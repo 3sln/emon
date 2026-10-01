@@ -25,6 +25,12 @@ pub fn ho_furniture_drop() -> i32 {
 pub fn ho_no_milestones() -> i32 {
     return 64;
 }
+pub fn ho_initials_plain() -> i32 {
+    return 128;
+}
+pub fn ho_align_style() -> i32 {
+    return 256;
+}
 pub(crate) fn h_on(o: i32, bit: i32) -> i32 {
     if (o & bit) != 0 {
         return 1;
@@ -115,7 +121,85 @@ pub(crate) fn h_iattr(nodes: &mut crate::port::Cells, attrs: &mut crate::port::C
     }
     return a;
 }
-pub(crate) fn h_common(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, n: i32) -> i32 {
+pub(crate) fn h_find_cell(pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, pg: i32, cx: i32, cy: i32) -> i32 {
+    // The first cell of the column map of page NUMBER pg that contains the
+    // point (edges included), as a `layout` row, or -1 (D113).
+    let mut p: i32 = 0;
+    let mut j: i32 = 0;
+    let mut r: i32 = 0;
+    while p < page_count(pages) {
+        if page_number(pages, p) == pg {
+            j = 0;
+            while j < page_layout_count(pages, p) {
+                r = page_layout_first(pages, p) + j;
+                if (cx >= layout_x0(layout, r)) && (cx <= layout_x1(layout, r)) && (cy >= layout_y0(layout, r)) && (cy <= layout_y1(layout, r)) {
+                    return r;
+                }
+                j += 1;
+            }
+            return -1;
+        }
+        p += 1;
+    }
+    return -1;
+}
+pub(crate) fn h_region_cell(regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, r: i32) -> i32 {
+    // The column cell holding the centre of region r (halved per edge, so
+    // no sum can overflow), or -1.
+    return h_find_cell(pages, layout, region_page(regions, r), (region_x0(regions, r) / 2) + (region_x1(regions, r) / 2), (region_y0(regions, r) / 2) + (region_y1(regions, r) / 2));
+}
+pub(crate) fn h_cell_name(mut t: &mut String, layout: &mut crate::port::Cells, c: i32) -> i32 {
+    crate::port::text_i32(t, layout_page(layout, c));
+    crate::port::text_ascii(t, ":");
+    crate::port::text_i32(t, layout_band(layout, c));
+    crate::port::text_ascii(t, ":");
+    crate::port::text_i32(t, layout_col(layout, c));
+    return 0;
+}
+pub(crate) fn h_columns(mut t: &mut String, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, n: i32) -> i32 {
+    // `data-emon-col="page:band:col"` (the first fragment that lies in a
+    // cell) and, when more than one does, `data-emon-cols` (every one, in
+    // order, space-separated): D113. Nothing when the page has no map.
+    let mut r: i32 = node_region_head(nodes, n);
+    let mut c: i32 = 0;
+    let mut first: i32 = -1;
+    let mut k: i32 = 0;
+    while r >= 0 {
+        c = h_region_cell(regions, pages, layout, r);
+        if c >= 0 {
+            if k == 0 {
+                first = c;
+            }
+            k += 1;
+        }
+        r = region_next(regions, r);
+    }
+    if k == 0 {
+        return 0;
+    }
+    crate::port::text_ascii(t, " data-emon-col=\"");
+    h_cell_name(t, layout, first);
+    crate::port::text_ascii(t, "\"");
+    if k > 1 {
+        crate::port::text_ascii(t, " data-emon-cols=\"");
+        r = node_region_head(nodes, n);
+        k = 0;
+        while r >= 0 {
+            c = h_region_cell(regions, pages, layout, r);
+            if c >= 0 {
+                if k > 0 {
+                    crate::port::text_ascii(t, " ");
+                }
+                h_cell_name(t, layout, c);
+                k += 1;
+            }
+            r = region_next(regions, r);
+        }
+        crate::port::text_ascii(t, "\"");
+    }
+    return 0;
+}
+pub(crate) fn h_common(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, n: i32) -> i32 {
     // The attributes the options add to the element of node n, last in
     // the tag: `id` (blocks only, and never on a note, which has `fn-N`),
     // `data-emon-at` (`page,x0,y0,x1,y1` per region, `;` between) and
@@ -150,10 +234,56 @@ pub(crate) fn h_common(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
         }
         crate::port::text_ascii(t, "\"");
     }
-    if (h_on(o, 4) == 1) && (cf >= 0) && (cf < (o / 256)) {
+    if (h_on(o, 2) == 1) && (nk_is_inline(kind) == 0) && (node_region_count(nodes, n) > 0) && (layout_count(layout) > 0) {
+        h_columns(t, nodes, regions, pages, layout, n);
+    }
+    if (h_on(o, 4) == 1) && (cf >= 0) && (cf < (o / 1024)) {
         crate::port::text_ascii(t, " data-emon-conf=\"");
         crate::port::text_i32(t, cf);
         crate::port::text_ascii(t, "\"");
+    }
+    return 0;
+}
+pub(crate) fn h_align(mut t: &mut String, o: i32, v: i32) -> i32 {
+    // `data-emon-align` for an `al` code (D069), and with `ho-align-style` the
+    // style that shows it and `dir="auto"`, so start and end resolve for
+    // right-to-left text in a browser (D110). Nothing for 0.
+    if v <= 0 {
+        return 0;
+    }
+    crate::port::text_ascii(t, " data-emon-align=\"");
+    al_emit_name(t, v);
+    crate::port::text_ascii(t, "\"");
+    if h_on(o, 256) == 1 {
+        crate::port::text_ascii(t, " style=\"text-align:");
+        al_emit_name(t, v);
+        crate::port::text_ascii(t, "\" dir=\"auto\"");
+    }
+    return 0;
+}
+pub(crate) fn h_align_attr(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, n: i32) -> i32 {
+    // The alignment of a heading, caption or cell: the `align` attribute.
+    let a: i32 = h_iattr(nodes, attrs, n, fk_align());
+    if a < 0 {
+        return 0;
+    }
+    return h_align(t, o, attr_value(attrs, a));
+}
+pub(crate) fn h_targeted(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, n: i32) -> i32 {
+    // 1 when a `ref` or a `link` points at node n: only then does a margin or
+    // sidebar note get an `id` (`fn-N`), as a footnote always does (D113).
+    let mut i: i32 = 0;
+    let mut a: i32 = -1;
+    let mut k: i32 = 0;
+    while i < node_count(nodes) {
+        k = node_kind(nodes, i);
+        if (k == nk_ref()) || (k == nk_link()) {
+            a = h_iattr(nodes, attrs, i, fk_target());
+            if (a >= 0) && (attr_value(attrs, a) == n) {
+                return 1;
+            }
+        }
+        i += 1;
     }
     return 0;
 }
@@ -193,7 +323,7 @@ pub(crate) fn h_plain(mut t: &mut String, nodes: &mut crate::port::Cells, text: 
     }
     return 0;
 }
-pub(crate) fn h_span_open(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, n: i32, bit: i32, first: i32) -> i32 {
+pub(crate) fn h_span_open(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, n: i32, bit: i32, first: i32) -> i32 {
     // Open the element of one style bit. The options' attributes go on
     // the first element opened. Answers the new `first` (0).
     if bit == 1 {
@@ -221,7 +351,7 @@ pub(crate) fn h_span_open(mut t: &mut String, o: i32, nodes: &mut crate::port::C
         crate::port::text_ascii(t, "<span data-emon-style=\"smallcaps\"");
     }
     if first == 1 {
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
     }
     crate::port::text_ascii(t, ">");
     return 0;
@@ -253,14 +383,14 @@ pub(crate) fn h_span_close(mut t: &mut String, bit: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn h_inner(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
+pub(crate) fn h_inner(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
     // The content of an inline node or of a block's own line of text: its
     // inline children if it has any, else its own run.
     let mut c: i32 = node_first_child(nodes, n);
     if h_has_inline(nodes, n) == 1 {
         while c >= 0 {
             if nk_is_inline(node_kind(nodes, c)) == 1 {
-                h_inline(t, o, nodes, attrs, regions, text, c);
+                h_inline(t, o, nodes, attrs, regions, pages, layout, text, c);
             }
             c = node_next(nodes, c);
         }
@@ -283,7 +413,7 @@ pub(crate) fn h_target_href(mut t: &mut String, nodes: &mut crate::port::Cells, 
     crate::port::text_i32(t, target);
     return 0;
 }
-pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
+pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
     // One inline node: text, span, link, ref or linebreak (SPEC 5.1).
     let kind: i32 = node_kind(nodes, n);
     let sub: i32 = node_sub(nodes, n);
@@ -297,29 +427,51 @@ pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
         }
         return 0;
     }
+    if kind == nk_initial() {
+        if h_on(o, 128) == 1 {
+            h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
+            return 0;
+        }
+        crate::port::text_ascii(t, "<span data-emon=\"initial\"");
+        if sub > 0 {
+            crate::port::text_ascii(t, " data-emon-form=\"");
+            ifm_emit_name(t, sub);
+            crate::port::text_ascii(t, "\"");
+        }
+        if node_aux(nodes, n) > 0 {
+            crate::port::text_ascii(t, " data-emon-lines=\"");
+            crate::port::text_i32(t, node_aux(nodes, n));
+            crate::port::text_ascii(t, "\"");
+        }
+        h_common(t, o, nodes, regions, pages, layout, n);
+        crate::port::text_ascii(t, ">");
+        h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
+        crate::port::text_ascii(t, "</span>");
+        return 0;
+    }
     if kind == nk_linebreak() {
         crate::port::text_ascii(t, "<br");
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
         return 0;
     }
     if kind == nk_span() {
         if sub == 0 {
             crate::port::text_ascii(t, "<span");
-            h_common(t, o, nodes, regions, n);
+            h_common(t, o, nodes, regions, pages, layout, n);
             crate::port::text_ascii(t, ">");
-            h_inner(t, o, nodes, attrs, regions, text, n);
+            h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
             crate::port::text_ascii(t, "</span>");
             return 0;
         }
         while b < 8 {
             bit = (1) << (b);
             if (sub & bit) != 0 {
-                first = h_span_open(t, o, nodes, regions, n, bit, first);
+                first = h_span_open(t, o, nodes, regions, pages, layout, n, bit, first);
             }
             b += 1;
         }
-        h_inner(t, o, nodes, attrs, regions, text, n);
+        h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
         b = 7;
         while b >= 0 {
             bit = (1) << (b);
@@ -345,9 +497,9 @@ pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
                 crate::port::text_ascii(t, "\"");
             }
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        h_inner(t, o, nodes, attrs, regions, text, n);
+        h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
         crate::port::text_ascii(t, "</a>");
         return 0;
     }
@@ -361,10 +513,10 @@ pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
         if a < 0 {
             crate::port::text_ascii(t, "<span role=\"doc-noteref\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
         if (h_has_inline(nodes, n) == 1) || (node_has_text(nodes, n) == 1) {
-            h_inner(t, o, nodes, attrs, regions, text, n);
+            h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
         } else {
             b = h_tattr(nodes, attrs, n, fk_marker());
             if b >= 0 {
@@ -381,26 +533,26 @@ pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
     }
     return 0;
 }
-pub(crate) fn h_blocks(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
+pub(crate) fn h_blocks(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
     // Every non-inline child of n as a block at depth d. Answers how many
     // wrote anything (a milestone turned off writes nothing).
     let mut c: i32 = node_first_child(nodes, n);
     let mut k: i32 = 0;
     while c >= 0 {
         if nk_is_inline(node_kind(nodes, c)) == 0 {
-            k += h_block(t, o, nodes, attrs, regions, text, c, d);
+            k += h_block(t, o, nodes, attrs, regions, pages, layout, text, c, d);
         }
         c = node_next(nodes, c);
     }
     return k;
 }
-pub(crate) fn h_body(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
+pub(crate) fn h_body(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
     // What goes inside a block's element: its line of text (inline
     // children, else its own run), then its block children at depth d.
     // Answers how many block children were written, so the caller knows
     // whether its closing tag starts a new line (pretty mode).
-    h_inner(t, o, nodes, attrs, regions, text, n);
-    return h_blocks(t, o, nodes, attrs, regions, text, n, d);
+    h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
+    return h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d);
 }
 pub(crate) fn h_list_type(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
     // An ordered list's `type` from its scheme: `lower-alpha` a,
@@ -454,7 +606,7 @@ pub(crate) fn h_seal_word(mut t: &mut String, sub: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
+pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
     // One node as a block element at depth d (SPEC 5.1), on its own line
     // in pretty mode. Answers 1 if it wrote anything, 0 if not. An inline
     // kind met where a block belongs is written as itself.
@@ -468,7 +620,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     let mut pk: i32 = 0;
     if nk_is_inline(kind) == 1 {
         h_nl(t, o, d);
-        h_inline(t, o, nodes, attrs, regions, text, n);
+        h_inline(t, o, nodes, attrs, regions, pages, layout, text, n);
         return 1;
     }
     if kind == nk_break() {
@@ -485,16 +637,16 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, "\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, "></span>");
         return 1;
     }
     h_nl(t, o, d);
     if kind == nk_section() {
         crate::port::text_ascii(t, "<section");
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -523,13 +675,14 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, "\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_align_attr(t, o, nodes, attrs, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
         if a >= 0 {
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, " ");
         }
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -540,14 +693,10 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     }
     if kind == nk_paragraph() {
         crate::port::text_ascii(t, "<p");
-        if sub > 0 {
-            crate::port::text_ascii(t, " data-emon-align=\"");
-            al_emit_name(t, sub);
-            crate::port::text_ascii(t, "\"");
-        }
-        h_common(t, o, nodes, regions, n);
+        h_align(t, o, sub);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -568,9 +717,9 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         if sub != 2 {
             crate::port::text_ascii(t, "<ul");
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -596,9 +745,9 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, "\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -607,19 +756,19 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     }
     if kind == nk_table() {
         crate::port::text_ascii(t, "<table");
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
         c = node_first_child(nodes, n);
         while c >= 0 {
             if node_kind(nodes, c) == nk_caption() {
-                h_block(t, o, nodes, attrs, regions, text, c, d + 1);
+                h_block(t, o, nodes, attrs, regions, pages, layout, text, c, d + 1);
             }
             c = node_next(nodes, c);
         }
         c = node_first_child(nodes, n);
         while c >= 0 {
             if node_kind(nodes, c) != nk_caption() {
-                h_block(t, o, nodes, attrs, regions, text, c, d + 1);
+                h_block(t, o, nodes, attrs, regions, pages, layout, text, c, d + 1);
             }
             c = node_next(nodes, c);
         }
@@ -637,9 +786,9 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         if (sub != 1) && (sub != 3) {
             crate::port::text_ascii(t, "<tbody");
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_blocks(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -659,9 +808,9 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         if sub == 1 {
             crate::port::text_ascii(t, " data-emon-repeated=\"true\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_blocks(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -689,9 +838,10 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             crate::port::text_i32(t, attr_value(attrs, a));
             crate::port::text_ascii(t, "\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_align_attr(t, o, nodes, attrs, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -724,9 +874,10 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, "\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_align_attr(t, o, nodes, attrs, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -762,9 +913,9 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, "\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        h_inner(t, o, nodes, attrs, regions, text, n);
+        h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
         a = node_attr(nodes, attrs, n, fk_labels());
         while a >= 0 {
             crate::port::text_ascii(t, "<span data-emon=\"label\">");
@@ -772,7 +923,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             crate::port::text_ascii(t, "</span>");
             a = attr_find_next(attrs, a, fk_labels());
         }
-        hb = h_blocks(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -818,7 +969,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
         }
         crate::port::text_ascii(t, "\"");
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, "></figure>");
         return 1;
     }
@@ -832,17 +983,17 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         crate::port::text_ascii(t, " aria-label=\"");
         h_plain(t, nodes, text, n);
         crate::port::text_ascii(t, "\"");
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, "></figure>");
         return 1;
     }
     if kind == nk_code() {
         crate::port::text_ascii(t, "<pre");
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, "><code>");
-        h_inner(t, o, nodes, attrs, regions, text, n);
+        h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
         crate::port::text_ascii(t, "</code>");
-        hb = h_blocks(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -851,9 +1002,9 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     }
     if kind == nk_quote() {
         crate::port::text_ascii(t, "<blockquote");
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -861,23 +1012,35 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         return 1;
     }
     if kind == nk_note() {
+        if (sub == 6) || (sub == 9) {
+            crate::port::text_ascii(t, "<aside data-emon-role=\"");
+            rl_emit_name(t, sub);
+            crate::port::text_ascii(t, "\"");
+            if h_targeted(nodes, attrs, n) == 1 {
+                crate::port::text_ascii(t, " id=\"fn-");
+                crate::port::text_i32(t, n);
+                crate::port::text_ascii(t, "\"");
+            }
+        }
         if sub == 5 {
             crate::port::text_ascii(t, "<aside role=\"doc-endnote\" id=\"fn-");
         }
-        if sub != 5 {
+        if (sub != 5) && (sub != 6) && (sub != 9) {
             crate::port::text_ascii(t, "<aside role=\"doc-footnote\" id=\"fn-");
         }
-        crate::port::text_i32(t, n);
-        crate::port::text_ascii(t, "\"");
+        if (sub != 6) && (sub != 9) {
+            crate::port::text_i32(t, n);
+            crate::port::text_ascii(t, "\"");
+        }
         a = h_tattr(nodes, attrs, n, fk_marker());
         if a >= 0 {
             crate::port::text_ascii(t, " data-emon-marker=\"");
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, "\"");
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -907,20 +1070,20 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
                 crate::port::text_ascii(t, " data-emon-checked=\"false\"");
             }
         }
-        h_common(t, o, nodes, regions, n);
+        h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
         a = h_tattr(nodes, attrs, n, fk_value());
         if a >= 0 {
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
         }
         if a < 0 {
-            h_inner(t, o, nodes, attrs, regions, text, n);
+            h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
         }
         crate::port::text_ascii(t, "</span>");
         return 1;
     }
     if kind == nk_furniture() {
-        h_furniture_open(t, o, nodes, attrs, regions, text, n);
+        h_furniture_open(t, o, nodes, attrs, regions, pages, layout, text, n);
         if node_has_text(nodes, n) == 1 {
             h_nl(t, o, d + 1);
             crate::port::text_ascii(t, "<p>");
@@ -928,7 +1091,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             crate::port::text_ascii(t, "</p>");
             hb = 1;
         }
-        hb += h_blocks(t, o, nodes, attrs, regions, text, n, d + 1);
+        hb += h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -938,16 +1101,16 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     crate::port::text_ascii(t, "<div data-emon-kind=\"");
     nk_emit_name(t, kind);
     crate::port::text_ascii(t, "\"");
-    h_common(t, o, nodes, regions, n);
+    h_common(t, o, nodes, regions, pages, layout, n);
     crate::port::text_ascii(t, ">");
-    hb = h_body(t, o, nodes, attrs, regions, text, n, d + 1);
+    hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
     if hb > 0 {
         h_nl(t, o, d);
     }
     crate::port::text_ascii(t, "</div>");
     return 1;
 }
-pub(crate) fn h_furniture_open(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
+pub(crate) fn h_furniture_open(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
     // `<aside data-emon="furniture" data-emon-role="header" ...>`:
     // the role, the pages it was seen on, then the options' attributes.
     let sub: i32 = node_sub(nodes, n);
@@ -971,7 +1134,7 @@ pub(crate) fn h_furniture_open(mut t: &mut String, o: i32, nodes: &mut crate::po
         }
         crate::port::text_ascii(t, "\"");
     }
-    h_common(t, o, nodes, regions, n);
+    h_common(t, o, nodes, regions, pages, layout, n);
     crate::port::text_ascii(t, ">");
     return 0;
 }
@@ -990,13 +1153,13 @@ pub(crate) fn h_meta(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells,
     crate::port::text_ascii(t, "\">");
     return 1;
 }
-pub fn html_emit(mut t: &mut String, opts: i32, conf_below: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, ledger: &mut crate::port::Cells) -> i32 {
+pub fn html_emit(mut t: &mut String, opts: i32, conf_below: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i32 {
     // Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;
     // `conf-below` is the threshold for `ho-confidence` (nodes with a
     // conf under it get `data-emon-conf`). The root (node 0) must be a
     // document: run `model-check` first on a Model of unknown origin.
     // Answers 0.
-    let o: i32 = (opts & 255) + (conf_below * 256);
+    let o: i32 = (opts & 1023) + (conf_below * 1024);
     let nn: i32 = node_count(nodes);
     let nl: i32 = ledger_count(ledger);
     let mut a: i32 = -1;
@@ -1040,12 +1203,12 @@ pub fn html_emit(mut t: &mut String, opts: i32, conf_below: i32, nodes: &mut cra
         i = 0;
         while i < nn {
             if (node_kind(nodes, i) == nk_furniture()) && (node_parent(nodes, i) == -1) {
-                h_block(t, o, nodes, attrs, regions, text, i, 3);
+                h_block(t, o, nodes, attrs, regions, pages, layout, text, i, 3);
             }
             i += 1;
         }
     }
-    h_blocks(t, o, nodes, attrs, regions, text, 0, 3);
+    h_blocks(t, o, nodes, attrs, regions, pages, layout, text, 0, 3);
     if h_on(o, 8) == 1 {
         i = 0;
         while i < nl {

@@ -779,11 +779,23 @@ analysis beyond "top-to-bottom lines on a single column".
   **This is the first vertical slice.** Record
   timings for the fixtures (baseline, not a target).
 
-- [ ] **P1.13 — The Model's vocabulary for initials, alignment and layout**
+- [x] **P1.13 — The Model's vocabulary for initials, alignment and layout**
   (`kin/model.kin`, `kin/json.kin`, `kin/html.kin`, `kin/mscript.kin`, their
   tests; SPEC 3.2, 3.7, 3.8, 4.2, 5; D109-D111, D113). **Independent of P1.8
   and P1.12; take after P2.13's step 1 (the schema) is on main**, because
   the JSON goldens validate against it.
+  **DONE (D131, D132, D133).** All five steps as briefed; `bb unit` 4 arms green (all
+  four targets write the same bytes for the new goldens; `bb unit red` fails on every arm),
+  `json-check.py` and `html-check.py` (the independent references) were extended first and
+  write the goldens, every golden validates against `schema/emon-1.json` (1.1) and parses
+  with html5lib strict, zero errors. Where it differs from the brief, D131-D133 say so:
+  the option bits no longer fit the low byte of `o` (it is now ten bits and the confidence
+  threshold times 1024); the layout arena is the last parameter of `model-init`,
+  `model-check`, `model-hash`, `js-emit` and `html-emit` (which also takes `pages`, for the
+  runs); a margin or sidebar note gets its `fn-` id when a `link` targets it as well as a
+  `ref`; and a script's `ly` line adds a layout cell, `al` sets an alignment through the
+  builder that refuses `justify` on a cell. Not done, because the brief did not ask for it:
+  no pipeline stage writes any of this yet (P4.10, P1.10 and the columns stage will).
   *Brief*: (1) `model.kin`, codes appended, never renumbered (D050):
   `nk-initial 26 "initial"`; `fk` rows `form 76`, `lines 77`, `layout 78`,
   `band 79`, `col 80`, `box 81`; `rl-sidebar 9 "sidebar"`; a new enum
@@ -4797,4 +4809,77 @@ anyway); (4) separate length code runs for the two trees, as zlib writes them (o
 boundary, no gain); (5) moving D090's transcript PNGs to this writer now: **not done**, every
 committed transcript would change, and D090's writer is stored-block only and stays until a decision
 says otherwise.
+- [ ] **Signed off** (maintainer)
+
+### D131 — The Model's vocabulary for initials, alignment and layout, as built: a seventh arena, one builder for `align`, and where each code is (P1.13; D109-D111)
+**Decision**: `kin/model.kin`, codes appended and never renumbered (D050): `nk-initial` 26 (an inline: `nk-is-inline`
+says so; `node-new` and `model-check` accept kinds 1-26); `fk` rows `form` 76, `lines` 77, `layout` 78, `band` 79,
+`col` 80, `box` 81; `rl-sidebar` 9; a new `defenum` `ifm` (`drop` 1, `raised` 2, `margin` 3). An `initial` keeps its form
+in `sub` and its lines in `aux` (0 = absent). `align` on a heading, caption or cell is the int attribute `fk-align` (an
+`al` code), on a paragraph it is still `sub`; `node-set-align nodes attrs n v` is the one builder and answers -1 for a value
+outside 1-4, for a kind that has no alignment, and for `justify` on a cell (D110). The seventh arena is `layout`, stride 8
+(page NUMBER, band, col, role as an `rl` code, x0 y0 x1 y1; `layout-stride`); a page's cells are one contiguous run in
+reading order, named by cells 11 (first) and 12 (count) of its `pages` row (`page-layout-first`, `page-layout-count`;
+the cells were reserved zeros, so an old row means "no map"). `lay-add layout pages p band col role x0 y0 x1 y1` appends
+to page INDEX p's run and answers the row, or -1 for a missing page, a role that is not body (2), margin (6) or sidebar
+(9), or a page whose run is no longer the last one written. `model-check` gains `mc-bad-layout` 13 (a negative or
+out-of-range run, a cell of another page, a role outside the three) and the layout stride; `model-hash` folds the layout
+arena last, so the fingerprint of every Model with an empty map is the old one times the FNV prime (the law in
+`modeltest` says so, and `kin/scripts/check` expects `model: 1538303818 -13163675`, both worked out apart from kin).
+The layout arena is the LAST parameter of `model-init`, `model-check`, `model-hash` and `js-emit` (`... pages ledger
+layout`) and `html-emit` takes `... text pages ledger layout` (it needed `pages` for the runs, and has had neither
+before). The Model script (`emon.mscript`) gains `al NODE v` and `ly IDX BAND COL ROLE X0 Y0 X1 Y1`; a refused line is a
+wrong line, so the goldens cannot hide a refusal. `corners.model` and `kinds.model` gain a drop, a raised and a margin
+initial (one ahead of a smallcaps span, one read by OCR with `low-conf`, one with neither form nor lines), aligned
+heading, caption and cells, sidebar and margin notes (targeted and not), and layouts of two pages (every role).
+**Why**: the same reasons as D050 and D109-D111, and Rust's: no function reads and writes the same `Cells` in one call,
+so `lay-add` binds the page's count and number first. A new stride would have been a seventh `Cells` for every host
+anyway; a builder that refuses is where a bad alignment must stop, since the serializer writes whatever the arena holds.
+**Alternatives**: the layout as pages-row cells only (eight per page would be the stride of a fixed table the spec leaves
+open-ended); `align` for headings in `aux` (a cell's `aux` is `empty`, a heading's would be the only user, and an
+attribute is what D110 said); a separate `justify` check at the JSON writer (too late).
+- [ ] **Signed off** (maintainer)
+
+### D132 — JSON 1.1: the version string is `"1.1"` always; field order for the new keys (P1.13; D109-D111, D055)
+**Decision**: `js-emit` writes `"emon":"1.1"` for every Model, not only for one that uses a 1.1 feature: the brief for
+P1.13 says the string becomes `"1.1"` and that every JSON golden changes by that string only (and so they did, apart from
+the two models that gained content: `kinds` and `corners`). `schema/emon-1.json` accepts both; a consumer must ignore what
+it does not know (SPEC 4.4), so a 1.1 document without a 1.1 feature is a 1.0 document. Field order: `initial` is an inline,
+so no `id`, then `kind`, `form`, `lines` (when `aux` is above 0), then `children`, `at`, `src`, `conf`, `flags`; `align` sits
+after the kind's own fields (heading: `level`, `number`, `numbering`, `align`; caption: `label`, `target`, `align`; cell:
+`rowspan`, `colspan`, `header`, `empty`, `align`; paragraph: `align`); a page's `layout` is the last member of the page,
+`[{"band","col","role","box":[x0,y0,x1,y1]}]` in run order, omitted when the run is empty. An `initial` makes `inlines`
+informative with no new rule (it is not a plain `text`). `kin/scripts/json-check.py` (the independent serializer) learned
+all of this first and writes the goldens (`--write`).
+**Why**: one version string per build is what a consumer can test; deciding it from the Model's content would make the
+version a property of the document a crawler cannot predict, and the goldens would mix both.
+**Alternatives**: `"1.0"` unless a 1.1 feature is present (honest, but two strings from one emitter, and the day a stage
+writes one the whole corpus flips); leaving the string at `"1.0"` until the first stage writes a feature (the schema would
+accept what no one writes, and the brief said otherwise).
+- [ ] **Signed off** (maintainer)
+
+### D133 — HTML for initials, alignment, sidebars and columns, as built (P1.13; D109, D110, D113, D067-D069)
+**Decision**: `kin/html.kin`. (1) `<span data-emon="initial" data-emon-form data-emon-lines>` with the options' own
+attributes after them (`ids` never, `geometry`, `confidence`), the children as its content; `ho-initials-plain` (128) writes
+the children bare. (2) `data-emon-align` on `p`, `h1-h6`, `caption`/`figcaption`/`p data-emon="caption"` and `th`/`td`
+wherever the Model has an alignment, then, with `ho-align-style` (256), `style="text-align:start|center|end|justify"
+dir="auto"` right after it. (3) A note whose role is `margin` or `sidebar` is `<aside data-emon-role="margin|sidebar">`:
+no `role="doc-footnote"`, and no `id="fn-N"` unless a `ref` or a `link` targets it (a link to a note already writes
+`#fn-N`, so a link counts as well as a ref, which D113 said only of a ref); `footnote` and `endnote` are unchanged.
+(4) With `ho-geometry`, every NON-INLINE node with regions gets `data-emon-col="page:band:col"`, then
+`data-emon-cols="p:b:c p:b:c"` when more than one of its regions lies in a cell, after `data-emon-at`. A region lies in the
+first cell of its page's map (the page with that NUMBER) that contains its CENTRE, edges included; the centre is the sum of
+the two halves of each pair of edges, each truncated toward zero (so no sum can overflow an I32); a region in no cell
+(a centre in a gutter, a page with no map) writes nothing and is not counted. (5) The option word `o` outgrew its low
+byte (`ho-align-style` is 256, which is where the confidence threshold used to start): `o` is now the options in the low
+ten bits and the threshold times 1024, and `html-emit` masks `opts` with 1023. (6) The goldens gain a fifth set per model,
+`test/html/NAME.plain.html`, under `ho-initials-plain | ho-align-style | ho-geometry` (386, no confidence). `html-check.py`
+(the independent renderer; it reads the JSON, including `pages[].layout`) learned the same first, and the html5lib
+census counts `span[data-emon=initial]`; strict parsing stays at zero errors.
+**Why**: D109, D110 and D113 say what the markup is; this records what they left open: the packing of the options, what
+"contains" means at an edge and for an I32, and that a note nobody points at has no anchor to keep (a dead `id` is the
+only thing `fn-N` would add; a margin note is not a footnote).
+**Alternatives**: a second options parameter for the new bits (a signature every caller changes for the sake of two
+bits); the centre by `(x0 + x1) / 2` (overflows at the extremes the goldens use on purpose); `data-emon-col` also on inline
+nodes (an inline at `detail: words` has regions of its own, and the block already says which column it began in).
 - [ ] **Signed off** (maintainer)

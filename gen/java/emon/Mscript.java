@@ -105,7 +105,7 @@ public final class Mscript {
         emon.Port.cellsSet(st, 0, end);
         return start;
     }
-    public static int jtLine(byte[] b, int from, int end, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells st) {
+    public static int jtLine(byte[] b, int from, int end, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells st) {
         // Run one command. Answers 0, or 1 when it is unknown or refused.
         int c0 = emon.Port.blobU8(b, from);
         int c1 = 0;
@@ -222,6 +222,28 @@ public final class Mscript {
             Model.nodeAddAttrText(nodes, attrs, a, k, v, Model.textLen(text) - v);
             return 0;
         }
+        if (code == 24940) {
+            a = jtInt(b, end, st);
+            v = jtInt(b, end, st);
+            if (Model.nodeSetAlign(nodes, attrs, a, v) < 0) {
+                return 1;
+            }
+            return 0;
+        }
+        if (code == 27769) {
+            a = jtInt(b, end, st);
+            k = jtInt(b, end, st);
+            v = jtInt(b, end, st);
+            w = jtInt(b, end, st);
+            x = jtInt(b, end, st);
+            y = jtInt(b, end, st);
+            z = jtInt(b, end, st);
+            q = jtInt(b, end, st);
+            if (Model.layAdd(layout, pages, a, k, v, w, x, y, z, q) < 0) {
+                return 1;
+            }
+            return 0;
+        }
         if (code == 28775) {
             a = jtInt(b, end, st);
             k = jtInt(b, end, st);
@@ -271,19 +293,19 @@ public final class Mscript {
         }
         return 1;
     }
-    public static int jtBuild(byte[] b, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells st) {
+    public static int jtBuild(byte[] b, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells st) {
         // Build the Model a script describes. 0, or the first bad line.
         int pos = 0;
         int e = 0;
         int lineno = 0;
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.cellsDrop(st, 0);
         emon.Port.cellsPush(st, 0);
         while (pos < emon.Port.blobLen(b)) {
             e = jtEol(b, pos);
             lineno += 1;
             if ((pos < e) && (emon.Port.blobU8(b, pos) != 35)) {
-                if (jtLine(b, pos, e, nodes, attrs, regions, text, pages, ledger, st) == 1) {
+                if (jtLine(b, pos, e, nodes, attrs, regions, text, pages, ledger, layout, st) == 1) {
                     return lineno;
                 }
             }

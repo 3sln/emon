@@ -349,6 +349,27 @@ func jsEAlign(t *strings.Builder, pr int32, d int32, started int32, v int32) int
 	return 1
 }
 
+func jsEForm(t *strings.Builder, pr int32, d int32, started int32, v int32) int32 {
+	if v <= 0 {
+		return started
+	}
+	jsBegin(t, pr, d, started, model.FkForm())
+	port.TextAscii(t, "\"")
+	model.IfmEmitName(t, v)
+	port.TextAscii(t, "\"")
+	return 1
+}
+
+func jsFAlign(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *port.Cells, n int32, started int32) int32 {
+	// The `align` ATTRIBUTE of a heading, caption or cell (D110): an `al`
+	// code in an int attribute, written as its name.
+	var a int32 = model.NodeAttr(nodes, attrs, n, model.FkAlign())
+	if a < 0 {
+		return started
+	}
+	return jsEAlign(t, pr, d, started, model.AttrValue(attrs, a))
+}
+
 func jsEHeader(t *strings.Builder, pr int32, d int32, started int32, v int32) int32 {
 	if v <= 0 {
 		return started
@@ -411,6 +432,7 @@ func jsKfields(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *
 	if kind == model.NkHeading() {
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkNumber(), s)
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkNumbering(), s)
+		s = jsFAlign(t, pr, d, nodes, attrs, n, s)
 	}
 	if kind == model.NkParagraph() {
 		s = jsEAlign(t, pr, d, s, sub)
@@ -449,10 +471,12 @@ func jsKfields(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *
 			s = jsBegin(t, pr, d, s, model.FkEmpty())
 			port.TextAscii(t, "true")
 		}
+		s = jsFAlign(t, pr, d, nodes, attrs, n, s)
 	}
 	if kind == model.NkCaption() {
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkLabel(), s)
 		s = jsFint(t, pr, d, nodes, attrs, n, model.FkTarget(), s)
+		s = jsFAlign(t, pr, d, nodes, attrs, n, s)
 	}
 	if kind == model.NkFigure() {
 		s = jsEFigure(t, pr, d, s, sub)
@@ -501,6 +525,13 @@ func jsKfields(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *
 	if kind == model.NkRef() {
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkMarker(), s)
 		s = jsFint(t, pr, d, nodes, attrs, n, model.FkTarget(), s)
+	}
+	if kind == model.NkInitial() {
+		s = jsEForm(t, pr, d, s, sub)
+		if aux > 0 {
+			s = jsBegin(t, pr, d, s, model.FkLines())
+			port.TextI32(t, aux)
+		}
 	}
 	return s
 }
@@ -710,10 +741,38 @@ func jsFurniture(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs
 	return 0
 }
 
-func jsPage(t *strings.Builder, pr int32, d int32, pages *port.Cells, text *port.Cells, p int32) int32 {
-	// One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,
-	// `health`, `dpi`, `px` (the pixel size of a raster page).
+func jsLayout(t *strings.Builder, pr int32, d int32, layout *port.Cells, r int32) int32 {
+	// One cell of a page's column map: `band`, `col`, `role`, `box`.
 	var s int32 = 0
+	port.TextAscii(t, "{")
+	s = jsBegin(t, pr, d, s, model.FkBand())
+	port.TextI32(t, model.LayoutBand(layout, r))
+	s = jsBegin(t, pr, d, s, model.FkCol())
+	port.TextI32(t, model.LayoutCol(layout, r))
+	s = jsBegin(t, pr, d, s, model.FkRole())
+	port.TextAscii(t, "\"")
+	model.RlEmitName(t, model.LayoutRole(layout, r))
+	port.TextAscii(t, "\"")
+	s = jsBegin(t, pr, d, s, model.FkBox())
+	port.TextAscii(t, "[")
+	JsCpt(t, model.LayoutX0(layout, r))
+	JsFsep(t, pr, 1)
+	JsCpt(t, model.LayoutY0(layout, r))
+	JsFsep(t, pr, 1)
+	JsCpt(t, model.LayoutX1(layout, r))
+	JsFsep(t, pr, 1)
+	JsCpt(t, model.LayoutY1(layout, r))
+	port.TextAscii(t, "]")
+	JsClose(t, pr, d, s)
+	return 0
+}
+
+func jsPage(t *strings.Builder, pr int32, d int32, pages *port.Cells, layout *port.Cells, text *port.Cells, p int32) int32 {
+	// One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,
+	// `health`, `dpi`, `px` (the pixel size of a raster page), `layout` (the
+	// page's column map, when it has one).
+	var s int32 = 0
+	var i int32 = 0
 	port.TextAscii(t, "{")
 	s = jsBegin(t, pr, d, s, model.FkN())
 	port.TextI32(t, model.PageNumber(pages, p))
@@ -748,6 +807,16 @@ func jsPage(t *strings.Builder, pr int32, d int32, pages *port.Cells, text *port
 		JsFsep(t, pr, 1)
 		port.TextI32(t, model.PagePxH(pages, p))
 		port.TextAscii(t, "]")
+	}
+	if model.PageLayoutCount(pages, p) > 0 {
+		s = jsBegin(t, pr, d, s, model.FkLayout())
+		port.TextAscii(t, "[")
+		for i < model.PageLayoutCount(pages, p) {
+			JsAelem(t, pr, d+1, i)
+			jsLayout(t, pr, d+2, layout, model.PageLayoutFirst(pages, p)+i)
+			i += 1
+		}
+		JsAend(t, pr, d+1, i)
 	}
 	JsClose(t, pr, d, s)
 	return 0
@@ -848,7 +917,7 @@ func jsMeta(t *strings.Builder, pr int32, nodes *port.Cells, attrs *port.Cells, 
 	return 0
 }
 
-func JsEmit(t *strings.Builder, pretty int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells) int32 {
+func JsEmit(t *strings.Builder, pretty int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
 	// Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1
 	// for the indented form, 0 for the compact one. The root (node 0)
 	// must be a document: run `model-check` first on a Model of unknown
@@ -861,7 +930,7 @@ func JsEmit(t *strings.Builder, pretty int32, nodes *port.Cells, attrs *port.Cel
 	var nl int32 = model.LedgerCount(ledger)
 	port.TextAscii(t, "{")
 	s = jsBegin(t, pretty, 0, s, model.FkEmon())
-	port.TextAscii(t, "\"1.0\"")
+	port.TextAscii(t, "\"1.1\"")
 	s = jsFtext(t, pretty, 0, nodes, attrs, text, 0, model.FkGenerator(), s)
 	if (jsHas(nodes, attrs, model.FkFormat()) == 1) || (jsHas(nodes, attrs, model.FkVersion()) == 1) || (jsHas(nodes, attrs, model.FkPages()) == 1) || (jsHas(nodes, attrs, model.FkTagged()) == 1) || (jsHas(nodes, attrs, model.FkEncrypted()) == 1) || (jsHas(nodes, attrs, model.FkLang()) == 1) {
 		s = jsBegin(t, pretty, 0, s, model.FkSource())
@@ -879,7 +948,7 @@ func JsEmit(t *strings.Builder, pretty int32, nodes *port.Cells, attrs *port.Cel
 	port.TextAscii(t, "[")
 	for i < np {
 		JsAelem(t, pretty, 1, i)
-		jsPage(t, pretty, 2, pages, text, i)
+		jsPage(t, pretty, 2, pages, layout, text, i)
 		i += 1
 	}
 	JsAend(t, pretty, 1, np)

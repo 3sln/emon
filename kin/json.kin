@@ -1,6 +1,6 @@
 ;; Canonical JSON (P1.2; SPEC 4, D012). emon's own module (D039).
 ;;
-;; THE MODEL, AS BYTES. `js-emit` writes the six arenas of `emon.model` to a
+;; THE MODEL, AS BYTES. `js-emit` writes the seven arenas of `emon.model` to a
 ;; `Text` sink, and the four targets must write the SAME BYTES: that one
 ;; comparison is the whole cross-language claim (SPEC 4.1). Nothing here
 ;; formats a number or a string for a host to disagree about: integers are
@@ -32,6 +32,11 @@
 ;; inline children but no run of its own, `text` is DERIVED by concatenating
 ;; them. A figure's or seal's own kind is `subkind` (D053): `kind` is taken.
 ;;
+;; VERSION 1.1 (P1.13, D132): `"emon":"1.1"`; an `initial` inline (`form`, `lines`,
+;; then its `children`), `align` after a heading's, caption's and cell's own
+;; fields (the attribute `fk-align`; a paragraph's is its `sub`), and a page's
+;; `layout`, the last member of the page, from the `layout` arena's run.
+;;
 ;; RECURSION DEPTH is bounded by the Model (`max-depth`), not here: `node-new`
 ;; refuses a deeper node, so a Model that was built cannot overflow a stack.
 (ns emon.json
@@ -47,7 +52,12 @@
                                 fl-emit-name sy-emit-name al-emit-name
                                 rl-emit-name fg-emit-name sl-emit-name
                                 dp-emit-name ch-emit-name pk-emit-name
-                                dr-emit-name
+                                dr-emit-name ifm-emit-name
+                                nk-initial
+                                fk-form fk-lines fk-layout fk-band fk-col fk-box
+                                page-layout-first page-layout-count
+                                layout-page layout-band layout-col layout-role
+                                layout-x0 layout-y0 layout-x1 layout-y1
                                 region-page region-x0 region-y0 region-x1
                                 region-y1 region-next
                                 page-count page-number page-label-start
@@ -345,6 +355,22 @@
   (emit-ascii t "\"")
   (return 1))
 
+(defn ^I32 js-e-form [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 v]
+  (if (<= v 0) (return started))
+  (js-begin t pr d started (fk-form))
+  (emit-ascii t "\"")
+  (ifm-emit-name t v)
+  (emit-ascii t "\"")
+  (return 1))
+
+(defn ^I32 js-f-align [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
+                       ^I32 n ^I32 started]
+  (comment "The `align` ATTRIBUTE of a heading, caption or cell (D110): an `al`")
+  (comment "code in an int attribute, written as its name.")
+  (let [^I32 a (node-attr nodes attrs n (fk-align))]
+    (if (< a 0) (return started))
+    (return (js-e-align t pr d started (attr-value attrs a)))))
+
 (defn ^I32 js-e-header [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 v]
   (if (<= v 0) (return started))
   (js-begin t pr d started (fk-header))
@@ -395,7 +421,8 @@
             (text-i32 t sub))))
     (if (== kind (nk-heading))
       (do (set s (js-ftext t pr d nodes attrs text n (fk-number) s))
-          (set s (js-ftext t pr d nodes attrs text n (fk-numbering) s))))
+          (set s (js-ftext t pr d nodes attrs text n (fk-numbering) s))
+          (set s (js-f-align t pr d nodes attrs n s))))
     (if (== kind (nk-paragraph))
       (set s (js-e-align t pr d s sub)))
     (if (== kind (nk-list))
@@ -423,10 +450,12 @@
           (set s (js-e-header t pr d s sub))
           (if (== aux 1)
             (do (set s (js-begin t pr d s (fk-empty)))
-                (emit-ascii t "true")))))
+                (emit-ascii t "true")))
+          (set s (js-f-align t pr d nodes attrs n s))))
     (if (== kind (nk-caption))
       (do (set s (js-ftext t pr d nodes attrs text n (fk-label) s))
-          (set s (js-fint t pr d nodes attrs n (fk-target) s))))
+          (set s (js-fint t pr d nodes attrs n (fk-target) s))
+          (set s (js-f-align t pr d nodes attrs n s))))
     (if (== kind (nk-figure))
       (do (set s (js-e-figure t pr d s sub))
           (set s (js-ftext t pr d nodes attrs text n (fk-label) s))
@@ -464,6 +493,11 @@
     (if (== kind (nk-ref))
       (do (set s (js-ftext t pr d nodes attrs text n (fk-marker) s))
           (set s (js-fint t pr d nodes attrs n (fk-target) s))))
+    (if (== kind (nk-initial))
+      (do (set s (js-e-form t pr d s sub))
+          (if (> aux 0)
+            (do (set s (js-begin t pr d s (fk-lines)))
+                (text-i32 t aux)))))
     (return s)))
 
 ;; ------------------------------------------------------------------ a node
@@ -636,10 +670,38 @@
     (js-close t pr d s)
     (return 0)))
 
-(defn ^I32 js-page [^:mut ^Text t ^I32 pr ^I32 d ^Cells pages ^Cells text ^I32 p]
-  (comment "One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,")
-  (comment "`health`, `dpi`, `px` (the pixel size of a raster page).")
+(defn ^I32 js-layout [^:mut ^Text t ^I32 pr ^I32 d ^Cells layout ^I32 r]
+  (comment "One cell of a page's column map: `band`, `col`, `role`, `box`.")
   (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (js-begin t pr d s (fk-band)))
+    (text-i32 t (layout-band layout r))
+    (set s (js-begin t pr d s (fk-col)))
+    (text-i32 t (layout-col layout r))
+    (set s (js-begin t pr d s (fk-role)))
+    (emit-ascii t "\"")
+    (rl-emit-name t (layout-role layout r))
+    (emit-ascii t "\"")
+    (set s (js-begin t pr d s (fk-box)))
+    (emit-ascii t "[")
+    (js-cpt t (layout-x0 layout r))
+    (js-fsep t pr 1)
+    (js-cpt t (layout-y0 layout r))
+    (js-fsep t pr 1)
+    (js-cpt t (layout-x1 layout r))
+    (js-fsep t pr 1)
+    (js-cpt t (layout-y1 layout r))
+    (emit-ascii t "]")
+    (js-close t pr d s)
+    (return 0)))
+
+(defn ^I32 js-page [^:mut ^Text t ^I32 pr ^I32 d ^Cells pages ^Cells layout
+                    ^Cells text ^I32 p]
+  (comment "One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,")
+  (comment "`health`, `dpi`, `px` (the pixel size of a raster page), `layout` (the")
+  (comment "page's column map, when it has one).")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 i 0]
     (emit-ascii t "{")
     (set s (js-begin t pr d s (fk-n)))
     (text-i32 t (page-number pages p))
@@ -670,6 +732,14 @@
           (js-fsep t pr 1)
           (text-i32 t (page-px-h pages p))
           (emit-ascii t "]")))
+    (if (> (page-layout-count pages p) 0)
+      (do (set s (js-begin t pr d s (fk-layout)))
+          (emit-ascii t "[")
+          (while (< i (page-layout-count pages p))
+            (do (js-aelem t pr (+ d 1) i)
+                (js-layout t pr (+ d 2) layout (+ (page-layout-first pages p) i))
+                (set i (+ i 1))))
+          (js-aend t pr (+ d 1) i)))
     (js-close t pr d s)
     (return 0)))
 
@@ -759,7 +829,8 @@
 ;; ------------------------------------------------------------- the whole
 
 (defn ^:pub ^I32 js-emit [^:mut ^Text t ^I32 pretty ^Cells nodes ^Cells attrs
-                          ^Cells regions ^Cells text ^Cells pages ^Cells ledger]
+                          ^Cells regions ^Cells text ^Cells pages ^Cells ledger
+                          ^Cells layout]
   (comment "Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1")
   (comment "for the indented form, 0 for the compact one. The root (node 0)")
   (comment "must be a document: run `model-check` first on a Model of unknown")
@@ -772,7 +843,7 @@
         ^I32 nl (ledger-count ledger)]
     (emit-ascii t "{")
     (set s (js-begin t pretty 0 s (fk-emon)))
-    (emit-ascii t "\"1.0\"")
+    (emit-ascii t "\"1.1\"")
     (set s (js-ftext t pretty 0 nodes attrs text 0 (fk-generator) s))
     (if (or (== (js-has nodes attrs (fk-format)) 1)
             (== (js-has nodes attrs (fk-version)) 1)
@@ -800,7 +871,7 @@
     (emit-ascii t "[")
     (while (< i np)
       (do (js-aelem t pretty 1 i)
-          (js-page t pretty 2 pages text i)
+          (js-page t pretty 2 pages layout text i)
           (set i (+ i 1))))
     (js-aend t pretty 1 np)
     (set s (js-begin t pretty 0 s (fk-body)))

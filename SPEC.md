@@ -437,7 +437,7 @@ Nested, because walking is what consumers do; ids on every node, because
 citing is the other thing they do.
 
 ```json
-{"emon":"1.0","generator":"emon 0.1.0",
+{"emon":"1.1","generator":"emon 0.1.0",
  "source":{"format":"pdf","version":"1.7","pages":2,"tagged":false,
            "encrypted":false,"lang":"en"},
  "settings":{"locale":null,"ocr":"always","detail":"blocks"},
@@ -508,7 +508,9 @@ The same Model always serializes to the same bytes (§12):
 reason) — consumers must ignore what they do not know. **Major**: anything
 that changes the meaning of an existing field. A JSON Schema for each version
 is committed (`schema/emon-1.json`) and every gate validates output against
-it.
+it. The emitter writes `"1.1"` (the `initial` inline, `align` on headings, captions
+and cells, the note role `sidebar`, `pages[].layout`: D109-D111, D132); the schema
+accepts `"1.0"` too.
 
 ### 4.5 The evidence dump
 
@@ -554,7 +556,7 @@ information and removes only what the options say.
 | `linebreak` | `<br>` |
 | `initial` | `<span data-emon="initial" data-emon-form="drop" data-emon-lines="3">O</span>nce` — no styling, the text intact; option `initials: plain` writes the bare text (D109) |
 | `align` | `data-emon-align` (D069); with option `align-style` also `style="text-align:…"` and `dir="auto"` (D110) |
-| `note` `margin`/`sidebar` | `<aside data-emon-role="margin">` in reading order, no `doc-footnote` role (D113) |
+| `note` `margin`/`sidebar` | `<aside data-emon-role="margin">` in reading order, no `doc-footnote` role, and no `id="fn-N"` unless a `ref` or a `link` targets it (D113, D133) |
 | column fragments | nothing by default: **one logical flow in reading order**; with `geometry`, `data-emon-col="page:band:col"` on each block (D113) |
 
 `<b>`/`<i>` rather than `<strong>`/`<em>`: emon knows the text was bold, not
@@ -575,7 +577,9 @@ no ids, no geometry, policy furniture, milestones on. Escaping: `&`, `<`, `>`,
 `"` and nothing else; attribute values always double-quoted.
 The rest of the mapping this table leaves open (extra `data-emon-*` attributes,
 forbidden code points, `pretty` layout, what a caption or a seal's label is)
-is DEVLOG D068-D069; the code is `kin/html.kin`.
+is DEVLOG D068-D069 and D133; the code is `kin/html.kin`. The option bits are `ids` 1,
+`geometry` 2, `confidence` 4, `ledger` 8, `pretty` 16, furniture-drop 32, no-milestones 64,
+`initials: plain` 128 and `align-style` 256 (D133).
 
 ---
 

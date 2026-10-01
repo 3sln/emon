@@ -14,11 +14,12 @@ public final class Htmltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
         StringBuilder out = emon.Testport.newText();
-        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile(mfile), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        emon.Testport.assertEq(Html.htmlEmit(out, opts, below, nodes, attrs, regions, text, ledger), 0, "it emits");
+        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile(mfile), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        emon.Testport.assertEq(Html.htmlEmit(out, opts, below, nodes, attrs, regions, text, pages, ledger, layout), 0, "it emits");
         emon.Testport.assertTextSpan(out, emon.Testport.testFile(hfile), 0, Mscript.jtEnd(emon.Testport.testFile(hfile)), "the golden", 0);
         return 0;
     }
@@ -34,30 +35,35 @@ public final class Htmltest {
         htGolden(0, "json/minimal.model", "html/minimal.pretty.html", 16, 0);
         htGolden(0, "json/minimal.model", "html/minimal.full.html", 15, 950);
         htGolden(0, "json/minimal.model", "html/minimal.bare.html", 96, 0);
+        htGolden(0, "json/minimal.model", "html/minimal.plain.html", 386, 0);
     }
     public static void testGoldenSample() {
         htGolden(0, "json/sample.model", "html/sample.html", 0, 0);
         htGolden(0, "json/sample.model", "html/sample.pretty.html", 16, 0);
         htGolden(0, "json/sample.model", "html/sample.full.html", 15, 950);
         htGolden(0, "json/sample.model", "html/sample.bare.html", 96, 0);
+        htGolden(0, "json/sample.model", "html/sample.plain.html", 386, 0);
     }
     public static void testGoldenKinds() {
         htGolden(0, "json/kinds.model", "html/kinds.html", 0, 0);
         htGolden(0, "json/kinds.model", "html/kinds.pretty.html", 16, 0);
         htGolden(0, "json/kinds.model", "html/kinds.full.html", 15, 950);
         htGolden(0, "json/kinds.model", "html/kinds.bare.html", 96, 0);
+        htGolden(0, "json/kinds.model", "html/kinds.plain.html", 386, 0);
     }
     public static void testGoldenCorners() {
         htGolden(0, "json/corners.model", "html/corners.html", 0, 0);
         htGolden(0, "json/corners.model", "html/corners.pretty.html", 16, 0);
         htGolden(0, "json/corners.model", "html/corners.full.html", 15, 950);
         htGolden(0, "json/corners.model", "html/corners.bare.html", 96, 0);
+        htGolden(0, "json/corners.model", "html/corners.plain.html", 386, 0);
     }
     public static void testGoldenProbe() {
         htGolden(0, "json/probe.model", "html/probe.html", 0, 0);
         htGolden(0, "json/probe.model", "html/probe.pretty.html", 16, 0);
         htGolden(0, "json/probe.model", "html/probe.full.html", 15, 950);
         htGolden(0, "json/probe.model", "html/probe.bare.html", 96, 0);
+        htGolden(0, "json/probe.model", "html/probe.plain.html", 386, 0);
     }
     public static void testAnEmptyDocument() {
         emon.Port.Cells nodes = emon.Port.newCells();
@@ -66,9 +72,10 @@ public final class Htmltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         StringBuilder out = emon.Testport.newText();
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
-        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "the smallest document");
     }
     public static void testHeadingLevelsAndEscapes() {
@@ -78,9 +85,10 @@ public final class Htmltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         StringBuilder out = emon.Testport.newText();
         int h = 0;
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         h = Model.nodeNew(nodes, Model.nkHeading(), 0);
         Model.nodeSetSub(nodes, h, 1);
         htSet(nodes, text, h, emon.Testport.textBlob("a & b"));
@@ -90,7 +98,7 @@ public final class Htmltest {
         h = Model.nodeNew(nodes, Model.nkHeading(), 0);
         Model.nodeSetSub(nodes, h, 7);
         htSet(nodes, text, h, emon.Testport.textBlob("say \"seven\""));
-        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, ledger);
+        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><h1>a &amp; b</h1><h6>&lt;six&gt;</h6><h6 aria-level=\"7\">say &quot;seven&quot;</h6></main></body></html>", "levels, and the four escapes");
     }
     public static void testOptionsAddIdsGeometryAndConfidence() {
@@ -100,18 +108,19 @@ public final class Htmltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         StringBuilder all = emon.Testport.newText();
         StringBuilder none = emon.Testport.newText();
         StringBuilder edge = emon.Testport.newText();
         int p = 0;
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         p = Model.nodeNew(nodes, Model.nkParagraph(), 0);
         htSet(nodes, text, p, emon.Testport.textBlob("x"));
         Model.nodeAddRegion(nodes, regions, p, 1, 7250, -5, 54000, 100);
         Model.nodeSetConf(nodes, p, 500);
-        Html.htmlEmit(all, 7, 600, nodes, attrs, regions, text, ledger);
-        Html.htmlEmit(none, 0, 600, nodes, attrs, regions, text, ledger);
-        Html.htmlEmit(edge, 4, 500, nodes, attrs, regions, text, ledger);
+        Html.htmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.htmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.htmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertText(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options");
         emon.Testport.assertText(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default");
         emon.Testport.assertText(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold");
@@ -123,16 +132,17 @@ public final class Htmltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         StringBuilder kept = emon.Testport.newText();
         StringBuilder bare = emon.Testport.newText();
         int n = 0;
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         n = Model.nodeNew(nodes, Model.nkBreak(), 0);
         Model.nodeSetSub(nodes, n, 2);
         n = Model.nodeNew(nodes, Model.nkFurniture(), -1);
         Model.nodeSetSub(nodes, n, 7);
-        Html.htmlEmit(kept, 0, 0, nodes, attrs, regions, text, ledger);
-        Html.htmlEmit(bare, 96, 0, nodes, attrs, regions, text, ledger);
+        Html.htmlEmit(kept, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.htmlEmit(bare, 96, 0, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertText(kept, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>", "furniture once at the top, then the milestone");
         emon.Testport.assertText(bare, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "both off");
     }
@@ -143,14 +153,15 @@ public final class Htmltest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         StringBuilder compact = emon.Testport.newText();
         StringBuilder pretty = emon.Testport.newText();
         int at = 0;
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (at != -1) {
             at = Model.nodeNew(nodes, Model.nkSection(), at);
         }
-        emon.Testport.assertEq(Html.htmlEmit(compact, 0, 0, nodes, attrs, regions, text, ledger), 0, "compact");
-        emon.Testport.assertEq(Html.htmlEmit(pretty, 16, 0, nodes, attrs, regions, text, ledger), 0, "pretty");
+        emon.Testport.assertEq(Html.htmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "compact");
+        emon.Testport.assertEq(Html.htmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "pretty");
     }
 }

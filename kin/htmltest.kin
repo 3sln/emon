@@ -40,11 +40,12 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Cells st (new-cells)
         ^Text out (new-text)]
-    (assert-eq (jt-build (test-file mfile) nodes attrs regions text pages ledger st) 0 "the script builds")
-    (assert-eq (model-check nodes attrs regions text pages ledger st) 0 "the Model is well formed")
-    (assert-eq (html-emit out opts below nodes attrs regions text ledger) 0 "it emits")
+    (assert-eq (jt-build (test-file mfile) nodes attrs regions text pages ledger layout st) 0 "the script builds")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
+    (assert-eq (html-emit out opts below nodes attrs regions text pages ledger layout) 0 "it emits")
     (assert-text-span out (test-file hfile) 0 (jt-end (test-file hfile)) "the golden" 0)
     (return 0)))
 
@@ -61,31 +62,36 @@
   (ht-golden (test-t) "json/minimal.model" "html/minimal.html" 0 0)
   (ht-golden (test-t) "json/minimal.model" "html/minimal.pretty.html" 16 0)
   (ht-golden (test-t) "json/minimal.model" "html/minimal.full.html" 15 950)
-  (ht-golden (test-t) "json/minimal.model" "html/minimal.bare.html" 96 0))
+  (ht-golden (test-t) "json/minimal.model" "html/minimal.bare.html" 96 0)
+  (ht-golden (test-t) "json/minimal.model" "html/minimal.plain.html" 386 0))
 
 (deftest test-golden-sample
   (ht-golden (test-t) "json/sample.model" "html/sample.html" 0 0)
   (ht-golden (test-t) "json/sample.model" "html/sample.pretty.html" 16 0)
   (ht-golden (test-t) "json/sample.model" "html/sample.full.html" 15 950)
-  (ht-golden (test-t) "json/sample.model" "html/sample.bare.html" 96 0))
+  (ht-golden (test-t) "json/sample.model" "html/sample.bare.html" 96 0)
+  (ht-golden (test-t) "json/sample.model" "html/sample.plain.html" 386 0))
 
 (deftest test-golden-kinds
   (ht-golden (test-t) "json/kinds.model" "html/kinds.html" 0 0)
   (ht-golden (test-t) "json/kinds.model" "html/kinds.pretty.html" 16 0)
   (ht-golden (test-t) "json/kinds.model" "html/kinds.full.html" 15 950)
-  (ht-golden (test-t) "json/kinds.model" "html/kinds.bare.html" 96 0))
+  (ht-golden (test-t) "json/kinds.model" "html/kinds.bare.html" 96 0)
+  (ht-golden (test-t) "json/kinds.model" "html/kinds.plain.html" 386 0))
 
 (deftest test-golden-corners
   (ht-golden (test-t) "json/corners.model" "html/corners.html" 0 0)
   (ht-golden (test-t) "json/corners.model" "html/corners.pretty.html" 16 0)
   (ht-golden (test-t) "json/corners.model" "html/corners.full.html" 15 950)
-  (ht-golden (test-t) "json/corners.model" "html/corners.bare.html" 96 0))
+  (ht-golden (test-t) "json/corners.model" "html/corners.bare.html" 96 0)
+  (ht-golden (test-t) "json/corners.model" "html/corners.plain.html" 386 0))
 
 (deftest test-golden-probe
   (ht-golden (test-t) "json/probe.model" "html/probe.html" 0 0)
   (ht-golden (test-t) "json/probe.model" "html/probe.pretty.html" 16 0)
   (ht-golden (test-t) "json/probe.model" "html/probe.full.html" 15 950)
-  (ht-golden (test-t) "json/probe.model" "html/probe.bare.html" 96 0))
+  (ht-golden (test-t) "json/probe.model" "html/probe.bare.html" 96 0)
+  (ht-golden (test-t) "json/probe.model" "html/probe.plain.html" 386 0))
 
 ;; ------------------------------------------------------------- the corners
 
@@ -96,9 +102,10 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Text out (new-text)]
-    (model-init nodes attrs regions text pages ledger)
-    (html-emit out 0 0 nodes attrs regions text ledger)
+    (model-init nodes attrs regions text pages ledger layout)
+    (html-emit out 0 0 nodes attrs regions text pages ledger layout)
     (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>" "the smallest document")))
 
 (deftest test-heading-levels-and-escapes
@@ -108,9 +115,10 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Text out (new-text)
         ^:mut ^I32 h 0]
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (set h (node-new nodes (nk-heading) 0))
     (node-set-sub nodes h 1)
     (ht-set nodes text h (text-blob "a & b"))
@@ -120,7 +128,7 @@
     (set h (node-new nodes (nk-heading) 0))
     (node-set-sub nodes h 7)
     (ht-set nodes text h (text-blob "say \"seven\""))
-    (html-emit out 0 0 nodes attrs regions text ledger)
+    (html-emit out 0 0 nodes attrs regions text pages ledger layout)
     (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><h1>a &amp; b</h1><h6>&lt;six&gt;</h6><h6 aria-level=\"7\">say &quot;seven&quot;</h6></main></body></html>" "levels, and the four escapes")))
 
 (deftest test-options-add-ids-geometry-and-confidence
@@ -130,18 +138,19 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Text all (new-text)
         ^Text none (new-text)
         ^Text edge (new-text)
         ^:mut ^I32 p 0]
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (set p (node-new nodes (nk-paragraph) 0))
     (ht-set nodes text p (text-blob "x"))
     (node-add-region nodes regions p 1 7250 -5 54000 100)
     (node-set-conf nodes p 500)
-    (html-emit all 7 600 nodes attrs regions text ledger)
-    (html-emit none 0 600 nodes attrs regions text ledger)
-    (html-emit edge 4 500 nodes attrs regions text ledger)
+    (html-emit all 7 600 nodes attrs regions text pages ledger layout)
+    (html-emit none 0 600 nodes attrs regions text pages ledger layout)
+    (html-emit edge 4 500 nodes attrs regions text pages ledger layout)
     (assert-text all "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>" "all three options")
     (assert-text none "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>" "clean by default")
     (assert-text edge "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>" "conf is only written strictly below the threshold")))
@@ -153,16 +162,17 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Text kept (new-text)
         ^Text bare (new-text)
         ^:mut ^I32 n 0]
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (set n (node-new nodes (nk-break) 0))
     (node-set-sub nodes n 2)
     (set n (node-new nodes (nk-furniture) -1))
     (node-set-sub nodes n 7)
-    (html-emit kept 0 0 nodes attrs regions text ledger)
-    (html-emit bare 96 0 nodes attrs regions text ledger)
+    (html-emit kept 0 0 nodes attrs regions text pages ledger layout)
+    (html-emit bare 96 0 nodes attrs regions text pages ledger layout)
     (assert-text kept "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>" "furniture once at the top, then the milestone")
     (assert-text bare "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>" "both off")))
 
@@ -173,11 +183,12 @@
         ^Cells text (new-cells)
         ^Cells pages (new-cells)
         ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
         ^Text compact (new-text)
         ^Text pretty (new-text)
         ^:mut ^I32 at 0]
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (while (!= at -1)
       (set at (node-new nodes (nk-section) at)))
-    (assert-eq (html-emit compact 0 0 nodes attrs regions text ledger) 0 "compact")
-    (assert-eq (html-emit pretty 16 0 nodes attrs regions text ledger) 0 "pretty")))
+    (assert-eq (html-emit compact 0 0 nodes attrs regions text pages ledger layout) 0 "compact")
+    (assert-eq (html-emit pretty 16 0 nodes attrs regions text pages ledger layout) 0 "pretty")))

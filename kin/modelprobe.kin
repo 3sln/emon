@@ -19,8 +19,8 @@
 
 (defn ^:pub ^I32 probe-build [^:mut ^Cells nodes ^:mut ^Cells attrs
                               ^:mut ^Cells regions ^:mut ^Cells text
-                              ^:mut ^Cells pages ^:mut ^Cells ledger]
-  (model-init nodes attrs regions text pages ledger)
+                              ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout]
+  (model-init nodes attrs regions text pages ledger layout)
   (node-new nodes (nk-paragraph) 0)
   (text-append-cp text 72)
   (text-append-cp text 105)
@@ -39,9 +39,9 @@
 
 (defn ^:pub ^I32 probe-hash [^:mut ^Text t ^Cells nodes ^Cells attrs
                              ^Cells regions ^Cells text ^Cells pages
-                             ^Cells ledger]
+                             ^Cells ledger ^Cells layout]
   (comment "`model: HI LO`, the two signed 32-bit halves of `model-hash`.")
-  (let [^I64 h (model-hash nodes attrs regions text pages ledger)]
+  (let [^I64 h (model-hash nodes attrs regions text pages ledger layout)]
     (emit-ascii t "model: ")
     (text-i32 t (sm-hi h))
     (emit-ascii t " ")
@@ -50,5 +50,5 @@
 
 (defn ^:pub ^I32 probe-json [^:mut ^Text t ^Cells nodes ^Cells attrs
                              ^Cells regions ^Cells text ^Cells pages
-                             ^Cells ledger]
-  (return (js-emit t 0 nodes attrs regions text pages ledger)))
+                             ^Cells ledger ^Cells layout]
+  (return (js-emit t 0 nodes attrs regions text pages ledger layout)))

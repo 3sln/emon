@@ -13,8 +13,8 @@ public static class Modeltest {
         }
         return 0;
     }
-    internal static int MtTree(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+    internal static int MtTree(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeNew(nodes, Model.NkSection(), 0);
         Model.NodeNew(nodes, Model.NkHeading(), 1);
         Model.NodeNew(nodes, Model.NkParagraph(), 1);
@@ -35,7 +35,8 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertEq(Model.NodeCount(nodes), 1, "one node");
         emon.Testport.AssertEq(emon.Port.CellsLen(nodes), 16, "a node is sixteen cells");
         emon.Testport.AssertEq(Model.NodeKind(nodes, 0), 1, "the root is a document, code 1");
@@ -60,7 +61,7 @@ public static class Modeltest {
         emon.Testport.AssertEq(emon.Port.CellsLen(text), 0, "text empty");
         emon.Testport.AssertEq(Model.PageCount(pages), 0, "no pages");
         emon.Testport.AssertEq(Model.LedgerCount(ledger), 0, "nothing dropped");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.NewCells()), 0, "well formed");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells()), 0, "well formed");
     }
     [Xunit.Fact]
     public static void TestModelInitEmptiesAUsedModel() {
@@ -70,11 +71,12 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.NewCells();
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.TextAppendCp(text, 65);
         Model.PageNew(pages, 1, 100, 100, 0, 1);
         Model.LedgerAdd(ledger, 1, 1, 0, 0, 1, 1, 500, 0);
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertEq(Model.NodeCount(nodes), 1, "back to the root");
         emon.Testport.AssertEq(emon.Port.CellsLen(text), 0, "text cleared");
         emon.Testport.AssertEq(Model.PageCount(pages), 0, "pages cleared");
@@ -88,7 +90,8 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.NewCells();
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertEq(Model.NodeCount(nodes), 11, "eleven nodes");
         emon.Testport.AssertEq(Model.NodeFirstChild(nodes, 0), 1, "document first child");
         emon.Testport.AssertEq(Model.NodeLastChild(nodes, 0), 10, "document last child");
@@ -115,7 +118,7 @@ public static class Modeltest {
         emon.Testport.AssertEq(Model.NodeDepth(nodes, 6), 4, "depth of the innermost text");
         emon.Testport.AssertEq(Model.NodeKind(nodes, 5), 22, "span is code 22");
         emon.Testport.AssertEq(Model.NodeKind(nodes, 7), 5, "list is code 5");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.NewCells()), 0, "well formed");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells()), 0, "well formed");
     }
     [Xunit.Fact]
     public static void TestNodeNewRefusesWhatItCannotPlace() {
@@ -125,11 +128,12 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertEq(Model.NodeNew(nodes, Model.NkParagraph(), 5), -1, "a parent that does not exist");
         emon.Testport.AssertEq(Model.NodeNew(nodes, Model.NkParagraph(), -2), -1, "a parent below -1");
         emon.Testport.AssertEq(Model.NodeNew(nodes, 0, 0), -1, "kind 0 is unknown");
-        emon.Testport.AssertEq(Model.NodeNew(nodes, 26, 0), -1, "kind 26 is unknown");
+        emon.Testport.AssertEq(Model.NodeNew(nodes, 27, 0), -1, "kind 27 is unknown");
         emon.Testport.AssertEq(Model.NodeCount(nodes), 1, "a refusal adds nothing");
         emon.Testport.AssertEq(Model.NodeNew(nodes, Model.NkFurniture(), -1), 1, "a second root is allowed");
         emon.Testport.AssertEq(Model.NodeParent(nodes, 1), -1, "furniture has no parent");
@@ -143,9 +147,10 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         int at = 0;
         int made = 0;
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (at != -1) {
             at = Model.NodeNew(nodes, Model.NkSection(), at);
             if (at != -1) {
@@ -153,7 +158,7 @@ public static class Modeltest {
             }
         }
         emon.Testport.AssertEq(made, Model.MaxDepth() - 1, "a chain of sections ends at max-depth - 1 below the root");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.NewCells()), 0, "still well formed");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells()), 0, "still well formed");
     }
     [Xunit.Fact]
     public static void TestFieldsAreSetAndReadBack() {
@@ -163,7 +168,8 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.NewCells();
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeSetText(nodes, 3, 7, 5);
         emon.Testport.AssertEq(Model.NodeTextStart(nodes, 3), 7, "text start");
         emon.Testport.AssertEq(Model.NodeTextLen(nodes, 3), 5, "text len");
@@ -211,7 +217,8 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.NewCells();
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertEq(Model.NodeAddRegion(nodes, regions, 3, 1, 7200, 9000, 54000, 11000), 0, "first region is 0");
         emon.Testport.AssertEq(Model.NodeAddRegion(nodes, regions, 2, 1, 100, 200, 300, 400), 1, "another node's region is 1");
         emon.Testport.AssertEq(Model.NodeAddRegion(nodes, regions, 3, 2, 7200, 6000, 54000, 8000), 2, "a second page for the paragraph");
@@ -231,7 +238,7 @@ public static class Modeltest {
         emon.Testport.AssertEq(Model.RegionPage(regions, 1), 1, "the heading's page");
         emon.Testport.AssertEq(Model.NodeRegionHead(nodes, 2), 1, "the heading's head");
         emon.Testport.AssertEq(Model.NodeRegionHead(nodes, 4), -1, "a node with none");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.NewCells()), 0, "well formed");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells()), 0, "well formed");
     }
     [Xunit.Fact]
     public static void TestAttributesSetReplaceAndRepeat() {
@@ -241,8 +248,9 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         int a = 0;
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         MtText(text, 20);
         emon.Testport.AssertEq(Model.NodeAttr(nodes, attrs, 2, Model.FkLevel()), -1, "no attribute yet");
         emon.Testport.AssertEq(Model.NodeAttrIntOr(nodes, attrs, 2, Model.FkLevel(), 77), 77, "default when absent");
@@ -288,7 +296,7 @@ public static class Modeltest {
         emon.Testport.AssertEq(Model.AttrFindNext(attrs, a, Model.FkPages()), -1, "no fourth");
         emon.Testport.AssertEq(Model.NodeAttr(nodes, attrs, 7, Model.FkAlt()), -1, "a key never set");
         emon.Testport.AssertEq(Model.NodeAttr(nodes, attrs, 3, Model.FkPages()), -1, "another node's chain is its own");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.NewCells()), 0, "well formed");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells()), 0, "well formed");
     }
     [Xunit.Fact]
     public static void TestTextArenaHoldsScalarValuesOnly() {
@@ -409,11 +417,11 @@ public static class Modeltest {
         emon.Port.TextAscii(t, " ");
         Model.FkEmitName(t, 74);
         emon.Testport.AssertText(t, "paragraph linebreak id checked", "spellings");
-        emon.Testport.AssertEq(Model.NkEmitName(t, 26), 0, "an unknown kind writes nothing");
+        emon.Testport.AssertEq(Model.NkEmitName(t, 27), 0, "an unknown kind writes nothing");
         emon.Testport.AssertEq(Model.NkEmitName(t, 0), 0, "kind 0 is unknown");
     }
-    internal static int MtTiny(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+    internal static int MtTiny(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeNew(nodes, Model.NkParagraph(), 0);
         Model.TextAppendCp(text, 72);
         Model.TextAppendCp(text, 105);
@@ -436,7 +444,8 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
-        MtTiny(nodes, attrs, regions, text, pages, ledger);
+        emon.Port.Cells layout = emon.Port.NewCells();
+        MtTiny(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.AssertEq(emon.Port.CellsLen(nodes), 32, "two nodes");
         emon.Testport.AssertEq(emon.Port.CellsAt(nodes, 2), 1, "root first child");
         emon.Testport.AssertEq(emon.Port.CellsAt(nodes, 3), 1, "root last child");
@@ -454,8 +463,8 @@ public static class Modeltest {
         emon.Testport.AssertEq(emon.Port.CellsLen(pages), 16, "one page");
         emon.Testport.AssertEq(emon.Port.CellsAt(pages, 7), 987, "page health");
         emon.Testport.AssertEq(emon.Port.CellsLen(ledger), 10, "one ledger row");
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, emon.Port.NewCells()), 0, "well formed");
-        emon.Testport.AssertEq64(Model.ModelHash(nodes, attrs, regions, text, pages, ledger), -413424005450145991, "fingerprint");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells()), 0, "well formed");
+        emon.Testport.AssertEq64(Model.ModelHash(nodes, attrs, regions, text, pages, ledger, layout), -4136225311394902565, "fingerprint (the old one times the FNV prime: an empty layout arena folds as one more multiply)");
     }
     [Xunit.Fact]
     public static void TestCheckNamesEachWayAModelCanBeWrong() {
@@ -465,48 +474,49 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.TextAppendCp(text, 65);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "well formed to begin with");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed to begin with");
         emon.Port.CellsPush(nodes, 0);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadStride(), "a stray cell");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadStride(), "a stray cell");
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.CellsSet(nodes, 17, 99);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadLink(), "a parent out of range");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadLink(), "a parent out of range");
         emon.Testport.AssertEq(emon.Port.CellsAt(st, 0), 1, "names node 1");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.CellsSet(nodes, (3 * 16) + 1, 2);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadTree(), "a child that points at another parent");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadTree(), "a child that points at another parent");
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.CellsSet(nodes, (3 * 16) + 7, 0);
         emon.Port.CellsSet(nodes, (3 * 16) + 8, 5);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadText(), "a text run past the arena");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadText(), "a text run past the arena");
         emon.Testport.AssertEq(emon.Port.CellsAt(st, 0), 3, "names node 3");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeSetConf(nodes, 3, 10);
         emon.Port.CellsSet(nodes, (3 * 16) + 12, 1001);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadConf(), "a confidence of 1001");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadConf(), "a confidence of 1001");
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.CellsSet(nodes, 0, 2);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McNoRoot(), "a root that is not a document");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McNoRoot(), "a root that is not a document");
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         emon.Port.CellsSet(nodes, (4 * 16) + 0, 40);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), 3, "an unknown kind is mc-bad-kind");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 3, "an unknown kind is mc-bad-kind");
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeSetAttrText(nodes, attrs, 3, Model.FkLabel(), 0, 4);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadAttr(), "an attribute run past the arena");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadAttr(), "an attribute run past the arena");
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeAddRegion(nodes, regions, 3, 1, 0, 0, 1, 1);
         emon.Port.CellsSet(nodes, (3 * 16) + 10, 2);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadRegion(), "a region count that is not the chain");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadRegion(), "a region count that is not the chain");
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.PageNew(pages, 1, 100, 100, 0, 1);
         Model.PageSetLabel(pages, 0, 0, 3);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadPage(), "a page label past the arena");
-        MtTree(nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadPage(), "a page label past the arena");
+        MtTree(nodes, attrs, regions, text, pages, ledger, layout);
         Model.LedgerAdd(ledger, 1, 1, 0, 0, 1, 1, 2000, 0);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McBadLedger(), "a ledger confidence of 2000");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadLedger(), "a ledger confidence of 2000");
     }
     [Xunit.Fact]
     public static void TestCheckRequiresPreorderIds() {
@@ -516,12 +526,13 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeNew(nodes, Model.NkSection(), 0);
         Model.NodeNew(nodes, Model.NkSection(), 0);
         Model.NodeNew(nodes, Model.NkParagraph(), 1);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McNotPreorder(), "a child created after its parent's next sibling");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McNotPreorder(), "a child created after its parent's next sibling");
         emon.Testport.AssertEq(emon.Port.CellsAt(st, 0), 3, "names node 3");
     }
     [Xunit.Fact]
@@ -532,14 +543,137 @@ public static class Modeltest {
         emon.Port.Cells text = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
         emon.Port.Cells st = emon.Port.NewCells();
-        Model.ModelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.NodeNew(nodes, Model.NkParagraph(), 0);
         Model.NodeNew(nodes, Model.NkFurniture(), -1);
         Model.NodeNew(nodes, Model.NkParagraph(), 2);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "two trees, each in pre-order");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "two trees, each in pre-order");
         Model.NodeNew(nodes, Model.NkFurniture(), -1);
         Model.NodeNew(nodes, Model.NkParagraph(), 0);
-        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, st), Model.McNotPreorder(), "a body node added after the furniture");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McNotPreorder(), "a body node added after the furniture");
+    }
+    [Xunit.Fact]
+    public static void TestTheNewCodesAreWhereD050PutThem() {
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        emon.Testport.AssertEq(Model.NkInitial(), 26, "initial is kind 26");
+        emon.Testport.AssertEq(Model.NkIsInline(Model.NkInitial()), 1, "an initial is an inline");
+        emon.Testport.AssertEq(Model.FkForm(), 76, "form");
+        emon.Testport.AssertEq(Model.FkLines(), 77, "lines");
+        emon.Testport.AssertEq(Model.FkLayout(), 78, "layout");
+        emon.Testport.AssertEq(Model.FkBand(), 79, "band");
+        emon.Testport.AssertEq(Model.FkCol(), 80, "col");
+        emon.Testport.AssertEq(Model.FkBox(), 81, "box");
+        emon.Testport.AssertEq(Model.RlSidebar(), 9, "sidebar is role 9");
+        Model.NkEmitName(t, 26);
+        emon.Port.TextAscii(t, " ");
+        Model.IfmEmitName(t, 1);
+        emon.Port.TextAscii(t, " ");
+        Model.IfmEmitName(t, 2);
+        emon.Port.TextAscii(t, " ");
+        Model.IfmEmitName(t, 3);
+        emon.Port.TextAscii(t, " ");
+        Model.RlEmitName(t, 9);
+        emon.Port.TextAscii(t, " ");
+        Model.FkEmitName(t, 78);
+        emon.Testport.AssertText(t, "initial drop raised margin sidebar layout", "the names");
+    }
+    [Xunit.Fact]
+    public static void TestAnInitialIsAnInlineWithFormAndLines() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        emon.Testport.AssertEq(Model.NodeNew(nodes, Model.NkInitial(), 1), 2, "an initial under a paragraph");
+        Model.NodeSetSub(nodes, 2, 2);
+        Model.NodeSetAux(nodes, 2, 3);
+        emon.Testport.AssertEq(Model.NodeNew(nodes, Model.NkText(), 2), 3, "its text");
+        emon.Testport.AssertEq(Model.NodeNew(nodes, 27, 1), -1, "27 is not a kind");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells()), 0, "well formed");
+    }
+    [Xunit.Fact]
+    public static void TestAlignIsASubOnAParagraphAndAnAttributeElsewhere() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        Model.NodeNew(nodes, Model.NkHeading(), 0);
+        Model.NodeNew(nodes, Model.NkCell(), 0);
+        Model.NodeNew(nodes, Model.NkCaption(), 0);
+        Model.NodeNew(nodes, Model.NkSection(), 0);
+        Model.NodeSetSub(nodes, 2, 3);
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 1, Model.AlCenter()), 0, "a paragraph");
+        emon.Testport.AssertEq(Model.NodeSub(nodes, 1), 2, "in its sub");
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 2, Model.AlEnd()), 0, "a heading");
+        emon.Testport.AssertEq(Model.NodeSub(nodes, 2), 3, "its level is untouched");
+        emon.Testport.AssertEq(Model.NodeAttrIntOr(nodes, attrs, 2, Model.FkAlign(), 0), 3, "the alignment is an attribute");
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 2, Model.AlStart()), 0, "set again");
+        emon.Testport.AssertEq(Model.NodeAttrIntOr(nodes, attrs, 2, Model.FkAlign(), 0), 1, "replaced, not repeated");
+        emon.Testport.AssertEq(Model.AttrCount(attrs), 1, "one attribute");
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 3, Model.AlJustify()), -1, "a cell is never justified");
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 3, Model.AlCenter()), 0, "a cell may be centred");
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 4, Model.AlJustify()), 0, "a caption");
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 5, Model.AlStart()), -1, "a section has none");
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 1, 0), -1, "0 is not a value");
+        emon.Testport.AssertEq(Model.NodeSetAlign(nodes, attrs, 1, 5), -1, "5 is not a value");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells()), 0, "well formed");
+    }
+    [Xunit.Fact]
+    public static void TestAPagesLayoutIsOneContiguousRun() {
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
+        emon.Testport.AssertEq(Model.PageLayoutCount(pages, 0), 0, "no map yet");
+        emon.Testport.AssertEq(Model.LayAdd(layout, pages, 0, 0, 0, Model.RlBody(), 7200, 9000, 30000, 75000), 0, "first cell");
+        emon.Testport.AssertEq(Model.LayAdd(layout, pages, 0, 0, 1, Model.RlSidebar(), 31200, 9000, 54000, 75000), 1, "second cell");
+        emon.Testport.AssertEq(Model.LayAdd(layout, pages, 1, 0, 0, Model.RlMargin(), 100, 200, 300, 400), 2, "the next page's run");
+        emon.Testport.AssertEq(Model.LayAdd(layout, pages, 0, 1, 0, Model.RlBody(), 0, 0, 1, 1), -1, "page 1's run is no longer last");
+        emon.Testport.AssertEq(Model.LayAdd(layout, pages, 1, 0, 1, 3, 0, 0, 1, 1), -1, "a role that is no layout role");
+        emon.Testport.AssertEq(Model.LayAdd(layout, pages, 2, 0, 0, Model.RlBody(), 0, 0, 1, 1), -1, "no such page");
+        emon.Testport.AssertEq(emon.Port.CellsLen(layout), 24, "eight cells each, three rows");
+        emon.Testport.AssertEq(Model.LayoutCount(layout), 3, "three rows");
+        emon.Testport.AssertEq(Model.PageLayoutFirst(pages, 0), 0, "page 1 starts at row 0");
+        emon.Testport.AssertEq(Model.PageLayoutCount(pages, 0), 2, "and has two");
+        emon.Testport.AssertEq(Model.PageLayoutFirst(pages, 1), 2, "page 2 starts at row 2");
+        emon.Testport.AssertEq(Model.PageLayoutCount(pages, 1), 1, "and has one");
+        emon.Testport.AssertEq(Model.LayoutPage(layout, 2), 2, "the page number");
+        emon.Testport.AssertEq(Model.LayoutBand(layout, 1), 0, "band");
+        emon.Testport.AssertEq(Model.LayoutCol(layout, 1), 1, "col");
+        emon.Testport.AssertEq(Model.LayoutRole(layout, 1), 9, "role");
+        emon.Testport.AssertEq(Model.LayoutX0(layout, 1), 31200, "x0");
+        emon.Testport.AssertEq(Model.LayoutY0(layout, 1), 9000, "y0");
+        emon.Testport.AssertEq(Model.LayoutX1(layout, 1), 54000, "x1");
+        emon.Testport.AssertEq(Model.LayoutY1(layout, 1), 75000, "y1");
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+        emon.Port.CellsSet(pages, 12, 5);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadLayout(), "a run past the arena");
+        emon.Port.CellsSet(pages, 12, 2);
+        emon.Port.CellsSet(layout, 3, 3);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadLayout(), "a role that is not body, margin or sidebar");
+        emon.Port.CellsSet(layout, 3, 9);
+        emon.Port.CellsSet(layout, 0, 7);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadLayout(), "a cell of another page");
+        emon.Port.CellsSet(layout, 0, 1);
+        emon.Port.CellsPush(layout, 0);
+        emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), Model.McBadStride(), "a stray cell");
     }
 }

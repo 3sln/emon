@@ -113,7 +113,7 @@ func jtText(b []byte, end int32, st *port.Cells, text *port.Cells) int32 {
 	return start
 }
 
-func jtLine(b []byte, from int32, end int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, st *port.Cells) int32 {
+func jtLine(b []byte, from int32, end int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, st *port.Cells) int32 {
 	// Run one command. Answers 0, or 1 when it is unknown or refused.
 	var c0 int32 = port.BlobU8(b, from)
 	var c1 int32 = 0
@@ -230,6 +230,28 @@ func jtLine(b []byte, from int32, end int32, nodes *port.Cells, attrs *port.Cell
 		model.NodeAddAttrText(nodes, attrs, a, k, v, model.TextLen(text)-v)
 		return 0
 	}
+	if code == 24940 {
+		a = jtInt(b, end, st)
+		v = jtInt(b, end, st)
+		if model.NodeSetAlign(nodes, attrs, a, v) < 0 {
+			return 1
+		}
+		return 0
+	}
+	if code == 27769 {
+		a = jtInt(b, end, st)
+		k = jtInt(b, end, st)
+		v = jtInt(b, end, st)
+		w = jtInt(b, end, st)
+		x = jtInt(b, end, st)
+		y = jtInt(b, end, st)
+		z = jtInt(b, end, st)
+		q = jtInt(b, end, st)
+		if model.LayAdd(layout, pages, a, k, v, w, x, y, z, q) < 0 {
+			return 1
+		}
+		return 0
+	}
 	if code == 28775 {
 		a = jtInt(b, end, st)
 		k = jtInt(b, end, st)
@@ -280,19 +302,19 @@ func jtLine(b []byte, from int32, end int32, nodes *port.Cells, attrs *port.Cell
 	return 1
 }
 
-func JtBuild(b []byte, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, st *port.Cells) int32 {
+func JtBuild(b []byte, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, st *port.Cells) int32 {
 	// Build the Model a script describes. 0, or the first bad line.
 	var pos int32 = 0
 	var e int32 = 0
 	var lineno int32 = 0
-	model.ModelInit(nodes, attrs, regions, text, pages, ledger)
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	port.CellsDrop(st, 0)
 	port.CellsPush(st, 0)
 	for pos < port.BlobLen(b) {
 		e = jtEol(b, pos)
 		lineno += 1
 		if (pos < e) && (port.BlobU8(b, pos) != 35) {
-			if jtLine(b, pos, e, nodes, attrs, regions, text, pages, ledger, st) == 1 {
+			if jtLine(b, pos, e, nodes, attrs, regions, text, pages, ledger, layout, st) == 1 {
 				return lineno
 			}
 		}

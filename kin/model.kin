@@ -2,7 +2,7 @@
 ;;
 ;; THE MODEL IS THE PRODUCT: every stage after evidence writes into it and
 ;; every consumer reads it, so this module is the one whose codes are forever.
-;; Kin cannot allocate, so the Model is SIX ARENAS OF INTEGERS -- `Cells` the
+;; Kin cannot allocate, so the Model is SEVEN ARENAS OF INTEGERS -- `Cells` the
 ;; host allocates and this module fills. A node is its index; four languages
 ;; cannot disagree about an index.
 ;;
@@ -13,6 +13,9 @@
 ;;                        Model is a run (start, length) in here
 ;;   pages    stride 16   the page table
 ;;   ledger   stride 10   what was dropped, and why
+;;   layout   stride 8    the column map (D111): page, band, col, role, x0 y0 x1 y1;
+;;                        a page's cells are one contiguous run, named by two
+;;                        spare cells of its `pages` row (first, count)
 ;;
 ;; NO LINK IS A POINTER. A missing link, run, or value is -1; a count is 0.
 ;; A field that is -1 is OMITTED from the JSON (SPEC 4.2), so "absent" has one
@@ -80,7 +83,8 @@
    [nk-span 22 "span"]
    [nk-link 23 "link"]
    [nk-ref 24 "ref"]
-   [nk-linebreak 25 "linebreak"]])
+   [nk-linebreak 25 "linebreak"]
+   [nk-initial 26 "initial"]])
 
 ;; The JSON field names. A node's attribute key is one of these.
 (defenum ^:pub fk
@@ -158,7 +162,13 @@
    [fk-modified 72 "modified"]
    [fk-type 73 "type"]
    [fk-checked 74 "checked"]
-   [fk-subkind 75 "subkind"]])
+   [fk-subkind 75 "subkind"]
+   [fk-form 76 "form"]
+   [fk-lines 77 "lines"]
+   [fk-layout 78 "layout"]
+   [fk-band 79 "band"]
+   [fk-col 80 "col"]
+   [fk-box 81 "box"]])
 
 ;; Provenance bits (SPEC 3.5). The code IS the bit.
 (defenum ^:pub sr
@@ -193,7 +203,9 @@
    [sy-mono 64 "mono"]
    [sy-smallcaps 128 "smallcaps"]])
 
-;; A paragraph's `align` (its `sub`; 0 is "not informative", omitted).
+;; An `align` (D110): a paragraph's is its `sub` (0 is "not informative", omitted);
+;; a heading's, caption's and cell's is the attribute `fk-align` (their `sub` is
+;; taken), and a cell is never `justify`. `node-set-align` is the one builder.
 (defenum ^:pub al
   [[al-start 1 "start"]
    [al-center 2 "center"]
@@ -209,7 +221,14 @@
    [rl-endnote 5 "endnote"]
    [rl-margin 6 "margin"]
    [rl-header 7 "header"]
-   [rl-footer 8 "footer"]])
+   [rl-footer 8 "footer"]
+   [rl-sidebar 9 "sidebar"]])
+
+;; An `initial` inline's form (D109; its `sub`; its `aux` is the lines, 0 absent).
+(defenum ^:pub ifm
+  [[ifm-drop 1 "drop"]
+   [ifm-raised 2 "raised"]
+   [ifm-margin 3 "margin"]])
 
 ;; A figure's `kind` (SPEC 10.6; its `sub`).
 (defenum ^:pub fg
@@ -276,7 +295,8 @@
    [mc-bad-conf 9 "bad-conf"]
    [mc-not-preorder 10 "not-preorder"]
    [mc-bad-page 11 "bad-page"]
-   [mc-bad-ledger 12 "bad-ledger"]])
+   [mc-bad-ledger 12 "bad-ledger"]
+   [mc-bad-layout 13 "bad-layout"]])
 
 ;; Attribute value kinds. A `node` value is a node id (`caption.target`).
 (defn ^:pub ^I32 av-int [] (return 0))
@@ -290,6 +310,7 @@
 (defn ^:pub ^I32 regions-stride [] (return 6))
 (defn ^:pub ^I32 pages-stride [] (return 16))
 (defn ^:pub ^I32 ledger-stride [] (return 10))
+(defn ^:pub ^I32 layout-stride [] (return 8))
 
 ;; The deepest a tree may nest. `node-new` refuses a deeper node (answers -1),
 ;; which is what lets every walker recurse without a stack of its own.
@@ -329,12 +350,14 @@
 
 (defn ^:pub ^I32 nk-is-inline [^I32 kind]
   (comment "1 for the kinds that live inside a block's text: text, span, link,")
-  (comment "ref, linebreak (SPEC 3.2). A `break` is a milestone, not an inline.")
+  (comment "ref, linebreak, initial (SPEC 3.2). A `break` is a milestone, not an")
+  (comment "inline.")
   (if (== kind (nk-text)) (return 1))
   (if (== kind (nk-span)) (return 1))
   (if (== kind (nk-link)) (return 1))
   (if (== kind (nk-ref)) (return 1))
   (if (== kind (nk-linebreak)) (return 1))
+  (if (== kind (nk-initial)) (return 1))
   (return 0))
 
 (defn ^:pub ^I32 node-child-count [^Cells nodes ^I32 n]
@@ -364,7 +387,7 @@
   (comment "(absent), `flags` 0, `sub` 0, `aux` 0.")
   (let [^I32 n (quot (cells-len nodes) 16)
         ^:mut ^I32 last -1]
-    (if (or (< kind 1) (> kind 25)) (return -1))
+    (if (or (< kind 1) (> kind 26)) (return -1))
     (if (< parent -1) (return -1))
     (if (>= parent n) (return -1))
     (if (>= parent 0)
@@ -395,14 +418,16 @@
 
 (defn ^:pub ^I32 model-init [^:mut ^Cells nodes ^:mut ^Cells attrs
                              ^:mut ^Cells regions ^:mut ^Cells text
-                             ^:mut ^Cells pages ^:mut ^Cells ledger]
-  (comment "Empty all six arenas and create the `document` root, node 0.")
+                             ^:mut ^Cells pages ^:mut ^Cells ledger
+                             ^:mut ^Cells layout]
+  (comment "Empty all seven arenas and create the `document` root, node 0.")
   (cells-drop nodes 0)
   (cells-drop attrs 0)
   (cells-drop regions 0)
   (cells-drop text 0)
   (cells-drop pages 0)
   (cells-drop ledger 0)
+  (cells-drop layout 0)
   (node-new nodes (nk-document) -1)
   (return 0))
 
@@ -611,6 +636,20 @@
 (defn ^:pub ^I32 node-set-attr-text [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key ^I32 start ^I32 ln]
   (comment "The value is the run [start, start+length) of the text arena.")
   (return (attr-put nodes attrs n key 1 start ln 1)))
+(defn ^:pub ^I32 node-set-align [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 v]
+  (comment "Set the alignment of a paragraph (its `sub`), heading, caption or cell")
+  (comment "(the attribute `fk-align`), a logical `al` code (D110). Answers 0, or -1")
+  (comment "when the value is not an `al` code, the node is not one of those kinds,")
+  (comment "or it is a cell and the value is `justify`.")
+  (let [^I32 kind (nget nodes n 0)]
+    (if (or (< v 1) (> v 4)) (return -1))
+    (if (== kind (nk-paragraph))
+      (do (nput nodes n 14 v) (return 0)))
+    (if (and (== kind (nk-cell)) (== v (al-justify))) (return -1))
+    (if (or (== kind (nk-heading)) (== kind (nk-caption)) (== kind (nk-cell)))
+      (do (attr-put nodes attrs n (fk-align) 0 v 0 1) (return 0)))
+    (return -1)))
+
 (defn ^:pub ^I32 node-add-attr-int [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 key ^I32 v]
   (comment "Append, even if the key is already there (a repeated key).")
   (return (attr-put nodes attrs n key 0 v 0 0)))
@@ -622,7 +661,9 @@
 ;;   0 number (1-based, as the JSON `n`)  1 label-start (-1 none)  2 label-len
 ;;   3 w  4 h (centipoints)  5 rot (0, 90, 180, 270)  6 kind (`pk`)
 ;;   7 health (0..1000, -1 absent)  8 dpi (0 unknown)  9 px-w  10 px-h
-;;   11..15 reserved, 0 (D050): room for per-page fields without a new stride.
+;;   11 layout-first (the first row of this page's run in the `layout` arena)
+;;   12 layout-count (rows in the run; 0 = no layout, and 11 means nothing)
+;;   13..15 reserved, 0 (D050): room for per-page fields without a new stride.
 
 (defn ^:pub ^I32 page-new [^:mut ^Cells pages ^I32 number ^I32 w ^I32 h ^I32 rot ^I32 kind]
   (comment "Append a page-table row and answer its index. A new row has no")
@@ -661,6 +702,9 @@
   (pset pages p 8 dpi)
   (pset pages p 9 pxw)
   (return (pset pages p 10 pxh)))
+
+(defn ^:pub ^I32 page-layout-first [^Cells pages ^I32 p] (return (pget pages p 11)))
+(defn ^:pub ^I32 page-layout-count [^Cells pages ^I32 p] (return (pget pages p 12)))
 
 (defn ^:pub ^I32 page-count [^Cells pages] (return (quot (cells-len pages) 16)))
 (defn ^:pub ^I32 page-number [^Cells pages ^I32 p] (return (pget pages p 0)))
@@ -716,9 +760,60 @@
 (defn ^:pub ^I32 ledger-conf [^Cells ledger ^I32 l] (return (lget ledger l 8)))
 (defn ^:pub ^I32 ledger-src [^Cells ledger ^I32 l] (return (lget ledger l 9)))
 
+;; ----------------------------------------------------------------- layout
+;;
+;;   0 page (the page NUMBER, as a region's)  1 band  2 col
+;;   3 role (`rl`: body 2, margin 6, sidebar 9)  4 x0  5 y0  6 x1  7 y1
+;;
+;; THE COLUMN MAP (D111). A page's cells are ONE CONTIGUOUS RUN, in reading
+;; order, and its `pages` row names the run (cells 11 and 12: first, count).
+;; `lay-add` keeps the run contiguous: it refuses (answers -1) a cell for a page
+;; whose run is not the last one written, so a stage writes a page's map whole.
+
+(defn ^:pub ^I32 lay-add [^:mut ^Cells layout ^:mut ^Cells pages ^I32 p
+                          ^I32 band ^I32 col ^I32 role
+                          ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Append a cell to page index p's run and answer its row, or -1 when p")
+  (comment "is not a page, the role is not body, margin or sidebar, or the page's")
+  (comment "run is not at the end of the arena.")
+  (let [^I32 r (quot (cells-len layout) 8)
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 num 0]
+    (if (or (< p 0) (>= p (quot (cells-len pages) 16))) (return -1))
+    (if (and (!= role (rl-body)) (!= role (rl-margin)) (!= role (rl-sidebar)))
+      (return -1))
+    (set cnt (pget pages p 12))
+    (set num (pget pages p 0))
+    (if (== cnt 0)
+      (pset pages p 11 r)
+      (if (!= (+ (pget pages p 11) cnt) r) (return -1)))
+    (pset pages p 12 (+ cnt 1))
+    (cells-push layout num)
+    (cells-push layout band)
+    (cells-push layout col)
+    (cells-push layout role)
+    (cells-push layout x0)
+    (cells-push layout y0)
+    (cells-push layout x1)
+    (cells-push layout y1)
+    (return r)))
+
+(defn ^I32 yget [^Cells layout ^I32 r ^I32 f]
+  (return (cells-at layout (+ (* r 8) f))))
+
+(defn ^:pub ^I32 layout-count [^Cells layout] (return (quot (cells-len layout) 8)))
+(defn ^:pub ^I32 layout-page [^Cells layout ^I32 r] (return (yget layout r 0)))
+(defn ^:pub ^I32 layout-band [^Cells layout ^I32 r] (return (yget layout r 1)))
+(defn ^:pub ^I32 layout-col [^Cells layout ^I32 r] (return (yget layout r 2)))
+(defn ^:pub ^I32 layout-role [^Cells layout ^I32 r] (return (yget layout r 3)))
+(defn ^:pub ^I32 layout-x0 [^Cells layout ^I32 r] (return (yget layout r 4)))
+(defn ^:pub ^I32 layout-y0 [^Cells layout ^I32 r] (return (yget layout r 5)))
+(defn ^:pub ^I32 layout-x1 [^Cells layout ^I32 r] (return (yget layout r 6)))
+(defn ^:pub ^I32 layout-y1 [^Cells layout ^I32 r] (return (yget layout r 7)))
+
 ;; ------------------------------------------------------------------ check
 ;;
-;; `model-check` answers 0 when the six arenas are a well-formed Model and an
+;; `model-check` answers 0 when the seven arenas are a well-formed Model and an
 ;; `mc` code when not, with the offending index in `st[0]` (`st` is any
 ;; `Cells`, cleared on entry). It is what a stage runs on its own output
 ;; before handing it on, and what a fuzzer asserts: a Model that passes cannot
@@ -757,7 +852,7 @@
         ^I32 na (quot (cells-len attrs) 5)
         ^I32 nr (quot (cells-len regions) 6)
         ^I32 tl (cells-len text)]
-    (if (or (< kind 1) (> kind 25)) (return (mc-bad-kind)))
+    (if (or (< kind 1) (> kind 26)) (return (mc-bad-kind)))
     (if (== (mc-link-ok (nget nodes n 1) nn) 0) (return (mc-bad-link)))
     (if (== (mc-link-ok (nget nodes n 2) nn) 0) (return (mc-bad-link)))
     (if (== (mc-link-ok (nget nodes n 3) nn) 0) (return (mc-bad-link)))
@@ -830,8 +925,10 @@
     (return 0)))
 
 (defn ^:pub ^I32 model-check [^Cells nodes ^Cells attrs ^Cells regions ^Cells text
-                              ^Cells pages ^Cells ledger ^:mut ^Cells st]
+                              ^Cells pages ^Cells ledger ^Cells layout ^:mut ^Cells st]
   (let [^I32 nn (quot (cells-len nodes) 16)
+        ^I32 nlay (quot (cells-len layout) 8)
+        ^:mut ^I32 j 0
         ^:mut ^I32 i 0
         ^:mut ^I32 rc 0
         ^:mut ^I32 kids 0
@@ -845,6 +942,7 @@
     (if (!= (rem (cells-len regions) 6) 0) (return (mc-fail st (mc-bad-stride) 0)))
     (if (!= (rem (cells-len pages) 16) 0) (return (mc-fail st (mc-bad-stride) 0)))
     (if (!= (rem (cells-len ledger) 10) 0) (return (mc-fail st (mc-bad-stride) 0)))
+    (if (!= (rem (cells-len layout) 8) 0) (return (mc-fail st (mc-bad-stride) 0)))
     (if (< nn 1) (return (mc-fail st (mc-no-root) 0)))
     (if (!= (nget nodes 0 0) (nk-document)) (return (mc-fail st (mc-no-root) 0)))
     (if (!= (nget nodes 0 1) -1) (return (mc-fail st (mc-no-root) 0)))
@@ -874,6 +972,23 @@
           (if (or (< (lget ledger i 8) -1) (> (lget ledger i 8) 1000))
             (return (mc-fail st (mc-bad-ledger) i)))
           (set i (+ i 1))))
+    (set i 0)
+    (while (< i (quot (cells-len pages) 16))
+      (do (if (< (pget pages i 12) 0) (return (mc-fail st (mc-bad-layout) i)))
+          (if (> (pget pages i 12) 0)
+            (do (if (< (pget pages i 11) 0) (return (mc-fail st (mc-bad-layout) i)))
+                (if (> (pget pages i 11) (- nlay (pget pages i 12)))
+                  (return (mc-fail st (mc-bad-layout) i)))
+                (set j 0)
+                (while (< j (pget pages i 12))
+                  (do (if (!= (yget layout (+ (pget pages i 11) j) 0) (pget pages i 0))
+                        (return (mc-fail st (mc-bad-layout) i)))
+                      (if (and (!= (yget layout (+ (pget pages i 11) j) 3) (rl-body))
+                               (!= (yget layout (+ (pget pages i 11) j) 3) (rl-margin))
+                               (!= (yget layout (+ (pget pages i 11) j) 3) (rl-sidebar)))
+                        (return (mc-fail st (mc-bad-layout) i)))
+                      (set j (+ j 1))))))
+          (set i (+ i 1))))
     (return 0)))
 
 ;; ------------------------------------------------------------------- hash
@@ -890,9 +1005,9 @@
     (return (mul64 (bit-xor acc (i64 (cells-len c))) 1099511628211))))
 
 (defn ^:pub ^I64 model-hash [^Cells nodes ^Cells attrs ^Cells regions ^Cells text
-                             ^Cells pages ^Cells ledger]
+                             ^Cells pages ^Cells ledger ^Cells layout]
   (comment "A 64-bit fingerprint of the whole Model: the gate's proof that four")
-  (comment "targets built the same six arenas. FNV-1a, offset basis")
+  (comment "targets built the same seven arenas. FNV-1a, offset basis")
   (comment "14695981039346656037 (as a signed value) and prime 1099511628211.")
   (let [^:mut ^I64 h -3750763034362895579]
     (set h (mh-fold h nodes))
@@ -901,4 +1016,5 @@
     (set h (mh-fold h text))
     (set h (mh-fold h pages))
     (set h (mh-fold h ledger))
+    (set h (mh-fold h layout))
     (return h)))

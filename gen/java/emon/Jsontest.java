@@ -12,13 +12,14 @@ public final class Jsontest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
         StringBuilder compact = emon.Testport.newText();
         StringBuilder pretty = emon.Testport.newText();
-        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/minimal.model"), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/minimal.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertTextSpan(compact, emon.Testport.testFile("json/minimal.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/minimal.json")), "compact", 0);
         emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("json/minimal.pretty.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/minimal.pretty.json")), "pretty", 0);
     }
@@ -29,13 +30,14 @@ public final class Jsontest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
         StringBuilder compact = emon.Testport.newText();
         StringBuilder pretty = emon.Testport.newText();
-        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/sample.model"), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/sample.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertTextSpan(compact, emon.Testport.testFile("json/sample.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/sample.json")), "compact", 0);
         emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("json/sample.pretty.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/sample.pretty.json")), "pretty", 0);
     }
@@ -46,13 +48,14 @@ public final class Jsontest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
         StringBuilder compact = emon.Testport.newText();
         StringBuilder pretty = emon.Testport.newText();
-        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/kinds.model"), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/kinds.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertTextSpan(compact, emon.Testport.testFile("json/kinds.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/kinds.json")), "compact", 0);
         emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("json/kinds.pretty.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/kinds.pretty.json")), "pretty", 0);
     }
@@ -63,13 +66,14 @@ public final class Jsontest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
         StringBuilder compact = emon.Testport.newText();
         StringBuilder pretty = emon.Testport.newText();
-        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/corners.model"), nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+        emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile("json/corners.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+        Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
         emon.Testport.assertTextSpan(compact, emon.Testport.testFile("json/corners.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/corners.json")), "compact", 0);
         emon.Testport.assertTextSpan(pretty, emon.Testport.testFile("json/corners.pretty.json"), 0, Mscript.jtEnd(emon.Testport.testFile("json/corners.pretty.json")), "pretty", 0);
     }
@@ -130,16 +134,17 @@ public final class Jsontest {
         emon.Port.Cells text = emon.Port.newCells();
         emon.Port.Cells pages = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
         emon.Port.Cells st = emon.Port.newCells();
         StringBuilder compact = emon.Testport.newText();
         StringBuilder pretty = emon.Testport.newText();
         int at = 0;
-        Model.modelInit(nodes, attrs, regions, text, pages, ledger);
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         while (at != -1) {
             at = Model.nodeNew(nodes, Model.nkSection(), at);
         }
-        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, st), 0, "well formed");
-        emon.Testport.assertEq(Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger), 0, "compact");
-        emon.Testport.assertEq(Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger), 0, "pretty");
+        emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+        emon.Testport.assertEq(Json.jsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "compact");
+        emon.Testport.assertEq(Json.jsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout), 0, "pretty");
     }
 }

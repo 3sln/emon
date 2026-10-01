@@ -37,12 +37,14 @@ HTML_DIR = os.path.join(ROOT, "test", "html")
 
 # Option bits, transcribed from `kin/html.kin`'s header (the `ho-*` functions).
 IDS, GEOM, CONF, LEDGER, PRETTY, FURN_DROP, NO_MILE = 1, 2, 4, 8, 16, 32, 64
+INITIALS_PLAIN, ALIGN_STYLE = 128, 256
 # name -> (bits, confidence threshold)
 VARIANTS = {
     "html": (0, 0),
     "pretty.html": (PRETTY, 0),
     "full.html": (IDS | GEOM | CONF | LEDGER, 950),
     "bare.html": (FURN_DROP | NO_MILE, 0),
+    "plain.html": (INITIALS_PLAIN | ALIGN_STYLE | GEOM, 0),
 }
 
 
@@ -75,7 +77,7 @@ def cpt(v):
 
 
 # ------------------------------------------------------------- the renderer
-BLOCKLESS = ("text", "span", "link", "ref", "linebreak")
+BLOCKLESS = ("text", "span", "link", "ref", "linebreak", "initial")
 STYLE_OPEN = [("bold", "<b"), ("italic", "<i"), ("underline", "<u"), ("strike", "<s"),
               ("sub", "<sub"), ("sup", "<sup"), ("mono", "<code"),
               ("smallcaps", '<span data-emon-style="smallcaps"')]
@@ -86,8 +88,38 @@ SEAL_WORD = {"seal": "Seal", "stamp": "Stamp", "signature": "Signature",
 
 
 class R:
-    def __init__(self, bits, conf_below, node_kinds):
+    def __init__(self, bits, conf_below, node_kinds, pages=(), targeted=()):
         self.o, self.cb, self.kinds = bits, conf_below, node_kinds
+        self.pages, self.targeted = pages, targeted
+
+    def cells(self, n):
+        """The column cells (`page:band:col`) holding the centre of each region of
+        node n, in order (D113). The centre is the sum of the halves, each
+        truncated toward zero, in centipoints, and a cell contains it edges
+        included; the first cell of the page's map that does wins."""
+        out = []
+        for r in n.get("at", []):
+            pg, x0, y0, x1, y1 = [int(Decimal(v) * 100) for v in r]
+            pg = int(Decimal(r[0]))
+            cx, cy = half(x0) + half(x1), half(y0) + half(y1)
+            for p in self.pages:
+                if p["n"] != pg:
+                    continue
+                for c in p.get("layout", []):
+                    bx0, by0, bx1, by1 = [int(Decimal(v) * 100) for v in c["box"]]
+                    if bx0 <= cx <= bx1 and by0 <= cy <= by1:
+                        out.append("%d:%d:%d" % (pg, c["band"], c["col"]))
+                        break
+                break
+        return out
+
+    def align(self, n):
+        if "align" not in n:
+            return ""
+        s = ' data-emon-align="%s"' % n["align"]
+        if self.on(ALIGN_STYLE):
+            s += ' style="text-align:%s" dir="auto"' % n["align"]
+        return s
 
     def on(self, bit):
         return bool(self.o & bit)
@@ -103,6 +135,12 @@ class R:
         if self.on(GEOM) and n.get("at"):
             s += ' data-emon-at="%s"' % ";".join(
                 ",".join(cpt(x) for x in r) for r in n["at"])
+        if self.on(GEOM) and not inline and n.get("at"):
+            cs = self.cells(n)
+            if cs:
+                s += ' data-emon-col="%s"' % cs[0]
+            if len(cs) > 1:
+                s += ' data-emon-cols="%s"' % " ".join(cs)
         if self.on(CONF) and "conf" in n and n["conf"] < self.cb:
             s += ' data-emon-conf="%d"' % n["conf"]
         return s
@@ -122,6 +160,13 @@ class R:
         k = n["kind"]
         if k == "text":
             return esc(n.get("text", ""))
+        if k == "initial":
+            if self.on(INITIALS_PLAIN):
+                return self.inner(n)
+            s = '<span data-emon="initial"'
+            s += self.attr("data-emon-form", n, "form")
+            s += self.attr("data-emon-lines", n, "lines", str)
+            return s + self.common(n) + ">" + self.inner(n) + "</span>"
         if k == "linebreak":
             return "<br%s>" % self.common(n)
         if k == "span":
@@ -196,12 +241,13 @@ class R:
             if lv > 6:
                 o += ' aria-level="%d"' % lv
             o += self.attr("data-emon-number", n, "number")
+            o += self.align(n)
             o += c + ">"
             if "number" in n:
                 o += esc(n["number"]) + " "
             return nl + self.wrap(o, "</h%d>" % pk, n, d)
         if k == "paragraph":
-            return nl + self.wrap("<p%s%s>" % (self.attr("data-emon-align", n, "align"), c), "</p>", n, d)
+            return nl + self.wrap("<p%s%s>" % (self.align(n), c), "</p>", n, d)
         if k == "list":
             if n.get("ordered"):
                 o = "<ol"
@@ -242,11 +288,11 @@ class R:
             for key in ("rowspan", "colspan"):
                 if key in n and n[key] != 1:
                     o += ' %s="%d"' % (key, n[key])
-            return nl + self.wrap(o + c + ">", "</%s>" % tag, n, d)
+            return nl + self.wrap(o + self.align(n) + c + ">", "</%s>" % tag, n, d)
         if k == "caption":
             tag = {"table": "caption", "figure": "figcaption"}.get(parent)
             o = "<" + tag if tag else '<p data-emon="caption"'
-            o += self.attr("data-emon-label", n, "label") + c + ">"
+            o += self.attr("data-emon-label", n, "label") + self.align(n) + c + ">"
             return nl + self.wrap(o, "</%s>" % (tag or "p"), n, d)
         if k == "figure":
             o = '<figure data-emon-kind="%s" role="img"' % n.get("subkind", "unknown")
@@ -283,8 +329,13 @@ class R:
         if k == "quote":
             return nl + self.wrap("<blockquote%s>" % c, "</blockquote>", n, d)
         if k == "note":
-            role = "doc-endnote" if n.get("role") == "endnote" else "doc-footnote"
-            o = '<aside role="%s" id="fn-%d"' % (role, n["id"])
+            if n.get("role") in ("margin", "sidebar"):
+                o = '<aside data-emon-role="%s"' % n["role"]
+                if n["id"] in self.targeted:
+                    o += ' id="fn-%d"' % n["id"]
+            else:
+                role = "doc-endnote" if n.get("role") == "endnote" else "doc-footnote"
+                o = '<aside role="%s" id="fn-%d"' % (role, n["id"])
             o += self.attr("data-emon-marker", n, "marker") + c + ">"
             return nl + self.wrap(o, "</aside>", n, d)
         if k == "field":
@@ -315,6 +366,28 @@ class R:
         return self.nl(d) + o + "".join(parts) + (self.nl(d) if parts else "") + "</aside>"
 
 
+def half(v):
+    """Half, truncated toward zero (kin's `quot`)."""
+    return -(-v // 2) if v < 0 else v // 2
+
+
+def targets(doc):
+    """The ids a `ref` or a `link` points at."""
+    out = set()
+
+    def walk(n):
+        if n["kind"] in ("ref", "link") and "target" in n:
+            out.add(n["target"])
+        for key in ("children", "inlines"):
+            for c in n.get(key, []):
+                walk(c)
+    walk(doc["body"])
+    for f in doc.get("furniture", []):
+        for c in f.get("children", []):
+            walk(c)
+    return out
+
+
 def kind_index(doc):
     idx = {}
 
@@ -332,7 +405,7 @@ def kind_index(doc):
 
 
 def render(doc, bits, cb):
-    r = R(bits, cb, kind_index(doc))
+    r = R(bits, cb, kind_index(doc), doc.get("pages", []), targets(doc))
     src, meta = doc.get("source", {}), doc.get("meta", {})
     nl = r.nl
     out = "<!doctype html>" + nl(0) + "<html"
@@ -403,7 +476,7 @@ def text_of(el):
     return "".join(out)
 
 
-def json_census(doc):
+def json_census(doc, bits=0):
     """Expected element counts, from the JSON: name -> count."""
     cen = {}
 
@@ -450,6 +523,9 @@ def json_census(doc):
             add("a")
         elif k == "ref":
             add("a-or-span-noteref")
+        elif k == "initial":
+            if not bits & INITIALS_PLAIN:
+                add("span-initial")
         for key in ("children", "inlines"):
             for c in n.get(key, []):
                 walk(c, k)
@@ -485,6 +561,8 @@ def html_census(root):
                 add("span-page")
             elif e.get("data-emon") == "label":
                 add("span-label")
+            elif e.get("data-emon") == "initial":
+                add("span-initial")
             elif e.get("role") == "doc-noteref":
                 add("a-or-span-noteref")
         for c in e:
@@ -507,7 +585,7 @@ def structure_check(h5, name, html, doc, bits):
         return ["%s: no <main>" % name]
     # ---- census (only for the variants that drop nothing the JSON lists)
     if not bits & (FURN_DROP | NO_MILE):
-        want = json_census(doc)
+        want = json_census(doc, bits)
         # ledger templates are not in the census; aside/p of furniture are
         want.setdefault("a", 0)
         refs = want.pop("a-or-span-noteref", 0)

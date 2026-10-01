@@ -103,7 +103,7 @@ pub(crate) fn jt_text(b: &[u8], end: i32, mut st: &mut crate::port::Cells, mut t
     crate::port::cells_set(st, 0, end);
     return start;
 }
-pub(crate) fn jt_line(b: &[u8], from: i32, end: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
+pub(crate) fn jt_line(b: &[u8], from: i32, end: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
     // Run one command. Answers 0, or 1 when it is unknown or refused.
     let c0: i32 = crate::port::blob_u8(b, from);
     let mut c1: i32 = 0;
@@ -220,6 +220,28 @@ pub(crate) fn jt_line(b: &[u8], from: i32, end: i32, mut nodes: &mut crate::port
         node_add_attr_text(nodes, attrs, a, k, v, text_len(text) - v);
         return 0;
     }
+    if code == 24940 {
+        a = jt_int(b, end, st);
+        v = jt_int(b, end, st);
+        if node_set_align(nodes, attrs, a, v) < 0 {
+            return 1;
+        }
+        return 0;
+    }
+    if code == 27769 {
+        a = jt_int(b, end, st);
+        k = jt_int(b, end, st);
+        v = jt_int(b, end, st);
+        w = jt_int(b, end, st);
+        x = jt_int(b, end, st);
+        y = jt_int(b, end, st);
+        z = jt_int(b, end, st);
+        q = jt_int(b, end, st);
+        if lay_add(layout, pages, a, k, v, w, x, y, z, q) < 0 {
+            return 1;
+        }
+        return 0;
+    }
     if code == 28775 {
         a = jt_int(b, end, st);
         k = jt_int(b, end, st);
@@ -269,19 +291,19 @@ pub(crate) fn jt_line(b: &[u8], from: i32, end: i32, mut nodes: &mut crate::port
     }
     return 1;
 }
-pub fn jt_build(b: &[u8], mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
+pub fn jt_build(b: &[u8], mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
     // Build the Model a script describes. 0, or the first bad line.
     let mut pos: i32 = 0;
     let mut e: i32 = 0;
     let mut lineno: i32 = 0;
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     crate::port::cells_drop(st, 0);
     crate::port::cells_push(st, 0);
     while pos < crate::port::blob_len(b) {
         e = jt_eol(b, pos);
         lineno += 1;
         if (pos < e) && (crate::port::blob_u8(b, pos) != 35) {
-            if jt_line(b, pos, e, nodes, attrs, regions, text, pages, ledger, st) == 1 {
+            if jt_line(b, pos, e, nodes, attrs, regions, text, pages, ledger, layout, st) == 1 {
                 return lineno;
             }
         }

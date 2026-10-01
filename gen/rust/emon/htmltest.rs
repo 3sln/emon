@@ -14,11 +14,12 @@ pub(crate) fn ht_golden(emon_t: i32, mfile: &str, hfile: &str, opts: i32, below:
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut String = &mut crate::port::new_text();
-    crate::testport::assert_eq(jt_build(&crate::testport::test_file(mfile)[..], nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-    crate::testport::assert_eq(html_emit(out, opts, below, nodes, attrs, regions, text, ledger), 0, "it emits");
+    crate::testport::assert_eq(jt_build(&crate::testport::test_file(mfile)[..], nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+    crate::testport::assert_eq(html_emit(out, opts, below, nodes, attrs, regions, text, pages, ledger, layout), 0, "it emits");
     crate::testport::assert_text_span(out, &crate::testport::test_file(hfile)[..], 0, jt_end(&crate::testport::test_file(hfile)[..]), "the golden", 0);
     return 0;
 }
@@ -35,6 +36,7 @@ fn test_golden_minimal() {
     ht_golden(0, "json/minimal.model", "html/minimal.pretty.html", 16, 0);
     ht_golden(0, "json/minimal.model", "html/minimal.full.html", 15, 950);
     ht_golden(0, "json/minimal.model", "html/minimal.bare.html", 96, 0);
+    ht_golden(0, "json/minimal.model", "html/minimal.plain.html", 386, 0);
 }
 #[test]
 fn test_golden_sample() {
@@ -42,6 +44,7 @@ fn test_golden_sample() {
     ht_golden(0, "json/sample.model", "html/sample.pretty.html", 16, 0);
     ht_golden(0, "json/sample.model", "html/sample.full.html", 15, 950);
     ht_golden(0, "json/sample.model", "html/sample.bare.html", 96, 0);
+    ht_golden(0, "json/sample.model", "html/sample.plain.html", 386, 0);
 }
 #[test]
 fn test_golden_kinds() {
@@ -49,6 +52,7 @@ fn test_golden_kinds() {
     ht_golden(0, "json/kinds.model", "html/kinds.pretty.html", 16, 0);
     ht_golden(0, "json/kinds.model", "html/kinds.full.html", 15, 950);
     ht_golden(0, "json/kinds.model", "html/kinds.bare.html", 96, 0);
+    ht_golden(0, "json/kinds.model", "html/kinds.plain.html", 386, 0);
 }
 #[test]
 fn test_golden_corners() {
@@ -56,6 +60,7 @@ fn test_golden_corners() {
     ht_golden(0, "json/corners.model", "html/corners.pretty.html", 16, 0);
     ht_golden(0, "json/corners.model", "html/corners.full.html", 15, 950);
     ht_golden(0, "json/corners.model", "html/corners.bare.html", 96, 0);
+    ht_golden(0, "json/corners.model", "html/corners.plain.html", 386, 0);
 }
 #[test]
 fn test_golden_probe() {
@@ -63,6 +68,7 @@ fn test_golden_probe() {
     ht_golden(0, "json/probe.model", "html/probe.pretty.html", 16, 0);
     ht_golden(0, "json/probe.model", "html/probe.full.html", 15, 950);
     ht_golden(0, "json/probe.model", "html/probe.bare.html", 96, 0);
+    ht_golden(0, "json/probe.model", "html/probe.plain.html", 386, 0);
 }
 #[test]
 fn test_an_empty_document() {
@@ -72,9 +78,10 @@ fn test_an_empty_document() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut String = &mut crate::port::new_text();
-    model_init(nodes, attrs, regions, text, pages, ledger);
-    html_emit(out, 0, 0, nodes, attrs, regions, text, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    html_emit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "the smallest document");
 }
 #[test]
@@ -85,9 +92,10 @@ fn test_heading_levels_and_escapes() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut String = &mut crate::port::new_text();
     let mut h: i32 = 0;
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     h = node_new(nodes, nk_heading(), 0);
     node_set_sub(nodes, h, 1);
     ht_set(nodes, text, h, &crate::testport::text_blob("a & b")[..]);
@@ -97,7 +105,7 @@ fn test_heading_levels_and_escapes() {
     h = node_new(nodes, nk_heading(), 0);
     node_set_sub(nodes, h, 7);
     ht_set(nodes, text, h, &crate::testport::text_blob("say \"seven\"")[..]);
-    html_emit(out, 0, 0, nodes, attrs, regions, text, ledger);
+    html_emit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_text(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><h1>a &amp; b</h1><h6>&lt;six&gt;</h6><h6 aria-level=\"7\">say &quot;seven&quot;</h6></main></body></html>", "levels, and the four escapes");
 }
 #[test]
@@ -108,18 +116,19 @@ fn test_options_add_ids_geometry_and_confidence() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let all: &mut String = &mut crate::port::new_text();
     let none: &mut String = &mut crate::port::new_text();
     let edge: &mut String = &mut crate::port::new_text();
     let mut p: i32 = 0;
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     p = node_new(nodes, nk_paragraph(), 0);
     ht_set(nodes, text, p, &crate::testport::text_blob("x")[..]);
     node_add_region(nodes, regions, p, 1, 7250, -5, 54000, 100);
     node_set_conf(nodes, p, 500);
-    html_emit(all, 7, 600, nodes, attrs, regions, text, ledger);
-    html_emit(none, 0, 600, nodes, attrs, regions, text, ledger);
-    html_emit(edge, 4, 500, nodes, attrs, regions, text, ledger);
+    html_emit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout);
+    html_emit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout);
+    html_emit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_text(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options");
     crate::testport::assert_text(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default");
     crate::testport::assert_text(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold");
@@ -132,16 +141,17 @@ fn test_furniture_drops_and_milestones_switch_off() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let kept: &mut String = &mut crate::port::new_text();
     let bare: &mut String = &mut crate::port::new_text();
     let mut n: i32 = 0;
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     n = node_new(nodes, nk_break(), 0);
     node_set_sub(nodes, n, 2);
     n = node_new(nodes, nk_furniture(), -1);
     node_set_sub(nodes, n, 7);
-    html_emit(kept, 0, 0, nodes, attrs, regions, text, ledger);
-    html_emit(bare, 96, 0, nodes, attrs, regions, text, ledger);
+    html_emit(kept, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
+    html_emit(bare, 96, 0, nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_text(kept, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>", "furniture once at the top, then the milestone");
     crate::testport::assert_text(bare, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "both off");
 }
@@ -153,13 +163,14 @@ fn test_the_deepest_tree_emits() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let compact: &mut String = &mut crate::port::new_text();
     let pretty: &mut String = &mut crate::port::new_text();
     let mut at: i32 = 0;
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     while at != -1 {
         at = node_new(nodes, nk_section(), at);
     }
-    crate::testport::assert_eq(html_emit(compact, 0, 0, nodes, attrs, regions, text, ledger), 0, "compact");
-    crate::testport::assert_eq(html_emit(pretty, 16, 0, nodes, attrs, regions, text, ledger), 0, "pretty");
+    crate::testport::assert_eq(html_emit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "compact");
+    crate::testport::assert_eq(html_emit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "pretty");
 }

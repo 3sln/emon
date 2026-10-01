@@ -13,13 +13,14 @@ fn test_golden_minimal() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let compact: &mut String = &mut crate::port::new_text();
     let pretty: &mut String = &mut crate::port::new_text();
-    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/minimal.model")[..], nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/minimal.model")[..], nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_text_span(compact, &crate::testport::test_file("json/minimal.json")[..], 0, jt_end(&crate::testport::test_file("json/minimal.json")[..]), "compact", 0);
     crate::testport::assert_text_span(pretty, &crate::testport::test_file("json/minimal.pretty.json")[..], 0, jt_end(&crate::testport::test_file("json/minimal.pretty.json")[..]), "pretty", 0);
 }
@@ -31,13 +32,14 @@ fn test_golden_sample() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let compact: &mut String = &mut crate::port::new_text();
     let pretty: &mut String = &mut crate::port::new_text();
-    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/sample.model")[..], nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/sample.model")[..], nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_text_span(compact, &crate::testport::test_file("json/sample.json")[..], 0, jt_end(&crate::testport::test_file("json/sample.json")[..]), "compact", 0);
     crate::testport::assert_text_span(pretty, &crate::testport::test_file("json/sample.pretty.json")[..], 0, jt_end(&crate::testport::test_file("json/sample.pretty.json")[..]), "pretty", 0);
 }
@@ -49,13 +51,14 @@ fn test_golden_kinds() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let compact: &mut String = &mut crate::port::new_text();
     let pretty: &mut String = &mut crate::port::new_text();
-    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/kinds.model")[..], nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/kinds.model")[..], nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_text_span(compact, &crate::testport::test_file("json/kinds.json")[..], 0, jt_end(&crate::testport::test_file("json/kinds.json")[..]), "compact", 0);
     crate::testport::assert_text_span(pretty, &crate::testport::test_file("json/kinds.pretty.json")[..], 0, jt_end(&crate::testport::test_file("json/kinds.pretty.json")[..]), "pretty", 0);
 }
@@ -67,13 +70,14 @@ fn test_golden_corners() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let compact: &mut String = &mut crate::port::new_text();
     let pretty: &mut String = &mut crate::port::new_text();
-    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/corners.model")[..], nodes, attrs, regions, text, pages, ledger, st), 0, "the script builds");
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "the Model is well formed");
-    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger);
-    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger);
+    crate::testport::assert_eq(jt_build(&crate::testport::test_file("json/corners.model")[..], nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
+    js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout);
+    js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout);
     crate::testport::assert_text_span(compact, &crate::testport::test_file("json/corners.json")[..], 0, jt_end(&crate::testport::test_file("json/corners.json")[..]), "compact", 0);
     crate::testport::assert_text_span(pretty, &crate::testport::test_file("json/corners.pretty.json")[..], 0, jt_end(&crate::testport::test_file("json/corners.pretty.json")[..]), "pretty", 0);
 }
@@ -137,15 +141,16 @@ fn test_the_deepest_tree_serializes() {
     let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let compact: &mut String = &mut crate::port::new_text();
     let pretty: &mut String = &mut crate::port::new_text();
     let mut at: i32 = 0;
-    model_init(nodes, attrs, regions, text, pages, ledger);
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
     while at != -1 {
         at = node_new(nodes, nk_section(), at);
     }
-    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, st), 0, "well formed");
-    crate::testport::assert_eq(js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger), 0, "compact");
-    crate::testport::assert_eq(js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger), 0, "pretty");
+    crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed");
+    crate::testport::assert_eq(js_emit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "compact");
+    crate::testport::assert_eq(js_emit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout), 0, "pretty");
 }

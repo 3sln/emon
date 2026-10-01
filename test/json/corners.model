@@ -6,6 +6,13 @@ at 0 44 emon <0.1.0> & "x"
 at 0 39 A "quoted" <title> & more
 pg 1 61200 79200 0 1
 pg 2 61200 79200 0 1
+# THE COLUMN MAP (D111): two pages of two bands. ly IDX BAND COL ROLE X0 Y0 X1 Y1
+ly 0 0 0 2 7200 9000 30000 40000
+ly 0 0 1 2 31200 9000 54000 40000
+ly 0 1 0 2 7200 41000 54000 75000
+ly 1 0 0 2 7200 9000 40000 75000
+ly 1 0 1 9 41000 9000 54000 75000
+ly 1 1 0 6 7200 76000 54000 78000
 # 1 section
 n 2 0
 # 2 heading level 7 (h6 + aria-level); 3 heading with no level
@@ -134,7 +141,89 @@ s 48 9
 n 20 1
 s 49 10
 at 49 28 x<y
-# 50 furniture with nothing on it
+# 50 a paragraph whose first letter is a drop initial of three lines (52) and a
+# smallcaps lead-in after it (53, 54): the text reads THE BUREAU was closed.
+n 4 1
+r 50 1 7200 9000 30000 40000
+n 26 50
+s 51 1
+x 51 3
+n 21 51
+t 52 T
+n 22 50
+s 53 128
+n 21 53
+t 54 HE BUREAU
+n 21 50
+t 55 \u0020was closed.
+# 56 justified, with a raised initial (57); 60 a margin initial of two lines (61);
+# 64 an initial with no form and no lines
+n 4 1
+al 56 4
+n 26 56
+s 57 2
+n 21 57
+t 58 W
+n 21 56
+t 59 ith it.
+n 4 1
+n 26 60
+s 61 3
+x 61 2
+n 21 61
+t 62 Q
+n 21 60
+t 63 uiet
+n 4 1
+n 26 64
+n 21 65
+t 66 Z
+# 67 a heading aligned to the start; 68 a loose caption aligned to the centre
+n 3 1
+s 67 2
+al 67 1
+t 67 Start heading
+n 11 1
+al 68 2
+t 68 Centered caption
+# 69 a table whose header cell (72) is aligned to the end and whose body cell
+# (73) to the centre
+n 7 1
+n 8 69
+n 9 70
+n 10 71
+s 72 1
+al 72 3
+t 72 Total
+n 10 71
+al 73 2
+t 73 9
+# 74 a paragraph with a link to the sidebar note (78) and a ref to the margin note
+# (77), in two columns of two pages and one region on no cell
+n 4 1
+r 74 1 7200 45000 54000 60000
+r 74 2 8000 10000 30000 20000
+r 74 2 55000 100000 56000 101000
+n 23 74
+an 75 29 78
+t 75 see aside
+n 24 74
+at 76 17 m
+an 76 29 77
+n 17 1
+s 77 6
+t 77 margin text, targeted
+n 17 1
+s 78 9
+n 4 78
+t 79 Sidebar paragraph, targeted
+n 17 1
+s 80 9
+t 80 sidebar, not targeted
+n 17 1
+s 81 6
+t 81 margin, not targeted
+# 82 furniture with nothing on it
 n 19 -1
 d 2 1 100 200 300 400 500 4
 dt 0 x & "y" <z>

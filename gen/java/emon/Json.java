@@ -321,6 +321,25 @@ public final class Json {
         emon.Port.textAscii(t, "\"");
         return 1;
     }
+    public static int jsEForm(StringBuilder t, int pr, int d, int started, int v) {
+        if (v <= 0) {
+            return started;
+        }
+        jsBegin(t, pr, d, started, Model.fkForm());
+        emon.Port.textAscii(t, "\"");
+        Model.ifmEmitName(t, v);
+        emon.Port.textAscii(t, "\"");
+        return 1;
+    }
+    public static int jsFAlign(StringBuilder t, int pr, int d, emon.Port.Cells nodes, emon.Port.Cells attrs, int n, int started) {
+        // The `align` ATTRIBUTE of a heading, caption or cell (D110): an `al`
+        // code in an int attribute, written as its name.
+        int a = Model.nodeAttr(nodes, attrs, n, Model.fkAlign());
+        if (a < 0) {
+            return started;
+        }
+        return jsEAlign(t, pr, d, started, Model.attrValue(attrs, a));
+    }
     public static int jsEHeader(StringBuilder t, int pr, int d, int started, int v) {
         if (v <= 0) {
             return started;
@@ -379,6 +398,7 @@ public final class Json {
         if (kind == Model.nkHeading()) {
             s = jsFtext(t, pr, d, nodes, attrs, text, n, Model.fkNumber(), s);
             s = jsFtext(t, pr, d, nodes, attrs, text, n, Model.fkNumbering(), s);
+            s = jsFAlign(t, pr, d, nodes, attrs, n, s);
         }
         if (kind == Model.nkParagraph()) {
             s = jsEAlign(t, pr, d, s, sub);
@@ -417,10 +437,12 @@ public final class Json {
                 s = jsBegin(t, pr, d, s, Model.fkEmpty());
                 emon.Port.textAscii(t, "true");
             }
+            s = jsFAlign(t, pr, d, nodes, attrs, n, s);
         }
         if (kind == Model.nkCaption()) {
             s = jsFtext(t, pr, d, nodes, attrs, text, n, Model.fkLabel(), s);
             s = jsFint(t, pr, d, nodes, attrs, n, Model.fkTarget(), s);
+            s = jsFAlign(t, pr, d, nodes, attrs, n, s);
         }
         if (kind == Model.nkFigure()) {
             s = jsEFigure(t, pr, d, s, sub);
@@ -469,6 +491,13 @@ public final class Json {
         if (kind == Model.nkRef()) {
             s = jsFtext(t, pr, d, nodes, attrs, text, n, Model.fkMarker(), s);
             s = jsFint(t, pr, d, nodes, attrs, n, Model.fkTarget(), s);
+        }
+        if (kind == Model.nkInitial()) {
+            s = jsEForm(t, pr, d, s, sub);
+            if (aux > 0) {
+                s = jsBegin(t, pr, d, s, Model.fkLines());
+                emon.Port.textI32(t, aux);
+            }
         }
         return s;
     }
@@ -670,10 +699,37 @@ public final class Json {
         jsClose(t, pr, d, s);
         return 0;
     }
-    public static int jsPage(StringBuilder t, int pr, int d, emon.Port.Cells pages, emon.Port.Cells text, int p) {
-        // One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,
-        // `health`, `dpi`, `px` (the pixel size of a raster page).
+    public static int jsLayout(StringBuilder t, int pr, int d, emon.Port.Cells layout, int r) {
+        // One cell of a page's column map: `band`, `col`, `role`, `box`.
         int s = 0;
+        emon.Port.textAscii(t, "{");
+        s = jsBegin(t, pr, d, s, Model.fkBand());
+        emon.Port.textI32(t, Model.layoutBand(layout, r));
+        s = jsBegin(t, pr, d, s, Model.fkCol());
+        emon.Port.textI32(t, Model.layoutCol(layout, r));
+        s = jsBegin(t, pr, d, s, Model.fkRole());
+        emon.Port.textAscii(t, "\"");
+        Model.rlEmitName(t, Model.layoutRole(layout, r));
+        emon.Port.textAscii(t, "\"");
+        s = jsBegin(t, pr, d, s, Model.fkBox());
+        emon.Port.textAscii(t, "[");
+        jsCpt(t, Model.layoutX0(layout, r));
+        jsFsep(t, pr, 1);
+        jsCpt(t, Model.layoutY0(layout, r));
+        jsFsep(t, pr, 1);
+        jsCpt(t, Model.layoutX1(layout, r));
+        jsFsep(t, pr, 1);
+        jsCpt(t, Model.layoutY1(layout, r));
+        emon.Port.textAscii(t, "]");
+        jsClose(t, pr, d, s);
+        return 0;
+    }
+    public static int jsPage(StringBuilder t, int pr, int d, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells text, int p) {
+        // One row of the page table: `n`, `label`, `w`, `h`, `rot`, `kind`,
+        // `health`, `dpi`, `px` (the pixel size of a raster page), `layout` (the
+        // page's column map, when it has one).
+        int s = 0;
+        int i = 0;
         emon.Port.textAscii(t, "{");
         s = jsBegin(t, pr, d, s, Model.fkN());
         emon.Port.textI32(t, Model.pageNumber(pages, p));
@@ -708,6 +764,16 @@ public final class Json {
             jsFsep(t, pr, 1);
             emon.Port.textI32(t, Model.pagePxH(pages, p));
             emon.Port.textAscii(t, "]");
+        }
+        if (Model.pageLayoutCount(pages, p) > 0) {
+            s = jsBegin(t, pr, d, s, Model.fkLayout());
+            emon.Port.textAscii(t, "[");
+            while (i < Model.pageLayoutCount(pages, p)) {
+                jsAelem(t, pr, d + 1, i);
+                jsLayout(t, pr, d + 2, layout, Model.pageLayoutFirst(pages, p) + i);
+                i += 1;
+            }
+            jsAend(t, pr, d + 1, i);
         }
         jsClose(t, pr, d, s);
         return 0;
@@ -802,7 +868,7 @@ public final class Json {
         jsClose(t, pr, 1, s);
         return 0;
     }
-    public static int jsEmit(StringBuilder t, int pretty, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger) {
+    public static int jsEmit(StringBuilder t, int pretty, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
         // Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1
         // for the indented form, 0 for the compact one. The root (node 0)
         // must be a document: run `model-check` first on a Model of unknown
@@ -815,7 +881,7 @@ public final class Json {
         int nl = Model.ledgerCount(ledger);
         emon.Port.textAscii(t, "{");
         s = jsBegin(t, pretty, 0, s, Model.fkEmon());
-        emon.Port.textAscii(t, "\"1.0\"");
+        emon.Port.textAscii(t, "\"1.1\"");
         s = jsFtext(t, pretty, 0, nodes, attrs, text, 0, Model.fkGenerator(), s);
         if ((jsHas(nodes, attrs, Model.fkFormat()) == 1) || (jsHas(nodes, attrs, Model.fkVersion()) == 1) || (jsHas(nodes, attrs, Model.fkPages()) == 1) || (jsHas(nodes, attrs, Model.fkTagged()) == 1) || (jsHas(nodes, attrs, Model.fkEncrypted()) == 1) || (jsHas(nodes, attrs, Model.fkLang()) == 1)) {
             s = jsBegin(t, pretty, 0, s, Model.fkSource());
@@ -833,7 +899,7 @@ public final class Json {
         emon.Port.textAscii(t, "[");
         while (i < np) {
             jsAelem(t, pretty, 1, i);
-            jsPage(t, pretty, 2, pages, text, i);
+            jsPage(t, pretty, 2, pages, layout, text, i);
             i += 1;
         }
         jsAend(t, pretty, 1, np);

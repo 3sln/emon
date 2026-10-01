@@ -25,7 +25,10 @@
 ;;   ai NODE KEY int       ab NODE KEY 0|1        an NODE KEY node
 ;;   at NODE KEY text      set an attribute (replacing one with the key)
 ;;   ni NODE KEY int       nt NODE KEY text       ADD one (a repeated key)
+;;   al NODE v             node-set-align: paragraph, heading, caption, cell (an
+;;                         `al` code; a refusal is a wrong line)
 ;;   pg NUM W H ROT KIND   pl IDX text   ph IDX health   pd IDX dpi pxw pxh
+;;   ly IDX BAND COL ROLE X0 Y0 X1 Y1   lay-add to the page at index IDX (D111)
 ;;   d REASON PAGE X0 Y0 X1 Y1 CONF SRC           ledger-add
 ;;   dt IDX text           the ledger row's text
 ;;
@@ -40,6 +43,7 @@
                                 node-set-flags node-add-region
                                 node-set-attr-int node-set-attr-bool
                                 node-set-attr-node node-set-attr-text
+                                node-set-align lay-add
                                 node-add-attr-int node-add-attr-text
                                 text-len text-append-cp text-append-utf8
                                 page-new page-set-label page-set-health
@@ -126,7 +130,8 @@
 
 (defn ^I32 jt-line [^Blob b ^I32 from ^I32 end ^:mut ^Cells nodes
                     ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
-                    ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells st]
+                    ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout
+                    ^:mut ^Cells st]
   (comment "Run one command. Answers 0, or 1 when it is unknown or refused.")
   (let [^I32 c0 (blob-u8 b from)
         ^:mut ^I32 c1 0
@@ -207,6 +212,18 @@
           (set v (jt-text b end st text))
           (node-add-attr-text nodes attrs a k v (- (text-len text) v))
           (return 0)))
+    ;; al NODE v
+    (if (== code 24940)
+      (do (set a (jt-int b end st)) (set v (jt-int b end st))
+          (if (< (node-set-align nodes attrs a v) 0) (return 1))
+          (return 0)))
+    ;; ly IDX BAND COL ROLE X0 Y0 X1 Y1
+    (if (== code 27769)
+      (do (set a (jt-int b end st)) (set k (jt-int b end st)) (set v (jt-int b end st))
+          (set w (jt-int b end st)) (set x (jt-int b end st)) (set y (jt-int b end st))
+          (set z (jt-int b end st)) (set q (jt-int b end st))
+          (if (< (lay-add layout pages a k v w x y z q) 0) (return 1))
+          (return 0)))
     ;; pg NUM W H ROT KIND
     (if (== code 28775)
       (do (set a (jt-int b end st)) (set k (jt-int b end st)) (set v (jt-int b end st))
@@ -243,19 +260,19 @@
 
 (defn ^:pub ^I32 jt-build [^Blob b ^:mut ^Cells nodes ^:mut ^Cells attrs
                      ^:mut ^Cells regions ^:mut ^Cells text ^:mut ^Cells pages
-                     ^:mut ^Cells ledger ^:mut ^Cells st]
+                     ^:mut ^Cells ledger ^:mut ^Cells layout ^:mut ^Cells st]
   (comment "Build the Model a script describes. 0, or the first bad line.")
   (let [^:mut ^I32 pos 0
         ^:mut ^I32 e 0
         ^:mut ^I32 lineno 0]
-    (model-init nodes attrs regions text pages ledger)
+    (model-init nodes attrs regions text pages ledger layout)
     (cells-drop st 0)
     (cells-push st 0)
     (while (< pos (blob-len b))
       (do (set e (jt-eol b pos))
           (set lineno (+ lineno 1))
           (if (and (< pos e) (!= (blob-u8 b pos) 35))
-            (if (== (jt-line b pos e nodes attrs regions text pages ledger st) 1)
+            (if (== (jt-line b pos e nodes attrs regions text pages ledger layout st) 1)
               (return lineno)))
           (set pos (+ e 1))))
     (return 0)))
@@ -266,4 +283,3 @@
   (let [^I32 n (blob-len b)]
     (if (and (> n 0) (== (blob-u8 b (- n 1)) 10)) (return (- n 1)))
     (return n)))
-
