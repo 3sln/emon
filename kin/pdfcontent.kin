@@ -108,8 +108,9 @@
                                   pfn-vertical pfn-dw2-v pfn-dw2-w pfn-kind-of pfn-subtype pfn-flags
                                   pfn-has-tounicode pfn-encoding]]
             [emon.model :refer [sr-hidden-text sy-bold sy-italic sy-mono sy-smallcaps]]
+            [emon.bidi :refer [bd-class bd-strong bd-mirror bd-order-of]]
             [emon.evidence :refer [gl-new gl-set gl-get gl-count etx-append-cp
-                                   wd-new wd-get wd-set wd-count ln-new ln-set
+                                   wd-new wd-get wd-set wd-count ln-new ln-set ln-get lh-page
                                    mk-open mk-close mk-get mk-set mk-ocg-of
                                    fo-new fo-get fo-set fo-count
                                    ev-angle
@@ -3049,41 +3050,64 @@
     (if (< (* gap 1000) (- 0 (* sz WORD_BACK_PM))) (return 0))
     (return 1)))
 
-(defn ^I32 pc-cls [^I32 cp]
-  (comment "A code point's strength for reordering right-to-left text: 1 strong right-to-left")
-  (comment "(Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right")
-  (comment "letter or a digit (Arabic-Indic digits are digits: they run left to right inside")
-  (comment "right-to-left text), 0 neutral (punctuation, symbols, what has no value).")
-  (if (< cp 33) (return 0))
-  (if (or (and (>= cp 48) (<= cp 57)) (or (and (>= cp 1632) (<= cp 1641)) (and (>= cp 1776) (<= cp 1785))))
-    (return 2))
-  (if (or (and (>= cp 1424) (<= cp 2303)) (or (and (>= cp 64285) (<= cp 65023)) (and (>= cp 65136) (<= cp 65279))))
-    (return 1))
-  (if (or (and (>= cp 65) (<= cp 90)) (and (>= cp 97) (<= cp 122))) (return 2))
-  (if (and (>= cp 192) (and (< cp 8192) (!= cp 215))) (return 2))
-  (if (and (>= cp 12352) (< cp 65000)) (return 2))
-  (return 0))
-
 (defn ^I32 pc-gcls [^Cells gl ^I32 j]
-  (return (pc-cls (gl-get gl j (ch-cp)))))
+  (comment "1 when glyph j stands for a strong right-to-left LETTER (Hebrew, Arabic, Syriac, ...: the Unicode class R or")
+  (comment "AL), 2 for a strong left-to-right letter, else 0. Letters decide the direction of a word and of a line (D162);")
+  (comment "a digit, a separator or a mark does not.")
+  (return (bd-strong (gl-get gl j (ch-cp)))))
 
-(defn ^I32 pc-glyph-out [^:mut ^Cells et ^Cells gl ^I32 j]
-  (comment "Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.")
+(defn ^I32 pc-glyph-out [^:mut ^Cells et ^Cells gl ^I32 j ^I32 lvl]
+  (comment "Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text. At bidi level 1")
+  (comment "(lvl, L4) a text of ONE code point whose character is mirrored (a bracket) is the mirror: the glyph on the")
+  (comment "page was drawn as the mirror image of the character it stands for.")
   (let [^I32 ts (gl-get gl j (ch-tstart))
         ^I32 tl (gl-get gl j (ch-tlen))
-        ^I32 cp (gl-get gl j (ch-cp))
+        ^:mut ^I32 cp (gl-get gl j (ch-cp))
         ^:mut ^I32 k 0
         ^:mut ^I32 cpv 0]
     (if (and (>= ts 0) (> tl 0))
       (do (while (< k tl)
             (do (set cpv (cells-at et (+ ts k)))
+                (if (and (== lvl 1) (== tl 1)) (set cpv (bd-mirror cpv)))
                 (etx-append-cp et cpv)
                 (set k (+ k 1))))
           (return 0)))
     (if (>= cp 0)
-      (etx-append-cp et cp)
+      (do (if (== lvl 1) (set cp (bd-mirror cp)))
+          (etx-append-cp et cp))
       (etx-append-cp et 65533))
     (return 0)))
+
+(defn ^I32 pc-bidi-text [^:mut ^Cells et ^Cells gl ^I32 gfst ^I32 glst]
+  (comment "Append the text of glyphs [gfst, glst], which were SHOWN left to right, in LOGICAL order of a right-to-left")
+  (comment "paragraph (`emon.bidi`, D162): the order the Bidirectional Algorithm would display them in. It is written")
+  (comment "where the arena ended, moved down over the scratch the algorithm used, and the index it starts at is the")
+  (comment "answer. (The scratch is the arena's own tail: the algorithm owns no memory.)")
+  (let [^I32 n (+ (- glst gfst) 1)
+        ^I32 b (cells-len et)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 k 0]
+    (while (< j n)
+      (do (cells-push et (gl-get gl (+ gfst j) (ch-cp)))
+          (set j (+ j 1))))
+    (set o (bd-order-of et b n))
+    (set e (cells-len et))
+    (set j 0)
+    (while (< j n)
+      (do (set i (cells-at et (+ o j)))
+          (set lv (cells-at et (+ (- o n) i)))
+          (pc-glyph-out et gl (+ gfst i) lv)
+          (set j (+ j 1))))
+    (set k 0)
+    (while (< k (- (cells-len et) e))
+      (do (cells-set et (+ b k) (cells-at et (+ e k)))
+          (set k (+ k 1))))
+    (cells-drop et (+ b (- (cells-len et) e)))
+    (return b)))
 
 (defn ^I32 pc-emit-word [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd ^:mut ^Cells fnt
                          ^I32 page ^I32 gfst ^I32 glst ^I32 wbk]
@@ -3091,8 +3115,10 @@
   (comment "dominant font and size of the first, and `hidden-text` as its source when every")
   (comment "glyph is render mode 3. A right-to-left word whose glyphs run left to right on the")
   (comment "page (visual order, as Skia and most producers write them) has its TEXT written in")
-  (comment "logical order: the glyphs reversed, with the runs of digits and Latin letters in it")
-  (comment "turned back. The glyphs themselves stay as they were shown.")
+  (comment "logical order by the Bidirectional Algorithm (`pc-bidi-text`, D162): numbers and their separators,")
+  (comment "Latin runs, brackets and the neutrals between them as UAX #9 resolves them, not letter by letter. A word")
+  (comment "with no letter to say so (\"2026,\") is put right once its line is known to be right to left")
+  (comment "(`pc-word-fix`). The glyphs themselves stay as they were shown.")
   (let [^:mut ^I32 x0 (gl-get gl gfst (ch-x0))
         ^:mut ^I32 y0 (gl-get gl gfst (ch-y0))
         ^:mut ^I32 x1 (gl-get gl gfst (ch-x1))
@@ -3103,9 +3129,7 @@
         ^:mut ^I32 nr 0
         ^:mut ^I32 nl 0
         ^:mut ^I32 cl 0
-        ^:mut ^I32 rtlw 0
-        ^:mut ^I32 kk 0
-        ^:mut ^I32 m 0]
+        ^:mut ^I32 rtlw 0]
     (while (<= j glst)
       (do (if (< (gl-get gl j (ch-x0)) x0) (set x0 (gl-get gl j (ch-x0))))
           (if (< (gl-get gl j (ch-y0)) y0) (set y0 (gl-get gl j (ch-y0))))
@@ -3124,21 +3148,9 @@
     (if (== rtlw 0)
       (do (set j gfst)
           (while (<= j glst)
-            (do (pc-glyph-out et gl j)
+            (do (pc-glyph-out et gl j 2)
                 (set j (+ j 1)))))
-      (do (set j glst)
-          (while (>= j gfst)
-            (if (== (pc-gcls gl j) 2)
-              (do (set kk j)
-                  (while (and (> kk gfst) (== (pc-gcls gl (- kk 1)) 2))
-                    (set kk (- kk 1)))
-                  (set m kk)
-                  (while (<= m j)
-                    (do (pc-glyph-out et gl m)
-                        (set m (+ m 1))))
-                  (set j (- kk 1)))
-              (do (pc-glyph-out et gl j)
-                  (set j (- j 1)))))))
+      (set tstart (pc-bidi-text et gl gfst glst)))
     (let [^I32 w (wd-new wd page x0 y0 x1 y1
                          (gl-get gl gfst (gf-bx0)) (gl-get gl gfst (gf-by0))
                          (gl-get gl glst (gf-bx1)) (gl-get gl glst (gf-by1))
@@ -3183,28 +3195,87 @@
     (return 0)))
 
 (defn ^I32 pc-wcls [^Cells gl ^Cells wd ^I32 w]
-  (comment "2 when the word has more left-to-right letters and digits than right-to-left letters.")
+  (comment "What a word is to the order of the words of a right-to-left line: 1 when it has a right-to-left letter,")
+  (comment "2 when it has a left-to-right letter and no right-to-left one, 3 when it is only numbers (and what goes")
+  (comment "with them), 0 when it is only neutrals (a dash, a bullet).")
   (let [^I32 g0 (wd-get wd w (wf-gfirst))
         ^I32 gn (wd-get wd w (wf-gcount))
         ^:mut ^I32 j 0
         ^:mut ^I32 nr 0
         ^:mut ^I32 nl 0
+        ^:mut ^I32 nn 0
         ^:mut ^I32 cl 0]
     (while (< j gn)
       (do (set cl (pc-gcls gl (+ g0 j)))
           (if (== cl 1) (set nr (+ nr 1)))
           (if (== cl 2) (set nl (+ nl 1)))
+          (set cl (bd-class (gl-get gl (+ g0 j) (ch-cp))))
+          (if (or (== cl 3) (== cl 4)) (set nn (+ nn 1)))
           (set j (+ j 1))))
-    (if (> nr nl) (return 1))
-    (return 2)))
+    (if (> nr 0) (return 1))
+    (if (> nl 0) (return 2))
+    (if (> nn 0) (return 3))
+    (return 0)))
 
-(defn ^I32 pc-line-bidi [^:mut ^Cells gl ^:mut ^Cells wd ^:mut ^Cells ln ^I32 lidx
+(defn ^I32 pc-word-fix [^Cells gl ^:mut ^Cells et ^Cells wd ^I32 w]
+  (comment "A word of a right-to-left line that `pc-emit-word` left in the order it was shown, because nothing in it")
+  (comment "said it was right to left (\"2026,\", \"50%\", \"(1)\", \"ROI-\" before a Hebrew letter): when its glyphs run")
+  (comment "left to right on the page they are in visual order, so its text is put in logical order, as a word that")
+  (comment "says so is. Done in place: the same code points, in the order the algorithm gives; nothing moves if the")
+  (comment "order does not change. Answers 1 when it changed the text.")
+  (let [^I32 g0 (wd-get wd w (wf-gfirst))
+        ^I32 gn (wd-get wd w (wf-gcount))
+        ^I32 ts (wd-get wd w (hd-tstart))
+        ^I32 tl (wd-get wd w (hd-tlen))
+        ^I32 b (cells-len et)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 lv 0
+        ^:mut ^I32 changed 0]
+    (if (< gn 2) (return 0))
+    (if (== (wd-get wd w (hd-dir)) (ld-rtl)) (return 0))
+    (if (!= (pc-axis (gl-get gl g0 (gf-rot))) 0) (return 0))
+    (if (< (gl-get gl (+ g0 (- gn 1)) (ch-x0)) (gl-get gl g0 (ch-x0))) (return 0))
+    (while (< j gn)
+      (do (cells-push et (gl-get gl (+ g0 j) (ch-cp)))
+          (set j (+ j 1))))
+    (set o (bd-order-of et b gn))
+    (set j 0)
+    (while (< j gn)
+      (do (set i (cells-at et (+ o j)))
+          (set lv (cells-at et (+ (- o gn) i)))
+          (if (or (!= i j) (== lv 1)) (set changed 1))
+          (set j (+ j 1))))
+    (if (== changed 0)
+      (do (cells-drop et b)
+          (return 0)))
+    (set e (cells-len et))
+    (set j 0)
+    (while (< j gn)
+      (do (set i (cells-at et (+ o j)))
+          (set lv (cells-at et (+ (- o gn) i)))
+          (pc-glyph-out et gl (+ g0 i) lv)
+          (set j (+ j 1))))
+    (if (!= (- (cells-len et) e) tl)
+      (do (cells-drop et b)
+          (return 0)))
+    (set j 0)
+    (while (< j tl)
+      (do (cells-set et (+ ts j) (cells-at et (+ e j)))
+          (set j (+ j 1))))
+    (cells-drop et b)
+    (return 1)))
+
+(defn ^I32 pc-line-bidi [^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells wd ^:mut ^Cells ln ^I32 lidx
                          ^I32 wfst ^I32 wlst]
-  (comment "Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than")
-  (comment "left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on")
-  (comment "the page, their ORDER is made logical: reversed, with runs of left-to-right words")
-  (comment "turned back; each word's glyphs are re-pointed at it and its gap is the space to")
-  (comment "the word that follows it in that order.")
+  (comment "Line lidx holds words [wfst, wlst]. When more of its letters are right-to-left than left-to-right")
+  (comment "it is a right-to-left line (`ld-rtl`). Its words that no letter put in logical order are put in it")
+  (comment "(`pc-word-fix`); if the words run left to right on the page, their ORDER is made logical: reversed,")
+  (comment "with each group of words that make one left-to-right run (Latin words, and the numbers and neutrals")
+  (comment "between them, W7 and N1) turned back; each word's glyphs are re-pointed at it and its gap is the")
+  (comment "space to the word that follows it in that order.")
   (let [^:mut ^I32 w wfst
         ^:mut ^I32 nr 0
         ^:mut ^I32 nl 0
@@ -3212,6 +3283,9 @@
         ^:mut ^I32 cl 0
         ^:mut ^I32 a 0
         ^:mut ^I32 z 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 hasl 0
+        ^:mut ^I32 rtl 0
         ^:mut ^I32 g0 0
         ^:mut ^I32 gn 0]
     (while (<= w wlst)
@@ -3224,21 +3298,52 @@
                 (if (== cl 2) (set nl (+ nl 1)))
                 (set j (+ j 1))))
           (set w (+ w 1))))
-    (if (<= nr nl) (return 0))
+    (comment "A paragraph's direction is its own, not each line's: a short last line that is mostly Latin (a")
+    (comment "product name, an acronym) after a right-to-left line is still right to left (UAX #9, P2 and P3 read")
+    (comment "the paragraph, and the lines of one run on). So a line is right to left when its right-to-left")
+    (comment "letters outnumber the left-to-right ones, or when the line before it (same page) is and this one has a")
+    (comment "right-to-left letter or no left-to-right one (a number, a bullet).")
+    (set rtl 0)
+    (if (> nr nl) (set rtl 1))
+    (if (and (> lidx 0) (== rtl 0))
+      (if (== (ln-get ln (- lidx 1) (lh-page)) (ln-get ln lidx (lh-page)))
+        (if (== (ln-get ln (- lidx 1) (lh-dir)) (ld-rtl))
+          (if (or (> nr 0) (== nl 0))
+            (set rtl 1)))))
+    (if (== rtl 0) (return 0))
     (ln-set ln lidx (lh-dir) (ld-rtl))
+    (set w wfst)
+    (while (<= w wlst)
+      (do (pc-word-fix gl et wd w)
+          (set w (+ w 1))))
     (if (!= (pc-axis (gl-get gl (wd-get wd wfst (wf-gfirst)) (gf-rot))) 0) (return 0))
     (if (< (wd-get wd wlst (hd-x0)) (wd-get wd wfst (hd-x0))) (return 0))
     (if (== wfst wlst) (return 0))
     (pc-rev-rows wd wfst wlst)
+    (comment "Now the rows are in logical order but for the left-to-right runs, which are backwards: a run is a")
+    (comment "maximal stretch of words that are not right-to-left, holding at least one left-to-right word, less")
+    (comment "the neutral-only words at its ends (they are between a left-to-right and a right-to-left word: N2).")
     (set a wfst)
     (while (<= a wlst)
-      (if (== (pc-wcls gl wd a) 2)
+      (if (== (pc-wcls gl wd a) 1)
+        (set a (+ a 1))
         (do (set z a)
-            (while (and (< z wlst) (== (pc-wcls gl wd (+ z 1)) 2))
+            (while (and (< z wlst) (!= (pc-wcls gl wd (+ z 1)) 1))
               (set z (+ z 1)))
-            (pc-rev-rows wd a z)
-            (set a (+ z 1)))
-        (set a (+ a 1))))
+            (set hasl 0)
+            (set s a)
+            (while (<= s z)
+              (do (if (== (pc-wcls gl wd s) 2) (set hasl 1))
+                  (set s (+ s 1))))
+            (if (== hasl 1)
+              (do (set s a)
+                  (while (== (pc-wcls gl wd s) 0)
+                    (set s (+ s 1)))
+                  (set j z)
+                  (while (== (pc-wcls gl wd j) 0)
+                    (set j (- j 1)))
+                  (pc-rev-rows wd s j)))
+            (set a (+ z 1)))))
     (set w wfst)
     (while (<= w wlst)
       (do (set g0 (wd-get wd w (wf-gfirst)))
@@ -3342,7 +3447,7 @@
                                          (wd-get wd prev (hd-bx1)) (wd-get wd prev (hd-by1))
                                          (gl-get gl gfp (gf-rot)) 0 lfirst (+ (- prev lfirst) 1)))
                         (ln-set ln lnx (lf-order) ord)
-                        (pc-line-bidi gl wd ln lnx lfirst prev)
+                        (pc-line-bidi gl et wd ln lnx lfirst prev)
                         (wd-set wd prev (wf-wbreak) (wb-line-end))
                         (set gfp lfirst)
                         (while (<= gfp prev)

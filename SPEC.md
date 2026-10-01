@@ -335,7 +335,7 @@ header says `"conf": "uncalibrated"`.
   one-letter initial is a word of its own (`A` + `long time`) cannot be
   seen on the page; it is joined unless a tagged tree says otherwise (D108).
 * **Right-to-left** text stored in *logical* order. PDFs frequently store
-  visual order; stage 2 reorders with UAX #9 (emon's `bidi`).
+  visual order; stage 2 reorders with UAX #9 (emon's `bidi`, D162).
 * **Whitespace** is normalized: one space between words, line breaks inside a
   paragraph become spaces, `linebreak` nodes only where the break carries
   meaning (§10.1).

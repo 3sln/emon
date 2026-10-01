@@ -3786,36 +3786,16 @@ public static class Pdfcontent {
         }
         return 1;
     }
-    internal static int PcCls(int cp) {
-        // A code point's strength for reordering right-to-left text: 1 strong right-to-left
-        // (Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right
-        // letter or a digit (Arabic-Indic digits are digits: they run left to right inside
-        // right-to-left text), 0 neutral (punctuation, symbols, what has no value).
-        if (cp < 33) {
-            return 0;
-        }
-        if (((cp >= 48) && (cp <= 57)) || (((cp >= 1632) && (cp <= 1641)) || ((cp >= 1776) && (cp <= 1785)))) {
-            return 2;
-        }
-        if (((cp >= 1424) && (cp <= 2303)) || (((cp >= 64285) && (cp <= 65023)) || ((cp >= 65136) && (cp <= 65279)))) {
-            return 1;
-        }
-        if (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
-            return 2;
-        }
-        if ((cp >= 192) && ((cp < 8192) && (cp != 215))) {
-            return 2;
-        }
-        if ((cp >= 12352) && (cp < 65000)) {
-            return 2;
-        }
-        return 0;
-    }
     internal static int PcGcls(emon.Port.Cells gl, int j) {
-        return PcCls(Evidence.GlGet(gl, j, Evidence.ChCp()));
+        // 1 when glyph j stands for a strong right-to-left LETTER (Hebrew, Arabic, Syriac, ...: the Unicode class R or
+        // AL), 2 for a strong left-to-right letter, else 0. Letters decide the direction of a word and of a line (D162);
+        // a digit, a separator or a mark does not.
+        return Bidi.BdStrong(Evidence.GlGet(gl, j, Evidence.ChCp()));
     }
-    internal static int PcGlyphOut(emon.Port.Cells et, emon.Port.Cells gl, int j) {
-        // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
+    internal static int PcGlyphOut(emon.Port.Cells et, emon.Port.Cells gl, int j, int lvl) {
+        // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text. At bidi level 1
+        // (lvl, L4) a text of ONE code point whose character is mirrored (a bracket) is the mirror: the glyph on the
+        // page was drawn as the mirror image of the character it stands for.
         int ts = Evidence.GlGet(gl, j, Evidence.ChTstart());
         int tl = Evidence.GlGet(gl, j, Evidence.ChTlen());
         int cp = Evidence.GlGet(gl, j, Evidence.ChCp());
@@ -3824,25 +3804,67 @@ public static class Pdfcontent {
         if ((ts >= 0) && (tl > 0)) {
             while (k < tl) {
                 cpv = emon.Port.CellsAt(et, ts + k);
+                if ((lvl == 1) && (tl == 1)) {
+                    cpv = Bidi.BdMirror(cpv);
+                }
                 Evidence.EtxAppendCp(et, cpv);
                 k += 1;
             }
             return 0;
         }
         if (cp >= 0) {
+            if (lvl == 1) {
+                cp = Bidi.BdMirror(cp);
+            }
             Evidence.EtxAppendCp(et, cp);
         } else {
             Evidence.EtxAppendCp(et, 65533);
         }
         return 0;
     }
+    internal static int PcBidiText(emon.Port.Cells et, emon.Port.Cells gl, int gfst, int glst) {
+        // Append the text of glyphs [gfst, glst], which were SHOWN left to right, in LOGICAL order of a right-to-left
+        // paragraph (`emon.bidi`, D162): the order the Bidirectional Algorithm would display them in. It is written
+        // where the arena ended, moved down over the scratch the algorithm used, and the index it starts at is the
+        // answer. (The scratch is the arena's own tail: the algorithm owns no memory.)
+        int n = (glst - gfst) + 1;
+        int b = emon.Port.CellsLen(et);
+        int j = 0;
+        int o = 0;
+        int e = 0;
+        int i = 0;
+        int lv = 0;
+        int k = 0;
+        while (j < n) {
+            emon.Port.CellsPush(et, Evidence.GlGet(gl, gfst + j, Evidence.ChCp()));
+            j += 1;
+        }
+        o = Bidi.BdOrderOf(et, b, n);
+        e = emon.Port.CellsLen(et);
+        j = 0;
+        while (j < n) {
+            i = emon.Port.CellsAt(et, o + j);
+            lv = emon.Port.CellsAt(et, (o - n) + i);
+            PcGlyphOut(et, gl, gfst + i, lv);
+            j += 1;
+        }
+        k = 0;
+        while (k < (emon.Port.CellsLen(et) - e)) {
+            emon.Port.CellsSet(et, b + k, emon.Port.CellsAt(et, e + k));
+            k += 1;
+        }
+        emon.Port.CellsDrop(et, b + (emon.Port.CellsLen(et) - e));
+        return b;
+    }
     internal static int PcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells fnt, int page, int gfst, int glst, int wbk) {
         // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
         // dominant font and size of the first, and `hidden-text` as its source when every
         // glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
         // page (visual order, as Skia and most producers write them) has its TEXT written in
-        // logical order: the glyphs reversed, with the runs of digits and Latin letters in it
-        // turned back. The glyphs themselves stay as they were shown.
+        // logical order by the Bidirectional Algorithm (`pc-bidi-text`, D162): numbers and their separators,
+        // Latin runs, brackets and the neutrals between them as UAX #9 resolves them, not letter by letter. A word
+        // with no letter to say so ("2026,") is put right once its line is known to be right to left
+        // (`pc-word-fix`). The glyphs themselves stay as they were shown.
         int x0 = Evidence.GlGet(gl, gfst, Evidence.ChX0());
         int y0 = Evidence.GlGet(gl, gfst, Evidence.ChY0());
         int x1 = Evidence.GlGet(gl, gfst, Evidence.ChX1());
@@ -3854,8 +3876,6 @@ public static class Pdfcontent {
         int nl = 0;
         int cl = 0;
         int rtlw = 0;
-        int kk = 0;
-        int m = 0;
         while (j <= glst) {
             if (Evidence.GlGet(gl, j, Evidence.ChX0()) < x0) {
                 x0 = Evidence.GlGet(gl, j, Evidence.ChX0());
@@ -3892,28 +3912,11 @@ public static class Pdfcontent {
         if (rtlw == 0) {
             j = gfst;
             while (j <= glst) {
-                PcGlyphOut(et, gl, j);
+                PcGlyphOut(et, gl, j, 2);
                 j += 1;
             }
         } else {
-            j = glst;
-            while (j >= gfst) {
-                if (PcGcls(gl, j) == 2) {
-                    kk = j;
-                    while ((kk > gfst) && (PcGcls(gl, kk - 1) == 2)) {
-                        kk -= 1;
-                    }
-                    m = kk;
-                    while (m <= j) {
-                        PcGlyphOut(et, gl, m);
-                        m += 1;
-                    }
-                    j = kk - 1;
-                } else {
-                    PcGlyphOut(et, gl, j);
-                    j -= 1;
-                }
-            }
+            tstart = PcBidiText(et, gl, gfst, glst);
         }
         int w = Evidence.WdNew(wd, page, x0, y0, x1, y1, Evidence.GlGet(gl, gfst, Evidence.GfBx0()), Evidence.GlGet(gl, gfst, Evidence.GfBy0()), Evidence.GlGet(gl, glst, Evidence.GfBx1()), Evidence.GlGet(gl, glst, Evidence.GfBy1()), Evidence.GlGet(gl, gfst, Evidence.GfRot()), 0, tstart, emon.Port.CellsLen(et) - tstart, -1, -1, -1);
         int fo = Evidence.GlGet(gl, gfst, Evidence.GfFont());
@@ -3962,12 +3965,15 @@ public static class Pdfcontent {
         return 0;
     }
     internal static int PcWcls(emon.Port.Cells gl, emon.Port.Cells wd, int w) {
-        // 2 when the word has more left-to-right letters and digits than right-to-left letters.
+        // What a word is to the order of the words of a right-to-left line: 1 when it has a right-to-left letter,
+        // 2 when it has a left-to-right letter and no right-to-left one, 3 when it is only numbers (and what goes
+        // with them), 0 when it is only neutrals (a dash, a bullet).
         int g0 = Evidence.WdGet(wd, w, Evidence.WfGfirst());
         int gn = Evidence.WdGet(wd, w, Evidence.WfGcount());
         int j = 0;
         int nr = 0;
         int nl = 0;
+        int nn = 0;
         int cl = 0;
         while (j < gn) {
             cl = PcGcls(gl, g0 + j);
@@ -3977,19 +3983,97 @@ public static class Pdfcontent {
             if (cl == 2) {
                 nl += 1;
             }
+            cl = Bidi.BdClass(Evidence.GlGet(gl, g0 + j, Evidence.ChCp()));
+            if ((cl == 3) || (cl == 4)) {
+                nn += 1;
+            }
             j += 1;
         }
-        if (nr > nl) {
+        if (nr > 0) {
             return 1;
         }
-        return 2;
+        if (nl > 0) {
+            return 2;
+        }
+        if (nn > 0) {
+            return 3;
+        }
+        return 0;
     }
-    internal static int PcLineBidi(emon.Port.Cells gl, emon.Port.Cells wd, emon.Port.Cells ln, int lidx, int wfst, int wlst) {
-        // Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than
-        // left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on
-        // the page, their ORDER is made logical: reversed, with runs of left-to-right words
-        // turned back; each word's glyphs are re-pointed at it and its gap is the space to
-        // the word that follows it in that order.
+    internal static int PcWordFix(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, int w) {
+        // A word of a right-to-left line that `pc-emit-word` left in the order it was shown, because nothing in it
+        // said it was right to left ("2026,", "50%", "(1)", "ROI-" before a Hebrew letter): when its glyphs run
+        // left to right on the page they are in visual order, so its text is put in logical order, as a word that
+        // says so is. Done in place: the same code points, in the order the algorithm gives; nothing moves if the
+        // order does not change. Answers 1 when it changed the text.
+        int g0 = Evidence.WdGet(wd, w, Evidence.WfGfirst());
+        int gn = Evidence.WdGet(wd, w, Evidence.WfGcount());
+        int ts = Evidence.WdGet(wd, w, Evidence.HdTstart());
+        int tl = Evidence.WdGet(wd, w, Evidence.HdTlen());
+        int b = emon.Port.CellsLen(et);
+        int j = 0;
+        int o = 0;
+        int e = 0;
+        int i = 0;
+        int lv = 0;
+        int changed = 0;
+        if (gn < 2) {
+            return 0;
+        }
+        if (Evidence.WdGet(wd, w, Evidence.HdDir()) == Evidence.LdRtl()) {
+            return 0;
+        }
+        if (PcAxis(Evidence.GlGet(gl, g0, Evidence.GfRot())) != 0) {
+            return 0;
+        }
+        if (Evidence.GlGet(gl, g0 + (gn - 1), Evidence.ChX0()) < Evidence.GlGet(gl, g0, Evidence.ChX0())) {
+            return 0;
+        }
+        while (j < gn) {
+            emon.Port.CellsPush(et, Evidence.GlGet(gl, g0 + j, Evidence.ChCp()));
+            j += 1;
+        }
+        o = Bidi.BdOrderOf(et, b, gn);
+        j = 0;
+        while (j < gn) {
+            i = emon.Port.CellsAt(et, o + j);
+            lv = emon.Port.CellsAt(et, (o - gn) + i);
+            if ((i != j) || (lv == 1)) {
+                changed = 1;
+            }
+            j += 1;
+        }
+        if (changed == 0) {
+            emon.Port.CellsDrop(et, b);
+            return 0;
+        }
+        e = emon.Port.CellsLen(et);
+        j = 0;
+        while (j < gn) {
+            i = emon.Port.CellsAt(et, o + j);
+            lv = emon.Port.CellsAt(et, (o - gn) + i);
+            PcGlyphOut(et, gl, g0 + i, lv);
+            j += 1;
+        }
+        if ((emon.Port.CellsLen(et) - e) != tl) {
+            emon.Port.CellsDrop(et, b);
+            return 0;
+        }
+        j = 0;
+        while (j < tl) {
+            emon.Port.CellsSet(et, ts + j, emon.Port.CellsAt(et, e + j));
+            j += 1;
+        }
+        emon.Port.CellsDrop(et, b);
+        return 1;
+    }
+    internal static int PcLineBidi(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, int lidx, int wfst, int wlst) {
+        // Line lidx holds words [wfst, wlst]. When more of its letters are right-to-left than left-to-right
+        // it is a right-to-left line (`ld-rtl`). Its words that no letter put in logical order are put in it
+        // (`pc-word-fix`); if the words run left to right on the page, their ORDER is made logical: reversed,
+        // with each group of words that make one left-to-right run (Latin words, and the numbers and neutrals
+        // between them, W7 and N1) turned back; each word's glyphs are re-pointed at it and its gap is the
+        // space to the word that follows it in that order.
         int w = wfst;
         int nr = 0;
         int nl = 0;
@@ -3997,6 +4081,9 @@ public static class Pdfcontent {
         int cl = 0;
         int a = 0;
         int z = 0;
+        int s = 0;
+        int hasl = 0;
+        int rtl = 0;
         int g0 = 0;
         int gn = 0;
         while (w <= wlst) {
@@ -4015,10 +4102,33 @@ public static class Pdfcontent {
             }
             w += 1;
         }
-        if (nr <= nl) {
+        // A paragraph's direction is its own, not each line's: a short last line that is mostly Latin (a
+        // product name, an acronym) after a right-to-left line is still right to left (UAX #9, P2 and P3 read
+        // the paragraph, and the lines of one run on). So a line is right to left when its right-to-left
+        // letters outnumber the left-to-right ones, or when the line before it (same page) is and this one has a
+        // right-to-left letter or no left-to-right one (a number, a bullet).
+        rtl = 0;
+        if (nr > nl) {
+            rtl = 1;
+        }
+        if ((lidx > 0) && (rtl == 0)) {
+            if (Evidence.LnGet(ln, lidx - 1, Evidence.LhPage()) == Evidence.LnGet(ln, lidx, Evidence.LhPage())) {
+                if (Evidence.LnGet(ln, lidx - 1, Evidence.LhDir()) == Evidence.LdRtl()) {
+                    if ((nr > 0) || (nl == 0)) {
+                        rtl = 1;
+                    }
+                }
+            }
+        }
+        if (rtl == 0) {
             return 0;
         }
         Evidence.LnSet(ln, lidx, Evidence.LhDir(), Evidence.LdRtl());
+        w = wfst;
+        while (w <= wlst) {
+            PcWordFix(gl, et, wd, w);
+            w += 1;
+        }
         if (PcAxis(Evidence.GlGet(gl, Evidence.WdGet(wd, wfst, Evidence.WfGfirst()), Evidence.GfRot())) != 0) {
             return 0;
         }
@@ -4029,17 +4139,38 @@ public static class Pdfcontent {
             return 0;
         }
         PcRevRows(wd, wfst, wlst);
+        // Now the rows are in logical order but for the left-to-right runs, which are backwards: a run is a
+        // maximal stretch of words that are not right-to-left, holding at least one left-to-right word, less
+        // the neutral-only words at its ends (they are between a left-to-right and a right-to-left word: N2).
         a = wfst;
         while (a <= wlst) {
-            if (PcWcls(gl, wd, a) == 2) {
+            if (PcWcls(gl, wd, a) == 1) {
+                a += 1;
+            } else {
                 z = a;
-                while ((z < wlst) && (PcWcls(gl, wd, z + 1) == 2)) {
+                while ((z < wlst) && (PcWcls(gl, wd, z + 1) != 1)) {
                     z += 1;
                 }
-                PcRevRows(wd, a, z);
+                hasl = 0;
+                s = a;
+                while (s <= z) {
+                    if (PcWcls(gl, wd, s) == 2) {
+                        hasl = 1;
+                    }
+                    s += 1;
+                }
+                if (hasl == 1) {
+                    s = a;
+                    while (PcWcls(gl, wd, s) == 0) {
+                        s += 1;
+                    }
+                    j = z;
+                    while (PcWcls(gl, wd, j) == 0) {
+                        j -= 1;
+                    }
+                    PcRevRows(wd, s, j);
+                }
                 a = z + 1;
-            } else {
-                a += 1;
             }
         }
         w = wfst;
@@ -4177,7 +4308,7 @@ public static class Pdfcontent {
                     // order the words were SHOWN (the bidi step below re-orders the rows, not the page).
                     lnx = Evidence.LnNew(ln, page, x0, y0, x1, y1, Evidence.WdGet(wd, lfirst, Evidence.HdBx0()), Evidence.WdGet(wd, lfirst, Evidence.HdBy0()), Evidence.WdGet(wd, prev, Evidence.HdBx1()), Evidence.WdGet(wd, prev, Evidence.HdBy1()), Evidence.GlGet(gl, gfp, Evidence.GfRot()), 0, lfirst, (prev - lfirst) + 1);
                     Evidence.LnSet(ln, lnx, Evidence.LfOrder(), ord);
-                    PcLineBidi(gl, wd, ln, lnx, lfirst, prev);
+                    PcLineBidi(gl, et, wd, ln, lnx, lfirst, prev);
                     Evidence.WdSet(wd, prev, Evidence.WfWbreak(), Evidence.WbLineEnd());
                     gfp = lfirst;
                     while (gfp <= prev) {

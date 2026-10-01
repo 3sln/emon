@@ -1377,8 +1377,8 @@
         :block-note-f1 0.0
         :block-note-p 0.0
         :block-note-r 0.0
-        :block-paragraph-f1 0.125877
-        :block-paragraph-p 0.068931
+        :block-paragraph-f1 0.125906
+        :block-paragraph-p 0.068948
         :block-paragraph-r 0.723958
         :block-seal-f1 0.0
         :block-seal-p 0.0
@@ -1386,10 +1386,10 @@
         :block-table-f1 0.0
         :block-table-p 0.0
         :block-table-r 0.0
-        :bow-f1 0.9795
-        :bow-p 0.966248
-        :bow-r 0.993119
-        :cer 0.184245
+        :bow-f1 0.979594
+        :bow-p 0.966341
+        :bow-r 0.993215
+        :cer 0.184136
         :first-word-acc 0.043478
         :frag-col-acc 0.0
         :furniture-f1 0.0
@@ -1410,14 +1410,14 @@
         :join-r 0.0
         :order-tau 1.0
         :page-label-acc 0.706522
-        :para-boundary-f1 0.125877
-        :para-boundary-p 0.069884
+        :para-boundary-f1 0.125906
+        :para-boundary-p 0.069902
         :para-boundary-r 0.633257
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
         :watermark-leak 0.00201
-        :wer 0.241972}
+        :wer 0.241829}
       "pdf/columns" {
         :block-caption-f1 0.0
         :block-caption-p 0.0
@@ -1671,16 +1671,16 @@
         :block-list-f1 0.0
         :block-list-p 0.0
         :block-list-r 0.0
-        :block-paragraph-f1 0.295455
-        :block-paragraph-p 0.173333
+        :block-paragraph-f1 0.298851
+        :block-paragraph-p 0.175676
         :block-paragraph-r 1.0
         :block-table-f1 0.0
         :block-table-p 0.0
         :block-table-r 0.0
-        :bow-f1 0.772643
-        :bow-p 0.751799
-        :bow-r 0.794677
-        :cer 0.154639
+        :bow-f1 0.780037
+        :bow-p 0.758993
+        :bow-r 0.802281
+        :cer 0.146756
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -1690,13 +1690,13 @@
         :heading-r 0.0
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.244444
-        :para-boundary-p 0.157143
+        :para-boundary-f1 0.247191
+        :para-boundary-p 0.15942
         :para-boundary-r 0.55
         :table-continued-acc 0.0
         :table-teds-lite 0.0
         :table-teds-struct-lite 0.0
-        :wer 0.357414}
+        :wer 0.346008}
       "pdf/seals" {
         :block-heading-f1 0.0
         :block-heading-p 0.0

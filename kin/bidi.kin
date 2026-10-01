@@ -1,0 +1,325 @@
+;; The Unicode Bidirectional Algorithm, for one run of text inside a RIGHT-TO-LEFT paragraph (D162).
+;; emon's own module (D039); UAX #9 and Unicode 18.0.0's classes (`emon.bidiclass`, generated).
+;;
+;; WHAT IT IS FOR. A PDF holds glyphs in the order they are PAINTED, which for right-to-left text is usually the VISUAL
+;; order (left to right on the page); the text layer must give LOGICAL order (D104). The Bidirectional Algorithm turns
+;; logical into visual: it resolves each character's embedding level and reverses by level. The two directions are
+;; the same operation at the paragraph level these callers use (the rules are mirror-symmetric: a run of European
+;; numbers is one run whichever side its separators are on; N1 and N2 look at both neighbours alike; W2 and W7 are
+;; the two exceptions, which look BACK, and for a word read visually "back" is the right: the error is at most a
+;; number after a Latin letter), so a caller hands the code points in the order they were SHOWN, asks for the order
+;; the algorithm would DISPLAY them in, and that is their logical order.
+;;
+;; WHAT IT DOES: resolve the types W1 to W7 (a non-spacing mark takes the type before it, a European number after an
+;; Arabic letter is an Arabic number, a separator between two numbers, and a terminator beside a European number, are
+;; European numbers, a European number after a left-to-right letter is a letter), N1 and N2 (a run of neutrals between
+;; two characters of one direction takes it, between two of different directions takes the paragraph's, right to
+;; left), N0 (paired brackets), I1 and I2 (levels 1 and 2 only), L1 (trailing white space is at the paragraph level) and L2 (the order).
+;; The paragraph level is 1; the run's start and end count as right-to-left (sot, eot). What it does NOT do:
+;; explicit embeddings, overrides and isolates (a PDF's text has none; they are neutral). It is held to Unicode's own
+;; BidiCharacterTest (test/bidi/conformance.txt).
+;;
+;; THE ARENA. kin functions own no memory, so a run lives in a region of a `Cells` the caller owns (the evidence text
+;; arena is one: scratch pushed past its end and dropped again): `bd-order-of` takes the code points at c[a, a+n),
+;; PUSHES the classes, the levels and the order after the arena's end, and answers where the order starts; the
+;; caller reads it and drops the arena back to its old length.
+(ns emon.bidi
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-grow]]
+            [emon.bidiclass :refer [bc-run-count bc-run-at bc-bracket-count bc-bracket-at
+                                    bc-mirror-count bc-mirror-at]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; The classes (kin/bidiclass.kin): 0 ON, 1 R, 2 L, 3 EN, 4 AN, 5 ES, 6 ET, 7 CS, 8 AL, 9 WS, 10 NSM, 11 BN,
+;; 12 anything else.
+
+(defn ^:pub ^I32 bd-class [^I32 cp]
+  (comment "The bidi class code of a code point: the last run that starts at or before it. -1 (no value) is ON.")
+  (if (or (< cp 0) (> cp 1114111)) (return 0))
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (bc-run-count 0) 1)
+        ^:mut ^I32 mid 0]
+    (while (< lo hi)
+      (do (set mid (quot (+ lo hi 1) 2))
+          (if (<= (bc-run-at 0 mid 0) cp)
+            (set lo mid)
+            (set hi (- mid 1)))))
+    (return (bc-run-at 0 lo 1))))
+
+(defn ^:pub ^I32 bd-strong [^I32 cp]
+  (comment "1 when the code point is a strong right-to-left LETTER (Hebrew, Arabic, ...), 2 a strong left-to-right")
+  (comment "one, 0 otherwise: a digit, a separator and a mark are not strong. What decides a word's direction.")
+  (let [^I32 k (bd-class cp)]
+    (if (or (== k 1) (== k 8)) (return 1))
+    (if (== k 2) (return 2))
+    (return 0)))
+
+(defn ^I32 bd-bracket [^I32 cp]
+  (comment "The row of the paired-bracket table (bidiclass.kin) of a code point, or -1.")
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (bc-bracket-count 0) 1)
+        ^:mut ^I32 mid 0]
+    (if (< hi 0) (return -1))
+    (while (< lo hi)
+      (do (set mid (quot (+ lo hi) 2))
+          (if (< (bc-bracket-at 0 mid 0) cp)
+            (set lo (+ mid 1))
+            (set hi mid))))
+    (if (== (bc-bracket-at 0 lo 0) cp) (return lo))
+    (return -1)))
+
+(defn ^:pub ^I32 bd-mirror [^I32 cp]
+  (comment "L4: the code point whose glyph is the mirror image of this one's (a parenthesis, a bracket, an angle,")
+  (comment "a comparison sign: BidiMirroring.txt), or the code point itself. A glyph drawn at an odd level (inside")
+  (comment "right-to-left text) is the mirror image of the character's own, so text read back from glyphs, in logical")
+  (comment "order, has the mirror of what the glyph shows at every level-1 position.")
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (- (bc-mirror-count 0) 1)
+        ^:mut ^I32 mid 0]
+    (if (< hi 0) (return cp))
+    (while (< lo hi)
+      (do (set mid (quot (+ lo hi) 2))
+          (if (< (bc-mirror-at 0 mid 0) cp)
+            (set lo (+ mid 1))
+            (set hi mid))))
+    (if (== (bc-mirror-at 0 lo 0) cp) (return (bc-mirror-at 0 lo 1)))
+    (return cp)))
+
+(defn ^I32 bd-dir [^I32 k]
+  (comment "What a resolved neighbour counts as to N1: left-to-right (2) for a letter, else right-to-left (1)")
+  (comment "(a European or Arabic number counts as right-to-left).")
+  (if (== k 2) (return 2))
+  (return 1))
+
+(defn ^:pub ^I32 bd-resolve [^:mut ^Cells c ^I32 a ^I32 n ^I32 b]
+  (comment "Resolve the run whose code points are c[a, a+n) into levels (1 or 2), paragraph level 1. The scratch")
+  (comment "region starts at b: flags (n: 1 where a character was a non-spacing mark), the bracket pairs (n), the")
+  (comment "bracket stack (64), the classes (n, DESTROYED), the levels (n, the answer).")
+  (let [^I32 f b
+        ^I32 pm (+ b n)
+        ^I32 stk (+ (+ b n) n)
+        ^I32 t (+ stk 64)
+        ^I32 l (+ t n)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 p 1
+        ^:mut ^I32 s 1
+        ^:mut ^I32 lft 0
+        ^:mut ^I32 rgt 0
+        ^:mut ^I32 sp 0
+        ^:mut ^I32 stop 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 key 0
+        ^:mut ^I32 fe 0
+        ^:mut ^I32 fo 0
+        ^:mut ^I32 ctx 0
+        ^:mut ^I32 tail n]
+    (comment "L1: the white space at the end stays at the paragraph level (found before WS becomes neutral).")
+    (while (and (> tail 0) (== (cells-at c (+ t (- tail 1))) 9))
+      (set tail (- tail 1)))
+    (comment "W1 (a mark takes the type before it; the start counts as R), and the classes the rest do not")
+    (comment "tell apart (white space, boundary neutrals, controls) are neutral.")
+    (while (< i n)
+      (do (set x (cells-at c (+ t i)))
+          (cells-set c (+ f i) 0)
+          (cells-set c (+ pm i) -1)
+          (if (== x 10)
+            (do (set x p)
+                (cells-set c (+ f i) 1)))
+          (if (or (== x 9) (or (== x 11) (== x 12))) (set x 0))
+          (cells-set c (+ t i) x)
+          (set p x)
+          (set i (+ i 1))))
+    (comment "W2 (a European number after an Arabic letter is an Arabic number) and W3 (Arabic letters are R).")
+    (set i 0)
+    (set s 1)
+    (while (< i n)
+      (do (set x (cells-at c (+ t i)))
+          (if (or (== x 1) (or (== x 2) (== x 8))) (set s x))
+          (if (and (== x 3) (== s 8)) (cells-set c (+ t i) 4))
+          (if (== x 8) (cells-set c (+ t i) 1))
+          (set i (+ i 1))))
+    (comment "W4: one separator between two numbers of a kind is a number of it (ES and CS between ENs, CS between ANs).")
+    (set i 1)
+    (while (< i (- n 1))
+      (do (set x (cells-at c (+ t i)))
+          (set lft (cells-at c (+ t (- i 1))))
+          (set rgt (cells-at c (+ t (+ i 1))))
+          (if (and (== lft 3) (and (== rgt 3) (or (== x 5) (== x 7)))) (cells-set c (+ t i) 3))
+          (if (and (== lft 4) (and (== rgt 4) (== x 7))) (cells-set c (+ t i) 4))
+          (set i (+ i 1))))
+    (comment "W5: a run of terminators next to a European number is European numbers.")
+    (set i 0)
+    (while (< i n)
+      (if (== (cells-at c (+ t i)) 6)
+        (do (set j i)
+            (while (and (< j n) (== (cells-at c (+ t j)) 6))
+              (set j (+ j 1)))
+            (set lft 0)
+            (if (> i 0) (set lft (cells-at c (+ t (- i 1)))))
+            (set rgt 0)
+            (if (< j n) (set rgt (cells-at c (+ t j))))
+            (if (or (== lft 3) (== rgt 3))
+              (do (set k i)
+                  (while (< k j)
+                    (do (cells-set c (+ t k) 3)
+                        (set k (+ k 1))))))
+            (set i j))
+        (set i (+ i 1))))
+    (comment "W6: the separators and terminators left are neutral. W7: a European number after a left-to-right")
+    (comment "letter (the start is R) is a letter.")
+    (set i 0)
+    (set s 1)
+    (while (< i n)
+      (do (set x (cells-at c (+ t i)))
+          (if (or (== x 5) (or (== x 6) (== x 7)))
+            (do (set x 0) (cells-set c (+ t i) 0)))
+          (if (or (== x 1) (== x 2)) (set s x))
+          (if (and (== x 3) (== s 2)) (cells-set c (+ t i) 2))
+          (set i (+ i 1))))
+    (comment "BD16: pair the brackets (a neutral whose code point is in the bracket table). The stack holds the")
+    (comment "positions of up to 63 unclosed openers; a closer pairs with the nearest opener of its key and drops")
+    (comment "everything above it. `pm` holds, at an opener, the position of its closer.")
+    (set i 0)
+    (while (and (< i n) (== stop 0))
+      (do (if (== (cells-at c (+ t i)) 0)
+            (do (set r (bd-bracket (cells-at c (+ a i))))
+                (if (>= r 0)
+                  (if (== (bc-bracket-at 0 r 1) 0)
+                    (if (== sp 63)
+                      (set stop 1)
+                      (do (cells-set c (+ stk sp) i)
+                          (set sp (+ sp 1))))
+                    (do (set key (bc-bracket-at 0 r 2))
+                        (set k sp)
+                        (while (> k 0)
+                          (do (set k (- k 1))
+                              (if (== (bc-bracket-at 0 (bd-bracket (cells-at c (+ a (cells-at c (+ stk k))))) 2) key)
+                                (do (cells-set c (+ pm (cells-at c (+ stk k))) i)
+                                    (set sp k)
+                                    (set k 0))))))))))
+          (set i (+ i 1))))
+    (comment "N0: for each pair, in order of its opener: a strong type inside that is the embedding direction (R;")
+    (comment "European and Arabic numbers count as R) makes both brackets it; else one of the other direction inside")
+    (comment "makes them that direction when the context before the opener is that direction too, else R; none inside")
+    (comment "leaves them neutral. A mark that followed a bracket takes its new type.")
+    (set i 0)
+    (while (< i n)
+      (do (set j (cells-at c (+ pm i)))
+          (if (> j i)
+            (do (set fe 0)
+                (set fo 0)
+                (set k (+ i 1))
+                (while (< k j)
+                  (do (set x (cells-at c (+ t k)))
+                      (if (or (== x 1) (or (== x 3) (== x 4))) (set fe 1))
+                      (if (== x 2) (set fo 1))
+                      (set k (+ k 1))))
+                (set x 0)
+                (if (== fe 1) (set x 1))
+                (if (and (== fe 0) (== fo 1))
+                  (do (set ctx 1)
+                      (set k (- i 1))
+                      (set r 0)
+                      (while (and (>= k 0) (== r 0))
+                        (do (set p (cells-at c (+ t k)))
+                            (if (== p 2) (do (set ctx 2) (set r 1)))
+                            (if (or (== p 1) (or (== p 3) (== p 4))) (do (set ctx 1) (set r 1)))
+                            (set k (- k 1))))
+                      (set x 1)
+                      (if (== ctx 2) (set x 2))))
+                (if (> x 0)
+                  (do (cells-set c (+ t i) x)
+                      (cells-set c (+ t j) x)
+                      (set k (+ i 1))
+                      (while (and (< k n) (== (cells-at c (+ f k)) 1))
+                        (do (cells-set c (+ t k) x)
+                            (set k (+ k 1))))
+                      (set k (+ j 1))
+                      (while (and (< k n) (== (cells-at c (+ f k)) 1))
+                        (do (cells-set c (+ t k) x)
+                            (set k (+ k 1))))))))
+          (set i (+ i 1))))
+    (comment "N1 and N2: a run of neutrals takes the direction both sides share, else the paragraph's (R).")
+    (set i 0)
+    (while (< i n)
+      (if (== (cells-at c (+ t i)) 0)
+        (do (set j i)
+            (while (and (< j n) (== (cells-at c (+ t j)) 0))
+              (set j (+ j 1)))
+            (set lft 1)
+            (if (> i 0) (set lft (bd-dir (cells-at c (+ t (- i 1))))))
+            (set rgt 1)
+            (if (< j n) (set rgt (bd-dir (cells-at c (+ t j)))))
+            (set x 1)
+            (if (== lft rgt) (set x lft))
+            (set k i)
+            (while (< k j)
+              (do (cells-set c (+ t k) x)
+                  (set k (+ k 1))))
+            (set i j))
+        (set i (+ i 1))))
+    (comment "I1, I2 at level 1: R stays 1, L and the numbers go up to 2. Then L1's tail.")
+    (set i 0)
+    (while (< i n)
+      (do (set x (cells-at c (+ t i)))
+          (set k 2)
+          (if (== x 1) (set k 1))
+          (if (>= i tail) (set k 1))
+          (cells-set c (+ l i) k)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 bd-reverse [^:mut ^Cells c ^I32 o ^I32 a ^I32 b]
+  (comment "Reverse c[o+a, o+b).")
+  (let [^:mut ^I32 i a
+        ^:mut ^I32 j (- b 1)
+        ^:mut ^I32 u 0]
+    (while (< i j)
+      (do (set u (cells-at c (+ o i)))
+          (cells-set c (+ o i) (cells-at c (+ o j)))
+          (cells-set c (+ o j) u)
+          (set i (+ i 1))
+          (set j (- j 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 bd-order [^:mut ^Cells c ^I32 l ^I32 n ^I32 o]
+  (comment "L2: from the levels c[l, l+n) the order the characters are DISPLAYED in, left to right, written")
+  (comment "to c[o, o+n) as indices 0..n-1: every run at level 2 reversed, then everything.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 j 0]
+    (while (< i n)
+      (do (cells-set c (+ o i) i)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (if (>= (cells-at c (+ l i)) 2)
+        (do (set j i)
+            (while (and (< j n) (>= (cells-at c (+ l j)) 2))
+              (set j (+ j 1)))
+            (bd-reverse c o i j)
+            (set i j))
+        (set i (+ i 1))))
+    (bd-reverse c o 0 n)
+    (return 0)))
+
+(defn ^:pub ^I32 bd-order-of [^:mut ^Cells c ^I32 a ^I32 n]
+  (comment "The code points c[a, a+n) in the order they were SHOWN: push the scratch (flags, pairs, stack, classes,")
+  (comment "levels, order) after the arena's end and answer where the ORDER starts (n indices: the k-th is the index,")
+  (comment "in shown order, of the character that comes k-th in logical order); the levels are the n cells before it.")
+  (comment "The caller drops the arena back to its old length.")
+  (let [^I32 b (cells-len c)
+        ^I32 t (+ (+ (+ b n) n) 64)
+        ^I32 l (+ t n)
+        ^I32 o (+ l n)
+        ^:mut ^I32 i 0]
+    (cells-grow c (+ (* 5 n) 64) 0)
+    (while (< i n)
+      (do (cells-set c (+ t i) (bd-class (cells-at c (+ a i))))
+          (set i (+ i 1))))
+    (bd-resolve c a n b)
+    (bd-order c l n o)
+    (return o)))

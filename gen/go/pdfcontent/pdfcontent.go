@@ -4,6 +4,7 @@
 package pdfcontent
 
 import (
+	"emon/bidi"
 	"emon/evidence"
 	"emon/fx"
 	"emon/model"
@@ -4118,38 +4119,17 @@ func pcContinues(gl *port.Cells, p int32, g int32) int32 {
 	return 1
 }
 
-func pcCls(cp int32) int32 {
-	// A code point's strength for reordering right-to-left text: 1 strong right-to-left
-	// (Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right
-	// letter or a digit (Arabic-Indic digits are digits: they run left to right inside
-	// right-to-left text), 0 neutral (punctuation, symbols, what has no value).
-	if cp < 33 {
-		return 0
-	}
-	if ((cp >= 48) && (cp <= 57)) || (((cp >= 1632) && (cp <= 1641)) || ((cp >= 1776) && (cp <= 1785))) {
-		return 2
-	}
-	if ((cp >= 1424) && (cp <= 2303)) || (((cp >= 64285) && (cp <= 65023)) || ((cp >= 65136) && (cp <= 65279))) {
-		return 1
-	}
-	if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
-		return 2
-	}
-	if (cp >= 192) && ((cp < 8192) && (cp != 215)) {
-		return 2
-	}
-	if (cp >= 12352) && (cp < 65000) {
-		return 2
-	}
-	return 0
-}
-
 func pcGcls(gl *port.Cells, j int32) int32 {
-	return pcCls(evidence.GlGet(gl, j, evidence.ChCp()))
+	// 1 when glyph j stands for a strong right-to-left LETTER (Hebrew, Arabic, Syriac, ...: the Unicode class R or
+	// AL), 2 for a strong left-to-right letter, else 0. Letters decide the direction of a word and of a line (D162);
+	// a digit, a separator or a mark does not.
+	return bidi.BdStrong(evidence.GlGet(gl, j, evidence.ChCp()))
 }
 
-func pcGlyphOut(et *port.Cells, gl *port.Cells, j int32) int32 {
-	// Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
+func pcGlyphOut(et *port.Cells, gl *port.Cells, j int32, lvl int32) int32 {
+	// Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text. At bidi level 1
+	// (lvl, L4) a text of ONE code point whose character is mirrored (a bracket) is the mirror: the glyph on the
+	// page was drawn as the mirror image of the character it stands for.
 	var ts int32 = evidence.GlGet(gl, j, evidence.ChTstart())
 	var tl int32 = evidence.GlGet(gl, j, evidence.ChTlen())
 	var cp int32 = evidence.GlGet(gl, j, evidence.ChCp())
@@ -4158,12 +4138,18 @@ func pcGlyphOut(et *port.Cells, gl *port.Cells, j int32) int32 {
 	if (ts >= 0) && (tl > 0) {
 		for k < tl {
 			cpv = port.CellsAt(et, ts+k)
+			if (lvl == 1) && (tl == 1) {
+				cpv = bidi.BdMirror(cpv)
+			}
 			evidence.EtxAppendCp(et, cpv)
 			k += 1
 		}
 		return 0
 	}
 	if cp >= 0 {
+		if lvl == 1 {
+			cp = bidi.BdMirror(cp)
+		}
 		evidence.EtxAppendCp(et, cp)
 	} else {
 		evidence.EtxAppendCp(et, 65533)
@@ -4171,13 +4157,50 @@ func pcGlyphOut(et *port.Cells, gl *port.Cells, j int32) int32 {
 	return 0
 }
 
+func pcBidiText(et *port.Cells, gl *port.Cells, gfst int32, glst int32) int32 {
+	// Append the text of glyphs [gfst, glst], which were SHOWN left to right, in LOGICAL order of a right-to-left
+	// paragraph (`emon.bidi`, D162): the order the Bidirectional Algorithm would display them in. It is written
+	// where the arena ended, moved down over the scratch the algorithm used, and the index it starts at is the
+	// answer. (The scratch is the arena's own tail: the algorithm owns no memory.)
+	var n int32 = (glst - gfst) + 1
+	var b int32 = port.CellsLen(et)
+	var j int32 = 0
+	var o int32 = 0
+	var e int32 = 0
+	var i int32 = 0
+	var lv int32 = 0
+	var k int32 = 0
+	for j < n {
+		port.CellsPush(et, evidence.GlGet(gl, gfst+j, evidence.ChCp()))
+		j += 1
+	}
+	o = bidi.BdOrderOf(et, b, n)
+	e = port.CellsLen(et)
+	j = 0
+	for j < n {
+		i = port.CellsAt(et, o+j)
+		lv = port.CellsAt(et, (o-n)+i)
+		pcGlyphOut(et, gl, gfst+i, lv)
+		j += 1
+	}
+	k = 0
+	for k < (port.CellsLen(et) - e) {
+		port.CellsSet(et, b+k, port.CellsAt(et, e+k))
+		k += 1
+	}
+	port.CellsDrop(et, b+(port.CellsLen(et)-e))
+	return b
+}
+
 func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells, page int32, gfst int32, glst int32, wbk int32) int32 {
 	// Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
 	// dominant font and size of the first, and `hidden-text` as its source when every
 	// glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
 	// page (visual order, as Skia and most producers write them) has its TEXT written in
-	// logical order: the glyphs reversed, with the runs of digits and Latin letters in it
-	// turned back. The glyphs themselves stay as they were shown.
+	// logical order by the Bidirectional Algorithm (`pc-bidi-text`, D162): numbers and their separators,
+	// Latin runs, brackets and the neutrals between them as UAX #9 resolves them, not letter by letter. A word
+	// with no letter to say so ("2026,") is put right once its line is known to be right to left
+	// (`pc-word-fix`). The glyphs themselves stay as they were shown.
 	var x0 int32 = evidence.GlGet(gl, gfst, evidence.ChX0())
 	var y0 int32 = evidence.GlGet(gl, gfst, evidence.ChY0())
 	var x1 int32 = evidence.GlGet(gl, gfst, evidence.ChX1())
@@ -4189,8 +4212,6 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells,
 	var nl int32 = 0
 	var cl int32 = 0
 	var rtlw int32 = 0
-	var kk int32 = 0
-	var m int32 = 0
 	for j <= glst {
 		if evidence.GlGet(gl, j, evidence.ChX0()) < x0 {
 			x0 = evidence.GlGet(gl, j, evidence.ChX0())
@@ -4227,28 +4248,11 @@ func pcEmitWord(gl *port.Cells, et *port.Cells, wd *port.Cells, fnt *port.Cells,
 	if rtlw == 0 {
 		j = gfst
 		for j <= glst {
-			pcGlyphOut(et, gl, j)
+			pcGlyphOut(et, gl, j, 2)
 			j += 1
 		}
 	} else {
-		j = glst
-		for j >= gfst {
-			if pcGcls(gl, j) == 2 {
-				kk = j
-				for (kk > gfst) && (pcGcls(gl, kk-1) == 2) {
-					kk -= 1
-				}
-				m = kk
-				for m <= j {
-					pcGlyphOut(et, gl, m)
-					m += 1
-				}
-				j = kk - 1
-			} else {
-				pcGlyphOut(et, gl, j)
-				j -= 1
-			}
-		}
+		tstart = pcBidiText(et, gl, gfst, glst)
 	}
 	var w int32 = evidence.WdNew(wd, page, x0, y0, x1, y1, evidence.GlGet(gl, gfst, evidence.GfBx0()), evidence.GlGet(gl, gfst, evidence.GfBy0()), evidence.GlGet(gl, glst, evidence.GfBx1()), evidence.GlGet(gl, glst, evidence.GfBy1()), evidence.GlGet(gl, gfst, evidence.GfRot()), 0, tstart, port.CellsLen(et)-tstart, -1, -1, -1)
 	var fo int32 = evidence.GlGet(gl, gfst, evidence.GfFont())
@@ -4300,12 +4304,15 @@ func pcRevRows(wd *port.Cells, a int32, b int32) int32 {
 }
 
 func pcWcls(gl *port.Cells, wd *port.Cells, w int32) int32 {
-	// 2 when the word has more left-to-right letters and digits than right-to-left letters.
+	// What a word is to the order of the words of a right-to-left line: 1 when it has a right-to-left letter,
+	// 2 when it has a left-to-right letter and no right-to-left one, 3 when it is only numbers (and what goes
+	// with them), 0 when it is only neutrals (a dash, a bullet).
 	var g0 int32 = evidence.WdGet(wd, w, evidence.WfGfirst())
 	var gn int32 = evidence.WdGet(wd, w, evidence.WfGcount())
 	var j int32 = 0
 	var nr int32 = 0
 	var nl int32 = 0
+	var nn int32 = 0
 	var cl int32 = 0
 	for j < gn {
 		cl = pcGcls(gl, g0+j)
@@ -4315,20 +4322,99 @@ func pcWcls(gl *port.Cells, wd *port.Cells, w int32) int32 {
 		if cl == 2 {
 			nl += 1
 		}
+		cl = bidi.BdClass(evidence.GlGet(gl, g0+j, evidence.ChCp()))
+		if (cl == 3) || (cl == 4) {
+			nn += 1
+		}
 		j += 1
 	}
-	if nr > nl {
+	if nr > 0 {
 		return 1
 	}
-	return 2
+	if nl > 0 {
+		return 2
+	}
+	if nn > 0 {
+		return 3
+	}
+	return 0
 }
 
-func pcLineBidi(gl *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst int32, wlst int32) int32 {
-	// Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than
-	// left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on
-	// the page, their ORDER is made logical: reversed, with runs of left-to-right words
-	// turned back; each word's glyphs are re-pointed at it and its gap is the space to
-	// the word that follows it in that order.
+func pcWordFix(gl *port.Cells, et *port.Cells, wd *port.Cells, w int32) int32 {
+	// A word of a right-to-left line that `pc-emit-word` left in the order it was shown, because nothing in it
+	// said it was right to left ("2026,", "50%", "(1)", "ROI-" before a Hebrew letter): when its glyphs run
+	// left to right on the page they are in visual order, so its text is put in logical order, as a word that
+	// says so is. Done in place: the same code points, in the order the algorithm gives; nothing moves if the
+	// order does not change. Answers 1 when it changed the text.
+	var g0 int32 = evidence.WdGet(wd, w, evidence.WfGfirst())
+	var gn int32 = evidence.WdGet(wd, w, evidence.WfGcount())
+	var ts int32 = evidence.WdGet(wd, w, evidence.HdTstart())
+	var tl int32 = evidence.WdGet(wd, w, evidence.HdTlen())
+	var b int32 = port.CellsLen(et)
+	var j int32 = 0
+	var o int32 = 0
+	var e int32 = 0
+	var i int32 = 0
+	var lv int32 = 0
+	var changed int32 = 0
+	if gn < 2 {
+		return 0
+	}
+	if evidence.WdGet(wd, w, evidence.HdDir()) == evidence.LdRtl() {
+		return 0
+	}
+	if pcAxis(evidence.GlGet(gl, g0, evidence.GfRot())) != 0 {
+		return 0
+	}
+	if evidence.GlGet(gl, g0+(gn-1), evidence.ChX0()) < evidence.GlGet(gl, g0, evidence.ChX0()) {
+		return 0
+	}
+	for j < gn {
+		port.CellsPush(et, evidence.GlGet(gl, g0+j, evidence.ChCp()))
+		j += 1
+	}
+	o = bidi.BdOrderOf(et, b, gn)
+	j = 0
+	for j < gn {
+		i = port.CellsAt(et, o+j)
+		lv = port.CellsAt(et, (o-gn)+i)
+		if (i != j) || (lv == 1) {
+			changed = 1
+		}
+		j += 1
+	}
+	if changed == 0 {
+		port.CellsDrop(et, b)
+		return 0
+	}
+	e = port.CellsLen(et)
+	j = 0
+	for j < gn {
+		i = port.CellsAt(et, o+j)
+		lv = port.CellsAt(et, (o-gn)+i)
+		pcGlyphOut(et, gl, g0+i, lv)
+		j += 1
+	}
+	if (port.CellsLen(et) - e) != tl {
+		port.CellsDrop(et, b)
+		return 0
+	}
+	j = 0
+	for j < tl {
+		port.CellsSet(et, ts+j, port.CellsAt(et, e+j))
+		j += 1
+	}
+	port.CellsDrop(et, b)
+	return 1
+}
+
+func pcLineBidi(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst int32, wlst int32) int32 {
+	// Line lidx holds words [wfst, wlst]. When more of its letters are right-to-left than left-to-right
+	// it is a right-to-left line (`ld-rtl`). Its words that no letter put in logical order are put in it
+	// (`pc-word-fix`); if the words run left to right on the page, their ORDER is made logical: reversed,
+	// with each group of words that make one left-to-right run (Latin words, and the numbers and neutrals
+	// between them, W7 and N1) turned back; each word's glyphs are re-pointed at it and its gap is the
+	// space to the word that follows it in that order.
 	var w int32 = wfst
 	var nr int32 = 0
 	var nl int32 = 0
@@ -4336,6 +4422,9 @@ func pcLineBidi(gl *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst
 	var cl int32 = 0
 	var a int32 = 0
 	var z int32 = 0
+	var s int32 = 0
+	var hasl int32 = 0
+	var rtl int32 = 0
 	var g0 int32 = 0
 	var gn int32 = 0
 	for w <= wlst {
@@ -4354,10 +4443,33 @@ func pcLineBidi(gl *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst
 		}
 		w += 1
 	}
-	if nr <= nl {
+	// A paragraph's direction is its own, not each line's: a short last line that is mostly Latin (a
+	// product name, an acronym) after a right-to-left line is still right to left (UAX #9, P2 and P3 read
+	// the paragraph, and the lines of one run on). So a line is right to left when its right-to-left
+	// letters outnumber the left-to-right ones, or when the line before it (same page) is and this one has a
+	// right-to-left letter or no left-to-right one (a number, a bullet).
+	rtl = 0
+	if nr > nl {
+		rtl = 1
+	}
+	if (lidx > 0) && (rtl == 0) {
+		if evidence.LnGet(ln, lidx-1, evidence.LhPage()) == evidence.LnGet(ln, lidx, evidence.LhPage()) {
+			if evidence.LnGet(ln, lidx-1, evidence.LhDir()) == evidence.LdRtl() {
+				if (nr > 0) || (nl == 0) {
+					rtl = 1
+				}
+			}
+		}
+	}
+	if rtl == 0 {
 		return 0
 	}
 	evidence.LnSet(ln, lidx, evidence.LhDir(), evidence.LdRtl())
+	w = wfst
+	for w <= wlst {
+		pcWordFix(gl, et, wd, w)
+		w += 1
+	}
 	if pcAxis(evidence.GlGet(gl, evidence.WdGet(wd, wfst, evidence.WfGfirst()), evidence.GfRot())) != 0 {
 		return 0
 	}
@@ -4368,17 +4480,38 @@ func pcLineBidi(gl *port.Cells, wd *port.Cells, ln *port.Cells, lidx int32, wfst
 		return 0
 	}
 	pcRevRows(wd, wfst, wlst)
+	// Now the rows are in logical order but for the left-to-right runs, which are backwards: a run is a
+	// maximal stretch of words that are not right-to-left, holding at least one left-to-right word, less
+	// the neutral-only words at its ends (they are between a left-to-right and a right-to-left word: N2).
 	a = wfst
 	for a <= wlst {
-		if pcWcls(gl, wd, a) == 2 {
+		if pcWcls(gl, wd, a) == 1 {
+			a += 1
+		} else {
 			z = a
-			for (z < wlst) && (pcWcls(gl, wd, z+1) == 2) {
+			for (z < wlst) && (pcWcls(gl, wd, z+1) != 1) {
 				z += 1
 			}
-			pcRevRows(wd, a, z)
+			hasl = 0
+			s = a
+			for s <= z {
+				if pcWcls(gl, wd, s) == 2 {
+					hasl = 1
+				}
+				s += 1
+			}
+			if hasl == 1 {
+				s = a
+				for pcWcls(gl, wd, s) == 0 {
+					s += 1
+				}
+				j = z
+				for pcWcls(gl, wd, j) == 0 {
+					j -= 1
+				}
+				pcRevRows(wd, s, j)
+			}
 			a = z + 1
-		} else {
-			a += 1
 		}
 	}
 	w = wfst
@@ -4517,7 +4650,7 @@ func PcGroup(gl *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, fnt
 				// order the words were SHOWN (the bidi step below re-orders the rows, not the page).
 				lnx = evidence.LnNew(ln, page, x0, y0, x1, y1, evidence.WdGet(wd, lfirst, evidence.HdBx0()), evidence.WdGet(wd, lfirst, evidence.HdBy0()), evidence.WdGet(wd, prev, evidence.HdBx1()), evidence.WdGet(wd, prev, evidence.HdBy1()), evidence.GlGet(gl, gfp, evidence.GfRot()), 0, lfirst, (prev-lfirst)+1)
 				evidence.LnSet(ln, lnx, evidence.LfOrder(), ord)
-				pcLineBidi(gl, wd, ln, lnx, lfirst, prev)
+				pcLineBidi(gl, et, wd, ln, lnx, lfirst, prev)
 				evidence.WdSet(wd, prev, evidence.WfWbreak(), evidence.WbLineEnd())
 				gfp = lfirst
 				for gfp <= prev {

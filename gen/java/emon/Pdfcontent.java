@@ -3786,36 +3786,16 @@ public final class Pdfcontent {
         }
         return 1;
     }
-    public static int pcCls(int cp) {
-        // A code point's strength for reordering right-to-left text: 1 strong right-to-left
-        // (Hebrew, Arabic, Syriac, Thaana, N'Ko and their presentation forms), 2 a left-to-right
-        // letter or a digit (Arabic-Indic digits are digits: they run left to right inside
-        // right-to-left text), 0 neutral (punctuation, symbols, what has no value).
-        if (cp < 33) {
-            return 0;
-        }
-        if (((cp >= 48) && (cp <= 57)) || (((cp >= 1632) && (cp <= 1641)) || ((cp >= 1776) && (cp <= 1785)))) {
-            return 2;
-        }
-        if (((cp >= 1424) && (cp <= 2303)) || (((cp >= 64285) && (cp <= 65023)) || ((cp >= 65136) && (cp <= 65279)))) {
-            return 1;
-        }
-        if (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
-            return 2;
-        }
-        if ((cp >= 192) && ((cp < 8192) && (cp != 215))) {
-            return 2;
-        }
-        if ((cp >= 12352) && (cp < 65000)) {
-            return 2;
-        }
-        return 0;
-    }
     public static int pcGcls(emon.Port.Cells gl, int j) {
-        return pcCls(Evidence.glGet(gl, j, Evidence.chCp()));
+        // 1 when glyph j stands for a strong right-to-left LETTER (Hebrew, Arabic, Syriac, ...: the Unicode class R or
+        // AL), 2 for a strong left-to-right letter, else 0. Letters decide the direction of a word and of a line (D162);
+        // a digit, a separator or a mark does not.
+        return Bidi.bdStrong(Evidence.glGet(gl, j, Evidence.chCp()));
     }
-    public static int pcGlyphOut(emon.Port.Cells et, emon.Port.Cells gl, int j) {
-        // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text.
+    public static int pcGlyphOut(emon.Port.Cells et, emon.Port.Cells gl, int j, int lvl) {
+        // Append glyph j's text (every code point it stands for, or U+FFFD) to the evidence text. At bidi level 1
+        // (lvl, L4) a text of ONE code point whose character is mirrored (a bracket) is the mirror: the glyph on the
+        // page was drawn as the mirror image of the character it stands for.
         int ts = Evidence.glGet(gl, j, Evidence.chTstart());
         int tl = Evidence.glGet(gl, j, Evidence.chTlen());
         int cp = Evidence.glGet(gl, j, Evidence.chCp());
@@ -3824,25 +3804,67 @@ public final class Pdfcontent {
         if ((ts >= 0) && (tl > 0)) {
             while (k < tl) {
                 cpv = emon.Port.cellsAt(et, ts + k);
+                if ((lvl == 1) && (tl == 1)) {
+                    cpv = Bidi.bdMirror(cpv);
+                }
                 Evidence.etxAppendCp(et, cpv);
                 k += 1;
             }
             return 0;
         }
         if (cp >= 0) {
+            if (lvl == 1) {
+                cp = Bidi.bdMirror(cp);
+            }
             Evidence.etxAppendCp(et, cp);
         } else {
             Evidence.etxAppendCp(et, 65533);
         }
         return 0;
     }
+    public static int pcBidiText(emon.Port.Cells et, emon.Port.Cells gl, int gfst, int glst) {
+        // Append the text of glyphs [gfst, glst], which were SHOWN left to right, in LOGICAL order of a right-to-left
+        // paragraph (`emon.bidi`, D162): the order the Bidirectional Algorithm would display them in. It is written
+        // where the arena ended, moved down over the scratch the algorithm used, and the index it starts at is the
+        // answer. (The scratch is the arena's own tail: the algorithm owns no memory.)
+        int n = (glst - gfst) + 1;
+        int b = emon.Port.cellsLen(et);
+        int j = 0;
+        int o = 0;
+        int e = 0;
+        int i = 0;
+        int lv = 0;
+        int k = 0;
+        while (j < n) {
+            emon.Port.cellsPush(et, Evidence.glGet(gl, gfst + j, Evidence.chCp()));
+            j += 1;
+        }
+        o = Bidi.bdOrderOf(et, b, n);
+        e = emon.Port.cellsLen(et);
+        j = 0;
+        while (j < n) {
+            i = emon.Port.cellsAt(et, o + j);
+            lv = emon.Port.cellsAt(et, (o - n) + i);
+            pcGlyphOut(et, gl, gfst + i, lv);
+            j += 1;
+        }
+        k = 0;
+        while (k < (emon.Port.cellsLen(et) - e)) {
+            emon.Port.cellsSet(et, b + k, emon.Port.cellsAt(et, e + k));
+            k += 1;
+        }
+        emon.Port.cellsDrop(et, b + (emon.Port.cellsLen(et) - e));
+        return b;
+    }
     public static int pcEmitWord(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells fnt, int page, int gfst, int glst, int wbk) {
         // Record glyphs [gfst, glst] as a word: the union of their boxes, their text, the
         // dominant font and size of the first, and `hidden-text` as its source when every
         // glyph is render mode 3. A right-to-left word whose glyphs run left to right on the
         // page (visual order, as Skia and most producers write them) has its TEXT written in
-        // logical order: the glyphs reversed, with the runs of digits and Latin letters in it
-        // turned back. The glyphs themselves stay as they were shown.
+        // logical order by the Bidirectional Algorithm (`pc-bidi-text`, D162): numbers and their separators,
+        // Latin runs, brackets and the neutrals between them as UAX #9 resolves them, not letter by letter. A word
+        // with no letter to say so ("2026,") is put right once its line is known to be right to left
+        // (`pc-word-fix`). The glyphs themselves stay as they were shown.
         int x0 = Evidence.glGet(gl, gfst, Evidence.chX0());
         int y0 = Evidence.glGet(gl, gfst, Evidence.chY0());
         int x1 = Evidence.glGet(gl, gfst, Evidence.chX1());
@@ -3854,8 +3876,6 @@ public final class Pdfcontent {
         int nl = 0;
         int cl = 0;
         int rtlw = 0;
-        int kk = 0;
-        int m = 0;
         while (j <= glst) {
             if (Evidence.glGet(gl, j, Evidence.chX0()) < x0) {
                 x0 = Evidence.glGet(gl, j, Evidence.chX0());
@@ -3892,28 +3912,11 @@ public final class Pdfcontent {
         if (rtlw == 0) {
             j = gfst;
             while (j <= glst) {
-                pcGlyphOut(et, gl, j);
+                pcGlyphOut(et, gl, j, 2);
                 j += 1;
             }
         } else {
-            j = glst;
-            while (j >= gfst) {
-                if (pcGcls(gl, j) == 2) {
-                    kk = j;
-                    while ((kk > gfst) && (pcGcls(gl, kk - 1) == 2)) {
-                        kk -= 1;
-                    }
-                    m = kk;
-                    while (m <= j) {
-                        pcGlyphOut(et, gl, m);
-                        m += 1;
-                    }
-                    j = kk - 1;
-                } else {
-                    pcGlyphOut(et, gl, j);
-                    j -= 1;
-                }
-            }
+            tstart = pcBidiText(et, gl, gfst, glst);
         }
         int w = Evidence.wdNew(wd, page, x0, y0, x1, y1, Evidence.glGet(gl, gfst, Evidence.gfBx0()), Evidence.glGet(gl, gfst, Evidence.gfBy0()), Evidence.glGet(gl, glst, Evidence.gfBx1()), Evidence.glGet(gl, glst, Evidence.gfBy1()), Evidence.glGet(gl, gfst, Evidence.gfRot()), 0, tstart, emon.Port.cellsLen(et) - tstart, -1, -1, -1);
         int fo = Evidence.glGet(gl, gfst, Evidence.gfFont());
@@ -3962,12 +3965,15 @@ public final class Pdfcontent {
         return 0;
     }
     public static int pcWcls(emon.Port.Cells gl, emon.Port.Cells wd, int w) {
-        // 2 when the word has more left-to-right letters and digits than right-to-left letters.
+        // What a word is to the order of the words of a right-to-left line: 1 when it has a right-to-left letter,
+        // 2 when it has a left-to-right letter and no right-to-left one, 3 when it is only numbers (and what goes
+        // with them), 0 when it is only neutrals (a dash, a bullet).
         int g0 = Evidence.wdGet(wd, w, Evidence.wfGfirst());
         int gn = Evidence.wdGet(wd, w, Evidence.wfGcount());
         int j = 0;
         int nr = 0;
         int nl = 0;
+        int nn = 0;
         int cl = 0;
         while (j < gn) {
             cl = pcGcls(gl, g0 + j);
@@ -3977,19 +3983,97 @@ public final class Pdfcontent {
             if (cl == 2) {
                 nl += 1;
             }
+            cl = Bidi.bdClass(Evidence.glGet(gl, g0 + j, Evidence.chCp()));
+            if ((cl == 3) || (cl == 4)) {
+                nn += 1;
+            }
             j += 1;
         }
-        if (nr > nl) {
+        if (nr > 0) {
             return 1;
         }
-        return 2;
+        if (nl > 0) {
+            return 2;
+        }
+        if (nn > 0) {
+            return 3;
+        }
+        return 0;
     }
-    public static int pcLineBidi(emon.Port.Cells gl, emon.Port.Cells wd, emon.Port.Cells ln, int lidx, int wfst, int wlst) {
-        // Line lidx holds words [wfst, wlst]. When more of its glyphs are right-to-left than
-        // left-to-right it is a right-to-left line (`ld-rtl`); if the words run left to right on
-        // the page, their ORDER is made logical: reversed, with runs of left-to-right words
-        // turned back; each word's glyphs are re-pointed at it and its gap is the space to
-        // the word that follows it in that order.
+    public static int pcWordFix(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, int w) {
+        // A word of a right-to-left line that `pc-emit-word` left in the order it was shown, because nothing in it
+        // said it was right to left ("2026,", "50%", "(1)", "ROI-" before a Hebrew letter): when its glyphs run
+        // left to right on the page they are in visual order, so its text is put in logical order, as a word that
+        // says so is. Done in place: the same code points, in the order the algorithm gives; nothing moves if the
+        // order does not change. Answers 1 when it changed the text.
+        int g0 = Evidence.wdGet(wd, w, Evidence.wfGfirst());
+        int gn = Evidence.wdGet(wd, w, Evidence.wfGcount());
+        int ts = Evidence.wdGet(wd, w, Evidence.hdTstart());
+        int tl = Evidence.wdGet(wd, w, Evidence.hdTlen());
+        int b = emon.Port.cellsLen(et);
+        int j = 0;
+        int o = 0;
+        int e = 0;
+        int i = 0;
+        int lv = 0;
+        int changed = 0;
+        if (gn < 2) {
+            return 0;
+        }
+        if (Evidence.wdGet(wd, w, Evidence.hdDir()) == Evidence.ldRtl()) {
+            return 0;
+        }
+        if (pcAxis(Evidence.glGet(gl, g0, Evidence.gfRot())) != 0) {
+            return 0;
+        }
+        if (Evidence.glGet(gl, g0 + (gn - 1), Evidence.chX0()) < Evidence.glGet(gl, g0, Evidence.chX0())) {
+            return 0;
+        }
+        while (j < gn) {
+            emon.Port.cellsPush(et, Evidence.glGet(gl, g0 + j, Evidence.chCp()));
+            j += 1;
+        }
+        o = Bidi.bdOrderOf(et, b, gn);
+        j = 0;
+        while (j < gn) {
+            i = emon.Port.cellsAt(et, o + j);
+            lv = emon.Port.cellsAt(et, (o - gn) + i);
+            if ((i != j) || (lv == 1)) {
+                changed = 1;
+            }
+            j += 1;
+        }
+        if (changed == 0) {
+            emon.Port.cellsDrop(et, b);
+            return 0;
+        }
+        e = emon.Port.cellsLen(et);
+        j = 0;
+        while (j < gn) {
+            i = emon.Port.cellsAt(et, o + j);
+            lv = emon.Port.cellsAt(et, (o - gn) + i);
+            pcGlyphOut(et, gl, g0 + i, lv);
+            j += 1;
+        }
+        if ((emon.Port.cellsLen(et) - e) != tl) {
+            emon.Port.cellsDrop(et, b);
+            return 0;
+        }
+        j = 0;
+        while (j < tl) {
+            emon.Port.cellsSet(et, ts + j, emon.Port.cellsAt(et, e + j));
+            j += 1;
+        }
+        emon.Port.cellsDrop(et, b);
+        return 1;
+    }
+    public static int pcLineBidi(emon.Port.Cells gl, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, int lidx, int wfst, int wlst) {
+        // Line lidx holds words [wfst, wlst]. When more of its letters are right-to-left than left-to-right
+        // it is a right-to-left line (`ld-rtl`). Its words that no letter put in logical order are put in it
+        // (`pc-word-fix`); if the words run left to right on the page, their ORDER is made logical: reversed,
+        // with each group of words that make one left-to-right run (Latin words, and the numbers and neutrals
+        // between them, W7 and N1) turned back; each word's glyphs are re-pointed at it and its gap is the
+        // space to the word that follows it in that order.
         int w = wfst;
         int nr = 0;
         int nl = 0;
@@ -3997,6 +4081,9 @@ public final class Pdfcontent {
         int cl = 0;
         int a = 0;
         int z = 0;
+        int s = 0;
+        int hasl = 0;
+        int rtl = 0;
         int g0 = 0;
         int gn = 0;
         while (w <= wlst) {
@@ -4015,10 +4102,33 @@ public final class Pdfcontent {
             }
             w += 1;
         }
-        if (nr <= nl) {
+        // A paragraph's direction is its own, not each line's: a short last line that is mostly Latin (a
+        // product name, an acronym) after a right-to-left line is still right to left (UAX #9, P2 and P3 read
+        // the paragraph, and the lines of one run on). So a line is right to left when its right-to-left
+        // letters outnumber the left-to-right ones, or when the line before it (same page) is and this one has a
+        // right-to-left letter or no left-to-right one (a number, a bullet).
+        rtl = 0;
+        if (nr > nl) {
+            rtl = 1;
+        }
+        if ((lidx > 0) && (rtl == 0)) {
+            if (Evidence.lnGet(ln, lidx - 1, Evidence.lhPage()) == Evidence.lnGet(ln, lidx, Evidence.lhPage())) {
+                if (Evidence.lnGet(ln, lidx - 1, Evidence.lhDir()) == Evidence.ldRtl()) {
+                    if ((nr > 0) || (nl == 0)) {
+                        rtl = 1;
+                    }
+                }
+            }
+        }
+        if (rtl == 0) {
             return 0;
         }
         Evidence.lnSet(ln, lidx, Evidence.lhDir(), Evidence.ldRtl());
+        w = wfst;
+        while (w <= wlst) {
+            pcWordFix(gl, et, wd, w);
+            w += 1;
+        }
         if (pcAxis(Evidence.glGet(gl, Evidence.wdGet(wd, wfst, Evidence.wfGfirst()), Evidence.gfRot())) != 0) {
             return 0;
         }
@@ -4029,17 +4139,38 @@ public final class Pdfcontent {
             return 0;
         }
         pcRevRows(wd, wfst, wlst);
+        // Now the rows are in logical order but for the left-to-right runs, which are backwards: a run is a
+        // maximal stretch of words that are not right-to-left, holding at least one left-to-right word, less
+        // the neutral-only words at its ends (they are between a left-to-right and a right-to-left word: N2).
         a = wfst;
         while (a <= wlst) {
-            if (pcWcls(gl, wd, a) == 2) {
+            if (pcWcls(gl, wd, a) == 1) {
+                a += 1;
+            } else {
                 z = a;
-                while ((z < wlst) && (pcWcls(gl, wd, z + 1) == 2)) {
+                while ((z < wlst) && (pcWcls(gl, wd, z + 1) != 1)) {
                     z += 1;
                 }
-                pcRevRows(wd, a, z);
+                hasl = 0;
+                s = a;
+                while (s <= z) {
+                    if (pcWcls(gl, wd, s) == 2) {
+                        hasl = 1;
+                    }
+                    s += 1;
+                }
+                if (hasl == 1) {
+                    s = a;
+                    while (pcWcls(gl, wd, s) == 0) {
+                        s += 1;
+                    }
+                    j = z;
+                    while (pcWcls(gl, wd, j) == 0) {
+                        j -= 1;
+                    }
+                    pcRevRows(wd, s, j);
+                }
                 a = z + 1;
-            } else {
-                a += 1;
             }
         }
         w = wfst;
@@ -4177,7 +4308,7 @@ public final class Pdfcontent {
                     // order the words were SHOWN (the bidi step below re-orders the rows, not the page).
                     lnx = Evidence.lnNew(ln, page, x0, y0, x1, y1, Evidence.wdGet(wd, lfirst, Evidence.hdBx0()), Evidence.wdGet(wd, lfirst, Evidence.hdBy0()), Evidence.wdGet(wd, prev, Evidence.hdBx1()), Evidence.wdGet(wd, prev, Evidence.hdBy1()), Evidence.glGet(gl, gfp, Evidence.gfRot()), 0, lfirst, (prev - lfirst) + 1);
                     Evidence.lnSet(ln, lnx, Evidence.lfOrder(), ord);
-                    pcLineBidi(gl, wd, ln, lnx, lfirst, prev);
+                    pcLineBidi(gl, et, wd, ln, lnx, lfirst, prev);
                     Evidence.wdSet(wd, prev, Evidence.wfWbreak(), Evidence.wbLineEnd());
                     gfp = lfirst;
                     while (gfp <= prev) {

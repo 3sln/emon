@@ -1,0 +1,182 @@
+;; Laws for `emon.bidi` (D162), on every target.
+;;
+;; THE CONFORMANCE CORPUS is Unicode's own `BidiCharacterTest.txt`, the rows emon's resolver claims
+;; (test/bidi/conformance.txt, written by kin/scripts/bididata.clj: paragraph level 1, no brackets, no explicit
+;; controls): for each row the RESOLVED LEVELS and the VISUAL ORDER the Unicode file gives, which are not emon's.
+;; THE SAMPLES (test/bidi/samples.txt, kin/scripts/bidi-samples.clj) are hand-written Hebrew and Arabic with numbers,
+;; commas, percent signs, dates and Latin words, each as it is SHOWN on the page and as it is LOGICALLY: the order
+;; the algorithm gives for what is shown must be the logical text (what the text layer needs), and the order it
+;; gives for the logical text must be what is shown (the rules are mirror-symmetric, so this is the same law).
+(ns emon.biditest
+  (:require [emon.lang :refer [I32 Blob Cells]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that new-cells test-file]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push cells-drop]]
+            [emon.model :refer [text-append-utf8]]
+            [emon.bidi :refer [bd-class bd-strong bd-mirror bd-order-of]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^I32 bt-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 bt-next [^Blob b ^I32 i ^I32 lim ^I32 ch]
+  (comment "Index of the next byte `ch` in [i, lim), or lim.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) ch))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 bt-digit [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (if (and (>= c 65) (<= c 70)) (return (- c 55)))
+  (if (and (>= c 97) (<= c 102)) (return (- c 87)))
+  (return -1))
+
+(defn ^I32 bt-nums [^Blob b ^I32 from ^I32 to ^I32 base ^:mut ^Cells c]
+  (comment "Parse the numbers (written in `base`, 10 or 16) separated by spaces in b[from, to) onto c, cleared first.")
+  (comment "Answers how many.")
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0
+        ^:mut ^I32 in 0
+        ^:mut ^I32 d 0]
+    (cells-drop c 0)
+    (while (< k to)
+      (do (set d (bt-digit (blob-u8 b k)))
+          (if (and (>= d 0) (< d base))
+            (do (set v (+ (* v base) d)) (set in 1))
+            (if (== in 1)
+              (do (cells-push c v) (set v 0) (set in 0))))
+          (set k (+ k 1))))
+    (if (== in 1) (cells-push c v))
+    (return (cells-len c))))
+
+;; ----------------------------------------------------------------- the conformance rows
+
+(deftest test-every-claimed-row-of-bidi-character-test-txt
+  (let [^Blob f (test-file "bidi/conformance.txt")
+        ^Cells ar (new-cells)
+        ^Cells want-lv (new-cells)
+        ^Cells want-vis (new-cells)
+        ^I32 end (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 badl 0
+        ^:mut ^I32 badv 0]
+    (while (< pos end)
+      (do (set line (+ line 1))
+          (set e (bt-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set s1 (bt-next f pos e 59))
+                (set s2 (bt-next f (+ s1 1) e 59))
+                (cells-drop ar 0)
+                (set n (bt-nums f pos s1 16 ar))
+                (bt-nums f (+ s1 1) s2 10 want-lv)
+                (bt-nums f (+ s2 1) e 10 want-vis)
+                (set o (bd-order-of ar 0 n))
+                (set badl 0)
+                (set badv 0)
+                (set k 0)
+                (while (< k n)
+                  (do (if (!= (cells-at ar (+ (- o n) k)) (cells-at want-lv k)) (set badl (+ badl 1)))
+                      (if (!= (cells-at ar (+ o k)) (cells-at want-vis k)) (set badv (+ badv 1)))
+                      (set k (+ k 1))))
+                (assert-eq-at badl 0 "characters with a wrong level" line)
+                (assert-eq-at badv 0 "positions in the wrong visual order" line)))
+          (set pos (+ e 1))))
+    (assert-that (> rows 1000) "the corpus has its rows")))
+
+;; ----------------------------------------------------------------- the classes
+
+(deftest test-classes-of-the-characters-that-matter
+  (assert-eq (bd-class 1488) 1 "alef is R")
+  (assert-eq (bd-class 1575) 8 "arabic alif is AL")
+  (assert-eq (bd-class 48) 3 "0 is EN")
+  (assert-eq (bd-class 1632) 4 "arabic-indic zero is AN")
+  (assert-eq (bd-class 1776) 3 "extended arabic-indic zero is EN")
+  (assert-eq (bd-class 37) 6 "% is ET")
+  (assert-eq (bd-class 36) 6 "$ is ET")
+  (assert-eq (bd-class 1642) 6 "arabic percent sign is ET")
+  (assert-eq (bd-class 44) 7 ", is CS")
+  (assert-eq (bd-class 47) 7 "/ is CS")
+  (assert-eq (bd-class 1548) 7 "arabic comma is CS")
+  (assert-eq (bd-class 45) 5 "hyphen-minus is ES")
+  (assert-eq (bd-class 43) 5 "+ is ES")
+  (assert-eq (bd-class 1456) 10 "a hebrew point is NSM")
+  (assert-eq (bd-class 97) 2 "a is L")
+  (assert-eq (bd-class 32) 9 "space is WS")
+  (assert-eq (bd-class -1) 0 "no value is neutral")
+  (assert-eq (bd-mirror 40) 41 "( mirrors to )")
+  (assert-eq (bd-mirror 41) 40 ") mirrors to (")
+  (assert-eq (bd-mirror 60) 62 "< mirrors to >")
+  (assert-eq (bd-mirror 187) 171 "a right guillemet mirrors to the left one")
+  (assert-eq (bd-mirror 97) 97 "a letter mirrors to itself")
+  (assert-eq (bd-strong 1488) 1 "alef is a strong R letter")
+  (assert-eq (bd-strong 1575) 1 "alif is a strong R letter")
+  (assert-eq (bd-strong 97) 2 "a is a strong L letter")
+  (assert-eq (bd-strong 48) 0 "a digit is not strong")
+  (assert-eq (bd-strong 44) 0 "a comma is not strong"))
+
+;; ----------------------------------------------------------------- the samples
+
+(defn ^I32 bt-shown-as-logical [^Cells a ^I32 n ^Cells want ^:mut ^Cells ar]
+  (comment "1 when the order the algorithm gives for the code points a[0, n) (read as shown), each mirrored where its")
+  (comment "level is odd (L4), lists want.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 o 0]
+    (if (!= n (cells-len want)) (return 0))
+    (cells-drop ar 0)
+    (while (< k n)
+      (do (cells-push ar (cells-at a k))
+          (set k (+ k 1))))
+    (set o (bd-order-of ar 0 n))
+    (set k 0)
+    (while (< k n)
+      (do (set i (cells-at ar (+ o k)))
+          (set cp (cells-at a i))
+          (if (== (cells-at ar (+ (- o n) i)) 1) (set cp (bd-mirror cp)))
+          (if (!= cp (cells-at want k)) (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(deftest test-hebrew-and-arabic-samples-shown-and-logical
+  (let [^Blob f (test-file "bidi/samples.txt")
+        ^Cells shown (new-cells)
+        ^Cells logical (new-cells)
+        ^Cells ar (new-cells)
+        ^I32 end (blob-len f)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 t1 0
+        ^:mut ^I32 t2 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 m 0]
+    (while (< pos end)
+      (do (set line (+ line 1))
+          (set e (bt-nl f pos))
+          (if (and (< pos e) (!= (blob-u8 f pos) 35))
+            (do (set rows (+ rows 1))
+                (set t1 (bt-next f pos e 9))
+                (set t2 (bt-next f (+ t1 1) e 9))
+                (cells-drop shown 0)
+                (cells-drop logical 0)
+                (set n (text-append-utf8 shown f pos t1))
+                (set m (text-append-utf8 logical f (+ t1 1) t2))
+                (assert-eq-at (bt-shown-as-logical shown n logical ar) 1 "what is shown, put in logical order, is the logical text" line)
+                (assert-eq-at (bt-shown-as-logical logical m shown ar) 1 "the logical text, put in display order, is what is shown" line)))
+          (set pos (+ e 1))))
+    (assert-eq rows 23 "the samples")))
