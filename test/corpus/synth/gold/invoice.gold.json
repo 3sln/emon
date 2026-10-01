@@ -6,7 +6,8 @@
   "pdf": "pdf/invoice.pdf",
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
-   "scan": "scan/invoice.pdf"
+   "scan": "scan/invoice.pdf",
+   "scan-color": "scan-color/invoice.pdf"
   }
  },
  "annotated": {

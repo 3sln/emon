@@ -83,6 +83,7 @@
       "description": "What printing the document showed, found by tools/synth/build.clj from `pdftotext -bbox-layout` and committed in MANIFEST.json (D114). Node ids are body ids. `frags`: per leaf block, its fragments [page, band, col] in reading order (a block broken by a column or a page has several). `lines`: the printed line count of every block that has `align` or an initial. `hyphens`: every word the printer hyphenated at a line or column end: `printed` is the word as printed (with its hyphen), `word` the HTML's word.",
       "additionalProperties": false,
       "properties": {
+        "tl-untrusted": { "type": "boolean", "description": "The document's text layer is wrong or older than the pixels ON PURPOSE (a rewritten ToUnicode, a worse hidden OCR layer, D209): the scorer's `tl-override` skips it, because overriding that text layer is the right behaviour." },
         "frags": {
           "type": "object",
           "additionalProperties": false,

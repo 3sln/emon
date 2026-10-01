@@ -1,0 +1,436 @@
+{
+ "emon-gold": "1.0",
+ "id": "table-simple-ruled",
+ "provenance": {
+  "html": "html/table-simple-ruled.html",
+  "pdf": "pdf/table-simple-ruled.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/table-simple-ruled.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Regional Sales"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Large does while saw toward do not words thought show being since is. White with want same who soon the paper its before boy want together."
+      },
+      {
+       "id": 4,
+       "kind": "seal",
+       "subkind": "seal",
+       "color": "blue",
+       "text": "DEPARTMENT OF STATE FILED"
+      },
+      {
+       "id": 5,
+       "kind": "table",
+       "profile": "ruled",
+       "columns": 5,
+       "children": [
+        {
+         "id": 6,
+         "kind": "caption",
+         "label": "Table 1.",
+         "text": "Sales by region, thousands of units"
+        },
+        {
+         "id": 7,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 8,
+           "kind": "row",
+           "children": [
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "Region"
+            },
+            {
+             "id": 10,
+             "kind": "cell",
+             "header": "col",
+             "text": "Q1"
+            },
+            {
+             "id": 11,
+             "kind": "cell",
+             "header": "col",
+             "text": "Q2"
+            },
+            {
+             "id": 12,
+             "kind": "cell",
+             "header": "col",
+             "text": "Q3"
+            },
+            {
+             "id": 13,
+             "kind": "cell",
+             "header": "col",
+             "text": "Q4"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 14,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 15,
+           "kind": "row",
+           "children": [
+            {
+             "id": 16,
+             "kind": "cell",
+             "text": "North"
+            },
+            {
+             "id": 17,
+             "kind": "cell",
+             "text": "100"
+            },
+            {
+             "id": 18,
+             "kind": "cell",
+             "text": "153"
+            },
+            {
+             "id": 19,
+             "kind": "cell",
+             "text": "116"
+            },
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "169"
+            }
+           ]
+          },
+          {
+           "id": 21,
+           "kind": "row",
+           "children": [
+            {
+             "id": 22,
+             "kind": "cell",
+             "text": "South"
+            },
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "137"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "100"
+            },
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "153"
+            },
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "116"
+            }
+           ]
+          },
+          {
+           "id": 27,
+           "kind": "row",
+           "children": [
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "East"
+            },
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "174"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "137"
+            },
+            {
+             "id": 31,
+             "kind": "cell",
+             "text": "100"
+            },
+            {
+             "id": 32,
+             "kind": "cell",
+             "text": "153"
+            }
+           ]
+          },
+          {
+           "id": 33,
+           "kind": "row",
+           "children": [
+            {
+             "id": 34,
+             "kind": "cell",
+             "text": "West"
+            },
+            {
+             "id": 35,
+             "kind": "cell",
+             "text": "121"
+            },
+            {
+             "id": 36,
+             "kind": "cell",
+             "text": "174"
+            },
+            {
+             "id": 37,
+             "kind": "cell",
+             "text": "137"
+            },
+            {
+             "id": 38,
+             "kind": "cell",
+             "text": "100"
+            }
+           ]
+          },
+          {
+           "id": 39,
+           "kind": "row",
+           "children": [
+            {
+             "id": 40,
+             "kind": "cell",
+             "text": "Central"
+            },
+            {
+             "id": 41,
+             "kind": "cell",
+             "text": "158"
+            },
+            {
+             "id": 42,
+             "kind": "cell",
+             "text": "121"
+            },
+            {
+             "id": 43,
+             "kind": "cell",
+             "text": "174"
+            },
+            {
+             "id": 44,
+             "kind": "cell",
+             "text": "137"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 45,
+         "kind": "rowgroup",
+         "role": "foot",
+         "children": [
+          {
+           "id": 46,
+           "kind": "row",
+           "children": [
+            {
+             "id": 47,
+             "kind": "cell",
+             "header": "row",
+             "text": "Total"
+            },
+            {
+             "id": 48,
+             "kind": "cell",
+             "header": "row",
+             "text": "512"
+            },
+            {
+             "id": 49,
+             "kind": "cell",
+             "header": "row",
+             "text": "498"
+            },
+            {
+             "id": 50,
+             "kind": "cell",
+             "header": "row",
+             "text": "530"
+            },
+            {
+             "id": 51,
+             "kind": "cell",
+             "header": "row",
+             "text": "547"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 52,
+       "kind": "paragraph",
+       "text": "Don't after show after need one food several each place us new more left usually three. Leave your or said she called new point this review all."
+      },
+      {
+       "id": 53,
+       "kind": "seal",
+       "subkind": "signature",
+       "color": "blue",
+       "text": ""
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Regional Sales"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

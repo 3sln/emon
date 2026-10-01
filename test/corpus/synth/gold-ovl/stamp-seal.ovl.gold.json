@@ -1,0 +1,230 @@
+{
+ "emon-gold": "1.0",
+ "id": "stamp-seal",
+ "provenance": {
+  "html": "html/stamp-seal.html",
+  "pdf": "pdf/stamp-seal.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/stamp-seal.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Certificate of Completion"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "This certifies that Jordan Rivera completed the Advanced Safety Course on 14 March 2026 with distinction.",
+       "inlines": [
+        {
+         "kind": "text",
+         "text": "This certifies that "
+        },
+        {
+         "kind": "span",
+         "style": [
+          "bold"
+         ],
+         "children": [
+          {
+           "kind": "text",
+           "text": "Jordan Rivera"
+          }
+         ]
+        },
+        {
+         "kind": "text",
+         "text": " completed the Advanced Safety Course on 14 March 2026 with distinction."
+        }
+       ]
+      },
+      {
+       "id": 4,
+       "kind": "seal",
+       "subkind": "seal",
+       "color": "red",
+       "text": "CITY OF RIVERTON NOTARY"
+      },
+      {
+       "id": 5,
+       "kind": "paragraph",
+       "text": "Side once been just top three young been which upon until same its when home. Two enough put men even city put your."
+      },
+      {
+       "id": 6,
+       "kind": "seal",
+       "subkind": "signature",
+       "color": "blue",
+       "text": ""
+      },
+      {
+       "id": 7,
+       "kind": "seal",
+       "subkind": "seal",
+       "name": "City of Riverton",
+       "date": "2026-03-14",
+       "color": "blue",
+       "text": "CITY OF RIVERTON NOTARY PUBLIC"
+      },
+      {
+       "id": 8,
+       "kind": "seal",
+       "subkind": "stamp",
+       "color": "red",
+       "text": "PAID 2026-03-14"
+      },
+      {
+       "id": 9,
+       "kind": "paragraph",
+       "text": "Signed: ______________________\nRegistrar",
+       "inlines": [
+        {
+         "kind": "text",
+         "text": "Signed: ______________________"
+        },
+        {
+         "kind": "linebreak"
+        },
+        {
+         "kind": "text",
+         "text": "Registrar"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Certificate of Completion"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}
