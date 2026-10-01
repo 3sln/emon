@@ -1,0 +1,402 @@
+{
+  "emon": "1.1",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "pages": [
+    {
+      "n": 1,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector"
+    },
+    {
+      "n": 2,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector"
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "text": "A N N U A L R E V I E W O F O P E R AT I O N S",
+            "at": [[1, 72, 88.69, 277.01, 98.18]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "text": "School change them boy every it side no always cut region would words. Family father try our around did not were very being review man.",
+            "at": [[1, 72, 106.92, 523.32, 135.91]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 4,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 5,
+                "kind": "heading",
+                "level": 2,
+                "text": "Northern Region",
+                "at": [[1, 72, 159.24, 255.39, 183.1]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 6,
+                "kind": "paragraph",
+                "text": "At again as five when another for sea before. Land under all just come results before above father between we seen family got.",
+                "at": [[1, 72, 192.42, 509.09, 220.66]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 7,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 8,
+                    "kind": "heading",
+                    "level": 3,
+                    "text": "Staffing",
+                    "at": [[1, 72, 236.4, 114.79, 247.89]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 9,
+                    "kind": "paragraph",
+                    "text": "Life much came air across over long page she name sound say father.",
+                    "at": [[1, 72, 253.92, 405.46, 266.41]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 10,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 11,
+                        "kind": "heading",
+                        "level": 4,
+                        "text": "Hiring plan",
+                        "at": [[1, 72, 282.67, 155.25, 298.56]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 12,
+                        "kind": "paragraph",
+                        "text": "Heard both life just budget looked learn young usually. Far near for men see next what come what high live.",
+                        "at": [[1, 72, 304.92, 519.37, 333.91]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              },
+              {
+                "id": 13,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 14,
+                    "kind": "heading",
+                    "level": 3,
+                    "text": "Facilities",
+                    "at": [[1, 72, 348.9, 121.21, 360.39]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 15,
+                    "kind": "paragraph",
+                    "text": "Me show say want leave him white try leave do story has took found.",
+                    "at": [[1, 72, 366.42, 402.68, 378.91]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 16,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 17,
+                        "kind": "heading",
+                        "level": 4,
+                        "text": "Maintenance backlog",
+                        "at": [[1, 72, 395.17, 224.9, 411.06]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 18,
+                        "kind": "paragraph",
+                        "text": "Me body after come review during have today knew all since can across will growth better. That put city great enough near any always.",
+                        "at": [[1, 72, 418.17, 532.74, 446.41]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 19,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 20,
+                "kind": "heading",
+                "level": 2,
+                "text": "Southern Region",
+                "at": [[1, 72, 469.74, 254.68, 493.6]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 21,
+                "kind": "paragraph",
+                "text": "At pay best where leave white the off face that both above because off sea always. Didn't through use few asked group around sample seen take better money near put during.",
+                "at": [[1, 72, 502.92, 536.91, 531.91]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 22,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 23,
+                    "kind": "heading",
+                    "level": 3,
+                    "text": "Staffing",
+                    "at": [[1, 72, 546.9, 114.79, 558.39]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 24,
+                    "kind": "paragraph",
+                    "text": "Until knew too let change and study help animal need quarter.",
+                    "at": [[1, 72, 564.42, 373.81, 576.91]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 25,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 26,
+                        "kind": "heading",
+                        "level": 4,
+                        "text": "Hiring plan",
+                        "at": [[1, 72, 593.17, 155.25, 609.06]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 27,
+                        "kind": "paragraph",
+                        "text": "Give take ever try results children time out began. And budget much find line last her being measure will family like then world.",
+                        "at": [[1, 72, 616.17, 513.48, 644.41]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              },
+              {
+                "id": 28,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 29,
+                    "kind": "heading",
+                    "level": 3,
+                    "text": "Facilities",
+                    "at": [[1, 72, 660.15, 121.21, 671.64]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 30,
+                    "kind": "paragraph",
+                    "text": "Money every almost money using began friend number go an true on city then most just.",
+                    "at": [[1, 72, 677.67, 500.78, 690.16]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 31,
+                    "kind": "break",
+                    "page": 2,
+                    "src": ["infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 32,
+                    "kind": "section",
+                    "level": 4,
+                    "children": [
+                      {
+                        "id": 33,
+                        "kind": "heading",
+                        "level": 4,
+                        "text": "Maintenance backlog",
+                        "at": [[2, 72, 71.92, 224.9, 87.81]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      },
+                      {
+                        "id": 34,
+                        "kind": "paragraph",
+                        "text": "An hand do young three where far last. There write their almost make method four were hand city form part other across sure.",
+                        "at": [[2, 72, 94.17, 525.39, 123.16]],
+                        "src": ["text", "infer"],
+                        "conf": 500
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      },
+      {
+        "id": 35,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 36,
+            "kind": "heading",
+            "level": 1,
+            "text": "F I N A N C I A L S U M M A RY",
+            "at": [[2, 72, 141.94, 201.7, 151.43]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 37,
+            "kind": "paragraph",
+            "text": "Budget us last many part along away pay could look for side example.",
+            "at": [[2, 72, 160.17, 407.47, 172.66]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 38,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 39,
+                "kind": "heading",
+                "level": 2,
+                "text": "Income and Expenses",
+                "at": [[2, 72, 196.74, 306.62, 220.6]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 40,
+                "kind": "paragraph",
+                "text": "Land kind see review white called form under left back just called now came my move. Good has know an move results never up friend next animal.",
+                "at": [[2, 72, 229.92, 537.52, 258.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 41,
+                "kind": "section",
+                "level": 3,
+                "children": [
+                  {
+                    "id": 42,
+                    "kind": "heading",
+                    "level": 3,
+                    "text": "Income",
+                    "at": [[2, 72, 273.9, 112.25, 285.39]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  },
+                  {
+                    "id": 43,
+                    "kind": "paragraph",
+                    "text": "Good same big show all without white face father any leave all country.",
+                    "at": [[2, 72, 291.42, 414.69, 303.91]],
+                    "src": ["text", "infer"],
+                    "conf": 500
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      }
+    ]
+  },
+  "furniture": [],
+  "dropped": []
+}

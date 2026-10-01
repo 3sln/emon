@@ -65,12 +65,13 @@
                    ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout
                    ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells st]
   (comment "Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.")
-  (let [^:mut ^I32 p 1]
+  (let [^:mut ^I32 p 1
+        ^Cells hc (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
     (while (<= p npages)
       (do (page-new pages p 61200 79200 0 (pk-vector))
           (set p (+ p 1))))
-    (pa-build wd ln et npages nodes attrs regions text ord raw tmp fr gp)
+    (pa-build wd ln et npages nodes attrs regions text ord raw tmp fr gp hc)
     (return (model-check nodes attrs regions text pages ledger layout st))))
 
 (defn ^I32 pt-brief [^:mut ^Text t ^Cells nodes ^Cells regions ^Cells text]
@@ -292,8 +293,9 @@
     (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln) 0) (return 2))
     (model-init nodes attrs regions text pages ledger layout)
     (pa-pages pg pages)
-    (let [^I32 np (quot (cells-len pages) 16)]
-      (pa-build wd ln et np nodes attrs regions text ord raw tmp fr gp))
+    (let [^I32 np (quot (cells-len pages) 16)
+          ^Cells hc (new-cells)]
+      (pa-build wd ln et np nodes attrs regions text ord raw tmp fr gp hc))
     (if (!= (model-check nodes attrs regions text pages ledger layout mst) 0) (return 3))
     (js-emit t 1 nodes attrs regions text pages ledger layout)
     (return 0)))

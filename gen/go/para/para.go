@@ -5,6 +5,7 @@ package para
 
 import (
 	"emon/evidence"
+	"emon/heading"
 	"emon/model"
 	"emon/normalize"
 	"emon/pdfdoc"
@@ -27,7 +28,7 @@ const paWideNum int32 = 3
 
 const paWideDen int32 = 5
 
-const frStride int32 = 6
+const frStride int32 = 7
 
 func PaPages(pg *port.Cells, pages *port.Cells) int32 {
 	// One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
@@ -337,8 +338,16 @@ func paMedian(ln *port.Cells, ord *port.Cells, gp *port.Cells, npages int32) int
 	return port.CellsAt(gp, port.CellsLen(gp)/4)
 }
 
-func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margin int32) bool {
-	// Does line b, the next one on the page, start a paragraph after line a (D135).
+func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margin int32, hc *port.Cells) bool {
+	// Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
+	// (P4.4) decides first where it has an opinion: a heading is a block of its own (D159).
+	var op int32 = heading.HdOpinion(hc, a, b)
+	if op == 1 {
+		return 0 == 1
+	}
+	if op == 2 {
+		return 1 == 1
+	}
 	if !paUpright(ln, a) {
 		return 1 == 1
 	}
@@ -447,6 +456,7 @@ func paFragOpen(fr *port.Cells, ln *port.Cells, page int32, l int32, rawstart in
 	port.CellsPush(fr, evidence.LnGet(ln, l, evidence.LhX1()))
 	port.CellsPush(fr, evidence.LnGet(ln, l, evidence.LhY1()))
 	port.CellsPush(fr, rawstart)
+	port.CellsPush(fr, l)
 	return 0
 }
 
@@ -476,7 +486,29 @@ func paFragExtend(fr *port.Cells, ln *port.Cells, l int32) int32 {
 	return 0
 }
 
-func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells) int32 {
+func paHeadingNumber(nodes *port.Cells, attrs *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, par int32, from int32, to int32, hc *port.Cells, hl int32) int32 {
+	// A numbered heading (D159): the number goes to the `number` attribute and its scheme to `numbering`,
+	// and the text starts after them. Answers how many code points of `raw` the title is further on (0: the
+	// line is kept whole).
+	var skip int32 = heading.HdField(hc, hl, heading.HckSkip())
+	var ns int32 = heading.HdField(hc, hl, heading.HckNstart())
+	var nl int32 = heading.HdField(hc, hl, heading.HckNlen())
+	if (skip <= 0) || ((from + skip) >= to) {
+		return 0
+	}
+	if (nl < 1) || ((ns + nl) > skip) {
+		return 0
+	}
+	var t0 int32 = port.CellsLen(text)
+	normalize.NzNfc(raw, from+ns, (from+ns)+nl, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+	model.NodeSetAttrText(nodes, attrs, par, model.FkNumber(), t0, port.CellsLen(text)-t0)
+	var t1 int32 = port.CellsLen(text)
+	var n int32 = heading.HdPutScheme(text, heading.HdField(hc, hl, heading.HckScheme()))
+	model.NodeSetAttrText(nodes, attrs, par, model.FkNumbering(), t1, n)
+	return skip
+}
+
+func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, hc *port.Cells) int32 {
 	// Close the open paragraph, if there is one: its node (own `text` when it is on one page, else
 	// `text`, `break`, `text` inlines), `at` one region per page, `src`, `conf`. Empties `raw` and `fr`.
 	var nfr int32 = port.CellsLen(fr) / frStride
@@ -485,13 +517,24 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		port.CellsDrop(raw, 0)
 		return 0
 	}
-	var par int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
+	var hl int32 = port.CellsAt(fr, 6)
+	var lev int32 = heading.HdLevel(hc, hl)
+	var parent int32 = heading.HdParent(hc, nodes, lev)
+	var kind int32 = model.NkParagraph()
+	var par int32 = 0
 	var k int32 = 0
 	var from int32 = 0
 	var to int32 = 0
 	var base int32 = 0
 	var t0 int32 = 0
 	var child int32 = 0
+	if lev > 0 {
+		kind = model.NkHeading()
+	}
+	par = model.NodeNew(nodes, kind, parent)
+	if lev > 0 {
+		model.NodeSetSub(nodes, par, lev)
+	}
 	model.NodeSetConf(nodes, par, 500)
 	model.NodeAddSrc(nodes, par, model.SrText())
 	model.NodeAddSrc(nodes, par, model.SrInfer())
@@ -524,6 +567,9 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 			model.NodeAddSrc(nodes, child, model.SrText())
 			model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1)
 		} else {
+			if lev > 0 {
+				from += paHeadingNumber(nodes, attrs, text, raw, tmp, par, from, to, hc, hl)
+			}
 			t0 = port.CellsLen(text)
 			normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 			var tn2 int32 = port.CellsLen(text) - t0
@@ -536,9 +582,9 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	return 0
 }
 
-func paMilestone(nodes *port.Cells, page int32) int32 {
+func paMilestone(nodes *port.Cells, page int32, hc *port.Cells) int32 {
 	// A page milestone between two blocks.
-	var b int32 = model.NodeNew(nodes, model.NkBreak(), 0)
+	var b int32 = model.NodeNew(nodes, model.NkBreak(), heading.HdCur(hc))
 	model.NodeSetSub(nodes, b, page)
 	model.NodeSetConf(nodes, b, 500)
 	model.NodeAddSrc(nodes, b, model.SrInfer())
@@ -583,7 +629,7 @@ func paMargin(ln *port.Cells, ord *port.Cells) int32 {
 	return m
 }
 
-func paContinues(wd *port.Cells, ln *port.Cells, raw *port.Cells, a int32, b int32, amaxw int32, bmargin int32) bool {
+func paContinues(wd *port.Cells, ln *port.Cells, raw *port.Cells, a int32, b int32, amaxw int32, bmargin int32, hc *port.Cells) bool {
 	// Does the paragraph that ended the last page (its last line a) go on with line b, the first of the
 	// next (D137): both upright and one way; a is long (3/5 of its page's longest) and does not close
 	// a sentence; b is not indented past the margin of its page.
@@ -594,6 +640,9 @@ func paContinues(wd *port.Cells, ln *port.Cells, raw *port.Cells, a int32, b int
 		return 0 == 1
 	}
 	if evidence.LnGet(ln, a, evidence.LhDir()) != evidence.LnGet(ln, b, evidence.LhDir()) {
+		return 0 == 1
+	}
+	if (heading.HdLevel(hc, a) > 0) || (heading.HdLevel(hc, b) > 0) {
 		return 0 == 1
 	}
 	if paEndsSentence(raw) {
@@ -610,18 +659,18 @@ func paContinues(wd *port.Cells, ln *port.Cells, raw *port.Cells, a int32, b int
 	return 1 == 1
 }
 
-func paFlushAll(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, wd *port.Cells, ln *port.Cells, et *port.Cells, dq *port.Cells) int32 {
+func paFlushAll(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, wd *port.Cells, ln *port.Cells, et *port.Cells, dq *port.Cells, hc *port.Cells) int32 {
 	// Close the open paragraph, then make a paragraph of each line queued in `dq` (the lines that are not
 	// upright, D136) and empty the queue.
 	var nq int32 = port.CellsLen(dq)
 	var k int32 = 0
-	paFlush(nodes, attrs, regions, text, raw, tmp, fr)
+	paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc)
 	for k < nq {
 		var l int32 = port.CellsAt(dq, k)
 		var pg int32 = evidence.LnGet(ln, l, evidence.LhPage())
 		paFragOpen(fr, ln, pg, l, 0)
 		paAddLine(wd, ln, et, raw, l)
-		paFlush(nodes, attrs, regions, text, raw, tmp, fr)
+		paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc)
 		k += 1
 	}
 	port.CellsDrop(dq, 0)
@@ -642,10 +691,12 @@ func paUprightCount(ln *port.Cells, ord *port.Cells) int32 {
 	return n
 }
 
-func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells) int32 {
+func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, hc *port.Cells) int32 {
 	// Append every page's lines to the Model as paragraphs under the document root (node 0, made by
 	// `model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the
-	// queue of lines that are not upright). Answers 0.
+	// queue of lines that are not upright). `hc` is the heading analysis (`emon.heading`, P4.4, D159): an
+	// EMPTY `hc` means none and the paragraphs are what they were; it is also where the open sections
+	// are kept. Answers 0.
 	var med int32 = paMedian(ln, ord, gp, npages)
 	var p int32 = 1
 	var i int32 = 0
@@ -667,24 +718,24 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 		nu = paUprightCount(ln, ord)
 		pm = paMargin(ln, ord)
 		if nu == 0 {
-			paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
+			paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc)
 			open = 0
 			prev = -1
 			if p > 1 {
-				paMilestone(nodes, p)
+				paMilestone(nodes, p, hc)
 			}
 		} else {
 			b = port.CellsAt(ord, 0)
 			cont = 0
 			if open == 1 {
-				if paContinues(wd, ln, raw, prev, b, prevmaxw, pm) {
+				if paContinues(wd, ln, raw, prev, b, prevmaxw, pm, hc) {
 					cont = 1
 				}
 			}
 			if cont == 0 {
-				paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
+				paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc)
 				if p > 1 {
-					paMilestone(nodes, p)
+					paMilestone(nodes, p, hc)
 				}
 				paFragOpen(fr, ln, p, b, 0)
 			} else {
@@ -698,8 +749,8 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 			i = 1
 			for i < nu {
 				b = port.CellsAt(ord, i)
-				if paNewPar(wd, ln, prev, b, med, pm) {
-					paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
+				if paNewPar(wd, ln, prev, b, med, pm, hc) {
+					paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc)
 					paFragOpen(fr, ln, p, b, 0)
 				} else {
 					paJoin(wd, ln, et, raw, b)
@@ -718,6 +769,6 @@ func PaBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 		}
 		p += 1
 	}
-	paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp)
+	paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc)
 	return 0
 }

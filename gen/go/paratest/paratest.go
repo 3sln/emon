@@ -52,12 +52,13 @@ func ptClear(wd *port.Cells, ln *port.Cells, et *port.Cells) int32 {
 func ptRun(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, st *port.Cells) int32 {
 	// Make the Model of the evidence: `npages` Letter pages, `pa-build`; answer `model-check`'s verdict.
 	var p int32 = 1
+	var hc *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	for p <= npages {
 		model.PageNew(pages, p, 61200, 79200, 0, model.PkVector())
 		p += 1
 	}
-	para.PaBuild(wd, ln, et, npages, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	para.PaBuild(wd, ln, et, npages, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
 
@@ -342,7 +343,8 @@ func ptGolden(pdf []byte, t *strings.Builder, ar *port.Cells, dc *port.Cells, a 
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
-	para.PaBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp)
+	var hc *port.Cells = port.NewCells()
+	para.PaBuild(wd, ln, et, np, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, hc)
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
 		return 3
 	}

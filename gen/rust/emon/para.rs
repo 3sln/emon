@@ -2,6 +2,7 @@
 // source: emon.para
 
 use crate::emon::evidence::*;
+use crate::emon::heading::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
 use crate::emon::pdfdoc::*;
@@ -14,7 +15,7 @@ pub(crate) const PA_SIZE_DIV: i32 = 20;
 pub(crate) const PA_ROT_SLOP: i32 = 100;
 pub(crate) const PA_WIDE_NUM: i32 = 3;
 pub(crate) const PA_WIDE_DEN: i32 = 5;
-pub(crate) const FR_STRIDE: i32 = 6;
+pub(crate) const FR_STRIDE: i32 = 7;
 pub fn pa_pages(pg: &mut crate::port::Cells, mut pages: &mut crate::port::Cells) -> i32 {
     // One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
     // (`/Rotate` turns it), centipoints, the page's own turn in degrees, `vector`.
@@ -302,8 +303,16 @@ pub(crate) fn pa_median(ln: &mut crate::port::Cells, mut ord: &mut crate::port::
     pa_sort_nums(gp);
     return crate::port::cells_at(gp, crate::port::cells_len(gp) / 4);
 }
-pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, a: i32, b: i32, med: i32, margin: i32) -> bool {
-    // Does line b, the next one on the page, start a paragraph after line a (D135).
+pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, a: i32, b: i32, med: i32, margin: i32, hc: &mut crate::port::Cells) -> bool {
+    // Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
+    // (P4.4) decides first where it has an opinion: a heading is a block of its own (D159).
+    let op: i32 = hd_opinion(hc, a, b);
+    if op == 1 {
+        return 0 == 1;
+    }
+    if op == 2 {
+        return 1 == 1;
+    }
     if !pa_upright(ln, a) {
         return 1 == 1;
     }
@@ -408,6 +417,7 @@ pub(crate) fn pa_frag_open(mut fr: &mut crate::port::Cells, ln: &mut crate::port
     crate::port::cells_push(fr, ln_get(ln, l, lh_x1()));
     crate::port::cells_push(fr, ln_get(ln, l, lh_y1()));
     crate::port::cells_push(fr, rawstart);
+    crate::port::cells_push(fr, l);
     return 0;
 }
 pub(crate) fn pa_frag_extend(mut fr: &mut crate::port::Cells, ln: &mut crate::port::Cells, l: i32) -> i32 {
@@ -435,7 +445,28 @@ pub(crate) fn pa_frag_extend(mut fr: &mut crate::port::Cells, ln: &mut crate::po
     }
     return 0;
 }
-pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pa_heading_number(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, par: i32, from: i32, to: i32, hc: &mut crate::port::Cells, hl: i32) -> i32 {
+    // A numbered heading (D159): the number goes to the `number` attribute and its scheme to `numbering`,
+    // and the text starts after them. Answers how many code points of `raw` the title is further on (0: the
+    // line is kept whole).
+    let skip: i32 = hd_field(hc, hl, hck_skip());
+    let ns: i32 = hd_field(hc, hl, hck_nstart());
+    let nl: i32 = hd_field(hc, hl, hck_nlen());
+    if (skip <= 0) || ((from + skip) >= to) {
+        return 0;
+    }
+    if (nl < 1) || ((ns + nl) > skip) {
+        return 0;
+    }
+    let t0: i32 = crate::port::cells_len(text);
+    nz_nfc(raw, from + ns, (from + ns) + nl, text, tmp, nz_flag_ligatures() + nz_flag_radicals());
+    node_set_attr_text(nodes, attrs, par, fk_number(), t0, crate::port::cells_len(text) - t0);
+    let t1: i32 = crate::port::cells_len(text);
+    let n: i32 = hd_put_scheme(text, hd_field(hc, hl, hck_scheme()));
+    node_set_attr_text(nodes, attrs, par, fk_numbering(), t1, n);
+    return skip;
+}
+pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
     // Close the open paragraph, if there is one: its node (own `text` when it is on one page, else
     // `text`, `break`, `text` inlines), `at` one region per page, `src`, `conf`. Empties `raw` and `fr`.
     let nfr: i32 = crate::port::cells_len(fr) / FR_STRIDE;
@@ -444,13 +475,24 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
         crate::port::cells_drop(raw, 0);
         return 0;
     }
-    let par: i32 = node_new(nodes, nk_paragraph(), 0);
+    let hl: i32 = crate::port::cells_at(fr, 6);
+    let lev: i32 = hd_level(hc, hl);
+    let parent: i32 = hd_parent(hc, nodes, lev);
+    let mut kind: i32 = nk_paragraph();
+    let mut par: i32 = 0;
     let mut k: i32 = 0;
     let mut from: i32 = 0;
     let mut to: i32 = 0;
     let mut base: i32 = 0;
     let mut t0: i32 = 0;
     let mut child: i32 = 0;
+    if lev > 0 {
+        kind = nk_heading();
+    }
+    par = node_new(nodes, kind, parent);
+    if lev > 0 {
+        node_set_sub(nodes, par, lev);
+    }
     node_set_conf(nodes, par, 500);
     node_add_src(nodes, par, sr_text());
     node_add_src(nodes, par, sr_infer());
@@ -483,6 +525,9 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
             node_add_src(nodes, child, sr_text());
             node_add_region(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
         } else {
+            if lev > 0 {
+                from += pa_heading_number(nodes, attrs, text, raw, tmp, par, from, to, hc, hl);
+            }
             t0 = crate::port::cells_len(text);
             nz_nfc(raw, from, to, text, tmp, nz_flag_ligatures() + nz_flag_radicals());
             let tn2: i32 = crate::port::cells_len(text) - t0;
@@ -494,9 +539,9 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
     crate::port::cells_drop(fr, 0);
     return 0;
 }
-pub(crate) fn pa_milestone(mut nodes: &mut crate::port::Cells, page: i32) -> i32 {
+pub(crate) fn pa_milestone(mut nodes: &mut crate::port::Cells, page: i32, hc: &mut crate::port::Cells) -> i32 {
     // A page milestone between two blocks.
-    let b: i32 = node_new(nodes, nk_break(), 0);
+    let b: i32 = node_new(nodes, nk_break(), hd_cur(hc));
     node_set_sub(nodes, b, page);
     node_set_conf(nodes, b, 500);
     node_add_src(nodes, b, sr_infer());
@@ -538,7 +583,7 @@ pub(crate) fn pa_margin(ln: &mut crate::port::Cells, ord: &mut crate::port::Cell
     }
     return m;
 }
-pub(crate) fn pa_continues(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, raw: &mut crate::port::Cells, a: i32, b: i32, amaxw: i32, bmargin: i32) -> bool {
+pub(crate) fn pa_continues(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, raw: &mut crate::port::Cells, a: i32, b: i32, amaxw: i32, bmargin: i32, hc: &mut crate::port::Cells) -> bool {
     // Does the paragraph that ended the last page (its last line a) go on with line b, the first of the
     // next (D137): both upright and one way; a is long (3/5 of its page's longest) and does not close
     // a sentence; b is not indented past the margin of its page.
@@ -549,6 +594,9 @@ pub(crate) fn pa_continues(wd: &mut crate::port::Cells, ln: &mut crate::port::Ce
         return 0 == 1;
     }
     if ln_get(ln, a, lh_dir()) != ln_get(ln, b, lh_dir()) {
+        return 0 == 1;
+    }
+    if (hd_level(hc, a) > 0) || (hd_level(hc, b) > 0) {
         return 0 == 1;
     }
     if pa_ends_sentence(raw) {
@@ -564,18 +612,18 @@ pub(crate) fn pa_continues(wd: &mut crate::port::Cells, ln: &mut crate::port::Ce
     }
     return 1 == 1;
 }
-pub(crate) fn pa_flush_all(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut dq: &mut crate::port::Cells) -> i32 {
+pub(crate) fn pa_flush_all(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut dq: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
     // Close the open paragraph, then make a paragraph of each line queued in `dq` (the lines that are not
     // upright, D136) and empty the queue.
     let nq: i32 = crate::port::cells_len(dq);
     let mut k: i32 = 0;
-    pa_flush(nodes, attrs, regions, text, raw, tmp, fr);
+    pa_flush(nodes, attrs, regions, text, raw, tmp, fr, hc);
     while k < nq {
         let l: i32 = crate::port::cells_at(dq, k);
         let pg: i32 = ln_get(ln, l, lh_page());
         pa_frag_open(fr, ln, pg, l, 0);
         pa_add_line(wd, ln, et, raw, l);
-        pa_flush(nodes, attrs, regions, text, raw, tmp, fr);
+        pa_flush(nodes, attrs, regions, text, raw, tmp, fr, hc);
         k += 1;
     }
     crate::port::cells_drop(dq, 0);
@@ -594,10 +642,12 @@ pub(crate) fn pa_upright_count(ln: &mut crate::port::Cells, ord: &mut crate::por
     }
     return n;
 }
-pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells) -> i32 {
+pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut hc: &mut crate::port::Cells) -> i32 {
     // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
     // `model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the
-    // queue of lines that are not upright). Answers 0.
+    // queue of lines that are not upright). `hc` is the heading analysis (`emon.heading`, P4.4, D159): an
+    // EMPTY `hc` means none and the paragraphs are what they were; it is also where the open sections
+    // are kept. Answers 0.
     let med: i32 = pa_median(ln, ord, gp, npages);
     let mut p: i32 = 1;
     let mut i: i32 = 0;
@@ -619,24 +669,24 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
         nu = pa_upright_count(ln, ord);
         pm = pa_margin(ln, ord);
         if nu == 0 {
-            pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+            pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc);
             open = 0;
             prev = -1;
             if p > 1 {
-                pa_milestone(nodes, p);
+                pa_milestone(nodes, p, hc);
             }
         } else {
             b = crate::port::cells_at(ord, 0);
             cont = 0;
             if open == 1 {
-                if pa_continues(wd, ln, raw, prev, b, prevmaxw, pm) {
+                if pa_continues(wd, ln, raw, prev, b, prevmaxw, pm, hc) {
                     cont = 1;
                 }
             }
             if cont == 0 {
-                pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc);
                 if p > 1 {
-                    pa_milestone(nodes, p);
+                    pa_milestone(nodes, p, hc);
                 }
                 pa_frag_open(fr, ln, p, b, 0);
             } else {
@@ -650,8 +700,8 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
             i = 1;
             while i < nu {
                 b = crate::port::cells_at(ord, i);
-                if pa_new_par(wd, ln, prev, b, med, pm) {
-                    pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                if pa_new_par(wd, ln, prev, b, med, pm, hc) {
+                    pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc);
                     pa_frag_open(fr, ln, p, b, 0);
                 } else {
                     pa_join(wd, ln, et, raw, b);
@@ -670,6 +720,6 @@ pub fn pa_build(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &m
         }
         p += 1;
     }
-    pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+    pa_flush_all(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc);
     return 0;
 }

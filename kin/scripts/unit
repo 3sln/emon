@@ -119,6 +119,12 @@ kin/scripts/content-check
 # document was printed from, with every page's milestone.
 kin/scripts/para-check
 
+# THE HEADING STAGE'S INDEPENDENT WITNESS (P4.2, P4.4, D159-D163; babashka, reads only committed files): the
+# headings of each golden Model in test/heading are, in order, the headings of the synthetic gold (the HTML's
+# own): text, level, number and numbering scheme; each is the first child of a section of its own level, and
+# the sections nest by level.
+kin/scripts/heading-check
+
 tests=""
 for f in kin/*.kin; do
   if grep -q '^ *(:require.*\[emon\.test\|^ *\[emon\.test ' "$f"; then

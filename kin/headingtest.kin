@@ -1,0 +1,506 @@
+;; Laws for `emon.style` and `emon.heading` (P4.2, P4.4), on every target.
+;;
+;; TWO KINDS, as for `emon.para`. (1) What the stages DECIDE, on evidence written by hand (a line is a row of
+;; `lines` with its words, in centipoints; a style is the size and the style bits of its words): the style
+;; inventory (the body is the class of most characters; the line gap is a lower quartile), the numbering
+;; patterns (what `hd-marker` reads off a line and what it refuses), and above all the LEVELS. The maintainer's
+;; requirement is the first law of the second kind: a higher heading printed SMALLER than an inner one gets
+;; the lower level number all the same (`test-a-higher-heading-may-print-smaller`), and the level a
+;; hierarchical number says beats the size (`test-dotted-numbers-beat-size`). Then what must not become a
+;; heading: the lines of a numbered list, an initial beside its paragraph (D108, D109) while a letter that
+;; divides a glossary does, a running header; and what the paragraph stage makes of the analysis (sections
+;; that nest by level, `numbering`, a heading's own text without its number). Priors from an outline overrule
+;; the sequence. (2) What it MAKES of real files: documents of the synthetic corpus run PDF -> content ->
+;; style inventory -> headings -> paragraphs and sections -> Model -> pretty JSON, byte for byte against
+;; `test/heading/NAME.json` (`kin/scripts/heading-goldens` wrote them; `kin/scripts/heading-check` holds them
+;; to the synthetic GOLD).
+(ns emon.headingtest
+  (:require [emon.lang :refer [I32 Blob Src Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-text assert-text-span new-cells new-text
+                               test-file text-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop
+                               text-cp text-i32 src-of-blob]]
+            [emon.mscript :refer [jt-end]]
+            [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind node-sub
+                                node-text-start node-text-len text-at text-append-utf8
+                                nk-paragraph nk-heading nk-section nk-break]]
+            [emon.json :refer [js-emit]]
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style]]
+            [emon.pdfdoc :refer [pd-open]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.para :refer [pa-pages pa-build]]
+            [emon.style :refer [st-build st-get st-hget sc-get sfh-body sfh-gap sfh-size
+                                sfk-class sfk-caps sck-chars sck-size]]
+            [emon.heading :refer [hd-analyze hd-level hd-marker hd-prior-add hd-prior-outline]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------ hand-made evidence
+
+(defn ^I32 ht-line [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                    ^I32 size ^I32 style]
+  (comment "Append one upright line on `page`: the words of the UTF-8 text b (split at spaces) with the size and the")
+  (comment "style bits, the line's box and a baseline 2 pt above its bottom. Answers the line's index.")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 n (blob-len b)
+        ^I32 at (ln-count ln)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0]
+    (while (<= k n)
+      (do (if (or (== k n) (== (blob-u8 b k) 32))
+            (do (if (> k s)
+                  (do (let [^I32 ts (cells-len et)]
+                        (text-append-utf8 et b s k)
+                        (let [^I32 tl (- (cells-len et) ts)
+                              ^I32 r (wd-new wd page x0 y0 x1 y1 x0 (- y1 200) x1 (- y1 200) 0 0 ts tl -1 -1 -1)]
+                          (wd-set wd r (wf-size) size)
+                          (wd-set wd r (wf-font) 0)
+                          (wd-set wd r (wf-style) style)))))
+                (set s (+ k 1))))
+          (set k (+ k 1))))
+    (ln-new ln page x0 y0 x1 y1 x0 (- y1 200) x1 (- y1 200) 0 0 w0 (- (wd-count wd) w0))
+    (return at)))
+
+(defn ^I32 ht-body [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 page ^I32 y ^I32 count]
+  (comment "`count` lines of body text (11 pt, regular, 1400 apart, 1200 tall) from y; answers the y after them.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 yy y]
+    (while (< i count)
+      (do (ht-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur adipiscing elit sed do")
+                   page 7200 yy 54000 (+ yy 1200) 1100 0)
+          (set yy (+ yy 1400))
+          (set i (+ i 1))))
+    (return yy)))
+
+(defn ^I32 ht-heading [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 y ^I32 size ^I32 style]
+  (comment "A heading on page 1 at y: its height is 1.2 times its size; answers the line's index.")
+  (return (ht-line wd ln et b 1 7200 y 40000 (+ y (quot (* size 12) 10)) size style)))
+
+(defn ^I32 ht-run [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc ^:mut ^Cells ws
+                   ^:mut ^Cells tmp ^Cells pr ^Cells ptxt]
+  (comment "The heading analysis of the evidence (no glyphs, so every colour is unknown). Answers the headings found.")
+  (let [^Cells gl (new-cells)]
+    (return (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt))))
+
+(defn ^I32 ht-model [^Cells wd ^Cells ln ^Cells et ^I32 npages
+                     ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                     ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout ^:mut ^Cells hc
+                     ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp
+                     ^:mut ^Cells st]
+  (comment "The Model of the evidence with the heading analysis in `hc`; answers `model-check`'s verdict.")
+  (let [^:mut ^I32 p 1]
+    (model-init nodes attrs regions text pages ledger layout)
+    (while (<= p npages)
+      (do (page-new pages p 61200 79200 0 (pk-vector))
+          (set p (+ p 1))))
+    (pa-build wd ln et npages nodes attrs regions text ord raw tmp fr gp hc)
+    (return (model-check nodes attrs regions text pages ledger layout st))))
+
+(defn ^I32 ht-brief [^:mut ^Text t ^Cells nodes ^Cells text]
+  (comment "The shape of the Model: every node but the root, in id order: S<level> a section, H<level>:<text> a")
+  (comment "heading, P a paragraph, B<page> a milestone; each ended by `;`.")
+  (let [^I32 n (node-count nodes)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 k 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 s 0]
+    (while (< i n)
+      (do (set kind (node-kind nodes i))
+          (if (== kind (nk-section))
+            (do (text-cp t 83)
+                (text-i32 t (node-sub nodes i))))
+          (if (== kind (nk-heading))
+            (do (text-cp t 72)
+                (text-i32 t (node-sub nodes i))
+                (text-cp t 58)
+                (set s (node-text-start nodes i))
+                (set k 0)
+                (while (< k (node-text-len nodes i))
+                  (do (text-cp t (text-at text (+ s k)))
+                      (set k (+ k 1))))))
+          (if (== kind (nk-paragraph)) (text-cp t 80))
+          (if (== kind (nk-break))
+            (do (text-cp t 66)
+                (text-i32 t (node-sub nodes i))))
+          (text-cp t 59)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ht-ws [^:mut ^Cells ws]
+  (comment "Eight cells for `hd-marker` to write its answer in.")
+  (cells-drop ws 0)
+  (let [^:mut ^I32 i 0]
+    (while (< i 8)
+      (do (cells-push ws 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ht-outline-doc [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et]
+  (comment "The document of the inverted-sizes laws: a small bold capitals title, a big bold section, a middle bold")
+  (comment "subsection, another section, another title; body lines between. Answers 0; the lines are 0, 4, 7, 10, 13.")
+  (let [^:mut ^I32 y 5000]
+    (ht-heading wd ln et (text-blob "ANNUAL REVIEW") y 950 1)
+    (set y (+ y 1700))
+    (set y (ht-body wd ln et 1 y 3))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Northern Region") y 2100 1)
+    (set y (+ y 3100))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Staffing") y 1150 1)
+    (set y (+ y 2000))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Southern Region") y 2100 1)
+    (set y (+ y 3100))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "FINANCIAL SUMMARY") y 950 1)
+    (set y (+ y 1700))
+    (set y (ht-body wd ln et 1 y 2))
+    (return 0)))
+
+;; ---------------------------------------------------------------- the style inventory
+
+(deftest test-the-body-is-the-class-of-most-characters-and-the-gap-a-lower-quartile
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells tmp (new-cells)]
+    (ht-line wd ln et (text-blob "A big title") 1 7200 5000 40000 7400 2000 1)
+    (ht-body wd ln et 1 8500 6)
+    (assert-eq (st-build wd ln et gl sf sc tmp) 2 "two classes: the title's and the body's")
+    (assert-eq (sc-get sc (st-hget sf (sfh-body)) (sck-size)) 1100 "the body is the class of most characters, not the first or the biggest")
+    (assert-eq (st-hget sf (sfh-size)) 1100 "its size is in the header")
+    (assert-eq (st-hget sf (sfh-gap)) 200 "the line gap: the lower quartile of the whitespace between body lines (1400 apart, 1200 tall)")
+    (assert-eq (st-get sf 0 (sfk-class)) 0 "the title is class 0, the first seen")
+    (assert-eq (st-get sf 1 (sfk-class)) 1 "and the body class 1")
+    (assert-eq (st-get sf 0 (sfk-caps)) 0 "a title in title case is not capitals")
+    (assert-eq (sc-get sc 1 (sck-chars)) 312 "the body characters: six lines of 52")))
+
+(deftest test-capitals-are-a-property-of-the-letters
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells tmp (new-cells)]
+    (ht-line wd ln et (text-blob "ANNUAL REVIEW OF 2026") 1 7200 5000 40000 6000 950 1)
+    (ht-line wd ln et (text-blob "A") 1 7200 7000 8000 8000 950 1)
+    (ht-line wd ln et (text-blob "Annual Review") 1 7200 9000 40000 10000 950 1)
+    (ht-line wd ln et (text-blob "12 34") 1 7200 11000 40000 12000 950 1)
+    (st-build wd ln et gl sf sc tmp)
+    (assert-eq (st-get sf 0 (sfk-caps)) 1 "digits do not stop capitals")
+    (assert-eq (st-get sf 1 (sfk-caps)) 0 "one letter is not enough to call it capitals")
+    (assert-eq (st-get sf 2 (sfk-caps)) 0 "mixed case")
+    (assert-eq (st-get sf 3 (sfk-caps)) 0 "no letters")))
+
+;; ---------------------------------------------------------------- numbering patterns
+
+(defn ^I32 ht-marker [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^:mut ^Cells ws ^Blob b]
+  (comment "What `hd-marker` says of a line that says b: the scheme; ws[1..4] hold depth, where the number is, how")
+  (comment "long, and how much to skip.")
+  (cells-drop wd 0)
+  (cells-drop ln 0)
+  (cells-drop et 0)
+  (ht-ws ws)
+  (ht-line wd ln et b 1 7200 5000 40000 6200 1200 1)
+  (return (hd-marker wd ln et ws 0)))
+
+(deftest test-numbering-patterns
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells ws (new-cells)]
+    (assert-eq (ht-marker wd ln et ws (text-blob "1.2.3 Title")) 1 "1.2.3: decimal")
+    (assert-eq (cells-at ws 1) 3 "of depth three")
+    (assert-eq (cells-at ws 2) 0 "the number starts the line")
+    (assert-eq (cells-at ws 3) 5 "and is five code points")
+    (assert-eq (cells-at ws 4) 6 "the title is six further on")
+    (assert-eq (ht-marker wd ln et ws (text-blob "2. Methods")) 1 "2.: decimal")
+    (assert-eq (cells-at ws 1) 1 "of depth one")
+    (assert-eq (cells-at ws 3) 1 "the dot is not part of the number")
+    (assert-eq (cells-at ws 4) 3 "but it is skipped")
+    (assert-eq (ht-marker wd ln et ws (text-blob "IV. Rules")) 2 "IV.: upper roman")
+    (assert-eq (ht-marker wd ln et ws (text-blob "A. Name")) 4 "A.: upper letter")
+    (assert-eq (ht-marker wd ln et ws (text-blob "b) item")) 5 "b): lower letter")
+    (assert-eq (ht-marker wd ln et ws (text-blob "(iv) item")) 3 "(iv): lower roman")
+    (assert-eq (cells-at ws 2) 1 "its number starts after the bracket")
+    (assert-eq (cells-at ws 3) 2 "and is two code points")
+    (assert-eq (ht-marker wd ln et ws (text-blob "§ 4.1 Scope")) 7 "a section sign and a number")
+    (assert-eq (cells-at ws 1) 2 "depth two")
+    (assert-eq (cells-at ws 2) 2 "the number is after the sign")
+    (assert-eq (ht-marker wd ln et ws (text-blob "Chapter 3 Formation")) 6 "a capitalised word and a number: a keyword form, no table needed")
+    (assert-eq (cells-at ws 3) 9 "`Chapter 3` is the number")
+    (assert-eq (cells-at ws 4) 10 "the title follows")
+    (assert-eq (ht-marker wd ln et ws (text-blob "Article 1.1 Name")) 6 "Article 1.1")
+    (assert-eq (cells-at ws 1) 2 "dotted depth counts for a keyword form too")
+    (assert-eq (ht-marker wd ln et ws (text-blob "Kapitel IV Anfang")) 6 "another language, the same pattern")
+    (assert-eq (ht-marker wd ln et ws (text-blob "Appendix A: Data")) 6 "a capital letter and a colon")
+    (assert-eq (cells-at ws 3) 10 "`Appendix A`")))
+
+(deftest test-what-is-not-a-numbering-pattern
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells ws (new-cells)]
+    (assert-eq (ht-marker wd ln et ws (text-blob "2026 Annual Report")) 0 "a year is four digits")
+    (assert-eq (ht-marker wd ln et ws (text-blob "1234 apples")) 0 "so is a number")
+    (assert-eq (ht-marker wd ln et ws (text-blob "Aardvark A burrowing animal")) 0 "a glossary entry: a word, a lone capital and more text")
+    (assert-eq (ht-marker wd ln et ws (text-blob "The quick brown fox")) 0 "words")
+    (assert-eq (ht-marker wd ln et ws (text-blob "1.2.3.4.5.6.7.8.9 deep")) 0 "nine components are not an outline")
+    (assert-eq (ht-marker wd ln et ws (text-blob "1..2 broken")) 0 "an empty component")
+    (assert-eq (ht-marker wd ln et ws (text-blob "Dr. Smith")) 0 "an abbreviation is not a letter")
+    (assert-eq (ht-marker wd ln et ws (text-blob "AB. text")) 0 "two letters that are not a numeral")))
+
+;; ---------------------------------------------------------------- the levels
+
+(deftest test-a-higher-heading-may-print-smaller
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)]
+    (ht-outline-doc wd ln et)
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 5 "five headings")
+    (assert-eq (hd-level hc 0) 1 "the title in 9.5 pt capitals is level 1: it comes first and nothing is above it")
+    (assert-eq (hd-level hc 4) 2 "the 21 pt section under it is level 2, though it prints bigger")
+    (assert-eq (hd-level hc 7) 3 "the 11.5 pt subsection is level 3")
+    (assert-eq (hd-level hc 10) 2 "the next 21 pt section is level 2 again")
+    (assert-eq (hd-level hc 13) 1 "the next small title is level 1 again")
+    (assert-eq (hd-level hc 1) 0 "body lines are not headings")
+    (assert-eq (hd-level hc 5) 0 "nor are these")))
+
+(deftest test-dotted-numbers-beat-size
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^:mut ^I32 y 5000]
+    (ht-heading wd ln et (text-blob "1 Introduction") y 1200 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "1.1 Scope") y 1600 1)
+    (set y (+ y 2500))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "1.2 Terms") y 1600 1)
+    (set y (+ y 2500))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "2 Next steps") y 1200 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 2))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 4 "four headings")
+    (assert-eq (hd-level hc 0) 1 "`1` is level 1 though it prints the smaller")
+    (assert-eq (hd-level hc 3) 2 "`1.1` is level 2 though it prints the bigger")
+    (assert-eq (hd-level hc 6) 2 "`1.2` too")
+    (assert-eq (hd-level hc 9) 1 "`2` is level 1 again")))
+
+(deftest test-a-numbered-list-is-not-a-run-of-headings
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^:mut ^I32 y 5000]
+    (set y (ht-body wd ln et 1 y 5))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Fruit") y 1400 1)
+    (set y (+ y 2300))
+    (ht-line wd ln et (text-blob "1. Apples are red and green") 1 7200 y 40000 (+ y 1200) 1100 0)
+    (set y (+ y 1400))
+    (ht-line wd ln et (text-blob "2. Pears are yellow") 1 7200 y 40000 (+ y 1200) 1100 0)
+    (set y (+ y 1400))
+    (ht-line wd ln et (text-blob "3. Plums are purple") 1 7200 y 40000 (+ y 1200) 1100 0)
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 1 "one heading")
+    (assert-eq (hd-level hc 5) 1 "`Fruit`")
+    (assert-eq (hd-level hc 6) 0 "the first item")
+    (assert-eq (hd-level hc 7) 0 "the second")
+    (assert-eq (hd-level hc 8) 0 "the third")))
+
+(deftest test-an-initial-is-never-a-heading-but-a-divider-is
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^:mut ^I32 y 5000]
+    (set y (ht-body wd ln et 1 y 6))
+    (set y (+ y 900))
+    (comment "a drop cap: 40 pt, three lines of its paragraph beside it")
+    (ht-line wd ln et (text-blob "O") 1 7200 y 9400 (+ y 3600) 4000 0)
+    (ht-line wd ln et (text-blob "nce upon a time there lived a king who had three sons") 1 9600 y 54000 (+ y 1200) 1100 0)
+    (ht-line wd ln et (text-blob "and this king was so old that he could not tell his age") 1 9600 (+ y 1400) 54000 (+ y 2600) 1100 0)
+    (ht-line wd ln et (text-blob "nor how long he had reigned in the kingdom of his fathers") 1 9600 (+ y 2800) 54000 (+ y 4000) 1100 0)
+    (set y (+ y 4200))
+    (set y (ht-body wd ln et 1 y 4))
+    (set y (+ y 1200))
+    (comment "a divider: a bold letter on a line of its own, then a full-width line")
+    (ht-line wd ln et (text-blob "A") 1 7200 y 8600 (+ y 2400) 2000 1)
+    (set y (+ y 3200))
+    (set y (ht-body wd ln et 1 y 3))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 1 "one heading")
+    (assert-eq (hd-level hc 6) 0 "the drop cap is not a heading")
+    (assert-eq (hd-level hc 7) 0 "nor is the line beside it")
+    (assert-eq (hd-level hc 14) 1 "the letter that divides a glossary is")))
+
+(deftest test-a-running-header-is-not-a-heading
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^:mut ^I32 y 0]
+    (ht-line wd ln et (text-blob "Quarterly Report 1") 1 7200 2000 40000 3700 1400 1)
+    (set y (ht-body wd ln et 1 6000 3))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Overview") y 1400 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 2))
+    (ht-line wd ln et (text-blob "Quarterly Report 2") 2 7200 2000 40000 3700 1400 1)
+    (ht-body wd ln et 2 6000 4)
+    (ht-line wd ln et (text-blob "Quarterly Report 3") 3 7200 2000 40000 3700 1400 1)
+    (ht-body wd ln et 3 6000 4)
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 1 "one heading: the one that is not on every page")
+    (assert-eq (hd-level hc 0) 0 "the running header on page 1")
+    (assert-eq (hd-level hc 4) 1 "`Overview`")))
+
+;; ---------------------------------------------------------------- what the paragraph stage makes of it
+
+(deftest test-sections-nest-by-level
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp2 (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t (new-text)]
+    (ht-outline-doc wd ln et)
+    (ht-run wd ln et sf sc hc ws tmp pr ptxt)
+    (assert-eq (ht-model wd ln et 1 nodes attrs regions text pages ledger layout hc ord raw tmp2 fr gp st) 0 "well formed")
+    (ht-brief t nodes text)
+    (assert-text t "S1;H1:ANNUAL REVIEW;P;S2;H2:Northern Region;P;S3;H3:Staffing;P;S2;H2:Southern Region;P;S1;H1:FINANCIAL SUMMARY;P;"
+                 "each heading opens a section of its level, closed by the next heading of its level or higher; the body goes in the innermost")))
+
+(deftest test-a-heading-and-its-number-on-two-lines-is-one-heading
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp2 (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells)
+        ^Text t (new-text)
+        ^:mut ^I32 y 5000]
+    (comment "the layout put `1.1` and `Purpose` on one row with a wide gap: two lines of the text layer")
+    (set y (ht-body wd ln et 1 y 3))
+    (set y (+ y 900))
+    (ht-line wd ln et (text-blob "1.1") 1 7200 y 9000 (+ y 1800) 1500 1)
+    (ht-line wd ln et (text-blob "Purpose") 1 16000 y 30000 (+ y 1800) 1500 1)
+    (set y (+ y 2600))
+    (set y (ht-body wd ln et 1 y 2))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 1 "one heading")
+    (assert-eq (hd-level hc 3) 2 "the number line: `1.1` is depth 2, so level 2 even with no `1` before it")
+    (assert-eq (hd-level hc 4) 2 "and the title line")
+    (assert-eq (ht-model wd ln et 1 nodes attrs regions text pages ledger layout hc ord raw tmp2 fr gp st) 0 "well formed")
+    (ht-brief t nodes text)
+    (assert-text t "P;S2;H2:Purpose;P;" "the number is the `number` attribute, the title the text, and the two lines are one heading of level 2")))
+
+;; ---------------------------------------------------------------- external priors
+
+(deftest test-an-outline-overrules-the-sequence
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells) ^Cells ttl (new-cells)
+        ^:mut ^I32 y 5000]
+    (comment "Alpha (12 pt bold) comes first, Beta (16 pt bold) after: the sequence says Alpha is the parent")
+    (ht-heading wd ln et (text-blob "Alpha") y 1200 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Beta") y 1600 1)
+    (set y (+ y 2500))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Alpha") y 1200 1)
+    (set y (+ y 2300))
+    (set y (ht-body wd ln et 1 y 2))
+    (set y (+ y 900))
+    (ht-heading wd ln et (text-blob "Beta") y 1600 1)
+    (set y (+ y 2500))
+    (set y (ht-body wd ln et 1 y 2))
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 4 "four headings")
+    (assert-eq (hd-level hc 0) 1 "without a prior the first class is the top")
+    (assert-eq (hd-level hc 3) 2 "and the other under it")
+    (comment "an outline says Beta is at depth 0 and Alpha at depth 1")
+    (text-append-utf8 ttl (text-blob "Beta") 0 4)
+    (hd-prior-add pr ptxt 2 0 4 ttl 1 800)
+    (text-append-utf8 ttl (text-blob "Alpha") 0 5)
+    (hd-prior-add pr ptxt 2 4 5 ttl 2 800)
+    (assert-eq (ht-run wd ln et sf sc hc ws tmp pr ptxt) 4 "four headings")
+    (assert-eq (hd-level hc 0) 2 "now Alpha is the inner heading")
+    (assert-eq (hd-level hc 3) 1 "and Beta the outer, as the author's outline says")))
+
+(deftest test-an-outline-row-is-a-prior
+  (let [^Cells ol (new-cells) ^Cells txt (new-cells) ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^:mut ^I32 i 0]
+    (while (< i 24)
+      (do (cells-push ol 0)
+          (set i (+ i 1))))
+    (text-append-utf8 txt (text-blob "xxIntroduction") 0 14)
+    (cells-set ol 0 2)
+    (cells-set ol 5 2)
+    (cells-set ol 6 12)
+    (assert-eq (hd-prior-outline ol txt pr ptxt) 1 "one row read")
+    (assert-eq (cells-at pr 1) 12 "its title is twelve code points")
+    (assert-eq (cells-at pr 2) 3 "at depth 2, so level 3")
+    (assert-eq (cells-at pr 3) 2 "from an outline")
+    (assert-eq (cells-at pr 4) 800 "with the weight of a healthy outline")
+    (assert-eq (cells-len ptxt) 12 "and its text copied")))
+
+;; ---------------------------------------------------------------- real documents
+
+(defn ^I32 ht-golden [^Blob pdf ^:mut ^Text t
+                      ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                      ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
+                      ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                      ^:mut ^Cells gl ^:mut ^Cells et ^:mut ^Cells mk ^:mut ^Cells fnt ^:mut ^Cells pg
+                      ^:mut ^Cells wd ^:mut ^Cells ln
+                      ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
+                      ^:mut ^Cells pages ^:mut ^Cells ledger ^:mut ^Cells layout
+                      ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp ^:mut ^Cells mst
+                      ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells hc ^:mut ^Cells ws ^:mut ^Cells tmp2
+                      ^Cells pr ^Cells ptxt]
+  (comment "PDF -> content -> headings -> paragraphs and sections -> Model -> pretty JSON; answer 0 when every step")
+  (comment "answered 0, else a code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`.")
+  (cells-drop gl 0)
+  (cells-drop et 0)
+  (cells-drop mk 0)
+  (cells-drop fnt 0)
+  (cells-drop wd 0)
+  (cells-drop ln 0)
+  (let [^Src src (src-of-blob pdf)
+        ^I32 o (pd-open src ar dc a b st)]
+    (if (!= o 0) (return 1))
+    (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln) 0) (return 2))
+    (hd-analyze wd ln et gl sf sc hc ws tmp2 pr ptxt)
+    (model-init nodes attrs regions text pages ledger layout)
+    (pa-pages pg pages)
+    (let [^I32 np (quot (cells-len pages) 16)]
+      (pa-build wd ln et np nodes attrs regions text ord raw tmp fr gp hc))
+    (if (!= (model-check nodes attrs regions text pages ledger layout mst) 0) (return 3))
+    (js-emit t 1 nodes attrs regions text pages ledger layout)
+    (return 0)))
+
+(deftest test-real-documents-make-the-golden-models
+  (let [^Cells ar (new-cells) ^Cells dc (new-cells) ^Cells a (new-cells) ^Cells b (new-cells) ^Cells st (new-cells)
+        ^Cells cx (new-cells) ^Cells ox (new-cells) ^Cells cs (new-cells) ^Cells out (new-cells)
+        ^Cells f0 (new-cells) ^Cells f1 (new-cells) ^Cells f2 (new-cells) ^Cells f3 (new-cells)
+        ^Cells gl (new-cells) ^Cells et (new-cells) ^Cells mk (new-cells) ^Cells fnt (new-cells) ^Cells pg (new-cells)
+        ^Cells wd (new-cells) ^Cells ln (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells mst (new-cells)
+        ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp2 (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells)
+        ^Text t1 (new-text) ^Text t2 (new-text) ^Text t3 (new-text) ^Text t4 (new-text) ^Text t5 (new-text)
+        ^Text t6 (new-text) ^Text t7 (new-text) ^Text t8 (new-text)]
+    (assert-eq (ht-golden (test-file "corpus/synth/pdf/h-plain.pdf") t1 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "h-plain runs")
+    (assert-text-span t1 (test-file "heading/h-plain.json") 0 (jt-end (test-file "heading/h-plain.json")) "h-plain" 0)
+    (assert-eq (ht-golden (test-file "corpus/synth/pdf/h-numbered.pdf") t2 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "h-numbered runs")
+    (assert-text-span t2 (test-file "heading/h-numbered.json") 0 (jt-end (test-file "heading/h-numbered.json")) "h-numbered" 0)
+    (assert-eq (ht-golden (test-file "corpus/synth/pdf/h-keyword.pdf") t3 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "h-keyword runs")
+    (assert-text-span t3 (test-file "heading/h-keyword.json") 0 (jt-end (test-file "heading/h-keyword.json")) "h-keyword" 0)
+    (assert-eq (ht-golden (test-file "corpus/synth/pdf/h-inverted.pdf") t4 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "h-inverted runs")
+    (assert-text-span t4 (test-file "heading/h-inverted.json") 0 (jt-end (test-file "heading/h-inverted.json")) "h-inverted" 0)
+    (assert-eq (ht-golden (test-file "corpus/synth/pdf/h-inverted-numbered.pdf") t5 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "h-inverted-numbered runs")
+    (assert-text-span t5 (test-file "heading/h-inverted-numbered.json") 0 (jt-end (test-file "heading/h-inverted-numbered.json")) "h-inverted-numbered" 0)
+    (assert-eq (ht-golden (test-file "corpus/synth/pdf/h-div-samesize.pdf") t6 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "h-div-samesize runs")
+    (assert-text-span t6 (test-file "heading/h-div-samesize.json") 0 (jt-end (test-file "heading/h-div-samesize.json")) "h-div-samesize" 0)
+    (assert-eq (ht-golden (test-file "corpus/synth/pdf/initial-letter-headings.pdf") t7 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "initial-letter-headings runs")
+    (assert-text-span t7 (test-file "heading/initial-letter-headings.json") 0 (jt-end (test-file "heading/initial-letter-headings.json")) "initial-letter-headings" 0)
+    (assert-eq (ht-golden (test-file "corpus/synth/pdf/lists-basic.pdf") t8 ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln nodes attrs regions text pages ledger layout ord raw tmp fr gp mst sf sc hc ws tmp2 pr ptxt) 0 "lists-basic runs")
+    (assert-text-span t8 (test-file "heading/lists-basic.json") 0 (jt-end (test-file "heading/lists-basic.json")) "lists-basic" 0)))

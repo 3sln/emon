@@ -1,0 +1,78 @@
+#!/usr/bin/env bb
+;; The heading stage's independent witness (DEVLOG P4.4; babashka, reads only committed files).
+;;
+;;     kin/scripts/heading-check
+;;
+;; For every golden `test/heading/NAME.json` (what `kin/scripts/heading-goldens` wrote from the generated
+;; Rust), its headings are, in order, the headings of the synthetic GOLD `test/corpus/synth/gold/NAME.gold.json`
+;; (which `tools/synth/html2gold.clj` made from the HTML the document was printed from): the same text (white
+;; space ignored: a letter-spaced title is the text layer's, P1.7), the same LEVEL, the same number; and the
+;; Model's sections nest as the levels say (a heading is the first child of a section of its own level, a
+;; section's parent section is of a lower level). The paragraphs between are the gold's, in number. For the
+;; documents with no heading in the gold, none is made.
+;;
+;; Prints `  ok ` lines (the score `bb unit` wants) and exits 1 on the first difference.
+(require '[clojure.java.io :as io]
+         '[clojure.string :as str]
+         '[cheshire.core :as json]
+         '[nfc])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+
+(defn nows [s] (str/replace (nfc/normalize (or s "")) #"\s+" ""))
+
+(defn walk [n] (cons n (mapcat walk (concat (get n "children") (get n "inlines")))))
+
+(defn headings [body] (filter #(= "heading" (get % "kind")) (walk body)))
+(defn kind-count [body k] (count (filter #(= k (get % "kind")) (walk body))))
+
+(defn parents [body]
+  (letfn [(go [n parent] (cons [n parent] (mapcat #(go % n) (get n "children"))))]
+    (into {} (map (fn [[n p]] [(get n "id") p]) (go body nil)))))
+
+(def fails (atom 0))
+(defn fail [& xs] (println "  FAIL" (apply str xs)) (swap! fails inc))
+
+(def goldens (->> (.listFiles (io/file root "test" "heading"))
+                  (filter #(str/ends-with? (.getName %) ".json")) sort))
+
+(when (empty? goldens) (fail "no goldens in test/heading"))
+
+(doseq [f goldens]
+  (let [name (str/replace (.getName f) #"\.json$" "")
+        model (json/parse-string (slurp f :encoding "UTF-8"))
+        gold (json/parse-string (slurp (io/file root "test" "corpus" "synth" "gold" (str name ".gold.json")) :encoding "UTF-8"))
+        body (get model "body")
+        gbody (get-in gold ["model" "body"])
+        hs (vec (headings body))
+        gs (vec (headings gbody))
+        par (parents body)
+        proj (fn [h] [(nows (get h "text")) (get h "level") (get h "number") (get h "numbering")])
+        bad (first (filter #(not= (proj (get hs %)) (proj (get gs %))) (range (min (count hs) (count gs)))))]
+    (cond
+      (not= (count hs) (count gs))
+      (fail name ": " (count hs) " headings, the gold has " (count gs))
+
+      bad
+      (fail name ": heading " bad " is " (pr-str (proj (get hs bad))) ", the gold's " (pr-str (proj (get gs bad))))
+
+      (some (fn [h] (let [p (get par (get h "id"))]
+                      (or (not= "section" (get p "kind")) (not= (get p "level") (get h "level"))
+                          (not= (get (first (get p "children")) "id") (get h "id")))))
+            hs)
+      (fail name ": a heading is not the first child of a section of its own level")
+
+      (some (fn [s] (let [p (get par (get s "id"))]
+                      (and (= "section" (get p "kind")) (>= (get p "level") (get s "level")))))
+            (filter #(= "section" (get % "kind")) (walk body)))
+      (fail name ": a section is not deeper than the section that holds it")
+
+      (not= (kind-count body "section") (count hs))
+      (fail name ": " (kind-count body "section") " sections for " (count hs) " headings")
+
+      :else
+      (println (format "  ok   %s: %d headings = the gold's, levels and numbers, in sections that nest by level" name (count hs))))))
+
+(if (pos? @fails)
+  (System/exit 1)
+  (println (format "  ok   heading-check: %d goldens match the synthetic gold" (count goldens))))

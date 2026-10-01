@@ -1,0 +1,38 @@
+#!/usr/bin/env bb
+;; Write the heading stage's goldens from the generated Rust (DEVLOG P4.2, P4.4; D159-D163).
+;;
+;;     kin/scripts/heading-goldens         write test/heading/NAME.json (pretty canonical JSON) for each document below
+;;
+;; A DEVELOPMENT SCRIPT, run by a person after the stage changed on purpose; no gate runs it. The laws in
+;; `kin/headingtest.kin` hold every target to what this wrote (PDF -> content -> style inventory -> headings ->
+;; paragraphs and sections -> Model -> JSON, byte for byte), and `kin/scripts/heading-check` holds the goldens
+;; to the synthetic GOLD (the HTML's own headings, their levels and numbers): what makes a golden of kin's own
+;; output worth anything. The driver is `tools/accuracy/naive/main.rs` (the temporary predictor of P1.8,
+;; extended with the heading analysis; P1.10's Engine replaces it).
+;;
+;; THE DOCUMENTS are the ones the maintainer's requirement is about (a higher heading printed smaller than an
+;; inner one: h-inverted, h-inverted-numbered; levels told apart by weight, colour and indent at one size:
+;; h-div-samesize; numbering by depth, by letters and romans, by keyword: h-numbered, h-inverted-numbered,
+;; h-keyword), a plain one, letter dividers that wrap nothing, and a list that must not become headings.
+(require '[clojure.java.io :as io]
+         '[clojure.java.shell :as sh]
+         '[clojure.string :as str])
+
+(def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
+
+(def docs ["h-plain" "h-numbered" "h-keyword" "h-inverted" "h-inverted-numbered" "h-div-samesize"
+           "initial-letter-headings" "lists-basic"])
+
+(defn run [& args]
+  (let [r (apply sh/sh (concat args [:dir root]))]
+    (when-not (zero? (:exit r)) (println (:err r)) (System/exit 1))
+    (:out r)))
+
+;; builds .cache/naive when gen/rust changed (its own stamp), by asking it for a document
+(run "tools/accuracy/predict-naive.sh" "x" "pdf" "test/corpus/synth/pdf/h-plain.pdf" "x")
+
+(.mkdirs (io/file root "test" "heading"))
+(doseq [d docs]
+  (let [out (run ".cache/naive" (str "test/corpus/synth/pdf/" d ".pdf") "pretty")]
+    (spit (io/file root "test" "heading" (str d ".json")) (str out "\n") :encoding "UTF-8")
+    (println "  wrote test/heading/" (str d ".json") (count out) "bytes")))

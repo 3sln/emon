@@ -13,7 +13,7 @@ public final class Para {
     public static final int PA_ROT_SLOP = 100;
     public static final int PA_WIDE_NUM = 3;
     public static final int PA_WIDE_DEN = 5;
-    public static final int FR_STRIDE = 6;
+    public static final int FR_STRIDE = 7;
     public static int paPages(emon.Port.Cells pg, emon.Port.Cells pages) {
         // One Model page per page of the document layer's table: the crop box's size AS DISPLAYED
         // (`/Rotate` turns it), centipoints, the page's own turn in degrees, `vector`.
@@ -301,8 +301,16 @@ public final class Para {
         paSortNums(gp);
         return emon.Port.cellsAt(gp, emon.Port.cellsLen(gp) / 4);
     }
-    public static boolean paNewPar(emon.Port.Cells wd, emon.Port.Cells ln, int a, int b, int med, int margin) {
-        // Does line b, the next one on the page, start a paragraph after line a (D135).
+    public static boolean paNewPar(emon.Port.Cells wd, emon.Port.Cells ln, int a, int b, int med, int margin, emon.Port.Cells hc) {
+        // Does line b, the next one on the page, start a paragraph after line a (D135). The heading analysis
+        // (P4.4) decides first where it has an opinion: a heading is a block of its own (D159).
+        int op = Heading.hdOpinion(hc, a, b);
+        if (op == 1) {
+            return 0 == 1;
+        }
+        if (op == 2) {
+            return 1 == 1;
+        }
         if (!paUpright(ln, a)) {
             return 1 == 1;
         }
@@ -407,6 +415,7 @@ public final class Para {
         emon.Port.cellsPush(fr, Evidence.lnGet(ln, l, Evidence.lhX1()));
         emon.Port.cellsPush(fr, Evidence.lnGet(ln, l, Evidence.lhY1()));
         emon.Port.cellsPush(fr, rawstart);
+        emon.Port.cellsPush(fr, l);
         return 0;
     }
     public static int paFragExtend(emon.Port.Cells fr, emon.Port.Cells ln, int l) {
@@ -434,7 +443,28 @@ public final class Para {
         }
         return 0;
     }
-    public static int paFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr) {
+    public static int paHeadingNumber(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to, emon.Port.Cells hc, int hl) {
+        // A numbered heading (D159): the number goes to the `number` attribute and its scheme to `numbering`,
+        // and the text starts after them. Answers how many code points of `raw` the title is further on (0: the
+        // line is kept whole).
+        int skip = Heading.hdField(hc, hl, Heading.hckSkip());
+        int ns = Heading.hdField(hc, hl, Heading.hckNstart());
+        int nl = Heading.hdField(hc, hl, Heading.hckNlen());
+        if ((skip <= 0) || ((from + skip) >= to)) {
+            return 0;
+        }
+        if ((nl < 1) || ((ns + nl) > skip)) {
+            return 0;
+        }
+        int t0 = emon.Port.cellsLen(text);
+        Normalize.nzNfc(raw, from + ns, (from + ns) + nl, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
+        Model.nodeSetAttrText(nodes, attrs, par, Model.fkNumber(), t0, emon.Port.cellsLen(text) - t0);
+        int t1 = emon.Port.cellsLen(text);
+        int n = Heading.hdPutScheme(text, Heading.hdField(hc, hl, Heading.hckScheme()));
+        Model.nodeSetAttrText(nodes, attrs, par, Model.fkNumbering(), t1, n);
+        return skip;
+    }
+    public static int paFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells hc) {
         // Close the open paragraph, if there is one: its node (own `text` when it is on one page, else
         // `text`, `break`, `text` inlines), `at` one region per page, `src`, `conf`. Empties `raw` and `fr`.
         int nfr = emon.Port.cellsLen(fr) / FR_STRIDE;
@@ -443,13 +473,24 @@ public final class Para {
             emon.Port.cellsDrop(raw, 0);
             return 0;
         }
-        int par = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        int hl = emon.Port.cellsAt(fr, 6);
+        int lev = Heading.hdLevel(hc, hl);
+        int parent = Heading.hdParent(hc, nodes, lev);
+        int kind = Model.nkParagraph();
+        int par = 0;
         int k = 0;
         int from = 0;
         int to = 0;
         int base = 0;
         int t0 = 0;
         int child = 0;
+        if (lev > 0) {
+            kind = Model.nkHeading();
+        }
+        par = Model.nodeNew(nodes, kind, parent);
+        if (lev > 0) {
+            Model.nodeSetSub(nodes, par, lev);
+        }
         Model.nodeSetConf(nodes, par, 500);
         Model.nodeAddSrc(nodes, par, Model.srText());
         Model.nodeAddSrc(nodes, par, Model.srInfer());
@@ -482,6 +523,9 @@ public final class Para {
                 Model.nodeAddSrc(nodes, child, Model.srText());
                 Model.nodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
             } else {
+                if (lev > 0) {
+                    from += paHeadingNumber(nodes, attrs, text, raw, tmp, par, from, to, hc, hl);
+                }
                 t0 = emon.Port.cellsLen(text);
                 Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
                 int tn2 = emon.Port.cellsLen(text) - t0;
@@ -493,9 +537,9 @@ public final class Para {
         emon.Port.cellsDrop(fr, 0);
         return 0;
     }
-    public static int paMilestone(emon.Port.Cells nodes, int page) {
+    public static int paMilestone(emon.Port.Cells nodes, int page, emon.Port.Cells hc) {
         // A page milestone between two blocks.
-        int b = Model.nodeNew(nodes, Model.nkBreak(), 0);
+        int b = Model.nodeNew(nodes, Model.nkBreak(), Heading.hdCur(hc));
         Model.nodeSetSub(nodes, b, page);
         Model.nodeSetConf(nodes, b, 500);
         Model.nodeAddSrc(nodes, b, Model.srInfer());
@@ -537,7 +581,7 @@ public final class Para {
         }
         return m;
     }
-    public static boolean paContinues(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells raw, int a, int b, int amaxw, int bmargin) {
+    public static boolean paContinues(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells raw, int a, int b, int amaxw, int bmargin, emon.Port.Cells hc) {
         // Does the paragraph that ended the last page (its last line a) go on with line b, the first of the
         // next (D137): both upright and one way; a is long (3/5 of its page's longest) and does not close
         // a sentence; b is not indented past the margin of its page.
@@ -548,6 +592,9 @@ public final class Para {
             return 0 == 1;
         }
         if (Evidence.lnGet(ln, a, Evidence.lhDir()) != Evidence.lnGet(ln, b, Evidence.lhDir())) {
+            return 0 == 1;
+        }
+        if ((Heading.hdLevel(hc, a) > 0) || (Heading.hdLevel(hc, b) > 0)) {
             return 0 == 1;
         }
         if (paEndsSentence(raw)) {
@@ -563,18 +610,18 @@ public final class Para {
         }
         return 1 == 1;
     }
-    public static int paFlushAll(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells dq) {
+    public static int paFlushAll(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells dq, emon.Port.Cells hc) {
         // Close the open paragraph, then make a paragraph of each line queued in `dq` (the lines that are not
         // upright, D136) and empty the queue.
         int nq = emon.Port.cellsLen(dq);
         int k = 0;
-        paFlush(nodes, attrs, regions, text, raw, tmp, fr);
+        paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc);
         while (k < nq) {
             int l = emon.Port.cellsAt(dq, k);
             int pg = Evidence.lnGet(ln, l, Evidence.lhPage());
             paFragOpen(fr, ln, pg, l, 0);
             paAddLine(wd, ln, et, raw, l);
-            paFlush(nodes, attrs, regions, text, raw, tmp, fr);
+            paFlush(nodes, attrs, regions, text, raw, tmp, fr, hc);
             k += 1;
         }
         emon.Port.cellsDrop(dq, 0);
@@ -593,10 +640,12 @@ public final class Para {
         }
         return n;
     }
-    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp) {
+    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int npages, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells hc) {
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
         // `model-init`). `ord`, `raw`, `tmp`, `fr` and `gp` are scratch (`gp` first holds the gaps, then the
-        // queue of lines that are not upright). Answers 0.
+        // queue of lines that are not upright). `hc` is the heading analysis (`emon.heading`, P4.4, D159): an
+        // EMPTY `hc` means none and the paragraphs are what they were; it is also where the open sections
+        // are kept. Answers 0.
         int med = paMedian(ln, ord, gp, npages);
         int p = 1;
         int i = 0;
@@ -618,24 +667,24 @@ public final class Para {
             nu = paUprightCount(ln, ord);
             pm = paMargin(ln, ord);
             if (nu == 0) {
-                paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc);
                 open = 0;
                 prev = -1;
                 if (p > 1) {
-                    paMilestone(nodes, p);
+                    paMilestone(nodes, p, hc);
                 }
             } else {
                 b = emon.Port.cellsAt(ord, 0);
                 cont = 0;
                 if (open == 1) {
-                    if (paContinues(wd, ln, raw, prev, b, prevmaxw, pm)) {
+                    if (paContinues(wd, ln, raw, prev, b, prevmaxw, pm, hc)) {
                         cont = 1;
                     }
                 }
                 if (cont == 0) {
-                    paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                    paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc);
                     if (p > 1) {
-                        paMilestone(nodes, p);
+                        paMilestone(nodes, p, hc);
                     }
                     paFragOpen(fr, ln, p, b, 0);
                 } else {
@@ -649,8 +698,8 @@ public final class Para {
                 i = 1;
                 while (i < nu) {
                     b = emon.Port.cellsAt(ord, i);
-                    if (paNewPar(wd, ln, prev, b, med, pm)) {
-                        paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+                    if (paNewPar(wd, ln, prev, b, med, pm, hc)) {
+                        paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc);
                         paFragOpen(fr, ln, p, b, 0);
                     } else {
                         paJoin(wd, ln, et, raw, b);
@@ -669,7 +718,7 @@ public final class Para {
             }
             p += 1;
         }
-        paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp);
+        paFlushAll(nodes, attrs, regions, text, raw, tmp, fr, wd, ln, et, gp, hc);
         return 0;
     }
 }

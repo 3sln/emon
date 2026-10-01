@@ -1,0 +1,598 @@
+;; The style inventory and the body style (P4.2; SPEC 10.3.1, D159, D160). emon's own module (D039).
+;;
+;;   (st-build wd ln et gl sf sc tmp)       every line's features, the style classes, the body class
+;;   (st-feats-size wd ln sf feats)         feature column 18 of a text-layer word: size over the body size
+;;
+;; WHAT IT READS is the text layer's v2 `words`, `lines`, `etext` and the glyphs' fill colour (`gl`): the
+;; same evidence the paragraph stage reads, plus the one colour cell. It writes ONLY into the caller's
+;; scratch (`sf`, `sc`, `tmp`); the evidence is not changed, so the stage can run before or after
+;; P4.1/P4.10 without either noticing.
+;;
+;; `sf` is a header of `SF_HDR` cells and one row of `SF_STRIDE` cells for every line of `ln`, in the line's
+;; own index. A line's FEATURES (the field indices are the `sfk-*` functions, and `st-get` reads one):
+;; its dominant (font, size) word's size, style bits and fill colour; its code points, the first and the
+;; last; whether its letters are all upper case; the nearest line above and below it that overlaps it
+;; across the page (so a column is a column) and the whitespace to each; whether another line sits on its
+;; ROW (a table cell, an initial's neighbour: narrow, wide, near); the left margin of the body text under
+;; it, its indent from that margin in ems and whether it is centred on that text.
+;;
+;; THE INVENTORY (SPEC 10.3.1 step 1) clusters every upright line by (size bucket, bold, italic, mono, upper-
+;; case, colour). A class is a row of `sc` (`SC_STRIDE` cells). The class holding the most CHARACTERS is the
+;; BODY (a page of a table and a page of prose both have a body: the characters decide, not the lines).
+;; THE LINE GAP of the document is the lower quartile of the whitespace between a body line and the body
+;; line above it (D135's reasoning: a short document's median is its paragraph gaps).
+;;
+;; SIZE is bucketed in 0.4 pt steps (`ST_BUCKET`): sizes the same producer prints are within a bucket of each
+;; other, and 11 pt and 11.5 pt (a real heading size) are not. FONT FAMILY is not a feature: Skia gives one
+;; face several font rows and the name table is P4.7's; colour and size and weight carry the rest, and a
+;; document whose only difference between two heading levels is the family is a limit D160 names.
+;; Case: Basic Latin, Latin-1, Greek, Cyrillic. A script with no case (CJK, Arabic, Hebrew, Devanagari)
+;; is never "upper case".
+(ns emon.style
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [wd-get ln-get ln-count gl-get lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
+                                   lh-rot lh-first lh-count hd-tstart hd-tlen hd-feat wf-font wf-size wf-style
+                                   wf-gfirst gf-fill fe-set xt-rel-size]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem bit-and]]))
+
+(defconst ^I32 SF_HDR 16)
+(defconst ^I32 SF_STRIDE 32)
+(defconst ^I32 SC_STRIDE 8)
+(defconst ^I32 ST_BUCKET 40)        ;; size bucket: centipoints per step
+(defconst ^I32 ST_ROT_SLOP 100)     ;; upright: within one degree
+(defconst ^I32 ST_FAR 1000000)      ;; "no line there"
+
+;; header cells
+(defn ^:pub ^I32 sfh-lines [] (return 0))     ;; lines
+(defn ^:pub ^I32 sfh-body [] (return 1))      ;; the body class (row of `sc`), -1 when no line is upright
+(defn ^:pub ^I32 sfh-gap [] (return 2))       ;; the document's line gap, centipoints
+(defn ^:pub ^I32 sfh-classes [] (return 3))   ;; classes
+(defn ^:pub ^I32 sfh-size [] (return 4))      ;; the body's size (centipoints)
+(defn ^:pub ^I32 sfh-chars [] (return 5))     ;; characters over every upright line
+(defn ^:pub ^I32 sfh-bucket [] (return 6))    ;; the body's size bucket
+
+;; row fields
+(defn ^:pub ^I32 sfk-page [] (return 0))
+(defn ^:pub ^I32 sfk-size [] (return 1))      ;; the dominant word's size
+(defn ^:pub ^I32 sfk-bits [] (return 2))      ;; its style bits (`sy`)
+(defn ^:pub ^I32 sfk-color [] (return 3))     ;; its fill, 0xRRGGBB, -1 none
+(defn ^:pub ^I32 sfk-cps [] (return 4))       ;; code points of the line's words
+(defn ^:pub ^I32 sfk-first [] (return 5))     ;; the first code point, -1 none
+(defn ^:pub ^I32 sfk-last [] (return 6))      ;; the last code point, -1 none
+(defn ^:pub ^I32 sfk-caps [] (return 7))      ;; 1: two letters or more, all of them upper case
+(defn ^:pub ^I32 sfk-class [] (return 8))     ;; the class (row of `sc`), -1 for a line that is not upright
+(defn ^:pub ^I32 sfk-above [] (return 9))     ;; nearest line above that overlaps across the page, -1
+(defn ^:pub ^I32 sfk-below [] (return 10))    ;; the same below
+(defn ^:pub ^I32 sfk-gap-above [] (return 11));; whitespace to it (ST_FAR when none), may be negative
+(defn ^:pub ^I32 sfk-gap-below [] (return 12))
+(defn ^:pub ^I32 sfk-sib [] (return 13))      ;; row siblings: 1 narrow, 2 wide, 4 near
+(defn ^:pub ^I32 sfk-sibline [] (return 27))  ;; the nearest sibling on its row, -1
+(defn ^:pub ^I32 sfk-nsib [] (return 28))     ;; how many siblings on its row
+(defn ^:pub ^I32 sfk-sibgap [] (return 29))   ;; the whitespace to the nearest one
+(defn ^:pub ^I32 sfk-x0 [] (return 14))
+(defn ^:pub ^I32 sfk-width [] (return 15))
+(defn ^:pub ^I32 sfk-upright [] (return 16))
+(defn ^:pub ^I32 sfk-bucket [] (return 17))   ;; the size bucket
+(defn ^:pub ^I32 sfk-words [] (return 18))
+(defn ^:pub ^I32 sfk-height [] (return 19))
+(defn ^:pub ^I32 sfk-letters [] (return 20))
+(defn ^:pub ^I32 sfk-margin [] (return 21))   ;; the left edge of the body lines under this one
+(defn ^:pub ^I32 sfk-centered [] (return 22)) ;; 1: centred on the body text under it
+(defn ^:pub ^I32 sfk-indent [] (return 23))   ;; its indent from that margin, in ems of the body size, 0..6
+
+;; class fields
+(defn ^:pub ^I32 sck-bucket [] (return 0))
+(defn ^:pub ^I32 sck-bits [] (return 1))      ;; bold, italic, mono of the style bits
+(defn ^:pub ^I32 sck-caps [] (return 2))
+(defn ^:pub ^I32 sck-color [] (return 3))
+(defn ^:pub ^I32 sck-chars [] (return 4))
+(defn ^:pub ^I32 sck-lines [] (return 5))
+(defn ^:pub ^I32 sck-first [] (return 6))     ;; the first line of the class
+(defn ^:pub ^I32 sck-size [] (return 7))      ;; the size of that line
+
+(defn ^:pub ^I32 st-hget [^Cells sf ^I32 f] (return (cells-at sf f)))
+
+(defn ^:pub ^I32 st-get [^Cells sf ^I32 l ^I32 f]
+  (return (cells-at sf (+ (+ SF_HDR (* l SF_STRIDE)) f))))
+
+(defn ^I32 st-put [^:mut ^Cells sf ^I32 l ^I32 f ^I32 v]
+  (cells-set sf (+ (+ SF_HDR (* l SF_STRIDE)) f) v)
+  (return 0))
+
+(defn ^:pub ^I32 sc-get [^Cells sc ^I32 c ^I32 f]
+  (return (cells-at sc (+ (* c SC_STRIDE) f))))
+
+;; ------------------------------------------------------------------ small tests
+
+(defn ^:pub ^Bool st-upper [^I32 cp]
+  (comment "An upper case letter: Basic Latin, Latin-1, Greek, Cyrillic.")
+  (if (and (>= cp 65) (<= cp 90)) (return (== 1 1)))
+  (if (and (>= cp 192) (and (<= cp 222) (!= cp 215))) (return (== 1 1)))
+  (if (and (>= cp 913) (<= cp 937)) (return (== 1 1)))
+  (if (and (>= cp 1040) (<= cp 1071)) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^:pub ^Bool st-lower [^I32 cp]
+  (comment "A lower case letter, in the same blocks.")
+  (if (and (>= cp 97) (<= cp 122)) (return (== 1 1)))
+  (if (and (>= cp 223) (and (<= cp 255) (!= cp 247))) (return (== 1 1)))
+  (if (and (>= cp 945) (<= cp 969)) (return (== 1 1)))
+  (if (and (>= cp 1072) (<= cp 1103)) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^:pub ^Bool st-upright [^Cells ln ^I32 l]
+  (let [^I32 r (ln-get ln l (lh-rot))]
+    (return (or (< r ST_ROT_SLOP) (> r (- 36000 ST_ROT_SLOP))))))
+
+(defn ^I32 st-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 st-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+;; ------------------------------------------------------------ one line's own features
+
+(defn ^I32 st-dom [^Cells wd ^Cells ln ^I32 l]
+  (comment "The word whose (font, size) the most words of the line share, the earliest on a tie; -1 for no")
+  (comment "words. Only the first 32 words vote.")
+  (let [^I32 w0 (ln-get ln l (lh-first))
+        ^:mut ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestc 0]
+    (if (> wn 32) (set wn 32))
+    (while (< i wn)
+      (do (set c 0)
+          (set j 0)
+          (while (< j wn)
+            (do (if (and (== (wd-get wd (+ w0 i) (wf-size)) (wd-get wd (+ w0 j) (wf-size)))
+                         (and (== (wd-get wd (+ w0 i) (wf-font)) (wd-get wd (+ w0 j) (wf-font)))
+                              (== (wd-get wd (+ w0 i) (wf-style)) (wd-get wd (+ w0 j) (wf-style)))))
+                  (set c (+ c 1)))
+                (set j (+ j 1))))
+          (if (> c bestc)
+            (do (set bestc c)
+                (set best (+ w0 i))))
+          (set i (+ i 1))))
+    (return best)))
+
+(defn ^I32 st-line-features [^Cells wd ^Cells ln ^Cells et ^Cells gl ^:mut ^Cells sf ^I32 l]
+  (comment "Everything about line l that needs only the line: the dominant word's size, bits and colour; the")
+  (comment "text's length, ends and case.")
+  (let [^I32 d (st-dom wd ln l)
+        ^I32 w0 (ln-get ln l (lh-first))
+        ^I32 wn (ln-get ln l (lh-count))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cps 0
+        ^:mut ^I32 first -1
+        ^:mut ^I32 last -1
+        ^:mut ^I32 letters 0
+        ^:mut ^I32 upper 0
+        ^:mut ^I32 g -1
+        ^:mut ^I32 col -1]
+    (st-put sf l (sfk-page) (ln-get ln l (lh-page)))
+    (st-put sf l (sfk-upright) 0)
+    (if (st-upright ln l) (st-put sf l (sfk-upright) 1))
+    (st-put sf l (sfk-x0) (ln-get ln l (lh-x0)))
+    (st-put sf l (sfk-width) (- (ln-get ln l (lh-x1)) (ln-get ln l (lh-x0))))
+    (st-put sf l (sfk-height) (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0))))
+    (st-put sf l (sfk-words) wn)
+    (if (< d 0)
+      (do (st-put sf l (sfk-size) (- (ln-get ln l (lh-y1)) (ln-get ln l (lh-y0))))
+          (st-put sf l (sfk-bits) 0))
+      (do (st-put sf l (sfk-size) (wd-get wd d (wf-size)))
+          (st-put sf l (sfk-bits) (wd-get wd d (wf-style)))
+          (set g (wd-get wd d (wf-gfirst)))
+          (if (>= g 0) (set col (gl-get gl g (gf-fill))))))
+    (st-put sf l (sfk-color) col)
+    (while (< k wn)
+      (do (let [^I32 ts (wd-get wd (+ w0 k) (hd-tstart))
+                ^I32 tl (wd-get wd (+ w0 k) (hd-tlen))]
+            (if (and (>= ts 0) (> tl 0))
+              (do (set j 0)
+                  (while (< j tl)
+                    (do (let [^I32 c (cells-at et (+ ts j))]
+                          (if (< first 0) (set first c))
+                          (set last c)
+                          (set cps (+ cps 1))
+                          (if (st-upper c)
+                            (do (set letters (+ letters 1))
+                                (set upper (+ upper 1))))
+                          (if (st-lower c)
+                            (set letters (+ letters 1))))
+                        (set j (+ j 1)))))))
+          (set k (+ k 1))))
+    (st-put sf l (sfk-cps) cps)
+    (st-put sf l (sfk-first) first)
+    (st-put sf l (sfk-last) last)
+    (st-put sf l (sfk-letters) letters)
+    (st-put sf l (sfk-caps) 0)
+    (if (and (>= letters 2) (== upper letters)) (st-put sf l (sfk-caps) 1))
+    (let [^I32 sz (st-get sf l (sfk-size))]
+      (st-put sf l (sfk-bucket) (quot (+ sz (quot ST_BUCKET 2)) ST_BUCKET)))
+    (st-put sf l (sfk-class) -1)
+    (st-put sf l (sfk-above) -1)
+    (st-put sf l (sfk-below) -1)
+    (st-put sf l (sfk-gap-above) ST_FAR)
+    (st-put sf l (sfk-gap-below) ST_FAR)
+    (st-put sf l (sfk-sib) 0)
+    (st-put sf l (sfk-nsib) 0)
+    (st-put sf l (sfk-sibline) -1)
+    (st-put sf l (sfk-sibgap) ST_FAR)
+    (st-put sf l (sfk-margin) (ln-get ln l (lh-x0)))
+    (st-put sf l (sfk-centered) 0)
+    (st-put sf l (sfk-indent) 0)
+    (return 0)))
+
+
+;; ------------------------------------------------------------------ neighbours
+
+(defn ^I32 st-sib-add [^I32 b ^I32 bit]
+  (if (== (bit-and b bit) 0) (return (+ b bit)))
+  (return b))
+
+(defn ^I32 st-pair [^Cells ln ^:mut ^Cells sf ^I32 i ^I32 j ^I32 pagew]
+  (comment "What line j is to line i (both upright, on one page): the nearest line above, the nearest below, or")
+  (comment "a sibling on i's row (another box at the same height, beside it).")
+  (let [^I32 xi0 (ln-get ln i (lh-x0))
+        ^I32 xi1 (ln-get ln i (lh-x1))
+        ^I32 yi0 (ln-get ln i (lh-y0))
+        ^I32 yi1 (ln-get ln i (lh-y1))
+        ^I32 xj0 (ln-get ln j (lh-x0))
+        ^I32 xj1 (ln-get ln j (lh-x1))
+        ^I32 yj0 (ln-get ln j (lh-y0))
+        ^I32 yj1 (ln-get ln j (lh-y1))
+        ^I32 hi (- yi1 yi0)
+        ^I32 hj (- yj1 yj0)
+        ^I32 wi (- xi1 xi0)
+        ^I32 wj (- xj1 xj0)
+        ^I32 ovx (- (st-min xi1 xj1) (st-max xi0 xj0))
+        ^I32 ovy (- (st-min yi1 yj1) (st-max yi0 yj0))
+        ^I32 byi (+ (ln-get ln i (lh-by0)) (ln-get ln i (lh-by1)))
+        ^I32 byj (+ (ln-get ln j (lh-by0)) (ln-get ln j (lh-by1)))
+        ^I32 narrow (st-min wi wj)
+        ^:mut ^I32 b (st-get sf i (sfk-sib))]
+    (comment "the same row: the extents overlap in y (30 per cent of the shorter) and not in x")
+    (if (and (<= ovx 0) (>= (* ovy 10) (* (st-min hi hj) 3)))
+      (do (if (< (* wj 100) (* pagew 30))
+            (set b (st-sib-add b 1))
+            (set b (st-sib-add b 2)))
+          (if (< (- 0 ovx) (st-get sf i (sfk-size)))
+            (set b (st-sib-add b 4)))
+          (st-put sf i (sfk-sib) b)
+          (let [^I32 ns (st-get sf i (sfk-nsib))]
+            (st-put sf i (sfk-nsib) (+ ns 1)))
+          (if (< (- 0 ovx) (st-get sf i (sfk-sibgap)))
+            (do (st-put sf i (sfk-sibgap) (- 0 ovx))
+                (st-put sf i (sfk-sibline) j)))
+          (return 0)))
+    (comment "above and below share some of the column: a fifth of the narrower line")
+    (if (and (> ovx 0) (>= (* ovx 5) narrow))
+      (do (if (>= (- byj byi) hj)
+            (do (let [^I32 g (- yj0 yi1)]
+                  (if (< g (st-get sf i (sfk-gap-below)))
+                    (do (st-put sf i (sfk-gap-below) g)
+                        (st-put sf i (sfk-below) j))))))
+          (if (>= (- byi byj) hi)
+            (do (let [^I32 g2 (- yi0 yj1)]
+                  (if (< g2 (st-get sf i (sfk-gap-above)))
+                    (do (st-put sf i (sfk-gap-above) g2)
+                        (st-put sf i (sfk-above) j))))))))
+    (return 0)))
+
+(defn ^I32 st-run-end [^Cells ln ^I32 s ^I32 n]
+  (comment "The end of the run of lines from s that are on the page of line s.")
+  (let [^I32 p (ln-get ln s (lh-page))
+        ^:mut ^I32 e s]
+    (while (and (< e n) (== (ln-get ln e (lh-page)) p))
+      (set e (+ e 1)))
+    (return e)))
+
+(defn ^I32 st-neighbours [^Cells ln ^:mut ^Cells sf]
+  (comment "Above, below and the row's siblings of every upright line, page by page. Quadratic in the lines of a")
+  (comment "page, which is a page's worth.")
+  (let [^I32 n (ln-count ln)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 any 0]
+    (while (< s n)
+      (do (set e (st-run-end ln s n))
+          (set any 0)
+          (set i s)
+          (while (< i e)
+            (do (if (st-upright ln i)
+                  (do (if (== any 0)
+                        (do (set lo (ln-get ln i (lh-x0)))
+                            (set hi (ln-get ln i (lh-x1)))
+                            (set any 1)))
+                      (set lo (st-min lo (ln-get ln i (lh-x0))))
+                      (set hi (st-max hi (ln-get ln i (lh-x1))))))
+                (set i (+ i 1))))
+          (set i s)
+          (while (< i e)
+            (do (if (st-upright ln i)
+                  (do (set j s)
+                      (while (< j e)
+                        (do (if (and (!= i j) (st-upright ln j))
+                              (st-pair ln sf i j (st-max 1 (- hi lo))))
+                            (set j (+ j 1))))))
+                (set i (+ i 1))))
+          (set s e)))
+    (return 0)))
+
+;; ------------------------------------------------------------------ the inventory
+
+(defn ^I32 st-class-of [^:mut ^Cells sc ^I32 bucket ^I32 bits ^I32 caps ^I32 col ^I32 l ^I32 size]
+  (comment "The row of `sc` for the key, made when there is none.")
+  (let [^I32 n (quot (cells-len sc) SC_STRIDE)
+        ^:mut ^I32 c 0]
+    (while (< c n)
+      (do (if (and (== (sc-get sc c (sck-bucket)) bucket)
+                   (and (== (sc-get sc c (sck-bits)) bits)
+                        (and (== (sc-get sc c (sck-caps)) caps)
+                             (== (sc-get sc c (sck-color)) col))))
+            (return c))
+          (set c (+ c 1))))
+    (cells-push sc bucket)
+    (cells-push sc bits)
+    (cells-push sc caps)
+    (cells-push sc col)
+    (cells-push sc 0)
+    (cells-push sc 0)
+    (cells-push sc l)
+    (cells-push sc size)
+    (return n)))
+
+(defn ^I32 st-bits [^I32 style]
+  (comment "The style bits that make a class: bold (1), italic (2), mono (64) of `sy`.")
+  (let [^I32 b (bit-and style 1)
+        ^I32 i (bit-and style 2)
+        ^I32 m (bit-and style 64)]
+    (return (+ b (+ i m)))))
+
+(defn ^I32 st-classify [^:mut ^Cells sf ^:mut ^Cells sc ^I32 n]
+  (comment "Every upright line into a class; the class's characters and lines.")
+  (let [^:mut ^I32 l 0]
+    (while (< l n)
+      (do (if (== (st-get sf l (sfk-upright)) 1)
+            (do (let [^I32 c (st-class-of sc (st-get sf l (sfk-bucket)) (st-bits (st-get sf l (sfk-bits)))
+                                          (st-get sf l (sfk-caps)) (st-get sf l (sfk-color)) l (st-get sf l (sfk-size)))
+                      ^I32 at (+ (* c SC_STRIDE) (sck-chars))]
+                  (st-put sf l (sfk-class) c)
+                  (cells-set sc at (+ (cells-at sc at) (st-get sf l (sfk-cps))))
+                  (cells-set sc (+ at 1) (+ (cells-at sc (+ at 1)) 1)))))
+          (set l (+ l 1))))
+    (return 0)))
+
+(defn ^I32 st-sort-nums [^:mut ^Cells c]
+  (comment "Shell sort of the numbers in `c`, ascending (Knuth's gaps).")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 more 1]
+    (while (< h (quot n 3))
+      (set h (+ (* h 3) 1)))
+    (while (>= h 1)
+      (do (set i h)
+          (while (< i n)
+            (do (set v (cells-at c i))
+                (set j i)
+                (set more 1)
+                (while (and (>= j h) (== more 1))
+                  (do (set u (cells-at c (- j h)))
+                      (if (< v u)
+                        (do (cells-set c j u)
+                            (set j (- j h)))
+                        (set more 0))))
+                (cells-set c j v)
+                (set i (+ i 1))))
+          (set h (quot (- h 1) 3))))
+    (return 0)))
+
+(defn ^I32 st-line-gap [^:mut ^Cells sf ^Cells sc ^:mut ^Cells tmp ^I32 n ^I32 body]
+  (comment "The document's line gap: the lower quartile of the whitespace between a body line and the body line")
+  (comment "above it. When no body line has one, of every line's; 0 when no line has one.")
+  (let [^:mut ^I32 l 0
+        ^:mut ^I32 pass 0]
+    (while (< pass 2)
+      (do (cells-drop tmp 0)
+          (set l 0)
+          (while (< l n)
+            (do (if (and (== (st-get sf l (sfk-upright)) 1) (< (st-get sf l (sfk-gap-above)) ST_FAR))
+                  (let [^I32 ab (st-get sf l (sfk-above))
+                        ^I32 abc (st-get sf ab (sfk-class))]
+                    (if (or (== pass 1) (== (st-get sf l (sfk-class)) body))
+                      (if (or (== pass 1) (== abc body))
+                        (cells-push tmp (st-get sf l (sfk-gap-above)))))))
+                (set l (+ l 1))))
+          (if (> (cells-len tmp) 0)
+            (do (st-sort-nums tmp)
+                (return (cells-at tmp (quot (cells-len tmp) 4)))))
+          (set pass (+ pass 1))))
+    (return 0)))
+
+(defn ^I32 st-nbase [^Cells ln ^Cells sf ^I32 i ^I32 dflt]
+  (comment "The left edge a line is indented from: that of the body line right below it, else right above it (so a")
+  (comment "column is measured from its own margin), else `dflt`.")
+  (let [^I32 b (st-get sf i (sfk-below))
+        ^I32 a (st-get sf i (sfk-above))
+        ^I32 body (st-hget sf (sfh-body))]
+    (if (and (>= b 0) (== (st-get sf b (sfk-class)) body)) (return (ln-get ln b (lh-x0))))
+    (if (and (>= a 0) (== (st-get sf a (sfk-class)) body)) (return (ln-get ln a (lh-x0))))
+    (return dflt)))
+
+(defn ^I32 st-margins [^Cells ln ^:mut ^Cells sf ^I32 n ^I32 body ^I32 bsize]
+  (comment "For every upright line: the left edge of the body lines it overlaps across the page (its column's")
+  (comment "margin), its indent from that edge in ems of the body size, and whether it is centred on them.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cm 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 any 0]
+    (while (< s n)
+      (do (set e (st-run-end ln s n))
+          (set i s)
+          (while (< i e)
+            (do (if (== (st-get sf i (sfk-upright)) 1)
+                  (do (set any 0)
+                      (set j s)
+                      (while (< j e)
+                        (do (if (and (== (st-get sf j (sfk-class)) body)
+                                     (> (- (st-min (ln-get ln i (lh-x1)) (ln-get ln j (lh-x1)))
+                                           (st-max (ln-get ln i (lh-x0)) (ln-get ln j (lh-x0)))) 0))
+                              (do (if (== any 0)
+                                    (do (set cm (ln-get ln j (lh-x0)))
+                                        (set cx (ln-get ln j (lh-x1)))
+                                        (set any 1))
+                                    (do (set cm (st-min cm (ln-get ln j (lh-x0))))
+                                        (set cx (st-max cx (ln-get ln j (lh-x1))))))))
+                            (set j (+ j 1))))
+                      (if (== any 1)
+                        (do (st-put sf i (sfk-margin) cm)
+                            (let [^I32 x0 (ln-get ln i (lh-x0))
+                                  ^I32 x1 (ln-get ln i (lh-x1))
+                                  ^I32 cw (st-max 1 (- cx cm))
+                                  ^:mut ^I32 d (- x0 (st-nbase ln sf i cm))
+                                  ^:mut ^I32 em 0
+                                  ^I32 mid2 (+ x0 x1)
+                                  ^:mut ^I32 off (- mid2 (+ cm cx))]
+                              (if (< d 0) (set d 0))
+                              (set em (quot (+ (* d 2) bsize) (st-max 1 (* bsize 2))))
+                              (if (> em 6) (set em 6))
+                              (st-put sf i (sfk-indent) em)
+                              (if (< off 0) (set off (- 0 off)))
+                              (if (and (<= (* off 50) cw)
+                                       (and (<= (* (- x1 x0) 100) (* cw 85))
+                                            (>= (* d 100) (* cw 4))))
+                                (st-put sf i (sfk-centered) 1)))))))
+                (set i (+ i 1))))
+          (set s e)))
+    (return 0)))
+
+(defn ^:pub ^I32 sfk-ncol [] (return 30))     ;; of its row siblings, how many are lines of a column of body text
+
+(defn ^I32 st-colsibs [^Cells ln ^:mut ^Cells sf ^I32 n ^I32 body]
+  (comment "For every upright line with a sibling on its row: how many of its siblings are a column of body text,")
+  (comment "that is body-class lines at least a quarter as wide as the widest body line of the page. A neighbouring")
+  (comment "column is that; a table cell, a label beside a value and an initial's neighbour are not (D159).")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 k 0]
+    (while (< s n)
+      (do (set e (st-run-end ln s n))
+          (set m 0)
+          (set i s)
+          (while (< i e)
+            (do (if (and (== (st-get sf i (sfk-class)) body) (> (st-get sf i (sfk-width)) m))
+                  (set m (st-get sf i (sfk-width))))
+                (set i (+ i 1))))
+          (set i s)
+          (while (< i e)
+            (do (st-put sf i (sfk-ncol) 0)
+                (if (and (== (st-get sf i (sfk-upright)) 1) (> (st-get sf i (sfk-nsib)) 0))
+                  (do (set k 0)
+                      (set j s)
+                      (while (< j e)
+                        (do (if (and (!= i j) (and (== (st-get sf j (sfk-class)) body) (> (* (st-get sf j (sfk-width)) 100) (* m 25))))
+                              (if (and (<= (- (st-min (ln-get ln i (lh-x1)) (ln-get ln j (lh-x1))) (st-max (ln-get ln i (lh-x0)) (ln-get ln j (lh-x0)))) 0)
+                                       (>= (* (- (st-min (ln-get ln i (lh-y1)) (ln-get ln j (lh-y1))) (st-max (ln-get ln i (lh-y0)) (ln-get ln j (lh-y0)))) 10)
+                                           (* (st-min (st-get sf i (sfk-height)) (st-get sf j (sfk-height))) 3)))
+                                (set k (+ k 1))))
+                            (set j (+ j 1))))
+                      (st-put sf i (sfk-ncol) k)))
+                (set i (+ i 1))))
+          (set s e)))
+    (return 0)))
+
+(defn ^:pub ^I32 st-build [^Cells wd ^Cells ln ^Cells et ^Cells gl
+                           ^:mut ^Cells sf ^:mut ^Cells sc ^:mut ^Cells tmp]
+  (comment "The style inventory of the document's lines. `sf`, `sc` and `tmp` are the caller's and are emptied")
+  (comment "first; afterwards `sf` has a row for every line (see the head of this file), `sc` the classes, and")
+  (comment "the header says which class is the body, its size, and the document's line gap. Answers the number")
+  (comment "of classes.")
+  (let [^I32 n (ln-count ln)
+        ^:mut ^I32 l 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 body -1
+        ^:mut ^I32 total 0]
+    (cells-drop sf 0)
+    (cells-drop sc 0)
+    (cells-drop tmp 0)
+    (while (< l SF_HDR)
+      (do (cells-push sf 0)
+          (set l (+ l 1))))
+    (cells-set sf (sfh-lines) n)
+    (cells-set sf (sfh-body) -1)
+    (set l 0)
+    (while (< l (* n SF_STRIDE))
+      (do (cells-push sf 0)
+          (set l (+ l 1))))
+    (set l 0)
+    (while (< l n)
+      (do (st-line-features wd ln et gl sf l)
+          (set l (+ l 1))))
+    (st-neighbours ln sf)
+    (st-classify sf sc n)
+    (let [^I32 nc (quot (cells-len sc) SC_STRIDE)]
+      (cells-set sf (sfh-classes) nc)
+      (set c 0)
+      (while (< c nc)
+        (do (set total (+ total (sc-get sc c (sck-chars))))
+            (if (or (< body 0) (> (sc-get sc c (sck-chars)) (sc-get sc body (sck-chars))))
+              (set body c))
+            (set c (+ c 1))))
+      (cells-set sf (sfh-chars) total)
+      (cells-set sf (sfh-body) body)
+      (if (>= body 0)
+        (do (cells-set sf (sfh-size) (sc-get sc body (sck-size)))
+            (cells-set sf (sfh-bucket) (sc-get sc body (sck-bucket)))
+            (let [^I32 gap (st-line-gap sf sc tmp n body)]
+              (cells-set sf (sfh-gap) gap))
+            (st-margins ln sf n body (sc-get sc body (sck-size)))
+            (st-colsibs ln sf n body)))
+      (return nc))))
+
+(defn ^:pub ^I32 st-feats-size [^Cells wd ^Cells sf ^:mut ^Cells feats]
+  (comment "Feature column 18 of every text-layer word that has a `feats` row: its size over the document's")
+  (comment "body size, per-mille (SPEC 8.4.5; P4.2 fills it). Answers the number of words written.")
+  (let [^I32 n (quot (cells-len wd) 24)
+        ^I32 bsize (cells-at sf (sfh-size))
+        ^:mut ^I32 w 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 row 0]
+    (if (<= bsize 0) (return 0))
+    (while (< w n)
+      (do (set row (wd-get wd w (hd-feat)))
+          (if (>= row 0)
+            (do (fe-set feats row (xt-rel-size) (quot (* (wd-get wd w (wf-size)) 1000) bsize))
+                (set k (+ k 1))))
+          (set w (+ w 1))))
+    (return k)))
+
+;; the fields the heading stage keeps in the same rows (D159)
+(defn ^:pub ^I32 sfk-head [] (return 24))     ;; 1: a candidate line (style or numbering sets it apart)
+(defn ^:pub ^I32 sfk-unit [] (return 25))     ;; the heading unit it belongs to, -1 none yet, -2 rejected
+(defn ^:pub ^I32 sfk-points [] (return 26))   ;; its style points against the body
+
+(defn ^:pub ^I32 st-set [^:mut ^Cells sf ^I32 l ^I32 f ^I32 v]
+  (comment "Write a field of a line's row (the heading stage's own fields).")
+  (return (st-put sf l f v)))
