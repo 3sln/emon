@@ -8,6 +8,7 @@ import (
 	"emon/pdfsrc"
 	"emon/plan"
 	"emon/port"
+	"emon/scan"
 )
 
 func RsNone() int32 {
@@ -123,10 +124,46 @@ func rsFormatName(nodes *port.Cells, attrs *port.Cells, text *port.Cells, fmt in
 	return 0
 }
 
-func RsUnit(src *port.Src, input int32, fmt int32, info int32, ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells) int32 {
-	// One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the
-	// host. Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's
-	// `format` and `pages` and one page row per frame written.
+func rsEffDpi100(dpi100 int32) int32 {
+	// The resolution a frame is read at: its own, or 300 dpi when it states none.
+	if dpi100 <= 0 {
+		return RsDefaultDpi100()
+	}
+	return dpi100
+}
+
+func RsOcrId(frames int32, f int32) int32 {
+	// The request id of the OCR of frame `f` of a `frames`-frame input: after every decode's.
+	return (frames + f) + 1
+}
+
+func rsWantOcr(info int32, policy int32) int32 {
+	// 1 when this attempt asks for OCR: not a header-only intake, and the policy is not `never`.
+	if info == 1 {
+		return 0
+	}
+	if policy == 0 {
+		return 0
+	}
+	return 1
+}
+
+func rsReadPage(ans *port.Cells, ao int32, ad int32, page int32, oid int32, loc *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells) int32 {
+	// The evidence and the lines of one frame whose OCR answer is at `ao` (its decode's at `ad`).
+	var w int32 = plan.AnArg(ans, ad, 0)
+	var h int32 = plan.AnArg(ans, ad, 1)
+	var eff int32 = rsEffDpi100(plan.AnArg(ans, ad, 3))
+	var wc int32 = RsCpt(w, eff)
+	var hc int32 = RsCpt(h, eff)
+	return scan.ScPage(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, scan.ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
+}
+
+func RsUnit(src *port.Src, input int32, fmt int32, info int32, ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, policy int32, loc *port.Cells, mask *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells) int32 {
+	// One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the host, and so are
+	// the evidence arenas. `policy` is the OCR policy: 0 never, 1 auto, 2 always (D038); `loc` the locale hint's code points
+	// (empty: none). Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's `format` and
+	// `pages`, one page row per frame, and for every frame whose OCR answered: its evidence and its lines in `words` and
+	// `lines`, and `mask` (one cell a page) set to 1 so that `sc-tag` can say where the text came from.
 	var nbytes int32 = pdfsrc.PsLen(src)
 	var a0 int32 = plan.AnFind(ans, 1)
 	if a0 < 0 {
@@ -137,8 +174,11 @@ func RsUnit(src *port.Src, input int32, fmt int32, info int32, ans *port.Cells, 
 		return rsFail(ans, a0)
 	}
 	var frames int32 = plan.AnArg(ans, a0, 5)
+	var want int32 = rsWantOcr(info, policy)
 	var f int32 = 1
 	var asked int32 = 0
+	var da int32 = 0
+	var dd int32 = 0
 	if frames < 1 {
 		return RsUndecodable()
 	}
@@ -152,11 +192,26 @@ func RsUnit(src *port.Src, input int32, fmt int32, info int32, ans *port.Cells, 
 		}
 		f += 1
 	}
+	if want == 1 {
+		f = 0
+		for f < frames {
+			da = plan.AnFind(ans, f+1)
+			if (da >= 0) && (plan.AnFind(ans, RsOcrId(frames, f)) < 0) {
+				if plan.AnOk(ans, da) == 1 {
+					dd = rsEffDpi100(plan.AnArg(ans, da, 3))
+					scan.ScRequest(rq, RsOcrId(frames, f), f+1, (dd+50)/100, loc)
+					asked = 1
+				}
+			}
+			f += 1
+		}
+	}
 	if asked == 1 {
 		return plan.UsRequests()
 	}
 	rsFormatName(nodes, attrs, text, fmt)
 	model.NodeSetAttrInt(nodes, attrs, 0, model.FkPages(), frames)
+	port.CellsDrop(mask, 0)
 	f = 0
 	for f < frames {
 		var a int32 = plan.AnFind(ans, f+1)
@@ -179,7 +234,22 @@ func RsUnit(src *port.Src, input int32, fmt int32, info int32, ans *port.Cells, 
 		}
 		var p int32 = model.PageNew(pages, f+1, RsCpt(w, eff), RsCpt(h, eff), 0, model.PkImage())
 		model.PageSetResolution(pages, p, (dpi100+50)/100, w, h)
+		port.CellsPush(mask, 0)
 		f += 1
+	}
+	if want == 1 {
+		f = 0
+		for f < frames {
+			da = plan.AnFind(ans, RsOcrId(frames, f))
+			if da >= 0 {
+				if plan.AnOk(ans, da) == 1 {
+					dd = plan.AnFind(ans, f+1)
+					rsReadPage(ans, da, dd, f+1, RsOcrId(frames, f), loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
+					port.CellsSet(mask, f, 1)
+				}
+			}
+			f += 1
+		}
 	}
 	return 0
 }

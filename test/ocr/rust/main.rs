@@ -146,7 +146,7 @@ fn main() {
     let cfg = Config::default();
     assert_eq!(emon::plan::pk_ocr(), KIND_OCR);
 
-    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new() };
+    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new(), producer: Vec::new() };
     let mut replayer: Option<Replayer> = None;
     if mode == "replay" {
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
@@ -187,6 +187,7 @@ fn main() {
             let tessdata = args.get(6).cloned().unwrap_or("/opt/homebrew/share/tessdata".to_string());
             eprintln!("tesseract {}", tess::version());
             let mut t = tess::Tess::new(&tessdata, dpi);
+            transcript.producer = t.producer();
             let page = read_pgm(&pgm);
             let mut f = SyncFulfiller::new(|req: &Request, bm: &Bitmaps| -> Result<Answer, PlanError> {
                 match req.kind() {
@@ -201,7 +202,7 @@ fn main() {
                     }
                     KIND_OCR => {
                         let t0 = std::time::Instant::now();
-                        let a = t.fulfil(req, bm);
+                        let a = t.fulfil(req, bm, true);
                         eprintln!("ocr: {} ms", t0.elapsed().as_millis());
                         a
                     }

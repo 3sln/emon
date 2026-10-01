@@ -4,7 +4,7 @@
 (ns emon.ocrtest
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-that new-cells]]
-            [emon.port :refer [cells-len cells-at]]
+            [emon.port :refer [cells-len cells-at cells-push]]
             [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end an-ocr-count
                                an-ocr-first aw-next]]
             [emon.ocr :refer [ox-version ox-header ox-line-stride ox-begin ox-line
@@ -12,7 +12,9 @@
                               ox-get ox-orient ox-wdir ox-tlorder ox-deskew ox-osd
                               ox-script ox-sconf ox-oconf ox-nlines ox-line-at
                               ox-first-word ox-wflags ox-wlang ox-nsym ox-first-sym
-                              ox-sym-next ox-sym-alts ox-alt-next ox-word-next]]
+                              ox-sym-next ox-sym-alts ox-alt-next ox-word-next
+                              ox-block ox-nblocks ox-binary ox-bw ox-bh ox-block-at ox-block-stride
+                              ox-wpsize ox-wdflags ocf-dpi ocf-osd ocf-symbols]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -32,9 +34,10 @@
     (an-ocr-cp c w0 105)
     (let [^I32 w1 (an-ocr-word c at 50 20 30 40 800 0 0)]
       (an-ocr-cp c w1 33)
-      (ox-begin c 1 2 3 -85 90 1281455214 17 187 1)
-      (ox-line c 10 18 70 44 10 60 80 62 0 0 1)
-      (let [^I32 x0 (ox-word c 65 1701734144)
+      (ox-begin c 1 2 3 -85 90 1281455214 17 187 1 1 1 640 480)
+      (ox-line c 10 18 70 44 10 60 80 62 0 0 1 22 14 6)
+      (ox-block c 5 15 80 50 1 2 3)
+      (let [^I32 x0 (ox-word c 65 1701734144 11 3)
             ^I32 s0 (ox-sym c x0 10 20 15 40 950)]
         (ox-sym-cp c s0 72)
         (let [^I32 a0 (ox-alt c s0 120)]
@@ -44,7 +47,7 @@
             (ox-alt-cp c a1 77)))
         (let [^I32 s1 (ox-sym c x0 25 20 15 40 900)]
           (ox-sym-cp c s1 105))
-        (let [^I32 x1 (ox-word c 0 0)
+        (let [^I32 x1 (ox-word c 0 0 -1 0)
               ^I32 s2 (ox-sym c x1 50 20 30 40 800)]
           (ox-sym-cp c s2 33)
           (an-ocr-end c at)
@@ -66,10 +69,25 @@
               (assert-eq l (+ ext (ox-header)) "the line list follows the header")
               (assert-eq (cells-at c (+ l 6)) 80 "baseline end x")
               (assert-eq (cells-at c (+ l 10)) 1 "block type")
-              (assert-eq (ox-first-word c ext) (+ l (ox-line-stride)) "the word list follows the lines"))
+              (assert-eq (cells-at c (+ l 11)) 22 "x-height")
+              (assert-eq (cells-at c (+ l 12)) 14 "ascenders")
+              (assert-eq (cells-at c (+ l 13)) 6 "descenders")
+              (assert-eq (ox-block-at c ext 0) (+ l (ox-line-stride)) "the block table follows the lines")
+              (assert-eq (ox-first-word c ext) (+ (ox-block-at c ext 0) (ox-block-stride)) "the word list follows the blocks"))
+            (assert-eq (ox-nblocks c ext) 1 "one block")
+            (assert-eq (ox-binary c ext) 1 "the thresholded image is there")
+            (assert-eq (ox-bw c ext) 640 "its width")
+            (assert-eq (ox-bh c ext) 480 "its height")
+            (let [^I32 bl (ox-block-at c ext 0)]
+              (assert-eq (cells-at c bl) 5 "block x")
+              (assert-eq (cells-at c (+ bl 4)) 1 "block orientation")
+              (assert-eq (cells-at c (+ bl 5)) 2 "block writing direction")
+              (assert-eq (cells-at c (+ bl 6)) 3 "block line order"))
             (let [^I32 wx0 (ox-first-word c ext)]
               (assert-eq (ox-wflags c wx0) 65 "bold and mono")
               (assert-eq (ox-wlang c wx0) 1701734144 "eng")
+              (assert-eq (ox-wpsize c wx0) 11 "point size")
+              (assert-eq (ox-wdflags c wx0) 3 "dictionary and numeric")
               (assert-eq (ox-nsym c wx0) 2 "two symbols")
               (let [^I32 sy0 (ox-first-sym c wx0)]
                 (assert-eq (cells-at c (+ sy0 4)) 950 "symbol confidence")
@@ -89,3 +107,26 @@
                 (let [^I32 s (ox-first-sym c wx1)]
                   (assert-eq (cells-at c (+ s 7)) 33 "!"))
                 (assert-eq (ox-word-next c wx1) (cells-len c) "and is the last thing in the answer")))))))))
+
+(deftest test-the-resolution-hint-is-the-flags-above-the-low-byte
+  (assert-eq (ocf-dpi (+ (ocf-symbols) (ocf-osd))) 0 "no hint in the low flags")
+  (assert-eq (ocf-dpi (+ 3 (* 150 256))) 150 "150 dpi")
+  (assert-eq (ocf-dpi (+ 3 (* 300 256))) 300 "300 dpi"))
+
+(deftest test-a-version-one-extension-is-not-read
+  (let [^Cells c (new-cells)
+        ^I32 at (an-ocr c 3)
+        ^I32 w (an-ocr-word c at 10 20 30 40 900 0 0)]
+    (an-ocr-cp c w 97)
+    (cells-push c 1)
+    (cells-push c 0)
+    (cells-push c 0)
+    (cells-push c 0)
+    (cells-push c 0)
+    (cells-push c 0)
+    (cells-push c 0)
+    (cells-push c 0)
+    (cells-push c 0)
+    (cells-push c 0)
+    (an-ocr-end c at)
+    (assert-eq (ox-find c at) -1 "version 1 reads as no extension")))

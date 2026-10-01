@@ -15,6 +15,9 @@ mod imgdec;
 pub mod plan;
 pub mod port;
 pub mod source;
+// the Tesseract adapter of the `Ocr` port (D184): live only, built under the `tesseract` feature (it links libtesseract)
+#[cfg(feature = "tesseract")]
+pub mod tess;
 
-pub use engine::{Assets, Attr, Config, Dropped, Engine, Error, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, OcrPolicy, Options, Output, Page, Region, RunStats, Transcript};
+pub use engine::{Assets, Attr, Config, Dropped, Engine, Error, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, Ocr, OcrPolicy, OcrPort, Options, Output, Page, Region, RunStats, Transcript};
 pub use source::{ByteSource, BytesSource, Input, Inputs, SeekSource, SpoolSource};

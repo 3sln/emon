@@ -1,0 +1,1036 @@
+;; OCR INTO THE PIPELINE: scanned and image pages (P6.5, P6.5a; SPEC 7.2, 7.3, 8.3, 8.4.4, 9.1, 13; D008, D038, D089,
+;; D095, D096, D130, D184-D188). emon's own module (D039).
+;;
+;; kin NEVER CALLS the `Ocr` port (D008): a unit asks for OCR as a request (`rq-ocr`, built by `sc-request`), answers
+;; `us-requests`, and is re-run on the answers. This module is what a unit does with an OCR answer:
+;;
+;;   answer (the extension of `emon.ocr`, version 2)
+;;      -> evidence v2 (`sc-answer`): `oruns`, `oblocks`, `olines`, `owords`, `osyms`, `oalts`, `feats`, a `views` row for the
+;;         raster that was read and one for the engine's own thresholded image, the page's `epages` row and the
+;;         placement of the image (`sc-page`)
+;;      -> the lines of the pipeline (`sc-emit-lines`): one `lines` row per OCR line and one `words` row per OCR word,
+;;         in the SAME arenas the text layer fills, so everything downstream (furniture, initials, headings,
+;;         paragraphs, columns, tables) reads an OCR page as it reads a born-digital one and never learns the
+;;         difference (SPEC 9.1: one pipeline)
+;;      -> the Model's provenance (`sc-tag`): the text is `ocr`, not `text`, the page kind `scanned`, the
+;;         paragraphs flagged `ocr-only`, the document's `settings.ocr` written.
+;;
+;; WHICH PAGES. An image input is one page per frame (`emon.rasterin`). A PDF page is OCR'd when it has NO text layer at all
+;; (no `words` row: not even a hidden one) and carries an image that covers at least half of it, is upright,
+;; and is one plain image XObject with exactly one filter, DCT (a JPEG stream is a JPEG file, so the host's `ImageDecode` reads
+;; the span in place). A page with a text layer is born-digital whatever else it holds: fusion (P7) does not exist yet, so the text
+;; layer stays authoritative and the policy `always` (D038) runs OCR on it only once fusion can weigh the two (D185). A page whose
+;; image is rotated, tiled, masked, Flate or CCITT coded, or in an encrypted file is left to the `Renderer` (P6.2) and has no text.
+;;
+;; THE PIPELINE'S LINES FROM AN OCR LINE (D186). An OCR line carries what the text layer's does: a box, a baseline, a rotation, a
+;; direction, its words. Three things differ and are decided here, once.
+;;   * SIZE. A glyph has a font size; an OCR word has a box whose height changes with its letters ("was" has no ascender). The
+;;     engine's ROW attributes (x-height and ascender height, version 2) are a property of the LINE, so the line's size is
+;;     (x-height + ascenders) / 0.73 (an em), the same for all of its words, and the paragraph and heading stages that compare sizes
+;;     compare lines, not letters. With no row attributes it is the line's box height over 0.93.
+;;   * THE BOX of a line is its words' extent along the line and, across it, the band the row attributes name around the baseline,
+;;     not the axis-aligned box of a line that is tilted: a 1.2 degree scan makes a 1000 pixel line 20 pixels taller, which would
+;;     swallow the gap between lines the paragraph stage measures.
+;;   * ROTATION. A line's `rot` is its baseline's angle less the page's dominant one (the lower median of the run's lines, as
+;;     `xo-angle` is): a scan that was fed in 1 degree off is a page of upright lines, and one line that is not is still not.
+;; The evidence rows (`olines`, `owords`) keep the engine's own numbers; only the pipeline's rows are normalised.
+(ns emon.scan
+  (:require [emon.lang :refer [I32 I64 Cells Src i64 i32 mul64 add64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.pdfsrc :refer [ps-len ps-u8 ps-missed]]
+            [emon.plan :refer [rq-ocr rq-ocr-lang rq-ocr-end rq-decode an-find an-ok an-arg an-status
+                               an-ocr-count an-ocr-first aw-get aw-cp aw-next aw-x aw-y aw-w aw-h aw-conf
+                               aw-line aw-block aw-len flt-dct us-requests us-done lay-full]]
+            [emon.ocr :refer [ocf-symbols ocf-osd ocf-dpi-unit ox-find ox-line-at ox-first-word ox-block-at
+                              ox-wflags ox-wlang ox-wpsize ox-wdflags ox-nsym ox-first-sym ox-sym-next
+                              ox-sym-alts ox-alt-next ox-word-next ox-nlines ox-nblocks ox-orient ox-wdir
+                              ox-tlorder ox-deskew ox-osd ox-script ox-sconf ox-oconf ox-binary ox-bw ox-bh]]
+            [emon.evidence :refer [ep-new ep-set vw-new vw-px-to-cpt vw-box-to-cpt im-new im-get im-count
+                                   or-new or-set or-count ob-new ob-set ob-get ob-count
+                                   ol-new ol-set ol-get ol-count ow-new ow-set ow-get ow-count
+                                   os-new os-set os-get os-count oa-add oa-count wd-new wd-set wd-get wd-count
+                                   ln-new ln-set ln-count etx-append-cp etx-len ev-angle ev-baseline-at
+                                   ev-rot-median ev-feat-ocr
+                                   hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-dir
+                                   hd-tstart hd-tlen hd-conf
+                                   lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1 lh-by1
+                                   lh-rot lh-dir
+                                   epf-flags epf-dpi
+                                   orf-request orf-round orf-pass orf-psm orf-orient orf-wdir orf-lorder orf-deskew
+                                   orf-osd orf-script orf-sconf orf-oconf orf-flags orf-bfirst orf-bcount orf-bview
+                                   orf-lfirst orf-lcount orf-wfirst orf-wcount orf-lang orf-langlen
+                                   obf-btype obf-orient obf-wdir obf-first obf-count obf-x0 obf-y0 obf-x1 obf-y1
+                                   olf-par olf-run olf-xheight olf-asc olf-desc olf-px olf-py olf-pw olf-ph
+                                   owf-style owf-run owf-sfirst owf-scount owf-lang owf-flags owf-psize
+                                   owf-px owf-py owf-pw owf-ph
+                                   osf-conf osf-afirst osf-acount osf-px osf-py osf-pw osf-ph
+                                   wf-style wf-size wf-font wf-gap wf-wbreak wf-src lf-src lf-order
+                                   ch-x0 ch-y0 ch-x1 ch-y1 ch-cp ld-rtl ld-ttb ob-block ob-paragraph
+                                   vk-decode vk-engine-binary eg-raster wb-space wb-line-end
+                                   mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj mf-pxw mf-pxh mf-flags mf-rot
+                                   mf-skewed mg-mask mg-inline mg-smask]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value pl-stream-start pl-stream-len]]
+            [emon.pdfdoc :refer [pd-get pd-stream-plan pd-pg-count pd-pg-crop pd-pg-rotate]]
+            [emon.model :refer [sr-ocr sr-text node-count node-kind node-parent node-region-head node-region-count
+                                node-src node-conf node-set-src node-set-conf node-add-flag nk-is-inline
+                                region-page fl-ocr-only page-count page-set-kind pk-scanned
+                                node-set-attr-text text-append-cp fk-ocr]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ================================================================== languages
+
+(defn ^I32 sc-iso3 [^I32 p]
+  (comment "A two-letter ISO 639-1 code, packed `a * 256 + b`, as the ISO 639-3 code the `Ocr` port speaks, packed")
+  (comment "`a * 65536 + b * 256 + c`; 0 for a code that is not in the table. Standard assignments, not engine names.")
+  (if (== p 25966) (return 6647399))   ;; en eng
+  (if (== p 25701) (return 6579573))   ;; de deu
+  (if (== p 26226) (return 6713953))   ;; fr fra
+  (if (== p 25971) (return 7565409))   ;; es spa
+  (if (== p 26996) (return 6911073))   ;; it ita
+  (if (== p 28788) (return 7368562))   ;; pt por
+  (if (== p 28268) (return 7236708))   ;; nl nld
+  (if (== p 29558) (return 7567205))   ;; sv swe
+  (if (== p 25697) (return 6578542))   ;; da dan
+  (if (== p 28258) (return 7237490))   ;; nb nor
+  (if (== p 28270) (return 7237490))   ;; nn nor
+  (if (== p 28271) (return 7237490))   ;; no nor
+  (if (== p 26217) (return 6711662))   ;; fi fin
+  (if (== p 28780) (return 7368556))   ;; pl pol
+  (if (== p 25459) (return 6514035))   ;; cs ces
+  (if (== p 29547) (return 7564395))   ;; sk slk
+  (if (== p 29548) (return 7564406))   ;; sl slv
+  (if (== p 26741) (return 6845806))   ;; hu hun
+  (if (== p 29295) (return 7499630))   ;; ro ron
+  (if (== p 25191) (return 6452588))   ;; bg bul
+  (if (== p 26738) (return 6845046))   ;; hr hrv
+  (if (== p 29554) (return 7565936))   ;; sr srp
+  (if (== p 30059) (return 7695218))   ;; uk ukr
+  (if (== p 29301) (return 7501171))   ;; ru rus
+  (if (== p 25964) (return 6646892))   ;; el ell
+  (if (== p 29810) (return 7632242))   ;; tr tur
+  (if (== p 24946) (return 6386273))   ;; ar ara
+  (if (== p 26725) (return 6841698))   ;; he heb
+  (if (== p 26209) (return 6709619))   ;; fa fas
+  (if (== p 30066) (return 7696996))   ;; ur urd
+  (if (== p 26729) (return 6842734))   ;; hi hin
+  (if (== p 25198) (return 6448494))   ;; bn ben
+  (if (== p 29793) (return 7627117))   ;; ta tam
+  (if (== p 29797) (return 7628140))   ;; te tel
+  (if (== p 29800) (return 7628897))   ;; th tha
+  (if (== p 30313) (return 7760229))   ;; vi vie
+  (if (== p 26980) (return 6909540))   ;; id ind
+  (if (== p 28019) (return 7172961))   ;; ms msa
+  (if (== p 27233) (return 6975598))   ;; ja jpn
+  (if (== p 27503) (return 7040882))   ;; ko kor
+  (if (== p 25441) (return 6513012))   ;; ca cat
+  (if (== p 27764) (return 7104884))   ;; lt lit
+  (if (== p 27766) (return 7102838))   ;; lv lav
+  (if (== p 25972) (return 6648692))   ;; et est
+  (if (== p 26995) (return 6910828))   ;; is isl
+  (if (== p 26465) (return 6777957))   ;; ga gle
+  (if (== p 25465) (return 6519149))   ;; cy cym
+  (if (== p 25973) (return 6649203))   ;; eu eus
+  (if (== p 26476) (return 6777959))   ;; gl glg
+  (if (== p 28020) (return 7171188))   ;; mt mlt
+  (if (== p 29553) (return 7565673))   ;; sq sqi
+  (if (== p 28011) (return 7170916))   ;; mk mkd
+  (if (== p 25189) (return 6448492))   ;; be bel
+  (if (== p 27489) (return 7037300))   ;; ka kat
+  (if (== p 26745) (return 6846821))   ;; hy hye
+  (if (== p 24934) (return 6383218))   ;; af afr
+  (if (== p 27745) (return 7102836))   ;; la lat
+  (if (== p 24954) (return 6388325))   ;; az aze
+  (if (== p 27499) (return 7037306))   ;; kk kaz
+  (if (== p 30074) (return 7699042))   ;; uz uzb
+  (if (== p 28012) (return 7168364))   ;; ml mal
+  (if (== p 27502) (return 7037294))   ;; kn kan
+  (if (== p 28018) (return 7168370))   ;; mr mar
+  (if (== p 26485) (return 6780266))   ;; gu guj
+  (if (== p 28769) (return 7364974))   ;; pa pan
+  (if (== p 28261) (return 7234928))   ;; ne nep
+  (if (== p 29545) (return 7563630))   ;; si sin
+  (if (== p 28025) (return 7174497))   ;; my mya
+  (if (== p 27501) (return 7039085))   ;; km khm
+  (if (== p 27759) (return 7102831))   ;; lo lao
+  (if (== p 25199) (return 6451044))   ;; bo bod
+  (if (== p 24941) (return 6385000))   ;; am amh
+  (return 0))
+
+(defn ^I32 sc-low [^I32 c]
+  (comment "ASCII lowercase; anything else as it is.")
+  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
+  (return c))
+
+(defn ^I32 sc-is-sep [^I32 c]
+  (if (or (== c 45) (== c 95)) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 sc-lang [^Cells loc]
+  (comment "The language a locale hint (a BCP 47 tag as code points: `de`, `de-CH`, `zh-Hant-TW`, `eng`) names, as an ISO 639-3")
+  (comment "code packed `a * 65536 + b * 256 + c`; 0 when there is no hint or it is not one we can name, and then the")
+  (comment "port reads with whatever it has (D038: no language is assumed). Chinese is `chs` or `cht` by its script (`Hant`) or")
+  (comment "its region (TW, HK, MO): the port maps them to its simplified and traditional models. A three-letter primary")
+  (comment "subtag is taken as it is (`deu`, `fra`, `chi`). NO LOCALE ASSUMES ENGLISH: a document with no hint is read with")
+  (comment "every model the port has.")
+  (let [^I32 n (cells-len loc)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 plen 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 hant 0
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 k 0]
+    (if (< n 2) (return 0))
+    (comment "the primary subtag")
+    (while (and (< i n) (== (sc-is-sep (cells-at loc i)) 0))
+      (do (if (== plen 0) (set a (sc-low (cells-at loc i))))
+          (if (== plen 1) (set b (sc-low (cells-at loc i))))
+          (if (== plen 2) (set c (sc-low (cells-at loc i))))
+          (set plen (+ plen 1))
+          (set i (+ i 1))))
+    (if (== plen 3)
+      (do (if (or (< a 97) (> a 122)) (return 0))
+          (if (or (< b 97) (> b 122)) (return 0))
+          (if (or (< c 97) (> c 122)) (return 0))
+          (if (and (== a 122) (and (== b 104) (== c 111))) (set plen 2))
+          (if (and (== a 99) (and (== b 104) (== c 105))) (set plen 2))
+          (if (== plen 3) (return (+ (+ (* a 65536) (* b 256)) c)))
+          (set a 122)
+          (set b 104)))
+    (if (!= plen 2) (return 0))
+    (if (or (< a 97) (> a 122)) (return 0))
+    (if (or (< b 97) (> b 122)) (return 0))
+    (if (and (== a 122) (== b 104))
+      (do (comment "Chinese: look through the other subtags for `hant`, `tw`, `hk`, `mo`")
+          (while (< i n)
+            (do (if (== (sc-is-sep (cells-at loc i)) 1)
+                  (do (set k (+ i 1))
+                      (set sub 0)
+                      (set s0 0)
+                      (set s1 0)
+                      (set s2 0)
+                      (set s3 0)
+                      (while (and (< k n) (== (sc-is-sep (cells-at loc k)) 0))
+                        (do (if (== sub 0) (set s0 (sc-low (cells-at loc k))))
+                            (if (== sub 1) (set s1 (sc-low (cells-at loc k))))
+                            (if (== sub 2) (set s2 (sc-low (cells-at loc k))))
+                            (if (== sub 3) (set s3 (sc-low (cells-at loc k))))
+                            (set sub (+ sub 1))
+                            (set k (+ k 1))))
+                      (if (and (== sub 4) (and (== s0 104) (and (== s1 97) (and (== s2 110) (== s3 116)))))
+                        (set hant 1))
+                      (if (and (== sub 2) (and (== s0 116) (== s1 119))) (set hant 1))
+                      (if (and (== sub 2) (and (== s0 104) (== s1 107))) (set hant 1))
+                      (if (and (== sub 2) (and (== s0 109) (== s1 111))) (set hant 1))))
+                (set i (+ i 1))))
+          (if (== hant 1) (return (+ (+ (* 99 65536) (* 104 256)) 116)))
+          (return (+ (+ (* 99 65536) (* 104 256)) 115))))
+    (return (sc-iso3 (+ (* a 256) b)))))
+
+(defn ^:pub ^I32 sc-request [^:mut ^Cells rq ^I32 id ^I32 bitmap ^I32 dpi ^Cells loc]
+  (comment "The OCR request for page-sized bitmap `bitmap` (a decode or render request's id): the whole bitmap, `psm` 3 (fully")
+  (comment "automatic page segmentation), symbols with their alternatives and orientation and script detection wanted, the")
+  (comment "resolution `dpi` as a hint in the flags (D184), and the language the locale hint names, if any.")
+  (let [^I32 q (rq-ocr rq id bitmap 3 (+ (+ (ocf-symbols) (ocf-osd)) (* dpi (ocf-dpi-unit))) 0 0 0 0)
+        ^I32 lg (sc-lang loc)]
+    (if (> lg 0)
+      (rq-ocr-lang rq (quot lg 65536) (rem (quot lg 256) 256) (rem lg 256) 0))
+    (rq-ocr-end rq q)
+    (return q)))
+
+;; ===================================================== the answer as evidence
+
+(defn ^I32 sc-cpt-len [^Cells views ^I32 view ^I32 v]
+  (comment "A length of `v` pixels down the view's y axis, in centipoints; -1 stays -1.")
+  (if (< v 0) (return -1))
+  (return (- (vw-px-to-cpt views view 1 0 v) (vw-px-to-cpt views view 1 0 0))))
+
+(defn ^I32 sc-ld [^I32 wdir]
+  (comment "The engine's writing direction as `ld`: 0 left to right, 1 right to left, 2 top to bottom.")
+  (if (== wdir 1) (return (ld-rtl)))
+  (if (== wdir 2) (return (ld-ttb)))
+  (return 0))
+
+(defn ^I32 sc-grow [^:mut ^Cells oblocks ^I32 row ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Grow block (or paragraph) `row`'s box to hold the box (x0 y0 x1 y1).")
+  (if (< x0 (ob-get oblocks row (obf-x0))) (ob-set oblocks row (obf-x0) x0))
+  (if (< y0 (ob-get oblocks row (obf-y0))) (ob-set oblocks row (obf-y0) y0))
+  (if (> x1 (ob-get oblocks row (obf-x1))) (ob-set oblocks row (obf-x1) x1))
+  (if (> y1 (ob-get oblocks row (obf-y1))) (ob-set oblocks row (obf-y1) y1))
+  (return 0))
+
+(defn ^I32 sc-ev-lines [^Cells an ^I32 ext ^I32 view ^I32 run ^I32 page
+                        ^Cells views ^:mut ^Cells oblocks ^:mut ^Cells olines]
+  (comment "The blocks, paragraphs and lines of the extension, in its order. A block is a run of lines with the same block id,")
+  (comment "a paragraph a run of them with the same paragraph id inside it (-1 is an id like another); a block is followed by")
+  (comment "its paragraphs, a paragraph's lines are the rows that follow it. A block's box, orientation and writing direction")
+  (comment "are the engine's own, from the extension's block table (version 2); a line's row attributes are mapped to")
+  (comment "centipoints.")
+  (let [^I32 nl (ox-nlines an ext)
+        ^I32 nb (ox-nblocks an ext)
+        ^I32 orient0 (ox-orient an ext)
+        ^I32 wdir0 (ox-wdir an ext)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 px 0
+        ^:mut ^I32 py 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 blk 0
+        ^:mut ^I32 par 0
+        ^:mut ^I32 bty 0
+        ^:mut ^I32 curblk -2
+        ^:mut ^I32 curpar -2
+        ^:mut ^I32 brow -1
+        ^:mut ^I32 prow -1
+        ^:mut ^I32 lrow 0
+        ^:mut ^I32 bcnt 0
+        ^:mut ^I32 fresh 0
+        ^:mut ^I32 bl -1
+        ^:mut ^I32 orient 0
+        ^:mut ^I32 wdir 0
+        ^:mut ^I32 tx0 0
+        ^:mut ^I32 ty0 0
+        ^:mut ^I32 tx1 0
+        ^:mut ^I32 ty1 0]
+    (while (< k nl)
+      (do (set l (ox-line-at an ext k))
+          (set px (cells-at an l))
+          (set py (cells-at an (+ l 1)))
+          (set pw (cells-at an (+ l 2)))
+          (set ph (cells-at an (+ l 3)))
+          (set x0 (vw-box-to-cpt views view 0 px py pw ph))
+          (set y0 (vw-box-to-cpt views view 1 px py pw ph))
+          (set x1 (vw-box-to-cpt views view 2 px py pw ph))
+          (set y1 (vw-box-to-cpt views view 3 px py pw ph))
+          (set bx0 (vw-px-to-cpt views view 0 (cells-at an (+ l 4)) (cells-at an (+ l 5))))
+          (set by0 (vw-px-to-cpt views view 1 (cells-at an (+ l 4)) (cells-at an (+ l 5))))
+          (set bx1 (vw-px-to-cpt views view 0 (cells-at an (+ l 6)) (cells-at an (+ l 7))))
+          (set by1 (vw-px-to-cpt views view 1 (cells-at an (+ l 6)) (cells-at an (+ l 7))))
+          (set blk (cells-at an (+ l 8)))
+          (set par (cells-at an (+ l 9)))
+          (set bty (cells-at an (+ l 10)))
+          (set orient orient0)
+          (set wdir wdir0)
+          (set bl -1)
+          (if (and (>= blk 0) (< blk nb))
+            (do (set bl (ox-block-at an ext blk))
+                (set orient (cells-at an (+ bl 4)))
+                (set wdir (cells-at an (+ bl 5)))))
+          (set fresh 0)
+          (if (or (== k 0) (!= blk curblk))
+            (do (set tx0 x0)
+                (set ty0 y0)
+                (set tx1 x1)
+                (set ty1 y1)
+                (if (>= bl 0)
+                  (do (set tx0 (vw-box-to-cpt views view 0 (cells-at an bl) (cells-at an (+ bl 1)) (cells-at an (+ bl 2)) (cells-at an (+ bl 3))))
+                      (set ty0 (vw-box-to-cpt views view 1 (cells-at an bl) (cells-at an (+ bl 1)) (cells-at an (+ bl 2)) (cells-at an (+ bl 3))))
+                      (set tx1 (vw-box-to-cpt views view 2 (cells-at an bl) (cells-at an (+ bl 1)) (cells-at an (+ bl 2)) (cells-at an (+ bl 3))))
+                      (set ty1 (vw-box-to-cpt views view 3 (cells-at an bl) (cells-at an (+ bl 1)) (cells-at an (+ bl 2)) (cells-at an (+ bl 3))))))
+                (set brow (ob-new oblocks page tx0 ty0 tx1 ty1 (ob-block) -1 run))
+                (ob-set oblocks brow (obf-btype) bty)
+                (ob-set oblocks brow (obf-orient) orient)
+                (ob-set oblocks brow (obf-wdir) wdir)
+                (ob-set oblocks brow (obf-first) (+ brow 1))
+                (set curblk blk)
+                (set curpar -2)))
+          (if (!= par curpar)
+            (do (set prow (ob-new oblocks page x0 y0 x1 y1 (ob-paragraph) brow run))
+                (ob-set oblocks prow (obf-btype) bty)
+                (ob-set oblocks prow (obf-orient) orient)
+                (ob-set oblocks prow (obf-wdir) wdir)
+                (ob-set oblocks prow (obf-first) (ol-count olines))
+                (set bcnt (ob-get oblocks brow (obf-count)))
+                (ob-set oblocks brow (obf-count) (+ bcnt 1))
+                (set curpar par)
+                (set fresh 1)))
+          (if (== fresh 0)
+            (do (sc-grow oblocks prow x0 y0 x1 y1)
+                (if (< bl 0) (sc-grow oblocks brow x0 y0 x1 y1))))
+          (set lrow (ol-new olines page x0 y0 x1 y1 bx0 by0 bx1 by1
+                            (ev-angle (- bx1 bx0) (- by1 by0)) (sc-ld wdir) -1 0))
+          (ol-set olines lrow (olf-par) prow)
+          (ol-set olines lrow (olf-run) run)
+          (ol-set olines lrow (olf-px) px)
+          (ol-set olines lrow (olf-py) py)
+          (ol-set olines lrow (olf-pw) pw)
+          (ol-set olines lrow (olf-ph) ph)
+          (ol-set olines lrow (olf-xheight) (sc-cpt-len views view (cells-at an (+ l 11))))
+          (ol-set olines lrow (olf-asc) (sc-cpt-len views view (cells-at an (+ l 12))))
+          (ol-set olines lrow (olf-desc) (sc-cpt-len views view (cells-at an (+ l 13))))
+          (set bcnt (ob-get oblocks prow (obf-count)))
+          (ob-set oblocks prow (obf-count) (+ bcnt 1))
+          (set k (+ k 1))))
+    (return nl)))
+
+(defn ^I32 sc-ev-words [^Cells an ^I32 at ^I32 ext ^I32 view ^I32 run ^I32 page ^I32 l0
+                        ^Cells views ^:mut ^Cells etext ^:mut ^Cells olines
+                        ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts]
+  (comment "The words of the answer with their symbols and alternatives. A word's line is the extension's line index (an")
+  (comment "olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 (mapped first, interpolated")
+  (comment "after: D096). The engine's point size is in centipoints, its dictionary and numeric flags are carried.")
+  (let [^I32 nw (an-ocr-count an at)
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 wdir 0
+        ^:mut ^I32 tlen 0
+        ^:mut ^I32 w (an-ocr-first an at)
+        ^:mut ^I32 wx -1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 px 0
+        ^:mut ^I32 py 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 lx0 0
+        ^:mut ^I32 ly0 0
+        ^:mut ^I32 lx1 0
+        ^:mut ^I32 ly1 0
+        ^:mut ^I32 lrow -1
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 nc 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ow 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 sym 0
+        ^:mut ^I32 ncp 0
+        ^:mut ^I32 nalt 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 acp 0
+        ^:mut ^I32 cpv 0
+        ^:mut ^I32 a0 0
+        ^:mut ^I32 lcnt 0
+        ^:mut ^I32 sy 0
+        ^:mut ^I32 ps 0]
+    (if (>= ext 0)
+      (do (set wx (ox-first-word an ext))
+          (set nl (ox-nlines an ext))
+          (set wdir (ox-wdir an ext))))
+    (while (< i nw)
+      (do (set px (aw-get an w (aw-x)))
+          (set py (aw-get an w (aw-y)))
+          (set pw (aw-get an w (aw-w)))
+          (set ph (aw-get an w (aw-h)))
+          (set x0 (vw-box-to-cpt views view 0 px py pw ph))
+          (set y0 (vw-box-to-cpt views view 1 px py pw ph))
+          (set x1 (vw-box-to-cpt views view 2 px py pw ph))
+          (set y1 (vw-box-to-cpt views view 3 px py pw ph))
+          (set ln (aw-get an w (aw-line)))
+          (set lrow -1)
+          (set bx0 x0)
+          (set by0 y1)
+          (set bx1 x1)
+          (set by1 y1)
+          (if (and (>= wx 0) (and (>= ln 0) (< ln nl)))
+            (do (set lrow (+ l0 ln))
+                (set bx0 (vw-px-to-cpt views view 0 px py))
+                (set bx1 (vw-px-to-cpt views view 0 (+ px pw) py))
+                (set lx0 (ol-get olines lrow (lh-bx0)))
+                (set ly0 (ol-get olines lrow (lh-by0)))
+                (set lx1 (ol-get olines lrow (lh-bx1)))
+                (set ly1 (ol-get olines lrow (lh-by1)))
+                (set by0 (ev-baseline-at lx0 ly0 lx1 ly1 bx0))
+                (set by1 (ev-baseline-at lx0 ly0 lx1 ly1 bx1))))
+          (set ts (etx-len etext))
+          (set nc (aw-get an w (aw-len)))
+          (set k 0)
+          (while (< k nc)
+            (do (etx-append-cp etext (aw-cp an w k))
+                (set k (+ k 1))))
+          (set ow (ow-new owords page x0 y0 x1 y1 bx0 by0 bx1 by1
+                          (ev-angle (- bx1 bx0) (- by1 by0)) (sc-ld wdir) ts nc lrow
+                          (aw-get an w (aw-conf)) -1))
+          (ow-set owords ow (owf-run) run)
+          (ow-set owords ow (owf-px) px)
+          (ow-set owords ow (owf-py) py)
+          (ow-set owords ow (owf-pw) pw)
+          (ow-set owords ow (owf-ph) ph)
+          (if (>= lrow 0)
+            (do (set lcnt (ol-get olines lrow (lh-count)))
+                (if (== lcnt 0) (ol-set olines lrow (lh-first) ow))
+                (ol-set olines lrow (lh-count) (+ lcnt 1))))
+          (if (>= wx 0)
+            (do (ow-set owords ow (owf-style) (ox-wflags an wx))
+                (ow-set owords ow (owf-lang) (ox-wlang an wx))
+                (set ps (ox-wpsize an wx))
+                (if (>= ps 0) (ow-set owords ow (owf-psize) (* ps 100)))
+                (ow-set owords ow (owf-flags) (ox-wdflags an wx))
+                (set ns (ox-nsym an wx))
+                (ow-set owords ow (owf-sfirst) (os-count osyms))
+                (ow-set owords ow (owf-scount) ns)
+                (set sy (ox-first-sym an wx))
+                (set j 0)
+                (while (< j ns)
+                  (do (set ncp (cells-at an (+ sy 5)))
+                      (set nalt (cells-at an (+ sy 6)))
+                      (set px (cells-at an sy))
+                      (set py (cells-at an (+ sy 1)))
+                      (set pw (cells-at an (+ sy 2)))
+                      (set ph (cells-at an (+ sy 3)))
+                      (set ts -1)
+                      (set tlen 0)
+                      (set cpv -1)
+                      (if (> ncp 1) (set tlen ncp))
+                      (if (> ncp 0) (set cpv (cells-at an (+ sy 7))))
+                      (if (> ncp 1)
+                        (do (set ts (etx-len etext))
+                            (set k 0)
+                            (while (< k ncp)
+                              (do (etx-append-cp etext (cells-at an (+ (+ sy 7) k)))
+                                  (set k (+ k 1))))))
+                      (set sym (os-new osyms page (vw-box-to-cpt views view 0 px py pw ph)
+                                       (vw-box-to-cpt views view 1 px py pw ph)
+                                       (vw-box-to-cpt views view 2 px py pw ph)
+                                       (vw-box-to-cpt views view 3 px py pw ph)
+                                       cpv ts tlen ow))
+                      (os-set osyms sym (osf-conf) (cells-at an (+ sy 4)))
+                      (os-set osyms sym (osf-px) px)
+                      (os-set osyms sym (osf-py) py)
+                      (os-set osyms sym (osf-pw) pw)
+                      (os-set osyms sym (osf-ph) ph)
+                      (set a0 (oa-count oalts))
+                      (set a (ox-sym-alts an sy))
+                      (set m 0)
+                      (while (< m nalt)
+                        (do (set acp (cells-at an a))
+                            (if (> acp 0)
+                              (do (set ts (etx-len etext))
+                                  (set k 0)
+                                  (while (< k acp)
+                                    (do (etx-append-cp etext (cells-at an (+ (+ a 2) k)))
+                                        (set k (+ k 1))))
+                                  (oa-add oalts sym ts acp (cells-at an (+ a 1)))))
+                            (set a (ox-alt-next an a))
+                            (set m (+ m 1))))
+                      (os-set osyms sym (osf-afirst) a0)
+                      (os-set osyms sym (osf-acount) (- (oa-count oalts) a0))
+                      (set sy (ox-sym-next an sy))
+                      (set j (+ j 1))))
+                (set wx (ox-word-next an wx))))
+          (set w (aw-next an w))
+          (set i (+ i 1))))
+    (return nw)))
+
+(defn ^:pub ^I32 sc-answer [^Cells an ^I32 at ^I32 page ^I32 view ^I32 request ^I32 lang
+                      ^Cells views ^Cells epages ^:mut ^Cells etext ^:mut ^Cells oruns
+                      ^:mut ^Cells oblocks ^:mut ^Cells olines ^:mut ^Cells owords
+                      ^:mut ^Cells osyms ^:mut ^Cells oalts ^:mut ^Cells feats]
+  (comment "One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives, and the")
+  (comment "stage 1 features of every word. `view` is the `views` row of the raster that was read; `lang` the ISO 639-3 the request")
+  (comment "named (0 none: the run records no language, D038). Answers the run's row.")
+  (let [^I32 ext (ox-find an at)
+        ^I32 run (or-new oruns page view)
+        ^I32 b0 (ob-count oblocks)
+        ^I32 l0 (ol-count olines)
+        ^I32 w0 (ow-count owords)
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 nw 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 rotmed 0
+        ^:mut ^I32 ts 0]
+    (or-set oruns run (orf-request) request)
+    (or-set oruns run (orf-round) 1)
+    (or-set oruns run (orf-pass) 1)
+    (or-set oruns run (orf-psm) 3)
+    (or-set oruns run (orf-flags) (+ (ocf-symbols) (ocf-osd)))
+    (if (> lang 0)
+      (do (set ts (etx-len etext))
+          (etx-append-cp etext (quot lang 65536))
+          (etx-append-cp etext (rem (quot lang 256) 256))
+          (etx-append-cp etext (rem lang 256))
+          (or-set oruns run (orf-lang) ts)
+          (or-set oruns run (orf-langlen) 3)))
+    (if (>= ext 0)
+      (do (or-set oruns run (orf-orient) (ox-orient an ext))
+          (or-set oruns run (orf-wdir) (ox-wdir an ext))
+          (or-set oruns run (orf-lorder) (ox-tlorder an ext))
+          (or-set oruns run (orf-deskew) (ox-deskew an ext))
+          (or-set oruns run (orf-osd) (ox-osd an ext))
+          (or-set oruns run (orf-script) (ox-script an ext))
+          (or-set oruns run (orf-sconf) (ox-sconf an ext))
+          (or-set oruns run (orf-oconf) (ox-oconf an ext))
+          (set nl (sc-ev-lines an ext view run page views oblocks olines))))
+    (set nw (sc-ev-words an at ext view run page l0 views etext olines owords osyms oalts))
+    (or-set oruns run (orf-bfirst) b0)
+    (set nb (- (ob-count oblocks) b0))
+    (or-set oruns run (orf-bcount) nb)
+    (or-set oruns run (orf-lfirst) l0)
+    (set nl (- (ol-count olines) l0))
+    (or-set oruns run (orf-lcount) nl)
+    (or-set oruns run (orf-wfirst) w0)
+    (or-set oruns run (orf-wcount) nw)
+    (set rotmed (ev-rot-median olines l0 nl))
+    (set w w0)
+    (while (< w (+ w0 nw))
+      (do (ev-feat-ocr feats epages etext olines owords osyms oalts w rotmed 100)
+          (set w (+ w 1))))
+    (return run)))
+
+;; ======================================================= the pipeline's lines
+
+(defn ^I32 sc-prep [^:mut ^Cells scr]
+  (comment "The scratch of `sc-sample`: 242 cells (two for the metrics and 240 samples), made once.")
+  (while (< (cells-len scr) 242)
+    (cells-push scr 0))
+  (return 0))
+
+(defn ^I32 sc-isort [^:mut ^Cells c ^I32 from ^I32 n]
+  (comment "Insertion sort of the `n` cells of `c` that start at `from`, ascending (a line has a few hundred symbols at most).")
+  (let [^:mut ^I32 i 1
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0]
+    (while (< i n)
+      (do (set v (cells-at c (+ from i)))
+          (set j (- i 1))
+          (while (and (>= j 0) (> (cells-at c (+ from j)) v))
+            (do (cells-set c (+ from (+ j 1)) (cells-at c (+ from j)))
+                (set j (- j 1))))
+          (cells-set c (+ from (+ j 1)) v)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 sc-class [^I32 cp]
+  (comment "What a letter says about a line's metrics: 1 a letter that stands on the baseline and reaches the x-height only (a c e m n")
+  (comment "o r s u v w x z), 2 one that reaches the ascender line (b d f h k l, the digits and the capitals), 3 one that hangs below the")
+  (comment "baseline (g j p q y), 0 any other. Basic Latin only: a script this does not know measures nothing.")
+  (if (or (== cp 97) (or (== cp 99) (or (== cp 101) (or (== cp 109) (or (== cp 110) (or (== cp 111) (or (== cp 114) (== cp 115))))))))
+    (return 1))
+  (if (or (== cp 117) (or (== cp 118) (or (== cp 119) (or (== cp 120) (== cp 122)))))
+    (return 1))
+  (if (or (== cp 98) (or (== cp 100) (or (== cp 102) (or (== cp 104) (or (== cp 107) (== cp 108))))))
+    (return 2))
+  (if (and (>= cp 48) (<= cp 57)) (return 2))
+  (if (and (>= cp 65) (<= cp 90)) (return 2))
+  (if (or (== cp 103) (or (== cp 106) (or (== cp 112) (or (== cp 113) (== cp 121)))))
+    (return 3))
+  (return 0))
+
+(defn ^I32 sc-sample [^Cells olines ^Cells owords ^Cells osyms ^I32 l ^I32 cls ^:mut ^Cells scr]
+  (comment "The lower median, in centipoints, of one class of symbol on line `l`: for classes 1 and 2 the symbol's top above the line's")
+  (comment "baseline at its centre, for class 3 its bottom below it; -1 with fewer than `3` symbols (2 for class 3). `scr` is scratch")
+  (comment "from cell 2 on and is overwritten.")
+  (let [^I32 w0 (ol-get olines l (lh-first))
+        ^I32 cnt (ol-get olines l (lh-count))
+        ^I32 bx0 (ol-get olines l (lh-bx0))
+        ^I32 by0 (ol-get olines l (lh-by0))
+        ^I32 bx1 (ol-get olines l (lh-bx1))
+        ^I32 by1 (ol-get olines l (lh-by1))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 yb 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 need 3]
+    (if (== cls 3) (set need 2))
+    (while (and (< j cnt) (< n 240))
+      (do (set s (ow-get owords (+ w0 j) (owf-sfirst)))
+          (set s1 (+ s (ow-get owords (+ w0 j) (owf-scount))))
+          (while (and (< s s1) (< n 240))
+            (do (if (== (sc-class (os-get osyms s (ch-cp))) cls)
+                  (do (set yb (ev-baseline-at bx0 by0 bx1 by1 (quot (+ (os-get osyms s (ch-x0)) (os-get osyms s (ch-x1))) 2)))
+                      (if (== cls 3)
+                        (set v (- (os-get osyms s (ch-y1)) yb))
+                        (set v (- yb (os-get osyms s (ch-y0)))))
+                      (if (> v 0)
+                        (do (cells-set scr (+ 2 n) v)
+                            (set n (+ n 1))))))
+                (set s (+ s 1))))
+          (set j (+ j 1))))
+    (if (< n need) (return -1))
+    (sc-isort scr 2 n)
+    (return (cells-at scr (+ 2 (quot (- n 1) 2))))))
+
+(defn ^I32 sc-metrics [^Cells olines ^Cells owords ^Cells osyms ^I32 l ^:mut ^Cells scr]
+  (comment "The line's ascender line `A` (its baseline to the top of its tall letters) and descender depth `D`, centipoints, into cells 0")
+  (comment "and 1 of `scr` (-1 unknown). The engine's own row attributes when the answer has them (x-height + ascenders, descenders);")
+  (comment "else MEASURED from the symbols' boxes and the baseline (D186): the Tesseract C API does not export its row attributes, and")
+  (comment "a measurement is one implementation for every engine. The ascender line is the median top of the tall letters, or 1.46 x the")
+  (comment "median x-height when the line has too few; the descender depth the median bottom of the hanging letters, or 0.27 A.")
+  (let [^I32 xh (ol-get olines l (olf-xheight))
+        ^I32 asc (ol-get olines l (olf-asc))
+        ^I32 dsc (ol-get olines l (olf-desc))
+        ^:mut ^I32 a -1
+        ^:mut ^I32 d -1
+        ^:mut ^I32 x -1]
+    (if (and (> xh 0) (>= asc 0))
+      (do (set a (+ xh asc))
+          (set d dsc))
+      (do (set a (sc-sample olines owords osyms l 2 scr))
+          (if (< a 0)
+            (do (set x (sc-sample olines owords osyms l 1 scr))
+                (if (> x 0) (set a (quot (* x 146) 100)))))
+          (set d (sc-sample olines owords osyms l 3 scr))))
+    (if (and (< d 0) (> a 0)) (set d (quot (* a 27) 100)))
+    (cells-set scr 0 a)
+    (cells-set scr 1 d)
+    (return 0)))
+
+(defn ^I32 sc-emit-lines [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
+                          ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines]
+  (comment "Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas")
+  (comment "the text layer fills (D186: size, box and rotation are the line's, see the head of this file). The words' text is")
+  (comment "the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 lnx 0
+        ^:mut ^I32 lx0 0
+        ^:mut ^I32 ly0 0
+        ^:mut ^I32 lx1 0
+        ^:mut ^I32 ly1 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 ymid 0
+        ^:mut ^I32 asc 0
+        ^:mut ^I32 dsc 0
+        ^:mut ^I32 size 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 dir 0
+        ^:mut ^I32 gap 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 ox 0
+        ^:mut ^I32 ox1 0
+        ^:mut ^I32 nx0 0
+        ^:mut ^I32 nx1 0]
+    (while (< k nl)
+      (do (set l (+ l0 k))
+          (set cnt (ol-get olines l (lh-count)))
+          (if (> cnt 0)
+            (do (set w0 (ol-get olines l (lh-first)))
+                (set lx0 (ol-get olines l (lh-x0)))
+                (set ly0 (ol-get olines l (lh-y0)))
+                (set lx1 (ol-get olines l (lh-x1)))
+                (set ly1 (ol-get olines l (lh-y1)))
+                (set bx0 (ol-get olines l (lh-bx0)))
+                (set by0 (ol-get olines l (lh-by0)))
+                (set bx1 (ol-get olines l (lh-bx1)))
+                (set by1 (ol-get olines l (lh-by1)))
+                (set dir (ol-get olines l (lh-dir)))
+                (sc-metrics olines owords osyms l scr)
+                (set asc (cells-at scr 0))
+                (set dsc (cells-at scr 1))
+                (set ymid (quot (+ by0 by1) 2))
+                (if (> asc 0)
+                  (do (set size (quot (* asc 137) 100))
+                      (set ly0 (- ymid asc))
+                      (set ly1 (+ ymid dsc)))
+                  (set size (quot (* (- ly1 ly0) 108) 100)))
+                (if (< size 1) (set size 1))
+                (set rot (rem (+ (- (ev-angle (- bx1 bx0) (- by1 by0)) rotmed) 36000) 36000))
+                (set lnx (ln-count lines))
+                (set first (wd-count words))
+                (set j 0)
+                (while (< j cnt)
+                  (do (set wi (+ w0 j))
+                      (set gap -1)
+                      (if (< (+ j 1) cnt)
+                        (do (set ox (ow-get owords wi (hd-x0)))
+                            (set ox1 (ow-get owords wi (hd-x1)))
+                            (set nx0 (ow-get owords (+ wi 1) (hd-x0)))
+                            (set nx1 (ow-get owords (+ wi 1) (hd-x1)))
+                            (if (== dir 1)
+                              (set gap (- ox nx1))
+                              (set gap (- nx0 ox1)))))
+                      (set r (wd-new words page
+                                     (ow-get owords wi (hd-x0)) (ow-get owords wi (hd-y0))
+                                     (ow-get owords wi (hd-x1)) (ow-get owords wi (hd-y1))
+                                     (ow-get owords wi (hd-bx0)) (ow-get owords wi (hd-by0))
+                                     (ow-get owords wi (hd-bx1)) (ow-get owords wi (hd-by1))
+                                     rot dir
+                                     (ow-get owords wi (hd-tstart)) (ow-get owords wi (hd-tlen))
+                                     lnx (ow-get owords wi (hd-conf)) -1))
+                      (wd-set words r (wf-style) (ow-get owords wi (owf-style)))
+                      (wd-set words r (wf-size) size)
+                      (wd-set words r (wf-font) -1)
+                      (wd-set words r (wf-gap) gap)
+                      (wd-set words r (wf-wbreak) (wb-space))
+                      (if (== (+ j 1) cnt) (wd-set words r (wf-wbreak) (wb-line-end)))
+                      (wd-set words r (wf-src) (sr-ocr))
+                      (set j (+ j 1))))
+                (set r (ln-new lines page lx0 ly0 lx1 ly1 bx0 by0 bx1 by1 rot dir first cnt))
+                (ln-set lines r (lf-src) (sr-ocr))
+                (ln-set lines r (lf-order) r)
+                (set made (+ made 1))))
+          (set k (+ k 1))))
+    (return made)))
+
+(defn ^:pub ^I32 sc-page [^Cells an ^I32 at ^I32 page ^I32 request ^I32 decreq
+                          ^I32 wcpt ^I32 hcpt ^I32 pxw ^I32 pxh ^I32 dpi100
+                          ^I32 cropx ^I32 cropy ^I32 obj ^I32 ix0 ^I32 iy0 ^I32 ix1 ^I32 iy1 ^I32 lang
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
+                          ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr]
+  (comment "One page whose OCR answer is at `at`: the page's evidence (`epages`, the `views` row of the raster read, the image's")
+  (comment "placement, the run with everything under it, the engine's thresholded image as a view of its own when the answer says")
+  (comment "it carries one) and its lines in the pipeline's arenas. `decreq` is the decode request that made the bitmap, `request`")
+  (comment "the OCR request; the raster is `pxw x pxh` at `dpi100` (dots per inch x 100) and its top-left corner is at (`cropx`,")
+  (comment "`cropy`) centipoints of the page; `obj` is the image's object number (0 none) and (`ix0` `iy0`)-(`ix1` `iy1`) its box.")
+  (comment "`scr` is scratch (at least 242 cells). Answers the number of OCR lines the pipeline got.")
+  (sc-prep scr)
+  (im-new images page ix0 iy0 ix1 iy1 obj pxw pxh)
+  (let [^I32 ep (ep-new epages page wcpt hcpt)
+        ^I32 vdec (vw-new views page (vk-decode) decreq -1 pxw pxh dpi100 (lay-full) -1 0 0 cropx cropy 0)
+        ^I32 l0 (ol-count olines)
+        ^I32 run (sc-answer an at page vdec request lang views epages etext oruns oblocks olines owords osyms oalts feats)
+        ^I32 ext (ox-find an at)
+        ^I32 nl (- (ol-count olines) l0)
+        ^:mut ^I32 vbin -1
+        ^:mut ^I32 rotmed 0]
+    (ep-set epages ep (epf-flags) (eg-raster))
+    (ep-set epages ep (epf-dpi) dpi100)
+    (if (>= ext 0)
+      (if (== (ox-binary an ext) 1)
+        (do (set vbin (vw-new views page (vk-engine-binary) request vdec (ox-bw an ext) (ox-bh an ext) dpi100 (lay-full) -1 0 0 cropx cropy 1))
+            (or-set oruns run (orf-bview) vbin))))
+    (set rotmed (ev-rot-median olines l0 nl))
+    (return (sc-emit-lines olines owords osyms l0 nl page rotmed scr words lines))))
+
+;; ================================================================== the Model
+
+(defn ^I32 sc-node-page [^Cells nodes ^Cells regions ^I32 n]
+  (comment "The page of node `n`'s first region, or its nearest ancestor's that has one; -1 when none has.")
+  (let [^:mut ^I32 t n]
+    (while (>= t 0)
+      (do (if (> (node-region-count nodes t) 0)
+            (return (region-page regions (node-region-head nodes t))))
+          (set t (node-parent nodes t))))
+    (return -1)))
+
+(defn ^:pub ^I32 sc-tag [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^Cells regions
+                         ^:mut ^Cells pages ^Cells mask ^I32 policy]
+  (comment "The provenance of OCR text, after the paragraphs are built. `mask` has one cell a page: 0 none, 1 an image page was")
+  (comment "OCR'd, 2 a PDF page was (its kind becomes `scanned`, SPEC 3.4). Every node on a masked page: its `text` source becomes")
+  (comment "`ocr`, an inline text's confidence 1000 (a glyph's own) becomes 500 (an engine's word: uncalibrated, D130, Phase 10), and a")
+  (comment "block that had `text` is flagged `ocr-only`. The root gets `settings.ocr` (`policy` 1 auto, 2 always) when any page was OCR'd.")
+  (let [^I32 np (page-count pages)
+        ^I32 nn (node-count nodes)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 any 0
+        ^:mut ^I32 n 1
+        ^:mut ^I32 pg 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 start 0]
+    (while (< i np)
+      (do (if (and (< i (cells-len mask)) (>= (cells-at mask i) 1))
+            (set any 1))
+          (if (and (< i (cells-len mask)) (== (cells-at mask i) 2))
+            (page-set-kind pages i (pk-scanned)))
+          (set i (+ i 1))))
+    (if (== any 0) (return 0))
+    (while (< n nn)
+      (do (set pg (sc-node-page nodes regions n))
+          (set m 0)
+          (if (and (>= pg 1) (<= pg (cells-len mask)))
+            (set m (cells-at mask (- pg 1))))
+          (if (>= m 1)
+            (do (set s (node-src nodes n))
+                (if (== (bit-and s (sr-text)) (sr-text))
+                  (do (node-set-src nodes n (+ (- s (sr-text)) (sr-ocr)))
+                      (if (== (nk-is-inline (node-kind nodes n)) 0)
+                        (node-add-flag nodes n (fl-ocr-only)))
+                      (if (== (node-conf nodes n) 1000)
+                        (node-set-conf nodes n 500))))))
+          (set n (+ n 1))))
+    (set start (cells-len text))
+    (if (== policy 1)
+      (do (text-append-cp text 97) (text-append-cp text 117) (text-append-cp text 116) (text-append-cp text 111)))
+    (if (== policy 2)
+      (do (text-append-cp text 97) (text-append-cp text 108) (text-append-cp text 119) (text-append-cp text 97)
+          (text-append-cp text 121) (text-append-cp text 115)))
+    (if (> (cells-len text) start)
+      (node-set-attr-text nodes attrs 0 (fk-ocr) start (- (cells-len text) start)))
+    (return 1)))
+
+;; ============================================================== a PDF's scanned pages
+
+(defn ^I32 sc-dct-span [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                        ^I32 obj ^:mut ^Cells sp]
+  (comment "Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`")
+  (comment "holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in")
+  (comment "place. Anything else 0. Loads objects, so `a`, `b` and `st` are overwritten and the source may miss.")
+  (let [^I32 h (pd-get src ar dc a b st obj)
+        ^:mut ^I32 plan 0
+        ^:mut ^I32 h0 0
+        ^:mut ^I32 h1 0
+        ^:mut ^I32 kt 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ns 0]
+    (if (== h 0) (return 0))
+    (comment "8 is the arena kind of a stream (`pl-k-stream`; what `pc-do-image` checks)")
+    (if (!= (pl-kind-of ar h) 8) (return 0))
+    (set plan (pd-stream-plan src ar dc a b st h))
+    (if (ps-missed src) (return 0))
+    (set h0 (pl-first ar plan))
+    (set h1 (pl-next ar h0))
+    (if (!= (pl-int-value ar h0) 0) (return 0))
+    (set ns (pl-int-value ar h1))
+    (if (!= ns 1) (return 0))
+    (set kt (pl-next ar h1))
+    (if (!= (pl-int-value ar kt) 7) (return 0))
+    (comment "past the stage's six numbers to the decryption mode: 0 none")
+    (while (< j 6)
+      (do (set kt (pl-next ar kt))
+          (set j (+ j 1))))
+    (if (!= (pl-int-value ar kt) 0) (return 0))
+    (cells-drop sp 0)
+    (cells-push sp (pl-stream-start ar h))
+    (cells-push sp (pl-stream-len ar h))
+    (return 1)))
+
+(defn ^I32 sc-eligible [^Cells im ^I32 j ^I32 pw ^I32 ph]
+  (comment "Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil")
+  (comment "mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.")
+  (if (<= (im-get im j (mf-obj)) 0) (return 0))
+  (if (!= (im-get im j (mf-rot)) 0) (return 0))
+  (if (!= (im-get im j (mf-skewed)) 0) (return 0))
+  (if (!= (bit-and (im-get im j (mf-flags)) (+ (mg-mask) (mg-inline))) 0) (return 0))
+  (if (< (im-get im j (mf-pxw)) 16) (return 0))
+  (if (< (im-get im j (mf-pxh)) 16) (return 0))
+  (let [^I64 area (mul64 (i64 (- (im-get im j (mf-x1)) (im-get im j (mf-x0))))
+                         (i64 (- (im-get im j (mf-y1)) (im-get im j (mf-y0)))))
+        ^I64 whole (mul64 (i64 pw) (i64 ph))]
+    (if (< (mul64 area (i64 2)) whole) (return 0))
+    (if (<= whole (i64 0)) (return 0))
+    (return 1)))
+
+(defn ^:pub ^I32 sc-pdf-unit [^Src src ^I32 input ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                              ^Cells pg ^Cells im ^Cells ans ^:mut ^Cells rq ^I32 policy ^Cells loc
+                              ^:mut ^Cells mask ^:mut ^Cells sp
+                              ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
+                              ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                              ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                              ^:mut ^Cells words ^:mut ^Cells lines]
+  (comment "The scanned pages of a PDF, after the text layer is read. A page with no `words` row at all and one image that")
+  (comment "`sc-eligible` and `sc-dct-span` accept is OCR'd: decode request `2 * i + 1` for the stream's bytes (filter DCT),")
+  (comment "then OCR request `2 * i + 2` of its bitmap, for page index `i`; two rounds whatever the page count. Where the answers")
+  (comment "are in, the page's evidence and lines are appended to `words` and `lines` and `mask[i]` is 2. Every other page is left")
+  (comment "exactly as the text layer made it (D185). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,")
+  (comment "else `us-done`. `sp` is two cells of scratch.")
+  (let [^I32 np (pd-pg-count pg)
+        ^I32 nw (wd-count words)
+        ^I32 nim (im-count im)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 jj 0
+        ^:mut ^I32 best -1
+        ^:mut ^I64 bestarea (i64 0)
+        ^:mut ^I32 w 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 asked 0
+        ^:mut ^I32 px0 0
+        ^:mut ^I32 py0 0
+        ^:mut ^I32 px1 0
+        ^:mut ^I32 py1 0
+        ^:mut ^I32 did 0
+        ^:mut ^I32 oid 0
+        ^:mut ^I32 ad -1
+        ^:mut ^I32 ao -1
+        ^:mut ^I32 ix0 0
+        ^:mut ^I32 iy0 0
+        ^:mut ^I32 ix1 0
+        ^:mut ^I32 iy1 0
+        ^:mut ^I32 wp 0
+        ^:mut ^I32 dpi100 0
+        ^:mut ^I64 area (i64 0)
+        ^:mut ^I32 pxw 0
+        ^:mut ^I32 pxh 0]
+    (cells-drop mask 0)
+    (while (< i np)
+      (do (cells-push mask 0)
+          (set i (+ i 1))))
+    (if (== policy 0) (return (us-done)))
+    (comment "a page with any word, hidden or not, is born digital: -1")
+    (while (< w nw)
+      (do (set p (wd-get words w (hd-page)))
+          (if (and (>= p 1) (<= p np))
+            (cells-set mask (- p 1) -1))
+          (set w (+ w 1))))
+    (set i 0)
+    (while (< i np)
+      (do (while (and (< j nim) (< (im-get im j (mf-page)) (+ i 1)))
+            (set j (+ j 1)))
+          (if (and (== (cells-at mask i) 0) (== (pd-pg-rotate pg i) 0))
+            (do (set px0 (pd-pg-crop pg i 0))
+                (set py0 (pd-pg-crop pg i 1))
+                (set px1 (pd-pg-crop pg i 2))
+                (set py1 (pd-pg-crop pg i 3))
+                (set best -1)
+                (set bestarea (i64 0))
+                (set jj j)
+                (while (and (< jj nim) (== (im-get im jj (mf-page)) (+ i 1)))
+                  (do (if (== (sc-eligible im jj (- px1 px0) (- py1 py0)) 1)
+                        (do (set area (mul64 (i64 (- (im-get im jj (mf-x1)) (im-get im jj (mf-x0))))
+                                             (i64 (- (im-get im jj (mf-y1)) (im-get im jj (mf-y0))))))
+                            (if (> area bestarea)
+                              (do (set best jj)
+                                  (set bestarea area)))))
+                      (set jj (+ jj 1))))
+                (if (>= best 0)
+                  (if (== (sc-dct-span src ar dc a b st (im-get im best (mf-obj)) sp) 1)
+                    (do (set did (+ (* 2 i) 1))
+                        (set oid (+ (* 2 i) 2))
+                        (set ix0 (im-get im best (mf-x0)))
+                        (set iy0 (im-get im best (mf-y0)))
+                        (set ix1 (im-get im best (mf-x1)))
+                        (set iy1 (im-get im best (mf-y1)))
+                        (set ad (an-find ans did))
+                        (if (< ad 0)
+                          (do (rq-decode rq did input (cells-at sp 0) (cells-at sp 1) (flt-dct) 0)
+                              (set asked 1))
+                          (if (== (an-ok ans ad) 1)
+                            (do (set pxw (an-arg ans ad 0))
+                                (set pxh (an-arg ans ad 1))
+                                (set wp (- ix1 ix0))
+                                (set dpi100 (i32 (quot (add64 (mul64 (i64 pxw) (i64 720000)) (i64 (quot wp 2))) (i64 wp))))
+                                (set ao (an-find ans oid))
+                                (if (< ao 0)
+                                  (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
+                                      (set asked 1))
+                                  (if (== (an-ok ans ao) 1)
+                                    (do (sc-page ans ao (+ i 1) oid did (- px1 px0) (- py1 py0) pxw pxh dpi100
+                                                 ix0 iy0 (im-get im best (mf-obj)) ix0 iy0 ix1 iy1 (sc-lang loc)
+                                                 epages views etext feats images oruns oblocks olines owords osyms oalts words lines sp)
+                                        (cells-set mask i 2)))))))))
+                (if (ps-missed src) (return (us-done))))))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i np)
+      (do (if (< (cells-at mask i) 0) (cells-set mask i 0))
+          (set i (+ i 1))))
+    (if (== asked 1) (return (us-requests)))
+    (return (us-done))))

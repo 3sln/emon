@@ -18,7 +18,12 @@
 #   EMON_RS_WARN=1   build with warnings on (for the host files)
 set -e
 cd "$(dirname "$0")/../.."
+# LIVE (D184): EMON_RS_LIVE=1 builds the same crate with the `tesseract` feature (the Tesseract adapter of the Ocr port,
+# linked to libtesseract and libleptonica) into .cache/emon-rs-live; it is NOT a gate's (a gate replays a transcript).
+# EMON_TESS_LIB is the directory of the libraries (default /opt/homebrew/lib).
 crate=.cache/emon-rs
+live=0
+if [ "${EMON_RS_LIVE:-}" = 1 ]; then crate=.cache/emon-rs-live; live=1; fi
 mkdir -p "$crate/src/emon"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -39,7 +44,7 @@ for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
 put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
 rm -f "$crate/src/emon.rs.new"
 
-for f in lib port plan source engine imgdec; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+for f in lib port plan source engine imgdec tess; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
 put test/driver/rust/main.rs "$crate/src/driver.rs"
 mkdir -p "$crate/tests"
 put host/rust/tests/engine.rs "$crate/tests/engine.rs"
@@ -55,6 +60,9 @@ path = "src/lib.rs"
 [[bin]]
 name = "emon-rs"
 path = "src/driver.rs"
+
+[features]
+tesseract = []
 
 [dependencies]
 # the ImageDecode port's codecs (D175): PNG and JPEG pixels, CCITT, and the TIFF Deflate stream. Pinned; the
@@ -73,8 +81,13 @@ rm -f "$crate/Cargo.toml.new"
 
 flags="-A warnings"
 [ "${EMON_RS_WARN:-}" = 1 ] && flags=""
+cargo_features=""
+if [ "$live" = 1 ]; then
+  flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
+  cargo_features="--features tesseract"
+fi
 # the lock file is committed (host/rust/Cargo.lock); the registry is reached only when a crate is not cached
 put host/rust/Cargo.lock "$crate/Cargo.lock"
-out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q 2>&1 || RUSTFLAGS="$flags" cargo build --release -q 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
+out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q $cargo_features 2>&1 || RUSTFLAGS="$flags" cargo build --release -q $cargo_features 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2
 echo "$crate/target/release/emon-rs"

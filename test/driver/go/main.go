@@ -5,7 +5,7 @@
 // or a spooled `io.Reader` (D058).
 //
 //	emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//	        [--ocr=always|auto|never] [--assets=none] [--password=TEXT]
+//	        [--ocr=always|auto|never] [--tesseract[=TESSDATA]] [--assets=none] [--password=TEXT]
 //	        [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats]
 //	        [--record=DIR | --replay=DIR] [--parallel=N] FILE
 //
@@ -14,6 +14,9 @@
 //	--out=bundle     one conversion, every output, for `bb identity` (see the Rust driver: the sections are the same)
 //	--out=pixels     one recording as one line per decode entry (see the Rust driver; `bb image` compares them)
 //	--dump=DIR       with --out=pixels, also write each frame's pixels to DIR/frame-N.raw
+//	--tesseract[=D]  give the Engine the Tesseract `Ocr` port (D184), reading models from D (default: $TESSDATA_PREFIX and the usual
+//	                 places). LIVE: only a build with the `tesseract` tag has it (`EMON_GO_LIVE=1 kin/scripts/emon-go-build`, cgo); no gate
+//	                 uses it. Without the flag an `ocr` request is answered `unsupported` and a page that needed OCR has no text.
 //	--record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
 //	--replay=DIR     convert from the transcript in DIR (no port is called)
 //	--parallel=N     run N conversions at once on one Engine; all N must give the same answer (`bb repeat`)
@@ -110,6 +113,7 @@ func main() {
 	source := "bytes"
 	stats := false
 	var file, record, replay, dump string
+	tess, tessdata := false, ""
 	parallel := 1
 	for _, a := range os.Args[1:] {
 		switch {
@@ -156,6 +160,10 @@ func main() {
 			cfg.ChunkSize = n
 		case a == "--async":
 			cfg.SimulateAsync = true
+		case a == "--tesseract":
+			tess = true
+		case strings.HasPrefix(a, "--tesseract="):
+			tess, tessdata = true, strings.TrimPrefix(a, "--tesseract=")
 		case a == "--stats":
 			stats = true
 		case strings.HasPrefix(a, "--dump="):
@@ -237,6 +245,13 @@ func main() {
 		input = input.WithPassword([]byte(*password))
 	}
 	inputs := []emon.Input{input}
+	if tess {
+		o, err := emon.NewTessOcr(tessdata)
+		if err != nil {
+			usage(err.Error())
+		}
+		cfg.Ocr = o
+	}
 	engine := emon.NewEngine(cfg)
 
 	errExit := func(err error) {

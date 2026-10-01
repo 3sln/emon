@@ -715,6 +715,9 @@
   (return (pset pages p 2 ln)))
 (defn ^:pub ^I32 page-set-health [^:mut ^Cells pages ^I32 p ^I32 v]
   (return (pset pages p 7 v)))
+(defn ^:pub ^I32 page-set-kind [^:mut ^Cells pages ^I32 p ^I32 kind]
+  (comment "A page's source kind (`pk`), after the page is made: `scanned` once the unit finds its text came from OCR (D185).")
+  (return (pset pages p 6 kind)))
 (defn ^:pub ^I32 page-set-resolution [^:mut ^Cells pages ^I32 p ^I32 dpi ^I32 pxw ^I32 pxh]
   (pset pages p 8 dpi)
   (pset pages p 9 pxw)

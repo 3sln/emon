@@ -401,6 +401,11 @@ pub struct Transcript {
     // count (SPEC 13.1). A password is never here.
     pub inputs: Vec<(i32, i32)>,
     pub entries: Vec<Entry>,
+    // WHO ANSWERED (D187): the live ports' identities as name/value strings (an OCR engine and its version, the
+    // models it read with), written as `:producer {...}` when there are any and never read back for a replay: a
+    // replay depends on the answers, not on whose engine gave them. Empty for a run with no live port that
+    // identifies itself, which leaves the file as it always was.
+    pub producer: Vec<(String, String)>,
 }
 
 pub const TRANSCRIPT_FILE: &str = "transcript.edn";
@@ -435,7 +440,12 @@ impl Transcript {
     pub fn to_files(&self) -> Vec<(String, Vec<u8>)> {
         let mut files: Vec<(String, Vec<u8>)> = Vec::new();
         let mut s = String::new();
-        s.push_str("{:emon-transcript 1\n :inputs [");
+        s.push_str("{:emon-transcript 1\n");
+        if !self.producer.is_empty() {
+            let ps: Vec<String> = self.producer.iter().map(|(k, v)| format!(":{} \"{}\"", k, v.replace('\\', "/").replace('"', "'"))).collect();
+            s.push_str(&format!(" :producer {{{}}}\n", ps.join(" ")));
+        }
+        s.push_str(" :inputs [");
         let ins: Vec<String> = self.inputs.iter().map(|(i, l)| format!("{{:index {} :length {}}}", i, l)).collect();
         s.push_str(&ins.join(" "));
         s.push_str("]\n :entries [");
@@ -472,6 +482,13 @@ impl Transcript {
             return Err(bad("not an emon-transcript of version 1"));
         }
         let mut t = Transcript::default();
+        if let Some(p) = m.get("producer").and_then(|v| v.map()) {
+            for (k, v) in p.0.iter() {
+                if let Some(sv) = v.str() {
+                    t.producer.push((k.clone(), sv.to_string()));
+                }
+            }
+        }
         for i in m.get("inputs").and_then(|v| v.vec()).ok_or_else(|| bad("no :inputs"))? {
             let im = i.map().ok_or_else(|| bad("an input is not a map"))?;
             let idx = im.get("index").and_then(|v| v.int()).ok_or_else(|| bad("an input has no :index"))?;

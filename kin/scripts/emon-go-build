@@ -16,7 +16,12 @@
 # `bb emit` is NOT run here: callers that must be current run it first.
 set -e
 cd "$(dirname "$0")/../.."
+# LIVE (D184): EMON_GO_LIVE=1 builds the same module with the `tesseract` build tag (the cgo adapter of the Ocr port, linked to
+# libtesseract and libleptonica) into .cache/emon-go-live; it is NOT a gate's (a gate replays a transcript). EMON_TESS_LIB is the
+# directory of the libraries (default /opt/homebrew/lib).
 mod=.cache/emon-go
+tags=""
+if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract"; fi
 mkdir -p "$mod/port" "$mod/pngenc" "$mod/cmd/emon-go"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -46,6 +51,9 @@ put "$mod/go.mod.new" "$mod/go.mod"
 put host/go/go.sum "$mod/go.sum"
 rm -f "$mod/go.mod.new"
 
-out=$(cd "$mod" && go build -o emon-go ./cmd/emon-go 2>&1) || { echo "$out" | head -80 >&2; echo "emon-go: build failed" >&2; exit 1; }
+if [ -n "$tags" ]; then export CGO_ENABLED=1 CGO_LDFLAGS="-L${EMON_TESS_LIB:-/opt/homebrew/lib} ${CGO_LDFLAGS:-}"; fi
+out=$(cd "$mod" && go build $tags -o emon-go ./cmd/emon-go 2>&1) || { echo "$out" | head -80 >&2; echo "emon-go: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2
+# a cgo binary the external linker signed on macOS can fail its own signature check (SIGKILL at launch): sign it again
+if [ -n "$tags" ] && [ "$(uname)" = Darwin ]; then codesign -s - -f "$mod/emon-go" > /dev/null 2>&1 || true; fi
 echo "$mod/emon-go"

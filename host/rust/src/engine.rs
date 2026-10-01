@@ -43,11 +43,12 @@ use crate::emon::json::*;
 use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::rasterin::*;
+use crate::emon::scan::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::imgdec;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
-use crate::port::{self, cells_at, cells_len, Cells, Src, SrcBacking};
+use crate::port::{self, cells_at, cells_len, cells_push, Cells, Src, SrcBacking};
 use crate::source::{ByteSource, Input, Inputs};
 use std::collections::BTreeSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -135,12 +136,49 @@ impl From<PlanError> for Error {
 
 // ----------------------------------------------------------------- options
 
-// SPEC 13's OCR setting (D038). NOT WIRED IN THIS SLICE: accepted, kept, and without effect (see above).
+// SPEC 13's OCR setting (D038). WIRED (P6.5, D184-D188): `Never` asks for no OCR; `Auto` and `Always` OCR an image and a
+// scanned PDF page, and a born-digital page (a page with a text layer) keeps its text layer under both, because
+// fusion (P7) does not exist yet to weigh a second reading against it (D185).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OcrPolicy {
     Always,
     Auto,
     Never,
+}
+
+impl OcrPolicy {
+    // kin's code (`emon.scan`, `emon.rasterin`): 0 never, 1 auto, 2 always.
+    fn code(self) -> i32 {
+        match self {
+            OcrPolicy::Never => 0,
+            OcrPolicy::Auto => 1,
+            OcrPolicy::Always => 2,
+        }
+    }
+}
+
+// THE `Ocr` PORT (SPEC 7.2; D008, D095, D184): fulfils one `ocr` request. A host brings its engine (Tesseract through
+// `tess.rs` under the `tesseract` feature; anything else that answers in the layout of `emon.ocr`). It is LIVE only: a
+// gate replays a transcript and never calls it. With no port a request is answered `unsupported`, a page
+// then has no text, and nothing is guessed.
+pub trait Ocr: Send + Sync {
+    // The answer to `req` (whose bitmap is in `bitmaps`). `keep_binary`: the caller records, so the engine's
+    // thresholded image, when it has one, goes in the answer's `bitmap` (the record says it has one either way).
+    fn fulfil(&self, req: &plan::Request, bitmaps: &plan::Bitmaps, keep_binary: bool) -> Result<plan::Answer, PlanError>;
+    // What this engine is, for the transcript's `:producer` (D187): name/value strings.
+    fn producer(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+}
+
+// An `Ocr` port as a `Config` holds it.
+#[derive(Clone)]
+pub struct OcrPort(pub Arc<dyn Ocr>);
+
+impl std::fmt::Debug for OcrPort {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("OcrPort")
+    }
 }
 
 // SPEC 13's `assets` (D117). Only `None` is implemented; the others are refused, not ignored.
@@ -181,11 +219,13 @@ pub struct Config {
     pub simulate_async: bool,
     pub max_rounds: i32,
     pub fetch_rounds: i32,
+    // The `Ocr` port, if the embedder has one (D184). None: no live OCR; a replay needs none.
+    pub ocr: Option<OcrPort>,
 }
 
 impl Default for Config {
     fn default() -> Config {
-        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS }
+        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS, ocr: None }
     }
 }
 
@@ -516,13 +556,30 @@ impl imgdec::Source for Span {
     }
 }
 
-// The `ImageDecode` fulfiller (SPEC 7.2, D173): answers `decode` requests for this input from the host's
-// codecs, and nothing else (no Renderer or Ocr port is configured). `keep` holds the pixels in the answer
-// (a recording wants them, as canonical PNG; a plain conversion needs only the numbers).
-fn image_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
-    move |req: &Request, _bm: &plan::Bitmaps| -> Result<Answer, PlanError> {
+// The LIVE ports' fulfiller (SPEC 7.2): `ImageDecode` (D173) answers `decode` requests for this input from the host's
+// codecs; `Ocr` (D184) answers `ocr` requests from the embedder's engine, or `unsupported` when it has none. No
+// Renderer is configured (P6.2). `keep` holds the pixels in a decode answer (a recording wants them, as canonical
+// PNG, and so does a live OCR engine; a plain conversion needs only the numbers); `recording` also keeps the OCR
+// engine's thresholded image, which only a transcript wants (D184).
+fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording: bool, ocr: Option<OcrPort>) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
+    move |req: &Request, bm: &plan::Bitmaps| -> Result<Answer, PlanError> {
+        if req.kind() == plan::KIND_OCR {
+            let failed = |status: i32| {
+                let mut c = Cells::new();
+                crate::emon::plan::an_fail(&mut c, plan::KIND_OCR, req.id(), status);
+                Ok(Answer { rec: to_vec(&c), bitmap: None })
+            };
+            return match &ocr {
+                // an engine that panics on a page is a failed OCR of it, not a crashed process
+                Some(p) => match std::panic::catch_unwind(AssertUnwindSafe(|| p.0.fulfil(req, bm, recording))) {
+                    Ok(r) => r,
+                    Err(_) => failed(plan::STATUS_FAILED),
+                },
+                None => failed(crate::emon::plan::ps_unsupported()),
+            };
+        }
         if req.kind() != plan::KIND_DECODE {
-            return Err(PlanError::Fulfil("no Renderer or Ocr port is configured (only ImageDecode is)".to_string()));
+            return Err(PlanError::Fulfil("no Renderer port is configured (only ImageDecode and Ocr are)".to_string()));
         }
         let (input, off, len, filter, frame) = (req.arg(0), req.arg(1), req.arg(2), req.arg(3), req.arg(4));
         if input != idx as i32 || off < 0 || len < 0 || off as u64 + len as u64 > source.len() {
@@ -533,8 +590,9 @@ fn image_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool) -> impl 
             crate::emon::plan::an_fail(c, plan::KIND_DECODE, req.id(), status);
             Ok(Answer { rec: to_vec(c), bitmap: None })
         };
-        if filter != crate::emon::plan::flt_none() {
-            // the PDF image filters (DCT, JPX, JBIG2, CCITT) are P6.1a's
+        // a DCT stream is a JPEG file: the span is read in place (a scanned PDF page's image, D185); the other PDF
+        // image filters (JPX, JBIG2, CCITT) are P6.1a's
+        if filter != crate::emon::plan::flt_none() && filter != crate::emon::plan::flt_dct() {
             return fail(&mut c, crate::emon::plan::ps_unsupported());
         }
         let span = Span { src: source.clone(), off: off as u64, len: len as u64 };
@@ -544,7 +602,7 @@ fn image_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool) -> impl 
         match decoded {
             Ok(d) => {
                 crate::emon::plan::an_decode(&mut c, req.id(), d.w, d.h, d.ch, d.dpi100, d.bilevel as i32, d.frames);
-                let bitmap = match (&d.pixels, keep) {
+                let bitmap = match (&d.pixels, keep && (filter != crate::emon::plan::flt_dct() || ocr.is_some())) {
                     (Some(px), true) => Some(Arc::new(port::Bitmap::from_bytes(d.w, d.h, d.ch, px))),
                     _ => None,
                 };
@@ -564,11 +622,86 @@ enum RStep {
     Done(Outcome),
 }
 
-// ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF.
-fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, fmt: i32, intake_only: bool, len: u64) -> RStep {
+// The evidence arenas the OCR stages fill (SPEC 8.4.6: the arenas `emon.scan` writes and `ev_emit` dumps). A PDF's
+// text layer fills `gl`, `mk`, `fnt` and the word and line arenas; an image's OCR fills the `o*` ones and the same word
+// and line arenas (D186), so the rest are empty and only dumped.
+struct EvArenas {
+    epages: Cells,
+    views: Cells,
+    pts: Cells,
+    refs: Cells,
+    feats: Cells,
+    paths: Cells,
+    images: Cells,
+    oruns: Cells,
+    oblocks: Cells,
+    olines: Cells,
+    owords: Cells,
+    osyms: Cells,
+    oalts: Cells,
+    inks: Cells,
+    comps: Cells,
+    rules: Cells,
+    prims: Cells,
+    tlines: Cells,
+}
+
+impl EvArenas {
+    fn new() -> EvArenas {
+        EvArenas {
+            epages: Cells::new(),
+            views: Cells::new(),
+            pts: Cells::new(),
+            refs: Cells::new(),
+            feats: Cells::new(),
+            paths: Cells::new(),
+            images: Cells::new(),
+            oruns: Cells::new(),
+            oblocks: Cells::new(),
+            olines: Cells::new(),
+            owords: Cells::new(),
+            osyms: Cells::new(),
+            oalts: Cells::new(),
+            inks: Cells::new(),
+            comps: Cells::new(),
+            rules: Cells::new(),
+            prims: Cells::new(),
+            tlines: Cells::new(),
+        }
+    }
+}
+
+// The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
+fn locale_cells(opts: &Options) -> Cells {
+    let mut c = Cells::new();
+    if let Some(l) = &opts.locale {
+        for ch in l.chars() {
+            cells_push(&mut c, ch as i32);
+        }
+    }
+    c
+}
+
+// The evidence dump of a conversion: `ev` is what the OCR stages made, the rest the text layer's.
+fn evidence_dump(ev: &mut EvArenas, et: &mut Cells, gl: &mut Cells, wd: &mut Cells, ln: &mut Cells, mk: &mut Cells, fnt: &mut Cells) -> String {
+    let mut t = String::new();
+    ev_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines);
+    t
+}
+
+// ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF. An image's pages are made
+// by kin's `rs_unit` (decode, then OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D186):
+// the stages below are `attempt`'s, in its order, with the glyph-fed ones given empty arenas.
+fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, fmt: i32, opts: &Options, intake_only: bool, len: u64) -> RStep {
     let mut m = Arenas::new();
     model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
-    let status = rs_unit(view, idx as i32, fmt, intake_only as i32, answers, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages);
+    let mut ev = EvArenas::new();
+    let (mut et, mut wd, mut ln, mut mask, mut scr, mut loc) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), locale_cells(opts));
+    let status = rs_unit(
+        view, idx as i32, fmt, intake_only as i32, answers, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages, opts.ocr.code(), &mut loc, &mut mask,
+        &mut ev.epages, &mut ev.views, &mut et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts,
+        &mut wd, &mut ln, &mut scr,
+    );
     if view.missed() {
         return RStep::Miss;
     }
@@ -590,12 +723,31 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     if intake_only {
         return RStep::Done(Outcome::Intake(info));
     }
+    let (mut gl, mut mk, mut fnt) = (Cells::new(), Cells::new(), Cells::new());
+    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
+    let np = page_count(&mut m.pages);
+    let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    hd_analyze(&mut wd, &mut ln, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
+    pa_build(&mut wd, &mut ln, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
+             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc);
+    sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
+    if let Some(loc) = &opts.locale {
+        let start = cells_len(&m.text);
+        for ch in loc.chars() {
+            text_append_cp(&mut m.text, ch as i32);
+        }
+        let n = cells_len(&m.text) - start;
+        node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), start, n);
+    }
     let mut chk = Cells::new();
     let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
     if c != 0 {
         return RStep::Done(Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0)))));
     }
-    RStep::Done(Outcome::Built(Built { arenas: m, evidence: None, intake: info }))
+    RStep::Done(Outcome::Built(Built { arenas: m, evidence, intake: info }))
 }
 
 // The unit of one input: a PNG, JPEG or TIFF (by kin's sniff) is read by the raster unit, anything else by the
@@ -606,10 +758,11 @@ fn dispatch(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usiz
         return RStep::Miss;
     }
     if fmt != rs_none() {
-        return attempt_raster(view, answers, rq, idx, fmt, intake_only, len);
+        return attempt_raster(view, answers, rq, idx, fmt, opts, intake_only, len);
     }
-    match attempt(view, pw, idx, opts, intake_only, len) {
+    match attempt(view, pw, answers, rq, idx, opts, intake_only, len) {
         Step::Miss => RStep::Miss,
+        Step::Requests => RStep::Requests,
         Step::Done(o) => RStep::Done(o),
     }
 }
@@ -731,9 +884,11 @@ enum Mode<'a> {
     Replay(&'a Transcript),
 }
 
-// One attempt's end: it missed (discard it, fetch, re-run) or it finished.
+// One attempt's end: it missed (discard it, fetch, re-run), asked for something (OCR of a scanned page: the loop
+// fulfils it and re-runs the unit on the answers) or it finished.
 enum Step {
     Miss,
+    Requests,
     Done(Outcome),
 }
 
@@ -754,7 +909,7 @@ fn text_of(cells: &mut Cells, start: i32, len: i32) -> String {
 // is never looked at, and a failure or a panic in one that missed is a miss, never reported (SPEC 13.1).
 // THIS IS THE ONE PLACE the Engine calls the text-layer stages; when their signatures grow (P3.5-P3.7)
 // this is what changes.
-fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, len: u64) -> Step {
+fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, opts: &Options, intake_only: bool, len: u64) -> Step {
     let mut ar = Cells::new();
     let mut dc = Cells::new();
     let mut a = Cells::new();
@@ -812,17 +967,24 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     }
     let np = pd_pg_count(&mut pg);
     let info = intake(np, &mut dc);
-    let evidence = if opts.keep_evidence {
-        let (mut epages, mut views, mut pts, mut refs, mut feats) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-        let (mut paths, mut images, mut oruns, mut oblocks, mut olines) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-        let (mut owords, mut osyms, mut oalts, mut inks, mut comps) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-        let (mut rules, mut prims, mut tlines) = (Cells::new(), Cells::new(), Cells::new());
-        let mut t = String::new();
-        ev_emit(&mut t, 0, &mut epages, &mut views, &mut pts, &mut refs, &mut et, &mut feats, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut paths, &mut images, &mut oruns, &mut oblocks, &mut olines, &mut owords, &mut osyms, &mut oalts, &mut inks, &mut comps, &mut rules, &mut prims, &mut tlines);
-        Some(t)
-    } else {
-        None
-    };
+    // SCANNED PAGES (P6.5, D185): a page with no text layer and one JPEG image that covers it is asked for as OCR
+    // (a `decode` of the stream, then an `ocr` of its bitmap: two rounds whatever the page count); where the answers
+    // are in, its OCR lines are appended to `wd` and `ln` beside the text layer's, and `mask` says which pages.
+    // A page with a text layer is left as the text layer made it (fusion, P7, is what would weigh a second reading).
+    let mut ev = EvArenas::new();
+    let (mut mask, mut sp, mut loc) = (Cells::new(), Cells::new(), locale_cells(opts));
+    let sstatus = sc_pdf_unit(
+        view, idx as i32, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut im, answers, rq, opts.ocr.code(), &mut loc, &mut mask, &mut sp,
+        &mut ev.epages, &mut ev.views, &mut et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts,
+        &mut wd, &mut ln,
+    );
+    if view.missed() {
+        return Step::Miss;
+    }
+    if sstatus == crate::emon::plan::us_requests() {
+        return Step::Requests;
+    }
+    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
     let mut m = Arenas::new();
     model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
     pa_pages(&mut pg, &mut m.pages);
@@ -836,6 +998,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     hd_analyze(&mut wd, &mut ln, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
     pa_build(&mut wd, &mut ln, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc);
+    sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
         for ch in loc.chars() {
@@ -992,14 +1155,18 @@ impl Engine {
         let pcfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
         let this_input = vec![(idx as i32, len as i32)];
         let mut replayer: Option<Replayer> = None;
-        // the live ports: ImageDecode only (a Renderer and an Ocr come with P6.2 and P6.5); pixels are kept in
-        // the answers only when a transcript is being recorded
-        let mut nop = SyncFulfiller::new(image_fulfiller(input.source.clone(), idx, matches!(mode, Mode::Record(_))));
+        // the live ports: ImageDecode, and Ocr when the Engine was given one (a Renderer comes with P6.2); pixels are
+        // kept in the answers when a transcript is being recorded or an OCR engine will read them
+        let is_recording = matches!(mode, Mode::Record(_));
+        let mut nop = SyncFulfiller::new(port_fulfiller(input.source.clone(), idx, is_recording || self.cfg.ocr.is_some(), is_recording, self.cfg.ocr.clone()));
         let mut recording: Option<&mut Transcript> = None;
         match mode {
             Mode::Live => {}
             Mode::Record(t) => {
                 t.inputs = this_input.clone();
+                if let Some(p) = &self.cfg.ocr {
+                    t.producer = p.0.producer();
+                }
                 recording = Some(t);
             }
             Mode::Replay(t) => {

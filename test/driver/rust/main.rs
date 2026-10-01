@@ -3,7 +3,7 @@
 // itself and hands the Engine bytes, a seekable `File` or a spooled `Read` (D058).
 //
 //     emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//             [--ocr=always|auto|never] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool]
+//             [--ocr=always|auto|never] [--tesseract[=TESSDATA]] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool]
 //             [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE
 //
 //   --out=json       the canonical JSON (compact; --pretty indents)           (default)
@@ -21,6 +21,9 @@
 //   --chunk=N        the source cache's chunk size; with --async the cache behaves like a browser Blob (it
 //                    misses, the loop fetches and re-runs): the output must equal the in-memory run's
 //   --dump=DIR       with --out=pixels, also write each frame's pixels to DIR/frame-N.raw (w*h*ch bytes)
+//   --tesseract[=D]  give the Engine the Tesseract `Ocr` port (D184), reading models from D (default: $TESSDATA_PREFIX and the usual
+//                    places). LIVE: only a build with the `tesseract` feature has it (`EMON_RS_LIVE=1 kin/scripts/emon-rs-build`); no gate
+//                    uses it. Without the flag an `ocr` request is answered `unsupported` and a page that needed OCR has no text.
 //   --stats          print the loop's attempts, fetch rounds and bytes fetched on stderr
 //   --record=DIR     also write the plan/fulfil transcript to DIR (transcript.edn and PNGs)
 //   --replay=DIR     convert from the transcript in DIR (no port is called)
@@ -34,7 +37,7 @@ use std::io::Read;
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--tesseract[=TESSDATA]] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
     std::process::exit(2);
 }
 
@@ -127,6 +130,7 @@ fn main() {
     let mut replay: Option<String> = None;
     let mut parallel: usize = 1;
     let mut dump: Option<String> = None;
+    let mut tess: Option<Option<String>> = None;
     for a in std::env::args().skip(1) {
         if let Some(v) = a.strip_prefix("--out=") {
             out = v.to_string();
@@ -158,6 +162,10 @@ fn main() {
             cfg.chunk_size = v.parse().unwrap_or_else(|_| usage("--chunk=N wants a number"));
         } else if a == "--async" {
             cfg.simulate_async = true;
+        } else if a == "--tesseract" {
+            tess = Some(None);
+        } else if let Some(v) = a.strip_prefix("--tesseract=") {
+            tess = Some(Some(v.to_string()));
         } else if a == "--stats" {
             stats = true;
         } else if let Some(v) = a.strip_prefix("--record=") {
@@ -210,6 +218,18 @@ fn main() {
         input = input.with_password(p.into_bytes());
     }
 
+    if let Some(dir) = &tess {
+        #[cfg(feature = "tesseract")]
+        {
+            let t = emon::tess::TessOcr::new(dir.as_deref()).unwrap_or_else(|e| usage(&e));
+            cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(t)));
+        }
+        #[cfg(not(feature = "tesseract"))]
+        {
+            let _ = dir;
+            usage("--tesseract needs a build with the tesseract feature (EMON_RS_LIVE=1 kin/scripts/emon-rs-build)");
+        }
+    }
     let engine = Engine::new(cfg);
     let fail = |e: emon::Error| -> ! {
         eprintln!("error: {}", e.name());

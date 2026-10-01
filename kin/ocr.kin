@@ -10,10 +10,11 @@
 ;; answer with nothing after its last word has no extension (a fake, a failed
 ;; engine, an engine that cannot); `ox-find` says so by answering -1.
 ;;
-;;   ext     version orient wdir tlorder deskew osd script sconf oconf nlines
-;;           line * nlines   word-ext * nwords       (`ox-line-stride` = 11 per line)
-;;   line    x y w h  bx0 by0 bx1 by1  block par btype
-;;   wordext flags lang nsym  sym *
+;;   ext     version orient wdir tlorder deskew osd script sconf oconf nlines  nblocks binary bw bh
+;;           line * nlines   block * nblocks   word-ext * nwords       (`ox-header` = 14 cells)
+;;   line    x y w h  bx0 by0 bx1 by1  block par btype  xheight asc desc     (`ox-line-stride` = 14)
+;;   block   x y w h  orient wdir tlorder                                  (`ox-block-stride` = 7)
+;;   wordext flags lang psize dflags nsym  sym *
 ;;   sym     x y w h conf ncp nalt  cp * ncp  alt * nalt
 ;;   alt     ncp conf cp * ncp
 ;;
@@ -33,6 +34,18 @@
 ;; index of its line in the line list, and `par` a paragraph number unique in the
 ;; answer (-1 when the engine does not say).
 ;;
+;; VERSION 2 (P6.5a, D096, D184). Over version 1 it adds, each -1 (or 0) when the engine does not say:
+;;   * a line's ROW ATTRIBUTES `xheight asc desc` in pixels (x-height, the ascenders' height above it and the
+;;     descenders' depth below the baseline: Tesseract's `RowAttributes`);
+;;   * a BLOCK TABLE, one row per block id in order (a line's `block` indexes it): the block's box, and the
+;;     orientation, writing direction and line order the engine reports AT that block (they differ per block);
+;;   * per word `psize` (the engine's point size, -1 unknown) and `dflags`: bit 1 the word is from the
+;;     engine's dictionary, bit 2 it is numeric (`ocw-dict`, `ocw-numeric`);
+;;   * the engine's THRESHOLDED image: `binary` 1 says the ANSWER carries a bitmap (the answer's id names it,
+;;     as a decode answer's does; 1-channel, 0 black ... 255 white, `bw` x `bh` pixels, the request bitmap's
+;;     size), which the unit records as a `views` row of kind engine-binary named by the `oruns` row.
+;; A version 1 extension is no longer read: `ox-find` answers -1 for it, as for none.
+;;
 ;; A symbol is what the engine read as ONE glyph: its box, its confidence, its
 ;; text (usually one code point; a ligature is several) and its other candidates.
 ;; The alternatives are the engine's own, unranked beyond their confidences.
@@ -48,8 +61,18 @@
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
+
 (defn ^:pub ^I32 ocf-symbols [] (return 1))   ;; request flag: symbols and their alternatives
 (defn ^:pub ^I32 ocf-osd [] (return 2))       ;; request flag: orientation and script detection
+(defn ^:pub ^I32 ocf-dpi-unit [] (return 256)) ;; the request's flags above the low byte are the resolution hint, dpi (D184)
+
+(defn ^:pub ^I32 ocf-dpi [^I32 flags]
+  (comment "The resolution the request says its bitmap has, dots per inch; 0 none. A hint for the engine's size")
+  (comment "heuristics: the flags above the low byte.")
+  (return (quot flags (ocf-dpi-unit))))
+
+(defn ^:pub ^I32 ocw-dict [] (return 1))      ;; a word's `dflags`: from the engine's dictionary
+(defn ^:pub ^I32 ocw-numeric [] (return 2))   ;; ... numeric
 
 (defn ^:pub ^I32 bt-text [] (return 0))
 (defn ^:pub ^I32 bt-table [] (return 1))
@@ -57,17 +80,19 @@
 (defn ^:pub ^I32 bt-line [] (return 3))
 (defn ^:pub ^I32 bt-other [] (return 4))
 
-(defn ^:pub ^I32 ox-version [] (return 1))
-(defn ^:pub ^I32 ox-header [] (return 10))
-(defn ^:pub ^I32 ox-line-stride [] (return 11))
+(defn ^:pub ^I32 ox-version [] (return 2))
+(defn ^:pub ^I32 ox-header [] (return 14))
+(defn ^:pub ^I32 ox-line-stride [] (return 14))
+(defn ^:pub ^I32 ox-block-stride [] (return 7))
 
 ;; ---------------------------------------------------------------- builders
 
 (defn ^:pub ^I32 ox-begin [^:mut ^Cells c ^I32 orient ^I32 wdir ^I32 tlorder ^I32 deskew
-                           ^I32 osd ^I32 script ^I32 sconf ^I32 oconf ^I32 nlines]
-  (comment "Start the extension after the LAST word of an answer; then `nlines`")
-  (comment "calls of `ox-line`, then per word `ox-word` and its `ox-sym`s. The")
-  (comment "answer's own length is fixed by `an-ocr-end`, as ever.")
+                           ^I32 osd ^I32 script ^I32 sconf ^I32 oconf ^I32 nlines ^I32 nblocks
+                           ^I32 binary ^I32 bw ^I32 bh]
+  (comment "Start the extension after the LAST word of an answer; then `nlines` calls of `ox-line`,")
+  (comment "`nblocks` of `ox-block`, then per word `ox-word` and its `ox-sym`s. The answer's own length is")
+  (comment "fixed by `an-ocr-end`, as ever.")
   (let [^I32 at (cells-len c)]
     (cells-push c (ox-version))
     (cells-push c orient)
@@ -79,11 +104,15 @@
     (cells-push c sconf)
     (cells-push c oconf)
     (cells-push c nlines)
+    (cells-push c nblocks)
+    (cells-push c binary)
+    (cells-push c bw)
+    (cells-push c bh)
     (return at)))
 
 (defn ^:pub ^I32 ox-line [^:mut ^Cells c ^I32 x ^I32 y ^I32 w ^I32 h
                           ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1
-                          ^I32 block ^I32 par ^I32 btype]
+                          ^I32 block ^I32 par ^I32 btype ^I32 xheight ^I32 asc ^I32 desc]
   (cells-push c x)
   (cells-push c y)
   (cells-push c w)
@@ -95,13 +124,28 @@
   (cells-push c block)
   (cells-push c par)
   (cells-push c btype)
+  (cells-push c xheight)
+  (cells-push c asc)
+  (cells-push c desc)
   (return 0))
 
-(defn ^:pub ^I32 ox-word [^:mut ^Cells c ^I32 flags ^I32 lang]
+(defn ^:pub ^I32 ox-block [^:mut ^Cells c ^I32 x ^I32 y ^I32 w ^I32 h ^I32 orient ^I32 wdir ^I32 tlorder]
+  (cells-push c x)
+  (cells-push c y)
+  (cells-push c w)
+  (cells-push c h)
+  (cells-push c orient)
+  (cells-push c wdir)
+  (cells-push c tlorder)
+  (return 0))
+
+(defn ^:pub ^I32 ox-word [^:mut ^Cells c ^I32 flags ^I32 lang ^I32 psize ^I32 dflags]
   (comment "Start a word's extension; answers its start, which `ox-sym` wants.")
   (let [^I32 at (cells-len c)]
     (cells-push c flags)
     (cells-push c lang)
+    (cells-push c psize)
+    (cells-push c dflags)
     (cells-push c 0)
     (return at)))
 
@@ -109,7 +153,7 @@
   (comment "Start a symbol of the word begun at `word`; answers the symbol's start.")
   (comment "Add its code points with `ox-sym-cp` THEN its alternatives with `ox-alt`.")
   (let [^I32 at (cells-len c)]
-    (cells-set c (+ word 2) (+ (cells-at c (+ word 2)) 1))
+    (cells-set c (+ word 4) (+ (cells-at c (+ word 4)) 1))
     (cells-push c x)
     (cells-push c y)
     (cells-push c w)
@@ -141,7 +185,7 @@
 
 (defn ^:pub ^I32 ox-find [^Cells c ^I32 at]
   (comment "The start of the extension of the OCR answer at `at`, or -1 when it has")
-  (comment "none (or is not version 1). Walks the words to find it.")
+  (comment "none (or is not version 2). Walks the words to find it.")
   (let [^I32 end (+ at (cells-at c at))
         ^I32 n (an-ocr-count c at)
         ^:mut ^I32 w (an-ocr-first c at)
@@ -163,19 +207,30 @@
 (defn ^:pub ^I32 ox-sconf [^Cells c ^I32 ext] (return (cells-at c (+ ext 7))))
 (defn ^:pub ^I32 ox-oconf [^Cells c ^I32 ext] (return (cells-at c (+ ext 8))))
 (defn ^:pub ^I32 ox-nlines [^Cells c ^I32 ext] (return (cells-at c (+ ext 9))))
+(defn ^:pub ^I32 ox-nblocks [^Cells c ^I32 ext] (return (cells-at c (+ ext 10))))
+(defn ^:pub ^I32 ox-binary [^Cells c ^I32 ext] (return (cells-at c (+ ext 11))))
+(defn ^:pub ^I32 ox-bw [^Cells c ^I32 ext] (return (cells-at c (+ ext 12))))
+(defn ^:pub ^I32 ox-bh [^Cells c ^I32 ext] (return (cells-at c (+ ext 13))))
 
 (defn ^:pub ^I32 ox-line-at [^Cells c ^I32 ext ^I32 k]
   (return (+ (+ ext (ox-header)) (* k (ox-line-stride)))))
 
+(defn ^:pub ^I32 ox-block-at [^Cells c ^I32 ext ^I32 k]
+  (comment "The start of block `k`'s row in the block table, which follows the lines.")
+  (let [^I32 n (ox-nlines c ext)]
+    (return (+ (ox-line-at c ext n) (* k (ox-block-stride))))))
+
 (defn ^:pub ^I32 ox-first-word [^Cells c ^I32 ext]
   (comment "The start of the first word's extension.")
-  (let [^I32 n (ox-nlines c ext)]
-    (return (ox-line-at c ext n))))
+  (let [^I32 n (ox-nblocks c ext)]
+    (return (ox-block-at c ext n))))
 
 (defn ^:pub ^I32 ox-wflags [^Cells c ^I32 w] (return (cells-at c w)))
 (defn ^:pub ^I32 ox-wlang [^Cells c ^I32 w] (return (cells-at c (+ w 1))))
-(defn ^:pub ^I32 ox-nsym [^Cells c ^I32 w] (return (cells-at c (+ w 2))))
-(defn ^:pub ^I32 ox-first-sym [^Cells c ^I32 w] (return (+ w 3)))
+(defn ^:pub ^I32 ox-wpsize [^Cells c ^I32 w] (return (cells-at c (+ w 2))))
+(defn ^:pub ^I32 ox-wdflags [^Cells c ^I32 w] (return (cells-at c (+ w 3))))
+(defn ^:pub ^I32 ox-nsym [^Cells c ^I32 w] (return (cells-at c (+ w 4))))
+(defn ^:pub ^I32 ox-first-sym [^Cells c ^I32 w] (return (+ w 5)))
 
 (defn ^:pub ^I32 ox-alt-next [^Cells c ^I32 alt]
   (return (+ (+ alt 2) (cells-at c alt))))
@@ -194,7 +249,7 @@
     (return a)))
 
 (defn ^:pub ^I32 ox-word-next [^Cells c ^I32 w]
-  (let [^I32 n (cells-at c (+ w 2))
+  (let [^I32 n (cells-at c (+ w 4))
         ^:mut ^I32 s (ox-first-sym c w)
         ^:mut ^I32 i 0]
     (while (< i n)
