@@ -691,7 +691,7 @@ public static class Para {
     }
     internal static int PaJoinScore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells raw, int a, int b, int colx0, int colx1, int ncol, int bmargin, int indents, int bottom, int bx0, int bx1, int bn) {
         // The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going
-        // on with line b, the first of the next fragment (SPEC 10.1.2, D159). `colx0`..`colx1` is the extent of a's
+        // on with line b, the first of the next fragment (SPEC 10.1.2, D164). `colx0`..`colx1` is the extent of a's
         // fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether
         // the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.
         int n = emon.Port.CellsLen(raw);
@@ -1035,7 +1035,7 @@ public static class Para {
         return 0;
     }
     public static int PaDump(System.Text.StringBuilder t, emon.Port.Cells cf, emon.Port.Cells dbg) {
-        // The column stage's evidence as debug lines (SPEC 10.1.1; D158, D159), from what `pa-build` was given:
+        // The column stage's evidence as debug lines (SPEC 10.1.1; D163, D164), from what `pa-build` was given:
         // one line `F page band col role x0 y0 x1 y1 first count assoc` per column fragment (the cut tree's leaves,
         // in reading order, body fragments first; centipoints, `first`/`count` index the stage's line list) and one
         // `J fragment a b score` per join decision, in the order made (lines separated by a newline, none after the last) (`a`, `b` rows of the stage's lines, `score` the

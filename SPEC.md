@@ -1458,7 +1458,7 @@ the page's `layout` (§3.7).
    trees of nearly equal score. Newspaper jumps (`continued on page 4`) are
    not followed: the two parts stay two blocks.
 
-**As built (P4.1, D158, D160).** The text layer's stage reads what steps 1-6
+**As built (P4.1, D163, D165).** The text layer's stage reads what steps 1-6
 say with these departures, each forced by a document and held by a named
 constant: a row counts for a gutter only where it has type of body class
 (17/20 to 27/20 of the dominant size; a footnote or a chart label is not),
@@ -1502,7 +1502,7 @@ order (a note, a figure, a table, a caption) move after the joined
 paragraph, in their order. A join near the threshold lowers the paragraph's
 confidence.
 
-**As built (P4.1, D159).** `join-min` is 4; the points are +3 hyphen, +2 edge
+**As built (P4.1, D164).** `join-min` is 4; the points are +3 hyphen, +2 edge
 (within 15 % of the width), +2 no terminal mark (a footnote mark after the
 mark is not read), +3 lowercase, −3 indent, −3 list marker, −3 another size
 or style, −3 short, +1 following in the stream, and two the table above does

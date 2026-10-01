@@ -1,4 +1,4 @@
-;; Columns and reading order (P4.1; SPEC 10.1.1; D111, D158-D161). emon's own module (D039).
+;; Columns and reading order (P4.1; SPEC 10.1.1; D111, D163-D166). emon's own module (D039).
 ;;
 ;;   (lc-copy ln lt)                     the document's lines, copied: the stage splits lines, the evidence is not touched
 ;;   (lc-page wd et lt p ...)            one page: its fragments (`cf`) and their lines in reading order (`lo`)

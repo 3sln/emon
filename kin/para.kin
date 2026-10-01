@@ -61,7 +61,7 @@
 (defconst ^I32 PA_ROT_SLOP 100)     ;; upright: within one degree of 0
 (defconst ^I32 PA_INDENT_USE 1)     ;; the document's paragraphs have first-line indents from this many
 
-;; the points of a continuation (SPEC 10.1.2, D159) against `join-min`
+;; the points of a continuation (SPEC 10.1.2, D164) against `join-min`
 (defconst ^I32 JS_HYPHEN 3)         ;; the last line ends in a hyphen after a letter
 (defconst ^I32 JS_EDGE 2)           ;; ... reaches the end edge of its column
 (defconst ^I32 JS_SHORT -3)         ;; ... is short: more than 1/5 of the column's width free
@@ -71,8 +71,8 @@
 (defconst ^I32 JS_MARKER -3)        ;; ... starts with a list marker
 (defconst ^I32 JS_STYLE -3)         ;; ... is of another size or style
 (defconst ^I32 JS_STREAM 1)         ;; ... follows in the content stream
-(defconst ^I32 JS_WIDTH -3)         ;; the two fragments are not of one width (a table, a figure, another structure: D159)
-(defconst ^I32 JS_BOTTOM 1)         ;; the last line is at the bottom of its column: the column is full (D159)
+(defconst ^I32 JS_WIDTH -3)         ;; the two fragments are not of one width (a table, a figure, another structure: D164)
+(defconst ^I32 JS_BOTTOM 1)         ;; the last line is at the bottom of its column: the column is full (D164)
 (defconst ^I32 JOIN_MIN 4)
 (defconst ^I32 PA_EDGE_PCT 15)       ;; the last line reaches the column's end: at most 15 per cent of the width short
 
@@ -617,7 +617,7 @@
                           ^I32 colx0 ^I32 colx1 ^I32 ncol ^I32 bmargin ^I32 indents ^I32 bottom
                           ^I32 bx0 ^I32 bx1 ^I32 bn]
   (comment "The points for the paragraph that ended its fragment (its last line a, the text so far in `raw`) going")
-  (comment "on with line b, the first of the next fragment (SPEC 10.1.2, D159). `colx0`..`colx1` is the extent of a's")
+  (comment "on with line b, the first of the next fragment (SPEC 10.1.2, D164). `colx0`..`colx1` is the extent of a's")
   (comment "fragment, `ncol` its lines (the edge signals need two), `bmargin` the margin of b's, `indents` whether")
   (comment "the document's paragraphs have first-line indents, `bottom` the bottom of the fragments of a's band.")
   (let [^I32 n (cells-len raw)
@@ -937,7 +937,7 @@
   (return 0))
 
 (defn ^:pub ^I32 pa-dump [^:mut ^Text t ^Cells cf ^Cells dbg]
-  (comment "The column stage's evidence as debug lines (SPEC 10.1.1; D158, D159), from what `pa-build` was given:")
+  (comment "The column stage's evidence as debug lines (SPEC 10.1.1; D163, D164), from what `pa-build` was given:")
   (comment "one line `F page band col role x0 y0 x1 y1 first count assoc` per column fragment (the cut tree's leaves,")
   (comment "in reading order, body fragments first; centipoints, `first`/`count` index the stage's line list) and one")
   (comment "`J fragment a b score` per join decision, in the order made (lines separated by a newline, none after the last) (`a`, `b` rows of the stage's lines, `score` the")

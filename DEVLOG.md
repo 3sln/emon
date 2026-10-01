@@ -1623,16 +1623,16 @@ analysis beyond "top-to-bottom lines on a single column".
   tau at least 0.95, no `join-p` below 0.95; on `layout/arxiv` 1512.03385,
   1810.04805 and 2206.01062 a person reads the HTML in order and the entry
   lists what is wrong; first numbers recorded in the scoreboard (D023).
-  *Done (P4.1, D158-D161).* New `kin/columns.kin` (`emon.columns`: `lc-copy`, `lc-page`) and `kin/para.kin` rebuilt around it
+  *Done (P4.1, D163-D166).* New `kin/columns.kin` (`emon.columns`: `lc-copy`, `lc-page`) and `kin/para.kin` rebuilt around it
   (`pa-build` has a new, longer signature: the column stage's scratch and a debug log are arguments; `host/rust/src/engine.rs` was
   changed to pass them). Per page: the lines are copied (the evidence is not touched), side lines (margin notes, sidebars) are set
   aside, **gutters are found over words**, lines that cross one are **split**, the extents are carried along the columns, the **cut
   tree** is made (vertical first; horizontal only at a full-width gap, at the end of an extent that no other gutter's extent
   contains, or under a title) and its leaves are the **column fragments**, numbered `band`/`col`; the page's `layout` map is written
   for every page that has text (one cell for a one-column page); then the paragraphs are built fragment by fragment and a paragraph
-  that fills its fragment is **joined** to the next by the points of D159, with hyphenation at the break by the rule of SPEC 3.6
+  that fills its fragment is **joined** to the next by the points of D164, with hyphenation at the break by the rule of SPEC 3.6
   (no locale: the hyphen is kept). Margin notes and sidebars become `note` blocks placed after the paragraph beside which they begin
-  (D160). `bb unit` has seven new laws in `kin/paratest.kin` (two columns, the join, the hyphen at the break, a title across the
+  (D165). `bb unit` has seven new laws in `kin/paratest.kin` (two columns, the join, the hyphen at the break, a title across the
   gutter, margin notes, a right-to-left page, a table across the gutter and a gap, a line written across the gutter and split at
   it); `kin/scripts/slice --update` rewrote the six `.full.html` goldens (they now carry `data-emon-col`), `test/para/*.json` the
   page `layout`; no paragraph of them changed.
@@ -1653,7 +1653,7 @@ analysis beyond "top-to-bottom lines on a single column".
   title and authors are band 0, then two columns, in order; the abstract, section heads and footnote at the foot of column 1 are in
   their column; the figure's labels (CIFAR curves, `20`, `56-layer`, tick numbers) are paragraphs in the right column's top (P5), and
   the sentence that straddles the figure (`have also` / `greatly benefited from very deep models.`) is not joined (the first line of
-  the next column is a chart label, not the continuation: D159). **1810.04805**: title and authors band 0, two columns in order,
+  the next column is a chart label, not the continuation: D164). **1810.04805**: title and authors band 0, two columns in order,
   bullet items cut after their marker line (the hanging indent starts a paragraph: D135, P4.5), hyphenated words kept hyphenated (`representa-tion`), `In this paper...` joined from
   page 1 to page 2; correct. **2206.01062**: the page-1 header (author block of five authors in three cells) is read in a plausible
   order but `Rueschlikon, Switzerland bpf@zurich.ibm.com` is joined across the author cells and the abstract's lines are each a
@@ -1666,13 +1666,13 @@ analysis beyond "top-to-bottom lines on a single column".
   footer is a paragraph and a header can be joined to the first paragraph of the page (GAO page 5/6); (3) line numbers in a margin
   (a column of digits) are dropped from the flow without a ledger entry; (4) a paragraph that ends exactly at the bottom of a column in a
   full line closing a sentence and whose next column starts in capitals has no evidence of continuing but "the column is full": it
-  is joined when the line reaches the edge (D159), and the synthetic corpus has paragraphs that do and do not; (5) two columns that
+  is joined when the line reaches the edge (D164), and the synthetic corpus has paragraphs that do and do not; (5) two columns that
   continue a paragraph for fewer than three rows at a page's top are read row by row; (6) the first line of a continuation after a
   figure at the head of a column; (7) tight-leading and loose-leading text in one document (`pa-new-par`'s document-wide median);
   (8) a table of cells of three words or more with a gap of under three sizes is read as columns (no table stage yet); (9) a
   producer that writes one word per line in a column (rare) gives words, not lines, to split.
   *Learnt*: a page's structure is found by dumping what the algorithm decided (each gutter's extent and why it ended, each fragment's
-  box), not by reading the code: every constant of D158 that is not the SPEC's came from one such dump (the median word gap that
+  box), not by reading the code: every constant of D163 that is not the SPEC's came from one such dump (the median word gap that
   ended every gutter of a justified three-word column, the table row that closed the gutters of a newspaper, the footnote that
   was body type at 0.77 of the size). Go's `declared and not used` found a local that `rustc` accepted (`r` of `pa-columns`, kept as `^:mut` and never read);
   the nested-read-of-a-mutated-`Cells` borrow error occurred twice (a call that took `(ln-get lt ...)` as an argument while `lt` was the
@@ -5585,12 +5585,12 @@ a per-glyph classifier is right and a per-string expectation is not (text partly
 drawn where they are (a picture, a patch, the same text again) for all but 3 of the 27,505 glyphs of the hidden classes (those 3 had no ink, as claimed): the fixtures (D156) are the witness for those classes. ZERO-SIZE: 137. No sampled file had transparent or `ocg-hidden` text. Pdfminer.six does not reason about visibility at all (it extracts Tr 3 text and white text); the glyph streams were already held to it (D127: 99.6% of 2.0M characters).
 **Also found**: poppler and Ghostscript ignore the `/AS` View state (D154); `pdftotext` drops clipped text; the corpus's white and occluded text is in a handful of files (white text in a brochure, text under white patches in a form).
 
-### D158 — The column stage as built: gutters from the rows of a page's words, extents carried along the columns, a cut tree that cuts at full-width gaps and between gutters, never through them (P4.1; D111, SPEC 10.1.1)
+### D163 — The column stage as built: gutters from the rows of a page's words, extents carried along the columns, a cut tree that cuts at full-width gaps and between gutters, never through them (P4.1; D111, SPEC 10.1.1)
 **Decision**: `kin/columns.kin` (`emon.columns`) does SPEC 10.1.1's steps over a page's UPRIGHT lines (non-upright ones stand alone, D136), on a
 COPY of `lines` (`lc-copy`; the evidence is never written). Everything is an integer in centipoints; each number below is a named constant
 (`LC_*`), the settings of SPEC 13 until the Engine has a table. **(0) The page**: its dominant size is the size (within 1/20) with the most line width;
 the body block is the dominant-size lines at least 2/5 as long as the longest of them (`LC_LONG`); lines wholly outside it by half a size,
-when most of them are in type under 19/20 of the dominant, are SIDE lines (D160) and a line of digits among them is dropped (line numbers).
+when most of them are in type under 19/20 of the dominant, are SIDE lines (D165) and a line of digits among them is dropped (line numbers).
 **(1) Gutters, over words**: items are the words (a producer that writes a row across the columns gives one LINE with a gap in it); rows
 are the words whose baselines are within half of the smaller size; per row, the free x-intervals between two runs of ink at least
 `gutter-min` wide start an interval (the larger of 3/5 of the row's size and 1.5 times its median word gap: a river of a justified line
@@ -5607,7 +5607,7 @@ a line whose words are on both sides of a gutter inside its extent is split at i
 through one-sided lines of body size until a line crosses or a gap of `hole` sizes, except the last line of a spanning paragraph (a line
 whose neighbour above crosses the gutter within 4/5 of a size); carried down by the sweep itself, and trimmed above a last row that has
 words on one side only when ink crosses the gutter close under it (a heading that goes with the spanning text under it). Gutters of one
-column gap seen in pieces are merged. **(4) The cut tree**, a stack, a region cut in this order: the cut under the title (see D160); the
+column gap seen in pieces are merged. **(4) The cut tree**, a stack, a region cut in this order: the cut under the title (see D165); the
 first full-width gap of more than 5/2 sizes between the lines of the region (`LC_GAP`: the story break of a newspaper, a figure's hole), made
 only when some gutter divides the region (a region of one column is not cut at every paragraph gap), and never a gap that lines up in
 balanced columns, which is not wider than a paragraph gap; a gutter whose extent covers every line of the region, vertically; the first top
@@ -5616,7 +5616,7 @@ or bottom of the extent of a gutter that divides the region, strictly inside its
 Right-to-left pages (the majority of the page's lines, D104) put the right half first. **(5) Fragments**: leaves, their lines in rows
 (baseline, then x); `band` is the number of horizontal cuts above the middle of the fragment and across its x-range, `col` the number
 of earlier body fragments of its band; the page's `layout` has one cell per (band, col); a fragment also keeps the bottom of the region its
-vertical cuts came from (the columns of one set end together: D159).
+vertical cuts came from (the columns of one set end together: D164).
 **Why**: SPEC 10.1.1 as written finds gutters from persistence rows with ink on both sides in every row, which fails exactly where real
 pages are: columns whose baselines are offset by headings (every row would be one-sided), figures and tables whose labels live in one column, narrow
 justified columns, page tails. Each departure was forced by a document of the corpus or a paper (the dump showed it) and is a constant a
@@ -5629,7 +5629,7 @@ scores badly); gutter rows counted over lines rather than words (misses the rows
 that also ends a gutter (ends them in every narrow justified column).
 - [ ] **Signed off** (maintainer)
 
-### D159 — A paragraph that fills its fragment goes on in the next one when the points say so: the table, `join-min` 4, and what each signal is worth (P4.1; D112, SPEC 10.1.2)
+### D164 — A paragraph that fills its fragment goes on in the next one when the points say so: the table, `join-min` 4, and what each signal is worth (P4.1; D112, SPEC 10.1.2)
 **Decision**: between the last line of a body fragment and the first of the next, in reading order (next column, or the first of the next page),
 a paragraph continues when its points reach `join-min` 4. The points (`JS_*` in `kin/para.kin`): last line ends in a hyphen after a letter **+3**;
 reaches the column's end edge (within 15 per cent of the fragment's width) **+2**; ends without a sentence mark (a footnote mark of one to
@@ -5643,7 +5643,7 @@ than its neighbours ended a paragraph). The edge and bottom signals need a fragm
 `P` that holds both (decisive in the SPEC) is not read: the tagged tree is P3.7's and reaches this stage with P4.2. A join is one
 paragraph, `at` one region per fragment, `text` inlines and a `break` milestone only where the page changes, the column break only
 the regions; the hyphen at the break is `pa-join`'s (SPEC 3.6: no locale, hyphen kept, a soft hyphen goes); notes that begin
-between the two are written after the joined paragraph (D160). `pa-dump` prints every fragment and every join decision as lines
+between the two are written after the joined paragraph (D165). `pa-dump` prints every fragment and every join decision as lines
 (`F` and `J`, one law, `test/para/two-columns.dump`): the evidence dump of the stage.
 **Why**: the table is the SPEC's with weights chosen on the corpus so that the cases with evidence join (a hyphen, a lowercase start, a
 full line without a stop) and the cases without do not unless the column is full and the line reaches the
@@ -5655,8 +5655,8 @@ ends at a page's foot, with a footnote mark). The width signal made a table afte
 the corpus with a learned weight (the corpus is 11 joins); a signal for the paragraph's own length (unknown here).
 - [ ] **Signed off** (maintainer)
 
-### D160 — Margin notes and sidebars are lines outside the body block; a column of them is one `layout` cell, each run of them one `note`; the title above columns is cut from them (P4.1; D111, D113)
-**Decision**: the side lines of D158 (outside the body block by half a size, mostly under 19/20 of the dominant size; a digits-only line among
+### D165 — Margin notes and sidebars are lines outside the body block; a column of them is one `layout` cell, each run of them one `note`; the title above columns is cut from them (P4.1; D111, D113)
+**Decision**: the side lines of D163 (outside the body block by half a size, mostly under 19/20 of the dominant size; a digits-only line among
 them is a line number and is dropped, with no ledger entry yet: P4.3's) are grouped, per side, into RUNS (a gap of more than two sizes ends
 one); a run of at most four lines, all of them in small type, is a `margin` note, any other a `sidebar`; each is a fragment with the body
 fragment it overlaps most in y as `assoc` and its band; the notes of one side are ONE column of the page's `layout` (the left strip first, after the body
@@ -5665,14 +5665,14 @@ is written when the paragraph open beside it is closed: after the last paragraph
 paragraph (a note beside a paragraph that goes on to the next column waits for the next paragraph break). When the page has side
 lines and something lies above the body's first line that is not of body type (a title), the cut under it is the page's first horizontal cut (the
 gold's `band 0`). Not found: a sidebar INSIDE the body block (a box between two columns); it is a column.
-**Why**: the gold's notes (`columns-margin-notes`, `columns-uneven`) have no gutter: a note is one or two lines, too few rows for D158's gutter, so
+**Why**: the gold's notes (`columns-margin-notes`, `columns-uneven`) have no gutter: a note is one or two lines, too few rows for D163's gutter, so
 the margin is found by what lies outside the text, which is what a person does; the placement is D111's "after the body block being read
 where it begins".
 **Alternatives**: gutters only (the notes are in the middle of the paragraphs they stand beside); a note per line; a sidebar by a box (the
 interpreter writes no paths yet).
 - [ ] **Signed off** (maintainer)
 
-### D161 — `pa-build` makes the Model in two phases from the column fragments; the page `layout` is written for every page; HTML carries the column of a block with `geometry` (P4.1; D112, D113, D132)
+### D166 — `pa-build` makes the Model in two phases from the column fragments; the page `layout` is written for every page; HTML carries the column of a block with `geometry` (P4.1; D112, D113, D132)
 **Decision**: `pa-build` copies the lines, runs `lc-page` on every page (phase one: fragments, and the page `layout` from them: `lay-add`, one
 cell per (band, col) with the union of the fragments' boxes), then builds paragraphs per fragment (phase two), the line gap being the
 lower quartile over the fragments' consecutive lines. A page with text has at least one `layout` cell (a one-column page has one), so every Model's JSON has a
