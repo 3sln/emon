@@ -212,6 +212,11 @@
                          :java "emon.Port.newCells()"
                          :csharp "emon.Port.NewCells()"}
                         {:tag el/Cells :arity 0})
+    'new-buf (kl/call {:go "port.NewBuf()"
+                       :rust "(&mut crate::port::Buf::new())"
+                       :java "emon.Port.newBuf()"
+                       :csharp "emon.Port.NewBuf()"}
+                      {:tag el/Buf :arity 0})
     'new-text (kl/call {:go "port.NewText()"
                         :rust "(&mut crate::port::new_text())"
                         :java "emon.Testport.newText()"

@@ -1,0 +1,226 @@
+;; The PNG writer's test images, and its cross-target probe (P3.11, D117).
+;;
+;; TWELVE IMAGES, generated from splitmix in integers, so every target builds
+;; the same pixels and, through `emon.png`, the same file. `pp-build` writes
+;; image k to `out` (and, to `raw`, the rows it was given: what a decoder must
+;; answer); `pp-digest` answers the SHA-256 of the file as hex text, which
+;; `kin/scripts/check` compares across the four targets and with
+;; `test/png/digests.txt`; `kin/scripts/png-check` writes the files and has
+;; ImageMagick and java.util.zip decode them. `pp-page` writes real pixels
+;; (a scan, a photo) handed in as a `Blob`: what the benchmark uses.
+;;
+;;    k   image                             type, depth    pHYs
+;;    0   gray 1x1                           0, 8          -
+;;    1   RGB 97x61, a smooth gradient        2, 8          96 dpi
+;;    2   RGBA 97x61, gradient, random alpha  6, 8          -
+;;    3   gray+alpha 97x61, random            4, 8          -
+;;    4   bilevel gray 33x17, random          0, 1          -
+;;    5   16-entry palette, 12 alphas, 50x30  3, 4          -
+;;    6   RGB 3000x1                          2, 8          -
+;;    7   gray 1x3000                         0, 8          -
+;;    8   a scan-like strip 2481x64           0, 8          300 dpi
+;;    9   RGB 61x43, 16-bit gradient          2, 16         72 dpi
+;;   10   RGBA 23x19, 16-bit random           6, 16         -
+;;   11   200-entry palette 64x48             3, 8          -
+(ns emon.pngprobe
+  (:require [emon.lang :refer [I32 I64 Blob Cells Buf Text i64 shl32 sar32]]
+            [emon.port :refer [blob-u8 cells-at cells-set cells-push cells-drop
+                               cells-len buf-len buf-at buf-push buf-blob buf-truncate
+                               crypto-sha256 text-cp]]
+            [emon.splitmix :refer [sm-seed sm-below]]
+            [emon.png :refer [png-begin png-row png-end]]
+            [kin.lang :refer [defn defdata return let set while if comment do
+                              + - * < > <= >= == != and or bit-and bit-or
+                              quot rem]]))
+
+(defdata pp-table
+  :emitter kin.lang/flat-array
+  :data [1 1 0 8 0 0 0 0
+         97 61 2 8 9600 0 0 1
+         97 61 6 8 0 0 0 1
+         97 61 4 8 0 0 0 0
+         33 17 0 1 0 0 0 0
+         50 30 3 4 0 16 12 0
+         3000 1 2 8 0 0 0 1
+         1 3000 0 8 0 0 0 1
+         2481 64 0 8 30000 0 0 2
+         61 43 2 16 7200 0 0 1
+         23 19 6 16 0 0 0 0
+         64 48 3 8 0 200 0 1]
+  :accessors {^I32 pp-table-at [^I32 ignored ^I32 i]})
+
+(defn ^:pub ^I32 pp-count []
+  (comment "The images `kin/scripts/check` digests.")
+  (return 12))
+
+(defn ^:pub ^I32 pp-spec [^I32 k ^I32 f]
+  (comment "Field f of image k: 0 w, 1 h, 2 colour type, 3 depth, 4 dpi*100,")
+  (comment "5 palette entries, 6 tRNS entries, 7 content (0 random, 1 smooth,")
+  (comment "2 scan-like).")
+  (return (pp-table-at 0 (+ (* k 8) f))))
+
+(defn ^:pub ^I32 pp-channels [^I32 ct]
+  (if (== ct 2) (return 3))
+  (if (== ct 4) (return 2))
+  (if (== ct 6) (return 4))
+  (return 1))
+
+(defn ^I32 pp-sample [^:mut ^Cells st ^I32 kind ^I32 depth ^I32 x ^I32 y ^I32 c
+                      ^I32 alpha]
+  (comment "One sample of depth `depth` bits. Random where the image is, or the")
+  (comment "channel is alpha; a gradient with a little noise; or scan-like.")
+  (let [^:mut ^I32 v 0
+        ^I32 mask (- (shl32 1 depth) 1)]
+    (if (or (== kind 0) (== alpha 1))
+      (return (sm-below st (shl32 1 depth))))
+    (if (== kind 1)
+      (do (if (== depth 16)
+            (set v (+ (+ (* x 257) (* y 131)) (+ (* c 4000) (* 37 (sm-below st 5)))))
+            (set v (+ (+ (* x 7) (* y 3)) (+ (* c 50) (sm-below st 5)))))
+          (return (bit-and v mask))))
+    (set v (+ 235 (sm-below st 6)))
+    (if (and (== (rem (+ (quot x 9) (quot y 7)) 5) 0)
+             (and (< (rem x 9) 6) (< (rem y 7) 4)))
+      (set v (+ 20 (sm-below st 30))))
+    (return v)))
+
+(defn ^I32 pp-pack-row [^:mut ^Cells row ^:mut ^Cells st ^I32 w ^I32 ch ^I32 ct
+                        ^I32 depth ^I32 kind ^I32 y ^I32 npal]
+  (comment "Build row y into `row` (cleared first) as the PNG format packs it.")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 acc 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 al 0]
+    (cells-drop row 0)
+    (while (< x w)
+      (do (set c 0)
+          (while (< c ch)
+            (do (set al 0)
+                (if (and (or (== ct 4) (== ct 6)) (== c (- ch 1))) (set al 1))
+                (set v (pp-sample st kind depth x y c al))
+                (if (== ct 3) (set v (rem v npal)))
+                (if (== depth 16)
+                  (do (cells-push row (bit-and (sar32 v 8) 255))
+                      (cells-push row (bit-and v 255))))
+                (if (== depth 8)
+                  (cells-push row v))
+                (if (< depth 8)
+                  (do (set acc (+ (shl32 acc depth) v))
+                      (set nb (+ nb depth))
+                      (if (== nb 8)
+                        (do (cells-push row acc)
+                            (set acc 0)
+                            (set nb 0)))))
+                (set c (+ c 1))))
+          (set x (+ x 1))))
+    (if (> nb 0)
+      (cells-push row (shl32 acc (- 8 nb))))
+    (return 0)))
+
+(defn ^I32 pp-palette [^:mut ^Cells pal ^I32 k ^I32 npal]
+  (let [^:mut ^I32 i 0]
+    (cells-drop pal 0)
+    (while (< i npal)
+      (do (if (== k 5)
+            (do (cells-push pal (* i 17))
+                (cells-push pal (- 255 (* i 17)))
+                (cells-push pal (bit-and (* i 53) 255))
+                (cells-push pal (bit-and (* i 23) 255)))
+            (do (cells-push pal i)
+                (cells-push pal (bit-and (* i 5) 255))
+                (cells-push pal (- 255 i))
+                (cells-push pal 255)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pp-build [^I32 k ^:mut ^Cells ws ^:mut ^Buf out ^:mut ^Buf z
+                           ^:mut ^Buf raw ^:mut ^Cells row ^:mut ^Cells st
+                           ^:mut ^Cells pal]
+  (comment "Image k into `out`; the rows it was given, packed, into `raw`.")
+  (let [^I32 w (pp-spec k 0)
+        ^I32 h (pp-spec k 1)
+        ^I32 ct (pp-spec k 2)
+        ^I32 depth (pp-spec k 3)
+        ^I32 dpi (pp-spec k 4)
+        ^I32 npal (pp-spec k 5)
+        ^I32 trns (pp-spec k 6)
+        ^I32 kind (pp-spec k 7)
+        ^I32 ch (pp-channels ct)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0]
+    (sm-seed st (i64 (+ 1000 k)))
+    (pp-palette pal k npal)
+    (png-begin ws out z w h ct depth dpi pal npal trns)
+    (while (< y h)
+      (do (pp-pack-row row st w ch ct depth kind y npal)
+          (set i 0)
+          (while (< i (cells-len row))
+            (do (buf-push raw (cells-at row i))
+                (set i (+ i 1))))
+          (png-row ws out z row 0)
+          (set y (+ y 1))))
+    (png-end ws out z)
+    (return 0)))
+
+
+(defn ^I32 pp-ct [^I32 ch]
+  (if (== ch 2) (return 4))
+  (if (== ch 3) (return 2))
+  (if (== ch 4) (return 6))
+  (return 0))
+
+(defn ^:pub ^I32 pp-page [^:mut ^Cells ws ^:mut ^Buf out ^:mut ^Buf z
+                          ^Blob px ^I32 w ^I32 h ^I32 ch ^I32 dpi100
+                          ^:mut ^Cells row ^Cells pal]
+  (comment "A PNG of real 8-bit pixels: `px` is w * h * ch bytes, tightly packed,")
+  (comment "ch 1 (gray), 2, 3 (RGB) or 4. What the benchmark and png-check write.")
+  (let [^I32 n (* w ch)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0]
+    (png-begin ws out z w h (pp-ct ch) 8 dpi100 pal 0 0)
+    (while (< y h)
+      (do (cells-drop row 0)
+          (set i 0)
+          (while (< i n)
+            (do (cells-push row (blob-u8 px (+ (* y n) i)))
+                (set i (+ i 1))))
+          (png-row ws out z row 0)
+          (set y (+ y 1))))
+    (png-end ws out z)
+    (return 0)))
+
+;; --------------------------------------------------------------- the digest
+
+(defn ^I32 pp-hexdigit [^I32 d]
+  (if (< d 10) (return (+ 48 d)))
+  (return (+ 87 d)))
+
+(defn ^:pub ^I32 pp-digest [^Buf png ^:mut ^Cells dig ^:mut ^Text t]
+  (comment "The SHA-256 of the file as 64 lower-case hex digits, into `t`.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (cells-drop dig 0)
+    (crypto-sha256 (buf-blob png) 0 (buf-len png) dig)
+    (while (< i 32)
+      (do (set v (cells-at dig i))
+          (text-cp t (pp-hexdigit (bit-and (sar32 v 4) 15)))
+          (text-cp t (pp-hexdigit (bit-and v 15)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pp-probe [^:mut ^Cells ws ^:mut ^Buf out ^:mut ^Buf z
+                           ^:mut ^Buf raw ^:mut ^Cells row ^:mut ^Cells st
+                           ^:mut ^Cells pal ^:mut ^Cells dig ^:mut ^Text t]
+  (comment "The digests of the twelve images, one line, separated by spaces: the")
+  (comment "answer the four targets must give alike (`kin/scripts/check`).")
+  (let [^:mut ^I32 k 0]
+    (while (< k 12)
+      (do (buf-truncate out 0)
+          (buf-truncate raw 0)
+          (pp-build k ws out z raw row st pal)
+          (if (> k 0) (text-cp t 32))
+          (pp-digest out dig t)
+          (set k (+ k 1))))
+    (return 0)))

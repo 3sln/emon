@@ -1,0 +1,513 @@
+;; Laws for `emon.png` (P3.11, D117).
+;;
+;; THE TEST-ONLY READER. `pt-read` and `pt-decode` are written here, apart from
+;; the writer and its CRC table: they walk the chunks (a bitwise CRC-32, the
+;; length and order rules, every IDAT but the last exactly 65,536 bytes, no
+;; chunk the writer is not allowed), inflate the IDATs with `emon.inflate`
+;; (itself checked against zlib, D046), undo the filters, and compare the
+;; samples with what the generator (`emon.pngprobe`) handed the writer.
+;; THE DIGESTS of the twelve images are committed in `test/png/digests.txt`
+;; (one per line) and `kin/scripts/check` has the four targets print them:
+;; a change to any byte the writer makes is a reviewed change of that file.
+;; `kin/scripts/png-check` adds the independent decoders (ImageMagick,
+;; java.util.zip) over the same files.
+(ns emon.pngtest
+  (:require [emon.lang :refer [I32 I64 Blob Cells Buf shl32 sar32]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that
+                               new-cells new-buf test-file]]
+            [emon.port :refer [blob-len blob-u8 blob-u32 cells-len cells-at
+                               cells-set cells-push cells-drop buf-len buf-at
+                               buf-push buf-set buf-truncate buf-append-blob
+                               buf-blob crypto-sha256]]
+            [emon.splitmix :refer [sm-seed sm-below]]
+            [emon.inflate :refer [iz-zlib iz-ok]]
+            [emon.png :refer [png-begin png-row png-end]]
+            [emon.pngprobe :refer [pp-build pp-count pp-spec pp-channels]]
+            [kin.lang :refer [defn defconst let set while if comment do return
+                              + - * < > <= >= == != and or bit-and bit-or
+                              bit-xor quot rem]]))
+
+(defconst ^I32 PT_POLY -306674912)
+(defconst ^I32 PT_IHDR 1229472850)
+(defconst ^I32 PT_PLTE 1347179589)
+(defconst ^I32 PT_TRNS 1951551059)
+(defconst ^I32 PT_PHYS 1883789683)
+(defconst ^I32 PT_IDAT 1229209940)
+(defconst ^I32 PT_IEND 1229278788)
+
+;; info cells: what the reader found
+(defconst ^I32 I_W 0)
+(defconst ^I32 I_H 1)
+(defconst ^I32 I_CT 2)
+(defconst ^I32 I_DEPTH 3)
+(defconst ^I32 I_PPM 4)
+(defconst ^I32 I_NPAL 5)
+(defconst ^I32 I_NTRNS 6)
+(defconst ^I32 I_NIDAT 7)
+(defconst ^I32 I_F0 10)       ;; how many rows used filter 0..4 (10..14)
+
+;; ------------------------------------------------------------ the reader
+
+(defn ^I32 pt-crc [^Blob b ^I32 from ^I32 to]
+  (comment "CRC-32 bit by bit: no table, nothing shared with the writer.")
+  (let [^:mut ^I32 crc -1
+        ^:mut ^I32 i from
+        ^:mut ^I32 k 0]
+    (while (< i to)
+      (do (set crc (bit-xor crc (blob-u8 b i)))
+          (set k 0)
+          (while (< k 8)
+            (do (if (== (bit-and crc 1) 1)
+                  (set crc (bit-xor PT_POLY (bit-and (sar32 crc 1) 2147483647)))
+                  (set crc (bit-and (sar32 crc 1) 2147483647)))
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (return (bit-xor crc -1))))
+
+(defn ^I32 pt-read [^Blob png ^:mut ^Cells info ^:mut ^Buf idat]
+  (comment "Walk the file. 0 when it is well formed (signature, IHDR first, CRCs,")
+  (comment "chunk order, IDAT sizes, IEND last and alone), else a status: 1")
+  (comment "signature, 2 CRC, 3 order, 4 IHDR, 5 IDAT size, 6 unexpected chunk, 10")
+  (comment "truncated, 11 no IEND, 12 data after IEND.")
+  (let [^I32 n (blob-len png)
+        ^:mut ^I32 pos 8
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 ty 0
+        ^:mut ^I32 first 1
+        ^:mut ^I32 sawidat 0
+        ^:mut ^I32 sawend 0
+        ^:mut ^I32 prevlen 65536
+        ^:mut ^I32 nidat 0]
+    (if (< n 8) (return 1))
+    (if (!= (blob-u32 png 0) -1991225785) (return 1))
+    (if (!= (blob-u32 png 4) 218765834) (return 1))
+    (buf-truncate idat 0)
+    (while (and (< pos n) (== sawend 0))
+      (do (if (> (+ pos 12) n) (return 10))
+          (set ln (blob-u32 png pos))
+          (if (< ln 0) (return 10))
+          (if (> (+ (+ pos 12) ln) n) (return 10))
+          (set ty (blob-u32 png (+ pos 4)))
+          (if (!= (blob-u32 png (+ (+ pos 8) ln))
+                  (pt-crc png (+ pos 4) (+ (+ pos 8) ln)))
+            (return 2))
+          (if (and (== first 1) (!= ty PT_IHDR)) (return 3))
+          (if (== ty PT_IHDR)
+            (do (if (or (!= first 1) (!= ln 13)) (return 4))
+                (if (or (!= (blob-u8 png (+ pos 18)) 0)
+                        (or (!= (blob-u8 png (+ pos 19)) 0)
+                            (!= (blob-u8 png (+ pos 20)) 0)))
+                  (return 4))
+                (cells-set info I_W (blob-u32 png (+ pos 8)))
+                (cells-set info I_H (blob-u32 png (+ pos 12)))
+                (cells-set info I_DEPTH (blob-u8 png (+ pos 16)))
+                (cells-set info I_CT (blob-u8 png (+ pos 17)))))
+          (if (== ty PT_PLTE)
+            (do (if (== sawidat 1) (return 3))
+                (cells-set info I_NPAL (quot ln 3))))
+          (if (== ty PT_TRNS)
+            (do (if (== sawidat 1) (return 3))
+                (cells-set info I_NTRNS ln)))
+          (if (== ty PT_PHYS)
+            (do (if (== sawidat 1) (return 3))
+                (if (!= ln 9) (return 4))
+                (if (!= (blob-u32 png (+ pos 8)) (blob-u32 png (+ pos 12))) (return 4))
+                (if (!= (blob-u8 png (+ pos 16)) 1) (return 4))
+                (cells-set info I_PPM (blob-u32 png (+ pos 8)))))
+          (if (== ty PT_IDAT)
+            (do (if (== sawidat 2) (return 3))
+                (if (> ln 65536) (return 5))
+                (if (!= prevlen 65536) (return 5))
+                (set prevlen ln)
+                (set sawidat 1)
+                (set nidat (+ nidat 1))
+                (buf-append-blob idat png (+ pos 8) (+ (+ pos 8) ln))))
+          (if (== ty PT_IEND)
+            (do (if (!= ln 0) (return 4))
+                (set sawend 1)))
+          (if (and (!= ty PT_IHDR) (and (!= ty PT_PLTE) (and (!= ty PT_TRNS)
+                (and (!= ty PT_PHYS) (and (!= ty PT_IDAT) (!= ty PT_IEND))))))
+            (return 6))
+          (if (and (== sawidat 1) (!= ty PT_IDAT)) (set sawidat 2))
+          (set first 0)
+          (set pos (+ pos (+ 12 ln)))))
+    (if (== sawend 0) (return 11))
+    (if (!= pos n) (return 12))
+    (cells-set info I_NIDAT nidat)
+    (return 0)))
+
+(defn ^I32 pt-paeth [^I32 a ^I32 b ^I32 c]
+  (let [^I32 p (- (+ a b) c)
+        ^:mut ^I32 pa (- p a)
+        ^:mut ^I32 pb (- p b)
+        ^:mut ^I32 pc (- p c)]
+    (if (< pa 0) (set pa (- 0 pa)))
+    (if (< pb 0) (set pb (- 0 pb)))
+    (if (< pc 0) (set pc (- 0 pc)))
+    (if (and (<= pa pb) (<= pa pc)) (return a))
+    (if (<= pb pc) (return b))
+    (return c)))
+
+(defn ^I32 pt-decode [^Buf idat ^:mut ^Cells info ^:mut ^Cells dec ^:mut ^Cells st]
+  (comment "Inflate the IDAT data into `dec` and undo the filters in place: 0 when")
+  (comment "it is exactly h rows, else 20 (inflate refused), 21 (wrong size), 22 (a")
+  (comment "filter type that does not exist). Counts the filters used in info.")
+  (let [^I32 h (cells-at info I_H)
+        ^I32 w (cells-at info I_W)
+        ^I32 ct (cells-at info I_CT)
+        ^I32 depth (cells-at info I_DEPTH)
+        ^I32 ch (pp-channels ct)
+        ^I32 bits (* ch depth)
+        ^I32 rowb (quot (+ (* w bits) 7) 8)
+        ^I32 bpp (quot (+ bits 7) 8)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 rs 0
+        ^:mut ^I32 ps 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 cnt 0]
+    (cells-drop dec 0)
+    (if (!= (iz-zlib (buf-blob idat) 0 (buf-len idat) dec st) (iz-ok)) (return 20))
+    (if (!= (cells-len dec) (* h (+ rowb 1))) (return 21))
+    (set i 0)
+    (while (< i 5)
+      (do (cells-set info (+ I_F0 i) 0)
+          (set i (+ i 1))))
+    (while (< y h)
+      (do (set rs (* y (+ rowb 1)))
+          (set ps (- rs (+ rowb 1)))
+          (set f (cells-at dec rs))
+          (if (> f 4) (return 22))
+          (set cnt (cells-at info (+ I_F0 f)))
+          (cells-set info (+ I_F0 f) (+ cnt 1))
+          (set i 0)
+          (while (< i rowb)
+            (do (set x (cells-at dec (+ (+ rs 1) i)))
+                (set a 0)
+                (set b 0)
+                (set c 0)
+                (if (>= i bpp) (set a (cells-at dec (+ (+ rs 1) (- i bpp)))))
+                (if (> y 0) (set b (cells-at dec (+ (+ ps 1) i))))
+                (if (and (> y 0) (>= i bpp))
+                  (set c (cells-at dec (+ (+ ps 1) (- i bpp)))))
+                (set v x)
+                (if (== f 1) (set v (+ x a)))
+                (if (== f 2) (set v (+ x b)))
+                (if (== f 3) (set v (+ x (quot (+ a b) 2))))
+                (if (== f 4) (set v (+ x (pt-paeth a b c))))
+                (cells-set dec (+ (+ rs 1) i) (bit-and v 255))
+                (set i (+ i 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 pt-compare [^Cells dec ^Cells info ^Buf raw]
+  (comment "-1 when the unfiltered rows equal `raw`, else the first differing index.")
+  (let [^I32 h (cells-at info I_H)
+        ^I32 w (cells-at info I_W)
+        ^I32 bits (* (pp-channels (cells-at info I_CT)) (cells-at info I_DEPTH))
+        ^I32 rowb (quot (+ (* w bits) 7) 8)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0]
+    (if (!= (buf-len raw) (* h rowb)) (return -2))
+    (while (< y h)
+      (do (set i 0)
+          (while (< i rowb)
+            (do (if (!= (cells-at dec (+ (+ (* y (+ rowb 1)) 1) i))
+                        (buf-at raw (+ (* y rowb) i)))
+                  (return (+ (* y rowb) i)))
+                (set i (+ i 1))))
+          (set y (+ y 1))))
+    (return -1)))
+
+(defn ^I32 pt-expect-ppm [^I32 dpi100]
+  (if (> dpi100 0) (return (quot (+ (* dpi100 100) 127) 254)))
+  (return 0))
+
+;; -------------------------------------------------------------- the images
+
+(defn ^I32 pt-check [^I32 k]
+  (comment "Build image k, read it back with the test reader and compare. -1 passes;")
+  (comment "100 + status: the file is malformed or undecodable; 200: the header")
+  (comment "says something the spec does not; 1000 + i: a wrong sample at i.")
+  (let [^Cells ws (new-cells)
+        ^Buf out (new-buf)
+        ^Buf z (new-buf)
+        ^Buf raw (new-buf)
+        ^Cells row (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pal (new-cells)
+        ^Cells info (new-cells)
+        ^Cells dec (new-cells)
+        ^Cells ist (new-cells)
+        ^Buf idat (new-buf)
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 i 0]
+    (while (< i 16)
+      (do (cells-push info 0)
+          (set i (+ i 1))))
+    (pp-build k ws out z raw row st pal)
+    (set rc (pt-read (buf-blob out) info idat))
+    (if (!= rc 0) (return (+ 100 rc)))
+    (if (!= (cells-at info I_W) (pp-spec k 0)) (return 200))
+    (if (!= (cells-at info I_H) (pp-spec k 1)) (return 201))
+    (if (!= (cells-at info I_CT) (pp-spec k 2)) (return 202))
+    (if (!= (cells-at info I_DEPTH) (pp-spec k 3)) (return 203))
+    (if (!= (cells-at info I_PPM) (pt-expect-ppm (pp-spec k 4))) (return 204))
+    (if (!= (cells-at info I_NPAL) (pp-spec k 5)) (return 205))
+    (if (!= (cells-at info I_NTRNS) (pp-spec k 6)) (return 206))
+    (set rc (pt-decode idat info dec ist))
+    (if (!= rc 0) (return (+ 100 rc)))
+    (set rc (pt-compare dec info raw))
+    (if (!= rc -1) (return (+ 1000 rc)))
+    (return -1)))
+
+(deftest test-every-image-decodes-to-its-pixels
+  (let [^:mut ^I32 k 0]
+    (while (< k (pp-count))
+      (do (assert-eq-at (pt-check k) -1 "image decodes to exactly its samples" k)
+          (set k (+ k 1))))))
+
+;; ---------------------------------------------------------- the digests
+
+(defn ^I32 pt-hexval [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return (- c 48)))
+  (return (- c 87)))
+
+(defn ^I32 pt-digest-of [^I32 k ^Blob want]
+  (comment "-1 when the SHA-256 of image k equals line k of the committed file.")
+  (let [^Cells ws (new-cells)
+        ^Buf out (new-buf)
+        ^Buf z (new-buf)
+        ^Buf raw (new-buf)
+        ^Cells row (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pal (new-cells)
+        ^Cells dig (new-cells)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0]
+    (pp-build k ws out z raw row st pal)
+    (crypto-sha256 (buf-blob out) 0 (buf-len out) dig)
+    (if (!= (cells-len dig) 32) (return -3))
+    (set at (* k 65))
+    (while (< i 32)
+      (do (if (!= (cells-at dig i)
+                  (+ (* 16 (pt-hexval (blob-u8 want (+ at (* 2 i)))))
+                     (pt-hexval (blob-u8 want (+ (+ at (* 2 i)) 1)))))
+            (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(deftest test-every-image-has-its-committed-digest
+  (let [^:mut ^I32 k 0]
+    (while (< k (pp-count))
+      (do (assert-eq-at (pt-digest-of k (test-file "png/digests.txt")) -1
+                        "SHA-256 of the file equals test/png/digests.txt" k)
+          (set k (+ k 1))))))
+
+;; ------------------------------------------------------ structure and size
+
+(deftest test-the-chunks-are-the-specified-ones-and-no-others
+  (comment "pt-read refuses any chunk but IHDR, PLTE, tRNS, pHYs, IDAT, IEND, in")
+  (comment "order, so image 5 (palette, tRNS) and image 8 (pHYs) having read clean")
+  (comment "is the statement; here the header's own numbers.")
+  (let [^Cells ws (new-cells)
+        ^Buf out (new-buf)
+        ^Buf z (new-buf)
+        ^Buf raw (new-buf)
+        ^Cells row (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pal (new-cells)
+        ^Cells info (new-cells)
+        ^Buf idat (new-buf)
+        ^:mut ^I32 i 0]
+    (while (< i 16)
+      (do (cells-push info 0)
+          (set i (+ i 1))))
+    (pp-build 8 ws out z raw row st pal)
+    (assert-eq (pt-read (buf-blob out) info idat) 0 "well formed")
+    (assert-eq (cells-at info I_PPM) 11811 "300 dpi is 11811 pixels per metre")
+    (assert-eq (cells-at info I_NPAL) 0 "no palette")
+    (assert-eq (buf-at out 0) 137 "signature")
+    (assert-eq (buf-at out 1) 80 "P")
+    (assert-eq (buf-at out 12) 73 "IHDR follows at 12: I")
+    (assert-eq (buf-at out (- (buf-len out) 8)) 73 "IEND is the last chunk: I")
+    (assert-eq (buf-at out (- (buf-len out) 7)) 69 "E")
+    (assert-eq (buf-at out (- (buf-len out) 6)) 78 "N")
+    (assert-eq (buf-at out (- (buf-len out) 5)) 68 "D")))
+
+(deftest test-a-corrupted-file-is-refused-by-the-reader
+  (comment "The reader is only evidence if it can say no: a flipped bit in the")
+  (comment "IHDR or in the pixel data fails a CRC.")
+  (let [^Cells ws (new-cells)
+        ^Buf out (new-buf)
+        ^Buf z (new-buf)
+        ^Buf raw (new-buf)
+        ^Cells row (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pal (new-cells)
+        ^Cells info (new-cells)
+        ^Buf idat (new-buf)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 i 0]
+    (while (< i 16)
+      (do (cells-push info 0)
+          (set i (+ i 1))))
+    (pp-build 2 ws out z raw row st pal)
+    (assert-eq (pt-read (buf-blob out) info idat) 0 "well formed before")
+    (set v (buf-at out 20))
+    (buf-set out 20 (bit-xor v 1))
+    (assert-eq (pt-read (buf-blob out) info idat) 2 "IHDR CRC fails")
+    (buf-set out 20 v)
+    (set v (buf-at out 60))
+    (buf-set out 60 (bit-xor v 4))
+    (assert-eq (pt-read (buf-blob out) info idat) 2 "IDAT CRC fails")
+    (buf-set out 60 v)
+    (assert-eq (pt-read (buf-blob out) info idat) 0 "well formed again")))
+
+(defn ^I32 pt-random-rgb [^I32 w ^I32 h ^:mut ^Cells ws ^:mut ^Buf out ^:mut ^Buf z
+                          ^:mut ^Buf raw ^:mut ^Cells row ^:mut ^Cells st
+                          ^:mut ^Cells pal]
+  (comment "An incompressible RGB image: its IDATs must be several, each 65,536")
+  (comment "bytes but the last.")
+  (let [^:mut ^I32 y 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (sm-seed st 77)
+    (png-begin ws out z w h 2 8 0 pal 0 0)
+    (while (< y h)
+      (do (cells-drop row 0)
+          (set i 0)
+          (while (< i (* w 3))
+            (do (set v (sm-below st 256))
+                (cells-push row v)
+                (buf-push raw v)
+                (set i (+ i 1))))
+          (png-row ws out z row 0)
+          (set y (+ y 1))))
+    (png-end ws out z)
+    (return 0)))
+
+(deftest test-an-incompressible-image-is-written-in-several-idats
+  (let [^Cells ws (new-cells)
+        ^Buf out (new-buf)
+        ^Buf z (new-buf)
+        ^Buf raw (new-buf)
+        ^Cells row (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pal (new-cells)
+        ^Cells info (new-cells)
+        ^Cells dec (new-cells)
+        ^Cells ist (new-cells)
+        ^Buf idat (new-buf)
+        ^:mut ^I32 i 0]
+    (while (< i 16)
+      (do (cells-push info 0)
+          (set i (+ i 1))))
+    (pt-random-rgb 200 300 ws out z raw row st pal)
+    (assert-eq (pt-read (buf-blob out) info idat) 0 "well formed: every IDAT but the last is 65,536")
+    (assert-that (>= (cells-at info I_NIDAT) 3) "180,000 random bytes: at least three IDATs")
+    (assert-eq (pt-decode idat info dec ist) 0 "inflates")
+    (assert-eq (pt-compare dec info raw) -1 "to the pixels")
+    (assert-eq (buf-len z) 0 "the scratch buffer is empty at the end")))
+
+(deftest test-the-filter-is-the-one-with-the-smallest-sum-ties-to-the-lower
+  (comment "A gray 64x8 image of identical rows, each a ramp of step 3. Row 0: `none`")
+  (comment "sums 3*(0+..+63), `sub` is 3 a byte, `paeth` of a row with nothing above")
+  (comment "is `sub` again, so `sub` wins the tie on being lower. Rows 1..7: `up` is")
+  (comment "all zeros, and so is `paeth`; `up` wins. So filters: 1 once, 2 seven times.")
+  (let [^Cells ws (new-cells)
+        ^Buf out (new-buf)
+        ^Buf z (new-buf)
+        ^Cells row (new-cells)
+        ^Cells pal (new-cells)
+        ^Cells info (new-cells)
+        ^Cells dec (new-cells)
+        ^Cells ist (new-cells)
+        ^Buf idat (new-buf)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0]
+    (while (< i 16)
+      (do (cells-push info 0)
+          (set i (+ i 1))))
+    (png-begin ws out z 64 8 0 8 0 pal 0 0)
+    (while (< y 8)
+      (do (cells-drop row 0)
+          (set i 0)
+          (while (< i 64)
+            (do (cells-push row (* i 3))
+                (set i (+ i 1))))
+          (png-row ws out z row 0)
+          (set y (+ y 1))))
+    (png-end ws out z)
+    (assert-eq (pt-read (buf-blob out) info idat) 0 "well formed")
+    (assert-eq (pt-decode idat info dec ist) 0 "inflates")
+    (assert-eq (cells-at info (+ I_F0 0)) 0 "no row with none")
+    (assert-eq (cells-at info (+ I_F0 1)) 1 "one row with sub")
+    (assert-eq (cells-at info (+ I_F0 2)) 7 "seven rows with up")
+    (assert-eq (cells-at info (+ I_F0 3)) 0 "none with average")
+    (assert-eq (cells-at info (+ I_F0 4)) 0 "none with paeth")))
+
+(deftest test-palette-and-sub-byte-images-use-filter-none-only
+  (let [^Cells ws (new-cells)
+        ^Buf out (new-buf)
+        ^Buf z (new-buf)
+        ^Buf raw (new-buf)
+        ^Cells row (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pal (new-cells)
+        ^Cells info (new-cells)
+        ^Cells dec (new-cells)
+        ^Cells ist (new-cells)
+        ^Buf idat (new-buf)
+        ^:mut ^I32 i 0]
+    (while (< i 16)
+      (do (cells-push info 0)
+          (set i (+ i 1))))
+    (pp-build 5 ws out z raw row st pal)
+    (assert-eq (pt-read (buf-blob out) info idat) 0 "palette image, well formed")
+    (assert-eq (pt-decode idat info dec ist) 0 "inflates")
+    (assert-eq (cells-at info (+ I_F0 0)) 30 "all 30 rows filter none (palette)")
+    (assert-eq (cells-at info I_NPAL) 16 "16 entries")
+    (assert-eq (cells-at info I_NTRNS) 12 "12 alphas")
+    (buf-truncate out 0)
+    (buf-truncate raw 0)
+    (pp-build 4 ws out z raw row st pal)
+    (assert-eq (pt-read (buf-blob out) info idat) 0 "1-bit image, well formed")
+    (assert-eq (pt-decode idat info dec ist) 0 "inflates")
+    (assert-eq (cells-at info (+ I_F0 0)) 17 "all 17 rows filter none (1-bit)")))
+
+(deftest test-a-writer-reused-for-a-second-image-gives-the-same-file
+  (comment "The workspace is cleared by png-begin: a second image through the same")
+  (comment "buffers is byte for byte the first built fresh.")
+  (let [^Cells ws (new-cells)
+        ^Buf o1 (new-buf)
+        ^Buf o2 (new-buf)
+        ^Buf z (new-buf)
+        ^Buf raw (new-buf)
+        ^Cells row (new-cells)
+        ^Cells st (new-cells)
+        ^Cells pal (new-cells)
+        ^Cells ws2 (new-cells)
+        ^Buf z2 (new-buf)
+        ^Buf raw2 (new-buf)
+        ^Buf o3 (new-buf)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 same 1]
+    (pp-build 3 ws o1 z raw row st pal)
+    (pp-build 1 ws o2 z raw row st pal)
+    (buf-truncate raw 0)
+    (buf-truncate o1 0)
+    (pp-build 1 ws o1 z raw row st pal)
+    (pp-build 1 ws2 o3 z2 raw2 row st pal)
+    (assert-eq (buf-len o2) (buf-len o1) "same length after a different image")
+    (assert-eq (buf-len o3) (buf-len o1) "and as a fresh one")
+    (while (< i (buf-len o1))
+      (do (if (!= (buf-at o1 i) (buf-at o2 i)) (set same 0))
+          (if (!= (buf-at o1 i) (buf-at o3 i)) (set same 0))
+          (set i (+ i 1))))
+    (assert-eq same 1 "same bytes")))

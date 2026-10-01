@@ -125,6 +125,72 @@ pub fn cells_bytes(c: &Cells) -> Vec<u8> {
     c.v.iter().map(|&x| x as u8).collect()
 }
 
+// ---------------------------------------------------------------- the Buf
+//
+// A GROWABLE RUN OF BYTES, read and written (D117, SPEC 10.11): what `Cells`
+// is for 32-bit integers, at one byte an element, for output that IS bytes (a
+// PNG, an asset) and is too big to spend four bytes a byte on. `buf-push` and
+// `buf-set` keep the LOW EIGHT BITS; `buf-at` answers 0..255 on every host
+// (Java's `byte` is signed, so it masks). `buf-push` answers the NEW LENGTH
+// (`cells-push` answers the index it wrote, which is one less). An index or a
+// span outside the buffer, or a truncation past the length, panics or throws.
+//
+// `buf-blob` is a BORROW as a `Blob`, valid until the next write to the buffer:
+// Rust and Go hand out the storage itself, Java and C# a copy of the bytes (a
+// `byte[]` cannot be a prefix of a larger array). A caller must not rely on
+// either: read it, use it, drop it. In Rust the borrow checker enforces that.
+#[derive(Clone, Default)]
+pub struct Buf(pub Vec<u8>);
+
+impl Buf {
+    pub fn new() -> Buf {
+        Buf(Vec::new())
+    }
+}
+
+// @kin:link:form:buf-len: {:template "crate::port::buf_len({0})" :arity 1}
+pub fn buf_len(b: &Buf) -> i32 {
+    b.0.len() as i32
+}
+
+// @kin:link:form:buf-at: {:template "crate::port::buf_at({0}, {1})" :arity 2}
+pub fn buf_at(b: &Buf, i: i32) -> i32 {
+    b.0[i as usize] as i32
+}
+
+// @kin:link:form:buf-push: {:template "crate::port::buf_push({0}, {1})" :arity 2}
+pub fn buf_push(b: &mut Buf, v: i32) -> i32 {
+    b.0.push(v as u8);
+    b.0.len() as i32
+}
+
+// @kin:link:form:buf-set: {:template "crate::port::buf_set({0}, {1}, {2})" :arity 3}
+pub fn buf_set(b: &mut Buf, i: i32, v: i32) {
+    b.0[i as usize] = v as u8;
+}
+
+// @kin:link:form:buf-truncate: {:template "crate::port::buf_truncate({0}, {1})" :arity 2}
+//
+// Truncates TO a length, as `cells-drop` does.
+pub fn buf_truncate(b: &mut Buf, n: i32) {
+    if n < 0 || n as usize > b.0.len() {
+        panic!("buf_truncate out of range");
+    }
+    b.0.truncate(n as usize);
+}
+
+// @kin:link:form:buf-append-blob: {:template "crate::port::buf_append_blob({0}, {1}, {2}, {3})" :arity 4}
+//
+// Appends blob[start, end).
+pub fn buf_append_blob(b: &mut Buf, blob: &[u8], start: i32, end: i32) {
+    b.0.extend_from_slice(&blob[start as usize..end as usize]);
+}
+
+// @kin:link:form:buf-blob: {:template "crate::port::buf_blob({0})" :arity 1}
+pub fn buf_blob(b: &Buf) -> &[u8] {
+    &b.0[..]
+}
+
 // ---------------------------------------------------------------- the Bitmap
 //
 // AN OPAQUE 8-BIT PIXEL BUFFER (SPEC 7.2, P2.7): `channels` bytes per pixel

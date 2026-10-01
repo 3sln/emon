@@ -20,6 +20,10 @@
         :task (apply shell "bb" "tools/fuzz/fuzz.clj" *command-line-args*)}
   ocr  {:doc "A real Tesseract transcript (one scanned page) replayed on Rust and Go: identical evidence, a first CER (P2.6). Recording it is tools/ocr/record.clj (live, not a gate)."
         :task (shell "kin/scripts/ocr")}
+  png-check {:doc "Do independent decoders (ImageMagick, java.util.zip) read emon's canonical PNGs to the same pixels; size against zlib level 6 (P3.11, D117).  bb png-check [--update-digests]"
+             :task (apply shell "kin/scripts/png-check" *command-line-args*)}
+  png-bench {:doc "ms per target to write a real scanned page and a photo as PNG, and whether the four write the same file (NOT a gate; needs corpus/).  bb png-bench [N]"
+             :task (apply shell "kin/scripts/png-bench" *command-line-args*)}
   drift {:doc "Is the committed generated code what the sources say?"
          :task (shell "kin/scripts/drift")}
   hosts {:doc "Do the four host trees agree, and do the call sites match?"

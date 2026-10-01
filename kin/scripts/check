@@ -16,6 +16,8 @@
 #   4. `emon.enumprobe` -- `defenum`, code -> spelling, and constants (P0.6)
 #   5. `emon.modelprobe` -- the fingerprint of a built Model's six arenas (P1.1)
 #   6. `emon.modelprobe` -- that Model's canonical JSON, byte for byte (P1.2)
+#   7. `emon.pngprobe` -- the SHA-256 of the twelve PNGs the canonical writer
+#      makes (P3.11, D117), equal to test/png/digests.txt on every target
 #
 # THE MODULE LISTS ARE NOT WRITTEN OUT, unlike nome's: each arm copies the
 # whole of `gen/<target>/` and the host port beside it, so a new module is
@@ -55,25 +57,31 @@ want5='model: -540963052 -987379065'
 # P1.2: that model's canonical JSON, from the committed golden (the reference
 # serializer `kin/scripts/json-check.py` agrees with it, and so must every target).
 want6=$(cat test/json/probe.json)
+# P3.11: the SHA-256 of the twelve PNGs `emon.pngprobe` writes, one line: the
+# committed digests (test/png/digests.txt) joined by spaces. `bb unit` holds
+# every target to that file one image at a time; this holds all four to one line.
+want7=$(tr '\n' ' ' < test/png/digests.txt | sed 's/ *$//')
 
 fails=0
 report() {                      # report <target> <output>
   # THE LAST TWO LINES: a compiler that has something to say says it on
   # stdout in front of the program's own output.
-  four=$(printf '%s\n' "$2" | tail -6)
+  four=$(printf '%s\n' "$2" | tail -7)
   l1=$(printf '%s\n' "$four" | sed -n 1p)
   l2=$(printf '%s\n' "$four" | sed -n 2p)
   l3=$(printf '%s\n' "$four" | sed -n 3p)
   l4=$(printf '%s\n' "$four" | sed -n 4p)
   l5=$(printf '%s\n' "$four" | sed -n 5p)
   l6=$(printf '%s\n' "$four" | sed -n 6p)
-  printf '%s\n' "  $1 $l1 | $l2 | $l3 | $l4 | $l5 | $(printf '%s' "$l6" | cut -c1-60)..."
+  l7=$(printf '%s\n' "$four" | sed -n 7p)
+  printf '%s\n' "  $1 $l1 | $l2 | $l3 | $l4 | $l5 | $(printf '%s' "$l6" | cut -c1-60)... | png $(printf '%s' "$l7" | cut -c1-16)..."
   [ "$l1" = "$want1" ] || { printf '%s\n' "    FAIL hello: expected \`$want1\`"; fails=$((fails+1)); }
   [ "$l2" = "$want2" ] || { printf '%s\n' "    FAIL porttest: expected \`$want2\`"; fails=$((fails+1)); }
   [ "$l3" = "$want3" ] || { printf '%s\n' "    FAIL emit-ascii: expected \`$want3\`"; fails=$((fails+1)); }
   [ "$l4" = "$want4" ] || { printf '%s\n' "    FAIL defenum: expected \`$want4\`"; fails=$((fails+1)); }
   [ "$l5" = "$want5" ] || { printf '%s\n' "    FAIL model fingerprint: expected \`$want5\`"; fails=$((fails+1)); }
   [ "$l6" = "$want6" ] || { printf '%s\n' "    FAIL model JSON: expected \`$want6\` got \`$l6\`"; fails=$((fails+1)); }
+  [ "$l7" = "$want7" ] || { printf '%s\n' "    FAIL PNG digests: expected \`$want7\` got \`$l7\`"; fails=$((fails+1)); }
 }
 refused() {                     # refused <target> <compiler output>
   echo "  FAIL $1 refused the generated code:"
@@ -123,6 +131,11 @@ fn main() {
     let mut j = String::new();
     emon::modelprobe::probe_json(&mut j, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml);
     println!("{}", j);
+    let (mut qws, mut qrow, mut qst, mut qpal, mut qdig) = (port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new());
+    let (mut qo, mut qz, mut qr) = (port::Buf::new(), port::Buf::new(), port::Buf::new());
+    let mut qt = String::new();
+    emon::pngprobe::pp_probe(&mut qws, &mut qo, &mut qz, &mut qr, &mut qrow, &mut qst, &mut qpal, &mut qdig, &mut qt);
+    println!("{}", qt);
 }
 MAIN
   if build=$(cd "$work/rust" && rustc -O -o prog main.rs 2>&1); then
@@ -155,6 +168,7 @@ import (
 	"emon/enumprobe"
 	"emon/hello"
 	"emon/modelprobe"
+	"emon/pngprobe"
 	"emon/port"
 	"emon/porttest"
 )
@@ -178,6 +192,11 @@ func main() {
 	var j strings.Builder
 	modelprobe.ProbeJson(&j, mn, ma, mr, mt, mp, ml)
 	fmt.Println(j.String())
+	qws, qrow, qst, qpal, qdig := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
+	qo, qz, qr := port.NewBuf(), port.NewBuf(), port.NewBuf()
+	var qt strings.Builder
+	pngprobe.PpProbe(qws, qo, qz, qr, qrow, qst, qpal, qdig, &qt)
+	fmt.Println(qt.String())
 }
 MAIN
   # gofmt is the tightest check on the Go side and it is free.
@@ -225,6 +244,12 @@ public class Main {
         StringBuilder pj = new StringBuilder();
         emon.Modelprobe.probeJson(pj, mn, ma, mr, mt, mp, ml);
         out.println(pj.toString());
+        emon.Port.Cells qws = emon.Port.newCells(), qrow = emon.Port.newCells(), qst = emon.Port.newCells(),
+            qpal = emon.Port.newCells(), qdig = emon.Port.newCells();
+        emon.Port.Buf qo = emon.Port.newBuf(), qz = emon.Port.newBuf(), qr = emon.Port.newBuf();
+        StringBuilder qt = new StringBuilder();
+        emon.Pngprobe.ppProbe(qws, qo, qz, qr, qrow, qst, qpal, qdig, qt);
+        out.println(qt.toString());
     }
 }
 MAIN
@@ -267,6 +292,12 @@ System.Console.WriteLine(h.ToString());
 var j = new System.Text.StringBuilder();
 emon.Modelprobe.ProbeJson(j, mn, ma, mr, mt, mp, ml);
 System.Console.WriteLine(j.ToString());
+var qws = emon.Port.NewCells(); var qrow = emon.Port.NewCells(); var qst = emon.Port.NewCells();
+var qpal = emon.Port.NewCells(); var qdig = emon.Port.NewCells();
+var qo = emon.Port.NewBuf(); var qz = emon.Port.NewBuf(); var qr = emon.Port.NewBuf();
+var qt = new System.Text.StringBuilder();
+emon.Pngprobe.PpProbe(qws, qo, qz, qr, qrow, qst, qpal, qdig, qt);
+System.Console.WriteLine(qt.ToString());
 MAIN
   cat > "$work/cs/cs.csproj" <<'PROJ'
 <Project Sdk="Microsoft.NET.Sdk">

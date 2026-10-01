@@ -1,0 +1,87 @@
+;; Laws for the `Buf` port (P3.11, D117): a growable run of bytes. One law set,
+;; four hosts: Java's signed `byte`, a write that keeps the low eight bits, the
+;; new length `buf-push` answers, truncation to a length, and the borrow as a
+;; `Blob`. (`kin/porttest.kin` is the probe `bb check` compares; it is not a
+;; law file, so the Buf laws live here.)
+(ns emon.buftest
+  (:require [emon.lang :refer [I32 Blob Buf]]
+            [emon.test :refer [deftest assert-eq assert-eq-at new-buf hex-blob]]
+            [emon.port :refer [blob-len blob-u8 buf-len buf-at buf-push buf-set
+                               buf-truncate buf-append-blob buf-blob]]
+            [kin.lang :refer [let set while do + < ==]]))
+
+(deftest test-push-answers-the-new-length-and-keeps-the-low-eight-bits
+  (let [^Buf b (new-buf)]
+    (assert-eq (buf-len b) 0 "empty")
+    (assert-eq (buf-push b 65) 1 "the first push answers 1")
+    (assert-eq (buf-push b 511) 2 "the second answers 2")
+    (assert-eq (buf-push b -1) 3 "and the third 3")
+    (assert-eq (buf-push b 128) 4 "a byte with the high bit")
+    (assert-eq (buf-push b 4660) 5 "0x1234 keeps 0x34")
+    (assert-eq (buf-len b) 5 "five bytes")
+    (assert-eq (buf-at b 0) 65 "0 is 65")
+    (assert-eq (buf-at b 1) 255 "511 is 255")
+    (assert-eq (buf-at b 2) 255 "-1 is 255")
+    (assert-eq (buf-at b 3) 128 "128 reads back as 128, not -128")
+    (assert-eq (buf-at b 4) 52 "0x34")))
+
+(deftest test-set-overwrites-one-byte
+  (let [^Buf b (new-buf)]
+    (buf-push b 1)
+    (buf-push b 2)
+    (buf-push b 3)
+    (buf-set b 1 300)
+    (assert-eq (buf-at b 0) 1 "untouched")
+    (assert-eq (buf-at b 1) 44 "300 keeps 44")
+    (assert-eq (buf-at b 2) 3 "untouched")
+    (assert-eq (buf-len b) 3 "the length did not change")))
+
+(deftest test-truncate-goes-to-a-length-and-pushes-resume-there
+  (let [^Buf b (new-buf)]
+    (buf-push b 10)
+    (buf-push b 20)
+    (buf-push b 30)
+    (buf-truncate b 1)
+    (assert-eq (buf-len b) 1 "one left")
+    (assert-eq (buf-push b 99) 2 "the next push answers 2")
+    (assert-eq (buf-at b 1) 99 "and lands at 1")
+    (buf-truncate b 0)
+    (assert-eq (buf-len b) 0 "emptied")
+    (buf-truncate b 0)
+    (assert-eq (buf-len b) 0 "emptying an empty one is allowed")))
+
+(deftest test-append-blob-copies-a-span
+  (let [^Buf b (new-buf)]
+    (buf-push b 7)
+    (buf-append-blob b (hex-blob "00ff80aa55") 1 4)
+    (assert-eq (buf-len b) 4 "one and three")
+    (assert-eq (buf-at b 0) 7 "the first byte")
+    (assert-eq (buf-at b 1) 255 "ff")
+    (assert-eq (buf-at b 2) 128 "80")
+    (assert-eq (buf-at b 3) 170 "aa")
+    (buf-append-blob b (hex-blob "0102") 0 0)
+    (assert-eq (buf-len b) 4 "an empty span appends nothing")))
+
+(deftest test-it-grows-past-its-first-allocation
+  (let [^Buf b (new-buf)
+        ^:mut ^I32 i 0]
+    (while (< i 100000)
+      (do (buf-push b i)
+          (set i (+ i 1))))
+    (assert-eq (buf-len b) 100000 "100,000 bytes")
+    (assert-eq (buf-at b 0) 0 "first")
+    (assert-eq (buf-at b 255) 255 "255")
+    (assert-eq (buf-at b 256) 0 "wraps: 256 is 0")
+    (assert-eq (buf-at b 99999) 159 "99999 is 0x9F")))
+
+(deftest test-blob-lends-the-contents
+  (let [^Buf b (new-buf)]
+    (buf-push b 1)
+    (buf-push b 255)
+    (buf-push b 128)
+    (assert-eq (blob-len (buf-blob b)) 3 "three bytes")
+    (assert-eq (blob-u8 (buf-blob b) 0) 1 "1")
+    (assert-eq (blob-u8 (buf-blob b) 1) 255 "255")
+    (assert-eq (blob-u8 (buf-blob b) 2) 128 "128")
+    (buf-push b 5)
+    (assert-eq (blob-len (buf-blob b)) 4 "a borrow taken after a write sees it")))

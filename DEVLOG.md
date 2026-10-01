@@ -1322,8 +1322,31 @@ analysis beyond "top-to-bottom lines on a single column".
 - [ ] P3.10 — Text-layer oracle (SPEC §14.5): per-character comparison
   against a pinned reference extractor on a born-digital corpus; committed
   expectations.
-- [ ] **P3.11 — Canonical PNG writer, DEFLATE compressor, and the `Buf` port**
+- [x] **P3.11 — Canonical PNG writer, DEFLATE compressor, and the `Buf` port**
   (D117, SPEC §10.11). No dependency: may be taken at any time.
+  **DONE (D123, D124).** `Buf` is in all four host trees and `bb hosts` agrees on its
+  seven forms; `kin/deflate.kin`, `kin/png.kin`, `kin/pngprobe.kin` and the laws
+  `kin/buftest.kin`, `kin/deflatetest.kin`, `kin/pngtest.kin` (241 laws per arm, all four
+  arms; `bb unit red` fails on every arm); `kin/scripts/check` has a seventh line, the
+  SHA-256 of the twelve generated PNGs, **identical on Rust, Go, Java and C#** and equal to
+  `test/png/digests.txt`; `kin/scripts/png-check` (a gate) has java.util.zip and
+  ImageMagick 7.1.1-33 read the twelve files and six real images (scans at 300 dpi up to
+  2481x3508, a 1200x800 photo) to exactly their pixels; `kin/scripts/png-bench` (not a gate)
+  writes the real page and photo on all four targets and finds **the same bytes**.
+  **Measured** (Apple silicon, arm64, release builds, best of 7, machine shared with other
+  builds; `bb png-bench 7`): the 2481x3508 gray bench page (the noisy invoice,
+  `inv_00007.noise.png`, 8.7 Mpx): Rust 380 ms, Go 336, Java 316, C# 359, 807,061 B;
+  the 1200x800 RGB photo: 141 / 151 / 148 / 154 ms, 543,247 B. **Size against
+  `java.util.zip.Deflater` level 6 over the same filtered rows**: page 1.035x (806,839 B of
+  IDAT data against 779,679), photo 1.067x (543,094 against 509,103); the clean 300-dpi
+  scans of `bb png-check` 1.023-1.033x, two receipt scans 1.027-1.030x (ImageMagick's own PNG of the same pixels, with its own filter choice, is 3-5 %
+  smaller than zlib-6 over our rows on the scans and 8 % larger on the photo). The cost of determinism is about 3-7 % of size; no target is slower than 0.4 s per
+  scanned page. Debug-mode Rust (`cargo test`) writes 1 MiB of random bytes in about 6 s.
+  Deviations from the brief, all in D123/D124: `buf-push` answers the **new length** as the
+  brief says (not the index, as `cells-push` does); the Buf laws are in `kin/buftest.kin`
+  because `porttest` is a probe and not a law file; the window ring is 64 KiB (32 KiB of
+  window and the lookahead), so the workspace is about 670 KiB; `kin/scripts/png-check`
+  is a gate (in `bb gates`) and `png-bench` a named non-gate.
   *Brief*: (a) **`Buf` port**, in all four host port files beside `Cells`, with
   `@kin:link` annotations and a `Buf` tag in `emon.lang`: `buf-len b`, `buf-at b i`
   (0..255), `buf-push b v` (low 8 bits; answers the new length, as `cells-push`),
@@ -3402,6 +3425,12 @@ them; offer them upstream when they have proved general.
   borrow (a source and a mask in one call), so its bytes are `Cell<u8>` behind `&Bitmap`;
   `Cells`' `&mut` tag is the same read-only-parameter question again (the labeller passes
   three `Cells` and only works because they are distinct arenas).
+- P3.11 (`emon.deflate`): a `defconst DF_SIZE` and a `defn df-size` are both `DfSize` in C#
+  (`CS0102`, nothing at generation time says so: the `PG`/`pg` case again, for a constant and
+  a function); `final` is refused for Java at generation time, as `len` is for Go (both
+  clear, both found by the first emit); a `let` binding that a `deftest` never reads is a Go
+  compile error only (`raw declared and not used`), the `bb unit` arm printed only the first
+  40 lines of the failure, which hid it.
 - `var` (a Go keyword, a C# contextual one) as a kin local name was avoided by hand (`vr`);
   worth a generation-time check beside `len`/`cap`/`go`.
 - A `(while 1 ...)` with statements after it would be unreachable code in Java
@@ -4677,4 +4706,95 @@ the prediction failed, and never counts a prediction the gold cannot judge.
 through the match (a split paragraph can still be matched to a half at similarity 0.5); `align-wrong` counting
 predicted alignments on blocks the gold leaves unaligned (the gold annotates only where authored, so it cannot
 judge them).
+- [ ] **Signed off** (maintainer)
+
+### D123 — `Buf`: a growable byte buffer beside `Cells` (P3.11; D117)
+**Decision**: a fifth opaque port type, `Buf`, tagged in `emon.lang` (Rust `&mut crate::port::Buf`,
+Go `*port.Buf`, Java and C# `emon.Port.Buf`, nested in the port class as `Cells` is) with seven
+forms in all four host trees, `@kin:link`-annotated and compared by `bb hosts`: `buf-len`,
+`buf-at` (0..255 on every host), `buf-push` (the low eight bits; answers the **new length**),
+`buf-set` (low eight bits), `buf-truncate` (to a length, as `cells-drop`), `buf-append-blob b
+blob start end`, and `buf-blob` (a borrow as a `Blob`, valid until the next write). The Rust host is
+`pub struct Buf(pub Vec<u8>)`, so the host loop reads the bytes out with no copy; `buf-blob` hands
+out the storage in Rust and Go and a copy in Java and C# (a `byte[]` cannot be a prefix of a
+larger array), which a caller must not depend on either way. Out-of-range indices, spans and
+truncations panic or throw, as `Cells` does. The test vocabulary gains `new-buf`. The laws are
+`kin/buftest.kin`.
+**Why**: the assets of D117 and the PNG writer produce bytes by the megabyte (a 32 MiB budget),
+which `Cells` holds at four bytes each (128 MiB, four times the heap in a browser); an `&mut`
+tag keeps the rule the other arenas live by (bind an inner read first) rather than inventing a
+shared-borrow `Buf` with interior mutability like `Bitmap`, which no caller here needs (a PNG
+writer writes one buffer and reads another). `buf-push` answers the new length because every
+caller that uses the answer (an IDAT length, a chunk offset) wants "how long is it now"; it
+differs from `cells-push` (the index written) on purpose and the forms are named for what they
+answer, which is written at the port.
+**Alternatives**: (1) `Cells` of bytes, as inflate's output (rejected: the cost above);
+(2) `buf-blob` a snapshot everywhere (simple and uniform, but a copy of every asset on Rust,
+where the borrow is free); (3) a borrow everywhere (impossible on Java and C# without a slice
+type); (4) answering the index as `cells-push` does (the brief's "as `cells-push`" and "the new
+length" disagree; the explicit words were followed); (5) the laws in `porttest.kin` (it is the
+probe `bb check` compares, not a law file; a second law file costs nothing).
+- [ ] **Signed off** (maintainer)
+
+### D124 — The canonical PNG as built: `emon.deflate`, `emon.png`, and what holds them (P3.11; D117)
+**Decision**: SPEC §10.11's sentence about the zlib stream is fixed to the following, all of it
+in `kin/deflate.kin` and `kin/png.kin` and now also in the SPEC.
+1. *LZ77.* The hash is `((b0<<10) ^ (b1<<5) ^ b2) & 32767`; candidates nearest first, at most
+   32, none further than 32,768; a candidate replaces the best only when strictly longer (so on a
+   tie the nearest stays). **One step of lazy matching**: having a match at *p* the encoder looks
+   at *p*+1 once and, if that match is strictly longer, emits *p* as a literal and takes it, with
+   no further look (zlib keeps looking; this is simpler to state, and its ratio cost was not measured separately).
+   Positions are inserted into the hash once, in order, each before the next is searched; the
+   last two bytes of a stream never are. A position is decided when 262 bytes of lookahead exist
+   (or at `df-finish`), a decision reads at most 259 ahead, so **the output does not depend on how
+   the input is split** into calls or rows (a law: byte by byte, chunks, and whole, equal).
+2. *Blocks.* One every 16,384 symbols and a last one; the last is empty when the symbols divide
+   evenly. Each is stored, fixed or dynamic by exact bit count (the header, the code-length code,
+   the run-length coded lengths, every symbol and extra bit, and for stored the padding to the
+   byte the stream is at), ties stored, fixed, dynamic. **Stored is a candidate only for a block
+   covering at most 32,768 input bytes**, what the 64 KiB ring (32 KiB of window and the
+   lookahead) still holds; a block of 16,384 symbols of long matches covers more, and is
+   never stored anyway.
+3. *Huffman.* Lengths by package-merge (limit 15; 7 for the code-length code), symbols sorted by
+   (frequency, symbol), a leaf before a package of equal weight. Fewer than two used symbols: length 1
+   for symbol 0 (or 1 when 0 is the used one) and for the used one, as zlib's dummy codes, so every
+   code is complete and every decoder accepts it (an all-zero distance code is valid for zlib but not
+   for every decoder). The literal/length and distance lengths are one sequence, run-length coded
+   greedily (zeros: 18 for 11..138, then 17 for 3..10; a value once, then 16 for 3..6 repeats; shorter
+   as literals); HLIT and HDIST are trimmed to the last non-zero length.
+4. *PNG.* Chunks IHDR, PLTE and tRNS (palette), pHYs (`(dpi100*100 + 127) / 254`, unit metre), IDATs
+   of exactly 65,536 bytes but the last, IEND. Per row the filter of smallest sum of absolute signed
+   bytes, ties to the lower number, all five scored in one pass and only the chosen one fed to the
+   compressor; filter 0 for palette and depth below 8. The API is `png-begin ws out z w h ctype depth
+   dpi100 pal npal trns`, `png-row ws out z cells start`, `png-end ws out z`; `ws` is one `Cells`
+   for both modules (deflate's 167,936 cells, then the CRC table and the previous row), `z` the
+   scratch `Buf`; the palette is four cells per entry (r, g, b, a) and `trns` the number of alphas
+   written. `df-force` (stored/fixed/dynamic) exists for the laws only.
+5. *What holds it.* `bb unit` (241 laws per arm): round trips through `emon.inflate` of every block
+   type and sizes from 0 to 1 MiB, two streams worked out by hand (empty, one byte: zlib's own
+   bytes), a match at distance 32,768, the split independence, and a **separately written** test
+   reader (bitwise CRC, chunk order, IDAT sizes, unfilter) over the twelve images
+   (`emon.pngprobe`: gray, gray+alpha, RGB, RGBA at 8 and 16 bits, 1/2/4-bit, palettes with tRNS,
+   odd sizes 1x1 to 3000x1, a scan-like strip) against `test/png/digests.txt`;
+   `bb check` (line 7): the four targets print the twelve digests, equal to that file;
+   `bb png-check` (a gate): java.util.zip and ImageMagick read the twelve and six real images
+   (a 300-dpi A4 page is 2481x3508) to exactly their pixels; `bb png-bench` (not a gate): the same
+   real page and photo on all four targets, same bytes, time and size against zlib-6.
+   The independent decoders found one generator bug (a palette index beyond the palette, which
+   emon's own reader had accepted): fixed, which is what they are for.
+**Why**: the SPEC sentence is a description; a hash needs the parts it leaves open chosen and
+written down, and each was chosen for being the simplest that is correct and deterministic (the
+one-step lazy rule, leaf-first merges, dummy codes), not for ratio. The ratio is measured
+(DEVLOG P3.11): 1.02-1.07 times zlib level 6 over the same rows, which is what "reasonable" means for
+an encoder whose output is the same on four languages; the one-pass five-filter score and the
+64 KiB ring keep the working set under 700 KiB and a page under 0.4 s everywhere.
+**Alternatives**: (1) zlib's continuing lazy chain and `good_length`/`nice_length` cut-offs
+(probably better, not measured; several more constants to specify and keep equal); (2) a 32 KiB ring
+with the lookahead borrowed from the window (distance 32,768 unusable, or a less simple bound on
+stored blocks); (3) storing the block's bytes for stored blocks at any span (a second 64 KiB
+buffer for a case that occurs on incompressible input, where 16,384 literals are 16,384 bytes
+anyway); (4) separate length code runs for the two trees, as zlib writes them (one extra run
+boundary, no gain); (5) moving D090's transcript PNGs to this writer now: **not done**, every
+committed transcript would change, and D090's writer is stored-block only and stays until a decision
+says otherwise.
 - [ ] **Signed off** (maintainer)

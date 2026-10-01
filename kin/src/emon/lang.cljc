@@ -118,6 +118,19 @@
    :zero {:go "nil"}})
 
 
+(def Buf
+  "A growable run of BYTES, read and written, opaque to kin (D117, SPEC 10.11).
+
+  `Cells` at one byte an element, for output that is bytes: a PNG, an asset.
+  Its elements are 0..255 (a write keeps the low eight bits) and, like
+  `Cells`, it is `&mut` in Rust: bind a read before a write that nests it.
+  `buf-blob` lends the contents as a `Blob` (valid until the next write)."
+  {:name 'Buf
+   :types {:rust "&mut crate::port::Buf" :go "*port.Buf"
+           :java "emon.Port.Buf" :csharp "emon.Port.Buf"}
+   :needs {:go "emon/port"}
+   :zero {:go "nil"}})
+
 (def Src
   "An INPUT BYTE SOURCE that may MISS, opaque to kin (SPEC 7.2, 13.1, D058).
 
@@ -335,7 +348,7 @@
   {:namespace 'emon.lang
    :targets #{:rust :go :java :csharp}
    :tags {'I32 I32 'U32 U32 'I64 I64
-          'Bool Bool 'Blob Blob 'Src Src 'Bitmap Bitmap 'Sink Sink 'Cells Cells
+          'Bool Bool 'Blob Blob 'Src Src 'Bitmap Bitmap 'Sink Sink 'Cells Cells 'Buf Buf
           'Cpt Cpt 'Px Px 'Fx Fx 'Conf Conf 'Text Text}
    :names {}
    ;; ---------------------------------------------------------- the casts

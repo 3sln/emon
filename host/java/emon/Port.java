@@ -116,6 +116,77 @@ public final class Port {
         return b;
     }
 
+    // ---------------------------------------------------------- the Buf
+    //
+    // A growable run of bytes (see the Rust half for the contract). JAVA'S
+    // `byte` IS SIGNED, so a read masks with 0xFF.
+    public static final class Buf {
+        byte[] v = new byte[64];
+        int n = 0;
+    }
+
+    public static Buf newBuf() {
+        return new Buf();
+    }
+
+    // @kin:link:form:buf-len: {:template "emon.Port.bufLen({0})" :arity 1}
+    public static int bufLen(Buf b) {
+        return b.n;
+    }
+
+    // @kin:link:form:buf-at: {:template "emon.Port.bufAt({0}, {1})" :arity 2}
+    public static int bufAt(Buf b, int i) {
+        if (i < 0 || i >= b.n) {
+            throw new IndexOutOfBoundsException();
+        }
+        return b.v[i] & 0xFF;
+    }
+
+    // @kin:link:form:buf-push: {:template "emon.Port.bufPush({0}, {1})" :arity 2}
+    public static int bufPush(Buf b, int v) {
+        if (b.n == b.v.length) {
+            b.v = java.util.Arrays.copyOf(b.v, b.v.length * 2);
+        }
+        b.v[b.n++] = (byte) v;
+        return b.n;
+    }
+
+    // @kin:link:form:buf-set: {:template "emon.Port.bufSet({0}, {1}, {2})" :arity 3}
+    public static void bufSet(Buf b, int i, int v) {
+        if (i < 0 || i >= b.n) {
+            throw new IndexOutOfBoundsException();
+        }
+        b.v[i] = (byte) v;
+    }
+
+    // @kin:link:form:buf-truncate: {:template "emon.Port.bufTruncate({0}, {1})" :arity 2}
+    public static void bufTruncate(Buf b, int n) {
+        if (n < 0 || n > b.n) {
+            throw new IndexOutOfBoundsException();
+        }
+        b.n = n;
+    }
+
+    // @kin:link:form:buf-append-blob: {:template "emon.Port.bufAppendBlob({0}, {1}, {2}, {3})" :arity 4}
+    public static void bufAppendBlob(Buf b, byte[] blob, int start, int end) {
+        if (start < 0 || end < start || end > blob.length) {
+            throw new IndexOutOfBoundsException();
+        }
+        int k = end - start;
+        if (b.n + k > b.v.length) {
+            b.v = java.util.Arrays.copyOf(b.v, Math.max(b.n + k, b.v.length * 2));
+        }
+        System.arraycopy(blob, start, b.v, b.n, k);
+        b.n += k;
+    }
+
+    // @kin:link:form:buf-blob: {:template "emon.Port.bufBlob({0})" :arity 1}
+    //
+    // A copy (a `byte[]` cannot be a prefix of a larger array).
+    public static byte[] bufBlob(Buf b) {
+        return java.util.Arrays.copyOf(b.v, b.n);
+    }
+
     // ---------------------------------------------------------- the Bitmap
     //
     // An opaque 8-bit pixel buffer (see the Rust half for the contract). The
