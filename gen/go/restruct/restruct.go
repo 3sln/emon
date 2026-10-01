@@ -11,6 +11,8 @@ import (
 
 const rsFr int32 = 8
 
+const rsDeep int32 = 24
+
 const rsNest int32 = 400
 
 var RsNames [68]int32 = [68]int32{
@@ -58,6 +60,11 @@ func rsNode(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, 
 	// attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes
 	// it in `nm` (old to new).
 	var nn int32 = model.NodeNew(nodes, model.NodeKind(on, n), np)
+	// deeper than the Model allows (a hostile file): the node goes under the root, and `model-check` says no to the
+	// result rather than a store going out of bounds
+	if nn < 0 {
+		nn = model.NodeNew(nodes, model.NodeKind(on, n), 0)
+	}
 	if nn < 0 {
 		return -1
 	}
@@ -370,7 +377,7 @@ func rsPlaceItem(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Ce
 				shift = cx - fc
 			}
 			var dx int32 = (tx - shift) - ind
-			if dx > rsNest {
+			if (dx > rsNest) && (d < rsDeep) {
 				var held int32 = port.CellsAt(stk, f+4)
 				rsOpenList(nodes, attrs, text, stk, held, tx-shift, sch, val, cx)
 				more = 0
@@ -389,6 +396,9 @@ func rsPlaceItem(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Ce
 		}
 	}
 	var d2 int32 = rsDepth(stk, base)
+	if d2 == 0 {
+		return np
+	}
 	return port.CellsAt(stk, base+((d2-1)*rsFr))
 }
 
@@ -553,17 +563,23 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, ls)
 			model.NodeSetSub(nodes, nn, 0)
 			model.NodeSetAux(nodes, nn, 0)
-			if (port.CellsAt(stk, f+2) != 1) && (model.NodeAux(on, c) > 0) && (port.CellsAt(stk, f+4) != -1) && (model.NodeAux(on, c) != (port.CellsAt(stk, f+3) + 1)) {
-				model.NodeSetAttrInt(nodes, attrs, nn, model.FkValue(), model.NodeAux(on, c))
+			// no frame: the Model's depth limit stopped the list; the item stands where it is
+			if rsDepth(stk, base) >= 1 {
+				if (port.CellsAt(stk, f+2) != 1) && (model.NodeAux(on, c) > 0) && (port.CellsAt(stk, f+4) != -1) && (model.NodeAux(on, c) != (port.CellsAt(stk, f+3) + 1)) {
+					model.NodeSetAttrInt(nodes, attrs, nn, model.FkValue(), model.NodeAux(on, c))
+				}
+				port.CellsSet(stk, f+3, model.NodeAux(on, c))
+				port.CellsSet(stk, f+4, nn)
 			}
-			port.CellsSet(stk, f+3, model.NodeAux(on, c))
-			port.CellsSet(stk, f+4, nn)
 			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn)
 		}
 		// a milestone or a note inside a list that goes on: kept in the item before it
 		if act == 2 {
 			f = base + ((rsDepth(stk, base) - 1) * rsFr)
 			hold = port.CellsAt(stk, f+4)
+			if hold < 0 {
+				hold = np
+			}
 			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, hold)
 			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn)
 		}

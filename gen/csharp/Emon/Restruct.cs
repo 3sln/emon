@@ -6,6 +6,7 @@ namespace emon;
 
 public static class Restruct {
     internal const int RsFr = 8;
+    internal const int RsDeep = 24;
     internal const int RsNest = 400;
     public static readonly int[] RsNames = new int[] {
         98, 117, 108, 108, 101, 116, 100, 101, 99, 105, 109, 97, 108, 108, 111, 119,
@@ -49,6 +50,11 @@ public static class Restruct {
         // attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes
         // it in `nm` (old to new).
         int nn = Model.NodeNew(nodes, Model.NodeKind(on, n), np);
+        // deeper than the Model allows (a hostile file): the node goes under the root, and `model-check` says no to the
+        // result rather than a store going out of bounds
+        if (nn < 0) {
+            nn = Model.NodeNew(nodes, Model.NodeKind(on, n), 0);
+        }
         if (nn < 0) {
             return -1;
         }
@@ -347,7 +353,7 @@ public static class Restruct {
                     shift = cx - fc;
                 }
                 int dx = (tx - shift) - ind;
-                if (dx > RsNest) {
+                if ((dx > RsNest) && (d < RsDeep)) {
                     int held = emon.Port.CellsAt(stk, f + 4);
                     RsOpenList(nodes, attrs, text, stk, held, tx - shift, sch, val, cx);
                     more = 0;
@@ -366,6 +372,9 @@ public static class Restruct {
             }
         }
         int d2 = RsDepth(stk, @base);
+        if (d2 == 0) {
+            return np;
+        }
         return emon.Port.CellsAt(stk, @base + ((d2 - 1) * RsFr));
     }
     internal static bool RsTrailer(int k) {
@@ -520,17 +529,23 @@ public static class Restruct {
                 nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, ls);
                 Model.NodeSetSub(nodes, nn, 0);
                 Model.NodeSetAux(nodes, nn, 0);
-                if ((emon.Port.CellsAt(stk, f + 2) != 1) && (Model.NodeAux(on, c) > 0) && (emon.Port.CellsAt(stk, f + 4) != -1) && (Model.NodeAux(on, c) != (emon.Port.CellsAt(stk, f + 3) + 1))) {
-                    Model.NodeSetAttrInt(nodes, attrs, nn, Model.FkValue(), Model.NodeAux(on, c));
+                // no frame: the Model's depth limit stopped the list; the item stands where it is
+                if (RsDepth(stk, @base) >= 1) {
+                    if ((emon.Port.CellsAt(stk, f + 2) != 1) && (Model.NodeAux(on, c) > 0) && (emon.Port.CellsAt(stk, f + 4) != -1) && (Model.NodeAux(on, c) != (emon.Port.CellsAt(stk, f + 3) + 1))) {
+                        Model.NodeSetAttrInt(nodes, attrs, nn, Model.FkValue(), Model.NodeAux(on, c));
+                    }
+                    emon.Port.CellsSet(stk, f + 3, Model.NodeAux(on, c));
+                    emon.Port.CellsSet(stk, f + 4, nn);
                 }
-                emon.Port.CellsSet(stk, f + 3, Model.NodeAux(on, c));
-                emon.Port.CellsSet(stk, f + 4, nn);
                 RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, c, nn);
             }
             // a milestone or a note inside a list that goes on: kept in the item before it
             if (act == 2) {
                 f = @base + ((RsDepth(stk, @base) - 1) * RsFr);
                 hold = emon.Port.CellsAt(stk, f + 4);
+                if (hold < 0) {
+                    hold = np;
+                }
                 nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, hold);
                 RsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, @out, lay, c, nn);
             }

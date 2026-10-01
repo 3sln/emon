@@ -52,6 +52,7 @@
                               + - * < > <= >= == != and or not quot rem]]))
 
 (defconst ^I32 RS_FR 8)            ;; a list frame: list, indent, scheme, last value, last item, first value, parent
+(defconst ^I32 RS_DEEP 24)         ;; lists nested no deeper than this (a hostile file's indents)
 (defconst ^I32 RS_NEST 400)        ;; an item whose text starts this far (4 pt) beyond the last one's is nested in it
 
 (defdata ^:pub rs-names
@@ -86,7 +87,10 @@
   (comment "Copy node n of the old arenas as the last child of np (-1: a new root): its kind and small fields, text run,")
   (comment "attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes")
   (comment "it in `nm` (old to new).")
-  (let [^I32 nn (node-new nodes (node-kind on n) np)]
+  (let [^:mut ^I32 nn (node-new nodes (node-kind on n) np)]
+    (comment "deeper than the Model allows (a hostile file): the node goes under the root, and `model-check` says no to the")
+    (comment "result rather than a store going out of bounds")
+    (if (< nn 0) (set nn (node-new nodes (node-kind on n) 0)))
     (if (< nn 0) (return -1))
     (node-set-sub nodes nn (node-sub on n))
     (node-set-aux nodes nn (node-aux on n))
@@ -317,7 +321,7 @@
                     (set shift 0)
                     (if (and (> fc 0) (> cx 0) (< tx 5000000) (> (rs-abs (- cx fc)) 2000)) (set shift (- cx fc)))
                     (let [^I32 dx (- (- tx shift) ind)]
-                    (if (> dx RS_NEST)
+                    (if (and (> dx RS_NEST) (< d RS_DEEP))
                       (do (let [^I32 held (cells-at stk (+ f 4))]
                             (rs-open-list nodes attrs text stk held (- tx shift) sch val cx)
                             (set more 0)))
@@ -331,6 +335,7 @@
                                     (rs-open-list nodes attrs text stk par (- tx shift) sch val cx)
                                     (set more 0))))))))))))))
     (let [^I32 d2 (rs-depth stk base)]
+      (if (== d2 0) (return np))
       (return (cells-at stk (+ base (* (- d2 1) RS_FR)))))))
 
 ;; ---------------------------------------------------------------------------------- the walk
@@ -450,18 +455,21 @@
                 (set nn (rs-node on oa orr nodes attrs regions nm c ls))
                 (node-set-sub nodes nn 0)
                 (node-set-aux nodes nn 0)
-                (if (and (!= (cells-at stk (+ f 2)) 1)
-                         (> (node-aux on c) 0)
-                         (!= (cells-at stk (+ f 4)) -1)
-                         (!= (node-aux on c) (+ (cells-at stk (+ f 3)) 1)))
-                  (node-set-attr-int nodes attrs nn (fk-value) (node-aux on c)))
-                (cells-set stk (+ f 3) (node-aux on c))
-                (cells-set stk (+ f 4) nn)
+                (comment "no frame: the Model's depth limit stopped the list; the item stands where it is")
+                (if (>= (rs-depth stk base) 1)
+                  (do (if (and (!= (cells-at stk (+ f 2)) 1)
+                               (> (node-aux on c) 0)
+                               (!= (cells-at stk (+ f 4)) -1)
+                               (!= (node-aux on c) (+ (cells-at stk (+ f 3)) 1)))
+                        (node-set-attr-int nodes attrs nn (fk-value) (node-aux on c)))
+                      (cells-set stk (+ f 3) (node-aux on c))
+                      (cells-set stk (+ f 4) nn)))
                 (rs-children on oa orr text nodes attrs regions nm stk out lay c nn)))
           (comment "a milestone or a note inside a list that goes on: kept in the item before it")
           (if (== act 2)
             (do (set f (+ base (* (- (rs-depth stk base) 1) RS_FR)))
                 (set hold (cells-at stk (+ f 4)))
+                (if (< hold 0) (set hold np))
                 (set nn (rs-node on oa orr nodes attrs regions nm c hold))
                 (rs-children on oa orr text nodes attrs regions nm stk out lay c nn)))
           (comment "the caption above its object")

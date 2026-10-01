@@ -6,6 +6,7 @@ package emon;
 
 public final class Restruct {
     public static final int RS_FR = 8;
+    public static final int RS_DEEP = 24;
     public static final int RS_NEST = 400;
     public static final int[] RS_NAMES = {
         98, 117, 108, 108, 101, 116, 100, 101, 99, 105, 109, 97, 108, 108, 111, 119,
@@ -49,6 +50,11 @@ public final class Restruct {
         // attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes
         // it in `nm` (old to new).
         int nn = Model.nodeNew(nodes, Model.nodeKind(on, n), np);
+        // deeper than the Model allows (a hostile file): the node goes under the root, and `model-check` says no to the
+        // result rather than a store going out of bounds
+        if (nn < 0) {
+            nn = Model.nodeNew(nodes, Model.nodeKind(on, n), 0);
+        }
         if (nn < 0) {
             return -1;
         }
@@ -347,7 +353,7 @@ public final class Restruct {
                     shift = cx - fc;
                 }
                 int dx = (tx - shift) - ind;
-                if (dx > RS_NEST) {
+                if ((dx > RS_NEST) && (d < RS_DEEP)) {
                     int held = emon.Port.cellsAt(stk, f + 4);
                     rsOpenList(nodes, attrs, text, stk, held, tx - shift, sch, val, cx);
                     more = 0;
@@ -366,6 +372,9 @@ public final class Restruct {
             }
         }
         int d2 = rsDepth(stk, base);
+        if (d2 == 0) {
+            return np;
+        }
         return emon.Port.cellsAt(stk, base + ((d2 - 1) * RS_FR));
     }
     public static boolean rsTrailer(int k) {
@@ -520,17 +529,23 @@ public final class Restruct {
                 nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, ls);
                 Model.nodeSetSub(nodes, nn, 0);
                 Model.nodeSetAux(nodes, nn, 0);
-                if ((emon.Port.cellsAt(stk, f + 2) != 1) && (Model.nodeAux(on, c) > 0) && (emon.Port.cellsAt(stk, f + 4) != -1) && (Model.nodeAux(on, c) != (emon.Port.cellsAt(stk, f + 3) + 1))) {
-                    Model.nodeSetAttrInt(nodes, attrs, nn, Model.fkValue(), Model.nodeAux(on, c));
+                // no frame: the Model's depth limit stopped the list; the item stands where it is
+                if (rsDepth(stk, base) >= 1) {
+                    if ((emon.Port.cellsAt(stk, f + 2) != 1) && (Model.nodeAux(on, c) > 0) && (emon.Port.cellsAt(stk, f + 4) != -1) && (Model.nodeAux(on, c) != (emon.Port.cellsAt(stk, f + 3) + 1))) {
+                        Model.nodeSetAttrInt(nodes, attrs, nn, Model.fkValue(), Model.nodeAux(on, c));
+                    }
+                    emon.Port.cellsSet(stk, f + 3, Model.nodeAux(on, c));
+                    emon.Port.cellsSet(stk, f + 4, nn);
                 }
-                emon.Port.cellsSet(stk, f + 3, Model.nodeAux(on, c));
-                emon.Port.cellsSet(stk, f + 4, nn);
                 rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn);
             }
             // a milestone or a note inside a list that goes on: kept in the item before it
             if (act == 2) {
                 f = base + ((rsDepth(stk, base) - 1) * RS_FR);
                 hold = emon.Port.cellsAt(stk, f + 4);
+                if (hold < 0) {
+                    hold = np;
+                }
                 nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, hold);
                 rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn);
             }

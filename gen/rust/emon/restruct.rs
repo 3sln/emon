@@ -5,6 +5,7 @@ use crate::emon::links::*;
 use crate::emon::model::*;
 
 pub(crate) const RS_FR: i32 = 8;
+pub(crate) const RS_DEEP: i32 = 24;
 pub(crate) const RS_NEST: i32 = 400;
 pub static RS_NAMES: [i32; 68] = [
     98, 117, 108, 108, 101, 116, 100, 101, 99, 105, 109, 97, 108, 108, 111, 119,
@@ -47,7 +48,12 @@ pub(crate) fn rs_node(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, 
     // Copy node n of the old arenas as the last child of np (-1: a new root): its kind and small fields, text run,
     // attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes
     // it in `nm` (old to new).
-    let nn: i32 = node_new(nodes, node_kind(on, n), np);
+    let mut nn: i32 = node_new(nodes, node_kind(on, n), np);
+    // deeper than the Model allows (a hostile file): the node goes under the root, and `model-check` says no to the
+    // result rather than a store going out of bounds
+    if nn < 0 {
+        nn = node_new(nodes, node_kind(on, n), 0);
+    }
     if nn < 0 {
         return -1;
     }
@@ -346,7 +352,7 @@ pub(crate) fn rs_place_item(on: &mut crate::port::Cells, oa: &mut crate::port::C
                 shift = cx - fc;
             }
             let dx: i32 = (tx - shift) - ind;
-            if dx > RS_NEST {
+            if (dx > RS_NEST) && (d < RS_DEEP) {
                 let held: i32 = crate::port::cells_at(stk, f + 4);
                 rs_open_list(nodes, attrs, text, stk, held, tx - shift, sch, val, cx);
                 more = 0;
@@ -365,6 +371,9 @@ pub(crate) fn rs_place_item(on: &mut crate::port::Cells, oa: &mut crate::port::C
         }
     }
     let d2: i32 = rs_depth(stk, base);
+    if d2 == 0 {
+        return np;
+    }
     return crate::port::cells_at(stk, base + ((d2 - 1) * RS_FR));
 }
 pub(crate) fn rs_trailer(k: i32) -> bool {
@@ -519,17 +528,23 @@ pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
             nn = rs_node(on, oa, orr, nodes, attrs, regions, nm, c, ls);
             node_set_sub(nodes, nn, 0);
             node_set_aux(nodes, nn, 0);
-            if (crate::port::cells_at(stk, f + 2) != 1) && (node_aux(on, c) > 0) && (crate::port::cells_at(stk, f + 4) != -1) && (node_aux(on, c) != (crate::port::cells_at(stk, f + 3) + 1)) {
-                node_set_attr_int(nodes, attrs, nn, fk_value(), node_aux(on, c));
+            // no frame: the Model's depth limit stopped the list; the item stands where it is
+            if rs_depth(stk, base) >= 1 {
+                if (crate::port::cells_at(stk, f + 2) != 1) && (node_aux(on, c) > 0) && (crate::port::cells_at(stk, f + 4) != -1) && (node_aux(on, c) != (crate::port::cells_at(stk, f + 3) + 1)) {
+                    node_set_attr_int(nodes, attrs, nn, fk_value(), node_aux(on, c));
+                }
+                crate::port::cells_set(stk, f + 3, node_aux(on, c));
+                crate::port::cells_set(stk, f + 4, nn);
             }
-            crate::port::cells_set(stk, f + 3, node_aux(on, c));
-            crate::port::cells_set(stk, f + 4, nn);
             rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn);
         }
         // a milestone or a note inside a list that goes on: kept in the item before it
         if act == 2 {
             f = base + ((rs_depth(stk, base) - 1) * RS_FR);
             hold = crate::port::cells_at(stk, f + 4);
+            if hold < 0 {
+                hold = np;
+            }
             nn = rs_node(on, oa, orr, nodes, attrs, regions, nm, c, hold);
             rs_children(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn);
         }

@@ -199,8 +199,9 @@
                         (set x (+ x 2800)))))
                 (set s (+ k 1))))
           (set k (+ k 1))))
-    (return (ln-new ln 1 (if (> (blob-len marker) 0) mx tx) y (+ x 0) (+ y 1200)
-                    (if (> (blob-len marker) 0) mx tx) (- (+ y 1200) 200) (+ x 0) (- (+ y 1200) 200) 0 0 w0 (- (wd-count wd) w0)))))
+    (let [^:mut ^I32 lx tx]
+      (if (> (blob-len marker) 0) (set lx mx))
+      (return (ln-new ln 1 lx y x (+ y 1200) lx (- (+ y 1200) 200) x (- (+ y 1200) 200) 0 0 w0 (- (wd-count wd) w0))))))
 
 (defn ^I32 lt-doc [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et]
   (comment "Body text, then three numbered lines, a nested pair, and a lone `A. Smith` among prose. The lines: 0..2 body,")

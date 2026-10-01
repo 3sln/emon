@@ -181,13 +181,11 @@ pub(crate) fn lt_line(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port:
         }
         k += 1;
     }
-    return ln_new(ln, 1,     if crate::port::blob_len(marker) > 0 {
-mx    } else {
-tx    }
-, y, x + 0, y + 1200,     if crate::port::blob_len(marker) > 0 {
-mx    } else {
-tx    }
-, (y + 1200) - 200, x + 0, (y + 1200) - 200, 0, 0, w0, wd_count(wd) - w0);
+    let mut lx: i32 = tx;
+    if crate::port::blob_len(marker) > 0 {
+        lx = mx;
+    }
+    return ln_new(ln, 1, lx, y, x, y + 1200, lx, (y + 1200) - 200, x, (y + 1200) - 200, 0, 0, w0, wd_count(wd) - w0);
 }
 pub(crate) fn lt_doc(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells) -> i32 {
     // Body text, then three numbered lines, a nested pair, and a lone `A. Smith` among prose. The lines: 0..2 body,

@@ -172,13 +172,11 @@ public final class Listtest {
             }
             k += 1;
         }
-        return Evidence.lnNew(ln, 1,         if (emon.Port.blobLen(marker) > 0) {
-mx        } else {
-tx        }
-, y, x + 0, y + 1200,         if (emon.Port.blobLen(marker) > 0) {
-mx        } else {
-tx        }
-, (y + 1200) - 200, x + 0, (y + 1200) - 200, 0, 0, w0, Evidence.wdCount(wd) - w0);
+        int lx = tx;
+        if (emon.Port.blobLen(marker) > 0) {
+            lx = mx;
+        }
+        return Evidence.lnNew(ln, 1, lx, y, x, y + 1200, lx, (y + 1200) - 200, x, (y + 1200) - 200, 0, 0, w0, Evidence.wdCount(wd) - w0);
     }
     public static int ltDoc(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et) {
         // Body text, then three numbered lines, a nested pair, and a lone `A. Smith` among prose. The lines: 0..2 body,
