@@ -11,6 +11,7 @@
   same OS.  No text is `text-transform`ed: what prints is what the source says.  See html2gold.clj for
   the HTML subset."
   (:require [babashka.process :as p]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [pyfmt :refer [fmt]]
@@ -996,10 +997,117 @@ h1{font:bold 20pt %s} h2{font:bold 14pt %s}" SERIF SANS SANS SANS)
 
     @docs))
 
+;; ------------------------------------------------------------------------------------------------
+;; The fusion documents (P6.6, D209): born-digital pages whose PRINT carries an artifact over or under the text.
+;; Each is two pages of ordinary prose, headings and one table, so the CER means something; the gold is the prose,
+;; never the artifact (a watermark goes to the `dropped` ledger, a seal or signature is a `seal` node).
+
+(def FUSION-CSS
+  (fmt "h1{font:bold 20pt %s} h2{font:bold 14pt %s} table.ft{width:100%%} .ft th,.ft td{border-bottom:1px solid #999} .ft thead th{border-bottom:2px solid #000}" SANS SANS))
+
+(defn fprose
+  "A title and prose in three sections around one table (`table`, or a small ruled one)."
+  [seed title & {:keys [table]}]
+  (str (fmt "<h1>%s</h1>" title) (P seed 5)
+       "<h2>Overview</h2>" (P (+ seed 1) 5) (P (+ seed 2) 5)
+       "<h2>Findings</h2>" (P (+ seed 3) 5)
+       (or table (small-table "F" 7 (+ seed 90)))
+       (P (+ seed 4) 5)
+       "<h2>Recommendations</h2>" (P (+ seed 5) 5) (P (+ seed 6) 5) (P (+ seed 7) 5)
+       "<h2>Annex</h2>" (P (+ seed 8) 5) (P (+ seed 9) 5)))
+
+(defn ring-seal
+  "A ring seal as SVG: arc text round the ring, one word in the middle. `data-text` is what it prints."
+  [{:keys [arc center text name date color hex size] :or {color "blue" hex "#1f3f9f" size 150}}]
+  (fmt "<svg data-seal=\"seal\" data-name=\"%s\" data-date=\"%s\" data-color=\"%s\" data-text=\"%s\" width=\"%d\" height=\"%d\" viewBox=\"0 0 150 150\" font-family=\"Helvetica\"><defs><path id=\"arc\" d=\"M75,75 m-56,0 a56,56 0 1,1 112,0 a56,56 0 1,1 -112,0\"/></defs><circle cx=\"75\" cy=\"75\" r=\"70\" fill=\"none\" stroke=\"%s\" stroke-width=\"3\"/><circle cx=\"75\" cy=\"75\" r=\"45\" fill=\"none\" stroke=\"%s\"/><text font-size=\"11\" fill=\"%s\" letter-spacing=\"1.5\"><textPath href=\"#arc\">%s</textPath></text><text x=\"75\" y=\"80\" text-anchor=\"middle\" font-size=\"13\" font-weight=\"bold\" fill=\"%s\">%s</text></svg>"
+       name date color text size size hex hex hex arc hex center))
+
+(defn outline-svg
+  "A heading's glyph outlines (tools/synth/outlines.edn, made by outline.clj) as inline SVG."
+  [outlines name]
+  (let [o (first (filter #(= name (:name %)) outlines))
+        id (fn [g] (str "o" name "-" g))]
+    (fmt "<svg role=\"img\" width=\"%s\" height=\"%s\" viewBox=\"0 0 %s %s\" fill=\"#111\"><defs>%s</defs>%s</svg>"
+         (:w o) (:h o) (:w o) (:h o)
+         (apply str (for [[g d] (:defs o)] (fmt "<path id=\"%s\" d=\"%s\"/>" (id g) d)))
+         (apply str (for [[g x y] (:uses o)] (fmt "<use href=\"#%s\" x=\"%s\" y=\"%s\"/>" (id g) x y))))))
+
+(defn build-fusion
+  "The documents of P6.6's brief, items 1 and 2 (the sources of the hand-made PDFs), as {name html}."
+  [p28]
+  (let [docs (atom {})
+        add (fn [name title body & [opts]] (swap! docs assoc name (doc title body (or opts {}))))
+        outlines (edn/read-string (slurp "tools/synth/outlines.edn"))]
+
+    ;; opaque light-grey CONFIDENTIAL, -45 degrees, 110 pt, behind the text and crossing body lines on both pages
+    (add "wm-gray-behind" "Operating Review"
+         (str "<div data-gold=\"skip\" class=\"wm\">CONFIDENTIAL</div>" (fprose 2001 "Operating Review"))
+         {:css (fmt "%s .wm{position:fixed;top:50%%;left:50%%;transform:translate(-50%%,-50%%) rotate(-45deg);white-space:nowrap;font:bold 110pt %s;color:#d0d0d0;z-index:-1}" FUSION-CSS SANS)
+          :h (om "dropped" [(om "reason" "watermark" "text" "CONFIDENTIAL" "pages" "all")])})
+
+    ;; a PNG of SAMPLE at 20 % opacity behind the text: the PDF has the picture and no text for it
+    (add "wm-image-behind" "Training Guide"
+         (str "<img data-gold=\"skip\" class=\"wm\" src=\"img/wm-sample.png\" alt=\"\">" (fprose 2101 "Training Guide"))
+         {:css (fmt "%s .wm{position:fixed;top:50%%;left:50%%;width:6.2in;transform:translate(-50%%,-50%%);z-index:-1}" FUSION-CSS)
+          :h (om "dropped" [(om "reason" "watermark" "text" "SAMPLE" "pages" "all")])})
+
+    ;; a light texture picture the size of the page under all the text
+    (add "bg-texture" "Field Report"
+         (str "<img data-gold=\"skip\" class=\"bg\" src=\"img/bg-texture.jpg\" alt=\"\">" (fprose 2201 "Field Report"))
+         {:css (fmt "%s .bg{position:fixed;left:-1in;top:-1in;width:8.5in;height:11in;z-index:-1}" FUSION-CSS)})
+
+    ;; a ring seal over the end of a paragraph, a red rotated PAID stamp over a table cell
+    (let [tbl (str "<table class=\"ft\" data-profile=\"ruled\"><thead>" (tr ["Invoice" "Description" "Amount" "Status"] "th" #{2})
+                   "</thead><tbody>"
+                   (tr ["INV-1041" "Consulting, March" "1,200.00" "Open"] "td" #{2})
+                   (tr ["INV-1042" "Consulting, April" "1,350.00" "Open"] "td" #{2})
+                   (tr ["INV-1043" "Training days" "2,400.00" "Settled"] "td" #{2})
+                   (tr ["INV-1044" "Licences" "980.00" "Open"] "td" #{2})
+                   "</tbody></table>"
+                   "<div class=\"ov0\"><div data-seal=\"stamp\" data-color=\"red\" class=\"stamp\">PAID<br>2026-04-02</div></div>")
+          seal (fmt "<div class=\"ov0 s1\">%s</div>"
+                    (ring-seal {:arc "HARBOR COUNTY CLERK - OFFICIAL -" :center "SEAL" :text "HARBOR COUNTY CLERK OFFICIAL SEAL"
+                                :name "Harbor County Clerk" :date "2026-04-02"}))
+          body (str "<h1>Notice of Registration</h1>" (P 2301 5)
+                    "<h2>Overview</h2>" (P 2302 5) (P 2303 5) seal
+                    "<h2>Findings</h2>" (P 2304 5) tbl (P 2305 5)
+                    "<h2>Recommendations</h2>" (P 2306 5) (P 2307 5) (P 2308 5)
+                    "<h2>Annex</h2>" (P 2309 5) (P 2310 5))]
+      (add "seal-over-text" "Notice of Registration" body
+           {:css (fmt "%s .ov0{height:0;position:relative} .ov0>*{position:absolute} .s1 svg{right:.25in;top:-120px} .stamp{left:3.3in;top:-62px;border:3px solid #c0201f;color:#c0201f;font:bold 18pt %s;padding:2px 12px;transform:rotate(-12deg);white-space:nowrap}" FUSION-CSS SANS)}))
+
+    ;; a pen-stroke signature crossing the typed name above a Signature rule
+    (let [sig "<div class=\"ov0\"><svg data-seal=\"signature\" data-name=\"Jordan Rivera\" data-color=\"blue\" width=\"210\" height=\"70\" viewBox=\"0 0 210 70\"><path d=\"M6,48 C22,6 38,70 56,30 S92,4 112,36 S150,62 168,22 S196,18 204,30\" fill=\"none\" stroke=\"#1f3f9f\" stroke-width=\"2.4\" stroke-linecap=\"round\"/><path d=\"M20,58 C70,52 140,60 196,50\" fill=\"none\" stroke=\"#1f3f9f\" stroke-width=\"1.6\" stroke-linecap=\"round\"/></svg></div>"
+          body (str (fprose 2401 "Service Agreement")
+                    "<p class=\"agree\">Signed for and on behalf of the supplier:</p><p class=\"signer\">Jordan Rivera</p>" sig
+                    "<p class=\"sigrule\">Signature</p>")]
+      (add "sig-over-name" "Service Agreement" body
+           {:css (fmt "%s .signer{font:italic 14pt %s;margin:36px 0 0 .3in} .ov0{height:0;position:relative} .ov0>*{position:absolute} .ov0 svg{left:.2in;top:-54px} .sigrule{border-top:1px solid #000;width:3in;margin-top:22px;font:9pt %s} .agree{margin-top:1em}" FUSION-CSS SERIF SANS)}))
+
+    ;; two headings drawn as paths: the text layer lacks them, the gold has them
+    (let [h (fn [lvl name text] (fmt "<h%d data-outline-text=\"%s\">%s</h%d>" lvl text (outline-svg outlines name) lvl))
+          body (str "<h1>Results Bulletin</h1>" (P 2501 5)
+                    (h 2 "qr" "Quarterly Results") (P 2502 5) (P 2503 5) (P 2504 5)
+                    (small-table "F" 7 2590)
+                    (P 2505 5)
+                    (h 2 "or" "Outlook and Risks") (P 2506 5) (P 2507 5) (P 2508 5) (P 2509 5) (P 2510 5))]
+      (add "outlined-heading" "Results Bulletin" body {:css FUSION-CSS}))
+
+    ;; the sources of the hand-made PDFs (item 2): ordinary prose Chrome prints, which wm_pdf.clj then edits
+    ;; (the SPECIMEN of the three wm-* files is drawn by that edit, never by the HTML)
+    (doseq [[stem title seed] [["wm-marked" "Product Brief" 2601] ["wm-ocg" "Product Brief" 2701] ["wm-annot" "Product Brief" 2801]]]
+      (add stem title (fprose seed title) {:css FUSION-CSS :h (om "dropped" [(om "reason" "watermark" "text" "SPECIMEN" "pages" "all")])}))
+    (add "tl-broken-shift" "Maintenance Log" (fprose 2901 "Maintenance Log") {:css FUSION-CSS})
+    (add "tl-broken-unmapped" "Maintenance Log" (fprose 3001 "Maintenance Log") {:css FUSION-CSS})
+    ;; `hidden-older-ocr`: the pages of scan/h-plain.pdf, with a worse previous OCR's text layer: h-plain's own HTML
+    (swap! docs assoc "hidden-older-ocr" (get p28 "h-plain"))
+    @docs))
+
 (defn build
-  "Every document: the 36 of P2.8 and the 19 of P2.13 (D114), as {name html}."
+  "Every document: the 36 of P2.8, the 19 of P2.13 (D114) and the 12 of P6.6 (D209), as {name html}."
   []
-  (merge (build-p28) (build-d114)))
+  (let [p28 (build-p28)]
+    (merge p28 (build-d114) (build-fusion p28))))
 
 (defn -main [& args]
   (let [out (or (first args) "test/corpus/synth/html")

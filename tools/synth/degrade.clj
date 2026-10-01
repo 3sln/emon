@@ -19,6 +19,11 @@
 (def CORPUS "test/corpus/synth")
 (def DPI 150)
 
+;; The 12 documents of P6.6 (D209) are scanned in colour and with overlays (degrade_fusion.clj) INSTEAD of in grey:
+;; the pixel budget (the new committed files stay near 10 MB) cannot carry a third variant of each.
+(def NO-PLAIN-SCAN #{"wm-gray-behind" "wm-image-behind" "bg-texture" "seal-over-text" "sig-over-name" "outlined-heading"
+                     "wm-marked" "wm-ocg" "wm-annot" "tl-broken-shift" "tl-broken-unmapped" "hidden-older-ocr"})
+
 (defn sh! [& cmd]
   (let [r (apply p/sh cmd)]
     (when-not (zero? (:exit r)) (throw (ex-info (str "command failed: " (str/join " " cmd) "\n" (:err r)) r)))
@@ -61,4 +66,4 @@
                 args
                 (sort (for [f (.list (io/file CORPUS "html")) :when (str/ends-with? f ".html")] (subs f 0 (- (count f) 5)))))]
     (println (str "  ImageMagick: " (magick-version)))
-    (doseq [s stems] (degrade! s out-dir))))
+    (doseq [s stems :when (not (NO-PLAIN-SCAN s))] (degrade! s out-dir))))

@@ -6,7 +6,8 @@
   "pdf": "pdf/watermark-draft.pdf",
   "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
   "variants": {
-   "scan": "scan/watermark-draft.pdf"
+   "scan": "scan/watermark-draft.pdf",
+   "scan-color": "scan-color/watermark-draft.pdf"
   }
  },
  "annotated": {

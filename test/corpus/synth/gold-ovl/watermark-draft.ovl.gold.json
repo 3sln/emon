@@ -1,0 +1,325 @@
+{
+ "emon-gold": "1.0",
+ "id": "watermark-draft",
+ "provenance": {
+  "html": "html/watermark-draft.html",
+  "pdf": "pdf/watermark-draft.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan-ovl": "scan-ovl/watermark-draft.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Draft Policy Statement"
+      },
+      {
+       "id": 3,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 4,
+         "kind": "heading",
+         "level": 2,
+         "text": "Overview"
+        },
+        {
+         "id": 5,
+         "kind": "paragraph",
+         "text": "Name like quarter find feet sure again left knew land head paper results done. Example him home until more large into it four. During five home air mother keep group little and left results had help three has need. About top budget often high own method us whole as thought young together. Mother your report man with form to point."
+        },
+        {
+         "id": 6,
+         "kind": "paragraph",
+         "text": "Enough today which report made five group new turned way room big. Growth figure paper off room little words sample give year old something any. Line back but we soon thing use since page should method made color over. Write life boy away one which body want was she come for paper. Good house learn better come toward tell them went an help have from away."
+        },
+        {
+         "id": 7,
+         "kind": "paragraph",
+         "text": "Up still night through face good before enough. How friend well here hard world her she important young big should an off. Boy near get usually against once look people few. Earth family mother might because only from boy tell such under. Page up thought may that one world look should using on is did not said."
+        }
+       ]
+      },
+      {
+       "id": 8,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 9,
+         "kind": "heading",
+         "level": 2,
+         "text": "Findings"
+        },
+        {
+         "id": 10,
+         "kind": "paragraph",
+         "text": "Side once been just top three young been which upon until same its when home. Two enough put men even city put your. Through country which began every hard however down thought figure today took true. Off know move water country looked down any. Every come toward keep old good head into our took turned end if want."
+        },
+        {
+         "id": 11,
+         "kind": "paragraph",
+         "text": "Under much move kind water five large be from what back top did not report sure never. One make to heard picture part ever morning men. Can figure people or these young very number want the. Never never himself white find was your often between. Could had say time enough came work family best mother usually knew big day long."
+        },
+        {
+         "id": 12,
+         "kind": "paragraph",
+         "text": "It across report might sound side feet me under. Page at one room report hand new study how across. Out that but that house number house at asked. Policy city around saw like right do kind show do not. Knew using to began feet four name first while."
+        }
+       ]
+      },
+      {
+       "id": 13,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 14,
+         "kind": "heading",
+         "level": 2,
+         "text": "Recommendations"
+        },
+        {
+         "id": 15,
+         "kind": "paragraph",
+         "text": "Looked sometimes how results where for came get side not mother same measure. Earth almost then leave then would time turned about away morning asked paper. Look read quarter however could which across great most tell large might head. Family from almost down down more it done never car. And at soon far group as up color sea."
+        },
+        {
+         "id": 16,
+         "kind": "seal",
+         "subkind": "seal",
+         "color": "blue",
+         "text": "HARBOR COUNTY CLERK SEAL"
+        },
+        {
+         "id": 17,
+         "kind": "paragraph",
+         "text": "Several told new man said does should read. Pay make say us think us high did mother. Down put later only our four used while often when head. Than white want no long far over five were must of that. Why let high only will right above say done today out left end hand home other."
+        },
+        {
+         "id": 18,
+         "kind": "paragraph",
+         "text": "Find growth want move be above how some hard father new study three red would. Light thing night when against at your family budget look will hard had friend. Now home what home ever just father big him kind. Think let policy report true true did not going some. Sound it an few show ever move heard."
+        }
+       ]
+      },
+      {
+       "id": 19,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 20,
+         "kind": "heading",
+         "level": 2,
+         "text": "Methods"
+        },
+        {
+         "id": 21,
+         "kind": "paragraph",
+         "text": "Side move true light around set enough called several seen saw place name large. Above how need know being out revenue our father study picture house leave who. Top head away does again have both sea any thing city. Next we keep did not night keep today home car water night. Get once find try men door results because when four study say."
+        },
+        {
+         "id": 22,
+         "kind": "paragraph",
+         "text": "Has room heard above way see it most the would now against her right found day. Around using would almost together think friend that want paper door sometimes those. Any them thing is under and give kind let country change like. Still upon many it old always few seen ever. We leave say the feet air pay almost we of color these seen those big."
+        },
+        {
+         "id": 23,
+         "kind": "paragraph",
+         "text": "Group just turn example it will method write now next those up not face head at. Of most head sea life over my food began does me budget work just after side. Food often far off been sometimes once back may door father country. These were land boy even example get was. My line sun sea does still now face never earth around land."
+        }
+       ]
+      },
+      {
+       "id": 24,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 25,
+         "kind": "heading",
+         "level": 2,
+         "text": "Annex"
+        },
+        {
+         "id": 26,
+         "kind": "paragraph",
+         "text": "Play five animal live us or while below came growth today other many. For growth again cut work market now whole used method will. True so took line using time if each body. Little home would very against several in color words very city the city take is food. Last world well food our will up animal words help learn from turn take came."
+        },
+        {
+         "id": 27,
+         "kind": "seal",
+         "subkind": "signature",
+         "color": "blue",
+         "text": ""
+        },
+        {
+         "id": 28,
+         "kind": "paragraph",
+         "text": "Right right method away knew results when however learn world money face keep change. Find line something after car food using under method that change both. With there my over got own several hard both move later near usually done could. At used answer way up place often home place boy. Door sometimes make important sentence hand which sometimes."
+        },
+        {
+         "id": 29,
+         "kind": "paragraph",
+         "text": "Must using been where let father answer own men water enough what face last being because. How write white ever food off himself without form come way me still know out. When done end many had hard our up your hear morning large end get room before. Friend had seen would budget car for think does up three move sample name between. Picture off near every budget be might because."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [
+   {
+    "page": 1,
+    "reason": "watermark",
+    "text": "DRAFT"
+   },
+   {
+    "reason": "watermark",
+    "page": 1,
+    "text": "COPY"
+   },
+   {
+    "page": 2,
+    "reason": "watermark",
+    "text": "DRAFT"
+   },
+   {
+    "reason": "watermark",
+    "page": 2,
+    "text": "COPY"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Draft Policy Statement"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

@@ -110,6 +110,14 @@ command -v python3 > /dev/null && python3 kin/scripts/gold-check.py
 # and the oracle predictor scoring perfect on real gold while the degraded
 # fixture does not. `bb accuracy` itself is NOT a gate (D078).
 bb -cp tools:tools/lib tools/accuracy/test_score.clj
+# THE FUSION TOOLS' OWN WITNESSES (P6.6, D206, D209): `bb fusion-report` on a hand-made evidence dump (win rates, rule and
+# defence counts, pooled) and `bb fusion-live`'s stamp-ghost on hand-made words and boxes. Neither reads a corpus.
+bb -cp tools:tools/lib tools/accuracy/fusion_report.clj --self-test
+bb -cp tools:tools/lib tools/fusion/fusion_live.clj --self-test
+# THE FUSION CORPUS (P6.6, D209; babashka, reads only committed files): the six hand-edited PDFs are what wm_pdf.clj makes of
+# their sources, and every overlay scan's gold is what the document's gold plus scan-ovl/FACTS.json say.
+bb -cp tools:tools/lib tools/synth/wm_pdf.clj check
+bb -cp tools:tools/lib -m synth.degrade-fusion --check
 
 # THE BIDI TABLES (D162) are generated from the vendored UCD files (class, brackets, mirroring), and the committed
 # conformance rows are checked against them; the hand-written samples are what their script writes.
