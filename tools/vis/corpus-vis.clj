@@ -66,7 +66,7 @@
             "Q" (let [flags (parse-long (nth f 3))
                        p {:page (parse-long (nth f 1)) :flags flags :fill (parse-long (nth f 4)) :stroke (parse-long (nth f 5))
                           :x0 (parse-long (nth f 6)) :y0 (parse-long (nth f 7)) :x1 (parse-long (nth f 8)) :y1 (parse-long (nth f 9))
-                          :vis (parse-long (nth f 12)) :backdrop (parse-long (nth f 15)) :pcount (parse-long (nth f 16))}]
+                          :z (parse-long (nth f 10)) :vby (parse-long (nth f 13)) :vis (parse-long (nth f 12)) :backdrop (parse-long (nth f 15)) :pcount (parse-long (nth f 16))}]
                    (recur (rest lines) pending
                           (if (zero? (bit-and 4 flags)) (conj paint (select-keys p [:page :x0 :y0 :x1 :y1])) paint)
                           (if (zero? (bit-and 36 flags)) (conj paths p) paths) out))
@@ -139,7 +139,14 @@
         (when sp
           (bump! :path-render cls (if (>= sp 8) :ink :flat))
           (when (and (not (zero? (:vis p))) (>= sp 8))
-            (swap! tally update [:disagree cls] (fnil conj []) [pdf (:page p) (:x0 p) (:y0 p) (:x1 p) (:y1 p)])))))))
+            ;; ink where a path is hidden is explained when what covers it, or what it is the colour of, is its own colour:
+            ;; a rule drawn twice, or a frame's edge drawn over the same-coloured frame
+            (let [c (fn [q] (if (pos? (bit-and 8 (:flags q))) (:fill q) (:stroke q)))
+                  cover (when (= cls "occluded") (first (filter #(and (= (:page %) (:page p)) (= (:z %) (:vby p))) paths)))
+                  same (or (= cls "white") (and cover (= (c cover) (c p))))]
+              (bump! :path-ink-explained cls (if same :same-colour :different))
+              (when-not same
+                (swap! tally update [:disagree cls] (fnil conj []) [pdf (:page p) (:x0 p) (:y0 p) (:x1 p) (:y1 p)])))))))))
 
 (defn judge-paths [pdf paths]
   (when paths-render? (judge-paths-render pdf paths))
@@ -211,6 +218,9 @@
       (println "\nRULE-LIKE PATHS on poppler's page (ink = a spread of 8 levels; visible should show ink, hidden should not)")
       (doseq [c (sort (set (map second (filter #(= :path-render (first %)) (keys t)))))]
         (println (format "%-26s ink %7d   flat %7d" c (g :path-render c :ink) (g :path-render c :flat))))
+      (doseq [c (sort (set (map second (filter #(= :path-ink-explained (first %)) (keys t)))))]
+        (println (str "  hidden but inked, " c ": the colour of what covers it or of its backdrop " (g :path-ink-explained c :same-colour)
+                      "; a different colour " (g :path-ink-explained c :different))))
       (doseq [[k v] t :when (= :disagree (first k))]
         (println (str "  hidden but inked (" (second k) "): " (count v) " e.g. " (pr-str (take 4 v))))))
     (let [vis-py (g :poppler-has "visible" :yes) vis-pn (g :poppler-has "visible" :no)
