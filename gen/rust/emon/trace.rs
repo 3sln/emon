@@ -805,7 +805,7 @@ pub fn tr_stroke_px(cs: &mut crate::port::Cells, c: i32) -> i32 {
 pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells) -> i32 {
     // Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
     // text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-    // and at most 10 times as long as thick; the INK-WEIGHTED median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
+    // and at most 10 times as long as thick; the INK-WEIGHTED (each capped at 1024 pixels) median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
     // within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
     // (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
     // has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -825,6 +825,7 @@ pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate
     let mut m: i32 = 0;
     let mut nprov: i32 = 0;
     let mut hh: i32 = 0;
+    let mut wgt: i32 = 0;
     let mut kind: i32 = 0;
     crate::port::cells_drop(s1, 0);
     crate::port::cells_grow(s1, 1024, 0);
@@ -846,8 +847,9 @@ pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate
         if (h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise))) {
             if (tr_cg(cs, c, C_KIND) != tr_k_rule()) || (lng < (3 * tmin)) {
                 hh = tr_min(h, 1023);
-                crate::port::cells_set(s1, hh, crate::port::cells_at(s1, hh) + ink);
-                nprov += ink;
+                wgt = tr_min(ink, 1024);
+                crate::port::cells_set(s1, hh, crate::port::cells_at(s1, hh) + wgt);
+                nprov += wgt;
                 tr_cset(cs, c, C_FIT, 1);
             }
         }
@@ -878,6 +880,32 @@ pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate
     }
     return m;
 }
+pub(crate) fn tr_row_lo(rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, y: i32, comp: i32) -> i32 {
+    // The smallest x0 of component `comp`'s runs in row y (a large number when it has none).
+    let mut r: i32 = crate::port::cells_at(ri, y);
+    let re: i32 = crate::port::cells_at(ri, y + 1);
+    let mut v: i32 = 1000000000;
+    while r < re {
+        if tr_rg(rn, r, 5) == comp {
+            v = tr_min(v, tr_rg(rn, r, 1));
+        }
+        r += 1;
+    }
+    return v;
+}
+pub(crate) fn tr_row_hi(rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, y: i32, comp: i32) -> i32 {
+    // The largest x1 of component `comp`'s runs in row y (a very small number when it has none).
+    let mut r: i32 = crate::port::cells_at(ri, y);
+    let re: i32 = crate::port::cells_at(ri, y + 1);
+    let mut v: i32 = -1000000000;
+    while r < re {
+        if tr_rg(rn, r, 5) == comp {
+            v = tr_max(v, tr_rg(rn, r, 2));
+        }
+        r += 1;
+    }
+    return v;
+}
 pub(crate) fn tr_row_has(rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, y: i32, comp: i32, before: i32, after: i32) -> i32 {
     // 1 when component `comp` has a run of row y ending at or before `before` AND a run starting at or after `after`.
     let mut r: i32 = crate::port::cells_at(ri, y);
@@ -902,7 +930,7 @@ pub(crate) fn tr_row_has(rn: &mut crate::port::Cells, ri: &mut crate::port::Cell
 }
 pub fn tr_parents(rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells) -> i32 {
     // `C_PARENT` of each component: the smallest (by box) component that has a hole, is neither noise nor text, whose box holds
-    // this component's box, and that has ink on BOTH sides of it in its first and in its last row (the run test, so a letter in the
+    // this component's box, and that has ink on BOTH sides of the component's own extent in its first and in its last row (the run test, so a letter in the
     // notch of a `c` is not inside it). Among at most `tr-parent-cands` holders, taken in order. -1 for none.
     let nc: i32 = crate::port::cells_len(cs) / 24;
     let capn: i32 = tr_parent_cands();
@@ -941,7 +969,7 @@ pub fn tr_parents(rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, mut 
             if (p != c) && ((tr_cg(cs, p, C_TOP) <= t) && ((tr_cg(cs, p, C_LEFT) <= l) && ((tr_cg(cs, p, C_RIGHT) >= rr) && (tr_cg(cs, p, C_BOTTOM) >= b)))) {
                 area = ((tr_cg(cs, p, C_RIGHT) - tr_cg(cs, p, C_LEFT)) as i64).wrapping_mul((tr_cg(cs, p, C_BOTTOM) - tr_cg(cs, p, C_TOP)) as i64);
                 if (best < 0) || (area < barea) {
-                    if (tr_row_has(rn, ri, t, p, l, rr) == 1) && (tr_row_has(rn, ri, b - 1, p, l, rr) == 1) {
+                    if (tr_row_has(rn, ri, t, p, tr_row_lo(rn, ri, t, c), tr_row_hi(rn, ri, t, c)) == 1) && (tr_row_has(rn, ri, b - 1, p, tr_row_lo(rn, ri, b - 1, c), tr_row_hi(rn, ri, b - 1, c)) == 1) {
                         best = p;
                         barea = area;
                     }
@@ -2706,7 +2734,7 @@ pub(crate) fn tr_ring_test(rn: &mut crate::port::Cells, ri: &mut crate::port::Ce
     return 1;
 }
 pub fn tr_shapes(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, bin: &crate::port::Bitmap, rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, inks: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells) -> i32 {
-    // Contours (SPEC 8.2): the outer boundary of every LARGE component that gave no rule, traced on the binary view, simplified,
+    // Contours (SPEC 8.2): the outer boundary of every LARGE component (one that gave rules too: a frame is four rules AND a rect), traced on the binary view, simplified,
     // written to `pts` (the `components` row's `pfirst pcount`); and one primitive each: `rect`, `circle`/`ellipse` (or `ring`: an
     // annulus), else `polygon` (up to 12 corners) or `curve`. Fit residuals are per mille of the radius and the confidence is 1000
     // less eight times it. Answers the number of primitives. `s1`..`s5` are scratch (s1 the raw corners, s4 the simplified).
@@ -2745,7 +2773,7 @@ pub fn tr_shapes(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
     let mut pcf: i32 = 0;
     c = 0;
     while c < nc {
-        if (tr_cg(cs, c, C_KIND) == tr_k_large()) && (tr_cg(cs, c, C_RULE) < 0) {
+        if tr_cg(cs, c, C_KIND) == tr_k_large() {
             rr = tr_cg(cs, c, C_ROOT);
             m = tr_contour_raw(bin, tr_rg(rn, rr, 1), tr_rg(rn, rr, 0), s1, tr_max_contour());
             if m >= 4 {

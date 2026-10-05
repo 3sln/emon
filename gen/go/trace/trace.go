@@ -886,7 +886,7 @@ func TrStrokePx(cs *port.Cells, c int32) int32 {
 func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 	// Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
 	// text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-	// and at most 10 times as long as thick; the INK-WEIGHTED median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
+	// and at most 10 times as long as thick; the INK-WEIGHTED (each capped at 1024 pixels) median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
 	// within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
 	// (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
 	// has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -906,6 +906,7 @@ func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 	var m int32 = 0
 	var nprov int32 = 0
 	var hh int32 = 0
+	var wgt int32 = 0
 	var kind int32 = 0
 	port.CellsDrop(s1, 0)
 	port.CellsGrow(s1, 1024, 0)
@@ -927,8 +928,9 @@ func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 		if (h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise))) {
 			if (TrCg(cs, c, cKind) != TrKRule()) || (lng < (3 * tmin)) {
 				hh = trMin(h, 1023)
-				port.CellsSet(s1, hh, port.CellsAt(s1, hh)+ink)
-				nprov += ink
+				wgt = trMin(ink, 1024)
+				port.CellsSet(s1, hh, port.CellsAt(s1, hh)+wgt)
+				nprov += wgt
 				trCset(cs, c, cFit, 1)
 			}
 		}
@@ -960,6 +962,34 @@ func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 	return m
 }
 
+func trRowLo(rn *port.Cells, ri *port.Cells, y int32, comp int32) int32 {
+	// The smallest x0 of component `comp`'s runs in row y (a large number when it has none).
+	var r int32 = port.CellsAt(ri, y)
+	var re int32 = port.CellsAt(ri, y+1)
+	var v int32 = 1000000000
+	for r < re {
+		if trRg(rn, r, 5) == comp {
+			v = trMin(v, trRg(rn, r, 1))
+		}
+		r += 1
+	}
+	return v
+}
+
+func trRowHi(rn *port.Cells, ri *port.Cells, y int32, comp int32) int32 {
+	// The largest x1 of component `comp`'s runs in row y (a very small number when it has none).
+	var r int32 = port.CellsAt(ri, y)
+	var re int32 = port.CellsAt(ri, y+1)
+	var v int32 = -1000000000
+	for r < re {
+		if trRg(rn, r, 5) == comp {
+			v = trMax(v, trRg(rn, r, 2))
+		}
+		r += 1
+	}
+	return v
+}
+
 func trRowHas(rn *port.Cells, ri *port.Cells, y int32, comp int32, before int32, after int32) int32 {
 	// 1 when component `comp` has a run of row y ending at or before `before` AND a run starting at or after `after`.
 	var r int32 = port.CellsAt(ri, y)
@@ -985,7 +1015,7 @@ func trRowHas(rn *port.Cells, ri *port.Cells, y int32, comp int32, before int32,
 
 func TrParents(rn *port.Cells, ri *port.Cells, cs *port.Cells, s1 *port.Cells) int32 {
 	// `C_PARENT` of each component: the smallest (by box) component that has a hole, is neither noise nor text, whose box holds
-	// this component's box, and that has ink on BOTH sides of it in its first and in its last row (the run test, so a letter in the
+	// this component's box, and that has ink on BOTH sides of the component's own extent in its first and in its last row (the run test, so a letter in the
 	// notch of a `c` is not inside it). Among at most `tr-parent-cands` holders, taken in order. -1 for none.
 	var nc int32 = port.CellsLen(cs) / 24
 	var capn int32 = TrParentCands()
@@ -1024,7 +1054,7 @@ func TrParents(rn *port.Cells, ri *port.Cells, cs *port.Cells, s1 *port.Cells) i
 			if (p != c) && ((TrCg(cs, p, cTop) <= t) && ((TrCg(cs, p, cLeft) <= l) && ((TrCg(cs, p, cRight) >= rr) && (TrCg(cs, p, cBottom) >= b)))) {
 				area = int64(TrCg(cs, p, cRight)-TrCg(cs, p, cLeft)) * int64(TrCg(cs, p, cBottom)-TrCg(cs, p, cTop))
 				if (best < 0) || (area < barea) {
-					if (trRowHas(rn, ri, t, p, l, rr) == 1) && (trRowHas(rn, ri, b-1, p, l, rr) == 1) {
+					if (trRowHas(rn, ri, t, p, trRowLo(rn, ri, t, c), trRowHi(rn, ri, t, c)) == 1) && (trRowHas(rn, ri, b-1, p, trRowLo(rn, ri, b-1, c), trRowHi(rn, ri, b-1, c)) == 1) {
 						best = p
 						barea = area
 					}
@@ -2852,7 +2882,7 @@ func trRingTest(rn *port.Cells, ri *port.Cells, comp int32, cx int32, cy int32, 
 }
 
 func TrShapes(views *port.Cells, page int32, view int32, dpi100 int32, bin *port.Bitmap, rn *port.Cells, ri *port.Cells, cs *port.Cells, comps *port.Cells, prims *port.Cells, pts *port.Cells, refs *port.Cells, inks *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells) int32 {
-	// Contours (SPEC 8.2): the outer boundary of every LARGE component that gave no rule, traced on the binary view, simplified,
+	// Contours (SPEC 8.2): the outer boundary of every LARGE component (one that gave rules too: a frame is four rules AND a rect), traced on the binary view, simplified,
 	// written to `pts` (the `components` row's `pfirst pcount`); and one primitive each: `rect`, `circle`/`ellipse` (or `ring`: an
 	// annulus), else `polygon` (up to 12 corners) or `curve`. Fit residuals are per mille of the radius and the confidence is 1000
 	// less eight times it. Answers the number of primitives. `s1`..`s5` are scratch (s1 the raw corners, s4 the simplified).
@@ -2891,7 +2921,7 @@ func TrShapes(views *port.Cells, page int32, view int32, dpi100 int32, bin *port
 	var pcf int32 = 0
 	c = 0
 	for c < nc {
-		if (TrCg(cs, c, cKind) == TrKLarge()) && (TrCg(cs, c, cRule) < 0) {
+		if TrCg(cs, c, cKind) == TrKLarge() {
 			rr = TrCg(cs, c, cRoot)
 			m = TrContourRaw(bin, trRg(rn, rr, 1), trRg(rn, rr, 0), s1, TrMaxContour())
 			if m >= 4 {

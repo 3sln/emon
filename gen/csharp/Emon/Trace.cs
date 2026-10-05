@@ -807,7 +807,7 @@ public static class Trace {
     public static int TrKinds(int dpi100, emon.Port.Cells cs, emon.Port.Cells s1) {
         // Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
         // text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-        // and at most 10 times as long as thick; the INK-WEIGHTED median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
+        // and at most 10 times as long as thick; the INK-WEIGHTED (each capped at 1024 pixels) median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
         // within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
         // (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
         // has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -827,6 +827,7 @@ public static class Trace {
         int m = 0;
         int nprov = 0;
         int hh = 0;
+        int wgt = 0;
         int kind = 0;
         emon.Port.CellsDrop(s1, 0);
         emon.Port.CellsGrow(s1, 1024, 0);
@@ -848,8 +849,9 @@ public static class Trace {
             if ((h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise)))) {
                 if ((TrCg(cs, c, CKind) != TrKRule()) || (lng < (3 * tmin))) {
                     hh = TrMin(h, 1023);
-                    emon.Port.CellsSet(s1, hh, emon.Port.CellsAt(s1, hh) + ink);
-                    nprov += ink;
+                    wgt = TrMin(ink, 1024);
+                    emon.Port.CellsSet(s1, hh, emon.Port.CellsAt(s1, hh) + wgt);
+                    nprov += wgt;
                     TrCset(cs, c, CFit, 1);
                 }
             }
@@ -880,6 +882,32 @@ public static class Trace {
         }
         return m;
     }
+    internal static int TrRowLo(emon.Port.Cells rn, emon.Port.Cells ri, int y, int comp) {
+        // The smallest x0 of component `comp`'s runs in row y (a large number when it has none).
+        int r = emon.Port.CellsAt(ri, y);
+        int re = emon.Port.CellsAt(ri, y + 1);
+        int v = 1000000000;
+        while (r < re) {
+            if (TrRg(rn, r, 5) == comp) {
+                v = TrMin(v, TrRg(rn, r, 1));
+            }
+            r += 1;
+        }
+        return v;
+    }
+    internal static int TrRowHi(emon.Port.Cells rn, emon.Port.Cells ri, int y, int comp) {
+        // The largest x1 of component `comp`'s runs in row y (a very small number when it has none).
+        int r = emon.Port.CellsAt(ri, y);
+        int re = emon.Port.CellsAt(ri, y + 1);
+        int v = -1000000000;
+        while (r < re) {
+            if (TrRg(rn, r, 5) == comp) {
+                v = TrMax(v, TrRg(rn, r, 2));
+            }
+            r += 1;
+        }
+        return v;
+    }
     internal static int TrRowHas(emon.Port.Cells rn, emon.Port.Cells ri, int y, int comp, int before, int after) {
         // 1 when component `comp` has a run of row y ending at or before `before` AND a run starting at or after `after`.
         int r = emon.Port.CellsAt(ri, y);
@@ -904,7 +932,7 @@ public static class Trace {
     }
     public static int TrParents(emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells s1) {
         // `C_PARENT` of each component: the smallest (by box) component that has a hole, is neither noise nor text, whose box holds
-        // this component's box, and that has ink on BOTH sides of it in its first and in its last row (the run test, so a letter in the
+        // this component's box, and that has ink on BOTH sides of the component's own extent in its first and in its last row (the run test, so a letter in the
         // notch of a `c` is not inside it). Among at most `tr-parent-cands` holders, taken in order. -1 for none.
         int nc = emon.Port.CellsLen(cs) / 24;
         int capn = TrParentCands();
@@ -943,7 +971,7 @@ public static class Trace {
                 if ((p != c) && ((TrCg(cs, p, CTop) <= t) && ((TrCg(cs, p, CLeft) <= l) && ((TrCg(cs, p, CRight) >= rr) && (TrCg(cs, p, CBottom) >= b))))) {
                     area = unchecked(((long) (TrCg(cs, p, CRight) - TrCg(cs, p, CLeft))) * ((long) (TrCg(cs, p, CBottom) - TrCg(cs, p, CTop))));
                     if ((best < 0) || (area < barea)) {
-                        if ((TrRowHas(rn, ri, t, p, l, rr) == 1) && (TrRowHas(rn, ri, b - 1, p, l, rr) == 1)) {
+                        if ((TrRowHas(rn, ri, t, p, TrRowLo(rn, ri, t, c), TrRowHi(rn, ri, t, c)) == 1) && (TrRowHas(rn, ri, b - 1, p, TrRowLo(rn, ri, b - 1, c), TrRowHi(rn, ri, b - 1, c)) == 1)) {
                             best = p;
                             barea = area;
                         }
@@ -2708,7 +2736,7 @@ public static class Trace {
         return 1;
     }
     public static int TrShapes(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Bitmap bin, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells comps, emon.Port.Cells prims, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells inks, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5) {
-        // Contours (SPEC 8.2): the outer boundary of every LARGE component that gave no rule, traced on the binary view, simplified,
+        // Contours (SPEC 8.2): the outer boundary of every LARGE component (one that gave rules too: a frame is four rules AND a rect), traced on the binary view, simplified,
         // written to `pts` (the `components` row's `pfirst pcount`); and one primitive each: `rect`, `circle`/`ellipse` (or `ring`: an
         // annulus), else `polygon` (up to 12 corners) or `curve`. Fit residuals are per mille of the radius and the confidence is 1000
         // less eight times it. Answers the number of primitives. `s1`..`s5` are scratch (s1 the raw corners, s4 the simplified).
@@ -2747,7 +2775,7 @@ public static class Trace {
         int pcf = 0;
         c = 0;
         while (c < nc) {
-            if ((TrCg(cs, c, CKind) == TrKLarge()) && (TrCg(cs, c, CRule) < 0)) {
+            if (TrCg(cs, c, CKind) == TrKLarge()) {
                 rr = TrCg(cs, c, CRoot);
                 m = TrContourRaw(bin, TrRg(rn, rr, 1), TrRg(rn, rr, 0), s1, TrMaxContour());
                 if (m >= 4) {

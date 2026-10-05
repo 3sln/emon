@@ -664,7 +664,7 @@
 (defn ^:pub ^I32 tr-kinds [^I32 dpi100 ^:mut ^Cells cs ^:mut ^Cells s1]
   (comment "Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median")
   (comment "text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,")
-  (comment "and at most 10 times as long as thick; the INK-WEIGHTED median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height")
+  (comment "and at most 10 times as long as thick; the INK-WEIGHTED (each capped at 1024 pixels) median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height")
   (comment "within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin")
   (comment "(its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,")
   (comment "has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything")
@@ -684,6 +684,7 @@
         ^:mut ^I32 m 0
         ^:mut ^I32 nprov 0
         ^:mut ^I32 hh 0
+        ^:mut ^I32 wgt 0
         ^:mut ^I32 kind 0]
     (cells-drop s1 0)
     (cells-grow s1 1024 0)
@@ -703,8 +704,9 @@
           (if (and (>= h tmin) (and (<= h tmax) (and (<= w (* 10 h)) (> ink noise))))
             (if (or (!= (tr-cg cs c C_KIND) (tr-k-rule)) (< lng (* 3 tmin)))
               (do (set hh (tr-min h 1023))
-                  (cells-set s1 hh (+ (cells-at s1 hh) ink))
-                  (set nprov (+ nprov ink))
+                  (set wgt (tr-min ink 1024))
+                  (cells-set s1 hh (+ (cells-at s1 hh) wgt))
+                  (set nprov (+ nprov wgt))
                   (tr-cset cs c C_FIT 1))))
           (set c (+ c 1))))
     (set m (tr-hist-median s1 0 1024 nprov))
@@ -728,6 +730,26 @@
 
 ;; ---------------------------------------------------------------- parents
 
+(defn ^I32 tr-row-lo [^Cells rn ^Cells ri ^I32 y ^I32 comp]
+  (comment "The smallest x0 of component `comp`'s runs in row y (a large number when it has none).")
+  (let [^:mut ^I32 r (cells-at ri y)
+        ^I32 re (cells-at ri (+ y 1))
+        ^:mut ^I32 v 1000000000]
+    (while (< r re)
+      (do (if (== (tr-rg rn r 5) comp) (set v (tr-min v (tr-rg rn r 1))))
+          (set r (+ r 1))))
+    (return v)))
+
+(defn ^I32 tr-row-hi [^Cells rn ^Cells ri ^I32 y ^I32 comp]
+  (comment "The largest x1 of component `comp`'s runs in row y (a very small number when it has none).")
+  (let [^:mut ^I32 r (cells-at ri y)
+        ^I32 re (cells-at ri (+ y 1))
+        ^:mut ^I32 v -1000000000]
+    (while (< r re)
+      (do (if (== (tr-rg rn r 5) comp) (set v (tr-max v (tr-rg rn r 2))))
+          (set r (+ r 1))))
+    (return v)))
+
 (defn ^I32 tr-row-has [^Cells rn ^Cells ri ^I32 y ^I32 comp ^I32 before ^I32 after]
   (comment "1 when component `comp` has a run of row y ending at or before `before` AND a run starting at or after `after`.")
   (let [^:mut ^I32 r (cells-at ri y)
@@ -744,7 +766,7 @@
 
 (defn ^:pub ^I32 tr-parents [^Cells rn ^Cells ri ^:mut ^Cells cs ^:mut ^Cells s1]
   (comment "`C_PARENT` of each component: the smallest (by box) component that has a hole, is neither noise nor text, whose box holds")
-  (comment "this component's box, and that has ink on BOTH sides of it in its first and in its last row (the run test, so a letter in the")
+  (comment "this component's box, and that has ink on BOTH sides of the component's own extent in its first and in its last row (the run test, so a letter in the")
   (comment "notch of a `c` is not inside it). Among at most `tr-parent-cands` holders, taken in order. -1 for none.")
   (let [^I32 nc (quot (cells-len cs) 24)
         ^I32 capn (tr-parent-cands)
@@ -781,7 +803,8 @@
                 (if (and (!= p c) (and (<= (tr-cg cs p C_TOP) t) (and (<= (tr-cg cs p C_LEFT) l) (and (>= (tr-cg cs p C_RIGHT) rr) (>= (tr-cg cs p C_BOTTOM) b)))))
                   (do (set area (mul64 (i64 (- (tr-cg cs p C_RIGHT) (tr-cg cs p C_LEFT))) (i64 (- (tr-cg cs p C_BOTTOM) (tr-cg cs p C_TOP)))))
                       (if (or (< best 0) (< area barea))
-                        (if (and (== (tr-row-has rn ri t p l rr) 1) (== (tr-row-has rn ri (- b 1) p l rr) 1))
+                        (if (and (== (tr-row-has rn ri t p (tr-row-lo rn ri t c) (tr-row-hi rn ri t c)) 1)
+                                 (== (tr-row-has rn ri (- b 1) p (tr-row-lo rn ri (- b 1) c) (tr-row-hi rn ri (- b 1) c)) 1))
                           (do (set best p)
                               (set barea area))))))
                 (set k (+ k 1))))
@@ -2193,7 +2216,7 @@
 (defn ^:pub ^I32 tr-shapes [^Cells views ^I32 page ^I32 view ^I32 dpi100 ^Bitmap bin
                             ^Cells rn ^Cells ri ^:mut ^Cells cs ^:mut ^Cells comps ^:mut ^Cells prims ^:mut ^Cells pts ^:mut ^Cells refs ^Cells inks
                             ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5]
-  (comment "Contours (SPEC 8.2): the outer boundary of every LARGE component that gave no rule, traced on the binary view, simplified,")
+  (comment "Contours (SPEC 8.2): the outer boundary of every LARGE component (one that gave rules too: a frame is four rules AND a rect), traced on the binary view, simplified,")
   (comment "written to `pts` (the `components` row's `pfirst pcount`); and one primitive each: `rect`, `circle`/`ellipse` (or `ring`: an")
   (comment "annulus), else `polygon` (up to 12 corners) or `curve`. Fit residuals are per mille of the radius and the confidence is 1000")
   (comment "less eight times it. Answers the number of primitives. `s1`..`s5` are scratch (s1 the raw corners, s4 the simplified).")
@@ -2232,7 +2255,7 @@
         ^:mut ^I32 pcf 0]
     (set c 0)
     (while (< c nc)
-      (do (if (and (== (tr-cg cs c C_KIND) (tr-k-large)) (< (tr-cg cs c C_RULE) 0))
+      (do (if (== (tr-cg cs c C_KIND) (tr-k-large))
             (do (set rr (tr-cg cs c C_ROOT))
                 (set m (tr-contour-raw bin (tr-rg rn rr 1) (tr-rg rn rr 0) s1 (tr-max-contour)))
                 (if (>= m 4)
