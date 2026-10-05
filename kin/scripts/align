@@ -1,0 +1,109 @@
+#!/usr/bin/env bb
+;; Cross-source alignment on real renders and a real OCR engine's reading, replayed from transcripts: recorded on Rust (pdfium and
+;; Tesseract), replayed on Rust and Go, identical correspondence groups.   kin/scripts/align     (DEVLOG P7.1, D250-D252)
+;;
+;; THE LIVE ENGINES ARE NOT HERE. `tools/fusion/record-align.clj` rendered each page of six fusion documents at 300 dpi WITH its text
+;; (pdfium), read each render with Tesseract and committed what they answered (test/fusion/align/ID/, a slim transcript with no
+;; bitmap) and the dump of its replay (test/fusion/align/ID.dump). This gate only REPLAYS, so it tests emon and never whose pdfium or
+;; Tesseract is installed (SPEC 7.3). The unit is `emon.alignprobe`: the text layer from the PDF, the OCR evidence from the transcript
+;; (the `emon.scan` builders), then `xa-page`. It holds:
+;;
+;;   1. the Rust replay and the Go replay print the IDENTICAL dump (one line a correspondence group, then the transcript's hashes), and
+;;      it is the dump the live recording printed;
+;;   2. COVERAGE (the visible text-layer words in a group with an OCR candidate) is at least 0.99 on the four documents whose text
+;;      OCR can read (`h-numbered`, `columns-two`, `table-simple-ruled`, `watermark-draft`: the watermark's own word is text-only, as it
+;;      should be), and on `stamp-seal` at least the recorded floor: what Tesseract cannot read there is the seal's ARC text, a
+;;      text-only group of one letter each (SPEC 9.5; P7.7 is what decides such text);
+;;   3. PRECISION (the 1:1 groups whose case-folded similarity is at least 800) is at least 0.98 over those five;
+;;   4. on `tl-broken-shift`, at least 90 % of the shifted font's words (the body font, Georgia, font row 1) are grouped with an OCR
+;;      word by geometry and that word's case-folded similarity is under 300: the geometry pairs them, the letters disagree;
+;;   4b. on `hidden-older-ocr` (a hidden OCR layer under a scan: the `hidden-text` source) at least 99 % of the hidden words are grouped
+;;      with an OCR word of this run; `tl-broken-unmapped` (one U+FFFD word a line) and `align-rtl` (Hebrew that the English model cannot
+;;      read) are recorded, held to identity, and their numbers printed;
+;;   5. at most 10 ms a page for the alignment (Rust; the best of three, the repeats timed apart from the document pass).
+(require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
+         '[babashka.process :refer [shell]]
+         '[clojure.string :as str])
+(cp/add-classpath "tools")
+(require '[fusion.align-lib :as l]
+         '[fusion.align-report :as r])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def work (str (fs/create-temp-dir {:prefix "emon-align."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+
+(def rust (if (fs/which "rustc")
+            (let [[prog err] (l/build-rust work nil)] (or prog (do (bad "rust driver did not build:\n" err) nil)))
+            (do (println "  SKIP rust   -- rustc not on PATH") nil)))
+(def go (if (fs/which "go")
+          (let [[prog err] (l/build-go work)] (or prog (do (bad "go driver did not build:\n" err) nil)))
+          (do (println "  SKIP go     -- go not on PATH") nil)))
+
+(defn pct* [a b] (if (pos? b) (/ (double a) b) 0.0))
+(def healthy ["h-numbered" "columns-two" "table-simple-ruled" "watermark-draft"])
+(def stamp-floor 0.57)
+(def floor 0.99)
+
+(when (and rust go)
+  (let [run (fn [prog id & [env]]
+              (let [r @(babashka.process/process {:dir work :out :string :err :string :extra-env (or env {})}
+                                                 prog "replay" (l/abs (str "test/fusion/align/" id)) (l/abs (str "test/corpus/synth/pdf/" id ".pdf")))]
+                {:exit (:exit r) :out (:out r) :err (:err r)}))
+        dumps (into {} (for [id l/all-ids]
+                         (let [want (slurp (str "test/fusion/align/" id ".dump"))
+                               rr (run rust id)
+                               rg (run go id)]
+                           (check (and (zero? (:exit rr)) (= want (:out rr)))
+                                  id ": rust replays the committed transcript to the dump the live recording printed ("
+                                  (count (str/split-lines (:out rr))) " lines: the groups, then the transcript's hash)")
+                           (check (and (zero? (:exit rg)) (= (:out rr) (:out rg)))
+                                  id ": GO REPLAYS THE TRANSCRIPT: the identical correspondence groups, byte for byte")
+                           [id (r/parse-dump (:out rr))])))
+        ms (into {} (for [[id gs] dumps] [id (r/measure gs)]))]
+    ;; 2. coverage ------------------------------------------------------------------------------------------------------------
+    (doseq [id healthy]
+      (let [m (ms id)]
+        (check (>= (:coverage m) floor)
+               (format "%s: coverage %.4f (%d of %d visible text words in a group with an OCR word), floor %.2f"
+                       id (:coverage m) (:covered m) (:text-words m) floor))))
+    (let [m (ms "stamp-seal")
+          lone (filter #(and (pos? (:t %)) (zero? (:o %))) (dumps "stamp-seal"))]
+      (check (and (>= (:coverage m) stamp-floor) (<= (count lone) 32)
+                  (>= (count (filter #(re-matches #"^\S\[[^\]]*\]$" (:T %)) lone)) 28))
+             (format "stamp-seal: coverage %.4f (floor %.2f); the %d words with no OCR are the seal's, the stamp's and the signature line's (28 of them one-letter arc words)"
+                     (:coverage m) stamp-floor (count lone))))
+    ;; 3. precision -----------------------------------------------------------------------------------------------------------
+    (let [five (map ms (conj healthy "stamp-seal"))
+          p (:precision (r/pool five))]
+      (check (>= p 0.98) (format "precision %.4f of %d 1:1 groups, case-folded similarity at least 800, floor 0.98"
+                                 p (reduce + (map :one-to-one five)))))
+    ;; the counts the entry reports
+    (let [all (r/pool (vals ms))]
+      (ok (format "all nine: %d groups on %d pages; %d split, %d merged, %d text-only, %d OCR-only"
+                  (:groups all) (:pages all) (:split all) (:merged all) (:text-only all) (:ocr-only all))))
+    ;; 4. the broken mapping --------------------------------------------------------------------------------------------------
+    (let [f (r/measure-font (dumps "tl-broken-shift") 1)]
+      (check (and (>= (:grouped f) 0.90) (>= (:low f) 0.90))
+             (format "tl-broken-shift: %d words of the shifted font: %.4f grouped with an OCR word, %.4f of them with similarity under 300 (floor 0.90)"
+                     (:words f) (:grouped f) (:low f))))
+    (let [m (ms "hidden-older-ocr")]
+      (check (>= (pct* (:hidden-covered m) (:hidden-words m)) 0.99)
+             (format "hidden-older-ocr: %d of %d hidden-text words grouped with an OCR word, floor 0.99" (:hidden-covered m) (:hidden-words m))))
+    (doseq [id ["tl-broken-unmapped" "hidden-older-ocr" "align-rtl"]]
+      (ok (r/show id (ms id))))
+    ;; 5. time ----------------------------------------------------------------------------------------------------------------
+    (let [ms-per-page (for [id l/ids]
+                        (let [x (run rust id {"EMON_ALIGN_BENCH" "1"})
+                              t (some->> (:err x) (re-find #"align-ms ([\d.]+)") second Double/parseDouble)]
+                          (/ (or t 1e9) (:pages (ms id)))))
+          worst (apply max ms-per-page)]
+      (check (<= worst 10.0) (format "alignment: %.3f ms a page at worst over the six documents (Rust, best of three), ceiling 10" worst)))))
+
+(when (pos? @fails) (System/exit 1))

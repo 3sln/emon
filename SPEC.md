@@ -1493,6 +1493,19 @@ column 24) and over case-folded letters only (kept in the group, for the
 broken-encoding test of §9.4). Every group's text-layer candidates in
 content-stream order and OCR candidates in engine order are runs of `refs`.
 
+**As built (P7.1, D250-D252).** `emon.xalign` (`kin/xalign.kin`, entry `xa-page`; not `emon.align`, which is the paragraph
+alignment of §10.10) is as designed, with these made precise. A pairing's cost is 1000 minus the intersection over union of the
+merged words' **extents along the line** (not of their boxes: the sources draw a word's height differently and agree on where
+along the line it is); the candidate test stays on the boxes. An OCR word belongs to the text-layer line of its best candidate
+and is ordered by its centre along that line's baseline, reversed for a right-to-left line. The visible layer and the
+`hidden-text` layer are aligned apart, each against every OCR run; a group is the connected set of all the steps, so one group
+holds a word of each source and each run. What no step matched is **attached** when the other source covers it (an OCR word
+inside a text-layer word joins its group as a `split`, a text-layer word inside an OCR word as `merged`); an OCR word still
+unmatched joins only an overlapping OCR word of another run. Similarity concatenates a side's words without a separator and is
+capped at 256 code points; the folded form keeps letters and digits. The columns written are `xt-sim-ocr` (the first run),
+`xt-sim-ocr2` (the second), `xo-sim-text` and `xo-sim-hidden`, per step with case kept. It is measured on nine real
+documents (`bb align`: pdfium renders, Tesseract's reading, replayed on Rust and Go; DEVLOG P7.1).
+
 ### 9.3 Health
 
 Before comparing words, each source is scored **per region** (per font × page
