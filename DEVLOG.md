@@ -1384,7 +1384,7 @@ analysis beyond "top-to-bottom lines on a single column".
   `hidden-text` source and a Tr 3 OCR layer over a scan is never dropped or "occluded". 17 fixtures (3,278 hand
   or independently computed expectations) on every target; poppler's text and page agree on the real corpus (D156).
   `bb gates` green; `bb unit red` fails on every arm.
-- [ ] **P3.6a — Path visibility and whole path geometry** (SPEC §8.1, §8.4.3; D219; graphics fusion, D218). **Wave 1**
+- [x] **P3.6a — Path visibility and whole path geometry** (SPEC §8.1, §8.4.3; D219; graphics fusion, D218). **Wave 1**
   of the Phase 7 table; depends on nothing new; parallel with everything in wave 1.
   *Brief*:
   1. **Paths get `vis`, `vby`, `vchk`** in `paths` cells 19, 20, 21, and the backdrop colour the white check found in cell
@@ -1419,6 +1419,17 @@ analysis beyond "top-to-bottom lines on a single column".
   of paths and of rule-like paths (D179's sizes) on the 899 files, recorded here.
   *Done when*: the laws on four targets; every Model of every gate byte-identical (only evidence dumps move); `bb gates`
   green.
+  *Done* (D245-D247): paths are classified by `emon.pdfvis` at the end of the page, in the glyphs' order, and the dump prints
+  `vis`, `vby`, `vchk` and `backdrop` for them; a straight path keeps up to 4,096 points, a path with a curve 128, and a path
+  cut short is `truncated` (512) with its box; `test/vis/paths.pdf` (43 paths, one `P` row each) holds every class to the
+  hand-written truth, to Rust, Go, Java and C# through `bb unit`, and (`kin/scripts/vis-check --render`) to poppler: 21 expected
+  visible paths leave ink, 13 expected hidden leave none. The 899-file survey (`tools/vis/corpus-vis.clj --paths-only`):
+  108,776 painted paths, 57,592 rule-like; clipped 5,279 (1,377 rule-like), occluded 4,117 (3,521), white 9,429 (1,865),
+  transparent 257 (48), zero-size 6, off the page and OCG-hidden 0; 291 truncated. `--paths-render` (450 files, 3 pages, the
+  rule-like paths): 10,934 of 10,936 visible show ink; of the 175 hidden-but-inked all but 2 are a rule drawn twice or a
+  same-coloured edge of a same-coloured frame, and the 2 are paint drawn over them later (checked by eye for one: white lettering on a banner). Every Model and every gate's
+  evidence golden is byte-identical (no golden prints a painted path); the P6.8 rule metrics read `grl`, which is P5.5a's: they
+  do not move yet (D247 says what P5.5a takes from here).
 - [x] P3.7 — Tagged PDF: structure tree, role map, MCID ↔ content mapping,
   `/Alt`, `/ActualText` (use it when present — it is the author's answer),
   informativeness score (D034). Also (D076): Artifact subtypes as
@@ -7563,6 +7574,67 @@ check. `gold/STEM.rules.json` is in centi-points, page space as displayed. Scan 
 checked by eye (overlay of truth on one page each): all match their render; `furn-fixed-dom` has none. Corners lose about 0.5 pt of a rule at each end (a
 crossing rule defeats the contrast test), inside the matching tolerance.
 **Why**: emon cannot be its own oracle (D100); contrast rather than "not white" so a hidden rule over a fill is not truth.
+- [ ] **Signed off** (maintainer)
+
+### D245 — P3.6a as built: a path is classified on the region it paints, in the glyphs' order, with five readings of its own (P3.6a; SPEC 8.4.3; D219, D152, D155)
+**Decision** (`emon.pdfvis`, `pv-path`, run at the end of each page after the glyphs and images; not clips, not shadings, whose `vchk` stays 0).
+`paths` cells 19-22 are `vis`, `vby`, `vchk` and `backdrop` (-1: not asked or not told; cell 23 stays spare); `vchk` starts as the
+interpreter's blend (128) and soft-mask (256) bits. The region is the path's box (it already holds half the stroke) intersected with the
+box of its clip. The checks and their order are the glyphs' (clip, offpage, white, zero-size, occlusion, ocg, transparent) with these
+readings: (1) boxes are CLOSED for clip and offpage (a rule has no height, a hairline no width: touching is overlapping; an empty clip
+overlaps nothing); (2) zero-size is a region with no extent either way, a point, and never for a stroke of width 0, which is a hairline
+and is drawn; a thin filled rectangle of any thickness is a rule; (3) the ink is the stroke colour if stroked and the fill colour if
+filled, both must equal the backdrop (a pattern fill is unknown); the backdrop is the glyphs' search (the nearest earlier opaque
+rectangle fill that covers the whole region, else the paper; an image, shading, pattern, translucent or partial cover makes it
+unknown), kept in `backdrop` so a consumer can ask for CONTRAST (a white rule on a dark header is seen); a region with no extent one way
+is grown by one centipoint that way only, so a hairline has something to look under and a box that merely touches its neighbour does
+not overlap it; (4) an earlier rectangle that the path, itself an exactly known opaque rectangle, covers completely is not what it is
+painted on: a rule drawn twice is the later one's ink and the earlier is `occluded` (without this both came out hidden, the first
+under the second, the second 'the colour of the first': 4 of the 8 hidden rules the first survey compared with the render were this),
+while a same-coloured rectangle inside a larger one is `white` (the frame's edges: invisible, and the survey says so); (5) the look-back
+and look-ahead are PV_SCAN (4,096) rows each, and on a page of more than 20,000 paths they shrink in proportion (to 64) so a page of
+200,000 paths costs at most about 160 million steps and not 3 billion; past it the answer is 'cannot tell' (visible), as for glyphs.
+A path whose `vis` is 0 and whose `vchk` lacks the blend and soft-mask bits is exactly known (the occluder test's own rule).
+**Why**: D219; each reading is the one that kept the claim exact against poppler's render and the 899-file survey (D247).
+**Alternatives**: a closed-box test also for the white and occlusion checks (a box that touches is not covered); `zero-size` under
+a point (a 0.5 pt rule is a rule: D179); skipping `occluded` when the occluder is the same colour (then the first of two stacked
+different-colour rects would show, which it must not); an unbounded scan (above).
+- [ ] **Signed off** (maintainer)
+
+### D246 — Whole straight geometry: 4,096 points for `m l h re`, 128 with a curve, one flag for a cut path, a page budget for `pts` (P3.6a; D219, D152)
+**Decision**: `PATH_KEEP_STRAIGHT` 4,096 (`kin/pdfcontent.kin`; a grid of 30 `re` is 150 points and stays whole; 1,100 `re` is 5,500 and is
+cut), `PATH_KEEP` 128 for a path with any curve, `PTS_PAGE` 1,000,000 `pts` rows a page (cell `C_PTS0` is the page's first; past it every
+later path is cut and warning 1024 is set). A cut path keeps its box and no geometry (D152's rule: not its first 4,096 points, which
+would be a different shape) and its `paths` row (and its clip row) carries `truncated` (512, in the `pg` enum and the dump); a curve
+path of 129-4,096 points was a 'kept' path before and is now a `truncated` one, so the dumps of such paths gain a flag, nothing else.
+The `pts` arena is still dropped for a path nobody kept. A kept straight path is `pf-pfirst`/`pf-pcount` rows of `pts`: the segments P5.5a
+turns into rule primitives.
+**Why**: a grid drawn as one path (ReportLab, Excel exports, PDF/UA tools) is one box without this, and a table built on its box has no rows
+and no columns; the bound is the one that keeps a hostile path from holding the page's memory (12 MB of `pts` at the page bound).
+**Alternatives**: keeping the first N points of a cut path (an open shape that a consumer would take for the whole); one `paths` row per
+subpath (the dash and the paint order are per path; D219); no page bound.
+**Not done**: the page bound has no fixture (a page of a million points is 8 MB of PDF); it is the same test as the path bound.
+- [ ] **Signed off** (maintainer)
+
+### D247 — P3.6a verified and measured; what P5.5a takes (P3.6a; D219, D245, D246)
+**Fixtures** (`kin/scripts/vis-fixtures`, `test/vis/paths.pdf`, rows `P` of `test/vis/rows.txt`, held by `kin/pdfvistest.kin` on four targets
+and, through a 512-byte async source, by `kin/pdfcontenttest.kin`): per class a horizontal rule and a thin filled rectangle: clipped away,
+half clipped (seen), off the page, white on white and almost white, white on a black rectangle (seen, backdrop black) and on half of one
+(seen, backdrop unknown), occluded by a later white rectangle and by a later image, covered in half (seen), under half-transparent and
+Multiply white rectangles (seen), under an OCG that is off, in a print-only layer (seen), at alpha 0, filled-and-stroked with a clear fill
+(seen by its stroke), under Multiply and under a soft mask (seen, `vchk` 128 and 256), a 0-width hairline and a stroked point (seen), a filled
+point (zero-size), the same thin rectangle drawn twice, a black rectangle inside a black one (white), a grid of 30 `re` in one path
+(150 points, whole) and one of 1,100 (truncated). `vis-check` holds the same rows to the generated Rust and, with `--render`, to poppler.
+**Survey** (899 files, `bb tools/vis/corpus-vis.clj --paths-only --n 900 --max-kb 4000 --pages 100000`, five minutes; `--paths-render` is
+the render witness for the rule-like paths): the numbers are in the P3.6a entry above. A first run found the drawn-twice rule (D245 (4)).
+**What P5.5a takes**: a rule candidate is a `paths` row that is painted (not `pg-clip`, not `pg-shading`) with `vis` 0; it is EXACT when
+`vchk` has neither 128 nor 256, else it is a candidate the render must witness (D222); its contrast is `pf-backdrop` against its ink
+(`-1`: unknown, so 'seen' is all that is known); its segments are the `pts` rows `pf-pfirst` for `pf-pcount` when the row is not
+`truncated`, else its box only; `occluded` rules whose `vby` row has the same colour are the drawn-twice case (the later row is the rule).
+`tools/accuracy/graphics.clj` still reads `grl`, so the P6.8 rule metrics (`rule-p`, `rule-r`: 0.0 for the `emon` predictor) do not move until
+P5.5a writes `grl` from these rows.
+**Known**: `kin/scripts/vis-check --render` reports three glyphs of `spaces.pdf` (`C21`, a pattern colour) as flat where emon says visible;
+that is the glyph witness, not changed here (poppler does not paint the fixture's pattern).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here
