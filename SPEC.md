@@ -1072,11 +1072,18 @@ within `fill-tol` (2 px), at least `fill-min` (6 pt) each way.
   opponent space (`L = gray`, `a = r - g`, `b = (r + g)/2 - b`), seeded
   deterministically (heaviest bin first, ties by bin index) and merged while
   two centroids are within `ink-merge` (a named setting); at most 8 layers.
+  An anti-aliased edge is not a layer: a bin lying on the segment between an
+  existing layer's colour and the paper joins that layer unless it holds
+  `ink-spike` of the page (a flat watermark does, an edge does not), and a
+  bin outside every layer's core (half of `ink-merge`) goes to the layer
+  whose ink-to-paper segment it lies nearest (D237).
   Each layer's role (`ir`) is guessed from lightness, chroma and coverage:
-  `body` (the darkest low-chroma layer holding most text-like ink), `light`
+  `body` (every low-chroma layer darker than `ink-light`: black headings and
+  dark-grey text are two clusters of one kind of ink), `light`
   (low chroma, lightness over `ink-light`), `colour` (chroma over
-  `ink-chroma`: blue, red, purple seal inks), `background` (large connected
-  coverage), else `unknown`. A layer's mask is one `bitmap-lut-into` pass (a
+  `ink-chroma`: blue, red, purple seal inks), `background` (covers
+  `ink-bg` of the page, and is light or coloured), `unknown` (a dark neutral
+  mass of that coverage: not text). A layer's mask is one `bitmap-lut-into` pass (a
   4096-entry table from bin to mask value). On a **gray** source (a 1-channel
   scan) only lightness separates layers: `colour` cannot occur, and
   watermark separation rests on lightness, geometry and recurrence.
@@ -1086,8 +1093,10 @@ within `fill-tol` (2 px), at least `fill-min` (6 pt) each way.
   of P2.7 and costing `O(w r)` memory instead of 70 MB. Bilevel decodes
   skip it.
 * **Deskew** runs only on decode views (a render is unskewed by
-  construction): projection profiles of the body layer's component centres
-  at candidate angles (±5°, 0.1° then 0.01°), with `ev-sin`/`ev-cos`. Kin
+  construction): projection profiles of the ink runs of the body layers' mask
+  (each run by its midpoint, weighted by its length, on every few rows) at
+  candidate angles (±5°, 0.1° then 0.01°), with `ev-sin`/`ev-cos`; the angle
+  goes to the decode view and every view derived from it (D238). Kin
   never resamples for its own analysis; it maps coordinates through the
   view. **Orientation** (0/90/180/270) is OSD's when its confidence passes
   `osd-conf`, else the `tlines`' dominant direction; a page not upright is
@@ -1511,12 +1520,15 @@ for the text layer):
   witnesses, the tracer's precision on the same page, the skew spread and
   confidence of the tracer's rules.
 
-**As designed (P7.0, P7.2, D203).** The text layer's health is computed in
-two steps. **Without OCR** (P7.0, the document pass): per (font, page) the
+**As designed (P7.0, P7.2, D203); step one as built (P7.0, D240-D242).** The text layer's health is computed in
+two steps. **Without OCR** (P7.0, the document pass, `kin/tlhealth.kin`): per (font, page) the
 pooled stage-1 `xt` columns (mapped share, PUA/control/U+FFFD share, worst
-overlap, worst gap anomaly) give `tl-health`, a per-mille in the `hl` arena,
+overlap, worst gap anomaly: glyph-weighted means over the words) give `tl-health`, a per-mille in the `hl` arena
+(components 1000 - garbage, mapped, an overlap ramp, a gap ramp; weights 4, 3, 2, 1; each floored at 50; scaled by
+`(1000 + weakest) / 2000`),
 and fill `xt` column 13; this alone drives `ocr: auto` and is what a run with
-no OCR engine has. **With OCR** (P7.2, the page unit): the agreement rate of
+no OCR engine has. It catches a font that has no Unicode for its glyphs (`tl-broken-unmapped`: 34 against `tl-trusted` 700) and
+does NOT catch a plausible wrong mapping (`tl-broken-shift`): only OCR agreement can. **With OCR** (P7.2, the page unit): the agreement rate of
 the (font, page) — groups with a text-layer and an OCR candidate whose
 case-folded similarity is at least `agree-sim` (900), over groups with both
 — joins as a component, and a font whose agreement is low on **every** page
@@ -1678,11 +1690,11 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (2 cells), similarity (case kept), similarity (case-folded letters), flags (`gf`: text-only, OCR-only, split, merged, in-figure, in-seal), spare |
+| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (ONE cell, its arena being known: D240), similarity (case kept), similarity (case-folded letters), flags (`plg`: text-only, OCR-only, split, merged, in-figure, in-seal) |
 | `fw` | 24 | **the layout of `words`** (word head 16, style, glyph run, font, size, gap, `wbreak`, `src`): `src` is the sources bitset (`sr`: text, hidden-text, ocr, trace), the glyph run is the text-layer word's when it won, empty otherwise |
 | `fl` | 16 | **the layout of `lines`**; a line of OCR-won words is measured as D213 measures an OCR line |
 | `fv` | 8 | per `fw` row: group, winning source (`sr` code), rule (`fr` number), confidence (per-mille, uncalibrated until P10.1), flags (`fl`: low-conf, ocr-only, text-layer-suspect), spare (3) |
-| `fa` | 12 | artifacts set aside: page, box, ledger reason (`dr`), subject `(ea, index)`, defence (1-6, 0 none), group, rule, spare (2) |
+| `fa` | 12 | artifacts set aside: page, box, ledger reason (`dr`), subject `(ea, index)`, defence (1-6, 0 none), group, rule, spare (1: D240) |
 | `fx` | 4 | explanation: group, rule, feature column, value read — a run per group, every column the deciding rule read |
 | `hl` | 12 | health: subject kind (font-page, OCR block, region, **graphics-region**), page, subject index, components (6: mapped, garbage, overlap, gap, agreement, ink; for a graphics region: vector witness, tracer precision, skew spread, tracer confidence, rules, fills, D223), score |
 | `grl` | 24 | **the fused rules** (D218, §9.9; replaces D195's `fpa`, taking its `ea` code): page, box, centre-line endpoints `ex0 ey0 ex1 ey1` (cpt), thickness (cpt), orientation (`go`: h, v, slant), angle (centi-degrees, `ev-angle`), colour (0xRRGGBB, -1), style (`rs`), sources (`sr` bitset: vector, trace, ocr), winning source, rule (`fr` number), confidence (per-mille), flags (`gq`: traced, unwitnessed, in-image, box-edge, from-fill, artifact-layout, artifact-pagination, in-figure), group (`ggp` row), `z` (the vector member's, -1), spare (3) |
@@ -2102,6 +2114,26 @@ after a page break or a figure continues its numbering), nesting by indent.
 A numbered paragraph that is really a heading is disambiguated by the heading
 analysis, which runs first.
 
+As built (D229-D232). A marker is read from the characters, in no language: a
+bullet or a dash standing alone (a strong bullet glued to its text), one to
+three digits of any decimal script with `.` or `)`, the same in parentheses or
+brackets, a letter (Latin, Greek, Cyrillic) or a roman numeral with `.` or `)`,
+a circled digit. A bullet that is not text is read from the vector evidence: a
+small filled or stroked circle or square just before (after, for a line that runs
+right to left) the first word, on the x-height; its `marker` is the character it
+stands for (`•` `◦` `▪`). A candidate is confirmed, never trusted alone: by a
+neighbour of its own scheme and indent whose value is one off (or a few: a list
+that skips), or for a bullet by a sibling, or by a hanging continuation line
+under it; a lone `Z.` is never an item (an initial). A marker alone on its line
+with its text on the line beside it (a text layer builds two lines out of a marker
+and its text set in another font; the common case of a right to left list)
+is joined to it. Nesting is by the x where an item's *text* starts, measured
+inside its column (markers are often right aligned); items of one scheme whose
+values go up are one list, across a page milestone or a column break (a milestone
+or a note body between two items of a list that goes on stays inside the item
+before it); a value that starts again is a new list; `start` is the first value
+when it is not 1 and an item that skips has an explicit `value`.
+
 ### 10.5 Tables (D019)
 
 **Profiles** — detected independently; the best-scoring interpretation wins:
@@ -2260,6 +2292,31 @@ small-font block in the page's bottom band starting with the same marker →
 "Notes" section. Captions: §10.6 and tables. Links: from annotations (§8.1),
 plus bare URLs and e-mail addresses in text (a conservative recogniser; not a
 guess at every dotted string).
+
+As built (D233-D235). A caption starts with a label: a keyword of a table of
+caption words (English and a dozen other languages until P4.8's locale tables
+replace it) and a number (`1`, `2.3`, `A.1`, `4b`, `IV`), and then a full stop, a
+colon, a dash, or the line's own style (smaller than the body, or italic or bold
+where the body is not): `Figure 2 shows how` set as body text is a sentence. The
+`label` is the keyword and the number as printed, a dot after the number kept
+and a colon or dash left out (D073.2); the rest is the caption's text. A caption
+is the first child of the `table` or `figure` next to it (above a table, below a
+figure; the label's kind says which can be its object), its `target` the object;
+a figure caption with no figure beside it is the evidence of a figure nothing
+else found and is wrapped in an empty `figure` of kind `unknown`. A footnote
+reference is a run of superscript glyphs (smaller than the line and raised, or
+the Unicode superscript digits) after a letter or punctuation, followed by
+nothing but punctuation: `m²` and `10⁻⁶` are not notes. It is believed only when
+a note body with the same marker stands where a footnote stands (the lower half
+of the page of the reference or the page after it, set smaller than the body or
+marked in superscript) or, for an endnote, later in the document (a
+superscript marker at the start of the line, or a plain number among at least
+two others after a heading that says `Notes`; or, when the notes print no marker
+at all, as many notes under that heading as there are references left over). A
+`ref`'s `target` is the next note body with its marker that nothing else
+claims (D073.4). A bare link is `https://`, `http://`, `ftp://`, `mailto:`, `www.`
+and a host with a top-level domain, or `local@domain.tld`; what trails it
+(sentence punctuation, a closing bracket it did not open) is not part of it.
 
 ### 10.9 Initials: drop caps and their kin (D108, D109)
 

@@ -661,6 +661,120 @@ func CryptoAesEncrypt(key []byte, koff int32, klen int32, data []byte, doff int3
 	return pushBytes(out, ct)
 }
 
+// ;; P6.3 bulk forms (D197): see the Rust half for the contracts.
+
+// @kin:link:form:bitmap-gray-into: {:template "port.BitmapGrayInto({0}, {1})" :import "emon/port" :arity 2}
+func BitmapGrayInto(src, dst *Bitmap) int32 {
+	if src.W != dst.W || src.H != dst.H || dst.Ch != 1 {
+		panic("bitmap size")
+	}
+	w, ch := int(src.W), int(src.Ch)
+	for y := 0; y < int(src.H); y++ {
+		s := src.D[y*int(src.Stride) : y*int(src.Stride)+w*ch]
+		d := dst.D[y*int(dst.Stride) : y*int(dst.Stride)+w]
+		if ch < 3 {
+			for x := 0; x < w; x++ {
+				d[x] = s[x*ch]
+			}
+		} else {
+			for x := 0; x < w; x++ {
+				p := s[x*ch : x*ch+3 : x*ch+3]
+				d[x] = byte((77*uint32(p[0]) + 150*uint32(p[1]) + 29*uint32(p[2]) + 128) >> 8)
+			}
+		}
+	}
+	return 0
+}
+
+// @kin:link:form:bitmap-hist-rgb: {:template "port.BitmapHistRgb({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapHistRgb(src *Bitmap, cells *Cells, off int32) int32 {
+	bins := cells.V[off : off+4096]
+	w, ch := int(src.W), int(src.Ch)
+	for y := 0; y < int(src.H); y++ {
+		s := src.D[y*int(src.Stride) : y*int(src.Stride)+w*ch]
+		if ch < 3 {
+			for x := 0; x < w; x++ {
+				bins[int(s[x*ch]>>4)*273]++
+			}
+		} else {
+			for x := 0; x < w; x++ {
+				p := s[x*ch : x*ch+3 : x*ch+3]
+				bins[int(p[0]>>4)<<8|int(p[1]>>4)<<4|int(p[2]>>4)]++
+			}
+		}
+	}
+	return 0
+}
+
+// @kin:link:form:bitmap-lut-into: {:template "port.BitmapLutInto({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
+func BitmapLutInto(src *Bitmap, lut *Cells, off int32, dst *Bitmap) int32 {
+	if src.W != dst.W || src.H != dst.H || dst.Ch != 1 {
+		panic("bitmap size")
+	}
+	t := lut.V[off : off+4096]
+	w, ch := int(src.W), int(src.Ch)
+	for y := 0; y < int(src.H); y++ {
+		s := src.D[y*int(src.Stride) : y*int(src.Stride)+w*ch]
+		d := dst.D[y*int(dst.Stride) : y*int(dst.Stride)+w]
+		if ch < 3 {
+			for x := 0; x < w; x++ {
+				d[x] = byte(t[int(s[x*ch]>>4)*273])
+			}
+		} else {
+			for x := 0; x < w; x++ {
+				p := s[x*ch : x*ch+3 : x*ch+3]
+				d[x] = byte(t[int(p[0]>>4)<<8|int(p[1]>>4)<<4|int(p[2]>>4)])
+			}
+		}
+	}
+	return 0
+}
+
+// @kin:link:form:bitmap-hash: {:template "port.BitmapHash({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapHash(b *Bitmap, out *Cells, off int32) int32 {
+	h := uint64(0xcbf29ce484222325)
+	for _, v := range [3]int32{b.W, b.H, b.Ch} {
+		for k := 0; k < 4; k++ {
+			h = (h ^ uint64((uint32(v)>>(8*k))&255)) * 0x100000001b3
+		}
+	}
+	n := int(b.W) * int(b.Ch)
+	for y := 0; y < int(b.H); y++ {
+		for _, c := range b.D[y*int(b.Stride) : y*int(b.Stride)+n] {
+			h = (h ^ uint64(c)) * 0x100000001b3
+		}
+	}
+	out.V[off] = int32(uint32(h >> 32))
+	out.V[off+1] = int32(uint32(h))
+	return 0
+}
+
+// @kin:link:form:bitmap-quarter-into: {:template "port.BitmapQuarterInto({0}, {1}, {2})" :import "emon/port" :arity 3}
+func BitmapQuarterInto(src, dst *Bitmap, turns int32) int32 {
+	q := ((turns % 4) + 4) % 4
+	sw, sh, ch := int(src.W), int(src.H), int(src.Ch)
+	if src.Ch != dst.Ch || (q%2 == 0 && (src.W != dst.W || src.H != dst.H)) || (q%2 == 1 && (src.W != dst.H || src.H != dst.W)) {
+		panic("bitmap size")
+	}
+	for y := 0; y < int(dst.H); y++ {
+		for x := 0; x < int(dst.W); x++ {
+			var sx, sy int
+			switch q {
+			case 0:
+				sx, sy = x, y
+			case 1:
+				sx, sy = y, sh-1-x
+			case 2:
+				sx, sy = sw-1-x, sh-1-y
+			default:
+				sx, sy = sw-1-y, x
+			}
+			copy(dst.D[y*int(dst.Stride)+x*ch:y*int(dst.Stride)+x*ch+ch], src.D[sy*int(src.Stride)+sx*ch:sy*int(src.Stride)+sx*ch+ch])
+		}
+	}
+	return 0
+}
+
 // ================================================================ P7.U BitmapSet
 //
 // The pixels a page unit may read (see the Rust half for the contract): the bitmaps its answers carried by request id

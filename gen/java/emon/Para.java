@@ -110,10 +110,29 @@ public final class Para {
         // A closing bracket or quotation mark, which may follow the mark that ends a sentence.
         return (cp == 41) || ((cp == 93) || ((cp == 34) || ((cp == 39) || ((cp == 8221) || ((cp == 8217) || (cp == 187))))));
     }
+    public static int paTrimRef(emon.Port.Cells raw) {
+        // The length of `raw` without a note reference group that ends it (and the space before it): the text the
+        // reader reads ends where the marker was printed, against the word.
+        int n = emon.Port.cellsLen(raw);
+        int i = 0;
+        if ((n > 0) && (emon.Port.cellsAt(raw, n - 1) == Lists.lsSEnd())) {
+            i = n - 2;
+            while ((i >= 0) && (emon.Port.cellsAt(raw, i) != Lists.lsSRef()) && (emon.Port.cellsAt(raw, i) != Lists.lsSEnd())) {
+                i -= 1;
+            }
+            if ((i >= 0) && (emon.Port.cellsAt(raw, i) == Lists.lsSRef())) {
+                n = i;
+                if ((n > 0) && (emon.Port.cellsAt(raw, n - 1) == 32)) {
+                    n -= 1;
+                }
+            }
+        }
+        return n;
+    }
     public static boolean paEndsSentence(emon.Port.Cells raw) {
         // Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
         // three digits after a mark that follows a letter: `thing.3`) is not read.
-        int n = emon.Port.cellsLen(raw);
+        int n = paTrimRef(raw);
         int nd = 0;
         if (n < 1) {
             return 0 == 1;
@@ -409,6 +428,10 @@ public final class Para {
         if (op == 2) {
             return 1 == 1;
         }
+        // an item, a note body or a caption starts here (P4.5, P4.6: the list stage's rows after the heading rows)
+        if (Lists.lsSplit(hc, a, b) == 1) {
+            return 1 == 1;
+        }
         if (!paUpright(ln, a)) {
             return 1 == 1;
         }
@@ -432,7 +455,7 @@ public final class Para {
         if (((g * PA_GAP_DEN) > (med * PA_GAP_NUM)) && (((g - med) * PA_TINY_DIV) > hb)) {
             return 1 == 1;
         }
-        if ((((paStart(ln, b) - paStart(ln, a)) * PA_INDENT_DIV) > sb) && (((paStart(ln, a) - margin) * PA_INDENT_DIV) <= sb)) {
+        if ((((paStart(ln, b) - paStart(ln, a)) * PA_INDENT_DIV) > sb) && (((paStart(ln, a) - margin) * PA_INDENT_DIV) <= sb) && (Lists.lsHang(hc, ln, a, b) == 0)) {
             return 1 == 1;
         }
         if ((paAbs(ds) * PA_SIZE_DIV) > sa) {
@@ -654,6 +677,164 @@ public final class Para {
         Model.nodeSetAttrText(nodes, attrs, par, Model.fkNumbering(), t1, n);
         return skip;
     }
+    public static int paGroupEnd(emon.Port.Cells raw, int s, int rawn) {
+        // The index one past the END of the group that opens at `s` (an opener of `emon.lists`), or -1 when the
+        // group is not closed before `rawn`.
+        int i = s + 1;
+        while (i < rawn) {
+            if (emon.Port.cellsAt(raw, i) == Lists.lsSEnd()) {
+                return i + 1;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static int paGroupSep(emon.Port.Cells raw, int s, int gend) {
+        // The index of the separator of the group at `s`..`gend`, which ends its header and starts its text.
+        int i = s + 1;
+        while (i < gend) {
+            if (emon.Port.cellsAt(raw, i) == Lists.lsSSep()) {
+                return i;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static int paGroupValue(emon.Port.Cells raw, int s, int sep) {
+        // The number the header of the group holds (the digits after the code cell); 0 when it holds none.
+        int i = s + 2;
+        int v = 0;
+        while (i < sep) {
+            v = (v * 10) + (emon.Port.cellsAt(raw, i) - 48);
+            i += 1;
+        }
+        return v;
+    }
+    public static int paPutMarker(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, int node, int key, int from, int to) {
+        // The code points raw[from..to) as the text attribute `key` of the node (a marker, a label).
+        int t0 = emon.Port.cellsLen(text);
+        int i = from;
+        while (i < to) {
+            Model.textAppendCp(text, emon.Port.cellsAt(raw, i));
+            i += 1;
+        }
+        Model.nodeSetAttrText(nodes, attrs, node, key, t0, to - from);
+        return 0;
+    }
+    public static int paCut(emon.Port.Cells raw, emon.Port.Cells fr, int a, int b) {
+        // Remove raw[a..b), moving what follows down, and move the raw starts of the fragments (`fr`, cell 5 of a row)
+        // that lie beyond a.
+        int n = emon.Port.cellsLen(raw);
+        int d = b - a;
+        int j = a;
+        int k = 0;
+        while ((j + d) < n) {
+            emon.Port.cellsSet(raw, j, emon.Port.cellsAt(raw, j + d));
+            j += 1;
+        }
+        emon.Port.cellsDrop(raw, n - d);
+        while (k < (emon.Port.cellsLen(fr) / FR_STRIDE)) {
+            int s = emon.Port.cellsAt(fr, (k * FR_STRIDE) + 5);
+            if (s >= b) {
+                emon.Port.cellsSet(fr, (k * FR_STRIDE) + 5, s - d);
+            }
+            if ((s > a) && (s < b)) {
+                emon.Port.cellsSet(fr, (k * FR_STRIDE) + 5, a);
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    public static int paScrub(emon.Port.Cells raw, emon.Port.Cells fr, int from) {
+        // Cut every list, note or caption group at or after `from`: the stages leave one only at a paragraph's start.
+        int i = from;
+        while (i < emon.Port.cellsLen(raw)) {
+            int c = emon.Port.cellsAt(raw, i);
+            int n = emon.Port.cellsLen(raw);
+            if ((c == Lists.lsSItem()) || ((c == Lists.lsSNote()) || (c == Lists.lsSCap()))) {
+                int gend = paGroupEnd(raw, i, n);
+                if (gend > 0) {
+                    if ((gend < n) && (emon.Port.cellsAt(raw, gend) == 32)) {
+                        paCut(raw, fr, i, gend + 1);
+                    } else {
+                        paCut(raw, fr, i, gend);
+                    }
+                } else {
+                    i += 1;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        return 0;
+    }
+    public static int paHasRef(emon.Port.Cells raw, int from, int to) {
+        // 1 when the range holds a note reference group.
+        int i = from;
+        while (i < to) {
+            if (emon.Port.cellsAt(raw, i) == Lists.lsSRef()) {
+                return 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int paTextChild(emon.Port.Cells nodes, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to) {
+        // A `text` inline of the paragraph for raw[from..to), normalised. Answers its node.
+        int child = Model.nodeNew(nodes, Model.nkText(), par);
+        int t0 = emon.Port.cellsLen(text);
+        Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
+        Model.nodeSetText(nodes, child, t0, emon.Port.cellsLen(text) - t0);
+        Model.nodeSetConf(nodes, child, 1000);
+        Model.nodeAddSrc(nodes, child, Model.srText());
+        return child;
+    }
+    public static int paInlines(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to) {
+        // The inline children of the paragraph for raw[from..to): `text` runs, and a `ref` for every note reference
+        // group (its marker; the target is set later, when the notes are known). A space before a reference is not
+        // text: the reference stands where the marker was printed, against the word. Answers the first `text` child, -1
+        // when there is none.
+        int i = from;
+        int seg = from;
+        int first = -1;
+        int child = 0;
+        while (i < to) {
+            if (emon.Port.cellsAt(raw, i) == Lists.lsSRef()) {
+                int gend = paGroupEnd(raw, i, to);
+                int sep = paGroupSep(raw, i, gend);
+                if ((gend < 0) || (sep < 0)) {
+                    i += 1;
+                } else {
+                    int se = i;
+                    if ((se > seg) && (emon.Port.cellsAt(raw, se - 1) == 32)) {
+                        se -= 1;
+                    }
+                    if (se > seg) {
+                        child = paTextChild(nodes, text, raw, tmp, par, seg, se);
+                        if (first < 0) {
+                            first = child;
+                        }
+                    }
+                    child = Model.nodeNew(nodes, Model.nkRef(), par);
+                    Model.nodeSetConf(nodes, child, 500);
+                    Model.nodeAddSrc(nodes, child, Model.srText());
+                    Model.nodeAddSrc(nodes, child, Model.srInfer());
+                    paPutMarker(nodes, attrs, text, raw, child, Model.fkMarker(), sep + 1, gend - 1);
+                    i = gend;
+                    seg = gend;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        if (seg < to) {
+            child = paTextChild(nodes, text, raw, tmp, par, seg, to);
+            if (first < 0) {
+                first = child;
+            }
+        }
+        return first;
+    }
     public static int paFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells hc, int parent) {
         // Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
         // column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`
@@ -661,7 +842,10 @@ public final class Para {
         // (SPEC 10.1.2). Under the root (parent 0) a paragraph the heading analysis found a heading in is a `heading` of its
         // level under the open section it belongs in (D167). A paragraph that an initial opens (`fr`'s first row, P4.10) has an
         // `initial` inline first, holding the initial's text, and the rest of its text as a `text` inline (also when it is on one
-        // page, where it has its own `text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`,
+        // page, where it has its own `text` as well, equal to the two); no list, note or caption group is read there (the
+        // initial wins, D229). A paragraph that starts with a group of the list, note or caption stage is an `item`, a `note`
+        // holding a paragraph, or a `caption` (D179), the group's marker or label an attribute and not in the text; note
+        // reference groups in the text become `ref` inlines. Closes the block's line rows in `al` (P4.11: `al-mark`,
         // `al-pass` decides at the end). Empties `raw` and `fr`.
         int nfr = emon.Port.cellsLen(fr) / FR_STRIDE;
         int rawn = emon.Port.cellsLen(raw);
@@ -675,22 +859,79 @@ public final class Para {
         int sect = parent;
         int kind = Model.nkParagraph();
         int par = 0;
+        int own = -1;
+        int lead = 0;
+        int gcode = 0;
+        int gval = 0;
+        int gm0 = 0;
+        int gm1 = 0;
+        int blk = 0;
         int k = 0;
         int kend = 0;
         int runs = 1;
-        int kids = 0;
         int from = 0;
         int to = 0;
         int cut = 0;
         int ini = 0;
         int t0 = 0;
         int child = 0;
+        int kids = 0;
         if (parent == 0) {
             lev = Heading.hdLevel(hc, hl);
             sect = Heading.hdParent(hc, nodes, lev);
         }
+        // a group at the start of the paragraph: an item, a note body or a caption (not inside a margin note)
+        if ((lev == 0) && ((rawn > 0) && (ncp == 0))) {
+            int c0 = emon.Port.cellsAt(raw, emon.Port.cellsAt(fr, 5));
+            int s0 = emon.Port.cellsAt(fr, 5);
+            if ((c0 == Lists.lsSItem()) || ((c0 == Lists.lsSNote()) || (c0 == Lists.lsSCap()))) {
+                int gend = paGroupEnd(raw, s0, rawn);
+                int sep = paGroupSep(raw, s0, gend);
+                if ((gend > 0) && (sep > 0) && ((parent == 0) || (Model.nodeKind(nodes, parent) != Model.nkNote()))) {
+                    gcode = emon.Port.cellsAt(raw, s0 + 1) - Lists.lsSBase();
+                    gval = paGroupValue(raw, s0, sep);
+                    gm0 = sep + 1;
+                    gm1 = gend - 1;
+                    lead = gend - s0;
+                    if ((gend < rawn) && (emon.Port.cellsAt(raw, gend) == 32)) {
+                        lead += 1;
+                    }
+                    if (c0 == Lists.lsSItem()) {
+                        blk = 1;
+                    }
+                    if (c0 == Lists.lsSNote()) {
+                        blk = 2;
+                    }
+                    if (c0 == Lists.lsSCap()) {
+                        blk = 3;
+                    }
+                } else {
+                    // an unusable group (inside a margin note, or not closed): its text is dropped, the rest kept
+                    if (gend > 0) {
+                        lead = gend - s0;
+                        if ((gend < rawn) && (emon.Port.cellsAt(raw, gend) == 32)) {
+                            lead += 1;
+                        }
+                    }
+                }
+            }
+        }
+        // a group that is still in the text after the first is a stray (the stages put one only at a line's start, and
+        // a paragraph's first line is its start): it is cut out, with its space
+        paScrub(raw, fr, emon.Port.cellsAt(fr, 5) + lead);
+        rawn = emon.Port.cellsLen(raw);
         if (lev > 0) {
             kind = Model.nkHeading();
+        }
+        if (blk == 1) {
+            kind = Model.nkItem();
+        }
+        if (blk == 3) {
+            kind = Model.nkCaption();
+        }
+        if (blk == 2) {
+            own = Model.nodeNew(nodes, Model.nkNote(), sect);
+            sect = own;
         }
         par = Model.nodeNew(nodes, kind, sect);
         if (lev > 0) {
@@ -699,15 +940,28 @@ public final class Para {
         Model.nodeSetConf(nodes, par, 500);
         Model.nodeAddSrc(nodes, par, Model.srText());
         Model.nodeAddSrc(nodes, par, Model.srInfer());
+        if (blk == 1) {
+            Model.nodeSetSub(nodes, par, gcode);
+            Model.nodeSetAux(nodes, par, gval);
+            Model.nodeSetAttrInt(nodes, attrs, par, Model.fkBox(), Lists.lsGet(hc, hl, Lists.lsKTextx()));
+            paPutMarker(nodes, attrs, text, raw, par, Model.fkMarker(), gm0, gm1);
+        }
+        if (blk == 3) {
+            Model.nodeSetAux(nodes, par, gcode);
+            paPutMarker(nodes, attrs, text, raw, par, Model.fkLabel(), gm0, gm1);
+        }
+        if (blk == 2) {
+            Model.nodeSetSub(nodes, own, gcode);
+            Model.nodeSetConf(nodes, own, 500);
+            Model.nodeAddSrc(nodes, own, Model.srInfer());
+            paPutMarker(nodes, attrs, text, raw, own, Model.fkMarker(), gm0, gm1);
+        }
         k = 1;
         while (k < nfr) {
             if (emon.Port.cellsAt(fr, k * FR_STRIDE) != emon.Port.cellsAt(fr, (k - 1) * FR_STRIDE)) {
                 runs += 1;
             }
             k += 1;
-        }
-        if ((runs > 1) || (ncp > 0)) {
-            kids = 1;
         }
         k = 0;
         while (k < nfr) {
@@ -717,16 +971,30 @@ public final class Para {
                 kend += 1;
             }
             from = emon.Port.cellsAt(fr, (k * FR_STRIDE) + 5);
+            if (k == 0) {
+                from += lead;
+            }
             to = rawn;
             if (kend < nfr) {
                 to = emon.Port.cellsAt(fr, (kend * FR_STRIDE) + 5);
             }
+            kids = 0;
+            if (runs > 1) {
+                kids = 1;
+            }
+            if ((k == 0) && (ncp > 0)) {
+                kids = 1;
+            }
+            if (paHasRef(raw, from, to) == 1) {
+                kids = 1;
+            }
+            child = -1;
             if (kids == 1) {
-                if (k > 0) {
-                    child = Model.nodeNew(nodes, Model.nkBreak(), par);
-                    Model.nodeSetSub(nodes, child, pg);
-                    Model.nodeSetConf(nodes, child, 500);
-                    Model.nodeAddSrc(nodes, child, Model.srInfer());
+                if ((runs > 1) && (k > 0)) {
+                    int br = Model.nodeNew(nodes, Model.nkBreak(), par);
+                    Model.nodeSetSub(nodes, br, pg);
+                    Model.nodeSetConf(nodes, br, 500);
+                    Model.nodeAddSrc(nodes, br, Model.srInfer());
                 }
                 cut = from;
                 if ((k == 0) && (ncp > 0)) {
@@ -751,17 +1019,15 @@ public final class Para {
                     Model.nodeSetText(nodes, child, t0, tn0);
                     Model.nodeSetConf(nodes, child, 1000);
                     Model.nodeAddSrc(nodes, child, Model.srText());
+                    child = -1;
                 }
                 if ((runs > 1) || (cut < to)) {
-                    child = Model.nodeNew(nodes, Model.nkText(), par);
-                    t0 = emon.Port.cellsLen(text);
-                    Normalize.nzNfc(raw, cut, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
-                    int tn = emon.Port.cellsLen(text) - t0;
-                    Model.nodeSetText(nodes, child, t0, tn);
-                    Model.nodeSetConf(nodes, child, 1000);
-                    Model.nodeAddSrc(nodes, child, Model.srText());
+                    child = paInlines(nodes, attrs, text, raw, tmp, par, cut, to);
                 }
-                if (runs == 1) {
+                if ((runs > 1) && (child < 0) && (k == 0) && (ncp > 0)) {
+                    child = paTextChild(nodes, text, raw, tmp, par, cut, to);
+                }
+                if ((runs == 1) && (paHasRef(raw, from, to) == 0)) {
                     t0 = emon.Port.cellsLen(text);
                     Normalize.nzNfc(raw, from, to, text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
                     int tn1 = emon.Port.cellsLen(text) - t0;
@@ -783,7 +1049,10 @@ public final class Para {
                 int rx1 = emon.Port.cellsAt(fr, base + 3);
                 int ry1 = emon.Port.cellsAt(fr, base + 4);
                 Model.nodeAddRegion(nodes, regions, par, pg, rx0, ry0, rx1, ry1);
-                if (runs > 1) {
+                if (own >= 0) {
+                    Model.nodeAddRegion(nodes, regions, own, pg, rx0, ry0, rx1, ry1);
+                }
+                if ((runs > 1) && (child >= 0)) {
                     Model.nodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
                 }
                 k += 1;
@@ -900,6 +1169,9 @@ public final class Para {
         if ((Heading.hdLevel(hc, a) > 0) || (Heading.hdLevel(hc, b) > 0)) {
             return -100;
         }
+        if (Lists.lsStart(hc, b) == 1) {
+            return -100;
+        }
         int last = emon.Port.cellsAt(raw, n - 1);
         if (((last == 45) || (last == 173)) && (n >= 2)) {
             if (paLetter(emon.Port.cellsAt(raw, n - 2))) {
@@ -920,7 +1192,7 @@ public final class Para {
         if (paLower(paFirstCp(wd, ln, et, b))) {
             pts += JS_LOWER;
         }
-        if ((indents == 1) && (((paStart(ln, b) - bmargin) * PA_INDENT_DIV) > sb)) {
+        if ((indents == 1) && (((paStart(ln, b) - bmargin) * PA_INDENT_DIV) > sb) && (Lists.lsHangCol(hc, ln, a, b, colx0, bmargin) == 0)) {
             pts += JS_INDENT;
         }
         if (paMarker(wd, ln, et, b)) {

@@ -728,6 +728,128 @@ public final class Port {
         return pushBytes(out, ct, ct.length);
     }
 
+    // ;; P6.3 bulk forms (D197): see the Rust half for the contracts.
+
+    // @kin:link:form:bitmap-gray-into: {:template "emon.Port.bitmapGrayInto({0}, {1})" :arity 2}
+    public static int bitmapGrayInto(Bitmap src, Bitmap dst) {
+        if (src.w != dst.w || src.h != dst.h || dst.ch != 1) {
+            throw new IllegalArgumentException("bitmap size");
+        }
+        byte[] s = src.d, d = dst.d;
+        int ch = src.ch;
+        for (int y = 0; y < src.h; y++) {
+            int si = y * src.stride, di = y * dst.stride;
+            if (ch < 3) {
+                for (int x = 0; x < src.w; x++) {
+                    d[di + x] = s[si + x * ch];
+                }
+            } else {
+                for (int x = 0; x < src.w; x++) {
+                    int p = si + x * ch;
+                    d[di + x] = (byte) ((77 * (s[p] & 0xFF) + 150 * (s[p + 1] & 0xFF) + 29 * (s[p + 2] & 0xFF) + 128) >> 8);
+                }
+            }
+        }
+        return 0;
+    }
+
+    // @kin:link:form:bitmap-hist-rgb: {:template "emon.Port.bitmapHistRgb({0}, {1}, {2})" :arity 3}
+    public static int bitmapHistRgb(Bitmap src, Cells cells, int off) {
+        if (off < 0 || off + 4096 > cells.n) {
+            throw new IndexOutOfBoundsException();
+        }
+        int[] bins = cells.v;
+        byte[] s = src.d;
+        int ch = src.ch;
+        for (int y = 0; y < src.h; y++) {
+            int p = y * src.stride;
+            if (ch < 3) {
+                for (int x = 0; x < src.w; x++, p += ch) {
+                    bins[off + (s[p] & 0xFF) / 16 * 273]++;
+                }
+            } else {
+                for (int x = 0; x < src.w; x++, p += ch) {
+                    bins[off + (((s[p] & 0xF0) << 4) | (s[p + 1] & 0xF0) | ((s[p + 2] & 0xF0) >> 4))]++;
+                }
+            }
+        }
+        return 0;
+    }
+
+    // @kin:link:form:bitmap-lut-into: {:template "emon.Port.bitmapLutInto({0}, {1}, {2}, {3})" :arity 4}
+    public static int bitmapLutInto(Bitmap src, Cells lut, int off, Bitmap dst) {
+        if (src.w != dst.w || src.h != dst.h || dst.ch != 1) {
+            throw new IllegalArgumentException("bitmap size");
+        }
+        if (off < 0 || off + 4096 > lut.n) {
+            throw new IndexOutOfBoundsException();
+        }
+        int[] t = lut.v;
+        byte[] s = src.d, d = dst.d;
+        int ch = src.ch;
+        for (int y = 0; y < src.h; y++) {
+            int p = y * src.stride, q = y * dst.stride;
+            if (ch < 3) {
+                for (int x = 0; x < src.w; x++, p += ch) {
+                    d[q + x] = (byte) t[off + (s[p] & 0xFF) / 16 * 273];
+                }
+            } else {
+                for (int x = 0; x < src.w; x++, p += ch) {
+                    d[q + x] = (byte) t[off + (((s[p] & 0xF0) << 4) | (s[p + 1] & 0xF0) | ((s[p + 2] & 0xF0) >> 4))];
+                }
+            }
+        }
+        return 0;
+    }
+
+    // @kin:link:form:bitmap-hash: {:template "emon.Port.bitmapHash({0}, {1}, {2})" :arity 3}
+    public static int bitmapHash(Bitmap b, Cells out, int off) {
+        if (off < 0 || off + 2 > out.n) {
+            throw new IndexOutOfBoundsException();
+        }
+        long h = 0xcbf29ce484222325L;
+        int[] head = {b.w, b.h, b.ch};
+        for (int v : head) {
+            for (int k = 0; k < 4; k++) {
+                h = (h ^ ((v >>> (8 * k)) & 255)) * 0x100000001b3L;
+            }
+        }
+        byte[] d = b.d;
+        int n = b.w * b.ch;
+        for (int y = 0; y < b.h; y++) {
+            int e = y * b.stride + n;
+            for (int i = y * b.stride; i < e; i++) {
+                h = (h ^ (d[i] & 0xFF)) * 0x100000001b3L;
+            }
+        }
+        out.v[off] = (int) (h >>> 32);
+        out.v[off + 1] = (int) h;
+        return 0;
+    }
+
+    // @kin:link:form:bitmap-quarter-into: {:template "emon.Port.bitmapQuarterInto({0}, {1}, {2})" :arity 3}
+    public static int bitmapQuarterInto(Bitmap src, Bitmap dst, int turns) {
+        int q = ((turns % 4) + 4) % 4;
+        if (src.ch != dst.ch || (q % 2 == 0 && (src.w != dst.w || src.h != dst.h))
+            || (q % 2 == 1 && (src.w != dst.h || src.h != dst.w))) {
+            throw new IllegalArgumentException("bitmap size");
+        }
+        int ch = src.ch;
+        for (int y = 0; y < dst.h; y++) {
+            for (int x = 0; x < dst.w; x++) {
+                int sx, sy;
+                switch (q) {
+                    case 0: sx = x; sy = y; break;
+                    case 1: sx = y; sy = src.h - 1 - x; break;
+                    case 2: sx = src.w - 1 - x; sy = src.h - 1 - y; break;
+                    default: sx = src.w - 1 - y; sy = x; break;
+                }
+                System.arraycopy(src.d, sy * src.stride + sx * ch, dst.d, y * dst.stride + x * ch, ch);
+            }
+        }
+        return 0;
+    }
+
     // ================================================================ P7.U BitmapSet
     //
     // The pixels a page unit may read (see the Rust half for the contract): the bitmaps its answers carried by request id

@@ -37,6 +37,9 @@ import (
 	"emon/evidence"
 	"emon/furniture"
 	"emon/initial"
+	"emon/lists"
+	"emon/notes"
+	"emon/restruct"
 	"emon/heading"
 	"emon/html"
 	"emon/model"
@@ -52,6 +55,7 @@ import (
 	"emon/port"
 	"emon/rasterin"
 	"emon/scan"
+	"emon/tlhealth"
 )
 
 // Transcript is the plan/fulfil transcript (SPEC 13): per input its index and length, and every request
@@ -819,6 +823,10 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 		s := evidenceDump(ev, et, gl, wd, ln, mk, fnt)
 		evs = &s
 	}
+	// the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
+	fwc := newCellsN(2)
+	fw, fl := fwc[0], fwc[1]
+	tlhealth.ThAppend(wd, ln, fw, fl, 0)
 	np := model.PageCount(m.pages)
 	// Running furniture (P4.3), as `attempt` runs it: an image has no catalogue (no Info, no page labels, no tagged tree), so those
 	// arenas are empty and the stage reads the lines and the pages alone.
@@ -827,12 +835,12 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 	trust := pdfstruct.TgTrust(ss)
 	fc := newCellsN(10)
 	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
-	furniture.FuFind(wd, ln, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
+	furniture.FuFind(fw, fl, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
 	// Tables (P5), as `attempt` finds them: before the paragraphs, from the OCR lines like any others; an image has no vector
 	// paths (`pa` is empty), so only the text-based profiles can find one.
 	pa := port.NewCells()
 	tb := newCellsN(24)
-	table.TbBuild(wd, ln, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
+	table.TbBuild(fw, fl, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
 	t := newCellsN(5)
 	c := newCellsN(13)
 	// initials (P4.10) on the lines' copy, before the headings read it, exactly as `attempt` does; OCR words have no glyph or
@@ -841,13 +849,22 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 	for _, ch := range opts.Locale {
 		port.CellsPush(ia[0], int32(ch))
 	}
-	columns.LcCopy(ln, c[0])
-	initial.InDetect(wd, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
+	columns.LcCopy(fl, c[0])
+	initial.InDetect(fw, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
 	h := newCellsN(7)
 	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
-	heading.HdAnalyze(wd, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
-	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
+	heading.HdAnalyze(fw, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
+	// notes and lists, then restructuring, exactly as `attempt` runs them: the OCR lines are the text layer's lines
+	l := newCellsN(6)
+	notes.NtAnalyze(fw, c[0], et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
+	lists.LsAnalyze(fw, c[0], et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
+	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
+	r := newCellsN(10)
+	restruct.RsRun(m.nodes, m.attrs, m.regions, m.text, r[0], r[1], r[2], r[3], r[4], r[5], r[6], m.layout)
+	m.nodes, r[0] = r[0], m.nodes
+	m.attrs, r[1] = r[1], m.attrs
+	m.regions, r[2] = r[2], m.regions
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
 	if opts.Locale != "" {
@@ -1082,6 +1099,13 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	// THE PLAN OF THE PAGE UNITS (P6.5, D212, P7.U): a page with no text layer and one JPEG image that covers it is a scanned page
 	// (a `decode` of the stream, then an `ocr` of its bitmap, in its own unit); its stream is located here, the one place that
 	// reads the input. A page with a text layer is left as the text layer made it (fusion, P7.3, is what weighs a second reading).
+	// The text layer's own triage and health (P7.0, D195, D208): epages, the stage-1 features, the flow COPIED into fw/fl without the
+	// words that failed a P3.6 check (set aside in fa, written to the ledger after FuWrite), and the font health in hl. Stage 3 reads
+	// fw/fl from here on, never wd/ln; the scanned pages' lines join them after the page units.
+	l7 := newCellsN(7)
+	tlEpages, tlFeats, fw, fl, fa, hl, hsc := l7[0], l7[1], l7[2], l7[3], l7[4], l7[5], l7[6]
+	tlhealth.ThRun(pg, gl, et, mk, fnt, wd, ln, im, tlEpages, tlFeats, fw, fl, fa, hl, hsc)
+	nl0 := port.CellsLen(ln) / 16
 	sx := newCellsN(2)
 	plan0, sp := sx[0], sx[1]
 	pageunit.PuPlan(view, ar, dc, ca, cb, st, pg, im, wd, opts.Ocr.code(), sp, plan0)
@@ -1110,7 +1134,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	for i := int32(0); i < max(np, 0); i++ {
 		port.CellsPush(mask, 0)
 	}
-	return step{pdf: &pdfDoc{ev: newEvArenas(), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, pa: pa, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
+	return step{pdf: &pdfDoc{ev: newEvArenas(), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
 		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, info: info}}
 }
 
@@ -1119,6 +1143,9 @@ type pdfDoc struct {
 	ev                                   *evArenas
 	et, gl, mk, fnt, wd, ln, pa, pg      *port.Cells
 	txt, md, lb, ol, ss, plan, mask, loc *port.Cells
+	// the flow stage 3 reads (P7.0), the words set aside, and how many lines the text layer had before any page unit
+	fw, fl, fa *port.Cells
+	nl0        int32
 	// the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence dump has
 	// always shown (kept only when the evidence is asked for)
 	snap []*port.Cells
@@ -1146,8 +1173,11 @@ func unitPdf(d *pdfDoc, i, idx int, opts Options, answers, rq *port.Cells, bms *
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 func finishPdf(d *pdfDoc, opts Options) outcome {
 	ev, et, gl, mk, fnt, wd, ln, pa, pg := d.ev, d.et, d.gl, d.mk, d.fnt, d.wd, d.ln, d.pa, d.pg
+	fw, fl, fa := d.fw, d.fl, d.fa
 	qtxt, md, lb, ol, ss, mask, info := d.txt, d.md, d.lb, d.ol, d.ss, d.mask, d.info
 	np := pdfdoc.PdPgCount(pg)
+	// the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
+	tlhealth.ThAppend(wd, ln, fw, fl, d.nl0)
 	var evs *string
 	if opts.KeepEvidence {
 		g, k, f := gl, mk, fnt
@@ -1164,10 +1194,10 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	// Running furniture (P4.3): found BEFORE the headings and paragraphs, which then never see it, and written after them.
 	fc := newCellsN(10)
 	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
-	furniture.FuFind(wd, ln, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
+	furniture.FuFind(fw, fl, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
 	// Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
 	tb := newCellsN(24)
-	table.TbBuild(wd, ln, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
+	table.TbBuild(fw, fl, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)
@@ -1178,17 +1208,32 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	for _, ch := range opts.Locale {
 		port.CellsPush(ia[0], int32(ch))
 	}
-	columns.LcCopy(ln, c[0])
-	initial.InDetect(wd, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
+	columns.LcCopy(fl, c[0])
+	initial.InDetect(fw, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
 	// the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
 	// paragraph stage builds; its priors: the outline (D172); the tagged roles are a follow-up
 	h := newCellsN(7)
 	// the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
 	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
-	heading.HdAnalyze(wd, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
-	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
+	heading.HdAnalyze(fw, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
+	// captions, note bodies and their references (kin/notes.kin, P4.6), then lists (kin/lists.kin, P4.5): which lines begin them, written
+	// into et and the rows after hc's, which the paragraph stage reads; the notes first, the lists never take a line they took. They
+	// read the same copy of the lines the headings do (initials already out of it), and leave a table's lines to the table (tb[2])
+	l := newCellsN(6)
+	notes.NtAnalyze(fw, c[0], et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
+	lists.LsAnalyze(fw, c[0], et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
+	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
+	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
+	// body is copied into new arenas, in document order, and they replace the old ones
+	r := newCellsN(10)
+	restruct.RsRun(m.nodes, m.attrs, m.regions, m.text, r[0], r[1], r[2], r[3], r[4], r[5], r[6], m.layout)
+	m.nodes, r[0] = r[0], m.nodes
+	m.attrs, r[1] = r[1], m.attrs
+	m.regions, r[2] = r[2], m.regions
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
+	// the words the triage set aside (P7.0): ledger rows, after the furniture's
+	tlhealth.ThWrite(fa, wd, et, m.ledger, m.text, t[2], port.NewCells())
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)

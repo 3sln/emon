@@ -28,7 +28,7 @@ fn read(rel: &str) -> Vec<u8> {
     std::fs::read(&p).unwrap_or_else(|e| panic!("{}: {}", p.display(), e))
 }
 
-const SLICE: [&str; 6] = ["h-plain", "h-keyword", "h-inverted-numbered", "footnotes-endnotes", "initial-image", "initial-vector"];
+const SLICE: [&str; 6] = ["h-plain", "h-keyword", "h-inverted-numbered", "h-numbered", "initial-image", "initial-vector"];
 
 fn synth(name: &str) -> Vec<u8> {
     read(&format!("test/corpus/synth/pdf/{}.pdf", name))

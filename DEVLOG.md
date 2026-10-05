@@ -1761,8 +1761,19 @@ analysis beyond "top-to-bottom lines on a single column".
   PDF/A files (no panic; every drop a page number or text the body says). Wired into the Go Engine too and visibility left for later: D177; a header on one page of a short document is found only by the style rule.
 - [x] P4.4 — Headings: candidates, numbering schemes, priors (tagged, outline,
   TOC detection), global level assignment, sections (D018). *Done (D167-D171), wired into both Engines (D172), minus the tagged prior (D172) and TOC detection; the outline prior wired and mastheads demoted (D177).* `kin/heading.kin`; `kin/para.kin` takes `hc`; with the real `emon` predictor on the 160 synthetic documents (all variants) the heading P/R on `pdf/all` are 0.986/0.982, level accuracy 0.963, end to end 0.946; `kin/scripts/heading-check` holds 8 goldens (`test/heading`) to the gold.
-- [ ] P4.5 — Lists: markers, nesting, continuation across breaks.
-- [ ] P4.6 — Footnotes/endnotes and references; captions; bare URLs.
+- [x] P4.5 — Lists: markers, nesting, continuation across breaks. *Done (D229-D232), wired into both Engines.* `kin/lists.kin`
+  (`emon.lists`: markers read from the characters in no language, bullets drawn as vector shapes, a marker alone on its line, right to
+  left lists, confirmation by neighbours or a hanging indent) and `kin/restruct.kin` (`emon.restruct`: the finished body copied into new
+  arenas, items grouped into lists nested by the x of their text inside their column, a list that goes on across a column or a page
+  one list, `start` and `value`, the list's `at`); laws in `kin/listtest.kin`. `bb accuracy`: `pdf/lists` block list/item P/R 0 -> 1.0,
+  paragraph-boundary F1 0.047 -> 1.0, CER/WER 0.045/0.067 -> 0/0; `pdf/all` item and list P/R 1.0.
+- [x] P4.6 — Footnotes/endnotes and references; captions; bare URLs. *Done (D233-D236), wired into both Engines.* `kin/notes.kin`
+  (`emon.notes`: caption keywords and numbers, label/text split by D073.2, footnote references as superscript runs a note body stands
+  behind, endnotes, notes that print no marker), `kin/links.kin` (`emon.links`: a conservative recogniser of URLs and addresses), and
+  `emon.restruct` (captions bound to the table or figure beside them, an unbound figure caption wrapped in an empty `figure`, a `ref`'s
+  `target` the next unclaimed note body with its marker, bare links made `link` inlines). *Not in this item*: link annotations onto words
+  (P4.7: this stage never touches text under a `link`, so P4.7's links win), the figure's own text as `labels`, table captions bound to
+  tables (P5: the rule is in `rs-run`), locale keyword tables (P4.8).
 - [ ] P4.7 — Inline styles (bold/italic from font flags, names and stem
   widths; sub/sup from baseline shift; mono; small caps), links onto words.
 - [ ] P4.8 — Locale: keyword tables (start with en, de, fr, es, pt, it, nl,
@@ -2064,6 +2075,35 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: the laws (each bulk form against its reference over random bitmaps; banded Sauvola equal to `ras-sauvola`
   on three pages; a two-colour fixture separates into exactly two layers with the right roles; a page of known skew)
   pass on all four targets; `bb ink` meets the targets above; the bench table is in this entry.
+  *Done (D237-D239), as written except where said.* **Files**: `kin/norm.kin` (`emon.norm`), `kin/normtest.kin` (31 laws),
+  the five bulk forms in section `;; P6.3 bulk forms` of the four port files (`bitmap-gray-into`, `-hist-rgb`, `-lut-into`,
+  `-hash`, `-quarter-into`; each held byte-identical to its kin reference `nm-ref-*` by law, the hash against FNV-1a values
+  computed in babashka), `bench/{norm.sh,norm_report.clj,mknorm.clj,mains/norm.rs,norm.go,Norm.java,NormProgram.cs}` (`bench/run.sh N
+  norm`), `kin/scripts/ink` (`bb ink`, in `bb.edn`, a named non-gate in `kin/scripts/gates`). **No Engine wiring**: `nm-view`
+  allocates no bitmap (the caller makes `gray`, `binary` and asks `nm-mask-into` / `nm-role-mask-into` for masks), and it appends the
+  `views` rows (gray, binary, one ink-mask per layer) and `inks` rows that P7.U attaches `bms-put` bitmaps to (wiring point in the
+  header of `kin/norm.kin`). `nm-feat-ocr`/`nm-feat-text` fill `xo` 10-13, 16 and `xt` 10-12 from pixel boxes (`nm-box-px` maps a
+  page box through a view); `nm-orient` is OSD's quarter turns when confident. Deviations from the brief: the skew is read off the
+  BODY mask's ink RUNS (weighted by length, two-pixel rows, differenced), not run-cluster centres (D238), and every dark neutral
+  layer is `body` (D237).
+  *Measured* (`bb ink`, 22 fusion documents, 39 scan-ovl pages at 130 dpi RGB q45 skewed ±3°, truth from the overlays drawn alone
+  through the same rotation; Rust and Go agree on every page): body glyph ink in body layers **0.974** (target 0.98: MISS; 0.981
+  on the clean documents, 0.93-0.95 on pages with bg-texture, seal over text and signatures); the COPY watermark's ink OUTSIDE body
+  **0.998** (0.943 in `light` layers, 0.048 not clustered as ink at all: ok); seal ink in colour layers **0.950**, outside body
+  **0.955** (ok, once `ink-chroma` fell from 48 to 32: JPEG 4:2:0 at q45 strips the chroma of thin strokes); the document's own seals
+  and stamps in colour layers **0.925** (MISS); the pen signature in colour layers **0.931** (MISS: a 3 px stroke has lost its chroma
+  by q45; it lands in `body`). Deskew against the known angles, pages not turned: scan-ovl within 0.1 degree on **89.2 %**, within
+  0.3 on **97.3 %** (worst 0.37); scan-color within 0.1 on **91.9 %**, all within 0.3 (worst 0.17) (targets 95 % / all: MISS, narrowly;
+  the corpus's own rotation by integer shears leaves one-pixel stairs, whose exactly horizontal runs vote for 0: `bb ink --verbose`
+  lists every page). Bench (`bench/norm.sh 5`, best of 5, **machine load 20-40 while measured**, so absolute times are about twice a quiet
+  machine's), ms per page, 300 dpi, `nm-view` whole (gray, histogram, layers, banded Sauvola, deskew): `inv_00007.noise` (gray 2481x3508)
+  rust 287, go 410, java 624, csharp 573; `watermark-draft` (RGB 2550x3300) rust 350, go 506, java 576, csharp 623. Stages, rust / go /
+  java / csharp on the RGB page: gray 16 / 26 / 30 / 37, colour histogram 47 / 54 / 56 / 48, layers (clustering) 0.6 / 0.9 / 2.4 /
+  1.3, one mask 22 / 32 / 45 / 43, banded Sauvola 219 / 274 / 313 / 315, deskew 15 / 15 / 16 / 26. Every kin stage is within D092's 2x of
+  Rust except the gray form's Go/Java/C# arms (Rust vectorises the copy; the form is a bulk form already). The banded Sauvola costs the
+  same as P2.7's whole-page `ras-sauvola` on the same page (rust 219 vs 219) with 2r+2 integral rows instead of 70 MB, and is **the one stage
+  over the SPEC 12.3 budget** (normalization 0.12 s a page on Rust): at an unloaded machine's speed it is roughly 0.1-0.15 s, so it is the
+  P6.3a candidate (`bitmap-sauvola-band`, bit-identical to the kin reference). On the 130 dpi scans `nm-view` is 60-95 ms (rust), 80-100 (go).
 - [ ] P6.3a — Raster kernels as host-accelerable whole-stage forms (D093): SIMD and GPU implementations of the P6.3 and
   P6.4 bulk forms behind the same declarations. **Not on the fusion path**: taken under P10.3 only if `bb fusion-bench`
   shows a raster stage over its SPEC 12.3 budget. Gate: every accelerated implementation bit-identical to the kin
@@ -2439,7 +2479,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   before and after (after: one page's bitmaps, under 120 MB); `bb repeat` serial vs. pages in reverse order.
   *Done when*: all of the above; a law that a page unit with no answers asks the same requests on every target; the
   Go and Rust Engines' `RunStats` agree on rounds and requests per page.
-  **DONE (D229-D231), two commits on one branch.** *Step 1, a byte-identical refactor*: both Engines run the **document pass**
+  **DONE (D243-D245), two commits on one branch.** *Step 1, a byte-identical refactor*: both Engines run the **document pass**
   (`attempt`: text layer, catalogue, tagged tree, and `pu-plan`, which finds each scanned page's DCT stream: the one place a
   page's work reads the input), then **one `plan::run` per page** (`unit_pdf` / `unit_raster`, `kin/pageunit.kin` `pu-run-pdf`,
   `kin/rasterin.kin` `rs-page`) with its own answers, requests and `BitmapSet`, then the **document unit** (`finish_pdf` /
@@ -2468,7 +2508,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   *Left*: `pu-run-pdf`'s PageLayer is the page's slice of `wd`/`ln` (no `fw`/`fl`: P7.0 and P7.3 are not merged); a scanned PDF
   page that is not one DCT image is still not OCR'd (it needs the render and `ocr` of it, which the unit can now ask).
 
-- [ ] **P7.0 — The text layer's own triage and health, before OCR** (SPEC §9.3 "without OCR", §9.4 rule 1, §9.7; D203,
+- [x] **P7.0 — The text layer's own triage and health, before OCR** (SPEC §9.3 "without OCR", §9.4 rule 1, §9.7; D203,
   D208). **Wave 1.** Depends on M0. Merge BEFORE P7.U (it adds one call to `attempt()`; P7.U rebases on it).
   *Brief*: `kin/tlhealth.kin` (`emon.tlhealth`) and `kin/player.kin` (`emon.player`).
   1. `player.kin`: the §9.7 layouts (`cg fw fl fv fa fx hl sl`; `fw`/`fl` reuse the `words`/`lines` accessors of
@@ -2499,6 +2539,37 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   `tl-broken-unmapped`: the broken font < 300 (`tl-broken-shift` is NOT caught here: its mapping is plausible; that is
   what OCR agreement in P7.2 is for, and this entry says so).
   *Done when*: the above, and `pl-check` answers 0 on the layers of every gate document.
+  *Done (D240-D242).* `kin/tlhealth.kin` (`th-run`, `th-epages`, `ev-feat-text`, `th-health`, `th-score`, `th-write`),
+  `kin/player.kin` (the nine layouts, builders, `pl-append`, `pl-check`, `pl-emit` = dump version "2"), laws
+  `kin/tlhealthtest.kin` (the 15 P3.6 fixtures, the hidden-OCR and broken-encoding documents, the score) and `kin/playertest.kin`
+  (a two-page layer appended and checked, every way of being broken, every cell printed or spare, a literal dump), one call in
+  each Engine (`th_run` right after `pc_document`, `fw`/`fl` where `wd`/`ln` were for `fu_find`, `tb_build`, `lc_copy`, `in_detect`,
+  `hd_analyze`, `pa_build`, and `th_write` after `fu_write`; the Engines' evidence dump is unchanged, D242), `ev-begin`/`ev-row` exported and
+  `ev-emit-body` split out of `ev-emit` in `kin/evidence.kin` (its dump, version "1", is byte-identical), SPEC 9.3 and 9.7 amended.
+  *Measured* (Rust, live; nothing here is replayed because nothing here calls a port). **`bb accuracy` `emon`, before and after: identical**
+  (1950 metrics, none regressed, none improved, so no `--update`): of the 70 PDFs of the synthetic corpus only `wm-ocg`'s Model
+  changes (the hidden `SPECIMEN` is still a `watermark` row, now of conf 1000 and src `text`), and no document of the
+  corpus has white or hidden text in a category scored by CER; the expected drop of the watermark, seal and figure CER therefore
+  does not show on this corpus, it shows on the files that have such text (below). A first run of this stage put the same word
+  under `invisible` and cost `pdf/watermarks` furniture-f1 0.8 -> 0.667: D241 is why it does not. **The corpus**: 700 of the
+  PDFs of `corpus/` (every fourth and every third-from-first of those under 2.5 MB of layout, financial, forms, formats,
+  multilingual, tables, graphics, seals) convert to the same Model before and after; `layout/gov-reports/gao-24-106540.pdf` is the
+  one that changes: `Letter` (white on white, in a clip, page 5) and the running title `Appendix I: Comments from the Department of`
+  / `Appendix II: GAO Contacts and Staff` (pages 39, 43: black text under an opaque paint, `occluded`) are in the ledger as
+  `invisible`, not the body or, for the last, the running-title row (the furniture's row for page 43 is gone because the word is no
+  longer in the flow it reads); the P3.6 fixtures give one ledger row per run of one reason on one line (`white.pdf` 14 rows for 60
+  words, `clip.pdf` 5 for 22, ...: the numbers are laws). `ocrlayer.pdf`, `ocrfirst.pdf` and `hidden-older-ocr.pdf`
+  keep their text as `hidden-text` (`ocrfirst`: 8 of its 22 words are occluded ones converted, the others were mode 3; `ocrlayer`: all 25 were mode 3). **Health** on the 70 synthetic
+  PDFs (472 font-page rows): 469 at least `tl-trusted` (700); `tl-broken-unmapped`: the broken font scores **34** (< 300) on both pages, its
+  other four fonts 1000; **`tl-broken-shift` is NOT caught** (every font 1000: its mapping is plausible, and this entry says so; it is OCR
+  agreement's job in P7.2); the three that are under 700 are Devanagari fonts of `script-devanagari` (616) and `script-mixed` (201, 694)
+  whose ToUnicode has no entry for the matras and conjuncts (glyphs of `how` `unknown`, no code point), which the text layer really
+  loses. **Cost**: `gao-24-106540.pdf` (a 2.4 MB, 44-page report) 0.86 s before, 0.91 s after; one 128-byte `feats` row per word.
+  *Learnt*: a ledger row only says what the reader cannot see when the same word's OLD reason survives the move out of the flow
+  (D241); `ev-emit` could not be given the layer's arenas without a second dump version, so the dump is built from the body
+  (`ev-emit-body`) and the committed goldens stay version "1"; rustc's `&mut` rule bit `hl-set hl .. (hl-get hl ..)` again
+  (bind the read first: `th-hl-add`).
+  *Commit*: on branch `worktree-agent-a491e23853d8396e1` (D037).
 
 - [ ] **P7.1 — Alignment and correspondence groups** (SPEC §9.2 "As designed", D202). **Wave 2.** Depends on P7.0
   (`player.kin`, `fw`); not on P7.U (it is tested through a probe).
@@ -7395,6 +7466,145 @@ text is body; and five sources already say where figures are, so fusing them onc
 entirely (rule 140 needs them now).
 - [ ] **Signed off** (maintainer)
 
+### D229 — P4.5: a list marker is read from the characters and confirmed by its neighbours, never trusted alone
+**Decision** (`kin/lists.kin`, `emon.lists`). (1) A MARKER (`ls-parse`, no language, no keyword table): a bullet or a dash standing alone as a word (a *strong* bullet — `• ◦ ▪ ‣ ● ■ ➢ ✓ ・` and the Symbol/Wingdings private-use range U+F000..F0FF — may also be glued to its text; a *weak* one — `- – — * − ·` — needs a word that starts with a letter after it, so a table's `- 82.3` is not a bullet); one to three digits (ASCII, Arabic-Indic, Extended Arabic-Indic, Devanagari, fullwidth) and `.` `)` or `、`; the same in `(…)` or `[…]`; a letter (Latin, Greek, Cyrillic) or a canonical roman numeral up to 89 with `.` or `)`; a circled, parenthesised or dingbat digit. `I.` `V.` `X.` are two readings (the ninth letter and one): the scheme is chosen by the neighbours. `3.5`, `2019.`, `1.2.` (a section number: the heading stage's), `e.g.` and `mix.` are not markers. (2) A BULLET THAT IS NOT TEXT (Chrome and Word draw discs and squares as paths: the text layer has no bullet at all, which `lists-basic`'s PDF shows): a filled or stroked circle or square of 0.12-0.70 em, centred on the x-height, 1/16 to 2.5 em before the first word of an upright line (after the end of a line that runs right to left: `script-arabic`), read from P3.5's `paths` (the evidence dump's `paths` is empty: `ev_emit` is handed a fresh arena, not the one `pc_document` fills; `attempt()` passes `pa` itself). Its character is what it is drawn as: a disc `•`, a ring `◦`, a square `▪`, a hollow square `▫` (D073.8 says by depth `• ◦ ▪`: that is what Chrome draws). (3) A CANDIDATE IS CONFIRMED (`ls-confirm`, within 48 candidates and a page): a bullet or shape by a sibling of its own kind at the same indent; a number or a letter by a neighbour of its scheme and punctuation, a value one to twelve off, at the same text x; or by a HANGING continuation under it (the line below starts at the item's text x, close below). A lone `Z.` is NEVER confirmed by a hanging indent (a bibliography entry starts with an initial: found on BERT's references); a letter needs a sequence. A line set below three quarters of the body's size is not an item (the labels of a figure: BERT's diagram nodes were bullet shapes). (4) A MARKER ALONE ON ITS LINE with its text on the line beside it (the text layer builds two lines out of a marker and its text set in another font: `script-hebrew`, and the `(a)` of a contract with a tab stop) is joined: the text's first word takes the group, the marker's word is emptied and its line is taken out (page -7, as D173's), the item's line grows to hold it. Tab gaps up to 10 em. (5) A line a heading, a note or a caption took is never an item; `hd-analyze` runs first.
+**Why**: the SPEC (§10.4) says markers, hanging indents, sequence continuity, nesting; every one of them is evidence a false positive also has (`1.` at the start of a sentence, `A. Smith`, a dash in a table, a diagram's boxes); none is trusted alone. The thresholds are named constants (`LS_*`). **Alternatives**: a locale table of list words (P4.8's; there is none to need); reading bullets only from text (misses every Chrome and Word bullet); confirming a lone numbered line by its hanging indent alone for letters too (an author's initial in a bibliography is that).
+- [ ] **Signed off** (maintainer)
+
+### D230 — P4.5/P4.6: the stages tell the paragraph stage what they found in the text of the evidence and in rows after `hc`'s, and the paragraph stage's signatures do not change
+**Decision**. `emon.lists` and `emon.notes` run between `hd-analyze` and `pa-build` and write (a) a NEW TEXT RUN, appended to `etext`, for the first word of an item, note body or caption line and for the word that holds a note reference: a GROUP of Unicode NONCHARACTERS (U+FDD0..U+FDEF, which no text layer carries): `S_ITEM|S_NOTE|S_CAP code [digits] S_SEP marker S_END` (the item's scheme and value, the note's role, the caption's kind; the marker or label as text), and `S_REF 0 S_SEP marker S_END` inside a word; the evidence's own text (`ev_emit` has run) is untouched; (b) one row of `LS_STRIDE` (8) cells per line after the heading rows of `hc` (`hd-rows-end`: new, 4 lines in `kin/heading.kin`): flags (an item, a note, a caption STARTS here; this line CONTINUES an item; 64 scratch), the x where an item's text starts and its slop, a bullet shape's path row, gap and side. The paragraph stage reads them with three questions: `ls-split hc a b` ("line b must begin a paragraph"), `ls-hang hc ln a b` ("b is indented from a only because a is an item whose text starts there": waives D135's indent split) and, at the head of a column or a page, `ls-hang-col` (the same, measured from each column's own edge); `pa-join-score` never joins a line that starts an item. `pa-flush` finds a group at the start of its paragraph and writes an `item` (`sub` the scheme, `aux` the value, `marker`), a `note` holding a paragraph (`role`, `marker`) or a `caption` (`label`, `aux` its kind), or a `ref` inline where `S_REF` stands (a space before it is not text); a group inside a margin note's paragraph, or one that is not at the start, is cut out (`pa-scrub`); a paragraph with references has `text`/`ref`/`text` children. `pa-ends-sentence` ignores a reference at the end. **Why**: the Engines call `pa-build` with 28 arguments that two other branches (tables, initials) are changing right now, and a hand-made evidence in `kin/paratest.kin`, `headingtest.kin` calls it too; nothing in the signatures of `pa-build`, `pa-flush`, `pa-new-par` or the Engines' scratch had to change for this. **Alternatives**: another argument `lc` threaded the way `hc` was (a conflict with every branch that touches `pa-build`); marking words in an evidence column (the evidence is a published schema); doing it in `pa-flush` from the lines it holds (it holds paragraph text, not words, glyphs, sizes or shapes).
+- [ ] **Signed off** (maintainer)
+
+### D231 — P4.5: lists are made by COPYING the finished body into new arenas (`kin/restruct.kin`), nested by the x of the text inside its column
+**Decision**. A node's id is its index and the builder appends: a `list` cannot be opened before the first item is read and closed after the fifth (`mc-not-preorder`). So `rs-run` reads the body the paragraph stage wrote (`on oa orr`) and writes the same Model, in document order, into empty arenas (`nodes attrs regions`; the text arena is shared and only appended to), and the Engines swap them in, between `pa-build` and `fu-write` (the furniture roots are made after). It copies every node with its kind, `sub`, `aux`, `src`, `conf`, `flags`, text run, attributes and regions, and in every container (document, section, note, cell, item) it: (1) groups sibling `item`s into `list`s: by the x where an item's TEXT starts (a marker is often right aligned: `I.` `II.` `III.` start at three x's; the text starts at one), more than 4 pt in is a list inside the item before it, more than 4 pt out closes the lists it left; at one indent a list goes on while its scheme is the same and its values go up (a bullet's always), else a new list starts at the same parent; the x is held in the frame of the list in the coordinates of ITS column (the layout's body cell: a list that goes on in the second column of BERT's page 12 is one list: the shift of the two cells' left edges is what is taken off, and only when they differ by more than 20 pt, because a cell's edge is the leftmost line it holds and a page with only list items has the markers' edge); (2) keeps a page milestone or a note body between two items of a list that GOES ON inside the item before it (an `ul` holds only `li`): `lists-long-multipage` and the arXiv bibliographies are one list across 2-3 pages; (3) writes `ordered` (the list's `sub`), `scheme` (`bullet decimal lower-alpha upper-alpha lower-roman upper-roman lower-greek`), `start` (the first value when it is not 1) and an explicit `value` on an item that skips (`3 4 10`); (4) gives a list the union per page of the regions of everything under it as its `at`. It also does the caption binding (D233), the bare links (D235) and the reference targets (D234): the same copy, so one pass.
+**Why**: in place is impossible (ids), and the pass is generic (a `table`'s cells, a `note`'s blocks and an `item`'s are all containers: a list inside a table cell stays in the cell). **Alternatives**: opening the list in `pa-flush` with a stack kept in `hc` (every non-item node written between two items ends the list: milestones, notes, a column's side fragments); re-walking the lines.
+- [ ] **Signed off** (maintainer)
+
+### D232 — P4.5: what lists still do not do
+**Open**: (1) a list whose items are separated by a paragraph or a figure is two lists (the second with its `start`: SPEC 10.4 says "continues its numbering": it does, by `start`, but they are two nodes: the gold's `Resumed` is a case where it was one `ol start=5`); (2) `1.1` and `(i)` after `1.1` — section numbers are the heading stage's; contract clauses that are paragraphs numbered `1.1` stay paragraphs (with the number as text, or a heading when P4.4 says so); (3) an item whose marker is a *picture* (an image bullet: P3.5's `images` is not read); (4) a bullet that is a glyph in a font whose text the PDF does not map (`.notdef`): the shape is read, the glyph is not; (5) a marker alone on its line with a sibling line is joined only when the sibling is THE one on its row (a table row with a marker in its first cell is not); (6) indent classes beyond the x of the text: a list whose nested items are not indented (rare) is flat. The bibliography of a paper (`[1] …`) is a list (the gold's convention for `ol`; P4.? may make references its own kind).
+- [ ] **Signed off** (maintainer)
+
+### D233 — P4.6: captions: the label is the keyword and the number, the text is the rest (D073.2), bound to the object next to it
+**Decision** (`emon.notes`, `emon.restruct`). A line starts a caption when it starts with a KEYWORD of a flat table (`nt-kw`: `Table Figure Fig. Chart Exhibit Diagram Schedule Plate Image Photo Graph Map Illustration`, and `Abbildung Tabelle Diagramm Grafik Bild`, `Tableau Graphique Schéma`, `Figura Tabla Cuadro Gráfico Ilustración Mapa Imagen`, `Tabela Quadro Tabella Grafico Figuur Tabel Afbeelding Figur Tabell Rysunek Wykres Рисунок Таблица Схема Obrázek Tabulka Şekil Tablo` and their abbreviations; kind 2 for what is a table's, 1 for the rest) and a NUMBER (`1` `2.3` `A.1` `4b` `IV`), and then a full stop, a colon, a dash, or the line's own STYLE (smaller than the body by 4 per cent, or bold or italic where the body is not): `Figure 2 shows how` set as body text is a sentence. The LABEL is the keyword and the number as printed, a dot after the number kept and a colon or dash left out (the gold's `Figure 1.` and `Figure 2`: D073.2's regex swallows a dot into the number and a colon into the separator, kept exactly); the caption's text is the rest, the `S_CAP` group takes the label's words out of the text. A run of candidates one under another a line gap and a half apart is a LIST OF FIGURES or TABLES (GAO's contents page) and no caption. BINDING (in `rs-run`): a caption and the `table` or `figure` next to it become one — the caption is the object's first child, its `target` the object, the figure's `label` its caption's — a table's above it, a figure's below; not when the next table has none and this caption is a table's. A figure caption with no figure beside it (every real file today: no stage reads figures) is the evidence of one nothing else found, and is wrapped in an empty `figure` of kind `unknown` (SPEC 10.6: "a non-text region is an empty figure"), at the caption's place; a table caption with no table stays a `caption` block (P5 binds it: a `table` is the first child's parent when it exists: the rule is there). **Why**: the gold's captions are `Figure 1.`/`Figure 2` + text, five documents. **Alternatives**: per-locale keyword tables (P4.8: this table is the seed and is replaced, not extended); binding by proximity alone (a body paragraph between a table and its caption); leaving the wrapper out (every figure caption would be a floating block, and the chart's axis labels are the figure stage's, which would have no anchor).
+**Open**: the figure's own text (a chart's axis labels, `Units (thousands)`, `Q1`…`Q4`) is still paragraphs before the wrapper: SPEC 10.6's `labels` is the figure stage's (it reads `paths`); the wrapper is where it will put them. `figure-subkind-acc` is not measured until then (`unknown`).
+- [ ] **Signed off** (maintainer)
+
+### D234 — P4.6: a footnote reference is a superscript that a note body stands behind; an endnote is a body that earlier references call
+**Decision** (`emon.notes`). (1) A REFERENCE CANDIDATE is a run of superscript glyphs inside a word of an upright line that is not a heading: the glyph is smaller than the line's text (88 per cent) AND raised off its baseline (12 per cent of the size), or a Unicode superscript digit (`¹ ² ³ ⁰ ⁴`-`⁹`); its characters digits, a note symbol (`* † ‡ § ¶ ‖ #`) or a small letter, with `,` between two (`1,2`); what is before it in the word (or, when it is the whole word, in the word before) is a letter or punctuation and never a digit or an operator, and what is after it in the word is punctuation only (`m²`, `x²+y`, `10⁻⁶` are exponents: found on the Transformer paper, whose sup digits matched its bibliography). The glyph's text is its own code point when it has no run (`ch-tstart` -1: every Chrome glyph), and its place in the word is its index when the word has as many code points as glyphs (a ligature in the word: no candidate). (2) A NOTE BODY CANDIDATE is the first word of a line that starts with a superscript run, or is a lone number (`1` `1.` `1)`), `[1]` or a note symbol. (3) FOOTNOTES: a body in the lower half of the page (the band), set smaller than the body text (96 per cent) or marked in superscript, with an unclaimed reference of its marker on its page; or small and anywhere, with one on the page before (a note a column or a page break pushed on: `columns-continue`); a superscript marker, small, in the band, needs no reference. (4) ENDNOTES: a body with an earlier reference of its marker: a superscript marker at once; a plain number only when at least two do and a heading that says `Notes` (a flat table `nt-nh`: `Notes Endnotes Footnotes Anmerkungen Noten Notas Remarques Примечания Сноски 注释 脚注 …`) stands between the first reference and the body (the first rule without it made the Transformer's bibliography, `[1]` to `[40]`, endnotes of its exponents). (5) NOTES THAT PRINT NO MARKER (`footnotes-endnotes`: the markers are in the HTML's `data-marker` only): references nothing claimed and a `Notes` heading after them: the lines under it that start after more than one and a half line gaps, as many as there are references, are the endnotes, their markers the references' in order; any other count leaves everything as it is. (6) The marker is not text: it is the `note`'s `marker`; the `ref`'s is the same string. The Model's `ref` gets its `target` in `rs-run`: the next note body with its marker that nothing else claims, searching forward and then back (D073.4).
+**Why**: SPEC 10.8 ("a superscript or bracketed marker in body text matched to a small-font block in the page's bottom band starting with the same marker"); precision first: `m²`, `10⁹`, a bibliography and a table of numbers at a page's foot are the false positives that were found and each is a rule above. **Alternatives**: believing every superscript (the Transformer: 11 false notes); believing a plain `1.` for an endnote without a heading (the bibliography).
+**Open**: a reference as a bracketed number (`[3]` in text) is a citation, not a note, and is not read; a note body continued on the next page is a new paragraph there; a word with a ligature keeps its superscript as text; running footnotes with a marker that is not superscript and not at the line's start.
+- [ ] **Signed off** (maintainer)
+
+### D235 — P4.6: bare URLs and addresses become links where nothing else says so
+**Decision** (`kin/links.kin`, `emon.links`; run on every text the copy of D231 meets that is not already under a `link`). A conservative recogniser: `http://`, `https://`, `ftp://`, `ftps://` and a host (labels of letters, digits and hyphens, none empty or starting with a hyphen); `mailto:` and an address; `www.` and a host of three labels at least with a top-level domain of two letters or more; `local@domain.tld` (the local part of letters, digits and `._%+-'`, a domain with a top-level domain). Not links: `example.com` (a word with a dot), `www.example`, `http://` and nothing, `@handle`, `a@b`, `1.2.3`, an IPv6 host and `user:password@host`. What trails a link is not part of it: `. , ; : ! ? ' "` and a closing bracket the link did not open (`(see www.x.org)`, `…/Foo_(bar).`). The `link` inline holds the text intact; its `href` is the text as printed, with `https://` before a `www.` link and `mailto:` before an address. P3.8's link annotations (`pa-run`) take precedence, as the brief says: they are not wired into the Engines yet (P4.7: links onto words), and this pass never touches text that is under a `link` — so P4.7 writes its links first and this finds what is left. **Alternatives**: any dotted string with a known top-level domain (a list of 1500 names for `example.com`; a sentence that ends without a space is a link); `http://` for `www.` (a link that downgrades).
+- [ ] **Signed off** (maintainer)
+
+### D236 — P4.5/P4.6 verified: laws, the gold, both Engines, and the real corpus by eye
+**Result**. `kin/listtest.kin` (all four targets): markers (every form, every script above) and what is not a marker; a run of numbered lines is a list and a lone `A. Smith` is not; the caption keywords and numbers; what a bare link is and is not; and `rs-run` on a Model written by hand: items nested by x, a list that goes on across a milestone, a caption bound to its table and a figure caption wrapped, a reference with the target of its note and a bare link made a `link`. `bb accuracy` (the real `emon` predictor, 160 documents; `--update` recorded). ON THE BRANCH POINT (D177, before tables) `pdf/all`: block `list` P/R 0/0 -> 1.0/1.0, `item` 0/0 -> 1.0/1.0, `caption` 0/0 -> 1.0/1.0, `note` 0.75/0.375 -> 0.889/1.0, `figure` 0/0 -> 1.0/0.8, paragraph-boundary F1 0.189 -> 0.250, CER/WER 0.01178/0.02083 -> 0.00826/0.01510. AFTER MERGING main (tables, D178-D182) against main's own scoreboard: `list` and `item` P/R 0/0 -> 1.0/1.0, `caption` P/R 1.0/0.2 -> 1.0/1.0 (the tables' captions were P5.3's; the rest are figure captions), `note` 0.75/0.375 -> 0.889/1.0, `figure` 0/0 -> 1.0/0.8, `block-paragraph` P/R 0.612/0.966 -> 0.738/0.982, paragraph-boundary F1 0.657 -> 0.854, CER/WER 0.00967/0.01868 -> 0.00619/0.01305; the families: `pdf/lists` list/item P/R 1.0, paragraph-boundary F1 0.047 -> 1.0, CER/WER 0.0450/0.0673 -> 0/0; `pdf/footnotes` note P/R 0 -> 1.0, CER/WER 0.0098/0.0423 -> 0/0; `pdf/figures` caption P/R 0 -> 1.0, CER/WER 0.208/0.236 -> 0.147/0.167 (the chart's axis labels are still paragraphs: the figure stage's). The 0.89 note precision is two chart labels (`Q1 Q2`, `Units (thousands)`) that P4.1's column stage reads as margin notes. Merged with the table stage: a table's cells are written from WORDS (`tw`), and a group in one of them would be in the cell's text (found on a Hebrew Wikipedia infobox and nine CUAD contracts of 150 sampled, by scanning every output for a code point of U+FDD0..U+FDEF). So the stages here ask `ls-upright`, which is false for a line a table claims (`tb-claimed`), and `ls-taint` takes out every line that has a word in `tw` (flag 32; the line is found by bisection over the lines' word ranges: a word's own `line` field names the line before furniture's compaction, D173, and is stale), and `rs-run` ends by replacing any noncharacter in the Model's text with U+FFFD (a leak would be seen, not hidden); none in 1000 sampled corpus files since. A caption a table found (P5.3) is never found again here, and one it missed is bound to the table beside it by `rs-run`. Rust == Go (`bb identity`: 275 inputs x 9 arms byte-identical; the notes, lists and links stages are in `attempt()` of both Engines, in the order `hd-analyze`, `nt-analyze`, `ls-analyze`, `pa-build`, `rs-run`, `fu-write`). By eye on the corpus (arXiv: the Transformer, BERT, GPT-3; GAO; FOMC): the Transformer's 40-entry bibliography is one list across three pages and its exponents no notes; BERT's three-item list is one list across two columns, its `• 80% of the time` items are items, its table dashes and diagram boxes are not; GPT-3's 109 captions label `Figure 1.1` … `Table 3.3`; the FOMC minutes have four footnotes, each with its reference; GAO's list of figures is not captions; a CUAD contract's `(a)` with a tab stop is joined to its text. **Found while verifying** (each is a rule above): a bullet's group copied the bullet twice (text bullets are text markers), single-item lists from a table's dashes, one-item lists from a diagram's boxes, `Z.` initials as items, the exponents as footnotes, the bibliography as endnotes, a list in the second column as a nested list, a list across pages as three; `bb slice`'s fixture `footnotes-endnotes` is a P4.6 document now (its Model has notes: no longer paragraphs and headings alone, which is what `para-goldens`/`para-check` hold) and is replaced by `h-numbered` in the slice, the para goldens, `kin/paratest.kin` and both Engines' native tests (goldens regenerated); a Rust borrow error six times in the first builds (a `Cells` that is an argument of the call and of an argument: bind first, D163 said it); kin's refusals met on the way, each named by `bb emit` or `bb check`: a local called `go`, `len`, `cap` or `close` (Go's predeclared names have no escape), a constant and a function that differ only in case (`LS_NEAR`, `ls-near`: Go), an `if` as an argument (Java prints it as a malformed statement: in a law, too), a local that is assigned and never read (Go). The new stages cap what they multiply (`ls-cap`: coordinates and sizes held to ±10^7, the fuzz crasher `content-size-overflow` of D163 found it again in `notes.rs`), bound every candidate list (`LS_MAXCAND`, `NT_MAXRF`, `NT_MAXNB`) and nest lists no deeper than 24.
+
+### D237 — Ink layers as built: paper by mass, seeds by mass with a spike rule, edges by ink-to-paper segment, every dark neutral layer is body (P6.3; SPEC 8.2; D197)
+**Decision**: the histogram clustering of D197 as follows (all integer, settings `nm-ink-*`): paper is the heaviest bin among the
+lightest and every bin within `ink-paper` (24) of it; seeds are the heaviest non-paper bins (ties by bin index, bins under n/40000
+pixels never seed) farther than `ink-merge` (40, L1 in lightness, r-g, (r+g)/2-b) from every seed so far AND either off every seed's
+ink-to-paper segment or holding `ink-spike` (1 % of the page): an anti-aliased edge lies on the segment between its ink and the paper
+and must not become a layer, a flat watermark does; the other bins join the nearest seed within half of `ink-merge`, else the seed whose
+segment they lie nearest; layers under `ink-min` (0.5 % of the ink) are folded away, centroids within `ink-merge` merged, layers numbered
+by size. Roles: `colour` at chroma (|a|+|b|) 32 or more (48 lost thin seal strokes to JPEG), `light` neutral from lightness 150, `body` every
+other neutral layer (black headings and dark-grey text are two clusters of one ink; the first run labelled the second `unknown` and
+lost 24 % of the body), `background` a light or coloured layer covering 25 % of the page, `unknown` a dark neutral mass of that
+coverage. `nm-role-mask-into` is the union mask of a role.
+**Why**: first runs on the P6.6 scans gave 0.745 body purity (second dark layer), 0.0 signature (no colour seed), and seeds exhausted by
+anti-aliasing ramps; each rule above removed one of those. Measured in P6.3's entry.
+**Alternatives**: k-means over pixels (D197); seeding on every heavy bin (eight seeds spent on a grey ramp); one body layer (loses headings).
+- [ ] **Signed off** (maintainer)
+
+### D238 — Deskew from the body mask's ink runs, in two-pixel rows, scored by squared steps; the angle goes to the view and every view derived from it (P6.3; SPEC 8.2)
+**Decision**: on a decode view, the body layers' mask (borrowing `binary`'s buffer before Sauvola overwrites it) is read by
+`bitmap-next-nonzero` into ink runs (midpoint x, row, length) on every `h/800+1`-th row; for each angle from -5 to 5 degrees at 0.1,
+then 0.01 around the best, a run goes to the row `(y cos + x sin) >> 17` (two pixels) with its length as weight and the score is the
+sum of squared steps between neighbouring rows; 0 unless the best beats 0 by 1/64 (and 50 runs exist). Positive is counter-clockwise
+(lines rise to the right: the sign of `vwf-deskew`). `nm-reskew` rebuilds the source row's transform in place and `nm-view` gives the
+angle to the gray, binary and mask views. No resampling. Orientation is `nm-orient` (OSD at `osd-conf` 20).
+**Why**: the brief's word-cluster centres gave stacks of points whose alignment is within half a pixel (error 0.5-1 degree); a sum of
+squares over one-pixel rows is spiked at 0 by the stairs an integer-shear rotation leaves (P6.6's scans, ImageMagick) - two-pixel rows
+and squared differences gain 2x to 10x at the true angle; reading only body ink keeps watermarks, seals and textures from voting.
+**Alternatives**: Hough over components (the tracer's, later); component centres (tried: stacks); one-pixel rows (stair artefact).
+- [ ] **Signed off** (maintainer)
+
+### D239 — normalization allocates no bitmap: the caller owns gray, binary and masks; banded Sauvola on rings of integral rows; the measurement is bb ink on known overlays (P6.3; D092, D093, D196)
+**Decision**: `nm-view` (and every `nm-*` stage) takes the bitmaps it fills; kin cannot hold one in `Cells`, so P7.U makes them with
+`bms-put` at ids >= `KIN_VIEW_BASE` for the `views` rows `nm-view` appended (`nm-gray-view`, `nm-binary-view`, `ikf-mask`), and a mask is
+one `nm-mask-into` / `nm-role-mask-into` call per row. Sauvola keeps rings of `2r+2` integral rows (sum and square), equal to
+`ras-sauvola` by law at r = 15 and to a brute-force window sum at other radii. `bb ink` (not a gate) measures separation on P6.6's scans:
+truth is each overlay drawn alone through the very rotation the scan got, and the body's the clean render's dark neutral pixels.
+**Why**: no Engine wiring is P6.3's; memory O(w r) instead of 70 MB (D092); overlays are ours so the truth is exact.
+**Alternatives**: allocating inside `nm-view` (the bitmaps would die with the call); whole-page integral images.
+
+### D240 — The text layer's health, as built: glyph-weighted pooled components per (font, page), a weighted harmonic mean scaled by the weakest, and two stride corrections to SPEC 9.7 (P7.0; SPEC 8.4.5, 9.3, 9.7; D150, D203)
+**Decision**: `th-health` pools each word's `xt` columns 2-5 over the words of a (font, page) of the flow, weighted by glyph count
+(columns 4 and 5 are each word's WORST, so the pool is the mean worst; column 5 is capped at 10 000, ten space widths, so one torn
+word cannot overflow a sum): components **mapped**, **garbage**, **overlap**, **gap** in the `hl` row (agreement and ink stay -1
+until P7.2). The score is the weighted harmonic mean of `mapped`, `1000 - garbage`, an overlap ramp (1000 up to `tl-overlap-ok` 500,
+0 at 1000) and a gap ramp (1000 up to `tl-gap-ok` 500, 0 at `tl-gap-bad` 3000), weights 4, 3, 2, 1, each floored at 50, times
+`(1000 + weakest) / 2000` (D150's shape). `tl-trusted` 700 and `auto-health` 500 are settings. The `hl` row's cell 11 holds the
+glyph count while the rows are accumulated and is 0 after. SPEC 9.7's strides could not hold their own fields: `cg`'s `tlines`
+reference is ONE cell (its arena is known), which is what makes 16 hold the three runs, two similarities and the flags, and `fa`
+has one spare cell, not two; SPEC 9.7 says so now. `pl-append` re-bases `etext` runs, `refs` runs, `fw.line`, `fl`'s word run,
+every group index and a reference INTO a layer arena by that arena's offset; glyph runs, `feat` and evidence references are not
+re-based (D203's contract, now laws).
+**Why**: the harmonic mean makes a font with NO Unicode for its glyphs unmistakable (`tl-broken-unmapped`: 34 against 700, every
+other font of the document 1000) and keeps a normal font at 1000 (the first values of the ramps are free for a normal font:
+overlap means of 0-13 and gaps of 0 on the 70 synthetic PDFs); the scale by the weakest makes one failed component pull the whole
+down. **`tl-broken-shift` is NOT caught here** (every font 1000: a plausible but wrong mapping): that is what OCR agreement in P7.2 is
+for. Measured on the 70 PDFs of the synthetic corpus (472 font-page rows): 469 are at least `tl-trusted`; the three that are not
+are two Devanagari fonts (`script-devanagari` 616, `script-mixed` 201 and 694) whose ToUnicode lacks the matras and conjuncts
+(glyphs with `how` `unknown` and no code point: the text layer really does lose them), which is the right answer for fusion.
+**Alternatives**: counting `glyphname` glyphs as mapped (the SPEC's column 2 says `tounicode` or `encoding`, and nothing in the
+corpus needed the relaxation); a minimum instead of a mean for overlap and gap (one kerned pair would condemn a font).
+- [ ] **Signed off** (maintainer)
+
+### D241 — Triage as built: what each P3.6 class becomes in the ledger, and a hidden watermark is still a watermark (P7.0; SPEC 8.1, 9.5; D015, D155, D157, D208)
+**Decision**: `vis` ≠ 0 takes the word out of the flow (`fw`/`fl` are copies without it; `wd`/`ln` stay the evidence), and its ledger
+row says: `clipped` and `offpage` under those reasons; `white-on-white`, `zero-size`, `transparent`, `ocg-hidden` and `occluded`
+(by a paint that is not a page-sized image) as `invisible`, EXCEPT that a word which is also what a watermark is, an `/Artifact` of
+subtype Watermark or text set at least 3 degrees off every right angle, says `watermark`, as the furniture stage's geometry already did
+for the same word when it was still in the flow (a hidden `SPECIMEN` in an optional-content group that is off by default:
+`wm-ocg`). A word occluded by an image covering at least `tl-page-image` (500 per mille) of the page stays, as a `hidden-text` word
+(its `fw` source), and so do render-mode 3 and 7 words that passed the checks. A line that loses words is re-measured from the
+rest (box union, baseline from the first start to the last end) and one that loses all is dropped; a line that loses none is copied
+bit for bit, so a document with nothing to triage has `fw` = `wd` and `fl` = `ln` and every Model unchanged. A run of one reason,
+page and line is ONE ledger row (its words joined by a space), conf 1000 (a check says invisible only when certain), src `text`,
+written after `fu-write` so the furniture's rows keep their order.
+**Why**: the ledger is for what the reader cannot see; the old geometry-only watermark detection must not lose the reason the moment
+the word is no longer in the flow (the synthetic scoreboard's watermarks category would have lost 0.17 of furniture-f1); a
+page-wide image over text is how an older OCR layer sits under its scan (D155).
+**Measured**: the synthetic scoreboard does not move (1950 metrics, none regressed, none improved: of the 70 PDFs only `wm-ocg`'s
+Model changes, in the conf and src of two ledger rows). On the corpus (every fourth of the PDFs under 2.5 MB) the changed documents are listed in the DEVLOG
+entry of P7.0; `gao-24-106540.pdf` is the instance to read: `Letter` (white, in a clip) on page 5 and the running title `Appendix I/II:
+...` of pages 39 and 43 (painted over by an opaque rectangle) leave the body for the ledger as `invisible`.
+**Alternatives**: `occluded` words by a non-image kept in the flow (the renderer shows them covered); a ledger row per word (a hidden
+page would be a thousand rows).
+**Merged with lists/notes/normalization (coordinator)**: both Engines run the triage first and the notes, lists and restructuring stages on `fw`/`fl` (`nt_analyze`/`ls_analyze` read the flow like the headings, so invisible and white text is in the ledger and never in a list or note); the raster path appends its OCR lines to `fw`/`fl` with `th_append` (an image has no text layer, nothing is set aside) and reads the flow too, Rust = Go.
+- [ ] **Signed off** (maintainer)
+
+### D242 — Stage-1 text-layer features and the dump's version "2", as built (P7.0; SPEC 8.4.5, 9.7; D096, D203)
+**Decision**: `ev-feat-text` (in `kin/tlhealth.kin`) fills columns 2-9, 16, 17, 19-21, 28, 29 of a word's `feats` row, 13 by
+`th-health`, 18 stays -1 (no size inventory yet), the rest are later stages'. Column 7 is the first glyph's mode class (0 fill, 1
+stroke, 2 clip only, 3 invisible); 8 the lowest alpha of the ink the mode paints; 9 the lowest contrast of the fill against WHITE
+PAPER (`|255 - luminance|` per mille: the page background under a glyph is the render's, P6.3's, so the text-layer-only value
+is against paper); 16 an `/Artifact` span on the glyph's mark chain; 17 the word's height over its line's lower median
+(the line's first 64 words); 19 the angle to the page's dominant text angle (the 1-degree bucket most lines fall in, answered as
+the first line's `rot` in it); 20 the baseline midpoint's distance from its line's baseline; 21 the mean inter-glyph gap over the mean
+advance (along the word's own direction); a combining mark is not a neighbour for column 4. `epages` has a row for every page. The
+`feat` of a word is set on the FLOW's copy (`fw`), not on the interpreter's `words`, which are the evidence. `pl-emit` writes dump
+version "2" (the evidence's 24 arrays, then `cg fw fl fv fa fx hl fpa sl`), built from `ev-emit-body`, which `ev-emit` (version "1")
+now calls too; **the Engines' `keep_evidence` dump stays version "1" and the interpreter's own** (`bb slice` holds it to the three
+content goldens, which `kin/pdfcontenttest.kin` also holds the generated dump to), so the layer's arenas reach a dump with P7.3,
+when those goldens move with it; until then the layer is read through `kin/tlhealthtest.kin` and `kin/playertest.kin`.
+**Why**: fusion reads these columns by number; the dump explains them; the cost is one feature row per word (128 bytes), counted in
+the memory of the document pass.
+**Alternatives**: a render-based contrast (not available before P6.2/P6.3 and needs pixels); features per glyph (SPEC 8.4.5: a
+glyph has none, its word speaks for it).
 ### D191 — The `Renderer` port: `render` and `crop` are one fulfiller; RGB; the page geometry is stated; a crop is answered with its own kind (P6.2; SPEC 7.2, D007, D089, D117)
 **Decision**: (1) A `Renderer` is `render(input: ByteSource, password, request) -> Bitmap | failed | unsupported`, with `layers()` (a bit set) and `exact_crop()`. The request is D089's `input page dpi layer` (page 0-based) and, for a crop, D117's `crop` kind 5: the same four plus the pixel rectangle `px py pw ph`. `kin/plan.kin` gains `pk-crop`, `rq-crop`, and two layers beyond text-on/off/only: `lay-no-watermark` 3 and `lay-watermark-only` 4. (2) One fulfiller, `RenderFulfiller` (Rust and Go), takes both kinds, reads the input BY INDEX through the run's byte source (D058), and answers `[len kind id status w h channels dpi]`. A crop's answer carries kind 5 (the loop matches an answer to its request by id and kind) with a render's layout. `failed` and `unsupported` are answers (header and status), transcribed and replayed; a malformed request or a missing input is the loop's `fulfil-failed`, not an answer. (3) The page is RGB, 3 channels: the tracer's ink separation wants colour (SPEC 8.2.1), OCR takes 1 or 3. (4) The whole-page size is `floor(pt * dpi / 72 + 1/2)` per side (`pixels_of`), at least 1; a crop is a rectangle of that bitmap. (5) The Engine's port set is `Config.renderer`: when it is set and the Engine converts or records, `render` and `crop` go to it through a `KindMux` (a request goes to the fulfiller that takes its kind; `ocr` and `decode` join with one `.with` each); when it is not set a unit that asks fails with a named `fulfil-failed`, as before. A replay never calls it. `Renderer` requires `Debug` in Rust so `Config` stays `Debug + Clone`.
 **Why**: kin's side of D089 already had `render`; D117 reserved `crop`, whose only difference is the rectangle, so one function serves both and a second fulfiller per kind would be two places to drift. Stating the geometry makes two engines and two hosts agree on the size before they disagree on a pixel. The mux is the seam P6.5 and P6.1a need.
@@ -7571,7 +7781,7 @@ them; offer them upstream when they have proved general.
 **Decision**: cell 15 of a line row was the table stage's claim (D178) and, on the lines' copy, the initials' code (D183: minus the drop's code points, or `4*(row+1)` plus flags). Both Engines run furniture, then the tables on the evidence lines, then the copy and `in-detect`, then headings, then `pa-build`; so the two met. A table's claim is now `TB_HELD + k` (1073741824 + the table's index, `tb-claimed` answers index + 1 or 0); `in-detect` leaves a held line's cell 15 as it is and never sees the line (`in-collect` skips it, so a big first glyph in a table cell is no initial, and a table's lines never take part in a drop initial's neighbours); `in-row`, `in-cell` (para's raised-initial and no-space bits and `pa-skip`) read a held line as no initial; the column stage's split copies the claim to the new piece instead of clearing it; the heading stage's "a held line is never a heading" tests `>= TB_HELD`, so a heading that opens with a raised initial is still a heading. `pa-build` takes the prepared copy (`lt`) of the lines and no `ln`; the tables' laws and the Engine's hosts prepare it as the Engine does. **Held to**: the unit laws on all four arms (356), the table goldens (now carrying `align`), the accuracy gate (no metric lowered; the branch's lowering of `pdf/forms block-paragraph-r` was not carried over).
 **Alternatives**: a 17th line cell (every stride changes in the evidence, the columns and the readers); the claim kept on the original lines only (a column split's new rows are not there to ask).
 
-### D229 — The page unit as built: the document pass reads the input, each page is its own loop, and the evidence dump keeps its pre-join marks (P7.U; SPEC 2.2, 7.3, 12.1; D195, D207, D211, D212)
+### D243 — The page unit as built: the document pass reads the input, each page is its own loop, and the evidence dump keeps its pre-join marks (P7.U; SPEC 2.2, 7.3, 12.1; D195, D207, D211, D212)
 **Decision**: (1) The Engines run three parts: the document pass (everything that reads the input, re-run on misses, and for
 a PDF the plan of the page units: `pu-plan` locates a scanned page's one DCT stream, so a page unit never reads the input),
 one `plan::run` a page (a unit that writes nothing until its answers are in), and the document unit (stage 3 unchanged). (2) A
@@ -7590,7 +7800,7 @@ the seam P7.3 plugs fusion into; (4) is what keeps every committed dump byte for
 the document pass); making the dump an Engine-side concatenation (it is kin's `ev-emit`).
 - [ ] **Signed off** (maintainer)
 
-### D230 — `BitmapSet` as built: one set an attempt, answered and kin-made bitmaps apart, kin-made ones visible to the fulfiller (P7.U; SPEC 7.2; D092, D196)
+### D244 — `BitmapSet` as built: one set an attempt, answered and kin-made bitmaps apart, kin-made ones visible to the fulfiller (P7.U; SPEC 7.2; D092, D196)
 **Decision**: the set is made for each attempt of a page unit from the bitmaps its answers carried (shared, not copied) and is
 dropped with the attempt; `bms-put` allocates a zeroed bitmap kin fills and panics on an id already in the set; what kin made
 is added to the bitmaps `Fulfiller::start` is given, so an `ocr` request naming a kin-made view finds its pixels. In Rust the
@@ -7602,7 +7812,7 @@ means a re-run recomputes what kin made (it is a function of the answers) and th
 (stale views, and an id collision on every re-run).
 - [ ] **Signed off** (maintainer)
 
-### D231 — A born-digital page asks for its two rasters under `always` before anything reads them, and a gate with no Renderer sees `unsupported` (P7.U; SPEC 7.2; D199, D201, D212)
+### D245 — A born-digital page asks for its two rasters under `always` before anything reads them, and a gate with no Renderer sees `unsupported` (P7.U; SPEC 7.2; D199, D201, D212)
 **Decision**: as D199 (2), under `always` (the default, D038) a born-digital page's unit asks `render` layer 0 and layer 1 at
 300 dpi, in one round, and is not OCR'd; with no `Renderer` both are answered `unsupported` and transcribed, and the Model is
 the one a conversion without them gives. A transcript of a born-digital document recorded before this change misses (a replay
