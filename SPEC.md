@@ -792,7 +792,7 @@ host implement it however it likes.
   cut out, never a re-fit — with annotations' normal appearances painted (a
   stamp is often an annotation). pdfium does this directly
   (`FPDF_RenderPageBitmapWithMatrix` with a translation and a clip); an
-  engine that cannot may render the page and cut. **As built** (D191-D194):
+  engine that cannot may render the page and cut. **As built** (D245-D248):
   pdfium makes `no-text` and `text-only` by removing page objects, and
   answers the watermark layers (`lay-no-watermark`, `lay-watermark-only`)
   `unsupported`, because pdfium cannot read the NAME values of an
@@ -800,7 +800,7 @@ host implement it however it likes.
   render (§9.5 defence 1 classifies from the text layer instead). A crop is
   the fulfiller's cut of the whole-page render it keeps. **An Engine with no
   `Renderer` answers `render` and `crop` `unsupported`** (D199, revising
-  D191's `fulfil-failed`), as an Engine with no `Ocr` answers `ocr`: a gate
+  D245's `fulfil-failed`), as an Engine with no `Ocr` answers `ocr`: a gate
   with no engine converts every born-digital page as fusion over one source.
 * **`Ocr`** must: take a `Bitmap` and a request (languages, page-segmentation
   mode, region, whether symbol alternatives are wanted); return integers only
@@ -880,6 +880,20 @@ and where its bytes are: a span of an input, or a span of the unit's
 filter), named by its SHA-256 so the record, and so the transcript key,
 never holds the bytes; a second such span for `JBIG2Globals`). A payload is
 input-derived, like a `bytes` answer, so it is never written to a transcript.
+
+**WASM.** pdfium has a WebAssembly build (bblanchon/pdfium-binaries ships
+`pdfium-wasm.tgz`, pinned beside the native ones in `tools/pdfium/pdfium.edn`;
+PDFium's own `FPDF_*` C API, exported through Emscripten). The JS host
+fulfils `render` and `crop` as it fulfils OCR: it owns the loop (§7.3, 2),
+loads the module once, serves pdfium's custom file-access callback from the
+async byte source (`FPDF_LoadCustomDocument` with `m_GetBlock` reading a
+resident span, or the request awaited first as a `bytes` round, D058), builds
+the same page edits for the layers and answers with RGB pixels in a
+`Uint8Array` that the Rust/WASM core writes into a `Bitmap`. Nothing in kin
+or in the transcript changes: what the browser's pdfium draws is recorded
+like any engine's, and a transcript recorded natively replays in the
+browser (and the reverse) to the same Model. This is an item of P9.3; it is
+not built.
 
 Cheap, deterministic ports (`Blob`, `Cells`, `Text`, `Bitmap` pixel access,
 `Crypto`, limits) are called synchronously as in nome.
@@ -1622,7 +1636,7 @@ classified by (3) and (6).
    from `emon.pdfannot` (wired into the document pass by P7.5), alpha under
    `wm-alpha` on text or images covering over `wm-cover` of the page, and
    the tagged tree's verified Watermark artifacts (D149, weighed by trust).
-   pdfium cannot render without them (D193), so the classified text-layer
+   pdfium cannot render without them (D247), so the classified text-layer
    words go to the ledger directly, and the OCR words their glyph boxes
    cover (aligned to them, §9.2) go with them: **an OCR word is never body
    text when it is aligned only to a watermark-classified text-layer word.**
@@ -2878,7 +2892,7 @@ Settings (all named, all with defaults, all in the Model header):
 | `furniture` | `policy` / `keep` / `drop` | `policy` |
 | `figure-text` | `omit` / `labels` | `labels` |
 | `ledger` | on / off in outputs | on in JSON, off in HTML |
-| `max-rounds` | plan/fulfil rounds | 3 |
+| `max-rounds` | plan/fulfil rounds (per page unit, D207) | 5 |
 | `assets` | `none` / `images` / `figures` (§10.11, D117) | `none` |
 | `asset-dpi` | render-crop resolution | 150 |
 | `asset-pixels` | pixels per asset | 4,194,304 |

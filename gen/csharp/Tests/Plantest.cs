@@ -34,6 +34,26 @@ public static class Plantest {
         emon.Testport.AssertEq(Plan.RqNargs(c, 0), 4, "four args");
     }
     [Xunit.Fact]
+    public static void TestACropRequestIsRenderPlusAPixelRectangle() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Testport.AssertEq(Plan.PkCrop(), 5, "crop");
+        emon.Testport.AssertEq(Plan.LayNoWatermark(), 3, "no watermark");
+        emon.Testport.AssertEq(Plan.LayWatermarkOnly(), 4, "watermark only");
+        emon.Testport.AssertEq(Plan.RqCrop(c, 8, 1, 4, 150, Plan.LayNoWatermark(), 10, 20, 300, 400), 0, "starts at 0");
+        emon.Testport.AssertEq(Plan.RecLen(c, 0), 11, "length");
+        emon.Testport.AssertEq(Plan.RecKind(c, 0), 5, "kind");
+        emon.Testport.AssertEq(Plan.RecId(c, 0), 8, "id");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, 0), 1, "input");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, 1), 4, "page");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, 2), 150, "dpi");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, 3), 3, "layer");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, 4), 10, "px");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, 5), 20, "py");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, 6), 300, "pw");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, 7), 400, "ph");
+        emon.Testport.AssertEq(Plan.RqNargs(c, 0), 8, "eight args");
+    }
+    [Xunit.Fact]
     public static void TestADecodeRequestNamesItsInputByIndexAndSpan() {
         emon.Port.Cells c = emon.Port.NewCells();
         Plan.RqDecode(c, 6, 1, 4096, 512, Plan.FltDct(), 2);

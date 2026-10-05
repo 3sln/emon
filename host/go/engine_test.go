@@ -9,7 +9,8 @@
 //   - the input-bytes limit is checked against the SIZE before any byte is read; a source that lies about its
 //     size is `source-changed`;
 //   - `assets` other than `none` and several inputs as one document are refused, not approximated;
-//   - record and replay; the walkable Model; and that the library names no filesystem.
+//   - record and replay; the walkable Model; and that the library names no filesystem;
+//   - (render_test.go) the Renderer port, P6.2, D127.
 package emon
 
 import (
@@ -353,13 +354,15 @@ func TestIntakeTakesAnyNumberOfInputs(t *testing.T) {
 	}
 }
 
-func TestRecordAndReplayWithTheSliceIssuingNoRequests(t *testing.T) {
+func TestRecordAndReplayWithABornDigitalPageAskingForNothing(t *testing.T) {
 	e := NewEngine(DefaultConfig())
 	b := synth(t, "h-plain")
 	m, tr, err := e.Record(one(BytesInput(b)), DefaultOptions())
 	must(t, m, err)
+	// a born-digital page's two rasters are lazy (D251, revised by the coordinator): nothing asks for them until a stage reads
+	// pixels, so the transcript is empty; nothing is OCR'd
 	if len(tr.Entries) != 0 {
-		t.Error("the slice issues zero requests")
+		t.Fatalf("entries: %d", len(tr.Entries))
 	}
 	if len(tr.Inputs) != 1 || tr.Inputs[0] != [2]int32{0, int32(len(b))} {
 		t.Errorf("inputs %v", tr.Inputs)
@@ -489,7 +492,7 @@ func TestTheLibraryNamesNoFilesystem(t *testing.T) {
 	// D058: nothing under host/go (the Engine, its sources, the loop, the ports) opens a file or names a path.
 	// `port/testport.go` (test support) is not the library.
 	bad := regexp.MustCompile(`"io/ioutil"|"io/fs"|"path"|"path/filepath"|\bos\.(Open|OpenFile|ReadFile|WriteFile|Create|Stat|ReadDir|Mkdir|Remove|File)\b`)
-	for _, f := range []string{"engine.go", "source.go", "model.go", "port/port.go", "port/plan.go"} {
+	for _, f := range []string{"engine.go", "source.go", "model.go", "port/port.go", "port/plan.go", "port/render.go", "pdfium/pdfium.go", "pdfium/callback.go"} {
 		src, err := os.ReadFile(f)
 		if err != nil {
 			src = read(t, "host/go/"+f)
@@ -567,16 +570,18 @@ func TestAnImageRecordsItsPixelsAndReplaysWithoutACodec(t *testing.T) {
 	in := imageFx(t, "tiff-multi3-gray-none.tif")
 	m, tr, err := e.Record(one(BytesInput(in)), DefaultOptions())
 	m = must(t, m, err)
-	// three decode requests, round two asking for frames 1 and 2 together (and for OCR of frame 0), each decode answer carrying
-	// its bitmap; then OCR of frames 1 and 2 (P6.5, D211): no Ocr port is configured, so each is answered `unsupported`
-	if len(tr.Entries) != 6 {
+	// the document pass asks each frame's HEADER (frame 0, then frames 1 and 2 together: rounds 0 and 1, no pixels), then each
+	// frame is its own page unit (P7.U, D207): its decode (round 0, the bitmap kept) and its OCR (round 1: no Ocr port is
+	// configured, so it is answered `unsupported`, P6.5, D211)
+	if len(tr.Entries) != 9 {
 		t.Fatalf("entries: %d", len(tr.Entries))
 	}
-	for i, want := range [][2]int32{{0, 2}, {1, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 3}} {
-		if tr.Entries[i].Round != want[0] || tr.Entries[i].Req[1] != want[1] {
-			t.Errorf("entry %d: round %d kind %d", i, tr.Entries[i].Round, tr.Entries[i].Req[1])
+	ids := []int32{1, 2, 3, 260, 272, 516, 528, 772, 784}
+	for i, want := range [][2]int32{{0, 2}, {1, 2}, {1, 2}, {0, 2}, {1, 3}, {0, 2}, {1, 3}, {0, 2}, {1, 3}} {
+		if tr.Entries[i].Round != want[0] || tr.Entries[i].Req[1] != want[1] || tr.Entries[i].Req[2] != ids[i] {
+			t.Errorf("entry %d: round %d kind %d id %d", i, tr.Entries[i].Round, tr.Entries[i].Req[1], tr.Entries[i].Req[2])
 		}
-		if (tr.Entries[i].Req[1] == 2) != (tr.Entries[i].Bitmap != nil) {
+		if (tr.Entries[i].Req[1] == 2 && tr.Entries[i].Req[7] >= 0) != (tr.Entries[i].Bitmap != nil) {
 			t.Errorf("entry %d: a decode keeps its pixels and an unsupported OCR has none", i)
 		}
 		if tr.Entries[i].Req[1] == 3 && tr.Entries[i].Ans[3] != 2 {
@@ -656,8 +661,8 @@ func TestAnImageIsReadByTheOcrPortAndItsTranscriptReplaysWithoutIt(t *testing.T)
 			t.Errorf("%s is not in %s", want, j)
 		}
 	}
-	// decode, then ocr; the transcript says whose engine answered
-	if k := kinds(tr); len(k) != 2 || k[0] != 2 || k[1] != 3 {
+	// the header, then the page unit's decode and ocr; the transcript says whose engine answered
+	if k := kinds(tr); len(k) != 3 || k[0] != 2 || k[1] != 2 || k[2] != 3 {
 		t.Errorf("kinds %v", k)
 	}
 	if len(tr.Producer) != 1 || tr.Producer[0] != [2]string{"engine", "fake"} {
@@ -684,7 +689,7 @@ func TestAnImageIsReadByTheOcrPortAndItsTranscriptReplaysWithoutIt(t *testing.T)
 	never.Ocr = OcrNever
 	mn, tn, err := withOcr().Record(one(BytesInput(in)), never)
 	jn := js(must(t, mn, err))
-	if k := kinds(tn); len(k) != 1 || k[0] != 2 || strings.Contains(jn, "Hello") || strings.Contains(jn, `"ocr"`) {
+	if k := kinds(tn); len(k) != 2 || k[0] != 2 || k[1] != 2 || strings.Contains(jn, "Hello") || strings.Contains(jn, `"ocr"`) {
 		t.Errorf("never: %v %s", k, jn)
 	}
 	// with no port the request is answered `unsupported` and the page has no text, as before OCR existed
@@ -728,12 +733,15 @@ func TestAScannedPDFPageIsOcredAndABornDigitalOneKeepsItsTextLayer(t *testing.T)
 	if strings.Contains(none, "Hello") || strings.Contains(none, `"ocr"`) || !strings.Contains(none, `"kind": "vector"`) {
 		t.Errorf("%s", none)
 	}
-	// a born-digital page keeps its text layer under `always`: no request, the same Model with or without a port (D212)
+	// a born-digital page keeps its text layer under `always`: it asks for its rasters and for no OCR, and the Model is the same
+	// with or without a port (D212, D199)
 	born := synth(t, "h-plain")
 	mb, tb, err := withOcr().Record(one(BytesInput(born)), o)
 	mb = must(t, mb, err)
-	if len(tb.Entries) != 0 {
-		t.Error("a text layer is read as it is: nothing is asked")
+	for _, en := range tb.Entries {
+		if en.Req[1] != 1 {
+			t.Error("a text layer is read as it is: no OCR is asked")
+		}
 	}
 	mp, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(born)), o)
 	if js(must(t, mp, err)) != js(mb) {

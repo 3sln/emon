@@ -849,4 +849,43 @@ public final class Port {
         }
         return 0;
     }
+
+    // ================================================================ P7.U BitmapSet
+    //
+    // The pixels a page unit may read (see the Rust half for the contract): the bitmaps its answers carried by request id
+    // and the ones kin makes (`bms-put`, ids from KIN_VIEW_BASE).
+    public static final class BitmapSet {
+        public final java.util.HashMap<Integer, Bitmap> answered = new java.util.HashMap<>();
+        public final java.util.HashMap<Integer, Bitmap> made = new java.util.HashMap<>();
+        final Bitmap none = new Bitmap(0, 0, 1, new byte[0]);
+    }
+
+    public static BitmapSet newBitmapSet() {
+        return new BitmapSet();
+    }
+
+    // @kin:link:form:bms-get: {:template "emon.Port.bmsGet({0}, {1})" :arity 2}
+    public static Bitmap bmsGet(BitmapSet s, int id) {
+        Bitmap b = s.made.get(id);
+        if (b != null) {
+            return b;
+        }
+        b = s.answered.get(id);
+        return b != null ? b : s.none;
+    }
+
+    // @kin:link:form:bms-has: {:template "emon.Port.bmsHas({0}, {1})" :arity 2}
+    public static int bmsHas(BitmapSet s, int id) {
+        return s.made.containsKey(id) || s.answered.containsKey(id) ? 1 : 0;
+    }
+
+    // @kin:link:form:bms-put: {:template "emon.Port.bmsPut({0}, {1}, {2}, {3}, {4})" :arity 5}
+    public static Bitmap bmsPut(BitmapSet s, int id, int w, int h, int ch) {
+        if (bmsHas(s, id) == 1) {
+            throw new IllegalStateException("bms_put: id is already in the set");
+        }
+        Bitmap b = bitmapNew(w, h, ch);
+        s.made.put(id, b);
+        return b;
+    }
 }

@@ -1978,10 +1978,57 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: JPX (lossless), JBIG2 and CCITT cases equal the generator's pixels
   exactly, DCT within 2 per channel of `pdfimages -png`; the replay's JSON, HTML and
   asset files are byte-identical on Rust and Go.
-- [ ] P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
-  available (D007); pdfium loads through its custom-loader callback over the
-  byte source, not a path or a whole-file copy (D058).
-- [x] **P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew, orientation** (SPEC §8.2 "As designed", D092,
+- [x] **P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
+  available** (D007, D008, D058, D089-D091, D117, D124, D125; D245-D248).
+  pdfium loads through its custom-loader callback over the byte source, not a path or
+  a whole-file copy (D058). *Done 2026-10-01.* **Built**: `host/rust/src/render.rs` and
+  `host/go/port/render.go` (the PORT, no engine and no filesystem: `Renderer`,
+  `RenderRequest`, `Clip`, `RenderError`, `RenderFulfiller` for kinds `render` 1 and
+  `crop` 5, `KindMux`, `cut`, `pixels_of`); `host/rust/src/pdfium.rs` (hand FFI to the
+  C API, `--cfg pdfium`) and `host/go/pdfium/` (cgo, `-tags pdfium`), the default
+  engine; `Config.renderer` / `Config.Renderer` on both Engines (the port set the loop
+  fulfils with when it converts or records; a replay never calls it); `kin/plan.kin`:
+  `pk-crop` 5, `rq-crop`, `lay-no-watermark` 3, `lay-watermark-only` 4 (laws in
+  `plantest`; `gen/` regenerated); `tools/pdfium/pdfium.edn` + `fetch.clj`
+  (`bb pdfium-fetch`: pdfium `chromium/8076` = 156.0.8076.0, bblanchon/pdfium-binaries,
+  SHA-256 pinned per platform, unpacked into the ignored `.cache/pdfium/`);
+  `tools/render/{record,lib,mkfixture}.clj` (`bb render-record`, live, not a gate);
+  `test/render/` (cases, the fixture `layers.pdf`, the Rust and Go drivers, the
+  committed transcript `render/` of 17 requests, 12 PNGs, 230 KB, and its dump);
+  `kin/scripts/render` = `bb render`, **a gate** (replay only: no pdfium, no cgo, no
+  network); tests of the fulfiller and of the Engine wiring in both hosts' native tests.
+  **Answers**
+  1. *Do Rust and Go render the same page differently?* Not with the same pdfium:
+     `bb render-record --go` records the 17 requests on both hosts (Rust FFI, Go cgo, the
+     same `libpdfium`): 12 bitmaps, 885,827 pixels, maximum channel difference 0, and
+     the identical dump. *Builds do:* against pdfium `chromium/7390` (a year older, same
+     platform) the vector fixture and the scan are identical, and the three
+     born-digital text renders differ in 686 to 4,888 pixels (4-5% of a text page) by at
+     most **3 of 255** per channel (text anti-aliasing). Tolerance recorded: a host that
+     renders live may stray from the transcript by 3/255 on text pixels and by nothing
+     on vector and image pages; the TRANSCRIPT is the identity mechanism (D008), not
+     the pixels, so no gate has a tolerance.
+  2. *Layers.* No-text and text-only are real and tested on a fixture of known objects
+     (text, a path, a form XObject with both); the watermark and background layers are
+     `unsupported` on pdfium (D247). *Crops* are cuts of a whole render (D247).
+  3. *Reading the input.* A 431 KB scan rendered by reading 290 KB in 32 `read_at`
+     calls; a 1 KB file in a handful; no copy of the file (D246).
+  4. *Cost.* 17 renders at 36 to 144 dpi took 55 ms (Rust, warm); the document is
+     opened afresh for each request (a per-input document cache is a later measurement).
+  **Coordination with P6.5** (in progress elsewhere): nothing in kin asks for a render
+  yet (the slice issues zero requests), so OCR can use real renders as soon as its unit
+  writes `rq-render` for a scanned page. The merge point is the Engine's port set in
+  `run_input_bounded` / `runInputBounded`: `KindMux` takes `render` and `crop` here and
+  takes `ocr` (and `decode`) with one more `.with(...)` line each. Renders are RGB
+  (`channels` 3); `Bitmap` has no gray conversion yet (P6.3 normalization), and
+  `tess.rs` already takes 1 or 3 channels. The first scanned-page OCR can replace the
+  stand-in of `tools/ocr/record.clj` (`pdfimages` + ImageMagick) by `pdfium::Pdfium`
+  at the same 150 dpi.
+  **Not done**: the watermark layers on pdfium (D247); a per-input document cache; the
+  JS host's pdfium WASM fulfiller (SPEC 7.3, D248; P9.3); Windows and Linux builds of
+  the live drivers are untested here (the pins exist for `linux-x64`, `linux-arm64`,
+  `mac-x64`, `win-x64`, `wasm`).
+- [ ] **P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew, orientation** (SPEC §8.2 "As designed", D092,
   D093, D096, D197). **Critical path, wave 1.** Depends on: P6.2 and P6.5 merged to main (renders and the evidence's
   `views`). Parallel with P7.0, P7.U, P6.6 (different files; see "Who edits what" under Phase 7).
   *Brief*: a kin module `emon.norm` that turns ONE raster (a render or a decode, given as a `Bitmap` plus its `views`
@@ -2318,7 +2365,7 @@ and the items P3.6a, P6.8, P5.5a, P5.5 and P7.G placed in the waves below.
 
 **M0 — before any item below (coordinator, not a brief).** Merge `worktree-agent-afd782ca8bc66f033` (P6.1 + P6.5 +
 P6.5a: image intake, the `Ocr` port, `emon.scan`, D187-D190 and D211-D216) and `worktree-agent-aac8530d7436e2eec`
-(P6.2: the `Renderer` port and pdfium, D191-D194) into main, renumbering their decisions after the highest on main, and
+(P6.2: the `Renderer` port and pdfium, D245-D248) into main, renumbering their decisions after the highest on main, and
 the P4.5/P4.6 and initials branches as they come. Every brief below assumes that main.
 
 **Order and what runs in parallel** (each wave's items touch disjoint files, "Who edits what" below):
@@ -2369,7 +2416,7 @@ rest is off the critical path.
 order names, and `bb identity`, `bb embedders` and `bb repeat` stay green; a bulk form is declared in all four host trees
 with a law equal to its kin reference (`bb hosts`, D093); anything a live engine produced (renders, OCR) reaches a gate only
 through a transcript recorded live on Rust and replayed on Rust and Go to the identical bundle (JSON, HTML, evidence dump)
-(D008, D095, D194). (2) *Gates*: `bb gates` green; the `emon` scoreboard (no engine) does not move unless the brief says
+(D008, D095, D248). (2) *Gates*: `bb gates` green; the `emon` scoreboard (no engine) does not move unless the brief says
 it moves and why. (3) *kin's known traps* (the "Found in kin" list): bind every inner read of a `Cells` before an outer
 call (Rust `&mut`), unique `let` names per function (Java, C#), no `len`/`cap`/`new`/`go`/`var`/`close` as names,
 predicates `^Bool`, no constant named like a function. (4) *Thresholds* are named settings with defaults at the head of
@@ -2396,7 +2443,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
       pl-append (pages in order), ar-recur (P7.5 defence 2), then stage 3 on fw/fl/grl/gfl (+ se sc ss for P5.5):
       fu-find, tb-build, hd-analyze, pa-build, fu-write, sm-write (P7.7), fz-write (provenance, ledger; replaces sc-tag)
 
-- [ ] **P7.U — Page units: one plan/fulfil loop per page, `BitmapSet`, an absent `Renderer` answers `unsupported`, five
+- [x] **P7.U — Page units: one plan/fulfil loop per page, `BitmapSet`, an absent `Renderer` answers `unsupported`, five
   rounds** (SPEC §2.2, §7.3, §12.1; D195, D196, D199, D207). **Wave 1, critical path.** Depends on M0.
   *Brief*: restructure both Engines so that stages 1b, 1c and 2 run per page, with NO change to any Model.
   1. **Split `attempt()`** (Rust) and `attempt` (Go) into the *document pass* (everything that reads the input: today's
@@ -2419,7 +2466,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
      fills; Rust `&Bitmap` over `Cell<u8>` as D092 found necessary). The Engine fills it from the unit's answers and drops it
      when the unit ends, so peak memory is one page's bitmaps. P6.3's `bitmap-new` allocations in `nm-view` become
      `bms-put` here if P6.3 has merged, else in P7.3.
-  5. **No `Renderer` → `unsupported`** (D199, revising D191 (5)): `render` and `crop` without a configured renderer are
+  5. **No `Renderer` → `unsupported`** (D199, revising D245 (5)): `render` and `crop` without a configured renderer are
      answered `unsupported` and transcribed, as `ocr` is without an engine.
   6. **`max-rounds` 5 per page unit** (D207); `fetch-rounds` stays the document pass's.
   *Inputs/outputs*: the document pass's arenas in; per page `fw fl` (+ the evidence rows the page unit made) out; the
@@ -2432,6 +2479,34 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   before and after (after: one page's bitmaps, under 120 MB); `bb repeat` serial vs. pages in reverse order.
   *Done when*: all of the above; a law that a page unit with no answers asks the same requests on every target; the
   Go and Rust Engines' `RunStats` agree on rounds and requests per page.
+  **DONE (D249-D251), two commits on one branch.** *Step 1, a byte-identical refactor*: both Engines run the **document pass**
+  (`attempt`: text layer, catalogue, tagged tree, and `pu-plan`, which finds each scanned page's DCT stream: the one place a
+  page's work reads the input), then **one `plan::run` per page** (`unit_pdf` / `unit_raster`, `kin/pageunit.kin` `pu-run-pdf`,
+  `kin/rasterin.kin` `rs-page`) with its own answers, requests and `BitmapSet`, then the **document unit** (`finish_pdf` /
+  `finish_raster`: today's tail). A raster input's document pass is `rs-doc`: header-only decodes of every frame (D187), so the
+  page table is built without pixels; each frame's unit decodes it and OCRs it. `sc-pdf-unit` and `rs-unit` are gone (their
+  laws are `pageunittest`/`rasterintest`). Every Model, evidence dump and bundle of `bb slice`, `bb ocr`, `bb image`, `bb render`,
+  `bb identity`, `bb repeat` and `bb accuracy` is byte-identical; what changed is only the ids and the order of transcript entries
+  (D207): the five `test/ocr/scan/` transcripts were RE-KEYED, not re-recorded (`tools/ocr/remap-ids.clj`: the answers are the
+  engine's and do not depend on the id, so a re-key is what a re-recording would give, without a new Tesseract moving them);
+  their dumps are unchanged. `test/ocr/h-keyword/` and `test/render/` are untouched (their drivers use their own ids). The
+  `--out=pixels` of both drivers skips the header-only decodes. `max-rounds` is 5 (`plan::MAX_ROUNDS`, `PlanMaxRounds`).
+  `RunStats.attempts` and `fetch_rounds` are the document pass's (the async gate's `attempts == fetch_rounds + 1` holds),
+  `requests` counts every unit's, and `page_rounds` / `page_requests` give each page unit's (equal on Rust and Go). *Step 2, the
+  new capability*: `BitmapSet` (`bms-get`, `bms-has`, `bms-put`, tag `BitmapSet`, test constructor `new-bitmap-set`) in all four
+  host trees; `plan::run_bms` / `PlanRunBms` hand each attempt of a unit its set, and what kin made in it is added to the
+  bitmaps a fulfiller sees, so an `ocr` request can name a kin-made view (D196; the request form and the hash are P6.3 and P7.4);
+  a missing `Renderer` answers `render` and `crop` `unsupported`, transcribed (D199); a born-digital page's `render` layer 0 and layer 1 at 300 dpi
+  (ids `(p+1)*256+1`, `+2`) are asked LAZILY, by `pu-ask-rasters`, once a stage reads them (D251, revised by the coordinator); it is NOT OCR'd
+  (D201, D212 (3)); nothing reads those pixels yet, and the Model is identical with or without a Renderer.
+  *Measured* (live Tesseract, `emon-rs --tesseract`, peak RSS, before = the P6.2 merge `03ba5f6`, after = this branch):
+  `scanned-receipts-6p.pdf` 215 -> 198 MB, `scanned-funsd-4p.pdf` 170 -> 178 MB, `multipage-receipts-rgb-lzw.tif` 190 -> 188
+  MB. These pages are small (a few MB of pixels), so the process peak is Tesseract's and the arenas', and the saving is hidden;
+  what the design bounds is the bitmaps a conversion holds: every page's before, one page's after (25 MB x 2 a 300 dpi render:
+  a 40-page document drops from 2 GB of renders to 50 MB). No 40-page scanned PDF exists in `corpus/scanned/` (it holds
+  page images only), so the 120 MB figure of the brief is NOT measured here.
+  *Left*: `pu-run-pdf`'s PageLayer is the page's slice of `wd`/`ln` (no `fw`/`fl`: P7.0 and P7.3 are not merged); a scanned PDF
+  page that is not one DCT image is still not OCR'd (it needs the render and `ocr` of it, which the unit can now ask).
 
 - [x] **P7.0 — The text layer's own triage and health, before OCR** (SPEC §9.3 "without OCR", §9.4 rule 1, §9.7; D203,
   D208). **Wave 1.** Depends on M0. Merge BEFORE P7.U (it adds one call to `attempt()`; P7.U rebases on it).
@@ -7059,13 +7134,13 @@ for "thin" against "thick" and bold against regular: to be confirmed by the meas
 (duplicates the text layer and mixes glyph ink into rule detection).
 - [ ] **Signed off** (maintainer)
 
-### D199 — An Engine with no `Renderer` answers `render` and `crop` `unsupported` (revises D191 (5)); a born-digital page's rasters are a `with-text` and a `no-text` render at 300 dpi; OCR languages from the text layer's scripts (P7.U, P7.S; SPEC 7.2, 8.3; D211, D215, D191, D193)
+### D199 — An Engine with no `Renderer` answers `render` and `crop` `unsupported` (revises D245 (5)); a born-digital page's rasters are a `with-text` and a `no-text` render at 300 dpi; OCR languages from the text layer's scripts (P7.U, P7.S; SPEC 7.2, 8.3; D211, D215, D245, D247)
 **Decision**: (1) As D211 made a missing `Ocr` an answer, a missing `Renderer` is an `unsupported` answer, transcribed: a
 gate with no engines then converts every page as fusion over the sources it has. (2) Under `always` a born-digital page asks
-round 1 `render` layer 0 and layer 1 at 300 dpi; the watermark layers are never asked of pdfium (D193 found it cannot make
+round 1 `render` layer 0 and layer 1 at 300 dpi; the watermark layers are never asked of pdfium (D247 found it cannot make
 them); `text-only` (layer 2) is asked only by the targeted round for an unhealthy font (P7.4). (3) On a born-digital page the
 OCR request's languages are the locale's, else the models of the text layer's scripts, else every model (D215's default).
-**Why**: D191's `fulfil-failed` was right while nothing asked for a render without wanting one; once every born-digital page
+**Why**: D245's `fulfil-failed` was right while nothing asked for a render without wanting one; once every born-digital page
 asks under `always`, a missing renderer must degrade, not fail. Two renders because the tracer wants the page without text
 and OCR wants it with; the text layer's scripts are an exact script detection that costs nothing.
 **Alternatives**: one `with-text` render and kin masking the glyph boxes (anti-aliasing and overlapping paint make that
@@ -7127,8 +7202,8 @@ once without renumbering each other; the order puts ownership (seal, artifact) b
 collide on numbers).
 - [ ] **Signed off** (maintainer)
 
-### D204 — The six defences on what is built: the PDF's say from marks, OCGs, alpha, annotations and the tree, never from a masked render; OCR words aligned to a watermark go with it; recurrence is a document pass (P7.5; SPEC 9.5; D015, D149, D154, D173-D177, D193)
-**Decision**: as SPEC 9.5's "Against what is built". pdfium cannot make the watermark layers (D193), so defence 1 classifies
+### D204 — The six defences on what is built: the PDF's say from marks, OCGs, alpha, annotations and the tree, never from a masked render; OCR words aligned to a watermark go with it; recurrence is a document pass (P7.5; SPEC 9.5; D015, D149, D154, D173-D177, D247)
+**Decision**: as SPEC 9.5's "Against what is built". pdfium cannot make the watermark layers (D247), so defence 1 classifies
 from the text layer and the annotations, and takes the OCR words aligned only to classified words with them; `pa-run`
 (annotations, P3.8) is wired into the document pass, where it had never been called; recurrence of OCR-only text is a
 document-unit pass before the furniture stage, beside the furniture stage's diagonal rule; defences 3, 4 and 6 judge
@@ -7136,7 +7211,7 @@ OCR-only groups only (D201).
 **Why**: the strongest signal is the file's own and costs nothing; the next strongest is that a watermark repeats; colour,
 angle and plausibility are last because they are what a real body word can also have.
 **Alternatives**: waiting for a renderer that can mask marks (pdfium cannot, and MuPDF is not bound); a mark-key heuristic in
-the renderer (drops headers, D193).
+the renderer (drops headers, D247).
 - [ ] **Signed off** (maintainer)
 
 ### D205 — Seal, stamp and signature placeholders come with fusion (P7.7), before P8: candidates from the tracer, text inside kept out of the body, `seal` nodes with subkind, colour and raw text (SPEC 10.7; D016)
@@ -7200,7 +7275,7 @@ tracer on `no-text`, histogram clustering, OCR languages from the text layer, bi
 concurrent in the host).
 **Why**: OCR is seconds a page and everything else is a tenth of that; the budget says where the tenth must stay, so a slow
 kin stage is noticed, and the scope switch is the one lever that changes the seconds.
-**Alternatives**: a gate on time (machine-dependent, as D194 found for pixels).
+**Alternatives**: a gate on time (machine-dependent, as D248 found for pixels).
 
 ### D211 — The `Ocr` port as wired: a request kin builds, a port the embedder brings, `unsupported` without one, Tesseract live behind a feature in Rust and a build tag in Go (P6.5; D008, D089-D091, D095, D038, D187)
 **Decision**: (1) **kin asks, the host answers.** An image input (`emon.rasterin`'s `rs-unit`) and a PDF page that is a scan (`emon.scan`'s `sc-pdf-unit`) ask for OCR as a plan request (`rq-ocr`, built by `sc-request`: the whole bitmap of the decode request named, `psm` 3, flags symbols + OSD, no region, the language the locale hint names, if any) and are re-run on the answers; the evidence, the lines and the Model are made from the answer by kin alone. Request ids are derived from what is asked: an image's decode of frame `f` is `f + 1` as before (D187) and its OCR `frames + f + 1`; a PDF page `i`'s decode of the embedded stream is `2 i + 1` and its OCR `2 i + 2`. The rounds are three for an image (frame 0; the other frames and OCR of frame 0; OCR of the rest) and two for a PDF whatever its length (every scanned page's stream; every one's OCR), both within `max-rounds` 3. (2) **The port.** Rust: `trait Ocr { fn fulfil(&self, &Request, &Bitmaps, keep_binary: bool) -> Result<Answer, PlanError>; fn producer(&self) -> Vec<(String, String)> }` in `Config::ocr: Option<OcrPort>`; Go: `type Ocr interface { Fulfil(PlanRequest, PlanBitmaps, keepBinary bool) (PlanAnswer, error); Producer() [][2]string }` in `Config.Ocr`. With no port an `ocr` request is answered `unsupported` (a failure is an answer too, D089) and the page keeps the text it has (none, for a scan): so every gate, which has no engine, converts a scan as it did before OCR existed, and a recording made so says it. An engine that panics on a page answers `failed` for it. (3) **Pixels are kept when somebody will read them**: a decode answer carries its bitmap when a transcript is being recorded or an `Ocr` port is configured; a decode of a PDF's embedded DCT stream (kept only for an engine: a recording of a scan with no engine has no 450 KB PNG a page, and the two hosts' JPEG decoders, which differ in the last bits, D190, leave no difference between their transcripts). The engine's own thresholded image goes in the OCR answer's bitmap only when recording. (4) **A DCT stream is a JPEG file**: the `decode` request's `filter` may now be `flt-dct`, and the host reads the span in place with the same decoder (orientation and resolution tags of an embedded stream are not honoured by a PDF viewer and are not here either, which is a follow-up: P6.1a owns the other PDF image filters). (5) **Tesseract** is bound by hand to the C API in both hosts, LIVE only: Rust `host/rust/src/tess.rs` under the Cargo feature `tesseract` (`EMON_RS_LIVE=1 kin/scripts/emon-rs-build` builds `.cache/emon-rs-live`, `-L $EMON_TESS_LIB`), Go `host/go/tess.go` under the build tag `tesseract` with cgo (`EMON_GO_LIVE=1 kin/scripts/emon-go-build`, `.cache/emon-go-live`; the script signs the binary again on macOS, whose linker's signature fails its own check) with `tess_stub.go` for every other build. The two drivers take `--tesseract[=TESSDATA]`. Nothing in `bb gates` builds either (a gate replays a transcript, D095). One engine sits behind a mutex (Tesseract's API objects are not thread safe). **Live outputs of the two hosts are not identical and cannot be asked to be**: the Rust and Go JPEG decoders agree to a few bits per byte (D190) and Tesseract's answer moves with them (a live Go conversion of `h-keyword` read `Chapter1` where Rust read `Chapter 1`); the identity is the transcript's, recorded on one host and replayed on the other, byte for byte (`bb ocr`).
@@ -7564,6 +7639,30 @@ crossing rule defeats the contrast test), inside the matching tolerance.
 **Why**: emon cannot be its own oracle (D100); contrast rather than "not white" so a hidden rule over a fill is not truth.
 - [ ] **Signed off** (maintainer)
 
+### D245 — The `Renderer` port: `render` and `crop` are one fulfiller; RGB; the page geometry is stated; a crop is answered with its own kind (P6.2; SPEC 7.2, D007, D089, D117)
+**Decision**: (1) A `Renderer` is `render(input: ByteSource, password, request) -> Bitmap | failed | unsupported`, with `layers()` (a bit set) and `exact_crop()`. The request is D089's `input page dpi layer` (page 0-based) and, for a crop, D117's `crop` kind 5: the same four plus the pixel rectangle `px py pw ph`. `kin/plan.kin` gains `pk-crop`, `rq-crop`, and two layers beyond text-on/off/only: `lay-no-watermark` 3 and `lay-watermark-only` 4. (2) One fulfiller, `RenderFulfiller` (Rust and Go), takes both kinds, reads the input BY INDEX through the run's byte source (D058), and answers `[len kind id status w h channels dpi]`. A crop's answer carries kind 5 (the loop matches an answer to its request by id and kind) with a render's layout. `failed` and `unsupported` are answers (header and status), transcribed and replayed; a malformed request or a missing input is the loop's `fulfil-failed`, not an answer. (3) The page is RGB, 3 channels: the tracer's ink separation wants colour (SPEC 8.2.1), OCR takes 1 or 3. (4) The whole-page size is `floor(pt * dpi / 72 + 1/2)` per side (`pixels_of`), at least 1; a crop is a rectangle of that bitmap. (5) The Engine's port set is `Config.renderer`: when it is set and the Engine converts or records, `render` and `crop` go to it through a `KindMux` (a request goes to the fulfiller that takes its kind; `ocr` and `decode` join with one `.with` each); when it is not set a unit that asks fails with a named `fulfil-failed`, as before. A replay never calls it. `Renderer` requires `Debug` in Rust so `Config` stays `Debug + Clone`.
+**Why**: kin's side of D089 already had `render`; D117 reserved `crop`, whose only difference is the rectangle, so one function serves both and a second fulfiller per kind would be two places to drift. Stating the geometry makes two engines and two hosts agree on the size before they disagree on a pixel. The mux is the seam P6.5 and P6.1a need.
+**Alternatives**: the clip as optional trailing arguments of `render` (rejected: D117 and SPEC 7.2 name `crop` as its own kind); a gray render when OCR wants it (a request flag later; gray is P6.3's conversion, and a flag changes transcripts' keys); one fulfiller per kind (above); the Engine owning pdfium (rejected: an embedder registers any engine, D007).
+- [ ] **Signed off** (maintainer)
+
+### D246 — pdfium is a pinned bblanchon/pdfium-binaries build, fetched by a bb script into an ignored cache, bound by hand through its C API (Rust FFI, Go cgo), reading through `FPDF_LoadCustomDocument` (P6.2; D007, D058, D074, D095)
+**Decision**: (1) `tools/pdfium/pdfium.edn` pins `chromium/8076` (pdfium 156.0.8076.0) with the SHA-256 GitHub published for each non-V8 archive (`mac-arm64`, `mac-x64`, `linux-x64`, `linux-arm64`, `win-x64`, and `pdfium-wasm`); `bb pdfium-fetch` downloads one into `.cache/pdfium/<version>/<platform>/`, REFUSES an archive whose hash is not the pin's before unpacking it, and links `.cache/pdfium/current`. On macOS it rewrites the dylib's install name to `@rpath/libpdfium.dylib` and ad-hoc re-signs it. `.cache/` is ignored; nothing is committed. (2) The binding is hand-written against the C API: `host/rust/src/pdfium.rs` (`#[link(name = "pdfium")]`, compiled under `--cfg pdfium`) and `host/go/pdfium/` (cgo, `-tags pdfium`), about 25 functions, as D095 bound Tesseract. They are NOT the `pdfium-render` crate or `go-pdfium`: a crate adds a build script and a version axis to a dependency that is already one pinned binary; the layer edits (D247) need the raw object API either way; and the same C functions in both hosts is what makes "same pdfium, same pixels" a statement we can measure. (3) The document is read through `FPDF_LoadCustomDocument` and an `FPDF_FILEACCESS` whose `m_GetBlock` calls the run's `ByteSource::read_at` / Go `ReadAt` (Go: a `runtime/cgo.Handle` in `m_Param`, the exported callback in its own file, the access struct and the pixel buffer in C memory). No path, no copy, no whole-file buffer: a 431 KB scan rendered by 32 reads of 290 KB. (4) pdfium is not thread-safe: one process-wide lock; the Go binary on macOS needs `codesign -f -s -` after `go build` (the kernel kills it otherwise: exit 137). (5) Gates never need any of this: `bb render` replays the committed transcript; only `bb render-record` (live, not a gate) builds the engines.
+**Why**: the brief's order of preference (a host project would download a prebuilt pdfium by version and checksum), D058 (the loader), D095's pattern (live recording, replay gate).
+**Alternatives**: `pdfium-render` and `go-pdfium` (above); building pdfium from source (hours and a Chromium toolchain for a binary that is published); the system's pdfium (no version to pin, which defeats the transcript's producer record).
+- [ ] **Signed off** (maintainer)
+
+### D247 — Layers are made by removing page objects in memory; the watermark layers are `unsupported` on pdfium; a crop is the cut of a whole-page render, which the fulfiller keeps (P6.2; SPEC 7.2, D117)
+**Decision**: (1) pdfium has no switch to hide text, so after `FPDF_LoadPage` the page's objects are removed in memory (`FPDFPage_RemoveObject`; `FPDFFormObj_RemoveObject` inside Form XObjects, recursively) and the page is rendered; nothing is saved, the page is closed after. `no-text` removes text objects and keeps annotations' appearances (their text is not separable); `text-only` keeps only text and no annotations; both were found right on a fixture of known objects (`test/render/layers.pdf`, made by `tools/render/mkfixture.clj`): no red watermark word without text, no background or path with text only, the text inside a form found by the recursion. (2) `lay-no-watermark` and `lay-watermark-only` are `unsupported` on pdfium: the layer is `/Artifact` marked content with `/Subtype /Watermark` or `/Background` (or `/Type /Background`), whose values are NAMES, and pdfium's mark API reads the mark's name and its string, number and blob parameters but has no reader for a name (`GetParamValueType` says NAME; the string and blob getters answer false: checked). Guessing from the key alone would drop headers and footers with the watermark. The engine says it cannot (SPEC 7.2) and kin separates watermarks itself: §8.1 reads the marks, §8.2.1 separates ink by colour. The codes exist for an engine that can. (3) pdfium's clipped render is NOT the cut of the whole render: a crop of a bank statement at 36 dpi differed from the same rectangle cut out of the whole page in 70 pixels of 15,000, all in the two left columns, by up to 107 of 255 (a clip moves the edge pixels). D117 and SPEC 7.2 say a crop is "the same pixels, cut out, never a re-fit", so the CONTRACT is the fulfiller's: unless a `Renderer` declares `exact_crop()`, it is handed the whole page, and the fulfiller cuts (`cut`, `RenderCut`) and keeps the last whole page, so a page and the regions of it (P8.5) render once. `bb render` holds every committed crop to equality with the cut of its whole page.
+**Why**: the maintainer asked for text-off and ink-only renders so OCR sees the page without the text layer (SPEC 9.5); a layer an engine cannot make honestly is better refused than approximated; a crop that disagrees with its page would move boxes by a pixel between a render and its figures.
+**Alternatives**: hiding text by `FPDFTextObj_SetTextRenderMode` invisible (text only, no path removal for text-only, no form recursion for free); rendering a margin around the crop and cutting (not exact at every operator, so not a law); `FPDF_RenderPageBitmapWithMatrix` with a clip (the same edge, measured); a watermark heuristic from the mark's key set (drops headers).
+- [ ] **Signed off** (maintainer)
+
+### D248 — Rust and Go render the same pdfium build to the same pixels; two builds differ by 3/255 on text; the transcript is the identity mechanism, so no gate has a tolerance; WASM is the browser's engine (P6.2; D008, D095; SPEC 7.3)
+**Decision**: (1) Measured by `bb render-record --go --compare-build` (live, not a gate), 17 requests, 12 bitmaps, 885,827 pixels, on macOS arm64: Rust (FFI) against Go (cgo), one `libpdfium`: **0 differing pixels**, identical dumps. pdfium `chromium/8076` against `chromium/7390` (a year earlier): the vector fixture (five layer renders, three crops) and the scan (image only) identical; the three born-digital text renders differ in 686, 4,878 and 4,888 pixels (4-5%) by at most **3 of 255** per channel. The recorded tolerance, for whoever re-pins or runs another build: text anti-aliasing may move a text pixel by 3/255 and nothing else moves. Other platforms (FMA, SIMD paths) are unmeasured. (2) No gate has that tolerance. The transcript is the identity mechanism (D008): `bb render` replays the committed `test/render/render/` on Rust and Go and requires the identical dump (every request and answer, each bitmap's FNV-1a pixel hash, each file's size and hash) and that it is the dump the live recording printed; a changed request is `transcript-miss` on both. (3) WASM: pdfium's own WebAssembly build is pinned beside the native ones; the JS host fulfils `render` and `crop` in the browser the way it fulfils OCR (SPEC 7.3: it owns the loop), serving the custom file-access callback from the async byte source, and a transcript recorded natively replays in the browser and the reverse. Not built (P9.3).
+**Why**: D095's lesson: a gate that runs a live engine tests whose engine is installed. The measurement tells an embedder how far a live host may stray, and the pin and its re-record procedure (`tools/pdfium/pdfium.edn`) say how to move.
+**Alternatives**: a gate that renders live and compares within the tolerance (machine-dependent, which D008 exists to prevent); a bigger committed transcript (230 KB is enough to hold layers, crops and failures).
+- [ ] **Signed off** (maintainer)
+
 ## Found in kin, not ours to fix here
 
 **Audit (2026-09-30, coordinator; checked against kin's source and nome):**
@@ -7715,3 +7814,48 @@ them; offer them upstream when they have proved general.
 
 **Decision**: cell 15 of a line row was the table stage's claim (D178) and, on the lines' copy, the initials' code (D183: minus the drop's code points, or `4*(row+1)` plus flags). Both Engines run furniture, then the tables on the evidence lines, then the copy and `in-detect`, then headings, then `pa-build`; so the two met. A table's claim is now `TB_HELD + k` (1073741824 + the table's index, `tb-claimed` answers index + 1 or 0); `in-detect` leaves a held line's cell 15 as it is and never sees the line (`in-collect` skips it, so a big first glyph in a table cell is no initial, and a table's lines never take part in a drop initial's neighbours); `in-row`, `in-cell` (para's raised-initial and no-space bits and `pa-skip`) read a held line as no initial; the column stage's split copies the claim to the new piece instead of clearing it; the heading stage's "a held line is never a heading" tests `>= TB_HELD`, so a heading that opens with a raised initial is still a heading. `pa-build` takes the prepared copy (`lt`) of the lines and no `ln`; the tables' laws and the Engine's hosts prepare it as the Engine does. **Held to**: the unit laws on all four arms (356), the table goldens (now carrying `align`), the accuracy gate (no metric lowered; the branch's lowering of `pdf/forms block-paragraph-r` was not carried over).
 **Alternatives**: a 17th line cell (every stride changes in the evidence, the columns and the readers); the claim kept on the original lines only (a column split's new rows are not there to ask).
+
+### D249 — The page unit as built: the document pass reads the input, each page is its own loop, and the evidence dump keeps its pre-join marks (P7.U; SPEC 2.2, 7.3, 12.1; D195, D207, D211, D212)
+**Decision**: (1) The Engines run three parts: the document pass (everything that reads the input, re-run on misses, and for
+a PDF the plan of the page units: `pu-plan` locates a scanned page's one DCT stream, so a page unit never reads the input),
+one `plan::run` a page (a unit that writes nothing until its answers are in), and the document unit (stage 3 unchanged). (2) A
+raster input's document pass is header-only (D187): the page table needs no pixels; each frame's unit asks its pixels and then
+its OCR, and a frame that cannot be decoded refuses the conversion by name whatever the policy (it still asks the decode under
+`never`). (3) Ids are D207's: page `p` asks `(p + 1) * 256 + k`; the header-only decodes of the document pass keep `f + 1`
+(their records differ from a page unit's by the frame argument). (4) The evidence dump is taken from the glyph, mark and font
+arenas as they were before the tagged tree was joined to them (a copy, only when the evidence is asked for), because that join
+now runs before the units and the dump has always shown the text layer before it. (5) The PageLayer is, until P7.0 and P7.3,
+the page's rows of `wd`/`ln`, in the text layer's own layouts; a scanned page's OCR lines are appended in page order, so
+stage 3 reads what it always read. (6) `max-rounds` is 5, `RunStats` gains `page_rounds` and `page_requests`; `attempts` stays
+the document pass's.
+**Why**: memory (one page's bitmaps, not the document's; no recomputation of a page's work in every round of another's) and
+the seam P7.3 plugs fusion into; (4) is what keeps every committed dump byte for byte.
+**Alternatives**: running the tagged tree after the units (a second loop that reads the input, and a miss in it would re-run
+the document pass); making the dump an Engine-side concatenation (it is kin's `ev-emit`).
+- [ ] **Signed off** (maintainer)
+
+### D250 — `BitmapSet` as built: one set an attempt, answered and kin-made bitmaps apart, kin-made ones visible to the fulfiller (P7.U; SPEC 7.2; D092, D196)
+**Decision**: the set is made for each attempt of a page unit from the bitmaps its answers carried (shared, not copied) and is
+dropped with the attempt; `bms-put` allocates a zeroed bitmap kin fills and panics on an id already in the set; what kin made
+is added to the bitmaps `Fulfiller::start` is given, so an `ocr` request naming a kin-made view finds its pixels. In Rust the
+set hands out `&Bitmap` borrows of `Arc`s that are never removed or replaced for its life (one `unsafe`, in `port.rs`); the
+other three trees use plain maps. A missing id reads as a 0 x 0 bitmap.
+**Why**: kin keeps views it made while it calls `bms-get` again, which a `RefCell` guard cannot allow; a set per attempt
+means a re-run recomputes what kin made (it is a function of the answers) and the host never holds a stale view.
+**Alternatives**: `bitmap-new` in kin (the host could not give the engine what kin made); one set per page unit across attempts
+(stale views, and an id collision on every re-run).
+- [ ] **Signed off** (maintainer)
+
+### D251 — A born-digital page's two rasters are asked lazily, by a consumer stage, and a gate with no Renderer sees `unsupported` (P7.U; SPEC 7.2; D199, D201, D212)
+**Decision**: **revised by the coordinator 2026-10-05: lazy until a consumer exists; avoids two 300-dpi renders per page doing nothing.** As built
+by P7.U (and reversed): under `always` (the default, D038) a born-digital page's unit asked `render` layer 0 and layer 1 at 300 dpi in one round
+and was not OCR'd. Now `pu-run-pdf` asks a born-digital page for nothing (`us-done`, and no OCR, D201); the two requests (D199 (2): ids
+`pi-render-text` and `pi-render-no-text`, 300 dpi, `always` only) live in `pu-ask-rasters`, which a stage that reads pixels calls when it
+needs them (P7.1, P7.3; none does yet). With no `Renderer` both are answered `unsupported` and transcribed, and the Model is the one a
+conversion without them gives; output is byte-identical whether or not they are asked.
+**Why**: the requests are the contract P6.3 and P7.3 read the pixels through, and `pu-ask-rasters` with `kin/pageunittest.kin` keeps that
+plumbing (ids, `BitmapSet`, `unsupported`) proven; asking them before a consumer exists made an embedder with a Renderer pay two 300-dpi
+renders a page for nothing.
+**Alternatives**: asking in the page unit now (P7.U's original: proves the plumbing on every document, costs the renders); making the default
+`auto` for born-digital until P7.S.
+- [ ] **Signed off** (maintainer)

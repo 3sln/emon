@@ -13,6 +13,9 @@ pub fn pk_ocr() -> i32 {
 pub fn pk_bytes() -> i32 {
     return 4;
 }
+pub fn pk_crop() -> i32 {
+    return 5;
+}
 pub fn ps_ok() -> i32 {
     return 0;
 }
@@ -42,6 +45,36 @@ pub fn lay_no_text() -> i32 {
 }
 pub fn lay_text_only() -> i32 {
     return 2;
+}
+pub fn lay_no_watermark() -> i32 {
+    return 3;
+}
+pub fn lay_watermark_only() -> i32 {
+    return 4;
+}
+pub fn view_base() -> i32 {
+    return 16777216;
+}
+pub fn pu_id(page: i32, k: i32) -> i32 {
+    return ((page + 1) * 256) + k;
+}
+pub fn pu_view_id(page: i32, k: i32) -> i32 {
+    return view_base() + ((page * 256) + k);
+}
+pub fn pi_render_text() -> i32 {
+    return 1;
+}
+pub fn pi_render_no_text() -> i32 {
+    return 2;
+}
+pub fn pi_render_text_only() -> i32 {
+    return 3;
+}
+pub fn pi_decode() -> i32 {
+    return 4;
+}
+pub fn pi_ocr() -> i32 {
+    return 16;
 }
 pub fn flt_none() -> i32 {
     return 0;
@@ -199,6 +232,20 @@ pub fn rq_render(mut c: &mut crate::port::Cells, id: i32, input: i32, page: i32,
     crate::port::cells_push(c, page);
     crate::port::cells_push(c, dpi);
     crate::port::cells_push(c, layer);
+    rec_end(c, at);
+    return at;
+}
+pub fn rq_crop(mut c: &mut crate::port::Cells, id: i32, input: i32, page: i32, dpi: i32, layer: i32, px: i32, py: i32, pw: i32, ph: i32) -> i32 {
+    // Ask for the pixel rectangle px py pw ph of page `page` as `rq-render` would answer it whole.
+    let at: i32 = rec_begin(c, pk_crop(), id);
+    crate::port::cells_push(c, input);
+    crate::port::cells_push(c, page);
+    crate::port::cells_push(c, dpi);
+    crate::port::cells_push(c, layer);
+    crate::port::cells_push(c, px);
+    crate::port::cells_push(c, py);
+    crate::port::cells_push(c, pw);
+    crate::port::cells_push(c, ph);
     rec_end(c, at);
     return at;
 }

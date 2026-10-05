@@ -212,6 +212,11 @@
                          :java "emon.Port.newCells()"
                          :csharp "emon.Port.NewCells()"}
                         {:tag el/Cells :arity 0})
+    'new-bitmap-set (kl/call {:go "port.NewBitmapSet()"
+                              :rust "(&crate::port::BitmapSet::new())"
+                              :java "emon.Port.newBitmapSet()"
+                              :csharp "emon.Port.NewBitmapSet()"}
+                             {:tag el/BitmapSet :arity 0})
     'new-buf (kl/call {:go "port.NewBuf()"
                        :rust "(&mut crate::port::Buf::new())"
                        :java "emon.Port.newBuf()"

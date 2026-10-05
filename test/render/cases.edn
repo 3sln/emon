@@ -1,0 +1,17 @@
+;; The render cases (P6.2, D127): input:page:dpi:layer, or input:page:dpi:layer:px,py,pw,ph for a crop.
+;; Layers: 0 full, 1 no text, 2 text only, 3 no watermark/background, 4 watermark/background only.
+;; Recorded live by `bb render-record` into test/render/<name>/ and replayed by `bb render`.
+{:name "render"
+ :pdfs ["test/render/layers.pdf"                       ; 0: five layers by construction
+        "test/corpus/synth/pdf/bank-statement.pdf"     ; 1: a born-digital page
+        "test/corpus/synth/scan/bank-statement.pdf"]   ; 2: a scan, one embedded image
+ :reqs ["0:0:72:0" "0:0:72:1" "0:0:72:2" "0:0:72:3" "0:0:72:4"
+        "0:0:72:0:60,40,120,100"                        ; a crop of the full render
+        "0:0:72:2:60,40,120,100"                        ; and of the text-only render
+        "0:0:144:0:100,80,240,200"                      ; at twice the resolution
+        "1:0:36:0" "1:0:36:1" "1:0:36:2"
+        "1:0:36:0:40,60,150,100"
+        "2:0:36:0" "2:0:36:1"
+        "1:5:36:0"                                      ; a page that is not there: failed, transcribed
+        "0:0:72:0:200,200,100,100"                      ; a crop outside the page: failed
+        "0:0:72:9"]}                                    ; a layer nobody has: unsupported

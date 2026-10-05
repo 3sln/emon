@@ -6,7 +6,7 @@
 #     .cache/emon-rs/src/emon/*.rs     gen/rust/emon/*.rs, every module that is NOT a law (`emon.test`) or
 #                                      a probe/test namespace (names ending `test` or `probe`)
 #     .cache/emon-rs/src/emon.rs       the module list, written here
-#     .cache/emon-rs/src/{lib,port,plan,source,engine}.rs   host/rust/src/
+#     .cache/emon-rs/src/{lib,port,plan,source,engine,render,pdfium}.rs   host/rust/src/
 #     .cache/emon-rs/src/driver.rs     test/driver/rust/main.rs, the `emon-rs` binary
 #     .cache/emon-rs/tests/engine.rs   host/rust/tests/engine.rs, the Engine API's native tests (`bb slice` runs them)
 #
@@ -44,7 +44,7 @@ for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
 put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
 rm -f "$crate/src/emon.rs.new"
 
-for f in lib port plan source engine imgdec tess; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+for f in lib port plan source engine imgdec tess render pdfium; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
 put test/driver/rust/main.rs "$crate/src/driver.rs"
 mkdir -p "$crate/tests"
 put host/rust/tests/engine.rs "$crate/tests/engine.rs"
@@ -70,6 +70,9 @@ tesseract = []
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
 fax = "=0.2.7"
 miniz_oxide = "=0.8.9"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)"] }
 
 [profile.release]
 opt-level = 3
