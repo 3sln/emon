@@ -3,7 +3,7 @@
 #
 #     kin/scripts/unit               all four arms
 #     kin/scripts/unit go            one arm (go rust java csharp): the fast loop
-#     kin/scripts/unit red           the NEGATIVE CHECK: every law inverted,
+#     kin/scripts/unit red [ARM]     the NEGATIVE CHECK: every law inverted,
 #                                    and every arm must FAIL
 #
 # A gate: non-zero on any failure. DEVLOG P0.5, D044.
@@ -40,7 +40,12 @@ mode=normal
 arms=all
 case "${1:-all}" in
   all) ;;
-  red) mode=red ;;
+  red) mode=red
+       case "${2:-all}" in
+         all) ;;
+         go|rust|java|csharp) arms=$2 ;;   # one arm's negative check: the CI shards (D259)
+         *) echo "unit: unknown arm $2 (go rust java csharp)"; exit 2 ;;
+       esac ;;
   go|rust|java|csharp) arms=$1 ;;
   *) echo "unit: unknown arm $1 (go rust java csharp red)"; exit 2 ;;
 esac
