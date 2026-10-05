@@ -2192,7 +2192,7 @@ analysis beyond "top-to-bottom lines on a single column".
   |---|---|---|
   | 1. vertical rules, P / R, corrected truth (targets .98) | .985 / .995 | .985 / .997 |
   | 1. horizontal rules, P / R | .987 / .994 | .987 / .995 |
-  | 1. vertical rules, P6.4's own scoring (`--legacy`, `decode` views, 99 documents; P6.4 recorded .958 / .963 on 55) | .926 / .955 | .925 / .957 |
+  | 1. vertical rules, P6.4's own scoring (`--legacy`, `decode` views, 99 documents; P6.4 recorded .958 / .963 on 55) | .926 / .955 (first run, before the render cache was keyed by the PDF hash, D272) | .925 / .957 |
   | 2. endpoint error p95, horizontal / vertical, px (target 2) | 1.33 / 1.75 (legacy 2.75 / 1.75) | 1.81 / 1.75 (legacy 2.75 / 1.75) |
   | 3. tints, area recall / precision (truth: vector fills 600-959 and `gfx-*` fills; P6.4's 600-899 gave .109 on 55) | .334 / .960 | .976 / .928 |
   | 4. `tlines` against the text layer, lines at least 3 heights wide (target .97) / all lines | .942 / .863 | .9735 / .885 |
