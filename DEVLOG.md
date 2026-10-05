@@ -2415,7 +2415,7 @@ rest is off the critical path.
 | `kin/trace.kin`, `kin/tracetest.kin` | P6.4 | — |
 | `kin/tlhealth.kin`, `kin/player.kin` (+ tests) | P7.0 | P7.3 adds `fv`/`fx` builders below P7.0's in `player.kin`; P5.5a adds ONE block `;; P5.5a graphics arenas` (the `gl-*` calls in `pl-append`/`pl-check`/`pl-emit`) |
 | `kin/pageunit.kin` (+ test) | P7.U | P7.3 fills its stage calls (including `gv-page` + `gf-page` before `al-page`); P7.4, P7.5, P7.6, P7.7, P7.S each add ONE call at the hook comment `;; HOOK P7.n` P7.3 leaves; P7.G changes only the arguments of the `gf-page` call |
-| `kin/align.kin` / `kin/health.kin` / `kin/arbiter.kin` | P7.1 / P7.2 / P7.3 | — |
+| `kin/xalign.kin` (+ test, probe; D252: `kin/align.kin` is P4.11's) / `kin/health.kin` / `kin/arbiter.kin` | P7.1 / P7.2 / P7.3 | — |
 | `kin/fuserules.kin` | P7.3 (rows 100-199, the block headers of 100-699, `fr-order` 400, 600, 200, 300, 100) | P7.5 rows 200-299, P7.6 300-399, P7.7 400-499, P7.G 500-599 and 600-699, each inside its own block |
 | `kin/glayer.kin`, `kin/gvec.kin` (+ tests) | P5.5a | — |
 | `kin/gfuse.kin` (+ test) | P5.5a (the vector-only `gf-page`) | P7.G (everything else in it) |
@@ -2459,7 +2459,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
       sc evidence + nm-feat-*                 OCR evidence (P6.5) and its raster features
       gv-page, gf-page                        P5.5a (vector only, every page) / P7.G (+ tracer, OCR blocks, regions,
                                               xo 30-31): grl gfl ggp grg, graphics hl rows (SPEC 9.9, D218)
-      al-page, hl-page, ar-page               P7.1, P7.2, P7.3 (+ P7.5/P7.6/P7.7/P7.G rule blocks)
+      xa-page (D252), hl-page, ar-page        P7.1, P7.2, P7.3 (+ P7.5/P7.6/P7.7/P7.G rule blocks)
       rt-plan                                 P7.4 (targeted requests while rounds remain)
       -> the page's PageLayer (fw fl fv fa cg fx hl grl gfl ggp grg sl, SPEC 9.7)
     document unit (no pixels):
@@ -2594,7 +2594,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   (bind the read first: `th-hl-add`).
   *Commit*: on branch `worktree-agent-a491e23853d8396e1` (D037).
 
-- [ ] **P7.1 — Alignment and correspondence groups** (SPEC §9.2 "As designed", D202). **Wave 2.** Depends on P7.0
+- [x] **P7.1 — Alignment and correspondence groups** (SPEC §9.2 "As designed", D202). **Wave 2.** Depends on P7.0
   (`player.kin`, `fw`); not on P7.U (it is tested through a probe).
   *Brief*: `kin/align.kin` (`emon.align`), `al-page`: one page's candidates (the visible text-layer words of `words` with
   their `vis` and `src`; `hidden-text` words; every `owords` run of the page; `tlines`) → `cg` rows with their `refs` runs,
@@ -2615,6 +2615,59 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   *Files*: `kin/align.kin`, `kin/aligntest.kin`, `kin/alignprobe.kin`, `kin/scripts/align`, `tools/fusion/record-align.clj`,
   `test/fusion/align/`.
   *Done when*: the laws on four targets, `bb align` green on Rust and Go, the measured numbers in this entry.
+  **DONE (D252-D254).** `kin/xalign.kin` (`emon.xalign`, entry `xa-page`) holds the algorithm, `kin/xaligntest.kin` its 12 laws
+  (run on all four targets), `kin/alignprobe.kin` the probe unit, `test/fusion/align/` the fixtures (the six documents of the
+  brief and three more), `tools/fusion/record-align.clj` (`bb align-record`, live) records them, `tools/fusion/align_report.clj`
+  (`bb align-report`) measures them, `kin/scripts/align` (`bb align`, a gate) replays them on Rust and Go. **Two departures
+  from the brief's file names**: the module is `emon.xalign` with prefix `xa-` and the entry `xa-page`, not `kin/align.kin`,
+  `emon.align` and `al-page`, because `kin/align.kin` is P4.11's paragraph alignment (`al-line`, `al-pass`, D184) and the
+  prefix collides (D252); the fixture files hold nine documents, not six (D254). **Nothing is wired into the Engine**: P7.3
+  owns the stage calls in `kin/pageunit.kin` (the who-edits-what table), which is untouched, so no stage reads `cg` yet and no
+  existing gate moved. The only consumer of a born-digital render at 300 dpi with its text is the fixtures' recorder (D199,
+  D251: born-digital rasters are lazy), where the brief says to ask for it: the probe asks one `render` and one `ocr` a page itself, with `rq-render`, and nothing else; the Engine's way to ask is `pu-ask-rasters`, which P7.3 calls when it wires `xa-page`.
+  *The fixtures*: `tools/fusion/record-align.clj` builds `test/fusion/align/rust/main.rs` with `--cfg pdfium --cfg live` and runs
+  the probe against the pinned pdfium (chromium/8076) and Tesseract 5.5.3 (no language named: every installed model, D038); the
+  transcript is committed slim (answers and `:producer`, no bitmap, as `test/ocr/scan/`) with the dump of its replay
+  (`ID.dump`: one line a group, with each member's text and box). `bb align` replays every one on Rust and Go: identical on
+  all nine, and equal to the committed dump. *Measured* (the dumps; `bb align-report`):
+
+  | document | groups | text words | coverage | 1:1 groups | precision | merged | text-only | OCR-only |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | `h-numbered` (2 pages) | 399 | 399 | 1.0000 | 399 | 1.0000 | 0 | 0 | 0 |
+  | `columns-two` (2) | 732 | 732 | 1.0000 | 732 | 1.0000 | 0 | 0 | 0 |
+  | `table-simple-ruled` | 98 | 98 | 1.0000 | 98 | 1.0000 | 0 | 0 | 0 |
+  | `watermark-draft` (2) | 915 | 915 | 0.9978 | 913 | 1.0000 | 0 | 2 | 0 |
+  | `stamp-seal` | 76 | 76 | 0.5789 | 44 | 1.0000 | 0 | 32 | 0 |
+  | `tl-broken-shift` (2) | 651 | 654 | 1.0000 | 647 | 0.0788 | 3 | 0 | 1 |
+
+  Coverage (visible text-layer words in a group with an OCR candidate) is at least 0.99 on the four documents whose text
+  OCR can read (the watermark's own two `DRAFT` words are the text-only ones: no OCR reads a grey diagonal watermark at 300 dpi,
+  which is what SPEC 9.5 expects of one). **`stamp-seal` is 0.5789, under the brief's 0.99, and is not an alignment error**:
+  its 32 text-only groups are the seal's arc text (28 one-letter words set on a circle, which Tesseract cannot read), the stamp's
+  `SEAL`, `PAID` and its date, and the signature line (`____`); they are ink the text layer says is text and OCR does not see,
+  which is what P7.7 (seals) and P7.5 (defence 1) decide. The gate holds the other four to 0.99, `stamp-seal` to its
+  recorded 0.57, and its words with no OCR to the seal's, the stamp's and the signature line's. **Precision** (1:1 groups with
+  case-folded similarity at least 800) is 1.0000 over the 2186 1:1 groups of the five healthy documents (floor 0.98): every
+  pair the geometry made, the letters confirm. **`tl-broken-shift`**: its body font (Georgia, font row 1; the ToUnicode
+  rewritten so every letter maps to the next one) has 594 words, **all 594 grouped with an OCR word by geometry and all 594
+  with case-folded similarity under 300** (floor: 90 %); the font's words read `Foe` for `End`, and the headings and the table in
+  the other fonts agree at 1000. The three merges are the document's `Face` `change`, `Large` `almost` `line` and `City` `come`,
+  which OCR read as one word each (a narrow space in the proportional font). **Time**: 0.58 ms a page at worst over the nine
+  documents (Rust `-O`, the best of three, the alignment repeated 21 times against once to take the document pass out; ceiling 10).
+  *The three extra documents* (identity and their numbers only): `tl-broken-unmapped` (a text layer whose spaces and letters are
+  unmapped, one U+FFFD word a line): 40 of its 104 groups are a whole line's word against its 10 or more OCR words (a split of 1:k,
+  attached by D253), their similarity 0, and its 62 1:1 groups (the headings and the table) agree at 0.9194; `hidden-older-ocr` (an
+  older OCR layer under a scan: the `hidden-text` source): all 200 hidden words are in a group with this run's OCR words (65 of them
+  a hidden word against two or more), the older layer agreeing with the new reading; `align-rtl` (Hebrew, which the
+  English model cannot read): 197 of 201 groups are 1:1 by geometry and the words are paired with their right neighbours
+  (similarity 0, an OCR that read nothing; the reversal of a right-to-left line is what pairs them).
+  *What measuring found, and what changed*: (1) the first cost, the overlap of the merged BOXES, paired `water`/`even`/`work`
+  wrongly on a real page (a text-layer box is the font's ascent and descent, an OCR box is its ink: their heights differ by
+  half, so the true pairs cost 400-500 and a 1:2 plus a 2:1 cost less than three 1:1s): the cost is now over the words' extents
+  ALONG THE LINE, which the sources agree on (D253); (2) a word that a pairing step cannot reach (`Section2.1` read as three, a
+  line with no mapped spaces) left the rest of it as OCR-only words that arbitration would have written a second time, so what no
+  step matched is attached when the other source covers it (D253). The grid, the 64 x 64 cells and the candidate test are as
+  SPEC 9.2 says; the page unit and the Engine do not call `xa-page` until P7.3.
 
 - [ ] **P7.2 — Health per source and region** (SPEC §9.3 "As designed", D203). **Wave 2.** Depends on P7.0; uses P7.1's
   `cg` and P6.3's ink columns when present (laws build them by hand, so it can start with P7.1).
@@ -7913,4 +7966,61 @@ renders a page for nothing.
 
 ### D258 — `bb trace`: truth is the vector content of ghostscript's text-free copy; scoring by length and by area (P6.4; D227)
 **Decision**: `gs -dFILTERTEXT` removes the text and keeps the paths (it is also the `no-text` render), qpdf's QDF is read by a small content-stream interpreter (q Q cm re m l S f B w colours): a filled rectangle at most 3 pt thick and 4 times as long, or a stroked segment at most 3 pt wide and 3 pt long, is a rule; a filled rectangle over 5 pt each way, lightness at least 600 and not the paper's white, is a fill. Rule precision and recall are the share of samples (every 3 px) within 2.5 px of the other set; fills are compared as areas on a 4 px grid. Not a gate; P7.S owns the ratchet.
+- [ ] **Signed off** (maintainer)
+
+### D252 — Cross-source alignment is `emon.xalign` (`kin/xalign.kin`, prefix `xa-`, entry `xa-page`), not `emon.align` (P7.1; SPEC 9.2; D184, D202)
+**Decision**: the brief's `kin/align.kin` / `emon.align` / `al-page` are named `kin/xalign.kin` / `emon.xalign` / `xa-page`
+(and `kin/xaligntest.kin`, `kin/alignprobe.kin`; the file table, the who-edits-what row and SPEC 9.2 name the new file). The
+page unit calls `xa-page` where D195's order says `al-page`.
+**Why**: `kin/align.kin` already exists and is `emon.align`, the paragraph alignment of P4.11 (D110, D184: `al-line`,
+`al-mark`, `al-pass`, `al-judge`); two modules cannot share a namespace in the four generated trees, and the `al-` prefix
+is taken by its functions.
+**Alternatives**: renaming P4.11's module to `emon.parenalign` (a change to merged, golden-bound code for a name).
+- [ ] **Signed off** (maintainer)
+
+### D253 — Alignment as built: cost along the line, one extent per word; what the steps do not reach is attached; groups are connected sets over every run and layer (P7.1; SPEC 9.2; D202)
+**Decision**: SPEC 9.2's grid, candidate test (`align-overlap` 500, `align-angle` 300) and per-line dynamic program stand
+(1:1, 1:2, 2:1, 1:0, 0:1; `align-gap` 400; ties toward 1:1, 1:2, 2:1, an unmatched text-layer word, an unmatched OCR word),
+with these made precise. (1) A pairing's cost is 1000 minus the intersection over union of the merged words' EXTENTS ALONG THE
+LINE (the half of the box projected on the line's axis), not of the boxes; the candidate test is still on the boxes. (2) A
+text-layer line is a maximal run of consecutive candidates with one `line`; an OCR word belongs to the line of the candidate
+with the most overlap (ties: the earlier word) and is ordered by its centre's position along that line's baseline, reversed for
+a right-to-left line, so both sides are in logical order whatever order the engine gave. (3) The visible layer and the
+`hidden-text` layer are aligned separately, each against every OCR run separately; a group is the connected set (union-find) of
+all the steps, so one group holds a word of each source and each run. (4) What no step matched is ATTACHED when the other
+source covers it: an OCR word that is a candidate of a text-layer word joins that word's group (flag `split`), a text-layer
+word that is a candidate of an OCR word joins its group (flag `merged`); an OCR word still unmatched joins only an overlapping
+OCR word of another run. (5) Similarity is `1000 * (max - lev) / max` over NFC code points (ligatures, soft hyphens and CJK
+radicals normalised) of the sides' words joined without a separator, capped at 256 code points a side; `simfold` keeps letters
+and digits and folds case (ASCII, Latin-1, Latin Extended-A, Greek, Cyrillic; other scripts unfolded). A group's sides are its
+visible text words (its hidden ones when it has none) and the lowest-numbered OCR run's words; the group's `sim` and `simfold` are -1 when a side is empty, and a word's columns stay -1 where no step touched it. (6) The dynamic program is exact
+for a line up to 1000 x 1000 words; a longer line is paired greedily along the line. (7) A line's angle and direction are its
+first candidate's; mixed-direction lines (Latin words in a right-to-left line) are ordered by the line's direction, not by bidi.
+**Why**: (1) measured: the sources draw a word's height differently, so a box overlap ranks the wrong pairing first (the page
+that showed it is in the DEVLOG entry); (2) the engines' orders differ and the evidence is positional; (4) arbitration would
+otherwise write a covered word's text twice (an unmapped-spaces line is one text word and 15 OCR words); (5) whitespace is
+where the sources disagree most and the letters are the claim; the cap bounds the cost of a hostile line.
+**Alternatives**: a Hungarian match on box overlap (ignores order); bidi-aware ordering (needs the bidi levels in the
+heads, which the evidence does not carry); a 1:k step for every k in the dynamic program (k times the cost for words that
+are rare once attached).
+- [ ] **Signed off** (maintainer)
+
+### D254 — The alignment fixtures: nine documents rendered by pdfium and read by Tesseract, recorded live, replayed on Rust and Go; the floors the gate holds (P7.1; SPEC 9.2, 14; D008, D127, D199, D211)
+**Decision**: `test/fusion/align/ID/transcript.edn` and `ID.dump` for the brief's six documents and `tl-broken-unmapped`,
+`hidden-older-ocr` and `align-rtl`: a render of every page at 300 dpi WITH its text (pdfium, the pinned build) and the OCR
+of each render (Tesseract 5.5.3, every installed model), recorded by `bb align-record` with no Engine around (the
+probe unit, `emon.alignprobe`, run by the drivers `test/fusion/align/{rust,go}`), the transcripts slim (no bitmap) like
+`test/ocr/scan/`. `bb align` is a gate: Rust and Go print the same dump as committed; coverage at least 0.99 on four
+documents and at least 0.57 on `stamp-seal` (its seal and stamp text, which Tesseract cannot read); precision at least 0.98
+over the five; at least 90 % of `tl-broken-shift`'s shifted font grouped with similarity under 300; at least 99 % of
+`hidden-older-ocr`'s hidden words grouped; at most 10 ms a page (Rust, best of three).
+**Why**: a unit test with hand-made heads proves the algorithm; only real renders, a real OCR engine and real broken fonts
+show that the geometry of two sources pairs (the first cost did not); and the floors are what a later change to the OCR
+adapter, the renderer pin or the tracer must not cost the alignment.
+**Cost to decide**: about 1.0 MB of transcripts (the OCR answers carry every symbol and alternative) and 0.45 MB of dumps,
+committed; the corpus PDFs are the synthetic ones already committed. `stamp-seal`'s 0.5789 is below the brief's 0.99 and is
+held as a floor of its own with its cause; the maintainer may prefer a metric that excludes seal and stamp regions once P7.7
+names them.
+**Alternatives**: recording through the Engine (it does not request OCR of a born-digital page, D201, and P7.3 owns that
+wiring); hand-built fixtures only (they cannot show the first cost's failure).
 - [ ] **Signed off** (maintainer)

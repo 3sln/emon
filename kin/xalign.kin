@@ -1,0 +1,1111 @@
+;; CROSS-SOURCE ALIGNMENT of one page's words: correspondence groups (P7.1; SPEC 9.2; D202, D252-D254). emon's own module (D039).
+;; It is `emon.xalign` and not `emon.align` because `emon.align` is the paragraph alignment of P4.11 (`al-line`, `al-pass`; D252).
+;;
+;;   (xa-page page epages words owords tlines feats etext refs cg scr gp dp ta tb tt)
+;;       Aligns the text layer (`words`: the visible ones, and the `hidden-text` ones), every OCR run's words (`owords`) and the
+;;       tracer's text lines (`tlines`) of ONE page into correspondence groups: rows appended to `cg` (SPEC 9.7), their candidate
+;;       runs appended to `refs` as `(ea, index)` pairs, and the similarity columns written into the words' `feats` rows
+;;       (`xt-sim-ocr`, `xt-sim-ocr2`, `xo-sim-text`, `xo-sim-hidden`, columns 24 and 25). Answers the number of groups appended.
+;;       `scr gp dp ta tb tt` are scratch the caller owns (any contents; they are emptied here): the caller keeps them between pages
+;;       so a page costs no allocation once they have grown.
+;;
+;; WHAT IT READS. The HEADS (SPEC 8.4.1) and nothing else of a word: its page, box, angle, direction, text run, line and feature row
+;; (the three kinds of row share the head, D096). A text-layer word is a CANDIDATE of the visible text layer when its `src` is
+;; `text` and its worst glyph `vis` (feature column `xt-vis`) is 0 (no feature row, or -1: 0), a candidate of the HIDDEN layer when
+;; its `src` is `hidden-text`, and is not a candidate at all otherwise (it is the ledger's). Every OCR word of the page is a candidate,
+;; of whichever run made it. The rows of one page are contiguous and pages ascend in each arena (a law holds the builders to it).
+;;
+;; THE ALGORITHM, as SPEC 9.2 says, with the choices it leaves (D253):
+;;   1. A 64 x 64 GRID over the page box indexes every candidate's head. An OCR word is a candidate of a text-layer word when
+;;      `ev-overlap-small` of their boxes is at least `xa-overlap` (500) and their angles differ by at most `xa-angle` (300
+;;      centi-degrees). The text-layer line of the candidate with the most overlap (ties: the earlier word) is the OCR word's LINE;
+;;      an OCR word with no candidate has none.
+;;   2. Per text-layer line (a maximal run of consecutive candidates with the same `line`), per layer (visible, then hidden), per OCR
+;;      run: the line's OCR words, ordered by their position along the line's baseline (reversed for a right-to-left line, so both
+;;      sides are in logical order), are aligned to its words by a DYNAMIC PROGRAM over the two sequences. A step is 1:1, 1:2, 2:1
+;;      (two consecutive words of one side against one of the other), 1:0 or 0:1. A pairing step is allowed only when the merged
+;;      boxes are candidates by the test above, and costs 1000 minus the intersection over union of the merged words' EXTENTS ALONG
+;;      THE LINE (per mille; not of the boxes, because the sources draw a word's height differently and agree on where it is along
+;;      the line); an unmatched word costs `xa-gap` (400). Ties are broken toward 1:1, then 1:2, then 2:1, then an unmatched text-layer word,
+;;      then an unmatched OCR word. A line whose table would pass `xa-dpmax` cells is paired greedily along the line instead.
+;;   3. A GROUP is a connected set of the chosen steps (union-find; a word of the text layer shared by two runs' steps joins them).
+;;      What no step matched is attached when the other source COVERS it: an OCR word that is a candidate of a text-layer word joins
+;;      that word's group (flag split), a text-layer word that is a candidate of an OCR word joins its group (flag merged): a word
+;;      read as three, a line whose spaces the font does not map (D253). An OCR word still unmatched is OCR-ONLY: it joins a group
+;;      only through an OCR word of ANOTHER run that overlaps it by the test above (two engines' reading of the same ink); a
+;;      text-layer word still unmatched is TEXT-ONLY. Groups come in the order
+;;      of their first candidate: text-layer words in the layer's order, then the OCR-only ones in the engine's.
+;;   4. Text similarity is `1000 * (max - lev) / max` over the NFC code points (ligatures expanded) of the two sides' words
+;;      concatenated, with case kept (`sim`) and over the letters and digits only, case-folded (`simfold`, the broken-encoding test of
+;;      SPEC 9.4). A side is capped at `xa-tcap` code points. The group's two sides are its text-layer words (its hidden ones when it
+;;      has none of the visible layer) and the words of the lowest-numbered OCR run in it; -1 where a side is empty. The word columns
+;;      are written per step with case kept: a text-layer word's `xt-sim-ocr` from the first run, `xt-sim-ocr2` from the second; an
+;;      OCR word's `xo-sim-text` against the visible layer, `xo-sim-hidden` against the hidden one; untouched where no step matched it.
+;;   5. A group's `tlines` cell is the tracer line of the page that the group's box overlaps most (the same test; ties: the first).
+;;
+;; WHAT IT DOES NOT DO: weigh the sources (that is arbitration, P7.3), flag `in-figure` or `in-seal` (P7.7, P7.G), or read pixels.
+(ns emon.xalign
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32 mul64 add64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-soft-hyphens nz-flag-radicals]]
+            [emon.evidence :refer [ev-overlap-small ev-page-row ev-sin ev-cos fe-set fe-get ep-get rf-add rf-count
+                                   epf-width epf-height
+                                   hd-x0 hd-y0 hd-x1 hd-y1 hd-rot hd-dir hd-tstart hd-tlen hd-line hd-feat
+                                   owf-run wf-src ea-words ea-owords
+                                   xt-vis xt-sim-ocr xt-sim-ocr2 xo-sim-text xo-sim-hidden]]
+            [emon.model :refer [sr-hidden-text]]
+            [emon.player :refer [cg-new cg-set cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hfirst cgf-hcount cgf-tline
+                                 cgf-sim cgf-simfold cgf-flags plg-text-only plg-ocr-only]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 9.4: named, first values, P10.1 calibrates)
+
+(defn ^:pub ^I32 xa-overlap [] (comment "`align-overlap`: the overlap (per mille of the smaller box) that makes two words candidates.") (return 500))
+(defn ^:pub ^I32 xa-angle [] (comment "`align-angle`: the most two candidates' angles may differ (centi-degrees).") (return 300))
+(defn ^:pub ^I32 xa-gap [] (comment "`align-gap`: what an unmatched word costs in the dynamic program (a pairing costs 1000 minus its overlap).") (return 400))
+(defn ^:pub ^I32 xa-tcap [] (comment "The code points of a side that similarity reads (the first ones).") (return 256))
+(defn ^:pub ^I32 xa-dpmax [] (comment "The most cells of one line's dynamic program; a larger line is paired greedily.") (return 1000000))
+
+(defn ^I32 xa-inf [] (return 1000000))
+
+;; ------------------------------------------------------------- the scratch
+;; `scr`: the heads table `hb` (stride 12: x0 y0 x1 y1 rot dir tstart tlen feat kind line run) of the N candidates (the page's `words`
+;; rows first, then its `owords` rows; `kind` 1 visible text, 2 hidden text, 0 not a candidate, 3 OCR), then 16 arrays of S = N + 1
+;; cells indexed by node, then the grid's 4096 heads.
+;;   array 0 uf  1 nflag  2 oline  3 orank  4 matched  5 okey  6 ord  7 tmp  8 cnt  9 mem  10 root  11 tlist  12 olist  13 olist2
+;;         14 elo  15 ehi (a node's extent along its line, which is what a pairing's cost reads)
+
+(defn ^I32 xa-hb [^Cells scr ^I32 i ^I32 f] (return (cells-at scr (+ (* i 12) f))))
+
+(defn ^I32 xa-hbs [^:mut ^Cells scr ^I32 i ^I32 f ^I32 v]
+  (cells-set scr (+ (* i 12) f) v)
+  (return 0))
+
+(defn ^I32 xa-a [^Cells scr ^I32 nn ^I32 k ^I32 i] (return (cells-at scr (+ (+ (* 12 nn) (* k nn)) i))))
+
+(defn ^I32 xa-as [^:mut ^Cells scr ^I32 nn ^I32 k ^I32 i ^I32 v]
+  (cells-set scr (+ (+ (* 12 nn) (* k nn)) i) v)
+  (return 0))
+
+(defn ^I32 xa-grid-base [^I32 nn] (return (* 28 nn)))
+
+;; ------------------------------------------------------------- union-find
+
+(defn ^I32 xa-find [^:mut ^Cells scr ^I32 nn ^I32 i]
+  (let [^:mut ^I32 r i
+        ^:mut ^I32 p 0
+        ^:mut ^I32 q i]
+    (set p (xa-a scr nn 0 r))
+    (while (!= p r)
+      (do (set r p)
+          (set p (xa-a scr nn 0 r))))
+    (while (!= q r)
+      (do (set p (xa-a scr nn 0 q))
+          (xa-as scr nn 0 q r)
+          (set q p)))
+    (return r)))
+
+(defn ^I32 xa-union [^:mut ^Cells scr ^I32 nn ^I32 a ^I32 b]
+  (comment "Join the sets of a and b; the root of a set is its smallest node, so a group's first candidate is its root.")
+  (let [^I32 ra (xa-find scr nn a)
+        ^I32 rb (xa-find scr nn b)]
+    (if (< ra rb) (xa-as scr nn 0 rb ra))
+    (if (< rb ra) (xa-as scr nn 0 ra rb))
+    (return 0)))
+
+;; ------------------------------------------------------------- geometry
+
+(defn ^I32 xa-ang-diff [^I32 a ^I32 b]
+  (let [^:mut ^I32 d (- a b)]
+    (if (< d 0) (set d (- 0 d)))
+    (if (> d 18000) (set d (- 36000 d)))
+    (return d)))
+
+(defn ^I32 xa-iou1 [^I32 alo ^I32 ahi ^I32 blo ^I32 bhi]
+  (comment "Intersection over union of two intervals along a line, per mille; 0 when they miss or the union is empty.")
+  (let [^:mut ^I32 lo alo
+        ^:mut ^I32 hi ahi
+        ^:mut ^I32 ulo alo
+        ^:mut ^I32 uhi ahi]
+    (if (> blo lo) (set lo blo))
+    (if (< bhi hi) (set hi bhi))
+    (if (< blo ulo) (set ulo blo))
+    (if (> bhi uhi) (set uhi bhi))
+    (if (>= lo hi) (return 0))
+    (if (<= uhi ulo) (return 0))
+    (return (i32 (quot (mul64 (i64 (- hi lo)) (i64 1000)) (i64 (- uhi ulo)))))))
+
+(defn ^I32 xa-cand [^I32 ax0 ^I32 ay0 ^I32 ax1 ^I32 ay1 ^I32 arot ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1 ^I32 brot]
+  (comment "1 when two boxes at two angles are candidates of each other (SPEC 9.2), else 0.")
+  (if (> (xa-ang-diff arot brot) (xa-angle)) (return 0))
+  (if (< (ev-overlap-small ax0 ay0 ax1 ay1 bx0 by0 bx1 by1) (xa-overlap)) (return 0))
+  (return 1))
+
+(defn ^I32 xa-node-cand [^Cells scr ^I32 a ^I32 b]
+  (return (xa-cand (xa-hb scr a 0) (xa-hb scr a 1) (xa-hb scr a 2) (xa-hb scr a 3) (xa-hb scr a 4)
+                   (xa-hb scr b 0) (xa-hb scr b 1) (xa-hb scr b 2) (xa-hb scr b 3) (xa-hb scr b 4))))
+
+(defn ^I32 xa-ubox [^Cells scr ^I32 nn ^I32 k ^I32 s ^I32 c ^I32 f]
+  (comment "One coordinate of the union of the boxes of the c nodes of array k from s: f 0 least x0, 1 least y0, 2 greatest x1, 3 greatest y1.")
+  (let [^:mut ^I32 t 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 node 0
+        ^:mut ^I32 w 0]
+    (while (< t c)
+      (do (set node (xa-a scr nn k (+ s t)))
+          (set w (xa-hb scr node f))
+          (if (== t 0)
+            (set v w)
+            (do (if (and (< f 2) (< w v)) (set v w))
+                (if (and (>= f 2) (> w v)) (set v w))))
+          (set t (+ t 1))))
+    (return v)))
+
+(defn ^I32 xa-hull [^Cells scr ^I32 nn ^I32 k ^I32 s ^I32 c ^I32 which]
+  (comment "The hull along the line of the c nodes of array k from s: which 0 its start, 1 its end.")
+  (let [^:mut ^I32 t 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 node 0]
+    (while (< t c)
+      (do (set node (xa-a scr nn k (+ s t)))
+          (if (== which 0)
+            (set w (xa-a scr nn 14 node))
+            (set w (xa-a scr nn 15 node)))
+          (if (== t 0)
+            (set v w)
+            (do (if (and (== which 0) (< w v)) (set v w))
+                (if (and (== which 1) (> w v)) (set v w))))
+          (set t (+ t 1))))
+    (return v)))
+
+(defn ^I32 xa-cost [^Cells scr ^I32 nn ^I32 ka ^I32 sa ^I32 ca ^I32 kb ^I32 sb ^I32 cb]
+  (comment "The cost of pairing ca nodes of array ka from sa with cb nodes of array kb from sb: `xa-inf` when their merged boxes are")
+  (comment "not candidates, else 1000 minus the intersection over union of their extents along the line (per mille). Along the line")
+  (comment "and not over the boxes, because the sources draw a word's height differently (a font's ascent and descent, an engine's")
+  (comment "ink) and agree on where along the line it is (D253).")
+  (let [^I32 ax0 (xa-ubox scr nn ka sa ca 0)
+        ^I32 ay0 (xa-ubox scr nn ka sa ca 1)
+        ^I32 ax1 (xa-ubox scr nn ka sa ca 2)
+        ^I32 ay1 (xa-ubox scr nn ka sa ca 3)
+        ^I32 bx0 (xa-ubox scr nn kb sb cb 0)
+        ^I32 by0 (xa-ubox scr nn kb sb cb 1)
+        ^I32 bx1 (xa-ubox scr nn kb sb cb 2)
+        ^I32 by1 (xa-ubox scr nn kb sb cb 3)
+        ^I32 na (xa-a scr nn ka sa)
+        ^I32 nb (xa-a scr nn kb sb)
+        ^I32 ra (xa-hb scr na 4)
+        ^I32 rb (xa-hb scr nb 4)]
+    (if (== (xa-cand ax0 ay0 ax1 ay1 ra bx0 by0 bx1 by1 rb) 0) (return (xa-inf)))
+    (let [^I32 alo (xa-hull scr nn ka sa ca 0)
+          ^I32 ahi (xa-hull scr nn ka sa ca 1)
+          ^I32 blo (xa-hull scr nn kb sb cb 0)
+          ^I32 bhi (xa-hull scr nn kb sb cb 1)]
+      (return (- 1000 (xa-iou1 alo ahi blo bhi))))))
+
+;; ------------------------------------------------------------- text similarity
+
+(defn ^I32 xa-fold-cp [^I32 cp]
+  (comment "A code point's folded form when it is a letter or a digit, 0 when it is not (a space, a punctuation, a symbol).")
+  (comment "Case folding covers ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic; every other letter folds to itself.")
+  (if (< cp 48) (return 0))
+  (if (<= cp 57) (return cp))
+  (if (< cp 65) (return 0))
+  (if (<= cp 90) (return (+ cp 32)))
+  (if (< cp 97) (return 0))
+  (if (<= cp 122) (return cp))
+  (if (< cp 170) (return 0))
+  (if (== cp 170) (return cp))
+  (if (< cp 181) (return 0))
+  (if (== cp 181) (return cp))
+  (if (< cp 186) (return 0))
+  (if (== cp 186) (return cp))
+  (if (< cp 192) (return 0))
+  (if (== cp 215) (return 0))
+  (if (== cp 247) (return 0))
+  (if (<= cp 222) (return (+ cp 32)))
+  (if (<= cp 255) (return cp))
+  (if (and (>= cp 256) (<= cp 311))
+    (do (if (== (rem cp 2) 0) (return (+ cp 1)))
+        (return cp)))
+  (if (and (>= cp 313) (<= cp 328))
+    (do (if (== (rem cp 2) 1) (return (+ cp 1)))
+        (return cp)))
+  (if (and (>= cp 330) (<= cp 375))
+    (do (if (== (rem cp 2) 0) (return (+ cp 1)))
+        (return cp)))
+  (if (== cp 376) (return 255))
+  (if (and (>= cp 377) (<= cp 382))
+    (do (if (== (rem cp 2) 1) (return (+ cp 1)))
+        (return cp)))
+  (if (and (>= cp 913) (<= cp 937) (!= cp 930)) (return (+ cp 32)))
+  (if (and (>= cp 1024) (<= cp 1039)) (return (+ cp 80)))
+  (if (and (>= cp 1040) (<= cp 1071)) (return (+ cp 32)))
+  (if (and (>= cp 8192) (<= cp 8303)) (return 0))
+  (if (and (>= cp 8592) (<= cp 11263)) (return 0))
+  (if (and (>= cp 12288) (<= cp 12351)) (return 0))
+  (if (and (>= cp 65024) (<= cp 65039)) (return 0))
+  (if (== cp 65279) (return 0))
+  (return cp))
+
+(defn ^I32 xa-fold-in-place [^:mut ^Cells c]
+  (comment "Keep the letters and digits of c, case-folded, in order.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 cp 0]
+    (while (< i n)
+      (do (set cp (cells-at c i))
+          (set f (xa-fold-cp cp))
+          (if (!= f 0)
+            (do (cells-set c j f)
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (cells-drop c j)
+    (return j)))
+
+(defn ^I32 xa-side [^Cells scr ^I32 nn ^I32 k ^I32 s ^I32 c ^Cells etext ^:mut ^Cells out ^:mut ^Cells tt]
+  (comment "Empty `out` and fill it with the NFC code points (ligatures expanded) of the c nodes of array k from s, side by side, the first `xa-tcap`.")
+  (let [^:mut ^I32 t 0
+        ^:mut ^I32 node 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0]
+    (cells-drop out 0)
+    (while (< t c)
+      (do (set node (xa-a scr nn k (+ s t)))
+          (set ts (xa-hb scr node 6))
+          (set tl (xa-hb scr node 7))
+          (if (> tl 0)
+            (nz-nfc etext ts (+ ts tl) out tt (+ (nz-flag-ligatures) (+ (nz-flag-soft-hyphens) (nz-flag-radicals)))))
+          (set t (+ t 1))))
+    (if (> (cells-len out) (xa-tcap)) (cells-drop out (xa-tcap)))
+    (return (cells-len out))))
+
+(defn ^I32 xa-lev [^Cells a ^Cells b ^:mut ^Cells tt]
+  (comment "The Levenshtein distance of a and b (code points), its two rows in `tt`.")
+  (let [^I32 la (cells-len a)
+        ^I32 lb (cells-len b)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 i 1
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 alt 0
+        ^:mut ^I32 up 0
+        ^:mut ^I32 left 0
+        ^:mut ^I32 diag 0
+        ^:mut ^I32 ca 0
+        ^:mut ^I32 cb 0
+        ^:mut ^I32 prev 0]
+    (cells-drop tt 0)
+    (while (< j (* 2 (+ lb 1)))
+      (do (cells-push tt 0)
+          (set j (+ j 1))))
+    (set j 0)
+    (while (<= j lb)
+      (do (cells-set tt j j)
+          (set j (+ j 1))))
+    (while (<= i la)
+      (do (cells-set tt (+ lb 1) i)
+          (set ca (cells-at a (- i 1)))
+          (set j 1)
+          (while (<= j lb)
+            (do (set diag (cells-at tt (- j 1)))
+                (set up (cells-at tt j))
+                (set left (cells-at tt (+ (+ lb 1) (- j 1))))
+                (set cb (cells-at b (- j 1)))
+                (set sub 1)
+                (if (== ca cb) (set sub 0))
+                (set best (+ diag sub))
+                (set alt (+ up 1))
+                (if (< alt best) (set best alt))
+                (set alt (+ left 1))
+                (if (< alt best) (set best alt))
+                (cells-set tt (+ (+ lb 1) j) best)
+                (set j (+ j 1))))
+          (set j 0)
+          (while (<= j lb)
+            (do (set prev (cells-at tt (+ (+ lb 1) j)))
+                (cells-set tt j prev)
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (return (cells-at tt lb))))
+
+(defn ^I32 xa-sim [^Cells scr ^I32 nn ^I32 ka ^I32 sa ^I32 ca ^I32 kb ^I32 sb ^I32 cb ^Cells etext ^I32 fold
+                   ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "The similarity (per mille) of two sides, each some consecutive nodes of an array: case kept (fold 0) or over the")
+  (comment "case-folded letters and digits only (fold 1). Both sides empty is 1000.")
+  (xa-side scr nn ka sa ca etext ta tt)
+  (xa-side scr nn kb sb cb etext tb tt)
+  (if (== fold 1)
+    (do (xa-fold-in-place ta)
+        (xa-fold-in-place tb)))
+  (let [^I32 la (cells-len ta)
+        ^I32 lb (cells-len tb)
+        ^:mut ^I32 mx la]
+    (if (> lb mx) (set mx lb))
+    (if (== mx 0) (return 1000))
+    (let [^I32 d (xa-lev ta tb tt)]
+      (return (quot (* (- mx d) 1000) mx)))))
+
+;; ------------------------------------------------------------- columns
+
+(defn ^I32 xa-put [^Cells scr ^I32 node ^I32 col ^I32 v ^:mut ^Cells feats]
+  (comment "Write `v` into column `col` of the node's feature row, when it has one.")
+  (let [^I32 row (xa-hb scr node 8)]
+    (if (>= row 0) (fe-set feats row col v))
+    (return 0)))
+
+;; ------------------------------------------------------------- the steps
+
+(defn ^I32 xa-step [^:mut ^Cells scr ^I32 nn ^I32 ts ^I32 tc ^I32 os ^I32 oc ^I32 layer ^I32 rank
+                    ^Cells etext ^:mut ^Cells feats ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "One chosen pairing step: the text-layer nodes `tlist[ts, ts + tc)` with the OCR nodes `olist2[os, os + oc)`. Join them,")
+  (comment "mark a 1:2 as a split and a 2:1 as merged, record that the OCR nodes were matched, and write the similarity columns")
+  (comment "(`layer` 1 the visible layer, 2 the hidden one).")
+  (let [^I32 sim (xa-sim scr nn 11 ts tc 13 os oc etext 0 ta tb tt)
+        ^I32 head (xa-a scr nn 11 ts)
+        ^:mut ^I32 t 0
+        ^:mut ^I32 node 0
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 cur 0]
+    (if (and (== tc 1) (== oc 2)) (set fl 4))
+    (if (and (== tc 2) (== oc 1)) (set fl 8))
+    (while (< t tc)
+      (do (set node (xa-a scr nn 11 (+ ts t)))
+          (xa-union scr nn head node)
+          (xa-as scr nn 4 node 1)
+          (set cur (xa-a scr nn 1 node))
+          (xa-as scr nn 1 node (bit-or cur fl))
+          (if (== rank 0) (xa-put scr node (xt-sim-ocr) sim feats))
+          (if (== rank 1) (xa-put scr node (xt-sim-ocr2) sim feats))
+          (set t (+ t 1))))
+    (set t 0)
+    (while (< t oc)
+      (do (set node (xa-a scr nn 13 (+ os t)))
+          (xa-union scr nn head node)
+          (xa-as scr nn 4 node 1)
+          (set cur (xa-a scr nn 1 node))
+          (xa-as scr nn 1 node (bit-or cur fl))
+          (if (== layer 1) (xa-put scr node (xo-sim-text) sim feats))
+          (if (== layer 2) (xa-put scr node (xo-sim-hidden) sim feats))
+          (set t (+ t 1))))
+    (return 0)))
+
+(defn ^I32 xa-greedy [^:mut ^Cells scr ^I32 nn ^I32 n ^I32 m ^I32 layer ^I32 rank ^Cells etext ^:mut ^Cells feats
+                      ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "A line too long for the table: walk the two sequences along the line, pairing 1:1 where the words are candidates and")
+  (comment "otherwise leaving the one that lies earlier unmatched.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ti 0
+        ^:mut ^I32 oj 0
+        ^:mut ^I32 kt 0
+        ^:mut ^I32 ko 0]
+    (while (and (< i n) (< j m))
+      (do (if (< (xa-cost scr nn 11 i 1 13 j 1) (xa-inf))
+            (do (xa-step scr nn i 1 j 1 layer rank etext feats ta tb tt)
+                (set i (+ i 1))
+                (set j (+ j 1)))
+            (do (set ti (xa-a scr nn 11 i))
+                (set oj (xa-a scr nn 13 j))
+                (set kt (xa-a scr nn 5 ti))
+                (set ko (xa-a scr nn 5 oj))
+                (if (<= kt ko)
+                  (set i (+ i 1))
+                  (set j (+ j 1)))))))
+    (return 0)))
+
+(defn ^I32 xa-dp-at [^Cells dp ^I32 m ^I32 i ^I32 j] (return (cells-at dp (+ (* i (+ m 1)) j))))
+
+(defn ^I32 xa-align [^:mut ^Cells scr ^I32 nn ^I32 n ^I32 m ^I32 layer ^I32 rank ^Cells etext ^:mut ^Cells feats
+                     ^:mut ^Cells dp ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "Align the n text-layer nodes of `tlist` with the m OCR nodes of `olist2` (both in logical order along the line) and")
+  (comment "apply the steps. The table is `(n + 1) * (m + 1)` costs and then as many choices (1 pair, 2 a 1:2, 3 a 2:1, 4 a text-layer")
+  (comment "word alone, 5 an OCR word alone).")
+  (if (> (* (+ n 1) (+ m 1)) (xa-dpmax))
+    (do (xa-greedy scr nn n m layer rank etext feats ta tb tt)
+        (return 0)))
+  (let [^I32 sz (* (+ n 1) (+ m 1))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 choice 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 w 0]
+    (cells-drop dp 0)
+    (while (< k (* 2 sz))
+      (do (cells-push dp 0)
+          (set k (+ k 1))))
+    (while (<= i n)
+      (do (set j 0)
+          (while (<= j m)
+            (do (set best 2000000000)
+                (set choice 0)
+                (if (and (> i 0) (> j 0))
+                  (do (set w (xa-cost scr nn 11 (- i 1) 1 13 (- j 1) 1))
+                      (if (< w (xa-inf))
+                        (do (set c (+ (xa-dp-at dp m (- i 1) (- j 1)) w))
+                            (if (< c best) (do (set best c) (set choice 1)))))))
+                (if (and (> i 0) (> j 1))
+                  (do (set w (xa-cost scr nn 11 (- i 1) 1 13 (- j 2) 2))
+                      (if (< w (xa-inf))
+                        (do (set c (+ (xa-dp-at dp m (- i 1) (- j 2)) w))
+                            (if (< c best) (do (set best c) (set choice 2)))))))
+                (if (and (> i 1) (> j 0))
+                  (do (set w (xa-cost scr nn 11 (- i 2) 2 13 (- j 1) 1))
+                      (if (< w (xa-inf))
+                        (do (set c (+ (xa-dp-at dp m (- i 2) (- j 1)) w))
+                            (if (< c best) (do (set best c) (set choice 3)))))))
+                (if (> i 0)
+                  (do (set c (+ (xa-dp-at dp m (- i 1) j) (xa-gap)))
+                      (if (< c best) (do (set best c) (set choice 4)))))
+                (if (> j 0)
+                  (do (set c (+ (xa-dp-at dp m i (- j 1)) (xa-gap)))
+                      (if (< c best) (do (set best c) (set choice 5)))))
+                (if (== choice 0) (set best 0))
+                (cells-set dp (+ (* i (+ m 1)) j) best)
+                (cells-set dp (+ sz (+ (* i (+ m 1)) j)) choice)
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (set i n)
+    (set j m)
+    (while (or (> i 0) (> j 0))
+      (do (set choice (cells-at dp (+ sz (+ (* i (+ m 1)) j))))
+          (if (== choice 1)
+            (do (xa-step scr nn (- i 1) 1 (- j 1) 1 layer rank etext feats ta tb tt)
+                (set i (- i 1))
+                (set j (- j 1))))
+          (if (== choice 2)
+            (do (xa-step scr nn (- i 1) 1 (- j 2) 2 layer rank etext feats ta tb tt)
+                (set i (- i 1))
+                (set j (- j 2))))
+          (if (== choice 3)
+            (do (xa-step scr nn (- i 2) 2 (- j 1) 1 layer rank etext feats ta tb tt)
+                (set i (- i 2))
+                (set j (- j 1))))
+          (if (== choice 4) (set i (- i 1)))
+          (if (== choice 5) (set j (- j 1)))
+          (if (== choice 0)
+            (do (set i 0)
+                (set j 0)))))
+    (return 0)))
+
+;; ------------------------------------------------------------- sorting (stable, by a key array)
+
+(defn ^I32 xa-msort [^:mut ^Cells scr ^I32 nn ^I32 arr ^I32 lo ^I32 cnt ^I32 kk]
+  (comment "Sort the c nodes of array `arr` from `lo` by the key array `kk` ascending, stably (a bottom-up merge sort through array 7).")
+  (let [^:mut ^I32 width 1
+        ^:mut ^I32 start 0
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 kx 0
+        ^:mut ^I32 ky 0]
+    (while (< width cnt)
+      (do (set start 0)
+          (while (< start cnt)
+            (do (set mid (+ start width))
+                (if (> mid cnt) (set mid cnt))
+                (set hi (+ start (* 2 width)))
+                (if (> hi cnt) (set hi cnt))
+                (set p start)
+                (set q mid)
+                (set o start)
+                (while (or (< p mid) (< q hi))
+                  (do (if (>= p mid)
+                        (do (set y (xa-a scr nn arr (+ lo q)))
+                            (xa-as scr nn 7 o y)
+                            (set q (+ q 1)))
+                        (if (>= q hi)
+                          (do (set x (xa-a scr nn arr (+ lo p)))
+                              (xa-as scr nn 7 o x)
+                              (set p (+ p 1)))
+                          (do (set x (xa-a scr nn arr (+ lo p)))
+                              (set y (xa-a scr nn arr (+ lo q)))
+                              (set kx (xa-a scr nn kk x))
+                              (set ky (xa-a scr nn kk y))
+                              (if (<= kx ky)
+                                (do (xa-as scr nn 7 o x)
+                                    (set p (+ p 1)))
+                                (do (xa-as scr nn 7 o y)
+                                    (set q (+ q 1)))))))
+                      (set o (+ o 1))))
+                (set start (+ start (* 2 width)))))
+          (set p 0)
+          (while (< p cnt)
+            (do (set x (xa-a scr nn 7 p))
+                (xa-as scr nn arr (+ lo p) x)
+                (set p (+ p 1))))
+          (set width (* width 2))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the grid
+
+(defn ^I32 xa-cell [^I32 x ^I32 size]
+  (comment "The grid cell (0..63) of a coordinate on a page `size` wide.")
+  (let [^:mut ^I32 v (i32 (quot (mul64 (i64 x) (i64 64)) (i64 size)))]
+    (if (< v 0) (set v 0))
+    (if (> v 63) (set v 63))
+    (return v)))
+
+(defn ^I32 xa-grid-add [^:mut ^Cells scr ^I32 nn ^:mut ^Cells gp ^I32 node ^I32 pw ^I32 ph]
+  (comment "Enter a node in every grid cell its box touches.")
+  (let [^I32 cx0 (xa-cell (xa-hb scr node 0) pw)
+        ^I32 cx1 (xa-cell (xa-hb scr node 2) pw)
+        ^I32 cy0 (xa-cell (xa-hb scr node 1) ph)
+        ^I32 cy1 (xa-cell (xa-hb scr node 3) ph)
+        ^I32 gb (xa-grid-base nn)
+        ^:mut ^I32 cy cy0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 head 0
+        ^:mut ^I32 at2 0]
+    (while (<= cy cy1)
+      (do (set cx cx0)
+          (while (<= cx cx1)
+            (do (set at (+ gb (+ (* cy 64) cx)))
+                (set head (cells-at scr at))
+                (cells-push gp node)
+                (cells-push gp head)
+                (set at2 (- (cells-len gp) 2))
+                (cells-set scr at at2)
+                (set cx (+ cx 1))))
+          (set cy (+ cy 1))))
+    (return 0)))
+
+(defn ^I32 xa-best [^Cells scr ^I32 nn ^Cells gp ^I32 nt ^I32 node ^I32 pw ^I32 ph ^I32 side]
+  (comment "The candidate of `node` with the most overlap (`ev-overlap-small`), -1 for none; ties go to the earlier node. `side` 1 looks")
+  (comment "among the text layer's candidates, 0 among the OCR words (other than the node itself).")
+  (let [^I32 cx0 (xa-cell (xa-hb scr node 0) pw)
+        ^I32 cx1 (xa-cell (xa-hb scr node 2) pw)
+        ^I32 cy0 (xa-cell (xa-hb scr node 1) ph)
+        ^I32 cy1 (xa-cell (xa-hb scr node 3) ph)
+        ^I32 gb (xa-grid-base nn)
+        ^:mut ^I32 cy cy0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ov 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestov 0]
+    (while (<= cy cy1)
+      (do (set cx cx0)
+          (while (<= cx cx1)
+            (do (set e (cells-at scr (+ gb (+ (* cy 64) cx))))
+                (while (>= e 0)
+                  (do (set k (cells-at gp e))
+                      (if (or (and (== side 1) (and (< k nt) (!= (xa-hb scr k 9) 0)))
+                              (and (== side 0) (and (>= k nt) (!= k node))))
+                        (if (== (xa-node-cand scr node k) 1)
+                          (do (set ov (ev-overlap-small (xa-hb scr node 0) (xa-hb scr node 1) (xa-hb scr node 2) (xa-hb scr node 3)
+                                                        (xa-hb scr k 0) (xa-hb scr k 1) (xa-hb scr k 2) (xa-hb scr k 3)))
+                              (if (or (> ov bestov) (and (== ov bestov) (and (>= best 0) (< k best))))
+                                (do (set bestov ov)
+                                    (set best k))))))
+                      (set e (cells-at gp (+ e 1)))))
+                (set cx (+ cx 1))))
+          (set cy (+ cy 1))))
+    (return best)))
+
+(defn ^I32 xa-attach [^:mut ^Cells scr ^I32 nn ^Cells gp ^I32 nt ^I32 no ^I32 pw ^I32 ph ^Cells etext ^:mut ^Cells feats
+                      ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "What no step matched but a word of the other source COVERS: an OCR word that is a candidate of a text-layer word (the")
+  (comment "word is longer than the pairing steps reach: `Section2.1` read as three words, a whole line whose spaces the font")
+  (comment "does not map) joins that word's group as a split, and a text-layer word that is a candidate of an OCR word joins its")
+  (comment "group as a merged one. Without this the covered words would be OCR-only or text-only groups of their own, and")
+  (comment "arbitration (P7.3) would write the same text twice (D253).")
+  (let [^:mut ^I32 j nt
+        ^:mut ^I32 k 0
+        ^:mut ^I32 layer 0
+        ^:mut ^I32 sim 0
+        ^:mut ^I32 cur 0]
+    (while (< j (+ nt no))
+      (do (if (== (xa-a scr nn 4 j) 0)
+            (do (set k (xa-best scr nn gp nt j pw ph 1))
+                (if (>= k 0)
+                  (do (xa-union scr nn k j)
+                      (xa-as scr nn 4 j 1)
+                      (set cur (xa-a scr nn 1 k))
+                      (xa-as scr nn 1 k (bit-or cur 4))
+                      (set cur (xa-a scr nn 1 j))
+                      (xa-as scr nn 1 j (bit-or cur 4))
+                      (xa-as scr nn 11 0 k)
+                      (xa-as scr nn 13 0 j)
+                      (set sim (xa-sim scr nn 11 0 1 13 0 1 etext 0 ta tb tt))
+                      (set layer 1)
+                      (if (== (xa-hb scr k 9) 2) (set layer 2))
+                      (if (== layer 1) (xa-put scr j (xo-sim-text) sim feats))
+                      (if (== layer 2) (xa-put scr j (xo-sim-hidden) sim feats))))))
+          (set j (+ j 1))))
+    (set k 0)
+    (while (< k nt)
+      (do (if (and (!= (xa-hb scr k 9) 0) (== (xa-a scr nn 4 k) 0))
+            (do (set j (xa-best scr nn gp nt k pw ph 0))
+                (if (>= j 0)
+                  (do (xa-union scr nn k j)
+                      (xa-as scr nn 4 k 1)
+                      (set cur (xa-a scr nn 1 k))
+                      (xa-as scr nn 1 k (bit-or cur 8))
+                      (set cur (xa-a scr nn 1 j))
+                      (xa-as scr nn 1 j (bit-or cur 8))))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 xa-cluster [^:mut ^Cells scr ^I32 nn ^Cells gp ^I32 nt ^I32 no ^I32 pw ^I32 ph]
+  (comment "Join the OCR words no step matched with the overlapping OCR words of other runs.")
+  (let [^I32 gb (xa-grid-base nn)
+        ^:mut ^I32 j nt
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 cx0 0
+        ^:mut ^I32 cx1 0
+        ^:mut ^I32 cy1 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 k 0]
+    (while (< j (+ nt no))
+      (do (if (== (xa-a scr nn 4 j) 0)
+            (do (set cx0 (xa-cell (xa-hb scr j 0) pw))
+                (set cx1 (xa-cell (xa-hb scr j 2) pw))
+                (set cy (xa-cell (xa-hb scr j 1) ph))
+                (set cy1 (xa-cell (xa-hb scr j 3) ph))
+                (while (<= cy cy1)
+                  (do (set cx cx0)
+                      (while (<= cx cx1)
+                        (do (set e (cells-at scr (+ gb (+ (* cy 64) cx))))
+                            (while (>= e 0)
+                              (do (set k (cells-at gp e))
+                                  (if (and (>= k nt) (!= k j))
+                                    (if (!= (xa-hb scr k 11) (xa-hb scr j 11))
+                                      (if (== (xa-node-cand scr j k) 1)
+                                        (xa-union scr nn j k))))
+                                  (set e (cells-at gp (+ e 1)))))
+                            (set cx (+ cx 1))))
+                      (set cy (+ cy 1))))))
+          (set j (+ j 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the lines
+
+(defn ^I32 xa-pos [^Cells scr ^I32 node ^I32 rot ^I32 dir]
+  (comment "A node's position along a line whose baseline is at `rot`: the centre projected on the reading axis, negated for a")
+  (comment "right-to-left line (so every line is read in logical order).")
+  (let [^I64 cx (i64 (+ (xa-hb scr node 0) (xa-hb scr node 2)))
+        ^I64 cy (i64 (+ (xa-hb scr node 1) (xa-hb scr node 3)))
+        ^I64 v (- (mul64 cx (i64 (ev-cos rot))) (mul64 cy (i64 (ev-sin rot))))
+        ^I32 p (i32 (quot v (i64 131072)))]
+    (if (== dir 1) (return (- 0 p)))
+    (return p)))
+
+(defn ^I32 xa-extent [^:mut ^Cells scr ^I32 nn ^I32 node ^I32 rot ^I32 pos]
+  (comment "Set node's extent along a line at `rot` (array 14 its start, 15 its end): its position `pos` less and plus the half of")
+  (comment "its box projected on the line's axis.")
+  (let [^I64 w (i64 (- (xa-hb scr node 2) (xa-hb scr node 0)))
+        ^I64 h (i64 (- (xa-hb scr node 3) (xa-hb scr node 1)))
+        ^:mut ^I32 c (ev-cos rot)
+        ^:mut ^I32 sn (ev-sin rot)]
+    (if (< c 0) (set c (- 0 c)))
+    (if (< sn 0) (set sn (- 0 sn)))
+    (let [^I32 e (i32 (quot (add64 (mul64 w (i64 c)) (mul64 h (i64 sn))) (i64 131072)))]
+      (xa-as scr nn 14 node (- pos e))
+      (xa-as scr nn 15 node (+ pos e))
+      (return 0))))
+
+(defn ^I32 xa-run-lines [^:mut ^Cells scr ^I32 nn ^I32 nt ^I32 na ^I32 nruns ^Cells etext ^:mut ^Cells feats
+                         ^:mut ^Cells dp ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "Every text-layer line: its OCR words (`ord[0, na)` is the assigned ones sorted by line), then the passes.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 lid 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 bc 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 node 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 dir 0
+        ^:mut ^I32 layer 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 rank 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 ol 0]
+    (while (< i nt)
+      (do (if (== (xa-hb scr i 9) 0)
+            (set i (+ i 1))
+            (do (set a i)
+                (set lid (xa-hb scr i 10))
+                (set b (+ i 1))
+                (comment "the run goes on over the words with the same line, skipping the ones that are not candidates")
+                (set t (+ i 1))
+                (while (and (< t nt) (or (== (xa-hb scr t 9) 0) (== (xa-hb scr t 10) lid)))
+                  (do (if (!= (xa-hb scr t 9) 0) (set b (+ t 1)))
+                      (set t (+ t 1))))
+                (set rot (xa-hb scr a 4))
+                (set dir (xa-hb scr a 5))
+                (comment "the line's OCR block: ord is sorted by oline, so find its first and its count")
+                (set lo 0)
+                (set hi na)
+                (while (< lo hi)
+                  (do (set mid (quot (+ lo hi) 2))
+                      (set node (xa-a scr nn 6 mid))
+                      (set ol (xa-a scr nn 2 node))
+                      (if (< ol lid)
+                        (set lo (+ mid 1))
+                        (set hi mid))))
+                (set bc 0)
+                (set ol lid)
+                (while (and (< (+ lo bc) na) (== ol lid))
+                  (do (set node (xa-a scr nn 6 (+ lo bc)))
+                      (set ol (xa-a scr nn 2 node))
+                      (if (== ol lid) (set bc (+ bc 1)))))
+                (set t 0)
+                (while (< t bc)
+                  (do (set node (xa-a scr nn 6 (+ lo t)))
+                      (xa-as scr nn 12 t node)
+                      (set pos (xa-pos scr node rot dir))
+                      (xa-as scr nn 5 node pos)
+                      (xa-extent scr nn node rot pos)
+                      (set t (+ t 1))))
+                (set t a)
+                (while (< t b)
+                  (do (set pos (xa-pos scr t rot dir))
+                      (xa-as scr nn 5 t pos)
+                      (xa-extent scr nn t rot pos)
+                      (set t (+ t 1))))
+                (if (> bc 1) (xa-msort scr nn 12 0 bc 5))
+                (set layer 1)
+                (while (<= layer 2)
+                  (do (set n 0)
+                      (set t a)
+                      (while (< t b)
+                        (do (if (== (xa-hb scr t 9) layer)
+                              (do (xa-as scr nn 11 n t)
+                                  (set n (+ n 1))))
+                            (set t (+ t 1))))
+                      (if (and (> n 0) (> bc 0))
+                        (do (set rank 0)
+                            (while (< rank nruns)
+                              (do (set m 0)
+                                  (set t 0)
+                                  (while (< t bc)
+                                    (do (set node (xa-a scr nn 12 t))
+                                        (if (== (xa-a scr nn 3 node) rank)
+                                          (do (xa-as scr nn 13 m node)
+                                              (set m (+ m 1))))
+                                        (set t (+ t 1))))
+                                  (if (> m 0)
+                                    (xa-align scr nn n m layer rank etext feats dp ta tb tt))
+                                  (set rank (+ rank 1))))))
+                      (set layer (+ layer 1))))
+                (set i b)))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the groups
+
+(defn ^I32 xa-emit [^I32 page ^:mut ^Cells scr ^I32 nn ^I32 nt ^I32 no ^I32 w0 ^I32 o0 ^I32 t0 ^I32 t1
+                    ^Cells tlines ^Cells etext ^:mut ^Cells refs ^:mut ^Cells cg
+                    ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "Write the groups in the order of their first candidate; answers how many.")
+  (let [^I32 total (+ nt no)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 node 0
+        ^:mut ^I32 tcnt 0
+        ^:mut ^I32 hcnt 0
+        ^:mut ^I32 ocnt 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 flags 0
+        ^:mut ^I32 minrank 0
+        ^:mut ^I32 nm 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 bestov 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 ov 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 sim -1
+        ^:mut ^I32 simfold -1]
+    (comment "roots, counts, the exclusive scan and the members bucketed by root (stable, so in candidate order)")
+    (set i 0)
+    (while (< i nn)
+      (do (xa-as scr nn 8 i 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i total)
+      (do (set r (xa-find scr nn i))
+          (xa-as scr nn 10 i r)
+          (if (!= (xa-hb scr i 9) 0)
+            (do (set c (xa-a scr nn 8 r))
+                (xa-as scr nn 8 r (+ c 1))))
+          (set i (+ i 1))))
+    (set s 0)
+    (set i 0)
+    (while (< i total)
+      (do (set c (xa-a scr nn 8 i))
+          (xa-as scr nn 8 i s)
+          (xa-as scr nn 7 i s)
+          (set s (+ s c))
+          (set i (+ i 1))))
+    (xa-as scr nn 8 total s)
+    (set i 0)
+    (while (< i total)
+      (do (if (!= (xa-hb scr i 9) 0)
+            (do (set r (xa-a scr nn 10 i))
+                (set c (xa-a scr nn 7 r))
+                (xa-as scr nn 9 c i)
+                (xa-as scr nn 7 r (+ c 1))))
+          (set i (+ i 1))))
+    (set r 0)
+    (while (< r total)
+      (do (if (and (!= (xa-hb scr r 9) 0) (== (xa-a scr nn 10 r) r))
+            (do (set s (xa-a scr nn 8 r))
+                (set e (xa-a scr nn 8 (+ r 1)))
+                (set tcnt 0)
+                (set hcnt 0)
+                (set ocnt 0)
+                (set flags 0)
+                (set i s)
+                (while (< i e)
+                  (do (set node (xa-a scr nn 9 i))
+                      (set kind (xa-hb scr node 9))
+                      (if (== kind 1) (do (xa-as scr nn 11 tcnt node) (set tcnt (+ tcnt 1))))
+                      (if (== kind 2) (do (xa-as scr nn 13 hcnt node) (set hcnt (+ hcnt 1))))
+                      (if (== kind 3) (do (xa-as scr nn 12 ocnt node) (set ocnt (+ ocnt 1))))
+                      (if (== i s)
+                        (do (set x0 (xa-hb scr node 0))
+                            (set y0 (xa-hb scr node 1))
+                            (set x1 (xa-hb scr node 2))
+                            (set y1 (xa-hb scr node 3))
+                            (set rot (xa-hb scr node 4)))
+                        (do (if (< (xa-hb scr node 0) x0) (set x0 (xa-hb scr node 0)))
+                            (if (< (xa-hb scr node 1) y0) (set y0 (xa-hb scr node 1)))
+                            (if (> (xa-hb scr node 2) x1) (set x1 (xa-hb scr node 2)))
+                            (if (> (xa-hb scr node 3) y1) (set y1 (xa-hb scr node 3)))))
+                      (set c (xa-a scr nn 1 node))
+                      (set flags (bit-or flags c))
+                      (set i (+ i 1))))
+                (set c (xa-a scr nn 11 0))
+                (set e (xa-a scr nn 13 0))
+                (set node (xa-a scr nn 12 0))
+                (if (> tcnt 0) (set rot (xa-hb scr c 4)))
+                (if (and (== tcnt 0) (> hcnt 0)) (set rot (xa-hb scr e 4)))
+                (if (and (== tcnt 0) (and (== hcnt 0) (> ocnt 0))) (set rot (xa-hb scr node 4)))
+                (if (and (> (+ tcnt hcnt) 0) (== ocnt 0)) (set flags (bit-or flags (plg-text-only))))
+                (if (and (> ocnt 0) (== (+ tcnt hcnt) 0)) (set flags (bit-or flags (plg-ocr-only))))
+                (set row (cg-new cg page x0 y0 x1 y1 rot))
+                (cg-set cg row (cgf-flags) flags)
+                (if (> tcnt 0)
+                  (do (cg-set cg row (cgf-tfirst) (rf-count refs))
+                      (cg-set cg row (cgf-tcount) tcnt)
+                      (set i 0)
+                      (while (< i tcnt)
+                        (do (set node (xa-a scr nn 11 i))
+                            (rf-add refs (ea-words) (+ w0 node))
+                            (set i (+ i 1))))))
+                (if (> ocnt 0)
+                  (do (cg-set cg row (cgf-ofirst) (rf-count refs))
+                      (cg-set cg row (cgf-ocount) ocnt)
+                      (set i 0)
+                      (while (< i ocnt)
+                        (do (set node (xa-a scr nn 12 i))
+                            (rf-add refs (ea-owords) (+ o0 (- node nt)))
+                            (set i (+ i 1))))))
+                (if (> hcnt 0)
+                  (do (cg-set cg row (cgf-hfirst) (rf-count refs))
+                      (cg-set cg row (cgf-hcount) hcnt)
+                      (set i 0)
+                      (while (< i hcnt)
+                        (do (set node (xa-a scr nn 13 i))
+                            (rf-add refs (ea-words) (+ w0 node))
+                            (set i (+ i 1))))))
+                (comment "the similarity: the text layer's words (the hidden ones without them) against the lowest run's")
+                (set sim -1)
+                (set simfold -1)
+                (if (and (> ocnt 0) (> (+ tcnt hcnt) 0))
+                  (do (set node (xa-a scr nn 12 0))
+                      (set minrank (xa-a scr nn 3 node))
+                      (set i 0)
+                      (while (< i ocnt)
+                        (do (set node (xa-a scr nn 12 i))
+                            (set c (xa-a scr nn 3 node))
+                            (if (< c minrank) (set minrank c))
+                            (set i (+ i 1))))
+                      (set nm 0)
+                      (set i 0)
+                      (while (< i ocnt)
+                        (do (set node (xa-a scr nn 12 i))
+                            (if (== (xa-a scr nn 3 node) minrank)
+                              (do (xa-as scr nn 5 nm node)
+                                  (set nm (+ nm 1))))
+                            (set i (+ i 1))))
+                      (if (> tcnt 0)
+                        (do (set sim (xa-sim scr nn 11 0 tcnt 5 0 nm etext 0 ta tb tt))
+                            (set simfold (xa-sim scr nn 11 0 tcnt 5 0 nm etext 1 ta tb tt)))
+                        (do (set sim (xa-sim scr nn 13 0 hcnt 5 0 nm etext 0 ta tb tt))
+                            (set simfold (xa-sim scr nn 13 0 hcnt 5 0 nm etext 1 ta tb tt))))))
+                (cg-set cg row (cgf-sim) sim)
+                (cg-set cg row (cgf-simfold) simfold)
+                (comment "the tracer line the group's box overlaps most")
+                (set best -1)
+                (set bestov 0)
+                (set i t0)
+                (while (< i t1)
+                  (do (if (== (xa-cand x0 y0 x1 y1 rot
+                                       (cells-at tlines (+ (* i 20) 1)) (cells-at tlines (+ (* i 20) 2))
+                                       (cells-at tlines (+ (* i 20) 3)) (cells-at tlines (+ (* i 20) 4))
+                                       (cells-at tlines (+ (* i 20) 9))) 1)
+                        (do (set ov (ev-overlap-small x0 y0 x1 y1
+                                                      (cells-at tlines (+ (* i 20) 1)) (cells-at tlines (+ (* i 20) 2))
+                                                      (cells-at tlines (+ (* i 20) 3)) (cells-at tlines (+ (* i 20) 4))))
+                            (if (> ov bestov)
+                              (do (set bestov ov)
+                                  (set best i)))))
+                      (set i (+ i 1))))
+                (cg-set cg row (cgf-tline) best)
+                (set g (+ g 1))))
+          (set r (+ r 1))))
+    (return g)))
+
+;; ------------------------------------------------------------- the page
+
+(defn ^I32 xa-lower [^Cells c ^I32 stride ^I32 page]
+  (comment "The first row of an arena whose page is at least `page`, the rows being in page order.")
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (quot (cells-len c) stride)
+        ^:mut ^I32 mid 0]
+    (while (< lo hi)
+      (do (set mid (quot (+ lo hi) 2))
+          (if (< (cells-at c (* mid stride)) page)
+            (set lo (+ mid 1))
+            (set hi mid))))
+    (return lo)))
+
+(defn ^I32 xa-load-head [^:mut ^Cells scr ^I32 i ^Cells src ^I32 stride ^I32 r]
+  (comment "Copy the head of row r of an arena of the given stride (a word's or an OCR word's) into node i.")
+  (xa-hbs scr i 0 (cells-at src (+ (* r stride) (hd-x0))))
+  (xa-hbs scr i 1 (cells-at src (+ (* r stride) (hd-y0))))
+  (xa-hbs scr i 2 (cells-at src (+ (* r stride) (hd-x1))))
+  (xa-hbs scr i 3 (cells-at src (+ (* r stride) (hd-y1))))
+  (xa-hbs scr i 4 (cells-at src (+ (* r stride) (hd-rot))))
+  (xa-hbs scr i 5 (cells-at src (+ (* r stride) (hd-dir))))
+  (xa-hbs scr i 6 (cells-at src (+ (* r stride) (hd-tstart))))
+  (xa-hbs scr i 7 (cells-at src (+ (* r stride) (hd-tlen))))
+  (xa-hbs scr i 8 (cells-at src (+ (* r stride) (hd-feat))))
+  (return 0))
+
+(defn ^:pub ^I32 xa-page [^I32 page ^Cells epages ^Cells words ^Cells owords ^Cells tlines ^:mut ^Cells feats ^Cells etext
+                          ^:mut ^Cells refs ^:mut ^Cells cg ^:mut ^Cells scr ^:mut ^Cells gp ^:mut ^Cells dp
+                          ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "Align one page. See the head of the file. Answers the number of groups appended to `cg`.")
+  (let [^I32 w0 (xa-lower words 24 page)
+        ^I32 w1 (xa-lower words 24 (+ page 1))
+        ^I32 o0 (xa-lower owords 28 page)
+        ^I32 o1 (xa-lower owords 28 (+ page 1))
+        ^I32 t0 (xa-lower tlines 20 page)
+        ^I32 t1 (xa-lower tlines 20 (+ page 1))
+        ^I32 nt (- w1 w0)
+        ^I32 no (- o1 o0)
+        ^I32 total (+ nt no)
+        ^I32 nn (+ total 1)
+        ^I32 erow (ev-page-row epages page)
+        ^:mut ^I32 pw 1
+        ^:mut ^I32 ph 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 prun -2
+        ^:mut ^I32 rk -1
+        ^:mut ^I32 csrc 0
+        ^:mut ^I32 na 0]
+    (if (== total 0) (return 0))
+    (cells-drop scr 0)
+    (while (< i (+ (* 28 nn) 4096))
+      (do (cells-push scr 0)
+          (set i (+ i 1))))
+    (cells-drop gp 0)
+    (comment "the text layer's heads, kinds and lines")
+    (set i 0)
+    (while (< i nt)
+      (do (set r (+ w0 i))
+          (xa-load-head scr i words 24 r)
+          (set f (xa-hb scr i 8))
+          (set v 0)
+          (if (>= f 0)
+            (do (set v (fe-get feats f (xt-vis)))
+                (if (< v 0) (set v 0))))
+          (set csrc (cells-at words (+ (* r 24) (wf-src))))
+          (xa-hbs scr i 9 0)
+          (if (!= (bit-and csrc (sr-hidden-text)) 0)
+            (xa-hbs scr i 9 2)
+            (if (== v 0) (xa-hbs scr i 9 1)))
+          (set f (cells-at words (+ (* r 24) (hd-line))))
+          (if (< f 0) (set f (+ 1000000000 i)))
+          (xa-hbs scr i 10 f)
+          (set i (+ i 1))))
+    (comment "the OCR words' heads and their runs, ranked in order of appearance")
+    (set i 0)
+    (while (< i no)
+      (do (set r (+ o0 i))
+          (xa-load-head scr (+ nt i) owords 28 r)
+          (xa-hbs scr (+ nt i) 9 3)
+          (set f (cells-at owords (+ (* r 28) (owf-run))))
+          (xa-hbs scr (+ nt i) 11 f)
+          (if (!= f prun)
+            (do (set rk (+ rk 1))
+                (set prun f)))
+          (xa-as scr nn 3 (+ nt i) rk)
+          (set i (+ i 1))))
+    (comment "the page box (the grid's scale), the union-find and the grid")
+    (set i 0)
+    (while (< i total)
+      (do (if (!= (xa-hb scr i 9) 0)
+            (do (if (> (xa-hb scr i 2) pw) (set pw (xa-hb scr i 2)))
+                (if (> (xa-hb scr i 3) ph) (set ph (xa-hb scr i 3)))))
+          (xa-as scr nn 0 i i)
+          (xa-as scr nn 2 i -1)
+          (set i (+ i 1))))
+    (if (>= erow 0)
+      (do (set v (ep-get epages erow (epf-width)))
+          (if (> v 0) (set pw v))
+          (set v (ep-get epages erow (epf-height)))
+          (if (> v 0) (set ph v))))
+    (set i 0)
+    (while (< i 4096)
+      (do (cells-set scr (+ (xa-grid-base nn) i) -1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i total)
+      (do (if (!= (xa-hb scr i 9) 0) (xa-grid-add scr nn gp i pw ph))
+          (set i (+ i 1))))
+    (comment "every OCR word's line, and the OCR words that have one sorted by it (stably: by their order)")
+    (set i 0)
+    (while (< i no)
+      (do (set v (xa-best scr nn gp nt (+ nt i) pw ph 1))
+          (if (>= v 0) (set v (xa-hb scr v 10)))
+          (xa-as scr nn 2 (+ nt i) v)
+          (if (>= v 0)
+            (do (xa-as scr nn 6 na (+ nt i))
+                (set na (+ na 1))))
+          (set i (+ i 1))))
+    (if (> na 1) (xa-msort scr nn 6 0 na 2))
+    (xa-run-lines scr nn nt na (+ rk 1) etext feats dp ta tb tt)
+    (xa-attach scr nn gp nt no pw ph etext feats ta tb tt)
+    (xa-cluster scr nn gp nt no pw ph)
+    (return (xa-emit page scr nn nt no w0 o0 t0 t1 tlines etext refs cg ta tb tt))))
