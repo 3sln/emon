@@ -229,9 +229,16 @@ public static class Tabletest {
         emon.Port.Cells s16 = emon.Port.NewCells();
         emon.Port.Cells s17 = emon.Port.NewCells();
         emon.Port.Cells s18 = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells gfl = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells gpts = emon.Port.NewCells();
+        emon.Port.Cells gmk = emon.Port.NewCells();
+        emon.Port.Cells gim = emon.Port.NewCells();
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
-        Table.TbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Gfuse.GfDoc(pa, gpts, gmk, gim, 1, Gfuse.GfxMode(), grl, gfl, cand);
+        Table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
         Columns.LcCopy(ln, lt);
         Para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         TtBrief(t, nodes, attrs, text);
@@ -448,6 +455,9 @@ public static class Tabletest {
         emon.Port.Cells s16 = emon.Port.NewCells();
         emon.Port.Cells s17 = emon.Port.NewCells();
         emon.Port.Cells s18 = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells gfl = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
         emon.Port.Cells sf = emon.Port.NewCells();
         emon.Port.Cells sc = emon.Port.NewCells();
         emon.Port.Cells ws = emon.Port.NewCells();
@@ -468,7 +478,8 @@ public static class Tabletest {
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.PaPages(pg, pages);
         int np = emon.Port.CellsLen(pages) / 16;
-        Table.TbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Gfuse.GfDoc(pa, pts, mk, im, np, Gfuse.GfxMode(), grl, gfl, cand);
+        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
         Columns.LcCopy(ln, lt);
         Initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
         Heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);

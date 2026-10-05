@@ -184,77 +184,34 @@ public static class Table {
         emon.Port.CellsPush(rl, 0);
         return 0;
     }
-    internal static int TbCollectOne(emon.Port.Cells pa, int i, emon.Port.Cells rl, emon.Port.Cells fl) {
-        // One path as a rule (a thin box, or an edge of a stroked rectangle) or a fill (a large filled box).
-        int fg = Evidence.PaGet(pa, i, Evidence.PfFlags());
-        int x0 = Evidence.PaGet(pa, i, Evidence.PfX0());
-        int y0 = Evidence.PaGet(pa, i, Evidence.PfY0());
-        int x1 = Evidence.PaGet(pa, i, Evidence.PfX1());
-        int y1 = Evidence.PaGet(pa, i, Evidence.PfY1());
-        int w = x1 - x0;
-        int h = y1 - y0;
-        int filled = fg & Evidence.PgFilled();
-        int stroked = fg & Evidence.PgStroked();
-        int kind = Evidence.PaGet(pa, i, Evidence.PfKind());
-        int lw = Evidence.PaGet(pa, i, Evidence.PfWidth());
-        int colour = Evidence.PaGet(pa, i, Evidence.PfFill());
-        int al = Evidence.PaGet(pa, i, Evidence.PfSalpha());
-        if ((fg & Evidence.PgClip()) != 0) {
-            return 0;
-        }
-        if ((fg & (Evidence.PgPattern() + Evidence.PgShading())) != 0) {
-            return 0;
-        }
-        if ((filled == 0) && (stroked == 0)) {
-            return 0;
-        }
-        if (filled != 0) {
-            al = Evidence.PaGet(pa, i, Evidence.PfFalpha());
-            colour = Evidence.PaGet(pa, i, Evidence.PfFill());
-        } else {
-            colour = Evidence.PaGet(pa, i, Evidence.PfStroke());
-        }
-        if (al <= 0) {
-            return 0;
-        }
-        if ((TbMin(w, h) <= RuleT) && (TbMax(w, h) >= RuleMin)) {
-            if (TbLum(colour) < 240) {
-                if (w >= h) {
-                    TbRuleAdd(rl, 0, (y0 + y1) / 2, x0, x1, h, colour);
-                } else {
-                    TbRuleAdd(rl, 1, (x0 + x1) / 2, y0, y1, w, colour);
-                }
-            }
-            return 0;
-        }
-        if ((kind == Evidence.PaRect()) && (stroked != 0) && (w > RuleMin) && (h > RuleMin)) {
-            int hw = lw / 2;
-            int sc = Evidence.PaGet(pa, i, Evidence.PfStroke());
-            if (TbLum(sc) < 240) {
-                TbRuleAdd(rl, 0, y0 + hw, x0, x1, lw, sc);
-                TbRuleAdd(rl, 0, y1 - hw, x0, x1, lw, sc);
-                TbRuleAdd(rl, 1, x0 + hw, y0, y1, lw, sc);
-                TbRuleAdd(rl, 1, x1 - hw, y0, y1, lw, sc);
-            }
-        }
-        if ((filled != 0) && (w > RuleMin) && (h > RuleMin)) {
-            emon.Port.CellsPush(fl, x0);
-            emon.Port.CellsPush(fl, y0);
-            emon.Port.CellsPush(fl, x1);
-            emon.Port.CellsPush(fl, y1);
-            emon.Port.CellsPush(fl, Evidence.PaGet(pa, i, Evidence.PfFill()));
-            emon.Port.CellsPush(fl, 0);
-        }
-        return 0;
-    }
-    internal static int TbCollect(emon.Port.Cells pa, int p0, int p1, emon.Port.Cells rl, emon.Port.Cells fl) {
-        // The page's paths p0..p1 as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness,
-        // colour) and fills (`fl`: box and colour).
-        int i = p0;
+    internal static int TbCollect(emon.Port.Cells grl, int r0, int r1, emon.Port.Cells gfl, int f0, int f1, emon.Port.Cells rl, emon.Port.Cells fl) {
+        // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never an `artifact-pagination` one: a running header's or footer's)
+        // as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
+        // (`fl`: box and colour). P5.5a (D218, D248): the table stage reads the fused graphics and never `paths`.
+        int i = r0;
+        int o = 0;
         emon.Port.CellsDrop(rl, 0);
         emon.Port.CellsDrop(fl, 0);
-        while (i < p1) {
-            TbCollectOne(pa, i, rl, fl);
+        while (i < r1) {
+            o = Glayer.GrlGet(grl, i, Glayer.GrfOrient());
+            if ((Glayer.GrlGet(grl, i, Glayer.GrfFlags()) & Glayer.GqArtifactPagination()) == 0) {
+                if (o == Glayer.GoH()) {
+                    TbRuleAdd(rl, 0, (Glayer.GrlGet(grl, i, Glayer.GrfEy0()) + Glayer.GrlGet(grl, i, Glayer.GrfEy1())) / 2, Glayer.GrlGet(grl, i, Glayer.GrfEx0()), Glayer.GrlGet(grl, i, Glayer.GrfEx1()), Glayer.GrlGet(grl, i, Glayer.GrfThick()), Glayer.GrlGet(grl, i, Glayer.GrfColour()));
+                }
+                if (o == Glayer.GoV()) {
+                    TbRuleAdd(rl, 1, (Glayer.GrlGet(grl, i, Glayer.GrfEx0()) + Glayer.GrlGet(grl, i, Glayer.GrfEx1())) / 2, Glayer.GrlGet(grl, i, Glayer.GrfEy0()), Glayer.GrlGet(grl, i, Glayer.GrfEy1()), Glayer.GrlGet(grl, i, Glayer.GrfThick()), Glayer.GrlGet(grl, i, Glayer.GrfColour()));
+                }
+            }
+            i += 1;
+        }
+        i = f0;
+        while (i < f1) {
+            emon.Port.CellsPush(fl, Glayer.GflGet(gfl, i, Glayer.GffX0()));
+            emon.Port.CellsPush(fl, Glayer.GflGet(gfl, i, Glayer.GffY0()));
+            emon.Port.CellsPush(fl, Glayer.GflGet(gfl, i, Glayer.GffX1()));
+            emon.Port.CellsPush(fl, Glayer.GflGet(gfl, i, Glayer.GffY1()));
+            emon.Port.CellsPush(fl, Glayer.GflGet(gfl, i, Glayer.GffColour()));
+            emon.Port.CellsPush(fl, 0);
             i += 1;
         }
         return 0;
@@ -2982,14 +2939,15 @@ public static class Table {
         TbCaption(tb, k, wd, et, ln, l0, l1, tq);
         return 0;
     }
-    public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages) {
+    public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages) {
         // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
         // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
         // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
         // row extents (one name each in the calls below). Answers the number of tables.
         int nw = Evidence.WdCount(wd);
         int nl = Evidence.LnCount(ln);
-        int nq = Evidence.PaCount(pa);
+        int nq = Glayer.GrlCount(grl);
+        int nu = Glayer.GflCount(gfl);
         int p = 1;
         int wi = 0;
         int wj = 0;
@@ -2997,6 +2955,8 @@ public static class Table {
         int lj = 0;
         int qi = 0;
         int qj = 0;
+        int ui = 0;
+        int uj = 0;
         int t0 = 0;
         int k = 0;
         emon.Port.CellsDrop(tb, 0);
@@ -3019,16 +2979,23 @@ public static class Table {
             while ((lj < nl) && (Evidence.LnGet(ln, lj, Evidence.LhPage()) == p)) {
                 lj += 1;
             }
-            while ((qi < nq) && (Evidence.PaGet(pa, qi, Evidence.PfPage()) < p)) {
+            while ((qi < nq) && (Glayer.GrlGet(grl, qi, Glayer.GrfPage()) < p)) {
                 qi += 1;
             }
             qj = qi;
-            while ((qj < nq) && (Evidence.PaGet(pa, qj, Evidence.PfPage()) == p)) {
+            while ((qj < nq) && (Glayer.GrlGet(grl, qj, Glayer.GrfPage()) == p)) {
                 qj += 1;
+            }
+            while ((ui < nu) && (Glayer.GflGet(gfl, ui, Glayer.GffPage()) < p)) {
+                ui += 1;
+            }
+            uj = ui;
+            while ((uj < nu) && (Glayer.GflGet(gfl, uj, Glayer.GffPage()) == p)) {
+                uj += 1;
             }
             t0 = TbRowsOf(tb, Tbs);
             if ((wj - wi) > 0) {
-                TbCollect(pa, qi, qj, s0, s2);
+                TbCollect(grl, qi, qj, gfl, ui, uj, s0, s2);
                 if (TbRowsOf(s0, Rls) <= MaxRules) {
                     TbMergeRules(s0, s1, s3, s9);
                     TbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx);
@@ -3049,6 +3016,7 @@ public static class Table {
             wi = wj;
             li = lj;
             qi = qj;
+            ui = uj;
             p += 1;
         }
         TbLink(tb, tc, tw, tx, tq, wd, et, ln, pages);

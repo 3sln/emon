@@ -56,6 +56,8 @@ use crate::emon::pdfdoc::*;
 use crate::emon::pdfmeta::pm_run;
 use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
 use crate::emon::pdfx::px_index_build;
+use crate::emon::gfuse::{gf_doc, gfx_mode};
+use crate::emon::player::pl_emit_gfx;
 use crate::emon::tlhealth::{th_append, th_run, th_write};
 use crate::imgdec;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
@@ -715,9 +717,15 @@ fn locale_cells(opts: &Options) -> Cells {
 }
 
 // The evidence dump of a conversion: `ev` is what the OCR stages made, the rest the text layer's.
-fn evidence_dump(ev: &mut EvArenas, et: &mut Cells, gl: &mut Cells, wd: &mut Cells, ln: &mut Cells, mk: &mut Cells, fnt: &mut Cells) -> String {
+fn evidence_dump(ev: &mut EvArenas, et: &mut Cells, gl: &mut Cells, wd: &mut Cells, ln: &mut Cells, mk: &mut Cells, fnt: &mut Cells, grl: &mut Cells, gfl: &mut Cells) -> String {
     let mut t = String::new();
-    ev_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines);
+    if cells_len(grl) == 0 && cells_len(gfl) == 0 {
+        ev_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines);
+    } else {
+        // P5.5a (D248): a document with fused graphics dumps version "2", the evidence's arrays then `grl gfl ggp grg` (the rest of the layer joins with P7.3)
+        let (mut ggp, mut grg) = (Cells::new(), Cells::new());
+        pl_emit_gfx(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines, grl, gfl, &mut ggp, &mut grg);
+    }
     t
 }
 
@@ -756,7 +764,8 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
         return RStep::Done(Outcome::Intake(info));
     }
     let (mut gl, mut mk, mut fnt) = (Cells::new(), Cells::new(), Cells::new());
-    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
+    let (mut grl, mut gfl) = (Cells::new(), Cells::new());
+    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut grl, &mut gfl)) } else { None };
     // the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
     let (mut fw, mut fl) = (Cells::new(), Cells::new());
     th_append(&mut wd, &mut ln, &mut fw, &mut fl, 0);
@@ -769,14 +778,15 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     let (mut fo, mut fp, mut ft, mut pl) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
     fu_find(&mut fw, &mut fl, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
     // Tables (P5), as `attempt` finds them: before the paragraphs, from the OCR lines like any others; an image has no vector
-    // paths (`pa` is empty), so only the text-based profiles can find one.
+    // paths, so its `grl`/`gfl` are empty (the tracer's witnesses are P7.G's) and only the text-based profiles can find one.
+    // (`pa` stays: the lists stage takes an empty paths arena.)
     let mut pa = Cells::new();
     let (mut tb, mut tc, mut tw, mut tq, mut tx) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s0, mut s1, mut s2, mut s3, mut s4) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s5, mut s6, mut s7, mut s8, mut s9) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s10, mut s11, mut s12, mut s13, mut s14) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s15, mut s16, mut s17, mut s18) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    tb_build(&mut fw, &mut fl, &mut et, &mut pa, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
+    tb_build(&mut fw, &mut fl, &mut et, &mut grl, &mut gfl, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
     let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
@@ -1063,9 +1073,12 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     }
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
     th_append(&mut wd, &mut ln, &mut fw, &mut fl, nl0);
+    // The fused graphics (P5.5a, D248): the vector source's rules and fills of every page, which the table stage reads instead of `paths`.
+    let (mut grl, mut gfl, mut gcand) = (Cells::new(), Cells::new(), Cells::new());
+    gf_doc(&mut pa, &mut pts, &mut mk, &mut im, np, gfx_mode(), &mut grl, &mut gfl, &mut gcand);
     // The evidence dump is the interpreter's own plus the scanned pages' (version "1", the content goldens' bytes): the layer's arenas
     // join it as version "2" with P7.3, when the goldens move with it (D242).
-    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
+    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut grl, &mut gfl)) } else { None };
     // The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
     // (D076), which the furniture stage weighs the tree's /Artifact marks by.
     let (mut idx, mut txt, mut w, mut seen) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
@@ -1093,7 +1106,7 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     let (mut s5, mut s6, mut s7, mut s8, mut s9) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s10, mut s11, mut s12, mut s13, mut s14) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s15, mut s16, mut s17, mut s18) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    tb_build(&mut fw, &mut fl, &mut et, &mut pa, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
+    tb_build(&mut fw, &mut fl, &mut et, &mut grl, &mut gfl, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
     let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     // the column stage's scratch (kin/columns.kin), and its debug log (`dbg`: one row of eight per join decision)
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());

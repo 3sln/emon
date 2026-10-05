@@ -36,6 +36,7 @@ import (
 	"emon/columns"
 	"emon/evidence"
 	"emon/furniture"
+	"emon/gfuse"
 	"emon/initial"
 	"emon/lists"
 	"emon/notes"
@@ -49,6 +50,7 @@ import (
 	"emon/pdfdoc"
 	"emon/pdfmeta"
 	"emon/pdfstruct"
+	"emon/player"
 	"emon/pdfx"
 	"emon/plan"
 	"emon/port"
@@ -736,9 +738,14 @@ func localeCells(opts Options) *port.Cells {
 }
 
 // evidenceDump is the evidence dump of a conversion: `ev` is what the OCR stages made, the rest the text layer's.
-func evidenceDump(ev *evArenas, et, gl, wd, ln, mk, fnt *port.Cells) string {
+func evidenceDump(ev *evArenas, et, gl, wd, ln, mk, fnt, grl, gfl *port.Cells) string {
 	var sb strings.Builder
-	evidence.EvEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines)
+	if port.CellsLen(grl) == 0 && port.CellsLen(gfl) == 0 {
+		evidence.EvEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines)
+	} else {
+		// P5.5a (D248): a document with fused graphics dumps version "2", the evidence's arrays then grl gfl ggp grg (the rest of the layer joins with P7.3)
+		player.PlEmitGfx(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines, grl, gfl, port.NewCells(), port.NewCells())
+	}
 	return sb.String()
 }
 
@@ -785,8 +792,9 @@ func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int3
 	g := newCellsN(3)
 	gl, mk, fnt := g[0], g[1], g[2]
 	var evs *string
+	grl, gfl := port.NewCells(), port.NewCells()
 	if opts.KeepEvidence {
-		s := evidenceDump(ev, et, gl, wd, ln, mk, fnt)
+		s := evidenceDump(ev, et, gl, wd, ln, mk, fnt, grl, gfl)
 		evs = &s
 	}
 	// the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
@@ -803,10 +811,11 @@ func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int3
 	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
 	furniture.FuFind(fw, fl, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
 	// Tables (P5), as `attempt` finds them: before the paragraphs, from the OCR lines like any others; an image has no vector
-	// paths (`pa` is empty), so only the text-based profiles can find one.
+	// paths, so its grl/gfl are empty (the tracer's witnesses are P7.G's) and only the text-based profiles can find one.
+	// (pa stays: the lists stage takes an empty paths arena.)
 	pa := port.NewCells()
 	tb := newCellsN(24)
-	table.TbBuild(fw, fl, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
+	table.TbBuild(fw, fl, et, grl, gfl, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
 	t := newCellsN(5)
 	c := newCellsN(13)
 	// initials (P4.10) on the lines' copy, before the headings read it, exactly as `attempt` does; OCR words have no glyph or
@@ -1084,11 +1093,15 @@ func attempt(view, pw *port.Src, answers, rq *port.Cells, idx int, opts Options,
 	}
 	// the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
 	tlhealth.ThAppend(wd, ln, fw, fl, nl0)
+	// The fused graphics (P5.5a, D248): the vector source's rules and fills of every page, which the table stage reads instead of paths.
+	gx3 := newCellsN(3)
+	grl, gfl, gcand := gx3[0], gx3[1], gx3[2]
+	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, gcand)
 	// The evidence dump is the interpreter's own plus the scanned pages' (version "1", the content goldens' bytes): the layer's arenas
 	// join it as version "2" with P7.3, when the goldens move with it (D242).
 	var ev *string
 	if opts.KeepEvidence {
-		s := evidenceDump(evs, et, gl, wd, ln, mk, fnt)
+		s := evidenceDump(evs, et, gl, wd, ln, mk, fnt, grl, gfl)
 		ev = &s
 	}
 	m := newArenas()
@@ -1115,7 +1128,7 @@ func attempt(view, pw *port.Src, answers, rq *port.Cells, idx int, opts Options,
 	furniture.FuFind(fw, fl, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
 	// Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
 	tb := newCellsN(24)
-	table.TbBuild(fw, fl, et, pa, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
+	table.TbBuild(fw, fl, et, grl, gfl, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)

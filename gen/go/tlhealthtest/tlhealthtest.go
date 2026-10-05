@@ -52,6 +52,9 @@ func ttFixture(emonT *testing.T, file []byte, wantFa int32, wantHidden int32, wa
 	var fv *port.Cells = port.NewCells()
 	var fx *port.Cells = port.NewCells()
 	var fpa *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var ggp *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
 	var sl *port.Cells = port.NewCells()
 	var refs *port.Cells = port.NewCells()
 	var ledger *port.Cells = port.NewCells()
@@ -125,11 +128,11 @@ func ttFixture(emonT *testing.T, file []byte, wantFa int32, wantHidden int32, wa
 	}
 	port.AssertEqAt(emonT, total, player.FwCount(fw), "the lines hold every word", ctx)
 	port.AssertThatAt(emonT, player.FlCount(fl) <= evidence.LnCount(ln), "no line is made", ctx)
-	port.AssertEqAt(emonT, player.PlCheck(cg, fw, fl, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the layer is sound", ctx)
+	port.AssertEqAt(emonT, player.PlCheck(cg, fw, fl, fv, fa, fx, hl, fpa, sl, gfl, ggp, grg, et, refs, gl), 0, "the layer is sound", ctx)
 	// the OCR lines of a scanned page join the flow as they are: every line and word of the evidence, copied
 	port.AssertEqAt(emonT, tlhealth.ThAppend(wd, ln, fw2, fl2, 0), evidence.LnCount(ln), "every line is copied", ctx)
 	port.AssertEqAt(emonT, player.FwCount(fw2), evidence.WdCount(wd), "and every word", ctx)
-	port.AssertEqAt(emonT, player.PlCheck(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the copy is sound", ctx)
+	port.AssertEqAt(emonT, player.PlCheck(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, gfl, ggp, grg, et, refs, gl), 0, "the copy is sound", ctx)
 	// the ledger
 	rows = tlhealth.ThWrite(fa, wd, et, ledger, text, tmp, tt)
 	port.AssertEqAt(emonT, rows, wantRows, "ledger rows", ctx)
