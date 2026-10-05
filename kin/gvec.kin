@@ -7,7 +7,7 @@
 ;;           0 kind (1 rule, 2 fill)  1 the `paths` row (a `from-image` rule: the `images` row)  2 the first `pts` row of the segment
 ;;           (-1: a candidate that is a path's box only)  3 page  4-7 box  8-11 the centre line `x0 y0 x1 y1` (a rule's; a fill's
 ;;           are 0)  12 thickness  13 colour (0xRRGGBB, -1)  14 style (`rs`)  15 flags: a rule's `gq` bits, a fill's `gqf` bits, and
-;;           GV_HIDDEN (65536) when the source's `vis` is not 0.
+;;           GVF_HIDDEN (65536) when the source's `vis` is not 0.
 ;;
 ;;       TWO MODES (`mode`):
 ;;
@@ -26,7 +26,7 @@
 ;;       each stays a candidate (`gv-piece`, `gv-pieces-finish`; D256); the others are dropped. A rectangle may be written `re` (five rows) or
 ;;       as a move, four lines and a close (Skia: six).
 ;;       A candidate is TRIMMED to its clip's box (a rule's extent along its axis; a rule whose band misses the box, or that the trim
-;;       leaves shorter than RULE_MIN, goes; a fill is intersected), keeps its path's `vis` (`GV_HIDDEN`: kept but flagged, for
+;;       leaves shorter than RULE_MIN, goes; a fill is intersected), keeps its path's `vis` (`GVF_HIDDEN`: kept but flagged, for
 ;;       `gf-page` to record) and must CONTRAST with the backdrop P3.6a found (the luminance difference of its ink and the backdrop,
 ;;       at least GF_CONTRAST of 255; an ink of -1 and a backdrop of -1, "cannot tell", are not tested), which replaces D179's "mean
 ;;       channel under 240" (a white rule on a dark header is a rule). A pattern fill and a shading are fills of colour -1 over their
@@ -52,14 +52,14 @@
 (defconst ^I32 GV_HAIR 24)          ;; a stroke of width 0 is one device pixel, 24 cpt
 (defconst ^I32 GV_FLAT 50)          ;; `gf-flat`: a curve within this of its chord is a straight segment
 (defconst ^I32 GV_CONTRAST 16)      ;; `gf-contrast`: of 255
-(defconst ^I32 GV_HIDDEN 65536)     ;; flag: the source's `vis` is not 0
-(defconst ^I32 GV_PIECE 131072)     ;; flag, in the scratch only: a thin box too short to be a rule, which may be a dash of one (see `gv-piece`)
+(defconst ^I32 GVF_HIDDEN 65536)     ;; flag: the source's `vis` is not 0
+(defconst ^I32 GVF_PIECE 131072)     ;; flag, in the scratch only: a thin box too short to be a rule, which may be a dash of one (see `gv-piece`)
 (defconst ^I32 GV_GAP 300)          ;; D179: pieces of a dashed line this close (3 pt) are one line
 (defconst ^I32 GV_PIECES 3)         ;; ... and a dashed line is at least this many pieces
 
 (defn ^:pub ^I32 gv-legacy [] (return 0))
 (defn ^:pub ^I32 gv-segments [] (return 1))
-(defn ^:pub ^I32 gv-hidden [] (return GV_HIDDEN))
+(defn ^:pub ^I32 gv-hidden [] (return GVF_HIDDEN))
 
 ;; ------------------------------------------------------------- small things
 
@@ -173,7 +173,7 @@
             ^I32 cls (mk-artifact-class 1 (quot packed 16) (rem packed 16))]
         (if (== cls (ar-pagination)) (set f (+ f (gq-artifact-pagination))))
         (if (== cls (ar-layout)) (set f (+ f (gq-artifact-layout))))))
-    (if (!= (pa-get pa i (pf-vis)) 0) (set f (+ f GV_HIDDEN)))
+    (if (!= (pa-get pa i (pf-vis)) 0) (set f (+ f GVF_HIDDEN)))
     (return f)))
 
 (defn ^I32 gv-contrasts [^I32 ink ^I32 backdrop]
@@ -188,7 +188,7 @@
                      ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1 ^I32 ex0 ^I32 ey0 ^I32 ex1 ^I32 ey1
                      ^I32 thick ^I32 colour ^I32 flags ^I32 horiz]
   (comment "A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons")
-  (comment "in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GV_PIECE, and its")
+  (comment "in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GVF_PIECE, and its")
   (comment "cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),")
   (comment "as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.")
   (comment "Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.")
@@ -196,7 +196,7 @@
         ^I32 b (* (- n 1) 16)
         ^:mut ^I32 ok 0]
     (if (> n 0)
-      (if (and (== (cells-at out b) 1) (and (== (cells-at out (+ b 1)) row) (!= (bit-and (cells-at out (+ b 15)) GV_PIECE) 0)))
+      (if (and (== (cells-at out b) 1) (and (== (cells-at out (+ b 1)) row) (!= (bit-and (cells-at out (+ b 15)) GVF_PIECE) 0)))
         (if (and (<= (gv-abs (- (cells-at out (+ b 12)) thick)) 50) (== (cells-at out (+ b 13)) colour))
           (if (== horiz 1)
             (if (and (== (cells-at out (+ b 9)) (cells-at out (+ b 11))) (<= (gv-abs (- (cells-at out (+ b 9)) ey0)) 100))
@@ -226,7 +226,7 @@
         ^:mut ^I32 keep 0]
     (while (< r n)
       (do (set b (* r 16))
-          (if (== (bit-and (cells-at out (+ b 15)) GV_PIECE) 0)
+          (if (== (bit-and (cells-at out (+ b 15)) GVF_PIECE) 0)
             (do (if (< w r)
                   (do (set k 0)
                       (while (< k 16)
@@ -241,7 +241,7 @@
                 (set lo2 (cells-at out (+ b 9)))
                 (set hi2 (cells-at out (+ b 11)))
                 (while (and (< (+ r1 1) n)
-                            (and (!= (bit-and (cells-at out (+ (* (+ r1 1) 16) 15)) GV_PIECE) 0)
+                            (and (!= (bit-and (cells-at out (+ (* (+ r1 1) 16) 15)) GVF_PIECE) 0)
                                  (== (cells-at out (+ (* (+ r1 1) 16) 14)) 1)))
                   (do (set r1 (+ r1 1))
                       (set lo (gv-min lo (cells-at out (+ (* r1 16) 8))))
@@ -256,7 +256,7 @@
                 (set j r)
                 (while (<= j r1)
                   (do (if (== keep 1)
-                        (do (cells-set out (+ (* j 16) 15) (- (cells-at out (+ (* j 16) 15)) GV_PIECE))
+                        (do (cells-set out (+ (* j 16) 15) (- (cells-at out (+ (* j 16) 15)) GVF_PIECE))
                             (cells-set out (+ (* j 16) 14) style)
                             (if (< w j)
                               (do (set k 0)
@@ -310,7 +310,7 @@
             (do (if (or (< (+ ex0 half) cx0) (> (- ex0 half) cx1)) (return 0))
                 (if (< ey0 cy0) (set ey0 cy0))
                 (if (> ey1 cy1) (set ey1 cy1))))))
-    (if (and (== (bit-and flags GV_PIECE) 0) (< (gv-max (- ex1 ex0) (gv-abs (- ey1 ey0))) GV_RULE_MIN)) (return 0))
+    (if (and (== (bit-and flags GVF_PIECE) 0) (< (gv-max (- ex1 ex0) (gv-abs (- ey1 ey0))) GV_RULE_MIN)) (return 0))
     (if (== (gv-contrasts colour (pa-get pa i (pf-backdrop))) 0) (return 0))
     (set bx0 (- (gv-min ex0 ex1) half))
     (set bx1 (+ (gv-max ex0 ex1) half))
@@ -320,7 +320,7 @@
       (do (set bx0 ex0) (set bx1 ex1)))
     (if (and (== horiz 0) (== ex0 ex1))
       (do (set by0 ey0) (set by1 ey1)))
-    (if (!= (bit-and flags GV_PIECE) 0)
+    (if (!= (bit-and flags GVF_PIECE) 0)
       (gv-piece out i ptrow page bx0 by0 bx1 by1 ex0 ey0 ex1 ey1 thick colour flags horiz)
       (gv-push out 1 i ptrow page bx0 by0 bx1 by1 ex0 ey0 ex1 ey1 thick colour style flags))
     (return 0)))
@@ -351,7 +351,7 @@
         ^I32 stroked (bit-and fg (pg-stroked))
         ^I32 w (- x1 x0)
         ^I32 h (- y1 y0)
-        ^I32 hid (bit-and flags GV_HIDDEN)
+        ^I32 hid (bit-and flags GVF_HIDDEN)
         ^:mut ^I32 lwe (pa-get pa i (pf-width))
         ^:mut ^I32 ew w
         ^:mut ^I32 eh h
@@ -372,7 +372,7 @@
           (if (<= al 0) (return 0))
           (if (and (!= filled 0) (!= fillflags 0)) (return 0))
           (let [^I32 th (gv-min ew eh)
-                ^I32 fl (+ (gv-sel stroked flags (+ flags (gq-from-fill))) GV_PIECE)
+                ^I32 fl (+ (gv-sel stroked flags (+ flags (gq-from-fill))) GVF_PIECE)
                 ^I32 ym (quot (+ y0 y1) 2)
                 ^I32 xm (quot (+ x0 x1) 2)]
             (if (>= ew eh)

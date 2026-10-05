@@ -9,8 +9,8 @@ pub(crate) const GV_RULE_MIN: i32 = 500;
 pub(crate) const GV_HAIR: i32 = 24;
 pub(crate) const GV_FLAT: i32 = 50;
 pub(crate) const GV_CONTRAST: i32 = 16;
-pub(crate) const GV_HIDDEN: i32 = 65536;
-pub(crate) const GV_PIECE: i32 = 131072;
+pub(crate) const GVF_HIDDEN: i32 = 65536;
+pub(crate) const GVF_PIECE: i32 = 131072;
 pub(crate) const GV_GAP: i32 = 300;
 pub(crate) const GV_PIECES: i32 = 3;
 pub fn gv_legacy() -> i32 {
@@ -20,7 +20,7 @@ pub fn gv_segments() -> i32 {
     return 1;
 }
 pub fn gv_hidden() -> i32 {
-    return GV_HIDDEN;
+    return GVF_HIDDEN;
 }
 pub(crate) fn gv_abs(a: i32) -> i32 {
     if a < 0 {
@@ -175,7 +175,7 @@ pub(crate) fn gv_path_flags(pa: &mut crate::port::Cells, mk: &mut crate::port::C
         }
     }
     if pa_get(pa, i, pf_vis()) != 0 {
-        f += GV_HIDDEN;
+        f += GVF_HIDDEN;
     }
     return f;
 }
@@ -195,7 +195,7 @@ pub(crate) fn gv_contrasts(ink: i32, backdrop: i32) -> i32 {
 }
 pub(crate) fn gv_piece(mut out: &mut crate::port::Cells, row: i32, ptrow: i32, page: i32, bx0: i32, by0: i32, bx1: i32, by1: i32, ex0: i32, ey0: i32, ex1: i32, ey1: i32, thick: i32, colour: i32, flags: i32, horiz: i32) -> i32 {
     // A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons
-    // in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GV_PIECE, and its
+    // in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GVF_PIECE, and its
     // cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),
     // as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.
     // Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.
@@ -203,7 +203,7 @@ pub(crate) fn gv_piece(mut out: &mut crate::port::Cells, row: i32, ptrow: i32, p
     let b: i32 = (n - 1) * 16;
     let mut ok: i32 = 0;
     if n > 0 {
-        if (crate::port::cells_at(out, b) == 1) && ((crate::port::cells_at(out, b + 1) == row) && ((crate::port::cells_at(out, b + 15) & GV_PIECE) != 0)) {
+        if (crate::port::cells_at(out, b) == 1) && ((crate::port::cells_at(out, b + 1) == row) && ((crate::port::cells_at(out, b + 15) & GVF_PIECE) != 0)) {
             if (gv_abs(crate::port::cells_at(out, b + 12) - thick) <= 50) && (crate::port::cells_at(out, b + 13) == colour) {
                 if horiz == 1 {
                     if (crate::port::cells_at(out, b + 9) == crate::port::cells_at(out, b + 11)) && (gv_abs(crate::port::cells_at(out, b + 9) - ey0) <= 100) {
@@ -242,7 +242,7 @@ pub(crate) fn gv_pieces_finish(mut out: &mut crate::port::Cells, start: i32) -> 
     let mut keep: i32 = 0;
     while r < n {
         b = r * 16;
-        if (crate::port::cells_at(out, b + 15) & GV_PIECE) == 0 {
+        if (crate::port::cells_at(out, b + 15) & GVF_PIECE) == 0 {
             if w < r {
                 k = 0;
                 while k < 16 {
@@ -259,7 +259,7 @@ pub(crate) fn gv_pieces_finish(mut out: &mut crate::port::Cells, start: i32) -> 
             hi = crate::port::cells_at(out, b + 10);
             lo2 = crate::port::cells_at(out, b + 9);
             hi2 = crate::port::cells_at(out, b + 11);
-            while ((r1 + 1) < n) && (((crate::port::cells_at(out, ((r1 + 1) * 16) + 15) & GV_PIECE) != 0) && (crate::port::cells_at(out, ((r1 + 1) * 16) + 14) == 1)) {
+            while ((r1 + 1) < n) && (((crate::port::cells_at(out, ((r1 + 1) * 16) + 15) & GVF_PIECE) != 0) && (crate::port::cells_at(out, ((r1 + 1) * 16) + 14) == 1)) {
                 r1 += 1;
                 lo = gv_min(lo, crate::port::cells_at(out, (r1 * 16) + 8));
                 hi = gv_max(hi, crate::port::cells_at(out, (r1 * 16) + 10));
@@ -278,7 +278,7 @@ pub(crate) fn gv_pieces_finish(mut out: &mut crate::port::Cells, start: i32) -> 
             j = r;
             while j <= r1 {
                 if keep == 1 {
-                    crate::port::cells_set(out, (j * 16) + 15, crate::port::cells_at(out, (j * 16) + 15) - GV_PIECE);
+                    crate::port::cells_set(out, (j * 16) + 15, crate::port::cells_at(out, (j * 16) + 15) - GVF_PIECE);
                     crate::port::cells_set(out, (j * 16) + 14, style);
                     if w < j {
                         k = 0;
@@ -364,7 +364,7 @@ pub(crate) fn gv_seg_rule(pa: &mut crate::port::Cells, i: i32, ptrow: i32, mut o
             }
         }
     }
-    if ((flags & GV_PIECE) == 0) && (gv_max(ex1 - ex0, gv_abs(ey1 - ey0)) < GV_RULE_MIN) {
+    if ((flags & GVF_PIECE) == 0) && (gv_max(ex1 - ex0, gv_abs(ey1 - ey0)) < GV_RULE_MIN) {
         return 0;
     }
     if gv_contrasts(colour, pa_get(pa, i, pf_backdrop())) == 0 {
@@ -382,7 +382,7 @@ pub(crate) fn gv_seg_rule(pa: &mut crate::port::Cells, i: i32, ptrow: i32, mut o
         by0 = ey0;
         by1 = ey1;
     }
-    if (flags & GV_PIECE) != 0 {
+    if (flags & GVF_PIECE) != 0 {
         gv_piece(out, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, flags, horiz);
     } else {
         gv_push(out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags);
@@ -418,7 +418,7 @@ pub(crate) fn gv_rect(pa: &mut crate::port::Cells, i: i32, ptrow: i32, mut out: 
     let stroked: i32 = fg & pg_stroked();
     let w: i32 = x1 - x0;
     let h: i32 = y1 - y0;
-    let hid: i32 = flags & GV_HIDDEN;
+    let hid: i32 = flags & GVF_HIDDEN;
     let mut lwe: i32 = pa_get(pa, i, pf_width());
     let mut ew: i32 = w;
     let mut eh: i32 = h;
@@ -451,7 +451,7 @@ pub(crate) fn gv_rect(pa: &mut crate::port::Cells, i: i32, ptrow: i32, mut out: 
             return 0;
         }
         let th: i32 = gv_min(ew, eh);
-        let fl: i32 = gv_sel(stroked, flags, flags + gq_from_fill()) + GV_PIECE;
+        let fl: i32 = gv_sel(stroked, flags, flags + gq_from_fill()) + GVF_PIECE;
         let ym: i32 = (y0 + y1) / 2;
         let xm: i32 = (x0 + x1) / 2;
         if ew >= eh {

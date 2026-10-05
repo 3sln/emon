@@ -19,9 +19,9 @@ const gvFlat int32 = 50
 
 const gvContrast int32 = 16
 
-const gvHidden int32 = 65536
+const gvfHidden int32 = 65536
 
-const gvPiece int32 = 131072
+const gvfPiece int32 = 131072
 
 const gvGap int32 = 300
 
@@ -36,7 +36,7 @@ func GvSegments() int32 {
 }
 
 func GvHidden() int32 {
-	return gvHidden
+	return gvfHidden
 }
 
 func gvAbs(a int32) int32 {
@@ -202,7 +202,7 @@ func gvPathFlags(pa *port.Cells, mk *port.Cells, i int32) int32 {
 		}
 	}
 	if evidence.PaGet(pa, i, evidence.PfVis()) != 0 {
-		f += gvHidden
+		f += gvfHidden
 	}
 	return f
 }
@@ -224,7 +224,7 @@ func gvContrasts(ink int32, backdrop int32) int32 {
 
 func gvPiece(out *port.Cells, row int32, ptrow int32, page int32, bx0 int32, by0 int32, bx1 int32, by1 int32, ex0 int32, ey0 int32, ex1 int32, ey1 int32, thick int32, colour int32, flags int32, horiz int32) int32 {
 	// A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons
-	// in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GV_PIECE, and its
+	// in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GVF_PIECE, and its
 	// cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),
 	// as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.
 	// Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.
@@ -232,7 +232,7 @@ func gvPiece(out *port.Cells, row int32, ptrow int32, page int32, bx0 int32, by0
 	var b int32 = (n - 1) * 16
 	var ok int32 = 0
 	if n > 0 {
-		if (port.CellsAt(out, b) == 1) && ((port.CellsAt(out, b+1) == row) && ((port.CellsAt(out, b+15) & gvPiece) != 0)) {
+		if (port.CellsAt(out, b) == 1) && ((port.CellsAt(out, b+1) == row) && ((port.CellsAt(out, b+15) & gvfPiece) != 0)) {
 			if (gvAbs(port.CellsAt(out, b+12)-thick) <= 50) && (port.CellsAt(out, b+13) == colour) {
 				if horiz == 1 {
 					if (port.CellsAt(out, b+9) == port.CellsAt(out, b+11)) && (gvAbs(port.CellsAt(out, b+9)-ey0) <= 100) {
@@ -272,7 +272,7 @@ func gvPiecesFinish(out *port.Cells, start int32) int32 {
 	var keep int32 = 0
 	for r < n {
 		b = r * 16
-		if (port.CellsAt(out, b+15) & gvPiece) == 0 {
+		if (port.CellsAt(out, b+15) & gvfPiece) == 0 {
 			if w < r {
 				k = 0
 				for k < 16 {
@@ -289,7 +289,7 @@ func gvPiecesFinish(out *port.Cells, start int32) int32 {
 			hi = port.CellsAt(out, b+10)
 			lo2 = port.CellsAt(out, b+9)
 			hi2 = port.CellsAt(out, b+11)
-			for ((r1 + 1) < n) && (((port.CellsAt(out, ((r1+1)*16)+15) & gvPiece) != 0) && (port.CellsAt(out, ((r1+1)*16)+14) == 1)) {
+			for ((r1 + 1) < n) && (((port.CellsAt(out, ((r1+1)*16)+15) & gvfPiece) != 0) && (port.CellsAt(out, ((r1+1)*16)+14) == 1)) {
 				r1 += 1
 				lo = gvMin(lo, port.CellsAt(out, (r1*16)+8))
 				hi = gvMax(hi, port.CellsAt(out, (r1*16)+10))
@@ -308,7 +308,7 @@ func gvPiecesFinish(out *port.Cells, start int32) int32 {
 			j = r
 			for j <= r1 {
 				if keep == 1 {
-					port.CellsSet(out, (j*16)+15, port.CellsAt(out, (j*16)+15)-gvPiece)
+					port.CellsSet(out, (j*16)+15, port.CellsAt(out, (j*16)+15)-gvfPiece)
 					port.CellsSet(out, (j*16)+14, style)
 					if w < j {
 						k = 0
@@ -395,7 +395,7 @@ func gvSegRule(pa *port.Cells, i int32, ptrow int32, out *port.Cells, xa int32, 
 			}
 		}
 	}
-	if ((flags & gvPiece) == 0) && (gvMax(ex1-ex0, gvAbs(ey1-ey0)) < gvRuleMin) {
+	if ((flags & gvfPiece) == 0) && (gvMax(ex1-ex0, gvAbs(ey1-ey0)) < gvRuleMin) {
 		return 0
 	}
 	if gvContrasts(colour, evidence.PaGet(pa, i, evidence.PfBackdrop())) == 0 {
@@ -413,7 +413,7 @@ func gvSegRule(pa *port.Cells, i int32, ptrow int32, out *port.Cells, xa int32, 
 		by0 = ey0
 		by1 = ey1
 	}
-	if (flags & gvPiece) != 0 {
+	if (flags & gvfPiece) != 0 {
 		gvPiece(out, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, flags, horiz)
 	} else {
 		gvPush(out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags)
@@ -451,7 +451,7 @@ func gvRect(pa *port.Cells, i int32, ptrow int32, out *port.Cells, x0 int32, y0 
 	var stroked int32 = fg & evidence.PgStroked()
 	var w int32 = x1 - x0
 	var h int32 = y1 - y0
-	var hid int32 = flags & gvHidden
+	var hid int32 = flags & gvfHidden
 	var lwe int32 = evidence.PaGet(pa, i, evidence.PfWidth())
 	var ew int32 = w
 	var eh int32 = h
@@ -484,7 +484,7 @@ func gvRect(pa *port.Cells, i int32, ptrow int32, out *port.Cells, x0 int32, y0 
 			return 0
 		}
 		var th int32 = gvMin(ew, eh)
-		var fl int32 = gvSel(stroked, flags, flags+glayer.GqFromFill()) + gvPiece
+		var fl int32 = gvSel(stroked, flags, flags+glayer.GqFromFill()) + gvfPiece
 		var ym int32 = (y0 + y1) / 2
 		var xm int32 = (x0 + x1) / 2
 		if ew >= eh {

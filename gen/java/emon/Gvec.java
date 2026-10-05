@@ -10,8 +10,8 @@ public final class Gvec {
     public static final int GV_HAIR = 24;
     public static final int GV_FLAT = 50;
     public static final int GV_CONTRAST = 16;
-    public static final int GV_HIDDEN = 65536;
-    public static final int GV_PIECE = 131072;
+    public static final int GVF_HIDDEN = 65536;
+    public static final int GVF_PIECE = 131072;
     public static final int GV_GAP = 300;
     public static final int GV_PIECES = 3;
     public static int gvLegacy() {
@@ -21,7 +21,7 @@ public final class Gvec {
         return 1;
     }
     public static int gvHidden() {
-        return GV_HIDDEN;
+        return GVF_HIDDEN;
     }
     public static int gvAbs(int a) {
         if (a < 0) {
@@ -176,7 +176,7 @@ public final class Gvec {
             }
         }
         if (Evidence.paGet(pa, i, Evidence.pfVis()) != 0) {
-            f += GV_HIDDEN;
+            f += GVF_HIDDEN;
         }
         return f;
     }
@@ -196,7 +196,7 @@ public final class Gvec {
     }
     public static int gvPiece(emon.Port.Cells out, int row, int ptrow, int page, int bx0, int by0, int bx1, int by1, int ex0, int ey0, int ex1, int ey1, int thick, int colour, int flags, int horiz) {
         // A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons
-        // in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GV_PIECE, and its
+        // in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GVF_PIECE, and its
         // cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),
         // as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.
         // Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.
@@ -204,7 +204,7 @@ public final class Gvec {
         int b = (n - 1) * 16;
         int ok = 0;
         if (n > 0) {
-            if ((emon.Port.cellsAt(out, b) == 1) && ((emon.Port.cellsAt(out, b + 1) == row) && ((emon.Port.cellsAt(out, b + 15) & GV_PIECE) != 0))) {
+            if ((emon.Port.cellsAt(out, b) == 1) && ((emon.Port.cellsAt(out, b + 1) == row) && ((emon.Port.cellsAt(out, b + 15) & GVF_PIECE) != 0))) {
                 if ((gvAbs(emon.Port.cellsAt(out, b + 12) - thick) <= 50) && (emon.Port.cellsAt(out, b + 13) == colour)) {
                     if (horiz == 1) {
                         if ((emon.Port.cellsAt(out, b + 9) == emon.Port.cellsAt(out, b + 11)) && (gvAbs(emon.Port.cellsAt(out, b + 9) - ey0) <= 100)) {
@@ -243,7 +243,7 @@ public final class Gvec {
         int keep = 0;
         while (r < n) {
             b = r * 16;
-            if ((emon.Port.cellsAt(out, b + 15) & GV_PIECE) == 0) {
+            if ((emon.Port.cellsAt(out, b + 15) & GVF_PIECE) == 0) {
                 if (w < r) {
                     k = 0;
                     while (k < 16) {
@@ -260,7 +260,7 @@ public final class Gvec {
                 hi = emon.Port.cellsAt(out, b + 10);
                 lo2 = emon.Port.cellsAt(out, b + 9);
                 hi2 = emon.Port.cellsAt(out, b + 11);
-                while (((r1 + 1) < n) && (((emon.Port.cellsAt(out, ((r1 + 1) * 16) + 15) & GV_PIECE) != 0) && (emon.Port.cellsAt(out, ((r1 + 1) * 16) + 14) == 1))) {
+                while (((r1 + 1) < n) && (((emon.Port.cellsAt(out, ((r1 + 1) * 16) + 15) & GVF_PIECE) != 0) && (emon.Port.cellsAt(out, ((r1 + 1) * 16) + 14) == 1))) {
                     r1 += 1;
                     lo = gvMin(lo, emon.Port.cellsAt(out, (r1 * 16) + 8));
                     hi = gvMax(hi, emon.Port.cellsAt(out, (r1 * 16) + 10));
@@ -279,7 +279,7 @@ public final class Gvec {
                 j = r;
                 while (j <= r1) {
                     if (keep == 1) {
-                        emon.Port.cellsSet(out, (j * 16) + 15, emon.Port.cellsAt(out, (j * 16) + 15) - GV_PIECE);
+                        emon.Port.cellsSet(out, (j * 16) + 15, emon.Port.cellsAt(out, (j * 16) + 15) - GVF_PIECE);
                         emon.Port.cellsSet(out, (j * 16) + 14, style);
                         if (w < j) {
                             k = 0;
@@ -365,7 +365,7 @@ public final class Gvec {
                 }
             }
         }
-        if (((flags & GV_PIECE) == 0) && (gvMax(ex1 - ex0, gvAbs(ey1 - ey0)) < GV_RULE_MIN)) {
+        if (((flags & GVF_PIECE) == 0) && (gvMax(ex1 - ex0, gvAbs(ey1 - ey0)) < GV_RULE_MIN)) {
             return 0;
         }
         if (gvContrasts(colour, Evidence.paGet(pa, i, Evidence.pfBackdrop())) == 0) {
@@ -383,7 +383,7 @@ public final class Gvec {
             by0 = ey0;
             by1 = ey1;
         }
-        if ((flags & GV_PIECE) != 0) {
+        if ((flags & GVF_PIECE) != 0) {
             gvPiece(out, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, flags, horiz);
         } else {
             gvPush(out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags);
@@ -419,7 +419,7 @@ public final class Gvec {
         int stroked = fg & Evidence.pgStroked();
         int w = x1 - x0;
         int h = y1 - y0;
-        int hid = flags & GV_HIDDEN;
+        int hid = flags & GVF_HIDDEN;
         int lwe = Evidence.paGet(pa, i, Evidence.pfWidth());
         int ew = w;
         int eh = h;
@@ -452,7 +452,7 @@ public final class Gvec {
                 return 0;
             }
             int th = gvMin(ew, eh);
-            int fl = gvSel(stroked, flags, flags + Glayer.gqFromFill()) + GV_PIECE;
+            int fl = gvSel(stroked, flags, flags + Glayer.gqFromFill()) + GVF_PIECE;
             int ym = (y0 + y1) / 2;
             int xm = (x0 + x1) / 2;
             if (ew >= eh) {

@@ -10,8 +10,8 @@ public static class Gvec {
     internal const int GvHair = 24;
     internal const int GvFlat = 50;
     internal const int GvContrast = 16;
-    internal const int GvHidden = 65536;
-    internal const int GvPiece = 131072;
+    internal const int GvfHidden = 65536;
+    internal const int GvfPiece = 131072;
     internal const int GvGap = 300;
     internal const int GvPieces = 3;
     public static int GvLegacy() {
@@ -21,7 +21,7 @@ public static class Gvec {
         return 1;
     }
     public static int GvHidden() {
-        return GvHidden;
+        return GvfHidden;
     }
     internal static int GvAbs(int a) {
         if (a < 0) {
@@ -176,7 +176,7 @@ public static class Gvec {
             }
         }
         if (Evidence.PaGet(pa, i, Evidence.PfVis()) != 0) {
-            f += GvHidden;
+            f += GvfHidden;
         }
         return f;
     }
@@ -196,7 +196,7 @@ public static class Gvec {
     }
     internal static int GvPiece(emon.Port.Cells @out, int row, int ptrow, int page, int bx0, int by0, int bx1, int by1, int ex0, int ey0, int ex1, int ey1, int thick, int colour, int flags, int horiz) {
         // A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons
-        // in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GV_PIECE, and its
+        // in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GVF_PIECE, and its
         // cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),
         // as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.
         // Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.
@@ -204,7 +204,7 @@ public static class Gvec {
         int b = (n - 1) * 16;
         int ok = 0;
         if (n > 0) {
-            if ((emon.Port.CellsAt(@out, b) == 1) && ((emon.Port.CellsAt(@out, b + 1) == row) && ((emon.Port.CellsAt(@out, b + 15) & GvPiece) != 0))) {
+            if ((emon.Port.CellsAt(@out, b) == 1) && ((emon.Port.CellsAt(@out, b + 1) == row) && ((emon.Port.CellsAt(@out, b + 15) & GvfPiece) != 0))) {
                 if ((GvAbs(emon.Port.CellsAt(@out, b + 12) - thick) <= 50) && (emon.Port.CellsAt(@out, b + 13) == colour)) {
                     if (horiz == 1) {
                         if ((emon.Port.CellsAt(@out, b + 9) == emon.Port.CellsAt(@out, b + 11)) && (GvAbs(emon.Port.CellsAt(@out, b + 9) - ey0) <= 100)) {
@@ -243,7 +243,7 @@ public static class Gvec {
         int keep = 0;
         while (r < n) {
             b = r * 16;
-            if ((emon.Port.CellsAt(@out, b + 15) & GvPiece) == 0) {
+            if ((emon.Port.CellsAt(@out, b + 15) & GvfPiece) == 0) {
                 if (w < r) {
                     k = 0;
                     while (k < 16) {
@@ -260,7 +260,7 @@ public static class Gvec {
                 hi = emon.Port.CellsAt(@out, b + 10);
                 lo2 = emon.Port.CellsAt(@out, b + 9);
                 hi2 = emon.Port.CellsAt(@out, b + 11);
-                while (((r1 + 1) < n) && (((emon.Port.CellsAt(@out, ((r1 + 1) * 16) + 15) & GvPiece) != 0) && (emon.Port.CellsAt(@out, ((r1 + 1) * 16) + 14) == 1))) {
+                while (((r1 + 1) < n) && (((emon.Port.CellsAt(@out, ((r1 + 1) * 16) + 15) & GvfPiece) != 0) && (emon.Port.CellsAt(@out, ((r1 + 1) * 16) + 14) == 1))) {
                     r1 += 1;
                     lo = GvMin(lo, emon.Port.CellsAt(@out, (r1 * 16) + 8));
                     hi = GvMax(hi, emon.Port.CellsAt(@out, (r1 * 16) + 10));
@@ -279,7 +279,7 @@ public static class Gvec {
                 j = r;
                 while (j <= r1) {
                     if (keep == 1) {
-                        emon.Port.CellsSet(@out, (j * 16) + 15, emon.Port.CellsAt(@out, (j * 16) + 15) - GvPiece);
+                        emon.Port.CellsSet(@out, (j * 16) + 15, emon.Port.CellsAt(@out, (j * 16) + 15) - GvfPiece);
                         emon.Port.CellsSet(@out, (j * 16) + 14, style);
                         if (w < j) {
                             k = 0;
@@ -365,7 +365,7 @@ public static class Gvec {
                 }
             }
         }
-        if (((flags & GvPiece) == 0) && (GvMax(ex1 - ex0, GvAbs(ey1 - ey0)) < GvRuleMin)) {
+        if (((flags & GvfPiece) == 0) && (GvMax(ex1 - ex0, GvAbs(ey1 - ey0)) < GvRuleMin)) {
             return 0;
         }
         if (GvContrasts(colour, Evidence.PaGet(pa, i, Evidence.PfBackdrop())) == 0) {
@@ -383,7 +383,7 @@ public static class Gvec {
             by0 = ey0;
             by1 = ey1;
         }
-        if ((flags & GvPiece) != 0) {
+        if ((flags & GvfPiece) != 0) {
             GvPiece(@out, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, flags, horiz);
         } else {
             GvPush(@out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags);
@@ -419,7 +419,7 @@ public static class Gvec {
         int stroked = fg & Evidence.PgStroked();
         int w = x1 - x0;
         int h = y1 - y0;
-        int hid = flags & GvHidden;
+        int hid = flags & GvfHidden;
         int lwe = Evidence.PaGet(pa, i, Evidence.PfWidth());
         int ew = w;
         int eh = h;
@@ -452,7 +452,7 @@ public static class Gvec {
                 return 0;
             }
             int th = GvMin(ew, eh);
-            int fl = GvSel(stroked, flags, flags + Glayer.GqFromFill()) + GvPiece;
+            int fl = GvSel(stroked, flags, flags + Glayer.GqFromFill()) + GvfPiece;
             int ym = (y0 + y1) / 2;
             int xm = (x0 + x1) / 2;
             if (ew >= eh) {
