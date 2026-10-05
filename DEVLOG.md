@@ -1981,7 +1981,7 @@ analysis beyond "top-to-bottom lines on a single column".
 - [ ] P6.2 — `Renderer` port (pdfium in Rust and Go), with layer masks where
   available (D007); pdfium loads through its custom-loader callback over the
   byte source, not a path or a whole-file copy (D058).
-- [ ] **P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew, orientation** (SPEC §8.2 "As designed", D092,
+- [x] **P6.3 — Normalization: grayscale, ink layers, Sauvola, deskew, orientation** (SPEC §8.2 "As designed", D092,
   D093, D096, D197). **Critical path, wave 1.** Depends on: P6.2 and P6.5 merged to main (renders and the evidence's
   `views`). Parallel with P7.0, P7.U, P6.6 (different files; see "Who edits what" under Phase 7).
   *Brief*: a kin module `emon.norm` that turns ONE raster (a render or a decode, given as a `Bitmap` plus its `views`
@@ -2028,6 +2028,35 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: the laws (each bulk form against its reference over random bitmaps; banded Sauvola equal to `ras-sauvola`
   on three pages; a two-colour fixture separates into exactly two layers with the right roles; a page of known skew)
   pass on all four targets; `bb ink` meets the targets above; the bench table is in this entry.
+  *Done (D237-D239), as written except where said.* **Files**: `kin/norm.kin` (`emon.norm`), `kin/normtest.kin` (31 laws),
+  the five bulk forms in section `;; P6.3 bulk forms` of the four port files (`bitmap-gray-into`, `-hist-rgb`, `-lut-into`,
+  `-hash`, `-quarter-into`; each held byte-identical to its kin reference `nm-ref-*` by law, the hash against FNV-1a values
+  computed in babashka), `bench/{norm.sh,norm_report.clj,mknorm.clj,mains/norm.rs,norm.go,Norm.java,NormProgram.cs}` (`bench/run.sh N
+  norm`), `kin/scripts/ink` (`bb ink`, in `bb.edn`, a named non-gate in `kin/scripts/gates`). **No Engine wiring**: `nm-view`
+  allocates no bitmap (the caller makes `gray`, `binary` and asks `nm-mask-into` / `nm-role-mask-into` for masks), and it appends the
+  `views` rows (gray, binary, one ink-mask per layer) and `inks` rows that P7.U attaches `bms-put` bitmaps to (wiring point in the
+  header of `kin/norm.kin`). `nm-feat-ocr`/`nm-feat-text` fill `xo` 10-13, 16 and `xt` 10-12 from pixel boxes (`nm-box-px` maps a
+  page box through a view); `nm-orient` is OSD's quarter turns when confident. Deviations from the brief: the skew is read off the
+  BODY mask's ink RUNS (weighted by length, two-pixel rows, differenced), not run-cluster centres (D238), and every dark neutral
+  layer is `body` (D237).
+  *Measured* (`bb ink`, 22 fusion documents, 39 scan-ovl pages at 130 dpi RGB q45 skewed ±3°, truth from the overlays drawn alone
+  through the same rotation; Rust and Go agree on every page): body glyph ink in body layers **0.974** (target 0.98: MISS; 0.981
+  on the clean documents, 0.93-0.95 on pages with bg-texture, seal over text and signatures); the COPY watermark's ink OUTSIDE body
+  **0.998** (0.943 in `light` layers, 0.048 not clustered as ink at all: ok); seal ink in colour layers **0.950**, outside body
+  **0.955** (ok, once `ink-chroma` fell from 48 to 32: JPEG 4:2:0 at q45 strips the chroma of thin strokes); the document's own seals
+  and stamps in colour layers **0.925** (MISS); the pen signature in colour layers **0.931** (MISS: a 3 px stroke has lost its chroma
+  by q45; it lands in `body`). Deskew against the known angles, pages not turned: scan-ovl within 0.1 degree on **89.2 %**, within
+  0.3 on **97.3 %** (worst 0.37); scan-color within 0.1 on **91.9 %**, all within 0.3 (worst 0.17) (targets 95 % / all: MISS, narrowly;
+  the corpus's own rotation by integer shears leaves one-pixel stairs, whose exactly horizontal runs vote for 0: `bb ink --verbose`
+  lists every page). Bench (`bench/norm.sh 5`, best of 5, **machine load 20-40 while measured**, so absolute times are about twice a quiet
+  machine's), ms per page, 300 dpi, `nm-view` whole (gray, histogram, layers, banded Sauvola, deskew): `inv_00007.noise` (gray 2481x3508)
+  rust 287, go 410, java 624, csharp 573; `watermark-draft` (RGB 2550x3300) rust 350, go 506, java 576, csharp 623. Stages, rust / go /
+  java / csharp on the RGB page: gray 16 / 26 / 30 / 37, colour histogram 47 / 54 / 56 / 48, layers (clustering) 0.6 / 0.9 / 2.4 /
+  1.3, one mask 22 / 32 / 45 / 43, banded Sauvola 219 / 274 / 313 / 315, deskew 15 / 15 / 16 / 26. Every kin stage is within D092's 2x of
+  Rust except the gray form's Go/Java/C# arms (Rust vectorises the copy; the form is a bulk form already). The banded Sauvola costs the
+  same as P2.7's whole-page `ras-sauvola` on the same page (rust 219 vs 219) with 2r+2 integral rows instead of 70 MB, and is **the one stage
+  over the SPEC 12.3 budget** (normalization 0.12 s a page on Rust): at an unloaded machine's speed it is roughly 0.1-0.15 s, so it is the
+  P6.3a candidate (`bitmap-sauvola-band`, bit-identical to the kin reference). On the 130 dpi scans `nm-view` is 60-95 ms (rust), 80-100 (go).
 - [ ] P6.3a — Raster kernels as host-accelerable whole-stage forms (D093): SIMD and GPU implementations of the P6.3 and
   P6.4 bulk forms behind the same declarations. **Not on the fusion path**: taken under P10.3 only if `bb fusion-bench`
   shows a raster stage over its SPEC 12.3 budget. Gate: every accelerated implementation bit-identical to the kin
@@ -7366,6 +7395,45 @@ entirely (rule 140 needs them now).
 
 ### D236 — P4.5/P4.6 verified: laws, the gold, both Engines, and the real corpus by eye
 **Result**. `kin/listtest.kin` (all four targets): markers (every form, every script above) and what is not a marker; a run of numbered lines is a list and a lone `A. Smith` is not; the caption keywords and numbers; what a bare link is and is not; and `rs-run` on a Model written by hand: items nested by x, a list that goes on across a milestone, a caption bound to its table and a figure caption wrapped, a reference with the target of its note and a bare link made a `link`. `bb accuracy` (the real `emon` predictor, 160 documents; `--update` recorded). ON THE BRANCH POINT (D177, before tables) `pdf/all`: block `list` P/R 0/0 -> 1.0/1.0, `item` 0/0 -> 1.0/1.0, `caption` 0/0 -> 1.0/1.0, `note` 0.75/0.375 -> 0.889/1.0, `figure` 0/0 -> 1.0/0.8, paragraph-boundary F1 0.189 -> 0.250, CER/WER 0.01178/0.02083 -> 0.00826/0.01510. AFTER MERGING main (tables, D178-D182) against main's own scoreboard: `list` and `item` P/R 0/0 -> 1.0/1.0, `caption` P/R 1.0/0.2 -> 1.0/1.0 (the tables' captions were P5.3's; the rest are figure captions), `note` 0.75/0.375 -> 0.889/1.0, `figure` 0/0 -> 1.0/0.8, `block-paragraph` P/R 0.612/0.966 -> 0.738/0.982, paragraph-boundary F1 0.657 -> 0.854, CER/WER 0.00967/0.01868 -> 0.00619/0.01305; the families: `pdf/lists` list/item P/R 1.0, paragraph-boundary F1 0.047 -> 1.0, CER/WER 0.0450/0.0673 -> 0/0; `pdf/footnotes` note P/R 0 -> 1.0, CER/WER 0.0098/0.0423 -> 0/0; `pdf/figures` caption P/R 0 -> 1.0, CER/WER 0.208/0.236 -> 0.147/0.167 (the chart's axis labels are still paragraphs: the figure stage's). The 0.89 note precision is two chart labels (`Q1 Q2`, `Units (thousands)`) that P4.1's column stage reads as margin notes. Merged with the table stage: a table's cells are written from WORDS (`tw`), and a group in one of them would be in the cell's text (found on a Hebrew Wikipedia infobox and nine CUAD contracts of 150 sampled, by scanning every output for a code point of U+FDD0..U+FDEF). So the stages here ask `ls-upright`, which is false for a line a table claims (`tb-claimed`), and `ls-taint` takes out every line that has a word in `tw` (flag 32; the line is found by bisection over the lines' word ranges: a word's own `line` field names the line before furniture's compaction, D173, and is stale), and `rs-run` ends by replacing any noncharacter in the Model's text with U+FFFD (a leak would be seen, not hidden); none in 1000 sampled corpus files since. A caption a table found (P5.3) is never found again here, and one it missed is bound to the table beside it by `rs-run`. Rust == Go (`bb identity`: 275 inputs x 9 arms byte-identical; the notes, lists and links stages are in `attempt()` of both Engines, in the order `hd-analyze`, `nt-analyze`, `ls-analyze`, `pa-build`, `rs-run`, `fu-write`). By eye on the corpus (arXiv: the Transformer, BERT, GPT-3; GAO; FOMC): the Transformer's 40-entry bibliography is one list across three pages and its exponents no notes; BERT's three-item list is one list across two columns, its `• 80% of the time` items are items, its table dashes and diagram boxes are not; GPT-3's 109 captions label `Figure 1.1` … `Table 3.3`; the FOMC minutes have four footnotes, each with its reference; GAO's list of figures is not captions; a CUAD contract's `(a)` with a tab stop is joined to its text. **Found while verifying** (each is a rule above): a bullet's group copied the bullet twice (text bullets are text markers), single-item lists from a table's dashes, one-item lists from a diagram's boxes, `Z.` initials as items, the exponents as footnotes, the bibliography as endnotes, a list in the second column as a nested list, a list across pages as three; `bb slice`'s fixture `footnotes-endnotes` is a P4.6 document now (its Model has notes: no longer paragraphs and headings alone, which is what `para-goldens`/`para-check` hold) and is replaced by `h-numbered` in the slice, the para goldens, `kin/paratest.kin` and both Engines' native tests (goldens regenerated); a Rust borrow error six times in the first builds (a `Cells` that is an argument of the call and of an argument: bind first, D163 said it); kin's refusals met on the way, each named by `bb emit` or `bb check`: a local called `go`, `len`, `cap` or `close` (Go's predeclared names have no escape), a constant and a function that differ only in case (`LS_NEAR`, `ls-near`: Go), an `if` as an argument (Java prints it as a malformed statement: in a law, too), a local that is assigned and never read (Go). The new stages cap what they multiply (`ls-cap`: coordinates and sizes held to ±10^7, the fuzz crasher `content-size-overflow` of D163 found it again in `notes.rs`), bound every candidate list (`LS_MAXCAND`, `NT_MAXRF`, `NT_MAXNB`) and nest lists no deeper than 24.
+
+### D237 — Ink layers as built: paper by mass, seeds by mass with a spike rule, edges by ink-to-paper segment, every dark neutral layer is body (P6.3; SPEC 8.2; D197)
+**Decision**: the histogram clustering of D197 as follows (all integer, settings `nm-ink-*`): paper is the heaviest bin among the
+lightest and every bin within `ink-paper` (24) of it; seeds are the heaviest non-paper bins (ties by bin index, bins under n/40000
+pixels never seed) farther than `ink-merge` (40, L1 in lightness, r-g, (r+g)/2-b) from every seed so far AND either off every seed's
+ink-to-paper segment or holding `ink-spike` (1 % of the page): an anti-aliased edge lies on the segment between its ink and the paper
+and must not become a layer, a flat watermark does; the other bins join the nearest seed within half of `ink-merge`, else the seed whose
+segment they lie nearest; layers under `ink-min` (0.5 % of the ink) are folded away, centroids within `ink-merge` merged, layers numbered
+by size. Roles: `colour` at chroma (|a|+|b|) 32 or more (48 lost thin seal strokes to JPEG), `light` neutral from lightness 150, `body` every
+other neutral layer (black headings and dark-grey text are two clusters of one ink; the first run labelled the second `unknown` and
+lost 24 % of the body), `background` a light or coloured layer covering 25 % of the page, `unknown` a dark neutral mass of that
+coverage. `nm-role-mask-into` is the union mask of a role.
+**Why**: first runs on the P6.6 scans gave 0.745 body purity (second dark layer), 0.0 signature (no colour seed), and seeds exhausted by
+anti-aliasing ramps; each rule above removed one of those. Measured in P6.3's entry.
+**Alternatives**: k-means over pixels (D197); seeding on every heavy bin (eight seeds spent on a grey ramp); one body layer (loses headings).
+- [ ] **Signed off** (maintainer)
+
+### D238 — Deskew from the body mask's ink runs, in two-pixel rows, scored by squared steps; the angle goes to the view and every view derived from it (P6.3; SPEC 8.2)
+**Decision**: on a decode view, the body layers' mask (borrowing `binary`'s buffer before Sauvola overwrites it) is read by
+`bitmap-next-nonzero` into ink runs (midpoint x, row, length) on every `h/800+1`-th row; for each angle from -5 to 5 degrees at 0.1,
+then 0.01 around the best, a run goes to the row `(y cos + x sin) >> 17` (two pixels) with its length as weight and the score is the
+sum of squared steps between neighbouring rows; 0 unless the best beats 0 by 1/64 (and 50 runs exist). Positive is counter-clockwise
+(lines rise to the right: the sign of `vwf-deskew`). `nm-reskew` rebuilds the source row's transform in place and `nm-view` gives the
+angle to the gray, binary and mask views. No resampling. Orientation is `nm-orient` (OSD at `osd-conf` 20).
+**Why**: the brief's word-cluster centres gave stacks of points whose alignment is within half a pixel (error 0.5-1 degree); a sum of
+squares over one-pixel rows is spiked at 0 by the stairs an integer-shear rotation leaves (P6.6's scans, ImageMagick) - two-pixel rows
+and squared differences gain 2x to 10x at the true angle; reading only body ink keeps watermarks, seals and textures from voting.
+**Alternatives**: Hough over components (the tracer's, later); component centres (tried: stacks); one-pixel rows (stair artefact).
+- [ ] **Signed off** (maintainer)
+
+### D239 — normalization allocates no bitmap: the caller owns gray, binary and masks; banded Sauvola on rings of integral rows; the measurement is bb ink on known overlays (P6.3; D092, D093, D196)
+**Decision**: `nm-view` (and every `nm-*` stage) takes the bitmaps it fills; kin cannot hold one in `Cells`, so P7.U makes them with
+`bms-put` at ids >= `KIN_VIEW_BASE` for the `views` rows `nm-view` appended (`nm-gray-view`, `nm-binary-view`, `ikf-mask`), and a mask is
+one `nm-mask-into` / `nm-role-mask-into` call per row. Sauvola keeps rings of `2r+2` integral rows (sum and square), equal to
+`ras-sauvola` by law at r = 15 and to a brute-force window sum at other radii. `bb ink` (not a gate) measures separation on P6.6's scans:
+truth is each overlay drawn alone through the very rotation the scan got, and the body's the clean render's dark neutral pixels.
+**Why**: no Engine wiring is P6.3's; memory O(w r) instead of 70 MB (D092); overlays are ours so the truth is exact.
+**Alternatives**: allocating inside `nm-view` (the bitmaps would die with the call); whole-page integral images.
+- [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here
 
