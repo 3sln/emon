@@ -40,6 +40,26 @@ func TestARenderRequestIsSevenCells(emonT *testing.T) {
 	port.AssertEq(emonT, plan.RqNargs(c, 0), 4, "four args")
 }
 
+func TestACropRequestIsRenderPlusAPixelRectangle(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	port.AssertEq(emonT, plan.PkCrop(), 5, "crop")
+	port.AssertEq(emonT, plan.LayNoWatermark(), 3, "no watermark")
+	port.AssertEq(emonT, plan.LayWatermarkOnly(), 4, "watermark only")
+	port.AssertEq(emonT, plan.RqCrop(c, 8, 1, 4, 150, plan.LayNoWatermark(), 10, 20, 300, 400), 0, "starts at 0")
+	port.AssertEq(emonT, plan.RecLen(c, 0), 11, "length")
+	port.AssertEq(emonT, plan.RecKind(c, 0), 5, "kind")
+	port.AssertEq(emonT, plan.RecId(c, 0), 8, "id")
+	port.AssertEq(emonT, plan.RqArg(c, 0, 0), 1, "input")
+	port.AssertEq(emonT, plan.RqArg(c, 0, 1), 4, "page")
+	port.AssertEq(emonT, plan.RqArg(c, 0, 2), 150, "dpi")
+	port.AssertEq(emonT, plan.RqArg(c, 0, 3), 3, "layer")
+	port.AssertEq(emonT, plan.RqArg(c, 0, 4), 10, "px")
+	port.AssertEq(emonT, plan.RqArg(c, 0, 5), 20, "py")
+	port.AssertEq(emonT, plan.RqArg(c, 0, 6), 300, "pw")
+	port.AssertEq(emonT, plan.RqArg(c, 0, 7), 400, "ph")
+	port.AssertEq(emonT, plan.RqNargs(c, 0), 8, "eight args")
+}
+
 func TestADecodeRequestNamesItsInputByIndexAndSpan(emonT *testing.T) {
 	var c *port.Cells = port.NewCells()
 	plan.RqDecode(c, 6, 1, 4096, 512, plan.FltDct(), 2)

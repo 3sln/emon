@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D243-D249) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
+;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D259-D265) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
 ;;
 ;; NOT A GATE (DEVLOG P6.4: a ratchet is P7.S's). Needs poppler, ghostscript, qpdf and ImageMagick, test/corpus/synth, the drivers (`bench/trace.sh`,
 ;; which this builds) and, for text-layer lines, a built `emon-rs` (kin/scripts/emon-rs-build, or EMON_RS). Measured, per DEVLOG P6.4 "Measured":
@@ -17,7 +17,7 @@
 ;;               primitive at IoU >= 0.5, the baseline P7.7 must keep;
 ;;   counts      components, runs and time per page, Rust (and with --go Go), and whether the two dump identical bytes.
 ;;
-;; P6.4b (D265) changed how the truth is made, not only the tracer: the renders are `render` views (not `decode`: a decode view is deskewed, and a page of table rules
+;; P6.4b (D272) changed how the truth is made, not only the tracer: the renders are `render` views (not `decode`: a decode view is deskewed, and a page of table rules
 ;; and no text was 'deskewed' by 3 degrees); a vector rule counts only where the render shows it (clipped, painted-over and off-page pieces are not truth); a page
 ;; that paints an image, a shading or a dash pattern has no precision score from its paths; the `gfx-*` documents use P6.8's own truth; the PDF's hash guards the
 ;; cache (P6.8 regenerated some documents under P6.4's renders).  `--legacy` is P6.4's scoring; `--tl` runs the with-text half only; TRACE_DECODE=1 restores the decode view.
@@ -433,7 +433,7 @@
                      (ratio (get-in m [:rules :v :pc]) (get-in m [:rules :v :pn])) (ratio (get-in m [:rules :v :rc]) (get-in m [:rules :v :rn])))))
   (let [fl (remove zero? (map :nfig nt)) tot (reduce + (map :ndet nt))
         by (sort-by (comp - val) (reduce (fn [m r] (update m (:stem r) (fnil + 0) (:nfig r))) {} (filter #(pos? (:nfig %)) nt)))]
-    (println (format "\n== figure-flagged rules (D263: the component holds over twice its rules' ink): %d of %d rules on the no-text renders; by document: %s"
+    (println (format "\n== figure-flagged rules (D270: the component holds over twice its rules' ink): %d of %d rules on the no-text renders; by document: %s"
                      (reduce + (map :nfig nt)) tot (pr-str (take 14 by)))))
   (let [t (reduce (fn [a m] (merge-with + a (:tints m))) {:both 0 :det 0 :truth 0} nt)]
     (println (format "\n== tints against vector fills (>5 pt, lightness >= 600): %d truth fills on %d pages; area recall %.4f precision %.4f (4 px cells: %d, %d, %d)"

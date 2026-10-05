@@ -136,27 +136,24 @@ public static class Rasterin {
         int hc = RsCpt(h, eff);
         return Scan.ScPage(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, Scan.ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
     }
-    public static int RsUnit(emon.Port.Src src, int input, int fmt, int info, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells scr) {
-        // One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the host, and so are
-        // the evidence arenas. `policy` is the OCR policy: 0 never, 1 auto, 2 always (D038); `loc` the locale hint's code points
-        // (empty: none). Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's `format` and
-        // `pages`, one page row per frame, and for every frame whose OCR answered: its evidence and its lines in `words` and
-        // `lines`, and `mask` (one cell a page) set to 1 so that `sc-tag` can say where the text came from.
+    public static int RsDoc(emon.Port.Src src, int input, int fmt, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells mask) {
+        // THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
+        // round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
+        // in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is
+        // decoded and no OCR is asked here: that is each frame's own page unit, `rs-page`. Answers `us-requests`, a failure
+        // status, or 0.
         int nbytes = Pdfsrc.PsLen(src);
         int a0 = Plan.AnFind(ans, 1);
         if (a0 < 0) {
-            Plan.RqDecode(rq, 1, input, 0, nbytes, Plan.FltNone(), RsFrameArg(info, 0));
+            Plan.RqDecode(rq, 1, input, 0, nbytes, Plan.FltNone(), RsFrameArg(1, 0));
             return Plan.UsRequests();
         }
         if (Plan.AnStatus(ans, a0) != Plan.PsOk()) {
             return RsFail(ans, a0);
         }
         int frames = Plan.AnArg(ans, a0, 5);
-        int want = RsWantOcr(info, policy);
         int f = 1;
         int asked = 0;
-        int da = 0;
-        int dd = 0;
         if (frames < 1) {
             return RsUndecodable();
         }
@@ -165,24 +162,10 @@ public static class Rasterin {
         }
         while (f < frames) {
             if (Plan.AnFind(ans, f + 1) < 0) {
-                Plan.RqDecode(rq, f + 1, input, 0, nbytes, Plan.FltNone(), RsFrameArg(info, f));
+                Plan.RqDecode(rq, f + 1, input, 0, nbytes, Plan.FltNone(), RsFrameArg(1, f));
                 asked = 1;
             }
             f += 1;
-        }
-        if (want == 1) {
-            f = 0;
-            while (f < frames) {
-                da = Plan.AnFind(ans, f + 1);
-                if ((da >= 0) && (Plan.AnFind(ans, RsOcrId(frames, f)) < 0)) {
-                    if (Plan.AnOk(ans, da) == 1) {
-                        dd = RsEffDpi100(Plan.AnArg(ans, da, 3));
-                        Scan.ScRequest(rq, RsOcrId(frames, f), f + 1, (dd + 50) / 100, loc);
-                        asked = 1;
-                    }
-                }
-                f += 1;
-            }
         }
         if (asked == 1) {
             return Plan.UsRequests();
@@ -215,19 +198,36 @@ public static class Rasterin {
             emon.Port.CellsPush(mask, 0);
             f += 1;
         }
-        if (want == 1) {
-            f = 0;
-            while (f < frames) {
-                da = Plan.AnFind(ans, RsOcrId(frames, f));
-                if (da >= 0) {
-                    if (Plan.AnOk(ans, da) == 1) {
-                        dd = Plan.AnFind(ans, f + 1);
-                        RsReadPage(ans, da, dd, f + 1, RsOcrId(frames, f), loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
-                        emon.Port.CellsSet(mask, f, 1);
-                    }
-                }
-                f += 1;
-            }
+        return 0;
+    }
+    public static int RsPage(int f, int input, int nbytes, int policy, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells scr) {
+        // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
+        // failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
+        // `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
+        // appended to `words` and `lines` and `mask[f]` is 1. Answers `us-requests`, a failure status, or 0. It writes nothing
+        // until every answer it asked for is in.
+        int did = Plan.PuId(f, Plan.PiDecode());
+        int oid = Plan.PuId(f, Plan.PiOcr());
+        int ad = Plan.AnFind(ans, did);
+        int ao = -1;
+        if (ad < 0) {
+            Plan.RqDecode(rq, did, input, 0, nbytes, Plan.FltNone(), f);
+            return Plan.UsRequests();
+        }
+        if (Plan.AnStatus(ans, ad) != Plan.PsOk()) {
+            return RsFail(ans, ad);
+        }
+        if (policy == 0) {
+            return 0;
+        }
+        ao = Plan.AnFind(ans, oid);
+        if (ao < 0) {
+            Scan.ScRequest(rq, oid, did, (RsEffDpi100(Plan.AnArg(ans, ad, 3)) + 50) / 100, loc);
+            return Plan.UsRequests();
+        }
+        if (Plan.AnOk(ans, ao) == 1) {
+            RsReadPage(ans, ao, ad, f + 1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
+            emon.Port.CellsSet(mask, f, 1);
         }
         return 0;
     }

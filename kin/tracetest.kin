@@ -1,4 +1,4 @@
-;; Laws for `emon.trace` (P6.4; D243-D249): hand-built bitmaps with known answers. Runs, components (two touching runs are one, a ring has a
+;; Laws for `emon.trace` (P6.4; D259-D265): hand-built bitmaps with known answers. Runs, components (two touching runs are one, a ring has a
 ;; hole, a letter in the notch of a `c` is not inside it), stroke width, classes, contours, Douglas-Peucker, rules (horizontal, vertical, slanted,
 ;; inside a grid component, dashed, double, and a circle that is NOT one), primitives (rect, circle, ellipse, ring, double ring), tints, text
 ;; lines (a 30 degree line of letters), the features and the orientation hint. 72 dpi makes a pixel a point (100 centipoints); 144 dpi makes
@@ -613,7 +613,7 @@
     (assert-eq (cells-at idx 2) 0 "equal keys by index")
     (assert-eq (cells-at idx 3) 2 "the later one last")))
 
-;; ---------------------------------------------------------------- P6.4b (D259-D265)
+;; ---------------------------------------------------------------- P6.4b (D266-D272)
 
 (defn ^I32 tt-trace-bin [^Bitmap bin ^I32 dpi100 ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tlines ^:mut ^Cells pts
                          ^:mut ^Cells refs ^:mut ^Cells views ^:mut ^Cells inks]

@@ -28,22 +28,22 @@ func TestTheSniffReadsTheSignatureAndNothingElse(emonT *testing.T) {
 	port.AssertEq(emonT, rasterin.RsCpt(1, 100000000), 1, "never zero")
 }
 
-func unitPol(ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, info int32, policy int32, loc *port.Cells, mask *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, oruns *port.Cells, olines *port.Cells, owords *port.Cells) int32 {
+func docOf(ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, mask *port.Cells) int32 {
 	var regions *port.Cells = port.NewCells()
 	var ledger *port.Cells = port.NewCells()
 	var layout *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
-	return rasterin.RsUnit(port.SrcOfBlob(port.HexBlob("49492a0008000000")), 7, rasterin.RsTiff(), info, ans, rq, nodes, attrs, text, pages, policy, loc, mask, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells())
+	return rasterin.RsDoc(port.SrcOfBlob(port.HexBlob("49492a0008000000")), 7, rasterin.RsTiff(), ans, rq, nodes, attrs, text, pages, mask)
 }
 
-func unitOf(ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, info int32) int32 {
-	return unitPol(ans, rq, nodes, attrs, text, pages, info, 0, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+func pagePol(f int32, ans *port.Cells, rq *port.Cells, policy int32, loc *port.Cells, mask *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, oruns *port.Cells, olines *port.Cells, owords *port.Cells) int32 {
+	return rasterin.RsPage(f, 7, 8, policy, ans, rq, loc, port.NewBitmapSet(), mask, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells())
 }
 
-func TestTheFirstRoundAsksForFrameZeroAndNothingMore(emonT *testing.T) {
+func TestTheDocumentPassAsksForFrameZerosHeaderAndNothingMore(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
 	var rq *port.Cells = port.NewCells()
-	port.AssertEq(emonT, unitOf(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 0), plan.UsRequests(), "it asks")
+	port.AssertEq(emonT, docOf(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
 	port.AssertEq(emonT, port.CellsLen(rq), 8, "one request of eight cells")
 	port.AssertEq(emonT, plan.RecKind(rq, 0), plan.PkDecode(), "a decode")
 	port.AssertEq(emonT, plan.RecId(rq, 0), 1, "frame 0 is id 1")
@@ -51,38 +51,33 @@ func TestTheFirstRoundAsksForFrameZeroAndNothingMore(emonT *testing.T) {
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 1), 0, "from its first byte")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 8, "the whole input")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 3), plan.FltNone(), "a whole image file, not a PDF filter")
-	port.AssertEq(emonT, plan.RqArg(rq, 0, 4), 0, "frame 0")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 4), -1, "frame 0, header only (D187)")
 }
 
-func TestTheHeaderOnlyFormAsksWithANegativeFrame(emonT *testing.T) {
-	var ans *port.Cells = port.NewCells()
-	var rq *port.Cells = port.NewCells()
-	port.AssertEq(emonT, unitOf(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 1), plan.UsRequests(), "it asks")
-	port.AssertEq(emonT, plan.RqArg(rq, 0, 4), -1, "frame 0, header only, is -1")
-}
-
-func TestTheSecondRoundAsksForEveryOtherFrame(emonT *testing.T) {
+func TestTheSecondRoundAsksForEveryOtherFramesHeader(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
 	var rq *port.Cells = port.NewCells()
 	plan.AnDecode(ans, 1, 463, 894, 1, 20000, 1, 3)
-	port.AssertEq(emonT, unitOf(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 0), plan.UsRequests(), "it asks again")
+	port.AssertEq(emonT, docOf(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks again")
 	port.AssertEq(emonT, port.CellsLen(rq), 16, "two more requests")
 	port.AssertEq(emonT, plan.RecId(rq, 0), 2, "frame 1 is id 2")
-	port.AssertEq(emonT, plan.RqArg(rq, 0, 4), 1, "frame 1")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 4), -2, "frame 1, header only")
 	port.AssertEq(emonT, plan.RecId(rq, 8), 3, "frame 2 is id 3")
-	port.AssertEq(emonT, plan.RqArg(rq, 8, 4), 2, "frame 2")
+	port.AssertEq(emonT, plan.RqArg(rq, 8, 4), -3, "frame 2, header only")
 }
 
-func TestWithEveryAnswerInTheUnitBuildsThePages(emonT *testing.T) {
+func TestWithEveryHeaderInTheDocumentPassBuildsThePages(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
 	var rq *port.Cells = port.NewCells()
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()
 	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
 	plan.AnDecode(ans, 1, 463, 894, 1, 20000, 1, 2)
 	plan.AnDecode(ans, 2, 992, 1403, 3, 0, 0, 2)
-	port.AssertEq(emonT, unitOf(ans, rq, nodes, attrs, port.NewCells(), pages, 0), 0, "done")
+	port.AssertEq(emonT, docOf(ans, rq, nodes, attrs, port.NewCells(), pages, mask), 0, "done")
 	port.AssertEq(emonT, port.CellsLen(rq), 0, "asks for nothing")
+	port.AssertEq(emonT, port.CellsLen(mask), 2, "a mask cell a page")
 	port.AssertEq(emonT, model.PageCount(pages), 2, "one page a frame")
 	port.AssertEq(emonT, model.PageNumber(pages, 1), 2, "numbered from 1 in frame order")
 	port.AssertEq(emonT, model.PageKind(pages, 0), model.PkImage(), "an image page")
@@ -97,18 +92,48 @@ func TestWithEveryAnswerInTheUnitBuildsThePages(emonT *testing.T) {
 	port.AssertEq(emonT, model.NodeFlags(nodes, 0), model.FlDpiUnknown(), "and that one of them has no stated resolution")
 }
 
-func TestAFailedDecodeIsTheUnitsFailure(emonT *testing.T) {
+func TestAFailedHeaderIsTheUnitsFailure(emonT *testing.T) {
 	var a1 *port.Cells = port.NewCells()
 	var a2 *port.Cells = port.NewCells()
 	var a3 *port.Cells = port.NewCells()
-	var rq *port.Cells = port.NewCells()
 	plan.AnFail(a1, plan.PkDecode(), 1, plan.PsFailed())
-	port.AssertEq(emonT, unitOf(a1, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 0), rasterin.RsUndecodable(), "damaged")
+	port.AssertEq(emonT, docOf(a1, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), rasterin.RsUndecodable(), "damaged")
 	plan.AnFail(a2, plan.PkDecode(), 1, plan.PsUnsupported())
-	port.AssertEq(emonT, unitOf(a2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 0), rasterin.RsUnsupported(), "not read")
+	port.AssertEq(emonT, docOf(a2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), rasterin.RsUnsupported(), "not read")
 	plan.AnDecode(a3, 1, 10, 10, 1, 0, 0, 2)
 	plan.AnFail(a3, plan.PkDecode(), 2, plan.PsFailed())
-	port.AssertEq(emonT, unitOf(a3, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 0), rasterin.RsUndecodable(), "a later frame that fails fails the unit")
+	port.AssertEq(emonT, docOf(a3, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), rasterin.RsUndecodable(), "a later frame that fails fails the unit")
+}
+
+func TestAFramesUnitAsksForItsPixelsFirstUnderItsOwnId(emonT *testing.T) {
+	var rq *port.Cells = port.NewCells()
+	port.AssertEq(emonT, pagePol(0, port.NewCells(), rq, 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
+	port.AssertEq(emonT, port.CellsLen(rq), 8, "one request")
+	port.AssertEq(emonT, plan.RecKind(rq, 0), plan.PkDecode(), "a decode")
+	port.AssertEq(emonT, plan.RecId(rq, 0), 260, "page 0, k 4: (0 + 1) * 256 + 4")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 4), 0, "the whole frame, not a header")
+	var rq2 *port.Cells = port.NewCells()
+	port.AssertEq(emonT, pagePol(2, port.NewCells(), rq2, 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
+	port.AssertEq(emonT, plan.RecId(rq2, 0), 772, "page 2: 3 * 256 + 4")
+	port.AssertEq(emonT, plan.RqArg(rq2, 0, 4), 2, "frame 2")
+}
+
+func TestAFramesUnitThatAskedTheSameAgainAsksTheSame(emonT *testing.T) {
+	var rq1 *port.Cells = port.NewCells()
+	var rq2 *port.Cells = port.NewCells()
+	pagePol(1, port.NewCells(), rq1, 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	pagePol(1, port.NewCells(), rq2, 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	port.AssertEq(emonT, port.CellsLen(rq1), port.CellsLen(rq2), "the same length")
+	port.AssertEq(emonT, port.CellsAt(rq1, 2), port.CellsAt(rq2, 2), "the same id")
+}
+
+func TestAFailedFrameDecodeIsTheUnitsFailure(emonT *testing.T) {
+	var a1 *port.Cells = port.NewCells()
+	plan.AnFail(a1, plan.PkDecode(), 260, plan.PsFailed())
+	port.AssertEq(emonT, pagePol(0, a1, port.NewCells(), 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), rasterin.RsUndecodable(), "damaged")
+	var a2 *port.Cells = port.NewCells()
+	plan.AnFail(a2, plan.PkDecode(), 260, plan.PsUnsupported())
+	port.AssertEq(emonT, pagePol(0, a2, port.NewCells(), 0, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), rasterin.RsUnsupported(), "not read, whatever the policy")
 }
 
 func fakeOcr(ans *port.Cells, id int32) int32 {
@@ -129,15 +154,15 @@ func fakeOcr(ans *port.Cells, id int32) int32 {
 	return at
 }
 
-func TestWithThePolicyOnTheSecondRoundAsksForOcrOfTheDecodedFrame(emonT *testing.T) {
+func TestWithThePolicyTheFramesSecondRoundAsksForOcrOfItsBitmap(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
 	var rq *port.Cells = port.NewCells()
-	plan.AnDecode(ans, 1, 463, 894, 1, 0, 1, 1)
-	port.AssertEq(emonT, unitPol(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 0, 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
+	plan.AnDecode(ans, 260, 463, 894, 1, 0, 1, 1)
+	port.AssertEq(emonT, pagePol(0, ans, rq, 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
 	port.AssertEq(emonT, plan.RecKind(rq, 0), plan.PkOcr(), "an OCR request")
-	port.AssertEq(emonT, plan.RecId(rq, 0), rasterin.RsOcrId(1, 0), "after every decode's id")
-	port.AssertEq(emonT, plan.RecId(rq, 0), 2, "one frame: id 2")
-	port.AssertEq(emonT, plan.RqArg(rq, 0, 0), 1, "of the bitmap of decode 1")
+	port.AssertEq(emonT, plan.RecId(rq, 0), plan.PuId(0, plan.PiOcr()), "page 0's OCR id")
+	port.AssertEq(emonT, plan.RecId(rq, 0), 272, "256 + 16")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 0), 260, "of the bitmap of the decode")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 1), 3, "psm 3")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 3+(300*256), "symbols, OSD, and the 300 dpi it assumed as a hint")
 	port.AssertEq(emonT, ocr.OcfDpi(plan.RqArg(rq, 0, 2)), 300, "read back")
@@ -154,26 +179,22 @@ func TestALocaleHintNamesTheLanguage(emonT *testing.T) {
 	port.CellsPush(loc, 45)
 	port.CellsPush(loc, 67)
 	port.CellsPush(loc, 72)
-	plan.AnDecode(ans, 1, 463, 894, 1, 20000, 1, 1)
-	port.AssertEq(emonT, unitPol(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 0, 2, loc, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
+	plan.AnDecode(ans, 260, 463, 894, 1, 20000, 1, 1)
+	port.AssertEq(emonT, pagePol(0, ans, rq, 2, loc, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 3+(200*256), "the stated 200 dpi")
 	port.AssertEq(emonT, plan.RqNargs(rq, 0), 8, "one language")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 7), 1684370688, "`de-CH` is `deu`")
 }
 
-func TestNeverAndTheHeaderOnlyFormAskForNoOcr(emonT *testing.T) {
+func TestNeverAsksForNoOcr(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
 	var rq *port.Cells = port.NewCells()
 	var mask *port.Cells = port.NewCells()
-	plan.AnDecode(ans, 1, 463, 894, 1, 20000, 1, 1)
-	port.AssertEq(emonT, unitPol(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 0, 0, port.NewCells(), mask, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "never: done")
+	port.CellsPush(mask, 0)
+	plan.AnDecode(ans, 260, 463, 894, 1, 20000, 1, 1)
+	port.AssertEq(emonT, pagePol(0, ans, rq, 0, port.NewCells(), mask, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "never: done")
 	port.AssertEq(emonT, port.CellsLen(rq), 0, "no request")
 	port.AssertEq(emonT, port.CellsAt(mask, 0), 0, "the page was not OCR'd")
-	var ans2 *port.Cells = port.NewCells()
-	var rq2 *port.Cells = port.NewCells()
-	plan.AnDecode(ans2, 1, 463, 894, 1, 20000, 1, 1)
-	port.AssertEq(emonT, unitPol(ans2, rq2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), 1, 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "intake: done")
-	port.AssertEq(emonT, port.CellsLen(rq2), 0, "intake never asks for OCR")
 }
 
 func TestAnOcrAnswerBecomesEvidenceAndThePipelinesLines(emonT *testing.T) {
@@ -186,10 +207,10 @@ func TestAnOcrAnswerBecomesEvidenceAndThePipelinesLines(emonT *testing.T) {
 	var oruns *port.Cells = port.NewCells()
 	var olines *port.Cells = port.NewCells()
 	var owords *port.Cells = port.NewCells()
-	var pages *port.Cells = port.NewCells()
-	plan.AnDecode(ans, 1, 600, 800, 1, 30000, 1, 1)
-	fakeOcr(ans, 2)
-	port.AssertEq(emonT, unitPol(ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), pages, 0, 2, port.NewCells(), mask, et, wd, ln, oruns, olines, owords), 0, "done")
+	port.CellsPush(mask, 0)
+	plan.AnDecode(ans, 260, 600, 800, 1, 30000, 1, 1)
+	fakeOcr(ans, 272)
+	port.AssertEq(emonT, pagePol(0, ans, rq, 2, port.NewCells(), mask, et, wd, ln, oruns, olines, owords), 0, "done")
 	port.AssertEq(emonT, port.CellsAt(mask, 0), 1, "the page's text came from OCR")
 	port.AssertEq(emonT, evidence.OrCount(oruns), 1, "one OCR run")
 	port.AssertEq(emonT, evidence.OlCount(olines), 1, "one OCR line")

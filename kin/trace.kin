@@ -1,4 +1,4 @@
-;; The tracer (P6.4, P6.4b; SPEC 8.2, 8.4.4; D092, D093, D198, D226; D243-D249, D259-D263). emon's own module (D039).
+;; The tracer (P6.4, P6.4b; SPEC 8.2, 8.4.4; D092, D093, D198, D226; D259-D265, D266-D270). emon's own module (D039).
 ;;
 ;;   Runs, components   `tr-runs` (the row runs of a binary view by `bitmap-next-nonzero`), `tr-label` (8-connected components by
 ;;                      union-find OVER RUNS, the smaller root wins), `tr-measure` (per component: ink, holes, stroke width as the
@@ -11,7 +11,7 @@
 ;;                      merged along their axis, styled (dashed, dotted, double), written to `rules` (D226).
 ;;   Primitives         `tr-prims`: `rect`, `circle`/`ellipse`, `ring`, `arrow`, `polygon`, `curve` fitted to the contours.
 ;;                      `tr-tints`: filled `rect`s from a light or background ink mask (D226).
-;;                      `tr-lightfills`: filled `rect`s from the GRAY view where a fill is too near the paper for any ink layer (P6.4b, D259).
+;;                      `tr-lightfills`: filled `rect`s from the GRAY view where a fill is too near the paper for any ink layer (P6.4b, D266).
 ;;   Text lines         `tr-tlines`: the text-like components of one ink layer chained along their own direction by agglomeration,
 ;;                      a baseline fitted, one `tlines` row a line (a faint diagonal watermark is one row at its angle).
 ;;   Features           `tr-feat-ocr`, `tr-feat-text`: `xo`/`xt` columns 14, 15 and 23 (SPEC 8.4.5).
@@ -84,7 +84,7 @@
 (defn ^:pub ^I32 tr-text-min [^I32 dpi100] (comment "The smallest text-like height: 3 pt.") (return (tr-pt dpi100 3)))
 (defn ^:pub ^I32 tr-text-max [^I32 dpi100 ^I32 weighted]
   (comment "The tallest provisional glyph, the components that decide the page's median text height: 200 pt on an ink mask (a watermark's")
-  (comment "letters are huge), 48 pt on the binary view (P6.4b, D260): on a page of figures a bar or a box is not text, and a median taken")
+  (comment "letters are huge), 48 pt on the binary view (P6.4b, D267): on a page of figures a bar or a box is not text, and a median taken")
   (comment "over them made every chart of a text-free page `text`, so the rules inside it were never looked for.")
   (if (== weighted 1) (return (tr-pt dpi100 200)))
   (return (tr-pt dpi100 48)))
@@ -125,7 +125,7 @@
 (defn ^:pub ^I32 tr-k-large [] (return 3))
 
 ;; flag bits of a `prims` row (SPEC 8.4.4: closed, filled, double ring, tint)
-(defn ^:pub ^I32 tr-rf-figure [] (comment "`rules` flag (D263): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.") (return 1))
+(defn ^:pub ^I32 tr-rf-figure [] (comment "`rules` flag (D270): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.") (return 1))
 (defn ^:pub ^I32 tr-pf-closed [] (return 1))
 (defn ^:pub ^I32 tr-pf-filled [] (return 2))
 (defn ^:pub ^I32 tr-pf-double [] (return 4))
@@ -2557,7 +2557,7 @@
           (set y (+ y 1))))
     (return n)))
 
-;; ---------------------------------------------------------------- light fills (P6.4b, D259)
+;; ---------------------------------------------------------------- light fills (P6.4b, D266)
 
 (defn ^:pub ^I32 tr-light-lo [] (comment "A pixel is a light fill at least this many gray levels darker than the paper (below it: paper, JPEG noise included).") (return 10))
 (defn ^:pub ^I32 tr-light-hi [] (comment "...and at most this many (darker is ink: P6.3's layers and the binary view have it).") (return 104))
@@ -2614,7 +2614,7 @@
 
 (defn ^:pub ^I32 tr-lightfills [^Cells views ^I32 page ^I32 view ^I32 dpi100 ^Bitmap gray ^I32 paper ^Bitmap mask ^Cells inks
                                 ^:mut ^Cells prims ^:mut ^Cells refs ^:mut ^Cells s1 ^:mut ^Cells s2]
-  (comment "Tints and shading fills too light for a layer (P6.4b, D259): `tr-light-mask` of the page's gray view (`view` is its `views` row),")
+  (comment "Tints and shading fills too light for a layer (P6.4b, D266): `tr-light-mask` of the page's gray view (`view` is its `views` row),")
   (comment "then `tr-tints` on that mask (inkrow -1), then the ones that cover half of a tint of an ink layer already in `prims` are dropped and the")
   (comment "colour of the rest is the gray (0xGGGGGG) of the fill pixels at nine points of the rectangle. A page more than 60 per cent \"fill\" has")
   (comment "a wrong paper and gets none. Nothing here reads or writes the layers' masks or the binary view. Answers the tints added.")
@@ -2703,7 +2703,7 @@
 
 (defconst ^I32 K_IT 10)   ;; a text item: comp cx cy w h ink parent next tail count
 (defn ^:pub ^I32 tr-tl-min [] (comment "A text line has at least this many components.") (return 3))
-(defn ^:pub ^I32 tr-tl-gap2 [] (comment "Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D262), it was 9 (1.5).") (return 23))
+(defn ^:pub ^I32 tr-tl-gap2 [] (comment "Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D269), it was 9 (1.5).") (return 23))
 
 (defn ^I32 tr-ifind [^:mut ^Cells it ^I32 a]
   (let [^:mut ^I32 x a
@@ -2878,7 +2878,7 @@
                 (if (> nn (i64 0)) (set icpt (quot (* sv (i64 65536)) nn)))))
           (set pass (+ pass 1))))
     (comment "the residual of the kept bottoms about the fit (px^2, rounded down) and the lowest bottom: `tr-tlines` distrusts a baseline whose")
-    (comment "bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D261)")
+    (comment "bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D268)")
     (set k 0)
     (set nn (i64 0))
     (set den (i64 0))
@@ -3103,7 +3103,7 @@
                       (set pass (+ pass 1))))
                 (comment "bottoms that do not line up (rms over 1/8 of the mean height, or the fit pulls the angle 1.5 degrees from the strip's) say nothing")
                 (comment "about the direction: a watermark's letters, hidden in")
-                (comment "places by body text, are cut at a different place each (P6.4b, D261). The thinnest strip's angle stands, the baseline is the")
+                (comment "places by body text, are cut at a different place each (P6.4b, D268). The thinnest strip's angle stands, the baseline is the")
                 (comment "strip's lower edge.")
                 (set hbar (cells-at s4 2))
                 (set dx (- th th0))

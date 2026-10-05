@@ -973,7 +973,7 @@ pub fn nm_sauvola(g: &crate::port::Bitmap, m: &crate::port::Bitmap, r: i32, k: i
 }
 pub fn nm_skew_points_cap(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells, ystep: i32, limit: i32, maxrun: i32) -> i32 {
     // As `nm-skew-points`, but a run longer than `maxrun` is not a point: a rule or an underline is not a text cluster, and its midpoint
-    // stands for its pixels only while it is short against the angle (P6.4b, D264).
+    // stands for its pixels only while it is short against the angle (P6.4b, D271).
     // The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its
     // midpoint x with its length as the weight (a run's pixels all project within a pixel of its midpoint at the angles
     // tried, so this is the row projection of the ink without visiting a pixel twice). At most `limit` runs. Answers how many.

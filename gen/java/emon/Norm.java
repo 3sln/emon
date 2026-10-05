@@ -975,7 +975,7 @@ public final class Norm {
     }
     public static int nmSkewPointsCap(emon.Port.Bitmap m, emon.Port.Cells pts, int ystep, int limit, int maxrun) {
         // As `nm-skew-points`, but a run longer than `maxrun` is not a point: a rule or an underline is not a text cluster, and its midpoint
-        // stands for its pixels only while it is short against the angle (P6.4b, D264).
+        // stands for its pixels only while it is short against the angle (P6.4b, D271).
         // The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its
         // midpoint x with its length as the weight (a run's pixels all project within a pixel of its midpoint at the angles
         // tried, so this is the row projection of the ink without visiting a pixel twice). At most `limit` runs. Answers how many.

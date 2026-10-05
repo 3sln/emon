@@ -381,7 +381,7 @@ func main() {
 func pixelLines(t *emon.Transcript, dump string) string {
 	var sb strings.Builder
 	for _, e := range t.Entries {
-		if len(e.Req) < 8 || e.Req[1] != 2 {
+		if len(e.Req) < 8 || e.Req[1] != 2 || e.Req[7] < 0 {
 			continue
 		}
 		if e.Ans[3] != 0 {

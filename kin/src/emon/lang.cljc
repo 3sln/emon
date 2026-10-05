@@ -170,6 +170,17 @@
    :needs {:go "emon/port"}
    :zero {:go "nil"}})
 
+(def BitmapSet
+  "The pixels a PAGE UNIT may read (P7.U, D196): the bitmaps its answers carried (a render's, a decode's) by request id,
+  and the ones kin makes itself (`bms-put`, ids from `KIN_VIEW_BASE`). The Engine makes one for each attempt of a page
+  unit and drops it when the unit ends, so a conversion holds one page's bitmaps. Opaque: `bms-get`, `bms-has`,
+  `bms-put`. IN RUST IT IS A SHARED BORROW, for the Bitmap's reason (`bms-put` writes through it)."
+  {:name 'BitmapSet
+   :types {:rust "&crate::port::BitmapSet" :go "*port.BitmapSet"
+           :java "emon.Port.BitmapSet" :csharp "emon.Port.BitmapSet"}
+   :needs {:go "emon/port"}
+   :zero {:go "nil"}})
+
 (def Cpt
   "Centipoints, 1/100 pt, as a 32-bit integer (SPEC 3.4, D009).
 
@@ -348,7 +359,7 @@
   {:namespace 'emon.lang
    :targets #{:rust :go :java :csharp}
    :tags {'I32 I32 'U32 U32 'I64 I64
-          'Bool Bool 'Blob Blob 'Src Src 'Bitmap Bitmap 'Sink Sink 'Cells Cells 'Buf Buf
+          'Bool Bool 'Blob Blob 'Src Src 'Bitmap Bitmap 'BitmapSet BitmapSet 'Sink Sink 'Cells Cells 'Buf Buf
           'Cpt Cpt 'Px Px 'Fx Fx 'Conf Conf 'Text Text}
    :names {}
    ;; ---------------------------------------------------------- the casts

@@ -158,27 +158,24 @@ func rsReadPage(ans *port.Cells, ao int32, ad int32, page int32, oid int32, loc 
 	return scan.ScPage(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, scan.ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
 }
 
-func RsUnit(src *port.Src, input int32, fmt int32, info int32, ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, policy int32, loc *port.Cells, mask *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells) int32 {
-	// One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the host, and so are
-	// the evidence arenas. `policy` is the OCR policy: 0 never, 1 auto, 2 always (D038); `loc` the locale hint's code points
-	// (empty: none). Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's `format` and
-	// `pages`, one page row per frame, and for every frame whose OCR answered: its evidence and its lines in `words` and
-	// `lines`, and `mask` (one cell a page) set to 1 so that `sc-tag` can say where the text came from.
+func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, mask *port.Cells) int32 {
+	// THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
+	// round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
+	// in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is
+	// decoded and no OCR is asked here: that is each frame's own page unit, `rs-page`. Answers `us-requests`, a failure
+	// status, or 0.
 	var nbytes int32 = pdfsrc.PsLen(src)
 	var a0 int32 = plan.AnFind(ans, 1)
 	if a0 < 0 {
-		plan.RqDecode(rq, 1, input, 0, nbytes, plan.FltNone(), rsFrameArg(info, 0))
+		plan.RqDecode(rq, 1, input, 0, nbytes, plan.FltNone(), rsFrameArg(1, 0))
 		return plan.UsRequests()
 	}
 	if plan.AnStatus(ans, a0) != plan.PsOk() {
 		return rsFail(ans, a0)
 	}
 	var frames int32 = plan.AnArg(ans, a0, 5)
-	var want int32 = rsWantOcr(info, policy)
 	var f int32 = 1
 	var asked int32 = 0
-	var da int32 = 0
-	var dd int32 = 0
 	if frames < 1 {
 		return RsUndecodable()
 	}
@@ -187,24 +184,10 @@ func RsUnit(src *port.Src, input int32, fmt int32, info int32, ans *port.Cells, 
 	}
 	for f < frames {
 		if plan.AnFind(ans, f+1) < 0 {
-			plan.RqDecode(rq, f+1, input, 0, nbytes, plan.FltNone(), rsFrameArg(info, f))
+			plan.RqDecode(rq, f+1, input, 0, nbytes, plan.FltNone(), rsFrameArg(1, f))
 			asked = 1
 		}
 		f += 1
-	}
-	if want == 1 {
-		f = 0
-		for f < frames {
-			da = plan.AnFind(ans, f+1)
-			if (da >= 0) && (plan.AnFind(ans, RsOcrId(frames, f)) < 0) {
-				if plan.AnOk(ans, da) == 1 {
-					dd = rsEffDpi100(plan.AnArg(ans, da, 3))
-					scan.ScRequest(rq, RsOcrId(frames, f), f+1, (dd+50)/100, loc)
-					asked = 1
-				}
-			}
-			f += 1
-		}
 	}
 	if asked == 1 {
 		return plan.UsRequests()
@@ -237,19 +220,37 @@ func RsUnit(src *port.Src, input int32, fmt int32, info int32, ans *port.Cells, 
 		port.CellsPush(mask, 0)
 		f += 1
 	}
-	if want == 1 {
-		f = 0
-		for f < frames {
-			da = plan.AnFind(ans, RsOcrId(frames, f))
-			if da >= 0 {
-				if plan.AnOk(ans, da) == 1 {
-					dd = plan.AnFind(ans, f+1)
-					rsReadPage(ans, da, dd, f+1, RsOcrId(frames, f), loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
-					port.CellsSet(mask, f, 1)
-				}
-			}
-			f += 1
-		}
+	return 0
+}
+
+func RsPage(f int32, input int32, nbytes int32, policy int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells) int32 {
+	// The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
+	// failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
+	// `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
+	// appended to `words` and `lines` and `mask[f]` is 1. Answers `us-requests`, a failure status, or 0. It writes nothing
+	// until every answer it asked for is in.
+	var did int32 = plan.PuId(f, plan.PiDecode())
+	var oid int32 = plan.PuId(f, plan.PiOcr())
+	var ad int32 = plan.AnFind(ans, did)
+	var ao int32 = -1
+	if ad < 0 {
+		plan.RqDecode(rq, did, input, 0, nbytes, plan.FltNone(), f)
+		return plan.UsRequests()
+	}
+	if plan.AnStatus(ans, ad) != plan.PsOk() {
+		return rsFail(ans, ad)
+	}
+	if policy == 0 {
+		return 0
+	}
+	ao = plan.AnFind(ans, oid)
+	if ao < 0 {
+		scan.ScRequest(rq, oid, did, (rsEffDpi100(plan.AnArg(ans, ad, 3))+50)/100, loc)
+		return plan.UsRequests()
+	}
+	if plan.AnOk(ans, ao) == 1 {
+		rsReadPage(ans, ao, ad, f+1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
+		port.CellsSet(mask, f, 1)
 	}
 	return 0
 }

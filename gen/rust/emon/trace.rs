@@ -85,7 +85,7 @@ pub fn tr_text_min(dpi100: i32) -> i32 {
 }
 pub fn tr_text_max(dpi100: i32, weighted: i32) -> i32 {
     // The tallest provisional glyph, the components that decide the page's median text height: 200 pt on an ink mask (a watermark's
-    // letters are huge), 48 pt on the binary view (P6.4b, D260): on a page of figures a bar or a box is not text, and a median taken
+    // letters are huge), 48 pt on the binary view (P6.4b, D267): on a page of figures a bar or a box is not text, and a median taken
     // over them made every chart of a text-free page `text`, so the rules inside it were never looked for.
     if weighted == 1 {
         return tr_pt(dpi100, 200);
@@ -131,7 +131,7 @@ pub fn tr_k_large() -> i32 {
     return 3;
 }
 pub fn tr_rf_figure() -> i32 {
-    // `rules` flag (D263): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.
+    // `rules` flag (D270): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.
     return 1;
 }
 pub fn tr_pf_closed() -> i32 {
@@ -3244,7 +3244,7 @@ pub fn tr_light_mask(gray: &crate::port::Bitmap, paper: i32, bridge: i32, mask: 
     return cov;
 }
 pub fn tr_lightfills(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, gray: &crate::port::Bitmap, paper: i32, mask: &crate::port::Bitmap, inks: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells) -> i32 {
-    // Tints and shading fills too light for a layer (P6.4b, D259): `tr-light-mask` of the page's gray view (`view` is its `views` row),
+    // Tints and shading fills too light for a layer (P6.4b, D266): `tr-light-mask` of the page's gray view (`view` is its `views` row),
     // then `tr-tints` on that mask (inkrow -1), then the ones that cover half of a tint of an ink layer already in `prims` are dropped and the
     // colour of the rest is the gray (0xGGGGGG) of the fill pixels at nine points of the rectangle. A page more than 60 per cent "fill" has
     // a wrong paper and gets none. Nothing here reads or writes the layers' masks or the binary view. Answers the tints added.
@@ -3351,7 +3351,7 @@ pub fn tr_tl_min() -> i32 {
     return 3;
 }
 pub fn tr_tl_gap2() -> i32 {
-    // Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D262), it was 9 (1.5).
+    // Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D269), it was 9 (1.5).
     return 23;
 }
 pub(crate) fn tr_ifind(mut it: &mut crate::port::Cells, a: i32) -> i32 {
@@ -3574,7 +3574,7 @@ pub(crate) fn tr_line_frame(rn: &mut crate::port::Cells, cs: &mut crate::port::C
         pass += 1;
     }
     // the residual of the kept bottoms about the fit (px^2, rounded down) and the lowest bottom: `tr-tlines` distrusts a baseline whose
-    // bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D261)
+    // bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D268)
     k = 0;
     nn = 0 as i64;
     den = 0 as i64;
@@ -3845,7 +3845,7 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
             }
             // bottoms that do not line up (rms over 1/8 of the mean height, or the fit pulls the angle 1.5 degrees from the strip's) say nothing
             // about the direction: a watermark's letters, hidden in
-            // places by body text, are cut at a different place each (P6.4b, D261). The thinnest strip's angle stands, the baseline is the
+            // places by body text, are cut at a different place each (P6.4b, D268). The thinnest strip's angle stands, the baseline is the
             // strip's lower edge.
             hbar = crate::port::cells_at(s4, 2);
             dx = th - th0;

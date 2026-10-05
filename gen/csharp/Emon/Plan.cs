@@ -16,6 +16,9 @@ public static class Plan {
     public static int PkBytes() {
         return 4;
     }
+    public static int PkCrop() {
+        return 5;
+    }
     public static int PsOk() {
         return 0;
     }
@@ -45,6 +48,36 @@ public static class Plan {
     }
     public static int LayTextOnly() {
         return 2;
+    }
+    public static int LayNoWatermark() {
+        return 3;
+    }
+    public static int LayWatermarkOnly() {
+        return 4;
+    }
+    public static int ViewBase() {
+        return 16777216;
+    }
+    public static int PuId(int page, int k) {
+        return ((page + 1) * 256) + k;
+    }
+    public static int PuViewId(int page, int k) {
+        return ViewBase() + ((page * 256) + k);
+    }
+    public static int PiRenderText() {
+        return 1;
+    }
+    public static int PiRenderNoText() {
+        return 2;
+    }
+    public static int PiRenderTextOnly() {
+        return 3;
+    }
+    public static int PiDecode() {
+        return 4;
+    }
+    public static int PiOcr() {
+        return 16;
     }
     public static int FltNone() {
         return 0;
@@ -202,6 +235,20 @@ public static class Plan {
         emon.Port.CellsPush(c, page);
         emon.Port.CellsPush(c, dpi);
         emon.Port.CellsPush(c, layer);
+        RecEnd(c, at);
+        return at;
+    }
+    public static int RqCrop(emon.Port.Cells c, int id, int input, int page, int dpi, int layer, int px, int py, int pw, int ph) {
+        // Ask for the pixel rectangle px py pw ph of page `page` as `rq-render` would answer it whole.
+        int at = RecBegin(c, PkCrop(), id);
+        emon.Port.CellsPush(c, input);
+        emon.Port.CellsPush(c, page);
+        emon.Port.CellsPush(c, dpi);
+        emon.Port.CellsPush(c, layer);
+        emon.Port.CellsPush(c, px);
+        emon.Port.CellsPush(c, py);
+        emon.Port.CellsPush(c, pw);
+        emon.Port.CellsPush(c, ph);
         RecEnd(c, at);
         return at;
     }

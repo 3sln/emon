@@ -1309,7 +1309,7 @@ func ScTag(nodes *port.Cells, attrs *port.Cells, text *port.Cells, regions *port
 	return 1
 }
 
-func scDctSpan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, obj int32, sp *port.Cells) int32 {
+func ScDctSpan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, obj int32, sp *port.Cells) int32 {
 	// Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`
 	// holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in
 	// place. Anything else 0. Loads objects, so `a`, `b` and `st` are overwritten and the source may miss.
@@ -1358,7 +1358,7 @@ func scDctSpan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	return 1
 }
 
-func scEligible(im *port.Cells, j int32, pw int32, ph int32) int32 {
+func ScEligible(im *port.Cells, j int32, pw int32, ph int32) int32 {
 	// Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
 	// mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
 	if evidence.ImGet(im, j, evidence.MfObj()) <= 0 {
@@ -1388,124 +1388,4 @@ func scEligible(im *port.Cells, j int32, pw int32, ph int32) int32 {
 		return 0
 	}
 	return 1
-}
-
-func ScPdfUnit(src *port.Src, input int32, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, im *port.Cells, ans *port.Cells, rq *port.Cells, policy int32, loc *port.Cells, mask *port.Cells, sp *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells) int32 {
-	// The scanned pages of a PDF, after the text layer is read. A page with no `words` row at all and one image that
-	// `sc-eligible` and `sc-dct-span` accept is OCR'd: decode request `2 * i + 1` for the stream's bytes (filter DCT),
-	// then OCR request `2 * i + 2` of its bitmap, for page index `i`; two rounds whatever the page count. Where the answers
-	// are in, the page's evidence and lines are appended to `words` and `lines` and `mask[i]` is 2. Every other page is left
-	// exactly as the text layer made it (D212). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
-	// else `us-done`. `sp` is two cells of scratch.
-	var np int32 = pdfdoc.PdPgCount(pg)
-	var nw int32 = evidence.WdCount(words)
-	var nim int32 = evidence.ImCount(im)
-	var i int32 = 0
-	var j int32 = 0
-	var jj int32 = 0
-	var best int32 = -1
-	var bestarea int64 = int64(0)
-	var w int32 = 0
-	var p int32 = 0
-	var asked int32 = 0
-	var px0 int32 = 0
-	var py0 int32 = 0
-	var px1 int32 = 0
-	var py1 int32 = 0
-	var did int32 = 0
-	var oid int32 = 0
-	var ad int32 = -1
-	var ao int32 = -1
-	var ix0 int32 = 0
-	var iy0 int32 = 0
-	var ix1 int32 = 0
-	var iy1 int32 = 0
-	var wp int32 = 0
-	var dpi100 int32 = 0
-	var area int64 = int64(0)
-	var pxw int32 = 0
-	var pxh int32 = 0
-	port.CellsDrop(mask, 0)
-	for i < np {
-		port.CellsPush(mask, 0)
-		i += 1
-	}
-	if policy == 0 {
-		return plan.UsDone()
-	}
-	// a page with any word, hidden or not, is born digital: -1
-	for w < nw {
-		p = evidence.WdGet(words, w, evidence.HdPage())
-		if (p >= 1) && (p <= np) {
-			port.CellsSet(mask, p-1, -1)
-		}
-		w += 1
-	}
-	i = 0
-	for i < np {
-		for (j < nim) && (evidence.ImGet(im, j, evidence.MfPage()) < (i + 1)) {
-			j += 1
-		}
-		if (port.CellsAt(mask, i) == 0) && (pdfdoc.PdPgRotate(pg, i) == 0) {
-			px0 = pdfdoc.PdPgCrop(pg, i, 0)
-			py0 = pdfdoc.PdPgCrop(pg, i, 1)
-			px1 = pdfdoc.PdPgCrop(pg, i, 2)
-			py1 = pdfdoc.PdPgCrop(pg, i, 3)
-			best = -1
-			bestarea = int64(0)
-			jj = j
-			for (jj < nim) && (evidence.ImGet(im, jj, evidence.MfPage()) == (i + 1)) {
-				if scEligible(im, jj, px1-px0, py1-py0) == 1 {
-					area = int64(evidence.ImGet(im, jj, evidence.MfX1())-evidence.ImGet(im, jj, evidence.MfX0())) * int64(evidence.ImGet(im, jj, evidence.MfY1())-evidence.ImGet(im, jj, evidence.MfY0()))
-					if area > bestarea {
-						best = jj
-						bestarea = area
-					}
-				}
-				jj += 1
-			}
-			if best >= 0 {
-				if scDctSpan(src, ar, dc, a, b, st, evidence.ImGet(im, best, evidence.MfObj()), sp) == 1 {
-					did = (2 * i) + 1
-					oid = (2 * i) + 2
-					ix0 = evidence.ImGet(im, best, evidence.MfX0())
-					iy0 = evidence.ImGet(im, best, evidence.MfY0())
-					ix1 = evidence.ImGet(im, best, evidence.MfX1())
-					iy1 = evidence.ImGet(im, best, evidence.MfY1())
-					ad = plan.AnFind(ans, did)
-					if ad < 0 {
-						plan.RqDecode(rq, did, input, port.CellsAt(sp, 0), port.CellsAt(sp, 1), plan.FltDct(), 0)
-						asked = 1
-					} else if plan.AnOk(ans, ad) == 1 {
-						pxw = plan.AnArg(ans, ad, 0)
-						pxh = plan.AnArg(ans, ad, 1)
-						wp = ix1 - ix0
-						dpi100 = int32(((int64(pxw) * int64(720000)) + int64(wp/2)) / int64(wp))
-						ao = plan.AnFind(ans, oid)
-						if ao < 0 {
-							ScRequest(rq, oid, did, (dpi100+50)/100, loc)
-							asked = 1
-						} else if plan.AnOk(ans, ao) == 1 {
-							ScPage(ans, ao, i+1, oid, did, px1-px0, py1-py0, pxw, pxh, dpi100, ix0, iy0, evidence.ImGet(im, best, evidence.MfObj()), ix0, iy0, ix1, iy1, ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, sp)
-							port.CellsSet(mask, i, 2)
-						}
-					}
-				}
-			} else if pdfsrc.PsMissed(src) {
-				return plan.UsDone()
-			}
-		}
-		i += 1
-	}
-	i = 0
-	for i < np {
-		if port.CellsAt(mask, i) < 0 {
-			port.CellsSet(mask, i, 0)
-		}
-		i += 1
-	}
-	if asked == 1 {
-		return plan.UsRequests()
-	}
-	return plan.UsDone()
 }

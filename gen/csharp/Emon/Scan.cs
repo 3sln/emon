@@ -1276,7 +1276,7 @@ public static class Scan {
         }
         return 1;
     }
-    internal static int ScDctSpan(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int obj, emon.Port.Cells sp) {
+    public static int ScDctSpan(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int obj, emon.Port.Cells sp) {
         // Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`
         // holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in
         // place. Anything else 0. Loads objects, so `a`, `b` and `st` are overwritten and the source may miss.
@@ -1324,7 +1324,7 @@ public static class Scan {
         emon.Port.CellsPush(sp, Pdflex.PlStreamLen(ar, h));
         return 1;
     }
-    internal static int ScEligible(emon.Port.Cells im, int j, int pw, int ph) {
+    public static int ScEligible(emon.Port.Cells im, int j, int pw, int ph) {
         // Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
         // mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
         if (Evidence.ImGet(im, j, Evidence.MfObj()) <= 0) {
@@ -1354,124 +1354,5 @@ public static class Scan {
             return 0;
         }
         return 1;
-    }
-    public static int ScPdfUnit(emon.Port.Src src, int input, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, emon.Port.Cells im, emon.Port.Cells ans, emon.Port.Cells rq, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells sp, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines) {
-        // The scanned pages of a PDF, after the text layer is read. A page with no `words` row at all and one image that
-        // `sc-eligible` and `sc-dct-span` accept is OCR'd: decode request `2 * i + 1` for the stream's bytes (filter DCT),
-        // then OCR request `2 * i + 2` of its bitmap, for page index `i`; two rounds whatever the page count. Where the answers
-        // are in, the page's evidence and lines are appended to `words` and `lines` and `mask[i]` is 2. Every other page is left
-        // exactly as the text layer made it (D212). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
-        // else `us-done`. `sp` is two cells of scratch.
-        int np = Pdfdoc.PdPgCount(pg);
-        int nw = Evidence.WdCount(words);
-        int nim = Evidence.ImCount(im);
-        int i = 0;
-        int j = 0;
-        int jj = 0;
-        int best = -1;
-        long bestarea = (long) 0;
-        int w = 0;
-        int p = 0;
-        int asked = 0;
-        int px0 = 0;
-        int py0 = 0;
-        int px1 = 0;
-        int py1 = 0;
-        int did = 0;
-        int oid = 0;
-        int ad = -1;
-        int ao = -1;
-        int ix0 = 0;
-        int iy0 = 0;
-        int ix1 = 0;
-        int iy1 = 0;
-        int wp = 0;
-        int dpi100 = 0;
-        long area = (long) 0;
-        int pxw = 0;
-        int pxh = 0;
-        emon.Port.CellsDrop(mask, 0);
-        while (i < np) {
-            emon.Port.CellsPush(mask, 0);
-            i += 1;
-        }
-        if (policy == 0) {
-            return Plan.UsDone();
-        }
-        // a page with any word, hidden or not, is born digital: -1
-        while (w < nw) {
-            p = Evidence.WdGet(words, w, Evidence.HdPage());
-            if ((p >= 1) && (p <= np)) {
-                emon.Port.CellsSet(mask, p - 1, -1);
-            }
-            w += 1;
-        }
-        i = 0;
-        while (i < np) {
-            while ((j < nim) && (Evidence.ImGet(im, j, Evidence.MfPage()) < (i + 1))) {
-                j += 1;
-            }
-            if ((emon.Port.CellsAt(mask, i) == 0) && (Pdfdoc.PdPgRotate(pg, i) == 0)) {
-                px0 = Pdfdoc.PdPgCrop(pg, i, 0);
-                py0 = Pdfdoc.PdPgCrop(pg, i, 1);
-                px1 = Pdfdoc.PdPgCrop(pg, i, 2);
-                py1 = Pdfdoc.PdPgCrop(pg, i, 3);
-                best = -1;
-                bestarea = (long) 0;
-                jj = j;
-                while ((jj < nim) && (Evidence.ImGet(im, jj, Evidence.MfPage()) == (i + 1))) {
-                    if (ScEligible(im, jj, px1 - px0, py1 - py0) == 1) {
-                        area = unchecked(((long) (Evidence.ImGet(im, jj, Evidence.MfX1()) - Evidence.ImGet(im, jj, Evidence.MfX0()))) * ((long) (Evidence.ImGet(im, jj, Evidence.MfY1()) - Evidence.ImGet(im, jj, Evidence.MfY0()))));
-                        if (area > bestarea) {
-                            best = jj;
-                            bestarea = area;
-                        }
-                    }
-                    jj += 1;
-                }
-                if (best >= 0) {
-                    if (ScDctSpan(src, ar, dc, a, b, st, Evidence.ImGet(im, best, Evidence.MfObj()), sp) == 1) {
-                        did = (2 * i) + 1;
-                        oid = (2 * i) + 2;
-                        ix0 = Evidence.ImGet(im, best, Evidence.MfX0());
-                        iy0 = Evidence.ImGet(im, best, Evidence.MfY0());
-                        ix1 = Evidence.ImGet(im, best, Evidence.MfX1());
-                        iy1 = Evidence.ImGet(im, best, Evidence.MfY1());
-                        ad = Plan.AnFind(ans, did);
-                        if (ad < 0) {
-                            Plan.RqDecode(rq, did, input, emon.Port.CellsAt(sp, 0), emon.Port.CellsAt(sp, 1), Plan.FltDct(), 0);
-                            asked = 1;
-                        } else if (Plan.AnOk(ans, ad) == 1) {
-                            pxw = Plan.AnArg(ans, ad, 0);
-                            pxh = Plan.AnArg(ans, ad, 1);
-                            wp = ix1 - ix0;
-                            dpi100 = (int) (unchecked(unchecked(((long) pxw) * ((long) 720000)) + ((long) (wp / 2))) / ((long) wp));
-                            ao = Plan.AnFind(ans, oid);
-                            if (ao < 0) {
-                                ScRequest(rq, oid, did, (dpi100 + 50) / 100, loc);
-                                asked = 1;
-                            } else if (Plan.AnOk(ans, ao) == 1) {
-                                ScPage(ans, ao, i + 1, oid, did, px1 - px0, py1 - py0, pxw, pxh, dpi100, ix0, iy0, Evidence.ImGet(im, best, Evidence.MfObj()), ix0, iy0, ix1, iy1, ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, sp);
-                                emon.Port.CellsSet(mask, i, 2);
-                            }
-                        }
-                    }
-                } else if (Pdfsrc.PsMissed(src)) {
-                    return Plan.UsDone();
-                }
-            }
-            i += 1;
-        }
-        i = 0;
-        while (i < np) {
-            if (emon.Port.CellsAt(mask, i) < 0) {
-                emon.Port.CellsSet(mask, i, 0);
-            }
-            i += 1;
-        }
-        if (asked == 1) {
-            return Plan.UsRequests();
-        }
-        return Plan.UsDone();
     }
 }

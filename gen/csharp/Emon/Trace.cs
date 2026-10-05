@@ -87,7 +87,7 @@ public static class Trace {
     }
     public static int TrTextMax(int dpi100, int weighted) {
         // The tallest provisional glyph, the components that decide the page's median text height: 200 pt on an ink mask (a watermark's
-        // letters are huge), 48 pt on the binary view (P6.4b, D260): on a page of figures a bar or a box is not text, and a median taken
+        // letters are huge), 48 pt on the binary view (P6.4b, D267): on a page of figures a bar or a box is not text, and a median taken
         // over them made every chart of a text-free page `text`, so the rules inside it were never looked for.
         if (weighted == 1) {
             return TrPt(dpi100, 200);
@@ -133,7 +133,7 @@ public static class Trace {
         return 3;
     }
     public static int TrRfFigure() {
-        // `rules` flag (D263): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.
+        // `rules` flag (D270): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.
         return 1;
     }
     public static int TrPfClosed() {
@@ -3246,7 +3246,7 @@ public static class Trace {
         return cov;
     }
     public static int TrLightfills(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Bitmap gray, int paper, emon.Port.Bitmap mask, emon.Port.Cells inks, emon.Port.Cells prims, emon.Port.Cells refs, emon.Port.Cells s1, emon.Port.Cells s2) {
-        // Tints and shading fills too light for a layer (P6.4b, D259): `tr-light-mask` of the page's gray view (`view` is its `views` row),
+        // Tints and shading fills too light for a layer (P6.4b, D266): `tr-light-mask` of the page's gray view (`view` is its `views` row),
         // then `tr-tints` on that mask (inkrow -1), then the ones that cover half of a tint of an ink layer already in `prims` are dropped and the
         // colour of the rest is the gray (0xGGGGGG) of the fill pixels at nine points of the rectangle. A page more than 60 per cent "fill" has
         // a wrong paper and gets none. Nothing here reads or writes the layers' masks or the binary view. Answers the tints added.
@@ -3353,7 +3353,7 @@ public static class Trace {
         return 3;
     }
     public static int TrTlGap2() {
-        // Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D262), it was 9 (1.5).
+        // Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D269), it was 9 (1.5).
         return 23;
     }
     internal static int TrIfind(emon.Port.Cells it, int a) {
@@ -3576,7 +3576,7 @@ public static class Trace {
             pass += 1;
         }
         // the residual of the kept bottoms about the fit (px^2, rounded down) and the lowest bottom: `tr-tlines` distrusts a baseline whose
-        // bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D261)
+        // bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D268)
         k = 0;
         nn = (long) 0;
         den = (long) 0;
@@ -3847,7 +3847,7 @@ public static class Trace {
                 }
                 // bottoms that do not line up (rms over 1/8 of the mean height, or the fit pulls the angle 1.5 degrees from the strip's) say nothing
                 // about the direction: a watermark's letters, hidden in
-                // places by body text, are cut at a different place each (P6.4b, D261). The thinnest strip's angle stands, the baseline is the
+                // places by body text, are cut at a different place each (P6.4b, D268). The thinnest strip's angle stands, the baseline is the
                 // strip's lower edge.
                 hbar = emon.Port.CellsAt(s4, 2);
                 dx = th - th0;
