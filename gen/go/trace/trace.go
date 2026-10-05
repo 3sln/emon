@@ -82,8 +82,8 @@ func TrRuleMin(dpi100 int32) int32 {
 }
 
 func TrRuleThick(dpi100 int32) int32 {
-	// The thickest rule: 3 pt.
-	return TrPt(dpi100, 3)
+	// The thickest rule: 2 pt (a Sauvola outline of a filled block is about 11 px, 2.6 pt, at 300 dpi: not a rule).
+	return TrPt(dpi100, 2)
 }
 
 func TrRuleGap(dpi100 int32) int32 {

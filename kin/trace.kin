@@ -76,7 +76,7 @@
     (if (< v 1) (return 1))
     (return v)))
 (defn ^:pub ^I32 tr-rule-min [^I32 dpi100] (comment "The shortest rule: 6 pt.") (return (tr-pt dpi100 6)))
-(defn ^:pub ^I32 tr-rule-thick [^I32 dpi100] (comment "The thickest rule: 3 pt.") (return (tr-pt dpi100 3)))
+(defn ^:pub ^I32 tr-rule-thick [^I32 dpi100] (comment "The thickest rule: 2 pt (a Sauvola outline of a filled block is about 11 px, 2.6 pt, at 300 dpi: not a rule).") (return (tr-pt dpi100 2)))
 (defn ^:pub ^I32 tr-rule-gap [^I32 dpi100] (comment "A rule's pieces merge across a gap of at most 2 pt (`rule-gap`).") (return (tr-pt dpi100 2)))
 (defn ^:pub ^I32 tr-fill-min [^I32 dpi100] (comment "A tint is at least 6 pt each way (`fill-min`, D226).") (return (tr-pt dpi100 6)))
 (defn ^:pub ^I32 tr-fill-tol [] (comment "Consecutive rows of a tint share their x-extent within 2 px (`fill-tol`, D226).") (return 2))

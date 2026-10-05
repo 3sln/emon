@@ -64,8 +64,8 @@ pub fn tr_rule_min(dpi100: i32) -> i32 {
     return tr_pt(dpi100, 6);
 }
 pub fn tr_rule_thick(dpi100: i32) -> i32 {
-    // The thickest rule: 3 pt.
-    return tr_pt(dpi100, 3);
+    // The thickest rule: 2 pt (a Sauvola outline of a filled block is about 11 px, 2.6 pt, at 300 dpi: not a rule).
+    return tr_pt(dpi100, 2);
 }
 pub fn tr_rule_gap(dpi100: i32) -> i32 {
     // A rule's pieces merge across a gap of at most 2 pt (`rule-gap`).

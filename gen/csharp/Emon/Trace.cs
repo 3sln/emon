@@ -66,8 +66,8 @@ public static class Trace {
         return TrPt(dpi100, 6);
     }
     public static int TrRuleThick(int dpi100) {
-        // The thickest rule: 3 pt.
-        return TrPt(dpi100, 3);
+        // The thickest rule: 2 pt (a Sauvola outline of a filled block is about 11 px, 2.6 pt, at 300 dpi: not a rule).
+        return TrPt(dpi100, 2);
     }
     public static int TrRuleGap(int dpi100) {
         // A rule's pieces merge across a gap of at most 2 pt (`rule-gap`).
