@@ -19,4 +19,5 @@ if [ ! -x "$bin" ] || [ "$(cat "$root/.cache/emon-rs/stamp" 2>/dev/null)" != "$s
   "$root/kin/scripts/emon-rs-build" > /dev/null || exit 1
   printf '%s' "$stamp" > "$root/.cache/emon-rs/stamp"
 fi
-exec "$bin" "$3"
+# EMON_OUT=evidence asks for the evidence dump instead of the Model (the graphics metrics, P6.8)
+exec "$bin" ${EMON_OUT:+--out=$EMON_OUT} "$3"
