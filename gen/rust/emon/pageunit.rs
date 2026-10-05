@@ -115,6 +115,16 @@ pub fn pu_plan(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
     }
     return 0;
 }
+pub fn pu_ask_rasters(i: i32, input: i32, policy: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells) -> i32 {
+    if policy == 2 {
+        if an_find(ans, pu_id(i, pi_render_text())) < 0 {
+            rq_render(rq, pu_id(i, pi_render_text()), input, i, pu_dpi(), lay_full());
+            rq_render(rq, pu_id(i, pi_render_no_text()), input, i, pu_dpi(), lay_no_text());
+            return us_requests();
+        }
+    }
+    return us_done();
+}
 pub fn pu_run_pdf(i: i32, input: i32, policy: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
     // The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
     // of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`
@@ -123,17 +133,9 @@ pub fn pu_run_pdf(i: i32, input: i32, policy: i32, pl: &mut crate::port::Cells, 
     if policy == 0 {
         return us_done();
     }
-    // A BORN-DIGITAL page under `always` asks for its two rasters in one round (D199): the page with its text and without it,
-    // at 300 dpi. NOTHING IS OCR'd on it (D201, D212 (3): until P7.S flips the policy a text layer is read as it is); the
-    // bitmaps are the unit's, held in `bms` for the stages that read pixels (P6.3, P7.3) and dropped when the unit ends.
+    // A BORN-DIGITAL page asks for NOTHING here (D251, revised by the coordinator): its two rasters are lazy, asked by
+    // `pu-ask-rasters` when a stage that reads pixels exists (P7.1, P7.3); and nothing is OCR'd on it (D201, D212 (3)).
     if pu_kind(pl, i) == pk_born() {
-        if policy == 2 {
-            if an_find(ans, pu_id(i, pi_render_text())) < 0 {
-                rq_render(rq, pu_id(i, pi_render_text()), input, i, pu_dpi(), lay_full());
-                rq_render(rq, pu_id(i, pi_render_no_text()), input, i, pu_dpi(), lay_no_text());
-                return us_requests();
-            }
-        }
         return us_done();
     }
     if pu_kind(pl, i) != pk_scan() {

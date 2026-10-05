@@ -354,21 +354,15 @@ func TestIntakeTakesAnyNumberOfInputs(t *testing.T) {
 	}
 }
 
-func TestRecordAndReplayWithABornDigitalPagesTwoRastersUnsupported(t *testing.T) {
+func TestRecordAndReplayWithABornDigitalPageAskingForNothing(t *testing.T) {
 	e := NewEngine(DefaultConfig())
 	b := synth(t, "h-plain")
 	m, tr, err := e.Record(one(BytesInput(b)), DefaultOptions())
 	must(t, m, err)
-	// under `always` a born-digital page asks for its two rasters (D199): with no Renderer each is answered `unsupported`, in page
-	// order, each page its own unit; nothing is OCR'd
-	if len(tr.Entries) != 4 {
+	// a born-digital page's two rasters are lazy (D251, revised by the coordinator): nothing asks for them until a stage reads
+	// pixels, so the transcript is empty; nothing is OCR'd
+	if len(tr.Entries) != 0 {
 		t.Fatalf("entries: %d", len(tr.Entries))
-	}
-	for i, id := range []int32{257, 258, 513, 514} {
-		en := tr.Entries[i]
-		if en.Round != 0 || en.Req[1] != 1 || en.Req[2] != id || en.Ans[3] != 2 || en.Bitmap != nil {
-			t.Errorf("entry %d: %v %v", i, en.Req, en.Ans)
-		}
 	}
 	if len(tr.Inputs) != 1 || tr.Inputs[0] != [2]int32{0, int32(len(b))} {
 		t.Errorf("inputs %v", tr.Inputs)

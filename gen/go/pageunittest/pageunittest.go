@@ -67,11 +67,13 @@ func TestAUnitWithNoAnswersAsksTheSameEveryTime(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(rq1, 4), port.CellsAt(rq2, 4), "the same arguments")
 }
 
-func TestABornDigitalPageAsksForTwoRastersUnderAlwaysAndNeverForOcr(emonT *testing.T) {
+func TestABornDigitalPageAsksForNothingUntilAConsumerAsksForItsRasters(emonT *testing.T) {
 	var pl *port.Cells = port.NewCells()
 	var rq *port.Cells = port.NewCells()
 	planOf(pl, 2, pageunit.PkBorn())
-	port.AssertEq(emonT, runPage(1, 2, pl, port.NewCells(), rq), plan.UsRequests(), "always: it asks")
+	port.AssertEq(emonT, runPage(1, 2, pl, port.NewCells(), rq), plan.UsDone(), "always: lazy, it asks nothing")
+	port.AssertEq(emonT, port.CellsLen(rq), 0, "no request, no OCR")
+	port.AssertEq(emonT, pageunit.PuAskRasters(1, 3, 2, port.NewCells(), rq), plan.UsRequests(), "a consumer asks")
 	port.AssertEq(emonT, port.CellsLen(rq), 14, "two renders of seven cells")
 	port.AssertEq(emonT, plan.RecKind(rq, 0), plan.PkRender(), "a render")
 	port.AssertEq(emonT, plan.RecId(rq, 0), 513, "page 1, with text: 2 * 256 + 1")
@@ -87,7 +89,7 @@ func TestABornDigitalPageAsksForTwoRastersUnderAlwaysAndNeverForOcr(emonT *testi
 	planOf(pla, 1, pageunit.PkBorn())
 	plan.AnFail(ans1, plan.PkRender(), 257, plan.PsUnsupported())
 	plan.AnFail(ans1, plan.PkRender(), 258, plan.PsUnsupported())
-	port.AssertEq(emonT, runPage(0, 2, pla, ans1, rqa), plan.UsDone(), "answered, even `unsupported`: done")
+	port.AssertEq(emonT, pageunit.PuAskRasters(0, 3, 2, ans1, rqa), plan.UsDone(), "answered, even `unsupported`: done")
 	port.AssertEq(emonT, port.CellsLen(rqa), 0, "asks nothing more, and no OCR")
 	var plb *port.Cells = port.NewCells()
 	var rqb *port.Cells = port.NewCells()

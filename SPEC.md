@@ -792,7 +792,7 @@ host implement it however it likes.
   cut out, never a re-fit — with annotations' normal appearances painted (a
   stamp is often an annotation). pdfium does this directly
   (`FPDF_RenderPageBitmapWithMatrix` with a translation and a clip); an
-  engine that cannot may render the page and cut. **As built** (D191-D194):
+  engine that cannot may render the page and cut. **As built** (D245-D248):
   pdfium makes `no-text` and `text-only` by removing page objects, and
   answers the watermark layers (`lay-no-watermark`, `lay-watermark-only`)
   `unsupported`, because pdfium cannot read the NAME values of an
@@ -800,7 +800,7 @@ host implement it however it likes.
   render (§9.5 defence 1 classifies from the text layer instead). A crop is
   the fulfiller's cut of the whole-page render it keeps. **An Engine with no
   `Renderer` answers `render` and `crop` `unsupported`** (D199, revising
-  D191's `fulfil-failed`), as an Engine with no `Ocr` answers `ocr`: a gate
+  D245's `fulfil-failed`), as an Engine with no `Ocr` answers `ocr`: a gate
   with no engine converts every born-digital page as fusion over one source.
 * **`Ocr`** must: take a `Bitmap` and a request (languages, page-segmentation
   mode, region, whether symbol alternatives are wanted); return integers only
@@ -1646,7 +1646,7 @@ classified by (3) and (6).
    from `emon.pdfannot` (wired into the document pass by P7.5), alpha under
    `wm-alpha` on text or images covering over `wm-cover` of the page, and
    the tagged tree's verified Watermark artifacts (D149, weighed by trust).
-   pdfium cannot render without them (D193), so the classified text-layer
+   pdfium cannot render without them (D247), so the classified text-layer
    words go to the ledger directly, and the OCR words their glyph boxes
    cover (aligned to them, §9.2) go with them: **an OCR word is never body
    text when it is aligned only to a watermark-classified text-layer word.**
