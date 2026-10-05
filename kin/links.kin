@@ -1,0 +1,241 @@
+;; Bare URLs and e-mail addresses in text (P4.6; SPEC 10.8; D229). emon's own module (D039).
+;;
+;;   (lk-find text to at out)    the first URL or address in text[at, to), as (start, end, kind) in out[0..2]
+;;
+;; A CONSERVATIVE recogniser, "not a guess at every dotted string" (SPEC 10.8): a string is a link only if it SAYS so.
+;;   * a scheme: `http://`, `https://`, `ftp://`, `ftps://` and then a host (labels of letters, digits and
+;;     hyphens); `mailto:` and then an address;
+;;   * `www.` and then a host with a top-level domain (`www.example.com`; `www.example` is not);
+;;   * an address `local@domain.tld`: the local part of letters, digits and `._%+-'`, a domain of labels with a
+;;     top-level domain of two letters or more. `@handle` is not an address, and neither is `a@b`.
+;; A bare `example.com` is NOT: it is a word with a dot until something says otherwise (a link annotation, which
+;; P3.8 reads and which always wins: this recogniser only sees text that is not already under a `link`). What
+;; trails a link is not part of it: sentence punctuation (`.,;:!?` and quotes), and a closing bracket the link
+;; did not open. The kinds are 1 scheme, 2 `www.`, 3 address, 4 `mailto:`; the caller makes the `href`
+;; (`https://` before a `www.` link, `mailto:` before an address): the text stays what was printed. A user and a
+;; password before the host (`http://u:p@host`) and an IPv6 host are not recognised.
+;;
+;; It works on code points of the text arena, never on a string, and finds the LEFTMOST link at or after `at`;
+;; a token (a run without spaces) is searched whole, so a link inside brackets or after a colon is found.
+(ns emon.links
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set]]
+            [kin.lang :refer [defn defconst defdata return let set while if do comment
+                              + - * < > <= >= == != and or not]]))
+
+(defdata ^:pub lk-pats
+  :emitter kin.lang/flat-array
+  :data [104 116 116 112 58 47 47
+         104 116 116 112 115 58 47 47
+         102 116 112 58 47 47
+         102 116 112 115 58 47 47
+         109 97 105 108 116 111 58
+         119 119 119 46]
+  :accessors {^I32 lk-pat-at [^I32 ignored ^I32 i]})
+
+(defn ^I32 lk-poff [^I32 p]
+  (comment "Where pattern p starts in `lk-pats`: 1 http://, 2 https://, 3 ftp://, 4 ftps://, 5 mailto:, 6 www.")
+  (if (== p 1) (return 0))
+  (if (== p 2) (return 7))
+  (if (== p 3) (return 15))
+  (if (== p 4) (return 21))
+  (if (== p 5) (return 28))
+  (return 35))
+
+(defn ^I32 lk-plen [^I32 p]
+  (if (== p 1) (return 7))
+  (if (== p 2) (return 8))
+  (if (== p 3) (return 6))
+  (if (== p 4) (return 7))
+  (if (== p 5) (return 7))
+  (return 4))
+
+(defn ^Bool lk-space [^I32 c]
+  (comment "What ends a token: a space or a control, the no-break space, the zero-width and line separators.")
+  (return (or (<= c 32) (or (== c 160) (or (== c 8203) (or (== c 8232) (or (== c 8233) (or (== c 12288) (== c 127)))))))))
+
+(defn ^Bool lk-letter [^I32 c]
+  (comment "A letter of ASCII, Latin-1 and Latin Extended, or any character of Greek to General Punctuation's start.")
+  (if (and (>= c 65) (<= c 90)) (return (== 1 1)))
+  (if (and (>= c 97) (<= c 122)) (return (== 1 1)))
+  (if (and (>= c 192) (and (<= c 591) (and (!= c 215) (!= c 247)))) (return (== 1 1)))
+  (if (and (>= c 880) (<= c 8191)) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^Bool lk-alnum [^I32 c]
+  (comment "A letter or a digit (an international host name is made of them).")
+  (if (and (>= c 48) (<= c 57)) (return (== 1 1)))
+  (if (lk-letter c) (return (== 1 1)))
+  (if (and (>= c 12352) (<= c 40959)) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^I32 lk-fold [^I32 c]
+  (comment "ASCII lower case.")
+  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
+  (return c))
+
+(defn ^I32 lk-pat [^Cells text ^I32 at ^I32 to]
+  (comment "Which pattern the text at `at` starts with, ignoring ASCII case, 0 none. No pattern is a prefix of another.")
+  (let [^:mut ^I32 p 1
+        ^:mut ^I32 best 0]
+    (while (and (<= p 6) (== best 0))
+      (do (let [^I32 n (lk-plen p)
+                ^I32 off (lk-poff p)
+                ^:mut ^I32 i 0
+                ^:mut ^I32 ok 1]
+            (if (> (+ at n) to) (set ok 0))
+            (while (and (== ok 1) (< i n))
+              (do (if (!= (lk-fold (cells-at text (+ at i))) (lk-pat-at 0 (+ off i))) (set ok 0))
+                  (set i (+ i 1))))
+            (if (== ok 1) (set best p)))
+          (set p (+ p 1))))
+    (return best)))
+
+(defn ^I32 lk-open [^I32 cl]
+  (comment "The opening bracket a closing one pairs with.")
+  (if (== cl 41) (return 40))
+  (if (== cl 93) (return 91))
+  (if (== cl 125) (return 123))
+  (return 60))
+
+(defn ^Bool lk-trailing [^I32 c]
+  (comment "Punctuation that ends a sentence or a quotation and so is not part of a link before it.")
+  (if (or (== c 46) (or (== c 44) (or (== c 59) (== c 58)))) (return (== 1 1)))
+  (if (or (== c 33) (or (== c 63) (or (== c 39) (== c 34)))) (return (== 1 1)))
+  (if (or (== c 8221) (or (== c 8217) (or (== c 187) (== c 8230)))) (return (== 1 1)))
+  (return (== 0 1)))
+
+(defn ^I32 lk-trim [^Cells text ^I32 s ^I32 e]
+  (comment "The end of the link that starts at s and runs to e at most: without the sentence punctuation that trails it")
+  (comment "and the closing brackets it did not open.")
+  (let [^:mut ^I32 end e
+        ^:mut ^I32 more 1]
+    (while (and (== more 1) (> end s))
+      (do (let [^I32 c (cells-at text (- end 1))]
+            (set more 0)
+            (if (lk-trailing c)
+              (do (set end (- end 1))
+                  (set more 1))
+              (if (or (== c 41) (or (== c 93) (or (== c 125) (== c 62))))
+                (do (let [^I32 open (lk-open c)
+                          ^:mut ^I32 i s
+                          ^:mut ^I32 no 0
+                          ^:mut ^I32 nc 0]
+                      (while (< i end)
+                        (do (if (== (cells-at text i) open) (set no (+ no 1)))
+                            (if (== (cells-at text i) c) (set nc (+ nc 1)))
+                            (set i (+ i 1))))
+                      (if (> nc no)
+                        (do (set end (- end 1))
+                            (set more 1))))))))))
+    (return end)))
+
+(defn ^I32 lk-host [^Cells text ^I32 from ^I32 e ^I32 minlabels]
+  (comment "Check the host that starts at `from` and runs to the first `/`, `?`, `#` or `:` (a port) or the end e: labels")
+  (comment "of letters, digits and hyphens between dots, none empty, none starting with a hyphen. With minlabels above 0")
+  (comment "it must have that many labels and the last of two letters or more. Answers the host's end, or -1.")
+  (let [^:mut ^I32 i from
+        ^:mut ^I32 labels 0
+        ^:mut ^I32 ll 0
+        ^:mut ^I32 alpha 1]
+    (while (and (< i e) (!= (cells-at text i) 47) (!= (cells-at text i) 63) (!= (cells-at text i) 35) (!= (cells-at text i) 58))
+      (do (let [^I32 c (cells-at text i)]
+            (if (== c 46)
+              (do (if (== ll 0) (return -1))
+                  (set labels (+ labels 1))
+                  (set ll 0)
+                  (set alpha 1))
+              (do (if (not (or (lk-alnum c) (== c 45))) (return -1))
+                  (if (and (== ll 0) (== c 45)) (return -1))
+                  (if (not (lk-letter c)) (set alpha 0))
+                  (set ll (+ ll 1)))))
+          (set i (+ i 1))))
+    (if (== ll 0) (return -1))
+    (set labels (+ labels 1))
+    (if (> minlabels 0)
+      (do (if (< labels minlabels) (return -1))
+          (if (or (< ll 2) (== alpha 0)) (return -1))))
+    (return i)))
+
+(defn ^Bool lk-local [^I32 c]
+  (comment "A character of an address's local part.")
+  (return (or (lk-alnum c) (or (== c 46) (or (== c 95) (or (== c 37) (or (== c 43) (or (== c 45) (== c 39)))))))))
+
+(defn ^I32 lk-email [^Cells text ^I32 from ^I32 e]
+  (comment "Does text[from, e) read as `local@domain.tld`? Answers the index of the `@`, or -1.")
+  (let [^:mut ^I32 i from
+        ^:mut ^I32 at -1]
+    (while (< i e)
+      (do (if (== (cells-at text i) 64)
+            (do (if (>= at 0) (return -1))
+                (set at i)))
+          (set i (+ i 1))))
+    (if (<= at from) (return -1))
+    (let [^:mut ^I32 j from]
+      (while (< j at)
+        (do (if (not (lk-local (cells-at text j))) (return -1))
+            (set j (+ j 1)))))
+    (if (== (lk-host text (+ at 1) e 2) e) (return at))
+    (return -1)))
+
+(defn ^I32 lk-try-scheme [^Cells text ^I32 s ^I32 te ^:mut ^Cells out]
+  (comment "A link with a scheme or `www.` that starts at s inside a token ending at te. Answers its kind (1, 2 or 4) with")
+  (comment "out set, or 0.")
+  (let [^I32 p (lk-pat text s te)]
+    (if (== p 0) (return 0))
+    (let [^I32 e (lk-trim text s te)
+          ^I32 pl (lk-plen p)]
+      (if (<= e (+ s pl)) (return 0))
+      (if (== p 5)
+        (do (if (>= (lk-email text (+ s pl) e) 0)
+              (do (cells-set out 0 s) (cells-set out 1 e) (cells-set out 2 4) (return 4)))
+            (return 0)))
+      (if (== p 6)
+        (do (if (>= (lk-host text s e 3) 0)
+              (do (cells-set out 0 s) (cells-set out 1 e) (cells-set out 2 2) (return 2)))
+            (return 0)))
+      (if (>= (lk-host text (+ s pl) e 0) 0)
+        (do (cells-set out 0 s) (cells-set out 1 e) (cells-set out 2 1) (return 1)))
+      (return 0))))
+
+(defn ^I32 lk-try-email [^Cells text ^I32 ts ^I32 te ^:mut ^Cells out]
+  (comment "An address inside the token [ts, te): the `@`'s local part grown to the left over what a local part may hold, the")
+  (comment "domain to the right to the end of the token less trailing punctuation. Answers 3 with out set, or 0.")
+  (let [^:mut ^I32 k ts
+        ^:mut ^I32 at -1]
+    (while (and (< k te) (< at 0))
+      (do (if (== (cells-at text k) 64) (set at k))
+          (set k (+ k 1))))
+    (if (<= at ts) (return 0))
+    (let [^:mut ^I32 s at]
+      (while (and (> s ts) (lk-local (cells-at text (- s 1))))
+        (set s (- s 1)))
+      (while (and (< s at) (== (cells-at text s) 46))
+        (set s (+ s 1)))
+      (if (>= s at) (return 0))
+      (let [^I32 e (lk-trim text s te)]
+        (if (> e (+ at 1))
+          (do (if (>= (lk-email text s e) 0)
+                (do (cells-set out 0 s) (cells-set out 1 e) (cells-set out 2 3) (return 3)))))))
+    (return 0)))
+
+(defn ^:pub ^I32 lk-find [^Cells text ^I32 to ^I32 at ^:mut ^Cells out]
+  (comment "The leftmost link in text[at, to) (the arena's code points). Answers its kind and sets out[0] its start, out[1]")
+  (comment "its end, out[2] its kind; 0 when there is none. `out` needs three cells.")
+  (let [^:mut ^I32 i at]
+    (while (< i to)
+      (do (if (lk-space (cells-at text i))
+            (set i (+ i 1))
+            (do (let [^:mut ^I32 te i
+                      ^:mut ^I32 j i]
+                  (while (and (< te to) (not (lk-space (cells-at text te))))
+                    (set te (+ te 1)))
+                  (while (< j te)
+                    (do (if (or (== j i) (not (lk-alnum (cells-at text (- j 1)))))
+                          (do (let [^I32 k (lk-try-scheme text j te out)]
+                                (if (> k 0) (return k)))))
+                        (set j (+ j 1))))
+                  (let [^I32 m (lk-try-email text i te out)]
+                    (if (> m 0) (return m)))
+                  (set i te))))))
+    (return 0)))

@@ -1,0 +1,639 @@
+;; Restructuring the Model: lists, captions bound to their objects, bare links, note references (P4.5, P4.6;
+;; SPEC 10.4, 10.6, 10.8; D180-D182, D229-D231). emon's own module (D039).
+;;
+;;   (rs-run on oa orr text nodes attrs regions nm stk used)    copy the Model body into new arenas, restructured
+;;
+;; WHY A COPY. A node's id is its index and the builder appends: a tree built out of order is a Model `model-check`
+;; refuses (SPEC 3.3, `mc-not-preorder`). The paragraph stage writes what it reads in the order it reads it: an
+;; `item` where an item is, a `note` where its lines are, a `caption` where its text is. It cannot know, when it
+;; writes the first item, that the next five are its siblings in a list, or that the caption under the chart is the
+;; chart's. So this stage reads the finished body (`on`, `oa`, `orr`: nodes, attributes, regions of the old arenas) and
+;; writes the same Model, in document order, into empty ones (`nodes`, `attrs`, `regions`); the text arena is shared
+;; (append-only: new strings are appended). The caller then swaps the arenas. Every node is copied with its own
+;; fields, attributes, regions and children; what it changes, in every container (the document, a section, a note, a
+;; cell, an item):
+;;
+;;   1. LISTS. A run of sibling `item`s is a `list`, nested by the x where the item's TEXT starts (a marker is often
+;;      right aligned, its own x says little): an item further in than the one before it by more than 4 pt begins a
+;;      list inside it, one further out closes the lists it has left. At one indent an item continues the list when
+;;      its scheme is the list's and its value goes up (1, 2, 4: the 4 gets an explicit `value`), else it starts a
+;;      new list. A page milestone or a note body between two items of a list that goes on is kept INSIDE the item
+;;      before it (a `ul` holds only `li`), so a list that crosses a page is one list; its `at` is the union per page.
+;;      `start` is the first value when it is not 1; `ordered` and `scheme` come from the first marker.
+;;   2. CAPTIONS. A `caption` and the `table` or `figure` next to it (the caption above a table, below a figure; the
+;;      kind of the label says which kind of object it can belong to: `Table` a table, `Figure` a figure) become
+;;      one: the caption is the object's first child, its `target` the object. A figure caption with no figure next to
+;;      it is the evidence of a figure nothing else found: it is wrapped in an empty `figure` of kind `unknown`
+;;      (SPEC 10.6: a non-text region is an empty figure), the `label` the caption's.
+;;   3. LINKS. Text that is not under a `link` is searched for bare URLs and addresses (`emon.links`); each is
+;;      a `link` inline, the text intact.
+;;   4. NOTE REFERENCES. Each `ref` gets the `target` of the next note body with its marker that nothing else claims,
+;;      searching forward in document order and, failing that, backward (D073.4).
+(ns emon.restruct
+  (:require [emon.lang :refer [I32 Bool Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [node-count node-kind node-parent node-first-child node-next node-attr-head
+                                node-text-start node-text-len node-has-text node-region-head node-region-count
+                                node-src node-conf node-flags node-sub node-aux
+                                node-new node-set-text node-set-sub node-set-aux node-set-src node-set-conf
+                                node-set-flags node-add-region node-add-src
+                                region-page region-x0 region-y0 region-x1 region-y1 region-next
+                                layout-count layout-page layout-x0 layout-y0 layout-x1 layout-y1 layout-role rl-body
+                                attr-key attr-vkind attr-value attr-len attr-next
+                                node-set-attr-int node-add-attr-int node-add-attr-text node-set-attr-text
+                                node-set-attr-node node-set-attr-bool node-attr node-attr-int-or
+                                av-int av-text av-node av-bool text-append-cp
+                                nk-list nk-item nk-caption nk-figure nk-table nk-note nk-ref nk-link nk-text nk-break
+                                nk-paragraph nk-heading nk-quote nk-cell
+                                fk-scheme fk-start fk-value fk-box fk-marker fk-label fk-target fk-href
+                                sr-text sr-infer fg-unknown]]
+            [emon.links :refer [lk-find]]
+            [kin.lang :refer [defn defconst defdata return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem]]))
+
+(defconst ^I32 RS_FR 8)            ;; a list frame: list, indent, scheme, last value, last item, first value, parent
+(defconst ^I32 RS_DEEP 24)         ;; lists nested no deeper than this (a hostile file's indents)
+(defconst ^I32 RS_NEST 400)        ;; an item whose text starts this far (4 pt) beyond the last one's is nested in it
+
+(defdata ^:pub rs-names
+  :emitter kin.lang/flat-array
+  :data [98 117 108 108 101 116
+         100 101 99 105 109 97 108
+         108 111 119 101 114 45 97 108 112 104 97
+         117 112 112 101 114 45 97 108 112 104 97
+         108 111 119 101 114 45 114 111 109 97 110
+         117 112 112 101 114 45 114 111 109 97 110
+         108 111 119 101 114 45 103 114 101 101 107]
+  :accessors {^I32 rs-name-at [^I32 ignored ^I32 i]})
+
+(defn ^I32 rs-name-off [^I32 s]
+  (if (== s 1) (return 0))
+  (if (== s 2) (return 6))
+  (if (== s 3) (return 13))
+  (if (== s 4) (return 24))
+  (if (== s 5) (return 35))
+  (if (== s 6) (return 46))
+  (return 57))
+
+(defn ^I32 rs-name-len [^I32 s]
+  (if (== s 1) (return 6))
+  (if (== s 2) (return 7))
+  (return 11))
+
+;; ---------------------------------------------------------------------------- copying one node
+
+(defn ^I32 rs-node [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                    ^:mut ^Cells nm ^I32 n ^I32 np]
+  (comment "Copy node n of the old arenas as the last child of np (-1: a new root): its kind and small fields, text run,")
+  (comment "attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes")
+  (comment "it in `nm` (old to new).")
+  (let [^:mut ^I32 nn (node-new nodes (node-kind on n) np)]
+    (comment "deeper than the Model allows (a hostile file): the node goes under the root, and `model-check` says no to the")
+    (comment "result rather than a store going out of bounds")
+    (if (< nn 0) (set nn (node-new nodes (node-kind on n) 0)))
+    (if (< nn 0) (return -1))
+    (node-set-sub nodes nn (node-sub on n))
+    (node-set-aux nodes nn (node-aux on n))
+    (node-set-src nodes nn (node-src on n))
+    (node-set-conf nodes nn (node-conf on n))
+    (node-set-flags nodes nn (node-flags on n))
+    (if (== (node-has-text on n) 1)
+      (node-set-text nodes nn (node-text-start on n) (node-text-len on n)))
+    (let [^:mut ^I32 a (node-attr-head on n)]
+      (while (>= a 0)
+        (do (let [^I32 k (attr-key oa a)
+                  ^I32 vk (attr-vkind oa a)
+                  ^I32 v (attr-value oa a)
+                  ^I32 l (attr-len oa a)]
+              (if (!= k (fk-box))
+                (do (if (== vk (av-text)) (node-add-attr-text nodes attrs nn k v l))
+                    (if (== vk (av-int)) (node-add-attr-int nodes attrs nn k v))
+                    (if (== vk (av-node)) (node-set-attr-node nodes attrs nn k v))
+                    (if (== vk (av-bool)) (node-set-attr-bool nodes attrs nn k v)))))
+            (set a (attr-next oa a)))))
+    (let [^:mut ^I32 r (node-region-head on n)]
+      (while (>= r 0)
+        (do (node-add-region nodes regions nn (region-page orr r) (region-x0 orr r) (region-y0 orr r)
+                             (region-x1 orr r) (region-y1 orr r))
+            (set r (region-next orr r)))))
+    (cells-set nm n nn)
+    (return nn)))
+
+(defn ^I32 rs-copy-regions [^Cells on ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells regions ^I32 n ^I32 nn]
+  (comment "The regions of old node n added to new node nn (a wrapper has its content's place).")
+  (let [^:mut ^I32 r (node-region-head on n)]
+    (while (>= r 0)
+      (do (node-add-region nodes regions nn (region-page orr r) (region-x0 orr r) (region-y0 orr r)
+                           (region-x1 orr r) (region-y1 orr r))
+          (set r (region-next orr r))))
+    (return 0)))
+
+;; ------------------------------------------------------------------------------- bare links
+
+(defn ^I32 rs-text-piece [^:mut ^Cells nodes ^I32 par ^I32 from ^I32 to]
+  (comment "A `text` inline of the arena's run [from, to) under par.")
+  (let [^I32 t (node-new nodes (nk-text) par)]
+    (node-set-text nodes t from (- to from))
+    (node-set-conf nodes t 1000)
+    (node-add-src nodes t (sr-text))
+    (return t)))
+
+(defn ^I32 rs-link-piece [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 par ^I32 s ^I32 e ^I32 kind]
+  (comment "A `link` inline for the link in text[s, e) of the given kind (`emon.links`): its `href`, and the text as its child.")
+  (let [^I32 lk (node-new nodes (nk-link) par)]
+    (node-set-conf nodes lk 500)
+    (node-add-src nodes lk (sr-text))
+    (node-add-src nodes lk (sr-infer))
+    (if (or (== kind 1) (== kind 4))
+      (node-set-attr-text nodes attrs lk (fk-href) s (- e s))
+      (do (let [^I32 t0 (cells-len text)
+                ^:mut ^I32 i s]
+            (if (== kind 2)
+              (do (text-append-cp text 104) (text-append-cp text 116) (text-append-cp text 116)
+                  (text-append-cp text 112) (text-append-cp text 115) (text-append-cp text 58)
+                  (text-append-cp text 47) (text-append-cp text 47))
+              (do (text-append-cp text 109) (text-append-cp text 97) (text-append-cp text 105)
+                  (text-append-cp text 108) (text-append-cp text 116) (text-append-cp text 111)
+                  (text-append-cp text 58)))
+            (while (< i e)
+              (do (text-append-cp text (cells-at text i))
+                  (set i (+ i 1))))
+            (node-set-attr-text nodes attrs lk (fk-href) t0 (- (cells-len text) t0)))))
+    (rs-text-piece nodes lk s e)
+    (return lk)))
+
+(defn ^I32 rs-has-link [^Cells text ^I32 from ^I32 to ^:mut ^Cells out]
+  (comment "1 when text[from, to) holds a bare link.")
+  (if (> (lk-find text to from out) 0) (return 1))
+  (return 0))
+
+(defn ^I32 rs-pieces [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 par ^I32 from ^I32 to ^:mut ^Cells out]
+  (comment "The children of par for the run text[from, to): `text` inlines and `link`s, the text intact.")
+  (let [^:mut ^I32 at from
+        ^:mut ^I32 more 1]
+    (while (== more 1)
+      (do (let [^I32 k (lk-find text to at out)]
+            (if (== k 0)
+              (do (if (< at to) (rs-text-piece nodes par at to))
+                  (set more 0))
+              (do (let [^I32 s (cells-at out 0)
+                        ^I32 e (cells-at out 1)]
+                    (if (> s at) (rs-text-piece nodes par at s))
+                    (rs-link-piece nodes attrs text par s e k)
+                    (set at e))))))
+      )
+    (return 0)))
+
+(defn ^Bool rs-linkable [^I32 kind]
+  (comment "The kinds whose own text is searched for bare links.")
+  (return (or (== kind (nk-paragraph)) (or (== kind (nk-heading)) (or (== kind (nk-item)) (or (== kind (nk-caption))
+              (or (== kind (nk-quote)) (== kind (nk-cell)))))))))
+
+;; ------------------------------------------------------------------------------------ list frames
+
+(defn ^I32 rs-fget [^Cells stk ^I32 i ^I32 f]
+  (return (cells-at stk (+ (* i RS_FR) f))))
+
+(defn ^I32 rs-depth [^Cells stk ^I32 base]
+  (return (quot (- (cells-len stk) base) RS_FR)))
+
+(defn ^I32 rs-close-top [^:mut ^Cells nodes ^:mut ^Cells regions ^:mut ^Cells stk ^I32 base]
+  (comment "Close the innermost list of the stack: its `at` is the union per page of the regions of everything under it")
+  (comment "(its nodes are the tail of the arena), then pop it.")
+  (let [^I32 d (rs-depth stk base)]
+    (if (== d 0) (return 0))
+    (let [^I32 f (+ base (* (- d 1) RS_FR))
+          ^I32 ls (cells-at stk f)
+          ^I32 cnt (node-count nodes)
+          ^:mut ^I32 i (+ ls 1)
+          ^:mut ^I32 pg -1
+          ^:mut ^I32 x0 0
+          ^:mut ^I32 y0 0
+          ^:mut ^I32 x1 0
+          ^:mut ^I32 y1 0]
+      (while (< i cnt)
+        (do (let [^:mut ^I32 r (node-region-head nodes i)]
+              (while (>= r 0)
+                (do (if (== (region-page regions r) pg)
+                      (do (if (< (region-x0 regions r) x0) (set x0 (region-x0 regions r)))
+                          (if (< (region-y0 regions r) y0) (set y0 (region-y0 regions r)))
+                          (if (> (region-x1 regions r) x1) (set x1 (region-x1 regions r)))
+                          (if (> (region-y1 regions r) y1) (set y1 (region-y1 regions r))))
+                      (do (if (>= pg 0) (node-add-region nodes regions ls pg x0 y0 x1 y1))
+                          (set pg (region-page regions r))
+                          (set x0 (region-x0 regions r))
+                          (set y0 (region-y0 regions r))
+                          (set x1 (region-x1 regions r))
+                          (set y1 (region-y1 regions r))))
+                    (set r (region-next regions r)))))
+            (set i (+ i 1))))
+      (if (>= pg 0) (node-add-region nodes regions ls pg x0 y0 x1 y1))
+      (cells-drop stk (- (cells-len stk) RS_FR))
+      (return 0))))
+
+(defn ^I32 rs-close-all [^:mut ^Cells nodes ^:mut ^Cells regions ^:mut ^Cells stk ^I32 base]
+  (while (> (rs-depth stk base) 0)
+    (rs-close-top nodes regions stk base))
+  (return 0))
+
+(defn ^I32 rs-open-list [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^:mut ^Cells stk
+                         ^I32 parent ^I32 indent ^I32 scheme ^I32 value ^I32 colx]
+  (comment "Open a list under parent for an item of this scheme and value, and push its frame: the x its items' text starts at")
+  (comment "and the left edge of the column that x is in (the frame's own coordinates).")
+  (let [^I32 ls (node-new nodes (nk-list) parent)
+        ^I32 off (rs-name-off scheme)
+        ^I32 n (rs-name-len scheme)
+        ^I32 t0 (cells-len text)
+        ^:mut ^I32 i 0]
+    (if (< ls 0) (return -1))
+    (if (== scheme 1)
+      (node-set-sub nodes ls 1)
+      (node-set-sub nodes ls 2))
+    (node-set-conf nodes ls 500)
+    (node-add-src nodes ls (sr-infer))
+    (while (< i n)
+      (do (text-append-cp text (rs-name-at 0 (+ off i)))
+          (set i (+ i 1))))
+    (node-set-attr-text nodes attrs ls (fk-scheme) t0 n)
+    (if (and (!= scheme 1) (> value 1))
+      (node-set-attr-int nodes attrs ls (fk-start) value))
+    (cells-push stk ls)
+    (cells-push stk indent)
+    (cells-push stk scheme)
+    (cells-push stk value)
+    (cells-push stk -1)
+    (cells-push stk value)
+    (cells-push stk parent)
+    (cells-push stk colx)
+    (return ls)))
+
+(defn ^I32 rs-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 rs-column-x [^Cells lay ^Cells on ^Cells orr ^I32 c]
+  (comment "The left edge of the column (the layout's body cell) the item c's first region is in; 0 when none is.")
+  (let [^I32 r (node-region-head on c)]
+    (if (< r 0) (return 0))
+    (let [^I32 pg (region-page orr r)
+          ^I32 cx (quot (+ (region-x0 orr r) (region-x1 orr r)) 2)
+          ^I32 cy (quot (+ (region-y0 orr r) (region-y1 orr r)) 2)
+          ^I32 n (layout-count lay)
+          ^:mut ^I32 lo 0
+          ^:mut ^I32 hi n
+          ^:mut ^I32 i 0]
+      (comment "the rows of a page are one run, the pages in order: find the first row of the item's page by bisection")
+      (while (< lo hi)
+        (do (set i (quot (+ lo hi) 2))
+            (if (< (layout-page lay i) pg)
+              (set lo (+ i 1))
+              (set hi i))))
+      (set i lo)
+      (while (and (< i n) (== (layout-page lay i) pg))
+        (do (if (and (== (layout-role lay i) (rl-body))
+                     (>= cx (layout-x0 lay i)) (<= cx (layout-x1 lay i))
+                     (>= cy (layout-y0 lay i)) (<= cy (layout-y1 lay i)))
+              (return (layout-x0 lay i)))
+            (set i (+ i 1))))
+      (return 0))))
+
+(defn ^I32 rs-continues [^Cells stk ^I32 f ^I32 sch ^I32 val ^I32 dx]
+  (comment "1 when the item is the very next of the list whose frame starts at f: its scheme, its value one past the last, and its")
+  (comment "text no further off than 60 pt of the list's (a first line indented in some paragraphs and not in others, as a")
+  (comment "contract's `(f)` is, is not a list inside `(e)`). A bullet has no value to say it.")
+  (if (or (== sch 1) (<= val 0)) (return 0))
+  (if (!= sch (cells-at stk (+ f 2))) (return 0))
+  (if (!= val (+ (cells-at stk (+ f 3)) 1)) (return 0))
+  (if (<= (rs-abs dx) 6000) (return 1))
+  (return 0))
+
+(defn ^I32 rs-place-item [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                          ^:mut ^Cells text ^:mut ^Cells stk ^Cells lay ^I32 base ^I32 c ^I32 np]
+  (comment "The list the item c (of the old arenas) goes in, under np: opened, or an open one, closing those the item has")
+  (comment "left. Answers the new list's node; the frame on top of the stack is its.")
+  (let [^I32 tx0 (node-attr-int-or on oa c (fk-box) -1)
+        ^I32 sch (node-sub on c)
+        ^I32 val (node-aux on c)
+        ^I32 cx (rs-column-x lay on orr c)
+        ^:mut ^I32 tx tx0
+        ^:mut ^I32 shift 0
+        ^:mut ^I32 more 1]
+    (if (< tx 0)
+      (if (>= (node-region-head on c) 0) (set tx (region-x0 orr (node-region-head on c))) (set tx 0)))
+    (while (== more 1)
+      (do (let [^I32 d (rs-depth stk base)]
+            (if (== d 0)
+              (do (rs-open-list nodes attrs text stk np tx sch val cx)
+                  (set more 0))
+              (do (let [^I32 f (+ base (* (- d 1) RS_FR))
+                        ^I32 ind (cells-at stk (+ f 1))
+                        ^I32 fc (cells-at stk (+ f 7))]
+                    (set shift 0)
+                    (if (and (> fc 0) (> cx 0) (< tx 5000000) (> (rs-abs (- cx fc)) 2000)) (set shift (- cx fc)))
+                    (let [^I32 dx (- (- tx shift) ind)]
+                    (if (== (rs-continues stk f sch val dx) 1)
+                      (set more 0)
+                    (if (and (> dx RS_NEST) (< d RS_DEEP))
+                      (do (let [^I32 held (cells-at stk (+ f 4))]
+                            (rs-open-list nodes attrs text stk held (- tx shift) sch val cx)
+                            (set more 0)))
+                      (if (< dx (- 0 RS_NEST))
+                        (rs-close-top nodes regions stk base)
+                        (do (if (and (== sch (cells-at stk (+ f 2)))
+                                     (or (== sch 1) (> val (cells-at stk (+ f 3)))))
+                              (set more 0)
+                              (do (let [^I32 par (cells-at stk (+ f 6))]
+                                    (rs-close-top nodes regions stk base)
+                                    (rs-open-list nodes attrs text stk par (- tx shift) sch val cx)
+                                    (set more 0)))))))))))))))
+    (let [^I32 d2 (rs-depth stk base)]
+      (if (== d2 0) (return np))
+      (return (cells-at stk (+ base (* (- d2 1) RS_FR)))))))
+
+;; ---------------------------------------------------------------------------------- the walk
+
+(defn ^Bool rs-trailer [^I32 k]
+  (comment "A page milestone or a note body: what may stand between two items of a list that goes on.")
+  (return (or (== k (nk-break)) (== k (nk-note)))))
+
+(defn ^Bool rs-list-goes-on [^Cells on ^I32 c]
+  (comment "After the milestones and notes from c on, is there an item?")
+  (let [^:mut ^I32 q c]
+    (while (and (>= q 0) (rs-trailer (node-kind on q)))
+      (set q (node-next on q)))
+    (if (< q 0) (return (== 0 1)))
+    (return (== (node-kind on q) (nk-item)))))
+
+(defn ^Bool rs-has-caption [^Cells on ^I32 n]
+  (let [^:mut ^I32 q (node-first-child on n)]
+    (while (>= q 0)
+      (do (if (== (node-kind on q) (nk-caption)) (return (== 1 1)))
+          (set q (node-next on q))))
+    (return (== 0 1))))
+
+(defn ^Bool rs-fits [^Cells on ^I32 cpn ^I32 obj]
+  (comment "Can the caption cpn (its kind in `aux`: 1 figure-like, 2 table-like) belong to the object: a table or a figure")
+  (comment "of the right kind, without a caption already?")
+  (if (or (< obj 0) (< cpn 0)) (return (== 0 1)))
+  (if (!= (node-kind on cpn) (nk-caption)) (return (== 0 1)))
+  (let [^I32 ck (node-aux on cpn)
+        ^I32 ok (node-kind on obj)]
+    (if (rs-has-caption on obj) (return (== 0 1)))
+    (if (and (== ck 2) (== ok (nk-table))) (return (== 1 1)))
+    (if (and (== ck 1) (== ok (nk-figure))) (return (== 1 1)))
+    (return (== 0 1))))
+
+(defn ^Bool rs-grab [^Cells on ^I32 obj]
+  (comment "Does the object (a table or a figure) take the caption that follows it? Not when the caption is a table's and")
+  (comment "a table follows it with none: a table's caption is above it.")
+  (let [^I32 q (node-next on obj)]
+    (if (not (rs-fits on q obj)) (return (== 0 1)))
+    (if (== (node-kind on obj) (nk-table))
+      (do (let [^I32 r (node-next on q)]
+            (if (and (>= r 0) (== (node-kind on r) (nk-table)) (not (rs-has-caption on r)))
+              (return (== 0 1))))))
+    (return (== 1 1))))
+
+(defn ^I32 rs-label-of [^Cells on ^Cells oa ^I32 cpn ^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 obj]
+  (comment "The label of the caption cpn as the `label` of the new object when it has none.")
+  (let [^I32 a (node-attr on oa cpn (fk-label))]
+    (if (>= a 0)
+      (do (if (< (node-attr nodes attrs obj (fk-label)) 0)
+            (node-set-attr-text nodes attrs obj (fk-label) (attr-value oa a) (attr-len oa a)))))
+    (return 0)))
+
+(defn ^I32 rs-pair [^:mut ^Cells out ^I32 cn ^I32 obj]
+  (comment "Remember that caption cn (a new node) belongs to the object obj (a new node): its `target` is set when the copy")
+  (comment "is done and the node-valued attributes of the old Model have been moved to the new ids (cells 0..2 of `out` are")
+  (comment "`emon.links`'s; the pairs follow).")
+  (cells-push out cn)
+  (cells-push out obj)
+  (return 0))
+
+(defn ^I32 rs-targets [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells out]
+  (let [^:mut ^I32 i 3]
+    (while (< (+ i 1) (cells-len out))
+      (do (node-set-attr-node nodes attrs (cells-at out i) (fk-target) (cells-at out (+ i 1)))
+          (set i (+ i 2))))
+    (return 0)))
+
+(defn ^I32 rs-classify [^Cells on ^Cells text ^I32 p ^I32 c ^I32 depth ^:mut ^Cells out]
+  (comment "What to do with child c of old node p, with `depth` lists open: 1 an item (into a list), 2 a milestone or a")
+  (comment "note inside a list that goes on, 3 a caption above its object, 4 a figure caption with no figure (wrapped),")
+  (comment "5 an object with its caption below, 6 a `text` inline holding a link, 7 anything else, 8 a block whose own")
+  (comment "text holds a link.")
+  (let [^I32 k (node-kind on c)]
+    (if (== k (nk-item)) (return 1))
+    (if (and (> depth 0) (rs-trailer k) (rs-list-goes-on on c)) (return 2))
+    (if (== k (nk-caption))
+      (do (let [^I32 nx (node-next on c)]
+            (if (rs-fits on c nx) (return 3)))
+          (if (== (node-aux on c) 1) (return 4))
+          (return 7)))
+    (if (and (or (== k (nk-table)) (== k (nk-figure))) (rs-grab on c)) (return 5))
+    (if (and (== k (nk-text)) (== (node-has-text on c) 1) (!= (node-kind on p) (nk-link)))
+      (do (if (== (rs-has-link text (node-text-start on c) (+ (node-text-start on c) (node-text-len on c)) out) 1)
+            (return 6))))
+    (if (and (rs-linkable k) (== (node-has-text on c) 1) (== (node-first-child on c) -1))
+      (do (if (== (rs-has-link text (node-text-start on c) (+ (node-text-start on c) (node-text-len on c)) out) 1)
+            (return 8))))
+    (return 7)))
+
+(defn ^I32 rs-children [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells text
+                        ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                        ^:mut ^Cells nm ^:mut ^Cells stk ^:mut ^Cells out ^Cells lay ^I32 p ^I32 np]
+  (comment "Copy the children of old node p under new node np, restructured (see the head). Recursive.")
+  (let [^I32 base (cells-len stk)
+        ^:mut ^I32 c (node-first-child on p)
+        ^:mut ^I32 act 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 t1 0
+        ^:mut ^I32 nn 0
+        ^:mut ^I32 cn 0
+        ^:mut ^I32 ls 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 hold 0]
+    (while (>= c 0)
+      (do (set act (rs-classify on text p c (rs-depth stk base) out))
+          (set t0 (node-text-start on c))
+          (set t1 (+ (node-text-start on c) (node-text-len on c)))
+          (if (and (!= act 1) (!= act 2))
+            (rs-close-all nodes regions stk base))
+          (comment "an item: into a list, nested or not")
+          (if (== act 1)
+            (do (set ls (rs-place-item on oa orr nodes attrs regions text stk lay base c np))
+                (set f (+ base (* (- (rs-depth stk base) 1) RS_FR)))
+                (set nn (rs-node on oa orr nodes attrs regions nm c ls))
+                (node-set-sub nodes nn 0)
+                (node-set-aux nodes nn 0)
+                (comment "no frame: the Model's depth limit stopped the list; the item stands where it is")
+                (if (>= (rs-depth stk base) 1)
+                  (do (if (and (!= (cells-at stk (+ f 2)) 1)
+                               (> (node-aux on c) 0)
+                               (!= (cells-at stk (+ f 4)) -1)
+                               (!= (node-aux on c) (+ (cells-at stk (+ f 3)) 1)))
+                        (node-set-attr-int nodes attrs nn (fk-value) (node-aux on c)))
+                      (cells-set stk (+ f 3) (node-aux on c))
+                      (cells-set stk (+ f 4) nn)))
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c nn)))
+          (comment "a milestone or a note inside a list that goes on: kept in the item before it")
+          (if (== act 2)
+            (do (set f (+ base (* (- (rs-depth stk base) 1) RS_FR)))
+                (set hold (cells-at stk (+ f 4)))
+                (if (< hold 0) (set hold np))
+                (set nn (rs-node on oa orr nodes attrs regions nm c hold))
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c nn)))
+          (comment "the caption above its object")
+          (if (== act 3)
+            (do (set q (node-next on c))
+                (set nn (rs-node on oa orr nodes attrs regions nm q np))
+                (set cn (rs-node on oa orr nodes attrs regions nm c nn))
+                (rs-pair out cn nn)
+                (rs-label-of on oa c nodes attrs nn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c cn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay q nn)
+                (set c q)))
+          (comment "a figure caption with no figure: the evidence of a figure nothing else found")
+          (if (== act 4)
+            (do (set nn (node-new nodes (nk-figure) np))
+                (node-set-sub nodes nn (fg-unknown))
+                (node-set-conf nodes nn 500)
+                (node-add-src nodes nn (sr-infer))
+                (rs-copy-regions on orr nodes regions c nn)
+                (rs-label-of on oa c nodes attrs nn)
+                (set cn (rs-node on oa orr nodes attrs regions nm c nn))
+                (rs-pair out cn nn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c cn)))
+          (comment "an object and the caption below it")
+          (if (== act 5)
+            (do (set q (node-next on c))
+                (set nn (rs-node on oa orr nodes attrs regions nm c np))
+                (set cn (rs-node on oa orr nodes attrs regions nm q nn))
+                (rs-pair out cn nn)
+                (rs-label-of on oa q nodes attrs nn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay q cn)
+                (rs-children on oa orr text nodes attrs regions nm stk out lay c nn)
+                (set c q)))
+          (if (== act 6)
+            (rs-pieces nodes attrs text np t0 t1 out))
+          (if (or (== act 7) (== act 8))
+            (do (set nn (rs-node on oa orr nodes attrs regions nm c np))
+                (if (== act 8)
+                  (do (node-set-text nodes nn -1 0)
+                      (rs-pieces nodes attrs text nn t0 t1 out))
+                  (rs-children on oa orr text nodes attrs regions nm stk out lay c nn))))
+          (set c (node-next on c))))
+    (rs-close-all nodes regions stk base)
+    (return 0)))
+
+;; --------------------------------------------------------------------------- after the copy
+
+(defn ^I32 rs-remap [^:mut ^Cells attrs ^Cells nm]
+  (comment "Node-valued attributes point at old nodes: point them at the new ones.")
+  (let [^:mut ^I32 a 0
+        ^I32 n (quot (cells-len attrs) 5)]
+    (while (< a n)
+      (do (if (== (cells-at attrs (+ (* a 5) 1)) (av-node))
+            (do (let [^I32 v (cells-at attrs (+ (* a 5) 2))]
+                  (if (and (>= v 0) (< v (cells-len nm)))
+                    (cells-set attrs (+ (* a 5) 2) (cells-at nm v))))))
+          (set a (+ a 1))))
+    (return 0)))
+
+(defn ^Bool rs-same-run [^Cells text ^I32 s1 ^I32 l1 ^I32 s2 ^I32 l2]
+  (if (!= l1 l2) (return (== 0 1)))
+  (let [^:mut ^I32 i 0]
+    (while (< i l1)
+      (do (if (!= (cells-at text (+ s1 i)) (cells-at text (+ s2 i))) (return (== 0 1)))
+          (set i (+ i 1))))
+    (return (== 1 1))))
+
+(defn ^I32 rs-scan [^Cells nodes ^Cells attrs ^Cells text ^Cells used ^I32 from ^I32 to ^I32 ma]
+  (comment "The first unclaimed note of `used`[from, to) whose marker is the attribute `ma`'s: its index there, or -1.")
+  (let [^:mut ^I32 j from]
+    (while (< j to)
+      (do (if (== (cells-at used (+ (* j 2) 1)) 0)
+            (do (let [^I32 na (node-attr nodes attrs (cells-at used (* j 2)) (fk-marker))]
+                  (if (and (>= na 0)
+                           (rs-same-run text (attr-value attrs ma) (attr-len attrs ma)
+                                        (attr-value attrs na) (attr-len attrs na)))
+                    (return j)))))
+          (set j (+ j 1))))
+    (return -1)))
+
+(defn ^I32 rs-link-refs [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells text ^:mut ^Cells used]
+  (comment "Give each `ref` the `target` of the next note body with its marker that is not claimed: forward from the")
+  (comment "reference, then from the start. `used` is scratch: a note's node and whether it is taken.")
+  (let [^I32 cnt (node-count nodes)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 nn 0
+        ^:mut ^I32 p0 0
+        ^:mut ^I32 ma -1
+        ^:mut ^I32 found -1]
+    (cells-drop used 0)
+    (while (< i cnt)
+      (do (if (== (node-kind nodes i) (nk-note))
+            (do (cells-push used i)
+                (cells-push used 0)
+                (set nn (+ nn 1))))
+          (set i (+ i 1))))
+    (if (== nn 0) (return 0))
+    (set i 0)
+    (while (< i cnt)
+      (do (if (== (node-kind nodes i) (nk-ref))
+            (do (set ma (node-attr nodes attrs i (fk-marker)))
+                (if (and (>= ma 0) (< (node-attr nodes attrs i (fk-target)) 0))
+                  (do (while (and (< p0 nn) (< (cells-at used (* p0 2)) i))
+                        (set p0 (+ p0 1)))
+                      (set found (rs-scan nodes attrs text used p0 nn ma))
+                      (if (< found 0)
+                        (set found (rs-scan nodes attrs text used 0 p0 ma)))
+                      (if (>= found 0)
+                        (do (cells-set used (+ (* found 2) 1) 1)
+                            (node-set-attr-node nodes attrs i (fk-target) (cells-at used (* found 2)))))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 rs-scrub-text [^:mut ^Cells text]
+  (comment "A last safety: no Unicode noncharacter (U+FDD0..U+FDEF: what the groups of `emon.lists` are made of) is in the")
+  (comment "Model's text, whoever wrote it (a table's cell is written from the words, and a word of one that the stages here")
+  (comment "rewrote would have carried a group into it): U+FFFD stands for it, where it can be seen.")
+  (let [^:mut ^I32 i 0]
+    (while (< i (cells-len text))
+      (do (let [^I32 c (cells-at text i)]
+            (if (and (>= c 64976) (<= c 65007)) (cells-set text i 65533)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 rs-run [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells text
+                         ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                         ^:mut ^Cells nm ^:mut ^Cells stk ^:mut ^Cells used ^:mut ^Cells out ^Cells lay]
+  (comment "Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).")
+  (comment "`nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new")
+  (comment "node count.")
+  (let [^I32 n (node-count on)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 i 0]
+    (cells-drop nodes 0)
+    (cells-drop attrs 0)
+    (cells-drop regions 0)
+    (cells-drop nm 0)
+    (cells-drop stk 0)
+    (cells-drop out 0)
+    (cells-push out 0)
+    (cells-push out 0)
+    (cells-push out 0)
+    (while (< i n)
+      (do (cells-push nm -1)
+          (set i (+ i 1))))
+    (while (< r n)
+      (do (if (< (node-parent on r) 0)
+            (do (let [^I32 nr (rs-node on oa orr nodes attrs regions nm r -1)]
+                  (rs-children on oa orr text nodes attrs regions nm stk out lay r nr))))
+          (set r (+ r 1))))
+    (rs-remap attrs nm)
+    (rs-targets nodes attrs out)
+    (rs-link-refs nodes attrs text used)
+    (rs-scrub-text text)
+    (return (node-count nodes))))

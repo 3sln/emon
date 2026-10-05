@@ -110,10 +110,29 @@ public static class Para {
         // A closing bracket or quotation mark, which may follow the mark that ends a sentence.
         return (cp == 41) || ((cp == 93) || ((cp == 34) || ((cp == 39) || ((cp == 8221) || ((cp == 8217) || (cp == 187))))));
     }
+    internal static int PaTrimRef(emon.Port.Cells raw) {
+        // The length of `raw` without a note reference group that ends it (and the space before it): the text the
+        // reader reads ends where the marker was printed, against the word.
+        int n = emon.Port.CellsLen(raw);
+        int i = 0;
+        if ((n > 0) && (emon.Port.CellsAt(raw, n - 1) == Lists.LsSEnd())) {
+            i = n - 2;
+            while ((i >= 0) && (emon.Port.CellsAt(raw, i) != Lists.LsSRef()) && (emon.Port.CellsAt(raw, i) != Lists.LsSEnd())) {
+                i -= 1;
+            }
+            if ((i >= 0) && (emon.Port.CellsAt(raw, i) == Lists.LsSRef())) {
+                n = i;
+                if ((n > 0) && (emon.Port.CellsAt(raw, n - 1) == 32)) {
+                    n -= 1;
+                }
+            }
+        }
+        return n;
+    }
     internal static bool PaEndsSentence(emon.Port.Cells raw) {
         // Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
         // three digits after a mark that follows a letter: `thing.3`) is not read.
-        int n = emon.Port.CellsLen(raw);
+        int n = PaTrimRef(raw);
         int nd = 0;
         if (n < 1) {
             return 0 == 1;
@@ -409,6 +428,10 @@ public static class Para {
         if (op == 2) {
             return 1 == 1;
         }
+        // an item, a note body or a caption starts here (P4.5, P4.6: the list stage's rows after the heading rows)
+        if (Lists.LsSplit(hc, a, b) == 1) {
+            return 1 == 1;
+        }
         if (!PaUpright(ln, a)) {
             return 1 == 1;
         }
@@ -432,7 +455,7 @@ public static class Para {
         if (((g * PaGapDen) > (med * PaGapNum)) && (((g - med) * PaTinyDiv) > hb)) {
             return 1 == 1;
         }
-        if ((((PaStart(ln, b) - PaStart(ln, a)) * PaIndentDiv) > sb) && (((PaStart(ln, a) - margin) * PaIndentDiv) <= sb)) {
+        if ((((PaStart(ln, b) - PaStart(ln, a)) * PaIndentDiv) > sb) && (((PaStart(ln, a) - margin) * PaIndentDiv) <= sb) && (Lists.LsHang(hc, ln, a, b) == 0)) {
             return 1 == 1;
         }
         if ((PaAbs(ds) * PaSizeDiv) > sa) {
@@ -654,6 +677,164 @@ public static class Para {
         Model.NodeSetAttrText(nodes, attrs, par, Model.FkNumbering(), t1, n);
         return skip;
     }
+    internal static int PaGroupEnd(emon.Port.Cells raw, int s, int rawn) {
+        // The index one past the END of the group that opens at `s` (an opener of `emon.lists`), or -1 when the
+        // group is not closed before `rawn`.
+        int i = s + 1;
+        while (i < rawn) {
+            if (emon.Port.CellsAt(raw, i) == Lists.LsSEnd()) {
+                return i + 1;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    internal static int PaGroupSep(emon.Port.Cells raw, int s, int gend) {
+        // The index of the separator of the group at `s`..`gend`, which ends its header and starts its text.
+        int i = s + 1;
+        while (i < gend) {
+            if (emon.Port.CellsAt(raw, i) == Lists.LsSSep()) {
+                return i;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    internal static int PaGroupValue(emon.Port.Cells raw, int s, int sep) {
+        // The number the header of the group holds (the digits after the code cell); 0 when it holds none.
+        int i = s + 2;
+        int v = 0;
+        while (i < sep) {
+            v = (v * 10) + (emon.Port.CellsAt(raw, i) - 48);
+            i += 1;
+        }
+        return v;
+    }
+    internal static int PaPutMarker(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, int node, int key, int from, int to) {
+        // The code points raw[from..to) as the text attribute `key` of the node (a marker, a label).
+        int t0 = emon.Port.CellsLen(text);
+        int i = from;
+        while (i < to) {
+            Model.TextAppendCp(text, emon.Port.CellsAt(raw, i));
+            i += 1;
+        }
+        Model.NodeSetAttrText(nodes, attrs, node, key, t0, to - from);
+        return 0;
+    }
+    internal static int PaCut(emon.Port.Cells raw, emon.Port.Cells fr, int a, int b) {
+        // Remove raw[a..b), moving what follows down, and move the raw starts of the fragments (`fr`, cell 5 of a row)
+        // that lie beyond a.
+        int n = emon.Port.CellsLen(raw);
+        int d = b - a;
+        int j = a;
+        int k = 0;
+        while ((j + d) < n) {
+            emon.Port.CellsSet(raw, j, emon.Port.CellsAt(raw, j + d));
+            j += 1;
+        }
+        emon.Port.CellsDrop(raw, n - d);
+        while (k < (emon.Port.CellsLen(fr) / FrStride)) {
+            int s = emon.Port.CellsAt(fr, (k * FrStride) + 5);
+            if (s >= b) {
+                emon.Port.CellsSet(fr, (k * FrStride) + 5, s - d);
+            }
+            if ((s > a) && (s < b)) {
+                emon.Port.CellsSet(fr, (k * FrStride) + 5, a);
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    internal static int PaScrub(emon.Port.Cells raw, emon.Port.Cells fr, int from) {
+        // Cut every list, note or caption group at or after `from`: the stages leave one only at a paragraph's start.
+        int i = from;
+        while (i < emon.Port.CellsLen(raw)) {
+            int c = emon.Port.CellsAt(raw, i);
+            int n = emon.Port.CellsLen(raw);
+            if ((c == Lists.LsSItem()) || ((c == Lists.LsSNote()) || (c == Lists.LsSCap()))) {
+                int gend = PaGroupEnd(raw, i, n);
+                if (gend > 0) {
+                    if ((gend < n) && (emon.Port.CellsAt(raw, gend) == 32)) {
+                        PaCut(raw, fr, i, gend + 1);
+                    } else {
+                        PaCut(raw, fr, i, gend);
+                    }
+                } else {
+                    i += 1;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        return 0;
+    }
+    internal static int PaHasRef(emon.Port.Cells raw, int from, int to) {
+        // 1 when the range holds a note reference group.
+        int i = from;
+        while (i < to) {
+            if (emon.Port.CellsAt(raw, i) == Lists.LsSRef()) {
+                return 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int PaTextChild(emon.Port.Cells nodes, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to) {
+        // A `text` inline of the paragraph for raw[from..to), normalised. Answers its node.
+        int child = Model.NodeNew(nodes, Model.NkText(), par);
+        int t0 = emon.Port.CellsLen(text);
+        Normalize.NzNfc(raw, from, to, text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
+        Model.NodeSetText(nodes, child, t0, emon.Port.CellsLen(text) - t0);
+        Model.NodeSetConf(nodes, child, 1000);
+        Model.NodeAddSrc(nodes, child, Model.SrText());
+        return child;
+    }
+    internal static int PaInlines(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, int par, int from, int to) {
+        // The inline children of the paragraph for raw[from..to): `text` runs, and a `ref` for every note reference
+        // group (its marker; the target is set later, when the notes are known). A space before a reference is not
+        // text: the reference stands where the marker was printed, against the word. Answers the first `text` child, -1
+        // when there is none.
+        int i = from;
+        int seg = from;
+        int first = -1;
+        int child = 0;
+        while (i < to) {
+            if (emon.Port.CellsAt(raw, i) == Lists.LsSRef()) {
+                int gend = PaGroupEnd(raw, i, to);
+                int sep = PaGroupSep(raw, i, gend);
+                if ((gend < 0) || (sep < 0)) {
+                    i += 1;
+                } else {
+                    int se = i;
+                    if ((se > seg) && (emon.Port.CellsAt(raw, se - 1) == 32)) {
+                        se -= 1;
+                    }
+                    if (se > seg) {
+                        child = PaTextChild(nodes, text, raw, tmp, par, seg, se);
+                        if (first < 0) {
+                            first = child;
+                        }
+                    }
+                    child = Model.NodeNew(nodes, Model.NkRef(), par);
+                    Model.NodeSetConf(nodes, child, 500);
+                    Model.NodeAddSrc(nodes, child, Model.SrText());
+                    Model.NodeAddSrc(nodes, child, Model.SrInfer());
+                    PaPutMarker(nodes, attrs, text, raw, child, Model.FkMarker(), sep + 1, gend - 1);
+                    i = gend;
+                    seg = gend;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        if (seg < to) {
+            child = PaTextChild(nodes, text, raw, tmp, par, seg, to);
+            if (first < 0) {
+                first = child;
+            }
+        }
+        return first;
+    }
     internal static int PaFlush(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells hc, int parent) {
         // Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
         // column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`
@@ -661,7 +842,10 @@ public static class Para {
         // (SPEC 10.1.2). Under the root (parent 0) a paragraph the heading analysis found a heading in is a `heading` of its
         // level under the open section it belongs in (D167). A paragraph that an initial opens (`fr`'s first row, P4.10) has an
         // `initial` inline first, holding the initial's text, and the rest of its text as a `text` inline (also when it is on one
-        // page, where it has its own `text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`,
+        // page, where it has its own `text` as well, equal to the two); no list, note or caption group is read there (the
+        // initial wins, D229). A paragraph that starts with a group of the list, note or caption stage is an `item`, a `note`
+        // holding a paragraph, or a `caption` (D179), the group's marker or label an attribute and not in the text; note
+        // reference groups in the text become `ref` inlines. Closes the block's line rows in `al` (P4.11: `al-mark`,
         // `al-pass` decides at the end). Empties `raw` and `fr`.
         int nfr = emon.Port.CellsLen(fr) / FrStride;
         int rawn = emon.Port.CellsLen(raw);
@@ -675,22 +859,79 @@ public static class Para {
         int sect = parent;
         int kind = Model.NkParagraph();
         int par = 0;
+        int own = -1;
+        int lead = 0;
+        int gcode = 0;
+        int gval = 0;
+        int gm0 = 0;
+        int gm1 = 0;
+        int blk = 0;
         int k = 0;
         int kend = 0;
         int runs = 1;
-        int kids = 0;
         int from = 0;
         int to = 0;
         int cut = 0;
         int ini = 0;
         int t0 = 0;
         int child = 0;
+        int kids = 0;
         if (parent == 0) {
             lev = Heading.HdLevel(hc, hl);
             sect = Heading.HdParent(hc, nodes, lev);
         }
+        // a group at the start of the paragraph: an item, a note body or a caption (not inside a margin note)
+        if ((lev == 0) && ((rawn > 0) && (ncp == 0))) {
+            int c0 = emon.Port.CellsAt(raw, emon.Port.CellsAt(fr, 5));
+            int s0 = emon.Port.CellsAt(fr, 5);
+            if ((c0 == Lists.LsSItem()) || ((c0 == Lists.LsSNote()) || (c0 == Lists.LsSCap()))) {
+                int gend = PaGroupEnd(raw, s0, rawn);
+                int sep = PaGroupSep(raw, s0, gend);
+                if ((gend > 0) && (sep > 0) && ((parent == 0) || (Model.NodeKind(nodes, parent) != Model.NkNote()))) {
+                    gcode = emon.Port.CellsAt(raw, s0 + 1) - Lists.LsSBase();
+                    gval = PaGroupValue(raw, s0, sep);
+                    gm0 = sep + 1;
+                    gm1 = gend - 1;
+                    lead = gend - s0;
+                    if ((gend < rawn) && (emon.Port.CellsAt(raw, gend) == 32)) {
+                        lead += 1;
+                    }
+                    if (c0 == Lists.LsSItem()) {
+                        blk = 1;
+                    }
+                    if (c0 == Lists.LsSNote()) {
+                        blk = 2;
+                    }
+                    if (c0 == Lists.LsSCap()) {
+                        blk = 3;
+                    }
+                } else {
+                    // an unusable group (inside a margin note, or not closed): its text is dropped, the rest kept
+                    if (gend > 0) {
+                        lead = gend - s0;
+                        if ((gend < rawn) && (emon.Port.CellsAt(raw, gend) == 32)) {
+                            lead += 1;
+                        }
+                    }
+                }
+            }
+        }
+        // a group that is still in the text after the first is a stray (the stages put one only at a line's start, and
+        // a paragraph's first line is its start): it is cut out, with its space
+        PaScrub(raw, fr, emon.Port.CellsAt(fr, 5) + lead);
+        rawn = emon.Port.CellsLen(raw);
         if (lev > 0) {
             kind = Model.NkHeading();
+        }
+        if (blk == 1) {
+            kind = Model.NkItem();
+        }
+        if (blk == 3) {
+            kind = Model.NkCaption();
+        }
+        if (blk == 2) {
+            own = Model.NodeNew(nodes, Model.NkNote(), sect);
+            sect = own;
         }
         par = Model.NodeNew(nodes, kind, sect);
         if (lev > 0) {
@@ -699,15 +940,28 @@ public static class Para {
         Model.NodeSetConf(nodes, par, 500);
         Model.NodeAddSrc(nodes, par, Model.SrText());
         Model.NodeAddSrc(nodes, par, Model.SrInfer());
+        if (blk == 1) {
+            Model.NodeSetSub(nodes, par, gcode);
+            Model.NodeSetAux(nodes, par, gval);
+            Model.NodeSetAttrInt(nodes, attrs, par, Model.FkBox(), Lists.LsGet(hc, hl, Lists.LsKTextx()));
+            PaPutMarker(nodes, attrs, text, raw, par, Model.FkMarker(), gm0, gm1);
+        }
+        if (blk == 3) {
+            Model.NodeSetAux(nodes, par, gcode);
+            PaPutMarker(nodes, attrs, text, raw, par, Model.FkLabel(), gm0, gm1);
+        }
+        if (blk == 2) {
+            Model.NodeSetSub(nodes, own, gcode);
+            Model.NodeSetConf(nodes, own, 500);
+            Model.NodeAddSrc(nodes, own, Model.SrInfer());
+            PaPutMarker(nodes, attrs, text, raw, own, Model.FkMarker(), gm0, gm1);
+        }
         k = 1;
         while (k < nfr) {
             if (emon.Port.CellsAt(fr, k * FrStride) != emon.Port.CellsAt(fr, (k - 1) * FrStride)) {
                 runs += 1;
             }
             k += 1;
-        }
-        if ((runs > 1) || (ncp > 0)) {
-            kids = 1;
         }
         k = 0;
         while (k < nfr) {
@@ -717,16 +971,30 @@ public static class Para {
                 kend += 1;
             }
             from = emon.Port.CellsAt(fr, (k * FrStride) + 5);
+            if (k == 0) {
+                from += lead;
+            }
             to = rawn;
             if (kend < nfr) {
                 to = emon.Port.CellsAt(fr, (kend * FrStride) + 5);
             }
+            kids = 0;
+            if (runs > 1) {
+                kids = 1;
+            }
+            if ((k == 0) && (ncp > 0)) {
+                kids = 1;
+            }
+            if (PaHasRef(raw, from, to) == 1) {
+                kids = 1;
+            }
+            child = -1;
             if (kids == 1) {
-                if (k > 0) {
-                    child = Model.NodeNew(nodes, Model.NkBreak(), par);
-                    Model.NodeSetSub(nodes, child, pg);
-                    Model.NodeSetConf(nodes, child, 500);
-                    Model.NodeAddSrc(nodes, child, Model.SrInfer());
+                if ((runs > 1) && (k > 0)) {
+                    int br = Model.NodeNew(nodes, Model.NkBreak(), par);
+                    Model.NodeSetSub(nodes, br, pg);
+                    Model.NodeSetConf(nodes, br, 500);
+                    Model.NodeAddSrc(nodes, br, Model.SrInfer());
                 }
                 cut = from;
                 if ((k == 0) && (ncp > 0)) {
@@ -751,17 +1019,15 @@ public static class Para {
                     Model.NodeSetText(nodes, child, t0, tn0);
                     Model.NodeSetConf(nodes, child, 1000);
                     Model.NodeAddSrc(nodes, child, Model.SrText());
+                    child = -1;
                 }
                 if ((runs > 1) || (cut < to)) {
-                    child = Model.NodeNew(nodes, Model.NkText(), par);
-                    t0 = emon.Port.CellsLen(text);
-                    Normalize.NzNfc(raw, cut, to, text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
-                    int tn = emon.Port.CellsLen(text) - t0;
-                    Model.NodeSetText(nodes, child, t0, tn);
-                    Model.NodeSetConf(nodes, child, 1000);
-                    Model.NodeAddSrc(nodes, child, Model.SrText());
+                    child = PaInlines(nodes, attrs, text, raw, tmp, par, cut, to);
                 }
-                if (runs == 1) {
+                if ((runs > 1) && (child < 0) && (k == 0) && (ncp > 0)) {
+                    child = PaTextChild(nodes, text, raw, tmp, par, cut, to);
+                }
+                if ((runs == 1) && (PaHasRef(raw, from, to) == 0)) {
                     t0 = emon.Port.CellsLen(text);
                     Normalize.NzNfc(raw, from, to, text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
                     int tn1 = emon.Port.CellsLen(text) - t0;
@@ -783,7 +1049,10 @@ public static class Para {
                 int rx1 = emon.Port.CellsAt(fr, @base + 3);
                 int ry1 = emon.Port.CellsAt(fr, @base + 4);
                 Model.NodeAddRegion(nodes, regions, par, pg, rx0, ry0, rx1, ry1);
-                if (runs > 1) {
+                if (own >= 0) {
+                    Model.NodeAddRegion(nodes, regions, own, pg, rx0, ry0, rx1, ry1);
+                }
+                if ((runs > 1) && (child >= 0)) {
                     Model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
                 }
                 k += 1;
@@ -900,6 +1169,9 @@ public static class Para {
         if ((Heading.HdLevel(hc, a) > 0) || (Heading.HdLevel(hc, b) > 0)) {
             return -100;
         }
+        if (Lists.LsStart(hc, b) == 1) {
+            return -100;
+        }
         int last = emon.Port.CellsAt(raw, n - 1);
         if (((last == 45) || (last == 173)) && (n >= 2)) {
             if (PaLetter(emon.Port.CellsAt(raw, n - 2))) {
@@ -920,7 +1192,7 @@ public static class Para {
         if (PaLower(PaFirstCp(wd, ln, et, b))) {
             pts += JsLower;
         }
-        if ((indents == 1) && (((PaStart(ln, b) - bmargin) * PaIndentDiv) > sb)) {
+        if ((indents == 1) && (((PaStart(ln, b) - bmargin) * PaIndentDiv) > sb) && (Lists.LsHangCol(hc, ln, a, b, colx0, bmargin) == 0)) {
             pts += JsIndent;
         }
         if (PaMarker(wd, ln, et, b)) {
