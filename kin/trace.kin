@@ -1,0 +1,1951 @@
+;; The tracer (P6.4; SPEC 8.2, 8.4.4; D092, D093, D198, D226; D229-D235). emon's own module (D039).
+;;
+;;   Runs, components   `tr-runs` (the row runs of a binary view by `bitmap-next-nonzero`), `tr-label` (8-connected components by
+;;                      union-find OVER RUNS, the smaller root wins), `tr-measure` (per component: ink, holes, stroke width as the
+;;                      median run length, majority ink layer, mean gray), `tr-kinds`, `tr-parents`, `tr-emit-components` (the
+;;                      `components` rows). No label image is ever held: memory is the runs (D092).
+;;   Contours           `tr-contours`: the outer boundary of a component by crack following on the binary view itself, simplified by
+;;                      integer Douglas-Peucker at `tr-dp-eps` (1.5 px), written to `pts`.
+;;   Rules              `tr-rules`: runs of every component that is not a glyph, chained as stacks of short row runs (vertical and
+;;                      steep rules) and of short COLUMN runs (horizontal and shallow ones), straightened by Douglas-Peucker,
+;;                      merged along their axis, styled (dashed, dotted, double), written to `rules` (D226).
+;;   Primitives         `tr-prims`: `rect`, `circle`/`ellipse`, `ring`, `arrow`, `polygon`, `curve` fitted to the contours.
+;;                      `tr-tints`: filled `rect`s from a light or background ink mask (D226).
+;;   Text lines         `tr-tlines`: the text-like components of one ink layer chained along their own direction by agglomeration,
+;;                      a baseline fitted, one `tlines` row a line (a faint diagonal watermark is one row at its angle).
+;;   Features           `tr-feat-ocr`, `tr-feat-text`: `xo`/`xt` columns 14, 15 and 23 (SPEC 8.4.5).
+;;   The stage          `tr-trace` runs components, rules, contours, primitives and text lines of ONE traced bitmap.
+;;
+;; THE WIRING POINT (for P7.U / P7.3). Like `emon.norm` this module allocates NO bitmap: the caller owns the bitmaps it traces (a
+;; binary view, or an ink-mask view) and the workspace `Cells` it hands every stage. Engine wiring waits for P7.U.
+;;
+;; THE WORKSPACE, owned by the caller and handed to every stage (`rn ri cs vr s1 s2 s3`):
+;;   rn  the runs, 6 cells each: y x0 x1 parent edges component        ri  row index, h + 2 cells (first run of a row, run count,
+;;   cs  the components, 24 cells each (the `C_*` columns below)               truncated flag)
+;;   vr  the column runs, 4 cells each: component x y0 y1              s1 s2 s3  scratch (any stage may overwrite)
+;; `rn ri cs vr` live from `tr-runs` until the last stage; `s1 s2 s3` are scratch whose contents die with the call that used them.
+;;
+;; THE SETTINGS are the zero- and one-argument functions below (the way `nm-ink-merge` is); `dpi100` is the view's resolution x100
+;; and every length in points scales with it.
+(ns emon.trace
+  (:require [emon.lang :refer [I32 I64 Bitmap Cells i64 i32 add64 mul64 shr64 shl32 sar32]]
+            [emon.port :refer [bitmap-w bitmap-h bitmap-u8 bitmap-next-nonzero
+                               cells-len cells-at cells-set cells-push cells-drop cells-grow]]
+            [emon.evidence :refer [vw-get vw-px-to-cpt vw-box-to-cpt ik-get fe-set
+                                   co-new co-set co-get co-count rl-new rl-set rl-get rl-count
+                                   pm-new pm-set pm-get pm-count tl-new tl-set tl-get tl-count
+                                   ck-blob ck-rule-h ck-rule-v ck-text-like
+                                   rs-solid rs-dashed rs-dotted rs-double
+                                   pm-rect pm-ellipse pm-circle pm-arrow pm-curve pm-polygon pm-ring
+                                   po-move po-line po-close
+                                   vwf-dpi vwf-deskew
+                                   ikf-color ikf-role ir-body
+                                   cf-x0 cf-y0 cf-x1 cf-y1 cf-view cf-pxx cf-pxy cf-pxw cf-pxh cf-area cf-fill cf-stroke cf-color
+                                   cf-ink cf-kind cf-conf cf-flags cf-pfirst cf-pcount cf-parent cf-holes cf-gray
+                                   rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-view rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-color rlf-ink
+                                   rlf-style rlf-conf rlf-rfirst rlf-rcount rlf-flags
+                                   pmf-x0 pmf-y0 pmf-x1 pmf-y1 pmf-view pmf-kind pmf-cx pmf-cy pmf-rx pmf-ry pmf-rot pmf-stroke
+                                   pmf-color pmf-ink pmf-fill pmf-conf pmf-pfirst pmf-pcount pmf-rfirst pmf-rcount pmf-flags
+                                   tlf-ink tlf-height tlf-gap tlf-conf
+                                   ea-components ea-rules ea-prims
+                                   ev-angle ev-sin ev-cos ev-overlap-small]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem bit-and bit-or bit-xor]]))
+
+;; ---------------------------------------------------------------- settings (SPEC 8.2; D229)
+
+(defn ^:pub ^I32 tr-max-runs [] (comment "Row runs a traced bitmap may hold; the rest of the page is not traced (`ri`'s truncated flag).") (return 4000000))
+(defn ^:pub ^I32 tr-max-comps [] (comment "`trace-components`: components recorded for a page, the rest counted (D198).") (return 200000))
+(defn ^:pub ^I32 tr-max-vruns [] (comment "Column runs a traced bitmap may hold.") (return 6000000))
+(defn ^:pub ^I32 tr-max-contour [] (comment "Corners of one component's raw contour; a longer one is not traced.") (return 60000))
+(defn ^:pub ^I32 tr-dp-eps2 [] (comment "Douglas-Peucker's epsilon squared times four: eps = 1.5 px, so (3/2)^2 * 4 = 9.") (return 9))
+(defn ^:pub ^I32 tr-rule-ratio [] (comment "A rule is at least this many times as long as it is thick.") (return 8))
+(defn ^:pub ^I32 tr-text-lo [] (comment "A text-like component is at least 1/this of the page's median text-like height.") (return 3))
+(defn ^:pub ^I32 tr-text-hi [] (comment "...and at most this many times it.") (return 4))
+(defn ^:pub ^I32 tr-text-aspect [] (comment "...and at most this many times as wide as high.") (return 8))
+(defn ^:pub ^I32 tr-parent-cands [] (comment "Components that can enclose another are searched among at most this many (the largest come first).") (return 4096))
+(defn ^:pub ^I32 tr-pt [^I32 dpi100 ^I32 pt]
+  (comment "`pt` points as pixels at `dpi100` (x100), rounded, at least 1.")
+  (let [^I32 v (i32 (quot (add64 (mul64 (i64 pt) (i64 dpi100)) (i64 3600)) (i64 7200)))]
+    (if (< v 1) (return 1))
+    (return v)))
+(defn ^:pub ^I32 tr-noise [^I32 dpi100]
+  (comment "A component of at most this many ink pixels is noise: 6 at 300 dpi, scaled by the square of the resolution, at least 1.")
+  (let [^I32 v (i32 (quot (add64 (mul64 (i64 6) (mul64 (i64 dpi100) (i64 dpi100))) (i64 450000000)) (i64 900000000)))]
+    (if (< v 1) (return 1))
+    (return v)))
+(defn ^:pub ^I32 tr-rule-min [^I32 dpi100] (comment "The shortest rule: 6 pt.") (return (tr-pt dpi100 6)))
+(defn ^:pub ^I32 tr-rule-thick [^I32 dpi100] (comment "The thickest rule: 3 pt.") (return (tr-pt dpi100 3)))
+(defn ^:pub ^I32 tr-rule-gap [^I32 dpi100] (comment "A rule's pieces merge across a gap of at most 2 pt (`rule-gap`).") (return (tr-pt dpi100 2)))
+(defn ^:pub ^I32 tr-fill-min [^I32 dpi100] (comment "A tint is at least 6 pt each way (`fill-min`, D226).") (return (tr-pt dpi100 6)))
+(defn ^:pub ^I32 tr-fill-tol [] (comment "Consecutive rows of a tint share their x-extent within 2 px (`fill-tol`, D226).") (return 2))
+(defn ^:pub ^I32 tr-text-min [^I32 dpi100] (comment "The smallest text-like height: 3 pt.") (return (tr-pt dpi100 3)))
+
+;; ---------------------------------------------------------------- columns
+
+(defconst ^I32 RS 6)   ;; a run: y x0 x1 parent edges component
+(defconst ^I32 CS 24)  ;; a component
+(defconst ^I32 C_TOP 0)
+(defconst ^I32 C_LEFT 1)
+(defconst ^I32 C_RIGHT 2)
+(defconst ^I32 C_BOTTOM 3)
+(defconst ^I32 C_INK 4)
+(defconst ^I32 C_NRUNS 5)
+(defconst ^I32 C_HOLES 6)
+(defconst ^I32 C_STROKE_H 7)
+(defconst ^I32 C_STROKE_V 8)
+(defconst ^I32 C_INKROW 9)
+(defconst ^I32 C_GRAY 10)
+(defconst ^I32 C_KIND 11)
+(defconst ^I32 C_PARENT 12)
+(defconst ^I32 C_ROOT 13)
+(defconst ^I32 C_EVROW 14)
+(defconst ^I32 C_CONF 15)
+(defconst ^I32 C_PFIRST 16)
+(defconst ^I32 C_PCOUNT 17)
+(defconst ^I32 C_FIT 18)
+(defconst ^I32 C_RULE 19)
+(defconst ^I32 C_PRIM 20)
+(defconst ^I32 C_CX2 21)
+(defconst ^I32 C_CY2 22)
+
+;; the classes of a component, before they are `ck` codes
+(defn ^:pub ^I32 tr-k-noise [] (return 0))
+(defn ^:pub ^I32 tr-k-text [] (return 1))
+(defn ^:pub ^I32 tr-k-rule [] (return 2))
+(defn ^:pub ^I32 tr-k-large [] (return 3))
+
+;; flag bits of a `prims` row (SPEC 8.4.4: closed, filled, double ring, tint)
+(defn ^:pub ^I32 tr-pf-closed [] (return 1))
+(defn ^:pub ^I32 tr-pf-filled [] (return 2))
+(defn ^:pub ^I32 tr-pf-double [] (return 4))
+(defn ^:pub ^I32 tr-pf-tint [] (return 8))
+
+;; ---------------------------------------------------------------- small helpers
+
+(defn ^I32 tr-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 tr-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 tr-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 tr-permille [^I32 n ^I32 d]
+  (comment "n over d, per mille, clamped to 0..1000; 0 when d is not positive.")
+  (if (<= d 0) (return 0))
+  (let [^I32 v (i32 (quot (mul64 (i64 n) (i64 1000)) (i64 d)))]
+    (if (< v 0) (return 0))
+    (if (> v 1000) (return 1000))
+    (return v)))
+
+(defn ^:pub ^I32 tr-isqrt [^I64 n]
+  (comment "floor(sqrt n) for 0 <= n < 2^62, by Newton's iteration from a power of two above it.")
+  (if (<= n (i64 0)) (return 0))
+  (let [^:mut ^I64 x (i64 1)
+        ^:mut ^I64 y (i64 0)]
+    (while (< (mul64 x x) n)
+      (set x (mul64 x (i64 2))))
+    (set y (quot (add64 x (quot n x)) (i64 2)))
+    (while (< y x)
+      (do (set x y)
+          (set y (quot (add64 x (quot n x)) (i64 2)))))
+    (return (i32 x))))
+
+(defn ^I32 tr-rg [^Cells rn ^I32 r ^I32 f] (return (cells-at rn (+ (* r 6) f))))
+(defn ^I32 tr-rs [^:mut ^Cells rn ^I32 r ^I32 f ^I32 v] (cells-set rn (+ (* r 6) f) v) (return 0))
+(defn ^:pub ^I32 tr-cg [^Cells cs ^I32 c ^I32 f] (return (cells-at cs (+ (* c 24) f))))
+(defn ^I32 tr-cset [^:mut ^Cells cs ^I32 c ^I32 f ^I32 v] (cells-set cs (+ (* c 24) f) v) (return 0))
+
+(defn ^:pub ^I32 tr-fg [^Bitmap b ^I32 x ^I32 y]
+  (comment "1 when (x, y) is on the bitmap and nonzero.")
+  (if (< x 0) (return 0))
+  (if (< y 0) (return 0))
+  (if (>= x (bitmap-w b)) (return 0))
+  (if (>= y (bitmap-h b)) (return 0))
+  (if (== (bitmap-u8 b x y 0) 0) (return 0))
+  (return 1))
+
+;; ---------------------------------------------------------------- runs
+
+(defn ^:pub ^I32 tr-runs [^Bitmap bin ^:mut ^Cells rn ^:mut ^Cells ri]
+  (comment "The row runs of the nonzero pixels of `bin`, in raster order, into `rn` (y x0 x1 parent=self edges=0 component=-1; x1")
+  (comment "exclusive) and the row index into `ri` (h + 3 cells: the first run of each row, then the run count, a flag that is 1")
+  (comment "when `tr-max-runs` stopped the walk, and the component count `tr-label` sets). Only ink is visited: `bitmap-next-nonzero` skips paper. Answers the run count.")
+  (let [^I32 w (bitmap-w bin)
+        ^I32 h (bitmap-h bin)
+        ^I32 maxr (tr-max-runs)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 trunc 0]
+    (cells-drop rn 0)
+    (cells-drop ri 0)
+    (while (< y h)
+      (do (cells-push ri n)
+          (if (== trunc 0)
+            (do (set x (bitmap-next-nonzero bin 0 y))
+                (while (< x w)
+                  (do (set e x)
+                      (while (and (< e w) (!= (bitmap-u8 bin e y 0) 0))
+                        (set e (+ e 1)))
+                      (if (>= n maxr)
+                        (do (set trunc 1) (set x w))
+                        (do (cells-push rn y)
+                            (cells-push rn x)
+                            (cells-push rn e)
+                            (cells-push rn n)
+                            (cells-push rn 0)
+                            (cells-push rn -1)
+                            (set n (+ n 1))
+                            (set x (bitmap-next-nonzero bin e y))))))))
+          (set y (+ y 1))))
+    (cells-push ri n)
+    (cells-push ri trunc)
+    (cells-push ri 0)
+    (return n)))
+
+(defn ^I32 tr-find [^:mut ^Cells rn ^I32 r]
+  (comment "The root of run r's set, halving the path as it goes.")
+  (let [^:mut ^I32 a r
+        ^:mut ^I32 p 0
+        ^:mut ^I32 g 0]
+    (set p (cells-at rn (+ (* a 6) 3)))
+    (while (!= p a)
+      (do (set g (cells-at rn (+ (* p 6) 3)))
+          (cells-set rn (+ (* a 6) 3) g)
+          (set a g)
+          (set p (cells-at rn (+ (* a 6) 3)))))
+    (return a)))
+
+(defn ^I32 tr-union [^:mut ^Cells rn ^I32 a ^I32 b]
+  (comment "Join the sets of runs a and b; the smaller root wins (D092's determinism rule).")
+  (let [^I32 ra (tr-find rn a)
+        ^I32 rb (tr-find rn b)]
+    (if (== ra rb) (return 0))
+    (if (< ra rb)
+      (cells-set rn (+ (* rb 6) 3) ra)
+      (cells-set rn (+ (* ra 6) 3) rb))
+    (return 1)))
+
+(defn ^:pub ^I32 tr-unify [^:mut ^Cells rn ^Cells ri ^I32 h]
+  (comment "8-connected components over runs: a run of row y joins every run of row y - 1 whose x-range touches its own with one")
+  (comment "pixel's slack (x0 <= other x1 and other x0 <= x1, the ends being exclusive). Every adjacent pair is also counted in the")
+  (comment "lower run's `edges` cell, so that holes = edges - runs + 1 per component. Afterwards every run's parent is its root.")
+  (let [^I32 n (cells-at ri h)
+        ^:mut ^I32 y 1
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ie 0
+        ^:mut ^I32 je 0
+        ^:mut ^I32 ax0 0
+        ^:mut ^I32 ax1 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 ec 0]
+    (while (< y h)
+      (do (set i (cells-at ri (- y 1)))
+          (set ie (cells-at ri y))
+          (set j ie)
+          (set je (cells-at ri (+ y 1)))
+          (while (and (< i ie) (< j je))
+            (do (set ax0 (tr-rg rn i 1))
+                (set ax1 (tr-rg rn i 2))
+                (set bx0 (tr-rg rn j 1))
+                (set bx1 (tr-rg rn j 2))
+                (if (and (<= bx0 ax1) (<= ax0 bx1))
+                  (do (tr-union rn i j)
+                      (set ec (tr-rg rn j 4))
+                      (tr-rs rn j 4 (+ ec 1))))
+                (if (<= ax1 bx1)
+                  (set i (+ i 1))
+                  (set j (+ j 1)))))
+          (set y (+ y 1))))
+    (set r 0)
+    (while (< r n)
+      (do (tr-rs rn r 3 (tr-find rn r))
+          (set r (+ r 1))))
+    (return n)))
+
+;; ---------------------------------------------------------------- sorting (a bottom-up merge sort of an index array)
+
+(defn ^I32 tr-comp-before [^Cells cp ^I32 a ^I32 b]
+  (comment "1 when component a sorts before b in the provisional table `cp` (9 cells: root top left right bottom ink nruns edges rank):")
+  (comment "by top, left, size, then root run (unique, so the order is total).")
+  (let [^I32 ta (cells-at cp (+ (* a 9) 1))
+        ^I32 tb (cells-at cp (+ (* b 9) 1))
+        ^I32 la (cells-at cp (+ (* a 9) 2))
+        ^I32 lb (cells-at cp (+ (* b 9) 2))
+        ^I32 sa (cells-at cp (+ (* a 9) 5))
+        ^I32 sb (cells-at cp (+ (* b 9) 5))]
+    (if (< ta tb) (return 1))
+    (if (> ta tb) (return 0))
+    (if (< la lb) (return 1))
+    (if (> la lb) (return 0))
+    (if (< sa sb) (return 1))
+    (if (> sa sb) (return 0))
+    (if (< (cells-at cp (* a 9)) (cells-at cp (* b 9))) (return 1))
+    (return 0)))
+
+(defn ^I32 tr-sort-comps [^Cells cp ^I32 nc ^:mut ^Cells od ^:mut ^Cells tmp]
+  (comment "`od` (nc cells, 0 1 2 ... in) sorted by `tr-comp-before`; `tmp` is scratch of nc cells.")
+  (let [^:mut ^I32 width 1
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ai 0
+        ^:mut ^I32 bj 0]
+    (while (< width nc)
+      (do (set lo 0)
+          (while (< lo nc)
+            (do (set mid (tr-min (+ lo width) nc))
+                (set hi (tr-min (+ lo (* 2 width)) nc))
+                (set i lo)
+                (set j mid)
+                (set k lo)
+                (while (and (< i mid) (< j hi))
+                  (do (set ai (cells-at od i))
+                      (set bj (cells-at od j))
+                      (if (== (tr-comp-before cp bj ai) 1)
+                        (do (cells-set tmp k bj) (set j (+ j 1)))
+                        (do (cells-set tmp k ai) (set i (+ i 1))))
+                      (set k (+ k 1))))
+                (while (< i mid)
+                  (do (cells-set tmp k (cells-at od i)) (set i (+ i 1)) (set k (+ k 1))))
+                (while (< j hi)
+                  (do (cells-set tmp k (cells-at od j)) (set j (+ j 1)) (set k (+ k 1))))
+                (set lo hi)))
+          (set k 0)
+          (while (< k nc)
+            (do (cells-set od k (cells-at tmp k))
+                (set k (+ k 1))))
+          (set width (* width 2))))
+    (return 0)))
+
+;; ---------------------------------------------------------------- components
+
+(defn ^:pub ^I32 tr-label [^:mut ^Cells rn ^:mut ^Cells ri ^I32 h ^:mut ^Cells cs ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3]
+  (comment "Group the runs (after `tr-unify`) into components, sorted by (top, left, size) (D092's determinism: ties by the root run).")
+  (comment "Fills `cs` with one row per component (top left right bottom ink nruns holes; every other column its default) and every")
+  (comment "run's component cell with its rank (-1 past `tr-max-comps`). Answers the number of components RECORDED; the count of all of")
+  (comment "them is `ri`'s cell h + 2. `s1 s2 s3` are scratch.")
+  (let [^I32 n (cells-at ri h)
+        ^I32 maxc (tr-max-comps)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 nc 0
+        ^:mut ^I32 pid 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 root 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 rec 0]
+    (comment "s1 = cp (9 cells a component), s2 = od, s3 = tmp")
+    (cells-drop s1 0)
+    (set r 0)
+    (while (< r n)
+      (do (set root (tr-rg rn r 3))
+          (set y (tr-rg rn r 0))
+          (set x0 (tr-rg rn r 1))
+          (set x1 (tr-rg rn r 2))
+          (if (== root r)
+            (do (set pid nc)
+                (set nc (+ nc 1))
+                (cells-push s1 r)
+                (cells-push s1 y)
+                (cells-push s1 x0)
+                (cells-push s1 x1)
+                (cells-push s1 (+ y 1))
+                (cells-push s1 0)
+                (cells-push s1 0)
+                (cells-push s1 0)
+                (cells-push s1 -1)
+                (tr-rs rn r 5 pid))
+            (do (set pid (tr-rg rn root 5))
+                (tr-rs rn r 5 pid)))
+          (set q (* pid 9))
+          (if (< x0 (cells-at s1 (+ q 2))) (cells-set s1 (+ q 2) x0))
+          (if (> x1 (cells-at s1 (+ q 3))) (cells-set s1 (+ q 3) x1))
+          (if (> (+ y 1) (cells-at s1 (+ q 4))) (cells-set s1 (+ q 4) (+ y 1)))
+          (set v (cells-at s1 (+ q 5)))
+          (cells-set s1 (+ q 5) (+ v (- x1 x0)))
+          (set v (cells-at s1 (+ q 6)))
+          (cells-set s1 (+ q 6) (+ v 1))
+          (set v (cells-at s1 (+ q 7)))
+          (cells-set s1 (+ q 7) (+ v (tr-rg rn r 4)))
+          (set r (+ r 1))))
+    (comment "the order: od is the identity, sorted")
+    (cells-drop s2 0)
+    (cells-drop s3 0)
+    (set k 0)
+    (while (< k nc)
+      (do (cells-push s2 k)
+          (cells-push s3 0)
+          (set k (+ k 1))))
+    (tr-sort-comps s1 nc s2 s3)
+    (comment "rank of each provisional id (into cp column 8), then every run's component becomes its rank")
+    (set k 0)
+    (while (< k nc)
+      (do (cells-set s1 (+ (* (cells-at s2 k) 9) 8) k)
+          (set k (+ k 1))))
+    (set r 0)
+    (while (< r n)
+      (do (set v (cells-at s1 (+ (* (tr-rg rn r 5) 9) 8)))
+          (if (>= v maxc) (set v -1))
+          (tr-rs rn r 5 v)
+          (set r (+ r 1))))
+    (cells-drop cs 0)
+    (set rec (tr-min nc maxc))
+    (set k 0)
+    (while (< k rec)
+      (do (set q (* (cells-at s2 k) 9))
+          (set v 0)
+          (while (< v 24)
+            (do (cells-push cs 0)
+                (set v (+ v 1))))
+          (tr-cset cs k C_TOP (cells-at s1 (+ q 1)))
+          (tr-cset cs k C_LEFT (cells-at s1 (+ q 2)))
+          (tr-cset cs k C_RIGHT (cells-at s1 (+ q 3)))
+          (tr-cset cs k C_BOTTOM (cells-at s1 (+ q 4)))
+          (tr-cset cs k C_INK (cells-at s1 (+ q 5)))
+          (tr-cset cs k C_NRUNS (cells-at s1 (+ q 6)))
+          (tr-cset cs k C_HOLES (+ (- (cells-at s1 (+ q 7)) (cells-at s1 (+ q 6))) 1))
+          (tr-cset cs k C_INKROW -1)
+          (tr-cset cs k C_PARENT -1)
+          (tr-cset cs k C_ROOT (cells-at s1 q))
+          (tr-cset cs k C_EVROW -1)
+          (tr-cset cs k C_PFIRST -1)
+          (tr-cset cs k C_RULE -1)
+          (tr-cset cs k C_PRIM -1)
+          (set k (+ k 1))))
+    (cells-set ri (+ h 2) nc)
+    (return rec)))
+
+;; ---------------------------------------------------------------- statistics per component
+
+(defn ^I32 tr-hist-median [^Cells h ^I32 off ^I32 nbins ^I32 total]
+  (comment "The lower median bin of a histogram of `nbins` bins at `off` holding `total` counts; 0 for none.")
+  (let [^:mut ^I32 b 0
+        ^:mut ^I32 acc 0]
+    (if (<= total 0) (return 0))
+    (while (< b nbins)
+      (do (set acc (+ acc (cells-at h (+ off b))))
+          (if (>= (* acc 2) total) (return b))
+          (set b (+ b 1))))
+    (return (- nbins 1))))
+
+(defn ^I32 tr-len-cpt [^I32 px ^I32 dpi100]
+  (comment "A length of `px` pixels at `dpi100` as centipoints, rounded.")
+  (if (< dpi100 1) (return (* px 24)))
+  (return (i32 (quot (add64 (mul64 (i64 px) (i64 720000)) (i64 (quot dpi100 2))) (i64 dpi100)))))
+
+(defn ^I32 tr-group [^Cells data ^I32 stride ^I32 col ^I32 n ^I32 nc ^:mut ^Cells idx ^:mut ^Cells off]
+  (comment "Counting sort of `n` records of `data` (cells per record `stride`, component id at `col`, -1 skipped) by component:")
+  (comment "`off` gets nc + 1 offsets, `idx` the record numbers grouped by component in record order. Answers the count grouped.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 acc 0
+        ^:mut ^I32 v 0]
+    (cells-drop off 0)
+    (cells-grow off (+ nc 1) 0)
+    (while (< i n)
+      (do (set c (cells-at data (+ (* i stride) col)))
+          (if (>= c 0)
+            (do (set v (cells-at off (+ c 1)))
+                (cells-set off (+ c 1) (+ v 1))))
+          (set i (+ i 1))))
+    (set c 0)
+    (while (< c nc)
+      (do (set v (cells-at off (+ c 1)))
+          (set acc (+ acc v))
+          (cells-set off (+ c 1) acc)
+          (set c (+ c 1))))
+    (cells-drop idx 0)
+    (cells-grow idx acc 0)
+    (comment "fill: the offsets are cursors, then shifted back")
+    (set i 0)
+    (while (< i n)
+      (do (set c (cells-at data (+ (* i stride) col)))
+          (if (>= c 0)
+            (do (set v (cells-at off c))
+                (cells-set idx v i)
+                (cells-set off c (+ v 1))))
+          (set i (+ i 1))))
+    (set c nc)
+    (while (> c 0)
+      (do (cells-set off c (cells-at off (- c 1)))
+          (set c (- c 1))))
+    (cells-set off 0 0)
+    (return acc)))
+
+(defn ^:pub ^I32 tr-vruns [^Bitmap bin ^Cells rn ^Cells ri ^:mut ^Cells vr ^:mut ^Cells s1]
+  (comment "The COLUMN runs (vertical runs of ink) of every recorded component into `vr` (component x y0 y1, y1 exclusive), in the")
+  (comment "order they END (raster order of their last pixel). One pass over the row runs, visiting only ink; `s1` is scratch of one")
+  (comment "cell per column. Answers the number of column runs (capped at `tr-max-vruns`).")
+  (let [^I32 w (bitmap-w bin)
+        ^I32 h (bitmap-h bin)
+        ^I32 n (cells-at ri h)
+        ^I32 maxv (tr-max-vruns)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 nv 0
+        ^:mut ^I32 comp 0]
+    (cells-drop vr 0)
+    (cells-drop s1 0)
+    (cells-grow s1 w 0)
+    (while (< r n)
+      (do (set y (tr-rg rn r 0))
+          (set comp (tr-rg rn r 5))
+          (set x (tr-rg rn r 1))
+          (while (< x (tr-rg rn r 2))
+            (do (set ln (+ (cells-at s1 x) 1))
+                (if (and (< (+ y 1) h) (!= (bitmap-u8 bin x (+ y 1) 0) 0))
+                  (cells-set s1 x ln)
+                  (do (cells-set s1 x 0)
+                      (if (and (>= comp 0) (< nv maxv))
+                        (do (cells-push vr comp)
+                            (cells-push vr x)
+                            (cells-push vr (+ (- y ln) 1))
+                            (cells-push vr (+ y 1))
+                            (set nv (+ nv 1))))))
+                (set x (+ x 1))))
+          (set r (+ r 1))))
+    (return nv)))
+
+(defn ^:pub ^I32 tr-measure [^Bitmap gray ^Bitmap labels ^I32 fixed ^I32 ink0
+                             ^Cells rn ^Cells ri ^:mut ^Cells cs ^Cells vr ^I32 nv
+                             ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3]
+  (comment "Per component: the majority ink layer (`labels` holds each pixel's layer id, 0 paper, 1..K as `nm-label-into` makes it, and")
+  (comment "the layer's row is `ink0` + id - 1 in `inks`; `fixed` >= 0 says the whole bitmap is that one `inks` row and `labels` is")
+  (comment "not read), the mean gray of its ink, and its STROKE WIDTH: the smaller of the medians of its horizontal run lengths and its")
+  (comment "vertical (column) run lengths, in pixels (D198: no distance transform; its error is measured by `bb trace`). `vr` and `nv` are")
+  (comment "`tr-vruns`'s. Writes `cs` columns INKROW, GRAY, STROKE_H, STROKE_V. `s1 s2 s3` are scratch.")
+  (let [^I32 h (bitmap-h gray)
+        ^I32 n (cells-at ri h)
+        ^I32 nc (quot (cells-len cs) 24)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 lab 0
+        ^:mut ^I32 rs 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bl 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 med 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 tot 0]
+    (comment "1. layer histogram and gray sums (in 2^20 units: GRAY is the low part, column 23 the high)")
+    (cells-drop s1 0)
+    (cells-grow s1 (* nc 9) 0)
+    (set r 0)
+    (while (< r n)
+      (do (set c (tr-rg rn r 5))
+          (if (>= c 0)
+            (do (set y (tr-rg rn r 0))
+                (set x (tr-rg rn r 1))
+                (set x1 (tr-rg rn r 2))
+                (set rs 0)
+                (while (< x x1)
+                  (do (set rs (+ rs (bitmap-u8 gray x y 0)))
+                      (if (< fixed 0)
+                        (do (set lab (bitmap-u8 labels x y 0))
+                            (if (> lab 8) (set lab 8))
+                            (set v (cells-at s1 (+ (* c 9) lab)))
+                            (cells-set s1 (+ (* c 9) lab) (+ v 1))))
+                      (set x (+ x 1))))
+                (set lo (+ (tr-cg cs c C_GRAY) rs))
+                (if (>= lo 1048576)
+                  (do (tr-cset cs c 23 (+ (tr-cg cs c 23) (sar32 lo 20)))
+                      (set lo (bit-and lo 1048575))))
+                (tr-cset cs c C_GRAY lo)))
+          (set r (+ r 1))))
+    (set c 0)
+    (while (< c nc)
+      (do (set tot (tr-cg cs c C_INK))
+          (set v (i32 (quot (add64 (mul64 (i64 (tr-cg cs c 23)) (i64 1048576)) (i64 (tr-cg cs c C_GRAY))) (i64 (tr-max 1 tot)))))
+          (tr-cset cs c C_GRAY v)
+          (if (>= fixed 0)
+            (tr-cset cs c C_INKROW fixed)
+            (do (set best 0)
+                (set bl 0)
+                (set k 1)
+                (while (<= k 8)
+                  (do (set v (cells-at s1 (+ (* c 9) k)))
+                      (if (> v best) (do (set best v) (set bl k)))
+                      (set k (+ k 1))))
+                (if (> bl 0)
+                  (tr-cset cs c C_INKROW (+ ink0 (- bl 1)))
+                  (tr-cset cs c C_INKROW -1))))
+          (set c (+ c 1))))
+    (comment "2. stroke width: medians of the horizontal and the vertical run lengths of each component")
+    (cells-drop s1 0)
+    (cells-grow s1 256 0)
+    (tr-group rn RS 5 n nc s2 s3)
+    (set c 0)
+    (while (< c nc)
+      (do (set lo (cells-at s3 c))
+          (set hi (cells-at s3 (+ c 1)))
+          (set k lo)
+          (while (< k hi)
+            (do (set r (cells-at s2 k))
+                (set v (tr-min 255 (- (tr-rg rn r 2) (tr-rg rn r 1))))
+                (cells-set s1 v (+ (cells-at s1 v) 1))
+                (set k (+ k 1))))
+          (set med (tr-hist-median s1 0 256 (- hi lo)))
+          (tr-cset cs c C_STROKE_H med)
+          (set k lo)
+          (while (< k hi)
+            (do (set r (cells-at s2 k))
+                (set v (tr-min 255 (- (tr-rg rn r 2) (tr-rg rn r 1))))
+                (cells-set s1 v 0)
+                (set k (+ k 1))))
+          (set c (+ c 1))))
+    (tr-group vr 4 0 nv nc s2 s3)
+    (set c 0)
+    (while (< c nc)
+      (do (set lo (cells-at s3 c))
+          (set hi (cells-at s3 (+ c 1)))
+          (set k lo)
+          (while (< k hi)
+            (do (set r (cells-at s2 k))
+                (set v (tr-min 255 (- (cells-at vr (+ (* r 4) 3)) (cells-at vr (+ (* r 4) 2)))))
+                (cells-set s1 v (+ (cells-at s1 v) 1))
+                (set k (+ k 1))))
+          (set med (tr-hist-median s1 0 256 (- hi lo)))
+          (tr-cset cs c C_STROKE_V med)
+          (set k lo)
+          (while (< k hi)
+            (do (set r (cells-at s2 k))
+                (set v (tr-min 255 (- (cells-at vr (+ (* r 4) 3)) (cells-at vr (+ (* r 4) 2)))))
+                (cells-set s1 v 0)
+                (set k (+ k 1))))
+          (set c (+ c 1))))
+    (return nc)))
+
+;; ---------------------------------------------------------------- kinds
+
+(defn ^:pub ^I32 tr-stroke-px [^Cells cs ^I32 c]
+  (comment "The stroke width of component c in pixels: the smaller nonzero of its two medians (0 when it has no run).")
+  (let [^I32 a (tr-cg cs c C_STROKE_H)
+        ^I32 b (tr-cg cs c C_STROKE_V)]
+    (if (== a 0) (return b))
+    (if (== b 0) (return a))
+    (return (tr-min a b))))
+
+(defn ^:pub ^I32 tr-kinds [^I32 dpi100 ^:mut ^Cells cs ^:mut ^Cells s1]
+  (comment "Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median")
+  (comment "text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,")
+  (comment "and at most 10 times as long as thick; the median height M of those decides: TEXT is a provisional glyph of height")
+  (comment "within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin")
+  (comment "(its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,")
+  (comment "has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything")
+  (comment "else is LARGE. Answers M (0 when the page has no glyph); scratch `s1`.")
+  (let [^I32 nc (quot (cells-len cs) 24)
+        ^I32 noise (tr-noise dpi100)
+        ^I32 tmin (tr-text-min dpi100)
+        ^I32 tmax (tr-pt dpi100 60)
+        ^I32 rmin (tr-rule-min dpi100)
+        ^I32 rthick (tr-rule-thick dpi100)
+        ^:mut ^I32 c 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 ink 0
+        ^:mut ^I32 lng 0
+        ^:mut ^I32 thick 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 nprov 0
+        ^:mut ^I32 hh 0
+        ^:mut ^I32 kind 0]
+    (cells-drop s1 0)
+    (cells-grow s1 1024 0)
+    (set c 0)
+    (while (< c nc)
+      (do (set w (- (tr-cg cs c C_RIGHT) (tr-cg cs c C_LEFT)))
+          (set h (- (tr-cg cs c C_BOTTOM) (tr-cg cs c C_TOP)))
+          (set ink (tr-cg cs c C_INK))
+          (set lng (tr-max w h))
+          (set thick (quot (+ ink (- lng 1)) lng))
+          (if (<= ink noise)
+            (tr-cset cs c C_KIND (tr-k-noise))
+            (if (and (and (>= lng rmin) (<= thick rthick)) (and (>= lng (* thick (tr-rule-ratio))) (== (tr-cg cs c C_HOLES) 0)))
+              (tr-cset cs c C_KIND (tr-k-rule))
+              (tr-cset cs c C_KIND (tr-k-large))))
+          (comment "provisional glyph: not noise, sized like text, at most 10 times as wide as high; a rule candidate only if short")
+          (if (and (>= h tmin) (and (<= h tmax) (and (<= w (* 10 h)) (> ink noise))))
+            (if (or (!= (tr-cg cs c C_KIND) (tr-k-rule)) (< lng (* 3 tmin)))
+              (do (set hh (tr-min h 1023))
+                  (cells-set s1 hh (+ (cells-at s1 hh) 1))
+                  (set nprov (+ nprov 1))
+                  (tr-cset cs c C_FIT 1))))
+          (set c (+ c 1))))
+    (set m (tr-hist-median s1 0 1024 nprov))
+    (set c 0)
+    (while (< c nc)
+      (do (set w (- (tr-cg cs c C_RIGHT) (tr-cg cs c C_LEFT)))
+          (set h (- (tr-cg cs c C_BOTTOM) (tr-cg cs c C_TOP)))
+          (set lng (tr-max w h))
+          (set kind (tr-cg cs c C_KIND))
+          (if (== kind (tr-k-rule))
+            (if (<= lng (* 2 m))
+              (do (set kind (tr-k-large))
+                  (tr-cset cs c C_KIND kind))))
+          (if (and (== (tr-cg cs c C_FIT) 1) (!= kind (tr-k-noise)))
+            (if (and (>= (* h (tr-text-lo)) m) (and (<= h (* m (tr-text-hi))) (<= w (* h (tr-text-aspect)))))
+              (if (!= kind (tr-k-rule))
+                (tr-cset cs c C_KIND (tr-k-text)))))
+          (tr-cset cs c C_FIT 0)
+          (set c (+ c 1))))
+    (return m)))
+
+;; ---------------------------------------------------------------- parents
+
+(defn ^I32 tr-row-has [^Cells rn ^Cells ri ^I32 y ^I32 comp ^I32 before ^I32 after]
+  (comment "1 when component `comp` has a run of row y ending at or before `before` AND a run starting at or after `after`.")
+  (let [^:mut ^I32 r (cells-at ri y)
+        ^I32 re (cells-at ri (+ y 1))
+        ^:mut ^I32 l 0
+        ^:mut ^I32 rt 0]
+    (while (< r re)
+      (do (if (== (tr-rg rn r 5) comp)
+            (do (if (<= (tr-rg rn r 2) before) (set l 1))
+                (if (>= (tr-rg rn r 1) after) (set rt 1))))
+          (set r (+ r 1))))
+    (if (and (== l 1) (== rt 1)) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 tr-parents [^Cells rn ^Cells ri ^:mut ^Cells cs ^:mut ^Cells s1]
+  (comment "`C_PARENT` of each component: the smallest (by box) component that has a hole, is neither noise nor text, whose box holds")
+  (comment "this component's box, and that has ink on BOTH sides of it in its first and in its last row (the run test, so a letter in the")
+  (comment "notch of a `c` is not inside it). Among at most `tr-parent-cands` holders, taken in order. -1 for none.")
+  (let [^I32 nc (quot (cells-len cs) 24)
+        ^I32 capn (tr-parent-cands)
+        ^:mut ^I32 c 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 nh 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 best -1
+        ^:mut ^I64 barea 0
+        ^:mut ^I64 area 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 rr 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 kind 0]
+    (cells-drop s1 0)
+    (while (< c nc)
+      (do (set kind (tr-cg cs c C_KIND))
+          (if (and (and (> (tr-cg cs c C_HOLES) 0) (!= kind (tr-k-noise))) (and (!= kind (tr-k-text)) (< nh capn)))
+            (do (cells-push s1 c)
+                (set nh (+ nh 1))))
+          (set c (+ c 1))))
+    (set c 0)
+    (while (< c nc)
+      (do (set t (tr-cg cs c C_TOP))
+          (set l (tr-cg cs c C_LEFT))
+          (set rr (tr-cg cs c C_RIGHT))
+          (set b (tr-cg cs c C_BOTTOM))
+          (set best -1)
+          (set barea (i64 0))
+          (set k 0)
+          (while (< k nh)
+            (do (set p (cells-at s1 k))
+                (if (and (!= p c) (and (<= (tr-cg cs p C_TOP) t) (and (<= (tr-cg cs p C_LEFT) l) (and (>= (tr-cg cs p C_RIGHT) rr) (>= (tr-cg cs p C_BOTTOM) b)))))
+                  (do (set area (mul64 (i64 (- (tr-cg cs p C_RIGHT) (tr-cg cs p C_LEFT))) (i64 (- (tr-cg cs p C_BOTTOM) (tr-cg cs p C_TOP)))))
+                      (if (or (< best 0) (< area barea))
+                        (if (and (== (tr-row-has rn ri t p l rr) 1) (== (tr-row-has rn ri (- b 1) p l rr) 1))
+                          (do (set best p)
+                              (set barea area))))))
+                (set k (+ k 1))))
+          (tr-cset cs c C_PARENT best)
+          (set c (+ c 1))))
+    (return nh)))
+
+;; ---------------------------------------------------------------- the `components` rows
+
+(defn ^I32 tr-ck-of [^I32 kind ^I32 w ^I32 h]
+  (comment "The `ck` code of a class: text-like, rule-h or rule-v by the longer side, else `blob` (noise and large).")
+  (if (== kind (tr-k-text)) (return (ck-text-like)))
+  (if (== kind (tr-k-rule))
+    (do (if (>= w h) (return (ck-rule-h)))
+        (return (ck-rule-v))))
+  (return (ck-blob)))
+
+(defn ^I32 tr-conf-of [^I32 kind]
+  (comment "A component's confidence in its class: 900 text and rule, 700 large, 0 for noise (the class `ck` has no code for).")
+  (if (== kind (tr-k-text)) (return 900))
+  (if (== kind (tr-k-rule)) (return 900))
+  (if (== kind (tr-k-large)) (return 700))
+  (return 0))
+
+(defn ^:pub ^I32 tr-emit-components [^Cells views ^:mut ^Cells comps ^:mut ^Cells cs ^Cells inks ^I32 page ^I32 view]
+  (comment "Append one `components` row per recorded component (SPEC 8.4.4), in `cs` order, and remember each row in `C_EVROW`: page")
+  (comment "box through the view, pixel box, ink pixels, fill, stroke width, colour and ink row of its majority layer, class, mean gray,")
+  (comment "holes and parent (a row). Answers the row of the first.")
+  (let [^I32 nc (quot (cells-len cs) 24)
+        ^I32 first (co-count comps)
+        ^I32 dpi (vw-get views view (vwf-dpi))
+        ^:mut ^I32 c 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 ir 0
+        ^:mut ^I32 p 0]
+    (set c 0)
+    (while (< c nc)
+      (do (set l (tr-cg cs c C_LEFT))
+          (set t (tr-cg cs c C_TOP))
+          (set w (- (tr-cg cs c C_RIGHT) l))
+          (set h (- (tr-cg cs c C_BOTTOM) t))
+          (set kind (tr-cg cs c C_KIND))
+          (set r (co-new comps page (vw-box-to-cpt views view 0 l t w h) (vw-box-to-cpt views view 1 l t w h)
+                         (vw-box-to-cpt views view 2 l t w h) (vw-box-to-cpt views view 3 l t w h)
+                         (tr-ck-of kind w h)))
+          (tr-cset cs c C_EVROW r)
+          (co-set comps r (cf-view) view)
+          (co-set comps r (cf-pxx) l)
+          (co-set comps r (cf-pxy) t)
+          (co-set comps r (cf-pxw) w)
+          (co-set comps r (cf-pxh) h)
+          (co-set comps r (cf-area) (tr-cg cs c C_INK))
+          (co-set comps r (cf-fill) (tr-permille (tr-cg cs c C_INK) (* w h)))
+          (co-set comps r (cf-stroke) (tr-len-cpt (tr-stroke-px cs c) dpi))
+          (set ir (tr-cg cs c C_INKROW))
+          (co-set comps r (cf-ink) ir)
+          (if (>= ir 0) (co-set comps r (cf-color) (ik-get inks ir (ikf-color))))
+          (co-set comps r (cf-conf) (tr-conf-of kind))
+          (co-set comps r (cf-holes) (tr-cg cs c C_HOLES))
+          (co-set comps r (cf-gray) (tr-cg cs c C_GRAY))
+          (set p (tr-cg cs c C_PARENT))
+          (if (>= p 0) (co-set comps r (cf-parent) (+ first p)))
+          (set c (+ c 1))))
+    (return first)))
+
+;; ---------------------------------------------------------------- contours (crack following) and Douglas-Peucker
+
+(defn ^:pub ^I32 tr-contour-raw [^Bitmap bin ^I32 sx ^I32 sy ^:mut ^Cells oc ^I32 maxn]
+  (comment "The OUTER boundary of the 8-connected component whose first pixel in raster order is (sx, sy), by crack following on the")
+  (comment "binary bitmap itself (the pixels next to the component that are ink belong to it, or it would be bigger): the corners of")
+  (comment "the pixel boundary, clockwise as seen with y down, as x y pairs appended to a cleared `out`, starting at (sx, sy). Diagonal")
+  (comment "neighbours are connected (8-connectivity). Answers the number of corners, or -1 when there are more than `maxn`.")
+  (let [^:mut ^I32 vx sx
+        ^:mut ^I32 vy sy
+        ^:mut ^I32 d 0
+        ^:mut ^I32 nd 0
+        ^:mut ^I32 n 1
+        ^:mut ^I32 far 0
+        ^:mut ^I32 fal 0
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 done 0
+        ^I32 lim (* maxn 4)]
+    (cells-drop oc 0)
+    (cells-push oc sx)
+    (cells-push oc sy)
+    (while (== done 0)
+      (do (if (== d 0) (set vx (+ vx 1)))
+          (if (== d 1) (set vy (+ vy 1)))
+          (if (== d 2) (set vx (- vx 1)))
+          (if (== d 3) (set vy (- vy 1)))
+          (if (== d 0) (do (set far (tr-fg bin vx vy)) (set fal (tr-fg bin vx (- vy 1)))))
+          (if (== d 1) (do (set far (tr-fg bin (- vx 1) vy)) (set fal (tr-fg bin vx vy))))
+          (if (== d 2) (do (set far (tr-fg bin (- vx 1) (- vy 1))) (set fal (tr-fg bin (- vx 1) vy))))
+          (if (== d 3) (do (set far (tr-fg bin vx (- vy 1))) (set fal (tr-fg bin (- vx 1) (- vy 1)))))
+          (if (== fal 1)
+            (set nd (rem (+ d 3) 4))
+            (if (== far 1)
+              (set nd d)
+              (set nd (rem (+ d 1) 4))))
+          (if (and (== vx sx) (and (== vy sy) (== nd 0)))
+            (set done 1)
+            (if (!= nd d)
+              (do (cells-push oc vx)
+                  (cells-push oc vy)
+                  (set n (+ n 1))
+                  (if (> n maxn) (do (set done 1) (set n -1))))))
+          (set d nd)
+          (set steps (+ steps 1))
+          (if (> steps lim) (do (set done 1) (set n -1)))))
+    (return n)))
+
+(defn ^I64 tr-cross-abs [^I32 ax ^I32 ay ^I32 bx ^I32 by ^I32 px ^I32 py]
+  (comment "|cross((b - a), (p - a))|: twice the triangle's area.")
+  (let [^I64 c (- (mul64 (i64 (- bx ax)) (i64 (- py ay))) (mul64 (i64 (- by ay)) (i64 (- px ax))))]
+    (if (< c (i64 0)) (return (- (i64 0) c)))
+    (return c)))
+
+(defn ^I32 tr-pt-wrap [^I32 i ^I32 m]
+  (if (>= i m) (return (- i m)))
+  (return i))
+
+(defn ^:pub ^I32 tr-simplify [^Cells raw ^I32 m ^I32 closed ^I32 e2 ^:mut ^Cells keep ^:mut ^Cells stk]
+  (comment "Integer Douglas-Peucker of the polygon `raw` (m corners, x y pairs): a point is kept when its distance to the chord is")
+  (comment "over eps, i.e. cross^2 * 4 > e2 * chord^2 (`e2` is eps^2 * 4: `tr-dp-eps2` = 9 is eps 1.5 px). `closed` 1: the polygon is")
+  (comment "split at corner 0 and the corner farthest from it; 0: an open chain, between its first and its last. `keep` (m cells, set)")
+  (comment "says which corners stay; `stk` is scratch. Answers the number kept.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 sp 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I64 best 0
+        ^:mut ^I32 bi 0
+        ^:mut ^I64 cr 0
+        ^:mut ^I32 ia 0
+        ^:mut ^I32 ib 0
+        ^:mut ^I32 ip 0
+        ^:mut ^I32 kept 0
+        ^:mut ^I64 d2 0
+        ^:mut ^I64 bd 0
+        ^:mut ^I64 len2 0
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0]
+    (cells-drop keep 0)
+    (cells-grow keep m 0)
+    (if (<= m 3)
+      (do (set i 0)
+          (while (< i m) (do (cells-set keep i 1) (set i (+ i 1))))
+          (return m)))
+    (comment "the corner farthest from corner 0")
+    (set i 1)
+    (while (< i m)
+      (do (set dx (- (cells-at raw (* i 2)) (cells-at raw 0)))
+          (set dy (- (cells-at raw (+ (* i 2) 1)) (cells-at raw 1)))
+          (set d2 (+ (mul64 (i64 dx) (i64 dx)) (mul64 (i64 dy) (i64 dy))))
+          (if (> d2 bd) (do (set bd d2) (set f i)))
+          (set i (+ i 1))))
+    (if (== closed 0) (set f (- m 1)))
+    (cells-set keep 0 1)
+    (cells-set keep f 1)
+    (cells-drop stk 0)
+    (cells-grow stk (+ (* m 4) 8) 0)
+    (cells-set stk 0 0)
+    (cells-set stk 1 f)
+    (set sp 1)
+    (if (== closed 1)
+      (do (cells-set stk 2 f)
+          (cells-set stk 3 m)
+          (set sp 2)))
+    (while (> sp 0)
+      (do (set sp (- sp 1))
+          (set b (cells-at stk (+ (* sp 2) 1)))
+          (set a (cells-at stk (* sp 2)))
+          (if (> (- b a) 1)
+            (do (set ia (tr-pt-wrap a m))
+                (set ib (tr-pt-wrap b m))
+                (set dx (- (cells-at raw (* ib 2)) (cells-at raw (* ia 2))))
+                (set dy (- (cells-at raw (+ (* ib 2) 1)) (cells-at raw (+ (* ia 2) 1))))
+                (set len2 (+ (mul64 (i64 dx) (i64 dx)) (mul64 (i64 dy) (i64 dy))))
+                (set best (i64 0))
+                (set bi -1)
+                (set i (+ a 1))
+                (while (< i b)
+                  (do (set ip (tr-pt-wrap i m))
+                      (if (> len2 (i64 0))
+                        (set cr (tr-cross-abs (cells-at raw (* ia 2)) (cells-at raw (+ (* ia 2) 1))
+                                              (cells-at raw (* ib 2)) (cells-at raw (+ (* ib 2) 1))
+                                              (cells-at raw (* ip 2)) (cells-at raw (+ (* ip 2) 1))))
+                        (do (set dx (- (cells-at raw (* ip 2)) (cells-at raw (* ia 2))))
+                            (set dy (- (cells-at raw (+ (* ip 2) 1)) (cells-at raw (+ (* ia 2) 1))))
+                            (set cr (i64 (+ (tr-abs dx) (tr-abs dy))))))
+                      (if (> cr best) (do (set best cr) (set bi i)))
+                      (set i (+ i 1))))
+                (if (>= bi 0)
+                  (if (> len2 (i64 0))
+                    (if (> (mul64 (mul64 best best) (i64 4)) (mul64 (i64 e2) len2))
+                      (do (cells-set keep (tr-pt-wrap bi m) 1)
+                          (cells-set stk (* sp 2) a)
+                          (cells-set stk (+ (* sp 2) 1) bi)
+                          (cells-set stk (+ (* sp 2) 2) bi)
+                          (cells-set stk (+ (* sp 2) 3) b)
+                          (set sp (+ sp 2))))
+                    (if (> (* best (i64 4)) (i64 e2))
+                      (do (cells-set keep (tr-pt-wrap bi m) 1)
+                          (cells-set stk (* sp 2) a)
+                          (cells-set stk (+ (* sp 2) 1) bi)
+                          (cells-set stk (+ (* sp 2) 2) bi)
+                          (cells-set stk (+ (* sp 2) 3) b)
+                          (set sp (+ sp 2))))))))))
+    (set i 0)
+    (while (< i m)
+      (do (set kept (+ kept (cells-at keep i)))
+          (set i (+ i 1))))
+    (return kept)))
+
+;; ---------------------------------------------------------------- shared helpers: keys sort, half pixels
+
+(defn ^:pub ^I32 tr-sort-keys [^Cells keys ^I32 n ^:mut ^Cells idx ^:mut ^Cells tmp]
+  (comment "`idx` (n cells, 0 1 2 ... in) sorted by `keys[idx]`, ties by the index: a bottom-up merge sort. `tmp` is scratch.")
+  (let [^:mut ^I32 width 1
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ai 0
+        ^:mut ^I32 bj 0
+        ^:mut ^I32 ka 0
+        ^:mut ^I32 kb 0]
+    (cells-drop tmp 0)
+    (cells-grow tmp n 0)
+    (while (< width n)
+      (do (set lo 0)
+          (while (< lo n)
+            (do (set mid (tr-min (+ lo width) n))
+                (set hi (tr-min (+ lo (* 2 width)) n))
+                (set i lo)
+                (set j mid)
+                (set k lo)
+                (while (and (< i mid) (< j hi))
+                  (do (set ai (cells-at idx i))
+                      (set bj (cells-at idx j))
+                      (set ka (cells-at keys ai))
+                      (set kb (cells-at keys bj))
+                      (if (< kb ka)
+                        (do (cells-set tmp k bj) (set j (+ j 1)))
+                        (do (cells-set tmp k ai) (set i (+ i 1))))
+                      (set k (+ k 1))))
+                (while (< i mid)
+                  (do (cells-set tmp k (cells-at idx i)) (set i (+ i 1)) (set k (+ k 1))))
+                (while (< j hi)
+                  (do (cells-set tmp k (cells-at idx j)) (set j (+ j 1)) (set k (+ k 1))))
+                (set lo hi)))
+          (set k 0)
+          (while (< k n)
+            (do (cells-set idx k (cells-at tmp k))
+                (set k (+ k 1))))
+          (set width (* width 2))))
+    (return 0)))
+
+(defn ^:pub ^I32 tr-h2cpt [^Cells views ^I32 view ^I32 axis ^I32 x2 ^I32 y2]
+  (comment "Page space (centipoints, one axis) of the HALF-PIXEL position (x2 / 2, y2 / 2) of a view: the mean of the mapped pixel")
+  (comment "corners around it (a position on the grid is one corner, on an edge two, in a pixel's centre four).")
+  (let [^I32 x0 (sar32 x2 1)
+        ^I32 y0 (sar32 y2 1)
+        ^I32 xo (bit-and x2 1)
+        ^:mut ^I32 yo (bit-and y2 1)
+        ^:mut ^I32 s (vw-px-to-cpt views view axis x0 y0)
+        ^:mut ^I32 n 1]
+    (if (== xo 1) (do (set s (+ s (vw-px-to-cpt views view axis (+ x0 1) y0))) (set n (+ n 1))))
+    (if (== yo 1) (do (set s (+ s (vw-px-to-cpt views view axis x0 (+ y0 1)))) (set n (+ n 1))))
+    (if (and (== xo 1) (== yo 1)) (do (set s (+ s (vw-px-to-cpt views view axis (+ x0 1) (+ y0 1)))) (set n (+ n 1))))
+    (if (== n 1) (return s))
+    (return (quot (+ (* s 2) n) (* 2 n)))))
+
+;; ---------------------------------------------------------------- rules: slices, chains, pieces
+
+(defconst ^I32 PS 12)   ;; a piece: x0 y0 x1 y1 (doubled pixels) thick*4 comp orient minw maxw slices parent spare
+(defconst ^I32 P_X0 0)
+(defconst ^I32 P_Y0 1)
+(defconst ^I32 P_X1 2)
+(defconst ^I32 P_Y1 3)
+(defconst ^I32 P_THK 4)
+(defconst ^I32 P_COMP 5)
+(defconst ^I32 P_ORI 6)
+(defconst ^I32 P_MINW 7)
+(defconst ^I32 P_MAXW 8)
+(defconst ^I32 P_N 9)
+(defconst ^I32 P_PAR 10)
+
+(defn ^:pub ^I32 tr-max-pieces [] (comment "Rule pieces kept for one page (the merge compares pairs).") (return 6000))
+
+(defn ^I32 tr-eligible [^Cells cs ^I32 comp]
+  (comment "1 when rules may be found in component `comp`: it is neither noise nor a glyph.")
+  (if (< comp 0) (return 0))
+  (if (== (tr-cg cs comp C_KIND) (tr-k-noise)) (return 0))
+  (if (== (tr-cg cs comp C_KIND) (tr-k-text)) (return 0))
+  (return 1))
+
+(defn ^:pub ^I32 tr-slices-rows [^Cells rn ^Cells ri ^I32 h ^Cells cs ^I32 thick ^:mut ^Cells sl]
+  (comment "The row runs that may belong to a vertical rule, as slices [y x0 x1 comp]: thin (at most `thick` pixels) runs of")
+  (comment "components that are neither noise nor glyphs. Answers how many.")
+  (let [^I32 n (cells-at ri h)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 c 0]
+    (cells-drop sl 0)
+    (while (< r n)
+      (do (set c (tr-rg rn r 5))
+          (if (<= (- (tr-rg rn r 2) (tr-rg rn r 1)) thick)
+            (if (== (tr-eligible cs c) 1)
+              (do (cells-push sl (tr-rg rn r 0))
+                  (cells-push sl (tr-rg rn r 1))
+                  (cells-push sl (tr-rg rn r 2))
+                  (cells-push sl c)
+                  (set ns (+ ns 1)))))
+          (set r (+ r 1))))
+    (return ns)))
+
+(defn ^:pub ^I32 tr-slices-cols [^Cells vr ^I32 nv ^I32 w ^Cells cs ^I32 thick ^:mut ^Cells sl ^:mut ^Cells idx ^:mut ^Cells off]
+  (comment "The column runs that may belong to a horizontal rule, as slices [x y0 y1 comp] in order of x then y0: the thin column")
+  (comment "runs of components that are neither noise nor glyphs, grouped by column (a counting sort). Answers how many.")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0]
+    (tr-group vr 4 1 nv w idx off)
+    (cells-drop sl 0)
+    (while (< x w)
+      (do (set lo (cells-at off x))
+          (set hi (cells-at off (+ x 1)))
+          (set k lo)
+          (while (< k hi)
+            (do (set v (cells-at idx k))
+                (if (<= (- (cells-at vr (+ (* v 4) 3)) (cells-at vr (+ (* v 4) 2))) thick)
+                  (if (== (tr-eligible cs (cells-at vr (* v 4))) 1)
+                    (do (cells-push sl x)
+                        (cells-push sl (cells-at vr (+ (* v 4) 2)))
+                        (cells-push sl (cells-at vr (+ (* v 4) 3)))
+                        (cells-push sl (cells-at vr (* v 4)))
+                        (set ns (+ ns 1)))))
+                (set k (+ k 1))))
+          (set x (+ x 1))))
+    (return ns)))
+
+(defn ^I32 tr-link-slices [^Cells sl ^I32 ns ^:mut ^Cells lk]
+  (comment "Chain the slices: a slice joins one of the previous major coordinate's (consecutive row or column) whose two edges are")
+  (comment "both within one pixel of its own, each slice having at most one successor. `lk` gets [pred succ] per slice (-1 none).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 pg0 0
+        ^:mut ^I32 pg1 0
+        ^:mut ^I32 pm -100
+        ^:mut ^I32 s 0
+        ^:mut ^I32 pp 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 nl 0]
+    (cells-drop lk 0)
+    (cells-grow lk (* ns 2) -1)
+    (while (< i ns)
+      (do (set m (cells-at sl (* i 4)))
+          (set j i)
+          (while (and (< j ns) (== (cells-at sl (* j 4)) m))
+            (set j (+ j 1)))
+          (if (== pm (- m 1))
+            (do (set pp pg0)
+                (set s i)
+                (while (< s j)
+                  (do (set lo (cells-at sl (+ (* s 4) 1)))
+                      (set hi (cells-at sl (+ (* s 4) 2)))
+                      (while (and (< pp pg1) (< (cells-at sl (+ (* pp 4) 1)) (- lo 1)))
+                        (set pp (+ pp 1)))
+                      (set q pp)
+                      (while (and (< q pg1) (<= (cells-at sl (+ (* q 4) 1)) (+ lo 1)))
+                        (do (if (and (<= (tr-abs (- (cells-at sl (+ (* q 4) 2)) hi)) 1) (== (cells-at lk (+ (* q 2) 1)) -1))
+                              (do (cells-set lk (* s 2) q)
+                                  (cells-set lk (+ (* q 2) 1) s)
+                                  (set nl (+ nl 1))
+                                  (set q pg1))
+                              (set q (+ q 1)))))
+                      (set s (+ s 1))))))
+          (set pg0 i)
+          (set pg1 j)
+          (set pm m)
+          (set i j)))
+    (return nl)))
+
+(defn ^:pub ^I32 tr-chains [^Cells sl ^I32 ns ^I32 ori ^I32 pmin ^Cells cs ^:mut ^Cells pc ^I32 maxp
+                            ^:mut ^Cells lk ^:mut ^Cells buf ^:mut ^Cells chn ^:mut ^Cells keep ^:mut ^Cells stk]
+  (comment "Chains of slices (`tr-link-slices`) straightened by Douglas-Peucker into PIECES appended to `pc` (stride 12, doubled")
+  (comment "pixels: x0 y0 x1 y1, thickness x4, component, orientation `ori`, narrowest and widest slice, slices). `ori` 0: the major")
+  (comment "coordinate is x (slices are columns, a horizontal-ish rule), 1: it is y (rows, a vertical-ish one). A chain shorter than")
+  (comment "`pmin` is dropped; one that is not straight (its longest straight stretch under 4/5 of it) is dropped; else the stretch is")
+  (comment "the piece. Answers the number of pieces in `pc` afterwards.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 mc 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 la 0
+        ^:mut ^I32 lb 0
+        ^:mut ^I32 lbest 0
+        ^:mut ^I32 prev -1
+        ^:mut ^I32 k 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 np (quot (cells-len pc) 12)
+        ^:mut ^I32 sw 0
+        ^:mut ^I32 minw 0
+        ^:mut ^I32 maxw 0
+        ^:mut ^I32 majs 0
+        ^:mut ^I32 majb 0
+        ^:mut ^I32 mina 0
+        ^:mut ^I32 minb 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 kn 0]
+    (tr-link-slices sl ns lk)
+    (set s 0)
+    (while (< s ns)
+      (do (if (== (cells-at lk (* s 2)) -1)
+            (do (cells-drop chn 0)
+                (cells-drop buf 0)
+                (set t s)
+                (set mc 0)
+                (while (>= t 0)
+                  (do (cells-push chn t)
+                      (set m (cells-at sl (* t 4)))
+                      (set lo (cells-at sl (+ (* t 4) 1)))
+                      (set hi (cells-at sl (+ (* t 4) 2)))
+                      (if (== ori 0)
+                        (do (cells-push buf m) (cells-push buf (quot (+ lo hi) 2)))
+                        (do (cells-push buf (quot (+ lo hi) 2)) (cells-push buf m)))
+                      (set mc (+ mc 1))
+                      (set t (cells-at lk (+ (* t 2) 1)))))
+                (if (>= mc pmin)
+                  (if (< np maxp)
+                    (do (tr-simplify buf mc 0 (tr-dp-eps2) keep stk)
+                        (set lbest 0)
+                        (set la 0)
+                        (set lb 0)
+                        (set prev 0)
+                        (set k 1)
+                        (while (< k mc)
+                          (do (if (== (cells-at keep k) 1)
+                                (do (if (> (- k prev) lbest)
+                                      (do (set lbest (- k prev)) (set la prev) (set lb k)))
+                                    (set prev k)))
+                              (set k (+ k 1))))
+                        (if (>= (* (+ lbest 1) 5) (* mc 4))
+                          (do (set sw 0)
+                              (set minw 100000)
+                              (set maxw 0)
+                              (set k la)
+                              (while (<= k lb)
+                                (do (set t (cells-at chn k))
+                                    (set w (- (cells-at sl (+ (* t 4) 2)) (cells-at sl (+ (* t 4) 1))))
+                                    (set sw (+ sw w))
+                                    (if (< w minw) (set minw w))
+                                    (if (> w maxw) (set maxw w))
+                                    (set k (+ k 1))))
+                              (set kn (+ (- lb la) 1))
+                              (set a (cells-at chn la))
+                              (set b (cells-at chn lb))
+                              (set majs (* 2 (cells-at sl (* a 4))))
+                              (if (> la 0) (set majs (+ majs 1)))
+                              (set majb (* 2 (+ (cells-at sl (* b 4)) 1)))
+                              (if (< lb (- mc 1)) (set majb (- majb 1)))
+                              (set mina (+ (cells-at sl (+ (* a 4) 1)) (cells-at sl (+ (* a 4) 2))))
+                              (set minb (+ (cells-at sl (+ (* b 4) 1)) (cells-at sl (+ (* b 4) 2))))
+                              (if (== ori 0)
+                                (do (cells-push pc majs) (cells-push pc mina) (cells-push pc majb) (cells-push pc minb))
+                                (do (cells-push pc mina) (cells-push pc majs) (cells-push pc minb) (cells-push pc majb)))
+                              (cells-push pc (quot (+ (* sw 4) (quot kn 2)) kn))
+                              (cells-push pc (cells-at sl (+ (* a 4) 3)))
+                              (cells-push pc ori)
+                              (cells-push pc minw)
+                              (cells-push pc maxw)
+                              (cells-push pc kn)
+                              (cells-push pc np)
+                              (cells-push pc 0)
+                              (set np (+ np 1)))))))))
+          (set s (+ s 1))))
+    (return np)))
+
+;; ---------------------------------------------------------------- rules: merging pieces along their axis
+
+(defn ^I32 tr-same-line [^Cells pc ^I32 a ^I32 b ^I32 gapmax]
+  (comment "1 when pieces a and b lie on one straight line and are at most `gapmax` (doubled pixels) apart along it: the angle between")
+  (comment "them under 2.5 degrees, both ends of the shorter within (thickness + 2 px) of the longer one's line.")
+  (let [^:mut ^I32 p a
+        ^:mut ^I32 q b
+        ^I32 pdx0 (- (cells-at pc (+ (* a PS) P_X1)) (cells-at pc (+ (* a PS) P_X0)))
+        ^I32 pdy0 (- (cells-at pc (+ (* a PS) P_Y1)) (cells-at pc (+ (* a PS) P_Y0)))
+        ^I32 qdx0 (- (cells-at pc (+ (* b PS) P_X1)) (cells-at pc (+ (* b PS) P_X0)))
+        ^I32 qdy0 (- (cells-at pc (+ (* b PS) P_Y1)) (cells-at pc (+ (* b PS) P_Y0)))
+        ^I64 l1 (+ (mul64 (i64 pdx0) (i64 pdx0)) (mul64 (i64 pdy0) (i64 pdy0)))
+        ^I64 l2 (+ (mul64 (i64 qdx0) (i64 qdx0)) (mul64 (i64 qdy0) (i64 qdy0)))]
+    (if (< l1 l2) (do (set p b) (set q a)))
+    (let [^I32 px0 (cells-at pc (+ (* p PS) P_X0))
+          ^I32 py0 (cells-at pc (+ (* p PS) P_Y0))
+          ^I32 dx (- (cells-at pc (+ (* p PS) P_X1)) px0)
+          ^I32 dy (- (cells-at pc (+ (* p PS) P_Y1)) py0)
+          ^I32 ex (- (cells-at pc (+ (* q PS) P_X1)) (cells-at pc (+ (* q PS) P_X0)))
+          ^I32 ey (- (cells-at pc (+ (* q PS) P_Y1)) (cells-at pc (+ (* q PS) P_Y0)))
+          ^I64 lp2 (+ (mul64 (i64 dx) (i64 dx)) (mul64 (i64 dy) (i64 dy)))
+          ^I64 lq2 (+ (mul64 (i64 ex) (i64 ex)) (mul64 (i64 ey) (i64 ey)))
+          ^I64 cr (- (mul64 (i64 dx) (i64 ey)) (mul64 (i64 dy) (i64 ex)))
+          ^I32 lp (tr-isqrt lp2)
+          ^I32 tol (+ (quot (tr-max (cells-at pc (+ (* p PS) P_THK)) (cells-at pc (+ (* q PS) P_THK))) 4) 4)
+          ^I32 qx0 (- (cells-at pc (+ (* q PS) P_X0)) px0)
+          ^I32 qy0 (- (cells-at pc (+ (* q PS) P_Y0)) py0)
+          ^I32 qx1 (- (cells-at pc (+ (* q PS) P_X1)) px0)
+          ^I32 qy1 (- (cells-at pc (+ (* q PS) P_Y1)) py0)
+          ^I64 c0 (- (mul64 (i64 dx) (i64 qy0)) (mul64 (i64 dy) (i64 qx0)))
+          ^I64 c1 (- (mul64 (i64 dx) (i64 qy1)) (mul64 (i64 dy) (i64 qx1)))
+          ^I64 d0 (+ (mul64 (i64 dx) (i64 qx0)) (mul64 (i64 dy) (i64 qy0)))
+          ^I64 d1 (+ (mul64 (i64 dx) (i64 qx1)) (mul64 (i64 dy) (i64 qy1)))
+          ^:mut ^I64 t0 0
+          ^:mut ^I64 t1 0
+          ^:mut ^I64 ad 0]
+      (if (<= lp 0) (return 0))
+      (if (> (* cr cr) (quot (mul64 lp2 lq2) (i64 526))) (return 0))
+      (set ad c0)
+      (if (< ad (i64 0)) (set ad (- (i64 0) ad)))
+      (if (> ad (mul64 (i64 tol) (i64 lp))) (return 0))
+      (set ad c1)
+      (if (< ad (i64 0)) (set ad (- (i64 0) ad)))
+      (if (> ad (mul64 (i64 tol) (i64 lp))) (return 0))
+      (comment "along the line: t = dot / |d|, the longer piece spanning 0 .. lp")
+      (set t0 (quot d0 (i64 lp)))
+      (set t1 (quot d1 (i64 lp)))
+      (if (< t1 t0) (do (set ad t0) (set t0 t1) (set t1 ad)))
+      (if (> (- t0 (i64 lp)) (i64 gapmax)) (return 0))
+      (if (> (- (i64 0) t1) (i64 gapmax)) (return 0))
+      (return 1))))
+
+(defn ^I32 tr-pfind [^:mut ^Cells pc ^I32 a]
+  (let [^:mut ^I32 x a
+        ^:mut ^I32 p 0
+        ^:mut ^I32 g 0]
+    (set p (cells-at pc (+ (* x PS) P_PAR)))
+    (while (!= p x)
+      (do (set g (cells-at pc (+ (* p PS) P_PAR)))
+          (cells-set pc (+ (* x PS) P_PAR) g)
+          (set x g)
+          (set p (cells-at pc (+ (* x PS) P_PAR)))))
+    (return x)))
+
+(defn ^:pub ^I32 tr-merge-pieces [^:mut ^Cells pc ^I32 np ^I32 gapmax ^:mut ^Cells keys ^:mut ^Cells ord ^:mut ^Cells tmp]
+  (comment "Union the pieces that lie on one line and are within `gapmax` doubled pixels along it (`tr-same-line`): every piece's")
+  (comment "PARENT cell ends up its group's root (the smallest index). Pieces are visited by their left edge so that a pair is only")
+  (comment "compared while their x-ranges can still meet. Answers the number of groups.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 pmax 0
+        ^:mut ^I32 ra 0
+        ^:mut ^I32 rb 0
+        ^:mut ^I32 ng 0]
+    (cells-drop keys 0)
+    (cells-drop ord 0)
+    (set i 0)
+    (while (< i np)
+      (do (cells-set pc (+ (* i PS) P_PAR) i)
+          (cells-push keys (tr-min (cells-at pc (+ (* i PS) P_X0)) (cells-at pc (+ (* i PS) P_X1))))
+          (cells-push ord i)
+          (set i (+ i 1))))
+    (tr-sort-keys keys np ord tmp)
+    (set i 0)
+    (while (< i np)
+      (do (set p (cells-at ord i))
+          (set pmax (+ (tr-max (cells-at pc (+ (* p PS) P_X0)) (cells-at pc (+ (* p PS) P_X1))) gapmax))
+          (set j (+ i 1))
+          (while (and (< j np) (<= (cells-at keys (cells-at ord j)) pmax))
+            (do (set q (cells-at ord j))
+                (if (== (tr-same-line pc p q gapmax) 1)
+                  (do (set ra (tr-pfind pc p))
+                      (set rb (tr-pfind pc q))
+                      (if (!= ra rb)
+                        (if (< ra rb)
+                          (cells-set pc (+ (* rb PS) P_PAR) ra)
+                          (cells-set pc (+ (* ra PS) P_PAR) rb)))))
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i np)
+      (do (cells-set pc (+ (* i PS) P_PAR) (tr-pfind pc i))
+          (if (== (cells-at pc (+ (* i PS) P_PAR)) i) (set ng (+ ng 1)))
+          (set i (+ i 1))))
+    (return ng)))
+
+;; ---------------------------------------------------------------- rules: segments (a group of pieces) and the rows
+
+(defconst ^I32 SG 16)   ;; a segment: ax ay bx by thk4 minw maxw comp gaps length mfirst mcount parent style conf spare
+(defconst ^I32 G_AX 0)
+(defconst ^I32 G_AY 1)
+(defconst ^I32 G_BX 2)
+(defconst ^I32 G_BY 3)
+(defconst ^I32 G_THK 4)
+(defconst ^I32 G_MINW 5)
+(defconst ^I32 G_MAXW 6)
+(defconst ^I32 G_COMP 7)
+(defconst ^I32 G_GAPS 8)
+(defconst ^I32 G_LEN 9)
+(defconst ^I32 G_MFIRST 10)
+(defconst ^I32 G_MCOUNT 11)
+(defconst ^I32 G_PAR 12)
+(defconst ^I32 G_STYLE 13)
+(defconst ^I32 G_CONF 14)
+
+(defn ^I32 tr-seg-add-member [^:mut ^Cells mem ^I32 mfirst ^I32 comp]
+  (comment "Append `comp` to the member list from `mfirst` unless it is already there. Answers 1 when it was added.")
+  (let [^I32 n (cells-len mem)
+        ^:mut ^I32 i mfirst]
+    (while (< i n)
+      (do (if (== (cells-at mem i) comp) (return 0))
+          (set i (+ i 1))))
+    (cells-push mem comp)
+    (return 1)))
+
+(defn ^:pub ^I32 tr-segments [^Cells pc ^I32 np ^I32 rmin ^:mut ^Cells sg ^:mut ^Cells mem ^:mut ^Cells idx ^:mut ^Cells off ^:mut ^Cells tmp]
+  (comment "One SEGMENT per group of pieces (their PARENT cell, from `tr-merge-pieces`): the longest piece's line, the endpoints the")
+  (comment "extreme points along it, the thickness the length-weighted mean, the total gap between the pieces along the line, the member")
+  (comment "components in `mem`. Groups shorter than `rmin` pixels are kept too (`tr-dashes` may join them). Answers the segments.")
+  (let [^:mut ^I32 g 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 rf 0
+        ^:mut ^I64 rl2 0
+        ^:mut ^I64 l2 0
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 lr 0
+        ^:mut ^I64 tmin 0
+        ^:mut ^I64 tmax 0
+        ^:mut ^I64 t 0
+        ^:mut ^I32 amin 0
+        ^:mut ^I32 amax 0
+        ^:mut ^I64 sthk 0
+        ^:mut ^I64 slen 0
+        ^:mut ^I32 minw 0
+        ^:mut ^I32 maxw 0
+        ^:mut ^I32 mf 0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I64 gaps 0
+        ^:mut ^I64 cur 0
+        ^:mut ^I64 ta 0
+        ^:mut ^I64 tb 0
+        ^:mut ^I32 s 0]
+    (tr-group pc PS 10 np np idx off)
+    (cells-drop sg 0)
+    (cells-drop mem 0)
+    (while (< g np)
+      (do (set lo (cells-at off g))
+          (set hi (cells-at off (+ g 1)))
+          (if (> hi lo)
+            (do (comment "the longest piece is the reference line")
+                (set rl2 (i64 -1))
+                (set k lo)
+                (while (< k hi)
+                  (do (set p (cells-at idx k))
+                      (set dx (- (cells-at pc (+ (* p PS) P_X1)) (cells-at pc (+ (* p PS) P_X0))))
+                      (set dy (- (cells-at pc (+ (* p PS) P_Y1)) (cells-at pc (+ (* p PS) P_Y0))))
+                      (set l2 (+ (mul64 (i64 dx) (i64 dx)) (mul64 (i64 dy) (i64 dy))))
+                      (if (> l2 rl2) (do (set rl2 l2) (set rf p)))
+                      (set k (+ k 1))))
+                (set dx (- (cells-at pc (+ (* rf PS) P_X1)) (cells-at pc (+ (* rf PS) P_X0))))
+                (set dy (- (cells-at pc (+ (* rf PS) P_Y1)) (cells-at pc (+ (* rf PS) P_Y0))))
+                (set lr (tr-max 1 (tr-isqrt rl2)))
+                (set tmin (i64 100000000))
+                (set tmax (i64 -100000000))
+                (set sthk (i64 0))
+                (set slen (i64 0))
+                (set minw 100000)
+                (set maxw 0)
+                (set mf (cells-len mem))
+                (set cnt 0)
+                (cells-drop tmp 0)
+                (set k lo)
+                (while (< k hi)
+                  (do (set p (cells-at idx k))
+                      (comment "both ends of the piece, along the reference line")
+                      (set e 0)
+                      (while (< e 2)
+                        (do (if (== e 0)
+                              (do (set x (cells-at pc (+ (* p PS) P_X0))) (set y (cells-at pc (+ (* p PS) P_Y0))))
+                              (do (set x (cells-at pc (+ (* p PS) P_X1))) (set y (cells-at pc (+ (* p PS) P_Y1)))))
+                            (set t (quot (+ (mul64 (i64 (- x (cells-at pc (+ (* rf PS) P_X0)))) (i64 dx))
+                                            (mul64 (i64 (- y (cells-at pc (+ (* rf PS) P_Y0)))) (i64 dy))) (i64 lr)))
+                            (if (< t tmin) (do (set tmin t) (set amin p) (set j e)))
+                            (if (> t tmax) (do (set tmax t) (set amax p) (set cnt e)))
+                            (set e (+ e 1))))
+                      (set l2 (+ (mul64 (i64 (- (cells-at pc (+ (* p PS) P_X1)) (cells-at pc (+ (* p PS) P_X0))))
+                                        (i64 (- (cells-at pc (+ (* p PS) P_X1)) (cells-at pc (+ (* p PS) P_X0)))))
+                                 (mul64 (i64 (- (cells-at pc (+ (* p PS) P_Y1)) (cells-at pc (+ (* p PS) P_Y0))))
+                                        (i64 (- (cells-at pc (+ (* p PS) P_Y1)) (cells-at pc (+ (* p PS) P_Y0)))))))
+                      (set s (tr-isqrt l2))
+                      (set sthk (+ sthk (mul64 (i64 (cells-at pc (+ (* p PS) P_THK))) (i64 s))))
+                      (set slen (+ slen (i64 s)))
+                      (if (< (cells-at pc (+ (* p PS) P_MINW)) minw) (set minw (cells-at pc (+ (* p PS) P_MINW))))
+                      (if (> (cells-at pc (+ (* p PS) P_MAXW)) maxw) (set maxw (cells-at pc (+ (* p PS) P_MAXW))))
+                      (tr-seg-add-member mem mf (cells-at pc (+ (* p PS) P_COMP)))
+                      (set k (+ k 1))))
+                (comment "the endpoints: the extreme points along the reference line (recomputed from the piece and end that won)")
+                (set ns (quot (cells-len sg) SG))
+                (cells-push sg 0) (cells-push sg 0) (cells-push sg 0) (cells-push sg 0)
+                (cells-push sg 0) (cells-push sg 0) (cells-push sg 0) (cells-push sg 0)
+                (cells-push sg 0) (cells-push sg 0) (cells-push sg 0) (cells-push sg 0)
+                (cells-push sg 0) (cells-push sg 0) (cells-push sg 0) (cells-push sg 0)
+                (if (== j 0)
+                  (do (cells-set sg (+ (* ns SG) G_AX) (cells-at pc (+ (* amin PS) P_X0)))
+                      (cells-set sg (+ (* ns SG) G_AY) (cells-at pc (+ (* amin PS) P_Y0))))
+                  (do (cells-set sg (+ (* ns SG) G_AX) (cells-at pc (+ (* amin PS) P_X1)))
+                      (cells-set sg (+ (* ns SG) G_AY) (cells-at pc (+ (* amin PS) P_Y1)))))
+                (if (== cnt 0)
+                  (do (cells-set sg (+ (* ns SG) G_BX) (cells-at pc (+ (* amax PS) P_X0)))
+                      (cells-set sg (+ (* ns SG) G_BY) (cells-at pc (+ (* amax PS) P_Y0))))
+                  (do (cells-set sg (+ (* ns SG) G_BX) (cells-at pc (+ (* amax PS) P_X1)))
+                      (cells-set sg (+ (* ns SG) G_BY) (cells-at pc (+ (* amax PS) P_Y1)))))
+                (cells-set sg (+ (* ns SG) G_THK) (i32 (quot (+ sthk (quot slen (i64 2))) (tr-max (i64 1) slen))))
+                (cells-set sg (+ (* ns SG) G_MINW) minw)
+                (cells-set sg (+ (* ns SG) G_MAXW) maxw)
+                (cells-set sg (+ (* ns SG) G_COMP) (cells-at pc (+ (* rf PS) P_COMP)))
+                (cells-set sg (+ (* ns SG) G_LEN) (i32 (- tmax tmin)))
+                (cells-set sg (+ (* ns SG) G_MFIRST) mf)
+                (cells-set sg (+ (* ns SG) G_MCOUNT) (- (cells-len mem) mf))
+                (cells-set sg (+ (* ns SG) G_PAR) ns)
+                (comment "the total gap: the intervals along the line, by start, then what lies between them")
+                (set cnt 0)
+                (set k lo)
+                (while (< k hi)
+                  (do (set p (cells-at idx k))
+                      (set ta (quot (+ (mul64 (i64 (- (cells-at pc (+ (* p PS) P_X0)) (cells-at pc (+ (* rf PS) P_X0)))) (i64 dx))
+                                       (mul64 (i64 (- (cells-at pc (+ (* p PS) P_Y0)) (cells-at pc (+ (* rf PS) P_Y0)))) (i64 dy))) (i64 lr)))
+                      (set tb (quot (+ (mul64 (i64 (- (cells-at pc (+ (* p PS) P_X1)) (cells-at pc (+ (* rf PS) P_X0)))) (i64 dx))
+                                       (mul64 (i64 (- (cells-at pc (+ (* p PS) P_Y1)) (cells-at pc (+ (* rf PS) P_Y0)))) (i64 dy))) (i64 lr)))
+                      (if (< tb ta) (do (set t ta) (set ta tb) (set tb t)))
+                      (cells-push tmp (i32 ta))
+                      (cells-push tmp (i32 tb))
+                      (set cnt (+ cnt 1))
+                      (set k (+ k 1))))
+                (comment "insertion sort of the intervals by start")
+                (set k 1)
+                (while (< k cnt)
+                  (do (set j k)
+                      (while (and (> j 0) (> (cells-at tmp (* (- j 1) 2)) (cells-at tmp (* j 2))))
+                        (do (set x (cells-at tmp (* j 2)))
+                            (set y (cells-at tmp (+ (* j 2) 1)))
+                            (cells-set tmp (* j 2) (cells-at tmp (* (- j 1) 2)))
+                            (cells-set tmp (+ (* j 2) 1) (cells-at tmp (+ (* (- j 1) 2) 1)))
+                            (cells-set tmp (* (- j 1) 2) x)
+                            (cells-set tmp (+ (* (- j 1) 2) 1) y)
+                            (set j (- j 1))))
+                      (set k (+ k 1))))
+                (set gaps (i64 0))
+                (set cur (i64 (cells-at tmp 1)))
+                (set k 1)
+                (while (< k cnt)
+                  (do (if (> (i64 (cells-at tmp (* k 2))) cur)
+                        (set gaps (+ gaps (- (i64 (cells-at tmp (* k 2))) cur))))
+                      (if (> (i64 (cells-at tmp (+ (* k 2) 1))) cur) (set cur (i64 (cells-at tmp (+ (* k 2) 1)))))
+                      (set k (+ k 1))))
+                (cells-set sg (+ (* ns SG) G_GAPS) (i32 gaps))))
+          (set g (+ g 1))))
+    (return (quot (cells-len sg) SG))))
+
+;; ---------------------------------------------------------------- rules: dashes, doubles, the rows
+
+(defn ^I32 tr-sorted-median [^:mut ^Cells a ^I32 n]
+  (comment "Sort a[0..n) in place (insertion) and answer its upper median a[n / 2]; 0 for none.")
+  (let [^:mut ^I32 i 1
+        ^:mut ^I32 j 0
+        ^:mut ^I32 v 0]
+    (if (<= n 0) (return 0))
+    (while (< i n)
+      (do (set j i)
+          (while (and (> j 0) (> (cells-at a (- j 1)) (cells-at a j)))
+            (do (set v (cells-at a j))
+                (cells-set a j (cells-at a (- j 1)))
+                (cells-set a (- j 1) v)
+                (set j (- j 1))))
+          (set i (+ i 1))))
+    (return (cells-at a (quot n 2)))))
+
+(defn ^I32 tr-along [^Cells pc ^I32 ref ^I32 x ^I32 y ^I32 dx ^I32 dy ^I32 lr]
+  (comment "The position of the point (x, y) along piece `ref`'s direction (dx, dy; length lr), from its start, in doubled pixels.")
+  (return (i32 (quot (+ (mul64 (i64 (- x (cells-at pc (+ (* ref PS) P_X0)))) (i64 dx))
+                        (mul64 (i64 (- y (cells-at pc (+ (* ref PS) P_Y0)))) (i64 dy))) (i64 lr)))))
+
+(defn ^I32 tr-dash-group [^I32 cnt ^:mut ^Cells s1 ^Cells s4]
+  (comment "Judge ONE group of `cnt` short segments (pieces of `pc`, ordered along the line into `s4` as [t0 t1 piece]): 1 when they")
+  (comment "are a dashed line (three or more; every gap within 0.4 .. 2.2 times the median gap plus 2 px; every dash within 0.4 ..")
+  (comment "2.5 times the median dash plus 2 px), with the median dash in cell 0 of `s1` afterwards; 0 when not.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 med 0
+        ^:mut ^I32 mdash 0]
+    (if (< cnt 3) (return 0))
+    (cells-drop s1 0)
+    (set k 0)
+    (while (< k cnt)
+      (do (cells-push s1 (- (cells-at s4 (+ (* k 3) 1)) (cells-at s4 (* k 3))))
+          (set k (+ k 1))))
+    (set mdash (tr-sorted-median s1 cnt))
+    (set k 0)
+    (while (< k cnt)
+      (do (set v (- (cells-at s4 (+ (* k 3) 1)) (cells-at s4 (* k 3))))
+          (comment "the dashes were sorted in place in s1, so test against the unsorted s4 lengths")
+          (if (or (< (* v 5) (* mdash 2)) (> (* v 10) (+ (* mdash 25) 40))) (return 0))
+          (set k (+ k 1))))
+    (cells-drop s1 0)
+    (set k 1)
+    (while (< k cnt)
+      (do (set v (- (cells-at s4 (* k 3)) (cells-at s4 (+ (* (- k 1) 3) 1))))
+          (if (<= v 0) (return 0))
+          (cells-push s1 v)
+          (set k (+ k 1))))
+    (set med (tr-sorted-median s1 (- cnt 1)))
+    (set k 1)
+    (while (< k cnt)
+      (do (set v (- (cells-at s4 (* k 3)) (cells-at s4 (+ (* (- k 1) 3) 1))))
+          (if (or (< (* v 5) (* med 2)) (> (* v 10) (+ (* med 22) 40))) (return 0))
+          (set k (+ k 1))))
+    (cells-drop s1 0)
+    (cells-push s1 mdash)
+    (return 1)))
+
+(defn ^:pub ^I32 tr-dashes [^:mut ^Cells sg ^I32 ns ^I32 rmin ^I32 dashgap ^:mut ^Cells mem
+                            ^:mut ^Cells pc ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4]
+  (comment "Decide every segment's `G_STYLE`: a segment of at least `rmin` pixels is a SOLID rule (1); the shorter ones are tried as")
+  (comment "DASHES: those on one line within `dashgap` doubled pixels of each other form a group, which is a dashed rule (2) when")
+  (comment "`tr-dash-group` says so; the group's first segment then takes the whole line's extent and thickness and the union of every")
+  (comment "dash's members (appended to `mem`), the other dashes are dropped (0). Dashes no longer than twice the thickness are DOTTED")
+  (comment "(3). Every other short segment is dropped. `pc` `s1`..`s4` are scratch. Answers the number of rules that remain.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 n2 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 sgi 0
+        ^:mut ^I32 sgj 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 t1 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 nrules 0
+        ^:mut ^I64 sthk 0
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 lr 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 tmin 0
+        ^:mut ^I32 tmax 0
+        ^:mut ^I32 ax 0
+        ^:mut ^I32 ay 0
+        ^:mut ^I32 bx 0
+        ^:mut ^I32 by 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 mf 0
+        ^:mut ^I32 mdash 0]
+    (cells-drop pc 0)
+    (set i 0)
+    (while (< i ns)
+      (do (cells-set sg (+ (* i SG) G_STYLE) 0)
+          (if (>= (quot (cells-at sg (+ (* i SG) G_LEN)) 2) rmin)
+            (do (cells-set sg (+ (* i SG) G_STYLE) 1)
+                (set nrules (+ nrules 1)))
+            (if (> (cells-at sg (+ (* i SG) G_LEN)) 0)
+              (do (cells-push pc (cells-at sg (+ (* i SG) G_AX)))
+                  (cells-push pc (cells-at sg (+ (* i SG) G_AY)))
+                  (cells-push pc (cells-at sg (+ (* i SG) G_BX)))
+                  (cells-push pc (cells-at sg (+ (* i SG) G_BY)))
+                  (cells-push pc (cells-at sg (+ (* i SG) G_THK)))
+                  (cells-push pc (cells-at sg (+ (* i SG) G_COMP)))
+                  (cells-push pc 0)
+                  (cells-push pc (cells-at sg (+ (* i SG) G_MINW)))
+                  (cells-push pc (cells-at sg (+ (* i SG) G_MAXW)))
+                  (cells-push pc 1)
+                  (cells-push pc n2)
+                  (cells-push pc i)
+                  (set n2 (+ n2 1)))))
+          (set i (+ i 1))))
+    (if (>= n2 3)
+      (do (tr-merge-pieces pc n2 dashgap s1 s2 s3)
+          (tr-group pc PS 10 n2 n2 s2 s3)
+          (set g 0)
+          (while (< g n2)
+            (do (set lo (cells-at s3 g))
+                (set hi (cells-at s3 (+ g 1)))
+                (set cnt (- hi lo))
+                (if (>= cnt 3)
+                  (do (set first (cells-at s2 lo))
+                      (set dx (- (cells-at pc (+ (* first PS) P_X1)) (cells-at pc (+ (* first PS) P_X0))))
+                      (set dy (- (cells-at pc (+ (* first PS) P_Y1)) (cells-at pc (+ (* first PS) P_Y0))))
+                      (set lr (tr-max 1 (tr-isqrt (+ (mul64 (i64 dx) (i64 dx)) (mul64 (i64 dy) (i64 dy))))))
+                      (cells-drop s4 0)
+                      (set k lo)
+                      (while (< k hi)
+                        (do (set j (cells-at s2 k))
+                            (set t0 (tr-along pc first (cells-at pc (+ (* j PS) P_X0)) (cells-at pc (+ (* j PS) P_Y0)) dx dy lr))
+                            (set t1 (tr-along pc first (cells-at pc (+ (* j PS) P_X1)) (cells-at pc (+ (* j PS) P_Y1)) dx dy lr))
+                            (if (< t1 t0) (do (set v t0) (set t0 t1) (set t1 v)))
+                            (cells-push s4 t0)
+                            (cells-push s4 t1)
+                            (cells-push s4 j)
+                            (set k (+ k 1))))
+                      (comment "insertion sort by start")
+                      (set k 1)
+                      (while (< k cnt)
+                        (do (set j k)
+                            (while (and (> j 0) (> (cells-at s4 (* (- j 1) 3)) (cells-at s4 (* j 3))))
+                              (do (set e 0)
+                                  (while (< e 3)
+                                    (do (set v (cells-at s4 (+ (* j 3) e)))
+                                        (cells-set s4 (+ (* j 3) e) (cells-at s4 (+ (* (- j 1) 3) e)))
+                                        (cells-set s4 (+ (* (- j 1) 3) e) v)
+                                        (set e (+ e 1))))
+                                  (set j (- j 1))))
+                            (set k (+ k 1))))
+                      (if (== (tr-dash-group cnt s1 s4) 1)
+                        (do (set mdash (cells-at s1 0))
+                            (comment "the line's extent: the extreme endpoints of every dash along the first one's direction")
+                            (set tmin 100000000)
+                            (set tmax -100000000)
+                            (set sthk (i64 0))
+                            (set k 0)
+                            (while (< k cnt)
+                              (do (set j (cells-at s4 (+ (* k 3) 2)))
+                                  (set sgj (cells-at pc (+ (* j PS) 11)))
+                                  (set sthk (+ sthk (i64 (cells-at sg (+ (* sgj SG) G_THK)))))
+                                  (set e 0)
+                                  (while (< e 2)
+                                    (do (if (== e 0)
+                                          (do (set x (cells-at pc (+ (* j PS) P_X0))) (set y (cells-at pc (+ (* j PS) P_Y0))))
+                                          (do (set x (cells-at pc (+ (* j PS) P_X1))) (set y (cells-at pc (+ (* j PS) P_Y1)))))
+                                        (set t (tr-along pc first x y dx dy lr))
+                                        (if (< t tmin) (do (set tmin t) (set ax x) (set ay y)))
+                                        (if (> t tmax) (do (set tmax t) (set bx x) (set by y)))
+                                        (set e (+ e 1))))
+                                  (set k (+ k 1))))
+                            (set sgi (cells-at pc (+ (* (cells-at s4 2) PS) 11)))
+                            (cells-set sg (+ (* sgi SG) G_AX) ax)
+                            (cells-set sg (+ (* sgi SG) G_AY) ay)
+                            (cells-set sg (+ (* sgi SG) G_BX) bx)
+                            (cells-set sg (+ (* sgi SG) G_BY) by)
+                            (cells-set sg (+ (* sgi SG) G_THK) (i32 (quot (+ sthk (i64 (quot cnt 2))) (i64 cnt))))
+                            (cells-set sg (+ (* sgi SG) G_LEN) (- tmax tmin))
+                            (cells-set sg (+ (* sgi SG) G_GAPS) 0)
+                            (comment "the members of every dash, appended to one list")
+                            (set mf (cells-len mem))
+                            (set k 0)
+                            (while (< k cnt)
+                              (do (set sgj (cells-at pc (+ (* (cells-at s4 (+ (* k 3) 2)) PS) 11)))
+                                  (set q 0)
+                                  (while (< q (cells-at sg (+ (* sgj SG) G_MCOUNT)))
+                                    (do (tr-seg-add-member mem mf (cells-at mem (+ (cells-at sg (+ (* sgj SG) G_MFIRST)) q)))
+                                        (set q (+ q 1))))
+                                  (set k (+ k 1))))
+                            (cells-set sg (+ (* sgi SG) G_MFIRST) mf)
+                            (cells-set sg (+ (* sgi SG) G_MCOUNT) (- (cells-len mem) mf))
+                            (if (<= (* mdash 4) (* 2 (cells-at sg (+ (* sgi SG) G_THK))))
+                              (cells-set sg (+ (* sgi SG) G_STYLE) 3)
+                              (cells-set sg (+ (* sgi SG) G_STYLE) 2))
+                            (set nrules (+ nrules 1))))))
+                (set g (+ g 1))))))
+    (return nrules)))
+(defn ^:pub ^I32 tr-doubles [^:mut ^Cells sg ^I32 ns]
+  (comment "Mark as DOUBLE (style 4) every pair of solid rules that are parallel (under 2 degrees), whose centre lines are between one")
+  (comment "and three thicknesses apart and whose extents overlap by at least 60 per cent of the shorter. Both rules stay rows. At")
+  (comment "most 2000 rules are compared. Answers the number marked.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 ex 0
+        ^:mut ^I32 ey 0
+        ^:mut ^I64 l1 0
+        ^:mut ^I64 l2 0
+        ^:mut ^I64 cr 0
+        ^:mut ^I64 off 0
+        ^:mut ^I64 t0 0
+        ^:mut ^I64 t1 0
+        ^:mut ^I64 ov 0
+        ^:mut ^I32 thk 0
+        ^:mut ^I32 li 0
+        ^:mut ^I64 mx 0
+        ^:mut ^I64 my 0
+        ^:mut ^I64 small 0]
+    (if (> ns 2000) (return 0))
+    (set i 0)
+    (while (< i ns)
+      (do (if (== (cells-at sg (+ (* i SG) G_STYLE)) 1)
+            (do (set dx (- (cells-at sg (+ (* i SG) G_BX)) (cells-at sg (+ (* i SG) G_AX))))
+                (set dy (- (cells-at sg (+ (* i SG) G_BY)) (cells-at sg (+ (* i SG) G_AY))))
+                (set l1 (+ (mul64 (i64 dx) (i64 dx)) (mul64 (i64 dy) (i64 dy))))
+                (set li (tr-max 1 (tr-isqrt l1)))
+                (set j (+ i 1))
+                (while (< j ns)
+                  (do (if (== (cells-at sg (+ (* j SG) G_STYLE)) 1)
+                        (do (set ex (- (cells-at sg (+ (* j SG) G_BX)) (cells-at sg (+ (* j SG) G_AX))))
+                            (set ey (- (cells-at sg (+ (* j SG) G_BY)) (cells-at sg (+ (* j SG) G_AY))))
+                            (set l2 (+ (mul64 (i64 ex) (i64 ex)) (mul64 (i64 ey) (i64 ey))))
+                            (set cr (- (mul64 (i64 dx) (i64 ey)) (mul64 (i64 dy) (i64 ex))))
+                            (if (<= (* cr cr) (quot (mul64 l1 l2) (i64 820)))
+                              (do (comment "the perpendicular offset of j's midpoint from i's line, in doubled pixels")
+                                  (set mx (- (quot (+ (i64 (cells-at sg (+ (* j SG) G_AX))) (i64 (cells-at sg (+ (* j SG) G_BX)))) (i64 2)) (i64 (cells-at sg (+ (* i SG) G_AX)))))
+                                  (set my (- (quot (+ (i64 (cells-at sg (+ (* j SG) G_AY))) (i64 (cells-at sg (+ (* j SG) G_BY)))) (i64 2)) (i64 (cells-at sg (+ (* i SG) G_AY)))))
+                                  (set off (quot (- (mul64 (i64 dx) my) (mul64 (i64 dy) mx)) (i64 li)))
+                                  (if (< off (i64 0)) (set off (- (i64 0) off)))
+                                  (set thk (tr-max (cells-at sg (+ (* i SG) G_THK)) (cells-at sg (+ (* j SG) G_THK))))
+                                  (comment "thk is x4 pixels, so doubled pixels are thk / 2: between 1 and 3 thicknesses")
+                                  (if (and (>= (* off (i64 2)) (i64 thk)) (<= (* off (i64 2)) (* (i64 thk) (i64 3))))
+                                    (do (comment "overlap along i's axis of j's extent with i's")
+                                        (set t0 (quot (+ (mul64 (i64 (- (cells-at sg (+ (* j SG) G_AX)) (cells-at sg (+ (* i SG) G_AX)))) (i64 dx))
+                                                         (mul64 (i64 (- (cells-at sg (+ (* j SG) G_AY)) (cells-at sg (+ (* i SG) G_AY)))) (i64 dy))) (i64 li)))
+                                        (set t1 (quot (+ (mul64 (i64 (- (cells-at sg (+ (* j SG) G_BX)) (cells-at sg (+ (* i SG) G_AX)))) (i64 dx))
+                                                         (mul64 (i64 (- (cells-at sg (+ (* j SG) G_BY)) (cells-at sg (+ (* i SG) G_AY)))) (i64 dy))) (i64 li)))
+                                        (if (< t1 t0) (do (set ov t0) (set t0 t1) (set t1 ov)))
+                                        (if (< t0 (i64 0)) (set t0 (i64 0)))
+                                        (if (> t1 (i64 li)) (set t1 (i64 li)))
+                                        (set ov (- t1 t0))
+                                        (set small (i64 (tr-min li (tr-isqrt l2))))
+                                        (if (and (> ov (i64 0)) (>= (* ov (i64 10)) (* small (i64 6))))
+                                          (do (cells-set sg (+ (* i SG) G_STYLE) 4)
+                                              (cells-set sg (+ (* j SG) G_STYLE) 4)
+                                              (set n (+ n 1))))))))))
+                      (set j (+ j 1))))))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^:pub ^I32 tr-rule-rows [^Cells views ^I32 page ^I32 view ^I32 dpi100 ^:mut ^Cells cs ^Cells sg ^I32 ns ^Cells mem ^Cells inks
+                               ^:mut ^Cells rules ^:mut ^Cells refs ^Cells comps]
+  (comment "Write one `rules` row (SPEC 8.4.4) for every segment whose style is not 0: the box through the view, the centre-line")
+  (comment "endpoints (half pixels mapped), thickness, the colour and ink row of its first member's layer, the style, a confidence")
+  (comment "(1000 minus the per-mille of its length that is gap, dashes excepted, minus 300 when its thickness varies by more than half")
+  (comment "along it; never below 0, D226) and its member components as `refs`. Each member's `C_RULE` is the row. Answers the rows.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 ax 0
+        ^:mut ^I32 ay 0
+        ^:mut ^I32 bx 0
+        ^:mut ^I32 by 0
+        ^:mut ^I32 thkpx 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 style 0
+        ^:mut ^I32 conf 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ir 0
+        ^:mut ^I32 rf 0
+        ^:mut ^I32 thk 0
+        ^:mut ^I32 ln 0]
+    (while (< i ns)
+      (do (set style (cells-at sg (+ (* i SG) G_STYLE)))
+          (if (> style 0)
+            (do (set ax (cells-at sg (+ (* i SG) G_AX)))
+                (set ay (cells-at sg (+ (* i SG) G_AY)))
+                (set bx (cells-at sg (+ (* i SG) G_BX)))
+                (set by (cells-at sg (+ (* i SG) G_BY)))
+                (set thk (cells-at sg (+ (* i SG) G_THK)))
+                (set thkpx (quot (+ thk 3) 4))
+                (set x0 (sar32 (- (tr-min ax bx) thkpx) 1))
+                (set y0 (sar32 (- (tr-min ay by) thkpx) 1))
+                (set x1 (sar32 (+ (+ (tr-max ax bx) thkpx) 1) 1))
+                (set y1 (sar32 (+ (+ (tr-max ay by) thkpx) 1) 1))
+                (set r (rl-new rules page (vw-box-to-cpt views view 0 x0 y0 (- x1 x0) (- y1 y0))
+                               (vw-box-to-cpt views view 1 x0 y0 (- x1 x0) (- y1 y0))
+                               (vw-box-to-cpt views view 2 x0 y0 (- x1 x0) (- y1 y0))
+                               (vw-box-to-cpt views view 3 x0 y0 (- x1 x0) (- y1 y0)) view))
+                (rl-set rules r (rlf-lx0) (tr-h2cpt views view 0 ax ay))
+                (rl-set rules r (rlf-ly0) (tr-h2cpt views view 1 ax ay))
+                (rl-set rules r (rlf-lx1) (tr-h2cpt views view 0 bx by))
+                (rl-set rules r (rlf-ly1) (tr-h2cpt views view 1 bx by))
+                (rl-set rules r (rlf-thick) (tr-len-cpt thk (* dpi100 4)))
+                (set c (cells-at sg (+ (* i SG) G_COMP)))
+                (set ir (tr-cg cs c C_INKROW))
+                (rl-set rules r (rlf-ink) ir)
+                (if (>= ir 0) (rl-set rules r (rlf-color) (ik-get inks ir (ikf-color))))
+                (if (== style 2) (rl-set rules r (rlf-style) (rs-dashed)))
+                (if (== style 3) (rl-set rules r (rlf-style) (rs-dotted)))
+                (if (== style 4) (rl-set rules r (rlf-style) (rs-double)))
+                (if (<= style 1) (rl-set rules r (rlf-style) (rs-solid)))
+                (comment "confidence")
+                (set ln (cells-at sg (+ (* i SG) G_LEN)))
+                (set conf 1000)
+                (if (or (== style 1) (== style 4))
+                  (set conf (- conf (tr-permille (cells-at sg (+ (* i SG) G_GAPS)) (tr-max 1 ln)))))
+                (if (> (* 2 (- (- (cells-at sg (+ (* i SG) G_MAXW)) (cells-at sg (+ (* i SG) G_MINW))) 1)) (quot (+ thk 2) 4))
+                  (set conf (- conf 300)))
+                (if (< conf 0) (set conf 0))
+                (rl-set rules r (rlf-conf) conf)
+                (comment "members")
+                (rl-set rules r (rlf-rfirst) (quot (cells-len refs) 2))
+                (rl-set rules r (rlf-rcount) (cells-at sg (+ (* i SG) G_MCOUNT)))
+                (set k 0)
+                (while (< k (cells-at sg (+ (* i SG) G_MCOUNT)))
+                  (do (set c (cells-at mem (+ (cells-at sg (+ (* i SG) G_MFIRST)) k)))
+                      (cells-push refs (ea-components))
+                      (cells-push refs (tr-cg cs c C_EVROW))
+                      (if (< (tr-cg cs c C_RULE) 0) (tr-cset cs c C_RULE r))
+                      (set k (+ k 1))))
+                (set rows (+ rows 1))))
+          (set i (+ i 1))))
+    (return rows)))
+
+(defn ^:pub ^I32 tr-rules [^Cells views ^I32 page ^I32 view ^I32 dpi100 ^I32 w ^I32 h
+                           ^Cells rn ^Cells ri ^:mut ^Cells cs ^Cells vr ^I32 nv
+                           ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells refs ^Cells inks
+                           ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
+                           ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6]
+  (comment "Rules (SPEC 8.2, D226): stacks of short row runs (vertical and steep rules) and of short column runs (horizontal and")
+  (comment "shallow ones) inside every component that is neither noise nor a glyph, chained, straightened, merged along their axis")
+  (comment "within `tr-rule-gap`, joined into dashed and dotted rules, doubles marked, written as `rules` rows. A rule-like component")
+  (comment "(`tr-kinds`) that gave no rule becomes large (its `components` row says `blob`). Answers the number of rule rows.")
+  (let [^I32 thick (tr-rule-thick dpi100)
+        ^I32 rmin (tr-rule-min dpi100)
+        ^I32 gap (tr-rule-gap dpi100)
+        ^I32 pmin (tr-max 6 (quot rmin 3))
+        ^I32 maxp (tr-max-pieces)
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 np 0
+        ^:mut ^I32 nseg 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 er 0
+        ^I32 nc (quot (cells-len cs) 24)]
+    (cells-drop pc 0)
+    (set ns (tr-slices-rows rn ri h cs thick s1))
+    (set np (tr-chains s1 ns 1 pmin cs pc maxp s2 s3 s4 s5 s6))
+    (set ns (tr-slices-cols vr nv w cs thick s1 s2 s3))
+    (set np (tr-chains s1 ns 0 pmin cs pc maxp s2 s3 s4 s5 s6))
+    (if (> np 0)
+      (do (tr-merge-pieces pc np (* gap 2) s1 s2 s3)
+          (set nseg (tr-segments pc np rmin sg mem s1 s2 s3))
+          (tr-dashes sg nseg rmin (* (tr-pt dpi100 6) 2) mem pc s1 s2 s3 s4)
+          (tr-doubles sg nseg)
+          (set rows (tr-rule-rows views page view dpi100 cs sg nseg mem inks rules refs comps))))
+    (set c 0)
+    (while (< c nc)
+      (do (if (== (tr-cg cs c C_KIND) (tr-k-rule))
+            (if (< (tr-cg cs c C_RULE) 0)
+              (do (tr-cset cs c C_KIND (tr-k-large))
+                  (set er (tr-cg cs c C_EVROW))
+                  (if (>= er 0)
+                    (do (co-set comps er (cf-kind) (ck-blob))
+                        (co-set comps er (cf-conf) (tr-conf-of (tr-k-large))))))))
+          (set c (+ c 1))))
+    (return rows)))
