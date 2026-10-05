@@ -568,16 +568,18 @@ func TestAnImageRecordsItsPixelsAndReplaysWithoutACodec(t *testing.T) {
 	in := imageFx(t, "tiff-multi3-gray-none.tif")
 	m, tr, err := e.Record(one(BytesInput(in)), DefaultOptions())
 	m = must(t, m, err)
-	// three decode requests, round two asking for frames 1 and 2 together (and for OCR of frame 0), each decode answer carrying
-	// its bitmap; then OCR of frames 1 and 2 (P6.5, D211): no Ocr port is configured, so each is answered `unsupported`
-	if len(tr.Entries) != 6 {
+	// the document pass asks each frame's HEADER (frame 0, then frames 1 and 2 together: rounds 0 and 1, no pixels), then each
+	// frame is its own page unit (P7.U, D207): its decode (round 0, the bitmap kept) and its OCR (round 1: no Ocr port is
+	// configured, so it is answered `unsupported`, P6.5, D211)
+	if len(tr.Entries) != 9 {
 		t.Fatalf("entries: %d", len(tr.Entries))
 	}
-	for i, want := range [][2]int32{{0, 2}, {1, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 3}} {
-		if tr.Entries[i].Round != want[0] || tr.Entries[i].Req[1] != want[1] {
-			t.Errorf("entry %d: round %d kind %d", i, tr.Entries[i].Round, tr.Entries[i].Req[1])
+	ids := []int32{1, 2, 3, 260, 272, 516, 528, 772, 784}
+	for i, want := range [][2]int32{{0, 2}, {1, 2}, {1, 2}, {0, 2}, {1, 3}, {0, 2}, {1, 3}, {0, 2}, {1, 3}} {
+		if tr.Entries[i].Round != want[0] || tr.Entries[i].Req[1] != want[1] || tr.Entries[i].Req[2] != ids[i] {
+			t.Errorf("entry %d: round %d kind %d id %d", i, tr.Entries[i].Round, tr.Entries[i].Req[1], tr.Entries[i].Req[2])
 		}
-		if (tr.Entries[i].Req[1] == 2) != (tr.Entries[i].Bitmap != nil) {
+		if (tr.Entries[i].Req[1] == 2 && tr.Entries[i].Req[7] >= 0) != (tr.Entries[i].Bitmap != nil) {
 			t.Errorf("entry %d: a decode keeps its pixels and an unsupported OCR has none", i)
 		}
 		if tr.Entries[i].Req[1] == 3 && tr.Entries[i].Ans[3] != 2 {
@@ -657,8 +659,8 @@ func TestAnImageIsReadByTheOcrPortAndItsTranscriptReplaysWithoutIt(t *testing.T)
 			t.Errorf("%s is not in %s", want, j)
 		}
 	}
-	// decode, then ocr; the transcript says whose engine answered
-	if k := kinds(tr); len(k) != 2 || k[0] != 2 || k[1] != 3 {
+	// the header, then the page unit's decode and ocr; the transcript says whose engine answered
+	if k := kinds(tr); len(k) != 3 || k[0] != 2 || k[1] != 2 || k[2] != 3 {
 		t.Errorf("kinds %v", k)
 	}
 	if len(tr.Producer) != 1 || tr.Producer[0] != [2]string{"engine", "fake"} {
@@ -685,7 +687,7 @@ func TestAnImageIsReadByTheOcrPortAndItsTranscriptReplaysWithoutIt(t *testing.T)
 	never.Ocr = OcrNever
 	mn, tn, err := withOcr().Record(one(BytesInput(in)), never)
 	jn := js(must(t, mn, err))
-	if k := kinds(tn); len(k) != 1 || k[0] != 2 || strings.Contains(jn, "Hello") || strings.Contains(jn, `"ocr"`) {
+	if k := kinds(tn); len(k) != 2 || k[0] != 2 || k[1] != 2 || strings.Contains(jn, "Hello") || strings.Contains(jn, `"ocr"`) {
 		t.Errorf("never: %v %s", k, jn)
 	}
 	// with no port the request is answered `unsupported` and the page has no text, as before OCR existed

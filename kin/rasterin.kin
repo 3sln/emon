@@ -23,11 +23,11 @@
 ;; 300 is the engine's own default, and the pixel size is kept in the page table either way (D187). The OCR request
 ;; carries the resolution it read the frame at as a hint (D211).
 (ns emon.rasterin
-  (:require [emon.lang :refer [I32 I64 Cells Src i64 i32 add64 mul64]]
+  (:require [emon.lang :refer [I32 I64 Cells Src BitmapSet i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push limit-of limit-breach]]
             [emon.pdfsrc :refer [ps-len ps-u8]]
             [emon.plan :refer [rq-decode an-find an-ok an-status an-arg flt-none ps-ok ps-unsupported ps-limit
-                               us-requests]]
+                               us-requests pu-id pi-decode pi-ocr]]
             [emon.model :refer [page-new page-set-resolution pk-image node-set-flags node-set-attr-int
                                 node-set-attr-text text-append-cp fk-format fk-pages fl-dpi-unknown]]
             [emon.scan :refer [sc-request sc-lang sc-page]]
@@ -128,47 +128,30 @@
     (return (sc-page ans ao page oid page wc hc w h eff 0 0 0 0 0 wc hc (sc-lang loc)
                      epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr))))
 
-(defn ^:pub ^I32 rs-unit [^Src src ^I32 input ^I32 fmt ^I32 info ^Cells ans ^:mut ^Cells rq
+(defn ^:pub ^I32 rs-doc [^Src src ^I32 input ^I32 fmt ^Cells ans ^:mut ^Cells rq
                           ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^:mut ^Cells pages
-                          ^I32 policy ^Cells loc ^:mut ^Cells mask
-                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
-                          ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
-                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
-                          ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr]
-  (comment "One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the host, and so are")
-  (comment "the evidence arenas. `policy` is the OCR policy: 0 never, 1 auto, 2 always (D038); `loc` the locale hint's code points")
-  (comment "(empty: none). Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's `format` and")
-  (comment "`pages`, one page row per frame, and for every frame whose OCR answered: its evidence and its lines in `words` and")
-  (comment "`lines`, and `mask` (one cell a page) set to 1 so that `sc-tag` can say where the text came from.")
+                          ^:mut ^Cells mask]
+  (comment "THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),")
+  (comment "round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame")
+  (comment "in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is")
+  (comment "decoded and no OCR is asked here: that is each frame's own page unit, `rs-page`. Answers `us-requests`, a failure")
+  (comment "status, or 0.")
   (let [^I32 nbytes (ps-len src)
         ^I32 a0 (an-find ans 1)]
     (if (< a0 0)
-      (do (rq-decode rq 1 input 0 nbytes (flt-none) (rs-frame-arg info 0))
+      (do (rq-decode rq 1 input 0 nbytes (flt-none) (rs-frame-arg 1 0))
           (return (us-requests))))
     (if (!= (an-status ans a0) (ps-ok)) (return (rs-fail ans a0)))
     (let [^I32 frames (an-arg ans a0 5)
-          ^I32 want (rs-want-ocr info policy)
           ^:mut ^I32 f 1
-          ^:mut ^I32 asked 0
-          ^:mut ^I32 da 0
-          ^:mut ^I32 dd 0]
+          ^:mut ^I32 asked 0]
       (if (< frames 1) (return (rs-undecodable)))
       (if (> frames (limit-of 8)) (limit-breach 8 frames))
       (while (< f frames)
         (do (if (< (an-find ans (+ f 1)) 0)
-              (do (rq-decode rq (+ f 1) input 0 nbytes (flt-none) (rs-frame-arg info f))
+              (do (rq-decode rq (+ f 1) input 0 nbytes (flt-none) (rs-frame-arg 1 f))
                   (set asked 1)))
             (set f (+ f 1))))
-      (if (== want 1)
-        (do (set f 0)
-            (while (< f frames)
-              (do (set da (an-find ans (+ f 1)))
-                  (if (and (>= da 0) (< (an-find ans (rs-ocr-id frames f)) 0))
-                    (if (== (an-ok ans da) 1)
-                      (do (set dd (rs-eff-dpi100 (an-arg ans da 3)))
-                          (sc-request rq (rs-ocr-id frames f) (+ f 1) (quot (+ dd 50) 100) loc)
-                          (set asked 1))))
-                  (set f (+ f 1))))))
       (if (== asked 1) (return (us-requests)))
       (rs-format-name nodes attrs text fmt)
       (node-set-attr-int nodes attrs 0 (fk-pages) frames)
@@ -190,15 +173,34 @@
                   (page-set-resolution pages p (quot (+ dpi100 50) 100) w h))))
             (cells-push mask 0)
             (set f (+ f 1))))
-      (if (== want 1)
-        (do (set f 0)
-            (while (< f frames)
-              (do (set da (an-find ans (rs-ocr-id frames f)))
-                  (if (>= da 0)
-                    (if (== (an-ok ans da) 1)
-                      (do (set dd (an-find ans (+ f 1)))
-                          (rs-read-page ans da dd (+ f 1) (rs-ocr-id frames f) loc
-                                        epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr)
-                          (cells-set mask f 1))))
-                  (set f (+ f 1))))))
       (return 0))))
+
+(defn ^:pub ^I32 rs-page [^I32 f ^I32 input ^I32 nbytes ^I32 policy ^Cells ans ^:mut ^Cells rq ^Cells loc
+                          ^BitmapSet bms ^:mut ^Cells mask
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
+                          ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr]
+  (comment "The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose")
+  (comment "failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless")
+  (comment "`policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are")
+  (comment "appended to `words` and `lines` and `mask[f]` is 1. Answers `us-requests`, a failure status, or 0. It writes nothing")
+  (comment "until every answer it asked for is in.")
+  (let [^I32 did (pu-id f (pi-decode))
+        ^I32 oid (pu-id f (pi-ocr))
+        ^I32 ad (an-find ans did)
+        ^:mut ^I32 ao -1]
+    (if (< ad 0)
+      (do (rq-decode rq did input 0 nbytes (flt-none) f)
+          (return (us-requests))))
+    (if (!= (an-status ans ad) (ps-ok)) (return (rs-fail ans ad)))
+    (if (== policy 0) (return 0))
+    (set ao (an-find ans oid))
+    (if (< ao 0)
+      (do (sc-request rq oid did (quot (+ (rs-eff-dpi100 (an-arg ans ad 3)) 50) 100) loc)
+          (return (us-requests))))
+    (if (== (an-ok ans ao) 1)
+      (do (rs-read-page ans ao ad (+ f 1) oid loc
+                        epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr)
+          (cells-set mask f 1)))
+    (return 0)))

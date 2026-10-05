@@ -20,21 +20,21 @@ public static class Rasterintest {
         emon.Testport.AssertEq(Rasterin.RsCpt(2481, 30000), 59544, "A4 at 300 dpi, rounded");
         emon.Testport.AssertEq(Rasterin.RsCpt(1, 100000000), 1, "never zero");
     }
-    internal static int UnitPol(emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, int info, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
+    internal static int DocOf(emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells mask) {
         emon.Port.Cells regions = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
         emon.Port.Cells layout = emon.Port.NewCells();
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
-        return Rasterin.RsUnit(emon.Port.SrcOfBlob(emon.Testport.HexBlob("49492a0008000000")), 7, Rasterin.RsTiff(), info, ans, rq, nodes, attrs, text, pages, policy, loc, mask, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), oruns, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells());
+        return Rasterin.RsDoc(emon.Port.SrcOfBlob(emon.Testport.HexBlob("49492a0008000000")), 7, Rasterin.RsTiff(), ans, rq, nodes, attrs, text, pages, mask);
     }
-    internal static int UnitOf(emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, int info) {
-        return UnitPol(ans, rq, nodes, attrs, text, pages, info, 0, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+    internal static int PagePol(int f, emon.Port.Cells ans, emon.Port.Cells rq, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
+        return Rasterin.RsPage(f, 7, 8, policy, ans, rq, loc, emon.Port.NewBitmapSet(), mask, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), oruns, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells());
     }
     [Xunit.Fact]
-    public static void TestTheFirstRoundAsksForFrameZeroAndNothingMore() {
+    public static void TestTheDocumentPassAsksForFrameZerosHeaderAndNothingMore() {
         emon.Port.Cells ans = emon.Port.NewCells();
         emon.Port.Cells rq = emon.Port.NewCells();
-        emon.Testport.AssertEq(UnitOf(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 0), Plan.UsRequests(), "it asks");
+        emon.Testport.AssertEq(DocOf(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
         emon.Testport.AssertEq(emon.Port.CellsLen(rq), 8, "one request of eight cells");
         emon.Testport.AssertEq(Plan.RecKind(rq, 0), Plan.PkDecode(), "a decode");
         emon.Testport.AssertEq(Plan.RecId(rq, 0), 1, "frame 0 is id 1");
@@ -42,38 +42,33 @@ public static class Rasterintest {
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 0, "from its first byte");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 8, "the whole input");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 3), Plan.FltNone(), "a whole image file, not a PDF filter");
-        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 4), 0, "frame 0");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 4), -1, "frame 0, header only (D187)");
     }
     [Xunit.Fact]
-    public static void TestTheHeaderOnlyFormAsksWithANegativeFrame() {
-        emon.Port.Cells ans = emon.Port.NewCells();
-        emon.Port.Cells rq = emon.Port.NewCells();
-        emon.Testport.AssertEq(UnitOf(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 1), Plan.UsRequests(), "it asks");
-        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 4), -1, "frame 0, header only, is -1");
-    }
-    [Xunit.Fact]
-    public static void TestTheSecondRoundAsksForEveryOtherFrame() {
+    public static void TestTheSecondRoundAsksForEveryOtherFramesHeader() {
         emon.Port.Cells ans = emon.Port.NewCells();
         emon.Port.Cells rq = emon.Port.NewCells();
         Plan.AnDecode(ans, 1, 463, 894, 1, 20000, 1, 3);
-        emon.Testport.AssertEq(UnitOf(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 0), Plan.UsRequests(), "it asks again");
+        emon.Testport.AssertEq(DocOf(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks again");
         emon.Testport.AssertEq(emon.Port.CellsLen(rq), 16, "two more requests");
         emon.Testport.AssertEq(Plan.RecId(rq, 0), 2, "frame 1 is id 2");
-        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 4), 1, "frame 1");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 4), -2, "frame 1, header only");
         emon.Testport.AssertEq(Plan.RecId(rq, 8), 3, "frame 2 is id 3");
-        emon.Testport.AssertEq(Plan.RqArg(rq, 8, 4), 2, "frame 2");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 8, 4), -3, "frame 2, header only");
     }
     [Xunit.Fact]
-    public static void TestWithEveryAnswerInTheUnitBuildsThePages() {
+    public static void TestWithEveryHeaderInTheDocumentPassBuildsThePages() {
         emon.Port.Cells ans = emon.Port.NewCells();
         emon.Port.Cells rq = emon.Port.NewCells();
         emon.Port.Cells nodes = emon.Port.NewCells();
         emon.Port.Cells attrs = emon.Port.NewCells();
         emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells mask = emon.Port.NewCells();
         Plan.AnDecode(ans, 1, 463, 894, 1, 20000, 1, 2);
         Plan.AnDecode(ans, 2, 992, 1403, 3, 0, 0, 2);
-        emon.Testport.AssertEq(UnitOf(ans, rq, nodes, attrs, emon.Port.NewCells(), pages, 0), 0, "done");
+        emon.Testport.AssertEq(DocOf(ans, rq, nodes, attrs, emon.Port.NewCells(), pages, mask), 0, "done");
         emon.Testport.AssertEq(emon.Port.CellsLen(rq), 0, "asks for nothing");
+        emon.Testport.AssertEq(emon.Port.CellsLen(mask), 2, "a mask cell a page");
         emon.Testport.AssertEq(Model.PageCount(pages), 2, "one page a frame");
         emon.Testport.AssertEq(Model.PageNumber(pages, 1), 2, "numbered from 1 in frame order");
         emon.Testport.AssertEq(Model.PageKind(pages, 0), Model.PkImage(), "an image page");
@@ -88,18 +83,48 @@ public static class Rasterintest {
         emon.Testport.AssertEq(Model.NodeFlags(nodes, 0), Model.FlDpiUnknown(), "and that one of them has no stated resolution");
     }
     [Xunit.Fact]
-    public static void TestAFailedDecodeIsTheUnitsFailure() {
+    public static void TestAFailedHeaderIsTheUnitsFailure() {
         emon.Port.Cells a1 = emon.Port.NewCells();
         emon.Port.Cells a2 = emon.Port.NewCells();
         emon.Port.Cells a3 = emon.Port.NewCells();
-        emon.Port.Cells rq = emon.Port.NewCells();
         Plan.AnFail(a1, Plan.PkDecode(), 1, Plan.PsFailed());
-        emon.Testport.AssertEq(UnitOf(a1, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 0), Rasterin.RsUndecodable(), "damaged");
+        emon.Testport.AssertEq(DocOf(a1, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Rasterin.RsUndecodable(), "damaged");
         Plan.AnFail(a2, Plan.PkDecode(), 1, Plan.PsUnsupported());
-        emon.Testport.AssertEq(UnitOf(a2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 0), Rasterin.RsUnsupported(), "not read");
+        emon.Testport.AssertEq(DocOf(a2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Rasterin.RsUnsupported(), "not read");
         Plan.AnDecode(a3, 1, 10, 10, 1, 0, 0, 2);
         Plan.AnFail(a3, Plan.PkDecode(), 2, Plan.PsFailed());
-        emon.Testport.AssertEq(UnitOf(a3, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 0), Rasterin.RsUndecodable(), "a later frame that fails fails the unit");
+        emon.Testport.AssertEq(DocOf(a3, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Rasterin.RsUndecodable(), "a later frame that fails fails the unit");
+    }
+    [Xunit.Fact]
+    public static void TestAFramesUnitAsksForItsPixelsFirstUnderItsOwnId() {
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Testport.AssertEq(PagePol(0, emon.Port.NewCells(), rq, 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq), 8, "one request");
+        emon.Testport.AssertEq(Plan.RecKind(rq, 0), Plan.PkDecode(), "a decode");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), 260, "page 0, k 4: (0 + 1) * 256 + 4");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 4), 0, "the whole frame, not a header");
+        emon.Port.Cells rq2 = emon.Port.NewCells();
+        emon.Testport.AssertEq(PagePol(2, emon.Port.NewCells(), rq2, 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
+        emon.Testport.AssertEq(Plan.RecId(rq2, 0), 1028, "page 2: 3 * 256 + 4");
+        emon.Testport.AssertEq(Plan.RqArg(rq2, 0, 4), 2, "frame 2");
+    }
+    [Xunit.Fact]
+    public static void TestAFramesUnitThatAskedTheSameAgainAsksTheSame() {
+        emon.Port.Cells rq1 = emon.Port.NewCells();
+        emon.Port.Cells rq2 = emon.Port.NewCells();
+        PagePol(1, emon.Port.NewCells(), rq1, 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        PagePol(1, emon.Port.NewCells(), rq2, 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq1), emon.Port.CellsLen(rq2), "the same length");
+        emon.Testport.AssertEq(emon.Port.CellsAt(rq1, 2), emon.Port.CellsAt(rq2, 2), "the same id");
+    }
+    [Xunit.Fact]
+    public static void TestAFailedFrameDecodeIsTheUnitsFailure() {
+        emon.Port.Cells a1 = emon.Port.NewCells();
+        Plan.AnFail(a1, Plan.PkDecode(), 260, Plan.PsFailed());
+        emon.Testport.AssertEq(PagePol(0, a1, emon.Port.NewCells(), 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Rasterin.RsUndecodable(), "damaged");
+        emon.Port.Cells a2 = emon.Port.NewCells();
+        Plan.AnFail(a2, Plan.PkDecode(), 260, Plan.PsUnsupported());
+        emon.Testport.AssertEq(PagePol(0, a2, emon.Port.NewCells(), 0, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Rasterin.RsUnsupported(), "not read, whatever the policy");
     }
     internal static int FakeOcr(emon.Port.Cells ans, int id) {
         // An OCR answer for one line holding the word "Hi": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.
@@ -119,15 +144,15 @@ public static class Rasterintest {
         return at;
     }
     [Xunit.Fact]
-    public static void TestWithThePolicyOnTheSecondRoundAsksForOcrOfTheDecodedFrame() {
+    public static void TestWithThePolicyTheFramesSecondRoundAsksForOcrOfItsBitmap() {
         emon.Port.Cells ans = emon.Port.NewCells();
         emon.Port.Cells rq = emon.Port.NewCells();
-        Plan.AnDecode(ans, 1, 463, 894, 1, 0, 1, 1);
-        emon.Testport.AssertEq(UnitPol(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 0, 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
+        Plan.AnDecode(ans, 260, 463, 894, 1, 0, 1, 1);
+        emon.Testport.AssertEq(PagePol(0, ans, rq, 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
         emon.Testport.AssertEq(Plan.RecKind(rq, 0), Plan.PkOcr(), "an OCR request");
-        emon.Testport.AssertEq(Plan.RecId(rq, 0), Rasterin.RsOcrId(1, 0), "after every decode's id");
-        emon.Testport.AssertEq(Plan.RecId(rq, 0), 2, "one frame: id 2");
-        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), 1, "of the bitmap of decode 1");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), Plan.PuId(0, Plan.PiOcr()), "page 0's OCR id");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), 272, "256 + 16");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), 260, "of the bitmap of the decode");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 3, "psm 3");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 3 + (300 * 256), "symbols, OSD, and the 300 dpi it assumed as a hint");
         emon.Testport.AssertEq(Ocr.OcfDpi(Plan.RqArg(rq, 0, 2)), 300, "read back");
@@ -144,26 +169,22 @@ public static class Rasterintest {
         emon.Port.CellsPush(loc, 45);
         emon.Port.CellsPush(loc, 67);
         emon.Port.CellsPush(loc, 72);
-        Plan.AnDecode(ans, 1, 463, 894, 1, 20000, 1, 1);
-        emon.Testport.AssertEq(UnitPol(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 0, 2, loc, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
+        Plan.AnDecode(ans, 260, 463, 894, 1, 20000, 1, 1);
+        emon.Testport.AssertEq(PagePol(0, ans, rq, 2, loc, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 3 + (200 * 256), "the stated 200 dpi");
         emon.Testport.AssertEq(Plan.RqNargs(rq, 0), 8, "one language");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 7), 1684370688, "`de-CH` is `deu`");
     }
     [Xunit.Fact]
-    public static void TestNeverAndTheHeaderOnlyFormAskForNoOcr() {
+    public static void TestNeverAsksForNoOcr() {
         emon.Port.Cells ans = emon.Port.NewCells();
         emon.Port.Cells rq = emon.Port.NewCells();
         emon.Port.Cells mask = emon.Port.NewCells();
-        Plan.AnDecode(ans, 1, 463, 894, 1, 20000, 1, 1);
-        emon.Testport.AssertEq(UnitPol(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 0, 0, emon.Port.NewCells(), mask, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 0, "never: done");
+        emon.Port.CellsPush(mask, 0);
+        Plan.AnDecode(ans, 260, 463, 894, 1, 20000, 1, 1);
+        emon.Testport.AssertEq(PagePol(0, ans, rq, 0, emon.Port.NewCells(), mask, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 0, "never: done");
         emon.Testport.AssertEq(emon.Port.CellsLen(rq), 0, "no request");
         emon.Testport.AssertEq(emon.Port.CellsAt(mask, 0), 0, "the page was not OCR'd");
-        emon.Port.Cells ans2 = emon.Port.NewCells();
-        emon.Port.Cells rq2 = emon.Port.NewCells();
-        Plan.AnDecode(ans2, 1, 463, 894, 1, 20000, 1, 1);
-        emon.Testport.AssertEq(UnitPol(ans2, rq2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 1, 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 0, "intake: done");
-        emon.Testport.AssertEq(emon.Port.CellsLen(rq2), 0, "intake never asks for OCR");
     }
     [Xunit.Fact]
     public static void TestAnOcrAnswerBecomesEvidenceAndThePipelinesLines() {
@@ -176,10 +197,10 @@ public static class Rasterintest {
         emon.Port.Cells oruns = emon.Port.NewCells();
         emon.Port.Cells olines = emon.Port.NewCells();
         emon.Port.Cells owords = emon.Port.NewCells();
-        emon.Port.Cells pages = emon.Port.NewCells();
-        Plan.AnDecode(ans, 1, 600, 800, 1, 30000, 1, 1);
-        FakeOcr(ans, 2);
-        emon.Testport.AssertEq(UnitPol(ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, 0, 2, emon.Port.NewCells(), mask, et, wd, ln, oruns, olines, owords), 0, "done");
+        emon.Port.CellsPush(mask, 0);
+        Plan.AnDecode(ans, 260, 600, 800, 1, 30000, 1, 1);
+        FakeOcr(ans, 272);
+        emon.Testport.AssertEq(PagePol(0, ans, rq, 2, emon.Port.NewCells(), mask, et, wd, ln, oruns, olines, owords), 0, "done");
         emon.Testport.AssertEq(emon.Port.CellsAt(mask, 0), 1, "the page's text came from OCR");
         emon.Testport.AssertEq(Evidence.OrCount(oruns), 1, "one OCR run");
         emon.Testport.AssertEq(Evidence.OlCount(olines), 1, "one OCR line");

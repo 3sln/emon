@@ -1280,7 +1280,7 @@ pub fn sc_tag(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::C
     }
     return 1;
 }
-pub(crate) fn sc_dct_span(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, obj: i32, mut sp: &mut crate::port::Cells) -> i32 {
+pub fn sc_dct_span(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, obj: i32, mut sp: &mut crate::port::Cells) -> i32 {
     // Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`
     // holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in
     // place. Anything else 0. Loads objects, so `a`, `b` and `st` are overwritten and the source may miss.
@@ -1328,7 +1328,7 @@ pub(crate) fn sc_dct_span(src: &crate::port::Src, mut ar: &mut crate::port::Cell
     crate::port::cells_push(sp, pl_stream_len(ar, h));
     return 1;
 }
-pub(crate) fn sc_eligible(im: &mut crate::port::Cells, j: i32, pw: i32, ph: i32) -> i32 {
+pub fn sc_eligible(im: &mut crate::port::Cells, j: i32, pw: i32, ph: i32) -> i32 {
     // Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil
     // mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.
     if im_get(im, j, mf_obj()) <= 0 {
@@ -1358,123 +1358,4 @@ pub(crate) fn sc_eligible(im: &mut crate::port::Cells, j: i32, pw: i32, ph: i32)
         return 0;
     }
     return 1;
-}
-pub fn sc_pdf_unit(src: &crate::port::Src, input: i32, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, pg: &mut crate::port::Cells, im: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, policy: i32, loc: &mut crate::port::Cells, mut mask: &mut crate::port::Cells, mut sp: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
-    // The scanned pages of a PDF, after the text layer is read. A page with no `words` row at all and one image that
-    // `sc-eligible` and `sc-dct-span` accept is OCR'd: decode request `2 * i + 1` for the stream's bytes (filter DCT),
-    // then OCR request `2 * i + 2` of its bitmap, for page index `i`; two rounds whatever the page count. Where the answers
-    // are in, the page's evidence and lines are appended to `words` and `lines` and `mask[i]` is 2. Every other page is left
-    // exactly as the text layer made it (D212). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,
-    // else `us-done`. `sp` is two cells of scratch.
-    let np: i32 = pd_pg_count(pg);
-    let nw: i32 = wd_count(words);
-    let nim: i32 = im_count(im);
-    let mut i: i32 = 0;
-    let mut j: i32 = 0;
-    let mut jj: i32 = 0;
-    let mut best: i32 = -1;
-    let mut bestarea: i64 = 0 as i64;
-    let mut w: i32 = 0;
-    let mut p: i32 = 0;
-    let mut asked: i32 = 0;
-    let mut px0: i32 = 0;
-    let mut py0: i32 = 0;
-    let mut px1: i32 = 0;
-    let mut py1: i32 = 0;
-    let mut did: i32 = 0;
-    let mut oid: i32 = 0;
-    let mut ad: i32 = -1;
-    let mut ao: i32 = -1;
-    let mut ix0: i32 = 0;
-    let mut iy0: i32 = 0;
-    let mut ix1: i32 = 0;
-    let mut iy1: i32 = 0;
-    let mut wp: i32 = 0;
-    let mut dpi100: i32 = 0;
-    let mut area: i64 = 0 as i64;
-    let mut pxw: i32 = 0;
-    let mut pxh: i32 = 0;
-    crate::port::cells_drop(mask, 0);
-    while i < np {
-        crate::port::cells_push(mask, 0);
-        i += 1;
-    }
-    if policy == 0 {
-        return us_done();
-    }
-    // a page with any word, hidden or not, is born digital: -1
-    while w < nw {
-        p = wd_get(words, w, hd_page());
-        if (p >= 1) && (p <= np) {
-            crate::port::cells_set(mask, p - 1, -1);
-        }
-        w += 1;
-    }
-    i = 0;
-    while i < np {
-        while (j < nim) && (im_get(im, j, mf_page()) < (i + 1)) {
-            j += 1;
-        }
-        if (crate::port::cells_at(mask, i) == 0) && (pd_pg_rotate(pg, i) == 0) {
-            px0 = pd_pg_crop(pg, i, 0);
-            py0 = pd_pg_crop(pg, i, 1);
-            px1 = pd_pg_crop(pg, i, 2);
-            py1 = pd_pg_crop(pg, i, 3);
-            best = -1;
-            bestarea = 0 as i64;
-            jj = j;
-            while (jj < nim) && (im_get(im, jj, mf_page()) == (i + 1)) {
-                if sc_eligible(im, jj, px1 - px0, py1 - py0) == 1 {
-                    area = ((im_get(im, jj, mf_x1()) - im_get(im, jj, mf_x0())) as i64).wrapping_mul((im_get(im, jj, mf_y1()) - im_get(im, jj, mf_y0())) as i64);
-                    if area > bestarea {
-                        best = jj;
-                        bestarea = area;
-                    }
-                }
-                jj += 1;
-            }
-            if best >= 0 {
-                if sc_dct_span(src, ar, dc, a, b, st, im_get(im, best, mf_obj()), sp) == 1 {
-                    did = (2 * i) + 1;
-                    oid = (2 * i) + 2;
-                    ix0 = im_get(im, best, mf_x0());
-                    iy0 = im_get(im, best, mf_y0());
-                    ix1 = im_get(im, best, mf_x1());
-                    iy1 = im_get(im, best, mf_y1());
-                    ad = an_find(ans, did);
-                    if ad < 0 {
-                        rq_decode(rq, did, input, crate::port::cells_at(sp, 0), crate::port::cells_at(sp, 1), flt_dct(), 0);
-                        asked = 1;
-                    } else if an_ok(ans, ad) == 1 {
-                        pxw = an_arg(ans, ad, 0);
-                        pxh = an_arg(ans, ad, 1);
-                        wp = ix1 - ix0;
-                        dpi100 = (((pxw as i64).wrapping_mul(720000 as i64)).wrapping_add((wp / 2) as i64) / (wp as i64)) as i32;
-                        ao = an_find(ans, oid);
-                        if ao < 0 {
-                            sc_request(rq, oid, did, (dpi100 + 50) / 100, loc);
-                            asked = 1;
-                        } else if an_ok(ans, ao) == 1 {
-                            sc_page(ans, ao, i + 1, oid, did, px1 - px0, py1 - py0, pxw, pxh, dpi100, ix0, iy0, im_get(im, best, mf_obj()), ix0, iy0, ix1, iy1, sc_lang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, sp);
-                            crate::port::cells_set(mask, i, 2);
-                        }
-                    }
-                }
-            } else if ps_missed(src) {
-                return us_done();
-            }
-        }
-        i += 1;
-    }
-    i = 0;
-    while i < np {
-        if crate::port::cells_at(mask, i) < 0 {
-            crate::port::cells_set(mask, i, 0);
-        }
-        i += 1;
-    }
-    if asked == 1 {
-        return us_requests();
-    }
-    return us_done();
 }

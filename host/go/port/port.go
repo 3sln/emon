@@ -660,3 +660,54 @@ func CryptoAesEncrypt(key []byte, koff int32, klen int32, data []byte, doff int3
 	}
 	return pushBytes(out, ct)
 }
+
+// ================================================================ P7.U BitmapSet
+//
+// The pixels a page unit may read (see the Rust half for the contract): the bitmaps its answers carried by request id
+// (Answered, the Engine's) and the ones kin makes (Made, `bms-put`, ids from KIN_VIEW_BASE). One set an attempt of a page
+// unit, dropped when the unit ends.
+type BitmapSet struct {
+	Answered map[int32]*Bitmap
+	Made     map[int32]*Bitmap
+	none     *Bitmap
+}
+
+func NewBitmapSet() *BitmapSet {
+	return &BitmapSet{Answered: map[int32]*Bitmap{}, Made: map[int32]*Bitmap{}, none: BitmapNew(0, 0, 1)}
+}
+
+// @kin:link:form:bms-get: {:template "port.BmsGet({0}, {1})" :import "emon/port" :arity 2}
+//
+// The bitmap with this id: an answer's, or one kin made; 0 x 0 when there is none.
+func BmsGet(s *BitmapSet, id int32) *Bitmap {
+	if b, ok := s.Made[id]; ok {
+		return b
+	}
+	if b, ok := s.Answered[id]; ok {
+		return b
+	}
+	return s.none
+}
+
+// @kin:link:form:bms-has: {:template "port.BmsHas({0}, {1})" :import "emon/port" :arity 2}
+func BmsHas(s *BitmapSet, id int32) int32 {
+	if _, ok := s.Made[id]; ok {
+		return 1
+	}
+	if _, ok := s.Answered[id]; ok {
+		return 1
+	}
+	return 0
+}
+
+// @kin:link:form:bms-put: {:template "port.BmsPut({0}, {1}, {2}, {3}, {4})" :import "emon/port" :arity 5}
+//
+// A new zeroed bitmap of w x h x channels under `id`, for kin to fill. An id already in the set is a bug in kin: it panics.
+func BmsPut(s *BitmapSet, id, w, h, ch int32) *Bitmap {
+	if BmsHas(s, id) == 1 {
+		panic("bms_put: id is already in the set")
+	}
+	b := BitmapNew(w, h, ch)
+	s.Made[id] = b
+	return b
+}

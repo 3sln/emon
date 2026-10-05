@@ -2,18 +2,18 @@
 ;; then every other frame, ids `f + 1`), the header-only form, the page table it builds from the answers (pixels to
 ;; centipoints at the stated resolution, 300 dpi and a flag when there is none), and its failure statuses.
 (ns emon.rasterintest
-  (:require [emon.lang :refer [I32 Cells Src]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells hex-blob]]
+  (:require [emon.lang :refer [I32 Cells Src BitmapSet]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set hex-blob]]
             [emon.port :refer [cells-len cells-at cells-push src-of-blob]]
             [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
             [emon.evidence :refer [wd-count wd-get ln-count ln-get ol-count ow-count or-count ep-new wf-size hd-tstart hd-tlen
                                    lh-first lh-count lh-rot lh-y0 lh-y1]]
-            [emon.plan :refer [rec-id rec-kind rq-arg rq-nargs an-decode an-fail ps-failed ps-unsupported
+            [emon.plan :refer [pu-id pi-decode pi-ocr rec-id rec-kind rq-arg rq-nargs an-decode an-fail ps-failed ps-unsupported
                                us-requests pk-decode pk-ocr flt-none an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
             [emon.model :refer [model-init node-flags node-attr-int-or page-count page-number page-w page-h
                                 page-kind page-dpi page-px-w page-px-h pk-image fl-dpi-unknown fk-pages]]
-            [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-tiff rs-unit rs-cpt rs-undecodable
-                                   rs-unsupported rs-ocr-id]]
+            [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-tiff rs-doc rs-page rs-cpt rs-undecodable
+                                   rs-unsupported]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -31,24 +31,22 @@
   (assert-eq (rs-cpt 2481 30000) 59544 "A4 at 300 dpi, rounded")
   (assert-eq (rs-cpt 1 100000000) 1 "never zero"))
 
-(defn ^I32 unit-pol [^Cells ans ^Cells rq ^Cells nodes ^Cells attrs ^Cells text ^Cells pages ^I32 info ^I32 policy
-                     ^Cells loc ^Cells mask ^Cells et ^Cells wd ^Cells ln ^Cells oruns ^Cells olines ^Cells owords]
+(defn ^I32 doc-of [^Cells ans ^Cells rq ^Cells nodes ^Cells attrs ^Cells text ^Cells pages ^Cells mask]
   (let [^Cells regions (new-cells)
         ^Cells ledger (new-cells)
         ^Cells layout (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
-    (return (rs-unit (src-of-blob (hex-blob "49492a0008000000")) 7 (rs-tiff) info ans rq nodes attrs text pages
-                     policy loc mask (new-cells) (new-cells) et (new-cells) (new-cells) oruns (new-cells) olines owords
-                     (new-cells) (new-cells) wd ln (new-cells)))))
+    (return (rs-doc (src-of-blob (hex-blob "49492a0008000000")) 7 (rs-tiff) ans rq nodes attrs text pages mask))))
 
-(defn ^I32 unit-of [^Cells ans ^Cells rq ^Cells nodes ^Cells attrs ^Cells text ^Cells pages ^I32 info]
-  (return (unit-pol ans rq nodes attrs text pages info 0 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                    (new-cells) (new-cells) (new-cells))))
+(defn ^I32 page-pol [^I32 f ^Cells ans ^Cells rq ^I32 policy ^Cells loc ^Cells mask ^Cells et ^Cells wd ^Cells ln
+                     ^Cells oruns ^Cells olines ^Cells owords]
+  (return (rs-page f 7 8 policy ans rq loc (new-bitmap-set) mask (new-cells) (new-cells) et (new-cells) (new-cells)
+                   oruns (new-cells) olines owords (new-cells) (new-cells) wd ln (new-cells))))
 
-(deftest test-the-first-round-asks-for-frame-zero-and-nothing-more
+(deftest test-the-document-pass-asks-for-frame-zeros-header-and-nothing-more
   (let [^Cells ans (new-cells)
         ^Cells rq (new-cells)]
-    (assert-eq (unit-of ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0) (us-requests) "it asks")
+    (assert-eq (doc-of ans rq (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
     (assert-eq (cells-len rq) 8 "one request of eight cells")
     (assert-eq (rec-kind rq 0) (pk-decode) "a decode")
     (assert-eq (rec-id rq 0) 1 "frame 0 is id 1")
@@ -56,35 +54,31 @@
     (assert-eq (rq-arg rq 0 1) 0 "from its first byte")
     (assert-eq (rq-arg rq 0 2) 8 "the whole input")
     (assert-eq (rq-arg rq 0 3) (flt-none) "a whole image file, not a PDF filter")
-    (assert-eq (rq-arg rq 0 4) 0 "frame 0")))
+    (assert-eq (rq-arg rq 0 4) -1 "frame 0, header only (D187)")))
 
-(deftest test-the-header-only-form-asks-with-a-negative-frame
-  (let [^Cells ans (new-cells)
-        ^Cells rq (new-cells)]
-    (assert-eq (unit-of ans rq (new-cells) (new-cells) (new-cells) (new-cells) 1) (us-requests) "it asks")
-    (assert-eq (rq-arg rq 0 4) -1 "frame 0, header only, is -1")))
-
-(deftest test-the-second-round-asks-for-every-other-frame
+(deftest test-the-second-round-asks-for-every-other-frames-header
   (let [^Cells ans (new-cells)
         ^Cells rq (new-cells)]
     (an-decode ans 1 463 894 1 20000 1 3)
-    (assert-eq (unit-of ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0) (us-requests) "it asks again")
+    (assert-eq (doc-of ans rq (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks again")
     (assert-eq (cells-len rq) 16 "two more requests")
     (assert-eq (rec-id rq 0) 2 "frame 1 is id 2")
-    (assert-eq (rq-arg rq 0 4) 1 "frame 1")
+    (assert-eq (rq-arg rq 0 4) -2 "frame 1, header only")
     (assert-eq (rec-id rq 8) 3 "frame 2 is id 3")
-    (assert-eq (rq-arg rq 8 4) 2 "frame 2")))
+    (assert-eq (rq-arg rq 8 4) -3 "frame 2, header only")))
 
-(deftest test-with-every-answer-in-the-unit-builds-the-pages
+(deftest test-with-every-header-in-the-document-pass-builds-the-pages
   (let [^Cells ans (new-cells)
         ^Cells rq (new-cells)
         ^Cells nodes (new-cells)
         ^Cells attrs (new-cells)
-        ^Cells pages (new-cells)]
+        ^Cells pages (new-cells)
+        ^Cells mask (new-cells)]
     (an-decode ans 1 463 894 1 20000 1 2)
     (an-decode ans 2 992 1403 3 0 0 2)
-    (assert-eq (unit-of ans rq nodes attrs (new-cells) pages 0) 0 "done")
+    (assert-eq (doc-of ans rq nodes attrs (new-cells) pages mask) 0 "done")
     (assert-eq (cells-len rq) 0 "asks for nothing")
+    (assert-eq (cells-len mask) 2 "a mask cell a page")
     (assert-eq (page-count pages) 2 "one page a frame")
     (assert-eq (page-number pages 1) 2 "numbered from 1 in frame order")
     (assert-eq (page-kind pages 0) (pk-image) "an image page")
@@ -98,18 +92,47 @@
     (assert-eq (node-attr-int-or nodes attrs 0 (fk-pages) -1) 2 "the root says how many pages")
     (assert-eq (node-flags nodes 0) (fl-dpi-unknown) "and that one of them has no stated resolution")))
 
-(deftest test-a-failed-decode-is-the-units-failure
+(deftest test-a-failed-header-is-the-units-failure
   (let [^Cells a1 (new-cells)
         ^Cells a2 (new-cells)
-        ^Cells a3 (new-cells)
-        ^Cells rq (new-cells)]
+        ^Cells a3 (new-cells)]
     (an-fail a1 (pk-decode) 1 (ps-failed))
-    (assert-eq (unit-of a1 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) 0) (rs-undecodable) "damaged")
+    (assert-eq (doc-of a1 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (rs-undecodable) "damaged")
     (an-fail a2 (pk-decode) 1 (ps-unsupported))
-    (assert-eq (unit-of a2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) 0) (rs-unsupported) "not read")
+    (assert-eq (doc-of a2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (rs-unsupported) "not read")
     (an-decode a3 1 10 10 1 0 0 2)
     (an-fail a3 (pk-decode) 2 (ps-failed))
-    (assert-eq (unit-of a3 rq (new-cells) (new-cells) (new-cells) (new-cells) 0) (rs-undecodable) "a later frame that fails fails the unit")))
+    (assert-eq (doc-of a3 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (rs-undecodable) "a later frame that fails fails the unit")))
+
+;; ------------------------------------------------------------------------------------------------ page units (P7.U, D207)
+
+(deftest test-a-frames-unit-asks-for-its-pixels-first-under-its-own-id
+  (let [^Cells rq (new-cells)]
+    (assert-eq (page-pol 0 (new-cells) rq 2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
+    (assert-eq (cells-len rq) 8 "one request")
+    (assert-eq (rec-kind rq 0) (pk-decode) "a decode")
+    (assert-eq (rec-id rq 0) 260 "page 0, k 4: (0 + 1) * 256 + 4")
+    (assert-eq (rq-arg rq 0 4) 0 "the whole frame, not a header"))
+  (let [^Cells rq2 (new-cells)]
+    (assert-eq (page-pol 2 (new-cells) rq2 2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
+    (assert-eq (rec-id rq2 0) 1028 "page 2: 3 * 256 + 4")
+    (assert-eq (rq-arg rq2 0 4) 2 "frame 2")))
+
+(deftest test-a-frames-unit-that-asked-the-same-again-asks-the-same
+  (let [^Cells rq1 (new-cells)
+        ^Cells rq2 (new-cells)]
+    (page-pol 1 (new-cells) rq1 2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))
+    (page-pol 1 (new-cells) rq2 2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))
+    (assert-eq (cells-len rq1) (cells-len rq2) "the same length")
+    (assert-eq (cells-at rq1 2) (cells-at rq2 2) "the same id")))
+
+(deftest test-a-failed-frame-decode-is-the-units-failure
+  (let [^Cells a1 (new-cells)]
+    (an-fail a1 (pk-decode) 260 (ps-failed))
+    (assert-eq (page-pol 0 a1 (new-cells) 2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (rs-undecodable) "damaged"))
+  (let [^Cells a2 (new-cells)]
+    (an-fail a2 (pk-decode) 260 (ps-unsupported))
+    (assert-eq (page-pol 0 a2 (new-cells) 0 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (rs-unsupported) "not read, whatever the policy")))
 
 ;; ------------------------------------------------------------------------------------------------ OCR (P6.5, D211)
 
@@ -130,16 +153,15 @@
     (an-ocr-end ans at)
     (return at)))
 
-(deftest test-with-the-policy-on-the-second-round-asks-for-ocr-of-the-decoded-frame
+(deftest test-with-the-policy-the-frames-second-round-asks-for-ocr-of-its-bitmap
   (let [^Cells ans (new-cells)
         ^Cells rq (new-cells)]
-    (an-decode ans 1 463 894 1 0 1 1)
-    (assert-eq (unit-pol ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0 2 (new-cells) (new-cells)
-                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
+    (an-decode ans 260 463 894 1 0 1 1)
+    (assert-eq (page-pol 0 ans rq 2 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
     (assert-eq (rec-kind rq 0) (pk-ocr) "an OCR request")
-    (assert-eq (rec-id rq 0) (rs-ocr-id 1 0) "after every decode's id")
-    (assert-eq (rec-id rq 0) 2 "one frame: id 2")
-    (assert-eq (rq-arg rq 0 0) 1 "of the bitmap of decode 1")
+    (assert-eq (rec-id rq 0) (pu-id 0 (pi-ocr)) "page 0's OCR id")
+    (assert-eq (rec-id rq 0) 272 "256 + 16")
+    (assert-eq (rq-arg rq 0 0) 260 "of the bitmap of the decode")
     (assert-eq (rq-arg rq 0 1) 3 "psm 3")
     (assert-eq (rq-arg rq 0 2) (+ 3 (* 300 256)) "symbols, OSD, and the 300 dpi it assumed as a hint")
     (assert-eq (ocf-dpi (rq-arg rq 0 2)) 300 "read back")
@@ -155,28 +177,21 @@
     (cells-push loc 45)
     (cells-push loc 67)
     (cells-push loc 72)
-    (an-decode ans 1 463 894 1 20000 1 1)
-    (assert-eq (unit-pol ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0 2 loc (new-cells)
-                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
+    (an-decode ans 260 463 894 1 20000 1 1)
+    (assert-eq (page-pol 0 ans rq 2 loc (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
     (assert-eq (rq-arg rq 0 2) (+ 3 (* 200 256)) "the stated 200 dpi")
     (assert-eq (rq-nargs rq 0) 8 "one language")
     (assert-eq (rq-arg rq 0 7) 1684370688 "`de-CH` is `deu`")))
 
-(deftest test-never-and-the-header-only-form-ask-for-no-ocr
+(deftest test-never-asks-for-no-ocr
   (let [^Cells ans (new-cells)
         ^Cells rq (new-cells)
         ^Cells mask (new-cells)]
-    (an-decode ans 1 463 894 1 20000 1 1)
-    (assert-eq (unit-pol ans rq (new-cells) (new-cells) (new-cells) (new-cells) 0 0 (new-cells) mask
-                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) 0 "never: done")
+    (cells-push mask 0)
+    (an-decode ans 260 463 894 1 20000 1 1)
+    (assert-eq (page-pol 0 ans rq 0 (new-cells) mask (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) 0 "never: done")
     (assert-eq (cells-len rq) 0 "no request")
-    (assert-eq (cells-at mask 0) 0 "the page was not OCR'd"))
-  (let [^Cells ans2 (new-cells)
-        ^Cells rq2 (new-cells)]
-    (an-decode ans2 1 463 894 1 20000 1 1)
-    (assert-eq (unit-pol ans2 rq2 (new-cells) (new-cells) (new-cells) (new-cells) 1 2 (new-cells) (new-cells)
-                         (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) 0 "intake: done")
-    (assert-eq (cells-len rq2) 0 "intake never asks for OCR")))
+    (assert-eq (cells-at mask 0) 0 "the page was not OCR'd")))
 
 (deftest test-an-ocr-answer-becomes-evidence-and-the-pipelines-lines
   (let [^Cells ans (new-cells)
@@ -187,12 +202,11 @@
         ^Cells ln (new-cells)
         ^Cells oruns (new-cells)
         ^Cells olines (new-cells)
-        ^Cells owords (new-cells)
-        ^Cells pages (new-cells)]
-    (an-decode ans 1 600 800 1 30000 1 1)
-    (fake-ocr ans 2)
-    (assert-eq (unit-pol ans rq (new-cells) (new-cells) (new-cells) pages 0 2 (new-cells) mask
-                         et wd ln oruns olines owords) 0 "done")
+        ^Cells owords (new-cells)]
+    (cells-push mask 0)
+    (an-decode ans 260 600 800 1 30000 1 1)
+    (fake-ocr ans 272)
+    (assert-eq (page-pol 0 ans rq 2 (new-cells) mask et wd ln oruns olines owords) 0 "done")
     (assert-eq (cells-at mask 0) 1 "the page's text came from OCR")
     (assert-eq (or-count oruns) 1 "one OCR run")
     (assert-eq (ol-count olines) 1 "one OCR line")

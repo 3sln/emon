@@ -55,6 +55,30 @@ public final class Plan {
     public static int layWatermarkOnly() {
         return 4;
     }
+    public static int viewBase() {
+        return 16777216;
+    }
+    public static int puId(int page, int k) {
+        return ((page + 1) * 256) + k;
+    }
+    public static int puViewId(int page, int k) {
+        return viewBase() + ((page * 256) + k);
+    }
+    public static int piRenderText() {
+        return 1;
+    }
+    public static int piRenderNoText() {
+        return 2;
+    }
+    public static int piRenderTextOnly() {
+        return 3;
+    }
+    public static int piDecode() {
+        return 4;
+    }
+    public static int piOcr() {
+        return 16;
+    }
     public static int fltNone() {
         return 0;
     }

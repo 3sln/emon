@@ -365,12 +365,15 @@ fn an_image_records_its_pixels_and_replays_without_a_codec() {
     let e = Engine::new(Config::default());
     let o = Options::default();
     let (m, t) = e.record(Input::bytes(image("tiff-multi3-gray-none.tif")), &o).unwrap();
-    // three decode requests, round two asking for frames 1 and 2 together (and for OCR of frame 0), each decode answer
-    // carrying its bitmap; then OCR of frames 1 and 2 (P6.5, D211): no Ocr port is configured, so each is answered `unsupported`
-    assert_eq!(t.entries.len(), 6);
-    assert_eq!(t.entries.iter().map(|x| x.round).collect::<Vec<_>>(), vec![0, 1, 1, 1, 2, 2]);
-    assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 2, 2, 3, 3, 3]);
-    assert!(t.entries.iter().filter(|x| x.req[1] == 2).all(|x| x.bitmap.is_some()));
+    // the document pass asks each frame's HEADER (frame 0 first, then frames 1 and 2 together: rounds 0 and 1, no pixels),
+    // then each frame is its own page unit (P7.U, D207): its decode (round 0, the bitmap kept) and its OCR (round 1: no Ocr
+    // port is configured, so it is answered `unsupported`, P6.5, D211)
+    assert_eq!(t.entries.len(), 9);
+    assert_eq!(t.entries.iter().map(|x| x.round).collect::<Vec<_>>(), vec![0, 1, 1, 0, 1, 0, 1, 0, 1]);
+    assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 2, 2, 2, 3, 2, 3, 2, 3]);
+    assert_eq!(t.entries.iter().map(|x| x.req[2]).collect::<Vec<_>>(), vec![1, 2, 3, 260, 272, 516, 528, 772, 784]);
+    assert!(t.entries.iter().filter(|x| x.req[1] == 2 && x.req[7] >= 0).all(|x| x.bitmap.is_some()));
+    assert!(t.entries.iter().filter(|x| x.req[1] == 2 && x.req[7] < 0).all(|x| x.bitmap.is_none()));
     assert!(t.entries.iter().filter(|x| x.req[1] == 3).all(|x| x.bitmap.is_none() && x.ans[3] == 2));
     // the transcript's files survive a round trip (the pixels as canonical PNG), and replaying them gives the same Model
     let files: std::collections::BTreeMap<String, Vec<u8>> = t.to_files().into_iter().collect();
@@ -426,8 +429,8 @@ fn an_image_is_read_by_the_ocr_port_and_its_transcript_replays_without_it() {
     assert!(j.contains("\"ocr\": \"always\""), "settings.ocr is written when OCR gave the text: {}", j);
     assert!(j.contains("\"ocr\"") && j.contains("\"ocr-only\""), "{}", j);
     assert_eq!(m.pages()[0].kind, "image");
-    // decode, then ocr; the transcript says whose engine answered
-    assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 3]);
+    // the header, then the page unit's decode and ocr; the transcript says whose engine answered
+    assert_eq!(t.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 2, 3]);
     assert_eq!(t.producer, vec![("engine".to_string(), "fake".to_string())]);
     // a replay needs no port, and gives the same Model; the files of the transcript survive a round trip
     let files: std::collections::BTreeMap<String, Vec<u8>> = t.to_files().into_iter().collect();
@@ -438,7 +441,7 @@ fn an_image_is_read_by_the_ocr_port_and_its_transcript_replays_without_it() {
     assert_eq!(json(&r), j);
     // `never` asks for nothing: no OCR request, no text and no setting
     let (m_never, t_never) = with_ocr().record(Input::bytes(bytes.clone()), &Options { ocr: OcrPolicy::Never, ..Options::default() }).unwrap();
-    assert_eq!(t_never.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2]);
+    assert_eq!(t_never.entries.iter().map(|x| x.req[1]).collect::<Vec<_>>(), vec![2, 2]);
     assert!(!json(&m_never).contains("Hello") && !json(&m_never).contains("\"ocr\""));
     // with no port the request is answered `unsupported` and the page has no text, as before OCR existed
     let m_none = Engine::new(Config::default()).convert(Input::bytes(bytes), &o).unwrap();

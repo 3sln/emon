@@ -1198,3 +1198,72 @@ fn aes_decrypt_block(rk: &[u8], st: &mut [u8; 16]) {
         }
     }
 }
+
+// ================================================================ P7.U BitmapSet
+//
+// THE PIXELS A PAGE UNIT MAY READ (D196). `answered` holds the bitmaps the unit's answers carried (a render's, a decode's),
+// by request id, as the Engine's loop gives them; `made` the ones kin makes (`bms-put`: a host-allocated zeroed bitmap kin
+// fills, ids from `KIN_VIEW_BASE`). The Engine makes a set for each ATTEMPT of a page unit (what kin made is a function of the
+// answers, recomputed) and drops it when the unit ends, so a conversion holds one page's bitmaps. `made()` hands what kin made
+// to a fulfiller (an `ocr` request may name a kin-made view, D196).
+//
+// A bitmap handed out is a borrow of the SET (kin holds it while it calls `bms-get` again): entries are `Arc`s that are
+// never removed or replaced for the set's life, so the pointer stays valid; that is the one `unsafe` here.
+pub struct BitmapSet {
+    answered: std::collections::BTreeMap<i32, std::sync::Arc<Bitmap>>,
+    made: std::cell::RefCell<std::collections::BTreeMap<i32, std::sync::Arc<Bitmap>>>,
+    none: Bitmap,
+}
+
+impl BitmapSet {
+    pub fn new() -> BitmapSet {
+        BitmapSet { answered: std::collections::BTreeMap::new(), made: std::cell::RefCell::new(std::collections::BTreeMap::new()), none: Bitmap::new(0, 0, 1) }
+    }
+    pub fn with_answers(answers: &std::collections::BTreeMap<i32, std::sync::Arc<Bitmap>>) -> BitmapSet {
+        let mut s = BitmapSet::new();
+        s.answered = answers.clone();
+        s
+    }
+    // What kin made, by id.
+    pub fn made(&self) -> std::collections::BTreeMap<i32, std::sync::Arc<Bitmap>> {
+        self.made.borrow().clone()
+    }
+}
+
+impl Default for BitmapSet {
+    fn default() -> BitmapSet {
+        BitmapSet::new()
+    }
+}
+
+// @kin:link:form:bms-get: {:template "crate::port::bms_get({0}, {1})" :arity 2}
+//
+// A borrow of the bitmap with this id: an answer's, or one kin made; 0 x 0 when there is none.
+pub fn bms_get(s: &BitmapSet, id: i32) -> &Bitmap {
+    if let Some(b) = s.made.borrow().get(&id) {
+        let p: *const Bitmap = std::sync::Arc::as_ptr(b);
+        return unsafe { &*p };
+    }
+    match s.answered.get(&id) {
+        Some(b) => b,
+        None => &s.none,
+    }
+}
+
+// @kin:link:form:bms-has: {:template "crate::port::bms_has({0}, {1})" :arity 2}
+pub fn bms_has(s: &BitmapSet, id: i32) -> i32 {
+    (s.answered.contains_key(&id) || s.made.borrow().contains_key(&id)) as i32
+}
+
+// @kin:link:form:bms-put: {:template "crate::port::bms_put({0}, {1}, {2}, {3}, {4})" :arity 5}
+//
+// A new zeroed bitmap of w x h x channels under `id`, for kin to fill. An id already in the set is a bug in kin: it panics.
+pub fn bms_put(s: &BitmapSet, id: i32, w: i32, h: i32, ch: i32) -> &Bitmap {
+    if bms_has(s, id) == 1 {
+        panic!("bms_put: id {} is already in the set", id);
+    }
+    let b = std::sync::Arc::new(Bitmap::new(w, h, ch));
+    let p: *const Bitmap = std::sync::Arc::as_ptr(&b);
+    s.made.borrow_mut().insert(id, b);
+    unsafe { &*p }
+}

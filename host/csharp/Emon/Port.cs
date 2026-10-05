@@ -701,4 +701,44 @@ public static class Port {
         }
         return PushBytes(o, ct, ct.Length);
     }
+
+    // ================================================================ P7.U BitmapSet
+    //
+    // The pixels a page unit may read (see the Rust half for the contract): the bitmaps its answers carried by request id
+    // and the ones kin makes (`bms-put`, ids from KIN_VIEW_BASE).
+    public sealed class BitmapSet {
+        public readonly System.Collections.Generic.Dictionary<int, Bitmap> Answered = new System.Collections.Generic.Dictionary<int, Bitmap>();
+        public readonly System.Collections.Generic.Dictionary<int, Bitmap> Made = new System.Collections.Generic.Dictionary<int, Bitmap>();
+        internal readonly Bitmap None = new Bitmap(0, 0, 1, new byte[0]);
+    }
+
+    public static BitmapSet NewBitmapSet() {
+        return new BitmapSet();
+    }
+
+    // @kin:link:form:bms-get: {:template "emon.Port.BmsGet({0}, {1})" :arity 2}
+    public static Bitmap BmsGet(BitmapSet s, int id) {
+        if (s.Made.TryGetValue(id, out var b)) {
+            return b;
+        }
+        if (s.Answered.TryGetValue(id, out b)) {
+            return b;
+        }
+        return s.None;
+    }
+
+    // @kin:link:form:bms-has: {:template "emon.Port.BmsHas({0}, {1})" :arity 2}
+    public static int BmsHas(BitmapSet s, int id) {
+        return s.Made.ContainsKey(id) || s.Answered.ContainsKey(id) ? 1 : 0;
+    }
+
+    // @kin:link:form:bms-put: {:template "emon.Port.BmsPut({0}, {1}, {2}, {3}, {4})" :arity 5}
+    public static Bitmap BmsPut(BitmapSet s, int id, int w, int h, int ch) {
+        if (BmsHas(s, id) == 1) {
+            throw new System.InvalidOperationException("bms_put: id is already in the set");
+        }
+        var b = BitmapNew(w, h, ch);
+        s.Made[id] = b;
+        return b;
+    }
 }

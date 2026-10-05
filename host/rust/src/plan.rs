@@ -26,7 +26,7 @@
 // the order, which is what makes a transcript the same however the answers
 // arrived.
 
-use crate::port::{cells_at, cells_len, cells_push, Bitmap, Cells};
+use crate::port::{cells_at, cells_len, cells_push, Bitmap, BitmapSet, Cells};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
@@ -47,7 +47,7 @@ pub const UNIT_REQUESTS: i32 = 1;
 pub const UNIT_NEED_BYTES: i32 = 7;
 
 // SPEC 13.1's defaults. Both are NAMED limits: a breach is `PlanError::Limit`.
-pub const MAX_ROUNDS: i32 = 3;
+pub const MAX_ROUNDS: i32 = 5;
 pub const FETCH_ROUNDS: i32 = 24;
 
 pub struct Config {
@@ -313,6 +313,20 @@ pub fn run(
     ports: &mut dyn Fulfiller,
     bytes: &mut dyn Fulfiller,
     misses: &mut dyn Misses,
+    rec: Option<&mut Transcript>,
+) -> Result<Stats, PlanError> {
+    run_bms(cfg, &mut |a, r, _| unit(a, r), ports, bytes, misses, rec)
+}
+
+// `run` for a PAGE UNIT (P7.U, D196): the unit is also handed the `BitmapSet` of this attempt, made from the bitmaps its answers
+// carried so far; what kin made in it (`bms-put`) is added to the bitmaps a fulfiller sees, so an `ocr` request may name a
+// kin-made view. The bitmaps are this run's alone: they are dropped when the unit ends, so a conversion holds one page's.
+pub fn run_bms(
+    cfg: &Config,
+    unit: &mut dyn FnMut(&mut Cells, &mut Cells, &BitmapSet) -> i32,
+    ports: &mut dyn Fulfiller,
+    bytes: &mut dyn Fulfiller,
+    misses: &mut dyn Misses,
     mut rec: Option<&mut Transcript>,
 ) -> Result<Stats, PlanError> {
     let mut answers = Cells::new();
@@ -324,7 +338,10 @@ pub fn run(
     loop {
         let mut rq = Cells::new();
         st.attempts += 1;
-        let status = unit(&mut answers, &mut rq);
+        let bms = BitmapSet::with_answers(&bitmaps);
+        let status = unit(&mut answers, &mut rq, &bms);
+        let made = bms.made();
+        drop(bms);
         match status {
             UNIT_NEED_BYTES => {
                 // The attempt missed: discard it whole (its requests too), fetch,
@@ -370,7 +387,13 @@ pub fn run(
         }
         st.requests += reqs.len() as i32;
         let round = st.rounds - 1;
-        let got = fulfil(ports, &reqs, &bitmaps)?;
+        let got = if made.is_empty() {
+            fulfil(ports, &reqs, &bitmaps)?
+        } else {
+            let mut all = bitmaps.clone();
+            all.extend(made);
+            fulfil(ports, &reqs, &all)?
+        };
         for (r, a) in reqs.iter().zip(got.iter()) {
             for &v in &a.rec {
                 cells_push(&mut answers, v);

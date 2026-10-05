@@ -1,0 +1,150 @@
+;; PAGE UNITS (P7.U; SPEC 2.2, 7.3, 12.1; D195, D196, D199, D207). emon's own module (D039).
+;;
+;; A conversion is a DOCUMENT PASS (everything that reads the input: the text layer, the catalogue, the tagged tree, and
+;; `pu-plan` below, which decides for every page what its unit will ask), then ONE PAGE UNIT PER PAGE, each its own
+;; plan/fulfil loop with its own answers, requests and `BitmapSet` (so the host holds one page's bitmaps, not the
+;; document's), then the DOCUMENT UNIT (stage 3). A page unit reads the document pass's arenas and NEVER the input: a scanned
+;; page's `decode` names the input by index and byte span, and the host reads it.
+;;
+;; A page unit is re-run from scratch on every round, like every unit (SPEC 7.3), so it WRITES NOTHING until the round in
+;; which every answer it asked for is in: a call that asks leaves the arenas as it found them.
+;;
+;; THE PAGE'S LAYER. Until fusion (P7.3) a page's words and lines are the document's `words`/`lines` rows of that page, in
+;; the text layer's own layouts; a scanned page's OCR lines are appended to them by `sc-page` (D213). Stage 3 is handed the
+;; same arenas as before, so a run whose engines answer `unsupported` gives every gate the Model it always gave (D195 (3)).
+;;
+;; IDS are `emon.plan`'s `pu-id` (D207).
+(ns emon.pageunit
+  (:require [emon.lang :refer [I32 I64 Cells Src BitmapSet i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-has]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.plan :refer [rq-decode rq-render an-find an-ok an-arg flt-dct us-requests us-done
+                               pu-id pi-render-text pi-render-no-text pi-decode pi-ocr lay-full lay-no-text]]
+            [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj]]
+            [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
+            [emon.scan :refer [sc-eligible sc-dct-span sc-request sc-page sc-lang]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; The plan: PU-W cells a page. kind 0: no request of the page's own (born digital, or no image to read); 1: a scanned
+;; page, one DCT image covering it (D212); 2: born digital (any word, hidden or not).
+(defn ^:pub ^I32 pu-w [] (return 10))
+(defn ^:pub ^I32 pu-kind [^Cells pl ^I32 i] (return (cells-at pl (* i (pu-w)))))
+(defn ^:pub ^I32 pu-field [^Cells pl ^I32 i ^I32 k] (return (cells-at pl (+ (* i (pu-w)) k))))
+;; fields: 1 object, 2 span start, 3 span length, 4-7 the image's box, 8-9 the page's size (centipoints)
+(defn ^:pub ^I32 pk-none [] (return 0))
+(defn ^:pub ^I32 pk-scan [] (return 1))
+(defn ^:pub ^I32 pk-born [] (return 2))
+
+(defn ^:pub ^I32 pu-plan [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                          ^Cells pg ^Cells im ^Cells words ^I32 policy ^:mut ^Cells sp ^:mut ^Cells pl]
+  (comment "THE DOCUMENT PASS'S PLAN, one row of `pu-w` cells a page. A page with no `words` row at all and one image that")
+  (comment "`sc-eligible` and `sc-dct-span` accept is a `pk-scan` page (its bytes are located here, the one place a page's work")
+  (comment "reads the input); every other page is `pk-none` and is left as the text layer made it (D212). `policy` 0 plans")
+  (comment "nothing. Loads objects, so `a`, `b`, `st` are overwritten and the source may miss (then the plan is not to be used).")
+  (let [^I32 np (pd-pg-count pg)
+        ^I32 nw (wd-count words)
+        ^I32 nim (im-count im)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 jj 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 best -1
+        ^:mut ^I64 bestarea (i64 0)
+        ^:mut ^I64 area (i64 0)
+        ^:mut ^I32 px0 0
+        ^:mut ^I32 py0 0
+        ^:mut ^I32 px1 0
+        ^:mut ^I32 py1 0
+        ^:mut ^I32 k 0]
+    (cells-drop pl 0)
+    (while (< i np)
+      (do (set k 0)
+          (while (< k (pu-w))
+            (do (cells-push pl 0)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (if (== policy 0) (return 0))
+    (comment "a page with any word, hidden or not, is born digital")
+    (while (< w nw)
+      (do (set p (wd-get words w (hd-page)))
+          (if (and (>= p 1) (<= p np))
+            (cells-set pl (* (- p 1) (pu-w)) 2))
+          (set w (+ w 1))))
+    (set i 0)
+    (while (< i np)
+      (do (while (and (< j nim) (< (im-get im j (mf-page)) (+ i 1)))
+            (set j (+ j 1)))
+          (if (and (== (pu-kind pl i) 0) (== (pd-pg-rotate pg i) 0))
+            (do (set px0 (pd-pg-crop pg i 0))
+                (set py0 (pd-pg-crop pg i 1))
+                (set px1 (pd-pg-crop pg i 2))
+                (set py1 (pd-pg-crop pg i 3))
+                (set best -1)
+                (set bestarea (i64 0))
+                (set jj j)
+                (while (and (< jj nim) (== (im-get im jj (mf-page)) (+ i 1)))
+                  (do (if (== (sc-eligible im jj (- px1 px0) (- py1 py0)) 1)
+                        (do (set area (mul64 (i64 (- (im-get im jj (mf-x1)) (im-get im jj (mf-x0))))
+                                             (i64 (- (im-get im jj (mf-y1)) (im-get im jj (mf-y0))))))
+                            (if (> area bestarea)
+                              (do (set best jj)
+                                  (set bestarea area)))))
+                      (set jj (+ jj 1))))
+                (if (>= best 0)
+                  (do (if (== (sc-dct-span src ar dc a b st (im-get im best (mf-obj)) sp) 1)
+                        (do (set k (* i (pu-w)))
+                            (cells-set pl k 1)
+                            (cells-set pl (+ k 1) (im-get im best (mf-obj)))
+                            (cells-set pl (+ k 2) (cells-at sp 0))
+                            (cells-set pl (+ k 3) (cells-at sp 1))
+                            (cells-set pl (+ k 4) (im-get im best (mf-x0)))
+                            (cells-set pl (+ k 5) (im-get im best (mf-y0)))
+                            (cells-set pl (+ k 6) (im-get im best (mf-x1)))
+                            (cells-set pl (+ k 7) (im-get im best (mf-y1)))
+                            (cells-set pl (+ k 8) (- px1 px0))
+                            (cells-set pl (+ k 9) (- py1 py0))))))
+                (if (ps-missed src) (return 0))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pu-run-pdf [^I32 i ^I32 input ^I32 policy ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc
+                             ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
+                             ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
+                             ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                             ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                             ^:mut ^Cells words ^:mut ^Cells lines]
+  (comment "The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR")
+  (comment "of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`")
+  (comment "and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`")
+  (comment "when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).")
+  (if (== policy 0) (return (us-done)))
+  (if (!= (pu-kind pl i) (pk-scan)) (return (us-done)))
+  (let [^I32 did (pu-id i (pi-decode))
+        ^I32 oid (pu-id i (pi-ocr))
+        ^I32 ad (an-find ans did)
+        ^:mut ^I32 ao -1
+        ^:mut ^I32 pxw 0
+        ^:mut ^I32 pxh 0
+        ^:mut ^I32 wp 0
+        ^:mut ^I32 dpi100 0]
+    (if (< ad 0)
+      (do (rq-decode rq did input (pu-field pl i 2) (pu-field pl i 3) (flt-dct) 0)
+          (return (us-requests))))
+    (if (!= (an-ok ans ad) 1) (return (us-done)))
+    (set pxw (an-arg ans ad 0))
+    (set pxh (an-arg ans ad 1))
+    (set wp (- (pu-field pl i 6) (pu-field pl i 4)))
+    (set dpi100 (i32 (quot (add64 (mul64 (i64 pxw) (i64 720000)) (i64 (quot wp 2))) (i64 wp))))
+    (set ao (an-find ans oid))
+    (if (< ao 0)
+      (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
+          (return (us-requests))))
+    (if (== (an-ok ans ao) 1)
+      (do (sc-page ans ao (+ i 1) oid did (pu-field pl i 8) (pu-field pl i 9) pxw pxh dpi100
+                   (pu-field pl i 4) (pu-field pl i 5) (pu-field pl i 1)
+                   (pu-field pl i 4) (pu-field pl i 5) (pu-field pl i 6) (pu-field pl i 7) (sc-lang loc)
+                   epages views etext feats images oruns oblocks olines owords osyms oalts words lines scr)
+          (cells-set mask i 2)))
+    (return (us-done))))

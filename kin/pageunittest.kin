@@ -1,0 +1,98 @@
+;; Laws for `emon.pageunit` (P7.U, D195, D196, D207) and the `BitmapSet` port: a page unit with no answers asks the same
+;; requests every time, under its own ids; a page it has nothing to say about asks nothing; and the set holds an answer's
+;; bitmap and the ones kin makes, apart.
+(ns emon.pageunittest
+  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
+            [emon.port :refer [cells-len cells-at cells-push bms-get bms-has bms-put bitmap-w bitmap-h bitmap-channels
+                               bitmap-u8 bitmap-set-u8]]
+            [emon.plan :refer [rec-id rec-kind rq-arg pk-decode us-requests us-done pu-id pu-view-id view-base
+                               pi-render-text pi-decode pi-ocr flt-dct]]
+            [emon.pageunit :refer [pu-w pu-kind pk-scan pk-born pk-none pu-run-pdf]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^I32 plan-of [^Cells pl ^I32 pages ^I32 kind]
+  (comment "`pages` rows; every page of `kind`, with a stream at bytes 100 + 50 of the input, a box and a page size.")
+  (let [^:mut ^I32 i 0]
+    (while (< i pages)
+      (do (cells-push pl kind)
+          (cells-push pl 9)
+          (cells-push pl 100)
+          (cells-push pl 50)
+          (cells-push pl 0)
+          (cells-push pl 0)
+          (cells-push pl 61200)
+          (cells-push pl 79200)
+          (cells-push pl 61200)
+          (cells-push pl 79200)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 run-page [^I32 i ^I32 policy ^Cells pl ^Cells ans ^Cells rq]
+  (return (pu-run-pdf i 3 policy pl ans rq (new-cells) (new-bitmap-set) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+
+(deftest test-ids-are-per-page-unit
+  (assert-eq (pu-id 0 (pi-decode)) 260 "page 0 decode")
+  (assert-eq (pu-id 0 (pi-render-text)) 257 "page 0 render with text")
+  (assert-eq (pu-id 41 (pi-decode)) 10756 "page 41 decode: 42 * 256 + 4")
+  (assert-eq (pu-view-id 0 1) (+ (view-base) 1) "a kin-made view of page 0")
+  (assert-eq (pu-view-id 2 5) (+ (view-base) 517) "and of page 2")
+  (assert-that (> (view-base) (pu-id 60000 255)) "no request id reaches the views' range"))
+
+(deftest test-a-scanned-pages-unit-asks-for-its-stream-under-its-own-id
+  (let [^Cells pl (new-cells)
+        ^Cells rq (new-cells)]
+    (plan-of pl 3 (pk-scan))
+    (assert-eq (run-page 1 2 pl (new-cells) rq) (us-requests) "it asks")
+    (assert-eq (rec-kind rq 0) (pk-decode) "a decode")
+    (assert-eq (rec-id rq 0) 516 "page 1: 2 * 256 + 4")
+    (assert-eq (rq-arg rq 0 0) 3 "of input 3")
+    (assert-eq (rq-arg rq 0 1) 100 "the stream's start")
+    (assert-eq (rq-arg rq 0 2) 50 "and length")
+    (assert-eq (rq-arg rq 0 3) (flt-dct) "a DCT stream")))
+
+(deftest test-a-unit-with-no-answers-asks-the-same-every-time
+  (let [^Cells pl (new-cells)
+        ^Cells rq1 (new-cells)
+        ^Cells rq2 (new-cells)]
+    (plan-of pl 2 (pk-scan))
+    (run-page 0 2 pl (new-cells) rq1)
+    (run-page 0 2 pl (new-cells) rq2)
+    (assert-eq (cells-len rq1) (cells-len rq2) "the same length")
+    (assert-eq (cells-at rq1 2) (cells-at rq2 2) "the same id")
+    (assert-eq (cells-at rq1 4) (cells-at rq2 4) "the same arguments")))
+
+(deftest test-a-born-digital-page-and-the-never-policy-ask-nothing
+  (let [^Cells pl (new-cells)
+        ^Cells rq (new-cells)]
+    (plan-of pl 1 (pk-born))
+    (assert-eq (run-page 0 2 pl (new-cells) rq) (us-done) "born digital: done")
+    (assert-eq (cells-len rq) 0 "no request"))
+  (let [^Cells plan2 (new-cells)
+        ^Cells rq2 (new-cells)]
+    (plan-of plan2 1 (pk-scan))
+    (assert-eq (run-page 0 0 plan2 (new-cells) rq2) (us-done) "never: done")
+    (assert-eq (cells-len rq2) 0 "no request"))
+  (let [^Cells plan3 (new-cells)
+        ^Cells rq3 (new-cells)]
+    (plan-of plan3 1 (pk-none))
+    (assert-eq (run-page 0 2 plan3 (new-cells) rq3) (us-done) "no image: done")
+    (assert-eq (cells-len rq3) 0 "no request")))
+
+(deftest test-the-bitmap-set-keeps-what-kin-makes
+  (let [^BitmapSet s (new-bitmap-set)]
+    (assert-eq (bms-has s 5) 0 "empty")
+    (assert-eq (bitmap-w (bms-get s 5)) 0 "an absent bitmap is 0 x 0")
+    (assert-eq (bitmap-h (bms-get s 5)) 0 "in both directions")
+    (let [^Bitmap b (bms-put s (view-base) 4 3 1)]
+      (assert-eq (bms-has s (view-base)) 1 "put")
+      (assert-eq (bitmap-w b) 4 "its width")
+      (assert-eq (bitmap-h b) 3 "its height")
+      (assert-eq (bitmap-channels b) 1 "its channels")
+      (assert-eq (bitmap-u8 b 1 1 0) 0 "zeroed")
+      (bitmap-set-u8 b 1 1 0 200)
+      (assert-eq (bitmap-u8 (bms-get s (view-base)) 1 1 0) 200 "the set holds the very bitmap kin filled"))
+    (assert-eq (bms-has s (+ (view-base) 1)) 0 "another id is absent")))

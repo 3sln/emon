@@ -1030,7 +1030,7 @@
 
 ;; ============================================================== a PDF's scanned pages
 
-(defn ^I32 sc-dct-span [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+(defn ^:pub ^I32 sc-dct-span [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                         ^I32 obj ^:mut ^Cells sp]
   (comment "Is object `obj` a stream whose whole filter chain is one DCT stage, in a file that is not encrypted? Then 1 and `sp`")
   (comment "holds [start, length] of its bytes in the file: a JPEG stream is a JPEG file, and the host's `ImageDecode` reads it in")
@@ -1064,7 +1064,7 @@
     (cells-push sp (pl-stream-len ar h))
     (return 1)))
 
-(defn ^I32 sc-eligible [^Cells im ^I32 j ^I32 pw ^I32 ph]
+(defn ^:pub ^I32 sc-eligible [^Cells im ^I32 j ^I32 pw ^I32 ph]
   (comment "Can image placement `j` be OCR'd as the page? Upright and not skewed, a real XObject (not inline, not a stencil")
   (comment "mask), at least 16 pixels each way, and covering at least half the page (`pw` x `ph` centipoints) by area.")
   (if (<= (im-get im j (mf-obj)) 0) (return 0))
@@ -1079,110 +1079,3 @@
     (if (< (mul64 area (i64 2)) whole) (return 0))
     (if (<= whole (i64 0)) (return 0))
     (return 1)))
-
-(defn ^:pub ^I32 sc-pdf-unit [^Src src ^I32 input ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
-                              ^Cells pg ^Cells im ^Cells ans ^:mut ^Cells rq ^I32 policy ^Cells loc
-                              ^:mut ^Cells mask ^:mut ^Cells sp
-                              ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
-                              ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
-                              ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
-                              ^:mut ^Cells words ^:mut ^Cells lines]
-  (comment "The scanned pages of a PDF, after the text layer is read. A page with no `words` row at all and one image that")
-  (comment "`sc-eligible` and `sc-dct-span` accept is OCR'd: decode request `2 * i + 1` for the stream's bytes (filter DCT),")
-  (comment "then OCR request `2 * i + 2` of its bitmap, for page index `i`; two rounds whatever the page count. Where the answers")
-  (comment "are in, the page's evidence and lines are appended to `words` and `lines` and `mask[i]` is 2. Every other page is left")
-  (comment "exactly as the text layer made it (D212). `policy` 0 asks for nothing. Answers `us-requests` when it asked for something,")
-  (comment "else `us-done`. `sp` is two cells of scratch.")
-  (let [^I32 np (pd-pg-count pg)
-        ^I32 nw (wd-count words)
-        ^I32 nim (im-count im)
-        ^:mut ^I32 i 0
-        ^:mut ^I32 j 0
-        ^:mut ^I32 jj 0
-        ^:mut ^I32 best -1
-        ^:mut ^I64 bestarea (i64 0)
-        ^:mut ^I32 w 0
-        ^:mut ^I32 p 0
-        ^:mut ^I32 asked 0
-        ^:mut ^I32 px0 0
-        ^:mut ^I32 py0 0
-        ^:mut ^I32 px1 0
-        ^:mut ^I32 py1 0
-        ^:mut ^I32 did 0
-        ^:mut ^I32 oid 0
-        ^:mut ^I32 ad -1
-        ^:mut ^I32 ao -1
-        ^:mut ^I32 ix0 0
-        ^:mut ^I32 iy0 0
-        ^:mut ^I32 ix1 0
-        ^:mut ^I32 iy1 0
-        ^:mut ^I32 wp 0
-        ^:mut ^I32 dpi100 0
-        ^:mut ^I64 area (i64 0)
-        ^:mut ^I32 pxw 0
-        ^:mut ^I32 pxh 0]
-    (cells-drop mask 0)
-    (while (< i np)
-      (do (cells-push mask 0)
-          (set i (+ i 1))))
-    (if (== policy 0) (return (us-done)))
-    (comment "a page with any word, hidden or not, is born digital: -1")
-    (while (< w nw)
-      (do (set p (wd-get words w (hd-page)))
-          (if (and (>= p 1) (<= p np))
-            (cells-set mask (- p 1) -1))
-          (set w (+ w 1))))
-    (set i 0)
-    (while (< i np)
-      (do (while (and (< j nim) (< (im-get im j (mf-page)) (+ i 1)))
-            (set j (+ j 1)))
-          (if (and (== (cells-at mask i) 0) (== (pd-pg-rotate pg i) 0))
-            (do (set px0 (pd-pg-crop pg i 0))
-                (set py0 (pd-pg-crop pg i 1))
-                (set px1 (pd-pg-crop pg i 2))
-                (set py1 (pd-pg-crop pg i 3))
-                (set best -1)
-                (set bestarea (i64 0))
-                (set jj j)
-                (while (and (< jj nim) (== (im-get im jj (mf-page)) (+ i 1)))
-                  (do (if (== (sc-eligible im jj (- px1 px0) (- py1 py0)) 1)
-                        (do (set area (mul64 (i64 (- (im-get im jj (mf-x1)) (im-get im jj (mf-x0))))
-                                             (i64 (- (im-get im jj (mf-y1)) (im-get im jj (mf-y0))))))
-                            (if (> area bestarea)
-                              (do (set best jj)
-                                  (set bestarea area)))))
-                      (set jj (+ jj 1))))
-                (if (>= best 0)
-                  (if (== (sc-dct-span src ar dc a b st (im-get im best (mf-obj)) sp) 1)
-                    (do (set did (+ (* 2 i) 1))
-                        (set oid (+ (* 2 i) 2))
-                        (set ix0 (im-get im best (mf-x0)))
-                        (set iy0 (im-get im best (mf-y0)))
-                        (set ix1 (im-get im best (mf-x1)))
-                        (set iy1 (im-get im best (mf-y1)))
-                        (set ad (an-find ans did))
-                        (if (< ad 0)
-                          (do (rq-decode rq did input (cells-at sp 0) (cells-at sp 1) (flt-dct) 0)
-                              (set asked 1))
-                          (if (== (an-ok ans ad) 1)
-                            (do (set pxw (an-arg ans ad 0))
-                                (set pxh (an-arg ans ad 1))
-                                (set wp (- ix1 ix0))
-                                (set dpi100 (i32 (quot (add64 (mul64 (i64 pxw) (i64 720000)) (i64 (quot wp 2))) (i64 wp))))
-                                (set ao (an-find ans oid))
-                                (if (< ao 0)
-                                  (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
-                                      (set asked 1))
-                                  (if (== (an-ok ans ao) 1)
-                                    (do (sc-page ans ao (+ i 1) oid did (- px1 px0) (- py1 py0) pxw pxh dpi100
-                                                 ix0 iy0 (im-get im best (mf-obj)) ix0 iy0 ix1 iy1 (sc-lang loc)
-                                                 epages views etext feats images oruns oblocks olines owords osyms oalts words lines sp)
-                                        (cells-set mask i 2)))))))))
-                (if (ps-missed src) (return (us-done))))))
-          (set i (+ i 1))))
-    (set i 0)
-    (while (< i np)
-      (do (if (< (cells-at mask i) 0) (cells-set mask i 0))
-          (set i (+ i 1))))
-    (if (== asked 1) (return (us-requests)))
-    (return (us-done))))

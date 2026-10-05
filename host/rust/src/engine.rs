@@ -46,6 +46,7 @@ use crate::emon::furniture::{fu_find, fu_write};
 use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::table::*;
+use crate::emon::pageunit::{pu_plan, pu_run_pdf};
 use crate::emon::rasterin::*;
 use crate::emon::scan::*;
 use crate::emon::pdfcontent::*;
@@ -55,7 +56,7 @@ use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
 use crate::emon::pdfx::px_index_build;
 use crate::imgdec;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
-use crate::port::{self, cells_at, cells_len, cells_push, Cells, Src, SrcBacking};
+use crate::port::{self, cells_at, cells_len, cells_push, BitmapSet, Cells, Src, SrcBacking};
 use crate::render::{KindMux, RenderFulfiller, RenderInput, Renderer};
 use crate::source::{ByteSource, Input, Inputs};
 use std::collections::BTreeSet;
@@ -659,6 +660,9 @@ enum RStep {
     Miss,
     Requests,
     Done(Outcome),
+    // the document pass is done and the page units are next (P7.U)
+    Pdf(Box<PdfDoc>),
+    Raster(Box<RasterDoc>),
 }
 
 // The evidence arenas the OCR stages fill (SPEC 8.4.6: the arenas `emon.scan` writes and `ev_emit` dumps). A PDF's
@@ -731,16 +735,23 @@ fn evidence_dump(ev: &mut EvArenas, et: &mut Cells, gl: &mut Cells, wd: &mut Cel
 // ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF. An image's pages are made
 // by kin's `rs_unit` (decode, then OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213):
 // the stages below are `attempt`'s, in its order, with the glyph-fed ones given empty arenas.
+// What the raster document pass leaves for its page units and the document unit (P7.U).
+struct RasterDoc {
+    m: Arenas,
+    ev: EvArenas,
+    et: Cells,
+    wd: Cells,
+    ln: Cells,
+    mask: Cells,
+    loc: Cells,
+    info: Intake,
+}
+
 fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, fmt: i32, opts: &Options, intake_only: bool, len: u64) -> RStep {
     let mut m = Arenas::new();
     model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
-    let mut ev = EvArenas::new();
-    let (mut et, mut wd, mut ln, mut mask, mut scr, mut loc) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), locale_cells(opts));
-    let status = rs_unit(
-        view, idx as i32, fmt, intake_only as i32, answers, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages, opts.ocr.code(), &mut loc, &mut mask,
-        &mut ev.epages, &mut ev.views, &mut et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts,
-        &mut wd, &mut ln, &mut scr,
-    );
+    let mut mask = Cells::new();
+    let status = rs_doc(view, idx as i32, fmt, answers, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages, &mut mask);
     if view.missed() {
         return RStep::Miss;
     }
@@ -762,6 +773,22 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     if intake_only {
         return RStep::Done(Outcome::Intake(info));
     }
+    RStep::Raster(Box::new(RasterDoc { m, ev: EvArenas::new(), et: Cells::new(), wd: Cells::new(), ln: Cells::new(), mask, loc: locale_cells(opts), info }))
+}
+
+// One frame's page unit (P7.U): its own requests and answers; it writes nothing until its answers are in.
+fn unit_raster(d: &mut RasterDoc, f: usize, idx: usize, len: u64, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
+    let mut scr = Cells::new();
+    rs_page(
+        f as i32, idx as i32, len as i32, opts.ocr.code(), answers, rq, &mut d.loc, bms, &mut d.mask,
+        &mut d.ev.epages, &mut d.ev.views, &mut d.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
+        &mut d.wd, &mut d.ln, &mut scr,
+    )
+}
+
+// The raster document unit: stage 3 over the frames' OCR lines.
+fn finish_raster(d: RasterDoc, opts: &Options) -> Outcome {
+    let RasterDoc { mut m, mut ev, mut et, mut wd, mut ln, mut mask, mut loc, info } = d;
     let (mut gl, mut mk, mut fnt) = (Cells::new(), Cells::new(), Cells::new());
     let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
     let np = page_count(&mut m.pages);
@@ -807,9 +834,9 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     let mut chk = Cells::new();
     let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
     if c != 0 {
-        return RStep::Done(Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0)))));
+        return Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0))));
     }
-    RStep::Done(Outcome::Built(Built { arenas: m, evidence, intake: info }))
+    Outcome::Built(Built { arenas: m, evidence, intake: info })
 }
 
 // The unit of one input: a PNG, JPEG or TIFF (by kin's sniff) is read by the raster unit, anything else by the
@@ -822,10 +849,11 @@ fn dispatch(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usiz
     if fmt != rs_none() {
         return attempt_raster(view, answers, rq, idx, fmt, opts, intake_only, len);
     }
-    match attempt(view, pw, answers, rq, idx, opts, intake_only, len) {
+    match attempt(view, pw, idx, opts, intake_only, len) {
         Step::Miss => RStep::Miss,
         Step::Requests => RStep::Requests,
         Step::Done(o) => RStep::Done(o),
+        Step::Pdf(d) => RStep::Pdf(d),
     }
 }
 
@@ -835,6 +863,7 @@ fn dispatch(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usiz
 // whichever way the bytes arrived).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RunStats {
+    // the document pass's attempts, fetch rounds and bytes requests; `requests` counts every request of every unit
     pub attempts: i32,
     pub fetch_rounds: i32,
     pub bytes_requests: i32,
@@ -842,6 +871,9 @@ pub struct RunStats {
     pub source_reads: u32,
     pub bytes_fetched: u64,
     pub input_bytes: u64,
+    // per page unit (P7.U): the rounds it took and the requests it made, in page order
+    pub page_rounds: Vec<i32>,
+    pub page_requests: Vec<i32>,
 }
 
 // ------------------------------------------------------------------- intake
@@ -861,6 +893,12 @@ pub struct Intake {
 
 pub struct Engine {
     cfg: Config,
+}
+
+// What the document pass leaves for the page units (P7.U).
+enum DocKind {
+    Pdf(Box<PdfDoc>),
+    Raster(Box<RasterDoc>),
 }
 
 // The result of one input's unit, kept from the attempt that did not miss.
@@ -952,6 +990,8 @@ enum Step {
     Miss,
     Requests,
     Done(Outcome),
+    // the document pass is done; the page units are next (P7.U)
+    Pdf(Box<PdfDoc>),
 }
 
 fn to_vec(c: &Cells) -> Vec<i32> {
@@ -966,12 +1006,38 @@ fn text_of(cells: &mut Cells, start: i32, len: i32) -> String {
     s
 }
 
-// ONE ATTEMPT OF THE UNIT for one input: everything kin does with it, from scratch, on a fresh view and
-// fresh arenas. A miss at any checkpoint ends it at once (`Step::Miss`): what a missed attempt computed
-// is never looked at, and a failure or a panic in one that missed is a miss, never reported (SPEC 13.1).
-// THIS IS THE ONE PLACE the Engine calls the text-layer stages; when their signatures grow (P3.5-P3.7)
-// this is what changes.
-fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, opts: &Options, intake_only: bool, len: u64) -> Step {
+// What the PDF document pass leaves for its page units and the document unit (P7.U, D195): the text layer's arenas, the
+// catalogue's extras, the plan of what each page's unit will ask, and the evidence arenas the units fill.
+struct PdfDoc {
+    ev: EvArenas,
+    et: Cells,
+    gl: Cells,
+    mk: Cells,
+    fnt: Cells,
+    wd: Cells,
+    ln: Cells,
+    pa: Cells,
+    pg: Cells,
+    txt: Cells,
+    md: Cells,
+    lb: Cells,
+    ol: Cells,
+    ss: Cells,
+    plan: Cells,
+    mask: Cells,
+    loc: Cells,
+    // the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence
+    // dump has always shown (kept only when the evidence is asked for)
+    snap: Option<(Cells, Cells, Cells)>,
+    info: Intake,
+}
+
+// ONE ATTEMPT OF THE DOCUMENT PASS for one input: everything kin does that READS THE INPUT, from scratch, on a fresh view
+// and fresh arenas: the text layer, the catalogue and the tagged tree, and the plan of the page units (which pages are
+// scanned, where their image streams are). A miss at any checkpoint ends it at once (`Step::Miss`): what a missed attempt
+// computed is never looked at, and a failure or a panic in one that missed is a miss, never reported (SPEC 13.1). The page
+// units (`unit_pdf`) and the document unit (`finish_pdf`) follow and never read the input.
+fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, len: u64) -> Step {
     let mut ar = Cells::new();
     let mut dc = Cells::new();
     let mut a = Cells::new();
@@ -1029,24 +1095,16 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     }
     let np = pd_pg_count(&mut pg);
     let info = intake(np, &mut dc);
-    // SCANNED PAGES (P6.5, D212): a page with no text layer and one JPEG image that covers it is asked for as OCR
-    // (a `decode` of the stream, then an `ocr` of its bitmap: two rounds whatever the page count); where the answers
-    // are in, its OCR lines are appended to `wd` and `ln` beside the text layer's, and `mask` says which pages.
-    // A page with a text layer is left as the text layer made it (fusion, P7, is what would weigh a second reading).
-    let mut ev = EvArenas::new();
-    let (mut mask, mut sp, mut loc) = (Cells::new(), Cells::new(), locale_cells(opts));
-    let sstatus = sc_pdf_unit(
-        view, idx as i32, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut im, answers, rq, opts.ocr.code(), &mut loc, &mut mask, &mut sp,
-        &mut ev.epages, &mut ev.views, &mut et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts,
-        &mut wd, &mut ln,
-    );
+    // THE PLAN OF THE PAGE UNITS (P6.5, D212, P7.U): a page with no text layer and one JPEG image that covers it is a scanned
+    // page (a `decode` of the stream, then an `ocr` of its bitmap, in its own unit); its stream is located here, the one place
+    // that reads the input. A page with a text layer is left as the text layer made it (fusion, P7.3, is what weighs a second
+    // reading against it).
+    let (mut plan, mut sp) = (Cells::new(), Cells::new());
+    pu_plan(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut im, &mut wd, opts.ocr.code(), &mut sp, &mut plan);
     if view.missed() {
         return Step::Miss;
     }
-    if sstatus == crate::emon::plan::us_requests() {
-        return Step::Requests;
-    }
-    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
+    let snap = if opts.keep_evidence { Some((gl.clone(), mk.clone(), fnt.clone())) } else { None };
     // The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
     // (D076), which the furniture stage weighs the tree's /Artifact marks by.
     let (mut idx, mut txt, mut w, mut seen) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
@@ -1060,6 +1118,38 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     if view.missed() {
         return Step::Miss;
     }
+    let mut mask = Cells::new();
+    for _ in 0..np.max(0) {
+        cells_push(&mut mask, 0);
+    }
+    Step::Pdf(Box::new(PdfDoc { ev: EvArenas::new(), et, gl, mk, fnt, wd, ln, pa, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, info }))
+}
+
+// One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
+// left as the text layer made it. It writes nothing until its answers are in, and never reads the input.
+fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
+    let mut scr = Cells::new();
+    pu_run_pdf(
+        i as i32, idx as i32, opts.ocr.code(), &mut d.plan, answers, rq, &mut d.loc, bms, &mut d.mask, &mut scr,
+        &mut d.ev.epages, &mut d.ev.views, &mut d.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
+        &mut d.wd, &mut d.ln,
+    )
+}
+
+// The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
+// paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
+fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut pa, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, snap, info } = d;
+    let mut mask = mask;
+    let np = pd_pg_count(&mut pg);
+    let evidence = if opts.keep_evidence {
+        Some(match snap {
+            Some((mut g, mut k, mut f)) => evidence_dump(&mut ev, &mut et, &mut g, &mut wd, &mut ln, &mut k, &mut f),
+            None => evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt),
+        })
+    } else {
+        None
+    };
     let trust = tg_trust(&mut ss);
     let mut m = Arenas::new();
     model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
@@ -1111,12 +1201,9 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     let mut chk = Cells::new();
     let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
     if c != 0 {
-        return Step::Done(Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0)))));
+        return Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0))));
     }
-    if view.missed() {
-        return Step::Miss;
-    }
-    Step::Done(Outcome::Built(Built { arenas: m, evidence, intake: info }))
+    Outcome::Built(Built { arenas: m, evidence, intake: info })
 }
 
 impl ChunkCache {
@@ -1220,6 +1307,7 @@ impl Engine {
         let base = Src::new(backing);
         let pw = Src::of_bytes(input.password.clone().unwrap_or_default());
         let mut outcome = Outcome::None;
+        let mut docslot: Option<DocKind> = None;
         let mut unit = |answers: &mut Cells, rq: &mut Cells| -> i32 {
             let view = base.view();
             match catch_unwind(AssertUnwindSafe(|| dispatch(&view, &pw, answers, rq, idx, opts, intake_only, len))) {
@@ -1227,6 +1315,14 @@ impl Engine {
                 Ok(RStep::Requests) => plan::UNIT_REQUESTS,
                 Ok(RStep::Done(o)) => {
                     outcome = o;
+                    plan::UNIT_DONE
+                }
+                Ok(RStep::Pdf(d)) => {
+                    docslot = Some(DocKind::Pdf(d));
+                    plan::UNIT_DONE
+                }
+                Ok(RStep::Raster(d)) => {
+                    docslot = Some(DocKind::Raster(d));
                     plan::UNIT_DONE
                 }
                 Err(p) => {
@@ -1283,13 +1379,12 @@ impl Engine {
                 replayer = Some(Replayer::new(t));
             }
         }
-        let result = {
-            let ports: &mut dyn Fulfiller = match replayer.as_mut() {
-                Some(r) => r,
-                None => &mut live,
-            };
-            plan::run(&pcfg, &mut unit, ports, &mut bytes, &mut *misses, recording)
+        let ports: &mut dyn Fulfiller = match replayer.as_mut() {
+            Some(r) => r,
+            None => &mut live,
         };
+        // THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
+        let result = plan::run(&pcfg, &mut unit, ports, &mut bytes, &mut *misses, recording.as_deref_mut());
         // a source that failed is the answer, whatever the loop made of the miss it caused
         if let Some(c) = &cache {
             if let Some((short, msg)) = c.failure() {
@@ -1297,20 +1392,76 @@ impl Engine {
             }
         }
         let ps = result?;
+        let mut stats = RunStats {
+            attempts: ps.attempts,
+            fetch_rounds: ps.fetch_rounds,
+            bytes_requests: ps.bytes_requests,
+            requests: ps.requests,
+            source_reads: 0,
+            bytes_fetched: 0,
+            input_bytes: len,
+            page_rounds: Vec::new(),
+            page_requests: Vec::new(),
+        };
+        // THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and `BitmapSet`, which
+        // are dropped when the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never
+        // reads the input. Then the document unit, stage 3, on what the units left.
+        if let Some(d) = docslot {
+            let page_cfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
+            let mut no_misses = NoMisses;
+            let mut failed: Option<Error> = None;
+            let np = match &d {
+                DocKind::Pdf(doc) => doc.info.pages,
+                DocKind::Raster(doc) => doc.info.pages,
+            };
+            let mut d = d;
+            for i in 0..np {
+                let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet| -> i32 {
+                    let r = catch_unwind(AssertUnwindSafe(|| match &mut d {
+                        DocKind::Pdf(doc) => unit_pdf(doc, i, idx, opts, answers, rq, bms),
+                        DocKind::Raster(doc) => unit_raster(doc, i, idx, len, opts, answers, rq, bms),
+                    }));
+                    match r {
+                        Ok(0) => plan::UNIT_DONE,
+                        Ok(1) => plan::UNIT_REQUESTS,
+                        Ok(21) => {
+                            failed = Some(Error::Damaged { input: idx, status: "undecodable" });
+                            plan::UNIT_DONE
+                        }
+                        Ok(22) => {
+                            failed = Some(Error::Damaged { input: idx, status: "unsupported-image" });
+                            plan::UNIT_DONE
+                        }
+                        Ok(s) => {
+                            failed = Some(Error::Internal(format!("a page unit answered status {}", s)));
+                            plan::UNIT_DONE
+                        }
+                        Err(p) => {
+                            failed = Some(panic_error(panic_message(p)));
+                            plan::UNIT_DONE
+                        }
+                    }
+                };
+                let pst = plan::run_bms(&page_cfg, &mut unit_p, &mut *ports, &mut bytes, &mut no_misses, recording.as_deref_mut())?;
+                if let Some(e) = failed {
+                    return Err(e);
+                }
+                stats.requests += pst.requests;
+                stats.page_rounds.push(pst.rounds);
+                stats.page_requests.push(pst.requests);
+            }
+            outcome = match d {
+                DocKind::Pdf(doc) => finish_pdf(*doc, opts),
+                DocKind::Raster(doc) => finish_raster(*doc, opts),
+            };
+        }
         if let Some(r) = &replayer {
             if r.unused() != 0 {
                 return Err(Error::Plan(PlanError::TranscriptBad(format!("{} recorded entries were never asked for", r.unused()))));
             }
         }
-        let stats = RunStats {
-            attempts: ps.attempts,
-            fetch_rounds: ps.fetch_rounds,
-            bytes_requests: ps.bytes_requests,
-            requests: ps.requests,
-            source_reads: cache.as_ref().map(|c| c.reads()).unwrap_or(0),
-            bytes_fetched: cache.as_ref().map(|c| c.bytes_read()).unwrap_or(0),
-            input_bytes: len,
-        };
+        stats.source_reads = cache.as_ref().map(|c| c.reads()).unwrap_or(0);
+        stats.bytes_fetched = cache.as_ref().map(|c| c.bytes_read()).unwrap_or(0);
         match outcome {
             Outcome::Failed(e) => Err(e),
             Outcome::None => Err(Error::Internal("the unit finished with nothing".to_string())),

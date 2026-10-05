@@ -52,6 +52,30 @@ pub fn lay_no_watermark() -> i32 {
 pub fn lay_watermark_only() -> i32 {
     return 4;
 }
+pub fn view_base() -> i32 {
+    return 16777216;
+}
+pub fn pu_id(page: i32, k: i32) -> i32 {
+    return ((page + 1) * 256) + k;
+}
+pub fn pu_view_id(page: i32, k: i32) -> i32 {
+    return view_base() + ((page * 256) + k);
+}
+pub fn pi_render_text() -> i32 {
+    return 1;
+}
+pub fn pi_render_no_text() -> i32 {
+    return 2;
+}
+pub fn pi_render_text_only() -> i32 {
+    return 3;
+}
+pub fn pi_decode() -> i32 {
+    return 4;
+}
+pub fn pi_ocr() -> i32 {
+    return 16;
+}
 pub fn flt_none() -> i32 {
     return 0;
 }

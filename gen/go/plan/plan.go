@@ -75,6 +75,38 @@ func LayWatermarkOnly() int32 {
 	return 4
 }
 
+func ViewBase() int32 {
+	return 16777216
+}
+
+func PuId(page int32, k int32) int32 {
+	return ((page + 1) * 256) + k
+}
+
+func PuViewId(page int32, k int32) int32 {
+	return ViewBase() + ((page * 256) + k)
+}
+
+func PiRenderText() int32 {
+	return 1
+}
+
+func PiRenderNoText() int32 {
+	return 2
+}
+
+func PiRenderTextOnly() int32 {
+	return 3
+}
+
+func PiDecode() int32 {
+	return 4
+}
+
+func PiOcr() int32 {
+	return 16
+}
+
 func FltNone() int32 {
 	return 0
 }

@@ -99,6 +99,18 @@
 (defn ^:pub ^I32 lay-no-watermark [] (return 3))
 (defn ^:pub ^I32 lay-watermark-only [] (return 4))
 
+;; PAGE UNITS (P7.U, D207): page `p` (0-based) asks ids `(p + 1) * 256 + k`, `k` < 256: 1 render with-text, 2 render
+;; no-text, 3 render text-only, 4 decode, 16-127 OCR, 128-255 crops and later kinds; a view kin makes is
+;; `view-base + p * 256 + k` (an id in a `BitmapSet`, never a request id). A page unit's ids never meet another's.
+(defn ^:pub ^I32 view-base [] (return 16777216))
+(defn ^:pub ^I32 pu-id [^I32 page ^I32 k] (return (+ (* (+ page 1) 256) k)))
+(defn ^:pub ^I32 pu-view-id [^I32 page ^I32 k] (return (+ (view-base) (+ (* page 256) k))))
+(defn ^:pub ^I32 pi-render-text [] (return 1))
+(defn ^:pub ^I32 pi-render-no-text [] (return 2))
+(defn ^:pub ^I32 pi-render-text-only [] (return 3))
+(defn ^:pub ^I32 pi-decode [] (return 4))
+(defn ^:pub ^I32 pi-ocr [] (return 16))
+
 ;; `decode`'s filter: what the requested span is encoded as (PDF image filters).
 (defn ^:pub ^I32 flt-none [] (return 0))
 (defn ^:pub ^I32 flt-dct [] (return 1))
