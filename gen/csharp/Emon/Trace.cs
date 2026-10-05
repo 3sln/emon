@@ -807,7 +807,7 @@ public static class Trace {
     public static int TrKinds(int dpi100, emon.Port.Cells cs, emon.Port.Cells s1) {
         // Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
         // text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-        // and at most 10 times as long as thick; the median height M of those decides: TEXT is a provisional glyph of height
+        // and at most 10 times as long as thick; the INK-WEIGHTED median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
         // within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
         // (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
         // has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -815,7 +815,7 @@ public static class Trace {
         int nc = emon.Port.CellsLen(cs) / 24;
         int noise = TrNoise(dpi100);
         int tmin = TrTextMin(dpi100);
-        int tmax = TrPt(dpi100, 60);
+        int tmax = TrPt(dpi100, 200);
         int rmin = TrRuleMin(dpi100);
         int rthick = TrRuleThick(dpi100);
         int c = 0;
@@ -848,8 +848,8 @@ public static class Trace {
             if ((h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise)))) {
                 if ((TrCg(cs, c, CKind) != TrKRule()) || (lng < (3 * tmin))) {
                     hh = TrMin(h, 1023);
-                    emon.Port.CellsSet(s1, hh, emon.Port.CellsAt(s1, hh) + 1);
-                    nprov += 1;
+                    emon.Port.CellsSet(s1, hh, emon.Port.CellsAt(s1, hh) + ink);
+                    nprov += ink;
                     TrCset(cs, c, CFit, 1);
                 }
             }
@@ -3136,7 +3136,258 @@ public static class Trace {
         }
         return 0;
     }
-    public static int TrTlines(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Cells cs, emon.Port.Cells comps, emon.Port.Cells tlines, emon.Port.Cells refs, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
+    internal static int TrLineFrame(emon.Port.Cells rn, emon.Port.Cells cs, emon.Port.Cells it, int head, int th, emon.Port.Cells idx, emon.Port.Cells off, emon.Port.Cells s5, emon.Port.Cells @out) {
+        // The members of the chain starting at item `head`, in the frame of the angle `th` (centi-degrees; u runs along the line, v
+        // across it, y down), measured on their RUNS (`idx` `off` group the runs by component): s5 gets [u-centre v-bottom height u-left
+        // u-right comp] per member ordered by u-centre; a least-squares line v = icpt + slope * u through the bottoms, once more without
+        // those far below it, goes to `out` as [slope x 65536, icpt x 65536, mean height]. Answers the member count.
+        int co = Evidence.EvCos(th);
+        int si = Evidence.EvSin(th);
+        int j = head;
+        int m = 0;
+        int k = 0;
+        int e = 0;
+        int r = 0;
+        int lo = 0;
+        int hi = 0;
+        int comp = 0;
+        int u = 0;
+        int v = 0;
+        int umn = 0;
+        int umx = 0;
+        int vmn = 0;
+        int vmx = 0;
+        int x = 0;
+        int y = 0;
+        int pass = 0;
+        int hsum = 0;
+        int hbar = 0;
+        long su = 0;
+        long sv = 0;
+        long suu = 0;
+        long suv = 0;
+        long den = 0;
+        long nn = 0;
+        long slope = 0;
+        long icpt = 0;
+        emon.Port.CellsDrop(s5, 0);
+        while (j >= 0) {
+            comp = emon.Port.CellsAt(it, j * KIt);
+            umn = 1000000000;
+            umx = -1000000000;
+            vmn = 1000000000;
+            vmx = -1000000000;
+            lo = emon.Port.CellsAt(off, comp);
+            hi = emon.Port.CellsAt(off, comp + 1);
+            k = lo;
+            while (k < hi) {
+                r = emon.Port.CellsAt(idx, k);
+                y = TrRg(rn, r, 0);
+                e = 0;
+                while (e < 2) {
+                    if (e == 0) {
+                        x = TrRg(rn, r, 1);
+                    } else {
+                        x = TrRg(rn, r, 2) - 1;
+                    }
+                    u = TrRotU(x, y, co, si);
+                    v = TrRotV(x, y, co, si);
+                    if (u < umn) {
+                        umn = u;
+                    }
+                    if (u > umx) {
+                        umx = u;
+                    }
+                    if (v < vmn) {
+                        vmn = v;
+                    }
+                    if (v > vmx) {
+                        vmx = v;
+                    }
+                    e += 1;
+                }
+                k += 1;
+            }
+            // insertion by the centre of u
+            k = m;
+            emon.Port.CellsPush(s5, 0);
+            emon.Port.CellsPush(s5, 0);
+            emon.Port.CellsPush(s5, 0);
+            emon.Port.CellsPush(s5, 0);
+            emon.Port.CellsPush(s5, 0);
+            emon.Port.CellsPush(s5, 0);
+            while ((k > 0) && (emon.Port.CellsAt(s5, (k - 1) * 6) > ((umn + umx) / 2))) {
+                e = 0;
+                while (e < 6) {
+                    x = emon.Port.CellsAt(s5, ((k - 1) * 6) + e);
+                    emon.Port.CellsSet(s5, (k * 6) + e, x);
+                    e += 1;
+                }
+                k -= 1;
+            }
+            emon.Port.CellsSet(s5, k * 6, (umn + umx) / 2);
+            emon.Port.CellsSet(s5, (k * 6) + 1, vmx + 1);
+            emon.Port.CellsSet(s5, (k * 6) + 2, (vmx - vmn) + 1);
+            emon.Port.CellsSet(s5, (k * 6) + 3, umn);
+            emon.Port.CellsSet(s5, (k * 6) + 4, umx + 1);
+            emon.Port.CellsSet(s5, (k * 6) + 5, comp);
+            m += 1;
+            j = emon.Port.CellsAt(it, (j * KIt) + 7);
+        }
+        k = 0;
+        while (k < m) {
+            hsum += emon.Port.CellsAt(s5, (k * 6) + 2);
+            k += 1;
+        }
+        hbar = hsum / TrMax(1, m);
+        while (pass < 2) {
+            su = (long) 0;
+            sv = (long) 0;
+            suu = (long) 0;
+            suv = (long) 0;
+            nn = (long) 0;
+            k = 0;
+            while (k < m) {
+                u = emon.Port.CellsAt(s5, k * 6);
+                v = emon.Port.CellsAt(s5, (k * 6) + 1);
+                e = 1;
+                if (pass == 1) {
+                    if ((4 * (v - ((int) (((slope * ((long) u)) + icpt) / ((long) 65536))))) > hbar) {
+                        e = 0;
+                    }
+                }
+                if (e == 1) {
+                    nn += (long) 1;
+                    su += (long) u;
+                    sv += (long) v;
+                    suu += unchecked(((long) u) * ((long) u));
+                    suv += unchecked(((long) u) * ((long) v));
+                }
+                k += 1;
+            }
+            den = unchecked(nn * suu) - unchecked(su * su);
+            if ((nn > ((long) 1)) && (den > ((long) 0))) {
+                slope = ((unchecked(nn * suv) - unchecked(su * sv)) * ((long) 65536)) / den;
+                icpt = ((sv * ((long) 65536)) - unchecked(slope * su)) / nn;
+            } else {
+                slope = (long) 0;
+                if (nn > ((long) 0)) {
+                    icpt = (sv * ((long) 65536)) / nn;
+                }
+            }
+            pass += 1;
+        }
+        emon.Port.CellsSet(@out, 0, (int) slope);
+        emon.Port.CellsSet(@out, 1, (int) icpt);
+        emon.Port.CellsSet(@out, 2, hbar);
+        return m;
+    }
+    internal static int TrProfileScore(emon.Port.Cells rn, emon.Port.Cells it, int head, emon.Port.Cells idx, emon.Port.Cells off, int th, int vlo, int nb, emon.Port.Cells prof) {
+        // The sharpness of the chain's ink projected across the direction `th`: every run of every member by its midpoint, weighted by
+        // its length, into two-pixel bins of v (from `vlo`; `nb` bins in `prof`, left zero); the sum of squared steps between neighbouring
+        // bins, which is largest when the line's edges fall into few bins. Answers the score / 256 (clamped to an Int).
+        int co = Evidence.EvCos(th);
+        int si = Evidence.EvSin(th);
+        int j = head;
+        int comp = 0;
+        int k = 0;
+        int lo = 0;
+        int hi = 0;
+        int r = 0;
+        int b = 0;
+        int c = 0;
+        int pc = 0;
+        long sc = 0;
+        while (j >= 0) {
+            comp = emon.Port.CellsAt(it, j * KIt);
+            lo = emon.Port.CellsAt(off, comp);
+            hi = emon.Port.CellsAt(off, comp + 1);
+            k = lo;
+            while (k < hi) {
+                r = emon.Port.CellsAt(idx, k);
+                b = (TrRotV((TrRg(rn, r, 1) + TrRg(rn, r, 2)) / 2, TrRg(rn, r, 0), co, si) - vlo) / 2;
+                if ((b >= 0) && (b < nb)) {
+                    c = emon.Port.CellsAt(prof, b);
+                    emon.Port.CellsSet(prof, b, c + (TrRg(rn, r, 2) - TrRg(rn, r, 1)));
+                }
+                k += 1;
+            }
+            j = emon.Port.CellsAt(it, (j * KIt) + 7);
+        }
+        b = 0;
+        while (b < nb) {
+            c = emon.Port.CellsAt(prof, b);
+            sc += unchecked(((long) (c - pc)) * ((long) (c - pc)));
+            pc = c;
+            emon.Port.CellsSet(prof, b, 0);
+            b += 1;
+        }
+        return (int) (sc / ((long) 256));
+    }
+    internal static int TrRefineAngle(emon.Port.Cells rn, emon.Port.Cells it, int head, int th0, int span, emon.Port.Cells idx, emon.Port.Cells off, emon.Port.Cells prof) {
+        // The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) whose projection
+        // profile (`tr-profile-score`) is sharpest; ties go to the smaller offset from `th0`. `prof` is scratch.
+        int d = 0;
+        int best = th0;
+        int bs = -1;
+        int s = 0;
+        int vlo = 100000000;
+        int vhi = -100000000;
+        int j = head;
+        int comp = 0;
+        int k = 0;
+        int r = 0;
+        int lo = 0;
+        int hi = 0;
+        int v = 0;
+        int nb = 0;
+        int ang = 0;
+        // the v-range over every angle tried is bounded by the chain's extent: take it at the worst angle of the span
+        while (j >= 0) {
+            comp = emon.Port.CellsAt(it, j * KIt);
+            lo = emon.Port.CellsAt(off, comp);
+            hi = emon.Port.CellsAt(off, comp + 1);
+            k = lo;
+            while (k < hi) {
+                r = emon.Port.CellsAt(idx, k);
+                d = 0;
+                while (d <= 1) {
+                    if (d == 0) {
+                        ang = th0 - span;
+                    } else {
+                        ang = th0 + span;
+                    }
+                    v = TrRotV(TrRg(rn, r, 1), TrRg(rn, r, 0), Evidence.EvCos(ang), Evidence.EvSin(ang));
+                    if (v < vlo) {
+                        vlo = v;
+                    }
+                    if (v > vhi) {
+                        vhi = v;
+                    }
+                    d += 1;
+                }
+                k += 1;
+            }
+            j = emon.Port.CellsAt(it, (j * KIt) + 7);
+        }
+        nb = ((vhi - vlo) / 2) + 4;
+        if (nb > 20000) {
+            return th0;
+        }
+        emon.Port.CellsDrop(prof, 0);
+        emon.Port.CellsGrow(prof, nb, 0);
+        d = 0 - span;
+        while (d <= span) {
+            s = TrProfileScore(rn, it, head, idx, off, th0 + d, vlo, nb, prof);
+            if ((s > bs) || ((s == bs) && (TrAbs(d) < TrAbs(best - th0)))) {
+                bs = s;
+                best = th0 + d;
+            }
+            d += 25;
+        }
+        return (best + 36000) % 36000;
+    }
+    public static int TrTlines(emon.Port.Cells views, int page, int view, int dpi100, int h, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells comps, emon.Port.Cells tlines, emon.Port.Cells refs, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
         // Text lines without OCR (SPEC 8.2): the text-like components of one ink layer chained by nearest neighbour (within 1.5 mean
         // heights, heights within a factor of three) in order of distance, a chain accepted only while its centres stay on a line (spread
         // across it at most 0.3 of the mean height). Every chain of at least `tr-tl-min` components is a `tlines` row: the box, the
@@ -3164,19 +3415,11 @@ public static class Trace {
         int rows = 0;
         int k = 0;
         int e = 0;
-        int cnt = 0;
         int row = 0;
         int alpha = 0;
         int th = 0;
         int co = 0;
         int si = 0;
-        int u = 0;
-        int v = 0;
-        int comp = 0;
-        int vmx = 0;
-        int vmn = 0;
-        int umn = 0;
-        int umx = 0;
         int x0 = 0;
         int y0 = 0;
         int x1 = 0;
@@ -3184,14 +3427,8 @@ public static class Trace {
         int hbar = 0;
         int pass = 0;
         int m = 0;
-        long su = 0;
-        long sv = 0;
-        long suu = 0;
-        long suv = 0;
-        long den = 0;
         long slope = 0;
         long icpt = 0;
-        long nn = 0;
         int hsum = 0;
         int gsum = 0;
         int rms = 0;
@@ -3294,126 +3531,43 @@ public static class Trace {
             }
             k += 1;
         }
-        // 4. a row for every chain of enough components
+        // 4. a row for every chain of enough components; the frame's angle is refined from the bottoms' own slope, three times
+        TrGroup(rn, KRs, 5, emon.Port.CellsAt(ri, h), nc, s2, s3);
         i = 0;
         while (i < n) {
             if ((emon.Port.CellsAt(s1, (i * KIt) + 6) == i) && (emon.Port.CellsAt(s1, (i * KIt) + 9) >= TrTlMin())) {
                 TrFitChain(s1, i, -1, s4);
-                cnt = emon.Port.CellsAt(s4, 0);
                 alpha = emon.Port.CellsAt(s4, 2);
-                hbar = emon.Port.CellsAt(s4, 3) / cnt;
-                rms = TrIsqrt((long) TrMax(0, emon.Port.CellsAt(s4, 1))) / 4;
                 if (alpha > 9000) {
                     th = alpha + 18000;
                 } else {
                     th = alpha;
                 }
-                co = Evidence.EvCos(th);
-                si = Evidence.EvSin(th);
-                // members into s5 as [u-centre v-bottom height u-left u-right comp], ordered by u-centre
-                emon.Port.CellsDrop(s5, 0);
-                j = i;
-                m = 0;
-                while (j >= 0) {
-                    comp = emon.Port.CellsAt(s1, j * KIt);
-                    umn = 1000000000;
-                    umx = -1000000000;
-                    vmn = 1000000000;
-                    vmx = -1000000000;
-                    e = 0;
-                    while (e < 4) {
-                        if ((e & 1) == 0) {
-                            dx = TrCg(cs, comp, CLeft);
-                        } else {
-                            dx = TrCg(cs, comp, CRight);
-                        }
-                        if (e < 2) {
-                            dy = TrCg(cs, comp, CTop);
-                        } else {
-                            dy = TrCg(cs, comp, CBottom);
-                        }
-                        u = TrRotU(dx, dy, co, si);
-                        v = TrRotV(dx, dy, co, si);
-                        if (u < umn) {
-                            umn = u;
-                        }
-                        if (u > umx) {
-                            umx = u;
-                        }
-                        if (v < vmn) {
-                            vmn = v;
-                        }
-                        if (v > vmx) {
-                            vmx = v;
-                        }
-                        e += 1;
-                    }
-                    // insertion by the centre of u
-                    k = m;
-                    emon.Port.CellsPush(s5, 0);
-                    emon.Port.CellsPush(s5, 0);
-                    emon.Port.CellsPush(s5, 0);
-                    emon.Port.CellsPush(s5, 0);
-                    emon.Port.CellsPush(s5, 0);
-                    emon.Port.CellsPush(s5, 0);
-                    while ((k > 0) && (emon.Port.CellsAt(s5, (k - 1) * 6) > ((umn + umx) / 2))) {
-                        e = 0;
-                        while (e < 6) {
-                            emon.Port.CellsSet(s5, (k * 6) + e, emon.Port.CellsAt(s5, ((k - 1) * 6) + e));
-                            e += 1;
-                        }
-                        k -= 1;
-                    }
-                    emon.Port.CellsSet(s5, k * 6, (umn + umx) / 2);
-                    emon.Port.CellsSet(s5, (k * 6) + 1, vmx);
-                    emon.Port.CellsSet(s5, (k * 6) + 2, vmx - vmn);
-                    emon.Port.CellsSet(s5, (k * 6) + 3, umn);
-                    emon.Port.CellsSet(s5, (k * 6) + 4, umx);
-                    emon.Port.CellsSet(s5, (k * 6) + 5, comp);
-                    m += 1;
-                    j = emon.Port.CellsAt(s1, (j * KIt) + 7);
-                }
-                // least squares v = icpt + slope * u over the bottoms, then once more without the points far below the line
+                rms = TrIsqrt((long) TrMax(0, emon.Port.CellsAt(s4, 1))) / 4;
+                th = TrRefineAngle(rn, s1, i, th, 800, s2, s3, s6);
                 pass = 0;
-                slope = (long) 0;
-                icpt = (long) 0;
                 while (pass < 2) {
-                    su = (long) 0;
-                    sv = (long) 0;
-                    suu = (long) 0;
-                    suv = (long) 0;
-                    nn = (long) 0;
-                    k = 0;
-                    while (k < m) {
-                        u = emon.Port.CellsAt(s5, k * 6);
-                        v = emon.Port.CellsAt(s5, (k * 6) + 1);
-                        e = 1;
-                        if (pass == 1) {
-                            if ((4 * (v - ((int) (((slope * ((long) u)) + icpt) / ((long) 65536))))) > hbar) {
-                                e = 0;
-                            }
-                        }
-                        if (e == 1) {
-                            nn += (long) 1;
-                            su += (long) u;
-                            sv += (long) v;
-                            suu += unchecked(((long) u) * ((long) u));
-                            suv += unchecked(((long) u) * ((long) v));
-                        }
-                        k += 1;
+                    m = TrLineFrame(rn, cs, s1, i, th, s2, s3, s5, s4);
+                    dx = Evidence.EvAngle(65536, emon.Port.CellsAt(s4, 0));
+                    if (dx > 18000) {
+                        dx -= 36000;
                     }
-                    den = unchecked(nn * suu) - unchecked(su * su);
-                    if ((nn > ((long) 1)) && (den > ((long) 0))) {
-                        slope = ((unchecked(nn * suv) - unchecked(su * sv)) * ((long) 65536)) / den;
-                        icpt = ((sv * ((long) 65536)) - unchecked(slope * su)) / nn;
-                    } else {
-                        slope = (long) 0;
-                        if (nn > ((long) 0)) {
-                            icpt = (sv * ((long) 65536)) / nn;
-                        }
+                    if (dx > 150) {
+                        dx = 150;
+                    }
+                    if (dx < -150) {
+                        dx = -150;
+                    }
+                    if (pass < 1) {
+                        th = ((th + dx) + 36000) % 36000;
                     }
                     pass += 1;
                 }
+                hbar = emon.Port.CellsAt(s4, 2);
+                co = Evidence.EvCos(th);
+                si = Evidence.EvSin(th);
+                slope = (long) emon.Port.CellsAt(s4, 0);
+                icpt = (long) emon.Port.CellsAt(s4, 1);
                 u0 = emon.Port.CellsAt(s5, 3);
                 u1 = emon.Port.CellsAt(s5, 4);
                 k = 0;
@@ -3581,7 +3735,7 @@ public static class Trace {
         TrRules(views, page, view, dpi, w, h, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6);
         TrShapes(views, page, view, dpi, bin, rn, ri, cs, comps, prims, pts, refs, inks, s1, s2, s3, s4, s5);
         TrDoubleRings(cs, prims, refs);
-        TrTlines(views, page, view, dpi, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6);
+        TrTlines(views, page, view, dpi, h, rn, ri, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6);
         return nc;
     }
 }

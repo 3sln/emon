@@ -886,7 +886,7 @@ func TrStrokePx(cs *port.Cells, c int32) int32 {
 func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 	// Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
 	// text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-	// and at most 10 times as long as thick; the median height M of those decides: TEXT is a provisional glyph of height
+	// and at most 10 times as long as thick; the INK-WEIGHTED median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
 	// within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
 	// (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
 	// has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -894,7 +894,7 @@ func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 	var nc int32 = port.CellsLen(cs) / 24
 	var noise int32 = TrNoise(dpi100)
 	var tmin int32 = TrTextMin(dpi100)
-	var tmax int32 = TrPt(dpi100, 60)
+	var tmax int32 = TrPt(dpi100, 200)
 	var rmin int32 = TrRuleMin(dpi100)
 	var rthick int32 = TrRuleThick(dpi100)
 	var c int32 = 0
@@ -927,8 +927,8 @@ func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 		if (h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise))) {
 			if (TrCg(cs, c, cKind) != TrKRule()) || (lng < (3 * tmin)) {
 				hh = trMin(h, 1023)
-				port.CellsSet(s1, hh, port.CellsAt(s1, hh)+1)
-				nprov += 1
+				port.CellsSet(s1, hh, port.CellsAt(s1, hh)+ink)
+				nprov += ink
 				trCset(cs, c, cFit, 1)
 			}
 		}
@@ -3288,7 +3288,261 @@ func trChainOk(it *port.Cells, ra int32, rb int32, out *port.Cells) int32 {
 	return 0
 }
 
-func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, cs *port.Cells, comps *port.Cells, tlines *port.Cells, refs *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+func trLineFrame(rn *port.Cells, cs *port.Cells, it *port.Cells, head int32, th int32, idx *port.Cells, off *port.Cells, s5 *port.Cells, out *port.Cells) int32 {
+	// The members of the chain starting at item `head`, in the frame of the angle `th` (centi-degrees; u runs along the line, v
+	// across it, y down), measured on their RUNS (`idx` `off` group the runs by component): s5 gets [u-centre v-bottom height u-left
+	// u-right comp] per member ordered by u-centre; a least-squares line v = icpt + slope * u through the bottoms, once more without
+	// those far below it, goes to `out` as [slope x 65536, icpt x 65536, mean height]. Answers the member count.
+	var co int32 = evidence.EvCos(th)
+	var si int32 = evidence.EvSin(th)
+	var j int32 = head
+	var m int32 = 0
+	var k int32 = 0
+	var e int32 = 0
+	var r int32 = 0
+	var lo int32 = 0
+	var hi int32 = 0
+	var comp int32 = 0
+	var u int32 = 0
+	var v int32 = 0
+	var umn int32 = 0
+	var umx int32 = 0
+	var vmn int32 = 0
+	var vmx int32 = 0
+	var x int32 = 0
+	var y int32 = 0
+	var pass int32 = 0
+	var hsum int32 = 0
+	var hbar int32 = 0
+	var su int64 = 0
+	var sv int64 = 0
+	var suu int64 = 0
+	var suv int64 = 0
+	var den int64 = 0
+	var nn int64 = 0
+	var slope int64 = 0
+	var icpt int64 = 0
+	port.CellsDrop(s5, 0)
+	for j >= 0 {
+		comp = port.CellsAt(it, j*kIt)
+		umn = 1000000000
+		umx = -1000000000
+		vmn = 1000000000
+		vmx = -1000000000
+		lo = port.CellsAt(off, comp)
+		hi = port.CellsAt(off, comp+1)
+		k = lo
+		for k < hi {
+			r = port.CellsAt(idx, k)
+			y = trRg(rn, r, 0)
+			e = 0
+			for e < 2 {
+				if e == 0 {
+					x = trRg(rn, r, 1)
+				} else {
+					x = trRg(rn, r, 2) - 1
+				}
+				u = trRotU(x, y, co, si)
+				v = trRotV(x, y, co, si)
+				if u < umn {
+					umn = u
+				}
+				if u > umx {
+					umx = u
+				}
+				if v < vmn {
+					vmn = v
+				}
+				if v > vmx {
+					vmx = v
+				}
+				e += 1
+			}
+			k += 1
+		}
+		// insertion by the centre of u
+		k = m
+		port.CellsPush(s5, 0)
+		port.CellsPush(s5, 0)
+		port.CellsPush(s5, 0)
+		port.CellsPush(s5, 0)
+		port.CellsPush(s5, 0)
+		port.CellsPush(s5, 0)
+		for (k > 0) && (port.CellsAt(s5, (k-1)*6) > ((umn + umx) / 2)) {
+			e = 0
+			for e < 6 {
+				x = port.CellsAt(s5, ((k-1)*6)+e)
+				port.CellsSet(s5, (k*6)+e, x)
+				e += 1
+			}
+			k -= 1
+		}
+		port.CellsSet(s5, k*6, (umn+umx)/2)
+		port.CellsSet(s5, (k*6)+1, vmx+1)
+		port.CellsSet(s5, (k*6)+2, (vmx-vmn)+1)
+		port.CellsSet(s5, (k*6)+3, umn)
+		port.CellsSet(s5, (k*6)+4, umx+1)
+		port.CellsSet(s5, (k*6)+5, comp)
+		m += 1
+		j = port.CellsAt(it, (j*kIt)+7)
+	}
+	k = 0
+	for k < m {
+		hsum += port.CellsAt(s5, (k*6)+2)
+		k += 1
+	}
+	hbar = hsum / trMax(1, m)
+	for pass < 2 {
+		su = int64(0)
+		sv = int64(0)
+		suu = int64(0)
+		suv = int64(0)
+		nn = int64(0)
+		k = 0
+		for k < m {
+			u = port.CellsAt(s5, k*6)
+			v = port.CellsAt(s5, (k*6)+1)
+			e = 1
+			if pass == 1 {
+				if (4 * (v - int32(((slope*int64(u))+icpt)/int64(65536)))) > hbar {
+					e = 0
+				}
+			}
+			if e == 1 {
+				nn += int64(1)
+				su += int64(u)
+				sv += int64(v)
+				suu += int64(u) * int64(u)
+				suv += int64(u) * int64(v)
+			}
+			k += 1
+		}
+		den = (nn * suu) - (su * su)
+		if (nn > int64(1)) && (den > int64(0)) {
+			slope = (((nn * suv) - (su * sv)) * int64(65536)) / den
+			icpt = ((sv * int64(65536)) - (slope * su)) / nn
+		} else {
+			slope = int64(0)
+			if nn > int64(0) {
+				icpt = (sv * int64(65536)) / nn
+			}
+		}
+		pass += 1
+	}
+	port.CellsSet(out, 0, int32(slope))
+	port.CellsSet(out, 1, int32(icpt))
+	port.CellsSet(out, 2, hbar)
+	return m
+}
+
+func trProfileScore(rn *port.Cells, it *port.Cells, head int32, idx *port.Cells, off *port.Cells, th int32, vlo int32, nb int32, prof *port.Cells) int32 {
+	// The sharpness of the chain's ink projected across the direction `th`: every run of every member by its midpoint, weighted by
+	// its length, into two-pixel bins of v (from `vlo`; `nb` bins in `prof`, left zero); the sum of squared steps between neighbouring
+	// bins, which is largest when the line's edges fall into few bins. Answers the score / 256 (clamped to an Int).
+	var co int32 = evidence.EvCos(th)
+	var si int32 = evidence.EvSin(th)
+	var j int32 = head
+	var comp int32 = 0
+	var k int32 = 0
+	var lo int32 = 0
+	var hi int32 = 0
+	var r int32 = 0
+	var b int32 = 0
+	var c int32 = 0
+	var pc int32 = 0
+	var sc int64 = 0
+	for j >= 0 {
+		comp = port.CellsAt(it, j*kIt)
+		lo = port.CellsAt(off, comp)
+		hi = port.CellsAt(off, comp+1)
+		k = lo
+		for k < hi {
+			r = port.CellsAt(idx, k)
+			b = (trRotV((trRg(rn, r, 1)+trRg(rn, r, 2))/2, trRg(rn, r, 0), co, si) - vlo) / 2
+			if (b >= 0) && (b < nb) {
+				c = port.CellsAt(prof, b)
+				port.CellsSet(prof, b, c+(trRg(rn, r, 2)-trRg(rn, r, 1)))
+			}
+			k += 1
+		}
+		j = port.CellsAt(it, (j*kIt)+7)
+	}
+	b = 0
+	for b < nb {
+		c = port.CellsAt(prof, b)
+		sc += int64(c-pc) * int64(c-pc)
+		pc = c
+		port.CellsSet(prof, b, 0)
+		b += 1
+	}
+	return int32(sc / int64(256))
+}
+
+func trRefineAngle(rn *port.Cells, it *port.Cells, head int32, th0 int32, span int32, idx *port.Cells, off *port.Cells, prof *port.Cells) int32 {
+	// The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) whose projection
+	// profile (`tr-profile-score`) is sharpest; ties go to the smaller offset from `th0`. `prof` is scratch.
+	var d int32 = 0
+	var best int32 = th0
+	var bs int32 = -1
+	var s int32 = 0
+	var vlo int32 = 100000000
+	var vhi int32 = -100000000
+	var j int32 = head
+	var comp int32 = 0
+	var k int32 = 0
+	var r int32 = 0
+	var lo int32 = 0
+	var hi int32 = 0
+	var v int32 = 0
+	var nb int32 = 0
+	var ang int32 = 0
+	// the v-range over every angle tried is bounded by the chain's extent: take it at the worst angle of the span
+	for j >= 0 {
+		comp = port.CellsAt(it, j*kIt)
+		lo = port.CellsAt(off, comp)
+		hi = port.CellsAt(off, comp+1)
+		k = lo
+		for k < hi {
+			r = port.CellsAt(idx, k)
+			d = 0
+			for d <= 1 {
+				if d == 0 {
+					ang = th0 - span
+				} else {
+					ang = th0 + span
+				}
+				v = trRotV(trRg(rn, r, 1), trRg(rn, r, 0), evidence.EvCos(ang), evidence.EvSin(ang))
+				if v < vlo {
+					vlo = v
+				}
+				if v > vhi {
+					vhi = v
+				}
+				d += 1
+			}
+			k += 1
+		}
+		j = port.CellsAt(it, (j*kIt)+7)
+	}
+	nb = ((vhi - vlo) / 2) + 4
+	if nb > 20000 {
+		return th0
+	}
+	port.CellsDrop(prof, 0)
+	port.CellsGrow(prof, nb, 0)
+	d = 0 - span
+	for d <= span {
+		s = trProfileScore(rn, it, head, idx, off, th0+d, vlo, nb, prof)
+		if (s > bs) || ((s == bs) && (trAbs(d) < trAbs(best-th0))) {
+			bs = s
+			best = th0 + d
+		}
+		d += 25
+	}
+	return (best + 36000) % 36000
+}
+
+func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, h int32, rn *port.Cells, ri *port.Cells, cs *port.Cells, comps *port.Cells, tlines *port.Cells, refs *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
 	// Text lines without OCR (SPEC 8.2): the text-like components of one ink layer chained by nearest neighbour (within 1.5 mean
 	// heights, heights within a factor of three) in order of distance, a chain accepted only while its centres stay on a line (spread
 	// across it at most 0.3 of the mean height). Every chain of at least `tr-tl-min` components is a `tlines` row: the box, the
@@ -3316,19 +3570,11 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, cs *port.
 	var rows int32 = 0
 	var k int32 = 0
 	var e int32 = 0
-	var cnt int32 = 0
 	var row int32 = 0
 	var alpha int32 = 0
 	var th int32 = 0
 	var co int32 = 0
 	var si int32 = 0
-	var u int32 = 0
-	var v int32 = 0
-	var comp int32 = 0
-	var vmx int32 = 0
-	var vmn int32 = 0
-	var umn int32 = 0
-	var umx int32 = 0
 	var x0 int32 = 0
 	var y0 int32 = 0
 	var x1 int32 = 0
@@ -3336,14 +3582,8 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, cs *port.
 	var hbar int32 = 0
 	var pass int32 = 0
 	var m int32 = 0
-	var su int64 = 0
-	var sv int64 = 0
-	var suu int64 = 0
-	var suv int64 = 0
-	var den int64 = 0
 	var slope int64 = 0
 	var icpt int64 = 0
-	var nn int64 = 0
 	var hsum int32 = 0
 	var gsum int32 = 0
 	var rms int32 = 0
@@ -3446,126 +3686,43 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, cs *port.
 		}
 		k += 1
 	}
-	// 4. a row for every chain of enough components
+	// 4. a row for every chain of enough components; the frame's angle is refined from the bottoms' own slope, three times
+	trGroup(rn, kRs, 5, port.CellsAt(ri, h), nc, s2, s3)
 	i = 0
 	for i < n {
 		if (port.CellsAt(s1, (i*kIt)+6) == i) && (port.CellsAt(s1, (i*kIt)+9) >= TrTlMin()) {
 			trFitChain(s1, i, -1, s4)
-			cnt = port.CellsAt(s4, 0)
 			alpha = port.CellsAt(s4, 2)
-			hbar = port.CellsAt(s4, 3) / cnt
-			rms = TrIsqrt(int64(trMax(0, port.CellsAt(s4, 1)))) / 4
 			if alpha > 9000 {
 				th = alpha + 18000
 			} else {
 				th = alpha
 			}
-			co = evidence.EvCos(th)
-			si = evidence.EvSin(th)
-			// members into s5 as [u-centre v-bottom height u-left u-right comp], ordered by u-centre
-			port.CellsDrop(s5, 0)
-			j = i
-			m = 0
-			for j >= 0 {
-				comp = port.CellsAt(s1, j*kIt)
-				umn = 1000000000
-				umx = -1000000000
-				vmn = 1000000000
-				vmx = -1000000000
-				e = 0
-				for e < 4 {
-					if (e & 1) == 0 {
-						dx = TrCg(cs, comp, cLeft)
-					} else {
-						dx = TrCg(cs, comp, cRight)
-					}
-					if e < 2 {
-						dy = TrCg(cs, comp, cTop)
-					} else {
-						dy = TrCg(cs, comp, cBottom)
-					}
-					u = trRotU(dx, dy, co, si)
-					v = trRotV(dx, dy, co, si)
-					if u < umn {
-						umn = u
-					}
-					if u > umx {
-						umx = u
-					}
-					if v < vmn {
-						vmn = v
-					}
-					if v > vmx {
-						vmx = v
-					}
-					e += 1
-				}
-				// insertion by the centre of u
-				k = m
-				port.CellsPush(s5, 0)
-				port.CellsPush(s5, 0)
-				port.CellsPush(s5, 0)
-				port.CellsPush(s5, 0)
-				port.CellsPush(s5, 0)
-				port.CellsPush(s5, 0)
-				for (k > 0) && (port.CellsAt(s5, (k-1)*6) > ((umn + umx) / 2)) {
-					e = 0
-					for e < 6 {
-						port.CellsSet(s5, (k*6)+e, port.CellsAt(s5, ((k-1)*6)+e))
-						e += 1
-					}
-					k -= 1
-				}
-				port.CellsSet(s5, k*6, (umn+umx)/2)
-				port.CellsSet(s5, (k*6)+1, vmx)
-				port.CellsSet(s5, (k*6)+2, vmx-vmn)
-				port.CellsSet(s5, (k*6)+3, umn)
-				port.CellsSet(s5, (k*6)+4, umx)
-				port.CellsSet(s5, (k*6)+5, comp)
-				m += 1
-				j = port.CellsAt(s1, (j*kIt)+7)
-			}
-			// least squares v = icpt + slope * u over the bottoms, then once more without the points far below the line
+			rms = TrIsqrt(int64(trMax(0, port.CellsAt(s4, 1)))) / 4
+			th = trRefineAngle(rn, s1, i, th, 800, s2, s3, s6)
 			pass = 0
-			slope = int64(0)
-			icpt = int64(0)
 			for pass < 2 {
-				su = int64(0)
-				sv = int64(0)
-				suu = int64(0)
-				suv = int64(0)
-				nn = int64(0)
-				k = 0
-				for k < m {
-					u = port.CellsAt(s5, k*6)
-					v = port.CellsAt(s5, (k*6)+1)
-					e = 1
-					if pass == 1 {
-						if (4 * (v - int32(((slope*int64(u))+icpt)/int64(65536)))) > hbar {
-							e = 0
-						}
-					}
-					if e == 1 {
-						nn += int64(1)
-						su += int64(u)
-						sv += int64(v)
-						suu += int64(u) * int64(u)
-						suv += int64(u) * int64(v)
-					}
-					k += 1
+				m = trLineFrame(rn, cs, s1, i, th, s2, s3, s5, s4)
+				dx = evidence.EvAngle(65536, port.CellsAt(s4, 0))
+				if dx > 18000 {
+					dx -= 36000
 				}
-				den = (nn * suu) - (su * su)
-				if (nn > int64(1)) && (den > int64(0)) {
-					slope = (((nn * suv) - (su * sv)) * int64(65536)) / den
-					icpt = ((sv * int64(65536)) - (slope * su)) / nn
-				} else {
-					slope = int64(0)
-					if nn > int64(0) {
-						icpt = (sv * int64(65536)) / nn
-					}
+				if dx > 150 {
+					dx = 150
+				}
+				if dx < -150 {
+					dx = -150
+				}
+				if pass < 1 {
+					th = ((th + dx) + 36000) % 36000
 				}
 				pass += 1
 			}
+			hbar = port.CellsAt(s4, 2)
+			co = evidence.EvCos(th)
+			si = evidence.EvSin(th)
+			slope = int64(port.CellsAt(s4, 0))
+			icpt = int64(port.CellsAt(s4, 1))
 			u0 = port.CellsAt(s5, 3)
 			u1 = port.CellsAt(s5, 4)
 			k = 0
@@ -3738,6 +3895,6 @@ func TrTrace(views *port.Cells, inks *port.Cells, page int32, view int32, fixed 
 	TrRules(views, page, view, dpi, w, h, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 	TrShapes(views, page, view, dpi, bin, rn, ri, cs, comps, prims, pts, refs, inks, s1, s2, s3, s4, s5)
 	TrDoubleRings(cs, prims, refs)
-	TrTlines(views, page, view, dpi, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6)
+	TrTlines(views, page, view, dpi, h, rn, ri, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6)
 	return nc
 }

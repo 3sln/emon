@@ -805,7 +805,7 @@ pub fn tr_stroke_px(cs: &mut crate::port::Cells, c: i32) -> i32 {
 pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells) -> i32 {
     // Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
     // text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-    // and at most 10 times as long as thick; the median height M of those decides: TEXT is a provisional glyph of height
+    // and at most 10 times as long as thick; the INK-WEIGHTED median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
     // within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
     // (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
     // has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -813,7 +813,7 @@ pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate
     let nc: i32 = crate::port::cells_len(cs) / 24;
     let noise: i32 = tr_noise(dpi100);
     let tmin: i32 = tr_text_min(dpi100);
-    let tmax: i32 = tr_pt(dpi100, 60);
+    let tmax: i32 = tr_pt(dpi100, 200);
     let rmin: i32 = tr_rule_min(dpi100);
     let rthick: i32 = tr_rule_thick(dpi100);
     let mut c: i32 = 0;
@@ -846,8 +846,8 @@ pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate
         if (h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise))) {
             if (tr_cg(cs, c, C_KIND) != tr_k_rule()) || (lng < (3 * tmin)) {
                 hh = tr_min(h, 1023);
-                crate::port::cells_set(s1, hh, crate::port::cells_at(s1, hh) + 1);
-                nprov += 1;
+                crate::port::cells_set(s1, hh, crate::port::cells_at(s1, hh) + ink);
+                nprov += ink;
                 tr_cset(cs, c, C_FIT, 1);
             }
         }
@@ -3134,7 +3134,258 @@ pub(crate) fn tr_chain_ok(it: &mut crate::port::Cells, ra: i32, rb: i32, mut out
     }
     return 0;
 }
-pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, cs: &mut crate::port::Cells, comps: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tr_line_frame(rn: &mut crate::port::Cells, cs: &mut crate::port::Cells, it: &mut crate::port::Cells, head: i32, th: i32, idx: &mut crate::port::Cells, off: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut out: &mut crate::port::Cells) -> i32 {
+    // The members of the chain starting at item `head`, in the frame of the angle `th` (centi-degrees; u runs along the line, v
+    // across it, y down), measured on their RUNS (`idx` `off` group the runs by component): s5 gets [u-centre v-bottom height u-left
+    // u-right comp] per member ordered by u-centre; a least-squares line v = icpt + slope * u through the bottoms, once more without
+    // those far below it, goes to `out` as [slope x 65536, icpt x 65536, mean height]. Answers the member count.
+    let co: i32 = ev_cos(th);
+    let si: i32 = ev_sin(th);
+    let mut j: i32 = head;
+    let mut m: i32 = 0;
+    let mut k: i32 = 0;
+    let mut e: i32 = 0;
+    let mut r: i32 = 0;
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 0;
+    let mut comp: i32 = 0;
+    let mut u: i32 = 0;
+    let mut v: i32 = 0;
+    let mut umn: i32 = 0;
+    let mut umx: i32 = 0;
+    let mut vmn: i32 = 0;
+    let mut vmx: i32 = 0;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut pass: i32 = 0;
+    let mut hsum: i32 = 0;
+    let mut hbar: i32 = 0;
+    let mut su: i64 = 0;
+    let mut sv: i64 = 0;
+    let mut suu: i64 = 0;
+    let mut suv: i64 = 0;
+    let mut den: i64 = 0;
+    let mut nn: i64 = 0;
+    let mut slope: i64 = 0;
+    let mut icpt: i64 = 0;
+    crate::port::cells_drop(s5, 0);
+    while j >= 0 {
+        comp = crate::port::cells_at(it, j * K_IT);
+        umn = 1000000000;
+        umx = -1000000000;
+        vmn = 1000000000;
+        vmx = -1000000000;
+        lo = crate::port::cells_at(off, comp);
+        hi = crate::port::cells_at(off, comp + 1);
+        k = lo;
+        while k < hi {
+            r = crate::port::cells_at(idx, k);
+            y = tr_rg(rn, r, 0);
+            e = 0;
+            while e < 2 {
+                if e == 0 {
+                    x = tr_rg(rn, r, 1);
+                } else {
+                    x = tr_rg(rn, r, 2) - 1;
+                }
+                u = tr_rot_u(x, y, co, si);
+                v = tr_rot_v(x, y, co, si);
+                if u < umn {
+                    umn = u;
+                }
+                if u > umx {
+                    umx = u;
+                }
+                if v < vmn {
+                    vmn = v;
+                }
+                if v > vmx {
+                    vmx = v;
+                }
+                e += 1;
+            }
+            k += 1;
+        }
+        // insertion by the centre of u
+        k = m;
+        crate::port::cells_push(s5, 0);
+        crate::port::cells_push(s5, 0);
+        crate::port::cells_push(s5, 0);
+        crate::port::cells_push(s5, 0);
+        crate::port::cells_push(s5, 0);
+        crate::port::cells_push(s5, 0);
+        while (k > 0) && (crate::port::cells_at(s5, (k - 1) * 6) > ((umn + umx) / 2)) {
+            e = 0;
+            while e < 6 {
+                x = crate::port::cells_at(s5, ((k - 1) * 6) + e);
+                crate::port::cells_set(s5, (k * 6) + e, x);
+                e += 1;
+            }
+            k -= 1;
+        }
+        crate::port::cells_set(s5, k * 6, (umn + umx) / 2);
+        crate::port::cells_set(s5, (k * 6) + 1, vmx + 1);
+        crate::port::cells_set(s5, (k * 6) + 2, (vmx - vmn) + 1);
+        crate::port::cells_set(s5, (k * 6) + 3, umn);
+        crate::port::cells_set(s5, (k * 6) + 4, umx + 1);
+        crate::port::cells_set(s5, (k * 6) + 5, comp);
+        m += 1;
+        j = crate::port::cells_at(it, (j * K_IT) + 7);
+    }
+    k = 0;
+    while k < m {
+        hsum += crate::port::cells_at(s5, (k * 6) + 2);
+        k += 1;
+    }
+    hbar = hsum / tr_max(1, m);
+    while pass < 2 {
+        su = 0 as i64;
+        sv = 0 as i64;
+        suu = 0 as i64;
+        suv = 0 as i64;
+        nn = 0 as i64;
+        k = 0;
+        while k < m {
+            u = crate::port::cells_at(s5, k * 6);
+            v = crate::port::cells_at(s5, (k * 6) + 1);
+            e = 1;
+            if pass == 1 {
+                if (4 * (v - ((((slope * (u as i64)) + icpt) / (65536 as i64)) as i32))) > hbar {
+                    e = 0;
+                }
+            }
+            if e == 1 {
+                nn += 1 as i64;
+                su += u as i64;
+                sv += v as i64;
+                suu += (u as i64).wrapping_mul(u as i64);
+                suv += (u as i64).wrapping_mul(v as i64);
+            }
+            k += 1;
+        }
+        den = (nn).wrapping_mul(suu) - (su).wrapping_mul(su);
+        if (nn > (1 as i64)) && (den > (0 as i64)) {
+            slope = (((nn).wrapping_mul(suv) - (su).wrapping_mul(sv)) * (65536 as i64)) / den;
+            icpt = ((sv * (65536 as i64)) - (slope).wrapping_mul(su)) / nn;
+        } else {
+            slope = 0 as i64;
+            if nn > (0 as i64) {
+                icpt = (sv * (65536 as i64)) / nn;
+            }
+        }
+        pass += 1;
+    }
+    crate::port::cells_set(out, 0, slope as i32);
+    crate::port::cells_set(out, 1, icpt as i32);
+    crate::port::cells_set(out, 2, hbar);
+    return m;
+}
+pub(crate) fn tr_profile_score(rn: &mut crate::port::Cells, it: &mut crate::port::Cells, head: i32, idx: &mut crate::port::Cells, off: &mut crate::port::Cells, th: i32, vlo: i32, nb: i32, mut prof: &mut crate::port::Cells) -> i32 {
+    // The sharpness of the chain's ink projected across the direction `th`: every run of every member by its midpoint, weighted by
+    // its length, into two-pixel bins of v (from `vlo`; `nb` bins in `prof`, left zero); the sum of squared steps between neighbouring
+    // bins, which is largest when the line's edges fall into few bins. Answers the score / 256 (clamped to an Int).
+    let co: i32 = ev_cos(th);
+    let si: i32 = ev_sin(th);
+    let mut j: i32 = head;
+    let mut comp: i32 = 0;
+    let mut k: i32 = 0;
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 0;
+    let mut r: i32 = 0;
+    let mut b: i32 = 0;
+    let mut c: i32 = 0;
+    let mut pc: i32 = 0;
+    let mut sc: i64 = 0;
+    while j >= 0 {
+        comp = crate::port::cells_at(it, j * K_IT);
+        lo = crate::port::cells_at(off, comp);
+        hi = crate::port::cells_at(off, comp + 1);
+        k = lo;
+        while k < hi {
+            r = crate::port::cells_at(idx, k);
+            b = (tr_rot_v((tr_rg(rn, r, 1) + tr_rg(rn, r, 2)) / 2, tr_rg(rn, r, 0), co, si) - vlo) / 2;
+            if (b >= 0) && (b < nb) {
+                c = crate::port::cells_at(prof, b);
+                crate::port::cells_set(prof, b, c + (tr_rg(rn, r, 2) - tr_rg(rn, r, 1)));
+            }
+            k += 1;
+        }
+        j = crate::port::cells_at(it, (j * K_IT) + 7);
+    }
+    b = 0;
+    while b < nb {
+        c = crate::port::cells_at(prof, b);
+        sc += ((c - pc) as i64).wrapping_mul((c - pc) as i64);
+        pc = c;
+        crate::port::cells_set(prof, b, 0);
+        b += 1;
+    }
+    return (sc / (256 as i64)) as i32;
+}
+pub(crate) fn tr_refine_angle(rn: &mut crate::port::Cells, it: &mut crate::port::Cells, head: i32, th0: i32, span: i32, idx: &mut crate::port::Cells, off: &mut crate::port::Cells, mut prof: &mut crate::port::Cells) -> i32 {
+    // The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) whose projection
+    // profile (`tr-profile-score`) is sharpest; ties go to the smaller offset from `th0`. `prof` is scratch.
+    let mut d: i32 = 0;
+    let mut best: i32 = th0;
+    let mut bs: i32 = -1;
+    let mut s: i32 = 0;
+    let mut vlo: i32 = 100000000;
+    let mut vhi: i32 = -100000000;
+    let mut j: i32 = head;
+    let mut comp: i32 = 0;
+    let mut k: i32 = 0;
+    let mut r: i32 = 0;
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 0;
+    let mut v: i32 = 0;
+    let mut nb: i32 = 0;
+    let mut ang: i32 = 0;
+    // the v-range over every angle tried is bounded by the chain's extent: take it at the worst angle of the span
+    while j >= 0 {
+        comp = crate::port::cells_at(it, j * K_IT);
+        lo = crate::port::cells_at(off, comp);
+        hi = crate::port::cells_at(off, comp + 1);
+        k = lo;
+        while k < hi {
+            r = crate::port::cells_at(idx, k);
+            d = 0;
+            while d <= 1 {
+                if d == 0 {
+                    ang = th0 - span;
+                } else {
+                    ang = th0 + span;
+                }
+                v = tr_rot_v(tr_rg(rn, r, 1), tr_rg(rn, r, 0), ev_cos(ang), ev_sin(ang));
+                if v < vlo {
+                    vlo = v;
+                }
+                if v > vhi {
+                    vhi = v;
+                }
+                d += 1;
+            }
+            k += 1;
+        }
+        j = crate::port::cells_at(it, (j * K_IT) + 7);
+    }
+    nb = ((vhi - vlo) / 2) + 4;
+    if nb > 20000 {
+        return th0;
+    }
+    crate::port::cells_drop(prof, 0);
+    crate::port::cells_grow(prof, nb, 0);
+    d = 0 - span;
+    while d <= span {
+        s = tr_profile_score(rn, it, head, idx, off, th0 + d, vlo, nb, prof);
+        if (s > bs) || ((s == bs) && (tr_abs(d) < tr_abs(best - th0))) {
+            bs = s;
+            best = th0 + d;
+        }
+        d += 25;
+    }
+    return (best + 36000) % 36000;
+}
+pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, h: i32, rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, cs: &mut crate::port::Cells, comps: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
     // Text lines without OCR (SPEC 8.2): the text-like components of one ink layer chained by nearest neighbour (within 1.5 mean
     // heights, heights within a factor of three) in order of distance, a chain accepted only while its centres stay on a line (spread
     // across it at most 0.3 of the mean height). Every chain of at least `tr-tl-min` components is a `tlines` row: the box, the
@@ -3162,19 +3413,11 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
     let mut rows: i32 = 0;
     let mut k: i32 = 0;
     let mut e: i32 = 0;
-    let mut cnt: i32 = 0;
     let mut row: i32 = 0;
     let mut alpha: i32 = 0;
     let mut th: i32 = 0;
     let mut co: i32 = 0;
     let mut si: i32 = 0;
-    let mut u: i32 = 0;
-    let mut v: i32 = 0;
-    let mut comp: i32 = 0;
-    let mut vmx: i32 = 0;
-    let mut vmn: i32 = 0;
-    let mut umn: i32 = 0;
-    let mut umx: i32 = 0;
     let mut x0: i32 = 0;
     let mut y0: i32 = 0;
     let mut x1: i32 = 0;
@@ -3182,14 +3425,8 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
     let mut hbar: i32 = 0;
     let mut pass: i32 = 0;
     let mut m: i32 = 0;
-    let mut su: i64 = 0;
-    let mut sv: i64 = 0;
-    let mut suu: i64 = 0;
-    let mut suv: i64 = 0;
-    let mut den: i64 = 0;
     let mut slope: i64 = 0;
     let mut icpt: i64 = 0;
-    let mut nn: i64 = 0;
     let mut hsum: i32 = 0;
     let mut gsum: i32 = 0;
     let mut rms: i32 = 0;
@@ -3292,126 +3529,43 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
         }
         k += 1;
     }
-    // 4. a row for every chain of enough components
+    // 4. a row for every chain of enough components; the frame's angle is refined from the bottoms' own slope, three times
+    tr_group(rn, K_RS, 5, crate::port::cells_at(ri, h), nc, s2, s3);
     i = 0;
     while i < n {
         if (crate::port::cells_at(s1, (i * K_IT) + 6) == i) && (crate::port::cells_at(s1, (i * K_IT) + 9) >= tr_tl_min()) {
             tr_fit_chain(s1, i, -1, s4);
-            cnt = crate::port::cells_at(s4, 0);
             alpha = crate::port::cells_at(s4, 2);
-            hbar = crate::port::cells_at(s4, 3) / cnt;
-            rms = tr_isqrt(tr_max(0, crate::port::cells_at(s4, 1)) as i64) / 4;
             if alpha > 9000 {
                 th = alpha + 18000;
             } else {
                 th = alpha;
             }
-            co = ev_cos(th);
-            si = ev_sin(th);
-            // members into s5 as [u-centre v-bottom height u-left u-right comp], ordered by u-centre
-            crate::port::cells_drop(s5, 0);
-            j = i;
-            m = 0;
-            while j >= 0 {
-                comp = crate::port::cells_at(s1, j * K_IT);
-                umn = 1000000000;
-                umx = -1000000000;
-                vmn = 1000000000;
-                vmx = -1000000000;
-                e = 0;
-                while e < 4 {
-                    if (e & 1) == 0 {
-                        dx = tr_cg(cs, comp, C_LEFT);
-                    } else {
-                        dx = tr_cg(cs, comp, C_RIGHT);
-                    }
-                    if e < 2 {
-                        dy = tr_cg(cs, comp, C_TOP);
-                    } else {
-                        dy = tr_cg(cs, comp, C_BOTTOM);
-                    }
-                    u = tr_rot_u(dx, dy, co, si);
-                    v = tr_rot_v(dx, dy, co, si);
-                    if u < umn {
-                        umn = u;
-                    }
-                    if u > umx {
-                        umx = u;
-                    }
-                    if v < vmn {
-                        vmn = v;
-                    }
-                    if v > vmx {
-                        vmx = v;
-                    }
-                    e += 1;
-                }
-                // insertion by the centre of u
-                k = m;
-                crate::port::cells_push(s5, 0);
-                crate::port::cells_push(s5, 0);
-                crate::port::cells_push(s5, 0);
-                crate::port::cells_push(s5, 0);
-                crate::port::cells_push(s5, 0);
-                crate::port::cells_push(s5, 0);
-                while (k > 0) && (crate::port::cells_at(s5, (k - 1) * 6) > ((umn + umx) / 2)) {
-                    e = 0;
-                    while e < 6 {
-                        crate::port::cells_set(s5, (k * 6) + e, crate::port::cells_at(s5, ((k - 1) * 6) + e));
-                        e += 1;
-                    }
-                    k -= 1;
-                }
-                crate::port::cells_set(s5, k * 6, (umn + umx) / 2);
-                crate::port::cells_set(s5, (k * 6) + 1, vmx);
-                crate::port::cells_set(s5, (k * 6) + 2, vmx - vmn);
-                crate::port::cells_set(s5, (k * 6) + 3, umn);
-                crate::port::cells_set(s5, (k * 6) + 4, umx);
-                crate::port::cells_set(s5, (k * 6) + 5, comp);
-                m += 1;
-                j = crate::port::cells_at(s1, (j * K_IT) + 7);
-            }
-            // least squares v = icpt + slope * u over the bottoms, then once more without the points far below the line
+            rms = tr_isqrt(tr_max(0, crate::port::cells_at(s4, 1)) as i64) / 4;
+            th = tr_refine_angle(rn, s1, i, th, 800, s2, s3, s6);
             pass = 0;
-            slope = 0 as i64;
-            icpt = 0 as i64;
             while pass < 2 {
-                su = 0 as i64;
-                sv = 0 as i64;
-                suu = 0 as i64;
-                suv = 0 as i64;
-                nn = 0 as i64;
-                k = 0;
-                while k < m {
-                    u = crate::port::cells_at(s5, k * 6);
-                    v = crate::port::cells_at(s5, (k * 6) + 1);
-                    e = 1;
-                    if pass == 1 {
-                        if (4 * (v - ((((slope * (u as i64)) + icpt) / (65536 as i64)) as i32))) > hbar {
-                            e = 0;
-                        }
-                    }
-                    if e == 1 {
-                        nn += 1 as i64;
-                        su += u as i64;
-                        sv += v as i64;
-                        suu += (u as i64).wrapping_mul(u as i64);
-                        suv += (u as i64).wrapping_mul(v as i64);
-                    }
-                    k += 1;
+                m = tr_line_frame(rn, cs, s1, i, th, s2, s3, s5, s4);
+                dx = ev_angle(65536, crate::port::cells_at(s4, 0));
+                if dx > 18000 {
+                    dx -= 36000;
                 }
-                den = (nn).wrapping_mul(suu) - (su).wrapping_mul(su);
-                if (nn > (1 as i64)) && (den > (0 as i64)) {
-                    slope = (((nn).wrapping_mul(suv) - (su).wrapping_mul(sv)) * (65536 as i64)) / den;
-                    icpt = ((sv * (65536 as i64)) - (slope).wrapping_mul(su)) / nn;
-                } else {
-                    slope = 0 as i64;
-                    if nn > (0 as i64) {
-                        icpt = (sv * (65536 as i64)) / nn;
-                    }
+                if dx > 150 {
+                    dx = 150;
+                }
+                if dx < -150 {
+                    dx = -150;
+                }
+                if pass < 1 {
+                    th = ((th + dx) + 36000) % 36000;
                 }
                 pass += 1;
             }
+            hbar = crate::port::cells_at(s4, 2);
+            co = ev_cos(th);
+            si = ev_sin(th);
+            slope = crate::port::cells_at(s4, 0) as i64;
+            icpt = crate::port::cells_at(s4, 1) as i64;
             u0 = crate::port::cells_at(s5, 3);
             u1 = crate::port::cells_at(s5, 4);
             k = 0;
@@ -3579,6 +3733,6 @@ pub fn tr_trace(views: &mut crate::port::Cells, inks: &mut crate::port::Cells, p
     tr_rules(views, page, view, dpi, w, h, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6);
     tr_shapes(views, page, view, dpi, bin, rn, ri, cs, comps, prims, pts, refs, inks, s1, s2, s3, s4, s5);
     tr_double_rings(cs, prims, refs);
-    tr_tlines(views, page, view, dpi, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6);
+    tr_tlines(views, page, view, dpi, h, rn, ri, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6);
     return nc;
 }
