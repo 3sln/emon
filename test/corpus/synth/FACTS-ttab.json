@@ -1,0 +1,50 @@
+{
+ "ttab-allp": {
+  "tag-verdict": "none"
+ },
+ "ttab-allp-untagged": {
+  "tag-verdict": "none"
+ },
+ "ttab-bad-rows": {
+  "tag-verdict": "contradicted"
+ },
+ "ttab-bad-rows-untagged": {
+  "tag-verdict": "none"
+ },
+ "ttab-bad-spans": {
+  "tag-verdict": "partial"
+ },
+ "ttab-bad-spans-untagged": {
+  "tag-verdict": "none"
+ },
+ "ttab-good": {
+  "tag-verdict": "confirmed"
+ },
+ "ttab-good-untagged": {
+  "tag-verdict": "none"
+ },
+ "ttab-good-ws": {
+  "tag-verdict": "confirmed"
+ },
+ "ttab-good-ws-untagged": {
+  "tag-verdict": "none"
+ },
+ "ttab-layout": {
+  "tag-verdict": "contradicted"
+ },
+ "ttab-layout-untagged": {
+  "tag-verdict": "none"
+ },
+ "ttab-missing-row": {
+  "tag-verdict": "partial"
+ },
+ "ttab-missing-row-untagged": {
+  "tag-verdict": "none"
+ },
+ "ttab-th-as-td": {
+  "tag-verdict": "confirmed"
+ },
+ "ttab-th-as-td-untagged": {
+  "tag-verdict": "none"
+ }
+}

@@ -32,7 +32,8 @@ its predicted kind).
 This is a port of the Python scorer and is written to give identical numbers:
 strings are code-point sequences, the sequence matcher is difflib's algorithm
 (autojunk off), and float sums are CPython's compensated `sum`."
-  (:require [clojure.string :as str]
+  (:require [accuracy.graphics :as G]
+            [clojure.string :as str]
             [nfc]
             [pyjson])
   (:import (java.math BigInteger)))
@@ -817,6 +818,8 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
             pp (into {} (for [x (or (get pred "pages") [])] [(get x "n") (get x "label")]))]
         (add "pages.label.n" (count gp))
         (add "pages.label.ok" (count (filter (fn [[n v]] (= (get pp n) v)) gp)))))
+    ;; the graphics metrics (P6.8, D227): the section at the end, in tools/accuracy/graphics.clj
+    (G/add-counts! add pred gold opts)
     {"counts" @c "stubs" STUBS}))
 
 ;; ---------------------------------------------------------------- ratios ----
@@ -918,7 +921,9 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
             m)
         m (if (contains? c "fusion.tl-chars")
             (set* m "tl-override" (or (ratio (c "fusion.tl-susp-chars") (c "fusion.tl-chars")) 0.0))
-            m)]
+            m)
+        ;; the graphics metrics (P6.8, D227): rule-p/r, fill-p/r, table-adj-p/r/f1, tag-verdict-acc
+        m (G/metrics set* m c)]
     m))
 
 (defn pool [list-of-counts]

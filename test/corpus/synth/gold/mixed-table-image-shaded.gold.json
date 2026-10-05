@@ -1,0 +1,363 @@
+{
+ "emon-gold": "1.0",
+ "id": "mixed-table-image-shaded",
+ "provenance": {
+  "html": "html/mixed-table-image-shaded.html",
+  "pdf": "pdf/mixed-table-image-shaded.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/mixed-table-image-shaded.pdf",
+   "scan-color": "scan-color/mixed-table-image-shaded.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Printed Status Chart"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "The chart below was scanned from last year's printed report; the figures were not available in electronic form."
+      },
+      {
+       "id": 4,
+       "kind": "table",
+       "profile": "shaded",
+       "columns": 4,
+       "children": [
+        {
+         "id": 5,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 6,
+           "kind": "row",
+           "children": [
+            {
+             "id": 7,
+             "kind": "cell",
+             "header": "col",
+             "text": "Account"
+            },
+            {
+             "id": 8,
+             "kind": "cell",
+             "header": "col",
+             "text": "Owner"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "Region"
+            },
+            {
+             "id": 10,
+             "kind": "cell",
+             "header": "col",
+             "text": "Balance"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 11,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 12,
+           "kind": "row",
+           "children": [
+            {
+             "id": 13,
+             "kind": "cell",
+             "text": "Operating"
+            },
+            {
+             "id": 14,
+             "kind": "cell",
+             "text": "Ana"
+            },
+            {
+             "id": 15,
+             "kind": "cell",
+             "text": "North"
+            },
+            {
+             "id": 16,
+             "kind": "cell",
+             "text": "12,400"
+            }
+           ]
+          },
+          {
+           "id": 17,
+           "kind": "row",
+           "children": [
+            {
+             "id": 18,
+             "kind": "cell",
+             "text": "Payroll"
+            },
+            {
+             "id": 19,
+             "kind": "cell",
+             "text": "Ben"
+            },
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "South"
+            },
+            {
+             "id": 21,
+             "kind": "cell",
+             "text": "8,150"
+            }
+           ]
+          },
+          {
+           "id": 22,
+           "kind": "row",
+           "children": [
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "Reserve"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "Chen"
+            },
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "East"
+            },
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "31,000"
+            }
+           ]
+          },
+          {
+           "id": 27,
+           "kind": "row",
+           "children": [
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "Travel"
+            },
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "Dee"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "West"
+            },
+            {
+             "id": 31,
+             "kind": "cell",
+             "text": "2,975"
+            }
+           ]
+          },
+          {
+           "id": 32,
+           "kind": "row",
+           "children": [
+            {
+             "id": 33,
+             "kind": "cell",
+             "text": "Training"
+            },
+            {
+             "id": 34,
+             "kind": "cell",
+             "text": "Eli"
+            },
+            {
+             "id": 35,
+             "kind": "cell",
+             "text": "North"
+            },
+            {
+             "id": 36,
+             "kind": "cell",
+             "text": "1,820"
+            }
+           ]
+          },
+          {
+           "id": 37,
+           "kind": "row",
+           "children": [
+            {
+             "id": 38,
+             "kind": "cell",
+             "text": "Equipment"
+            },
+            {
+             "id": 39,
+             "kind": "cell",
+             "text": "Fay"
+            },
+            {
+             "id": 40,
+             "kind": "cell",
+             "text": "South"
+            },
+            {
+             "id": 41,
+             "kind": "cell",
+             "text": "6,410"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 42,
+       "kind": "paragraph",
+       "text": "Compare the totals with the ledger that follows before relying on them."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Printed Status Chart"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}
