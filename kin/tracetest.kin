@@ -1,0 +1,612 @@
+;; Laws for `emon.trace` (P6.4; D252-D258): hand-built bitmaps with known answers. Runs, components (two touching runs are one, a ring has a
+;; hole, a letter in the notch of a `c` is not inside it), stroke width, classes, contours, Douglas-Peucker, rules (horizontal, vertical, slanted,
+;; inside a grid component, dashed, double, and a circle that is NOT one), primitives (rect, circle, ellipse, ring, double ring), tints, text
+;; lines (a 30 degree line of letters), the features and the orientation hint. 72 dpi makes a pixel a point (100 centipoints); 144 dpi makes
+;; the rule thresholds (6 pt long, 3 pt thick, 2 pt gap) 12, 6 and 4 pixels.
+(ns emon.tracetest
+  (:require [emon.lang :refer [I32 I64 Bitmap Cells i64 i32]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 cells-len cells-at cells-set cells-push]]
+            [emon.evidence :refer [vw-new vk-binary ik-new co-count co-get rl-count rl-get pm-count pm-get tl-count tl-get
+                                   cf-x0 cf-y0 cf-x1 cf-y1 cf-pxx cf-pxy cf-pxw cf-pxh cf-area cf-fill cf-stroke cf-kind cf-conf cf-holes cf-parent
+                                   cf-pfirst cf-pcount cf-gray
+                                   rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-style rlf-conf rlf-rcount
+                                   pmf-kind pmf-cx pmf-cy pmf-rx pmf-ry pmf-fill pmf-conf pmf-flags pmf-rcount pmf-pcount
+                                   tlf-ink tlf-height tlf-conf
+                                   ck-blob ck-rule-h ck-rule-v ck-text-like rs-solid rs-dashed rs-double
+                                   pm-rect pm-ellipse pm-circle pm-ring pm-polygon
+                                   fe-new fe-get xo-components xo-comp-ratio xt-tline-overlap]]
+            [emon.trace :refer [tr-isqrt tr-runs tr-unify tr-label tr-simplify tr-contour-raw tr-trace tr-tints tr-fg tr-pt tr-noise
+                                tr-feat-ocr tr-feat-text tr-orient-hint tr-sort-keys tr-h2cpt]]
+            [kin.lang :refer [defn let set while do comment return if
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ---------------------------------------------------------------- helpers
+
+(defn ^I32 tt-rect [^Bitmap b ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Ink in [x0, x1) x [y0, y1).")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y y0]
+    (while (< y y1)
+      (do (set x x0)
+          (while (< x x1)
+            (do (if (and (and (>= x 0) (< x (bitmap-w b))) (and (>= y 0) (< y (bitmap-h b))))
+                  (bitmap-set-u8 b x y 0 255))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 tt-dot [^Bitmap b ^I32 x ^I32 y]
+  (tt-rect b x y (+ x 1) (+ y 1))
+  (return 0))
+
+(defn ^I32 tt-disc [^Bitmap b ^I32 cx ^I32 cy ^I32 r2out ^I32 r2in]
+  (comment "Ink where r2in <= squared distance from (cx, cy) < r2out (a disc or a ring).")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 d 0]
+    (while (< y (bitmap-h b))
+      (do (set x 0)
+          (while (< x (bitmap-w b))
+            (do (set d (+ (* (- x cx) (- x cx)) (* (- y cy) (- y cy))))
+                (if (and (< d r2out) (>= d r2in)) (bitmap-set-u8 b x y 0 255))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 tt-ellipse [^Bitmap b ^I32 cx ^I32 cy ^I32 rx ^I32 ry]
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y (bitmap-h b))
+      (do (set x 0)
+          (while (< x (bitmap-w b))
+            (do (if (<= (+ (* (* (- x cx) (- x cx)) (* ry ry)) (* (* (- y cy) (- y cy)) (* rx rx))) (* (* rx rx) (* ry ry)))
+                  (bitmap-set-u8 b x y 0 255))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 tt-line [^Bitmap b ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 thick]
+  (comment "A line of the given thickness (vertical extent), x stepping, y by integer interpolation (|slope| <= 1).")
+  (let [^:mut ^I32 x x0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 j 0]
+    (while (<= x x1)
+      (do (set y (+ y0 (quot (* (- y1 y0) (- x x0)) (- x1 x0))))
+          (set j 0)
+          (while (< j thick)
+            (do (tt-dot b x (+ y j))
+                (set j (+ j 1))))
+          (set x (+ x 1))))
+    (return 0)))
+
+(defn ^I32 tt-trace [^Bitmap bin ^I32 dpi100 ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tlines ^:mut ^Cells pts
+                     ^:mut ^Cells refs ^:mut ^Cells views ^:mut ^Cells inks]
+  (comment "Trace `bin` as a binary view (also its own gray and label image) at `dpi100`, one ink layer; the workspace is made here.")
+  (let [^:mut ^Cells rn (new-cells)
+        ^:mut ^Cells ri (new-cells)
+        ^:mut ^Cells cs (new-cells)
+        ^:mut ^Cells vr (new-cells)
+        ^:mut ^Cells pc (new-cells)
+        ^:mut ^Cells sg (new-cells)
+        ^:mut ^Cells mem (new-cells)
+        ^:mut ^Cells s1 (new-cells)
+        ^:mut ^Cells s2 (new-cells)
+        ^:mut ^Cells s3 (new-cells)
+        ^:mut ^Cells s4 (new-cells)
+        ^:mut ^Cells s5 (new-cells)
+        ^:mut ^Cells s6 (new-cells)]
+    (vw-new views 0 (vk-binary) -1 -1 (bitmap-w bin) (bitmap-h bin) dpi100 0 -1 0 0 0 0 0)
+    (ik-new inks 0 0)
+    (cells-set inks 2 8421504)
+    (return (tr-trace views inks 0 0 0 0 bin bin bin comps rules prims tlines pts refs rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6))))
+
+(defn ^I32 tt-field [^Bitmap b]
+  (comment "Fifty glyph blocks (6 x 8) in five rows at the bottom of the bitmap: the page's body text, which makes the median glyph 8 px so that")
+  (comment "anything over 32 px is large.")
+  (let [^I32 y0 (- (bitmap-h b) 60)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 k 0]
+    (while (< r 5)
+      (do (set k 0)
+          (while (< k 10)
+            (do (tt-rect b (+ 2 (* k 10)) (+ y0 (* r 12)) (+ 8 (* k 10)) (+ (+ y0 (* r 12)) 8))
+                (set k (+ k 1))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 tt-near [^I32 got ^I32 want ^I32 tol]
+  (let [^:mut ^I32 d (- got want)]
+    (if (< d 0) (set d (- 0 d)))
+    (if (<= d tol) (return 1))
+    (return 0)))
+
+;; ---------------------------------------------------------------- integer square root, runs, components
+
+(deftest test-the-integer-square-root-is-the-floor
+  (assert-eq (tr-isqrt (i64 0)) 0 "0")
+  (assert-eq (tr-isqrt (i64 1)) 1 "1")
+  (assert-eq (tr-isqrt (i64 15)) 3 "15")
+  (assert-eq (tr-isqrt (i64 16)) 4 "16")
+  (assert-eq (tr-isqrt (i64 99999999)) 9999 "99999999")
+  (assert-eq (tr-isqrt (i64 100000000)) 10000 "10^8")
+  (assert-eq (tr-isqrt (i64 4611686014132420609)) 2147483647 "(2^31 - 1)^2"))
+
+(deftest test-runs-are-the-ink-rows-and-the-row-index-says-where
+  (let [^Bitmap b (bitmap-new 20 6 1)
+        ^Cells rn (new-cells)
+        ^Cells ri (new-cells)]
+    (tt-rect b 2 1 6 3)
+    (tt-rect b 10 1 13 2)
+    (tt-dot b 19 4)
+    (assert-eq (tr-runs b rn ri) 4 "the block's two rows, the bar and the dot")
+    (assert-eq (cells-at ri 0) 0 "row 0 starts at run 0")
+    (assert-eq (cells-at ri 1) 0 "row 1 starts at run 0")
+    (assert-eq (cells-at ri 2) 2 "row 2 starts after the two runs of row 1")
+    (assert-eq (cells-at ri 3) 3 "row 3 has none")
+    (assert-eq (cells-at ri 6) 4 "the count")
+    (assert-eq (cells-at rn 1) 2 "the first run's x0")
+    (assert-eq (cells-at rn 2) 6 "its x1, exclusive")
+    (assert-eq (cells-at rn 7) 10 "the second run's x0")))
+
+(deftest test-two-touching-runs-are-one-component-and-a-gap-makes-two
+  (let [^Bitmap b (bitmap-new 30 12 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 2 2 6 3)
+    (tt-rect b 6 3 9 4)
+    (tt-rect b 14 2 18 3)
+    (tt-rect b 20 3 24 4)
+    (assert-eq (tt-trace b 7200 comps rules prims tlines pts refs views inks) 3 "the first two touch at a corner (8-connected), the third and fourth are a pixel apart")
+    (assert-eq (co-get comps 0 (cf-area)) 7 "4 + 3 ink pixels")
+    (assert-eq (co-get comps 0 (cf-pxw)) 7 "its box is 7 wide")
+    (assert-eq (co-get comps 0 (cf-pxh)) 2 "and 2 high")))
+
+(deftest test-components-are-sorted-by-top-left-and-size
+  (let [^Bitmap b (bitmap-new 40 30 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 20 10 24 14)
+    (tt-rect b 5 10 9 14)
+    (tt-rect b 5 2 12 5)
+    (tt-rect b 30 2 33 5)
+    (assert-eq (tt-trace b 7200 comps rules prims tlines pts refs views inks) 4 "four")
+    (assert-eq (co-get comps 0 (cf-pxx)) 5 "the top row first, its left one first: x 5")
+    (assert-eq (co-get comps 0 (cf-pxy)) 2 "y 2")
+    (assert-eq (co-get comps 1 (cf-pxx)) 30 "then the right one of that row")
+    (assert-eq (co-get comps 2 (cf-pxx)) 5 "then row 10 from the left")
+    (assert-eq (co-get comps 3 (cf-pxx)) 20 "and the last")))
+
+(deftest test-a-component-measures-its-box-ink-fill-and-stroke
+  (let [^Bitmap b (bitmap-new 30 20 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 4 3 14 11)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (co-count comps) 1 "one")
+    (assert-eq (co-get comps 0 (cf-x0)) 400 "the page box through the view: 4 px at 72 dpi is 400 cpt")
+    (assert-eq (co-get comps 0 (cf-y1)) 1100 "11 px")
+    (assert-eq (co-get comps 0 (cf-area)) 80 "10 x 8 ink pixels")
+    (assert-eq (co-get comps 0 (cf-fill)) 1000 "a solid block")
+    (assert-eq (co-get comps 0 (cf-stroke)) 800 "the smaller of the median row run (10) and column run (8): 8 px, 800 cpt")
+    (assert-eq (co-get comps 0 (cf-holes)) 0 "no hole")
+    (assert-eq (co-get comps 0 (cf-gray)) 255 "the gray view is the bitmap itself")))
+
+(deftest test-a-stroke-is-the-run-median-of-a-thin-bar
+  (let [^Bitmap b (bitmap-new 20 40 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 5 4 8 34)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (co-get comps 0 (cf-stroke)) 300 "a 3 px bar has a 3 px stroke")))
+
+(deftest test-a-ring-has-a-hole-and-a-component-inside-it-has-the-ring-as-parent
+  (let [^Bitmap b (bitmap-new 120 120 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 4 4 48 48)
+    (comment "carve the hole: clear the inner block")
+    (let [^:mut ^I32 x 7
+          ^:mut ^I32 y 7]
+      (while (< y 45)
+        (do (set x 7)
+            (while (< x 45)
+              (do (bitmap-set-u8 b x y 0 0) (set x (+ x 1))))
+            (set y (+ y 1)))))
+    (tt-rect b 20 20 32 32)
+    (tt-field b)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (co-count comps) 52 "the frame, the block inside it and the fifty glyphs")
+    (assert-eq (co-get comps 0 (cf-holes)) 1 "the frame has one hole")
+    (assert-eq (co-get comps 0 (cf-parent)) -1 "and no parent")
+    (assert-eq (co-get comps 1 (cf-parent)) 0 "the block lies in the frame's hole")
+    (assert-eq (co-get comps 1 (cf-holes)) 0 "and has none")))
+
+(deftest test-a-letter-in-the-notch-of-a-c-is-not-inside-it
+  (let [^Bitmap b (bitmap-new 40 40 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (comment "a C: top, left and bottom bars, open on the right; a block in its mouth")
+    (tt-rect b 4 4 30 8)
+    (tt-rect b 4 8 8 26)
+    (tt-rect b 4 26 30 30)
+    (tt-rect b 20 14 26 20)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (co-count comps) 2 "the C and the block")
+    (assert-eq (co-get comps 0 (cf-holes)) 0 "the C has no hole")
+    (assert-eq (co-get comps 1 (cf-parent)) -1 "so nothing contains the block")))
+
+(deftest test-holes-are-counted-from-runs
+  (let [^Bitmap b (bitmap-new 30 30 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (comment "a B: a block with two separate holes")
+    (tt-rect b 4 4 20 24)
+    (tt-rect b 8 8 16 11)
+    (let [^:mut ^I32 x 8 ^:mut ^I32 y 8]
+      (while (< y 11) (do (set x 8) (while (< x 16) (do (bitmap-set-u8 b x y 0 0) (set x (+ x 1)))) (set y (+ y 1))))
+      (set y 15)
+      (while (< y 19) (do (set x 8) (while (< x 16) (do (bitmap-set-u8 b x y 0 0) (set x (+ x 1)))) (set y (+ y 1)))))
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (co-get comps 0 (cf-holes)) 2 "two holes")))
+
+(deftest test-a-diagonal-connection-closes-a-hole
+  (let [^Bitmap b (bitmap-new 12 12 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (comment "a diamond of four pixels around one background pixel")
+    (tt-dot b 5 3) (tt-dot b 4 4) (tt-dot b 6 4) (tt-dot b 5 5)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (co-count comps) 1 "one component")
+    (assert-eq (co-get comps 0 (cf-holes)) 1 "with the enclosed pixel as its hole")))
+
+;; ---------------------------------------------------------------- classes
+
+(deftest test-noise-glyphs-rules-and-large-things-are-told-apart
+  (let [^Bitmap b (bitmap-new 200 160 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0]
+    (comment "thirty glyph-sized blocks in three rows, a speck, a tall thin bar (a rule), a long thin one, and a big block")
+    (while (< r 3)
+      (do (set i 0)
+          (while (< i 10)
+            (do (tt-rect b (+ 4 (* i 10)) (+ 4 (* r 12)) (+ 10 (* i 10)) (+ 12 (* r 12)))
+                (set i (+ i 1))))
+          (set r (+ r 1))))
+    (tt-dot b 190 5)
+    (tt-rect b 170 60 172 90)
+    (tt-rect b 4 100 150 102)
+    (tt-rect b 4 110 60 148)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (co-count comps) 34 "thirty-four components")
+    (assert-eq (co-get comps 0 (cf-kind)) (ck-text-like) "a glyph-sized block is text-like")
+    (assert-eq (co-get comps 0 (cf-conf)) 900 "with confidence 900")
+    (comment "sorted by top: the first row (y 4), the speck (y 5), the second and third rows, the tall bar, the long bar, the big block")
+    (assert-eq (co-get comps 10 (cf-kind)) (ck-blob) "the speck is blob (noise)")
+    (assert-eq (co-get comps 10 (cf-conf)) 0 "with confidence 0")
+    (assert-eq (co-get comps 31 (cf-kind)) (ck-rule-v) "the tall thin bar is a vertical rule")
+    (assert-eq (co-get comps 32 (cf-kind)) (ck-rule-h) "the long thin one is a horizontal rule")
+    (assert-eq (co-get comps 33 (cf-kind)) (ck-blob) "the big block is large (blob)")
+    (assert-eq (co-get comps 33 (cf-conf)) 700 "with confidence 700")))
+
+;; ---------------------------------------------------------------- contours
+
+(deftest test-the-contour-of-a-block-is-its-four-corners
+  (let [^Bitmap b (bitmap-new 20 12 1)
+        ^Cells raw (new-cells)]
+    (tt-rect b 3 2 13 8)
+    (assert-eq (tr-contour-raw b 3 2 raw 1000) 4 "four corners")
+    (assert-eq (cells-at raw 0) 3 "the first is the top-left corner of the first pixel")
+    (assert-eq (cells-at raw 1) 2 "(3, 2)")
+    (assert-eq (cells-at raw 2) 13 "then clockwise: (13, 2)")
+    (assert-eq (cells-at raw 4) 13 "(13, 8)")
+    (assert-eq (cells-at raw 5) 8 "y 8")
+    (assert-eq (cells-at raw 6) 3 "(3, 8)")))
+
+(deftest test-the-contour-of-an-l-has-six-corners-and-diagonal-pixels-are-joined
+  (let [^Bitmap b (bitmap-new 20 20 1)
+        ^Cells raw (new-cells)]
+    (tt-rect b 2 2 5 12)
+    (tt-rect b 5 9 12 12)
+    (assert-eq (tr-contour-raw b 2 2 raw 1000) 6 "an L has six corners")
+    (let [^Bitmap d (bitmap-new 10 10 1)]
+      (tt-dot d 2 2)
+      (tt-dot d 3 3)
+      (assert-eq (tr-contour-raw d 2 2 raw 1000) 8 "two pixels touching at a corner are one boundary of eight corners")
+      (assert-eq (tr-contour-raw d 2 2 raw 5) -1 "a bound below the count refuses"))))
+
+(deftest test-douglas-peucker-drops-a-staircase-and-keeps-a-corner
+  (let [^Cells raw (new-cells)
+        ^Cells keep (new-cells)
+        ^Cells stk (new-cells)]
+    (comment "an open chain along a gentle line with one-pixel wobble, then a real corner")
+    (cells-push raw 0) (cells-push raw 0)
+    (cells-push raw 5) (cells-push raw 1)
+    (cells-push raw 10) (cells-push raw 0)
+    (cells-push raw 15) (cells-push raw 1)
+    (cells-push raw 20) (cells-push raw 0)
+    (assert-eq (tr-simplify raw 5 0 9 keep stk) 2 "the wobble is under 1.5 px: only the ends stay")
+    (cells-push raw 20) (cells-push raw 20)
+    (assert-eq (tr-simplify raw 6 0 9 keep stk) 3 "a corner 20 px off the chord stays")
+    (assert-eq (cells-at keep 5) 1 "the end")
+    (let [^Cells sq (new-cells)]
+      (cells-push sq 0) (cells-push sq 0)
+      (cells-push sq 10) (cells-push sq 0)
+      (cells-push sq 10) (cells-push sq 10)
+      (cells-push sq 0) (cells-push sq 10)
+      (assert-eq (tr-simplify sq 4 1 9 keep stk) 4 "a closed square keeps its four corners"))))
+
+;; ---------------------------------------------------------------- rules
+
+(deftest test-a-horizontal-rule-is-found-with-its-ends-and-thickness
+  (let [^Bitmap b (bitmap-new 200 40 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 20 18 160 21)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (rl-count rules) 1 "one rule")
+    (assert-eq (co-get comps 0 (cf-kind)) (ck-rule-h) "its component is a horizontal rule")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-lx0)) 1000 100) 1 "the left end: 20 px at 144 dpi is 1000 cpt")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-lx1)) 8000 100) 1 "the right end: 160 px")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-ly0)) 975 60) 1 "the centre line: 19.5 px")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-thick)) 150 20) 1 "3 px is 150 cpt")
+    (assert-eq (rl-get rules 0 (rlf-style)) (rs-solid) "solid")
+    (assert-eq (rl-get rules 0 (rlf-conf)) 1000 "no gap, a constant thickness: 1000")
+    (assert-eq (rl-get rules 0 (rlf-rcount)) 1 "one member")))
+
+(deftest test-a-vertical-rule-is-found-from-stacked-short-runs
+  (let [^Bitmap b (bitmap-new 40 200 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 18 20 21 160)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (rl-count rules) 1 "one rule")
+    (assert-eq (co-get comps 0 (cf-kind)) (ck-rule-v) "a vertical one")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-ly0)) 1000 100) 1 "from y 20 px")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-ly1)) 8000 100) 1 "to y 160 px")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-lx0)) 975 60) 1 "at x 19.5 px")))
+
+(deftest test-a-grid-is-one-component-and-its-edges-are-still-rules
+  (let [^Bitmap b (bitmap-new 140 160 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (comment "a frame 100 x 60 with two inner lines (one each way), all 3 px thick")
+    (tt-rect b 10 10 110 13)
+    (tt-rect b 10 67 110 70)
+    (tt-rect b 10 10 13 70)
+    (tt-rect b 107 10 110 70)
+    (tt-rect b 10 38 110 41)
+    (tt-rect b 58 10 61 70)
+    (tt-field b)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (co-count comps) 51 "the grid is one large component, besides the fifty glyphs")
+    (assert-eq (co-get comps 0 (cf-kind)) (ck-blob) "large")
+    (assert-eq (rl-count rules) 6 "four edges and two inner lines, crossings bridged")
+    (assert-eq (rl-get rules 0 (rlf-rcount)) 1 "each has the one component as its member")))
+
+(deftest test-a-slanted-rule-is-found-at-any-angle-within-a-shallow-slope
+  (let [^Bitmap b (bitmap-new 200 100 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-line b 20 70 170 20 3)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (rl-count rules) 1 "one rule")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-lx0)) 1000 100) 1 "starts at x 20 px")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-lx1)) 8500 100) 1 "ends at x 170 px")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-ly0)) 3600 100) 1 "y 71.5 px at the left")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-ly1)) 1100 100) 1 "y 21.5 px at the right")))
+
+(deftest test-a-dashed-line-is-one-dashed-rule
+  (let [^Bitmap b (bitmap-new 260 30 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^:mut ^I32 i 0]
+    (while (< i 10)
+      (do (tt-rect b (+ 10 (* i 16)) 12 (+ 18 (* i 16)) 15)
+          (set i (+ i 1))))
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (rl-count rules) 1 "ten dashes of 8 px, 8 px apart: one rule")
+    (assert-eq (rl-get rules 0 (rlf-style)) (rs-dashed) "dashed")
+    (assert-eq (rl-get rules 0 (rlf-rcount)) 10 "its members are the ten dash components")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-lx0)) 500 100) 1 "from x 10 px")
+    (assert-eq (tt-near (rl-get rules 0 (rlf-lx1)) 8100 100) 1 "to the last dash's end, 162 px")))
+
+(deftest test-two-parallel-rules-close-together-are-both-double
+  (let [^Bitmap b (bitmap-new 200 50 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 20 20 160 23)
+    (tt-rect b 20 29 160 32)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (rl-count rules) 2 "two rules")
+    (assert-eq (rl-get rules 0 (rlf-style)) (rs-double) "both double")
+    (assert-eq (rl-get rules 1 (rlf-style)) (rs-double) "both")))
+
+(deftest test-a-circle-outline-is-not-a-rule
+  (let [^Bitmap b (bitmap-new 100 160 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-disc b 50 45 1600 1225)
+    (tt-field b)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (rl-count rules) 0 "its arcs are not straight stretches")))
+
+;; ---------------------------------------------------------------- primitives
+
+(deftest test-a-block-outline-is-a-rect-with-a-fitted-outline
+  (let [^Bitmap b (bitmap-new 100 140 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-rect b 10 10 70 13)
+    (tt-rect b 10 47 70 50)
+    (tt-rect b 10 10 13 50)
+    (tt-rect b 67 10 70 50)
+    (tt-field b)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (pm-count prims) 1 "one primitive")
+    (assert-eq (pm-get prims 0 (pmf-kind)) (pm-rect) "a rect")
+    (assert-eq (tt-near (pm-get prims 0 (pmf-cx)) 2000 100) 1 "centred at x 40 px")
+    (assert-eq (tt-near (pm-get prims 0 (pmf-rx)) 1500 100) 1 "radius 30 px")
+    (assert-eq (tt-near (pm-get prims 0 (pmf-ry)) 1000 100) 1 "radius 20 px")
+    (assert-eq (pm-get prims 0 (pmf-conf)) 1000 "an exact fit")
+    (assert-eq (pm-get prims 0 (pmf-pcount)) 5 "its outline: four corners and the close")
+    (assert-eq (bit-and (pm-get prims 0 (pmf-flags)) 1) 1 "closed")
+    (assert-eq (bit-and (pm-get prims 0 (pmf-flags)) 2) 0 "not filled")))
+
+(deftest test-a-disc-is-a-filled-circle-and-an-ellipse-is-an-ellipse
+  (let [^Bitmap b (bitmap-new 120 130 1)
+        ^Bitmap e (bitmap-new 160 130 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^Cells comps2 (new-cells) ^Cells rules2 (new-cells) ^Cells prims2 (new-cells) ^Cells tlines2 (new-cells)
+        ^Cells pts2 (new-cells) ^Cells refs2 (new-cells) ^Cells views2 (new-cells) ^Cells inks2 (new-cells)]
+    (tt-disc b 60 34 400 0)
+    (tt-field b)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (pm-get prims 0 (pmf-kind)) (pm-circle) "a circle")
+    (assert-eq (tt-near (pm-get prims 0 (pmf-rx)) 1000 120) 1 "radius 20 px")
+    (assert-eq (bit-and (pm-get prims 0 (pmf-flags)) 2) 2 "filled")
+    (tt-ellipse e 80 34 30 20)
+    (tt-field e)
+    (tt-trace e 14400 comps2 rules2 prims2 tlines2 pts2 refs2 views2 inks2)
+    (assert-eq (pm-get prims2 0 (pmf-kind)) (pm-ellipse) "an ellipse")
+    (assert-eq (tt-near (pm-get prims2 0 (pmf-rx)) 1500 150) 1 "its long radius is 30 px")
+    (assert-eq (tt-near (pm-get prims2 0 (pmf-ry)) 1000 150) 1 "its short one 20 px")))
+
+(deftest test-an-annulus-is-a-ring-and-two-concentric-ones-a-double-ring
+  (let [^Bitmap b (bitmap-new 100 160 1)
+        ^Bitmap d (bitmap-new 100 160 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^Cells comps2 (new-cells) ^Cells rules2 (new-cells) ^Cells prims2 (new-cells) ^Cells tlines2 (new-cells)
+        ^Cells pts2 (new-cells) ^Cells refs2 (new-cells) ^Cells views2 (new-cells) ^Cells inks2 (new-cells)]
+    (tt-disc b 50 45 1600 1225)
+    (tt-field b)
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (pm-get prims 0 (pmf-kind)) (pm-ring) "the first primitive")
+    (assert-eq (pm-get prims 0 (pmf-kind)) (pm-ring) "a ring: a circle with a hole concentric with it")
+    (assert-eq (bit-and (pm-get prims 0 (pmf-flags)) 4) 0 "single")
+    (tt-disc d 50 45 1600 1225)
+    (tt-disc d 50 45 784 576)
+    (tt-field d)
+    (tt-trace d 14400 comps2 rules2 prims2 tlines2 pts2 refs2 views2 inks2)
+    (assert-eq (pm-get prims2 0 (pmf-kind)) (pm-ring) "the outer one is a ring")
+    (assert-eq (bit-and (pm-get prims2 0 (pmf-flags)) 4) 4 "with the double flag")
+    (assert-eq (pm-get prims2 0 (pmf-rcount)) 2 "and both components as members")))
+
+;; ---------------------------------------------------------------- tints
+
+(deftest test-a-shaded-band-in-a-mask-is-one-tint-rect
+  (let [^Bitmap m (bitmap-new 160 80 1)
+        ^Cells prims (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^Cells s1 (new-cells) ^Cells s2 (new-cells)]
+    (vw-new views 0 (vk-binary) -1 -1 160 80 14400 0 -1 0 0 0 0 0)
+    (ik-new inks 0 0)
+    (cells-set inks 2 14737632)
+    (tt-rect m 20 10 140 40)
+    (tt-rect m 20 50 24 52)
+    (assert-eq (tr-tints views 0 0 14400 m 0 inks prims refs s1 s2) 1 "the band; the 2 px stripe is under fill-min")
+    (assert-eq (pm-get prims 0 (pmf-kind)) (pm-rect) "a rect")
+    (assert-eq (pm-get prims 0 (pmf-flags)) 11 "closed + filled + tint")
+    (assert-eq (pm-get prims 0 (pmf-fill)) 1000 "coverage 1000")
+    (assert-eq (pm-get prims 0 (pmf-conf)) 1000 "so is the confidence")
+    (assert-eq (tt-near (pm-get prims 0 (pmf-cx)) 4000 50) 1 "centred at x 80 px")))
+
+(deftest test-a-tint-follows-an-edge-that-drifts-within-tolerance
+  (let [^Bitmap m (bitmap-new 100 60 1)
+        ^Cells prims (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^Cells s1 (new-cells) ^Cells s2 (new-cells)
+        ^:mut ^I32 y 10]
+    (vw-new views 0 (vk-binary) -1 -1 100 60 14400 0 -1 0 0 0 0 0)
+    (ik-new inks 0 0)
+    (while (< y 40)
+      (do (tt-rect m (+ 10 (quot (- y 10) 10)) y (+ 80 (quot (- y 10) 10)) (+ y 1))
+          (set y (+ y 1))))
+    (assert-eq (tr-tints views 0 0 14400 m 0 inks prims refs s1 s2) 1 "one rect: the edge moves a pixel in ten rows")))
+
+;; ---------------------------------------------------------------- text lines
+
+(defn ^I32 tt-glyphs [^Bitmap b ^I32 x0 ^I32 y0 ^I32 n ^I32 dx ^I32 dy]
+  (comment "n glyph blocks of 8 x 10 pixels, the k-th at (x0 + k dx, y0 + k dy), each a box with a small notch.")
+  (let [^:mut ^I32 k 0]
+    (while (< k n)
+      (do (tt-rect b (+ x0 (* k dx)) (+ y0 (* k dy)) (+ (+ x0 (* k dx)) 8) (+ (+ y0 (* k dy)) 10))
+          (set k (+ k 1))))
+    (return 0)))
+
+(deftest test-a-30-degree-line-of-letters-is-one-text-line-at-its-angle
+  (let [^Bitmap b (bitmap-new 400 300 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-glyphs b 40 220 8 17 -10)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (tl-count tlines) 1 "one line")
+    (assert-eq (tl-get tlines 0 12) 8 "of eight components")
+    (assert-eq (tt-near (tl-get tlines 0 9) 2900 500) 1 "at about 30 degrees (the steps are 17 right, 10 up: 30.5)")
+    (assert-eq (tl-get tlines 0 (tlf-ink)) 0 "on the one ink layer")
+    (assert-eq (tt-near (tl-get tlines 0 (tlf-height)) 1100 150) 1 "the mean height: 10 px of glyph, a pixel more on the rotated frame: about 1100 cpt")))
+
+(deftest test-upright-lines-are-separate-and-vertical-ones-say-so
+  (let [^Bitmap b (bitmap-new 300 200 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (tt-glyphs b 20 30 10 14 0)
+    (tt-glyphs b 20 60 10 14 0)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (tl-count tlines) 2 "two lines, not one block")
+    (assert-eq (tt-near (tl-get tlines 0 9) 0 100) 1 "upright")
+    (assert-eq (tr-orient-hint tlines) 0 "the hint is horizontal")
+    (let [^Bitmap v (bitmap-new 200 300 1)
+          ^Cells comps2 (new-cells) ^Cells rules2 (new-cells) ^Cells prims2 (new-cells) ^Cells tlines2 (new-cells)
+          ^Cells pts2 (new-cells) ^Cells refs2 (new-cells) ^Cells views2 (new-cells) ^Cells inks2 (new-cells)]
+      (tt-glyphs v 50 20 12 0 22)
+      (tt-trace v 7200 comps2 rules2 prims2 tlines2 pts2 refs2 views2 inks2)
+      (assert-eq (tl-count tlines2) 1 "a column of letters is one line")
+      (assert-eq (tr-orient-hint tlines2) 1 "and the hint is vertical"))))
+
+(deftest test-features-count-components-in-a-box-and-overlap-with-a-line-at-another-angle
+  (let [^Bitmap b (bitmap-new 400 300 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^Cells feats (new-cells) ^Cells sb (new-cells)]
+    (tt-glyphs b 40 220 8 17 -10)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (fe-new feats 0 0)
+    (cells-push sb 4000) (cells-push sb 22000) (cells-push sb 4900) (cells-push sb 23000)
+    (cells-push sb 15000) (cells-push sb 2000) (cells-push sb 16000) (cells-push sb 3000)
+    (tr-feat-ocr feats 0 comps 0 3900 21000 7000 23000 sb 2)
+    (assert-eq (fe-get feats 0 (xo-components)) 2 "two glyph centres in the box")
+    (assert-eq (fe-get feats 0 (xo-comp-ratio)) 500 "one of the two symbol boxes has a glyph in it")
+    (tr-feat-text feats 0 comps tlines 0 3900 21000 7000 23000 0 sb 0)
+    (assert-eq (fe-get feats 0 (xo-comp-ratio)) -1 "no glyphs: -1")
+    (assert-eq (tt-near (fe-get feats 0 (xt-tline-overlap)) 1000 50) 1 "a line at 30 degrees over a word at 0: nearly all of the word box is inside the line's box")))
+
+(deftest test-a-blank-page-has-nothing
+  (let [^Bitmap b (bitmap-new 50 50 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (assert-eq (tt-trace b 7200 comps rules prims tlines pts refs views inks) 0 "no component")
+    (assert-eq (rl-count rules) 0 "no rule")
+    (assert-eq (pm-count prims) 0 "no primitive")
+    (assert-eq (tl-count tlines) 0 "no line")))
+
+(deftest test-half-pixels-map-to-the-mean-of-their-corners
+  (let [^Cells views (new-cells)]
+    (vw-new views 0 (vk-binary) -1 -1 100 100 7200 0 -1 0 0 0 0 0)
+    (assert-eq (tr-h2cpt views 0 0 10 10) 500 "the grid point (5, 5) is 500 cpt")
+    (assert-eq (tr-h2cpt views 0 0 11 10) 550 "half a pixel on")
+    (assert-eq (tr-h2cpt views 0 1 11 11) 550 "and in y")))
+
+(deftest test-the-key-sort-is-stable-by-index
+  (let [^Cells keys (new-cells)
+        ^Cells idx (new-cells)
+        ^Cells tmp (new-cells)]
+    (cells-push keys 5) (cells-push keys 3) (cells-push keys 5) (cells-push keys 1)
+    (cells-push idx 0) (cells-push idx 1) (cells-push idx 2) (cells-push idx 3)
+    (tr-sort-keys keys 4 idx tmp)
+    (assert-eq (cells-at idx 0) 3 "the smallest key first")
+    (assert-eq (cells-at idx 1) 1 "then")
+    (assert-eq (cells-at idx 2) 0 "equal keys by index")
+    (assert-eq (cells-at idx 3) 2 "the later one last")))
