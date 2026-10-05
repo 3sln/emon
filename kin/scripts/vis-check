@@ -29,7 +29,11 @@
           "O" (recur (rest lines) cur out)
           "C" (recur (rest lines) cur (update out cur conj {:g [(parse-long (nth f 3)) -1 1 (parse-long (nth f 4))] :text (nth f 5)
                                                            :c (nth f 1) :cls (parse-long (nth f 2))}))
-          "I" (recur (rest lines) cur (update out cur conj {:i (mapv parse-long (rest f))}))))
+          "I" (recur (rest lines) cur (update out cur conj {:i (mapv parse-long (rest f))}))
+          "P" (recur (rest lines) cur (update out cur conj {:p [(parse-long (nth f 1)) (parse-long (nth f 2))
+                                                               (if (= "-1" (nth f 3)) -1 (Long/parseLong (nth f 3) 16))
+                                                               (parse-long (nth f 4)) (parse-long (nth f 5)) (parse-long (nth f 6))]
+                                                           :text (nth f 7)}))))
       out)))
 
 (defn sweep [files]
@@ -74,7 +78,7 @@
       (let [vs (for [y (range cy0 (inc cy1)) x (range cx0 (inc cx1))] (px x y))]
         (- (apply max vs) (apply min vs))))))
 
-(declare render-witness)
+(declare render-witness render-paths)
 
 (defn -main []
   (let [exp (expectations)
@@ -114,14 +118,29 @@
                              (when (or (not= ivis vis) (not= iby by))
                                (say f " image " ii ": vis " ivis " vby " iby " vchk " ichk "; expected vis " vis " vby " by))))
                          (recur (rest rows) vi (inc ii)))
+                (:p r) (recur (rest rows) vi ii)
                 (:n r) (let [[ng ni] (:n r)]
                          (when (not= ng (count vs)) (say f ": " (count vs) " glyphs, expected " ng))
                          (when (not= ni (count is)) (say f ": " (count is) " images, expected " ni))
                          (recur (rest rows) vi ii))))))))
+    (doseq [f files]
+      (let [g (get got (str root "/test/" f))
+            ps (filter #(zero? (bit-and (nth % 2) 36)) (:q g))      ;; painted paths: not a clip (4), not a shading (32)
+            rs (filter :p (get exp f))]
+        (when (seq rs)
+          (when (not= (count ps) (count rs)) (say f ": " (count ps) " painted paths, expected " (count rs)))
+          (doseq [[row r] (map vector ps rs)]
+            (swap! checked inc)
+            (let [[_page _kind flags _fill _stroke _x0 _y0 _x1 _y1 _z _clip vis vby vchk backdrop pcount] row
+                  [evis eby ebackdrop echk etr epcount] (:p r)]
+              (when (or (not= vis evis) (not= vby eby) (not= backdrop ebackdrop) (not= (bit-and vchk echk) echk)
+                        (not= (if (zero? (bit-and flags 512)) 0 1) etr) (and (>= epcount 0) (not= pcount epcount)))
+                (say f " path \"" (:text r) "\": vis " vis " vby " vby " backdrop " backdrop " vchk " vchk " truncated "
+                     (if (zero? (bit-and flags 512)) 0 1) " kept " pcount "; expected " (:p r)))))))) 
     (if (zero? @bad)
       (println (str "  ok   vis-check: " @checked " glyphs and images of " (count files) " fixtures are classified as written"))
       (do (println (str "  FAIL vis-check: " @bad " mismatches")) (System/exit 1)))
-    (when render? (render-witness exp got))))
+    (when render? (render-paths exp got) (render-witness exp got))))
 
 (defn judge
   "The renderer's verdict on one glyph row against its expectation: nil when they agree or the renderer cannot say."
@@ -135,6 +154,36 @@
         (if (= vis 0)
           (if (< v 8) [:bad (str f " glyph " gi " \"" (:text r) "\" should be seen but its box is uniform")] [:seen])
           (if (>= v 8) [:bad (str f " glyph " gi " \"" (:text r) "\" (vis " vis ") leaves ink in its box, variation " v)] [:hidden]))))))
+
+(defn judge-path
+  "The renderer's verdict on one painted path against its expectation (the walls that cover another item are not judged:
+  what is under them shows)."
+  [img f row r]
+  (let [[_ _ _ _ _ x0 y0 x1 y1] row
+        vis (get-in r [:p 0])]
+    (when (and (not (#{2 4} vis)) (not (str/starts-with? (:text r) "the ")))
+      ;; a hairline is a pixel row: look one pixel round the box as well, so its ends and edges show
+      (when-let [v (region-variation img [(- x0 100) (- y0 100) (+ x1 100) (+ y1 100)])]
+        (if (= vis 0)
+          (if (< v 8) [:bad (str f " path \"" (:text r) "\" should be seen but its box is uniform")] [:seen])
+          (if (>= v 8) [:bad (str f " path \"" (:text r) "\" (vis " vis ") leaves ink in its box, variation " v)] [:hidden]))))))
+
+(defn render-paths [exp got]
+  (let [verdicts (for [f (sort (keys exp))
+                       :let [pdf (str root "/test/" f) g (get got pdf)
+                             rs (filter :p (get exp f))
+                             ps (filter #(zero? (bit-and (nth % 2) 36)) (:q g))]
+                       :when (seq rs)
+                       [row r] (map vector ps rs)
+                       :let [v (judge-path (render-pgm pdf (first row)) f row r)]
+                       :when v]
+                   v)
+        bad (filter #(= :bad (first %)) verdicts)]
+    (doseq [[_ msg] bad] (println "  FAIL render:" msg))
+    (if (empty? bad)
+      (println (str "  ok   vis-check --render: poppler agrees on " (count (filter #(= :seen (first %)) verdicts)) " visible and "
+                    (count (filter #(= :hidden (first %)) verdicts)) " hidden paths"))
+      (do (println (str "  FAIL vis-check --render: " (count bad) " path disagreements")) (System/exit 1)))))
 
 (defn render-witness [exp got]
   (let [verdicts

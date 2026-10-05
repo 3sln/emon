@@ -152,9 +152,12 @@ pub(crate) const C_TCN: i32 = 17207;
 pub(crate) const C_NPATH: i32 = 17208;
 pub(crate) const C_NIMG: i32 = 17209;
 pub(crate) const C_PKEEP: i32 = 17210;
+pub(crate) const C_PTS0: i32 = 17211;
 pub(crate) const C_BB: i32 = 17212;
 pub(crate) const C_SIZE: i32 = 17248;
 pub(crate) const PATH_KEEP: i32 = 128;
+pub(crate) const PATH_KEEP_STRAIGHT: i32 = 4096;
+pub(crate) const PTS_PAGE: i32 = 1000000;
 pub(crate) const PATH_ROWS: i32 = 200000;
 pub(crate) const GS_STRIDE: i32 = 64;
 pub(crate) const G_CTM: i32 = 0;
@@ -2106,10 +2109,13 @@ pub(crate) fn pc_path_add(mut cx: &mut crate::port::Cells, mut pts: &mut crate::
     if y > crate::port::cells_at(cx, C_PBY1) {
         crate::port::cells_set(cx, C_PBY1, y);
     }
-    if keep < PATH_KEEP {
+    if (keep < PATH_KEEP_STRAIGHT) && ((pt_count(pts) - crate::port::cells_at(cx, C_PTS0)) < PTS_PAGE) {
         pt_add(pts, x, y, op);
         crate::port::cells_set(cx, C_PKEEP, keep + 1);
     } else {
+        if keep < PATH_KEEP_STRAIGHT {
+            pc_warn_set(cx, W_PATHS);
+        }
         crate::port::cells_set(cx, C_PFLAGS, pc_flag_or(crate::port::cells_at(cx, C_PFLAGS), 4));
     }
     crate::port::cells_set(cx, C_PN, crate::port::cells_at(cx, C_PN) + 1);
@@ -2432,8 +2438,12 @@ pub(crate) fn pc_kind_of_path(mut cx: &mut crate::port::Cells, mut pts: &mut cra
     return pa_other();
 }
 pub(crate) fn pc_geom_kept(cx: &mut crate::port::Cells) -> i32 {
-    // 1 when the whole path is in `pts` (it had no more than PATH_KEEP points).
+    // 1 when the whole path is in `pts`: a path of `m l h re` alone had no more than PATH_KEEP_STRAIGHT points (and the
+    // page's `pts` was not full), a path with a curve no more than PATH_KEEP (D219).
     if (crate::port::cells_at(cx, C_PFLAGS) & 4) != 0 {
+        return 0;
+    }
+    if ((crate::port::cells_at(cx, C_PFLAGS) & 1) != 0) && (crate::port::cells_at(cx, C_PN) > PATH_KEEP) {
         return 0;
     }
     return 1;
@@ -2456,6 +2466,7 @@ pub(crate) fn pc_end_path(mut cx: &mut crate::port::Cells, mut pa: &mut crate::p
     let mut pfst: i32 = -1;
     let mut geom: i32 = 0;
     let mut painted: i32 = 0;
+    let mut tr: i32 = 0;
     crate::port::cells_set(cx, C_CLIPP, 0);
     if n == 0 {
         pc_path_reset(cx, pts);
@@ -2465,6 +2476,9 @@ pub(crate) fn pc_end_path(mut cx: &mut crate::port::Cells, mut pa: &mut crate::p
     nrows = n;
     if kept == 0 {
         nrows = 0;
+    }
+    if kept == 0 {
+        tr = pg_truncated();
     }
     if nrows > 0 {
         pfst = start;
@@ -2478,7 +2492,7 @@ pub(crate) fn pc_end_path(mut cx: &mut crate::port::Cells, mut pa: &mut crate::p
             pc_warn_set(cx, W_PATHS);
         } else {
             painted = 1;
-            fl = 0;
+            fl = tr;
             if closed != 0 {
                 fl += pg_closed();
             }
@@ -2526,9 +2540,9 @@ pub(crate) fn pc_end_path(mut cx: &mut crate::port::Cells, mut pa: &mut crate::p
         }
     }
     if pend != 0 {
-        fl = 0;
+        fl = tr;
         if pend == 2 {
-            fl = pg_evenodd();
+            fl += pg_evenodd();
         }
         pc_clip_box(cx, pa, crate::port::cells_at(cx, C_PBX0), crate::port::cells_at(cx, C_PBY0), crate::port::cells_at(cx, C_PBX1), crate::port::cells_at(cx, C_PBY1), kind, fl, pfst, geom);
     }
@@ -4383,6 +4397,7 @@ pub fn pc_page(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: 
     let mut eh: i32 = 0;
     let mut endcs: i32 = 0;
     pc_begin_page(cx, page);
+    crate::port::cells_set(cx, C_PTS0, pt_count(pts));
     pc_base_matrix(cx, pd_pg_crop(pg, pi, 0), pd_pg_crop(pg, pi, 1), pd_pg_crop(pg, pi, 2), pd_pg_crop(pg, pi, 3), pd_pg_rotate(pg, pi));
     pc_gs_reset(cx);
     gx_page(gx);

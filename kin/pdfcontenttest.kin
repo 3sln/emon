@@ -519,6 +519,11 @@
     (assert-that (>= r 3600) "thirty-six documents were run")
     (assert-that (>= (rem r 100) 4) "the big ones took several rounds")))
 
+(deftest test-every-visibility-fixture-is-the-same-through-an-async-source-of-512-byte-chunks
+  (comment "P3.6a: the paths' vis, vby, vchk and backdrop are cells of the evidence, so they are held to the same rule.")
+  (let [^I32 r (ct-async-rows (test-t) (test-file "vis/rows.txt") 0 512)]
+    (assert-that (>= r 1800) "eighteen visibility fixtures were run")))
+
 (deftest test-every-tagged-document-is-the-same-through-an-async-source-of-512-byte-chunks
   (let [^I32 r (ct-async-rows (test-t) (test-file "content/tagged.txt") 0 512)]
     (assert-that (>= r 300) "three documents were run")))

@@ -1218,7 +1218,7 @@ public static class Evidencetest {
                 emon.Testport.AssertEq(cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)");
             }
             if (ea == 12) {
-                emon.Testport.AssertEq(Evidence.EvStrides[11] - cells, 5, "paths: five spare");
+                emon.Testport.AssertEq(Evidence.EvStrides[11] - cells, 1, "paths: one spare (D219 printed vis, vby, vchk and backdrop)");
             }
             if (ea == 13) {
                 emon.Testport.AssertEq(Evidence.EvStrides[12] - cells, 1, "images: one spare");

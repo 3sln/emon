@@ -220,6 +220,9 @@ pub(crate) fn vt_rows(emon_t: i32, rows: &[u8]) -> i32 {
     let mut gprev: i32 = 0;
     let mut nprev: i32 = 0;
     let mut ii: i32 = 0;
+    let mut pi: i32 = 0;
+    let mut tr: i32 = 0;
+    let mut want: i32 = 0;
     let mut status: i32 = 0;
     let mut p: i32 = 0;
     let mut q: i32 = 0;
@@ -242,6 +245,44 @@ pub(crate) fn vt_rows(emon_t: i32, rows: &[u8]) -> i32 {
                 vt_words(emon_t, gl, wd, line);
                 g = 0;
                 ii = 0;
+                pi = 0;
+            }
+            if kind == 80 {
+                // P vis vby backdrop chk tr n
+                while (pi < pa_count(pa)) && ((pa_get(pa, pi, pf_flags()) & (pg_clip() + pg_shading())) != 0) {
+                    pi += 1;
+                }
+                crate::testport::assert_that_at(pi < pa_count(pa), "there is a painted path row", line);
+                if pi < pa_count(pa) {
+                    p = pos + 2;
+                    q = vt_tab(rows, p, e);
+                    crate::testport::assert_eq_at(pa_get(pa, pi, pf_vis()), vt_dec(rows, p, q), "path vis", line);
+                    p = q + 1;
+                    q = vt_tab(rows, p, e);
+                    crate::testport::assert_eq_at(pa_get(pa, pi, pf_vby()), vt_dec(rows, p, q), "path vby", line);
+                    p = q + 1;
+                    q = vt_tab(rows, p, e);
+                    crate::testport::assert_eq_at(pa_get(pa, pi, pf_backdrop()), vt_rgb(rows, p, q), "path backdrop", line);
+                    p = q + 1;
+                    q = vt_tab(rows, p, e);
+                    want = vt_dec(rows, p, q);
+                    crate::testport::assert_eq_at(pa_get(pa, pi, pf_vchk()) & want, want, "path vchk has the checks that ran", line);
+                    p = q + 1;
+                    q = vt_tab(rows, p, e);
+                    want = vt_dec(rows, p, q);
+                    tr = 0;
+                    if (pa_get(pa, pi, pf_flags()) & pg_truncated()) != 0 {
+                        tr = 1;
+                    }
+                    crate::testport::assert_eq_at(tr, want, "path truncated", line);
+                    p = q + 1;
+                    q = vt_tab(rows, p, e);
+                    want = vt_dec(rows, p, q);
+                    if want >= 0 {
+                        crate::testport::assert_eq_at(pa_get(pa, pi, pf_pcount()), want, "path points kept", line);
+                    }
+                }
+                pi += 1;
             }
             if kind == 71 {
                 // G vis vby src ncp text

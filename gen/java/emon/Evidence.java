@@ -312,6 +312,9 @@ public final class Evidence {
     public static int pgSoftmask() {
         return 256;
     }
+    public static int pgTruncated() {
+        return 512;
+    }
     public static int pgEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "closed");
@@ -347,6 +350,10 @@ public final class Evidence {
         }
         if (code == 256) {
             emon.Port.textAscii(t, "softmask");
+            return 1;
+        }
+        if (code == 512) {
+            emon.Port.textAscii(t, "truncated");
             return 1;
         }
         return 0;
@@ -1663,6 +1670,9 @@ public final class Evidence {
     public static int ekOutline() {
         return 150;
     }
+    public static int ekBackdrop() {
+        return 151;
+    }
     public static int ekEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "emon-evidence");
@@ -2262,6 +2272,10 @@ public final class Evidence {
         }
         if (code == 150) {
             emon.Port.textAscii(t, "outline");
+            return 1;
+        }
+        if (code == 151) {
+            emon.Port.textAscii(t, "backdrop");
             return 1;
         }
         return 0;
@@ -3233,6 +3247,18 @@ public final class Evidence {
     public static int pfDash() {
         return 18;
     }
+    public static int pfVis() {
+        return 19;
+    }
+    public static int pfVby() {
+        return 20;
+    }
+    public static int pfVchk() {
+        return 21;
+    }
+    public static int pfBackdrop() {
+        return 22;
+    }
     public static int mfPage() {
         return 0;
     }
@@ -3871,6 +3897,10 @@ public final class Evidence {
         12, 15, 1, 101, -1, 0,
         12, 16, 7, 57, -1, 0,
         12, 18, 2, 117, 0, 0,
+        12, 19, 8, 21, 0, 2,
+        12, 20, 1, 102, -1, 0,
+        12, 21, 9, 103, 0, 11,
+        12, 22, 5, 151, -2147483648, 0,
         13, 0, 1, 9, -2147483648, 0,
         13, 1, 3, 15, -2147483648, 0,
         13, 5, 1, 35, -2147483648, 0,
@@ -4032,19 +4062,19 @@ public final class Evidence {
         72, 8,
         80, 17,
         97, 15,
-        112, 15,
-        127, 15,
-        142, 21,
-        163, 10,
-        173, 13,
-        186, 16,
-        202, 9,
-        211, 3,
-        214, 9,
-        223, 16,
-        239, 11,
-        250, 15,
-        265, 10
+        112, 19,
+        131, 15,
+        146, 21,
+        167, 10,
+        177, 13,
+        190, 16,
+        206, 9,
+        215, 3,
+        218, 9,
+        227, 16,
+        243, 11,
+        254, 15,
+        269, 10
     };
     public static final int[] EV_STRIDES = {
         12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
@@ -4438,6 +4468,8 @@ public final class Evidence {
         evSet(c, 24, r, 14, -1);
         evSet(c, 24, r, 15, -1);
         evSet(c, 24, r, 16, -1);
+        evSet(c, 24, r, 20, -1);
+        evSet(c, 24, r, 22, -1);
         return r;
     }
     public static int imCount(emon.Port.Cells c) {

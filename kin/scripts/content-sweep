@@ -13,7 +13,7 @@
 #   glyphs  `G page cp[+cp] how font size x0 y0 x1 y1 baseline rot mode mcid word artifact` per glyph
 #   text    `T page y0 x0 line-text` per emon line, words joined by a space
 #   vis     `V page glyph mode vis vby vchk x0 y0 x1 y1 fill stroke size cs cp` per glyph (P3.6, D152), then `I page vis vby vchk box`
-#           per image and `Q page kind flags fill stroke box z clip` per path row
+#           per image and `Q page kind flags fill stroke box z clip vis vby vchk backdrop pcount` per path row
 #   stats   (default) `F path open-status pages glyphs words lines spans warn fonts ms`
 set -e
 cd "$(dirname "$0")/../.."
@@ -144,9 +144,10 @@ fn main() {
                         im_get(&mut images, r, mf_vchk()), im_get(&mut images, r, mf_x0()), im_get(&mut images, r, mf_y0()), im_get(&mut images, r, mf_x1()), im_get(&mut images, r, mf_y1()), im_get(&mut images, r, mf_z())));
                 }
                 for r in 0..pa_count(&mut paths) {
-                    rows.push(format!("Q\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", pa_get(&mut paths, r, pf_page()), pa_get(&mut paths, r, pf_kind()), pa_get(&mut paths, r, pf_flags()),
+                    rows.push(format!("Q\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", pa_get(&mut paths, r, pf_page()), pa_get(&mut paths, r, pf_kind()), pa_get(&mut paths, r, pf_flags()),
                         pa_get(&mut paths, r, pf_fill()), pa_get(&mut paths, r, pf_stroke()), pa_get(&mut paths, r, pf_x0()), pa_get(&mut paths, r, pf_y0()),
-                        pa_get(&mut paths, r, pf_x1()), pa_get(&mut paths, r, pf_y1()), pa_get(&mut paths, r, pf_z()), pa_get(&mut paths, r, pf_clip())));
+                        pa_get(&mut paths, r, pf_x1()), pa_get(&mut paths, r, pf_y1()), pa_get(&mut paths, r, pf_z()), pa_get(&mut paths, r, pf_clip()),
+                        pa_get(&mut paths, r, pf_vis()), pa_get(&mut paths, r, pf_vby()), pa_get(&mut paths, r, pf_vchk()), pa_get(&mut paths, r, pf_backdrop()), pa_get(&mut paths, r, pf_pcount())));
                 }
             }
             if mode == "glyphs" || mode == "all" {
