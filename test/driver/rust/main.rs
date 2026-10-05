@@ -68,7 +68,7 @@ fn html_options(list: &str) -> HtmlOptions {
 fn pixel_lines(t: &emon::Transcript, dump: Option<&str>) -> String {
     let mut s = String::new();
     for e in &t.entries {
-        if e.req.get(1) != Some(&2) {
+        if e.req.get(1) != Some(&2) || e.req[7] < 0 {
             continue;
         }
         let frame = e.req[7];

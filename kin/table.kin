@@ -216,7 +216,7 @@
 (defn ^I32 tb-running-rule [^Cells grl ^I32 i ^I32 ph]
   (comment "1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of")
   (comment "the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination")
-  (comment "artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D249).")
+  (comment "artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D257).")
   (if (== (bit-and (grl-get grl i (grf-flags)) (gq-artifact-pagination)) 0) (return 0))
   (let [^I32 ya (grl-get grl i (grf-ey0))
         ^I32 yb (grl-get grl i (grf-ey1))
@@ -229,7 +229,7 @@
 (defn ^I32 tb-collect [^Cells grl ^I32 r0 ^I32 r1 ^Cells gfl ^I32 f0 ^I32 f1 ^I32 ph ^:mut ^Cells rl ^:mut ^Cells fl]
   (comment "The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)")
   (comment "as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1")
-  (comment "(`fl`: box and colour). P5.5a (D218, D248): the table stage reads the fused graphics and never `paths`.")
+  (comment "(`fl`: box and colour). P5.5a (D218, D255): the table stage reads the fused graphics and never `paths`.")
   (let [^:mut ^I32 i r0
         ^:mut ^I32 o 0]
     (cells-drop rl 0)

@@ -1,4 +1,4 @@
-;; The vector source of graphics fusion (P5.5a; SPEC 9.9 "Vector candidates"; D220, D179, D248). emon's own module (D039).
+;; The vector source of graphics fusion (P5.5a; SPEC 9.9 "Vector candidates"; D220, D179, D255). emon's own module (D039).
 ;;
 ;;   (gv-page pa pts mk im p0 p1 i0 i1 mode out)
 ;;       the page's paths `p0..p1` (rows of `paths`) and image placements `i0..i1` (rows of `images`) as CANDIDATES appended to
@@ -13,7 +13,7 @@
 ;;
 ;;       `legacy` (0) reproduces `tb-collect-one` EXACTLY, as P5.1 wrote it: a path's box is ONE candidate (a thin box a rule along its
 ;;       long axis, "mean channel under 240"; a stroked rectangle of `pa-rect` kind four edges, inset by half the stroke; a large filled
-;;       box a fill), no pattern or shading, no clip trimming, no visibility, no artifacts: the byte-identity step of P5.5a (D248).
+;;       box a fill), no pattern or shading, no clip trimming, no visibility, no artifacts: the byte-identity step of P5.5a (D255).
 ;;
 ;;       `segments` (1) is SPEC 9.9's. A path is read by its `pts` (a truncated path, or one with no geometry kept, by its box, as D179
 ;;       did): a rectangle subpath (four axis-aligned corners, closed or not for a fill, closed for a stroke) is ONE candidate when it is
@@ -23,7 +23,7 @@
 ;;       control points lie within GF_FLAT of its chord), each a rule when stroked, at most RULE_T thick (a zero width counts as
 ;;       GV_HAIR, 24 cpt: one device pixel) and at least RULE_MIN long; a curve that is not flat is figure material and is dropped. A thin box
 ;;       under RULE_MIN long is a PIECE: a run of GV_PIECES of one path on one line, GV_GAP apart at most, is the dashes of a dashed rule and
-;;       each stays a candidate (`gv-piece`, `gv-pieces-finish`; D249); the others are dropped. A rectangle may be written `re` (five rows) or
+;;       each stays a candidate (`gv-piece`, `gv-pieces-finish`; D256); the others are dropped. A rectangle may be written `re` (five rows) or
 ;;       as a move, four lines and a close (Skia: six).
 ;;       A candidate is TRIMMED to its clip's box (a rule's extent along its axis; a rule whose band misses the box, or that the trim
 ;;       leaves shorter than RULE_MIN, goes; a fill is intersected), keeps its path's `vis` (`GV_HIDDEN`: kept but flagged, for
@@ -178,7 +178,7 @@
 
 (defn ^I32 gv-contrasts [^I32 ink ^I32 backdrop]
   (comment "1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance. An ink of -1 is untested, and so is a backdrop of -1:")
-  (comment "P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D249).")
+  (comment "P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D256).")
   (if (< ink 0) (return 1))
   (if (< backdrop 0) (return 1))
   (if (>= (gv-abs (- (gv-lum255 ink) (gv-lum255 backdrop))) GV_CONTRAST) (return 1))

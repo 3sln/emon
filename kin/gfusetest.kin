@@ -1,4 +1,4 @@
-;; Laws for `emon.gfuse`, the vector-only form (P5.5a; SPEC 9.9; D218, D222, D248), on every target.
+;; Laws for `emon.gfuse`, the vector-only form (P5.5a; SPEC 9.9; D218, D222, D255), on every target.
 ;;
 ;; Hand-built paths over two pages go through `gf-doc` (`gv-page` then `gf-page`) into `grl` and `gfl`, and the rows say what the arbitration
 ;; table's rules 501, 505, 514, 560 and 562 say: an exactly known visible rule is 501 at 900, paint that is not exactly known (blend, soft mask,

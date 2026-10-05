@@ -187,7 +187,7 @@ public final class Table {
     public static int tbRunningRule(emon.Port.Cells grl, int i, int ph) {
         // 1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of
         // the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination
-        // artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D249).
+        // artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D257).
         if ((Glayer.grlGet(grl, i, Glayer.grfFlags()) & Glayer.gqArtifactPagination()) == 0) {
             return 0;
         }
@@ -206,7 +206,7 @@ public final class Table {
     public static int tbCollect(emon.Port.Cells grl, int r0, int r1, emon.Port.Cells gfl, int f0, int f1, int ph, emon.Port.Cells rl, emon.Port.Cells fl) {
         // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)
         // as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
-        // (`fl`: box and colour). P5.5a (D218, D248): the table stage reads the fused graphics and never `paths`.
+        // (`fl`: box and colour). P5.5a (D218, D255): the table stage reads the fused graphics and never `paths`.
         int i = r0;
         int o = 0;
         emon.Port.cellsDrop(rl, 0);

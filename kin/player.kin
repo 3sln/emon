@@ -5,7 +5,7 @@
 ;; to the document's by `pl-append`, checked by `pl-check` and dumped by `pl-emit` as the evidence dump's VERSION "2".
 ;;
 ;;   cg 16  fw 24 (the layout of `words`)  fl 16 (the layout of `lines`)  fv 8  fa 12  fx 4  hl 12  grl 24  sl 16
-;;   and, since P5.5a (D248), the graphics arenas of `emon.glayer`: gfl 16  ggp 12  grg 16 (grl took `fpa`'s place and its code)
+;;   and, since P5.5a (D255), the graphics arenas of `emon.glayer`: gfl 16  ggp 12  grg 16 (grl took `fpa`'s place and its code)
 ;;
 ;; Their `ea` codes continue the evidence's (24 are taken; the tagged tree's nine are reserved): cg 34, fw 35, fl 36, fv 37, fa 38,
 ;; fx 39, hl 40, grl 41, sl 42, gfl 43, ggp 44, grg 45. The accessors are the evidence's (`wd-get`, `ln-get`, `wf-*`, `hd-*`, `lh-*`, `pf-*`) for the three
@@ -768,7 +768,7 @@
     (js-close t pretty 0 s)
     (return 0)))
 
-;; P5.5a graphics arenas (D248). The Engines' `keep_evidence` dump stays version "1", the interpreter's own (D242), unless the document has
+;; P5.5a graphics arenas (D255). The Engines' `keep_evidence` dump stays version "1", the interpreter's own (D242), unless the document has
 ;; fused graphics: then it is version "2" with the four graphics arrays after the evidence's, and nothing else of the layer (the other
 ;; arenas join it with P7.3, when the goldens move). `bb accuracy` reads `grl` and `gfl` from it (tools/accuracy/graphics.clj).
 (defn ^:pub ^I32 pl-emit-gfx [^:mut ^Text t ^I32 pretty

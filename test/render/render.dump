@@ -1,0 +1,42 @@
+entry 1 render: req [7, 1, 1, 0, 0, 72, 0] ans [8, 1, 1, 0, 240, 240, 3, 72]
+bitmap 1: 240x240x3 59f9393d
+entry 2 render: req [7, 1, 2, 0, 0, 72, 1] ans [8, 1, 2, 0, 240, 240, 3, 72]
+bitmap 2: 240x240x3 508112e5
+entry 3 render: req [7, 1, 3, 0, 0, 72, 2] ans [8, 1, 3, 0, 240, 240, 3, 72]
+bitmap 3: 240x240x3 67a28671
+entry 4 render: req [7, 1, 4, 0, 0, 72, 3] ans [4, 1, 4, 2]
+entry 5 render: req [7, 1, 5, 0, 0, 72, 4] ans [4, 1, 5, 2]
+entry 6 crop: req [11, 5, 6, 0, 0, 72, 0, 60, 40, 120, 100] ans [8, 5, 6, 0, 120, 100, 3, 72]
+bitmap 6: 120x100x3 b62873e6
+entry 7 crop: req [11, 5, 7, 0, 0, 72, 2, 60, 40, 120, 100] ans [8, 5, 7, 0, 120, 100, 3, 72]
+bitmap 7: 120x100x3 5400c7f0
+entry 8 crop: req [11, 5, 8, 0, 0, 144, 0, 100, 80, 240, 200] ans [8, 5, 8, 0, 240, 200, 3, 144]
+bitmap 8: 240x200x3 f971b452
+entry 9 render: req [7, 1, 9, 1, 0, 36, 0] ans [8, 1, 9, 0, 297, 421, 3, 36]
+bitmap 9: 297x421x3 04859eb1
+entry 10 render: req [7, 1, 10, 1, 0, 36, 1] ans [8, 1, 10, 0, 297, 421, 3, 36]
+bitmap 10: 297x421x3 494d4f76
+entry 11 render: req [7, 1, 11, 1, 0, 36, 2] ans [8, 1, 11, 0, 297, 421, 3, 36]
+bitmap 11: 297x421x3 d3fa57fb
+entry 12 crop: req [11, 5, 12, 1, 0, 36, 0, 40, 60, 150, 100] ans [8, 5, 12, 0, 150, 100, 3, 36]
+bitmap 12: 150x100x3 cd86fb83
+entry 13 render: req [7, 1, 13, 2, 0, 36, 0] ans [8, 1, 13, 0, 298, 421, 3, 36]
+bitmap 13: 298x421x3 877992c5
+entry 14 render: req [7, 1, 14, 2, 0, 36, 1] ans [8, 1, 14, 0, 298, 421, 3, 36]
+bitmap 14: 298x421x3 877992c5
+entry 15 render: req [7, 1, 15, 1, 5, 36, 0] ans [4, 1, 15, 1]
+entry 16 crop: req [11, 5, 16, 0, 0, 72, 0, 200, 200, 100, 100] ans [4, 5, 16, 1]
+entry 17 render: req [7, 1, 17, 0, 0, 72, 9] ans [4, 1, 17, 2]
+file transcript.edn: 1762 bytes 2a149912
+file bitmap-0000.png: 6057 bytes db1a0925
+file bitmap-0001.png: 792 bytes 70f67f8d
+file bitmap-0002.png: 5131 bytes 9efa2cc9
+file bitmap-0005.png: 2540 bytes 72ec64ab
+file bitmap-0006.png: 2077 bytes 19afb664
+file bitmap-0007.png: 5752 bytes 62d1bf44
+file bitmap-0008.png: 25917 bytes a4a2c040
+file bitmap-0009.png: 1358 bytes 438024e9
+file bitmap-0010.png: 25825 bytes ef6e0f09
+file bitmap-0011.png: 4584 bytes 3602de02
+file bitmap-0012.png: 74443 bytes 3af2af34
+file bitmap-0013.png: 74443 bytes 3af2af34

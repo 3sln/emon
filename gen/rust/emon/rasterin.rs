@@ -137,27 +137,24 @@ pub(crate) fn rs_read_page(ans: &mut crate::port::Cells, ao: i32, ad: i32, page:
     let hc: i32 = rs_cpt(h, eff);
     return sc_page(ans, ao, page, oid, page, wc, hc, w, h, eff, 0, 0, 0, 0, 0, wc, hc, sc_lang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
 }
-pub fn rs_unit(src: &crate::port::Src, input: i32, fmt: i32, info: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, policy: i32, loc: &mut crate::port::Cells, mut mask: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
-    // One attempt of the unit for a raster input. The Model's arenas are fresh and `model-init`ed by the host, and so are
-    // the evidence arenas. `policy` is the OCR policy: 0 never, 1 auto, 2 always (D038); `loc` the locale hint's code points
-    // (empty: none). Answers `us-requests` (the requests are in `rq`), a failure status, or 0 with the root's `format` and
-    // `pages`, one page row per frame, and for every frame whose OCR answered: its evidence and its lines in `words` and
-    // `lines`, and `mask` (one cell a page) set to 1 so that `sc-tag` can say where the text came from.
+pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
+    // THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
+    // round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
+    // in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is
+    // decoded and no OCR is asked here: that is each frame's own page unit, `rs-page`. Answers `us-requests`, a failure
+    // status, or 0.
     let nbytes: i32 = ps_len(src);
     let a0: i32 = an_find(ans, 1);
     if a0 < 0 {
-        rq_decode(rq, 1, input, 0, nbytes, flt_none(), rs_frame_arg(info, 0));
+        rq_decode(rq, 1, input, 0, nbytes, flt_none(), rs_frame_arg(1, 0));
         return us_requests();
     }
     if an_status(ans, a0) != ps_ok() {
         return rs_fail(ans, a0);
     }
     let frames: i32 = an_arg(ans, a0, 5);
-    let want: i32 = rs_want_ocr(info, policy);
     let mut f: i32 = 1;
     let mut asked: i32 = 0;
-    let mut da: i32 = 0;
-    let mut dd: i32 = 0;
     if frames < 1 {
         return rs_undecodable();
     }
@@ -166,24 +163,10 @@ pub fn rs_unit(src: &crate::port::Src, input: i32, fmt: i32, info: i32, ans: &mu
     }
     while f < frames {
         if an_find(ans, f + 1) < 0 {
-            rq_decode(rq, f + 1, input, 0, nbytes, flt_none(), rs_frame_arg(info, f));
+            rq_decode(rq, f + 1, input, 0, nbytes, flt_none(), rs_frame_arg(1, f));
             asked = 1;
         }
         f += 1;
-    }
-    if want == 1 {
-        f = 0;
-        while f < frames {
-            da = an_find(ans, f + 1);
-            if (da >= 0) && (an_find(ans, rs_ocr_id(frames, f)) < 0) {
-                if an_ok(ans, da) == 1 {
-                    dd = rs_eff_dpi100(an_arg(ans, da, 3));
-                    sc_request(rq, rs_ocr_id(frames, f), f + 1, (dd + 50) / 100, loc);
-                    asked = 1;
-                }
-            }
-            f += 1;
-        }
     }
     if asked == 1 {
         return us_requests();
@@ -216,19 +199,36 @@ pub fn rs_unit(src: &crate::port::Src, input: i32, fmt: i32, info: i32, ans: &mu
         crate::port::cells_push(mask, 0);
         f += 1;
     }
-    if want == 1 {
-        f = 0;
-        while f < frames {
-            da = an_find(ans, rs_ocr_id(frames, f));
-            if da >= 0 {
-                if an_ok(ans, da) == 1 {
-                    dd = an_find(ans, f + 1);
-                    rs_read_page(ans, da, dd, f + 1, rs_ocr_id(frames, f), loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
-                    crate::port::cells_set(mask, f, 1);
-                }
-            }
-            f += 1;
-        }
+    return 0;
+}
+pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+    // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
+    // failure is the conversion's: an image that cannot be read is refused by name, whatever the policy), then, unless
+    // `policy` is 0 (never), OCR of the bitmap (id `pi-ocr`); where the answers are in, the frame's evidence and lines are
+    // appended to `words` and `lines` and `mask[f]` is 1. Answers `us-requests`, a failure status, or 0. It writes nothing
+    // until every answer it asked for is in.
+    let did: i32 = pu_id(f, pi_decode());
+    let oid: i32 = pu_id(f, pi_ocr());
+    let ad: i32 = an_find(ans, did);
+    let mut ao: i32 = -1;
+    if ad < 0 {
+        rq_decode(rq, did, input, 0, nbytes, flt_none(), f);
+        return us_requests();
+    }
+    if an_status(ans, ad) != ps_ok() {
+        return rs_fail(ans, ad);
+    }
+    if policy == 0 {
+        return 0;
+    }
+    ao = an_find(ans, oid);
+    if ao < 0 {
+        sc_request(rq, oid, did, (rs_eff_dpi100(an_arg(ans, ad, 3)) + 50) / 100, loc);
+        return us_requests();
+    }
+    if an_ok(ans, ao) == 1 {
+        rs_read_page(ans, ao, ad, f + 1, oid, loc, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr);
+        crate::port::cells_set(mask, f, 1);
     }
     return 0;
 }

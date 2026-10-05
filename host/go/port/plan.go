@@ -34,6 +34,7 @@ const (
 	PlanKindDecode int32 = 2
 	PlanKindOcr    int32 = 3
 	PlanKindBytes  int32 = 4
+	PlanKindCrop   int32 = 5
 
 	PlanStatusOk     int32 = 0
 	PlanStatusFailed int32 = 1
@@ -44,7 +45,7 @@ const (
 
 	// SPEC 13.1's defaults. Both are NAMED limits: a breach is a `*PlanError`
 	// whose `Name` is `max-rounds` or `fetch-rounds`.
-	PlanMaxRounds   int32 = 3
+	PlanMaxRounds   int32 = 5
 	PlanFetchRounds int32 = 24
 )
 
@@ -209,7 +210,7 @@ func planReadRequests(rq *Cells, answered map[int32]bool) ([]PlanRequest, error)
 			return nil, planErr("bad-record", "a request at %d has length %d", at, ln)
 		}
 		rec := planRecordAt(rq, at, ln)
-		if rec[1] < PlanKindRender || rec[1] > PlanKindOcr {
+		if rec[1] < PlanKindRender || (rec[1] > PlanKindOcr && rec[1] != PlanKindCrop) {
 			return nil, planErr("bad-record", "request %d has kind %d, which kin may not ask for", rec[2], rec[1])
 		}
 		if rec[2] < 1 {
@@ -259,6 +260,13 @@ func planFulfil(f PlanFulfiller, reqs []PlanRequest, bm PlanBitmaps) ([]PlanAnsw
 // `bytesF` fulfils the loop's own `bytes` requests; `rec`, when not nil, records
 // every render/decode/ocr pair (never `bytes`) in a deterministic order.
 func PlanRun(cfg PlanConfig, unit PlanUnit, ports, bytesF PlanFulfiller, misses PlanMisses, rec *Transcript) (PlanStats, error) {
+	return PlanRunBms(cfg, func(a, r *Cells, _ *BitmapSet) int32 { return unit(a, r) }, ports, bytesF, misses, rec)
+}
+
+// PlanRunBms is PlanRun for a PAGE UNIT (P7.U, D196): the unit is also handed the BitmapSet of this attempt, made from the
+// bitmaps its answers carried so far; what kin made in it (`bms-put`) is added to the bitmaps a fulfiller sees, so an `ocr`
+// request may name a kin-made view. The bitmaps are this run's alone and are dropped when the unit ends.
+func PlanRunBms(cfg PlanConfig, unit func(answers, rq *Cells, bms *BitmapSet) int32, ports, bytesF PlanFulfiller, misses PlanMisses, rec *Transcript) (PlanStats, error) {
 	answers := NewCells()
 	bitmaps := PlanBitmaps{}
 	answered := map[int32]bool{}
@@ -267,7 +275,12 @@ func PlanRun(cfg PlanConfig, unit PlanUnit, ports, bytesF PlanFulfiller, misses 
 	for {
 		rq := NewCells()
 		st.Attempts++
-		status := unit(answers, rq)
+		bms := NewBitmapSet()
+		for id, b := range bitmaps {
+			bms.Answered[id] = b
+		}
+		status := unit(answers, rq, bms)
+		made := bms.Made
 		switch status {
 		case PlanUnitNeedBytes:
 			// The attempt missed: discard it whole (its requests too), fetch,
@@ -319,7 +332,17 @@ func PlanRun(cfg PlanConfig, unit PlanUnit, ports, bytesF PlanFulfiller, misses 
 		}
 		st.Requests += int32(len(reqs))
 		round := st.Rounds - 1
-		got, err := planFulfil(ports, reqs, bitmaps)
+		fbm := bitmaps
+		if len(made) > 0 {
+			fbm = PlanBitmaps{}
+			for id, b := range bitmaps {
+				fbm[id] = b
+			}
+			for id, b := range made {
+				fbm[id] = b
+			}
+		}
+		got, err := planFulfil(ports, reqs, fbm)
 		if err != nil {
 			return st, err
 		}
@@ -376,6 +399,8 @@ func planKindName(k int32) string {
 		return "decode"
 	case PlanKindOcr:
 		return "ocr"
+	case PlanKindCrop:
+		return "crop"
 	}
 	return "unknown"
 }
@@ -388,6 +413,8 @@ func planKindCode(s string) (int32, bool) {
 		return PlanKindDecode, true
 	case "ocr":
 		return PlanKindOcr, true
+	case "crop":
+		return PlanKindCrop, true
 	}
 	return 0, false
 }

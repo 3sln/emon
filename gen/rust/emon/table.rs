@@ -188,7 +188,7 @@ pub(crate) fn tb_rule_add(mut rl: &mut crate::port::Cells, kind: i32, pos: i32, 
 pub(crate) fn tb_running_rule(grl: &mut crate::port::Cells, i: i32, ph: i32) -> i32 {
     // 1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of
     // the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination
-    // artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D249).
+    // artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D257).
     if (grl_get(grl, i, grf_flags()) & gq_artifact_pagination()) == 0 {
         return 0;
     }
@@ -207,7 +207,7 @@ pub(crate) fn tb_running_rule(grl: &mut crate::port::Cells, i: i32, ph: i32) -> 
 pub(crate) fn tb_collect(grl: &mut crate::port::Cells, r0: i32, r1: i32, gfl: &mut crate::port::Cells, f0: i32, f1: i32, ph: i32, mut rl: &mut crate::port::Cells, mut fl: &mut crate::port::Cells) -> i32 {
     // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)
     // as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
-    // (`fl`: box and colour). P5.5a (D218, D248): the table stage reads the fused graphics and never `paths`.
+    // (`fl`: box and colour). P5.5a (D218, D255): the table stage reads the fused graphics and never `paths`.
     let mut i: i32 = r0;
     let mut o: i32 = 0;
     crate::port::cells_drop(rl, 0);

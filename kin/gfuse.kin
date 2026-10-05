@@ -1,4 +1,4 @@
-;; Graphics fusion, in its VECTOR-ONLY form (P5.5a; SPEC 9.9; D218, D222, D248). emon's own module (D039); P7.G extends it with the
+;; Graphics fusion, in its VECTOR-ONLY form (P5.5a; SPEC 9.9; D218, D222, D255). emon's own module (D039); P7.G extends it with the
 ;; tracer's and OCR's witnesses and moves the arbitration into `kin/fuserules.kin` as data.
 ;;
 ;;   (gf-page cand pa im grl gfl)

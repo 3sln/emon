@@ -1,4 +1,4 @@
-;; Laws for `emon.gvec` (P5.5a; SPEC 9.9 "Vector candidates"; D220, D248), on every target.
+;; Laws for `emon.gvec` (P5.5a; SPEC 9.9 "Vector candidates"; D220, D255), on every target.
 ;;
 ;; Paths are built by hand: a row of `paths` with its flags, colours and width, and its geometry as rows of `pts` (`gt-pt`), as the
 ;; interpreter writes them. The candidates of a page are read back from the scratch (stride 16: kind, row, first point, page, box,

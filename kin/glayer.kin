@@ -39,7 +39,7 @@
    [go-slant 3 "slant"]])
 
 ;; A rule's flags, one bit each in the order SPEC 9.7 writes them; `from-image` (a thin image placement drawn as a rule, SPEC 9.9) is
-;; appended (D248).
+;; appended (D255).
 (defenum ^:pub gq
   [[gq-traced 1 "traced"]
    [gq-unwitnessed 2 "unwitnessed"]

@@ -1,4 +1,4 @@
-;; Laws for `emon.glayer` (P5.5a; SPEC 9.7, 9.9; D218, D248), on every target.
+;; Laws for `emon.glayer` (P5.5a; SPEC 9.7, 9.9; D218, D255), on every target.
 ;;
 ;; A HAND-BUILT GRAPHICS LAYER: two rules and a fill on a page, one group whose member runs point into `refs`, one region. Two such pages are
 ;; appended (what is re-based: every group, every member run; what is not: a region's subject), `gl-check` is satisfied and notices every way

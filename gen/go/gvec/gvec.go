@@ -209,7 +209,7 @@ func gvPathFlags(pa *port.Cells, mk *port.Cells, i int32) int32 {
 
 func gvContrasts(ink int32, backdrop int32) int32 {
 	// 1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance. An ink of -1 is untested, and so is a backdrop of -1:
-	// P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D249).
+	// P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D256).
 	if ink < 0 {
 		return 1
 	}

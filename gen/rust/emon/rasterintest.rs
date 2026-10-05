@@ -22,21 +22,21 @@ fn test_the_sniff_reads_the_signature_and_nothing_else() {
     crate::testport::assert_eq(rs_cpt(2481, 30000), 59544, "A4 at 300 dpi, rounded");
     crate::testport::assert_eq(rs_cpt(1, 100000000), 1, "never zero");
 }
-pub(crate) fn unit_pol(ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, info: i32, policy: i32, loc: &mut crate::port::Cells, mask: &mut crate::port::Cells, et: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, oruns: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells) -> i32 {
+pub(crate) fn doc_of(ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, mask: &mut crate::port::Cells) -> i32 {
     let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
-    return rs_unit(&crate::port::src_of_blob(&crate::testport::hex_blob("49492a0008000000")[..]), 7, rs_tiff(), info, ans, rq, nodes, attrs, text, pages, policy, loc, mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new());
+    return rs_doc(&crate::port::src_of_blob(&crate::testport::hex_blob("49492a0008000000")[..]), 7, rs_tiff(), ans, rq, nodes, attrs, text, pages, mask);
 }
-pub(crate) fn unit_of(ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, info: i32) -> i32 {
-    return unit_pol(ans, rq, nodes, attrs, text, pages, info, 0, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+pub(crate) fn page_pol(f: i32, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells, policy: i32, loc: &mut crate::port::Cells, mask: &mut crate::port::Cells, et: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, oruns: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells) -> i32 {
+    return rs_page(f, 7, 8, policy, ans, rq, loc, &crate::port::BitmapSet::new(), mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), oruns, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new());
 }
 #[test]
-fn test_the_first_round_asks_for_frame_zero_and_nothing_more() {
+fn test_the_document_pass_asks_for_frame_zeros_header_and_nothing_more() {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    crate::testport::assert_eq(unit_of(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 0), us_requests(), "it asks");
+    crate::testport::assert_eq(doc_of(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
     crate::testport::assert_eq(crate::port::cells_len(rq), 8, "one request of eight cells");
     crate::testport::assert_eq(rec_kind(rq, 0), pk_decode(), "a decode");
     crate::testport::assert_eq(rec_id(rq, 0), 1, "frame 0 is id 1");
@@ -44,38 +44,33 @@ fn test_the_first_round_asks_for_frame_zero_and_nothing_more() {
     crate::testport::assert_eq(rq_arg(rq, 0, 1), 0, "from its first byte");
     crate::testport::assert_eq(rq_arg(rq, 0, 2), 8, "the whole input");
     crate::testport::assert_eq(rq_arg(rq, 0, 3), flt_none(), "a whole image file, not a PDF filter");
-    crate::testport::assert_eq(rq_arg(rq, 0, 4), 0, "frame 0");
+    crate::testport::assert_eq(rq_arg(rq, 0, 4), -1, "frame 0, header only (D187)");
 }
 #[test]
-fn test_the_header_only_form_asks_with_a_negative_frame() {
-    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    crate::testport::assert_eq(unit_of(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1), us_requests(), "it asks");
-    crate::testport::assert_eq(rq_arg(rq, 0, 4), -1, "frame 0, header only, is -1");
-}
-#[test]
-fn test_the_second_round_asks_for_every_other_frame() {
+fn test_the_second_round_asks_for_every_other_frames_header() {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     an_decode(ans, 1, 463, 894, 1, 20000, 1, 3);
-    crate::testport::assert_eq(unit_of(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 0), us_requests(), "it asks again");
+    crate::testport::assert_eq(doc_of(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks again");
     crate::testport::assert_eq(crate::port::cells_len(rq), 16, "two more requests");
     crate::testport::assert_eq(rec_id(rq, 0), 2, "frame 1 is id 2");
-    crate::testport::assert_eq(rq_arg(rq, 0, 4), 1, "frame 1");
+    crate::testport::assert_eq(rq_arg(rq, 0, 4), -2, "frame 1, header only");
     crate::testport::assert_eq(rec_id(rq, 8), 3, "frame 2 is id 3");
-    crate::testport::assert_eq(rq_arg(rq, 8, 4), 2, "frame 2");
+    crate::testport::assert_eq(rq_arg(rq, 8, 4), -3, "frame 2, header only");
 }
 #[test]
-fn test_with_every_answer_in_the_unit_builds_the_pages() {
+fn test_with_every_header_in_the_document_pass_builds_the_pages() {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
     an_decode(ans, 1, 463, 894, 1, 20000, 1, 2);
     an_decode(ans, 2, 992, 1403, 3, 0, 0, 2);
-    crate::testport::assert_eq(unit_of(ans, rq, nodes, attrs, &mut crate::port::Cells::new(), pages, 0), 0, "done");
+    crate::testport::assert_eq(doc_of(ans, rq, nodes, attrs, &mut crate::port::Cells::new(), pages, mask), 0, "done");
     crate::testport::assert_eq(crate::port::cells_len(rq), 0, "asks for nothing");
+    crate::testport::assert_eq(crate::port::cells_len(mask), 2, "a mask cell a page");
     crate::testport::assert_eq(page_count(pages), 2, "one page a frame");
     crate::testport::assert_eq(page_number(pages, 1), 2, "numbered from 1 in frame order");
     crate::testport::assert_eq(page_kind(pages, 0), pk_image(), "an image page");
@@ -90,18 +85,48 @@ fn test_with_every_answer_in_the_unit_builds_the_pages() {
     crate::testport::assert_eq(node_flags(nodes, 0), fl_dpi_unknown(), "and that one of them has no stated resolution");
 }
 #[test]
-fn test_a_failed_decode_is_the_units_failure() {
+fn test_a_failed_header_is_the_units_failure() {
     let a1: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let a2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let a3: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     an_fail(a1, pk_decode(), 1, ps_failed());
-    crate::testport::assert_eq(unit_of(a1, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 0), rs_undecodable(), "damaged");
+    crate::testport::assert_eq(doc_of(a1, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), rs_undecodable(), "damaged");
     an_fail(a2, pk_decode(), 1, ps_unsupported());
-    crate::testport::assert_eq(unit_of(a2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 0), rs_unsupported(), "not read");
+    crate::testport::assert_eq(doc_of(a2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), rs_unsupported(), "not read");
     an_decode(a3, 1, 10, 10, 1, 0, 0, 2);
     an_fail(a3, pk_decode(), 2, ps_failed());
-    crate::testport::assert_eq(unit_of(a3, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 0), rs_undecodable(), "a later frame that fails fails the unit");
+    crate::testport::assert_eq(doc_of(a3, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), rs_undecodable(), "a later frame that fails fails the unit");
+}
+#[test]
+fn test_a_frames_unit_asks_for_its_pixels_first_under_its_own_id() {
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(page_pol(0, &mut crate::port::Cells::new(), rq, 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
+    crate::testport::assert_eq(crate::port::cells_len(rq), 8, "one request");
+    crate::testport::assert_eq(rec_kind(rq, 0), pk_decode(), "a decode");
+    crate::testport::assert_eq(rec_id(rq, 0), 260, "page 0, k 4: (0 + 1) * 256 + 4");
+    crate::testport::assert_eq(rq_arg(rq, 0, 4), 0, "the whole frame, not a header");
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(page_pol(2, &mut crate::port::Cells::new(), rq2, 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
+    crate::testport::assert_eq(rec_id(rq2, 0), 772, "page 2: 3 * 256 + 4");
+    crate::testport::assert_eq(rq_arg(rq2, 0, 4), 2, "frame 2");
+}
+#[test]
+fn test_a_frames_unit_that_asked_the_same_again_asks_the_same() {
+    let rq1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_pol(1, &mut crate::port::Cells::new(), rq1, 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    page_pol(1, &mut crate::port::Cells::new(), rq2, 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    crate::testport::assert_eq(crate::port::cells_len(rq1), crate::port::cells_len(rq2), "the same length");
+    crate::testport::assert_eq(crate::port::cells_at(rq1, 2), crate::port::cells_at(rq2, 2), "the same id");
+}
+#[test]
+fn test_a_failed_frame_decode_is_the_units_failure() {
+    let a1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    an_fail(a1, pk_decode(), 260, ps_failed());
+    crate::testport::assert_eq(page_pol(0, a1, &mut crate::port::Cells::new(), 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), rs_undecodable(), "damaged");
+    let a2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    an_fail(a2, pk_decode(), 260, ps_unsupported());
+    crate::testport::assert_eq(page_pol(0, a2, &mut crate::port::Cells::new(), 0, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), rs_unsupported(), "not read, whatever the policy");
 }
 pub(crate) fn fake_ocr(ans: &mut crate::port::Cells, id: i32) -> i32 {
     // An OCR answer for one line holding the word "Hi": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.
@@ -121,15 +146,15 @@ pub(crate) fn fake_ocr(ans: &mut crate::port::Cells, id: i32) -> i32 {
     return at;
 }
 #[test]
-fn test_with_the_policy_on_the_second_round_asks_for_ocr_of_the_decoded_frame() {
+fn test_with_the_policy_the_frames_second_round_asks_for_ocr_of_its_bitmap() {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    an_decode(ans, 1, 463, 894, 1, 0, 1, 1);
-    crate::testport::assert_eq(unit_pol(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 0, 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
+    an_decode(ans, 260, 463, 894, 1, 0, 1, 1);
+    crate::testport::assert_eq(page_pol(0, ans, rq, 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
     crate::testport::assert_eq(rec_kind(rq, 0), pk_ocr(), "an OCR request");
-    crate::testport::assert_eq(rec_id(rq, 0), rs_ocr_id(1, 0), "after every decode's id");
-    crate::testport::assert_eq(rec_id(rq, 0), 2, "one frame: id 2");
-    crate::testport::assert_eq(rq_arg(rq, 0, 0), 1, "of the bitmap of decode 1");
+    crate::testport::assert_eq(rec_id(rq, 0), pu_id(0, pi_ocr()), "page 0's OCR id");
+    crate::testport::assert_eq(rec_id(rq, 0), 272, "256 + 16");
+    crate::testport::assert_eq(rq_arg(rq, 0, 0), 260, "of the bitmap of the decode");
     crate::testport::assert_eq(rq_arg(rq, 0, 1), 3, "psm 3");
     crate::testport::assert_eq(rq_arg(rq, 0, 2), 3 + (300 * 256), "symbols, OSD, and the 300 dpi it assumed as a hint");
     crate::testport::assert_eq(ocf_dpi(rq_arg(rq, 0, 2)), 300, "read back");
@@ -146,26 +171,22 @@ fn test_a_locale_hint_names_the_language() {
     crate::port::cells_push(loc, 45);
     crate::port::cells_push(loc, 67);
     crate::port::cells_push(loc, 72);
-    an_decode(ans, 1, 463, 894, 1, 20000, 1, 1);
-    crate::testport::assert_eq(unit_pol(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 0, 2, loc, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
+    an_decode(ans, 260, 463, 894, 1, 20000, 1, 1);
+    crate::testport::assert_eq(page_pol(0, ans, rq, 2, loc, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
     crate::testport::assert_eq(rq_arg(rq, 0, 2), 3 + (200 * 256), "the stated 200 dpi");
     crate::testport::assert_eq(rq_nargs(rq, 0), 8, "one language");
     crate::testport::assert_eq(rq_arg(rq, 0, 7), 1684370688, "`de-CH` is `deu`");
 }
 #[test]
-fn test_never_and_the_header_only_form_ask_for_no_ocr() {
+fn test_never_asks_for_no_ocr() {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    an_decode(ans, 1, 463, 894, 1, 20000, 1, 1);
-    crate::testport::assert_eq(unit_pol(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 0, 0, &mut crate::port::Cells::new(), mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "never: done");
+    crate::port::cells_push(mask, 0);
+    an_decode(ans, 260, 463, 894, 1, 20000, 1, 1);
+    crate::testport::assert_eq(page_pol(0, ans, rq, 0, &mut crate::port::Cells::new(), mask, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "never: done");
     crate::testport::assert_eq(crate::port::cells_len(rq), 0, "no request");
     crate::testport::assert_eq(crate::port::cells_at(mask, 0), 0, "the page was not OCR'd");
-    let ans2: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    an_decode(ans2, 1, 463, 894, 1, 20000, 1, 1);
-    crate::testport::assert_eq(unit_pol(ans2, rq2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "intake: done");
-    crate::testport::assert_eq(crate::port::cells_len(rq2), 0, "intake never asks for OCR");
 }
 #[test]
 fn test_an_ocr_answer_becomes_evidence_and_the_pipelines_lines() {
@@ -178,10 +199,10 @@ fn test_an_ocr_answer_becomes_evidence_and_the_pipelines_lines() {
     let oruns: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let olines: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    an_decode(ans, 1, 600, 800, 1, 30000, 1, 1);
-    fake_ocr(ans, 2);
-    crate::testport::assert_eq(unit_pol(ans, rq, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, 0, 2, &mut crate::port::Cells::new(), mask, et, wd, ln, oruns, olines, owords), 0, "done");
+    crate::port::cells_push(mask, 0);
+    an_decode(ans, 260, 600, 800, 1, 30000, 1, 1);
+    fake_ocr(ans, 272);
+    crate::testport::assert_eq(page_pol(0, ans, rq, 2, &mut crate::port::Cells::new(), mask, et, wd, ln, oruns, olines, owords), 0, "done");
     crate::testport::assert_eq(crate::port::cells_at(mask, 0), 1, "the page's text came from OCR");
     crate::testport::assert_eq(or_count(oruns), 1, "one OCR run");
     crate::testport::assert_eq(ol_count(olines), 1, "one OCR line");

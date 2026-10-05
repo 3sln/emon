@@ -182,7 +182,7 @@ public static class Gvec {
     }
     internal static int GvContrasts(int ink, int backdrop) {
         // 1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance. An ink of -1 is untested, and so is a backdrop of -1:
-        // P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D249).
+        // P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D256).
         if (ink < 0) {
             return 1;
         }
