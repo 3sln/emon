@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 ;; What did alignment do?  Alignment coverage, precision, splits, merges and mismatch rates from the dumps of the fixtures
-;; (test/fusion/align/ID.dump) (DEVLOG P7.1, D250-D252). NOT a gate by itself: `kin/scripts/align` calls it and holds the numbers.
+;; (test/fusion/align/ID.dump) (DEVLOG P7.1, D252-D254). NOT a gate by itself: `kin/scripts/align` calls it and holds the numbers.
 ;;
 ;;     bb -cp tools:tools/lib tools/fusion/align_report.clj [--self-test] [DUMP...]      default every dump of test/fusion/align/
 ;;

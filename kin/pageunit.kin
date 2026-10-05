@@ -112,6 +112,16 @@
           (set i (+ i 1))))
     (return 0)))
 
+;; The born-digital page's two rasters, asked by a consumer stage (D251): the page with its text and without it, at 300 dpi, in one
+;; round under `always` (policy 2). Answers `us-requests` when it asked, else `us-done`. Nothing calls it yet.
+(defn ^:pub ^I32 pu-ask-rasters [^I32 i ^I32 input ^I32 policy ^Cells ans ^:mut ^Cells rq]
+  (if (== policy 2)
+    (if (< (an-find ans (pu-id i (pi-render-text))) 0)
+      (do (rq-render rq (pu-id i (pi-render-text)) input i (pu-dpi) (lay-full))
+          (rq-render rq (pu-id i (pi-render-no-text)) input i (pu-dpi) (lay-no-text))
+          (return (us-requests)))))
+  (return (us-done)))
+
 (defn ^:pub ^I32 pu-run-pdf [^I32 i ^I32 input ^I32 policy ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc
                              ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
                              ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
@@ -123,16 +133,9 @@
   (comment "and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`")
   (comment "when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).")
   (if (== policy 0) (return (us-done)))
-  (comment "A BORN-DIGITAL page under `always` asks for its two rasters in one round (D199): the page with its text and without it,")
-  (comment "at 300 dpi. NOTHING IS OCR'd on it (D201, D212 (3): until P7.S flips the policy a text layer is read as it is); the")
-  (comment "bitmaps are the unit's, held in `bms` for the stages that read pixels (P6.3, P7.3) and dropped when the unit ends.")
-  (if (== (pu-kind pl i) (pk-born))
-    (do (if (== policy 2)
-          (if (< (an-find ans (pu-id i (pi-render-text))) 0)
-            (do (rq-render rq (pu-id i (pi-render-text)) input i (pu-dpi) (lay-full))
-                (rq-render rq (pu-id i (pi-render-no-text)) input i (pu-dpi) (lay-no-text))
-                (return (us-requests)))))
-        (return (us-done))))
+  (comment "A BORN-DIGITAL page asks for NOTHING here (D251, revised by the coordinator): its two rasters are lazy, asked by")
+  (comment "`pu-ask-rasters` when a stage that reads pixels exists (P7.1, P7.3); and nothing is OCR'd on it (D201, D212 (3)).")
+  (if (== (pu-kind pl i) (pk-born)) (return (us-done)))
   (if (!= (pu-kind pl i) (pk-scan)) (return (us-done)))
   (let [^I32 did (pu-id i (pi-decode))
         ^I32 oid (pu-id i (pi-ocr))

@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 ;; Record the alignment fixtures LIVE: the render of each page of a fusion document by pdfium and the OCR of that render by
-;; Tesseract, on the Rust host, with NO Engine (DEVLOG P7.1, D250-D252). NOT a gate: it needs the pinned pdfium (`bb pdfium-fetch`)
+;; Tesseract, on the Rust host, with NO Engine (DEVLOG P7.1, D252-D254). NOT a gate: it needs the pinned pdfium (`bb pdfium-fetch`)
 ;; and Tesseract (brew: tesseract, leptonica).
 ;;
 ;;     bb tools/fusion/record-align.clj [ID...]       default the six documents of the brief and three more; each is test/corpus/synth/pdf/ID.pdf

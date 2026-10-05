@@ -177,7 +177,7 @@ pub(crate) fn xa_cost(scr: &mut crate::port::Cells, nn: i32, ka: i32, sa: i32, c
     // The cost of pairing ca nodes of array ka from sa with cb nodes of array kb from sb: `xa-inf` when their merged boxes are
     // not candidates, else 1000 minus the intersection over union of their extents along the line (per mille). Along the line
     // and not over the boxes, because the sources draw a word's height differently (a font's ascent and descent, an engine's
-    // ink) and agree on where along the line it is (D251).
+    // ink) and agree on where along the line it is (D253).
     let ax0: i32 = xa_ubox(scr, nn, ka, sa, ca, 0);
     let ay0: i32 = xa_ubox(scr, nn, ka, sa, ca, 1);
     let ax1: i32 = xa_ubox(scr, nn, ka, sa, ca, 2);
@@ -768,7 +768,7 @@ pub(crate) fn xa_attach(mut scr: &mut crate::port::Cells, nn: i32, gp: &mut crat
     // word is longer than the pairing steps reach: `Section2.1` read as three words, a whole line whose spaces the font
     // does not map) joins that word's group as a split, and a text-layer word that is a candidate of an OCR word joins its
     // group as a merged one. Without this the covered words would be OCR-only or text-only groups of their own, and
-    // arbitration (P7.3) would write the same text twice (D251).
+    // arbitration (P7.3) would write the same text twice (D253).
     let mut j: i32 = nt;
     let mut k: i32 = 0;
     let mut layer: i32 = 0;

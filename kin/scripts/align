@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 ;; Cross-source alignment on real renders and a real OCR engine's reading, replayed from transcripts: recorded on Rust (pdfium and
-;; Tesseract), replayed on Rust and Go, identical correspondence groups.   kin/scripts/align     (DEVLOG P7.1, D250-D252)
+;; Tesseract), replayed on Rust and Go, identical correspondence groups.   kin/scripts/align     (DEVLOG P7.1, D252-D254)
 ;;
 ;; THE LIVE ENGINES ARE NOT HERE. `tools/fusion/record-align.clj` rendered each page of six fusion documents at 300 dpi WITH its text
 ;; (pdfium), read each render with Tesseract and committed what they answered (test/fusion/align/ID/, a slim transcript with no

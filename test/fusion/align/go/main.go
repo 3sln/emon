@@ -1,4 +1,4 @@
-// The alignment DRIVER, Go (DEVLOG P7.1, D250-D252): the REPLAY twin of test/fusion/align/rust/main.rs, with the same output.
+// The alignment DRIVER, Go (DEVLOG P7.1, D252-D254): the REPLAY twin of test/fusion/align/rust/main.rs, with the same output.
 // Go never records: pdfium and Tesseract are the Rust host's bindings here (a transcript recorded there replays here to the
 // identical correspondence groups).
 //

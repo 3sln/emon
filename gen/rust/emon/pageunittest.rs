@@ -60,11 +60,13 @@ fn test_a_unit_with_no_answers_asks_the_same_every_time() {
     crate::testport::assert_eq(crate::port::cells_at(rq1, 4), crate::port::cells_at(rq2, 4), "the same arguments");
 }
 #[test]
-fn test_a_born_digital_page_asks_for_two_rasters_under_always_and_never_for_ocr() {
+fn test_a_born_digital_page_asks_for_nothing_until_a_consumer_asks_for_its_rasters() {
     let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     plan_of(pl, 2, pk_born());
-    crate::testport::assert_eq(run_page(1, 2, pl, &mut crate::port::Cells::new(), rq), us_requests(), "always: it asks");
+    crate::testport::assert_eq(run_page(1, 2, pl, &mut crate::port::Cells::new(), rq), us_done(), "always: lazy, it asks nothing");
+    crate::testport::assert_eq(crate::port::cells_len(rq), 0, "no request, no OCR");
+    crate::testport::assert_eq(pu_ask_rasters(1, 3, 2, &mut crate::port::Cells::new(), rq), us_requests(), "a consumer asks");
     crate::testport::assert_eq(crate::port::cells_len(rq), 14, "two renders of seven cells");
     crate::testport::assert_eq(rec_kind(rq, 0), pk_render(), "a render");
     crate::testport::assert_eq(rec_id(rq, 0), 513, "page 1, with text: 2 * 256 + 1");
@@ -80,7 +82,7 @@ fn test_a_born_digital_page_asks_for_two_rasters_under_always_and_never_for_ocr(
     plan_of(pla, 1, pk_born());
     an_fail(ans1, pk_render(), 257, ps_unsupported());
     an_fail(ans1, pk_render(), 258, ps_unsupported());
-    crate::testport::assert_eq(run_page(0, 2, pla, ans1, rqa), us_done(), "answered, even `unsupported`: done");
+    crate::testport::assert_eq(pu_ask_rasters(0, 3, 2, ans1, rqa), us_done(), "answered, even `unsupported`: done");
     crate::testport::assert_eq(crate::port::cells_len(rqa), 0, "asks nothing more, and no OCR");
     let plb: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rqb: &mut crate::port::Cells = &mut crate::port::Cells::new();

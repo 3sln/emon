@@ -1,5 +1,5 @@
-;; CROSS-SOURCE ALIGNMENT of one page's words: correspondence groups (P7.1; SPEC 9.2; D202, D250-D252). emon's own module (D039).
-;; It is `emon.xalign` and not `emon.align` because `emon.align` is the paragraph alignment of P4.11 (`al-line`, `al-pass`; D250).
+;; CROSS-SOURCE ALIGNMENT of one page's words: correspondence groups (P7.1; SPEC 9.2; D202, D252-D254). emon's own module (D039).
+;; It is `emon.xalign` and not `emon.align` because `emon.align` is the paragraph alignment of P4.11 (`al-line`, `al-pass`; D252).
 ;;
 ;;   (xa-page page epages words owords tlines feats etext refs cg scr gp dp ta tb tt)
 ;;       Aligns the text layer (`words`: the visible ones, and the `hidden-text` ones), every OCR run's words (`owords`) and the
@@ -15,7 +15,7 @@
 ;; its `src` is `hidden-text`, and is not a candidate at all otherwise (it is the ledger's). Every OCR word of the page is a candidate,
 ;; of whichever run made it. The rows of one page are contiguous and pages ascend in each arena (a law holds the builders to it).
 ;;
-;; THE ALGORITHM, as SPEC 9.2 says, with the choices it leaves (D251):
+;; THE ALGORITHM, as SPEC 9.2 says, with the choices it leaves (D253):
 ;;   1. A 64 x 64 GRID over the page box indexes every candidate's head. An OCR word is a candidate of a text-layer word when
 ;;      `ev-overlap-small` of their boxes is at least `xa-overlap` (500) and their angles differ by at most `xa-angle` (300
 ;;      centi-degrees). The text-layer line of the candidate with the most overlap (ties: the earlier word) is the OCR word's LINE;
@@ -31,7 +31,7 @@
 ;;   3. A GROUP is a connected set of the chosen steps (union-find; a word of the text layer shared by two runs' steps joins them).
 ;;      What no step matched is attached when the other source COVERS it: an OCR word that is a candidate of a text-layer word joins
 ;;      that word's group (flag split), a text-layer word that is a candidate of an OCR word joins its group (flag merged): a word
-;;      read as three, a line whose spaces the font does not map (D251). An OCR word still unmatched is OCR-ONLY: it joins a group
+;;      read as three, a line whose spaces the font does not map (D253). An OCR word still unmatched is OCR-ONLY: it joins a group
 ;;      only through an OCR word of ANOTHER run that overlaps it by the test above (two engines' reading of the same ink); a
 ;;      text-layer word still unmatched is TEXT-ONLY. Groups come in the order
 ;;      of their first candidate: text-layer words in the layer's order, then the OCR-only ones in the engine's.
@@ -184,7 +184,7 @@
   (comment "The cost of pairing ca nodes of array ka from sa with cb nodes of array kb from sb: `xa-inf` when their merged boxes are")
   (comment "not candidates, else 1000 minus the intersection over union of their extents along the line (per mille). Along the line")
   (comment "and not over the boxes, because the sources draw a word's height differently (a font's ascent and descent, an engine's")
-  (comment "ink) and agree on where along the line it is (D251).")
+  (comment "ink) and agree on where along the line it is (D253).")
   (let [^I32 ax0 (xa-ubox scr nn ka sa ca 0)
         ^I32 ay0 (xa-ubox scr nn ka sa ca 1)
         ^I32 ax1 (xa-ubox scr nn ka sa ca 2)
@@ -620,7 +620,7 @@
   (comment "word is longer than the pairing steps reach: `Section2.1` read as three words, a whole line whose spaces the font")
   (comment "does not map) joins that word's group as a split, and a text-layer word that is a candidate of an OCR word joins its")
   (comment "group as a merged one. Without this the covered words would be OCR-only or text-only groups of their own, and")
-  (comment "arbitration (P7.3) would write the same text twice (D251).")
+  (comment "arbitration (P7.3) would write the same text twice (D253).")
   (let [^:mut ^I32 j nt
         ^:mut ^I32 k 0
         ^:mut ^I32 layer 0

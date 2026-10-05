@@ -201,7 +201,7 @@ func xaCost(scr *port.Cells, nn int32, ka int32, sa int32, ca int32, kb int32, s
 	// The cost of pairing ca nodes of array ka from sa with cb nodes of array kb from sb: `xa-inf` when their merged boxes are
 	// not candidates, else 1000 minus the intersection over union of their extents along the line (per mille). Along the line
 	// and not over the boxes, because the sources draw a word's height differently (a font's ascent and descent, an engine's
-	// ink) and agree on where along the line it is (D251).
+	// ink) and agree on where along the line it is (D253).
 	var ax0 int32 = xaUbox(scr, nn, ka, sa, ca, 0)
 	var ay0 int32 = xaUbox(scr, nn, ka, sa, ca, 1)
 	var ax1 int32 = xaUbox(scr, nn, ka, sa, ca, 2)
@@ -807,7 +807,7 @@ func xaAttach(scr *port.Cells, nn int32, gp *port.Cells, nt int32, no int32, pw 
 	// word is longer than the pairing steps reach: `Section2.1` read as three words, a whole line whose spaces the font
 	// does not map) joins that word's group as a split, and a text-layer word that is a candidate of an OCR word joins its
 	// group as a merged one. Without this the covered words would be OCR-only or text-only groups of their own, and
-	// arbitration (P7.3) would write the same text twice (D251).
+	// arbitration (P7.3) would write the same text twice (D253).
 	var j int32 = nt
 	var k int32 = 0
 	var layer int32 = 0

@@ -50,7 +50,7 @@
          :task (shell "kin/scripts/hosts")}
   accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (a gate since P1.10, D145).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
             :task (apply shell "bb" "tools/accuracy/accuracy.clj" *command-line-args*)}
-  align {:doc "Cross-source alignment (P7.1, D250-D252): six fusion documents rendered at 300 dpi with their text and read by Tesseract, replayed on Rust and Go to identical correspondence groups; coverage, precision, the broken-mapping signature and the time held. Recording is `bb align-record` (live, not a gate)."
+  align {:doc "Cross-source alignment (P7.1, D252-D254): six fusion documents rendered at 300 dpi with their text and read by Tesseract, replayed on Rust and Go to identical correspondence groups; coverage, precision, the broken-mapping signature and the time held. Recording is `bb align-record` (live, not a gate)."
          :task (shell "bb" "kin/scripts/align")}
   align-record {:doc "Record the alignment fixtures LIVE: pdfium renders and Tesseract's reading, on the Rust host, into test/fusion/align/. NOT a gate (needs the pinned pdfium and Tesseract; P7.1).  bb align-record [ID...]"
                 :task (apply shell "bb" "tools/fusion/record-align.clj" *command-line-args*)}

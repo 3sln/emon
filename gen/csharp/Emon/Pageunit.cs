@@ -113,6 +113,16 @@ public static class Pageunit {
         }
         return 0;
     }
+    public static int PuAskRasters(int i, int input, int policy, emon.Port.Cells ans, emon.Port.Cells rq) {
+        if (policy == 2) {
+            if (Plan.AnFind(ans, Plan.PuId(i, Plan.PiRenderText())) < 0) {
+                Plan.RqRender(rq, Plan.PuId(i, Plan.PiRenderText()), input, i, PuDpi(), Plan.LayFull());
+                Plan.RqRender(rq, Plan.PuId(i, Plan.PiRenderNoText()), input, i, PuDpi(), Plan.LayNoText());
+                return Plan.UsRequests();
+            }
+        }
+        return Plan.UsDone();
+    }
     public static int PuRunPdf(int i, int input, int policy, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines) {
         // The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
         // of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`
@@ -121,17 +131,9 @@ public static class Pageunit {
         if (policy == 0) {
             return Plan.UsDone();
         }
-        // A BORN-DIGITAL page under `always` asks for its two rasters in one round (D199): the page with its text and without it,
-        // at 300 dpi. NOTHING IS OCR'd on it (D201, D212 (3): until P7.S flips the policy a text layer is read as it is); the
-        // bitmaps are the unit's, held in `bms` for the stages that read pixels (P6.3, P7.3) and dropped when the unit ends.
+        // A BORN-DIGITAL page asks for NOTHING here (D251, revised by the coordinator): its two rasters are lazy, asked by
+        // `pu-ask-rasters` when a stage that reads pixels exists (P7.1, P7.3); and nothing is OCR'd on it (D201, D212 (3)).
         if (PuKind(pl, i) == PkBorn()) {
-            if (policy == 2) {
-                if (Plan.AnFind(ans, Plan.PuId(i, Plan.PiRenderText())) < 0) {
-                    Plan.RqRender(rq, Plan.PuId(i, Plan.PiRenderText()), input, i, PuDpi(), Plan.LayFull());
-                    Plan.RqRender(rq, Plan.PuId(i, Plan.PiRenderNoText()), input, i, PuDpi(), Plan.LayNoText());
-                    return Plan.UsRequests();
-                }
-            }
             return Plan.UsDone();
         }
         if (PuKind(pl, i) != PkScan()) {

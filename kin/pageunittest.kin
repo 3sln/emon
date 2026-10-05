@@ -8,7 +8,7 @@
                                bitmap-u8 bitmap-set-u8]]
             [emon.plan :refer [rec-id rec-kind rq-arg pk-decode pk-render an-fail ps-unsupported lay-full lay-no-text us-requests us-done pu-id pu-view-id view-base
                                pi-render-text pi-decode pi-ocr flt-dct]]
-            [emon.pageunit :refer [pu-w pu-kind pu-dpi pk-scan pk-born pk-none pu-run-pdf]]
+            [emon.pageunit :refer [pu-w pu-kind pu-dpi pk-scan pk-born pk-none pu-run-pdf pu-ask-rasters]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -65,11 +65,13 @@
     (assert-eq (cells-at rq1 2) (cells-at rq2 2) "the same id")
     (assert-eq (cells-at rq1 4) (cells-at rq2 4) "the same arguments")))
 
-(deftest test-a-born-digital-page-asks-for-two-rasters-under-always-and-never-for-ocr
+(deftest test-a-born-digital-page-asks-for-nothing-until-a-consumer-asks-for-its-rasters
   (let [^Cells pl (new-cells)
         ^Cells rq (new-cells)]
     (plan-of pl 2 (pk-born))
-    (assert-eq (run-page 1 2 pl (new-cells) rq) (us-requests) "always: it asks")
+    (assert-eq (run-page 1 2 pl (new-cells) rq) (us-done) "always: lazy, it asks nothing")
+    (assert-eq (cells-len rq) 0 "no request, no OCR")
+    (assert-eq (pu-ask-rasters 1 3 2 (new-cells) rq) (us-requests) "a consumer asks")
     (assert-eq (cells-len rq) 14 "two renders of seven cells")
     (assert-eq (rec-kind rq 0) (pk-render) "a render")
     (assert-eq (rec-id rq 0) 513 "page 1, with text: 2 * 256 + 1")
@@ -85,7 +87,7 @@
     (plan-of pla 1 (pk-born))
     (an-fail ans1 (pk-render) 257 (ps-unsupported))
     (an-fail ans1 (pk-render) 258 (ps-unsupported))
-    (assert-eq (run-page 0 2 pla ans1 rqa) (us-done) "answered, even `unsupported`: done")
+    (assert-eq (pu-ask-rasters 0 3 2 ans1 rqa) (us-done) "answered, even `unsupported`: done")
     (assert-eq (cells-len rqa) 0 "asks nothing more, and no OCR"))
   (let [^Cells plb (new-cells)
         ^Cells rqb (new-cells)]

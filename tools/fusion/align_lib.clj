@@ -1,5 +1,5 @@
 ;; Shared by `kin/scripts/align` (the gate) and `tools/fusion/record-align.clj` (live): building the Rust and Go alignment drivers
-;; (test/fusion/align/{rust,go}) in a private temp dir.   (DEVLOG P7.1, D250-D252)
+;; (test/fusion/align/{rust,go}) in a private temp dir.   (DEVLOG P7.1, D252-D254)
 (ns fusion.align-lib
   (:require [babashka.fs :as fs]
             [babashka.process :refer [process]]

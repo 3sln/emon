@@ -61,11 +61,13 @@ public static class Pageunittest {
         emon.Testport.AssertEq(emon.Port.CellsAt(rq1, 4), emon.Port.CellsAt(rq2, 4), "the same arguments");
     }
     [Xunit.Fact]
-    public static void TestABornDigitalPageAsksForTwoRastersUnderAlwaysAndNeverForOcr() {
+    public static void TestABornDigitalPageAsksForNothingUntilAConsumerAsksForItsRasters() {
         emon.Port.Cells pl = emon.Port.NewCells();
         emon.Port.Cells rq = emon.Port.NewCells();
         PlanOf(pl, 2, Pageunit.PkBorn());
-        emon.Testport.AssertEq(RunPage(1, 2, pl, emon.Port.NewCells(), rq), Plan.UsRequests(), "always: it asks");
+        emon.Testport.AssertEq(RunPage(1, 2, pl, emon.Port.NewCells(), rq), Plan.UsDone(), "always: lazy, it asks nothing");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq), 0, "no request, no OCR");
+        emon.Testport.AssertEq(Pageunit.PuAskRasters(1, 3, 2, emon.Port.NewCells(), rq), Plan.UsRequests(), "a consumer asks");
         emon.Testport.AssertEq(emon.Port.CellsLen(rq), 14, "two renders of seven cells");
         emon.Testport.AssertEq(Plan.RecKind(rq, 0), Plan.PkRender(), "a render");
         emon.Testport.AssertEq(Plan.RecId(rq, 0), 513, "page 1, with text: 2 * 256 + 1");
@@ -81,7 +83,7 @@ public static class Pageunittest {
         PlanOf(pla, 1, Pageunit.PkBorn());
         Plan.AnFail(ans1, Plan.PkRender(), 257, Plan.PsUnsupported());
         Plan.AnFail(ans1, Plan.PkRender(), 258, Plan.PsUnsupported());
-        emon.Testport.AssertEq(RunPage(0, 2, pla, ans1, rqa), Plan.UsDone(), "answered, even `unsupported`: done");
+        emon.Testport.AssertEq(Pageunit.PuAskRasters(0, 3, 2, ans1, rqa), Plan.UsDone(), "answered, even `unsupported`: done");
         emon.Testport.AssertEq(emon.Port.CellsLen(rqa), 0, "asks nothing more, and no OCR");
         emon.Port.Cells plb = emon.Port.NewCells();
         emon.Port.Cells rqb = emon.Port.NewCells();

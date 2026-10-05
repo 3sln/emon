@@ -247,13 +247,13 @@ fn intake_takes_any_number_of_inputs() {
 }
 
 #[test]
-fn record_and_replay_with_a_born_digital_pages_two_rasters_unsupported() {
+fn record_and_replay_with_a_born_digital_page_asking_for_nothing() {
     let e = Engine::new(Config::default());
     let b = synth("h-plain");
     let (m, t) = e.record(Input::bytes(b.clone()), &Options::default()).unwrap();
-    // under `always` a born-digital page asks for its two rasters (D199): with no Renderer each is answered `unsupported`, in
-    // page order, each page its own unit; nothing is OCR'd
-    assert_eq!(t.entries.iter().map(|x| (x.round, x.req[1], x.req[2], x.ans[3])).collect::<Vec<_>>(), vec![(0, 1, 257, 2), (0, 1, 258, 2), (0, 1, 513, 2), (0, 1, 514, 2)]);
+    // a born-digital page's two rasters are lazy (D251, revised by the coordinator): nothing asks for them until a stage reads
+    // pixels, so the transcript is empty; nothing is OCR'd
+    assert!(t.entries.is_empty());
     assert!(t.entries.iter().all(|x| x.bitmap.is_none()));
     assert_eq!(t.inputs, vec![(0, b.len() as i32)]);
     let r = e.replay(Input::bytes(b.clone()), &Options::default(), &t).unwrap();
@@ -588,10 +588,10 @@ fn a_render_fulfiller_answers_renders_and_crops_and_failures_as_records() {
 }
 
 #[test]
-fn an_engine_with_a_renderer_is_the_same_engine_and_a_born_digital_page_is_rendered_twice() {
+fn an_engine_with_a_renderer_is_the_same_engine_and_a_born_digital_page_is_not_rendered() {
     // The Engine's port set (D127): `render` and `crop` go to Config.renderer. Under `always` a born-digital page asks for its
-    // two rasters (D199, P7.U) and nothing reads them yet, so the Model is byte-for-byte the one of an Engine with no
-    // renderer, and the renderer is called twice a page.
+    // two rasters lazily (D251), none does yet, so the Model is byte-for-byte the one of an Engine with no
+    // renderer, and the renderer is never called.
     let fake = Arc::new(Fake::default());
     let with = Engine::new(Config { renderer: Some(fake.clone()), ..Config::default() });
     let without = Engine::new(Config::default());
@@ -602,5 +602,5 @@ fn an_engine_with_a_renderer_is_the_same_engine_and_a_born_digital_page_is_rende
         assert_eq!(json(&a), json(&b), "{}", name);
     }
     let n = fake.calls.load(Ordering::SeqCst);
-    assert!(n > 0 && n % 2 == 0, "the renderer was called {} times: two a page expected", n);
+    assert_eq!(n, 0, "the renderer was called {} times: a born-digital page's rasters are lazy", n);
 }

@@ -1,4 +1,4 @@
-;; Laws for `emon.xalign` (P7.1; SPEC 9.2; D202, D250-D252), on every target.
+;; Laws for `emon.xalign` (P7.1; SPEC 9.2; D202, D252-D254), on every target.
 ;;
 ;; THE HEADS ARE BUILT BY HAND (the document fixtures are `bb align`'s): a text-layer word, an OCR word and a tracer line are
 ;; head rows like any other (SPEC 8.4.1), so what is held here is the alignment alone: 1:1 on a clean line, a split (`Chapter1`

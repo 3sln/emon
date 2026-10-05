@@ -57,11 +57,13 @@ public final class Pageunittest {
         emon.Testport.assertEq(emon.Port.cellsAt(rq1, 2), emon.Port.cellsAt(rq2, 2), "the same id");
         emon.Testport.assertEq(emon.Port.cellsAt(rq1, 4), emon.Port.cellsAt(rq2, 4), "the same arguments");
     }
-    public static void testABornDigitalPageAsksForTwoRastersUnderAlwaysAndNeverForOcr() {
+    public static void testABornDigitalPageAsksForNothingUntilAConsumerAsksForItsRasters() {
         emon.Port.Cells pl = emon.Port.newCells();
         emon.Port.Cells rq = emon.Port.newCells();
         planOf(pl, 2, Pageunit.pkBorn());
-        emon.Testport.assertEq(runPage(1, 2, pl, emon.Port.newCells(), rq), Plan.usRequests(), "always: it asks");
+        emon.Testport.assertEq(runPage(1, 2, pl, emon.Port.newCells(), rq), Plan.usDone(), "always: lazy, it asks nothing");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq), 0, "no request, no OCR");
+        emon.Testport.assertEq(Pageunit.puAskRasters(1, 3, 2, emon.Port.newCells(), rq), Plan.usRequests(), "a consumer asks");
         emon.Testport.assertEq(emon.Port.cellsLen(rq), 14, "two renders of seven cells");
         emon.Testport.assertEq(Plan.recKind(rq, 0), Plan.pkRender(), "a render");
         emon.Testport.assertEq(Plan.recId(rq, 0), 513, "page 1, with text: 2 * 256 + 1");
@@ -77,7 +79,7 @@ public final class Pageunittest {
         planOf(pla, 1, Pageunit.pkBorn());
         Plan.anFail(ans1, Plan.pkRender(), 257, Plan.psUnsupported());
         Plan.anFail(ans1, Plan.pkRender(), 258, Plan.psUnsupported());
-        emon.Testport.assertEq(runPage(0, 2, pla, ans1, rqa), Plan.usDone(), "answered, even `unsupported`: done");
+        emon.Testport.assertEq(Pageunit.puAskRasters(0, 3, 2, ans1, rqa), Plan.usDone(), "answered, even `unsupported`: done");
         emon.Testport.assertEq(emon.Port.cellsLen(rqa), 0, "asks nothing more, and no OCR");
         emon.Port.Cells plb = emon.Port.newCells();
         emon.Port.Cells rqb = emon.Port.newCells();

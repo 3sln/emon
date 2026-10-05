@@ -1,4 +1,4 @@
-// The alignment DRIVER, Rust (DEVLOG P7.1, D250-D252). Test-only.
+// The alignment DRIVER, Rust (DEVLOG P7.1, D252-D254). Test-only.
 //
 //     aligndrv replay DIR PDF                   the gate: answer from DIR (no pdfium, no Tesseract)
 //     aligndrv record DIR PDF                   live: `--cfg pdfium --cfg live`, links libpdfium and libtesseract

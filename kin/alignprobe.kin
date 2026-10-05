@@ -1,4 +1,4 @@
-;; THE ALIGNMENT PROBE UNIT (P7.1; SPEC 9.2; D250-D252): the text layer of a PDF aligned with what a real renderer and a real OCR engine
+;; THE ALIGNMENT PROBE UNIT (P7.1; SPEC 9.2; D252-D254): the text layer of a PDF aligned with what a real renderer and a real OCR engine
 ;; made of its pages, in miniature, with no Engine around it.
 ;;
 ;;   document pass   `pd-open`, `pc-document`, `th-run`: the text layer's evidence, its stage-1 features (so `xt-vis`), `epages`

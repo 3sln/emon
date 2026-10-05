@@ -176,7 +176,7 @@ public static class Xalign {
         // The cost of pairing ca nodes of array ka from sa with cb nodes of array kb from sb: `xa-inf` when their merged boxes are
         // not candidates, else 1000 minus the intersection over union of their extents along the line (per mille). Along the line
         // and not over the boxes, because the sources draw a word's height differently (a font's ascent and descent, an engine's
-        // ink) and agree on where along the line it is (D251).
+        // ink) and agree on where along the line it is (D253).
         int ax0 = XaUbox(scr, nn, ka, sa, ca, 0);
         int ay0 = XaUbox(scr, nn, ka, sa, ca, 1);
         int ax1 = XaUbox(scr, nn, ka, sa, ca, 2);
@@ -767,7 +767,7 @@ public static class Xalign {
         // word is longer than the pairing steps reach: `Section2.1` read as three words, a whole line whose spaces the font
         // does not map) joins that word's group as a split, and a text-layer word that is a candidate of an OCR word joins its
         // group as a merged one. Without this the covered words would be OCR-only or text-only groups of their own, and
-        // arbitration (P7.3) would write the same text twice (D251).
+        // arbitration (P7.3) would write the same text twice (D253).
         int j = nt;
         int k = 0;
         int layer = 0;
