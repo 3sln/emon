@@ -7,7 +7,7 @@ use crate::emon::gvec::*;
 
 pub(crate) const GF_AXIS: i32 = 100;
 pub fn gfx_mode() -> i32 {
-    return 0;
+    return 1;
 }
 pub(crate) fn gf_lightness(rgb: i32) -> i32 {
     // 0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.

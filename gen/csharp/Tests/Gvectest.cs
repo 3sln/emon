@@ -41,6 +41,26 @@ public static class Gvectest {
         return Gvec.GvPage(pa, pts, mk, im, 0, emon.Port.CellsLen(pa) / 24, 0, emon.Port.CellsLen(im) / 20, mode, @out);
     }
     [Xunit.Fact]
+    public static void TestARectangleWrittenAsFourLinesAndACloseIsARectangle() {
+        // Skia writes a rectangle as a move, four lines (the last back to the start) and a close: six rows, not five
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        int r = GtPath(pa, Evidence.PaOther(), Evidence.PgFilled(), 0, -1, 0, 1000, 4950, 21000, 5050);
+        GtPt(pa, pts, r, 1000, 4950, Evidence.PoMove());
+        GtPt(pa, pts, r, 21000, 4950, Evidence.PoLine());
+        GtPt(pa, pts, r, 21000, 5050, Evidence.PoLine());
+        GtPt(pa, pts, r, 1000, 5050, Evidence.PoLine());
+        GtPt(pa, pts, r, 1000, 4950, Evidence.PoLine());
+        GtPt(pa, pts, r, 1000, 4950, Evidence.PoClose());
+        emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvSegments(), @out), 1, "one rule");
+        emon.Testport.AssertEq(GtC(@out, 0, 8), 1000, "from its left end");
+        emon.Testport.AssertEq(GtC(@out, 0, 10), 21000, "to its right end");
+        emon.Testport.AssertEq(GtC(@out, 0, 12), 100, "one point thick");
+    }
+    [Xunit.Fact]
     public static void TestAPathOfThirtyRectsIsThirtyRulesOrOneFill() {
         emon.Port.Cells pa = emon.Port.NewCells();
         emon.Port.Cells pts = emon.Port.NewCells();
@@ -64,6 +84,38 @@ public static class Gvectest {
         emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvLegacy(), @out), 1, "legacy: its box is one candidate");
         emon.Testport.AssertEq(GtC(@out, 0, 0), 2, "a fill");
         emon.Testport.AssertEq(GtC(@out, 0, 6), 20000, "of the whole box");
+    }
+    [Xunit.Fact]
+    public static void TestTheDashesOfABorderAreRulesOfTheirOwn() {
+        emon.Port.Cells pa = emon.Port.NewCells();
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells mk = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        int r = GtPath(pa, Evidence.PaOther(), Evidence.PgFilled(), 5592405, -1, 0, 18700, 86500, 18775, 88825);
+        int k = 0;
+        // five dashes of 0.75 x 2.25 pt, a period of 5.25 pt, one path (as Chrome writes a dashed border)
+        while (k < 5) {
+            GtRe(pa, pts, r, 18700, 86500 + (k * 525), 18775, 86725 + (k * 525));
+            k += 1;
+        }
+        emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvSegments(), @out), 5, "five rules, one a dash: nothing bridges a gap");
+        emon.Testport.AssertEq(GtC(@out, 0, 8), 18737, "vertical, on the dashes' centre line");
+        emon.Testport.AssertEq(GtC(@out, 0, 9), 86500, "the first from its top");
+        emon.Testport.AssertEq(GtC(@out, 0, 11), 86725, "to its bottom");
+        emon.Testport.AssertEq(GtC(@out, 4, 9), 88600, "the last starts after four periods");
+        emon.Testport.AssertEq(GtC(@out, 4, 11), 88825, "and ends at the end of the chain");
+        emon.Testport.AssertEq(GtC(@out, 0, 12), 75, "as thick as a dash");
+        emon.Testport.AssertEq(GtC(@out, 0, 14), 2, "dashed (`rs` 2): the period is not within four thicknesses");
+        emon.Testport.AssertEq(GtC(@out, 0, 15) & 131072, 0, "and no longer a piece");
+        emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvLegacy(), @out), 1, "legacy: the path's box is one rule");
+        // two dashes are not a dashed line; a lone short box is not a rule
+        emon.Port.CellsDrop(pa, 0);
+        emon.Port.CellsDrop(pts, 0);
+        int d = GtPath(pa, Evidence.PaOther(), Evidence.PgFilled(), 0, -1, 0, 0, 0, 100, 100);
+        GtRe(pa, pts, d, 0, 0, 75, 225);
+        GtRe(pa, pts, d, 0, 525, 75, 750);
+        emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvSegments(), @out), 0, "two pieces are nothing");
     }
     [Xunit.Fact]
     public static void TestAGridInOnePathAndTheFlatCurve() {
@@ -145,7 +197,7 @@ public static class Gvectest {
         Evidence.PaSet(pa, r2, Evidence.PfClip(), c2);
         GtRe(pa, pts, r2, 0, 4950, 20000, 5050);
         emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvSegments(), @out), 0, "a rule whose band misses its clip is gone");
-        // white on black (backdrop black) is a rule; white on white is not; an unknown backdrop is white
+        // white on black (backdrop black) is a rule; white on white is not; on an unknown backdrop it is seen
         emon.Port.CellsDrop(pa, 0);
         emon.Port.CellsDrop(pts, 0);
         int w = GtPath(pa, Evidence.PaRect(), Evidence.PgFilled(), 16777215, -1, 0, 0, 4950, 20000, 5050);
@@ -156,7 +208,7 @@ public static class Gvectest {
         Evidence.PaSet(pa, w, Evidence.PfBackdrop(), 16777215);
         emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvSegments(), @out), 0, "a white rule on white is not");
         Evidence.PaSet(pa, w, Evidence.PfBackdrop(), -1);
-        emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvSegments(), @out), 0, "nor on an unknown backdrop");
+        emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvSegments(), @out), 1, "on an unknown backdrop (a partial cover) it is seen, and that is all that is known");
         emon.Testport.AssertEq(GtRun(pa, pts, mk, im, Gvec.GvLegacy(), @out), 0, "legacy: mean channel under 240 only");
     }
     [Xunit.Fact]

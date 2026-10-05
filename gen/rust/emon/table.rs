@@ -185,8 +185,27 @@ pub(crate) fn tb_rule_add(mut rl: &mut crate::port::Cells, kind: i32, pos: i32, 
     crate::port::cells_push(rl, 0);
     return 0;
 }
-pub(crate) fn tb_collect(grl: &mut crate::port::Cells, r0: i32, r1: i32, gfl: &mut crate::port::Cells, f0: i32, f1: i32, mut rl: &mut crate::port::Cells, mut fl: &mut crate::port::Cells) -> i32 {
-    // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never an `artifact-pagination` one: a running header's or footer's)
+pub(crate) fn tb_running_rule(grl: &mut crate::port::Cells, i: i32, ph: i32) -> i32 {
+    // 1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of
+    // the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination
+    // artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D249).
+    if (grl_get(grl, i, grf_flags()) & gq_artifact_pagination()) == 0 {
+        return 0;
+    }
+    let ya: i32 = grl_get(grl, i, grf_ey0());
+    let yb: i32 = grl_get(grl, i, grf_ey1());
+    let lo: i32 = tb_min(ya, yb);
+    let hi: i32 = tb_max(ya, yb);
+    if hi <= (ph / 8) {
+        return 1;
+    }
+    if lo >= (ph - (ph / 8)) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_collect(grl: &mut crate::port::Cells, r0: i32, r1: i32, gfl: &mut crate::port::Cells, f0: i32, f1: i32, ph: i32, mut rl: &mut crate::port::Cells, mut fl: &mut crate::port::Cells) -> i32 {
+    // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)
     // as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
     // (`fl`: box and colour). P5.5a (D218, D248): the table stage reads the fused graphics and never `paths`.
     let mut i: i32 = r0;
@@ -195,7 +214,7 @@ pub(crate) fn tb_collect(grl: &mut crate::port::Cells, r0: i32, r1: i32, gfl: &m
     crate::port::cells_drop(fl, 0);
     while i < r1 {
         o = grl_get(grl, i, grf_orient());
-        if (grl_get(grl, i, grf_flags()) & gq_artifact_pagination()) == 0 {
+        if tb_running_rule(grl, i, ph) == 0 {
             if o == go_h() {
                 tb_rule_add(rl, 0, (grl_get(grl, i, grf_ey0()) + grl_get(grl, i, grf_ey1())) / 2, grl_get(grl, i, grf_ex0()), grl_get(grl, i, grf_ex1()), grl_get(grl, i, grf_thick()), grl_get(grl, i, grf_colour()));
             }
@@ -2996,7 +3015,7 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
         }
         t0 = tb_rows_of(tb, TBS);
         if (wj - wi) > 0 {
-            tb_collect(grl, qi, qj, gfl, ui, uj, s0, s2);
+            tb_collect(grl, qi, qj, gfl, ui, uj, page_h(pages, p - 1), s0, s2);
             if tb_rows_of(s0, RLS) <= MAX_RULES {
                 tb_merge_rules(s0, s1, s3, s9);
                 tb_ruled_page(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx);

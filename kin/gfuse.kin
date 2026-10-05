@@ -27,7 +27,7 @@
 
 (defconst ^I32 GF_AXIS 100)          ;; `gf-axis`: within 1 degree of an axis is that axis's orientation (centi-degrees)
 
-(defn ^:pub ^I32 gfx-mode [] (return 0))
+(defn ^:pub ^I32 gfx-mode [] (return 1))
 
 (defn ^I32 gf-lightness [^I32 rgb]
   (comment "0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.")

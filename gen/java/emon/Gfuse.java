@@ -7,7 +7,7 @@ package emon;
 public final class Gfuse {
     public static final int GF_AXIS = 100;
     public static int gfxMode() {
-        return 0;
+        return 1;
     }
     public static int gfLightness(int rgb) {
         // 0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.

@@ -1883,7 +1883,7 @@ analysis beyond "top-to-bottom lines on a single column".
 - [x] P5.4 — Tables across pages: with and without recurring headers,
   "continued" markers, split rows (D019). **Done** (D174) except split rows and a free-standing "(continued)" line: the
   synthetic multi-page documents score TEDS-lite 1.0 and `table-continued-acc` 1.0.
-- [ ] **P5.5a — The fused-graphics arenas and the vector source; `emon.table` reads `grl`/`gfl`, never `paths`** (SPEC
+- [x] **P5.5a — The fused-graphics arenas and the vector source; `emon.table` reads `grl`/`gfl`, never `paths`** (SPEC
   §9.7, §9.9 "Vector candidates", §10.5 "What the profiles read"; D218, D220). **Wave 2** of the Phase 7 table. Depends on
   P3.6a (step B only) and P7.0 (`kin/player.kin`); parallel with P6.4, P7.1, P7.2.
   *Brief*:
@@ -1920,6 +1920,40 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: step A's identity and step B's numbers in this entry; laws (a path of 30 `re` subpaths gives 30 rules in
   `segments` and one fill in `legacy`; a clipped half rule is trimmed; a white rule on black is a rule; a hidden rule is
   flagged; `gl-check` 0 on a hand-built two-page layer) on four targets; `bb gates` green.
+  *Done* (D248-D250). **Step A (identity)**: `gv-legacy` is `tb-collect-one` as P5.1 wrote it, `gf-page` writes its candidates as
+  `grl`/`gfl` rows, and `tb-collect` reads them; every one of the 674 outputs (JSON and HTML, 337 PDFs of `test/`) is byte for byte what
+  the base commit makes, `bb slice` (Rust and Go) and the table goldens hold, and `bb accuracy` moved only its rule and fill metrics (26
+  of them: the dump now has `grl`/`gfl`; under `legacy` a path's box is one rule, so `pdf/graphics` scores rule-p 0.847, rule-r 0.203).
+  **Step B (the default is `segments`)**, BEFORE (= step A: the tables are the base's) and AFTER, `bb accuracy` (the emon scoreboard; 59
+  metrics improved and recorded, none regressed): `pdf/graphics` `table-adj-f1` 0.715 -> 0.890 (r 0.556 -> 0.802, p 1.0 held),
+  `table-teds-lite` 0.731 -> 0.808, `table-teds-struct-lite` 0.785 -> 0.872, `block-table` R 0.846 -> 0.885 (P 1.0 held, F1 0.917 ->
+  0.939), `table-continued-acc` 0.846 -> 0.885, `para-boundary-f1` 0.245 -> 0.479, `block-paragraph-f1` 0.355 -> 0.596 (the lines that
+  were in a table's region are no longer paragraphs), `rule-p`/`rule-r` 0.0 -> 0.963/0.957, `fill-p`/`fill-r` 0.0 -> 1.0/0.805; `pdf/all`
+  `table-teds-lite` 0.819 -> 0.852, `table-teds-struct-lite` 0.870 -> 0.907, `table-adj-f1` 0.962 -> 0.980, `block-table` F1 0.948 ->
+  0.957, `rule-p`/`rule-r` 0.974/0.997, `fill-p`/`fill-r` 1.0/0.943; `pdf/tables` tables unchanged, `rule-p` 0.968, `rule-r` 1.0, fills
+  1.0/1.0 (the dashes the oracle does not list are the 0.03). `tag-verdict-acc` is P5.5's. ICDAR 2013 live (66 scored, D182's numbers
+  reproduced by the same scorer on the base): `block-table` P 0.778 -> 0.774, R 0.861 held, `table-teds-lite` 0.484 -> 0.485, struct
+  0.684 -> 0.686, `table-adj-f1` 0.792 -> 0.791. Survey (546 PDFs: `test/`, ICDAR 2013, the gov reports, the IRS forms, 100 digital bank
+  statements, 23 contracts): no panic, the tables of 513 unchanged and 33 changed (below). **Document by document** (profile columns x
+  rows): `gfx-hidden-rules` whitespace -> ruled 3 x 3 (the hidden pieces are 505: nothing; D227's 3 x 3, not 4 x 4); `gfx-onepath-grid`
+  page 1 whitespace -> ruled 5 x 4 and page 2 ruled 12 x 10 (1,100 points are now whole, D246, so it is a lattice, not a box);
+  `gfx-curve-lines` ruled 3 x 3 as before (its rules are the flat curves' lines now); `gfx-image-rules` whitespace -> ruled 3 x 3 (the
+  one-point images are `from-image` rules, 514); `gfx-softmask-rule` whitespace -> ruled 3 x 3 (the masked rule is a 514 row: seen, not
+  exactly known, for P7.G's tracer to arbitrate); `gfx-shading-bands` and `gfx-pattern-bands` whitespace -> shaded, 3 columns, 5 rows
+  (the bands are `gfl` fills of colour -1, flags `shading`/`pattern`); the eight `ttab-*` documents whitespace -> ruled (their grids are
+  `m l` paths, which `tb-collect-one` never read); `table-white-rules`: the three white header separators are in `grl` (rule 501, white; the
+  backdrop is unknown, so seen) and the partial profile is unchanged; `table-dashed`, `bank-statement`, `invoice` and
+  `test/pdf/tagged/*` keep their tables (a table's box moves by up to half a stroke, 71.75 -> 72 pt: a rule's ends are now the line's, not
+  the path box's); the Chrome table goldens do not move. The corpus (tables, ruled ones, cells; before -> after): `f1040` 7, 4, 293 -> 7, 4, 293; `f1065` 17, 5, 662 ->
+  17, 5, 659; `f1120` 19, 2, 772 -> 19, 2, 767; `f941` 9, 1, 84 -> 9, 1, 92; `f990` 28, 8, 989 -> 33, 7, 1,090; `p15` 22, 12, 411 -> 22, 12, 404;
+  `census-p60-279` 37, 21, 886 -> 35, 21, 901; `eia-steo-full` 71, 32, 1,741 -> 74, 29, 1,759; `i1040gi` 110, 18, 27,590 -> 151, 18, 25,839 (its tax
+  tables, a 21-column table a page, are two 10-column tables a page; whether that is the page's own division I did not check); `bea-gdp2q24` 28, 1, 14,173 -> 24, 22, 773 (whitespace
+  tables of thousands of cells became its ruled tables); ICDAR `eu-012` 6, 5, 226 -> 5, 5, 206, `eu-015` 5, 5, 234 -> 7, 5, 262, `eu-027` 1, 0, 167 ->
+  2, 0, 184, `us-002` 4, 0, 108 -> 5, 1, 129, `us-010` partial 5 x 7 -> ruled 4 x 6, `us-011a` 26 -> 28 cells, `us-023` 225 -> 201 cells (the three that
+  moved ICDAR's precision are `eu-015`, `eu-027` and `us-002`). I read these by their structure and the scores above, not cell by cell.
+  *Found by the survey, fixed*: (1) Skia (Chrome) writes a rectangle as a move, FOUR lines (the last back to the start) and a close, six rows
+  where `re` has five: the first `segments` read lost every such rectangle (the El Pollo Loco contract's tables, `gv-subpath`); (2) the IRS
+  publications tag a table's own rules `/Artifact /Pagination` (D250); (3) a dashed border is a run of thin boxes (D249).
 - [ ] **P5.5 — `struct` (tagged) tables verified against geometry** (SPEC §10.5 "Tagged tables"; D225, D034, D148-D150).
   **Wave 3** of the Phase 7 table, parallel with P7.3 (disjoint files). Depends on P5.5a and P6.8's tagged-table
   fixtures. `form` moved to P5.5b.
@@ -7635,6 +7669,65 @@ the render witness for the rule-like paths): the numbers are in the P3.6a entry 
 P5.5a writes `grl` from these rows.
 **Known**: `kin/scripts/vis-check --render` reports three glyphs of `spaces.pdf` (`C21`, a pattern colour) as flat where emon says visible;
 that is the glyph witness, not changed here (poppler does not paint the fixture's pattern).
+- [ ] **Signed off** (maintainer)
+
+### D248 — P5.5a as built: the graphics arenas, the vector source, the table stage's one reader, and the Engines' wiring (P5.5a; SPEC 9.7, 9.9, 10.5; D218, D220, D222)
+**Decision**: `kin/glayer.kin` has the layouts of `grl` (24), `gfl` (16), `ggp` (12), `grg` (16) with accessors (`grf-`, `gff-`, `ggf-`, `gcf-`)
+and builders (`grl-new` ...), the enums `go`, `gq`, `gk`, `rk`, `gs` (the sources bitset: vector 1, trace 2, ocr 4, struct 8, image 16) and
+`glk` (the dump's keys), `gl-check` (1 stride, 2 a group outside `ggp`, 3 a member run outside `refs` or a group of an unknown kind, 4 a
+bad orientation, thickness or box, 5 a bad region, 6 a `refs` reference into a row that is not there), `gl-append` (re-bases groups and
+member runs) and the dump (`gl-fd`, `gl-fx`, `gl-emit`: a law holds that every cell is printed or spare). Where SPEC 9.7 is amended
+(SPEC edited in place): the flags of `gfl` are their own enum `gqf` (shading, pattern, in-image, tint-coloured: the spec lists two flag sets
+under one name); `gq` gains `from-image` (256, appended: a thin image placement drawn as a rule, SPEC 9.9, which had no bit); `grg` has 3 spare
+cells, not 2 (13 fields in 16, as D240 corrected `cg` and `fa`); sources are the `gs` bitset (the spec's `sr` is the words' enum). The
+layer's codes: `grl` 41 (`fpa`'s, which is gone from `player.kin`: `pl-append`, `pl-check`, `pl-emit` and `pl-emit-layer` take `grl gfl ggp
+grg`, `pl-check` answers 11 + `gl-check`'s answer), `gfl` 43, `ggp` 44, `grg` 45. `kin/gvec.kin` `gv-page` writes candidates (stride 16) in
+`legacy` (0: `tb-collect-one` exactly) or `segments` (1: D249); `kin/gfuse.kin` `gf-page` writes the rows through 501, 505, 514, 560 and 562
+(`fr` number in the row; 505 is not recorded: there is no `fx` without a group) and `gf-doc` runs both for every page of the document;
+`gfx-mode` is the mode the Engines pass (0 in step A, 1 now). `ggp` is not written before P7.G (every row's group is -1), and no collinear
+candidates are merged here (`tb-build` merges them, D179). `tb-collect` reads `grl` (orientation `h`/`v`; not a running header's or footer's,
+D250) and `gfl`; `tb-build` takes `grl gfl` where it took `pa`. Both Engines call `gf_doc` once per document before the evidence dump and
+`tb_build` (until P7.U moves it into the page unit), and an Engine's `keep_evidence` dump is version "2" with the four arrays after the
+evidence's when `grl` or `gfl` is not empty (`pl-emit-gfx`), else version "1" as D242 left it (so no golden moves: the three content goldens and
+the slice's are of documents with no rule or fill); the rest of the layer joins the dump with P7.3.
+**Why**: D218's one reader; the identity step first (D248's step A held 674 outputs byte for byte) so that every later change is the
+vector source's and nothing else's. **Alternatives**: a version-2 dump always (moves the goldens P7.3 owns); `ggp` rows for every vector
+candidate now (a refs row per rule for nothing a reader reads before P7.G).
+- [ ] **Signed off** (maintainer)
+
+### D249 — The `segments` reading of a path: what a rule is, from the geometry (P5.5a; SPEC 9.9 "Vector candidates"; D179, D220, D245-D247)
+**Decision** (`gv-page`, mode `segments`). A path is read by its subpaths (`pts`); one with no geometry kept (truncated, or built by hand) by its
+box, as a rectangle (a stroked one inset by half its stroke first). A subpath of four axis-aligned corners, optionally followed by a line back
+to the start and a close (`re`: five rows; Skia, Chrome's PDF writer: six), is a rectangle: thin (an extent, grown by a stroke, at most 4 pt
+on one side and at least 5 pt on the other) it is ONE rule along its long axis (`from-fill` when it is not stroked); else a filled one
+larger both ways is a fill (colour -1 and the flag `pattern` or `shading` for a pattern fill) and a stroked closed one larger both ways is four
+`box-edge` rules at the exact corners; any other subpath is its straight segments (`l`, the closing edge, a curve whose two control points lie
+within 0.5 pt of its chord), each a rule when the path is stroked, at most 4 pt thick (a zero width counts 24 cpt, one device pixel) and at least
+5 pt long; a curve that is not flat is figure material and nothing. A shading is a fill of colour -1 over its box (at least 5 pt both ways).
+Every candidate is trimmed to its clip's box (a rule along its axis; a band that misses the box, or a rule the trim leaves under 5 pt, is
+dropped; a fill is intersected), carries the path's `/Artifact` (`artifact-pagination`, `artifact-layout`) and its `vis` (a hidden one is kept
+flagged in the scratch and is nothing in `grl`, rule 505), and must CONTRAST: the ink against the `backdrop` of P3.6a by 16 of 255 in luminance;
+**a backdrop of -1 is not tested** (D247: "seen is all that is known": the three white column separators of `table-white-rules` straddle two
+header fills, so no one fill covers them) and neither is an ink of -1. A visible image placement at most 4 pt thick and at least 5 pt long is a
+`from-image` rule of colour -1 (514). **Dashes**: Chrome draws a dashed or dotted border as the dashes' polygons in one path (`table-dashed`:
+the whole path's box was D179's one rule); a thin box under 5 pt long is a PIECE, and a run of at least three pieces of one path, on one axis and
+line (1 pt), as thick (0.5 pt) and no more than 3 pt apart, whose extent is at least 5 pt, is a dashed (dotted when the period is within four
+thicknesses) rule whose pieces stay candidates of their own (nothing bridges a gap: SPEC 9.9; `tb-build` merges them as D179 does); other
+pieces are dropped. The rule's ends are the line's, not the path box's, which holds half the stroke at each end: a table's box moves by up to half
+a stroke (71.75 -> 72 pt), and a rule truth (pdfplumber's) is matched at its tolerance.
+**Why**: each choice is the one the P6.8 fixtures, the survey and the oracle's truth agree on (D250). **Alternatives**: the contrast against white
+for an unknown backdrop (SPEC 9.9's text: drops the white separators on a partly covered header); merging the dashes (bridges gaps, and costs rule
+precision for dashes the oracle's truth does not list); a piece under 5 pt as a rule (every tick mark and bullet).
+**Not done**: `ggp` groups and the `fx` record of 505 (P7.G); a stroked rectangle that is open (three sides) is its three segments, an open
+filled-and-stroked box only its fill; a slanted rule is not trimmed to a clip (its axis rules are).
+- [ ] **Signed off** (maintainer)
+
+### D250 — P5.5a measured; a running header's rules are the page's top and bottom eighth, not every pagination artifact (P5.5a; D182, D248, D249)
+**Decision**: `tb-collect` skips a fused rule flagged `artifact-pagination` only when it lies wholly in the page's top or bottom eighth (D182's stand-in
+for the furniture zones; `tb-running-rule`), where SPEC 10.5 and the brief skipped every one. The survey (the IRS publications) found producers that
+tag a table's own rules as `/Artifact /Pagination`: all 104 rules of Publication 15's withholding table on page 46 carry it, and reading none of them
+lost every ruled table of pages 32-51 (12 of 12). The flag stays in `grl` for the readers that ask. The numbers, the documents and the survey are in
+the P5.5a entry above. **Alternatives**: skipping every pagination rule (above); reading them all (a header's underline closes a table).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here

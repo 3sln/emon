@@ -51,6 +51,26 @@ func gtRun(pa *port.Cells, pts *port.Cells, mk *port.Cells, im *port.Cells, mode
 	return gvec.GvPage(pa, pts, mk, im, 0, port.CellsLen(pa)/24, 0, port.CellsLen(im)/20, mode, out)
 }
 
+func TestARectangleWrittenAsFourLinesAndACloseIsARectangle(emonT *testing.T) {
+	// Skia writes a rectangle as a move, four lines (the last back to the start) and a close: six rows, not five
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var r int32 = gtPath(pa, evidence.PaOther(), evidence.PgFilled(), 0, -1, 0, 1000, 4950, 21000, 5050)
+	gtPt(pa, pts, r, 1000, 4950, evidence.PoMove())
+	gtPt(pa, pts, r, 21000, 4950, evidence.PoLine())
+	gtPt(pa, pts, r, 21000, 5050, evidence.PoLine())
+	gtPt(pa, pts, r, 1000, 5050, evidence.PoLine())
+	gtPt(pa, pts, r, 1000, 4950, evidence.PoLine())
+	gtPt(pa, pts, r, 1000, 4950, evidence.PoClose())
+	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvSegments(), out), 1, "one rule")
+	port.AssertEq(emonT, gtC(out, 0, 8), 1000, "from its left end")
+	port.AssertEq(emonT, gtC(out, 0, 10), 21000, "to its right end")
+	port.AssertEq(emonT, gtC(out, 0, 12), 100, "one point thick")
+}
+
 func TestAPathOfThirtyRectsIsThirtyRulesOrOneFill(emonT *testing.T) {
 	var pa *port.Cells = port.NewCells()
 	var pts *port.Cells = port.NewCells()
@@ -74,6 +94,38 @@ func TestAPathOfThirtyRectsIsThirtyRulesOrOneFill(emonT *testing.T) {
 	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvLegacy(), out), 1, "legacy: its box is one candidate")
 	port.AssertEq(emonT, gtC(out, 0, 0), 2, "a fill")
 	port.AssertEq(emonT, gtC(out, 0, 6), 20000, "of the whole box")
+}
+
+func TestTheDashesOfABorderAreRulesOfTheirOwn(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var r int32 = gtPath(pa, evidence.PaOther(), evidence.PgFilled(), 5592405, -1, 0, 18700, 86500, 18775, 88825)
+	var k int32 = 0
+	// five dashes of 0.75 x 2.25 pt, a period of 5.25 pt, one path (as Chrome writes a dashed border)
+	for k < 5 {
+		gtRe(pa, pts, r, 18700, 86500+(k*525), 18775, 86725+(k*525))
+		k += 1
+	}
+	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvSegments(), out), 5, "five rules, one a dash: nothing bridges a gap")
+	port.AssertEq(emonT, gtC(out, 0, 8), 18737, "vertical, on the dashes' centre line")
+	port.AssertEq(emonT, gtC(out, 0, 9), 86500, "the first from its top")
+	port.AssertEq(emonT, gtC(out, 0, 11), 86725, "to its bottom")
+	port.AssertEq(emonT, gtC(out, 4, 9), 88600, "the last starts after four periods")
+	port.AssertEq(emonT, gtC(out, 4, 11), 88825, "and ends at the end of the chain")
+	port.AssertEq(emonT, gtC(out, 0, 12), 75, "as thick as a dash")
+	port.AssertEq(emonT, gtC(out, 0, 14), 2, "dashed (`rs` 2): the period is not within four thicknesses")
+	port.AssertEq(emonT, gtC(out, 0, 15)&131072, 0, "and no longer a piece")
+	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvLegacy(), out), 1, "legacy: the path's box is one rule")
+	// two dashes are not a dashed line; a lone short box is not a rule
+	port.CellsDrop(pa, 0)
+	port.CellsDrop(pts, 0)
+	var d int32 = gtPath(pa, evidence.PaOther(), evidence.PgFilled(), 0, -1, 0, 0, 0, 100, 100)
+	gtRe(pa, pts, d, 0, 0, 75, 225)
+	gtRe(pa, pts, d, 0, 525, 75, 750)
+	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvSegments(), out), 0, "two pieces are nothing")
 }
 
 func TestAGridInOnePathAndTheFlatCurve(emonT *testing.T) {
@@ -155,7 +207,7 @@ func TestAClippedRuleIsTrimmedAndAWhiteOneOnBlackIsARule(emonT *testing.T) {
 	evidence.PaSet(pa, r2, evidence.PfClip(), c2)
 	gtRe(pa, pts, r2, 0, 4950, 20000, 5050)
 	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvSegments(), out), 0, "a rule whose band misses its clip is gone")
-	// white on black (backdrop black) is a rule; white on white is not; an unknown backdrop is white
+	// white on black (backdrop black) is a rule; white on white is not; on an unknown backdrop it is seen
 	port.CellsDrop(pa, 0)
 	port.CellsDrop(pts, 0)
 	var w int32 = gtPath(pa, evidence.PaRect(), evidence.PgFilled(), 16777215, -1, 0, 0, 4950, 20000, 5050)
@@ -166,7 +218,7 @@ func TestAClippedRuleIsTrimmedAndAWhiteOneOnBlackIsARule(emonT *testing.T) {
 	evidence.PaSet(pa, w, evidence.PfBackdrop(), 16777215)
 	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvSegments(), out), 0, "a white rule on white is not")
 	evidence.PaSet(pa, w, evidence.PfBackdrop(), -1)
-	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvSegments(), out), 0, "nor on an unknown backdrop")
+	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvSegments(), out), 1, "on an unknown backdrop (a partial cover) it is seen, and that is all that is known")
 	port.AssertEq(emonT, gtRun(pa, pts, mk, im, gvec.GvLegacy(), out), 0, "legacy: mean channel under 240 only")
 }
 

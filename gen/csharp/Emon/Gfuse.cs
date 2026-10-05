@@ -7,7 +7,7 @@ namespace emon;
 public static class Gfuse {
     internal const int GfAxis = 100;
     public static int GfxMode() {
-        return 0;
+        return 1;
     }
     internal static int GfLightness(int rgb) {
         // 0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.

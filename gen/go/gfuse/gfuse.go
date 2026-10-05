@@ -13,7 +13,7 @@ import (
 const gfAxis int32 = 100
 
 func GfxMode() int32 {
-	return 0
+	return 1
 }
 
 func gfLightness(rgb int32) int32 {

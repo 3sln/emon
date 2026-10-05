@@ -10,6 +10,9 @@ pub(crate) const GV_HAIR: i32 = 24;
 pub(crate) const GV_FLAT: i32 = 50;
 pub(crate) const GV_CONTRAST: i32 = 16;
 pub(crate) const GV_HIDDEN: i32 = 65536;
+pub(crate) const GV_PIECE: i32 = 131072;
+pub(crate) const GV_GAP: i32 = 300;
+pub(crate) const GV_PIECES: i32 = 3;
 pub fn gv_legacy() -> i32 {
     return 0;
 }
@@ -177,13 +180,121 @@ pub(crate) fn gv_path_flags(pa: &mut crate::port::Cells, mk: &mut crate::port::C
     return f;
 }
 pub(crate) fn gv_contrasts(ink: i32, backdrop: i32) -> i32 {
-    // 1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance (an ink of -1 is untested, a backdrop of -1 is white).
+    // 1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance. An ink of -1 is untested, and so is a backdrop of -1:
+    // P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D249).
     if ink < 0 {
+        return 1;
+    }
+    if backdrop < 0 {
         return 1;
     }
     if gv_abs(gv_lum255(ink) - gv_lum255(backdrop)) >= GV_CONTRAST {
         return 1;
     }
+    return 0;
+}
+pub(crate) fn gv_piece(mut out: &mut crate::port::Cells, row: i32, ptrow: i32, page: i32, bx0: i32, by0: i32, bx1: i32, by1: i32, ex0: i32, ey0: i32, ex1: i32, ey1: i32, thick: i32, colour: i32, flags: i32, horiz: i32) -> i32 {
+    // A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons
+    // in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GV_PIECE, and its
+    // cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),
+    // as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.
+    // Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.
+    let n: i32 = crate::port::cells_len(out) / 16;
+    let b: i32 = (n - 1) * 16;
+    let mut ok: i32 = 0;
+    if n > 0 {
+        if (crate::port::cells_at(out, b) == 1) && ((crate::port::cells_at(out, b + 1) == row) && ((crate::port::cells_at(out, b + 15) & GV_PIECE) != 0)) {
+            if (gv_abs(crate::port::cells_at(out, b + 12) - thick) <= 50) && (crate::port::cells_at(out, b + 13) == colour) {
+                if horiz == 1 {
+                    if (crate::port::cells_at(out, b + 9) == crate::port::cells_at(out, b + 11)) && (gv_abs(crate::port::cells_at(out, b + 9) - ey0) <= 100) {
+                        if (gv_max(crate::port::cells_at(out, b + 8), ex0) - gv_min(crate::port::cells_at(out, b + 10), ex1)) <= GV_GAP {
+                            ok = 1;
+                        }
+                    }
+                } else if (crate::port::cells_at(out, b + 8) == crate::port::cells_at(out, b + 10)) && (gv_abs(crate::port::cells_at(out, b + 8) - ex0) <= 100) {
+                    if (gv_max(crate::port::cells_at(out, b + 9), ey0) - gv_min(crate::port::cells_at(out, b + 11), ey1)) <= GV_GAP {
+                        ok = 1;
+                    }
+                }
+            }
+        }
+    }
+    gv_push(out, 1, row, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, ok, flags);
+    return 0;
+}
+pub(crate) fn gv_pieces_finish(mut out: &mut crate::port::Cells, start: i32) -> i32 {
+    // After a path: the CHAINS of its pieces (rows from `start` on: a row and the rows linked to it) of at least GV_PIECES pieces
+    // whose extent is at least GV_RULE_MIN are dashed rules (dotted when the period is within four thicknesses): their pieces stay,
+    // each its own candidate, no longer pieces. Every other piece is dropped.
+    let n: i32 = crate::port::cells_len(out) / 16;
+    let mut r: i32 = start;
+    let mut w: i32 = start;
+    let mut r1: i32 = 0;
+    let mut k: i32 = 0;
+    let mut j: i32 = 0;
+    let mut b: i32 = 0;
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 0;
+    let mut lo2: i32 = 0;
+    let mut hi2: i32 = 0;
+    let mut span: i32 = 0;
+    let mut style: i32 = 0;
+    let mut keep: i32 = 0;
+    while r < n {
+        b = r * 16;
+        if (crate::port::cells_at(out, b + 15) & GV_PIECE) == 0 {
+            if w < r {
+                k = 0;
+                while k < 16 {
+                    crate::port::cells_set(out, (w * 16) + k, crate::port::cells_at(out, b + k));
+                    k += 1;
+                }
+            }
+            w += 1;
+            r += 1;
+        } else {
+            // a chain: rows r..r1, each piece after the first linked to the one before
+            r1 = r;
+            lo = crate::port::cells_at(out, b + 8);
+            hi = crate::port::cells_at(out, b + 10);
+            lo2 = crate::port::cells_at(out, b + 9);
+            hi2 = crate::port::cells_at(out, b + 11);
+            while ((r1 + 1) < n) && (((crate::port::cells_at(out, ((r1 + 1) * 16) + 15) & GV_PIECE) != 0) && (crate::port::cells_at(out, ((r1 + 1) * 16) + 14) == 1)) {
+                r1 += 1;
+                lo = gv_min(lo, crate::port::cells_at(out, (r1 * 16) + 8));
+                hi = gv_max(hi, crate::port::cells_at(out, (r1 * 16) + 10));
+                lo2 = gv_min(lo2, crate::port::cells_at(out, (r1 * 16) + 9));
+                hi2 = gv_max(hi2, crate::port::cells_at(out, (r1 * 16) + 11));
+            }
+            span = gv_max(hi - lo, hi2 - lo2);
+            keep = 0;
+            if (((r1 - r) + 1) >= GV_PIECES) && (span >= GV_RULE_MIN) {
+                keep = 1;
+            }
+            style = rs_dashed();
+            if (span / ((r1 - r) + 1)) <= (4 * crate::port::cells_at(out, b + 12)) {
+                style = rs_dotted();
+            }
+            j = r;
+            while j <= r1 {
+                if keep == 1 {
+                    crate::port::cells_set(out, (j * 16) + 15, crate::port::cells_at(out, (j * 16) + 15) - GV_PIECE);
+                    crate::port::cells_set(out, (j * 16) + 14, style);
+                    if w < j {
+                        k = 0;
+                        while k < 16 {
+                            crate::port::cells_set(out, (w * 16) + k, crate::port::cells_at(out, (j * 16) + k));
+                            k += 1;
+                        }
+                    }
+                    w += 1;
+                }
+                j += 1;
+            }
+            r = r1 + 1;
+        }
+    }
+    crate::port::cells_drop(out, w * 16);
     return 0;
 }
 pub(crate) fn gv_seg_rule(pa: &mut crate::port::Cells, i: i32, ptrow: i32, mut out: &mut crate::port::Cells, xa: i32, ya: i32, xb: i32, yb: i32, thick: i32, colour: i32, style: i32, flags: i32) -> i32 {
@@ -253,7 +364,7 @@ pub(crate) fn gv_seg_rule(pa: &mut crate::port::Cells, i: i32, ptrow: i32, mut o
             }
         }
     }
-    if gv_max(ex1 - ex0, gv_abs(ey1 - ey0)) < GV_RULE_MIN {
+    if ((flags & GV_PIECE) == 0) && (gv_max(ex1 - ex0, gv_abs(ey1 - ey0)) < GV_RULE_MIN) {
         return 0;
     }
     if gv_contrasts(colour, pa_get(pa, i, pf_backdrop())) == 0 {
@@ -271,7 +382,11 @@ pub(crate) fn gv_seg_rule(pa: &mut crate::port::Cells, i: i32, ptrow: i32, mut o
         by0 = ey0;
         by1 = ey1;
     }
-    gv_push(out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags);
+    if (flags & GV_PIECE) != 0 {
+        gv_piece(out, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, flags, horiz);
+    } else {
+        gv_push(out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags);
+    }
     return 0;
 }
 pub(crate) fn gv_seg_fill(pa: &mut crate::port::Cells, i: i32, mut out: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, colour: i32, flags: i32) -> i32 {
@@ -322,6 +437,29 @@ pub(crate) fn gv_rect(pa: &mut crate::port::Cells, i: i32, ptrow: i32, mut out: 
     }
     if (fg & pg_shading()) != 0 {
         fillflags += gqf_shading();
+    }
+    // thin and too short for a rule: a piece, maybe a dash of one (`gv-piece`)
+    if (gv_min(ew, eh) <= GV_RULE_T) && (gv_max(ew, eh) < GV_RULE_MIN) && (gv_min(ew, eh) > 0) {
+        if filled == 0 {
+            colour = pa_get(pa, i, pf_stroke());
+            al = pa_get(pa, i, pf_salpha());
+        }
+        if al <= 0 {
+            return 0;
+        }
+        if (filled != 0) && (fillflags != 0) {
+            return 0;
+        }
+        let th: i32 = gv_min(ew, eh);
+        let fl: i32 = gv_sel(stroked, flags, flags + gq_from_fill()) + GV_PIECE;
+        let ym: i32 = (y0 + y1) / 2;
+        let xm: i32 = (x0 + x1) / 2;
+        if ew >= eh {
+            gv_seg_rule(pa, i, ptrow, out, x0, ym, x1, ym, th, colour, rs_solid(), fl);
+        } else {
+            gv_seg_rule(pa, i, ptrow, out, xm, y0, xm, y1, th, colour, rs_solid(), fl);
+        }
+        return 0;
     }
     // thin: one rule along the long axis; its ink is the fill's when it is filled, else the stroke's
     if (gv_min(ew, eh) <= GV_RULE_T) && (gv_max(ew, eh) >= GV_RULE_MIN) {
@@ -398,9 +536,6 @@ pub(crate) fn gv_subpath(pa: &mut crate::port::Cells, pts: &mut crate::port::Cel
     let mut k: i32 = 0;
     let mut op: i32 = 0;
     let mut curve: i32 = 0;
-    let mut closed: i32 = 0;
-    let mut lastx: i32 = 0;
-    let mut lasty: i32 = 0;
     let mut thick: i32 = 0;
     let mut sx: i32 = 0;
     let mut sy: i32 = 0;
@@ -410,48 +545,50 @@ pub(crate) fn gv_subpath(pa: &mut crate::port::Cells, pts: &mut crate::port::Cel
     if thick == 0 {
         thick = GV_HAIR;
     }
-    // closed? any curve? where does it end?
+    // any curve?
     k = 0;
     while k < n {
         op = pt_get(pts, a + k, ptf_op());
         if op == po_curve() {
             curve = 1;
         }
-        if op == po_close() {
-            closed = 1;
-        }
         k += 1;
     }
     sx = pt_get(pts, a, ptf_x());
     sy = pt_get(pts, a, ptf_y());
-    lastx = pt_get(pts, b - 1, ptf_x());
-    lasty = pt_get(pts, b - 1, ptf_y());
-    // a rectangle: four corners, and (five rows) a close or a line back to the start
-    if (curve == 0) && (n >= 4) && (n <= 5) {
-        let x0: i32 = pt_get(pts, a, ptf_x());
-        let y0: i32 = pt_get(pts, a, ptf_y());
-        let x1: i32 = pt_get(pts, a + 1, ptf_x());
-        let y1: i32 = pt_get(pts, a + 1, ptf_y());
-        let x2: i32 = pt_get(pts, a + 2, ptf_x());
-        let y2: i32 = pt_get(pts, a + 2, ptf_y());
-        let x3: i32 = pt_get(pts, a + 3, ptf_x());
-        let y3: i32 = pt_get(pts, a + 3, ptf_y());
+    // a rectangle: four corners, then (optionally) a line back to the start and/or a close (`re`: a move, three lines, a close; Skia:
+    // a move, four lines, a close). `m` is the number of rows that are corners; `closed` says the shape was closed
+    if (curve == 0) && (n >= 4) && (n <= 6) {
+        let mut m: i32 = n;
+        let mut closedr: i32 = 0;
         let mut isr: i32 = 0;
-        if (x0 == x1) && ((y1 == y2) && ((x2 == x3) && (y3 == y0))) {
-            isr = 1;
+        if pt_get(pts, a + (m - 1), ptf_op()) == po_close() {
+            m -= 1;
+            closedr = 1;
         }
-        if (y0 == y1) && ((x1 == x2) && ((y2 == y3) && (x3 == x0))) {
-            isr = 1;
+        if (m > 4) && ((pt_get(pts, a + (m - 1), ptf_x()) == sx) && (pt_get(pts, a + (m - 1), ptf_y()) == sy)) {
+            m -= 1;
+            closedr = 1;
         }
-        if n == 5 {
-            if (pt_get(pts, a + 4, ptf_op()) != po_close()) && ((lastx != sx) || (lasty != sy)) {
-                isr = 0;
+        if m == 4 {
+            let x0: i32 = pt_get(pts, a, ptf_x());
+            let y0: i32 = pt_get(pts, a, ptf_y());
+            let x1: i32 = pt_get(pts, a + 1, ptf_x());
+            let y1: i32 = pt_get(pts, a + 1, ptf_y());
+            let x2: i32 = pt_get(pts, a + 2, ptf_x());
+            let y2: i32 = pt_get(pts, a + 2, ptf_y());
+            let x3: i32 = pt_get(pts, a + 3, ptf_x());
+            let y3: i32 = pt_get(pts, a + 3, ptf_y());
+            if (x0 == x1) && ((y1 == y2) && ((x2 == x3) && (y3 == y0))) {
+                isr = 1;
             }
-            closed = 1;
-        }
-        if (isr == 1) && ((closed == 1) || (filled != 0)) {
-            gv_rect(pa, i, a, out, gv_min(gv_min(x0, x1), gv_min(x2, x3)), gv_min(gv_min(y0, y1), gv_min(y2, y3)), gv_max(gv_max(x0, x1), gv_max(x2, x3)), gv_max(gv_max(y0, y1), gv_max(y2, y3)), closed, flags);
-            return 0;
+            if (y0 == y1) && ((x1 == x2) && ((y2 == y3) && (x3 == x0))) {
+                isr = 1;
+            }
+            if (isr == 1) && ((closedr == 1) || (filled != 0)) {
+                gv_rect(pa, i, a, out, gv_min(gv_min(x0, x1), gv_min(x2, x3)), gv_min(gv_min(y0, y1), gv_min(y2, y3)), gv_max(gv_max(x0, x1), gv_max(x2, x3)), gv_max(gv_max(y0, y1), gv_max(y2, y3)), closedr, flags);
+                return 0;
+            }
         }
     }
     // otherwise: straight segments, each a rule when the path is stroked
@@ -526,6 +663,7 @@ pub(crate) fn gv_path(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells,
     let first: i32 = pa_get(pa, i, pf_pfirst());
     let cnt: i32 = pa_get(pa, i, pf_pcount());
     let flags: i32 = gv_path_flags(pa, mk, i);
+    let start: i32 = crate::port::cells_len(out) / 16;
     let mut a: i32 = 0;
     let mut k: i32 = 0;
     let mut op: i32 = 0;
@@ -550,6 +688,7 @@ pub(crate) fn gv_path(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells,
             return 0;
         }
         gv_box_only(pa, i, out, flags);
+        gv_pieces_finish(out, start);
         return 0;
     }
     // the subpaths: from a move to the next move
@@ -564,6 +703,7 @@ pub(crate) fn gv_path(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells,
         k += 1;
     }
     gv_subpath(pa, pts, i, a, first + cnt, out, flags);
+    gv_pieces_finish(out, start);
     return 0;
 }
 pub(crate) fn gv_image_rule(im: &mut crate::port::Cells, j: i32, mut out: &mut crate::port::Cells) -> i32 {

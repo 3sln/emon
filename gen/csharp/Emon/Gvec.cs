@@ -11,6 +11,9 @@ public static class Gvec {
     internal const int GvFlat = 50;
     internal const int GvContrast = 16;
     internal const int GvHidden = 65536;
+    internal const int GvPiece = 131072;
+    internal const int GvGap = 300;
+    internal const int GvPieces = 3;
     public static int GvLegacy() {
         return 0;
     }
@@ -178,13 +181,121 @@ public static class Gvec {
         return f;
     }
     internal static int GvContrasts(int ink, int backdrop) {
-        // 1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance (an ink of -1 is untested, a backdrop of -1 is white).
+        // 1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance. An ink of -1 is untested, and so is a backdrop of -1:
+        // P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D249).
         if (ink < 0) {
+            return 1;
+        }
+        if (backdrop < 0) {
             return 1;
         }
         if (GvAbs(GvLum255(ink) - GvLum255(backdrop)) >= GvContrast) {
             return 1;
         }
+        return 0;
+    }
+    internal static int GvPiece(emon.Port.Cells @out, int row, int ptrow, int page, int bx0, int by0, int bx1, int by1, int ex0, int ey0, int ex1, int ey1, int thick, int colour, int flags, int horiz) {
+        // A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons
+        // in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GV_PIECE, and its
+        // cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),
+        // as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.
+        // Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.
+        int n = emon.Port.CellsLen(@out) / 16;
+        int b = (n - 1) * 16;
+        int ok = 0;
+        if (n > 0) {
+            if ((emon.Port.CellsAt(@out, b) == 1) && ((emon.Port.CellsAt(@out, b + 1) == row) && ((emon.Port.CellsAt(@out, b + 15) & GvPiece) != 0))) {
+                if ((GvAbs(emon.Port.CellsAt(@out, b + 12) - thick) <= 50) && (emon.Port.CellsAt(@out, b + 13) == colour)) {
+                    if (horiz == 1) {
+                        if ((emon.Port.CellsAt(@out, b + 9) == emon.Port.CellsAt(@out, b + 11)) && (GvAbs(emon.Port.CellsAt(@out, b + 9) - ey0) <= 100)) {
+                            if ((GvMax(emon.Port.CellsAt(@out, b + 8), ex0) - GvMin(emon.Port.CellsAt(@out, b + 10), ex1)) <= GvGap) {
+                                ok = 1;
+                            }
+                        }
+                    } else if ((emon.Port.CellsAt(@out, b + 8) == emon.Port.CellsAt(@out, b + 10)) && (GvAbs(emon.Port.CellsAt(@out, b + 8) - ex0) <= 100)) {
+                        if ((GvMax(emon.Port.CellsAt(@out, b + 9), ey0) - GvMin(emon.Port.CellsAt(@out, b + 11), ey1)) <= GvGap) {
+                            ok = 1;
+                        }
+                    }
+                }
+            }
+        }
+        GvPush(@out, 1, row, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, ok, flags);
+        return 0;
+    }
+    internal static int GvPiecesFinish(emon.Port.Cells @out, int start) {
+        // After a path: the CHAINS of its pieces (rows from `start` on: a row and the rows linked to it) of at least GV_PIECES pieces
+        // whose extent is at least GV_RULE_MIN are dashed rules (dotted when the period is within four thicknesses): their pieces stay,
+        // each its own candidate, no longer pieces. Every other piece is dropped.
+        int n = emon.Port.CellsLen(@out) / 16;
+        int r = start;
+        int w = start;
+        int r1 = 0;
+        int k = 0;
+        int j = 0;
+        int b = 0;
+        int lo = 0;
+        int hi = 0;
+        int lo2 = 0;
+        int hi2 = 0;
+        int span = 0;
+        int style = 0;
+        int keep = 0;
+        while (r < n) {
+            b = r * 16;
+            if ((emon.Port.CellsAt(@out, b + 15) & GvPiece) == 0) {
+                if (w < r) {
+                    k = 0;
+                    while (k < 16) {
+                        emon.Port.CellsSet(@out, (w * 16) + k, emon.Port.CellsAt(@out, b + k));
+                        k += 1;
+                    }
+                }
+                w += 1;
+                r += 1;
+            } else {
+                // a chain: rows r..r1, each piece after the first linked to the one before
+                r1 = r;
+                lo = emon.Port.CellsAt(@out, b + 8);
+                hi = emon.Port.CellsAt(@out, b + 10);
+                lo2 = emon.Port.CellsAt(@out, b + 9);
+                hi2 = emon.Port.CellsAt(@out, b + 11);
+                while (((r1 + 1) < n) && (((emon.Port.CellsAt(@out, ((r1 + 1) * 16) + 15) & GvPiece) != 0) && (emon.Port.CellsAt(@out, ((r1 + 1) * 16) + 14) == 1))) {
+                    r1 += 1;
+                    lo = GvMin(lo, emon.Port.CellsAt(@out, (r1 * 16) + 8));
+                    hi = GvMax(hi, emon.Port.CellsAt(@out, (r1 * 16) + 10));
+                    lo2 = GvMin(lo2, emon.Port.CellsAt(@out, (r1 * 16) + 9));
+                    hi2 = GvMax(hi2, emon.Port.CellsAt(@out, (r1 * 16) + 11));
+                }
+                span = GvMax(hi - lo, hi2 - lo2);
+                keep = 0;
+                if ((((r1 - r) + 1) >= GvPieces) && (span >= GvRuleMin)) {
+                    keep = 1;
+                }
+                style = Evidence.RsDashed();
+                if ((span / ((r1 - r) + 1)) <= (4 * emon.Port.CellsAt(@out, b + 12))) {
+                    style = Evidence.RsDotted();
+                }
+                j = r;
+                while (j <= r1) {
+                    if (keep == 1) {
+                        emon.Port.CellsSet(@out, (j * 16) + 15, emon.Port.CellsAt(@out, (j * 16) + 15) - GvPiece);
+                        emon.Port.CellsSet(@out, (j * 16) + 14, style);
+                        if (w < j) {
+                            k = 0;
+                            while (k < 16) {
+                                emon.Port.CellsSet(@out, (w * 16) + k, emon.Port.CellsAt(@out, (j * 16) + k));
+                                k += 1;
+                            }
+                        }
+                        w += 1;
+                    }
+                    j += 1;
+                }
+                r = r1 + 1;
+            }
+        }
+        emon.Port.CellsDrop(@out, w * 16);
         return 0;
     }
     internal static int GvSegRule(emon.Port.Cells pa, int i, int ptrow, emon.Port.Cells @out, int xa, int ya, int xb, int yb, int thick, int colour, int style, int flags) {
@@ -254,7 +365,7 @@ public static class Gvec {
                 }
             }
         }
-        if (GvMax(ex1 - ex0, GvAbs(ey1 - ey0)) < GvRuleMin) {
+        if (((flags & GvPiece) == 0) && (GvMax(ex1 - ex0, GvAbs(ey1 - ey0)) < GvRuleMin)) {
             return 0;
         }
         if (GvContrasts(colour, Evidence.PaGet(pa, i, Evidence.PfBackdrop())) == 0) {
@@ -272,7 +383,11 @@ public static class Gvec {
             by0 = ey0;
             by1 = ey1;
         }
-        GvPush(@out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags);
+        if ((flags & GvPiece) != 0) {
+            GvPiece(@out, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, flags, horiz);
+        } else {
+            GvPush(@out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags);
+        }
         return 0;
     }
     internal static int GvSegFill(emon.Port.Cells pa, int i, emon.Port.Cells @out, int x0, int y0, int x1, int y1, int colour, int flags) {
@@ -323,6 +438,29 @@ public static class Gvec {
         }
         if ((fg & Evidence.PgShading()) != 0) {
             fillflags += Glayer.GqfShading();
+        }
+        // thin and too short for a rule: a piece, maybe a dash of one (`gv-piece`)
+        if ((GvMin(ew, eh) <= GvRuleT) && (GvMax(ew, eh) < GvRuleMin) && (GvMin(ew, eh) > 0)) {
+            if (filled == 0) {
+                colour = Evidence.PaGet(pa, i, Evidence.PfStroke());
+                al = Evidence.PaGet(pa, i, Evidence.PfSalpha());
+            }
+            if (al <= 0) {
+                return 0;
+            }
+            if ((filled != 0) && (fillflags != 0)) {
+                return 0;
+            }
+            int th = GvMin(ew, eh);
+            int fl = GvSel(stroked, flags, flags + Glayer.GqFromFill()) + GvPiece;
+            int ym = (y0 + y1) / 2;
+            int xm = (x0 + x1) / 2;
+            if (ew >= eh) {
+                GvSegRule(pa, i, ptrow, @out, x0, ym, x1, ym, th, colour, Evidence.RsSolid(), fl);
+            } else {
+                GvSegRule(pa, i, ptrow, @out, xm, y0, xm, y1, th, colour, Evidence.RsSolid(), fl);
+            }
+            return 0;
         }
         // thin: one rule along the long axis; its ink is the fill's when it is filled, else the stroke's
         if ((GvMin(ew, eh) <= GvRuleT) && (GvMax(ew, eh) >= GvRuleMin)) {
@@ -399,9 +537,6 @@ public static class Gvec {
         int k = 0;
         int op = 0;
         int curve = 0;
-        int closed = 0;
-        int lastx = 0;
-        int lasty = 0;
         int thick = 0;
         int sx = 0;
         int sy = 0;
@@ -411,48 +546,50 @@ public static class Gvec {
         if (thick == 0) {
             thick = GvHair;
         }
-        // closed? any curve? where does it end?
+        // any curve?
         k = 0;
         while (k < n) {
             op = Evidence.PtGet(pts, a + k, Evidence.PtfOp());
             if (op == Evidence.PoCurve()) {
                 curve = 1;
             }
-            if (op == Evidence.PoClose()) {
-                closed = 1;
-            }
             k += 1;
         }
         sx = Evidence.PtGet(pts, a, Evidence.PtfX());
         sy = Evidence.PtGet(pts, a, Evidence.PtfY());
-        lastx = Evidence.PtGet(pts, b - 1, Evidence.PtfX());
-        lasty = Evidence.PtGet(pts, b - 1, Evidence.PtfY());
-        // a rectangle: four corners, and (five rows) a close or a line back to the start
-        if ((curve == 0) && (n >= 4) && (n <= 5)) {
-            int x0 = Evidence.PtGet(pts, a, Evidence.PtfX());
-            int y0 = Evidence.PtGet(pts, a, Evidence.PtfY());
-            int x1 = Evidence.PtGet(pts, a + 1, Evidence.PtfX());
-            int y1 = Evidence.PtGet(pts, a + 1, Evidence.PtfY());
-            int x2 = Evidence.PtGet(pts, a + 2, Evidence.PtfX());
-            int y2 = Evidence.PtGet(pts, a + 2, Evidence.PtfY());
-            int x3 = Evidence.PtGet(pts, a + 3, Evidence.PtfX());
-            int y3 = Evidence.PtGet(pts, a + 3, Evidence.PtfY());
+        // a rectangle: four corners, then (optionally) a line back to the start and/or a close (`re`: a move, three lines, a close; Skia:
+        // a move, four lines, a close). `m` is the number of rows that are corners; `closed` says the shape was closed
+        if ((curve == 0) && (n >= 4) && (n <= 6)) {
+            int m = n;
+            int closedr = 0;
             int isr = 0;
-            if ((x0 == x1) && ((y1 == y2) && ((x2 == x3) && (y3 == y0)))) {
-                isr = 1;
+            if (Evidence.PtGet(pts, a + (m - 1), Evidence.PtfOp()) == Evidence.PoClose()) {
+                m -= 1;
+                closedr = 1;
             }
-            if ((y0 == y1) && ((x1 == x2) && ((y2 == y3) && (x3 == x0)))) {
-                isr = 1;
+            if ((m > 4) && ((Evidence.PtGet(pts, a + (m - 1), Evidence.PtfX()) == sx) && (Evidence.PtGet(pts, a + (m - 1), Evidence.PtfY()) == sy))) {
+                m -= 1;
+                closedr = 1;
             }
-            if (n == 5) {
-                if ((Evidence.PtGet(pts, a + 4, Evidence.PtfOp()) != Evidence.PoClose()) && ((lastx != sx) || (lasty != sy))) {
-                    isr = 0;
+            if (m == 4) {
+                int x0 = Evidence.PtGet(pts, a, Evidence.PtfX());
+                int y0 = Evidence.PtGet(pts, a, Evidence.PtfY());
+                int x1 = Evidence.PtGet(pts, a + 1, Evidence.PtfX());
+                int y1 = Evidence.PtGet(pts, a + 1, Evidence.PtfY());
+                int x2 = Evidence.PtGet(pts, a + 2, Evidence.PtfX());
+                int y2 = Evidence.PtGet(pts, a + 2, Evidence.PtfY());
+                int x3 = Evidence.PtGet(pts, a + 3, Evidence.PtfX());
+                int y3 = Evidence.PtGet(pts, a + 3, Evidence.PtfY());
+                if ((x0 == x1) && ((y1 == y2) && ((x2 == x3) && (y3 == y0)))) {
+                    isr = 1;
                 }
-                closed = 1;
-            }
-            if ((isr == 1) && ((closed == 1) || (filled != 0))) {
-                GvRect(pa, i, a, @out, GvMin(GvMin(x0, x1), GvMin(x2, x3)), GvMin(GvMin(y0, y1), GvMin(y2, y3)), GvMax(GvMax(x0, x1), GvMax(x2, x3)), GvMax(GvMax(y0, y1), GvMax(y2, y3)), closed, flags);
-                return 0;
+                if ((y0 == y1) && ((x1 == x2) && ((y2 == y3) && (x3 == x0)))) {
+                    isr = 1;
+                }
+                if ((isr == 1) && ((closedr == 1) || (filled != 0))) {
+                    GvRect(pa, i, a, @out, GvMin(GvMin(x0, x1), GvMin(x2, x3)), GvMin(GvMin(y0, y1), GvMin(y2, y3)), GvMax(GvMax(x0, x1), GvMax(x2, x3)), GvMax(GvMax(y0, y1), GvMax(y2, y3)), closedr, flags);
+                    return 0;
+                }
             }
         }
         // otherwise: straight segments, each a rule when the path is stroked
@@ -527,6 +664,7 @@ public static class Gvec {
         int first = Evidence.PaGet(pa, i, Evidence.PfPfirst());
         int cnt = Evidence.PaGet(pa, i, Evidence.PfPcount());
         int flags = GvPathFlags(pa, mk, i);
+        int start = emon.Port.CellsLen(@out) / 16;
         int a = 0;
         int k = 0;
         int op = 0;
@@ -551,6 +689,7 @@ public static class Gvec {
                 return 0;
             }
             GvBoxOnly(pa, i, @out, flags);
+            GvPiecesFinish(@out, start);
             return 0;
         }
         // the subpaths: from a move to the next move
@@ -565,6 +704,7 @@ public static class Gvec {
             k += 1;
         }
         GvSubpath(pa, pts, i, a, first + cnt, @out, flags);
+        GvPiecesFinish(@out, start);
         return 0;
     }
     internal static int GvImageRule(emon.Port.Cells im, int j, emon.Port.Cells @out) {

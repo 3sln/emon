@@ -21,6 +21,12 @@ const gvContrast int32 = 16
 
 const gvHidden int32 = 65536
 
+const gvPiece int32 = 131072
+
+const gvGap int32 = 300
+
+const gvPieces int32 = 3
+
 func GvLegacy() int32 {
 	return 0
 }
@@ -202,13 +208,123 @@ func gvPathFlags(pa *port.Cells, mk *port.Cells, i int32) int32 {
 }
 
 func gvContrasts(ink int32, backdrop int32) int32 {
-	// 1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance (an ink of -1 is untested, a backdrop of -1 is white).
+	// 1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance. An ink of -1 is untested, and so is a backdrop of -1:
+	// P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D247, D249).
 	if ink < 0 {
+		return 1
+	}
+	if backdrop < 0 {
 		return 1
 	}
 	if gvAbs(gvLum255(ink)-gvLum255(backdrop)) >= gvContrast {
 		return 1
 	}
+	return 0
+}
+
+func gvPiece(out *port.Cells, row int32, ptrow int32, page int32, bx0 int32, by0 int32, bx1 int32, by1 int32, ex0 int32, ey0 int32, ex1 int32, ey1 int32, thick int32, colour int32, flags int32, horiz int32) int32 {
+	// A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons
+	// in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GV_PIECE, and its
+	// cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),
+	// as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.
+	// Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.
+	var n int32 = port.CellsLen(out) / 16
+	var b int32 = (n - 1) * 16
+	var ok int32 = 0
+	if n > 0 {
+		if (port.CellsAt(out, b) == 1) && ((port.CellsAt(out, b+1) == row) && ((port.CellsAt(out, b+15) & gvPiece) != 0)) {
+			if (gvAbs(port.CellsAt(out, b+12)-thick) <= 50) && (port.CellsAt(out, b+13) == colour) {
+				if horiz == 1 {
+					if (port.CellsAt(out, b+9) == port.CellsAt(out, b+11)) && (gvAbs(port.CellsAt(out, b+9)-ey0) <= 100) {
+						if (gvMax(port.CellsAt(out, b+8), ex0) - gvMin(port.CellsAt(out, b+10), ex1)) <= gvGap {
+							ok = 1
+						}
+					}
+				} else if (port.CellsAt(out, b+8) == port.CellsAt(out, b+10)) && (gvAbs(port.CellsAt(out, b+8)-ex0) <= 100) {
+					if (gvMax(port.CellsAt(out, b+9), ey0) - gvMin(port.CellsAt(out, b+11), ey1)) <= gvGap {
+						ok = 1
+					}
+				}
+			}
+		}
+	}
+	gvPush(out, 1, row, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, ok, flags)
+	return 0
+}
+
+func gvPiecesFinish(out *port.Cells, start int32) int32 {
+	// After a path: the CHAINS of its pieces (rows from `start` on: a row and the rows linked to it) of at least GV_PIECES pieces
+	// whose extent is at least GV_RULE_MIN are dashed rules (dotted when the period is within four thicknesses): their pieces stay,
+	// each its own candidate, no longer pieces. Every other piece is dropped.
+	var n int32 = port.CellsLen(out) / 16
+	var r int32 = start
+	var w int32 = start
+	var r1 int32 = 0
+	var k int32 = 0
+	var j int32 = 0
+	var b int32 = 0
+	var lo int32 = 0
+	var hi int32 = 0
+	var lo2 int32 = 0
+	var hi2 int32 = 0
+	var span int32 = 0
+	var style int32 = 0
+	var keep int32 = 0
+	for r < n {
+		b = r * 16
+		if (port.CellsAt(out, b+15) & gvPiece) == 0 {
+			if w < r {
+				k = 0
+				for k < 16 {
+					port.CellsSet(out, (w*16)+k, port.CellsAt(out, b+k))
+					k += 1
+				}
+			}
+			w += 1
+			r += 1
+		} else {
+			// a chain: rows r..r1, each piece after the first linked to the one before
+			r1 = r
+			lo = port.CellsAt(out, b+8)
+			hi = port.CellsAt(out, b+10)
+			lo2 = port.CellsAt(out, b+9)
+			hi2 = port.CellsAt(out, b+11)
+			for ((r1 + 1) < n) && (((port.CellsAt(out, ((r1+1)*16)+15) & gvPiece) != 0) && (port.CellsAt(out, ((r1+1)*16)+14) == 1)) {
+				r1 += 1
+				lo = gvMin(lo, port.CellsAt(out, (r1*16)+8))
+				hi = gvMax(hi, port.CellsAt(out, (r1*16)+10))
+				lo2 = gvMin(lo2, port.CellsAt(out, (r1*16)+9))
+				hi2 = gvMax(hi2, port.CellsAt(out, (r1*16)+11))
+			}
+			span = gvMax(hi-lo, hi2-lo2)
+			keep = 0
+			if (((r1 - r) + 1) >= gvPieces) && (span >= gvRuleMin) {
+				keep = 1
+			}
+			style = evidence.RsDashed()
+			if (span / ((r1 - r) + 1)) <= (4 * port.CellsAt(out, b+12)) {
+				style = evidence.RsDotted()
+			}
+			j = r
+			for j <= r1 {
+				if keep == 1 {
+					port.CellsSet(out, (j*16)+15, port.CellsAt(out, (j*16)+15)-gvPiece)
+					port.CellsSet(out, (j*16)+14, style)
+					if w < j {
+						k = 0
+						for k < 16 {
+							port.CellsSet(out, (w*16)+k, port.CellsAt(out, (j*16)+k))
+							k += 1
+						}
+					}
+					w += 1
+				}
+				j += 1
+			}
+			r = r1 + 1
+		}
+	}
+	port.CellsDrop(out, w*16)
 	return 0
 }
 
@@ -279,7 +395,7 @@ func gvSegRule(pa *port.Cells, i int32, ptrow int32, out *port.Cells, xa int32, 
 			}
 		}
 	}
-	if gvMax(ex1-ex0, gvAbs(ey1-ey0)) < gvRuleMin {
+	if ((flags & gvPiece) == 0) && (gvMax(ex1-ex0, gvAbs(ey1-ey0)) < gvRuleMin) {
 		return 0
 	}
 	if gvContrasts(colour, evidence.PaGet(pa, i, evidence.PfBackdrop())) == 0 {
@@ -297,7 +413,11 @@ func gvSegRule(pa *port.Cells, i int32, ptrow int32, out *port.Cells, xa int32, 
 		by0 = ey0
 		by1 = ey1
 	}
-	gvPush(out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags)
+	if (flags & gvPiece) != 0 {
+		gvPiece(out, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, flags, horiz)
+	} else {
+		gvPush(out, 1, i, ptrow, page, bx0, by0, bx1, by1, ex0, ey0, ex1, ey1, thick, colour, style, flags)
+	}
 	return 0
 }
 
@@ -350,6 +470,29 @@ func gvRect(pa *port.Cells, i int32, ptrow int32, out *port.Cells, x0 int32, y0 
 	}
 	if (fg & evidence.PgShading()) != 0 {
 		fillflags += glayer.GqfShading()
+	}
+	// thin and too short for a rule: a piece, maybe a dash of one (`gv-piece`)
+	if (gvMin(ew, eh) <= gvRuleT) && (gvMax(ew, eh) < gvRuleMin) && (gvMin(ew, eh) > 0) {
+		if filled == 0 {
+			colour = evidence.PaGet(pa, i, evidence.PfStroke())
+			al = evidence.PaGet(pa, i, evidence.PfSalpha())
+		}
+		if al <= 0 {
+			return 0
+		}
+		if (filled != 0) && (fillflags != 0) {
+			return 0
+		}
+		var th int32 = gvMin(ew, eh)
+		var fl int32 = gvSel(stroked, flags, flags+glayer.GqFromFill()) + gvPiece
+		var ym int32 = (y0 + y1) / 2
+		var xm int32 = (x0 + x1) / 2
+		if ew >= eh {
+			gvSegRule(pa, i, ptrow, out, x0, ym, x1, ym, th, colour, evidence.RsSolid(), fl)
+		} else {
+			gvSegRule(pa, i, ptrow, out, xm, y0, xm, y1, th, colour, evidence.RsSolid(), fl)
+		}
+		return 0
 	}
 	// thin: one rule along the long axis; its ink is the fill's when it is filled, else the stroke's
 	if (gvMin(ew, eh) <= gvRuleT) && (gvMax(ew, eh) >= gvRuleMin) {
@@ -428,9 +571,6 @@ func gvSubpath(pa *port.Cells, pts *port.Cells, i int32, a int32, b int32, out *
 	var k int32 = 0
 	var op int32 = 0
 	var curve int32 = 0
-	var closed int32 = 0
-	var lastx int32 = 0
-	var lasty int32 = 0
 	var thick int32 = 0
 	var sx int32 = 0
 	var sy int32 = 0
@@ -440,48 +580,50 @@ func gvSubpath(pa *port.Cells, pts *port.Cells, i int32, a int32, b int32, out *
 	if thick == 0 {
 		thick = gvHair
 	}
-	// closed? any curve? where does it end?
+	// any curve?
 	k = 0
 	for k < n {
 		op = evidence.PtGet(pts, a+k, evidence.PtfOp())
 		if op == evidence.PoCurve() {
 			curve = 1
 		}
-		if op == evidence.PoClose() {
-			closed = 1
-		}
 		k += 1
 	}
 	sx = evidence.PtGet(pts, a, evidence.PtfX())
 	sy = evidence.PtGet(pts, a, evidence.PtfY())
-	lastx = evidence.PtGet(pts, b-1, evidence.PtfX())
-	lasty = evidence.PtGet(pts, b-1, evidence.PtfY())
-	// a rectangle: four corners, and (five rows) a close or a line back to the start
-	if (curve == 0) && (n >= 4) && (n <= 5) {
-		var x0 int32 = evidence.PtGet(pts, a, evidence.PtfX())
-		var y0 int32 = evidence.PtGet(pts, a, evidence.PtfY())
-		var x1 int32 = evidence.PtGet(pts, a+1, evidence.PtfX())
-		var y1 int32 = evidence.PtGet(pts, a+1, evidence.PtfY())
-		var x2 int32 = evidence.PtGet(pts, a+2, evidence.PtfX())
-		var y2 int32 = evidence.PtGet(pts, a+2, evidence.PtfY())
-		var x3 int32 = evidence.PtGet(pts, a+3, evidence.PtfX())
-		var y3 int32 = evidence.PtGet(pts, a+3, evidence.PtfY())
+	// a rectangle: four corners, then (optionally) a line back to the start and/or a close (`re`: a move, three lines, a close; Skia:
+	// a move, four lines, a close). `m` is the number of rows that are corners; `closed` says the shape was closed
+	if (curve == 0) && (n >= 4) && (n <= 6) {
+		var m int32 = n
+		var closedr int32 = 0
 		var isr int32 = 0
-		if (x0 == x1) && ((y1 == y2) && ((x2 == x3) && (y3 == y0))) {
-			isr = 1
+		if evidence.PtGet(pts, a+(m-1), evidence.PtfOp()) == evidence.PoClose() {
+			m -= 1
+			closedr = 1
 		}
-		if (y0 == y1) && ((x1 == x2) && ((y2 == y3) && (x3 == x0))) {
-			isr = 1
+		if (m > 4) && ((evidence.PtGet(pts, a+(m-1), evidence.PtfX()) == sx) && (evidence.PtGet(pts, a+(m-1), evidence.PtfY()) == sy)) {
+			m -= 1
+			closedr = 1
 		}
-		if n == 5 {
-			if (evidence.PtGet(pts, a+4, evidence.PtfOp()) != evidence.PoClose()) && ((lastx != sx) || (lasty != sy)) {
-				isr = 0
+		if m == 4 {
+			var x0 int32 = evidence.PtGet(pts, a, evidence.PtfX())
+			var y0 int32 = evidence.PtGet(pts, a, evidence.PtfY())
+			var x1 int32 = evidence.PtGet(pts, a+1, evidence.PtfX())
+			var y1 int32 = evidence.PtGet(pts, a+1, evidence.PtfY())
+			var x2 int32 = evidence.PtGet(pts, a+2, evidence.PtfX())
+			var y2 int32 = evidence.PtGet(pts, a+2, evidence.PtfY())
+			var x3 int32 = evidence.PtGet(pts, a+3, evidence.PtfX())
+			var y3 int32 = evidence.PtGet(pts, a+3, evidence.PtfY())
+			if (x0 == x1) && ((y1 == y2) && ((x2 == x3) && (y3 == y0))) {
+				isr = 1
 			}
-			closed = 1
-		}
-		if (isr == 1) && ((closed == 1) || (filled != 0)) {
-			gvRect(pa, i, a, out, gvMin(gvMin(x0, x1), gvMin(x2, x3)), gvMin(gvMin(y0, y1), gvMin(y2, y3)), gvMax(gvMax(x0, x1), gvMax(x2, x3)), gvMax(gvMax(y0, y1), gvMax(y2, y3)), closed, flags)
-			return 0
+			if (y0 == y1) && ((x1 == x2) && ((y2 == y3) && (x3 == x0))) {
+				isr = 1
+			}
+			if (isr == 1) && ((closedr == 1) || (filled != 0)) {
+				gvRect(pa, i, a, out, gvMin(gvMin(x0, x1), gvMin(x2, x3)), gvMin(gvMin(y0, y1), gvMin(y2, y3)), gvMax(gvMax(x0, x1), gvMax(x2, x3)), gvMax(gvMax(y0, y1), gvMax(y2, y3)), closedr, flags)
+				return 0
+			}
 		}
 	}
 	// otherwise: straight segments, each a rule when the path is stroked
@@ -558,6 +700,7 @@ func gvPath(pa *port.Cells, pts *port.Cells, mk *port.Cells, i int32, out *port.
 	var first int32 = evidence.PaGet(pa, i, evidence.PfPfirst())
 	var cnt int32 = evidence.PaGet(pa, i, evidence.PfPcount())
 	var flags int32 = gvPathFlags(pa, mk, i)
+	var start int32 = port.CellsLen(out) / 16
 	var a int32 = 0
 	var k int32 = 0
 	var op int32 = 0
@@ -582,6 +725,7 @@ func gvPath(pa *port.Cells, pts *port.Cells, mk *port.Cells, i int32, out *port.
 			return 0
 		}
 		gvBoxOnly(pa, i, out, flags)
+		gvPiecesFinish(out, start)
 		return 0
 	}
 	// the subpaths: from a move to the next move
@@ -596,6 +740,7 @@ func gvPath(pa *port.Cells, pts *port.Cells, mk *port.Cells, i int32, out *port.
 		k += 1
 	}
 	gvSubpath(pa, pts, i, a, first+cnt, out, flags)
+	gvPiecesFinish(out, start)
 	return 0
 }
 

@@ -184,8 +184,27 @@ public static class Table {
         emon.Port.CellsPush(rl, 0);
         return 0;
     }
-    internal static int TbCollect(emon.Port.Cells grl, int r0, int r1, emon.Port.Cells gfl, int f0, int f1, emon.Port.Cells rl, emon.Port.Cells fl) {
-        // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never an `artifact-pagination` one: a running header's or footer's)
+    internal static int TbRunningRule(emon.Port.Cells grl, int i, int ph) {
+        // 1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of
+        // the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination
+        // artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D249).
+        if ((Glayer.GrlGet(grl, i, Glayer.GrfFlags()) & Glayer.GqArtifactPagination()) == 0) {
+            return 0;
+        }
+        int ya = Glayer.GrlGet(grl, i, Glayer.GrfEy0());
+        int yb = Glayer.GrlGet(grl, i, Glayer.GrfEy1());
+        int lo = TbMin(ya, yb);
+        int hi = TbMax(ya, yb);
+        if (hi <= (ph / 8)) {
+            return 1;
+        }
+        if (lo >= (ph - (ph / 8))) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int TbCollect(emon.Port.Cells grl, int r0, int r1, emon.Port.Cells gfl, int f0, int f1, int ph, emon.Port.Cells rl, emon.Port.Cells fl) {
+        // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)
         // as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
         // (`fl`: box and colour). P5.5a (D218, D248): the table stage reads the fused graphics and never `paths`.
         int i = r0;
@@ -194,7 +213,7 @@ public static class Table {
         emon.Port.CellsDrop(fl, 0);
         while (i < r1) {
             o = Glayer.GrlGet(grl, i, Glayer.GrfOrient());
-            if ((Glayer.GrlGet(grl, i, Glayer.GrfFlags()) & Glayer.GqArtifactPagination()) == 0) {
+            if (TbRunningRule(grl, i, ph) == 0) {
                 if (o == Glayer.GoH()) {
                     TbRuleAdd(rl, 0, (Glayer.GrlGet(grl, i, Glayer.GrfEy0()) + Glayer.GrlGet(grl, i, Glayer.GrfEy1())) / 2, Glayer.GrlGet(grl, i, Glayer.GrfEx0()), Glayer.GrlGet(grl, i, Glayer.GrfEx1()), Glayer.GrlGet(grl, i, Glayer.GrfThick()), Glayer.GrlGet(grl, i, Glayer.GrfColour()));
                 }
@@ -2995,7 +3014,7 @@ public static class Table {
             }
             t0 = TbRowsOf(tb, Tbs);
             if ((wj - wi) > 0) {
-                TbCollect(grl, qi, qj, gfl, ui, uj, s0, s2);
+                TbCollect(grl, qi, qj, gfl, ui, uj, Model.PageH(pages, p - 1), s0, s2);
                 if (TbRowsOf(s0, Rls) <= MaxRules) {
                     TbMergeRules(s0, s1, s3, s9);
                     TbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx);

@@ -221,8 +221,28 @@ func tbRuleAdd(rl *port.Cells, kind int32, pos int32, a0 int32, a1 int32, thick 
 	return 0
 }
 
-func tbCollect(grl *port.Cells, r0 int32, r1 int32, gfl *port.Cells, f0 int32, f1 int32, rl *port.Cells, fl *port.Cells) int32 {
-	// The page's fused rules `grl` r0..r1 (`h` and `v` ones, never an `artifact-pagination` one: a running header's or footer's)
+func tbRunningRule(grl *port.Cells, i int32, ph int32) int32 {
+	// 1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of
+	// the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination
+	// artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D249).
+	if (glayer.GrlGet(grl, i, glayer.GrfFlags()) & glayer.GqArtifactPagination()) == 0 {
+		return 0
+	}
+	var ya int32 = glayer.GrlGet(grl, i, glayer.GrfEy0())
+	var yb int32 = glayer.GrlGet(grl, i, glayer.GrfEy1())
+	var lo int32 = tbMin(ya, yb)
+	var hi int32 = tbMax(ya, yb)
+	if hi <= (ph / 8) {
+		return 1
+	}
+	if lo >= (ph - (ph / 8)) {
+		return 1
+	}
+	return 0
+}
+
+func tbCollect(grl *port.Cells, r0 int32, r1 int32, gfl *port.Cells, f0 int32, f1 int32, ph int32, rl *port.Cells, fl *port.Cells) int32 {
+	// The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)
 	// as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
 	// (`fl`: box and colour). P5.5a (D218, D248): the table stage reads the fused graphics and never `paths`.
 	var i int32 = r0
@@ -231,7 +251,7 @@ func tbCollect(grl *port.Cells, r0 int32, r1 int32, gfl *port.Cells, f0 int32, f
 	port.CellsDrop(fl, 0)
 	for i < r1 {
 		o = glayer.GrlGet(grl, i, glayer.GrfOrient())
-		if (glayer.GrlGet(grl, i, glayer.GrfFlags()) & glayer.GqArtifactPagination()) == 0 {
+		if tbRunningRule(grl, i, ph) == 0 {
 			if o == glayer.GoH() {
 				tbRuleAdd(rl, 0, (glayer.GrlGet(grl, i, glayer.GrfEy0())+glayer.GrlGet(grl, i, glayer.GrfEy1()))/2, glayer.GrlGet(grl, i, glayer.GrfEx0()), glayer.GrlGet(grl, i, glayer.GrfEx1()), glayer.GrlGet(grl, i, glayer.GrfThick()), glayer.GrlGet(grl, i, glayer.GrfColour()))
 			}
@@ -3115,7 +3135,7 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 		}
 		t0 = tbRowsOf(tb, tbs)
 		if (wj - wi) > 0 {
-			tbCollect(grl, qi, qj, gfl, ui, uj, s0, s2)
+			tbCollect(grl, qi, qj, gfl, ui, uj, model.PageH(pages, p-1), s0, s2)
 			if tbRowsOf(s0, rls) <= maxRules {
 				tbMergeRules(s0, s1, s3, s9)
 				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx)

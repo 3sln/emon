@@ -41,6 +41,26 @@ pub(crate) fn gt_run(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, 
     return gv_page(pa, pts, mk, im, 0, crate::port::cells_len(pa) / 24, 0, crate::port::cells_len(im) / 20, mode, out);
 }
 #[test]
+fn test_a_rectangle_written_as_four_lines_and_a_close_is_a_rectangle() {
+    // Skia writes a rectangle as a move, four lines (the last back to the start) and a close: six rows, not five
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let r: i32 = gt_path(pa, pa_other(), pg_filled(), 0, -1, 0, 1000, 4950, 21000, 5050);
+    gt_pt(pa, pts, r, 1000, 4950, po_move());
+    gt_pt(pa, pts, r, 21000, 4950, po_line());
+    gt_pt(pa, pts, r, 21000, 5050, po_line());
+    gt_pt(pa, pts, r, 1000, 5050, po_line());
+    gt_pt(pa, pts, r, 1000, 4950, po_line());
+    gt_pt(pa, pts, r, 1000, 4950, po_close());
+    crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_segments(), out), 1, "one rule");
+    crate::testport::assert_eq(gt_c(out, 0, 8), 1000, "from its left end");
+    crate::testport::assert_eq(gt_c(out, 0, 10), 21000, "to its right end");
+    crate::testport::assert_eq(gt_c(out, 0, 12), 100, "one point thick");
+}
+#[test]
 fn test_a_path_of_thirty_rects_is_thirty_rules_or_one_fill() {
     let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -64,6 +84,38 @@ fn test_a_path_of_thirty_rects_is_thirty_rules_or_one_fill() {
     crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_legacy(), out), 1, "legacy: its box is one candidate");
     crate::testport::assert_eq(gt_c(out, 0, 0), 2, "a fill");
     crate::testport::assert_eq(gt_c(out, 0, 6), 20000, "of the whole box");
+}
+#[test]
+fn test_the_dashes_of_a_border_are_rules_of_their_own() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let r: i32 = gt_path(pa, pa_other(), pg_filled(), 5592405, -1, 0, 18700, 86500, 18775, 88825);
+    let mut k: i32 = 0;
+    // five dashes of 0.75 x 2.25 pt, a period of 5.25 pt, one path (as Chrome writes a dashed border)
+    while k < 5 {
+        gt_re(pa, pts, r, 18700, 86500 + (k * 525), 18775, 86725 + (k * 525));
+        k += 1;
+    }
+    crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_segments(), out), 5, "five rules, one a dash: nothing bridges a gap");
+    crate::testport::assert_eq(gt_c(out, 0, 8), 18737, "vertical, on the dashes' centre line");
+    crate::testport::assert_eq(gt_c(out, 0, 9), 86500, "the first from its top");
+    crate::testport::assert_eq(gt_c(out, 0, 11), 86725, "to its bottom");
+    crate::testport::assert_eq(gt_c(out, 4, 9), 88600, "the last starts after four periods");
+    crate::testport::assert_eq(gt_c(out, 4, 11), 88825, "and ends at the end of the chain");
+    crate::testport::assert_eq(gt_c(out, 0, 12), 75, "as thick as a dash");
+    crate::testport::assert_eq(gt_c(out, 0, 14), 2, "dashed (`rs` 2): the period is not within four thicknesses");
+    crate::testport::assert_eq(gt_c(out, 0, 15) & 131072, 0, "and no longer a piece");
+    crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_legacy(), out), 1, "legacy: the path's box is one rule");
+    // two dashes are not a dashed line; a lone short box is not a rule
+    crate::port::cells_drop(pa, 0);
+    crate::port::cells_drop(pts, 0);
+    let d: i32 = gt_path(pa, pa_other(), pg_filled(), 0, -1, 0, 0, 0, 100, 100);
+    gt_re(pa, pts, d, 0, 0, 75, 225);
+    gt_re(pa, pts, d, 0, 525, 75, 750);
+    crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_segments(), out), 0, "two pieces are nothing");
 }
 #[test]
 fn test_a_grid_in_one_path_and_the_flat_curve() {
@@ -145,7 +197,7 @@ fn test_a_clipped_rule_is_trimmed_and_a_white_one_on_black_is_a_rule() {
     pa_set(pa, r2, pf_clip(), c2);
     gt_re(pa, pts, r2, 0, 4950, 20000, 5050);
     crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_segments(), out), 0, "a rule whose band misses its clip is gone");
-    // white on black (backdrop black) is a rule; white on white is not; an unknown backdrop is white
+    // white on black (backdrop black) is a rule; white on white is not; on an unknown backdrop it is seen
     crate::port::cells_drop(pa, 0);
     crate::port::cells_drop(pts, 0);
     let w: i32 = gt_path(pa, pa_rect(), pg_filled(), 16777215, -1, 0, 0, 4950, 20000, 5050);
@@ -156,7 +208,7 @@ fn test_a_clipped_rule_is_trimmed_and_a_white_one_on_black_is_a_rule() {
     pa_set(pa, w, pf_backdrop(), 16777215);
     crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_segments(), out), 0, "a white rule on white is not");
     pa_set(pa, w, pf_backdrop(), -1);
-    crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_segments(), out), 0, "nor on an unknown backdrop");
+    crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_segments(), out), 1, "on an unknown backdrop (a partial cover) it is seen, and that is all that is known");
     crate::testport::assert_eq(gt_run(pa, pts, mk, im, gv_legacy(), out), 0, "legacy: mean channel under 240 only");
 }
 #[test]
