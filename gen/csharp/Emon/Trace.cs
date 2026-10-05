@@ -85,8 +85,8 @@ public static class Trace {
         // The smallest text-like height: 3 pt.
         return TrPt(dpi100, 3);
     }
-    internal const int Rs = 6;
-    internal const int Cs = 24;
+    internal const int KRs = 6;
+    internal const int KCs = 24;
     internal const int CTop = 0;
     internal const int CLeft = 1;
     internal const int CRight = 2;
@@ -151,6 +151,18 @@ public static class Trace {
             return a;
         }
         return b;
+    }
+    internal static long TrMax64(long a, long b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    internal static long TrAbs64(long a) {
+        if (a < ((long) 0)) {
+            return ((long) 0) - a;
+        }
+        return a;
     }
     internal static int TrPermille(int n, int d) {
         // n over d, per mille, clamped to 0..1000; 0 when d is not positive.
@@ -305,6 +317,7 @@ public static class Trace {
         int bx1 = 0;
         int r = 0;
         int ec = 0;
+        int root = 0;
         while (y < h) {
             i = emon.Port.CellsAt(ri, y - 1);
             ie = emon.Port.CellsAt(ri, y);
@@ -330,7 +343,8 @@ public static class Trace {
         }
         r = 0;
         while (r < n) {
-            TrRs(rn, r, 3, TrFind(rn, r));
+            root = TrFind(rn, r);
+            TrRs(rn, r, 3, root);
             r += 1;
         }
         return n;
@@ -692,7 +706,8 @@ public static class Trace {
                 }
                 lo = TrCg(cs, c, CGray) + rs;
                 if (lo >= 1048576) {
-                    TrCset(cs, c, 23, TrCg(cs, c, 23) + ((lo) >> (20)));
+                    v = TrCg(cs, c, 23);
+                    TrCset(cs, c, 23, v + ((lo) >> (20)));
                     lo &= 1048575;
                 }
                 TrCset(cs, c, CGray, lo);
@@ -729,7 +744,7 @@ public static class Trace {
         // 2. stroke width: medians of the horizontal and the vertical run lengths of each component
         emon.Port.CellsDrop(s1, 0);
         emon.Port.CellsGrow(s1, 256, 0);
-        TrGroup(rn, Rs, 5, n, nc, s2, s3);
+        TrGroup(rn, KRs, 5, n, nc, s2, s3);
         c = 0;
         while (c < nc) {
             lo = emon.Port.CellsAt(s3, c);
@@ -1303,7 +1318,7 @@ public static class Trace {
         }
         return ((s * 2) + n) / (2 * n);
     }
-    internal const int Ps = 12;
+    internal const int KPs = 12;
     internal const int PX0 = 0;
     internal const int PY0 = 1;
     internal const int PX1 = 2;
@@ -1574,31 +1589,31 @@ public static class Trace {
         // them under 2.5 degrees, both ends of the shorter within (thickness + 2 px) of the longer one's line.
         int p = a;
         int q = b;
-        int pdx0 = emon.Port.CellsAt(pc, (a * Ps) + PX1) - emon.Port.CellsAt(pc, (a * Ps) + PX0);
-        int pdy0 = emon.Port.CellsAt(pc, (a * Ps) + PY1) - emon.Port.CellsAt(pc, (a * Ps) + PY0);
-        int qdx0 = emon.Port.CellsAt(pc, (b * Ps) + PX1) - emon.Port.CellsAt(pc, (b * Ps) + PX0);
-        int qdy0 = emon.Port.CellsAt(pc, (b * Ps) + PY1) - emon.Port.CellsAt(pc, (b * Ps) + PY0);
+        int pdx0 = emon.Port.CellsAt(pc, (a * KPs) + PX1) - emon.Port.CellsAt(pc, (a * KPs) + PX0);
+        int pdy0 = emon.Port.CellsAt(pc, (a * KPs) + PY1) - emon.Port.CellsAt(pc, (a * KPs) + PY0);
+        int qdx0 = emon.Port.CellsAt(pc, (b * KPs) + PX1) - emon.Port.CellsAt(pc, (b * KPs) + PX0);
+        int qdy0 = emon.Port.CellsAt(pc, (b * KPs) + PY1) - emon.Port.CellsAt(pc, (b * KPs) + PY0);
         long l1 = unchecked(((long) pdx0) * ((long) pdx0)) + unchecked(((long) pdy0) * ((long) pdy0));
         long l2 = unchecked(((long) qdx0) * ((long) qdx0)) + unchecked(((long) qdy0) * ((long) qdy0));
         if (l1 < l2) {
             p = b;
             q = a;
         }
-        int px0 = emon.Port.CellsAt(pc, (p * Ps) + PX0);
-        int py0 = emon.Port.CellsAt(pc, (p * Ps) + PY0);
-        int dx = emon.Port.CellsAt(pc, (p * Ps) + PX1) - px0;
-        int dy = emon.Port.CellsAt(pc, (p * Ps) + PY1) - py0;
-        int ex = emon.Port.CellsAt(pc, (q * Ps) + PX1) - emon.Port.CellsAt(pc, (q * Ps) + PX0);
-        int ey = emon.Port.CellsAt(pc, (q * Ps) + PY1) - emon.Port.CellsAt(pc, (q * Ps) + PY0);
+        int px0 = emon.Port.CellsAt(pc, (p * KPs) + PX0);
+        int py0 = emon.Port.CellsAt(pc, (p * KPs) + PY0);
+        int dx = emon.Port.CellsAt(pc, (p * KPs) + PX1) - px0;
+        int dy = emon.Port.CellsAt(pc, (p * KPs) + PY1) - py0;
+        int ex = emon.Port.CellsAt(pc, (q * KPs) + PX1) - emon.Port.CellsAt(pc, (q * KPs) + PX0);
+        int ey = emon.Port.CellsAt(pc, (q * KPs) + PY1) - emon.Port.CellsAt(pc, (q * KPs) + PY0);
         long lp2 = unchecked(((long) dx) * ((long) dx)) + unchecked(((long) dy) * ((long) dy));
         long lq2 = unchecked(((long) ex) * ((long) ex)) + unchecked(((long) ey) * ((long) ey));
         long cr = unchecked(((long) dx) * ((long) ey)) - unchecked(((long) dy) * ((long) ex));
         int lp = TrIsqrt(lp2);
-        int tol = (TrMax(emon.Port.CellsAt(pc, (p * Ps) + PThk), emon.Port.CellsAt(pc, (q * Ps) + PThk)) / 4) + 4;
-        int qx0 = emon.Port.CellsAt(pc, (q * Ps) + PX0) - px0;
-        int qy0 = emon.Port.CellsAt(pc, (q * Ps) + PY0) - py0;
-        int qx1 = emon.Port.CellsAt(pc, (q * Ps) + PX1) - px0;
-        int qy1 = emon.Port.CellsAt(pc, (q * Ps) + PY1) - py0;
+        int tol = (TrMax(emon.Port.CellsAt(pc, (p * KPs) + PThk), emon.Port.CellsAt(pc, (q * KPs) + PThk)) / 4) + 4;
+        int qx0 = emon.Port.CellsAt(pc, (q * KPs) + PX0) - px0;
+        int qy0 = emon.Port.CellsAt(pc, (q * KPs) + PY0) - py0;
+        int qx1 = emon.Port.CellsAt(pc, (q * KPs) + PX1) - px0;
+        int qy1 = emon.Port.CellsAt(pc, (q * KPs) + PY1) - py0;
         long c0 = unchecked(((long) dx) * ((long) qy0)) - unchecked(((long) dy) * ((long) qx0));
         long c1 = unchecked(((long) dx) * ((long) qy1)) - unchecked(((long) dy) * ((long) qx1));
         long d0 = unchecked(((long) dx) * ((long) qx0)) + unchecked(((long) dy) * ((long) qy0));
@@ -1646,12 +1661,12 @@ public static class Trace {
         int x = a;
         int p = 0;
         int g = 0;
-        p = emon.Port.CellsAt(pc, (x * Ps) + PPar);
+        p = emon.Port.CellsAt(pc, (x * KPs) + PPar);
         while (p != x) {
-            g = emon.Port.CellsAt(pc, (p * Ps) + PPar);
-            emon.Port.CellsSet(pc, (x * Ps) + PPar, g);
+            g = emon.Port.CellsAt(pc, (p * KPs) + PPar);
+            emon.Port.CellsSet(pc, (x * KPs) + PPar, g);
             x = g;
-            p = emon.Port.CellsAt(pc, (x * Ps) + PPar);
+            p = emon.Port.CellsAt(pc, (x * KPs) + PPar);
         }
         return x;
     }
@@ -1671,8 +1686,8 @@ public static class Trace {
         emon.Port.CellsDrop(ord, 0);
         i = 0;
         while (i < np) {
-            emon.Port.CellsSet(pc, (i * Ps) + PPar, i);
-            emon.Port.CellsPush(keys, TrMin(emon.Port.CellsAt(pc, (i * Ps) + PX0), emon.Port.CellsAt(pc, (i * Ps) + PX1)));
+            emon.Port.CellsSet(pc, (i * KPs) + PPar, i);
+            emon.Port.CellsPush(keys, TrMin(emon.Port.CellsAt(pc, (i * KPs) + PX0), emon.Port.CellsAt(pc, (i * KPs) + PX1)));
             emon.Port.CellsPush(ord, i);
             i += 1;
         }
@@ -1680,7 +1695,7 @@ public static class Trace {
         i = 0;
         while (i < np) {
             p = emon.Port.CellsAt(ord, i);
-            pmax = TrMax(emon.Port.CellsAt(pc, (p * Ps) + PX0), emon.Port.CellsAt(pc, (p * Ps) + PX1)) + gapmax;
+            pmax = TrMax(emon.Port.CellsAt(pc, (p * KPs) + PX0), emon.Port.CellsAt(pc, (p * KPs) + PX1)) + gapmax;
             j = i + 1;
             while ((j < np) && (emon.Port.CellsAt(keys, emon.Port.CellsAt(ord, j)) <= pmax)) {
                 q = emon.Port.CellsAt(ord, j);
@@ -1689,9 +1704,9 @@ public static class Trace {
                     rb = TrPfind(pc, q);
                     if (ra != rb) {
                         if (ra < rb) {
-                            emon.Port.CellsSet(pc, (rb * Ps) + PPar, ra);
+                            emon.Port.CellsSet(pc, (rb * KPs) + PPar, ra);
                         } else {
-                            emon.Port.CellsSet(pc, (ra * Ps) + PPar, rb);
+                            emon.Port.CellsSet(pc, (ra * KPs) + PPar, rb);
                         }
                     }
                 }
@@ -1701,15 +1716,16 @@ public static class Trace {
         }
         i = 0;
         while (i < np) {
-            emon.Port.CellsSet(pc, (i * Ps) + PPar, TrPfind(pc, i));
-            if (emon.Port.CellsAt(pc, (i * Ps) + PPar) == i) {
+            ra = TrPfind(pc, i);
+            emon.Port.CellsSet(pc, (i * KPs) + PPar, ra);
+            if (ra == i) {
                 ng += 1;
             }
             i += 1;
         }
         return ng;
     }
-    internal const int Sg = 16;
+    internal const int KSg = 16;
     internal const int GAx = 0;
     internal const int GAy = 1;
     internal const int GBx = 2;
@@ -1774,7 +1790,7 @@ public static class Trace {
         long ta = 0;
         long tb = 0;
         int s = 0;
-        TrGroup(pc, Ps, 10, np, np, idx, off);
+        TrGroup(pc, KPs, 10, np, np, idx, off);
         emon.Port.CellsDrop(sg, 0);
         emon.Port.CellsDrop(mem, 0);
         while (g < np) {
@@ -1786,8 +1802,8 @@ public static class Trace {
                 k = lo;
                 while (k < hi) {
                     p = emon.Port.CellsAt(idx, k);
-                    dx = emon.Port.CellsAt(pc, (p * Ps) + PX1) - emon.Port.CellsAt(pc, (p * Ps) + PX0);
-                    dy = emon.Port.CellsAt(pc, (p * Ps) + PY1) - emon.Port.CellsAt(pc, (p * Ps) + PY0);
+                    dx = emon.Port.CellsAt(pc, (p * KPs) + PX1) - emon.Port.CellsAt(pc, (p * KPs) + PX0);
+                    dy = emon.Port.CellsAt(pc, (p * KPs) + PY1) - emon.Port.CellsAt(pc, (p * KPs) + PY0);
                     l2 = unchecked(((long) dx) * ((long) dx)) + unchecked(((long) dy) * ((long) dy));
                     if (l2 > rl2) {
                         rl2 = l2;
@@ -1795,8 +1811,8 @@ public static class Trace {
                     }
                     k += 1;
                 }
-                dx = emon.Port.CellsAt(pc, (rf * Ps) + PX1) - emon.Port.CellsAt(pc, (rf * Ps) + PX0);
-                dy = emon.Port.CellsAt(pc, (rf * Ps) + PY1) - emon.Port.CellsAt(pc, (rf * Ps) + PY0);
+                dx = emon.Port.CellsAt(pc, (rf * KPs) + PX1) - emon.Port.CellsAt(pc, (rf * KPs) + PX0);
+                dy = emon.Port.CellsAt(pc, (rf * KPs) + PY1) - emon.Port.CellsAt(pc, (rf * KPs) + PY0);
                 lr = TrMax(1, TrIsqrt(rl2));
                 tmin = (long) 100000000;
                 tmax = (long) -100000000;
@@ -1814,13 +1830,13 @@ public static class Trace {
                     e = 0;
                     while (e < 2) {
                         if (e == 0) {
-                            x = emon.Port.CellsAt(pc, (p * Ps) + PX0);
-                            y = emon.Port.CellsAt(pc, (p * Ps) + PY0);
+                            x = emon.Port.CellsAt(pc, (p * KPs) + PX0);
+                            y = emon.Port.CellsAt(pc, (p * KPs) + PY0);
                         } else {
-                            x = emon.Port.CellsAt(pc, (p * Ps) + PX1);
-                            y = emon.Port.CellsAt(pc, (p * Ps) + PY1);
+                            x = emon.Port.CellsAt(pc, (p * KPs) + PX1);
+                            y = emon.Port.CellsAt(pc, (p * KPs) + PY1);
                         }
-                        t = (unchecked(((long) (x - emon.Port.CellsAt(pc, (rf * Ps) + PX0))) * ((long) dx)) + unchecked(((long) (y - emon.Port.CellsAt(pc, (rf * Ps) + PY0))) * ((long) dy))) / ((long) lr);
+                        t = (unchecked(((long) (x - emon.Port.CellsAt(pc, (rf * KPs) + PX0))) * ((long) dx)) + unchecked(((long) (y - emon.Port.CellsAt(pc, (rf * KPs) + PY0))) * ((long) dy))) / ((long) lr);
                         if (t < tmin) {
                             tmin = t;
                             amin = p;
@@ -1833,21 +1849,21 @@ public static class Trace {
                         }
                         e += 1;
                     }
-                    l2 = unchecked(((long) (emon.Port.CellsAt(pc, (p * Ps) + PX1) - emon.Port.CellsAt(pc, (p * Ps) + PX0))) * ((long) (emon.Port.CellsAt(pc, (p * Ps) + PX1) - emon.Port.CellsAt(pc, (p * Ps) + PX0)))) + unchecked(((long) (emon.Port.CellsAt(pc, (p * Ps) + PY1) - emon.Port.CellsAt(pc, (p * Ps) + PY0))) * ((long) (emon.Port.CellsAt(pc, (p * Ps) + PY1) - emon.Port.CellsAt(pc, (p * Ps) + PY0))));
+                    l2 = unchecked(((long) (emon.Port.CellsAt(pc, (p * KPs) + PX1) - emon.Port.CellsAt(pc, (p * KPs) + PX0))) * ((long) (emon.Port.CellsAt(pc, (p * KPs) + PX1) - emon.Port.CellsAt(pc, (p * KPs) + PX0)))) + unchecked(((long) (emon.Port.CellsAt(pc, (p * KPs) + PY1) - emon.Port.CellsAt(pc, (p * KPs) + PY0))) * ((long) (emon.Port.CellsAt(pc, (p * KPs) + PY1) - emon.Port.CellsAt(pc, (p * KPs) + PY0))));
                     s = TrIsqrt(l2);
-                    sthk += unchecked(((long) emon.Port.CellsAt(pc, (p * Ps) + PThk)) * ((long) s));
+                    sthk += unchecked(((long) emon.Port.CellsAt(pc, (p * KPs) + PThk)) * ((long) s));
                     slen += (long) s;
-                    if (emon.Port.CellsAt(pc, (p * Ps) + PMinw) < minw) {
-                        minw = emon.Port.CellsAt(pc, (p * Ps) + PMinw);
+                    if (emon.Port.CellsAt(pc, (p * KPs) + PMinw) < minw) {
+                        minw = emon.Port.CellsAt(pc, (p * KPs) + PMinw);
                     }
-                    if (emon.Port.CellsAt(pc, (p * Ps) + PMaxw) > maxw) {
-                        maxw = emon.Port.CellsAt(pc, (p * Ps) + PMaxw);
+                    if (emon.Port.CellsAt(pc, (p * KPs) + PMaxw) > maxw) {
+                        maxw = emon.Port.CellsAt(pc, (p * KPs) + PMaxw);
                     }
-                    TrSegAddMember(mem, mf, emon.Port.CellsAt(pc, (p * Ps) + PComp));
+                    TrSegAddMember(mem, mf, emon.Port.CellsAt(pc, (p * KPs) + PComp));
                     k += 1;
                 }
                 // the endpoints: the extreme points along the reference line (recomputed from the piece and end that won)
-                ns = emon.Port.CellsLen(sg) / Sg;
+                ns = emon.Port.CellsLen(sg) / KSg;
                 emon.Port.CellsPush(sg, 0);
                 emon.Port.CellsPush(sg, 0);
                 emon.Port.CellsPush(sg, 0);
@@ -1865,34 +1881,34 @@ public static class Trace {
                 emon.Port.CellsPush(sg, 0);
                 emon.Port.CellsPush(sg, 0);
                 if (j == 0) {
-                    emon.Port.CellsSet(sg, (ns * Sg) + GAx, emon.Port.CellsAt(pc, (amin * Ps) + PX0));
-                    emon.Port.CellsSet(sg, (ns * Sg) + GAy, emon.Port.CellsAt(pc, (amin * Ps) + PY0));
+                    emon.Port.CellsSet(sg, (ns * KSg) + GAx, emon.Port.CellsAt(pc, (amin * KPs) + PX0));
+                    emon.Port.CellsSet(sg, (ns * KSg) + GAy, emon.Port.CellsAt(pc, (amin * KPs) + PY0));
                 } else {
-                    emon.Port.CellsSet(sg, (ns * Sg) + GAx, emon.Port.CellsAt(pc, (amin * Ps) + PX1));
-                    emon.Port.CellsSet(sg, (ns * Sg) + GAy, emon.Port.CellsAt(pc, (amin * Ps) + PY1));
+                    emon.Port.CellsSet(sg, (ns * KSg) + GAx, emon.Port.CellsAt(pc, (amin * KPs) + PX1));
+                    emon.Port.CellsSet(sg, (ns * KSg) + GAy, emon.Port.CellsAt(pc, (amin * KPs) + PY1));
                 }
                 if (cnt == 0) {
-                    emon.Port.CellsSet(sg, (ns * Sg) + GBx, emon.Port.CellsAt(pc, (amax * Ps) + PX0));
-                    emon.Port.CellsSet(sg, (ns * Sg) + GBy, emon.Port.CellsAt(pc, (amax * Ps) + PY0));
+                    emon.Port.CellsSet(sg, (ns * KSg) + GBx, emon.Port.CellsAt(pc, (amax * KPs) + PX0));
+                    emon.Port.CellsSet(sg, (ns * KSg) + GBy, emon.Port.CellsAt(pc, (amax * KPs) + PY0));
                 } else {
-                    emon.Port.CellsSet(sg, (ns * Sg) + GBx, emon.Port.CellsAt(pc, (amax * Ps) + PX1));
-                    emon.Port.CellsSet(sg, (ns * Sg) + GBy, emon.Port.CellsAt(pc, (amax * Ps) + PY1));
+                    emon.Port.CellsSet(sg, (ns * KSg) + GBx, emon.Port.CellsAt(pc, (amax * KPs) + PX1));
+                    emon.Port.CellsSet(sg, (ns * KSg) + GBy, emon.Port.CellsAt(pc, (amax * KPs) + PY1));
                 }
-                emon.Port.CellsSet(sg, (ns * Sg) + GThk, (int) ((sthk + (slen / ((long) 2))) / TrMax((long) 1, slen)));
-                emon.Port.CellsSet(sg, (ns * Sg) + GMinw, minw);
-                emon.Port.CellsSet(sg, (ns * Sg) + GMaxw, maxw);
-                emon.Port.CellsSet(sg, (ns * Sg) + GComp, emon.Port.CellsAt(pc, (rf * Ps) + PComp));
-                emon.Port.CellsSet(sg, (ns * Sg) + GLen, (int) (tmax - tmin));
-                emon.Port.CellsSet(sg, (ns * Sg) + GMfirst, mf);
-                emon.Port.CellsSet(sg, (ns * Sg) + GMcount, emon.Port.CellsLen(mem) - mf);
-                emon.Port.CellsSet(sg, (ns * Sg) + GPar, ns);
+                emon.Port.CellsSet(sg, (ns * KSg) + GThk, (int) ((sthk + (slen / ((long) 2))) / TrMax64((long) 1, slen)));
+                emon.Port.CellsSet(sg, (ns * KSg) + GMinw, minw);
+                emon.Port.CellsSet(sg, (ns * KSg) + GMaxw, maxw);
+                emon.Port.CellsSet(sg, (ns * KSg) + GComp, emon.Port.CellsAt(pc, (rf * KPs) + PComp));
+                emon.Port.CellsSet(sg, (ns * KSg) + GLen, (int) (tmax - tmin));
+                emon.Port.CellsSet(sg, (ns * KSg) + GMfirst, mf);
+                emon.Port.CellsSet(sg, (ns * KSg) + GMcount, emon.Port.CellsLen(mem) - mf);
+                emon.Port.CellsSet(sg, (ns * KSg) + GPar, ns);
                 // the total gap: the intervals along the line, by start, then what lies between them
                 cnt = 0;
                 k = lo;
                 while (k < hi) {
                     p = emon.Port.CellsAt(idx, k);
-                    ta = (unchecked(((long) (emon.Port.CellsAt(pc, (p * Ps) + PX0) - emon.Port.CellsAt(pc, (rf * Ps) + PX0))) * ((long) dx)) + unchecked(((long) (emon.Port.CellsAt(pc, (p * Ps) + PY0) - emon.Port.CellsAt(pc, (rf * Ps) + PY0))) * ((long) dy))) / ((long) lr);
-                    tb = (unchecked(((long) (emon.Port.CellsAt(pc, (p * Ps) + PX1) - emon.Port.CellsAt(pc, (rf * Ps) + PX0))) * ((long) dx)) + unchecked(((long) (emon.Port.CellsAt(pc, (p * Ps) + PY1) - emon.Port.CellsAt(pc, (rf * Ps) + PY0))) * ((long) dy))) / ((long) lr);
+                    ta = (unchecked(((long) (emon.Port.CellsAt(pc, (p * KPs) + PX0) - emon.Port.CellsAt(pc, (rf * KPs) + PX0))) * ((long) dx)) + unchecked(((long) (emon.Port.CellsAt(pc, (p * KPs) + PY0) - emon.Port.CellsAt(pc, (rf * KPs) + PY0))) * ((long) dy))) / ((long) lr);
+                    tb = (unchecked(((long) (emon.Port.CellsAt(pc, (p * KPs) + PX1) - emon.Port.CellsAt(pc, (rf * KPs) + PX0))) * ((long) dx)) + unchecked(((long) (emon.Port.CellsAt(pc, (p * KPs) + PY1) - emon.Port.CellsAt(pc, (rf * KPs) + PY0))) * ((long) dy))) / ((long) lr);
                     if (tb < ta) {
                         t = ta;
                         ta = tb;
@@ -1930,11 +1946,11 @@ public static class Trace {
                     }
                     k += 1;
                 }
-                emon.Port.CellsSet(sg, (ns * Sg) + GGaps, (int) gaps);
+                emon.Port.CellsSet(sg, (ns * KSg) + GGaps, (int) gaps);
             }
             g += 1;
         }
-        return emon.Port.CellsLen(sg) / Sg;
+        return emon.Port.CellsLen(sg) / KSg;
     }
     internal static int TrSortedMedian(emon.Port.Cells a, int n) {
         // Sort a[0..n) in place (insertion) and answer its upper median a[n / 2]; 0 for none.
@@ -1958,7 +1974,7 @@ public static class Trace {
     }
     internal static int TrAlong(emon.Port.Cells pc, int @ref, int x, int y, int dx, int dy, int lr) {
         // The position of the point (x, y) along piece `ref`'s direction (dx, dy; length lr), from its start, in doubled pixels.
-        return (int) ((unchecked(((long) (x - emon.Port.CellsAt(pc, (@ref * Ps) + PX0))) * ((long) dx)) + unchecked(((long) (y - emon.Port.CellsAt(pc, (@ref * Ps) + PY0))) * ((long) dy))) / ((long) lr));
+        return (int) ((unchecked(((long) (x - emon.Port.CellsAt(pc, (@ref * KPs) + PX0))) * ((long) dx)) + unchecked(((long) (y - emon.Port.CellsAt(pc, (@ref * KPs) + PY0))) * ((long) dy))) / ((long) lr));
     }
     internal static int TrDashGroup(int cnt, emon.Port.Cells s1, emon.Port.Cells s4) {
         // Judge ONE group of `cnt` short segments (pieces of `pc`, ordered along the line into `s4` as [t0 t1 piece]): 1 when they
@@ -2051,20 +2067,20 @@ public static class Trace {
         emon.Port.CellsDrop(pc, 0);
         i = 0;
         while (i < ns) {
-            emon.Port.CellsSet(sg, (i * Sg) + GStyle, 0);
-            if ((emon.Port.CellsAt(sg, (i * Sg) + GLen) / 2) >= rmin) {
-                emon.Port.CellsSet(sg, (i * Sg) + GStyle, 1);
+            emon.Port.CellsSet(sg, (i * KSg) + GStyle, 0);
+            if ((emon.Port.CellsAt(sg, (i * KSg) + GLen) / 2) >= rmin) {
+                emon.Port.CellsSet(sg, (i * KSg) + GStyle, 1);
                 nrules += 1;
-            } else if (emon.Port.CellsAt(sg, (i * Sg) + GLen) > 0) {
-                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * Sg) + GAx));
-                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * Sg) + GAy));
-                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * Sg) + GBx));
-                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * Sg) + GBy));
-                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * Sg) + GThk));
-                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * Sg) + GComp));
+            } else if (emon.Port.CellsAt(sg, (i * KSg) + GLen) > 0) {
+                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * KSg) + GAx));
+                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * KSg) + GAy));
+                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * KSg) + GBx));
+                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * KSg) + GBy));
+                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * KSg) + GThk));
+                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * KSg) + GComp));
                 emon.Port.CellsPush(pc, 0);
-                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * Sg) + GMinw));
-                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * Sg) + GMaxw));
+                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * KSg) + GMinw));
+                emon.Port.CellsPush(pc, emon.Port.CellsAt(sg, (i * KSg) + GMaxw));
                 emon.Port.CellsPush(pc, 1);
                 emon.Port.CellsPush(pc, n2);
                 emon.Port.CellsPush(pc, i);
@@ -2074,7 +2090,7 @@ public static class Trace {
         }
         if (n2 >= 3) {
             TrMergePieces(pc, n2, dashgap, s1, s2, s3);
-            TrGroup(pc, Ps, 10, n2, n2, s2, s3);
+            TrGroup(pc, KPs, 10, n2, n2, s2, s3);
             g = 0;
             while (g < n2) {
                 lo = emon.Port.CellsAt(s3, g);
@@ -2082,15 +2098,15 @@ public static class Trace {
                 cnt = hi - lo;
                 if (cnt >= 3) {
                     first = emon.Port.CellsAt(s2, lo);
-                    dx = emon.Port.CellsAt(pc, (first * Ps) + PX1) - emon.Port.CellsAt(pc, (first * Ps) + PX0);
-                    dy = emon.Port.CellsAt(pc, (first * Ps) + PY1) - emon.Port.CellsAt(pc, (first * Ps) + PY0);
+                    dx = emon.Port.CellsAt(pc, (first * KPs) + PX1) - emon.Port.CellsAt(pc, (first * KPs) + PX0);
+                    dy = emon.Port.CellsAt(pc, (first * KPs) + PY1) - emon.Port.CellsAt(pc, (first * KPs) + PY0);
                     lr = TrMax(1, TrIsqrt(unchecked(((long) dx) * ((long) dx)) + unchecked(((long) dy) * ((long) dy))));
                     emon.Port.CellsDrop(s4, 0);
                     k = lo;
                     while (k < hi) {
                         j = emon.Port.CellsAt(s2, k);
-                        t0 = TrAlong(pc, first, emon.Port.CellsAt(pc, (j * Ps) + PX0), emon.Port.CellsAt(pc, (j * Ps) + PY0), dx, dy, lr);
-                        t1 = TrAlong(pc, first, emon.Port.CellsAt(pc, (j * Ps) + PX1), emon.Port.CellsAt(pc, (j * Ps) + PY1), dx, dy, lr);
+                        t0 = TrAlong(pc, first, emon.Port.CellsAt(pc, (j * KPs) + PX0), emon.Port.CellsAt(pc, (j * KPs) + PY0), dx, dy, lr);
+                        t1 = TrAlong(pc, first, emon.Port.CellsAt(pc, (j * KPs) + PX1), emon.Port.CellsAt(pc, (j * KPs) + PY1), dx, dy, lr);
                         if (t1 < t0) {
                             v = t0;
                             t0 = t1;
@@ -2126,16 +2142,16 @@ public static class Trace {
                         k = 0;
                         while (k < cnt) {
                             j = emon.Port.CellsAt(s4, (k * 3) + 2);
-                            sgj = emon.Port.CellsAt(pc, (j * Ps) + 11);
-                            sthk += (long) emon.Port.CellsAt(sg, (sgj * Sg) + GThk);
+                            sgj = emon.Port.CellsAt(pc, (j * KPs) + 11);
+                            sthk += (long) emon.Port.CellsAt(sg, (sgj * KSg) + GThk);
                             e = 0;
                             while (e < 2) {
                                 if (e == 0) {
-                                    x = emon.Port.CellsAt(pc, (j * Ps) + PX0);
-                                    y = emon.Port.CellsAt(pc, (j * Ps) + PY0);
+                                    x = emon.Port.CellsAt(pc, (j * KPs) + PX0);
+                                    y = emon.Port.CellsAt(pc, (j * KPs) + PY0);
                                 } else {
-                                    x = emon.Port.CellsAt(pc, (j * Ps) + PX1);
-                                    y = emon.Port.CellsAt(pc, (j * Ps) + PY1);
+                                    x = emon.Port.CellsAt(pc, (j * KPs) + PX1);
+                                    y = emon.Port.CellsAt(pc, (j * KPs) + PY1);
                                 }
                                 t = TrAlong(pc, first, x, y, dx, dy, lr);
                                 if (t < tmin) {
@@ -2152,32 +2168,32 @@ public static class Trace {
                             }
                             k += 1;
                         }
-                        sgi = emon.Port.CellsAt(pc, (emon.Port.CellsAt(s4, 2) * Ps) + 11);
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GAx, ax);
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GAy, ay);
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GBx, bx);
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GBy, by);
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GThk, (int) ((sthk + ((long) (cnt / 2))) / ((long) cnt)));
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GLen, tmax - tmin);
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GGaps, 0);
+                        sgi = emon.Port.CellsAt(pc, (emon.Port.CellsAt(s4, 2) * KPs) + 11);
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GAx, ax);
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GAy, ay);
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GBx, bx);
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GBy, by);
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GThk, (int) ((sthk + ((long) (cnt / 2))) / ((long) cnt)));
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GLen, tmax - tmin);
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GGaps, 0);
                         // the members of every dash, appended to one list
                         mf = emon.Port.CellsLen(mem);
                         k = 0;
                         while (k < cnt) {
-                            sgj = emon.Port.CellsAt(pc, (emon.Port.CellsAt(s4, (k * 3) + 2) * Ps) + 11);
+                            sgj = emon.Port.CellsAt(pc, (emon.Port.CellsAt(s4, (k * 3) + 2) * KPs) + 11);
                             q = 0;
-                            while (q < emon.Port.CellsAt(sg, (sgj * Sg) + GMcount)) {
-                                TrSegAddMember(mem, mf, emon.Port.CellsAt(mem, emon.Port.CellsAt(sg, (sgj * Sg) + GMfirst) + q));
+                            while (q < emon.Port.CellsAt(sg, (sgj * KSg) + GMcount)) {
+                                TrSegAddMember(mem, mf, emon.Port.CellsAt(mem, emon.Port.CellsAt(sg, (sgj * KSg) + GMfirst) + q));
                                 q += 1;
                             }
                             k += 1;
                         }
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GMfirst, mf);
-                        emon.Port.CellsSet(sg, (sgi * Sg) + GMcount, emon.Port.CellsLen(mem) - mf);
-                        if ((mdash * 4) <= (2 * emon.Port.CellsAt(sg, (sgi * Sg) + GThk))) {
-                            emon.Port.CellsSet(sg, (sgi * Sg) + GStyle, 3);
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GMfirst, mf);
+                        emon.Port.CellsSet(sg, (sgi * KSg) + GMcount, emon.Port.CellsLen(mem) - mf);
+                        if ((mdash * 4) <= (2 * emon.Port.CellsAt(sg, (sgi * KSg) + GThk))) {
+                            emon.Port.CellsSet(sg, (sgi * KSg) + GStyle, 3);
                         } else {
-                            emon.Port.CellsSet(sg, (sgi * Sg) + GStyle, 2);
+                            emon.Port.CellsSet(sg, (sgi * KSg) + GStyle, 2);
                         }
                         nrules += 1;
                     }
@@ -2215,32 +2231,32 @@ public static class Trace {
         }
         i = 0;
         while (i < ns) {
-            if (emon.Port.CellsAt(sg, (i * Sg) + GStyle) == 1) {
-                dx = emon.Port.CellsAt(sg, (i * Sg) + GBx) - emon.Port.CellsAt(sg, (i * Sg) + GAx);
-                dy = emon.Port.CellsAt(sg, (i * Sg) + GBy) - emon.Port.CellsAt(sg, (i * Sg) + GAy);
+            if (emon.Port.CellsAt(sg, (i * KSg) + GStyle) == 1) {
+                dx = emon.Port.CellsAt(sg, (i * KSg) + GBx) - emon.Port.CellsAt(sg, (i * KSg) + GAx);
+                dy = emon.Port.CellsAt(sg, (i * KSg) + GBy) - emon.Port.CellsAt(sg, (i * KSg) + GAy);
                 l1 = unchecked(((long) dx) * ((long) dx)) + unchecked(((long) dy) * ((long) dy));
                 li = TrMax(1, TrIsqrt(l1));
                 j = i + 1;
                 while (j < ns) {
-                    if (emon.Port.CellsAt(sg, (j * Sg) + GStyle) == 1) {
-                        ex = emon.Port.CellsAt(sg, (j * Sg) + GBx) - emon.Port.CellsAt(sg, (j * Sg) + GAx);
-                        ey = emon.Port.CellsAt(sg, (j * Sg) + GBy) - emon.Port.CellsAt(sg, (j * Sg) + GAy);
+                    if (emon.Port.CellsAt(sg, (j * KSg) + GStyle) == 1) {
+                        ex = emon.Port.CellsAt(sg, (j * KSg) + GBx) - emon.Port.CellsAt(sg, (j * KSg) + GAx);
+                        ey = emon.Port.CellsAt(sg, (j * KSg) + GBy) - emon.Port.CellsAt(sg, (j * KSg) + GAy);
                         l2 = unchecked(((long) ex) * ((long) ex)) + unchecked(((long) ey) * ((long) ey));
                         cr = unchecked(((long) dx) * ((long) ey)) - unchecked(((long) dy) * ((long) ex));
                         if ((cr * cr) <= (unchecked(l1 * l2) / ((long) 820))) {
                             // the perpendicular offset of j's midpoint from i's line, in doubled pixels
-                            mx = ((((long) emon.Port.CellsAt(sg, (j * Sg) + GAx)) + ((long) emon.Port.CellsAt(sg, (j * Sg) + GBx))) / ((long) 2)) - ((long) emon.Port.CellsAt(sg, (i * Sg) + GAx));
-                            my = ((((long) emon.Port.CellsAt(sg, (j * Sg) + GAy)) + ((long) emon.Port.CellsAt(sg, (j * Sg) + GBy))) / ((long) 2)) - ((long) emon.Port.CellsAt(sg, (i * Sg) + GAy));
+                            mx = ((((long) emon.Port.CellsAt(sg, (j * KSg) + GAx)) + ((long) emon.Port.CellsAt(sg, (j * KSg) + GBx))) / ((long) 2)) - ((long) emon.Port.CellsAt(sg, (i * KSg) + GAx));
+                            my = ((((long) emon.Port.CellsAt(sg, (j * KSg) + GAy)) + ((long) emon.Port.CellsAt(sg, (j * KSg) + GBy))) / ((long) 2)) - ((long) emon.Port.CellsAt(sg, (i * KSg) + GAy));
                             off = (unchecked(((long) dx) * my) - unchecked(((long) dy) * mx)) / ((long) li);
                             if (off < ((long) 0)) {
                                 off = ((long) 0) - off;
                             }
-                            thk = TrMax(emon.Port.CellsAt(sg, (i * Sg) + GThk), emon.Port.CellsAt(sg, (j * Sg) + GThk));
+                            thk = TrMax(emon.Port.CellsAt(sg, (i * KSg) + GThk), emon.Port.CellsAt(sg, (j * KSg) + GThk));
                             // thk is x4 pixels, so doubled pixels are thk / 2: between 1 and 3 thicknesses
                             if (((off * ((long) 2)) >= ((long) thk)) && ((off * ((long) 2)) <= (((long) thk) * ((long) 3)))) {
                                 // overlap along i's axis of j's extent with i's
-                                t0 = (unchecked(((long) (emon.Port.CellsAt(sg, (j * Sg) + GAx) - emon.Port.CellsAt(sg, (i * Sg) + GAx))) * ((long) dx)) + unchecked(((long) (emon.Port.CellsAt(sg, (j * Sg) + GAy) - emon.Port.CellsAt(sg, (i * Sg) + GAy))) * ((long) dy))) / ((long) li);
-                                t1 = (unchecked(((long) (emon.Port.CellsAt(sg, (j * Sg) + GBx) - emon.Port.CellsAt(sg, (i * Sg) + GAx))) * ((long) dx)) + unchecked(((long) (emon.Port.CellsAt(sg, (j * Sg) + GBy) - emon.Port.CellsAt(sg, (i * Sg) + GAy))) * ((long) dy))) / ((long) li);
+                                t0 = (unchecked(((long) (emon.Port.CellsAt(sg, (j * KSg) + GAx) - emon.Port.CellsAt(sg, (i * KSg) + GAx))) * ((long) dx)) + unchecked(((long) (emon.Port.CellsAt(sg, (j * KSg) + GAy) - emon.Port.CellsAt(sg, (i * KSg) + GAy))) * ((long) dy))) / ((long) li);
+                                t1 = (unchecked(((long) (emon.Port.CellsAt(sg, (j * KSg) + GBx) - emon.Port.CellsAt(sg, (i * KSg) + GAx))) * ((long) dx)) + unchecked(((long) (emon.Port.CellsAt(sg, (j * KSg) + GBy) - emon.Port.CellsAt(sg, (i * KSg) + GAy))) * ((long) dy))) / ((long) li);
                                 if (t1 < t0) {
                                     ov = t0;
                                     t0 = t1;
@@ -2255,8 +2271,8 @@ public static class Trace {
                                 ov = t1 - t0;
                                 small = (long) TrMin(li, TrIsqrt(l2));
                                 if ((ov > ((long) 0)) && ((ov * ((long) 10)) >= (small * ((long) 6)))) {
-                                    emon.Port.CellsSet(sg, (i * Sg) + GStyle, 4);
-                                    emon.Port.CellsSet(sg, (j * Sg) + GStyle, 4);
+                                    emon.Port.CellsSet(sg, (i * KSg) + GStyle, 4);
+                                    emon.Port.CellsSet(sg, (j * KSg) + GStyle, 4);
                                     n += 1;
                                 }
                             }
@@ -2291,17 +2307,16 @@ public static class Trace {
         int k = 0;
         int c = 0;
         int ir = 0;
-        int rf = 0;
         int thk = 0;
         int ln = 0;
         while (i < ns) {
-            style = emon.Port.CellsAt(sg, (i * Sg) + GStyle);
+            style = emon.Port.CellsAt(sg, (i * KSg) + GStyle);
             if (style > 0) {
-                ax = emon.Port.CellsAt(sg, (i * Sg) + GAx);
-                ay = emon.Port.CellsAt(sg, (i * Sg) + GAy);
-                bx = emon.Port.CellsAt(sg, (i * Sg) + GBx);
-                by = emon.Port.CellsAt(sg, (i * Sg) + GBy);
-                thk = emon.Port.CellsAt(sg, (i * Sg) + GThk);
+                ax = emon.Port.CellsAt(sg, (i * KSg) + GAx);
+                ay = emon.Port.CellsAt(sg, (i * KSg) + GAy);
+                bx = emon.Port.CellsAt(sg, (i * KSg) + GBx);
+                by = emon.Port.CellsAt(sg, (i * KSg) + GBy);
+                thk = emon.Port.CellsAt(sg, (i * KSg) + GThk);
                 thkpx = (thk + 3) / 4;
                 x0 = (TrMin(ax, bx) - thkpx) >> (1);
                 y0 = (TrMin(ay, by) - thkpx) >> (1);
@@ -2313,7 +2328,7 @@ public static class Trace {
                 Evidence.RlSet(rules, r, Evidence.RlfLx1(), TrH2cpt(views, view, 0, bx, by));
                 Evidence.RlSet(rules, r, Evidence.RlfLy1(), TrH2cpt(views, view, 1, bx, by));
                 Evidence.RlSet(rules, r, Evidence.RlfThick(), TrLenCpt(thk, dpi100 * 4));
-                c = emon.Port.CellsAt(sg, (i * Sg) + GComp);
+                c = emon.Port.CellsAt(sg, (i * KSg) + GComp);
                 ir = TrCg(cs, c, CInkrow);
                 Evidence.RlSet(rules, r, Evidence.RlfInk(), ir);
                 if (ir >= 0) {
@@ -2332,12 +2347,12 @@ public static class Trace {
                     Evidence.RlSet(rules, r, Evidence.RlfStyle(), Evidence.RsSolid());
                 }
                 // confidence
-                ln = emon.Port.CellsAt(sg, (i * Sg) + GLen);
+                ln = emon.Port.CellsAt(sg, (i * KSg) + GLen);
                 conf = 1000;
                 if ((style == 1) || (style == 4)) {
-                    conf -= TrPermille(emon.Port.CellsAt(sg, (i * Sg) + GGaps), TrMax(1, ln));
+                    conf -= TrPermille(emon.Port.CellsAt(sg, (i * KSg) + GGaps), TrMax(1, ln));
                 }
-                if ((2 * ((emon.Port.CellsAt(sg, (i * Sg) + GMaxw) - emon.Port.CellsAt(sg, (i * Sg) + GMinw)) - 1)) > ((thk + 2) / 4)) {
+                if ((2 * ((emon.Port.CellsAt(sg, (i * KSg) + GMaxw) - emon.Port.CellsAt(sg, (i * KSg) + GMinw)) - 1)) > ((thk + 2) / 4)) {
                     conf -= 300;
                 }
                 if (conf < 0) {
@@ -2346,10 +2361,10 @@ public static class Trace {
                 Evidence.RlSet(rules, r, Evidence.RlfConf(), conf);
                 // members
                 Evidence.RlSet(rules, r, Evidence.RlfRfirst(), emon.Port.CellsLen(refs) / 2);
-                Evidence.RlSet(rules, r, Evidence.RlfRcount(), emon.Port.CellsAt(sg, (i * Sg) + GMcount));
+                Evidence.RlSet(rules, r, Evidence.RlfRcount(), emon.Port.CellsAt(sg, (i * KSg) + GMcount));
                 k = 0;
-                while (k < emon.Port.CellsAt(sg, (i * Sg) + GMcount)) {
-                    c = emon.Port.CellsAt(mem, emon.Port.CellsAt(sg, (i * Sg) + GMfirst) + k);
+                while (k < emon.Port.CellsAt(sg, (i * KSg) + GMcount)) {
+                    c = emon.Port.CellsAt(mem, emon.Port.CellsAt(sg, (i * KSg) + GMfirst) + k);
                     emon.Port.CellsPush(refs, Evidence.EaComponents());
                     emon.Port.CellsPush(refs, TrCg(cs, c, CEvrow));
                     if (TrCg(cs, c, CRule) < 0) {
@@ -2407,5 +2422,1166 @@ public static class Trace {
             c += 1;
         }
         return rows;
+    }
+    internal static int TrCornerW(emon.Port.Cells raw, int i, int m) {
+        // The weight of corner i of a closed contour: the lengths of its two edges (axis-aligned, so Manhattan).
+        int p = TrPtWrap(i + (m - 1), m);
+        int q = TrPtWrap(i + 1, m);
+        return (TrAbs(emon.Port.CellsAt(raw, i * 2) - emon.Port.CellsAt(raw, p * 2)) + TrAbs(emon.Port.CellsAt(raw, (i * 2) + 1) - emon.Port.CellsAt(raw, (p * 2) + 1))) + (TrAbs(emon.Port.CellsAt(raw, q * 2) - emon.Port.CellsAt(raw, i * 2)) + TrAbs(emon.Port.CellsAt(raw, (q * 2) + 1) - emon.Port.CellsAt(raw, (i * 2) + 1)));
+    }
+    internal static int TrRotU(int x, int y, int co, int si) {
+        // x * cos - y * sin in the frame of an angle whose cos and sin are 16.16 (y down): the coordinate ALONG that direction.
+        return (int) ((long)((ulong)((unchecked(((long) x) * ((long) co)) + unchecked(((long) (0 - y)) * ((long) si))) + ((long) 32768)) >> 16));
+    }
+    internal static int TrRotV(int x, int y, int co, int si) {
+        // x * sin + y * cos: the coordinate ACROSS it.
+        return (int) ((long)((ulong)((unchecked(((long) x) * ((long) si)) + unchecked(((long) y) * ((long) co))) + ((long) 32768)) >> 16));
+    }
+    internal static int TrRectFit(emon.Port.Cells raw, int m, emon.Port.Cells simp, int k, emon.Port.Cells res) {
+        // Fit a rectangle to the simplified polygon `simp` (k corners) and the raw contour (m corners): the dominant direction is the
+        // longest edge's; edges of 4 px or more must lie within 3 degrees of it or of its perpendicular, off-axis edges being at most 1/8
+        // of the perimeter. `res` gets: angle (centi-degrees, 0..9000), centre x2 y2 (doubled px), radii u2 v2 (doubled px), mean
+        // residual per mille of the smaller radius. Answers 1 when it is a rectangle (residual under 40), else 0.
+        int i = 0;
+        int j = 0;
+        int dx = 0;
+        int dy = 0;
+        int le = 0;
+        int lbest = 0;
+        int theta = 0;
+        int perim = 0;
+        int off = 0;
+        int r = 0;
+        int u = 0;
+        int v = 0;
+        int umin = 100000000;
+        int umax = -100000000;
+        int vmin = 100000000;
+        int vmax = -100000000;
+        long sum = 0;
+        int d = 0;
+        int co = 0;
+        int si = 0;
+        int ru2 = 0;
+        int rv2 = 0;
+        if (k < 4) {
+            return 0;
+        }
+        i = 0;
+        while (i < k) {
+            j = TrPtWrap(i + 1, k);
+            dx = emon.Port.CellsAt(simp, j * 2) - emon.Port.CellsAt(simp, i * 2);
+            dy = emon.Port.CellsAt(simp, (j * 2) + 1) - emon.Port.CellsAt(simp, (i * 2) + 1);
+            le = TrIsqrt(unchecked(((long) dx) * ((long) dx)) + unchecked(((long) dy) * ((long) dy)));
+            perim += le;
+            if (le > lbest) {
+                lbest = le;
+                theta = Evidence.EvAngle(dx, dy);
+            }
+            i += 1;
+        }
+        theta = theta % 9000;
+        i = 0;
+        while (i < k) {
+            j = TrPtWrap(i + 1, k);
+            dx = emon.Port.CellsAt(simp, j * 2) - emon.Port.CellsAt(simp, i * 2);
+            dy = emon.Port.CellsAt(simp, (j * 2) + 1) - emon.Port.CellsAt(simp, (i * 2) + 1);
+            le = TrIsqrt(unchecked(((long) dx) * ((long) dx)) + unchecked(((long) dy) * ((long) dy)));
+            if (le >= 4) {
+                r = (((Evidence.EvAngle(dx, dy) % 9000) - theta) + 9000) % 9000;
+                if ((r > 300) && (r < 8700)) {
+                    off += le;
+                }
+            }
+            i += 1;
+        }
+        if ((off * 8) > perim) {
+            return 0;
+        }
+        co = Evidence.EvCos(theta);
+        si = Evidence.EvSin(theta);
+        i = 0;
+        while (i < m) {
+            u = TrRotU(emon.Port.CellsAt(raw, i * 2), emon.Port.CellsAt(raw, (i * 2) + 1), co, si);
+            v = TrRotV(emon.Port.CellsAt(raw, i * 2), emon.Port.CellsAt(raw, (i * 2) + 1), co, si);
+            if (u < umin) {
+                umin = u;
+            }
+            if (u > umax) {
+                umax = u;
+            }
+            if (v < vmin) {
+                vmin = v;
+            }
+            if (v > vmax) {
+                vmax = v;
+            }
+            i += 1;
+        }
+        ru2 = umax - umin;
+        rv2 = vmax - vmin;
+        if ((ru2 < 4) || (rv2 < 4)) {
+            return 0;
+        }
+        i = 0;
+        while (i < m) {
+            u = TrRotU(emon.Port.CellsAt(raw, i * 2), emon.Port.CellsAt(raw, (i * 2) + 1), co, si);
+            v = TrRotV(emon.Port.CellsAt(raw, i * 2), emon.Port.CellsAt(raw, (i * 2) + 1), co, si);
+            d = TrMin(TrMin(TrAbs(u - umin), TrAbs(u - umax)), TrMin(TrAbs(v - vmin), TrAbs(v - vmax)));
+            sum += (long) d;
+            i += 1;
+        }
+        d = (int) ((sum * ((long) 2000)) / (((long) m) * ((long) TrMin(ru2, rv2))));
+        emon.Port.CellsSet(res, 0, theta);
+        // the centre back in the pixel frame: x = u cos + v sin, y = -u sin + v cos
+        u = (umin + umax) / 2;
+        v = (vmin + vmax) / 2;
+        emon.Port.CellsSet(res, 1, (int) ((long)((ulong)((unchecked(((long) u) * ((long) co)) + unchecked(((long) v) * ((long) si))) + ((long) 32768)) >> 16)));
+        emon.Port.CellsSet(res, 2, (int) ((long)((ulong)((unchecked(((long) (0 - u)) * ((long) si)) + unchecked(((long) v) * ((long) co))) + ((long) 32768)) >> 16)));
+        emon.Port.CellsSet(res, 3, ru2);
+        emon.Port.CellsSet(res, 4, rv2);
+        emon.Port.CellsSet(res, 5, d);
+        if (d < 40) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int TrEllipseFit(emon.Port.Cells raw, int m, emon.Port.Cells res) {
+        // Fit an ellipse to the raw contour by moments: the corners weighted by the length of their two edges (so the samples are
+        // uniform along the boundary), the principal axis from the covariance, the radii from the extent along and across it. `res` gets
+        // the angle (0..18000), centre x2 y2 (doubled px), radii u2 v2 (doubled px, as extents) and the mean residual per mille of the
+        // ellipse equation. Answers 1 when it is an ellipse (residual under 40, at least 12 corners), else 0.
+        int i = 0;
+        int w = 0;
+        long sw = 0;
+        long sx = 0;
+        long sy = 0;
+        long sxx = 0;
+        long syy = 0;
+        long sxy = 0;
+        int cx = 0;
+        int cy = 0;
+        int dx = 0;
+        int dy = 0;
+        int alpha = 0;
+        int co = 0;
+        int si = 0;
+        int u = 0;
+        int v = 0;
+        int umin = 100000000;
+        int umax = -100000000;
+        int vmin = 100000000;
+        int vmax = -100000000;
+        long sum = 0;
+        long n2 = 0;
+        long tg = 0;
+        int ru = 0;
+        int rv = 0;
+        int d = 0;
+        if (m < 12) {
+            return 0;
+        }
+        i = 0;
+        while (i < m) {
+            w = TrCornerW(raw, i, m);
+            sw += (long) w;
+            sx += unchecked(((long) w) * ((long) emon.Port.CellsAt(raw, i * 2)));
+            sy += unchecked(((long) w) * ((long) emon.Port.CellsAt(raw, (i * 2) + 1)));
+            i += 1;
+        }
+        if (sw <= ((long) 0)) {
+            return 0;
+        }
+        cx = (int) (sx / sw);
+        cy = (int) (sy / sw);
+        i = 0;
+        while (i < m) {
+            w = TrCornerW(raw, i, m);
+            dx = emon.Port.CellsAt(raw, i * 2) - cx;
+            dy = emon.Port.CellsAt(raw, (i * 2) + 1) - cy;
+            sxx += unchecked(((long) w) * unchecked(((long) dx) * ((long) dx)));
+            syy += unchecked(((long) w) * unchecked(((long) dy) * ((long) dy)));
+            sxy += unchecked(((long) w) * unchecked(((long) dx) * ((long) dy)));
+            i += 1;
+        }
+        // 2 alpha = the angle of (sxx - syy, 2 sxy) as `ev-angle` spells it (y down)
+        alpha = Evidence.EvAngle((int) ((sxx - syy) / TrMax64((long) 1, sw / ((long) 64))), (int) ((((long) 2) * sxy) / TrMax64((long) 1, sw / ((long) 64)))) / 2;
+        co = Evidence.EvCos(alpha);
+        si = Evidence.EvSin(alpha);
+        i = 0;
+        while (i < m) {
+            u = TrRotU(emon.Port.CellsAt(raw, i * 2), emon.Port.CellsAt(raw, (i * 2) + 1), co, si);
+            v = TrRotV(emon.Port.CellsAt(raw, i * 2), emon.Port.CellsAt(raw, (i * 2) + 1), co, si);
+            if (u < umin) {
+                umin = u;
+            }
+            if (u > umax) {
+                umax = u;
+            }
+            if (v < vmin) {
+                vmin = v;
+            }
+            if (v > vmax) {
+                vmax = v;
+            }
+            i += 1;
+        }
+        ru = umax - umin;
+        rv = vmax - vmin;
+        if ((ru < 8) || (rv < 8)) {
+            return 0;
+        }
+        // radii are half the extents: work in doubled pixels, so the extents themselves are the doubled radii
+        i = 0;
+        while (i < m) {
+            u = (2 * TrRotU(emon.Port.CellsAt(raw, i * 2), emon.Port.CellsAt(raw, (i * 2) + 1), co, si)) - (umin + umax);
+            v = (2 * TrRotV(emon.Port.CellsAt(raw, i * 2), emon.Port.CellsAt(raw, (i * 2) + 1), co, si)) - (vmin + vmax);
+            // (u / ru)^2 + (v / rv)^2 = 1 with u and v now doubled offsets and ru, rv the doubled radii: distance 1000 * (n / (ru rv) - 1)
+            n2 = unchecked(unchecked(((long) u) * ((long) u)) * unchecked(((long) rv) * ((long) rv))) + unchecked(unchecked(((long) v) * ((long) v)) * unchecked(((long) ru) * ((long) ru)));
+            tg = unchecked(((long) ru) * ((long) rv));
+            sum += TrAbs64(((((long) TrIsqrt(n2)) * ((long) 1000)) / tg) - ((long) 1000));
+            i += 1;
+        }
+        d = (int) (sum / ((long) m));
+        emon.Port.CellsSet(res, 0, alpha);
+        emon.Port.CellsSet(res, 1, (int) ((long)((ulong)((unchecked(((long) ((umin + umax) / 2)) * ((long) co)) + unchecked(((long) ((vmin + vmax) / 2)) * ((long) si))) + ((long) 32768)) >> 16)));
+        emon.Port.CellsSet(res, 2, (int) ((long)((ulong)((unchecked(((long) (0 - ((umin + umax) / 2))) * ((long) si)) + unchecked(((long) ((vmin + vmax) / 2)) * ((long) co))) + ((long) 32768)) >> 16)));
+        emon.Port.CellsSet(res, 3, ru);
+        emon.Port.CellsSet(res, 4, rv);
+        emon.Port.CellsSet(res, 5, d);
+        if (d < 40) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int TrEmitPoly(emon.Port.Cells views, int view, emon.Port.Cells pts, emon.Port.Cells simp, int k) {
+        // Append the closed polygon `simp` (k corners, x y px) to `pts` as centipoints: move, line ..., close. Answers its first row.
+        int first = emon.Port.CellsLen(pts) / 3;
+        int i = 0;
+        while (i < k) {
+            emon.Port.CellsPush(pts, Evidence.VwPxToCpt(views, view, 0, emon.Port.CellsAt(simp, i * 2), emon.Port.CellsAt(simp, (i * 2) + 1)));
+            emon.Port.CellsPush(pts, Evidence.VwPxToCpt(views, view, 1, emon.Port.CellsAt(simp, i * 2), emon.Port.CellsAt(simp, (i * 2) + 1)));
+            if (i == 0) {
+                emon.Port.CellsPush(pts, Evidence.PoMove());
+            } else {
+                emon.Port.CellsPush(pts, Evidence.PoLine());
+            }
+            i += 1;
+        }
+        emon.Port.CellsPush(pts, emon.Port.CellsAt(pts, first * 3));
+        emon.Port.CellsPush(pts, emon.Port.CellsAt(pts, (first * 3) + 1));
+        emon.Port.CellsPush(pts, Evidence.PoClose());
+        return first;
+    }
+    internal static int TrRingTest(emon.Port.Cells rn, emon.Port.Cells ri, int comp, int cx, int cy, int ru2) {
+        // 1 when component `comp`'s runs in the row through (cx, cy) are exactly two, the gap between them is a hole at least 3/10 of
+        // the radius wide (`ru2` is the diameter) and centred within 15 per cent of the radius: an annulus.
+        int r = emon.Port.CellsAt(ri, cy);
+        int re = emon.Port.CellsAt(ri, cy + 1);
+        int n = 0;
+        int le = 0;
+        int rs = 0;
+        int mid = 0;
+        while (r < re) {
+            if (TrRg(rn, r, 5) == comp) {
+                if (n == 0) {
+                    le = TrRg(rn, r, 2);
+                }
+                rs = TrRg(rn, r, 1);
+                n += 1;
+            }
+            r += 1;
+        }
+        if (n != 2) {
+            return 0;
+        }
+        if ((10 * (rs - le)) < (3 * ru2)) {
+            return 0;
+        }
+        if ((rs - le) >= ru2) {
+            return 0;
+        }
+        mid = (le + rs) / 2;
+        if ((100 * TrAbs(mid - cx)) > (15 * (ru2 / 2))) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int TrShapes(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Bitmap bin, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells comps, emon.Port.Cells prims, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells inks, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5) {
+        // Contours (SPEC 8.2): the outer boundary of every LARGE component that gave no rule, traced on the binary view, simplified,
+        // written to `pts` (the `components` row's `pfirst pcount`); and one primitive each: `rect`, `circle`/`ellipse` (or `ring`: an
+        // annulus), else `polygon` (up to 12 corners) or `curve`. Fit residuals are per mille of the radius and the confidence is 1000
+        // less eight times it. Answers the number of primitives. `s1`..`s5` are scratch (s1 the raw corners, s4 the simplified).
+        int nc = emon.Port.CellsLen(cs) / 24;
+        int c = 0;
+        int rr = 0;
+        int m = 0;
+        int k = 0;
+        int i = 0;
+        int np = 0;
+        int pf = 0;
+        int kind = 0;
+        int fit = 0;
+        int prow = 0;
+        int evr = 0;
+        int cx = 0;
+        int cy = 0;
+        int ru2 = 0;
+        int rv2 = 0;
+        int th = 0;
+        int co = 0;
+        int si = 0;
+        int ir = 0;
+        int flags = 0;
+        int fill = 0;
+        int conf = 0;
+        int ax = 0;
+        int ay = 0;
+        int hu = 0;
+        int hv = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int npts = 0;
+        int pcf = 0;
+        c = 0;
+        while (c < nc) {
+            if ((TrCg(cs, c, CKind) == TrKLarge()) && (TrCg(cs, c, CRule) < 0)) {
+                rr = TrCg(cs, c, CRoot);
+                m = TrContourRaw(bin, TrRg(rn, rr, 1), TrRg(rn, rr, 0), s1, TrMaxContour());
+                if (m >= 4) {
+                    TrSimplify(s1, m, 1, TrDpEps2(), s2, s3);
+                    emon.Port.CellsDrop(s4, 0);
+                    k = 0;
+                    i = 0;
+                    while (i < m) {
+                        if (emon.Port.CellsAt(s2, i) == 1) {
+                            emon.Port.CellsPush(s4, emon.Port.CellsAt(s1, i * 2));
+                            emon.Port.CellsPush(s4, emon.Port.CellsAt(s1, (i * 2) + 1));
+                            k += 1;
+                        }
+                        i += 1;
+                    }
+                    pf = TrEmitPoly(views, view, pts, s4, k);
+                    npts = k + 1;
+                    evr = TrCg(cs, c, CEvrow);
+                    Evidence.CoSet(comps, evr, Evidence.CfPfirst(), pf);
+                    Evidence.CoSet(comps, evr, Evidence.CfPcount(), npts);
+                    // the fit
+                    emon.Port.CellsDrop(s5, 0);
+                    emon.Port.CellsGrow(s5, 8, 0);
+                    kind = 0;
+                    pcf = pf;
+                    flags = 1;
+                    if (TrRectFit(s1, m, s4, k, s5) == 1) {
+                        kind = Evidence.PmRect();
+                        th = emon.Port.CellsAt(s5, 0);
+                    } else if (TrEllipseFit(s1, m, s5) == 1) {
+                        th = emon.Port.CellsAt(s5, 0);
+                        if ((20 * TrAbs(emon.Port.CellsAt(s5, 3) - emon.Port.CellsAt(s5, 4))) < TrMax(emon.Port.CellsAt(s5, 3), emon.Port.CellsAt(s5, 4))) {
+                            kind = Evidence.PmCircle();
+                        } else {
+                            kind = Evidence.PmEllipse();
+                        }
+                    } else {
+                        if (k <= 12) {
+                            kind = Evidence.PmPolygon();
+                        } else {
+                            kind = Evidence.PmCurve();
+                        }
+                    }
+                    fit = emon.Port.CellsAt(s5, 5);
+                    cx = emon.Port.CellsAt(s5, 1);
+                    cy = emon.Port.CellsAt(s5, 2);
+                    ru2 = emon.Port.CellsAt(s5, 3);
+                    rv2 = emon.Port.CellsAt(s5, 4);
+                    if ((kind == Evidence.PmPolygon()) || (kind == Evidence.PmCurve())) {
+                        cx = (TrCg(cs, c, CLeft) + TrCg(cs, c, CRight)) / 2;
+                        cy = (TrCg(cs, c, CTop) + TrCg(cs, c, CBottom)) / 2;
+                        ru2 = TrCg(cs, c, CRight) - TrCg(cs, c, CLeft);
+                        rv2 = TrCg(cs, c, CBottom) - TrCg(cs, c, CTop);
+                        th = 0;
+                        if (kind == Evidence.PmPolygon()) {
+                            conf = 500;
+                        } else {
+                            conf = 300;
+                        }
+                    }
+                    if ((kind == Evidence.PmRect()) || (kind == Evidence.PmCircle()) || (kind == Evidence.PmEllipse())) {
+                        conf = TrMax(0, 1000 - (8 * fit));
+                    }
+                    if (((kind == Evidence.PmCircle()) || (kind == Evidence.PmEllipse())) && (TrCg(cs, c, CHoles) > 0)) {
+                        if (TrRingTest(rn, ri, c, cx, cy, ru2) == 1) {
+                            kind = Evidence.PmRing();
+                        }
+                    }
+                    // the fill: ink over the fitted shape's area
+                    if (kind == Evidence.PmRect()) {
+                        fill = TrPermille(TrCg(cs, c, CInk), ru2 * rv2);
+                    } else {
+                        fill = TrPermille(TrCg(cs, c, CInk), (((ru2 * rv2) / 100) * 785) / 10);
+                    }
+                    if (fill >= 800) {
+                        flags += 2;
+                    }
+                    // a rect is written as its four corners
+                    co = Evidence.EvCos(th);
+                    si = Evidence.EvSin(th);
+                    if (kind == Evidence.PmRect()) {
+                        emon.Port.CellsDrop(s4, 0);
+                        i = 0;
+                        while (i < 4) {
+                            if ((i == 0) || (i == 3)) {
+                                hu = 0 - ru2;
+                            } else {
+                                hu = ru2;
+                            }
+                            if (i < 2) {
+                                hv = 0 - rv2;
+                            } else {
+                                hv = rv2;
+                            }
+                            emon.Port.CellsPush(s4, cx + ((int) ((long)((ulong)(unchecked(((long) hu) * ((long) co)) + unchecked(((long) hv) * ((long) si))) >> 17))));
+                            emon.Port.CellsPush(s4, cy + ((int) ((long)((ulong)(unchecked(((long) (0 - hu)) * ((long) si)) + unchecked(((long) hv) * ((long) co))) >> 17))));
+                            i += 1;
+                        }
+                        pcf = TrEmitPoly(views, view, pts, s4, 4);
+                    }
+                    x0 = Evidence.VwBoxToCpt(views, view, 0, TrCg(cs, c, CLeft), TrCg(cs, c, CTop), TrCg(cs, c, CRight) - TrCg(cs, c, CLeft), TrCg(cs, c, CBottom) - TrCg(cs, c, CTop));
+                    y0 = Evidence.VwBoxToCpt(views, view, 1, TrCg(cs, c, CLeft), TrCg(cs, c, CTop), TrCg(cs, c, CRight) - TrCg(cs, c, CLeft), TrCg(cs, c, CBottom) - TrCg(cs, c, CTop));
+                    x1 = Evidence.VwBoxToCpt(views, view, 2, TrCg(cs, c, CLeft), TrCg(cs, c, CTop), TrCg(cs, c, CRight) - TrCg(cs, c, CLeft), TrCg(cs, c, CBottom) - TrCg(cs, c, CTop));
+                    y1 = Evidence.VwBoxToCpt(views, view, 3, TrCg(cs, c, CLeft), TrCg(cs, c, CTop), TrCg(cs, c, CRight) - TrCg(cs, c, CLeft), TrCg(cs, c, CBottom) - TrCg(cs, c, CTop));
+                    prow = Evidence.PmNew(prims, page, x0, y0, x1, y1, kind);
+                    Evidence.PmSet(prims, prow, Evidence.PmfView(), view);
+                    Evidence.PmSet(prims, prow, Evidence.PmfCx(), Evidence.VwPxToCpt(views, view, 0, cx, cy));
+                    Evidence.PmSet(prims, prow, Evidence.PmfCy(), Evidence.VwPxToCpt(views, view, 1, cx, cy));
+                    Evidence.PmSet(prims, prow, Evidence.PmfRx(), TrLenCpt(ru2, dpi100 * 2));
+                    Evidence.PmSet(prims, prow, Evidence.PmfRy(), TrLenCpt(rv2, dpi100 * 2));
+                    ax = cx + ((int) ((long)((ulong)(unchecked(((long) 64) * ((long) co))) >> 16)));
+                    ay = cy - ((int) ((long)((ulong)(unchecked(((long) 64) * ((long) si))) >> 16)));
+                    Evidence.PmSet(prims, prow, Evidence.PmfRot(), Evidence.EvAngle(Evidence.VwPxToCpt(views, view, 0, ax, ay) - Evidence.VwPxToCpt(views, view, 0, cx, cy), Evidence.VwPxToCpt(views, view, 1, ax, ay) - Evidence.VwPxToCpt(views, view, 1, cx, cy)));
+                    Evidence.PmSet(prims, prow, Evidence.PmfStroke(), TrLenCpt(TrStrokePx(cs, c), dpi100));
+                    ir = TrCg(cs, c, CInkrow);
+                    Evidence.PmSet(prims, prow, Evidence.PmfInk(), ir);
+                    if (ir >= 0) {
+                        Evidence.PmSet(prims, prow, Evidence.PmfColor(), Evidence.IkGet(inks, ir, Evidence.IkfColor()));
+                    }
+                    Evidence.PmSet(prims, prow, Evidence.PmfFill(), fill);
+                    Evidence.PmSet(prims, prow, Evidence.PmfConf(), conf);
+                    Evidence.PmSet(prims, prow, Evidence.PmfPfirst(), pcf);
+                    if (kind == Evidence.PmRect()) {
+                        Evidence.PmSet(prims, prow, Evidence.PmfPcount(), 5);
+                    } else {
+                        Evidence.PmSet(prims, prow, Evidence.PmfPcount(), npts);
+                    }
+                    Evidence.PmSet(prims, prow, Evidence.PmfRfirst(), emon.Port.CellsLen(refs) / 2);
+                    Evidence.PmSet(prims, prow, Evidence.PmfRcount(), 1);
+                    emon.Port.CellsPush(refs, Evidence.EaComponents());
+                    emon.Port.CellsPush(refs, evr);
+                    Evidence.PmSet(prims, prow, Evidence.PmfFlags(), flags);
+                    TrCset(cs, c, CPrim, prow);
+                    TrCset(cs, c, CCx2, cx);
+                    TrCset(cs, c, CCy2, cy);
+                    np += 1;
+                }
+            }
+            c += 1;
+        }
+        return np;
+    }
+    public static int TrDoubleRings(emon.Port.Cells cs, emon.Port.Cells prims, emon.Port.Cells refs) {
+        // A circle or ring whose PARENT component also carries a circle or ring primitive, concentric within 15 per cent of the outer
+        // radius and smaller than it (0.4 .. 0.97 of it), makes the parent's primitive a `ring` with the `double` flag, its members
+        // both components. Answers how many rings were doubled.
+        int nc = emon.Port.CellsLen(cs) / 24;
+        int c = 0;
+        int p = 0;
+        int pr = 0;
+        int cr = 0;
+        int rp = 0;
+        int rc = 0;
+        int n = 0;
+        while (c < nc) {
+            p = TrCg(cs, c, CParent);
+            cr = TrCg(cs, c, CPrim);
+            if ((p >= 0) && (cr >= 0)) {
+                pr = TrCg(cs, p, CPrim);
+                if (pr >= 0) {
+                    if (((Evidence.PmGet(prims, pr, Evidence.PmfKind()) == Evidence.PmCircle()) || (Evidence.PmGet(prims, pr, Evidence.PmfKind()) == Evidence.PmRing())) && ((Evidence.PmGet(prims, cr, Evidence.PmfKind()) == Evidence.PmCircle()) || (Evidence.PmGet(prims, cr, Evidence.PmfKind()) == Evidence.PmRing()))) {
+                        rp = Evidence.PmGet(prims, pr, Evidence.PmfRx());
+                        rc = Evidence.PmGet(prims, cr, Evidence.PmfRx());
+                        if (((rc * 100) > (rp * 40)) && ((rc * 100) < (rp * 97))) {
+                            if (((100 * TrAbs(Evidence.PmGet(prims, pr, Evidence.PmfCx()) - Evidence.PmGet(prims, cr, Evidence.PmfCx()))) <= (15 * rp)) && ((100 * TrAbs(Evidence.PmGet(prims, pr, Evidence.PmfCy()) - Evidence.PmGet(prims, cr, Evidence.PmfCy()))) <= (15 * rp))) {
+                                if ((Evidence.PmGet(prims, pr, Evidence.PmfFlags()) & 4) == 0) {
+                                    Evidence.PmSet(prims, pr, Evidence.PmfKind(), Evidence.PmRing());
+                                    rp = Evidence.PmGet(prims, pr, Evidence.PmfFlags());
+                                    Evidence.PmSet(prims, pr, Evidence.PmfFlags(), rp + 4);
+                                    Evidence.PmSet(prims, pr, Evidence.PmfRfirst(), emon.Port.CellsLen(refs) / 2);
+                                    Evidence.PmSet(prims, pr, Evidence.PmfRcount(), 2);
+                                    emon.Port.CellsPush(refs, Evidence.EaComponents());
+                                    emon.Port.CellsPush(refs, TrCg(cs, p, CEvrow));
+                                    emon.Port.CellsPush(refs, Evidence.EaComponents());
+                                    emon.Port.CellsPush(refs, TrCg(cs, c, CEvrow));
+                                    n += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            c += 1;
+        }
+        return n;
+    }
+    public static int TrTints(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Bitmap mask, int inkrow, emon.Port.Cells inks, emon.Port.Cells prims, emon.Port.Cells refs, emon.Port.Cells s1, emon.Port.Cells s2) {
+        // Shading and header fills (D226): on one `light` or `background` ink MASK, the row runs at least `tr-fill-min` long are merged
+        // into rectangles whose consecutive rows share their x-extent within `tr-fill-tol`; a rectangle at least `tr-fill-min` each way
+        // becomes a `rect` primitive with the flags `closed`, `filled` and `tint`, the layer's colour, fill = the mask's coverage of its
+        // box per mille and confidence = that coverage. `s1` `s2` are scratch (the rectangles open in the previous and the current row;
+        // 10 cells each: x0 x1 top rows ink minx maxx). Answers the tints written.
+        int w = emon.Port.BitmapW(mask);
+        int h = emon.Port.BitmapH(mask);
+        int fmin = TrFillMin(dpi100);
+        int tol = TrFillTol();
+        int y = 0;
+        int x = 0;
+        int e = 0;
+        int np = 0;
+        int nc = 0;
+        int i = 0;
+        int hit = 0;
+        int n = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int cov = 0;
+        int prow = 0;
+        emon.Port.CellsDrop(s1, 0);
+        emon.Port.CellsDrop(s2, 0);
+        y = 0;
+        while (y <= h) {
+            emon.Port.CellsDrop(s2, 0);
+            nc = 0;
+            if (y < h) {
+                x = emon.Port.BitmapNextNonzero(mask, 0, y);
+                while (x < w) {
+                    e = x;
+                    while ((e < w) && (emon.Port.BitmapU8(mask, e, y, 0) != 0)) {
+                        e += 1;
+                    }
+                    if ((e - x) >= fmin) {
+                        hit = -1;
+                        i = 0;
+                        while (i < np) {
+                            if ((emon.Port.CellsAt(s1, (i * 10) + 9) == 0) && ((TrAbs(x - emon.Port.CellsAt(s1, i * 10)) <= tol) && (TrAbs(e - emon.Port.CellsAt(s1, (i * 10) + 1)) <= tol))) {
+                                if (hit < 0) {
+                                    hit = i;
+                                }
+                            }
+                            i += 1;
+                        }
+                        if (hit >= 0) {
+                            emon.Port.CellsSet(s1, (hit * 10) + 9, 1);
+                            emon.Port.CellsPush(s2, x);
+                            emon.Port.CellsPush(s2, e);
+                            emon.Port.CellsPush(s2, emon.Port.CellsAt(s1, (hit * 10) + 2));
+                            emon.Port.CellsPush(s2, emon.Port.CellsAt(s1, (hit * 10) + 3) + 1);
+                            emon.Port.CellsPush(s2, emon.Port.CellsAt(s1, (hit * 10) + 4) + (e - x));
+                            emon.Port.CellsPush(s2, TrMin(emon.Port.CellsAt(s1, (hit * 10) + 5), x));
+                            emon.Port.CellsPush(s2, TrMax(emon.Port.CellsAt(s1, (hit * 10) + 6), e));
+                            emon.Port.CellsPush(s2, 0);
+                            emon.Port.CellsPush(s2, 0);
+                            emon.Port.CellsPush(s2, 0);
+                        } else {
+                            emon.Port.CellsPush(s2, x);
+                            emon.Port.CellsPush(s2, e);
+                            emon.Port.CellsPush(s2, y);
+                            emon.Port.CellsPush(s2, 1);
+                            emon.Port.CellsPush(s2, e - x);
+                            emon.Port.CellsPush(s2, x);
+                            emon.Port.CellsPush(s2, e);
+                            emon.Port.CellsPush(s2, 0);
+                            emon.Port.CellsPush(s2, 0);
+                            emon.Port.CellsPush(s2, 0);
+                        }
+                        nc += 1;
+                    }
+                    x = emon.Port.BitmapNextNonzero(mask, e, y);
+                }
+            }
+            // rectangles of the previous row that nothing continued are finished
+            i = 0;
+            while (i < np) {
+                if (emon.Port.CellsAt(s1, (i * 10) + 9) == 0) {
+                    if (emon.Port.CellsAt(s1, (i * 10) + 3) >= fmin) {
+                        if ((emon.Port.CellsAt(s1, (i * 10) + 6) - emon.Port.CellsAt(s1, (i * 10) + 5)) >= fmin) {
+                            x0 = emon.Port.CellsAt(s1, (i * 10) + 5);
+                            x1 = emon.Port.CellsAt(s1, (i * 10) + 6);
+                            y0 = emon.Port.CellsAt(s1, (i * 10) + 2);
+                            y1 = y0 + emon.Port.CellsAt(s1, (i * 10) + 3);
+                            cov = TrPermille(emon.Port.CellsAt(s1, (i * 10) + 4), (x1 - x0) * (y1 - y0));
+                            prow = Evidence.PmNew(prims, page, Evidence.VwBoxToCpt(views, view, 0, x0, y0, x1 - x0, y1 - y0), Evidence.VwBoxToCpt(views, view, 1, x0, y0, x1 - x0, y1 - y0), Evidence.VwBoxToCpt(views, view, 2, x0, y0, x1 - x0, y1 - y0), Evidence.VwBoxToCpt(views, view, 3, x0, y0, x1 - x0, y1 - y0), Evidence.PmRect());
+                            Evidence.PmSet(prims, prow, Evidence.PmfView(), view);
+                            Evidence.PmSet(prims, prow, Evidence.PmfCx(), Evidence.VwPxToCpt(views, view, 0, (x0 + x1) / 2, (y0 + y1) / 2));
+                            Evidence.PmSet(prims, prow, Evidence.PmfCy(), Evidence.VwPxToCpt(views, view, 1, (x0 + x1) / 2, (y0 + y1) / 2));
+                            Evidence.PmSet(prims, prow, Evidence.PmfRx(), TrLenCpt(x1 - x0, dpi100 * 2));
+                            Evidence.PmSet(prims, prow, Evidence.PmfRy(), TrLenCpt(y1 - y0, dpi100 * 2));
+                            Evidence.PmSet(prims, prow, Evidence.PmfInk(), inkrow);
+                            if (inkrow >= 0) {
+                                Evidence.PmSet(prims, prow, Evidence.PmfColor(), Evidence.IkGet(inks, inkrow, Evidence.IkfColor()));
+                            }
+                            Evidence.PmSet(prims, prow, Evidence.PmfFill(), cov);
+                            Evidence.PmSet(prims, prow, Evidence.PmfConf(), cov);
+                            Evidence.PmSet(prims, prow, Evidence.PmfFlags(), (1 + 2) + 8);
+                            n += 1;
+                        }
+                    }
+                }
+                i += 1;
+            }
+            // the current row's rectangles become the previous row's
+            emon.Port.CellsDrop(s1, 0);
+            i = 0;
+            while (i < (nc * 10)) {
+                emon.Port.CellsPush(s1, emon.Port.CellsAt(s2, i));
+                i += 1;
+            }
+            np = nc;
+            y += 1;
+        }
+        return n;
+    }
+    internal const int KIt = 10;
+    public static int TrTlMin() {
+        // A text line has at least this many components.
+        return 3;
+    }
+    internal static int TrIfind(emon.Port.Cells it, int a) {
+        int x = a;
+        int p = 0;
+        int g = 0;
+        p = emon.Port.CellsAt(it, (x * KIt) + 6);
+        while (p != x) {
+            g = emon.Port.CellsAt(it, (p * KIt) + 6);
+            emon.Port.CellsSet(it, (x * KIt) + 6, g);
+            x = g;
+            p = emon.Port.CellsAt(it, (x * KIt) + 6);
+        }
+        return x;
+    }
+    internal static int TrFitChain(emon.Port.Cells it, int ra, int rb, emon.Port.Cells @out) {
+        // Moments of the centres of the members of chain ra (and of rb when it is not -1): `out` gets the member count, the smaller
+        // eigenvalue of the covariance (px^2 x 16: the squared spread ACROSS the line), the principal axis' angle (0..18000), the sum of
+        // the members' heights, and the centroid x y. Answers the count.
+        int k = ra;
+        int pass = 0;
+        int n = 0;
+        long sx = 0;
+        long sy = 0;
+        long sxx = 0;
+        long syy = 0;
+        long sxy = 0;
+        long sh = 0;
+        int x = 0;
+        int y = 0;
+        while (pass < 2) {
+            if (pass == 1) {
+                k = rb;
+            }
+            while (k >= 0) {
+                x = emon.Port.CellsAt(it, (k * KIt) + 1);
+                y = emon.Port.CellsAt(it, (k * KIt) + 2);
+                n += 1;
+                sx += (long) x;
+                sy += (long) y;
+                sxx += unchecked(((long) x) * ((long) x));
+                syy += unchecked(((long) y) * ((long) y));
+                sxy += unchecked(((long) x) * ((long) y));
+                sh += (long) emon.Port.CellsAt(it, (k * KIt) + 4);
+                k = emon.Port.CellsAt(it, (k * KIt) + 7);
+            }
+            pass += 1;
+            if (rb < 0) {
+                pass = 2;
+            }
+        }
+        long nn = (long) n;
+        long n2 = unchecked(nn * nn);
+        long cxx = unchecked((unchecked(sxx * nn) - unchecked(sx * sx)) * ((long) 16)) / n2;
+        long cyy = unchecked((unchecked(syy * nn) - unchecked(sy * sy)) * ((long) 16)) / n2;
+        long cxy = unchecked((unchecked(sxy * nn) - unchecked(sx * sy)) * ((long) 16)) / n2;
+        long half = (cxx - cyy) / ((long) 2);
+        int root = TrIsqrt(unchecked(half * half) + unchecked(cxy * cxy));
+        long lmin = ((cxx + cyy) / ((long) 2)) - ((long) root);
+        emon.Port.CellsSet(@out, 0, n);
+        emon.Port.CellsSet(@out, 1, (int) lmin);
+        emon.Port.CellsSet(@out, 2, Evidence.EvAngle((int) (cxx - cyy), (int) (((long) 2) * cxy)) / 2);
+        emon.Port.CellsSet(@out, 3, (int) sh);
+        emon.Port.CellsSet(@out, 4, (int) (sx / nn));
+        emon.Port.CellsSet(@out, 5, (int) (sy / nn));
+        return n;
+    }
+    internal static int TrChainOk(emon.Port.Cells it, int ra, int rb, emon.Port.Cells @out) {
+        // 1 when chain ra and chain rb may be one line: the spread of the union's centres across its principal axis is at most 0.3
+        // of the mean height (any two components pass: a pair always lies on a line).
+        int n = TrFitChain(it, ra, rb, @out);
+        int hbar = emon.Port.CellsAt(@out, 3) / n;
+        if (n <= 2) {
+            return 1;
+        }
+        if ((emon.Port.CellsAt(@out, 1) * 100) <= ((16 * 9) * (hbar * hbar))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int TrTlines(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Cells cs, emon.Port.Cells comps, emon.Port.Cells tlines, emon.Port.Cells refs, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
+        // Text lines without OCR (SPEC 8.2): the text-like components of one ink layer chained by nearest neighbour (within 1.5 mean
+        // heights, heights within a factor of three) in order of distance, a chain accepted only while its centres stay on a line (spread
+        // across it at most 0.3 of the mean height). Every chain of at least `tr-tl-min` components is a `tlines` row: the box, the
+        // baseline fitted by integer least squares to the members' bottoms in the line's own frame (one outlier round), its angle by
+        // `ev-angle` of the baseline in page space, the layer, the mean height and gap in centipoints, the members as `refs`. A faint
+        // diagonal watermark is one row at its angle. `s1`..`s6` are scratch. Answers the rows written.
+        int nc = emon.Port.CellsLen(cs) / 24;
+        int c = 0;
+        int n = 0;
+        int i = 0;
+        int j = 0;
+        int a = 0;
+        int b = 0;
+        int ne = 0;
+        int dx = 0;
+        int dy = 0;
+        int gx = 0;
+        int gy = 0;
+        int hmax = 0;
+        int wmax = 0;
+        int ra = 0;
+        int rb = 0;
+        int lo = 0;
+        int hi = 0;
+        int rows = 0;
+        int k = 0;
+        int e = 0;
+        int cnt = 0;
+        int row = 0;
+        int alpha = 0;
+        int th = 0;
+        int co = 0;
+        int si = 0;
+        int u = 0;
+        int v = 0;
+        int comp = 0;
+        int vmx = 0;
+        int vmn = 0;
+        int umn = 0;
+        int umx = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int hbar = 0;
+        int pass = 0;
+        int m = 0;
+        long su = 0;
+        long sv = 0;
+        long suu = 0;
+        long suv = 0;
+        long den = 0;
+        long slope = 0;
+        long icpt = 0;
+        long nn = 0;
+        int hsum = 0;
+        int gsum = 0;
+        int rms = 0;
+        int evr = 0;
+        int u0 = 0;
+        int u1 = 0;
+        int v0 = 0;
+        int v1 = 0;
+        int px0 = 0;
+        int py0 = 0;
+        int px1 = 0;
+        int py1 = 0;
+        int rf = 0;
+        // 1. the items
+        emon.Port.CellsDrop(s1, 0);
+        c = 0;
+        while ((c < nc) && (n < 60000)) {
+            if ((TrCg(cs, c, CKind) == TrKText()) && (TrCg(cs, c, CInkrow) >= 0)) {
+                emon.Port.CellsPush(s1, c);
+                emon.Port.CellsPush(s1, (TrCg(cs, c, CLeft) + TrCg(cs, c, CRight)) / 2);
+                emon.Port.CellsPush(s1, (TrCg(cs, c, CTop) + TrCg(cs, c, CBottom)) / 2);
+                emon.Port.CellsPush(s1, TrCg(cs, c, CRight) - TrCg(cs, c, CLeft));
+                emon.Port.CellsPush(s1, TrCg(cs, c, CBottom) - TrCg(cs, c, CTop));
+                emon.Port.CellsPush(s1, TrCg(cs, c, CInkrow));
+                emon.Port.CellsPush(s1, n);
+                emon.Port.CellsPush(s1, -1);
+                emon.Port.CellsPush(s1, n);
+                emon.Port.CellsPush(s1, 1);
+                hmax = TrMax(hmax, TrCg(cs, c, CBottom) - TrCg(cs, c, CTop));
+                wmax = TrMax(wmax, TrCg(cs, c, CRight) - TrCg(cs, c, CLeft));
+                n += 1;
+            }
+            c += 1;
+        }
+        if (n < TrTlMin()) {
+            return 0;
+        }
+        // 2. candidate edges, in order of centre distance
+        emon.Port.CellsDrop(s2, 0);
+        emon.Port.CellsDrop(s3, 0);
+        i = 0;
+        while (i < n) {
+            emon.Port.CellsPush(s2, emon.Port.CellsAt(s1, (i * KIt) + 1));
+            emon.Port.CellsPush(s3, i);
+            i += 1;
+        }
+        TrSortKeys(s2, n, s3, s4);
+        emon.Port.CellsDrop(s5, 0);
+        emon.Port.CellsDrop(s6, 0);
+        a = 0;
+        while (a < n) {
+            i = emon.Port.CellsAt(s3, a);
+            b = a + 1;
+            while ((b < n) && ((emon.Port.CellsAt(s2, emon.Port.CellsAt(s3, b)) - emon.Port.CellsAt(s2, i)) <= ((3 * hmax) + wmax))) {
+                j = emon.Port.CellsAt(s3, b);
+                if ((emon.Port.CellsAt(s1, (i * KIt) + 5) == emon.Port.CellsAt(s1, (j * KIt) + 5)) && (ne < 600000)) {
+                    if (((3 * TrMin(emon.Port.CellsAt(s1, (i * KIt) + 4), emon.Port.CellsAt(s1, (j * KIt) + 4))) >= TrMax(emon.Port.CellsAt(s1, (i * KIt) + 4), emon.Port.CellsAt(s1, (j * KIt) + 4))) && (emon.Port.CellsAt(s1, (i * KIt) + 4) > 0)) {
+                        dx = TrAbs(emon.Port.CellsAt(s1, (i * KIt) + 1) - emon.Port.CellsAt(s1, (j * KIt) + 1));
+                        dy = TrAbs(emon.Port.CellsAt(s1, (i * KIt) + 2) - emon.Port.CellsAt(s1, (j * KIt) + 2));
+                        gx = TrMax(0, dx - ((emon.Port.CellsAt(s1, (i * KIt) + 3) + emon.Port.CellsAt(s1, (j * KIt) + 3)) / 2));
+                        gy = TrMax(0, dy - ((emon.Port.CellsAt(s1, (i * KIt) + 4) + emon.Port.CellsAt(s1, (j * KIt) + 4)) / 2));
+                        hmax = TrMax(hmax, 1);
+                        // gap within 1.5 mean heights: gap^2 * 4 <= 9 * mean_h^2 (mean_h = (hi + hj) / 2)
+                        if ((((gx * gx) + (gy * gy)) * 16) <= (9 * ((emon.Port.CellsAt(s1, (i * KIt) + 4) + emon.Port.CellsAt(s1, (j * KIt) + 4)) * (emon.Port.CellsAt(s1, (i * KIt) + 4) + emon.Port.CellsAt(s1, (j * KIt) + 4))))) {
+                            emon.Port.CellsPush(s6, (dx * dx) + (dy * dy));
+                            emon.Port.CellsPush(s5, i);
+                            emon.Port.CellsPush(s5, j);
+                            ne += 1;
+                        }
+                    }
+                }
+                b += 1;
+            }
+            a += 1;
+        }
+        // 3. merge in order of distance, while the chain stays on a line
+        emon.Port.CellsDrop(s2, 0);
+        i = 0;
+        while (i < ne) {
+            emon.Port.CellsPush(s2, i);
+            i += 1;
+        }
+        TrSortKeys(s6, ne, s2, s3);
+        emon.Port.CellsDrop(s4, 0);
+        emon.Port.CellsGrow(s4, 8, 0);
+        k = 0;
+        while (k < ne) {
+            e = emon.Port.CellsAt(s2, k);
+            ra = TrIfind(s1, emon.Port.CellsAt(s5, e * 2));
+            rb = TrIfind(s1, emon.Port.CellsAt(s5, (e * 2) + 1));
+            if (ra != rb) {
+                lo = TrMin(ra, rb);
+                hi = TrMax(ra, rb);
+                if (TrChainOk(s1, lo, hi, s4) == 1) {
+                    emon.Port.CellsSet(s1, (emon.Port.CellsAt(s1, (lo * KIt) + 8) * KIt) + 7, hi);
+                    emon.Port.CellsSet(s1, (lo * KIt) + 8, emon.Port.CellsAt(s1, (hi * KIt) + 8));
+                    emon.Port.CellsSet(s1, (lo * KIt) + 9, emon.Port.CellsAt(s1, (lo * KIt) + 9) + emon.Port.CellsAt(s1, (hi * KIt) + 9));
+                    emon.Port.CellsSet(s1, (hi * KIt) + 6, lo);
+                }
+            }
+            k += 1;
+        }
+        // 4. a row for every chain of enough components
+        i = 0;
+        while (i < n) {
+            if ((emon.Port.CellsAt(s1, (i * KIt) + 6) == i) && (emon.Port.CellsAt(s1, (i * KIt) + 9) >= TrTlMin())) {
+                TrFitChain(s1, i, -1, s4);
+                cnt = emon.Port.CellsAt(s4, 0);
+                alpha = emon.Port.CellsAt(s4, 2);
+                hbar = emon.Port.CellsAt(s4, 3) / cnt;
+                rms = TrIsqrt((long) TrMax(0, emon.Port.CellsAt(s4, 1))) / 4;
+                if (alpha > 9000) {
+                    th = alpha + 18000;
+                } else {
+                    th = alpha;
+                }
+                co = Evidence.EvCos(th);
+                si = Evidence.EvSin(th);
+                // members into s5 as [u-centre v-bottom height u-left u-right comp], ordered by u-centre
+                emon.Port.CellsDrop(s5, 0);
+                j = i;
+                m = 0;
+                while (j >= 0) {
+                    comp = emon.Port.CellsAt(s1, j * KIt);
+                    umn = 1000000000;
+                    umx = -1000000000;
+                    vmn = 1000000000;
+                    vmx = -1000000000;
+                    e = 0;
+                    while (e < 4) {
+                        if ((e & 1) == 0) {
+                            dx = TrCg(cs, comp, CLeft);
+                        } else {
+                            dx = TrCg(cs, comp, CRight);
+                        }
+                        if (e < 2) {
+                            dy = TrCg(cs, comp, CTop);
+                        } else {
+                            dy = TrCg(cs, comp, CBottom);
+                        }
+                        u = TrRotU(dx, dy, co, si);
+                        v = TrRotV(dx, dy, co, si);
+                        if (u < umn) {
+                            umn = u;
+                        }
+                        if (u > umx) {
+                            umx = u;
+                        }
+                        if (v < vmn) {
+                            vmn = v;
+                        }
+                        if (v > vmx) {
+                            vmx = v;
+                        }
+                        e += 1;
+                    }
+                    // insertion by the centre of u
+                    k = m;
+                    emon.Port.CellsPush(s5, 0);
+                    emon.Port.CellsPush(s5, 0);
+                    emon.Port.CellsPush(s5, 0);
+                    emon.Port.CellsPush(s5, 0);
+                    emon.Port.CellsPush(s5, 0);
+                    emon.Port.CellsPush(s5, 0);
+                    while ((k > 0) && (emon.Port.CellsAt(s5, (k - 1) * 6) > ((umn + umx) / 2))) {
+                        e = 0;
+                        while (e < 6) {
+                            emon.Port.CellsSet(s5, (k * 6) + e, emon.Port.CellsAt(s5, ((k - 1) * 6) + e));
+                            e += 1;
+                        }
+                        k -= 1;
+                    }
+                    emon.Port.CellsSet(s5, k * 6, (umn + umx) / 2);
+                    emon.Port.CellsSet(s5, (k * 6) + 1, vmx);
+                    emon.Port.CellsSet(s5, (k * 6) + 2, vmx - vmn);
+                    emon.Port.CellsSet(s5, (k * 6) + 3, umn);
+                    emon.Port.CellsSet(s5, (k * 6) + 4, umx);
+                    emon.Port.CellsSet(s5, (k * 6) + 5, comp);
+                    m += 1;
+                    j = emon.Port.CellsAt(s1, (j * KIt) + 7);
+                }
+                // least squares v = icpt + slope * u over the bottoms, then once more without the points far below the line
+                pass = 0;
+                slope = (long) 0;
+                icpt = (long) 0;
+                while (pass < 2) {
+                    su = (long) 0;
+                    sv = (long) 0;
+                    suu = (long) 0;
+                    suv = (long) 0;
+                    nn = (long) 0;
+                    k = 0;
+                    while (k < m) {
+                        u = emon.Port.CellsAt(s5, k * 6);
+                        v = emon.Port.CellsAt(s5, (k * 6) + 1);
+                        e = 1;
+                        if (pass == 1) {
+                            if ((4 * (v - ((int) (((slope * ((long) u)) + icpt) / ((long) 65536))))) > hbar) {
+                                e = 0;
+                            }
+                        }
+                        if (e == 1) {
+                            nn += (long) 1;
+                            su += (long) u;
+                            sv += (long) v;
+                            suu += unchecked(((long) u) * ((long) u));
+                            suv += unchecked(((long) u) * ((long) v));
+                        }
+                        k += 1;
+                    }
+                    den = unchecked(nn * suu) - unchecked(su * su);
+                    if ((nn > ((long) 1)) && (den > ((long) 0))) {
+                        slope = ((unchecked(nn * suv) - unchecked(su * sv)) * ((long) 65536)) / den;
+                        icpt = ((sv * ((long) 65536)) - unchecked(slope * su)) / nn;
+                    } else {
+                        slope = (long) 0;
+                        if (nn > ((long) 0)) {
+                            icpt = (sv * ((long) 65536)) / nn;
+                        }
+                    }
+                    pass += 1;
+                }
+                u0 = emon.Port.CellsAt(s5, 3);
+                u1 = emon.Port.CellsAt(s5, 4);
+                k = 0;
+                hsum = 0;
+                gsum = 0;
+                while (k < m) {
+                    u0 = TrMin(u0, emon.Port.CellsAt(s5, (k * 6) + 3));
+                    u1 = TrMax(u1, emon.Port.CellsAt(s5, (k * 6) + 4));
+                    hsum += emon.Port.CellsAt(s5, (k * 6) + 2);
+                    if (k > 0) {
+                        gsum += TrMax(0, emon.Port.CellsAt(s5, (k * 6) + 3) - emon.Port.CellsAt(s5, ((k - 1) * 6) + 4));
+                    }
+                    k += 1;
+                }
+                v0 = (int) (((slope * ((long) u0)) + icpt) / ((long) 65536));
+                v1 = (int) (((slope * ((long) u1)) + icpt) / ((long) 65536));
+                px0 = (int) ((long)((ulong)((unchecked(((long) u0) * ((long) co)) + unchecked(((long) v0) * ((long) si))) + ((long) 32768)) >> 16));
+                py0 = (int) ((long)((ulong)((unchecked(((long) (0 - u0)) * ((long) si)) + unchecked(((long) v0) * ((long) co))) + ((long) 32768)) >> 16));
+                px1 = (int) ((long)((ulong)((unchecked(((long) u1) * ((long) co)) + unchecked(((long) v1) * ((long) si))) + ((long) 32768)) >> 16));
+                py1 = (int) ((long)((ulong)((unchecked(((long) (0 - u1)) * ((long) si)) + unchecked(((long) v1) * ((long) co))) + ((long) 32768)) >> 16));
+                // the box: the union of the members' rows
+                x0 = 1000000000;
+                y0 = 1000000000;
+                x1 = -1000000000;
+                y1 = -1000000000;
+                rf = emon.Port.CellsLen(refs) / 2;
+                k = 0;
+                while (k < m) {
+                    evr = TrCg(cs, emon.Port.CellsAt(s5, (k * 6) + 5), CEvrow);
+                    x0 = TrMin(x0, Evidence.CoGet(comps, evr, Evidence.CfX0()));
+                    y0 = TrMin(y0, Evidence.CoGet(comps, evr, Evidence.CfY0()));
+                    x1 = TrMax(x1, Evidence.CoGet(comps, evr, Evidence.CfX1()));
+                    y1 = TrMax(y1, Evidence.CoGet(comps, evr, Evidence.CfY1()));
+                    emon.Port.CellsPush(refs, Evidence.EaComponents());
+                    emon.Port.CellsPush(refs, evr);
+                    k += 1;
+                }
+                dx = Evidence.VwPxToCpt(views, view, 0, px1, py1) - Evidence.VwPxToCpt(views, view, 0, px0, py0);
+                dy = Evidence.VwPxToCpt(views, view, 1, px1, py1) - Evidence.VwPxToCpt(views, view, 1, px0, py0);
+                row = Evidence.TlNew(tlines, page, x0, y0, x1, y1, Evidence.VwPxToCpt(views, view, 0, px0, py0), Evidence.VwPxToCpt(views, view, 1, px0, py0), Evidence.VwPxToCpt(views, view, 0, px1, py1), Evidence.VwPxToCpt(views, view, 1, px1, py1), Evidence.EvAngle(dx, dy), 0, rf, m);
+                Evidence.TlSet(tlines, row, Evidence.TlfInk(), emon.Port.CellsAt(s1, (i * KIt) + 5));
+                Evidence.TlSet(tlines, row, Evidence.TlfHeight(), TrLenCpt(hsum / m, dpi100));
+                if (m > 1) {
+                    Evidence.TlSet(tlines, row, Evidence.TlfGap(), TrLenCpt(gsum / (m - 1), dpi100));
+                }
+                Evidence.TlSet(tlines, row, Evidence.TlfConf(), TrMax(0, 1000 - (3 * TrPermille(rms, TrMax(1, hbar)))));
+                rows += 1;
+            }
+            i += 1;
+        }
+        return rows;
+    }
+    internal static int TrTextCentred(emon.Port.Cells comps, int page, int x0, int y0, int x1, int y1) {
+        // How many text-like components of `page` have their centre in the box (centipoints).
+        int n = Evidence.CoCount(comps);
+        int r = 0;
+        int cnt = 0;
+        int cx = 0;
+        int cy = 0;
+        while (r < n) {
+            if ((Evidence.CoGet(comps, r, Evidence.CfKind()) == Evidence.CkTextLike()) && (Evidence.CoGet(comps, r, 0) == page)) {
+                cx = (Evidence.CoGet(comps, r, Evidence.CfX0()) + Evidence.CoGet(comps, r, Evidence.CfX1())) / 2;
+                cy = (Evidence.CoGet(comps, r, Evidence.CfY0()) + Evidence.CoGet(comps, r, Evidence.CfY1())) / 2;
+                if (((cx >= x0) && (cx < x1)) && ((cy >= y0) && (cy < y1))) {
+                    cnt += 1;
+                }
+            }
+            r += 1;
+        }
+        return cnt;
+    }
+    public static int TrFeatOcr(emon.Port.Cells feats, int frow, emon.Port.Cells comps, int page, int x0, int y0, int x1, int y1, emon.Port.Cells sb, int nsym) {
+        // `xo` columns 14 (text-like components centred in the word's box) and 15 (per mille of its `nsym` symbols, whose boxes are the
+        // centipoint quadruples of `sb`, that have a text-like component centred in them; -1 with no symbols).
+        int s = 0;
+        int hit = 0;
+        Evidence.FeSet(feats, frow, Evidence.XoComponents(), TrTextCentred(comps, page, x0, y0, x1, y1));
+        if (nsym <= 0) {
+            Evidence.FeSet(feats, frow, Evidence.XoCompRatio(), -1);
+        } else {
+            while (s < nsym) {
+                if (TrTextCentred(comps, page, emon.Port.CellsAt(sb, s * 4), emon.Port.CellsAt(sb, (s * 4) + 1), emon.Port.CellsAt(sb, (s * 4) + 2), emon.Port.CellsAt(sb, (s * 4) + 3)) > 0) {
+                    hit += 1;
+                }
+                s += 1;
+            }
+            Evidence.FeSet(feats, frow, Evidence.XoCompRatio(), TrPermille(hit, nsym));
+        }
+        return 0;
+    }
+    public static int TrFeatText(emon.Port.Cells feats, int frow, emon.Port.Cells comps, emon.Port.Cells tlines, int page, int x0, int y0, int x1, int y1, int rot, emon.Port.Cells sb, int nsym) {
+        // `xt` columns 14 and 15 (as `tr-feat-ocr`, over the glyph boxes) and 23: the largest overlap (`ev-overlap-small`, per mille) of the
+        // word's box with a `tlines` row of the page whose angle differs from the word's `rot` by more than 3 degrees (mod 180).
+        int n = Evidence.TlCount(tlines);
+        int r = 0;
+        int d = 0;
+        int best = 0;
+        int o = 0;
+        TrFeatOcr(feats, frow, comps, page, x0, y0, x1, y1, sb, nsym);
+        while (r < n) {
+            if (Evidence.TlGet(tlines, r, 0) == page) {
+                d = (TrAbs(Evidence.TlGet(tlines, r, 9) - rot) + 36000) % 18000;
+                if (d > 9000) {
+                    d = 18000 - d;
+                }
+                if (d > 300) {
+                    o = Evidence.EvOverlapSmall(x0, y0, x1, y1, Evidence.TlGet(tlines, r, 1), Evidence.TlGet(tlines, r, 2), Evidence.TlGet(tlines, r, 3), Evidence.TlGet(tlines, r, 4));
+                    if (o > best) {
+                        best = o;
+                    }
+                }
+            }
+            r += 1;
+        }
+        Evidence.FeSet(feats, frow, Evidence.XtTlineOverlap(), best);
+        return 0;
+    }
+    public static int TrOrientHint(emon.Port.Cells tlines) {
+        // The dominant direction of the text lines (P6.3's orientation fallback, D197): 0 when most characters lie on lines within 45
+        // degrees of horizontal, 1 when most lie on near-vertical ones, -1 when there are no lines. Weighted by member count.
+        int n = Evidence.TlCount(tlines);
+        int r = 0;
+        int hz = 0;
+        int vt = 0;
+        int a = 0;
+        if (n == 0) {
+            return -1;
+        }
+        while (r < n) {
+            a = Evidence.TlGet(tlines, r, 9) % 18000;
+            if ((a < 4500) || (a >= 13500)) {
+                hz += Evidence.TlGet(tlines, r, 12);
+            } else {
+                vt += Evidence.TlGet(tlines, r, 12);
+            }
+            r += 1;
+        }
+        if (hz >= vt) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int TrTrace(emon.Port.Cells views, emon.Port.Cells inks, int page, int view, int @fixed, int ink0, emon.Port.Bitmap bin, emon.Port.Bitmap gray, emon.Port.Bitmap labels, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
+        // Trace ONE bitmap `bin` (a binary view, or an ink-mask view: nonzero is ink) of `view` (a `views` row): runs, components
+        // (with the majority layer of `labels` against `inks` from `ink0`, or the single layer `fixed` when it is >= 0), rules,
+        // contours and primitives, text lines; the rows go to the evidence arenas. `gray` is the page's gray view. Answers the number
+        // of components recorded (the number found is `ri` cell h + 2; a page over `tr-max-runs` is cut, `ri` cell h + 1).
+        int w = emon.Port.BitmapW(bin);
+        int h = emon.Port.BitmapH(bin);
+        int dpi = Evidence.VwGet(views, view, Evidence.VwfDpi());
+        int nc = 0;
+        int nv = 0;
+        int n = 0;
+        n = TrRuns(bin, rn, ri);
+        if (n == 0) {
+            return 0;
+        }
+        TrUnify(rn, ri, h);
+        nc = TrLabel(rn, ri, h, cs, s1, s2, s3);
+        nv = TrVruns(bin, rn, ri, vr, s1);
+        TrMeasure(gray, labels, @fixed, ink0, rn, ri, cs, vr, nv, s1, s2, s3);
+        TrKinds(dpi, cs, s1);
+        TrParents(rn, ri, cs, s1);
+        TrEmitComponents(views, comps, cs, inks, page, view);
+        TrRules(views, page, view, dpi, w, h, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+        TrShapes(views, page, view, dpi, bin, rn, ri, cs, comps, prims, pts, refs, inks, s1, s2, s3, s4, s5);
+        TrDoubleRings(cs, prims, refs);
+        TrTlines(views, page, view, dpi, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6);
+        return nc;
     }
 }

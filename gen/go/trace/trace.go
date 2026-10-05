@@ -106,9 +106,9 @@ func TrTextMin(dpi100 int32) int32 {
 	return TrPt(dpi100, 3)
 }
 
-const rs int32 = 6
+const kRs int32 = 6
 
-const cs int32 = 24
+const kCs int32 = 24
 
 const cTop int32 = 0
 
@@ -207,6 +207,20 @@ func trMax(a int32, b int32) int32 {
 		return a
 	}
 	return b
+}
+
+func trMax64(a int64, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func trAbs64(a int64) int64 {
+	if a < int64(0) {
+		return int64(0) - a
+	}
+	return a
 }
 
 func trPermille(n int32, d int32) int32 {
@@ -372,6 +386,7 @@ func TrUnify(rn *port.Cells, ri *port.Cells, h int32) int32 {
 	var bx1 int32 = 0
 	var r int32 = 0
 	var ec int32 = 0
+	var root int32 = 0
 	for y < h {
 		i = port.CellsAt(ri, y-1)
 		ie = port.CellsAt(ri, y)
@@ -397,7 +412,8 @@ func TrUnify(rn *port.Cells, ri *port.Cells, h int32) int32 {
 	}
 	r = 0
 	for r < n {
-		trRs(rn, r, 3, trFind(rn, r))
+		root = trFind(rn, r)
+		trRs(rn, r, 3, root)
 		r += 1
 	}
 	return n
@@ -767,7 +783,8 @@ func TrMeasure(gray *port.Bitmap, labels *port.Bitmap, fixed int32, ink0 int32, 
 			}
 			lo = TrCg(cs, c, cGray) + rs
 			if lo >= 1048576 {
-				trCset(cs, c, 23, TrCg(cs, c, 23)+((lo)>>uint(20)))
+				v = TrCg(cs, c, 23)
+				trCset(cs, c, 23, v+((lo)>>uint(20)))
 				lo &= 1048575
 			}
 			trCset(cs, c, cGray, lo)
@@ -804,7 +821,7 @@ func TrMeasure(gray *port.Bitmap, labels *port.Bitmap, fixed int32, ink0 int32, 
 	// 2. stroke width: medians of the horizontal and the vertical run lengths of each component
 	port.CellsDrop(s1, 0)
 	port.CellsGrow(s1, 256, 0)
-	trGroup(rn, rs, 5, n, nc, s2, s3)
+	trGroup(rn, kRs, 5, n, nc, s2, s3)
 	c = 0
 	for c < nc {
 		lo = port.CellsAt(s3, c)
@@ -1392,7 +1409,7 @@ func TrH2cpt(views *port.Cells, view int32, axis int32, x2 int32, y2 int32) int3
 	return ((s * 2) + n) / (2 * n)
 }
 
-const ps int32 = 12
+const kPs int32 = 12
 
 const pX0 int32 = 0
 
@@ -1681,31 +1698,31 @@ func trSameLine(pc *port.Cells, a int32, b int32, gapmax int32) int32 {
 	// them under 2.5 degrees, both ends of the shorter within (thickness + 2 px) of the longer one's line.
 	var p int32 = a
 	var q int32 = b
-	var pdx0 int32 = port.CellsAt(pc, (a*ps)+pX1) - port.CellsAt(pc, (a*ps)+pX0)
-	var pdy0 int32 = port.CellsAt(pc, (a*ps)+pY1) - port.CellsAt(pc, (a*ps)+pY0)
-	var qdx0 int32 = port.CellsAt(pc, (b*ps)+pX1) - port.CellsAt(pc, (b*ps)+pX0)
-	var qdy0 int32 = port.CellsAt(pc, (b*ps)+pY1) - port.CellsAt(pc, (b*ps)+pY0)
+	var pdx0 int32 = port.CellsAt(pc, (a*kPs)+pX1) - port.CellsAt(pc, (a*kPs)+pX0)
+	var pdy0 int32 = port.CellsAt(pc, (a*kPs)+pY1) - port.CellsAt(pc, (a*kPs)+pY0)
+	var qdx0 int32 = port.CellsAt(pc, (b*kPs)+pX1) - port.CellsAt(pc, (b*kPs)+pX0)
+	var qdy0 int32 = port.CellsAt(pc, (b*kPs)+pY1) - port.CellsAt(pc, (b*kPs)+pY0)
 	var l1 int64 = (int64(pdx0) * int64(pdx0)) + (int64(pdy0) * int64(pdy0))
 	var l2 int64 = (int64(qdx0) * int64(qdx0)) + (int64(qdy0) * int64(qdy0))
 	if l1 < l2 {
 		p = b
 		q = a
 	}
-	var px0 int32 = port.CellsAt(pc, (p*ps)+pX0)
-	var py0 int32 = port.CellsAt(pc, (p*ps)+pY0)
-	var dx int32 = port.CellsAt(pc, (p*ps)+pX1) - px0
-	var dy int32 = port.CellsAt(pc, (p*ps)+pY1) - py0
-	var ex int32 = port.CellsAt(pc, (q*ps)+pX1) - port.CellsAt(pc, (q*ps)+pX0)
-	var ey int32 = port.CellsAt(pc, (q*ps)+pY1) - port.CellsAt(pc, (q*ps)+pY0)
+	var px0 int32 = port.CellsAt(pc, (p*kPs)+pX0)
+	var py0 int32 = port.CellsAt(pc, (p*kPs)+pY0)
+	var dx int32 = port.CellsAt(pc, (p*kPs)+pX1) - px0
+	var dy int32 = port.CellsAt(pc, (p*kPs)+pY1) - py0
+	var ex int32 = port.CellsAt(pc, (q*kPs)+pX1) - port.CellsAt(pc, (q*kPs)+pX0)
+	var ey int32 = port.CellsAt(pc, (q*kPs)+pY1) - port.CellsAt(pc, (q*kPs)+pY0)
 	var lp2 int64 = (int64(dx) * int64(dx)) + (int64(dy) * int64(dy))
 	var lq2 int64 = (int64(ex) * int64(ex)) + (int64(ey) * int64(ey))
 	var cr int64 = (int64(dx) * int64(ey)) - (int64(dy) * int64(ex))
 	var lp int32 = TrIsqrt(lp2)
-	var tol int32 = (trMax(port.CellsAt(pc, (p*ps)+pThk), port.CellsAt(pc, (q*ps)+pThk)) / 4) + 4
-	var qx0 int32 = port.CellsAt(pc, (q*ps)+pX0) - px0
-	var qy0 int32 = port.CellsAt(pc, (q*ps)+pY0) - py0
-	var qx1 int32 = port.CellsAt(pc, (q*ps)+pX1) - px0
-	var qy1 int32 = port.CellsAt(pc, (q*ps)+pY1) - py0
+	var tol int32 = (trMax(port.CellsAt(pc, (p*kPs)+pThk), port.CellsAt(pc, (q*kPs)+pThk)) / 4) + 4
+	var qx0 int32 = port.CellsAt(pc, (q*kPs)+pX0) - px0
+	var qy0 int32 = port.CellsAt(pc, (q*kPs)+pY0) - py0
+	var qx1 int32 = port.CellsAt(pc, (q*kPs)+pX1) - px0
+	var qy1 int32 = port.CellsAt(pc, (q*kPs)+pY1) - py0
 	var c0 int64 = (int64(dx) * int64(qy0)) - (int64(dy) * int64(qx0))
 	var c1 int64 = (int64(dx) * int64(qy1)) - (int64(dy) * int64(qx1))
 	var d0 int64 = (int64(dx) * int64(qx0)) + (int64(dy) * int64(qy0))
@@ -1754,12 +1771,12 @@ func trPfind(pc *port.Cells, a int32) int32 {
 	var x int32 = a
 	var p int32 = 0
 	var g int32 = 0
-	p = port.CellsAt(pc, (x*ps)+pPar)
+	p = port.CellsAt(pc, (x*kPs)+pPar)
 	for p != x {
-		g = port.CellsAt(pc, (p*ps)+pPar)
-		port.CellsSet(pc, (x*ps)+pPar, g)
+		g = port.CellsAt(pc, (p*kPs)+pPar)
+		port.CellsSet(pc, (x*kPs)+pPar, g)
 		x = g
-		p = port.CellsAt(pc, (x*ps)+pPar)
+		p = port.CellsAt(pc, (x*kPs)+pPar)
 	}
 	return x
 }
@@ -1780,8 +1797,8 @@ func TrMergePieces(pc *port.Cells, np int32, gapmax int32, keys *port.Cells, ord
 	port.CellsDrop(ord, 0)
 	i = 0
 	for i < np {
-		port.CellsSet(pc, (i*ps)+pPar, i)
-		port.CellsPush(keys, trMin(port.CellsAt(pc, (i*ps)+pX0), port.CellsAt(pc, (i*ps)+pX1)))
+		port.CellsSet(pc, (i*kPs)+pPar, i)
+		port.CellsPush(keys, trMin(port.CellsAt(pc, (i*kPs)+pX0), port.CellsAt(pc, (i*kPs)+pX1)))
 		port.CellsPush(ord, i)
 		i += 1
 	}
@@ -1789,7 +1806,7 @@ func TrMergePieces(pc *port.Cells, np int32, gapmax int32, keys *port.Cells, ord
 	i = 0
 	for i < np {
 		p = port.CellsAt(ord, i)
-		pmax = trMax(port.CellsAt(pc, (p*ps)+pX0), port.CellsAt(pc, (p*ps)+pX1)) + gapmax
+		pmax = trMax(port.CellsAt(pc, (p*kPs)+pX0), port.CellsAt(pc, (p*kPs)+pX1)) + gapmax
 		j = i + 1
 		for (j < np) && (port.CellsAt(keys, port.CellsAt(ord, j)) <= pmax) {
 			q = port.CellsAt(ord, j)
@@ -1798,9 +1815,9 @@ func TrMergePieces(pc *port.Cells, np int32, gapmax int32, keys *port.Cells, ord
 				rb = trPfind(pc, q)
 				if ra != rb {
 					if ra < rb {
-						port.CellsSet(pc, (rb*ps)+pPar, ra)
+						port.CellsSet(pc, (rb*kPs)+pPar, ra)
 					} else {
-						port.CellsSet(pc, (ra*ps)+pPar, rb)
+						port.CellsSet(pc, (ra*kPs)+pPar, rb)
 					}
 				}
 			}
@@ -1810,8 +1827,9 @@ func TrMergePieces(pc *port.Cells, np int32, gapmax int32, keys *port.Cells, ord
 	}
 	i = 0
 	for i < np {
-		port.CellsSet(pc, (i*ps)+pPar, trPfind(pc, i))
-		if port.CellsAt(pc, (i*ps)+pPar) == i {
+		ra = trPfind(pc, i)
+		port.CellsSet(pc, (i*kPs)+pPar, ra)
+		if ra == i {
 			ng += 1
 		}
 		i += 1
@@ -1819,7 +1837,7 @@ func TrMergePieces(pc *port.Cells, np int32, gapmax int32, keys *port.Cells, ord
 	return ng
 }
 
-const sg int32 = 16
+const kSg int32 = 16
 
 const gAx int32 = 0
 
@@ -1901,7 +1919,7 @@ func TrSegments(pc *port.Cells, np int32, rmin int32, sg *port.Cells, mem *port.
 	var ta int64 = 0
 	var tb int64 = 0
 	var s int32 = 0
-	trGroup(pc, ps, 10, np, np, idx, off)
+	trGroup(pc, kPs, 10, np, np, idx, off)
 	port.CellsDrop(sg, 0)
 	port.CellsDrop(mem, 0)
 	for g < np {
@@ -1913,8 +1931,8 @@ func TrSegments(pc *port.Cells, np int32, rmin int32, sg *port.Cells, mem *port.
 			k = lo
 			for k < hi {
 				p = port.CellsAt(idx, k)
-				dx = port.CellsAt(pc, (p*ps)+pX1) - port.CellsAt(pc, (p*ps)+pX0)
-				dy = port.CellsAt(pc, (p*ps)+pY1) - port.CellsAt(pc, (p*ps)+pY0)
+				dx = port.CellsAt(pc, (p*kPs)+pX1) - port.CellsAt(pc, (p*kPs)+pX0)
+				dy = port.CellsAt(pc, (p*kPs)+pY1) - port.CellsAt(pc, (p*kPs)+pY0)
 				l2 = (int64(dx) * int64(dx)) + (int64(dy) * int64(dy))
 				if l2 > rl2 {
 					rl2 = l2
@@ -1922,8 +1940,8 @@ func TrSegments(pc *port.Cells, np int32, rmin int32, sg *port.Cells, mem *port.
 				}
 				k += 1
 			}
-			dx = port.CellsAt(pc, (rf*ps)+pX1) - port.CellsAt(pc, (rf*ps)+pX0)
-			dy = port.CellsAt(pc, (rf*ps)+pY1) - port.CellsAt(pc, (rf*ps)+pY0)
+			dx = port.CellsAt(pc, (rf*kPs)+pX1) - port.CellsAt(pc, (rf*kPs)+pX0)
+			dy = port.CellsAt(pc, (rf*kPs)+pY1) - port.CellsAt(pc, (rf*kPs)+pY0)
 			lr = trMax(1, TrIsqrt(rl2))
 			tmin = int64(100000000)
 			tmax = int64(-100000000)
@@ -1941,13 +1959,13 @@ func TrSegments(pc *port.Cells, np int32, rmin int32, sg *port.Cells, mem *port.
 				e = 0
 				for e < 2 {
 					if e == 0 {
-						x = port.CellsAt(pc, (p*ps)+pX0)
-						y = port.CellsAt(pc, (p*ps)+pY0)
+						x = port.CellsAt(pc, (p*kPs)+pX0)
+						y = port.CellsAt(pc, (p*kPs)+pY0)
 					} else {
-						x = port.CellsAt(pc, (p*ps)+pX1)
-						y = port.CellsAt(pc, (p*ps)+pY1)
+						x = port.CellsAt(pc, (p*kPs)+pX1)
+						y = port.CellsAt(pc, (p*kPs)+pY1)
 					}
-					t = ((int64(x-port.CellsAt(pc, (rf*ps)+pX0)) * int64(dx)) + (int64(y-port.CellsAt(pc, (rf*ps)+pY0)) * int64(dy))) / int64(lr)
+					t = ((int64(x-port.CellsAt(pc, (rf*kPs)+pX0)) * int64(dx)) + (int64(y-port.CellsAt(pc, (rf*kPs)+pY0)) * int64(dy))) / int64(lr)
 					if t < tmin {
 						tmin = t
 						amin = p
@@ -1960,21 +1978,21 @@ func TrSegments(pc *port.Cells, np int32, rmin int32, sg *port.Cells, mem *port.
 					}
 					e += 1
 				}
-				l2 = (int64(port.CellsAt(pc, (p*ps)+pX1)-port.CellsAt(pc, (p*ps)+pX0)) * int64(port.CellsAt(pc, (p*ps)+pX1)-port.CellsAt(pc, (p*ps)+pX0))) + (int64(port.CellsAt(pc, (p*ps)+pY1)-port.CellsAt(pc, (p*ps)+pY0)) * int64(port.CellsAt(pc, (p*ps)+pY1)-port.CellsAt(pc, (p*ps)+pY0)))
+				l2 = (int64(port.CellsAt(pc, (p*kPs)+pX1)-port.CellsAt(pc, (p*kPs)+pX0)) * int64(port.CellsAt(pc, (p*kPs)+pX1)-port.CellsAt(pc, (p*kPs)+pX0))) + (int64(port.CellsAt(pc, (p*kPs)+pY1)-port.CellsAt(pc, (p*kPs)+pY0)) * int64(port.CellsAt(pc, (p*kPs)+pY1)-port.CellsAt(pc, (p*kPs)+pY0)))
 				s = TrIsqrt(l2)
-				sthk += int64(port.CellsAt(pc, (p*ps)+pThk)) * int64(s)
+				sthk += int64(port.CellsAt(pc, (p*kPs)+pThk)) * int64(s)
 				slen += int64(s)
-				if port.CellsAt(pc, (p*ps)+pMinw) < minw {
-					minw = port.CellsAt(pc, (p*ps)+pMinw)
+				if port.CellsAt(pc, (p*kPs)+pMinw) < minw {
+					minw = port.CellsAt(pc, (p*kPs)+pMinw)
 				}
-				if port.CellsAt(pc, (p*ps)+pMaxw) > maxw {
-					maxw = port.CellsAt(pc, (p*ps)+pMaxw)
+				if port.CellsAt(pc, (p*kPs)+pMaxw) > maxw {
+					maxw = port.CellsAt(pc, (p*kPs)+pMaxw)
 				}
-				trSegAddMember(mem, mf, port.CellsAt(pc, (p*ps)+pComp))
+				trSegAddMember(mem, mf, port.CellsAt(pc, (p*kPs)+pComp))
 				k += 1
 			}
 			// the endpoints: the extreme points along the reference line (recomputed from the piece and end that won)
-			ns = port.CellsLen(sg) / sg
+			ns = port.CellsLen(sg) / kSg
 			port.CellsPush(sg, 0)
 			port.CellsPush(sg, 0)
 			port.CellsPush(sg, 0)
@@ -1992,34 +2010,34 @@ func TrSegments(pc *port.Cells, np int32, rmin int32, sg *port.Cells, mem *port.
 			port.CellsPush(sg, 0)
 			port.CellsPush(sg, 0)
 			if j == 0 {
-				port.CellsSet(sg, (ns*sg)+gAx, port.CellsAt(pc, (amin*ps)+pX0))
-				port.CellsSet(sg, (ns*sg)+gAy, port.CellsAt(pc, (amin*ps)+pY0))
+				port.CellsSet(sg, (ns*kSg)+gAx, port.CellsAt(pc, (amin*kPs)+pX0))
+				port.CellsSet(sg, (ns*kSg)+gAy, port.CellsAt(pc, (amin*kPs)+pY0))
 			} else {
-				port.CellsSet(sg, (ns*sg)+gAx, port.CellsAt(pc, (amin*ps)+pX1))
-				port.CellsSet(sg, (ns*sg)+gAy, port.CellsAt(pc, (amin*ps)+pY1))
+				port.CellsSet(sg, (ns*kSg)+gAx, port.CellsAt(pc, (amin*kPs)+pX1))
+				port.CellsSet(sg, (ns*kSg)+gAy, port.CellsAt(pc, (amin*kPs)+pY1))
 			}
 			if cnt == 0 {
-				port.CellsSet(sg, (ns*sg)+gBx, port.CellsAt(pc, (amax*ps)+pX0))
-				port.CellsSet(sg, (ns*sg)+gBy, port.CellsAt(pc, (amax*ps)+pY0))
+				port.CellsSet(sg, (ns*kSg)+gBx, port.CellsAt(pc, (amax*kPs)+pX0))
+				port.CellsSet(sg, (ns*kSg)+gBy, port.CellsAt(pc, (amax*kPs)+pY0))
 			} else {
-				port.CellsSet(sg, (ns*sg)+gBx, port.CellsAt(pc, (amax*ps)+pX1))
-				port.CellsSet(sg, (ns*sg)+gBy, port.CellsAt(pc, (amax*ps)+pY1))
+				port.CellsSet(sg, (ns*kSg)+gBx, port.CellsAt(pc, (amax*kPs)+pX1))
+				port.CellsSet(sg, (ns*kSg)+gBy, port.CellsAt(pc, (amax*kPs)+pY1))
 			}
-			port.CellsSet(sg, (ns*sg)+gThk, int32((sthk+(slen/int64(2)))/trMax(int64(1), slen)))
-			port.CellsSet(sg, (ns*sg)+gMinw, minw)
-			port.CellsSet(sg, (ns*sg)+gMaxw, maxw)
-			port.CellsSet(sg, (ns*sg)+gComp, port.CellsAt(pc, (rf*ps)+pComp))
-			port.CellsSet(sg, (ns*sg)+gLen, int32(tmax-tmin))
-			port.CellsSet(sg, (ns*sg)+gMfirst, mf)
-			port.CellsSet(sg, (ns*sg)+gMcount, port.CellsLen(mem)-mf)
-			port.CellsSet(sg, (ns*sg)+gPar, ns)
+			port.CellsSet(sg, (ns*kSg)+gThk, int32((sthk+(slen/int64(2)))/trMax64(int64(1), slen)))
+			port.CellsSet(sg, (ns*kSg)+gMinw, minw)
+			port.CellsSet(sg, (ns*kSg)+gMaxw, maxw)
+			port.CellsSet(sg, (ns*kSg)+gComp, port.CellsAt(pc, (rf*kPs)+pComp))
+			port.CellsSet(sg, (ns*kSg)+gLen, int32(tmax-tmin))
+			port.CellsSet(sg, (ns*kSg)+gMfirst, mf)
+			port.CellsSet(sg, (ns*kSg)+gMcount, port.CellsLen(mem)-mf)
+			port.CellsSet(sg, (ns*kSg)+gPar, ns)
 			// the total gap: the intervals along the line, by start, then what lies between them
 			cnt = 0
 			k = lo
 			for k < hi {
 				p = port.CellsAt(idx, k)
-				ta = ((int64(port.CellsAt(pc, (p*ps)+pX0)-port.CellsAt(pc, (rf*ps)+pX0)) * int64(dx)) + (int64(port.CellsAt(pc, (p*ps)+pY0)-port.CellsAt(pc, (rf*ps)+pY0)) * int64(dy))) / int64(lr)
-				tb = ((int64(port.CellsAt(pc, (p*ps)+pX1)-port.CellsAt(pc, (rf*ps)+pX0)) * int64(dx)) + (int64(port.CellsAt(pc, (p*ps)+pY1)-port.CellsAt(pc, (rf*ps)+pY0)) * int64(dy))) / int64(lr)
+				ta = ((int64(port.CellsAt(pc, (p*kPs)+pX0)-port.CellsAt(pc, (rf*kPs)+pX0)) * int64(dx)) + (int64(port.CellsAt(pc, (p*kPs)+pY0)-port.CellsAt(pc, (rf*kPs)+pY0)) * int64(dy))) / int64(lr)
+				tb = ((int64(port.CellsAt(pc, (p*kPs)+pX1)-port.CellsAt(pc, (rf*kPs)+pX0)) * int64(dx)) + (int64(port.CellsAt(pc, (p*kPs)+pY1)-port.CellsAt(pc, (rf*kPs)+pY0)) * int64(dy))) / int64(lr)
 				if tb < ta {
 					t = ta
 					ta = tb
@@ -2057,11 +2075,11 @@ func TrSegments(pc *port.Cells, np int32, rmin int32, sg *port.Cells, mem *port.
 				}
 				k += 1
 			}
-			port.CellsSet(sg, (ns*sg)+gGaps, int32(gaps))
+			port.CellsSet(sg, (ns*kSg)+gGaps, int32(gaps))
 		}
 		g += 1
 	}
-	return port.CellsLen(sg) / sg
+	return port.CellsLen(sg) / kSg
 }
 
 func trSortedMedian(a *port.Cells, n int32) int32 {
@@ -2087,7 +2105,7 @@ func trSortedMedian(a *port.Cells, n int32) int32 {
 
 func trAlong(pc *port.Cells, ref int32, x int32, y int32, dx int32, dy int32, lr int32) int32 {
 	// The position of the point (x, y) along piece `ref`'s direction (dx, dy; length lr), from its start, in doubled pixels.
-	return int32(((int64(x-port.CellsAt(pc, (ref*ps)+pX0)) * int64(dx)) + (int64(y-port.CellsAt(pc, (ref*ps)+pY0)) * int64(dy))) / int64(lr))
+	return int32(((int64(x-port.CellsAt(pc, (ref*kPs)+pX0)) * int64(dx)) + (int64(y-port.CellsAt(pc, (ref*kPs)+pY0)) * int64(dy))) / int64(lr))
 }
 
 func trDashGroup(cnt int32, s1 *port.Cells, s4 *port.Cells) int32 {
@@ -2182,20 +2200,20 @@ func TrDashes(sg *port.Cells, ns int32, rmin int32, dashgap int32, mem *port.Cel
 	port.CellsDrop(pc, 0)
 	i = 0
 	for i < ns {
-		port.CellsSet(sg, (i*sg)+gStyle, 0)
-		if (port.CellsAt(sg, (i*sg)+gLen) / 2) >= rmin {
-			port.CellsSet(sg, (i*sg)+gStyle, 1)
+		port.CellsSet(sg, (i*kSg)+gStyle, 0)
+		if (port.CellsAt(sg, (i*kSg)+gLen) / 2) >= rmin {
+			port.CellsSet(sg, (i*kSg)+gStyle, 1)
 			nrules += 1
-		} else if port.CellsAt(sg, (i*sg)+gLen) > 0 {
-			port.CellsPush(pc, port.CellsAt(sg, (i*sg)+gAx))
-			port.CellsPush(pc, port.CellsAt(sg, (i*sg)+gAy))
-			port.CellsPush(pc, port.CellsAt(sg, (i*sg)+gBx))
-			port.CellsPush(pc, port.CellsAt(sg, (i*sg)+gBy))
-			port.CellsPush(pc, port.CellsAt(sg, (i*sg)+gThk))
-			port.CellsPush(pc, port.CellsAt(sg, (i*sg)+gComp))
+		} else if port.CellsAt(sg, (i*kSg)+gLen) > 0 {
+			port.CellsPush(pc, port.CellsAt(sg, (i*kSg)+gAx))
+			port.CellsPush(pc, port.CellsAt(sg, (i*kSg)+gAy))
+			port.CellsPush(pc, port.CellsAt(sg, (i*kSg)+gBx))
+			port.CellsPush(pc, port.CellsAt(sg, (i*kSg)+gBy))
+			port.CellsPush(pc, port.CellsAt(sg, (i*kSg)+gThk))
+			port.CellsPush(pc, port.CellsAt(sg, (i*kSg)+gComp))
 			port.CellsPush(pc, 0)
-			port.CellsPush(pc, port.CellsAt(sg, (i*sg)+gMinw))
-			port.CellsPush(pc, port.CellsAt(sg, (i*sg)+gMaxw))
+			port.CellsPush(pc, port.CellsAt(sg, (i*kSg)+gMinw))
+			port.CellsPush(pc, port.CellsAt(sg, (i*kSg)+gMaxw))
 			port.CellsPush(pc, 1)
 			port.CellsPush(pc, n2)
 			port.CellsPush(pc, i)
@@ -2205,7 +2223,7 @@ func TrDashes(sg *port.Cells, ns int32, rmin int32, dashgap int32, mem *port.Cel
 	}
 	if n2 >= 3 {
 		TrMergePieces(pc, n2, dashgap, s1, s2, s3)
-		trGroup(pc, ps, 10, n2, n2, s2, s3)
+		trGroup(pc, kPs, 10, n2, n2, s2, s3)
 		g = 0
 		for g < n2 {
 			lo = port.CellsAt(s3, g)
@@ -2213,15 +2231,15 @@ func TrDashes(sg *port.Cells, ns int32, rmin int32, dashgap int32, mem *port.Cel
 			cnt = hi - lo
 			if cnt >= 3 {
 				first = port.CellsAt(s2, lo)
-				dx = port.CellsAt(pc, (first*ps)+pX1) - port.CellsAt(pc, (first*ps)+pX0)
-				dy = port.CellsAt(pc, (first*ps)+pY1) - port.CellsAt(pc, (first*ps)+pY0)
+				dx = port.CellsAt(pc, (first*kPs)+pX1) - port.CellsAt(pc, (first*kPs)+pX0)
+				dy = port.CellsAt(pc, (first*kPs)+pY1) - port.CellsAt(pc, (first*kPs)+pY0)
 				lr = trMax(1, TrIsqrt((int64(dx)*int64(dx))+(int64(dy)*int64(dy))))
 				port.CellsDrop(s4, 0)
 				k = lo
 				for k < hi {
 					j = port.CellsAt(s2, k)
-					t0 = trAlong(pc, first, port.CellsAt(pc, (j*ps)+pX0), port.CellsAt(pc, (j*ps)+pY0), dx, dy, lr)
-					t1 = trAlong(pc, first, port.CellsAt(pc, (j*ps)+pX1), port.CellsAt(pc, (j*ps)+pY1), dx, dy, lr)
+					t0 = trAlong(pc, first, port.CellsAt(pc, (j*kPs)+pX0), port.CellsAt(pc, (j*kPs)+pY0), dx, dy, lr)
+					t1 = trAlong(pc, first, port.CellsAt(pc, (j*kPs)+pX1), port.CellsAt(pc, (j*kPs)+pY1), dx, dy, lr)
 					if t1 < t0 {
 						v = t0
 						t0 = t1
@@ -2257,16 +2275,16 @@ func TrDashes(sg *port.Cells, ns int32, rmin int32, dashgap int32, mem *port.Cel
 					k = 0
 					for k < cnt {
 						j = port.CellsAt(s4, (k*3)+2)
-						sgj = port.CellsAt(pc, (j*ps)+11)
-						sthk += int64(port.CellsAt(sg, (sgj*sg)+gThk))
+						sgj = port.CellsAt(pc, (j*kPs)+11)
+						sthk += int64(port.CellsAt(sg, (sgj*kSg)+gThk))
 						e = 0
 						for e < 2 {
 							if e == 0 {
-								x = port.CellsAt(pc, (j*ps)+pX0)
-								y = port.CellsAt(pc, (j*ps)+pY0)
+								x = port.CellsAt(pc, (j*kPs)+pX0)
+								y = port.CellsAt(pc, (j*kPs)+pY0)
 							} else {
-								x = port.CellsAt(pc, (j*ps)+pX1)
-								y = port.CellsAt(pc, (j*ps)+pY1)
+								x = port.CellsAt(pc, (j*kPs)+pX1)
+								y = port.CellsAt(pc, (j*kPs)+pY1)
 							}
 							t = trAlong(pc, first, x, y, dx, dy, lr)
 							if t < tmin {
@@ -2283,32 +2301,32 @@ func TrDashes(sg *port.Cells, ns int32, rmin int32, dashgap int32, mem *port.Cel
 						}
 						k += 1
 					}
-					sgi = port.CellsAt(pc, (port.CellsAt(s4, 2)*ps)+11)
-					port.CellsSet(sg, (sgi*sg)+gAx, ax)
-					port.CellsSet(sg, (sgi*sg)+gAy, ay)
-					port.CellsSet(sg, (sgi*sg)+gBx, bx)
-					port.CellsSet(sg, (sgi*sg)+gBy, by)
-					port.CellsSet(sg, (sgi*sg)+gThk, int32((sthk+int64(cnt/2))/int64(cnt)))
-					port.CellsSet(sg, (sgi*sg)+gLen, tmax-tmin)
-					port.CellsSet(sg, (sgi*sg)+gGaps, 0)
+					sgi = port.CellsAt(pc, (port.CellsAt(s4, 2)*kPs)+11)
+					port.CellsSet(sg, (sgi*kSg)+gAx, ax)
+					port.CellsSet(sg, (sgi*kSg)+gAy, ay)
+					port.CellsSet(sg, (sgi*kSg)+gBx, bx)
+					port.CellsSet(sg, (sgi*kSg)+gBy, by)
+					port.CellsSet(sg, (sgi*kSg)+gThk, int32((sthk+int64(cnt/2))/int64(cnt)))
+					port.CellsSet(sg, (sgi*kSg)+gLen, tmax-tmin)
+					port.CellsSet(sg, (sgi*kSg)+gGaps, 0)
 					// the members of every dash, appended to one list
 					mf = port.CellsLen(mem)
 					k = 0
 					for k < cnt {
-						sgj = port.CellsAt(pc, (port.CellsAt(s4, (k*3)+2)*ps)+11)
+						sgj = port.CellsAt(pc, (port.CellsAt(s4, (k*3)+2)*kPs)+11)
 						q = 0
-						for q < port.CellsAt(sg, (sgj*sg)+gMcount) {
-							trSegAddMember(mem, mf, port.CellsAt(mem, port.CellsAt(sg, (sgj*sg)+gMfirst)+q))
+						for q < port.CellsAt(sg, (sgj*kSg)+gMcount) {
+							trSegAddMember(mem, mf, port.CellsAt(mem, port.CellsAt(sg, (sgj*kSg)+gMfirst)+q))
 							q += 1
 						}
 						k += 1
 					}
-					port.CellsSet(sg, (sgi*sg)+gMfirst, mf)
-					port.CellsSet(sg, (sgi*sg)+gMcount, port.CellsLen(mem)-mf)
-					if (mdash * 4) <= (2 * port.CellsAt(sg, (sgi*sg)+gThk)) {
-						port.CellsSet(sg, (sgi*sg)+gStyle, 3)
+					port.CellsSet(sg, (sgi*kSg)+gMfirst, mf)
+					port.CellsSet(sg, (sgi*kSg)+gMcount, port.CellsLen(mem)-mf)
+					if (mdash * 4) <= (2 * port.CellsAt(sg, (sgi*kSg)+gThk)) {
+						port.CellsSet(sg, (sgi*kSg)+gStyle, 3)
 					} else {
-						port.CellsSet(sg, (sgi*sg)+gStyle, 2)
+						port.CellsSet(sg, (sgi*kSg)+gStyle, 2)
 					}
 					nrules += 1
 				}
@@ -2347,32 +2365,32 @@ func TrDoubles(sg *port.Cells, ns int32) int32 {
 	}
 	i = 0
 	for i < ns {
-		if port.CellsAt(sg, (i*sg)+gStyle) == 1 {
-			dx = port.CellsAt(sg, (i*sg)+gBx) - port.CellsAt(sg, (i*sg)+gAx)
-			dy = port.CellsAt(sg, (i*sg)+gBy) - port.CellsAt(sg, (i*sg)+gAy)
+		if port.CellsAt(sg, (i*kSg)+gStyle) == 1 {
+			dx = port.CellsAt(sg, (i*kSg)+gBx) - port.CellsAt(sg, (i*kSg)+gAx)
+			dy = port.CellsAt(sg, (i*kSg)+gBy) - port.CellsAt(sg, (i*kSg)+gAy)
 			l1 = (int64(dx) * int64(dx)) + (int64(dy) * int64(dy))
 			li = trMax(1, TrIsqrt(l1))
 			j = i + 1
 			for j < ns {
-				if port.CellsAt(sg, (j*sg)+gStyle) == 1 {
-					ex = port.CellsAt(sg, (j*sg)+gBx) - port.CellsAt(sg, (j*sg)+gAx)
-					ey = port.CellsAt(sg, (j*sg)+gBy) - port.CellsAt(sg, (j*sg)+gAy)
+				if port.CellsAt(sg, (j*kSg)+gStyle) == 1 {
+					ex = port.CellsAt(sg, (j*kSg)+gBx) - port.CellsAt(sg, (j*kSg)+gAx)
+					ey = port.CellsAt(sg, (j*kSg)+gBy) - port.CellsAt(sg, (j*kSg)+gAy)
 					l2 = (int64(ex) * int64(ex)) + (int64(ey) * int64(ey))
 					cr = (int64(dx) * int64(ey)) - (int64(dy) * int64(ex))
 					if (cr * cr) <= ((l1 * l2) / int64(820)) {
 						// the perpendicular offset of j's midpoint from i's line, in doubled pixels
-						mx = ((int64(port.CellsAt(sg, (j*sg)+gAx)) + int64(port.CellsAt(sg, (j*sg)+gBx))) / int64(2)) - int64(port.CellsAt(sg, (i*sg)+gAx))
-						my = ((int64(port.CellsAt(sg, (j*sg)+gAy)) + int64(port.CellsAt(sg, (j*sg)+gBy))) / int64(2)) - int64(port.CellsAt(sg, (i*sg)+gAy))
+						mx = ((int64(port.CellsAt(sg, (j*kSg)+gAx)) + int64(port.CellsAt(sg, (j*kSg)+gBx))) / int64(2)) - int64(port.CellsAt(sg, (i*kSg)+gAx))
+						my = ((int64(port.CellsAt(sg, (j*kSg)+gAy)) + int64(port.CellsAt(sg, (j*kSg)+gBy))) / int64(2)) - int64(port.CellsAt(sg, (i*kSg)+gAy))
 						off = ((int64(dx) * my) - (int64(dy) * mx)) / int64(li)
 						if off < int64(0) {
 							off = int64(0) - off
 						}
-						thk = trMax(port.CellsAt(sg, (i*sg)+gThk), port.CellsAt(sg, (j*sg)+gThk))
+						thk = trMax(port.CellsAt(sg, (i*kSg)+gThk), port.CellsAt(sg, (j*kSg)+gThk))
 						// thk is x4 pixels, so doubled pixels are thk / 2: between 1 and 3 thicknesses
 						if ((off * int64(2)) >= int64(thk)) && ((off * int64(2)) <= (int64(thk) * int64(3))) {
 							// overlap along i's axis of j's extent with i's
-							t0 = ((int64(port.CellsAt(sg, (j*sg)+gAx)-port.CellsAt(sg, (i*sg)+gAx)) * int64(dx)) + (int64(port.CellsAt(sg, (j*sg)+gAy)-port.CellsAt(sg, (i*sg)+gAy)) * int64(dy))) / int64(li)
-							t1 = ((int64(port.CellsAt(sg, (j*sg)+gBx)-port.CellsAt(sg, (i*sg)+gAx)) * int64(dx)) + (int64(port.CellsAt(sg, (j*sg)+gBy)-port.CellsAt(sg, (i*sg)+gAy)) * int64(dy))) / int64(li)
+							t0 = ((int64(port.CellsAt(sg, (j*kSg)+gAx)-port.CellsAt(sg, (i*kSg)+gAx)) * int64(dx)) + (int64(port.CellsAt(sg, (j*kSg)+gAy)-port.CellsAt(sg, (i*kSg)+gAy)) * int64(dy))) / int64(li)
+							t1 = ((int64(port.CellsAt(sg, (j*kSg)+gBx)-port.CellsAt(sg, (i*kSg)+gAx)) * int64(dx)) + (int64(port.CellsAt(sg, (j*kSg)+gBy)-port.CellsAt(sg, (i*kSg)+gAy)) * int64(dy))) / int64(li)
 							if t1 < t0 {
 								ov = t0
 								t0 = t1
@@ -2387,8 +2405,8 @@ func TrDoubles(sg *port.Cells, ns int32) int32 {
 							ov = t1 - t0
 							small = int64(trMin(li, TrIsqrt(l2)))
 							if (ov > int64(0)) && ((ov * int64(10)) >= (small * int64(6))) {
-								port.CellsSet(sg, (i*sg)+gStyle, 4)
-								port.CellsSet(sg, (j*sg)+gStyle, 4)
+								port.CellsSet(sg, (i*kSg)+gStyle, 4)
+								port.CellsSet(sg, (j*kSg)+gStyle, 4)
 								n += 1
 							}
 						}
@@ -2424,17 +2442,16 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, cs *por
 	var k int32 = 0
 	var c int32 = 0
 	var ir int32 = 0
-	var rf int32 = 0
 	var thk int32 = 0
 	var ln int32 = 0
 	for i < ns {
-		style = port.CellsAt(sg, (i*sg)+gStyle)
+		style = port.CellsAt(sg, (i*kSg)+gStyle)
 		if style > 0 {
-			ax = port.CellsAt(sg, (i*sg)+gAx)
-			ay = port.CellsAt(sg, (i*sg)+gAy)
-			bx = port.CellsAt(sg, (i*sg)+gBx)
-			by = port.CellsAt(sg, (i*sg)+gBy)
-			thk = port.CellsAt(sg, (i*sg)+gThk)
+			ax = port.CellsAt(sg, (i*kSg)+gAx)
+			ay = port.CellsAt(sg, (i*kSg)+gAy)
+			bx = port.CellsAt(sg, (i*kSg)+gBx)
+			by = port.CellsAt(sg, (i*kSg)+gBy)
+			thk = port.CellsAt(sg, (i*kSg)+gThk)
 			thkpx = (thk + 3) / 4
 			x0 = (trMin(ax, bx) - thkpx) >> uint(1)
 			y0 = (trMin(ay, by) - thkpx) >> uint(1)
@@ -2446,7 +2463,7 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, cs *por
 			evidence.RlSet(rules, r, evidence.RlfLx1(), TrH2cpt(views, view, 0, bx, by))
 			evidence.RlSet(rules, r, evidence.RlfLy1(), TrH2cpt(views, view, 1, bx, by))
 			evidence.RlSet(rules, r, evidence.RlfThick(), trLenCpt(thk, dpi100*4))
-			c = port.CellsAt(sg, (i*sg)+gComp)
+			c = port.CellsAt(sg, (i*kSg)+gComp)
 			ir = TrCg(cs, c, cInkrow)
 			evidence.RlSet(rules, r, evidence.RlfInk(), ir)
 			if ir >= 0 {
@@ -2465,12 +2482,12 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, cs *por
 				evidence.RlSet(rules, r, evidence.RlfStyle(), evidence.RsSolid())
 			}
 			// confidence
-			ln = port.CellsAt(sg, (i*sg)+gLen)
+			ln = port.CellsAt(sg, (i*kSg)+gLen)
 			conf = 1000
 			if (style == 1) || (style == 4) {
-				conf -= trPermille(port.CellsAt(sg, (i*sg)+gGaps), trMax(1, ln))
+				conf -= trPermille(port.CellsAt(sg, (i*kSg)+gGaps), trMax(1, ln))
 			}
-			if (2 * ((port.CellsAt(sg, (i*sg)+gMaxw) - port.CellsAt(sg, (i*sg)+gMinw)) - 1)) > ((thk + 2) / 4) {
+			if (2 * ((port.CellsAt(sg, (i*kSg)+gMaxw) - port.CellsAt(sg, (i*kSg)+gMinw)) - 1)) > ((thk + 2) / 4) {
 				conf -= 300
 			}
 			if conf < 0 {
@@ -2479,10 +2496,10 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, cs *por
 			evidence.RlSet(rules, r, evidence.RlfConf(), conf)
 			// members
 			evidence.RlSet(rules, r, evidence.RlfRfirst(), port.CellsLen(refs)/2)
-			evidence.RlSet(rules, r, evidence.RlfRcount(), port.CellsAt(sg, (i*sg)+gMcount))
+			evidence.RlSet(rules, r, evidence.RlfRcount(), port.CellsAt(sg, (i*kSg)+gMcount))
 			k = 0
-			for k < port.CellsAt(sg, (i*sg)+gMcount) {
-				c = port.CellsAt(mem, port.CellsAt(sg, (i*sg)+gMfirst)+k)
+			for k < port.CellsAt(sg, (i*kSg)+gMcount) {
+				c = port.CellsAt(mem, port.CellsAt(sg, (i*kSg)+gMfirst)+k)
 				port.CellsPush(refs, evidence.EaComponents())
 				port.CellsPush(refs, TrCg(cs, c, cEvrow))
 				if TrCg(cs, c, cRule) < 0 {
@@ -2541,4 +2558,1186 @@ func TrRules(views *port.Cells, page int32, view int32, dpi100 int32, w int32, h
 		c += 1
 	}
 	return rows
+}
+
+func trCornerW(raw *port.Cells, i int32, m int32) int32 {
+	// The weight of corner i of a closed contour: the lengths of its two edges (axis-aligned, so Manhattan).
+	var p int32 = trPtWrap(i+(m-1), m)
+	var q int32 = trPtWrap(i+1, m)
+	return (trAbs(port.CellsAt(raw, i*2)-port.CellsAt(raw, p*2)) + trAbs(port.CellsAt(raw, (i*2)+1)-port.CellsAt(raw, (p*2)+1))) + (trAbs(port.CellsAt(raw, q*2)-port.CellsAt(raw, i*2)) + trAbs(port.CellsAt(raw, (q*2)+1)-port.CellsAt(raw, (i*2)+1)))
+}
+
+func trRotU(x int32, y int32, co int32, si int32) int32 {
+	// x * cos - y * sin in the frame of an angle whose cos and sin are 16.16 (y down): the coordinate ALONG that direction.
+	return int32(int64(uint64(((int64(x)*int64(co))+(int64(0-y)*int64(si)))+int64(32768)) >> uint(16)))
+}
+
+func trRotV(x int32, y int32, co int32, si int32) int32 {
+	// x * sin + y * cos: the coordinate ACROSS it.
+	return int32(int64(uint64(((int64(x)*int64(si))+(int64(y)*int64(co)))+int64(32768)) >> uint(16)))
+}
+
+func trRectFit(raw *port.Cells, m int32, simp *port.Cells, k int32, res *port.Cells) int32 {
+	// Fit a rectangle to the simplified polygon `simp` (k corners) and the raw contour (m corners): the dominant direction is the
+	// longest edge's; edges of 4 px or more must lie within 3 degrees of it or of its perpendicular, off-axis edges being at most 1/8
+	// of the perimeter. `res` gets: angle (centi-degrees, 0..9000), centre x2 y2 (doubled px), radii u2 v2 (doubled px), mean
+	// residual per mille of the smaller radius. Answers 1 when it is a rectangle (residual under 40), else 0.
+	var i int32 = 0
+	var j int32 = 0
+	var dx int32 = 0
+	var dy int32 = 0
+	var le int32 = 0
+	var lbest int32 = 0
+	var theta int32 = 0
+	var perim int32 = 0
+	var off int32 = 0
+	var r int32 = 0
+	var u int32 = 0
+	var v int32 = 0
+	var umin int32 = 100000000
+	var umax int32 = -100000000
+	var vmin int32 = 100000000
+	var vmax int32 = -100000000
+	var sum int64 = 0
+	var d int32 = 0
+	var co int32 = 0
+	var si int32 = 0
+	var ru2 int32 = 0
+	var rv2 int32 = 0
+	if k < 4 {
+		return 0
+	}
+	i = 0
+	for i < k {
+		j = trPtWrap(i+1, k)
+		dx = port.CellsAt(simp, j*2) - port.CellsAt(simp, i*2)
+		dy = port.CellsAt(simp, (j*2)+1) - port.CellsAt(simp, (i*2)+1)
+		le = TrIsqrt((int64(dx) * int64(dx)) + (int64(dy) * int64(dy)))
+		perim += le
+		if le > lbest {
+			lbest = le
+			theta = evidence.EvAngle(dx, dy)
+		}
+		i += 1
+	}
+	theta = theta % 9000
+	i = 0
+	for i < k {
+		j = trPtWrap(i+1, k)
+		dx = port.CellsAt(simp, j*2) - port.CellsAt(simp, i*2)
+		dy = port.CellsAt(simp, (j*2)+1) - port.CellsAt(simp, (i*2)+1)
+		le = TrIsqrt((int64(dx) * int64(dx)) + (int64(dy) * int64(dy)))
+		if le >= 4 {
+			r = (((evidence.EvAngle(dx, dy) % 9000) - theta) + 9000) % 9000
+			if (r > 300) && (r < 8700) {
+				off += le
+			}
+		}
+		i += 1
+	}
+	if (off * 8) > perim {
+		return 0
+	}
+	co = evidence.EvCos(theta)
+	si = evidence.EvSin(theta)
+	i = 0
+	for i < m {
+		u = trRotU(port.CellsAt(raw, i*2), port.CellsAt(raw, (i*2)+1), co, si)
+		v = trRotV(port.CellsAt(raw, i*2), port.CellsAt(raw, (i*2)+1), co, si)
+		if u < umin {
+			umin = u
+		}
+		if u > umax {
+			umax = u
+		}
+		if v < vmin {
+			vmin = v
+		}
+		if v > vmax {
+			vmax = v
+		}
+		i += 1
+	}
+	ru2 = umax - umin
+	rv2 = vmax - vmin
+	if (ru2 < 4) || (rv2 < 4) {
+		return 0
+	}
+	i = 0
+	for i < m {
+		u = trRotU(port.CellsAt(raw, i*2), port.CellsAt(raw, (i*2)+1), co, si)
+		v = trRotV(port.CellsAt(raw, i*2), port.CellsAt(raw, (i*2)+1), co, si)
+		d = trMin(trMin(trAbs(u-umin), trAbs(u-umax)), trMin(trAbs(v-vmin), trAbs(v-vmax)))
+		sum += int64(d)
+		i += 1
+	}
+	d = int32((sum * int64(2000)) / (int64(m) * int64(trMin(ru2, rv2))))
+	port.CellsSet(res, 0, theta)
+	// the centre back in the pixel frame: x = u cos + v sin, y = -u sin + v cos
+	u = (umin + umax) / 2
+	v = (vmin + vmax) / 2
+	port.CellsSet(res, 1, int32(int64(uint64(((int64(u)*int64(co))+(int64(v)*int64(si)))+int64(32768))>>uint(16))))
+	port.CellsSet(res, 2, int32(int64(uint64(((int64(0-u)*int64(si))+(int64(v)*int64(co)))+int64(32768))>>uint(16))))
+	port.CellsSet(res, 3, ru2)
+	port.CellsSet(res, 4, rv2)
+	port.CellsSet(res, 5, d)
+	if d < 40 {
+		return 1
+	}
+	return 0
+}
+
+func trEllipseFit(raw *port.Cells, m int32, res *port.Cells) int32 {
+	// Fit an ellipse to the raw contour by moments: the corners weighted by the length of their two edges (so the samples are
+	// uniform along the boundary), the principal axis from the covariance, the radii from the extent along and across it. `res` gets
+	// the angle (0..18000), centre x2 y2 (doubled px), radii u2 v2 (doubled px, as extents) and the mean residual per mille of the
+	// ellipse equation. Answers 1 when it is an ellipse (residual under 40, at least 12 corners), else 0.
+	var i int32 = 0
+	var w int32 = 0
+	var sw int64 = 0
+	var sx int64 = 0
+	var sy int64 = 0
+	var sxx int64 = 0
+	var syy int64 = 0
+	var sxy int64 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	var dx int32 = 0
+	var dy int32 = 0
+	var alpha int32 = 0
+	var co int32 = 0
+	var si int32 = 0
+	var u int32 = 0
+	var v int32 = 0
+	var umin int32 = 100000000
+	var umax int32 = -100000000
+	var vmin int32 = 100000000
+	var vmax int32 = -100000000
+	var sum int64 = 0
+	var n2 int64 = 0
+	var tg int64 = 0
+	var ru int32 = 0
+	var rv int32 = 0
+	var d int32 = 0
+	if m < 12 {
+		return 0
+	}
+	i = 0
+	for i < m {
+		w = trCornerW(raw, i, m)
+		sw += int64(w)
+		sx += int64(w) * int64(port.CellsAt(raw, i*2))
+		sy += int64(w) * int64(port.CellsAt(raw, (i*2)+1))
+		i += 1
+	}
+	if sw <= int64(0) {
+		return 0
+	}
+	cx = int32(sx / sw)
+	cy = int32(sy / sw)
+	i = 0
+	for i < m {
+		w = trCornerW(raw, i, m)
+		dx = port.CellsAt(raw, i*2) - cx
+		dy = port.CellsAt(raw, (i*2)+1) - cy
+		sxx += int64(w) * (int64(dx) * int64(dx))
+		syy += int64(w) * (int64(dy) * int64(dy))
+		sxy += int64(w) * (int64(dx) * int64(dy))
+		i += 1
+	}
+	// 2 alpha = the angle of (sxx - syy, 2 sxy) as `ev-angle` spells it (y down)
+	alpha = evidence.EvAngle(int32((sxx-syy)/trMax64(int64(1), sw/int64(64))), int32((int64(2)*sxy)/trMax64(int64(1), sw/int64(64)))) / 2
+	co = evidence.EvCos(alpha)
+	si = evidence.EvSin(alpha)
+	i = 0
+	for i < m {
+		u = trRotU(port.CellsAt(raw, i*2), port.CellsAt(raw, (i*2)+1), co, si)
+		v = trRotV(port.CellsAt(raw, i*2), port.CellsAt(raw, (i*2)+1), co, si)
+		if u < umin {
+			umin = u
+		}
+		if u > umax {
+			umax = u
+		}
+		if v < vmin {
+			vmin = v
+		}
+		if v > vmax {
+			vmax = v
+		}
+		i += 1
+	}
+	ru = umax - umin
+	rv = vmax - vmin
+	if (ru < 8) || (rv < 8) {
+		return 0
+	}
+	// radii are half the extents: work in doubled pixels, so the extents themselves are the doubled radii
+	i = 0
+	for i < m {
+		u = (2 * trRotU(port.CellsAt(raw, i*2), port.CellsAt(raw, (i*2)+1), co, si)) - (umin + umax)
+		v = (2 * trRotV(port.CellsAt(raw, i*2), port.CellsAt(raw, (i*2)+1), co, si)) - (vmin + vmax)
+		// (u / ru)^2 + (v / rv)^2 = 1 with u and v now doubled offsets and ru, rv the doubled radii: distance 1000 * (n / (ru rv) - 1)
+		n2 = ((int64(u) * int64(u)) * (int64(rv) * int64(rv))) + ((int64(v) * int64(v)) * (int64(ru) * int64(ru)))
+		tg = int64(ru) * int64(rv)
+		sum += trAbs64(((int64(TrIsqrt(n2)) * int64(1000)) / tg) - int64(1000))
+		i += 1
+	}
+	d = int32(sum / int64(m))
+	port.CellsSet(res, 0, alpha)
+	port.CellsSet(res, 1, int32(int64(uint64(((int64((umin+umax)/2)*int64(co))+(int64((vmin+vmax)/2)*int64(si)))+int64(32768))>>uint(16))))
+	port.CellsSet(res, 2, int32(int64(uint64(((int64(0-((umin+umax)/2))*int64(si))+(int64((vmin+vmax)/2)*int64(co)))+int64(32768))>>uint(16))))
+	port.CellsSet(res, 3, ru)
+	port.CellsSet(res, 4, rv)
+	port.CellsSet(res, 5, d)
+	if d < 40 {
+		return 1
+	}
+	return 0
+}
+
+func trEmitPoly(views *port.Cells, view int32, pts *port.Cells, simp *port.Cells, k int32) int32 {
+	// Append the closed polygon `simp` (k corners, x y px) to `pts` as centipoints: move, line ..., close. Answers its first row.
+	var first int32 = port.CellsLen(pts) / 3
+	var i int32 = 0
+	for i < k {
+		port.CellsPush(pts, evidence.VwPxToCpt(views, view, 0, port.CellsAt(simp, i*2), port.CellsAt(simp, (i*2)+1)))
+		port.CellsPush(pts, evidence.VwPxToCpt(views, view, 1, port.CellsAt(simp, i*2), port.CellsAt(simp, (i*2)+1)))
+		if i == 0 {
+			port.CellsPush(pts, evidence.PoMove())
+		} else {
+			port.CellsPush(pts, evidence.PoLine())
+		}
+		i += 1
+	}
+	port.CellsPush(pts, port.CellsAt(pts, first*3))
+	port.CellsPush(pts, port.CellsAt(pts, (first*3)+1))
+	port.CellsPush(pts, evidence.PoClose())
+	return first
+}
+
+func trRingTest(rn *port.Cells, ri *port.Cells, comp int32, cx int32, cy int32, ru2 int32) int32 {
+	// 1 when component `comp`'s runs in the row through (cx, cy) are exactly two, the gap between them is a hole at least 3/10 of
+	// the radius wide (`ru2` is the diameter) and centred within 15 per cent of the radius: an annulus.
+	var r int32 = port.CellsAt(ri, cy)
+	var re int32 = port.CellsAt(ri, cy+1)
+	var n int32 = 0
+	var le int32 = 0
+	var rs int32 = 0
+	var mid int32 = 0
+	for r < re {
+		if trRg(rn, r, 5) == comp {
+			if n == 0 {
+				le = trRg(rn, r, 2)
+			}
+			rs = trRg(rn, r, 1)
+			n += 1
+		}
+		r += 1
+	}
+	if n != 2 {
+		return 0
+	}
+	if (10 * (rs - le)) < (3 * ru2) {
+		return 0
+	}
+	if (rs - le) >= ru2 {
+		return 0
+	}
+	mid = (le + rs) / 2
+	if (100 * trAbs(mid-cx)) > (15 * (ru2 / 2)) {
+		return 0
+	}
+	return 1
+}
+
+func TrShapes(views *port.Cells, page int32, view int32, dpi100 int32, bin *port.Bitmap, rn *port.Cells, ri *port.Cells, cs *port.Cells, comps *port.Cells, prims *port.Cells, pts *port.Cells, refs *port.Cells, inks *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells) int32 {
+	// Contours (SPEC 8.2): the outer boundary of every LARGE component that gave no rule, traced on the binary view, simplified,
+	// written to `pts` (the `components` row's `pfirst pcount`); and one primitive each: `rect`, `circle`/`ellipse` (or `ring`: an
+	// annulus), else `polygon` (up to 12 corners) or `curve`. Fit residuals are per mille of the radius and the confidence is 1000
+	// less eight times it. Answers the number of primitives. `s1`..`s5` are scratch (s1 the raw corners, s4 the simplified).
+	var nc int32 = port.CellsLen(cs) / 24
+	var c int32 = 0
+	var rr int32 = 0
+	var m int32 = 0
+	var k int32 = 0
+	var i int32 = 0
+	var np int32 = 0
+	var pf int32 = 0
+	var kind int32 = 0
+	var fit int32 = 0
+	var prow int32 = 0
+	var evr int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	var ru2 int32 = 0
+	var rv2 int32 = 0
+	var th int32 = 0
+	var co int32 = 0
+	var si int32 = 0
+	var ir int32 = 0
+	var flags int32 = 0
+	var fill int32 = 0
+	var conf int32 = 0
+	var ax int32 = 0
+	var ay int32 = 0
+	var hu int32 = 0
+	var hv int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var npts int32 = 0
+	var pcf int32 = 0
+	c = 0
+	for c < nc {
+		if (TrCg(cs, c, cKind) == TrKLarge()) && (TrCg(cs, c, cRule) < 0) {
+			rr = TrCg(cs, c, cRoot)
+			m = TrContourRaw(bin, trRg(rn, rr, 1), trRg(rn, rr, 0), s1, TrMaxContour())
+			if m >= 4 {
+				TrSimplify(s1, m, 1, TrDpEps2(), s2, s3)
+				port.CellsDrop(s4, 0)
+				k = 0
+				i = 0
+				for i < m {
+					if port.CellsAt(s2, i) == 1 {
+						port.CellsPush(s4, port.CellsAt(s1, i*2))
+						port.CellsPush(s4, port.CellsAt(s1, (i*2)+1))
+						k += 1
+					}
+					i += 1
+				}
+				pf = trEmitPoly(views, view, pts, s4, k)
+				npts = k + 1
+				evr = TrCg(cs, c, cEvrow)
+				evidence.CoSet(comps, evr, evidence.CfPfirst(), pf)
+				evidence.CoSet(comps, evr, evidence.CfPcount(), npts)
+				// the fit
+				port.CellsDrop(s5, 0)
+				port.CellsGrow(s5, 8, 0)
+				kind = 0
+				pcf = pf
+				flags = 1
+				if trRectFit(s1, m, s4, k, s5) == 1 {
+					kind = evidence.PmRect()
+					th = port.CellsAt(s5, 0)
+				} else if trEllipseFit(s1, m, s5) == 1 {
+					th = port.CellsAt(s5, 0)
+					if (20 * trAbs(port.CellsAt(s5, 3)-port.CellsAt(s5, 4))) < trMax(port.CellsAt(s5, 3), port.CellsAt(s5, 4)) {
+						kind = evidence.PmCircle()
+					} else {
+						kind = evidence.PmEllipse()
+					}
+				} else {
+					if k <= 12 {
+						kind = evidence.PmPolygon()
+					} else {
+						kind = evidence.PmCurve()
+					}
+				}
+				fit = port.CellsAt(s5, 5)
+				cx = port.CellsAt(s5, 1)
+				cy = port.CellsAt(s5, 2)
+				ru2 = port.CellsAt(s5, 3)
+				rv2 = port.CellsAt(s5, 4)
+				if (kind == evidence.PmPolygon()) || (kind == evidence.PmCurve()) {
+					cx = (TrCg(cs, c, cLeft) + TrCg(cs, c, cRight)) / 2
+					cy = (TrCg(cs, c, cTop) + TrCg(cs, c, cBottom)) / 2
+					ru2 = TrCg(cs, c, cRight) - TrCg(cs, c, cLeft)
+					rv2 = TrCg(cs, c, cBottom) - TrCg(cs, c, cTop)
+					th = 0
+					if kind == evidence.PmPolygon() {
+						conf = 500
+					} else {
+						conf = 300
+					}
+				}
+				if (kind == evidence.PmRect()) || (kind == evidence.PmCircle()) || (kind == evidence.PmEllipse()) {
+					conf = trMax(0, 1000-(8*fit))
+				}
+				if ((kind == evidence.PmCircle()) || (kind == evidence.PmEllipse())) && (TrCg(cs, c, cHoles) > 0) {
+					if trRingTest(rn, ri, c, cx, cy, ru2) == 1 {
+						kind = evidence.PmRing()
+					}
+				}
+				// the fill: ink over the fitted shape's area
+				if kind == evidence.PmRect() {
+					fill = trPermille(TrCg(cs, c, cInk), ru2*rv2)
+				} else {
+					fill = trPermille(TrCg(cs, c, cInk), (((ru2*rv2)/100)*785)/10)
+				}
+				if fill >= 800 {
+					flags += 2
+				}
+				// a rect is written as its four corners
+				co = evidence.EvCos(th)
+				si = evidence.EvSin(th)
+				if kind == evidence.PmRect() {
+					port.CellsDrop(s4, 0)
+					i = 0
+					for i < 4 {
+						if (i == 0) || (i == 3) {
+							hu = 0 - ru2
+						} else {
+							hu = ru2
+						}
+						if i < 2 {
+							hv = 0 - rv2
+						} else {
+							hv = rv2
+						}
+						port.CellsPush(s4, cx+int32(int64(uint64((int64(hu)*int64(co))+(int64(hv)*int64(si)))>>uint(17))))
+						port.CellsPush(s4, cy+int32(int64(uint64((int64(0-hu)*int64(si))+(int64(hv)*int64(co)))>>uint(17))))
+						i += 1
+					}
+					pcf = trEmitPoly(views, view, pts, s4, 4)
+				}
+				x0 = evidence.VwBoxToCpt(views, view, 0, TrCg(cs, c, cLeft), TrCg(cs, c, cTop), TrCg(cs, c, cRight)-TrCg(cs, c, cLeft), TrCg(cs, c, cBottom)-TrCg(cs, c, cTop))
+				y0 = evidence.VwBoxToCpt(views, view, 1, TrCg(cs, c, cLeft), TrCg(cs, c, cTop), TrCg(cs, c, cRight)-TrCg(cs, c, cLeft), TrCg(cs, c, cBottom)-TrCg(cs, c, cTop))
+				x1 = evidence.VwBoxToCpt(views, view, 2, TrCg(cs, c, cLeft), TrCg(cs, c, cTop), TrCg(cs, c, cRight)-TrCg(cs, c, cLeft), TrCg(cs, c, cBottom)-TrCg(cs, c, cTop))
+				y1 = evidence.VwBoxToCpt(views, view, 3, TrCg(cs, c, cLeft), TrCg(cs, c, cTop), TrCg(cs, c, cRight)-TrCg(cs, c, cLeft), TrCg(cs, c, cBottom)-TrCg(cs, c, cTop))
+				prow = evidence.PmNew(prims, page, x0, y0, x1, y1, kind)
+				evidence.PmSet(prims, prow, evidence.PmfView(), view)
+				evidence.PmSet(prims, prow, evidence.PmfCx(), evidence.VwPxToCpt(views, view, 0, cx, cy))
+				evidence.PmSet(prims, prow, evidence.PmfCy(), evidence.VwPxToCpt(views, view, 1, cx, cy))
+				evidence.PmSet(prims, prow, evidence.PmfRx(), trLenCpt(ru2, dpi100*2))
+				evidence.PmSet(prims, prow, evidence.PmfRy(), trLenCpt(rv2, dpi100*2))
+				ax = cx + int32(int64(uint64(int64(64)*int64(co))>>uint(16)))
+				ay = cy - int32(int64(uint64(int64(64)*int64(si))>>uint(16)))
+				evidence.PmSet(prims, prow, evidence.PmfRot(), evidence.EvAngle(evidence.VwPxToCpt(views, view, 0, ax, ay)-evidence.VwPxToCpt(views, view, 0, cx, cy), evidence.VwPxToCpt(views, view, 1, ax, ay)-evidence.VwPxToCpt(views, view, 1, cx, cy)))
+				evidence.PmSet(prims, prow, evidence.PmfStroke(), trLenCpt(TrStrokePx(cs, c), dpi100))
+				ir = TrCg(cs, c, cInkrow)
+				evidence.PmSet(prims, prow, evidence.PmfInk(), ir)
+				if ir >= 0 {
+					evidence.PmSet(prims, prow, evidence.PmfColor(), evidence.IkGet(inks, ir, evidence.IkfColor()))
+				}
+				evidence.PmSet(prims, prow, evidence.PmfFill(), fill)
+				evidence.PmSet(prims, prow, evidence.PmfConf(), conf)
+				evidence.PmSet(prims, prow, evidence.PmfPfirst(), pcf)
+				if kind == evidence.PmRect() {
+					evidence.PmSet(prims, prow, evidence.PmfPcount(), 5)
+				} else {
+					evidence.PmSet(prims, prow, evidence.PmfPcount(), npts)
+				}
+				evidence.PmSet(prims, prow, evidence.PmfRfirst(), port.CellsLen(refs)/2)
+				evidence.PmSet(prims, prow, evidence.PmfRcount(), 1)
+				port.CellsPush(refs, evidence.EaComponents())
+				port.CellsPush(refs, evr)
+				evidence.PmSet(prims, prow, evidence.PmfFlags(), flags)
+				trCset(cs, c, cPrim, prow)
+				trCset(cs, c, cCx2, cx)
+				trCset(cs, c, cCy2, cy)
+				np += 1
+			}
+		}
+		c += 1
+	}
+	return np
+}
+
+func TrDoubleRings(cs *port.Cells, prims *port.Cells, refs *port.Cells) int32 {
+	// A circle or ring whose PARENT component also carries a circle or ring primitive, concentric within 15 per cent of the outer
+	// radius and smaller than it (0.4 .. 0.97 of it), makes the parent's primitive a `ring` with the `double` flag, its members
+	// both components. Answers how many rings were doubled.
+	var nc int32 = port.CellsLen(cs) / 24
+	var c int32 = 0
+	var p int32 = 0
+	var pr int32 = 0
+	var cr int32 = 0
+	var rp int32 = 0
+	var rc int32 = 0
+	var n int32 = 0
+	for c < nc {
+		p = TrCg(cs, c, cParent)
+		cr = TrCg(cs, c, cPrim)
+		if (p >= 0) && (cr >= 0) {
+			pr = TrCg(cs, p, cPrim)
+			if pr >= 0 {
+				if ((evidence.PmGet(prims, pr, evidence.PmfKind()) == evidence.PmCircle()) || (evidence.PmGet(prims, pr, evidence.PmfKind()) == evidence.PmRing())) && ((evidence.PmGet(prims, cr, evidence.PmfKind()) == evidence.PmCircle()) || (evidence.PmGet(prims, cr, evidence.PmfKind()) == evidence.PmRing())) {
+					rp = evidence.PmGet(prims, pr, evidence.PmfRx())
+					rc = evidence.PmGet(prims, cr, evidence.PmfRx())
+					if ((rc * 100) > (rp * 40)) && ((rc * 100) < (rp * 97)) {
+						if ((100 * trAbs(evidence.PmGet(prims, pr, evidence.PmfCx())-evidence.PmGet(prims, cr, evidence.PmfCx()))) <= (15 * rp)) && ((100 * trAbs(evidence.PmGet(prims, pr, evidence.PmfCy())-evidence.PmGet(prims, cr, evidence.PmfCy()))) <= (15 * rp)) {
+							if (evidence.PmGet(prims, pr, evidence.PmfFlags()) & 4) == 0 {
+								evidence.PmSet(prims, pr, evidence.PmfKind(), evidence.PmRing())
+								rp = evidence.PmGet(prims, pr, evidence.PmfFlags())
+								evidence.PmSet(prims, pr, evidence.PmfFlags(), rp+4)
+								evidence.PmSet(prims, pr, evidence.PmfRfirst(), port.CellsLen(refs)/2)
+								evidence.PmSet(prims, pr, evidence.PmfRcount(), 2)
+								port.CellsPush(refs, evidence.EaComponents())
+								port.CellsPush(refs, TrCg(cs, p, cEvrow))
+								port.CellsPush(refs, evidence.EaComponents())
+								port.CellsPush(refs, TrCg(cs, c, cEvrow))
+								n += 1
+							}
+						}
+					}
+				}
+			}
+		}
+		c += 1
+	}
+	return n
+}
+
+func TrTints(views *port.Cells, page int32, view int32, dpi100 int32, mask *port.Bitmap, inkrow int32, inks *port.Cells, prims *port.Cells, refs *port.Cells, s1 *port.Cells, s2 *port.Cells) int32 {
+	// Shading and header fills (D226): on one `light` or `background` ink MASK, the row runs at least `tr-fill-min` long are merged
+	// into rectangles whose consecutive rows share their x-extent within `tr-fill-tol`; a rectangle at least `tr-fill-min` each way
+	// becomes a `rect` primitive with the flags `closed`, `filled` and `tint`, the layer's colour, fill = the mask's coverage of its
+	// box per mille and confidence = that coverage. `s1` `s2` are scratch (the rectangles open in the previous and the current row;
+	// 10 cells each: x0 x1 top rows ink minx maxx). Answers the tints written.
+	var w int32 = port.BitmapW(mask)
+	var h int32 = port.BitmapH(mask)
+	var fmin int32 = TrFillMin(dpi100)
+	var tol int32 = TrFillTol()
+	var y int32 = 0
+	var x int32 = 0
+	var e int32 = 0
+	var np int32 = 0
+	var nc int32 = 0
+	var i int32 = 0
+	var hit int32 = 0
+	var n int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var cov int32 = 0
+	var prow int32 = 0
+	port.CellsDrop(s1, 0)
+	port.CellsDrop(s2, 0)
+	y = 0
+	for y <= h {
+		port.CellsDrop(s2, 0)
+		nc = 0
+		if y < h {
+			x = port.BitmapNextNonzero(mask, 0, y)
+			for x < w {
+				e = x
+				for (e < w) && (port.BitmapU8(mask, e, y, 0) != 0) {
+					e += 1
+				}
+				if (e - x) >= fmin {
+					hit = -1
+					i = 0
+					for i < np {
+						if (port.CellsAt(s1, (i*10)+9) == 0) && ((trAbs(x-port.CellsAt(s1, i*10)) <= tol) && (trAbs(e-port.CellsAt(s1, (i*10)+1)) <= tol)) {
+							if hit < 0 {
+								hit = i
+							}
+						}
+						i += 1
+					}
+					if hit >= 0 {
+						port.CellsSet(s1, (hit*10)+9, 1)
+						port.CellsPush(s2, x)
+						port.CellsPush(s2, e)
+						port.CellsPush(s2, port.CellsAt(s1, (hit*10)+2))
+						port.CellsPush(s2, port.CellsAt(s1, (hit*10)+3)+1)
+						port.CellsPush(s2, port.CellsAt(s1, (hit*10)+4)+(e-x))
+						port.CellsPush(s2, trMin(port.CellsAt(s1, (hit*10)+5), x))
+						port.CellsPush(s2, trMax(port.CellsAt(s1, (hit*10)+6), e))
+						port.CellsPush(s2, 0)
+						port.CellsPush(s2, 0)
+						port.CellsPush(s2, 0)
+					} else {
+						port.CellsPush(s2, x)
+						port.CellsPush(s2, e)
+						port.CellsPush(s2, y)
+						port.CellsPush(s2, 1)
+						port.CellsPush(s2, e-x)
+						port.CellsPush(s2, x)
+						port.CellsPush(s2, e)
+						port.CellsPush(s2, 0)
+						port.CellsPush(s2, 0)
+						port.CellsPush(s2, 0)
+					}
+					nc += 1
+				}
+				x = port.BitmapNextNonzero(mask, e, y)
+			}
+		}
+		// rectangles of the previous row that nothing continued are finished
+		i = 0
+		for i < np {
+			if port.CellsAt(s1, (i*10)+9) == 0 {
+				if port.CellsAt(s1, (i*10)+3) >= fmin {
+					if (port.CellsAt(s1, (i*10)+6) - port.CellsAt(s1, (i*10)+5)) >= fmin {
+						x0 = port.CellsAt(s1, (i*10)+5)
+						x1 = port.CellsAt(s1, (i*10)+6)
+						y0 = port.CellsAt(s1, (i*10)+2)
+						y1 = y0 + port.CellsAt(s1, (i*10)+3)
+						cov = trPermille(port.CellsAt(s1, (i*10)+4), (x1-x0)*(y1-y0))
+						prow = evidence.PmNew(prims, page, evidence.VwBoxToCpt(views, view, 0, x0, y0, x1-x0, y1-y0), evidence.VwBoxToCpt(views, view, 1, x0, y0, x1-x0, y1-y0), evidence.VwBoxToCpt(views, view, 2, x0, y0, x1-x0, y1-y0), evidence.VwBoxToCpt(views, view, 3, x0, y0, x1-x0, y1-y0), evidence.PmRect())
+						evidence.PmSet(prims, prow, evidence.PmfView(), view)
+						evidence.PmSet(prims, prow, evidence.PmfCx(), evidence.VwPxToCpt(views, view, 0, (x0+x1)/2, (y0+y1)/2))
+						evidence.PmSet(prims, prow, evidence.PmfCy(), evidence.VwPxToCpt(views, view, 1, (x0+x1)/2, (y0+y1)/2))
+						evidence.PmSet(prims, prow, evidence.PmfRx(), trLenCpt(x1-x0, dpi100*2))
+						evidence.PmSet(prims, prow, evidence.PmfRy(), trLenCpt(y1-y0, dpi100*2))
+						evidence.PmSet(prims, prow, evidence.PmfInk(), inkrow)
+						if inkrow >= 0 {
+							evidence.PmSet(prims, prow, evidence.PmfColor(), evidence.IkGet(inks, inkrow, evidence.IkfColor()))
+						}
+						evidence.PmSet(prims, prow, evidence.PmfFill(), cov)
+						evidence.PmSet(prims, prow, evidence.PmfConf(), cov)
+						evidence.PmSet(prims, prow, evidence.PmfFlags(), (1+2)+8)
+						n += 1
+					}
+				}
+			}
+			i += 1
+		}
+		// the current row's rectangles become the previous row's
+		port.CellsDrop(s1, 0)
+		i = 0
+		for i < (nc * 10) {
+			port.CellsPush(s1, port.CellsAt(s2, i))
+			i += 1
+		}
+		np = nc
+		y += 1
+	}
+	return n
+}
+
+const kIt int32 = 10
+
+func TrTlMin() int32 {
+	// A text line has at least this many components.
+	return 3
+}
+
+func trIfind(it *port.Cells, a int32) int32 {
+	var x int32 = a
+	var p int32 = 0
+	var g int32 = 0
+	p = port.CellsAt(it, (x*kIt)+6)
+	for p != x {
+		g = port.CellsAt(it, (p*kIt)+6)
+		port.CellsSet(it, (x*kIt)+6, g)
+		x = g
+		p = port.CellsAt(it, (x*kIt)+6)
+	}
+	return x
+}
+
+func trFitChain(it *port.Cells, ra int32, rb int32, out *port.Cells) int32 {
+	// Moments of the centres of the members of chain ra (and of rb when it is not -1): `out` gets the member count, the smaller
+	// eigenvalue of the covariance (px^2 x 16: the squared spread ACROSS the line), the principal axis' angle (0..18000), the sum of
+	// the members' heights, and the centroid x y. Answers the count.
+	var k int32 = ra
+	var pass int32 = 0
+	var n int32 = 0
+	var sx int64 = 0
+	var sy int64 = 0
+	var sxx int64 = 0
+	var syy int64 = 0
+	var sxy int64 = 0
+	var sh int64 = 0
+	var x int32 = 0
+	var y int32 = 0
+	for pass < 2 {
+		if pass == 1 {
+			k = rb
+		}
+		for k >= 0 {
+			x = port.CellsAt(it, (k*kIt)+1)
+			y = port.CellsAt(it, (k*kIt)+2)
+			n += 1
+			sx += int64(x)
+			sy += int64(y)
+			sxx += int64(x) * int64(x)
+			syy += int64(y) * int64(y)
+			sxy += int64(x) * int64(y)
+			sh += int64(port.CellsAt(it, (k*kIt)+4))
+			k = port.CellsAt(it, (k*kIt)+7)
+		}
+		pass += 1
+		if rb < 0 {
+			pass = 2
+		}
+	}
+	var nn int64 = int64(n)
+	var n2 int64 = nn * nn
+	var cxx int64 = (((sxx * nn) - (sx * sx)) * int64(16)) / n2
+	var cyy int64 = (((syy * nn) - (sy * sy)) * int64(16)) / n2
+	var cxy int64 = (((sxy * nn) - (sx * sy)) * int64(16)) / n2
+	var half int64 = (cxx - cyy) / int64(2)
+	var root int32 = TrIsqrt((half * half) + (cxy * cxy))
+	var lmin int64 = ((cxx + cyy) / int64(2)) - int64(root)
+	port.CellsSet(out, 0, n)
+	port.CellsSet(out, 1, int32(lmin))
+	port.CellsSet(out, 2, evidence.EvAngle(int32(cxx-cyy), int32(int64(2)*cxy))/2)
+	port.CellsSet(out, 3, int32(sh))
+	port.CellsSet(out, 4, int32(sx/nn))
+	port.CellsSet(out, 5, int32(sy/nn))
+	return n
+}
+
+func trChainOk(it *port.Cells, ra int32, rb int32, out *port.Cells) int32 {
+	// 1 when chain ra and chain rb may be one line: the spread of the union's centres across its principal axis is at most 0.3
+	// of the mean height (any two components pass: a pair always lies on a line).
+	var n int32 = trFitChain(it, ra, rb, out)
+	var hbar int32 = port.CellsAt(out, 3) / n
+	if n <= 2 {
+		return 1
+	}
+	if (port.CellsAt(out, 1) * 100) <= ((16 * 9) * (hbar * hbar)) {
+		return 1
+	}
+	return 0
+}
+
+func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, cs *port.Cells, comps *port.Cells, tlines *port.Cells, refs *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+	// Text lines without OCR (SPEC 8.2): the text-like components of one ink layer chained by nearest neighbour (within 1.5 mean
+	// heights, heights within a factor of three) in order of distance, a chain accepted only while its centres stay on a line (spread
+	// across it at most 0.3 of the mean height). Every chain of at least `tr-tl-min` components is a `tlines` row: the box, the
+	// baseline fitted by integer least squares to the members' bottoms in the line's own frame (one outlier round), its angle by
+	// `ev-angle` of the baseline in page space, the layer, the mean height and gap in centipoints, the members as `refs`. A faint
+	// diagonal watermark is one row at its angle. `s1`..`s6` are scratch. Answers the rows written.
+	var nc int32 = port.CellsLen(cs) / 24
+	var c int32 = 0
+	var n int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var a int32 = 0
+	var b int32 = 0
+	var ne int32 = 0
+	var dx int32 = 0
+	var dy int32 = 0
+	var gx int32 = 0
+	var gy int32 = 0
+	var hmax int32 = 0
+	var wmax int32 = 0
+	var ra int32 = 0
+	var rb int32 = 0
+	var lo int32 = 0
+	var hi int32 = 0
+	var rows int32 = 0
+	var k int32 = 0
+	var e int32 = 0
+	var cnt int32 = 0
+	var row int32 = 0
+	var alpha int32 = 0
+	var th int32 = 0
+	var co int32 = 0
+	var si int32 = 0
+	var u int32 = 0
+	var v int32 = 0
+	var comp int32 = 0
+	var vmx int32 = 0
+	var vmn int32 = 0
+	var umn int32 = 0
+	var umx int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var hbar int32 = 0
+	var pass int32 = 0
+	var m int32 = 0
+	var su int64 = 0
+	var sv int64 = 0
+	var suu int64 = 0
+	var suv int64 = 0
+	var den int64 = 0
+	var slope int64 = 0
+	var icpt int64 = 0
+	var nn int64 = 0
+	var hsum int32 = 0
+	var gsum int32 = 0
+	var rms int32 = 0
+	var evr int32 = 0
+	var u0 int32 = 0
+	var u1 int32 = 0
+	var v0 int32 = 0
+	var v1 int32 = 0
+	var px0 int32 = 0
+	var py0 int32 = 0
+	var px1 int32 = 0
+	var py1 int32 = 0
+	var rf int32 = 0
+	// 1. the items
+	port.CellsDrop(s1, 0)
+	c = 0
+	for (c < nc) && (n < 60000) {
+		if (TrCg(cs, c, cKind) == TrKText()) && (TrCg(cs, c, cInkrow) >= 0) {
+			port.CellsPush(s1, c)
+			port.CellsPush(s1, (TrCg(cs, c, cLeft)+TrCg(cs, c, cRight))/2)
+			port.CellsPush(s1, (TrCg(cs, c, cTop)+TrCg(cs, c, cBottom))/2)
+			port.CellsPush(s1, TrCg(cs, c, cRight)-TrCg(cs, c, cLeft))
+			port.CellsPush(s1, TrCg(cs, c, cBottom)-TrCg(cs, c, cTop))
+			port.CellsPush(s1, TrCg(cs, c, cInkrow))
+			port.CellsPush(s1, n)
+			port.CellsPush(s1, -1)
+			port.CellsPush(s1, n)
+			port.CellsPush(s1, 1)
+			hmax = trMax(hmax, TrCg(cs, c, cBottom)-TrCg(cs, c, cTop))
+			wmax = trMax(wmax, TrCg(cs, c, cRight)-TrCg(cs, c, cLeft))
+			n += 1
+		}
+		c += 1
+	}
+	if n < TrTlMin() {
+		return 0
+	}
+	// 2. candidate edges, in order of centre distance
+	port.CellsDrop(s2, 0)
+	port.CellsDrop(s3, 0)
+	i = 0
+	for i < n {
+		port.CellsPush(s2, port.CellsAt(s1, (i*kIt)+1))
+		port.CellsPush(s3, i)
+		i += 1
+	}
+	TrSortKeys(s2, n, s3, s4)
+	port.CellsDrop(s5, 0)
+	port.CellsDrop(s6, 0)
+	a = 0
+	for a < n {
+		i = port.CellsAt(s3, a)
+		b = a + 1
+		for (b < n) && ((port.CellsAt(s2, port.CellsAt(s3, b)) - port.CellsAt(s2, i)) <= ((3 * hmax) + wmax)) {
+			j = port.CellsAt(s3, b)
+			if (port.CellsAt(s1, (i*kIt)+5) == port.CellsAt(s1, (j*kIt)+5)) && (ne < 600000) {
+				if ((3 * trMin(port.CellsAt(s1, (i*kIt)+4), port.CellsAt(s1, (j*kIt)+4))) >= trMax(port.CellsAt(s1, (i*kIt)+4), port.CellsAt(s1, (j*kIt)+4))) && (port.CellsAt(s1, (i*kIt)+4) > 0) {
+					dx = trAbs(port.CellsAt(s1, (i*kIt)+1) - port.CellsAt(s1, (j*kIt)+1))
+					dy = trAbs(port.CellsAt(s1, (i*kIt)+2) - port.CellsAt(s1, (j*kIt)+2))
+					gx = trMax(0, dx-((port.CellsAt(s1, (i*kIt)+3)+port.CellsAt(s1, (j*kIt)+3))/2))
+					gy = trMax(0, dy-((port.CellsAt(s1, (i*kIt)+4)+port.CellsAt(s1, (j*kIt)+4))/2))
+					hmax = trMax(hmax, 1)
+					// gap within 1.5 mean heights: gap^2 * 4 <= 9 * mean_h^2 (mean_h = (hi + hj) / 2)
+					if (((gx * gx) + (gy * gy)) * 16) <= (9 * ((port.CellsAt(s1, (i*kIt)+4) + port.CellsAt(s1, (j*kIt)+4)) * (port.CellsAt(s1, (i*kIt)+4) + port.CellsAt(s1, (j*kIt)+4)))) {
+						port.CellsPush(s6, (dx*dx)+(dy*dy))
+						port.CellsPush(s5, i)
+						port.CellsPush(s5, j)
+						ne += 1
+					}
+				}
+			}
+			b += 1
+		}
+		a += 1
+	}
+	// 3. merge in order of distance, while the chain stays on a line
+	port.CellsDrop(s2, 0)
+	i = 0
+	for i < ne {
+		port.CellsPush(s2, i)
+		i += 1
+	}
+	TrSortKeys(s6, ne, s2, s3)
+	port.CellsDrop(s4, 0)
+	port.CellsGrow(s4, 8, 0)
+	k = 0
+	for k < ne {
+		e = port.CellsAt(s2, k)
+		ra = trIfind(s1, port.CellsAt(s5, e*2))
+		rb = trIfind(s1, port.CellsAt(s5, (e*2)+1))
+		if ra != rb {
+			lo = trMin(ra, rb)
+			hi = trMax(ra, rb)
+			if trChainOk(s1, lo, hi, s4) == 1 {
+				port.CellsSet(s1, (port.CellsAt(s1, (lo*kIt)+8)*kIt)+7, hi)
+				port.CellsSet(s1, (lo*kIt)+8, port.CellsAt(s1, (hi*kIt)+8))
+				port.CellsSet(s1, (lo*kIt)+9, port.CellsAt(s1, (lo*kIt)+9)+port.CellsAt(s1, (hi*kIt)+9))
+				port.CellsSet(s1, (hi*kIt)+6, lo)
+			}
+		}
+		k += 1
+	}
+	// 4. a row for every chain of enough components
+	i = 0
+	for i < n {
+		if (port.CellsAt(s1, (i*kIt)+6) == i) && (port.CellsAt(s1, (i*kIt)+9) >= TrTlMin()) {
+			trFitChain(s1, i, -1, s4)
+			cnt = port.CellsAt(s4, 0)
+			alpha = port.CellsAt(s4, 2)
+			hbar = port.CellsAt(s4, 3) / cnt
+			rms = TrIsqrt(int64(trMax(0, port.CellsAt(s4, 1)))) / 4
+			if alpha > 9000 {
+				th = alpha + 18000
+			} else {
+				th = alpha
+			}
+			co = evidence.EvCos(th)
+			si = evidence.EvSin(th)
+			// members into s5 as [u-centre v-bottom height u-left u-right comp], ordered by u-centre
+			port.CellsDrop(s5, 0)
+			j = i
+			m = 0
+			for j >= 0 {
+				comp = port.CellsAt(s1, j*kIt)
+				umn = 1000000000
+				umx = -1000000000
+				vmn = 1000000000
+				vmx = -1000000000
+				e = 0
+				for e < 4 {
+					if (e & 1) == 0 {
+						dx = TrCg(cs, comp, cLeft)
+					} else {
+						dx = TrCg(cs, comp, cRight)
+					}
+					if e < 2 {
+						dy = TrCg(cs, comp, cTop)
+					} else {
+						dy = TrCg(cs, comp, cBottom)
+					}
+					u = trRotU(dx, dy, co, si)
+					v = trRotV(dx, dy, co, si)
+					if u < umn {
+						umn = u
+					}
+					if u > umx {
+						umx = u
+					}
+					if v < vmn {
+						vmn = v
+					}
+					if v > vmx {
+						vmx = v
+					}
+					e += 1
+				}
+				// insertion by the centre of u
+				k = m
+				port.CellsPush(s5, 0)
+				port.CellsPush(s5, 0)
+				port.CellsPush(s5, 0)
+				port.CellsPush(s5, 0)
+				port.CellsPush(s5, 0)
+				port.CellsPush(s5, 0)
+				for (k > 0) && (port.CellsAt(s5, (k-1)*6) > ((umn + umx) / 2)) {
+					e = 0
+					for e < 6 {
+						port.CellsSet(s5, (k*6)+e, port.CellsAt(s5, ((k-1)*6)+e))
+						e += 1
+					}
+					k -= 1
+				}
+				port.CellsSet(s5, k*6, (umn+umx)/2)
+				port.CellsSet(s5, (k*6)+1, vmx)
+				port.CellsSet(s5, (k*6)+2, vmx-vmn)
+				port.CellsSet(s5, (k*6)+3, umn)
+				port.CellsSet(s5, (k*6)+4, umx)
+				port.CellsSet(s5, (k*6)+5, comp)
+				m += 1
+				j = port.CellsAt(s1, (j*kIt)+7)
+			}
+			// least squares v = icpt + slope * u over the bottoms, then once more without the points far below the line
+			pass = 0
+			slope = int64(0)
+			icpt = int64(0)
+			for pass < 2 {
+				su = int64(0)
+				sv = int64(0)
+				suu = int64(0)
+				suv = int64(0)
+				nn = int64(0)
+				k = 0
+				for k < m {
+					u = port.CellsAt(s5, k*6)
+					v = port.CellsAt(s5, (k*6)+1)
+					e = 1
+					if pass == 1 {
+						if (4 * (v - int32(((slope*int64(u))+icpt)/int64(65536)))) > hbar {
+							e = 0
+						}
+					}
+					if e == 1 {
+						nn += int64(1)
+						su += int64(u)
+						sv += int64(v)
+						suu += int64(u) * int64(u)
+						suv += int64(u) * int64(v)
+					}
+					k += 1
+				}
+				den = (nn * suu) - (su * su)
+				if (nn > int64(1)) && (den > int64(0)) {
+					slope = (((nn * suv) - (su * sv)) * int64(65536)) / den
+					icpt = ((sv * int64(65536)) - (slope * su)) / nn
+				} else {
+					slope = int64(0)
+					if nn > int64(0) {
+						icpt = (sv * int64(65536)) / nn
+					}
+				}
+				pass += 1
+			}
+			u0 = port.CellsAt(s5, 3)
+			u1 = port.CellsAt(s5, 4)
+			k = 0
+			hsum = 0
+			gsum = 0
+			for k < m {
+				u0 = trMin(u0, port.CellsAt(s5, (k*6)+3))
+				u1 = trMax(u1, port.CellsAt(s5, (k*6)+4))
+				hsum += port.CellsAt(s5, (k*6)+2)
+				if k > 0 {
+					gsum += trMax(0, port.CellsAt(s5, (k*6)+3)-port.CellsAt(s5, ((k-1)*6)+4))
+				}
+				k += 1
+			}
+			v0 = int32(((slope * int64(u0)) + icpt) / int64(65536))
+			v1 = int32(((slope * int64(u1)) + icpt) / int64(65536))
+			px0 = int32(int64(uint64(((int64(u0)*int64(co))+(int64(v0)*int64(si)))+int64(32768)) >> uint(16)))
+			py0 = int32(int64(uint64(((int64(0-u0)*int64(si))+(int64(v0)*int64(co)))+int64(32768)) >> uint(16)))
+			px1 = int32(int64(uint64(((int64(u1)*int64(co))+(int64(v1)*int64(si)))+int64(32768)) >> uint(16)))
+			py1 = int32(int64(uint64(((int64(0-u1)*int64(si))+(int64(v1)*int64(co)))+int64(32768)) >> uint(16)))
+			// the box: the union of the members' rows
+			x0 = 1000000000
+			y0 = 1000000000
+			x1 = -1000000000
+			y1 = -1000000000
+			rf = port.CellsLen(refs) / 2
+			k = 0
+			for k < m {
+				evr = TrCg(cs, port.CellsAt(s5, (k*6)+5), cEvrow)
+				x0 = trMin(x0, evidence.CoGet(comps, evr, evidence.CfX0()))
+				y0 = trMin(y0, evidence.CoGet(comps, evr, evidence.CfY0()))
+				x1 = trMax(x1, evidence.CoGet(comps, evr, evidence.CfX1()))
+				y1 = trMax(y1, evidence.CoGet(comps, evr, evidence.CfY1()))
+				port.CellsPush(refs, evidence.EaComponents())
+				port.CellsPush(refs, evr)
+				k += 1
+			}
+			dx = evidence.VwPxToCpt(views, view, 0, px1, py1) - evidence.VwPxToCpt(views, view, 0, px0, py0)
+			dy = evidence.VwPxToCpt(views, view, 1, px1, py1) - evidence.VwPxToCpt(views, view, 1, px0, py0)
+			row = evidence.TlNew(tlines, page, x0, y0, x1, y1, evidence.VwPxToCpt(views, view, 0, px0, py0), evidence.VwPxToCpt(views, view, 1, px0, py0), evidence.VwPxToCpt(views, view, 0, px1, py1), evidence.VwPxToCpt(views, view, 1, px1, py1), evidence.EvAngle(dx, dy), 0, rf, m)
+			evidence.TlSet(tlines, row, evidence.TlfInk(), port.CellsAt(s1, (i*kIt)+5))
+			evidence.TlSet(tlines, row, evidence.TlfHeight(), trLenCpt(hsum/m, dpi100))
+			if m > 1 {
+				evidence.TlSet(tlines, row, evidence.TlfGap(), trLenCpt(gsum/(m-1), dpi100))
+			}
+			evidence.TlSet(tlines, row, evidence.TlfConf(), trMax(0, 1000-(3*trPermille(rms, trMax(1, hbar)))))
+			rows += 1
+		}
+		i += 1
+	}
+	return rows
+}
+
+func trTextCentred(comps *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// How many text-like components of `page` have their centre in the box (centipoints).
+	var n int32 = evidence.CoCount(comps)
+	var r int32 = 0
+	var cnt int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	for r < n {
+		if (evidence.CoGet(comps, r, evidence.CfKind()) == evidence.CkTextLike()) && (evidence.CoGet(comps, r, 0) == page) {
+			cx = (evidence.CoGet(comps, r, evidence.CfX0()) + evidence.CoGet(comps, r, evidence.CfX1())) / 2
+			cy = (evidence.CoGet(comps, r, evidence.CfY0()) + evidence.CoGet(comps, r, evidence.CfY1())) / 2
+			if ((cx >= x0) && (cx < x1)) && ((cy >= y0) && (cy < y1)) {
+				cnt += 1
+			}
+		}
+		r += 1
+	}
+	return cnt
+}
+
+func TrFeatOcr(feats *port.Cells, frow int32, comps *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, sb *port.Cells, nsym int32) int32 {
+	// `xo` columns 14 (text-like components centred in the word's box) and 15 (per mille of its `nsym` symbols, whose boxes are the
+	// centipoint quadruples of `sb`, that have a text-like component centred in them; -1 with no symbols).
+	var s int32 = 0
+	var hit int32 = 0
+	evidence.FeSet(feats, frow, evidence.XoComponents(), trTextCentred(comps, page, x0, y0, x1, y1))
+	if nsym <= 0 {
+		evidence.FeSet(feats, frow, evidence.XoCompRatio(), -1)
+	} else {
+		for s < nsym {
+			if trTextCentred(comps, page, port.CellsAt(sb, s*4), port.CellsAt(sb, (s*4)+1), port.CellsAt(sb, (s*4)+2), port.CellsAt(sb, (s*4)+3)) > 0 {
+				hit += 1
+			}
+			s += 1
+		}
+		evidence.FeSet(feats, frow, evidence.XoCompRatio(), trPermille(hit, nsym))
+	}
+	return 0
+}
+
+func TrFeatText(feats *port.Cells, frow int32, comps *port.Cells, tlines *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, rot int32, sb *port.Cells, nsym int32) int32 {
+	// `xt` columns 14 and 15 (as `tr-feat-ocr`, over the glyph boxes) and 23: the largest overlap (`ev-overlap-small`, per mille) of the
+	// word's box with a `tlines` row of the page whose angle differs from the word's `rot` by more than 3 degrees (mod 180).
+	var n int32 = evidence.TlCount(tlines)
+	var r int32 = 0
+	var d int32 = 0
+	var best int32 = 0
+	var o int32 = 0
+	TrFeatOcr(feats, frow, comps, page, x0, y0, x1, y1, sb, nsym)
+	for r < n {
+		if evidence.TlGet(tlines, r, 0) == page {
+			d = (trAbs(evidence.TlGet(tlines, r, 9)-rot) + 36000) % 18000
+			if d > 9000 {
+				d = 18000 - d
+			}
+			if d > 300 {
+				o = evidence.EvOverlapSmall(x0, y0, x1, y1, evidence.TlGet(tlines, r, 1), evidence.TlGet(tlines, r, 2), evidence.TlGet(tlines, r, 3), evidence.TlGet(tlines, r, 4))
+				if o > best {
+					best = o
+				}
+			}
+		}
+		r += 1
+	}
+	evidence.FeSet(feats, frow, evidence.XtTlineOverlap(), best)
+	return 0
+}
+
+func TrOrientHint(tlines *port.Cells) int32 {
+	// The dominant direction of the text lines (P6.3's orientation fallback, D197): 0 when most characters lie on lines within 45
+	// degrees of horizontal, 1 when most lie on near-vertical ones, -1 when there are no lines. Weighted by member count.
+	var n int32 = evidence.TlCount(tlines)
+	var r int32 = 0
+	var hz int32 = 0
+	var vt int32 = 0
+	var a int32 = 0
+	if n == 0 {
+		return -1
+	}
+	for r < n {
+		a = evidence.TlGet(tlines, r, 9) % 18000
+		if (a < 4500) || (a >= 13500) {
+			hz += evidence.TlGet(tlines, r, 12)
+		} else {
+			vt += evidence.TlGet(tlines, r, 12)
+		}
+		r += 1
+	}
+	if hz >= vt {
+		return 0
+	}
+	return 1
+}
+
+func TrTrace(views *port.Cells, inks *port.Cells, page int32, view int32, fixed int32, ink0 int32, bin *port.Bitmap, gray *port.Bitmap, labels *port.Bitmap, comps *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, pts *port.Cells, refs *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+	// Trace ONE bitmap `bin` (a binary view, or an ink-mask view: nonzero is ink) of `view` (a `views` row): runs, components
+	// (with the majority layer of `labels` against `inks` from `ink0`, or the single layer `fixed` when it is >= 0), rules,
+	// contours and primitives, text lines; the rows go to the evidence arenas. `gray` is the page's gray view. Answers the number
+	// of components recorded (the number found is `ri` cell h + 2; a page over `tr-max-runs` is cut, `ri` cell h + 1).
+	var w int32 = port.BitmapW(bin)
+	var h int32 = port.BitmapH(bin)
+	var dpi int32 = evidence.VwGet(views, view, evidence.VwfDpi())
+	var nc int32 = 0
+	var nv int32 = 0
+	var n int32 = 0
+	n = TrRuns(bin, rn, ri)
+	if n == 0 {
+		return 0
+	}
+	TrUnify(rn, ri, h)
+	nc = TrLabel(rn, ri, h, cs, s1, s2, s3)
+	nv = TrVruns(bin, rn, ri, vr, s1)
+	TrMeasure(gray, labels, fixed, ink0, rn, ri, cs, vr, nv, s1, s2, s3)
+	TrKinds(dpi, cs, s1)
+	TrParents(rn, ri, cs, s1)
+	TrEmitComponents(views, comps, cs, inks, page, view)
+	TrRules(views, page, view, dpi, w, h, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	TrShapes(views, page, view, dpi, bin, rn, ri, cs, comps, prims, pts, refs, inks, s1, s2, s3, s4, s5)
+	TrDoubleRings(cs, prims, refs)
+	TrTlines(views, page, view, dpi, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6)
+	return nc
 }
