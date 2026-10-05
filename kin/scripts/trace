@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D240-D246) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
+;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D243-D249) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
 ;;
 ;; NOT A GATE (DEVLOG P6.4: a ratchet is P7.S's). Needs poppler, ghostscript, qpdf and ImageMagick, test/corpus/synth, the drivers (`bench/trace.sh`,
 ;; which this builds) and, for text-layer lines, a built `emon-rs` (kin/scripts/emon-rs-build, or EMON_RS). Measured, per DEVLOG P6.4 "Measured":
