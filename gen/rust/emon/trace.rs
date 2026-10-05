@@ -802,10 +802,10 @@ pub fn tr_stroke_px(cs: &mut crate::port::Cells, c: i32) -> i32 {
     }
     return tr_min(a, b);
 }
-pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells) -> i32 {
+pub fn tr_kinds(dpi100: i32, weighted: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells) -> i32 {
     // Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
     // text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-    // and at most 10 times as long as thick; the INK-WEIGHTED (each capped at 1024 pixels) median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
+    // and at most 10 times as long as thick; the median height M of those decides (at least three of them, or there is none and nothing is text: a table alone is not a glyph; on an ink MASK, `weighted` 1, each counts its ink capped at 1024 pixels, so a watermark of huge letters outweighs the specks of its own mask; on the binary view each counts one): TEXT is a provisional glyph of height
     // within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
     // (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
     // has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -826,6 +826,7 @@ pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate
     let mut nprov: i32 = 0;
     let mut hh: i32 = 0;
     let mut wgt: i32 = 0;
+    let mut ngl: i32 = 0;
     let mut kind: i32 = 0;
     crate::port::cells_drop(s1, 0);
     crate::port::cells_grow(s1, 1024, 0);
@@ -847,7 +848,12 @@ pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate
         if (h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise))) {
             if (tr_cg(cs, c, C_KIND) != tr_k_rule()) || (lng < (3 * tmin)) {
                 hh = tr_min(h, 1023);
-                wgt = tr_min(ink, 1024);
+                if weighted == 1 {
+                    wgt = tr_min(ink, 1024);
+                } else {
+                    wgt = 1;
+                }
+                ngl += 1;
                 crate::port::cells_set(s1, hh, crate::port::cells_at(s1, hh) + wgt);
                 nprov += wgt;
                 tr_cset(cs, c, C_FIT, 1);
@@ -855,7 +861,9 @@ pub fn tr_kinds(dpi100: i32, mut cs: &mut crate::port::Cells, mut s1: &mut crate
         }
         c += 1;
     }
-    m = tr_hist_median(s1, 0, 1024, nprov);
+    if ngl >= 3 {
+        m = tr_hist_median(s1, 0, 1024, nprov);
+    }
     c = 0;
     while c < nc {
         w = tr_cg(cs, c, C_RIGHT) - tr_cg(cs, c, C_LEFT);
@@ -2319,7 +2327,23 @@ pub fn tr_doubles(mut sg: &mut crate::port::Cells, ns: i32) -> i32 {
     }
     return n;
 }
-pub fn tr_rule_rows(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, mut cs: &mut crate::port::Cells, sg: &mut crate::port::Cells, ns: i32, mem: &mut crate::port::Cells, inks: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, comps: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tr_ext_steps(bin: &crate::port::Bitmap, x2: i32, y2: i32, sx: i32, sy: i32, maxn: i32) -> i32 {
+    // How many pixels the line goes on past the half-pixel point (x2, y2) in the step (sx, sy) (doubled pixels, so 2 is a pixel):
+    // while the pixel under the moving centre is ink, at most `maxn`. A rule whose chain stopped where a perpendicular rule is
+    // (its slices turned long there) really ends on the far side of it.
+    let mut k: i32 = 0;
+    let mut x: i32 = x2;
+    let mut y: i32 = y2;
+    x += sx;
+    y += sy;
+    while (k < maxn) && (tr_fg(bin, (x) >> (1), (y) >> (1)) == 1) {
+        k += 1;
+        x += sx;
+        y += sy;
+    }
+    return k;
+}
+pub fn tr_rule_rows(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, bin: &crate::port::Bitmap, mut cs: &mut crate::port::Cells, sg: &mut crate::port::Cells, ns: i32, mem: &mut crate::port::Cells, inks: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, comps: &mut crate::port::Cells) -> i32 {
     // Write one `rules` row (SPEC 8.4.4) for every segment whose style is not 0: the box through the view, the centre-line
     // endpoints (half pixels mapped), thickness, the colour and ink row of its first member's layer, the style, a confidence
     // (1000 minus the per-mille of its length that is gap, dashes excepted, minus 300 when its thickness varies by more than half
@@ -2342,6 +2366,11 @@ pub fn tr_rule_rows(views: &mut crate::port::Cells, page: i32, view: i32, dpi100
     let mut c: i32 = 0;
     let mut ir: i32 = 0;
     let mut thk: i32 = 0;
+    let mut ex: i32 = 0;
+    let mut ey: i32 = 0;
+    let mut elen: i32 = 0;
+    let mut sx: i32 = 0;
+    let mut sy: i32 = 0;
     let mut ln: i32 = 0;
     while i < ns {
         style = crate::port::cells_at(sg, (i * K_SG) + G_STYLE);
@@ -2352,6 +2381,24 @@ pub fn tr_rule_rows(views: &mut crate::port::Cells, page: i32, view: i32, dpi100
             by = crate::port::cells_at(sg, (i * K_SG) + G_BY);
             thk = crate::port::cells_at(sg, (i * K_SG) + G_THK);
             thkpx = (thk + 3) / 4;
+            // a chain that stopped at a perpendicular rule goes on to its far edge
+            ex = bx - ax;
+            ey = by - ay;
+            elen = tr_max(1, tr_isqrt((ex as i64).wrapping_mul(ex as i64) + (ey as i64).wrapping_mul(ey as i64)));
+            sx = ((ex * 4) + (elen / 2)) / (2 * elen);
+            sy = ((ey * 4) + (elen / 2)) / (2 * elen);
+            if ex < 0 {
+                sx = ((ex * 4) - (elen / 2)) / (2 * elen);
+            }
+            if ey < 0 {
+                sy = ((ey * 4) - (elen / 2)) / (2 * elen);
+            }
+            k = tr_ext_steps(bin, bx, by, sx, sy, thkpx + 3);
+            bx += k * sx;
+            by += k * sy;
+            k = tr_ext_steps(bin, ax, ay, 0 - sx, 0 - sy, thkpx + 3);
+            ax -= k * sx;
+            ay -= k * sy;
             x0 = (tr_min(ax, bx) - thkpx) >> (1);
             y0 = (tr_min(ay, by) - thkpx) >> (1);
             x1 = ((tr_max(ax, bx) + thkpx) + 1) >> (1);
@@ -2412,7 +2459,7 @@ pub fn tr_rule_rows(views: &mut crate::port::Cells, page: i32, view: i32, dpi100
     }
     return rows;
 }
-pub fn tr_rules(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, w: i32, h: i32, rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, vr: &mut crate::port::Cells, nv: i32, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, inks: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
+pub fn tr_rules(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, w: i32, h: i32, bin: &crate::port::Bitmap, rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, vr: &mut crate::port::Cells, nv: i32, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, inks: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells) -> i32 {
     // Rules (SPEC 8.2, D226): stacks of short row runs (vertical and steep rules) and of short column runs (horizontal and
     // shallow ones) inside every component that is neither noise nor a glyph, chained, straightened, merged along their axis
     // within `tr-rule-gap`, joined into dashed and dotted rules, doubles marked, written as `rules` rows. A rule-like component
@@ -2439,7 +2486,7 @@ pub fn tr_rules(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i3
         nseg = tr_segments(pc, np, rmin, sg, mem, s1, s2, s3);
         tr_dashes(sg, nseg, rmin, tr_pt(dpi100, 6) * 2, mem, pc, s1, s2, s3, s4);
         tr_doubles(sg, nseg);
-        rows = tr_rule_rows(views, page, view, dpi100, cs, sg, nseg, mem, inks, rules, refs, comps);
+        rows = tr_rule_rows(views, page, view, dpi100, bin, cs, sg, nseg, mem, inks, rules, refs, comps);
     }
     c = 0;
     while c < nc {
@@ -3711,6 +3758,7 @@ pub fn tr_trace(views: &mut crate::port::Cells, inks: &mut crate::port::Cells, p
     let dpi: i32 = vw_get(views, view, vwf_dpi());
     let mut nc: i32 = 0;
     let mut nv: i32 = 0;
+    let mut wt: i32 = 0;
     let mut n: i32 = 0;
     n = tr_runs(bin, rn, ri);
     if n == 0 {
@@ -3720,10 +3768,15 @@ pub fn tr_trace(views: &mut crate::port::Cells, inks: &mut crate::port::Cells, p
     nc = tr_label(rn, ri, h, cs, s1, s2, s3);
     nv = tr_vruns(bin, rn, ri, vr, s1);
     tr_measure(gray, labels, fixed, ink0, rn, ri, cs, vr, nv, s1, s2, s3);
-    tr_kinds(dpi, cs, s1);
+    if fixed >= 0 {
+        wt = 1;
+    } else {
+        wt = 0;
+    }
+    tr_kinds(dpi, wt, cs, s1);
     tr_parents(rn, ri, cs, s1);
     tr_emit_components(views, comps, cs, inks, page, view);
-    tr_rules(views, page, view, dpi, w, h, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+    tr_rules(views, page, view, dpi, w, h, bin, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6);
     tr_shapes(views, page, view, dpi, bin, rn, ri, cs, comps, prims, pts, refs, inks, s1, s2, s3, s4, s5);
     tr_double_rings(cs, prims, refs);
     tr_tlines(views, page, view, dpi, h, rn, ri, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6);

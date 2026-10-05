@@ -883,10 +883,10 @@ func TrStrokePx(cs *port.Cells, c int32) int32 {
 	return trMin(a, b)
 }
 
-func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
+func TrKinds(dpi100 int32, weighted int32, cs *port.Cells, s1 *port.Cells) int32 {
 	// Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
 	// text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-	// and at most 10 times as long as thick; the INK-WEIGHTED (each capped at 1024 pixels) median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
+	// and at most 10 times as long as thick; the median height M of those decides (at least three of them, or there is none and nothing is text: a table alone is not a glyph; on an ink MASK, `weighted` 1, each counts its ink capped at 1024 pixels, so a watermark of huge letters outweighs the specks of its own mask; on the binary view each counts one): TEXT is a provisional glyph of height
 	// within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
 	// (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
 	// has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -907,6 +907,7 @@ func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 	var nprov int32 = 0
 	var hh int32 = 0
 	var wgt int32 = 0
+	var ngl int32 = 0
 	var kind int32 = 0
 	port.CellsDrop(s1, 0)
 	port.CellsGrow(s1, 1024, 0)
@@ -928,7 +929,12 @@ func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 		if (h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise))) {
 			if (TrCg(cs, c, cKind) != TrKRule()) || (lng < (3 * tmin)) {
 				hh = trMin(h, 1023)
-				wgt = trMin(ink, 1024)
+				if weighted == 1 {
+					wgt = trMin(ink, 1024)
+				} else {
+					wgt = 1
+				}
+				ngl += 1
 				port.CellsSet(s1, hh, port.CellsAt(s1, hh)+wgt)
 				nprov += wgt
 				trCset(cs, c, cFit, 1)
@@ -936,7 +942,9 @@ func TrKinds(dpi100 int32, cs *port.Cells, s1 *port.Cells) int32 {
 		}
 		c += 1
 	}
-	m = trHistMedian(s1, 0, 1024, nprov)
+	if ngl >= 3 {
+		m = trHistMedian(s1, 0, 1024, nprov)
+	}
 	c = 0
 	for c < nc {
 		w = TrCg(cs, c, cRight) - TrCg(cs, c, cLeft)
@@ -2458,7 +2466,24 @@ func TrDoubles(sg *port.Cells, ns int32) int32 {
 	return n
 }
 
-func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, cs *port.Cells, sg *port.Cells, ns int32, mem *port.Cells, inks *port.Cells, rules *port.Cells, refs *port.Cells, comps *port.Cells) int32 {
+func trExtSteps(bin *port.Bitmap, x2 int32, y2 int32, sx int32, sy int32, maxn int32) int32 {
+	// How many pixels the line goes on past the half-pixel point (x2, y2) in the step (sx, sy) (doubled pixels, so 2 is a pixel):
+	// while the pixel under the moving centre is ink, at most `maxn`. A rule whose chain stopped where a perpendicular rule is
+	// (its slices turned long there) really ends on the far side of it.
+	var k int32 = 0
+	var x int32 = x2
+	var y int32 = y2
+	x += sx
+	y += sy
+	for (k < maxn) && (TrFg(bin, (x)>>uint(1), (y)>>uint(1)) == 1) {
+		k += 1
+		x += sx
+		y += sy
+	}
+	return k
+}
+
+func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, bin *port.Bitmap, cs *port.Cells, sg *port.Cells, ns int32, mem *port.Cells, inks *port.Cells, rules *port.Cells, refs *port.Cells, comps *port.Cells) int32 {
 	// Write one `rules` row (SPEC 8.4.4) for every segment whose style is not 0: the box through the view, the centre-line
 	// endpoints (half pixels mapped), thickness, the colour and ink row of its first member's layer, the style, a confidence
 	// (1000 minus the per-mille of its length that is gap, dashes excepted, minus 300 when its thickness varies by more than half
@@ -2481,6 +2506,11 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, cs *por
 	var c int32 = 0
 	var ir int32 = 0
 	var thk int32 = 0
+	var ex int32 = 0
+	var ey int32 = 0
+	var elen int32 = 0
+	var sx int32 = 0
+	var sy int32 = 0
 	var ln int32 = 0
 	for i < ns {
 		style = port.CellsAt(sg, (i*kSg)+gStyle)
@@ -2491,6 +2521,24 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, cs *por
 			by = port.CellsAt(sg, (i*kSg)+gBy)
 			thk = port.CellsAt(sg, (i*kSg)+gThk)
 			thkpx = (thk + 3) / 4
+			// a chain that stopped at a perpendicular rule goes on to its far edge
+			ex = bx - ax
+			ey = by - ay
+			elen = trMax(1, TrIsqrt((int64(ex)*int64(ex))+(int64(ey)*int64(ey))))
+			sx = ((ex * 4) + (elen / 2)) / (2 * elen)
+			sy = ((ey * 4) + (elen / 2)) / (2 * elen)
+			if ex < 0 {
+				sx = ((ex * 4) - (elen / 2)) / (2 * elen)
+			}
+			if ey < 0 {
+				sy = ((ey * 4) - (elen / 2)) / (2 * elen)
+			}
+			k = trExtSteps(bin, bx, by, sx, sy, thkpx+3)
+			bx += k * sx
+			by += k * sy
+			k = trExtSteps(bin, ax, ay, 0-sx, 0-sy, thkpx+3)
+			ax -= k * sx
+			ay -= k * sy
 			x0 = (trMin(ax, bx) - thkpx) >> uint(1)
 			y0 = (trMin(ay, by) - thkpx) >> uint(1)
 			x1 = ((trMax(ax, bx) + thkpx) + 1) >> uint(1)
@@ -2552,7 +2600,7 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, cs *por
 	return rows
 }
 
-func TrRules(views *port.Cells, page int32, view int32, dpi100 int32, w int32, h int32, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, nv int32, comps *port.Cells, rules *port.Cells, refs *port.Cells, inks *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+func TrRules(views *port.Cells, page int32, view int32, dpi100 int32, w int32, h int32, bin *port.Bitmap, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, nv int32, comps *port.Cells, rules *port.Cells, refs *port.Cells, inks *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
 	// Rules (SPEC 8.2, D226): stacks of short row runs (vertical and steep rules) and of short column runs (horizontal and
 	// shallow ones) inside every component that is neither noise nor a glyph, chained, straightened, merged along their axis
 	// within `tr-rule-gap`, joined into dashed and dotted rules, doubles marked, written as `rules` rows. A rule-like component
@@ -2579,7 +2627,7 @@ func TrRules(views *port.Cells, page int32, view int32, dpi100 int32, w int32, h
 		nseg = TrSegments(pc, np, rmin, sg, mem, s1, s2, s3)
 		TrDashes(sg, nseg, rmin, TrPt(dpi100, 6)*2, mem, pc, s1, s2, s3, s4)
 		TrDoubles(sg, nseg)
-		rows = TrRuleRows(views, page, view, dpi100, cs, sg, nseg, mem, inks, rules, refs, comps)
+		rows = TrRuleRows(views, page, view, dpi100, bin, cs, sg, nseg, mem, inks, rules, refs, comps)
 	}
 	c = 0
 	for c < nc {
@@ -3875,6 +3923,7 @@ func TrTrace(views *port.Cells, inks *port.Cells, page int32, view int32, fixed 
 	var dpi int32 = evidence.VwGet(views, view, evidence.VwfDpi())
 	var nc int32 = 0
 	var nv int32 = 0
+	var wt int32 = 0
 	var n int32 = 0
 	n = TrRuns(bin, rn, ri)
 	if n == 0 {
@@ -3884,10 +3933,15 @@ func TrTrace(views *port.Cells, inks *port.Cells, page int32, view int32, fixed 
 	nc = TrLabel(rn, ri, h, cs, s1, s2, s3)
 	nv = TrVruns(bin, rn, ri, vr, s1)
 	TrMeasure(gray, labels, fixed, ink0, rn, ri, cs, vr, nv, s1, s2, s3)
-	TrKinds(dpi, cs, s1)
+	if fixed >= 0 {
+		wt = 1
+	} else {
+		wt = 0
+	}
+	TrKinds(dpi, wt, cs, s1)
 	TrParents(rn, ri, cs, s1)
 	TrEmitComponents(views, comps, cs, inks, page, view)
-	TrRules(views, page, view, dpi, w, h, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	TrRules(views, page, view, dpi, w, h, bin, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 	TrShapes(views, page, view, dpi, bin, rn, ri, cs, comps, prims, pts, refs, inks, s1, s2, s3, s4, s5)
 	TrDoubleRings(cs, prims, refs)
 	TrTlines(views, page, view, dpi, h, rn, ri, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6)

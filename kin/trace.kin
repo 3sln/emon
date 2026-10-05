@@ -1,4 +1,4 @@
-;; The tracer (P6.4; SPEC 8.2, 8.4.4; D092, D093, D198, D226; D229-D235). emon's own module (D039).
+;; The tracer (P6.4; SPEC 8.2, 8.4.4; D092, D093, D198, D226; D237-D243). emon's own module (D039).
 ;;
 ;;   Runs, components   `tr-runs` (the row runs of a binary view by `bitmap-next-nonzero`), `tr-label` (8-connected components by
 ;;                      union-find OVER RUNS, the smaller root wins), `tr-measure` (per component: ink, holes, stroke width as the
@@ -661,10 +661,10 @@
     (if (== b 0) (return a))
     (return (tr-min a b))))
 
-(defn ^:pub ^I32 tr-kinds [^I32 dpi100 ^:mut ^Cells cs ^:mut ^Cells s1]
+(defn ^:pub ^I32 tr-kinds [^I32 dpi100 ^I32 weighted ^:mut ^Cells cs ^:mut ^Cells s1]
   (comment "Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median")
   (comment "text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,")
-  (comment "and at most 10 times as long as thick; the INK-WEIGHTED (each capped at 1024 pixels) median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height")
+  (comment "and at most 10 times as long as thick; the median height M of those decides (at least three of them, or there is none and nothing is text: a table alone is not a glyph; on an ink MASK, `weighted` 1, each counts its ink capped at 1024 pixels, so a watermark of huge letters outweighs the specks of its own mask; on the binary view each counts one): TEXT is a provisional glyph of height")
   (comment "within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin")
   (comment "(its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,")
   (comment "has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything")
@@ -685,6 +685,7 @@
         ^:mut ^I32 nprov 0
         ^:mut ^I32 hh 0
         ^:mut ^I32 wgt 0
+        ^:mut ^I32 ngl 0
         ^:mut ^I32 kind 0]
     (cells-drop s1 0)
     (cells-grow s1 1024 0)
@@ -704,12 +705,13 @@
           (if (and (>= h tmin) (and (<= h tmax) (and (<= w (* 10 h)) (> ink noise))))
             (if (or (!= (tr-cg cs c C_KIND) (tr-k-rule)) (< lng (* 3 tmin)))
               (do (set hh (tr-min h 1023))
-                  (set wgt (tr-min ink 1024))
+                  (if (== weighted 1) (set wgt (tr-min ink 1024)) (set wgt 1))
+                  (set ngl (+ ngl 1))
                   (cells-set s1 hh (+ (cells-at s1 hh) wgt))
                   (set nprov (+ nprov wgt))
                   (tr-cset cs c C_FIT 1))))
           (set c (+ c 1))))
-    (set m (tr-hist-median s1 0 1024 nprov))
+    (if (>= ngl 3) (set m (tr-hist-median s1 0 1024 nprov)))
     (set c 0)
     (while (< c nc)
       (do (set w (- (tr-cg cs c C_RIGHT) (tr-cg cs c C_LEFT)))
@@ -1870,7 +1872,22 @@
           (set i (+ i 1))))
     (return n)))
 
-(defn ^:pub ^I32 tr-rule-rows [^Cells views ^I32 page ^I32 view ^I32 dpi100 ^:mut ^Cells cs ^Cells sg ^I32 ns ^Cells mem ^Cells inks
+(defn ^I32 tr-ext-steps [^Bitmap bin ^I32 x2 ^I32 y2 ^I32 sx ^I32 sy ^I32 maxn]
+  (comment "How many pixels the line goes on past the half-pixel point (x2, y2) in the step (sx, sy) (doubled pixels, so 2 is a pixel):")
+  (comment "while the pixel under the moving centre is ink, at most `maxn`. A rule whose chain stopped where a perpendicular rule is")
+  (comment "(its slices turned long there) really ends on the far side of it.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 x x2
+        ^:mut ^I32 y y2]
+    (set x (+ x sx))
+    (set y (+ y sy))
+    (while (and (< k maxn) (== (tr-fg bin (sar32 x 1) (sar32 y 1)) 1))
+      (do (set k (+ k 1))
+          (set x (+ x sx))
+          (set y (+ y sy))))
+    (return k)))
+
+(defn ^:pub ^I32 tr-rule-rows [^Cells views ^I32 page ^I32 view ^I32 dpi100 ^Bitmap bin ^:mut ^Cells cs ^Cells sg ^I32 ns ^Cells mem ^Cells inks
                                ^:mut ^Cells rules ^:mut ^Cells refs ^Cells comps]
   (comment "Write one `rules` row (SPEC 8.4.4) for every segment whose style is not 0: the box through the view, the centre-line")
   (comment "endpoints (half pixels mapped), thickness, the colour and ink row of its first member's layer, the style, a confidence")
@@ -1894,6 +1911,11 @@
         ^:mut ^I32 c 0
         ^:mut ^I32 ir 0
         ^:mut ^I32 thk 0
+        ^:mut ^I32 ex 0
+        ^:mut ^I32 ey 0
+        ^:mut ^I32 elen 0
+        ^:mut ^I32 sx 0
+        ^:mut ^I32 sy 0
         ^:mut ^I32 ln 0]
     (while (< i ns)
       (do (set style (cells-at sg (+ (* i K_SG) G_STYLE)))
@@ -1904,6 +1926,20 @@
                 (set by (cells-at sg (+ (* i K_SG) G_BY)))
                 (set thk (cells-at sg (+ (* i K_SG) G_THK)))
                 (set thkpx (quot (+ thk 3) 4))
+                (comment "a chain that stopped at a perpendicular rule goes on to its far edge")
+                (set ex (- bx ax))
+                (set ey (- by ay))
+                (set elen (tr-max 1 (tr-isqrt (+ (mul64 (i64 ex) (i64 ex)) (mul64 (i64 ey) (i64 ey))))))
+                (set sx (quot (+ (* ex 4) (quot elen 2)) (* 2 elen)))
+                (set sy (quot (+ (* ey 4) (quot elen 2)) (* 2 elen)))
+                (if (< ex 0) (set sx (quot (- (* ex 4) (quot elen 2)) (* 2 elen))))
+                (if (< ey 0) (set sy (quot (- (* ey 4) (quot elen 2)) (* 2 elen))))
+                (set k (tr-ext-steps bin bx by sx sy (+ thkpx 3)))
+                (set bx (+ bx (* k sx)))
+                (set by (+ by (* k sy)))
+                (set k (tr-ext-steps bin ax ay (- 0 sx) (- 0 sy) (+ thkpx 3)))
+                (set ax (- ax (* k sx)))
+                (set ay (- ay (* k sy)))
                 (set x0 (sar32 (- (tr-min ax bx) thkpx) 1))
                 (set y0 (sar32 (- (tr-min ay by) thkpx) 1))
                 (set x1 (sar32 (+ (+ (tr-max ax bx) thkpx) 1) 1))
@@ -1948,7 +1984,7 @@
           (set i (+ i 1))))
     (return rows)))
 
-(defn ^:pub ^I32 tr-rules [^Cells views ^I32 page ^I32 view ^I32 dpi100 ^I32 w ^I32 h
+(defn ^:pub ^I32 tr-rules [^Cells views ^I32 page ^I32 view ^I32 dpi100 ^I32 w ^I32 h ^Bitmap bin
                            ^Cells rn ^Cells ri ^:mut ^Cells cs ^Cells vr ^I32 nv
                            ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells refs ^Cells inks
                            ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
@@ -1979,7 +2015,7 @@
           (set nseg (tr-segments pc np rmin sg mem s1 s2 s3))
           (tr-dashes sg nseg rmin (* (tr-pt dpi100 6) 2) mem pc s1 s2 s3 s4)
           (tr-doubles sg nseg)
-          (set rows (tr-rule-rows views page view dpi100 cs sg nseg mem inks rules refs comps))))
+          (set rows (tr-rule-rows views page view dpi100 bin cs sg nseg mem inks rules refs comps))))
     (set c 0)
     (while (< c nc)
       (do (if (== (tr-cg cs c C_KIND) (tr-k-rule))
@@ -3017,6 +3053,7 @@
         ^I32 dpi (vw-get views view (vwf-dpi))
         ^:mut ^I32 nc 0
         ^:mut ^I32 nv 0
+        ^:mut ^I32 wt 0
         ^:mut ^I32 n 0]
     (set n (tr-runs bin rn ri))
     (if (== n 0) (return 0))
@@ -3024,10 +3061,11 @@
     (set nc (tr-label rn ri h cs s1 s2 s3))
     (set nv (tr-vruns bin rn ri vr s1))
     (tr-measure gray labels fixed ink0 rn ri cs vr nv s1 s2 s3)
-    (tr-kinds dpi cs s1)
+    (if (>= fixed 0) (set wt 1) (set wt 0))
+    (tr-kinds dpi wt cs s1)
     (tr-parents rn ri cs s1)
     (tr-emit-components views comps cs inks page view)
-    (tr-rules views page view dpi w h rn ri cs vr nv comps rules refs inks pc sg mem s1 s2 s3 s4 s5 s6)
+    (tr-rules views page view dpi w h bin rn ri cs vr nv comps rules refs inks pc sg mem s1 s2 s3 s4 s5 s6)
     (tr-shapes views page view dpi bin rn ri cs comps prims pts refs inks s1 s2 s3 s4 s5)
     (tr-double-rings cs prims refs)
     (tr-tlines views page view dpi h rn ri cs comps tlines refs s1 s2 s3 s4 s5 s6)

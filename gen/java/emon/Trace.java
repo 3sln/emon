@@ -804,10 +804,10 @@ public final class Trace {
         }
         return trMin(a, b);
     }
-    public static int trKinds(int dpi100, emon.Port.Cells cs, emon.Port.Cells s1) {
+    public static int trKinds(int dpi100, int weighted, emon.Port.Cells cs, emon.Port.Cells s1) {
         // Classify every component (`C_KIND`: noise, text, rule or large, by the named sizes relative to the page's median
         // text-like height). Noise: at most `tr-noise` ink pixels. A provisional glyph is not a rule, not too small or too large,
-        // and at most 10 times as long as thick; the INK-WEIGHTED (each capped at 1024 pixels) median height M of those decides (so a watermark of huge letters outweighs the specks of its own mask): TEXT is a provisional glyph of height
+        // and at most 10 times as long as thick; the median height M of those decides (at least three of them, or there is none and nothing is text: a table alone is not a glyph; on an ink MASK, `weighted` 1, each counts its ink capped at 1024 pixels, so a watermark of huge letters outweighs the specks of its own mask; on the binary view each counts one): TEXT is a provisional glyph of height
         // within M/`tr-text-lo` .. M * `tr-text-hi` and at most `tr-text-aspect` times as wide as high. A RULE CANDIDATE is thin
         // (its ink over its longer side is at most `tr-rule-thick`), at least `tr-rule-min` and `tr-rule-ratio` thicknesses long,
         // has no hole, and is longer than twice M (a tall `l` is a glyph); `tr-rules` confirms it or turns it to large. Everything
@@ -828,6 +828,7 @@ public final class Trace {
         int nprov = 0;
         int hh = 0;
         int wgt = 0;
+        int ngl = 0;
         int kind = 0;
         emon.Port.cellsDrop(s1, 0);
         emon.Port.cellsGrow(s1, 1024, 0);
@@ -849,7 +850,12 @@ public final class Trace {
             if ((h >= tmin) && ((h <= tmax) && ((w <= (10 * h)) && (ink > noise)))) {
                 if ((trCg(cs, c, C_KIND) != trKRule()) || (lng < (3 * tmin))) {
                     hh = trMin(h, 1023);
-                    wgt = trMin(ink, 1024);
+                    if (weighted == 1) {
+                        wgt = trMin(ink, 1024);
+                    } else {
+                        wgt = 1;
+                    }
+                    ngl += 1;
                     emon.Port.cellsSet(s1, hh, emon.Port.cellsAt(s1, hh) + wgt);
                     nprov += wgt;
                     trCset(cs, c, C_FIT, 1);
@@ -857,7 +863,9 @@ public final class Trace {
             }
             c += 1;
         }
-        m = trHistMedian(s1, 0, 1024, nprov);
+        if (ngl >= 3) {
+            m = trHistMedian(s1, 0, 1024, nprov);
+        }
         c = 0;
         while (c < nc) {
             w = trCg(cs, c, C_RIGHT) - trCg(cs, c, C_LEFT);
@@ -2321,7 +2329,23 @@ public final class Trace {
         }
         return n;
     }
-    public static int trRuleRows(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Cells cs, emon.Port.Cells sg, int ns, emon.Port.Cells mem, emon.Port.Cells inks, emon.Port.Cells rules, emon.Port.Cells refs, emon.Port.Cells comps) {
+    public static int trExtSteps(emon.Port.Bitmap bin, int x2, int y2, int sx, int sy, int maxn) {
+        // How many pixels the line goes on past the half-pixel point (x2, y2) in the step (sx, sy) (doubled pixels, so 2 is a pixel):
+        // while the pixel under the moving centre is ink, at most `maxn`. A rule whose chain stopped where a perpendicular rule is
+        // (its slices turned long there) really ends on the far side of it.
+        int k = 0;
+        int x = x2;
+        int y = y2;
+        x += sx;
+        y += sy;
+        while ((k < maxn) && (trFg(bin, (x) >> (1), (y) >> (1)) == 1)) {
+            k += 1;
+            x += sx;
+            y += sy;
+        }
+        return k;
+    }
+    public static int trRuleRows(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Bitmap bin, emon.Port.Cells cs, emon.Port.Cells sg, int ns, emon.Port.Cells mem, emon.Port.Cells inks, emon.Port.Cells rules, emon.Port.Cells refs, emon.Port.Cells comps) {
         // Write one `rules` row (SPEC 8.4.4) for every segment whose style is not 0: the box through the view, the centre-line
         // endpoints (half pixels mapped), thickness, the colour and ink row of its first member's layer, the style, a confidence
         // (1000 minus the per-mille of its length that is gap, dashes excepted, minus 300 when its thickness varies by more than half
@@ -2344,6 +2368,11 @@ public final class Trace {
         int c = 0;
         int ir = 0;
         int thk = 0;
+        int ex = 0;
+        int ey = 0;
+        int elen = 0;
+        int sx = 0;
+        int sy = 0;
         int ln = 0;
         while (i < ns) {
             style = emon.Port.cellsAt(sg, (i * K_SG) + G_STYLE);
@@ -2354,6 +2383,24 @@ public final class Trace {
                 by = emon.Port.cellsAt(sg, (i * K_SG) + G_BY);
                 thk = emon.Port.cellsAt(sg, (i * K_SG) + G_THK);
                 thkpx = (thk + 3) / 4;
+                // a chain that stopped at a perpendicular rule goes on to its far edge
+                ex = bx - ax;
+                ey = by - ay;
+                elen = trMax(1, trIsqrt((((long) ex) * ((long) ex)) + (((long) ey) * ((long) ey))));
+                sx = ((ex * 4) + (elen / 2)) / (2 * elen);
+                sy = ((ey * 4) + (elen / 2)) / (2 * elen);
+                if (ex < 0) {
+                    sx = ((ex * 4) - (elen / 2)) / (2 * elen);
+                }
+                if (ey < 0) {
+                    sy = ((ey * 4) - (elen / 2)) / (2 * elen);
+                }
+                k = trExtSteps(bin, bx, by, sx, sy, thkpx + 3);
+                bx += k * sx;
+                by += k * sy;
+                k = trExtSteps(bin, ax, ay, 0 - sx, 0 - sy, thkpx + 3);
+                ax -= k * sx;
+                ay -= k * sy;
                 x0 = (trMin(ax, bx) - thkpx) >> (1);
                 y0 = (trMin(ay, by) - thkpx) >> (1);
                 x1 = ((trMax(ax, bx) + thkpx) + 1) >> (1);
@@ -2414,7 +2461,7 @@ public final class Trace {
         }
         return rows;
     }
-    public static int trRules(emon.Port.Cells views, int page, int view, int dpi100, int w, int h, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, int nv, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells refs, emon.Port.Cells inks, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
+    public static int trRules(emon.Port.Cells views, int page, int view, int dpi100, int w, int h, emon.Port.Bitmap bin, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, int nv, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells refs, emon.Port.Cells inks, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6) {
         // Rules (SPEC 8.2, D226): stacks of short row runs (vertical and steep rules) and of short column runs (horizontal and
         // shallow ones) inside every component that is neither noise nor a glyph, chained, straightened, merged along their axis
         // within `tr-rule-gap`, joined into dashed and dotted rules, doubles marked, written as `rules` rows. A rule-like component
@@ -2441,7 +2488,7 @@ public final class Trace {
             nseg = trSegments(pc, np, rmin, sg, mem, s1, s2, s3);
             trDashes(sg, nseg, rmin, trPt(dpi100, 6) * 2, mem, pc, s1, s2, s3, s4);
             trDoubles(sg, nseg);
-            rows = trRuleRows(views, page, view, dpi100, cs, sg, nseg, mem, inks, rules, refs, comps);
+            rows = trRuleRows(views, page, view, dpi100, bin, cs, sg, nseg, mem, inks, rules, refs, comps);
         }
         c = 0;
         while (c < nc) {
@@ -3713,6 +3760,7 @@ public final class Trace {
         int dpi = Evidence.vwGet(views, view, Evidence.vwfDpi());
         int nc = 0;
         int nv = 0;
+        int wt = 0;
         int n = 0;
         n = trRuns(bin, rn, ri);
         if (n == 0) {
@@ -3722,10 +3770,15 @@ public final class Trace {
         nc = trLabel(rn, ri, h, cs, s1, s2, s3);
         nv = trVruns(bin, rn, ri, vr, s1);
         trMeasure(gray, labels, fixed, ink0, rn, ri, cs, vr, nv, s1, s2, s3);
-        trKinds(dpi, cs, s1);
+        if (fixed >= 0) {
+            wt = 1;
+        } else {
+            wt = 0;
+        }
+        trKinds(dpi, wt, cs, s1);
         trParents(rn, ri, cs, s1);
         trEmitComponents(views, comps, cs, inks, page, view);
-        trRules(views, page, view, dpi, w, h, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+        trRules(views, page, view, dpi, w, h, bin, rn, ri, cs, vr, nv, comps, rules, refs, inks, pc, sg, mem, s1, s2, s3, s4, s5, s6);
         trShapes(views, page, view, dpi, bin, rn, ri, cs, comps, prims, pts, refs, inks, s1, s2, s3, s4, s5);
         trDoubleRings(cs, prims, refs);
         trTlines(views, page, view, dpi, h, rn, ri, cs, comps, tlines, refs, s1, s2, s3, s4, s5, s6);

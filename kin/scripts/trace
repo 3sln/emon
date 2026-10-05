@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D229-D235) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
+;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D237-D243) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
 ;;
 ;; NOT A GATE (DEVLOG P6.4: a ratchet is P7.S's). Needs poppler, ghostscript, qpdf and ImageMagick, test/corpus/synth, the drivers (`bench/trace.sh`,
 ;; which this builds) and, for text-layer lines, a built `emon-rs` (kin/scripts/emon-rs-build, or EMON_RS). Measured, per DEVLOG P6.4 "Measured":
@@ -295,7 +295,14 @@
 
 (def results (atom []))
 
-(doseq [stem stems]
+(def sig (str (.lastModified (fs/file rust)) "/" (boolean go?)))
+(doseq [stem stems
+        :let [cf (str CACHE "/" stem "/res.edn")
+              cached (when (and (fs/exists? cf) (not rebuild?)) (read-string (slurp cf)))
+              n0 (count @results)]]
+  (if (= sig (:sig cached))
+    (do (println (format "%-34s cached" stem)) (swap! results into (:res cached)))
+    (do
   (let [pdf (str CORPUS "/pdf/" stem ".pdf")
         nt (notext-pdf! pdf (str CACHE "/" stem "/notext.pdf"))
         nt-pages (render! nt (str CACHE "/" stem "/nt"))
@@ -334,7 +341,8 @@
                               (let [iw (max 0.0 (- (min c g) (max a e)))] (and (>= iw (* 0.5 (- c a))) (<= f (/ (+ b d) 2)) (>= h (/ (+ b d) 2)))))]
                      {:hit (count (filter (fn [t] (some #(>= (iou t %) 0.5) boxes)) tlines))
                       :loose (count (filter (fn [t] (some #(ov t %) boxes)) tlines))})
-              :tl all-tls :inks (:I d) :P (:P d) :w w :h h}))))
+              :tl all-tls :inks (:I d) :P (:P d) :w w :h h})))
+  (spit cf (pr-str {:sig sig :res (subvec @results n0)})))))
 
 ;; ---------------------------------------------------------------- report
 (let [nt (filter #(= :notext (:kind %)) @results)
@@ -348,7 +356,7 @@
   (println (line :h))
   (println (line :v))
   (println "\n== per document (worst recall first; h/v recall)")
-  (doseq [m (take 12 (sort-by #(min (ratio (get-in % [:rules :h :rc]) (get-in % [:rules :h :rn]) ) 2) nt))]
+  (doseq [m (take 12 (sort-by #(let [x (ratio (get-in % [:rules :h :rc]) (get-in % [:rules :h :rn]))] (if (Double/isNaN x) 2.0 x)) nt))]
     (println (format "  %-30s p%d  truth %3d  found %3d  h %.3f/%.3f  v %.3f/%.3f" (:stem m) (:page m) (:ntruth m) (:ndet m)
                      (ratio (get-in m [:rules :h :pc]) (get-in m [:rules :h :pn])) (ratio (get-in m [:rules :h :rc]) (get-in m [:rules :h :rn]))
                      (ratio (get-in m [:rules :v :pc]) (get-in m [:rules :v :pn])) (ratio (get-in m [:rules :v :rc]) (get-in m [:rules :v :rn])))))
