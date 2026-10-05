@@ -1,0 +1,1 @@
+:producer {:engine "tesseract" :version "5.5.3" :leptonica "leptonica-1.87.0" :engine-mode "default (LSTM)" :lstm-choice-mode "2" :models "eng:4113088:fnv64=ed1d7621c7f3ed49 osd:10562727:fnv64=1f7083c48a50011b" :host "host/rust/src/tess.rs"}

@@ -1,0 +1,570 @@
+;; Health per source and region (P7.2; SPEC 8.4.5, 9.3, 9.7; D130, D150, D203, D223, D240; D252-D255). emon's own module (D039).
+;;
+;;   (hl-page page cg refs fw wd etext feats oblocks olines owords hl)
+;;       the page unit's call, after alignment: (1) the AGREEMENT of every (font, page) of the page (groups with a text-layer and an OCR
+;;       candidate whose case-folded similarity is at least `agree-sim`, over the groups with both whose text-layer word is Latin
+;;       script (`hh-latin`: see WHY AGREEMENT); -1 without OCR) joins P7.0's
+;;       components as a fifth, the score is made again (its `xt` column 13 with it), and (2) every OCR block of the page is scored from its
+;;       words' `xo` columns as an `hl` row. Answers the OCR-block rows of the page. Idempotent: a second call overwrites its rows.
+;;   (hl-doc feats fw hl)
+;;       the document unit's call, once every page is appended: a font whose agreement is under `agree-min` on EVERY page that has at
+;;       least `agree-words` groups is unhealthy on every page (a font's encoding is a document fact), its pages' scores made again.
+;;       Answers the (font, page) rows changed.
+;;   (hl-regions page images rules witness precision hl)
+;;       the graphics regions of a page (SPEC 9.9, D223): R0 (the page outside the visible image placements) and one row per
+;;       placement, from the tracer's rules; the vector witness and the tracer's precision come from the caller (graphics fusion
+;;       measures them against the vector rules, which this module never sees), -1 when it cannot.
+;;   (hh-score ...)  (hh-ocr-score ...)  (hh-region-score ...)   the three scores on their components, for the laws and the callers.
+;;   (hh-word-score feats f)   one OCR word's score from its feature row, by the block's weights.
+;;
+;; WHY AGREEMENT: a font whose ToUnicode is a plausible permutation (`tl-broken-shift`) has no tell in the text layer; the one witness
+;; that cannot share its mistake is the engine that read the page's pixels. Where the text layer and the OCR have both read a word they
+;; agree, up to case, in nearly every group of a healthy font and in almost none of a shifted one. THE ENGINE MUST BE ABLE TO READ THE
+;; SCRIPT: Tesseract's English model reads Hebrew, Arabic and Devanagari as soup, and a text layer that is right would be marked as
+;; wrong for it (measured: align-rtl, initial-rtl, script-arabic, script-hebrew, script-devanagari all fall to 68 on agreement 0). So a
+;; group counts only when a text-layer candidate of it holds a Latin letter or digit (ASCII, Latin-1 and Latin Extended A/B): a shifted
+;; font maps to Latin letters (that is what makes it plausible), a font of another script is left as P7.0 scored it.
+;;
+;; THE SCORE is D150's shape everywhere: a weighted harmonic mean of per-mille components, each floored at 50, scaled by `(1000 + weakest)
+;; / 2000`, over the components that are PRESENT (-1 is absent, never zero). With no agreement the font score IS `th-score` (a law).
+;; An OCR block's components are its words' `xo` columns pooled by code points: ink support (the larger of kin's and the engine's, a
+;; ramp, averaged with the tracer's symbols-with-a-component share when the tracer has run: 15), plausibility (1000 - 8), script
+;; consistency (1000 - 9), the share of the ink on the body layer (13), and the overlap with a
+;; seal and with a watermark/artifact region (1000 - 22, 1000 - 23). Engine confidence is NOT a component (D130: a word the network is
+;; unsure of scores exactly 0, and a misspelling can score high).
+;;
+;; THE `hl` ROWS. A font-page row keeps its cells (kind, page, subject = the font, mapped, garbage, overlap, gap, agreement 7, ink 8,
+;; score 9); this module fills the agreement and uses the two spare cells to hold what the agreement was made of: 10 the groups with
+;; both candidates, 11 the agreeing ones (`hlf-both`, `hlf-agree`: they are not dumped; the agreement is). An OCR-block row has the
+;; subject `oblocks` row and components ink, plausibility, script, body, seal, artifact in cells 3-8 (`hob-*`). A region row
+;; (kind `region`) has the subject -1 for R0 and the `images` row for an image, and components vector witness, tracer precision, skew
+;; spread, tracer confidence, rules, fills (`hrg-*`).
+(ns emon.health
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at]]
+            [emon.evidence :refer [fe-get fe-set rf-get ow-get ol-get ob-get wd-get im-get rl-get ev-angle
+                                   hd-feat hd-page hd-tstart hd-tlen lh-first lh-count obf-kind obf-first obf-count obf-page
+                                   wf-font wf-gcount ea-words ob-block ob-paragraph
+                                   mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-vis
+                                   rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-conf
+                                   xt-font-health xo-kin-ink xo-engine-ink xo-implausible xo-script xo-body-share xo-seal xo-artifact
+                                   xo-length xo-comp-ratio]]
+            [emon.player :refer [cg-get fw-count hl-new hl-count hl-get hl-set plh-font-page plh-ocr-block plh-region pl-ea-fw
+                                 cgf-page cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-simfold
+                                 hlf-kind hlf-page hlf-subject hlf-mapped hlf-garbage hlf-overlap hlf-gap hlf-agreement hlf-score]]
+            [emon.tlhealth :refer [th-overlap-ok th-gap-ok th-gap-bad]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 9.4: named, first values, P10.1 calibrates)
+
+(defn ^:pub ^I32 hh-agree-sim [] (comment "`agree-sim`: the case-folded similarity (per mille) at which a text-layer word and an OCR word agree.") (return 900))
+(defn ^:pub ^I32 hh-agree-min [] (comment "`agree-min`: the agreement under which a font is unhealthy on every page it is seen on.") (return 600))
+(defn ^:pub ^I32 hh-agree-words [] (comment "`agree-words`: the groups with both candidates a page needs for its agreement to count.") (return 8))
+(defn ^:pub ^I32 hh-agree-ok [] (comment "The agreement from which the agreement component is 1000.") (return 800))
+(defn ^:pub ^I32 hh-agree-bad [] (comment "The agreement at which the agreement component is 0.") (return 200))
+(defn ^:pub ^I32 hh-agree-weight [] (comment "The agreement component's weight beside mapped 4, garbage 3, overlap 2, gap 1.") (return 5))
+(defn ^:pub ^I32 hh-ink-bad [] (comment "An OCR word whose box holds this per-mille of ink or less is over blank paper.") (return 10))
+(defn ^:pub ^I32 hh-ink-ok [] (comment "An OCR word whose box holds this per-mille of ink has the ink support of a word.") (return 60))
+(defn ^:pub ^I32 hh-skew-ok [] (comment "A spread of the rules' angles (centi-degrees) up to which the skew component is 1000.") (return 30))
+(defn ^:pub ^I32 hh-skew-bad [] (comment "The spread from which the skew component is 0.") (return 300))
+(defn ^:pub ^I32 hh-axis [] (comment "A rule within this many centi-degrees of an axis counts for the skew spread (`gf-axis` is 100, the rule's class; wider here).") (return 1500))
+(defn ^:pub ^I32 hh-img-min [] (comment "The side (centipoints) an image placement needs to be a region of its own (`gf-img-min`, 2 cm).") (return 5669))
+
+;; the cells of the rows other than a font-page's
+(defn ^:pub ^I32 hlf-both [] (return 10))
+(defn ^:pub ^I32 hlf-agree [] (return 11))
+(defn ^:pub ^I32 hob-ink [] (return 3))
+(defn ^:pub ^I32 hob-plausible [] (return 4))
+(defn ^:pub ^I32 hob-script [] (return 5))
+(defn ^:pub ^I32 hob-body [] (return 6))
+(defn ^:pub ^I32 hob-seal [] (return 7))
+(defn ^:pub ^I32 hob-artifact [] (return 8))
+(defn ^:pub ^I32 hrg-witness [] (return 3))
+(defn ^:pub ^I32 hrg-precision [] (return 4))
+(defn ^:pub ^I32 hrg-skew [] (return 5))
+(defn ^:pub ^I32 hrg-conf [] (return 6))
+(defn ^:pub ^I32 hrg-rules [] (return 7))
+(defn ^:pub ^I32 hrg-fills [] (return 8))
+
+;; ------------------------------------------------------------- the score
+
+(defn ^I32 hh-down [^I32 v ^I32 ok ^I32 bad]
+  (comment "1000 up to `ok`, 0 from `bad` (ok < bad), linear between: a measure of badness as a component.")
+  (if (<= v ok) (return 1000))
+  (if (>= v bad) (return 0))
+  (return (quot (* (- bad v) 1000) (- bad ok))))
+
+(defn ^I32 hh-up [^I32 v ^I32 bad ^I32 ok]
+  (comment "0 up to `bad`, 1000 from `ok` (bad < ok), linear between: a measure of goodness as a component.")
+  (if (>= v ok) (return 1000))
+  (if (<= v bad) (return 0))
+  (return (quot (* (- v bad) 1000) (- ok bad))))
+
+(defn ^I32 hh-floor [^I32 c]
+  (if (< c 50) (return 50))
+  (return c))
+
+(defn ^I32 hh-term [^I32 c ^I32 w]
+  (comment "A component's share of the harmonic sum: w * 10^6 / max(c, 50); 0 for an absent one.")
+  (if (< c 0) (return 0))
+  (return (quot (* w 1000000) (hh-floor c))))
+
+(defn ^I32 hh-wsum [^I32 c ^I32 w]
+  (if (< c 0) (return 0))
+  (return w))
+
+(defn ^I32 hh-min [^I32 a ^I32 c]
+  (comment "The smaller of two components, an absent one (-1) being ignored.")
+  (if (< a 0) (return c))
+  (if (< c 0) (return a))
+  (if (< c a) (return c))
+  (return a))
+
+(defn ^:pub ^I32 hh-blend [^I32 c0 ^I32 w0 ^I32 c1 ^I32 w1 ^I32 c2 ^I32 w2 ^I32 c3 ^I32 w3 ^I32 c4 ^I32 w4 ^I32 c5 ^I32 w5]
+  (comment "D150's shape over up to six components: the weighted harmonic mean of those present (>= 0), each floored at 50, times")
+  (comment "(1000 + weakest) / 2000, the weakest being the smallest present one before the floor. -1 when none is present.")
+  (let [^I32 sw (+ (+ (+ (hh-wsum c0 w0) (hh-wsum c1 w1)) (+ (hh-wsum c2 w2) (hh-wsum c3 w3))) (+ (hh-wsum c4 w4) (hh-wsum c5 w5)))
+        ^I32 sum (+ (+ (+ (hh-term c0 w0) (hh-term c1 w1)) (+ (hh-term c2 w2) (hh-term c3 w3))) (+ (hh-term c4 w4) (hh-term c5 w5)))
+        ^I32 weakest (hh-min (hh-min (hh-min c0 c1) (hh-min c2 c3)) (hh-min c4 c5))]
+    (if (or (== sw 0) (== sum 0)) (return -1))
+    (return (quot (* (quot (* sw 1000000) sum) (+ 1000 weakest)) 2000))))
+
+(defn ^:pub ^I32 hh-agree-component [^I32 agreement]
+  (comment "The agreement as a component: -1 absent, else 0 at `agree-bad` and 1000 at `agree-ok`.")
+  (if (< agreement 0) (return -1))
+  (return (hh-up agreement (hh-agree-bad) (hh-agree-ok))))
+
+(defn ^:pub ^I32 hh-score [^I32 mapped ^I32 garbage ^I32 overlap ^I32 gap ^I32 agreement]
+  (comment "A (font, page)'s score from the pooled components and the agreement (-1: not counted). With no agreement it is `th-score`.")
+  (return (hh-blend mapped 4 (- 1000 garbage) 3 (hh-down overlap (th-overlap-ok) 1000) 2 (hh-down gap (th-gap-ok) (th-gap-bad)) 1
+                    (hh-agree-component agreement) (hh-agree-weight) -1 0)))
+
+(defn ^:pub ^I32 hh-ocr-score [^I32 ink ^I32 plausible ^I32 script ^I32 body ^I32 seal ^I32 artifact]
+  (comment "An OCR block's score from its pooled components (-1 absent): weights ink 3, plausibility 2, script 1, body 3, seal 3, artifact 3.")
+  (return (hh-blend ink 3 plausible 2 script 1 body 3 seal 3 artifact 3)))
+
+(defn ^:pub ^I32 hh-region-score [^I32 witness ^I32 precision ^I32 skew ^I32 conf]
+  (comment "A graphics region's score (D223): weights vector witness 3, tracer precision 3, skew spread 2, tracer confidence 2.")
+  (return (hh-blend witness 3 precision 3 skew 2 conf 2 -1 0 -1 0)))
+
+;; ------------------------------------------------------------- the rows
+
+(defn ^I32 hh-find [^Cells hl ^I32 kind ^I32 page ^I32 subject]
+  (comment "The row of `hl` of this kind, page and subject, -1 when none.")
+  (let [^I32 n (hl-count hl)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (and (== (hl-get hl i (hlf-kind)) kind)
+                   (and (== (hl-get hl i (hlf-page)) page) (== (hl-get hl i (hlf-subject)) subject)))
+            (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 hh-upsert [^:mut ^Cells hl ^I32 kind ^I32 page ^I32 subject]
+  (comment "The row for (kind, page, subject): the one there is with its cells made new, else a new one.")
+  (let [^I32 old (hh-find hl kind page subject)
+        ^:mut ^I32 r old
+        ^:mut ^I32 k 3]
+    (if (< old 0)
+      (return (hl-new hl kind page subject)))
+    (while (< k 12)
+      (do (hl-set hl r k -1)
+          (set k (+ k 1))))
+    (return r)))
+
+(defn ^I32 hh-font-rescore [^:mut ^Cells hl ^I32 r ^I32 use-agreement]
+  (comment "Make a font-page row's score again from its components, with the agreement or without; answers the score.")
+  (let [^:mut ^I32 ag -1
+        ^:mut ^I32 sc 0]
+    (if (== use-agreement 1) (set ag (hl-get hl r (hlf-agreement))))
+    (set sc (hh-score (hl-get hl r (hlf-mapped)) (hl-get hl r (hlf-garbage)) (hl-get hl r (hlf-overlap)) (hl-get hl r (hlf-gap)) ag))
+    (hl-set hl r (hlf-score) sc)
+    (return sc)))
+
+(defn ^I32 hh-font-of [^Cells refs ^Cells fw ^Cells wd ^I32 ref]
+  (comment "The font of the text-layer word `refs` row `ref` names (an `fw` row of the layer, or a `words` row), -1 for neither.")
+  (let [^I32 ea (rf-get refs ref 0)
+        ^I32 ix (rf-get refs ref 1)]
+    (if (and (== ea (pl-ea-fw)) (and (>= ix 0) (< ix (fw-count fw)))) (return (cells-at fw (+ (* ix 24) 19))))
+    (if (and (== ea (ea-words)) (>= ix 0)) (return (wd-get wd ix (wf-font))))
+    (return -1)))
+
+;; ------------------------------------------------------------- the text layer: agreement
+
+(defn ^I32 hh-latin-cp [^I32 c]
+  (comment "1 for a Latin letter or a digit: ASCII, Latin-1 (without the multiplication and division signs), Latin Extended-A and -B.")
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (if (and (>= c 65) (<= c 90)) (return 1))
+  (if (and (>= c 97) (<= c 122)) (return 1))
+  (if (and (>= c 192) (<= c 591) (and (!= c 215) (!= c 247))) (return 1))
+  (return 0))
+
+(defn ^I32 hh-latin [^Cells refs ^Cells fw ^Cells wd ^Cells etext ^I32 first ^I32 count]
+  (comment "1 when one of the `count` text-layer candidates from `refs` row `first` holds a Latin letter or digit in its text.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 ea 0
+        ^:mut ^I32 ix 0
+        ^:mut ^I32 ts -1
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 j 0]
+    (while (< k count)
+      (do (set ea (rf-get refs (+ first k) 0))
+          (set ix (rf-get refs (+ first k) 1))
+          (set ts -1)
+          (set tl 0)
+          (if (and (== ea (pl-ea-fw)) (and (>= ix 0) (< ix (fw-count fw))))
+            (do (set ts (cells-at fw (+ (* ix 24) 11)))
+                (set tl (cells-at fw (+ (* ix 24) 12)))))
+          (if (and (== ea (ea-words)) (>= ix 0))
+            (do (set ts (wd-get wd ix (hd-tstart)))
+                (set tl (wd-get wd ix (hd-tlen)))))
+          (set j 0)
+          (if (>= ts 0)
+            (while (< j tl)
+              (do (if (== (hh-latin-cp (cells-at etext (+ ts j))) 1) (return 1))
+                  (set j (+ j 1)))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 hh-count-agreement [^I32 page ^Cells cg ^Cells refs ^Cells fw ^Cells wd ^Cells etext ^:mut ^Cells hl]
+  (comment "Per (font, page) row of this page: the groups with both candidates (cell 10) and the agreeing ones (cell 11), from")
+  (comment "zero. A group's font is its first text-layer candidate's. Answers the groups counted.")
+  (let [^I32 n (quot (cells-len cg) 16)
+        ^I32 nh (hl-count hl)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 font 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 a 0]
+    (while (< r nh)
+      (do (if (and (== (hl-get hl r (hlf-kind)) (plh-font-page)) (== (hl-get hl r (hlf-page)) page))
+            (do (hl-set hl r (hlf-both) 0)
+                (hl-set hl r (hlf-agree) 0)))
+          (set r (+ r 1))))
+    (while (< i n)
+      (do (if (and (== (cg-get cg i (cgf-page)) page)
+                   (and (> (cg-get cg i (cgf-tcount)) 0)
+                        (and (> (cg-get cg i (cgf-ocount)) 0)
+                             (== (hh-latin refs fw wd etext (cg-get cg i (cgf-tfirst)) (cg-get cg i (cgf-tcount))) 1))))
+            (do (set font (hh-font-of refs fw wd (cg-get cg i (cgf-tfirst))))
+                (set r (hh-find hl (plh-font-page) page font))
+                (if (>= r 0)
+                  (do (set b (hl-get hl r (hlf-both)))
+                      (hl-set hl r (hlf-both) (+ b 1))
+                      (if (>= (cg-get cg i (cgf-simfold)) (hh-agree-sim))
+                        (do (set a (hl-get hl r (hlf-agree)))
+                            (hl-set hl r (hlf-agree) (+ a 1))))
+                      (set total (+ total 1))))))
+          (set i (+ i 1))))
+    (return total)))
+
+(defn ^I32 hh-set-fonts [^I32 page ^Cells fw ^:mut ^Cells feats ^Cells hl]
+  (comment "Each flow word of the page: its (font, page) row's score into its `xt` column 13.")
+  (let [^I32 n (fw-count fw)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 ft 0
+        ^:mut ^I32 r 0]
+    (while (< i n)
+      (do (if (== (cells-at fw (* i 24)) page)
+            (do (set ft (cells-at fw (+ (* i 24) 15)))
+                (set r (hh-find hl (plh-font-page) page (cells-at fw (+ (* i 24) 19))))
+                (if (and (>= ft 0) (>= r 0)) (fe-set feats ft (xt-font-health) (hl-get hl r (hlf-score))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- OCR blocks
+
+(defn ^I32 hh-pool [^I32 sum ^I32 weight]
+  (if (<= weight 0) (return -1))
+  (return (quot sum weight)))
+
+(defn ^I32 hh-word-comp [^Cells feats ^I32 f ^I32 k]
+  (comment "Component `k` of one OCR word's reliability, from its feature row: 0 ink support (the larger of kin's and the engine's, a ramp")
+  (comment "from `ink-bad` to `ink-ok`, averaged with the tracer's share of the word's symbols that have a text-like component, 15), 1 plausibility (1000 - 8), 2 script consistency (1000 - 9), 3 the share of its ink on the body")
+  (comment "layer (13), 4 free of a seal (1000 - 22), 5 free of a watermark or artifact (1000 - 23). -1 where the column is absent.")
+  (let [^:mut ^I32 v 0
+        ^:mut ^I32 u 0]
+    (if (== k 0)
+      (do (set v (fe-get feats f (xo-kin-ink)))
+          (set u (fe-get feats f (xo-engine-ink)))
+          (if (> u v) (set v u))
+          (set u (fe-get feats f (xo-comp-ratio)))
+          (if (< v 0) (return u))
+          (set v (hh-up v (hh-ink-bad) (hh-ink-ok)))
+          (if (>= u 0) (set v (quot (+ v u) 2)))
+          (return v)))
+    (if (== k 1)
+      (do (set v (fe-get feats f (xo-implausible)))
+          (if (< v 0) (return -1))
+          (return (- 1000 v))))
+    (if (== k 2)
+      (do (set v (fe-get feats f (xo-script)))
+          (if (< v 0) (return -1))
+          (return (- 1000 v))))
+    (if (== k 3) (return (fe-get feats f (xo-body-share))))
+    (if (== k 4)
+      (do (set v (fe-get feats f (xo-seal)))
+          (if (< v 0) (return -1))
+          (return (- 1000 v))))
+    (set v (fe-get feats f (xo-artifact)))
+    (if (< v 0) (return -1))
+    (return (- 1000 v))))
+
+(defn ^:pub ^I32 hh-word-score [^Cells feats ^I32 f]
+  (comment "One OCR word's score from its feature row `f` by the block's weights, for the arbitration that reads words (P7.3) and for the")
+  (comment "measures: -1 when it has no feature row or none of the six columns.")
+  (if (< f 0) (return -1))
+  (return (hh-ocr-score (hh-word-comp feats f 0) (hh-word-comp feats f 1) (hh-word-comp feats f 2)
+                        (hh-word-comp feats f 3) (hh-word-comp feats f 4) (hh-word-comp feats f 5))))
+
+(defn ^I32 hh-add-block [^:mut ^Cells hl ^I32 page ^I32 b ^Cells oblocks ^Cells olines ^Cells owords ^Cells feats]
+  (comment "Score OCR block `b` (an `oblocks` row of kind block): its words are those of the lines of its paragraphs. A component is the")
+  (comment "mean of the words' measure weighted by their code points, over the words that have it; -1 for none. Answers the row.")
+  (let [^I32 r (hh-upsert hl (plh-ocr-block) page b)
+        ^:mut ^I32 pr (ob-get oblocks b (obf-first))
+        ^:mut ^I32 pend 0
+        ^:mut ^I32 li 0
+        ^:mut ^I32 lend 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 wend 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 wl 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 sc 0
+        ^:mut ^I32 s0 0
+        ^:mut ^I32 n0 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 n1 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 n2 0
+        ^:mut ^I32 s3 0
+        ^:mut ^I32 n3 0
+        ^:mut ^I32 s4 0
+        ^:mut ^I32 n4 0
+        ^:mut ^I32 s5 0
+        ^:mut ^I32 n5 0]
+    (set pend (+ pr (ob-get oblocks b (obf-count))))
+    (while (< pr pend)
+      (do (if (== (ob-get oblocks pr (obf-kind)) (ob-paragraph))
+            (do (set li (ob-get oblocks pr (obf-first)))
+                (set lend (+ li (ob-get oblocks pr (obf-count))))
+                (while (< li lend)
+                  (do (set w (ol-get olines li (lh-first)))
+                      (set wend (+ w (ol-get olines li (lh-count))))
+                      (while (< w wend)
+                        (do (set f (ow-get owords w (hd-feat)))
+                            (if (>= f 0)
+                              (do (set wl (fe-get feats f (xo-length)))
+                                  (if (< wl 1) (set wl 1))
+                                  (set v (hh-word-comp feats f 0))
+                                  (if (>= v 0) (do (set s0 (+ s0 (* wl v))) (set n0 (+ n0 wl))))
+                                  (set v (hh-word-comp feats f 1))
+                                  (if (>= v 0) (do (set s1 (+ s1 (* wl v))) (set n1 (+ n1 wl))))
+                                  (set v (hh-word-comp feats f 2))
+                                  (if (>= v 0) (do (set s2 (+ s2 (* wl v))) (set n2 (+ n2 wl))))
+                                  (set v (hh-word-comp feats f 3))
+                                  (if (>= v 0) (do (set s3 (+ s3 (* wl v))) (set n3 (+ n3 wl))))
+                                  (set v (hh-word-comp feats f 4))
+                                  (if (>= v 0) (do (set s4 (+ s4 (* wl v))) (set n4 (+ n4 wl))))
+                                  (set v (hh-word-comp feats f 5))
+                                  (if (>= v 0) (do (set s5 (+ s5 (* wl v))) (set n5 (+ n5 wl))))))
+                            (set w (+ w 1))))
+                      (set li (+ li 1))))))
+          (set pr (+ pr 1))))
+    (hl-set hl r (hob-ink) (hh-pool s0 n0))
+    (hl-set hl r (hob-plausible) (hh-pool s1 n1))
+    (hl-set hl r (hob-script) (hh-pool s2 n2))
+    (hl-set hl r (hob-body) (hh-pool s3 n3))
+    (hl-set hl r (hob-seal) (hh-pool s4 n4))
+    (hl-set hl r (hob-artifact) (hh-pool s5 n5))
+    (set sc (hh-ocr-score (hl-get hl r (hob-ink)) (hl-get hl r (hob-plausible)) (hl-get hl r (hob-script))
+                          (hl-get hl r (hob-body)) (hl-get hl r (hob-seal)) (hl-get hl r (hob-artifact))))
+    (hl-set hl r (hlf-score) sc)
+    (return r)))
+
+;; ------------------------------------------------------------- the entry points
+
+(defn ^:pub ^I32 hl-page [^I32 page ^Cells cg ^Cells refs ^Cells fw ^Cells wd ^Cells etext ^:mut ^Cells feats
+                          ^Cells oblocks ^Cells olines ^Cells owords ^:mut ^Cells hl]
+  (comment "The page unit's call (see the head). The agreement of each (font, page) of the page and its scores; every OCR block's row.")
+  (let [^I32 nh (hl-count hl)
+        ^I32 nb (quot (cells-len oblocks) 16)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 both 0
+        ^:mut ^I32 usea 0
+        ^:mut ^I32 agree 0]
+    (hh-count-agreement page cg refs fw wd etext hl)
+    (while (< r nh)
+      (do (if (and (== (hl-get hl r (hlf-kind)) (plh-font-page)) (== (hl-get hl r (hlf-page)) page))
+            (do (set both (hl-get hl r (hlf-both)))
+                (set agree (hl-get hl r (hlf-agree)))
+                (if (> both 0)
+                  (hl-set hl r (hlf-agreement) (quot (* agree 1000) both))
+                  (hl-set hl r (hlf-agreement) -1))
+                (set usea 0)
+                (if (>= both (hh-agree-words)) (set usea 1))
+                (hh-font-rescore hl r usea)))
+          (set r (+ r 1))))
+    (hh-set-fonts page fw feats hl)
+    (while (< b nb)
+      (do (if (and (== (ob-get oblocks b (obf-page)) page) (== (ob-get oblocks b (obf-kind)) (ob-block)))
+            (do (hh-add-block hl page b oblocks olines owords feats)
+                (set rows (+ rows 1))))
+          (set b (+ b 1))))
+    (return rows)))
+
+(defn ^I32 hh-doc-agree [^Cells hl ^I32 font ^I32 from ^I32 want]
+  (comment "For font `font`: with `want` 0 the number of pages that have at least `agree-words` groups, with 1 the number of those under")
+  (comment "`agree-min`, with 2 the groups with both candidates over the whole document, with 3 the agreeing ones.")
+  (let [^I32 n (hl-count hl)
+        ^:mut ^I32 i from
+        ^:mut ^I32 pages 0
+        ^:mut ^I32 low 0
+        ^:mut ^I32 both 0
+        ^:mut ^I32 agree 0]
+    (while (< i n)
+      (do (if (and (== (hl-get hl i (hlf-kind)) (plh-font-page)) (== (hl-get hl i (hlf-subject)) font))
+            (do (set both (+ both (hl-get hl i (hlf-both))))
+                (set agree (+ agree (hl-get hl i (hlf-agree))))
+                (if (>= (hl-get hl i (hlf-both)) (hh-agree-words))
+                  (do (set pages (+ pages 1))
+                      (if (< (hl-get hl i (hlf-agreement)) (hh-agree-min)) (set low (+ low 1)))))))
+          (set i (+ i 1))))
+    (if (== want 0) (return pages))
+    (if (== want 1) (return low))
+    (if (== want 2) (return both))
+    (return agree)))
+
+(defn ^:pub ^I32 hl-doc [^:mut ^Cells feats ^Cells fw ^:mut ^Cells hl]
+  (comment "The document unit's call: a font under `agree-min` on every page that has `agree-words` groups is unhealthy on every page.")
+  (comment "Its rows' agreement is the page's own when the page has the groups and the document's (pooled) when it has not, and the")
+  (comment "score is made again with it. The words' `xt` column 13 follow. Answers the rows changed.")
+  (let [^I32 n (hl-count hl)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 font 0
+        ^:mut ^I32 changed 0
+        ^:mut ^I32 both 0
+        ^:mut ^I32 dag 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ft 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 nw (fw-count fw)]
+    (while (< i n)
+      (do (if (== (hl-get hl i (hlf-kind)) (plh-font-page))
+            (do (set font (hl-get hl i (hlf-subject)))
+                (if (and (> (hh-doc-agree hl font 0 0) 0) (== (hh-doc-agree hl font 0 0) (hh-doc-agree hl font 0 1)))
+                  (do (set both (hh-doc-agree hl font 0 2))
+                      (set dag (quot (* (hh-doc-agree hl font 0 3) 1000) both))
+                      (if (< (hl-get hl i (hlf-both)) (hh-agree-words))
+                        (hl-set hl i (hlf-agreement) dag))
+                      (hh-font-rescore hl i 1)
+                      (set changed (+ changed 1))))))
+          (set i (+ i 1))))
+    (comment "every flow word: its row's score")
+    (while (< j nw)
+      (do (set ft (cells-at fw (+ (* j 24) 15)))
+          (set r (hh-find hl (plh-font-page) (cells-at fw (* j 24)) (cells-at fw (+ (* j 24) 19))))
+          (if (and (>= ft 0) (>= r 0)) (fe-set feats ft (xt-font-health) (hl-get hl r (hlf-score))))
+          (set j (+ j 1))))
+    (return changed)))
+
+;; ------------------------------------------------------------- graphics regions (D223)
+
+(defn ^I32 hh-image-ok [^Cells images ^I32 m]
+  (comment "1 for a visible image placement at least `img-min` each way.")
+  (if (!= (im-get images m (mf-vis)) 0) (return 0))
+  (if (< (- (im-get images m (mf-x1)) (im-get images m (mf-x0))) (hh-img-min)) (return 0))
+  (if (< (- (im-get images m (mf-y1)) (im-get images m (mf-y0))) (hh-img-min)) (return 0))
+  (return 1))
+
+(defn ^I32 hh-rule-region [^Cells images ^I32 page ^I32 cx ^I32 cy]
+  (comment "The `images` row of the visible placement of the page that holds the point, else -1 (R0).")
+  (let [^I32 n (quot (cells-len images) 20)
+        ^:mut ^I32 m 0]
+    (while (< m n)
+      (do (if (and (== (im-get images m (mf-page)) page) (== (hh-image-ok images m) 1))
+            (if (and (and (>= cx (im-get images m (mf-x0))) (< cx (im-get images m (mf-x1))))
+                     (and (>= cy (im-get images m (mf-y0))) (< cy (im-get images m (mf-y1)))))
+              (return m)))
+          (set m (+ m 1))))
+    (return -1)))
+
+(defn ^I32 hh-dev [^I32 dx ^I32 dy]
+  (comment "A rule's deviation from its axis in centi-degrees (signed, within +-1500 when it counts): 0 for a horizontal one; a")
+  (comment "vertical one's from the vertical. -100000 for a slanted one that counts for neither.")
+  (let [^I32 a0 (ev-angle dx dy)
+        ^:mut ^I32 a (- a0 (* (quot a0 18000) 18000))]
+    (if (<= a (hh-axis)) (return a))
+    (if (>= a (- 18000 (hh-axis))) (return (- a 18000)))
+    (if (and (>= a (- 9000 (hh-axis))) (<= a (+ 9000 (hh-axis)))) (return (- a 9000)))
+    (return -100000)))
+
+(defn ^I32 hh-region-row [^:mut ^Cells hl ^I32 page ^I32 subject ^I32 witness ^I32 precision ^I32 skew ^I32 conf ^I32 nrules]
+  (let [^I32 r (hh-upsert hl (plh-region) page subject)]
+    (hl-set hl r (hrg-witness) witness)
+    (hl-set hl r (hrg-precision) precision)
+    (hl-set hl r (hrg-skew) skew)
+    (hl-set hl r (hrg-conf) conf)
+    (hl-set hl r (hrg-rules) nrules)
+    (hl-set hl r (hlf-score) (hh-region-score witness precision skew conf))
+    (return r)))
+
+(defn ^I32 hh-region-measure [^I32 page ^Cells images ^Cells rules ^I32 region ^I32 want]
+  (comment "The tracer's measures of one region of a page: want 0 the number of its rules, 1 the mean rule confidence (-1 for none or")
+  (comment "unknown), 2 the skew component (-1 with fewer than two axis-aligned rules): 1000 at a spread of the rules' deviations")
+  (comment "of at most `skew-ok`, falling to 0 at `skew-bad`.")
+  (let [^I32 n (quot (cells-len rules) 20)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 csum 0
+        ^:mut ^I32 cn 0
+        ^:mut ^I32 axis 0
+        ^:mut ^I32 lo 100000
+        ^:mut ^I32 hi -100000
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 c 0]
+    (while (< i n)
+      (do (if (== (rl-get rules i (rlf-page)) page)
+            (do (set dx (quot (+ (rl-get rules i (rlf-lx0)) (rl-get rules i (rlf-lx1))) 2))
+                (set dy (quot (+ (rl-get rules i (rlf-ly0)) (rl-get rules i (rlf-ly1))) 2))
+                (if (== (hh-rule-region images page dx dy) region)
+                  (do (set nr (+ nr 1))
+                      (set c (rl-get rules i (rlf-conf)))
+                      (if (>= c 0)
+                        (do (set csum (+ csum c))
+                            (set cn (+ cn 1))))
+                      (set d (hh-dev (- (rl-get rules i (rlf-lx1)) (rl-get rules i (rlf-lx0)))
+                                     (- (rl-get rules i (rlf-ly1)) (rl-get rules i (rlf-ly0)))))
+                      (if (> d -100000)
+                        (do (set axis (+ axis 1))
+                            (if (< d lo) (set lo d))
+                            (if (> d hi) (set hi d))))))))
+          (set i (+ i 1))))
+    (if (== want 0) (return nr))
+    (if (== want 1) (return (hh-pool csum cn)))
+    (if (< axis 2) (return -1))
+    (return (hh-down (- hi lo) (hh-skew-ok) (hh-skew-bad)))))
+
+(defn ^:pub ^I32 hl-regions [^I32 page ^Cells images ^Cells rules ^I32 witness ^I32 precision ^:mut ^Cells hl]
+  (comment "The page's graphics regions (see the head): R0 first (subject -1), then one row per visible placement of at least")
+  (comment "`img-min`. An image region borrows R0's tracer precision and has no vector witness of its own.")
+  (let [^I32 ni (quot (cells-len images) 20)
+        ^:mut ^I32 m 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 n0 (hh-region-measure page images rules -1 0)
+        ^:mut ^I32 prec precision]
+    (hh-region-row hl page -1 witness precision (hh-region-measure page images rules -1 2) (hh-region-measure page images rules -1 1) n0)
+    (set rows 1)
+    (while (< m ni)
+      (do (if (and (== (im-get images m (mf-page)) page) (== (hh-image-ok images m) 1))
+            (do (hh-region-row hl page m -1 prec (hh-region-measure page images rules m 2) (hh-region-measure page images rules m 1)
+                               (hh-region-measure page images rules m 0))
+                (set rows (+ rows 1))))
+          (set m (+ m 1))))
+    (return rows)))

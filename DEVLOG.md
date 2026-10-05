@@ -2669,7 +2669,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   step matched is attached when the other source covers it (D253). The grid, the 64 x 64 cells and the candidate test are as
   SPEC 9.2 says; the page unit and the Engine do not call `xa-page` until P7.3.
 
-- [ ] **P7.2 — Health per source and region** (SPEC §9.3 "As designed", D203). **Wave 2.** Depends on P7.0; uses P7.1's
+- [x] **P7.2 — Health per source and region** (SPEC §9.3 "As designed", D203). **Wave 2.** Depends on P7.0; uses P7.1's
   `cg` and P6.3's ink columns when present (laws build them by hand, so it can start with P7.1).
   *Brief*: `kin/health.kin` (`emon.health`), `hl-page`: (1) the text layer per (font, page): P7.0's components plus the
   **agreement rate** (groups with both candidates whose case-folded similarity ≥ `agree-sim` 900, over groups with both;
@@ -2684,6 +2684,42 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   ≥ 95 % of pages (live).
   *Done when*: laws (a healthy font; a shifted font that agrees on nothing; a font that is bad on one page only and stays
   healthy elsewhere; an OCR block over blank paper) on four targets and the numbers above in this entry.
+  *Done (D252-D255).* `kin/health.kin` (`emon.health`): `hl-page` (the agreement of every (font, page), the score made again with it
+  and written into each word's `xt` 13, one `hl` row per OCR block), `hl-doc` (a font that disagrees on every page that has the
+  groups is unhealthy on all), `hl-regions` (D223's graphics regions from the tracer's rules), `hh-word-score` (one OCR word, for
+  P7.3's rules), `hh-score`/`hh-ocr-score`/`hh-region-score` over D150's shape (`hh-blend`); every threshold a named setting at
+  the head (`agree-sim` 900, `agree-min` 600, `agree-words` 8, the agreement ramp 200-800, its weight 5, `ink-bad` 10, `ink-ok` 60,
+  `skew-ok` 30, `skew-bad` 300). Laws: `kin/healthtest.kin` (11, hand-built groups, words, blocks, rules) and
+  `kin/healthfusiontest.kin` (7, 67 documents of the fusion set against the OCR of their first page); both on four targets.
+  `tools/fusion/record_health.clj` (live, Tesseract through `tess.rs`) made `test/fusion/health/pdf/*.ocr` (4.7 MB of integers, the
+  engine's answers; no pixel is committed); `bb ghost-health` (not a gate) and `bench/mains/health.rs` measure the OCR side on the
+  overlay scans. `hl-page` costs 0.01 ms a page (mean, ~250 words; Rust).
+  *Measured* (the text layer: Tesseract 5.5.3 at 150 dpi on page 1 of the 67 `pdf/` documents, the alignment the stand-in of
+  `healthfusiontest.kin`, which is the lower bound P7.1's will beat). **Without OCR (P7.0) the shifted font is not seen**:
+  `tl-broken-shift` has 5 of 5 fonts at `tl-trusted`. **With agreement** 4 of 5: the shifted font scores **68** (agreement 0 of its
+  groups; < 300) and the other four stay at 1000. `tl-broken-unmapped`'s broken font is **34** with or without OCR (its glyphs
+  have no letters to count: P7.0 sees it). **The 63 healthy documents** (the other 67 less `tl-broken-*`, `script-devanagari` and
+  `script-mixed`): **295 of 295 (font, page 1) rows at least `tl-trusted`** (700), 55 of the 63 have a font with the groups to
+  count and its lowest agreement is **777** (`figures-charts`), over `agree-min` 600. `script-devanagari` (616) and `script-mixed`
+  (201) keep P7.0's scores: their ToUnicode really loses the matras (D240). **Without D252's Latin rule five healthy documents
+  would be condemned** (`align-rtl`, `initial-rtl`, `script-arabic`, `script-hebrew`, `script-devanagari` all fall to 66-68 on an
+  agreement of 0: the English model reads Hebrew and Arabic as soup).
+  *Measured* (the OCR side: P6.6's 39 pages of `scan-ovl/` at 130 dpi, Tesseract, kin's `nm-view` and `nm-feat-ocr`, truth the corpus's own
+  overlay masks). **NOT MET: the OCR blocks over a watermark, seal or signature do not score under every text block of their
+  page on 95 % of pages.** Tesseract itself reads almost no overlay: 293 blocks, none that is a pure ghost; the 32 words it reads
+  over no true text ink (rule fragments, blank paper, a seal's rim) score **371** against **810** for the 9,641 text words (69 % of
+  them under 700 against 12 %; of the pairs of one page the ghost scores lower in 61 % and ties in 17 %). To measure the
+  case the brief names, one word is put over each overlay's strokes (a watermark's letters, a seal, a signature: 201 words, 39
+  pages): ghosts 565, text blocks 842; **a ghost under every text block on 7 of 37 pages (letters) or 18 of 37 (union boxes)**;
+  ordered pairs 0.65 and 0.88. The columns that would separate them are the overlap with a seal and an artifact (`xo` 22, 23: P7.7,
+  P7.5) and the tracer's (14, 15), none written yet: a watermark's box lies over the text it is behind, so kin's ink and body share
+  see mostly text. The score has the components; P7.3's rule blocks 200 and 400 read the overlap columns when they exist.
+  *Learnt*: a font's agreement says nothing where the engine cannot read the script, and is a wrong witness there (D252); an
+  engine's rule fragment is a ghost the ink alone cannot see when its box is a few pixels all inked (the `bank-statement` rule
+  fragments score 1000); kin's body layer is two or three layers in a noisy scan (the dark core and its edge), so
+  `bench/mains/health.rs` takes their union; rustc rejects a function that returns a `Cells` (a helper that builds one must fill the
+  caller's).
+  *Commit*: on branch `worktree-agent-a1c5eb27a82a00546` (D037).
 
 - [ ] **P7.3 — Arbitration, the PageLayer, and the stages wired into the page unit** (SPEC §9.4 with the born-digital
   contract, §9.7; D014, D195, D201, D203). **Wave 3, critical path.** Depends on P7.U, P7.1, P7.2, P6.3, P6.4, P5.5a (`grl`/`gfl` and the
@@ -7681,6 +7717,60 @@ when those goldens move with it; until then the layer is read through `kin/tlhea
 the memory of the document pass.
 **Alternatives**: a render-based contrast (not available before P6.2/P6.3 and needs pixels); features per glyph (SPEC 8.4.5: a
 glyph has none, its word speaks for it).
+### D191 — The `Renderer` port: `render` and `crop` are one fulfiller; RGB; the page geometry is stated; a crop is answered with its own kind (P6.2; SPEC 7.2, D007, D089, D117)
+**Decision**: (1) A `Renderer` is `render(input: ByteSource, password, request) -> Bitmap | failed | unsupported`, with `layers()` (a bit set) and `exact_crop()`. The request is D089's `input page dpi layer` (page 0-based) and, for a crop, D117's `crop` kind 5: the same four plus the pixel rectangle `px py pw ph`. `kin/plan.kin` gains `pk-crop`, `rq-crop`, and two layers beyond text-on/off/only: `lay-no-watermark` 3 and `lay-watermark-only` 4. (2) One fulfiller, `RenderFulfiller` (Rust and Go), takes both kinds, reads the input BY INDEX through the run's byte source (D058), and answers `[len kind id status w h channels dpi]`. A crop's answer carries kind 5 (the loop matches an answer to its request by id and kind) with a render's layout. `failed` and `unsupported` are answers (header and status), transcribed and replayed; a malformed request or a missing input is the loop's `fulfil-failed`, not an answer. (3) The page is RGB, 3 channels: the tracer's ink separation wants colour (SPEC 8.2.1), OCR takes 1 or 3. (4) The whole-page size is `floor(pt * dpi / 72 + 1/2)` per side (`pixels_of`), at least 1; a crop is a rectangle of that bitmap. (5) The Engine's port set is `Config.renderer`: when it is set and the Engine converts or records, `render` and `crop` go to it through a `KindMux` (a request goes to the fulfiller that takes its kind; `ocr` and `decode` join with one `.with` each); when it is not set a unit that asks fails with a named `fulfil-failed`, as before. A replay never calls it. `Renderer` requires `Debug` in Rust so `Config` stays `Debug + Clone`.
+**Why**: kin's side of D089 already had `render`; D117 reserved `crop`, whose only difference is the rectangle, so one function serves both and a second fulfiller per kind would be two places to drift. Stating the geometry makes two engines and two hosts agree on the size before they disagree on a pixel. The mux is the seam P6.5 and P6.1a need.
+**Alternatives**: the clip as optional trailing arguments of `render` (rejected: D117 and SPEC 7.2 name `crop` as its own kind); a gray render when OCR wants it (a request flag later; gray is P6.3's conversion, and a flag changes transcripts' keys); one fulfiller per kind (above); the Engine owning pdfium (rejected: an embedder registers any engine, D007).
+- [ ] **Signed off** (maintainer)
+
+### D192 — pdfium is a pinned bblanchon/pdfium-binaries build, fetched by a bb script into an ignored cache, bound by hand through its C API (Rust FFI, Go cgo), reading through `FPDF_LoadCustomDocument` (P6.2; D007, D058, D074, D095)
+**Decision**: (1) `tools/pdfium/pdfium.edn` pins `chromium/8076` (pdfium 156.0.8076.0) with the SHA-256 GitHub published for each non-V8 archive (`mac-arm64`, `mac-x64`, `linux-x64`, `linux-arm64`, `win-x64`, and `pdfium-wasm`); `bb pdfium-fetch` downloads one into `.cache/pdfium/<version>/<platform>/`, REFUSES an archive whose hash is not the pin's before unpacking it, and links `.cache/pdfium/current`. On macOS it rewrites the dylib's install name to `@rpath/libpdfium.dylib` and ad-hoc re-signs it. `.cache/` is ignored; nothing is committed. (2) The binding is hand-written against the C API: `host/rust/src/pdfium.rs` (`#[link(name = "pdfium")]`, compiled under `--cfg pdfium`) and `host/go/pdfium/` (cgo, `-tags pdfium`), about 25 functions, as D095 bound Tesseract. They are NOT the `pdfium-render` crate or `go-pdfium`: a crate adds a build script and a version axis to a dependency that is already one pinned binary; the layer edits (D193) need the raw object API either way; and the same C functions in both hosts is what makes "same pdfium, same pixels" a statement we can measure. (3) The document is read through `FPDF_LoadCustomDocument` and an `FPDF_FILEACCESS` whose `m_GetBlock` calls the run's `ByteSource::read_at` / Go `ReadAt` (Go: a `runtime/cgo.Handle` in `m_Param`, the exported callback in its own file, the access struct and the pixel buffer in C memory). No path, no copy, no whole-file buffer: a 431 KB scan rendered by 32 reads of 290 KB. (4) pdfium is not thread-safe: one process-wide lock; the Go binary on macOS needs `codesign -f -s -` after `go build` (the kernel kills it otherwise: exit 137). (5) Gates never need any of this: `bb render` replays the committed transcript; only `bb render-record` (live, not a gate) builds the engines.
+**Why**: the brief's order of preference (a host project would download a prebuilt pdfium by version and checksum), D058 (the loader), D095's pattern (live recording, replay gate).
+**Alternatives**: `pdfium-render` and `go-pdfium` (above); building pdfium from source (hours and a Chromium toolchain for a binary that is published); the system's pdfium (no version to pin, which defeats the transcript's producer record).
+- [ ] **Signed off** (maintainer)
+
+### D193 — Layers are made by removing page objects in memory; the watermark layers are `unsupported` on pdfium; a crop is the cut of a whole-page render, which the fulfiller keeps (P6.2; SPEC 7.2, D117)
+**Decision**: (1) pdfium has no switch to hide text, so after `FPDF_LoadPage` the page's objects are removed in memory (`FPDFPage_RemoveObject`; `FPDFFormObj_RemoveObject` inside Form XObjects, recursively) and the page is rendered; nothing is saved, the page is closed after. `no-text` removes text objects and keeps annotations' appearances (their text is not separable); `text-only` keeps only text and no annotations; both were found right on a fixture of known objects (`test/render/layers.pdf`, made by `tools/render/mkfixture.clj`): no red watermark word without text, no background or path with text only, the text inside a form found by the recursion. (2) `lay-no-watermark` and `lay-watermark-only` are `unsupported` on pdfium: the layer is `/Artifact` marked content with `/Subtype /Watermark` or `/Background` (or `/Type /Background`), whose values are NAMES, and pdfium's mark API reads the mark's name and its string, number and blob parameters but has no reader for a name (`GetParamValueType` says NAME; the string and blob getters answer false: checked). Guessing from the key alone would drop headers and footers with the watermark. The engine says it cannot (SPEC 7.2) and kin separates watermarks itself: §8.1 reads the marks, §8.2.1 separates ink by colour. The codes exist for an engine that can. (3) pdfium's clipped render is NOT the cut of the whole render: a crop of a bank statement at 36 dpi differed from the same rectangle cut out of the whole page in 70 pixels of 15,000, all in the two left columns, by up to 107 of 255 (a clip moves the edge pixels). D117 and SPEC 7.2 say a crop is "the same pixels, cut out, never a re-fit", so the CONTRACT is the fulfiller's: unless a `Renderer` declares `exact_crop()`, it is handed the whole page, and the fulfiller cuts (`cut`, `RenderCut`) and keeps the last whole page, so a page and the regions of it (P8.5) render once. `bb render` holds every committed crop to equality with the cut of its whole page.
+**Why**: the maintainer asked for text-off and ink-only renders so OCR sees the page without the text layer (SPEC 9.5); a layer an engine cannot make honestly is better refused than approximated; a crop that disagrees with its page would move boxes by a pixel between a render and its figures.
+**Alternatives**: hiding text by `FPDFTextObj_SetTextRenderMode` invisible (text only, no path removal for text-only, no form recursion for free); rendering a margin around the crop and cutting (not exact at every operator, so not a law); `FPDF_RenderPageBitmapWithMatrix` with a clip (the same edge, measured); a watermark heuristic from the mark's key set (drops headers).
+- [ ] **Signed off** (maintainer)
+
+### D194 — Rust and Go render the same pdfium build to the same pixels; two builds differ by 3/255 on text; the transcript is the identity mechanism, so no gate has a tolerance; WASM is the browser's engine (P6.2; D008, D095; SPEC 7.3)
+**Decision**: (1) Measured by `bb render-record --go --compare-build` (live, not a gate), 17 requests, 12 bitmaps, 885,827 pixels, on macOS arm64: Rust (FFI) against Go (cgo), one `libpdfium`: **0 differing pixels**, identical dumps. pdfium `chromium/8076` against `chromium/7390` (a year earlier): the vector fixture (five layer renders, three crops) and the scan (image only) identical; the three born-digital text renders differ in 686, 4,878 and 4,888 pixels (4-5%) by at most **3 of 255** per channel. The recorded tolerance, for whoever re-pins or runs another build: text anti-aliasing may move a text pixel by 3/255 and nothing else moves. Other platforms (FMA, SIMD paths) are unmeasured. (2) No gate has that tolerance. The transcript is the identity mechanism (D008): `bb render` replays the committed `test/render/render/` on Rust and Go and requires the identical dump (every request and answer, each bitmap's FNV-1a pixel hash, each file's size and hash) and that it is the dump the live recording printed; a changed request is `transcript-miss` on both. (3) WASM: pdfium's own WebAssembly build is pinned beside the native ones; the JS host fulfils `render` and `crop` in the browser the way it fulfils OCR (SPEC 7.3: it owns the loop), serving the custom file-access callback from the async byte source, and a transcript recorded natively replays in the browser and the reverse. Not built (P9.3).
+**Why**: D095's lesson: a gate that runs a live engine tests whose engine is installed. The measurement tells an embedder how far a live host may stray, and the pin and its re-record procedure (`tools/pdfium/pdfium.edn`) say how to move.
+**Alternatives**: a gate that renders live and compares within the tolerance (machine-dependent, which D008 exists to prevent); a bigger committed transcript (230 KB is enough to hold layers, crops and failures).
+- [ ] **Signed off** (maintainer)
+
+
+### D243 — The tracer as built: a caller-owned workspace, one `tr-trace` per traced bitmap (the binary view with its majority layer, or an ink mask as one fixed layer), classes mapped onto the existing `ck` codes (P6.4; SPEC 8.2, 8.4.4; D092, D198, D220)
+**Decision**: `kin/trace.kin` (`emon.trace`) allocates no bitmap and no arena: the caller owns the workspace `Cells` (`rn ri cs vr pc sg mem s1..s6`) and the evidence arenas, as `emon.norm` does (D220). `tr-trace` runs runs, components, rules, contours and primitives, text lines on ONE bitmap: a binary view (each component's ink row is the majority of `labels`, i.e. `nm-label-into`) or an ink-mask view (`fixed` = that layer's `inks` row); the caller traces the binary view and every non-body layer's mask (a faint watermark is not in Sauvola's binary), and `tr-tints` on each `light`/`background` mask. Components are union-find over row runs (a pair of adjacent rows touches with one pixel's slack, the smaller root wins), sorted by (top, left, ink, root run); holes are edges - runs + 1 of the run graph; parent is the smallest hole-bearing component whose box holds it and that has ink on both sides of the child's own first and last row. `ck` has no `noise`/`large`/`rule-like` codes and `evidence.kin` is P3.6a's: noise is `blob` with confidence 0, large is `blob` 700, text-like 900, `rule-h`/`rule-v` 900. The median text height M of the glyph-sized components counts each once on the binary view and needs three of them (a table alone is not a glyph), and on an ink mask weighs each by its ink capped at 1024 pixels (a watermark's huge letters outweigh the specks of their own mask); text-like is M/3..4M high, at most 8 times as wide; a rule candidate is thin (ink over the longer side at most 2 pt: a Sauvola outline of a filled bar is 11 px, 2.6 pt, and is not a rule), at least 6 pt and 8 thicknesses long, hole-free and longer than 2M; `tr-rules` confirms it or it becomes large. Limits: 4,000,000 runs, 200,000 components (the rest counted), 6,000,000 column runs, 6000 rule pieces, 60,000 corners a contour. `prims` flag bits: closed 1, filled 2, double 4, tint 8. Rust, Go, Java and C# hold the same 32 laws (`kin/tracetest.kin`); Rust and Go dump byte-identical rows on every page measured.
+**Why**: D092 (memory proportional to ink), D220 (the caller owns memory), and not touching `evidence.kin` (the who-edits-what table).
+**Alternatives**: a label image (35 MB a page); adding `ck-noise` (an additive code, but another item's file); arrow primitives (not built: no fixture has one, the `arrow` code stays unused).
+- [ ] **Signed off** (maintainer)
+
+### D244 — Stroke width is the smaller of the median row-run and median column-run lengths; its error against a distance transform is measured, not assumed (P6.4; D198)
+**Decision**: per component the median length of its row runs and of its column runs (column runs from one pass over the row runs, a counter a column, ended where the pixel below is paper), the smaller one, in pixels, written in centipoints. `bb trace` compares it with a 3-4 chamfer distance transform (ridge median, 2r - 1) on text-like components; the numbers are in P6.4's "Measured".
+**Why**: a vertical stem's rows are its width and a horizontal bar's columns are; the other median is a length. Integer, cheap, no second image.
+- [ ] **Signed off** (maintainer)
+
+### D245 — Contours by crack following on the binary view itself; integer Douglas-Peucker at 1.5 px; rect, ellipse/circle, ring (annulus or concentric pair), polygon, curve by residual (P6.4; SPEC 8.2; D198)
+**Decision**: the outer boundary of every LARGE component (also one that gave rules: a frame is four rules and a `rect`), traced as pixel corners with 8-connectivity on `binary` (a neighbour that is ink belongs to the component, or it would be bigger), so no component-local bitmap is needed. Simplified closed at eps 1.5 px (`4 cross^2 > 9 chord^2`). `rect`: the longest edge's angle, every edge of 4 px or more within 3 degrees of it or its perpendicular (off-axis at most 1/8 of the perimeter), mean distance of the raw corners to the fitted rectangle under 40 per mille of the smaller radius; `circle`/`ellipse`: moments of the corners weighted by edge length, axis from the covariance, radii from the extents, mean equation residual under 40 per mille, circle within 5 per cent; `ring`: such a circle whose centre row has exactly two runs with a hole of 3/10 .. 1 of the radius centred within 15 per cent, or whose parent component carries a concentric circle of 0.4 .. 0.97 of its radius (then `double` and both components as members); else `polygon` (12 corners at most) or `curve`. Confidence is 1000 minus eight times the residual. The fitted outline of a `rect` is its four corners; the others point at the contour's `pts`.
+- [ ] **Signed off** (maintainer)
+
+### D246 — Rules from chains of thin slices: row runs for vertical and steep rules, column runs for horizontal and shallow ones, straightened, merged, dashed, doubled (P6.4; D226; SPEC 8.2)
+**Decision**: inside every component that is neither noise nor a glyph (a table grid is one `large` component), a slice is a run or column run of at most 2 pt; slices of consecutive rows (or columns) whose two edges are each within one pixel are a chain; Douglas-Peucker at 1.5 px must leave one stretch of at least 4/5 of the chain (a circle's arcs are not rules); the stretch is a piece. Pieces on one line (2.5 degrees, within thickness + 2 px) and within `rule-gap` (2 pt) are one rule (this bridges the crossings of a grid); shorter groups of three or more dashes with gaps and lengths within 0.4 .. 2.2 / 2.5 times their medians are one `dashed` rule (`dotted` when no longer than twice the thickness, but dots below the 8 px chain minimum are not found: not built); two parallel solid rules 1-3 thicknesses apart overlapping by 60 per cent are both `double`. A skewed scan needs no deskew: a slice chain follows a line up to 45 degrees off its axis, in either representation. Confidence is D226's (1000 minus the gap per mille, minus 300 for thickness varying by more than half beyond one pixel of jitter). Not found: slanted lines steeper than 45 degrees inside large components in both representations at once (they are, by the other one), and lines inside a glyph-like component (an underline fused to a word).
+- [ ] **Signed off** (maintainer)
+
+### D247 — Text lines without OCR by agglomeration; the direction is the thinnest strip, the baseline the bottoms' least squares (P6.4; SPEC 8.4.4; D095)
+**Decision**: per ink layer, text-like components are linked when the gap between boxes is within 1.5 mean heights (heights within a factor of three), joined nearest first, a join accepted while the union's centres stay within 0.3 of the mean height of a line (any pair passes). A chain of 3 or more is a `tlines` row: its direction is the angle (every 0.25 degree within 10 degrees of the covariance axis) at which the strip containing the chain's run ends is thinnest, so that a text block hiding part of a watermark does not bend it; the baseline is a least-squares line through the members' bottoms in that frame (one outlier round), the row's `rot` is `ev-angle` of it in page space; mean height and gap in centipoints. `tr-orient-hint` answers 0 or 1 from the member-weighted directions. Known limit, measured: on `watermark-draft` the visible letter pieces give 34.5 degrees against the PDF's 30.
+- [ ] **Signed off** (maintainer)
+
+### D248 — Tints from row runs of an ink mask; features 14, 15, 23 (P6.4; D226)
+**Decision**: as D226, with the rectangle's rows continuing while both extents move at most 2 px from the row above (so a slightly skewed band survives); coverage is the mask's ink over the box. `tr-feat-ocr` fills `xo` 14 (text-like components centred in the word) and 15 (per mille of its symbols with one centred in them, -1 without symbols), `tr-feat-text` `xt` 14, 15 and 23 (largest overlap with a `tlines` row differing by more than 3 degrees mod 180).
+- [ ] **Signed off** (maintainer)
+
+### D249 — `bb trace`: truth is the vector content of ghostscript's text-free copy; scoring by length and by area (P6.4; D227)
+**Decision**: `gs -dFILTERTEXT` removes the text and keeps the paths (it is also the `no-text` render), qpdf's QDF is read by a small content-stream interpreter (q Q cm re m l S f B w colours): a filled rectangle at most 3 pt thick and 4 times as long, or a stroked segment at most 3 pt wide and 3 pt long, is a rule; a filled rectangle over 5 pt each way, lightness at least 600 and not the paper's white, is a fill. Rule precision and recall are the share of samples (every 3 px) within 2.5 px of the other set; fills are compared as areas on a 4 px grid. Not a gate; P7.S owns the ratchet.
 
 ### D243 — P6.8 as built: what the corpus holds, the dump names the scorer reads, and where the brief was cut to the pixel budget (P6.8; D227, D209)
 **Decision**: 32 new documents (99 in the corpus): six Chrome tables (`table-dashed`, `-double`, `-zebra`, `-header-fill`,
@@ -8023,4 +8113,70 @@ held as a floor of its own with its cause; the maintainer may prefer a metric th
 names them.
 **Alternatives**: recording through the Engine (it does not request OCR of a born-digital page, D201, and P7.3 owns that
 wiring); hand-built fixtures only (they cannot show the first cost's failure).
+- [ ] **Signed off** (maintainer)
+
+### D252 — Agreement is a fifth component of a font's score, counted only where the engine can read the script, a font's own fact across pages (P7.2; SPEC 9.3; D150, D203, D240)
+**Decision**: after alignment `hl-page` counts, per (font, page) of the page, the groups that have a text-layer and an OCR candidate
+and the ones whose case-folded similarity is at least `agree-sim` (900), keeps both counts in the row's spare cells 10 and 11 and the
+per-mille in the agreement cell; with at least `agree-words` (8) groups the score is the weighted harmonic mean of D240's four
+components (4, 3, 2, 1) and the agreement (a ramp, 0 at 200 and 1000 at 800, weight 5) scaled by the weakest, which with no agreement is
+exactly `th-score`; the page's words' `xt` 13 follow. A group counts only when a text-layer candidate holds a Latin letter or digit.
+`hl-doc` finds a font whose agreement is under `agree-min` (600) on every page that has the groups (and at least one such page) and
+makes its score again on all of its pages with the page's own agreement or, where the page has too few groups, the document's pooled one.
+**Why**: the text layer cannot tell a plausible wrong mapping from a right one; the engine reads the pixels. Measured on 67 documents
+(DEVLOG P7.2): the shifted font 68, 295 of 295 healthy rows trusted, the lowest healthy agreement 777. The script rule is the only
+way English Tesseract's soup over Hebrew, Arabic and Devanagari does not condemn five correct text layers; a shifted font maps to
+Latin letters (that is what plausible means), so the rule costs it nothing. The ramp's ends and the weight are first values, P10.1
+calibrates; 8 groups is where a page's agreement stops being three words.
+**Alternatives**: counting every group (measured: five healthy documents at 66-68); a flag instead of a score (P7.3's rules read a
+score and its components); a new `hl` stride for the counts (the dump of every layer would change; the counts are what the dump's agreement
+is made of, and they are recomputed from `cg`).
+- [ ] **Signed off** (maintainer)
+
+### D253 — OCR reliability is scored from the evidence's columns and never from the engine's confidence: per block as `hl` rows, per word by `hh-word-score`; an absent column is not a bad one; the overlay target is not met (P7.2; SPEC 8.4.5, 9.3; D130, D150)
+**Decision**: six components pooled over a block's words by code points (words of the lines of its paragraphs): ink support (the larger
+of kin's and the engine's ink under the box, a ramp from `ink-bad` 10 to `ink-ok` 60 per mille, averaged with the tracer's share of the
+word's symbols that have a text-like component, `xo` 15, when the tracer has run), plausibility (1000 - `xo` 8), script
+consistency (1000 - 9), the share of the word's ink on the body layers (13), freedom from a seal (1000 - 22) and from a watermark or
+artifact (1000 - 23). A column that was not computed (-1) is left out of the mean and the score, never counted as zero; the weights are
+3, 2, 1, 3, 3, 3 and the shape D150's. The engine's confidence is not a component (D130). The row (`plh-ocr-block`, subject the block's
+`oblocks` row) keeps the components in cells 3-8 (`hob-*`); `hh-word-score` gives a word's score by the same weights for the
+arbitration that decides words.
+**Why**: a word the network is unsure of scores exactly 0 and a misspelling can score high (D130); ink under the box, the layer the ink is
+on and what the box overlaps are what a ghost lacks. Measured, and not as the brief wanted: on the overlay scans the engine barely reads
+the overlays (one word over each overlay's strokes: ghosts 565 against 842 for text, a ghost under every text block on 7 of 37
+pages), because a watermark lies over the text it is behind, so the box's ink is the text's. The two columns that name it (22, 23) and
+the tracer's (14, 15) are not written until P7.7, P7.5 and P7.3's wiring; with them present the components already carry them.
+**Alternatives**: engine confidence or symbol margins as a component (D130's warning; unmeasured here); scoring words only (the brief's
+unit is the block, and a block is what an arbitration of regions reads); a 0 for an absent column (every scan without an engine binary
+would lose a third of its score).
+- [ ] **Signed off** (maintainer)
+
+### D254 — Graphics health: `hl-regions` writes D223's rows from the tracer's rules and takes the vector witness and the tracer's precision from the caller (P7.2; SPEC 9.3, 9.9; D223)
+**Decision**: per page, `hl-regions` writes a row of kind `region` for R0 (subject -1: the page outside the visible image placements
+of at least `img-min`, 5669 centipoints each way) and one for each such placement (subject its `images` row), with components vector
+witness, tracer precision, skew spread, tracer confidence and the number of rules (`hrg-*`), and the score of D223's shape (weights 3, 3,
+2, 2). The skew spread is 1000 at a spread of at most 30 centi-degrees of the deviation from its axis of the region's rules that lie
+within 15 degrees of one, falling to 0 at 300, -1 with fewer than two; the confidence is the mean of the rules' (`rlf-conf`); an image's
+precision is R0's. The witness and the precision are arguments, -1 when unknown, because they compare the tracer with the vector
+rules, which are P5.5a's and P7.G's and which this module never sees.
+**Why**: the tracer's reliability differs most between a render of vector art and a photographed table pasted into a report, and the
+image placement is the boundary known without pixels (D223); the two comparisons need the vector candidates, so they belong to the stage
+that has them. The rows are built here so P7.G only supplies two numbers.
+**Alternatives**: building the vector candidates here (P5.5a's work, and a second reading of the same paths); one row a page (a mixed page
+averages a perfect R0 with a noisy image).
+- [ ] **Signed off** (maintainer)
+
+### D255 — The text layer's health is measured on page 1 of the fusion set against committed engine answers, with a stand-in alignment; the OCR side by a not-a-gate harness (P7.2)
+**Decision**: `test/fusion/health/pdf/ID.ocr` is Tesseract's answer to page 1 of each of the 67 `pdf/` documents rendered at 150 dpi (one
+line of integers: the width and height, then the answer's cells; 4.7 MB in all; the producer is `PRODUCER.edn`); `healthfusiontest`
+reads it back with `sc-answer`, aligns it to the text layer by connected overlap with the groups' words joined in order (the stand-in
+P7.1's `al-page` replaces; it is a lower bound on agreement) and runs the document pass, `hl-page` and `hl-doc`, on four targets, with no
+engine and no pixel. The OCR side needs pixels: `bb ghost-health` (`tools/fusion/ghost_health.clj`, `bench/mains/health.rs`, Rust only,
+not a gate) reads kin's rasters and truth masks from `bb ink`.
+**Why**: the laws on hand-built groups say the arithmetic is right; only a real engine on real documents says whether agreement separates
+a shifted font from the healthy ones, and a replayed answer makes that a gate on every target without an engine (D008, D095). P7.1's
+fixtures (`test/fusion/align/`, six documents) are its own; these 67 were wanted because the claim is about every font of the set.
+**Alternatives**: waiting for P7.1 (the order of the plan has them in parallel); recording through the whole Engine (born-digital pages
+are not OCR'd until P7.S).
 - [ ] **Signed off** (maintainer)
