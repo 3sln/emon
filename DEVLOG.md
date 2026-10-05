@@ -1954,6 +1954,10 @@ analysis beyond "top-to-bottom lines on a single column".
   *Found by the survey, fixed*: (1) Skia (Chrome) writes a rectangle as a move, FOUR lines (the last back to the start) and a close, six rows
   where `re` has five: the first `segments` read lost every such rectangle (the El Pollo Loco contract's tables, `gv-subpath`); (2) the IRS
   publications tag a table's own rules `/Artifact /Pagination` (D257); (3) a dashed border is a run of thin boxes (D256).
+  *Gates* (after merging P7.U): `bb hosts`, `bb drift`, `bb lang-test`, `bb check` (four languages, one answer), `bb accuracy` (none regressed), `bb slice`,
+  `bb identity` (475 inputs, Rust == Go, the dumps with `grl`/`gfl` included) green; the new laws (`glayertest`, `gvectest`, `gfusetest`, with `playertest`,
+  `tabletest`, `tlhealthtest`) pass on Rust, Go, Java and C#, and fail inverted (`EMON_TEST_INVERT=1`) on Rust and Go; the full `bb unit` and `bb gates` were
+  left to the merge step because the machine could not finish them (load 40).
 - [ ] **P5.5 — `struct` (tagged) tables verified against geometry** (SPEC §10.5 "Tagged tables"; D225, D034, D148-D150).
   **Wave 3** of the Phase 7 table, parallel with P7.3 (disjoint files). Depends on P5.5a and P6.8's tagged-table
   fixtures. `form` moved to P5.5b.
