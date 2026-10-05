@@ -16,6 +16,11 @@
 ;;   mapo80      live only (corpus/seals/mapo80-stamps/images/val, YOLO labels): the share of labelled stamps hit by a ring/circle/ellipse/rect
 ;;               primitive at IoU >= 0.5, the baseline P7.7 must keep;
 ;;   counts      components, runs and time per page, Rust (and with --go Go), and whether the two dump identical bytes.
+;;
+;; P6.4b (D265) changed how the truth is made, not only the tracer: the renders are `render` views (not `decode`: a decode view is deskewed, and a page of table rules
+;; and no text was 'deskewed' by 3 degrees); a vector rule counts only where the render shows it (clipped, painted-over and off-page pieces are not truth); a page
+;; that paints an image, a shading or a dash pattern has no precision score from its paths; the `gfx-*` documents use P6.8's own truth; the PDF's hash guards the
+;; cache (P6.8 regenerated some documents under P6.4's renders).  `--legacy` is P6.4's scoring; `--tl` runs the with-text half only; TRACE_DECODE=1 restores the decode view.
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [shell]]
          '[clojure.string :as str]
@@ -27,6 +32,8 @@
 (defn opt [k] (second (drop-while #(not= % k) args)))
 (def limit (some-> (opt "--limit") parse-long))
 (def only (opt "--only"))
+(def tl-only? (some #{"--tl"} args)) ; text lines only: skip the no-text renders (a quick loop for tuning `tr-tlines`)
+(def legacy? (some #{"--legacy"} args)) ; P6.4's scoring: no visibility check, no oracle, no image/shading/dash exemption, fills lighter than 900 are paper
 (def mapo-n (some-> (opt "--mapo") parse-long))
 (def CORPUS "test/corpus/synth")
 (def CACHE ".cache/trace")
@@ -182,9 +189,51 @@
                                {:p0 (pxy p0) :p1 (pxy p1) :w (* PX (max w 0.5))}))
                       tints (for [{:keys [x0 y0 x1 y1 color]} fills
                                   :let [w (- x1 x0) h (- y1 y0)]
-                                  :when (and (> w 5.0) (> h 5.0) (>= (light color) 600) (< (light color) 900))]
+                                  :when (and (> w 5.0) (> h 5.0) (>= (light color) 600) (< (light color) (if legacy? 900 960)))]
                               (let [[a b] (pxy [x0 y1]) [c d] (pxy [x1 y0])] [a b c d]))]]
-            [n {:rules (vec rules) :tints (vec tints)}]))))
+            [n {:rules (vec rules) :tints (vec tints) :img (boolean (or (re-find #"\sDo\s" s) (re-find #"\ssh\s" s) (re-find #"\[\s*[-\d.]+[^\]]*\]\s*[-\d.]+\s+d\s" s)))}]))))
+
+;; The vector truth is what the paths DRAW; what the render does not show (clipped away, painted over, outside the page: the pieces ghostscript keeps)
+;; is not a rule to find (P6.4b; P6.8 D238's rule). A truth rule is cut into the runs of samples (every px) with a pixel darker than 240 within 1 px
+;; (white rules on a dark fill are not scored here); runs of 10 px or more, gaps up to 24 px bridged, are the visible pieces.
+(defn read-raw [f] (java.nio.file.Files/readAllBytes (.toPath (java.io.File. ^String f))))
+(defn visible-pieces [raw w h {[ax ay] :p0 [bx by] :p1 :as seg}]
+  (let [^bytes raw raw l (Math/hypot (- bx ax) (- by ay)) k (max 1 (int (Math/ceil l)))
+        dark? (fn [px py]
+                (let [x (long (Math/round (double px))) y (long (Math/round (double py)))]
+                  (loop [dy -1]
+                    (if (> dy 1) false
+                        (or (loop [dx -1]
+                              (if (> dx 1) false
+                                  (let [xx (+ x dx) yy (+ y dy)]
+                                    (if (and (>= xx 0) (< xx w) (>= yy 0) (< yy h)
+                                             (< (bit-and 0xff (aget raw (* 3 (+ (* yy w) xx)))) 240))
+                                      true (recur (inc dx))))))
+                            (recur (inc dy)))))))
+        vis (vec (for [i (range (inc k))] (let [f (/ i (double k))] (dark? (+ ax (* f (- bx ax))) (+ ay (* f (- by ay)))))))
+        runs (loop [i 0 cur nil acc []]
+               (cond (> i k) (cond-> acc cur (conj cur))
+                     (vis i) (recur (inc i) (if cur [(first cur) i] [i i]) acc)
+                     (and cur (<= (- i (second cur)) 24)) (recur (inc i) cur acc)
+                     :else (recur (inc i) nil (cond-> acc cur (conj cur)))))]
+    (vec (for [[a b] runs :when (>= (- b a) 9)]
+           (let [fa (/ a (double k)) fb (/ b (double k))]
+             (assoc seg :p0 [(+ ax (* fa (- bx ax))) (+ ay (* fa (- by ay)))] :p1 [(+ ax (* fb (- bx ax))) (+ ay (* fb (- by ay)))]))))))
+
+;; The `gfx-*` documents (P6.8) are made of what the vector paths do not say: shadings, patterns, images, curves, hidden pieces. Their truth is P6.8's own
+;; (`gold/STEM.rules.json`, centi-points, y down, D238); the other documents are scored against the visible vector pieces. (`mixed-*`, whose raster tables are
+;; skewed, have no exact truth and keep the vector rule: none.)
+(defn oracle-of [stem]
+  (let [f (str CORPUS "/gold/" stem ".rules.json")]
+    (when (and (str/starts-with? stem "gfx-") (fs/exists? f))
+      (into {} (for [pg (:pages (json/parse-string (slurp f) true))]
+                 [(:n pg) {:rules (vec (for [[x0 y0 x1 y1 t _] (:rules pg)]
+                                         {:p0 [(/ x0 24.0) (/ y0 24.0)] :p1 [(/ x1 24.0) (/ y1 24.0)] :w (/ t 24.0)}))
+                           :fills (vec (for [[x0 y0 x1 y1 c] (:fills pg)
+                                             :let [v (Long/parseLong (subs c 1) 16)
+                                                   lt (light [(/ (bit-and 255 (bit-shift-right v 16)) 255.0) (/ (bit-and 255 (bit-shift-right v 8)) 255.0) (/ (bit-and 255 v) 255.0)])]
+                                             :when (and (>= lt 600) (< lt 960) (> (- x1 x0) 360) (> (- y1 y0) 360))]
+                                         [(/ x0 24.0) (/ y0 24.0) (/ x1 24.0) (/ y1 24.0)]))}])))))
 
 ;; ---------------------------------------------------------------- scoring
 (defn seg-dist
@@ -255,13 +304,14 @@
          {:p0 [(/ (nth r 6) 24.0) (/ (nth r 7) 24.0)] :p1 [(/ (nth r 8) 24.0) (/ (nth r 9) 24.0)] :w (/ (nth r 10) 24.0) :style (nth r 13) :conf (nth r 14)})))
 
 (defn score-rules
-  "Pool of {:h [cov n cov n] :v ...} for one page's detections against its truth."
-  [dets ts]
+  "Pool of {:h [cov n cov n] :v ...} for one page's detections against its truth. A page that paints an image (`Do`) has raster rules the paths do not
+  know: its detections are not scored for precision."
+  [dets ts img? ep?]
   (into {}
         (for [o [:h :v]
               :let [d (filter #(= o (orient %)) dets) t (filter #(= o (orient %)) ts)
                     [pc pn] (coverage d t) [rc rn] (coverage t d)]]
-          [o {:pc pc :pn pn :rc rc :rn rn :ep (endpoint-errors d t)}])))
+          [o {:pc (if img? 0 pc) :pn (if img? 0 pn) :rc rc :rn rn :ep (if ep? (endpoint-errors d t) [])}])))
 
 (defn pool-rules [ms]
   (into {} (for [o [:h :v]]
@@ -300,18 +350,24 @@
 (def results (atom []))
 
 (def sig (str (.lastModified (fs/file rust)) "/" (boolean go?)))
+;; a cache dir belongs to ONE version of its PDF (P6.8 regenerated some documents): its renders, truth and text-layer lines go when the PDF's hash changes
+(defn pdf-sha [stem] (let [d (java.security.MessageDigest/getInstance "SHA-1")] (.update d (java.nio.file.Files/readAllBytes (.toPath (java.io.File. (str CORPUS "/pdf/" stem ".pdf"))))) (format "%040x" (java.math.BigInteger. 1 (.digest d)))))
 (doseq [stem stems
-        :let [cf (str CACHE "/" stem "/res.edn")
+        :let [shaf (str CACHE "/" stem "/pdf.sha") sha (pdf-sha stem)
+              _ (when-not (and (fs/exists? shaf) (= sha (slurp shaf)))
+                  (fs/delete-tree (str CACHE "/" stem)) (fs/create-dirs (str CACHE "/" stem)) (spit shaf sha))
+              cf (str CACHE "/" stem "/res.edn")
               cached (when (and (fs/exists? cf) (not rebuild?)) (read-string (slurp cf)))
               n0 (count @results)]]
   (if (= sig (:sig cached))
     (do (println (format "%-34s cached" stem)) (swap! results into (:res cached)))
     (do
   (let [pdf (str CORPUS "/pdf/" stem ".pdf")
-        nt (notext-pdf! pdf (str CACHE "/" stem "/notext.pdf"))
-        nt-pages (render! nt (str CACHE "/" stem "/nt"))
+        nt (if tl-only? nil (notext-pdf! pdf (str CACHE "/" stem "/notext.pdf")))
+        nt-pages (if tl-only? [] (render! nt (str CACHE "/" stem "/nt")))
         wt-pages (render! pdf (str CACHE "/" stem "/wt"))
-        truth (truth-of nt (str CACHE "/" stem "/truth"))
+        truth (if tl-only? {} (truth-of nt (str CACHE "/" stem "/truth")))
+        oracle (when-not legacy? (oracle-of stem))
         lines (when (or EMON-RS (fs/exists? (str CACHE "/" stem "/evidence.json")))
                 (let [f (str CACHE "/" stem "/evidence.json")]
                   (when (and EMON-RS (or rebuild? (not (fs/exists? f)))) (spit f (run EMON-RS "--out=evidence" pdf)))
@@ -321,11 +377,14 @@
     (doseq [[i {:keys [raw w h]}] (map-indexed vector nt-pages)
             :let [page (inc i) d (drive rust raw w h 3) g (when go? (drive gop raw w h 3))
                   tr (get truth page {:rules [] :tints []})
+                  raw-bytes (read-raw raw)
+                  orc (get oracle page)
+                  vis (cond legacy? (vec (:rules tr)) oracle (vec (:rules orc)) :else (vec (mapcat #(visible-pieces raw-bytes w h %) (:rules tr))))
                   dets (det-rules (:R d) 0)]]
       (swap! results conj
              {:kind :notext :stem stem :page page :w w :h h :S (:S d) :T (:T d) :H (:H d) :goH (:H g) :goT (:T g)
-              :rules (score-rules dets (:rules tr)) :ndet (count dets) :ntruth (count (:rules tr))
-              :tints (score-tints (det-tints (:P d) 0) (:tints tr) w h) :ntint (count (:tints tr))
+              :img (and (:img tr) (not oracle)) :rules (score-rules dets vis (and (:img tr) (not oracle) (not legacy?)) (not oracle)) :nfig (count (filter #(pos? (bit-and 1 (nth % 17))) (filter #(= (nth % 0) 0) (:R d)))) :ndet (count dets) :ntruth (count vis) :nvec (count (:rules tr))
+              :tints (score-tints (det-tints (:P d) 0) (into (vec (:tints tr)) (:fills (get oracle page))) w h) :ntint (+ (count (:tints tr)) (count (:fills (get oracle page))))
               :comps (count (:C d)) :dstyles (frequencies (map :style dets))}))
     (doseq [[i {:keys [raw w h]}] (map-indexed vector wt-pages)
             :let [page (inc i) d (drive rust raw w h 3) g (when go? (drive gop raw w h 3))
@@ -348,9 +407,14 @@
                         :loose (count (filter (fn [t] (some #(ov t %) boxes)) tlines))
                         :nlong (count lng)
                         :hitlong (count (filter (fn [t] (some #(>= (iou t %) 0.5) boxes)) lng))}))
+              :miss (vec (for [t tlines :when (not (some (fn [b] (let [[a bb c dd] t [e f g hh] b iw (max 0.0 (- (min c g) (max a e))) ih (max 0.0 (- (min dd hh) (max bb f))) i (* iw ih) u (+ (* (- c a) (- dd bb)) (* (- g e) (- hh f)) (- i))] (and (pos? u) (>= (/ i u) 0.5)))) boxes))]
+                          {:box (mapv #(Math/round (double %)) t)
+                           :near (vec (for [b boxes :let [[a bb c dd] t [e f g hh] b] :when (and (< e c) (> g a) (< f dd) (> hh bb))] (mapv #(Math/round (double %)) b)))}))
               :tl all-tls :inks (:I d) :P (:P d) :w w :h h})))
   (spit cf (pr-str {:sig sig :res (subvec @results n0)})))))
 
+(when-let [f (opt "--misses")]
+  (spit f (pr-str (vec (for [m @results :when (= :withtext (:kind m)) :let [ms (:miss m)] :when (seq ms)] {:stem (:stem m) :page (:page m) :miss ms})))))
 ;; ---------------------------------------------------------------- report
 (let [nt (filter #(= :notext (:kind %)) @results)
       wt (filter #(= :withtext (:kind %)) @results)
@@ -367,6 +431,10 @@
     (println (format "  %-30s p%d  truth %3d  found %3d  h %.3f/%.3f  v %.3f/%.3f" (:stem m) (:page m) (:ntruth m) (:ndet m)
                      (ratio (get-in m [:rules :h :pc]) (get-in m [:rules :h :pn])) (ratio (get-in m [:rules :h :rc]) (get-in m [:rules :h :rn]))
                      (ratio (get-in m [:rules :v :pc]) (get-in m [:rules :v :pn])) (ratio (get-in m [:rules :v :rc]) (get-in m [:rules :v :rn])))))
+  (let [fl (remove zero? (map :nfig nt)) tot (reduce + (map :ndet nt))
+        by (sort-by (comp - val) (reduce (fn [m r] (update m (:stem r) (fnil + 0) (:nfig r))) {} (filter #(pos? (:nfig %)) nt)))]
+    (println (format "\n== figure-flagged rules (D263: the component holds over twice its rules' ink): %d of %d rules on the no-text renders; by document: %s"
+                     (reduce + (map :nfig nt)) tot (pr-str (take 14 by)))))
   (let [t (reduce (fn [a m] (merge-with + a (:tints m))) {:both 0 :det 0 :truth 0} nt)]
     (println (format "\n== tints against vector fills (>5 pt, lightness >= 600): %d truth fills on %d pages; area recall %.4f precision %.4f (4 px cells: %d, %d, %d)"
                      (reduce + (map :ntint nt)) (count (filter #(pos? (:ntint %)) nt)) (ratio (:both t) (:truth t)) (ratio (:both t) (:det t)) (:both t) (:truth t) (:det t)))

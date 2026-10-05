@@ -971,7 +971,9 @@ pub fn nm_sauvola(g: &crate::port::Bitmap, m: &crate::port::Bitmap, r: i32, k: i
     }
     return ink;
 }
-pub fn nm_skew_points(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells, ystep: i32, limit: i32) -> i32 {
+pub fn nm_skew_points_cap(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells, ystep: i32, limit: i32, maxrun: i32) -> i32 {
+    // As `nm-skew-points`, but a run longer than `maxrun` is not a point: a rule or an underline is not a text cluster, and its midpoint
+    // stands for its pixels only while it is short against the angle (P6.4b, D264).
     // The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its
     // midpoint x with its length as the weight (a run's pixels all project within a pixel of its midpoint at the angles
     // tried, so this is the row projection of the ink without visiting a pixel twice). At most `limit` runs. Answers how many.
@@ -989,15 +991,22 @@ pub fn nm_skew_points(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells,
             while (ce < w) && (crate::port::bitmap_u8(m, ce, y, 0) != 0) {
                 ce += 1;
             }
-            crate::port::cells_push(pts, (x + ce) / 2);
-            crate::port::cells_push(pts, y);
-            crate::port::cells_push(pts, ce - x);
-            np += 1;
+            if (ce - x) <= maxrun {
+                crate::port::cells_push(pts, (x + ce) / 2);
+                crate::port::cells_push(pts, y);
+                crate::port::cells_push(pts, ce - x);
+                np += 1;
+            }
             x = crate::port::bitmap_next_nonzero(m, ce, y);
         }
         y += ystep;
     }
     return np;
+}
+pub fn nm_skew_points(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells, ystep: i32, limit: i32) -> i32 {
+    // The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its
+    // midpoint x with its length as the weight; no run is too long. At most `limit` runs. Answers how many.
+    return nm_skew_points_cap(m, pts, ystep, limit, crate::port::bitmap_w(m));
 }
 pub(crate) fn nm_skew_score(mut pts: &mut crate::port::Cells, np: i32, mut prof: &mut crate::port::Cells, cdeg: i32, off: i32, nb: i32) -> i64 {
     // The projection profile's sharpness at one angle: with the text lines at `cdeg` (they RISE to the right by it,
@@ -1046,7 +1055,7 @@ pub fn nm_deskew(m: &crate::port::Bitmap, mut pts: &mut crate::port::Cells, mut 
     if h > 16000 {
         return 0;
     }
-    np = nm_skew_points(m, pts, ystep, 120000);
+    np = nm_skew_points_cap(m, pts, ystep, 120000, w / 12);
     if np < 50 {
         return 0;
     }

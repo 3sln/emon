@@ -106,6 +106,16 @@ func TrTextMin(dpi100 int32) int32 {
 	return TrPt(dpi100, 3)
 }
 
+func TrTextMax(dpi100 int32, weighted int32) int32 {
+	// The tallest provisional glyph, the components that decide the page's median text height: 200 pt on an ink mask (a watermark's
+	// letters are huge), 48 pt on the binary view (P6.4b, D260): on a page of figures a bar or a box is not text, and a median taken
+	// over them made every chart of a text-free page `text`, so the rules inside it were never looked for.
+	if weighted == 1 {
+		return TrPt(dpi100, 200)
+	}
+	return TrPt(dpi100, 48)
+}
+
 const kRs int32 = 6
 
 const kCs int32 = 24
@@ -156,6 +166,8 @@ const cCx2 int32 = 21
 
 const cCy2 int32 = 22
 
+const cRink int32 = 23
+
 func TrKNoise() int32 {
 	return 0
 }
@@ -170,6 +182,11 @@ func TrKRule() int32 {
 
 func TrKLarge() int32 {
 	return 3
+}
+
+func TrRfFigure() int32 {
+	// `rules` flag (D263): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.
+	return 1
 }
 
 func TrPfClosed() int32 {
@@ -894,7 +911,7 @@ func TrKinds(dpi100 int32, weighted int32, cs *port.Cells, s1 *port.Cells) int32
 	var nc int32 = port.CellsLen(cs) / 24
 	var noise int32 = TrNoise(dpi100)
 	var tmin int32 = TrTextMin(dpi100)
-	var tmax int32 = TrPt(dpi100, 200)
+	var tmax int32 = TrTextMax(dpi100, weighted)
 	var rmin int32 = TrRuleMin(dpi100)
 	var rthick int32 = TrRuleThick(dpi100)
 	var c int32 = 0
@@ -2512,6 +2529,24 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, bin *po
 	var sx int32 = 0
 	var sy int32 = 0
 	var ln int32 = 0
+	// the ink each component's rules account for (the figure flag compares it with the component's own)
+	i = 0
+	for (i * 24) < port.CellsLen(cs) {
+		trCset(cs, i, cRink, 0)
+		i += 1
+	}
+	i = 0
+	for i < ns {
+		if port.CellsAt(sg, (i*kSg)+gStyle) > 0 {
+			c = port.CellsAt(sg, (i*kSg)+gComp)
+			if c >= 0 {
+				k = TrCg(cs, c, cRink) + ((port.CellsAt(sg, (i*kSg)+gLen) * port.CellsAt(sg, (i*kSg)+gThk)) / 8)
+				trCset(cs, c, cRink, k)
+			}
+		}
+		i += 1
+	}
+	i = 0
 	for i < ns {
 		style = port.CellsAt(sg, (i*kSg)+gStyle)
 		if style > 0 {
@@ -2580,6 +2615,9 @@ func TrRuleRows(views *port.Cells, page int32, view int32, dpi100 int32, bin *po
 				conf = 0
 			}
 			evidence.RlSet(rules, r, evidence.RlfConf(), conf)
+			if TrCg(cs, c, cInk) > (2 * TrCg(cs, c, cRink)) {
+				evidence.RlSet(rules, r, evidence.RlfFlags(), TrRfFigure())
+			}
 			// members
 			evidence.RlSet(rules, r, evidence.RlfRfirst(), port.CellsLen(refs)/2)
 			evidence.RlSet(rules, r, evidence.RlfRcount(), port.CellsAt(sg, (i*kSg)+gMcount))
@@ -3286,11 +3324,198 @@ func TrTints(views *port.Cells, page int32, view int32, dpi100 int32, mask *port
 	return n
 }
 
+func TrLightLo() int32 {
+	// A pixel is a light fill at least this many gray levels darker than the paper (below it: paper, JPEG noise included).
+	return 10
+}
+
+func TrLightHi() int32 {
+	// ...and at most this many (darker is ink: P6.3's layers and the binary view have it).
+	return 104
+}
+
+func TrLightStep() int32 {
+	// ...and within this many levels of its left neighbour (a glyph's antialiased edge is steeper; a band's flat part is not).
+	return 4
+}
+
+func TrLightBridge(dpi100 int32) int32 {
+	// Ink or edge pixels between two fill pixels of a row are fill when no wider than 3 pt (a glyph's stem inside a header cell).
+	return TrPt(dpi100, 3)
+}
+
+func TrLightMask(gray *port.Bitmap, paper int32, bridge int32, mask *port.Bitmap) int32 {
+	// The light-fill mask of `gray` into `mask` (both 1-channel, one size): per row, the pixels whose gray lies `tr-light-lo` .. `tr-light-hi`
+	// under `paper` and within `tr-light-step` of the pixel to their left are fill (1), the rest 0; a run of ink or edge pixels (neither paper nor
+	// fill) of at most `bridge` between two fill pixels is fill too (text inside a tinted cell), a paper pixel ends the bridge. Answers the fill
+	// pixels. This is a path of its own: P6.3's layers answer to the ink-paper distance (D237), a tint nearer the paper than that has no layer.
+	var w int32 = port.BitmapW(gray)
+	var h int32 = port.BitmapH(gray)
+	var lo int32 = TrLightLo()
+	var hi int32 = TrLightHi()
+	var stp int32 = TrLightStep()
+	var y int32 = 0
+	var x int32 = 0
+	var g int32 = 0
+	var pg int32 = 0
+	var d int32 = 0
+	var st int32 = 0
+	var gs int32 = 0
+	var k int32 = 0
+	var cov int32 = 0
+	for y < h {
+		st = 0
+		gs = 0
+		pg = port.BitmapU8(gray, 0, y, 0)
+		x = 0
+		for x < w {
+			g = port.BitmapU8(gray, x, y, 0)
+			d = paper - g
+			if d < lo {
+				port.BitmapSetU8(mask, x, y, 0, 0)
+				st = 0
+			} else if (d <= hi) && (trAbs(g-pg) <= stp) {
+				if st == 2 {
+					if (x - gs) <= bridge {
+						k = gs
+						for k < x {
+							port.BitmapSetU8(mask, k, y, 0, 1)
+							cov += 1
+							k += 1
+						}
+					}
+				}
+				port.BitmapSetU8(mask, x, y, 0, 1)
+				cov += 1
+				st = 1
+			} else {
+				port.BitmapSetU8(mask, x, y, 0, 0)
+				if st == 1 {
+					st = 2
+					gs = x
+				}
+			}
+			pg = g
+			x += 1
+		}
+		y += 1
+	}
+	return cov
+}
+
+func TrLightfills(views *port.Cells, page int32, view int32, dpi100 int32, gray *port.Bitmap, paper int32, mask *port.Bitmap, inks *port.Cells, prims *port.Cells, refs *port.Cells, s1 *port.Cells, s2 *port.Cells) int32 {
+	// Tints and shading fills too light for a layer (P6.4b, D259): `tr-light-mask` of the page's gray view (`view` is its `views` row),
+	// then `tr-tints` on that mask (inkrow -1), then the ones that cover half of a tint of an ink layer already in `prims` are dropped and the
+	// colour of the rest is the gray (0xGGGGGG) of the fill pixels at nine points of the rectangle. A page more than 60 per cent "fill" has
+	// a wrong paper and gets none. Nothing here reads or writes the layers' masks or the binary view. Answers the tints added.
+	var w int32 = port.BitmapW(gray)
+	var h int32 = port.BitmapH(gray)
+	var cov int32 = TrLightMask(gray, paper, TrLightBridge(dpi100), mask)
+	var from int32 = evidence.PmCount(prims)
+	var n int32 = 0
+	var r int32 = 0
+	var q int32 = 0
+	var wr int32 = 0
+	var f int32 = 0
+	var dup int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var iw int32 = 0
+	var ih int32 = 0
+	var px int32 = 0
+	var py int32 = 0
+	var ax int32 = 0
+	var ay int32 = 0
+	var bx int32 = 0
+	var by int32 = 0
+	var sum int32 = 0
+	var cnt int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var tmp int32 = 0
+	var area int64 = 0
+	if cov > (((w * h) / 10) * 6) {
+		return 0
+	}
+	n = TrTints(views, page, view, dpi100, mask, -1, inks, prims, refs, s1, s2)
+	if n == 0 {
+		return 0
+	}
+	wr = from
+	r = from
+	for r < evidence.PmCount(prims) {
+		x0 = evidence.PmGet(prims, r, evidence.PmfX0())
+		y0 = evidence.PmGet(prims, r, evidence.PmfY0())
+		x1 = evidence.PmGet(prims, r, evidence.PmfX1())
+		y1 = evidence.PmGet(prims, r, evidence.PmfY1())
+		area = int64(x1-x0) * int64(y1-y0)
+		dup = 0
+		q = 0
+		for q < from {
+			if (evidence.PmGet(prims, q, evidence.PmfFlags()) & 8) != 0 {
+				iw = trMin(x1, evidence.PmGet(prims, q, evidence.PmfX1())) - trMax(x0, evidence.PmGet(prims, q, evidence.PmfX0()))
+				ih = trMin(y1, evidence.PmGet(prims, q, evidence.PmfY1())) - trMax(y0, evidence.PmGet(prims, q, evidence.PmfY0()))
+				if (iw > 0) && (ih > 0) {
+					if (int64(2) * (int64(iw) * int64(ih))) >= area {
+						dup = 1
+					}
+				}
+			}
+			q += 1
+		}
+		if dup == 0 {
+			// the colour: the mean gray of the fill pixels at a 3 x 3 grid of the rectangle
+			ax = evidence.VwCptToPx(views, view, 0, x0, y0)
+			ay = evidence.VwCptToPx(views, view, 1, x0, y0)
+			bx = evidence.VwCptToPx(views, view, 0, x1, y1)
+			by = evidence.VwCptToPx(views, view, 1, x1, y1)
+			sum = 0
+			cnt = 0
+			i = 1
+			for i <= 3 {
+				j = 1
+				for j <= 3 {
+					px = trMin(w-1, trMax(0, ax+(((bx-ax)*i)/4)))
+					py = trMin(h-1, trMax(0, ay+(((by-ay)*j)/4)))
+					tmp = paper - port.BitmapU8(gray, px, py, 0)
+					if (port.BitmapU8(mask, px, py, 0) != 0) && ((tmp >= TrLightLo()) && (tmp <= TrLightHi())) {
+						sum += port.BitmapU8(gray, px, py, 0)
+						cnt += 1
+					}
+					j += 1
+				}
+				i += 1
+			}
+			f = 0
+			for f < 24 {
+				tmp = evidence.PmGet(prims, r, f)
+				evidence.PmSet(prims, wr, f, tmp)
+				f += 1
+			}
+			if cnt > 0 {
+				sum = sum / cnt
+				evidence.PmSet(prims, wr, evidence.PmfColor(), (((sum)<<uint(16))+((sum)<<uint(8)))+sum)
+			}
+			wr += 1
+		}
+		r += 1
+	}
+	port.CellsDrop(prims, wr*24)
+	return wr - from
+}
+
 const kIt int32 = 10
 
 func TrTlMin() int32 {
 	// A text line has at least this many components.
 	return 3
+}
+
+func TrTlGap2() int32 {
+	// Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D262), it was 9 (1.5).
+	return 23
 }
 
 func trIfind(it *port.Cells, a int32) int32 {
@@ -3515,9 +3740,34 @@ func trLineFrame(rn *port.Cells, cs *port.Cells, it *port.Cells, head int32, th 
 		}
 		pass += 1
 	}
+	// the residual of the kept bottoms about the fit (px^2, rounded down) and the lowest bottom: `tr-tlines` distrusts a baseline whose
+	// bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D261)
+	k = 0
+	nn = int64(0)
+	den = int64(0)
+	hsum = -1000000000
+	for k < m {
+		u = port.CellsAt(s5, k*6)
+		v = port.CellsAt(s5, (k*6)+1)
+		if v > hsum {
+			hsum = v
+		}
+		e = v - int32(((slope*int64(u))+icpt)/int64(65536))
+		if (4 * e) <= hbar {
+			nn += int64(1)
+			den += int64(e) * int64(e)
+		}
+		k += 1
+	}
 	port.CellsSet(out, 0, int32(slope))
 	port.CellsSet(out, 1, int32(icpt))
 	port.CellsSet(out, 2, hbar)
+	if nn > int64(0) {
+		port.CellsSet(out, 3, int32(den/nn))
+	} else {
+		port.CellsSet(out, 3, 0)
+	}
+	port.CellsSet(out, 4, hsum)
 	return m
 }
 
@@ -3616,6 +3866,7 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, h int32, 
 	var row int32 = 0
 	var alpha int32 = 0
 	var th int32 = 0
+	var th0 int32 = 0
 	var co int32 = 0
 	var si int32 = 0
 	var x0 int32 = 0
@@ -3690,7 +3941,7 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, h int32, 
 					gy = trMax(0, dy-((port.CellsAt(s1, (i*kIt)+4)+port.CellsAt(s1, (j*kIt)+4))/2))
 					hmax = trMax(hmax, 1)
 					// gap within 1.5 mean heights: gap^2 * 4 <= 9 * mean_h^2 (mean_h = (hi + hj) / 2)
-					if (((gx * gx) + (gy * gy)) * 16) <= (9 * ((port.CellsAt(s1, (i*kIt)+4) + port.CellsAt(s1, (j*kIt)+4)) * (port.CellsAt(s1, (i*kIt)+4) + port.CellsAt(s1, (j*kIt)+4)))) {
+					if (((gx * gx) + (gy * gy)) * 16) <= (TrTlGap2() * ((port.CellsAt(s1, (i*kIt)+4) + port.CellsAt(s1, (j*kIt)+4)) * (port.CellsAt(s1, (i*kIt)+4) + port.CellsAt(s1, (j*kIt)+4)))) {
 						port.CellsPush(s6, (dx*dx)+(dy*dy))
 						port.CellsPush(s5, i)
 						port.CellsPush(s5, j)
@@ -3743,6 +3994,7 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, h int32, 
 			}
 			rms = TrIsqrt(int64(trMax(0, port.CellsAt(s4, 1)))) / 4
 			th = trRefineAngle(rn, s1, i, th, 1000, s2, s3)
+			th0 = th
 			pass = 0
 			for pass < 2 {
 				m = trLineFrame(rn, cs, s1, i, th, s2, s3, s5, s4)
@@ -3761,7 +4013,25 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, h int32, 
 				}
 				pass += 1
 			}
+			// bottoms that do not line up (rms over 1/8 of the mean height, or the fit pulls the angle 1.5 degrees from the strip's) say nothing
+			// about the direction: a watermark's letters, hidden in
+			// places by body text, are cut at a different place each (P6.4b, D261). The thinnest strip's angle stands, the baseline is the
+			// strip's lower edge.
 			hbar = port.CellsAt(s4, 2)
+			dx = th - th0
+			if dx > 18000 {
+				dx -= 36000
+			}
+			if dx < -18000 {
+				dx += 36000
+			}
+			if ((64 * port.CellsAt(s4, 3)) > (hbar * hbar)) || (trAbs(dx) >= 150) {
+				th = th0
+				m = trLineFrame(rn, cs, s1, i, th, s2, s3, s5, s4)
+				hbar = port.CellsAt(s4, 2)
+				port.CellsSet(s4, 0, 0)
+				port.CellsSet(s4, 1, port.CellsAt(s4, 4)*65536)
+			}
 			co = evidence.EvCos(th)
 			si = evidence.EvSin(th)
 			slope = int64(port.CellsAt(s4, 0))

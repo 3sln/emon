@@ -784,7 +784,9 @@
 
 ;; ---------------------------------------------------------------- deskew and orientation
 
-(defn ^:pub ^I32 nm-skew-points [^Bitmap m ^:mut ^Cells pts ^I32 ystep ^I32 limit]
+(defn ^:pub ^I32 nm-skew-points-cap [^Bitmap m ^:mut ^Cells pts ^I32 ystep ^I32 limit ^I32 maxrun]
+  (comment "As `nm-skew-points`, but a run longer than `maxrun` is not a point: a rule or an underline is not a text cluster, and its midpoint")
+  (comment "stands for its pixels only while it is short against the angle (P6.4b, D264).")
   (comment "The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its")
   (comment "midpoint x with its length as the weight (a run's pixels all project within a pixel of its midpoint at the angles")
   (comment "tried, so this is the row projection of the ink without visiting a pixel twice). At most `limit` runs. Answers how many.")
@@ -801,13 +803,19 @@
             (do (set ce x)
                 (while (and (< ce w) (!= (bitmap-u8 m ce y 0) 0))
                   (set ce (+ ce 1)))
-                (cells-push pts (quot (+ x ce) 2))
-                (cells-push pts y)
-                (cells-push pts (- ce x))
-                (set np (+ np 1))
+                (if (<= (- ce x) maxrun)
+                  (do (cells-push pts (quot (+ x ce) 2))
+                      (cells-push pts y)
+                      (cells-push pts (- ce x))
+                      (set np (+ np 1))))
                 (set x (bitmap-next-nonzero m ce y))))
           (set y (+ y ystep))))
     (return np)))
+
+(defn ^:pub ^I32 nm-skew-points [^Bitmap m ^:mut ^Cells pts ^I32 ystep ^I32 limit]
+  (comment "The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its")
+  (comment "midpoint x with its length as the weight; no run is too long. At most `limit` runs. Answers how many.")
+  (return (nm-skew-points-cap m pts ystep limit (bitmap-w m))))
 
 (defn ^I64 nm-skew-score [^:mut ^Cells pts ^I32 np ^:mut ^Cells prof ^I32 cdeg ^I32 off ^I32 nb]
   (comment "The projection profile's sharpness at one angle: with the text lines at `cdeg` (they RISE to the right by it,")
@@ -852,7 +860,7 @@
         ^:mut ^I64 s 0
         ^:mut ^I64 s0 0]
     (if (> h 16000) (return 0))
-    (set np (nm-skew-points m pts ystep 120000))
+    (set np (nm-skew-points-cap m pts ystep 120000 (quot w 12)))
     (if (< np 50) (return 0))
     (cells-drop prof 0)
     (cells-grow prof (+ nb 1) 0)
