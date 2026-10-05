@@ -66,4 +66,5 @@
                 args
                 (sort (for [f (.list (io/file CORPUS "html")) :when (str/ends-with? f ".html")] (subs f 0 (- (count f) 5)))))]
     (println (str "  ImageMagick: " (magick-version)))
-    (doseq [s stems :when (not (NO-PLAIN-SCAN s))] (degrade! s out-dir))))
+    ;; the tagged-table fixtures (P6.8) have no scans: their point is the tags
+    (doseq [s stems :when (not (or (NO-PLAIN-SCAN s) (str/starts-with? s "ttab-")))] (degrade! s out-dir))))

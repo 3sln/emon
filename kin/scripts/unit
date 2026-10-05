@@ -118,6 +118,22 @@ bb -cp tools:tools/lib tools/fusion/fusion_live.clj --self-test
 # their sources, and every overlay scan's gold is what the document's gold plus scan-ovl/FACTS.json say.
 bb -cp tools:tools/lib tools/synth/wm_pdf.clj check
 bb -cp tools:tools/lib -m synth.degrade-fusion --check
+# THE GRAPHICS CORPUS (P6.8, D227; babashka, reads only committed files): the seven hand-made gfx-* PDFs, the sixteen tagged-table
+# PDFs (and their verdicts) and the three mixed documents' HTML and generator rules are what their generators write, the scan
+# twins' facts are what the seeds say, and the graphics metrics' own laws hold (hand-computed, then the oracle perfect on every
+# document of the GRAPHICS set).
+bb -cp tools:tools/lib tools/synth/gfx_pdf.clj --check
+bb -cp tools:tools/lib tools/synth/tagged_tables.clj --check
+bb -cp tools:tools/lib tools/synth/mixed.clj --check
+bb -cp tools:tools/lib -m synth.degrade-graphics --check
+bb -cp tools:tools/lib tools/accuracy/test_graphics.clj
+# The rule truth is an ORACLE's (pdfplumber filtered by poppler's render, tools/oracle/rules.py): re-derived and compared when both
+# are installed, skipped loudly when not (a gate may skip a missing input, not pass quietly).
+if command -v pdftoppm > /dev/null && python3 -c 'import sys, os; sys.path.insert(0, os.path.expanduser("~/.cache/emon/pylib")); import pdfplumber' 2> /dev/null; then
+  python3 tools/oracle/rules.py --check
+else
+  echo "  SKIP rules.py --check: pdfplumber (pip install --target ~/.cache/emon/pylib pdfplumber) or poppler is missing"
+fi
 
 # THE BIDI TABLES (D162) are generated from the vendored UCD files (class, brackets, mirroring), and the committed
 # conformance rows are checked against them; the hand-written samples are what their script writes.

@@ -2250,7 +2250,7 @@ analysis beyond "top-to-bottom lines on a single column".
   geometry test), one `op` row. *Done when*: `initial-image` and `initial-vector` score `initial-r` 1.0 and
   `first-word-acc` 1.0 on `pdf/` and `scan/` under `emon-replay` of their committed transcripts, and the scanned variants of
   every P2.13 initials document have no single-letter heading.
-- [ ] **P6.8 — The graphics corpus, rule truth from an oracle, and the graphics metrics** (SPEC §14.2 "Graphics",
+- [x] **P6.8 — The graphics corpus, rule truth from an oracle, and the graphics metrics** (SPEC §14.2 "Graphics",
   §14.3 "Rule and fill truth"; D227). **Wave 1**, no kin: parallel with everything. Depends on nothing new; if P6.6 has
   not merged, take only new files and rebase onto it for the shared ones (named below).
   *Brief*:
@@ -7530,6 +7530,38 @@ when those goldens move with it; until then the layer is read through `kin/tlhea
 the memory of the document pass.
 **Alternatives**: a render-based contrast (not available before P6.2/P6.3 and needs pixels); features per glyph (SPEC 8.4.5: a
 glyph has none, its word speaks for it).
+
+### D243 — P6.8 as built: what the corpus holds, the dump names the scorer reads, and where the brief was cut to the pixel budget (P6.8; D227, D209)
+**Decision**: 32 new documents (99 in the corpus): six Chrome tables (`table-dashed`, `-double`, `-zebra`, `-header-fill`,
+`-white-rules`, `-slanted-header`: two pages each, prose then the table), seven hand-made `gfx-*` PDFs (`tools/synth/gfx_pdf.clj`; `gfx-hidden-rules`
+draws one extra vertical and one extra horizontal rule in three pieces each, every piece hidden another way, so the naive reading is 4 x 4 and
+the seen one 3 x 3), three `mixed-*` (`tools/synth/mixed.clj`: the image table is poppler's 200 dpi render of `table-simple-ruled` / `table-zebra`,
+skewed 0.7 degrees, noise, JPEG 80, 60 % of the width; the gold holds a `display:none` table so both tables are in it), and sixteen tagged tables
+(`tools/synth/tagged_tables.clj`: eight verdict cases and an untagged twin of each; `facts.tag-verdict` is confirmed, partial, contradicted or **none**
+(no tagged table: `ttab-allp`, every untagged twin)). Hand-made documents also get an `html/` source (the gold is the table's HTML, as for Chrome
+ones; `print.sh`'s HAND list skips them). `GRAPHICS` lists 28 stems (12 existing: the 8 `table-*`, `align-table-numeric`, `invoice`,
+`bank-statement` and `furn-fixed-dom`, a no-rule control). **Scans**: `scan/` for the 16 new non-tagged documents (the existing 12 already had
+one), `scan-color/` (130 dpi, the fusion kind) only for five (`table-zebra`, `table-header-fill`, `table-white-rules`, `gfx-shading-bands`,
+`mixed-table-image-shaded`); `degrade_graphics.clj --all DIR` writes the colour twins of the whole set for the S3 store (non-gate), tagged tables have
+no scans. Facts for the twins' truth: `FACTS-gfx.json` (`skew-scan`, `dpi`, colour `skew`), copied into MANIFEST by `build.clj`.
+**Measured**: new committed files about 2.6 MB (pixels: scans 1.1 MB, colour 0.2, mixed images 0.1; PDFs 0.7; truth and gold the rest), under the 3 MB of D226.
+**Dump names** the scorer reads (the real dump does not have the arenas yet; `tools/accuracy/graphics.clj` is the one file to change): `grl` rows
+`page` (1-based), `ex0 ey0 ex1 ey1`, `thickness` in points; `gfl` rows `page`, `box`; `tb` rows `verdict`. `predict-emon.sh` takes `EMON_OUT=evidence`
+and `bb accuracy` asks it for the dump of graphics documents; a predictor with no dump scores no graphics metric (not zero).
+**Deviations**: the brief's `facts.turns`/dpi mapping is exact; the scan-color twins are 130 dpi (the fusion set's), not 200.
+**Why**: the budget cannot carry colour twins of 28 documents; the metrics read what a perfect `bb accuracy --predictor oracle` writes, so both ends are tested now.
+- [ ] **Signed off** (maintainer)
+
+### D244 — The rule-truth oracle: pdfplumber candidates kept where poppler shows contrast, runs not whole rules (P6.8; D227, D094)
+**Decision**: `tools/oracle/rules.py` keeps a candidate stretch of a pdfplumber line, straight curve, thin filled rectangle (short side <= 3 pt, long >= 4x)
+or stroked-rectangle edge only where the 150 dpi render has a pixel (or one beside it) differing by >= 16 from the pixels two px to BOTH sides: a white rule
+on a dark fill is seen, a white rule on white, a clipped, OCG-off, painted-over, alpha-0 or soft-masked one is not, and a partly hidden rule is shortened
+(runs, gaps <= 8 px bridged, runs >= 3 px). Fills: a non-white (>= 16) pdfplumber fill with half its sample grid non-white. Shadings, patterns, image rules
+and the rules of a table in an image are the generator's (`gold/STEM.rules-gen.json`, placed through the image placement pdfplumber reads) and pass the same render
+check. `gold/STEM.rules.json` is in centi-points, page space as displayed. Scan twins are derived by the scorer, not stored. The 12 existing documents were
+checked by eye (overlay of truth on one page each): all match their render; `furn-fixed-dom` has none. Corners lose about 0.5 pt of a rule at each end (a
+crossing rule defeats the contrast test), inside the matching tolerance.
+**Why**: emon cannot be its own oracle (D100); contrast rather than "not white" so a hidden rule over a fill is not truth.
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here

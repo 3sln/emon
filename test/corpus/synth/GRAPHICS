@@ -1,0 +1,30 @@
+# The graphics set (P6.8, D227): the documents whose rule and fill truth is measured, one stem a line.
+# Born-digital pdf/STEM.pdf has gold/STEM.rules.json (tools/oracle/rules.py); the scan variants inherit it.
+table-simple-ruled
+table-whitespace
+table-spans-partial
+table-shaded
+table-multipage-thead
+table-multipage-nohead-repeat
+table-multipage-no-thead
+table-consecutive-distinct
+align-table-numeric
+invoice
+bank-statement
+furn-fixed-dom
+table-dashed
+table-double
+table-zebra
+table-header-fill
+table-white-rules
+table-slanted-header
+gfx-onepath-grid
+gfx-hidden-rules
+gfx-shading-bands
+gfx-pattern-bands
+gfx-curve-lines
+gfx-image-rules
+gfx-softmask-rule
+mixed-table-image
+mixed-table-image-shaded
+mixed-two-tables

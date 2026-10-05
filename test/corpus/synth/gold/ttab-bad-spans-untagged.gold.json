@@ -1,0 +1,272 @@
+{
+ "emon-gold": "1.0",
+ "id": "ttab-bad-spans-untagged",
+ "provenance": {
+  "html": "html/ttab-bad-spans-untagged.html",
+  "pdf": "pdf/ttab-bad-spans-untagged.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; "
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Supplies Ledger"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "The table below was extracted from the supplies ledger. Figures are totals for the quarter."
+      },
+      {
+       "id": 4,
+       "kind": "table",
+       "profile": "ruled",
+       "columns": 4,
+       "children": [
+        {
+         "id": 5,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 6,
+           "kind": "row",
+           "children": [
+            {
+             "id": 7,
+             "kind": "cell",
+             "header": "col",
+             "text": "Region"
+            },
+            {
+             "id": 8,
+             "kind": "cell",
+             "colspan": 2,
+             "header": "col",
+             "text": "Sales"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "Notes"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 10,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 11,
+           "kind": "row",
+           "children": [
+            {
+             "id": 12,
+             "kind": "cell",
+             "rowspan": 2,
+             "text": "North"
+            },
+            {
+             "id": 13,
+             "kind": "cell",
+             "text": "120"
+            },
+            {
+             "id": 14,
+             "kind": "cell",
+             "text": "135"
+            },
+            {
+             "id": 15,
+             "kind": "cell",
+             "text": "up"
+            }
+           ]
+          },
+          {
+           "id": 16,
+           "kind": "row",
+           "children": [
+            {
+             "id": 17,
+             "kind": "cell",
+             "text": "98"
+            },
+            {
+             "id": 18,
+             "kind": "cell",
+             "text": "104"
+            },
+            {
+             "id": 19,
+             "kind": "cell",
+             "text": "flat"
+            }
+           ]
+          },
+          {
+           "id": 20,
+           "kind": "row",
+           "children": [
+            {
+             "id": 21,
+             "kind": "cell",
+             "text": "South"
+            },
+            {
+             "id": 22,
+             "kind": "cell",
+             "text": "75"
+            },
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "80"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "up"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 25,
+       "kind": "paragraph",
+       "text": "Questions go to the purchasing office."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Tagged table"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

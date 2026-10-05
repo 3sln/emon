@@ -32,11 +32,13 @@ A PREDICTOR is a command run as  CMD ID VARIANT INPUT GOLD  that prints an emon-
 Model as JSON on stdout (exit 3: not available yet). The built-in `oracle` and
 `degraded` are functions of the same shape, run in-process (their standalone
 forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
-  (:require [accuracy.predict-degraded :as degraded]
+  (:require [accuracy.graphics :as G]
+            [accuracy.predict-degraded :as degraded]
             [accuracy.predict-oracle :as oracle]
             [accuracy.score :as S]
             [babashka.fs :as fs]
             [babashka.process :as proc]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [pyjson])
   (:import (java.math BigDecimal RoundingMode)))
@@ -64,7 +66,9 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
              "initial" "initials" "align" "align"
              ;; the fusion corpus (P6.6, D209)
              "wm" "watermarks" "bg" "watermarks" "seal" "seals" "sig" "seals"
-             "outlined" "headings" "tl" "textlayer" "hidden" "textlayer"})
+             "outlined" "headings" "tl" "textlayer" "hidden" "textlayer"
+             ;; the graphics corpus (P6.8, D227)
+             "gfx" "graphics" "mixed" "graphics" "ttab" "graphics"})
 
 (defn category [doc-id]
   (get FAMILY (first (str/split doc-id #"-" 2)) "other"))
@@ -192,6 +196,27 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
        (str (fs/path CORPUS (if (= variant "scan-ovl") "gold-ovl" "gold")
                      (str doc-id (if (= variant "scan-ovl") ".ovl" "") ".gold.json")))])))
 
+(def MANIFEST (delay (pyjson/parse-file (str (fs/path CORPUS "MANIFEST.json")))))
+
+(defn doc-graphics
+  "What the graphics metrics need of a document besides its prediction (P6.8): the rule truth (rules.json, or nil) and the
+  MANIFEST facts."
+  [doc-id]
+  (let [f (fs/path CORPUS "gold" (str doc-id ".rules.json"))]
+    {:rules (when (fs/exists? f) (pyjson/parse-file (str f)))
+     :facts (get-in @MANIFEST ["docs" doc-id "facts"])}))
+
+(defn dump-of
+  "The evidence dump of a prediction for the graphics metrics, or :none: the oracle writes the one a perfect emon would; `emon`
+  runs the driver with --out=evidence on the documents that have graphics truth; every other predictor has none."
+  [cmd doc-id variant inp gold-path {:keys [rules facts]}]
+  (cond
+    (= cmd (PREDICTORS "oracle")) (G/oracle-dump rules facts variant)
+    (and (= cmd (PREDICTORS "emon")) (or rules (get facts "tag-verdict")))
+    (let [r (apply proc/sh (concat ["env" "EMON_OUT=evidence"] cmd [doc-id variant inp gold-path]))]
+      (if (zero? (:exit r)) (json/parse-string (:out r)) :none))
+    :else :none))
+
 (defn evaluate
   "-> [board entry {\"variant/cat\" {\":metric\" v}}, per-document metrics] or [nil why] if unavailable."
   ([cmd] (evaluate cmd nil))
@@ -201,13 +226,16 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    (let [docs (filter (fn [[doc-id]] (or (nil? only) (= doc-id only))) (corpus))
          preds (loop [ds (seq docs), out []]
                  (if-let [[[doc-id variant inp gp] & more] ds]
-                   (let [[pred why] (run-predictor cmd doc-id variant inp gp)]
-                     (if (nil? pred) [nil why] (recur more (conj out pred))))
+                   (let [[pred why] (run-predictor cmd doc-id variant inp gp)
+                         g (doc-graphics doc-id)]
+                     (if (nil? pred)
+                       [nil why]
+                       (recur more (conj out [pred (assoc g :variant variant :dump (dump-of cmd doc-id variant inp gp g))]))))
                    [out nil]))]
      (if (nil? (first preds))
        [nil (second preds)]
        (loop [rs (pmap (fn [[doc-id variant _ gp] pred]
-                         [doc-id variant (get (S/score pred (pyjson/parse-file gp) {:variant variant}) "counts")])
+                         [doc-id variant (get (S/score (first pred) (pyjson/parse-file gp) (second pred)) "counts")])
                        docs (first preds))
               pools {}, per-doc (array-map)]
          (if-let [[[doc-id variant c] & more] (seq rs)]
