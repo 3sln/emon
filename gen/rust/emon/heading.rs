@@ -132,6 +132,14 @@ pub fn hd_field(hc: &mut crate::port::Cells, l: i32, f: i32) -> i32 {
     }
     return crate::port::cells_at(hc, (HC_HDR + (l * HC_STRIDE)) + f);
 }
+pub fn hd_rows_end(hc: &mut crate::port::Cells) -> i32 {
+    // Where the heading rows end in `hc`: the first cell the list stage (`emon.lists`, P4.5) may append its own rows at;
+    // -1 when `hc` is empty. Nothing in this module reads past it.
+    if hd_live(hc) == 0 {
+        return -1;
+    }
+    return HC_HDR + (crate::port::cells_at(hc, 0) * HC_STRIDE);
+}
 pub fn hd_level(hc: &mut crate::port::Cells, l: i32) -> i32 {
     return hd_field(hc, l, hck_level());
 }

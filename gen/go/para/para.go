@@ -9,6 +9,7 @@ import (
 	"emon/evidence"
 	"emon/heading"
 	"emon/initial"
+	"emon/lists"
 	"emon/model"
 	"emon/normalize"
 	"emon/pdfdoc"
@@ -170,10 +171,30 @@ func paCloser(cp int32) bool {
 	return (cp == 41) || ((cp == 93) || ((cp == 34) || ((cp == 39) || ((cp == 8221) || ((cp == 8217) || (cp == 187))))))
 }
 
+func paTrimRef(raw *port.Cells) int32 {
+	// The length of `raw` without a note reference group that ends it (and the space before it): the text the
+	// reader reads ends where the marker was printed, against the word.
+	var n int32 = port.CellsLen(raw)
+	var i int32 = 0
+	if (n > 0) && (port.CellsAt(raw, n-1) == lists.LsSEnd()) {
+		i = n - 2
+		for (i >= 0) && (port.CellsAt(raw, i) != lists.LsSRef()) && (port.CellsAt(raw, i) != lists.LsSEnd()) {
+			i -= 1
+		}
+		if (i >= 0) && (port.CellsAt(raw, i) == lists.LsSRef()) {
+			n = i
+			if (n > 0) && (port.CellsAt(raw, n-1) == 32) {
+				n -= 1
+			}
+		}
+	}
+	return n
+}
+
 func paEndsSentence(raw *port.Cells) bool {
 	// Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
 	// three digits after a mark that follows a letter: `thing.3`) is not read.
-	var n int32 = port.CellsLen(raw)
+	var n int32 = paTrimRef(raw)
 	var nd int32 = 0
 	if n < 1 {
 		return 0 == 1
@@ -485,6 +506,10 @@ func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margi
 	if op == 2 {
 		return 1 == 1
 	}
+	// an item, a note body or a caption starts here (P4.5, P4.6: the list stage's rows after the heading rows)
+	if lists.LsSplit(hc, a, b) == 1 {
+		return 1 == 1
+	}
 	if !paUpright(ln, a) {
 		return 1 == 1
 	}
@@ -508,7 +533,7 @@ func paNewPar(wd *port.Cells, ln *port.Cells, a int32, b int32, med int32, margi
 	if ((g * paGapDen) > (med * paGapNum)) && (((g - med) * paTinyDiv) > hb) {
 		return 1 == 1
 	}
-	if (((paStart(ln, b) - paStart(ln, a)) * paIndentDiv) > sb) && (((paStart(ln, a) - margin) * paIndentDiv) <= sb) {
+	if (((paStart(ln, b) - paStart(ln, a)) * paIndentDiv) > sb) && (((paStart(ln, a) - margin) * paIndentDiv) <= sb) && (lists.LsHang(hc, ln, a, b) == 0) {
 		return 1 == 1
 	}
 	if (paAbs(ds) * paSizeDiv) > sa {
@@ -741,6 +766,173 @@ func paHeadingNumber(nodes *port.Cells, attrs *port.Cells, text *port.Cells, raw
 	return skip
 }
 
+func paGroupEnd(raw *port.Cells, s int32, rawn int32) int32 {
+	// The index one past the END of the group that opens at `s` (an opener of `emon.lists`), or -1 when the
+	// group is not closed before `rawn`.
+	var i int32 = s + 1
+	for i < rawn {
+		if port.CellsAt(raw, i) == lists.LsSEnd() {
+			return i + 1
+		}
+		i += 1
+	}
+	return -1
+}
+
+func paGroupSep(raw *port.Cells, s int32, gend int32) int32 {
+	// The index of the separator of the group at `s`..`gend`, which ends its header and starts its text.
+	var i int32 = s + 1
+	for i < gend {
+		if port.CellsAt(raw, i) == lists.LsSSep() {
+			return i
+		}
+		i += 1
+	}
+	return -1
+}
+
+func paGroupValue(raw *port.Cells, s int32, sep int32) int32 {
+	// The number the header of the group holds (the digits after the code cell); 0 when it holds none.
+	var i int32 = s + 2
+	var v int32 = 0
+	for i < sep {
+		v = (v * 10) + (port.CellsAt(raw, i) - 48)
+		i += 1
+	}
+	return v
+}
+
+func paPutMarker(nodes *port.Cells, attrs *port.Cells, text *port.Cells, raw *port.Cells, node int32, key int32, from int32, to int32) int32 {
+	// The code points raw[from..to) as the text attribute `key` of the node (a marker, a label).
+	var t0 int32 = port.CellsLen(text)
+	var i int32 = from
+	for i < to {
+		model.TextAppendCp(text, port.CellsAt(raw, i))
+		i += 1
+	}
+	model.NodeSetAttrText(nodes, attrs, node, key, t0, to-from)
+	return 0
+}
+
+func paCut(raw *port.Cells, fr *port.Cells, a int32, b int32) int32 {
+	// Remove raw[a..b), moving what follows down, and move the raw starts of the fragments (`fr`, cell 5 of a row)
+	// that lie beyond a.
+	var n int32 = port.CellsLen(raw)
+	var d int32 = b - a
+	var j int32 = a
+	var k int32 = 0
+	for (j + d) < n {
+		port.CellsSet(raw, j, port.CellsAt(raw, j+d))
+		j += 1
+	}
+	port.CellsDrop(raw, n-d)
+	for k < (port.CellsLen(fr) / frStride) {
+		var s int32 = port.CellsAt(fr, (k*frStride)+5)
+		if s >= b {
+			port.CellsSet(fr, (k*frStride)+5, s-d)
+		}
+		if (s > a) && (s < b) {
+			port.CellsSet(fr, (k*frStride)+5, a)
+		}
+		k += 1
+	}
+	return 0
+}
+
+func paScrub(raw *port.Cells, fr *port.Cells, from int32) int32 {
+	// Cut every list, note or caption group at or after `from`: the stages leave one only at a paragraph's start.
+	var i int32 = from
+	for i < port.CellsLen(raw) {
+		var c int32 = port.CellsAt(raw, i)
+		var n int32 = port.CellsLen(raw)
+		if (c == lists.LsSItem()) || ((c == lists.LsSNote()) || (c == lists.LsSCap())) {
+			var gend int32 = paGroupEnd(raw, i, n)
+			if gend > 0 {
+				if (gend < n) && (port.CellsAt(raw, gend) == 32) {
+					paCut(raw, fr, i, gend+1)
+				} else {
+					paCut(raw, fr, i, gend)
+				}
+			} else {
+				i += 1
+			}
+		} else {
+			i += 1
+		}
+	}
+	return 0
+}
+
+func paHasRef(raw *port.Cells, from int32, to int32) int32 {
+	// 1 when the range holds a note reference group.
+	var i int32 = from
+	for i < to {
+		if port.CellsAt(raw, i) == lists.LsSRef() {
+			return 1
+		}
+		i += 1
+	}
+	return 0
+}
+
+func paTextChild(nodes *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, par int32, from int32, to int32) int32 {
+	// A `text` inline of the paragraph for raw[from..to), normalised. Answers its node.
+	var child int32 = model.NodeNew(nodes, model.NkText(), par)
+	var t0 int32 = port.CellsLen(text)
+	normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+	model.NodeSetText(nodes, child, t0, port.CellsLen(text)-t0)
+	model.NodeSetConf(nodes, child, 1000)
+	model.NodeAddSrc(nodes, child, model.SrText())
+	return child
+}
+
+func paInlines(nodes *port.Cells, attrs *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, par int32, from int32, to int32) int32 {
+	// The inline children of the paragraph for raw[from..to): `text` runs, and a `ref` for every note reference
+	// group (its marker; the target is set later, when the notes are known). A space before a reference is not
+	// text: the reference stands where the marker was printed, against the word. Answers the first `text` child, -1
+	// when there is none.
+	var i int32 = from
+	var seg int32 = from
+	var first int32 = -1
+	var child int32 = 0
+	for i < to {
+		if port.CellsAt(raw, i) == lists.LsSRef() {
+			var gend int32 = paGroupEnd(raw, i, to)
+			var sep int32 = paGroupSep(raw, i, gend)
+			if (gend < 0) || (sep < 0) {
+				i += 1
+			} else {
+				var se int32 = i
+				if (se > seg) && (port.CellsAt(raw, se-1) == 32) {
+					se -= 1
+				}
+				if se > seg {
+					child = paTextChild(nodes, text, raw, tmp, par, seg, se)
+					if first < 0 {
+						first = child
+					}
+				}
+				child = model.NodeNew(nodes, model.NkRef(), par)
+				model.NodeSetConf(nodes, child, 500)
+				model.NodeAddSrc(nodes, child, model.SrText())
+				model.NodeAddSrc(nodes, child, model.SrInfer())
+				paPutMarker(nodes, attrs, text, raw, child, model.FkMarker(), sep+1, gend-1)
+				i = gend
+				seg = gend
+			}
+		} else {
+			i += 1
+		}
+	}
+	if seg < to {
+		child = paTextChild(nodes, text, raw, tmp, par, seg, to)
+		if first < 0 {
+			first = child
+		}
+	}
+	return first
+}
+
 func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, hc *port.Cells, parent int32) int32 {
 	// Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
 	// column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`
@@ -748,7 +940,10 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	// (SPEC 10.1.2). Under the root (parent 0) a paragraph the heading analysis found a heading in is a `heading` of its
 	// level under the open section it belongs in (D167). A paragraph that an initial opens (`fr`'s first row, P4.10) has an
 	// `initial` inline first, holding the initial's text, and the rest of its text as a `text` inline (also when it is on one
-	// page, where it has its own `text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`,
+	// page, where it has its own `text` as well, equal to the two); no list, note or caption group is read there (the
+	// initial wins, D229). A paragraph that starts with a group of the list, note or caption stage is an `item`, a `note`
+	// holding a paragraph, or a `caption` (D179), the group's marker or label an attribute and not in the text; note
+	// reference groups in the text become `ref` inlines. Closes the block's line rows in `al` (P4.11: `al-mark`,
 	// `al-pass` decides at the end). Empties `raw` and `fr`.
 	var nfr int32 = port.CellsLen(fr) / frStride
 	var rawn int32 = port.CellsLen(raw)
@@ -762,22 +957,79 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	var sect int32 = parent
 	var kind int32 = model.NkParagraph()
 	var par int32 = 0
+	var own int32 = -1
+	var lead int32 = 0
+	var gcode int32 = 0
+	var gval int32 = 0
+	var gm0 int32 = 0
+	var gm1 int32 = 0
+	var blk int32 = 0
 	var k int32 = 0
 	var kend int32 = 0
 	var runs int32 = 1
-	var kids int32 = 0
 	var from int32 = 0
 	var to int32 = 0
 	var cut int32 = 0
 	var ini int32 = 0
 	var t0 int32 = 0
 	var child int32 = 0
+	var kids int32 = 0
 	if parent == 0 {
 		lev = heading.HdLevel(hc, hl)
 		sect = heading.HdParent(hc, nodes, lev)
 	}
+	// a group at the start of the paragraph: an item, a note body or a caption (not inside a margin note)
+	if (lev == 0) && ((rawn > 0) && (ncp == 0)) {
+		var c0 int32 = port.CellsAt(raw, port.CellsAt(fr, 5))
+		var s0 int32 = port.CellsAt(fr, 5)
+		if (c0 == lists.LsSItem()) || ((c0 == lists.LsSNote()) || (c0 == lists.LsSCap())) {
+			var gend int32 = paGroupEnd(raw, s0, rawn)
+			var sep int32 = paGroupSep(raw, s0, gend)
+			if (gend > 0) && (sep > 0) && ((parent == 0) || (model.NodeKind(nodes, parent) != model.NkNote())) {
+				gcode = port.CellsAt(raw, s0+1) - lists.LsSBase()
+				gval = paGroupValue(raw, s0, sep)
+				gm0 = sep + 1
+				gm1 = gend - 1
+				lead = gend - s0
+				if (gend < rawn) && (port.CellsAt(raw, gend) == 32) {
+					lead += 1
+				}
+				if c0 == lists.LsSItem() {
+					blk = 1
+				}
+				if c0 == lists.LsSNote() {
+					blk = 2
+				}
+				if c0 == lists.LsSCap() {
+					blk = 3
+				}
+			} else {
+				// an unusable group (inside a margin note, or not closed): its text is dropped, the rest kept
+				if gend > 0 {
+					lead = gend - s0
+					if (gend < rawn) && (port.CellsAt(raw, gend) == 32) {
+						lead += 1
+					}
+				}
+			}
+		}
+	}
+	// a group that is still in the text after the first is a stray (the stages put one only at a line's start, and
+	// a paragraph's first line is its start): it is cut out, with its space
+	paScrub(raw, fr, port.CellsAt(fr, 5)+lead)
+	rawn = port.CellsLen(raw)
 	if lev > 0 {
 		kind = model.NkHeading()
+	}
+	if blk == 1 {
+		kind = model.NkItem()
+	}
+	if blk == 3 {
+		kind = model.NkCaption()
+	}
+	if blk == 2 {
+		own = model.NodeNew(nodes, model.NkNote(), sect)
+		sect = own
 	}
 	par = model.NodeNew(nodes, kind, sect)
 	if lev > 0 {
@@ -786,15 +1038,28 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	model.NodeSetConf(nodes, par, 500)
 	model.NodeAddSrc(nodes, par, model.SrText())
 	model.NodeAddSrc(nodes, par, model.SrInfer())
+	if blk == 1 {
+		model.NodeSetSub(nodes, par, gcode)
+		model.NodeSetAux(nodes, par, gval)
+		model.NodeSetAttrInt(nodes, attrs, par, model.FkBox(), lists.LsGet(hc, hl, lists.LsKTextx()))
+		paPutMarker(nodes, attrs, text, raw, par, model.FkMarker(), gm0, gm1)
+	}
+	if blk == 3 {
+		model.NodeSetAux(nodes, par, gcode)
+		paPutMarker(nodes, attrs, text, raw, par, model.FkLabel(), gm0, gm1)
+	}
+	if blk == 2 {
+		model.NodeSetSub(nodes, own, gcode)
+		model.NodeSetConf(nodes, own, 500)
+		model.NodeAddSrc(nodes, own, model.SrInfer())
+		paPutMarker(nodes, attrs, text, raw, own, model.FkMarker(), gm0, gm1)
+	}
 	k = 1
 	for k < nfr {
 		if port.CellsAt(fr, k*frStride) != port.CellsAt(fr, (k-1)*frStride) {
 			runs += 1
 		}
 		k += 1
-	}
-	if (runs > 1) || (ncp > 0) {
-		kids = 1
 	}
 	k = 0
 	for k < nfr {
@@ -804,16 +1069,30 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 			kend += 1
 		}
 		from = port.CellsAt(fr, (k*frStride)+5)
+		if k == 0 {
+			from += lead
+		}
 		to = rawn
 		if kend < nfr {
 			to = port.CellsAt(fr, (kend*frStride)+5)
 		}
+		kids = 0
+		if runs > 1 {
+			kids = 1
+		}
+		if (k == 0) && (ncp > 0) {
+			kids = 1
+		}
+		if paHasRef(raw, from, to) == 1 {
+			kids = 1
+		}
+		child = -1
 		if kids == 1 {
-			if k > 0 {
-				child = model.NodeNew(nodes, model.NkBreak(), par)
-				model.NodeSetSub(nodes, child, pg)
-				model.NodeSetConf(nodes, child, 500)
-				model.NodeAddSrc(nodes, child, model.SrInfer())
+			if (runs > 1) && (k > 0) {
+				var br int32 = model.NodeNew(nodes, model.NkBreak(), par)
+				model.NodeSetSub(nodes, br, pg)
+				model.NodeSetConf(nodes, br, 500)
+				model.NodeAddSrc(nodes, br, model.SrInfer())
 			}
 			cut = from
 			if (k == 0) && (ncp > 0) {
@@ -838,17 +1117,15 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 				model.NodeSetText(nodes, child, t0, tn0)
 				model.NodeSetConf(nodes, child, 1000)
 				model.NodeAddSrc(nodes, child, model.SrText())
+				child = -1
 			}
 			if (runs > 1) || (cut < to) {
-				child = model.NodeNew(nodes, model.NkText(), par)
-				t0 = port.CellsLen(text)
-				normalize.NzNfc(raw, cut, to, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
-				var tn int32 = port.CellsLen(text) - t0
-				model.NodeSetText(nodes, child, t0, tn)
-				model.NodeSetConf(nodes, child, 1000)
-				model.NodeAddSrc(nodes, child, model.SrText())
+				child = paInlines(nodes, attrs, text, raw, tmp, par, cut, to)
 			}
-			if runs == 1 {
+			if (runs > 1) && (child < 0) && (k == 0) && (ncp > 0) {
+				child = paTextChild(nodes, text, raw, tmp, par, cut, to)
+			}
+			if (runs == 1) && (paHasRef(raw, from, to) == 0) {
 				t0 = port.CellsLen(text)
 				normalize.NzNfc(raw, from, to, text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 				var tn1 int32 = port.CellsLen(text) - t0
@@ -870,7 +1147,10 @@ func paFlush(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 			var rx1 int32 = port.CellsAt(fr, base+3)
 			var ry1 int32 = port.CellsAt(fr, base+4)
 			model.NodeAddRegion(nodes, regions, par, pg, rx0, ry0, rx1, ry1)
-			if runs > 1 {
+			if own >= 0 {
+				model.NodeAddRegion(nodes, regions, own, pg, rx0, ry0, rx1, ry1)
+			}
+			if (runs > 1) && (child >= 0) {
 				model.NodeAddRegion(nodes, regions, child, pg, rx0, ry0, rx1, ry1)
 			}
 			k += 1
@@ -994,6 +1274,9 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 	if (heading.HdLevel(hc, a) > 0) || (heading.HdLevel(hc, b) > 0) {
 		return -100
 	}
+	if lists.LsStart(hc, b) == 1 {
+		return -100
+	}
 	var last int32 = port.CellsAt(raw, n-1)
 	if ((last == 45) || (last == 173)) && (n >= 2) {
 		if paLetter(port.CellsAt(raw, n-2)) {
@@ -1014,7 +1297,7 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 	if paLower(paFirstCp(wd, ln, et, b)) {
 		pts += jsLower
 	}
-	if (indents == 1) && (((paStart(ln, b) - bmargin) * paIndentDiv) > sb) {
+	if (indents == 1) && (((paStart(ln, b) - bmargin) * paIndentDiv) > sb) && (lists.LsHangCol(hc, ln, a, b, colx0, bmargin) == 0) {
 		pts += jsIndent
 	}
 	if paMarker(wd, ln, et, b) {

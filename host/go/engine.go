@@ -37,6 +37,9 @@ import (
 	"emon/evidence"
 	"emon/furniture"
 	"emon/initial"
+	"emon/lists"
+	"emon/notes"
+	"emon/restruct"
 	"emon/heading"
 	"emon/html"
 	"emon/model"
@@ -812,8 +815,17 @@ func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int3
 	h := newCellsN(7)
 	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
 	heading.HdAnalyze(wd, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
+	// notes and lists, then restructuring, exactly as `attempt` runs them: the OCR lines are the text layer's lines
+	l := newCellsN(6)
+	notes.NtAnalyze(wd, c[0], et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
+	lists.LsAnalyze(wd, c[0], et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
 	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
+	r := newCellsN(10)
+	restruct.RsRun(m.nodes, m.attrs, m.regions, m.text, r[0], r[1], r[2], r[3], r[4], r[5], r[6], m.layout)
+	m.nodes, r[0] = r[0], m.nodes
+	m.attrs, r[1] = r[1], m.attrs
+	m.regions, r[2] = r[2], m.regions
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
 	if opts.Locale != "" {
@@ -1105,8 +1117,21 @@ func attempt(view, pw *port.Src, answers, rq *port.Cells, idx int, opts Options,
 	// the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
 	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
 	heading.HdAnalyze(wd, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
+	// captions, note bodies and their references (kin/notes.kin, P4.6), then lists (kin/lists.kin, P4.5): which lines begin them, written
+	// into et and the rows after hc's, which the paragraph stage reads; the notes first, the lists never take a line they took. They
+	// read the same copy of the lines the headings do (initials already out of it), and leave a table's lines to the table (tb[2])
+	l := newCellsN(6)
+	notes.NtAnalyze(wd, c[0], et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
+	lists.LsAnalyze(wd, c[0], et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
 	para.PaBuild(wd, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
+	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
+	// body is copied into new arenas, in document order, and they replace the old ones
+	r := newCellsN(10)
+	restruct.RsRun(m.nodes, m.attrs, m.regions, m.text, r[0], r[1], r[2], r[3], r[4], r[5], r[6], m.layout)
+	m.nodes, r[0] = r[0], m.nodes
+	m.attrs, r[1] = r[1], m.attrs
+	m.regions, r[2] = r[2], m.regions
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
 	if opts.Locale != "" {
