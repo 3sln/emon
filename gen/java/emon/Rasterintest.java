@@ -99,7 +99,7 @@ public final class Rasterintest {
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 4), 0, "the whole frame, not a header");
         emon.Port.Cells rq2 = emon.Port.newCells();
         emon.Testport.assertEq(pagePol(2, emon.Port.newCells(), rq2, 2, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), Plan.usRequests(), "it asks");
-        emon.Testport.assertEq(Plan.recId(rq2, 0), 1028, "page 2: 3 * 256 + 4");
+        emon.Testport.assertEq(Plan.recId(rq2, 0), 772, "page 2: 3 * 256 + 4");
         emon.Testport.assertEq(Plan.rqArg(rq2, 0, 4), 2, "frame 2");
     }
     public static void testAFramesUnitThatAskedTheSameAgainAsksTheSame() {

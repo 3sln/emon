@@ -114,7 +114,7 @@ func TestAFramesUnitAsksForItsPixelsFirstUnderItsOwnId(emonT *testing.T) {
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 4), 0, "the whole frame, not a header")
 	var rq2 *port.Cells = port.NewCells()
 	port.AssertEq(emonT, pagePol(2, port.NewCells(), rq2, 2, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
-	port.AssertEq(emonT, plan.RecId(rq2, 0), 1028, "page 2: 3 * 256 + 4")
+	port.AssertEq(emonT, plan.RecId(rq2, 0), 772, "page 2: 3 * 256 + 4")
 	port.AssertEq(emonT, plan.RqArg(rq2, 0, 4), 2, "frame 2")
 }
 

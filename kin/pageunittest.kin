@@ -6,9 +6,9 @@
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
             [emon.port :refer [cells-len cells-at cells-push bms-get bms-has bms-put bitmap-w bitmap-h bitmap-channels
                                bitmap-u8 bitmap-set-u8]]
-            [emon.plan :refer [rec-id rec-kind rq-arg pk-decode us-requests us-done pu-id pu-view-id view-base
+            [emon.plan :refer [rec-id rec-kind rq-arg pk-decode pk-render an-fail ps-unsupported lay-full lay-no-text us-requests us-done pu-id pu-view-id view-base
                                pi-render-text pi-decode pi-ocr flt-dct]]
-            [emon.pageunit :refer [pu-w pu-kind pk-scan pk-born pk-none pu-run-pdf]]
+            [emon.pageunit :refer [pu-w pu-kind pu-dpi pk-scan pk-born pk-none pu-run-pdf]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -65,12 +65,33 @@
     (assert-eq (cells-at rq1 2) (cells-at rq2 2) "the same id")
     (assert-eq (cells-at rq1 4) (cells-at rq2 4) "the same arguments")))
 
-(deftest test-a-born-digital-page-and-the-never-policy-ask-nothing
+(deftest test-a-born-digital-page-asks-for-two-rasters-under-always-and-never-for-ocr
   (let [^Cells pl (new-cells)
         ^Cells rq (new-cells)]
-    (plan-of pl 1 (pk-born))
-    (assert-eq (run-page 0 2 pl (new-cells) rq) (us-done) "born digital: done")
-    (assert-eq (cells-len rq) 0 "no request"))
+    (plan-of pl 2 (pk-born))
+    (assert-eq (run-page 1 2 pl (new-cells) rq) (us-requests) "always: it asks")
+    (assert-eq (cells-len rq) 14 "two renders of seven cells")
+    (assert-eq (rec-kind rq 0) (pk-render) "a render")
+    (assert-eq (rec-id rq 0) 513 "page 1, with text: 2 * 256 + 1")
+    (assert-eq (rq-arg rq 0 0) 3 "of input 3")
+    (assert-eq (rq-arg rq 0 1) 1 "page 1, 0-based")
+    (assert-eq (rq-arg rq 0 2) 300 "at 300 dpi")
+    (assert-eq (rq-arg rq 0 3) (lay-full) "with its text")
+    (assert-eq (rec-id rq 7) 514 "and without it")
+    (assert-eq (rq-arg rq 7 3) (lay-no-text) "the layer"))
+  (let [^Cells pl1 (new-cells)
+        ^Cells rq1 (new-cells)
+        ^Cells ans1 (new-cells)]
+    (plan-of pl1 1 (pk-born))
+    (an-fail ans1 (pk-render) 257 (ps-unsupported))
+    (an-fail ans1 (pk-render) 258 (ps-unsupported))
+    (assert-eq (run-page 0 2 pl1 ans1 rq1) (us-done) "answered, even `unsupported`: done")
+    (assert-eq (cells-len rq1) 0 "asks nothing more, and no OCR"))
+  (let [^Cells pl2 (new-cells)
+        ^Cells rq2 (new-cells)]
+    (plan-of pl2 1 (pk-born))
+    (assert-eq (run-page 0 1 pl2 (new-cells) rq2) (us-done) "auto: a text layer is read as it is")
+    (assert-eq (cells-len rq2) 0 "no request"))
   (let [^Cells plan2 (new-cells)
         ^Cells rq2 (new-cells)]
     (plan-of plan2 1 (pk-scan))

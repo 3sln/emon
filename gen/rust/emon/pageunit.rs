@@ -7,6 +7,9 @@ use crate::emon::pdfsrc::*;
 use crate::emon::plan::*;
 use crate::emon::scan::*;
 
+pub fn pu_dpi() -> i32 {
+    return 300;
+}
 pub fn pu_w() -> i32 {
     return 10;
 }
@@ -118,6 +121,19 @@ pub fn pu_run_pdf(i: i32, input: i32, policy: i32, pl: &mut crate::port::Cells, 
     // and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`
     // when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).
     if policy == 0 {
+        return us_done();
+    }
+    // A BORN-DIGITAL page under `always` asks for its two rasters in one round (D199): the page with its text and without it,
+    // at 300 dpi. NOTHING IS OCR'd on it (D201, D212 (3): until P7.S flips the policy a text layer is read as it is); the
+    // bitmaps are the unit's, held in `bms` for the stages that read pixels (P6.3, P7.3) and dropped when the unit ends.
+    if pu_kind(pl, i) == pk_born() {
+        if policy == 2 {
+            if an_find(ans, pu_id(i, pi_render_text())) < 0 {
+                rq_render(rq, pu_id(i, pi_render_text()), input, i, pu_dpi(), lay_full());
+                rq_render(rq, pu_id(i, pi_render_no_text()), input, i, pu_dpi(), lay_no_text());
+                return us_requests();
+            }
+        }
         return us_done();
     }
     if pu_kind(pl, i) != pk_scan() {

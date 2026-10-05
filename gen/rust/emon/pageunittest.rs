@@ -60,12 +60,33 @@ fn test_a_unit_with_no_answers_asks_the_same_every_time() {
     crate::testport::assert_eq(crate::port::cells_at(rq1, 4), crate::port::cells_at(rq2, 4), "the same arguments");
 }
 #[test]
-fn test_a_born_digital_page_and_the_never_policy_ask_nothing() {
+fn test_a_born_digital_page_asks_for_two_rasters_under_always_and_never_for_ocr() {
     let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(pl, 1, pk_born());
-    crate::testport::assert_eq(run_page(0, 2, pl, &mut crate::port::Cells::new(), rq), us_done(), "born digital: done");
-    crate::testport::assert_eq(crate::port::cells_len(rq), 0, "no request");
+    plan_of(pl, 2, pk_born());
+    crate::testport::assert_eq(run_page(1, 2, pl, &mut crate::port::Cells::new(), rq), us_requests(), "always: it asks");
+    crate::testport::assert_eq(crate::port::cells_len(rq), 14, "two renders of seven cells");
+    crate::testport::assert_eq(rec_kind(rq, 0), pk_render(), "a render");
+    crate::testport::assert_eq(rec_id(rq, 0), 513, "page 1, with text: 2 * 256 + 1");
+    crate::testport::assert_eq(rq_arg(rq, 0, 0), 3, "of input 3");
+    crate::testport::assert_eq(rq_arg(rq, 0, 1), 1, "page 1, 0-based");
+    crate::testport::assert_eq(rq_arg(rq, 0, 2), 300, "at 300 dpi");
+    crate::testport::assert_eq(rq_arg(rq, 0, 3), lay_full(), "with its text");
+    crate::testport::assert_eq(rec_id(rq, 7), 514, "and without it");
+    crate::testport::assert_eq(rq_arg(rq, 7, 3), lay_no_text(), "the layer");
+    let pl1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    plan_of(pl1, 1, pk_born());
+    an_fail(ans1, pk_render(), 257, ps_unsupported());
+    an_fail(ans1, pk_render(), 258, ps_unsupported());
+    crate::testport::assert_eq(run_page(0, 2, pl1, ans1, rq1), us_done(), "answered, even `unsupported`: done");
+    crate::testport::assert_eq(crate::port::cells_len(rq1), 0, "asks nothing more, and no OCR");
+    let pl2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    plan_of(pl2, 1, pk_born());
+    crate::testport::assert_eq(run_page(0, 1, pl2, &mut crate::port::Cells::new(), rq2), us_done(), "auto: a text layer is read as it is");
+    crate::testport::assert_eq(crate::port::cells_len(rq2), 0, "no request");
     let plan2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     plan_of(plan2, 1, pk_scan());

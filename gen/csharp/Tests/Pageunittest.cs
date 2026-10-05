@@ -61,12 +61,33 @@ public static class Pageunittest {
         emon.Testport.AssertEq(emon.Port.CellsAt(rq1, 4), emon.Port.CellsAt(rq2, 4), "the same arguments");
     }
     [Xunit.Fact]
-    public static void TestABornDigitalPageAndTheNeverPolicyAskNothing() {
+    public static void TestABornDigitalPageAsksForTwoRastersUnderAlwaysAndNeverForOcr() {
         emon.Port.Cells pl = emon.Port.NewCells();
         emon.Port.Cells rq = emon.Port.NewCells();
-        PlanOf(pl, 1, Pageunit.PkBorn());
-        emon.Testport.AssertEq(RunPage(0, 2, pl, emon.Port.NewCells(), rq), Plan.UsDone(), "born digital: done");
-        emon.Testport.AssertEq(emon.Port.CellsLen(rq), 0, "no request");
+        PlanOf(pl, 2, Pageunit.PkBorn());
+        emon.Testport.AssertEq(RunPage(1, 2, pl, emon.Port.NewCells(), rq), Plan.UsRequests(), "always: it asks");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq), 14, "two renders of seven cells");
+        emon.Testport.AssertEq(Plan.RecKind(rq, 0), Plan.PkRender(), "a render");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), 513, "page 1, with text: 2 * 256 + 1");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), 3, "of input 3");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 1, "page 1, 0-based");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 300, "at 300 dpi");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, 3), Plan.LayFull(), "with its text");
+        emon.Testport.AssertEq(Plan.RecId(rq, 7), 514, "and without it");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 7, 3), Plan.LayNoText(), "the layer");
+        emon.Port.Cells pl1 = emon.Port.NewCells();
+        emon.Port.Cells rq1 = emon.Port.NewCells();
+        emon.Port.Cells ans1 = emon.Port.NewCells();
+        PlanOf(pl1, 1, Pageunit.PkBorn());
+        Plan.AnFail(ans1, Plan.PkRender(), 257, Plan.PsUnsupported());
+        Plan.AnFail(ans1, Plan.PkRender(), 258, Plan.PsUnsupported());
+        emon.Testport.AssertEq(RunPage(0, 2, pl1, ans1, rq1), Plan.UsDone(), "answered, even `unsupported`: done");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq1), 0, "asks nothing more, and no OCR");
+        emon.Port.Cells pl2 = emon.Port.NewCells();
+        emon.Port.Cells rq2 = emon.Port.NewCells();
+        PlanOf(pl2, 1, Pageunit.PkBorn());
+        emon.Testport.AssertEq(RunPage(0, 1, pl2, emon.Port.NewCells(), rq2), Plan.UsDone(), "auto: a text layer is read as it is");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq2), 0, "no request");
         emon.Port.Cells plan2 = emon.Port.NewCells();
         emon.Port.Cells rq2 = emon.Port.NewCells();
         PlanOf(plan2, 1, Pageunit.PkScan());

@@ -26,6 +26,9 @@
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
+;; The resolution of a born-digital page's rasters (D199).
+(defn ^:pub ^I32 pu-dpi [] (return 300))
+
 ;; The plan: PU-W cells a page. kind 0: no request of the page's own (born digital, or no image to read); 1: a scanned
 ;; page, one DCT image covering it (D212); 2: born digital (any word, hidden or not).
 (defn ^:pub ^I32 pu-w [] (return 10))
@@ -120,6 +123,16 @@
   (comment "and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`")
   (comment "when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).")
   (if (== policy 0) (return (us-done)))
+  (comment "A BORN-DIGITAL page under `always` asks for its two rasters in one round (D199): the page with its text and without it,")
+  (comment "at 300 dpi. NOTHING IS OCR'd on it (D201, D212 (3): until P7.S flips the policy a text layer is read as it is); the")
+  (comment "bitmaps are the unit's, held in `bms` for the stages that read pixels (P6.3, P7.3) and dropped when the unit ends.")
+  (if (== (pu-kind pl i) (pk-born))
+    (do (if (== policy 2)
+          (if (< (an-find ans (pu-id i (pi-render-text))) 0)
+            (do (rq-render rq (pu-id i (pi-render-text)) input i (pu-dpi) (lay-full))
+                (rq-render rq (pu-id i (pi-render-no-text)) input i (pu-dpi) (lay-no-text))
+                (return (us-requests)))))
+        (return (us-done))))
   (if (!= (pu-kind pl i) (pk-scan)) (return (us-done)))
   (let [^I32 did (pu-id i (pi-decode))
         ^I32 oid (pu-id i (pi-ocr))

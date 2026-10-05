@@ -107,7 +107,7 @@ fn test_a_frames_unit_asks_for_its_pixels_first_under_its_own_id() {
     crate::testport::assert_eq(rq_arg(rq, 0, 4), 0, "the whole frame, not a header");
     let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     crate::testport::assert_eq(page_pol(2, &mut crate::port::Cells::new(), rq2, 2, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
-    crate::testport::assert_eq(rec_id(rq2, 0), 1028, "page 2: 3 * 256 + 4");
+    crate::testport::assert_eq(rec_id(rq2, 0), 772, "page 2: 3 * 256 + 4");
     crate::testport::assert_eq(rq_arg(rq2, 0, 4), 2, "frame 2");
 }
 #[test]

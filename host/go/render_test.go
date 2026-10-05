@@ -127,10 +127,10 @@ func TestARenderFulfillerAnswersRendersAndCropsAndFailuresAsRecords(t *testing.T
 	}
 }
 
-func TestAnEngineWithARendererIsTheSameEngineAndTheSliceNeverCallsIt(t *testing.T) {
-	// The Engine's port set (D127): `render` and `crop` go to Config.Renderer. The slice issues no request
-	// (D008: nothing asks for a render until the OCR plan, P6.5), so the Model is byte-for-byte the one of an
-	// Engine with no renderer, and the renderer is never called.
+func TestAnEngineWithARendererIsTheSameEngineAndABornDigitalPageIsRenderedTwice(t *testing.T) {
+	// The Engine's port set (D127): `render` and `crop` go to Config.Renderer. Under `always` a born-digital page asks for its two
+	// rasters (D199, P7.U) and nothing reads them yet, so the Model is byte-for-byte the one of an Engine with no renderer, and
+	// the renderer is called twice a page.
 	fake := &fakeRenderer{}
 	cfg := DefaultConfig()
 	cfg.Renderer = fake
@@ -145,7 +145,7 @@ func TestAnEngineWithARendererIsTheSameEngineAndTheSliceNeverCallsIt(t *testing.
 			t.Fatalf("%s: a renderer changed the Model", name)
 		}
 	}
-	if fake.calls.Load() != 0 {
-		t.Fatal("the slice called the renderer")
+	if n := fake.calls.Load(); n == 0 || n%2 != 0 {
+		t.Fatalf("the renderer was called %d times: two a page expected", n)
 	}
 }

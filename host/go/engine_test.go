@@ -354,13 +354,21 @@ func TestIntakeTakesAnyNumberOfInputs(t *testing.T) {
 	}
 }
 
-func TestRecordAndReplayWithTheSliceIssuingNoRequests(t *testing.T) {
+func TestRecordAndReplayWithABornDigitalPagesTwoRastersUnsupported(t *testing.T) {
 	e := NewEngine(DefaultConfig())
 	b := synth(t, "h-plain")
 	m, tr, err := e.Record(one(BytesInput(b)), DefaultOptions())
 	must(t, m, err)
-	if len(tr.Entries) != 0 {
-		t.Error("the slice issues zero requests")
+	// under `always` a born-digital page asks for its two rasters (D199): with no Renderer each is answered `unsupported`, in page
+	// order, each page its own unit; nothing is OCR'd
+	if len(tr.Entries) != 4 {
+		t.Fatalf("entries: %d", len(tr.Entries))
+	}
+	for i, id := range []int32{257, 258, 513, 514} {
+		en := tr.Entries[i]
+		if en.Round != 0 || en.Req[1] != 1 || en.Req[2] != id || en.Ans[3] != 2 || en.Bitmap != nil {
+			t.Errorf("entry %d: %v %v", i, en.Req, en.Ans)
+		}
 	}
 	if len(tr.Inputs) != 1 || tr.Inputs[0] != [2]int32{0, int32(len(b))} {
 		t.Errorf("inputs %v", tr.Inputs)
@@ -731,12 +739,15 @@ func TestAScannedPDFPageIsOcredAndABornDigitalOneKeepsItsTextLayer(t *testing.T)
 	if strings.Contains(none, "Hello") || strings.Contains(none, `"ocr"`) || !strings.Contains(none, `"kind": "vector"`) {
 		t.Errorf("%s", none)
 	}
-	// a born-digital page keeps its text layer under `always`: no request, the same Model with or without a port (D212)
+	// a born-digital page keeps its text layer under `always`: it asks for its rasters and for no OCR, and the Model is the same
+	// with or without a port (D212, D199)
 	born := synth(t, "h-plain")
 	mb, tb, err := withOcr().Record(one(BytesInput(born)), o)
 	mb = must(t, mb, err)
-	if len(tb.Entries) != 0 {
-		t.Error("a text layer is read as it is: nothing is asked")
+	for _, en := range tb.Entries {
+		if en.Req[1] != 1 {
+			t.Error("a text layer is read as it is: no OCR is asked")
+		}
 	}
 	mp, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(born)), o)
 	if js(must(t, mp, err)) != js(mb) {

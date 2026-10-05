@@ -57,12 +57,33 @@ public final class Pageunittest {
         emon.Testport.assertEq(emon.Port.cellsAt(rq1, 2), emon.Port.cellsAt(rq2, 2), "the same id");
         emon.Testport.assertEq(emon.Port.cellsAt(rq1, 4), emon.Port.cellsAt(rq2, 4), "the same arguments");
     }
-    public static void testABornDigitalPageAndTheNeverPolicyAskNothing() {
+    public static void testABornDigitalPageAsksForTwoRastersUnderAlwaysAndNeverForOcr() {
         emon.Port.Cells pl = emon.Port.newCells();
         emon.Port.Cells rq = emon.Port.newCells();
-        planOf(pl, 1, Pageunit.pkBorn());
-        emon.Testport.assertEq(runPage(0, 2, pl, emon.Port.newCells(), rq), Plan.usDone(), "born digital: done");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq), 0, "no request");
+        planOf(pl, 2, Pageunit.pkBorn());
+        emon.Testport.assertEq(runPage(1, 2, pl, emon.Port.newCells(), rq), Plan.usRequests(), "always: it asks");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq), 14, "two renders of seven cells");
+        emon.Testport.assertEq(Plan.recKind(rq, 0), Plan.pkRender(), "a render");
+        emon.Testport.assertEq(Plan.recId(rq, 0), 513, "page 1, with text: 2 * 256 + 1");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 0), 3, "of input 3");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 1, "page 1, 0-based");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 2), 300, "at 300 dpi");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 3), Plan.layFull(), "with its text");
+        emon.Testport.assertEq(Plan.recId(rq, 7), 514, "and without it");
+        emon.Testport.assertEq(Plan.rqArg(rq, 7, 3), Plan.layNoText(), "the layer");
+        emon.Port.Cells pl1 = emon.Port.newCells();
+        emon.Port.Cells rq1 = emon.Port.newCells();
+        emon.Port.Cells ans1 = emon.Port.newCells();
+        planOf(pl1, 1, Pageunit.pkBorn());
+        Plan.anFail(ans1, Plan.pkRender(), 257, Plan.psUnsupported());
+        Plan.anFail(ans1, Plan.pkRender(), 258, Plan.psUnsupported());
+        emon.Testport.assertEq(runPage(0, 2, pl1, ans1, rq1), Plan.usDone(), "answered, even `unsupported`: done");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq1), 0, "asks nothing more, and no OCR");
+        emon.Port.Cells pl2 = emon.Port.newCells();
+        emon.Port.Cells rq2 = emon.Port.newCells();
+        planOf(pl2, 1, Pageunit.pkBorn());
+        emon.Testport.assertEq(runPage(0, 1, pl2, emon.Port.newCells(), rq2), Plan.usDone(), "auto: a text layer is read as it is");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq2), 0, "no request");
         emon.Port.Cells plan2 = emon.Port.newCells();
         emon.Port.Cells rq2 = emon.Port.newCells();
         planOf(plan2, 1, Pageunit.pkScan());

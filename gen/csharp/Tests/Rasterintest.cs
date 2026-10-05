@@ -105,7 +105,7 @@ public static class Rasterintest {
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 4), 0, "the whole frame, not a header");
         emon.Port.Cells rq2 = emon.Port.NewCells();
         emon.Testport.AssertEq(PagePol(2, emon.Port.NewCells(), rq2, 2, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
-        emon.Testport.AssertEq(Plan.RecId(rq2, 0), 1028, "page 2: 3 * 256 + 4");
+        emon.Testport.AssertEq(Plan.RecId(rq2, 0), 772, "page 2: 3 * 256 + 4");
         emon.Testport.AssertEq(Plan.RqArg(rq2, 0, 4), 2, "frame 2");
     }
     [Xunit.Fact]

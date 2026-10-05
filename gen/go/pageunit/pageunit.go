@@ -12,6 +12,10 @@ import (
 	"emon/scan"
 )
 
+func PuDpi() int32 {
+	return 300
+}
+
 func PuW() int32 {
 	return 10
 }
@@ -130,6 +134,19 @@ func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cell
 	// and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`
 	// when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).
 	if policy == 0 {
+		return plan.UsDone()
+	}
+	// A BORN-DIGITAL page under `always` asks for its two rasters in one round (D199): the page with its text and without it,
+	// at 300 dpi. NOTHING IS OCR'd on it (D201, D212 (3): until P7.S flips the policy a text layer is read as it is); the
+	// bitmaps are the unit's, held in `bms` for the stages that read pixels (P6.3, P7.3) and dropped when the unit ends.
+	if PuKind(pl, i) == PkBorn() {
+		if policy == 2 {
+			if plan.AnFind(ans, plan.PuId(i, plan.PiRenderText())) < 0 {
+				plan.RqRender(rq, plan.PuId(i, plan.PiRenderText()), input, i, PuDpi(), plan.LayFull())
+				plan.RqRender(rq, plan.PuId(i, plan.PiRenderNoText()), input, i, PuDpi(), plan.LayNoText())
+				return plan.UsRequests()
+			}
+		}
 		return plan.UsDone()
 	}
 	if PuKind(pl, i) != PkScan() {

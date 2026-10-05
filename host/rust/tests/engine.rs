@@ -247,11 +247,14 @@ fn intake_takes_any_number_of_inputs() {
 }
 
 #[test]
-fn record_and_replay_with_the_slice_issuing_no_requests() {
+fn record_and_replay_with_a_born_digital_pages_two_rasters_unsupported() {
     let e = Engine::new(Config::default());
     let b = synth("h-plain");
     let (m, t) = e.record(Input::bytes(b.clone()), &Options::default()).unwrap();
-    assert!(t.entries.is_empty(), "the slice issues zero requests");
+    // under `always` a born-digital page asks for its two rasters (D199): with no Renderer each is answered `unsupported`, in
+    // page order, each page its own unit; nothing is OCR'd
+    assert_eq!(t.entries.iter().map(|x| (x.round, x.req[1], x.req[2], x.ans[3])).collect::<Vec<_>>(), vec![(0, 1, 257, 2), (0, 1, 258, 2), (0, 1, 513, 2), (0, 1, 514, 2)]);
+    assert!(t.entries.iter().all(|x| x.bitmap.is_none()));
     assert_eq!(t.inputs, vec![(0, b.len() as i32)]);
     let r = e.replay(Input::bytes(b.clone()), &Options::default(), &t).unwrap();
     assert_eq!(json(&r), json(&m));
@@ -466,10 +469,11 @@ fn a_scanned_pdf_page_is_ocred_and_a_born_digital_one_keeps_its_text_layer() {
     // no port: the page is there and has no text, and the Model says nothing about OCR
     let none = json(&Engine::new(Config::default()).convert(Input::bytes(scan), &o).unwrap());
     assert!(!none.contains("Hello") && !none.contains("\"ocr\"") && none.contains("\"kind\": \"vector\""), "{}", none);
-    // a born-digital page keeps its text layer under `always`: no request, the same Model with or without a port (D212)
+    // a born-digital page keeps its text layer under `always`: it asks for its rasters and for no OCR, and the Model is the
+    // same with or without a port (D212, D199)
     let born = synth("h-plain");
     let (mb, tb) = with_ocr().record(Input::bytes(born.clone()), &o).unwrap();
-    assert!(tb.entries.is_empty(), "a text layer is read as it is: nothing is asked");
+    assert!(tb.entries.iter().all(|x| x.req[1] == 1), "a text layer is read as it is: no OCR is asked");
     assert_eq!(json(&mb), json(&Engine::new(Config::default()).convert(Input::bytes(born), &o).unwrap()));
 }
 
@@ -584,10 +588,10 @@ fn a_render_fulfiller_answers_renders_and_crops_and_failures_as_records() {
 }
 
 #[test]
-fn an_engine_with_a_renderer_is_the_same_engine_and_the_slice_never_calls_it() {
-    // The Engine's port set (D127): `render` and `crop` go to Config.renderer. The slice issues no request
-    // (D008: nothing asks for a render until the OCR plan, P6.5), so the Model is byte-for-byte the one of an
-    // Engine with no renderer, and the renderer is never called.
+fn an_engine_with_a_renderer_is_the_same_engine_and_a_born_digital_page_is_rendered_twice() {
+    // The Engine's port set (D127): `render` and `crop` go to Config.renderer. Under `always` a born-digital page asks for its
+    // two rasters (D199, P7.U) and nothing reads them yet, so the Model is byte-for-byte the one of an Engine with no
+    // renderer, and the renderer is called twice a page.
     let fake = Arc::new(Fake::default());
     let with = Engine::new(Config { renderer: Some(fake.clone()), ..Config::default() });
     let without = Engine::new(Config::default());
@@ -597,5 +601,6 @@ fn an_engine_with_a_renderer_is_the_same_engine_and_the_slice_never_calls_it() {
         let b = without.convert(Input::bytes(bytes), &Options::default()).unwrap();
         assert_eq!(json(&a), json(&b), "{}", name);
     }
-    assert_eq!(fake.calls.load(Ordering::SeqCst), 0);
+    let n = fake.calls.load(Ordering::SeqCst);
+    assert!(n > 0 && n % 2 == 0, "the renderer was called {} times: two a page expected", n);
 }
