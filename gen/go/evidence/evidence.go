@@ -6508,7 +6508,7 @@ func EvCheck(epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.
 	return 0
 }
 
-func evBegin(t *strings.Builder, pr int32, d int32, started int32, code int32) int32 {
+func EvBegin(t *strings.Builder, pr int32, d int32, started int32, code int32) int32 {
 	if started == 1 {
 		port.TextAscii(t, ",")
 	}
@@ -6530,7 +6530,7 @@ func evFint(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, 
 	if v == dflt {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	port.TextI32(t, v)
 	return 1
 }
@@ -6541,14 +6541,14 @@ func evFcpt(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, 
 	if v == dflt {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	json.JsCpt(t, v)
 	return 1
 }
 
 func evFquad(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, started int32) int32 {
 	// `"key":[a,b,c,d]`, four cells f..f+3, in points: a box, a baseline.
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	port.TextAscii(t, "[")
 	json.JsCpt(t, evGet(c, stride, row, f))
 	json.JsFsep(t, pr, 1)
@@ -6566,7 +6566,7 @@ func evFpx4(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, 
 	if (evGet(c, stride, row, f+2) == 0) && (evGet(c, stride, row, f+3) == 0) {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	port.TextAscii(t, "[")
 	port.TextI32(t, evGet(c, stride, row, f))
 	json.JsFsep(t, pr, 1)
@@ -6584,7 +6584,7 @@ func evFpair(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 	if (evGet(c, stride, row, f) == d1) && (evGet(c, stride, row, f+1) == d2) {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	port.TextAscii(t, "[")
 	if pts == 1 {
 		json.JsCpt(t, evGet(c, stride, row, f))
@@ -6607,7 +6607,7 @@ func evFcolor(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32
 	if v < 0 {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	port.TextAscii(t, "\"#")
 	json.JsHex(t, ((v)>>uint(20))&15)
 	json.JsHex(t, ((v)>>uint(16))&15)
@@ -6627,7 +6627,7 @@ func evFpacked(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int3
 	if v == 0 {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	port.TextAscii(t, "\"")
 	for sh >= 0 {
 		ch = ((v) >> uint(sh)) & 255
@@ -6648,14 +6648,14 @@ func evFtextk(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32
 	if s < 0 {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	json.JsStr(t, etext, s, evGet(c, stride, row, fstart+1))
 	return 1
 }
 
 func evFrun(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32, row int32, f int32, key int32, started int32) int32 {
 	// A run as `"key":[first,count]`.
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	port.TextAscii(t, "[")
 	port.TextI32(t, evGet(c, stride, row, f))
 	json.JsFsep(t, pr, 1)
@@ -6674,7 +6674,7 @@ func evFbits(t *strings.Builder, pr int32, d int32, c *port.Cells, stride int32,
 	if v == 0 {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	if which == 1 {
 		json.JsBitsSrc(t, pr, v)
 	}
@@ -6732,7 +6732,7 @@ func evFenum(t *strings.Builder, pr int32, d int32, started int32, key int32, wh
 	if v <= 0 {
 		return started
 	}
-	evBegin(t, pr, d, started, key)
+	EvBegin(t, pr, d, started, key)
 	port.TextAscii(t, "\"")
 	if which == 1 {
 		GhEmitName(t, v)
@@ -6844,7 +6844,7 @@ func evField(t *strings.Builder, pr int32, d int32, c *port.Cells, etext *port.C
 	return started
 }
 
-func evRow(t *strings.Builder, pr int32, d int32, ea int32, c *port.Cells, etext *port.Cells, row int32) int32 {
+func EvRow(t *strings.Builder, pr int32, d int32, ea int32, c *port.Cells, etext *port.Cells, row int32) int32 {
 	// One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).
 	var stride int32 = EvStrides[ea-1]
 	var first int32 = EvFx[(ea-1)*2+0]
@@ -6864,11 +6864,11 @@ func evArena(t *strings.Builder, pr int32, started int32, ea int32, c *port.Cell
 	// `"arena":[row, ...]` for any arena with a field table.
 	var n int32 = port.CellsLen(c) / EvStrides[ea-1]
 	var i int32 = 0
-	evBegin(t, pr, 0, started, EvEaKey[ea-1])
+	EvBegin(t, pr, 0, started, EvEaKey[ea-1])
 	port.TextAscii(t, "[")
 	for i < n {
 		json.JsAelem(t, pr, 1, i)
-		evRow(t, pr, 2, ea, c, etext, i)
+		EvRow(t, pr, 2, ea, c, etext, i)
 		i += 1
 	}
 	json.JsAend(t, pr, 1, n)
@@ -6880,7 +6880,7 @@ func evArenaRefs(t *strings.Builder, pr int32, started int32, refs *port.Cells) 
 	// the pretty form too (`kin/scripts/json-check.py`).
 	var n int32 = port.CellsLen(refs) / 2
 	var i int32 = 0
-	evBegin(t, pr, 0, started, EvEaKey[3])
+	EvBegin(t, pr, 0, started, EvEaKey[3])
 	port.TextAscii(t, "[")
 	for i < n {
 		json.JsFsep(t, pr, i)
@@ -6901,7 +6901,7 @@ func evArenaRefs(t *strings.Builder, pr int32, started int32, refs *port.Cells) 
 func evArenaEtext(t *strings.Builder, pr int32, started int32, etext *port.Cells) int32 {
 	// `"etext":["all the text"]`, the whole arena as one string; `[]` when it is empty.
 	var n int32 = port.CellsLen(etext)
-	evBegin(t, pr, 0, started, EvEaKey[4])
+	EvBegin(t, pr, 0, started, EvEaKey[4])
 	port.TextAscii(t, "[")
 	if n > 0 {
 		json.JsStr(t, etext, 0, n)
@@ -6918,14 +6918,14 @@ func evArenaFeats(t *strings.Builder, pr int32, started int32, feats *port.Cells
 	var col int32 = 0
 	var s int32 = 0
 	var sea int32 = 0
-	evBegin(t, pr, 0, started, EvEaKey[5])
+	EvBegin(t, pr, 0, started, EvEaKey[5])
 	port.TextAscii(t, "[")
 	for i < n {
 		json.JsAelem(t, pr, 1, i)
 		sea = evGet(feats, 32, i, 0)
 		port.TextAscii(t, "{")
 		s = 0
-		s = evBegin(t, pr, 2, s, EkSubject())
+		s = EvBegin(t, pr, 2, s, EkSubject())
 		port.TextAscii(t, "[\"")
 		EaEmitName(t, sea)
 		port.TextAscii(t, "\",")
@@ -6968,13 +6968,10 @@ func evArenaFeats(t *strings.Builder, pr int32, started int32, feats *port.Cells
 	return 1
 }
 
-func EvEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
-	// Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
-	// in the order of the `ea` codes, each row in its fixed key order.
-	var s int32 = 0
-	port.TextAscii(t, "{")
-	s = evBegin(t, pretty, 0, s, EkVersion())
-	port.TextAscii(t, "\"1\"")
+func EvEmitBody(t *strings.Builder, pretty int32, s0 int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// The arenas of the evidence dump, `epages` to `tlines`, written as members of the object the caller opened;
+	// `s0` is 1 when a member came before. Answers 1. (`ev-emit` and the layer dump of `emon.player` share it.)
+	var s int32 = s0
 	s = evArena(t, pretty, s, 1, epages, etext)
 	s = evArena(t, pretty, s, 2, views, etext)
 	s = evArena(t, pretty, s, 3, pts, etext)
@@ -6999,6 +6996,17 @@ func EvEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Ce
 	s = evArena(t, pretty, s, 22, rules, etext)
 	s = evArena(t, pretty, s, 23, prims, etext)
 	s = evArena(t, pretty, s, 24, tlines, etext)
+	return s
+}
+
+func EvEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+	// in the order of the `ea` codes, each row in its fixed key order.
+	var s int32 = 0
+	port.TextAscii(t, "{")
+	s = EvBegin(t, pretty, 0, s, EkVersion())
+	port.TextAscii(t, "\"1\"")
+	s = EvEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 	json.JsClose(t, pretty, 0, s)
 	return 0
 }

@@ -2654,7 +2654,7 @@
 ;; Fixed key order per row (the stride order), defaults omitted, exactly the Model's rules (`emon.json`).
 ;; `ev-begin` is `js-begin` with THIS module's key table.
 
-(defn ^I32 ev-begin [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 code]
+(defn ^:pub ^I32 ev-begin [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 code]
   (if (== started 1) (emit-ascii t ","))
   (if (== pr 1) (js-indent t (+ d 1)))
   (emit-ascii t "\"")
@@ -2867,7 +2867,7 @@
     (if (== kind 13) (return (ev-fpair t pr d c stride row f key dflt arg 1 started)))
     (return started)))
 
-(defn ^I32 ev-row [^:mut ^Text t ^I32 pr ^I32 d ^I32 ea ^Cells c ^Cells etext ^I32 row]
+(defn ^:pub ^I32 ev-row [^:mut ^Text t ^I32 pr ^I32 d ^I32 ea ^Cells c ^Cells etext ^I32 row]
   (comment "One row of arena `ea` as an object, its fields in stride order (the table `ev-fd`).")
   (let [^I32 stride (ev-strides-at 0 (- ea 1))
         ^I32 first (ev-fx-at 0 (- ea 1) 0)
@@ -2964,7 +2964,7 @@
     (js-aend t pr 1 n)
     (return 1)))
 
-(defn ^:pub ^I32 ev-emit [^:mut ^Text t ^I32 pretty
+(defn ^:pub ^I32 ev-emit-body [^:mut ^Text t ^I32 pretty ^I32 s0
                           ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
                           ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
                           ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
@@ -2974,12 +2974,9 @@
                           ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
                           ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
                           ^:mut ^Cells prims ^:mut ^Cells tlines]
-  (comment "Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version \"1\": one array per arena,")
-  (comment "in the order of the `ea` codes, each row in its fixed key order.")
-  (let [^:mut ^I32 s 0]
-    (emit-ascii t "{")
-    (set s (ev-begin t pretty 0 s (ek-version)))
-    (emit-ascii t "\"1\"")
+  (comment "The arenas of the evidence dump, `epages` to `tlines`, written as members of the object the caller opened;")
+  (comment "`s0` is 1 when a member came before. Answers 1. (`ev-emit` and the layer dump of `emon.player` share it.)")
+  (let [^:mut ^I32 s s0]
     (set s (ev-arena t pretty s 1 epages etext))
     (set s (ev-arena t pretty s 2 views etext))
     (set s (ev-arena t pretty s 3 pts etext))
@@ -3004,5 +3001,25 @@
     (set s (ev-arena t pretty s 22 rules etext))
     (set s (ev-arena t pretty s 23 prims etext))
     (set s (ev-arena t pretty s 24 tlines etext))
+    (return s)))
+
+(defn ^:pub ^I32 ev-emit [^:mut ^Text t ^I32 pretty
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
+                          ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
+                          ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                          ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+                          ^:mut ^Cells images
+                          ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+                          ^:mut ^Cells prims ^:mut ^Cells tlines]
+  (comment "Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version \"1\": one array per arena,")
+  (comment "in the order of the `ea` codes, each row in its fixed key order.")
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-begin t pretty 0 s (ek-version)))
+    (emit-ascii t "\"1\"")
+    (set s (ev-emit-body t pretty s epages views pts refs etext feats glyphs words lines marks fonts paths images
+                         oruns oblocks olines owords osyms oalts inks components rules prims tlines))
     (js-close t pretty 0 s)
     (return 0)))
