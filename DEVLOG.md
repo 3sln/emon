@@ -2403,7 +2403,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
       pl-append (pages in order), ar-recur (P7.5 defence 2), then stage 3 on fw/fl/grl/gfl (+ se sc ss for P5.5):
       fu-find, tb-build, hd-analyze, pa-build, fu-write, sm-write (P7.7), fz-write (provenance, ledger; replaces sc-tag)
 
-- [ ] **P7.U — Page units: one plan/fulfil loop per page, `BitmapSet`, an absent `Renderer` answers `unsupported`, five
+- [x] **P7.U — Page units: one plan/fulfil loop per page, `BitmapSet`, an absent `Renderer` answers `unsupported`, five
   rounds** (SPEC §2.2, §7.3, §12.1; D195, D196, D199, D207). **Wave 1, critical path.** Depends on M0.
   *Brief*: restructure both Engines so that stages 1b, 1c and 2 run per page, with NO change to any Model.
   1. **Split `attempt()`** (Rust) and `attempt` (Go) into the *document pass* (everything that reads the input: today's
@@ -2439,6 +2439,34 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   before and after (after: one page's bitmaps, under 120 MB); `bb repeat` serial vs. pages in reverse order.
   *Done when*: all of the above; a law that a page unit with no answers asks the same requests on every target; the
   Go and Rust Engines' `RunStats` agree on rounds and requests per page.
+  **DONE (D229-D231), two commits on one branch.** *Step 1, a byte-identical refactor*: both Engines run the **document pass**
+  (`attempt`: text layer, catalogue, tagged tree, and `pu-plan`, which finds each scanned page's DCT stream: the one place a
+  page's work reads the input), then **one `plan::run` per page** (`unit_pdf` / `unit_raster`, `kin/pageunit.kin` `pu-run-pdf`,
+  `kin/rasterin.kin` `rs-page`) with its own answers, requests and `BitmapSet`, then the **document unit** (`finish_pdf` /
+  `finish_raster`: today's tail). A raster input's document pass is `rs-doc`: header-only decodes of every frame (D187), so the
+  page table is built without pixels; each frame's unit decodes it and OCRs it. `sc-pdf-unit` and `rs-unit` are gone (their
+  laws are `pageunittest`/`rasterintest`). Every Model, evidence dump and bundle of `bb slice`, `bb ocr`, `bb image`, `bb render`,
+  `bb identity`, `bb repeat` and `bb accuracy` is byte-identical; what changed is only the ids and the order of transcript entries
+  (D207): the five `test/ocr/scan/` transcripts were RE-KEYED, not re-recorded (`tools/ocr/remap-ids.clj`: the answers are the
+  engine's and do not depend on the id, so a re-key is what a re-recording would give, without a new Tesseract moving them);
+  their dumps are unchanged. `test/ocr/h-keyword/` and `test/render/` are untouched (their drivers use their own ids). The
+  `--out=pixels` of both drivers skips the header-only decodes. `max-rounds` is 5 (`plan::MAX_ROUNDS`, `PlanMaxRounds`).
+  `RunStats.attempts` and `fetch_rounds` are the document pass's (the async gate's `attempts == fetch_rounds + 1` holds),
+  `requests` counts every unit's, and `page_rounds` / `page_requests` give each page unit's (equal on Rust and Go). *Step 2, the
+  new capability*: `BitmapSet` (`bms-get`, `bms-has`, `bms-put`, tag `BitmapSet`, test constructor `new-bitmap-set`) in all four
+  host trees; `plan::run_bms` / `PlanRunBms` hand each attempt of a unit its set, and what kin made in it is added to the
+  bitmaps a fulfiller sees, so an `ocr` request can name a kin-made view (D196; the request form and the hash are P6.3 and P7.4);
+  a missing `Renderer` answers `render` and `crop` `unsupported`, transcribed (D199); a born-digital page under `always` asks
+  `render` layer 0 and layer 1 at 300 dpi (ids `(p+1)*256+1`, `+2`) in its own unit and is NOT OCR'd (D201, D212 (3)); nothing
+  reads those pixels yet (the hook for P6.3/P7.3 is in `pu-run-pdf`), and the Model is identical with or without a Renderer.
+  *Measured* (live Tesseract, `emon-rs --tesseract`, peak RSS, before = the P6.2 merge `03ba5f6`, after = this branch):
+  `scanned-receipts-6p.pdf` 215 -> 198 MB, `scanned-funsd-4p.pdf` 170 -> 178 MB, `multipage-receipts-rgb-lzw.tif` 190 -> 188
+  MB. These pages are small (a few MB of pixels), so the process peak is Tesseract's and the arenas', and the saving is hidden;
+  what the design bounds is the bitmaps a conversion holds: every page's before, one page's after (25 MB x 2 a 300 dpi render:
+  a 40-page document drops from 2 GB of renders to 50 MB). No 40-page scanned PDF exists in `corpus/scanned/` (it holds
+  page images only), so the 120 MB figure of the brief is NOT measured here.
+  *Left*: `pu-run-pdf`'s PageLayer is the page's slice of `wd`/`ln` (no `fw`/`fl`: P7.0 and P7.3 are not merged); a scanned PDF
+  page that is not one DCT image is still not OCR'd (it needs the render and `ocr` of it, which the unit can now ask).
 
 - [ ] **P7.0 — The text layer's own triage and health, before OCR** (SPEC §9.3 "without OCR", §9.4 rule 1, §9.7; D203,
   D208). **Wave 1.** Depends on M0. Merge BEFORE P7.U (it adds one call to `attempt()`; P7.U rebases on it).
@@ -7542,3 +7570,47 @@ them; offer them upstream when they have proved general.
 
 **Decision**: cell 15 of a line row was the table stage's claim (D178) and, on the lines' copy, the initials' code (D183: minus the drop's code points, or `4*(row+1)` plus flags). Both Engines run furniture, then the tables on the evidence lines, then the copy and `in-detect`, then headings, then `pa-build`; so the two met. A table's claim is now `TB_HELD + k` (1073741824 + the table's index, `tb-claimed` answers index + 1 or 0); `in-detect` leaves a held line's cell 15 as it is and never sees the line (`in-collect` skips it, so a big first glyph in a table cell is no initial, and a table's lines never take part in a drop initial's neighbours); `in-row`, `in-cell` (para's raised-initial and no-space bits and `pa-skip`) read a held line as no initial; the column stage's split copies the claim to the new piece instead of clearing it; the heading stage's "a held line is never a heading" tests `>= TB_HELD`, so a heading that opens with a raised initial is still a heading. `pa-build` takes the prepared copy (`lt`) of the lines and no `ln`; the tables' laws and the Engine's hosts prepare it as the Engine does. **Held to**: the unit laws on all four arms (356), the table goldens (now carrying `align`), the accuracy gate (no metric lowered; the branch's lowering of `pdf/forms block-paragraph-r` was not carried over).
 **Alternatives**: a 17th line cell (every stride changes in the evidence, the columns and the readers); the claim kept on the original lines only (a column split's new rows are not there to ask).
+
+### D229 — The page unit as built: the document pass reads the input, each page is its own loop, and the evidence dump keeps its pre-join marks (P7.U; SPEC 2.2, 7.3, 12.1; D195, D207, D211, D212)
+**Decision**: (1) The Engines run three parts: the document pass (everything that reads the input, re-run on misses, and for
+a PDF the plan of the page units: `pu-plan` locates a scanned page's one DCT stream, so a page unit never reads the input),
+one `plan::run` a page (a unit that writes nothing until its answers are in), and the document unit (stage 3 unchanged). (2) A
+raster input's document pass is header-only (D187): the page table needs no pixels; each frame's unit asks its pixels and then
+its OCR, and a frame that cannot be decoded refuses the conversion by name whatever the policy (it still asks the decode under
+`never`). (3) Ids are D207's: page `p` asks `(p + 1) * 256 + k`; the header-only decodes of the document pass keep `f + 1`
+(their records differ from a page unit's by the frame argument). (4) The evidence dump is taken from the glyph, mark and font
+arenas as they were before the tagged tree was joined to them (a copy, only when the evidence is asked for), because that join
+now runs before the units and the dump has always shown the text layer before it. (5) The PageLayer is, until P7.0 and P7.3,
+the page's rows of `wd`/`ln`, in the text layer's own layouts; a scanned page's OCR lines are appended in page order, so
+stage 3 reads what it always read. (6) `max-rounds` is 5, `RunStats` gains `page_rounds` and `page_requests`; `attempts` stays
+the document pass's.
+**Why**: memory (one page's bitmaps, not the document's; no recomputation of a page's work in every round of another's) and
+the seam P7.3 plugs fusion into; (4) is what keeps every committed dump byte for byte.
+**Alternatives**: running the tagged tree after the units (a second loop that reads the input, and a miss in it would re-run
+the document pass); making the dump an Engine-side concatenation (it is kin's `ev-emit`).
+- [ ] **Signed off** (maintainer)
+
+### D230 — `BitmapSet` as built: one set an attempt, answered and kin-made bitmaps apart, kin-made ones visible to the fulfiller (P7.U; SPEC 7.2; D092, D196)
+**Decision**: the set is made for each attempt of a page unit from the bitmaps its answers carried (shared, not copied) and is
+dropped with the attempt; `bms-put` allocates a zeroed bitmap kin fills and panics on an id already in the set; what kin made
+is added to the bitmaps `Fulfiller::start` is given, so an `ocr` request naming a kin-made view finds its pixels. In Rust the
+set hands out `&Bitmap` borrows of `Arc`s that are never removed or replaced for its life (one `unsafe`, in `port.rs`); the
+other three trees use plain maps. A missing id reads as a 0 x 0 bitmap.
+**Why**: kin keeps views it made while it calls `bms-get` again, which a `RefCell` guard cannot allow; a set per attempt
+means a re-run recomputes what kin made (it is a function of the answers) and the host never holds a stale view.
+**Alternatives**: `bitmap-new` in kin (the host could not give the engine what kin made); one set per page unit across attempts
+(stale views, and an id collision on every re-run).
+- [ ] **Signed off** (maintainer)
+
+### D231 — A born-digital page asks for its two rasters under `always` before anything reads them, and a gate with no Renderer sees `unsupported` (P7.U; SPEC 7.2; D199, D201, D212)
+**Decision**: as D199 (2), under `always` (the default, D038) a born-digital page's unit asks `render` layer 0 and layer 1 at
+300 dpi, in one round, and is not OCR'd; with no `Renderer` both are answered `unsupported` and transcribed, and the Model is
+the one a conversion without them gives. A transcript of a born-digital document recorded before this change misses (a replay
+needs the render entries); the committed ones are scans, and `bb identity` records afresh.
+**Why**: the requests are the contract P6.3 and P7.3 read the pixels through; asking them in the page unit now proves the
+plumbing (ids, `BitmapSet`, `unsupported`, transcripts) on every document before a stage depends on it.
+**Cost to decide**: an embedder that configures a Renderer and leaves the default policy now pays two 300-dpi renders a
+born-digital page that nothing reads until P6.3/P7.3; `auto` or `never` avoids it. Making the default `auto` for born-digital
+renders until P7.S is the alternative, left to the maintainer.
+**Alternatives**: waiting for P7.3 to ask (every later gate would then change at once).
+- [ ] **Signed off** (maintainer)

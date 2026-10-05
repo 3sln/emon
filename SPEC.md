@@ -2835,7 +2835,7 @@ Settings (all named, all with defaults, all in the Model header):
 | `furniture` | `policy` / `keep` / `drop` | `policy` |
 | `figure-text` | `omit` / `labels` | `labels` |
 | `ledger` | on / off in outputs | on in JSON, off in HTML |
-| `max-rounds` | plan/fulfil rounds | 3 |
+| `max-rounds` | plan/fulfil rounds (per page unit, D207) | 5 |
 | `assets` | `none` / `images` / `figures` (§10.11, D117) | `none` |
 | `asset-dpi` | render-crop resolution | 150 |
 | `asset-pixels` | pixels per asset | 4,194,304 |
