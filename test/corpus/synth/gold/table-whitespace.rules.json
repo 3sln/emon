@@ -1,0 +1,13 @@
+{
+ "stem": "table-whitespace",
+ "oracle": "pdfplumber 0.11.10, pdftoppm -r 150",
+ "pages": [
+  {"n": 1, "w": 61200, "h": 79200,
+   "rules": [
+
+   ],
+   "fills": [
+
+   ]}
+ ]
+}

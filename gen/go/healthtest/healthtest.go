@@ -452,3 +452,18 @@ func TestRegions(emonT *testing.T) {
 	health.HlRegions(1, im, rl, 920, 960, hl)
 	port.AssertEq(emonT, player.HlCount(hl), 2, "no row is added")
 }
+
+func TestTheTracersSymbolSupportJoinsTheInkSupport(emonT *testing.T) {
+	var feats *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	// ink 150 is full support alone; with the tracer saying none of the symbols has a text-like component it is half
+	htOcrWord(ow, feats, 5, 150, 0, 1000, 0, 0)
+	htOcrWord(ow, feats, 5, 150, 0, 1000, 0, 0)
+	evidence.FeSet(feats, 1, evidence.XoCompRatio(), 0)
+	htOcrWord(ow, feats, 5, -1, 0, 1000, 0, 0)
+	evidence.FeSet(feats, 2, evidence.XoCompRatio(), 400)
+	port.AssertEq(emonT, health.HhWordScore(feats, 0), 1000, "the word with ink alone")
+	port.AssertThat(emonT, health.HhWordScore(feats, 1) < health.HhWordScore(feats, 0), "the same word with no component in its symbols scores under it")
+	port.AssertEq(emonT, health.HhWordScore(feats, 2), 529, "a word with only the tracer's share is scored on it: 14e6 / 18500 = 756, times 1400 / 2000")
+	port.AssertEq(emonT, health.HhWordScore(feats, -1), -1, "no feature row: no score")
+}

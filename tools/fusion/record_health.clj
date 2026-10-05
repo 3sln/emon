@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; Record the OCR of the FIRST PAGE of fusion-set documents, LIVE, for the health laws (DEVLOG P7.2, D250). NOT a gate: it needs
+;; Record the OCR of the FIRST PAGE of fusion-set documents, LIVE, for the health laws (DEVLOG P7.2, D255). NOT a gate: it needs
 ;; poppler's `pdftoppm`, Tesseract (brew: tesseract, leptonica; EMON_TESS_LIB is the directory of the libraries) and rustc.
 ;;
 ;;     bb tools/fusion/record_health.clj [--dir pdf] (--all | ID...)        the page is test/corpus/synth/DIR/ID.pdf (default DIR pdf)

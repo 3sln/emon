@@ -1537,6 +1537,16 @@ is unhealthy everywhere (a font's encoding is a document fact). An OCR
 support 10-13, plausibility 8, script 9, layer 13, artifact and seal overlap
 22-23). Every component and the score are rows of `hl`, so the dump says why.
 
+**Step two as built (P7.2, D252-D254).** The agreement is a fifth component (a ramp from 200 to 800, weight 5) that counts only on a
+page with at least `agree-words` (8) groups and only for a group whose text-layer candidate holds a Latin letter or digit (an engine
+without the script's model reads soup, and the text layer is not wrong for that); its two counts are the row's spare cells 10 and 11.
+A font under `agree-min` (600) on every page that has the groups is unhealthy on all of them (`hl-doc`). An OCR block's row has
+the components ink support (averaged with the tracer's symbols-with-a-component share), plausibility, script, body share, seal and
+artifact freedom in cells 3-8; a column not computed is absent (-1), never zero, and the engine's confidence is not one (D130).
+`hh-word-score` is the same for one word. A graphics region's row (kind `region`, subject -1 for R0 or the `images` row) has the
+vector witness and the tracer's precision from the caller (the vector rules are not this module's), the skew spread and the mean
+confidence of the region's rules, and their number.
+
 ### 9.4 Arbitration
 
 Per correspondence group, in order:

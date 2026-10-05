@@ -1,0 +1,380 @@
+{
+ "table-simple-ruled": {
+  "skew-scan": [
+   -0.524
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   2.369
+  ]
+ },
+ "table-whitespace": {
+  "skew-scan": [
+   -0.082
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -1.168
+  ]
+ },
+ "table-spans-partial": {
+  "skew-scan": [
+   -0.377
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -1.841
+  ]
+ },
+ "table-shaded": {
+  "skew-scan": [
+   0.39
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -0.601
+  ]
+ },
+ "table-multipage-thead": {
+  "skew-scan": [
+   0.967,
+   -0.055,
+   0.089,
+   0.641
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   2.015,
+   1.876,
+   -1.694,
+   -0.61
+  ]
+ },
+ "table-multipage-nohead-repeat": {
+  "skew-scan": [
+   0.25,
+   0.084,
+   0.767,
+   1.076
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -0.833,
+   -0.985,
+   -1.676,
+   -2.088
+  ]
+ },
+ "table-multipage-no-thead": {
+  "skew-scan": [
+   -0.12,
+   0.941,
+   1.162,
+   -0.032
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -1.983,
+   -2.354,
+   -1.535,
+   -0.16
+  ]
+ },
+ "table-consecutive-distinct": {
+  "skew-scan": [
+   -0.661,
+   0.947
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   2.344,
+   0.547
+  ]
+ },
+ "align-table-numeric": {
+  "skew-scan": [
+   0.185
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -1.783
+  ]
+ },
+ "invoice": {
+  "skew-scan": [
+   -0.598
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   0.685
+  ]
+ },
+ "bank-statement": {
+  "skew-scan": [
+   0.766,
+   -1.174,
+   -0.874
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   2.716,
+   -1.6,
+   0.623
+  ]
+ },
+ "furn-fixed-dom": {
+  "skew-scan": [
+   -1.177,
+   -0.995,
+   -0.72
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -0.881,
+   -0.025,
+   1.782
+  ]
+ },
+ "table-dashed": {
+  "skew-scan": [
+   0.738,
+   1.063
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   0.912,
+   0.419
+  ]
+ },
+ "table-double": {
+  "skew-scan": [
+   -0.73,
+   0.068
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   2.515,
+   1.774
+  ]
+ },
+ "table-zebra": {
+  "skew-scan": [
+   1.102,
+   0.858
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -1.382,
+   -0.92
+  ]
+ },
+ "table-header-fill": {
+  "skew-scan": [
+   0.958,
+   -0.385
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -2.107,
+   1.153
+  ]
+ },
+ "table-white-rules": {
+  "skew-scan": [
+   0.564,
+   -0.511
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -1.404,
+   -1.89
+  ]
+ },
+ "table-slanted-header": {
+  "skew-scan": [
+   -0.05,
+   0.616
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   1.053,
+   -2.969
+  ]
+ },
+ "gfx-onepath-grid": {
+  "skew-scan": [
+   -0.808,
+   0.379
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   1.375,
+   1.49
+  ]
+ },
+ "gfx-hidden-rules": {
+  "skew-scan": [
+   -0.835
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   1.667
+  ]
+ },
+ "gfx-shading-bands": {
+  "skew-scan": [
+   0.108
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -2.335
+  ]
+ },
+ "gfx-pattern-bands": {
+  "skew-scan": [
+   1.187
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   2.869
+  ]
+ },
+ "gfx-curve-lines": {
+  "skew-scan": [
+   -0.809
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -0.215
+  ]
+ },
+ "gfx-image-rules": {
+  "skew-scan": [
+   -0.023
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   2.428
+  ]
+ },
+ "gfx-softmask-rule": {
+  "skew-scan": [
+   0.643
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -2.311
+  ]
+ },
+ "mixed-table-image": {
+  "skew-scan": [
+   -0.642
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   2.818
+  ]
+ },
+ "mixed-table-image-shaded": {
+  "skew-scan": [
+   -1.162
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   -0.712
+  ]
+ },
+ "mixed-two-tables": {
+  "skew-scan": [
+   0.469
+  ],
+  "dpi": {
+   "scan": 150,
+   "scan-color": 130
+  },
+  "color-skew": [
+   1.089
+  ]
+ }
+}

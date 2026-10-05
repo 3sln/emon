@@ -1,0 +1,373 @@
+{
+ "emon-gold": "1.0",
+ "id": "table-dashed",
+ "provenance": {
+  "html": "html/table-dashed.html",
+  "pdf": "pdf/table-dashed.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; Skia/PDF m154",
+  "variants": {
+   "scan": "scan/table-dashed.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Account Register"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Did long sure night but find under look and little method of usually. Policy across now life without money earth said story often other cut we. Said out picture turned do not face money next hear first point under growth four what."
+      },
+      {
+       "id": 4,
+       "kind": "paragraph",
+       "text": "Car my do back group thought told day through same food water with cut water night. Even own might but hand let here through form other got we important or. Paper house air policy got food write school side thought up country out than."
+      },
+      {
+       "id": 5,
+       "kind": "table",
+       "profile": "ruled",
+       "columns": 4,
+       "children": [
+        {
+         "id": 6,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 7,
+           "kind": "row",
+           "children": [
+            {
+             "id": 8,
+             "kind": "cell",
+             "header": "col",
+             "text": "Account"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "Owner"
+            },
+            {
+             "id": 10,
+             "kind": "cell",
+             "header": "col",
+             "text": "Region"
+            },
+            {
+             "id": 11,
+             "kind": "cell",
+             "header": "col",
+             "text": "Balance"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 12,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 13,
+           "kind": "row",
+           "children": [
+            {
+             "id": 14,
+             "kind": "cell",
+             "text": "Operating"
+            },
+            {
+             "id": 15,
+             "kind": "cell",
+             "text": "Ana"
+            },
+            {
+             "id": 16,
+             "kind": "cell",
+             "text": "North"
+            },
+            {
+             "id": 17,
+             "kind": "cell",
+             "text": "12,400"
+            }
+           ]
+          },
+          {
+           "id": 18,
+           "kind": "row",
+           "children": [
+            {
+             "id": 19,
+             "kind": "cell",
+             "text": "Payroll"
+            },
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "Ben"
+            },
+            {
+             "id": 21,
+             "kind": "cell",
+             "text": "South"
+            },
+            {
+             "id": 22,
+             "kind": "cell",
+             "text": "8,150"
+            }
+           ]
+          },
+          {
+           "id": 23,
+           "kind": "row",
+           "children": [
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "Reserve"
+            },
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "Chen"
+            },
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "East"
+            },
+            {
+             "id": 27,
+             "kind": "cell",
+             "text": "31,000"
+            }
+           ]
+          },
+          {
+           "id": 28,
+           "kind": "row",
+           "children": [
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "Travel"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "Dee"
+            },
+            {
+             "id": 31,
+             "kind": "cell",
+             "text": "West"
+            },
+            {
+             "id": 32,
+             "kind": "cell",
+             "text": "2,975"
+            }
+           ]
+          },
+          {
+           "id": 33,
+           "kind": "row",
+           "children": [
+            {
+             "id": 34,
+             "kind": "cell",
+             "text": "Training"
+            },
+            {
+             "id": 35,
+             "kind": "cell",
+             "text": "Eli"
+            },
+            {
+             "id": 36,
+             "kind": "cell",
+             "text": "North"
+            },
+            {
+             "id": 37,
+             "kind": "cell",
+             "text": "1,820"
+            }
+           ]
+          },
+          {
+           "id": 38,
+           "kind": "row",
+           "children": [
+            {
+             "id": 39,
+             "kind": "cell",
+             "text": "Equipment"
+            },
+            {
+             "id": 40,
+             "kind": "cell",
+             "text": "Fay"
+            },
+            {
+             "id": 41,
+             "kind": "cell",
+             "text": "South"
+            },
+            {
+             "id": 42,
+             "kind": "cell",
+             "text": "6,410"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 43,
+       "kind": "paragraph",
+       "text": "Today seen results knew tell does same family can second show cut side near did. Good because did not night often us place have great some city."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Account Register"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

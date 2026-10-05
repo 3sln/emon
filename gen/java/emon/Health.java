@@ -336,6 +336,66 @@ public final class Health {
         }
         return sum / weight;
     }
+    public static int hhWordComp(emon.Port.Cells feats, int f, int k) {
+        // Component `k` of one OCR word's reliability, from its feature row: 0 ink support (the larger of kin's and the engine's, a ramp
+        // from `ink-bad` to `ink-ok`, averaged with the tracer's share of the word's symbols that have a text-like component, 15), 1 plausibility (1000 - 8), 2 script consistency (1000 - 9), 3 the share of its ink on the body
+        // layer (13), 4 free of a seal (1000 - 22), 5 free of a watermark or artifact (1000 - 23). -1 where the column is absent.
+        int v = 0;
+        int u = 0;
+        if (k == 0) {
+            v = Evidence.feGet(feats, f, Evidence.xoKinInk());
+            u = Evidence.feGet(feats, f, Evidence.xoEngineInk());
+            if (u > v) {
+                v = u;
+            }
+            u = Evidence.feGet(feats, f, Evidence.xoCompRatio());
+            if (v < 0) {
+                return u;
+            }
+            v = hhUp(v, hhInkBad(), hhInkOk());
+            if (u >= 0) {
+                v = (v + u) / 2;
+            }
+            return v;
+        }
+        if (k == 1) {
+            v = Evidence.feGet(feats, f, Evidence.xoImplausible());
+            if (v < 0) {
+                return -1;
+            }
+            return 1000 - v;
+        }
+        if (k == 2) {
+            v = Evidence.feGet(feats, f, Evidence.xoScript());
+            if (v < 0) {
+                return -1;
+            }
+            return 1000 - v;
+        }
+        if (k == 3) {
+            return Evidence.feGet(feats, f, Evidence.xoBodyShare());
+        }
+        if (k == 4) {
+            v = Evidence.feGet(feats, f, Evidence.xoSeal());
+            if (v < 0) {
+                return -1;
+            }
+            return 1000 - v;
+        }
+        v = Evidence.feGet(feats, f, Evidence.xoArtifact());
+        if (v < 0) {
+            return -1;
+        }
+        return 1000 - v;
+    }
+    public static int hhWordScore(emon.Port.Cells feats, int f) {
+        // One OCR word's score from its feature row `f` by the block's weights, for the arbitration that reads words (P7.3) and for the
+        // measures: -1 when it has no feature row or none of the six columns.
+        if (f < 0) {
+            return -1;
+        }
+        return hhOcrScore(hhWordComp(feats, f, 0), hhWordComp(feats, f, 1), hhWordComp(feats, f, 2), hhWordComp(feats, f, 3), hhWordComp(feats, f, 4), hhWordComp(feats, f, 5));
+    }
     public static int hhAddBlock(emon.Port.Cells hl, int page, int b, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells feats) {
         // Score OCR block `b` (an `oblocks` row of kind block): its words are those of the lines of its paragraphs. A component is the
         // mean of the words' measure weighted by their code points, over the words that have it; -1 for none. Answers the row.
@@ -349,7 +409,6 @@ public final class Health {
         int f = 0;
         int wl = 0;
         int v = 0;
-        int u = 0;
         int sc = 0;
         int s0 = 0;
         int n0 = 0;
@@ -378,38 +437,34 @@ public final class Health {
                             if (wl < 1) {
                                 wl = 1;
                             }
-                            v = Evidence.feGet(feats, f, Evidence.xoKinInk());
-                            u = Evidence.feGet(feats, f, Evidence.xoEngineInk());
-                            if (u > v) {
-                                v = u;
-                            }
+                            v = hhWordComp(feats, f, 0);
                             if (v >= 0) {
-                                s0 += wl * hhUp(v, hhInkBad(), hhInkOk());
+                                s0 += wl * v;
                                 n0 += wl;
                             }
-                            v = Evidence.feGet(feats, f, Evidence.xoImplausible());
+                            v = hhWordComp(feats, f, 1);
                             if (v >= 0) {
-                                s1 += wl * (1000 - v);
+                                s1 += wl * v;
                                 n1 += wl;
                             }
-                            v = Evidence.feGet(feats, f, Evidence.xoScript());
+                            v = hhWordComp(feats, f, 2);
                             if (v >= 0) {
-                                s2 += wl * (1000 - v);
+                                s2 += wl * v;
                                 n2 += wl;
                             }
-                            v = Evidence.feGet(feats, f, Evidence.xoBodyShare());
+                            v = hhWordComp(feats, f, 3);
                             if (v >= 0) {
                                 s3 += wl * v;
                                 n3 += wl;
                             }
-                            v = Evidence.feGet(feats, f, Evidence.xoSeal());
+                            v = hhWordComp(feats, f, 4);
                             if (v >= 0) {
-                                s4 += wl * (1000 - v);
+                                s4 += wl * v;
                                 n4 += wl;
                             }
-                            v = Evidence.feGet(feats, f, Evidence.xoArtifact());
+                            v = hhWordComp(feats, f, 5);
                             if (v >= 0) {
-                                s5 += wl * (1000 - v);
+                                s5 += wl * v;
                                 n5 += wl;
                             }
                         }

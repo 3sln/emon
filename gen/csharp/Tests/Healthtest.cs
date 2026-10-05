@@ -434,4 +434,19 @@ public static class Healthtest {
         Health.HlRegions(1, im, rl, 920, 960, hl);
         emon.Testport.AssertEq(Player.HlCount(hl), 2, "no row is added");
     }
+    [Xunit.Fact]
+    public static void TestTheTracersSymbolSupportJoinsTheInkSupport() {
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        // ink 150 is full support alone; with the tracer saying none of the symbols has a text-like component it is half
+        HtOcrWord(ow, feats, 5, 150, 0, 1000, 0, 0);
+        HtOcrWord(ow, feats, 5, 150, 0, 1000, 0, 0);
+        Evidence.FeSet(feats, 1, Evidence.XoCompRatio(), 0);
+        HtOcrWord(ow, feats, 5, -1, 0, 1000, 0, 0);
+        Evidence.FeSet(feats, 2, Evidence.XoCompRatio(), 400);
+        emon.Testport.AssertEq(Health.HhWordScore(feats, 0), 1000, "the word with ink alone");
+        emon.Testport.AssertThat(Health.HhWordScore(feats, 1) < Health.HhWordScore(feats, 0), "the same word with no component in its symbols scores under it");
+        emon.Testport.AssertEq(Health.HhWordScore(feats, 2), 529, "a word with only the tracer's share is scored on it: 14e6 / 18500 = 756, times 1400 / 2000");
+        emon.Testport.AssertEq(Health.HhWordScore(feats, -1), -1, "no feature row: no score");
+    }
 }

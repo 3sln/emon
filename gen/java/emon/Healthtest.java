@@ -424,4 +424,18 @@ public final class Healthtest {
         Health.hlRegions(1, im, rl, 920, 960, hl);
         emon.Testport.assertEq(Player.hlCount(hl), 2, "no row is added");
     }
+    public static void testTheTracersSymbolSupportJoinsTheInkSupport() {
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        // ink 150 is full support alone; with the tracer saying none of the symbols has a text-like component it is half
+        htOcrWord(ow, feats, 5, 150, 0, 1000, 0, 0);
+        htOcrWord(ow, feats, 5, 150, 0, 1000, 0, 0);
+        Evidence.feSet(feats, 1, Evidence.xoCompRatio(), 0);
+        htOcrWord(ow, feats, 5, -1, 0, 1000, 0, 0);
+        Evidence.feSet(feats, 2, Evidence.xoCompRatio(), 400);
+        emon.Testport.assertEq(Health.hhWordScore(feats, 0), 1000, "the word with ink alone");
+        emon.Testport.assertThat(Health.hhWordScore(feats, 1) < Health.hhWordScore(feats, 0), "the same word with no component in its symbols scores under it");
+        emon.Testport.assertEq(Health.hhWordScore(feats, 2), 529, "a word with only the tracer's share is scored on it: 14e6 / 18500 = 756, times 1400 / 2000");
+        emon.Testport.assertEq(Health.hhWordScore(feats, -1), -1, "no feature row: no score");
+    }
 }

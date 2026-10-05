@@ -1103,11 +1103,46 @@ h1{font:bold 20pt %s} h2{font:bold 14pt %s}" SERIF SANS SANS SANS)
     (swap! docs assoc "hidden-older-ocr" (get p28 "h-plain"))
     @docs))
 
+(defn build-graphics
+  "The six Chrome table documents of P6.8 (D227): what differs is only how the table's lines and fills are drawn. Two pages
+  each: prose, then (after a page break) the table and prose."
+  []
+  (let [docs (atom {})
+        head ["Account" "Owner" "Region" "Balance"]
+        rows [["Operating" "Ana" "North" "12,400"] ["Payroll" "Ben" "South" "8,150"] ["Reserve" "Chen" "East" "31,000"]
+              ["Travel" "Dee" "West" "2,975"] ["Training" "Eli" "North" "1,820"] ["Equipment" "Fay" "South" "6,410"]]
+        table (fn [profile first-th]
+                (str "<table data-profile=\"" profile "\"><thead><tr>"
+                     (str/join (map-indexed (fn [i h] (if (and (zero? i) first-th) (str "<th>" first-th h "</th>") (str "<th>" h "</th>"))) head))
+                     "</tr></thead><tbody>"
+                     (apply str (map #(tr % "td" #{3}) rows)) "</tbody></table>"))
+        add (fn [name title seed profile css & [first-th]]
+              (swap! docs assoc name
+                     (doc title
+                          (str "<h1>" title "</h1>" (P seed 3) (P (inc seed) 3)
+                               "<div style=\"break-after:page\"></div>"
+                               (table profile first-th) (P (+ seed 2) 2))
+                          {:css (str "table{width:100%} th,td{border:0} " css)})))]
+    (add "table-dashed" "Account Register" 8101 "ruled"
+         "table{border:1px solid #000} th,td{border:1px dashed #555}")
+    (add "table-double" "Account Summary" 8201 "ruled"
+         "thead th{border-bottom:4px double #000} td{border-bottom:1px solid #999} table{border-top:1px solid #000;border-bottom:1px solid #000}")
+    (add "table-zebra" "Account Listing" 8301 "shaded"
+         "tbody tr:nth-child(odd) td{background:#e9eff7} th{font-weight:bold}")
+    (add "table-header-fill" "Account Overview" 8401 "shaded"
+         "thead th{background:#1f4e79;color:#fff}")
+    (add "table-white-rules" "Account Roster" 8501 "ruled"
+         "thead th{background:#1f4e79;color:#fff;border-left:2px solid #fff} thead th:first-child{border-left:0} td{border-bottom:1px solid #1f4e79}")
+    (add "table-slanted-header" "Account Matrix" 8601 "ruled"
+         "table{border:1px solid #000} th,td{border:1px solid #000} th:first-child{position:relative;height:3em;vertical-align:bottom;text-align:right}"
+         "<svg width=\"100%\" height=\"100%\" style=\"position:absolute;left:0;top:0\" viewBox=\"0 0 100 100\" preserveAspectRatio=\"none\"><line x1=\"0\" y1=\"0\" x2=\"100\" y2=\"100\" stroke=\"#000\" stroke-width=\"1\" vector-effect=\"non-scaling-stroke\"/></svg>")
+    @docs))
+
 (defn build
   "Every document: the 36 of P2.8, the 19 of P2.13 (D114) and the 12 of P6.6 (D209), as {name html}."
   []
   (let [p28 (build-p28)]
-    (merge p28 (build-d114) (build-fusion p28))))
+    (merge p28 (build-d114) (build-fusion p28) (build-graphics))))
 
 (defn -main [& args]
   (let [out (or (first args) "test/corpus/synth/html")

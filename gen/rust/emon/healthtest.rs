@@ -435,3 +435,18 @@ fn test_regions() {
     hl_regions(1, im, rl, 920, 960, hl);
     crate::testport::assert_eq(hl_count(hl), 2, "no row is added");
 }
+#[test]
+fn test_the_tracers_symbol_support_joins_the_ink_support() {
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // ink 150 is full support alone; with the tracer saying none of the symbols has a text-like component it is half
+    ht_ocr_word(ow, feats, 5, 150, 0, 1000, 0, 0);
+    ht_ocr_word(ow, feats, 5, 150, 0, 1000, 0, 0);
+    fe_set(feats, 1, xo_comp_ratio(), 0);
+    ht_ocr_word(ow, feats, 5, -1, 0, 1000, 0, 0);
+    fe_set(feats, 2, xo_comp_ratio(), 400);
+    crate::testport::assert_eq(hh_word_score(feats, 0), 1000, "the word with ink alone");
+    crate::testport::assert_that(hh_word_score(feats, 1) < hh_word_score(feats, 0), "the same word with no component in its symbols scores under it");
+    crate::testport::assert_eq(hh_word_score(feats, 2), 529, "a word with only the tracer's share is scored on it: 14e6 / 18500 = 756, times 1400 / 2000");
+    crate::testport::assert_eq(hh_word_score(feats, -1), -1, "no feature row: no score");
+}

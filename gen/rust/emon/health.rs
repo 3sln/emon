@@ -336,6 +336,66 @@ pub(crate) fn hh_pool(sum: i32, weight: i32) -> i32 {
     }
     return sum / weight;
 }
+pub(crate) fn hh_word_comp(feats: &mut crate::port::Cells, f: i32, k: i32) -> i32 {
+    // Component `k` of one OCR word's reliability, from its feature row: 0 ink support (the larger of kin's and the engine's, a ramp
+    // from `ink-bad` to `ink-ok`, averaged with the tracer's share of the word's symbols that have a text-like component, 15), 1 plausibility (1000 - 8), 2 script consistency (1000 - 9), 3 the share of its ink on the body
+    // layer (13), 4 free of a seal (1000 - 22), 5 free of a watermark or artifact (1000 - 23). -1 where the column is absent.
+    let mut v: i32 = 0;
+    let mut u: i32 = 0;
+    if k == 0 {
+        v = fe_get(feats, f, xo_kin_ink());
+        u = fe_get(feats, f, xo_engine_ink());
+        if u > v {
+            v = u;
+        }
+        u = fe_get(feats, f, xo_comp_ratio());
+        if v < 0 {
+            return u;
+        }
+        v = hh_up(v, hh_ink_bad(), hh_ink_ok());
+        if u >= 0 {
+            v = (v + u) / 2;
+        }
+        return v;
+    }
+    if k == 1 {
+        v = fe_get(feats, f, xo_implausible());
+        if v < 0 {
+            return -1;
+        }
+        return 1000 - v;
+    }
+    if k == 2 {
+        v = fe_get(feats, f, xo_script());
+        if v < 0 {
+            return -1;
+        }
+        return 1000 - v;
+    }
+    if k == 3 {
+        return fe_get(feats, f, xo_body_share());
+    }
+    if k == 4 {
+        v = fe_get(feats, f, xo_seal());
+        if v < 0 {
+            return -1;
+        }
+        return 1000 - v;
+    }
+    v = fe_get(feats, f, xo_artifact());
+    if v < 0 {
+        return -1;
+    }
+    return 1000 - v;
+}
+pub fn hh_word_score(feats: &mut crate::port::Cells, f: i32) -> i32 {
+    // One OCR word's score from its feature row `f` by the block's weights, for the arbitration that reads words (P7.3) and for the
+    // measures: -1 when it has no feature row or none of the six columns.
+    if f < 0 {
+        return -1;
+    }
+    return hh_ocr_score(hh_word_comp(feats, f, 0), hh_word_comp(feats, f, 1), hh_word_comp(feats, f, 2), hh_word_comp(feats, f, 3), hh_word_comp(feats, f, 4), hh_word_comp(feats, f, 5));
+}
 pub(crate) fn hh_add_block(mut hl: &mut crate::port::Cells, page: i32, b: i32, oblocks: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, feats: &mut crate::port::Cells) -> i32 {
     // Score OCR block `b` (an `oblocks` row of kind block): its words are those of the lines of its paragraphs. A component is the
     // mean of the words' measure weighted by their code points, over the words that have it; -1 for none. Answers the row.
@@ -349,7 +409,6 @@ pub(crate) fn hh_add_block(mut hl: &mut crate::port::Cells, page: i32, b: i32, o
     let mut f: i32 = 0;
     let mut wl: i32 = 0;
     let mut v: i32 = 0;
-    let mut u: i32 = 0;
     let mut sc: i32 = 0;
     let mut s0: i32 = 0;
     let mut n0: i32 = 0;
@@ -378,38 +437,34 @@ pub(crate) fn hh_add_block(mut hl: &mut crate::port::Cells, page: i32, b: i32, o
                         if wl < 1 {
                             wl = 1;
                         }
-                        v = fe_get(feats, f, xo_kin_ink());
-                        u = fe_get(feats, f, xo_engine_ink());
-                        if u > v {
-                            v = u;
-                        }
+                        v = hh_word_comp(feats, f, 0);
                         if v >= 0 {
-                            s0 += wl * hh_up(v, hh_ink_bad(), hh_ink_ok());
+                            s0 += wl * v;
                             n0 += wl;
                         }
-                        v = fe_get(feats, f, xo_implausible());
+                        v = hh_word_comp(feats, f, 1);
                         if v >= 0 {
-                            s1 += wl * (1000 - v);
+                            s1 += wl * v;
                             n1 += wl;
                         }
-                        v = fe_get(feats, f, xo_script());
+                        v = hh_word_comp(feats, f, 2);
                         if v >= 0 {
-                            s2 += wl * (1000 - v);
+                            s2 += wl * v;
                             n2 += wl;
                         }
-                        v = fe_get(feats, f, xo_body_share());
+                        v = hh_word_comp(feats, f, 3);
                         if v >= 0 {
                             s3 += wl * v;
                             n3 += wl;
                         }
-                        v = fe_get(feats, f, xo_seal());
+                        v = hh_word_comp(feats, f, 4);
                         if v >= 0 {
-                            s4 += wl * (1000 - v);
+                            s4 += wl * v;
                             n4 += wl;
                         }
-                        v = fe_get(feats, f, xo_artifact());
+                        v = hh_word_comp(feats, f, 5);
                         if v >= 0 {
-                            s5 += wl * (1000 - v);
+                            s5 += wl * v;
                             n5 += wl;
                         }
                     }

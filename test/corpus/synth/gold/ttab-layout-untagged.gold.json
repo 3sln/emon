@@ -1,0 +1,156 @@
+{
+ "emon-gold": "1.0",
+ "id": "ttab-layout-untagged",
+ "provenance": {
+  "html": "html/ttab-layout-untagged.html",
+  "pdf": "pdf/ttab-layout-untagged.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; "
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Committee Notes"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "Two columns of notes follow."
+      },
+      {
+       "id": 4,
+       "kind": "paragraph",
+       "text": "The committee met on Tuesday to review the plan for the new building. Members agreed that the schedule is tight but that the budget leaves room for the changes requested in March."
+      },
+      {
+       "id": 5,
+       "kind": "paragraph",
+       "text": "A second round of drawings will be ready by the end of May and the contractors will be invited to comment on them before any contract is signed. Minutes follow on Friday."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Tagged table"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

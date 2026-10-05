@@ -1,4 +1,4 @@
-;; Health per source and region (P7.2; SPEC 8.4.5, 9.3, 9.7; D130, D150, D203, D223, D240; the P7.2 decisions in DEVLOG). emon's own module (D039).
+;; Health per source and region (P7.2; SPEC 8.4.5, 9.3, 9.7; D130, D150, D203, D223, D240; D252-D255). emon's own module (D039).
 ;;
 ;;   (hl-page page cg refs fw wd etext feats oblocks olines owords hl)
 ;;       the page unit's call, after alignment: (1) the AGREEMENT of every (font, page) of the page (groups with a text-layer and an OCR
@@ -15,6 +15,7 @@
 ;;       placement, from the tracer's rules; the vector witness and the tracer's precision come from the caller (graphics fusion
 ;;       measures them against the vector rules, which this module never sees), -1 when it cannot.
 ;;   (hh-score ...)  (hh-ocr-score ...)  (hh-region-score ...)   the three scores on their components, for the laws and the callers.
+;;   (hh-word-score feats f)   one OCR word's score from its feature row, by the block's weights.
 ;;
 ;; WHY AGREEMENT: a font whose ToUnicode is a plausible permutation (`tl-broken-shift`) has no tell in the text layer; the one witness
 ;; that cannot share its mistake is the engine that read the page's pixels. Where the text layer and the OCR have both read a word they
@@ -27,7 +28,8 @@
 ;; THE SCORE is D150's shape everywhere: a weighted harmonic mean of per-mille components, each floored at 50, scaled by `(1000 + weakest)
 ;; / 2000`, over the components that are PRESENT (-1 is absent, never zero). With no agreement the font score IS `th-score` (a law).
 ;; An OCR block's components are its words' `xo` columns pooled by code points: ink support (the larger of kin's and the engine's, a
-;; ramp), plausibility (1000 - 8), script consistency (1000 - 9), the share of the ink on the body layer (13), and the overlap with a
+;; ramp, averaged with the tracer's symbols-with-a-component share when the tracer has run: 15), plausibility (1000 - 8), script
+;; consistency (1000 - 9), the share of the ink on the body layer (13), and the overlap with a
 ;; seal and with a watermark/artifact region (1000 - 22, 1000 - 23). Engine confidence is NOT a component (D130: a word the network is
 ;; unsure of scores exactly 0, and a misspelling can score high).
 ;;
@@ -46,7 +48,7 @@
                                    mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-vis
                                    rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-conf
                                    xt-font-health xo-kin-ink xo-engine-ink xo-implausible xo-script xo-body-share xo-seal xo-artifact
-                                   xo-length]]
+                                   xo-length xo-comp-ratio]]
             [emon.player :refer [cg-get fw-count hl-new hl-count hl-get hl-set plh-font-page plh-ocr-block plh-region pl-ea-fw
                                  cgf-page cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-simfold
                                  hlf-kind hlf-page hlf-subject hlf-mapped hlf-garbage hlf-overlap hlf-gap hlf-agreement hlf-score]]
@@ -278,6 +280,45 @@
   (if (<= weight 0) (return -1))
   (return (quot sum weight)))
 
+(defn ^I32 hh-word-comp [^Cells feats ^I32 f ^I32 k]
+  (comment "Component `k` of one OCR word's reliability, from its feature row: 0 ink support (the larger of kin's and the engine's, a ramp")
+  (comment "from `ink-bad` to `ink-ok`, averaged with the tracer's share of the word's symbols that have a text-like component, 15), 1 plausibility (1000 - 8), 2 script consistency (1000 - 9), 3 the share of its ink on the body")
+  (comment "layer (13), 4 free of a seal (1000 - 22), 5 free of a watermark or artifact (1000 - 23). -1 where the column is absent.")
+  (let [^:mut ^I32 v 0
+        ^:mut ^I32 u 0]
+    (if (== k 0)
+      (do (set v (fe-get feats f (xo-kin-ink)))
+          (set u (fe-get feats f (xo-engine-ink)))
+          (if (> u v) (set v u))
+          (set u (fe-get feats f (xo-comp-ratio)))
+          (if (< v 0) (return u))
+          (set v (hh-up v (hh-ink-bad) (hh-ink-ok)))
+          (if (>= u 0) (set v (quot (+ v u) 2)))
+          (return v)))
+    (if (== k 1)
+      (do (set v (fe-get feats f (xo-implausible)))
+          (if (< v 0) (return -1))
+          (return (- 1000 v))))
+    (if (== k 2)
+      (do (set v (fe-get feats f (xo-script)))
+          (if (< v 0) (return -1))
+          (return (- 1000 v))))
+    (if (== k 3) (return (fe-get feats f (xo-body-share))))
+    (if (== k 4)
+      (do (set v (fe-get feats f (xo-seal)))
+          (if (< v 0) (return -1))
+          (return (- 1000 v))))
+    (set v (fe-get feats f (xo-artifact)))
+    (if (< v 0) (return -1))
+    (return (- 1000 v))))
+
+(defn ^:pub ^I32 hh-word-score [^Cells feats ^I32 f]
+  (comment "One OCR word's score from its feature row `f` by the block's weights, for the arbitration that reads words (P7.3) and for the")
+  (comment "measures: -1 when it has no feature row or none of the six columns.")
+  (if (< f 0) (return -1))
+  (return (hh-ocr-score (hh-word-comp feats f 0) (hh-word-comp feats f 1) (hh-word-comp feats f 2)
+                        (hh-word-comp feats f 3) (hh-word-comp feats f 4) (hh-word-comp feats f 5))))
+
 (defn ^I32 hh-add-block [^:mut ^Cells hl ^I32 page ^I32 b ^Cells oblocks ^Cells olines ^Cells owords ^Cells feats]
   (comment "Score OCR block `b` (an `oblocks` row of kind block): its words are those of the lines of its paragraphs. A component is the")
   (comment "mean of the words' measure weighted by their code points, over the words that have it; -1 for none. Answers the row.")
@@ -291,7 +332,6 @@
         ^:mut ^I32 f 0
         ^:mut ^I32 wl 0
         ^:mut ^I32 v 0
-        ^:mut ^I32 u 0
         ^:mut ^I32 sc 0
         ^:mut ^I32 s0 0
         ^:mut ^I32 n0 0
@@ -318,32 +358,18 @@
                             (if (>= f 0)
                               (do (set wl (fe-get feats f (xo-length)))
                                   (if (< wl 1) (set wl 1))
-                                  (set v (fe-get feats f (xo-kin-ink)))
-                                  (set u (fe-get feats f (xo-engine-ink)))
-                                  (if (> u v) (set v u))
-                                  (if (>= v 0)
-                                    (do (set s0 (+ s0 (* wl (hh-up v (hh-ink-bad) (hh-ink-ok)))))
-                                        (set n0 (+ n0 wl))))
-                                  (set v (fe-get feats f (xo-implausible)))
-                                  (if (>= v 0)
-                                    (do (set s1 (+ s1 (* wl (- 1000 v))))
-                                        (set n1 (+ n1 wl))))
-                                  (set v (fe-get feats f (xo-script)))
-                                  (if (>= v 0)
-                                    (do (set s2 (+ s2 (* wl (- 1000 v))))
-                                        (set n2 (+ n2 wl))))
-                                  (set v (fe-get feats f (xo-body-share)))
-                                  (if (>= v 0)
-                                    (do (set s3 (+ s3 (* wl v)))
-                                        (set n3 (+ n3 wl))))
-                                  (set v (fe-get feats f (xo-seal)))
-                                  (if (>= v 0)
-                                    (do (set s4 (+ s4 (* wl (- 1000 v))))
-                                        (set n4 (+ n4 wl))))
-                                  (set v (fe-get feats f (xo-artifact)))
-                                  (if (>= v 0)
-                                    (do (set s5 (+ s5 (* wl (- 1000 v))))
-                                        (set n5 (+ n5 wl))))))
+                                  (set v (hh-word-comp feats f 0))
+                                  (if (>= v 0) (do (set s0 (+ s0 (* wl v))) (set n0 (+ n0 wl))))
+                                  (set v (hh-word-comp feats f 1))
+                                  (if (>= v 0) (do (set s1 (+ s1 (* wl v))) (set n1 (+ n1 wl))))
+                                  (set v (hh-word-comp feats f 2))
+                                  (if (>= v 0) (do (set s2 (+ s2 (* wl v))) (set n2 (+ n2 wl))))
+                                  (set v (hh-word-comp feats f 3))
+                                  (if (>= v 0) (do (set s3 (+ s3 (* wl v))) (set n3 (+ n3 wl))))
+                                  (set v (hh-word-comp feats f 4))
+                                  (if (>= v 0) (do (set s4 (+ s4 (* wl v))) (set n4 (+ n4 wl))))
+                                  (set v (hh-word-comp feats f 5))
+                                  (if (>= v 0) (do (set s5 (+ s5 (* wl v))) (set n5 (+ n5 wl))))))
                             (set w (+ w 1))))
                       (set li (+ li 1))))))
           (set pr (+ pr 1))))

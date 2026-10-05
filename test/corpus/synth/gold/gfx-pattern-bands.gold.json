@@ -1,0 +1,305 @@
+{
+ "emon-gold": "1.0",
+ "id": "gfx-pattern-bands",
+ "provenance": {
+  "html": "html/gfx-pattern-bands.html",
+  "pdf": "pdf/gfx-pattern-bands.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; ",
+  "variants": {
+   "scan": "scan/gfx-pattern-bands.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Bands From Patterns"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "The table below lists the supplies ordered this quarter. Quantities are in boxes and prices in dollars."
+      },
+      {
+       "id": 4,
+       "kind": "table",
+       "profile": "shaded",
+       "columns": 3,
+       "children": [
+        {
+         "id": 5,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 6,
+           "kind": "row",
+           "children": [
+            {
+             "id": 7,
+             "kind": "cell",
+             "header": "col",
+             "text": "Item"
+            },
+            {
+             "id": 8,
+             "kind": "cell",
+             "header": "col",
+             "text": "Qty"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "Price"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 10,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 11,
+           "kind": "row",
+           "children": [
+            {
+             "id": 12,
+             "kind": "cell",
+             "text": "Pens"
+            },
+            {
+             "id": 13,
+             "kind": "cell",
+             "text": "12"
+            },
+            {
+             "id": 14,
+             "kind": "cell",
+             "text": "3.40"
+            }
+           ]
+          },
+          {
+           "id": 15,
+           "kind": "row",
+           "children": [
+            {
+             "id": 16,
+             "kind": "cell",
+             "text": "Paper"
+            },
+            {
+             "id": 17,
+             "kind": "cell",
+             "text": "4"
+            },
+            {
+             "id": 18,
+             "kind": "cell",
+             "text": "7.25"
+            }
+           ]
+          },
+          {
+           "id": 19,
+           "kind": "row",
+           "children": [
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "Tape"
+            },
+            {
+             "id": 21,
+             "kind": "cell",
+             "text": "9"
+            },
+            {
+             "id": 22,
+             "kind": "cell",
+             "text": "2.10"
+            }
+           ]
+          },
+          {
+           "id": 23,
+           "kind": "row",
+           "children": [
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "Glue"
+            },
+            {
+             "id": 25,
+             "kind": "cell",
+             "text": "3"
+            },
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "4.80"
+            }
+           ]
+          },
+          {
+           "id": 27,
+           "kind": "row",
+           "children": [
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "Clips"
+            },
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "20"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "1.15"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 31,
+       "kind": "paragraph",
+       "text": "Orders above fifty dollars ship free of charge. Questions go to the purchasing office."
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Bands From Patterns"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 1,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}

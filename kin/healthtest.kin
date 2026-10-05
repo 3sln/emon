@@ -23,12 +23,12 @@
                                    hd-feat hd-tstart lh-first lh-count obf-first obf-count obf-conf
                                    ea-words ea-owords
                                    xt-font-health xo-kin-ink xo-engine-ink xo-implausible xo-script xo-body-share xo-seal xo-artifact
-                                   xo-length xo-conf rlf-conf ob-block ob-paragraph]]
+                                   xo-length xo-conf xo-comp-ratio rlf-conf ob-block ob-paragraph]]
             [emon.player :refer [cg-new cg-set cg-get fw-copy-word hl-new hl-get hl-set hl-count pl-ea-fw
                                  cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-simfold
                                  hlf-mapped hlf-garbage hlf-overlap hlf-gap hlf-agreement hlf-score plh-font-page plh-ocr-block plh-region]]
             [emon.tlhealth :refer [th-score th-trusted]]
-            [emon.health :refer [hh-score hh-blend hh-ocr-score hh-region-score hl-page hl-doc hl-regions hlf-both hlf-agree
+            [emon.health :refer [hh-score hh-blend hh-ocr-score hh-region-score hh-word-score hl-page hl-doc hl-regions hlf-both hlf-agree
                                  hob-ink hob-plausible hob-script hob-body hob-seal hob-artifact
                                  hrg-witness hrg-precision hrg-skew hrg-conf hrg-rules]]
             [kin.lang :refer [defn return let set while if do comment
@@ -442,3 +442,17 @@
     (comment "again: overwritten")
     (hl-regions 1 im rl 920 960 hl)
     (assert-eq (hl-count hl) 2 "no row is added")))
+
+(deftest test-the-tracers-symbol-support-joins-the-ink-support
+  (let [^Cells feats (new-cells)
+        ^Cells ow (new-cells)]
+    (comment "ink 150 is full support alone; with the tracer saying none of the symbols has a text-like component it is half")
+    (ht-ocr-word ow feats 5 150 0 1000 0 0)
+    (ht-ocr-word ow feats 5 150 0 1000 0 0)
+    (fe-set feats 1 (xo-comp-ratio) 0)
+    (ht-ocr-word ow feats 5 -1 0 1000 0 0)
+    (fe-set feats 2 (xo-comp-ratio) 400)
+    (assert-eq (hh-word-score feats 0) 1000 "the word with ink alone")
+    (assert-that (< (hh-word-score feats 1) (hh-word-score feats 0)) "the same word with no component in its symbols scores under it")
+    (assert-eq (hh-word-score feats 2) 529 "a word with only the tracer's share is scored on it: 14e6 / 18500 = 756, times 1400 / 2000")
+    (assert-eq (hh-word-score feats -1) -1 "no feature row: no score")))

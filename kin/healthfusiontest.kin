@@ -1,4 +1,4 @@
-;; Laws for `emon.health` on the fusion corpus (P7.2; SPEC 9.3; D250): the text layer of a document's first page (`test/corpus/synth/pdf/`,
+;; Laws for `emon.health` on the fusion corpus (P7.2; SPEC 9.3; D255): the text layer of a document's first page (`test/corpus/synth/pdf/`,
 ;; the document pass as the Engine runs it: `pd-open`, `pc-document`, `th-run`) against the OCR of the same page, recorded live by Tesseract
 ;; at 150 dpi (`test/fusion/health/pdf/ID.ocr`, `tools/fusion/record_health.clj`: the width and height in pixels, then the engine's answer),
 ;; read back with `sc-answer` as the page unit does. No engine runs here and no pixel is read.
