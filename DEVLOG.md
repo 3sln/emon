@@ -2433,7 +2433,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   *Done when*: all of the above; a law that a page unit with no answers asks the same requests on every target; the
   Go and Rust Engines' `RunStats` agree on rounds and requests per page.
 
-- [ ] **P7.0 — The text layer's own triage and health, before OCR** (SPEC §9.3 "without OCR", §9.4 rule 1, §9.7; D203,
+- [x] **P7.0 — The text layer's own triage and health, before OCR** (SPEC §9.3 "without OCR", §9.4 rule 1, §9.7; D203,
   D208). **Wave 1.** Depends on M0. Merge BEFORE P7.U (it adds one call to `attempt()`; P7.U rebases on it).
   *Brief*: `kin/tlhealth.kin` (`emon.tlhealth`) and `kin/player.kin` (`emon.player`).
   1. `player.kin`: the §9.7 layouts (`cg fw fl fv fa fx hl sl`; `fw`/`fl` reuse the `words`/`lines` accessors of
@@ -2464,6 +2464,37 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   `tl-broken-unmapped`: the broken font < 300 (`tl-broken-shift` is NOT caught here: its mapping is plausible; that is
   what OCR agreement in P7.2 is for, and this entry says so).
   *Done when*: the above, and `pl-check` answers 0 on the layers of every gate document.
+  *Done (D240-D242).* `kin/tlhealth.kin` (`th-run`, `th-epages`, `ev-feat-text`, `th-health`, `th-score`, `th-write`),
+  `kin/player.kin` (the nine layouts, builders, `pl-append`, `pl-check`, `pl-emit` = dump version "2"), laws
+  `kin/tlhealthtest.kin` (the 15 P3.6 fixtures, the hidden-OCR and broken-encoding documents, the score) and `kin/playertest.kin`
+  (a two-page layer appended and checked, every way of being broken, every cell printed or spare, a literal dump), one call in
+  each Engine (`th_run` right after `pc_document`, `fw`/`fl` where `wd`/`ln` were for `fu_find`, `tb_build`, `lc_copy`, `in_detect`,
+  `hd_analyze`, `pa_build`, and `th_write` after `fu_write`; the Engines' evidence dump is unchanged, D242), `ev-begin`/`ev-row` exported and
+  `ev-emit-body` split out of `ev-emit` in `kin/evidence.kin` (its dump, version "1", is byte-identical), SPEC 9.3 and 9.7 amended.
+  *Measured* (Rust, live; nothing here is replayed because nothing here calls a port). **`bb accuracy` `emon`, before and after: identical**
+  (1950 metrics, none regressed, none improved, so no `--update`): of the 70 PDFs of the synthetic corpus only `wm-ocg`'s Model
+  changes (the hidden `SPECIMEN` is still a `watermark` row, now of conf 1000 and src `text`), and no document of the
+  corpus has white or hidden text in a category scored by CER; the expected drop of the watermark, seal and figure CER therefore
+  does not show on this corpus, it shows on the files that have such text (below). A first run of this stage put the same word
+  under `invisible` and cost `pdf/watermarks` furniture-f1 0.8 -> 0.667: D241 is why it does not. **The corpus**: 700 of the
+  PDFs of `corpus/` (every fourth and every third-from-first of those under 2.5 MB of layout, financial, forms, formats,
+  multilingual, tables, graphics, seals) convert to the same Model before and after; `layout/gov-reports/gao-24-106540.pdf` is the
+  one that changes: `Letter` (white on white, in a clip, page 5) and the running title `Appendix I: Comments from the Department of`
+  / `Appendix II: GAO Contacts and Staff` (pages 39, 43: black text under an opaque paint, `occluded`) are in the ledger as
+  `invisible`, not the body or, for the last, the running-title row (the furniture's row for page 43 is gone because the word is no
+  longer in the flow it reads); the P3.6 fixtures give one ledger row per run of one reason on one line (`white.pdf` 14 rows for 60
+  words, `clip.pdf` 5 for 22, ...: the numbers are laws). `ocrlayer.pdf`, `ocrfirst.pdf` and `hidden-older-ocr.pdf`
+  keep their text as `hidden-text` (`ocrfirst`: 8 of its 22 words are occluded ones converted, the others were mode 3; `ocrlayer`: all 25 were mode 3). **Health** on the 70 synthetic
+  PDFs (472 font-page rows): 469 at least `tl-trusted` (700); `tl-broken-unmapped`: the broken font scores **34** (< 300) on both pages, its
+  other four fonts 1000; **`tl-broken-shift` is NOT caught** (every font 1000: its mapping is plausible, and this entry says so; it is OCR
+  agreement's job in P7.2); the three that are under 700 are Devanagari fonts of `script-devanagari` (616) and `script-mixed` (201, 694)
+  whose ToUnicode has no entry for the matras and conjuncts (glyphs of `how` `unknown`, no code point), which the text layer really
+  loses. **Cost**: `gao-24-106540.pdf` (a 2.4 MB, 44-page report) 0.86 s before, 0.91 s after; one 128-byte `feats` row per word.
+  *Learnt*: a ledger row only says what the reader cannot see when the same word's OLD reason survives the move out of the flow
+  (D241); `ev-emit` could not be given the layer's arenas without a second dump version, so the dump is built from the body
+  (`ev-emit-body`) and the committed goldens stay version "1"; rustc's `&mut` rule bit `hl-set hl .. (hl-get hl ..)` again
+  (bind the read first: `th-hl-add`).
+  *Commit*: on branch `worktree-agent-a491e23853d8396e1` (D037).
 
 - [ ] **P7.1 — Alignment and correspondence groups** (SPEC §9.2 "As designed", D202). **Wave 2.** Depends on P7.0
   (`player.kin`, `fw`); not on P7.U (it is tested through a probe).
@@ -7433,6 +7464,72 @@ one `nm-mask-into` / `nm-role-mask-into` call per row. Sauvola keeps rings of `2
 truth is each overlay drawn alone through the very rotation the scan got, and the body's the clean render's dark neutral pixels.
 **Why**: no Engine wiring is P6.3's; memory O(w r) instead of 70 MB (D092); overlays are ours so the truth is exact.
 **Alternatives**: allocating inside `nm-view` (the bitmaps would die with the call); whole-page integral images.
+
+### D240 — The text layer's health, as built: glyph-weighted pooled components per (font, page), a weighted harmonic mean scaled by the weakest, and two stride corrections to SPEC 9.7 (P7.0; SPEC 8.4.5, 9.3, 9.7; D150, D203)
+**Decision**: `th-health` pools each word's `xt` columns 2-5 over the words of a (font, page) of the flow, weighted by glyph count
+(columns 4 and 5 are each word's WORST, so the pool is the mean worst; column 5 is capped at 10 000, ten space widths, so one torn
+word cannot overflow a sum): components **mapped**, **garbage**, **overlap**, **gap** in the `hl` row (agreement and ink stay -1
+until P7.2). The score is the weighted harmonic mean of `mapped`, `1000 - garbage`, an overlap ramp (1000 up to `tl-overlap-ok` 500,
+0 at 1000) and a gap ramp (1000 up to `tl-gap-ok` 500, 0 at `tl-gap-bad` 3000), weights 4, 3, 2, 1, each floored at 50, times
+`(1000 + weakest) / 2000` (D150's shape). `tl-trusted` 700 and `auto-health` 500 are settings. The `hl` row's cell 11 holds the
+glyph count while the rows are accumulated and is 0 after. SPEC 9.7's strides could not hold their own fields: `cg`'s `tlines`
+reference is ONE cell (its arena is known), which is what makes 16 hold the three runs, two similarities and the flags, and `fa`
+has one spare cell, not two; SPEC 9.7 says so now. `pl-append` re-bases `etext` runs, `refs` runs, `fw.line`, `fl`'s word run,
+every group index and a reference INTO a layer arena by that arena's offset; glyph runs, `feat` and evidence references are not
+re-based (D203's contract, now laws).
+**Why**: the harmonic mean makes a font with NO Unicode for its glyphs unmistakable (`tl-broken-unmapped`: 34 against 700, every
+other font of the document 1000) and keeps a normal font at 1000 (the first values of the ramps are free for a normal font:
+overlap means of 0-13 and gaps of 0 on the 70 synthetic PDFs); the scale by the weakest makes one failed component pull the whole
+down. **`tl-broken-shift` is NOT caught here** (every font 1000: a plausible but wrong mapping): that is what OCR agreement in P7.2 is
+for. Measured on the 70 PDFs of the synthetic corpus (472 font-page rows): 469 are at least `tl-trusted`; the three that are not
+are two Devanagari fonts (`script-devanagari` 616, `script-mixed` 201 and 694) whose ToUnicode lacks the matras and conjuncts
+(glyphs with `how` `unknown` and no code point: the text layer really does lose them), which is the right answer for fusion.
+**Alternatives**: counting `glyphname` glyphs as mapped (the SPEC's column 2 says `tounicode` or `encoding`, and nothing in the
+corpus needed the relaxation); a minimum instead of a mean for overlap and gap (one kerned pair would condemn a font).
+- [ ] **Signed off** (maintainer)
+
+### D241 — Triage as built: what each P3.6 class becomes in the ledger, and a hidden watermark is still a watermark (P7.0; SPEC 8.1, 9.5; D015, D155, D157, D208)
+**Decision**: `vis` ≠ 0 takes the word out of the flow (`fw`/`fl` are copies without it; `wd`/`ln` stay the evidence), and its ledger
+row says: `clipped` and `offpage` under those reasons; `white-on-white`, `zero-size`, `transparent`, `ocg-hidden` and `occluded`
+(by a paint that is not a page-sized image) as `invisible`, EXCEPT that a word which is also what a watermark is, an `/Artifact` of
+subtype Watermark or text set at least 3 degrees off every right angle, says `watermark`, as the furniture stage's geometry already did
+for the same word when it was still in the flow (a hidden `SPECIMEN` in an optional-content group that is off by default:
+`wm-ocg`). A word occluded by an image covering at least `tl-page-image` (500 per mille) of the page stays, as a `hidden-text` word
+(its `fw` source), and so do render-mode 3 and 7 words that passed the checks. A line that loses words is re-measured from the
+rest (box union, baseline from the first start to the last end) and one that loses all is dropped; a line that loses none is copied
+bit for bit, so a document with nothing to triage has `fw` = `wd` and `fl` = `ln` and every Model unchanged. A run of one reason,
+page and line is ONE ledger row (its words joined by a space), conf 1000 (a check says invisible only when certain), src `text`,
+written after `fu-write` so the furniture's rows keep their order.
+**Why**: the ledger is for what the reader cannot see; the old geometry-only watermark detection must not lose the reason the moment
+the word is no longer in the flow (the synthetic scoreboard's watermarks category would have lost 0.17 of furniture-f1); a
+page-wide image over text is how an older OCR layer sits under its scan (D155).
+**Measured**: the synthetic scoreboard does not move (1950 metrics, none regressed, none improved: of the 70 PDFs only `wm-ocg`'s
+Model changes, in the conf and src of two ledger rows). On the corpus (every fourth of the PDFs under 2.5 MB) the changed documents are listed in the DEVLOG
+entry of P7.0; `gao-24-106540.pdf` is the instance to read: `Letter` (white, in a clip) on page 5 and the running title `Appendix I/II:
+...` of pages 39 and 43 (painted over by an opaque rectangle) leave the body for the ledger as `invisible`.
+**Alternatives**: `occluded` words by a non-image kept in the flow (the renderer shows them covered); a ledger row per word (a hidden
+page would be a thousand rows).
+**Merged with lists/notes/normalization (coordinator)**: both Engines run the triage first and the notes, lists and restructuring stages on `fw`/`fl` (`nt_analyze`/`ls_analyze` read the flow like the headings, so invisible and white text is in the ledger and never in a list or note); the raster path appends its OCR lines to `fw`/`fl` with `th_append` (an image has no text layer, nothing is set aside) and reads the flow too, Rust = Go.
+- [ ] **Signed off** (maintainer)
+
+### D242 — Stage-1 text-layer features and the dump's version "2", as built (P7.0; SPEC 8.4.5, 9.7; D096, D203)
+**Decision**: `ev-feat-text` (in `kin/tlhealth.kin`) fills columns 2-9, 16, 17, 19-21, 28, 29 of a word's `feats` row, 13 by
+`th-health`, 18 stays -1 (no size inventory yet), the rest are later stages'. Column 7 is the first glyph's mode class (0 fill, 1
+stroke, 2 clip only, 3 invisible); 8 the lowest alpha of the ink the mode paints; 9 the lowest contrast of the fill against WHITE
+PAPER (`|255 - luminance|` per mille: the page background under a glyph is the render's, P6.3's, so the text-layer-only value
+is against paper); 16 an `/Artifact` span on the glyph's mark chain; 17 the word's height over its line's lower median
+(the line's first 64 words); 19 the angle to the page's dominant text angle (the 1-degree bucket most lines fall in, answered as
+the first line's `rot` in it); 20 the baseline midpoint's distance from its line's baseline; 21 the mean inter-glyph gap over the mean
+advance (along the word's own direction); a combining mark is not a neighbour for column 4. `epages` has a row for every page. The
+`feat` of a word is set on the FLOW's copy (`fw`), not on the interpreter's `words`, which are the evidence. `pl-emit` writes dump
+version "2" (the evidence's 24 arrays, then `cg fw fl fv fa fx hl fpa sl`), built from `ev-emit-body`, which `ev-emit` (version "1")
+now calls too; **the Engines' `keep_evidence` dump stays version "1" and the interpreter's own** (`bb slice` holds it to the three
+content goldens, which `kin/pdfcontenttest.kin` also holds the generated dump to), so the layer's arenas reach a dump with P7.3,
+when those goldens move with it; until then the layer is read through `kin/tlhealthtest.kin` and `kin/playertest.kin`.
+**Why**: fusion reads these columns by number; the dump explains them; the cost is one feature row per word (128 bytes), counted in
+the memory of the document pass.
+**Alternatives**: a render-based contrast (not available before P6.2/P6.3 and needs pixels); features per glyph (SPEC 8.4.5: a
+glyph has none, its word speaks for it).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here

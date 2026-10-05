@@ -1,0 +1,755 @@
+;; The PageLayer arenas (P7.0; SPEC 9.7; D195, D203). emon's own module (D039).
+;;
+;; WHAT FUSION BUILDS: nine integer arenas in `Cells`, like the evidence's (absent -1, runs `first count`, references `(ea, index)` in
+;; `refs`), made by a page unit (or, until P7.U, by the document pass: `th-run` in `emon.tlhealth` writes `fw fl fa hl`), appended
+;; to the document's by `pl-append`, checked by `pl-check` and dumped by `pl-emit` as the evidence dump's VERSION "2".
+;;
+;;   cg 16  fw 24 (the layout of `words`)  fl 16 (the layout of `lines`)  fv 8  fa 12  fx 4  hl 12  fpa 24 (the layout of `paths`)  sl 16
+;;
+;; Their `ea` codes continue the evidence's (24 are taken; the tagged tree's nine are reserved): cg 34, fw 35, fl 36, fv 37, fa 38,
+;; fx 39, hl 40, fpa 41, sl 42. The accessors are the evidence's (`wd-get`, `ln-get`, `wf-*`, `hd-*`, `lh-*`, `pf-*`) for the three
+;; that share a layout, and the prefixes below for the others:
+;;
+;;   cgf- cg  fvf- fv  faf- fa  fxf- fx  hlf- hl  slf- sl
+;;
+;; WHAT DIFFERS FROM THE SPEC'S TABLE (D240): `cg`'s `tlines` reference is ONE cell (its arena is known), which is what makes the
+;; stride 16 hold the three runs, two similarities and the flags; `fa` has one spare cell, not two (its reference is two cells).
+;;
+;; APPEND (`pl-append`): a page's arenas, and its own `etext` and `refs` (the text of its OCR-won words, the references of its
+;; groups), are concatenated onto the document's. What is re-based: `etext` runs (`fw` text, an `fa` is not text), `refs` runs of
+;; `cg` and `sl`, `fl`'s word run, `fw`'s `line`, every group index of `fv fa fx`, and a `refs` or `fa` reference INTO a layer arena
+;; by that arena's offset. What is not: glyph runs (they point into the document pass's `glyphs`), `feat`, `hl` subjects, `fpa`'s
+;; `pts` runs and every reference into the evidence (the evidence is document-wide).
+;;
+;; THE DUMP is table driven (`pl-fd`, one row per printed field), and `fw fl fpa` reuse the evidence's own tables (`ev-row`): a law
+;; checks that every cell of every stride is printed or named spare.
+(ns emon.player
+  (:require [emon.lang :refer [I32 Cells Text defenum emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push text-i32]]
+            [emon.json :refer [js-indent js-close js-aelem js-aend js-fsep js-cpt]]
+            [emon.model :refer [dr-emit-name]]
+            [emon.evidence :refer [ea-emit-name ev-begin ev-row ev-emit-body ek-version]]
+            [kin.lang :refer [defn defdata return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------- the codes
+
+;; The arenas' own spellings in the dump (the layer's keys; the evidence's are `ek`'s).
+(defenum ^:pub plk
+  [[plk-cg 1 "cg"]
+   [plk-fw 2 "fw"]
+   [plk-fl 3 "fl"]
+   [plk-fv 4 "fv"]
+   [plk-fa 5 "fa"]
+   [plk-fx 6 "fx"]
+   [plk-hl 7 "hl"]
+   [plk-fpa 8 "fpa"]
+   [plk-sl 9 "sl"]
+   [plk-page 10 "page"]
+   [plk-box 11 "box"]
+   [plk-rot 12 "rot"]
+   [plk-text 13 "text"]
+   [plk-ocr 14 "ocr"]
+   [plk-hidden 15 "hidden"]
+   [plk-tlines 16 "tlines"]
+   [plk-sim 17 "sim"]
+   [plk-simfold 18 "simfold"]
+   [plk-flags 19 "flags"]
+   [plk-group 20 "group"]
+   [plk-source 21 "source"]
+   [plk-rule 22 "rule"]
+   [plk-conf 23 "conf"]
+   [plk-reason 24 "reason"]
+   [plk-subject 25 "subject"]
+   [plk-defence 26 "defence"]
+   [plk-column 27 "column"]
+   [plk-value 28 "value"]
+   [plk-kind 29 "kind"]
+   [plk-components 30 "components"]
+   [plk-score 31 "score"]
+   [plk-ink 32 "ink"]
+   [plk-ref 33 "ref"]
+   [plk-words 34 "words"]])
+
+;; What a health row is about (SPEC 9.7 `hl`): a font on a page, an OCR block, a region.
+(defenum ^:pub plh
+  [[plh-font-page 1 "font-page"]
+   [plh-ocr-block 2 "ocr-block"]
+   [plh-region 3 "region"]])
+
+;; A seal candidate's kind (`sl`).
+(defenum ^:pub pls
+  [[pls-seal 1 "seal"]
+   [pls-stamp 2 "stamp"]
+   [pls-signature 3 "signature"]])
+
+;; `cg` flags (`gf`): the bits of a group's flags.
+(defenum ^:pub plg
+  [[plg-text-only 1 "text-only"]
+   [plg-ocr-only 2 "ocr-only"]
+   [plg-split 4 "split"]
+   [plg-merged 8 "merged"]
+   [plg-in-figure 16 "in-figure"]
+   [plg-in-seal 32 "in-seal"]])
+
+;; The layer's `ea` codes and strides. An arena's index here is 0 for `cg` ... 8 for `sl`.
+(defn ^:pub ^I32 pl-ea-cg [] (return 34))
+(defn ^:pub ^I32 pl-ea-fw [] (return 35))
+(defn ^:pub ^I32 pl-ea-fl [] (return 36))
+(defn ^:pub ^I32 pl-ea-fv [] (return 37))
+(defn ^:pub ^I32 pl-ea-fa [] (return 38))
+(defn ^:pub ^I32 pl-ea-fx [] (return 39))
+(defn ^:pub ^I32 pl-ea-hl [] (return 40))
+(defn ^:pub ^I32 pl-ea-fpa [] (return 41))
+(defn ^:pub ^I32 pl-ea-sl [] (return 42))
+
+(defn ^:pub ^I32 cg-stride [] (return 16))
+(defn ^:pub ^I32 fw-stride [] (return 24))
+(defn ^:pub ^I32 fl-stride [] (return 16))
+(defn ^:pub ^I32 fv-stride [] (return 8))
+(defn ^:pub ^I32 fa-stride [] (return 12))
+(defn ^:pub ^I32 fx-stride [] (return 4))
+(defn ^:pub ^I32 hl-stride [] (return 12))
+(defn ^:pub ^I32 fpa-stride [] (return 24))
+(defn ^:pub ^I32 sl-stride [] (return 16))
+
+;; cg
+(defn ^:pub ^I32 cgf-page [] (return 0))
+(defn ^:pub ^I32 cgf-x0 [] (return 1))
+(defn ^:pub ^I32 cgf-y0 [] (return 2))
+(defn ^:pub ^I32 cgf-x1 [] (return 3))
+(defn ^:pub ^I32 cgf-y1 [] (return 4))
+(defn ^:pub ^I32 cgf-rot [] (return 5))
+(defn ^:pub ^I32 cgf-tfirst [] (return 6))
+(defn ^:pub ^I32 cgf-tcount [] (return 7))
+(defn ^:pub ^I32 cgf-ofirst [] (return 8))
+(defn ^:pub ^I32 cgf-ocount [] (return 9))
+(defn ^:pub ^I32 cgf-hfirst [] (return 10))
+(defn ^:pub ^I32 cgf-hcount [] (return 11))
+(defn ^:pub ^I32 cgf-tline [] (return 12))
+(defn ^:pub ^I32 cgf-sim [] (return 13))
+(defn ^:pub ^I32 cgf-simfold [] (return 14))
+(defn ^:pub ^I32 cgf-flags [] (return 15))
+;; fv
+(defn ^:pub ^I32 fvf-group [] (return 0))
+(defn ^:pub ^I32 fvf-source [] (return 1))
+(defn ^:pub ^I32 fvf-rule [] (return 2))
+(defn ^:pub ^I32 fvf-conf [] (return 3))
+(defn ^:pub ^I32 fvf-flags [] (return 4))
+;; fa
+(defn ^:pub ^I32 faf-page [] (return 0))
+(defn ^:pub ^I32 faf-x0 [] (return 1))
+(defn ^:pub ^I32 faf-y0 [] (return 2))
+(defn ^:pub ^I32 faf-x1 [] (return 3))
+(defn ^:pub ^I32 faf-y1 [] (return 4))
+(defn ^:pub ^I32 faf-reason [] (return 5))
+(defn ^:pub ^I32 faf-sea [] (return 6))
+(defn ^:pub ^I32 faf-sidx [] (return 7))
+(defn ^:pub ^I32 faf-defence [] (return 8))
+(defn ^:pub ^I32 faf-group [] (return 9))
+(defn ^:pub ^I32 faf-rule [] (return 10))
+;; fx
+(defn ^:pub ^I32 fxf-group [] (return 0))
+(defn ^:pub ^I32 fxf-rule [] (return 1))
+(defn ^:pub ^I32 fxf-column [] (return 2))
+(defn ^:pub ^I32 fxf-value [] (return 3))
+;; hl: components 3..8 (mapped, garbage, overlap, gap, agreement, ink)
+(defn ^:pub ^I32 hlf-kind [] (return 0))
+(defn ^:pub ^I32 hlf-page [] (return 1))
+(defn ^:pub ^I32 hlf-subject [] (return 2))
+(defn ^:pub ^I32 hlf-mapped [] (return 3))
+(defn ^:pub ^I32 hlf-garbage [] (return 4))
+(defn ^:pub ^I32 hlf-overlap [] (return 5))
+(defn ^:pub ^I32 hlf-gap [] (return 6))
+(defn ^:pub ^I32 hlf-agreement [] (return 7))
+(defn ^:pub ^I32 hlf-ink [] (return 8))
+(defn ^:pub ^I32 hlf-score [] (return 9))
+;; sl
+(defn ^:pub ^I32 slf-page [] (return 0))
+(defn ^:pub ^I32 slf-x0 [] (return 1))
+(defn ^:pub ^I32 slf-y0 [] (return 2))
+(defn ^:pub ^I32 slf-x1 [] (return 3))
+(defn ^:pub ^I32 slf-y1 [] (return 4))
+(defn ^:pub ^I32 slf-kind [] (return 5))
+(defn ^:pub ^I32 slf-ink [] (return 6))
+(defn ^:pub ^I32 slf-rea [] (return 7))
+(defn ^:pub ^I32 slf-ridx [] (return 8))
+(defn ^:pub ^I32 slf-conf [] (return 9))
+(defn ^:pub ^I32 slf-wfirst [] (return 10))
+(defn ^:pub ^I32 slf-wcount [] (return 11))
+(defn ^:pub ^I32 slf-flags [] (return 12))
+
+;; ------------------------------------------------------------- the builders
+
+(defn ^I32 pl-push [^:mut ^Cells c ^I32 stride]
+  (comment "Append a row of zeros and answer its index.")
+  (let [^I32 row (quot (cells-len c) stride)
+        ^:mut ^I32 i 0]
+    (while (< i stride)
+      (do (cells-push c 0)
+          (set i (+ i 1))))
+    (return row)))
+
+(defn ^:pub ^I32 cg-count [^Cells c] (return (quot (cells-len c) 16)))
+(defn ^:pub ^I32 cg-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 16) f))))
+(defn ^:pub ^I32 cg-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (cells-set c (+ (* i 16) f) v) (return 0))
+(defn ^:pub ^I32 cg-new [^:mut ^Cells c ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 rot]
+  (comment "Append a correspondence group: its page, box and angle; the runs empty (first -1), no tlines row, no similarity, no flags.")
+  (let [^I32 r (pl-push c 16)]
+    (cg-set c r 0 page)
+    (cg-set c r 1 x0)
+    (cg-set c r 2 y0)
+    (cg-set c r 3 x1)
+    (cg-set c r 4 y1)
+    (cg-set c r 5 rot)
+    (cg-set c r 6 -1)
+    (cg-set c r 8 -1)
+    (cg-set c r 10 -1)
+    (cg-set c r 12 -1)
+    (cg-set c r 13 -1)
+    (cg-set c r 14 -1)
+    (return r)))
+
+(defn ^:pub ^I32 fw-count [^Cells c] (return (quot (cells-len c) 24)))
+(defn ^:pub ^I32 fl-count [^Cells c] (return (quot (cells-len c) 16)))
+
+(defn ^:pub ^I32 fw-copy-word [^:mut ^Cells fw ^Cells words ^I32 w ^I32 line]
+  (comment "Append a copy of row w of `words` (the evidence's) to `fw`, pointing at `line` of `fl`; answers its row.")
+  (let [^I32 r (pl-push fw 24)
+        ^:mut ^I32 k 0]
+    (while (< k 24)
+      (do (cells-set fw (+ (* r 24) k) (cells-at words (+ (* w 24) k)))
+          (set k (+ k 1))))
+    (cells-set fw (+ (* r 24) 13) line)
+    (return r)))
+
+(defn ^:pub ^I32 fl-copy-line [^:mut ^Cells fl ^Cells lines ^I32 l ^I32 first ^I32 cnt]
+  (comment "Append a copy of row l of `lines` to `fl` over the run (first, count) of `fw`; answers its row.")
+  (let [^I32 r (pl-push fl 16)
+        ^:mut ^I32 k 0]
+    (while (< k 16)
+      (do (cells-set fl (+ (* r 16) k) (cells-at lines (+ (* l 16) k)))
+          (set k (+ k 1))))
+    (cells-set fl (+ (* r 16) 11) first)
+    (cells-set fl (+ (* r 16) 12) cnt)
+    (return r)))
+
+(defn ^:pub ^I32 fv-count [^Cells c] (return (quot (cells-len c) 8)))
+(defn ^:pub ^I32 fv-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 8) f))))
+(defn ^:pub ^I32 fv-new [^:mut ^Cells c ^I32 group ^I32 source ^I32 rule ^I32 conf ^I32 flags]
+  (comment "Append the verdict of one `fw` row: its group, winning source (`sr`), rule, confidence (per mille), flags.")
+  (let [^I32 r (pl-push c 8)]
+    (cells-set c (* r 8) group)
+    (cells-set c (+ (* r 8) 1) source)
+    (cells-set c (+ (* r 8) 2) rule)
+    (cells-set c (+ (* r 8) 3) conf)
+    (cells-set c (+ (* r 8) 4) flags)
+    (return r)))
+
+(defn ^:pub ^I32 fa-count [^Cells c] (return (quot (cells-len c) 12)))
+(defn ^:pub ^I32 fa-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 12) f))))
+(defn ^:pub ^I32 fa-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (cells-set c (+ (* i 12) f) v) (return 0))
+(defn ^:pub ^I32 fa-new [^:mut ^Cells c ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 reason ^I32 sea ^I32 sidx]
+  (comment "Append a set-aside item: page, box, ledger reason (`dr`), subject (ea, index); defence 0, no group, no rule.")
+  (let [^I32 r (pl-push c 12)]
+    (fa-set c r 0 page)
+    (fa-set c r 1 x0)
+    (fa-set c r 2 y0)
+    (fa-set c r 3 x1)
+    (fa-set c r 4 y1)
+    (fa-set c r 5 reason)
+    (fa-set c r 6 sea)
+    (fa-set c r 7 sidx)
+    (fa-set c r 9 -1)
+    (return r)))
+
+(defn ^:pub ^I32 fx-count [^Cells c] (return (quot (cells-len c) 4)))
+(defn ^:pub ^I32 fx-new [^:mut ^Cells c ^I32 group ^I32 rule ^I32 column ^I32 value]
+  (comment "Append one read of an explanation: the group, the rule, the feature column and the value read.")
+  (let [^I32 r (pl-push c 4)]
+    (cells-set c (* r 4) group)
+    (cells-set c (+ (* r 4) 1) rule)
+    (cells-set c (+ (* r 4) 2) column)
+    (cells-set c (+ (* r 4) 3) value)
+    (return r)))
+
+(defn ^:pub ^I32 hl-count [^Cells c] (return (quot (cells-len c) 12)))
+(defn ^:pub ^I32 hl-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 12) f))))
+(defn ^:pub ^I32 hl-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (cells-set c (+ (* i 12) f) v) (return 0))
+(defn ^:pub ^I32 hl-new [^:mut ^Cells c ^I32 kind ^I32 page ^I32 subject]
+  (comment "Append a health row: kind (`plh`), page, subject row; the six components and the score -1 (not computed).")
+  (let [^I32 r (pl-push c 12)
+        ^:mut ^I32 k 3]
+    (hl-set c r 0 kind)
+    (hl-set c r 1 page)
+    (hl-set c r 2 subject)
+    (while (< k 10)
+      (do (hl-set c r k -1)
+          (set k (+ k 1))))
+    (return r)))
+
+(defn ^:pub ^I32 sl-count [^Cells c] (return (quot (cells-len c) 16)))
+(defn ^:pub ^I32 sl-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 16) f))))
+(defn ^:pub ^I32 sl-new [^:mut ^Cells c ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 kind]
+  (comment "Append a seal or signature candidate: page, box, kind (`pls`); no ink row, no primitive, no words, no confidence.")
+  (let [^I32 r (pl-push c 16)]
+    (cells-set c (* r 16) page)
+    (cells-set c (+ (* r 16) 1) x0)
+    (cells-set c (+ (* r 16) 2) y0)
+    (cells-set c (+ (* r 16) 3) x1)
+    (cells-set c (+ (* r 16) 4) y1)
+    (cells-set c (+ (* r 16) 5) kind)
+    (cells-set c (+ (* r 16) 6) -1)
+    (cells-set c (+ (* r 16) 7) -1)
+    (cells-set c (+ (* r 16) 8) -1)
+    (cells-set c (+ (* r 16) 9) -1)
+    (cells-set c (+ (* r 16) 10) -1)
+    (return r)))
+
+;; ------------------------------------------------------------- append
+
+(defn ^I32 pl-off [^I32 ea ^I32 ocg ^I32 ofw ^I32 ofl ^I32 ofv ^I32 ofa ^I32 ofx ^I32 ohl ^I32 ofpa ^I32 osl]
+  (comment "The offset a reference into layer arena `ea` is re-based by (0 for an evidence arena).")
+  (if (== ea 34) (return ocg))
+  (if (== ea 35) (return ofw))
+  (if (== ea 36) (return ofl))
+  (if (== ea 37) (return ofv))
+  (if (== ea 38) (return ofa))
+  (if (== ea 39) (return ofx))
+  (if (== ea 40) (return ohl))
+  (if (== ea 41) (return ofpa))
+  (if (== ea 42) (return osl))
+  (return 0))
+
+(defn ^I32 pl-add-if [^I32 v ^I32 by]
+  (comment "v + by for a present value (v >= 0); an absent one stays -1.")
+  (if (< v 0) (return v))
+  (return (+ v by)))
+
+(defn ^:pub ^I32 pl-append [^:mut ^Cells dcg ^:mut ^Cells dfw ^:mut ^Cells dfl ^:mut ^Cells dfv ^:mut ^Cells dfa
+                            ^:mut ^Cells dfx ^:mut ^Cells dhl ^:mut ^Cells dfpa ^:mut ^Cells dsl
+                            ^:mut ^Cells detext ^:mut ^Cells drefs
+                            ^Cells pcg ^Cells pfw ^Cells pfl ^Cells pfv ^Cells pfa
+                            ^Cells pfx ^Cells phl ^Cells pfpa ^Cells psl
+                            ^Cells petext ^Cells prefs]
+  (comment "Concatenate a page's layer (its arenas, and its own `etext` and `refs`) onto the document's, re-basing as the head of")
+  (comment "this file says. Answers 0.")
+  (let [^I32 ocg (quot (cells-len dcg) 16)
+        ^I32 ofw (quot (cells-len dfw) 24)
+        ^I32 ofl (quot (cells-len dfl) 16)
+        ^I32 ofv (quot (cells-len dfv) 8)
+        ^I32 ofa (quot (cells-len dfa) 12)
+        ^I32 ofx (quot (cells-len dfx) 4)
+        ^I32 ohl (quot (cells-len dhl) 12)
+        ^I32 ofpa (quot (cells-len dfpa) 24)
+        ^I32 osl (quot (cells-len dsl) 16)
+        ^I32 oet (cells-len detext)
+        ^I32 orf (quot (cells-len drefs) 2)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 v 0]
+    (comment "etext and refs: the page's, after the document's; a reference into a layer arena is re-based")
+    (set n (cells-len petext))
+    (while (< i n)
+      (do (cells-push detext (cells-at petext i))
+          (set i (+ i 1))))
+    (set i 0)
+    (set n (quot (cells-len prefs) 2))
+    (while (< i n)
+      (do (set v (cells-at prefs (* i 2)))
+          (cells-push drefs v)
+          (cells-push drefs (+ (cells-at prefs (+ (* i 2) 1)) (pl-off v ocg ofw ofl ofv ofa ofx ohl ofpa osl)))
+          (set i (+ i 1))))
+    (comment "cg: its three runs of refs, and nothing else")
+    (set i 0)
+    (set n (quot (cells-len pcg) 16))
+    (while (< i n)
+      (do (set k 0)
+          (while (< k 16)
+            (do (set v (cells-at pcg (+ (* i 16) k)))
+                (if (or (== k 6) (or (== k 8) (== k 10))) (set v (pl-add-if v orf)))
+                (cells-push dcg v)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (comment "fw: its text run and its line")
+    (set i 0)
+    (set n (quot (cells-len pfw) 24))
+    (while (< i n)
+      (do (set k 0)
+          (while (< k 24)
+            (do (set v (cells-at pfw (+ (* i 24) k)))
+                (if (== k 11) (set v (pl-add-if v oet)))
+                (if (== k 13) (set v (pl-add-if v ofl)))
+                (cells-push dfw v)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (comment "fl: its word run")
+    (set i 0)
+    (set n (quot (cells-len pfl) 16))
+    (while (< i n)
+      (do (set k 0)
+          (while (< k 16)
+            (do (set v (cells-at pfl (+ (* i 16) k)))
+                (if (== k 11) (set v (pl-add-if v ofw)))
+                (cells-push dfl v)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (comment "fv: its group")
+    (set i 0)
+    (set n (cells-len pfv))
+    (while (< i n)
+      (do (set v (cells-at pfv i))
+          (if (== (rem i 8) 0) (set v (pl-add-if v ocg)))
+          (cells-push dfv v)
+          (set i (+ i 1))))
+    (comment "fa: its group, and its subject when that is a layer row")
+    (set i 0)
+    (set n (quot (cells-len pfa) 12))
+    (while (< i n)
+      (do (set b (cells-at pfa (+ (* i 12) 6)))
+          (set k 0)
+          (while (< k 12)
+            (do (set v (cells-at pfa (+ (* i 12) k)))
+                (if (== k 7) (set v (+ v (pl-off b ocg ofw ofl ofv ofa ofx ohl ofpa osl))))
+                (if (== k 9) (set v (pl-add-if v ocg)))
+                (cells-push dfa v)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (comment "fx: its group")
+    (set i 0)
+    (set n (cells-len pfx))
+    (while (< i n)
+      (do (set v (cells-at pfx i))
+          (if (== (rem i 4) 0) (set v (pl-add-if v ocg)))
+          (cells-push dfx v)
+          (set i (+ i 1))))
+    (comment "hl and fpa: nothing to re-base")
+    (set i 0)
+    (set n (cells-len phl))
+    (while (< i n)
+      (do (cells-push dhl (cells-at phl i))
+          (set i (+ i 1))))
+    (set i 0)
+    (set n (cells-len pfpa))
+    (while (< i n)
+      (do (cells-push dfpa (cells-at pfpa i))
+          (set i (+ i 1))))
+    (comment "sl: its run of OCR words in refs, and its reference when that is a layer row")
+    (set i 0)
+    (set n (quot (cells-len psl) 16))
+    (while (< i n)
+      (do (set b (cells-at psl (+ (* i 16) 7)))
+          (set k 0)
+          (while (< k 16)
+            (do (set v (cells-at psl (+ (* i 16) k)))
+                (if (== k 8) (set v (pl-add-if v (pl-off b ocg ofw ofl ofv ofa ofx ohl ofpa osl))))
+                (if (== k 10) (set v (pl-add-if v orf)))
+                (cells-push dsl v)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- check
+
+(defn ^I32 pl-run-ok [^I32 first ^I32 cnt ^I32 limit]
+  (comment "1 when (first, count) is absent (first -1, count 0) or lies inside [0, limit).")
+  (if (< first 0)
+    (do (if (== cnt 0) (return 1))
+        (return 0)))
+  (if (< cnt 0) (return 0))
+  (if (> (+ first cnt) limit) (return 0))
+  (return 1))
+
+(defn ^:pub ^I32 pl-check [^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells fpa ^Cells sl
+                           ^Cells etext ^Cells refs ^Cells glyphs]
+  (comment "0 for a sound layer, else the first broken thing: 1 a stride; 2 a `cg` run outside `refs`; 3 an `fw` text run outside")
+  (comment "`etext`; 4 an `fw` line outside `fl`; 5 an `fw` glyph run outside `glyphs`; 6 an `fl` run outside `fw`; 7 `fv` neither")
+  (comment "empty nor one row per `fw` row, or a group outside `cg`; 8 an `fa` group outside `cg` or a negative subject; 9 an `fx`")
+  (comment "group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row.")
+  (let [^I32 ncg (quot (cells-len cg) 16)
+        ^I32 nfw (quot (cells-len fw) 24)
+        ^I32 nfl (quot (cells-len fl) 16)
+        ^I32 nfv (quot (cells-len fv) 8)
+        ^I32 nfa (quot (cells-len fa) 12)
+        ^I32 nfx (quot (cells-len fx) 4)
+        ^I32 nsl (quot (cells-len sl) 16)
+        ^I32 nrf (quot (cells-len refs) 2)
+        ^I32 net (cells-len etext)
+        ^I32 ngl (quot (cells-len glyphs) 32)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 w 0]
+    (if (!= (rem (cells-len cg) 16) 0) (return 1))
+    (if (!= (rem (cells-len fw) 24) 0) (return 1))
+    (if (!= (rem (cells-len fl) 16) 0) (return 1))
+    (if (!= (rem (cells-len fv) 8) 0) (return 1))
+    (if (!= (rem (cells-len fa) 12) 0) (return 1))
+    (if (!= (rem (cells-len fx) 4) 0) (return 1))
+    (if (!= (rem (cells-len hl) 12) 0) (return 1))
+    (if (!= (rem (cells-len fpa) 24) 0) (return 1))
+    (if (!= (rem (cells-len sl) 16) 0) (return 1))
+    (if (!= (rem (cells-len refs) 2) 0) (return 1))
+    (while (< i ncg)
+      (do (if (== (pl-run-ok (cg-get cg i 6) (cg-get cg i 7) nrf) 0) (return 2))
+          (if (== (pl-run-ok (cg-get cg i 8) (cg-get cg i 9) nrf) 0) (return 2))
+          (if (== (pl-run-ok (cg-get cg i 10) (cg-get cg i 11) nrf) 0) (return 2))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nfw)
+      (do (set v (cells-at fw (+ (* i 24) 11)))
+          (set w (cells-at fw (+ (* i 24) 12)))
+          (if (>= v 0) (if (or (< w 0) (> (+ v w) net)) (return 3)))
+          (set v (cells-at fw (+ (* i 24) 13)))
+          (if (or (< v -1) (>= v nfl)) (return 4))
+          (if (== (pl-run-ok (cells-at fw (+ (* i 24) 17)) (cells-at fw (+ (* i 24) 18)) ngl) 0) (return 5))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nfl)
+      (do (if (== (pl-run-ok (cells-at fl (+ (* i 16) 11)) (cells-at fl (+ (* i 16) 12)) nfw) 0) (return 6))
+          (set i (+ i 1))))
+    (if (and (> nfv 0) (!= nfv nfw)) (return 7))
+    (set i 0)
+    (while (< i nfv)
+      (do (set v (cells-at fv (* i 8)))
+          (if (or (< v -1) (>= v ncg)) (return 7))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nfa)
+      (do (set v (cells-at fa (+ (* i 12) 9)))
+          (if (or (< v -1) (>= v ncg)) (return 8))
+          (if (< (cells-at fa (+ (* i 12) 7)) 0) (return 8))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nfx)
+      (do (set v (cells-at fx (* i 4)))
+          (if (or (< v 0) (>= v ncg)) (return 9))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nsl)
+      (do (if (== (pl-run-ok (cells-at sl (+ (* i 16) 10)) (cells-at sl (+ (* i 16) 11)) nrf) 0) (return 10))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nrf)
+      (do (set v (cells-at refs (* i 2)))
+          (set w (cells-at refs (+ (* i 2) 1)))
+          (if (== v 34) (if (or (< w 0) (>= w ncg)) (return 11)))
+          (if (== v 35) (if (or (< w 0) (>= w nfw)) (return 11)))
+          (if (== v 36) (if (or (< w 0) (>= w nfl)) (return 11)))
+          (if (== v 37) (if (or (< w 0) (>= w nfv)) (return 11)))
+          (if (== v 38) (if (or (< w 0) (>= w nfa)) (return 11)))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the dump
+
+;; THE FIELD TABLE of the six arenas that have a layout of their own: [arena first-cell kind key default arg], arenas 1 `cg`,
+;; 2 `fv`, 3 `fa`, 4 `fx`, 5 `hl`, 6 `sl`. Kinds: 1 int, 2 centi-units as points, 3 box (4 cells), 4 run `[first,count]` (omitted when
+;; it is (default, arg)), 5 reference `["arena", index]` (the arena cell first; omitted when the index cell is -1), 6 `dr` name, 7 an
+;; array of `arg` ints, 8 `plh` name, 9 `pls` name. MIN default is never omitted.
+(defdata ^:pub pl-fd
+  :emitter kin.lang/flat-array
+  :stride 6
+  :data [1 0 1 10 -2147483648 0
+         1 1 3 11 -2147483648 0
+         1 5 2 12 0 0
+         1 6 4 13 -1 0
+         1 8 4 14 -1 0
+         1 10 4 15 -1 0
+         1 12 1 16 -1 0
+         1 13 1 17 -1 0
+         1 14 1 18 -1 0
+         1 15 1 19 0 0
+         2 0 1 20 -1 0
+         2 1 1 21 0 0
+         2 2 1 22 0 0
+         2 3 1 23 -1 0
+         2 4 1 19 0 0
+         3 0 1 10 -2147483648 0
+         3 1 3 11 -2147483648 0
+         3 5 6 24 0 0
+         3 6 5 25 -1 0
+         3 8 1 26 0 0
+         3 9 1 20 -1 0
+         3 10 1 22 0 0
+         4 0 1 20 -2147483648 0
+         4 1 1 22 -2147483648 0
+         4 2 1 27 -2147483648 0
+         4 3 1 28 -2147483648 0
+         5 0 8 29 0 0
+         5 1 1 10 -2147483648 0
+         5 2 1 25 -2147483648 0
+         5 3 7 30 -2147483648 6
+         5 9 1 31 -2147483648 0
+         6 0 1 10 -2147483648 0
+         6 1 3 11 -2147483648 0
+         6 5 9 29 0 0
+         6 6 1 32 -1 0
+         6 7 5 33 -1 0
+         6 9 1 23 -1 0
+         6 10 4 34 -1 0
+         6 12 1 19 0 0]
+  :accessors {^I32 pl-fd-count [^I32 ignored]
+              ^I32 pl-fd-at [^I32 ignored ^I32 row ^I32 field]})
+
+;; where an arena's rows of `pl-fd` start and how many, index = arena - 1; and its stride; and how many of its cells are spare
+(defdata ^:pub pl-fx
+  :emitter kin.lang/flat-array
+  :stride 4
+  :data [0 10 16 0
+         10 5 8 3
+         15 7 12 1
+         22 4 4 0
+         26 5 12 2
+         31 8 16 3]
+  :accessors {^I32 pl-fx-count [^I32 ignored]
+              ^I32 pl-fx-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^I32 pl-begin [^:mut ^Text t ^I32 pr ^I32 d ^I32 started ^I32 code]
+  (if (== started 1) (emit-ascii t ","))
+  (if (== pr 1) (js-indent t (+ d 1)))
+  (emit-ascii t "\"")
+  (plk-emit-name t code)
+  (emit-ascii t "\":")
+  (if (== pr 1) (emit-ascii t " "))
+  (return 1))
+
+(defn ^I32 pl-quad [^:mut ^Text t ^I32 pr ^Cells c ^I32 p]
+  (emit-ascii t "[")
+  (js-cpt t (cells-at c p))
+  (js-fsep t pr 1)
+  (js-cpt t (cells-at c (+ p 1)))
+  (js-fsep t pr 1)
+  (js-cpt t (cells-at c (+ p 2)))
+  (js-fsep t pr 1)
+  (js-cpt t (cells-at c (+ p 3)))
+  (emit-ascii t "]")
+  (return 0))
+
+(defn ^I32 pl-field [^:mut ^Text t ^I32 pr ^Cells c ^I32 stride ^I32 row ^I32 r ^I32 started]
+  (comment "One printed field of a row, by row `r` of `pl-fd`.")
+  (let [^I32 f (pl-fd-at 0 r 1)
+        ^I32 kind (pl-fd-at 0 r 2)
+        ^I32 key (pl-fd-at 0 r 3)
+        ^I32 dflt (pl-fd-at 0 r 4)
+        ^I32 arg (pl-fd-at 0 r 5)
+        ^I32 p (+ (* row stride) f)
+        ^:mut ^I32 s started
+        ^:mut ^I32 j 0]
+    (if (and (or (== kind 1) (or (== kind 2) (or (== kind 6) (or (== kind 8) (== kind 9))))) (== (cells-at c p) dflt))
+      (return started))
+    (if (== kind 1) (do (set s (pl-begin t pr 2 s key)) (text-i32 t (cells-at c p)) (return s)))
+    (if (== kind 2) (do (set s (pl-begin t pr 2 s key)) (js-cpt t (cells-at c p)) (return s)))
+    (if (== kind 3) (do (set s (pl-begin t pr 2 s key)) (pl-quad t pr c p) (return s)))
+    (if (== kind 4)
+      (do (if (and (== (cells-at c p) dflt) (== (cells-at c (+ p 1)) arg)) (return started))
+          (set s (pl-begin t pr 2 s key))
+          (emit-ascii t "[")
+          (text-i32 t (cells-at c p))
+          (js-fsep t pr 1)
+          (text-i32 t (cells-at c (+ p 1)))
+          (emit-ascii t "]")
+          (return s)))
+    (if (== kind 5)
+      (do (if (== (cells-at c (+ p 1)) dflt) (return started))
+          (set s (pl-begin t pr 2 s key))
+          (emit-ascii t "[\"")
+          (ea-emit-name t (cells-at c p))
+          (emit-ascii t "\",")
+          (if (== pr 1) (emit-ascii t " "))
+          (text-i32 t (cells-at c (+ p 1)))
+          (emit-ascii t "]")
+          (return s)))
+    (if (or (== kind 6) (or (== kind 8) (== kind 9)))
+      (do (set s (pl-begin t pr 2 s key))
+          (emit-ascii t "\"")
+          (if (== kind 6) (dr-emit-name t (cells-at c p)))
+          (if (== kind 8) (plh-emit-name t (cells-at c p)))
+          (if (== kind 9) (pls-emit-name t (cells-at c p)))
+          (emit-ascii t "\"")
+          (return s)))
+    (if (== kind 7)
+      (do (set s (pl-begin t pr 2 s key))
+          (emit-ascii t "[")
+          (while (< j arg)
+            (do (js-fsep t pr j)
+                (text-i32 t (cells-at c (+ p j)))
+                (set j (+ j 1))))
+          (emit-ascii t "]")
+          (return s)))
+    (return started)))
+
+(defn ^I32 pl-row [^:mut ^Text t ^I32 pr ^I32 a ^Cells c ^I32 row]
+  (comment "One row of own arena a (1 `cg` .. 6 `sl`) as an object, its fields in stride order.")
+  (let [^I32 first (pl-fx-at 0 (- a 1) 0)
+        ^I32 cnt (pl-fx-at 0 (- a 1) 1)
+        ^I32 stride (pl-fx-at 0 (- a 1) 2)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0]
+    (emit-ascii t "{")
+    (while (< k cnt)
+      (do (set s (pl-field t pr c stride row (+ first k) s))
+          (set k (+ k 1))))
+    (js-close t pr 2 s)
+    (return 0)))
+
+(defn ^I32 pl-arena [^:mut ^Text t ^I32 pr ^I32 started ^I32 key ^I32 a ^I32 evea ^Cells c ^Cells etext]
+  (comment "`\"key\":[row, ...]` for own arena a (1..6), or, when a is 0, for an arena of the evidence's layout `evea` (8 words, 9 lines,")
+  (comment "12 paths) printed by the evidence's own table.")
+  (let [^:mut ^I32 stride 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 i 0]
+    (if (> a 0) (set stride (pl-fx-at 0 (- a 1) 2)))
+    (if (== a 0)
+      (do (if (== evea 8) (set stride 24))
+          (if (== evea 9) (set stride 16))
+          (if (== evea 12) (set stride 24))))
+    (set n (quot (cells-len c) stride))
+    (pl-begin t pr 0 started key)
+    (emit-ascii t "[")
+    (while (< i n)
+      (do (js-aelem t pr 1 i)
+          (if (> a 0) (pl-row t pr a c i))
+          (if (== a 0) (ev-row t pr 2 evea c etext i))
+          (set i (+ i 1))))
+    (js-aend t pr 1 n)
+    (return 1)))
+
+(defn ^:pub ^I32 pl-emit-layer [^:mut ^Text t ^I32 pretty ^I32 s0
+                                ^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells fpa ^Cells sl
+                                ^Cells etext]
+  (comment "The layer's nine arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.")
+  (let [^:mut ^I32 s s0]
+    (set s (pl-arena t pretty s (plk-cg) 1 0 cg etext))
+    (set s (pl-arena t pretty s (plk-fw) 0 8 fw etext))
+    (set s (pl-arena t pretty s (plk-fl) 0 9 fl etext))
+    (set s (pl-arena t pretty s (plk-fv) 2 0 fv etext))
+    (set s (pl-arena t pretty s (plk-fa) 3 0 fa etext))
+    (set s (pl-arena t pretty s (plk-fx) 4 0 fx etext))
+    (set s (pl-arena t pretty s (plk-hl) 5 0 hl etext))
+    (set s (pl-arena t pretty s (plk-fpa) 0 12 fpa etext))
+    (set s (pl-arena t pretty s (plk-sl) 6 0 sl etext))
+    (return s)))
+
+(defn ^:pub ^I32 pl-emit [^:mut ^Text t ^I32 pretty
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
+                          ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
+                          ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                          ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+                          ^:mut ^Cells images
+                          ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+                          ^:mut ^Cells prims ^:mut ^Cells tlines
+                          ^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells fpa ^Cells sl]
+  (comment "The evidence dump, VERSION \"2\" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's nine.")
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-begin t pretty 0 s (ek-version)))
+    (emit-ascii t "\"2\"")
+    (set s (ev-emit-body t pretty s epages views pts refs etext feats glyphs words lines marks fonts paths images
+                         oruns oblocks olines owords osyms oalts inks components rules prims tlines))
+    (set s (pl-emit-layer t pretty s cg fw fl fv fa fx hl fpa sl etext))
+    (js-close t pretty 0 s)
+    (return 0)))

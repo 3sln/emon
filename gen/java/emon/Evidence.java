@@ -6374,13 +6374,10 @@ public final class Evidence {
         Json.jsAend(t, pr, 1, n);
         return 1;
     }
-    public static int evEmit(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
-        // Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
-        // in the order of the `ea` codes, each row in its fixed key order.
-        int s = 0;
-        emon.Port.textAscii(t, "{");
-        s = evBegin(t, pretty, 0, s, ekVersion());
-        emon.Port.textAscii(t, "\"1\"");
+    public static int evEmitBody(StringBuilder t, int pretty, int s0, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // The arenas of the evidence dump, `epages` to `tlines`, written as members of the object the caller opened;
+        // `s0` is 1 when a member came before. Answers 1. (`ev-emit` and the layer dump of `emon.player` share it.)
+        int s = s0;
         s = evArena(t, pretty, s, 1, epages, etext);
         s = evArena(t, pretty, s, 2, views, etext);
         s = evArena(t, pretty, s, 3, pts, etext);
@@ -6405,6 +6402,16 @@ public final class Evidence {
         s = evArena(t, pretty, s, 22, rules, etext);
         s = evArena(t, pretty, s, 23, prims, etext);
         s = evArena(t, pretty, s, 24, tlines, etext);
+        return s;
+    }
+    public static int evEmit(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+        // in the order of the `ea` codes, each row in its fixed key order.
+        int s = 0;
+        emon.Port.textAscii(t, "{");
+        s = evBegin(t, pretty, 0, s, ekVersion());
+        emon.Port.textAscii(t, "\"1\"");
+        s = evEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         Json.jsClose(t, pretty, 0, s);
         return 0;
     }

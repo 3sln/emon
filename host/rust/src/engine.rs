@@ -56,6 +56,7 @@ use crate::emon::pdfdoc::*;
 use crate::emon::pdfmeta::pm_run;
 use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
 use crate::emon::pdfx::px_index_build;
+use crate::emon::tlhealth::{th_append, th_run, th_write};
 use crate::imgdec;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
 use crate::port::{self, cells_at, cells_len, cells_push, Cells, Src, SrcBacking};
@@ -756,6 +757,9 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     }
     let (mut gl, mut mk, mut fnt) = (Cells::new(), Cells::new(), Cells::new());
     let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
+    // the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
+    let (mut fw, mut fl) = (Cells::new(), Cells::new());
+    th_append(&mut wd, &mut ln, &mut fw, &mut fl, 0);
     let np = page_count(&mut m.pages);
     // Running furniture (P4.3), as `attempt` runs it: an image has no catalogue (no Info, no page labels, no tagged tree), so those
     // arenas are empty and the stage reads the lines and the pages alone.
@@ -763,7 +767,7 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     let trust = tg_trust(&mut ss);
     let (mut cd, mut sl, mut gr, mut ford, mut tx, mut bh) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut fo, mut fp, mut ft, mut pl) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    fu_find(&mut wd, &mut ln, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
+    fu_find(&mut fw, &mut fl, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
     // Tables (P5), as `attempt` finds them: before the paragraphs, from the OCR lines like any others; an image has no vector
     // paths (`pa` is empty), so only the text-based profiles can find one.
     let mut pa = Cells::new();
@@ -772,24 +776,24 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     let (mut s5, mut s6, mut s7, mut s8, mut s9) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s10, mut s11, mut s12, mut s13, mut s14) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s15, mut s16, mut s17, mut s18) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    tb_build(&mut wd, &mut ln, &mut et, &mut pa, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
+    tb_build(&mut fw, &mut fl, &mut et, &mut pa, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
     let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     // initials (P4.10) on the lines' copy, before the headings read it, exactly as `attempt` does; OCR words have no glyph or
     // font evidence (`gl`, `fnt` are empty), which the detector reads as no initial. `loc` is the locale's code points.
     let (mut ii, mut al) = (Cells::new(), Cells::new());
-    lc_copy(&mut ln, &mut lt);
-    in_detect(&mut wd, &mut gl, &mut fnt, &mut et, np, &mut loc, &mut lt, &mut ls, &mut lo, &mut tm, &mut ii);
+    lc_copy(&mut fl, &mut lt);
+    in_detect(&mut fw, &mut gl, &mut fnt, &mut et, np, &mut loc, &mut lt, &mut ls, &mut lo, &mut tm, &mut ii);
     let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     hd_prior_outline(&mut ol, &mut txt, &mut hpr, &mut hptxt);
-    hd_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
+    hd_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
     // notes and lists, then restructuring, exactly as `attempt` runs them: the OCR lines are the text layer's lines
     let (mut nrf, mut nnb, mut nmk) = (Cells::new(), Cells::new(), Cells::new());
-    nt_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut m.pages, &mut hc, &mut nrf, &mut nnb, &mut nmk, &mut tw);
+    nt_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut m.pages, &mut hc, &mut nrf, &mut nnb, &mut nmk, &mut tw);
     let (mut lcd, mut lpi, mut lws) = (Cells::new(), Cells::new(), Cells::new());
-    ls_analyze(&mut wd, &mut lt, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
-    pa_build(&mut wd, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
+    ls_analyze(&mut fw, &mut lt, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
+    pa_build(&mut fw, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
     {
         let (mut rn, mut ra, mut rr, mut rnm, mut rstk, mut rused, mut rout) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
@@ -1033,12 +1037,19 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     }
     let np = pd_pg_count(&mut pg);
     let info = intake(np, &mut dc);
+    // The text layer's own triage and health (P7.0, D195, D208): `epages`, the stage-1 features, the flow COPIED into `fw`/`fl` without
+    // the words that failed a P3.6 check (set aside in `fa`, written to the ledger after `fu_write`), and the font health in `hl`.
+    // Stage 3 reads `fw`/`fl` from here on, never `wd`/`ln`. (Its `epages` and `feats` are its own: the scanned pages' evidence below
+    // keeps the rows it makes, until P7.U puts them in one arena.)
+    let (mut tl_epages, mut tl_feats, mut fw, mut fl, mut fa, mut hl, mut hsc) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    th_run(&mut pg, &mut gl, &mut et, &mut mk, &mut fnt, &mut wd, &mut ln, &mut im, &mut tl_epages, &mut tl_feats, &mut fw, &mut fl, &mut fa, &mut hl, &mut hsc);
     // SCANNED PAGES (P6.5, D212): a page with no text layer and one JPEG image that covers it is asked for as OCR
     // (a `decode` of the stream, then an `ocr` of its bitmap: two rounds whatever the page count); where the answers
     // are in, its OCR lines are appended to `wd` and `ln` beside the text layer's, and `mask` says which pages.
     // A page with a text layer is left as the text layer made it (fusion, P7, is what would weigh a second reading).
     let mut ev = EvArenas::new();
     let (mut mask, mut sp, mut loc) = (Cells::new(), Cells::new(), locale_cells(opts));
+    let nl0 = cells_len(&ln) / 16;
     let sstatus = sc_pdf_unit(
         view, idx as i32, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut im, answers, rq, opts.ocr.code(), &mut loc, &mut mask, &mut sp,
         &mut ev.epages, &mut ev.views, &mut et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts,
@@ -1050,6 +1061,10 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     if sstatus == crate::emon::plan::us_requests() {
         return Step::Requests;
     }
+    // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
+    th_append(&mut wd, &mut ln, &mut fw, &mut fl, nl0);
+    // The evidence dump is the interpreter's own plus the scanned pages' (version "1", the content goldens' bytes): the layer's arenas
+    // join it as version "2" with P7.3, when the goldens move with it (D242).
     let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt)) } else { None };
     // The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
     // (D076), which the furniture stage weighs the tree's /Artifact marks by.
@@ -1071,14 +1086,14 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     // Running furniture (P4.3): found BEFORE the paragraphs, which then never see it, and written after them.
     let (mut cd, mut sl, mut gr, mut ford, mut tx, mut bh) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut fo, mut fp, mut ft, mut pl) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    fu_find(&mut wd, &mut ln, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
+    fu_find(&mut fw, &mut fl, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
     // Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
     let (mut tb, mut tc, mut tw, mut tq, mut tx) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s0, mut s1, mut s2, mut s3, mut s4) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s5, mut s6, mut s7, mut s8, mut s9) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s10, mut s11, mut s12, mut s13, mut s14) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s15, mut s16, mut s17, mut s18) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    tb_build(&mut wd, &mut ln, &mut et, &mut pa, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
+    tb_build(&mut fw, &mut fl, &mut et, &mut pa, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
     let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     // the column stage's scratch (kin/columns.kin), and its debug log (`dbg`: one row of eight per join decision)
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
@@ -1092,23 +1107,23 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
             cells_push(&mut loc, ch as i32);
         }
     }
-    lc_copy(&mut ln, &mut lt);
-    in_detect(&mut wd, &mut gl, &mut fnt, &mut et, np, &mut loc, &mut lt, &mut ls, &mut lo, &mut tm, &mut ii);
+    lc_copy(&mut fl, &mut lt);
+    in_detect(&mut fw, &mut gl, &mut fnt, &mut et, np, &mut loc, &mut lt, &mut ls, &mut lo, &mut tm, &mut ii);
     // the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
     // paragraph stage builds; its priors: the outline (D172); the tagged roles are a follow-up
     let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     // the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
     hd_prior_outline(&mut ol, &mut txt, &mut hpr, &mut hptxt);
-    hd_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
+    hd_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
     // captions, note bodies and their references (kin/notes.kin, P4.6): the lines that begin them, written into `et` and the rows after
     // `hc`'s; before the lists, which never take a line these did. They read the same copy of the lines the headings do (initials
     // already out of it), and leave a table's lines to the table (`tw`)
     let (mut nrf, mut nnb, mut nmk) = (Cells::new(), Cells::new(), Cells::new());
-    nt_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut m.pages, &mut hc, &mut nrf, &mut nnb, &mut nmk, &mut tw);
+    nt_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut m.pages, &mut hc, &mut nrf, &mut nnb, &mut nmk, &mut tw);
     // lists (kin/lists.kin, P4.5): which lines begin an item, written into `et` and the rows after `hc`'s, which the paragraph stage reads
     let (mut lcd, mut lpi, mut lws) = (Cells::new(), Cells::new(), Cells::new());
-    ls_analyze(&mut wd, &mut lt, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
-    pa_build(&mut wd, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
+    ls_analyze(&mut fw, &mut lt, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
+    pa_build(&mut fw, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
     // restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
     // body is copied into new arenas, in document order, and they replace the old ones
@@ -1120,6 +1135,9 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
         std::mem::swap(&mut m.regions, &mut rr);
     }
     fu_write(&mut fo, &mut fp, &mut ft, &mut pl, np, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut tmp);
+    // the words the triage set aside (P7.0): ledger rows, after the furniture's
+    let mut ttx = Cells::new();
+    th_write(&mut fa, &mut wd, &mut et, &mut m.ledger, &mut m.text, &mut tmp, &mut ttx);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
