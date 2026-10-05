@@ -781,6 +781,10 @@
         ^:mut ^I32 l 0
         ^:mut ^I32 rr 0
         ^:mut ^I32 b 0
+        ^:mut ^I32 lo1 0
+        ^:mut ^I32 hi1 0
+        ^:mut ^I32 lo2 0
+        ^:mut ^I32 hi2 0
         ^:mut ^I32 kind 0]
     (cells-drop s1 0)
     (while (< c nc)
@@ -803,10 +807,13 @@
                 (if (and (!= p c) (and (<= (tr-cg cs p C_TOP) t) (and (<= (tr-cg cs p C_LEFT) l) (and (>= (tr-cg cs p C_RIGHT) rr) (>= (tr-cg cs p C_BOTTOM) b)))))
                   (do (set area (mul64 (i64 (- (tr-cg cs p C_RIGHT) (tr-cg cs p C_LEFT))) (i64 (- (tr-cg cs p C_BOTTOM) (tr-cg cs p C_TOP)))))
                       (if (or (< best 0) (< area barea))
-                        (if (and (== (tr-row-has rn ri t p (tr-row-lo rn ri t c) (tr-row-hi rn ri t c)) 1)
-                                 (== (tr-row-has rn ri (- b 1) p (tr-row-lo rn ri (- b 1) c) (tr-row-hi rn ri (- b 1) c)) 1))
-                          (do (set best p)
-                              (set barea area))))))
+                        (do (set lo1 (tr-row-lo rn ri t c))
+                            (set hi1 (tr-row-hi rn ri t c))
+                            (set lo2 (tr-row-lo rn ri (- b 1) c))
+                            (set hi2 (tr-row-hi rn ri (- b 1) c))
+                            (if (and (== (tr-row-has rn ri t p lo1 hi1) 1) (== (tr-row-has rn ri (- b 1) p lo2 hi2) 1))
+                              (do (set best p)
+                                  (set barea area)))))))
                 (set k (+ k 1))))
           (tr-cset cs c C_PARENT best)
           (set c (+ c 1))))
@@ -2672,10 +2679,9 @@
     (cells-set out 2 hbar)
     (return m)))
 
-(defn ^I32 tr-profile-score [^Cells rn ^Cells it ^I32 head ^Cells idx ^Cells off ^I32 th ^I32 vlo ^I32 nb ^:mut ^Cells prof]
-  (comment "The sharpness of the chain's ink projected across the direction `th`: every run of every member by its midpoint, weighted by")
-  (comment "its length, into two-pixel bins of v (from `vlo`; `nb` bins in `prof`, left zero); the sum of squared steps between neighbouring")
-  (comment "bins, which is largest when the line's edges fall into few bins. Answers the score / 256 (clamped to an Int).")
+(defn ^I32 tr-extent-at [^Cells rn ^Cells it ^I32 head ^Cells idx ^Cells off ^I32 th]
+  (comment "The extent ACROSS the direction `th` of every run end of every member of the chain (vmax - vmin, pixels): the thickness of the")
+  (comment "strip the chain's ink lies in. A line of letters is thinnest along its own direction, whatever hides parts of it.")
   (let [^I32 co (ev-cos th)
         ^I32 si (ev-sin th)
         ^:mut ^I32 j head
@@ -2684,10 +2690,10 @@
         ^:mut ^I32 lo 0
         ^:mut ^I32 hi 0
         ^:mut ^I32 r 0
-        ^:mut ^I32 b 0
-        ^:mut ^I32 c 0
-        ^:mut ^I32 pc 0
-        ^:mut ^I64 sc 0]
+        ^:mut ^I32 y 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 vmn 1000000000
+        ^:mut ^I32 vmx -1000000000]
     (while (>= j 0)
       (do (set comp (cells-at it (* j K_IT)))
           (set lo (cells-at off comp))
@@ -2695,65 +2701,30 @@
           (set k lo)
           (while (< k hi)
             (do (set r (cells-at idx k))
-                (set b (quot (- (tr-rot-v (quot (+ (tr-rg rn r 1) (tr-rg rn r 2)) 2) (tr-rg rn r 0) co si) vlo) 2))
-                (if (and (>= b 0) (< b nb))
-                  (do (set c (cells-at prof b))
-                      (cells-set prof b (+ c (- (tr-rg rn r 2) (tr-rg rn r 1))))))
+                (set y (tr-rg rn r 0))
+                (set v (tr-rot-v (tr-rg rn r 1) y co si))
+                (if (< v vmn) (set vmn v))
+                (if (> v vmx) (set vmx v))
+                (set v (tr-rot-v (- (tr-rg rn r 2) 1) y co si))
+                (if (< v vmn) (set vmn v))
+                (if (> v vmx) (set vmx v))
                 (set k (+ k 1))))
           (set j (cells-at it (+ (* j K_IT) 7)))))
-    (set b 0)
-    (while (< b nb)
-      (do (set c (cells-at prof b))
-          (set sc (+ sc (mul64 (i64 (- c pc)) (i64 (- c pc)))))
-          (set pc c)
-          (cells-set prof b 0)
-          (set b (+ b 1))))
-    (return (i32 (quot sc (i64 256))))))
+    (return (- vmx vmn))))
 
-(defn ^I32 tr-refine-angle [^Cells rn ^Cells it ^I32 head ^I32 th0 ^I32 span ^Cells idx ^Cells off ^:mut ^Cells prof]
-  (comment "The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) whose projection")
-  (comment "profile (`tr-profile-score`) is sharpest; ties go to the smaller offset from `th0`. `prof` is scratch.")
+(defn ^I32 tr-refine-angle [^Cells rn ^Cells it ^I32 head ^I32 th0 ^I32 span ^Cells idx ^Cells off]
+  (comment "The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) at which the strip the")
+  (comment "chain's ink lies in is thinnest (`tr-extent-at`); of equal extents the one nearest `th0`. This holds when a text line hides part")
+  (comment "of a watermark's letters: what is hidden is inside the strip, its two edges are not.")
   (let [^:mut ^I32 d 0
         ^:mut ^I32 best th0
-        ^:mut ^I32 bs -1
-        ^:mut ^I32 s 0
-        ^:mut ^I32 vlo 100000000
-        ^:mut ^I32 vhi -100000000
-        ^:mut ^I32 j head
-        ^:mut ^I32 comp 0
-        ^:mut ^I32 k 0
-        ^:mut ^I32 r 0
-        ^:mut ^I32 lo 0
-        ^:mut ^I32 hi 0
-        ^:mut ^I32 v 0
-        ^:mut ^I32 nb 0
-        ^:mut ^I32 ang 0]
-    (comment "the v-range over every angle tried is bounded by the chain's extent: take it at the worst angle of the span")
-    (while (>= j 0)
-      (do (set comp (cells-at it (* j K_IT)))
-          (set lo (cells-at off comp))
-          (set hi (cells-at off (+ comp 1)))
-          (set k lo)
-          (while (< k hi)
-            (do (set r (cells-at idx k))
-                (set d 0)
-                (while (<= d 1)
-                  (do (if (== d 0) (set ang (- th0 span)) (set ang (+ th0 span)))
-                      (set v (tr-rot-v (tr-rg rn r 1) (tr-rg rn r 0) (ev-cos ang) (ev-sin ang)))
-                      (if (< v vlo) (set vlo v))
-                      (if (> v vhi) (set vhi v))
-                      (set d (+ d 1))))
-                (set k (+ k 1))))
-          (set j (cells-at it (+ (* j K_IT) 7)))))
-    (set nb (+ (quot (- vhi vlo) 2) 4))
-    (if (> nb 20000) (return th0))
-    (cells-drop prof 0)
-    (cells-grow prof nb 0)
+        ^:mut ^I32 be 1000000000
+        ^:mut ^I32 e 0]
     (set d (- 0 span))
     (while (<= d span)
-      (do (set s (tr-profile-score rn it head idx off (+ th0 d) vlo nb prof))
-          (if (or (> s bs) (and (== s bs) (< (tr-abs d) (tr-abs (- best th0)))))
-            (do (set bs s) (set best (+ th0 d))))
+      (do (set e (tr-extent-at rn it head idx off (+ th0 d)))
+          (if (or (< e be) (and (== e be) (< (tr-abs d) (tr-abs (- best th0)))))
+            (do (set be e) (set best (+ th0 d))))
           (set d (+ d 25))))
     (return (rem (+ best 36000) 36000))))
 
@@ -2898,7 +2869,7 @@
                 (set alpha (cells-at s4 2))
                 (if (> alpha 9000) (set th (+ alpha 18000)) (set th alpha))
                 (set rms (quot (tr-isqrt (i64 (tr-max 0 (cells-at s4 1)))) 4))
-                (set th (tr-refine-angle rn s1 i th 800 s2 s3 s6))
+                (set th (tr-refine-angle rn s1 i th 1000 s2 s3))
                 (set pass 0)
                 (while (< pass 2)
                   (do (set m (tr-line-frame rn cs s1 i th s2 s3 s5 s4))

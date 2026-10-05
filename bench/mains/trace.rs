@@ -112,6 +112,9 @@ fn main() {
         cells_len(&pts) / 3,
         cells_len(&refs) / 2
     );
+    for k in 0..ik_count(&mut inks) {
+        println!("I {} {} {}", k, ik_get(&mut inks, k, ikf_count()), ik_get(&mut inks, k, ikf_role()));
+    }
     let mut out = String::new();
     dump_arena("C", &comps, 24, &mut out);
     dump_arena("R", &rules, 20, &mut out);
@@ -127,5 +130,76 @@ fn main() {
     println!("H {:016x}", hv);
     if dump {
         print!("{}", out);
+    }
+    if a.len() > 8 && a[8] == "dt" {
+        // The stroke width of a text-like component as the run median says (D198) against a distance transform (a 3-4 chamfer of the
+        // component's own box, the ridge pixels' median, 2r - 1): `D <components> <median |error|> <p95 |error|> <mean run> <mean dt>`, x100 px.
+        let mut errs: Vec<i32> = Vec::new();
+        let (mut sr, mut sd) = (0i64, 0i64);
+        for r in 0..(cells_len(&comps) / 24) {
+            let g = |f: i32| cells_at(&comps, r * 24 + f);
+            if g(15) != ck_text_like() || g(5) != nm_binary_view(&mut ws) {
+                continue;
+            }
+            let (px, py, pw, ph) = (g(6), g(7), g(8), g(9));
+            let (cw, chh) = (pw + 2, ph + 2);
+            let mut d = vec![0i32; (cw * chh) as usize];
+            for y in 0..ph {
+                for x in 0..pw {
+                    if bitmap_u8(&binary, px + x, py + y, 0) != 0 {
+                        d[((y + 1) * cw + x + 1) as usize] = 1_000_000;
+                    }
+                }
+            }
+            for y in 1..chh - 1 {
+                for x in 1..cw - 1 {
+                    let i = (y * cw + x) as usize;
+                    if d[i] != 0 {
+                        let m = (d[i - 1] + 3).min(d[i - cw as usize] + 3).min(d[i - cw as usize - 1] + 4).min(d[i - cw as usize + 1] + 4);
+                        d[i] = d[i].min(m);
+                    }
+                }
+            }
+            for y in (1..chh - 1).rev() {
+                for x in (1..cw - 1).rev() {
+                    let i = (y * cw + x) as usize;
+                    if d[i] != 0 {
+                        let m = (d[i + 1] + 3).min(d[i + cw as usize] + 3).min(d[i + cw as usize - 1] + 4).min(d[i + cw as usize + 1] + 4);
+                        d[i] = d[i].min(m);
+                    }
+                }
+            }
+            let mut ridge: Vec<i32> = Vec::new();
+            for y in 1..chh - 1 {
+                for x in 1..cw - 1 {
+                    let i = (y * cw + x) as usize;
+                    if d[i] > 0 {
+                        let mut top = true;
+                        for dy in -1i32..=1 {
+                            for dx in -1i32..=1 {
+                                if d[(i as i32 + dy * cw + dx) as usize] > d[i] {
+                                    top = false;
+                                }
+                            }
+                        }
+                        if top {
+                            ridge.push(d[i]);
+                        }
+                    }
+                }
+            }
+            if ridge.is_empty() {
+                continue;
+            }
+            ridge.sort();
+            let dt = (2 * ridge[ridge.len() / 2] * 100) / 3 - 100;
+            let run = g(12) * 100 / 24;
+            errs.push((run - dt).abs());
+            sr += run as i64;
+            sd += dt as i64;
+        }
+        errs.sort();
+        let n = errs.len().max(1);
+        println!("D {} {} {} {} {}", errs.len(), errs.get(n / 2).copied().unwrap_or(-1), errs.get(n * 95 / 100).copied().unwrap_or(-1), sr / n as i64, sd / n as i64);
     }
 }

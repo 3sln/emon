@@ -947,6 +947,10 @@ public final class Trace {
         int l = 0;
         int rr = 0;
         int b = 0;
+        int lo1 = 0;
+        int hi1 = 0;
+        int lo2 = 0;
+        int hi2 = 0;
         int kind = 0;
         emon.Port.cellsDrop(s1, 0);
         while (c < nc) {
@@ -971,7 +975,11 @@ public final class Trace {
                 if ((p != c) && ((trCg(cs, p, C_TOP) <= t) && ((trCg(cs, p, C_LEFT) <= l) && ((trCg(cs, p, C_RIGHT) >= rr) && (trCg(cs, p, C_BOTTOM) >= b))))) {
                     area = ((long) (trCg(cs, p, C_RIGHT) - trCg(cs, p, C_LEFT))) * ((long) (trCg(cs, p, C_BOTTOM) - trCg(cs, p, C_TOP)));
                     if ((best < 0) || (area < barea)) {
-                        if ((trRowHas(rn, ri, t, p, trRowLo(rn, ri, t, c), trRowHi(rn, ri, t, c)) == 1) && (trRowHas(rn, ri, b - 1, p, trRowLo(rn, ri, b - 1, c), trRowHi(rn, ri, b - 1, c)) == 1)) {
+                        lo1 = trRowLo(rn, ri, t, c);
+                        hi1 = trRowHi(rn, ri, t, c);
+                        lo2 = trRowLo(rn, ri, b - 1, c);
+                        hi2 = trRowHi(rn, ri, b - 1, c);
+                        if ((trRowHas(rn, ri, t, p, lo1, hi1) == 1) && (trRowHas(rn, ri, b - 1, p, lo2, hi2) == 1)) {
                             best = p;
                             barea = area;
                         }
@@ -3310,10 +3318,9 @@ public final class Trace {
         emon.Port.cellsSet(out, 2, hbar);
         return m;
     }
-    public static int trProfileScore(emon.Port.Cells rn, emon.Port.Cells it, int head, emon.Port.Cells idx, emon.Port.Cells off, int th, int vlo, int nb, emon.Port.Cells prof) {
-        // The sharpness of the chain's ink projected across the direction `th`: every run of every member by its midpoint, weighted by
-        // its length, into two-pixel bins of v (from `vlo`; `nb` bins in `prof`, left zero); the sum of squared steps between neighbouring
-        // bins, which is largest when the line's edges fall into few bins. Answers the score / 256 (clamped to an Int).
+    public static int trExtentAt(emon.Port.Cells rn, emon.Port.Cells it, int head, emon.Port.Cells idx, emon.Port.Cells off, int th) {
+        // The extent ACROSS the direction `th` of every run end of every member of the chain (vmax - vmin, pixels): the thickness of the
+        // strip the chain's ink lies in. A line of letters is thinnest along its own direction, whatever hides parts of it.
         int co = Evidence.evCos(th);
         int si = Evidence.evSin(th);
         int j = head;
@@ -3322,10 +3329,10 @@ public final class Trace {
         int lo = 0;
         int hi = 0;
         int r = 0;
-        int b = 0;
-        int c = 0;
-        int pc = 0;
-        long sc = 0;
+        int y = 0;
+        int v = 0;
+        int vmn = 1000000000;
+        int vmx = -1000000000;
         while (j >= 0) {
             comp = emon.Port.cellsAt(it, j * K_IT);
             lo = emon.Port.cellsAt(off, comp);
@@ -3333,82 +3340,40 @@ public final class Trace {
             k = lo;
             while (k < hi) {
                 r = emon.Port.cellsAt(idx, k);
-                b = (trRotV((trRg(rn, r, 1) + trRg(rn, r, 2)) / 2, trRg(rn, r, 0), co, si) - vlo) / 2;
-                if ((b >= 0) && (b < nb)) {
-                    c = emon.Port.cellsAt(prof, b);
-                    emon.Port.cellsSet(prof, b, c + (trRg(rn, r, 2) - trRg(rn, r, 1)));
+                y = trRg(rn, r, 0);
+                v = trRotV(trRg(rn, r, 1), y, co, si);
+                if (v < vmn) {
+                    vmn = v;
+                }
+                if (v > vmx) {
+                    vmx = v;
+                }
+                v = trRotV(trRg(rn, r, 2) - 1, y, co, si);
+                if (v < vmn) {
+                    vmn = v;
+                }
+                if (v > vmx) {
+                    vmx = v;
                 }
                 k += 1;
             }
             j = emon.Port.cellsAt(it, (j * K_IT) + 7);
         }
-        b = 0;
-        while (b < nb) {
-            c = emon.Port.cellsAt(prof, b);
-            sc += ((long) (c - pc)) * ((long) (c - pc));
-            pc = c;
-            emon.Port.cellsSet(prof, b, 0);
-            b += 1;
-        }
-        return (int) (sc / ((long) 256));
+        return vmx - vmn;
     }
-    public static int trRefineAngle(emon.Port.Cells rn, emon.Port.Cells it, int head, int th0, int span, emon.Port.Cells idx, emon.Port.Cells off, emon.Port.Cells prof) {
-        // The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) whose projection
-        // profile (`tr-profile-score`) is sharpest; ties go to the smaller offset from `th0`. `prof` is scratch.
+    public static int trRefineAngle(emon.Port.Cells rn, emon.Port.Cells it, int head, int th0, int span, emon.Port.Cells idx, emon.Port.Cells off) {
+        // The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) at which the strip the
+        // chain's ink lies in is thinnest (`tr-extent-at`); of equal extents the one nearest `th0`. This holds when a text line hides part
+        // of a watermark's letters: what is hidden is inside the strip, its two edges are not.
         int d = 0;
         int best = th0;
-        int bs = -1;
-        int s = 0;
-        int vlo = 100000000;
-        int vhi = -100000000;
-        int j = head;
-        int comp = 0;
-        int k = 0;
-        int r = 0;
-        int lo = 0;
-        int hi = 0;
-        int v = 0;
-        int nb = 0;
-        int ang = 0;
-        // the v-range over every angle tried is bounded by the chain's extent: take it at the worst angle of the span
-        while (j >= 0) {
-            comp = emon.Port.cellsAt(it, j * K_IT);
-            lo = emon.Port.cellsAt(off, comp);
-            hi = emon.Port.cellsAt(off, comp + 1);
-            k = lo;
-            while (k < hi) {
-                r = emon.Port.cellsAt(idx, k);
-                d = 0;
-                while (d <= 1) {
-                    if (d == 0) {
-                        ang = th0 - span;
-                    } else {
-                        ang = th0 + span;
-                    }
-                    v = trRotV(trRg(rn, r, 1), trRg(rn, r, 0), Evidence.evCos(ang), Evidence.evSin(ang));
-                    if (v < vlo) {
-                        vlo = v;
-                    }
-                    if (v > vhi) {
-                        vhi = v;
-                    }
-                    d += 1;
-                }
-                k += 1;
-            }
-            j = emon.Port.cellsAt(it, (j * K_IT) + 7);
-        }
-        nb = ((vhi - vlo) / 2) + 4;
-        if (nb > 20000) {
-            return th0;
-        }
-        emon.Port.cellsDrop(prof, 0);
-        emon.Port.cellsGrow(prof, nb, 0);
+        int be = 1000000000;
+        int e = 0;
         d = 0 - span;
         while (d <= span) {
-            s = trProfileScore(rn, it, head, idx, off, th0 + d, vlo, nb, prof);
-            if ((s > bs) || ((s == bs) && (trAbs(d) < trAbs(best - th0)))) {
-                bs = s;
+            e = trExtentAt(rn, it, head, idx, off, th0 + d);
+            if ((e < be) || ((e == be) && (trAbs(d) < trAbs(best - th0)))) {
+                be = e;
                 best = th0 + d;
             }
             d += 25;
@@ -3572,7 +3537,7 @@ public final class Trace {
                     th = alpha;
                 }
                 rms = trIsqrt((long) trMax(0, emon.Port.cellsAt(s4, 1))) / 4;
-                th = trRefineAngle(rn, s1, i, th, 800, s2, s3, s6);
+                th = trRefineAngle(rn, s1, i, th, 1000, s2, s3);
                 pass = 0;
                 while (pass < 2) {
                     m = trLineFrame(rn, cs, s1, i, th, s2, s3, s5, s4);

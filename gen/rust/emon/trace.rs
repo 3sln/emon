@@ -945,6 +945,10 @@ pub fn tr_parents(rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, mut 
     let mut l: i32 = 0;
     let mut rr: i32 = 0;
     let mut b: i32 = 0;
+    let mut lo1: i32 = 0;
+    let mut hi1: i32 = 0;
+    let mut lo2: i32 = 0;
+    let mut hi2: i32 = 0;
     let mut kind: i32 = 0;
     crate::port::cells_drop(s1, 0);
     while c < nc {
@@ -969,7 +973,11 @@ pub fn tr_parents(rn: &mut crate::port::Cells, ri: &mut crate::port::Cells, mut 
             if (p != c) && ((tr_cg(cs, p, C_TOP) <= t) && ((tr_cg(cs, p, C_LEFT) <= l) && ((tr_cg(cs, p, C_RIGHT) >= rr) && (tr_cg(cs, p, C_BOTTOM) >= b)))) {
                 area = ((tr_cg(cs, p, C_RIGHT) - tr_cg(cs, p, C_LEFT)) as i64).wrapping_mul((tr_cg(cs, p, C_BOTTOM) - tr_cg(cs, p, C_TOP)) as i64);
                 if (best < 0) || (area < barea) {
-                    if (tr_row_has(rn, ri, t, p, tr_row_lo(rn, ri, t, c), tr_row_hi(rn, ri, t, c)) == 1) && (tr_row_has(rn, ri, b - 1, p, tr_row_lo(rn, ri, b - 1, c), tr_row_hi(rn, ri, b - 1, c)) == 1) {
+                    lo1 = tr_row_lo(rn, ri, t, c);
+                    hi1 = tr_row_hi(rn, ri, t, c);
+                    lo2 = tr_row_lo(rn, ri, b - 1, c);
+                    hi2 = tr_row_hi(rn, ri, b - 1, c);
+                    if (tr_row_has(rn, ri, t, p, lo1, hi1) == 1) && (tr_row_has(rn, ri, b - 1, p, lo2, hi2) == 1) {
                         best = p;
                         barea = area;
                     }
@@ -3308,10 +3316,9 @@ pub(crate) fn tr_line_frame(rn: &mut crate::port::Cells, cs: &mut crate::port::C
     crate::port::cells_set(out, 2, hbar);
     return m;
 }
-pub(crate) fn tr_profile_score(rn: &mut crate::port::Cells, it: &mut crate::port::Cells, head: i32, idx: &mut crate::port::Cells, off: &mut crate::port::Cells, th: i32, vlo: i32, nb: i32, mut prof: &mut crate::port::Cells) -> i32 {
-    // The sharpness of the chain's ink projected across the direction `th`: every run of every member by its midpoint, weighted by
-    // its length, into two-pixel bins of v (from `vlo`; `nb` bins in `prof`, left zero); the sum of squared steps between neighbouring
-    // bins, which is largest when the line's edges fall into few bins. Answers the score / 256 (clamped to an Int).
+pub(crate) fn tr_extent_at(rn: &mut crate::port::Cells, it: &mut crate::port::Cells, head: i32, idx: &mut crate::port::Cells, off: &mut crate::port::Cells, th: i32) -> i32 {
+    // The extent ACROSS the direction `th` of every run end of every member of the chain (vmax - vmin, pixels): the thickness of the
+    // strip the chain's ink lies in. A line of letters is thinnest along its own direction, whatever hides parts of it.
     let co: i32 = ev_cos(th);
     let si: i32 = ev_sin(th);
     let mut j: i32 = head;
@@ -3320,10 +3327,10 @@ pub(crate) fn tr_profile_score(rn: &mut crate::port::Cells, it: &mut crate::port
     let mut lo: i32 = 0;
     let mut hi: i32 = 0;
     let mut r: i32 = 0;
-    let mut b: i32 = 0;
-    let mut c: i32 = 0;
-    let mut pc: i32 = 0;
-    let mut sc: i64 = 0;
+    let mut y: i32 = 0;
+    let mut v: i32 = 0;
+    let mut vmn: i32 = 1000000000;
+    let mut vmx: i32 = -1000000000;
     while j >= 0 {
         comp = crate::port::cells_at(it, j * K_IT);
         lo = crate::port::cells_at(off, comp);
@@ -3331,82 +3338,40 @@ pub(crate) fn tr_profile_score(rn: &mut crate::port::Cells, it: &mut crate::port
         k = lo;
         while k < hi {
             r = crate::port::cells_at(idx, k);
-            b = (tr_rot_v((tr_rg(rn, r, 1) + tr_rg(rn, r, 2)) / 2, tr_rg(rn, r, 0), co, si) - vlo) / 2;
-            if (b >= 0) && (b < nb) {
-                c = crate::port::cells_at(prof, b);
-                crate::port::cells_set(prof, b, c + (tr_rg(rn, r, 2) - tr_rg(rn, r, 1)));
+            y = tr_rg(rn, r, 0);
+            v = tr_rot_v(tr_rg(rn, r, 1), y, co, si);
+            if v < vmn {
+                vmn = v;
+            }
+            if v > vmx {
+                vmx = v;
+            }
+            v = tr_rot_v(tr_rg(rn, r, 2) - 1, y, co, si);
+            if v < vmn {
+                vmn = v;
+            }
+            if v > vmx {
+                vmx = v;
             }
             k += 1;
         }
         j = crate::port::cells_at(it, (j * K_IT) + 7);
     }
-    b = 0;
-    while b < nb {
-        c = crate::port::cells_at(prof, b);
-        sc += ((c - pc) as i64).wrapping_mul((c - pc) as i64);
-        pc = c;
-        crate::port::cells_set(prof, b, 0);
-        b += 1;
-    }
-    return (sc / (256 as i64)) as i32;
+    return vmx - vmn;
 }
-pub(crate) fn tr_refine_angle(rn: &mut crate::port::Cells, it: &mut crate::port::Cells, head: i32, th0: i32, span: i32, idx: &mut crate::port::Cells, off: &mut crate::port::Cells, mut prof: &mut crate::port::Cells) -> i32 {
-    // The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) whose projection
-    // profile (`tr-profile-score`) is sharpest; ties go to the smaller offset from `th0`. `prof` is scratch.
+pub(crate) fn tr_refine_angle(rn: &mut crate::port::Cells, it: &mut crate::port::Cells, head: i32, th0: i32, span: i32, idx: &mut crate::port::Cells, off: &mut crate::port::Cells) -> i32 {
+    // The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) at which the strip the
+    // chain's ink lies in is thinnest (`tr-extent-at`); of equal extents the one nearest `th0`. This holds when a text line hides part
+    // of a watermark's letters: what is hidden is inside the strip, its two edges are not.
     let mut d: i32 = 0;
     let mut best: i32 = th0;
-    let mut bs: i32 = -1;
-    let mut s: i32 = 0;
-    let mut vlo: i32 = 100000000;
-    let mut vhi: i32 = -100000000;
-    let mut j: i32 = head;
-    let mut comp: i32 = 0;
-    let mut k: i32 = 0;
-    let mut r: i32 = 0;
-    let mut lo: i32 = 0;
-    let mut hi: i32 = 0;
-    let mut v: i32 = 0;
-    let mut nb: i32 = 0;
-    let mut ang: i32 = 0;
-    // the v-range over every angle tried is bounded by the chain's extent: take it at the worst angle of the span
-    while j >= 0 {
-        comp = crate::port::cells_at(it, j * K_IT);
-        lo = crate::port::cells_at(off, comp);
-        hi = crate::port::cells_at(off, comp + 1);
-        k = lo;
-        while k < hi {
-            r = crate::port::cells_at(idx, k);
-            d = 0;
-            while d <= 1 {
-                if d == 0 {
-                    ang = th0 - span;
-                } else {
-                    ang = th0 + span;
-                }
-                v = tr_rot_v(tr_rg(rn, r, 1), tr_rg(rn, r, 0), ev_cos(ang), ev_sin(ang));
-                if v < vlo {
-                    vlo = v;
-                }
-                if v > vhi {
-                    vhi = v;
-                }
-                d += 1;
-            }
-            k += 1;
-        }
-        j = crate::port::cells_at(it, (j * K_IT) + 7);
-    }
-    nb = ((vhi - vlo) / 2) + 4;
-    if nb > 20000 {
-        return th0;
-    }
-    crate::port::cells_drop(prof, 0);
-    crate::port::cells_grow(prof, nb, 0);
+    let mut be: i32 = 1000000000;
+    let mut e: i32 = 0;
     d = 0 - span;
     while d <= span {
-        s = tr_profile_score(rn, it, head, idx, off, th0 + d, vlo, nb, prof);
-        if (s > bs) || ((s == bs) && (tr_abs(d) < tr_abs(best - th0))) {
-            bs = s;
+        e = tr_extent_at(rn, it, head, idx, off, th0 + d);
+        if (e < be) || ((e == be) && (tr_abs(d) < tr_abs(best - th0))) {
+            be = e;
             best = th0 + d;
         }
         d += 25;
@@ -3570,7 +3535,7 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
                 th = alpha;
             }
             rms = tr_isqrt(tr_max(0, crate::port::cells_at(s4, 1)) as i64) / 4;
-            th = tr_refine_angle(rn, s1, i, th, 800, s2, s3, s6);
+            th = tr_refine_angle(rn, s1, i, th, 1000, s2, s3);
             pass = 0;
             while pass < 2 {
                 m = tr_line_frame(rn, cs, s1, i, th, s2, s3, s5, s4);

@@ -1030,6 +1030,10 @@ func TrParents(rn *port.Cells, ri *port.Cells, cs *port.Cells, s1 *port.Cells) i
 	var l int32 = 0
 	var rr int32 = 0
 	var b int32 = 0
+	var lo1 int32 = 0
+	var hi1 int32 = 0
+	var lo2 int32 = 0
+	var hi2 int32 = 0
 	var kind int32 = 0
 	port.CellsDrop(s1, 0)
 	for c < nc {
@@ -1054,7 +1058,11 @@ func TrParents(rn *port.Cells, ri *port.Cells, cs *port.Cells, s1 *port.Cells) i
 			if (p != c) && ((TrCg(cs, p, cTop) <= t) && ((TrCg(cs, p, cLeft) <= l) && ((TrCg(cs, p, cRight) >= rr) && (TrCg(cs, p, cBottom) >= b)))) {
 				area = int64(TrCg(cs, p, cRight)-TrCg(cs, p, cLeft)) * int64(TrCg(cs, p, cBottom)-TrCg(cs, p, cTop))
 				if (best < 0) || (area < barea) {
-					if (trRowHas(rn, ri, t, p, trRowLo(rn, ri, t, c), trRowHi(rn, ri, t, c)) == 1) && (trRowHas(rn, ri, b-1, p, trRowLo(rn, ri, b-1, c), trRowHi(rn, ri, b-1, c)) == 1) {
+					lo1 = trRowLo(rn, ri, t, c)
+					hi1 = trRowHi(rn, ri, t, c)
+					lo2 = trRowLo(rn, ri, b-1, c)
+					hi2 = trRowHi(rn, ri, b-1, c)
+					if (trRowHas(rn, ri, t, p, lo1, hi1) == 1) && (trRowHas(rn, ri, b-1, p, lo2, hi2) == 1) {
 						best = p
 						barea = area
 					}
@@ -3465,10 +3473,9 @@ func trLineFrame(rn *port.Cells, cs *port.Cells, it *port.Cells, head int32, th 
 	return m
 }
 
-func trProfileScore(rn *port.Cells, it *port.Cells, head int32, idx *port.Cells, off *port.Cells, th int32, vlo int32, nb int32, prof *port.Cells) int32 {
-	// The sharpness of the chain's ink projected across the direction `th`: every run of every member by its midpoint, weighted by
-	// its length, into two-pixel bins of v (from `vlo`; `nb` bins in `prof`, left zero); the sum of squared steps between neighbouring
-	// bins, which is largest when the line's edges fall into few bins. Answers the score / 256 (clamped to an Int).
+func trExtentAt(rn *port.Cells, it *port.Cells, head int32, idx *port.Cells, off *port.Cells, th int32) int32 {
+	// The extent ACROSS the direction `th` of every run end of every member of the chain (vmax - vmin, pixels): the thickness of the
+	// strip the chain's ink lies in. A line of letters is thinnest along its own direction, whatever hides parts of it.
 	var co int32 = evidence.EvCos(th)
 	var si int32 = evidence.EvSin(th)
 	var j int32 = head
@@ -3477,10 +3484,10 @@ func trProfileScore(rn *port.Cells, it *port.Cells, head int32, idx *port.Cells,
 	var lo int32 = 0
 	var hi int32 = 0
 	var r int32 = 0
-	var b int32 = 0
-	var c int32 = 0
-	var pc int32 = 0
-	var sc int64 = 0
+	var y int32 = 0
+	var v int32 = 0
+	var vmn int32 = 1000000000
+	var vmx int32 = -1000000000
 	for j >= 0 {
 		comp = port.CellsAt(it, j*kIt)
 		lo = port.CellsAt(off, comp)
@@ -3488,83 +3495,41 @@ func trProfileScore(rn *port.Cells, it *port.Cells, head int32, idx *port.Cells,
 		k = lo
 		for k < hi {
 			r = port.CellsAt(idx, k)
-			b = (trRotV((trRg(rn, r, 1)+trRg(rn, r, 2))/2, trRg(rn, r, 0), co, si) - vlo) / 2
-			if (b >= 0) && (b < nb) {
-				c = port.CellsAt(prof, b)
-				port.CellsSet(prof, b, c+(trRg(rn, r, 2)-trRg(rn, r, 1)))
+			y = trRg(rn, r, 0)
+			v = trRotV(trRg(rn, r, 1), y, co, si)
+			if v < vmn {
+				vmn = v
+			}
+			if v > vmx {
+				vmx = v
+			}
+			v = trRotV(trRg(rn, r, 2)-1, y, co, si)
+			if v < vmn {
+				vmn = v
+			}
+			if v > vmx {
+				vmx = v
 			}
 			k += 1
 		}
 		j = port.CellsAt(it, (j*kIt)+7)
 	}
-	b = 0
-	for b < nb {
-		c = port.CellsAt(prof, b)
-		sc += int64(c-pc) * int64(c-pc)
-		pc = c
-		port.CellsSet(prof, b, 0)
-		b += 1
-	}
-	return int32(sc / int64(256))
+	return vmx - vmn
 }
 
-func trRefineAngle(rn *port.Cells, it *port.Cells, head int32, th0 int32, span int32, idx *port.Cells, off *port.Cells, prof *port.Cells) int32 {
-	// The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) whose projection
-	// profile (`tr-profile-score`) is sharpest; ties go to the smaller offset from `th0`. `prof` is scratch.
+func trRefineAngle(rn *port.Cells, it *port.Cells, head int32, th0 int32, span int32, idx *port.Cells, off *port.Cells) int32 {
+	// The direction of the chain's lines, within `span` centi-degrees of `th0`: the angle (every 25 centi-degrees) at which the strip the
+	// chain's ink lies in is thinnest (`tr-extent-at`); of equal extents the one nearest `th0`. This holds when a text line hides part
+	// of a watermark's letters: what is hidden is inside the strip, its two edges are not.
 	var d int32 = 0
 	var best int32 = th0
-	var bs int32 = -1
-	var s int32 = 0
-	var vlo int32 = 100000000
-	var vhi int32 = -100000000
-	var j int32 = head
-	var comp int32 = 0
-	var k int32 = 0
-	var r int32 = 0
-	var lo int32 = 0
-	var hi int32 = 0
-	var v int32 = 0
-	var nb int32 = 0
-	var ang int32 = 0
-	// the v-range over every angle tried is bounded by the chain's extent: take it at the worst angle of the span
-	for j >= 0 {
-		comp = port.CellsAt(it, j*kIt)
-		lo = port.CellsAt(off, comp)
-		hi = port.CellsAt(off, comp+1)
-		k = lo
-		for k < hi {
-			r = port.CellsAt(idx, k)
-			d = 0
-			for d <= 1 {
-				if d == 0 {
-					ang = th0 - span
-				} else {
-					ang = th0 + span
-				}
-				v = trRotV(trRg(rn, r, 1), trRg(rn, r, 0), evidence.EvCos(ang), evidence.EvSin(ang))
-				if v < vlo {
-					vlo = v
-				}
-				if v > vhi {
-					vhi = v
-				}
-				d += 1
-			}
-			k += 1
-		}
-		j = port.CellsAt(it, (j*kIt)+7)
-	}
-	nb = ((vhi - vlo) / 2) + 4
-	if nb > 20000 {
-		return th0
-	}
-	port.CellsDrop(prof, 0)
-	port.CellsGrow(prof, nb, 0)
+	var be int32 = 1000000000
+	var e int32 = 0
 	d = 0 - span
 	for d <= span {
-		s = trProfileScore(rn, it, head, idx, off, th0+d, vlo, nb, prof)
-		if (s > bs) || ((s == bs) && (trAbs(d) < trAbs(best-th0))) {
-			bs = s
+		e = trExtentAt(rn, it, head, idx, off, th0+d)
+		if (e < be) || ((e == be) && (trAbs(d) < trAbs(best-th0))) {
+			be = e
 			best = th0 + d
 		}
 		d += 25
@@ -3729,7 +3694,7 @@ func TrTlines(views *port.Cells, page int32, view int32, dpi100 int32, h int32, 
 				th = alpha
 			}
 			rms = TrIsqrt(int64(trMax(0, port.CellsAt(s4, 1)))) / 4
-			th = trRefineAngle(rn, s1, i, th, 800, s2, s3, s6)
+			th = trRefineAngle(rn, s1, i, th, 1000, s2, s3)
 			pass = 0
 			for pass < 2 {
 				m = trLineFrame(rn, cs, s1, i, th, s2, s3, s5, s4)

@@ -83,6 +83,9 @@ func main() {
 		fmt.Printf("T %s %.3f\n", names[k], best[k])
 	}
 	fmt.Printf("S %d %d %d %d %d %d %d %d\n", nl, ncomp, nruns, port.CellsLen(rules)/20, port.CellsLen(prims)/24, port.CellsLen(tlines)/20, port.CellsLen(pts)/3, port.CellsLen(refs)/2)
+	for k := int32(0); k < evidence.IkCount(inks); k++ {
+		fmt.Printf("I %d %d %d\n", k, evidence.IkGet(inks, k, evidence.IkfCount()), evidence.IkGet(inks, k, evidence.IkfRole()))
+	}
 	var out strings.Builder
 	dumpArena("C", comps, 24, &out)
 	dumpArena("R", rules, 20, &out)
