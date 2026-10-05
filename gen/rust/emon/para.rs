@@ -6,6 +6,7 @@ use crate::emon::columns::*;
 use crate::emon::evidence::*;
 use crate::emon::heading::*;
 use crate::emon::initial::*;
+use crate::emon::lists::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
 use crate::emon::pdfdoc::*;
@@ -116,10 +117,29 @@ pub(crate) fn pa_closer(cp: i32) -> bool {
     // A closing bracket or quotation mark, which may follow the mark that ends a sentence.
     return (cp == 41) || ((cp == 93) || ((cp == 34) || ((cp == 39) || ((cp == 8221) || ((cp == 8217) || (cp == 187))))));
 }
+pub(crate) fn pa_trim_ref(raw: &mut crate::port::Cells) -> i32 {
+    // The length of `raw` without a note reference group that ends it (and the space before it): the text the
+    // reader reads ends where the marker was printed, against the word.
+    let mut n: i32 = crate::port::cells_len(raw);
+    let mut i: i32 = 0;
+    if (n > 0) && (crate::port::cells_at(raw, n - 1) == ls_s_end()) {
+        i = n - 2;
+        while (i >= 0) && (crate::port::cells_at(raw, i) != ls_s_ref()) && (crate::port::cells_at(raw, i) != ls_s_end()) {
+            i -= 1;
+        }
+        if (i >= 0) && (crate::port::cells_at(raw, i) == ls_s_ref()) {
+            n = i;
+            if (n > 0) && (crate::port::cells_at(raw, n - 1) == 32) {
+                n -= 1;
+            }
+        }
+    }
+    return n;
+}
 pub(crate) fn pa_ends_sentence(raw: &mut crate::port::Cells) -> bool {
     // Does the text so far end a sentence: a closing mark, or a closer after one; a footnote marker (one to
     // three digits after a mark that follows a letter: `thing.3`) is not read.
-    let mut n: i32 = crate::port::cells_len(raw);
+    let mut n: i32 = pa_trim_ref(raw);
     let mut nd: i32 = 0;
     if n < 1 {
         return 0 == 1;
@@ -415,6 +435,10 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     if op == 2 {
         return 1 == 1;
     }
+    // an item, a note body or a caption starts here (P4.5, P4.6: the list stage's rows after the heading rows)
+    if ls_split(hc, a, b) == 1 {
+        return 1 == 1;
+    }
     if !pa_upright(ln, a) {
         return 1 == 1;
     }
@@ -438,7 +462,7 @@ pub(crate) fn pa_new_par(wd: &mut crate::port::Cells, ln: &mut crate::port::Cell
     if ((g * PA_GAP_DEN) > (med * PA_GAP_NUM)) && (((g - med) * PA_TINY_DIV) > hb) {
         return 1 == 1;
     }
-    if (((pa_start(ln, b) - pa_start(ln, a)) * PA_INDENT_DIV) > sb) && (((pa_start(ln, a) - margin) * PA_INDENT_DIV) <= sb) {
+    if (((pa_start(ln, b) - pa_start(ln, a)) * PA_INDENT_DIV) > sb) && (((pa_start(ln, a) - margin) * PA_INDENT_DIV) <= sb) && (ls_hang(hc, ln, a, b) == 0) {
         return 1 == 1;
     }
     if (pa_abs(ds) * PA_SIZE_DIV) > sa {
@@ -660,6 +684,164 @@ pub(crate) fn pa_heading_number(mut nodes: &mut crate::port::Cells, mut attrs: &
     node_set_attr_text(nodes, attrs, par, fk_numbering(), t1, n);
     return skip;
 }
+pub(crate) fn pa_group_end(raw: &mut crate::port::Cells, s: i32, rawn: i32) -> i32 {
+    // The index one past the END of the group that opens at `s` (an opener of `emon.lists`), or -1 when the
+    // group is not closed before `rawn`.
+    let mut i: i32 = s + 1;
+    while i < rawn {
+        if crate::port::cells_at(raw, i) == ls_s_end() {
+            return i + 1;
+        }
+        i += 1;
+    }
+    return -1;
+}
+pub(crate) fn pa_group_sep(raw: &mut crate::port::Cells, s: i32, gend: i32) -> i32 {
+    // The index of the separator of the group at `s`..`gend`, which ends its header and starts its text.
+    let mut i: i32 = s + 1;
+    while i < gend {
+        if crate::port::cells_at(raw, i) == ls_s_sep() {
+            return i;
+        }
+        i += 1;
+    }
+    return -1;
+}
+pub(crate) fn pa_group_value(raw: &mut crate::port::Cells, s: i32, sep: i32) -> i32 {
+    // The number the header of the group holds (the digits after the code cell); 0 when it holds none.
+    let mut i: i32 = s + 2;
+    let mut v: i32 = 0;
+    while i < sep {
+        v = (v * 10) + (crate::port::cells_at(raw, i) - 48);
+        i += 1;
+    }
+    return v;
+}
+pub(crate) fn pa_put_marker(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, raw: &mut crate::port::Cells, node: i32, key: i32, from: i32, to: i32) -> i32 {
+    // The code points raw[from..to) as the text attribute `key` of the node (a marker, a label).
+    let t0: i32 = crate::port::cells_len(text);
+    let mut i: i32 = from;
+    while i < to {
+        text_append_cp(text, crate::port::cells_at(raw, i));
+        i += 1;
+    }
+    node_set_attr_text(nodes, attrs, node, key, t0, to - from);
+    return 0;
+}
+pub(crate) fn pa_cut(mut raw: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // Remove raw[a..b), moving what follows down, and move the raw starts of the fragments (`fr`, cell 5 of a row)
+    // that lie beyond a.
+    let n: i32 = crate::port::cells_len(raw);
+    let d: i32 = b - a;
+    let mut j: i32 = a;
+    let mut k: i32 = 0;
+    while (j + d) < n {
+        crate::port::cells_set(raw, j, crate::port::cells_at(raw, j + d));
+        j += 1;
+    }
+    crate::port::cells_drop(raw, n - d);
+    while k < (crate::port::cells_len(fr) / FR_STRIDE) {
+        let s: i32 = crate::port::cells_at(fr, (k * FR_STRIDE) + 5);
+        if s >= b {
+            crate::port::cells_set(fr, (k * FR_STRIDE) + 5, s - d);
+        }
+        if (s > a) && (s < b) {
+            crate::port::cells_set(fr, (k * FR_STRIDE) + 5, a);
+        }
+        k += 1;
+    }
+    return 0;
+}
+pub(crate) fn pa_scrub(mut raw: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, from: i32) -> i32 {
+    // Cut every list, note or caption group at or after `from`: the stages leave one only at a paragraph's start.
+    let mut i: i32 = from;
+    while i < crate::port::cells_len(raw) {
+        let c: i32 = crate::port::cells_at(raw, i);
+        let n: i32 = crate::port::cells_len(raw);
+        if (c == ls_s_item()) || ((c == ls_s_note()) || (c == ls_s_cap())) {
+            let gend: i32 = pa_group_end(raw, i, n);
+            if gend > 0 {
+                if (gend < n) && (crate::port::cells_at(raw, gend) == 32) {
+                    pa_cut(raw, fr, i, gend + 1);
+                } else {
+                    pa_cut(raw, fr, i, gend);
+                }
+            } else {
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    return 0;
+}
+pub(crate) fn pa_has_ref(raw: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
+    // 1 when the range holds a note reference group.
+    let mut i: i32 = from;
+    while i < to {
+        if crate::port::cells_at(raw, i) == ls_s_ref() {
+            return 1;
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn pa_text_child(mut nodes: &mut crate::port::Cells, mut text: &mut crate::port::Cells, raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, par: i32, from: i32, to: i32) -> i32 {
+    // A `text` inline of the paragraph for raw[from..to), normalised. Answers its node.
+    let child: i32 = node_new(nodes, nk_text(), par);
+    let t0: i32 = crate::port::cells_len(text);
+    nz_nfc(raw, from, to, text, tmp, nz_flag_ligatures() + nz_flag_radicals());
+    node_set_text(nodes, child, t0, crate::port::cells_len(text) - t0);
+    node_set_conf(nodes, child, 1000);
+    node_add_src(nodes, child, sr_text());
+    return child;
+}
+pub(crate) fn pa_inlines(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, par: i32, from: i32, to: i32) -> i32 {
+    // The inline children of the paragraph for raw[from..to): `text` runs, and a `ref` for every note reference
+    // group (its marker; the target is set later, when the notes are known). A space before a reference is not
+    // text: the reference stands where the marker was printed, against the word. Answers the first `text` child, -1
+    // when there is none.
+    let mut i: i32 = from;
+    let mut seg: i32 = from;
+    let mut first: i32 = -1;
+    let mut child: i32 = 0;
+    while i < to {
+        if crate::port::cells_at(raw, i) == ls_s_ref() {
+            let gend: i32 = pa_group_end(raw, i, to);
+            let sep: i32 = pa_group_sep(raw, i, gend);
+            if (gend < 0) || (sep < 0) {
+                i += 1;
+            } else {
+                let mut se: i32 = i;
+                if (se > seg) && (crate::port::cells_at(raw, se - 1) == 32) {
+                    se -= 1;
+                }
+                if se > seg {
+                    child = pa_text_child(nodes, text, raw, tmp, par, seg, se);
+                    if first < 0 {
+                        first = child;
+                    }
+                }
+                child = node_new(nodes, nk_ref(), par);
+                node_set_conf(nodes, child, 500);
+                node_add_src(nodes, child, sr_text());
+                node_add_src(nodes, child, sr_infer());
+                pa_put_marker(nodes, attrs, text, raw, child, fk_marker(), sep + 1, gend - 1);
+                i = gend;
+                seg = gend;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    if seg < to {
+        child = pa_text_child(nodes, text, raw, tmp, par, seg, to);
+        if first < 0 {
+            first = child;
+        }
+    }
+    return first;
+}
 pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut al: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, parent: i32) -> i32 {
     // Close the open paragraph, if there is one, under `parent`: its node, `at` one region per fragment (a
     // column or a page), `src`, `conf`. The text is the paragraph's own when it is on one page, else a `text`
@@ -667,10 +849,13 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
     // (SPEC 10.1.2). Under the root (parent 0) a paragraph the heading analysis found a heading in is a `heading` of its
     // level under the open section it belongs in (D167). A paragraph that an initial opens (`fr`'s first row, P4.10) has an
     // `initial` inline first, holding the initial's text, and the rest of its text as a `text` inline (also when it is on one
-    // page, where it has its own `text` as well, equal to the two). Closes the block's line rows in `al` (P4.11: `al-mark`,
+    // page, where it has its own `text` as well, equal to the two); no list, note or caption group is read there (the
+    // initial wins, D229). A paragraph that starts with a group of the list, note or caption stage is an `item`, a `note`
+    // holding a paragraph, or a `caption` (D179), the group's marker or label an attribute and not in the text; note
+    // reference groups in the text become `ref` inlines. Closes the block's line rows in `al` (P4.11: `al-mark`,
     // `al-pass` decides at the end). Empties `raw` and `fr`.
     let nfr: i32 = crate::port::cells_len(fr) / FR_STRIDE;
-    let rawn: i32 = crate::port::cells_len(raw);
+    let mut rawn: i32 = crate::port::cells_len(raw);
     if nfr == 0 {
         crate::port::cells_drop(raw, 0);
         return 0;
@@ -681,22 +866,79 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
     let mut sect: i32 = parent;
     let mut kind: i32 = nk_paragraph();
     let mut par: i32 = 0;
+    let mut own: i32 = -1;
+    let mut lead: i32 = 0;
+    let mut gcode: i32 = 0;
+    let mut gval: i32 = 0;
+    let mut gm0: i32 = 0;
+    let mut gm1: i32 = 0;
+    let mut blk: i32 = 0;
     let mut k: i32 = 0;
     let mut kend: i32 = 0;
     let mut runs: i32 = 1;
-    let mut kids: i32 = 0;
     let mut from: i32 = 0;
     let mut to: i32 = 0;
     let mut cut: i32 = 0;
     let mut ini: i32 = 0;
     let mut t0: i32 = 0;
     let mut child: i32 = 0;
+    let mut kids: i32 = 0;
     if parent == 0 {
         lev = hd_level(hc, hl);
         sect = hd_parent(hc, nodes, lev);
     }
+    // a group at the start of the paragraph: an item, a note body or a caption (not inside a margin note)
+    if (lev == 0) && ((rawn > 0) && (ncp == 0)) {
+        let c0: i32 = crate::port::cells_at(raw, crate::port::cells_at(fr, 5));
+        let s0: i32 = crate::port::cells_at(fr, 5);
+        if (c0 == ls_s_item()) || ((c0 == ls_s_note()) || (c0 == ls_s_cap())) {
+            let gend: i32 = pa_group_end(raw, s0, rawn);
+            let sep: i32 = pa_group_sep(raw, s0, gend);
+            if (gend > 0) && (sep > 0) && ((parent == 0) || (node_kind(nodes, parent) != nk_note())) {
+                gcode = crate::port::cells_at(raw, s0 + 1) - ls_s_base();
+                gval = pa_group_value(raw, s0, sep);
+                gm0 = sep + 1;
+                gm1 = gend - 1;
+                lead = gend - s0;
+                if (gend < rawn) && (crate::port::cells_at(raw, gend) == 32) {
+                    lead += 1;
+                }
+                if c0 == ls_s_item() {
+                    blk = 1;
+                }
+                if c0 == ls_s_note() {
+                    blk = 2;
+                }
+                if c0 == ls_s_cap() {
+                    blk = 3;
+                }
+            } else {
+                // an unusable group (inside a margin note, or not closed): its text is dropped, the rest kept
+                if gend > 0 {
+                    lead = gend - s0;
+                    if (gend < rawn) && (crate::port::cells_at(raw, gend) == 32) {
+                        lead += 1;
+                    }
+                }
+            }
+        }
+    }
+    // a group that is still in the text after the first is a stray (the stages put one only at a line's start, and
+    // a paragraph's first line is its start): it is cut out, with its space
+    pa_scrub(raw, fr, crate::port::cells_at(fr, 5) + lead);
+    rawn = crate::port::cells_len(raw);
     if lev > 0 {
         kind = nk_heading();
+    }
+    if blk == 1 {
+        kind = nk_item();
+    }
+    if blk == 3 {
+        kind = nk_caption();
+    }
+    if blk == 2 {
+        own = node_new(nodes, nk_note(), sect);
+        sect = own;
     }
     par = node_new(nodes, kind, sect);
     if lev > 0 {
@@ -705,15 +947,28 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
     node_set_conf(nodes, par, 500);
     node_add_src(nodes, par, sr_text());
     node_add_src(nodes, par, sr_infer());
+    if blk == 1 {
+        node_set_sub(nodes, par, gcode);
+        node_set_aux(nodes, par, gval);
+        node_set_attr_int(nodes, attrs, par, fk_box(), ls_get(hc, hl, ls_k_textx()));
+        pa_put_marker(nodes, attrs, text, raw, par, fk_marker(), gm0, gm1);
+    }
+    if blk == 3 {
+        node_set_aux(nodes, par, gcode);
+        pa_put_marker(nodes, attrs, text, raw, par, fk_label(), gm0, gm1);
+    }
+    if blk == 2 {
+        node_set_sub(nodes, own, gcode);
+        node_set_conf(nodes, own, 500);
+        node_add_src(nodes, own, sr_infer());
+        pa_put_marker(nodes, attrs, text, raw, own, fk_marker(), gm0, gm1);
+    }
     k = 1;
     while k < nfr {
         if crate::port::cells_at(fr, k * FR_STRIDE) != crate::port::cells_at(fr, (k - 1) * FR_STRIDE) {
             runs += 1;
         }
         k += 1;
-    }
-    if (runs > 1) || (ncp > 0) {
-        kids = 1;
     }
     k = 0;
     while k < nfr {
@@ -723,16 +978,30 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
             kend += 1;
         }
         from = crate::port::cells_at(fr, (k * FR_STRIDE) + 5);
+        if k == 0 {
+            from += lead;
+        }
         to = rawn;
         if kend < nfr {
             to = crate::port::cells_at(fr, (kend * FR_STRIDE) + 5);
         }
+        kids = 0;
+        if runs > 1 {
+            kids = 1;
+        }
+        if (k == 0) && (ncp > 0) {
+            kids = 1;
+        }
+        if pa_has_ref(raw, from, to) == 1 {
+            kids = 1;
+        }
+        child = -1;
         if kids == 1 {
-            if k > 0 {
-                child = node_new(nodes, nk_break(), par);
-                node_set_sub(nodes, child, pg);
-                node_set_conf(nodes, child, 500);
-                node_add_src(nodes, child, sr_infer());
+            if (runs > 1) && (k > 0) {
+                let br: i32 = node_new(nodes, nk_break(), par);
+                node_set_sub(nodes, br, pg);
+                node_set_conf(nodes, br, 500);
+                node_add_src(nodes, br, sr_infer());
             }
             cut = from;
             if (k == 0) && (ncp > 0) {
@@ -757,17 +1026,15 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
                 node_set_text(nodes, child, t0, tn0);
                 node_set_conf(nodes, child, 1000);
                 node_add_src(nodes, child, sr_text());
+                child = -1;
             }
             if (runs > 1) || (cut < to) {
-                child = node_new(nodes, nk_text(), par);
-                t0 = crate::port::cells_len(text);
-                nz_nfc(raw, cut, to, text, tmp, nz_flag_ligatures() + nz_flag_radicals());
-                let tn: i32 = crate::port::cells_len(text) - t0;
-                node_set_text(nodes, child, t0, tn);
-                node_set_conf(nodes, child, 1000);
-                node_add_src(nodes, child, sr_text());
+                child = pa_inlines(nodes, attrs, text, raw, tmp, par, cut, to);
             }
-            if runs == 1 {
+            if (runs > 1) && (child < 0) && (k == 0) && (ncp > 0) {
+                child = pa_text_child(nodes, text, raw, tmp, par, cut, to);
+            }
+            if (runs == 1) && (pa_has_ref(raw, from, to) == 0) {
                 t0 = crate::port::cells_len(text);
                 nz_nfc(raw, from, to, text, tmp, nz_flag_ligatures() + nz_flag_radicals());
                 let tn1: i32 = crate::port::cells_len(text) - t0;
@@ -789,7 +1056,10 @@ pub(crate) fn pa_flush(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate
             let rx1: i32 = crate::port::cells_at(fr, base + 3);
             let ry1: i32 = crate::port::cells_at(fr, base + 4);
             node_add_region(nodes, regions, par, pg, rx0, ry0, rx1, ry1);
-            if runs > 1 {
+            if own >= 0 {
+                node_add_region(nodes, regions, own, pg, rx0, ry0, rx1, ry1);
+            }
+            if (runs > 1) && (child >= 0) {
                 node_add_region(nodes, regions, child, pg, rx0, ry0, rx1, ry1);
             }
             k += 1;
@@ -906,6 +1176,9 @@ pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     if (hd_level(hc, a) > 0) || (hd_level(hc, b) > 0) {
         return -100;
     }
+    if ls_start(hc, b) == 1 {
+        return -100;
+    }
     let last: i32 = crate::port::cells_at(raw, n - 1);
     if ((last == 45) || (last == 173)) && (n >= 2) {
         if pa_letter(crate::port::cells_at(raw, n - 2)) {
@@ -926,7 +1199,7 @@ pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     if pa_lower(pa_first_cp(wd, ln, et, b)) {
         pts += JS_LOWER;
     }
-    if (indents == 1) && (((pa_start(ln, b) - bmargin) * PA_INDENT_DIV) > sb) {
+    if (indents == 1) && (((pa_start(ln, b) - bmargin) * PA_INDENT_DIV) > sb) && (ls_hang_col(hc, ln, a, b, colx0, bmargin) == 0) {
         pts += JS_INDENT;
     }
     if pa_marker(wd, ln, et, b) {

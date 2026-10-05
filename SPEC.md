@@ -2097,6 +2097,26 @@ after a page break or a figure continues its numbering), nesting by indent.
 A numbered paragraph that is really a heading is disambiguated by the heading
 analysis, which runs first.
 
+As built (D229-D232). A marker is read from the characters, in no language: a
+bullet or a dash standing alone (a strong bullet glued to its text), one to
+three digits of any decimal script with `.` or `)`, the same in parentheses or
+brackets, a letter (Latin, Greek, Cyrillic) or a roman numeral with `.` or `)`,
+a circled digit. A bullet that is not text is read from the vector evidence: a
+small filled or stroked circle or square just before (after, for a line that runs
+right to left) the first word, on the x-height; its `marker` is the character it
+stands for (`•` `◦` `▪`). A candidate is confirmed, never trusted alone: by a
+neighbour of its own scheme and indent whose value is one off (or a few: a list
+that skips), or for a bullet by a sibling, or by a hanging continuation line
+under it; a lone `Z.` is never an item (an initial). A marker alone on its line
+with its text on the line beside it (a text layer builds two lines out of a marker
+and its text set in another font; the common case of a right to left list)
+is joined to it. Nesting is by the x where an item's *text* starts, measured
+inside its column (markers are often right aligned); items of one scheme whose
+values go up are one list, across a page milestone or a column break (a milestone
+or a note body between two items of a list that goes on stays inside the item
+before it); a value that starts again is a new list; `start` is the first value
+when it is not 1 and an item that skips has an explicit `value`.
+
 ### 10.5 Tables (D019)
 
 **Profiles** — detected independently; the best-scoring interpretation wins:
@@ -2255,6 +2275,31 @@ small-font block in the page's bottom band starting with the same marker →
 "Notes" section. Captions: §10.6 and tables. Links: from annotations (§8.1),
 plus bare URLs and e-mail addresses in text (a conservative recogniser; not a
 guess at every dotted string).
+
+As built (D233-D235). A caption starts with a label: a keyword of a table of
+caption words (English and a dozen other languages until P4.8's locale tables
+replace it) and a number (`1`, `2.3`, `A.1`, `4b`, `IV`), and then a full stop, a
+colon, a dash, or the line's own style (smaller than the body, or italic or bold
+where the body is not): `Figure 2 shows how` set as body text is a sentence. The
+`label` is the keyword and the number as printed, a dot after the number kept
+and a colon or dash left out (D073.2); the rest is the caption's text. A caption
+is the first child of the `table` or `figure` next to it (above a table, below a
+figure; the label's kind says which can be its object), its `target` the object;
+a figure caption with no figure beside it is the evidence of a figure nothing
+else found and is wrapped in an empty `figure` of kind `unknown`. A footnote
+reference is a run of superscript glyphs (smaller than the line and raised, or
+the Unicode superscript digits) after a letter or punctuation, followed by
+nothing but punctuation: `m²` and `10⁻⁶` are not notes. It is believed only when
+a note body with the same marker stands where a footnote stands (the lower half
+of the page of the reference or the page after it, set smaller than the body or
+marked in superscript) or, for an endnote, later in the document (a
+superscript marker at the start of the line, or a plain number among at least
+two others after a heading that says `Notes`; or, when the notes print no marker
+at all, as many notes under that heading as there are references left over). A
+`ref`'s `target` is the next note body with its marker that nothing else
+claims (D073.4). A bare link is `https://`, `http://`, `ftp://`, `mailto:`, `www.`
+and a host with a top-level domain, or `local@domain.tld`; what trails it
+(sentence punctuation, a closing bracket it did not open) is not part of it.
 
 ### 10.9 Initials: drop caps and their kin (D108, D109)
 

@@ -43,6 +43,9 @@ use crate::emon::heading::*;
 use crate::emon::html::*;
 use crate::emon::json::*;
 use crate::emon::furniture::{fu_find, fu_write};
+use crate::emon::lists::ls_analyze;
+use crate::emon::notes::nt_analyze;
+use crate::emon::restruct::rs_run;
 use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::table::*;
@@ -781,8 +784,20 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     hd_prior_outline(&mut ol, &mut txt, &mut hpr, &mut hptxt);
     hd_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
+    // notes and lists, then restructuring, exactly as `attempt` runs them: the OCR lines are the text layer's lines
+    let (mut nrf, mut nnb, mut nmk) = (Cells::new(), Cells::new(), Cells::new());
+    nt_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut m.pages, &mut hc, &mut nrf, &mut nnb, &mut nmk, &mut tw);
+    let (mut lcd, mut lpi, mut lws) = (Cells::new(), Cells::new(), Cells::new());
+    ls_analyze(&mut wd, &mut lt, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
     pa_build(&mut wd, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
+    {
+        let (mut rn, mut ra, mut rr, mut rnm, mut rstk, mut rused, mut rout) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+        rs_run(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut rn, &mut ra, &mut rr, &mut rnm, &mut rstk, &mut rused, &mut rout, &mut m.layout);
+        std::mem::swap(&mut m.nodes, &mut rn);
+        std::mem::swap(&mut m.attrs, &mut ra);
+        std::mem::swap(&mut m.regions, &mut rr);
+    }
     fu_write(&mut fo, &mut fp, &mut ft, &mut pl, np, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut tmp);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
     if let Some(loc) = &opts.locale {
@@ -1085,8 +1100,25 @@ fn attempt(view: &Src, pw: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize
     // the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
     hd_prior_outline(&mut ol, &mut txt, &mut hpr, &mut hptxt);
     hd_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
+    // captions, note bodies and their references (kin/notes.kin, P4.6): the lines that begin them, written into `et` and the rows after
+    // `hc`'s; before the lists, which never take a line these did. They read the same copy of the lines the headings do (initials
+    // already out of it), and leave a table's lines to the table (`tw`)
+    let (mut nrf, mut nnb, mut nmk) = (Cells::new(), Cells::new(), Cells::new());
+    nt_analyze(&mut wd, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut m.pages, &mut hc, &mut nrf, &mut nnb, &mut nmk, &mut tw);
+    // lists (kin/lists.kin, P4.5): which lines begin an item, written into `et` and the rows after `hc`'s, which the paragraph stage reads
+    let (mut lcd, mut lpi, mut lws) = (Cells::new(), Cells::new(), Cells::new());
+    ls_analyze(&mut wd, &mut lt, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
     pa_build(&mut wd, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
+    // restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
+    // body is copied into new arenas, in document order, and they replace the old ones
+    {
+        let (mut rn, mut ra, mut rr, mut rnm, mut rstk, mut rused, mut rout) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+        rs_run(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut rn, &mut ra, &mut rr, &mut rnm, &mut rstk, &mut rused, &mut rout, &mut m.layout);
+        std::mem::swap(&mut m.nodes, &mut rn);
+        std::mem::swap(&mut m.attrs, &mut ra);
+        std::mem::swap(&mut m.regions, &mut rr);
+    }
     fu_write(&mut fo, &mut fp, &mut ft, &mut pl, np, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut tmp);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
     if let Some(loc) = &opts.locale {

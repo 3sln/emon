@@ -20,7 +20,7 @@
 
 (def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
 
-(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "footnotes-endnotes" "initial-image" "initial-vector"
+(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "h-numbered" "initial-image" "initial-vector"
            "initial-raised" "initial-firstword" "initial-columns" "initial-rtl"])
 
 (defn run [& args]
