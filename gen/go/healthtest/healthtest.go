@@ -52,27 +52,29 @@ func TestBlend(emonT *testing.T) {
 	port.AssertEq(emonT, health.HhRegionScore(-1, -1, 1000, 900), 899, "a region with only skew and confidence: 947 scaled by 0.95")
 }
 
-func htEt() *port.Cells {
-	// An `etext`: `ab` (Latin) at 0, two Hebrew letters at 2.
-	var c *port.Cells = port.NewCells()
-	port.CellsPush(c, 97)
-	port.CellsPush(c, 98)
-	port.CellsPush(c, 1488)
-	port.CellsPush(c, 1489)
-	return c
-}
-
-func htWord(words *port.Cells, fw *port.Cells, feats *port.Cells, page int32, font int32) int32 {
+func htWordIn(words *port.Cells, fw *port.Cells, feats *port.Cells, et *port.Cells, page int32, font int32, script int32) int32 {
 	// One text-layer word of `page` in `font`, its feature row of the `xt` columns a healthy font has, copied into `fw`; answers its `fw` row.
-	var w int32 = evidence.WdNew(words, page, 0, 0, 1000, 1000, 0, 900, 1000, 900, 0, 0, 0, 2, -1, -1, -1)
+	var ts int32 = port.CellsLen(et)
+	var w int32 = evidence.WdNew(words, page, 0, 0, 1000, 1000, 0, 900, 1000, 900, 0, 0, ts, 2, -1, -1, -1)
 	var f int32 = evidence.FeNew(feats, evidence.EaWords(), w)
 	var r int32 = 0
+	if script == 0 {
+		port.CellsPush(et, 97)
+		port.CellsPush(et, 98)
+	} else {
+		port.CellsPush(et, 1488)
+		port.CellsPush(et, 1489)
+	}
 	evidence.WdSet(words, w, evidence.WfFont(), font)
 	evidence.FeSet(feats, f, evidence.XtFontHealth(), 1000)
 	evidence.WdSet(words, w, evidence.HdFeat(), f)
 	r = port.CellsLen(fw) / 24
 	player.FwCopyWord(fw, words, w, -1)
 	return r
+}
+
+func htWord(words *port.Cells, fw *port.Cells, feats *port.Cells, et *port.Cells, page int32, font int32) int32 {
+	return htWordIn(words, fw, feats, et, page, font, 0)
 }
 
 func htFontRow(hl *port.Cells, page int32, font int32) int32 {
@@ -147,9 +149,9 @@ func TestAHealthyFontAndAShiftedOne(emonT *testing.T) {
 	var ob *port.Cells = port.NewCells()
 	var ol *port.Cells = port.NewCells()
 	var ow *port.Cells = port.NewCells()
-	var et *port.Cells = htEt()
-	var healthy int32 = htWord(words, fw, feats, 1, 0)
-	var shifted int32 = htWord(words, fw, feats, 1, 1)
+	var et *port.Cells = port.NewCells()
+	var healthy int32 = htWord(words, fw, feats, et, 1, 0)
+	var shifted int32 = htWord(words, fw, feats, et, 1, 1)
 	htFontRow(hl, 1, 0)
 	htFontRow(hl, 1, 1)
 	// font 0: 12 groups, 11 agree; font 1: 12 groups, 1 agrees
@@ -181,9 +183,9 @@ func TestNoOcrAndTooFewGroups(emonT *testing.T) {
 	var ob *port.Cells = port.NewCells()
 	var ol *port.Cells = port.NewCells()
 	var ow *port.Cells = port.NewCells()
-	var et *port.Cells = htEt()
-	var a int32 = htWord(words, fw, feats, 1, 0)
-	var b int32 = htWord(words, fw, feats, 1, 1)
+	var et *port.Cells = port.NewCells()
+	var a int32 = htWord(words, fw, feats, et, 1, 0)
+	var b int32 = htWord(words, fw, feats, et, 1, 1)
 	port.AssertEq(emonT, a, 0, "the first flow word")
 	htFontRow(hl, 1, 0)
 	htFontRow(hl, 1, 1)
@@ -205,10 +207,10 @@ func TestAFontBadOnOnePageOnly(emonT *testing.T) {
 	var ob *port.Cells = port.NewCells()
 	var ol *port.Cells = port.NewCells()
 	var ow *port.Cells = port.NewCells()
-	var et *port.Cells = htEt()
-	var p1 int32 = htWord(words, fw, feats, 1, 7)
-	var p2 int32 = htWord(words, fw, feats, 2, 7)
-	var p3 int32 = htWord(words, fw, feats, 3, 7)
+	var et *port.Cells = port.NewCells()
+	var p1 int32 = htWord(words, fw, feats, et, 1, 7)
+	var p2 int32 = htWord(words, fw, feats, et, 2, 7)
+	var p3 int32 = htWord(words, fw, feats, et, 3, 7)
 	htFontRow(hl, 1, 7)
 	htFontRow(hl, 2, 7)
 	htFontRow(hl, 3, 7)
@@ -236,12 +238,12 @@ func TestAFontBadEverywhereIsBadOnEveryPage(emonT *testing.T) {
 	var ob *port.Cells = port.NewCells()
 	var ol *port.Cells = port.NewCells()
 	var ow *port.Cells = port.NewCells()
-	var et *port.Cells = htEt()
-	var p1 int32 = htWord(words, fw, feats, 1, 7)
-	var p2 int32 = htWord(words, fw, feats, 2, 7)
-	var p3 int32 = htWord(words, fw, feats, 3, 7)
-	var o1 int32 = htWord(words, fw, feats, 1, 8)
-	var o2 int32 = htWord(words, fw, feats, 2, 8)
+	var et *port.Cells = port.NewCells()
+	var p1 int32 = htWord(words, fw, feats, et, 1, 7)
+	var p2 int32 = htWord(words, fw, feats, et, 2, 7)
+	var p3 int32 = htWord(words, fw, feats, et, 3, 7)
+	var o1 int32 = htWord(words, fw, feats, et, 1, 8)
+	var o2 int32 = htWord(words, fw, feats, et, 2, 8)
 	htFontRow(hl, 1, 7)
 	htFontRow(hl, 2, 7)
 	htFontRow(hl, 3, 7)
@@ -275,11 +277,9 @@ func TestAScriptTheEngineCannotReadIsNotCounted(emonT *testing.T) {
 	var ob *port.Cells = port.NewCells()
 	var ol *port.Cells = port.NewCells()
 	var ow *port.Cells = port.NewCells()
-	var et *port.Cells = htEt()
-	var w int32 = htWord(words, fw, feats, 1, 5)
+	var et *port.Cells = port.NewCells()
+	var w int32 = htWordIn(words, fw, feats, et, 1, 5, 1)
 	// the word's text is the two Hebrew letters: ten groups that all disagree, and the font is still trusted
-	evidence.WdSet(words, w, evidence.HdTstart(), 2)
-	port.CellsSet(fw, (w*24)+11, 2)
 	htFontRow(hl, 1, 5)
 	htGroups(cg, refs, 1, player.PlEaFw(), w, 10, 0)
 	health.HlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl)
@@ -298,8 +298,8 @@ func TestTextLayerCandidatesNamedAsWordsRows(emonT *testing.T) {
 	var ob *port.Cells = port.NewCells()
 	var ol *port.Cells = port.NewCells()
 	var ow *port.Cells = port.NewCells()
-	var et *port.Cells = htEt()
-	var w int32 = htWord(words, fw, feats, 1, 4)
+	var et *port.Cells = port.NewCells()
+	var w int32 = htWord(words, fw, feats, et, 1, 4)
 	htFontRow(hl, 1, 4)
 	htGroups(cg, refs, 1, evidence.EaWords(), w, 10, 0)
 	health.HlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl)
@@ -362,7 +362,7 @@ func TestOcrBlocks(emonT *testing.T) {
 	var ob *port.Cells = port.NewCells()
 	var ol *port.Cells = port.NewCells()
 	var ow *port.Cells = port.NewCells()
-	var et *port.Cells = htEt()
+	var et *port.Cells = port.NewCells()
 	// block 0: body text (ink 150, nothing implausible, 95 % on the body layer, no seal, no artifact); 1: over blank paper;
 	// 2: under a seal; 3: soup; 4: watermark (artifact 900, light ink); 5: no ink columns at all, only the plausibility
 	htOcrWord(ow, feats, 5, 150, 0, 950, 0, 0)

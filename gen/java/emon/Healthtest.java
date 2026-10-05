@@ -43,26 +43,28 @@ public final class Healthtest {
         emon.Testport.assertEq(Health.hhOcrScore(1000, 1000, -1, 1000, -1, -1), 1000, "a clean block");
         emon.Testport.assertEq(Health.hhRegionScore(-1, -1, 1000, 900), 899, "a region with only skew and confidence: 947 scaled by 0.95");
     }
-    public static emon.Port.Cells htEt() {
-        // An `etext`: `ab` (Latin) at 0, two Hebrew letters at 2.
-        emon.Port.Cells c = emon.Port.newCells();
-        emon.Port.cellsPush(c, 97);
-        emon.Port.cellsPush(c, 98);
-        emon.Port.cellsPush(c, 1488);
-        emon.Port.cellsPush(c, 1489);
-        return c;
-    }
-    public static int htWord(emon.Port.Cells words, emon.Port.Cells fw, emon.Port.Cells feats, int page, int font) {
+    public static int htWordIn(emon.Port.Cells words, emon.Port.Cells fw, emon.Port.Cells feats, emon.Port.Cells et, int page, int font, int script) {
         // One text-layer word of `page` in `font`, its feature row of the `xt` columns a healthy font has, copied into `fw`; answers its `fw` row.
-        int w = Evidence.wdNew(words, page, 0, 0, 1000, 1000, 0, 900, 1000, 900, 0, 0, 0, 2, -1, -1, -1);
+        int ts = emon.Port.cellsLen(et);
+        int w = Evidence.wdNew(words, page, 0, 0, 1000, 1000, 0, 900, 1000, 900, 0, 0, ts, 2, -1, -1, -1);
         int f = Evidence.feNew(feats, Evidence.eaWords(), w);
         int r = 0;
+        if (script == 0) {
+            emon.Port.cellsPush(et, 97);
+            emon.Port.cellsPush(et, 98);
+        } else {
+            emon.Port.cellsPush(et, 1488);
+            emon.Port.cellsPush(et, 1489);
+        }
         Evidence.wdSet(words, w, Evidence.wfFont(), font);
         Evidence.feSet(feats, f, Evidence.xtFontHealth(), 1000);
         Evidence.wdSet(words, w, Evidence.hdFeat(), f);
         r = emon.Port.cellsLen(fw) / 24;
         Player.fwCopyWord(fw, words, w, -1);
         return r;
+    }
+    public static int htWord(emon.Port.Cells words, emon.Port.Cells fw, emon.Port.Cells feats, emon.Port.Cells et, int page, int font) {
+        return htWordIn(words, fw, feats, et, page, font, 0);
     }
     public static int htFontRow(emon.Port.Cells hl, int page, int font) {
         // A font-page row of P7.0's: components of a healthy font, score 1000.
@@ -131,9 +133,9 @@ public final class Healthtest {
         emon.Port.Cells ob = emon.Port.newCells();
         emon.Port.Cells ol = emon.Port.newCells();
         emon.Port.Cells ow = emon.Port.newCells();
-        emon.Port.Cells et = htEt();
-        int healthy = htWord(words, fw, feats, 1, 0);
-        int shifted = htWord(words, fw, feats, 1, 1);
+        emon.Port.Cells et = emon.Port.newCells();
+        int healthy = htWord(words, fw, feats, et, 1, 0);
+        int shifted = htWord(words, fw, feats, et, 1, 1);
         htFontRow(hl, 1, 0);
         htFontRow(hl, 1, 1);
         // font 0: 12 groups, 11 agree; font 1: 12 groups, 1 agrees
@@ -164,9 +166,9 @@ public final class Healthtest {
         emon.Port.Cells ob = emon.Port.newCells();
         emon.Port.Cells ol = emon.Port.newCells();
         emon.Port.Cells ow = emon.Port.newCells();
-        emon.Port.Cells et = htEt();
-        int a = htWord(words, fw, feats, 1, 0);
-        int b = htWord(words, fw, feats, 1, 1);
+        emon.Port.Cells et = emon.Port.newCells();
+        int a = htWord(words, fw, feats, et, 1, 0);
+        int b = htWord(words, fw, feats, et, 1, 1);
         emon.Testport.assertEq(a, 0, "the first flow word");
         htFontRow(hl, 1, 0);
         htFontRow(hl, 1, 1);
@@ -187,10 +189,10 @@ public final class Healthtest {
         emon.Port.Cells ob = emon.Port.newCells();
         emon.Port.Cells ol = emon.Port.newCells();
         emon.Port.Cells ow = emon.Port.newCells();
-        emon.Port.Cells et = htEt();
-        int p1 = htWord(words, fw, feats, 1, 7);
-        int p2 = htWord(words, fw, feats, 2, 7);
-        int p3 = htWord(words, fw, feats, 3, 7);
+        emon.Port.Cells et = emon.Port.newCells();
+        int p1 = htWord(words, fw, feats, et, 1, 7);
+        int p2 = htWord(words, fw, feats, et, 2, 7);
+        int p3 = htWord(words, fw, feats, et, 3, 7);
         htFontRow(hl, 1, 7);
         htFontRow(hl, 2, 7);
         htFontRow(hl, 3, 7);
@@ -217,12 +219,12 @@ public final class Healthtest {
         emon.Port.Cells ob = emon.Port.newCells();
         emon.Port.Cells ol = emon.Port.newCells();
         emon.Port.Cells ow = emon.Port.newCells();
-        emon.Port.Cells et = htEt();
-        int p1 = htWord(words, fw, feats, 1, 7);
-        int p2 = htWord(words, fw, feats, 2, 7);
-        int p3 = htWord(words, fw, feats, 3, 7);
-        int o1 = htWord(words, fw, feats, 1, 8);
-        int o2 = htWord(words, fw, feats, 2, 8);
+        emon.Port.Cells et = emon.Port.newCells();
+        int p1 = htWord(words, fw, feats, et, 1, 7);
+        int p2 = htWord(words, fw, feats, et, 2, 7);
+        int p3 = htWord(words, fw, feats, et, 3, 7);
+        int o1 = htWord(words, fw, feats, et, 1, 8);
+        int o2 = htWord(words, fw, feats, et, 2, 8);
         htFontRow(hl, 1, 7);
         htFontRow(hl, 2, 7);
         htFontRow(hl, 3, 7);
@@ -255,11 +257,9 @@ public final class Healthtest {
         emon.Port.Cells ob = emon.Port.newCells();
         emon.Port.Cells ol = emon.Port.newCells();
         emon.Port.Cells ow = emon.Port.newCells();
-        emon.Port.Cells et = htEt();
-        int w = htWord(words, fw, feats, 1, 5);
+        emon.Port.Cells et = emon.Port.newCells();
+        int w = htWordIn(words, fw, feats, et, 1, 5, 1);
         // the word's text is the two Hebrew letters: ten groups that all disagree, and the font is still trusted
-        Evidence.wdSet(words, w, Evidence.hdTstart(), 2);
-        emon.Port.cellsSet(fw, (w * 24) + 11, 2);
         htFontRow(hl, 1, 5);
         htGroups(cg, refs, 1, Player.plEaFw(), w, 10, 0);
         Health.hlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
@@ -277,8 +277,8 @@ public final class Healthtest {
         emon.Port.Cells ob = emon.Port.newCells();
         emon.Port.Cells ol = emon.Port.newCells();
         emon.Port.Cells ow = emon.Port.newCells();
-        emon.Port.Cells et = htEt();
-        int w = htWord(words, fw, feats, 1, 4);
+        emon.Port.Cells et = emon.Port.newCells();
+        int w = htWord(words, fw, feats, et, 1, 4);
         htFontRow(hl, 1, 4);
         htGroups(cg, refs, 1, Evidence.eaWords(), w, 10, 0);
         Health.hlPage(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
@@ -336,7 +336,7 @@ public final class Healthtest {
         emon.Port.Cells ob = emon.Port.newCells();
         emon.Port.Cells ol = emon.Port.newCells();
         emon.Port.Cells ow = emon.Port.newCells();
-        emon.Port.Cells et = htEt();
+        emon.Port.Cells et = emon.Port.newCells();
         // block 0: body text (ink 150, nothing implausible, 95 % on the body layer, no seal, no artifact); 1: over blank paper;
         // 2: under a seal; 3: soup; 4: watermark (artifact 900, light ink); 5: no ink columns at all, only the plausibility
         htOcrWord(ow, feats, 5, 150, 0, 950, 0, 0);

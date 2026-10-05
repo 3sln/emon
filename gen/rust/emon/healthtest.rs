@@ -46,26 +46,28 @@ fn test_blend() {
     crate::testport::assert_eq(hh_ocr_score(1000, 1000, -1, 1000, -1, -1), 1000, "a clean block");
     crate::testport::assert_eq(hh_region_score(-1, -1, 1000, 900), 899, "a region with only skew and confidence: 947 scaled by 0.95");
 }
-pub(crate) fn ht_et() -> &mut crate::port::Cells {
-    // An `etext`: `ab` (Latin) at 0, two Hebrew letters at 2.
-    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    crate::port::cells_push(c, 97);
-    crate::port::cells_push(c, 98);
-    crate::port::cells_push(c, 1488);
-    crate::port::cells_push(c, 1489);
-    return c;
-}
-pub(crate) fn ht_word(mut words: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, page: i32, font: i32) -> i32 {
+pub(crate) fn ht_word_in(mut words: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, font: i32, script: i32) -> i32 {
     // One text-layer word of `page` in `font`, its feature row of the `xt` columns a healthy font has, copied into `fw`; answers its `fw` row.
-    let w: i32 = wd_new(words, page, 0, 0, 1000, 1000, 0, 900, 1000, 900, 0, 0, 0, 2, -1, -1, -1);
+    let ts: i32 = crate::port::cells_len(et);
+    let w: i32 = wd_new(words, page, 0, 0, 1000, 1000, 0, 900, 1000, 900, 0, 0, ts, 2, -1, -1, -1);
     let f: i32 = fe_new(feats, ea_words(), w);
     let mut r: i32 = 0;
+    if script == 0 {
+        crate::port::cells_push(et, 97);
+        crate::port::cells_push(et, 98);
+    } else {
+        crate::port::cells_push(et, 1488);
+        crate::port::cells_push(et, 1489);
+    }
     wd_set(words, w, wf_font(), font);
     fe_set(feats, f, xt_font_health(), 1000);
     wd_set(words, w, hd_feat(), f);
     r = crate::port::cells_len(fw) / 24;
     fw_copy_word(fw, words, w, -1);
     return r;
+}
+pub(crate) fn ht_word(mut words: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, font: i32) -> i32 {
+    return ht_word_in(words, fw, feats, et, page, font, 0);
 }
 pub(crate) fn ht_font_row(mut hl: &mut crate::port::Cells, page: i32, font: i32) -> i32 {
     // A font-page row of P7.0's: components of a healthy font, score 1000.
@@ -135,9 +137,9 @@ fn test_a_healthy_font_and_a_shifted_one() {
     let ob: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = ht_et();
-    let healthy: i32 = ht_word(words, fw, feats, 1, 0);
-    let shifted: i32 = ht_word(words, fw, feats, 1, 1);
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let healthy: i32 = ht_word(words, fw, feats, et, 1, 0);
+    let shifted: i32 = ht_word(words, fw, feats, et, 1, 1);
     ht_font_row(hl, 1, 0);
     ht_font_row(hl, 1, 1);
     // font 0: 12 groups, 11 agree; font 1: 12 groups, 1 agrees
@@ -169,9 +171,9 @@ fn test_no_ocr_and_too_few_groups() {
     let ob: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = ht_et();
-    let a: i32 = ht_word(words, fw, feats, 1, 0);
-    let b: i32 = ht_word(words, fw, feats, 1, 1);
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: i32 = ht_word(words, fw, feats, et, 1, 0);
+    let b: i32 = ht_word(words, fw, feats, et, 1, 1);
     crate::testport::assert_eq(a, 0, "the first flow word");
     ht_font_row(hl, 1, 0);
     ht_font_row(hl, 1, 1);
@@ -193,10 +195,10 @@ fn test_a_font_bad_on_one_page_only() {
     let ob: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = ht_et();
-    let p1: i32 = ht_word(words, fw, feats, 1, 7);
-    let p2: i32 = ht_word(words, fw, feats, 2, 7);
-    let p3: i32 = ht_word(words, fw, feats, 3, 7);
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let p1: i32 = ht_word(words, fw, feats, et, 1, 7);
+    let p2: i32 = ht_word(words, fw, feats, et, 2, 7);
+    let p3: i32 = ht_word(words, fw, feats, et, 3, 7);
     ht_font_row(hl, 1, 7);
     ht_font_row(hl, 2, 7);
     ht_font_row(hl, 3, 7);
@@ -224,12 +226,12 @@ fn test_a_font_bad_everywhere_is_bad_on_every_page() {
     let ob: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = ht_et();
-    let p1: i32 = ht_word(words, fw, feats, 1, 7);
-    let p2: i32 = ht_word(words, fw, feats, 2, 7);
-    let p3: i32 = ht_word(words, fw, feats, 3, 7);
-    let o1: i32 = ht_word(words, fw, feats, 1, 8);
-    let o2: i32 = ht_word(words, fw, feats, 2, 8);
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let p1: i32 = ht_word(words, fw, feats, et, 1, 7);
+    let p2: i32 = ht_word(words, fw, feats, et, 2, 7);
+    let p3: i32 = ht_word(words, fw, feats, et, 3, 7);
+    let o1: i32 = ht_word(words, fw, feats, et, 1, 8);
+    let o2: i32 = ht_word(words, fw, feats, et, 2, 8);
     ht_font_row(hl, 1, 7);
     ht_font_row(hl, 2, 7);
     ht_font_row(hl, 3, 7);
@@ -263,11 +265,9 @@ fn test_a_script_the_engine_cannot_read_is_not_counted() {
     let ob: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = ht_et();
-    let w: i32 = ht_word(words, fw, feats, 1, 5);
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let w: i32 = ht_word_in(words, fw, feats, et, 1, 5, 1);
     // the word's text is the two Hebrew letters: ten groups that all disagree, and the font is still trusted
-    wd_set(words, w, hd_tstart(), 2);
-    crate::port::cells_set(fw, (w * 24) + 11, 2);
     ht_font_row(hl, 1, 5);
     ht_groups(cg, refs, 1, pl_ea_fw(), w, 10, 0);
     hl_page(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
@@ -286,8 +286,8 @@ fn test_text_layer_candidates_named_as_words_rows() {
     let ob: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = ht_et();
-    let w: i32 = ht_word(words, fw, feats, 1, 4);
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let w: i32 = ht_word(words, fw, feats, et, 1, 4);
     ht_font_row(hl, 1, 4);
     ht_groups(cg, refs, 1, ea_words(), w, 10, 0);
     hl_page(1, cg, refs, fw, words, et, feats, ob, ol, ow, hl);
@@ -346,7 +346,7 @@ fn test_ocr_blocks() {
     let ob: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = ht_et();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
     // block 0: body text (ink 150, nothing implausible, 95 % on the body layer, no seal, no artifact); 1: over blank paper;
     // 2: under a seal; 3: soup; 4: watermark (artifact 900, light ink); 5: no ink columns at all, only the plausibility
     ht_ocr_word(ow, feats, 5, 150, 0, 950, 0, 0);

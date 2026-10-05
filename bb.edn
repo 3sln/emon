@@ -56,6 +56,8 @@
                  :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/accuracy/fusion_report.clj" *command-line-args*)}
   fusion-live {:doc "The live fusion sets (SROIE derived, mapo80 val; never committed, tools/fusion/live-sets.edn): `stamp-ghost` from evidence dumps (P6.6, D209). NOT a gate.  bb fusion-live --stamps [--dumps DIR] | --self-test"
                :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/fusion/fusion_live.clj" *command-line-args*)}
+  ghost-health {:doc "Do the OCR blocks over a watermark, seal, signature or blank paper score under the blocks of the page's text? On P6.6's overlay scans of known truth, kin's own ink layers and `hl-page` (P7.2, D250). NOT a gate; needs Tesseract, rustc, poppler, ImageMagick and the rasters `bb ink` builds.  bb ghost-health [--limit N] [--reocr] [--verbose]"
+                :task (apply shell "bb" "tools/fusion/ghost_health.clj" *command-line-args*)}
   import {:doc "Run every public-dataset importer into corpus/_gold/, validate, report counts (NOT a gate: the corpus is not in git).  bb import [--limit N] [name ...]"
           :task (apply shell "bb" "tools/import/import_all.clj" *command-line-args*)}
   gates {:doc "Run every gate; fail if one exits non-zero or prints no score."
