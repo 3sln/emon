@@ -42,6 +42,8 @@
              :task (apply shell "kin/scripts/png-check" *command-line-args*)}
   ink {:doc "How well do kin's ink layers separate body ink from stamps, seals, signatures and watermarks, and how close is the deskew, on P6.6's colour and overlay scans of known truth (P6.3, D197). NOT a gate; needs poppler, ImageMagick and corpus/.  bb ink [--go] [--limit N] [--rebuild]"
        :task (apply shell "bb" "kin/scripts/ink" *command-line-args*)}
+  trace {:doc "How well does kin's tracer find rules, tints, text lines (watermarks too), rings and rects: against the vector paths of the no-text renders, the text layer's lines, the PDF's own watermark matrix, and (live) mapo80's labelled stamps; counts and time per page, Rust and Go (P6.4, D243-D249). NOT a gate; needs poppler, ghostscript, qpdf, ImageMagick.  bb trace [--go] [--limit N] [--only STEM] [--rebuild] [--mapo N]"
+         :task (apply shell "bb" "kin/scripts/trace" *command-line-args*)}
   png-bench {:doc "ms per target to write a real scanned page and a photo as PNG, and whether the four write the same file (NOT a gate; needs corpus/).  bb png-bench [N]"
              :task (apply shell "kin/scripts/png-bench" *command-line-args*)}
   drift {:doc "Is the committed generated code what the sources say?"

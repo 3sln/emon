@@ -1,0 +1,445 @@
+#!/usr/bin/env bb
+;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D243-D249) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
+;;
+;; NOT A GATE (DEVLOG P6.4: a ratchet is P7.S's). Needs poppler, ghostscript, qpdf and ImageMagick, test/corpus/synth, the drivers (`bench/trace.sh`,
+;; which this builds) and, for text-layer lines, a built `emon-rs` (kin/scripts/emon-rs-build, or EMON_RS). Measured, per DEVLOG P6.4 "Measured":
+;;
+;;   rules       on the `no-text` renders of the `pdf/` documents (ghostscript's -dFILTERTEXT then poppler at 300 dpi), against the vector rules of
+;;               the page: a stroked line or a thin (<= 3 pt) filled rectangle. Precision and recall BY LENGTH (a sample every 3 px must lie within
+;;               2.5 px of the other set, and of its extent), horizontal and vertical apart; endpoint error of each detected rule against the merged
+;;               collinear vector pieces (the grid is split at every crossing in the PDF, one rule in the trace);
+;;   tints       the same renders: `tint` rectangles against the vector fills larger than 5 pt each way whose colour lightness is 600 to 899 (lighter is paper to P6.3, D218) and
+;;               that are visible (not the paper's white): area recall and precision on a 4 px grid;
+;;   tlines      on the `with-text` renders: the text layer's lines (emon-rs's `--out=evidence`) against `tlines` rows by IoU >= 0.5;
+;;   DRAFT       `watermark-draft`: the `tlines` row of five components on a non-body ink layer, its angle against the 30 degrees the PDF says;
+;;   seals       `stamp-seal`: a `ring` (or `circle`) at the seal and a `rect` at the stamp (2 of 2);
+;;   mapo80      live only (corpus/seals/mapo80-stamps/images/val, YOLO labels): the share of labelled stamps hit by a ring/circle/ellipse/rect
+;;               primitive at IoU >= 0.5, the baseline P7.7 must keep;
+;;   counts      components, runs and time per page, Rust (and with --go Go), and whether the two dump identical bytes.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [shell]]
+         '[clojure.string :as str]
+         '[cheshire.core :as json])
+
+(def args (vec *command-line-args*))
+(def go? (some #{"--go"} args))
+(def rebuild? (some #{"--rebuild"} args))
+(defn opt [k] (second (drop-while #(not= % k) args)))
+(def limit (some-> (opt "--limit") parse-long))
+(def only (opt "--only"))
+(def mapo-n (some-> (opt "--mapo") parse-long))
+(def CORPUS "test/corpus/synth")
+(def CACHE ".cache/trace")
+(def DPI 300)
+(def PX (/ DPI 72.0))
+(def EMON-RS (or (System/getenv "EMON_RS")
+                 (first (filter fs/exists? [".cache/emon-rs/target/release/emon-rs"
+                                            "../agent-a73f1ca1f3b28f169/.cache/emon-rs/target/release/emon-rs"]))))
+
+(defn run [& cmd]
+  (let [r (apply shell {:out :string :err :string :continue true} cmd)]
+    (when-not (zero? (:exit r)) (throw (ex-info (str "failed: " (str/join " " cmd) "\n" (:err r)) {})))
+    (:out r)))
+
+;; ---------------------------------------------------------------- the drivers
+(when-not (contains? (set args) "--no-build")
+  (shell {:out :string :err :string} "env" (str "ONLY=" (if go? "all" "all")) "sh" "bench/trace.sh" "1" "build"))
+(def rust "bench/work/trace/rust/prog")
+(def gop "bench/work/trace/go/prog")
+
+(defn parse-dump [out]
+  (let [ls (str/split-lines out)
+        ints (fn [l] (mapv parse-long (rest (str/split l #" "))))]
+    {:T (into {} (for [l ls :when (str/starts-with? l "T ")] (let [[_ k v] (str/split l #" ")] [k (parse-double v)])))
+     :S (some #(when (str/starts-with? % "S ") (ints %)) ls)
+     :H (some #(when (str/starts-with? % "H ") (second (str/split % #" "))) ls)
+     :I (vec (for [l ls :when (str/starts-with? l "I ")] (ints l)))
+     :C (vec (for [l ls :when (str/starts-with? l "C ")] (ints l)))
+     :R (vec (for [l ls :when (str/starts-with? l "R ")] (ints l)))
+     :P (vec (for [l ls :when (str/starts-with? l "P ")] (ints l)))
+     :L (vec (for [l ls :when (str/starts-with? l "L ")] (ints l)))
+     :raw out}))
+
+(defn drive [exe raw w h ch]
+  (parse-dump (run exe raw (str w) (str h) (str ch) "1" (str (* DPI 100)) "dump")))
+
+;; ---------------------------------------------------------------- renders
+(defn dims [f] (mapv parse-long (str/split (str/trim (run "magick" "identify" "-format" "%w %h" f)) #" ")))
+
+(defn render! [pdf dir]
+  "Pages of `pdf` at 300 dpi as raw RGB in `dir`: [{:raw :w :h}] (cached)."
+  (let [done (str dir "/done.edn")]
+    (if (and (fs/exists? done) (not rebuild?))
+      (read-string (slurp done))
+      (do (fs/delete-tree dir) (fs/create-dirs dir)
+          (run "pdftoppm" "-r" (str DPI) "-png" pdf (str dir "/p"))
+          (let [pngs (sort (filter #(re-find #"/p-\d+\.png$" %) (map str (fs/list-dir dir))))
+                recs (vec (for [p pngs :let [[w h] (dims p) raw (str/replace p #"\.png$" ".rgb")]]
+                            (do (run "magick" p "-depth" "8" (str "rgb:" raw)) (fs/delete p) {:raw raw :w w :h h})))]
+            (spit done (pr-str recs))
+            recs)))))
+
+(defn notext-pdf! [pdf out]
+  (when (or rebuild? (not (fs/exists? out)))
+    (fs/create-dirs (fs/parent out))
+    (run "gs" "-q" "-dBATCH" "-dNOPAUSE" "-sDEVICE=pdfwrite" "-dFILTERTEXT" "-o" out pdf))
+  out)
+
+;; ---------------------------------------------------------------- vector truth from a pdfwrite file
+(defn compose [[a1 b1 c1 d1 e1 f1] [a2 b2 c2 d2 e2 f2]]
+  [(+ (* a1 a2) (* b1 c2)) (+ (* a1 b2) (* b1 d2)) (+ (* c1 a2) (* d1 c2)) (+ (* c1 b2) (* d1 d2))
+   (+ (* e1 a2) (* f1 c2) e2) (+ (* e1 b2) (* f1 d2) f2)])
+(defn tx [[a b c d e f] [x y]] [(+ (* a x) (* c y) e) (+ (* b x) (* d y) f)])
+(defn light [[r g b]] (* 1000.0 (+ (* 0.30 r) (* 0.59 g) (* 0.11 b))))
+
+(defn interpret
+  "Rects filled, and lines stroked, by one content stream, in page points (y up)."
+  [txt]
+  (let [toks (str/split (str/trim txt) #"\s+")
+        out (atom {:fills [] :strokes []})
+        gs (atom {:ctm [1 0 0 1 0 0] :fill [0 0 0] :stroke [0 0 0] :lw 1.0})
+        stk (atom [])
+        path (atom {:rects [] :segs []})
+        cur (atom nil)
+        nums (atom [])
+        num? (fn [t] (re-matches #"-?\d*\.?\d+(?:[eE][-+]?\d+)?" t))
+        scale (fn [] (let [[a b c d] (:ctm @gs)] (Math/sqrt (Math/abs (- (* a d) (* b c))))))
+        fill! (fn [] (doseq [r (:rects @path)] (swap! out update :fills conj (assoc r :color (:fill @gs)))))
+        stroke! (fn []
+                  (doseq [{:keys [p0 p1]} (:segs @path)]
+                    (swap! out update :strokes conj {:p0 p0 :p1 p1 :w (* (:lw @gs) (scale)) :color (:stroke @gs)}))
+                  (doseq [{:keys [x0 y0 x1 y1]} (:rects @path)]
+                    (doseq [[p0 p1] [[[x0 y0] [x1 y0]] [[x1 y0] [x1 y1]] [[x1 y1] [x0 y1]] [[x0 y1] [x0 y0]]]]
+                      (swap! out update :strokes conj {:p0 p0 :p1 p1 :w (* (:lw @gs) (scale)) :color (:stroke @gs)}))))
+        clear! (fn [] (reset! path {:rects [] :segs []}) (reset! cur nil))]
+    (doseq [t toks]
+      (if (num? t)
+        (swap! nums conj (parse-double t))
+        (let [n @nums]
+          (case t
+            "q" (swap! stk conj @gs)
+            "Q" (when (seq @stk) (reset! gs (peek @stk)) (swap! stk pop))
+            "cm" (when (= 6 (count n)) (swap! gs update :ctm #(compose (vec n) %)))
+            "w" (swap! gs assoc :lw (last n))
+            "rg" (swap! gs assoc :fill (vec (take-last 3 n)))
+            "RG" (swap! gs assoc :stroke (vec (take-last 3 n)))
+            "g" (swap! gs assoc :fill (vec (repeat 3 (last n))))
+            "G" (swap! gs assoc :stroke (vec (repeat 3 (last n))))
+            "k" (let [[c m y k] (take-last 4 n)] (swap! gs assoc :fill [(* (- 1 c) (- 1 k)) (* (- 1 m) (- 1 k)) (* (- 1 y) (- 1 k))]))
+            "K" (let [[c m y k] (take-last 4 n)] (swap! gs assoc :stroke [(* (- 1 c) (- 1 k)) (* (- 1 m) (- 1 k)) (* (- 1 y) (- 1 k))]))
+            "re" (when (= 4 (count n))
+                   (let [[x y w h] n ctm (:ctm @gs)
+                         [ax ay] (tx ctm [x y]) [bx by] (tx ctm [(+ x w) (+ y h)])]
+                     (swap! path update :rects conj {:x0 (min ax bx) :y0 (min ay by) :x1 (max ax bx) :y1 (max ay by)
+                                                     :quad [(tx ctm [x y]) (tx ctm [(+ x w) y]) (tx ctm [(+ x w) (+ y h)]) (tx ctm [x (+ y h)])]})))
+            "m" (when (= 2 (count n)) (reset! cur (tx (:ctm @gs) (vec n))))
+            "l" (when (and @cur (= 2 (count n)))
+                  (let [p (tx (:ctm @gs) (vec n))]
+                    (swap! path update :segs conj {:p0 @cur :p1 p}) (reset! cur p)))
+            ("f" "F" "f*") (do (fill!) (clear!))
+            ("S" "s") (do (stroke!) (clear!))
+            ("B" "B*" "b" "b*") (do (fill!) (stroke!) (clear!))
+            "n" (clear!)
+            nil)
+          (reset! nums []))))
+    @out))
+
+(defn page-streams
+  "The content of each page of a QDF file: {page-number text}."
+  [qdf]
+  (let [txt (slurp qdf :encoding "ISO-8859-1")
+        parts (rest (str/split txt #"(?m)^%% Contents for page \d+\n"))]
+    (into {} (map-indexed (fn [i body] [(inc i) (or (second (re-find #"(?s)stream\n(.*?)\nendstream" body)) "")]) parts))))
+
+(defn media-height [qdf]
+  (let [txt (slurp qdf :encoding "ISO-8859-1")]
+    (some->> (re-find #"/MediaBox\s*\[\s*[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+([-\d.]+)" txt) second parse-double)))
+
+(defn truth-of
+  "{page {:rules [...] :fills [...]}} in px (y down) at 300 dpi, from the no-text pdf."
+  [pdf tmp]
+  (let [qdf (str tmp ".qdf")
+        _ (run "qpdf" "--qdf" "--object-streams=disable" pdf qdf)
+        H (or (media-height qdf) 792.0)
+        pg (page-streams qdf)
+        pxy (fn [[x y]] [(* PX x) (* PX (- H y))])]
+    (into {}
+          (for [[n s] pg
+                :let [{:keys [fills strokes]} (interpret s)
+                      rules (concat
+                             (for [{:keys [quad]} fills
+                                   :let [[a b c d] quad
+                                         dist (fn [[px py] [qx qy]] (Math/hypot (- qx px) (- qy py)))
+                                         mid (fn [[px py] [qx qy]] [(/ (+ px qx) 2) (/ (+ py qy) 2)])
+                                         l1 (dist a b) l2 (dist b c) mn (min l1 l2) mx (max l1 l2)]
+                                   :when (and (<= mn 3.0) (>= mx 4.0) (>= mx (* 4 mn)))]
+                               (if (>= l1 l2)
+                                 {:p0 (pxy (mid a d)) :p1 (pxy (mid b c)) :w (* PX mn)}
+                                 {:p0 (pxy (mid a b)) :p1 (pxy (mid d c)) :w (* PX mn)}))
+                             (for [{:keys [p0 p1 w]} strokes
+                                   :let [[x0 y0] p0 [x1 y1] p1]
+                                   :when (and (<= w 3.0) (>= (Math/hypot (- x1 x0) (- y1 y0)) 3.0) (< (light [0 0 0]) 1001))]
+                               {:p0 (pxy p0) :p1 (pxy p1) :w (* PX (max w 0.5))}))
+                      tints (for [{:keys [x0 y0 x1 y1 color]} fills
+                                  :let [w (- x1 x0) h (- y1 y0)]
+                                  :when (and (> w 5.0) (> h 5.0) (>= (light color) 600) (< (light color) 900))]
+                              (let [[a b] (pxy [x0 y1]) [c d] (pxy [x1 y0])] [a b c d]))]]
+            [n {:rules (vec rules) :tints (vec tints)}]))))
+
+;; ---------------------------------------------------------------- scoring
+(defn seg-dist
+  "[distance from point p to segment a-b, t in px along it from a, length]"
+  [[px py] [ax ay] [bx by]]
+  (let [dx (- bx ax) dy (- by ay) l2 (+ (* dx dx) (* dy dy)) l (Math/sqrt l2)]
+    (if (zero? l2) [(Math/hypot (- px ax) (- py ay)) 0.0 0.0]
+        (let [t (/ (+ (* (- px ax) dx) (* (- py ay) dy)) l) tc (max 0.0 (min l t))
+              cx (+ ax (* (/ tc l) dx)) cy (+ ay (* (/ tc l) dy))]
+          [(Math/hypot (- px cx) (- py cy)) t l]))))
+
+(defn orient [{[x0 y0] :p0 [x1 y1] :p1}] (if (<= (Math/abs (- y1 y0)) (Math/abs (- x1 x0))) :h :v))
+(defn rlen [{[x0 y0] :p0 [x1 y1] :p1}] (Math/hypot (- x1 x0) (- y1 y0)))
+
+(defn coverage
+  "[covered samples, samples] of the segments `as` against the segments `bs`, a sample every 3 px, within 2.5 px (2 px beyond the ends)."
+  [as bs]
+  (let [cell 32.0
+        idx (reduce (fn [m b]
+                      (let [[x0 y0] (:p0 b) [x1 y1] (:p1 b)
+                            cx0 (int (/ (- (min x0 x1) 6) cell)) cx1 (int (/ (+ (max x0 x1) 6) cell))
+                            cy0 (int (/ (- (min y0 y1) 6) cell)) cy1 (int (/ (+ (max y0 y1) 6) cell))]
+                        (reduce (fn [m k] (update m k (fnil conj []) b)) m (for [i (range cx0 (inc cx1)) j (range cy0 (inc cy1))] [i j]))))
+                    {} bs)]
+    (reduce (fn [[c n] a]
+              (let [l (rlen a) k (max 2 (int (Math/ceil (/ l 3.0))))
+                    [ax ay] (:p0 a) [bx by] (:p1 a)
+                    cov (count (for [i (range (inc k))
+                                     :let [f (/ i (double k)) px (+ ax (* f (- bx ax))) py (+ ay (* f (- by ay)))
+                                           cands (get idx [(int (Math/floor (/ px cell))) (int (Math/floor (/ py cell)))])]
+                                     :when (some (fn [b] (let [[d t bl] (seg-dist [px py] (:p0 b) (:p1 b))]
+                                                          (and (<= d 2.5) (<= -2.0 t) (<= t (+ bl 2.0)))))
+                                                 cands)]
+                                 i))]
+                [(+ c cov) (+ n (inc k))]))
+            [0 0] as)))
+
+(defn merged-extents
+  "The intervals along segment `d` covered by the vector pieces collinear with it (within 3 px and 3 degrees), touching pieces merged."
+  [d ts]
+  (let [[ax ay] (:p0 d) [bx by] (:p1 d) l (rlen d)
+        ux (/ (- bx ax) l) uy (/ (- by ay) l)
+        ivs (sort-by first
+                     (for [t ts
+                           :let [[tx0 ty0] (:p0 t) [tx1 ty1] (:p1 t)
+                                 d0 (Math/abs (- (* (- tx0 ax) uy) (* (- ty0 ay) ux)))
+                                 d1 (Math/abs (- (* (- tx1 ax) uy) (* (- ty1 ay) ux)))]
+                           :when (and (<= d0 3.0) (<= d1 3.0))
+                           :let [t0 (+ (* (- tx0 ax) ux) (* (- ty0 ay) uy)) t1 (+ (* (- tx1 ax) ux) (* (- ty1 ay) uy))]]
+                       [(min t0 t1) (max t0 t1)]))]
+    (reduce (fn [acc [lo hi]]
+              (if (and (seq acc) (<= lo (+ (second (peek acc)) 4.0)))
+                (conj (pop acc) [(first (peek acc)) (max hi (second (peek acc)))])
+                (conj acc [lo hi])))
+            [] ivs)))
+
+(defn endpoint-errors [dets ts]
+  (vec (for [d dets
+             :let [l (rlen d) ivs (merged-extents d ts)]
+             :when (and (pos? l) (seq ivs))
+             :let [iv (apply max-key (fn [[lo hi]] (- (min hi l) (max lo 0.0))) ivs)]
+             :when (> (- (min (second iv) l) (max (first iv) 0.0)) (* 0.5 l))
+             e [(Math/abs (- 0.0 (first iv))) (Math/abs (- l (second iv)))]]
+         e)))
+
+(defn det-rules [R page]
+  (vec (for [r R :when (= (nth r 0) page)]
+         {:p0 [(/ (nth r 6) 24.0) (/ (nth r 7) 24.0)] :p1 [(/ (nth r 8) 24.0) (/ (nth r 9) 24.0)] :w (/ (nth r 10) 24.0) :style (nth r 13) :conf (nth r 14)})))
+
+(defn score-rules
+  "Pool of {:h [cov n cov n] :v ...} for one page's detections against its truth."
+  [dets ts]
+  (into {}
+        (for [o [:h :v]
+              :let [d (filter #(= o (orient %)) dets) t (filter #(= o (orient %)) ts)
+                    [pc pn] (coverage d t) [rc rn] (coverage t d)]]
+          [o {:pc pc :pn pn :rc rc :rn rn :ep (endpoint-errors d t)}])))
+
+(defn pool-rules [ms]
+  (into {} (for [o [:h :v]]
+             [o (reduce (fn [a m] (let [x (get m o)] (-> a (update :pc + (:pc x)) (update :pn + (:pn x)) (update :rc + (:rc x)) (update :rn + (:rn x)) (update :ep into (:ep x)))))
+                        {:pc 0 :pn 0 :rc 0 :rn 0 :ep []} ms)])))
+
+(defn ratio [a b] (if (pos? b) (/ (double a) b) Double/NaN))
+(defn pct [xs p] (if (seq xs) (nth (sort xs) (min (dec (count xs)) (int (* p (count xs))))) Double/NaN))
+
+;; tints on a 4 px grid
+(defn grid [w h rects]
+  (let [gw (inc (quot w 4)) gh (inc (quot h 4)) a (boolean-array (* gw gh))]
+    (doseq [[x0 y0 x1 y1] rects]
+      (doseq [gy (range (max 0 (int (Math/ceil (/ y0 4.0)))) (min gh (inc (int (/ y1 4.0)))))
+              gx (range (max 0 (int (Math/ceil (/ x0 4.0)))) (min gw (inc (int (/ x1 4.0)))))]
+        (when (and (< (* gx 4) x1) (< (* gy 4) y1)) (aset a (+ (* gy gw) gx) true))))
+    a))
+
+(defn score-tints [dets ts w h]
+  (let [gd (grid w h dets) gt (grid w h ts)
+        n (alength gd)
+        both (count (filter #(and (aget gd %) (aget gt %)) (range n)))]
+    {:both both :det (count (filter #(aget gd %) (range n))) :truth (count (filter #(aget gt %) (range n)))}))
+
+(defn det-tints [P page]
+  (vec (for [p P :when (and (= (nth p 0) page) (pos? (bit-and (nth p 21) 8)))]
+         [(/ (nth p 1) 24.0) (/ (nth p 2) 24.0) (/ (nth p 3) 24.0) (/ (nth p 4) 24.0)])))
+
+;; ---------------------------------------------------------------- the documents
+(def stems (cond->> (->> (fs/list-dir (str CORPUS "/pdf")) (map #(str/replace (fs/file-name %) #"\.pdf$" "")) sort)
+             only (filter #(= % only))
+             limit (take limit)))
+
+(defn page-count [pdf] (parse-long (str/trim (run "qpdf" "--show-npages" pdf))))
+
+(def results (atom []))
+
+(def sig (str (.lastModified (fs/file rust)) "/" (boolean go?)))
+(doseq [stem stems
+        :let [cf (str CACHE "/" stem "/res.edn")
+              cached (when (and (fs/exists? cf) (not rebuild?)) (read-string (slurp cf)))
+              n0 (count @results)]]
+  (if (= sig (:sig cached))
+    (do (println (format "%-34s cached" stem)) (swap! results into (:res cached)))
+    (do
+  (let [pdf (str CORPUS "/pdf/" stem ".pdf")
+        nt (notext-pdf! pdf (str CACHE "/" stem "/notext.pdf"))
+        nt-pages (render! nt (str CACHE "/" stem "/nt"))
+        wt-pages (render! pdf (str CACHE "/" stem "/wt"))
+        truth (truth-of nt (str CACHE "/" stem "/truth"))
+        lines (when (or EMON-RS (fs/exists? (str CACHE "/" stem "/evidence.json")))
+                (let [f (str CACHE "/" stem "/evidence.json")]
+                  (when (and EMON-RS (or rebuild? (not (fs/exists? f)))) (spit f (run EMON-RS "--out=evidence" pdf)))
+                  (:lines (json/parse-string (slurp f) true))))]
+    (println (format "%-34s %d pages, %d vector rules, %d vector fills" stem (count nt-pages)
+                     (reduce + (map #(count (:rules %)) (vals truth))) (reduce + (map #(count (:tints %)) (vals truth)))))
+    (doseq [[i {:keys [raw w h]}] (map-indexed vector nt-pages)
+            :let [page (inc i) d (drive rust raw w h 3) g (when go? (drive gop raw w h 3))
+                  tr (get truth page {:rules [] :tints []})
+                  dets (det-rules (:R d) 0)]]
+      (swap! results conj
+             {:kind :notext :stem stem :page page :w w :h h :S (:S d) :T (:T d) :H (:H d) :goH (:H g) :goT (:T g)
+              :rules (score-rules dets (:rules tr)) :ndet (count dets) :ntruth (count (:rules tr))
+              :tints (score-tints (det-tints (:P d) 0) (:tints tr) w h) :ntint (count (:tints tr))
+              :comps (count (:C d)) :dstyles (frequencies (map :style dets))}))
+    (doseq [[i {:keys [raw w h]}] (map-indexed vector wt-pages)
+            :let [page (inc i) d (drive rust raw w h 3) g (when go? (drive gop raw w h 3))
+                  tls (filter #(= (nth % 13) 0) (:L d)) ; the body layer's rows (ink row 0 is the first layer: `body` or whatever is darkest)
+                  all-tls (:L d)
+                  boxes (map (fn [l] [(/ (nth l 1) 24.0) (/ (nth l 2) 24.0) (/ (nth l 3) 24.0) (/ (nth l 4) 24.0)]) all-tls)
+                  tlines (for [l lines :when (and (= (:page l) page) (>= (second (:words l)) 1))]
+                           (mapv #(* PX %) (:box l)))]]
+      (swap! results conj
+             {:kind :withtext :stem stem :page page :S (:S d) :T (:T d) :H (:H d) :goH (:H g) :goT (:T g)
+              :ntl (count all-tls) :ntext (count tlines)
+              :iou (let [iou (fn [[a b c d] [e f g h]]
+                               (let [iw (max 0.0 (- (min c g) (max a e))) ih (max 0.0 (- (min d h) (max b f))) i (* iw ih)
+                                     u (+ (* (- c a) (- d b)) (* (- g e) (- h f)) (- i))]
+                                 (if (pos? u) (/ i u) 0.0)))
+                         ov (fn [[a b c d] [e f g h]] ; share of the text line's width covered, and its centre line inside the tline box
+                              (let [iw (max 0.0 (- (min c g) (max a e)))] (and (>= iw (* 0.5 (- c a))) (<= f (/ (+ b d) 2)) (>= h (/ (+ b d) 2)))))]
+                     (let [lng (filter (fn [[a b c d]] (>= (- c a) (* 3 (- d b)))) tlines)]
+                       {:hit (count (filter (fn [t] (some #(>= (iou t %) 0.5) boxes)) tlines))
+                        :loose (count (filter (fn [t] (some #(ov t %) boxes)) tlines))
+                        :nlong (count lng)
+                        :hitlong (count (filter (fn [t] (some #(>= (iou t %) 0.5) boxes)) lng))}))
+              :tl all-tls :inks (:I d) :P (:P d) :w w :h h})))
+  (spit cf (pr-str {:sig sig :res (subvec @results n0)})))))
+
+;; ---------------------------------------------------------------- report
+(let [nt (filter #(= :notext (:kind %)) @results)
+      wt (filter #(= :withtext (:kind %)) @results)
+      pr (pool-rules (map :rules nt))
+      line (fn [o] (let [x (get pr o) ep (:ep x)]
+                     (format "  %s: precision %.4f (%d of %d samples)  recall %.4f (%d of %d)  endpoint error p50 %.2f p95 %.2f max %.2f px (%d ends)"
+                             (name o) (ratio (:pc x) (:pn x)) (:pc x) (:pn x) (ratio (:rc x) (:rn x)) (:rc x) (:rn x)
+                             (pct ep 0.5) (pct ep 0.95) (if (seq ep) (apply max ep) Double/NaN) (count ep))))]
+  (println "\n== rules, against the vector paths of the no-text renders (targets: P, R >= 0.98 each way; endpoint error <= 2 px)")
+  (println (line :h))
+  (println (line :v))
+  (println "\n== per document (worst recall first; h/v recall)")
+  (doseq [m (take 12 (sort-by #(let [x (ratio (get-in % [:rules :h :rc]) (get-in % [:rules :h :rn]))] (if (Double/isNaN x) 2.0 x)) nt))]
+    (println (format "  %-30s p%d  truth %3d  found %3d  h %.3f/%.3f  v %.3f/%.3f" (:stem m) (:page m) (:ntruth m) (:ndet m)
+                     (ratio (get-in m [:rules :h :pc]) (get-in m [:rules :h :pn])) (ratio (get-in m [:rules :h :rc]) (get-in m [:rules :h :rn]))
+                     (ratio (get-in m [:rules :v :pc]) (get-in m [:rules :v :pn])) (ratio (get-in m [:rules :v :rc]) (get-in m [:rules :v :rn])))))
+  (let [t (reduce (fn [a m] (merge-with + a (:tints m))) {:both 0 :det 0 :truth 0} nt)]
+    (println (format "\n== tints against vector fills (>5 pt, lightness >= 600): %d truth fills on %d pages; area recall %.4f precision %.4f (4 px cells: %d, %d, %d)"
+                     (reduce + (map :ntint nt)) (count (filter #(pos? (:ntint %)) nt)) (ratio (:both t) (:truth t)) (ratio (:both t) (:det t)) (:both t) (:truth t) (:det t)))
+    (doseq [m nt :when (pos? (:ntint m))]
+      (println (format "  %-30s p%d  fills %d  area recall %.3f precision %.3f" (:stem m) (:page m) (:ntint m)
+                       (ratio (get-in m [:tints :both]) (get-in m [:tints :truth])) (ratio (get-in m [:tints :both]) (get-in m [:tints :det]))))))
+  (let [hit (reduce + (map #(get-in % [:iou :hit]) wt)) loose (reduce + (map #(get-in % [:iou :loose]) wt)) n (reduce + (map :ntext wt))
+        nl (reduce + (map #(get-in % [:iou :nlong]) wt)) hl (reduce + (map #(get-in % [:iou :hitlong]) wt))]
+    (println (format "\n== tlines against the text layer's lines (with-text renders): %d lines; IoU >= 0.5 recall %.4f (%d); centre-line-and-width recall %.4f (%d)"
+                     n (ratio hit n) hit (ratio loose n) loose))
+    (println (format "   of the lines at least 3 heights wide (about 3 glyphs, the least a chain needs): %d lines, IoU >= 0.5 recall %.4f (%d)  (target 0.97)" nl (ratio hl nl) hl)))
+  (let [wm (first (filter #(and (= "watermark-draft" (:stem %)) (= 1 (:page %))) wt))
+        role (into {} (map (fn [[k _ r]] [k r]) (:I wm)))
+        rows (filter #(and (>= (nth % 12) 3) (not= 1 (get role (nth % 13)))) (:tl wm))]
+    (println (format "\n== DRAFT: tlines rows of >= 3 components on a non-body layer of watermark-draft (the PDF's matrix says 30 degrees ccw = 3000): %s"
+                     (pr-str (map (fn [l] {:rot (nth l 9) :members (nth l 12) :ink (nth l 13) :role (get role (nth l 13))}) rows)))))
+  (let [ss (first (filter #(and (= "stamp-seal" (:stem %)) (= 1 (:page %))) wt))
+        pm (fn [kinds x0 y0 x1 y1] (filter (fn [p] (and (contains? kinds (nth p 6))
+                                                         (let [cx (/ (nth p 7) 24.0) cy (/ (nth p 8) 24.0)] (and (<= x0 cx x1) (<= y0 cy y1))))) (:P ss)))]
+    (println (format "\n== stamp-seal: ring/circle near the seal: %d; rect near the stamp: %d (2 of 2 when both are 1+)  [all prims: %s]"
+                     (count (pm #{3 7} 360 880 880 1300)) (count (pm #{1} 400 1330 960 1680)) (pr-str (frequencies (map #(nth % 6) (:P ss)))))))
+  (let [tt (fn [k] (let [xs (keep #(get-in % [:T k]) @results)] (if (seq xs) (/ (reduce + xs) (count xs)) Double/NaN)))
+        comps (map #(nth (:S %) 1) @results) runs (map #(nth (:S %) 2) @results)
+        same (map (fn [m] (when (:goH m) (= (:H m) (:goH m)))) @results)]
+    (println (format "\n== counts and time (Rust, best of one, this machine, per page, norm + trace): %d pages; components median %d max %d; runs median %d max %d"
+                     (count @results) (long (pct comps 0.5)) (apply max comps) (long (pct runs 0.5)) (apply max runs)))
+    (println (format "   trace ms: mean %.1f p95 %.1f max %.1f   (norm alone mean %.1f)   per page of 300 dpi letter"
+                     (tt "trace") (pct (keep #(get-in % [:T "trace"]) @results) 0.95) (apply max (keep #(get-in % [:T "trace"]) @results)) (tt "norm")))
+    (when go?
+      (println (format "   Go trace ms: mean %.1f; Rust and Go dumps byte-identical on %d of %d pages"
+                       (let [xs (keep #(get-in % [:goT "trace"]) @results)] (/ (reduce + xs) (count xs)))
+                       (count (filter true? same)) (count (filter some? same)))))))
+
+;; ---------------------------------------------------------------- stroke width: the run median against a distance transform
+(let [pages (for [s ["h-plain" "invoice" "columns-two" "bank-statement" "lists-basic" "figures-charts" "script-mixed" "furn-odd-even"]
+                  :let [r (first (filter #(= s (:stem %)) (filter #(= :withtext (:kind %)) @results)))] :when r]
+              [s (str CACHE "/" s "/wt/p-1.rgb") (:w r) (:h r)])
+      rows (for [[s raw w h] pages
+                 :let [out (run rust raw (str w) (str h) "3" "1" (str (* DPI 100)) "nodump" "dt")
+                       l (first (filter #(str/starts-with? % "D ") (str/split-lines out)))]
+                 :when l]
+             (into [s] (map parse-long (rest (str/split l #" ")))))]
+  (when (seq rows)
+    (println "\n== stroke width: the median run length (D198) against a distance transform (3-4 chamfer, ridge median, 2r - 1), text-like components, x100 px")
+    (doseq [[s n med p95 run dt] rows]
+      (println (format "  %-18s %5d components  |error| median %.2f px  p95 %.2f px   mean stroke: runs %.2f, transform %.2f px" s n (/ med 100.0) (/ p95 100.0) (/ run 100.0) (/ dt 100.0))))
+    (let [n (reduce + (map second rows))]
+      (println (format "  pooled: %d components; median of the medians %.2f px, worst p95 %.2f px" n (/ (nth (sort (map #(nth % 2) rows)) (quot (count rows) 2)) 100.0) (/ (apply max (map #(nth % 3) rows)) 100.0))))))
+
+;; ---------------------------------------------------------------- mapo80 (live)
+(let [dir "corpus/seals/mapo80-stamps/images/val" ldir "corpus/seals/mapo80-stamps/labels/val"]
+  (if-not (and mapo-n (fs/exists? dir))
+    (println "\n== mapo80: SKIP (live only: bb trace --mapo N, with corpus/seals/mapo80-stamps)")
+    (let [imgs (take mapo-n (sort (map str (fs/list-dir dir))))
+          out (for [img imgs
+                    :let [stem (str/replace (fs/file-name img) #"\.[^.]+$" "")
+                          lf (str ldir "/" stem ".txt")
+                          [w h] (dims img)
+                          raw (str CACHE "/mapo-" stem ".rgb")
+                          _ (when-not (fs/exists? raw) (run "magick" img "-depth" "8" (str "rgb:" raw)))
+                          d (drive rust raw w h 3)
+                          labels (when (fs/exists? lf)
+                                   (for [l (str/split-lines (slurp lf)) :let [[_ cx cy bw bh] (map parse-double (str/split (str/trim l) #"\s+"))] :when bw]
+                                     [(* w (- cx (/ bw 2))) (* h (- cy (/ bh 2))) (* w (+ cx (/ bw 2))) (* h (+ cy (/ bh 2)))]))
+                          cands (for [p (:P d) :when (contains? #{1 2 3 7} (nth p 6))
+                                      :let [px (* (/ 72.0 DPI) 0)]]
+                                  (let [dpi (double (/ 7200 100.0))]
+                                    [(/ (nth p 1) 24.0) (/ (nth p 2) 24.0) (/ (nth p 3) 24.0) (/ (nth p 4) 24.0)]))
+                          iou (fn [[a b c d] [e f g h]]
+                                (let [iw (max 0.0 (- (min c g) (max a e))) ih (max 0.0 (- (min d h) (max b f))) i (* iw ih)
+                                      u (+ (* (- c a) (- d b)) (* (- g e) (- h f)) (- i))]
+                                  (if (pos? u) (/ i u) 0.0)))]]
+                [(count labels) (count (filter (fn [l] (some #(>= (iou l %) 0.5) cands)) labels))])
+          n (reduce + (map first out)) hit (reduce + (map second out))]
+      (println (format "\n== mapo80 val (live, first %d images): seal-candidate recall at IoU >= 0.5: %.4f (%d of %d labelled stamps) -- the baseline P7.7 must keep"
+                       (count imgs) (ratio hit n) hit n)))))
