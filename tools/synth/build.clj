@@ -384,6 +384,10 @@
         docs (volatile! (om))
         ;; what degrade_fusion.clj did to the FUSION set's pages (P6.6, D209): skew, turns, overlay boxes, the seal
         fusion (let [f (io/file CORPUS "scan-ovl" "FACTS.json")] (if (.exists f) (pj/oparse (slurp f :encoding "UTF-8")) (om)))
+        ;; the GRAPHICS set's scan facts (degrade_graphics.clj) and the tagged tables' declared verdicts (tagged_tables.clj), P6.8
+        read-facts (fn [f] (let [f (io/file CORPUS f)] (if (.exists f) (pj/oparse (slurp f :encoding "UTF-8")) (om))))
+        gfx (read-facts "FACTS-gfx.json")
+        ttab (read-facts "FACTS-ttab.json")
         _ (.mkdirs (io/file CORPUS "gold"))]
     (doseq [stem stems]
       (let [hp (str CORPUS "/html/" stem ".html")
@@ -403,6 +407,11 @@
                                     (oassoc "turns" (get ff "turns")) (oassoc "overlays" (get ff "overlays"))
                                     (oassoc "seal" (get ff "seal")) (oassoc "watermark" (get ff "watermark"))
                                     (oassoc "bleed" (get ff "bleed"))))
+            gf (get gfx stem)
+            manifest-facts (cond-> manifest-facts
+                             gf (-> (oassoc "skew-scan" (get gf "skew-scan")) (oassoc "dpi" (get gf "dpi")))
+                             (and gf (not ff) (.exists (io/file CORPUS "scan-color" (str stem ".pdf")))) (oassoc "skew" (get gf "color-skew"))
+                             (get ttab stem) (oassoc "tag-verdict" (get-in ttab [stem "tag-verdict"])))
             rel (fn [d & [ext]] (str d "/" stem (or ext ".pdf")))
             files (cond-> (om "html" (rel "html" ".html") "pdf" (rel "pdf"))
                     (re-find #"src=\"img/" html) (assoc "asset" (str "html/" (second (re-find #"src=\"(img/[^\"]+)\"" html))))

@@ -27,6 +27,13 @@ cd "$(dirname "$0")/../.."
 corpus=test/corpus/synth
 TAGGED="h-inverted table-simple-ruled lists-basic"
 HAND="hidden-older-ocr"          # made by wm_pdf.clj, not printed by Chrome
+# (P6.8, D227) the hand-made graphics PDFs (gfx_pdf.clj, tagged_tables.clj) are not printed either; the mixed documents are
+# printed AFTER mixed.clj has made their images from the tables printed here
+for h in gfx-onepath-grid gfx-hidden-rules gfx-shading-bands gfx-pattern-bands gfx-curve-lines gfx-image-rules gfx-softmask-rule \
+         ttab-good ttab-good-ws ttab-bad-spans ttab-bad-rows ttab-allp ttab-layout ttab-th-as-td ttab-missing-row; do
+  HAND="$HAND $h ${h}-untagged"
+done
+MIXED="mixed-table-image mixed-table-image-shaded mixed-two-tables"
 
 chrome="${CHROME:-}"
 if [ -z "$chrome" ]; then
@@ -59,7 +66,7 @@ print_pdf() { # print_pdf OUT [flags...]
 }
 
 for s in $stems; do
-  case " $HAND " in *" $s "*) continue ;; esac
+  case " $HAND $MIXED " in *" $s "*) continue ;; esac
   print_pdf "$corpus/pdf/$s.pdf" --disable-pdf-tagging
   case " $TAGGED " in
     *" $s "*) print_pdf "$corpus/pdf-tagged/$s.pdf" ;;
@@ -68,7 +75,16 @@ for s in $stems; do
 done
 
 [ -z "$PRINT_ONLY" ] || exit 0       # PRINT_ONLY=1: stop after Chrome (to look at the pages)
+# (P6.8) rule truth of the sources, then the mixed documents' images and HTML, their print, the hand-made PDFs
+bb -cp tools:tools/lib tools/synth/gfx_pdf.clj
+bb -cp tools:tools/lib tools/synth/tagged_tables.clj
+python3 tools/oracle/rules.py table-simple-ruled table-zebra
+bb -cp tools:tools/lib tools/synth/mixed.clj image
+bb -cp tools:tools/lib tools/synth/mixed.clj
+for s in $MIXED; do print_pdf "$corpus/pdf/$s.pdf" --disable-pdf-tagging; echo "  printed $s"; done
+python3 tools/oracle/rules.py
 bb -cp tools:tools/lib tools/synth/wm_pdf.clj patch
 bb -cp tools:tools/lib -m synth.degrade $stems
 bb -cp tools:tools/lib -m synth.degrade-fusion
+bb -cp tools:tools/lib -m synth.degrade-graphics
 bb -cp tools:tools/lib -m synth.build
