@@ -1,4 +1,4 @@
-;; The tracer (P6.4; SPEC 8.2, 8.4.4; D092, D093, D198, D226; D237-D243). emon's own module (D039).
+;; The tracer (P6.4; SPEC 8.2, 8.4.4; D092, D093, D198, D226; D240-D246). emon's own module (D039).
 ;;
 ;;   Runs, components   `tr-runs` (the row runs of a binary view by `bitmap-next-nonzero`), `tr-label` (8-connected components by
 ;;                      union-find OVER RUNS, the smaller root wins), `tr-measure` (per component: ink, holes, stroke width as the

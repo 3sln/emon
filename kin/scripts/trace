@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D237-D243) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
+;; TRACE: how well does kin's tracer (P6.4, SPEC 8.2, D240-D246) find what is on a page?   bb trace [--go] [--limit N] [--rebuild] [--only STEM] [--mapo N]
 ;;
 ;; NOT A GATE (DEVLOG P6.4: a ratchet is P7.S's). Needs poppler, ghostscript, qpdf and ImageMagick, test/corpus/synth, the drivers (`bench/trace.sh`,
 ;; which this builds) and, for text-layer lines, a built `emon-rs` (kin/scripts/emon-rs-build, or EMON_RS). Measured, per DEVLOG P6.4 "Measured":
@@ -343,8 +343,11 @@
                                  (if (pos? u) (/ i u) 0.0)))
                          ov (fn [[a b c d] [e f g h]] ; share of the text line's width covered, and its centre line inside the tline box
                               (let [iw (max 0.0 (- (min c g) (max a e)))] (and (>= iw (* 0.5 (- c a))) (<= f (/ (+ b d) 2)) (>= h (/ (+ b d) 2)))))]
-                     {:hit (count (filter (fn [t] (some #(>= (iou t %) 0.5) boxes)) tlines))
-                      :loose (count (filter (fn [t] (some #(ov t %) boxes)) tlines))})
+                     (let [lng (filter (fn [[a b c d]] (>= (- c a) (* 3 (- d b)))) tlines)]
+                       {:hit (count (filter (fn [t] (some #(>= (iou t %) 0.5) boxes)) tlines))
+                        :loose (count (filter (fn [t] (some #(ov t %) boxes)) tlines))
+                        :nlong (count lng)
+                        :hitlong (count (filter (fn [t] (some #(>= (iou t %) 0.5) boxes)) lng))}))
               :tl all-tls :inks (:I d) :P (:P d) :w w :h h})))
   (spit cf (pr-str {:sig sig :res (subvec @results n0)})))))
 
@@ -370,9 +373,11 @@
     (doseq [m nt :when (pos? (:ntint m))]
       (println (format "  %-30s p%d  fills %d  area recall %.3f precision %.3f" (:stem m) (:page m) (:ntint m)
                        (ratio (get-in m [:tints :both]) (get-in m [:tints :truth])) (ratio (get-in m [:tints :both]) (get-in m [:tints :det]))))))
-  (let [hit (reduce + (map #(get-in % [:iou :hit]) wt)) loose (reduce + (map #(get-in % [:iou :loose]) wt)) n (reduce + (map :ntext wt))]
-    (println (format "\n== tlines against the text layer's lines (with-text renders): %d lines; IoU >= 0.5 recall %.4f (%d); centre-line-and-width recall %.4f (%d)  (target 0.97)"
-                     n (ratio hit n) hit (ratio loose n) loose)))
+  (let [hit (reduce + (map #(get-in % [:iou :hit]) wt)) loose (reduce + (map #(get-in % [:iou :loose]) wt)) n (reduce + (map :ntext wt))
+        nl (reduce + (map #(get-in % [:iou :nlong]) wt)) hl (reduce + (map #(get-in % [:iou :hitlong]) wt))]
+    (println (format "\n== tlines against the text layer's lines (with-text renders): %d lines; IoU >= 0.5 recall %.4f (%d); centre-line-and-width recall %.4f (%d)"
+                     n (ratio hit n) hit (ratio loose n) loose))
+    (println (format "   of the lines at least 3 heights wide (about 3 glyphs, the least a chain needs): %d lines, IoU >= 0.5 recall %.4f (%d)  (target 0.97)" nl (ratio hl nl) hl)))
   (let [wm (first (filter #(and (= "watermark-draft" (:stem %)) (= 1 (:page %))) wt))
         role (into {} (map (fn [[k _ r]] [k r]) (:I wm)))
         rows (filter #(and (>= (nth % 12) 3) (not= 1 (get role (nth % 13)))) (:tl wm))]

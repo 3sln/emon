@@ -1062,7 +1062,7 @@ within `fill-tol` (2 px), at least `fill-min` (6 pt) each way.
   existing layer's colour and the paper joins that layer unless it holds
   `ink-spike` of the page (a flat watermark does, an edge does not), and a
   bin outside every layer's core (half of `ink-merge`) goes to the layer
-  whose ink-to-paper segment it lies nearest (D218).
+  whose ink-to-paper segment it lies nearest (D237).
   Each layer's role (`ir`) is guessed from lightness, chroma and coverage:
   `body` (every low-chroma layer darker than `ink-light`: black headings and
   dark-grey text are two clusters of one kind of ink), `light`
@@ -1082,7 +1082,7 @@ within `fill-tol` (2 px), at least `fill-min` (6 pt) each way.
   construction): projection profiles of the ink runs of the body layers' mask
   (each run by its midpoint, weighted by its length, on every few rows) at
   candidate angles (±5°, 0.1° then 0.01°), with `ev-sin`/`ev-cos`; the angle
-  goes to the decode view and every view derived from it (D219). Kin
+  goes to the decode view and every view derived from it (D238). Kin
   never resamples for its own analysis; it maps coordinates through the
   view. **Orientation** (0/90/180/270) is OSD's when its confidence passes
   `osd-conf`, else the `tlines`' dominant direction; a page not upright is

@@ -2028,7 +2028,7 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: the laws (each bulk form against its reference over random bitmaps; banded Sauvola equal to `ras-sauvola`
   on three pages; a two-colour fixture separates into exactly two layers with the right roles; a page of known skew)
   pass on all four targets; `bb ink` meets the targets above; the bench table is in this entry.
-  *Done (D218-D220), as written except where said.* **Files**: `kin/norm.kin` (`emon.norm`), `kin/normtest.kin` (31 laws),
+  *Done (D237-D239), as written except where said.* **Files**: `kin/norm.kin` (`emon.norm`), `kin/normtest.kin` (31 laws),
   the five bulk forms in section `;; P6.3 bulk forms` of the four port files (`bitmap-gray-into`, `-hist-rgb`, `-lut-into`,
   `-hash`, `-quarter-into`; each held byte-identical to its kin reference `nm-ref-*` by law, the hash against FNV-1a values
   computed in babashka), `bench/{norm.sh,norm_report.clj,mknorm.clj,mains/norm.rs,norm.go,Norm.java,NormProgram.cs}` (`bench/run.sh N
@@ -2037,8 +2037,8 @@ analysis beyond "top-to-bottom lines on a single column".
   `views` rows (gray, binary, one ink-mask per layer) and `inks` rows that P7.U attaches `bms-put` bitmaps to (wiring point in the
   header of `kin/norm.kin`). `nm-feat-ocr`/`nm-feat-text` fill `xo` 10-13, 16 and `xt` 10-12 from pixel boxes (`nm-box-px` maps a
   page box through a view); `nm-orient` is OSD's quarter turns when confident. Deviations from the brief: the skew is read off the
-  BODY mask's ink RUNS (weighted by length, two-pixel rows, differenced), not run-cluster centres (D219), and every dark neutral
-  layer is `body` (D218).
+  BODY mask's ink RUNS (weighted by length, two-pixel rows, differenced), not run-cluster centres (D238), and every dark neutral
+  layer is `body` (D237).
   *Measured* (`bb ink`, 22 fusion documents, 39 scan-ovl pages at 130 dpi RGB q45 skewed ±3°, truth from the overlays drawn alone
   through the same rotation; Rust and Go agree on every page): body glyph ink in body layers **0.974** (target 0.98: MISS; 0.981
   on the clean documents, 0.93-0.95 on pages with bg-texture, seal over text and signatures); the COPY watermark's ink OUTSIDE body
@@ -2061,7 +2061,7 @@ analysis beyond "top-to-bottom lines on a single column".
   P6.4 bulk forms behind the same declarations. **Not on the fusion path**: taken under P10.3 only if `bb fusion-bench`
   shows a raster stage over its SPEC 12.3 budget. Gate: every accelerated implementation bit-identical to the kin
   reference over the corpus.
-- [ ] **P6.4 — Tracer: runs, components, contours, rules, primitives, text lines without OCR** (SPEC §8.2, §8.4.4, D198).
+- [x] **P6.4 — Tracer: runs, components, contours, rules, primitives, text lines without OCR** (SPEC §8.2, §8.4.4, D198).
   **Wave 2.** Depends on P6.3 (binary and ink-mask views). Parallel with P7.1 and P7.2.
   *Brief*: a kin module `emon.trace` over a page's binary view and ink masks, writing the trace bundle.
   1. **Runs and components** (`tr-runs`, `tr-components`): row runs of the binary view (via `bitmap-next-nonzero`; a run is
@@ -2113,6 +2113,29 @@ analysis beyond "top-to-bottom lines on a single column".
   (each ≥ 0.98 against the vector truth); **tints against vector fills** (a `paths` fill larger than 5 pt each way, visible,
   colour lightness ≥ 600) on the `no-text` renders of `table-shaded`, P6.8's `table-zebra`, `table-header-fill` and
   `gfx-shading-bands`: area recall ≥ 0.95, area precision ≥ 0.95; on their `scan/` variants recorded.
+  **Done (D240-D246), with three targets MISSED, below.** `kin/trace.kin` (`emon.trace`: runs, components, kinds, parents, contours, rules, primitives,
+  tints, text lines, the `xo`/`xt` 14, 15, 23 builders, `tr-orient-hint`, the stage `tr-trace`), `kin/tracetest.kin` (32 laws, 442 laws in all on each of
+  the four targets), `bench/trace.sh` + `bench/mains/trace.{rs,go}` (the drivers: Rust and Go dump every row byte for byte), `bb trace`
+  (`kin/scripts/trace`, not a gate). Engine wiring waits for P7.U. *Measured* (`bb trace`, 55 documents, 230 pages at 300 dpi, this machine,
+  Rust and Go identical on 230 of 230 pages):
+  * **Rules** against the vector paths of the `no-text` renders (ghostscript `-dFILTERTEXT`, the paths read from the QDF): **horizontal precision
+    0.991, recall 0.990** (met); **vertical precision 0.958, recall 0.963 (MISSED, target 0.98)**: what is missed or invented is a chart's axis ticks
+    and bar edges (`figures-charts`, `columns-span-figure`, `align-paragraphs` p2) and a sheared table (`script-cjk`, whose vector truth is itself approximate
+    under a shear). Endpoint error p50 0.4 px horizontal, 0.6 vertical; p95 2.75 and 2.25 px (target <= 2 px at p95: MISSED by a pixel;
+    the worst are chains cut at a figure's edge). Rules are at most 2 pt thick (a 3 pt limit made Sauvola's 11 px outline of a filled bar a rule: precision 0.74).
+  * **Tints** against vector fills (> 5 pt each way, lightness 600-899): `table-shaded` 1.000/1.000 (area recall/precision), `table-simple-ruled` 0.942/1.000,
+    `columns-uneven` 0.983/1.000; **but 0.000 on `table-multipage-thead` and the other multipage tables (pooled recall 0.109: MISSED, target 0.95)**:
+    their header fills are lighter than P6.3's ink-paper distance (D218, 24 of 255) allows a layer, so there is no mask to trace; this is P6.3's threshold,
+    not the tracer's, and P7.G's row 571 is where it is decided. P6.8's fixtures and the `scan/` variants were not measured (P6.8 is not merged).
+  * **Text lines** against the text layer's lines (IoU >= 0.5, with-text renders): 0.916 of the 4115 lines at least 3 heights wide (target 0.97: MISSED),
+    0.842 of all 5239 (a line of one or two components is not a chain). Centre-line-and-width recall 0.882 of all.
+  * **DRAFT** on `watermark-draft`: found as ONE row of five components on the colour layer, but at **34.5 degrees against the PDF's 30 (MISSED, target +-0.5)**:
+    the body text hides parts of the letters, and what is left is what is traced (the same page with the text removed: 30.03 degrees; D244).
+  * **stamp-seal**: ring/circle near the seal 4 hits, rect near the stamp 2 hits (2 of 2). mapo80: not run here (`bb trace --mapo N`, live only; no baseline recorded).
+  * **Stroke width**, run median against a 3-4 chamfer distance transform on 7897 text-like components of eight documents: |error| median 1.00 px, p95 3.00 px at
+    300 dpi (mean stroke 3.0-4.4 px; the two agree on the mean within 0.4 px).
+  * **Counts and time** (per 300 dpi Letter page, best of one, loaded machine): components median 136, max 3233; runs median 12,059, max 120,454; trace
+    Rust mean 20 ms, p95 54, max 102; Go mean 23 ms; norm alone 74 ms. Java and C# were not timed (their laws pass).
 - [x] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
   first-pass plan; OCR-only pipeline for images and scanned PDFs (D033). *Done (D211-D216), minus the `Renderer` (P6.2: a PDF page
   that is not one upright JPEG covering it is not OCR'd), fusion (P7: a born-digital page keeps its text layer, D212) and acting
@@ -7360,46 +7383,6 @@ text is body; and five sources already say where figures are, so fusing them onc
 entirely (rule 140 needs them now).
 - [ ] **Signed off** (maintainer)
 
-### D218 — Ink layers as built: paper by mass, seeds by mass with a spike rule, edges by ink-to-paper segment, every dark neutral layer is body (P6.3; SPEC 8.2; D197)
-**Decision**: the histogram clustering of D197 as follows (all integer, settings `nm-ink-*`): paper is the heaviest bin among the
-lightest and every bin within `ink-paper` (24) of it; seeds are the heaviest non-paper bins (ties by bin index, bins under n/40000
-pixels never seed) farther than `ink-merge` (40, L1 in lightness, r-g, (r+g)/2-b) from every seed so far AND either off every seed's
-ink-to-paper segment or holding `ink-spike` (1 % of the page): an anti-aliased edge lies on the segment between its ink and the paper
-and must not become a layer, a flat watermark does; the other bins join the nearest seed within half of `ink-merge`, else the seed whose
-segment they lie nearest; layers under `ink-min` (0.5 % of the ink) are folded away, centroids within `ink-merge` merged, layers numbered
-by size. Roles: `colour` at chroma (|a|+|b|) 32 or more (48 lost thin seal strokes to JPEG), `light` neutral from lightness 150, `body` every
-other neutral layer (black headings and dark-grey text are two clusters of one ink; the first run labelled the second `unknown` and
-lost 24 % of the body), `background` a light or coloured layer covering 25 % of the page, `unknown` a dark neutral mass of that
-coverage. `nm-role-mask-into` is the union mask of a role.
-**Why**: first runs on the P6.6 scans gave 0.745 body purity (second dark layer), 0.0 signature (no colour seed), and seeds exhausted by
-anti-aliasing ramps; each rule above removed one of those. Measured in P6.3's entry.
-**Alternatives**: k-means over pixels (D197); seeding on every heavy bin (eight seeds spent on a grey ramp); one body layer (loses headings).
-- [ ] **Signed off** (maintainer)
-
-### D219 — Deskew from the body mask's ink runs, in two-pixel rows, scored by squared steps; the angle goes to the view and every view derived from it (P6.3; SPEC 8.2)
-**Decision**: on a decode view, the body layers' mask (borrowing `binary`'s buffer before Sauvola overwrites it) is read by
-`bitmap-next-nonzero` into ink runs (midpoint x, row, length) on every `h/800+1`-th row; for each angle from -5 to 5 degrees at 0.1,
-then 0.01 around the best, a run goes to the row `(y cos + x sin) >> 17` (two pixels) with its length as weight and the score is the
-sum of squared steps between neighbouring rows; 0 unless the best beats 0 by 1/64 (and 50 runs exist). Positive is counter-clockwise
-(lines rise to the right: the sign of `vwf-deskew`). `nm-reskew` rebuilds the source row's transform in place and `nm-view` gives the
-angle to the gray, binary and mask views. No resampling. Orientation is `nm-orient` (OSD at `osd-conf` 20).
-**Why**: the brief's word-cluster centres gave stacks of points whose alignment is within half a pixel (error 0.5-1 degree); a sum of
-squares over one-pixel rows is spiked at 0 by the stairs an integer-shear rotation leaves (P6.6's scans, ImageMagick) - two-pixel rows
-and squared differences gain 2x to 10x at the true angle; reading only body ink keeps watermarks, seals and textures from voting.
-**Alternatives**: Hough over components (the tracer's, later); component centres (tried: stacks); one-pixel rows (stair artefact).
-- [ ] **Signed off** (maintainer)
-
-### D220 — normalization allocates no bitmap: the caller owns gray, binary and masks; banded Sauvola on rings of integral rows; the measurement is bb ink on known overlays (P6.3; D092, D093, D196)
-**Decision**: `nm-view` (and every `nm-*` stage) takes the bitmaps it fills; kin cannot hold one in `Cells`, so P7.U makes them with
-`bms-put` at ids >= `KIN_VIEW_BASE` for the `views` rows `nm-view` appended (`nm-gray-view`, `nm-binary-view`, `ikf-mask`), and a mask is
-one `nm-mask-into` / `nm-role-mask-into` call per row. Sauvola keeps rings of `2r+2` integral rows (sum and square), equal to
-`ras-sauvola` by law at r = 15 and to a brute-force window sum at other radii. `bb ink` (not a gate) measures separation on P6.6's scans:
-truth is each overlay drawn alone through the very rotation the scan got, and the body's the clean render's dark neutral pixels.
-**Why**: no Engine wiring is P6.3's; memory O(w r) instead of 70 MB (D092); overlays are ours so the truth is exact.
-**Alternatives**: allocating inside `nm-view` (the bitmaps would die with the call); whole-page integral images.
-- [ ] **Signed off** (maintainer)
-
-
 ### D229 — P4.5: a list marker is read from the characters and confirmed by its neighbours, never trusted alone
 **Decision** (`kin/lists.kin`, `emon.lists`). (1) A MARKER (`ls-parse`, no language, no keyword table): a bullet or a dash standing alone as a word (a *strong* bullet — `• ◦ ▪ ‣ ● ■ ➢ ✓ ・` and the Symbol/Wingdings private-use range U+F000..F0FF — may also be glued to its text; a *weak* one — `- – — * − ·` — needs a word that starts with a letter after it, so a table's `- 82.3` is not a bullet); one to three digits (ASCII, Arabic-Indic, Extended Arabic-Indic, Devanagari, fullwidth) and `.` `)` or `、`; the same in `(…)` or `[…]`; a letter (Latin, Greek, Cyrillic) or a canonical roman numeral up to 89 with `.` or `)`; a circled, parenthesised or dingbat digit. `I.` `V.` `X.` are two readings (the ninth letter and one): the scheme is chosen by the neighbours. `3.5`, `2019.`, `1.2.` (a section number: the heading stage's), `e.g.` and `mix.` are not markers. (2) A BULLET THAT IS NOT TEXT (Chrome and Word draw discs and squares as paths: the text layer has no bullet at all, which `lists-basic`'s PDF shows): a filled or stroked circle or square of 0.12-0.70 em, centred on the x-height, 1/16 to 2.5 em before the first word of an upright line (after the end of a line that runs right to left: `script-arabic`), read from P3.5's `paths` (the evidence dump's `paths` is empty: `ev_emit` is handed a fresh arena, not the one `pc_document` fills; `attempt()` passes `pa` itself). Its character is what it is drawn as: a disc `•`, a ring `◦`, a square `▪`, a hollow square `▫` (D073.8 says by depth `• ◦ ▪`: that is what Chrome draws). (3) A CANDIDATE IS CONFIRMED (`ls-confirm`, within 48 candidates and a page): a bullet or shape by a sibling of its own kind at the same indent; a number or a letter by a neighbour of its scheme and punctuation, a value one to twelve off, at the same text x; or by a HANGING continuation under it (the line below starts at the item's text x, close below). A lone `Z.` is NEVER confirmed by a hanging indent (a bibliography entry starts with an initial: found on BERT's references); a letter needs a sequence. A line set below three quarters of the body's size is not an item (the labels of a figure: BERT's diagram nodes were bullet shapes). (4) A MARKER ALONE ON ITS LINE with its text on the line beside it (the text layer builds two lines out of a marker and its text set in another font: `script-hebrew`, and the `(a)` of a contract with a tab stop) is joined: the text's first word takes the group, the marker's word is emptied and its line is taken out (page -7, as D173's), the item's line grows to hold it. Tab gaps up to 10 em. (5) A line a heading, a note or a caption took is never an item; `hd-analyze` runs first.
 **Why**: the SPEC (§10.4) says markers, hanging indents, sequence continuity, nesting; every one of them is evidence a false positive also has (`1.` at the start of a sentence, `A. Smith`, a dash in a table, a diagram's boxes); none is trusted alone. The thresholds are named constants (`LS_*`). **Alternatives**: a locale table of list words (P4.8's; there is none to need); reading bullets only from text (misses every Chrome and Word bullet); confirming a lone numbered line by its hanging indent alone for letters too (an author's initial in a bibliography is that).
@@ -7435,6 +7418,77 @@ truth is each overlay drawn alone through the very rotation the scan got, and th
 
 ### D236 — P4.5/P4.6 verified: laws, the gold, both Engines, and the real corpus by eye
 **Result**. `kin/listtest.kin` (all four targets): markers (every form, every script above) and what is not a marker; a run of numbered lines is a list and a lone `A. Smith` is not; the caption keywords and numbers; what a bare link is and is not; and `rs-run` on a Model written by hand: items nested by x, a list that goes on across a milestone, a caption bound to its table and a figure caption wrapped, a reference with the target of its note and a bare link made a `link`. `bb accuracy` (the real `emon` predictor, 160 documents; `--update` recorded). ON THE BRANCH POINT (D177, before tables) `pdf/all`: block `list` P/R 0/0 -> 1.0/1.0, `item` 0/0 -> 1.0/1.0, `caption` 0/0 -> 1.0/1.0, `note` 0.75/0.375 -> 0.889/1.0, `figure` 0/0 -> 1.0/0.8, paragraph-boundary F1 0.189 -> 0.250, CER/WER 0.01178/0.02083 -> 0.00826/0.01510. AFTER MERGING main (tables, D178-D182) against main's own scoreboard: `list` and `item` P/R 0/0 -> 1.0/1.0, `caption` P/R 1.0/0.2 -> 1.0/1.0 (the tables' captions were P5.3's; the rest are figure captions), `note` 0.75/0.375 -> 0.889/1.0, `figure` 0/0 -> 1.0/0.8, `block-paragraph` P/R 0.612/0.966 -> 0.738/0.982, paragraph-boundary F1 0.657 -> 0.854, CER/WER 0.00967/0.01868 -> 0.00619/0.01305; the families: `pdf/lists` list/item P/R 1.0, paragraph-boundary F1 0.047 -> 1.0, CER/WER 0.0450/0.0673 -> 0/0; `pdf/footnotes` note P/R 0 -> 1.0, CER/WER 0.0098/0.0423 -> 0/0; `pdf/figures` caption P/R 0 -> 1.0, CER/WER 0.208/0.236 -> 0.147/0.167 (the chart's axis labels are still paragraphs: the figure stage's). The 0.89 note precision is two chart labels (`Q1 Q2`, `Units (thousands)`) that P4.1's column stage reads as margin notes. Merged with the table stage: a table's cells are written from WORDS (`tw`), and a group in one of them would be in the cell's text (found on a Hebrew Wikipedia infobox and nine CUAD contracts of 150 sampled, by scanning every output for a code point of U+FDD0..U+FDEF). So the stages here ask `ls-upright`, which is false for a line a table claims (`tb-claimed`), and `ls-taint` takes out every line that has a word in `tw` (flag 32; the line is found by bisection over the lines' word ranges: a word's own `line` field names the line before furniture's compaction, D173, and is stale), and `rs-run` ends by replacing any noncharacter in the Model's text with U+FFFD (a leak would be seen, not hidden); none in 1000 sampled corpus files since. A caption a table found (P5.3) is never found again here, and one it missed is bound to the table beside it by `rs-run`. Rust == Go (`bb identity`: 275 inputs x 9 arms byte-identical; the notes, lists and links stages are in `attempt()` of both Engines, in the order `hd-analyze`, `nt-analyze`, `ls-analyze`, `pa-build`, `rs-run`, `fu-write`). By eye on the corpus (arXiv: the Transformer, BERT, GPT-3; GAO; FOMC): the Transformer's 40-entry bibliography is one list across three pages and its exponents no notes; BERT's three-item list is one list across two columns, its `• 80% of the time` items are items, its table dashes and diagram boxes are not; GPT-3's 109 captions label `Figure 1.1` … `Table 3.3`; the FOMC minutes have four footnotes, each with its reference; GAO's list of figures is not captions; a CUAD contract's `(a)` with a tab stop is joined to its text. **Found while verifying** (each is a rule above): a bullet's group copied the bullet twice (text bullets are text markers), single-item lists from a table's dashes, one-item lists from a diagram's boxes, `Z.` initials as items, the exponents as footnotes, the bibliography as endnotes, a list in the second column as a nested list, a list across pages as three; `bb slice`'s fixture `footnotes-endnotes` is a P4.6 document now (its Model has notes: no longer paragraphs and headings alone, which is what `para-goldens`/`para-check` hold) and is replaced by `h-numbered` in the slice, the para goldens, `kin/paratest.kin` and both Engines' native tests (goldens regenerated); a Rust borrow error six times in the first builds (a `Cells` that is an argument of the call and of an argument: bind first, D163 said it); kin's refusals met on the way, each named by `bb emit` or `bb check`: a local called `go`, `len`, `cap` or `close` (Go's predeclared names have no escape), a constant and a function that differ only in case (`LS_NEAR`, `ls-near`: Go), an `if` as an argument (Java prints it as a malformed statement: in a law, too), a local that is assigned and never read (Go). The new stages cap what they multiply (`ls-cap`: coordinates and sizes held to ±10^7, the fuzz crasher `content-size-overflow` of D163 found it again in `notes.rs`), bound every candidate list (`LS_MAXCAND`, `NT_MAXRF`, `NT_MAXNB`) and nest lists no deeper than 24.
+
+### D237 — Ink layers as built: paper by mass, seeds by mass with a spike rule, edges by ink-to-paper segment, every dark neutral layer is body (P6.3; SPEC 8.2; D197)
+**Decision**: the histogram clustering of D197 as follows (all integer, settings `nm-ink-*`): paper is the heaviest bin among the
+lightest and every bin within `ink-paper` (24) of it; seeds are the heaviest non-paper bins (ties by bin index, bins under n/40000
+pixels never seed) farther than `ink-merge` (40, L1 in lightness, r-g, (r+g)/2-b) from every seed so far AND either off every seed's
+ink-to-paper segment or holding `ink-spike` (1 % of the page): an anti-aliased edge lies on the segment between its ink and the paper
+and must not become a layer, a flat watermark does; the other bins join the nearest seed within half of `ink-merge`, else the seed whose
+segment they lie nearest; layers under `ink-min` (0.5 % of the ink) are folded away, centroids within `ink-merge` merged, layers numbered
+by size. Roles: `colour` at chroma (|a|+|b|) 32 or more (48 lost thin seal strokes to JPEG), `light` neutral from lightness 150, `body` every
+other neutral layer (black headings and dark-grey text are two clusters of one ink; the first run labelled the second `unknown` and
+lost 24 % of the body), `background` a light or coloured layer covering 25 % of the page, `unknown` a dark neutral mass of that
+coverage. `nm-role-mask-into` is the union mask of a role.
+**Why**: first runs on the P6.6 scans gave 0.745 body purity (second dark layer), 0.0 signature (no colour seed), and seeds exhausted by
+anti-aliasing ramps; each rule above removed one of those. Measured in P6.3's entry.
+**Alternatives**: k-means over pixels (D197); seeding on every heavy bin (eight seeds spent on a grey ramp); one body layer (loses headings).
+- [ ] **Signed off** (maintainer)
+
+### D238 — Deskew from the body mask's ink runs, in two-pixel rows, scored by squared steps; the angle goes to the view and every view derived from it (P6.3; SPEC 8.2)
+**Decision**: on a decode view, the body layers' mask (borrowing `binary`'s buffer before Sauvola overwrites it) is read by
+`bitmap-next-nonzero` into ink runs (midpoint x, row, length) on every `h/800+1`-th row; for each angle from -5 to 5 degrees at 0.1,
+then 0.01 around the best, a run goes to the row `(y cos + x sin) >> 17` (two pixels) with its length as weight and the score is the
+sum of squared steps between neighbouring rows; 0 unless the best beats 0 by 1/64 (and 50 runs exist). Positive is counter-clockwise
+(lines rise to the right: the sign of `vwf-deskew`). `nm-reskew` rebuilds the source row's transform in place and `nm-view` gives the
+angle to the gray, binary and mask views. No resampling. Orientation is `nm-orient` (OSD at `osd-conf` 20).
+**Why**: the brief's word-cluster centres gave stacks of points whose alignment is within half a pixel (error 0.5-1 degree); a sum of
+squares over one-pixel rows is spiked at 0 by the stairs an integer-shear rotation leaves (P6.6's scans, ImageMagick) - two-pixel rows
+and squared differences gain 2x to 10x at the true angle; reading only body ink keeps watermarks, seals and textures from voting.
+**Alternatives**: Hough over components (the tracer's, later); component centres (tried: stacks); one-pixel rows (stair artefact).
+- [ ] **Signed off** (maintainer)
+
+### D239 — normalization allocates no bitmap: the caller owns gray, binary and masks; banded Sauvola on rings of integral rows; the measurement is bb ink on known overlays (P6.3; D092, D093, D196)
+**Decision**: `nm-view` (and every `nm-*` stage) takes the bitmaps it fills; kin cannot hold one in `Cells`, so P7.U makes them with
+`bms-put` at ids >= `KIN_VIEW_BASE` for the `views` rows `nm-view` appended (`nm-gray-view`, `nm-binary-view`, `ikf-mask`), and a mask is
+one `nm-mask-into` / `nm-role-mask-into` call per row. Sauvola keeps rings of `2r+2` integral rows (sum and square), equal to
+`ras-sauvola` by law at r = 15 and to a brute-force window sum at other radii. `bb ink` (not a gate) measures separation on P6.6's scans:
+truth is each overlay drawn alone through the very rotation the scan got, and the body's the clean render's dark neutral pixels.
+**Why**: no Engine wiring is P6.3's; memory O(w r) instead of 70 MB (D092); overlays are ours so the truth is exact.
+**Alternatives**: allocating inside `nm-view` (the bitmaps would die with the call); whole-page integral images.
+- [ ] **Signed off** (maintainer)
+
+
+### D240 — The tracer as built: a caller-owned workspace, one `tr-trace` per traced bitmap (the binary view with its majority layer, or an ink mask as one fixed layer), classes mapped onto the existing `ck` codes (P6.4; SPEC 8.2, 8.4.4; D092, D198, D220)
+**Decision**: `kin/trace.kin` (`emon.trace`) allocates no bitmap and no arena: the caller owns the workspace `Cells` (`rn ri cs vr pc sg mem s1..s6`) and the evidence arenas, as `emon.norm` does (D220). `tr-trace` runs runs, components, rules, contours and primitives, text lines on ONE bitmap: a binary view (each component's ink row is the majority of `labels`, i.e. `nm-label-into`) or an ink-mask view (`fixed` = that layer's `inks` row); the caller traces the binary view and every non-body layer's mask (a faint watermark is not in Sauvola's binary), and `tr-tints` on each `light`/`background` mask. Components are union-find over row runs (a pair of adjacent rows touches with one pixel's slack, the smaller root wins), sorted by (top, left, ink, root run); holes are edges - runs + 1 of the run graph; parent is the smallest hole-bearing component whose box holds it and that has ink on both sides of the child's own first and last row. `ck` has no `noise`/`large`/`rule-like` codes and `evidence.kin` is P3.6a's: noise is `blob` with confidence 0, large is `blob` 700, text-like 900, `rule-h`/`rule-v` 900. The median text height M of the glyph-sized components counts each once on the binary view and needs three of them (a table alone is not a glyph), and on an ink mask weighs each by its ink capped at 1024 pixels (a watermark's huge letters outweigh the specks of their own mask); text-like is M/3..4M high, at most 8 times as wide; a rule candidate is thin (ink over the longer side at most 2 pt: a Sauvola outline of a filled bar is 11 px, 2.6 pt, and is not a rule), at least 6 pt and 8 thicknesses long, hole-free and longer than 2M; `tr-rules` confirms it or it becomes large. Limits: 4,000,000 runs, 200,000 components (the rest counted), 6,000,000 column runs, 6000 rule pieces, 60,000 corners a contour. `prims` flag bits: closed 1, filled 2, double 4, tint 8. Rust, Go, Java and C# hold the same 32 laws (`kin/tracetest.kin`); Rust and Go dump byte-identical rows on every page measured.
+**Why**: D092 (memory proportional to ink), D220 (the caller owns memory), and not touching `evidence.kin` (the who-edits-what table).
+**Alternatives**: a label image (35 MB a page); adding `ck-noise` (an additive code, but another item's file); arrow primitives (not built: no fixture has one, the `arrow` code stays unused).
+- [ ] **Signed off** (maintainer)
+
+### D241 — Stroke width is the smaller of the median row-run and median column-run lengths; its error against a distance transform is measured, not assumed (P6.4; D198)
+**Decision**: per component the median length of its row runs and of its column runs (column runs from one pass over the row runs, a counter a column, ended where the pixel below is paper), the smaller one, in pixels, written in centipoints. `bb trace` compares it with a 3-4 chamfer distance transform (ridge median, 2r - 1) on text-like components; the numbers are in P6.4's "Measured".
+**Why**: a vertical stem's rows are its width and a horizontal bar's columns are; the other median is a length. Integer, cheap, no second image.
+- [ ] **Signed off** (maintainer)
+
+### D242 — Contours by crack following on the binary view itself; integer Douglas-Peucker at 1.5 px; rect, ellipse/circle, ring (annulus or concentric pair), polygon, curve by residual (P6.4; SPEC 8.2; D198)
+**Decision**: the outer boundary of every LARGE component (also one that gave rules: a frame is four rules and a `rect`), traced as pixel corners with 8-connectivity on `binary` (a neighbour that is ink belongs to the component, or it would be bigger), so no component-local bitmap is needed. Simplified closed at eps 1.5 px (`4 cross^2 > 9 chord^2`). `rect`: the longest edge's angle, every edge of 4 px or more within 3 degrees of it or its perpendicular (off-axis at most 1/8 of the perimeter), mean distance of the raw corners to the fitted rectangle under 40 per mille of the smaller radius; `circle`/`ellipse`: moments of the corners weighted by edge length, axis from the covariance, radii from the extents, mean equation residual under 40 per mille, circle within 5 per cent; `ring`: such a circle whose centre row has exactly two runs with a hole of 3/10 .. 1 of the radius centred within 15 per cent, or whose parent component carries a concentric circle of 0.4 .. 0.97 of its radius (then `double` and both components as members); else `polygon` (12 corners at most) or `curve`. Confidence is 1000 minus eight times the residual. The fitted outline of a `rect` is its four corners; the others point at the contour's `pts`.
+- [ ] **Signed off** (maintainer)
+
+### D243 — Rules from chains of thin slices: row runs for vertical and steep rules, column runs for horizontal and shallow ones, straightened, merged, dashed, doubled (P6.4; D226; SPEC 8.2)
+**Decision**: inside every component that is neither noise nor a glyph (a table grid is one `large` component), a slice is a run or column run of at most 2 pt; slices of consecutive rows (or columns) whose two edges are each within one pixel are a chain; Douglas-Peucker at 1.5 px must leave one stretch of at least 4/5 of the chain (a circle's arcs are not rules); the stretch is a piece. Pieces on one line (2.5 degrees, within thickness + 2 px) and within `rule-gap` (2 pt) are one rule (this bridges the crossings of a grid); shorter groups of three or more dashes with gaps and lengths within 0.4 .. 2.2 / 2.5 times their medians are one `dashed` rule (`dotted` when no longer than twice the thickness, but dots below the 8 px chain minimum are not found: not built); two parallel solid rules 1-3 thicknesses apart overlapping by 60 per cent are both `double`. A skewed scan needs no deskew: a slice chain follows a line up to 45 degrees off its axis, in either representation. Confidence is D226's (1000 minus the gap per mille, minus 300 for thickness varying by more than half beyond one pixel of jitter). Not found: slanted lines steeper than 45 degrees inside large components in both representations at once (they are, by the other one), and lines inside a glyph-like component (an underline fused to a word).
+- [ ] **Signed off** (maintainer)
+
+### D244 — Text lines without OCR by agglomeration; the direction is the thinnest strip, the baseline the bottoms' least squares (P6.4; SPEC 8.4.4; D095)
+**Decision**: per ink layer, text-like components are linked when the gap between boxes is within 1.5 mean heights (heights within a factor of three), joined nearest first, a join accepted while the union's centres stay within 0.3 of the mean height of a line (any pair passes). A chain of 3 or more is a `tlines` row: its direction is the angle (every 0.25 degree within 10 degrees of the covariance axis) at which the strip containing the chain's run ends is thinnest, so that a text block hiding part of a watermark does not bend it; the baseline is a least-squares line through the members' bottoms in that frame (one outlier round), the row's `rot` is `ev-angle` of it in page space; mean height and gap in centipoints. `tr-orient-hint` answers 0 or 1 from the member-weighted directions. Known limit, measured: on `watermark-draft` the visible letter pieces give 34.5 degrees against the PDF's 30.
+- [ ] **Signed off** (maintainer)
+
+### D245 — Tints from row runs of an ink mask; features 14, 15, 23 (P6.4; D226)
+**Decision**: as D226, with the rectangle's rows continuing while both extents move at most 2 px from the row above (so a slightly skewed band survives); coverage is the mask's ink over the box. `tr-feat-ocr` fills `xo` 14 (text-like components centred in the word) and 15 (per mille of its symbols with one centred in them, -1 without symbols), `tr-feat-text` `xt` 14, 15 and 23 (largest overlap with a `tlines` row differing by more than 3 degrees mod 180).
+- [ ] **Signed off** (maintainer)
+
+### D246 — `bb trace`: truth is the vector content of ghostscript's text-free copy; scoring by length and by area (P6.4; D227)
+**Decision**: `gs -dFILTERTEXT` removes the text and keeps the paths (it is also the `no-text` render), qpdf's QDF is read by a small content-stream interpreter (q Q cm re m l S f B w colours): a filled rectangle at most 3 pt thick and 4 times as long, or a stroked segment at most 3 pt wide and 3 pt long, is a rule; a filled rectangle over 5 pt each way, lightness at least 600 and not the paper's white, is a fill. Rule precision and recall are the share of samples (every 3 px) within 2.5 px of the other set; fills are compared as areas on a 4 px grid. Not a gate; P7.S owns the ratchet.
+- [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here
 
