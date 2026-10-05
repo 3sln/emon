@@ -1,0 +1,27 @@
+{
+ "stem": "furn-fixed-dom",
+ "oracle": "pdfplumber 0.11.10, pdftoppm -r 150",
+ "pages": [
+  {"n": 1, "w": 61200, "h": 79200,
+   "rules": [
+
+   ],
+   "fills": [
+
+   ]},
+  {"n": 2, "w": 61200, "h": 79200,
+   "rules": [
+
+   ],
+   "fills": [
+
+   ]},
+  {"n": 3, "w": 61200, "h": 79200,
+   "rules": [
+
+   ],
+   "fills": [
+
+   ]}
+ ]
+}

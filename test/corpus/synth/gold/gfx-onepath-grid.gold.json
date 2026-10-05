@@ -1,0 +1,1028 @@
+{
+ "emon-gold": "1.0",
+ "id": "gfx-onepath-grid",
+ "provenance": {
+  "html": "html/gfx-onepath-grid.html",
+  "pdf": "pdf/gfx-onepath-grid.pdf",
+  "producer": "Google Chrome 154.0.8037.59 ; ",
+  "variants": {
+   "scan": "scan/gfx-onepath-grid.pdf"
+  }
+ },
+ "annotated": {
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "attributes": {
+   "section": [
+    "level"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "caption": [
+    "label"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ]
+  },
+  "text": true,
+  "inlines": true,
+  "furniture": true,
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ]
+ },
+ "model": {
+  "pages": [
+   {
+    "h": 792.0,
+    "n": 1,
+    "rot": 0,
+    "w": 612.0
+   },
+   {
+    "h": 792.0,
+    "n": 2,
+    "rot": 0,
+    "w": 612.0
+   }
+  ],
+  "body": {
+   "id": 0,
+   "kind": "document",
+   "children": [
+    {
+     "id": 1,
+     "kind": "section",
+     "level": 1,
+     "children": [
+      {
+       "id": 2,
+       "kind": "heading",
+       "level": 1,
+       "text": "Regional Sales"
+      },
+      {
+       "id": 3,
+       "kind": "paragraph",
+       "text": "The table below lists the supplies ordered this quarter. Quantities are in boxes and prices in dollars."
+      },
+      {
+       "id": 4,
+       "kind": "table",
+       "profile": "ruled",
+       "columns": 5,
+       "children": [
+        {
+         "id": 5,
+         "kind": "rowgroup",
+         "role": "head",
+         "children": [
+          {
+           "id": 6,
+           "kind": "row",
+           "children": [
+            {
+             "id": 7,
+             "kind": "cell",
+             "header": "col",
+             "text": "Region"
+            },
+            {
+             "id": 8,
+             "kind": "cell",
+             "header": "col",
+             "text": "Q1"
+            },
+            {
+             "id": 9,
+             "kind": "cell",
+             "header": "col",
+             "text": "Q2"
+            },
+            {
+             "id": 10,
+             "kind": "cell",
+             "header": "col",
+             "text": "Q3"
+            },
+            {
+             "id": 11,
+             "kind": "cell",
+             "header": "col",
+             "text": "Q4"
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 12,
+         "kind": "rowgroup",
+         "role": "body",
+         "children": [
+          {
+           "id": 13,
+           "kind": "row",
+           "children": [
+            {
+             "id": 14,
+             "kind": "cell",
+             "text": "North"
+            },
+            {
+             "id": 15,
+             "kind": "cell",
+             "text": "120"
+            },
+            {
+             "id": 16,
+             "kind": "cell",
+             "text": "135"
+            },
+            {
+             "id": 17,
+             "kind": "cell",
+             "text": "150"
+            },
+            {
+             "id": 18,
+             "kind": "cell",
+             "text": "160"
+            }
+           ]
+          },
+          {
+           "id": 19,
+           "kind": "row",
+           "children": [
+            {
+             "id": 20,
+             "kind": "cell",
+             "text": "South"
+            },
+            {
+             "id": 21,
+             "kind": "cell",
+             "text": "98"
+            },
+            {
+             "id": 22,
+             "kind": "cell",
+             "text": "104"
+            },
+            {
+             "id": 23,
+             "kind": "cell",
+             "text": "99"
+            },
+            {
+             "id": 24,
+             "kind": "cell",
+             "text": "112"
+            }
+           ]
+          },
+          {
+           "id": 25,
+           "kind": "row",
+           "children": [
+            {
+             "id": 26,
+             "kind": "cell",
+             "text": "West"
+            },
+            {
+             "id": 27,
+             "kind": "cell",
+             "text": "75"
+            },
+            {
+             "id": 28,
+             "kind": "cell",
+             "text": "80"
+            },
+            {
+             "id": 29,
+             "kind": "cell",
+             "text": "91"
+            },
+            {
+             "id": 30,
+             "kind": "cell",
+             "text": "95"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": 31,
+       "kind": "paragraph",
+       "text": "Orders above fifty dollars ship free of charge. Questions go to the purchasing office."
+      },
+      {
+       "id": 32,
+       "kind": "section",
+       "level": 2,
+       "children": [
+        {
+         "id": 33,
+         "kind": "heading",
+         "level": 2,
+         "text": "Sample Readings"
+        },
+        {
+         "id": 34,
+         "kind": "paragraph",
+         "text": "Readings in arbitrary units, twelve sensors, nine runs."
+        },
+        {
+         "id": 35,
+         "kind": "table",
+         "profile": "ruled",
+         "columns": 12,
+         "children": [
+          {
+           "id": 36,
+           "kind": "rowgroup",
+           "role": "head",
+           "children": [
+            {
+             "id": 37,
+             "kind": "row",
+             "children": [
+              {
+               "id": 38,
+               "kind": "cell",
+               "header": "col",
+               "text": "C1"
+              },
+              {
+               "id": 39,
+               "kind": "cell",
+               "header": "col",
+               "text": "C2"
+              },
+              {
+               "id": 40,
+               "kind": "cell",
+               "header": "col",
+               "text": "C3"
+              },
+              {
+               "id": 41,
+               "kind": "cell",
+               "header": "col",
+               "text": "C4"
+              },
+              {
+               "id": 42,
+               "kind": "cell",
+               "header": "col",
+               "text": "C5"
+              },
+              {
+               "id": 43,
+               "kind": "cell",
+               "header": "col",
+               "text": "C6"
+              },
+              {
+               "id": 44,
+               "kind": "cell",
+               "header": "col",
+               "text": "C7"
+              },
+              {
+               "id": 45,
+               "kind": "cell",
+               "header": "col",
+               "text": "C8"
+              },
+              {
+               "id": 46,
+               "kind": "cell",
+               "header": "col",
+               "text": "C9"
+              },
+              {
+               "id": 47,
+               "kind": "cell",
+               "header": "col",
+               "text": "C10"
+              },
+              {
+               "id": 48,
+               "kind": "cell",
+               "header": "col",
+               "text": "C11"
+              },
+              {
+               "id": 49,
+               "kind": "cell",
+               "header": "col",
+               "text": "C12"
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "id": 50,
+           "kind": "rowgroup",
+           "role": "body",
+           "children": [
+            {
+             "id": 51,
+             "kind": "row",
+             "children": [
+              {
+               "id": 52,
+               "kind": "cell",
+               "text": "100"
+              },
+              {
+               "id": 53,
+               "kind": "cell",
+               "text": "101"
+              },
+              {
+               "id": 54,
+               "kind": "cell",
+               "text": "102"
+              },
+              {
+               "id": 55,
+               "kind": "cell",
+               "text": "103"
+              },
+              {
+               "id": 56,
+               "kind": "cell",
+               "text": "104"
+              },
+              {
+               "id": 57,
+               "kind": "cell",
+               "text": "105"
+              },
+              {
+               "id": 58,
+               "kind": "cell",
+               "text": "106"
+              },
+              {
+               "id": 59,
+               "kind": "cell",
+               "text": "107"
+              },
+              {
+               "id": 60,
+               "kind": "cell",
+               "text": "108"
+              },
+              {
+               "id": 61,
+               "kind": "cell",
+               "text": "109"
+              },
+              {
+               "id": 62,
+               "kind": "cell",
+               "text": "110"
+              },
+              {
+               "id": 63,
+               "kind": "cell",
+               "text": "111"
+              }
+             ]
+            },
+            {
+             "id": 64,
+             "kind": "row",
+             "children": [
+              {
+               "id": 65,
+               "kind": "cell",
+               "text": "112"
+              },
+              {
+               "id": 66,
+               "kind": "cell",
+               "text": "113"
+              },
+              {
+               "id": 67,
+               "kind": "cell",
+               "text": "114"
+              },
+              {
+               "id": 68,
+               "kind": "cell",
+               "text": "115"
+              },
+              {
+               "id": 69,
+               "kind": "cell",
+               "text": "116"
+              },
+              {
+               "id": 70,
+               "kind": "cell",
+               "text": "117"
+              },
+              {
+               "id": 71,
+               "kind": "cell",
+               "text": "118"
+              },
+              {
+               "id": 72,
+               "kind": "cell",
+               "text": "119"
+              },
+              {
+               "id": 73,
+               "kind": "cell",
+               "text": "120"
+              },
+              {
+               "id": 74,
+               "kind": "cell",
+               "text": "121"
+              },
+              {
+               "id": 75,
+               "kind": "cell",
+               "text": "122"
+              },
+              {
+               "id": 76,
+               "kind": "cell",
+               "text": "123"
+              }
+             ]
+            },
+            {
+             "id": 77,
+             "kind": "row",
+             "children": [
+              {
+               "id": 78,
+               "kind": "cell",
+               "text": "124"
+              },
+              {
+               "id": 79,
+               "kind": "cell",
+               "text": "125"
+              },
+              {
+               "id": 80,
+               "kind": "cell",
+               "text": "126"
+              },
+              {
+               "id": 81,
+               "kind": "cell",
+               "text": "127"
+              },
+              {
+               "id": 82,
+               "kind": "cell",
+               "text": "128"
+              },
+              {
+               "id": 83,
+               "kind": "cell",
+               "text": "129"
+              },
+              {
+               "id": 84,
+               "kind": "cell",
+               "text": "130"
+              },
+              {
+               "id": 85,
+               "kind": "cell",
+               "text": "131"
+              },
+              {
+               "id": 86,
+               "kind": "cell",
+               "text": "132"
+              },
+              {
+               "id": 87,
+               "kind": "cell",
+               "text": "133"
+              },
+              {
+               "id": 88,
+               "kind": "cell",
+               "text": "134"
+              },
+              {
+               "id": 89,
+               "kind": "cell",
+               "text": "135"
+              }
+             ]
+            },
+            {
+             "id": 90,
+             "kind": "row",
+             "children": [
+              {
+               "id": 91,
+               "kind": "cell",
+               "text": "136"
+              },
+              {
+               "id": 92,
+               "kind": "cell",
+               "text": "137"
+              },
+              {
+               "id": 93,
+               "kind": "cell",
+               "text": "138"
+              },
+              {
+               "id": 94,
+               "kind": "cell",
+               "text": "139"
+              },
+              {
+               "id": 95,
+               "kind": "cell",
+               "text": "140"
+              },
+              {
+               "id": 96,
+               "kind": "cell",
+               "text": "141"
+              },
+              {
+               "id": 97,
+               "kind": "cell",
+               "text": "142"
+              },
+              {
+               "id": 98,
+               "kind": "cell",
+               "text": "143"
+              },
+              {
+               "id": 99,
+               "kind": "cell",
+               "text": "144"
+              },
+              {
+               "id": 100,
+               "kind": "cell",
+               "text": "145"
+              },
+              {
+               "id": 101,
+               "kind": "cell",
+               "text": "146"
+              },
+              {
+               "id": 102,
+               "kind": "cell",
+               "text": "147"
+              }
+             ]
+            },
+            {
+             "id": 103,
+             "kind": "row",
+             "children": [
+              {
+               "id": 104,
+               "kind": "cell",
+               "text": "148"
+              },
+              {
+               "id": 105,
+               "kind": "cell",
+               "text": "149"
+              },
+              {
+               "id": 106,
+               "kind": "cell",
+               "text": "150"
+              },
+              {
+               "id": 107,
+               "kind": "cell",
+               "text": "151"
+              },
+              {
+               "id": 108,
+               "kind": "cell",
+               "text": "152"
+              },
+              {
+               "id": 109,
+               "kind": "cell",
+               "text": "153"
+              },
+              {
+               "id": 110,
+               "kind": "cell",
+               "text": "154"
+              },
+              {
+               "id": 111,
+               "kind": "cell",
+               "text": "155"
+              },
+              {
+               "id": 112,
+               "kind": "cell",
+               "text": "156"
+              },
+              {
+               "id": 113,
+               "kind": "cell",
+               "text": "157"
+              },
+              {
+               "id": 114,
+               "kind": "cell",
+               "text": "158"
+              },
+              {
+               "id": 115,
+               "kind": "cell",
+               "text": "159"
+              }
+             ]
+            },
+            {
+             "id": 116,
+             "kind": "row",
+             "children": [
+              {
+               "id": 117,
+               "kind": "cell",
+               "text": "160"
+              },
+              {
+               "id": 118,
+               "kind": "cell",
+               "text": "161"
+              },
+              {
+               "id": 119,
+               "kind": "cell",
+               "text": "162"
+              },
+              {
+               "id": 120,
+               "kind": "cell",
+               "text": "163"
+              },
+              {
+               "id": 121,
+               "kind": "cell",
+               "text": "164"
+              },
+              {
+               "id": 122,
+               "kind": "cell",
+               "text": "165"
+              },
+              {
+               "id": 123,
+               "kind": "cell",
+               "text": "166"
+              },
+              {
+               "id": 124,
+               "kind": "cell",
+               "text": "167"
+              },
+              {
+               "id": 125,
+               "kind": "cell",
+               "text": "168"
+              },
+              {
+               "id": 126,
+               "kind": "cell",
+               "text": "169"
+              },
+              {
+               "id": 127,
+               "kind": "cell",
+               "text": "170"
+              },
+              {
+               "id": 128,
+               "kind": "cell",
+               "text": "171"
+              }
+             ]
+            },
+            {
+             "id": 129,
+             "kind": "row",
+             "children": [
+              {
+               "id": 130,
+               "kind": "cell",
+               "text": "172"
+              },
+              {
+               "id": 131,
+               "kind": "cell",
+               "text": "173"
+              },
+              {
+               "id": 132,
+               "kind": "cell",
+               "text": "174"
+              },
+              {
+               "id": 133,
+               "kind": "cell",
+               "text": "175"
+              },
+              {
+               "id": 134,
+               "kind": "cell",
+               "text": "176"
+              },
+              {
+               "id": 135,
+               "kind": "cell",
+               "text": "177"
+              },
+              {
+               "id": 136,
+               "kind": "cell",
+               "text": "178"
+              },
+              {
+               "id": 137,
+               "kind": "cell",
+               "text": "179"
+              },
+              {
+               "id": 138,
+               "kind": "cell",
+               "text": "180"
+              },
+              {
+               "id": 139,
+               "kind": "cell",
+               "text": "181"
+              },
+              {
+               "id": 140,
+               "kind": "cell",
+               "text": "182"
+              },
+              {
+               "id": 141,
+               "kind": "cell",
+               "text": "183"
+              }
+             ]
+            },
+            {
+             "id": 142,
+             "kind": "row",
+             "children": [
+              {
+               "id": 143,
+               "kind": "cell",
+               "text": "184"
+              },
+              {
+               "id": 144,
+               "kind": "cell",
+               "text": "185"
+              },
+              {
+               "id": 145,
+               "kind": "cell",
+               "text": "186"
+              },
+              {
+               "id": 146,
+               "kind": "cell",
+               "text": "187"
+              },
+              {
+               "id": 147,
+               "kind": "cell",
+               "text": "188"
+              },
+              {
+               "id": 148,
+               "kind": "cell",
+               "text": "189"
+              },
+              {
+               "id": 149,
+               "kind": "cell",
+               "text": "190"
+              },
+              {
+               "id": 150,
+               "kind": "cell",
+               "text": "191"
+              },
+              {
+               "id": 151,
+               "kind": "cell",
+               "text": "192"
+              },
+              {
+               "id": 152,
+               "kind": "cell",
+               "text": "193"
+              },
+              {
+               "id": 153,
+               "kind": "cell",
+               "text": "194"
+              },
+              {
+               "id": 154,
+               "kind": "cell",
+               "text": "195"
+              }
+             ]
+            },
+            {
+             "id": 155,
+             "kind": "row",
+             "children": [
+              {
+               "id": 156,
+               "kind": "cell",
+               "text": "196"
+              },
+              {
+               "id": 157,
+               "kind": "cell",
+               "text": "197"
+              },
+              {
+               "id": 158,
+               "kind": "cell",
+               "text": "198"
+              },
+              {
+               "id": 159,
+               "kind": "cell",
+               "text": "199"
+              },
+              {
+               "id": 160,
+               "kind": "cell",
+               "text": "200"
+              },
+              {
+               "id": 161,
+               "kind": "cell",
+               "text": "201"
+              },
+              {
+               "id": 162,
+               "kind": "cell",
+               "text": "202"
+              },
+              {
+               "id": 163,
+               "kind": "cell",
+               "text": "203"
+              },
+              {
+               "id": 164,
+               "kind": "cell",
+               "text": "204"
+              },
+              {
+               "id": 165,
+               "kind": "cell",
+               "text": "205"
+              },
+              {
+               "id": 166,
+               "kind": "cell",
+               "text": "206"
+              },
+              {
+               "id": 167,
+               "kind": "cell",
+               "text": "207"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "id": 168,
+         "kind": "paragraph",
+         "text": "Sensor C7 was recalibrated after run five."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dropped": [],
+  "emon": "1.0",
+  "furniture": [],
+  "meta": {
+   "title": "Grid Drawn As One Path"
+  },
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "pages": 2,
+   "format": "pdf",
+   "lang": "en"
+  }
+ }
+}
