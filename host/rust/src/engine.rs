@@ -1063,6 +1063,9 @@ struct PdfDoc {
     pa: Cells,
     grl: Cells,
     gfl: Cells,
+    // inline styles and links (P4.7): the fonts' own style facts and the link annotations
+    ift: Cells,
+    an: Cells,
     pg: Cells,
     txt: Cells,
     md: Cells,
@@ -1193,7 +1196,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, info }))
 }
 
 // One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
@@ -1213,7 +1216,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1237,7 +1240,7 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
                &mut nfw, &mut nfl, &mut fv, &mut fx, &mut afa, &mut gd, &mut gv, &mut w2g, &mut o2g, &mut pp, &mut tw, &mut tl, &mut xscr);
         std::mem::swap(&mut fw, &mut nfw);
         std::mem::swap(&mut fl, &mut nfl);
-        let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut Cells::new(), &mut Cells::new(), &mut et, &mut ev.refs, &mut gl);
+        let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut grl, &mut Cells::new(), &mut gfl, &mut Cells::new(), &mut Cells::new(), &mut et, &mut ev.refs, &mut gl);
         if c != 0 {
             return Outcome::Failed(Error::Internal(format!("pl-check {}", c)));
         }

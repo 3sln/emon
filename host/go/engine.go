@@ -56,7 +56,6 @@ import (
 	"emon/pdfdoc"
 	"emon/pdfmeta"
 	"emon/pdfstruct"
-	"emon/player"
 	"emon/pdfx"
 	"emon/plan"
 	"emon/port"
@@ -1169,7 +1168,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	for i := int32(0); i < max(np, 0); i++ {
 		port.CellsPush(mask, 0)
 	}
-	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
+	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
 		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, info: info}}
 }
 
@@ -1177,6 +1176,8 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 type pdfDoc struct {
 	ev                                   *evArenas
 	et, gl, mk, fnt, wd, ln, pa, grl, gfl, pg *port.Cells
+	// inline styles and links (P4.7): the fonts' own style facts, the link annotations, and the stage's scratch
+	ift, van, isw *port.Cells
 	txt, md, lb, ol, ss, plan, mask, loc *port.Cells
 	// the flow stage 3 reads (P7.0), the words set aside, and how many lines the text layer had before any page unit
 	fw, fl, fa *port.Cells
@@ -1213,6 +1214,7 @@ func unitPdf(d *pdfDoc, i, idx int, opts Options, answers, rq *port.Cells, bms *
 func finishPdf(d *pdfDoc, opts Options) outcome {
 	ev, et, gl, mk, fnt, wd, ln, pa, grl, gfl, pg := d.ev, d.et, d.gl, d.mk, d.fnt, d.wd, d.ln, d.pa, d.grl, d.gfl, d.pg
 	fw, fl, fa := d.fw, d.fl, d.fa
+	ift, van, isw := d.ift, d.van, d.isw
 	qtxt, md, lb, ol, ss, mask, info := d.txt, d.md, d.lb, d.ol, d.ss, d.mask, d.info
 	np := pdfdoc.PdPgCount(pg)
 	// the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1236,7 +1238,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 			nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, d.xs[0])
 		fw, nfw = nfw, fw
 		fl, nfl = nfl, fl
-		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, port.NewCells(), port.NewCells(), et, ev.refs, gl); c != 0 {
+		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, grl, port.NewCells(), gfl, port.NewCells(), port.NewCells(), et, ev.refs, gl); c != 0 {
 			return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("pl-check %d", c)}}
 		}
 	}
@@ -1299,7 +1301,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	notes.NtAnalyze(fw, c[0], et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
 	lists.LsAnalyze(fw, c[0], et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
 	// the style and the link of every character (kin/inline.kin, P4.7): written after the lists' rows in hc, which the paragraph stage reads
-	inline.IlAnalyze(fw, c[0], et, gl, ift, h[0], van, qtxt, pg, m.pages, np, m.text, h[2], v[7])
+	inline.IlAnalyze(fw, c[0], et, gl, ift, h[0], van, qtxt, pg, m.pages, np, m.text, h[2], isw)
 	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
 	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
