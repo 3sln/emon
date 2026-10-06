@@ -1712,6 +1712,15 @@ Each defence is a block of `fr` rows (200-299), so the dump names the
 defence that removed a word, and the ledger entry carries the reason
 (`watermark`, `background`, `bleed-through`, `ocr-ghost`).
 
+**As built (P7.7, D314-D319): defence 5.** The seal's block is 400 (rows 401, 402), tried before every other. Its candidates are read from what a
+born-digital page holds and a replay reproduces, with no pixel: the page's VECTOR paths (a round stroked path of at least 8 mm radius, a stroked
+quadrilateral with a border of at least 1.5 pt in a chromatic ink, open stroked curves near a cue word) and the glyphs' inks; the tracer's ring,
+circle, ellipse and `colour`-layer components are the raster half, which comes with P7.S (D316). A text-layer word is a seal's by its ink (chromatic and
+the candidate's) or by its turn along the ring (the arc text: rotation varying along it); black upright text under a stamp or inside a ring is body
+text (D315). A correspondence group whose every text-layer word is a candidate's, or an OCR-only group inside one, is flagged `in-seal` before
+arbitration (`emon.sealmark`'s `sm-find`) and rows 401 and 402 hold it with no winner and no ledger row: its words are the `seal` node's `text`
+(`low-conf`), written in reading order after the block the candidate overlaps (`sm-write`, D318).
+
 ### 9.6 Confidence calibration
 
 Raw scores from each rule are combined and **calibrated per node kind** by
@@ -1742,7 +1751,7 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 | `gfl` | 16 | **the fused fills**: page, box, colour, lightness (0..1000), sources, winning source, rule, confidence, flags (`gq`: shading, pattern, in-image, tint-coloured: the colour came from the tracer), group, `z`, spare (2) |
 | `ggp` | 12 | **graphics groups** (the `cg` of graphics): page, kind (`gk`: rule, fill, region), vector members (`refs` run of `(paths, i)` and `(pts, k)` pairs: the path and the first point of the segment), tracer members (`refs` run of `rules` or `prims` rows), OCR members (`refs` run of `oblocks` rows), flags, spare (3) |
 | `grg` | 16 | **graphic regions**: page, box, kind (`rk`: table-in-image, figure, table-hint), sources (`gs`: vector, trace, ocr, struct, image), subject (`(ea, index)`: the image placement, the `oblocks` block, the `se` element, -1), fused rules inside (count), fills inside (count), confidence, flags, spare (3) |
-| `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference, confidence, OCR words inside (a `refs` run), flags, spare |
+| `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference (as built: `(paths, row)` of the vector path), confidence, OCR words inside (a `refs` run), flags (as built: 1 chromatic, 2 double ring, 4 inner ring of another, 16 roundness unverified, 32 text from the text layer, 64 written), and in the three spare cells the node's `etext` run and ink (D317) |
 
 **The tagged tables' verdicts, `tb` (D302, P5.5).** A document whose tagged tree has a `Table` adds one key after the arenas, `tb`, an
 array with a row for every tagged table the table stage read (§10.5), in document order: `page`, `se` (the `Table` element's row), `rows`,
@@ -2343,6 +2352,11 @@ fused rules and fills inside them (a chart's axes are two perpendicular
   `name` when the association is confident.
 * In all cases OCR words inside the region are **removed from the body** and
   attached to the seal (§9.5.5).
+
+**As built (P7.7).** Candidates, their words and the node are `emon.sealmark`'s (§9.5, D314-D318): seal, stamp and signature nodes with `subkind`, `color`
+(12 hue buckets, black, gray, white) and `text` (the words in the text layer's order, flagged `low-conf`; none for a signature), in reading order; the
+candidates are the layer's `sl` arena (§9.7). A seal's `name`, `date` and the signature's typed name are P8.2's and P8.3's; the polar unwarp of a raster
+seal (P8.2) and the handwriting of raster strokes wait for the tracer's candidates (D316).
 
 ### 10.8 Footnotes, captions, links
 

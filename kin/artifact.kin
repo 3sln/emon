@@ -1,0 +1,240 @@
+;; WATERMARKS, BACKGROUNDS AND GHOSTS: the evidence the rules of block 200 read (P7.5; SPEC 9.5 "Against what is built"; D015, D204). emon's own
+;; module (D039). The VERDICTS are rows of `emon.fuserules` (201-299, the tens digit the defence: `fr-defence`); this module measures what a row
+;; of the PDF's own say and of recurrence reads, because that is not a property of one group's words:
+;;
+;;   (ax-word-class gl mk an txt etext trust feats ofw row)
+;;       DEFENCE 1, THE PDF SAYS SO, of one visible text-layer word (row `row` of the flow `ofw`): 1 it is a watermark, 2 a background, 3 a stamp,
+;;       0 nothing. A watermark: the nearest /Artifact on its glyph's mark chain has the subtype Watermark (it counts whatever the tree's trust: the file
+;;       says so in as many words), or its alpha (`xt-alpha`, the least of its glyphs') is under `wm-alpha`, or its centre lies inside a Watermark
+;;       annotation's rectangle on its page and it is a token of the annotation's appearance text (`an`, `emon.pdfannot`'s, wired into the document pass by this
+;;       item; the rectangle alone says nothing, a watermark annotation covers the page the body is on). A background: the artifact's type is
+;;       Background and the tagged tree is believed (`trust` at least `wm-trust`: a Background mark of a tree nobody can vouch for is only a mark). A
+;;       stamp: its centre lies inside a Stamp annotation's rectangle (P7.7 turns the rectangle into a `seal` node; until then its words are not body).
+;;       A word with no glyphs (an OCR line's, a scanned page's) has no mark chain: only an annotation can classify it.
+;;   (ax-recur cg refs owords etext epages rc pp)
+;;       DEFENCE 2, RECURRENCE: the OCR-only groups (no text-layer word, no hidden word) whose case-folded text is the same, within `wm-recur-pos` (2 per
+;;       cent of the page) of the same place on at least `wm-recur-pages` (60 per cent, and at least three) of the pages that have groups, outside the top
+;;       and bottom `wm-band` (10 per cent: running furniture is the furniture stage's, which has the whole document to decide its bands with). `rc` gets
+;;       five cells a group (0 flag, 1 and 2 two hashes of the text, 3 and 4 the centre as per mille of the page, -1 when the group is no candidate);
+;;       `pp` is scratch (the candidates). Answers the groups flagged.
+;;
+;; WHAT IS NOT HERE, AND WHY. Defence 3 (the body-ink layer), the ink halves of 4 and 6, and bleed-through need P6.3's layers and P6.4's `tlines` (a word's
+;; `xo-kin-ink`, `xo-body-share`, a `light` layer, a mirrored line); they are not wired into the page unit (D286), so those columns are absent and the rows that
+;; read them (221, 251) stay in the table, inert until they are. An OCG's NAME is not in the marks (only its object and default state: the state is
+;; P7.0's triage, `ocg-hidden`), so "named like a watermark" is not read.
+(ns emon.artifact
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [gl-get gf-mark mk-artifact-of as-watermark fe-get xt-alpha ep-get epf-width epf-height ev-page-row
+                                   ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-page hd-rot hd-feat]]
+            [emon.player :refer [cg-count cg-get cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-ofirst cgf-ocount cgf-tcount cgf-hcount]]
+            [emon.pdfannot :refer [an-watermark an-stamp]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 13: named, first values; P10.1 calibrates)
+
+(defn ^:pub ^I32 wm-alpha [] (comment "`wm-alpha`: the alpha (per mille) under which text or an image is a watermark.") (return 500))
+(defn ^:pub ^I32 wm-cover [] (comment "`wm-cover`: the share of the page (per mille) an image covers to be a background.") (return 400))
+(defn ^:pub ^I32 wm-trust [] (comment "`wm-trust`: the tagged tree's trust (`tg-trust`, per mille) at which its Background artifacts are believed.") (return 300))
+(defn ^:pub ^I32 wm-recur-pos [] (comment "`wm-recur-pos`: how far (per mille of the page) the same text may lie from the same place on another page.") (return 20))
+(defn ^:pub ^I32 wm-recur-pages [] (comment "`wm-recur-pages`: the share (per mille) of the pages that have groups a recurring text is on.") (return 600))
+(defn ^:pub ^I32 wm-recur-min [] (comment "The fewest pages a recurrence is read from (a text on two pages is a coincidence).") (return 3))
+(defn ^:pub ^I32 wm-band [] (comment "`wm-band`: the top and bottom share (per mille) of a page where a recurring text is furniture's, not a watermark.") (return 100))
+(defn ^:pub ^I32 wm-min-alnum [] (comment "The Latin letters and digits a recurring text needs (a rule fragment or a bullet that recurs is not a watermark).") (return 3))
+(defn ^:pub ^I32 wm-max-candidates [] (comment "The most OCR-only groups recurrence compares (a quadratic pass).") (return 1500))
+(defn ^:pub ^I32 ax-an-stride [] (comment "`pdfannot`'s AN_STRIDE.") (return 38))
+
+;; ------------------------------------------------------------- defence 1
+
+(defn ^I32 ax-fold [^I32 c]
+  (comment "Case folding of a code point for matching and for the recurrence key: ASCII and Latin-1 capitals.")
+  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
+  (if (and (>= c 192) (and (<= c 222) (!= c 215))) (return (+ c 32)))
+  (return c))
+
+(defn ^I32 ax-token-at [^Cells txt ^I32 s ^I32 e ^I32 from ^Cells etext ^I32 ts ^I32 tl]
+  (comment "1 when a token of the run txt[s, e) (the code points between two spaces) that starts at `from` is the word etext[ts, ts + tl), case-folded.")
+  (let [^:mut ^I32 k 0]
+    (if (or (< (+ from tl) 0) (> (+ from tl) e)) (return 0))
+    (if (and (< (+ from tl) e) (> (cells-at txt (+ from tl)) 32)) (return 0))
+    (while (< k tl)
+      (do (if (!= (ax-fold (cells-at txt (+ from k))) (ax-fold (cells-at etext (+ ts k)))) (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 ax-text-in [^Cells txt ^I32 s ^I32 n ^Cells etext ^I32 ts ^I32 tl]
+  (comment "1 when the word etext[ts, ts + tl) is a whole token (space-separated) of the run txt[s, s + n), case-folded; an empty word or run is none.")
+  (let [^I32 e (+ s n)
+        ^:mut ^I32 i s]
+    (if (or (<= tl 0) (<= n 0)) (return 0))
+    (while (< i e)
+      (do (if (and (> (cells-at txt i) 32) (or (== i s) (<= (cells-at txt (- i 1)) 32)))
+            (if (== (ax-token-at txt s e i etext ts tl) 1) (return 1)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 ax-annot-class [^Cells an ^Cells txt ^Cells etext ^I32 page ^I32 cx ^I32 cy ^I32 ts ^I32 tl]
+  (comment "What an annotation says of a word: 1 when its centre lies in the rectangle (cells 4-7) of a Watermark annotation of its page AND the word is a token of")
+  (comment "that annotation's appearance text (cells 32-33: the rectangle of a watermark is usually the page and the body lies under it, so the place alone")
+  (comment "says nothing); 3 the same of a Stamp annotation; else 0. An annotation whose appearance text could not be read (a composite font) classifies nothing.")
+  (let [^I32 n (quot (cells-len an) (ax-an-stride))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 sub 0]
+    (while (< i n)
+      (do (set at (* i (ax-an-stride)))
+          (set sub (cells-at an (+ at 1)))
+          (if (and (== (cells-at an at) page) (or (== sub (an-watermark)) (== sub (an-stamp))))
+            (if (and (>= cx (cells-at an (+ at 4))) (and (<= cx (cells-at an (+ at 6)))
+                     (and (>= cy (cells-at an (+ at 5))) (<= cy (cells-at an (+ at 7))))))
+              (if (>= (cells-at an (+ at 32)) 0)
+                (if (== (ax-text-in txt (cells-at an (+ at 32)) (cells-at an (+ at 33)) etext ts tl) 1)
+                  (do (if (== sub (an-watermark)) (return 1))
+                      (return 3))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 ax-word-class [^Cells gl ^Cells mk ^Cells an ^Cells txt ^Cells etext ^I32 trust ^Cells feats ^Cells ofw ^I32 row]
+  (let [^I32 at (* row 24)
+        ^I32 page (cells-at ofw at)
+        ^I32 cx (quot (+ (cells-at ofw (+ at 1)) (cells-at ofw (+ at 3))) 2)
+        ^I32 cy (quot (+ (cells-at ofw (+ at 2)) (cells-at ofw (+ at 4))) 2)
+        ^I32 g0 (cells-at ofw (+ at 17))
+        ^I32 gn (cells-at ofw (+ at 18))
+        ^I32 f (cells-at ofw (+ at 15))
+        ^:mut ^I32 art 0
+        ^:mut ^I32 v 0]
+    (if (> gn 0)
+      (do (set art (mk-artifact-of mk (gl-get gl g0 (gf-mark))))
+          (if (and (> art 0) (== (rem art 16) (as-watermark))) (return 1))))
+    (if (>= f 0)
+      (do (set v (fe-get feats f (xt-alpha)))
+          (if (and (>= v 0) (< v (wm-alpha))) (return 1))))
+    (set v (ax-annot-class an txt etext page cx cy (cells-at ofw (+ at 11)) (cells-at ofw (+ at 12))))
+    (if (== v 1) (return 1))
+    (if (and (> art 0) (and (== (quot art 16) 4) (>= trust (wm-trust)))) (return 2))
+    (if (== v 3) (return 3))
+    (return 0)))
+
+(defn ^:pub ^I32 ax-oword-class [^Cells an ^Cells txt ^Cells etext ^Cells owords ^I32 row]
+  (comment "The annotation's say (`ax-annot-class`) of an OCR word, for an OCR-only group: the appearance of a Watermark or Stamp annotation read as text by the engine.")
+  (return (ax-annot-class an txt etext (ow-get owords row (hd-page))
+                          (quot (+ (ow-get owords row (hd-x0)) (ow-get owords row (hd-x1))) 2)
+                          (quot (+ (ow-get owords row (hd-y0)) (ow-get owords row (hd-y1))) 2)
+                          (ow-get owords row (hd-tstart)) (ow-get owords row (hd-tlen)))))
+
+;; ------------------------------------------------------------- defence 2
+
+(defn ^I32 ax-alnum-cp [^I32 c]
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (if (and (>= c 65) (<= c 90)) (return 1))
+  (if (and (>= c 97) (<= c 122)) (return 1))
+  (if (and (>= c 192) (and (<= c 591) (and (!= c 215) (!= c 247)))) (return 1))
+  (return 0))
+
+(defn ^I32 ax-key [^Cells cg ^Cells refs ^Cells owords ^Cells etext ^I32 g ^:mut ^Cells rc]
+  (comment "The two hashes of group g's OCR text (case-folded, the words joined by a space) into rc[g*5+1] and rc[g*5+2]; answers the letters and digits.")
+  (let [^I32 of (cg-get cg g (cgf-ofirst))
+        ^I32 no (cg-get cg g (cgf-ocount))
+        ^:mut ^I32 h1 7
+        ^:mut ^I32 h2 11
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 n 0]
+    (while (< k no)
+      (do (set row (cells-at refs (+ (* (+ of k) 2) 1)))
+          (set ts (ow-get owords row (hd-tstart)))
+          (set tl (ow-get owords row (hd-tlen)))
+          (if (> k 0)
+            (do (set h1 (rem (+ (* h1 31) 32) 1000003))
+                (set h2 (rem (+ (* h2 37) 32) 999983))))
+          (set j 0)
+          (while (< j tl)
+            (do (set c (cells-at etext (+ ts j)))
+                (set n (+ n (ax-alnum-cp c)))
+                (set c (ax-fold c))
+                (set h1 (rem (+ (* h1 31) (rem c 65536)) 1000003))
+                (set h2 (rem (+ (* h2 37) (rem c 65536)) 999983))
+                (set j (+ j 1))))
+          (set k (+ k 1))))
+    (cells-set rc (+ (* g 5) 1) h1)
+    (cells-set rc (+ (* g 5) 2) h2)
+    (return n)))
+
+(defn ^I32 ax-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^:pub ^I32 ax-recur [^Cells cg ^Cells refs ^Cells owords ^Cells etext ^Cells epages ^:mut ^Cells rc ^:mut ^Cells pp]
+  (let [^I32 ng (cg-count cg)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 pages 0
+        ^:mut ^I32 last -1
+        ^:mut ^I32 ep 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 fy 0
+        ^:mut ^I32 need 0
+        ^:mut ^I32 seen 0
+        ^:mut ^I32 lastp 0
+        ^:mut ^I32 gj 0
+        ^:mut ^I32 flagged 0
+        ^:mut ^I32 pg 0]
+    (cells-drop rc 0)
+    (cells-drop pp 0)
+    (while (< i (* ng 5))
+      (do (cells-push rc 0)
+          (set i (+ i 1))))
+    (comment "the pages that have groups, and the candidates: OCR-only groups with text, outside the furniture bands")
+    (set g 0)
+    (while (< g ng)
+      (do (if (!= (cg-get cg g (cgf-page)) last)
+            (do (set last (cg-get cg g (cgf-page)))
+                (set pages (+ pages 1))))
+          (cells-set rc (+ (* g 5) 3) -1)
+          (cells-set rc (+ (* g 5) 4) -1)
+          (if (and (== (cg-get cg g (cgf-tcount)) 0) (and (== (cg-get cg g (cgf-hcount)) 0) (> (cg-get cg g (cgf-ocount)) 0)))
+            (do (set pg (cg-get cg g (cgf-page)))
+                (set ep (ev-page-row epages pg))
+                (if (>= ep 0)
+                  (do (set w (ep-get epages ep (epf-width)))
+                      (set h (ep-get epages ep (epf-height)))
+                      (if (and (> w 0) (> h 0))
+                        (do (set fy (quot (* (quot (+ (cg-get cg g (cgf-y0)) (cg-get cg g (cgf-y1))) 2) 1000) h))
+                            (if (and (>= fy (wm-band)) (<= fy (- 1000 (wm-band))))
+                              (if (>= (ax-key cg refs owords etext g rc) (wm-min-alnum))
+                                (do (cells-set rc (+ (* g 5) 3) (quot (* (quot (+ (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-x1))) 2) 1000) w))
+                                    (cells-set rc (+ (* g 5) 4) fy)
+                                    (cells-push pp g))))))))))
+          (set g (+ g 1))))
+    (set need (quot (+ (* pages (wm-recur-pages)) 999) 1000))
+    (if (< need (wm-recur-min)) (set need (wm-recur-min)))
+    (if (> (cells-len pp) (wm-max-candidates)) (return 0))
+    (set i 0)
+    (while (< i (cells-len pp))
+      (do (set g (cells-at pp i))
+          (set seen 1)
+          (set lastp (cg-get cg g (cgf-page)))
+          (set j 0)
+          (while (< j (cells-len pp))
+            (do (set gj (cells-at pp j))
+                (if (and (!= (cg-get cg gj (cgf-page)) (cg-get cg g (cgf-page))) (!= (cg-get cg gj (cgf-page)) lastp))
+                  (if (and (== (cells-at rc (+ (* gj 5) 1)) (cells-at rc (+ (* g 5) 1)))
+                           (and (== (cells-at rc (+ (* gj 5) 2)) (cells-at rc (+ (* g 5) 2)))
+                                (and (<= (ax-abs (- (cells-at rc (+ (* gj 5) 3)) (cells-at rc (+ (* g 5) 3)))) (wm-recur-pos))
+                                     (<= (ax-abs (- (cells-at rc (+ (* gj 5) 4)) (cells-at rc (+ (* g 5) 4)))) (wm-recur-pos)))))
+                    (do (set seen (+ seen 1))
+                        (set lastp (cg-get cg gj (cgf-page))))))
+                (set j (+ j 1))))
+          (if (>= seen need)
+            (do (cells-set rc (* g 5) 1)
+                (set flagged (+ flagged 1))))
+          (set i (+ i 1))))
+    (return flagged)))

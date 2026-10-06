@@ -26,6 +26,16 @@ public final class Arbitertest {
         emon.Port.cellsSet(gv, Fuserules.agOconf(), 900);
         emon.Port.cellsSet(gv, Fuserules.agNear(), 0);
         emon.Port.cellsSet(gv, Fuserules.agPageagree(), 1000);
+        // P7.5's columns: nothing says anything (absent or zero)
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 0);
+        emon.Port.cellsSet(gv, Fuserules.agRecur(), 0);
+        emon.Port.cellsSet(gv, Fuserules.agOangle(), -1);
+        emon.Port.cellsSet(gv, Fuserules.agOdiag(), -1);
+        emon.Port.cellsSet(gv, Fuserules.agOrel(), -1);
+        emon.Port.cellsSet(gv, Fuserules.agMargin(), -1);
+        emon.Port.cellsSet(gv, Fuserules.agKink(), -1);
+        emon.Port.cellsSet(gv, Fuserules.agBody(), -1);
+        emon.Port.cellsSet(gv, Fuserules.agImalpha(), -1);
         return 0;
     }
     public static int atRule(int nt, int no, int nh, int font, int simfold, int garbage, int plaus, int score, int image, int latin) {
@@ -96,8 +106,8 @@ public final class Arbitertest {
         emon.Testport.assertEq(Fuserules.frOrder(4), 100, "then the core");
         emon.Testport.assertEq(Fuserules.frOrder(5), -1, "and no more");
         int i = 0;
-        while (i < 17) {
-            emon.Testport.assertEq(Fuserules.frBlock(i), 100, "every row of this item is in block 100");
+        while (i < 29) {
+            emon.Testport.assertThat(((Fuserules.frBlock(i) == 100) || (Fuserules.frBlock(i) == 200)) || (Fuserules.frBlock(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
             i += 1;
         }
     }
@@ -199,9 +209,20 @@ public final class Arbitertest {
         Player.cgSet(cg, g, Player.cgfTcount(), 1);
         return g;
     }
-    public static int atRun(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells ofw, emon.Port.Cells ofl, emon.Port.Cells et, emon.Port.Cells feats, emon.Port.Cells ow, emon.Port.Cells images, emon.Port.Cells epages, emon.Port.Cells nfw, emon.Port.Cells nfl, emon.Port.Cells fv, emon.Port.Cells fx, emon.Port.Cells afa) {
-        // `ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group): answers the groups decided.
+    public static int atGl(emon.Port.Cells c) {
+        // A glyph arena of ten rows none of which is in a marked-content span (mark -1).
+        int i = 0;
+        atGlyphs(c);
+        while (i < 10) {
+            Evidence.glSet(c, i, Evidence.gfMark(), -1);
+            i += 1;
+        }
+        return 0;
+    }
+    public static int atRun2(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells ofw, emon.Port.Cells ofl, emon.Port.Cells et, emon.Port.Cells feats, emon.Port.Cells ow, emon.Port.Cells images, emon.Port.Cells epages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells an, emon.Port.Cells txt, emon.Port.Cells nfw, emon.Port.Cells nfl, emon.Port.Cells fv, emon.Port.Cells fx, emon.Port.Cells afa) {
+        // `ar-doc` with the glyphs, marks, annotations and their text given.
         emon.Port.Cells gd = emon.Port.newCells();
+        emon.Port.Cells rc = emon.Port.newCells();
         emon.Port.Cells gv = emon.Port.newCells();
         emon.Port.Cells w2g = emon.Port.newCells();
         emon.Port.Cells o2g = emon.Port.newCells();
@@ -212,7 +233,15 @@ public final class Arbitertest {
         emon.Port.Cells ol = emon.Port.newCells();
         emon.Port.Cells orr = emon.Port.newCells();
         emon.Port.Cells os = emon.Port.newCells();
-        return Arbiter.arDoc(cg, refs, ofw, ofl, et, feats, ow, ol, orr, os, images, epages, nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, scr);
+        return Arbiter.arDoc(cg, refs, ofw, ofl, et, feats, ow, ol, orr, os, images, epages, gl, mk, an, txt, 0, rc, nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, scr);
+    }
+    public static int atRun(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells ofw, emon.Port.Cells ofl, emon.Port.Cells et, emon.Port.Cells feats, emon.Port.Cells ow, emon.Port.Cells images, emon.Port.Cells epages, emon.Port.Cells nfw, emon.Port.Cells nfl, emon.Port.Cells fv, emon.Port.Cells fx, emon.Port.Cells afa) {
+        // `ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group), unmarked glyphs and no annotations: answers the groups decided.
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        atGl(gl);
+        return atRun2(cg, refs, ofw, ofl, et, feats, ow, images, epages, gl, mk, an, emon.Port.newCells(), nfw, nfl, fv, fx, afa);
     }
     public static int atLine3(emon.Port.Cells fl, int first, int count) {
         // A line of page 1 over `count` flow words from `first`, 100 high on the baseline 900.
@@ -447,6 +476,7 @@ public final class Arbitertest {
         emon.Testport.assertEq(Player.faGet(afa, 0, 5), Model.drOcrGhost(), "as an ocr-ghost");
         emon.Testport.assertEq(Player.faGet(afa, 0, 9), 1, "from group 1");
         emon.Testport.assertEq(Player.faGet(afa, 0, 10), 170, "by rule 170");
+        emon.Testport.assertEq(Player.faGet(afa, 0, 8), 6, "which is defence 6 of SPEC 9.5, plausibility");
         emon.Testport.assertEq(Player.faGet(afa, 0, 7), 1, "whose OCR word is row 1");
         emon.Testport.assertEq(Player.cgGet(cg, g2, Player.cgfFlags()), 2 + Player.plgInFigure(), "the figure's word says it is in a figure");
         emon.Testport.assertEq(Player.cgGet(cg, g1, Player.cgfFlags()), 2, "and the ghost does not");
@@ -528,5 +558,395 @@ public final class Arbitertest {
         emon.Testport.assertEq(Model.nodeFlags(nodes, pb), Model.flTextLayerSuspect(), "flagged text-layer-suspect");
         emon.Testport.assertEq(Model.nodeConf(nodes, pb), 800, "at OCR's confidence");
         emon.Testport.assertEq(Model.nodeSrc(nodes, pb + 1), Model.srOcr(), "and its inline follows");
+    }
+    public static void testTheDefencesAreRowsOfBlock200() {
+        emon.Port.Cells gv = emon.Port.newCells();
+        // defence 1: the PDF says so, of a text-layer group
+        atGv(gv, 1, 0, 0, 1000, -1, 0, -1, -1, 0, 1);
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 201, "an artifact watermark: 201");
+        emon.Testport.assertEq(Fuserules.frWinner(Fuserules.frDecide(gv)), Fuserules.fwNone(), "the group is held");
+        emon.Testport.assertEq(Fuserules.frReason(Fuserules.frDecide(gv)), Model.drWatermark(), "as a watermark");
+        emon.Testport.assertEq(Fuserules.frDefence(Fuserules.frDecide(gv)), 1, "by defence 1");
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 2);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 202, "a background artifact: 202");
+        emon.Testport.assertEq(Fuserules.frReason(Fuserules.frDecide(gv)), Model.drBackground(), "a background");
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 3);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 203, "a stamp annotation: 203");
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 0);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 101, "the PDF says nothing: the identity");
+        atGv(gv, 1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 110, "and a word the PDF does not call a watermark stays the text layer's");
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 201, "(the PDF calls it one, whatever the font and OCR say)");
+        emon.Port.Cells gw = emon.Port.newCells();
+        // OCR-only groups: the baseline is admitted (140), each defence takes it out
+        atGv(gw, 0, 1, 0, -1, -1, 0, 1000, 900, 0, 0);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 140, "baseline: admitted");
+        emon.Port.cellsSet(gw, Fuserules.agRecur(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 211, "recurring: 211");
+        emon.Testport.assertEq(Fuserules.frDefence(Fuserules.frDecide(gw)), 2, "defence 2");
+        emon.Testport.assertEq(Fuserules.frReason(Fuserules.frDecide(gw)), Model.drWatermark(), "a watermark");
+        emon.Port.cellsSet(gw, Fuserules.agRecur(), 0);
+        emon.Port.cellsSet(gw, Fuserules.agImage(), 600);
+        emon.Port.cellsSet(gw, Fuserules.agImalpha(), 300);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 205, "in a translucent page-sized image: 205");
+        emon.Testport.assertEq(Fuserules.frReason(Fuserules.frDecide(gw)), Model.drBackground(), "a background");
+        emon.Port.cellsSet(gw, Fuserules.agImalpha(), 1000);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 141, "in an opaque page-sized image: a scanned insert, as before");
+        emon.Port.cellsSet(gw, Fuserules.agImage(), 0);
+        emon.Port.cellsSet(gw, Fuserules.agImalpha(), -1);
+        emon.Port.cellsSet(gw, Fuserules.agBody(), 100);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 221, "mostly another layer's ink: 221");
+        emon.Testport.assertEq(Fuserules.frDefence(Fuserules.frDecide(gw)), 3, "defence 3");
+        emon.Port.cellsSet(gw, Fuserules.agBody(), -1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 140, "(an absent column is no evidence)");
+        emon.Port.cellsSet(gw, Fuserules.agOangle(), 2500);
+        emon.Port.cellsSet(gw, Fuserules.agOdiag(), 2500);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 231, "on a diagonal: 231");
+        emon.Testport.assertEq(Fuserules.frDefence(Fuserules.frDecide(gw)), 4, "defence 4");
+        emon.Port.cellsSet(gw, Fuserules.agOdiag(), 0);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 140, "turned by a right angle: text, not a watermark");
+        emon.Port.cellsSet(gw, Fuserules.agOangle(), 0);
+        emon.Port.cellsSet(gw, Fuserules.agOrel(), 3000);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 140, "tall, but on no image");
+        emon.Port.cellsSet(gw, Fuserules.agImage(), 600);
+        emon.Port.cellsSet(gw, Fuserules.agImalpha(), 1000);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 232, "tall on a page-sized image: 232");
+        emon.Port.cellsSet(gw, Fuserules.agOrel(), -1);
+        emon.Port.cellsSet(gw, Fuserules.agImage(), 0);
+        emon.Port.cellsSet(gw, Fuserules.agImalpha(), -1);
+        emon.Port.cellsSet(gw, Fuserules.agKink(), 10);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 251, "no ink of kin's own: 251");
+        emon.Testport.assertEq(Fuserules.frReason(Fuserules.frDecide(gw)), Model.drOcrGhost(), "an ocr-ghost");
+        emon.Testport.assertEq(Fuserules.frDefence(Fuserules.frDecide(gw)), 6, "defence 6");
+        emon.Port.cellsSet(gw, Fuserules.agKink(), -1);
+        emon.Port.cellsSet(gw, Fuserules.agPlaus(), 650);
+        emon.Port.cellsSet(gw, Fuserules.agMargin(), 400);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 140, "plausible enough, and sure of itself: admitted");
+        emon.Port.cellsSet(gw, Fuserules.agMargin(), 100);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gw)), 252, "plausibility low and the margins low: 252");
+        emon.Testport.assertEq(Fuserules.frDefence(Fuserules.frDecide(gw)), 6, "defence 6");
+        emon.Testport.assertEq(Fuserules.frDefence(0), 0, "a core row names no defence");
+    }
+    public static int atMarkWatermark(emon.Port.Cells gl, emon.Port.Cells mk, int g0) {
+        // An /Artifact /Watermark mark row (mark 0) over the two glyph rows from `g0`.
+        int m = Evidence.mkNew(mk, 1, 1, 0, 0, -1, g0);
+        Evidence.mkSet(mk, m, Evidence.mkfArtype(), 0);
+        Evidence.mkSet(mk, m, Evidence.mkfArsub(), 3);
+        Evidence.glSet(gl, g0, Evidence.gfMark(), m);
+        Evidence.glSet(gl, g0 + 1, Evidence.gfMark(), m);
+        return m;
+    }
+    public static int atTwoWords(emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells feats, emon.Port.Cells et, emon.Port.Cells ow, emon.Port.Cells cg, emon.Port.Cells refs) {
+        // Two text-layer words (the second on glyph rows 5 and 6) each with an OCR word that agrees, in two groups; one line.
+        int w0 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
+        int w1 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
+        int o0 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+        int o1 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
+        Evidence.wdSet(fw, w1, Evidence.wfGfirst(), 5);
+        atLine3(fl, 0, 2);
+        atGroup(cg, refs, w0, 1, o0, 1, 1000);
+        atGroup(cg, refs, w1, 1, o1, 1, 1000);
+        return 0;
+    }
+    public static int atDropped(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells et, emon.Port.Cells feats, emon.Port.Cells ow, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells an, emon.Port.Cells txt, emon.Port.Cells nfw, emon.Port.Cells nfl, emon.Port.Cells fv, emon.Port.Cells fx, emon.Port.Cells afa, int reason) {
+        // What the second word's dropping must look like, whichever way the PDF said it: the flow has one word and one line, the first word
+        // unchanged; `afa` has one row with the text as its subject and the defence (1), the group (1) and a rule of block 200 in it; the ledger
+        // has one row of `reason`, a text-layer one, its text the word's.
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells ep = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells tt = emon.Port.newCells();
+        emon.Testport.assertEq(atRun2(cg, refs, fw, fl, et, feats, ow, im, ep, gl, mk, an, txt, nfw, nfl, fv, fx, afa), 2, "two groups decided");
+        emon.Testport.assertEq(Player.fwCount(nfw), 1, "one word is left in the flow");
+        emon.Testport.assertEq(Player.flCount(nfl), 1, "on its line");
+        emon.Testport.assertEq(emon.Port.cellsAt(nfw, 11), emon.Port.cellsAt(fw, 11), "the first word is the text layer's own");
+        emon.Testport.assertEq(Player.fvGet(fv, 0, 2), 110, "and it is rule 110's");
+        emon.Testport.assertEq(Player.faCount(afa), 1, "the second word is in the set-aside list");
+        emon.Testport.assertEq(Player.faGet(afa, 0, 5), reason, "under the reason");
+        emon.Testport.assertEq(Player.faGet(afa, 0, 6), 5, "its subject is its text");
+        emon.Testport.assertEq(Player.faGet(afa, 0, 8), 1, "the defence is the PDF's own say");
+        emon.Testport.assertEq(Player.faGet(afa, 0, 9), 1, "the group");
+        emon.Testport.assertThat(Player.faGet(afa, 0, 10) >= 201, "and the rule is one of block 200");
+        emon.Testport.assertEq(Player.faGet(afa, 0, 11), 2, "two code points");
+        emon.Testport.assertEq(Player.plCheck(cg, nfw, nfl, fv, afa, fx, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), et, refs, gl), 0, "the layer is sound");
+        emon.Testport.assertEq(Arbiter.arWrite(afa, ow, et, ledger, text, tmp, tt), 1, "one ledger row");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 0), reason, "the reason");
+        emon.Testport.assertEq(Model.ledgerTextLen(ledger, 0), 2, "its text is the word's");
+        return 0;
+    }
+    public static void testThePdfSaysWatermarkByAnArtifactMark() {
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells nfw = emon.Port.newCells();
+        emon.Port.Cells nfl = emon.Port.newCells();
+        emon.Port.Cells fv = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells afa = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        atGl(gl);
+        atTwoWords(fw, fl, feats, et, ow, cg, refs);
+        atMarkWatermark(gl, mk, 5);
+        atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, emon.Port.newCells(), nfw, nfl, fv, fx, afa, Model.drWatermark());
+    }
+    public static void testThePdfSaysWatermarkByAlpha() {
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells nfw = emon.Port.newCells();
+        emon.Port.Cells nfl = emon.Port.newCells();
+        emon.Port.Cells fv = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells afa = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        atGl(gl);
+        atTwoWords(fw, fl, feats, et, ow, cg, refs);
+        Evidence.feSet(feats, emon.Port.cellsAt(fw, 24 + 15), Evidence.xtAlpha(), 300);
+        atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, emon.Port.newCells(), nfw, nfl, fv, fx, afa, Model.drWatermark());
+    }
+    public static int atAnnot(emon.Port.Cells an, emon.Port.Cells txt, int sub) {
+        // An annotation of page 1 of `sub` over 900..2000 x -100..1100 (the second word's box and the gap before it) whose appearance text is `xy mo`.
+        int i = 0;
+        while (i < 38) {
+            emon.Port.cellsPush(an, 0);
+            i += 1;
+        }
+        emon.Port.cellsSet(an, 0, 1);
+        emon.Port.cellsSet(an, 1, sub);
+        emon.Port.cellsSet(an, 4, 900);
+        emon.Port.cellsSet(an, 5, -100);
+        emon.Port.cellsSet(an, 6, 2000);
+        emon.Port.cellsSet(an, 7, 1100);
+        emon.Port.cellsSet(an, 32, emon.Port.cellsLen(txt));
+        emon.Port.cellsSet(an, 33, 5);
+        emon.Port.cellsPush(txt, 120);
+        emon.Port.cellsPush(txt, 121);
+        emon.Port.cellsPush(txt, 32);
+        emon.Port.cellsPush(txt, 109);
+        emon.Port.cellsPush(txt, 111);
+        return 0;
+    }
+    public static void testThePdfSaysWatermarkByAnAnnotation() {
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells nfw = emon.Port.newCells();
+        emon.Port.Cells nfl = emon.Port.newCells();
+        emon.Port.Cells fv = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells afa = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        atGl(gl);
+        atTwoWords(fw, fl, feats, et, ow, cg, refs);
+        // a Watermark annotation (subtype 24) whose text is `xy mo`, over the second word (`mo`)
+        atAnnot(an, txt, 24);
+        atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, Model.drWatermark());
+    }
+    public static void testAnAnnotationRectangleAloneSaysNothing() {
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        atGl(gl);
+        atTwoWords(fw, fl, feats, et, ow, cg, refs);
+        atAnnot(an, txt, 24);
+        // widen the rectangle over the page: the first word (`he`) is under the annotation but not in its text
+        emon.Port.cellsSet(an, 4, -1000);
+        emon.Port.cellsSet(an, 6, 5000);
+        emon.Testport.assertEq(Artifact.axWordClass(gl, mk, an, txt, et, 0, feats, fw, 0), 0, "body text under a page-sized watermark annotation stays body");
+        emon.Testport.assertEq(Artifact.axWordClass(gl, mk, an, txt, et, 0, feats, fw, 1), 1, "the word the annotation's appearance says is the watermark");
+    }
+    public static void testAStampAnnotationAndABelievedBackground() {
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        atGl(gl);
+        atTwoWords(fw, fl, feats, et, ow, cg, refs);
+        atAnnot(an, txt, 13);
+        emon.Testport.assertEq(Artifact.axWordClass(gl, mk, an, txt, et, 0, feats, fw, 0), 0, "the first word is outside the stamp");
+        emon.Testport.assertEq(Artifact.axWordClass(gl, mk, an, txt, et, 0, feats, fw, 1), 3, "the second is inside it and in its text");
+        // a Background artifact (type 4) counts only when the tree is believed (trust 300)
+        int m = Evidence.mkNew(mk, 1, 1, 0, 0, -1, 5);
+        Evidence.mkSet(mk, m, Evidence.mkfArtype(), 4);
+        Evidence.mkSet(mk, m, Evidence.mkfArsub(), 0);
+        Evidence.glSet(gl, 5, Evidence.gfMark(), m);
+        emon.Testport.assertEq(Artifact.axWordClass(gl, mk, emon.Port.newCells(), emon.Port.newCells(), et, 299, feats, fw, 1), 0, "a tree nobody can vouch for: only a mark");
+        emon.Testport.assertEq(Artifact.axWordClass(gl, mk, emon.Port.newCells(), emon.Port.newCells(), et, 300, feats, fw, 1), 2, "a believed one: a background");
+        // a pagination artifact (type 1: a header or footer) is never a watermark
+        int m2 = Evidence.mkNew(mk, 1, 1, 0, 0, -1, 5);
+        Evidence.mkSet(mk, m2, Evidence.mkfArtype(), 1);
+        Evidence.mkSet(mk, m2, Evidence.mkfArsub(), 1);
+        Evidence.glSet(gl, 5, Evidence.gfMark(), m2);
+        emon.Testport.assertEq(Artifact.axWordClass(gl, mk, emon.Port.newCells(), emon.Port.newCells(), et, 1000, feats, fw, 1), 0, "a header is the furniture stage's");
+    }
+    public static int atRgroup(emon.Port.Cells cg, emon.Port.Cells refs, int oword, int page, int x0, int y0) {
+        // An OCR-only group of `page` over a box 1000 wide and 500 high from (x0, y0) with one OCR word.
+        int g = Player.cgNew(cg, page, x0, y0, x0 + 1000, y0 + 500, 0);
+        int first = Evidence.rfAdd(refs, Evidence.eaOwords(), oword);
+        Player.cgSet(cg, g, Player.cgfOfirst(), first);
+        Player.cgSet(cg, g, Player.cgfOcount(), 1);
+        return g;
+    }
+    public static void testRecurrenceFlagsTheSameTextAtTheSamePlace() {
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ep = emon.Port.newCells();
+        emon.Port.Cells rc = emon.Port.newCells();
+        emon.Port.Cells pp = emon.Port.newCells();
+        int q1 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+        int q2 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+        int q3 = atOword(ow, feats, et, 0, 100, 0, 113, 113, 113);
+        int q4 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+        int other = atOword(ow, feats, et, 0, 100, 0, 88, 89, 90);
+        int band = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+        Evidence.epNew(ep, 1, 20000, 20000);
+        Evidence.epNew(ep, 2, 20000, 20000);
+        Evidence.epNew(ep, 3, 20000, 20000);
+        Evidence.epNew(ep, 4, 20000, 20000);
+        // page 1: the text mid-page, another text elsewhere; page 2: the text moved right; pages 3 (lower case) and 4: at the same place
+        // (the groups are in page order, as `cg` is; the running head is the last group of each page)
+        atRgroup(cg, refs, q1, 1, 5000, 9000);
+        atRgroup(cg, refs, other, 1, 2000, 3000);
+        atRgroup(cg, refs, band, 1, 5000, 100);
+        atRgroup(cg, refs, q2, 2, 14000, 9000);
+        atRgroup(cg, refs, band, 2, 5000, 100);
+        atRgroup(cg, refs, q3, 3, 5000, 9000);
+        atRgroup(cg, refs, band, 3, 5000, 100);
+        atRgroup(cg, refs, q4, 4, 5100, 9100);
+        emon.Testport.assertEq(Artifact.axRecur(cg, refs, ow, et, ep, rc, pp), 3, "the text is flagged on the three pages it is at the same place on");
+        emon.Testport.assertEq(emon.Port.cellsAt(rc, 0), 1, "page 1");
+        emon.Testport.assertEq(emon.Port.cellsAt(rc, 5), 0, "the other text on page 1 is not");
+        emon.Testport.assertEq(emon.Port.cellsAt(rc, 10), 0, "a recurring text in the top band (a running head) is not a watermark here");
+        emon.Testport.assertEq(emon.Port.cellsAt(rc, 15), 0, "page 2: moved, not at the same place");
+        emon.Testport.assertEq(emon.Port.cellsAt(rc, 25), 1, "page 3, in lower case");
+        emon.Testport.assertEq(emon.Port.cellsAt(rc, 35), 1, "page 4, a hundredth of a page off");
+    }
+    public static void testRecurrenceNeedsMostOfThePages() {
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ep = emon.Port.newCells();
+        emon.Port.Cells rc = emon.Port.newCells();
+        emon.Port.Cells pp = emon.Port.newCells();
+        int a = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+        int b = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+        int f2 = atOword(ow, feats, et, 0, 100, 0, 70, 71, 72);
+        int f4 = atOword(ow, feats, et, 0, 100, 0, 73, 74, 75);
+        int f5 = atOword(ow, feats, et, 0, 100, 0, 76, 77, 78);
+        int f6 = atOword(ow, feats, et, 0, 100, 0, 79, 80, 82);
+        Evidence.epNew(ep, 1, 20000, 20000);
+        Evidence.epNew(ep, 2, 20000, 20000);
+        Evidence.epNew(ep, 3, 20000, 20000);
+        Evidence.epNew(ep, 4, 20000, 20000);
+        Evidence.epNew(ep, 5, 20000, 20000);
+        Evidence.epNew(ep, 6, 20000, 20000);
+        // six pages with groups, the text on two of them: not 60 per cent, and not three pages
+        atRgroup(cg, refs, a, 1, 5000, 9000);
+        atRgroup(cg, refs, f2, 2, 1000, 3000);
+        atRgroup(cg, refs, b, 3, 5000, 9000);
+        atRgroup(cg, refs, f4, 4, 1000, 3000);
+        atRgroup(cg, refs, f5, 5, 1000, 3000);
+        atRgroup(cg, refs, f6, 6, 1000, 3000);
+        emon.Testport.assertEq(Artifact.axRecur(cg, refs, ow, et, ep, rc, pp), 0, "two pages of six: nothing");
+    }
+    public static void testAGroupInASealIsTheSealsAndComesFirst() {
+        emon.Port.Cells gv = emon.Port.newCells();
+        // a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block
+        atGv(gv, 1, 1, 0, 1000, 1000, 0, -1, 900, 0, 1);
+        emon.Port.cellsSet(gv, Fuserules.agSeal(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 401, "a seal's text-layer group: 401");
+        emon.Testport.assertEq(Fuserules.frBlock(Fuserules.frDecide(gv)), 400, "of block 400");
+        emon.Testport.assertEq(Fuserules.frWinner(Fuserules.frDecide(gv)), Fuserules.fwNone(), "no source wins it: the body does not have it");
+        emon.Testport.assertEq(Fuserules.frReason(Fuserules.frDecide(gv)), 0, "and it is no ledger row (its words are the seal node's text)");
+        emon.Testport.assertEq(Fuserules.frFlags(Fuserules.frDecide(gv)), 128, "the row says it is the seal's");
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 401, "even a watermark mark does not take it from the seal");
+        // an OCR-only group inside one
+        atGv(gv, 0, 1, 0, -1, -1, 0, 800, 900, 0, 0);
+        emon.Port.cellsSet(gv, Fuserules.agSeal(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 402, "an OCR-only group in a seal: 402");
+        // a group that is in none is decided as before
+        emon.Port.cellsSet(gv, Fuserules.agSeal(), 0);
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 0);
+        emon.Testport.assertEq(Fuserules.frBlock(Fuserules.frDecide(gv)), 100, "outside a seal: the core's");
+    }
+    public static void testTheWordsOfASealLeaveTheFlowAndSaySo() {
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells ep = emon.Port.newCells();
+        emon.Port.Cells nfw = emon.Port.newCells();
+        emon.Port.Cells nfl = emon.Port.newCells();
+        emon.Port.Cells fv = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells afa = emon.Port.newCells();
+        int w0 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
+        int w1 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
+        int w2 = atTword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121);
+        int o0 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+        int o1 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
+        int o2 = atOword(ow, feats, et, 2000, 2900, 0, 120, 121, 0);
+        int o3 = atOword(ow, feats, et, 5000, 5900, 0, 88, 89, 0);
+        atLine3(fl, 0, 3);
+        atGroup(cg, refs, w0, 1, o0, 1, 1000);
+        int g1 = atGroup(cg, refs, w1, 1, o1, 1, 1000);
+        int g2 = atGroup(cg, refs, w2, 1, o2, 1, 1000);
+        int g3 = atOcrOnlyGroup(cg, refs, o3);
+        Player.cgSet(cg, g1, Player.cgfFlags(), Player.plgInSeal());
+        Player.cgSet(cg, g3, Player.cgfFlags(), 2 + Player.plgInSeal());
+        emon.Testport.assertEq(atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 4, "four groups decided");
+        emon.Testport.assertEq(Player.fwCount(nfw), 2, "the seal's word is not in the flow: the other two are");
+        emon.Testport.assertEq(Player.faCount(afa), 0, "and nothing is a ledger row: the words are the node's text, not ghosts");
+        emon.Testport.assertEq(Player.cgGet(cg, g1, Player.cgfFlags()), Player.plgInSeal(), "the seal's group is not also `in-figure`");
+        emon.Testport.assertEq(Player.cgGet(cg, g3, Player.cgfFlags()), 2 + Player.plgInSeal(), "nor is its OCR-only one");
+        emon.Testport.assertEq(Player.cgGet(cg, g2, Player.cgfFlags()), 0, "and a group outside is as it was");
     }
 }

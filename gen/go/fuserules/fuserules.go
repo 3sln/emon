@@ -4,6 +4,7 @@
 package fuserules
 
 import (
+	"emon/artifact"
 	"emon/health"
 	"emon/port"
 	"emon/tlhealth"
@@ -89,8 +90,58 @@ func AgPageagree() int32 {
 	return 15
 }
 
-func AgCount() int32 {
+func AgArt() int32 {
+	// defence 1 (D204): what the PDF says of the group's visible text-layer words, all alike: 0 nothing, 1 watermark (an /Artifact /Watermark mark, a Watermark annotation, alpha under `wm-alpha`), 2 background (an /Artifact /Background mark of a tree that can be believed), 3 a Stamp annotation's rectangle
 	return 16
+}
+
+func AgRecur() int32 {
+	// defence 2: 1 when the group is an OCR-only group that recurs at the same place on `wm-recur-pages` of the pages (`emon.artifact`'s `ax-recur`), else 0
+	return 17
+}
+
+func AgOangle() int32 {
+	// defence 4: the least angle (centi-degrees) of the group's OCR words to the page's OCR lines (`xo-angle`); -1 absent
+	return 18
+}
+
+func AgOdiag() int32 {
+	// defence 4: the least angle (centi-degrees) of the group's OCR words off the nearest right angle (0 for upright and turned text); -1 absent
+	return 19
+}
+
+func AgOrel() int32 {
+	// defence 4: the largest height (per mille) of the group's OCR words relative to their line's median (`xo-rel-height`); -1 absent
+	return 20
+}
+
+func AgMargin() int32 {
+	// defence 6: the least symbol margin (`xo-margin`) of the group's OCR words; -1 absent
+	return 21
+}
+
+func AgKink() int32 {
+	// defences 3 and 6: the least kin ink (`xo-kin-ink`, per mille) under the group's OCR words; -1 absent (P6.3's layers are not wired into the page unit)
+	return 22
+}
+
+func AgBody() int32 {
+	// defence 3: the least body-ink share (`xo-body-share`, per mille) of the group's OCR words; -1 absent (as `ag-kink`)
+	return 23
+}
+
+func AgImalpha() int32 {
+	// defence 1: the least alpha (per mille) of an image placement covering at least `wm-cover` of the page that the group lies in; -1 when there is none
+	return 24
+}
+
+func AgSeal() int32 {
+	// defence 5 (P7.7): 1 when the group lies in a seal, stamp or signature candidate (`emon.sealmark`'s `sm-find` flagged it `plg-in-seal`: every visible text-layer word of the group is the candidate's, or it is an OCR-only group inside one), else 0
+	return 25
+}
+
+func AgCount() int32 {
+	return 26
 }
 
 func FcGe() int32 {
@@ -157,6 +208,46 @@ func FsAgreeMin() int32 {
 	return 11
 }
 
+func FsWmCover() int32 {
+	return 12
+}
+
+func FsWmAlpha() int32 {
+	return 13
+}
+
+func FsWmAngle() int32 {
+	return 14
+}
+
+func FsWmSize() int32 {
+	return 15
+}
+
+func FsWmBodyShare() int32 {
+	return 16
+}
+
+func FsGhostInk() int32 {
+	return 17
+}
+
+func FsGhostPlausible() int32 {
+	return 18
+}
+
+func FsGhostMargin() int32 {
+	return 19
+}
+
+func FsTwo() int32 {
+	return 20
+}
+
+func FsThree() int32 {
+	return 21
+}
+
 func FrSetting(code int32) int32 {
 	// The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).
 	if code == 0 {
@@ -203,6 +294,41 @@ func FrSetting(code int32) int32 {
 	if code == 11 {
 		return health.HhAgreeMin()
 	}
+	// P7.5 (SPEC 9.5, 13): `wm-cover` the share of the page (per mille) an image covers to be a background; `wm-alpha` the alpha (per mille) under which
+	// text or an image is a watermark; `wm-angle` (centi-degrees) the angle off the page's text and off the right angles that is a watermark's;
+	// `wm-size` the height (per mille of the line's median) that is a watermark's; `wm-body-share` the body-ink share (per mille) under which a word is
+	// another layer's; `ghost-ink` the kin ink (per mille) under which an OCR word has no ink of its own; `ghost-plausible` is 1000 minus `ghost-implausible`
+	// (300), the plausibility an OCR-only word with low symbol margins needs; `ghost-margin` the symbol margin under which a reading is a guess.
+	if code == 12 {
+		return artifact.WmCover()
+	}
+	if code == 13 {
+		return artifact.WmAlpha()
+	}
+	if code == 14 {
+		return 1500
+	}
+	if code == 15 {
+		return 2500
+	}
+	if code == 16 {
+		return 300
+	}
+	if code == 17 {
+		return 50
+	}
+	if code == 18 {
+		return 700
+	}
+	if code == 19 {
+		return 150
+	}
+	if code == 20 {
+		return 2
+	}
+	if code == 21 {
+		return 3
+	}
 	return 0
 }
 
@@ -221,7 +347,7 @@ func FwOcr() int32 {
 	return 2
 }
 
-var FrRows [612]int32 = [612]int32{
+var FrRows [1044]int32 = [1044]int32{
 	101, 100, 1, 0, 0, 900, 0, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	102, 100, 1, 0, 0, 900, 0, 2, 0, 2, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	110, 100, 1, 0, 0, 1000, 0, 0, 1, 1, 0, 1, 3, 0, 2, 6, 2, 0, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -239,6 +365,18 @@ var FrRows [612]int32 = [612]int32{
 	177, 100, 0, 7, 0, 0, 0, 2, 0, 2, 2, 0, 1, 0, 1, 13, 1, 9, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	178, 100, 0, 7, 0, 0, 0, 2, 0, 2, 2, 0, 1, 0, 1, 15, 1, 11, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	190, 100, 1, 0, 1, 600, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	201, 200, 0, 1, 0, 900, 16, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	202, 200, 0, 2, 0, 900, 16, 2, 20, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	203, 200, 0, 2, 0, 900, 16, 2, 21, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	205, 200, 0, 2, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 9, 0, 12, 24, 1, 13, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	211, 200, 0, 1, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 17, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	221, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 23, 1, 16, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	231, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 18, 0, 14, 19, 0, 14, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	232, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 20, 0, 15, 9, 0, 12, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	251, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 22, 1, 17, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	252, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 7, 1, 18, 21, 1, 19, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	401, 400, 0, 0, 128, 900, 25, 2, 1, 0, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	402, 400, 0, 0, 128, 900, 25, 2, 1, 0, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 }
 
 func FrW() int32 {
@@ -284,6 +422,14 @@ func FrPcmp(row int32, k int32) int32 {
 
 func FrPset(row int32, k int32) int32 {
 	return FrRows[row*36+(8+(k*3))]
+}
+
+func FrDefence(row int32) int32 {
+	// The defence of SPEC 9.5 a row of block 200 is (1-6, by the tens digit of its number minus 19; 24x is the seals', 5), 0 for every other row.
+	if FrBlock(row) != 200 {
+		return 0
+	}
+	return (FrNumber(row) / 10) - 19
 }
 
 func FrOrder(k int32) int32 {
@@ -340,7 +486,7 @@ func frHolds(row int32, gv *port.Cells) int32 {
 func FrDecide(gv *port.Cells) int32 {
 	// The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
 	// rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-	var n int32 = 17
+	var n int32 = 29
 	var b int32 = 0
 	var blk int32 = 0
 	var r int32 = 0

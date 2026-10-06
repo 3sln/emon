@@ -56,7 +56,7 @@ func rsNameLen(s int32) int32 {
 	return 11
 }
 
-func rsNode(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, n int32, np int32) int32 {
+func RsNode(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, n int32, np int32) int32 {
 	// Copy node n of the old arenas as the last child of np (-1: a new root): its kind and small fields, text run,
 	// attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes
 	// it in `nm` (old to new).
@@ -597,7 +597,7 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 		if act == 1 {
 			ls = rsPlaceItem(on, oa, orr, nodes, attrs, regions, text, stk, lay, base, c, np)
 			f = base + ((rsDepth(stk, base) - 1) * rsFr)
-			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, ls)
+			nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, ls)
 			model.NodeSetSub(nodes, nn, 0)
 			model.NodeSetAux(nodes, nn, 0)
 			// no frame: the Model's depth limit stopped the list; the item stands where it is
@@ -617,14 +617,14 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 			if hold < 0 {
 				hold = np
 			}
-			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, hold)
+			nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, hold)
 			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, nn)
 		}
 		// the caption above its object
 		if act == 3 {
 			q = model.NodeNext(on, c)
-			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, q, np)
-			cn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, nn)
+			nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, q, np)
+			cn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, nn)
 			rsPair(out, cn, nn)
 			rsLabelOf(on, oa, c, nodes, attrs, nn)
 			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, cn)
@@ -639,15 +639,15 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 			model.NodeAddSrc(nodes, nn, model.SrInfer())
 			rsCopyRegions(on, orr, nodes, regions, c, nn)
 			rsLabelOf(on, oa, c, nodes, attrs, nn)
-			cn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, nn)
+			cn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, nn)
 			rsPair(out, cn, nn)
 			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, c, cn)
 		}
 		// an object and the caption below it
 		if act == 5 {
 			q = model.NodeNext(on, c)
-			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, np)
-			cn = rsNode(on, oa, orr, nodes, attrs, regions, nm, q, nn)
+			nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, np)
+			cn = RsNode(on, oa, orr, nodes, attrs, regions, nm, q, nn)
 			rsPair(out, cn, nn)
 			rsLabelOf(on, oa, q, nodes, attrs, nn)
 			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, q, cn)
@@ -658,7 +658,7 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 			rsPieces(nodes, attrs, text, np, t0, t1, out)
 		}
 		if (act == 7) || (act == 8) {
-			nn = rsNode(on, oa, orr, nodes, attrs, regions, nm, c, np)
+			nn = RsNode(on, oa, orr, nodes, attrs, regions, nm, c, np)
 			if act == 8 {
 				model.NodeSetText(nodes, nn, -1, 0)
 				rsPieces(nodes, attrs, text, nn, t0, t1, out)
@@ -672,7 +672,7 @@ func rsChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cell
 	return 0
 }
 
-func rsRemap(attrs *port.Cells, nm *port.Cells) int32 {
+func RsRemap(attrs *port.Cells, nm *port.Cells) int32 {
 	// Node-valued attributes point at old nodes: point them at the new ones.
 	var a int32 = 0
 	var n int32 = port.CellsLen(attrs) / 5
@@ -930,12 +930,12 @@ func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, no
 	}
 	for r < n {
 		if model.NodeParent(on, r) < 0 {
-			var nr int32 = rsNode(on, oa, orr, nodes, attrs, regions, nm, r, -1)
+			var nr int32 = RsNode(on, oa, orr, nodes, attrs, regions, nm, r, -1)
 			rsChildren(on, oa, orr, text, nodes, attrs, regions, nm, stk, out, lay, r, nr)
 		}
 		r += 1
 	}
-	rsRemap(attrs, nm)
+	RsRemap(attrs, nm)
 	rsTargets(nodes, attrs, out)
 	rsLinkRefs(nodes, attrs, text, used)
 	rsResolveLinks(nodes, attrs, regions, used)
@@ -1118,6 +1118,6 @@ func RsFigures(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cell
 		}
 		r += 1
 	}
-	rsRemap(attrs, nm)
+	RsRemap(attrs, nm)
 	return model.NodeCount(nodes)
 }

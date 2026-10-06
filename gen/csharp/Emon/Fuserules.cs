@@ -69,8 +69,48 @@ public static class Fuserules {
         // the agreement of the group's page between the text layer and OCR, per mille (1000 when too few groups have both)
         return 15;
     }
-    public static int AgCount() {
+    public static int AgArt() {
+        // defence 1 (D204): what the PDF says of the group's visible text-layer words, all alike: 0 nothing, 1 watermark (an /Artifact /Watermark mark, a Watermark annotation, alpha under `wm-alpha`), 2 background (an /Artifact /Background mark of a tree that can be believed), 3 a Stamp annotation's rectangle
         return 16;
+    }
+    public static int AgRecur() {
+        // defence 2: 1 when the group is an OCR-only group that recurs at the same place on `wm-recur-pages` of the pages (`emon.artifact`'s `ax-recur`), else 0
+        return 17;
+    }
+    public static int AgOangle() {
+        // defence 4: the least angle (centi-degrees) of the group's OCR words to the page's OCR lines (`xo-angle`); -1 absent
+        return 18;
+    }
+    public static int AgOdiag() {
+        // defence 4: the least angle (centi-degrees) of the group's OCR words off the nearest right angle (0 for upright and turned text); -1 absent
+        return 19;
+    }
+    public static int AgOrel() {
+        // defence 4: the largest height (per mille) of the group's OCR words relative to their line's median (`xo-rel-height`); -1 absent
+        return 20;
+    }
+    public static int AgMargin() {
+        // defence 6: the least symbol margin (`xo-margin`) of the group's OCR words; -1 absent
+        return 21;
+    }
+    public static int AgKink() {
+        // defences 3 and 6: the least kin ink (`xo-kin-ink`, per mille) under the group's OCR words; -1 absent (P6.3's layers are not wired into the page unit)
+        return 22;
+    }
+    public static int AgBody() {
+        // defence 3: the least body-ink share (`xo-body-share`, per mille) of the group's OCR words; -1 absent (as `ag-kink`)
+        return 23;
+    }
+    public static int AgImalpha() {
+        // defence 1: the least alpha (per mille) of an image placement covering at least `wm-cover` of the page that the group lies in; -1 when there is none
+        return 24;
+    }
+    public static int AgSeal() {
+        // defence 5 (P7.7): 1 when the group lies in a seal, stamp or signature candidate (`emon.sealmark`'s `sm-find` flagged it `plg-in-seal`: every visible text-layer word of the group is the candidate's, or it is an OCR-only group inside one), else 0
+        return 25;
+    }
+    public static int AgCount() {
+        return 26;
     }
     public static int FcGe() {
         return 0;
@@ -120,6 +160,36 @@ public static class Fuserules {
     public static int FsAgreeMin() {
         return 11;
     }
+    public static int FsWmCover() {
+        return 12;
+    }
+    public static int FsWmAlpha() {
+        return 13;
+    }
+    public static int FsWmAngle() {
+        return 14;
+    }
+    public static int FsWmSize() {
+        return 15;
+    }
+    public static int FsWmBodyShare() {
+        return 16;
+    }
+    public static int FsGhostInk() {
+        return 17;
+    }
+    public static int FsGhostPlausible() {
+        return 18;
+    }
+    public static int FsGhostMargin() {
+        return 19;
+    }
+    public static int FsTwo() {
+        return 20;
+    }
+    public static int FsThree() {
+        return 21;
+    }
     public static int FrSetting(int code) {
         // The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).
         if (code == 0) {
@@ -166,6 +236,41 @@ public static class Fuserules {
         if (code == 11) {
             return Health.HhAgreeMin();
         }
+        // P7.5 (SPEC 9.5, 13): `wm-cover` the share of the page (per mille) an image covers to be a background; `wm-alpha` the alpha (per mille) under which
+        // text or an image is a watermark; `wm-angle` (centi-degrees) the angle off the page's text and off the right angles that is a watermark's;
+        // `wm-size` the height (per mille of the line's median) that is a watermark's; `wm-body-share` the body-ink share (per mille) under which a word is
+        // another layer's; `ghost-ink` the kin ink (per mille) under which an OCR word has no ink of its own; `ghost-plausible` is 1000 minus `ghost-implausible`
+        // (300), the plausibility an OCR-only word with low symbol margins needs; `ghost-margin` the symbol margin under which a reading is a guess.
+        if (code == 12) {
+            return Artifact.WmCover();
+        }
+        if (code == 13) {
+            return Artifact.WmAlpha();
+        }
+        if (code == 14) {
+            return 1500;
+        }
+        if (code == 15) {
+            return 2500;
+        }
+        if (code == 16) {
+            return 300;
+        }
+        if (code == 17) {
+            return 50;
+        }
+        if (code == 18) {
+            return 700;
+        }
+        if (code == 19) {
+            return 150;
+        }
+        if (code == 20) {
+            return 2;
+        }
+        if (code == 21) {
+            return 3;
+        }
         return 0;
     }
     public static int FwNone() {
@@ -197,7 +302,19 @@ public static class Fuserules {
         176, 100, 0, 7, 0, 0, 0, 2, 0, 2, 2, 0, 1, 0, 1, 12, 1, 8, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
         177, 100, 0, 7, 0, 0, 0, 2, 0, 2, 2, 0, 1, 0, 1, 13, 1, 9, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
         178, 100, 0, 7, 0, 0, 0, 2, 0, 2, 2, 0, 1, 0, 1, 15, 1, 11, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
-        190, 100, 1, 0, 1, 600, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
+        190, 100, 1, 0, 1, 600, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        201, 200, 0, 1, 0, 900, 16, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        202, 200, 0, 2, 0, 900, 16, 2, 20, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        203, 200, 0, 2, 0, 900, 16, 2, 21, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        205, 200, 0, 2, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 9, 0, 12, 24, 1, 13, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        211, 200, 0, 1, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 17, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        221, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 23, 1, 16, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        231, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 18, 0, 14, 19, 0, 14, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        232, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 20, 0, 15, 9, 0, 12, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        251, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 22, 1, 17, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        252, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 7, 1, 18, 21, 1, 19, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        401, 400, 0, 0, 128, 900, 25, 2, 1, 0, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        402, 400, 0, 0, 128, 900, 25, 2, 1, 0, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
     };
     public static int FrW() {
         // cells of a row
@@ -232,6 +349,13 @@ public static class Fuserules {
     }
     public static int FrPset(int row, int k) {
         return FrRows[row * 36 + (8 + (k * 3))];
+    }
+    public static int FrDefence(int row) {
+        // The defence of SPEC 9.5 a row of block 200 is (1-6, by the tens digit of its number minus 19; 24x is the seals', 5), 0 for every other row.
+        if (FrBlock(row) != 200) {
+            return 0;
+        }
+        return (FrNumber(row) / 10) - 19;
     }
     public static int FrOrder(int k) {
         // The k-th block a word group is tried against (D224); -1 after the last.
@@ -285,7 +409,7 @@ public static class Fuserules {
     public static int FrDecide(emon.Port.Cells gv) {
         // The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
         // rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-        int n = 17;
+        int n = 29;
         int b = 0;
         int blk = 0;
         int r = 0;

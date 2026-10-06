@@ -49,18 +49,19 @@ use crate::emon::lists::ls_analyze;
 use crate::emon::notes::nt_analyze;
 use crate::emon::restruct::{rs_figures, rs_run};
 use crate::emon::asset::*;
+use crate::emon::sealmark::{sm_find, sm_write};
 use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::table::*;
 use crate::emon::pageunit::{pu_plan, pu_run_pdf};
 use crate::emon::arbiter::{ar_doc, ar_tag, ar_write};
+use crate::emon::pdfannot::pa_run;
 use crate::emon::health::hl_doc;
 use crate::emon::player::{pl_check, pl_emit};
 use crate::emon::rasterin::*;
 use crate::emon::scan::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
-use crate::emon::pdfannot::pa_run;
 use crate::emon::pdfmeta::pm_run;
 use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
 use crate::emon::tagtable::tt_emit;
@@ -1123,6 +1124,8 @@ struct PdfDoc {
     // inline styles and links (P4.7): the fonts' own style facts and the link annotations
     ift: Cells,
     an: Cells,
+    // the paths' geometry (P7.7: seals are round and stamps are quadrilaterals), kept only when fusion is on
+    pts: Cells,
     pg: Cells,
     txt: Cells,
     md: Cells,
@@ -1269,7 +1272,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, info }))
 }
 
 // One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
@@ -1289,7 +1292,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1304,16 +1307,23 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
         ev.feats = Cells::new();
     }
     let (mut fv, mut fx, mut afa) = (Cells::new(), Cells::new(), Cells::new());
+    // seal, stamp and signature candidates (P7.7): the `sl` arena, found before arbitration, which keeps their words out of the body
+    let mut sm = Cells::new();
     if fused {
         let [mut xscr, mut xgp, mut xdp, mut xta, mut xtb, mut xtt] = xs;
         let (mut nfw, mut nfl, mut gd, mut gv, mut w2g, mut o2g, mut pp, mut tw, mut tl) =
             (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
         hl_doc(&mut ev.feats, &mut fw, &mut hl);
+        let (trust0, mut rc) = (tg_trust(&mut ss), Cells::new());
+        {
+            let (mut sscr, mut stmp) = (Cells::new(), Cells::new());
+            sm_find(&mut pa, &mut pts, &mut gl, &mut fw, &mut et, &mut ev.epages, &mut cg, &mut ev.refs, &mut ev.owords, np, &mut sm, &mut sscr, &mut stmp);
+        }
         ar_doc(&mut cg, &mut ev.refs, &mut fw, &mut fl, &mut et, &mut ev.feats, &mut ev.owords, &mut ev.olines, &mut ev.oruns, &mut ev.osyms, &mut ev.images, &mut ev.epages,
-               &mut nfw, &mut nfl, &mut fv, &mut fx, &mut afa, &mut gd, &mut gv, &mut w2g, &mut o2g, &mut pp, &mut tw, &mut tl, &mut xscr);
+               &mut gl, &mut mk, &mut an, &mut txt, trust0, &mut rc, &mut nfw, &mut nfl, &mut fv, &mut fx, &mut afa, &mut gd, &mut gv, &mut w2g, &mut o2g, &mut pp, &mut tw, &mut tl, &mut xscr);
         std::mem::swap(&mut fw, &mut nfw);
         std::mem::swap(&mut fl, &mut nfl);
-        let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut grl, &mut Cells::new(), &mut gfl, &mut Cells::new(), &mut Cells::new(), &mut et, &mut ev.refs, &mut gl);
+        let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut grl, &mut sm, &mut gfl, &mut Cells::new(), &mut Cells::new(), &mut et, &mut ev.refs, &mut gl);
         if c != 0 {
             return Outcome::Failed(Error::Internal(format!("pl-check {}", c)));
         }
@@ -1332,7 +1342,7 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
             let mut t = String::new();
             pl_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, &mut et, &mut ev.feats, &mut g, &mut wd, &mut ln, &mut k, &mut f, &mut ev.paths, &mut ev.images,
                     &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines,
-                    &mut cg, &mut fw, &mut fl, &mut fv, &mut fad, &mut fx, &mut hl, &mut grl, &mut Cells::new(), &mut gfl, &mut Cells::new(), &mut Cells::new());
+                    &mut cg, &mut fw, &mut fl, &mut fv, &mut fad, &mut fx, &mut hl, &mut grl, &mut sm, &mut gfl, &mut Cells::new(), &mut Cells::new());
             Some(t)
         } else {
             Some(match snap {
@@ -1425,6 +1435,13 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
     if fused {
         ar_write(&mut afa, &mut ev.owords, &mut et, &mut m.ledger, &mut m.text, &mut tmp, &mut ttx);
         ar_tag(&mut m.nodes, &mut m.regions, &mut fw, &mut fv);
+        // the seals' nodes (P7.7): the body copied again with a `seal` node in reading order for every candidate
+        let (mut sn, mut sa, mut sr, mut snm) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+        if sm_write(&mut sm, &mut et, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut sn, &mut sa, &mut sr, &mut snm) > 0 {
+            std::mem::swap(&mut m.nodes, &mut sn);
+            std::mem::swap(&mut m.attrs, &mut sa);
+            std::mem::swap(&mut m.regions, &mut sr);
+        }
     }
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
