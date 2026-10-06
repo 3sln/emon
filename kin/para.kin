@@ -57,7 +57,10 @@
                                 sr-infer pk-vector lay-add rl-body nk-initial node-set-aux node-add-flag
                                 fl-low-conf node-set-align nk-heading node-set-attr-text
                                 fk-number fk-numbering nk-item nk-caption nk-ref node-kind
-                                fk-marker fk-label fk-box node-set-attr-int text-append-cp]]
+                                fk-marker fk-label fk-box node-set-attr-int text-append-cp
+                                nk-span nk-link fk-href sr-annot]]
+            [emon.inline :refer [il-base il-cur il-set-cur il-wstate il-mark il-mix il-state-at il-has il-base-of
+                                 il-styled il-eff il-link il-bits il-mark-end il-mark-value il-s-sty il-link-get]]
             [emon.lists :refer [ls-split ls-hang ls-hang-col ls-start ls-get ls-k-textx ls-s-item ls-s-end ls-s-note ls-s-cap ls-s-ref
                                 ls-s-sep ls-s-base]]
             [emon.heading :refer [hd-level hd-field hd-opinion hd-parent hd-cur hd-put-scheme
@@ -496,31 +499,87 @@
       (cells-push raw 32)
       (return 0))))
 
-(defn ^I32 pa-add-line [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells raw ^I32 l]
-  (comment "Append the line's words, a space between two.")
+(defn ^I32 pa-lead-end [^Cells et ^I32 ts ^I32 tl]
+  (comment "Where the group at the start of a word's text (the list, note or caption stage's) ends in the word; 0 when")
+  (comment "the text does not start with one.")
+  (let [^:mut ^I32 j 1
+        ^:mut ^I32 e 0]
+    (if (< tl 1) (return 0))
+    (let [^I32 c (cells-at et ts)]
+      (if (or (== c (ls-s-item)) (or (== c (ls-s-note)) (== c (ls-s-cap))))
+        (do (set e tl)
+            (while (< j tl)
+              (do (if (== (cells-at et (+ ts j)) (ls-s-end))
+                    (do (set e (+ j 1))
+                        (set j tl))
+                    (set j (+ j 1)))))))
+      (return e))))
+
+(defn ^I32 pa-add-line [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells raw ^I32 l ^:mut ^Cells hc ^:mut ^Cells fr]
+  (comment "Append the line's words, a space between two. Where the style or the link changes (`emon.inline`, P4.7, D192) a")
+  (comment "marker goes in first: the space between two words has what the two have in common, a group at the start of a")
+  (comment "word is not a character, and a heading line has no markers (its number is found by offset). The state the")
+  (comment "text is in is kept in the block of `hc`; the space `pa-join` pushed is taken back and pushed again, after a marker,")
+  (comment "and the raw start of the fragment that line opens (`fr`, the last row) moves to after it.")
   (let [^I32 w0 (ln-get ln l (lh-first))
         ^I32 wn (ln-get ln l (lh-count))
         ^I32 sk (pa-skip ln l)
         ^I32 nospace (rem (quot (in-cell ln l) 2) 2)
+        ^:mut ^I32 off 0
+        ^I32 n0 (cells-len raw)
+        ^I32 nfr (quot (cells-len fr) FR_STRIDE)
+        ^:mut ^I32 marks 0
+        ^:mut ^I32 spc 0
+        ^:mut ^I32 cur 0
         ^:mut ^I32 k 0
         ^:mut ^I32 j 0
-        ^:mut ^I32 started 0]
+        ^:mut ^I32 started 0
+        ^:mut ^I32 le 0
+        ^:mut ^I32 s1 0
+        ^:mut ^I32 c 0]
+    (if (and (>= (il-base hc) 0) (== (hd-level hc l) 0)) (set marks 1))
+    (if (== marks 1)
+      (do (if (== n0 0) (il-set-cur hc 0))
+          (set cur (il-cur hc))
+          (if (and (> n0 0) (== (cells-at raw (- n0 1)) 32))
+            (do (cells-drop raw (- n0 1))
+                (set spc 1)))))
     (comment "A line that opens a paragraph whose initial is its whole first word and joins the next with no space (cell 15, bit 1).")
     (while (< k wn)
       (do (let [^:mut ^I32 ts (wd-get wd (+ w0 k) (hd-tstart))
                 ^:mut ^I32 tl (wd-get wd (+ w0 k) (hd-tlen))]
             (if (and (== k 0) (>= tl sk))
               (do (set ts (+ ts sk))
-                  (set tl (- tl sk))))
+                  (set tl (- tl sk))
+                  (set off sk)))
             (if (and (>= ts 0) (> tl 0))
-              (do (if (and (== started 1) (not (and (== nospace 1) (== k 1)))) (cells-push raw 32))
+              (do (set le (pa-lead-end et ts tl))
+                  (if (and (or (== started 1) (== spc 1)) (not (and (== nospace 1) (== k 1))))
+                    (do (if (== marks 1)
+                          (do (set s1 cur)
+                              (if (< le tl) (set s1 (il-wstate hc (+ w0 k) (+ le off))))
+                              (set s1 (il-mix cur s1))
+                              (if (!= s1 cur)
+                                (do (il-mark raw s1)
+                                    (set cur s1)))))
+                        (cells-push raw 32)
+                        (if (and (== spc 1) (> nfr 0) (== (cells-at fr (+ (* (- nfr 1) FR_STRIDE) 5)) n0))
+                          (cells-set fr (+ (* (- nfr 1) FR_STRIDE) 5) (cells-len raw)))))
                   (set started 1)
+                  (set spc 0)
                   (set j 0)
                   (while (< j tl)
-                    (do (let [^I32 c (cells-at et (+ ts j))]
-                          (cells-push raw c))
+                    (do (set c (cells-at et (+ ts j)))
+                        (if (and (== marks 1) (>= j le))
+                          (do (set s1 (il-wstate hc (+ w0 k) (+ j off)))
+                              (if (!= s1 cur)
+                                (do (il-mark raw s1)
+                                    (set cur s1)))))
+                        (cells-push raw c)
                         (set j (+ j 1)))))))
           (set k (+ k 1))))
+    (if (== spc 1) (cells-push raw 32))
+    (if (== marks 1) (il-set-cur hc cur))
     (return 0)))
 
 ;; ----------------------------------------------------- the paragraph being built
@@ -713,39 +772,136 @@
     (node-add-src nodes child (sr-text))
     (return child)))
 
+(defn ^I32 pa-span-node [^:mut ^Cells nodes ^I32 par ^I32 bits]
+  (comment "A `span` inline of the style bits under par (P4.7, D192); -1 when the Model's depth limit says no.")
+  (let [^I32 sp (node-new nodes (nk-span) par)]
+    (if (< sp 0) (return -1))
+    (node-set-sub nodes sp bits)
+    (node-set-conf nodes sp 900)
+    (node-add-src nodes sp (sr-text))
+    (return sp)))
+
+(defn ^I32 pa-link-node [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells hc ^I32 par ^I32 id]
+  (comment "A `link` inline for link `id` of the block in `hc` (`emon.inline`) under par: a URI is its `href`; an internal")
+  (comment "link holds its destination (the page + 1 in `sub`, the point packed in `aux`) until `emon.restruct` finds the block")
+  (comment "it names and makes it the `target`. -1 when the Model's depth limit says no.")
+  (let [^I32 lk (node-new nodes (nk-link) par)]
+    (if (< lk 0) (return -1))
+    (node-add-src nodes lk (sr-annot))
+    (if (== (il-link-get hc id 0) 1)
+      (do (node-set-conf nodes lk 1000)
+          (node-set-attr-text nodes attrs lk (fk-href) (il-link-get hc id 1) (il-link-get hc id 2)))
+      (do (node-set-conf nodes lk 700)
+          (node-add-src nodes lk (sr-infer))
+          (node-set-sub nodes lk (+ (il-link-get hc id 3) 1))
+          (node-set-aux nodes lk (il-link-get hc id 4))))
+    (return lk)))
+
 (defn ^I32 pa-inlines [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^Cells raw ^:mut ^Cells tmp
-                       ^I32 par ^I32 from ^I32 to]
-  (comment "The inline children of the paragraph for raw[from..to): `text` runs, and a `ref` for every note reference")
-  (comment "group (its marker; the target is set later, when the notes are known). A space before a reference is not")
-  (comment "text: the reference stands where the marker was printed, against the word. Answers the first `text` child, -1")
-  (comment "when there is none.")
+                       ^I32 par ^I32 from ^I32 to ^I32 base ^Cells hc]
+  (comment "The inline children of the paragraph for raw[from..to): `text` runs, in a `span` where the style is marked and a")
+  (comment "`link` where the text is under one (`emon.inline`, P4.7: a marker in the text is a change of state, `base` the")
+  (comment "style the paragraph is set in, which is not marked), and a `ref` for every note reference group (its marker;")
+  (comment "the target is set later, when the notes are known). A space before a reference is not text: the reference")
+  (comment "stands where the marker was printed, against the word. A reference ends the span and the link it is in. Answers")
+  (comment "the first child that is not a `ref`, -1 when there is none.")
   (let [^:mut ^I32 i from
         ^:mut ^I32 seg from
         ^:mut ^I32 first -1
-        ^:mut ^I32 child 0]
-    (while (< i to)
-      (do (if (== (cells-at raw i) (ls-s-ref))
-            (do (let [^I32 gend (pa-group-end raw i to)
-                      ^I32 sep (pa-group-sep raw i gend)]
-                  (if (or (< gend 0) (< sep 0))
-                    (set i (+ i 1))
-                    (do (let [^:mut ^I32 se i]
-                          (if (and (> se seg) (== (cells-at raw (- se 1)) 32)) (set se (- se 1)))
-                          (if (> se seg)
-                            (do (set child (pa-text-child nodes text raw tmp par seg se))
-                                (if (< first 0) (set first child)))))
-                        (set child (node-new nodes (nk-ref) par))
-                        (node-set-conf nodes child 500)
-                        (node-add-src nodes child (sr-text))
-                        (node-add-src nodes child (sr-infer))
-                        (pa-put-marker nodes attrs text raw child (fk-marker) (+ sep 1) (- gend 1))
-                        (set i gend)
-                        (set seg gend)))))
-            (set i (+ i 1)))))
-    (if (< seg to)
-      (do (set child (pa-text-child nodes text raw tmp par seg to))
-          (if (< first 0) (set first child))))
+        ^:mut ^I32 child 0
+        ^:mut ^I32 st (il-state-at raw from)
+        ^:mut ^I32 cl 0
+        ^:mut ^I32 cb 0
+        ^:mut ^I32 lk -1
+        ^:mut ^I32 sp -1
+        ^:mut ^I32 pp 0
+        ^:mut ^I32 ev 0
+        ^:mut ^I32 ge 0
+        ^:mut ^I32 sep 0
+        ^:mut ^I32 se 0
+        ^:mut ^I32 eff 0]
+    (while (<= i to)
+      (do (set ev 0)
+          (if (== i to)
+            (set ev 3)
+            (do (let [^I32 c (cells-at raw i)]
+                  (if (== c (il-s-sty))
+                    (do (set ge (il-mark-end raw i to))
+                        (if (> ge 0) (set ev 1))))
+                  (if (== c (ls-s-ref))
+                    (do (set ge (pa-group-end raw i to))
+                        (set sep -1)
+                        (if (> ge 0) (set sep (pa-group-sep raw i ge)))
+                        (if (>= sep 0) (set ev 2)))))))
+          (if (== ev 0)
+            (set i (+ i 1))
+            (do (set se i)
+                (if (and (== ev 2) (> se seg) (== (cells-at raw (- se 1)) 32)) (set se (- se 1)))
+                (if (> se seg)
+                  (do (set eff (il-eff st base))
+                      (if (!= (il-link eff) cl)
+                        (do (set cl (il-link eff))
+                            (set cb 0)
+                            (set sp -1)
+                            (set lk -1)
+                            (if (> cl 0)
+                              (do (set lk (pa-link-node nodes attrs hc par (- cl 1)))
+                                  (if (and (>= lk 0) (< first 0)) (set first lk))))))
+                      (set pp par)
+                      (if (>= lk 0) (set pp lk))
+                      (if (!= (il-bits eff) cb)
+                        (do (set cb (il-bits eff))
+                            (set sp -1)
+                            (if (> cb 0)
+                              (do (set sp (pa-span-node nodes pp cb))
+                                  (if (and (>= sp 0) (< lk 0) (< first 0)) (set first sp))))))
+                      (if (>= sp 0) (set pp sp))
+                      (set child (pa-text-child nodes text raw tmp pp seg se))
+                      (if (and (< sp 0) (< lk 0) (< first 0)) (set first child))))
+                (if (== ev 1)
+                  (do (set st (il-mark-value raw i ge))
+                      (set i ge)
+                      (set seg ge)))
+                (if (== ev 2)
+                  (do (set cl 0)
+                      (set cb 0)
+                      (set lk -1)
+                      (set sp -1)
+                      (set child (node-new nodes (nk-ref) par))
+                      (node-set-conf nodes child 500)
+                      (node-add-src nodes child (sr-text))
+                      (node-add-src nodes child (sr-infer))
+                      (pa-put-marker nodes attrs text raw child (fk-marker) (+ sep 1) (- ge 1))
+                      (set i ge)
+                      (set seg ge)))
+                (if (== ev 3) (set i (+ to 1)))))))
     (return first)))
+
+(defn ^I32 pa-compact [^:mut ^Cells raw ^:mut ^Cells fr]
+  (comment "Take every style marker out of raw in one pass, and move the raw starts of the fragments (`fr`, cell 5 of a row,")
+  (comment "ascending) with it.")
+  (let [^I32 n (cells-len raw)
+        ^I32 nfr (quot (cells-len fr) FR_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ge 0]
+    (while (< i n)
+      (do (while (and (< k nfr) (<= (cells-at fr (+ (* k FR_STRIDE) 5)) i))
+            (do (cells-set fr (+ (* k FR_STRIDE) 5) o)
+                (set k (+ k 1))))
+          (set ge -1)
+          (if (== (cells-at raw i) (il-s-sty)) (set ge (il-mark-end raw i n)))
+          (if (> ge 0)
+            (set i ge)
+            (do (cells-set raw o (cells-at raw i))
+                (set o (+ o 1))
+                (set i (+ i 1))))))
+    (while (< k nfr)
+      (do (cells-set fr (+ (* k FR_STRIDE) 5) o)
+          (set k (+ k 1))))
+    (cells-drop raw o)
+    (return 0)))
 
 (defn ^I32 pa-flush [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                      ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells al ^:mut ^Cells hc ^I32 parent]
@@ -786,7 +942,16 @@
           ^:mut ^I32 ini 0
           ^:mut ^I32 t0 0
           ^:mut ^I32 child 0
+          ^:mut ^I32 sbase 0
+          ^:mut ^I32 sty 0
           ^:mut ^I32 kids 0]
+      (comment "style markers (P4.7): written, or, when nothing in the paragraph is marked against its own style, taken out")
+      (if (== (il-has raw rawn) 1)
+        (do (set sbase (il-base-of raw rawn))
+            (set sty (il-styled raw rawn sbase))
+            (if (== sty 0)
+              (do (pa-compact raw fr)
+                  (set rawn (cells-len raw))))))
       (if (== parent 0)
         (do (set lev (hd-level hc hl))
             (set sect (hd-parent hc nodes lev))))
@@ -860,6 +1025,7 @@
               (if (> runs 1) (set kids 1))
               (if (and (== k 0) (> ncp 0)) (set kids 1))
               (if (== (pa-has-ref raw from to) 1) (set kids 1))
+              (if (== sty 1) (set kids 1))
               (set child -1)
               (if (== kids 1)
                 (do (if (and (> runs 1) (> k 0))
@@ -889,10 +1055,10 @@
                           (node-add-src nodes child (sr-text))
                           (set child -1)))
                     (if (or (> runs 1) (< cut to))
-                      (set child (pa-inlines nodes attrs text raw tmp par cut to)))
+                      (set child (pa-inlines nodes attrs text raw tmp par cut to sbase hc)))
                     (if (and (> runs 1) (< child 0) (== k 0) (> ncp 0))
                       (set child (pa-text-child nodes text raw tmp par cut to)))
-                    (if (and (== runs 1) (== (pa-has-ref raw from to) 0))
+                    (if (and (== runs 1) (and (== sty 0) (== (pa-has-ref raw from to) 0)))
                       (do (set t0 (cells-len text))
                           (nz-nfc raw from to text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
                           (let [^I32 tn1 (- (cells-len text) t0)]
@@ -1046,7 +1212,7 @@
     (cells-drop fr 0)
     (pa-frag-open fr ln page prev 0)
     (pa-ini-start wd ln et raw fr ii prev)
-    (pa-add-line wd ln et raw prev)
+    (pa-add-line wd ln et raw prev hc fr)
     (pa-al-add wd ln al prev (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_X1)))
     (while (< i cnt)
       (do (let [^I32 b (cells-at lo (+ first i))]
@@ -1056,7 +1222,7 @@
                   (pa-ini-start wd ln et raw fr ii b))
               (do (pa-join wd ln et raw b)
                   (pa-frag-extend fr ln b)))
-            (pa-add-line wd ln et raw b)
+            (pa-add-line wd ln et raw b hc fr)
             (pa-al-add wd ln al b (cells-at cf (+ base CF_X0)) (cells-at cf (+ base CF_X1)))
             (set prev b))
           (set i (+ i 1))))
@@ -1105,7 +1271,7 @@
       (do (let [^I32 l (cells-at dq k)
                 ^I32 pg (ln-get ln l (lh-page))]
             (pa-frag-open fr ln pg l 0)
-            (pa-add-line wd ln et raw l)
+            (pa-add-line wd ln et raw l hc fr)
             (pa-flush nodes attrs regions text raw tmp fr al hc 0))
           (set k (+ k 1))))
     (cells-drop dq 0)
@@ -1321,7 +1487,7 @@
                             (set rs (cells-len raw))
                             (pa-frag-open fr lt p b rs)))
                       (set open 1)
-                      (pa-add-line wd lt et raw b)
+                      (pa-add-line wd lt et raw b hc fr)
                       (pa-al-add wd lt al b (cells-at cf (+ (* i CF_STRIDE) CF_X0)) (cells-at cf (+ (* i CF_STRIDE) CF_X1)))
                       (set prev b)
                       (set prevfr i)
@@ -1337,7 +1503,7 @@
                                         (pa-ini-start wd lt et raw fr ii b))
                                     (do (pa-join wd lt et raw b)
                                         (pa-frag-extend fr lt b)))
-                                  (pa-add-line wd lt et raw b)
+                                  (pa-add-line wd lt et raw b hc fr)
                                   (pa-al-add wd lt al b (cells-at cf (+ (* i CF_STRIDE) CF_X0)) (cells-at cf (+ (* i CF_STRIDE) CF_X1)))
                                   (set prev b)))
                             (set cont (+ cont 1))))))

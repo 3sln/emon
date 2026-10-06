@@ -991,6 +991,15 @@ func PxPatternType() int32 {
 func PxExtend() int32 {
 	return 190
 }
+func PxStemV() int32 {
+	return 191
+}
+func PxItalicAngle() int32 {
+	return 192
+}
+func PxFontWeight() int32 {
+	return 193
+}
 func PxEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "Annots")
@@ -1756,10 +1765,22 @@ func PxEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "Extend")
 		return 1
 	}
+	if code == 191 {
+		port.TextAscii(t, "StemV")
+		return 1
+	}
+	if code == 192 {
+		port.TextAscii(t, "ItalicAngle")
+		return 1
+	}
+	if code == 193 {
+		port.TextAscii(t, "FontWeight")
+		return 1
+	}
 	return 0
 }
 
-var PxChars [1075]int32 = [1075]int32{
+var PxChars [1101]int32 = [1101]int32{
 	65, 110, 110, 111, 116, 115, 65, 110, 110, 111, 116, 82, 101, 99, 116, 65,
 	83, 85, 82, 73, 71, 111, 84, 111, 71, 111, 84, 111, 82, 71, 111, 84,
 	111, 69, 76, 97, 117, 110, 99, 104, 78, 97, 109, 101, 100, 74, 97, 118,
@@ -1827,10 +1848,11 @@ var PxChars [1075]int32 = [1075]int32{
 	108, 79, 102, 102, 86, 69, 65, 110, 100, 79, 114, 78, 111, 116, 85, 110,
 	99, 104, 97, 110, 103, 101, 100, 83, 104, 97, 100, 105, 110, 103, 84, 121,
 	112, 101, 80, 97, 116, 116, 101, 114, 110, 84, 121, 112, 101, 69, 120, 116,
-	101, 110, 100,
+	101, 110, 100, 83, 116, 101, 109, 86, 73, 116, 97, 108, 105, 99, 65, 110,
+	103, 108, 101, 70, 111, 110, 116, 87, 101, 105, 103, 104, 116,
 }
 
-var PxSpan [382]int32 = [382]int32{
+var PxSpan [388]int32 = [388]int32{
 	0, 6,
 	6, 5,
 	11, 4,
@@ -2022,4 +2044,7 @@ var PxSpan [382]int32 = [382]int32{
 	1047, 11,
 	1058, 11,
 	1069, 6,
+	1075, 5,
+	1080, 11,
+	1091, 10,
 }

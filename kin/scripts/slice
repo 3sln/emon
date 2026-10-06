@@ -36,7 +36,7 @@
 (defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
 
 (def update? (some #{"--update"} *command-line-args*))
-(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "h-numbered" "initial-image" "initial-vector"])
+(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "h-numbered" "initial-image" "initial-vector" "furn-informative"])
 
 (shell {:out :string :err :string} "kin/scripts/emit")
 
@@ -86,9 +86,10 @@
   (def FULL "--html=ids,geometry,confidence=950,ledger,pretty")
 
   (defn html-paragraphs
-    "The text of each <p> of a default-options HTML, tags removed, entities decoded."
+    "The text of each <p> of a default-options HTML, tags removed, entities decoded. The running furniture (an <aside
+    data-emon=\"furniture\">, which is not in the body) is not read: a document with a running header has <p>s in it."
     [html]
-    (->> (re-seq #"<p(?: [^>]*)?>(.*?)</p>" html)
+    (->> (re-seq #"<p(?: [^>]*)?>(.*?)</p>" (str/replace html #"(?s)<aside data-emon=\"furniture\".*?</aside>" ""))
          (map (fn [[_ inner]]
                 (-> inner
                     (str/replace #"<[^>]*>" "")

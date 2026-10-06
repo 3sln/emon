@@ -2435,6 +2435,9 @@
         :para-boundary-r 1.0
         :rule-p 0.975451
         :rule-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -2508,6 +2511,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -2690,6 +2696,9 @@
         :join-f1 0.952381
         :join-p 1.0
         :join-r 0.909091
+        :link-f1 1.0
+        :link-p 1.0
+        :link-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
         :para-boundary-f1 0.812009
@@ -2698,6 +2707,15 @@
         :rule-p 0.973599
         :rule-r 0.996656
         :seal-leak 0.00449
+        :span-bold-f1 0.857143
+        :span-bold-p 0.857143
+        :span-bold-r 0.857143
+        :span-italic-f1 1.0
+        :span-italic-p 1.0
+        :span-italic-r 1.0
+        :span-mono-f1 1.0
+        :span-mono-p 1.0
+        :span-mono-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 0.980141
         :table-adj-p 0.996957
@@ -2830,6 +2848,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-italic-f1 1.0
+        :span-italic-p 1.0
+        :span-italic-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -2869,6 +2890,9 @@
         :para-boundary-r 1.0
         :rule-p 0.997778
         :rule-r 1.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :src-ocr-share 0.0
         :table-adj-f1 0.991924
         :table-adj-p 1.0
@@ -2908,6 +2932,9 @@
         :para-boundary-r 1.0
         :rule-p 1.0
         :rule-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -3037,6 +3064,9 @@
         :para-boundary-f1 0.9375
         :para-boundary-p 0.9375
         :para-boundary-r 0.9375
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -3070,11 +3100,23 @@
         :heading-level-near 1.0
         :heading-p 1.0
         :heading-r 1.0
+        :link-f1 1.0
+        :link-p 1.0
+        :link-r 1.0
         :order-tau 1.0
         :page-label-acc 1.0
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
+        :span-italic-f1 1.0
+        :span-italic-p 1.0
+        :span-italic-r 1.0
+        :span-mono-f1 1.0
+        :span-mono-p 1.0
+        :span-mono-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -3158,6 +3200,9 @@
         :para-boundary-p 0.277108
         :para-boundary-r 1.0
         :seal-leak 0.00449
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -4299,6 +4344,9 @@
         :join-f1 0.0
         :join-p 0.0
         :join-r 0.0
+        :link-f1 0.0
+        :link-p 0.0
+        :link-r 0.0
         :page-label-acc 0.765217
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
@@ -4306,6 +4354,15 @@
         :rule-p 0.0
         :rule-r 0.0
         :seal-leak 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
+        :span-italic-f1 0.0
+        :span-italic-p 0.0
+        :span-italic-r 0.0
+        :span-mono-f1 0.0
+        :span-mono-p 0.0
+        :span-mono-r 0.0
         :table-adj-f1 0.0
         :table-adj-p 0.0
         :table-adj-r 0.0
@@ -4420,6 +4477,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-italic-f1 0.0
+        :span-italic-p 0.0
+        :span-italic-r 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
         :table-adj-r 1.0
@@ -4454,6 +4514,9 @@
         :para-boundary-r 0.0
         :rule-p 0.0
         :rule-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 0.0
         :table-adj-p 0.0
         :table-adj-r 0.0
@@ -4488,6 +4551,9 @@
         :para-boundary-r 0.0
         :rule-p 1.0
         :rule-r 1.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
         :table-adj-r 1.0
@@ -4592,6 +4658,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
         :table-adj-r 1.0
@@ -4621,10 +4690,22 @@
         :heading-level-e2e 0.0
         :heading-p 0.0
         :heading-r 0.0
+        :link-f1 0.0
+        :link-p 0.0
+        :link-r 0.0
         :page-label-acc 0.4
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
+        :span-italic-f1 0.0
+        :span-italic-p 0.0
+        :span-italic-r 0.0
+        :span-mono-f1 0.0
+        :span-mono-p 0.0
+        :span-mono-r 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
         :table-adj-r 1.0
@@ -4695,6 +4776,9 @@
         :para-boundary-p 0.0
         :para-boundary-r 0.0
         :seal-leak 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
         :table-adj-r 1.0

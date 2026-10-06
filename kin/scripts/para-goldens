@@ -21,7 +21,7 @@
 (def root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile .getParentFile .getPath))
 
 (def docs ["h-plain" "h-keyword" "h-inverted-numbered" "h-numbered" "initial-image" "initial-vector"
-           "initial-raised" "initial-firstword" "initial-columns" "initial-rtl"])
+           "initial-raised" "initial-firstword" "initial-columns" "initial-rtl" "furn-informative"])
 
 (defn run [& args]
   (let [r (apply sh/sh (concat args [:dir root]))]

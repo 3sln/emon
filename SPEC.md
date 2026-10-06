@@ -2319,6 +2319,13 @@ claims (D073.4). A bare link is `https://`, `http://`, `ftp://`, `mailto:`, `www
 and a host with a top-level domain, or `local@domain.tld`; what trails it
 (sentence punctuation, a closing bracket it did not open) is not part of it.
 
+Inline styles and links as built (D273-D277). A `span` is written where bold, italic, monospace, small capitals, subscript or
+superscript differs from the paragraph's own style (a paragraph set wholly bold has no span); the style is the glyph's font's (flags,
+name, /FontWeight, /ItalicAngle, a stem thicker than the thinnest of its family's) and, for sub- and superscript, its place against the
+line's baseline. A `link` is the text under a link annotation: a /URI (only http, https, ftp, ftps, mailto, tel, or a reference with no
+scheme) is its `href`, a /GoTo or named destination its `target`, the block on the destination's page at its point. Annotations win: bare
+URLs are looked for only in text that is not under a link. Table cells have no inline styles yet.
+
 ### 10.9 Initials: drop caps and their kin (D108, D109)
 
 A paragraph may open with a letter (or a word) printed far larger than its

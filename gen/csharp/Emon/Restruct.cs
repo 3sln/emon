@@ -485,6 +485,20 @@ public static class Restruct {
         }
         return 0;
     }
+    internal static bool RsInLink(emon.Port.Cells on, int p) {
+        // Is node p, or one of its three nearest ancestors, a `link`? A bare URL in text under a link annotation is not
+        // linked again (P4.7, D193), and a `span` can stand between the text and its link.
+        int q = p;
+        int d = 0;
+        while ((q >= 0) && (d < 4)) {
+            if (Model.NodeKind(on, q) == Model.NkLink()) {
+                return 1 == 1;
+            }
+            q = Model.NodeParent(on, q);
+            d += 1;
+        }
+        return 0 == 1;
+    }
     internal static int RsClassify(emon.Port.Cells on, emon.Port.Cells text, int p, int c, int depth, emon.Port.Cells @out) {
         // What to do with child c of old node p, with `depth` lists open: 1 an item (into a list), 2 a milestone or a
         // note inside a list that goes on, 3 a caption above its object, 4 a figure caption with no figure (wrapped),
@@ -510,7 +524,7 @@ public static class Restruct {
         if (((k == Model.NkTable()) || (k == Model.NkFigure())) && RsGrab(on, c)) {
             return 5;
         }
-        if ((k == Model.NkText()) && (Model.NodeHasText(on, c) == 1) && (Model.NodeKind(on, p) != Model.NkLink())) {
+        if ((k == Model.NkText()) && (Model.NodeHasText(on, c) == 1) && !RsInLink(on, p)) {
             if (RsHasLink(text, Model.NodeTextStart(on, c), Model.NodeTextStart(on, c) + Model.NodeTextLen(on, c), @out) == 1) {
                 return 6;
             }
@@ -719,6 +733,133 @@ public static class Restruct {
         }
         return 0;
     }
+    internal static bool RsDestKind(int k) {
+        // The blocks a link can name: what a reader would call the place a destination is.
+        return (k == Model.NkHeading()) || ((k == Model.NkParagraph()) || ((k == Model.NkItem()) || ((k == Model.NkCaption()) || ((k == Model.NkFigure()) || ((k == Model.NkTable()) || ((k == Model.NkNote()) || (k == Model.NkQuote())))))));
+    }
+    internal static int RsDestBuild(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells used) {
+        // `used`: a row of six for each region of each block a link can name (`rs-dest-kind`): the node, its page, its box.
+        int cnt = Model.NodeCount(nodes);
+        int i = 0;
+        int r = 0;
+        emon.Port.CellsDrop(used, 0);
+        while (i < cnt) {
+            if (RsDestKind(Model.NodeKind(nodes, i))) {
+                r = Model.NodeRegionHead(nodes, i);
+                while (r >= 0) {
+                    emon.Port.CellsPush(used, i);
+                    emon.Port.CellsPush(used, Model.RegionPage(regions, r));
+                    emon.Port.CellsPush(used, Model.RegionX0(regions, r));
+                    emon.Port.CellsPush(used, Model.RegionY0(regions, r));
+                    emon.Port.CellsPush(used, Model.RegionX1(regions, r));
+                    emon.Port.CellsPush(used, Model.RegionY1(regions, r));
+                    r = Model.RegionNext(regions, r);
+                }
+            }
+            i += 1;
+        }
+        return emon.Port.CellsLen(used) / 6;
+    }
+    internal static int RsXdist(int x0, int x1, int x) {
+        // How far x is outside [x0, x1]: 0 inside.
+        if (x < x0) {
+            return x0 - x;
+        }
+        if (x > x1) {
+            return x - x1;
+        }
+        return 0;
+    }
+    internal static int RsDestFind(emon.Port.Cells used, int page, int y, int x, int mode) {
+        // The block a destination names (P4.7, D193): of the blocks on `page` that do not end above the point (3 pt of
+        // slack: a destination is set a little above its heading, a paragraph that ends there is not it), the topmost; a
+        // destination with no y has no top to be under. The point's x tells the column: mode 0 takes only the blocks whose
+        // extent is within 6 pt of it (a destination is at its entry's left edge or a little outside it, and the gutter is
+        // wider), mode 1 within 20 pt, mode 2 without the x; mode 3 the topmost block of the first page at or after `page`
+        // that has one. -1 when none.
+        int n = emon.Port.CellsLen(used) / 6;
+        int j = 0;
+        int best = -1;
+        int bp = 0;
+        int by = 0;
+        int tol = 2000;
+        if (mode == 0) {
+            tol = 600;
+        }
+        while (j < n) {
+            int b = j * 6;
+            int p = emon.Port.CellsAt(used, b + 1);
+            int y0 = emon.Port.CellsAt(used, b + 3);
+            if ((mode < 3) && (p == page)) {
+                if ((y < 0) || (emon.Port.CellsAt(used, b + 5) > (y + 300))) {
+                    if ((mode == 2) || (x < 0) || (RsXdist(emon.Port.CellsAt(used, b + 2), emon.Port.CellsAt(used, b + 4), x) <= tol)) {
+                        if ((best < 0) || (y0 < by)) {
+                            best = emon.Port.CellsAt(used, b);
+                            by = y0;
+                        }
+                    }
+                }
+            }
+            if ((mode == 3) && (p >= page)) {
+                if ((best < 0) || (p < bp) || ((p == bp) && (y0 < by))) {
+                    best = emon.Port.CellsAt(used, b);
+                    bp = p;
+                    by = y0;
+                }
+            }
+            j += 1;
+        }
+        return best;
+    }
+    internal static int RsResolveLinks(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells used) {
+        // Every internal link (`sub` the destination's page + 1, `aux` its point as `emon.inline` packed it) gets the
+        // `target` of the block it names and its `sub` and `aux` back to 0. The work is bounded (50 million rows looked at):
+        // a link past it keeps no target.
+        int cnt = Model.NodeCount(nodes);
+        int rows = RsDestBuild(nodes, regions, used);
+        int i = 0;
+        int tg = -1;
+        int work = 0;
+        int ys = 0;
+        int xs = 0;
+        int y = -1;
+        int x = -1;
+        while (i < cnt) {
+            if ((Model.NodeKind(nodes, i) == Model.NkLink()) && (Model.NodeSub(nodes, i) > 0)) {
+                ys = Model.NodeAux(nodes, i) / 32768;
+                xs = Model.NodeAux(nodes, i) % 32768;
+                y = -1;
+                x = -1;
+                if (ys > 0) {
+                    y = (ys - 1) * 100;
+                }
+                if (xs > 0) {
+                    x = (xs - 1) * 100;
+                }
+                tg = -1;
+                if (work < 50000000) {
+                    tg = RsDestFind(used, Model.NodeSub(nodes, i), y, x, 0);
+                    if (tg < 0) {
+                        tg = RsDestFind(used, Model.NodeSub(nodes, i), y, x, 1);
+                    }
+                    if (tg < 0) {
+                        tg = RsDestFind(used, Model.NodeSub(nodes, i), y, x, 2);
+                    }
+                    if (tg < 0) {
+                        tg = RsDestFind(used, Model.NodeSub(nodes, i), y, x, 3);
+                    }
+                    work += 4 * rows;
+                }
+                if (tg >= 0) {
+                    Model.NodeSetAttrNode(nodes, attrs, i, Model.FkTarget(), tg);
+                }
+                Model.NodeSetSub(nodes, i, 0);
+                Model.NodeSetAux(nodes, i, 0);
+            }
+            i += 1;
+        }
+        return 0;
+    }
     public static int RsRun(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells stk, emon.Port.Cells used, emon.Port.Cells @out, emon.Port.Cells lay) {
         // Copy the old Model's trees, restructured, into the empty arenas `nodes`, `attrs`, `regions` (see the head).
         // `nm` (old node to new), `stk` (the list frames), `used` and `out` (three cells) are scratch. Answers the new
@@ -749,6 +890,7 @@ public static class Restruct {
         RsRemap(attrs, nm);
         RsTargets(nodes, attrs, @out);
         RsLinkRefs(nodes, attrs, text, used);
+        RsResolveLinks(nodes, attrs, regions, used);
         RsScrubText(text);
         return Model.NodeCount(nodes);
     }

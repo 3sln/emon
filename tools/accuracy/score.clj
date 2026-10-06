@@ -717,6 +717,45 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
         (add "fusion.seal-leak-chars" (reduce + 0 (for [w sw] (* (nlen w) (max 0 (- (get cp w 0) (get cg w 0)))))))
         (add "fusion.seal-body-chars" (nlen pt))))))
 
+;; ------------------------------------------------------------- inline styles and links (P4.7, D194) ----
+;; Gated by `annotated.inlines`: the gold claims its spans and links. Scored over the WHOLE body as multisets
+;; (no block matching: a span is where its text is), a span by (style, normalized text) once for each style
+;; it has, a link by (href, normalized text), an internal link (a `target` node) by ("#", text). A span
+;; with no text is not counted. Precision and recall per style, and for links.
+
+(def SPAN-STYLES ["bold" "italic" "mono" "sup" "sub"])
+
+(defn inline-nodes
+  "Every inline node under every block of a body, with its descendants, in document order."
+  [body]
+  (vec (for [n (walk body) i (get n "inlines") d (walk i)] d)))
+
+(defn span-keys
+  "[[style text] ...] for the spans of a body."
+  [body]
+  (vec (for [d (inline-nodes body) :when (= "span" (get d "kind"))
+             :let [t (norm (leaf-text d))] :when (seq t)
+             s (get d "style")]
+         [s t])))
+
+(defn link-keys
+  "[[href text] ...] for the links of a body."
+  [body]
+  (vec (for [d (inline-nodes body) :when (= "link" (get d "kind"))
+             :let [t (norm (leaf-text d))]]
+         [(or (get d "href") (when (some? (get d "target")) "#")) t])))
+
+(defn inline-counts!
+  [add gb pb]
+  (let [gs (span-keys gb) ps (span-keys pb)
+        one (fn [pre g p]
+              (let [[tp ng npd] (multiset-counts (frequencies g) (frequencies p))]
+                (when (or (pos? ng) (pos? npd))
+                  (add (str pre ".tp") tp) (add (str pre ".gold") ng) (add (str pre ".pred") npd))))]
+    (doseq [s SPAN-STYLES]
+      (one (str "span." s) (for [[st t] gs :when (= st s)] t) (for [[st t] ps :when (= st s)] t)))
+    (one "link" (link-keys gb) (link-keys pb))))
+
 ;; ----------------------------------------------------------------- score ----
 
 (declare score*)
@@ -793,6 +832,8 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
                 (add "table.continued.ok"
                      (count (filter (fn [[i j]] (pyeq (get-in g [i "continued"] 1) (get-in p [j "continued"] 1))) tp_)))))))))
     (when (get ann "text") (fusion-counts! add gold pred opts))
+    ;; inline styles and links
+    (when (get ann "inlines") (inline-counts! add gb pb))
     ;; paragraph boundaries
     (when (and (get ann "text") (contains? (set (get ann "structure")) "paragraph"))
       (doseq [[k v] (boundary-counts gb pb)] (add k v)))
@@ -869,6 +910,8 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
                 (set* m "table-continued-acc" (div (c "table.continued.ok") (c "table.continued.n")))
                 m))
             m)
+        m (reduce (fn [m k] (prf m c (str "span." k) (str "span-" k))) m SPAN-STYLES)
+        m (prf m c "link" "link")
         m (prf m c "para.boundary" "para-boundary")
         m (prf m c "furniture" "furniture")
         m (if (pos? (get c "pages.label.n" 0))

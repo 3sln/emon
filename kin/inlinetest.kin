@@ -1,0 +1,449 @@
+;; Laws for `emon.inline` and what the paragraph and restructuring stages make of it (P4.7), on every target.
+;;
+;; TWO KINDS. (1) The small things: how two neighbours' states mix (the space between two words), what is written of a
+;; state against the paragraph's own style, the markers in the text and the paragraph's base style, which `/URI`s may be
+;; an `href`, which font names say bold and italic. (2) The stage whole, on evidence written by hand: words of other
+;; fonts become `span`s (bold, italic, and a space between two of one style is inside it), a superscript glyph a `sup`, a
+;; word under a link annotation a `link` with its `href`, a paragraph set wholly in one style no span at all, a document
+;; with nothing marked a paragraph as it was; and `rs-run`: an internal link finds the block it names, a bare URL in
+;; text that is under a link is not made a link again.
+(ns emon.inlinetest
+  (:require [emon.lang :refer [I32 Blob Cells Text]]
+            [emon.test :refer [deftest assert-eq new-cells text-blob]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind node-sub node-aux node-parent
+                                node-first-child node-next node-text-start node-text-len node-has-text node-new node-set-text
+                                node-set-sub node-set-aux node-set-attr-text node-add-region node-attr node-attr-int-or
+                                attr-value attr-len text-append-utf8
+                                nk-section nk-heading nk-paragraph nk-text nk-span nk-link
+                                fk-href fk-target]]
+            [emon.evidence :refer [wd-new wd-set wd-count wd-get ln-new ln-count gl-new gl-set fo-new fo-set
+                                   wf-size wf-font wf-gfirst wf-gcount gf-font gf-size gf-by0 fnf-style fnf-tstart fnf-tlen]]
+            [emon.columns :refer [lc-copy]]
+            [emon.heading :refer [hd-analyze]]
+            [emon.para :refer [pa-pages pa-build]]
+            [emon.lists :refer [ls-analyze ls-s-item ls-s-end]]
+            [emon.restruct :refer [rs-run]]
+            [emon.inline :refer [il-mix il-eff il-bits il-link il-mark il-mark-end il-mark-value il-state-at il-has
+                                 il-base-of il-styled il-uri-ok il-name-has il-s-sty il-analyze il-fonts il-base il-links
+                                 il-link-get]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------------------------------- the small things
+
+(deftest test-two-neighbours-share-what-they-have-both
+  (assert-eq (il-mix 3 1) 1 "bold italic and bold share bold")
+  (assert-eq (il-mix 1 2) 0 "bold and italic share nothing")
+  (assert-eq (il-mix (+ 1 768) (+ 3 768)) (+ 1 768) "the same link is shared, with the bits both have")
+  (assert-eq (il-mix (+ 1 768) (+ 1 512)) 1 "two links are not")
+  (assert-eq (il-mix 0 1) 0 "plain and bold"))
+
+(deftest test-a-state-is-written-against-the-style-of-the-paragraph
+  (assert-eq (il-eff 3 1) 2 "bold italic in a paragraph set bold is italic")
+  (assert-eq (il-eff 1 1) 0 "bold in a paragraph set bold is not marked")
+  (assert-eq (il-eff 1 0) 1 "bold in an ordinary one is")
+  (assert-eq (il-eff 33 1) 32 "a superscript is never the paragraph's style")
+  (assert-eq (il-eff (+ 1 256) 1) 256 "the link stays")
+  (assert-eq (il-eff 64 64) 0 "a monospaced paragraph")
+  (assert-eq (il-eff 128 128) 0 "small capitals too")
+  (assert-eq (il-bits (+ 3 1024)) 3 "the bits of a state")
+  (assert-eq (il-link (+ 3 1024)) 4 "its link number plus one"))
+
+(defn ^I32 it-raw-mark [^:mut ^Cells raw ^I32 v ^Blob b]
+  (comment "A marker for state v and then the ASCII text b.")
+  (let [^:mut ^I32 i 0]
+    (il-mark raw v)
+    (while (< i (blob-len b))
+      (do (cells-push raw (blob-u8 b i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-markers-are-read-back
+  (let [^Cells raw (new-cells)]
+    (it-raw-mark raw 0 (text-blob "ab"))
+    (it-raw-mark raw 7 (text-blob "cd"))
+    (it-raw-mark raw 12345 (text-blob "e"))
+    (assert-eq (cells-at raw 0) (il-s-sty) "the opener")
+    (assert-eq (il-mark-end raw 0 (cells-len raw)) 3 "a marker of state 0 ends after its digit and its end")
+    (assert-eq (il-mark-value raw 0 3) 0 "its state")
+    (assert-eq (il-state-at raw 0) 0 "before any marker")
+    (assert-eq (il-state-at raw 5) 0 "in the first")
+    (assert-eq (il-state-at raw 9) 7 "in the second: the state of the marker before it")
+    (assert-eq (il-state-at raw (cells-len raw)) 12345 "in the last")
+    (assert-eq (il-has raw (cells-len raw)) 1 "there are markers")
+    (assert-eq (il-has raw 0) 0 "and none in nothing")
+    (assert-eq (il-mark-end raw 1 2) -1 "an end past the limit is none")))
+
+(deftest test-the-base-style-of-a-paragraph-is-what-most-of-it-has
+  (let [^Cells raw (new-cells)]
+    (it-raw-mark raw 1 (text-blob "bold"))
+    (it-raw-mark raw 0 (text-blob " plain words"))
+    (assert-eq (il-base-of raw (cells-len raw)) 0 "four of twelve letters are bold: not the base")
+    (cells-drop raw 0)
+    (it-raw-mark raw 1 (text-blob "bold bold"))
+    (it-raw-mark raw 0 (text-blob " x"))
+    (assert-eq (il-base-of raw (cells-len raw)) 1 "eight of nine: bold is the paragraph's own")
+    (assert-eq (il-styled raw (cells-len raw) 1) 0 "and what is written of it is nothing")
+    (assert-eq (il-styled raw (cells-len raw) 0) 1 "when it is not")
+    (cells-drop raw 0)
+    (it-raw-mark raw 3 (text-blob "abcd"))
+    (assert-eq (il-base-of raw (cells-len raw)) 3 "bold italic wholly: both")
+    (cells-drop raw 0)
+    (cells-push raw (ls-s-item))
+    (cells-push raw 66)
+    (cells-push raw (ls-s-end))
+    (cells-push raw 32)
+    (it-raw-mark raw 2 (text-blob "ab"))
+    (assert-eq (il-base-of raw (cells-len raw)) 2 "a group of another stage is not a character: all that is left is italic")))
+
+(defn ^I32 it-uri [^Blob b]
+  (let [^Cells txt (new-cells)
+        ^:mut ^I32 i 0]
+    (while (< i (blob-len b))
+      (do (cells-push txt (blob-u8 b i))
+          (set i (+ i 1))))
+    (return (il-uri-ok txt 0 (blob-len b)))))
+
+(deftest test-which-uris-may-be-an-href
+  (assert-eq (it-uri (text-blob "https://example.org/a?b=c#d")) 1 "https")
+  (assert-eq (it-uri (text-blob "HTTP://EXAMPLE.ORG")) 1 "any case")
+  (assert-eq (it-uri (text-blob "mailto:a@b.co")) 1 "mailto")
+  (assert-eq (it-uri (text-blob "tel:+15551234")) 1 "tel")
+  (assert-eq (it-uri (text-blob "ftp://x.org/f")) 1 "ftp")
+  (assert-eq (it-uri (text-blob "www.example.org")) 1 "no scheme: a reference")
+  (assert-eq (it-uri (text-blob "a/b:c")) 1 "a colon after a slash is no scheme")
+  (assert-eq (it-uri (text-blob "javascript:alert(1)")) 0 "never javascript")
+  (assert-eq (it-uri (text-blob "JavaScript:alert(1)")) 0 "in any case")
+  (assert-eq (it-uri (text-blob "data:text/html,x")) 0 "nor data")
+  (assert-eq (it-uri (text-blob "file:///etc/passwd")) 0 "nor file")
+  (assert-eq (it-uri (text-blob ":x")) 0 "an empty scheme")
+  (assert-eq (it-uri (text-blob "")) 0 "nothing")
+  (assert-eq (it-uri (text-blob "http://x.org/\u0001")) 0 "a control character"))
+
+(defn ^I32 it-name [^Blob b ^I32 p]
+  (let [^Cells et (new-cells)
+        ^:mut ^I32 i 0]
+    (while (< i (blob-len b))
+      (do (cells-push et (blob-u8 b i))
+          (set i (+ i 1))))
+    (return (il-name-has et 0 (blob-len b) p))))
+
+(deftest test-which-font-names-say-bold-and-italic
+  (assert-eq (it-name (text-blob "ABCDEF+Georgia-Bold") 1) 1 "Bold")
+  (assert-eq (it-name (text-blob "TimesNewRomanPS-BoldItalicMT") 1) 1 "BoldItalic is bold")
+  (assert-eq (it-name (text-blob "TimesNewRomanPS-BoldItalicMT") 6) 1 "and italic")
+  (assert-eq (it-name (text-blob "Arial-SEMIBOLD") 1) 1 "any case")
+  (assert-eq (it-name (text-blob "Georgia") 1) 0 "Georgia is not bold")
+  (assert-eq (it-name (text-blob "Georgia") 6) 0 "nor italic")
+  (assert-eq (it-name (text-blob "CMBX12") 5) 1 "Computer Modern Bold Extended")
+  (assert-eq (it-name (text-blob "CMTI10") 8) 1 "Computer Modern Text Italic")
+  (assert-eq (it-name (text-blob "Helvetica-Oblique") 7) 1 "oblique")
+  (assert-eq (it-name (text-blob "Arial-Black") 2) 1 "black")
+  (assert-eq (it-name (text-blob "Bol") 1) 0 "a name too short to hold it"))
+
+;; ------------------------------------------------------------------------------- the stage on evidence
+
+(defn ^I32 it-line [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 y]
+  (comment "A line on page 1 at y (1200 tall, baseline 2 pt above its bottom): the words of the ASCII text b, 2800 apart")
+  (comment "from x 7200, 11 pt, font 0, no glyphs. Answers the line's first word.")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 n (blob-len b)
+        ^:mut ^I32 x 7200
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0]
+    (while (<= k n)
+      (do (if (or (== k n) (== (blob-u8 b k) 32))
+            (do (if (> k s)
+                  (do (let [^I32 ts (cells-len et)]
+                        (text-append-utf8 et b s k)
+                        (let [^I32 r (wd-new wd 1 x y (+ x 2400) (+ y 1200) x (- (+ y 1200) 200) (+ x 2400) (- (+ y 1200) 200)
+                                             0 0 ts (- (cells-len et) ts) -1 -1 -1)]
+                          (wd-set wd r (wf-size) 1100)
+                          (wd-set wd r (wf-font) 0))
+                        (set x (+ x 2800)))))
+                (set s (+ k 1))))
+          (set k (+ k 1))))
+    (ln-new ln 1 7200 y x (+ y 1200) 7200 (- (+ y 1200) 200) x (- (+ y 1200) 200) 0 0 w0 (- (wd-count wd) w0))
+    (return w0)))
+
+(defn ^I32 it-fonts [^:mut ^Cells ift]
+  (comment "Three fonts: 0 regular, 1 bold, 2 italic.")
+  (cells-push ift 0)
+  (cells-push ift 1)
+  (cells-push ift 2)
+  (return 0))
+
+(defn ^I32 it-build [^Cells wd ^Cells ln ^Cells et ^Cells gl ^Cells ift ^Cells an ^Cells txt
+                     ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^:mut ^Cells pages
+                     ^:mut ^Cells ledger ^:mut ^Cells layout]
+  (comment "The Model of the evidence as the Engines make it: heading analysis, list analysis, `il-analyze`, `pa-build`.")
+  (comment "Answers how many links the stage found.")
+  (let [^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells hc (new-cells) ^Cells ws (new-cells) ^Cells tmp (new-cells)
+        ^Cells pr (new-cells) ^Cells ptxt (new-cells) ^Cells pa (new-cells) ^Cells cd (new-cells) ^Cells pi (new-cells)
+        ^Cells lws (new-cells) ^Cells tw (new-cells) ^Cells pg (new-cells) ^Cells sw (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp2 (new-cells) ^Cells fr (new-cells) ^Cells gp (new-cells)
+        ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+        ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr2 (new-cells) ^Cells dbg (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tq (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)]
+    (lc-copy ln lt)
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (hd-analyze wd ln et gl sf sc hc ws tmp pr ptxt)
+    (ls-analyze wd ln et sf pa hc cd pi lws tw)
+    (il-analyze wd ln et gl ift sf an txt pg pages 1 text hc sw)
+    (pa-build wd et 1 pages layout nodes attrs regions text ord raw tmp2 fr gp
+              lt ls sd it io rw gu ac tm cf lo pr2 dbg hc tb tc tw tq ledger ii al)
+    (return (il-links hc))))
+
+(defn ^I32 it-find [^Cells nodes ^I32 kind ^I32 nth]
+  (comment "The nth node (from 0) of the kind, -1 when there are not so many.")
+  (let [^I32 n (node-count nodes)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 seen 0]
+    (while (< i n)
+      (do (if (== (node-kind nodes i) kind)
+            (do (if (== seen nth) (return i))
+                (set seen (+ seen 1))))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 it-says [^Cells text ^I32 start ^I32 n ^Blob b]
+  (comment "1 when the run text[start, start+n) is the ASCII text b.")
+  (let [^:mut ^I32 i 0]
+    (if (!= n (blob-len b)) (return 0))
+    (while (< i (blob-len b))
+      (do (if (!= (cells-at text (+ start i)) (blob-u8 b i)) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 it-own [^Cells nodes ^Cells text ^I32 n ^Blob b]
+  (comment "1 when node n's own text is the ASCII text b.")
+  (return (it-says text (node-text-start nodes n) (node-text-len nodes n) b)))
+
+(defn ^I32 it-body [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob mid]
+  (comment "Three lines of one paragraph: body text, the words of `mid` (the second line), body text. The words 0..5 are the")
+  (comment "first line's, the second's start at 6.")
+  (it-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur") 5000)
+  (it-line wd ln et mid 6400)
+  (it-line wd ln et (text-blob "lorem ipsum dolor sit amet consectetur") 7800)
+  (return 0))
+
+(deftest test-words-of-other-fonts-are-spans
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells) ^Cells ift (new-cells)
+        ^Cells an (new-cells) ^Cells txt (new-cells) ^Cells nodes (new-cells) ^Cells attrs (new-cells)
+        ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (it-body wd ln et (text-blob "alpha beta gamma delta epsilon"))
+    (it-fonts ift)
+    (comment "the second line is words 6..10: beta (7) is bold, gamma (8) and delta (9) are italic, epsilon (10) bold")
+    (wd-set wd 7 (wf-font) 1)
+    (wd-set wd 8 (wf-font) 2)
+    (wd-set wd 9 (wf-font) 2)
+    (wd-set wd 10 (wf-font) 1)
+    (it-build wd ln et gl ift an txt nodes attrs regions text pages ledger layout)
+    (let [^I32 p (it-find nodes (nk-paragraph) 0)
+          ^I32 s0 (it-find nodes (nk-span) 0)
+          ^I32 s1 (it-find nodes (nk-span) 1)
+          ^I32 s2 (it-find nodes (nk-span) 2)
+          ^I32 c0 (node-first-child nodes s0)
+          ^I32 c1 (node-first-child nodes s1)
+          ^I32 c2 (node-first-child nodes s2)
+          ^I32 pf (node-first-child nodes p)
+          ^I32 n0 (node-next nodes s0)
+          ^I32 n2 (node-next nodes s2)]
+      (assert-eq (it-find nodes (nk-paragraph) 1) -1 "one paragraph")
+      (assert-eq (it-find nodes (nk-span) 3) -1 "and three spans in it: bold, italic (two words, one span), bold")
+      (assert-eq (node-parent nodes s0) p "the first is a child of the paragraph")
+      (assert-eq (node-sub nodes s0) 1 "bold")
+      (assert-eq (node-sub nodes s1) 2 "italic")
+      (assert-eq (node-sub nodes s2) 1 "bold")
+      (assert-eq (it-own nodes text c0 (text-blob "beta")) 1 "beta")
+      (assert-eq (it-own nodes text c1 (text-blob "gamma delta")) 1
+                 "gamma delta: the space between them is inside the span")
+      (assert-eq (it-own nodes text c2 (text-blob "epsilon")) 1 "epsilon")
+      (assert-eq (it-own nodes text pf (text-blob "lorem ipsum dolor sit amet consectetur alpha ")) 1
+                 "the first text is the line before and `alpha`, and the space before the span is outside it")
+      (assert-eq (it-own nodes text n0 (text-blob " ")) 1 "the space between bold and italic is plain")
+      (assert-eq (it-own nodes text n2 (text-blob " lorem ipsum dolor sit amet consectetur")) 1
+                 "and the text after the last span goes on")
+      (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "a Model in document order"))))
+
+(deftest test-a-paragraph-set-in-one-style-has-no-span
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells) ^Cells ift (new-cells)
+        ^Cells an (new-cells) ^Cells txt (new-cells) ^Cells nodes (new-cells) ^Cells attrs (new-cells)
+        ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells layout (new-cells) ^Cells st (new-cells)
+        ^:mut ^I32 w 0]
+    (it-body wd ln et (text-blob "alpha beta gamma"))
+    (it-fonts ift)
+    (while (< w (wd-count wd))
+      (do (wd-set wd w (wf-font) 1)
+          (set w (+ w 1))))
+    (it-build wd ln et gl ift an txt nodes attrs regions text pages ledger layout)
+    (assert-eq (it-find nodes (nk-span) 0) -1 "bold throughout is the paragraph's own style, not an emphasis")
+    (assert-eq (it-find nodes (nk-text) 0) -1 "and the paragraph keeps its own text, with nothing of the markers in it")
+    (let [^I32 p (it-find nodes (nk-paragraph) 0)]
+      (assert-eq (it-own nodes text p
+                         (text-blob "lorem ipsum dolor sit amet consectetur alpha beta gamma lorem ipsum dolor sit amet consectetur")) 1
+                 "the whole text"))
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order")))
+
+(deftest test-nothing-marked-is-the-paragraph-as-it-was
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells) ^Cells ift (new-cells)
+        ^Cells an (new-cells) ^Cells txt (new-cells) ^Cells nodes (new-cells) ^Cells attrs (new-cells)
+        ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)]
+    (it-body wd ln et (text-blob "alpha beta gamma"))
+    (it-fonts ift)
+    (assert-eq (it-build wd ln et gl ift an txt nodes attrs regions text pages ledger layout) 0 "no links")
+    (assert-eq (it-find nodes (nk-span) 0) -1 "no span")
+    (assert-eq (it-find nodes (nk-text) 0) -1 "no inline at all: the paragraph's own text")))
+
+(defn ^I32 it-glyph [^:mut ^Cells gl ^I32 x0 ^I32 x1 ^I32 cp ^I32 word ^I32 size ^I32 by]
+  (comment "A glyph of word `word` in font 0: its box on the line at y 6400, its size and its baseline's y.")
+  (let [^I32 g (gl-new gl 1 x0 6400 x1 7600 cp -1 0 word)]
+    (gl-set gl g (gf-font) 0)
+    (gl-set gl g (gf-size) size)
+    (gl-set gl g (gf-by0) by)
+    (return g)))
+
+(deftest test-a-raised-small-glyph-is-a-superscript-and-a-lowered-one-a-subscript
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells) ^Cells ift (new-cells)
+        ^Cells an (new-cells) ^Cells txt (new-cells) ^Cells nodes (new-cells) ^Cells attrs (new-cells)
+        ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (it-body wd ln et (text-blob "x2 beta H2O"))
+    (it-fonts ift)
+    (comment "word 6 is `x2`, word 8 `H2O`: the baseline of the line is y 7400, its text 11 pt")
+    (wd-set wd 6 (wf-gfirst) 0)
+    (wd-set wd 6 (wf-gcount) 2)
+    (it-glyph gl 7200 8000 120 6 1100 7400)
+    (it-glyph gl 8000 8400 50 6 700 6900)
+    (wd-set wd 8 (wf-gfirst) 2)
+    (wd-set wd 8 (wf-gcount) 3)
+    (it-glyph gl 12800 13600 72 8 1100 7400)
+    (it-glyph gl 13600 14000 50 8 700 7900)
+    (it-glyph gl 14000 14800 79 8 1100 7400)
+    (it-build wd ln et gl ift an txt nodes attrs regions text pages ledger layout)
+    (let [^I32 sp (it-find nodes (nk-span) 0)
+          ^I32 sb (it-find nodes (nk-span) 1)
+          ^I32 cp (node-first-child nodes sp)
+          ^I32 cb (node-first-child nodes sb)
+          ^I32 nb (node-next nodes sb)]
+      (assert-eq (node-sub nodes sp) 32 "the 2 of x2 is raised and small: a superscript")
+      (assert-eq (it-own nodes text cp (text-blob "2")) 1 "and the span holds only it")
+      (assert-eq (node-sub nodes sb) 16 "the 2 of H2O is lowered: a subscript")
+      (assert-eq (it-own nodes text cb (text-blob "2")) 1 "only it")
+      (assert-eq (it-find nodes (nk-span) 2) -1 "nothing else is marked")
+      (assert-eq (it-own nodes text nb (text-blob "O lorem ipsum dolor sit amet consectetur")) 1
+                 "the text after goes on")
+      (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order"))))
+
+(defn ^I32 it-link-row [^:mut ^Cells an ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 act ^I32 ts ^I32 tl]
+  (comment "A link annotation row on page 0 (38 cells): its rectangle, the action (1 URI) and its target's run in `txt`.")
+  (let [^I32 at (cells-len an)
+        ^:mut ^I32 i 0]
+    (while (< i 38)
+      (do (cells-push an 0)
+          (set i (+ i 1))))
+    (cells-set an (+ at 1) 1)
+    (cells-set an (+ at 4) x0)
+    (cells-set an (+ at 5) y0)
+    (cells-set an (+ at 6) x1)
+    (cells-set an (+ at 7) y1)
+    (cells-set an (+ at 12) act)
+    (cells-set an (+ at 13) ts)
+    (cells-set an (+ at 14) tl)
+    (cells-set an (+ at 15) -1)
+    (return at)))
+
+(defn ^I32 it-txt [^:mut ^Cells txt ^Blob b]
+  (let [^:mut ^I32 i 0]
+    (while (< i (blob-len b))
+      (do (cells-push txt (blob-u8 b i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-a-word-under-a-link-annotation-is-a-link
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells gl (new-cells) ^Cells ift (new-cells)
+        ^Cells an (new-cells) ^Cells txt (new-cells) ^Cells nodes (new-cells) ^Cells attrs (new-cells)
+        ^Cells regions (new-cells) ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (it-body wd ln et (text-blob "alpha beta gamma delta"))
+    (it-fonts ift)
+    (it-txt txt (text-blob "https://example.org/x"))
+    (comment "beta is at x 10000..12400 and gamma at 12800..15200, on y 6400..7600: the link covers beta and gamma")
+    (it-link-row an 10000 6400 15200 7600 1 0 21)
+    (comment "a link to javascript, over delta, is no link")
+    (it-txt txt (text-blob "javascript:x"))
+    (it-link-row an 15600 6400 18000 7600 1 21 12)
+    (assert-eq (it-build wd ln et gl ift an txt nodes attrs regions text pages ledger layout) 1 "one link found")
+    (let [^I32 p (it-find nodes (nk-paragraph) 0)
+          ^I32 lk (it-find nodes (nk-link) 0)
+          ^I32 a (node-attr nodes attrs lk (fk-href))
+          ^I32 lc (node-first-child nodes lk)
+          ^I32 pf (node-first-child nodes p)
+          ^I32 ln1 (node-next nodes lk)]
+      (assert-eq (it-find nodes (nk-link) 1) -1 "and only one")
+      (assert-eq (node-parent nodes lk) p "in the paragraph")
+      (assert-eq (it-says text (attr-value attrs a) (attr-len attrs a) (text-blob "https://example.org/x")) 1 "its href")
+      (assert-eq (it-own nodes text lc (text-blob "beta gamma")) 1
+                 "holds the two words and the space between them")
+      (assert-eq (it-own nodes text pf (text-blob "lorem ipsum dolor sit amet consectetur alpha ")) 1
+                 "the text before it")
+      (assert-eq (it-own nodes text ln1 (text-blob " delta lorem ipsum dolor sit amet consectetur")) 1
+                 "and after it, delta is not linked")
+      (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order"))))
+
+;; ------------------------------------------------------------------------ the restructuring stage
+
+(defn ^I32 it-block [^:mut ^Cells nodes ^:mut ^Cells regions ^I32 kind ^I32 parent ^I32 y0 ^I32 y1]
+  (comment "A block of the kind on page 1 whose region is x 7200..50000 and y0..y1; answers its node.")
+  (let [^I32 n (node-new nodes kind parent)]
+    (node-add-region nodes regions n 1 7200 y0 50000 y1)
+    (return n)))
+
+(defn ^I32 it-link [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 parent ^I32 page ^I32 ypt ^Blob inner]
+  (comment "A link to page `page` whose point is ypt points down, holding a span holding a text: answers the link.")
+  (let [^I32 lk (node-new nodes (nk-link) parent)
+        ^I32 sp (node-new nodes (nk-span) lk)
+        ^I32 tx (node-new nodes (nk-text) sp)
+        ^I32 t0 (cells-len text)]
+    (node-set-sub nodes lk page)
+    (node-set-aux nodes lk (* (+ ypt 1) 32768))
+    (node-set-sub nodes sp 1)
+    (text-append-utf8 text inner 0 (blob-len inner))
+    (node-set-text nodes tx t0 (- (cells-len text) t0))
+    (return lk)))
+
+(defn ^I32 it-rs [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells text ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions]
+  (let [^Cells nm (new-cells) ^Cells stk (new-cells) ^Cells used (new-cells) ^Cells out (new-cells) ^Cells lay (new-cells)]
+    (return (rs-run on oa orr text nodes attrs regions nm stk used out lay))))
+
+(deftest test-an-internal-link-finds-the-block-it-names
+  (let [^Cells on (new-cells) ^Cells oa (new-cells) ^Cells orr (new-cells) ^Cells text (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells) ^Cells st (new-cells)]
+    (model-init on oa orr text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (comment "a heading at y 20..30 pt, a paragraph (4 links in it) at 40..50, another at 80..90, a third on page 2")
+    (it-block on orr (nk-heading) 0 2000 3000)
+    (let [^I32 p1 (it-block on orr (nk-paragraph) 0 4000 5000)]
+      (it-link on oa text p1 1 18 (text-blob "see http://x.org/a"))
+      (it-link on oa text p1 1 60 (text-blob "below"))
+      (it-link on oa text p1 1 41 (text-blob "inside"))
+      (it-link on oa text p1 2 5 (text-blob "later")))
+    (it-block on orr (nk-paragraph) 0 8000 9000)
+    (let [^I32 p3 (node-new on (nk-paragraph) 0)]
+      (node-add-region on orr p3 2 7200 1000 50000 2000))
+    (comment "the nodes: 0 document, 1 heading, 2 paragraph, then each link is three (link, span, text): 3, 6, 9, 12; 15, 16")
+    (assert-eq (it-rs on oa orr text nodes attrs regions) 17 "the same Model, restructured")
+    (assert-eq (node-attr-int-or nodes attrs 3 (fk-target) -1) 1 "a point a little above the heading is the heading")
+    (assert-eq (node-sub nodes 3) 0 "and the destination is taken out")
+    (assert-eq (node-attr-int-or nodes attrs 6 (fk-target) -1) 15 "a point below the first paragraph names the next block")
+    (assert-eq (node-attr-int-or nodes attrs 9 (fk-target) -1) 2 "a point inside a paragraph names it")
+    (assert-eq (node-attr-int-or nodes attrs 12 (fk-target) -1) 16 "a point on page 2 names the block there")
+    (assert-eq (it-find nodes (nk-link) 4) -1 "and the bare URL under the first link is not made a link again")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "in document order")))

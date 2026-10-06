@@ -38,6 +38,7 @@ import (
 	"emon/furniture"
 	"emon/gfuse"
 	"emon/initial"
+	"emon/inline"
 	"emon/lists"
 	"emon/notes"
 	"emon/restruct"
@@ -48,6 +49,7 @@ import (
 	"emon/para"
 	"emon/table"
 	"emon/pdfcontent"
+	"emon/pdfannot"
 	"emon/pdfdoc"
 	"emon/pdfmeta"
 	"emon/pdfstruct"
@@ -1141,6 +1143,11 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	pdfmeta.PmRun(view, ar, dc, ca, cb, st, pg, qidx, qtxt, qw, qseen, md, xm, ol, lb, nd, nt)
 	pdfstruct.TgRead(view, ar, dc, ca, cb, st, pg, qidx, qtxt, qw, qseen, ss, se, sk, sc, so, wk, md)
 	pdfstruct.TgJoin(ss, se, sk, sc, so, sa, gl, mk, fnt, pg, ha, hb, hh)
+	// inline styles and links (P4.7): what each font says of weight and slant, and the link annotations (P3.8)
+	v := newCellsN(8)
+	ift, vfs, vfm, van, vaq, vfd, vsg := v[0], v[1], v[2], v[3], v[4], v[5], v[6]
+	inline.IlFonts(view, ar, dc, ca, cb, st, fnt, et, ift)
+	pdfannot.PaRun(view, ar, dc, ca, cb, st, pg, qidx, qtxt, qw, vfs, qseen, vfm, van, vaq, vfd, vsg)
 	if view.Missed() {
 		return step{miss: true}
 	}
@@ -1236,6 +1243,8 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	l := newCellsN(6)
 	notes.NtAnalyze(fw, c[0], et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
 	lists.LsAnalyze(fw, c[0], et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
+	// the style and the link of every character (kin/inline.kin, P4.7): written after the lists' rows in hc, which the paragraph stage reads
+	inline.IlAnalyze(fw, c[0], et, gl, ift, h[0], van, qtxt, pg, m.pages, np, m.text, h[2], v[7])
 	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
 	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the

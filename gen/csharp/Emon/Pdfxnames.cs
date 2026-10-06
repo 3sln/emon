@@ -984,6 +984,15 @@ public static class Pdfxnames {
     public static int PxExtend() {
         return 190;
     }
+    public static int PxStemV() {
+        return 191;
+    }
+    public static int PxItalicAngle() {
+        return 192;
+    }
+    public static int PxFontWeight() {
+        return 193;
+    }
     public static int PxEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.TextAscii(t, "Annots");
@@ -1749,6 +1758,18 @@ public static class Pdfxnames {
             emon.Port.TextAscii(t, "Extend");
             return 1;
         }
+        if (code == 191) {
+            emon.Port.TextAscii(t, "StemV");
+            return 1;
+        }
+        if (code == 192) {
+            emon.Port.TextAscii(t, "ItalicAngle");
+            return 1;
+        }
+        if (code == 193) {
+            emon.Port.TextAscii(t, "FontWeight");
+            return 1;
+        }
         return 0;
     }
     public static readonly int[] PxChars = new int[] {
@@ -1819,7 +1840,8 @@ public static class Pdfxnames {
         108, 79, 102, 102, 86, 69, 65, 110, 100, 79, 114, 78, 111, 116, 85, 110,
         99, 104, 97, 110, 103, 101, 100, 83, 104, 97, 100, 105, 110, 103, 84, 121,
         112, 101, 80, 97, 116, 116, 101, 114, 110, 84, 121, 112, 101, 69, 120, 116,
-        101, 110, 100
+        101, 110, 100, 83, 116, 101, 109, 86, 73, 116, 97, 108, 105, 99, 65, 110,
+        103, 108, 101, 70, 111, 110, 116, 87, 101, 105, 103, 104, 116
     };
     public static readonly int[] PxSpan = new int[] {
         0, 6,
@@ -2012,6 +2034,9 @@ public static class Pdfxnames {
         1038, 9,
         1047, 11,
         1058, 11,
-        1069, 6
+        1069, 6,
+        1075, 5,
+        1080, 11,
+        1091, 10
     };
 }

@@ -1,0 +1,360 @@
+{
+  "emon": "1.1",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "pages": [
+    {
+      "n": 1,
+      "label": "1",
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 95.58, 539.63, 705.16]
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "label": "2",
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 80.67, 539.64, 687.91]
+        }
+      ]
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "text": "Motion for Summary Judgment",
+            "at": [[1, 175.88, 95.58, 436.12, 113.75]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "text": "Plaintiff Acme Holdings moves for summary judgment on all counts.",
+            "inlines": [
+              {
+                "kind": "span",
+                "style": ["bold"],
+                "children": [
+                  {
+                    "kind": "text",
+                    "text": "Plaintiff Acme Holdings",
+                    "src": ["text"],
+                    "conf": 1000
+                  }
+                ],
+                "src": ["text"],
+                "conf": 900
+              },
+              {
+                "kind": "text",
+                "text": " moves for summary judgment on all counts.",
+                "src": ["text"],
+                "conf": 1000
+              }
+            ],
+            "at": [[1, 72, 121.92, 423.06, 134.41]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 7,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 8,
+                "kind": "heading",
+                "level": 2,
+                "text": "Overview",
+                "at": [[1, 72, 148.75, 130.01, 162.38]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 9,
+                "kind": "paragraph",
+                "text": "Top together few without turned door under through knew night both heard head. To against good go work turned all part asked did different life life. Her children region five school see than together market. Were move me last well do not best group here life along market whole put one. Any other go until its car soon this over let down.",
+                "at": [[1, 72, 169.17, 537.32, 228.91]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 10,
+                "kind": "paragraph",
+                "text": "Can sun under for method need to sometimes last find upon door. Were in whole through back this day it great car. Has never much here time take few done. Between say sample like your thing study next policy may seen find. Play left said there sentence form down door heard have them.",
+                "at": [[1, 72, 240.42, 530.61, 300.91]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 11,
+                "kind": "paragraph",
+                "text": "Form words your until quarter what one some. Set into should any can land true side next method morning saw. Do be best right policy it it it air. Him family began when own put next enough cut also using if good into will. That seen earth in had sample made help almost word be method.",
+                "at": [[1, 72, 311.67, 537.08, 372.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 12,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 13,
+                "kind": "heading",
+                "level": 2,
+                "text": "Findings",
+                "at": [[1, 72, 386.5, 126.13, 400.13]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 14,
+                "kind": "paragraph",
+                "text": "Something any called figure its measure same answer small make way house. True money how sea this called until family set seen on. On head new from each do not since life both had. Four might toward next sun measure over example policy group house across learn point boy. Region see turned sure left new read method.",
+                "at": [[1, 72, 406.92, 536.48, 466.66]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 15,
+                "kind": "paragraph",
+                "text": "Three five from of give up same tell house since began just words. In your got enough picture much have some water tell way. While high read turn told try of for other told. Until was had city usually own room heard different try hard found since best. Turned think who me if from so over body many should below market.",
+                "at": [[1, 72, 478.17, 539.63, 538.66]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 16,
+                "kind": "paragraph",
+                "text": "Want when few that about in do not before. Heard country live sea up here into picture were market. But all in has know once just well life new large into find with white. Hand help figure saw does five children keep today. Different city region mother story also use color today back big can.",
+                "at": [[1, 72, 549.42, 526.57, 609.91]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 17,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 18,
+                "kind": "heading",
+                "level": 2,
+                "text": "Recommendations",
+                "at": [[1, 72, 624.25, 188.13, 637.88]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 19,
+                "kind": "paragraph",
+                "text": "That quarter if far important toward market animal from keep took need high group. Mother knew using move go want boy all good with. For had food under new usually sentence him that saw is. Now sea heard story called once air below of. Earth too must together year without were her.",
+                "at": [[1, 72, 644.67, 532.39, 705.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 20,
+                "kind": "break",
+                "page": 2,
+                "label": "2",
+                "src": ["infer"],
+                "conf": 500
+              },
+              {
+                "id": 21,
+                "kind": "paragraph",
+                "text": "Live heard policy sentence then sound page still using door house who. Heard four one using earth would she much white study your four top way. Tell second like made study near far is. Water any keep well long do not to then name far. Water come market must pay never ever even to done change.",
+                "at": [[2, 72, 80.67, 537.15, 141.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 22,
+                "kind": "paragraph",
+                "text": "Land room thought point write she still place show for until good quarter important story not. She began life get side think your who going after big seen or region well. Said in upon does give through ever without answer may. Being important began this its without another food toward said second. Your where market group every much an animal.",
+                "at": [[2, 72, 151.92, 535.85, 212.41]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 23,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 24,
+                "kind": "heading",
+                "level": 2,
+                "text": "Methods",
+                "at": [[2, 72, 226.75, 125.81, 240.38]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 25,
+                "kind": "paragraph",
+                "text": "Door first have her our or place found. Large true all report that as now report on toward looked. New them land only budget had learn began only all answer people any. Their money most three we very what found region big set an of animal number. Still line white city paper that two color four.",
+                "at": [[2, 72, 247.17, 539.64, 307.66]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 26,
+                "kind": "paragraph",
+                "text": "Point friend toward sun looked said him right have sound. Tell father and between went we friend left big this into look more example paper. Answer every much been however policy well find made so why done she the big. Your show she again five down always paper up. Made away back here into animal almost air not quarter day know page find other family.",
+                "at": [[2, 72, 318.42, 534.7, 378.91]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 27,
+                "kind": "paragraph",
+                "text": "Friend words thing great father food second family began later just picture hear top no. Off once day so heard me heard land him home last. Sure next move again some your put with these using cut must later back. Near five move food house new does no came want once. Get until as play example now learn good car world large soon.",
+                "at": [[2, 72, 389.67, 537.13, 450.16]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 28,
+            "kind": "section",
+            "level": 2,
+            "children": [
+              {
+                "id": 29,
+                "kind": "heading",
+                "level": 2,
+                "text": "Annex",
+                "at": [[2, 72, 465.25, 111.57, 478.88]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 30,
+                "kind": "paragraph",
+                "text": "Began own out seen know left another let sample or. Took budget turned together region an important called top thing would. Turned side different year put line animal review time time point words them. One heard soon began boy like air results. Away budget see another as room near still me write had once.",
+                "at": [[2, 72, 484.92, 531.71, 545.41]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 31,
+                "kind": "paragraph",
+                "text": "Be does should take men white change can figure. Color sun morning picture example these white took looked went up own family better during last. Going any just use enough no me near many have. Red write method these should down while four set. Not play body why made away when work one air far who play be number.",
+                "at": [[2, 72, 556.17, 533.42, 616.66]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 32,
+                "kind": "paragraph",
+                "text": "Father would learn while these several got region hand. Since set do not door get little can be like tell far. Near made father us water some called growth us. Time second turned toward turn work figure were came take review could most all group. The two something do and can however soon whole done head face.",
+                "at": [[2, 72, 628.17, 539.12, 687.91]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "src": ["infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      }
+    ]
+  },
+  "furniture": [
+    {
+      "id": 33,
+      "role": "header",
+      "template": "Case 1:21-cv-00123-ABC Document 14 Filed 05/03/21",
+      "pages": [1, 2],
+      "at": [[1, 72, 36.21, 277.94, 44.7], [2, 72, 36.21, 277.94, 44.7]],
+      "src": ["text", "infer"],
+      "conf": 800
+    },
+    {
+      "id": 34,
+      "role": "footer",
+      "template": "CONFIDENTIAL - ATTORNEYS' EYES ONLY",
+      "pages": [1, 2],
+      "at": [[1, 72, 749.84, 233.63, 757.84], [2, 72, 749.84, 233.63, 757.84]],
+      "src": ["text", "infer"],
+      "conf": 800
+    },
+    {
+      "id": 35,
+      "role": "footer",
+      "template": "ACME-{n:02}",
+      "pages": [1, 2],
+      "at": [[1, 505.34, 749.84, 540, 757.84], [2, 505.34, 749.84, 540, 757.84]],
+      "src": ["text", "infer"],
+      "conf": 800
+    }
+  ],
+  "dropped": [
+    {
+      "reason": "page-number",
+      "page": 1,
+      "at": [1, 496.51, 36.21, 539.99, 44.7],
+      "text": "Page 1 of 2",
+      "conf": 800,
+      "src": ["text", "infer"]
+    },
+    {
+      "reason": "page-number",
+      "page": 2,
+      "at": [2, 496.51, 36.21, 539.99, 44.7],
+      "text": "Page 2 of 2",
+      "conf": 800,
+      "src": ["text", "infer"]
+    }
+  ]
+}

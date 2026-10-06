@@ -39,7 +39,9 @@
    ["OCProperties" "oc-properties"] ["OCGs" "ocgs"] "OCG" "OCMD" "BaseState" ["ON" "on-upper"] ["OFF" "off-upper"]
    "Event" "Category" "Usage" "View" "ViewState" "Print" "PrintState" "Export" "ExportState"
    "AllOn" "AnyOn" "AnyOff" "AllOff" ["VE" "ve"] "And" "Or" "Not" "Unchanged"
-   "ShadingType" "PatternType" "Extend"])
+   "ShadingType" "PatternType" "Extend"
+   ;; inline styles (P4.7): what a FontDescriptor says of weight and slant
+   "StemV" "ItalicAngle" "FontWeight"])
 
 ;; XMP (P3.9): namespace URIs and the local names the reader meets, as [symbol string].
 (def xstrings
