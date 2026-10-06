@@ -541,7 +541,7 @@ public static class Tabletest {
         Json.JsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells());
         return 0;
     }
-    internal static int TtTagged(byte[] pdf, byte[] golden, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
+    internal static int TtTagged(int emonT, byte[] pdf, byte[] golden, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
         // A tagged document through the stage: the Model, byte for byte, and the verdicts of its tables (the evidence dump's `tb`) in `tvt`.
         int r = TtGolden(pdf, t, tvt);
         if (r != 0) {
@@ -570,23 +570,23 @@ public static class Tabletest {
         System.Text.StringBuilder v7 = emon.Testport.NewText();
         System.Text.StringBuilder t8 = emon.Testport.NewText();
         System.Text.StringBuilder v8 = emon.Testport.NewText();
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-good.pdf"), emon.Testport.TestFile("table/ttab-good.json"), t0, v0), 0, "ttab-good runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-good.pdf"), emon.Testport.TestFile("table/ttab-good.json"), t0, v0), 0, "ttab-good runs");
         emon.Testport.AssertText(v0, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":931,\"checks\":[900,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good: a correct grid, ruled, with spans and a header: confirmed, and the tags are among the table's sources");
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-good-ws.pdf"), emon.Testport.TestFile("table/ttab-good-ws.json"), t1, v1), 0, "ttab-good-ws runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-good-ws.pdf"), emon.Testport.TestFile("table/ttab-good-ws.json"), t1, v1), 0, "ttab-good-ws runs");
         emon.Testport.AssertText(v1, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good-ws: a table without a rule, correctly tagged: confirmed, and `struct` is among its sources");
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-th-as-td.pdf"), emon.Testport.TestFile("table/ttab-th-as-td.json"), t2, v2), 0, "ttab-th-as-td runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-th-as-td.pdf"), emon.Testport.TestFile("table/ttab-th-as-td.json"), t2, v2), 0, "ttab-th-as-td runs");
         emon.Testport.AssertText(v2, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-th-as-td: headers tagged TD are still a table that agrees with the page");
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-bad-spans.pdf"), emon.Testport.TestFile("table/ttab-bad-spans.json"), t3, v3), 0, "ttab-bad-spans runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-bad-spans.pdf"), emon.Testport.TestFile("table/ttab-bad-spans.json"), t3, v3), 0, "ttab-bad-spans runs");
         emon.Testport.AssertText(v3, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":5,\"verdict\":\"partial\",\"score\":821,\"checks\":[900,1000,1000,1000,1000,785],\"trust\":937}]", "ttab-bad-spans: ColSpan 3 where the rules close at 2: the geometry agrees with 785 of the words, so the verdict is partial, flagged struct-disagree and tag-span-conflict");
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-bad-rows.pdf"), emon.Testport.TestFile("table/ttab-bad-rows.json"), t4, v4), 0, "ttab-bad-rows runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-bad-rows.pdf"), emon.Testport.TestFile("table/ttab-bad-rows.json"), t4, v4), 0, "ttab-bad-rows runs");
         emon.Testport.AssertText(v4, "[{\"page\":1,\"se\":4,\"rows\":3,\"cols\":8,\"verdict\":\"contradicted\",\"score\":86,\"checks\":[923,1000,846,1000,1000,0],\"trust\":937}]", "ttab-bad-rows: two visual rows in one TR: contradicted, and the Model is the geometry's alone");
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-layout.pdf"), emon.Testport.TestFile("table/ttab-layout.json"), t5, v5), 0, "ttab-layout runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-layout.pdf"), emon.Testport.TestFile("table/ttab-layout.json"), t5, v5), 0, "ttab-layout runs");
         emon.Testport.AssertText(v5, "[{\"page\":1,\"se\":4,\"rows\":1,\"cols\":2,\"verdict\":\"contradicted\",\"score\":1000,\"checks\":[1000,-1,1000,1000,1000,-1],\"trust\":923}]", "ttab-layout: prose in two columns tagged Table is a layout table: refused (D180), so contradicted, and there is no table in the Model");
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-missing-row.pdf"), emon.Testport.TestFile("table/ttab-missing-row.json"), t6, v6), 0, "ttab-missing-row runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-missing-row.pdf"), emon.Testport.TestFile("table/ttab-missing-row.json"), t6, v6), 0, "ttab-missing-row runs");
         emon.Testport.AssertText(v6, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"partial\",\"score\":864,\"checks\":[1000,1000,1000,800,1000,1000],\"trust\":118}]", "ttab-missing-row: the last row is an artifact; the tree's trust is under 300, so it can confirm nothing: partial");
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-allp.pdf"), emon.Testport.TestFile("table/ttab-allp.json"), t7, v7), 0, "ttab-allp runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-allp.pdf"), emon.Testport.TestFile("table/ttab-allp.json"), t7, v7), 0, "ttab-allp runs");
         emon.Testport.AssertText(v7, "[]", "ttab-allp: cells tagged P: the tree has no Table, so no verdict");
-        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-good-ws-untagged.pdf"), emon.Testport.TestFile("table/ttab-good-ws-untagged.json"), t8, v8), 0, "ttab-good-ws-untagged runs");
+        emon.Testport.AssertEq(TtTagged(0, emon.Testport.TestFile("corpus/synth/pdf/ttab-good-ws-untagged.pdf"), emon.Testport.TestFile("table/ttab-good-ws-untagged.json"), t8, v8), 0, "ttab-good-ws-untagged runs");
         emon.Testport.AssertText(v8, "[]", "the same table with no tree: no verdict");
     }
     [Xunit.Fact]

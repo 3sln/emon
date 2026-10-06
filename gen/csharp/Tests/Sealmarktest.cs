@@ -363,8 +363,8 @@ public static class Sealmarktest {
         StStroke(pa, pts, 10000, 20000, 4);
         StStroke(pa, pts, 10500, 20400, 1);
         // the cue `By:` just to the left, and another word elsewhere
-        int cue = StText(fw, gl, et, 7200, 20300, 66, 121, 58);
-        int other = StText(fw, gl, et, 7200, 40000, 84, 111, 116);
+        StText(fw, gl, et, 7200, 20300, 66, 121, 58);
+        StText(fw, gl, et, 7200, 40000, 84, 111, 116);
         emon.Testport.AssertEq(StFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "two strokes of five segments together and a cue beside them: a signature");
         emon.Testport.AssertEq(Player.SlGet(sm, 0, 5), Player.PlsSignature(), "a signature");
         emon.Testport.AssertEq(Player.SlGet(sm, 0, 1), 10000, "the box is the union of the strokes");
@@ -449,9 +449,9 @@ public static class Sealmarktest {
         emon.Port.Cells nm = emon.Port.NewCells();
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         int sec = Model.NodeNew(nodes, Model.NkSection(), 0);
-        int a = StBlock(nodes, regions, sec, 1, 10000, 20000);
-        int b = StBlock(nodes, regions, sec, 1, 30000, 40000);
-        int c = StBlock(nodes, regions, sec, 1, 50000, 60000);
+        StBlock(nodes, regions, sec, 1, 10000, 20000);
+        StBlock(nodes, regions, sec, 1, 30000, 40000);
+        StBlock(nodes, regions, sec, 1, 50000, 60000);
         // S1 over the end of A and the start of B (as much of each: the later); S2 in the gap above C; S3 on page 9, after everything
         StSealRow(sm, 1, 20000, 15000, 50000, 35000, Player.PlsSeal(), 2047903);
         StSealRow(sm, 1, 20000, 42000, 50000, 48000, Player.PlsStamp(), 12591135);

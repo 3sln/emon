@@ -572,7 +572,7 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	return 0
 }
 
-func ttTagged(pdf []byte, golden []byte, t *strings.Builder, tvt *strings.Builder) int32 {
+func ttTagged(emonT *testing.T, pdf []byte, golden []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	// A tagged document through the stage: the Model, byte for byte, and the verdicts of its tables (the evidence dump's `tb`) in `tvt`.
 	var r int32 = ttGolden(pdf, t, tvt)
 	if r != 0 {
@@ -601,23 +601,23 @@ func TestTaggedTablesAreVerifiedAgainstThePage(emonT *testing.T) {
 	var v7 *strings.Builder = port.NewText()
 	var t8 *strings.Builder = port.NewText()
 	var v8 *strings.Builder = port.NewText()
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-good.pdf"), port.TestFile("table/ttab-good.json"), t0, v0), 0, "ttab-good runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-good.pdf"), port.TestFile("table/ttab-good.json"), t0, v0), 0, "ttab-good runs")
 	port.AssertText(emonT, v0, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":931,\"checks\":[900,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good: a correct grid, ruled, with spans and a header: confirmed, and the tags are among the table's sources")
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-good-ws.pdf"), port.TestFile("table/ttab-good-ws.json"), t1, v1), 0, "ttab-good-ws runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-good-ws.pdf"), port.TestFile("table/ttab-good-ws.json"), t1, v1), 0, "ttab-good-ws runs")
 	port.AssertText(emonT, v1, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good-ws: a table without a rule, correctly tagged: confirmed, and `struct` is among its sources")
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-th-as-td.pdf"), port.TestFile("table/ttab-th-as-td.json"), t2, v2), 0, "ttab-th-as-td runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-th-as-td.pdf"), port.TestFile("table/ttab-th-as-td.json"), t2, v2), 0, "ttab-th-as-td runs")
 	port.AssertText(emonT, v2, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-th-as-td: headers tagged TD are still a table that agrees with the page")
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-bad-spans.pdf"), port.TestFile("table/ttab-bad-spans.json"), t3, v3), 0, "ttab-bad-spans runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-bad-spans.pdf"), port.TestFile("table/ttab-bad-spans.json"), t3, v3), 0, "ttab-bad-spans runs")
 	port.AssertText(emonT, v3, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":5,\"verdict\":\"partial\",\"score\":821,\"checks\":[900,1000,1000,1000,1000,785],\"trust\":937}]", "ttab-bad-spans: ColSpan 3 where the rules close at 2: the geometry agrees with 785 of the words, so the verdict is partial, flagged struct-disagree and tag-span-conflict")
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-bad-rows.pdf"), port.TestFile("table/ttab-bad-rows.json"), t4, v4), 0, "ttab-bad-rows runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-bad-rows.pdf"), port.TestFile("table/ttab-bad-rows.json"), t4, v4), 0, "ttab-bad-rows runs")
 	port.AssertText(emonT, v4, "[{\"page\":1,\"se\":4,\"rows\":3,\"cols\":8,\"verdict\":\"contradicted\",\"score\":86,\"checks\":[923,1000,846,1000,1000,0],\"trust\":937}]", "ttab-bad-rows: two visual rows in one TR: contradicted, and the Model is the geometry's alone")
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-layout.pdf"), port.TestFile("table/ttab-layout.json"), t5, v5), 0, "ttab-layout runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-layout.pdf"), port.TestFile("table/ttab-layout.json"), t5, v5), 0, "ttab-layout runs")
 	port.AssertText(emonT, v5, "[{\"page\":1,\"se\":4,\"rows\":1,\"cols\":2,\"verdict\":\"contradicted\",\"score\":1000,\"checks\":[1000,-1,1000,1000,1000,-1],\"trust\":923}]", "ttab-layout: prose in two columns tagged Table is a layout table: refused (D180), so contradicted, and there is no table in the Model")
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-missing-row.pdf"), port.TestFile("table/ttab-missing-row.json"), t6, v6), 0, "ttab-missing-row runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-missing-row.pdf"), port.TestFile("table/ttab-missing-row.json"), t6, v6), 0, "ttab-missing-row runs")
 	port.AssertText(emonT, v6, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"partial\",\"score\":864,\"checks\":[1000,1000,1000,800,1000,1000],\"trust\":118}]", "ttab-missing-row: the last row is an artifact; the tree's trust is under 300, so it can confirm nothing: partial")
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-allp.pdf"), port.TestFile("table/ttab-allp.json"), t7, v7), 0, "ttab-allp runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-allp.pdf"), port.TestFile("table/ttab-allp.json"), t7, v7), 0, "ttab-allp runs")
 	port.AssertText(emonT, v7, "[]", "ttab-allp: cells tagged P: the tree has no Table, so no verdict")
-	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-good-ws-untagged.pdf"), port.TestFile("table/ttab-good-ws-untagged.json"), t8, v8), 0, "ttab-good-ws-untagged runs")
+	port.AssertEq(emonT, ttTagged(emonT, port.TestFile("corpus/synth/pdf/ttab-good-ws-untagged.pdf"), port.TestFile("table/ttab-good-ws-untagged.json"), t8, v8), 0, "ttab-good-ws-untagged runs")
 	port.AssertText(emonT, v8, "[]", "the same table with no tree: no verdict")
 }
 
