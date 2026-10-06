@@ -447,7 +447,10 @@
       (case cmd
         "push" (push! opts)
         "pull" (pull! opts)
-        (die "usage: bb corpus-push|corpus-pull [--dry-run] [--corpus DIR] [category...]"))
+        "index-sha" (println (sha256-hex (.getBytes ^String (or (get-string (load-config) "index.json")
+                                                                (die "no index.json -- nothing pushed yet?"))
+                                                    "UTF-8")))
+        (die "usage: bb corpus-push|corpus-pull|corpus-index-sha [--dry-run] [--corpus DIR] [category...]"))
       (catch clojure.lang.ExceptionInfo e (die (ex-message e))))))
 
 (when (= (System/getProperty "babashka.file") *file*)

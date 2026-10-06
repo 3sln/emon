@@ -3081,6 +3081,17 @@ out; archives are deterministic, so an unchanged category is skipped by
 sha256. A pull replaces `corpus/<category>` atomically (extract aside, rename).
 Pure babashka (own SigV4); no aws/rclone/mc. Implementation: `tools/corpus.clj`.
 
+### 15.3 Running the gates on GitHub (D259)
+
+`.github/workflows/gates.yml` runs every gate on `ubuntu-latest`, in parallel jobs, on demand only (`workflow_dispatch`; no push or pull-request trigger):
+
+    gh workflow run gates.yml -f groups=all            # all | unit-only | fast-only
+    gh workflow run gates.yml -f groups=unit-only -f ref=my-branch
+
+Jobs: `corpus` (not for `unit-only`), `unit` and `unit red` (one job per arm: go, rust, java, csharp), `gates` (shards of `bb gates G...`: static = hosts drift lang-test; check; replay = plan ocr render embedders; slice; fuzz; identity; repeat; accuracy; png-check; image), and `summary` (every selected job passed; every arm ran the same number of laws). `bb ci coverage` fails if a gate of `kin/scripts/gates` is in no shard. Tesseract and pdfium are not installed: `ocr` and `render` replay committed transcripts.
+
+Repository secrets (Settings, Secrets and variables, Actions): `EMON_S3_ENDPOINT`, `EMON_S3_REGION`, `EMON_S3_BUCKET`, `EMON_S3_ACCESS_KEY_ID`, `EMON_S3_SECRET_ACCESS_KEY`, and optionally `EMON_S3_PREFIX`, `EMON_S3_PATH_STYLE`. The workflow writes them to `.env`, pulls only the `formats` and `financial` categories (the ones `png-check` and `image` read), and caches `corpus/` keyed by `bb corpus-index-sha` (the SHA-256 of the remote `index.json`), so an unchanged corpus is not pulled again. Without the secrets the run fails with a message naming them; `groups=unit-only` needs none. The workflow's `3sln/kin` checkout is the sibling `../kin`.
+
 ---
 
 ## 16. Security posture
