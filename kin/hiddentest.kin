@@ -17,7 +17,7 @@
             [emon.player :refer [cg-new cg-set cgf-hfirst cgf-hcount cgf-ofirst cgf-ocount cgf-simfold
                                  fw-count fl-count fv-get fa-count fa-get]]
             [emon.model :refer [sr-hidden-text dr-invisible ledger-count ledger-reason ledger-text-len]]
-            [emon.fuserules :refer [ag-count ag-nt ag-no ag-nh ag-simfold ag-plaus ag-hlatin ag-hink ag-hinkwin ag-margin ag-pageocr ag-hsplit ag-hsame
+            [emon.fuserules :refer [ag-count ag-nt ag-no ag-nh ag-font ag-simfold ag-plaus ag-hlatin ag-hink ag-hinkwin ag-margin ag-pageocr ag-hsplit ag-hsame
                                     fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fw-none fw-text fw-ocr]]
             [emon.hidden :refer [hx-fill]]
             [emon.arbiter :refer [ar-doc ar-write]]
@@ -85,7 +85,10 @@
   (assert-eq (ht-rule 0 0 2 -1 -1 1 0 -1 -1 4) 331 "no ink at all")
   (assert-eq (ht-rule 0 0 2 -1 -1 1 -1 -1 -1 4) 332 "ink not measured: kept, never dropped on a guess")
   (comment "a visible text-layer word is block 100's, whatever hidden words stand beside it")
-  (assert-eq (ht-rule 1 1 0 950 1000 1 -1 -1 -1 0) 110 "a visible word and OCR agree: the contract's row, not 310"))
+  (let [^Cells gv (new-cells)]
+    (ht-gv gv 1 1 0 950 1000 1 -1 -1 -1 0)
+    (cells-set gv (ag-font) 1000)
+    (assert-eq (fr-number (fr-decide gv)) 110 "a visible word and OCR agree: the contract's row, not 310")))
 
 (deftest test-the-hidden-rows-say-what-they-set
   (let [^Cells gv (new-cells)]

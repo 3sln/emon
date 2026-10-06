@@ -66,7 +66,10 @@ public static class Hiddentest {
         emon.Testport.AssertEq(HtRule(0, 0, 2, -1, -1, 1, 0, -1, -1, 4), 331, "no ink at all");
         emon.Testport.AssertEq(HtRule(0, 0, 2, -1, -1, 1, -1, -1, -1, 4), 332, "ink not measured: kept, never dropped on a guess");
         // a visible text-layer word is block 100's, whatever hidden words stand beside it
-        emon.Testport.AssertEq(HtRule(1, 1, 0, 950, 1000, 1, -1, -1, -1, 0), 110, "a visible word and OCR agree: the contract's row, not 310");
+        emon.Port.Cells gv = emon.Port.NewCells();
+        HtGv(gv, 1, 1, 0, 950, 1000, 1, -1, -1, -1, 0);
+        emon.Port.CellsSet(gv, Fuserules.AgFont(), 1000);
+        emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gv)), 110, "a visible word and OCR agree: the contract's row, not 310");
     }
     [Xunit.Fact]
     public static void TestTheHiddenRowsSayWhatTheySet() {

@@ -97,10 +97,7 @@ public final class Arbitertest {
         emon.Testport.assertEq(Fuserules.frOrder(5), -1, "and no more");
         int i = 0;
         while (i < 28) {
-            emon.Testport.assertEq(            if ((Fuserules.frBlock(i) == 100) || (Fuserules.frBlock(i) == 300)) {
-1            } else {
-0            }
-, 1, "every row is in block 100 (P7.3) or 300 (P7.6)");
+            emon.Testport.assertThat((Fuserules.frBlock(i) == 100) || (Fuserules.frBlock(i) == 300), "every row is in block 100 (P7.3) or 300 (P7.6)");
             i += 1;
         }
     }

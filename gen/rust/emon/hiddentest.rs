@@ -69,7 +69,10 @@ fn test_every_hidden_rule_decides_what_its_number_says() {
     crate::testport::assert_eq(ht_rule(0, 0, 2, -1, -1, 1, 0, -1, -1, 4), 331, "no ink at all");
     crate::testport::assert_eq(ht_rule(0, 0, 2, -1, -1, 1, -1, -1, -1, 4), 332, "ink not measured: kept, never dropped on a guess");
     // a visible text-layer word is block 100's, whatever hidden words stand beside it
-    crate::testport::assert_eq(ht_rule(1, 1, 0, 950, 1000, 1, -1, -1, -1, 0), 110, "a visible word and OCR agree: the contract's row, not 310");
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ht_gv(gv, 1, 1, 0, 950, 1000, 1, -1, -1, -1, 0);
+    crate::port::cells_set(gv, ag_font(), 1000);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 110, "a visible word and OCR agree: the contract's row, not 310");
 }
 #[test]
 fn test_the_hidden_rows_say_what_they_set() {

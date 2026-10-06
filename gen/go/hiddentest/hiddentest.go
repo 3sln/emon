@@ -78,7 +78,10 @@ func TestEveryHiddenRuleDecidesWhatItsNumberSays(emonT *testing.T) {
 	port.AssertEq(emonT, htRule(0, 0, 2, -1, -1, 1, 0, -1, -1, 4), 331, "no ink at all")
 	port.AssertEq(emonT, htRule(0, 0, 2, -1, -1, 1, -1, -1, -1, 4), 332, "ink not measured: kept, never dropped on a guess")
 	// a visible text-layer word is block 100's, whatever hidden words stand beside it
-	port.AssertEq(emonT, htRule(1, 1, 0, 950, 1000, 1, -1, -1, -1, 0), 110, "a visible word and OCR agree: the contract's row, not 310")
+	var gv *port.Cells = port.NewCells()
+	htGv(gv, 1, 1, 0, 950, 1000, 1, -1, -1, -1, 0)
+	port.CellsSet(gv, fuserules.AgFont(), 1000)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 110, "a visible word and OCR agree: the contract's row, not 310")
 }
 
 func TestTheHiddenRowsSayWhatTheySet(emonT *testing.T) {

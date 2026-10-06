@@ -101,10 +101,7 @@ fn test_the_rows_say_what_they_set() {
     crate::testport::assert_eq(fr_order(5), -1, "and no more");
     let mut i: i32 = 0;
     while i < 28 {
-        crate::testport::assert_eq(        if (fr_block(i) == 100) || (fr_block(i) == 300) {
-1        } else {
-0        }
-, 1, "every row is in block 100 (P7.3) or 300 (P7.6)");
+        crate::testport::assert_that((fr_block(i) == 100) || (fr_block(i) == 300), "every row is in block 100 (P7.3) or 300 (P7.6)");
         i += 1;
     }
 }
