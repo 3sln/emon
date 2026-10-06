@@ -33,10 +33,9 @@ env:
 
 jobs:
   # ---- the corpus: pulled only when the remote index.json changes -------------------------------------------------
-  # png-check and image are the gates that read corpus/ (real scans, a photograph); the rest do not. Only the
+  # png-check, image and the unit arms' real-file laws read corpus/ (unit-red does not). Only the
   # categories they read are pulled (formats, financial), which keeps the cache under GitHub's 10 GB limit.
   corpus:
-    if: inputs.groups != 'unit-only'
     runs-on: ubuntu-latest
     outputs:
       index: ${{ steps.sha.outputs.index }}
@@ -68,7 +67,7 @@ jobs:
             [ -n "${!k}" ] || missing="$missing $k"
           done
           if [ -n "$missing" ]; then
-            echo "::error::the corpus gates need these repository secrets, and they are not set:$missing (Settings > Secrets and variables > Actions; SPEC 15.3). Use groups=unit-only to run without the corpus."
+            echo "::error::the corpus gates need these repository secrets, and they are not set:$missing (Settings > Secrets and variables > Actions; SPEC 15.3). "
             exit 1
           fi
           for k in EMON_S3_ENDPOINT EMON_S3_REGION EMON_S3_BUCKET EMON_S3_PREFIX EMON_S3_ACCESS_KEY_ID EMON_S3_SECRET_ACCESS_KEY EMON_S3_PATH_STYLE; do
@@ -91,7 +90,8 @@ jobs:
 
   # ---- the laws, one arm per job (bb unit ARM), then the cross-arm count in the summary ----------------------------
   unit:
-    if: inputs.groups != 'fast-only'
+    if: inputs.groups != 'fast-only' && needs.corpus.result == 'success'
+    needs: [corpus]
     name: unit (${{ matrix.arm }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -111,6 +111,11 @@ jobs:
           repository: 3sln/kin
           path: kin
       - uses: ./emon/.github/actions/setup
+      - uses: actions/cache/restore@v4
+        with:
+          path: emon/corpus
+          key: emon-corpus-${{ needs.corpus.outputs.index }}
+          fail-on-cache-miss: true
       - name: bb unit ${{ matrix.arm }}
         run: |
           set -o pipefail
