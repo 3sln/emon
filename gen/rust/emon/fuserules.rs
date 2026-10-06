@@ -105,8 +105,12 @@ pub fn ag_imalpha() -> i32 {
     // defence 1: the least alpha (per mille) of an image placement covering at least `wm-cover` of the page that the group lies in; -1 when there is none
     return 24;
 }
-pub fn ag_count() -> i32 {
+pub fn ag_seal() -> i32 {
+    // defence 5 (P7.7): 1 when the group lies in a seal, stamp or signature candidate (`emon.sealmark`'s `sm-find` flagged it `plg-in-seal`: every visible text-layer word of the group is the candidate's, or it is an OCR-only group inside one), else 0
     return 25;
+}
+pub fn ag_count() -> i32 {
+    return 26;
 }
 pub fn fc_ge() -> i32 {
     return 0;
@@ -281,7 +285,7 @@ pub fn fw_ocr() -> i32 {
     // the OCR words
     return 2;
 }
-pub static FR_ROWS: [i32; 972] = [
+pub static FR_ROWS: [i32; 1044] = [
     101, 100, 1, 0, 0, 900, 0, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     102, 100, 1, 0, 0, 900, 0, 2, 0, 2, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     110, 100, 1, 0, 0, 1000, 0, 0, 1, 1, 0, 1, 3, 0, 2, 6, 2, 0, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -308,7 +312,9 @@ pub static FR_ROWS: [i32; 972] = [
     231, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 18, 0, 14, 19, 0, 14, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     232, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 20, 0, 15, 9, 0, 12, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     251, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 22, 1, 17, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
-    252, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 7, 1, 18, 21, 1, 19, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
+    252, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 7, 1, 18, 21, 1, 19, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    401, 400, 0, 0, 128, 900, 25, 2, 1, 0, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    402, 400, 0, 0, 128, 900, 25, 2, 1, 0, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
 ];
 pub fn fr_w() -> i32 {
     // cells of a row
@@ -403,7 +409,7 @@ pub(crate) fn fr_holds(row: i32, gv: &mut crate::port::Cells) -> i32 {
 pub fn fr_decide(gv: &mut crate::port::Cells) -> i32 {
     // The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
     // rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-    let n: i32 = 27;
+    let n: i32 = 29;
     let mut b: i32 = 0;
     let mut blk: i32 = 0;
     let mut r: i32 = 0;

@@ -1,0 +1,455 @@
+;; Laws for `emon.sealmark` (P7.7; SPEC 9.5 defence 5, 10.7; D016, D205, D400-D405), on every target. Everything is built by hand: vector paths and their points, the
+;; text layer's words with their glyph's ink, the correspondence groups, and a three-paragraph Model.
+;;
+;;   * the colour names (12 hue buckets, and black, gray and white for an ink with no chroma);
+;;   * a ring is a closed round path of at least four Bezier segments within `sm-round` of one radius, or (a path that kept its box only) a square curve;
+;;   * a SEAL holds the words of its ink and the words turned along its arc, and NOT the black upright body text under it; the groups of its words are flagged
+;;     `plg-in-seal`, the text is the words in the text layer's order, one space between two unless both are one glyph close together;
+;;   * a STAMP is a stroked quadrilateral with a border of at least 1.5 pt of a chromatic ink with words of that ink in it, and nothing else is;
+;;   * a SIGNATURE is stroked open curves near a cue word (`By:`, `Signature`, `Signed`, `sign here`) and nothing else is;
+;;   * an OCR-only group inside a ring is the ring's (its text only when no text-layer word is);
+;;   * `sm-write` copies the Model and writes a seal node after the last block it overlaps (a stamp over a table is after the table), before the first block that
+;;     starts below it when it overlaps none, and the left ones at the end, and the Model still checks.
+(ns emon.sealmarktest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [pa-new pa-set pt-add gl-new gl-set gf-fill wd-new wd-set wf-gfirst wf-gcount ep-new ow-new ow-set rf-add
+                                   pf-stroke pf-width pf-flags pf-pfirst pf-pcount pf-kind pg-stroked pg-filled pa-curve pa-rect pa-other
+                                   po-move po-line po-curve po-close ea-words ea-owords]]
+            [emon.player :refer [cg-new cg-set cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-flags plg-in-seal sl-new sl-count sl-get pls-seal pls-stamp pls-signature]]
+            [emon.model :refer [model-init model-check node-new node-count node-kind node-sub node-parent node-add-region node-region-head region-page
+                                nk-document nk-section nk-paragraph nk-seal sl-seal sl-stamp]]
+            [emon.sealmark :refer [sm-hue sm-name-len sm-name-off sm-name-at sm-spread sm-ink-near sm-turned sm-ring-test sm-find sm-write sm-seal-min]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------- inks
+
+(deftest test-an-ink-has-a-name
+  (assert-eq (sm-hue 2047903) 10 "the blue of the corpus seals (#1f3f9f) is blue")
+  (assert-eq (sm-hue 12591135) 3 "the red of the corpus stamps (#c0201f) is red")
+  (assert-eq (sm-hue 1118481) 0 "#111111 is black")
+  (assert-eq (sm-hue 8421504) 1 "#808080 is gray")
+  (assert-eq (sm-hue 15790320) 2 "#f0f0f0 is white")
+  (assert-eq (sm-hue 2138176) 7 "a green is green")
+  (assert-eq (sm-hue 16744448) 4 "an orange is orange")
+  (assert-eq (sm-hue 8388736) 11 "a purple is purple")
+  (assert-eq (sm-hue -1) -1 "an unknown ink has no name")
+  (assert-eq (sm-name-len 10) 4 "blue has four letters")
+  (assert-eq (sm-name-at 0 (sm-name-off 10)) 98 "which start with b")
+  (assert-eq (sm-name-len 3) 3 "red")
+  (assert-eq (sm-name-at 0 (+ (sm-name-off 3) 2)) 100 "ends with d"))
+
+(deftest test-inks-near-and-turned-words
+  (assert-eq (sm-spread 2047903) 128 "the spread of #1f3f9f: 0x9f less 0x1f")
+  (assert-eq (sm-spread 1118481) 0 "of a gray: none")
+  (assert-eq (sm-ink-near 2047903 2047903) 1 "an ink is near itself")
+  (assert-eq (sm-ink-near 2047903 12591135) 0 "blue is not near red")
+  (assert-eq (sm-ink-near 2047903 -1) 0 "an unknown ink is near nothing")
+  (assert-eq (sm-turned 0) 0 "upright text is not turned")
+  (assert-eq (sm-turned 9000) 0 "nor is text set at a right angle")
+  (assert-eq (sm-turned 18000) 0 "nor upside down")
+  (assert-eq (sm-turned 4500) 1 "a word at 45 degrees is")
+  (assert-eq (sm-turned 35900) 1 "so is one a degree off upright (arc-turn 1 degree)")
+  (assert-eq (sm-turned 50) 0 "half a degree is not")
+  (assert-eq (sm-turned -1000) 1 "a negative angle counts"))
+
+;; ------------------------------------------------------------- paths
+
+(defn ^I32 st-ex [^I32 k]
+  (comment "The x offset of the k-th end point of an octagon of radius 3000 (k 0..8; the ninth is the first again).")
+  (if (== k 0) (return 3000))
+  (if (== k 1) (return 2121))
+  (if (== k 2) (return 0))
+  (if (== k 3) (return -2121))
+  (if (== k 4) (return -3000))
+  (if (== k 5) (return -2121))
+  (if (== k 6) (return 0))
+  (if (== k 7) (return 2121))
+  (return 3000))
+
+(defn ^I32 st-ey [^I32 k]
+  (if (== k 0) (return 0))
+  (if (== k 1) (return 2121))
+  (if (== k 2) (return 3000))
+  (if (== k 3) (return 2121))
+  (if (== k 4) (return 0))
+  (if (== k 5) (return -2121))
+  (if (== k 6) (return -3000))
+  (if (== k 7) (return -2121))
+  (return 0))
+
+(defn ^I32 st-circle [^:mut ^Cells pa ^:mut ^Cells pts ^I32 page ^I32 cx ^I32 cy ^I32 stroke ^I32 width ^I32 skew]
+  (comment "A stroked, unfilled path of eight Bezier segments whose end points lie on a circle of radius 3000 about (cx, cy) (the control points on the chord ends);")
+  (comment "`skew` moves the third end point sideways by that much, which spoils the roundness. Answers the path's row.")
+  (let [^I32 first (quot (cells-len pts) 3)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^I32 r (pa-new pa page (pa-curve) (- cx 3000) (- cy 3000) (+ cx 3000) (+ cy 3000))]
+    (pt-add pts (+ cx (st-ex 0)) (+ cy (st-ey 0)) (po-move))
+    (while (< k 8)
+      (do (set x (+ cx (st-ex (+ k 1))))
+          (set y (+ cy (st-ey (+ k 1))))
+          (if (== k 2) (set x (+ x skew)))
+          (pt-add pts (+ cx (st-ex k)) (+ cy (st-ey k)) (po-curve))
+          (pt-add pts x y (po-curve))
+          (pt-add pts x y (po-curve))
+          (set k (+ k 1))))
+    (pt-add pts (+ cx (st-ex 0)) (+ cy (st-ey 0)) (po-close))
+    (pa-set pa r (pf-flags) (pg-stroked))
+    (pa-set pa r (pf-stroke) stroke)
+    (pa-set pa r (pf-width) width)
+    (pa-set pa r (pf-pfirst) first)
+    (pa-set pa r (pf-pcount) 26)
+    (return r)))
+
+(deftest test-a-ring-is-round
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells out (new-cells)]
+    (cells-push out 0)
+    (cells-push out 0)
+    (cells-push out 0)
+    (cells-push out 0)
+    (let [^I32 a (st-circle pa pts 1 10000 20000 2047903 300 0)
+          ^I32 b (st-circle pa pts 1 10000 20000 2047903 300 1500)]
+      (assert-eq (sm-ring-test pa pts a out) 1 "end points on one circle: a ring")
+      (assert-eq (cells-at out 0) 10000 "its centre x")
+      (assert-eq (cells-at out 1) 20000 "its centre y")
+      (assert-eq (cells-at out 2) 3000 "its radius")
+      (assert-eq (cells-at out 3) 0 "its roundness was verified")
+      (assert-eq (sm-ring-test pa pts b out) 0 "an end point pushed 15 per cent of a radius out of the circle: not a ring"))
+    (comment "a path that kept its box only (more than 128 points): a curve whose box less its stroke is a square")
+    (let [^I32 c (pa-new pa 1 (pa-curve) 4850 4850 11150 11150)]
+      (pa-set pa c (pf-flags) (pg-stroked))
+      (pa-set pa c (pf-width) 300)
+      (pa-set pa c (pf-pfirst) -1)
+      (assert-eq (sm-ring-test pa pts c out) 1 "a square curve with no geometry is taken for a ring")
+      (assert-eq (cells-at out 2) 3000 "of the radius its box says")
+      (assert-eq (cells-at out 3) 1 "unverified"))
+    (let [^I32 d (pa-new pa 1 (pa-curve) 4850 4850 21150 11150)]
+      (pa-set pa d (pf-flags) (pg-stroked))
+      (pa-set pa d (pf-width) 300)
+      (pa-set pa d (pf-pfirst) -1)
+      (assert-eq (sm-ring-test pa pts d out) 0 "an oblong one is not")
+      (assert-that (> 3000 0) "(a radius of 3000 is over seal-min 2268)")
+      (assert-that (>= 3000 (sm-seal-min)) "so a ring of that size is a seal's"))))
+
+;; ------------------------------------------------------------- a page
+
+(defn ^I32 st-word [^:mut ^Cells fw ^:mut ^Cells gl ^:mut ^Cells et ^I32 x ^I32 y ^I32 rot ^I32 ink ^I32 cp]
+  (comment "A one-glyph text-layer word of page 1 centred on (x, y), 600 square, its glyph filled with `ink`; answers its row.")
+  (let [^I32 ts (cells-len et)
+        ^I32 g (gl-new gl 1 (- x 300) (- y 300) (+ x 300) (+ y 300) cp ts 1 0)
+        ^I32 w (wd-new fw 1 (- x 300) (- y 300) (+ x 300) (+ y 300) (- x 300) (+ y 300) (+ x 300) (+ y 300) rot 0 ts 1 0 -1 -1)]
+    (cells-push et cp)
+    (gl-set gl g (gf-fill) ink)
+    (wd-set fw w (wf-gfirst) g)
+    (wd-set fw w (wf-gcount) 1)
+    (return w)))
+
+(defn ^I32 st-tgroup [^:mut ^Cells cg ^:mut ^Cells refs ^I32 w]
+  (let [^I32 g (cg-new cg 1 0 0 100 100 0)
+        ^I32 f (rf-add refs (ea-words) w)]
+    (cg-set cg g (cgf-tfirst) f)
+    (cg-set cg g (cgf-tcount) 1)
+    (return g)))
+
+(defn ^I32 st-find [^Cells pa ^Cells pts ^Cells gl ^Cells fw ^Cells et ^Cells cg ^Cells refs ^Cells ow ^:mut ^Cells sm]
+  (let [^Cells ep (new-cells)
+        ^Cells scr (new-cells)
+        ^Cells tmp (new-cells)]
+    (ep-new ep 1 61200 79200)
+    (return (sm-find pa pts gl fw et ep cg refs ow 1 sm scr tmp))))
+
+(deftest test-a-seal-holds-its-arc-and-its-ink-and-not-the-body-under-it
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells sm (new-cells)]
+    (comment "a BLACK ring: no ink tells its words from the body's, only the turn of the glyphs along its arc does")
+    (st-circle pa pts 1 10000 20000 1118481 250 0)
+    (let [^I32 a (st-word fw gl et 7300 20000 -2000 1118481 65)
+          ^I32 b (st-word fw gl et 7700 21500 -1000 1118481 66)
+          ^I32 c (st-word fw gl et 8300 22500 500 1118481 67)
+          ^I32 body (st-word fw gl et 10000 20000 0 1118481 88)
+          ^I32 far (st-word fw gl et 30000 20000 0 1118481 89)
+          ^I32 ga (st-tgroup cg refs a)
+          ^I32 gb (st-tgroup cg refs b)
+          ^I32 gc (st-tgroup cg refs c)
+          ^I32 gbody (st-tgroup cg refs body)
+          ^I32 gfar (st-tgroup cg refs far)]
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "one candidate")
+      (assert-eq (sl-get sm 0 5) (pls-seal) "a seal")
+      (assert-eq (sl-get sm 0 1) 7000 "its box")
+      (assert-eq (sl-get sm 0 15) 1118481 "of black ink")
+      (assert-eq (cg-get cg ga (cgf-flags)) (plg-in-seal) "a turned glyph on the ring is the seal's")
+      (assert-eq (cg-get cg gb (cgf-flags)) (plg-in-seal) "so is the next")
+      (assert-eq (cg-get cg gc (cgf-flags)) (plg-in-seal) "and one five degrees off upright")
+      (assert-eq (cg-get cg gbody (cgf-flags)) 0 "an upright black word inside the ring is body text")
+      (assert-eq (cg-get cg gfar (cgf-flags)) 0 "and one outside is none of its business")
+      (assert-eq (sl-get sm 0 14) 3 "the text is the three glyphs")
+      (assert-eq (cells-at et (sl-get sm 0 13)) 65 "A")
+      (assert-eq (cells-at et (+ (sl-get sm 0 13) 2)) 67 "B then C, the glyphs close together, no space between them"))))
+
+(deftest test-a-chromatic-ink-is-the-seals-wherever-it-stands
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells sm (new-cells)]
+    (st-circle pa pts 1 10000 20000 2047903 300 0)
+    (let [^I32 mid (st-word fw gl et 10000 20000 0 2047903 83)
+          ^I32 body (st-word fw gl et 9000 21500 0 1118481 66)
+          ^I32 gm (st-tgroup cg refs mid)
+          ^I32 gb (st-tgroup cg refs body)]
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "a blue ring with a blue word in it is a seal")
+      (assert-eq (cg-get cg gm (cgf-flags)) (plg-in-seal) "the blue word upright in the middle is the seal's (its ink)")
+      (assert-eq (cg-get cg gb (cgf-flags)) 0 "the black one is not")
+      (assert-eq (sl-get sm 0 14) 1 "the seal's text is the one word"))))
+
+(deftest test-a-ring-with-nothing-in-it-is-no-seal
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells sm (new-cells)]
+    (st-circle pa pts 1 10000 20000 2047903 300 0)
+    (let [^I32 body (st-word fw gl et 10000 20000 0 1118481 66)
+          ^I32 g (st-tgroup cg refs body)]
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 0 "a blue ring holding black upright text only is a diagram's node, not a seal")
+      (assert-eq (cg-get cg g (cgf-flags)) 0 "and its text is body text"))
+    (comment "a black ring, no turned word: not a seal either")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (st-circle pa pts 1 10000 20000 1118481 300 0)
+    (assert-eq (st-find pa pts gl fw et cg refs ow sm) 0 "a black ring with no turned glyph is not one")
+    (comment "a ring smaller than 8 mm of radius is not a seal")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (let [^I32 small (pa-new pa 1 (pa-curve) 4000 4000 5000 5000)]
+      (pa-set pa small (pf-flags) (pg-stroked))
+      (pa-set pa small (pf-stroke) 2047903)
+      (pa-set pa small (pf-width) 100)
+      (pa-set pa small (pf-pfirst) -1)
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 0 "a ring of 5 pt radius is no seal"))))
+
+(defn ^I32 st-quad [^:mut ^Cells pa ^:mut ^Cells pts ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 stroke ^I32 width]
+  (let [^I32 first (quot (cells-len pts) 3)
+        ^I32 r (pa-new pa 1 (pa-rect) x0 y0 x1 y1)]
+    (pt-add pts x0 y0 (po-move))
+    (pt-add pts x1 y0 (po-line))
+    (pt-add pts x1 y1 (po-line))
+    (pt-add pts x0 y1 (po-line))
+    (pt-add pts x0 y0 (po-close))
+    (pa-set pa r (pf-flags) (pg-stroked))
+    (pa-set pa r (pf-stroke) stroke)
+    (pa-set pa r (pf-width) width)
+    (pa-set pa r (pf-pfirst) first)
+    (pa-set pa r (pf-pcount) 5)
+    (return r)))
+
+(deftest test-a-stamp-is-a-chromatic-frame-holding-words-of-its-ink
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells sm (new-cells)]
+    (st-quad pa pts 5000 5000 15000 9000 12591135 300)
+    (let [^I32 inside (st-word fw gl et 8000 7000 -800 12591135 80)
+          ^I32 body (st-word fw gl et 12000 7000 0 1118481 66)
+          ^I32 gi (st-tgroup cg refs inside)
+          ^I32 gb (st-tgroup cg refs body)]
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "a red frame of 3 pt with a red word in it is a stamp")
+      (assert-eq (sl-get sm 0 5) (pls-stamp) "a stamp")
+      (assert-eq (cg-get cg gi (cgf-flags)) (plg-in-seal) "the red word is its")
+      (assert-eq (cg-get cg gb (cgf-flags)) 0 "the black word in the frame is body text")
+      (assert-eq (sl-get sm 0 1) 5000 "its box is the frame's"))
+    (comment "the same frame with a 1 pt border, or a black one, or no word of its ink, is no stamp")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (st-quad pa pts 5000 5000 15000 9000 12591135 100)
+    (assert-eq (st-find pa pts gl fw et cg refs ow sm) 0 "a thin frame is no stamp")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (st-quad pa pts 5000 5000 15000 9000 1118481 300)
+    (assert-eq (st-find pa pts gl fw et cg refs ow sm) 0 "a black frame is a table's or a box's")))
+
+;; ------------------------------------------------------------- signatures
+
+(defn ^I32 st-stroke [^:mut ^Cells pa ^:mut ^Cells pts ^I32 x0 ^I32 y0 ^I32 segs]
+  (comment "An open stroked curve of `segs` Bezier segments from (x0, y0), 800 wide each and 1500 high; answers its row.")
+  (let [^I32 first (quot (cells-len pts) 3)
+        ^:mut ^I32 k 0
+        ^I32 r (pa-new pa 1 (pa-curve) x0 y0 (+ x0 (* segs 800)) (+ y0 1500))]
+    (pt-add pts x0 y0 (po-move))
+    (while (< k segs)
+      (do (pt-add pts (+ x0 (* k 800)) (+ y0 1500) (po-curve))
+          (pt-add pts (+ x0 (* k 800) 400) y0 (po-curve))
+          (pt-add pts (+ x0 (* (+ k 1) 800)) (+ y0 700) (po-curve))
+          (set k (+ k 1))))
+    (pa-set pa r (pf-flags) (pg-stroked))
+    (pa-set pa r (pf-stroke) 2047903)
+    (pa-set pa r (pf-width) 140)
+    (pa-set pa r (pf-pfirst) first)
+    (pa-set pa r (pf-pcount) (+ 1 (* segs 3)))
+    (return r)))
+
+(defn ^I32 st-text [^:mut ^Cells fw ^:mut ^Cells gl ^:mut ^Cells et ^I32 x ^I32 y ^I32 a ^I32 b ^I32 c]
+  (comment "A word of up to three letters, 1200 high, at (x, y); answers its row.")
+  (let [^I32 ts (cells-len et)
+        ^:mut ^I32 n 2
+        ^I32 g (gl-new gl 1 x y (+ x 2400) (+ y 1200) a ts 1 0)
+        ^I32 w (wd-new fw 1 x y (+ x 2400) (+ y 1200) x (+ y 1000) (+ x 2400) (+ y 1000) 0 0 ts 2 0 -1 -1)]
+    (cells-push et a)
+    (cells-push et b)
+    (if (> c 0)
+      (do (cells-push et c)
+          (set n 3)))
+    (wd-set fw w 12 n)
+    (wd-set fw w (wf-gfirst) g)
+    (wd-set fw w (wf-gcount) 1)
+    (gl-set gl g (gf-fill) 1118481)
+    (return w)))
+
+(deftest test-a-signature-is-pen-strokes-near-a-cue
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells sm (new-cells)]
+    (st-stroke pa pts 10000 20000 4)
+    (st-stroke pa pts 10500 20400 1)
+    (comment "the cue `By:` just to the left, and another word elsewhere")
+    (let [^I32 cue (st-text fw gl et 7200 20300 66 121 58)
+          ^I32 other (st-text fw gl et 7200 40000 84 111 116)]
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "two strokes of five segments together and a cue beside them: a signature")
+      (assert-eq (sl-get sm 0 5) (pls-signature) "a signature")
+      (assert-eq (sl-get sm 0 1) 10000 "the box is the union of the strokes")
+      (assert-eq (sl-get sm 0 3) 13200 "to the right edge of the longer")
+      (assert-eq (sl-get sm 0 15) 2047903 "in blue")
+      (assert-eq (sl-get sm 0 14) 0 "a signature has no text"))
+    (comment "no cue: no signature")
+    (cells-drop fw 0)
+    (cells-drop et 0)
+    (cells-drop gl 0)
+    (st-text fw gl et 7200 20300 84 111 116)
+    (assert-eq (st-find pa pts gl fw et cg refs ow sm) 0 "without a cue word it is a curve in a figure")
+    (comment "a cue four line heights away is too far")
+    (cells-drop fw 0)
+    (cells-drop et 0)
+    (cells-drop gl 0)
+    (st-text fw gl et 7200 30000 66 121 58)
+    (assert-eq (st-find pa pts gl fw et cg refs ow sm) 0 "a cue far above is none")))
+
+;; ------------------------------------------------------------- OCR
+
+(defn ^I32 st-oword [^:mut ^Cells ow ^:mut ^Cells et ^I32 x ^I32 y ^I32 a ^I32 b]
+  (let [^I32 ts (cells-len et)
+        ^I32 w (ow-new ow 1 (- x 400) (- y 300) (+ x 400) (+ y 300) (- x 400) (+ y 300) (+ x 400) (+ y 300) 0 0 ts 2 0 800 -1)]
+    (cells-push et a)
+    (cells-push et b)
+    (return w)))
+
+(defn ^I32 st-ogroup [^:mut ^Cells cg ^:mut ^Cells refs ^I32 oword]
+  (let [^I32 g (cg-new cg 1 0 0 100 100 0)
+        ^I32 f (rf-add refs (ea-owords) oword)]
+    (cg-set cg g (cgf-ofirst) f)
+    (cg-set cg g (cgf-ocount) 1)
+    (return g)))
+
+(deftest test-an-ocr-only-group-inside-a-ring-is-the-rings
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells sm (new-cells)]
+    (st-circle pa pts 1 10000 20000 2047903 300 0)
+    (let [^I32 inside (st-oword ow et 10000 20000 79 75)
+          ^I32 outside (st-oword ow et 30000 20000 88 89)
+          ^I32 gi (st-ogroup cg refs inside)
+          ^I32 gout (st-ogroup cg refs outside)]
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "a blue ring with OCR's reading in it, and no text-layer word: a seal")
+      (assert-eq (cg-get cg gi (cgf-flags)) (plg-in-seal) "the reading inside is its")
+      (assert-eq (cg-get cg gout (cgf-flags)) 0 "the reading outside is not")
+      (assert-eq (sl-get sm 0 14) 2 "with no text-layer word the OCR word is the text")
+      (assert-eq (sl-get sm 0 11) 1 "its words are in the `refs` run")
+      (assert-eq (sl-get sm 0 10) 2 "after the two group references"))))
+
+;; ------------------------------------------------------------- the nodes
+
+(defn ^I32 st-block [^:mut ^Cells nodes ^:mut ^Cells regions ^I32 parent ^I32 page ^I32 y0 ^I32 y1]
+  (let [^I32 n (node-new nodes (nk-paragraph) parent)]
+    (node-add-region nodes regions n page 0 y0 60000 y1)
+    (return n)))
+
+(defn ^I32 st-seal-row [^:mut ^Cells sm ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 kind ^I32 ink]
+  (let [^I32 o (sl-new sm page x0 y0 x1 y1 kind)]
+    (cells-set sm (+ (* o 16) 15) ink)
+    (return o)))
+
+(deftest test-a-seal-node-is-written-after-the-block-it-overlaps
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells chk (new-cells)
+        ^Cells et (new-cells)
+        ^Cells sm (new-cells)
+        ^Cells nn (new-cells)
+        ^Cells na (new-cells)
+        ^Cells nr (new-cells)
+        ^Cells nm (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 sec (node-new nodes (nk-section) 0)
+          ^I32 a (st-block nodes regions sec 1 10000 20000)
+          ^I32 b (st-block nodes regions sec 1 30000 40000)
+          ^I32 c (st-block nodes regions sec 1 50000 60000)]
+      (comment "S1 over the end of A and the start of B (as much of each: the later); S2 in the gap above C; S3 on page 9, after everything")
+      (st-seal-row sm 1 20000 15000 50000 35000 (pls-seal) 2047903)
+      (st-seal-row sm 1 20000 42000 50000 48000 (pls-stamp) 12591135)
+      (st-seal-row sm 9 0 0 100 100 (pls-signature) -1)
+      (assert-eq (sm-write sm et nodes attrs regions text nn na nr nm) 3 "three seals were written")
+      (assert-eq (node-count nn) 8 "three blocks, the section and the document are copied, and the three seals join them")
+      (assert-eq (node-kind nn 0) (nk-document) "the document")
+      (assert-eq (node-kind nn 1) (nk-section) "its section")
+      (assert-eq (node-kind nn 2) (nk-paragraph) "block A")
+      (assert-eq (node-kind nn 3) (nk-paragraph) "block B")
+      (assert-eq (node-kind nn 4) (nk-seal) "the first seal is after B, the last block it overlaps")
+      (assert-eq (node-sub nn 4) (sl-seal) "a seal")
+      (assert-eq (node-kind nn 5) (nk-seal) "the second is before C: it overlaps none and C starts below its top")
+      (assert-eq (node-sub nn 5) (sl-stamp) "a stamp")
+      (assert-eq (node-kind nn 6) (nk-paragraph) "then block C")
+      (assert-eq (node-kind nn 7) (nk-seal) "the third, on a later page, is the last of the section")
+      (assert-eq (node-parent nn 7) 1 "a child of the section")
+      (assert-eq (model-check nn na nr text pages ledger layout chk) 0 "and the Model still checks"))))

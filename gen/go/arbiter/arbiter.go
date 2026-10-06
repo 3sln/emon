@@ -325,6 +325,12 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 	}
 	port.CellsSet(gv, fuserules.AgImage(), arImageShare(images, epages, player.CgGet(cg, g, player.CgfPage()), player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1())))
 	port.CellsSet(gv, fuserules.AgFlags(), player.CgGet(cg, g, player.CgfFlags()))
+	// P7.7: the group lies in a seal, a stamp or a signature (`emon.sealmark` flagged it before arbitration)
+	if (player.CgGet(cg, g, player.CgfFlags()) & player.PlgInSeal()) != 0 {
+		port.CellsSet(gv, fuserules.AgSeal(), 1)
+	} else {
+		port.CellsSet(gv, fuserules.AgSeal(), 0)
+	}
 	// the engine reads the group's text-layer words only when none of them is in a script it lacks
 	if (latin > 0) && (foreign == 0) {
 		port.CellsSet(gv, fuserules.AgLatin(), 1)
@@ -453,9 +459,9 @@ func arDecide(g int32, cg *port.Cells, refs *port.Cells, ofw *port.Cells, etext 
 		}
 		k += 1
 	}
-	// held in a figure: the group says so
+	// held in a figure: the group says so (a seal's group is held by its own row, 128, and says so in its flag already)
 	gfl = player.CgGet(cg, g, player.CgfFlags())
-	if (win == fuserules.FwNone()) && (fuserules.FrReason(r) == 0) {
+	if (win == fuserules.FwNone()) && ((fuserules.FrReason(r) == 0) && ((flags & 128) == 0)) {
 		player.CgSet(cg, g, player.CgfFlags(), gfl|player.PlgInFigure())
 	}
 	// dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
@@ -770,7 +776,7 @@ func arPageAgreement(cg *port.Cells, g0 int32, g1 int32, refs *port.Cells, ofw *
 	var words int32 = 0
 	var foreign int32 = 0
 	for g < g1 {
-		if (player.CgGet(cg, g, player.CgfTcount()) > 0) && (player.CgGet(cg, g, player.CgfOcount()) > 0) {
+		if (player.CgGet(cg, g, player.CgfTcount()) > 0) && ((player.CgGet(cg, g, player.CgfOcount()) > 0) && ((player.CgGet(cg, g, player.CgfFlags()) & player.PlgInSeal()) == 0)) {
 			both += 1
 			if player.CgGet(cg, g, player.CgfSimfold()) >= health.HhAgreeSim() {
 				agree += 1

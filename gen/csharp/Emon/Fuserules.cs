@@ -105,8 +105,12 @@ public static class Fuserules {
         // defence 1: the least alpha (per mille) of an image placement covering at least `wm-cover` of the page that the group lies in; -1 when there is none
         return 24;
     }
-    public static int AgCount() {
+    public static int AgSeal() {
+        // defence 5 (P7.7): 1 when the group lies in a seal, stamp or signature candidate (`emon.sealmark`'s `sm-find` flagged it `plg-in-seal`: every visible text-layer word of the group is the candidate's, or it is an OCR-only group inside one), else 0
         return 25;
+    }
+    public static int AgCount() {
+        return 26;
     }
     public static int FcGe() {
         return 0;
@@ -308,7 +312,9 @@ public static class Fuserules {
         231, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 18, 0, 14, 19, 0, 14, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
         232, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 20, 0, 15, 9, 0, 12, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
         251, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 22, 1, 17, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
-        252, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 7, 1, 18, 21, 1, 19, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
+        252, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 7, 1, 18, 21, 1, 19, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        401, 400, 0, 0, 128, 900, 25, 2, 1, 0, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        402, 400, 0, 0, 128, 900, 25, 2, 1, 0, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
     };
     public static int FrW() {
         // cells of a row
@@ -403,7 +409,7 @@ public static class Fuserules {
     public static int FrDecide(emon.Port.Cells gv) {
         // The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
         // rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-        int n = 27;
+        int n = 29;
         int b = 0;
         int blk = 0;
         int r = 0;

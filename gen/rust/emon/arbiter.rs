@@ -310,6 +310,12 @@ pub(crate) fn ar_fill(g: i32, pageagree: i32, cg: &mut crate::port::Cells, refs:
     }
     crate::port::cells_set(gv, ag_image(), ar_image_share(images, epages, cg_get(cg, g, cgf_page()), cg_get(cg, g, cgf_x0()), cg_get(cg, g, cgf_y0()), cg_get(cg, g, cgf_x1()), cg_get(cg, g, cgf_y1())));
     crate::port::cells_set(gv, ag_flags(), cg_get(cg, g, cgf_flags()));
+    // P7.7: the group lies in a seal, a stamp or a signature (`emon.sealmark` flagged it before arbitration)
+    if (cg_get(cg, g, cgf_flags()) & plg_in_seal()) != 0 {
+        crate::port::cells_set(gv, ag_seal(), 1);
+    } else {
+        crate::port::cells_set(gv, ag_seal(), 0);
+    }
     // the engine reads the group's text-layer words only when none of them is in a script it lacks
     if (latin > 0) && (foreign == 0) {
         crate::port::cells_set(gv, ag_latin(), 1);
@@ -436,9 +442,9 @@ pub(crate) fn ar_decide(g: i32, mut cg: &mut crate::port::Cells, refs: &mut crat
         }
         k += 1;
     }
-    // held in a figure: the group says so
+    // held in a figure: the group says so (a seal's group is held by its own row, 128, and says so in its flag already)
     gfl = cg_get(cg, g, cgf_flags());
-    if (win == fw_none()) && (fr_reason(r) == 0) {
+    if (win == fw_none()) && ((fr_reason(r) == 0) && ((flags & 128) == 0)) {
         cg_set(cg, g, cgf_flags(), gfl | plg_in_figure());
     }
     // dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
@@ -746,7 +752,7 @@ pub(crate) fn ar_page_agreement(cg: &mut crate::port::Cells, g0: i32, g1: i32, r
     let mut words: i32 = 0;
     let mut foreign: i32 = 0;
     while g < g1 {
-        if (cg_get(cg, g, cgf_tcount()) > 0) && (cg_get(cg, g, cgf_ocount()) > 0) {
+        if (cg_get(cg, g, cgf_tcount()) > 0) && ((cg_get(cg, g, cgf_ocount()) > 0) && ((cg_get(cg, g, cgf_flags()) & plg_in_seal()) == 0)) {
             both += 1;
             if cg_get(cg, g, cgf_simfold()) >= hh_agree_sim() {
                 agree += 1;

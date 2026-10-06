@@ -44,7 +44,7 @@ pub(crate) fn rs_name_len(s: i32) -> i32 {
     }
     return 11;
 }
-pub(crate) fn rs_node(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, n: i32, np: i32) -> i32 {
+pub fn rs_node(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, n: i32, np: i32) -> i32 {
     // Copy node n of the old arenas as the last child of np (-1: a new root): its kind and small fields, text run,
     // attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes
     // it in `nm` (old to new).
@@ -619,7 +619,7 @@ pub(crate) fn rs_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cel
     rs_close_all(nodes, regions, stk, base);
     return 0;
 }
-pub(crate) fn rs_remap(mut attrs: &mut crate::port::Cells, nm: &mut crate::port::Cells) -> i32 {
+pub fn rs_remap(mut attrs: &mut crate::port::Cells, nm: &mut crate::port::Cells) -> i32 {
     // Node-valued attributes point at old nodes: point them at the new ones.
     let mut a: i32 = 0;
     let n: i32 = crate::port::cells_len(attrs) / 5;

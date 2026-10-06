@@ -305,6 +305,12 @@ public static class Arbiter {
         }
         emon.Port.CellsSet(gv, Fuserules.AgImage(), ArImageShare(images, epages, Player.CgGet(cg, g, Player.CgfPage()), Player.CgGet(cg, g, Player.CgfX0()), Player.CgGet(cg, g, Player.CgfY0()), Player.CgGet(cg, g, Player.CgfX1()), Player.CgGet(cg, g, Player.CgfY1())));
         emon.Port.CellsSet(gv, Fuserules.AgFlags(), Player.CgGet(cg, g, Player.CgfFlags()));
+        // P7.7: the group lies in a seal, a stamp or a signature (`emon.sealmark` flagged it before arbitration)
+        if ((Player.CgGet(cg, g, Player.CgfFlags()) & Player.PlgInSeal()) != 0) {
+            emon.Port.CellsSet(gv, Fuserules.AgSeal(), 1);
+        } else {
+            emon.Port.CellsSet(gv, Fuserules.AgSeal(), 0);
+        }
         // the engine reads the group's text-layer words only when none of them is in a script it lacks
         if ((latin > 0) && (foreign == 0)) {
             emon.Port.CellsSet(gv, Fuserules.AgLatin(), 1);
@@ -431,9 +437,9 @@ public static class Arbiter {
             }
             k += 1;
         }
-        // held in a figure: the group says so
+        // held in a figure: the group says so (a seal's group is held by its own row, 128, and says so in its flag already)
         gfl = Player.CgGet(cg, g, Player.CgfFlags());
-        if ((win == Fuserules.FwNone()) && (Fuserules.FrReason(r) == 0)) {
+        if ((win == Fuserules.FwNone()) && ((Fuserules.FrReason(r) == 0) && ((flags & 128) == 0))) {
             Player.CgSet(cg, g, Player.CgfFlags(), gfl | Player.PlgInFigure());
         }
         // dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
@@ -741,7 +747,7 @@ public static class Arbiter {
         int words = 0;
         int foreign = 0;
         while (g < g1) {
-            if ((Player.CgGet(cg, g, Player.CgfTcount()) > 0) && (Player.CgGet(cg, g, Player.CgfOcount()) > 0)) {
+            if ((Player.CgGet(cg, g, Player.CgfTcount()) > 0) && ((Player.CgGet(cg, g, Player.CgfOcount()) > 0) && ((Player.CgGet(cg, g, Player.CgfFlags()) & Player.PlgInSeal()) == 0))) {
                 both += 1;
                 if (Player.CgGet(cg, g, Player.CgfSimfold()) >= Health.HhAgreeSim()) {
                     agree += 1;

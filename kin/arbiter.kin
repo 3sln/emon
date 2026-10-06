@@ -47,12 +47,12 @@
                                    wf-gfirst wf-gcount wf-font wf-size wf-style wf-gap wf-wbreak wf-src wb-space
                                    xt-font-health xt-bad-cp xo-implausible ea-words ea-owords]]
             [emon.player :refer [cg-count cg-get cg-set cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount
-                                 cgf-hfirst cgf-hcount cgf-sim cgf-simfold cgf-flags plg-in-figure
+                                 cgf-hfirst cgf-hcount cgf-sim cgf-simfold cgf-flags plg-in-figure plg-in-seal
                                  fw-count fl-count fw-copy-word fl-copy-line fv-new fx-new fa-new fa-count fa-get fa-set]]
             [emon.health :refer [hh-word-score hh-agree-sim]]
             [emon.scan :refer [sc-prep sc-emit-lines]]
             [emon.artifact :refer [ax-word-class ax-oword-class ax-recur wm-alpha wm-cover]]
-            [emon.fuserules :refer [ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha fr-defence
+            [emon.fuserules :refer [ag-seal ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha fr-defence
                                     ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin
                                     ag-olen ag-oconf ag-near ag-pageagree ag-count fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-npred fr-pcol fw-none fw-text fw-ocr]]
             [kin.lang :refer [defn return let set while if do comment
@@ -282,6 +282,10 @@
     (cells-set gv (ag-image) (ar-image-share images epages (cg-get cg g (cgf-page)) (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0))
                                              (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1))))
     (cells-set gv (ag-flags) (cg-get cg g (cgf-flags)))
+    (comment "P7.7: the group lies in a seal, a stamp or a signature (`emon.sealmark` flagged it before arbitration)")
+    (if (!= (bit-and (cg-get cg g (cgf-flags)) (plg-in-seal)) 0)
+      (cells-set gv (ag-seal) 1)
+      (cells-set gv (ag-seal) 0))
     (comment "the engine reads the group's text-layer words only when none of them is in a script it lacks")
     (if (and (> latin 0) (== foreign 0))
       (cells-set gv (ag-latin) 1)
@@ -378,9 +382,9 @@
       (do (set col (fr-pcol r k))
           (if (>= col 0) (fx-new fx g (fr-number r) col (cells-at gv col)))
           (set k (+ k 1))))
-    (comment "held in a figure: the group says so")
+    (comment "held in a figure: the group says so (a seal's group is held by its own row, 128, and says so in its flag already)")
     (set gfl (cg-get cg g (cgf-flags)))
-    (if (and (== win (fw-none)) (== (fr-reason r) 0))
+    (if (and (== win (fw-none)) (and (== (fr-reason r) 0) (== (bit-and flags 128) 0)))
       (cg-set cg g (cgf-flags) (bit-or gfl (plg-in-figure))))
     (comment "dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list")
     (if (and (== win (fw-none)) (and (> (fr-reason r) 0) (== (fr-defence r) 0) (> (cg-get cg g (cgf-ocount)) 0)))
@@ -647,7 +651,7 @@
         ^:mut ^I32 words 0
         ^:mut ^I32 foreign 0]
     (while (< g g1)
-      (do (if (and (> (cg-get cg g (cgf-tcount)) 0) (> (cg-get cg g (cgf-ocount)) 0))
+      (do (if (and (> (cg-get cg g (cgf-tcount)) 0) (and (> (cg-get cg g (cgf-ocount)) 0) (== (bit-and (cg-get cg g (cgf-flags)) (plg-in-seal)) 0)))
             (do (set both (+ both 1))
                 (if (>= (cg-get cg g (cgf-simfold)) (hh-agree-sim)) (set agree (+ agree 1)))))
           (set k 0)

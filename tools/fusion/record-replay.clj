@@ -14,6 +14,7 @@
 ;;
 ;; Two more modes (P7.5, D300):
 ;;     --artifacts   records the watermark fixtures of test/artifacts/pdf (tools/synth/artifact_pdf.clj) into test/artifacts/replay/ instead
+;;     --seals       records the seal, stamp and signature fixtures of test/seals/pdf (tools/synth/seal_pdf.clj, P7.7) into test/seals/replay/
 ;;     --digests     reads NO live engine: it replays the committed transcripts with the plain driver and rewrites DIGESTS.edn (what a change to
 ;;                   the arbitration's own rules does to the bundles while the answers of pdfium and Tesseract are the same ones)
 (require '[babashka.fs :as fs]
@@ -24,11 +25,13 @@
 (def flags (set (filter #(str/starts-with? % "--") *command-line-args*)))
 (def args (vec (remove #(str/starts-with? % "--") *command-line-args*)))
 (def artifacts? (contains? flags "--artifacts"))
+(def seals? (contains? flags "--seals"))
+(def fixtures-dir (cond artifacts? "test/artifacts" seals? "test/seals"))
 (def digests-only? (contains? flags "--digests"))
-(def pdf-dir (if artifacts? "test/artifacts/pdf/" "test/corpus/synth/pdf/"))
-(def replay-dir (if artifacts? "test/artifacts/replay/" "test/fusion/replay/"))
+(def pdf-dir (if fixtures-dir (str fixtures-dir "/pdf/") "test/corpus/synth/pdf/"))
+(def replay-dir (if fixtures-dir (str fixtures-dir "/replay/") "test/fusion/replay/"))
 (def ids (cond (seq args) args
-               artifacts? (vec (sort (map #(str/replace (fs/file-name %) #"\.pdf$" "") (fs/glob "test/artifacts/pdf" "*.pdf"))))
+               fixtures-dir (vec (sort (map #(str/replace (fs/file-name %) #"\.pdf$" "") (fs/glob (str fixtures-dir "/pdf") "*.pdf"))))
                digests-only? (vec (sort (map fs/file-name (filter #(fs/exists? (str % "/transcript.edn")) (fs/list-dir replay-dir)))))
                :else (vec (remove str/blank? (str/split-lines (slurp "test/corpus/synth/FUSION"))))))
 

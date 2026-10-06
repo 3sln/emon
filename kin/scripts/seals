@@ -1,0 +1,139 @@
+#!/usr/bin/env bb
+;; SEALS, STAMPS AND SIGNATURES, replayed from transcripts (P7.7, SPEC 9.5 defence 5, 10.7, D016, D205, D400-D405).   kin/scripts/seals
+;;
+;; Born-digital pages with a seal, a stamp or a signature drawn as vector paths, their words in the text layer, read by a real OCR engine; recorded on
+;; Rust (pdfium and Tesseract) and only REPLAYED here, with the hidden setting `ocr-born-digital`, through the whole Engine on Rust and Go.
+;;
+;;   test/corpus/synth   stamp-seal, seal-over-text, sig-over-name (Chrome's prints of the corpus: seals as SVG, a rotated CSS stamp, a pen signature)
+;;                       test/fusion/replay/ID is their transcript; the gold is test/corpus/synth/gold/ID.gold.json
+;;   test/seals          seal-black-ring, stamp-translucent, sig-by-line, seal-negatives (tools/synth/seal_pdf.clj: a black seal, a translucent stamp, a signature
+;;                       with a `By:` cue, and a page with four things that are NOT seals); test/seals/replay/ID, test/seals/gold.edn
+;;
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the recorded one (SHA-256) (test/seals only: the corpus
+;;      documents are held to theirs by `bb fusion`);
+;;   2. THE NODES: the seal nodes of the body are the gold's: block-seal precision and recall of at least 0.9 over the corpus documents, subkind and
+;;      colour right on every node matched (`color` accuracy at least 0.9), and exactly the nodes of test/seals/gold.edn on the fixtures;
+;;   3. NOTHING LEAKS: no word of a seal or a stamp is in the body outside its node (`seal-leak` 0), and every word of the page's own text is (no body word lost);
+;;   4. NOTHING ELSE IS ONE: the 19 other documents of the fusion set have no seal node, and `seal-negatives` has none;
+;;   5. THE DUMP: the candidates are in the evidence's `sl` arena, one row a node, kinds seal, stamp or signature.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process]]
+         '[cheshire.core :as json]
+         '[clojure.edn :as edn]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def abs #(str (fs/absolutize %)))
+(def corpus-seals ["stamp-seal" "seal-over-text" "sig-over-name"])
+(def fusion-ids (vec (remove str/blank? (str/split-lines (slurp "test/corpus/synth/FUSION")))))
+(def fixture-gold (edn/read-string (slurp "test/seals/gold.edn")))
+(def fixture-digests (let [f "test/seals/replay/DIGESTS.edn"] (if (fs/exists? f) (read-string (slurp f)) {})))
+
+(defn sha256 [s]
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest md (.getBytes ^String s "UTF-8"))))))
+
+(defn build-driver [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r)) (str/trim (:out r)) (do (bad "the " what " Engine driver did not build:\n" (:err r)) nil))))
+
+(def rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" "Rust")))
+(def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
+(when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
+(when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+
+(defn drive [drv & a]
+  (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+
+(defn walk [n] (when (map? n) (cons n (mapcat walk (get n "children")))))
+(defn words [s] (re-seq #"[\p{L}\p{N}]+" (str/lower-case (str s))))
+(defn seals [model] (filter #(= "seal" (get % "kind")) (walk (get model "body"))))
+(defn body-words
+  "The words of every text of the body outside the seal nodes."
+  [model]
+  (mapcat (fn [n] (when (and (not= "seal" (get n "kind")) (string? (get n "text")) (empty? (get n "children"))) (words (get n "text"))))
+          (walk (get model "body"))))
+(defn replay [drv dir id pdf-dir out]
+  (drive drv "--ocr-born-digital" (str "--out=" out) (str "--replay=" (abs (str dir "/" id))) (abs (str pdf-dir "/" id ".pdf"))))
+(defn model-of [drv dir id pdf-dir] (json/parse-string (:out (replay drv dir id pdf-dir "json"))))
+(defn dump-of [drv dir id pdf-dir]
+  (let [e (replay drv dir id pdf-dir "evidence")
+        l (first (filter #(str/starts-with? % "evidence: ") (str/split-lines (:out e))))]
+    (json/parse-string (if l (subs l (count "evidence: ")) (:out e)))))
+(defn token-overlap
+  "1.0 when the two texts are the same but for their spaces (the text layer splits a word the PDF writes whole: `M AR`), else the share of their words in common."
+  [a b]
+  (let [wa (set (words a)) wb (set (words b))]
+    (cond (and (empty? wa) (empty? wb)) 1.0
+          (= (apply str (words a)) (apply str (words b))) 1.0
+          :else (/ (double (count (clojure.set/intersection wa wb))) (max 1 (count (clojure.set/union wa wb)))))))
+
+(when (and rdrv gdrv)
+  ;; 1. the fixtures: identity, nodes, leaks, losses, the dump ---------------------------------------------------------------------------------
+  (doseq [id (sort (keys fixture-gold))]
+    (let [g (get fixture-gold id) pdf (abs (str "test/seals/pdf/" id ".pdf")) rep (abs (str "test/seals/replay/" id))
+          rr (drive rdrv "--ocr-born-digital" "--out=bundle" (str "--replay=" rep) pdf)
+          rg (drive gdrv "--ocr-born-digital" "--out=bundle" (str "--replay=" rep) pdf)
+          want (get fixture-digests id)]
+      (check (and (zero? (:exit rr)) (= (:out rr) (:out rg)) (= (:err rr) (:err rg)))
+             id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
+      (let [m (model-of rdrv "test/seals/replay" id "test/seals/pdf")
+            ns (seals m)
+            got (mapv (fn [n] {:subkind (get n "subkind") :color (get n "color") :text (str/join " " (words (get n "text")))}) ns)
+            exp (mapv (fn [n] {:subkind (:subkind n) :color (:color n) :text (str/join " " (words (:text n)))}) (:nodes g))
+            bw (frequencies (body-words m))
+            gw (frequencies (words (str/join " " (:body g))))
+            missing (reduce + (for [[w n] gw] (max 0 (- n (get bw w 0)))))
+            leaked (reduce + (for [w (set (words (str/join " " (:leak g))))] (max 0 (- (get bw w 0) (get gw w 0)))))
+            d (dump-of rdrv "test/seals/replay" id "test/seals/pdf")
+            sl (get d "sl")]
+        (check (and (= (count got) (count exp))
+                    (every? true? (map (fn [a b] (and (= (:subkind a) (:subkind b)) (= (:color a) (:color b)) (>= (token-overlap (:text a) (:text b)) 0.9))) got exp)))
+               id ": the seal nodes are the gold's: " (pr-str (mapv #(select-keys % [:subkind :color]) got)) " expected " (pr-str (mapv #(select-keys % [:subkind :color]) exp))
+               (when (seq got) (str ", texts " (pr-str (mapv :text got)))))
+        (check (zero? leaked) id ": no word of the seal or the stamp is in the body outside its node (seal-leak 0: " leaked " words)")
+        (check (zero? missing) id ": every word of the page's own text is in the body (" missing " missing)")
+        (check (= (count sl) (count ns)) id ": the evidence's `sl` arena has a row a node (" (count sl) " rows, kinds " (pr-str (mapv #(get % "kind") sl)) ")"))))
+
+  ;; 2. the corpus documents: precision, recall, colour -------------------------------------------------------------------------------------------
+  (let [tp (atom 0) np (atom 0) ng (atom 0) col (atom 0)]
+    (doseq [id corpus-seals]
+      (let [g (json/parse-string (slurp (str "test/corpus/synth/gold/" id ".gold.json")))
+            gs (seals (get g "model"))
+            m (model-of rdrv "test/fusion/replay" id "test/corpus/synth/pdf")
+            ps (seals m)
+            ;; match in order by subkind and text overlap
+            pairs (loop [gs gs ps ps out []]
+                    (cond (or (empty? gs) (empty? ps)) out
+                          (and (= (get (first gs) "subkind") (get (first ps) "subkind"))
+                               (>= (token-overlap (get (first gs) "text" "") (get (first ps) "text" "")) 0.5))
+                          (recur (rest gs) (rest ps) (conj out [(first gs) (first ps)]))
+                          :else (recur (rest gs) ps out)))
+            body (frequencies (body-words m))
+            gold-body (frequencies (mapcat #(words (get % "text")) (remove #(= "seal" (get % "kind")) (walk (get-in g ["model" "body"])))))
+            sealwords (set (mapcat #(words (get % "text")) gs))
+            leaked (reduce + (for [w sealwords] (max 0 (- (get body w 0) (get gold-body w 0)))))]
+        (swap! tp + (count pairs)) (swap! np + (count ps)) (swap! ng + (count gs))
+        (swap! col + (count (filter (fn [[a b]] (= (get a "color") (get b "color"))) pairs)))
+        (check (= (count pairs) (count gs) (count ps))
+               id ": the " (count gs) " seal nodes of the gold are found (" (count pairs) " matched of " (count ps) " written): "
+               (pr-str (mapv #(str (get % "subkind") "/" (get % "color")) ps)))
+        (check (zero? leaked) id ": seal-leak 0: no seal word is in the body outside its node (" leaked " words)")))
+    (let [p (/ (double @tp) (max 1 @np)) r (/ (double @tp) (max 1 @ng)) c (/ (double @col) (max 1 @tp))]
+      (check (and (>= p 0.9) (>= r 0.9)) (format "block-seal precision %.3f and recall %.3f over %d gold nodes (at least 0.9; the no-engine run's 0)" p r @ng))
+      (check (>= c 0.9) (format "seal color accuracy %.3f over %d matched nodes (at least 0.9)" c @tp))))
+
+  ;; 3. nothing else is a seal -----------------------------------------------------------------------------------------------------------------
+  (let [others (remove (set corpus-seals) fusion-ids)
+        found (for [id others :let [m (model-of rdrv "test/fusion/replay" id "test/corpus/synth/pdf")] :when (seq (seals m))] id)]
+    (check (empty? found) (count others) " other documents of the fusion set have no seal node" (when (seq found) (str ": " (pr-str found))))))
+
+(when (pos? @fails) (System/exit 1))
+(when (and rdrv gdrv (zero? @fails))
+  (ok "seals: seals, stamps and signatures drawn in vectors are nodes of their own, their words are out of the body, nothing else is one; on Rust and Go"))

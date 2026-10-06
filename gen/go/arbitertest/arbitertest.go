@@ -118,8 +118,8 @@ func TestTheRowsSayWhatTheySet(emonT *testing.T) {
 	port.AssertEq(emonT, fuserules.FrOrder(4), 100, "then the core")
 	port.AssertEq(emonT, fuserules.FrOrder(5), -1, "and no more")
 	var i int32 = 0
-	for i < 27 {
-		port.AssertThat(emonT, (fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 200), "every row of P7.3 and P7.5 is in block 100 or 200")
+	for i < 29 {
+		port.AssertThat(emonT, ((fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 200)) || (fuserules.FrBlock(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400")
 		i += 1
 	}
 }
@@ -936,4 +936,63 @@ func TestRecurrenceNeedsMostOfThePages(emonT *testing.T) {
 	atRgroup(cg, refs, f5, 5, 1000, 3000)
 	atRgroup(cg, refs, f6, 6, 1000, 3000)
 	port.AssertEq(emonT, artifact.AxRecur(cg, refs, ow, et, ep, rc, pp), 0, "two pages of six: nothing")
+}
+
+func TestAGroupInASealIsTheSealsAndComesFirst(emonT *testing.T) {
+	var gv *port.Cells = port.NewCells()
+	// a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block
+	atGv(gv, 1, 1, 0, 1000, 1000, 0, -1, 900, 0, 1)
+	port.CellsSet(gv, fuserules.AgSeal(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 401, "a seal's text-layer group: 401")
+	port.AssertEq(emonT, fuserules.FrBlock(fuserules.FrDecide(gv)), 400, "of block 400")
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwNone(), "no source wins it: the body does not have it")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gv)), 0, "and it is no ledger row (its words are the seal node's text)")
+	port.AssertEq(emonT, fuserules.FrFlags(fuserules.FrDecide(gv)), 128, "the row says it is the seal's")
+	port.CellsSet(gv, fuserules.AgArt(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 401, "even a watermark mark does not take it from the seal")
+	// an OCR-only group inside one
+	atGv(gv, 0, 1, 0, -1, -1, 0, 800, 900, 0, 0)
+	port.CellsSet(gv, fuserules.AgSeal(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 402, "an OCR-only group in a seal: 402")
+	// a group that is in none is decided as before
+	port.CellsSet(gv, fuserules.AgSeal(), 0)
+	port.CellsSet(gv, fuserules.AgArt(), 0)
+	port.AssertEq(emonT, fuserules.FrBlock(fuserules.FrDecide(gv)), 100, "outside a seal: the core's")
+}
+
+func TestTheWordsOfASealLeaveTheFlowAndSaySo(emonT *testing.T) {
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var ep *port.Cells = port.NewCells()
+	var nfw *port.Cells = port.NewCells()
+	var nfl *port.Cells = port.NewCells()
+	var fv *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var afa *port.Cells = port.NewCells()
+	var w0 int32 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101)
+	var w1 int32 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111)
+	var w2 int32 = atTword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121)
+	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
+	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0)
+	var o2 int32 = atOword(ow, feats, et, 2000, 2900, 0, 120, 121, 0)
+	var o3 int32 = atOword(ow, feats, et, 5000, 5900, 0, 88, 89, 0)
+	atLine3(fl, 0, 3)
+	atGroup(cg, refs, w0, 1, o0, 1, 1000)
+	var g1 int32 = atGroup(cg, refs, w1, 1, o1, 1, 1000)
+	var g2 int32 = atGroup(cg, refs, w2, 1, o2, 1, 1000)
+	var g3 int32 = atOcrOnlyGroup(cg, refs, o3)
+	player.CgSet(cg, g1, player.CgfFlags(), player.PlgInSeal())
+	player.CgSet(cg, g3, player.CgfFlags(), 2+player.PlgInSeal())
+	port.AssertEq(emonT, atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 4, "four groups decided")
+	port.AssertEq(emonT, player.FwCount(nfw), 2, "the seal's word is not in the flow: the other two are")
+	port.AssertEq(emonT, player.FaCount(afa), 0, "and nothing is a ledger row: the words are the node's text, not ghosts")
+	port.AssertEq(emonT, player.CgGet(cg, g1, player.CgfFlags()), player.PlgInSeal(), "the seal's group is not also `in-figure`")
+	port.AssertEq(emonT, player.CgGet(cg, g3, player.CgfFlags()), 2+player.PlgInSeal(), "nor is its OCR-only one")
+	port.AssertEq(emonT, player.CgGet(cg, g2, player.CgfFlags()), 0, "and a group outside is as it was")
 }

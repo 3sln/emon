@@ -305,6 +305,12 @@ public final class Arbiter {
         }
         emon.Port.cellsSet(gv, Fuserules.agImage(), arImageShare(images, epages, Player.cgGet(cg, g, Player.cgfPage()), Player.cgGet(cg, g, Player.cgfX0()), Player.cgGet(cg, g, Player.cgfY0()), Player.cgGet(cg, g, Player.cgfX1()), Player.cgGet(cg, g, Player.cgfY1())));
         emon.Port.cellsSet(gv, Fuserules.agFlags(), Player.cgGet(cg, g, Player.cgfFlags()));
+        // P7.7: the group lies in a seal, a stamp or a signature (`emon.sealmark` flagged it before arbitration)
+        if ((Player.cgGet(cg, g, Player.cgfFlags()) & Player.plgInSeal()) != 0) {
+            emon.Port.cellsSet(gv, Fuserules.agSeal(), 1);
+        } else {
+            emon.Port.cellsSet(gv, Fuserules.agSeal(), 0);
+        }
         // the engine reads the group's text-layer words only when none of them is in a script it lacks
         if ((latin > 0) && (foreign == 0)) {
             emon.Port.cellsSet(gv, Fuserules.agLatin(), 1);
@@ -431,9 +437,9 @@ public final class Arbiter {
             }
             k += 1;
         }
-        // held in a figure: the group says so
+        // held in a figure: the group says so (a seal's group is held by its own row, 128, and says so in its flag already)
         gfl = Player.cgGet(cg, g, Player.cgfFlags());
-        if ((win == Fuserules.fwNone()) && (Fuserules.frReason(r) == 0)) {
+        if ((win == Fuserules.fwNone()) && ((Fuserules.frReason(r) == 0) && ((flags & 128) == 0))) {
             Player.cgSet(cg, g, Player.cgfFlags(), gfl | Player.plgInFigure());
         }
         // dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
@@ -741,7 +747,7 @@ public final class Arbiter {
         int words = 0;
         int foreign = 0;
         while (g < g1) {
-            if ((Player.cgGet(cg, g, Player.cgfTcount()) > 0) && (Player.cgGet(cg, g, Player.cgfOcount()) > 0)) {
+            if ((Player.cgGet(cg, g, Player.cgfTcount()) > 0) && ((Player.cgGet(cg, g, Player.cgfOcount()) > 0) && ((Player.cgGet(cg, g, Player.cgfFlags()) & Player.plgInSeal()) == 0))) {
                 both += 1;
                 if (Player.cgGet(cg, g, Player.cgfSimfold()) >= Health.hhAgreeSim()) {
                     agree += 1;

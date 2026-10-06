@@ -82,7 +82,7 @@
 
 ;; ---------------------------------------------------------------------------- copying one node
 
-(defn ^I32 rs-node [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+(defn ^:pub ^I32 rs-node [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
                     ^:mut ^Cells nm ^I32 n ^I32 np]
   (comment "Copy node n of the old arenas as the last child of np (-1: a new root): its kind and small fields, text run,")
   (comment "attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes")
@@ -529,7 +529,7 @@
 
 ;; --------------------------------------------------------------------------- after the copy
 
-(defn ^I32 rs-remap [^:mut ^Cells attrs ^Cells nm]
+(defn ^:pub ^I32 rs-remap [^:mut ^Cells attrs ^Cells nm]
   (comment "Node-valued attributes point at old nodes: point them at the new ones.")
   (let [^:mut ^I32 a 0
         ^I32 n (quot (cells-len attrs) 5)]

@@ -40,6 +40,7 @@ import (
 	"emon/lists"
 	"emon/notes"
 	"emon/restruct"
+	"emon/sealmark"
 	"emon/heading"
 	"emon/html"
 	"emon/model"
@@ -1156,7 +1157,11 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	for i := int32(0); i < max(np, 0); i++ {
 		port.CellsPush(mask, 0)
 	}
-	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, an: an,
+	ptsKept := port.NewCells()
+	if opts.OcrBornDigital {
+		ptsKept = pts
+	}
+	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, pts: ptsKept, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, an: an,
 		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, info: info}}
 }
 
@@ -1164,6 +1169,8 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 type pdfDoc struct {
 	ev                                   *evArenas
 	et, gl, mk, fnt, wd, ln, pa, pg      *port.Cells
+	// the paths' geometry (P7.7: seals are round and stamps are quadrilaterals), kept only when fusion is on
+	pts *port.Cells
 	txt, md, lb, ol, ss, an, plan, mask, loc *port.Cells
 	// the flow stage 3 reads (P7.0), the words set aside, and how many lines the text layer had before any page unit
 	fw, fl, fa *port.Cells
@@ -1215,15 +1222,18 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	}
 	fz := newCellsN(3)
 	fv, fx, afa := fz[0], fz[1], fz[2]
+	// seal, stamp and signature candidates (P7.7): the sl arena, found before arbitration, which keeps their words out of the body
+	sm := port.NewCells()
 	if fused {
 		fb := newCellsN(9)
 		nfw, nfl, gd, gv, w2g, o2g, pp, tw, tl := fb[0], fb[1], fb[2], fb[3], fb[4], fb[5], fb[6], fb[7], fb[8]
 		health.HlDoc(ev.feats, fw, d.hl)
+		sealmark.SmFind(pa, d.pts, gl, fw, et, ev.epages, d.cg, ev.refs, ev.owords, np, sm, port.NewCells(), port.NewCells())
 		arbiter.ArDoc(d.cg, ev.refs, fw, fl, et, ev.feats, ev.owords, ev.olines, ev.oruns, ev.osyms, ev.images, ev.epages,
 			gl, mk, d.an, qtxt, pdfstruct.TgTrust(ss), port.NewCells(), nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, d.xs[0])
 		fw, nfw = nfw, fw
 		fl, nfl = nfl, fl
-		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, port.NewCells(), port.NewCells(), et, ev.refs, gl); c != 0 {
+		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, port.NewCells(), sm, et, ev.refs, gl); c != 0 {
 			return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("pl-check %d", c)}}
 		}
 	}
@@ -1243,7 +1253,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 			var sb strings.Builder
 			player.PlEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, g, wd, ln, k, f, ev.paths, ev.images,
 				ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines,
-				d.cg, fw, fl, fv, fad, fx, d.hl, port.NewCells(), port.NewCells())
+				d.cg, fw, fl, fv, fad, fx, d.hl, port.NewCells(), sm)
 			s = sb.String()
 		} else {
 			s = evidenceDump(ev, et, g, wd, ln, k, f)
@@ -1302,6 +1312,13 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	if fused {
 		arbiter.ArWrite(afa, ev.owords, et, m.ledger, m.text, t[2], port.NewCells())
 		arbiter.ArTag(m.nodes, m.regions, fw, fv)
+		// the seals' nodes (P7.7): the body copied again with a seal node in reading order for every candidate
+		sw := newCellsN(4)
+		if sealmark.SmWrite(sm, et, m.nodes, m.attrs, m.regions, m.text, sw[0], sw[1], sw[2], sw[3]) > 0 {
+			m.nodes, sw[0] = sw[0], m.nodes
+			m.attrs, sw[1] = sw[1], m.attrs
+			m.regions, sw[2] = sw[2], m.regions
+		}
 	}
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)

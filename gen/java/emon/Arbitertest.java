@@ -106,8 +106,8 @@ public final class Arbitertest {
         emon.Testport.assertEq(Fuserules.frOrder(4), 100, "then the core");
         emon.Testport.assertEq(Fuserules.frOrder(5), -1, "and no more");
         int i = 0;
-        while (i < 27) {
-            emon.Testport.assertThat((Fuserules.frBlock(i) == 100) || (Fuserules.frBlock(i) == 200), "every row of P7.3 and P7.5 is in block 100 or 200");
+        while (i < 29) {
+            emon.Testport.assertThat(((Fuserules.frBlock(i) == 100) || (Fuserules.frBlock(i) == 200)) || (Fuserules.frBlock(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
             i += 1;
         }
     }
@@ -891,5 +891,62 @@ public final class Arbitertest {
         atRgroup(cg, refs, f5, 5, 1000, 3000);
         atRgroup(cg, refs, f6, 6, 1000, 3000);
         emon.Testport.assertEq(Artifact.axRecur(cg, refs, ow, et, ep, rc, pp), 0, "two pages of six: nothing");
+    }
+    public static void testAGroupInASealIsTheSealsAndComesFirst() {
+        emon.Port.Cells gv = emon.Port.newCells();
+        // a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block
+        atGv(gv, 1, 1, 0, 1000, 1000, 0, -1, 900, 0, 1);
+        emon.Port.cellsSet(gv, Fuserules.agSeal(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 401, "a seal's text-layer group: 401");
+        emon.Testport.assertEq(Fuserules.frBlock(Fuserules.frDecide(gv)), 400, "of block 400");
+        emon.Testport.assertEq(Fuserules.frWinner(Fuserules.frDecide(gv)), Fuserules.fwNone(), "no source wins it: the body does not have it");
+        emon.Testport.assertEq(Fuserules.frReason(Fuserules.frDecide(gv)), 0, "and it is no ledger row (its words are the seal node's text)");
+        emon.Testport.assertEq(Fuserules.frFlags(Fuserules.frDecide(gv)), 128, "the row says it is the seal's");
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 401, "even a watermark mark does not take it from the seal");
+        // an OCR-only group inside one
+        atGv(gv, 0, 1, 0, -1, -1, 0, 800, 900, 0, 0);
+        emon.Port.cellsSet(gv, Fuserules.agSeal(), 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 402, "an OCR-only group in a seal: 402");
+        // a group that is in none is decided as before
+        emon.Port.cellsSet(gv, Fuserules.agSeal(), 0);
+        emon.Port.cellsSet(gv, Fuserules.agArt(), 0);
+        emon.Testport.assertEq(Fuserules.frBlock(Fuserules.frDecide(gv)), 100, "outside a seal: the core's");
+    }
+    public static void testTheWordsOfASealLeaveTheFlowAndSaySo() {
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells ep = emon.Port.newCells();
+        emon.Port.Cells nfw = emon.Port.newCells();
+        emon.Port.Cells nfl = emon.Port.newCells();
+        emon.Port.Cells fv = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells afa = emon.Port.newCells();
+        int w0 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
+        int w1 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
+        int w2 = atTword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121);
+        int o0 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+        int o1 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
+        int o2 = atOword(ow, feats, et, 2000, 2900, 0, 120, 121, 0);
+        int o3 = atOword(ow, feats, et, 5000, 5900, 0, 88, 89, 0);
+        atLine3(fl, 0, 3);
+        atGroup(cg, refs, w0, 1, o0, 1, 1000);
+        int g1 = atGroup(cg, refs, w1, 1, o1, 1, 1000);
+        int g2 = atGroup(cg, refs, w2, 1, o2, 1, 1000);
+        int g3 = atOcrOnlyGroup(cg, refs, o3);
+        Player.cgSet(cg, g1, Player.cgfFlags(), Player.plgInSeal());
+        Player.cgSet(cg, g3, Player.cgfFlags(), 2 + Player.plgInSeal());
+        emon.Testport.assertEq(atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 4, "four groups decided");
+        emon.Testport.assertEq(Player.fwCount(nfw), 2, "the seal's word is not in the flow: the other two are");
+        emon.Testport.assertEq(Player.faCount(afa), 0, "and nothing is a ledger row: the words are the node's text, not ghosts");
+        emon.Testport.assertEq(Player.cgGet(cg, g1, Player.cgfFlags()), Player.plgInSeal(), "the seal's group is not also `in-figure`");
+        emon.Testport.assertEq(Player.cgGet(cg, g3, Player.cgfFlags()), 2 + Player.plgInSeal(), "nor is its OCR-only one");
+        emon.Testport.assertEq(Player.cgGet(cg, g2, Player.cgfFlags()), 0, "and a group outside is as it was");
     }
 }

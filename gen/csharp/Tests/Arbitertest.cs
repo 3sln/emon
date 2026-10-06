@@ -108,8 +108,8 @@ public static class Arbitertest {
         emon.Testport.AssertEq(Fuserules.FrOrder(4), 100, "then the core");
         emon.Testport.AssertEq(Fuserules.FrOrder(5), -1, "and no more");
         int i = 0;
-        while (i < 27) {
-            emon.Testport.AssertThat((Fuserules.FrBlock(i) == 100) || (Fuserules.FrBlock(i) == 200), "every row of P7.3 and P7.5 is in block 100 or 200");
+        while (i < 29) {
+            emon.Testport.AssertThat(((Fuserules.FrBlock(i) == 100) || (Fuserules.FrBlock(i) == 200)) || (Fuserules.FrBlock(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
             i += 1;
         }
     }
@@ -909,5 +909,64 @@ public static class Arbitertest {
         AtRgroup(cg, refs, f5, 5, 1000, 3000);
         AtRgroup(cg, refs, f6, 6, 1000, 3000);
         emon.Testport.AssertEq(Artifact.AxRecur(cg, refs, ow, et, ep, rc, pp), 0, "two pages of six: nothing");
+    }
+    [Xunit.Fact]
+    public static void TestAGroupInASealIsTheSealsAndComesFirst() {
+        emon.Port.Cells gv = emon.Port.NewCells();
+        // a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block
+        AtGv(gv, 1, 1, 0, 1000, 1000, 0, -1, 900, 0, 1);
+        emon.Port.CellsSet(gv, Fuserules.AgSeal(), 1);
+        emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gv)), 401, "a seal's text-layer group: 401");
+        emon.Testport.AssertEq(Fuserules.FrBlock(Fuserules.FrDecide(gv)), 400, "of block 400");
+        emon.Testport.AssertEq(Fuserules.FrWinner(Fuserules.FrDecide(gv)), Fuserules.FwNone(), "no source wins it: the body does not have it");
+        emon.Testport.AssertEq(Fuserules.FrReason(Fuserules.FrDecide(gv)), 0, "and it is no ledger row (its words are the seal node's text)");
+        emon.Testport.AssertEq(Fuserules.FrFlags(Fuserules.FrDecide(gv)), 128, "the row says it is the seal's");
+        emon.Port.CellsSet(gv, Fuserules.AgArt(), 1);
+        emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gv)), 401, "even a watermark mark does not take it from the seal");
+        // an OCR-only group inside one
+        AtGv(gv, 0, 1, 0, -1, -1, 0, 800, 900, 0, 0);
+        emon.Port.CellsSet(gv, Fuserules.AgSeal(), 1);
+        emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gv)), 402, "an OCR-only group in a seal: 402");
+        // a group that is in none is decided as before
+        emon.Port.CellsSet(gv, Fuserules.AgSeal(), 0);
+        emon.Port.CellsSet(gv, Fuserules.AgArt(), 0);
+        emon.Testport.AssertEq(Fuserules.FrBlock(Fuserules.FrDecide(gv)), 100, "outside a seal: the core's");
+    }
+    [Xunit.Fact]
+    public static void TestTheWordsOfASealLeaveTheFlowAndSaySo() {
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells feats = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells cg = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        emon.Port.Cells ep = emon.Port.NewCells();
+        emon.Port.Cells nfw = emon.Port.NewCells();
+        emon.Port.Cells nfl = emon.Port.NewCells();
+        emon.Port.Cells fv = emon.Port.NewCells();
+        emon.Port.Cells fx = emon.Port.NewCells();
+        emon.Port.Cells afa = emon.Port.NewCells();
+        int w0 = AtTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
+        int w1 = AtTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
+        int w2 = AtTword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121);
+        int o0 = AtOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+        int o1 = AtOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
+        int o2 = AtOword(ow, feats, et, 2000, 2900, 0, 120, 121, 0);
+        int o3 = AtOword(ow, feats, et, 5000, 5900, 0, 88, 89, 0);
+        AtLine3(fl, 0, 3);
+        AtGroup(cg, refs, w0, 1, o0, 1, 1000);
+        int g1 = AtGroup(cg, refs, w1, 1, o1, 1, 1000);
+        int g2 = AtGroup(cg, refs, w2, 1, o2, 1, 1000);
+        int g3 = AtOcrOnlyGroup(cg, refs, o3);
+        Player.CgSet(cg, g1, Player.CgfFlags(), Player.PlgInSeal());
+        Player.CgSet(cg, g3, Player.CgfFlags(), 2 + Player.PlgInSeal());
+        emon.Testport.AssertEq(AtRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 4, "four groups decided");
+        emon.Testport.AssertEq(Player.FwCount(nfw), 2, "the seal's word is not in the flow: the other two are");
+        emon.Testport.AssertEq(Player.FaCount(afa), 0, "and nothing is a ledger row: the words are the node's text, not ghosts");
+        emon.Testport.AssertEq(Player.CgGet(cg, g1, Player.CgfFlags()), Player.PlgInSeal(), "the seal's group is not also `in-figure`");
+        emon.Testport.AssertEq(Player.CgGet(cg, g3, Player.CgfFlags()), 2 + Player.PlgInSeal(), "nor is its OCR-only one");
+        emon.Testport.AssertEq(Player.CgGet(cg, g2, Player.CgfFlags()), 0, "and a group outside is as it was");
     }
 }

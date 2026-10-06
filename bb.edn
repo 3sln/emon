@@ -58,6 +58,8 @@
                  :task (apply shell "bb" "tools/fusion/record-replay.clj" *command-line-args*)}
   artifacts {:doc "Watermarks and their OCR ghosts (P7.5, SPEC 9.5, D204, D300-D306): born-digital documents with a raster watermark under the text, read by a real OCR engine, replayed from transcripts on Rust and Go to the identical bundle; the watermark is in no body, the dump names the defence that took it out (recurrence, geometry), the ledger holds it as `watermark`, no body word is lost. Recording is `bb fusion-record --artifacts` (live, not a gate)."
              :task (shell "bb" "kin/scripts/artifacts")}
+  seals {:doc "Seals, stamps and signatures (P7.7, SPEC 9.5 defence 5, 10.7, D400-D405): born-digital pages with a seal, a stamp or a signature drawn as vector paths, read by a real OCR engine, replayed from transcripts on Rust and Go to the identical bundle; each is a `seal` node of its subkind and colour, its words are out of the body, no body word is lost, nothing else is one (block-seal P/R at least 0.9, seal-leak 0). Recording is `bb fusion-record --seals` (live, not a gate)."
+         :task (shell "bb" "kin/scripts/seals")}
   align {:doc "Cross-source alignment (P7.1, D252-D254): six fusion documents rendered at 300 dpi with their text and read by Tesseract, replayed on Rust and Go to identical correspondence groups; coverage, precision, the broken-mapping signature and the time held. Recording is `bb align-record` (live, not a gate)."
          :task (shell "bb" "kin/scripts/align")}
   align-record {:doc "Record the alignment fixtures LIVE: pdfium renders and Tesseract's reading, on the Rust host, into test/fusion/align/. NOT a gate (needs the pinned pdfium and Tesseract; P7.1).  bb align-record [ID...]"

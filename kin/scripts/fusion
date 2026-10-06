@@ -130,7 +130,7 @@
                                       "none")
             "; reasons: " (str/join " " (for [[k v] (sort-by (comp str key) (:reasons pooled))] (str k "=" v))))
         (let [ocr-rules (set (for [[id a] an] [id (set (keys (select-keys (:rules a) [120 130 140 141])))]))]
-          (check (every? (fn [[_ a]] (every? #{101 102 110 111 112 120 130 140 141 145 150 170 175 176 177 178 190 201 202 203 205 211 221 231 232 251 252} (keys (:rules a)))) an)
+          (check (every? (fn [[_ a]] (every? #{101 102 110 111 112 120 130 140 141 145 150 170 175 176 177 178 190 201 202 203 205 211 221 231 232 251 252 401 402} (keys (:rules a)))) an)
                  "every verdict of every dump is a rule of the table"))
         (doseq [[id a] an]
           (let [w (FR/win-rates a)]

@@ -111,8 +111,8 @@ fn test_the_rows_say_what_they_set() {
     crate::testport::assert_eq(fr_order(4), 100, "then the core");
     crate::testport::assert_eq(fr_order(5), -1, "and no more");
     let mut i: i32 = 0;
-    while i < 27 {
-        crate::testport::assert_that((fr_block(i) == 100) || (fr_block(i) == 200), "every row of P7.3 and P7.5 is in block 100 or 200");
+    while i < 29 {
+        crate::testport::assert_that(((fr_block(i) == 100) || (fr_block(i) == 200)) || (fr_block(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
         i += 1;
     }
 }
@@ -912,4 +912,63 @@ fn test_recurrence_needs_most_of_the_pages() {
     at_rgroup(cg, refs, f5, 5, 1000, 3000);
     at_rgroup(cg, refs, f6, 6, 1000, 3000);
     crate::testport::assert_eq(ax_recur(cg, refs, ow, et, ep, rc, pp), 0, "two pages of six: nothing");
+}
+#[test]
+fn test_a_group_in_a_seal_is_the_seals_and_comes_first() {
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block
+    at_gv(gv, 1, 1, 0, 1000, 1000, 0, -1, 900, 0, 1);
+    crate::port::cells_set(gv, ag_seal(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 401, "a seal's text-layer group: 401");
+    crate::testport::assert_eq(fr_block(fr_decide(gv)), 400, "of block 400");
+    crate::testport::assert_eq(fr_winner(fr_decide(gv)), fw_none(), "no source wins it: the body does not have it");
+    crate::testport::assert_eq(fr_reason(fr_decide(gv)), 0, "and it is no ledger row (its words are the seal node's text)");
+    crate::testport::assert_eq(fr_flags(fr_decide(gv)), 128, "the row says it is the seal's");
+    crate::port::cells_set(gv, ag_art(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 401, "even a watermark mark does not take it from the seal");
+    // an OCR-only group inside one
+    at_gv(gv, 0, 1, 0, -1, -1, 0, 800, 900, 0, 0);
+    crate::port::cells_set(gv, ag_seal(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 402, "an OCR-only group in a seal: 402");
+    // a group that is in none is decided as before
+    crate::port::cells_set(gv, ag_seal(), 0);
+    crate::port::cells_set(gv, ag_art(), 0);
+    crate::testport::assert_eq(fr_block(fr_decide(gv)), 100, "outside a seal: the core's");
+}
+#[test]
+fn test_the_words_of_a_seal_leave_the_flow_and_say_so() {
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ep: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let afa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let w0: i32 = at_tword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
+    let w1: i32 = at_tword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
+    let w2: i32 = at_tword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121);
+    let o0: i32 = at_oword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+    let o1: i32 = at_oword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
+    let o2: i32 = at_oword(ow, feats, et, 2000, 2900, 0, 120, 121, 0);
+    let o3: i32 = at_oword(ow, feats, et, 5000, 5900, 0, 88, 89, 0);
+    at_line3(fl, 0, 3);
+    at_group(cg, refs, w0, 1, o0, 1, 1000);
+    let g1: i32 = at_group(cg, refs, w1, 1, o1, 1, 1000);
+    let g2: i32 = at_group(cg, refs, w2, 1, o2, 1, 1000);
+    let g3: i32 = at_ocr_only_group(cg, refs, o3);
+    cg_set(cg, g1, cgf_flags(), plg_in_seal());
+    cg_set(cg, g3, cgf_flags(), 2 + plg_in_seal());
+    crate::testport::assert_eq(at_run(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 4, "four groups decided");
+    crate::testport::assert_eq(fw_count(nfw), 2, "the seal's word is not in the flow: the other two are");
+    crate::testport::assert_eq(fa_count(afa), 0, "and nothing is a ledger row: the words are the node's text, not ghosts");
+    crate::testport::assert_eq(cg_get(cg, g1, cgf_flags()), plg_in_seal(), "the seal's group is not also `in-figure`");
+    crate::testport::assert_eq(cg_get(cg, g3, cgf_flags()), 2 + plg_in_seal(), "nor is its OCR-only one");
+    crate::testport::assert_eq(cg_get(cg, g2, cgf_flags()), 0, "and a group outside is as it was");
 }

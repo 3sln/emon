@@ -21,13 +21,13 @@
                                    xt-font-health xt-bad-cp xt-vis xo-implausible xo-conf xo-kin-ink
                                    ea-words ea-owords]]
             [emon.player :refer [cg-new cg-set cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hfirst cgf-hcount cgf-simfold cgf-flags
-                                 plg-in-figure fw-count fl-count fv-get fv-new fa-new fa-count fa-get fx-count pl-check]]
+                                 plg-in-figure plg-in-seal fw-count fl-count fv-get fv-new fa-new fa-count fa-get fx-count pl-check]]
             [emon.model :refer [sr-text sr-ocr fl-text-layer-suspect fl-low-conf fl-ocr-only dr-ocr-ghost dr-watermark dr-background ledger-count ledger-reason ledger-x1 ledger-text-len
                                 model-init node-new node-add-src node-set-conf node-src node-conf node-flags node-add-region node-set-text
                                 nk-paragraph nk-text nk-document page-new]]
             [emon.fuserules :refer [ag-count ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin ag-olen ag-oconf ag-near ag-pageagree
                                     fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-count fr-block fr-order fr-defence fw-none fw-text fw-ocr
-                                    ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha]]
+                                    ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha ag-seal]]
             [emon.artifact :refer [ax-recur ax-word-class]]
             [emon.arbiter :refer [ar-doc ar-write ar-tag]]
             [kin.lang :refer [defn return let set while if do comment
@@ -136,7 +136,7 @@
   (assert-eq (fr-order 5) -1 "and no more")
   (let [^:mut ^I32 i 0]
     (while (< i (fr-count 0))
-      (do (assert-that (or (== (fr-block i) 100) (== (fr-block i) 200)) "every row of P7.3 and P7.5 is in block 100 or 200")
+      (do (assert-that (or (or (== (fr-block i) 100) (== (fr-block i) 200)) (== (fr-block i) 400)) "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400")
           (set i (+ i 1))))))
 
 ;; ------------------------------------------------------------- a page by hand
@@ -850,3 +850,62 @@
     (at-rgroup cg refs f5 5 1000 3000)
     (at-rgroup cg refs f6 6 1000 3000)
     (assert-eq (ax-recur cg refs ow et ep rc pp) 0 "two pages of six: nothing")))
+
+;; ------------------------------------------------------------- P7.7: block 400 (SPEC 9.5 defence 5, 10.7)
+
+(deftest test-a-group-in-a-seal-is-the-seals-and-comes-first
+  (let [^Cells gv (new-cells)]
+    (comment "a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block")
+    (at-gv gv 1 1 0 1000 1000 0 -1 900 0 1)
+    (cells-set gv (ag-seal) 1)
+    (assert-eq (fr-number (fr-decide gv)) 401 "a seal's text-layer group: 401")
+    (assert-eq (fr-block (fr-decide gv)) 400 "of block 400")
+    (assert-eq (fr-winner (fr-decide gv)) (fw-none) "no source wins it: the body does not have it")
+    (assert-eq (fr-reason (fr-decide gv)) 0 "and it is no ledger row (its words are the seal node's text)")
+    (assert-eq (fr-flags (fr-decide gv)) 128 "the row says it is the seal's")
+    (cells-set gv (ag-art) 1)
+    (assert-eq (fr-number (fr-decide gv)) 401 "even a watermark mark does not take it from the seal")
+    (comment "an OCR-only group inside one")
+    (at-gv gv 0 1 0 -1 -1 0 800 900 0 0)
+    (cells-set gv (ag-seal) 1)
+    (assert-eq (fr-number (fr-decide gv)) 402 "an OCR-only group in a seal: 402")
+    (comment "a group that is in none is decided as before")
+    (cells-set gv (ag-seal) 0)
+    (cells-set gv (ag-art) 0)
+    (assert-eq (fr-block (fr-decide gv)) 100 "outside a seal: the core's")))
+
+(deftest test-the-words-of-a-seal-leave-the-flow-and-say-so
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)
+        ^I32 w1 (at-tword fw feats et 1000 0 0 1000 0 109 111)
+        ^I32 w2 (at-tword fw feats et 2000 0 0 1000 0 120 121)
+        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
+        ^I32 o1 (at-oword ow feats et 1000 1900 0 109 111 0)
+        ^I32 o2 (at-oword ow feats et 2000 2900 0 120 121 0)
+        ^I32 o3 (at-oword ow feats et 5000 5900 0 88 89 0)]
+    (at-line3 fl 0 3)
+    (at-group cg refs w0 1 o0 1 1000)
+    (let [^I32 g1 (at-group cg refs w1 1 o1 1 1000)
+          ^I32 g2 (at-group cg refs w2 1 o2 1 1000)
+          ^I32 g3 (at-ocr-only-group cg refs o3)]
+      (cg-set cg g1 (cgf-flags) (plg-in-seal))
+      (cg-set cg g3 (cgf-flags) (+ 2 (plg-in-seal)))
+      (assert-eq (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa) 4 "four groups decided")
+      (assert-eq (fw-count nfw) 2 "the seal's word is not in the flow: the other two are")
+      (assert-eq (fa-count afa) 0 "and nothing is a ledger row: the words are the node's text, not ghosts")
+      (assert-eq (cg-get cg g1 (cgf-flags)) (plg-in-seal) "the seal's group is not also `in-figure`")
+      (assert-eq (cg-get cg g3 (cgf-flags)) (+ 2 (plg-in-seal)) "nor is its OCR-only one")
+      (assert-eq (cg-get cg g2 (cgf-flags)) 0 "and a group outside is as it was"))))
