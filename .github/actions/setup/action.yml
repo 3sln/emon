@@ -43,7 +43,9 @@ runs:
         mkdir -p "$HOME/.local/bin"
         curl -fsSL -o "$HOME/.local/magick.AppImage" https://github.com/ImageMagick/ImageMagick/releases/download/7.1.1-33/ImageMagick-057259c-gcc-x86_64.AppImage
         chmod +x "$HOME/.local/magick.AppImage"
-        printf '#!/bin/sh\nexec "$HOME/.local/magick.AppImage" --appimage-extract-and-run "$@"\n' > "$HOME/.local/bin/magick"
+        # Extract once: --appimage-extract-and-run per call races when the image gate runs magick in parallel.
+        (cd "$HOME/.local" && ./magick.AppImage --appimage-extract > /dev/null)
+        printf '#!/bin/sh\nexec "$HOME/.local/squashfs-root/AppRun" "$@"\n' > "$HOME/.local/bin/magick"
         chmod +x "$HOME/.local/bin/magick"
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         "$HOME/.local/bin/magick" -version | head -1
