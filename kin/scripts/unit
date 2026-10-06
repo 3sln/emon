@@ -122,6 +122,8 @@ bb -cp tools:tools/lib tools/fusion/fusion_live.clj --self-test
 # THE FUSION CORPUS (P6.6, D209; babashka, reads only committed files): the six hand-edited PDFs are what wm_pdf.clj makes of
 # their sources, and every overlay scan's gold is what the document's gold plus scan-ovl/FACTS.json say.
 bb -cp tools:tools/lib tools/synth/wm_pdf.clj check
+# P7.6's hidden-text fixtures (agreeing and disagreeing older OCR layers under the same scan) are what hidden_pdf.clj makes.
+bb -cp tools:tools/lib tools/synth/hidden_pdf.clj check
 bb -cp tools:tools/lib -m synth.degrade-fusion --check
 # THE GRAPHICS CORPUS (P6.8, D227; babashka, reads only committed files): the seven hand-made gfx-* PDFs, the sixteen tagged-table
 # PDFs (and their verdicts) and the three mixed documents' HTML and generator rules are what their generators write, the scan

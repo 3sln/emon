@@ -1,0 +1,136 @@
+;; THE HIDDEN-TEXT COLUMNS (P7.6; SPEC 9.4's hidden row; D155, D208, D380). emon's own module (D039).
+;;
+;;   (hx-fill g cg refs ofw etext feats owords gv)
+;;       The group columns of rows 300-399 of `emon.fuserules` for group g, written into `gv` (cells `ag-hlatin` .. `ag-pageocr`, which
+;;       `emon.arbiter`'s `ar-fill` does not know of). They describe a group whose text-layer candidates are HIDDEN-TEXT words (a Tr 3 or
+;;       Tr 7 layer, or a visible-text layer occluded by a page-sized image: what an older OCR producer leaves under its scan, D155, D208)
+;;       and say how they compare with this run's OCR of the same ink:
+;;
+;;         ag-hlatin    1 when the hidden words are in a script the engine reads (a Latin letter or digit, or no letter of another script);
+;;         ag-hink      the mean kin ink under the hidden words' boxes (`xt-kin-ink`, per mille); -1 when no word's was measured;
+;;         ag-hinkwin   1 when the hidden words' ink agreement is at least the OCR words' (`xo-kin-ink`), 0 when it is lower, -1 when
+;;                      either was not measured;
+;;         ag-margin    the lowest engine margin (`xo-margin`) of the group's OCR words; -1 absent;
+;;         ag-hsplit    1 when the group has more OCR words than hidden words (the older layer glued what the engine split), else 0;
+;;         ag-hsame     1 when the group has as many OCR words as hidden words (one segmentation), else 0;
+;;         ag-pageocr   for a group with a hidden word and no OCR word: the OCR words the page's groups hold (0: the engine read nothing
+;;                      of this page, so the hidden layer is all there is of it); 0 for any other group.
+;;
+;; THE INK COLUMNS ARE ABSENT TODAY: the page unit does not yet measure kin's ink under a text-layer word (`nm-feat-text` is not wired,
+;; D381) and a replay carries no bitmap, so `ag-hink` and `ag-hinkwin` are -1 and the rules that need them never hold; the rules that
+;; ask "no ink" do not fire, and a hidden word with no OCR counterpart is kept, low-conf (never dropped on a guess). The columns are
+;; here so that wiring the ink is a change of the page unit and not of the table.
+(ns emon.hidden
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set]]
+            [emon.evidence :refer [hd-feat ow-get fe-get xt-kin-ink xo-kin-ink xo-margin]]
+            [emon.player :refer [cg-count cg-get cgf-page cgf-hfirst cgf-hcount cgf-tcount cgf-ofirst cgf-ocount]]
+            [emon.fuserules :refer [ag-hlatin ag-hink ag-hinkwin ag-margin ag-pageocr ag-hsplit ag-hsame]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^I32 hx-latin-cp [^I32 c]
+  (comment "1 for a Latin letter or a digit: ASCII, Latin-1 (without the multiplication and division signs), Latin Extended-A and -B.")
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (if (and (>= c 65) (<= c 90)) (return 1))
+  (if (and (>= c 97) (<= c 122)) (return 1))
+  (if (and (>= c 192) (<= c 591) (and (!= c 215) (!= c 247))) (return 1))
+  (return 0))
+
+(defn ^I32 hx-foreign-cp [^I32 c]
+  (comment "1 for a letter of a script a Latin engine cannot read (as `emon.arbiter`'s `ar-foreign-cp`).")
+  (if (and (>= c 880) (< c 7680)) (return 1))
+  (if (and (>= c 7936) (<= c 8191)) (return 1))
+  (if (and (>= c 11904) (<= c 55215)) (return 1))
+  (if (and (>= c 63744) (<= c 64975)) (return 1))
+  (if (and (>= c 65136) (<= c 65276)) (return 1))
+  (return 0))
+
+(defn ^I32 hx-word-latin [^Cells ofw ^Cells etext ^I32 row]
+  (comment "1 when the engine can read the flow word `row` (as `ar-word-latin`): a Latin letter or digit, or no letter of another script.")
+  (let [^I32 ts (cells-at ofw (+ (* row 24) 11))
+        ^I32 tl (cells-at ofw (+ (* row 24) 12))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 foreign 0]
+    (while (< j tl)
+      (do (if (== (hx-latin-cp (cells-at etext (+ ts j))) 1) (return 1))
+          (if (== (hx-foreign-cp (cells-at etext (+ ts j))) 1) (set foreign 1))
+          (set j (+ j 1))))
+    (if (and (== foreign 0) (> tl 0)) (return 1))
+    (return 0)))
+
+(defn ^I32 hx-page-ocr [^I32 g ^Cells cg]
+  (comment "The OCR words the groups of group g's page hold.")
+  (let [^I32 n (cg-count cg)
+        ^I32 page (cg-get cg g (cgf-page))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 s 0]
+    (while (< i n)
+      (do (if (== (cg-get cg i (cgf-page)) page)
+            (set s (+ s (cg-get cg i (cgf-ocount)))))
+          (set i (+ i 1))))
+    (return s)))
+
+(defn ^:pub ^I32 hx-fill [^I32 g ^Cells cg ^Cells refs ^Cells ofw ^Cells etext ^Cells feats ^Cells owords ^:mut ^Cells gv]
+  (comment "The hidden-text columns of group g (see the head of this file) into `gv`.")
+  (let [^I32 nh (cg-get cg g (cgf-hcount))
+        ^I32 hf (cg-get cg g (cgf-hfirst))
+        ^I32 no (cg-get cg g (cgf-ocount))
+        ^I32 of (cg-get cg g (cgf-ofirst))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 hlatin 0
+        ^:mut ^I32 foreign 0
+        ^:mut ^I32 hsum 0
+        ^:mut ^I32 hn 0
+        ^:mut ^I32 osum 0
+        ^:mut ^I32 on 0
+        ^:mut ^I32 margin -1
+        ^:mut ^I32 pageocr 0]
+    (while (< k nh)
+      (do (set row (cells-at refs (+ (* (+ hf k) 2) 1)))
+          (if (== (hx-word-latin ofw etext row) 0) (set foreign 1))
+          (set f (cells-at ofw (+ (* row 24) (hd-feat))))
+          (if (>= f 0)
+            (do (set v (fe-get feats f (xt-kin-ink)))
+                (if (>= v 0)
+                  (do (set hsum (+ hsum v))
+                      (set hn (+ hn 1))))))
+          (set k (+ k 1))))
+    (comment "the engine reads the group only when none of its words is in a script it lacks")
+    (if (and (> nh 0) (== foreign 0)) (set hlatin 1))
+    (set k 0)
+    (while (< k no)
+      (do (set row (cells-at refs (+ (* (+ of k) 2) 1)))
+          (set f (ow-get owords row (hd-feat)))
+          (if (>= f 0)
+            (do (set v (fe-get feats f (xo-kin-ink)))
+                (if (>= v 0)
+                  (do (set osum (+ osum v))
+                      (set on (+ on 1))))
+                (set v (fe-get feats f (xo-margin)))
+                (if (>= v 0)
+                  (if (or (< margin 0) (< v margin)) (set margin v)))))
+          (set k (+ k 1))))
+    (cells-set gv (ag-hlatin) hlatin)
+    (cells-set gv (ag-margin) margin)
+    (if (> hn 0)
+      (cells-set gv (ag-hink) (quot hsum hn))
+      (cells-set gv (ag-hink) -1))
+    (cells-set gv (ag-hinkwin) -1)
+    (if (and (> hn 0) (> on 0))
+      (if (>= (quot hsum hn) (quot osum on))
+        (cells-set gv (ag-hinkwin) 1)
+        (cells-set gv (ag-hinkwin) 0)))
+    (if (and (> nh 0) (and (== no 0) (== (cg-get cg g (cgf-tcount)) 0)))
+      (set pageocr (hx-page-ocr g cg)))
+    (cells-set gv (ag-pageocr) pageocr)
+    (if (and (> nh 0) (== no nh))
+      (cells-set gv (ag-hsame) 1)
+      (cells-set gv (ag-hsame) 0))
+    (if (and (> nh 0) (> no nh))
+      (cells-set gv (ag-hsplit) 1)
+      (cells-set gv (ag-hsplit) 0))
+    (return 0)))

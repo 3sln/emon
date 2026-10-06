@@ -68,8 +68,37 @@ pub fn ag_pageagree() -> i32 {
     // the agreement of the group's page between the text layer and OCR, per mille (1000 when too few groups have both)
     return 15;
 }
+// P7.6's columns (`emon.hidden`'s `hx-fill`), numbered from 32 so that no other item's columns move them
+pub fn ag_hlatin() -> i32 {
+    // 1 when the group's hidden-text words are in a script the engine reads, else 0
+    return 32;
+}
+pub fn ag_hink() -> i32 {
+    // the mean kin ink (per mille) under the group's hidden-text words; -1 when none was measured
+    return 33;
+}
+pub fn ag_hinkwin() -> i32 {
+    // 1 when the hidden words' ink agreement is at least the OCR words', 0 when lower, -1 when either was not measured
+    return 34;
+}
+pub fn ag_margin() -> i32 {
+    // the lowest engine margin of the group's OCR words; -1 absent
+    return 35;
+}
+pub fn ag_pageocr() -> i32 {
+    // for a group of hidden words with no OCR word: the OCR words the page holds; 0 otherwise
+    return 36;
+}
+pub fn ag_hsplit() -> i32 {
+    // 1 when the group's OCR words are MORE than its hidden words (the engine split what the older layer glued), else 0
+    return 37;
+}
+pub fn ag_hsame() -> i32 {
+    // 1 when the group has as many OCR words as hidden words (one segmentation: a disagreement is about the letters of the words, not about where they break), else 0
+    return 38;
+}
 pub fn ag_count() -> i32 {
-    return 16;
+    return 40;
 }
 pub fn fc_ge() -> i32 {
     return 0;
@@ -119,6 +148,14 @@ pub fn fs_near_max() -> i32 {
 pub fn fs_agree_min() -> i32 {
     return 11;
 }
+pub fn fs_hid_margin() -> i32 {
+    // P7.6: the engine margin under which an OCR word is a close call
+    return 40;
+}
+pub fn fs_hid_ink() -> i32 {
+    // P7.6: the kin ink (per mille) under a hidden word from which there is ink
+    return 41;
+}
 pub fn fr_setting(code: i32) -> i32 {
     // The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).
     if code == 0 {
@@ -165,6 +202,14 @@ pub fn fr_setting(code: i32) -> i32 {
     if code == 11 {
         return hh_agree_min();
     }
+    // `hid-margin` (P7.6): an OCR word whose engine margin (per mille) is under this is a close call, and a hidden word may stand against it
+    if code == 40 {
+        return 600;
+    }
+    // `hid-ink` (P7.6): the kin ink (per mille of a hidden word's box) from which there is ink under it
+    if code == 41 {
+        return 30;
+    }
     return 0;
 }
 pub fn fw_none() -> i32 {
@@ -179,7 +224,18 @@ pub fn fw_ocr() -> i32 {
     // the OCR words
     return 2;
 }
-pub static FR_ROWS: [i32; 612] = [
+pub static FR_ROWS: [i32; 1008] = [
+    301, 300, 1, 0, 0, 600, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    311, 300, 2, 0, 0, -1, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, 37, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    310, 300, 1, 0, 0, 950, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    315, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 32, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    316, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 7, 1, 5, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    321, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 35, 1, 40, 34, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    323, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 35, 1, 40, 38, 2, 1, 34, 3, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    322, 300, 2, 0, 0, -1, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    330, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, 33, 0, 41, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    331, 300, 0, 10, 0, 0, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, 33, 1, 41, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    332, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     101, 100, 1, 0, 0, 900, 0, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     102, 100, 1, 0, 0, 900, 0, 2, 0, 2, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     110, 100, 1, 0, 0, 1000, 0, 0, 1, 1, 0, 1, 3, 0, 2, 6, 2, 0, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -284,7 +340,7 @@ pub(crate) fn fr_holds(row: i32, gv: &mut crate::port::Cells) -> i32 {
 pub fn fr_decide(gv: &mut crate::port::Cells) -> i32 {
     // The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
     // rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-    let n: i32 = 17;
+    let n: i32 = 28;
     let mut b: i32 = 0;
     let mut blk: i32 = 0;
     let mut r: i32 = 0;

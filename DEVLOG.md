@@ -2892,7 +2892,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   it); the per-defence ledger counts from `bb fusion-report`.
   *Done when*: the above; every ledger row of the fusion set names its defence in the dump.
 
-- [ ] **P7.6 — `hidden-text` (prior OCR layers)** (SPEC §9.4's hidden row, D155, D208). **Wave 4.** Depends on P7.3.
+- [x] **P7.6 — `hidden-text` (prior OCR layers)** (SPEC §9.4's hidden row, D155, D208). **Wave 4.** Depends on P7.3.
   *Brief*: `kin/hidden.kin` and rows 300-399: `hidden-text` words (and P7.0's `occluded`-under-a-scan words) are
   candidates of their groups; (301) with no OCR on the page, `hidden-text` is the text, `src` hidden-text, confidence 600 (as
   before P7.0, now explicit); (310) hidden and OCR agree (case-folded similarity ≥ `agree-sim`) → the hidden text's code
@@ -2905,6 +2905,31 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   `*.ocr-layer.pdf` live: CER against SROIE's gold ≤ the lower of the two sources'; the D157 corpus files with Tr 3 layers by
   eye.
   *Done when*: the above in this entry.
+  **DONE (D380-D382), on branch `worktree-agent-a3e96401843698ffc` (on top of P7.3's).** *Built*: `kin/hidden.kin` (`emon.hidden`: `hx-fill`, the group columns of a hidden group) +
+  laws `kin/hiddentest.kin` (7), rows 301, 310, 311, 315, 316, 321, 322, 323, 330, 331, 332 of `fr-rows` (block 300) with columns 32-38 and settings 40, 41 in
+  `kin/fuserules.kin`, the call in `ar-fill`, the hidden branch of `ar-write` and of the flow copy in `kin/arbiter.kin`, `tools/synth/hidden_pdf.clj` and
+  `test/fusion/hidden/` (two derived fixtures), the gate's new checks in `kin/scripts/fusion`. *Departures from the brief*: (1) THE INK COLUMNS ARE ABSENT:
+  the page unit does not measure kin's ink under a text-layer word (P6.3 is not wired into it, D260) and a replay carries no bitmap, so rule 320's "better kin-ink
+  agreement" and 330's "ink under it" cannot be read; `ag-hink` / `ag-hinkwin` are -1 and the rules that ask for them are written and tested by hand but do not
+  fire on a replay (D381); in their place 323 (a close call about letters, one segmentation, ink not known) and 332 (kept low-conf, never dropped on a guess) stand;
+  (2) 311 is new: an agreeing layer that glued what the engine split takes the engine's segmentation; (3) `hid-margin` is 600 (the brief's value is open),
+  the margin column being the engine's own per mille; (4) row 301 is `no OCR word in the group and none on the page`, and 330-332 take the pages OCR read;
+  (5) `ar-remeasure` (P7.3's) keeps a re-measured line's baseline heights and moves only its ends (a hidden layer's words carry baselines a sixth of a point apart; the line
+  re-measured from them tilted and the paragraph builder moved a line: 14 characters of `hidden-older-ocr`'s error); (6) the live `*.ocr-layer.pdf` (SROIE) and the D157 corpus
+  files were not run (no pdfium here: nothing live ran); the two new fixtures' transcripts are DERIVED from `hidden-older-ocr`'s recording (same scan, same pixels,
+  `tools/synth/hidden_pdf.clj` says so), not recorded; (7) rows 321, 322 produce no `text-layer-suspect` flag: a hidden layer is not the text layer.
+  *Measured* (replay, Rust == Go): **`hidden-older-ocr` CER 0.0801 (hidden layer alone) -> 0.0062 fused** (brief: <= 0.02 and below both; the new OCR's text alone is 0.0068
+  by the evidence dump's words, measured by `bb fusion`'s fixtures' method); rules on the 22 documents: 310 x110, 311 x97, 322 x74, 323 x3 (the 190 x200 default that
+  gave every hidden group to the hidden text, low-conf, is gone); `hidden-exact-ocr` fused CER 0.0050 against 0.0516 hidden alone, 0.0068 OCR alone; `hidden-noisy-ocr`
+  0.0099 against 0.1484 and 0.0068 (the layer agrees to nine tenths on many words and keeps its typos: row 310 is the brief's). Block metrics of `hidden-older-ocr`: heading F1
+  0.27 -> 0.64, paragraph F1 0.15 -> 0.75, bow F1 0.48 -> 0.97. `emon-fusion` scoreboard: 36 metrics improved (`pdf/all` CER 0.007556 -> 0.005606, WER 0.0235 -> 0.0087, paragraph R 0.917
+  -> 0.979), **3 regressed beyond the tolerance and are NOT recorded** (D079): `pdf/all` and `pdf/textlayer` `heading-level-acc` (1.0 -> 0.990 and 0.941: the fused
+  `hidden-older-ocr` now matches seven headings of fifteen and one of them is a level off, the hidden layer having no weight to tell a level-4 heading from a paragraph) and `pdf/textlayer`
+  `src-ocr-share` (0.7296 -> 0.7335: OCR now wins words of a document whose layer it replaces). They follow from the intended behaviour; `bb fusion`'s scoreboard line is red until the
+  maintainer signs off the new values (a decision for the coordinator). `bb accuracy` (`emon` and every other entry) unchanged.
+  *Learnt*: (1) a hidden layer's words abut and glue ("onSoil"), and the engine's segmentation is the better one nearly always; (2) the engine's margin alone is a good signal
+  that a word is a close call (six of the eight wrong OCR words of `hidden-older-ocr` had a margin under 0.6 where the hidden word was right; `hid-margin` 600 takes the ones that are one word for one); (3) the case-folded similarity ignores
+  segmentation, so "agree" must be asked together with the word counts.
 
 - [ ] **P7.7 — Seal, stamp and signature placeholders before P8** (SPEC §9.5 defence 5, §10.7; D016, D205). **Wave 4.**
   Depends on P7.3 and P6.4. P8.2/P8.3 later fill name, date and arc text; this item puts the node where it belongs and
@@ -8365,4 +8390,32 @@ worse than the no-engine run's plus 0.0005; the broken documents' CER under half
 ### D259 — A manually triggered GitHub Actions workflow runs every gate and `unit red` in parallel jobs (SPEC 15.3)
 **Decision**: `gates.yml` (`workflow_dispatch` only: `groups` all | unit-only | fast-only, `ref`) checks emon and `3sln/kin` out side by side (`../kin`) and runs, on `ubuntu-latest`: `bb unit ARM` and `bb unit red ARM` per arm (go, rust, java, csharp; `unit red` now takes an optional arm), and `bb gates G...` shards for the rest (`bb gates` now takes gate names; its completeness check still runs). A summary job compares the four arms' law counts (`bb ci laws-compare`, what `bb unit` does in one process) and fails if any selected job failed; `bb ci coverage` (in the `static` shard) fails if a gate of `kin/scripts/gates` is in no shard or the workflow calls a missing bb task. Toolchains are pinned to the maintainer's (bb 1.3.190, Rust 1.92.0, Go 1.21, Temurin 25, .NET 10, ImageMagick 7 by AppImage, Python oracles at the versions of `~/.cache/emon/pylib`). Tesseract and pdfium are NOT installed: `ocr` and `render` replay committed transcripts (D127, D216). The corpus (`formats`, `financial`: all `png-check` and `image` read) is written from repository secrets into `.env`, pulled by `bb corpus-pull` only when `bb corpus-index-sha` (the SHA-256 of the remote `index.json`) changes, and cached under that key; missing secrets fail the run with a message naming them.
 **Why**: the gates take over an hour serially and nothing runs them but the maintainer's machine; sharding them is the cheapest way to a second opinion, and manual-only keeps a 12 GB corpus's credentials and minutes out of every push. Linux differences, not yet measured: poppler is Ubuntu's (older than macOS's), which `content-check` uses only for word-box comparison, and ImageMagick's version is whatever the AppImage is; a first run decides whether either needs pinning.
+- [ ] **Signed off** (maintainer)
+
+### D380 — Block 300: a hidden-text group is decided by rows of data, before block 100; OCR wins what it reads differently unless its margin is low (P7.6; SPEC 9.4; D155, D208, D260)
+**Decision**: rows 301 (hidden layer, no OCR word in the group and none on the page: the hidden text, 600), 310 (agree, case-folded similarity at least `agree-sim`: the hidden text's
+code points, sources hidden-text and ocr, 950), 311 (agree on the letters but OCR has more words than the hidden layer: OCR's words, the layer glued what the engine split), 315 (they
+disagree and the hidden text is in a script the engine does not read: the hidden text, low-conf), 316 (they disagree and the OCR is implausible: the hidden text, low-conf), 321 (a close
+call: the OCR margin under `hid-margin` 600, the hidden ink agreeing at least as well: the hidden text, low-conf), 323 (the same, one segmentation, the ink not measured: the hidden
+text, low-conf), 322 (they disagree: this run's OCR, its own score). They apply to a group with hidden words and no visible text-layer word; a visible word is block 100's.
+**Why**: the brief's rows, made executable; 311 and 323 are what the fixture `hidden-older-ocr` needed (CER 0.0801 -> 0.0062).
+**Alternatives**: the hidden text on every agreement (the brief's 310 alone: the glued words of `hidden-older-ocr` stayed glued, CER 0.0429 against 0.0062).
+- [ ] **Signed off** (maintainer)
+
+### D381 — The ink under a hidden word is not measured yet: the ink columns are -1 and the ink rows wait (P7.6; D260)
+**Decision**: `ag-hink` (mean `xt-kin-ink` of the hidden words) and `ag-hinkwin` (it against the OCR words' `xo-kin-ink`) are read from `feats` and are -1 until the page unit measures
+them (`nm-feat-text`); rows 321 (with better ink), 330 (kept, low-conf, ink under it) and 331 (ledger `invisible`, no ink under it) are written and tested by hand on those columns, and 332 keeps
+a hidden word with no OCR counterpart, low-conf, when the ink is unknown: **a word is never dropped on a guess**. The set-aside hidden words are ledger rows (`invisible`, conf 900, src
+`hidden-text`; one row a line), `afa` rows of `ea-words` with the text range in cells 8 and 11.
+**Why**: a replay has no bitmap and the page unit does not run P6.3; dropping text on its absence would lose real text (SPEC 9.4's hidden row).
+**Alternatives**: a column from the OCR's own ink (it is the OCR's: no counterpart is the very case).
+- [ ] **Signed off** (maintainer)
+
+### D382 — Derived fixtures and re-derived digests (P7.6; D209, D264)
+**Decision**: `test/fusion/hidden/{hidden-exact-ocr,hidden-noisy-ocr}` (`tools/synth/hidden_pdf.clj`, checked by `bb unit`): `hidden-older-ocr`'s scan with its older layer exact, and one letter in seven
+substituted. Their transcripts are `hidden-older-ocr`'s recording with the input length (unchanged: a substitution keeps the length), NOT recorded live: what an engine reads of a render is a function
+of its pixels and the layer is invisible. They are outside the pooled corpus (the scoreboards' categories do not move). `bb fusion` replays them on both Engines. `test/fusion/replay/DIGESTS.edn`
+changed for `hidden-older-ocr` (the rules) and `tl-broken-unmapped` (`ar-remeasure` keeps the baseline heights): re-derived by replaying their committed transcripts, no engine ran.
+**Why**: the item asks for agreeing and disagreeing layers, and pdfium is not at hand to record.
+**Alternatives**: adding the two to the corpus (every pooled metric of every gate would move).
 - [ ] **Signed off** (maintainer)

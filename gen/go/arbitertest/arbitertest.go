@@ -16,99 +16,102 @@ import (
 func atGv(gv *port.Cells, nt int32, no int32, nh int32, font int32, simfold int32, garbage int32, plaus int32, score int32, image int32, latin int32) int32 {
 	// A group's columns (the others absent or zero).
 	for port.CellsLen(gv) < fuserules.AgCount() {
-		port.CellsPush(gv, 0)
+		port.CellsPush(gv, 0);
 	}
-	port.CellsSet(gv, fuserules.AgNt(), nt)
-	port.CellsSet(gv, fuserules.AgNo(), no)
-	port.CellsSet(gv, fuserules.AgNh(), nh)
-	port.CellsSet(gv, fuserules.AgFont(), font)
-	port.CellsSet(gv, fuserules.AgSimfold(), simfold)
-	port.CellsSet(gv, fuserules.AgSim(), simfold)
-	port.CellsSet(gv, fuserules.AgGarbage(), garbage)
-	port.CellsSet(gv, fuserules.AgPlaus(), plaus)
-	port.CellsSet(gv, fuserules.AgScore(), score)
-	port.CellsSet(gv, fuserules.AgImage(), image)
-	port.CellsSet(gv, fuserules.AgFlags(), 0)
-	port.CellsSet(gv, fuserules.AgLatin(), latin)
-	port.CellsSet(gv, fuserules.AgOlen(), 5)
-	port.CellsSet(gv, fuserules.AgOconf(), 900)
-	port.CellsSet(gv, fuserules.AgNear(), 0)
-	port.CellsSet(gv, fuserules.AgPageagree(), 1000)
+	port.CellsSet(gv, fuserules.AgNt(), nt);
+	port.CellsSet(gv, fuserules.AgNo(), no);
+	port.CellsSet(gv, fuserules.AgNh(), nh);
+	port.CellsSet(gv, fuserules.AgFont(), font);
+	port.CellsSet(gv, fuserules.AgSimfold(), simfold);
+	port.CellsSet(gv, fuserules.AgSim(), simfold);
+	port.CellsSet(gv, fuserules.AgGarbage(), garbage);
+	port.CellsSet(gv, fuserules.AgPlaus(), plaus);
+	port.CellsSet(gv, fuserules.AgScore(), score);
+	port.CellsSet(gv, fuserules.AgImage(), image);
+	port.CellsSet(gv, fuserules.AgFlags(), 0);
+	port.CellsSet(gv, fuserules.AgLatin(), latin);
+	port.CellsSet(gv, fuserules.AgOlen(), 5);
+	port.CellsSet(gv, fuserules.AgOconf(), 900);
+	port.CellsSet(gv, fuserules.AgNear(), 0);
+	port.CellsSet(gv, fuserules.AgPageagree(), 1000);
 	return 0
 }
 
 func atRule(nt int32, no int32, nh int32, font int32, simfold int32, garbage int32, plaus int32, score int32, image int32, latin int32) int32 {
 	var gv *port.Cells = port.NewCells()
-	atGv(gv, nt, no, nh, font, simfold, garbage, plaus, score, image, latin)
+	atGv(gv, nt, no, nh, font, simfold, garbage, plaus, score, image, latin);
 	return fuserules.FrNumber(fuserules.FrDecide(gv))
 }
 
 func TestEveryRuleDecidesWhatItsNumberSays(emonT *testing.T) {
 	// text only: the identity; a hidden word only: the text layer's too
-	port.AssertEq(emonT, atRule(2, 0, 0, 1000, -1, 0, -1, -1, 0, 1), 101, "a sole text-layer candidate")
-	port.AssertEq(emonT, atRule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 102, "a sole hidden-text candidate")
+	port.AssertEq(emonT, atRule(2, 0, 0, 1000, -1, 0, -1, -1, 0, 1), 101, "a sole text-layer candidate");
+	port.AssertEq(emonT, atRule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 301, "a sole hidden-text candidate (P7.6's row 301 now says it first)");
 	// the contract: a healthy font, no bad glyph, OCR present
-	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1), 110, "OCR agrees")
-	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 500, 0, 1000, 900, 0, 1), 111, "OCR differs")
-	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 100, 0, 1000, 900, 0, 1), 112, "OCR differs a great deal")
-	port.AssertEq(emonT, atRule(1, 1, 0, 700, 100, 0, 1000, 900, 0, 1), 112, "the font is exactly trusted")
+	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1), 110, "OCR agrees");
+	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 500, 0, 1000, 900, 0, 1), 111, "OCR differs");
+	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 100, 0, 1000, 900, 0, 1), 112, "OCR differs a great deal");
+	port.AssertEq(emonT, atRule(1, 1, 0, 700, 100, 0, 1000, 900, 0, 1), 112, "the font is exactly trusted");
 	// even when OCR is perfectly plausible and the text layer is not
-	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 0, 0, 1000, 1000, 0, 1), 112, "a healthy font is untouchable by OCR's plausibility")
+	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 0, 0, 1000, 1000, 0, 1), 112, "a healthy font is untouchable by OCR's plausibility");
 	// OCR wins only where the text layer is bad
-	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 0, 250, 1000, 1000, 0, 1), 120, "a glyph of the word itself is bad")
-	port.AssertEq(emonT, atRule(1, 1, 0, 699, 0, 0, 1000, 1000, 0, 1), 130, "the font is just under trusted")
-	port.AssertEq(emonT, atRule(1, 1, 0, 699, 500, 0, 1000, 1000, 0, 1), 190, "an unhealthy font OCR half agrees with: the text layer stays (low-conf)")
-	port.AssertEq(emonT, atRule(1, 1, 0, 699, 950, 0, 1000, 1000, 0, 1), 190, "an unhealthy font OCR agrees with: the text layer stays")
-	port.AssertEq(emonT, atRule(1, 1, 0, 50, 0, 0, 1000, 1000, 0, 1), 130, "the font is unhealthy")
-	port.AssertEq(emonT, atRule(1, 1, 0, 50, 0, 0, 500, 1000, 0, 1), 190, "OCR implausible: the default (the text layer, low-conf)")
-	port.AssertEq(emonT, atRule(1, 1, 0, 50, 0, 0, 1000, 1000, 0, 0), 190, "a script the engine does not read: the default")
-	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 0, 250, 1000, 1000, 0, 0), 190, "a bad glyph in a script the engine does not read: the text layer stays (the default)")
+	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 0, 250, 1000, 1000, 0, 1), 120, "a glyph of the word itself is bad");
+	port.AssertEq(emonT, atRule(1, 1, 0, 699, 0, 0, 1000, 1000, 0, 1), 130, "the font is just under trusted");
+	port.AssertEq(emonT, atRule(1, 1, 0, 699, 500, 0, 1000, 1000, 0, 1), 190, "an unhealthy font OCR half agrees with: the text layer stays (low-conf)");
+	port.AssertEq(emonT, atRule(1, 1, 0, 699, 950, 0, 1000, 1000, 0, 1), 190, "an unhealthy font OCR agrees with: the text layer stays");
+	port.AssertEq(emonT, atRule(1, 1, 0, 50, 0, 0, 1000, 1000, 0, 1), 130, "the font is unhealthy");
+	port.AssertEq(emonT, atRule(1, 1, 0, 50, 0, 0, 500, 1000, 0, 1), 190, "OCR implausible: the default (the text layer, low-conf)");
+	port.AssertEq(emonT, atRule(1, 1, 0, 50, 0, 0, 1000, 1000, 0, 0), 190, "a script the engine does not read: the default");
+	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 0, 250, 1000, 1000, 0, 0), 190, "a bad glyph in a script the engine does not read: the text layer stays (the default)");
 	// OCR only
-	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 1000, 900, 0, 0), 140, "OCR only, plausible, scored, in no image: admitted")
-	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 1000, 900, 600, 0), 141, "in an image of most of the page: a scanned insert")
-	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 1000, 900, 100, 0), 150, "in a small image: the figure's")
-	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 400, 900, 0, 0), 170, "implausible: a ghost")
-	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 1000, 300, 0, 0), 175, "poorly scored: a ghost")
+	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 1000, 900, 0, 0), 140, "OCR only, plausible, scored, in no image: admitted");
+	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 1000, 900, 600, 0), 141, "in an image of most of the page: a scanned insert");
+	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 1000, 900, 100, 0), 150, "in a small image: the figure's");
+	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 400, 900, 0, 0), 170, "implausible: a ghost");
+	port.AssertEq(emonT, atRule(0, 1, 0, -1, -1, 0, 1000, 300, 0, 0), 175, "poorly scored: a ghost");
 	var gv *port.Cells = port.NewCells()
-	atGv(gv, 0, 1, 0, -1, -1, 0, 1000, 900, 0, 0)
-	port.CellsSet(gv, fuserules.AgOlen(), 1)
-	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 176, "one letter (a bullet): a ghost")
-	port.CellsSet(gv, fuserules.AgOlen(), 5)
-	port.CellsSet(gv, fuserules.AgOconf(), 300)
-	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 177, "not confident: a ghost")
-	port.CellsSet(gv, fuserules.AgOconf(), 900)
-	port.CellsSet(gv, fuserules.AgNear(), 800)
-	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 145, "over a text-layer word: that word's ink again, a ghost")
-	port.CellsSet(gv, fuserules.AgNear(), 0)
-	port.CellsSet(gv, fuserules.AgLatin(), 0)
-	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 140, "(admitted again)")
-	port.CellsSet(gv, fuserules.AgPageagree(), 200)
-	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 178, "on a page where OCR and the text layer do not agree: a ghost")
-	port.AssertEq(emonT, atRule(0, 1, 1, -1, -1, 0, 1000, 900, 0, 0), 190, "a hidden word and OCR: the default, the text layer")
+	atGv(gv, 0, 1, 0, -1, -1, 0, 1000, 900, 0, 0);
+	port.CellsSet(gv, fuserules.AgOlen(), 1);
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 176, "one letter (a bullet): a ghost");
+	port.CellsSet(gv, fuserules.AgOlen(), 5);
+	port.CellsSet(gv, fuserules.AgOconf(), 300);
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 177, "not confident: a ghost");
+	port.CellsSet(gv, fuserules.AgOconf(), 900);
+	port.CellsSet(gv, fuserules.AgNear(), 800);
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 145, "over a text-layer word: that word's ink again, a ghost");
+	port.CellsSet(gv, fuserules.AgNear(), 0);
+	port.CellsSet(gv, fuserules.AgLatin(), 0);
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 140, "(admitted again)");
+	port.CellsSet(gv, fuserules.AgPageagree(), 200);
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 178, "on a page where OCR and the text layer do not agree: a ghost");
+	port.AssertEq(emonT, atRule(0, 1, 1, -1, -1, 0, 1000, 900, 0, 0), 190, "a hidden word and OCR: the default, the text layer");
 }
 
 func TestTheRowsSayWhatTheySet(emonT *testing.T) {
 	var gv *port.Cells = port.NewCells()
-	atGv(gv, 1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1)
-	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwText(), "110 is the text layer's")
-	port.AssertEq(emonT, fuserules.FrConf(fuserules.FrDecide(gv)), 1000, "at confidence 1000")
-	atGv(gv, 1, 1, 0, 100, 0, 0, 1000, 900, 0, 1)
-	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwOcr(), "130 is OCR's")
-	port.AssertEq(emonT, fuserules.FrFlags(fuserules.FrDecide(gv)), 4, "flagged text-layer-suspect")
-	port.AssertEq(emonT, fuserules.FrConf(fuserules.FrDecide(gv)), -1, "with the OCR's own score for confidence")
-	atGv(gv, 0, 1, 0, -1, -1, 0, 400, 900, 0, 0)
-	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwNone(), "170 holds the group")
-	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gv)), model.DrOcrGhost(), "as an OCR ghost")
+	atGv(gv, 1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1);
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwText(), "110 is the text layer's");
+	port.AssertEq(emonT, fuserules.FrConf(fuserules.FrDecide(gv)), 1000, "at confidence 1000");
+	atGv(gv, 1, 1, 0, 100, 0, 0, 1000, 900, 0, 1);
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwOcr(), "130 is OCR's");
+	port.AssertEq(emonT, fuserules.FrFlags(fuserules.FrDecide(gv)), 4, "flagged text-layer-suspect");
+	port.AssertEq(emonT, fuserules.FrConf(fuserules.FrDecide(gv)), -1, "with the OCR's own score for confidence");
+	atGv(gv, 0, 1, 0, -1, -1, 0, 400, 900, 0, 0);
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwNone(), "170 holds the group");
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gv)), model.DrOcrGhost(), "as an OCR ghost");
 	// only block 100 has rows here, and `fr-order` is D224's
-	port.AssertEq(emonT, fuserules.FrOrder(0), 400, "seals first")
-	port.AssertEq(emonT, fuserules.FrOrder(1), 600, "then rule ghosts")
-	port.AssertEq(emonT, fuserules.FrOrder(2), 200, "then artifacts")
-	port.AssertEq(emonT, fuserules.FrOrder(3), 300, "then hidden text")
-	port.AssertEq(emonT, fuserules.FrOrder(4), 100, "then the core")
-	port.AssertEq(emonT, fuserules.FrOrder(5), -1, "and no more")
+	port.AssertEq(emonT, fuserules.FrOrder(0), 400, "seals first");
+	port.AssertEq(emonT, fuserules.FrOrder(1), 600, "then rule ghosts");
+	port.AssertEq(emonT, fuserules.FrOrder(2), 200, "then artifacts");
+	port.AssertEq(emonT, fuserules.FrOrder(3), 300, "then hidden text");
+	port.AssertEq(emonT, fuserules.FrOrder(4), 100, "then the core");
+	port.AssertEq(emonT, fuserules.FrOrder(5), -1, "and no more");
 	var i int32 = 0
-	for i < 17 {
-		port.AssertEq(emonT, fuserules.FrBlock(i), 100, "every row of this item is in block 100")
+	for i < 28 {
+		port.AssertEq(emonT, 		if (fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 300) {
+1		} else {
+0		}
+, 1, "every row is in block 100 (P7.3) or 300 (P7.6)");
 		i += 1
 	}
 }
@@ -117,13 +120,13 @@ func atText(et *port.Cells, a int32, b int32, c int32) int32 {
 	// Append up to three code points (0 for none) to the text; answers where they start.
 	var start int32 = port.CellsLen(et)
 	if a > 0 {
-		port.CellsPush(et, a)
+		port.CellsPush(et, a);
 	}
 	if b > 0 {
-		port.CellsPush(et, b)
+		port.CellsPush(et, b);
 	}
 	if c > 0 {
-		port.CellsPush(et, c)
+		port.CellsPush(et, c);
 	}
 	return start
 }
@@ -131,19 +134,19 @@ func atText(et *port.Cells, a int32, b int32, c int32) int32 {
 func atTword(fw *port.Cells, feats *port.Cells, et *port.Cells, x0 int32, line int32, font int32, health int32, garbage int32, a int32, b int32) int32 {
 	// A text-layer word of page 1 at x0..x0+900, y 0..1000, baseline y 900, in `font`, of two letters, with its feature row. Answers its row.
 	var ts int32 = atText(et, a, b, 0)
-	var w int32 = evidence.WdNew(fw, 1, x0, 0, x0+900, 1000, x0, 900, x0+900, 900, 0, 0, ts, 2, line, -1, -1)
+	var w int32 = evidence.WdNew(fw, 1, x0, 0, x0 + 900, 1000, x0, 900, x0 + 900, 900, 0, 0, ts, 2, line, -1, -1)
 	var f int32 = evidence.FeNew(feats, evidence.EaWords(), w)
-	evidence.WdSet(fw, w, evidence.WfFont(), font)
-	evidence.WdSet(fw, w, evidence.WfSize(), 1200)
-	evidence.WdSet(fw, w, evidence.WfStyle(), 7)
-	evidence.WdSet(fw, w, evidence.WfGfirst(), 3)
-	evidence.WdSet(fw, w, evidence.WfGcount(), 2)
-	evidence.WdSet(fw, w, evidence.WfSrc(), 1)
-	evidence.WdSet(fw, w, evidence.WfWbreak(), 1)
-	evidence.WdSet(fw, w, evidence.HdFeat(), f)
-	evidence.FeSet(feats, f, evidence.XtFontHealth(), health)
-	evidence.FeSet(feats, f, evidence.XtBadCp(), garbage)
-	evidence.FeSet(feats, f, evidence.XtVis(), 0)
+	evidence.WdSet(fw, w, evidence.WfFont(), font);
+	evidence.WdSet(fw, w, evidence.WfSize(), 1200);
+	evidence.WdSet(fw, w, evidence.WfStyle(), 7);
+	evidence.WdSet(fw, w, evidence.WfGfirst(), 3);
+	evidence.WdSet(fw, w, evidence.WfGcount(), 2);
+	evidence.WdSet(fw, w, evidence.WfSrc(), 1);
+	evidence.WdSet(fw, w, evidence.WfWbreak(), 1);
+	evidence.WdSet(fw, w, evidence.HdFeat(), f);
+	evidence.FeSet(feats, f, evidence.XtFontHealth(), health);
+	evidence.FeSet(feats, f, evidence.XtBadCp(), garbage);
+	evidence.FeSet(feats, f, evidence.XtVis(), 0);
 	return w
 }
 
@@ -156,10 +159,10 @@ func atOword(ow *port.Cells, feats *port.Cells, et *port.Cells, x0 int32, x1 int
 	if c > 0 {
 		n = 3
 	}
-	evidence.OwSet(ow, w, 12, n)
-	evidence.OwSet(ow, w, evidence.HdFeat(), f)
-	evidence.FeSet(feats, f, evidence.XoConf(), 888)
-	evidence.FeSet(feats, f, evidence.XoImplausible(), implausible)
+	evidence.OwSet(ow, w, 12, n);
+	evidence.OwSet(ow, w, evidence.HdFeat(), f);
+	evidence.FeSet(feats, f, evidence.XoConf(), 888);
+	evidence.FeSet(feats, f, evidence.XoImplausible(), implausible);
 	return w
 }
 
@@ -171,22 +174,22 @@ func atGroup(cg *port.Cells, refs *port.Cells, tword int32, nt int32, oword int3
 	first = evidence.RfAdd(refs, evidence.EaWords(), tword)
 	i = 1
 	for i < nt {
-		evidence.RfAdd(refs, evidence.EaWords(), tword+i)
+		evidence.RfAdd(refs, evidence.EaWords(), tword + i);
 		i += 1
 	}
 	if nt > 0 {
-		player.CgSet(cg, g, player.CgfTfirst(), first)
-		player.CgSet(cg, g, player.CgfTcount(), nt)
+		player.CgSet(cg, g, player.CgfTfirst(), first);
+		player.CgSet(cg, g, player.CgfTcount(), nt);
 	}
 	first = evidence.RfAdd(refs, evidence.EaOwords(), oword)
 	i = 1
 	for i < no {
-		evidence.RfAdd(refs, evidence.EaOwords(), oword+i)
+		evidence.RfAdd(refs, evidence.EaOwords(), oword + i);
 		i += 1
 	}
-	player.CgSet(cg, g, player.CgfOfirst(), first)
-	player.CgSet(cg, g, player.CgfOcount(), no)
-	player.CgSet(cg, g, player.CgfSimfold(), simfold)
+	player.CgSet(cg, g, player.CgfOfirst(), first);
+	player.CgSet(cg, g, player.CgfOcount(), no);
+	player.CgSet(cg, g, player.CgfSimfold(), simfold);
 	return g
 }
 
@@ -194,9 +197,9 @@ func atOcrOnlyGroup(cg *port.Cells, refs *port.Cells, oword int32) int32 {
 	// A group of page 1 with one OCR word and no text-layer candidate; answers it.
 	var g int32 = player.CgNew(cg, 1, 0, 0, 3000, 1000, 0)
 	var first int32 = evidence.RfAdd(refs, evidence.EaOwords(), oword)
-	player.CgSet(cg, g, player.CgfOfirst(), first)
-	player.CgSet(cg, g, player.CgfOcount(), 1)
-	player.CgSet(cg, g, player.CgfFlags(), 2)
+	player.CgSet(cg, g, player.CgfOfirst(), first);
+	player.CgSet(cg, g, player.CgfOcount(), 1);
+	player.CgSet(cg, g, player.CgfFlags(), 2);
 	return g
 }
 
@@ -204,7 +207,7 @@ func atGlyphs(c *port.Cells) int32 {
 	// Fill a glyph arena of ten rows (the text-layer words of these laws point at rows 3 and 4).
 	var i int32 = 0
 	for i < 320 {
-		port.CellsPush(c, 0)
+		port.CellsPush(c, 0);
 		i += 1
 	}
 	return 0
@@ -213,8 +216,8 @@ func atGlyphs(c *port.Cells) int32 {
 func atTextOnlyGroup(cg *port.Cells, refs *port.Cells, tword int32) int32 {
 	var g int32 = player.CgNew(cg, 1, 0, 0, 3000, 1000, 0)
 	var first int32 = evidence.RfAdd(refs, evidence.EaWords(), tword)
-	player.CgSet(cg, g, player.CgfTfirst(), first)
-	player.CgSet(cg, g, player.CgfTcount(), 1)
+	player.CgSet(cg, g, player.CgfTfirst(), first);
+	player.CgSet(cg, g, player.CgfTcount(), 1);
 	return g
 }
 
@@ -236,7 +239,7 @@ func atRun(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, e
 
 func atLine3(fl *port.Cells, first int32, count int32) int32 {
 	// A line of page 1 over `count` flow words from `first`, 100 high on the baseline 900.
-	return evidence.LnNew(fl, 1, 0, 0, (count*1000)+0, 1000, 0, 900, count*1000, 900, 0, 0, first, count)
+	return evidence.LnNew(fl, 1, 0, 0, (count * 1000) + 0, 1000, 0, 900, count * 1000, 900, 0, 0, first, count)
 }
 
 func TestAHealthyFontIsUntouchable(emonT *testing.T) {
@@ -262,33 +265,33 @@ func TestAHealthyFontIsUntouchable(emonT *testing.T) {
 	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
 	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 88, 89, 0)
 	var o2 int32 = atOword(ow, feats, et, 2000, 2900, 0, 90, 90, 0)
-	atLine3(fl, 0, 3)
+	atLine3(fl, 0, 3);
 	// OCR agrees on the first, differs on the second, reads something else entirely (and plausibly) on the third
-	atGroup(cg, refs, w0, 1, o0, 1, 1000)
-	atGroup(cg, refs, w1, 1, o1, 1, 500)
-	atGroup(cg, refs, w2, 1, o2, 1, 0)
-	port.AssertEq(emonT, atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 3, "three groups decided")
-	port.AssertEq(emonT, player.FwCount(nfw), 3, "three words")
-	port.AssertEq(emonT, player.FlCount(nfl), 1, "one line")
+	atGroup(cg, refs, w0, 1, o0, 1, 1000);
+	atGroup(cg, refs, w1, 1, o1, 1, 500);
+	atGroup(cg, refs, w2, 1, o2, 1, 0);
+	port.AssertEq(emonT, atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 3, "three groups decided");
+	port.AssertEq(emonT, player.FwCount(nfw), 3, "three words");
+	port.AssertEq(emonT, player.FlCount(nfl), 1, "one line");
 	var i int32 = 0
 	for i < 3 {
-		port.AssertEq(emonT, port.CellsAt(nfw, (i*24)+11), port.CellsAt(fw, (i*24)+11), "the text run is the text layer's")
-		port.AssertEq(emonT, port.CellsAt(nfw, (i*24)+12), 2, "its length")
-		port.AssertEq(emonT, port.CellsAt(nfw, (i*24)+17), 3, "its glyph run is kept")
-		port.AssertEq(emonT, port.CellsAt(nfw, (i*24)+1), port.CellsAt(fw, (i*24)+1), "its box is the text layer's")
-		port.AssertEq(emonT, port.CellsAt(nfw, (i*24)+23), 5, "src: text and ocr both had a candidate")
-		port.AssertEq(emonT, player.FvGet(fv, i, 1), 1, "the verdict says `text`")
+		port.AssertEq(emonT, port.CellsAt(nfw, (i * 24) + 11), port.CellsAt(fw, (i * 24) + 11), "the text run is the text layer's");
+		port.AssertEq(emonT, port.CellsAt(nfw, (i * 24) + 12), 2, "its length");
+		port.AssertEq(emonT, port.CellsAt(nfw, (i * 24) + 17), 3, "its glyph run is kept");
+		port.AssertEq(emonT, port.CellsAt(nfw, (i * 24) + 1), port.CellsAt(fw, (i * 24) + 1), "its box is the text layer's");
+		port.AssertEq(emonT, port.CellsAt(nfw, (i * 24) + 23), 5, "src: text and ocr both had a candidate");
+		port.AssertEq(emonT, player.FvGet(fv, i, 1), 1, "the verdict says `text`");
 		i += 1
 	}
-	port.AssertEq(emonT, player.FvGet(fv, 0, 2), 110, "agreement: rule 110")
-	port.AssertEq(emonT, player.FvGet(fv, 0, 3), 1000, "at confidence 1000")
-	port.AssertEq(emonT, player.FvGet(fv, 1, 2), 111, "disagreement: rule 111")
-	port.AssertEq(emonT, player.FvGet(fv, 1, 3), 700, "at a lowered confidence")
-	port.AssertEq(emonT, player.FvGet(fv, 2, 2), 112, "OCR reading something else entirely: rule 112, the text layer still wins")
-	port.AssertEq(emonT, player.FvGet(fv, 2, 4), 1, "low-conf")
-	port.AssertEq(emonT, player.FaCount(afa), 0, "nothing was set aside")
-	port.AssertThat(emonT, player.FxCount(fx) > 8, "the explanation has the columns each rule read")
-	port.AssertEq(emonT, player.PlCheck(cg, nfw, nfl, fv, port.NewCells(), fx, port.NewCells(), port.NewCells(), port.NewCells(), et, refs, gls), 0, "the layer is sound")
+	port.AssertEq(emonT, player.FvGet(fv, 0, 2), 110, "agreement: rule 110");
+	port.AssertEq(emonT, player.FvGet(fv, 0, 3), 1000, "at confidence 1000");
+	port.AssertEq(emonT, player.FvGet(fv, 1, 2), 111, "disagreement: rule 111");
+	port.AssertEq(emonT, player.FvGet(fv, 1, 3), 700, "at a lowered confidence");
+	port.AssertEq(emonT, player.FvGet(fv, 2, 2), 112, "OCR reading something else entirely: rule 112, the text layer still wins");
+	port.AssertEq(emonT, player.FvGet(fv, 2, 4), 1, "low-conf");
+	port.AssertEq(emonT, player.FaCount(afa), 0, "nothing was set aside");
+	port.AssertThat(emonT, player.FxCount(fx) > 8, "the explanation has the columns each rule read");
+	port.AssertEq(emonT, player.PlCheck(cg, nfw, nfl, fv, port.NewCells(), fx, port.NewCells(), port.NewCells(), port.NewCells(), et, refs, gls), 0, "the layer is sound");
 }
 
 func TestAPageNoGroupSawPassesThrough(emonT *testing.T) {
@@ -309,15 +312,15 @@ func TestAPageNoGroupSawPassesThrough(emonT *testing.T) {
 	var w0 int32 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101)
 	var w1 int32 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111)
 	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
-	atLine3(fl, 0, 2)
-	atGroup(cg, refs, w0, 1, o0, 1, 1000)
+	atLine3(fl, 0, 2);
+	atGroup(cg, refs, w0, 1, o0, 1, 1000);
 	// the second word is in no group: the identity
-	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa)
-	port.AssertEq(emonT, player.FwCount(nfw), 2, "both words")
-	port.AssertEq(emonT, player.FvGet(fv, 1, 0), -1, "no group")
-	port.AssertEq(emonT, player.FvGet(fv, 1, 2), 101, "rule 101, the identity")
-	port.AssertEq(emonT, player.FvGet(fv, 1, 3), 900, "without an OCR witness: 900")
-	port.AssertEq(emonT, port.CellsAt(nfw, 24+23), 1, "and its src is as it was")
+	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
+	port.AssertEq(emonT, player.FwCount(nfw), 2, "both words");
+	port.AssertEq(emonT, player.FvGet(fv, 1, 0), -1, "no group");
+	port.AssertEq(emonT, player.FvGet(fv, 1, 2), 101, "rule 101, the identity");
+	port.AssertEq(emonT, player.FvGet(fv, 1, 3), 900, "without an OCR witness: 900");
+	port.AssertEq(emonT, port.CellsAt(nfw, 24 + 23), 1, "and its src is as it was");
 }
 
 func TestAnUnhealthyFontGivesItsGroupToOcr(emonT *testing.T) {
@@ -343,30 +346,30 @@ func TestAnUnhealthyFontGivesItsGroupToOcr(emonT *testing.T) {
 	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
 	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0)
 	var o2 int32 = atOword(ow, feats, et, 2000, 2900, 0, 97, 97, 0)
-	atLine3(fl, 0, 3)
-	atGroup(cg, refs, w0, 1, o0, 1, 0)
-	atGroup(cg, refs, w1, 1, o1, 1, 0)
-	atGroup(cg, refs, w2, 1, o2, 1, 1000)
-	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa)
-	port.AssertEq(emonT, player.FwCount(nfw), 3, "three words")
-	port.AssertEq(emonT, port.CellsAt(nfw, 11), port.CellsAt(ow, 11), "the first word's text is OCR's")
-	port.AssertEq(emonT, port.CellsAt(nfw, 24+11), port.CellsAt(ow, 28+11), "so is the second's")
-	port.AssertEq(emonT, port.CellsAt(nfw, 48+11), port.CellsAt(fw, 48+11), "the healthy font's is the text layer's")
-	port.AssertEq(emonT, port.CellsAt(nfw, 1), 0, "the box is the text layer's")
-	port.AssertEq(emonT, port.CellsAt(nfw, 4), 1000, "all of it, ascent and descent")
-	port.AssertEq(emonT, port.CellsAt(nfw, 17), -1, "no glyph run says the word")
-	port.AssertEq(emonT, port.CellsAt(nfw, 18), 0, "none")
-	port.AssertEq(emonT, port.CellsAt(nfw, 15), -1, "no feature row")
-	port.AssertEq(emonT, port.CellsAt(nfw, 19), 5, "the font stays (style and size are the text layer's)")
-	port.AssertEq(emonT, port.CellsAt(nfw, 20), 1200, "the size")
-	port.AssertEq(emonT, port.CellsAt(nfw, 16), 7, "the style")
-	port.AssertEq(emonT, port.CellsAt(nfw, 23), 5, "src: both had a candidate")
-	port.AssertEq(emonT, player.FvGet(fv, 0, 1), 4, "the verdict says `ocr`")
-	port.AssertEq(emonT, player.FvGet(fv, 0, 2), 130, "rule 130")
-	port.AssertEq(emonT, player.FvGet(fv, 0, 4), 4, "text-layer-suspect")
-	port.AssertEq(emonT, player.FvGet(fv, 2, 1), 1, "the healthy font's word is the text layer's")
-	port.AssertEq(emonT, player.FvGet(fv, 2, 2), 110, "by 110")
-	port.AssertEq(emonT, player.PlCheck(cg, nfw, nfl, fv, port.NewCells(), fx, port.NewCells(), port.NewCells(), port.NewCells(), et, refs, gls), 0, "the layer is sound")
+	atLine3(fl, 0, 3);
+	atGroup(cg, refs, w0, 1, o0, 1, 0);
+	atGroup(cg, refs, w1, 1, o1, 1, 0);
+	atGroup(cg, refs, w2, 1, o2, 1, 1000);
+	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
+	port.AssertEq(emonT, player.FwCount(nfw), 3, "three words");
+	port.AssertEq(emonT, port.CellsAt(nfw, 11), port.CellsAt(ow, 11), "the first word's text is OCR's");
+	port.AssertEq(emonT, port.CellsAt(nfw, 24 + 11), port.CellsAt(ow, 28 + 11), "so is the second's");
+	port.AssertEq(emonT, port.CellsAt(nfw, 48 + 11), port.CellsAt(fw, 48 + 11), "the healthy font's is the text layer's");
+	port.AssertEq(emonT, port.CellsAt(nfw, 1), 0, "the box is the text layer's");
+	port.AssertEq(emonT, port.CellsAt(nfw, 4), 1000, "all of it, ascent and descent");
+	port.AssertEq(emonT, port.CellsAt(nfw, 17), -1, "no glyph run says the word");
+	port.AssertEq(emonT, port.CellsAt(nfw, 18), 0, "none");
+	port.AssertEq(emonT, port.CellsAt(nfw, 15), -1, "no feature row");
+	port.AssertEq(emonT, port.CellsAt(nfw, 19), 5, "the font stays (style and size are the text layer's)");
+	port.AssertEq(emonT, port.CellsAt(nfw, 20), 1200, "the size");
+	port.AssertEq(emonT, port.CellsAt(nfw, 16), 7, "the style");
+	port.AssertEq(emonT, port.CellsAt(nfw, 23), 5, "src: both had a candidate");
+	port.AssertEq(emonT, player.FvGet(fv, 0, 1), 4, "the verdict says `ocr`");
+	port.AssertEq(emonT, player.FvGet(fv, 0, 2), 130, "rule 130");
+	port.AssertEq(emonT, player.FvGet(fv, 0, 4), 4, "text-layer-suspect");
+	port.AssertEq(emonT, player.FvGet(fv, 2, 1), 1, "the healthy font's word is the text layer's");
+	port.AssertEq(emonT, player.FvGet(fv, 2, 2), 110, "by 110");
+	port.AssertEq(emonT, player.PlCheck(cg, nfw, nfl, fv, port.NewCells(), fx, port.NewCells(), port.NewCells(), port.NewCells(), et, refs, gls), 0, "the layer is sound");
 }
 
 func TestAWordReadAsThreeKeepsOcrsExtentsAndTheTextLayersBand(emonT *testing.T) {
@@ -388,22 +391,22 @@ func TestAWordReadAsThreeKeepsOcrsExtentsAndTheTextLayersBand(emonT *testing.T) 
 	var o0 int32 = atOword(ow, feats, et, 0, 250, 0, 97, 98, 0)
 	var o1 int32 = atOword(ow, feats, et, 300, 600, 0, 99, 100, 0)
 	var o2 int32 = atOword(ow, feats, et, 650, 900, 0, 101, 102, 0)
-	atLine3(fl, 0, 1)
-	atGroup(cg, refs, w0, 1, o0, 3, 0)
-	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa)
-	port.AssertEq(emonT, player.FwCount(nfw), 3, "one word became three")
-	port.AssertEq(emonT, player.FvGet(fv, 2, 0), 0, "all in group 0")
-	port.AssertEq(emonT, port.CellsAt(nfw, 1), 0, "the first one's extent is OCR's")
-	port.AssertEq(emonT, port.CellsAt(nfw, 3), 250, "to here")
-	port.AssertEq(emonT, port.CellsAt(nfw, 24+1), 300, "the second starts where OCR says")
-	port.AssertEq(emonT, port.CellsAt(nfw, 2), 0, "the band is the text layer's: its top")
-	port.AssertEq(emonT, port.CellsAt(nfw, 4), 1000, "its bottom")
-	port.AssertEq(emonT, port.CellsAt(nfw, 6), 900, "and its baseline")
-	port.AssertEq(emonT, port.CellsAt(nfw, 22), 1, "a space after the first")
-	port.AssertEq(emonT, port.CellsAt(nfw, 24+22), 1, "and the second")
-	port.AssertEq(emonT, port.CellsAt(nfw, 48+22), 1, "the last ends as the text layer's word did")
-	port.AssertEq(emonT, port.CellsAt(nfl, 12), 3, "the line has three words")
-	port.AssertEq(emonT, port.CellsAt(nfl, 3), 900, "and is measured again: its right edge is the last word's")
+	atLine3(fl, 0, 1);
+	atGroup(cg, refs, w0, 1, o0, 3, 0);
+	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
+	port.AssertEq(emonT, player.FwCount(nfw), 3, "one word became three");
+	port.AssertEq(emonT, player.FvGet(fv, 2, 0), 0, "all in group 0");
+	port.AssertEq(emonT, port.CellsAt(nfw, 1), 0, "the first one's extent is OCR's");
+	port.AssertEq(emonT, port.CellsAt(nfw, 3), 250, "to here");
+	port.AssertEq(emonT, port.CellsAt(nfw, 24 + 1), 300, "the second starts where OCR says");
+	port.AssertEq(emonT, port.CellsAt(nfw, 2), 0, "the band is the text layer's: its top");
+	port.AssertEq(emonT, port.CellsAt(nfw, 4), 1000, "its bottom");
+	port.AssertEq(emonT, port.CellsAt(nfw, 6), 900, "and its baseline");
+	port.AssertEq(emonT, port.CellsAt(nfw, 22), 1, "a space after the first");
+	port.AssertEq(emonT, port.CellsAt(nfw, 24 + 22), 1, "and the second");
+	port.AssertEq(emonT, port.CellsAt(nfw, 48 + 22), 1, "the last ends as the text layer's word did");
+	port.AssertEq(emonT, port.CellsAt(nfl, 12), 3, "the line has three words");
+	port.AssertEq(emonT, port.CellsAt(nfl, 3), 900, "and is measured again: its right edge is the last word's");
 }
 
 func TestABadGlyphInAHealthyFontGoesToOcrButOnlyWhereTheEngineReads(emonT *testing.T) {
@@ -425,14 +428,14 @@ func TestABadGlyphInAHealthyFontGoesToOcrButOnlyWhereTheEngineReads(emonT *testi
 	var w1 int32 = atTword(fw, feats, et, 1000, 0, 0, 1000, 500, 1488, 1489)
 	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
 	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 104, 101, 0)
-	atLine3(fl, 0, 2)
-	atGroup(cg, refs, w0, 1, o0, 1, 0)
-	atGroup(cg, refs, w1, 1, o1, 1, 0)
-	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa)
-	port.AssertEq(emonT, player.FvGet(fv, 0, 2), 120, "a Latin word with a bad glyph of its own: 120")
-	port.AssertEq(emonT, player.FvGet(fv, 0, 1), 4, "OCR's")
-	port.AssertEq(emonT, player.FvGet(fv, 1, 2), 190, "a Hebrew word with one: the engine cannot read it, so the text layer stays (the default)")
-	port.AssertEq(emonT, player.FvGet(fv, 1, 1), 1, "the text layer's")
+	atLine3(fl, 0, 2);
+	atGroup(cg, refs, w0, 1, o0, 1, 0);
+	atGroup(cg, refs, w1, 1, o1, 1, 0);
+	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
+	port.AssertEq(emonT, player.FvGet(fv, 0, 2), 120, "a Latin word with a bad glyph of its own: 120");
+	port.AssertEq(emonT, player.FvGet(fv, 0, 1), 4, "OCR's");
+	port.AssertEq(emonT, player.FvGet(fv, 1, 2), 190, "a Hebrew word with one: the engine cannot read it, so the text layer stays (the default)");
+	port.AssertEq(emonT, player.FvGet(fv, 1, 1), 1, "the text layer's");
 }
 
 func TestOcrOnlyGroupsAreDroppedHeldOrNothing(emonT *testing.T) {
@@ -454,28 +457,28 @@ func TestOcrOnlyGroupsAreDroppedHeldOrNothing(emonT *testing.T) {
 	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
 	var o1 int32 = atOword(ow, feats, et, 5000, 5900, 900, 88, 89, 0)
 	var o2 int32 = atOword(ow, feats, et, 6000, 6900, 0, 90, 91, 0)
-	atLine3(fl, 0, 1)
-	evidence.EpNew(ep, 1, 20000, 20000)
+	atLine3(fl, 0, 1);
+	evidence.EpNew(ep, 1, 20000, 20000);
 	// a small image holds the third OCR word's box (the area of the page is 400e6; the image 50e6: 125 per mille)
-	evidence.ImNew(im, 1, 5900, 0, 8000, 1000, 0, 10, 10)
-	atGroup(cg, refs, w0, 1, o0, 1, 1000)
+	evidence.ImNew(im, 1, 5900, 0, 8000, 1000, 0, 10, 10);
+	atGroup(cg, refs, w0, 1, o0, 1, 1000);
 	var g1 int32 = atOcrOnlyGroup(cg, refs, o1)
 	var g2 int32 = atOcrOnlyGroup(cg, refs, o2)
-	port.AssertEq(emonT, g1, 1, "the second group")
-	port.AssertEq(emonT, g2, 2, "the third group")
-	player.CgSet(cg, g1, 1, 5000)
-	player.CgSet(cg, g1, 3, 5900)
-	player.CgSet(cg, g2, 1, 6000)
-	player.CgSet(cg, g2, 3, 7000)
-	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa)
-	port.AssertEq(emonT, player.FwCount(nfw), 1, "only the text layer's word is in the flow: the ghost and the figure's word are not")
-	port.AssertEq(emonT, player.FaCount(afa), 1, "one ghost is set aside")
-	port.AssertEq(emonT, player.FaGet(afa, 0, 5), model.DrOcrGhost(), "as an ocr-ghost")
-	port.AssertEq(emonT, player.FaGet(afa, 0, 9), 1, "from group 1")
-	port.AssertEq(emonT, player.FaGet(afa, 0, 10), 170, "by rule 170")
-	port.AssertEq(emonT, player.FaGet(afa, 0, 7), 1, "whose OCR word is row 1")
-	port.AssertEq(emonT, player.CgGet(cg, g2, player.CgfFlags()), 2+player.PlgInFigure(), "the figure's word says it is in a figure")
-	port.AssertEq(emonT, player.CgGet(cg, g1, player.CgfFlags()), 2, "and the ghost does not")
+	port.AssertEq(emonT, g1, 1, "the second group");
+	port.AssertEq(emonT, g2, 2, "the third group");
+	player.CgSet(cg, g1, 1, 5000);
+	player.CgSet(cg, g1, 3, 5900);
+	player.CgSet(cg, g2, 1, 6000);
+	player.CgSet(cg, g2, 3, 7000);
+	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
+	port.AssertEq(emonT, player.FwCount(nfw), 1, "only the text layer's word is in the flow: the ghost and the figure's word are not");
+	port.AssertEq(emonT, player.FaCount(afa), 1, "one ghost is set aside");
+	port.AssertEq(emonT, player.FaGet(afa, 0, 5), model.DrOcrGhost(), "as an ocr-ghost");
+	port.AssertEq(emonT, player.FaGet(afa, 0, 9), 1, "from group 1");
+	port.AssertEq(emonT, player.FaGet(afa, 0, 10), 170, "by rule 170");
+	port.AssertEq(emonT, player.FaGet(afa, 0, 7), 1, "whose OCR word is row 1");
+	port.AssertEq(emonT, player.CgGet(cg, g2, player.CgfFlags()), 2 + player.PlgInFigure(), "the figure's word says it is in a figure");
+	port.AssertEq(emonT, player.CgGet(cg, g1, player.CgfFlags()), 2, "and the ghost does not");
 }
 
 func TestTheGhostsOfALineAreOneLedgerRow(emonT *testing.T) {
@@ -490,19 +493,19 @@ func TestTheGhostsOfALineAreOneLedgerRow(emonT *testing.T) {
 	var a int32 = atOword(ow, feats, et, 0, 100, 900, 88, 89, 0)
 	var b int32 = atOword(ow, feats, et, 200, 300, 900, 90, 91, 0)
 	var c int32 = atOword(ow, feats, et, 400, 500, 900, 92, 93, 0)
-	evidence.OwSet(ow, a, 13, 0)
-	evidence.OwSet(ow, b, 13, 0)
-	evidence.OwSet(ow, c, 13, 1)
+	evidence.OwSet(ow, a, 13, 0);
+	evidence.OwSet(ow, b, 13, 0);
+	evidence.OwSet(ow, c, 13, 1);
 	// three dropped groups: two on OCR line 0, one on line 1
-	player.FaNew(afa, 1, 0, 100, 100, 800, model.DrOcrGhost(), evidence.EaOwords(), a)
-	player.FaNew(afa, 1, 200, 100, 300, 800, model.DrOcrGhost(), evidence.EaOwords(), b)
-	player.FaNew(afa, 1, 400, 100, 500, 800, model.DrOcrGhost(), evidence.EaOwords(), c)
-	port.AssertEq(emonT, arbiter.ArWrite(afa, ow, et, ledger, text, tmp, tt), 2, "two ledger rows")
-	port.AssertEq(emonT, model.LedgerCount(ledger), 2, "in the ledger")
-	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrOcrGhost(), "an ocr-ghost")
-	port.AssertEq(emonT, model.LedgerX1(ledger, 0), 300, "the first row spans both words")
-	port.AssertEq(emonT, model.LedgerTextLen(ledger, 0), 5, "`XY ZZ`: the words joined by a space")
-	port.AssertEq(emonT, model.LedgerTextLen(ledger, 1), 2, "the second is one word")
+	player.FaNew(afa, 1, 0, 100, 100, 800, model.DrOcrGhost(), evidence.EaOwords(), a);
+	player.FaNew(afa, 1, 200, 100, 300, 800, model.DrOcrGhost(), evidence.EaOwords(), b);
+	player.FaNew(afa, 1, 400, 100, 500, 800, model.DrOcrGhost(), evidence.EaOwords(), c);
+	port.AssertEq(emonT, arbiter.ArWrite(afa, ow, et, ledger, text, tmp, tt), 2, "two ledger rows");
+	port.AssertEq(emonT, model.LedgerCount(ledger), 2, "in the ledger");
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), model.DrOcrGhost(), "an ocr-ghost");
+	port.AssertEq(emonT, model.LedgerX1(ledger, 0), 300, "the first row spans both words");
+	port.AssertEq(emonT, model.LedgerTextLen(ledger, 0), 5, "`XY ZZ`: the words joined by a space");
+	port.AssertEq(emonT, model.LedgerTextLen(ledger, 1), 2, "the second is one word");
 }
 
 func atBlock(nodes *port.Cells, regions *port.Cells, text *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, a int32) int32 {
@@ -510,11 +513,11 @@ func atBlock(nodes *port.Cells, regions *port.Cells, text *port.Cells, x0 int32,
 	var p int32 = model.NodeNew(nodes, model.NkParagraph(), 0)
 	var t int32 = model.NodeNew(nodes, model.NkText(), p)
 	var ts int32 = port.CellsLen(text)
-	port.CellsPush(text, a)
-	model.NodeSetText(nodes, t, ts, 1)
-	model.NodeAddRegion(nodes, regions, p, 1, x0, y0, x1, y1)
-	model.NodeAddSrc(nodes, p, model.SrText())
-	model.NodeAddSrc(nodes, t, model.SrText())
+	port.CellsPush(text, a);
+	model.NodeSetText(nodes, t, ts, 1);
+	model.NodeAddRegion(nodes, regions, p, 1, x0, y0, x1, y1);
+	model.NodeAddSrc(nodes, p, model.SrText());
+	model.NodeAddSrc(nodes, t, model.SrText());
 	return p
 }
 
@@ -530,31 +533,31 @@ func TestTheModelSaysWhereOcrWonAndChangesNothingElse(emonT *testing.T) {
 	var fv *port.Cells = port.NewCells()
 	var feats *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
-	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
 	// two paragraphs: the first over words 0 and 1, the second over word 2
 	var pa int32 = atBlock(nodes, regions, text, 0, 0, 2000, 1000, 65)
 	var pb int32 = atBlock(nodes, regions, text, 0, 2000, 1000, 3000, 66)
-	atTword(nfw, feats, et, 0, 0, 0, 1000, 0, 97, 97)
-	atTword(nfw, feats, et, 1000, 0, 0, 1000, 0, 98, 98)
+	atTword(nfw, feats, et, 0, 0, 0, 1000, 0, 97, 97);
+	atTword(nfw, feats, et, 1000, 0, 0, 1000, 0, 98, 98);
 	// word 2 sits in the second paragraph's box
 	var w2 int32 = atTword(nfw, feats, et, 0, 0, 0, 1000, 0, 99, 99)
-	evidence.WdSet(nfw, w2, 2, 2200)
-	evidence.WdSet(nfw, 2, 4, 2800)
-	player.FvNew(fv, 0, 1, 101, 900, 0)
-	player.FvNew(fv, 0, 1, 101, 900, 0)
-	player.FvNew(fv, 1, 1, 101, 900, 0)
-	port.AssertEq(emonT, arbiter.ArTag(nodes, regions, nfw, fv), 0, "nothing was OCR's: nothing is tagged")
-	port.AssertEq(emonT, model.NodeSrc(nodes, pa), model.SrText(), "the first paragraph is as it was")
-	port.AssertEq(emonT, model.NodeSrc(nodes, pb), model.SrText(), "so is the second")
+	evidence.WdSet(nfw, w2, 2, 2200);
+	evidence.WdSet(nfw, 2, 4, 2800);
+	player.FvNew(fv, 0, 1, 101, 900, 0);
+	player.FvNew(fv, 0, 1, 101, 900, 0);
+	player.FvNew(fv, 1, 1, 101, 900, 0);
+	port.AssertEq(emonT, arbiter.ArTag(nodes, regions, nfw, fv), 0, "nothing was OCR's: nothing is tagged");
+	port.AssertEq(emonT, model.NodeSrc(nodes, pa), model.SrText(), "the first paragraph is as it was");
+	port.AssertEq(emonT, model.NodeSrc(nodes, pb), model.SrText(), "so is the second");
 	// now OCR wins the third word
-	port.CellsSet(fv, 17, 4)
-	port.CellsSet(fv, 19, 800)
-	port.CellsSet(fv, 20, 4)
-	port.AssertEq(emonT, arbiter.ArTag(nodes, regions, nfw, fv), 1, "one block was tagged")
-	port.AssertEq(emonT, model.NodeSrc(nodes, pa), model.SrText(), "the paragraph OCR did not touch is not changed")
-	port.AssertEq(emonT, model.NodeFlags(nodes, pa), 0, "nor flagged")
-	port.AssertEq(emonT, model.NodeSrc(nodes, pb), model.SrOcr(), "the one OCR read in full is `ocr`, not `text`")
-	port.AssertEq(emonT, model.NodeFlags(nodes, pb), model.FlTextLayerSuspect(), "flagged text-layer-suspect")
-	port.AssertEq(emonT, model.NodeConf(nodes, pb), 800, "at OCR's confidence")
-	port.AssertEq(emonT, model.NodeSrc(nodes, pb+1), model.SrOcr(), "and its inline follows")
+	port.CellsSet(fv, 17, 4);
+	port.CellsSet(fv, 19, 800);
+	port.CellsSet(fv, 20, 4);
+	port.AssertEq(emonT, arbiter.ArTag(nodes, regions, nfw, fv), 1, "one block was tagged");
+	port.AssertEq(emonT, model.NodeSrc(nodes, pa), model.SrText(), "the paragraph OCR did not touch is not changed");
+	port.AssertEq(emonT, model.NodeFlags(nodes, pa), 0, "nor flagged");
+	port.AssertEq(emonT, model.NodeSrc(nodes, pb), model.SrOcr(), "the one OCR read in full is `ocr`, not `text`");
+	port.AssertEq(emonT, model.NodeFlags(nodes, pb), model.FlTextLayerSuspect(), "flagged text-layer-suspect");
+	port.AssertEq(emonT, model.NodeConf(nodes, pb), 800, "at OCR's confidence");
+	port.AssertEq(emonT, model.NodeSrc(nodes, pb + 1), model.SrOcr(), "and its inline follows");
 }

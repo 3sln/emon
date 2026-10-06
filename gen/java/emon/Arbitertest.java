@@ -36,7 +36,7 @@ public final class Arbitertest {
     public static void testEveryRuleDecidesWhatItsNumberSays() {
         // text only: the identity; a hidden word only: the text layer's too
         emon.Testport.assertEq(atRule(2, 0, 0, 1000, -1, 0, -1, -1, 0, 1), 101, "a sole text-layer candidate");
-        emon.Testport.assertEq(atRule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 102, "a sole hidden-text candidate");
+        emon.Testport.assertEq(atRule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 301, "a sole hidden-text candidate (P7.6's row 301 now says it first)");
         // the contract: a healthy font, no bad glyph, OCR present
         emon.Testport.assertEq(atRule(1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1), 110, "OCR agrees");
         emon.Testport.assertEq(atRule(1, 1, 0, 1000, 500, 0, 1000, 900, 0, 1), 111, "OCR differs");
@@ -96,8 +96,11 @@ public final class Arbitertest {
         emon.Testport.assertEq(Fuserules.frOrder(4), 100, "then the core");
         emon.Testport.assertEq(Fuserules.frOrder(5), -1, "and no more");
         int i = 0;
-        while (i < 17) {
-            emon.Testport.assertEq(Fuserules.frBlock(i), 100, "every row of this item is in block 100");
+        while (i < 28) {
+            emon.Testport.assertEq(            if ((Fuserules.frBlock(i) == 100) || (Fuserules.frBlock(i) == 300)) {
+1            } else {
+0            }
+, 1, "every row is in block 100 (P7.3) or 300 (P7.6)");
             i += 1;
         }
     }

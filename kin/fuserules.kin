@@ -45,7 +45,15 @@
 (defn ^:pub ^I32 ag-oconf [] (comment "the mean engine confidence (per mille) of the group's OCR words; one column of an admission, never the answer (D130)") (return 13))
 (defn ^:pub ^I32 ag-near [] (comment "for a group with no text-layer word: the most (per mille of the smaller box) its box overlaps a text-layer word of its page; else 0") (return 14))
 (defn ^:pub ^I32 ag-pageagree [] (comment "the agreement of the group's page between the text layer and OCR, per mille (1000 when too few groups have both)") (return 15))
-(defn ^:pub ^I32 ag-count [] (return 16))
+(comment "P7.6's columns (`emon.hidden`'s `hx-fill`), numbered from 32 so that no other item's columns move them")
+(defn ^:pub ^I32 ag-hlatin [] (comment "1 when the group's hidden-text words are in a script the engine reads, else 0") (return 32))
+(defn ^:pub ^I32 ag-hink [] (comment "the mean kin ink (per mille) under the group's hidden-text words; -1 when none was measured") (return 33))
+(defn ^:pub ^I32 ag-hinkwin [] (comment "1 when the hidden words' ink agreement is at least the OCR words', 0 when lower, -1 when either was not measured") (return 34))
+(defn ^:pub ^I32 ag-margin [] (comment "the lowest engine margin of the group's OCR words; -1 absent") (return 35))
+(defn ^:pub ^I32 ag-pageocr [] (comment "for a group of hidden words with no OCR word: the OCR words the page holds; 0 otherwise") (return 36))
+(defn ^:pub ^I32 ag-hsplit [] (comment "1 when the group's OCR words are MORE than its hidden words (the engine split what the older layer glued), else 0") (return 37))
+(defn ^:pub ^I32 ag-hsame [] (comment "1 when the group has as many OCR words as hidden words (one segmentation: a disagreement is about the letters of the words, not about where they break), else 0") (return 38))
+(defn ^:pub ^I32 ag-count [] (return 40))
 
 ;; ------------------------------------------------------------- comparisons and settings
 
@@ -67,6 +75,9 @@
 (defn ^:pub ^I32 fs-admit-conf [] (return 9))
 (defn ^:pub ^I32 fs-near-max [] (return 10))
 (defn ^:pub ^I32 fs-agree-min [] (return 11))
+
+(defn ^:pub ^I32 fs-hid-margin [] (comment "P7.6: the engine margin under which an OCR word is a close call") (return 40))
+(defn ^:pub ^I32 fs-hid-ink [] (comment "P7.6: the kin ink (per mille) under a hidden word from which there is ink") (return 41))
 
 (defn ^:pub ^I32 fr-setting [^I32 code]
   (comment "The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).")
@@ -90,6 +101,10 @@
   (if (== code 10) (return 150))
   (comment "`agree-min` (P7.2): the page agreement under which OCR-only words are not admitted")
   (if (== code 11) (return (hh-agree-min)))
+  (comment "`hid-margin` (P7.6): an OCR word whose engine margin (per mille) is under this is a close call, and a hidden word may stand against it")
+  (if (== code 40) (return 600))
+  (comment "`hid-ink` (P7.6): the kin ink (per mille of a hidden word's box) from which there is ink under it")
+  (if (== code 41) (return 30))
   (return 0))
 
 ;; ------------------------------------------------------------- the winners
@@ -105,7 +120,31 @@
 (defdata ^:pub fr-rows
   :emitter kin.lang/flat-array
   :stride 36
-  :data [;; 101 the identity: a sole text-layer candidate wins (no engine, or the engine saw nothing there)
+  :data [;; ---- block 300: hidden-text (P7.6; an older producer's OCR layer under its scan, D155). A hidden word is a candidate of its group like a visible one;
+         ;; ---- these rows are tried before block 100 and apply to a group whose text-layer side is hidden words only (no visible word).
+         ;; 301 a hidden layer and no OCR of the page at all: the hidden text, as before P7.0 and now explicit, confidence 600
+         301 300 1 0 0 600   2 0 1 0 2 0 1 2 0 36 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 311 hidden and OCR agree on the letters but OCR has more words (the older layer glued what the engine split): OCR's segmentation, sources both
+         311 300 2 0 0 -1   2 0 1 0 2 0 1 0 1 4 0 3 37 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 310 hidden and OCR agree (case-folded similarity at least `agree-sim`): the hidden text's code points (a better engine may have made it), sources both, confidence up
+         310 300 1 0 0 950   2 0 1 0 2 0 1 0 1 4 0 3 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 315 they disagree and the hidden text is in a script the engine does not read: the hidden text, low-conf
+         315 300 1 0 1 500   2 0 1 0 2 0 1 0 1 4 1 3 32 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 316 they disagree and the OCR is implausible: the hidden text, low-conf
+         316 300 1 0 1 500   2 0 1 0 2 0 1 0 1 4 1 3 7 1 5 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 321 they disagree, but the OCR word's margin is under `hid-margin` and the hidden word has the better ink: the hidden text, low-conf
+         321 300 1 0 1 500   2 0 1 0 2 0 1 0 1 4 1 3 35 1 40 34 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 323 ... and the ink was not measured (or does not say the hidden word is worse), but the group is one segmentation (as many OCR words as hidden words): a close call about letters goes to the hidden word, low-conf
+         323 300 1 0 1 500   2 0 1 0 2 0 1 0 1 4 1 3 35 1 40 38 2 1 34 3 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 322 they disagree: this run's OCR
+         322 300 2 0 0 -1   2 0 1 0 2 0 1 0 1 4 1 3 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 330 a hidden word with no OCR counterpart on a page OCR read, and ink under it: kept, low-conf
+         330 300 1 0 1 500   2 0 1 0 2 0 1 2 0 36 0 1 33 0 41 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 331 ... and no ink under it (text nothing shows): the ledger, `invisible`
+         331 300 0 10 0 0   2 0 1 0 2 0 1 2 0 36 0 1 33 1 41 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 332 ... and the ink not measured: kept, low-conf (a guess never drops text)
+         332 300 1 0 1 500   2 0 1 0 2 0 1 2 0 36 0 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 101 the identity: a sole text-layer candidate wins (no engine, or the engine saw nothing there)
          101 100 1 0 0 900   0 0 1 1 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; ... a sole hidden-text candidate is the text layer's too
          102 100 1 0 0 900   0 2 0 2 0 1 1 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
