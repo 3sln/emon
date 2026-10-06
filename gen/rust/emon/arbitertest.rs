@@ -112,7 +112,7 @@ fn test_the_rows_say_what_they_set() {
     crate::testport::assert_eq(fr_order(5), -1, "and no more");
     let mut i: i32 = 0;
     while i < 54 {
-        crate::testport::assert_that(((fr_block(i) == 100) || (fr_block(i) == 200)) || (fr_block(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
+        crate::testport::assert_that((((fr_block(i) == 100) || (fr_block(i) == 200)) || ((fr_block(i) == 400) || (fr_block(i) == 500))) || (fr_block(i) == 600), "every row of P7.3, P7.5, P7.7 and P7.G is in block 100, 200, 400, 500 or 600");
         i += 1;
     }
 }

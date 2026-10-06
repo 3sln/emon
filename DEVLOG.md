@@ -8953,7 +8953,8 @@ to a tagged row, and a tagged `rowspan` laid on a multi-line candidate would lan
 BEFORE 311 confirmed, 296 partial, 715 contradicted; AFTER 318, 316, 688 (26 contradicted to partial, 1 contradicted to confirmed, 6 partial to confirmed;
 no table the other way). Six Models changed, each only in a table's `flags`: `struct-disagree` appears on 5 tables that are now confirmed by the tags yet still
 disagree with the geometry on 900 per mille of the words (the case 2 of SPEC 10.5, as written), and goes from 2 tables whose tags now agree; `tag-span-conflict`
-goes from one (its table no longer takes the tags' spans). `bb accuracy`: 2,424 metrics, none regressed, 0 improved. The five multi-line tables P5.5 looked at
+goes from one (its table no longer takes the tags' spans). `bb accuracy`: 2,424 metrics, none regressed, 0 improved. The one law that moved is `ttab-bad-rows` (two visual rows in one `TR`): still `contradicted`, but its `geo` is 250 (was 0) and its score 351 (was 86), because
+two adjacent visual rows ARE, to this reading, one tagged row of two lines (`tag-verdict-acc` is still 1.0). The five multi-line tables P5.5 looked at
 were not all turned into confirmed ones: their rows now map, but the other checks (`row-band` for the lines of one cell) are what a tag that holds several
 lines costs, and the verdict reads them too.
 **Alternatives**: mapping columns the same way (a cell of several lines does not widen its column; spans are the tags' `ColSpan`, which `tb-tag-span` handles);
