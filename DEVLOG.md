@@ -1691,7 +1691,10 @@ analysis beyond "top-to-bottom lines on a single column".
   generator's pixels** (30 `D` rows of P3.12, RGBA8 SHA-256), the placed images are poppler's source oriented and cut by
   ImageMagick (the eight operations calibrated against the generator's oriented rows), **every embedded JPEG is, byte for
   byte, poppler's extraction**; `inline` decodes to the files, `external` names them, `omit` has no `<img>`; `--assets=none`
-  is a run without the flag. With the level off nothing runs and no arena is written: every committed golden is unchanged
+  is a run without the flag; every HTML (the goldens and every document in the three modes) parses with html5lib, zero errors.
+  `bb identity` has a second pass over the 68 documents with images, every arm given `--assets=images` (the bundle then holds the
+  HTML in `external` and `omit` mode and every asset file in hex): byte-identical on the nine arms and across record/replay.
+  `bb slice`'s native tests (Rust, Go) cover the API. With the level off nothing runs and no arena is written: every committed golden is unchanged
   (`bb identity`, `bb slice` green). **Departures** (D360-D367): (1) a provisional figure is made only with `assets` on
   (SPEC 10.6 owed it with or without; P8.1 owns the rule that makes it default, so a default Model and every golden are
   what they were); (2) `figures` is accepted and runs as `images` (cropping and rendering are P8.5/P6.2); (3) settings

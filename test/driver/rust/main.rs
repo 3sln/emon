@@ -13,6 +13,8 @@
 //                    drop-furniture,no-milestones,initials-plain,align-style,assets=inline|external|omit,prefix=TEXT
 //   --assets=        SPEC 10.11 (D117): `none` (the default), `images` (a figure or seal that is one embedded image gets its
 //                    bytes or its pixels as PNG), `figures` (runs as `images` until P8.5); the limits that go with it
+//   --html-assets=M  the HTML's mode for the Model's assets: inline (the default), external or omit (the same as `--html=assets=M`);
+//   --asset-prefix=P its `asset-prefix` (the same as `--html=prefix=P`)
 //   --asset-dir=D    write `Model::asset_files()` (a0.png, a1.jpg, ...) into D: the driver writes them, the library never does
 //   --out=evidence   the text layer's evidence dump (compact JSON)
 //   --out=bundle     one conversion, every output, for `bb identity`: sections `== json`, `== json-pretty`, `== html`,
@@ -42,7 +44,7 @@ use std::io::Read;
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
     std::process::exit(2);
 }
 
@@ -144,6 +146,8 @@ fn main() {
     let mut out = "json".to_string();
     let mut pretty = false;
     let mut html = HtmlOptions::default();
+    let mut html_assets: Option<HtmlAssets> = None;
+    let mut asset_prefix: Option<String> = None;
     let mut opts = Options::default();
     let mut cfg = Config::default();
     let mut password: Option<String> = None;
@@ -186,6 +190,15 @@ fn main() {
                 "figures" => Assets::Figures,
                 _ => usage("--assets is none, images or figures"),
             };
+        } else if let Some(v) = a.strip_prefix("--html-assets=") {
+            html_assets = Some(match v {
+                "inline" => HtmlAssets::Inline,
+                "external" => HtmlAssets::External,
+                "omit" => HtmlAssets::Omit,
+                _ => usage("--html-assets is inline, external or omit"),
+            });
+        } else if let Some(v) = a.strip_prefix("--asset-prefix=") {
+            asset_prefix = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--asset-dpi=") {
             opts.asset_dpi = v.parse().unwrap_or_else(|_| usage("--asset-dpi=N wants a number"));
         } else if let Some(v) = a.strip_prefix("--asset-pixels=") {
@@ -240,6 +253,12 @@ fn main() {
         usage("--record and --replay are one conversion");
     }
     opts.keep_evidence = out == "evidence" || out == "bundle";
+    if let Some(a) = html_assets {
+        html.assets = a;
+    }
+    if let Some(p) = asset_prefix {
+        html.asset_prefix = p;
+    }
 
     // THE DRIVER READS THE FILE (the library never does): three ways of handing the Engine the same bytes.
     let io = |e: std::io::Error| -> ! {

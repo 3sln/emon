@@ -41,7 +41,7 @@ import (
 
 func usage(msg string) {
 	fmt.Fprintf(os.Stderr, "emon-go: %s\n", msg)
-	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
+	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
 	os.Exit(2)
 }
 
@@ -125,6 +125,8 @@ func main() {
 	out := "json"
 	pretty := false
 	html := emon.DefaultHTMLOptions()
+	htmlAssets, assetPrefix := -1, ""
+	prefixSet := false
 	opts := emon.DefaultOptions()
 	cfg := emon.DefaultConfig()
 	var password *string
@@ -176,6 +178,19 @@ func main() {
 			default:
 				usage("--assets is none, images or figures")
 			}
+		case strings.HasPrefix(a, "--html-assets="):
+			switch strings.TrimPrefix(a, "--html-assets=") {
+			case "inline":
+				htmlAssets = int(emon.HTMLAssetsInline)
+			case "external":
+				htmlAssets = int(emon.HTMLAssetsExternal)
+			case "omit":
+				htmlAssets = int(emon.HTMLAssetsOmit)
+			default:
+				usage("--html-assets is inline, external or omit")
+			}
+		case strings.HasPrefix(a, "--asset-prefix="):
+			assetPrefix, prefixSet = strings.TrimPrefix(a, "--asset-prefix="), true
 		case strings.HasPrefix(a, "--asset-dpi="):
 			opts.AssetDPI = intFlag(a, "--asset-dpi=")
 		case strings.HasPrefix(a, "--asset-pixels="):
@@ -241,6 +256,12 @@ func main() {
 		usage("--record and --replay are two ways")
 	}
 	opts.KeepEvidence = out == "evidence" || out == "bundle"
+	if htmlAssets >= 0 {
+		html.Assets = emon.HTMLAssets(htmlAssets)
+	}
+	if prefixSet {
+		html.AssetPrefix = assetPrefix
+	}
 
 	fail := func(msg string, err error) {
 		fmt.Fprintf(os.Stderr, "emon-go: %s: %v\n", msg, err)
