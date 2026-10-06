@@ -286,7 +286,7 @@ API expose.
 | `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages or columns has one region per **fragment** (per page and column, in reading order; D112); the column of a region is the page's `layout` cell that contains it (§3.7). Inline `text` nodes have regions only at `detail: words` (§13). |
 | `src` | Provenance: the set of sources that contributed (§3.5). |
 | `conf` | Confidence, integer 0..1000 (§3.5). |
-| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close). |
+| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close), `in-table-image` (an OCR-only word admitted as the text of a table drawn in an image, §9.9, D224; carried by the fused flow's verdict rows, not by Model nodes). |
 
 ### 3.4 Geometry and units (D009)
 
@@ -377,7 +377,7 @@ The Model has three top-level collections besides the tree:
 * **`furniture`**: running headers/footers retained once, as templates.
 * **`dropped`**: the ledger — every suppressed element with `reason`
   (`watermark`, `background`, `page-number`, `running-title`, `bleed-through`,
-  `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`),
+  `duplicate-header-row`, `ocr-ghost`, `clipped`, `offpage`, `invisible`, `rule-ghost`, `unwitnessed-uncertain-paint`),
   its region, its text if any, and the confidence of the decision.
 * **`assets`** (only when the `assets` setting is not `none`, §10.11): the
   table of pixel assets — id, file name, media type, origin, byte size,
@@ -1951,6 +1951,22 @@ with no raster answer runs it over the vector source alone (rows 501, 505,
 514, 560, 562), which is the identity: `tb-build` over `grl`/`gfl` gives the
 tables `tb-build` over `paths` gave (P5.5a proves it byte for byte before it
 improves anything). Budget: ≤ 5 ms a page (Rust), inside §12.3's fusion line.
+
+**As built (P7.G, D441-D447).** The identity pass and the fusion are two calls, because the page unit does not run `gf-page` yet and the tracer is
+not in it until P7.4: `gf-page` stays in the document pass over the vector candidates alone, now **through the rows of block 500 as data** (`fr-decide-block`
+over the `gmz` measures, §9.7; no group is made); `gf-fuse` runs in the document unit after the page units, over the evidence arenas, on every page that has a
+**raster answer** (the tracer ran: the page has `inks`, `rules` or `prims` rows; OCR alone is not one, so a page that only OCR read is the identity) and
+reads the vector rows already made as the vector source's candidates, so a hidden vector rule (row 505) never reaches it. The rows differ from the table
+above only in numbering: **515** (vector paint not exactly known, raster answered, but the region's witness is under `gf-agree-min`: kept at 700, the render's silence
+means nothing), **532** and **535** (532 drops, 535 admits), **563** (a vector fill with a colour when a raster answered: 1000; 560 is without) and **574** (a tint
+alone on a raster page, as 570 is in an image), and **599**, the default that drops. A vector rule is one `grl` row and is never split by the tracer; its witness is
+the share of its length the tracer covers (`gf-agree-min`, 900, witnesses it). Tracer-only stretches of a group are the runs of elementary intervals that only the
+tracer covers; slanted tracer rules are figure material and are not emitted. The alignment is the pairs of §9.9 (not through the 64 × 64 grid, which only speeds
+them up). Health is `emon.health`'s `hl-regions` (kind `region`; D223), given the page's vector witness and tracer precision; the glyph test of row 532 reads the text
+layer's word boxes. The ledger row of 513 is written by `gf-write` from the arena `gfa`. The `fx` rows of block 500 name a `ggp` row. Regions: a
+`table-in-image` box is what its `in-image` rules and fills cover; figures are merged from visible image placements, OCR `bt-image` blocks and vector clusters
+(on a 32 × 32 grid, at least `fig-min-paths` curves or polygons in a connected set of cells); tagged `Figure` and `Table` elements are not read (the table stage
+verifies the tags itself, D225); `table-hint` is OCR's alone. Features 30 and 31 are written by `gf-fuse` for the OCR words of a page it made again.
 
 ---
 

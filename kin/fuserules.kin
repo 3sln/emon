@@ -33,6 +33,23 @@
             [kin.lang :refer [defdata defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
+;; ------------------------------------------------------------- the graphics settings (SPEC 9.9, 13; P7.G)
+;; first values, P10.1 calibrates; the sizes are centipoints, the angles centi-degrees, the rest per mille
+
+(defn ^:pub ^I32 fg-axis [] (comment "`gf-axis`: within this of horizontal or vertical is that orientation") (return 100))
+(defn ^:pub ^I32 fg-angle [] (comment "`gf-angle`: two rules are near when their angles differ by at most this") (return 150))
+(defn ^:pub ^I32 fg-perp [] (comment "`gf-perp`: ... and the distance between their centre lines is at most half their thicknesses plus this") (return 120))
+(defn ^:pub ^I32 fg-gap [] (comment "`gf-gap`: ... and their extents overlap or come this close") (return 300))
+(defn ^:pub ^I32 fg-fill-iou [] (comment "`gf-fill-iou`: two fills are near at this intersection over union") (return 700))
+(defn ^:pub ^I32 fg-img-min [] (comment "`gf-img-min`: an image placement is a region of its own at 2 cm each way") (return 5669))
+(defn ^:pub ^I32 fg-agree-min [] (comment "`gf-agree-min`: the share of a vector rule the tracer covers to witness it, and the region witness that makes its silence evidence") (return 900))
+(defn ^:pub ^I32 fg-trace-min [] (comment "`gf-trace-min`: the tracer's confidence a rule in an image or on a raster page needs") (return 600))
+(defn ^:pub ^I32 fg-ocr-bonus [] (comment "`gf-ocr-bonus`: what an OCR line block under a tracer rule lowers that bar by") (return 150))
+(defn ^:pub ^I32 fg-img-health [] (comment "`gf-img-health`: the region score under which the tracer is not believed") (return 500))
+(defn ^:pub ^I32 fg-tprec-min [] (comment "`gf-tprec-min`: the page's tracer precision a tracer-only rule in R0 needs") (return 900))
+(defn ^:pub ^I32 fg-contrast [] (comment "`gf-contrast`: of 255, the least contrast of a vector rule with its backdrop (`emon.gvec`'s GV_CONTRAST)") (return 16))
+(defn ^:pub ^I32 fg-flat [] (comment "`gf-flat`: a curve within this of its chord is a line (`emon.gvec`'s GV_FLAT)") (return 50))
+
 ;; ------------------------------------------------------------- the group columns
 
 (defn ^:pub ^I32 ag-nt [] (comment "visible text-layer words in the group") (return 0))
@@ -61,7 +78,9 @@
 (defn ^:pub ^I32 ag-body [] (comment "defence 3: the least body-ink share (`xo-body-share`, per mille) of the group's OCR words; -1 absent (as `ag-kink`)") (return 23))
 (defn ^:pub ^I32 ag-imalpha [] (comment "defence 1: the least alpha (per mille) of an image placement covering at least `wm-cover` of the page that the group lies in; -1 when there is none") (return 24))
 (defn ^:pub ^I32 ag-seal [] (comment "defence 5 (P7.7): 1 when the group lies in a seal, stamp or signature candidate (`emon.sealmark`'s `sm-find` flagged it `plg-in-seal`: every visible text-layer word of the group is the candidate's, or it is an OCR-only group inside one), else 0") (return 25))
-(defn ^:pub ^I32 ag-count [] (return 26))
+(defn ^:pub ^I32 ag-tableimg [] (comment "P7.G (D224): the largest share (per mille) of an OCR word's box of the group that lies in a `table-in-image` region (`xo` 30); -1 absent") (return 26))
+(defn ^:pub ^I32 ag-rulelike [] (comment "P7.G (D224): the largest rule-likeness (`xo` 31) of the group's OCR words; -1 absent") (return 27))
+(defn ^:pub ^I32 ag-count [] (return 28))
 
 ;; ------------------------------------------------------------- comparisons and settings
 
@@ -93,6 +112,17 @@
 (defn ^:pub ^I32 fs-ghost-margin [] (return 19))
 (defn ^:pub ^I32 fs-two [] (return 20))
 (defn ^:pub ^I32 fs-three [] (return 21))
+;; P7.G: the graphics settings (SPEC 9.9, 13), and the small numbers a unit kind is compared with
+(defn ^:pub ^I32 fs-gf-agree-min [] (return 22))
+(defn ^:pub ^I32 fs-gf-trace-min [] (return 23))
+(defn ^:pub ^I32 fs-gf-img-health [] (return 24))
+(defn ^:pub ^I32 fs-gf-tprec-min [] (return 25))
+(defn ^:pub ^I32 fs-gf-glyph [] (return 26))
+(defn ^:pub ^I32 fs-gf-word [] (return 27))
+(defn ^:pub ^I32 fs-rg-cover [] (return 28))
+(defn ^:pub ^I32 fs-table-image [] (return 29))
+(defn ^:pub ^I32 fs-four [] (return 30))
+(defn ^:pub ^I32 fs-five [] (return 31))
 
 (defn ^:pub ^I32 fr-setting [^I32 code]
   (comment "The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).")
@@ -131,6 +161,20 @@
   (if (== code 19) (return 150))
   (if (== code 20) (return 2))
   (if (== code 21) (return 3))
+  (comment "P7.G (SPEC 9.9, 13): `gf-agree-min` the share (per mille) of a vector rule the tracer must cover to witness it; `gf-trace-min` the tracer's confidence a rule in an image needs;")
+  (comment "`gf-img-health` the region score under which the tracer is not believed; `gf-tprec-min` the page's tracer precision a tracer rule in R0 needs; `gf-glyph` the share of a tracer rule's")
+  (comment "box in text under which it is not the stroke of a letter; `gf-word` the share inside one OCR word that makes it that word's bar; `rg-cover` the rule-likeness (D224) of a rule ghost;")
+  (comment "`table-image` the share of a word inside a table drawn in an image (D224).")
+  (if (== code 22) (return (fg-agree-min)))
+  (if (== code 23) (return (fg-trace-min)))
+  (if (== code 24) (return (fg-img-health)))
+  (if (== code 25) (return (fg-tprec-min)))
+  (if (== code 26) (return 500))
+  (if (== code 27) (return 800))
+  (if (== code 28) (return 700))
+  (if (== code 29) (return 500))
+  (if (== code 30) (return 4))
+  (if (== code 31) (return 5))
   (return 0))
 
 ;; ------------------------------------------------------------- the winners
@@ -203,7 +247,61 @@
          ;; 401 defence 5 (P7.7): every visible text-layer word of the group is a seal's or a stamp's (`ag-seal`: the group lies in a seal candidate): the words are the seal node's text, never body
          401 400 0 0 128 900   25 2 1  0 0 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 402 defence 5: an OCR-only group inside a seal, a stamp or a signature (the ring's or the stroke's own ink read as letters): kept out of the body, the seal's text only when it has no text-layer word
-         402 400 0 0 128 900   25 2 1  0 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0]
+         402 400 0 0 128 900   25 2 1  0 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; P7.G, BLOCK 500: GRAPHICS (SPEC 9.9, D222). The winner cell is 0 none, 1 vector, 2 trace; the flags are `gq` bits of a rule (1 traced, 2 unwitnessed, 4 in-image)
+         ;; or `gqf` bits of a fill (4 in-image, 8 tint-coloured); the confidence -1 is computed by `emon.gfuse` (the tracer's times the region's score). The predicate columns
+         ;; are the `gmz` measures of `emon.gfuse` (100 and up), read from a measure vector of its own. BLOCK 600 (D224, where graphics meet words) follows the 599 default and reads
+         ;; the group columns `ag-tableimg` and `ag-rulelike`, which `emon.gfuse` writes into the OCR words' features 30 and 31.
+         ;; 501 the identity: an exactly known visible vector rule, the page has no raster answer
+         501 500 1 0 0 900   100 2 1 101 2 1 108 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 505 a vector member whose `vis` is not 0 contributes nothing (a hidden rule is not a rule)
+         505 500 0 0 0 0   103 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 510 exactly known visible vector, the tracer witnesses it: vector geometry, sources vector + trace
+         510 500 1 0 0 1000   100 2 1 101 2 1 108 0 1 117 0 22 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 511 exactly known visible vector, raster answered, no witness: kept, flag `unwitnessed`
+         511 500 1 0 2 800   100 2 1 101 2 1 108 0 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 512 vector not exactly known (blend, soft mask, image placement), the tracer witnesses it: vector geometry, the tracer's colour when the vector's is -1
+         512 500 1 0 0 950   100 2 1 102 2 1 117 0 22 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 513 vector not exactly known, no witness, the region's witness is high (the render would have seen it): dropped, recorded as `unwitnessed-uncertain-paint`
+         513 500 0 12 0 0   100 2 1 102 2 1 108 0 1 110 0 22 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 514 vector not exactly known, no raster answer: kept
+         514 500 1 0 0 700   100 2 1 102 2 1 108 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 515 vector not exactly known, raster answered but its witness of this page is low (the render's silence means nothing): kept
+         515 500 1 0 0 700   100 2 1 102 2 1 108 0 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 520 trace only, in R0 of a born-digital page, in a group with an exactly known visible vector member: dropped (the vector says where its rule ends)
+         520 500 0 0 0 0   100 2 20 108 2 1 107 2 0 118 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 533 trace only, inside one OCR word of three or more code points that is not made of rule glyphs (the bar of a large E or T): dropped
+         533 500 0 0 0 0   100 2 20 113 0 27 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 530 trace only, inside an image region: a rule (`traced`, `in-image`) when the tracer's confidence (lowered by an OCR line) and the region's score allow
+         530 500 2 0 5 -1   100 2 20 107 2 1 105 0 23 109 0 24 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 531 trace only, raster page: as 530, without `in-image`
+         531 500 2 0 1 -1   100 2 20 108 2 20 105 0 23 109 0 24 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 532 trace only, R0 of a born-digital page, half or more of its box in glyph or word boxes (strokes of letters): dropped
+         532 500 0 0 0 0   100 2 20 108 2 1 107 2 0 112 0 26 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 535 trace only, R0 of a born-digital page, outside text, on a page whose tracer precision is high: a rule (`traced`, 600)
+         535 500 2 0 1 600   100 2 20 108 2 1 107 2 0 111 0 25 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 540 OCR line block only: never a rule; recorded
+         540 500 0 0 0 0   100 2 31 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 560 visible vector fill with a colour, no raster answer
+         560 500 1 0 0 900   100 2 21 115 2 1 108 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 563 visible vector fill with a colour, raster answered
+         563 500 1 0 0 1000   100 2 21 115 2 1 108 0 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 561 vector fill of colour -1 (a shading, a pattern) with a tint witness: vector box, the tint's colour (`tint-coloured`)
+         561 500 1 0 8 950   100 2 21 115 2 0 116 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 562 vector fill of colour -1, no witness: vector box, colour -1
+         562 500 1 0 0 600   100 2 21 115 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 570 tint only, inside an image region whose score allows: a fill (`in-image`)
+         570 500 2 0 4 700   100 2 30 107 2 1 109 0 24 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 574 tint only, raster page, the page's score allows: a fill
+         574 500 2 0 0 700   100 2 30 108 2 20 109 0 24 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 571 tint only, R0 of a born-digital page whose tracer precision is high (a tiling pattern emon does not interpret): a fill, 500
+         571 500 2 0 0 500   100 2 30 108 2 1 107 2 0 111 0 25 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 599 the default: nothing else holds, the graphic is dropped
+         599 500 0 0 0 0   -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 601 an OCR-only word that is made of rule glyphs and lies on a fused rule (`xo` 31 at least `rg-cover`): the ledger, `rule-ghost`
+         601 600 0 11 0 800   0 2 0 2 2 0 1 0 1 27 0 28 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 610 an OCR-only word inside a table drawn in an image (`xo` 30), with ink of its own and plausible: body text, flag `in-table-image`
+         610 600 2 0 514 -1   0 2 0 2 2 0 1 0 1 26 0 29 22 0 17 7 0 18 -1 0 0 -1 0 0 -1 0 0 -1 0 0]
   :accessors {^I32 fr-count [^I32 ignored]
               ^I32 fr-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -270,4 +368,15 @@
                   (if (== (fr-holds r gv) 1) (return r)))
                 (set r (+ r 1))))
           (set b (+ b 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 fr-decide-block [^Cells gv ^I32 blk]
+  (comment "The row (an index of `fr-rows`) of the first rule OF BLOCK `blk` that holds on the measures `gv`; -1 when none does. Block 500 reads the graphics")
+  (comment "measures (`gmz`, codes 100 and up, in a vector of 128 cells), which have a default row (599) so that the answer is never -1 there.")
+  (let [^I32 n (fr-count 0)
+        ^:mut ^I32 r 0]
+    (while (< r n)
+      (do (if (== (fr-block r) blk)
+            (if (== (fr-holds r gv) 1) (return r)))
+          (set r (+ r 1))))
     (return -1)))

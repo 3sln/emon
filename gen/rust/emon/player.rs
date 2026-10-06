@@ -961,6 +961,7 @@ pub fn pl_check(cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &m
     let nfa: i32 = crate::port::cells_len(fa) / 12;
     let nfx: i32 = crate::port::cells_len(fx) / 4;
     let nsl: i32 = crate::port::cells_len(sl) / 16;
+    let nggp: i32 = crate::port::cells_len(ggp) / 12;
     let nrf: i32 = crate::port::cells_len(refs) / 2;
     let net: i32 = crate::port::cells_len(etext);
     let ngl: i32 = crate::port::cells_len(glyphs) / 32;
@@ -1056,7 +1057,13 @@ pub fn pl_check(cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &m
     i = 0;
     while i < nfx {
         v = crate::port::cells_at(fx, i * 4);
-        if (v < 0) || (v >= ncg) {
+        w = crate::port::cells_at(fx, (i * 4) + 1);
+        // the rows of block 500 (graphics) name a `ggp` row, the others a `cg` row (SPEC 9.7)
+        if (w >= 500) && (w < 600) {
+            if (v < 0) || (v >= nggp) {
+                return 9;
+            }
+        } else if (v < 0) || (v >= ncg) {
             return 9;
         }
         i += 1;

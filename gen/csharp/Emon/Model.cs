@@ -964,6 +964,9 @@ public static class Model {
     public static int FlTagSpanConflict() {
         return 256;
     }
+    public static int FlInTableImage() {
+        return 512;
+    }
     public static int FlEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "low-conf");
@@ -999,6 +1002,10 @@ public static class Model {
         }
         if (code == 256) {
             emon.Port.TextAscii(t, "tag-span-conflict");
+            return 1;
+        }
+        if (code == 512) {
+            emon.Port.TextAscii(t, "in-table-image");
             return 1;
         }
         return 0;
@@ -1389,6 +1396,12 @@ public static class Model {
     public static int DrInvisible() {
         return 10;
     }
+    public static int DrRuleGhost() {
+        return 11;
+    }
+    public static int DrUnwitnessedUncertainPaint() {
+        return 12;
+    }
     public static int DrEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "watermark");
@@ -1428,6 +1441,14 @@ public static class Model {
         }
         if (code == 10) {
             emon.Port.TextAscii(t, "invisible");
+            return 1;
+        }
+        if (code == 11) {
+            emon.Port.TextAscii(t, "rule-ghost");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.TextAscii(t, "unwitnessed-uncertain-paint");
             return 1;
         }
         return 0;

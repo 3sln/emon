@@ -3191,6 +3191,15 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   it (row 520); a tracer
   rule inside a glyph box dropped; a `|` OCR word on a vertical rule to the ledger; a lattice in an image a
   `table-in-image` region); `bb gfuse` green in `bb gates`; the numbers above in this entry.
+  *Done in part* (D441-D447; the entry stays open). **Built** (`kin/gfuse.kin`, `kin/fuserules.kin` blocks 500 and 600, `kin/arbiter.kin` two group columns, `kin/evidence.kin` `xo` 30 and 31,
+  `kin/model.kin` + `schema/*` + `json-check.py` + SPEC 3.3 the reasons `rule-ghost`, `unwitnessed-uncertain-paint` and the flag `in-table-image`, `kin/player.kin` `pl-check` for the `fx` rows of
+  block 500, both Engines: `gf_fuse` and `gf_write` in `finish_pdf`, the placements kept in `PdfDoc`, `ggp`/`grg` passed to the check and the dumps): candidates of the tracer (rules, tints, rectangle edges) and OCR (line blocks), alignment into groups,
+  elementary-interval sweeps, the witness, health through P7.2's `hl-regions`, arbitration by the rows of block 500 as data (the vector-only pass too: the identity), `fx` explanations, `grg` regions
+  (`table-in-image`, `figure`, `table-hint`), features 30 and 31, rows 601 and 610. Seven laws on four targets (`kin/gfusetest.kin`: a witnessed rule, a soft-masked rule dropped only when the region's witness is high, a Chrome border
+  cell by cell and an open edge, a letter's stroke dropped and a precise page's rule admitted, a lattice in an image and its words, a tint, rows 601/610 and the copy of a page with no raster answer). **Not built, because the tracer is not in
+  the page unit** (P7.4 wires it; D447): `test/fusion/graphics/`, `tools/fusion/record-graphics.clj`, `bb gfuse`, and every live measure of the brief (rule and fill P/R, TEDS-lite BEFORE and AFTER, `twin-gap`, the rule-ghost counts, ICDAR, the 5 ms budget).
+  **Merge note for P7.4**: it fills `inks`, `rules`, `prims` (and `oblocks`) in the evidence arenas of the page units; `gf_fuse` reads them from `finish_pdf` through the argument list in both Engines and needs nothing else; the page unit's `gf-page` call that the brief says changes
+  does not exist on main.
 
 - [ ] **P7.S — The switch: born-digital pages OCR'd under `always`; the `bb fusion` gate; the cost** (SPEC §8.3 first
   pass, §9.8, §12.3; D038, D212 (3) superseded, D200, D201, D210). **Wave 5, the end of the critical path.** Depends on
@@ -8951,4 +8960,73 @@ lines costs, and the verdict reads them too.
 applying the tags' spans and head to the multi-row table by translating row numbers (a row map the tags and the geometry could disagree on in both directions;
 the cost is a table's head rows, which the geometry's own `tb-head-rows` finds as before); making the OWNER map the only reading (a one-to-one table whose
 modal row differs from its owner would change verdict: the `OR` keeps the old reading as a floor).
+- [ ] **Signed off** (maintainer)
+
+### D441 — Graphics fusion is two calls: `gf-page` stays in the document pass and is the identity, now through block 500 as data; `gf-fuse` runs in the document unit after the page units, on pages with a raster answer (P7.G; SPEC 9.9; D218, D222, D270)
+**Decision**: (1) `gf-page` reads the rows 501, 505, 514, 560 and 562 from `kin/fuserules.kin` (`fr-decide-block` over a measure vector, the `gmz` codes of `emon.gfuse`) and writes the row number and the confidence the row says; the numbers
+are P5.5a's, so every Model stays byte for byte. It makes no group. (2) `gf-fuse` (`emon.gfuse`) runs once per document in `finish_pdf`, after the page units and before fusion's arbiter: for every page that has a
+RASTER ANSWER, meaning the tracer ran (the page has `inks`, `rules` or `prims` rows), it reads the vector rows `gf-page` made as the vector source's candidates beside the tracer's rules and tints, the edges of its
+rectangles and OCR's `bt-line` blocks, and makes the page's rows again; every other page is copied. OCR alone is not a raster answer. With no tracer row in the document it returns at once. (3) The Engines keep one more arena for
+the placements (`im`), and make `ggp`, `grg` and `gfa` (the vector rules row 513 dropped, for `gf-write`) in `finish_pdf`; `pl-check`, the layer dump and the evidence dump receive the real `ggp` and `grg`.
+**Why**: SPEC 9.9 puts `gf-page` in the page unit after the tracer, but on main the page unit does not call it (P7.3 left it in the document pass) and the tracer is not in the page unit until P7.4 (another branch);
+reading the tracer through the evidence arenas is the narrowest interface that works with either, and a document whose evidence has no tracer row is untouched, which is what keeps every committed gate and digest as it was.
+Making the vector pass data-driven means the rows of block 500 have one reading, not two.
+**Alternatives**: calling `gf-fuse` from `pu-run-born` (needs the document's paths and images in the page unit's arguments, and P7.4's wiring); recomputing from `paths` (`pts` is dropped after the document pass unless fusion is on);
+treating OCR blocks alone as a raster answer (every replay digest of the fusion set would change for table hints the table stage would barely read).
+- [ ] **Signed off** (maintainer)
+
+### D442 — The rows of block 500 as built: a vector rule is one row, never split; the witness is a share of its length; 515, 532/535, 563, 574 and 599; slanted tracer rules are not emitted; no grid (P7.G; SPEC 9.9)
+**Decision**: a vector rule stays one `grl` row (the identity, D179's merging in `tb-build` and the Chrome border drawn cell by cell all need the pieces whole); the tracer's WITNESS of it is the per mille of its length the
+tracer covers (a sweep of the group's elementary intervals, D221), `gf-agree-min` (900) witnesses it. The stretches only the tracer covers (no vector rule, exactly known or not, covers them) are the runs that become tracer rules or are dropped
+(520 when the group has an exactly known visible vector rule: an open edge stays open). SPEC 9.9's rows 532 and 571 each have two outcomes and are written as two rows (532 drops what lies in text, 535 admits the rest at 600; 571 as
+written); 563 and 574 give the fill with a colour its 1000 when a raster answered and a tint alone on a raster page its row; 515 keeps vector paint that is not exactly known when the region's witness is under `gf-agree-min` (so row 513's
+drop needs a tracer that sees the page's exact rules: the coordinator's answer to SPEC 17 (8), made measurable); 599 is the default and drops. A group's pairs are found by scanning each tracer or OCR candidate against the others of
+another source (the pairs the 64 × 64 grid of D221 finds; the grid only makes it faster on a page of thousands of rules and no tracer). Slanted tracer rules are figure material and are not emitted; slanted vector rules
+are as before. Confidence 530 and 531: the tracer's times the region's score; the bar is the tracer's confidence (plus `gf-ocr-bonus` under an OCR line that covers half of it) against `gf-trace-min`.
+**Why**: the table stage needs whole vector pieces and cannot use a rule the sweep cut; the other rows are the table of SPEC 9.9 with the cases it left to the reader.
+**Alternatives**: splitting vector rules at the witness' boundaries (D179's merge would rejoin them, or fail to); one row 532 with two outcomes (a row has one winner).
+- [ ] **Signed off** (maintainer)
+
+### D443 — Health per region is `emon.health`'s `hl-regions` (kind `region`), given the page's vector witness and tracer precision; no new subject code (P7.G; SPEC 9.3, 9.7, 9.9; D223)
+**Decision**: P7.2 built the region rows (`plh-region`, R0 and one per visible placement of 2 cm, vector witness, tracer precision, skew, tracer confidence, rules; D150's shape and D223's weights) and left the witness and the
+precision to graphics fusion, which sees both sources. `gf-health` measures them: the witness is the length of the exactly known visible vector rules (horizontal and vertical, in R0 of a born-digital page) the tracer witnesses over their length; the
+precision is the length of the tracer's rules that a vector rule explains (the group has one) or that lie half or more in text-layer word boxes, over all of theirs; -1 when there is none; a raster page has neither. The brief's
+`graphics-region` subject kind is the existing `region` kind. The arbitration reads the region's score from these rows.
+**Why**: one set of rows, one score; adding a second kind of row for the same regions would have two scores for one region.
+**Alternatives**: a `graphics-region` kind of `hl` (SPEC 9.7's name) with its own rows (two rows per region).
+- [ ] **Signed off** (maintainer)
+
+### D444 — Regions as built: `table-in-image` from a lattice or three stacked bands of `in-image` graphics, `figure` from image placements, OCR image blocks and vector clusters, `table-hint` from OCR; tagged elements are not regions (P7.G; SPEC 9.9; D228)
+**Decision**: a `table-in-image` is a visible placement (2 cm each way) whose `in-image` fused rules make a lattice (two horizontal and two vertical, each pair 5 pt apart, every one touching every other of the other orientation within
+3 pt) or whose `in-image` fills include three bands of one extent stacked; its box is what those rules and fills cover. A `figure` is the merge (box IoU 500) of visible placements that are not tables (5 pt each way), OCR `bt-image`
+blocks and vector clusters: the paths that are curves or polygons, on a 32 × 32 grid over their extent (cells of at least 12 pt), a connected set of occupied cells with at least 8 paths. A `table-hint` is an OCR `bt-table` block (confidence 300). The
+tagged `Figure` and `Table` elements are not read here: the table stage verifies the tagged tables itself (D225) and a `Figure` region needs the tagged tree's index in the page's call, which P8.1 will read when it needs it. The tracer's `large`
+components are not read either.
+**Why**: each is the smallest reading of SPEC 9.9 that the laws can exercise; none changes a Model before P8.1.
+**Alternatives**: the grid of `fig-gap` (6 pt) distances (a pairwise test is quadratic in the paths of a map).
+- [ ] **Signed off** (maintainer)
+
+### D445 — Where graphics meet words as built: features 30 and 31 written by `gf-fuse`, rows 601 and 610 in block 600 over two new group columns, `rule-ghost`, `in-table-image` (P7.G; SPEC 8.4.5, 9.4, 9.9; D224)
+**Decision**: `gf-fuse` writes `xo` 30 (the share of an OCR word's box in the page's `table-in-image` regions) and 31 (rule-likeness: for a word of at most two code points, all rule glyphs, the share of its box the fused rules cover; -1
+otherwise) for every OCR word with a feature row of a page it made again, so they are -1 until a tracer runs; the arbiter reads them as the group columns `ag-tableimg` and `ag-rulelike` (the largest of the group's words). Row 601 sends an OCR-only
+group with `ag-rulelike` at least `rg-cover` (700) to the ledger as `rule-ghost`; row 610 admits an OCR-only group inside a table in an image (`ag-tableimg` at least 500) with ink of its own and plausible as body text with the flag
+`in-table-image` (512; the flow's flag, not a Model node's). `dr` gains `rule-ghost` (11) and `unwitnessed-uncertain-paint` (12); `fl` gains `in-table-image`; the schema, the SPEC, `json-check.py` and the gold schema follow, all additive (D055). `pl-check` accepts an
+`fx` row of a rule 500-599 whose group is a `ggp` row.
+**Why**: the page unit does not run graphics fusion, so the columns are written when `gf-fuse` runs, which is before the arbiter and after alignment; alignment reads neither column.
+**Alternatives**: writing them in the page unit before `al-page` (P7.4's wiring); a `|` test on the word's text alone (a `|` that is text is lost).
+- [ ] **Signed off** (maintainer)
+
+### D446 — The ledger row of a dropped uncertain vector rule is written by `gf-write` from its own arena (P7.G; SPEC 9.9 row 513)
+**Decision**: row 513's drop is a row of `gfa` (page, box, reason), which `gf-write` turns into ledger rows (confidence 700, source `vector`, no text) after the text layer's and OCR's. They are not `fa` rows: `th-write` and `ar-write` read a
+set-aside row's subject as a word.
+**Why**: a rule has no text and no word to read; the writers of the other two lists would misread its subject.
+**Alternatives**: teaching `ar-write` the subject kinds of a rule.
+- [ ] **Signed off** (maintainer)
+
+### D447 — What P7.G did not do: the tracer is not in the Engine, so there are no transcripts, no `bb gfuse` gate, no `record-graphics.clj` and none of the live measures (P7.G; D227)
+**Decision**: the tracer's output (`rules`, `prims`, `inks` rows) comes from the page unit only when P7.4 wires P6.3/P6.4 into it; on this branch the arenas are empty in every conversion, so graphics fusion runs only in the laws. The laws (`kin/gfusetest.kin`) are
+the seven scenes of the brief, on four targets. `bb gfuse`, `test/fusion/graphics/` and `tools/fusion/record-graphics.clj` need a live Engine that runs the tracer and are left for the merge with P7.4; the measures (rule and fill precision and recall,
+table TEDS-lite on the graphics set, `twin-gap`, the ghost counts, ICDAR) cannot be taken before then. What was checked: `bb accuracy`, `bb identity` and the rest of the gates are as they were (the vector-only identity), and the Rust and Go Engines agree.
+**Why**: a transcript is a recording of what the live engines answered; without the tracer in the page unit nothing would be recorded that the gate could replay.
+**Alternatives**: wiring the tracer into the page unit here (it is P7.4's, in parallel; the two would have to be reconciled).
 - [ ] **Signed off** (maintainer)

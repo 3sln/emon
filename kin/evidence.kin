@@ -483,7 +483,9 @@
    [xo-agree 26 "agree"]
    [xo-recur 27 "recur"]
    [xo-length 28 "length"]
-   [xo-edge 29 "edge"]])
+   [xo-edge 29 "edge"]
+   [xo-in-table-image 30 "in-table-image"]
+   [xo-rule-like 31 "rule-like"]])
 
 (defenum ^:pub xt
   [[xt-trust 2 "trust"]

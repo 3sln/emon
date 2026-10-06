@@ -66,7 +66,7 @@ use crate::emon::pdfmeta::pm_run;
 use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
 use crate::emon::tagtable::tt_emit;
 use crate::emon::pdfx::px_index_build;
-use crate::emon::gfuse::{gf_doc, gfx_mode};
+use crate::emon::gfuse::{gf_doc, gf_fuse, gf_write, gfx_mode};
 use crate::emon::player::pl_emit_gfx;
 use crate::emon::tlhealth::{th_append, th_run, th_write};
 use crate::imgdec;
@@ -784,14 +784,13 @@ fn locale_cells(opts: &Options) -> Cells {
 }
 
 // The evidence dump of a conversion: `ev` is what the OCR stages made, the rest the text layer's.
-fn evidence_dump(ev: &mut EvArenas, et: &mut Cells, gl: &mut Cells, wd: &mut Cells, ln: &mut Cells, mk: &mut Cells, fnt: &mut Cells, grl: &mut Cells, gfl: &mut Cells) -> String {
+fn evidence_dump(ev: &mut EvArenas, et: &mut Cells, gl: &mut Cells, wd: &mut Cells, ln: &mut Cells, mk: &mut Cells, fnt: &mut Cells, grl: &mut Cells, gfl: &mut Cells, ggp: &mut Cells, grg: &mut Cells) -> String {
     let mut t = String::new();
     if cells_len(grl) == 0 && cells_len(gfl) == 0 {
         ev_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines);
     } else {
         // P5.5a (D270): a document with fused graphics dumps version "2", the evidence's arrays then `grl gfl ggp grg` (the rest of the layer joins with P7.3)
-        let (mut ggp, mut grg) = (Cells::new(), Cells::new());
-        pl_emit_gfx(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines, grl, gfl, &mut ggp, &mut grg);
+        pl_emit_gfx(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines, grl, gfl, ggp, grg);
     }
     t
 }
@@ -855,7 +854,7 @@ fn finish_raster(d: RasterDoc, opts: &Options) -> Outcome {
     let RasterDoc { mut m, mut ev, mut et, mut wd, mut ln, mut mask, mut loc, info } = d;
     let (mut gl, mut mk, mut fnt) = (Cells::new(), Cells::new(), Cells::new());
     let (mut grl, mut gfl) = (Cells::new(), Cells::new());
-    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut grl, &mut gfl)) } else { None };
+    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut grl, &mut gfl, &mut Cells::new(), &mut Cells::new())) } else { None };
     // the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
     let (mut fw, mut fl) = (Cells::new(), Cells::new());
     th_append(&mut wd, &mut ln, &mut fw, &mut fl, 0);
@@ -1119,6 +1118,8 @@ struct PdfDoc {
     fa: Cells,
     nl0: i32,
     pa: Cells,
+    // the image placements (P7.G: a region of graphics fusion is a visible placement, and the page units added their rows to the evidence's own arena, not this)
+    im: Cells,
     grl: Cells,
     gfl: Cells,
     // inline styles and links (P4.7): the fonts' own style facts and the link annotations
@@ -1231,8 +1232,8 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     }
     // The fused graphics (P5.5a, D270): the vector source's rules and fills of every page, which the table stage reads instead of `paths`
     // (until P7.3 moves it into the page units, SPEC 9.9).
-    let (mut grl, mut gfl, mut gcand) = (Cells::new(), Cells::new(), Cells::new());
-    gf_doc(&mut pa, &mut pts, &mut mk, &mut im, np, gfx_mode(), &mut grl, &mut gfl, &mut gcand);
+    let (mut grl, mut gfl, mut gcand, mut gmeas) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    gf_doc(&mut pa, &mut pts, &mut mk, &mut im, np, gfx_mode(), &mut grl, &mut gfl, &mut gcand, &mut gmeas);
     // P3.13 (SPEC 10.11): the asset candidates, the one place the input's image bytes are read. Off, nothing runs.
     let (mut cand, mut cbytes) = (Cells::new(), Buf::new());
     if opts.assets != Assets::None {
@@ -1272,7 +1273,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, im, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, info }))
 }
 
 // One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
@@ -1292,7 +1293,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut im, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1307,6 +1308,12 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
         ev.feats = Cells::new();
     }
     let (mut fv, mut fx, mut afa) = (Cells::new(), Cells::new(), Cells::new());
+    // GRAPHICS FUSION, the tracer's and OCR's share (P7.G, SPEC 9.9, D221-D224, D228): every page that has a raster answer (the tracer ran: `inks`, `rules` or `prims`
+    // rows) has its vector rules and fills made again beside theirs, with the groups, the regions and the OCR words' features 30 and 31 that fusion reads below.
+    // With no tracer in the evidence (a conversion whose page units did not run it) it returns at once and nothing is different.
+    let (mut ggp, mut grg, mut gfa) = (Cells::new(), Cells::new(), Cells::new());
+    gf_fuse(np, &mut ev.epages, &mut ev.inks, &mut ev.rules, &mut ev.prims, &mut ev.oblocks, &mut ev.owords, &mut wd, &mut et, &mut pa, &mut im, &mut ev.feats, &mut grl, &mut gfl, &mut ggp, &mut grg, &mut ev.refs, &mut hl, &mut fx, &mut gfa,
+            &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new());
     // seal, stamp and signature candidates (P7.7): the `sl` arena, found before arbitration, which keeps their words out of the body
     let mut sm = Cells::new();
     if fused {
@@ -1323,7 +1330,7 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
                &mut gl, &mut mk, &mut an, &mut txt, trust0, &mut rc, &mut nfw, &mut nfl, &mut fv, &mut fx, &mut afa, &mut gd, &mut gv, &mut w2g, &mut o2g, &mut pp, &mut tw, &mut tl, &mut xscr);
         std::mem::swap(&mut fw, &mut nfw);
         std::mem::swap(&mut fl, &mut nfl);
-        let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut grl, &mut sm, &mut gfl, &mut Cells::new(), &mut Cells::new(), &mut et, &mut ev.refs, &mut gl);
+        let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut grl, &mut sm, &mut gfl, &mut ggp, &mut grg, &mut et, &mut ev.refs, &mut gl);
         if c != 0 {
             return Outcome::Failed(Error::Internal(format!("pl-check {}", c)));
         }
@@ -1342,12 +1349,12 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
             let mut t = String::new();
             pl_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, &mut et, &mut ev.feats, &mut g, &mut wd, &mut ln, &mut k, &mut f, &mut ev.paths, &mut ev.images,
                     &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines,
-                    &mut cg, &mut fw, &mut fl, &mut fv, &mut fad, &mut fx, &mut hl, &mut grl, &mut sm, &mut gfl, &mut Cells::new(), &mut Cells::new());
+                    &mut cg, &mut fw, &mut fl, &mut fv, &mut fad, &mut fx, &mut hl, &mut grl, &mut sm, &mut gfl, &mut ggp, &mut grg);
             Some(t)
         } else {
             Some(match snap {
-                Some((mut g, mut k, mut f)) => evidence_dump(&mut ev, &mut et, &mut g, &mut wd, &mut ln, &mut k, &mut f, &mut grl, &mut gfl),
-                None => evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut grl, &mut gfl),
+                Some((mut g, mut k, mut f)) => evidence_dump(&mut ev, &mut et, &mut g, &mut wd, &mut ln, &mut k, &mut f, &mut grl, &mut gfl, &mut ggp, &mut grg),
+                None => evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut grl, &mut gfl, &mut ggp, &mut grg),
             })
         }
     } else {
@@ -1430,6 +1437,8 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
     // the words the triage set aside (P7.0): ledger rows, after the furniture's
     let mut ttx = Cells::new();
     th_write(&mut fa, &mut wd, &mut et, &mut m.ledger, &mut m.text, &mut tmp, &mut ttx);
+    // the vector rules graphics fusion dropped (P7.G, row 513): ledger rows, with no text
+    gf_write(&mut gfa, &mut m.ledger);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
     // fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
     if fused {

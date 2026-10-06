@@ -2,9 +2,12 @@
 // source: emon.gfusetest
 
 use crate::emon::evidence::*;
+use crate::emon::fuserules::*;
 use crate::emon::gfuse::*;
 use crate::emon::glayer::*;
 use crate::emon::gvec::*;
+use crate::emon::model::*;
+use crate::emon::player::*;
 
 pub(crate) fn gu_rect(mut pa: &mut crate::port::Cells, page: i32, flags: i32, fill: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
     // A painted box with no geometry kept (read by its box).
@@ -25,6 +28,7 @@ fn test_the_rows_of_a_vector_only_page() {
     let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let h: i32 = gu_rect(pa, 1, pg_filled(), 0, 1000, 4950, 21000, 5050);
     let v: i32 = gu_rect(pa, 1, pg_filled(), 0, 1000, 5000, 1100, 9000);
     let b: i32 = gu_rect(pa, 1, pg_filled(), 0, 1000, 6950, 21000, 7050);
@@ -36,7 +40,7 @@ fn test_the_rows_of_a_vector_only_page() {
     pa_set(pa, b, pf_vchk(), vc_blend());
     pa_set(pa, x, pf_vis(), 3);
     pa_set(pa, h, pf_z(), 4);
-    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 2, gv_segments(), grl, gfl, cand), 4, "four rules: the hidden one is nothing");
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 2, gv_segments(), grl, gfl, cand, gv), 4, "four rules: the hidden one is nothing");
     crate::testport::assert_eq(gfl_count(gfl), 2, "two fills");
     crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
     crate::testport::assert_eq(grl_get(grl, 0, 0), 1, "the first rule's page");
@@ -76,6 +80,7 @@ fn test_a_slanted_line_is_a_slant_and_the_modes_agree_on_plain_boxes() {
     let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let r: i32 = pa_new(pa, 1, pa_other(), 0, 0, 10000, 10000);
     pa_set(pa, r, pf_flags(), pg_stroked());
     pa_set(pa, r, pf_stroke(), 0);
@@ -84,18 +89,483 @@ fn test_a_slanted_line_is_a_slant_and_the_modes_agree_on_plain_boxes() {
     pa_set(pa, r, pf_pcount(), 2);
     pt_add(pts, 0, 0, po_move());
     pt_add(pts, 10000, 10000, po_line());
-    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand), 1, "one rule");
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv), 1, "one rule");
     crate::testport::assert_eq(grl_get(grl, 0, 10), go_slant(), "slanted");
     crate::testport::assert_eq(grl_get(grl, 0, 11), 13500, "at 135 degrees (page space has y down)");
     // a plain thin box: the two modes give the same row
     crate::port::cells_drop(pa, 0);
     gu_rect(pa, 1, pg_filled(), 0, 1000, 4950, 21000, 5050);
-    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_legacy(), grl, gfl, cand), 1, "legacy: one rule");
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_legacy(), grl, gfl, cand, gv), 1, "legacy: one rule");
     let a: i32 = grl_get(grl, 0, 5);
     let b: i32 = grl_get(grl, 0, 7);
     let c: i32 = grl_get(grl, 0, 6);
-    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand), 1, "segments: one rule");
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv), 1, "segments: one rule");
     crate::testport::assert_eq(grl_get(grl, 0, 5), a, "the same left end");
     crate::testport::assert_eq(grl_get(grl, 0, 7), b, "the same right end");
     crate::testport::assert_eq(grl_get(grl, 0, 6), c, "the same centre");
+}
+pub(crate) fn gu_hrule(mut pa: &mut crate::port::Cells, y: i32, x0: i32, x1: i32) -> i32 {
+    // A vector rule, horizontal, 1 pt thick, a thin filled box.
+    return gu_rect(pa, 1, pg_filled(), 0, x0, y - 50, x1, y + 50);
+}
+pub(crate) fn gu_vrule(mut pa: &mut crate::port::Cells, x: i32, y0: i32, y1: i32) -> i32 {
+    return gu_rect(pa, 1, pg_filled(), 0, x - 50, y0, x + 50, y1);
+}
+pub(crate) fn gu_lo(a: i32, b: i32) -> i32 {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn gu_hi(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn gu_trace(mut rules: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, conf: i32) -> i32 {
+    // A tracer rule on page 1 along the centre line (x0, y0)-(x1, y1), 1 pt thick, black.
+    let r: i32 = rl_new(rules, 1, gu_lo(x0, x1) - 50, gu_lo(y0, y1) - 50, gu_hi(x0, x1) + 50, gu_hi(y0, y1) + 50, 0);
+    rl_set(rules, r, rlf_lx0(), x0);
+    rl_set(rules, r, rlf_ly0(), y0);
+    rl_set(rules, r, rlf_lx1(), x1);
+    rl_set(rules, r, rlf_ly1(), y1);
+    rl_set(rules, r, rlf_thick(), 100);
+    rl_set(rules, r, rlf_color(), 0);
+    rl_set(rules, r, rlf_style(), 1);
+    rl_set(rules, r, rlf_conf(), conf);
+    return r;
+}
+pub(crate) fn gu_fuse(np: i32, inks: &mut crate::port::Cells, rules: &mut crate::port::Cells, prims: &mut crate::port::Cells, oblocks: &mut crate::port::Cells, owords: &mut crate::port::Cells, words: &mut crate::port::Cells, etext: &mut crate::port::Cells, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, feats: &mut crate::port::Cells, mut grl: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells, mut ggp: &mut crate::port::Cells, mut grg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut hl: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut gfa: &mut crate::port::Cells) -> i32 {
+    // `gf-fuse` with the scratch it needs and no `epages` row (every page is a born-digital page).
+    return gf_fuse(np, &mut crate::port::Cells::new(), inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+}
+pub(crate) fn gu_count_rule(grl: &mut crate::port::Cells, rule: i32) -> i32 {
+    // How many fused rules were decided by row `rule`.
+    let mut i: i32 = 0;
+    let mut n: i32 = 0;
+    while i < grl_count(grl) {
+        if grl_get(grl, i, 16) == rule {
+            n += 1;
+        }
+        i += 1;
+    }
+    return n;
+}
+pub(crate) fn gu_first_rule(grl: &mut crate::port::Cells, rule: i32) -> i32 {
+    // The first fused rule decided by row `rule`, -1 for none.
+    let mut i: i32 = 0;
+    while i < grl_count(grl) {
+        if grl_get(grl, i, 16) == rule {
+            return i;
+        }
+        i += 1;
+    }
+    return -1;
+}
+#[test]
+fn test_a_vector_rule_the_tracer_witnesses_is_kept_whole_and_says_so() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let h: i32 = gu_hrule(pa, 5000, 1000, 21000);
+    crate::testport::assert_that(h >= 0, "a rule is drawn");
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv), 1, "the vector source alone: one rule");
+    crate::testport::assert_eq(grl_get(grl, 0, 16), 501, "by row 501");
+    crate::testport::assert_eq(gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 0, "no raster answer: nothing is done");
+    crate::testport::assert_eq(grl_get(grl, 0, 16), 501, "the identity");
+    crate::testport::assert_eq(ggp_count(ggp), 0, "no group is made");
+    ik_new(inks, 1, 0);
+    gu_trace(rules, 1000, 5000, 21000, 5000, 900);
+    crate::testport::assert_eq(gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "the page has a raster answer: it is made again");
+    crate::testport::assert_eq(grl_count(grl), 1, "still one rule");
+    crate::testport::assert_eq(grl_get(grl, 0, 16), 510, "witnessed by the tracer: row 510");
+    crate::testport::assert_eq(grl_get(grl, 0, 17), 1000, "at 1000");
+    crate::testport::assert_eq(grl_get(grl, 0, 14), 3, "its sources are the vector's and the tracer's");
+    crate::testport::assert_eq(grl_get(grl, 0, 15), 1, "the vector wins");
+    crate::testport::assert_eq(grl_get(grl, 0, 5), 1000, "its own geometry: the left end");
+    crate::testport::assert_eq(grl_get(grl, 0, 7), 21000, "and the right end");
+    crate::testport::assert_eq(grl_get(grl, 0, 19), 0, "in the group 0");
+    crate::testport::assert_eq(ggp_count(ggp), 1, "one group: the vector rule and the tracer's");
+    crate::testport::assert_eq(ggp_get(ggp, 0, 3), 1, "with one vector member");
+    crate::testport::assert_eq(ggp_get(ggp, 0, 5), 1, "and one tracer member");
+    crate::testport::assert_eq(ggp_get(ggp, 0, 8), 3, "flags: an exactly known vector rule, a tracer member");
+    crate::testport::assert_that(crate::port::cells_len(fx) > 0, "the explanation names the columns row 510 read");
+    crate::testport::assert_eq(crate::port::cells_at(fx, 0), 0, "the group");
+    crate::testport::assert_eq(crate::port::cells_at(fx, 1), 510, "the rule");
+    crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
+    crate::testport::assert_that(hl_count(hl) > 0, "R0's health row");
+}
+#[test]
+fn test_a_vector_rule_under_a_soft_mask_is_dropped_only_when_the_region_witness_is_high() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: i32 = gu_hrule(pa, 5000, 1000, 21000);
+    let b: i32 = gu_hrule(pa, 7000, 1000, 21000);
+    let c: i32 = gu_hrule(pa, 9000, 1000, 21000);
+    crate::testport::assert_that((a + (b + c)) >= 0, "three rules");
+    pa_set(pa, c, pf_vchk(), vc_blend());
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv), 3, "three rules");
+    crate::testport::assert_eq(grl_get(grl, 2, 16), 514, "the third is not exactly known: row 514");
+    gu_trace(rules, 1000, 5000, 21000, 5000, 900);
+    gu_trace(rules, 1000, 7000, 21000, 7000, 900);
+    gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+    crate::testport::assert_eq(grl_count(grl), 2, "the blended rule the render does not show is dropped, the two exact ones kept");
+    crate::testport::assert_eq(gu_count_rule(grl, 510), 2, "both witnessed");
+    crate::testport::assert_eq(crate::port::cells_len(gfa) / 6, 1, "and the drop is recorded, never silent");
+    crate::testport::assert_eq(crate::port::cells_at(gfa, 5), 12, "as `unwitnessed-uncertain-paint`");
+    crate::testport::assert_eq(crate::port::cells_at(gfa, 1), 1000, "with the rule's box");
+    crate::testport::assert_eq(gf_write(gfa, ledger), 1, "one ledger row");
+    crate::testport::assert_eq(ledger_reason(ledger, 0), 12, "its reason");
+    // the same page, but the tracer saw nothing it should have: the render's silence means nothing, so the blended rule stays
+    crate::port::cells_drop(rules, 0);
+    crate::port::cells_drop(grl, 0);
+    crate::port::cells_drop(gfl, 0);
+    crate::port::cells_drop(ggp, 0);
+    crate::port::cells_drop(gfa, 0);
+    crate::port::cells_drop(refs, 0);
+    crate::port::cells_drop(hl, 0);
+    crate::port::cells_drop(fx, 0);
+    gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv);
+    ik_new(inks, 1, 0);
+    gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+    crate::testport::assert_eq(grl_count(grl), 3, "all three are kept");
+    crate::testport::assert_eq(gu_count_rule(grl, 511), 2, "the exact ones unwitnessed: row 511");
+    crate::testport::assert_eq(grl_get(grl, 0, 17), 800, "at 800");
+    crate::testport::assert_eq(gu_count_rule(grl, 515), 1, "the blended one by row 515");
+    crate::testport::assert_eq(grl_get(grl, 2, 17), 700, "at 700");
+    crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
+}
+#[test]
+fn test_a_border_drawn_cell_by_cell_against_one_tracer_line_is_one_group_and_no_gap_is_bridged() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    gu_hrule(pa, 5000, 1000, 6000);
+    gu_hrule(pa, 5000, 6000, 11000);
+    gu_hrule(pa, 5000, 11000, 16000);
+    gu_hrule(pa, 5000, 16000, 21000);
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv), 4, "four vector pieces");
+    gu_trace(rules, 1000, 5000, 21000, 5000, 900);
+    gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+    crate::testport::assert_eq(ggp_count(ggp), 1, "one group");
+    crate::testport::assert_eq(ggp_get(ggp, 0, 3), 4, "four vector members");
+    crate::testport::assert_eq(ggp_get(ggp, 0, 5), 1, "one tracer member");
+    crate::testport::assert_eq(grl_count(grl), 4, "the vector pieces are kept as they are");
+    crate::testport::assert_eq(gu_count_rule(grl, 510), 4, "each witnessed");
+    // an open edge stays open: the tracer saw ink across a gap of the vector rule, and the vector says where its rule ends (row 520)
+    crate::port::cells_drop(pa, 0);
+    crate::port::cells_drop(rules, 0);
+    crate::port::cells_drop(grl, 0);
+    crate::port::cells_drop(gfl, 0);
+    crate::port::cells_drop(ggp, 0);
+    crate::port::cells_drop(refs, 0);
+    crate::port::cells_drop(hl, 0);
+    crate::port::cells_drop(fx, 0);
+    gu_hrule(pa, 5000, 1000, 6000);
+    gu_hrule(pa, 5000, 9000, 14000);
+    gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv);
+    gu_trace(rules, 1000, 5000, 14000, 5000, 900);
+    gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+    crate::testport::assert_eq(grl_count(grl), 2, "the stretch between them is NOT a rule: still two");
+    crate::testport::assert_eq(gu_count_rule(grl, 510), 2, "both pieces kept");
+    crate::testport::assert_eq(ggp_count(ggp), 1, "in one group");
+    crate::testport::assert_that(crate::port::cells_len(fx) > 0, "the dropped stretch is explained");
+    crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
+}
+#[test]
+fn test_a_tracer_rule_inside_a_letter_is_dropped_and_one_outside_text_is_a_rule_on_a_precise_page() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    gu_hrule(pa, 5000, 1000, 41000);
+    gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv);
+    gu_trace(rules, 1000, 5000, 41000, 5000, 900);
+    gu_trace(rules, 1000, 9000, 2500, 9000, 800);
+    gu_trace(rules, 1000, 2000, 2500, 2000, 800);
+    wd_new(words, 1, 800, 1800, 2700, 2200, 800, 1800, 2700, 2200, 0, 0, 0, 0, 0, 900, -1);
+    gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+    crate::testport::assert_eq(gu_count_rule(grl, 510), 1, "the vector rule, witnessed");
+    crate::testport::assert_eq(gu_count_rule(grl, 535), 1, "the tracer's rule outside text is admitted: the page's tracer is precise (535)");
+    crate::testport::assert_eq(grl_count(grl), 2, "the stroke inside the word's box is dropped (row 532)");
+    let t: i32 = gu_first_rule(grl, 535);
+    crate::testport::assert_eq(grl_get(grl, t, 17), 600, "its confidence is 600");
+    crate::testport::assert_eq(grl_get(grl, t, 18), 1, "flagged traced");
+    crate::testport::assert_eq(grl_get(grl, t, 14), 2, "its source is the tracer's");
+    crate::testport::assert_eq(grl_get(grl, t, 6), 9000, "its own geometry");
+    crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
+}
+#[test]
+fn test_a_lattice_in_an_image_is_a_table_in_image_region_and_its_words_know_it() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let m: i32 = im_new(im, 1, 10000, 10000, 40000, 40000, 7, 600, 600);
+    crate::testport::assert_eq(m, 0, "the image placement");
+    gu_trace(rules, 12000, 15000, 38000, 15000, 900);
+    gu_trace(rules, 12000, 25000, 38000, 25000, 900);
+    gu_trace(rules, 12000, 35000, 38000, 35000, 900);
+    gu_trace(rules, 12000, 12000, 12000, 38000, 900);
+    gu_trace(rules, 25000, 12000, 25000, 38000, 900);
+    gu_trace(rules, 38000, 12000, 38000, 38000, 900);
+    // an OCR word in a cell, and a `|` on the left border (read by the engine as a letter)
+    crate::port::cells_push(etext, 78);
+    crate::port::cells_push(etext, 124);
+    fe_new(feats, ea_owords(), 0);
+    fe_new(feats, ea_owords(), 1);
+    ow_new(owords, 1, 14000, 16000, 20000, 18000, 14000, 16000, 20000, 18000, 0, 0, 0, 1, 0, 900, 0);
+    ow_new(owords, 1, 11950, 20000, 12050, 22000, 11950, 20000, 12050, 22000, 0, 0, 1, 1, 0, 900, 1);
+    crate::testport::assert_eq(gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "fused");
+    crate::testport::assert_eq(grl_count(grl), 6, "six rules");
+    crate::testport::assert_eq(gu_count_rule(grl, 530), 6, "each from row 530: the tracer's, in an image whose region scores well");
+    crate::testport::assert_eq(grl_get(grl, 0, 18), 5, "flagged traced and in-image");
+    crate::testport::assert_that(grl_get(grl, 0, 17) > 0, "with a confidence the region's score scaled");
+    crate::testport::assert_that(grl_get(grl, 0, 17) <= 900, "never above the tracer's");
+    crate::testport::assert_eq(grg_count(grg), 1, "one region");
+    crate::testport::assert_eq(grg_get(grg, 0, 5), rk_table_in_image(), "a table in an image");
+    crate::testport::assert_eq(grg_get(grg, 0, 8), 0, "of the image placement 0");
+    crate::testport::assert_eq(grg_get(grg, 0, 1), 11950, "its box is what the rules cover: the left");
+    crate::testport::assert_eq(grg_get(grg, 0, 9), 6, "six rules inside");
+    crate::testport::assert_eq(fe_get(feats, 0, xo_in_table_image()), 1000, "the word in a cell is wholly in the table");
+    crate::testport::assert_eq(fe_get(feats, 0, xo_rule_like()), -1, "and is not rule-like");
+    crate::testport::assert_that(fe_get(feats, 1, xo_in_table_image()) >= 0, "the `|` has a share too");
+    crate::testport::assert_eq(fe_get(feats, 1, xo_rule_like()), 1000, "and it lies wholly on a rule: rule-likeness 1000");
+    crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
+}
+#[test]
+fn test_a_tint_over_a_pattern_gives_its_colour_and_a_tint_in_a_good_image_region_is_a_fill() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let p: i32 = gu_rect(pa, 1, pg_filled() + pg_pattern(), -1, 3000, 12000, 8000, 15000);
+    let t: i32 = pm_new(prims, 1, 3000, 12000, 8000, 15000, pm_rect());
+    crate::testport::assert_that(p >= 0, "a pattern fill");
+    pm_set(prims, t, pmf_flags(), 11);
+    pm_set(prims, t, pmf_color(), 14737632);
+    pm_set(prims, t, pmf_conf(), 800);
+    gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv);
+    crate::testport::assert_eq(gfl_get(gfl, 0, 9), 562, "the vector source alone: row 562");
+    gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+    crate::testport::assert_eq(gfl_count(gfl), 1, "one fill");
+    crate::testport::assert_eq(gfl_get(gfl, 0, 9), 561, "the render witnesses it: row 561");
+    crate::testport::assert_eq(gfl_get(gfl, 0, 10), 950, "at 950");
+    crate::testport::assert_eq(gfl_get(gfl, 0, 5), 14737632, "the tint's colour");
+    crate::testport::assert_eq(gfl_get(gfl, 0, 11) & 8, 8, "flagged `tint-coloured`");
+    crate::testport::assert_eq(gfl_get(gfl, 0, 7), 3, "from the vector and the tracer");
+    // a tint that only the tracer saw: dropped in R0 of a page whose tracer is not shown precise, a fill inside an image whose region scores well
+    let m: i32 = im_new(im, 1, 20000, 20000, 50000, 50000, 7, 600, 600);
+    let u: i32 = pm_new(prims, 1, 22000, 22000, 30000, 26000, pm_rect());
+    crate::testport::assert_that(m >= 0, "an image");
+    pm_set(prims, u, pmf_flags(), 11);
+    pm_set(prims, u, pmf_color(), 15658734);
+    pm_set(prims, u, pmf_conf(), 800);
+    gu_trace(rules, 22000, 30000, 48000, 30000, 900);
+    gu_trace(rules, 22000, 40000, 48000, 40000, 900);
+    gu_trace(rules, 22000, 22000, 22000, 48000, 900);
+    crate::port::cells_drop(grl, 0);
+    crate::port::cells_drop(gfl, 0);
+    crate::port::cells_drop(ggp, 0);
+    crate::port::cells_drop(refs, 0);
+    crate::port::cells_drop(hl, 0);
+    crate::port::cells_drop(fx, 0);
+    gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv);
+    gu_fuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+    crate::testport::assert_eq(gfl_count(gfl), 2, "the vector fill and the tint in the image");
+    crate::testport::assert_eq(gfl_get(gfl, 1, 9), 570, "the tint by row 570");
+    crate::testport::assert_eq(gfl_get(gfl, 1, 10), 700, "at 700");
+    crate::testport::assert_eq(gfl_get(gfl, 1, 11) & 4, 4, "flagged in-image");
+    crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
+}
+#[test]
+fn test_rows_601_and_610_of_block_600_read_the_words_features_and_a_hidden_vector_is_nothing() {
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    while i < ag_count() {
+        crate::port::cells_push(gv, -1);
+        i += 1;
+    }
+    crate::port::cells_set(gv, ag_nt(), 0);
+    crate::port::cells_set(gv, ag_nh(), 0);
+    crate::port::cells_set(gv, ag_no(), 1);
+    crate::port::cells_set(gv, ag_rulelike(), 900);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 601, "an OCR-only word made of rule glyphs on a rule: 601");
+    crate::testport::assert_eq(fr_reason(fr_decide(gv)), 11, "to the ledger as a rule ghost");
+    crate::testport::assert_eq(fr_winner(fr_decide(gv)), 0, "never body");
+    crate::port::cells_set(gv, ag_rulelike(), 300);
+    crate::testport::assert_that(fr_number(fr_decide(gv)) != 601, "a word that only touches a rule is not one");
+    crate::port::cells_set(gv, ag_rulelike(), -1);
+    crate::port::cells_set(gv, ag_tableimg(), 1000);
+    crate::port::cells_set(gv, ag_kink(), 500);
+    crate::port::cells_set(gv, ag_plaus(), 900);
+    crate::port::cells_set(gv, ag_score(), 800);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 610, "an OCR-only word in a table drawn in an image, with ink and plausible: 610");
+    crate::testport::assert_eq(fr_winner(fr_decide(gv)), fw_ocr(), "it is body text");
+    crate::testport::assert_eq(fr_flags(fr_decide(gv)) & 512, 512, "flagged `in-table-image`");
+    crate::port::cells_set(gv, ag_kink(), -1);
+    crate::testport::assert_that(fr_number(fr_decide(gv)) != 610, "without ink of kin's own it is not");
+}
+#[test]
+fn test_a_page_with_no_raster_answer_is_copied_and_a_hidden_vector_rule_is_row_505() {
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oblocks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let etext: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    while i < 128 {
+        crate::port::cells_push(gv, -1);
+        i += 1;
+    }
+    crate::port::cells_set(gv, 103, 1);
+    crate::testport::assert_eq(fr_number(fr_decide_block(gv, 500)), 505, "a vector member whose vis is not 0: row 505");
+    crate::testport::assert_eq(fr_winner(fr_decide_block(gv, 500)), 0, "contributes nothing");
+    gu_hrule(pa, 5000, 1000, 21000);
+    gu_hrule(pa, 7000, 1000, 21000);
+    gu_hrule(pa, 7000, 21000, 31000);
+    crate::port::cells_drop(gv, 0);
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 1, gv_segments(), grl, gfl, cand, gv), 3, "three rules");
+    // page 1 has the raster answer, page 2 has none: its rows are copied untouched
+    gu_rect(pa, 2, pg_filled(), 0, 1000, 4950, 21000, 5050);
+    crate::port::cells_drop(grl, 0);
+    crate::port::cells_drop(gfl, 0);
+    crate::port::cells_drop(gv, 0);
+    crate::testport::assert_eq(gf_doc(pa, pts, mk, im, 2, gv_segments(), grl, gfl, cand, gv), 4, "four rules on two pages");
+    ik_new(inks, 1, 0);
+    crate::testport::assert_eq(gu_fuse(2, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "one page fused");
+    crate::testport::assert_eq(grl_count(grl), 4, "four rules still");
+    crate::testport::assert_eq(grl_get(grl, 3, 0), 2, "the second page's is the last");
+    crate::testport::assert_eq(grl_get(grl, 3, 16), 501, "copied as it was");
+    crate::testport::assert_eq(grl_get(grl, 0, 16), 511, "the first page's are made again: nothing the tracer saw");
+    crate::testport::assert_eq(gl_check(grl, gfl, ggp, grg, refs), 0, "sound");
 }

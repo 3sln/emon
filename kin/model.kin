@@ -211,7 +211,8 @@
    [fl-rotated 32 "rotated"]
    [fl-vertical 64 "vertical"]
    [fl-struct-disagree 128 "struct-disagree"]
-   [fl-tag-span-conflict 256 "tag-span-conflict"]])
+   [fl-tag-span-conflict 256 "tag-span-conflict"]
+   [fl-in-table-image 512 "in-table-image"]])
 
 ;; A span's `style` bits, stored in its `sub`.
 (defenum ^:pub sy
@@ -300,7 +301,9 @@
    [dr-ocr-ghost 7 "ocr-ghost"]
    [dr-clipped 8 "clipped"]
    [dr-offpage 9 "offpage"]
-   [dr-invisible 10 "invisible"]])
+   [dr-invisible 10 "invisible"]
+   [dr-rule-ghost 11 "rule-ghost"]
+   [dr-unwitnessed-uncertain-paint 12 "unwitnessed-uncertain-paint"]])
 
 ;; ASSETS (P3.13, D117, SPEC 10.11). Codes assigned once, never reused (D050).
 ;; An asset's origin: what its pixels are.

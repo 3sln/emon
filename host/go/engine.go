@@ -797,13 +797,13 @@ func localeCells(opts Options) *port.Cells {
 }
 
 // evidenceDump is the evidence dump of a conversion: `ev` is what the OCR stages made, the rest the text layer's.
-func evidenceDump(ev *evArenas, et, gl, wd, ln, mk, fnt, grl, gfl *port.Cells) string {
+func evidenceDump(ev *evArenas, et, gl, wd, ln, mk, fnt, grl, gfl, ggp, grg *port.Cells) string {
 	var sb strings.Builder
 	if port.CellsLen(grl) == 0 && port.CellsLen(gfl) == 0 {
 		evidence.EvEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines)
 	} else {
 		// P5.5a (D270): a document with fused graphics dumps version "2", the evidence's arrays then grl gfl ggp grg (the rest of the layer joins with P7.3)
-		player.PlEmitGfx(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines, grl, gfl, port.NewCells(), port.NewCells())
+		player.PlEmitGfx(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines, grl, gfl, ggp, grg)
 	}
 	return sb.String()
 }
@@ -872,7 +872,7 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 	var evs *string
 	grl, gfl := port.NewCells(), port.NewCells()
 	if opts.KeepEvidence {
-		s := evidenceDump(ev, et, gl, wd, ln, mk, fnt, grl, gfl)
+		s := evidenceDump(ev, et, gl, wd, ln, mk, fnt, grl, gfl, port.NewCells(), port.NewCells())
 		evs = &s
 	}
 	// the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
@@ -1219,9 +1219,9 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	}
 	// The fused graphics (P5.5a, D270): the vector source's rules and fills of every page, which the table stage reads instead of paths
 	// (until P7.3 moves it into the page units, SPEC 9.9).
-	gx3 := newCellsN(3)
-	grl, gfl, gcand := gx3[0], gx3[1], gx3[2]
-	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, gcand)
+	gx4 := newCellsN(4)
+	grl, gfl, gcand, gmeas := gx4[0], gx4[1], gx4[2], gx4[3]
+	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, gcand, gmeas)
 	// P3.13 (SPEC 10.11): the asset candidates, the one place the input's image bytes are read. Off, nothing runs.
 	cand, cbytes := port.NewCells(), port.NewBuf()
 	if opts.Assets != AssetsNone {
@@ -1270,7 +1270,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	if opts.OcrBornDigital {
 		ptsKept = pts
 	}
-	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, pts: ptsKept, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, se: se, sc: sc,
+	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, im: im, grl: grl, gfl: gfl, pts: ptsKept, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, se: se, sc: sc,
 		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, cand: cand, cbytes: cbytes, info: info}}
 }
 
@@ -1278,6 +1278,8 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 type pdfDoc struct {
 	ev                                   *evArenas
 	et, gl, mk, fnt, wd, ln, pa, grl, gfl, pg *port.Cells
+	// the image placements (P7.G: a region of graphics fusion is a visible placement)
+	im *port.Cells
 	// the paths' geometry (P7.7: seals are round and stamps are quadrilaterals), kept only when fusion is on
 	pts *port.Cells
 	// inline styles and links (P4.7): the fonts' own style facts, the link annotations, and the stage's scratch
@@ -1338,8 +1340,14 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 		ev.epages = port.NewCells()
 		ev.feats = port.NewCells()
 	}
-	fz := newCellsN(3)
-	fv, fx, afa := fz[0], fz[1], fz[2]
+	fz := newCellsN(6)
+	fv, fx, afa, ggp, grg, gfa := fz[0], fz[1], fz[2], fz[3], fz[4], fz[5]
+	// GRAPHICS FUSION, the tracer's and OCR's share (P7.G, SPEC 9.9, D221-D224, D228): every page that has a raster answer (the tracer ran: inks, rules or prims
+	// rows) has its vector rules and fills made again beside theirs, with the groups, the regions and the OCR words' features 30 and 31 that fusion reads below.
+	// With no tracer in the evidence (a conversion whose page units did not run it) it returns at once and nothing is different.
+	gs := newCellsN(7)
+	gfuse.GfFuse(np, ev.epages, ev.inks, ev.rules, ev.prims, ev.oblocks, ev.owords, wd, et, pa, d.im, ev.feats, grl, gfl, ggp, grg, ev.refs, d.hl, fx, gfa,
+		gs[0], gs[1], gs[2], gs[3], gs[4], gs[5], gs[6])
 	// seal, stamp and signature candidates (P7.7): the sl arena, found before arbitration, which keeps their words out of the body
 	sm := port.NewCells()
 	if fused {
@@ -1351,7 +1359,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 			gl, mk, van, qtxt, pdfstruct.TgTrust(ss), port.NewCells(), nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, d.xs[0])
 		fw, nfw = nfw, fw
 		fl, nfl = nfl, fl
-		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, grl, sm, gfl, port.NewCells(), port.NewCells(), et, ev.refs, gl); c != 0 {
+		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, grl, sm, gfl, ggp, grg, et, ev.refs, gl); c != 0 {
 			return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("pl-check %d", c)}}
 		}
 	}
@@ -1371,10 +1379,10 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 			var sb strings.Builder
 			player.PlEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, g, wd, ln, k, f, ev.paths, ev.images,
 				ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines,
-				d.cg, fw, fl, fv, fad, fx, d.hl, grl, sm, gfl, port.NewCells(), port.NewCells())
+				d.cg, fw, fl, fv, fad, fx, d.hl, grl, sm, gfl, ggp, grg)
 			s = sb.String()
 		} else {
-			s = evidenceDump(ev, et, g, wd, ln, k, f, grl, gfl)
+			s = evidenceDump(ev, et, g, wd, ln, k, f, grl, gfl, ggp, grg)
 		}
 		evs = &s
 	}
@@ -1439,6 +1447,8 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	// the words the triage set aside (P7.0): ledger rows, after the furniture's
 	tlhealth.ThWrite(fa, wd, et, m.ledger, m.text, t[2], port.NewCells())
+	// the vector rules graphics fusion dropped (P7.G, row 513): ledger rows, with no text
+	gfuse.GfWrite(gfa, m.ledger)
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
 	// fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
 	if fused {

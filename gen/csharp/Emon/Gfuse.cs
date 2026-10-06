@@ -5,9 +5,141 @@ namespace emon;
 
 
 public static class Gfuse {
-    internal const int GfAxis = 100;
     public static int GfxMode() {
         return 1;
+    }
+    public static int GmzUnit() {
+        return 100;
+    }
+    public static int GmzVecExact() {
+        return 101;
+    }
+    public static int GmzVecUncertain() {
+        return 102;
+    }
+    public static int GmzVecHidden() {
+        return 103;
+    }
+    public static int GmzTrace() {
+        return 104;
+    }
+    public static int GmzTraceConf() {
+        return 105;
+    }
+    public static int GmzOcrLine() {
+        return 106;
+    }
+    public static int GmzInImage() {
+        return 107;
+    }
+    public static int GmzRaster() {
+        return 108;
+    }
+    public static int GmzRegionScore() {
+        return 109;
+    }
+    public static int GmzVecWitness() {
+        return 110;
+    }
+    public static int GmzTprec() {
+        return 111;
+    }
+    public static int GmzInGlyph() {
+        return 112;
+    }
+    public static int GmzInOcrWord() {
+        return 113;
+    }
+    public static int GmzFillColourKnown() {
+        return 115;
+    }
+    public static int GmzTint() {
+        return 116;
+    }
+    public static int GmzWitness() {
+        return 117;
+    }
+    public static int GmzGroupVecExact() {
+        return 118;
+    }
+    internal const int Gc = 24;
+    internal const int CKind = 0;
+    internal const int CSrc = 1;
+    internal const int CEa = 2;
+    internal const int CRow = 3;
+    internal const int CPt = 4;
+    internal const int CX0 = 5;
+    internal const int CY0 = 6;
+    internal const int CX1 = 7;
+    internal const int CY1 = 8;
+    internal const int CEx0 = 9;
+    internal const int CEy0 = 10;
+    internal const int CEx1 = 11;
+    internal const int CEy1 = 12;
+    internal const int CT = 13;
+    internal const int CCol = 14;
+    internal const int CSty = 15;
+    internal const int CFlg = 16;
+    internal const int CCls = 17;
+    internal const int CConf = 18;
+    internal const int CExact = 19;
+    internal const int CUf = 20;
+    internal const int CWit = 21;
+    internal const int CAng = 23;
+    internal const int XPage = 0;
+    internal const int XKind = 1;
+    internal const int XV0 = 2;
+    internal const int XV1 = 3;
+    internal const int XF0 = 4;
+    internal const int XF1 = 5;
+    internal const int XR0 = 6;
+    internal const int XR1 = 7;
+    internal const int XQ0 = 8;
+    internal const int XQ1 = 9;
+    internal const int XB0 = 10;
+    internal const int XB1 = 11;
+    internal const int XW0 = 12;
+    internal const int XW1 = 13;
+    internal const int XT0 = 14;
+    internal const int XT1 = 15;
+    internal const int XP0 = 16;
+    internal const int XP1 = 17;
+    internal const int XI0 = 18;
+    internal const int XI1 = 19;
+    internal const int XN = 20;
+    internal const int XWit = 21;
+    internal const int XPrec = 22;
+    internal const int XNgrl = 23;
+    internal const int XNgfl = 24;
+    internal const int ACnt = 0;
+    internal const int AStart = 1;
+    internal const int AOrd = 2;
+    internal const int AGid = 3;
+    internal const int AEp = 4;
+    internal const int ABits = 6;
+    internal static int GfAbs(int a) {
+        if (a < 0) {
+            return 0 - a;
+        }
+        return a;
+    }
+    internal static int GfMin(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    internal static int GfMax(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    internal static int GfEq(int a, int b) {
+        if (a == b) {
+            return 1;
+        }
+        return 0;
     }
     internal static int GfLightness(int rgb) {
         // 0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.
@@ -17,17 +149,78 @@ public static class Gfuse {
         return (((299 * ((rgb / 65536) & 255)) + (587 * ((rgb / 256) & 255))) + (114 * (rgb & 255))) / 255;
     }
     internal static int GfOrientOf(int a) {
-        // `go` of an angle in [0, 18000): h within GF_AXIS of 0, v of 9000, else slant.
-        if ((a <= GfAxis) || (a >= (18000 - GfAxis))) {
+        // `go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.
+        if ((a <= Fuserules.FgAxis()) || (a >= (18000 - Fuserules.FgAxis()))) {
             return Glayer.GoH();
         }
-        if ((a >= (9000 - GfAxis)) && (a <= (9000 + GfAxis))) {
+        if ((a >= (9000 - Fuserules.FgAxis())) && (a <= (9000 + Fuserules.FgAxis()))) {
             return Glayer.GoV();
         }
         return Glayer.GoSlant();
     }
-    internal static int GfRuleRow(emon.Port.Cells cand, int c, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells grl) {
-        // Candidate c (a rule) as a `grl` row.
+    internal static int GfAngleOf(int dx, int dy) {
+        // The angle of a centre line in [0, 18000).
+        int a = Evidence.EvAngle(dx, dy);
+        if (a >= 18000) {
+            a -= 18000;
+        }
+        return a;
+    }
+    internal static int GfIou(int ax0, int ay0, int ax1, int ay1, int bx0, int by0, int bx1, int by1) {
+        // The intersection over union of two boxes (cp), per mille. Areas in tenths of a point so they fit.
+        int iw = GfMax(0, GfMin(ax1, bx1) - GfMax(ax0, bx0)) / 10;
+        int ih = GfMax(0, GfMin(ay1, by1) - GfMax(ay0, by0)) / 10;
+        int inter = iw * ih;
+        int aa = (GfMax(0, ax1 - ax0) / 10) * (GfMax(0, ay1 - ay0) / 10);
+        int ab = (GfMax(0, bx1 - bx0) / 10) * (GfMax(0, by1 - by0) / 10);
+        int un = (aa + ab) - inter;
+        if (un <= 0) {
+            return 0;
+        }
+        return inter / GfMax(1, un / 1000);
+    }
+    internal static int GfInsideShare(int x0, int y0, int x1, int y1, int bx0, int by0, int bx1, int by1) {
+        // The per mille of box (x0 y0 x1 y1) that lies inside box b; 0 for an empty one. Areas in tenths of a point so they fit.
+        int iw = GfMax(0, GfMin(x1, bx1) - GfMax(x0, bx0)) / 10;
+        int ih = GfMax(0, GfMin(y1, by1) - GfMax(y0, by0)) / 10;
+        int inter = iw * ih;
+        int area = GfMax(1, GfMax(0, x1 - x0) / 10) * GfMax(1, GfMax(0, y1 - y0) / 10);
+        return inter / GfMax(1, area / 1000);
+    }
+    internal static int Gcat(emon.Port.Cells gc, int i, int f) {
+        return emon.Port.CellsAt(gc, (i * 24) + f);
+    }
+    internal static int Gcput(emon.Port.Cells gc, int i, int f, int v) {
+        emon.Port.CellsSet(gc, (i * 24) + f, v);
+        return 0;
+    }
+    internal static int GfGvReset(emon.Port.Cells gv) {
+        // The measure vector (128 cells), every measure absent (-1).
+        int i = 0;
+        while (emon.Port.CellsLen(gv) < 128) {
+            emon.Port.CellsPush(gv, -1);
+        }
+        while (i < 128) {
+            emon.Port.CellsSet(gv, i, -1);
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int GfExplain(emon.Port.Cells fx, int group, int r, emon.Port.Cells gv) {
+        // `fx` rows for the decision of row `r` of `fr-rows`: every column the rule read and the value it read (the group is a `ggp` row).
+        int k = 0;
+        int col = 0;
+        while (k < Fuserules.FrNpred()) {
+            col = Fuserules.FrPcol(r, k);
+            if (col >= 0) {
+                Player.FxNew(fx, group, Fuserules.FrNumber(r), col, emon.Port.CellsAt(gv, col));
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    internal static int GfRuleRow(emon.Port.Cells cand, int c, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells gv, emon.Port.Cells grl) {
+        // Candidate c (a rule) as a `grl` row, by the row of block 500 that holds (501 or 514 here: no raster answer).
         int b = c * 16;
         int row = emon.Port.CellsAt(cand, b + 1);
         int fl = emon.Port.CellsAt(cand, b + 15);
@@ -39,6 +232,7 @@ public static class Gfuse {
         int exact = 1;
         int z = -1;
         int r = 0;
+        int fr = 0;
         if ((fl & Gvec.GvHidden()) != 0) {
             return 0;
         }
@@ -54,62 +248,80 @@ public static class Gfuse {
             }
             z = Evidence.PaGet(pa, row, Evidence.PfZ());
         }
+        GfGvReset(gv);
+        emon.Port.CellsSet(gv, 100, 1);
+        emon.Port.CellsSet(gv, 101, exact);
+        emon.Port.CellsSet(gv, 102, 1 - exact);
+        emon.Port.CellsSet(gv, 103, 0);
+        emon.Port.CellsSet(gv, 108, 0);
+        fr = Fuserules.FrDecideBlock(gv, 500);
+        if (Fuserules.FrWinner(fr) == 0) {
+            return 0;
+        }
         r = Glayer.GrlNew(grl, emon.Port.CellsAt(cand, b + 3), emon.Port.CellsAt(cand, b + 4), emon.Port.CellsAt(cand, b + 5), emon.Port.CellsAt(cand, b + 6), emon.Port.CellsAt(cand, b + 7), ex0, ey0, ex1, ey1, emon.Port.CellsAt(cand, b + 12), GfOrientOf(ang));
         Glayer.GrlSet(grl, r, 11, ang);
         Glayer.GrlSet(grl, r, 12, emon.Port.CellsAt(cand, b + 13));
         Glayer.GrlSet(grl, r, 13, emon.Port.CellsAt(cand, b + 14));
         Glayer.GrlSet(grl, r, 14, Glayer.GsVector());
         Glayer.GrlSet(grl, r, 15, Glayer.GsVector());
-        if (exact == 1) {
-            Glayer.GrlSet(grl, r, 16, 501);
-            Glayer.GrlSet(grl, r, 17, 900);
-        } else {
-            Glayer.GrlSet(grl, r, 16, 514);
-            Glayer.GrlSet(grl, r, 17, 700);
-        }
-        Glayer.GrlSet(grl, r, 18, fl);
+        Glayer.GrlSet(grl, r, 16, Fuserules.FrNumber(fr));
+        Glayer.GrlSet(grl, r, 17, Fuserules.FrConf(fr));
+        Glayer.GrlSet(grl, r, 18, fl | Fuserules.FrFlags(fr));
         Glayer.GrlSet(grl, r, 20, z);
+        Glayer.GrlSet(grl, r, 21, row);
+        Glayer.GrlSet(grl, r, 22, emon.Port.CellsAt(cand, b + 2));
         return 0;
     }
-    internal static int GfFillRow(emon.Port.Cells cand, int c, emon.Port.Cells pa, emon.Port.Cells gfl) {
-        // Candidate c (a fill) as a `gfl` row.
+    internal static int GfFillRow(emon.Port.Cells cand, int c, emon.Port.Cells pa, emon.Port.Cells gv, emon.Port.Cells gfl) {
+        // Candidate c (a fill) as a `gfl` row, by the row of block 500 that holds (560 or 562 here).
         int b = c * 16;
         int row = emon.Port.CellsAt(cand, b + 1);
         int fl = emon.Port.CellsAt(cand, b + 15);
         int colour = emon.Port.CellsAt(cand, b + 13);
-        int r = Glayer.GflNew(gfl, emon.Port.CellsAt(cand, b + 3), emon.Port.CellsAt(cand, b + 4), emon.Port.CellsAt(cand, b + 5), emon.Port.CellsAt(cand, b + 6), emon.Port.CellsAt(cand, b + 7), colour);
+        int fr = 0;
+        int r = 0;
+        GfGvReset(gv);
+        emon.Port.CellsSet(gv, 100, 3);
+        emon.Port.CellsSet(gv, 108, 0);
+        if (colour < 0) {
+            emon.Port.CellsSet(gv, 115, 0);
+        } else {
+            emon.Port.CellsSet(gv, 115, 1);
+        }
+        fr = Fuserules.FrDecideBlock(gv, 500);
+        if (Fuserules.FrWinner(fr) == 0) {
+            return 0;
+        }
+        r = Glayer.GflNew(gfl, emon.Port.CellsAt(cand, b + 3), emon.Port.CellsAt(cand, b + 4), emon.Port.CellsAt(cand, b + 5), emon.Port.CellsAt(cand, b + 6), emon.Port.CellsAt(cand, b + 7), colour);
         Glayer.GflSet(gfl, r, 6, GfLightness(colour));
         Glayer.GflSet(gfl, r, 7, Glayer.GsVector());
         Glayer.GflSet(gfl, r, 8, Glayer.GsVector());
-        if (colour < 0) {
-            Glayer.GflSet(gfl, r, 9, 562);
-            Glayer.GflSet(gfl, r, 10, 600);
-        } else {
-            Glayer.GflSet(gfl, r, 9, 560);
-            Glayer.GflSet(gfl, r, 10, 900);
-        }
-        Glayer.GflSet(gfl, r, 11, fl & 15);
+        Glayer.GflSet(gfl, r, 9, Fuserules.FrNumber(fr));
+        Glayer.GflSet(gfl, r, 10, Fuserules.FrConf(fr));
+        Glayer.GflSet(gfl, r, 11, (fl & 15) | Fuserules.FrFlags(fr));
         Glayer.GflSet(gfl, r, 13, Evidence.PaGet(pa, row, Evidence.PfZ()));
+        Glayer.GflSet(gfl, r, 14, row);
         return 0;
     }
-    public static int GfPage(emon.Port.Cells cand, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells grl, emon.Port.Cells gfl) {
-        // One page's candidates into `grl` and `gfl` (the head of this file); answers 0.
+    public static int GfPage(emon.Port.Cells cand, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells gv) {
+        // One page's candidates (`gv-page`'s scratch, stride 16) into rows of the fused rules and fills over the vector source alone: the rows of block 500
+        // that a page with no raster answer reaches. A hidden candidate (`vis` not 0) is row 505's: it contributes nothing. No group is made. Answers 0.
         int n = emon.Port.CellsLen(cand) / 16;
         int c = 0;
         while (c < n) {
             if ((emon.Port.CellsAt(cand, (c * 16) + 15) & Gvec.GvHidden()) == 0) {
                 if (emon.Port.CellsAt(cand, c * 16) == 1) {
-                    GfRuleRow(cand, c, pa, im, grl);
+                    GfRuleRow(cand, c, pa, im, gv, grl);
                 } else {
-                    GfFillRow(cand, c, pa, gfl);
+                    GfFillRow(cand, c, pa, gv, gfl);
                 }
             }
             c += 1;
         }
         return 0;
     }
-    public static int GfDoc(emon.Port.Cells pa, emon.Port.Cells pts, emon.Port.Cells mk, emon.Port.Cells im, int np, int mode, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells cand) {
-        // The document's graphics: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the
+    public static int GfDoc(emon.Port.Cells pa, emon.Port.Cells pts, emon.Port.Cells mk, emon.Port.Cells im, int np, int mode, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells cand, emon.Port.Cells gv) {
+        // The document's graphics over the vector source: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the
         // number of fused rules.
         int nq = Evidence.PaCount(pa);
         int ni = Evidence.ImCount(im);
@@ -139,12 +351,1846 @@ public static class Gfuse {
             if ((qj > qi) || (ij > ii)) {
                 emon.Port.CellsDrop(cand, 0);
                 Gvec.GvPage(pa, pts, mk, im, qi, qj, ii, ij, mode, cand);
-                GfPage(cand, pa, im, grl, gfl);
+                GfPage(cand, pa, im, grl, gfl, gv);
             }
             qi = qj;
             ii = ij;
             p += 1;
         }
         return emon.Port.CellsLen(grl) / 24;
+    }
+    internal static int GfCandRule(emon.Port.Cells gc, int src, int ea, int row, int pt, int ex0, int ey0, int ex1, int ey1, int thick, int colour, int style, int flags, int conf, int exact) {
+        // Append a rule candidate: the box is derived from the centre line and the thickness (a horizontal rule's extent along its axis is the centre
+        // line's); the class (`go`) and the angle (centi-degrees, [0, 18000)) too. Answers its index.
+        int i = emon.Port.CellsLen(gc) / 24;
+        int ang = GfAngleOf(ex1 - ex0, ey1 - ey0);
+        int cls = GfOrientOf(ang);
+        int half = (GfMax(thick, 1) + 1) / 2;
+        int bx0 = GfMin(ex0, ex1);
+        int by0 = GfMin(ey0, ey1);
+        int bx1 = GfMax(ex0, ex1);
+        int by1 = GfMax(ey0, ey1);
+        if (cls == Glayer.GoH()) {
+            by0 -= half;
+            by1 += half;
+        }
+        if (cls == Glayer.GoV()) {
+            bx0 -= half;
+            bx1 += half;
+        }
+        if (cls == Glayer.GoSlant()) {
+            bx0 -= half;
+            by0 -= half;
+            bx1 += half;
+            by1 += half;
+        }
+        emon.Port.CellsPush(gc, 1);
+        emon.Port.CellsPush(gc, src);
+        emon.Port.CellsPush(gc, ea);
+        emon.Port.CellsPush(gc, row);
+        emon.Port.CellsPush(gc, pt);
+        emon.Port.CellsPush(gc, bx0);
+        emon.Port.CellsPush(gc, by0);
+        emon.Port.CellsPush(gc, bx1);
+        emon.Port.CellsPush(gc, by1);
+        emon.Port.CellsPush(gc, ex0);
+        emon.Port.CellsPush(gc, ey0);
+        emon.Port.CellsPush(gc, ex1);
+        emon.Port.CellsPush(gc, ey1);
+        emon.Port.CellsPush(gc, GfMax(thick, 1));
+        emon.Port.CellsPush(gc, colour);
+        emon.Port.CellsPush(gc, style);
+        emon.Port.CellsPush(gc, flags);
+        emon.Port.CellsPush(gc, cls);
+        emon.Port.CellsPush(gc, conf);
+        emon.Port.CellsPush(gc, exact);
+        emon.Port.CellsPush(gc, i);
+        emon.Port.CellsPush(gc, -1);
+        emon.Port.CellsPush(gc, -1);
+        emon.Port.CellsPush(gc, ang);
+        return i;
+    }
+    internal static int GfCandFill(emon.Port.Cells gc, int src, int ea, int row, int x0, int y0, int x1, int y1, int colour, int flags, int conf) {
+        // Append a fill candidate. Answers its index.
+        int i = emon.Port.CellsLen(gc) / 24;
+        emon.Port.CellsPush(gc, 2);
+        emon.Port.CellsPush(gc, src);
+        emon.Port.CellsPush(gc, ea);
+        emon.Port.CellsPush(gc, row);
+        emon.Port.CellsPush(gc, -1);
+        emon.Port.CellsPush(gc, x0);
+        emon.Port.CellsPush(gc, y0);
+        emon.Port.CellsPush(gc, x1);
+        emon.Port.CellsPush(gc, y1);
+        emon.Port.CellsPush(gc, 0);
+        emon.Port.CellsPush(gc, 0);
+        emon.Port.CellsPush(gc, 0);
+        emon.Port.CellsPush(gc, 0);
+        emon.Port.CellsPush(gc, 0);
+        emon.Port.CellsPush(gc, colour);
+        emon.Port.CellsPush(gc, 1);
+        emon.Port.CellsPush(gc, flags);
+        emon.Port.CellsPush(gc, 0);
+        emon.Port.CellsPush(gc, conf);
+        emon.Port.CellsPush(gc, 0);
+        emon.Port.CellsPush(gc, i);
+        emon.Port.CellsPush(gc, -1);
+        emon.Port.CellsPush(gc, -1);
+        emon.Port.CellsPush(gc, 0);
+        return i;
+    }
+    internal static int GfBuild(emon.Port.Cells gc, emon.Port.Cells ctx, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells oblocks) {
+        // The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its
+        // rectangles, then OCR's line blocks. Answers how many.
+        int i = 0;
+        int c = 0;
+        int f = 0;
+        int sw = 0;
+        int half = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int ea = 0;
+        emon.Port.CellsDrop(gc, 0);
+        i = emon.Port.CellsAt(ctx, XV0);
+        while (i < emon.Port.CellsAt(ctx, XV1)) {
+            f = emon.Port.CellsAt(og, (i * 24) + 18);
+            ea = Evidence.EaPaths();
+            if ((f & Glayer.GqFromImage()) != 0) {
+                ea = Evidence.EaImages();
+            }
+            c = GfCandRule(gc, 1, ea, i, emon.Port.CellsAt(og, (i * 24) + 22), emon.Port.CellsAt(og, (i * 24) + 5), emon.Port.CellsAt(og, (i * 24) + 6), emon.Port.CellsAt(og, (i * 24) + 7), emon.Port.CellsAt(og, (i * 24) + 8), emon.Port.CellsAt(og, (i * 24) + 9), emon.Port.CellsAt(og, (i * 24) + 12), emon.Port.CellsAt(og, (i * 24) + 13), f, -1, GfEq(emon.Port.CellsAt(og, (i * 24) + 16), 501));
+            i += 1;
+        }
+        i = emon.Port.CellsAt(ctx, XF0);
+        while (i < emon.Port.CellsAt(ctx, XF1)) {
+            GfCandFill(gc, 1, Evidence.EaPaths(), i, emon.Port.CellsAt(ofl, (i * 16) + 1), emon.Port.CellsAt(ofl, (i * 16) + 2), emon.Port.CellsAt(ofl, (i * 16) + 3), emon.Port.CellsAt(ofl, (i * 16) + 4), emon.Port.CellsAt(ofl, (i * 16) + 5), emon.Port.CellsAt(ofl, (i * 16) + 11), -1);
+            i += 1;
+        }
+        i = emon.Port.CellsAt(ctx, XR0);
+        while (i < emon.Port.CellsAt(ctx, XR1)) {
+            GfCandRule(gc, 2, Evidence.EaRules(), i, -1, Evidence.RlGet(rules, i, Evidence.RlfLx0()), Evidence.RlGet(rules, i, Evidence.RlfLy0()), Evidence.RlGet(rules, i, Evidence.RlfLx1()), Evidence.RlGet(rules, i, Evidence.RlfLy1()), Evidence.RlGet(rules, i, Evidence.RlfThick()), Evidence.RlGet(rules, i, Evidence.RlfColor()), Evidence.RlGet(rules, i, Evidence.RlfStyle()), 0, Evidence.RlGet(rules, i, Evidence.RlfConf()), 0);
+            i += 1;
+        }
+        i = emon.Port.CellsAt(ctx, XQ0);
+        while (i < emon.Port.CellsAt(ctx, XQ1)) {
+            if (Evidence.PmGet(prims, i, Evidence.PmfKind()) == Evidence.PmRect()) {
+                f = Evidence.PmGet(prims, i, Evidence.PmfFlags());
+                x0 = Evidence.PmGet(prims, i, Evidence.PmfX0());
+                y0 = Evidence.PmGet(prims, i, Evidence.PmfY0());
+                x1 = Evidence.PmGet(prims, i, Evidence.PmfX1());
+                y1 = Evidence.PmGet(prims, i, Evidence.PmfY1());
+                if ((f & 8) != 0) {
+                    GfCandFill(gc, 2, Evidence.EaPrims(), i, x0, y0, x1, y1, Evidence.PmGet(prims, i, Evidence.PmfColor()), 0, Evidence.PmGet(prims, i, Evidence.PmfConf()));
+                } else if ((f & 2) == 0) {
+                    sw = Evidence.PmGet(prims, i, Evidence.PmfStroke());
+                    if (sw <= 0) {
+                        sw = 100;
+                    }
+                    half = sw / 2;
+                    GfCandRule(gc, 2, Evidence.EaPrims(), i, -1, x0, y0 + half, x1, y0 + half, sw, Evidence.PmGet(prims, i, Evidence.PmfColor()), 1, Glayer.GqBoxEdge(), Evidence.PmGet(prims, i, Evidence.PmfConf()), 0);
+                    GfCandRule(gc, 2, Evidence.EaPrims(), i, -1, x0, y1 - half, x1, y1 - half, sw, Evidence.PmGet(prims, i, Evidence.PmfColor()), 1, Glayer.GqBoxEdge(), Evidence.PmGet(prims, i, Evidence.PmfConf()), 0);
+                    GfCandRule(gc, 2, Evidence.EaPrims(), i, -1, x0 + half, y0, x0 + half, y1, sw, Evidence.PmGet(prims, i, Evidence.PmfColor()), 1, Glayer.GqBoxEdge(), Evidence.PmGet(prims, i, Evidence.PmfConf()), 0);
+                    GfCandRule(gc, 2, Evidence.EaPrims(), i, -1, x1 - half, y0, x1 - half, y1, sw, Evidence.PmGet(prims, i, Evidence.PmfColor()), 1, Glayer.GqBoxEdge(), Evidence.PmGet(prims, i, Evidence.PmfConf()), 0);
+                }
+            }
+            i += 1;
+        }
+        i = emon.Port.CellsAt(ctx, XB0);
+        while (i < emon.Port.CellsAt(ctx, XB1)) {
+            if ((Evidence.ObGet(oblocks, i, Evidence.ObfKind()) == Evidence.ObBlock()) && (Evidence.ObGet(oblocks, i, Evidence.ObfBtype()) == 3)) {
+                x0 = Evidence.ObGet(oblocks, i, Evidence.ObfX0());
+                y0 = Evidence.ObGet(oblocks, i, Evidence.ObfY0());
+                x1 = Evidence.ObGet(oblocks, i, Evidence.ObfX1());
+                y1 = Evidence.ObGet(oblocks, i, Evidence.ObfY1());
+                if ((x1 - x0) >= (y1 - y0)) {
+                    GfCandRule(gc, 4, Evidence.EaOblocks(), i, -1, x0, (y0 + y1) / 2, x1, (y0 + y1) / 2, y1 - y0, -1, 1, 0, -1, 0);
+                } else {
+                    GfCandRule(gc, 4, Evidence.EaOblocks(), i, -1, (x0 + x1) / 2, y0, (x0 + x1) / 2, y1, x1 - x0, -1, 1, 0, -1, 0);
+                }
+            }
+            i += 1;
+        }
+        return emon.Port.CellsLen(gc) / 24;
+    }
+    internal static int GfA0(emon.Port.Cells gc, int c) {
+        // A rule's extent along its axis, its least coordinate (x for a horizontal rule, y for a vertical one).
+        if (Gcat(gc, c, CCls) == Glayer.GoH()) {
+            return GfMin(Gcat(gc, c, CEx0), Gcat(gc, c, CEx1));
+        }
+        return GfMin(Gcat(gc, c, CEy0), Gcat(gc, c, CEy1));
+    }
+    internal static int GfA1(emon.Port.Cells gc, int c) {
+        // ... its greatest.
+        if (Gcat(gc, c, CCls) == Glayer.GoH()) {
+            return GfMax(Gcat(gc, c, CEx0), Gcat(gc, c, CEx1));
+        }
+        return GfMax(Gcat(gc, c, CEy0), Gcat(gc, c, CEy1));
+    }
+    internal static int GfPerpOf(emon.Port.Cells gc, int c) {
+        // The position of a rule's centre line across its axis.
+        if (Gcat(gc, c, CCls) == Glayer.GoH()) {
+            return (Gcat(gc, c, CEy0) + Gcat(gc, c, CEy1)) / 2;
+        }
+        return (Gcat(gc, c, CEx0) + Gcat(gc, c, CEx1)) / 2;
+    }
+    internal static int GfNearRule(emon.Port.Cells gc, int a, int b) {
+        // SPEC 9.9: two rules are near when they have the same orientation, their angles differ by at most `gf-angle`, the distance between their
+        // centre lines is at most half the sum of their thicknesses plus `gf-perp`, and their extents along the axis overlap or come within `gf-gap`.
+        int ca = Gcat(gc, a, CCls);
+        int d = GfAbs(Gcat(gc, a, CAng) - Gcat(gc, b, CAng));
+        if (ca != Gcat(gc, b, CCls)) {
+            return 0;
+        }
+        if (ca == Glayer.GoSlant()) {
+            return 0;
+        }
+        if (d > 9000) {
+            d = 18000 - d;
+        }
+        if (d > Fuserules.FgAngle()) {
+            return 0;
+        }
+        if (GfAbs(GfPerpOf(gc, a) - GfPerpOf(gc, b)) > (((Gcat(gc, a, CT) + Gcat(gc, b, CT)) / 2) + Fuserules.FgPerp())) {
+            return 0;
+        }
+        if (GfA0(gc, b) > (GfA1(gc, a) + Fuserules.FgGap())) {
+            return 0;
+        }
+        if (GfA0(gc, a) > (GfA1(gc, b) + Fuserules.FgGap())) {
+            return 0;
+        }
+        return 1;
+    }
+    internal static int GfNear(emon.Port.Cells gc, int a, int b) {
+        // Two candidates of the same kind are near: rules by `gf-near-rule`, fills at box IoU at least `gf-fill-iou`.
+        if (Gcat(gc, a, CKind) == 1) {
+            return GfNearRule(gc, a, b);
+        }
+        if (GfIou(Gcat(gc, a, CX0), Gcat(gc, a, CY0), Gcat(gc, a, CX1), Gcat(gc, a, CY1), Gcat(gc, b, CX0), Gcat(gc, b, CY0), Gcat(gc, b, CX1), Gcat(gc, b, CY1)) >= Fuserules.FgFillIou()) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int GfFind(emon.Port.Cells gc, int i) {
+        // The root of candidate i's group (path compression).
+        int r = i;
+        int p = i;
+        int nx = 0;
+        while (Gcat(gc, r, CUf) != r) {
+            r = Gcat(gc, r, CUf);
+        }
+        while (Gcat(gc, p, CUf) != r) {
+            nx = Gcat(gc, p, CUf);
+            Gcput(gc, p, CUf, r);
+            p = nx;
+        }
+        return r;
+    }
+    internal static int GfUnion(emon.Port.Cells gc, int a, int b) {
+        // Join two candidates' groups; the smaller root wins.
+        int ra = GfFind(gc, a);
+        int rb = GfFind(gc, b);
+        if (ra < rb) {
+            Gcput(gc, rb, CUf, ra);
+        }
+        if (rb < ra) {
+            Gcput(gc, ra, CUf, rb);
+        }
+        return 0;
+    }
+    internal static int GfPairs(emon.Port.Cells gc, int n) {
+        // Every near pair of candidates of different sources, into groups: each tracer or OCR candidate against every vector one and the later ones of
+        // the others (the grid of D221 only speeds this up on a page of thousands of rules and no tracer; the pairs are the same). Answers 0.
+        int i = 0;
+        int j = 0;
+        while (i < n) {
+            if (Gcat(gc, i, CSrc) != 1) {
+                j = 0;
+                while (j < n) {
+                    if (Gcat(gc, j, CSrc) != Gcat(gc, i, CSrc)) {
+                        if ((Gcat(gc, j, CSrc) == 1) || (j > i)) {
+                            if (Gcat(gc, i, CKind) == Gcat(gc, j, CKind)) {
+                                if (GfNear(gc, i, j) == 1) {
+                                    GfUnion(gc, i, j);
+                                }
+                            }
+                        }
+                    }
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int GfOrder(emon.Port.Cells gc, emon.Port.Cells aux, int n) {
+        // Settle the groups and sort the candidates by root (ascending, then by index): `aux` has eight arrays of n cells, the counts of each root (A_CNT), where
+        // its members start (A_START), the members in order (A_ORD), its `ggp` row (A_GID, -1), and room for the sweeps (the other two, A_EP and A_BITS, 2 n each).
+        int i = 0;
+        int r = 0;
+        int s = 0;
+        int c = 0;
+        emon.Port.CellsDrop(aux, 0);
+        while (i < (n * 8)) {
+            emon.Port.CellsPush(aux, 0);
+            i += 1;
+        }
+        i = 0;
+        while (i < n) {
+            r = GfFind(gc, i);
+            Gcput(gc, i, CUf, r);
+            emon.Port.CellsSet(aux, (n * ACnt) + r, emon.Port.CellsAt(aux, (n * ACnt) + r) + 1);
+            i += 1;
+        }
+        i = 0;
+        while (i < n) {
+            emon.Port.CellsSet(aux, (n * AStart) + i, s);
+            s += emon.Port.CellsAt(aux, (n * ACnt) + i);
+            emon.Port.CellsSet(aux, (n * AGid) + i, -1);
+            i += 1;
+        }
+        i = 0;
+        while (i < n) {
+            r = Gcat(gc, i, CUf);
+            c = emon.Port.CellsAt(aux, (n * ABits) + r);
+            emon.Port.CellsSet(aux, (n * AOrd) + (emon.Port.CellsAt(aux, (n * AStart) + r) + c), i);
+            emon.Port.CellsSet(aux, (n * ABits) + r, c + 1);
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int GfRefsRun(emon.Port.Cells gc, emon.Port.Cells aux, int n, int s, int e, int src, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells refs, emon.Port.Cells ggp, int g, int slot) {
+        // The members of source `src` of the group whose members are `aux`'s A_ORD[s, e), as a run of `refs` and the cells (2 + 2 slot, 3 + 2 slot) of its
+        // `ggp` row. A vector member is named by the `paths` (or `images`) row its fused row came from; the others by their own rows. Answers the count.
+        int k = s;
+        int c = 0;
+        int cnt = 0;
+        int first = -1;
+        int row = 0;
+        while (k < e) {
+            c = emon.Port.CellsAt(aux, (n * AOrd) + k);
+            if (Gcat(gc, c, CSrc) == src) {
+                if (first < 0) {
+                    first = emon.Port.CellsLen(refs) / 2;
+                }
+                row = Gcat(gc, c, CRow);
+                if (src == 1) {
+                    if (Gcat(gc, c, CKind) == 1) {
+                        row = emon.Port.CellsAt(og, (row * 24) + 21);
+                    } else {
+                        row = emon.Port.CellsAt(ofl, (row * 16) + 14);
+                    }
+                }
+                Evidence.RfAdd(refs, Gcat(gc, c, CEa), row);
+                cnt += 1;
+            }
+            k += 1;
+        }
+        Glayer.GgpSet(ggp, g, 2 + (2 * slot), first);
+        Glayer.GgpSet(ggp, g, 3 + (2 * slot), cnt);
+        return cnt;
+    }
+    internal static int GfGroups(emon.Port.Cells gc, emon.Port.Cells aux, int n, emon.Port.Cells ctx, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells ggp, emon.Port.Cells refs) {
+        // A `ggp` row for every group of the page, in the order of its first member, with its three member runs; the group's flags: 1 an exactly known visible vector
+        // rule, 2 a tracer member, 4 an OCR member. The row is each root's A_GID. Answers the groups made.
+        int r = 0;
+        int s = 0;
+        int e = 0;
+        int g = 0;
+        int k = 0;
+        int c = 0;
+        int nv = 0;
+        int nt = 0;
+        int no = 0;
+        int nx = 0;
+        int made = 0;
+        int kind = 0;
+        while (r < n) {
+            if (emon.Port.CellsAt(aux, (n * ACnt) + r) > 0) {
+                s = emon.Port.CellsAt(aux, (n * AStart) + r);
+                e = s + emon.Port.CellsAt(aux, (n * ACnt) + r);
+                kind = Glayer.GkRule();
+                if (Gcat(gc, r, CKind) == 2) {
+                    kind = Glayer.GkFill();
+                }
+                g = Glayer.GgpNew(ggp, emon.Port.CellsAt(ctx, XPage), kind);
+                nv = GfRefsRun(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0);
+                nt = GfRefsRun(gc, aux, n, s, e, 2, og, ofl, refs, ggp, g, 1);
+                no = GfRefsRun(gc, aux, n, s, e, 4, og, ofl, refs, ggp, g, 2);
+                nx = 0;
+                k = s;
+                while (k < e) {
+                    c = emon.Port.CellsAt(aux, (n * AOrd) + k);
+                    if ((Gcat(gc, c, CSrc) == 1) && ((Gcat(gc, c, CKind) == 1) && (Gcat(gc, c, CExact) == 1))) {
+                        nx = 1;
+                    }
+                    k += 1;
+                }
+                Glayer.GgpSet(ggp, g, 8, (nx + (2 * GfMin(nt, 1))) + (4 * GfMin(no, 1)));
+                emon.Port.CellsSet(aux, (n * AGid) + r, g);
+                made += 1;
+            }
+            r += 1;
+        }
+        return made;
+    }
+    internal static int GfUnit(emon.Port.Cells un, int gid, int ukind) {
+        // Append a unit; answers its row.
+        int u = emon.Port.CellsLen(un) / 24;
+        int i = 0;
+        while (i < 24) {
+            emon.Port.CellsPush(un, 0);
+            i += 1;
+        }
+        emon.Port.CellsSet(un, u * 24, gid);
+        emon.Port.CellsSet(un, (u * 24) + 1, ukind);
+        emon.Port.CellsSet(un, (u * 24) + 9, -1);
+        emon.Port.CellsSet(un, (u * 24) + 15, -1);
+        return u;
+    }
+    internal static int Unat(emon.Port.Cells un, int u, int f) {
+        return emon.Port.CellsAt(un, (u * 24) + f);
+    }
+    internal static int Unput(emon.Port.Cells un, int u, int f, int v) {
+        emon.Port.CellsSet(un, (u * 24) + f, v);
+        return 0;
+    }
+    internal static int GfTraceOnly(int bits) {
+        // 1 for an elementary interval only the tracer covers (not a vector rule, exactly known or not).
+        if (((bits & 8) != 0) && ((bits & 3) == 0)) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int GfRunUnit(emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, int n, int s, int e, int gid, int cls, int vecexact, int q0, int q1) {
+        // One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its
+        // thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.
+        int epb = n * AEp;
+        int bitb = n * ABits;
+        int ordb = n * AOrd;
+        int lo = emon.Port.CellsAt(aux, epb + q0);
+        int hi = emon.Port.CellsAt(aux, epb + (q1 + 1));
+        int u = GfUnit(un, gid, 2);
+        int j = s;
+        int c = 0;
+        int ov = 0;
+        int best = -1;
+        int bestov = 0;
+        int cnt = 0;
+        int psum = 0;
+        int thick = 0;
+        int q = q0;
+        int oc = 0;
+        int perp = 0;
+        while (j < e) {
+            c = emon.Port.CellsAt(aux, ordb + j);
+            if (Gcat(gc, c, CSrc) == 2) {
+                ov = GfMin(hi, GfA1(gc, c)) - GfMax(lo, GfA0(gc, c));
+                if (ov > 0) {
+                    cnt += 1;
+                    psum += GfPerpOf(gc, c);
+                    thick = GfMax(thick, Gcat(gc, c, CT));
+                    if (ov > bestov) {
+                        bestov = ov;
+                        best = c;
+                    }
+                }
+            }
+            j += 1;
+        }
+        while (q <= q1) {
+            if ((emon.Port.CellsAt(aux, bitb + q) & 16) != 0) {
+                oc += emon.Port.CellsAt(aux, epb + (q + 1)) - emon.Port.CellsAt(aux, epb + q);
+            }
+            q += 1;
+        }
+        perp = psum / GfMax(cnt, 1);
+        Unput(un, u, 2, cls);
+        Unput(un, u, 3, lo);
+        Unput(un, u, 4, hi);
+        Unput(un, u, 5, perp);
+        Unput(un, u, 6, thick);
+        Unput(un, u, 10, (oc * 1000) / GfMax(hi - lo, 1));
+        Unput(un, u, 16, vecexact);
+        if (best >= 0) {
+            Unput(un, u, 7, Gcat(gc, best, CCol));
+            Unput(un, u, 8, Gcat(gc, best, CSty));
+            Unput(un, u, 9, Gcat(gc, best, CConf));
+        }
+        if ((cnt == 1) && ((lo == GfA0(gc, best)) && (hi == GfA1(gc, best)))) {
+            Unput(un, u, 11, Gcat(gc, best, CEx0));
+            Unput(un, u, 12, Gcat(gc, best, CEy0));
+            Unput(un, u, 13, Gcat(gc, best, CEx1));
+            Unput(un, u, 14, Gcat(gc, best, CEy1));
+            Unput(un, u, 15, best);
+        } else if (cls == Glayer.GoH()) {
+            Unput(un, u, 11, lo);
+            Unput(un, u, 12, perp);
+            Unput(un, u, 13, hi);
+            Unput(un, u, 14, perp);
+        } else {
+            Unput(un, u, 11, perp);
+            Unput(un, u, 12, lo);
+            Unput(un, u, 13, perp);
+            Unput(un, u, 14, hi);
+        }
+        return u;
+    }
+    internal static int GfSweep(emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, int n, int s, int e, int gid, int nv, int vecexact) {
+        // The group of rules whose members are `aux`'s A_ORD[s, e): the endpoints of every member along the axis cut it into ELEMENTARY INTERVALS, each with the
+        // kinds of member that cover it (bits: 1 an exactly known visible vector rule, 2 another vector rule, 8 the tracer, 16 an OCR line block). Every vector rule
+        // gets its WITNESS (`C_WIT`): the per mille of its length the tracer covers; every tracer member whether the group has a vector one (`C_EXACT`); and each
+        // run of intervals the tracer covers and no vector rule does becomes a unit. Gaps are never bridged: an interval nobody covers ends a run.
+        int k = e - s;
+        int cls = Gcat(gc, emon.Port.CellsAt(aux, (n * AOrd) + s), CCls);
+        int epb = n * AEp;
+        int bitb = n * ABits;
+        int ordb = n * AOrd;
+        int j = 0;
+        int m = 1;
+        int q = 0;
+        int qe = 0;
+        int c = 0;
+        int v = 0;
+        int w = 0;
+        int bits = 0;
+        int lo = 0;
+        int hi = 0;
+        int a0 = 0;
+        int a1 = 0;
+        int cov = 0;
+        while (j < k) {
+            c = emon.Port.CellsAt(aux, ordb + (s + j));
+            emon.Port.CellsSet(aux, epb + (j * 2), GfA0(gc, c));
+            emon.Port.CellsSet(aux, epb + ((j * 2) + 1), GfA1(gc, c));
+            j += 1;
+        }
+        j = 1;
+        while (j < (k * 2)) {
+            v = emon.Port.CellsAt(aux, epb + j);
+            w = j - 1;
+            while ((w >= 0) && (emon.Port.CellsAt(aux, epb + w) > v)) {
+                emon.Port.CellsSet(aux, epb + (w + 1), emon.Port.CellsAt(aux, epb + w));
+                w -= 1;
+            }
+            emon.Port.CellsSet(aux, epb + (w + 1), v);
+            j += 1;
+        }
+        j = 1;
+        while (j < (k * 2)) {
+            if (emon.Port.CellsAt(aux, epb + j) != emon.Port.CellsAt(aux, epb + (m - 1))) {
+                emon.Port.CellsSet(aux, epb + m, emon.Port.CellsAt(aux, epb + j));
+                m += 1;
+            }
+            j += 1;
+        }
+        while (q < (m - 1)) {
+            lo = emon.Port.CellsAt(aux, epb + q);
+            hi = emon.Port.CellsAt(aux, epb + (q + 1));
+            bits = 0;
+            j = 0;
+            while (j < k) {
+                c = emon.Port.CellsAt(aux, ordb + (s + j));
+                if ((GfA0(gc, c) <= lo) && (GfA1(gc, c) >= hi)) {
+                    if (Gcat(gc, c, CSrc) == 1) {
+                        if (Gcat(gc, c, CExact) == 1) {
+                            bits |= 1;
+                        } else {
+                            bits |= 2;
+                        }
+                    }
+                    if (Gcat(gc, c, CSrc) == 2) {
+                        bits |= 8;
+                    }
+                    if (Gcat(gc, c, CSrc) == 4) {
+                        bits |= 16;
+                    }
+                }
+                j += 1;
+            }
+            emon.Port.CellsSet(aux, bitb + q, bits);
+            q += 1;
+        }
+        j = 0;
+        while (j < k) {
+            c = emon.Port.CellsAt(aux, ordb + (s + j));
+            if (Gcat(gc, c, CSrc) == 1) {
+                a0 = GfA0(gc, c);
+                a1 = GfA1(gc, c);
+                cov = 0;
+                q = 0;
+                while (q < (m - 1)) {
+                    if ((emon.Port.CellsAt(aux, epb + q) >= a0) && (emon.Port.CellsAt(aux, epb + (q + 1)) <= a1)) {
+                        if ((emon.Port.CellsAt(aux, bitb + q) & 8) != 0) {
+                            cov += emon.Port.CellsAt(aux, epb + (q + 1)) - emon.Port.CellsAt(aux, epb + q);
+                        }
+                    }
+                    q += 1;
+                }
+                if (a1 > a0) {
+                    Gcput(gc, c, CWit, (cov * 1000) / (a1 - a0));
+                } else {
+                    Gcput(gc, c, CWit, 0);
+                }
+            }
+            if (Gcat(gc, c, CSrc) == 2) {
+                Gcput(gc, c, CExact, GfMin(nv, 1));
+            }
+            j += 1;
+        }
+        q = 0;
+        while (q < (m - 1)) {
+            if (GfTraceOnly(emon.Port.CellsAt(aux, bitb + q)) == 1) {
+                qe = q;
+                while (((qe + 1) < (m - 1)) && (GfTraceOnly(emon.Port.CellsAt(aux, bitb + (qe + 1))) == 1)) {
+                    qe += 1;
+                }
+                GfRunUnit(gc, aux, un, n, s, e, gid, cls, vecexact, q, qe);
+                q = qe + 1;
+            } else {
+                q += 1;
+            }
+        }
+        return 0;
+    }
+    internal static int GfSweeps(emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, int n) {
+        // Every group of the page in turn: a group of rules is swept (`gf-sweep`) when the tracer is in it; a vector rule with no tracer near it has witness 0; a
+        // slanted one is figure material and is not swept; OCR line blocks alone are a unit of kind 5. A group of fills: a vector fill's `C_WIT` is the candidate
+        // of a tint over it (-1: none), and a tint with no vector fill is a unit of kind 4. Answers the units.
+        int r = 0;
+        int s = 0;
+        int e = 0;
+        int k = 0;
+        int c = 0;
+        int nv = 0;
+        int nt = 0;
+        int no = 0;
+        int nx = 0;
+        int tint = -1;
+        int u = 0;
+        emon.Port.CellsDrop(un, 0);
+        while (r < n) {
+            if (emon.Port.CellsAt(aux, (n * ACnt) + r) > 0) {
+                s = emon.Port.CellsAt(aux, (n * AStart) + r);
+                e = s + emon.Port.CellsAt(aux, (n * ACnt) + r);
+                nv = 0;
+                nt = 0;
+                no = 0;
+                nx = 0;
+                tint = -1;
+                k = s;
+                while (k < e) {
+                    c = emon.Port.CellsAt(aux, (n * AOrd) + k);
+                    if (Gcat(gc, c, CSrc) == 1) {
+                        nv += 1;
+                        if (Gcat(gc, c, CExact) == 1) {
+                            nx = 1;
+                        }
+                    }
+                    if (Gcat(gc, c, CSrc) == 2) {
+                        nt += 1;
+                        if (tint < 0) {
+                            tint = c;
+                        }
+                    }
+                    if (Gcat(gc, c, CSrc) == 4) {
+                        no += 1;
+                    }
+                    k += 1;
+                }
+                if (Gcat(gc, r, CKind) == 1) {
+                    if (Gcat(gc, r, CCls) == Glayer.GoSlant()) {
+                        k = s;
+                        while (k < e) {
+                            c = emon.Port.CellsAt(aux, (n * AOrd) + k);
+                            if (Gcat(gc, c, CSrc) == 1) {
+                                Gcput(gc, c, CWit, 0);
+                            }
+                            k += 1;
+                        }
+                    } else if ((nt == 0) && (nv == 0)) {
+                        u = GfUnit(un, emon.Port.CellsAt(aux, (n * AGid) + r), 5);
+                        Unput(un, u, 16, 0);
+                    } else if (nt == 0) {
+                        k = s;
+                        while (k < e) {
+                            c = emon.Port.CellsAt(aux, (n * AOrd) + k);
+                            if (Gcat(gc, c, CSrc) == 1) {
+                                Gcput(gc, c, CWit, 0);
+                            }
+                            k += 1;
+                        }
+                    } else {
+                        GfSweep(gc, aux, un, n, s, e, emon.Port.CellsAt(aux, (n * AGid) + r), nv, nx);
+                    }
+                } else {
+                    k = s;
+                    while (k < e) {
+                        c = emon.Port.CellsAt(aux, (n * AOrd) + k);
+                        if (Gcat(gc, c, CSrc) == 1) {
+                            Gcput(gc, c, CWit, tint);
+                        }
+                        if ((Gcat(gc, c, CSrc) == 2) && (nv == 0)) {
+                            u = GfUnit(un, emon.Port.CellsAt(aux, (n * AGid) + r), 4);
+                            Unput(un, u, 11, Gcat(gc, c, CX0));
+                            Unput(un, u, 12, Gcat(gc, c, CY0));
+                            Unput(un, u, 13, Gcat(gc, c, CX1));
+                            Unput(un, u, 14, Gcat(gc, c, CY1));
+                            Unput(un, u, 7, Gcat(gc, c, CCol));
+                            Unput(un, u, 9, Gcat(gc, c, CConf));
+                            Unput(un, u, 15, c);
+                        }
+                        k += 1;
+                    }
+                }
+            }
+            r += 1;
+        }
+        return emon.Port.CellsLen(un) / 24;
+    }
+    internal static int GfImageOk(emon.Port.Cells im, int m) {
+        // 1 for a visible image placement at least `gf-img-min` each way (a region of its own: `emon.health`'s `hh-image-ok`).
+        if (Evidence.ImGet(im, m, Evidence.MfVis()) != 0) {
+            return 0;
+        }
+        if ((Evidence.ImGet(im, m, Evidence.MfX1()) - Evidence.ImGet(im, m, Evidence.MfX0())) < Fuserules.FgImgMin()) {
+            return 0;
+        }
+        if ((Evidence.ImGet(im, m, Evidence.MfY1()) - Evidence.ImGet(im, m, Evidence.MfY0())) < Fuserules.FgImgMin()) {
+            return 0;
+        }
+        return 1;
+    }
+    internal static int GfRegionOf(emon.Port.Cells ctx, emon.Port.Cells im, int cx, int cy) {
+        // The `images` row of the visible placement of the page that holds the point, else -1 (R0).
+        int m = emon.Port.CellsAt(ctx, XI0);
+        while (m < emon.Port.CellsAt(ctx, XI1)) {
+            if (GfImageOk(im, m) == 1) {
+                if (((cx >= Evidence.ImGet(im, m, Evidence.MfX0())) && (cx < Evidence.ImGet(im, m, Evidence.MfX1()))) && ((cy >= Evidence.ImGet(im, m, Evidence.MfY0())) && (cy < Evidence.ImGet(im, m, Evidence.MfY1())))) {
+                    return m;
+                }
+            }
+            m += 1;
+        }
+        return -1;
+    }
+    internal static int GfTextShare(emon.Port.Cells ctx, emon.Port.Cells words, int x0, int y0, int x1, int y1) {
+        // The per mille of the box that lies in the page's text-layer word boxes (their intersections added, at most 1000). Areas in tenths of a point.
+        int area = GfMax(1, GfMax(0, x1 - x0) / 10) * GfMax(1, GfMax(0, y1 - y0) / 10);
+        int w = emon.Port.CellsAt(ctx, XT0);
+        int inter = 0;
+        int iw = 0;
+        int ih = 0;
+        while (w < emon.Port.CellsAt(ctx, XT1)) {
+            iw = GfMax(0, GfMin(x1, Evidence.WdGet(words, w, Evidence.HdX1())) - GfMax(x0, Evidence.WdGet(words, w, Evidence.HdX0()))) / 10;
+            ih = GfMax(0, GfMin(y1, Evidence.WdGet(words, w, Evidence.HdY1())) - GfMax(y0, Evidence.WdGet(words, w, Evidence.HdY0()))) / 10;
+            inter += iw * ih;
+            w += 1;
+        }
+        return GfMin(1000, inter / GfMax(1, area / 1000));
+    }
+    internal static int GfRuleGlyph(int cp) {
+        // 1 for a code point a scanned border is read as: | l I 1 ! [ ] _ - and U+2010-U+2015 (SPEC 8.4.5, column 31).
+        if ((cp == 124) || ((cp == 108) || ((cp == 73) || ((cp == 49) || ((cp == 33) || ((cp == 91) || ((cp == 93) || ((cp == 95) || (cp == 45))))))))) {
+            return 1;
+        }
+        if ((cp >= 8208) && (cp <= 8213)) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int GfWordRuleLike(emon.Port.Cells owords, emon.Port.Cells etext, int w) {
+        // 1 for an OCR word of one or two code points, all rule glyphs.
+        int wl = Evidence.OwGet(owords, w, Evidence.HdTlen());
+        int st = Evidence.OwGet(owords, w, Evidence.HdTstart());
+        int k = 0;
+        if ((wl < 1) || (wl > 2)) {
+            return 0;
+        }
+        while (k < wl) {
+            if (GfRuleGlyph(emon.Port.CellsAt(etext, st + k)) == 0) {
+                return 0;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    internal static int GfWordPlain(emon.Port.Cells owords, emon.Port.Cells etext, int w) {
+        // 1 for an OCR word of three or more code points that is not made of rule glyphs alone.
+        int wl = Evidence.OwGet(owords, w, Evidence.HdTlen());
+        int st = Evidence.OwGet(owords, w, Evidence.HdTstart());
+        int k = 0;
+        if (wl < 3) {
+            return 0;
+        }
+        while (k < wl) {
+            if (GfRuleGlyph(emon.Port.CellsAt(etext, st + k)) == 0) {
+                return 1;
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    internal static int GfInOword(emon.Port.Cells ctx, emon.Port.Cells owords, emon.Port.Cells etext, int x0, int y0, int x1, int y1) {
+        // The most (per mille) of the box that lies inside ONE OCR word of three or more code points that is not made of rule glyphs (row 533); 0 for none.
+        int w = emon.Port.CellsAt(ctx, XW0);
+        int best = 0;
+        int v = 0;
+        while (w < emon.Port.CellsAt(ctx, XW1)) {
+            if (GfWordPlain(owords, etext, w) == 1) {
+                v = GfInsideShare(x0, y0, x1, y1, Evidence.OwGet(owords, w, Evidence.HdX0()), Evidence.OwGet(owords, w, Evidence.HdY0()), Evidence.OwGet(owords, w, Evidence.HdX1()), Evidence.OwGet(owords, w, Evidence.HdY1()));
+                if (v > best) {
+                    best = v;
+                }
+            }
+            w += 1;
+        }
+        return best;
+    }
+    internal static int GfRegionScore(emon.Port.Cells hl, int page, int subject) {
+        // The score of the graphics region of `emon.health` (`plh-region`) for a page and a subject (-1 R0, else the `images` row); -1 when there is none.
+        int n = emon.Port.CellsLen(hl) / 12;
+        int i = 0;
+        while (i < n) {
+            if ((Player.HlGet(hl, i, 0) == Player.PlhRegion()) && ((Player.HlGet(hl, i, 1) == page) && (Player.HlGet(hl, i, 2) == subject))) {
+                return Player.HlGet(hl, i, 9);
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    internal static int GfHealth(emon.Port.Cells ctx, emon.Port.Cells gc, int n, emon.Port.Cells im, emon.Port.Cells rules, emon.Port.Cells words, emon.Port.Cells hl) {
+        // The page's two figures that depend on how the sources meet (SPEC 9.9 `Health per region`), then `emon.health`'s rows. THE VECTOR WITNESS (R0 of a
+        // born-digital page): the length of the exactly known visible vector rules (horizontal and vertical) that the tracer witnesses, over their length; -1
+        // without any. THE TRACER'S PRECISION (R0 of a born-digital page): the length of the tracer's rules a vector rule explains (its group has one) or that lie
+        // in text-layer word boxes (half or more of their box), over all of theirs; -1 without any. A raster page has neither. Answers the rows of `hl` made.
+        int i = 0;
+        int rlen = 0;
+        int vl = 0;
+        int vw = 0;
+        int tl = 0;
+        int te = 0;
+        int witness = -1;
+        int precision = -1;
+        int cls = 0;
+        if (emon.Port.CellsAt(ctx, XKind) == 1) {
+            while (i < n) {
+                cls = Gcat(gc, i, CCls);
+                if ((Gcat(gc, i, CKind) == 1) && ((cls == Glayer.GoH()) || (cls == Glayer.GoV()))) {
+                    if (GfRegionOf(ctx, im, (Gcat(gc, i, CEx0) + Gcat(gc, i, CEx1)) / 2, (Gcat(gc, i, CEy0) + Gcat(gc, i, CEy1)) / 2) < 0) {
+                        rlen = GfA1(gc, i) - GfA0(gc, i);
+                        if ((Gcat(gc, i, CSrc) == 1) && (Gcat(gc, i, CExact) == 1)) {
+                            vl += rlen;
+                            vw += (rlen * GfMax(0, Gcat(gc, i, CWit))) / 1000;
+                        }
+                        if (Gcat(gc, i, CSrc) == 2) {
+                            tl += rlen;
+                            if (Gcat(gc, i, CExact) == 1) {
+                                te += rlen;
+                            } else if (GfTextShare(ctx, words, Gcat(gc, i, CX0), Gcat(gc, i, CY0), Gcat(gc, i, CX1), Gcat(gc, i, CY1)) >= 500) {
+                                te += rlen;
+                            }
+                        }
+                    }
+                }
+                i += 1;
+            }
+        }
+        if (vl > 0) {
+            witness = (vw * 1000) / vl;
+        }
+        if (tl > 0) {
+            precision = (te * 1000) / tl;
+        }
+        emon.Port.CellsSet(ctx, XWit, witness);
+        emon.Port.CellsSet(ctx, XPrec, precision);
+        return Health.HlRegions(emon.Port.CellsAt(ctx, XPage), im, rules, witness, precision, hl);
+    }
+    internal static int GfCopyRow(emon.Port.Cells og, int row, emon.Port.Cells grl) {
+        // Append a copy of row `row` of the vector-only rules to `grl`; answers its row.
+        int r = emon.Port.CellsLen(grl) / 24;
+        int k = 0;
+        while (k < 24) {
+            emon.Port.CellsPush(grl, emon.Port.CellsAt(og, (row * 24) + k));
+            k += 1;
+        }
+        return r;
+    }
+    internal static int GfFirstTrace(emon.Port.Cells gc, emon.Port.Cells aux, int n, int root) {
+        // The first tracer member of the group of `root` (candidate index), -1 when it has none.
+        int k = emon.Port.CellsAt(aux, (n * AStart) + root);
+        int e = emon.Port.CellsAt(aux, (n * AStart) + root) + emon.Port.CellsAt(aux, (n * ACnt) + root);
+        int c = 0;
+        while (k < e) {
+            c = emon.Port.CellsAt(aux, (n * AOrd) + k);
+            if (Gcat(gc, c, CSrc) == 2) {
+                return c;
+            }
+            k += 1;
+        }
+        return -1;
+    }
+    internal static int GfEmitVecRules(emon.Port.Cells ctx, emon.Port.Cells gc, int n, emon.Port.Cells aux, emon.Port.Cells og, emon.Port.Cells im, emon.Port.Cells hl, emon.Port.Cells ggp, emon.Port.Cells grl, emon.Port.Cells fx, emon.Port.Cells gfa, emon.Port.Cells gv) {
+        // Every vector rule of the page, in order, through block 500: kept (with the row's number, confidence and flags, `trace` among its sources when the tracer
+        // witnessed it, the tracer's colour when its own is -1 and the row is 512) or dropped (513: a row of `gfa`, for the ledger). Answers the rows kept.
+        int page = emon.Port.CellsAt(ctx, XPage);
+        int kind = emon.Port.CellsAt(ctx, XKind);
+        int i = 0;
+        int root = 0;
+        int gid = 0;
+        int r = 0;
+        int fr = 0;
+        int rg = 0;
+        int t = -1;
+        int kept = 0;
+        int num = 0;
+        int orow = 0;
+        while (i < n) {
+            if ((Gcat(gc, i, CKind) == 1) && (Gcat(gc, i, CSrc) == 1)) {
+                root = Gcat(gc, i, CUf);
+                gid = emon.Port.CellsAt(aux, (n * AGid) + root);
+                rg = GfRegionOf(ctx, im, (Gcat(gc, i, CEx0) + Gcat(gc, i, CEx1)) / 2, (Gcat(gc, i, CEy0) + Gcat(gc, i, CEy1)) / 2);
+                GfGvReset(gv);
+                emon.Port.CellsSet(gv, 100, 1);
+                emon.Port.CellsSet(gv, 101, Gcat(gc, i, CExact));
+                emon.Port.CellsSet(gv, 102, 1 - Gcat(gc, i, CExact));
+                emon.Port.CellsSet(gv, 103, 0);
+                emon.Port.CellsSet(gv, 108, kind);
+                emon.Port.CellsSet(gv, 117, Gcat(gc, i, CWit));
+                emon.Port.CellsSet(gv, 118, Glayer.GgpGet(ggp, gid, 8) & 1);
+                if (rg < 0) {
+                    emon.Port.CellsSet(gv, 110, emon.Port.CellsAt(ctx, XWit));
+                }
+                emon.Port.CellsSet(gv, 111, emon.Port.CellsAt(ctx, XPrec));
+                fr = Fuserules.FrDecideBlock(gv, 500);
+                GfExplain(fx, gid, fr, gv);
+                orow = Gcat(gc, i, CRow);
+                if (Fuserules.FrWinner(fr) == 0) {
+                    if (Fuserules.FrReason(fr) == 12) {
+                        emon.Port.CellsPush(gfa, page);
+                        emon.Port.CellsPush(gfa, emon.Port.CellsAt(og, (orow * 24) + 1));
+                        emon.Port.CellsPush(gfa, emon.Port.CellsAt(og, (orow * 24) + 2));
+                        emon.Port.CellsPush(gfa, emon.Port.CellsAt(og, (orow * 24) + 3));
+                        emon.Port.CellsPush(gfa, emon.Port.CellsAt(og, (orow * 24) + 4));
+                        emon.Port.CellsPush(gfa, Fuserules.FrReason(fr));
+                    }
+                } else {
+                    r = GfCopyRow(og, orow, grl);
+                    num = Fuserules.FrNumber(fr);
+                    Glayer.GrlSet(grl, r, 16, num);
+                    Glayer.GrlSet(grl, r, 17, Fuserules.FrConf(fr));
+                    Glayer.GrlSet(grl, r, 18, emon.Port.CellsAt(og, (orow * 24) + 18) | Fuserules.FrFlags(fr));
+                    Glayer.GrlSet(grl, r, 19, gid);
+                    if ((num == 510) || (num == 512)) {
+                        Glayer.GrlSet(grl, r, 14, Glayer.GsVector() | Glayer.GsTrace());
+                    }
+                    if ((num == 512) && (emon.Port.CellsAt(og, (orow * 24) + 12) < 0)) {
+                        t = GfFirstTrace(gc, aux, n, root);
+                        if (t >= 0) {
+                            Glayer.GrlSet(grl, r, 12, Gcat(gc, t, CCol));
+                        }
+                    }
+                    kept += 1;
+                }
+            }
+            i += 1;
+        }
+        return kept;
+    }
+    internal static int GfUnitBox(emon.Port.Cells un, int u, emon.Port.Cells gv) {
+        // A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.
+        int half = (GfMax(Unat(un, u, 6), 1) + 1) / 2;
+        if (Unat(un, u, 2) == Glayer.GoH()) {
+            emon.Port.CellsSet(gv, 0, Unat(un, u, 3));
+            emon.Port.CellsSet(gv, 1, Unat(un, u, 5) - half);
+            emon.Port.CellsSet(gv, 2, Unat(un, u, 4));
+            emon.Port.CellsSet(gv, 3, Unat(un, u, 5) + half);
+        } else {
+            emon.Port.CellsSet(gv, 0, Unat(un, u, 5) - half);
+            emon.Port.CellsSet(gv, 1, Unat(un, u, 3));
+            emon.Port.CellsSet(gv, 2, Unat(un, u, 5) + half);
+            emon.Port.CellsSet(gv, 3, Unat(un, u, 4));
+        }
+        return 0;
+    }
+    internal static int GfEmitTraceUnits(emon.Port.Cells ctx, emon.Port.Cells un, emon.Port.Cells im, emon.Port.Cells hl, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells words, emon.Port.Cells ggp, emon.Port.Cells grl, emon.Port.Cells fx, emon.Port.Cells gv) {
+        // Every rule unit the tracer alone draws (kind 2) and every OCR-only group (kind 5) through block 500. Answers the rules kept.
+        int page = emon.Port.CellsAt(ctx, XPage);
+        int kind = emon.Port.CellsAt(ctx, XKind);
+        int nu = emon.Port.CellsLen(un) / 24;
+        int u = 0;
+        int rg = 0;
+        int fr = 0;
+        int r = 0;
+        int conf = 0;
+        int tconf = 0;
+        int score = 0;
+        int ocr = 0;
+        int kept = 0;
+        int ang = 0;
+        int gid = 0;
+        int src = 0;
+        while (u < nu) {
+            if ((Unat(un, u, 1) == 2) || (Unat(un, u, 1) == 5)) {
+                gid = Unat(un, u, 0);
+                GfGvReset(gv);
+                if (Unat(un, u, 1) == 5) {
+                    emon.Port.CellsSet(gv, 100, 5);
+                } else {
+                    emon.Port.CellsSet(gv, 100, 2);
+                    emon.Port.CellsSet(gv, 104, 1);
+                    rg = GfRegionOf(ctx, im, (Unat(un, u, 11) + Unat(un, u, 13)) / 2, (Unat(un, u, 12) + Unat(un, u, 14)) / 2);
+                    tconf = Unat(un, u, 9);
+                    ocr = Unat(un, u, 10);
+                    if (tconf >= 0) {
+                        if (ocr >= 500) {
+                            emon.Port.CellsSet(gv, 105, tconf + Fuserules.FgOcrBonus());
+                        } else {
+                            emon.Port.CellsSet(gv, 105, tconf);
+                        }
+                    }
+                    emon.Port.CellsSet(gv, 106, ocr);
+                    if ((kind == 1) && (rg >= 0)) {
+                        emon.Port.CellsSet(gv, 107, 1);
+                    } else {
+                        emon.Port.CellsSet(gv, 107, 0);
+                    }
+                    emon.Port.CellsSet(gv, 108, kind);
+                    score = GfRegionScore(hl, page, rg);
+                    emon.Port.CellsSet(gv, 109, score);
+                    emon.Port.CellsSet(gv, 111, emon.Port.CellsAt(ctx, XPrec));
+                    emon.Port.CellsSet(gv, 118, Unat(un, u, 16));
+                    GfUnitBox(un, u, gv);
+                    if ((kind == 1) && (rg < 0)) {
+                        emon.Port.CellsSet(gv, 112, GfTextShare(ctx, words, emon.Port.CellsAt(gv, 0), emon.Port.CellsAt(gv, 1), emon.Port.CellsAt(gv, 2), emon.Port.CellsAt(gv, 3)));
+                    }
+                    emon.Port.CellsSet(gv, 113, GfInOword(ctx, owords, etext, emon.Port.CellsAt(gv, 0), emon.Port.CellsAt(gv, 1), emon.Port.CellsAt(gv, 2), emon.Port.CellsAt(gv, 3)));
+                }
+                fr = Fuserules.FrDecideBlock(gv, 500);
+                GfExplain(fx, gid, fr, gv);
+                if ((Fuserules.FrWinner(fr) == 2) && (Unat(un, u, 1) == 2)) {
+                    GfUnitBox(un, u, gv);
+                    r = Glayer.GrlNew(grl, page, emon.Port.CellsAt(gv, 0), emon.Port.CellsAt(gv, 1), emon.Port.CellsAt(gv, 2), emon.Port.CellsAt(gv, 3), Unat(un, u, 11), Unat(un, u, 12), Unat(un, u, 13), Unat(un, u, 14), GfMax(Unat(un, u, 6), 1), Unat(un, u, 2));
+                    Glayer.GrlSet(grl, r, 11, GfAngleOf(Unat(un, u, 13) - Unat(un, u, 11), Unat(un, u, 14) - Unat(un, u, 12)));
+                    Glayer.GrlSet(grl, r, 12, Unat(un, u, 7));
+                    Glayer.GrlSet(grl, r, 13, Unat(un, u, 8));
+                    src = Glayer.GsTrace();
+                    if (Unat(un, u, 10) > 0) {
+                        src |= Glayer.GsOcr();
+                    }
+                    Glayer.GrlSet(grl, r, 14, src);
+                    Glayer.GrlSet(grl, r, 15, Glayer.GsTrace());
+                    Glayer.GrlSet(grl, r, 16, Fuserules.FrNumber(fr));
+                    conf = Fuserules.FrConf(fr);
+                    if (conf < 0) {
+                        conf = Unat(un, u, 9);
+                        if (conf < 0) {
+                            conf = 500;
+                        }
+                        conf = (conf * GfMax(0, score)) / 1000;
+                    }
+                    Glayer.GrlSet(grl, r, 17, conf);
+                    Glayer.GrlSet(grl, r, 18, Fuserules.FrFlags(fr));
+                    Glayer.GrlSet(grl, r, 19, gid);
+                    kept += 1;
+                }
+            }
+            u += 1;
+        }
+        return kept;
+    }
+    internal static int GfEmitFills(emon.Port.Cells ctx, emon.Port.Cells gc, int n, emon.Port.Cells aux, emon.Port.Cells ofl, emon.Port.Cells un, emon.Port.Cells im, emon.Port.Cells hl, emon.Port.Cells ggp, emon.Port.Cells gfl, emon.Port.Cells fx, emon.Port.Cells gv) {
+        // Every vector fill (a tint over it is its witness) and every tint no vector fill has, through block 500, into `gfl`. Answers the fills kept.
+        int page = emon.Port.CellsAt(ctx, XPage);
+        int kind = emon.Port.CellsAt(ctx, XKind);
+        int nu = emon.Port.CellsLen(un) / 24;
+        int i = 0;
+        int u = 0;
+        int gid = 0;
+        int fr = 0;
+        int r = 0;
+        int rg = 0;
+        int t = 0;
+        int colour = 0;
+        int kept = 0;
+        int num = 0;
+        int orow = 0;
+        while (i < n) {
+            if ((Gcat(gc, i, CKind) == 2) && (Gcat(gc, i, CSrc) == 1)) {
+                gid = emon.Port.CellsAt(aux, (n * AGid) + Gcat(gc, i, CUf));
+                orow = Gcat(gc, i, CRow);
+                t = Gcat(gc, i, CWit);
+                GfGvReset(gv);
+                emon.Port.CellsSet(gv, 100, 3);
+                emon.Port.CellsSet(gv, 108, kind);
+                if (Gcat(gc, i, CCol) < 0) {
+                    emon.Port.CellsSet(gv, 115, 0);
+                } else {
+                    emon.Port.CellsSet(gv, 115, 1);
+                }
+                if (t >= 0) {
+                    emon.Port.CellsSet(gv, 116, 1);
+                } else {
+                    emon.Port.CellsSet(gv, 116, 0);
+                }
+                fr = Fuserules.FrDecideBlock(gv, 500);
+                GfExplain(fx, gid, fr, gv);
+                if (Fuserules.FrWinner(fr) != 0) {
+                    r = emon.Port.CellsLen(gfl) / 16;
+                    u = 0;
+                    while (u < 16) {
+                        emon.Port.CellsPush(gfl, emon.Port.CellsAt(ofl, (orow * 16) + u));
+                        u += 1;
+                    }
+                    num = Fuserules.FrNumber(fr);
+                    Glayer.GflSet(gfl, r, 9, num);
+                    Glayer.GflSet(gfl, r, 10, Fuserules.FrConf(fr));
+                    Glayer.GflSet(gfl, r, 11, emon.Port.CellsAt(ofl, (orow * 16) + 11) | Fuserules.FrFlags(fr));
+                    Glayer.GflSet(gfl, r, 12, gid);
+                    if (t >= 0) {
+                        Glayer.GflSet(gfl, r, 7, Glayer.GsVector() | Glayer.GsTrace());
+                        if (Gcat(gc, i, CCol) < 0) {
+                            colour = Gcat(gc, t, CCol);
+                            Glayer.GflSet(gfl, r, 5, colour);
+                            Glayer.GflSet(gfl, r, 6, GfLightness(colour));
+                        }
+                    }
+                    kept += 1;
+                }
+            }
+            i += 1;
+        }
+        u = 0;
+        while (u < nu) {
+            if (Unat(un, u, 1) == 4) {
+                gid = Unat(un, u, 0);
+                rg = GfRegionOf(ctx, im, (Unat(un, u, 11) + Unat(un, u, 13)) / 2, (Unat(un, u, 12) + Unat(un, u, 14)) / 2);
+                GfGvReset(gv);
+                emon.Port.CellsSet(gv, 100, 4);
+                emon.Port.CellsSet(gv, 108, kind);
+                if ((kind == 1) && (rg >= 0)) {
+                    emon.Port.CellsSet(gv, 107, 1);
+                } else {
+                    emon.Port.CellsSet(gv, 107, 0);
+                }
+                emon.Port.CellsSet(gv, 109, GfRegionScore(hl, page, rg));
+                emon.Port.CellsSet(gv, 111, emon.Port.CellsAt(ctx, XPrec));
+                fr = Fuserules.FrDecideBlock(gv, 500);
+                GfExplain(fx, gid, fr, gv);
+                if (Fuserules.FrWinner(fr) == 2) {
+                    r = Glayer.GflNew(gfl, page, Unat(un, u, 11), Unat(un, u, 12), Unat(un, u, 13), Unat(un, u, 14), Unat(un, u, 7));
+                    Glayer.GflSet(gfl, r, 6, GfLightness(Unat(un, u, 7)));
+                    Glayer.GflSet(gfl, r, 7, Glayer.GsTrace());
+                    Glayer.GflSet(gfl, r, 8, Glayer.GsTrace());
+                    Glayer.GflSet(gfl, r, 9, Fuserules.FrNumber(fr));
+                    Glayer.GflSet(gfl, r, 10, Fuserules.FrConf(fr));
+                    Glayer.GflSet(gfl, r, 11, Fuserules.FrFlags(fr));
+                    Glayer.GflSet(gfl, r, 12, gid);
+                    kept += 1;
+                }
+            }
+            u += 1;
+        }
+        return kept;
+    }
+    internal static int GfCrosses(emon.Port.Cells grl, int h, int v) {
+        // 1 when horizontal rule row h and vertical rule row v touch within 3 pt (D179's lattice test).
+        int hx0 = GfMin(Glayer.GrlGet(grl, h, 5), Glayer.GrlGet(grl, h, 7));
+        int hx1 = GfMax(Glayer.GrlGet(grl, h, 5), Glayer.GrlGet(grl, h, 7));
+        int hy = (Glayer.GrlGet(grl, h, 6) + Glayer.GrlGet(grl, h, 8)) / 2;
+        int vx = (Glayer.GrlGet(grl, v, 5) + Glayer.GrlGet(grl, v, 7)) / 2;
+        int vy0 = GfMin(Glayer.GrlGet(grl, v, 6), Glayer.GrlGet(grl, v, 8));
+        int vy1 = GfMax(Glayer.GrlGet(grl, v, 6), Glayer.GrlGet(grl, v, 8));
+        if (((vx >= (hx0 - 300)) && (vx <= (hx1 + 300))) && ((hy >= (vy0 - 300)) && (hy <= (vy1 + 300)))) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int GfInRegion(emon.Port.Cells grl, int r, int rx0, int ry0, int rx1, int ry1) {
+        // 1 when the middle of rule row r is inside the box.
+        int cx = (Glayer.GrlGet(grl, r, 5) + Glayer.GrlGet(grl, r, 7)) / 2;
+        int cy = (Glayer.GrlGet(grl, r, 6) + Glayer.GrlGet(grl, r, 8)) / 2;
+        if (((cx >= rx0) && (cx < rx1)) && ((cy >= ry0) && (cy < ry1))) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int GfLattice(emon.Port.Cells grl, int g0, int g1, int rx0, int ry0, int rx1, int ry1) {
+        // 1 when the `in-image` rules of rows [g0, g1) inside the box make a lattice: two horizontal and two vertical rules, each pair at least 5 pt apart, every
+        // horizontal touching every vertical within 3 pt (D179's component test without its text test, over a region; at most 300 rules of each kind are tried).
+        int a = g0;
+        int b = 0;
+        int c = 0;
+        int d = 0;
+        int tried = 0;
+        int v1 = -1;
+        while (a < g1) {
+            if ((Glayer.GrlGet(grl, a, 10) == Glayer.GoH()) && (((Glayer.GrlGet(grl, a, 18) & Glayer.GqInImage()) != 0) && (GfInRegion(grl, a, rx0, ry0, rx1, ry1) == 1))) {
+                b = a + 1;
+                while (b < g1) {
+                    if ((Glayer.GrlGet(grl, b, 10) == Glayer.GoH()) && (((Glayer.GrlGet(grl, b, 18) & Glayer.GqInImage()) != 0) && (GfInRegion(grl, b, rx0, ry0, rx1, ry1) == 1))) {
+                        if (GfAbs(((Glayer.GrlGet(grl, a, 6) + Glayer.GrlGet(grl, a, 8)) / 2) - ((Glayer.GrlGet(grl, b, 6) + Glayer.GrlGet(grl, b, 8)) / 2)) >= 500) {
+                            tried += 1;
+                            v1 = -1;
+                            c = g0;
+                            while (c < g1) {
+                                if ((Glayer.GrlGet(grl, c, 10) == Glayer.GoV()) && (((Glayer.GrlGet(grl, c, 18) & Glayer.GqInImage()) != 0) && (GfInRegion(grl, c, rx0, ry0, rx1, ry1) == 1))) {
+                                    if ((GfCrosses(grl, a, c) == 1) && (GfCrosses(grl, b, c) == 1)) {
+                                        if (v1 < 0) {
+                                            v1 = c;
+                                        } else if (GfAbs(((Glayer.GrlGet(grl, c, 5) + Glayer.GrlGet(grl, c, 7)) / 2) - ((Glayer.GrlGet(grl, v1, 5) + Glayer.GrlGet(grl, v1, 7)) / 2)) >= 500) {
+                                            return 1;
+                                        }
+                                    }
+                                }
+                                c += 1;
+                            }
+                        }
+                    }
+                    if (tried > 300000) {
+                        return 0;
+                    }
+                    b += 1;
+                }
+            }
+            a += 1;
+        }
+        return 0;
+    }
+    internal static int GfBands(emon.Port.Cells gfl, int f0, int f1, int rx0, int ry0, int rx1, int ry1) {
+        // 1 when the `in-image` fills of rows [f0, f1) inside the box include three bands of one extent (left and right edges within 3 pt) stacked one on the next (3 pt).
+        int a = f0;
+        int b = 0;
+        int c = 0;
+        while (a < f1) {
+            if (((Glayer.GflGet(gfl, a, 11) & Glayer.GqfInImage()) != 0) && ((Glayer.GflGet(gfl, a, 1) >= rx0) && ((Glayer.GflGet(gfl, a, 3) <= rx1) && ((Glayer.GflGet(gfl, a, 2) >= ry0) && (Glayer.GflGet(gfl, a, 4) <= ry1))))) {
+                b = f0;
+                while (b < f1) {
+                    if ((b != a) && ((Glayer.GflGet(gfl, b, 11) & Glayer.GqfInImage()) != 0)) {
+                        if ((GfAbs(Glayer.GflGet(gfl, b, 1) - Glayer.GflGet(gfl, a, 1)) <= 300) && ((GfAbs(Glayer.GflGet(gfl, b, 3) - Glayer.GflGet(gfl, a, 3)) <= 300) && (GfAbs(Glayer.GflGet(gfl, b, 2) - Glayer.GflGet(gfl, a, 4)) <= 300))) {
+                            c = f0;
+                            while (c < f1) {
+                                if ((c != a) && ((c != b) && ((Glayer.GflGet(gfl, c, 11) & Glayer.GqfInImage()) != 0))) {
+                                    if ((GfAbs(Glayer.GflGet(gfl, c, 1) - Glayer.GflGet(gfl, a, 1)) <= 300) && ((GfAbs(Glayer.GflGet(gfl, c, 3) - Glayer.GflGet(gfl, a, 3)) <= 300) && (GfAbs(Glayer.GflGet(gfl, c, 2) - Glayer.GflGet(gfl, b, 4)) <= 300))) {
+                                        return 1;
+                                    }
+                                }
+                                c += 1;
+                            }
+                        }
+                    }
+                    b += 1;
+                }
+            }
+            a += 1;
+        }
+        return 0;
+    }
+    internal static int GfCountInside(emon.Port.Cells grl, emon.Port.Cells gfl, int g0, int f0, int x0, int y0, int x1, int y1, emon.Port.Cells grg, int region) {
+        // The fused rules (from row g0 on) and fills (from row f0 on) whose middle lies in the box, into the region's cells 9 and 10.
+        int i = g0;
+        int nr = 0;
+        int nf = 0;
+        int cx = 0;
+        int cy = 0;
+        while (i < Glayer.GrlCount(grl)) {
+            if (GfInRegion(grl, i, x0, y0, x1, y1) == 1) {
+                nr += 1;
+            }
+            i += 1;
+        }
+        i = f0;
+        while (i < Glayer.GflCount(gfl)) {
+            cx = (Glayer.GflGet(gfl, i, 1) + Glayer.GflGet(gfl, i, 3)) / 2;
+            cy = (Glayer.GflGet(gfl, i, 2) + Glayer.GflGet(gfl, i, 4)) / 2;
+            if (((cx >= x0) && (cx < x1)) && ((cy >= y0) && (cy < y1))) {
+                nf += 1;
+            }
+            i += 1;
+        }
+        Glayer.GrgSet(grg, region, 9, nr);
+        Glayer.GrgSet(grg, region, 10, nf);
+        return 0;
+    }
+    internal static int GfGrow(emon.Port.Cells grg, int r, int x0, int y0, int x1, int y1) {
+        // Grow region r's box to take in the box.
+        int a = GfMin(Glayer.GrgGet(grg, r, 1), x0);
+        int b = GfMin(Glayer.GrgGet(grg, r, 2), y0);
+        int c = GfMax(Glayer.GrgGet(grg, r, 3), x1);
+        int d = GfMax(Glayer.GrgGet(grg, r, 4), y1);
+        Glayer.GrgSet(grg, r, 1, a);
+        Glayer.GrgSet(grg, r, 2, b);
+        Glayer.GrgSet(grg, r, 3, c);
+        Glayer.GrgSet(grg, r, 4, d);
+        return 0;
+    }
+    internal static int GfFigAdd(emon.Port.Cells un, int x0, int y0, int x1, int y1, int src, int sea, int sidx) {
+        // A figure candidate (stride 24 in `un`): 0-3 box, 4 sources, 5 6 its subject, 7 union-find parent.
+        int i = emon.Port.CellsLen(un) / 24;
+        int k = 8;
+        emon.Port.CellsPush(un, x0);
+        emon.Port.CellsPush(un, y0);
+        emon.Port.CellsPush(un, x1);
+        emon.Port.CellsPush(un, y1);
+        emon.Port.CellsPush(un, src);
+        emon.Port.CellsPush(un, sea);
+        emon.Port.CellsPush(un, sidx);
+        emon.Port.CellsPush(un, i);
+        while (k < 24) {
+            emon.Port.CellsPush(un, 0);
+            k += 1;
+        }
+        return i;
+    }
+    internal static int GfFigFind(emon.Port.Cells un, int i) {
+        int r = i;
+        while (Unat(un, r, 7) != r) {
+            r = Unat(un, r, 7);
+        }
+        return r;
+    }
+    internal static int GfFigClusters(emon.Port.Cells ctx, emon.Port.Cells pa, emon.Port.Cells gc, emon.Port.Cells un) {
+        // Vector figure clusters (SPEC 9.9): the page's paths that are curves or polygons, on a grid of 32 x 32 cells over their extent (a cell is at least 12 pt, so paths
+        // within 6 pt of each other fall in one cell or neighbouring ones); a connected set of occupied cells holding at least 8 of them is one cluster, a candidate figure
+        // of the box of its paths. (`gc` is scratch here: the page's candidates are done with.) Answers the clusters added.
+        int p = emon.Port.CellsAt(ctx, XP0);
+        int bx0 = 2000000000;
+        int by0 = 2000000000;
+        int bx1 = -2000000000;
+        int by1 = -2000000000;
+        int np = 0;
+        int k = 0;
+        int cs = 1200;
+        int cx = 0;
+        int cy = 0;
+        int cell = 0;
+        int changed = 1;
+        int iter = 0;
+        int nb = 0;
+        int dx = 0;
+        int dy = 0;
+        int lab = 0;
+        int added = 0;
+        int ux0 = 0;
+        while (p < emon.Port.CellsAt(ctx, XP1)) {
+            if ((Evidence.PaGet(pa, p, Evidence.PfKind()) == Evidence.PaCurve()) || (Evidence.PaGet(pa, p, Evidence.PfKind()) == Evidence.PaOther())) {
+                np += 1;
+                bx0 = GfMin(bx0, Evidence.PaGet(pa, p, Evidence.PfX0()));
+                by0 = GfMin(by0, Evidence.PaGet(pa, p, Evidence.PfY0()));
+                bx1 = GfMax(bx1, Evidence.PaGet(pa, p, Evidence.PfX1()));
+                by1 = GfMax(by1, Evidence.PaGet(pa, p, Evidence.PfY1()));
+            }
+            p += 1;
+        }
+        if (np < 8) {
+            return 0;
+        }
+        cs = GfMax(1200, (GfMax(bx1 - bx0, by1 - by0) + 31) / 32);
+        emon.Port.CellsDrop(gc, 0);
+        while (k < (1024 * 6)) {
+            emon.Port.CellsPush(gc, 0);
+            k += 1;
+        }
+        k = 0;
+        while (k < 1024) {
+            emon.Port.CellsSet(gc, (k * 6) + 1, 2000000000);
+            emon.Port.CellsSet(gc, (k * 6) + 2, 2000000000);
+            emon.Port.CellsSet(gc, (k * 6) + 3, -2000000000);
+            emon.Port.CellsSet(gc, (k * 6) + 4, -2000000000);
+            emon.Port.CellsSet(gc, (k * 6) + 5, k);
+            k += 1;
+        }
+        p = emon.Port.CellsAt(ctx, XP0);
+        while (p < emon.Port.CellsAt(ctx, XP1)) {
+            if ((Evidence.PaGet(pa, p, Evidence.PfKind()) == Evidence.PaCurve()) || (Evidence.PaGet(pa, p, Evidence.PfKind()) == Evidence.PaOther())) {
+                cx = GfMin(31, (((Evidence.PaGet(pa, p, Evidence.PfX0()) + Evidence.PaGet(pa, p, Evidence.PfX1())) / 2) - bx0) / cs);
+                cy = GfMin(31, (((Evidence.PaGet(pa, p, Evidence.PfY0()) + Evidence.PaGet(pa, p, Evidence.PfY1())) / 2) - by0) / cs);
+                cell = (cy * 32) + cx;
+                emon.Port.CellsSet(gc, cell * 6, emon.Port.CellsAt(gc, cell * 6) + 1);
+                emon.Port.CellsSet(gc, (cell * 6) + 1, GfMin(emon.Port.CellsAt(gc, (cell * 6) + 1), Evidence.PaGet(pa, p, Evidence.PfX0())));
+                emon.Port.CellsSet(gc, (cell * 6) + 2, GfMin(emon.Port.CellsAt(gc, (cell * 6) + 2), Evidence.PaGet(pa, p, Evidence.PfY0())));
+                emon.Port.CellsSet(gc, (cell * 6) + 3, GfMax(emon.Port.CellsAt(gc, (cell * 6) + 3), Evidence.PaGet(pa, p, Evidence.PfX1())));
+                emon.Port.CellsSet(gc, (cell * 6) + 4, GfMax(emon.Port.CellsAt(gc, (cell * 6) + 4), Evidence.PaGet(pa, p, Evidence.PfY1())));
+            }
+            p += 1;
+        }
+        while ((changed == 1) && (iter < 70)) {
+            changed = 0;
+            cell = 0;
+            while (cell < 1024) {
+                if (emon.Port.CellsAt(gc, cell * 6) > 0) {
+                    dy = -1;
+                    while (dy <= 1) {
+                        dx = -1;
+                        while (dx <= 1) {
+                            cx = (cell % 32) + dx;
+                            cy = (cell / 32) + dy;
+                            if (((cx >= 0) && (cx < 32)) && ((cy >= 0) && (cy < 32))) {
+                                nb = (cy * 32) + cx;
+                                if (emon.Port.CellsAt(gc, nb * 6) > 0) {
+                                    if (emon.Port.CellsAt(gc, (nb * 6) + 5) < emon.Port.CellsAt(gc, (cell * 6) + 5)) {
+                                        emon.Port.CellsSet(gc, (cell * 6) + 5, emon.Port.CellsAt(gc, (nb * 6) + 5));
+                                        changed = 1;
+                                    }
+                                }
+                            }
+                            dx += 1;
+                        }
+                        dy += 1;
+                    }
+                }
+                cell += 1;
+            }
+            iter += 1;
+        }
+        lab = 0;
+        while (lab < 1024) {
+            np = 0;
+            bx0 = 2000000000;
+            by0 = 2000000000;
+            bx1 = -2000000000;
+            by1 = -2000000000;
+            cell = 0;
+            while (cell < 1024) {
+                if ((emon.Port.CellsAt(gc, cell * 6) > 0) && (emon.Port.CellsAt(gc, (cell * 6) + 5) == lab)) {
+                    np += emon.Port.CellsAt(gc, cell * 6);
+                    bx0 = GfMin(bx0, emon.Port.CellsAt(gc, (cell * 6) + 1));
+                    by0 = GfMin(by0, emon.Port.CellsAt(gc, (cell * 6) + 2));
+                    bx1 = GfMax(bx1, emon.Port.CellsAt(gc, (cell * 6) + 3));
+                    by1 = GfMax(by1, emon.Port.CellsAt(gc, (cell * 6) + 4));
+                }
+                cell += 1;
+            }
+            if (np >= 8) {
+                GfFigAdd(un, bx0, by0, bx1, by1, Glayer.GsVector(), -1, -1);
+                added += 1;
+            }
+            lab += 1;
+        }
+        return added;
+    }
+    internal static int GfRegions(emon.Port.Cells ctx, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells im, emon.Port.Cells pa, emon.Port.Cells oblocks, emon.Port.Cells grg, emon.Port.Cells gc, emon.Port.Cells un) {
+        // The page's `grg` rows (D228): a TABLE-IN-IMAGE for each visible image placement (2 cm each way) whose `in-image` fused rules make a lattice or whose
+        // `in-image` fills make a stack of three bands, the box being what those rules and fills cover; a FIGURE for each merged (box IoU of 500) set of the visible image
+        // placements that are not tables, OCR image blocks and vector figure clusters; a TABLE-HINT for each OCR table block (confidence 300). The rows made by the page
+        // are those of `grl` from `X_NGRL` and `gfl` from `X_NGFL`. Answers the rows made.
+        int page = emon.Port.CellsAt(ctx, XPage);
+        int g0 = emon.Port.CellsAt(ctx, XNgrl);
+        int f0 = emon.Port.CellsAt(ctx, XNgfl);
+        int g1 = Glayer.GrlCount(grl);
+        int f1 = Glayer.GflCount(gfl);
+        int first = Glayer.GrgCount(grg);
+        int m = emon.Port.CellsAt(ctx, XI0);
+        int r = 0;
+        int i = 0;
+        int j = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int ok = 0;
+        int t = 0;
+        int ra = 0;
+        int rb = 0;
+        int src = 0;
+        int nsrc = 0;
+        int sea = -1;
+        int sidx = -1;
+        int csum = 0;
+        int cn = 0;
+        while (m < emon.Port.CellsAt(ctx, XI1)) {
+            if (GfImageOk(im, m) == 1) {
+                x0 = Evidence.ImGet(im, m, Evidence.MfX0());
+                y0 = Evidence.ImGet(im, m, Evidence.MfY0());
+                x1 = Evidence.ImGet(im, m, Evidence.MfX1());
+                y1 = Evidence.ImGet(im, m, Evidence.MfY1());
+                ok = GfLattice(grl, g0, g1, x0, y0, x1, y1);
+                if (ok == 0) {
+                    ok = GfBands(gfl, f0, f1, x0, y0, x1, y1);
+                }
+                if (ok == 1) {
+                    r = Glayer.GrgNew(grg, page, x1, y1, x0, y0, Glayer.RkTableInImage());
+                    csum = 0;
+                    cn = 0;
+                    i = g0;
+                    while (i < g1) {
+                        if (((Glayer.GrlGet(grl, i, 18) & Glayer.GqInImage()) != 0) && (GfInRegion(grl, i, x0, y0, x1, y1) == 1)) {
+                            GfGrow(grg, r, Glayer.GrlGet(grl, i, 1), Glayer.GrlGet(grl, i, 2), Glayer.GrlGet(grl, i, 3), Glayer.GrlGet(grl, i, 4));
+                            csum += Glayer.GrlGet(grl, i, 17);
+                            cn += 1;
+                        }
+                        i += 1;
+                    }
+                    i = f0;
+                    while (i < f1) {
+                        if (((Glayer.GflGet(gfl, i, 11) & Glayer.GqfInImage()) != 0) && ((Glayer.GflGet(gfl, i, 1) >= x0) && ((Glayer.GflGet(gfl, i, 3) <= x1) && ((Glayer.GflGet(gfl, i, 2) >= y0) && (Glayer.GflGet(gfl, i, 4) <= y1))))) {
+                            GfGrow(grg, r, Glayer.GflGet(gfl, i, 1), Glayer.GflGet(gfl, i, 2), Glayer.GflGet(gfl, i, 3), Glayer.GflGet(gfl, i, 4));
+                        }
+                        i += 1;
+                    }
+                    Glayer.GrgSet(grg, r, 6, Glayer.GsTrace() | Glayer.GsImage());
+                    Glayer.GrgSet(grg, r, 7, Evidence.EaImages());
+                    Glayer.GrgSet(grg, r, 8, m);
+                    if (cn > 0) {
+                        Glayer.GrgSet(grg, r, 11, csum / cn);
+                    } else {
+                        Glayer.GrgSet(grg, r, 11, 500);
+                    }
+                    GfCountInside(grl, gfl, g0, f0, Glayer.GrgGet(grg, r, 1), Glayer.GrgGet(grg, r, 2), Glayer.GrgGet(grg, r, 3), Glayer.GrgGet(grg, r, 4), grg, r);
+                }
+            }
+            m += 1;
+        }
+        // figures: candidates, merged
+        emon.Port.CellsDrop(un, 0);
+        m = emon.Port.CellsAt(ctx, XI0);
+        while (m < emon.Port.CellsAt(ctx, XI1)) {
+            if ((Evidence.ImGet(im, m, Evidence.MfVis()) == 0) && (((Evidence.ImGet(im, m, Evidence.MfX1()) - Evidence.ImGet(im, m, Evidence.MfX0())) >= 500) && ((Evidence.ImGet(im, m, Evidence.MfY1()) - Evidence.ImGet(im, m, Evidence.MfY0())) >= 500))) {
+                ok = 1;
+                j = first;
+                while (j < Glayer.GrgCount(grg)) {
+                    if (Glayer.GrgGet(grg, j, 5) == Glayer.RkTableInImage()) {
+                        if (GfIou(Glayer.GrgGet(grg, j, 1), Glayer.GrgGet(grg, j, 2), Glayer.GrgGet(grg, j, 3), Glayer.GrgGet(grg, j, 4), Evidence.ImGet(im, m, Evidence.MfX0()), Evidence.ImGet(im, m, Evidence.MfY0()), Evidence.ImGet(im, m, Evidence.MfX1()), Evidence.ImGet(im, m, Evidence.MfY1())) >= 500) {
+                            ok = 0;
+                        }
+                    }
+                    j += 1;
+                }
+                if (ok == 1) {
+                    GfFigAdd(un, Evidence.ImGet(im, m, Evidence.MfX0()), Evidence.ImGet(im, m, Evidence.MfY0()), Evidence.ImGet(im, m, Evidence.MfX1()), Evidence.ImGet(im, m, Evidence.MfY1()), Glayer.GsImage(), Evidence.EaImages(), m);
+                }
+            }
+            m += 1;
+        }
+        i = emon.Port.CellsAt(ctx, XB0);
+        while (i < emon.Port.CellsAt(ctx, XB1)) {
+            if ((Evidence.ObGet(oblocks, i, Evidence.ObfKind()) == Evidence.ObBlock()) && (Evidence.ObGet(oblocks, i, Evidence.ObfBtype()) == 2)) {
+                GfFigAdd(un, Evidence.ObGet(oblocks, i, Evidence.ObfX0()), Evidence.ObGet(oblocks, i, Evidence.ObfY0()), Evidence.ObGet(oblocks, i, Evidence.ObfX1()), Evidence.ObGet(oblocks, i, Evidence.ObfY1()), Glayer.GsOcr(), Evidence.EaOblocks(), i);
+            }
+            i += 1;
+        }
+        GfFigClusters(ctx, pa, gc, un);
+        i = 0;
+        while (i < (emon.Port.CellsLen(un) / 24)) {
+            j = i + 1;
+            while (j < (emon.Port.CellsLen(un) / 24)) {
+                if (GfIou(Unat(un, i, 0), Unat(un, i, 1), Unat(un, i, 2), Unat(un, i, 3), Unat(un, j, 0), Unat(un, j, 1), Unat(un, j, 2), Unat(un, j, 3)) >= 500) {
+                    ra = GfFigFind(un, i);
+                    rb = GfFigFind(un, j);
+                    if (ra < rb) {
+                        Unput(un, rb, 7, ra);
+                    }
+                    if (rb < ra) {
+                        Unput(un, ra, 7, rb);
+                    }
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < (emon.Port.CellsLen(un) / 24)) {
+            if (GfFigFind(un, i) == i) {
+                x0 = Unat(un, i, 0);
+                y0 = Unat(un, i, 1);
+                x1 = Unat(un, i, 2);
+                y1 = Unat(un, i, 3);
+                src = Unat(un, i, 4);
+                sea = Unat(un, i, 5);
+                sidx = Unat(un, i, 6);
+                j = i + 1;
+                while (j < (emon.Port.CellsLen(un) / 24)) {
+                    if (GfFigFind(un, j) == i) {
+                        x0 = GfMin(x0, Unat(un, j, 0));
+                        y0 = GfMin(y0, Unat(un, j, 1));
+                        x1 = GfMax(x1, Unat(un, j, 2));
+                        y1 = GfMax(y1, Unat(un, j, 3));
+                        src |= Unat(un, j, 4);
+                        if ((sea < 0) && (Unat(un, j, 5) >= 0)) {
+                            sea = Unat(un, j, 5);
+                            sidx = Unat(un, j, 6);
+                        }
+                    }
+                    j += 1;
+                }
+                r = Glayer.GrgNew(grg, page, x0, y0, x1, y1, Glayer.RkFigure());
+                Glayer.GrgSet(grg, r, 6, src);
+                Glayer.GrgSet(grg, r, 7, sea);
+                Glayer.GrgSet(grg, r, 8, sidx);
+                nsrc = 0;
+                if ((src & 1) != 0) {
+                    nsrc += 1;
+                }
+                if ((src & 4) != 0) {
+                    nsrc += 1;
+                }
+                if ((src & 16) != 0) {
+                    nsrc += 1;
+                }
+                Glayer.GrgSet(grg, r, 11, GfMin(1000, 400 + (150 * nsrc)));
+                GfCountInside(grl, gfl, g0, f0, x0, y0, x1, y1, grg, r);
+            }
+            i += 1;
+        }
+        i = emon.Port.CellsAt(ctx, XB0);
+        while (i < emon.Port.CellsAt(ctx, XB1)) {
+            if ((Evidence.ObGet(oblocks, i, Evidence.ObfKind()) == Evidence.ObBlock()) && (Evidence.ObGet(oblocks, i, Evidence.ObfBtype()) == 1)) {
+                r = Glayer.GrgNew(grg, page, Evidence.ObGet(oblocks, i, Evidence.ObfX0()), Evidence.ObGet(oblocks, i, Evidence.ObfY0()), Evidence.ObGet(oblocks, i, Evidence.ObfX1()), Evidence.ObGet(oblocks, i, Evidence.ObfY1()), Glayer.RkTableHint());
+                Glayer.GrgSet(grg, r, 6, Glayer.GsOcr());
+                Glayer.GrgSet(grg, r, 7, Evidence.EaOblocks());
+                Glayer.GrgSet(grg, r, 8, i);
+                Glayer.GrgSet(grg, r, 11, 300);
+                GfCountInside(grl, gfl, g0, f0, Glayer.GrgGet(grg, r, 1), Glayer.GrgGet(grg, r, 2), Glayer.GrgGet(grg, r, 3), Glayer.GrgGet(grg, r, 4), grg, r);
+            }
+            i += 1;
+        }
+        return Glayer.GrgCount(grg) - first;
+    }
+    internal static int GfWords(emon.Port.Cells ctx, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells grl, emon.Port.Cells grg, int g0, int q0) {
+        // The page's OCR words' features: 30 the share (per mille, the regions' added, at most 1000) of the word's box that lies in a `table-in-image` region of the
+        // page (`grg` rows from `q0`), 31 the rule-likeness: for a word of at most two code points all of them rule glyphs, the share of its box the fused rules
+        // (`grl` rows from `g0`) cover; -1 for any other word. Words with no feature row are left alone. Answers the words written.
+        int w = emon.Port.CellsAt(ctx, XW0);
+        int f = 0;
+        int q = 0;
+        int g = 0;
+        int s = 0;
+        int v = 0;
+        int n = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int area = 0;
+        int inter = 0;
+        int iw = 0;
+        int ih = 0;
+        while (w < emon.Port.CellsAt(ctx, XW1)) {
+            f = Evidence.OwGet(owords, w, Evidence.HdFeat());
+            if (f >= 0) {
+                x0 = Evidence.OwGet(owords, w, Evidence.HdX0());
+                y0 = Evidence.OwGet(owords, w, Evidence.HdY0());
+                x1 = Evidence.OwGet(owords, w, Evidence.HdX1());
+                y1 = Evidence.OwGet(owords, w, Evidence.HdY1());
+                s = 0;
+                q = q0;
+                while (q < Glayer.GrgCount(grg)) {
+                    if ((Glayer.GrgGet(grg, q, 0) == emon.Port.CellsAt(ctx, XPage)) && (Glayer.GrgGet(grg, q, 5) == Glayer.RkTableInImage())) {
+                        s += GfInsideShare(x0, y0, x1, y1, Glayer.GrgGet(grg, q, 1), Glayer.GrgGet(grg, q, 2), Glayer.GrgGet(grg, q, 3), Glayer.GrgGet(grg, q, 4));
+                    }
+                    q += 1;
+                }
+                Evidence.FeSet(feats, f, Evidence.XoInTableImage(), GfMin(s, 1000));
+                v = -1;
+                if (GfWordRuleLike(owords, etext, w) == 1) {
+                    area = GfMax(1, GfMax(0, x1 - x0) / 10) * GfMax(1, GfMax(0, y1 - y0) / 10);
+                    inter = 0;
+                    g = g0;
+                    while (g < Glayer.GrlCount(grl)) {
+                        iw = GfMax(0, GfMin(x1, Glayer.GrlGet(grl, g, 3)) - GfMax(x0, Glayer.GrlGet(grl, g, 1))) / 10;
+                        ih = GfMax(0, GfMin(y1, Glayer.GrlGet(grl, g, 4)) - GfMax(y0, Glayer.GrlGet(grl, g, 2))) / 10;
+                        inter += iw * ih;
+                        g += 1;
+                    }
+                    v = GfMin(1000, inter / GfMax(1, area / 1000));
+                }
+                Evidence.FeSet(feats, f, Evidence.XoRuleLike(), v);
+                n += 1;
+            }
+            w += 1;
+        }
+        return n;
+    }
+    internal static int GfFusePage(emon.Port.Cells ctx, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells oblocks, emon.Port.Cells owords, emon.Port.Cells words, emon.Port.Cells etext, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells feats, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Port.Cells refs, emon.Port.Cells hl, emon.Port.Cells fx, emon.Port.Cells gfa, emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, emon.Port.Cells gv) {
+        // One page that has a raster answer, from the head of this file: candidates, groups, sweeps, health, arbitration, regions, the words' features. Answers 0.
+        int n = GfBuild(gc, ctx, og, ofl, rules, prims, oblocks);
+        int q0 = 0;
+        emon.Port.CellsSet(ctx, XN, n);
+        GfPairs(gc, n);
+        GfOrder(gc, aux, n);
+        GfGroups(gc, aux, n, ctx, og, ofl, ggp, refs);
+        GfSweeps(gc, aux, un, n);
+        GfHealth(ctx, gc, n, im, rules, words, hl);
+        emon.Port.CellsSet(ctx, XNgrl, Glayer.GrlCount(grl));
+        emon.Port.CellsSet(ctx, XNgfl, Glayer.GflCount(gfl));
+        q0 = Glayer.GrgCount(grg);
+        GfEmitVecRules(ctx, gc, n, aux, og, im, hl, ggp, grl, fx, gfa, gv);
+        GfEmitTraceUnits(ctx, un, im, hl, owords, etext, words, ggp, grl, fx, gv);
+        GfEmitFills(ctx, gc, n, aux, ofl, un, im, hl, ggp, gfl, fx, gv);
+        GfRegions(ctx, grl, gfl, im, pa, oblocks, grg, gc, un);
+        GfWords(ctx, owords, etext, feats, grl, grg, emon.Port.CellsAt(ctx, XNgrl), q0);
+        return 0;
+    }
+    internal static int GfAdvance(emon.Port.Cells c, int stride, int field, int i, int page) {
+        // The first row at or after i whose page (cell `field`) is not before `page`.
+        int n = emon.Port.CellsLen(c) / stride;
+        int j = i;
+        while ((j < n) && (emon.Port.CellsAt(c, (j * stride) + field) < page)) {
+            j += 1;
+        }
+        return j;
+    }
+    internal static int GfRangeEnd(emon.Port.Cells c, int stride, int field, int i, int page) {
+        // The first row from i on whose page is not `page`.
+        int n = emon.Port.CellsLen(c) / stride;
+        int j = i;
+        while ((j < n) && (emon.Port.CellsAt(c, (j * stride) + field) == page)) {
+            j += 1;
+        }
+        return j;
+    }
+    internal static int GfHasRows(emon.Port.Cells c, int stride, int field, int page) {
+        // 1 when some row of the arena is of `page` (rows are in page order).
+        int n = emon.Port.CellsLen(c) / stride;
+        int j = 0;
+        while (j < n) {
+            if (emon.Port.CellsAt(c, (j * stride) + field) == page) {
+                return 1;
+            }
+            j += 1;
+        }
+        return 0;
+    }
+    public static int GfFuse(int np, emon.Port.Cells epages, emon.Port.Cells inks, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells oblocks, emon.Port.Cells owords, emon.Port.Cells words, emon.Port.Cells etext, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells feats, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Port.Cells refs, emon.Port.Cells hl, emon.Port.Cells fx, emon.Port.Cells gfa, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells ctx, emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, emon.Port.Cells gv) {
+        // The document's other sources of graphics (SPEC 9.9, from the head of this file): every page that has a raster answer is made again from the vector rows already
+        // in `grl` and `gfl` and the tracer's and OCR's evidence; every other page is copied. Nothing to do (no `inks`, `rules` or `prims` row at all) answers 0 and touches
+        // nothing. `ggp`, `grg`, `hl`, `fx`, `refs` and `gfa` only grow. Answers the pages fused.
+        if ((((emon.Port.CellsLen(inks) / 12) + (emon.Port.CellsLen(rules) / 20)) + (emon.Port.CellsLen(prims) / 24)) == 0) {
+            return 0;
+        }
+        int p = 1;
+        int vi = 0;
+        int vj = 0;
+        int fi = 0;
+        int fj = 0;
+        int ri = 0;
+        int rj = 0;
+        int qi = 0;
+        int qj = 0;
+        int bi = 0;
+        int bj = 0;
+        int wi = 0;
+        int wj = 0;
+        int ti = 0;
+        int tj = 0;
+        int pi = 0;
+        int pj = 0;
+        int ii = 0;
+        int ij = 0;
+        int k = 0;
+        int ep = 0;
+        int kind = 0;
+        int fused = 0;
+        emon.Port.CellsDrop(og, 0);
+        while (k < emon.Port.CellsLen(grl)) {
+            emon.Port.CellsPush(og, emon.Port.CellsAt(grl, k));
+            k += 1;
+        }
+        emon.Port.CellsDrop(ofl, 0);
+        k = 0;
+        while (k < emon.Port.CellsLen(gfl)) {
+            emon.Port.CellsPush(ofl, emon.Port.CellsAt(gfl, k));
+            k += 1;
+        }
+        emon.Port.CellsDrop(grl, 0);
+        emon.Port.CellsDrop(gfl, 0);
+        emon.Port.CellsDrop(ctx, 0);
+        k = 0;
+        while (k < 32) {
+            emon.Port.CellsPush(ctx, 0);
+            k += 1;
+        }
+        while (p <= np) {
+            vi = GfAdvance(og, 24, 0, vi, p);
+            vj = GfRangeEnd(og, 24, 0, vi, p);
+            fi = GfAdvance(ofl, 16, 0, fi, p);
+            fj = GfRangeEnd(ofl, 16, 0, fi, p);
+            ri = GfAdvance(rules, 20, 0, ri, p);
+            rj = GfRangeEnd(rules, 20, 0, ri, p);
+            qi = GfAdvance(prims, 24, 0, qi, p);
+            qj = GfRangeEnd(prims, 24, 0, qi, p);
+            bi = GfAdvance(oblocks, 16, 0, bi, p);
+            bj = GfRangeEnd(oblocks, 16, 0, bi, p);
+            wi = GfAdvance(owords, 28, 0, wi, p);
+            wj = GfRangeEnd(owords, 28, 0, wi, p);
+            ti = GfAdvance(words, 24, 0, ti, p);
+            tj = GfRangeEnd(words, 24, 0, ti, p);
+            pi = GfAdvance(pa, 24, 0, pi, p);
+            pj = GfRangeEnd(pa, 24, 0, pi, p);
+            ii = GfAdvance(im, 20, 0, ii, p);
+            ij = GfRangeEnd(im, 20, 0, ii, p);
+            kind = 0;
+            if (((rj > ri) || (qj > qi)) || (GfHasRows(inks, 12, 0, p) == 1)) {
+                kind = 1;
+                ep = Evidence.EvPageRow(epages, p);
+                if (ep >= 0) {
+                    if ((Evidence.EpGet(epages, ep, Evidence.EpfFlags()) & Evidence.EgRaster()) != 0) {
+                        kind = 2;
+                    }
+                }
+            }
+            if (kind == 0) {
+                k = vi;
+                while (k < vj) {
+                    GfCopyRow(og, k, grl);
+                    k += 1;
+                }
+                k = fi;
+                while (k < fj) {
+                    ep = 0;
+                    while (ep < 16) {
+                        emon.Port.CellsPush(gfl, emon.Port.CellsAt(ofl, (k * 16) + ep));
+                        ep += 1;
+                    }
+                    k += 1;
+                }
+            } else {
+                emon.Port.CellsSet(ctx, XPage, p);
+                emon.Port.CellsSet(ctx, XKind, kind);
+                emon.Port.CellsSet(ctx, XV0, vi);
+                emon.Port.CellsSet(ctx, XV1, vj);
+                emon.Port.CellsSet(ctx, XF0, fi);
+                emon.Port.CellsSet(ctx, XF1, fj);
+                emon.Port.CellsSet(ctx, XR0, ri);
+                emon.Port.CellsSet(ctx, XR1, rj);
+                emon.Port.CellsSet(ctx, XQ0, qi);
+                emon.Port.CellsSet(ctx, XQ1, qj);
+                emon.Port.CellsSet(ctx, XB0, bi);
+                emon.Port.CellsSet(ctx, XB1, bj);
+                emon.Port.CellsSet(ctx, XW0, wi);
+                emon.Port.CellsSet(ctx, XW1, wj);
+                emon.Port.CellsSet(ctx, XT0, ti);
+                emon.Port.CellsSet(ctx, XT1, tj);
+                emon.Port.CellsSet(ctx, XP0, pi);
+                emon.Port.CellsSet(ctx, XP1, pj);
+                emon.Port.CellsSet(ctx, XI0, ii);
+                emon.Port.CellsSet(ctx, XI1, ij);
+                GfFusePage(ctx, og, ofl, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa, gc, aux, un, gv);
+                fused += 1;
+            }
+            vi = vj;
+            fi = fj;
+            ri = rj;
+            qi = qj;
+            bi = bj;
+            wi = wj;
+            ti = tj;
+            pi = pj;
+            ii = ij;
+            p += 1;
+        }
+        return fused;
+    }
+    public static int GfWrite(emon.Port.Cells gfa, emon.Port.Cells ledger) {
+        // The vector rules block 500 dropped (`gfa`, stride 6: page, box, ledger reason) as ledger rows, confidence 700, source `vector`. Answers the rows written.
+        int n = emon.Port.CellsLen(gfa) / 6;
+        int i = 0;
+        while (i < n) {
+            Model.LedgerAdd(ledger, emon.Port.CellsAt(gfa, (i * 6) + 5), emon.Port.CellsAt(gfa, i * 6), emon.Port.CellsAt(gfa, (i * 6) + 1), emon.Port.CellsAt(gfa, (i * 6) + 2), emon.Port.CellsAt(gfa, (i * 6) + 3), emon.Port.CellsAt(gfa, (i * 6) + 4), 700, Model.SrVector());
+            i += 1;
+        }
+        return n;
     }
 }

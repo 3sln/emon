@@ -238,6 +238,8 @@ public final class Arbiter {
         int margin = -1;
         int kink = -1;
         int body = -1;
+        int tim = -1;
+        int rlk = -1;
         while (k < nt) {
             row = arRef(refs, tf + k, 1);
             v = Artifact.axWordClass(gl, mk, an, txt, etext, trust, feats, ofw, row);
@@ -286,6 +288,9 @@ public final class Arbiter {
                 margin = arMinPos(margin, Evidence.feGet(feats, f, Evidence.xoMargin()));
                 kink = arMinPos(kink, Evidence.feGet(feats, f, Evidence.xoKinInk()));
                 body = arMinPos(body, Evidence.feGet(feats, f, Evidence.xoBodyShare()));
+                // P7.G (D224): how far inside a table drawn in an image the word is, and how like a rule it is (graphics fusion wrote both)
+                tim = arMaxPos(tim, Evidence.feGet(feats, f, Evidence.xoInTableImage()));
+                rlk = arMaxPos(rlk, Evidence.feGet(feats, f, Evidence.xoRuleLike()));
             }
             odiag = arMinPos(odiag, arOffaxis(Evidence.owGet(owords, row, 9)));
             k += 1;
@@ -375,6 +380,8 @@ public final class Arbiter {
         emon.Port.cellsSet(gv, Fuserules.agMargin(), margin);
         emon.Port.cellsSet(gv, Fuserules.agKink(), kink);
         emon.Port.cellsSet(gv, Fuserules.agBody(), body);
+        emon.Port.cellsSet(gv, Fuserules.agTableimg(), tim);
+        emon.Port.cellsSet(gv, Fuserules.agRulelike(), rlk);
         emon.Port.cellsSet(gv, Fuserules.agImalpha(), arImageAlpha(images, epages, Player.cgGet(cg, g, Player.cgfPage()), Player.cgGet(cg, g, Player.cgfX0()), Player.cgGet(cg, g, Player.cgfY0()), Player.cgGet(cg, g, Player.cgfX1()), Player.cgGet(cg, g, Player.cgfY1())));
         return 0;
     }

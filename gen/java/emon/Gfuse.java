@@ -5,9 +5,141 @@ package emon;
 
 
 public final class Gfuse {
-    public static final int GF_AXIS = 100;
     public static int gfxMode() {
         return 1;
+    }
+    public static int gmzUnit() {
+        return 100;
+    }
+    public static int gmzVecExact() {
+        return 101;
+    }
+    public static int gmzVecUncertain() {
+        return 102;
+    }
+    public static int gmzVecHidden() {
+        return 103;
+    }
+    public static int gmzTrace() {
+        return 104;
+    }
+    public static int gmzTraceConf() {
+        return 105;
+    }
+    public static int gmzOcrLine() {
+        return 106;
+    }
+    public static int gmzInImage() {
+        return 107;
+    }
+    public static int gmzRaster() {
+        return 108;
+    }
+    public static int gmzRegionScore() {
+        return 109;
+    }
+    public static int gmzVecWitness() {
+        return 110;
+    }
+    public static int gmzTprec() {
+        return 111;
+    }
+    public static int gmzInGlyph() {
+        return 112;
+    }
+    public static int gmzInOcrWord() {
+        return 113;
+    }
+    public static int gmzFillColourKnown() {
+        return 115;
+    }
+    public static int gmzTint() {
+        return 116;
+    }
+    public static int gmzWitness() {
+        return 117;
+    }
+    public static int gmzGroupVecExact() {
+        return 118;
+    }
+    public static final int GC = 24;
+    public static final int C_KIND = 0;
+    public static final int C_SRC = 1;
+    public static final int C_EA = 2;
+    public static final int C_ROW = 3;
+    public static final int C_PT = 4;
+    public static final int C_X0 = 5;
+    public static final int C_Y0 = 6;
+    public static final int C_X1 = 7;
+    public static final int C_Y1 = 8;
+    public static final int C_EX0 = 9;
+    public static final int C_EY0 = 10;
+    public static final int C_EX1 = 11;
+    public static final int C_EY1 = 12;
+    public static final int C_T = 13;
+    public static final int C_COL = 14;
+    public static final int C_STY = 15;
+    public static final int C_FLG = 16;
+    public static final int C_CLS = 17;
+    public static final int C_CONF = 18;
+    public static final int C_EXACT = 19;
+    public static final int C_UF = 20;
+    public static final int C_WIT = 21;
+    public static final int C_ANG = 23;
+    public static final int X_PAGE = 0;
+    public static final int X_KIND = 1;
+    public static final int X_V0 = 2;
+    public static final int X_V1 = 3;
+    public static final int X_F0 = 4;
+    public static final int X_F1 = 5;
+    public static final int X_R0 = 6;
+    public static final int X_R1 = 7;
+    public static final int X_Q0 = 8;
+    public static final int X_Q1 = 9;
+    public static final int X_B0 = 10;
+    public static final int X_B1 = 11;
+    public static final int X_W0 = 12;
+    public static final int X_W1 = 13;
+    public static final int X_T0 = 14;
+    public static final int X_T1 = 15;
+    public static final int X_P0 = 16;
+    public static final int X_P1 = 17;
+    public static final int X_I0 = 18;
+    public static final int X_I1 = 19;
+    public static final int X_N = 20;
+    public static final int X_WIT = 21;
+    public static final int X_PREC = 22;
+    public static final int X_NGRL = 23;
+    public static final int X_NGFL = 24;
+    public static final int A_CNT = 0;
+    public static final int A_START = 1;
+    public static final int A_ORD = 2;
+    public static final int A_GID = 3;
+    public static final int A_EP = 4;
+    public static final int A_BITS = 6;
+    public static int gfAbs(int a) {
+        if (a < 0) {
+            return 0 - a;
+        }
+        return a;
+    }
+    public static int gfMin(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    public static int gfMax(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    public static int gfEq(int a, int b) {
+        if (a == b) {
+            return 1;
+        }
+        return 0;
     }
     public static int gfLightness(int rgb) {
         // 0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.
@@ -17,17 +149,78 @@ public final class Gfuse {
         return (((299 * ((rgb / 65536) & 255)) + (587 * ((rgb / 256) & 255))) + (114 * (rgb & 255))) / 255;
     }
     public static int gfOrientOf(int a) {
-        // `go` of an angle in [0, 18000): h within GF_AXIS of 0, v of 9000, else slant.
-        if ((a <= GF_AXIS) || (a >= (18000 - GF_AXIS))) {
+        // `go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.
+        if ((a <= Fuserules.fgAxis()) || (a >= (18000 - Fuserules.fgAxis()))) {
             return Glayer.goH();
         }
-        if ((a >= (9000 - GF_AXIS)) && (a <= (9000 + GF_AXIS))) {
+        if ((a >= (9000 - Fuserules.fgAxis())) && (a <= (9000 + Fuserules.fgAxis()))) {
             return Glayer.goV();
         }
         return Glayer.goSlant();
     }
-    public static int gfRuleRow(emon.Port.Cells cand, int c, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells grl) {
-        // Candidate c (a rule) as a `grl` row.
+    public static int gfAngleOf(int dx, int dy) {
+        // The angle of a centre line in [0, 18000).
+        int a = Evidence.evAngle(dx, dy);
+        if (a >= 18000) {
+            a -= 18000;
+        }
+        return a;
+    }
+    public static int gfIou(int ax0, int ay0, int ax1, int ay1, int bx0, int by0, int bx1, int by1) {
+        // The intersection over union of two boxes (cp), per mille. Areas in tenths of a point so they fit.
+        int iw = gfMax(0, gfMin(ax1, bx1) - gfMax(ax0, bx0)) / 10;
+        int ih = gfMax(0, gfMin(ay1, by1) - gfMax(ay0, by0)) / 10;
+        int inter = iw * ih;
+        int aa = (gfMax(0, ax1 - ax0) / 10) * (gfMax(0, ay1 - ay0) / 10);
+        int ab = (gfMax(0, bx1 - bx0) / 10) * (gfMax(0, by1 - by0) / 10);
+        int un = (aa + ab) - inter;
+        if (un <= 0) {
+            return 0;
+        }
+        return inter / gfMax(1, un / 1000);
+    }
+    public static int gfInsideShare(int x0, int y0, int x1, int y1, int bx0, int by0, int bx1, int by1) {
+        // The per mille of box (x0 y0 x1 y1) that lies inside box b; 0 for an empty one. Areas in tenths of a point so they fit.
+        int iw = gfMax(0, gfMin(x1, bx1) - gfMax(x0, bx0)) / 10;
+        int ih = gfMax(0, gfMin(y1, by1) - gfMax(y0, by0)) / 10;
+        int inter = iw * ih;
+        int area = gfMax(1, gfMax(0, x1 - x0) / 10) * gfMax(1, gfMax(0, y1 - y0) / 10);
+        return inter / gfMax(1, area / 1000);
+    }
+    public static int gcat(emon.Port.Cells gc, int i, int f) {
+        return emon.Port.cellsAt(gc, (i * 24) + f);
+    }
+    public static int gcput(emon.Port.Cells gc, int i, int f, int v) {
+        emon.Port.cellsSet(gc, (i * 24) + f, v);
+        return 0;
+    }
+    public static int gfGvReset(emon.Port.Cells gv) {
+        // The measure vector (128 cells), every measure absent (-1).
+        int i = 0;
+        while (emon.Port.cellsLen(gv) < 128) {
+            emon.Port.cellsPush(gv, -1);
+        }
+        while (i < 128) {
+            emon.Port.cellsSet(gv, i, -1);
+            i += 1;
+        }
+        return 0;
+    }
+    public static int gfExplain(emon.Port.Cells fx, int group, int r, emon.Port.Cells gv) {
+        // `fx` rows for the decision of row `r` of `fr-rows`: every column the rule read and the value it read (the group is a `ggp` row).
+        int k = 0;
+        int col = 0;
+        while (k < Fuserules.frNpred()) {
+            col = Fuserules.frPcol(r, k);
+            if (col >= 0) {
+                Player.fxNew(fx, group, Fuserules.frNumber(r), col, emon.Port.cellsAt(gv, col));
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    public static int gfRuleRow(emon.Port.Cells cand, int c, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells gv, emon.Port.Cells grl) {
+        // Candidate c (a rule) as a `grl` row, by the row of block 500 that holds (501 or 514 here: no raster answer).
         int b = c * 16;
         int row = emon.Port.cellsAt(cand, b + 1);
         int fl = emon.Port.cellsAt(cand, b + 15);
@@ -39,6 +232,7 @@ public final class Gfuse {
         int exact = 1;
         int z = -1;
         int r = 0;
+        int fr = 0;
         if ((fl & Gvec.gvHidden()) != 0) {
             return 0;
         }
@@ -54,62 +248,80 @@ public final class Gfuse {
             }
             z = Evidence.paGet(pa, row, Evidence.pfZ());
         }
+        gfGvReset(gv);
+        emon.Port.cellsSet(gv, 100, 1);
+        emon.Port.cellsSet(gv, 101, exact);
+        emon.Port.cellsSet(gv, 102, 1 - exact);
+        emon.Port.cellsSet(gv, 103, 0);
+        emon.Port.cellsSet(gv, 108, 0);
+        fr = Fuserules.frDecideBlock(gv, 500);
+        if (Fuserules.frWinner(fr) == 0) {
+            return 0;
+        }
         r = Glayer.grlNew(grl, emon.Port.cellsAt(cand, b + 3), emon.Port.cellsAt(cand, b + 4), emon.Port.cellsAt(cand, b + 5), emon.Port.cellsAt(cand, b + 6), emon.Port.cellsAt(cand, b + 7), ex0, ey0, ex1, ey1, emon.Port.cellsAt(cand, b + 12), gfOrientOf(ang));
         Glayer.grlSet(grl, r, 11, ang);
         Glayer.grlSet(grl, r, 12, emon.Port.cellsAt(cand, b + 13));
         Glayer.grlSet(grl, r, 13, emon.Port.cellsAt(cand, b + 14));
         Glayer.grlSet(grl, r, 14, Glayer.gsVector());
         Glayer.grlSet(grl, r, 15, Glayer.gsVector());
-        if (exact == 1) {
-            Glayer.grlSet(grl, r, 16, 501);
-            Glayer.grlSet(grl, r, 17, 900);
-        } else {
-            Glayer.grlSet(grl, r, 16, 514);
-            Glayer.grlSet(grl, r, 17, 700);
-        }
-        Glayer.grlSet(grl, r, 18, fl);
+        Glayer.grlSet(grl, r, 16, Fuserules.frNumber(fr));
+        Glayer.grlSet(grl, r, 17, Fuserules.frConf(fr));
+        Glayer.grlSet(grl, r, 18, fl | Fuserules.frFlags(fr));
         Glayer.grlSet(grl, r, 20, z);
+        Glayer.grlSet(grl, r, 21, row);
+        Glayer.grlSet(grl, r, 22, emon.Port.cellsAt(cand, b + 2));
         return 0;
     }
-    public static int gfFillRow(emon.Port.Cells cand, int c, emon.Port.Cells pa, emon.Port.Cells gfl) {
-        // Candidate c (a fill) as a `gfl` row.
+    public static int gfFillRow(emon.Port.Cells cand, int c, emon.Port.Cells pa, emon.Port.Cells gv, emon.Port.Cells gfl) {
+        // Candidate c (a fill) as a `gfl` row, by the row of block 500 that holds (560 or 562 here).
         int b = c * 16;
         int row = emon.Port.cellsAt(cand, b + 1);
         int fl = emon.Port.cellsAt(cand, b + 15);
         int colour = emon.Port.cellsAt(cand, b + 13);
-        int r = Glayer.gflNew(gfl, emon.Port.cellsAt(cand, b + 3), emon.Port.cellsAt(cand, b + 4), emon.Port.cellsAt(cand, b + 5), emon.Port.cellsAt(cand, b + 6), emon.Port.cellsAt(cand, b + 7), colour);
+        int fr = 0;
+        int r = 0;
+        gfGvReset(gv);
+        emon.Port.cellsSet(gv, 100, 3);
+        emon.Port.cellsSet(gv, 108, 0);
+        if (colour < 0) {
+            emon.Port.cellsSet(gv, 115, 0);
+        } else {
+            emon.Port.cellsSet(gv, 115, 1);
+        }
+        fr = Fuserules.frDecideBlock(gv, 500);
+        if (Fuserules.frWinner(fr) == 0) {
+            return 0;
+        }
+        r = Glayer.gflNew(gfl, emon.Port.cellsAt(cand, b + 3), emon.Port.cellsAt(cand, b + 4), emon.Port.cellsAt(cand, b + 5), emon.Port.cellsAt(cand, b + 6), emon.Port.cellsAt(cand, b + 7), colour);
         Glayer.gflSet(gfl, r, 6, gfLightness(colour));
         Glayer.gflSet(gfl, r, 7, Glayer.gsVector());
         Glayer.gflSet(gfl, r, 8, Glayer.gsVector());
-        if (colour < 0) {
-            Glayer.gflSet(gfl, r, 9, 562);
-            Glayer.gflSet(gfl, r, 10, 600);
-        } else {
-            Glayer.gflSet(gfl, r, 9, 560);
-            Glayer.gflSet(gfl, r, 10, 900);
-        }
-        Glayer.gflSet(gfl, r, 11, fl & 15);
+        Glayer.gflSet(gfl, r, 9, Fuserules.frNumber(fr));
+        Glayer.gflSet(gfl, r, 10, Fuserules.frConf(fr));
+        Glayer.gflSet(gfl, r, 11, (fl & 15) | Fuserules.frFlags(fr));
         Glayer.gflSet(gfl, r, 13, Evidence.paGet(pa, row, Evidence.pfZ()));
+        Glayer.gflSet(gfl, r, 14, row);
         return 0;
     }
-    public static int gfPage(emon.Port.Cells cand, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells grl, emon.Port.Cells gfl) {
-        // One page's candidates into `grl` and `gfl` (the head of this file); answers 0.
+    public static int gfPage(emon.Port.Cells cand, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells gv) {
+        // One page's candidates (`gv-page`'s scratch, stride 16) into rows of the fused rules and fills over the vector source alone: the rows of block 500
+        // that a page with no raster answer reaches. A hidden candidate (`vis` not 0) is row 505's: it contributes nothing. No group is made. Answers 0.
         int n = emon.Port.cellsLen(cand) / 16;
         int c = 0;
         while (c < n) {
             if ((emon.Port.cellsAt(cand, (c * 16) + 15) & Gvec.gvHidden()) == 0) {
                 if (emon.Port.cellsAt(cand, c * 16) == 1) {
-                    gfRuleRow(cand, c, pa, im, grl);
+                    gfRuleRow(cand, c, pa, im, gv, grl);
                 } else {
-                    gfFillRow(cand, c, pa, gfl);
+                    gfFillRow(cand, c, pa, gv, gfl);
                 }
             }
             c += 1;
         }
         return 0;
     }
-    public static int gfDoc(emon.Port.Cells pa, emon.Port.Cells pts, emon.Port.Cells mk, emon.Port.Cells im, int np, int mode, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells cand) {
-        // The document's graphics: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the
+    public static int gfDoc(emon.Port.Cells pa, emon.Port.Cells pts, emon.Port.Cells mk, emon.Port.Cells im, int np, int mode, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells cand, emon.Port.Cells gv) {
+        // The document's graphics over the vector source: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the
         // number of fused rules.
         int nq = Evidence.paCount(pa);
         int ni = Evidence.imCount(im);
@@ -139,12 +351,1846 @@ public final class Gfuse {
             if ((qj > qi) || (ij > ii)) {
                 emon.Port.cellsDrop(cand, 0);
                 Gvec.gvPage(pa, pts, mk, im, qi, qj, ii, ij, mode, cand);
-                gfPage(cand, pa, im, grl, gfl);
+                gfPage(cand, pa, im, grl, gfl, gv);
             }
             qi = qj;
             ii = ij;
             p += 1;
         }
         return emon.Port.cellsLen(grl) / 24;
+    }
+    public static int gfCandRule(emon.Port.Cells gc, int src, int ea, int row, int pt, int ex0, int ey0, int ex1, int ey1, int thick, int colour, int style, int flags, int conf, int exact) {
+        // Append a rule candidate: the box is derived from the centre line and the thickness (a horizontal rule's extent along its axis is the centre
+        // line's); the class (`go`) and the angle (centi-degrees, [0, 18000)) too. Answers its index.
+        int i = emon.Port.cellsLen(gc) / 24;
+        int ang = gfAngleOf(ex1 - ex0, ey1 - ey0);
+        int cls = gfOrientOf(ang);
+        int half = (gfMax(thick, 1) + 1) / 2;
+        int bx0 = gfMin(ex0, ex1);
+        int by0 = gfMin(ey0, ey1);
+        int bx1 = gfMax(ex0, ex1);
+        int by1 = gfMax(ey0, ey1);
+        if (cls == Glayer.goH()) {
+            by0 -= half;
+            by1 += half;
+        }
+        if (cls == Glayer.goV()) {
+            bx0 -= half;
+            bx1 += half;
+        }
+        if (cls == Glayer.goSlant()) {
+            bx0 -= half;
+            by0 -= half;
+            bx1 += half;
+            by1 += half;
+        }
+        emon.Port.cellsPush(gc, 1);
+        emon.Port.cellsPush(gc, src);
+        emon.Port.cellsPush(gc, ea);
+        emon.Port.cellsPush(gc, row);
+        emon.Port.cellsPush(gc, pt);
+        emon.Port.cellsPush(gc, bx0);
+        emon.Port.cellsPush(gc, by0);
+        emon.Port.cellsPush(gc, bx1);
+        emon.Port.cellsPush(gc, by1);
+        emon.Port.cellsPush(gc, ex0);
+        emon.Port.cellsPush(gc, ey0);
+        emon.Port.cellsPush(gc, ex1);
+        emon.Port.cellsPush(gc, ey1);
+        emon.Port.cellsPush(gc, gfMax(thick, 1));
+        emon.Port.cellsPush(gc, colour);
+        emon.Port.cellsPush(gc, style);
+        emon.Port.cellsPush(gc, flags);
+        emon.Port.cellsPush(gc, cls);
+        emon.Port.cellsPush(gc, conf);
+        emon.Port.cellsPush(gc, exact);
+        emon.Port.cellsPush(gc, i);
+        emon.Port.cellsPush(gc, -1);
+        emon.Port.cellsPush(gc, -1);
+        emon.Port.cellsPush(gc, ang);
+        return i;
+    }
+    public static int gfCandFill(emon.Port.Cells gc, int src, int ea, int row, int x0, int y0, int x1, int y1, int colour, int flags, int conf) {
+        // Append a fill candidate. Answers its index.
+        int i = emon.Port.cellsLen(gc) / 24;
+        emon.Port.cellsPush(gc, 2);
+        emon.Port.cellsPush(gc, src);
+        emon.Port.cellsPush(gc, ea);
+        emon.Port.cellsPush(gc, row);
+        emon.Port.cellsPush(gc, -1);
+        emon.Port.cellsPush(gc, x0);
+        emon.Port.cellsPush(gc, y0);
+        emon.Port.cellsPush(gc, x1);
+        emon.Port.cellsPush(gc, y1);
+        emon.Port.cellsPush(gc, 0);
+        emon.Port.cellsPush(gc, 0);
+        emon.Port.cellsPush(gc, 0);
+        emon.Port.cellsPush(gc, 0);
+        emon.Port.cellsPush(gc, 0);
+        emon.Port.cellsPush(gc, colour);
+        emon.Port.cellsPush(gc, 1);
+        emon.Port.cellsPush(gc, flags);
+        emon.Port.cellsPush(gc, 0);
+        emon.Port.cellsPush(gc, conf);
+        emon.Port.cellsPush(gc, 0);
+        emon.Port.cellsPush(gc, i);
+        emon.Port.cellsPush(gc, -1);
+        emon.Port.cellsPush(gc, -1);
+        emon.Port.cellsPush(gc, 0);
+        return i;
+    }
+    public static int gfBuild(emon.Port.Cells gc, emon.Port.Cells ctx, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells oblocks) {
+        // The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its
+        // rectangles, then OCR's line blocks. Answers how many.
+        int i = 0;
+        int c = 0;
+        int f = 0;
+        int sw = 0;
+        int half = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int ea = 0;
+        emon.Port.cellsDrop(gc, 0);
+        i = emon.Port.cellsAt(ctx, X_V0);
+        while (i < emon.Port.cellsAt(ctx, X_V1)) {
+            f = emon.Port.cellsAt(og, (i * 24) + 18);
+            ea = Evidence.eaPaths();
+            if ((f & Glayer.gqFromImage()) != 0) {
+                ea = Evidence.eaImages();
+            }
+            c = gfCandRule(gc, 1, ea, i, emon.Port.cellsAt(og, (i * 24) + 22), emon.Port.cellsAt(og, (i * 24) + 5), emon.Port.cellsAt(og, (i * 24) + 6), emon.Port.cellsAt(og, (i * 24) + 7), emon.Port.cellsAt(og, (i * 24) + 8), emon.Port.cellsAt(og, (i * 24) + 9), emon.Port.cellsAt(og, (i * 24) + 12), emon.Port.cellsAt(og, (i * 24) + 13), f, -1, gfEq(emon.Port.cellsAt(og, (i * 24) + 16), 501));
+            i += 1;
+        }
+        i = emon.Port.cellsAt(ctx, X_F0);
+        while (i < emon.Port.cellsAt(ctx, X_F1)) {
+            gfCandFill(gc, 1, Evidence.eaPaths(), i, emon.Port.cellsAt(ofl, (i * 16) + 1), emon.Port.cellsAt(ofl, (i * 16) + 2), emon.Port.cellsAt(ofl, (i * 16) + 3), emon.Port.cellsAt(ofl, (i * 16) + 4), emon.Port.cellsAt(ofl, (i * 16) + 5), emon.Port.cellsAt(ofl, (i * 16) + 11), -1);
+            i += 1;
+        }
+        i = emon.Port.cellsAt(ctx, X_R0);
+        while (i < emon.Port.cellsAt(ctx, X_R1)) {
+            gfCandRule(gc, 2, Evidence.eaRules(), i, -1, Evidence.rlGet(rules, i, Evidence.rlfLx0()), Evidence.rlGet(rules, i, Evidence.rlfLy0()), Evidence.rlGet(rules, i, Evidence.rlfLx1()), Evidence.rlGet(rules, i, Evidence.rlfLy1()), Evidence.rlGet(rules, i, Evidence.rlfThick()), Evidence.rlGet(rules, i, Evidence.rlfColor()), Evidence.rlGet(rules, i, Evidence.rlfStyle()), 0, Evidence.rlGet(rules, i, Evidence.rlfConf()), 0);
+            i += 1;
+        }
+        i = emon.Port.cellsAt(ctx, X_Q0);
+        while (i < emon.Port.cellsAt(ctx, X_Q1)) {
+            if (Evidence.pmGet(prims, i, Evidence.pmfKind()) == Evidence.pmRect()) {
+                f = Evidence.pmGet(prims, i, Evidence.pmfFlags());
+                x0 = Evidence.pmGet(prims, i, Evidence.pmfX0());
+                y0 = Evidence.pmGet(prims, i, Evidence.pmfY0());
+                x1 = Evidence.pmGet(prims, i, Evidence.pmfX1());
+                y1 = Evidence.pmGet(prims, i, Evidence.pmfY1());
+                if ((f & 8) != 0) {
+                    gfCandFill(gc, 2, Evidence.eaPrims(), i, x0, y0, x1, y1, Evidence.pmGet(prims, i, Evidence.pmfColor()), 0, Evidence.pmGet(prims, i, Evidence.pmfConf()));
+                } else if ((f & 2) == 0) {
+                    sw = Evidence.pmGet(prims, i, Evidence.pmfStroke());
+                    if (sw <= 0) {
+                        sw = 100;
+                    }
+                    half = sw / 2;
+                    gfCandRule(gc, 2, Evidence.eaPrims(), i, -1, x0, y0 + half, x1, y0 + half, sw, Evidence.pmGet(prims, i, Evidence.pmfColor()), 1, Glayer.gqBoxEdge(), Evidence.pmGet(prims, i, Evidence.pmfConf()), 0);
+                    gfCandRule(gc, 2, Evidence.eaPrims(), i, -1, x0, y1 - half, x1, y1 - half, sw, Evidence.pmGet(prims, i, Evidence.pmfColor()), 1, Glayer.gqBoxEdge(), Evidence.pmGet(prims, i, Evidence.pmfConf()), 0);
+                    gfCandRule(gc, 2, Evidence.eaPrims(), i, -1, x0 + half, y0, x0 + half, y1, sw, Evidence.pmGet(prims, i, Evidence.pmfColor()), 1, Glayer.gqBoxEdge(), Evidence.pmGet(prims, i, Evidence.pmfConf()), 0);
+                    gfCandRule(gc, 2, Evidence.eaPrims(), i, -1, x1 - half, y0, x1 - half, y1, sw, Evidence.pmGet(prims, i, Evidence.pmfColor()), 1, Glayer.gqBoxEdge(), Evidence.pmGet(prims, i, Evidence.pmfConf()), 0);
+                }
+            }
+            i += 1;
+        }
+        i = emon.Port.cellsAt(ctx, X_B0);
+        while (i < emon.Port.cellsAt(ctx, X_B1)) {
+            if ((Evidence.obGet(oblocks, i, Evidence.obfKind()) == Evidence.obBlock()) && (Evidence.obGet(oblocks, i, Evidence.obfBtype()) == 3)) {
+                x0 = Evidence.obGet(oblocks, i, Evidence.obfX0());
+                y0 = Evidence.obGet(oblocks, i, Evidence.obfY0());
+                x1 = Evidence.obGet(oblocks, i, Evidence.obfX1());
+                y1 = Evidence.obGet(oblocks, i, Evidence.obfY1());
+                if ((x1 - x0) >= (y1 - y0)) {
+                    gfCandRule(gc, 4, Evidence.eaOblocks(), i, -1, x0, (y0 + y1) / 2, x1, (y0 + y1) / 2, y1 - y0, -1, 1, 0, -1, 0);
+                } else {
+                    gfCandRule(gc, 4, Evidence.eaOblocks(), i, -1, (x0 + x1) / 2, y0, (x0 + x1) / 2, y1, x1 - x0, -1, 1, 0, -1, 0);
+                }
+            }
+            i += 1;
+        }
+        return emon.Port.cellsLen(gc) / 24;
+    }
+    public static int gfA0(emon.Port.Cells gc, int c) {
+        // A rule's extent along its axis, its least coordinate (x for a horizontal rule, y for a vertical one).
+        if (gcat(gc, c, C_CLS) == Glayer.goH()) {
+            return gfMin(gcat(gc, c, C_EX0), gcat(gc, c, C_EX1));
+        }
+        return gfMin(gcat(gc, c, C_EY0), gcat(gc, c, C_EY1));
+    }
+    public static int gfA1(emon.Port.Cells gc, int c) {
+        // ... its greatest.
+        if (gcat(gc, c, C_CLS) == Glayer.goH()) {
+            return gfMax(gcat(gc, c, C_EX0), gcat(gc, c, C_EX1));
+        }
+        return gfMax(gcat(gc, c, C_EY0), gcat(gc, c, C_EY1));
+    }
+    public static int gfPerpOf(emon.Port.Cells gc, int c) {
+        // The position of a rule's centre line across its axis.
+        if (gcat(gc, c, C_CLS) == Glayer.goH()) {
+            return (gcat(gc, c, C_EY0) + gcat(gc, c, C_EY1)) / 2;
+        }
+        return (gcat(gc, c, C_EX0) + gcat(gc, c, C_EX1)) / 2;
+    }
+    public static int gfNearRule(emon.Port.Cells gc, int a, int b) {
+        // SPEC 9.9: two rules are near when they have the same orientation, their angles differ by at most `gf-angle`, the distance between their
+        // centre lines is at most half the sum of their thicknesses plus `gf-perp`, and their extents along the axis overlap or come within `gf-gap`.
+        int ca = gcat(gc, a, C_CLS);
+        int d = gfAbs(gcat(gc, a, C_ANG) - gcat(gc, b, C_ANG));
+        if (ca != gcat(gc, b, C_CLS)) {
+            return 0;
+        }
+        if (ca == Glayer.goSlant()) {
+            return 0;
+        }
+        if (d > 9000) {
+            d = 18000 - d;
+        }
+        if (d > Fuserules.fgAngle()) {
+            return 0;
+        }
+        if (gfAbs(gfPerpOf(gc, a) - gfPerpOf(gc, b)) > (((gcat(gc, a, C_T) + gcat(gc, b, C_T)) / 2) + Fuserules.fgPerp())) {
+            return 0;
+        }
+        if (gfA0(gc, b) > (gfA1(gc, a) + Fuserules.fgGap())) {
+            return 0;
+        }
+        if (gfA0(gc, a) > (gfA1(gc, b) + Fuserules.fgGap())) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int gfNear(emon.Port.Cells gc, int a, int b) {
+        // Two candidates of the same kind are near: rules by `gf-near-rule`, fills at box IoU at least `gf-fill-iou`.
+        if (gcat(gc, a, C_KIND) == 1) {
+            return gfNearRule(gc, a, b);
+        }
+        if (gfIou(gcat(gc, a, C_X0), gcat(gc, a, C_Y0), gcat(gc, a, C_X1), gcat(gc, a, C_Y1), gcat(gc, b, C_X0), gcat(gc, b, C_Y0), gcat(gc, b, C_X1), gcat(gc, b, C_Y1)) >= Fuserules.fgFillIou()) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int gfFind(emon.Port.Cells gc, int i) {
+        // The root of candidate i's group (path compression).
+        int r = i;
+        int p = i;
+        int nx = 0;
+        while (gcat(gc, r, C_UF) != r) {
+            r = gcat(gc, r, C_UF);
+        }
+        while (gcat(gc, p, C_UF) != r) {
+            nx = gcat(gc, p, C_UF);
+            gcput(gc, p, C_UF, r);
+            p = nx;
+        }
+        return r;
+    }
+    public static int gfUnion(emon.Port.Cells gc, int a, int b) {
+        // Join two candidates' groups; the smaller root wins.
+        int ra = gfFind(gc, a);
+        int rb = gfFind(gc, b);
+        if (ra < rb) {
+            gcput(gc, rb, C_UF, ra);
+        }
+        if (rb < ra) {
+            gcput(gc, ra, C_UF, rb);
+        }
+        return 0;
+    }
+    public static int gfPairs(emon.Port.Cells gc, int n) {
+        // Every near pair of candidates of different sources, into groups: each tracer or OCR candidate against every vector one and the later ones of
+        // the others (the grid of D221 only speeds this up on a page of thousands of rules and no tracer; the pairs are the same). Answers 0.
+        int i = 0;
+        int j = 0;
+        while (i < n) {
+            if (gcat(gc, i, C_SRC) != 1) {
+                j = 0;
+                while (j < n) {
+                    if (gcat(gc, j, C_SRC) != gcat(gc, i, C_SRC)) {
+                        if ((gcat(gc, j, C_SRC) == 1) || (j > i)) {
+                            if (gcat(gc, i, C_KIND) == gcat(gc, j, C_KIND)) {
+                                if (gfNear(gc, i, j) == 1) {
+                                    gfUnion(gc, i, j);
+                                }
+                            }
+                        }
+                    }
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int gfOrder(emon.Port.Cells gc, emon.Port.Cells aux, int n) {
+        // Settle the groups and sort the candidates by root (ascending, then by index): `aux` has eight arrays of n cells, the counts of each root (A_CNT), where
+        // its members start (A_START), the members in order (A_ORD), its `ggp` row (A_GID, -1), and room for the sweeps (the other two, A_EP and A_BITS, 2 n each).
+        int i = 0;
+        int r = 0;
+        int s = 0;
+        int c = 0;
+        emon.Port.cellsDrop(aux, 0);
+        while (i < (n * 8)) {
+            emon.Port.cellsPush(aux, 0);
+            i += 1;
+        }
+        i = 0;
+        while (i < n) {
+            r = gfFind(gc, i);
+            gcput(gc, i, C_UF, r);
+            emon.Port.cellsSet(aux, (n * A_CNT) + r, emon.Port.cellsAt(aux, (n * A_CNT) + r) + 1);
+            i += 1;
+        }
+        i = 0;
+        while (i < n) {
+            emon.Port.cellsSet(aux, (n * A_START) + i, s);
+            s += emon.Port.cellsAt(aux, (n * A_CNT) + i);
+            emon.Port.cellsSet(aux, (n * A_GID) + i, -1);
+            i += 1;
+        }
+        i = 0;
+        while (i < n) {
+            r = gcat(gc, i, C_UF);
+            c = emon.Port.cellsAt(aux, (n * A_BITS) + r);
+            emon.Port.cellsSet(aux, (n * A_ORD) + (emon.Port.cellsAt(aux, (n * A_START) + r) + c), i);
+            emon.Port.cellsSet(aux, (n * A_BITS) + r, c + 1);
+            i += 1;
+        }
+        return 0;
+    }
+    public static int gfRefsRun(emon.Port.Cells gc, emon.Port.Cells aux, int n, int s, int e, int src, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells refs, emon.Port.Cells ggp, int g, int slot) {
+        // The members of source `src` of the group whose members are `aux`'s A_ORD[s, e), as a run of `refs` and the cells (2 + 2 slot, 3 + 2 slot) of its
+        // `ggp` row. A vector member is named by the `paths` (or `images`) row its fused row came from; the others by their own rows. Answers the count.
+        int k = s;
+        int c = 0;
+        int cnt = 0;
+        int first = -1;
+        int row = 0;
+        while (k < e) {
+            c = emon.Port.cellsAt(aux, (n * A_ORD) + k);
+            if (gcat(gc, c, C_SRC) == src) {
+                if (first < 0) {
+                    first = emon.Port.cellsLen(refs) / 2;
+                }
+                row = gcat(gc, c, C_ROW);
+                if (src == 1) {
+                    if (gcat(gc, c, C_KIND) == 1) {
+                        row = emon.Port.cellsAt(og, (row * 24) + 21);
+                    } else {
+                        row = emon.Port.cellsAt(ofl, (row * 16) + 14);
+                    }
+                }
+                Evidence.rfAdd(refs, gcat(gc, c, C_EA), row);
+                cnt += 1;
+            }
+            k += 1;
+        }
+        Glayer.ggpSet(ggp, g, 2 + (2 * slot), first);
+        Glayer.ggpSet(ggp, g, 3 + (2 * slot), cnt);
+        return cnt;
+    }
+    public static int gfGroups(emon.Port.Cells gc, emon.Port.Cells aux, int n, emon.Port.Cells ctx, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells ggp, emon.Port.Cells refs) {
+        // A `ggp` row for every group of the page, in the order of its first member, with its three member runs; the group's flags: 1 an exactly known visible vector
+        // rule, 2 a tracer member, 4 an OCR member. The row is each root's A_GID. Answers the groups made.
+        int r = 0;
+        int s = 0;
+        int e = 0;
+        int g = 0;
+        int k = 0;
+        int c = 0;
+        int nv = 0;
+        int nt = 0;
+        int no = 0;
+        int nx = 0;
+        int made = 0;
+        int kind = 0;
+        while (r < n) {
+            if (emon.Port.cellsAt(aux, (n * A_CNT) + r) > 0) {
+                s = emon.Port.cellsAt(aux, (n * A_START) + r);
+                e = s + emon.Port.cellsAt(aux, (n * A_CNT) + r);
+                kind = Glayer.gkRule();
+                if (gcat(gc, r, C_KIND) == 2) {
+                    kind = Glayer.gkFill();
+                }
+                g = Glayer.ggpNew(ggp, emon.Port.cellsAt(ctx, X_PAGE), kind);
+                nv = gfRefsRun(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0);
+                nt = gfRefsRun(gc, aux, n, s, e, 2, og, ofl, refs, ggp, g, 1);
+                no = gfRefsRun(gc, aux, n, s, e, 4, og, ofl, refs, ggp, g, 2);
+                nx = 0;
+                k = s;
+                while (k < e) {
+                    c = emon.Port.cellsAt(aux, (n * A_ORD) + k);
+                    if ((gcat(gc, c, C_SRC) == 1) && ((gcat(gc, c, C_KIND) == 1) && (gcat(gc, c, C_EXACT) == 1))) {
+                        nx = 1;
+                    }
+                    k += 1;
+                }
+                Glayer.ggpSet(ggp, g, 8, (nx + (2 * gfMin(nt, 1))) + (4 * gfMin(no, 1)));
+                emon.Port.cellsSet(aux, (n * A_GID) + r, g);
+                made += 1;
+            }
+            r += 1;
+        }
+        return made;
+    }
+    public static int gfUnit(emon.Port.Cells un, int gid, int ukind) {
+        // Append a unit; answers its row.
+        int u = emon.Port.cellsLen(un) / 24;
+        int i = 0;
+        while (i < 24) {
+            emon.Port.cellsPush(un, 0);
+            i += 1;
+        }
+        emon.Port.cellsSet(un, u * 24, gid);
+        emon.Port.cellsSet(un, (u * 24) + 1, ukind);
+        emon.Port.cellsSet(un, (u * 24) + 9, -1);
+        emon.Port.cellsSet(un, (u * 24) + 15, -1);
+        return u;
+    }
+    public static int unat(emon.Port.Cells un, int u, int f) {
+        return emon.Port.cellsAt(un, (u * 24) + f);
+    }
+    public static int unput(emon.Port.Cells un, int u, int f, int v) {
+        emon.Port.cellsSet(un, (u * 24) + f, v);
+        return 0;
+    }
+    public static int gfTraceOnly(int bits) {
+        // 1 for an elementary interval only the tracer covers (not a vector rule, exactly known or not).
+        if (((bits & 8) != 0) && ((bits & 3) == 0)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int gfRunUnit(emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, int n, int s, int e, int gid, int cls, int vecexact, int q0, int q1) {
+        // One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its
+        // thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.
+        int epb = n * A_EP;
+        int bitb = n * A_BITS;
+        int ordb = n * A_ORD;
+        int lo = emon.Port.cellsAt(aux, epb + q0);
+        int hi = emon.Port.cellsAt(aux, epb + (q1 + 1));
+        int u = gfUnit(un, gid, 2);
+        int j = s;
+        int c = 0;
+        int ov = 0;
+        int best = -1;
+        int bestov = 0;
+        int cnt = 0;
+        int psum = 0;
+        int thick = 0;
+        int q = q0;
+        int oc = 0;
+        int perp = 0;
+        while (j < e) {
+            c = emon.Port.cellsAt(aux, ordb + j);
+            if (gcat(gc, c, C_SRC) == 2) {
+                ov = gfMin(hi, gfA1(gc, c)) - gfMax(lo, gfA0(gc, c));
+                if (ov > 0) {
+                    cnt += 1;
+                    psum += gfPerpOf(gc, c);
+                    thick = gfMax(thick, gcat(gc, c, C_T));
+                    if (ov > bestov) {
+                        bestov = ov;
+                        best = c;
+                    }
+                }
+            }
+            j += 1;
+        }
+        while (q <= q1) {
+            if ((emon.Port.cellsAt(aux, bitb + q) & 16) != 0) {
+                oc += emon.Port.cellsAt(aux, epb + (q + 1)) - emon.Port.cellsAt(aux, epb + q);
+            }
+            q += 1;
+        }
+        perp = psum / gfMax(cnt, 1);
+        unput(un, u, 2, cls);
+        unput(un, u, 3, lo);
+        unput(un, u, 4, hi);
+        unput(un, u, 5, perp);
+        unput(un, u, 6, thick);
+        unput(un, u, 10, (oc * 1000) / gfMax(hi - lo, 1));
+        unput(un, u, 16, vecexact);
+        if (best >= 0) {
+            unput(un, u, 7, gcat(gc, best, C_COL));
+            unput(un, u, 8, gcat(gc, best, C_STY));
+            unput(un, u, 9, gcat(gc, best, C_CONF));
+        }
+        if ((cnt == 1) && ((lo == gfA0(gc, best)) && (hi == gfA1(gc, best)))) {
+            unput(un, u, 11, gcat(gc, best, C_EX0));
+            unput(un, u, 12, gcat(gc, best, C_EY0));
+            unput(un, u, 13, gcat(gc, best, C_EX1));
+            unput(un, u, 14, gcat(gc, best, C_EY1));
+            unput(un, u, 15, best);
+        } else if (cls == Glayer.goH()) {
+            unput(un, u, 11, lo);
+            unput(un, u, 12, perp);
+            unput(un, u, 13, hi);
+            unput(un, u, 14, perp);
+        } else {
+            unput(un, u, 11, perp);
+            unput(un, u, 12, lo);
+            unput(un, u, 13, perp);
+            unput(un, u, 14, hi);
+        }
+        return u;
+    }
+    public static int gfSweep(emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, int n, int s, int e, int gid, int nv, int vecexact) {
+        // The group of rules whose members are `aux`'s A_ORD[s, e): the endpoints of every member along the axis cut it into ELEMENTARY INTERVALS, each with the
+        // kinds of member that cover it (bits: 1 an exactly known visible vector rule, 2 another vector rule, 8 the tracer, 16 an OCR line block). Every vector rule
+        // gets its WITNESS (`C_WIT`): the per mille of its length the tracer covers; every tracer member whether the group has a vector one (`C_EXACT`); and each
+        // run of intervals the tracer covers and no vector rule does becomes a unit. Gaps are never bridged: an interval nobody covers ends a run.
+        int k = e - s;
+        int cls = gcat(gc, emon.Port.cellsAt(aux, (n * A_ORD) + s), C_CLS);
+        int epb = n * A_EP;
+        int bitb = n * A_BITS;
+        int ordb = n * A_ORD;
+        int j = 0;
+        int m = 1;
+        int q = 0;
+        int qe = 0;
+        int c = 0;
+        int v = 0;
+        int w = 0;
+        int bits = 0;
+        int lo = 0;
+        int hi = 0;
+        int a0 = 0;
+        int a1 = 0;
+        int cov = 0;
+        while (j < k) {
+            c = emon.Port.cellsAt(aux, ordb + (s + j));
+            emon.Port.cellsSet(aux, epb + (j * 2), gfA0(gc, c));
+            emon.Port.cellsSet(aux, epb + ((j * 2) + 1), gfA1(gc, c));
+            j += 1;
+        }
+        j = 1;
+        while (j < (k * 2)) {
+            v = emon.Port.cellsAt(aux, epb + j);
+            w = j - 1;
+            while ((w >= 0) && (emon.Port.cellsAt(aux, epb + w) > v)) {
+                emon.Port.cellsSet(aux, epb + (w + 1), emon.Port.cellsAt(aux, epb + w));
+                w -= 1;
+            }
+            emon.Port.cellsSet(aux, epb + (w + 1), v);
+            j += 1;
+        }
+        j = 1;
+        while (j < (k * 2)) {
+            if (emon.Port.cellsAt(aux, epb + j) != emon.Port.cellsAt(aux, epb + (m - 1))) {
+                emon.Port.cellsSet(aux, epb + m, emon.Port.cellsAt(aux, epb + j));
+                m += 1;
+            }
+            j += 1;
+        }
+        while (q < (m - 1)) {
+            lo = emon.Port.cellsAt(aux, epb + q);
+            hi = emon.Port.cellsAt(aux, epb + (q + 1));
+            bits = 0;
+            j = 0;
+            while (j < k) {
+                c = emon.Port.cellsAt(aux, ordb + (s + j));
+                if ((gfA0(gc, c) <= lo) && (gfA1(gc, c) >= hi)) {
+                    if (gcat(gc, c, C_SRC) == 1) {
+                        if (gcat(gc, c, C_EXACT) == 1) {
+                            bits |= 1;
+                        } else {
+                            bits |= 2;
+                        }
+                    }
+                    if (gcat(gc, c, C_SRC) == 2) {
+                        bits |= 8;
+                    }
+                    if (gcat(gc, c, C_SRC) == 4) {
+                        bits |= 16;
+                    }
+                }
+                j += 1;
+            }
+            emon.Port.cellsSet(aux, bitb + q, bits);
+            q += 1;
+        }
+        j = 0;
+        while (j < k) {
+            c = emon.Port.cellsAt(aux, ordb + (s + j));
+            if (gcat(gc, c, C_SRC) == 1) {
+                a0 = gfA0(gc, c);
+                a1 = gfA1(gc, c);
+                cov = 0;
+                q = 0;
+                while (q < (m - 1)) {
+                    if ((emon.Port.cellsAt(aux, epb + q) >= a0) && (emon.Port.cellsAt(aux, epb + (q + 1)) <= a1)) {
+                        if ((emon.Port.cellsAt(aux, bitb + q) & 8) != 0) {
+                            cov += emon.Port.cellsAt(aux, epb + (q + 1)) - emon.Port.cellsAt(aux, epb + q);
+                        }
+                    }
+                    q += 1;
+                }
+                if (a1 > a0) {
+                    gcput(gc, c, C_WIT, (cov * 1000) / (a1 - a0));
+                } else {
+                    gcput(gc, c, C_WIT, 0);
+                }
+            }
+            if (gcat(gc, c, C_SRC) == 2) {
+                gcput(gc, c, C_EXACT, gfMin(nv, 1));
+            }
+            j += 1;
+        }
+        q = 0;
+        while (q < (m - 1)) {
+            if (gfTraceOnly(emon.Port.cellsAt(aux, bitb + q)) == 1) {
+                qe = q;
+                while (((qe + 1) < (m - 1)) && (gfTraceOnly(emon.Port.cellsAt(aux, bitb + (qe + 1))) == 1)) {
+                    qe += 1;
+                }
+                gfRunUnit(gc, aux, un, n, s, e, gid, cls, vecexact, q, qe);
+                q = qe + 1;
+            } else {
+                q += 1;
+            }
+        }
+        return 0;
+    }
+    public static int gfSweeps(emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, int n) {
+        // Every group of the page in turn: a group of rules is swept (`gf-sweep`) when the tracer is in it; a vector rule with no tracer near it has witness 0; a
+        // slanted one is figure material and is not swept; OCR line blocks alone are a unit of kind 5. A group of fills: a vector fill's `C_WIT` is the candidate
+        // of a tint over it (-1: none), and a tint with no vector fill is a unit of kind 4. Answers the units.
+        int r = 0;
+        int s = 0;
+        int e = 0;
+        int k = 0;
+        int c = 0;
+        int nv = 0;
+        int nt = 0;
+        int no = 0;
+        int nx = 0;
+        int tint = -1;
+        int u = 0;
+        emon.Port.cellsDrop(un, 0);
+        while (r < n) {
+            if (emon.Port.cellsAt(aux, (n * A_CNT) + r) > 0) {
+                s = emon.Port.cellsAt(aux, (n * A_START) + r);
+                e = s + emon.Port.cellsAt(aux, (n * A_CNT) + r);
+                nv = 0;
+                nt = 0;
+                no = 0;
+                nx = 0;
+                tint = -1;
+                k = s;
+                while (k < e) {
+                    c = emon.Port.cellsAt(aux, (n * A_ORD) + k);
+                    if (gcat(gc, c, C_SRC) == 1) {
+                        nv += 1;
+                        if (gcat(gc, c, C_EXACT) == 1) {
+                            nx = 1;
+                        }
+                    }
+                    if (gcat(gc, c, C_SRC) == 2) {
+                        nt += 1;
+                        if (tint < 0) {
+                            tint = c;
+                        }
+                    }
+                    if (gcat(gc, c, C_SRC) == 4) {
+                        no += 1;
+                    }
+                    k += 1;
+                }
+                if (gcat(gc, r, C_KIND) == 1) {
+                    if (gcat(gc, r, C_CLS) == Glayer.goSlant()) {
+                        k = s;
+                        while (k < e) {
+                            c = emon.Port.cellsAt(aux, (n * A_ORD) + k);
+                            if (gcat(gc, c, C_SRC) == 1) {
+                                gcput(gc, c, C_WIT, 0);
+                            }
+                            k += 1;
+                        }
+                    } else if ((nt == 0) && (nv == 0)) {
+                        u = gfUnit(un, emon.Port.cellsAt(aux, (n * A_GID) + r), 5);
+                        unput(un, u, 16, 0);
+                    } else if (nt == 0) {
+                        k = s;
+                        while (k < e) {
+                            c = emon.Port.cellsAt(aux, (n * A_ORD) + k);
+                            if (gcat(gc, c, C_SRC) == 1) {
+                                gcput(gc, c, C_WIT, 0);
+                            }
+                            k += 1;
+                        }
+                    } else {
+                        gfSweep(gc, aux, un, n, s, e, emon.Port.cellsAt(aux, (n * A_GID) + r), nv, nx);
+                    }
+                } else {
+                    k = s;
+                    while (k < e) {
+                        c = emon.Port.cellsAt(aux, (n * A_ORD) + k);
+                        if (gcat(gc, c, C_SRC) == 1) {
+                            gcput(gc, c, C_WIT, tint);
+                        }
+                        if ((gcat(gc, c, C_SRC) == 2) && (nv == 0)) {
+                            u = gfUnit(un, emon.Port.cellsAt(aux, (n * A_GID) + r), 4);
+                            unput(un, u, 11, gcat(gc, c, C_X0));
+                            unput(un, u, 12, gcat(gc, c, C_Y0));
+                            unput(un, u, 13, gcat(gc, c, C_X1));
+                            unput(un, u, 14, gcat(gc, c, C_Y1));
+                            unput(un, u, 7, gcat(gc, c, C_COL));
+                            unput(un, u, 9, gcat(gc, c, C_CONF));
+                            unput(un, u, 15, c);
+                        }
+                        k += 1;
+                    }
+                }
+            }
+            r += 1;
+        }
+        return emon.Port.cellsLen(un) / 24;
+    }
+    public static int gfImageOk(emon.Port.Cells im, int m) {
+        // 1 for a visible image placement at least `gf-img-min` each way (a region of its own: `emon.health`'s `hh-image-ok`).
+        if (Evidence.imGet(im, m, Evidence.mfVis()) != 0) {
+            return 0;
+        }
+        if ((Evidence.imGet(im, m, Evidence.mfX1()) - Evidence.imGet(im, m, Evidence.mfX0())) < Fuserules.fgImgMin()) {
+            return 0;
+        }
+        if ((Evidence.imGet(im, m, Evidence.mfY1()) - Evidence.imGet(im, m, Evidence.mfY0())) < Fuserules.fgImgMin()) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int gfRegionOf(emon.Port.Cells ctx, emon.Port.Cells im, int cx, int cy) {
+        // The `images` row of the visible placement of the page that holds the point, else -1 (R0).
+        int m = emon.Port.cellsAt(ctx, X_I0);
+        while (m < emon.Port.cellsAt(ctx, X_I1)) {
+            if (gfImageOk(im, m) == 1) {
+                if (((cx >= Evidence.imGet(im, m, Evidence.mfX0())) && (cx < Evidence.imGet(im, m, Evidence.mfX1()))) && ((cy >= Evidence.imGet(im, m, Evidence.mfY0())) && (cy < Evidence.imGet(im, m, Evidence.mfY1())))) {
+                    return m;
+                }
+            }
+            m += 1;
+        }
+        return -1;
+    }
+    public static int gfTextShare(emon.Port.Cells ctx, emon.Port.Cells words, int x0, int y0, int x1, int y1) {
+        // The per mille of the box that lies in the page's text-layer word boxes (their intersections added, at most 1000). Areas in tenths of a point.
+        int area = gfMax(1, gfMax(0, x1 - x0) / 10) * gfMax(1, gfMax(0, y1 - y0) / 10);
+        int w = emon.Port.cellsAt(ctx, X_T0);
+        int inter = 0;
+        int iw = 0;
+        int ih = 0;
+        while (w < emon.Port.cellsAt(ctx, X_T1)) {
+            iw = gfMax(0, gfMin(x1, Evidence.wdGet(words, w, Evidence.hdX1())) - gfMax(x0, Evidence.wdGet(words, w, Evidence.hdX0()))) / 10;
+            ih = gfMax(0, gfMin(y1, Evidence.wdGet(words, w, Evidence.hdY1())) - gfMax(y0, Evidence.wdGet(words, w, Evidence.hdY0()))) / 10;
+            inter += iw * ih;
+            w += 1;
+        }
+        return gfMin(1000, inter / gfMax(1, area / 1000));
+    }
+    public static int gfRuleGlyph(int cp) {
+        // 1 for a code point a scanned border is read as: | l I 1 ! [ ] _ - and U+2010-U+2015 (SPEC 8.4.5, column 31).
+        if ((cp == 124) || ((cp == 108) || ((cp == 73) || ((cp == 49) || ((cp == 33) || ((cp == 91) || ((cp == 93) || ((cp == 95) || (cp == 45))))))))) {
+            return 1;
+        }
+        if ((cp >= 8208) && (cp <= 8213)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int gfWordRuleLike(emon.Port.Cells owords, emon.Port.Cells etext, int w) {
+        // 1 for an OCR word of one or two code points, all rule glyphs.
+        int wl = Evidence.owGet(owords, w, Evidence.hdTlen());
+        int st = Evidence.owGet(owords, w, Evidence.hdTstart());
+        int k = 0;
+        if ((wl < 1) || (wl > 2)) {
+            return 0;
+        }
+        while (k < wl) {
+            if (gfRuleGlyph(emon.Port.cellsAt(etext, st + k)) == 0) {
+                return 0;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    public static int gfWordPlain(emon.Port.Cells owords, emon.Port.Cells etext, int w) {
+        // 1 for an OCR word of three or more code points that is not made of rule glyphs alone.
+        int wl = Evidence.owGet(owords, w, Evidence.hdTlen());
+        int st = Evidence.owGet(owords, w, Evidence.hdTstart());
+        int k = 0;
+        if (wl < 3) {
+            return 0;
+        }
+        while (k < wl) {
+            if (gfRuleGlyph(emon.Port.cellsAt(etext, st + k)) == 0) {
+                return 1;
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    public static int gfInOword(emon.Port.Cells ctx, emon.Port.Cells owords, emon.Port.Cells etext, int x0, int y0, int x1, int y1) {
+        // The most (per mille) of the box that lies inside ONE OCR word of three or more code points that is not made of rule glyphs (row 533); 0 for none.
+        int w = emon.Port.cellsAt(ctx, X_W0);
+        int best = 0;
+        int v = 0;
+        while (w < emon.Port.cellsAt(ctx, X_W1)) {
+            if (gfWordPlain(owords, etext, w) == 1) {
+                v = gfInsideShare(x0, y0, x1, y1, Evidence.owGet(owords, w, Evidence.hdX0()), Evidence.owGet(owords, w, Evidence.hdY0()), Evidence.owGet(owords, w, Evidence.hdX1()), Evidence.owGet(owords, w, Evidence.hdY1()));
+                if (v > best) {
+                    best = v;
+                }
+            }
+            w += 1;
+        }
+        return best;
+    }
+    public static int gfRegionScore(emon.Port.Cells hl, int page, int subject) {
+        // The score of the graphics region of `emon.health` (`plh-region`) for a page and a subject (-1 R0, else the `images` row); -1 when there is none.
+        int n = emon.Port.cellsLen(hl) / 12;
+        int i = 0;
+        while (i < n) {
+            if ((Player.hlGet(hl, i, 0) == Player.plhRegion()) && ((Player.hlGet(hl, i, 1) == page) && (Player.hlGet(hl, i, 2) == subject))) {
+                return Player.hlGet(hl, i, 9);
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static int gfHealth(emon.Port.Cells ctx, emon.Port.Cells gc, int n, emon.Port.Cells im, emon.Port.Cells rules, emon.Port.Cells words, emon.Port.Cells hl) {
+        // The page's two figures that depend on how the sources meet (SPEC 9.9 `Health per region`), then `emon.health`'s rows. THE VECTOR WITNESS (R0 of a
+        // born-digital page): the length of the exactly known visible vector rules (horizontal and vertical) that the tracer witnesses, over their length; -1
+        // without any. THE TRACER'S PRECISION (R0 of a born-digital page): the length of the tracer's rules a vector rule explains (its group has one) or that lie
+        // in text-layer word boxes (half or more of their box), over all of theirs; -1 without any. A raster page has neither. Answers the rows of `hl` made.
+        int i = 0;
+        int rlen = 0;
+        int vl = 0;
+        int vw = 0;
+        int tl = 0;
+        int te = 0;
+        int witness = -1;
+        int precision = -1;
+        int cls = 0;
+        if (emon.Port.cellsAt(ctx, X_KIND) == 1) {
+            while (i < n) {
+                cls = gcat(gc, i, C_CLS);
+                if ((gcat(gc, i, C_KIND) == 1) && ((cls == Glayer.goH()) || (cls == Glayer.goV()))) {
+                    if (gfRegionOf(ctx, im, (gcat(gc, i, C_EX0) + gcat(gc, i, C_EX1)) / 2, (gcat(gc, i, C_EY0) + gcat(gc, i, C_EY1)) / 2) < 0) {
+                        rlen = gfA1(gc, i) - gfA0(gc, i);
+                        if ((gcat(gc, i, C_SRC) == 1) && (gcat(gc, i, C_EXACT) == 1)) {
+                            vl += rlen;
+                            vw += (rlen * gfMax(0, gcat(gc, i, C_WIT))) / 1000;
+                        }
+                        if (gcat(gc, i, C_SRC) == 2) {
+                            tl += rlen;
+                            if (gcat(gc, i, C_EXACT) == 1) {
+                                te += rlen;
+                            } else if (gfTextShare(ctx, words, gcat(gc, i, C_X0), gcat(gc, i, C_Y0), gcat(gc, i, C_X1), gcat(gc, i, C_Y1)) >= 500) {
+                                te += rlen;
+                            }
+                        }
+                    }
+                }
+                i += 1;
+            }
+        }
+        if (vl > 0) {
+            witness = (vw * 1000) / vl;
+        }
+        if (tl > 0) {
+            precision = (te * 1000) / tl;
+        }
+        emon.Port.cellsSet(ctx, X_WIT, witness);
+        emon.Port.cellsSet(ctx, X_PREC, precision);
+        return Health.hlRegions(emon.Port.cellsAt(ctx, X_PAGE), im, rules, witness, precision, hl);
+    }
+    public static int gfCopyRow(emon.Port.Cells og, int row, emon.Port.Cells grl) {
+        // Append a copy of row `row` of the vector-only rules to `grl`; answers its row.
+        int r = emon.Port.cellsLen(grl) / 24;
+        int k = 0;
+        while (k < 24) {
+            emon.Port.cellsPush(grl, emon.Port.cellsAt(og, (row * 24) + k));
+            k += 1;
+        }
+        return r;
+    }
+    public static int gfFirstTrace(emon.Port.Cells gc, emon.Port.Cells aux, int n, int root) {
+        // The first tracer member of the group of `root` (candidate index), -1 when it has none.
+        int k = emon.Port.cellsAt(aux, (n * A_START) + root);
+        int e = emon.Port.cellsAt(aux, (n * A_START) + root) + emon.Port.cellsAt(aux, (n * A_CNT) + root);
+        int c = 0;
+        while (k < e) {
+            c = emon.Port.cellsAt(aux, (n * A_ORD) + k);
+            if (gcat(gc, c, C_SRC) == 2) {
+                return c;
+            }
+            k += 1;
+        }
+        return -1;
+    }
+    public static int gfEmitVecRules(emon.Port.Cells ctx, emon.Port.Cells gc, int n, emon.Port.Cells aux, emon.Port.Cells og, emon.Port.Cells im, emon.Port.Cells hl, emon.Port.Cells ggp, emon.Port.Cells grl, emon.Port.Cells fx, emon.Port.Cells gfa, emon.Port.Cells gv) {
+        // Every vector rule of the page, in order, through block 500: kept (with the row's number, confidence and flags, `trace` among its sources when the tracer
+        // witnessed it, the tracer's colour when its own is -1 and the row is 512) or dropped (513: a row of `gfa`, for the ledger). Answers the rows kept.
+        int page = emon.Port.cellsAt(ctx, X_PAGE);
+        int kind = emon.Port.cellsAt(ctx, X_KIND);
+        int i = 0;
+        int root = 0;
+        int gid = 0;
+        int r = 0;
+        int fr = 0;
+        int rg = 0;
+        int t = -1;
+        int kept = 0;
+        int num = 0;
+        int orow = 0;
+        while (i < n) {
+            if ((gcat(gc, i, C_KIND) == 1) && (gcat(gc, i, C_SRC) == 1)) {
+                root = gcat(gc, i, C_UF);
+                gid = emon.Port.cellsAt(aux, (n * A_GID) + root);
+                rg = gfRegionOf(ctx, im, (gcat(gc, i, C_EX0) + gcat(gc, i, C_EX1)) / 2, (gcat(gc, i, C_EY0) + gcat(gc, i, C_EY1)) / 2);
+                gfGvReset(gv);
+                emon.Port.cellsSet(gv, 100, 1);
+                emon.Port.cellsSet(gv, 101, gcat(gc, i, C_EXACT));
+                emon.Port.cellsSet(gv, 102, 1 - gcat(gc, i, C_EXACT));
+                emon.Port.cellsSet(gv, 103, 0);
+                emon.Port.cellsSet(gv, 108, kind);
+                emon.Port.cellsSet(gv, 117, gcat(gc, i, C_WIT));
+                emon.Port.cellsSet(gv, 118, Glayer.ggpGet(ggp, gid, 8) & 1);
+                if (rg < 0) {
+                    emon.Port.cellsSet(gv, 110, emon.Port.cellsAt(ctx, X_WIT));
+                }
+                emon.Port.cellsSet(gv, 111, emon.Port.cellsAt(ctx, X_PREC));
+                fr = Fuserules.frDecideBlock(gv, 500);
+                gfExplain(fx, gid, fr, gv);
+                orow = gcat(gc, i, C_ROW);
+                if (Fuserules.frWinner(fr) == 0) {
+                    if (Fuserules.frReason(fr) == 12) {
+                        emon.Port.cellsPush(gfa, page);
+                        emon.Port.cellsPush(gfa, emon.Port.cellsAt(og, (orow * 24) + 1));
+                        emon.Port.cellsPush(gfa, emon.Port.cellsAt(og, (orow * 24) + 2));
+                        emon.Port.cellsPush(gfa, emon.Port.cellsAt(og, (orow * 24) + 3));
+                        emon.Port.cellsPush(gfa, emon.Port.cellsAt(og, (orow * 24) + 4));
+                        emon.Port.cellsPush(gfa, Fuserules.frReason(fr));
+                    }
+                } else {
+                    r = gfCopyRow(og, orow, grl);
+                    num = Fuserules.frNumber(fr);
+                    Glayer.grlSet(grl, r, 16, num);
+                    Glayer.grlSet(grl, r, 17, Fuserules.frConf(fr));
+                    Glayer.grlSet(grl, r, 18, emon.Port.cellsAt(og, (orow * 24) + 18) | Fuserules.frFlags(fr));
+                    Glayer.grlSet(grl, r, 19, gid);
+                    if ((num == 510) || (num == 512)) {
+                        Glayer.grlSet(grl, r, 14, Glayer.gsVector() | Glayer.gsTrace());
+                    }
+                    if ((num == 512) && (emon.Port.cellsAt(og, (orow * 24) + 12) < 0)) {
+                        t = gfFirstTrace(gc, aux, n, root);
+                        if (t >= 0) {
+                            Glayer.grlSet(grl, r, 12, gcat(gc, t, C_COL));
+                        }
+                    }
+                    kept += 1;
+                }
+            }
+            i += 1;
+        }
+        return kept;
+    }
+    public static int gfUnitBox(emon.Port.Cells un, int u, emon.Port.Cells gv) {
+        // A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.
+        int half = (gfMax(unat(un, u, 6), 1) + 1) / 2;
+        if (unat(un, u, 2) == Glayer.goH()) {
+            emon.Port.cellsSet(gv, 0, unat(un, u, 3));
+            emon.Port.cellsSet(gv, 1, unat(un, u, 5) - half);
+            emon.Port.cellsSet(gv, 2, unat(un, u, 4));
+            emon.Port.cellsSet(gv, 3, unat(un, u, 5) + half);
+        } else {
+            emon.Port.cellsSet(gv, 0, unat(un, u, 5) - half);
+            emon.Port.cellsSet(gv, 1, unat(un, u, 3));
+            emon.Port.cellsSet(gv, 2, unat(un, u, 5) + half);
+            emon.Port.cellsSet(gv, 3, unat(un, u, 4));
+        }
+        return 0;
+    }
+    public static int gfEmitTraceUnits(emon.Port.Cells ctx, emon.Port.Cells un, emon.Port.Cells im, emon.Port.Cells hl, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells words, emon.Port.Cells ggp, emon.Port.Cells grl, emon.Port.Cells fx, emon.Port.Cells gv) {
+        // Every rule unit the tracer alone draws (kind 2) and every OCR-only group (kind 5) through block 500. Answers the rules kept.
+        int page = emon.Port.cellsAt(ctx, X_PAGE);
+        int kind = emon.Port.cellsAt(ctx, X_KIND);
+        int nu = emon.Port.cellsLen(un) / 24;
+        int u = 0;
+        int rg = 0;
+        int fr = 0;
+        int r = 0;
+        int conf = 0;
+        int tconf = 0;
+        int score = 0;
+        int ocr = 0;
+        int kept = 0;
+        int ang = 0;
+        int gid = 0;
+        int src = 0;
+        while (u < nu) {
+            if ((unat(un, u, 1) == 2) || (unat(un, u, 1) == 5)) {
+                gid = unat(un, u, 0);
+                gfGvReset(gv);
+                if (unat(un, u, 1) == 5) {
+                    emon.Port.cellsSet(gv, 100, 5);
+                } else {
+                    emon.Port.cellsSet(gv, 100, 2);
+                    emon.Port.cellsSet(gv, 104, 1);
+                    rg = gfRegionOf(ctx, im, (unat(un, u, 11) + unat(un, u, 13)) / 2, (unat(un, u, 12) + unat(un, u, 14)) / 2);
+                    tconf = unat(un, u, 9);
+                    ocr = unat(un, u, 10);
+                    if (tconf >= 0) {
+                        if (ocr >= 500) {
+                            emon.Port.cellsSet(gv, 105, tconf + Fuserules.fgOcrBonus());
+                        } else {
+                            emon.Port.cellsSet(gv, 105, tconf);
+                        }
+                    }
+                    emon.Port.cellsSet(gv, 106, ocr);
+                    if ((kind == 1) && (rg >= 0)) {
+                        emon.Port.cellsSet(gv, 107, 1);
+                    } else {
+                        emon.Port.cellsSet(gv, 107, 0);
+                    }
+                    emon.Port.cellsSet(gv, 108, kind);
+                    score = gfRegionScore(hl, page, rg);
+                    emon.Port.cellsSet(gv, 109, score);
+                    emon.Port.cellsSet(gv, 111, emon.Port.cellsAt(ctx, X_PREC));
+                    emon.Port.cellsSet(gv, 118, unat(un, u, 16));
+                    gfUnitBox(un, u, gv);
+                    if ((kind == 1) && (rg < 0)) {
+                        emon.Port.cellsSet(gv, 112, gfTextShare(ctx, words, emon.Port.cellsAt(gv, 0), emon.Port.cellsAt(gv, 1), emon.Port.cellsAt(gv, 2), emon.Port.cellsAt(gv, 3)));
+                    }
+                    emon.Port.cellsSet(gv, 113, gfInOword(ctx, owords, etext, emon.Port.cellsAt(gv, 0), emon.Port.cellsAt(gv, 1), emon.Port.cellsAt(gv, 2), emon.Port.cellsAt(gv, 3)));
+                }
+                fr = Fuserules.frDecideBlock(gv, 500);
+                gfExplain(fx, gid, fr, gv);
+                if ((Fuserules.frWinner(fr) == 2) && (unat(un, u, 1) == 2)) {
+                    gfUnitBox(un, u, gv);
+                    r = Glayer.grlNew(grl, page, emon.Port.cellsAt(gv, 0), emon.Port.cellsAt(gv, 1), emon.Port.cellsAt(gv, 2), emon.Port.cellsAt(gv, 3), unat(un, u, 11), unat(un, u, 12), unat(un, u, 13), unat(un, u, 14), gfMax(unat(un, u, 6), 1), unat(un, u, 2));
+                    Glayer.grlSet(grl, r, 11, gfAngleOf(unat(un, u, 13) - unat(un, u, 11), unat(un, u, 14) - unat(un, u, 12)));
+                    Glayer.grlSet(grl, r, 12, unat(un, u, 7));
+                    Glayer.grlSet(grl, r, 13, unat(un, u, 8));
+                    src = Glayer.gsTrace();
+                    if (unat(un, u, 10) > 0) {
+                        src |= Glayer.gsOcr();
+                    }
+                    Glayer.grlSet(grl, r, 14, src);
+                    Glayer.grlSet(grl, r, 15, Glayer.gsTrace());
+                    Glayer.grlSet(grl, r, 16, Fuserules.frNumber(fr));
+                    conf = Fuserules.frConf(fr);
+                    if (conf < 0) {
+                        conf = unat(un, u, 9);
+                        if (conf < 0) {
+                            conf = 500;
+                        }
+                        conf = (conf * gfMax(0, score)) / 1000;
+                    }
+                    Glayer.grlSet(grl, r, 17, conf);
+                    Glayer.grlSet(grl, r, 18, Fuserules.frFlags(fr));
+                    Glayer.grlSet(grl, r, 19, gid);
+                    kept += 1;
+                }
+            }
+            u += 1;
+        }
+        return kept;
+    }
+    public static int gfEmitFills(emon.Port.Cells ctx, emon.Port.Cells gc, int n, emon.Port.Cells aux, emon.Port.Cells ofl, emon.Port.Cells un, emon.Port.Cells im, emon.Port.Cells hl, emon.Port.Cells ggp, emon.Port.Cells gfl, emon.Port.Cells fx, emon.Port.Cells gv) {
+        // Every vector fill (a tint over it is its witness) and every tint no vector fill has, through block 500, into `gfl`. Answers the fills kept.
+        int page = emon.Port.cellsAt(ctx, X_PAGE);
+        int kind = emon.Port.cellsAt(ctx, X_KIND);
+        int nu = emon.Port.cellsLen(un) / 24;
+        int i = 0;
+        int u = 0;
+        int gid = 0;
+        int fr = 0;
+        int r = 0;
+        int rg = 0;
+        int t = 0;
+        int colour = 0;
+        int kept = 0;
+        int num = 0;
+        int orow = 0;
+        while (i < n) {
+            if ((gcat(gc, i, C_KIND) == 2) && (gcat(gc, i, C_SRC) == 1)) {
+                gid = emon.Port.cellsAt(aux, (n * A_GID) + gcat(gc, i, C_UF));
+                orow = gcat(gc, i, C_ROW);
+                t = gcat(gc, i, C_WIT);
+                gfGvReset(gv);
+                emon.Port.cellsSet(gv, 100, 3);
+                emon.Port.cellsSet(gv, 108, kind);
+                if (gcat(gc, i, C_COL) < 0) {
+                    emon.Port.cellsSet(gv, 115, 0);
+                } else {
+                    emon.Port.cellsSet(gv, 115, 1);
+                }
+                if (t >= 0) {
+                    emon.Port.cellsSet(gv, 116, 1);
+                } else {
+                    emon.Port.cellsSet(gv, 116, 0);
+                }
+                fr = Fuserules.frDecideBlock(gv, 500);
+                gfExplain(fx, gid, fr, gv);
+                if (Fuserules.frWinner(fr) != 0) {
+                    r = emon.Port.cellsLen(gfl) / 16;
+                    u = 0;
+                    while (u < 16) {
+                        emon.Port.cellsPush(gfl, emon.Port.cellsAt(ofl, (orow * 16) + u));
+                        u += 1;
+                    }
+                    num = Fuserules.frNumber(fr);
+                    Glayer.gflSet(gfl, r, 9, num);
+                    Glayer.gflSet(gfl, r, 10, Fuserules.frConf(fr));
+                    Glayer.gflSet(gfl, r, 11, emon.Port.cellsAt(ofl, (orow * 16) + 11) | Fuserules.frFlags(fr));
+                    Glayer.gflSet(gfl, r, 12, gid);
+                    if (t >= 0) {
+                        Glayer.gflSet(gfl, r, 7, Glayer.gsVector() | Glayer.gsTrace());
+                        if (gcat(gc, i, C_COL) < 0) {
+                            colour = gcat(gc, t, C_COL);
+                            Glayer.gflSet(gfl, r, 5, colour);
+                            Glayer.gflSet(gfl, r, 6, gfLightness(colour));
+                        }
+                    }
+                    kept += 1;
+                }
+            }
+            i += 1;
+        }
+        u = 0;
+        while (u < nu) {
+            if (unat(un, u, 1) == 4) {
+                gid = unat(un, u, 0);
+                rg = gfRegionOf(ctx, im, (unat(un, u, 11) + unat(un, u, 13)) / 2, (unat(un, u, 12) + unat(un, u, 14)) / 2);
+                gfGvReset(gv);
+                emon.Port.cellsSet(gv, 100, 4);
+                emon.Port.cellsSet(gv, 108, kind);
+                if ((kind == 1) && (rg >= 0)) {
+                    emon.Port.cellsSet(gv, 107, 1);
+                } else {
+                    emon.Port.cellsSet(gv, 107, 0);
+                }
+                emon.Port.cellsSet(gv, 109, gfRegionScore(hl, page, rg));
+                emon.Port.cellsSet(gv, 111, emon.Port.cellsAt(ctx, X_PREC));
+                fr = Fuserules.frDecideBlock(gv, 500);
+                gfExplain(fx, gid, fr, gv);
+                if (Fuserules.frWinner(fr) == 2) {
+                    r = Glayer.gflNew(gfl, page, unat(un, u, 11), unat(un, u, 12), unat(un, u, 13), unat(un, u, 14), unat(un, u, 7));
+                    Glayer.gflSet(gfl, r, 6, gfLightness(unat(un, u, 7)));
+                    Glayer.gflSet(gfl, r, 7, Glayer.gsTrace());
+                    Glayer.gflSet(gfl, r, 8, Glayer.gsTrace());
+                    Glayer.gflSet(gfl, r, 9, Fuserules.frNumber(fr));
+                    Glayer.gflSet(gfl, r, 10, Fuserules.frConf(fr));
+                    Glayer.gflSet(gfl, r, 11, Fuserules.frFlags(fr));
+                    Glayer.gflSet(gfl, r, 12, gid);
+                    kept += 1;
+                }
+            }
+            u += 1;
+        }
+        return kept;
+    }
+    public static int gfCrosses(emon.Port.Cells grl, int h, int v) {
+        // 1 when horizontal rule row h and vertical rule row v touch within 3 pt (D179's lattice test).
+        int hx0 = gfMin(Glayer.grlGet(grl, h, 5), Glayer.grlGet(grl, h, 7));
+        int hx1 = gfMax(Glayer.grlGet(grl, h, 5), Glayer.grlGet(grl, h, 7));
+        int hy = (Glayer.grlGet(grl, h, 6) + Glayer.grlGet(grl, h, 8)) / 2;
+        int vx = (Glayer.grlGet(grl, v, 5) + Glayer.grlGet(grl, v, 7)) / 2;
+        int vy0 = gfMin(Glayer.grlGet(grl, v, 6), Glayer.grlGet(grl, v, 8));
+        int vy1 = gfMax(Glayer.grlGet(grl, v, 6), Glayer.grlGet(grl, v, 8));
+        if (((vx >= (hx0 - 300)) && (vx <= (hx1 + 300))) && ((hy >= (vy0 - 300)) && (hy <= (vy1 + 300)))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int gfInRegion(emon.Port.Cells grl, int r, int rx0, int ry0, int rx1, int ry1) {
+        // 1 when the middle of rule row r is inside the box.
+        int cx = (Glayer.grlGet(grl, r, 5) + Glayer.grlGet(grl, r, 7)) / 2;
+        int cy = (Glayer.grlGet(grl, r, 6) + Glayer.grlGet(grl, r, 8)) / 2;
+        if (((cx >= rx0) && (cx < rx1)) && ((cy >= ry0) && (cy < ry1))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int gfLattice(emon.Port.Cells grl, int g0, int g1, int rx0, int ry0, int rx1, int ry1) {
+        // 1 when the `in-image` rules of rows [g0, g1) inside the box make a lattice: two horizontal and two vertical rules, each pair at least 5 pt apart, every
+        // horizontal touching every vertical within 3 pt (D179's component test without its text test, over a region; at most 300 rules of each kind are tried).
+        int a = g0;
+        int b = 0;
+        int c = 0;
+        int d = 0;
+        int tried = 0;
+        int v1 = -1;
+        while (a < g1) {
+            if ((Glayer.grlGet(grl, a, 10) == Glayer.goH()) && (((Glayer.grlGet(grl, a, 18) & Glayer.gqInImage()) != 0) && (gfInRegion(grl, a, rx0, ry0, rx1, ry1) == 1))) {
+                b = a + 1;
+                while (b < g1) {
+                    if ((Glayer.grlGet(grl, b, 10) == Glayer.goH()) && (((Glayer.grlGet(grl, b, 18) & Glayer.gqInImage()) != 0) && (gfInRegion(grl, b, rx0, ry0, rx1, ry1) == 1))) {
+                        if (gfAbs(((Glayer.grlGet(grl, a, 6) + Glayer.grlGet(grl, a, 8)) / 2) - ((Glayer.grlGet(grl, b, 6) + Glayer.grlGet(grl, b, 8)) / 2)) >= 500) {
+                            tried += 1;
+                            v1 = -1;
+                            c = g0;
+                            while (c < g1) {
+                                if ((Glayer.grlGet(grl, c, 10) == Glayer.goV()) && (((Glayer.grlGet(grl, c, 18) & Glayer.gqInImage()) != 0) && (gfInRegion(grl, c, rx0, ry0, rx1, ry1) == 1))) {
+                                    if ((gfCrosses(grl, a, c) == 1) && (gfCrosses(grl, b, c) == 1)) {
+                                        if (v1 < 0) {
+                                            v1 = c;
+                                        } else if (gfAbs(((Glayer.grlGet(grl, c, 5) + Glayer.grlGet(grl, c, 7)) / 2) - ((Glayer.grlGet(grl, v1, 5) + Glayer.grlGet(grl, v1, 7)) / 2)) >= 500) {
+                                            return 1;
+                                        }
+                                    }
+                                }
+                                c += 1;
+                            }
+                        }
+                    }
+                    if (tried > 300000) {
+                        return 0;
+                    }
+                    b += 1;
+                }
+            }
+            a += 1;
+        }
+        return 0;
+    }
+    public static int gfBands(emon.Port.Cells gfl, int f0, int f1, int rx0, int ry0, int rx1, int ry1) {
+        // 1 when the `in-image` fills of rows [f0, f1) inside the box include three bands of one extent (left and right edges within 3 pt) stacked one on the next (3 pt).
+        int a = f0;
+        int b = 0;
+        int c = 0;
+        while (a < f1) {
+            if (((Glayer.gflGet(gfl, a, 11) & Glayer.gqfInImage()) != 0) && ((Glayer.gflGet(gfl, a, 1) >= rx0) && ((Glayer.gflGet(gfl, a, 3) <= rx1) && ((Glayer.gflGet(gfl, a, 2) >= ry0) && (Glayer.gflGet(gfl, a, 4) <= ry1))))) {
+                b = f0;
+                while (b < f1) {
+                    if ((b != a) && ((Glayer.gflGet(gfl, b, 11) & Glayer.gqfInImage()) != 0)) {
+                        if ((gfAbs(Glayer.gflGet(gfl, b, 1) - Glayer.gflGet(gfl, a, 1)) <= 300) && ((gfAbs(Glayer.gflGet(gfl, b, 3) - Glayer.gflGet(gfl, a, 3)) <= 300) && (gfAbs(Glayer.gflGet(gfl, b, 2) - Glayer.gflGet(gfl, a, 4)) <= 300))) {
+                            c = f0;
+                            while (c < f1) {
+                                if ((c != a) && ((c != b) && ((Glayer.gflGet(gfl, c, 11) & Glayer.gqfInImage()) != 0))) {
+                                    if ((gfAbs(Glayer.gflGet(gfl, c, 1) - Glayer.gflGet(gfl, a, 1)) <= 300) && ((gfAbs(Glayer.gflGet(gfl, c, 3) - Glayer.gflGet(gfl, a, 3)) <= 300) && (gfAbs(Glayer.gflGet(gfl, c, 2) - Glayer.gflGet(gfl, b, 4)) <= 300))) {
+                                        return 1;
+                                    }
+                                }
+                                c += 1;
+                            }
+                        }
+                    }
+                    b += 1;
+                }
+            }
+            a += 1;
+        }
+        return 0;
+    }
+    public static int gfCountInside(emon.Port.Cells grl, emon.Port.Cells gfl, int g0, int f0, int x0, int y0, int x1, int y1, emon.Port.Cells grg, int region) {
+        // The fused rules (from row g0 on) and fills (from row f0 on) whose middle lies in the box, into the region's cells 9 and 10.
+        int i = g0;
+        int nr = 0;
+        int nf = 0;
+        int cx = 0;
+        int cy = 0;
+        while (i < Glayer.grlCount(grl)) {
+            if (gfInRegion(grl, i, x0, y0, x1, y1) == 1) {
+                nr += 1;
+            }
+            i += 1;
+        }
+        i = f0;
+        while (i < Glayer.gflCount(gfl)) {
+            cx = (Glayer.gflGet(gfl, i, 1) + Glayer.gflGet(gfl, i, 3)) / 2;
+            cy = (Glayer.gflGet(gfl, i, 2) + Glayer.gflGet(gfl, i, 4)) / 2;
+            if (((cx >= x0) && (cx < x1)) && ((cy >= y0) && (cy < y1))) {
+                nf += 1;
+            }
+            i += 1;
+        }
+        Glayer.grgSet(grg, region, 9, nr);
+        Glayer.grgSet(grg, region, 10, nf);
+        return 0;
+    }
+    public static int gfGrow(emon.Port.Cells grg, int r, int x0, int y0, int x1, int y1) {
+        // Grow region r's box to take in the box.
+        int a = gfMin(Glayer.grgGet(grg, r, 1), x0);
+        int b = gfMin(Glayer.grgGet(grg, r, 2), y0);
+        int c = gfMax(Glayer.grgGet(grg, r, 3), x1);
+        int d = gfMax(Glayer.grgGet(grg, r, 4), y1);
+        Glayer.grgSet(grg, r, 1, a);
+        Glayer.grgSet(grg, r, 2, b);
+        Glayer.grgSet(grg, r, 3, c);
+        Glayer.grgSet(grg, r, 4, d);
+        return 0;
+    }
+    public static int gfFigAdd(emon.Port.Cells un, int x0, int y0, int x1, int y1, int src, int sea, int sidx) {
+        // A figure candidate (stride 24 in `un`): 0-3 box, 4 sources, 5 6 its subject, 7 union-find parent.
+        int i = emon.Port.cellsLen(un) / 24;
+        int k = 8;
+        emon.Port.cellsPush(un, x0);
+        emon.Port.cellsPush(un, y0);
+        emon.Port.cellsPush(un, x1);
+        emon.Port.cellsPush(un, y1);
+        emon.Port.cellsPush(un, src);
+        emon.Port.cellsPush(un, sea);
+        emon.Port.cellsPush(un, sidx);
+        emon.Port.cellsPush(un, i);
+        while (k < 24) {
+            emon.Port.cellsPush(un, 0);
+            k += 1;
+        }
+        return i;
+    }
+    public static int gfFigFind(emon.Port.Cells un, int i) {
+        int r = i;
+        while (unat(un, r, 7) != r) {
+            r = unat(un, r, 7);
+        }
+        return r;
+    }
+    public static int gfFigClusters(emon.Port.Cells ctx, emon.Port.Cells pa, emon.Port.Cells gc, emon.Port.Cells un) {
+        // Vector figure clusters (SPEC 9.9): the page's paths that are curves or polygons, on a grid of 32 x 32 cells over their extent (a cell is at least 12 pt, so paths
+        // within 6 pt of each other fall in one cell or neighbouring ones); a connected set of occupied cells holding at least 8 of them is one cluster, a candidate figure
+        // of the box of its paths. (`gc` is scratch here: the page's candidates are done with.) Answers the clusters added.
+        int p = emon.Port.cellsAt(ctx, X_P0);
+        int bx0 = 2000000000;
+        int by0 = 2000000000;
+        int bx1 = -2000000000;
+        int by1 = -2000000000;
+        int np = 0;
+        int k = 0;
+        int cs = 1200;
+        int cx = 0;
+        int cy = 0;
+        int cell = 0;
+        int changed = 1;
+        int iter = 0;
+        int nb = 0;
+        int dx = 0;
+        int dy = 0;
+        int lab = 0;
+        int added = 0;
+        int ux0 = 0;
+        while (p < emon.Port.cellsAt(ctx, X_P1)) {
+            if ((Evidence.paGet(pa, p, Evidence.pfKind()) == Evidence.paCurve()) || (Evidence.paGet(pa, p, Evidence.pfKind()) == Evidence.paOther())) {
+                np += 1;
+                bx0 = gfMin(bx0, Evidence.paGet(pa, p, Evidence.pfX0()));
+                by0 = gfMin(by0, Evidence.paGet(pa, p, Evidence.pfY0()));
+                bx1 = gfMax(bx1, Evidence.paGet(pa, p, Evidence.pfX1()));
+                by1 = gfMax(by1, Evidence.paGet(pa, p, Evidence.pfY1()));
+            }
+            p += 1;
+        }
+        if (np < 8) {
+            return 0;
+        }
+        cs = gfMax(1200, (gfMax(bx1 - bx0, by1 - by0) + 31) / 32);
+        emon.Port.cellsDrop(gc, 0);
+        while (k < (1024 * 6)) {
+            emon.Port.cellsPush(gc, 0);
+            k += 1;
+        }
+        k = 0;
+        while (k < 1024) {
+            emon.Port.cellsSet(gc, (k * 6) + 1, 2000000000);
+            emon.Port.cellsSet(gc, (k * 6) + 2, 2000000000);
+            emon.Port.cellsSet(gc, (k * 6) + 3, -2000000000);
+            emon.Port.cellsSet(gc, (k * 6) + 4, -2000000000);
+            emon.Port.cellsSet(gc, (k * 6) + 5, k);
+            k += 1;
+        }
+        p = emon.Port.cellsAt(ctx, X_P0);
+        while (p < emon.Port.cellsAt(ctx, X_P1)) {
+            if ((Evidence.paGet(pa, p, Evidence.pfKind()) == Evidence.paCurve()) || (Evidence.paGet(pa, p, Evidence.pfKind()) == Evidence.paOther())) {
+                cx = gfMin(31, (((Evidence.paGet(pa, p, Evidence.pfX0()) + Evidence.paGet(pa, p, Evidence.pfX1())) / 2) - bx0) / cs);
+                cy = gfMin(31, (((Evidence.paGet(pa, p, Evidence.pfY0()) + Evidence.paGet(pa, p, Evidence.pfY1())) / 2) - by0) / cs);
+                cell = (cy * 32) + cx;
+                emon.Port.cellsSet(gc, cell * 6, emon.Port.cellsAt(gc, cell * 6) + 1);
+                emon.Port.cellsSet(gc, (cell * 6) + 1, gfMin(emon.Port.cellsAt(gc, (cell * 6) + 1), Evidence.paGet(pa, p, Evidence.pfX0())));
+                emon.Port.cellsSet(gc, (cell * 6) + 2, gfMin(emon.Port.cellsAt(gc, (cell * 6) + 2), Evidence.paGet(pa, p, Evidence.pfY0())));
+                emon.Port.cellsSet(gc, (cell * 6) + 3, gfMax(emon.Port.cellsAt(gc, (cell * 6) + 3), Evidence.paGet(pa, p, Evidence.pfX1())));
+                emon.Port.cellsSet(gc, (cell * 6) + 4, gfMax(emon.Port.cellsAt(gc, (cell * 6) + 4), Evidence.paGet(pa, p, Evidence.pfY1())));
+            }
+            p += 1;
+        }
+        while ((changed == 1) && (iter < 70)) {
+            changed = 0;
+            cell = 0;
+            while (cell < 1024) {
+                if (emon.Port.cellsAt(gc, cell * 6) > 0) {
+                    dy = -1;
+                    while (dy <= 1) {
+                        dx = -1;
+                        while (dx <= 1) {
+                            cx = (cell % 32) + dx;
+                            cy = (cell / 32) + dy;
+                            if (((cx >= 0) && (cx < 32)) && ((cy >= 0) && (cy < 32))) {
+                                nb = (cy * 32) + cx;
+                                if (emon.Port.cellsAt(gc, nb * 6) > 0) {
+                                    if (emon.Port.cellsAt(gc, (nb * 6) + 5) < emon.Port.cellsAt(gc, (cell * 6) + 5)) {
+                                        emon.Port.cellsSet(gc, (cell * 6) + 5, emon.Port.cellsAt(gc, (nb * 6) + 5));
+                                        changed = 1;
+                                    }
+                                }
+                            }
+                            dx += 1;
+                        }
+                        dy += 1;
+                    }
+                }
+                cell += 1;
+            }
+            iter += 1;
+        }
+        lab = 0;
+        while (lab < 1024) {
+            np = 0;
+            bx0 = 2000000000;
+            by0 = 2000000000;
+            bx1 = -2000000000;
+            by1 = -2000000000;
+            cell = 0;
+            while (cell < 1024) {
+                if ((emon.Port.cellsAt(gc, cell * 6) > 0) && (emon.Port.cellsAt(gc, (cell * 6) + 5) == lab)) {
+                    np += emon.Port.cellsAt(gc, cell * 6);
+                    bx0 = gfMin(bx0, emon.Port.cellsAt(gc, (cell * 6) + 1));
+                    by0 = gfMin(by0, emon.Port.cellsAt(gc, (cell * 6) + 2));
+                    bx1 = gfMax(bx1, emon.Port.cellsAt(gc, (cell * 6) + 3));
+                    by1 = gfMax(by1, emon.Port.cellsAt(gc, (cell * 6) + 4));
+                }
+                cell += 1;
+            }
+            if (np >= 8) {
+                gfFigAdd(un, bx0, by0, bx1, by1, Glayer.gsVector(), -1, -1);
+                added += 1;
+            }
+            lab += 1;
+        }
+        return added;
+    }
+    public static int gfRegions(emon.Port.Cells ctx, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells im, emon.Port.Cells pa, emon.Port.Cells oblocks, emon.Port.Cells grg, emon.Port.Cells gc, emon.Port.Cells un) {
+        // The page's `grg` rows (D228): a TABLE-IN-IMAGE for each visible image placement (2 cm each way) whose `in-image` fused rules make a lattice or whose
+        // `in-image` fills make a stack of three bands, the box being what those rules and fills cover; a FIGURE for each merged (box IoU of 500) set of the visible image
+        // placements that are not tables, OCR image blocks and vector figure clusters; a TABLE-HINT for each OCR table block (confidence 300). The rows made by the page
+        // are those of `grl` from `X_NGRL` and `gfl` from `X_NGFL`. Answers the rows made.
+        int page = emon.Port.cellsAt(ctx, X_PAGE);
+        int g0 = emon.Port.cellsAt(ctx, X_NGRL);
+        int f0 = emon.Port.cellsAt(ctx, X_NGFL);
+        int g1 = Glayer.grlCount(grl);
+        int f1 = Glayer.gflCount(gfl);
+        int first = Glayer.grgCount(grg);
+        int m = emon.Port.cellsAt(ctx, X_I0);
+        int r = 0;
+        int i = 0;
+        int j = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int ok = 0;
+        int t = 0;
+        int ra = 0;
+        int rb = 0;
+        int src = 0;
+        int nsrc = 0;
+        int sea = -1;
+        int sidx = -1;
+        int csum = 0;
+        int cn = 0;
+        while (m < emon.Port.cellsAt(ctx, X_I1)) {
+            if (gfImageOk(im, m) == 1) {
+                x0 = Evidence.imGet(im, m, Evidence.mfX0());
+                y0 = Evidence.imGet(im, m, Evidence.mfY0());
+                x1 = Evidence.imGet(im, m, Evidence.mfX1());
+                y1 = Evidence.imGet(im, m, Evidence.mfY1());
+                ok = gfLattice(grl, g0, g1, x0, y0, x1, y1);
+                if (ok == 0) {
+                    ok = gfBands(gfl, f0, f1, x0, y0, x1, y1);
+                }
+                if (ok == 1) {
+                    r = Glayer.grgNew(grg, page, x1, y1, x0, y0, Glayer.rkTableInImage());
+                    csum = 0;
+                    cn = 0;
+                    i = g0;
+                    while (i < g1) {
+                        if (((Glayer.grlGet(grl, i, 18) & Glayer.gqInImage()) != 0) && (gfInRegion(grl, i, x0, y0, x1, y1) == 1)) {
+                            gfGrow(grg, r, Glayer.grlGet(grl, i, 1), Glayer.grlGet(grl, i, 2), Glayer.grlGet(grl, i, 3), Glayer.grlGet(grl, i, 4));
+                            csum += Glayer.grlGet(grl, i, 17);
+                            cn += 1;
+                        }
+                        i += 1;
+                    }
+                    i = f0;
+                    while (i < f1) {
+                        if (((Glayer.gflGet(gfl, i, 11) & Glayer.gqfInImage()) != 0) && ((Glayer.gflGet(gfl, i, 1) >= x0) && ((Glayer.gflGet(gfl, i, 3) <= x1) && ((Glayer.gflGet(gfl, i, 2) >= y0) && (Glayer.gflGet(gfl, i, 4) <= y1))))) {
+                            gfGrow(grg, r, Glayer.gflGet(gfl, i, 1), Glayer.gflGet(gfl, i, 2), Glayer.gflGet(gfl, i, 3), Glayer.gflGet(gfl, i, 4));
+                        }
+                        i += 1;
+                    }
+                    Glayer.grgSet(grg, r, 6, Glayer.gsTrace() | Glayer.gsImage());
+                    Glayer.grgSet(grg, r, 7, Evidence.eaImages());
+                    Glayer.grgSet(grg, r, 8, m);
+                    if (cn > 0) {
+                        Glayer.grgSet(grg, r, 11, csum / cn);
+                    } else {
+                        Glayer.grgSet(grg, r, 11, 500);
+                    }
+                    gfCountInside(grl, gfl, g0, f0, Glayer.grgGet(grg, r, 1), Glayer.grgGet(grg, r, 2), Glayer.grgGet(grg, r, 3), Glayer.grgGet(grg, r, 4), grg, r);
+                }
+            }
+            m += 1;
+        }
+        // figures: candidates, merged
+        emon.Port.cellsDrop(un, 0);
+        m = emon.Port.cellsAt(ctx, X_I0);
+        while (m < emon.Port.cellsAt(ctx, X_I1)) {
+            if ((Evidence.imGet(im, m, Evidence.mfVis()) == 0) && (((Evidence.imGet(im, m, Evidence.mfX1()) - Evidence.imGet(im, m, Evidence.mfX0())) >= 500) && ((Evidence.imGet(im, m, Evidence.mfY1()) - Evidence.imGet(im, m, Evidence.mfY0())) >= 500))) {
+                ok = 1;
+                j = first;
+                while (j < Glayer.grgCount(grg)) {
+                    if (Glayer.grgGet(grg, j, 5) == Glayer.rkTableInImage()) {
+                        if (gfIou(Glayer.grgGet(grg, j, 1), Glayer.grgGet(grg, j, 2), Glayer.grgGet(grg, j, 3), Glayer.grgGet(grg, j, 4), Evidence.imGet(im, m, Evidence.mfX0()), Evidence.imGet(im, m, Evidence.mfY0()), Evidence.imGet(im, m, Evidence.mfX1()), Evidence.imGet(im, m, Evidence.mfY1())) >= 500) {
+                            ok = 0;
+                        }
+                    }
+                    j += 1;
+                }
+                if (ok == 1) {
+                    gfFigAdd(un, Evidence.imGet(im, m, Evidence.mfX0()), Evidence.imGet(im, m, Evidence.mfY0()), Evidence.imGet(im, m, Evidence.mfX1()), Evidence.imGet(im, m, Evidence.mfY1()), Glayer.gsImage(), Evidence.eaImages(), m);
+                }
+            }
+            m += 1;
+        }
+        i = emon.Port.cellsAt(ctx, X_B0);
+        while (i < emon.Port.cellsAt(ctx, X_B1)) {
+            if ((Evidence.obGet(oblocks, i, Evidence.obfKind()) == Evidence.obBlock()) && (Evidence.obGet(oblocks, i, Evidence.obfBtype()) == 2)) {
+                gfFigAdd(un, Evidence.obGet(oblocks, i, Evidence.obfX0()), Evidence.obGet(oblocks, i, Evidence.obfY0()), Evidence.obGet(oblocks, i, Evidence.obfX1()), Evidence.obGet(oblocks, i, Evidence.obfY1()), Glayer.gsOcr(), Evidence.eaOblocks(), i);
+            }
+            i += 1;
+        }
+        gfFigClusters(ctx, pa, gc, un);
+        i = 0;
+        while (i < (emon.Port.cellsLen(un) / 24)) {
+            j = i + 1;
+            while (j < (emon.Port.cellsLen(un) / 24)) {
+                if (gfIou(unat(un, i, 0), unat(un, i, 1), unat(un, i, 2), unat(un, i, 3), unat(un, j, 0), unat(un, j, 1), unat(un, j, 2), unat(un, j, 3)) >= 500) {
+                    ra = gfFigFind(un, i);
+                    rb = gfFigFind(un, j);
+                    if (ra < rb) {
+                        unput(un, rb, 7, ra);
+                    }
+                    if (rb < ra) {
+                        unput(un, ra, 7, rb);
+                    }
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < (emon.Port.cellsLen(un) / 24)) {
+            if (gfFigFind(un, i) == i) {
+                x0 = unat(un, i, 0);
+                y0 = unat(un, i, 1);
+                x1 = unat(un, i, 2);
+                y1 = unat(un, i, 3);
+                src = unat(un, i, 4);
+                sea = unat(un, i, 5);
+                sidx = unat(un, i, 6);
+                j = i + 1;
+                while (j < (emon.Port.cellsLen(un) / 24)) {
+                    if (gfFigFind(un, j) == i) {
+                        x0 = gfMin(x0, unat(un, j, 0));
+                        y0 = gfMin(y0, unat(un, j, 1));
+                        x1 = gfMax(x1, unat(un, j, 2));
+                        y1 = gfMax(y1, unat(un, j, 3));
+                        src |= unat(un, j, 4);
+                        if ((sea < 0) && (unat(un, j, 5) >= 0)) {
+                            sea = unat(un, j, 5);
+                            sidx = unat(un, j, 6);
+                        }
+                    }
+                    j += 1;
+                }
+                r = Glayer.grgNew(grg, page, x0, y0, x1, y1, Glayer.rkFigure());
+                Glayer.grgSet(grg, r, 6, src);
+                Glayer.grgSet(grg, r, 7, sea);
+                Glayer.grgSet(grg, r, 8, sidx);
+                nsrc = 0;
+                if ((src & 1) != 0) {
+                    nsrc += 1;
+                }
+                if ((src & 4) != 0) {
+                    nsrc += 1;
+                }
+                if ((src & 16) != 0) {
+                    nsrc += 1;
+                }
+                Glayer.grgSet(grg, r, 11, gfMin(1000, 400 + (150 * nsrc)));
+                gfCountInside(grl, gfl, g0, f0, x0, y0, x1, y1, grg, r);
+            }
+            i += 1;
+        }
+        i = emon.Port.cellsAt(ctx, X_B0);
+        while (i < emon.Port.cellsAt(ctx, X_B1)) {
+            if ((Evidence.obGet(oblocks, i, Evidence.obfKind()) == Evidence.obBlock()) && (Evidence.obGet(oblocks, i, Evidence.obfBtype()) == 1)) {
+                r = Glayer.grgNew(grg, page, Evidence.obGet(oblocks, i, Evidence.obfX0()), Evidence.obGet(oblocks, i, Evidence.obfY0()), Evidence.obGet(oblocks, i, Evidence.obfX1()), Evidence.obGet(oblocks, i, Evidence.obfY1()), Glayer.rkTableHint());
+                Glayer.grgSet(grg, r, 6, Glayer.gsOcr());
+                Glayer.grgSet(grg, r, 7, Evidence.eaOblocks());
+                Glayer.grgSet(grg, r, 8, i);
+                Glayer.grgSet(grg, r, 11, 300);
+                gfCountInside(grl, gfl, g0, f0, Glayer.grgGet(grg, r, 1), Glayer.grgGet(grg, r, 2), Glayer.grgGet(grg, r, 3), Glayer.grgGet(grg, r, 4), grg, r);
+            }
+            i += 1;
+        }
+        return Glayer.grgCount(grg) - first;
+    }
+    public static int gfWords(emon.Port.Cells ctx, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells grl, emon.Port.Cells grg, int g0, int q0) {
+        // The page's OCR words' features: 30 the share (per mille, the regions' added, at most 1000) of the word's box that lies in a `table-in-image` region of the
+        // page (`grg` rows from `q0`), 31 the rule-likeness: for a word of at most two code points all of them rule glyphs, the share of its box the fused rules
+        // (`grl` rows from `g0`) cover; -1 for any other word. Words with no feature row are left alone. Answers the words written.
+        int w = emon.Port.cellsAt(ctx, X_W0);
+        int f = 0;
+        int q = 0;
+        int g = 0;
+        int s = 0;
+        int v = 0;
+        int n = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int area = 0;
+        int inter = 0;
+        int iw = 0;
+        int ih = 0;
+        while (w < emon.Port.cellsAt(ctx, X_W1)) {
+            f = Evidence.owGet(owords, w, Evidence.hdFeat());
+            if (f >= 0) {
+                x0 = Evidence.owGet(owords, w, Evidence.hdX0());
+                y0 = Evidence.owGet(owords, w, Evidence.hdY0());
+                x1 = Evidence.owGet(owords, w, Evidence.hdX1());
+                y1 = Evidence.owGet(owords, w, Evidence.hdY1());
+                s = 0;
+                q = q0;
+                while (q < Glayer.grgCount(grg)) {
+                    if ((Glayer.grgGet(grg, q, 0) == emon.Port.cellsAt(ctx, X_PAGE)) && (Glayer.grgGet(grg, q, 5) == Glayer.rkTableInImage())) {
+                        s += gfInsideShare(x0, y0, x1, y1, Glayer.grgGet(grg, q, 1), Glayer.grgGet(grg, q, 2), Glayer.grgGet(grg, q, 3), Glayer.grgGet(grg, q, 4));
+                    }
+                    q += 1;
+                }
+                Evidence.feSet(feats, f, Evidence.xoInTableImage(), gfMin(s, 1000));
+                v = -1;
+                if (gfWordRuleLike(owords, etext, w) == 1) {
+                    area = gfMax(1, gfMax(0, x1 - x0) / 10) * gfMax(1, gfMax(0, y1 - y0) / 10);
+                    inter = 0;
+                    g = g0;
+                    while (g < Glayer.grlCount(grl)) {
+                        iw = gfMax(0, gfMin(x1, Glayer.grlGet(grl, g, 3)) - gfMax(x0, Glayer.grlGet(grl, g, 1))) / 10;
+                        ih = gfMax(0, gfMin(y1, Glayer.grlGet(grl, g, 4)) - gfMax(y0, Glayer.grlGet(grl, g, 2))) / 10;
+                        inter += iw * ih;
+                        g += 1;
+                    }
+                    v = gfMin(1000, inter / gfMax(1, area / 1000));
+                }
+                Evidence.feSet(feats, f, Evidence.xoRuleLike(), v);
+                n += 1;
+            }
+            w += 1;
+        }
+        return n;
+    }
+    public static int gfFusePage(emon.Port.Cells ctx, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells oblocks, emon.Port.Cells owords, emon.Port.Cells words, emon.Port.Cells etext, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells feats, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Port.Cells refs, emon.Port.Cells hl, emon.Port.Cells fx, emon.Port.Cells gfa, emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, emon.Port.Cells gv) {
+        // One page that has a raster answer, from the head of this file: candidates, groups, sweeps, health, arbitration, regions, the words' features. Answers 0.
+        int n = gfBuild(gc, ctx, og, ofl, rules, prims, oblocks);
+        int q0 = 0;
+        emon.Port.cellsSet(ctx, X_N, n);
+        gfPairs(gc, n);
+        gfOrder(gc, aux, n);
+        gfGroups(gc, aux, n, ctx, og, ofl, ggp, refs);
+        gfSweeps(gc, aux, un, n);
+        gfHealth(ctx, gc, n, im, rules, words, hl);
+        emon.Port.cellsSet(ctx, X_NGRL, Glayer.grlCount(grl));
+        emon.Port.cellsSet(ctx, X_NGFL, Glayer.gflCount(gfl));
+        q0 = Glayer.grgCount(grg);
+        gfEmitVecRules(ctx, gc, n, aux, og, im, hl, ggp, grl, fx, gfa, gv);
+        gfEmitTraceUnits(ctx, un, im, hl, owords, etext, words, ggp, grl, fx, gv);
+        gfEmitFills(ctx, gc, n, aux, ofl, un, im, hl, ggp, gfl, fx, gv);
+        gfRegions(ctx, grl, gfl, im, pa, oblocks, grg, gc, un);
+        gfWords(ctx, owords, etext, feats, grl, grg, emon.Port.cellsAt(ctx, X_NGRL), q0);
+        return 0;
+    }
+    public static int gfAdvance(emon.Port.Cells c, int stride, int field, int i, int page) {
+        // The first row at or after i whose page (cell `field`) is not before `page`.
+        int n = emon.Port.cellsLen(c) / stride;
+        int j = i;
+        while ((j < n) && (emon.Port.cellsAt(c, (j * stride) + field) < page)) {
+            j += 1;
+        }
+        return j;
+    }
+    public static int gfRangeEnd(emon.Port.Cells c, int stride, int field, int i, int page) {
+        // The first row from i on whose page is not `page`.
+        int n = emon.Port.cellsLen(c) / stride;
+        int j = i;
+        while ((j < n) && (emon.Port.cellsAt(c, (j * stride) + field) == page)) {
+            j += 1;
+        }
+        return j;
+    }
+    public static int gfHasRows(emon.Port.Cells c, int stride, int field, int page) {
+        // 1 when some row of the arena is of `page` (rows are in page order).
+        int n = emon.Port.cellsLen(c) / stride;
+        int j = 0;
+        while (j < n) {
+            if (emon.Port.cellsAt(c, (j * stride) + field) == page) {
+                return 1;
+            }
+            j += 1;
+        }
+        return 0;
+    }
+    public static int gfFuse(int np, emon.Port.Cells epages, emon.Port.Cells inks, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells oblocks, emon.Port.Cells owords, emon.Port.Cells words, emon.Port.Cells etext, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells feats, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Port.Cells refs, emon.Port.Cells hl, emon.Port.Cells fx, emon.Port.Cells gfa, emon.Port.Cells og, emon.Port.Cells ofl, emon.Port.Cells ctx, emon.Port.Cells gc, emon.Port.Cells aux, emon.Port.Cells un, emon.Port.Cells gv) {
+        // The document's other sources of graphics (SPEC 9.9, from the head of this file): every page that has a raster answer is made again from the vector rows already
+        // in `grl` and `gfl` and the tracer's and OCR's evidence; every other page is copied. Nothing to do (no `inks`, `rules` or `prims` row at all) answers 0 and touches
+        // nothing. `ggp`, `grg`, `hl`, `fx`, `refs` and `gfa` only grow. Answers the pages fused.
+        if ((((emon.Port.cellsLen(inks) / 12) + (emon.Port.cellsLen(rules) / 20)) + (emon.Port.cellsLen(prims) / 24)) == 0) {
+            return 0;
+        }
+        int p = 1;
+        int vi = 0;
+        int vj = 0;
+        int fi = 0;
+        int fj = 0;
+        int ri = 0;
+        int rj = 0;
+        int qi = 0;
+        int qj = 0;
+        int bi = 0;
+        int bj = 0;
+        int wi = 0;
+        int wj = 0;
+        int ti = 0;
+        int tj = 0;
+        int pi = 0;
+        int pj = 0;
+        int ii = 0;
+        int ij = 0;
+        int k = 0;
+        int ep = 0;
+        int kind = 0;
+        int fused = 0;
+        emon.Port.cellsDrop(og, 0);
+        while (k < emon.Port.cellsLen(grl)) {
+            emon.Port.cellsPush(og, emon.Port.cellsAt(grl, k));
+            k += 1;
+        }
+        emon.Port.cellsDrop(ofl, 0);
+        k = 0;
+        while (k < emon.Port.cellsLen(gfl)) {
+            emon.Port.cellsPush(ofl, emon.Port.cellsAt(gfl, k));
+            k += 1;
+        }
+        emon.Port.cellsDrop(grl, 0);
+        emon.Port.cellsDrop(gfl, 0);
+        emon.Port.cellsDrop(ctx, 0);
+        k = 0;
+        while (k < 32) {
+            emon.Port.cellsPush(ctx, 0);
+            k += 1;
+        }
+        while (p <= np) {
+            vi = gfAdvance(og, 24, 0, vi, p);
+            vj = gfRangeEnd(og, 24, 0, vi, p);
+            fi = gfAdvance(ofl, 16, 0, fi, p);
+            fj = gfRangeEnd(ofl, 16, 0, fi, p);
+            ri = gfAdvance(rules, 20, 0, ri, p);
+            rj = gfRangeEnd(rules, 20, 0, ri, p);
+            qi = gfAdvance(prims, 24, 0, qi, p);
+            qj = gfRangeEnd(prims, 24, 0, qi, p);
+            bi = gfAdvance(oblocks, 16, 0, bi, p);
+            bj = gfRangeEnd(oblocks, 16, 0, bi, p);
+            wi = gfAdvance(owords, 28, 0, wi, p);
+            wj = gfRangeEnd(owords, 28, 0, wi, p);
+            ti = gfAdvance(words, 24, 0, ti, p);
+            tj = gfRangeEnd(words, 24, 0, ti, p);
+            pi = gfAdvance(pa, 24, 0, pi, p);
+            pj = gfRangeEnd(pa, 24, 0, pi, p);
+            ii = gfAdvance(im, 20, 0, ii, p);
+            ij = gfRangeEnd(im, 20, 0, ii, p);
+            kind = 0;
+            if (((rj > ri) || (qj > qi)) || (gfHasRows(inks, 12, 0, p) == 1)) {
+                kind = 1;
+                ep = Evidence.evPageRow(epages, p);
+                if (ep >= 0) {
+                    if ((Evidence.epGet(epages, ep, Evidence.epfFlags()) & Evidence.egRaster()) != 0) {
+                        kind = 2;
+                    }
+                }
+            }
+            if (kind == 0) {
+                k = vi;
+                while (k < vj) {
+                    gfCopyRow(og, k, grl);
+                    k += 1;
+                }
+                k = fi;
+                while (k < fj) {
+                    ep = 0;
+                    while (ep < 16) {
+                        emon.Port.cellsPush(gfl, emon.Port.cellsAt(ofl, (k * 16) + ep));
+                        ep += 1;
+                    }
+                    k += 1;
+                }
+            } else {
+                emon.Port.cellsSet(ctx, X_PAGE, p);
+                emon.Port.cellsSet(ctx, X_KIND, kind);
+                emon.Port.cellsSet(ctx, X_V0, vi);
+                emon.Port.cellsSet(ctx, X_V1, vj);
+                emon.Port.cellsSet(ctx, X_F0, fi);
+                emon.Port.cellsSet(ctx, X_F1, fj);
+                emon.Port.cellsSet(ctx, X_R0, ri);
+                emon.Port.cellsSet(ctx, X_R1, rj);
+                emon.Port.cellsSet(ctx, X_Q0, qi);
+                emon.Port.cellsSet(ctx, X_Q1, qj);
+                emon.Port.cellsSet(ctx, X_B0, bi);
+                emon.Port.cellsSet(ctx, X_B1, bj);
+                emon.Port.cellsSet(ctx, X_W0, wi);
+                emon.Port.cellsSet(ctx, X_W1, wj);
+                emon.Port.cellsSet(ctx, X_T0, ti);
+                emon.Port.cellsSet(ctx, X_T1, tj);
+                emon.Port.cellsSet(ctx, X_P0, pi);
+                emon.Port.cellsSet(ctx, X_P1, pj);
+                emon.Port.cellsSet(ctx, X_I0, ii);
+                emon.Port.cellsSet(ctx, X_I1, ij);
+                gfFusePage(ctx, og, ofl, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa, gc, aux, un, gv);
+                fused += 1;
+            }
+            vi = vj;
+            fi = fj;
+            ri = rj;
+            qi = qj;
+            bi = bj;
+            wi = wj;
+            ti = tj;
+            pi = pj;
+            ii = ij;
+            p += 1;
+        }
+        return fused;
+    }
+    public static int gfWrite(emon.Port.Cells gfa, emon.Port.Cells ledger) {
+        // The vector rules block 500 dropped (`gfa`, stride 6: page, box, ledger reason) as ledger rows, confidence 700, source `vector`. Answers the rows written.
+        int n = emon.Port.cellsLen(gfa) / 6;
+        int i = 0;
+        while (i < n) {
+            Model.ledgerAdd(ledger, emon.Port.cellsAt(gfa, (i * 6) + 5), emon.Port.cellsAt(gfa, i * 6), emon.Port.cellsAt(gfa, (i * 6) + 1), emon.Port.cellsAt(gfa, (i * 6) + 2), emon.Port.cellsAt(gfa, (i * 6) + 3), emon.Port.cellsAt(gfa, (i * 6) + 4), 700, Model.srVector());
+            i += 1;
+        }
+        return n;
     }
 }

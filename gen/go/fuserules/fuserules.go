@@ -10,6 +10,71 @@ import (
 	"emon/tlhealth"
 )
 
+func FgAxis() int32 {
+	// `gf-axis`: within this of horizontal or vertical is that orientation
+	return 100
+}
+
+func FgAngle() int32 {
+	// `gf-angle`: two rules are near when their angles differ by at most this
+	return 150
+}
+
+func FgPerp() int32 {
+	// `gf-perp`: ... and the distance between their centre lines is at most half their thicknesses plus this
+	return 120
+}
+
+func FgGap() int32 {
+	// `gf-gap`: ... and their extents overlap or come this close
+	return 300
+}
+
+func FgFillIou() int32 {
+	// `gf-fill-iou`: two fills are near at this intersection over union
+	return 700
+}
+
+func FgImgMin() int32 {
+	// `gf-img-min`: an image placement is a region of its own at 2 cm each way
+	return 5669
+}
+
+func FgAgreeMin() int32 {
+	// `gf-agree-min`: the share of a vector rule the tracer covers to witness it, and the region witness that makes its silence evidence
+	return 900
+}
+
+func FgTraceMin() int32 {
+	// `gf-trace-min`: the tracer's confidence a rule in an image or on a raster page needs
+	return 600
+}
+
+func FgOcrBonus() int32 {
+	// `gf-ocr-bonus`: what an OCR line block under a tracer rule lowers that bar by
+	return 150
+}
+
+func FgImgHealth() int32 {
+	// `gf-img-health`: the region score under which the tracer is not believed
+	return 500
+}
+
+func FgTprecMin() int32 {
+	// `gf-tprec-min`: the page's tracer precision a tracer-only rule in R0 needs
+	return 900
+}
+
+func FgContrast() int32 {
+	// `gf-contrast`: of 255, the least contrast of a vector rule with its backdrop (`emon.gvec`'s GV_CONTRAST)
+	return 16
+}
+
+func FgFlat() int32 {
+	// `gf-flat`: a curve within this of its chord is a line (`emon.gvec`'s GV_FLAT)
+	return 50
+}
+
 func AgNt() int32 {
 	// visible text-layer words in the group
 	return 0
@@ -140,8 +205,18 @@ func AgSeal() int32 {
 	return 25
 }
 
-func AgCount() int32 {
+func AgTableimg() int32 {
+	// P7.G (D224): the largest share (per mille) of an OCR word's box of the group that lies in a `table-in-image` region (`xo` 30); -1 absent
 	return 26
+}
+
+func AgRulelike() int32 {
+	// P7.G (D224): the largest rule-likeness (`xo` 31) of the group's OCR words; -1 absent
+	return 27
+}
+
+func AgCount() int32 {
+	return 28
 }
 
 func FcGe() int32 {
@@ -248,6 +323,46 @@ func FsThree() int32 {
 	return 21
 }
 
+func FsGfAgreeMin() int32 {
+	return 22
+}
+
+func FsGfTraceMin() int32 {
+	return 23
+}
+
+func FsGfImgHealth() int32 {
+	return 24
+}
+
+func FsGfTprecMin() int32 {
+	return 25
+}
+
+func FsGfGlyph() int32 {
+	return 26
+}
+
+func FsGfWord() int32 {
+	return 27
+}
+
+func FsRgCover() int32 {
+	return 28
+}
+
+func FsTableImage() int32 {
+	return 29
+}
+
+func FsFour() int32 {
+	return 30
+}
+
+func FsFive() int32 {
+	return 31
+}
+
 func FrSetting(code int32) int32 {
 	// The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).
 	if code == 0 {
@@ -329,6 +444,40 @@ func FrSetting(code int32) int32 {
 	if code == 21 {
 		return 3
 	}
+	// P7.G (SPEC 9.9, 13): `gf-agree-min` the share (per mille) of a vector rule the tracer must cover to witness it; `gf-trace-min` the tracer's confidence a rule in an image needs;
+	// `gf-img-health` the region score under which the tracer is not believed; `gf-tprec-min` the page's tracer precision a tracer rule in R0 needs; `gf-glyph` the share of a tracer rule's
+	// box in text under which it is not the stroke of a letter; `gf-word` the share inside one OCR word that makes it that word's bar; `rg-cover` the rule-likeness (D224) of a rule ghost;
+	// `table-image` the share of a word inside a table drawn in an image (D224).
+	if code == 22 {
+		return FgAgreeMin()
+	}
+	if code == 23 {
+		return FgTraceMin()
+	}
+	if code == 24 {
+		return FgImgHealth()
+	}
+	if code == 25 {
+		return FgTprecMin()
+	}
+	if code == 26 {
+		return 500
+	}
+	if code == 27 {
+		return 800
+	}
+	if code == 28 {
+		return 700
+	}
+	if code == 29 {
+		return 500
+	}
+	if code == 30 {
+		return 4
+	}
+	if code == 31 {
+		return 5
+	}
 	return 0
 }
 
@@ -347,7 +496,7 @@ func FwOcr() int32 {
 	return 2
 }
 
-var FrRows [1044]int32 = [1044]int32{
+var FrRows [1944]int32 = [1944]int32{
 	101, 100, 1, 0, 0, 900, 0, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	102, 100, 1, 0, 0, 900, 0, 2, 0, 2, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	110, 100, 1, 0, 0, 1000, 0, 0, 1, 1, 0, 1, 3, 0, 2, 6, 2, 0, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -377,6 +526,31 @@ var FrRows [1044]int32 = [1044]int32{
 	252, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 7, 1, 18, 21, 1, 19, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	401, 400, 0, 0, 128, 900, 25, 2, 1, 0, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	402, 400, 0, 0, 128, 900, 25, 2, 1, 0, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	501, 500, 1, 0, 0, 900, 100, 2, 1, 101, 2, 1, 108, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	505, 500, 0, 0, 0, 0, 103, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	510, 500, 1, 0, 0, 1000, 100, 2, 1, 101, 2, 1, 108, 0, 1, 117, 0, 22, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	511, 500, 1, 0, 2, 800, 100, 2, 1, 101, 2, 1, 108, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	512, 500, 1, 0, 0, 950, 100, 2, 1, 102, 2, 1, 117, 0, 22, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	513, 500, 0, 12, 0, 0, 100, 2, 1, 102, 2, 1, 108, 0, 1, 110, 0, 22, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	514, 500, 1, 0, 0, 700, 100, 2, 1, 102, 2, 1, 108, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	515, 500, 1, 0, 0, 700, 100, 2, 1, 102, 2, 1, 108, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	520, 500, 0, 0, 0, 0, 100, 2, 20, 108, 2, 1, 107, 2, 0, 118, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	533, 500, 0, 0, 0, 0, 100, 2, 20, 113, 0, 27, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	530, 500, 2, 0, 5, -1, 100, 2, 20, 107, 2, 1, 105, 0, 23, 109, 0, 24, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	531, 500, 2, 0, 1, -1, 100, 2, 20, 108, 2, 20, 105, 0, 23, 109, 0, 24, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	532, 500, 0, 0, 0, 0, 100, 2, 20, 108, 2, 1, 107, 2, 0, 112, 0, 26, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	535, 500, 2, 0, 1, 600, 100, 2, 20, 108, 2, 1, 107, 2, 0, 111, 0, 25, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	540, 500, 0, 0, 0, 0, 100, 2, 31, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	560, 500, 1, 0, 0, 900, 100, 2, 21, 115, 2, 1, 108, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	563, 500, 1, 0, 0, 1000, 100, 2, 21, 115, 2, 1, 108, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	561, 500, 1, 0, 8, 950, 100, 2, 21, 115, 2, 0, 116, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	562, 500, 1, 0, 0, 600, 100, 2, 21, 115, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	570, 500, 2, 0, 4, 700, 100, 2, 30, 107, 2, 1, 109, 0, 24, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	574, 500, 2, 0, 0, 700, 100, 2, 30, 108, 2, 20, 109, 0, 24, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	571, 500, 2, 0, 0, 500, 100, 2, 30, 108, 2, 1, 107, 2, 0, 111, 0, 25, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	599, 500, 0, 0, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	601, 600, 0, 11, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 27, 0, 28, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	610, 600, 2, 0, 514, -1, 0, 2, 0, 2, 2, 0, 1, 0, 1, 26, 0, 29, 22, 0, 17, 7, 0, 18, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 }
 
 func FrW() int32 {
@@ -486,7 +660,7 @@ func frHolds(row int32, gv *port.Cells) int32 {
 func FrDecide(gv *port.Cells) int32 {
 	// The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
 	// rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-	var n int32 = 29
+	var n int32 = 54
 	var b int32 = 0
 	var blk int32 = 0
 	var r int32 = 0
@@ -502,6 +676,22 @@ func FrDecide(gv *port.Cells) int32 {
 			r += 1
 		}
 		b += 1
+	}
+	return -1
+}
+
+func FrDecideBlock(gv *port.Cells, blk int32) int32 {
+	// The row (an index of `fr-rows`) of the first rule OF BLOCK `blk` that holds on the measures `gv`; -1 when none does. Block 500 reads the graphics
+	// measures (`gmz`, codes 100 and up, in a vector of 128 cells), which have a default row (599) so that the answer is never -1 there.
+	var n int32 = 54
+	var r int32 = 0
+	for r < n {
+		if FrBlock(r) == blk {
+			if frHolds(r, gv) == 1 {
+				return r
+			}
+		}
+		r += 1
 	}
 	return -1
 }

@@ -279,7 +279,7 @@ func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *st
 	var t12e *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
-	gfuse.GfDoc(pa, gpts, gmk, gim, 1, gfuse.GfxMode(), grl, gfl, cand)
+	gfuse.GfDoc(pa, gpts, gmk, gim, 1, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
 	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
 	columns.LcCopy(ln, lt)
 	para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
@@ -558,7 +558,7 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
-	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand)
+	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
 	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
 	tagtable.TtEmit(tvt, t12e)
 	columns.LcCopy(ln, lt)

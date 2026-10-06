@@ -64,7 +64,7 @@ SRC = [(1, "text"), (2, "hidden-text"), (4, "ocr"), (8, "trace"), (16, "vector")
        (32, "struct"), (64, "annot"), (128, "outline"), (256, "infer")]
 FLAGS = [(1, "low-conf"), (2, "ocr-only"), (4, "text-layer-suspect"),
          (8, "reconstructed"), (16, "dpi-unknown"), (32, "rotated"), (64, "vertical"),
-         (128, "struct-disagree"), (256, "tag-span-conflict")]
+         (128, "struct-disagree"), (256, "tag-span-conflict"), (512, "in-table-image")]
 STYLE = [(1, "bold"), (2, "italic"), (4, "underline"), (8, "strike"), (16, "sub"),
          (32, "sup"), (64, "mono"), (128, "smallcaps")]
 ALIGN = {1: "start", 2: "center", 3: "end", 4: "justify"}
@@ -79,7 +79,8 @@ HEADER = {1: "col", 2: "row"}
 PAGEKIND = {1: "vector", 2: "scanned", 3: "mixed", 4: "image"}
 REASON = {1: "watermark", 2: "background", 3: "page-number", 4: "running-title",
           5: "bleed-through", 6: "duplicate-header-row", 7: "ocr-ghost",
-          8: "clipped", 9: "offpage", 10: "invisible"}
+          8: "clipped", 9: "offpage", 10: "invisible", 11: "rule-ghost",
+          12: "unwitnessed-uncertain-paint"}
 
 
 class Cpt(int):
