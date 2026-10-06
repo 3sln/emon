@@ -1697,10 +1697,10 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 | `fa` | 12 | artifacts set aside: page, box, ledger reason (`dr`), subject `(ea, index)`, defence (1-6, 0 none), group, rule, spare (1: D240) |
 | `fx` | 4 | explanation: group, rule, feature column, value read — a run per group, every column the deciding rule read |
 | `hl` | 12 | health: subject kind (font-page, OCR block, region, **graphics-region**), page, subject index, components (6: mapped, garbage, overlap, gap, agreement, ink; for a graphics region: vector witness, tracer precision, skew spread, tracer confidence, rules, fills, D223), score |
-| `grl` | 24 | **the fused rules** (D218, §9.9; replaces D195's `fpa`, taking its `ea` code): page, box, centre-line endpoints `ex0 ey0 ex1 ey1` (cpt), thickness (cpt), orientation (`go`: h, v, slant), angle (centi-degrees, `ev-angle`), colour (0xRRGGBB, -1), style (`rs`), sources (`sr` bitset: vector, trace, ocr), winning source, rule (`fr` number), confidence (per-mille), flags (`gq`: traced, unwitnessed, in-image, box-edge, from-fill, artifact-layout, artifact-pagination, in-figure), group (`ggp` row), `z` (the vector member's, -1), spare (3) |
+| `grl` | 24 | **the fused rules** (D218, §9.9; replaces D195's `fpa`, taking its `ea` code): page, box, centre-line endpoints `ex0 ey0 ex1 ey1` (cpt), thickness (cpt), orientation (`go`: h, v, slant), angle (centi-degrees, `ev-angle`), colour (0xRRGGBB, -1), style (`rs`), sources (`gs` bitset: vector, trace, ocr, struct, image), winning source, rule (`fr` number), confidence (per-mille), flags (`gq`: traced, unwitnessed, in-image, box-edge, from-fill, artifact-layout, artifact-pagination, in-figure, from-image), group (`ggp` row), `z` (the vector member's, -1), spare (3) |
 | `gfl` | 16 | **the fused fills**: page, box, colour, lightness (0..1000), sources, winning source, rule, confidence, flags (`gq`: shading, pattern, in-image, tint-coloured: the colour came from the tracer), group, `z`, spare (2) |
 | `ggp` | 12 | **graphics groups** (the `cg` of graphics): page, kind (`gk`: rule, fill, region), vector members (`refs` run of `(paths, i)` and `(pts, k)` pairs: the path and the first point of the segment), tracer members (`refs` run of `rules` or `prims` rows), OCR members (`refs` run of `oblocks` rows), flags, spare (3) |
-| `grg` | 16 | **graphic regions**: page, box, kind (`rk`: table-in-image, figure, table-hint), sources (`sr`: vector, trace, ocr, struct, plus image), subject (`(ea, index)`: the image placement, the `oblocks` block, the `se` element, -1), fused rules inside (count), fills inside (count), confidence, flags, spare (2) |
+| `grg` | 16 | **graphic regions**: page, box, kind (`rk`: table-in-image, figure, table-hint), sources (`gs`: vector, trace, ocr, struct, image), subject (`(ea, index)`: the image placement, the `oblocks` block, the `se` element, -1), fused rules inside (count), fills inside (count), confidence, flags, spare (3) |
 | `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference, confidence, OCR words inside (a `refs` run), flags, spare |
 
 `fr`, the rule table, is `defdata` in `kin/fuserules.kin`: per row its
@@ -2150,7 +2150,8 @@ when it is not 1 and an item that skips has an explicit `value`.
 **What the profiles read (D218).** Rules and fills are the fused `grl` and
 `gfl` of §9.9, never `paths`: a rule is a `grl` row of orientation `h` or `v`
 (slanted rules are figure material), a fill a `gfl` row; a rule flagged
-`artifact-pagination` is a running header's or footer's and is not read. A
+`artifact-pagination` that lies wholly in the page's top or bottom eighth is a running header's or footer's and is not read (D272: one
+that does not is read, some producers tag a table's own rules so). A
 table's `src` is the union of the sources of the rules and fills it used
 (`vector`, `trace`, `ocr`), plus `struct` when the tags shaped it, plus `text`
 or `ocr` for its words; its confidence is the profile score scaled by the mean

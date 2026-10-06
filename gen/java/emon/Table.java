@@ -184,77 +184,53 @@ public final class Table {
         emon.Port.cellsPush(rl, 0);
         return 0;
     }
-    public static int tbCollectOne(emon.Port.Cells pa, int i, emon.Port.Cells rl, emon.Port.Cells fl) {
-        // One path as a rule (a thin box, or an edge of a stroked rectangle) or a fill (a large filled box).
-        int fg = Evidence.paGet(pa, i, Evidence.pfFlags());
-        int x0 = Evidence.paGet(pa, i, Evidence.pfX0());
-        int y0 = Evidence.paGet(pa, i, Evidence.pfY0());
-        int x1 = Evidence.paGet(pa, i, Evidence.pfX1());
-        int y1 = Evidence.paGet(pa, i, Evidence.pfY1());
-        int w = x1 - x0;
-        int h = y1 - y0;
-        int filled = fg & Evidence.pgFilled();
-        int stroked = fg & Evidence.pgStroked();
-        int kind = Evidence.paGet(pa, i, Evidence.pfKind());
-        int lw = Evidence.paGet(pa, i, Evidence.pfWidth());
-        int colour = Evidence.paGet(pa, i, Evidence.pfFill());
-        int al = Evidence.paGet(pa, i, Evidence.pfSalpha());
-        if ((fg & Evidence.pgClip()) != 0) {
+    public static int tbRunningRule(emon.Port.Cells grl, int i, int ph) {
+        // 1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of
+        // the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination
+        // artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D272).
+        if ((Glayer.grlGet(grl, i, Glayer.grfFlags()) & Glayer.gqArtifactPagination()) == 0) {
             return 0;
         }
-        if ((fg & (Evidence.pgPattern() + Evidence.pgShading())) != 0) {
-            return 0;
+        int ya = Glayer.grlGet(grl, i, Glayer.grfEy0());
+        int yb = Glayer.grlGet(grl, i, Glayer.grfEy1());
+        int lo = tbMin(ya, yb);
+        int hi = tbMax(ya, yb);
+        if (hi <= (ph / 8)) {
+            return 1;
         }
-        if ((filled == 0) && (stroked == 0)) {
-            return 0;
-        }
-        if (filled != 0) {
-            al = Evidence.paGet(pa, i, Evidence.pfFalpha());
-            colour = Evidence.paGet(pa, i, Evidence.pfFill());
-        } else {
-            colour = Evidence.paGet(pa, i, Evidence.pfStroke());
-        }
-        if (al <= 0) {
-            return 0;
-        }
-        if ((tbMin(w, h) <= RULE_T) && (tbMax(w, h) >= RULE_MIN)) {
-            if (tbLum(colour) < 240) {
-                if (w >= h) {
-                    tbRuleAdd(rl, 0, (y0 + y1) / 2, x0, x1, h, colour);
-                } else {
-                    tbRuleAdd(rl, 1, (x0 + x1) / 2, y0, y1, w, colour);
-                }
-            }
-            return 0;
-        }
-        if ((kind == Evidence.paRect()) && (stroked != 0) && (w > RULE_MIN) && (h > RULE_MIN)) {
-            int hw = lw / 2;
-            int sc = Evidence.paGet(pa, i, Evidence.pfStroke());
-            if (tbLum(sc) < 240) {
-                tbRuleAdd(rl, 0, y0 + hw, x0, x1, lw, sc);
-                tbRuleAdd(rl, 0, y1 - hw, x0, x1, lw, sc);
-                tbRuleAdd(rl, 1, x0 + hw, y0, y1, lw, sc);
-                tbRuleAdd(rl, 1, x1 - hw, y0, y1, lw, sc);
-            }
-        }
-        if ((filled != 0) && (w > RULE_MIN) && (h > RULE_MIN)) {
-            emon.Port.cellsPush(fl, x0);
-            emon.Port.cellsPush(fl, y0);
-            emon.Port.cellsPush(fl, x1);
-            emon.Port.cellsPush(fl, y1);
-            emon.Port.cellsPush(fl, Evidence.paGet(pa, i, Evidence.pfFill()));
-            emon.Port.cellsPush(fl, 0);
+        if (lo >= (ph - (ph / 8))) {
+            return 1;
         }
         return 0;
     }
-    public static int tbCollect(emon.Port.Cells pa, int p0, int p1, emon.Port.Cells rl, emon.Port.Cells fl) {
-        // The page's paths p0..p1 as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness,
-        // colour) and fills (`fl`: box and colour).
-        int i = p0;
+    public static int tbCollect(emon.Port.Cells grl, int r0, int r1, emon.Port.Cells gfl, int f0, int f1, int ph, emon.Port.Cells rl, emon.Port.Cells fl) {
+        // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)
+        // as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
+        // (`fl`: box and colour). P5.5a (D218, D270): the table stage reads the fused graphics and never `paths`.
+        int i = r0;
+        int o = 0;
         emon.Port.cellsDrop(rl, 0);
         emon.Port.cellsDrop(fl, 0);
-        while (i < p1) {
-            tbCollectOne(pa, i, rl, fl);
+        while (i < r1) {
+            o = Glayer.grlGet(grl, i, Glayer.grfOrient());
+            if (tbRunningRule(grl, i, ph) == 0) {
+                if (o == Glayer.goH()) {
+                    tbRuleAdd(rl, 0, (Glayer.grlGet(grl, i, Glayer.grfEy0()) + Glayer.grlGet(grl, i, Glayer.grfEy1())) / 2, Glayer.grlGet(grl, i, Glayer.grfEx0()), Glayer.grlGet(grl, i, Glayer.grfEx1()), Glayer.grlGet(grl, i, Glayer.grfThick()), Glayer.grlGet(grl, i, Glayer.grfColour()));
+                }
+                if (o == Glayer.goV()) {
+                    tbRuleAdd(rl, 1, (Glayer.grlGet(grl, i, Glayer.grfEx0()) + Glayer.grlGet(grl, i, Glayer.grfEx1())) / 2, Glayer.grlGet(grl, i, Glayer.grfEy0()), Glayer.grlGet(grl, i, Glayer.grfEy1()), Glayer.grlGet(grl, i, Glayer.grfThick()), Glayer.grlGet(grl, i, Glayer.grfColour()));
+                }
+            }
+            i += 1;
+        }
+        i = f0;
+        while (i < f1) {
+            emon.Port.cellsPush(fl, Glayer.gflGet(gfl, i, Glayer.gffX0()));
+            emon.Port.cellsPush(fl, Glayer.gflGet(gfl, i, Glayer.gffY0()));
+            emon.Port.cellsPush(fl, Glayer.gflGet(gfl, i, Glayer.gffX1()));
+            emon.Port.cellsPush(fl, Glayer.gflGet(gfl, i, Glayer.gffY1()));
+            emon.Port.cellsPush(fl, Glayer.gflGet(gfl, i, Glayer.gffColour()));
+            emon.Port.cellsPush(fl, 0);
             i += 1;
         }
         return 0;
@@ -2982,14 +2958,15 @@ public final class Table {
         tbCaption(tb, k, wd, et, ln, l0, l1, tq);
         return 0;
     }
-    public static int tbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages) {
+    public static int tbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages) {
         // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
         // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
         // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
         // row extents (one name each in the calls below). Answers the number of tables.
         int nw = Evidence.wdCount(wd);
         int nl = Evidence.lnCount(ln);
-        int nq = Evidence.paCount(pa);
+        int nq = Glayer.grlCount(grl);
+        int nu = Glayer.gflCount(gfl);
         int p = 1;
         int wi = 0;
         int wj = 0;
@@ -2997,6 +2974,8 @@ public final class Table {
         int lj = 0;
         int qi = 0;
         int qj = 0;
+        int ui = 0;
+        int uj = 0;
         int t0 = 0;
         int k = 0;
         emon.Port.cellsDrop(tb, 0);
@@ -3019,16 +2998,23 @@ public final class Table {
             while ((lj < nl) && (Evidence.lnGet(ln, lj, Evidence.lhPage()) == p)) {
                 lj += 1;
             }
-            while ((qi < nq) && (Evidence.paGet(pa, qi, Evidence.pfPage()) < p)) {
+            while ((qi < nq) && (Glayer.grlGet(grl, qi, Glayer.grfPage()) < p)) {
                 qi += 1;
             }
             qj = qi;
-            while ((qj < nq) && (Evidence.paGet(pa, qj, Evidence.pfPage()) == p)) {
+            while ((qj < nq) && (Glayer.grlGet(grl, qj, Glayer.grfPage()) == p)) {
                 qj += 1;
+            }
+            while ((ui < nu) && (Glayer.gflGet(gfl, ui, Glayer.gffPage()) < p)) {
+                ui += 1;
+            }
+            uj = ui;
+            while ((uj < nu) && (Glayer.gflGet(gfl, uj, Glayer.gffPage()) == p)) {
+                uj += 1;
             }
             t0 = tbRowsOf(tb, TBS);
             if ((wj - wi) > 0) {
-                tbCollect(pa, qi, qj, s0, s2);
+                tbCollect(grl, qi, qj, gfl, ui, uj, Model.pageH(pages, p - 1), s0, s2);
                 if (tbRowsOf(s0, RLS) <= MAX_RULES) {
                     tbMergeRules(s0, s1, s3, s9);
                     tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx);
@@ -3049,6 +3035,7 @@ public final class Table {
             wi = wj;
             li = lj;
             qi = qj;
+            ui = uj;
             p += 1;
         }
         tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages);

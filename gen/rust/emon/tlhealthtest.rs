@@ -46,6 +46,9 @@ pub(crate) fn tt_fixture(emon_t: i32, file: &[u8], want_fa: i32, want_hidden: i3
     let fv: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fpa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ggp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let sl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -119,11 +122,11 @@ pub(crate) fn tt_fixture(emon_t: i32, file: &[u8], want_fa: i32, want_hidden: i3
     }
     crate::testport::assert_eq_at(total, fw_count(fw), "the lines hold every word", ctx);
     crate::testport::assert_that_at(fl_count(fl) <= ln_count(ln), "no line is made", ctx);
-    crate::testport::assert_eq_at(pl_check(cg, fw, fl, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the layer is sound", ctx);
+    crate::testport::assert_eq_at(pl_check(cg, fw, fl, fv, fa, fx, hl, fpa, sl, gfl, ggp, grg, et, refs, gl), 0, "the layer is sound", ctx);
     // the OCR lines of a scanned page join the flow as they are: every line and word of the evidence, copied
     crate::testport::assert_eq_at(th_append(wd, ln, fw2, fl2, 0), ln_count(ln), "every line is copied", ctx);
     crate::testport::assert_eq_at(fw_count(fw2), wd_count(wd), "and every word", ctx);
-    crate::testport::assert_eq_at(pl_check(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the copy is sound", ctx);
+    crate::testport::assert_eq_at(pl_check(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, gfl, ggp, grg, et, refs, gl), 0, "the copy is sound", ctx);
     // the ledger
     rows = th_write(fa, wd, et, ledger, text, tmp, tt);
     crate::testport::assert_eq_at(rows, want_rows, "ledger rows", ctx);

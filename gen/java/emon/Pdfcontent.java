@@ -142,9 +142,12 @@ public final class Pdfcontent {
     public static final int C_NPATH = 17208;
     public static final int C_NIMG = 17209;
     public static final int C_PKEEP = 17210;
+    public static final int C_PTS0 = 17211;
     public static final int C_BB = 17212;
     public static final int C_SIZE = 17248;
     public static final int PATH_KEEP = 128;
+    public static final int PATH_KEEP_STRAIGHT = 4096;
+    public static final int PTS_PAGE = 1000000;
     public static final int PATH_ROWS = 200000;
     public static final int GS_STRIDE = 64;
     public static final int G_CTM = 0;
@@ -2096,10 +2099,13 @@ public final class Pdfcontent {
         if (y > emon.Port.cellsAt(cx, C_PBY1)) {
             emon.Port.cellsSet(cx, C_PBY1, y);
         }
-        if (keep < PATH_KEEP) {
+        if ((keep < PATH_KEEP_STRAIGHT) && ((Evidence.ptCount(pts) - emon.Port.cellsAt(cx, C_PTS0)) < PTS_PAGE)) {
             Evidence.ptAdd(pts, x, y, op);
             emon.Port.cellsSet(cx, C_PKEEP, keep + 1);
         } else {
+            if (keep < PATH_KEEP_STRAIGHT) {
+                pcWarnSet(cx, W_PATHS);
+            }
             emon.Port.cellsSet(cx, C_PFLAGS, pcFlagOr(emon.Port.cellsAt(cx, C_PFLAGS), 4));
         }
         emon.Port.cellsSet(cx, C_PN, emon.Port.cellsAt(cx, C_PN) + 1);
@@ -2422,8 +2428,12 @@ public final class Pdfcontent {
         return Evidence.paOther();
     }
     public static int pcGeomKept(emon.Port.Cells cx) {
-        // 1 when the whole path is in `pts` (it had no more than PATH_KEEP points).
+        // 1 when the whole path is in `pts`: a path of `m l h re` alone had no more than PATH_KEEP_STRAIGHT points (and the
+        // page's `pts` was not full), a path with a curve no more than PATH_KEEP (D219).
         if ((emon.Port.cellsAt(cx, C_PFLAGS) & 4) != 0) {
+            return 0;
+        }
+        if (((emon.Port.cellsAt(cx, C_PFLAGS) & 1) != 0) && (emon.Port.cellsAt(cx, C_PN) > PATH_KEEP)) {
             return 0;
         }
         return 1;
@@ -2446,6 +2456,7 @@ public final class Pdfcontent {
         int pfst = -1;
         int geom = 0;
         int painted = 0;
+        int tr = 0;
         emon.Port.cellsSet(cx, C_CLIPP, 0);
         if (n == 0) {
             pcPathReset(cx, pts);
@@ -2455,6 +2466,9 @@ public final class Pdfcontent {
         nrows = n;
         if (kept == 0) {
             nrows = 0;
+        }
+        if (kept == 0) {
+            tr = Evidence.pgTruncated();
         }
         if (nrows > 0) {
             pfst = start;
@@ -2468,7 +2482,7 @@ public final class Pdfcontent {
                 pcWarnSet(cx, W_PATHS);
             } else {
                 painted = 1;
-                fl = 0;
+                fl = tr;
                 if (closed != 0) {
                     fl += Evidence.pgClosed();
                 }
@@ -2516,9 +2530,9 @@ public final class Pdfcontent {
             }
         }
         if (pend != 0) {
-            fl = 0;
+            fl = tr;
             if (pend == 2) {
-                fl = Evidence.pgEvenodd();
+                fl += Evidence.pgEvenodd();
             }
             pcClipBox(cx, pa, emon.Port.cellsAt(cx, C_PBX0), emon.Port.cellsAt(cx, C_PBY0), emon.Port.cellsAt(cx, C_PBX1), emon.Port.cellsAt(cx, C_PBY1), kind, fl, pfst, geom);
         }
@@ -4373,6 +4387,7 @@ public final class Pdfcontent {
         int eh = 0;
         int endcs = 0;
         pcBeginPage(cx, page);
+        emon.Port.cellsSet(cx, C_PTS0, Evidence.ptCount(pts));
         pcBaseMatrix(cx, Pdfdoc.pdPgCrop(pg, pi, 0), Pdfdoc.pdPgCrop(pg, pi, 1), Pdfdoc.pdPgCrop(pg, pi, 2), Pdfdoc.pdPgCrop(pg, pi, 3), Pdfdoc.pdPgRotate(pg, pi));
         pcGsReset(cx);
         Pdfgfx.gxPage(gx);

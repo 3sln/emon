@@ -1384,7 +1384,7 @@ analysis beyond "top-to-bottom lines on a single column".
   `hidden-text` source and a Tr 3 OCR layer over a scan is never dropped or "occluded". 17 fixtures (3,278 hand
   or independently computed expectations) on every target; poppler's text and page agree on the real corpus (D156).
   `bb gates` green; `bb unit red` fails on every arm.
-- [ ] **P3.6a — Path visibility and whole path geometry** (SPEC §8.1, §8.4.3; D219; graphics fusion, D218). **Wave 1**
+- [x] **P3.6a — Path visibility and whole path geometry** (SPEC §8.1, §8.4.3; D219; graphics fusion, D218). **Wave 1**
   of the Phase 7 table; depends on nothing new; parallel with everything in wave 1.
   *Brief*:
   1. **Paths get `vis`, `vby`, `vchk`** in `paths` cells 19, 20, 21, and the backdrop colour the white check found in cell
@@ -1419,6 +1419,17 @@ analysis beyond "top-to-bottom lines on a single column".
   of paths and of rule-like paths (D179's sizes) on the 899 files, recorded here.
   *Done when*: the laws on four targets; every Model of every gate byte-identical (only evidence dumps move); `bb gates`
   green.
+  *Done* (D267-D269): paths are classified by `emon.pdfvis` at the end of the page, in the glyphs' order, and the dump prints
+  `vis`, `vby`, `vchk` and `backdrop` for them; a straight path keeps up to 4,096 points, a path with a curve 128, and a path
+  cut short is `truncated` (512) with its box; `test/vis/paths.pdf` (43 paths, one `P` row each) holds every class to the
+  hand-written truth, to Rust, Go, Java and C# through `bb unit`, and (`kin/scripts/vis-check --render`) to poppler: 21 expected
+  visible paths leave ink, 13 expected hidden leave none. The 899-file survey (`tools/vis/corpus-vis.clj --paths-only`):
+  108,776 painted paths, 57,592 rule-like; clipped 5,279 (1,377 rule-like), occluded 4,117 (3,521), white 9,429 (1,865),
+  transparent 257 (48), zero-size 6, off the page and OCG-hidden 0; 291 truncated. `--paths-render` (450 files, 3 pages, the
+  rule-like paths): 10,934 of 10,936 visible show ink; of the 175 hidden-but-inked all but 2 are a rule drawn twice or a
+  same-coloured edge of a same-coloured frame, and the 2 are paint drawn over them later (checked by eye for one: white lettering on a banner). Every Model and every gate's
+  evidence golden is byte-identical (no golden prints a painted path); the P6.8 rule metrics read `grl`, which is P5.5a's: they
+  do not move yet (D269 says what P5.5a takes from here).
 - [x] P3.7 — Tagged PDF: structure tree, role map, MCID ↔ content mapping,
   `/Alt`, `/ActualText` (use it when present — it is the author's answer),
   informativeness score (D034). Also (D076): Artifact subtypes as
@@ -1872,7 +1883,7 @@ analysis beyond "top-to-bottom lines on a single column".
 - [x] P5.4 — Tables across pages: with and without recurring headers,
   "continued" markers, split rows (D019). **Done** (D174) except split rows and a free-standing "(continued)" line: the
   synthetic multi-page documents score TEDS-lite 1.0 and `table-continued-acc` 1.0.
-- [ ] **P5.5a — The fused-graphics arenas and the vector source; `emon.table` reads `grl`/`gfl`, never `paths`** (SPEC
+- [x] **P5.5a — The fused-graphics arenas and the vector source; `emon.table` reads `grl`/`gfl`, never `paths`** (SPEC
   §9.7, §9.9 "Vector candidates", §10.5 "What the profiles read"; D218, D220). **Wave 2** of the Phase 7 table. Depends on
   P3.6a (step B only) and P7.0 (`kin/player.kin`); parallel with P6.4, P7.1, P7.2.
   *Brief*:
@@ -1909,6 +1920,44 @@ analysis beyond "top-to-bottom lines on a single column".
   *Done when*: step A's identity and step B's numbers in this entry; laws (a path of 30 `re` subpaths gives 30 rules in
   `segments` and one fill in `legacy`; a clipped half rule is trimmed; a white rule on black is a rule; a hidden rule is
   flagged; `gl-check` 0 on a hand-built two-page layer) on four targets; `bb gates` green.
+  *Done* (D270-D272). **Step A (identity)**: `gv-legacy` is `tb-collect-one` as P5.1 wrote it, `gf-page` writes its candidates as
+  `grl`/`gfl` rows, and `tb-collect` reads them; every one of the 674 outputs (JSON and HTML, 337 PDFs of `test/`) is byte for byte what
+  the base commit makes, `bb slice` (Rust and Go) and the table goldens hold, and `bb accuracy` moved only its rule and fill metrics (26
+  of them: the dump now has `grl`/`gfl`; under `legacy` a path's box is one rule, so `pdf/graphics` scores rule-p 0.847, rule-r 0.203).
+  **Step B (the default is `segments`)**, BEFORE (= step A: the tables are the base's) and AFTER, `bb accuracy` (the emon scoreboard; 59
+  metrics improved and recorded, none regressed): `pdf/graphics` `table-adj-f1` 0.715 -> 0.890 (r 0.556 -> 0.802, p 1.0 held),
+  `table-teds-lite` 0.731 -> 0.808, `table-teds-struct-lite` 0.785 -> 0.872, `block-table` R 0.846 -> 0.885 (P 1.0 held, F1 0.917 ->
+  0.939), `table-continued-acc` 0.846 -> 0.885, `para-boundary-f1` 0.245 -> 0.479, `block-paragraph-f1` 0.355 -> 0.596 (the lines that
+  were in a table's region are no longer paragraphs), `rule-p`/`rule-r` 0.0 -> 0.963/0.957, `fill-p`/`fill-r` 0.0 -> 1.0/0.805; `pdf/all`
+  `table-teds-lite` 0.819 -> 0.852, `table-teds-struct-lite` 0.870 -> 0.907, `table-adj-f1` 0.962 -> 0.980, `block-table` F1 0.948 ->
+  0.957, `rule-p`/`rule-r` 0.974/0.997, `fill-p`/`fill-r` 1.0/0.943; `pdf/tables` tables unchanged, `rule-p` 0.968, `rule-r` 1.0, fills
+  1.0/1.0 (the dashes the oracle does not list are the 0.03). `tag-verdict-acc` is P5.5's. ICDAR 2013 live (66 scored, D182's numbers
+  reproduced by the same scorer on the base): `block-table` P 0.778 -> 0.774, R 0.861 held, `table-teds-lite` 0.484 -> 0.485, struct
+  0.684 -> 0.686, `table-adj-f1` 0.792 -> 0.791. Survey (546 PDFs: `test/`, ICDAR 2013, the gov reports, the IRS forms, 100 digital bank
+  statements, 23 contracts): no panic, the tables of 513 unchanged and 33 changed (below). **Document by document** (profile columns x
+  rows): `gfx-hidden-rules` whitespace -> ruled 3 x 3 (the hidden pieces are 505: nothing; D227's 3 x 3, not 4 x 4); `gfx-onepath-grid`
+  page 1 whitespace -> ruled 5 x 4 and page 2 ruled 12 x 10 (1,100 points are now whole, D268, so it is a lattice, not a box);
+  `gfx-curve-lines` ruled 3 x 3 as before (its rules are the flat curves' lines now); `gfx-image-rules` whitespace -> ruled 3 x 3 (the
+  one-point images are `from-image` rules, 514); `gfx-softmask-rule` whitespace -> ruled 3 x 3 (the masked rule is a 514 row: seen, not
+  exactly known, for P7.G's tracer to arbitrate); `gfx-shading-bands` and `gfx-pattern-bands` whitespace -> shaded, 3 columns, 5 rows
+  (the bands are `gfl` fills of colour -1, flags `shading`/`pattern`); the eight `ttab-*` documents whitespace -> ruled (their grids are
+  `m l` paths, which `tb-collect-one` never read); `table-white-rules`: the three white header separators are in `grl` (rule 501, white; the
+  backdrop is unknown, so seen) and the partial profile is unchanged; `table-dashed`, `bank-statement`, `invoice` and
+  `test/pdf/tagged/*` keep their tables (a table's box moves by up to half a stroke, 71.75 -> 72 pt: a rule's ends are now the line's, not
+  the path box's); the Chrome table goldens do not move. The corpus (tables, ruled ones, cells; before -> after): `f1040` 7, 4, 293 -> 7, 4, 293; `f1065` 17, 5, 662 ->
+  17, 5, 659; `f1120` 19, 2, 772 -> 19, 2, 767; `f941` 9, 1, 84 -> 9, 1, 92; `f990` 28, 8, 989 -> 33, 7, 1,090; `p15` 22, 12, 411 -> 22, 12, 404;
+  `census-p60-279` 37, 21, 886 -> 35, 21, 901; `eia-steo-full` 71, 32, 1,741 -> 74, 29, 1,759; `i1040gi` 110, 18, 27,590 -> 151, 18, 25,839 (its tax
+  tables, a 21-column table a page, are two 10-column tables a page; whether that is the page's own division I did not check); `bea-gdp2q24` 28, 1, 14,173 -> 24, 22, 773 (whitespace
+  tables of thousands of cells became its ruled tables); ICDAR `eu-012` 6, 5, 226 -> 5, 5, 206, `eu-015` 5, 5, 234 -> 7, 5, 262, `eu-027` 1, 0, 167 ->
+  2, 0, 184, `us-002` 4, 0, 108 -> 5, 1, 129, `us-010` partial 5 x 7 -> ruled 4 x 6, `us-011a` 26 -> 28 cells, `us-023` 225 -> 201 cells (the three that
+  moved ICDAR's precision are `eu-015`, `eu-027` and `us-002`). I read these by their structure and the scores above, not cell by cell.
+  *Found by the survey, fixed*: (1) Skia (Chrome) writes a rectangle as a move, FOUR lines (the last back to the start) and a close, six rows
+  where `re` has five: the first `segments` read lost every such rectangle (the El Pollo Loco contract's tables, `gv-subpath`); (2) the IRS
+  publications tag a table's own rules `/Artifact /Pagination` (D272); (3) a dashed border is a run of thin boxes (D271).
+  *Gates* (after merging P7.U): `bb hosts`, `bb drift`, `bb lang-test`, `bb check` (four languages, one answer), `bb accuracy` (none regressed), `bb slice`,
+  `bb identity` (475 inputs, Rust == Go, the dumps with `grl`/`gfl` included) green; the new laws (`glayertest`, `gvectest`, `gfusetest`, with `playertest`,
+  `tabletest`, `tlhealthtest`) pass on Rust, Go, Java and C#, and fail inverted (`EMON_TEST_INVERT=1`) on Rust and Go; the full `bb unit` and `bb gates` were
+  left to the merge step because the machine could not finish them (load 40).
 - [ ] **P5.5 — `struct` (tagged) tables verified against geometry** (SPEC §10.5 "Tagged tables"; D225, D034, D148-D150).
   **Wave 3** of the Phase 7 table, parallel with P7.3 (disjoint files). Depends on P5.5a and P6.8's tagged-table
   fixtures. `form` moved to P5.5b.
@@ -7595,6 +7644,7 @@ one `nm-mask-into` / `nm-role-mask-into` call per row. Sauvola keeps rings of `2
 truth is each overlay drawn alone through the very rotation the scan got, and the body's the clean render's dark neutral pixels.
 **Why**: no Engine wiring is P6.3's; memory O(w r) instead of 70 MB (D092); overlays are ours so the truth is exact.
 **Alternatives**: allocating inside `nm-view` (the bitmaps would die with the call); whole-page integral images.
+- [ ] **Signed off** (maintainer)
 
 ### D240 — The text layer's health, as built: glyph-weighted pooled components per (font, page), a weighted harmonic mean scaled by the weakest, and two stride corrections to SPEC 9.7 (P7.0; SPEC 8.4.5, 9.3, 9.7; D150, D203)
 **Decision**: `th-health` pools each word's `xt` columns 2-5 over the words of a (font, page) of the flow, weighted by glyph count
@@ -7719,6 +7769,255 @@ crossing rule defeats the contrast test), inside the matching tolerance.
 **Decision**: (1) Measured by `bb render-record --go --compare-build` (live, not a gate), 17 requests, 12 bitmaps, 885,827 pixels, on macOS arm64: Rust (FFI) against Go (cgo), one `libpdfium`: **0 differing pixels**, identical dumps. pdfium `chromium/8076` against `chromium/7390` (a year earlier): the vector fixture (five layer renders, three crops) and the scan (image only) identical; the three born-digital text renders differ in 686, 4,878 and 4,888 pixels (4-5%) by at most **3 of 255** per channel. The recorded tolerance, for whoever re-pins or runs another build: text anti-aliasing may move a text pixel by 3/255 and nothing else moves. Other platforms (FMA, SIMD paths) are unmeasured. (2) No gate has that tolerance. The transcript is the identity mechanism (D008): `bb render` replays the committed `test/render/render/` on Rust and Go and requires the identical dump (every request and answer, each bitmap's FNV-1a pixel hash, each file's size and hash) and that it is the dump the live recording printed; a changed request is `transcript-miss` on both. (3) WASM: pdfium's own WebAssembly build is pinned beside the native ones; the JS host fulfils `render` and `crop` in the browser the way it fulfils OCR (SPEC 7.3: it owns the loop), serving the custom file-access callback from the async byte source, and a transcript recorded natively replays in the browser and the reverse. Not built (P9.3).
 **Why**: D095's lesson: a gate that runs a live engine tests whose engine is installed. The measurement tells an embedder how far a live host may stray, and the pin and its re-record procedure (`tools/pdfium/pdfium.edn`) say how to move.
 **Alternatives**: a gate that renders live and compares within the tolerance (machine-dependent, which D008 exists to prevent); a bigger committed transcript (230 KB is enough to hold layers, crops and failures).
+- [ ] **Signed off** (maintainer)
+
+### D186 — A table's claim on a line and the initials' code share cell 15 without meeting: the claim is TB_HELD (2^30) + the table's index
+
+**Decision**: cell 15 of a line row was the table stage's claim (D178) and, on the lines' copy, the initials' code (D183: minus the drop's code points, or `4*(row+1)` plus flags). Both Engines run furniture, then the tables on the evidence lines, then the copy and `in-detect`, then headings, then `pa-build`; so the two met. A table's claim is now `TB_HELD + k` (1073741824 + the table's index, `tb-claimed` answers index + 1 or 0); `in-detect` leaves a held line's cell 15 as it is and never sees the line (`in-collect` skips it, so a big first glyph in a table cell is no initial, and a table's lines never take part in a drop initial's neighbours); `in-row`, `in-cell` (para's raised-initial and no-space bits and `pa-skip`) read a held line as no initial; the column stage's split copies the claim to the new piece instead of clearing it; the heading stage's "a held line is never a heading" tests `>= TB_HELD`, so a heading that opens with a raised initial is still a heading. `pa-build` takes the prepared copy (`lt`) of the lines and no `ln`; the tables' laws and the Engine's hosts prepare it as the Engine does. **Held to**: the unit laws on all four arms (356), the table goldens (now carrying `align`), the accuracy gate (no metric lowered; the branch's lowering of `pdf/forms block-paragraph-r` was not carried over).
+**Alternatives**: a 17th line cell (every stride changes in the evidence, the columns and the readers); the claim kept on the original lines only (a column split's new rows are not there to ask).
+
+### D249 — The page unit as built: the document pass reads the input, each page is its own loop, and the evidence dump keeps its pre-join marks (P7.U; SPEC 2.2, 7.3, 12.1; D195, D207, D211, D212)
+**Decision**: (1) The Engines run three parts: the document pass (everything that reads the input, re-run on misses, and for
+a PDF the plan of the page units: `pu-plan` locates a scanned page's one DCT stream, so a page unit never reads the input),
+one `plan::run` a page (a unit that writes nothing until its answers are in), and the document unit (stage 3 unchanged). (2) A
+raster input's document pass is header-only (D187): the page table needs no pixels; each frame's unit asks its pixels and then
+its OCR, and a frame that cannot be decoded refuses the conversion by name whatever the policy (it still asks the decode under
+`never`). (3) Ids are D207's: page `p` asks `(p + 1) * 256 + k`; the header-only decodes of the document pass keep `f + 1`
+(their records differ from a page unit's by the frame argument). (4) The evidence dump is taken from the glyph, mark and font
+arenas as they were before the tagged tree was joined to them (a copy, only when the evidence is asked for), because that join
+now runs before the units and the dump has always shown the text layer before it. (5) The PageLayer is, until P7.0 and P7.3,
+the page's rows of `wd`/`ln`, in the text layer's own layouts; a scanned page's OCR lines are appended in page order, so
+stage 3 reads what it always read. (6) `max-rounds` is 5, `RunStats` gains `page_rounds` and `page_requests`; `attempts` stays
+the document pass's.
+**Why**: memory (one page's bitmaps, not the document's; no recomputation of a page's work in every round of another's) and
+the seam P7.3 plugs fusion into; (4) is what keeps every committed dump byte for byte.
+**Alternatives**: running the tagged tree after the units (a second loop that reads the input, and a miss in it would re-run
+the document pass); making the dump an Engine-side concatenation (it is kin's `ev-emit`).
+- [ ] **Signed off** (maintainer)
+
+### D250 — `BitmapSet` as built: one set an attempt, answered and kin-made bitmaps apart, kin-made ones visible to the fulfiller (P7.U; SPEC 7.2; D092, D196)
+**Decision**: the set is made for each attempt of a page unit from the bitmaps its answers carried (shared, not copied) and is
+dropped with the attempt; `bms-put` allocates a zeroed bitmap kin fills and panics on an id already in the set; what kin made
+is added to the bitmaps `Fulfiller::start` is given, so an `ocr` request naming a kin-made view finds its pixels. In Rust the
+set hands out `&Bitmap` borrows of `Arc`s that are never removed or replaced for its life (one `unsafe`, in `port.rs`); the
+other three trees use plain maps. A missing id reads as a 0 x 0 bitmap.
+**Why**: kin keeps views it made while it calls `bms-get` again, which a `RefCell` guard cannot allow; a set per attempt
+means a re-run recomputes what kin made (it is a function of the answers) and the host never holds a stale view.
+**Alternatives**: `bitmap-new` in kin (the host could not give the engine what kin made); one set per page unit across attempts
+(stale views, and an id collision on every re-run).
+- [ ] **Signed off** (maintainer)
+
+### D251 — A born-digital page's two rasters are asked lazily, by a consumer stage, and a gate with no Renderer sees `unsupported` (P7.U; SPEC 7.2; D199, D201, D212)
+**Decision**: **revised by the coordinator 2026-10-05: lazy until a consumer exists; avoids two 300-dpi renders per page doing nothing.** As built
+by P7.U (and reversed): under `always` (the default, D038) a born-digital page's unit asked `render` layer 0 and layer 1 at 300 dpi in one round
+and was not OCR'd. Now `pu-run-pdf` asks a born-digital page for nothing (`us-done`, and no OCR, D201); the two requests (D199 (2): ids
+`pi-render-text` and `pi-render-no-text`, 300 dpi, `always` only) live in `pu-ask-rasters`, which a stage that reads pixels calls when it
+needs them (P7.1, P7.3; none does yet). With no `Renderer` both are answered `unsupported` and transcribed, and the Model is the one a
+conversion without them gives; output is byte-identical whether or not they are asked.
+**Why**: the requests are the contract P6.3 and P7.3 read the pixels through, and `pu-ask-rasters` with `kin/pageunittest.kin` keeps that
+plumbing (ids, `BitmapSet`, `unsupported`) proven; asking them before a consumer exists made an embedder with a Renderer pay two 300-dpi
+renders a page for nothing.
+**Alternatives**: asking in the page unit now (P7.U's original: proves the plumbing on every document, costs the renders); making the default
+`auto` for born-digital until P7.S.
+- [ ] **Signed off** (maintainer)
+
+### D252 — The tracer as built: a caller-owned workspace, one `tr-trace` per traced bitmap (the binary view with its majority layer, or an ink mask as one fixed layer), classes mapped onto the existing `ck` codes (P6.4; SPEC 8.2, 8.4.4; D092, D198, D220)
+**Decision**: `kin/trace.kin` (`emon.trace`) allocates no bitmap and no arena: the caller owns the workspace `Cells` (`rn ri cs vr pc sg mem s1..s6`) and the evidence arenas, as `emon.norm` does (D220). `tr-trace` runs runs, components, rules, contours and primitives, text lines on ONE bitmap: a binary view (each component's ink row is the majority of `labels`, i.e. `nm-label-into`) or an ink-mask view (`fixed` = that layer's `inks` row); the caller traces the binary view and every non-body layer's mask (a faint watermark is not in Sauvola's binary), and `tr-tints` on each `light`/`background` mask. Components are union-find over row runs (a pair of adjacent rows touches with one pixel's slack, the smaller root wins), sorted by (top, left, ink, root run); holes are edges - runs + 1 of the run graph; parent is the smallest hole-bearing component whose box holds it and that has ink on both sides of the child's own first and last row. `ck` has no `noise`/`large`/`rule-like` codes and `evidence.kin` is P3.6a's: noise is `blob` with confidence 0, large is `blob` 700, text-like 900, `rule-h`/`rule-v` 900. The median text height M of the glyph-sized components counts each once on the binary view and needs three of them (a table alone is not a glyph), and on an ink mask weighs each by its ink capped at 1024 pixels (a watermark's huge letters outweigh the specks of their own mask); text-like is M/3..4M high, at most 8 times as wide; a rule candidate is thin (ink over the longer side at most 2 pt: a Sauvola outline of a filled bar is 11 px, 2.6 pt, and is not a rule), at least 6 pt and 8 thicknesses long, hole-free and longer than 2M; `tr-rules` confirms it or it becomes large. Limits: 4,000,000 runs, 200,000 components (the rest counted), 6,000,000 column runs, 6000 rule pieces, 60,000 corners a contour. `prims` flag bits: closed 1, filled 2, double 4, tint 8. Rust, Go, Java and C# hold the same 32 laws (`kin/tracetest.kin`); Rust and Go dump byte-identical rows on every page measured.
+**Why**: D092 (memory proportional to ink), D220 (the caller owns memory), and not touching `evidence.kin` (the who-edits-what table).
+**Alternatives**: a label image (35 MB a page); adding `ck-noise` (an additive code, but another item's file); arrow primitives (not built: no fixture has one, the `arrow` code stays unused).
+- [ ] **Signed off** (maintainer)
+
+### D253 — Stroke width is the smaller of the median row-run and median column-run lengths; its error against a distance transform is measured, not assumed (P6.4; D198)
+**Decision**: per component the median length of its row runs and of its column runs (column runs from one pass over the row runs, a counter a column, ended where the pixel below is paper), the smaller one, in pixels, written in centipoints. `bb trace` compares it with a 3-4 chamfer distance transform (ridge median, 2r - 1) on text-like components; the numbers are in P6.4's "Measured".
+**Why**: a vertical stem's rows are its width and a horizontal bar's columns are; the other median is a length. Integer, cheap, no second image.
+- [ ] **Signed off** (maintainer)
+
+### D254 — Contours by crack following on the binary view itself; integer Douglas-Peucker at 1.5 px; rect, ellipse/circle, ring (annulus or concentric pair), polygon, curve by residual (P6.4; SPEC 8.2; D198)
+**Decision**: the outer boundary of every LARGE component (also one that gave rules: a frame is four rules and a `rect`), traced as pixel corners with 8-connectivity on `binary` (a neighbour that is ink belongs to the component, or it would be bigger), so no component-local bitmap is needed. Simplified closed at eps 1.5 px (`4 cross^2 > 9 chord^2`). `rect`: the longest edge's angle, every edge of 4 px or more within 3 degrees of it or its perpendicular (off-axis at most 1/8 of the perimeter), mean distance of the raw corners to the fitted rectangle under 40 per mille of the smaller radius; `circle`/`ellipse`: moments of the corners weighted by edge length, axis from the covariance, radii from the extents, mean equation residual under 40 per mille, circle within 5 per cent; `ring`: such a circle whose centre row has exactly two runs with a hole of 3/10 .. 1 of the radius centred within 15 per cent, or whose parent component carries a concentric circle of 0.4 .. 0.97 of its radius (then `double` and both components as members); else `polygon` (12 corners at most) or `curve`. Confidence is 1000 minus eight times the residual. The fitted outline of a `rect` is its four corners; the others point at the contour's `pts`.
+- [ ] **Signed off** (maintainer)
+
+### D255 — Rules from chains of thin slices: row runs for vertical and steep rules, column runs for horizontal and shallow ones, straightened, merged, dashed, doubled (P6.4; D226; SPEC 8.2)
+**Decision**: inside every component that is neither noise nor a glyph (a table grid is one `large` component), a slice is a run or column run of at most 2 pt; slices of consecutive rows (or columns) whose two edges are each within one pixel are a chain; Douglas-Peucker at 1.5 px must leave one stretch of at least 4/5 of the chain (a circle's arcs are not rules); the stretch is a piece. Pieces on one line (2.5 degrees, within thickness + 2 px) and within `rule-gap` (2 pt) are one rule (this bridges the crossings of a grid); shorter groups of three or more dashes with gaps and lengths within 0.4 .. 2.2 / 2.5 times their medians are one `dashed` rule (`dotted` when no longer than twice the thickness, but dots below the 8 px chain minimum are not found: not built); two parallel solid rules 1-3 thicknesses apart overlapping by 60 per cent are both `double`. A skewed scan needs no deskew: a slice chain follows a line up to 45 degrees off its axis, in either representation. Confidence is D226's (1000 minus the gap per mille, minus 300 for thickness varying by more than half beyond one pixel of jitter). Not found: slanted lines steeper than 45 degrees inside large components in both representations at once (they are, by the other one), and lines inside a glyph-like component (an underline fused to a word).
+- [ ] **Signed off** (maintainer)
+
+### D256 — Text lines without OCR by agglomeration; the direction is the thinnest strip, the baseline the bottoms' least squares (P6.4; SPEC 8.4.4; D095)
+**Decision**: per ink layer, text-like components are linked when the gap between boxes is within 1.5 mean heights (heights within a factor of three), joined nearest first, a join accepted while the union's centres stay within 0.3 of the mean height of a line (any pair passes). A chain of 3 or more is a `tlines` row: its direction is the angle (every 0.25 degree within 10 degrees of the covariance axis) at which the strip containing the chain's run ends is thinnest, so that a text block hiding part of a watermark does not bend it; the baseline is a least-squares line through the members' bottoms in that frame (one outlier round), the row's `rot` is `ev-angle` of it in page space; mean height and gap in centipoints. `tr-orient-hint` answers 0 or 1 from the member-weighted directions. Known limit, measured: on `watermark-draft` the visible letter pieces give 34.5 degrees against the PDF's 30.
+- [ ] **Signed off** (maintainer)
+
+### D257 — Tints from row runs of an ink mask; features 14, 15, 23 (P6.4; D226)
+**Decision**: as D226, with the rectangle's rows continuing while both extents move at most 2 px from the row above (so a slightly skewed band survives); coverage is the mask's ink over the box. `tr-feat-ocr` fills `xo` 14 (text-like components centred in the word) and 15 (per mille of its symbols with one centred in them, -1 without symbols), `tr-feat-text` `xt` 14, 15 and 23 (largest overlap with a `tlines` row differing by more than 3 degrees mod 180).
+- [ ] **Signed off** (maintainer)
+
+### D258 — `bb trace`: truth is the vector content of ghostscript's text-free copy; scoring by length and by area (P6.4; D227)
+**Decision**: `gs -dFILTERTEXT` removes the text and keeps the paths (it is also the `no-text` render), qpdf's QDF is read by a small content-stream interpreter (q Q cm re m l S f B w colours): a filled rectangle at most 3 pt thick and 4 times as long, or a stroked segment at most 3 pt wide and 3 pt long, is a rule; a filled rectangle over 5 pt each way, lightness at least 600 and not the paper's white, is a fill. Rule precision and recall are the share of samples (every 3 px) within 2.5 px of the other set; fills are compared as areas on a 4 px grid. Not a gate; P7.S owns the ratchet.
+- [ ] **Signed off** (maintainer)
+
+### D259 — Light fills from the gray view: a separate path, uniform pixels in a band under the paper, bridged across glyphs, deduplicated against the layers' tints (P6.4b; D226, D237)
+**Decision**: `tr-lightfills` (`kin/trace.kin`) runs once a page after the ink layers' traces, on the GRAY view and the paper gray (`nm-paper-gray`), and nothing in P6.3 or in the binary view changes. `tr-light-mask` marks a pixel as fill when it is 10 to 104 levels under the paper and within 4 levels of the pixel to its left (an antialiased glyph edge is steeper, a band's flat part and a scan's noise are not), and bridges a run of non-fill, non-paper pixels of at most 3 pt between two fill pixels of a row (a stem in a header cell; a paper pixel ends the bridge). `tr-tints` then runs on that mask (a rectangle at least 6 pt each way whose rows move at most 2 px), the rows whose box is half inside a tint already written by a layer's mask are dropped, and the rest get the mean gray of their fill pixels at nine points as colour. A page more than 60 per cent fill is not traced (the paper was misjudged). The flags are `tr-tints`': closed, filled, tint.
+**Why**: P6.3 gives a layer to a colour bin farther than 24 of 255 from the paper bin (D237), by mass; a header fill of lightness 0.89 on one row of a table has no layer, so P6.4 gave `table-multipage-thead` 0.000 of its fills. Banding (`gfx-shading-bands`, `gfx-pattern-bands`) is the same case: flat bands under the paper.
+**Measured**: tints, area recall .334 -> .976 and precision .960 -> .928 on 95 truth fills of 18 pages (the vector fills of lightness 600-959 and P6.8's `gfx-*` fills); the lost precision is fills of pages without a truth list. Time +11.8 ms a page (mean). `bb ink`: identical.
+**Alternatives**: lowering `nm-ink-paper` (it moves every layer, body ink separation included, `bb ink` is the guard); a per-layer lower threshold for tints only (a layer needs a mass to be a layer).
+- [ ] **Signed off** (maintainer)
+
+### D260 — The median text height is taken over glyphs of at most 48 pt on the binary view, 200 pt on an ink mask (P6.4b; D252)
+**Decision**: `tr-text-max`: the provisional glyphs that give `tr-kinds` its median height M are at most 48 pt tall on the binary view (200 pt on a mask, where a watermark's letters are huge). With fewer than three, M is 0 and nothing on the page is `text`.
+**Why**: on a page of figures with no text (the harness's no-text renders; a figure page whose text is an image) the bars, boxes and charts were provisional glyphs, M became their height, and a whole chart (axes, ticks and a curve: one component) was `text`, so no rule was looked for in it (`figures-charts` p1's second chart). 48 pt is above any body or heading text the median is for; a headline above it was never `text` (4 M).
+**Measured**: vertical rule recall .995 -> .997, horizontal .994 -> .995, all other rule and component numbers within noise.
+- [ ] **Signed off** (maintainer)
+
+### D261 — A text line's direction is the thinnest strip's; the bottoms' fit refines it only where the bottoms line up (P6.4b; D256)
+**Decision**: in `tr-tlines`, after the two refinement passes, the fit's angle is dropped, and the baseline is the strip's lower edge, when the bottoms' residual rms is over 1/8 of the mean member height or the fit would pull the angle 1.5 degrees from the strip's. `tr-line-frame` answers the residual and the lowest bottom for that.
+**Why**: DRAFT's body text hides the bottom of each letter at a different height, so the least-squares line of the bottoms (rms 51 px of a 421 px letter) bent the 30.02 degree strip to 34.5 (two clamped 1.5 degree steps). The tops of the five letters lie on a 30.0 degree line to a pixel; the five centroids lie on a 35 degree one (measured on the page's mask), so a vote over centroids is not what the brief expected: a letter's centroid is a property of the letter. The thinnest strip was already right.
+**Measured**: DRAFT 34.51 -> 29.99 degrees (target 30 +- 0.5); `tlines` otherwise unchanged by this step.
+**Alternatives**: a Hough vote over centroids (above); a vote over pairs of tops and bottoms (the strip is that, with all the pixels).
+- [ ] **Signed off** (maintainer)
+
+### D262 — Two components of a line may be 2.4 mean heights apart (P6.4b; D256)
+**Decision**: `tr-tl-gap2` 23 (it was 9): the candidate edge of an agglomeration is at most 2.4 mean heights between the boxes (it was 1.5). Swept on the first, partly stale renders: 2.1 -> .9496, 2.4 -> .9514, 3.0 -> .9438 on the long lines; the fresh renders were run at 2.4 only.
+**Why**: a justified word space and a CJK stop are 2 to 2.3 heights; the chain-ok test (centres on a line within 0.3 of a height) keeps the line a line, and past 2.7 columns join across their gutters.
+**Measured**: `tlines` recall of the lines at least 3 heights wide .942 -> .9735 (target .97); of all lines .863 -> .885.
+- [ ] **Signed off** (maintainer)
+
+### D263 — A rule whose component holds more than twice its rules' ink carries the `rf-figure` flag (P6.4b; D226, SPEC 8.4.4)
+**Decision**: `rules.flags` bit 1 (`tr-rf-figure`): the rule's component has more than twice the ink the rules in it account for (half-pixel length x quarter-pixel thickness / 8, summed over the component's rules). An axis with its bars, a tick, a bar's edge or a plot's frame has it; a table grid (all rules), a rule alone, and a ruled line of text do not. The rule stays a rule with its confidence; a consumer that wants only a table's rules drops the flagged ones.
+**Why**: the brief wants axes and bar edges kept as rules and told from table rules. P7.G's fusion has `in-figure` and `box-edge` on the fused rule (`gq`); this is the tracer witness for them.
+**Measured**: 48 of 1153 rules on the no-text renders are flagged, all of them in `hidden-older-ocr` (17), `figures-charts` (12), `columns-span-figure` (11), `align-paragraphs` (6) and `initial-image` (2): no table document has one.
+- [ ] **Signed off** (maintainer)
+
+### D264 — `nm-deskew` ignores ink runs longer than 1/12 of the page width (P6.4b; D238)
+**Decision**: `nm-skew-points-cap` (`nm-skew-points` is the same with no cap): a run longer than `w / 12` is not a point of the projection profile; `nm-deskew` uses the cap. The midpoint of a run stands for its pixels only while the run is short against the angle (D238's own argument), which a table's rule 535 px long is not.
+**Why**: a page of table rules and no text (`script-cjk`: 3.18 degrees; `table-slanted-header` p2: 0.61) was deskewed by a wrong angle that moved every rule by 120 to 145 px; a few long runs outweighed the text that was not there.
+**Measured**: `bb ink`: every layer line identical; deskew within 0.1 degree .892 -> .946 (scan-ovl) and .919 -> .973 (scan-color), within 0.3 degree and the worst unchanged on scan-ovl (.973, 0.37) and better on scan-color (worst 0.17 -> 0.13). Laws: a ruled table alone is not skewed (fails without the cap).
+- [ ] **Signed off** (maintainer)
+
+### D265 — `bb trace`'s truth is what the render shows; render views; the PDF's hash guards the cache (P6.4b; D258, D238)
+**Decision**: (1) the harness gives the renders to norm as `render` views (`TRACE_DECODE=1` restores `decode`): a render is not a scan, and a decode view is deskewed; (2) a vector rule is truth only where the no-text render has a pixel darker than 240 within 1 px (runs of 10 px or more, gaps up to 24 px bridged); (3) a page that paints an image (`Do`), a shading (`sh`) or a dash pattern has no precision score from its paths; (4) the `gfx-*` documents (shadings, patterns, images, curves, hidden pieces) use P6.8's `gold/STEM.rules.json`, rules and fills; (5) the fill truth is lightness 600 to 959; (6) each cache directory keeps its PDF's SHA-1 and is dropped when it changes (P6.8 regenerated `table-multipage-*` and others after P6.4's renders were cached: a with-text render of page 1 was page 3 of the new PDF); (7) `--legacy` is P6.4's scoring (no visibility check, no oracle, no exemptions, fills under 900), `--tl` the with-text half, `--misses FILE` the text-layer lines no `tlines` row matches. Not changed: the pooled samples, the 2.5 px matching, the endpoint rule, the IoU of lines.
+**Why**: P6.4's "vertical P/R .958/.963" and "endpoint p95 2.75" were mostly the three artefacts above; a tuning pass aimed at them would have tuned the tracer to the truth's errors. `--legacy` keeps the old numbers reproducible (.925/.957 vertical, 2.75/1.75 endpoint on the 99 documents, both before and after this item).
+**Measured**: see P6.4b.
+
+### D266 — A manually triggered GitHub Actions workflow runs every gate and `unit red` in parallel jobs (SPEC 15.3)
+**Decision**: `gates.yml` (`workflow_dispatch` only: `groups` all | unit-only | fast-only, `ref`) checks emon and `3sln/kin` out side by side (`../kin`) and runs, on `ubuntu-latest`: `bb unit ARM` and `bb unit red ARM` per arm (go, rust, java, csharp; `unit red` now takes an optional arm), and `bb gates G...` shards for the rest (`bb gates` now takes gate names; its completeness check still runs). A summary job compares the four arms' law counts (`bb ci laws-compare`, what `bb unit` does in one process) and fails if any selected job failed; `bb ci coverage` (in the `static` shard) fails if a gate of `kin/scripts/gates` is in no shard or the workflow calls a missing bb task. Toolchains are pinned to the maintainer's (bb 1.3.190, Rust 1.92.0, Go 1.21, Temurin 25, .NET 10, ImageMagick 7 by AppImage, Python oracles at the versions of `~/.cache/emon/pylib`). Tesseract and pdfium are NOT installed: `ocr` and `render` replay committed transcripts (D127, D216). The corpus (`formats`, `financial`: all `png-check` and `image` read) is written from repository secrets into `.env`, pulled by `bb corpus-pull` only when `bb corpus-index-sha` (the SHA-256 of the remote `index.json`) changes, and cached under that key; missing secrets fail the run with a message naming them.
+**Why**: the gates take over an hour serially and nothing runs them but the maintainer's machine; sharding them is the cheapest way to a second opinion, and manual-only keeps a 12 GB corpus's credentials and minutes out of every push. Linux differences, not yet measured: poppler is Ubuntu's (older than macOS's), which `content-check` uses only for word-box comparison, and ImageMagick's version is whatever the AppImage is; a first run decides whether either needs pinning.
+- [ ] **Signed off** (maintainer)
+
+### D267 — P3.6a as built: a path is classified on the region it paints, in the glyphs' order, with five readings of its own (P3.6a; SPEC 8.4.3; D219, D152, D155)
+**Decision** (`emon.pdfvis`, `pv-path`, run at the end of each page after the glyphs and images; not clips, not shadings, whose `vchk` stays 0).
+`paths` cells 19-22 are `vis`, `vby`, `vchk` and `backdrop` (-1: not asked or not told; cell 23 stays spare); `vchk` starts as the
+interpreter's blend (128) and soft-mask (256) bits. The region is the path's box (it already holds half the stroke) intersected with the
+box of its clip. The checks and their order are the glyphs' (clip, offpage, white, zero-size, occlusion, ocg, transparent) with these
+readings: (1) boxes are CLOSED for clip and offpage (a rule has no height, a hairline no width: touching is overlapping; an empty clip
+overlaps nothing); (2) zero-size is a region with no extent either way, a point, and never for a stroke of width 0, which is a hairline
+and is drawn; a thin filled rectangle of any thickness is a rule; (3) the ink is the stroke colour if stroked and the fill colour if
+filled, both must equal the backdrop (a pattern fill is unknown); the backdrop is the glyphs' search (the nearest earlier opaque
+rectangle fill that covers the whole region, else the paper; an image, shading, pattern, translucent or partial cover makes it
+unknown), kept in `backdrop` so a consumer can ask for CONTRAST (a white rule on a dark header is seen); a region with no extent one way
+is grown by one centipoint that way only, so a hairline has something to look under and a box that merely touches its neighbour does
+not overlap it; (4) an earlier rectangle that the path, itself an exactly known opaque rectangle, covers completely is not what it is
+painted on: a rule drawn twice is the later one's ink and the earlier is `occluded` (without this both came out hidden, the first
+under the second, the second 'the colour of the first': 4 of the 8 hidden rules the first survey compared with the render were this),
+while a same-coloured rectangle inside a larger one is `white` (the frame's edges: invisible, and the survey says so); (5) the look-back
+and look-ahead are PV_SCAN (4,096) rows each, and on a page of more than 20,000 paths they shrink in proportion (to 64) so a page of
+200,000 paths costs at most about 160 million steps and not 3 billion; past it the answer is 'cannot tell' (visible), as for glyphs.
+A path whose `vis` is 0 and whose `vchk` lacks the blend and soft-mask bits is exactly known (the occluder test's own rule).
+**Why**: D219; each reading is the one that kept the claim exact against poppler's render and the 899-file survey (D269).
+**Alternatives**: a closed-box test also for the white and occlusion checks (a box that touches is not covered); `zero-size` under
+a point (a 0.5 pt rule is a rule: D179); skipping `occluded` when the occluder is the same colour (then the first of two stacked
+different-colour rects would show, which it must not); an unbounded scan (above).
+- [ ] **Signed off** (maintainer)
+
+### D268 — Whole straight geometry: 4,096 points for `m l h re`, 128 with a curve, one flag for a cut path, a page budget for `pts` (P3.6a; D219, D152)
+**Decision**: `PATH_KEEP_STRAIGHT` 4,096 (`kin/pdfcontent.kin`; a grid of 30 `re` is 150 points and stays whole; 1,100 `re` is 5,500 and is
+cut), `PATH_KEEP` 128 for a path with any curve, `PTS_PAGE` 1,000,000 `pts` rows a page (cell `C_PTS0` is the page's first; past it every
+later path is cut and warning 1024 is set). A cut path keeps its box and no geometry (D152's rule: not its first 4,096 points, which
+would be a different shape) and its `paths` row (and its clip row) carries `truncated` (512, in the `pg` enum and the dump); a curve
+path of 129-4,096 points was a 'kept' path before and is now a `truncated` one, so the dumps of such paths gain a flag, nothing else.
+The `pts` arena is still dropped for a path nobody kept. A kept straight path is `pf-pfirst`/`pf-pcount` rows of `pts`: the segments P5.5a
+turns into rule primitives.
+**Why**: a grid drawn as one path (ReportLab, Excel exports, PDF/UA tools) is one box without this, and a table built on its box has no rows
+and no columns; the bound is the one that keeps a hostile path from holding the page's memory (12 MB of `pts` at the page bound).
+**Alternatives**: keeping the first N points of a cut path (an open shape that a consumer would take for the whole); one `paths` row per
+subpath (the dash and the paint order are per path; D219); no page bound.
+**Not done**: the page bound has no fixture (a page of a million points is 8 MB of PDF); it is the same test as the path bound.
+- [ ] **Signed off** (maintainer)
+
+### D269 — P3.6a verified and measured; what P5.5a takes (P3.6a; D219, D267, D268)
+**Fixtures** (`kin/scripts/vis-fixtures`, `test/vis/paths.pdf`, rows `P` of `test/vis/rows.txt`, held by `kin/pdfvistest.kin` on four targets
+and, through a 512-byte async source, by `kin/pdfcontenttest.kin`): per class a horizontal rule and a thin filled rectangle: clipped away,
+half clipped (seen), off the page, white on white and almost white, white on a black rectangle (seen, backdrop black) and on half of one
+(seen, backdrop unknown), occluded by a later white rectangle and by a later image, covered in half (seen), under half-transparent and
+Multiply white rectangles (seen), under an OCG that is off, in a print-only layer (seen), at alpha 0, filled-and-stroked with a clear fill
+(seen by its stroke), under Multiply and under a soft mask (seen, `vchk` 128 and 256), a 0-width hairline and a stroked point (seen), a filled
+point (zero-size), the same thin rectangle drawn twice, a black rectangle inside a black one (white), a grid of 30 `re` in one path
+(150 points, whole) and one of 1,100 (truncated). `vis-check` holds the same rows to the generated Rust and, with `--render`, to poppler.
+**Survey** (899 files, `bb tools/vis/corpus-vis.clj --paths-only --n 900 --max-kb 4000 --pages 100000`, five minutes; `--paths-render` is
+the render witness for the rule-like paths): the numbers are in the P3.6a entry above. A first run found the drawn-twice rule (D267 (4)).
+**What P5.5a takes**: a rule candidate is a `paths` row that is painted (not `pg-clip`, not `pg-shading`) with `vis` 0; it is EXACT when
+`vchk` has neither 128 nor 256, else it is a candidate the render must witness (D222); its contrast is `pf-backdrop` against its ink
+(`-1`: unknown, so 'seen' is all that is known); its segments are the `pts` rows `pf-pfirst` for `pf-pcount` when the row is not
+`truncated`, else its box only; `occluded` rules whose `vby` row has the same colour are the drawn-twice case (the later row is the rule).
+`tools/accuracy/graphics.clj` still reads `grl`, so the P6.8 rule metrics (`rule-p`, `rule-r`: 0.0 for the `emon` predictor) do not move until
+P5.5a writes `grl` from these rows.
+**Known**: `kin/scripts/vis-check --render` reports three glyphs of `spaces.pdf` (`C21`, a pattern colour) as flat where emon says visible;
+that is the glyph witness, not changed here (poppler does not paint the fixture's pattern).
+- [ ] **Signed off** (maintainer)
+
+### D270 — P5.5a as built: the graphics arenas, the vector source, the table stage's one reader, and the Engines' wiring (P5.5a; SPEC 9.7, 9.9, 10.5; D218, D220, D222)
+**Decision**: `kin/glayer.kin` has the layouts of `grl` (24), `gfl` (16), `ggp` (12), `grg` (16) with accessors (`grf-`, `gff-`, `ggf-`, `gcf-`)
+and builders (`grl-new` ...), the enums `go`, `gq`, `gk`, `rk`, `gs` (the sources bitset: vector 1, trace 2, ocr 4, struct 8, image 16) and
+`glk` (the dump's keys), `gl-check` (1 stride, 2 a group outside `ggp`, 3 a member run outside `refs` or a group of an unknown kind, 4 a
+bad orientation, thickness or box, 5 a bad region, 6 a `refs` reference into a row that is not there), `gl-append` (re-bases groups and
+member runs) and the dump (`gl-fd`, `gl-fx`, `gl-emit`: a law holds that every cell is printed or spare). Where SPEC 9.7 is amended
+(SPEC edited in place): the flags of `gfl` are their own enum `gqf` (shading, pattern, in-image, tint-coloured: the spec lists two flag sets
+under one name); `gq` gains `from-image` (256, appended: a thin image placement drawn as a rule, SPEC 9.9, which had no bit); `grg` has 3 spare
+cells, not 2 (13 fields in 16, as D240 corrected `cg` and `fa`); sources are the `gs` bitset (the spec's `sr` is the words' enum). The
+layer's codes: `grl` 41 (`fpa`'s, which is gone from `player.kin`: `pl-append`, `pl-check`, `pl-emit` and `pl-emit-layer` take `grl gfl ggp
+grg`, `pl-check` answers 11 + `gl-check`'s answer), `gfl` 43, `ggp` 44, `grg` 45. `kin/gvec.kin` `gv-page` writes candidates (stride 16) in
+`legacy` (0: `tb-collect-one` exactly) or `segments` (1: D271); `kin/gfuse.kin` `gf-page` writes the rows through 501, 505, 514, 560 and 562
+(`fr` number in the row; 505 is not recorded: there is no `fx` without a group) and `gf-doc` runs both for every page of the document;
+`gfx-mode` is the mode the Engines pass (0 in step A, 1 now). `ggp` is not written before P7.G (every row's group is -1), and no collinear
+candidates are merged here (`tb-build` merges them, D179). `tb-collect` reads `grl` (orientation `h`/`v`; not a running header's or footer's,
+D272) and `gfl`; `tb-build` takes `grl gfl` where it took `pa`. Both Engines call `gf_doc` once per document before the evidence dump and
+`tb_build` (until P7.U moves it into the page unit), and an Engine's `keep_evidence` dump is version "2" with the four arrays after the
+evidence's when `grl` or `gfl` is not empty (`pl-emit-gfx`), else version "1" as D242 left it (so no golden moves: the three content goldens and
+the slice's are of documents with no rule or fill); the rest of the layer joins the dump with P7.3.
+**Why**: D218's one reader; the identity step first (D270's step A held 674 outputs byte for byte) so that every later change is the
+vector source's and nothing else's. **Alternatives**: a version-2 dump always (moves the goldens P7.3 owns); `ggp` rows for every vector
+candidate now (a refs row per rule for nothing a reader reads before P7.G).
+- [ ] **Signed off** (maintainer)
+
+### D271 — The `segments` reading of a path: what a rule is, from the geometry (P5.5a; SPEC 9.9 "Vector candidates"; D179, D220, D267-D269)
+**Decision** (`gv-page`, mode `segments`). A path is read by its subpaths (`pts`); one with no geometry kept (truncated, or built by hand) by its
+box, as a rectangle (a stroked one inset by half its stroke first). A subpath of four axis-aligned corners, optionally followed by a line back
+to the start and a close (`re`: five rows; Skia, Chrome's PDF writer: six), is a rectangle: thin (an extent, grown by a stroke, at most 4 pt
+on one side and at least 5 pt on the other) it is ONE rule along its long axis (`from-fill` when it is not stroked); else a filled one
+larger both ways is a fill (colour -1 and the flag `pattern` or `shading` for a pattern fill) and a stroked closed one larger both ways is four
+`box-edge` rules at the exact corners; any other subpath is its straight segments (`l`, the closing edge, a curve whose two control points lie
+within 0.5 pt of its chord), each a rule when the path is stroked, at most 4 pt thick (a zero width counts 24 cpt, one device pixel) and at least
+5 pt long; a curve that is not flat is figure material and nothing. A shading is a fill of colour -1 over its box (at least 5 pt both ways).
+Every candidate is trimmed to its clip's box (a rule along its axis; a band that misses the box, or a rule the trim leaves under 5 pt, is
+dropped; a fill is intersected), carries the path's `/Artifact` (`artifact-pagination`, `artifact-layout`) and its `vis` (a hidden one is kept
+flagged in the scratch and is nothing in `grl`, rule 505), and must CONTRAST: the ink against the `backdrop` of P3.6a by 16 of 255 in luminance;
+**a backdrop of -1 is not tested** (D269: "seen is all that is known": the three white column separators of `table-white-rules` straddle two
+header fills, so no one fill covers them) and neither is an ink of -1. A visible image placement at most 4 pt thick and at least 5 pt long is a
+`from-image` rule of colour -1 (514). **Dashes**: Chrome draws a dashed or dotted border as the dashes' polygons in one path (`table-dashed`:
+the whole path's box was D179's one rule); a thin box under 5 pt long is a PIECE, and a run of at least three pieces of one path, on one axis and
+line (1 pt), as thick (0.5 pt) and no more than 3 pt apart, whose extent is at least 5 pt, is a dashed (dotted when the period is within four
+thicknesses) rule whose pieces stay candidates of their own (nothing bridges a gap: SPEC 9.9; `tb-build` merges them as D179 does); other
+pieces are dropped. The rule's ends are the line's, not the path box's, which holds half the stroke at each end: a table's box moves by up to half
+a stroke (71.75 -> 72 pt), and a rule truth (pdfplumber's) is matched at its tolerance.
+**Why**: each choice is the one the P6.8 fixtures, the survey and the oracle's truth agree on (D272). **Alternatives**: the contrast against white
+for an unknown backdrop (SPEC 9.9's text: drops the white separators on a partly covered header); merging the dashes (bridges gaps, and costs rule
+precision for dashes the oracle's truth does not list); a piece under 5 pt as a rule (every tick mark and bullet).
+**Not done**: `ggp` groups and the `fx` record of 505 (P7.G); a stroked rectangle that is open (three sides) is its three segments, an open
+filled-and-stroked box only its fill; a slanted rule is not trimmed to a clip (its axis rules are).
+- [ ] **Signed off** (maintainer)
+
+### D272 — P5.5a measured; a running header's rules are the page's top and bottom eighth, not every pagination artifact (P5.5a; D182, D270, D271)
+**Decision**: `tb-collect` skips a fused rule flagged `artifact-pagination` only when it lies wholly in the page's top or bottom eighth (D182's stand-in
+for the furniture zones; `tb-running-rule`), where SPEC 10.5 and the brief skipped every one. The survey (the IRS publications) found producers that
+tag a table's own rules as `/Artifact /Pagination`: all 104 rules of Publication 15's withholding table on page 46 carry it, and reading none of them
+lost every ruled table of pages 32-51 (12 of 12). The flag stays in `grl` for the readers that ask. The numbers, the documents and the survey are in
+the P5.5a entry above. **Alternatives**: skipping every pagination rule (above); reading them all (a header's underline closes a table).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here
@@ -7867,132 +8166,3 @@ them; offer them upstream when they have proved general.
 - **Key/value extraction** for scanned forms (FUNSD-style) beyond AcroForm.
 - **Other inputs**: XPS/OXPS (fixed-layout like PDF), DjVu.
 - **Signature validation** (cryptographic) — out of scope unless asked.
-
-### D186 — A table's claim on a line and the initials' code share cell 15 without meeting: the claim is TB_HELD (2^30) + the table's index
-
-**Decision**: cell 15 of a line row was the table stage's claim (D178) and, on the lines' copy, the initials' code (D183: minus the drop's code points, or `4*(row+1)` plus flags). Both Engines run furniture, then the tables on the evidence lines, then the copy and `in-detect`, then headings, then `pa-build`; so the two met. A table's claim is now `TB_HELD + k` (1073741824 + the table's index, `tb-claimed` answers index + 1 or 0); `in-detect` leaves a held line's cell 15 as it is and never sees the line (`in-collect` skips it, so a big first glyph in a table cell is no initial, and a table's lines never take part in a drop initial's neighbours); `in-row`, `in-cell` (para's raised-initial and no-space bits and `pa-skip`) read a held line as no initial; the column stage's split copies the claim to the new piece instead of clearing it; the heading stage's "a held line is never a heading" tests `>= TB_HELD`, so a heading that opens with a raised initial is still a heading. `pa-build` takes the prepared copy (`lt`) of the lines and no `ln`; the tables' laws and the Engine's hosts prepare it as the Engine does. **Held to**: the unit laws on all four arms (356), the table goldens (now carrying `align`), the accuracy gate (no metric lowered; the branch's lowering of `pdf/forms block-paragraph-r` was not carried over).
-**Alternatives**: a 17th line cell (every stride changes in the evidence, the columns and the readers); the claim kept on the original lines only (a column split's new rows are not there to ask).
-
-### D249 — The page unit as built: the document pass reads the input, each page is its own loop, and the evidence dump keeps its pre-join marks (P7.U; SPEC 2.2, 7.3, 12.1; D195, D207, D211, D212)
-**Decision**: (1) The Engines run three parts: the document pass (everything that reads the input, re-run on misses, and for
-a PDF the plan of the page units: `pu-plan` locates a scanned page's one DCT stream, so a page unit never reads the input),
-one `plan::run` a page (a unit that writes nothing until its answers are in), and the document unit (stage 3 unchanged). (2) A
-raster input's document pass is header-only (D187): the page table needs no pixels; each frame's unit asks its pixels and then
-its OCR, and a frame that cannot be decoded refuses the conversion by name whatever the policy (it still asks the decode under
-`never`). (3) Ids are D207's: page `p` asks `(p + 1) * 256 + k`; the header-only decodes of the document pass keep `f + 1`
-(their records differ from a page unit's by the frame argument). (4) The evidence dump is taken from the glyph, mark and font
-arenas as they were before the tagged tree was joined to them (a copy, only when the evidence is asked for), because that join
-now runs before the units and the dump has always shown the text layer before it. (5) The PageLayer is, until P7.0 and P7.3,
-the page's rows of `wd`/`ln`, in the text layer's own layouts; a scanned page's OCR lines are appended in page order, so
-stage 3 reads what it always read. (6) `max-rounds` is 5, `RunStats` gains `page_rounds` and `page_requests`; `attempts` stays
-the document pass's.
-**Why**: memory (one page's bitmaps, not the document's; no recomputation of a page's work in every round of another's) and
-the seam P7.3 plugs fusion into; (4) is what keeps every committed dump byte for byte.
-**Alternatives**: running the tagged tree after the units (a second loop that reads the input, and a miss in it would re-run
-the document pass); making the dump an Engine-side concatenation (it is kin's `ev-emit`).
-- [ ] **Signed off** (maintainer)
-
-### D250 — `BitmapSet` as built: one set an attempt, answered and kin-made bitmaps apart, kin-made ones visible to the fulfiller (P7.U; SPEC 7.2; D092, D196)
-**Decision**: the set is made for each attempt of a page unit from the bitmaps its answers carried (shared, not copied) and is
-dropped with the attempt; `bms-put` allocates a zeroed bitmap kin fills and panics on an id already in the set; what kin made
-is added to the bitmaps `Fulfiller::start` is given, so an `ocr` request naming a kin-made view finds its pixels. In Rust the
-set hands out `&Bitmap` borrows of `Arc`s that are never removed or replaced for its life (one `unsafe`, in `port.rs`); the
-other three trees use plain maps. A missing id reads as a 0 x 0 bitmap.
-**Why**: kin keeps views it made while it calls `bms-get` again, which a `RefCell` guard cannot allow; a set per attempt
-means a re-run recomputes what kin made (it is a function of the answers) and the host never holds a stale view.
-**Alternatives**: `bitmap-new` in kin (the host could not give the engine what kin made); one set per page unit across attempts
-(stale views, and an id collision on every re-run).
-- [ ] **Signed off** (maintainer)
-
-### D251 — A born-digital page's two rasters are asked lazily, by a consumer stage, and a gate with no Renderer sees `unsupported` (P7.U; SPEC 7.2; D199, D201, D212)
-**Decision**: **revised by the coordinator 2026-10-05: lazy until a consumer exists; avoids two 300-dpi renders per page doing nothing.** As built
-by P7.U (and reversed): under `always` (the default, D038) a born-digital page's unit asked `render` layer 0 and layer 1 at 300 dpi in one round
-and was not OCR'd. Now `pu-run-pdf` asks a born-digital page for nothing (`us-done`, and no OCR, D201); the two requests (D199 (2): ids
-`pi-render-text` and `pi-render-no-text`, 300 dpi, `always` only) live in `pu-ask-rasters`, which a stage that reads pixels calls when it
-needs them (P7.1, P7.3; none does yet). With no `Renderer` both are answered `unsupported` and transcribed, and the Model is the one a
-conversion without them gives; output is byte-identical whether or not they are asked.
-**Why**: the requests are the contract P6.3 and P7.3 read the pixels through, and `pu-ask-rasters` with `kin/pageunittest.kin` keeps that
-plumbing (ids, `BitmapSet`, `unsupported`) proven; asking them before a consumer exists made an embedder with a Renderer pay two 300-dpi
-renders a page for nothing.
-**Alternatives**: asking in the page unit now (P7.U's original: proves the plumbing on every document, costs the renders); making the default
-`auto` for born-digital until P7.S.
-- [ ] **Signed off** (maintainer)
-
-### D252 — The tracer as built: a caller-owned workspace, one `tr-trace` per traced bitmap (the binary view with its majority layer, or an ink mask as one fixed layer), classes mapped onto the existing `ck` codes (P6.4; SPEC 8.2, 8.4.4; D092, D198, D220)
-**Decision**: `kin/trace.kin` (`emon.trace`) allocates no bitmap and no arena: the caller owns the workspace `Cells` (`rn ri cs vr pc sg mem s1..s6`) and the evidence arenas, as `emon.norm` does (D220). `tr-trace` runs runs, components, rules, contours and primitives, text lines on ONE bitmap: a binary view (each component's ink row is the majority of `labels`, i.e. `nm-label-into`) or an ink-mask view (`fixed` = that layer's `inks` row); the caller traces the binary view and every non-body layer's mask (a faint watermark is not in Sauvola's binary), and `tr-tints` on each `light`/`background` mask. Components are union-find over row runs (a pair of adjacent rows touches with one pixel's slack, the smaller root wins), sorted by (top, left, ink, root run); holes are edges - runs + 1 of the run graph; parent is the smallest hole-bearing component whose box holds it and that has ink on both sides of the child's own first and last row. `ck` has no `noise`/`large`/`rule-like` codes and `evidence.kin` is P3.6a's: noise is `blob` with confidence 0, large is `blob` 700, text-like 900, `rule-h`/`rule-v` 900. The median text height M of the glyph-sized components counts each once on the binary view and needs three of them (a table alone is not a glyph), and on an ink mask weighs each by its ink capped at 1024 pixels (a watermark's huge letters outweigh the specks of their own mask); text-like is M/3..4M high, at most 8 times as wide; a rule candidate is thin (ink over the longer side at most 2 pt: a Sauvola outline of a filled bar is 11 px, 2.6 pt, and is not a rule), at least 6 pt and 8 thicknesses long, hole-free and longer than 2M; `tr-rules` confirms it or it becomes large. Limits: 4,000,000 runs, 200,000 components (the rest counted), 6,000,000 column runs, 6000 rule pieces, 60,000 corners a contour. `prims` flag bits: closed 1, filled 2, double 4, tint 8. Rust, Go, Java and C# hold the same 32 laws (`kin/tracetest.kin`); Rust and Go dump byte-identical rows on every page measured.
-**Why**: D092 (memory proportional to ink), D220 (the caller owns memory), and not touching `evidence.kin` (the who-edits-what table).
-**Alternatives**: a label image (35 MB a page); adding `ck-noise` (an additive code, but another item's file); arrow primitives (not built: no fixture has one, the `arrow` code stays unused).
-- [ ] **Signed off** (maintainer)
-
-### D253 — Stroke width is the smaller of the median row-run and median column-run lengths; its error against a distance transform is measured, not assumed (P6.4; D198)
-**Decision**: per component the median length of its row runs and of its column runs (column runs from one pass over the row runs, a counter a column, ended where the pixel below is paper), the smaller one, in pixels, written in centipoints. `bb trace` compares it with a 3-4 chamfer distance transform (ridge median, 2r - 1) on text-like components; the numbers are in P6.4's "Measured".
-**Why**: a vertical stem's rows are its width and a horizontal bar's columns are; the other median is a length. Integer, cheap, no second image.
-- [ ] **Signed off** (maintainer)
-
-### D254 — Contours by crack following on the binary view itself; integer Douglas-Peucker at 1.5 px; rect, ellipse/circle, ring (annulus or concentric pair), polygon, curve by residual (P6.4; SPEC 8.2; D198)
-**Decision**: the outer boundary of every LARGE component (also one that gave rules: a frame is four rules and a `rect`), traced as pixel corners with 8-connectivity on `binary` (a neighbour that is ink belongs to the component, or it would be bigger), so no component-local bitmap is needed. Simplified closed at eps 1.5 px (`4 cross^2 > 9 chord^2`). `rect`: the longest edge's angle, every edge of 4 px or more within 3 degrees of it or its perpendicular (off-axis at most 1/8 of the perimeter), mean distance of the raw corners to the fitted rectangle under 40 per mille of the smaller radius; `circle`/`ellipse`: moments of the corners weighted by edge length, axis from the covariance, radii from the extents, mean equation residual under 40 per mille, circle within 5 per cent; `ring`: such a circle whose centre row has exactly two runs with a hole of 3/10 .. 1 of the radius centred within 15 per cent, or whose parent component carries a concentric circle of 0.4 .. 0.97 of its radius (then `double` and both components as members); else `polygon` (12 corners at most) or `curve`. Confidence is 1000 minus eight times the residual. The fitted outline of a `rect` is its four corners; the others point at the contour's `pts`.
-- [ ] **Signed off** (maintainer)
-
-### D255 — Rules from chains of thin slices: row runs for vertical and steep rules, column runs for horizontal and shallow ones, straightened, merged, dashed, doubled (P6.4; D226; SPEC 8.2)
-**Decision**: inside every component that is neither noise nor a glyph (a table grid is one `large` component), a slice is a run or column run of at most 2 pt; slices of consecutive rows (or columns) whose two edges are each within one pixel are a chain; Douglas-Peucker at 1.5 px must leave one stretch of at least 4/5 of the chain (a circle's arcs are not rules); the stretch is a piece. Pieces on one line (2.5 degrees, within thickness + 2 px) and within `rule-gap` (2 pt) are one rule (this bridges the crossings of a grid); shorter groups of three or more dashes with gaps and lengths within 0.4 .. 2.2 / 2.5 times their medians are one `dashed` rule (`dotted` when no longer than twice the thickness, but dots below the 8 px chain minimum are not found: not built); two parallel solid rules 1-3 thicknesses apart overlapping by 60 per cent are both `double`. A skewed scan needs no deskew: a slice chain follows a line up to 45 degrees off its axis, in either representation. Confidence is D226's (1000 minus the gap per mille, minus 300 for thickness varying by more than half beyond one pixel of jitter). Not found: slanted lines steeper than 45 degrees inside large components in both representations at once (they are, by the other one), and lines inside a glyph-like component (an underline fused to a word).
-- [ ] **Signed off** (maintainer)
-
-### D256 — Text lines without OCR by agglomeration; the direction is the thinnest strip, the baseline the bottoms' least squares (P6.4; SPEC 8.4.4; D095)
-**Decision**: per ink layer, text-like components are linked when the gap between boxes is within 1.5 mean heights (heights within a factor of three), joined nearest first, a join accepted while the union's centres stay within 0.3 of the mean height of a line (any pair passes). A chain of 3 or more is a `tlines` row: its direction is the angle (every 0.25 degree within 10 degrees of the covariance axis) at which the strip containing the chain's run ends is thinnest, so that a text block hiding part of a watermark does not bend it; the baseline is a least-squares line through the members' bottoms in that frame (one outlier round), the row's `rot` is `ev-angle` of it in page space; mean height and gap in centipoints. `tr-orient-hint` answers 0 or 1 from the member-weighted directions. Known limit, measured: on `watermark-draft` the visible letter pieces give 34.5 degrees against the PDF's 30.
-- [ ] **Signed off** (maintainer)
-
-### D257 — Tints from row runs of an ink mask; features 14, 15, 23 (P6.4; D226)
-**Decision**: as D226, with the rectangle's rows continuing while both extents move at most 2 px from the row above (so a slightly skewed band survives); coverage is the mask's ink over the box. `tr-feat-ocr` fills `xo` 14 (text-like components centred in the word) and 15 (per mille of its symbols with one centred in them, -1 without symbols), `tr-feat-text` `xt` 14, 15 and 23 (largest overlap with a `tlines` row differing by more than 3 degrees mod 180).
-- [ ] **Signed off** (maintainer)
-
-### D258 — `bb trace`: truth is the vector content of ghostscript's text-free copy; scoring by length and by area (P6.4; D227)
-**Decision**: `gs -dFILTERTEXT` removes the text and keeps the paths (it is also the `no-text` render), qpdf's QDF is read by a small content-stream interpreter (q Q cm re m l S f B w colours): a filled rectangle at most 3 pt thick and 4 times as long, or a stroked segment at most 3 pt wide and 3 pt long, is a rule; a filled rectangle over 5 pt each way, lightness at least 600 and not the paper's white, is a fill. Rule precision and recall are the share of samples (every 3 px) within 2.5 px of the other set; fills are compared as areas on a 4 px grid. Not a gate; P7.S owns the ratchet.
-- [ ] **Signed off** (maintainer)
-
-### D259 — Light fills from the gray view: a separate path, uniform pixels in a band under the paper, bridged across glyphs, deduplicated against the layers' tints (P6.4b; D226, D237)
-**Decision**: `tr-lightfills` (`kin/trace.kin`) runs once a page after the ink layers' traces, on the GRAY view and the paper gray (`nm-paper-gray`), and nothing in P6.3 or in the binary view changes. `tr-light-mask` marks a pixel as fill when it is 10 to 104 levels under the paper and within 4 levels of the pixel to its left (an antialiased glyph edge is steeper, a band's flat part and a scan's noise are not), and bridges a run of non-fill, non-paper pixels of at most 3 pt between two fill pixels of a row (a stem in a header cell; a paper pixel ends the bridge). `tr-tints` then runs on that mask (a rectangle at least 6 pt each way whose rows move at most 2 px), the rows whose box is half inside a tint already written by a layer's mask are dropped, and the rest get the mean gray of their fill pixels at nine points as colour. A page more than 60 per cent fill is not traced (the paper was misjudged). The flags are `tr-tints`': closed, filled, tint.
-**Why**: P6.3 gives a layer to a colour bin farther than 24 of 255 from the paper bin (D237), by mass; a header fill of lightness 0.89 on one row of a table has no layer, so P6.4 gave `table-multipage-thead` 0.000 of its fills. Banding (`gfx-shading-bands`, `gfx-pattern-bands`) is the same case: flat bands under the paper.
-**Measured**: tints, area recall .334 -> .976 and precision .960 -> .928 on 95 truth fills of 18 pages (the vector fills of lightness 600-959 and P6.8's `gfx-*` fills); the lost precision is fills of pages without a truth list. Time +11.8 ms a page (mean). `bb ink`: identical.
-**Alternatives**: lowering `nm-ink-paper` (it moves every layer, body ink separation included, `bb ink` is the guard); a per-layer lower threshold for tints only (a layer needs a mass to be a layer).
-- [ ] **Signed off** (maintainer)
-
-### D260 — The median text height is taken over glyphs of at most 48 pt on the binary view, 200 pt on an ink mask (P6.4b; D252)
-**Decision**: `tr-text-max`: the provisional glyphs that give `tr-kinds` its median height M are at most 48 pt tall on the binary view (200 pt on a mask, where a watermark's letters are huge). With fewer than three, M is 0 and nothing on the page is `text`.
-**Why**: on a page of figures with no text (the harness's no-text renders; a figure page whose text is an image) the bars, boxes and charts were provisional glyphs, M became their height, and a whole chart (axes, ticks and a curve: one component) was `text`, so no rule was looked for in it (`figures-charts` p1's second chart). 48 pt is above any body or heading text the median is for; a headline above it was never `text` (4 M).
-**Measured**: vertical rule recall .995 -> .997, horizontal .994 -> .995, all other rule and component numbers within noise.
-- [ ] **Signed off** (maintainer)
-
-### D261 — A text line's direction is the thinnest strip's; the bottoms' fit refines it only where the bottoms line up (P6.4b; D256)
-**Decision**: in `tr-tlines`, after the two refinement passes, the fit's angle is dropped, and the baseline is the strip's lower edge, when the bottoms' residual rms is over 1/8 of the mean member height or the fit would pull the angle 1.5 degrees from the strip's. `tr-line-frame` answers the residual and the lowest bottom for that.
-**Why**: DRAFT's body text hides the bottom of each letter at a different height, so the least-squares line of the bottoms (rms 51 px of a 421 px letter) bent the 30.02 degree strip to 34.5 (two clamped 1.5 degree steps). The tops of the five letters lie on a 30.0 degree line to a pixel; the five centroids lie on a 35 degree one (measured on the page's mask), so a vote over centroids is not what the brief expected: a letter's centroid is a property of the letter. The thinnest strip was already right.
-**Measured**: DRAFT 34.51 -> 29.99 degrees (target 30 +- 0.5); `tlines` otherwise unchanged by this step.
-**Alternatives**: a Hough vote over centroids (above); a vote over pairs of tops and bottoms (the strip is that, with all the pixels).
-- [ ] **Signed off** (maintainer)
-
-### D262 — Two components of a line may be 2.4 mean heights apart (P6.4b; D256)
-**Decision**: `tr-tl-gap2` 23 (it was 9): the candidate edge of an agglomeration is at most 2.4 mean heights between the boxes (it was 1.5). Swept on the first, partly stale renders: 2.1 -> .9496, 2.4 -> .9514, 3.0 -> .9438 on the long lines; the fresh renders were run at 2.4 only.
-**Why**: a justified word space and a CJK stop are 2 to 2.3 heights; the chain-ok test (centres on a line within 0.3 of a height) keeps the line a line, and past 2.7 columns join across their gutters.
-**Measured**: `tlines` recall of the lines at least 3 heights wide .942 -> .9735 (target .97); of all lines .863 -> .885.
-- [ ] **Signed off** (maintainer)
-
-### D263 — A rule whose component holds more than twice its rules' ink carries the `rf-figure` flag (P6.4b; D226, SPEC 8.4.4)
-**Decision**: `rules.flags` bit 1 (`tr-rf-figure`): the rule's component has more than twice the ink the rules in it account for (half-pixel length x quarter-pixel thickness / 8, summed over the component's rules). An axis with its bars, a tick, a bar's edge or a plot's frame has it; a table grid (all rules), a rule alone, and a ruled line of text do not. The rule stays a rule with its confidence; a consumer that wants only a table's rules drops the flagged ones.
-**Why**: the brief wants axes and bar edges kept as rules and told from table rules. P7.G's fusion has `in-figure` and `box-edge` on the fused rule (`gq`); this is the tracer witness for them.
-**Measured**: 48 of 1153 rules on the no-text renders are flagged, all of them in `hidden-older-ocr` (17), `figures-charts` (12), `columns-span-figure` (11), `align-paragraphs` (6) and `initial-image` (2): no table document has one.
-- [ ] **Signed off** (maintainer)
-
-### D264 — `nm-deskew` ignores ink runs longer than 1/12 of the page width (P6.4b; D238)
-**Decision**: `nm-skew-points-cap` (`nm-skew-points` is the same with no cap): a run longer than `w / 12` is not a point of the projection profile; `nm-deskew` uses the cap. The midpoint of a run stands for its pixels only while the run is short against the angle (D238's own argument), which a table's rule 535 px long is not.
-**Why**: a page of table rules and no text (`script-cjk`: 3.18 degrees; `table-slanted-header` p2: 0.61) was deskewed by a wrong angle that moved every rule by 120 to 145 px; a few long runs outweighed the text that was not there.
-**Measured**: `bb ink`: every layer line identical; deskew within 0.1 degree .892 -> .946 (scan-ovl) and .919 -> .973 (scan-color), within 0.3 degree and the worst unchanged on scan-ovl (.973, 0.37) and better on scan-color (worst 0.17 -> 0.13). Laws: a ruled table alone is not skewed (fails without the cap).
-- [ ] **Signed off** (maintainer)
-
-### D265 — `bb trace`'s truth is what the render shows; render views; the PDF's hash guards the cache (P6.4b; D258, D238)
-**Decision**: (1) the harness gives the renders to norm as `render` views (`TRACE_DECODE=1` restores `decode`): a render is not a scan, and a decode view is deskewed; (2) a vector rule is truth only where the no-text render has a pixel darker than 240 within 1 px (runs of 10 px or more, gaps up to 24 px bridged); (3) a page that paints an image (`Do`), a shading (`sh`) or a dash pattern has no precision score from its paths; (4) the `gfx-*` documents (shadings, patterns, images, curves, hidden pieces) use P6.8's `gold/STEM.rules.json`, rules and fills; (5) the fill truth is lightness 600 to 959; (6) each cache directory keeps its PDF's SHA-1 and is dropped when it changes (P6.8 regenerated `table-multipage-*` and others after P6.4's renders were cached: a with-text render of page 1 was page 3 of the new PDF); (7) `--legacy` is P6.4's scoring (no visibility check, no oracle, no exemptions, fills under 900), `--tl` the with-text half, `--misses FILE` the text-layer lines no `tlines` row matches. Not changed: the pooled samples, the 2.5 px matching, the endpoint rule, the IoU of lines.
-**Why**: P6.4's "vertical P/R .958/.963" and "endpoint p95 2.75" were mostly the three artefacts above; a tuning pass aimed at them would have tuned the tracer to the truth's errors. `--legacy` keeps the old numbers reproducible (.925/.957 vertical, 2.75/1.75 endpoint on the 99 documents, both before and after this item).
-**Measured**: see P6.4b.
-
-### D266 — A manually triggered GitHub Actions workflow runs every gate and `unit red` in parallel jobs (SPEC 15.3)
-**Decision**: `gates.yml` (`workflow_dispatch` only: `groups` all | unit-only | fast-only, `ref`) checks emon and `3sln/kin` out side by side (`../kin`) and runs, on `ubuntu-latest`: `bb unit ARM` and `bb unit red ARM` per arm (go, rust, java, csharp; `unit red` now takes an optional arm), and `bb gates G...` shards for the rest (`bb gates` now takes gate names; its completeness check still runs). A summary job compares the four arms' law counts (`bb ci laws-compare`, what `bb unit` does in one process) and fails if any selected job failed; `bb ci coverage` (in the `static` shard) fails if a gate of `kin/scripts/gates` is in no shard or the workflow calls a missing bb task. Toolchains are pinned to the maintainer's (bb 1.3.190, Rust 1.92.0, Go 1.21, Temurin 25, .NET 10, ImageMagick 7 by AppImage, Python oracles at the versions of `~/.cache/emon/pylib`). Tesseract and pdfium are NOT installed: `ocr` and `render` replay committed transcripts (D127, D216). The corpus (`formats`, `financial`: all `png-check` and `image` read) is written from repository secrets into `.env`, pulled by `bb corpus-pull` only when `bb corpus-index-sha` (the SHA-256 of the remote `index.json`) changes, and cached under that key; missing secrets fail the run with a message naming them.
-**Why**: the gates take over an hour serially and nothing runs them but the maintainer's machine; sharding them is the cheapest way to a second opinion, and manual-only keeps a 12 GB corpus's credentials and minutes out of every push. Linux differences, not yet measured: poppler is Ubuntu's (older than macOS's), which `content-check` uses only for word-box comparison, and ImageMagick's version is whatever the AppImage is; a first run decides whether either needs pinning.
-- [ ] **Signed off** (maintainer)

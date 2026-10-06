@@ -6,6 +6,8 @@ namespace emon;
 
 public static class Pdfvis {
     internal const int PvScan = 4096;
+    internal const int PvBusy = 20000;
+    internal const int PvFloor = 64;
     internal const int PvTol = 4;
     internal const int ZeroSizeCpt = 100;
     internal const int CoverSlack = 2;
@@ -205,9 +207,34 @@ public static class Pdfvis {
         }
         return 0;
     }
-    internal static int PvBackdrop(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, int x0, int y0, int x1, int y1, int gz, int jp, int ji, int p0, int i0) {
+    internal static int PvFullK(emon.Port.Cells pa, int r, int k) {
+        // Component k of the region path row r paints in full: its box (the stroke included) intersected with its clip.
+        int cl = Evidence.PaGet(pa, r, Evidence.PfClip());
+        int cv = PvClipK(pa, cl, k);
+        int v = 0;
+        if (k == 0) {
+            v = Evidence.PaGet(pa, r, Evidence.PfX0());
+        }
+        if (k == 1) {
+            v = Evidence.PaGet(pa, r, Evidence.PfY0());
+        }
+        if (k == 2) {
+            v = Evidence.PaGet(pa, r, Evidence.PfX1());
+        }
+        if (k == 3) {
+            v = Evidence.PaGet(pa, r, Evidence.PfY1());
+        }
+        if (k < 2) {
+            return PvMax(v, cv);
+        }
+        return PvMin(v, cv);
+    }
+    internal static int PvBackdrop(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, int x0, int y0, int x1, int y1, int gz, int jp, int ji, int p0, int i0, int me, int lim) {
         // The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths
-        // are searched backwards from row jp (the first with a later z), images from row ji.
+        // are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being
+        // classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,
+        // covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints
+        // of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).
         int r = jp - 1;
         int steps = 0;
         int zp = -1;
@@ -219,13 +246,18 @@ public static class Pdfvis {
         int ry1 = 0;
         int zi = -1;
         int found = 0;
-        while ((r >= p0) && ((steps < PvScan) && (found == 0))) {
+        while ((r >= p0) && ((steps < lim) && (found == 0))) {
             fl = Evidence.PaGet(pa, r, Evidence.PfFlags());
             if (((fl & Evidence.PgClip()) == 0) && ((fl & Evidence.PgFilled()) != 0)) {
                 rx0 = PvPathK(pa, r, 0);
                 ry0 = PvPathK(pa, r, 1);
                 rx1 = PvPathK(pa, r, 2);
                 ry1 = PvPathK(pa, r, 3);
+                if ((me >= 0) && (PvOpaqueRect(pa, mk, me) == 1)) {
+                    if (PvCovers(PvPathK(pa, me, 0), PvPathK(pa, me, 1), PvPathK(pa, me, 2), PvPathK(pa, me, 3), PvFullK(pa, r, 0), PvFullK(pa, r, 1), PvFullK(pa, r, 2), PvFullK(pa, r, 3)) == 1) {
+                        rx1 = rx0 - 1;
+                    }
+                }
                 if (PvHit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1) {
                     found = 1;
                     zp = Evidence.PaGet(pa, r, Evidence.PfZ());
@@ -243,7 +275,7 @@ public static class Pdfvis {
         r = ji - 1;
         steps = 0;
         found = 0;
-        while ((r >= i0) && ((steps < PvScan) && (found == 0))) {
+        while ((r >= i0) && ((steps < lim) && (found == 0))) {
             rx0 = PvImgK(im, pa, r, 0);
             ry0 = PvImgK(im, pa, r, 1);
             rx1 = PvImgK(im, pa, r, 2);
@@ -260,14 +292,14 @@ public static class Pdfvis {
         }
         return res;
     }
-    internal static int PvOccluder(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, int x0, int y0, int x1, int y1, int jp, int ji, int p1, int i1) {
+    internal static int PvOccluder(emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells mk, int x0, int y0, int x1, int y1, int jp, int ji, int p1, int i1, int lim) {
         // The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths
         // are searched forwards from row jp to p1, images from ji to i1.
         int r = jp;
         int steps = 0;
         int zp = -1;
         int zi = -1;
-        while ((r < p1) && ((steps < PvScan) && (zp < 0))) {
+        while ((r < p1) && ((steps < lim) && (zp < 0))) {
             if (PvOpaqueRect(pa, mk, r) == 1) {
                 if (PvCovers(PvPathK(pa, r, 0), PvPathK(pa, r, 1), PvPathK(pa, r, 2), PvPathK(pa, r, 3), x0, y0, x1, y1) == 1) {
                     zp = Evidence.PaGet(pa, r, Evidence.PfZ());
@@ -278,7 +310,7 @@ public static class Pdfvis {
         }
         r = ji;
         steps = 0;
-        while ((r < i1) && ((steps < PvScan) && (zi < 0))) {
+        while ((r < i1) && ((steps < lim) && (zi < 0))) {
             if (PvOpaqueImg(im, mk, r) == 1) {
                 if (PvCovers(PvImgK(im, pa, r, 0), PvImgK(im, pa, r, 1), PvImgK(im, pa, r, 2), PvImgK(im, pa, r, 3), x0, y0, x1, y1) == 1) {
                     zi = Evidence.ImGet(im, r, Evidence.MfZ());
@@ -353,7 +385,7 @@ public static class Pdfvis {
         // 3. the ink against what is behind it (only for glyphs that paint).
         if ((vis == 0) && ((PvPainted(mode, 0) == 1) || (PvPainted(mode, 1) == 1))) {
             chk = PvBit(chk, Evidence.VcWhite());
-            back = PvBackdrop(pa, im, mk, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0);
+            back = PvBackdrop(pa, im, mk, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0, -1, PvScan);
             if (back >= 0) {
                 npaint = 0;
                 nsame = 0;
@@ -387,7 +419,7 @@ public static class Pdfvis {
         if ((vis == 0) && ((PvPainted(mode, 0) == 1) || (PvPainted(mode, 1) == 1))) {
             chk = PvBit(chk, Evidence.VcOcclusion());
             if ((vx0 < vx1) && (vy0 < vy1)) {
-                occ = PvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1);
+                occ = PvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PvScan);
                 if (occ >= 0) {
                     vis = Evidence.VzOccluded();
                     vby = occ;
@@ -473,7 +505,7 @@ public static class Pdfvis {
         if (vis == 0) {
             chk = PvBit(chk, Evidence.VcOcclusion());
             if ((vx0 < vx1) && (vy0 < vy1)) {
-                occ = PvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1);
+                occ = PvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PvScan);
                 if (occ >= 0) {
                     vis = Evidence.VzOccluded();
                     vby = occ;
@@ -497,6 +529,161 @@ public static class Pdfvis {
         Evidence.ImSet(im, r, Evidence.MfVchk(), chk);
         return 0;
     }
+    internal static int PvTouch(int x0, int y0, int x1, int y1, int bx0, int by0, int bx1, int by1) {
+        // 1 when two CLOSED boxes share a point; a box with a negative extent (an empty clip) shares none.
+        if ((bx0 > bx1) || (by0 > by1)) {
+            return 0;
+        }
+        if ((x0 <= bx1) && ((bx0 <= x1) && ((y0 <= by1) && (by0 <= y1)))) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int PvPath(emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, int pw, int ph, int r, int ji, int p0, int i0, int p1, int i1) {
+        // Classify path row r (see the section header). ji is the first image row painted after it.
+        int fl = Evidence.PaGet(pa, r, Evidence.PfFlags());
+        int x0 = Evidence.PaGet(pa, r, Evidence.PfX0());
+        int y0 = Evidence.PaGet(pa, r, Evidence.PfY0());
+        int x1 = Evidence.PaGet(pa, r, Evidence.PfX1());
+        int y1 = Evidence.PaGet(pa, r, Evidence.PfY1());
+        int clip = Evidence.PaGet(pa, r, Evidence.PfClip());
+        int mark = Evidence.PaGet(pa, r, Evidence.PfMark());
+        int z = Evidence.PaGet(pa, r, Evidence.PfZ());
+        int filled = 0;
+        int stroked = 0;
+        int lim = PvScan;
+        int gx = 0;
+        int gy = 0;
+        int chk = fl & (Evidence.VcBlend() + Evidence.VcSoftmask());
+        int vis = 0;
+        int vby = -1;
+        int vx0 = x0;
+        int vy0 = y0;
+        int vx1 = x1;
+        int vy1 = y1;
+        int back = 0;
+        int bout = -1;
+        int ink = 0;
+        int npaint = 0;
+        int nsame = 0;
+        int nclear = 0;
+        int occ = -1;
+        if ((p1 - p0) > PvBusy) {
+            lim = (PvScan * PvBusy) / (p1 - p0);
+            if (lim < PvFloor) {
+                lim = PvFloor;
+            }
+        }
+        if ((fl & Evidence.PgFilled()) != 0) {
+            filled = 1;
+        }
+        if ((fl & Evidence.PgStroked()) != 0) {
+            stroked = 1;
+        }
+        // 1. the clip in force.
+        chk = PvBit(chk, Evidence.VcClip());
+        if (clip >= 0) {
+            vx0 = PvMax(x0, PvClipK(pa, clip, 0));
+            vy0 = PvMax(y0, PvClipK(pa, clip, 1));
+            vx1 = PvMin(x1, PvClipK(pa, clip, 2));
+            vy1 = PvMin(y1, PvClipK(pa, clip, 3));
+            if (PvTouch(x0, y0, x1, y1, PvClipK(pa, clip, 0), PvClipK(pa, clip, 1), PvClipK(pa, clip, 2), PvClipK(pa, clip, 3)) == 0) {
+                vis = Evidence.VzClipped();
+            }
+        }
+        // 2. the page.
+        if (vis == 0) {
+            chk = PvBit(chk, Evidence.VcOffpage());
+            if (PvTouch(x0, y0, x1, y1, 0, 0, pw, ph) == 0) {
+                vis = Evidence.VzOffpage();
+            }
+        }
+        // 3. the ink against what is behind it. A region with no extent one way (a hairline) is grown by a centipoint that way,
+        // so it has an area to look under; nothing else is grown (a box that only touches its neighbour does not overlap it).
+        if (vx1 <= vx0) {
+            gx = 1;
+        }
+        if (vy1 <= vy0) {
+            gy = 1;
+        }
+        if (vis == 0) {
+            chk = PvBit(chk, Evidence.VcWhite());
+            back = PvBackdrop(pa, im, mk, vx0 - gx, vy0 - gy, vx1 + gx, vy1 + gy, z, r, ji, p0, i0, r, lim);
+            if (back >= 0) {
+                bout = back;
+                if (filled == 1) {
+                    npaint += 1;
+                    ink = Evidence.PaGet(pa, r, Evidence.PfFill());
+                    if ((fl & Evidence.PgPattern()) != 0) {
+                        ink = -1;
+                    }
+                    if (PvClose(ink, back) == 1) {
+                        nsame += 1;
+                    }
+                }
+                if (stroked == 1) {
+                    npaint += 1;
+                    if (PvClose(Evidence.PaGet(pa, r, Evidence.PfStroke()), back) == 1) {
+                        nsame += 1;
+                    }
+                }
+                if ((npaint > 0) && (nsame == npaint)) {
+                    vis = Evidence.VzWhite();
+                }
+            }
+        }
+        // 4. a region of no extent either way (a point); a stroke of width 0 is a hairline, which is drawn.
+        if (vis == 0) {
+            chk = PvBit(chk, Evidence.VcZeroSize());
+            if ((vx1 <= vx0) && (vy1 <= vy0)) {
+                if ((stroked == 0) || (Evidence.PaGet(pa, r, Evidence.PfWidth()) > 0)) {
+                    vis = Evidence.VzZeroSize();
+                }
+            }
+        }
+        // 5. a later opaque paint over the whole region.
+        if (vis == 0) {
+            chk = PvBit(chk, Evidence.VcOcclusion());
+            occ = PvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, r + 1, ji, p1, i1, lim);
+            if (occ >= 0) {
+                vis = Evidence.VzOccluded();
+                vby = occ;
+            }
+        }
+        // 6. optional content that is off.
+        if (vis == 0) {
+            chk = PvBit(chk, Evidence.VcOcg());
+            if (PvChainOff(mk, mark) == 1) {
+                vis = Evidence.VzOcgHidden();
+            }
+        }
+        // 7. every painted component at alpha 0.
+        if (vis == 0) {
+            chk = PvBit(chk, Evidence.VcTransparent());
+            npaint = 0;
+            nclear = 0;
+            if (filled == 1) {
+                npaint += 1;
+                if (Evidence.PaGet(pa, r, Evidence.PfFalpha()) == 0) {
+                    nclear += 1;
+                }
+            }
+            if (stroked == 1) {
+                npaint += 1;
+                if (Evidence.PaGet(pa, r, Evidence.PfSalpha()) == 0) {
+                    nclear += 1;
+                }
+            }
+            if ((npaint > 0) && (nclear == npaint)) {
+                vis = Evidence.VzTransparent();
+            }
+        }
+        Evidence.PaSet(pa, r, Evidence.PfVis(), vis);
+        Evidence.PaSet(pa, r, Evidence.PfVby(), vby);
+        Evidence.PaSet(pa, r, Evidence.PfVchk(), chk);
+        Evidence.PaSet(pa, r, Evidence.PfBackdrop(), bout);
+        return 0;
+    }
     public static int PvPage(emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells pa, emon.Port.Cells im, int pw, int ph, int g0, int p0, int i0) {
         // Classify the glyphs from row g0, and the images from row i0, of the page whose paths start at row p0 and
         // whose size (the crop box in page space) is pw by ph centipoints. Rows are in paint order, so for each
@@ -509,6 +696,8 @@ public static class Pdfvis {
         int ji = i0;
         int gz = 0;
         int ig = i0;
+        int rp = p0;
+        int fl = 0;
         while (g < g1) {
             gz = Evidence.GlGet(gl, g, Evidence.GfZ());
             while ((jp < p1) && ((Evidence.PaGet(pa, jp, Evidence.PfZ()) < 0) || (Evidence.PaGet(pa, jp, Evidence.PfZ()) < gz))) {
@@ -529,6 +718,19 @@ public static class Pdfvis {
             ji = ig + 1;
             PvImage(mk, pa, im, pw, ph, ig, jp, ji, p1, i1);
             ig += 1;
+        }
+        // The paths: a clip and a shading are not classified (their `vchk` stays 0).
+        ji = i0;
+        while (rp < p1) {
+            fl = Evidence.PaGet(pa, rp, Evidence.PfFlags());
+            if (((fl & Evidence.PgClip()) == 0) && ((fl & Evidence.PgShading()) == 0)) {
+                gz = Evidence.PaGet(pa, rp, Evidence.PfZ());
+                while ((ji < i1) && (Evidence.ImGet(im, ji, Evidence.MfZ()) < gz)) {
+                    ji += 1;
+                }
+                PvPath(mk, pa, im, pw, ph, rp, ji, p0, i0, p1, i1);
+            }
+            rp += 1;
         }
         return 0;
     }

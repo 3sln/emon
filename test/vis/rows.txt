@@ -192,6 +192,52 @@ C	336699	2	0	3	C24
 C	4D801A	2	0	3	C25
 C	-1	0	0	3	C26
 N	81	0
+F	vis/paths.pdf
+P	1	-1	-1	0	0	-1	rule clipped away
+P	1	-1	-1	0	0	-1	thin rectangle clipped away
+P	0	-1	FFFFFF	127	0	-1	rule half clipped is seen
+P	0	-1	FFFFFF	127	0	-1	thin rectangle half clipped is seen
+P	2	-1	-1	0	0	-1	rule off the page
+P	2	-1	-1	0	0	-1	thin rectangle off the page
+P	3	-1	FFFFFF	0	0	-1	white rule on white
+P	3	-1	FFFFFF	0	0	-1	white thin rectangle on white
+P	3	-1	FFFFFF	0	0	-1	almost white rule on white
+P	0	-1	FFFFFF	127	0	-1	black rectangle (seen on the white page)
+P	0	-1	000000	127	0	-1	white rule on the black rectangle is seen
+P	0	-1	FFFFFF	0	0	-1	black rectangle two
+P	0	-1	000000	127	0	-1	white thin rectangle on the black rectangle is seen
+P	0	-1	FFFFFF	0	0	-1	black rectangle under half of the rule
+P	0	-1	-1	7	0	-1	white rule over half a black rectangle: backdrop unknown, seen
+P	5	16	FFFFFF	0	0	-1	the first of two identical thin rectangles is hidden by the second (the second is the ink)
+P	0	-1	FFFFFF	127	0	-1	drawn twice: the second is the ink
+P	0	-1	FFFFFF	0	0	-1	black rectangle three
+P	3	-1	000000	0	0	-1	a black thin rectangle inside it is not seen
+P	5	20	FFFFFF	0	0	-1	rule under a later white rectangle
+P	3	-1	FFFFFF	0	0	-1	the white rectangle that covers it
+P	5	22	FFFFFF	0	0	-1	thin rectangle under a later white rectangle
+P	0	-1	-1	0	0	-1	the white rectangle over the thin rectangle: it is seen, the paint behind it is not a plain rectangle
+P	5	24	FFFFFF	0	0	-1	rule under a later picture
+I	0	-1
+P	0	-1	FFFFFF	127	0	-1	rule half covered by a white rectangle is seen
+P	3	-1	FFFFFF	0	0	-1	the half wall
+P	0	-1	FFFFFF	127	0	-1	rule under a half transparent white rectangle is seen
+P	3	-1	FFFFFF	0	0	-1	the glass
+P	0	-1	FFFFFF	127	0	-1	rule under a multiply white rectangle is seen
+P	3	-1	FFFFFF	135	0	-1	the multiply wall
+P	6	-1	FFFFFF	0	0	-1	rule in a layer that is off
+P	6	-1	FFFFFF	0	0	-1	thin rectangle in a layer that is off
+P	0	-1	FFFFFF	127	0	-1	rule in a print only layer is seen
+P	7	-1	FFFFFF	0	0	-1	rule at alpha zero
+P	7	-1	FFFFFF	0	0	-1	thin rectangle at alpha zero
+P	0	-1	FFFFFF	127	0	-1	filled and stroked with a clear fill is seen by its stroke
+P	0	-1	FFFFFF	255	0	-1	rule under a multiply blend is seen
+P	0	-1	FFFFFF	383	0	-1	rule under a soft mask is seen
+P	0	-1	FFFFFF	127	0	-1	a zero width hairline is seen
+P	4	-1	FFFFFF	15	0	-1	a filled point has no size
+P	0	-1	FFFFFF	127	0	-1	a stroked zero width point is a hairline, seen
+P	0	-1	FFFFFF	127	0	150	a grid of 30 squares drawn as one path keeps its geometry
+P	0	-1	FFFFFF	127	1	0	a grid of 1100 squares is truncated
+N	0	1
 F	vis/pages.pdf
 G	0	-1	1	17	Page one is plain
 G	3	-1	1	17	white on page one

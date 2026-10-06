@@ -229,9 +229,16 @@ public final class Tabletest {
         emon.Port.Cells s16 = emon.Port.newCells();
         emon.Port.Cells s17 = emon.Port.newCells();
         emon.Port.Cells s18 = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells gpts = emon.Port.newCells();
+        emon.Port.Cells gmk = emon.Port.newCells();
+        emon.Port.Cells gim = emon.Port.newCells();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
-        Table.tbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Gfuse.gfDoc(pa, gpts, gmk, gim, 1, Gfuse.gfxMode(), grl, gfl, cand);
+        Table.tbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
         Columns.lcCopy(ln, lt);
         Para.paBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         ttBrief(t, nodes, attrs, text);
@@ -443,6 +450,9 @@ public final class Tabletest {
         emon.Port.Cells s16 = emon.Port.newCells();
         emon.Port.Cells s17 = emon.Port.newCells();
         emon.Port.Cells s18 = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
         emon.Port.Cells sf = emon.Port.newCells();
         emon.Port.Cells sc = emon.Port.newCells();
         emon.Port.Cells ws = emon.Port.newCells();
@@ -463,7 +473,8 @@ public final class Tabletest {
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
-        Table.tbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Gfuse.gfDoc(pa, pts, mk, im, np, Gfuse.gfxMode(), grl, gfl, cand);
+        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
         Columns.lcCopy(ln, lt);
         Initial.inDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
         Heading.hdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);

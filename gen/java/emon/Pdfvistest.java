@@ -220,6 +220,9 @@ public final class Pdfvistest {
         int gprev = 0;
         int nprev = 0;
         int ii = 0;
+        int pi = 0;
+        int tr = 0;
+        int want = 0;
         int status = 0;
         int p = 0;
         int q = 0;
@@ -242,6 +245,44 @@ public final class Pdfvistest {
                     vtWords(emonT, gl, wd, line);
                     g = 0;
                     ii = 0;
+                    pi = 0;
+                }
+                if (kind == 80) {
+                    // P vis vby backdrop chk tr n
+                    while ((pi < Evidence.paCount(pa)) && ((Evidence.paGet(pa, pi, Evidence.pfFlags()) & (Evidence.pgClip() + Evidence.pgShading())) != 0)) {
+                        pi += 1;
+                    }
+                    emon.Testport.assertThatAt(pi < Evidence.paCount(pa), "there is a painted path row", line);
+                    if (pi < Evidence.paCount(pa)) {
+                        p = pos + 2;
+                        q = vtTab(rows, p, e);
+                        emon.Testport.assertEqAt(Evidence.paGet(pa, pi, Evidence.pfVis()), vtDec(rows, p, q), "path vis", line);
+                        p = q + 1;
+                        q = vtTab(rows, p, e);
+                        emon.Testport.assertEqAt(Evidence.paGet(pa, pi, Evidence.pfVby()), vtDec(rows, p, q), "path vby", line);
+                        p = q + 1;
+                        q = vtTab(rows, p, e);
+                        emon.Testport.assertEqAt(Evidence.paGet(pa, pi, Evidence.pfBackdrop()), vtRgb(rows, p, q), "path backdrop", line);
+                        p = q + 1;
+                        q = vtTab(rows, p, e);
+                        want = vtDec(rows, p, q);
+                        emon.Testport.assertEqAt(Evidence.paGet(pa, pi, Evidence.pfVchk()) & want, want, "path vchk has the checks that ran", line);
+                        p = q + 1;
+                        q = vtTab(rows, p, e);
+                        want = vtDec(rows, p, q);
+                        tr = 0;
+                        if ((Evidence.paGet(pa, pi, Evidence.pfFlags()) & Evidence.pgTruncated()) != 0) {
+                            tr = 1;
+                        }
+                        emon.Testport.assertEqAt(tr, want, "path truncated", line);
+                        p = q + 1;
+                        q = vtTab(rows, p, e);
+                        want = vtDec(rows, p, q);
+                        if (want >= 0) {
+                            emon.Testport.assertEqAt(Evidence.paGet(pa, pi, Evidence.pfPcount()), want, "path points kept", line);
+                        }
+                    }
+                    pi += 1;
                 }
                 if (kind == 71) {
                     // G vis vby src ncp text

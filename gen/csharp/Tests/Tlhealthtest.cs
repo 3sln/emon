@@ -43,6 +43,9 @@ public static class Tlhealthtest {
         emon.Port.Cells fv = emon.Port.NewCells();
         emon.Port.Cells fx = emon.Port.NewCells();
         emon.Port.Cells fpa = emon.Port.NewCells();
+        emon.Port.Cells gfl = emon.Port.NewCells();
+        emon.Port.Cells ggp = emon.Port.NewCells();
+        emon.Port.Cells grg = emon.Port.NewCells();
         emon.Port.Cells sl = emon.Port.NewCells();
         emon.Port.Cells refs = emon.Port.NewCells();
         emon.Port.Cells ledger = emon.Port.NewCells();
@@ -116,11 +119,11 @@ public static class Tlhealthtest {
         }
         emon.Testport.AssertEqAt(total, Player.FwCount(fw), "the lines hold every word", ctx);
         emon.Testport.AssertThatAt(Player.FlCount(fl) <= Evidence.LnCount(ln), "no line is made", ctx);
-        emon.Testport.AssertEqAt(Player.PlCheck(cg, fw, fl, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the layer is sound", ctx);
+        emon.Testport.AssertEqAt(Player.PlCheck(cg, fw, fl, fv, fa, fx, hl, fpa, sl, gfl, ggp, grg, et, refs, gl), 0, "the layer is sound", ctx);
         // the OCR lines of a scanned page join the flow as they are: every line and word of the evidence, copied
         emon.Testport.AssertEqAt(Tlhealth.ThAppend(wd, ln, fw2, fl2, 0), Evidence.LnCount(ln), "every line is copied", ctx);
         emon.Testport.AssertEqAt(Player.FwCount(fw2), Evidence.WdCount(wd), "and every word", ctx);
-        emon.Testport.AssertEqAt(Player.PlCheck(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the copy is sound", ctx);
+        emon.Testport.AssertEqAt(Player.PlCheck(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, gfl, ggp, grg, et, refs, gl), 0, "the copy is sound", ctx);
         // the ledger
         rows = Tlhealth.ThWrite(fa, wd, et, ledger, text, tmp, tt);
         emon.Testport.AssertEqAt(rows, wantRows, "ledger rows", ctx);

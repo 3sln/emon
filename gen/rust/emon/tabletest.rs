@@ -3,6 +3,7 @@
 
 use crate::emon::columns::*;
 use crate::emon::evidence::*;
+use crate::emon::gfuse::*;
 use crate::emon::heading::*;
 use crate::emon::initial::*;
 use crate::emon::json::*;
@@ -237,9 +238,16 @@ pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, e
     let s16: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let s17: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let s18: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gpts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gmk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gim: &mut crate::port::Cells = &mut crate::port::Cells::new();
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
-    tb_build(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+    gf_doc(pa, gpts, gmk, gim, 1, gfx_mode(), grl, gfl, cand);
+    tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
     lc_copy(ln, lt);
     pa_build(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     tt_brief(t, nodes, attrs, text);
@@ -456,6 +464,9 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     let s16: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let s17: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let s18: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -476,7 +487,8 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
-    tb_build(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+    gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand);
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
     lc_copy(ln, lt);
     in_detect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
     hd_analyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);

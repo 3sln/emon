@@ -2,6 +2,7 @@
 // source: emon.table
 
 use crate::emon::evidence::*;
+use crate::emon::glayer::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
 
@@ -184,77 +185,53 @@ pub(crate) fn tb_rule_add(mut rl: &mut crate::port::Cells, kind: i32, pos: i32, 
     crate::port::cells_push(rl, 0);
     return 0;
 }
-pub(crate) fn tb_collect_one(pa: &mut crate::port::Cells, i: i32, mut rl: &mut crate::port::Cells, mut fl: &mut crate::port::Cells) -> i32 {
-    // One path as a rule (a thin box, or an edge of a stroked rectangle) or a fill (a large filled box).
-    let fg: i32 = pa_get(pa, i, pf_flags());
-    let x0: i32 = pa_get(pa, i, pf_x0());
-    let y0: i32 = pa_get(pa, i, pf_y0());
-    let x1: i32 = pa_get(pa, i, pf_x1());
-    let y1: i32 = pa_get(pa, i, pf_y1());
-    let w: i32 = x1 - x0;
-    let h: i32 = y1 - y0;
-    let filled: i32 = fg & pg_filled();
-    let stroked: i32 = fg & pg_stroked();
-    let kind: i32 = pa_get(pa, i, pf_kind());
-    let lw: i32 = pa_get(pa, i, pf_width());
-    let mut colour: i32 = pa_get(pa, i, pf_fill());
-    let mut al: i32 = pa_get(pa, i, pf_salpha());
-    if (fg & pg_clip()) != 0 {
+pub(crate) fn tb_running_rule(grl: &mut crate::port::Cells, i: i32, ph: i32) -> i32 {
+    // 1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of
+    // the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination
+    // artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D272).
+    if (grl_get(grl, i, grf_flags()) & gq_artifact_pagination()) == 0 {
         return 0;
     }
-    if (fg & (pg_pattern() + pg_shading())) != 0 {
-        return 0;
+    let ya: i32 = grl_get(grl, i, grf_ey0());
+    let yb: i32 = grl_get(grl, i, grf_ey1());
+    let lo: i32 = tb_min(ya, yb);
+    let hi: i32 = tb_max(ya, yb);
+    if hi <= (ph / 8) {
+        return 1;
     }
-    if (filled == 0) && (stroked == 0) {
-        return 0;
-    }
-    if filled != 0 {
-        al = pa_get(pa, i, pf_falpha());
-        colour = pa_get(pa, i, pf_fill());
-    } else {
-        colour = pa_get(pa, i, pf_stroke());
-    }
-    if al <= 0 {
-        return 0;
-    }
-    if (tb_min(w, h) <= RULE_T) && (tb_max(w, h) >= RULE_MIN) {
-        if tb_lum(colour) < 240 {
-            if w >= h {
-                tb_rule_add(rl, 0, (y0 + y1) / 2, x0, x1, h, colour);
-            } else {
-                tb_rule_add(rl, 1, (x0 + x1) / 2, y0, y1, w, colour);
-            }
-        }
-        return 0;
-    }
-    if (kind == pa_rect()) && (stroked != 0) && (w > RULE_MIN) && (h > RULE_MIN) {
-        let hw: i32 = lw / 2;
-        let sc: i32 = pa_get(pa, i, pf_stroke());
-        if tb_lum(sc) < 240 {
-            tb_rule_add(rl, 0, y0 + hw, x0, x1, lw, sc);
-            tb_rule_add(rl, 0, y1 - hw, x0, x1, lw, sc);
-            tb_rule_add(rl, 1, x0 + hw, y0, y1, lw, sc);
-            tb_rule_add(rl, 1, x1 - hw, y0, y1, lw, sc);
-        }
-    }
-    if (filled != 0) && (w > RULE_MIN) && (h > RULE_MIN) {
-        crate::port::cells_push(fl, x0);
-        crate::port::cells_push(fl, y0);
-        crate::port::cells_push(fl, x1);
-        crate::port::cells_push(fl, y1);
-        crate::port::cells_push(fl, pa_get(pa, i, pf_fill()));
-        crate::port::cells_push(fl, 0);
+    if lo >= (ph - (ph / 8)) {
+        return 1;
     }
     return 0;
 }
-pub(crate) fn tb_collect(pa: &mut crate::port::Cells, p0: i32, p1: i32, mut rl: &mut crate::port::Cells, mut fl: &mut crate::port::Cells) -> i32 {
-    // The page's paths p0..p1 as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness,
-    // colour) and fills (`fl`: box and colour).
-    let mut i: i32 = p0;
+pub(crate) fn tb_collect(grl: &mut crate::port::Cells, r0: i32, r1: i32, gfl: &mut crate::port::Cells, f0: i32, f1: i32, ph: i32, mut rl: &mut crate::port::Cells, mut fl: &mut crate::port::Cells) -> i32 {
+    // The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)
+    // as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
+    // (`fl`: box and colour). P5.5a (D218, D270): the table stage reads the fused graphics and never `paths`.
+    let mut i: i32 = r0;
+    let mut o: i32 = 0;
     crate::port::cells_drop(rl, 0);
     crate::port::cells_drop(fl, 0);
-    while i < p1 {
-        tb_collect_one(pa, i, rl, fl);
+    while i < r1 {
+        o = grl_get(grl, i, grf_orient());
+        if tb_running_rule(grl, i, ph) == 0 {
+            if o == go_h() {
+                tb_rule_add(rl, 0, (grl_get(grl, i, grf_ey0()) + grl_get(grl, i, grf_ey1())) / 2, grl_get(grl, i, grf_ex0()), grl_get(grl, i, grf_ex1()), grl_get(grl, i, grf_thick()), grl_get(grl, i, grf_colour()));
+            }
+            if o == go_v() {
+                tb_rule_add(rl, 1, (grl_get(grl, i, grf_ex0()) + grl_get(grl, i, grf_ex1())) / 2, grl_get(grl, i, grf_ey0()), grl_get(grl, i, grf_ey1()), grl_get(grl, i, grf_thick()), grl_get(grl, i, grf_colour()));
+            }
+        }
+        i += 1;
+    }
+    i = f0;
+    while i < f1 {
+        crate::port::cells_push(fl, gfl_get(gfl, i, gff_x0()));
+        crate::port::cells_push(fl, gfl_get(gfl, i, gff_y0()));
+        crate::port::cells_push(fl, gfl_get(gfl, i, gff_x1()));
+        crate::port::cells_push(fl, gfl_get(gfl, i, gff_y1()));
+        crate::port::cells_push(fl, gfl_get(gfl, i, gff_colour()));
+        crate::port::cells_push(fl, 0);
         i += 1;
     }
     return 0;
@@ -2982,14 +2959,15 @@ pub(crate) fn tb_finish(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate:
     tb_caption(tb, k, wd, et, ln, l0, l1, tq);
     return 0;
 }
-pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, np: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells) -> i32 {
+pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells) -> i32 {
     // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
     // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
     // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
     // row extents (one name each in the calls below). Answers the number of tables.
     let nw: i32 = wd_count(wd);
     let nl: i32 = ln_count(ln);
-    let nq: i32 = pa_count(pa);
+    let nq: i32 = grl_count(grl);
+    let nu: i32 = gfl_count(gfl);
     let mut p: i32 = 1;
     let mut wi: i32 = 0;
     let mut wj: i32 = 0;
@@ -2997,6 +2975,8 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
     let mut lj: i32 = 0;
     let mut qi: i32 = 0;
     let mut qj: i32 = 0;
+    let mut ui: i32 = 0;
+    let mut uj: i32 = 0;
     let mut t0: i32 = 0;
     let mut k: i32 = 0;
     crate::port::cells_drop(tb, 0);
@@ -3019,16 +2999,23 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
         while (lj < nl) && (ln_get(ln, lj, lh_page()) == p) {
             lj += 1;
         }
-        while (qi < nq) && (pa_get(pa, qi, pf_page()) < p) {
+        while (qi < nq) && (grl_get(grl, qi, grf_page()) < p) {
             qi += 1;
         }
         qj = qi;
-        while (qj < nq) && (pa_get(pa, qj, pf_page()) == p) {
+        while (qj < nq) && (grl_get(grl, qj, grf_page()) == p) {
             qj += 1;
+        }
+        while (ui < nu) && (gfl_get(gfl, ui, gff_page()) < p) {
+            ui += 1;
+        }
+        uj = ui;
+        while (uj < nu) && (gfl_get(gfl, uj, gff_page()) == p) {
+            uj += 1;
         }
         t0 = tb_rows_of(tb, TBS);
         if (wj - wi) > 0 {
-            tb_collect(pa, qi, qj, s0, s2);
+            tb_collect(grl, qi, qj, gfl, ui, uj, page_h(pages, p - 1), s0, s2);
             if tb_rows_of(s0, RLS) <= MAX_RULES {
                 tb_merge_rules(s0, s1, s3, s9);
                 tb_ruled_page(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx);
@@ -3049,6 +3036,7 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
         wi = wj;
         li = lj;
         qi = qj;
+        ui = uj;
         p += 1;
     }
     tb_link(tb, tc, tw, tx, tq, wd, et, ln, pages);
