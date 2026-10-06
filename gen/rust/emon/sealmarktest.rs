@@ -15,7 +15,8 @@ fn test_an_ink_has_a_name() {
     crate::testport::assert_eq(sm_hue(15790320), 2, "#f0f0f0 is white");
     crate::testport::assert_eq(sm_hue(2138176), 7, "a green is green");
     crate::testport::assert_eq(sm_hue(16744448), 4, "an orange is orange");
-    crate::testport::assert_eq(sm_hue(8388736), 11, "a purple is purple");
+    crate::testport::assert_eq(sm_hue(6697881), 11, "a purple (#663399) is purple");
+    crate::testport::assert_eq(sm_hue(8388736), 12, "and #800080 (300 degrees) is magenta");
     crate::testport::assert_eq(sm_hue(-1), -1, "an unknown ink has no name");
     crate::testport::assert_eq(sm_name_len(10), 4, "blue has four letters");
     crate::testport::assert_eq(SM_NAMES[(sm_name_off(10)) as usize], 98, "which start with b");

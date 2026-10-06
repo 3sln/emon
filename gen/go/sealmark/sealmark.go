@@ -347,23 +347,23 @@ func SmRingTest(pa *port.Cells, pts *port.Cells, r int32, out *port.Cells) int32
 		y0 = evidence.PaGet(pa, r, evidence.PfY0()) + (evidence.PaGet(pa, r, evidence.PfWidth()) / 2)
 		x1 = evidence.PaGet(pa, r, evidence.PfX1()) - (evidence.PaGet(pa, r, evidence.PfWidth()) / 2)
 		y1 = evidence.PaGet(pa, r, evidence.PfY1()) - (evidence.PaGet(pa, r, evidence.PfWidth()) / 2)
-		var w int32 = x1 - x0
-		var h int32 = y1 - y0
-		var big int32 = w
-		var small int32 = h
-		if w < h {
-			big = h
-			small = w
+		var bw int32 = x1 - x0
+		var bh int32 = y1 - y0
+		var bbig int32 = bw
+		var bsmall int32 = bh
+		if bw < bh {
+			bbig = bh
+			bsmall = bw
 		}
-		if big <= 0 {
+		if bbig <= 0 {
 			return 0
 		}
-		if ((big - small) * 100) > (big * SmSquare()) {
+		if ((bbig - bsmall) * 100) > (bbig * SmSquare()) {
 			return 0
 		}
 		port.CellsSet(out, 0, (x0+x1)/2)
 		port.CellsSet(out, 1, (y0+y1)/2)
-		port.CellsSet(out, 2, (w+h)/4)
+		port.CellsSet(out, 2, (bw+bh)/4)
 		port.CellsSet(out, 3, 1)
 		return 1
 	}

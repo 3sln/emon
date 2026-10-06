@@ -228,16 +228,16 @@
           (set y0 (+ (pa-get pa r (pf-y0)) (quot (pa-get pa r (pf-width)) 2)))
           (set x1 (- (pa-get pa r (pf-x1)) (quot (pa-get pa r (pf-width)) 2)))
           (set y1 (- (pa-get pa r (pf-y1)) (quot (pa-get pa r (pf-width)) 2)))
-          (let [^I32 w (- x1 x0)
-                ^I32 h (- y1 y0)
-                ^:mut ^I32 big w
-                ^:mut ^I32 small h]
-            (if (< w h) (do (set big h) (set small w)))
-            (if (<= big 0) (return 0))
-            (if (> (* (- big small) 100) (* big (sm-square))) (return 0))
+          (let [^I32 bw (- x1 x0)
+                ^I32 bh (- y1 y0)
+                ^:mut ^I32 bbig bw
+                ^:mut ^I32 bsmall bh]
+            (if (< bw bh) (do (set bbig bh) (set bsmall bw)))
+            (if (<= bbig 0) (return 0))
+            (if (> (* (- bbig bsmall) 100) (* bbig (sm-square))) (return 0))
             (cells-set out 0 (quot (+ x0 x1) 2))
             (cells-set out 1 (quot (+ y0 y1) 2))
-            (cells-set out 2 (quot (+ w h) 4))
+            (cells-set out 2 (quot (+ bw bh) 4))
             (cells-set out 3 1)
             (return 1))))
     (if (< n 10) (return 0))

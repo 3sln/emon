@@ -13,7 +13,8 @@ public final class Sealmarktest {
         emon.Testport.assertEq(Sealmark.smHue(15790320), 2, "#f0f0f0 is white");
         emon.Testport.assertEq(Sealmark.smHue(2138176), 7, "a green is green");
         emon.Testport.assertEq(Sealmark.smHue(16744448), 4, "an orange is orange");
-        emon.Testport.assertEq(Sealmark.smHue(8388736), 11, "a purple is purple");
+        emon.Testport.assertEq(Sealmark.smHue(6697881), 11, "a purple (#663399) is purple");
+        emon.Testport.assertEq(Sealmark.smHue(8388736), 12, "and #800080 (300 degrees) is magenta");
         emon.Testport.assertEq(Sealmark.smHue(-1), -1, "an unknown ink has no name");
         emon.Testport.assertEq(Sealmark.smNameLen(10), 4, "blue has four letters");
         emon.Testport.assertEq(Sealmark.SM_NAMES[Sealmark.smNameOff(10)], 98, "which start with b");

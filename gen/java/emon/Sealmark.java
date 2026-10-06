@@ -316,23 +316,23 @@ public final class Sealmark {
             y0 = Evidence.paGet(pa, r, Evidence.pfY0()) + (Evidence.paGet(pa, r, Evidence.pfWidth()) / 2);
             x1 = Evidence.paGet(pa, r, Evidence.pfX1()) - (Evidence.paGet(pa, r, Evidence.pfWidth()) / 2);
             y1 = Evidence.paGet(pa, r, Evidence.pfY1()) - (Evidence.paGet(pa, r, Evidence.pfWidth()) / 2);
-            int w = x1 - x0;
-            int h = y1 - y0;
-            int big = w;
-            int small = h;
-            if (w < h) {
-                big = h;
-                small = w;
+            int bw = x1 - x0;
+            int bh = y1 - y0;
+            int bbig = bw;
+            int bsmall = bh;
+            if (bw < bh) {
+                bbig = bh;
+                bsmall = bw;
             }
-            if (big <= 0) {
+            if (bbig <= 0) {
                 return 0;
             }
-            if (((big - small) * 100) > (big * smSquare())) {
+            if (((bbig - bsmall) * 100) > (bbig * smSquare())) {
                 return 0;
             }
             emon.Port.cellsSet(out, 0, (x0 + x1) / 2);
             emon.Port.cellsSet(out, 1, (y0 + y1) / 2);
-            emon.Port.cellsSet(out, 2, (w + h) / 4);
+            emon.Port.cellsSet(out, 2, (bw + bh) / 4);
             emon.Port.cellsSet(out, 3, 1);
             return 1;
         }

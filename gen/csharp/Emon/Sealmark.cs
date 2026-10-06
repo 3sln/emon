@@ -316,23 +316,23 @@ public static class Sealmark {
             y0 = Evidence.PaGet(pa, r, Evidence.PfY0()) + (Evidence.PaGet(pa, r, Evidence.PfWidth()) / 2);
             x1 = Evidence.PaGet(pa, r, Evidence.PfX1()) - (Evidence.PaGet(pa, r, Evidence.PfWidth()) / 2);
             y1 = Evidence.PaGet(pa, r, Evidence.PfY1()) - (Evidence.PaGet(pa, r, Evidence.PfWidth()) / 2);
-            int w = x1 - x0;
-            int h = y1 - y0;
-            int big = w;
-            int small = h;
-            if (w < h) {
-                big = h;
-                small = w;
+            int bw = x1 - x0;
+            int bh = y1 - y0;
+            int bbig = bw;
+            int bsmall = bh;
+            if (bw < bh) {
+                bbig = bh;
+                bsmall = bw;
             }
-            if (big <= 0) {
+            if (bbig <= 0) {
                 return 0;
             }
-            if (((big - small) * 100) > (big * SmSquare())) {
+            if (((bbig - bsmall) * 100) > (bbig * SmSquare())) {
                 return 0;
             }
             emon.Port.CellsSet(@out, 0, (x0 + x1) / 2);
             emon.Port.CellsSet(@out, 1, (y0 + y1) / 2);
-            emon.Port.CellsSet(@out, 2, (w + h) / 4);
+            emon.Port.CellsSet(@out, 2, (bw + bh) / 4);
             emon.Port.CellsSet(@out, 3, 1);
             return 1;
         }

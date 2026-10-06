@@ -317,23 +317,23 @@ pub fn sm_ring_test(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, r
         y0 = pa_get(pa, r, pf_y0()) + (pa_get(pa, r, pf_width()) / 2);
         x1 = pa_get(pa, r, pf_x1()) - (pa_get(pa, r, pf_width()) / 2);
         y1 = pa_get(pa, r, pf_y1()) - (pa_get(pa, r, pf_width()) / 2);
-        let w: i32 = x1 - x0;
-        let h: i32 = y1 - y0;
-        let mut big: i32 = w;
-        let mut small: i32 = h;
-        if w < h {
-            big = h;
-            small = w;
+        let bw: i32 = x1 - x0;
+        let bh: i32 = y1 - y0;
+        let mut bbig: i32 = bw;
+        let mut bsmall: i32 = bh;
+        if bw < bh {
+            bbig = bh;
+            bsmall = bw;
         }
-        if big <= 0 {
+        if bbig <= 0 {
             return 0;
         }
-        if ((big - small) * 100) > (big * sm_square()) {
+        if ((bbig - bsmall) * 100) > (bbig * sm_square()) {
             return 0;
         }
         crate::port::cells_set(out, 0, (x0 + x1) / 2);
         crate::port::cells_set(out, 1, (y0 + y1) / 2);
-        crate::port::cells_set(out, 2, (w + h) / 4);
+        crate::port::cells_set(out, 2, (bw + bh) / 4);
         crate::port::cells_set(out, 3, 1);
         return 1;
     }
