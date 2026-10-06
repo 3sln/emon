@@ -33,7 +33,7 @@ env:
 
 jobs:
   # ---- the corpus: pulled only when the remote index.json changes -------------------------------------------------
-  # png-check, image and the unit arms' real-file laws read corpus/ (unit-red does not). Only the
+  # png-check and image read corpus/ (the unit arms pull their own, larger share). Only the
   # categories they read are pulled (formats, financial), which keeps the cache under GitHub's 10 GB limit.
   corpus:
     runs-on: ubuntu-latest
@@ -90,8 +90,7 @@ jobs:
 
   # ---- the laws, one arm per job (bb unit ARM), then the cross-arm count in the summary ----------------------------
   unit:
-    if: inputs.groups != 'fast-only' && needs.corpus.result == 'success'
-    needs: [corpus]
+    if: inputs.groups != 'fast-only'
     name: unit (${{ matrix.arm }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -111,11 +110,20 @@ jobs:
           repository: 3sln/kin
           path: kin
       - uses: ./emon/.github/actions/setup
-      - uses: actions/cache/restore@v4
-        with:
-          path: emon/corpus
-          key: emon-corpus-${{ needs.corpus.outputs.index }}
-          fail-on-cache-miss: true
+      - name: Corpus for the real-file laws (formats financial forms layout multilingual tables; too big to cache)
+        env:
+          EMON_S3_ENDPOINT: ${{ secrets.EMON_S3_ENDPOINT }}
+          EMON_S3_REGION: ${{ secrets.EMON_S3_REGION }}
+          EMON_S3_BUCKET: ${{ secrets.EMON_S3_BUCKET }}
+          EMON_S3_PREFIX: ${{ secrets.EMON_S3_PREFIX }}
+          EMON_S3_ACCESS_KEY_ID: ${{ secrets.EMON_S3_ACCESS_KEY_ID }}
+          EMON_S3_SECRET_ACCESS_KEY: ${{ secrets.EMON_S3_SECRET_ACCESS_KEY }}
+          EMON_S3_PATH_STYLE: ${{ secrets.EMON_S3_PATH_STYLE }}
+        run: |
+          for k in EMON_S3_ENDPOINT EMON_S3_REGION EMON_S3_BUCKET EMON_S3_PREFIX EMON_S3_ACCESS_KEY_ID EMON_S3_SECRET_ACCESS_KEY EMON_S3_PATH_STYLE; do
+            [ -z "${!k}" ] || printf "%s=%s\n" "$k" "${!k}"
+          done > .env
+          bb corpus-pull formats financial forms layout multilingual tables; rm -f .env; df -h . | tail -1
       - name: bb unit ${{ matrix.arm }}
         run: |
           set -o pipefail
