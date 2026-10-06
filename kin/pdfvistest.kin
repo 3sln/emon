@@ -13,6 +13,9 @@
 ;;   O ocgdef ncp                 the ncp glyphs just given are in an optional-content span whose default state is this
 ;;   I vis vby                    the next image placement
 ;;   N glyphs images              how many of each the file made
+;;   P vis vby backdrop chk tr n  the next painted path (a clip and a shading are not painted paths): `vis`, `vby`, the
+;;                                backdrop the white check found (rrggbb or -1), the `vchk` bits that must be set, whether
+;;                                `truncated` (0 or 1), the points of geometry kept (-1 not asked) (P3.6a, D219)
 ;;
 ;; AND LAWS ABOUT HOW: a word is one thing to see (no word mixes visibilities), every classification's `vchk` says which
 ;; checks ran, the evidence is well formed (`ev-check`), and the paths the interpreter makes read back (a rectangle is a
@@ -28,9 +31,9 @@
                                    ch-word ch-x0 ch-y0 ch-x1 ch-y1
                                    gf-vis gf-vby gf-vchk gf-fill gf-cs gf-mark gf-clip gf-mode
                                    wf-src wf-gfirst wf-gcount mkf-ocgdef mk-ocg-of
-                                   pf-kind pf-flags pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-pcount pf-clip
+                                   pf-kind pf-flags pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-pcount pf-clip pf-vis pf-vby pf-vchk pf-backdrop
                                    mf-vis mf-vby mf-vchk mf-page
-                                   pa-rect pg-clip pg-filled
+                                   pa-rect pg-clip pg-filled pg-shading pg-truncated
                                    vc-clip vc-offpage vc-white vc-zero-size vc-occlusion vc-ocg vc-transparent
                                    ev-check]]
             [kin.lang :refer [defn return let set while if do comment
@@ -224,6 +227,9 @@
         ^:mut ^I32 gprev 0
         ^:mut ^I32 nprev 0
         ^:mut ^I32 ii 0
+        ^:mut ^I32 pi 0
+        ^:mut ^I32 tr 0
+        ^:mut ^I32 want 0
         ^:mut ^I32 status 0
         ^:mut ^I32 p 0
         ^:mut ^I32 q 0
@@ -246,7 +252,40 @@
                       (assert-eq-at (ev-check epages views pts refs et feats gl wd ln mk fnt pa im oruns oblocks olines owords osyms oalts inks components rules prims tlines) 0 "the evidence is well formed" line)
                       (vt-words emon-t gl wd line)
                       (set g 0)
-                      (set ii 0)))
+                      (set ii 0)
+                      (set pi 0)))
+                (if (== kind 80)
+                  (do (comment "P vis vby backdrop chk tr n")
+                      (while (and (< pi (pa-count pa))
+                                  (!= (bit-and (pa-get pa pi (pf-flags)) (+ (pg-clip) (pg-shading))) 0))
+                        (set pi (+ pi 1)))
+                      (assert-that-at (< pi (pa-count pa)) "there is a painted path row" line)
+                      (if (< pi (pa-count pa))
+                        (do (set p (+ pos 2))
+                            (set q (vt-tab rows p e))
+                            (assert-eq-at (pa-get pa pi (pf-vis)) (vt-dec rows p q) "path vis" line)
+                            (set p (+ q 1))
+                            (set q (vt-tab rows p e))
+                            (assert-eq-at (pa-get pa pi (pf-vby)) (vt-dec rows p q) "path vby" line)
+                            (set p (+ q 1))
+                            (set q (vt-tab rows p e))
+                            (assert-eq-at (pa-get pa pi (pf-backdrop)) (vt-rgb rows p q) "path backdrop" line)
+                            (set p (+ q 1))
+                            (set q (vt-tab rows p e))
+                            (set want (vt-dec rows p q))
+                            (assert-eq-at (bit-and (pa-get pa pi (pf-vchk)) want) want "path vchk has the checks that ran" line)
+                            (set p (+ q 1))
+                            (set q (vt-tab rows p e))
+                            (set want (vt-dec rows p q))
+                            (set tr 0)
+                            (if (!= (bit-and (pa-get pa pi (pf-flags)) (pg-truncated)) 0) (set tr 1))
+                            (assert-eq-at tr want "path truncated" line)
+                            (set p (+ q 1))
+                            (set q (vt-tab rows p e))
+                            (set want (vt-dec rows p q))
+                            (if (>= want 0)
+                              (assert-eq-at (pa-get pa pi (pf-pcount)) want "path points kept" line))))
+                      (set pi (+ pi 1))))
                 (if (== kind 71)
                   (do (comment "G vis vby src ncp text")
                       (set p (+ pos 2))

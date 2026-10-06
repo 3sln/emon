@@ -237,6 +237,9 @@ func vtRows(emonT *testing.T, rows []byte) int32 {
 	var gprev int32 = 0
 	var nprev int32 = 0
 	var ii int32 = 0
+	var pi int32 = 0
+	var tr int32 = 0
+	var want int32 = 0
 	var status int32 = 0
 	var p int32 = 0
 	var q int32 = 0
@@ -259,6 +262,44 @@ func vtRows(emonT *testing.T, rows []byte) int32 {
 				vtWords(emonT, gl, wd, line)
 				g = 0
 				ii = 0
+				pi = 0
+			}
+			if kind == 80 {
+				// P vis vby backdrop chk tr n
+				for (pi < evidence.PaCount(pa)) && ((evidence.PaGet(pa, pi, evidence.PfFlags()) & (evidence.PgClip() + evidence.PgShading())) != 0) {
+					pi += 1
+				}
+				port.AssertThatAt(emonT, pi < evidence.PaCount(pa), "there is a painted path row", line)
+				if pi < evidence.PaCount(pa) {
+					p = pos + 2
+					q = vtTab(rows, p, e)
+					port.AssertEqAt(emonT, evidence.PaGet(pa, pi, evidence.PfVis()), vtDec(rows, p, q), "path vis", line)
+					p = q + 1
+					q = vtTab(rows, p, e)
+					port.AssertEqAt(emonT, evidence.PaGet(pa, pi, evidence.PfVby()), vtDec(rows, p, q), "path vby", line)
+					p = q + 1
+					q = vtTab(rows, p, e)
+					port.AssertEqAt(emonT, evidence.PaGet(pa, pi, evidence.PfBackdrop()), vtRgb(rows, p, q), "path backdrop", line)
+					p = q + 1
+					q = vtTab(rows, p, e)
+					want = vtDec(rows, p, q)
+					port.AssertEqAt(emonT, evidence.PaGet(pa, pi, evidence.PfVchk())&want, want, "path vchk has the checks that ran", line)
+					p = q + 1
+					q = vtTab(rows, p, e)
+					want = vtDec(rows, p, q)
+					tr = 0
+					if (evidence.PaGet(pa, pi, evidence.PfFlags()) & evidence.PgTruncated()) != 0 {
+						tr = 1
+					}
+					port.AssertEqAt(emonT, tr, want, "path truncated", line)
+					p = q + 1
+					q = vtTab(rows, p, e)
+					want = vtDec(rows, p, q)
+					if want >= 0 {
+						port.AssertEqAt(emonT, evidence.PaGet(pa, pi, evidence.PfPcount()), want, "path points kept", line)
+					}
+				}
+				pi += 1
 			}
 			if kind == 71 {
 				// G vis vby src ncp text

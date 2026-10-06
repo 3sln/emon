@@ -1,0 +1,142 @@
+;; Graphics fusion, in its VECTOR-ONLY form (P5.5a; SPEC 9.9; D218, D222, D255). emon's own module (D039); P7.G extends it with the
+;; tracer's and OCR's witnesses and moves the arbitration into `kin/fuserules.kin` as data.
+;;
+;;   (gf-page cand pa im grl gfl)
+;;       one page's candidates (`gv-page`'s scratch, stride 16) into rows of the fused rules `grl` and fills `gfl`, through the rows of
+;;       SPEC 9.9's table that a page with no raster answer can reach, written as code with the `fr` number set in each row:
+;;
+;;           505  a candidate whose source's `vis` is not 0 contributes nothing (it is not recorded: there is no `fx` without a group)
+;;           501  an exactly known visible vector rule (the path's `vchk` has neither the blend nor the soft-mask bit): confidence 900
+;;           514  vector paint that is not exactly known (blend, soft mask, an image placement drawn as a rule): confidence 700
+;;           560  a vector fill with a colour: 900            562  a fill of colour -1 (a shading, a pattern): 600
+;;
+;;       Collinear candidates that touch are NOT merged here: `tb-build` merges them (D179's 3 pt), so the table is the one the paths gave.
+;;       A row's group is -1 (no `ggp` row is made before P7.G), its sources and winner are `vector`, its `z` the path's.
+;;   (gf-doc pa pts mk im np mode grl gfl cand)
+;;       the document's pages in turn: `gv-page` then `gf-page` for each, into the document's `grl` and `gfl` (both emptied first).
+;;       `mode` is `gv-legacy` or `gv-segments`; `gfx-mode` is the one the Engines pass.
+(ns emon.gfuse
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [pa-get pa-count im-get im-count ev-angle
+                                   pf-page pf-z pf-vchk vc-blend vc-softmask mf-page mf-z]]
+            [emon.glayer :refer [grl-new grl-set gfl-new gfl-set go-h go-v go-slant gs-vector gq-from-image]]
+            [emon.gvec :refer [gv-page gv-hidden gv-segments gv-legacy]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+(defconst ^I32 GF_AXIS 100)          ;; `gf-axis`: within 1 degree of an axis is that axis's orientation (centi-degrees)
+
+(defn ^:pub ^I32 gfx-mode [] (return 1))
+
+(defn ^I32 gf-lightness [^I32 rgb]
+  (comment "0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.")
+  (if (< rgb 0) (return -1))
+  (return (quot (+ (+ (* 299 (bit-and (quot rgb 65536) 255)) (* 587 (bit-and (quot rgb 256) 255))) (* 114 (bit-and rgb 255))) 255)))
+
+(defn ^I32 gf-orient-of [^I32 a]
+  (comment "`go` of an angle in [0, 18000): h within GF_AXIS of 0, v of 9000, else slant.")
+  (if (or (<= a GF_AXIS) (>= a (- 18000 GF_AXIS))) (return (go-h)))
+  (if (and (>= a (- 9000 GF_AXIS)) (<= a (+ 9000 GF_AXIS))) (return (go-v)))
+  (return (go-slant)))
+
+(defn ^I32 gf-rule-row [^Cells cand ^I32 c ^Cells pa ^Cells im ^:mut ^Cells grl]
+  (comment "Candidate c (a rule) as a `grl` row.")
+  (let [^I32 b (* c 16)
+        ^I32 row (cells-at cand (+ b 1))
+        ^I32 fl (cells-at cand (+ b 15))
+        ^I32 ex0 (cells-at cand (+ b 8))
+        ^I32 ey0 (cells-at cand (+ b 9))
+        ^I32 ex1 (cells-at cand (+ b 10))
+        ^I32 ey1 (cells-at cand (+ b 11))
+        ^:mut ^I32 ang (ev-angle (- ex1 ex0) (- ey1 ey0))
+        ^:mut ^I32 exact 1
+        ^:mut ^I32 z -1
+        ^:mut ^I32 r 0]
+    (if (!= (bit-and fl (gv-hidden)) 0) (return 0))
+    (if (>= ang 18000) (set ang (- ang 18000)))
+    (if (!= (bit-and fl (gq-from-image)) 0)
+      (do (set exact 0)
+          (set z (im-get im row (mf-z))))
+      (do (if (!= (bit-and (pa-get pa row (pf-vchk)) (+ (vc-blend) (vc-softmask))) 0) (set exact 0))
+          (set z (pa-get pa row (pf-z)))))
+    (set r (grl-new grl (cells-at cand (+ b 3)) (cells-at cand (+ b 4)) (cells-at cand (+ b 5)) (cells-at cand (+ b 6)) (cells-at cand (+ b 7))
+                    ex0 ey0 ex1 ey1 (cells-at cand (+ b 12)) (gf-orient-of ang)))
+    (grl-set grl r 11 ang)
+    (grl-set grl r 12 (cells-at cand (+ b 13)))
+    (grl-set grl r 13 (cells-at cand (+ b 14)))
+    (grl-set grl r 14 (gs-vector))
+    (grl-set grl r 15 (gs-vector))
+    (if (== exact 1)
+      (do (grl-set grl r 16 501)
+          (grl-set grl r 17 900))
+      (do (grl-set grl r 16 514)
+          (grl-set grl r 17 700)))
+    (grl-set grl r 18 fl)
+    (grl-set grl r 20 z)
+    (return 0)))
+
+(defn ^I32 gf-fill-row [^Cells cand ^I32 c ^Cells pa ^:mut ^Cells gfl]
+  (comment "Candidate c (a fill) as a `gfl` row.")
+  (let [^I32 b (* c 16)
+        ^I32 row (cells-at cand (+ b 1))
+        ^I32 fl (cells-at cand (+ b 15))
+        ^I32 colour (cells-at cand (+ b 13))
+        ^I32 r (gfl-new gfl (cells-at cand (+ b 3)) (cells-at cand (+ b 4)) (cells-at cand (+ b 5)) (cells-at cand (+ b 6)) (cells-at cand (+ b 7)) colour)]
+    (gfl-set gfl r 6 (gf-lightness colour))
+    (gfl-set gfl r 7 (gs-vector))
+    (gfl-set gfl r 8 (gs-vector))
+    (if (< colour 0)
+      (do (gfl-set gfl r 9 562)
+          (gfl-set gfl r 10 600))
+      (do (gfl-set gfl r 9 560)
+          (gfl-set gfl r 10 900)))
+    (gfl-set gfl r 11 (bit-and fl 15))
+    (gfl-set gfl r 13 (pa-get pa row (pf-z)))
+    (return 0)))
+
+(defn ^:pub ^I32 gf-page [^Cells cand ^Cells pa ^Cells im ^:mut ^Cells grl ^:mut ^Cells gfl]
+  (comment "One page's candidates into `grl` and `gfl` (the head of this file); answers 0.")
+  (let [^I32 n (quot (cells-len cand) 16)
+        ^:mut ^I32 c 0]
+    (while (< c n)
+      (do (if (== (bit-and (cells-at cand (+ (* c 16) 15)) (gv-hidden)) 0)
+            (if (== (cells-at cand (* c 16)) 1)
+              (gf-rule-row cand c pa im grl)
+              (gf-fill-row cand c pa gfl)))
+          (set c (+ c 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 gf-doc [^Cells pa ^Cells pts ^Cells mk ^Cells im ^I32 np ^I32 mode
+                         ^:mut ^Cells grl ^:mut ^Cells gfl ^:mut ^Cells cand]
+  (comment "The document's graphics: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the")
+  (comment "number of fused rules.")
+  (let [^I32 nq (pa-count pa)
+        ^I32 ni (im-count im)
+        ^:mut ^I32 p 1
+        ^:mut ^I32 qi 0
+        ^:mut ^I32 qj 0
+        ^:mut ^I32 ii 0
+        ^:mut ^I32 ij 0]
+    (cells-drop grl 0)
+    (cells-drop gfl 0)
+    (cells-drop cand 0)
+    (while (<= p np)
+      (do (while (and (< qi nq) (< (pa-get pa qi (pf-page)) p))
+            (set qi (+ qi 1)))
+          (set qj qi)
+          (while (and (< qj nq) (== (pa-get pa qj (pf-page)) p))
+            (set qj (+ qj 1)))
+          (while (and (< ii ni) (< (im-get im ii (mf-page)) p))
+            (set ii (+ ii 1)))
+          (set ij ii)
+          (while (and (< ij ni) (== (im-get im ij (mf-page)) p))
+            (set ij (+ ij 1)))
+          (if (or (> qj qi) (> ij ii))
+            (do (cells-drop cand 0)
+                (gv-page pa pts mk im qi qj ii ij mode cand)
+                (gf-page cand pa im grl gfl)))
+          (set qi qj)
+          (set ii ij)
+          (set p (+ p 1))))
+    (return (quot (cells-len grl) 24))))

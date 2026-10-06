@@ -34,6 +34,7 @@
             [emon.columns :refer [lc-copy]]
             [emon.initial :refer [in-detect]]
             [emon.table :refer [tb-build tb-count]]
+            [emon.gfuse :refer [gf-doc gfx-mode]]
             [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -180,10 +181,12 @@
         ^Cells s0 (new-cells) ^Cells s1 (new-cells) ^Cells s2 (new-cells) ^Cells s3 (new-cells) ^Cells s4 (new-cells)
         ^Cells s5 (new-cells) ^Cells s6 (new-cells) ^Cells s7 (new-cells) ^Cells s8 (new-cells) ^Cells s9 (new-cells)
         ^Cells s10 (new-cells) ^Cells s11 (new-cells) ^Cells s12 (new-cells) ^Cells s13 (new-cells) ^Cells s14 (new-cells)
-        ^Cells s15 (new-cells) ^Cells s16 (new-cells) ^Cells s17 (new-cells) ^Cells s18 (new-cells)]
+        ^Cells s15 (new-cells) ^Cells s16 (new-cells) ^Cells s17 (new-cells) ^Cells s18 (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gpts (new-cells) ^Cells gmk (new-cells) ^Cells gim (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
     (page-new pages 1 61200 79200 0 (pk-vector))
-    (tb-build wd ln et pa 1 tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages)
+    (gf-doc pa gpts gmk gim 1 (gfx-mode) grl gfl cand)
+    (tb-build wd ln et grl gfl 1 tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages)
     (lc-copy ln lt)
     (pa-build wd et 1 pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al)
     (tt-brief t nodes attrs text)
@@ -338,6 +341,7 @@
         ^Cells s5 (new-cells) ^Cells s6 (new-cells) ^Cells s7 (new-cells) ^Cells s8 (new-cells) ^Cells s9 (new-cells)
         ^Cells s10 (new-cells) ^Cells s11 (new-cells) ^Cells s12 (new-cells) ^Cells s13 (new-cells) ^Cells s14 (new-cells)
         ^Cells s15 (new-cells) ^Cells s16 (new-cells) ^Cells s17 (new-cells) ^Cells s18 (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells)
         ^Cells sf (new-cells) ^Cells sc (new-cells) ^Cells ws (new-cells) ^Cells htmp (new-cells)
         ^Cells hpr (new-cells) ^Cells hptxt (new-cells) ^Cells loc (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
         ^Src src (src-of-blob pdf)
@@ -347,7 +351,8 @@
     (model-init nodes attrs regions text pages ledger layout)
     (pa-pages pg pages)
     (let [^I32 np (quot (cells-len pages) 16)]
-      (tb-build wd ln et pa np tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages)
+      (gf-doc pa pts mk im np (gfx-mode) grl gfl cand)
+      (tb-build wd ln et grl gfl np tb tc tw tq tx s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages)
       (lc-copy ln lt)
       (in-detect wd gl fnt et np loc lt ls lo tm ii)
       (hd-analyze wd lt et gl sf sc hc ws htmp hpr hptxt)

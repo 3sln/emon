@@ -5,6 +5,7 @@ package player
 
 import (
 	"emon/evidence"
+	"emon/glayer"
 	"emon/json"
 	"emon/model"
 	"emon/port"
@@ -377,7 +378,7 @@ func PlEaHl() int32 {
 	return 40
 }
 
-func PlEaFpa() int32 {
+func PlEaGrl() int32 {
 	return 41
 }
 
@@ -411,10 +412,6 @@ func FxStride() int32 {
 
 func HlStride() int32 {
 	return 12
-}
-
-func FpaStride() int32 {
-	return 24
 }
 
 func SlStride() int32 {
@@ -845,7 +842,7 @@ func SlNew(c *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, ki
 	return r
 }
 
-func plOff(ea int32, ocg int32, ofw int32, ofl int32, ofv int32, ofa int32, ofx int32, ohl int32, ofpa int32, osl int32) int32 {
+func plOff(ea int32, ocg int32, ofw int32, ofl int32, ofv int32, ofa int32, ofx int32, ohl int32, ogrl int32, osl int32, ogfl int32, oggp int32, ogrg int32) int32 {
 	// The offset a reference into layer arena `ea` is re-based by (0 for an evidence arena).
 	if ea == 34 {
 		return ocg
@@ -869,10 +866,19 @@ func plOff(ea int32, ocg int32, ofw int32, ofl int32, ofv int32, ofa int32, ofx 
 		return ohl
 	}
 	if ea == 41 {
-		return ofpa
+		return ogrl
 	}
 	if ea == 42 {
 		return osl
+	}
+	if ea == 43 {
+		return ogfl
+	}
+	if ea == 44 {
+		return oggp
+	}
+	if ea == 45 {
+		return ogrg
 	}
 	return 0
 }
@@ -885,7 +891,7 @@ func plAddIf(v int32, by int32) int32 {
 	return v + by
 }
 
-func PlAppend(dcg *port.Cells, dfw *port.Cells, dfl *port.Cells, dfv *port.Cells, dfa *port.Cells, dfx *port.Cells, dhl *port.Cells, dfpa *port.Cells, dsl *port.Cells, detext *port.Cells, drefs *port.Cells, pcg *port.Cells, pfw *port.Cells, pfl *port.Cells, pfv *port.Cells, pfa *port.Cells, pfx *port.Cells, phl *port.Cells, pfpa *port.Cells, psl *port.Cells, petext *port.Cells, prefs *port.Cells) int32 {
+func PlAppend(dcg *port.Cells, dfw *port.Cells, dfl *port.Cells, dfv *port.Cells, dfa *port.Cells, dfx *port.Cells, dhl *port.Cells, dgrl *port.Cells, dsl *port.Cells, dgfl *port.Cells, dggp *port.Cells, dgrg *port.Cells, detext *port.Cells, drefs *port.Cells, pcg *port.Cells, pfw *port.Cells, pfl *port.Cells, pfv *port.Cells, pfa *port.Cells, pfx *port.Cells, phl *port.Cells, pgrl *port.Cells, psl *port.Cells, pgfl *port.Cells, pggp *port.Cells, pgrg *port.Cells, petext *port.Cells, prefs *port.Cells) int32 {
 	// Concatenate a page's layer (its arenas, and its own `etext` and `refs`) onto the document's, re-basing as the head of
 	// this file says. Answers 0.
 	var ocg int32 = port.CellsLen(dcg) / 16
@@ -895,8 +901,11 @@ func PlAppend(dcg *port.Cells, dfw *port.Cells, dfl *port.Cells, dfv *port.Cells
 	var ofa int32 = port.CellsLen(dfa) / 12
 	var ofx int32 = port.CellsLen(dfx) / 4
 	var ohl int32 = port.CellsLen(dhl) / 12
-	var ofpa int32 = port.CellsLen(dfpa) / 24
+	var ogrl int32 = port.CellsLen(dgrl) / 24
 	var osl int32 = port.CellsLen(dsl) / 16
+	var ogfl int32 = port.CellsLen(dgfl) / 16
+	var oggp int32 = port.CellsLen(dggp) / 12
+	var ogrg int32 = port.CellsLen(dgrg) / 16
 	var oet int32 = port.CellsLen(detext)
 	var orf int32 = port.CellsLen(drefs) / 2
 	var i int32 = 0
@@ -915,7 +924,7 @@ func PlAppend(dcg *port.Cells, dfw *port.Cells, dfl *port.Cells, dfv *port.Cells
 	for i < n {
 		v = port.CellsAt(prefs, i*2)
 		port.CellsPush(drefs, v)
-		port.CellsPush(drefs, port.CellsAt(prefs, (i*2)+1)+plOff(v, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl))
+		port.CellsPush(drefs, port.CellsAt(prefs, (i*2)+1)+plOff(v, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg))
 		i += 1
 	}
 	// cg: its three runs of refs, and nothing else
@@ -986,7 +995,7 @@ func PlAppend(dcg *port.Cells, dfw *port.Cells, dfl *port.Cells, dfv *port.Cells
 		for k < 12 {
 			v = port.CellsAt(pfa, (i*12)+k)
 			if k == 7 {
-				v += plOff(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl)
+				v += plOff(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg)
 			}
 			if k == 9 {
 				v = plAddIf(v, ocg)
@@ -1007,17 +1016,11 @@ func PlAppend(dcg *port.Cells, dfw *port.Cells, dfl *port.Cells, dfv *port.Cells
 		port.CellsPush(dfx, v)
 		i += 1
 	}
-	// hl and fpa: nothing to re-base
+	// hl: nothing to re-base
 	i = 0
 	n = port.CellsLen(phl)
 	for i < n {
 		port.CellsPush(dhl, port.CellsAt(phl, i))
-		i += 1
-	}
-	i = 0
-	n = port.CellsLen(pfpa)
-	for i < n {
-		port.CellsPush(dfpa, port.CellsAt(pfpa, i))
 		i += 1
 	}
 	// sl: its run of OCR words in refs, and its reference when that is a layer row
@@ -1029,7 +1032,7 @@ func PlAppend(dcg *port.Cells, dfw *port.Cells, dfl *port.Cells, dfv *port.Cells
 		for k < 16 {
 			v = port.CellsAt(psl, (i*16)+k)
 			if k == 8 {
-				v = plAddIf(v, plOff(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl))
+				v = plAddIf(v, plOff(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg))
 			}
 			if k == 10 {
 				v = plAddIf(v, orf)
@@ -1039,6 +1042,7 @@ func PlAppend(dcg *port.Cells, dfw *port.Cells, dfl *port.Cells, dfv *port.Cells
 		}
 		i += 1
 	}
+	glayer.GlAppend(dgrl, dgfl, dggp, dgrg, pgrl, pgfl, pggp, pgrg, orf)
 	return 0
 }
 
@@ -1059,11 +1063,12 @@ func plRunOk(first int32, cnt int32, limit int32) int32 {
 	return 1
 }
 
-func PlCheck(cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, fpa *port.Cells, sl *port.Cells, etext *port.Cells, refs *port.Cells, glyphs *port.Cells) int32 {
+func PlCheck(cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, grl *port.Cells, sl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells, etext *port.Cells, refs *port.Cells, glyphs *port.Cells) int32 {
 	// 0 for a sound layer, else the first broken thing: 1 a stride; 2 a `cg` run outside `refs`; 3 an `fw` text run outside
 	// `etext`; 4 an `fw` line outside `fl`; 5 an `fw` glyph run outside `glyphs`; 6 an `fl` run outside `fw`; 7 `fv` neither
 	// empty nor one row per `fw` row, or a group outside `cg`; 8 an `fa` group outside `cg` or a negative subject; 9 an `fx`
-	// group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row.
+	// group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row;
+	// 12 + `gl-check`'s answer when the graphics arenas are broken (13 a stride, 14 a group outside `ggp`, ... see `emon.glayer`).
 	var ncg int32 = port.CellsLen(cg) / 16
 	var nfw int32 = port.CellsLen(fw) / 24
 	var nfl int32 = port.CellsLen(fl) / 16
@@ -1096,9 +1101,6 @@ func PlCheck(cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa 
 		return 1
 	}
 	if (port.CellsLen(hl) % 12) != 0 {
-		return 1
-	}
-	if (port.CellsLen(fpa) % 24) != 0 {
 		return 1
 	}
 	if (port.CellsLen(sl) % 16) != 0 {
@@ -1211,6 +1213,10 @@ func PlCheck(cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa 
 			}
 		}
 		i += 1
+	}
+	v = glayer.GlCheck(grl, gfl, ggp, grg, refs)
+	if v != 0 {
+		return 11 + v
 	}
 	return 0
 }
@@ -1432,8 +1438,8 @@ func plArena(t *strings.Builder, pr int32, started int32, key int32, a int32, ev
 	return 1
 }
 
-func PlEmitLayer(t *strings.Builder, pretty int32, s0 int32, cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, fpa *port.Cells, sl *port.Cells, etext *port.Cells) int32 {
-	// The layer's nine arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.
+func PlEmitLayer(t *strings.Builder, pretty int32, s0 int32, cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, grl *port.Cells, sl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells, etext *port.Cells) int32 {
+	// The layer's twelve arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.
 	var s int32 = s0
 	s = plArena(t, pretty, s, PlkCg(), 1, 0, cg, etext)
 	s = plArena(t, pretty, s, PlkFw(), 0, 8, fw, etext)
@@ -1442,19 +1448,37 @@ func PlEmitLayer(t *strings.Builder, pretty int32, s0 int32, cg *port.Cells, fw 
 	s = plArena(t, pretty, s, PlkFa(), 3, 0, fa, etext)
 	s = plArena(t, pretty, s, PlkFx(), 4, 0, fx, etext)
 	s = plArena(t, pretty, s, PlkHl(), 5, 0, hl, etext)
-	s = plArena(t, pretty, s, PlkFpa(), 0, 12, fpa, etext)
+	s = glayer.GlArena(t, pretty, s, 1, grl)
 	s = plArena(t, pretty, s, PlkSl(), 6, 0, sl, etext)
+	s = glayer.GlArena(t, pretty, s, 2, gfl)
+	s = glayer.GlArena(t, pretty, s, 3, ggp)
+	s = glayer.GlArena(t, pretty, s, 4, grg)
 	return s
 }
 
-func PlEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, fpa *port.Cells, sl *port.Cells) int32 {
-	// The evidence dump, VERSION "2" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's nine.
+func PlEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, grl *port.Cells, sl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells) int32 {
+	// The evidence dump, VERSION "2" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's twelve.
 	var s int32 = 0
 	port.TextAscii(t, "{")
 	s = evidence.EvBegin(t, pretty, 0, s, evidence.EkVersion())
 	port.TextAscii(t, "\"2\"")
 	s = evidence.EvEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
-	s = PlEmitLayer(t, pretty, s, cg, fw, fl, fv, fa, fx, hl, fpa, sl, etext)
+	s = PlEmitLayer(t, pretty, s, cg, fw, fl, fv, fa, fx, hl, grl, sl, gfl, ggp, grg, etext)
+	json.JsClose(t, pretty, 0, s)
+	return 0
+}
+
+func PlEmitGfx(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells) int32 {
+	// The evidence dump as `pl-emit` writes it, version "2", with `grl gfl ggp grg` as the only layer arrays.
+	var s int32 = 0
+	port.TextAscii(t, "{")
+	s = evidence.EvBegin(t, pretty, 0, s, evidence.EkVersion())
+	port.TextAscii(t, "\"2\"")
+	s = evidence.EvEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	s = glayer.GlArena(t, pretty, s, 1, grl)
+	s = glayer.GlArena(t, pretty, s, 2, gfl)
+	s = glayer.GlArena(t, pretty, s, 3, ggp)
+	s = glayer.GlArena(t, pretty, s, 4, grg)
 	json.JsClose(t, pretty, 0, s)
 	return 0
 }

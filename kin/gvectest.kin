@@ -1,0 +1,220 @@
+;; Laws for `emon.gvec` (P5.5a; SPEC 9.9 "Vector candidates"; D220, D255), on every target.
+;;
+;; Paths are built by hand: a row of `paths` with its flags, colours and width, and its geometry as rows of `pts` (`gt-pt`), as the
+;; interpreter writes them. The candidates of a page are read back from the scratch (stride 16: kind, row, first point, page, box,
+;; centre line, thickness, colour, style, flags).
+;;
+;; The laws that SPEC 9.9 and the brief name: a path of 30 `re` subpaths is 30 rules in `segments` and one fill in `legacy`; a clipped half
+;; rule is trimmed; a white rule on black is a rule (on white is not, on an unknown backdrop is); a hidden rule is flagged; a grid drawn as `m l m l ...` is its lines;
+;; a flat curve is a line and a bent one is not; a stroked box is four edges at its corners; a thin image placement is a `from-image` rule;
+;; an `/Artifact` pagination mark is flagged. `legacy` is what `tb-collect-one` was.
+(ns emon.gvectest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop]]
+            [emon.evidence :refer [pa-new pa-set pa-get pt-add im-new im-set mk-new mk-set pa-rect pa-other
+                                   pf-flags pf-fill pf-stroke pf-width pf-pfirst pf-pcount pf-clip pf-vis pf-backdrop pf-mark
+                                   pg-filled pg-stroked pg-clip mf-vis
+                                   po-move po-line po-curve po-close]]
+            [emon.glayer :refer [gq-box-edge gq-from-fill gq-from-image gq-artifact-pagination]]
+            [emon.gvec :refer [gv-page gv-legacy gv-segments gv-hidden]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+(defn ^I32 gt-c [^Cells out ^I32 c ^I32 f] (return (cells-at out (+ (* c 16) f))))
+
+(defn ^I32 gt-path [^:mut ^Cells pa ^I32 kind ^I32 flags ^I32 fill ^I32 stroke ^I32 width ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "A painted path: its box, flags, colours and width; no geometry yet.")
+  (let [^I32 r (pa-new pa 1 kind x0 y0 x1 y1)]
+    (pa-set pa r (pf-flags) flags)
+    (pa-set pa r (pf-fill) fill)
+    (pa-set pa r (pf-stroke) stroke)
+    (pa-set pa r (pf-width) width)
+    (return r)))
+
+(defn ^I32 gt-pt [^:mut ^Cells pa ^:mut ^Cells pts ^I32 r ^I32 x ^I32 y ^I32 op]
+  (comment "A point of path r's geometry.")
+  (if (< (pa-get pa r (pf-pfirst)) 0) (pa-set pa r (pf-pfirst) (quot (cells-len pts) 3)))
+  (pt-add pts x y op)
+  (let [^I32 n (pa-get pa r (pf-pcount))]
+    (pa-set pa r (pf-pcount) (+ n 1)))
+  (return 0))
+
+(defn ^I32 gt-re [^:mut ^Cells pa ^:mut ^Cells pts ^I32 r ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "What `re` writes: a move, three lines, a close at the start.")
+  (gt-pt pa pts r x0 y0 (po-move))
+  (gt-pt pa pts r x1 y0 (po-line))
+  (gt-pt pa pts r x1 y1 (po-line))
+  (gt-pt pa pts r x0 y1 (po-line))
+  (gt-pt pa pts r x0 y0 (po-close))
+  (return 0))
+
+(defn ^I32 gt-run [^Cells pa ^Cells pts ^Cells mk ^Cells im ^I32 mode ^:mut ^Cells out]
+  (cells-drop out 0)
+  (return (gv-page pa pts mk im 0 (quot (cells-len pa) 24) 0 (quot (cells-len im) 20) mode out)))
+
+(deftest test-a-rectangle-written-as-four-lines-and-a-close-is-a-rectangle
+  (comment "Skia writes a rectangle as a move, four lines (the last back to the start) and a close: six rows, not five")
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells) ^Cells out (new-cells)
+        ^I32 r (gt-path pa (pa-other) (pg-filled) 0 -1 0 1000 4950 21000 5050)]
+    (gt-pt pa pts r 1000 4950 (po-move))
+    (gt-pt pa pts r 21000 4950 (po-line))
+    (gt-pt pa pts r 21000 5050 (po-line))
+    (gt-pt pa pts r 1000 5050 (po-line))
+    (gt-pt pa pts r 1000 4950 (po-line))
+    (gt-pt pa pts r 1000 4950 (po-close))
+    (assert-eq (gt-run pa pts mk im (gv-segments) out) 1 "one rule")
+    (assert-eq (gt-c out 0 8) 1000 "from its left end")
+    (assert-eq (gt-c out 0 10) 21000 "to its right end")
+    (assert-eq (gt-c out 0 12) 100 "one point thick")))
+
+(deftest test-a-path-of-thirty-rects-is-thirty-rules-or-one-fill
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells) ^Cells out (new-cells)
+        ^I32 r (gt-path pa (pa-other) (pg-filled) 0 -1 0 0 0 20000 30000)
+        ^:mut ^I32 k 0]
+    (while (< k 30)
+      (do (gt-re pa pts r 1000 (* k 1000) 19000 (+ (* k 1000) 100))
+          (set k (+ k 1))))
+    (assert-eq (gt-run pa pts mk im (gv-segments) out) 30 "segments: thirty rules")
+    (assert-eq (gt-c out 0 0) 1 "a rule")
+    (assert-eq (gt-c out 0 8) 1000 "from its left end")
+    (assert-eq (gt-c out 0 10) 19000 "to its right end")
+    (assert-eq (gt-c out 0 12) 100 "one point thick")
+    (assert-eq (gt-c out 0 15) (gq-from-fill) "a thin fill is `from-fill`")
+    (assert-eq (gt-c out 29 9) 29050 "the last is the thirtieth, on its centre line")
+    (assert-eq (gt-c out 5 2) 25 "its first point's row")
+    (assert-eq (gt-run pa pts mk im (gv-legacy) out) 1 "legacy: its box is one candidate")
+    (assert-eq (gt-c out 0 0) 2 "a fill")
+    (assert-eq (gt-c out 0 6) 20000 "of the whole box")))
+
+(deftest test-the-dashes-of-a-border-are-rules-of-their-own
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells) ^Cells out (new-cells)
+        ^I32 r (gt-path pa (pa-other) (pg-filled) 5592405 -1 0 18700 86500 18775 88825)
+        ^:mut ^I32 k 0]
+    (comment "five dashes of 0.75 x 2.25 pt, a period of 5.25 pt, one path (as Chrome writes a dashed border)")
+    (while (< k 5)
+      (do (gt-re pa pts r 18700 (+ 86500 (* k 525)) 18775 (+ 86725 (* k 525)))
+          (set k (+ k 1))))
+    (assert-eq (gt-run pa pts mk im (gv-segments) out) 5 "five rules, one a dash: nothing bridges a gap")
+    (assert-eq (gt-c out 0 8) 18737 "vertical, on the dashes' centre line")
+    (assert-eq (gt-c out 0 9) 86500 "the first from its top")
+    (assert-eq (gt-c out 0 11) 86725 "to its bottom")
+    (assert-eq (gt-c out 4 9) 88600 "the last starts after four periods")
+    (assert-eq (gt-c out 4 11) 88825 "and ends at the end of the chain")
+    (assert-eq (gt-c out 0 12) 75 "as thick as a dash")
+    (assert-eq (gt-c out 0 14) 2 "dashed (`rs` 2): the period is not within four thicknesses")
+    (assert-eq (bit-and (gt-c out 0 15) 131072) 0 "and no longer a piece")
+    (assert-eq (gt-run pa pts mk im (gv-legacy) out) 1 "legacy: the path's box is one rule")
+    (comment "two dashes are not a dashed line; a lone short box is not a rule")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (let [^I32 d (gt-path pa (pa-other) (pg-filled) 0 -1 0 0 0 100 100)]
+      (gt-re pa pts d 0 0 75 225)
+      (gt-re pa pts d 0 525 75 750)
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 0 "two pieces are nothing"))))
+
+(deftest test-a-grid-in-one-path-and-the-flat-curve
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells) ^Cells out (new-cells)
+        ^I32 r (gt-path pa (pa-other) (pg-stroked) -1 0 50 0 0 20000 10000)]
+    (gt-pt pa pts r 0 0 (po-move))
+    (gt-pt pa pts r 20000 0 (po-line))
+    (gt-pt pa pts r 0 5000 (po-move))
+    (gt-pt pa pts r 20000 5000 (po-line))
+    (gt-pt pa pts r 0 0 (po-move))
+    (gt-pt pa pts r 0 10000 (po-line))
+    (assert-eq (gt-run pa pts mk im (gv-segments) out) 3 "two rows and a column")
+    (assert-eq (gt-c out 2 9) 0 "the column's top")
+    (assert-eq (gt-c out 2 11) 10000 "and bottom")
+    (assert-eq (gt-c out 2 12) 50 "a half point thick")
+    (assert-eq (gt-run pa pts mk im (gv-legacy) out) 0 "legacy sees no rule in a path that is not a rectangle")
+    (comment "a curve whose controls lie on the chord is a line; one that bulges is figure material")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (let [^I32 c (gt-path pa (pa-other) (pg-stroked) -1 0 50 0 0 20000 10)]
+      (gt-pt pa pts c 0 0 (po-move))
+      (gt-pt pa pts c 5000 10 (po-curve))
+      (gt-pt pa pts c 15000 -10 (po-curve))
+      (gt-pt pa pts c 20000 0 (po-curve))
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 1 "a flat curve is one rule")
+      (assert-eq (gt-c out 0 10) 20000 "to its end"))
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (let [^I32 d (gt-path pa (pa-other) (pg-stroked) -1 0 50 0 0 20000 3000)]
+      (gt-pt pa pts d 0 0 (po-move))
+      (gt-pt pa pts d 0 3000 (po-curve))
+      (gt-pt pa pts d 20000 3000 (po-curve))
+      (gt-pt pa pts d 20000 0 (po-curve))
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 0 "a bent curve is not a rule"))))
+
+(deftest test-a-stroked-box-is-four-edges-at-its-corners
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells) ^Cells out (new-cells)
+        ^I32 r (gt-path pa (pa-rect) (pg-stroked) -1 0 200 9900 9900 20100 20100)]
+    (gt-re pa pts r 10000 10000 20000 20000)
+    (assert-eq (gt-run pa pts mk im (gv-segments) out) 4 "four edges")
+    (assert-eq (gt-c out 0 15) (gq-box-edge) "flagged box-edge")
+    (assert-eq (gt-c out 0 9) 10000 "the top edge's line is the corner's, not the box's")
+    (assert-eq (gt-c out 1 9) 20000 "the bottom edge's")
+    (assert-eq (gt-c out 2 8) 10000 "the left")
+    (assert-eq (gt-c out 3 8) 20000 "the right")
+    (assert-eq (gt-c out 0 12) 200 "two points thick")
+    (assert-eq (gt-run pa pts mk im (gv-legacy) out) 4 "legacy: four edges too")
+    (assert-eq (gt-c out 0 9) 10000 "inset by half the stroke from the box")))
+
+(deftest test-a-clipped-rule-is-trimmed-and-a-white-one-on-black-is-a-rule
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells) ^Cells out (new-cells)
+        ^I32 c (gt-path pa (pa-rect) (+ (pg-clip) (pg-filled)) -1 -1 0 0 0 10000 10000)
+        ^I32 r (gt-path pa (pa-rect) (pg-filled) 0 -1 0 0 4950 20000 5050)]
+    (pa-set pa r (pf-clip) c)
+    (gt-re pa pts r 0 4950 20000 5050)
+    (assert-eq (gt-run pa pts mk im (gv-segments) out) 1 "one rule")
+    (assert-eq (gt-c out 0 8) 0 "from its start")
+    (assert-eq (gt-c out 0 10) 10000 "to where the clip ends")
+    (assert-eq (gt-c out 0 6) 10000 "its box says so too")
+    (comment "outside the clip altogether: no rule")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (let [^I32 c2 (gt-path pa (pa-rect) (+ (pg-clip) (pg-filled)) -1 -1 0 0 0 10000 3000)
+          ^I32 r2 (gt-path pa (pa-rect) (pg-filled) 0 -1 0 0 4950 20000 5050)]
+      (pa-set pa r2 (pf-clip) c2)
+      (gt-re pa pts r2 0 4950 20000 5050)
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 0 "a rule whose band misses its clip is gone"))
+    (comment "white on black (backdrop black) is a rule; white on white is not; on an unknown backdrop it is seen")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (let [^I32 w (gt-path pa (pa-rect) (pg-filled) 16777215 -1 0 0 4950 20000 5050)]
+      (gt-re pa pts w 0 4950 20000 5050)
+      (pa-set pa w (pf-backdrop) 0)
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 1 "a white rule on black is a rule")
+      (assert-eq (gt-c out 0 13) 16777215 "of its own colour")
+      (pa-set pa w (pf-backdrop) 16777215)
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 0 "a white rule on white is not")
+      (pa-set pa w (pf-backdrop) -1)
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 1 "on an unknown backdrop (a partial cover) it is seen, and that is all that is known")
+      (assert-eq (gt-run pa pts mk im (gv-legacy) out) 0 "legacy: mean channel under 240 only"))))
+
+(deftest test-a-hidden-rule-is-kept-and-flagged
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells) ^Cells out (new-cells)
+        ^I32 r (gt-path pa (pa-rect) (pg-filled) 0 -1 0 0 4950 20000 5050)]
+    (gt-re pa pts r 0 4950 20000 5050)
+    (pa-set pa r (pf-vis) 3)
+    (assert-eq (gt-run pa pts mk im (gv-segments) out) 1 "kept")
+    (assert-eq (bit-and (gt-c out 0 15) (gv-hidden)) (gv-hidden) "flagged hidden")))
+
+(deftest test-an-artifact-and-an-image-and-a-box-only-path
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells) ^Cells out (new-cells)
+        ^I32 m (mk-new mk 1 1 0 0 -1 0)
+        ^I32 r (gt-path pa (pa-rect) (pg-filled) 0 -1 0 0 4950 20000 5050)]
+    (mk-set mk m 6 1)
+    (pa-set pa r (pf-mark) m)
+    (assert-eq (gt-run pa pts mk im (gv-segments) out) 1 "a path with no geometry is read by its box")
+    (assert-eq (bit-and (gt-c out 0 15) (gq-artifact-pagination)) (gq-artifact-pagination) "an /Artifact /Pagination mark is flagged")
+    (assert-eq (gt-c out 0 2) -1 "a box-only candidate has no point")
+    (comment "a thin visible image placement is a rule of colour -1; a hidden one is nothing")
+    (cells-drop pa 0)
+    (let [^I32 i (im-new im 1 0 0 20000 100 5 1 1)]
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 1 "an image rule")
+      (assert-eq (gt-c out 0 13) -1 "of unknown colour")
+      (assert-eq (gt-c out 0 15) (gq-from-image) "flagged from-image")
+      (assert-eq (gt-run pa pts mk im (gv-legacy) out) 0 "legacy has no image rules")
+      (im-set im i (mf-vis) 5)
+      (assert-eq (gt-run pa pts mk im (gv-segments) out) 0 "a hidden image is not one"))))

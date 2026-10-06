@@ -125,7 +125,7 @@
                                    pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-width pf-falpha pf-salpha pf-flags
                                    pf-z pf-clip pf-mark pf-ocg pf-pfirst pf-pcount pf-dash
                                    pa-line pa-rect pa-curve pa-other
-                                   pg-closed pg-evenodd pg-clip pg-filled pg-stroked pg-shading pg-pattern pg-blend pg-softmask
+                                   pg-closed pg-evenodd pg-clip pg-filled pg-stroked pg-shading pg-pattern pg-blend pg-softmask pg-truncated
                                    mf-alpha mf-flags mf-rot mf-skewed mf-z mf-clip mf-mark mf-ocg mf-vchk
                                    mg-mask mg-smask mg-inline mg-masked mg-blend mg-softmask
                                    vc-blend vc-softmask mc-xobject mkf-ocgdef
@@ -289,9 +289,12 @@
 (defconst ^I32 C_NPATH 17208)    ;; `paths` rows this page made
 (defconst ^I32 C_NIMG 17209)     ;; `images` rows this page made
 (defconst ^I32 C_PKEEP 17210)    ;; rows of `pts` the path under construction has
+(defconst ^I32 C_PTS0 17211)     ;; the first `pts` row this page may make (PTS_PAGE counts from it)
 (defconst ^I32 C_BB 17212)       ;; a Form XObject's /BBox, four Fx
 (defconst ^I32 C_SIZE 17248)
-(defconst ^I32 PATH_KEEP 128)    ;; points a path keeps in `pts` (a longer one keeps its box only)
+(defconst ^I32 PATH_KEEP 128)    ;; points a path WITH A CURVE keeps in `pts` (a longer one keeps its box only, flag `truncated`)
+(defconst ^I32 PATH_KEEP_STRAIGHT 4096) ;; points a path of `m l h re` alone keeps (D219)
+(defconst ^I32 PTS_PAGE 1000000) ;; rows of `pts` a page may make; past it every later path is truncated (warning 1024)
 (defconst ^I32 PATH_ROWS 200000) ;; `paths` rows, and `images` rows, a page may make (the rest are counted in warning 1024)
 
 ;; A graphics state: what `q` saves.
@@ -1813,10 +1816,11 @@
     (if (< y (cells-at cx C_PBY0)) (cells-set cx C_PBY0 y))
     (if (> x (cells-at cx C_PBX1)) (cells-set cx C_PBX1 x))
     (if (> y (cells-at cx C_PBY1)) (cells-set cx C_PBY1 y))
-    (if (< keep PATH_KEEP)
+    (if (and (< keep PATH_KEEP_STRAIGHT) (< (- (pt-count pts) (cells-at cx C_PTS0)) PTS_PAGE))
       (do (pt-add pts x y op)
           (cells-set cx C_PKEEP (+ keep 1)))
-      (cells-set cx C_PFLAGS (pc-flag-or (cells-at cx C_PFLAGS) 4)))
+      (do (if (< keep PATH_KEEP_STRAIGHT) (pc-warn-set cx W_PATHS))
+          (cells-set cx C_PFLAGS (pc-flag-or (cells-at cx C_PFLAGS) 4))))
     (cells-set cx C_PN (+ (cells-at cx C_PN) 1))
     (fx-put cx C_PCX px)
     (fx-put cx C_PCY py)
@@ -2054,8 +2058,10 @@
   (return (pa-other)))
 
 (defn ^I32 pc-geom-kept [^Cells cx]
-  (comment "1 when the whole path is in `pts` (it had no more than PATH_KEEP points).")
+  (comment "1 when the whole path is in `pts`: a path of `m l h re` alone had no more than PATH_KEEP_STRAIGHT points (and the")
+  (comment "page's `pts` was not full), a path with a curve no more than PATH_KEEP (D219).")
   (if (!= (bit-and (cells-at cx C_PFLAGS) 4) 0) (return 0))
+  (if (and (!= (bit-and (cells-at cx C_PFLAGS) 1) 0) (> (cells-at cx C_PN) PATH_KEEP)) (return 0))
   (return 1))
 
 (defn ^I32 pc-end-path [^:mut ^Cells cx ^:mut ^Cells pa ^:mut ^Cells pts ^I32 fill ^I32 stroke ^I32 evenodd ^I32 closed]
@@ -2075,7 +2081,8 @@
         ^:mut ^I32 nrows 0
         ^:mut ^I32 pfst -1
         ^:mut ^I32 geom 0
-        ^:mut ^I32 painted 0]
+        ^:mut ^I32 painted 0
+        ^:mut ^I32 tr 0]
     (cells-set cx C_CLIPP 0)
     (if (== n 0)
       (do (pc-path-reset cx pts)
@@ -2083,6 +2090,7 @@
     (set kind (pc-kind-of-path cx pts))
     (set nrows n)
     (if (== kept 0) (set nrows 0))
+    (if (== kept 0) (set tr (pg-truncated)))
     (if (> nrows 0) (set pfst start))
     (if (and (== kept 0) (> (cells-at cx C_PKEEP) 0))
       (cells-drop pts (* start 3)))
@@ -2091,7 +2099,7 @@
       (do (if (>= (cells-at cx C_NPATH) PATH_ROWS)
             (pc-warn-set cx W_PATHS)
             (do (set painted 1)
-                (set fl 0)
+                (set fl tr)
                 (if (!= closed 0) (set fl (+ fl (pg-closed))))
                 (if (== evenodd 1) (set fl (+ fl (pg-evenodd))))
                 (if (== stroke 1)
@@ -2124,8 +2132,8 @@
                 (pa-set pa r (pf-pcount) geom)
                 (cells-set cx C_NPATH (+ (cells-at cx C_NPATH) 1))))))
     (if (!= pend 0)
-      (do (set fl 0)
-          (if (== pend 2) (set fl (pg-evenodd)))
+      (do (set fl tr)
+          (if (== pend 2) (set fl (+ fl (pg-evenodd))))
           (pc-clip-box cx pa (cells-at cx C_PBX0) (cells-at cx C_PBY0) (cells-at cx C_PBX1) (cells-at cx C_PBY1)
                        kind fl pfst geom)))
     (comment "A path whose geometry nobody kept leaves no rows behind.")
@@ -3516,6 +3524,7 @@
         ^:mut ^I32 eh 0
         ^:mut ^I32 endcs 0]
     (pc-begin-page cx page)
+    (cells-set cx C_PTS0 (pt-count pts))
     (pc-base-matrix cx (pd-pg-crop pg pi 0) (pd-pg-crop pg pi 1) (pd-pg-crop pg pi 2)
                     (pd-pg-crop pg pi 3) (pd-pg-rotate pg pi))
     (pc-gs-reset cx)

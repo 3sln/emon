@@ -1233,7 +1233,7 @@ func TestEveryCellOfEveryStrideIsPrintedOrSpare(emonT *testing.T) {
 			port.AssertEq(emonT, cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)")
 		}
 		if ea == 12 {
-			port.AssertEq(emonT, evidence.EvStrides[11]-cells, 5, "paths: five spare")
+			port.AssertEq(emonT, evidence.EvStrides[11]-cells, 1, "paths: one spare (D219 printed vis, vby, vchk and backdrop)")
 		}
 		if ea == 13 {
 			port.AssertEq(emonT, evidence.EvStrides[12]-cells, 1, "images: one spare")

@@ -4,6 +4,8 @@
 use crate::emon::evidence::*;
 
 pub(crate) const PV_SCAN: i32 = 4096;
+pub(crate) const PV_BUSY: i32 = 20000;
+pub(crate) const PV_FLOOR: i32 = 64;
 pub(crate) const PV_TOL: i32 = 4;
 pub(crate) const ZERO_SIZE_CPT: i32 = 100;
 pub(crate) const COVER_SLACK: i32 = 2;
@@ -203,9 +205,34 @@ pub(crate) fn pv_painted(mode: i32, comp: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, gz: i32, jp: i32, ji: i32, p0: i32, i0: i32) -> i32 {
+pub(crate) fn pv_full_k(mut pa: &mut crate::port::Cells, r: i32, k: i32) -> i32 {
+    // Component k of the region path row r paints in full: its box (the stroke included) intersected with its clip.
+    let cl: i32 = pa_get(pa, r, pf_clip());
+    let cv: i32 = pv_clip_k(pa, cl, k);
+    let mut v: i32 = 0;
+    if k == 0 {
+        v = pa_get(pa, r, pf_x0());
+    }
+    if k == 1 {
+        v = pa_get(pa, r, pf_y0());
+    }
+    if k == 2 {
+        v = pa_get(pa, r, pf_x1());
+    }
+    if k == 3 {
+        v = pa_get(pa, r, pf_y1());
+    }
+    if k < 2 {
+        return pv_max(v, cv);
+    }
+    return pv_min(v, cv);
+}
+pub(crate) fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, gz: i32, jp: i32, ji: i32, p0: i32, i0: i32, me: i32, lim: i32) -> i32 {
     // The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths
-    // are searched backwards from row jp (the first with a later z), images from row ji.
+    // are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being
+    // classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,
+    // covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints
+    // of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).
     let mut r: i32 = jp - 1;
     let mut steps: i32 = 0;
     let mut zp: i32 = -1;
@@ -217,13 +244,18 @@ pub(crate) fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::p
     let mut ry1: i32 = 0;
     let mut zi: i32 = -1;
     let mut found: i32 = 0;
-    while (r >= p0) && ((steps < PV_SCAN) && (found == 0)) {
+    while (r >= p0) && ((steps < lim) && (found == 0)) {
         fl = pa_get(pa, r, pf_flags());
         if ((fl & pg_clip()) == 0) && ((fl & pg_filled()) != 0) {
             rx0 = pv_path_k(pa, r, 0);
             ry0 = pv_path_k(pa, r, 1);
             rx1 = pv_path_k(pa, r, 2);
             ry1 = pv_path_k(pa, r, 3);
+            if (me >= 0) && (pv_opaque_rect(pa, mk, me) == 1) {
+                if pv_covers(pv_path_k(pa, me, 0), pv_path_k(pa, me, 1), pv_path_k(pa, me, 2), pv_path_k(pa, me, 3), pv_full_k(pa, r, 0), pv_full_k(pa, r, 1), pv_full_k(pa, r, 2), pv_full_k(pa, r, 3)) == 1 {
+                    rx1 = rx0 - 1;
+                }
+            }
             if pv_hit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1 {
                 found = 1;
                 zp = pa_get(pa, r, pf_z());
@@ -241,7 +273,7 @@ pub(crate) fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::p
     r = ji - 1;
     steps = 0;
     found = 0;
-    while (r >= i0) && ((steps < PV_SCAN) && (found == 0)) {
+    while (r >= i0) && ((steps < lim) && (found == 0)) {
         rx0 = pv_img_k(im, pa, r, 0);
         ry0 = pv_img_k(im, pa, r, 1);
         rx1 = pv_img_k(im, pa, r, 2);
@@ -258,14 +290,14 @@ pub(crate) fn pv_backdrop(mut pa: &mut crate::port::Cells, mut im: &mut crate::p
     }
     return res;
 }
-pub(crate) fn pv_occluder(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, jp: i32, ji: i32, p1: i32, i1: i32) -> i32 {
+pub(crate) fn pv_occluder(mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, jp: i32, ji: i32, p1: i32, i1: i32, lim: i32) -> i32 {
     // The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths
     // are searched forwards from row jp to p1, images from ji to i1.
     let mut r: i32 = jp;
     let mut steps: i32 = 0;
     let mut zp: i32 = -1;
     let mut zi: i32 = -1;
-    while (r < p1) && ((steps < PV_SCAN) && (zp < 0)) {
+    while (r < p1) && ((steps < lim) && (zp < 0)) {
         if pv_opaque_rect(pa, mk, r) == 1 {
             if pv_covers(pv_path_k(pa, r, 0), pv_path_k(pa, r, 1), pv_path_k(pa, r, 2), pv_path_k(pa, r, 3), x0, y0, x1, y1) == 1 {
                 zp = pa_get(pa, r, pf_z());
@@ -276,7 +308,7 @@ pub(crate) fn pv_occluder(mut pa: &mut crate::port::Cells, mut im: &mut crate::p
     }
     r = ji;
     steps = 0;
-    while (r < i1) && ((steps < PV_SCAN) && (zi < 0)) {
+    while (r < i1) && ((steps < lim) && (zi < 0)) {
         if pv_opaque_img(im, mk, r) == 1 {
             if pv_covers(pv_img_k(im, pa, r, 0), pv_img_k(im, pa, r, 1), pv_img_k(im, pa, r, 2), pv_img_k(im, pa, r, 3), x0, y0, x1, y1) == 1 {
                 zi = im_get(im, r, mf_z());
@@ -351,7 +383,7 @@ pub(crate) fn pv_glyph(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port
     // 3. the ink against what is behind it (only for glyphs that paint).
     if (vis == 0) && ((pv_painted(mode, 0) == 1) || (pv_painted(mode, 1) == 1)) {
         chk = pv_bit(chk, vc_white());
-        back = pv_backdrop(pa, im, mk, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0);
+        back = pv_backdrop(pa, im, mk, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0, -1, PV_SCAN);
         if back >= 0 {
             npaint = 0;
             nsame = 0;
@@ -385,7 +417,7 @@ pub(crate) fn pv_glyph(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port
     if (vis == 0) && ((pv_painted(mode, 0) == 1) || (pv_painted(mode, 1) == 1)) {
         chk = pv_bit(chk, vc_occlusion());
         if (vx0 < vx1) && (vy0 < vy1) {
-            occ = pv_occluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1);
+            occ = pv_occluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
             if occ >= 0 {
                 vis = vz_occluded();
                 vby = occ;
@@ -471,7 +503,7 @@ pub(crate) fn pv_image(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port
     if vis == 0 {
         chk = pv_bit(chk, vc_occlusion());
         if (vx0 < vx1) && (vy0 < vy1) {
-            occ = pv_occluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1);
+            occ = pv_occluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, PV_SCAN);
             if occ >= 0 {
                 vis = vz_occluded();
                 vby = occ;
@@ -495,6 +527,161 @@ pub(crate) fn pv_image(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port
     im_set(im, r, mf_vchk(), chk);
     return 0;
 }
+pub(crate) fn pv_touch(x0: i32, y0: i32, x1: i32, y1: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
+    // 1 when two CLOSED boxes share a point; a box with a negative extent (an empty clip) shares none.
+    if (bx0 > bx1) || (by0 > by1) {
+        return 0;
+    }
+    if (x0 <= bx1) && ((bx0 <= x1) && ((y0 <= by1) && (by0 <= y1))) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn pv_path(mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, pw: i32, ph: i32, r: i32, ji: i32, p0: i32, i0: i32, p1: i32, i1: i32) -> i32 {
+    // Classify path row r (see the section header). ji is the first image row painted after it.
+    let fl: i32 = pa_get(pa, r, pf_flags());
+    let x0: i32 = pa_get(pa, r, pf_x0());
+    let y0: i32 = pa_get(pa, r, pf_y0());
+    let x1: i32 = pa_get(pa, r, pf_x1());
+    let y1: i32 = pa_get(pa, r, pf_y1());
+    let clip: i32 = pa_get(pa, r, pf_clip());
+    let mark: i32 = pa_get(pa, r, pf_mark());
+    let z: i32 = pa_get(pa, r, pf_z());
+    let mut filled: i32 = 0;
+    let mut stroked: i32 = 0;
+    let mut lim: i32 = PV_SCAN;
+    let mut gx: i32 = 0;
+    let mut gy: i32 = 0;
+    let mut chk: i32 = fl & (vc_blend() + vc_softmask());
+    let mut vis: i32 = 0;
+    let mut vby: i32 = -1;
+    let mut vx0: i32 = x0;
+    let mut vy0: i32 = y0;
+    let mut vx1: i32 = x1;
+    let mut vy1: i32 = y1;
+    let mut back: i32 = 0;
+    let mut bout: i32 = -1;
+    let mut ink: i32 = 0;
+    let mut npaint: i32 = 0;
+    let mut nsame: i32 = 0;
+    let mut nclear: i32 = 0;
+    let mut occ: i32 = -1;
+    if (p1 - p0) > PV_BUSY {
+        lim = (PV_SCAN * PV_BUSY) / (p1 - p0);
+        if lim < PV_FLOOR {
+            lim = PV_FLOOR;
+        }
+    }
+    if (fl & pg_filled()) != 0 {
+        filled = 1;
+    }
+    if (fl & pg_stroked()) != 0 {
+        stroked = 1;
+    }
+    // 1. the clip in force.
+    chk = pv_bit(chk, vc_clip());
+    if clip >= 0 {
+        vx0 = pv_max(x0, pv_clip_k(pa, clip, 0));
+        vy0 = pv_max(y0, pv_clip_k(pa, clip, 1));
+        vx1 = pv_min(x1, pv_clip_k(pa, clip, 2));
+        vy1 = pv_min(y1, pv_clip_k(pa, clip, 3));
+        if pv_touch(x0, y0, x1, y1, pv_clip_k(pa, clip, 0), pv_clip_k(pa, clip, 1), pv_clip_k(pa, clip, 2), pv_clip_k(pa, clip, 3)) == 0 {
+            vis = vz_clipped();
+        }
+    }
+    // 2. the page.
+    if vis == 0 {
+        chk = pv_bit(chk, vc_offpage());
+        if pv_touch(x0, y0, x1, y1, 0, 0, pw, ph) == 0 {
+            vis = vz_offpage();
+        }
+    }
+    // 3. the ink against what is behind it. A region with no extent one way (a hairline) is grown by a centipoint that way,
+    // so it has an area to look under; nothing else is grown (a box that only touches its neighbour does not overlap it).
+    if vx1 <= vx0 {
+        gx = 1;
+    }
+    if vy1 <= vy0 {
+        gy = 1;
+    }
+    if vis == 0 {
+        chk = pv_bit(chk, vc_white());
+        back = pv_backdrop(pa, im, mk, vx0 - gx, vy0 - gy, vx1 + gx, vy1 + gy, z, r, ji, p0, i0, r, lim);
+        if back >= 0 {
+            bout = back;
+            if filled == 1 {
+                npaint += 1;
+                ink = pa_get(pa, r, pf_fill());
+                if (fl & pg_pattern()) != 0 {
+                    ink = -1;
+                }
+                if pv_close(ink, back) == 1 {
+                    nsame += 1;
+                }
+            }
+            if stroked == 1 {
+                npaint += 1;
+                if pv_close(pa_get(pa, r, pf_stroke()), back) == 1 {
+                    nsame += 1;
+                }
+            }
+            if (npaint > 0) && (nsame == npaint) {
+                vis = vz_white();
+            }
+        }
+    }
+    // 4. a region of no extent either way (a point); a stroke of width 0 is a hairline, which is drawn.
+    if vis == 0 {
+        chk = pv_bit(chk, vc_zero_size());
+        if (vx1 <= vx0) && (vy1 <= vy0) {
+            if (stroked == 0) || (pa_get(pa, r, pf_width()) > 0) {
+                vis = vz_zero_size();
+            }
+        }
+    }
+    // 5. a later opaque paint over the whole region.
+    if vis == 0 {
+        chk = pv_bit(chk, vc_occlusion());
+        occ = pv_occluder(pa, im, mk, vx0, vy0, vx1, vy1, r + 1, ji, p1, i1, lim);
+        if occ >= 0 {
+            vis = vz_occluded();
+            vby = occ;
+        }
+    }
+    // 6. optional content that is off.
+    if vis == 0 {
+        chk = pv_bit(chk, vc_ocg());
+        if pv_chain_off(mk, mark) == 1 {
+            vis = vz_ocg_hidden();
+        }
+    }
+    // 7. every painted component at alpha 0.
+    if vis == 0 {
+        chk = pv_bit(chk, vc_transparent());
+        npaint = 0;
+        nclear = 0;
+        if filled == 1 {
+            npaint += 1;
+            if pa_get(pa, r, pf_falpha()) == 0 {
+                nclear += 1;
+            }
+        }
+        if stroked == 1 {
+            npaint += 1;
+            if pa_get(pa, r, pf_salpha()) == 0 {
+                nclear += 1;
+            }
+        }
+        if (npaint > 0) && (nclear == npaint) {
+            vis = vz_transparent();
+        }
+    }
+    pa_set(pa, r, pf_vis(), vis);
+    pa_set(pa, r, pf_vby(), vby);
+    pa_set(pa, r, pf_vchk(), chk);
+    pa_set(pa, r, pf_backdrop(), bout);
+    return 0;
+}
 pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, mut pa: &mut crate::port::Cells, mut im: &mut crate::port::Cells, pw: i32, ph: i32, g0: i32, p0: i32, i0: i32) -> i32 {
     // Classify the glyphs from row g0, and the images from row i0, of the page whose paths start at row p0 and
     // whose size (the crop box in page space) is pw by ph centipoints. Rows are in paint order, so for each
@@ -507,6 +694,8 @@ pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells,
     let mut ji: i32 = i0;
     let mut gz: i32 = 0;
     let mut ig: i32 = i0;
+    let mut rp: i32 = p0;
+    let mut fl: i32 = 0;
     while g < g1 {
         gz = gl_get(gl, g, gf_z());
         while (jp < p1) && ((pa_get(pa, jp, pf_z()) < 0) || (pa_get(pa, jp, pf_z()) < gz)) {
@@ -527,6 +716,19 @@ pub fn pv_page(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells,
         ji = ig + 1;
         pv_image(mk, pa, im, pw, ph, ig, jp, ji, p1, i1);
         ig += 1;
+    }
+    // The paths: a clip and a shading are not classified (their `vchk` stays 0).
+    ji = i0;
+    while rp < p1 {
+        fl = pa_get(pa, rp, pf_flags());
+        if ((fl & pg_clip()) == 0) && ((fl & pg_shading()) == 0) {
+            gz = pa_get(pa, rp, pf_z());
+            while (ji < i1) && (im_get(im, ji, mf_z()) < gz) {
+                ji += 1;
+            }
+            pv_path(mk, pa, im, pw, ph, rp, ji, p0, i0, p1, i1);
+        }
+        rp += 1;
     }
     return 0;
 }

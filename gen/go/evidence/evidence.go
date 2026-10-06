@@ -325,6 +325,9 @@ func PgBlend() int32 {
 func PgSoftmask() int32 {
 	return 256
 }
+func PgTruncated() int32 {
+	return 512
+}
 func PgEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "closed")
@@ -360,6 +363,10 @@ func PgEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 256 {
 		port.TextAscii(t, "softmask")
+		return 1
+	}
+	if code == 512 {
+		port.TextAscii(t, "truncated")
 		return 1
 	}
 	return 0
@@ -1696,6 +1703,9 @@ func EkRadii() int32 {
 func EkOutline() int32 {
 	return 150
 }
+func EkBackdrop() int32 {
+	return 151
+}
 func EkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "emon-evidence")
@@ -2295,6 +2305,10 @@ func EkEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 150 {
 		port.TextAscii(t, "outline")
+		return 1
+	}
+	if code == 151 {
+		port.TextAscii(t, "backdrop")
 		return 1
 	}
 	return 0
@@ -3461,6 +3475,22 @@ func PfDash() int32 {
 	return 18
 }
 
+func PfVis() int32 {
+	return 19
+}
+
+func PfVby() int32 {
+	return 20
+}
+
+func PfVchk() int32 {
+	return 21
+}
+
+func PfBackdrop() int32 {
+	return 22
+}
+
 func MfPage() int32 {
 	return 0
 }
@@ -4141,7 +4171,7 @@ func TlfConf() int32 {
 	return 16
 }
 
-var EvFd [1650]int32 = [1650]int32{
+var EvFd [1674]int32 = [1674]int32{
 	1, 0, 1, 9, -2147483648, 0,
 	1, 1, 2, 34, 0, 0,
 	1, 2, 2, 74, 0, 0,
@@ -4269,6 +4299,10 @@ var EvFd [1650]int32 = [1650]int32{
 	12, 15, 1, 101, -1, 0,
 	12, 16, 7, 57, -1, 0,
 	12, 18, 2, 117, 0, 0,
+	12, 19, 8, 21, 0, 2,
+	12, 20, 1, 102, -1, 0,
+	12, 21, 9, 103, 0, 11,
+	12, 22, 5, 151, -2147483648, 0,
 	13, 0, 1, 9, -2147483648, 0,
 	13, 1, 3, 15, -2147483648, 0,
 	13, 5, 1, 35, -2147483648, 0,
@@ -4431,19 +4465,19 @@ var EvFx [48]int32 = [48]int32{
 	72, 8,
 	80, 17,
 	97, 15,
-	112, 15,
-	127, 15,
-	142, 21,
-	163, 10,
-	173, 13,
-	186, 16,
-	202, 9,
-	211, 3,
-	214, 9,
-	223, 16,
-	239, 11,
-	250, 15,
-	265, 10,
+	112, 19,
+	131, 15,
+	146, 21,
+	167, 10,
+	177, 13,
+	190, 16,
+	206, 9,
+	215, 3,
+	218, 9,
+	227, 16,
+	243, 11,
+	254, 15,
+	269, 10,
 }
 
 var EvStrides [24]int32 = [24]int32{
@@ -4885,6 +4919,8 @@ func PaNew(c *port.Cells, vPage int32, vKind int32, vX0 int32, vY0 int32, vX1 in
 	evSet(c, 24, r, 14, -1)
 	evSet(c, 24, r, 15, -1)
 	evSet(c, 24, r, 16, -1)
+	evSet(c, 24, r, 20, -1)
+	evSet(c, 24, r, 22, -1)
 	return r
 }
 

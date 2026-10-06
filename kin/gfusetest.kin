@@ -1,0 +1,96 @@
+;; Laws for `emon.gfuse`, the vector-only form (P5.5a; SPEC 9.9; D218, D222, D255), on every target.
+;;
+;; Hand-built paths over two pages go through `gf-doc` (`gv-page` then `gf-page`) into `grl` and `gfl`, and the rows say what the arbitration
+;; table's rules 501, 505, 514, 560 and 562 say: an exactly known visible rule is 501 at 900, paint that is not exactly known (blend, soft mask,
+;; an image placement) 514 at 700, a hidden one is nothing (505), a fill 560 at 900 and a fill of colour -1 562 at 600; orientation and angle
+;; are the centre line's; the layer `gl-check`s; and `legacy` and `segments` agree on the rows of the plain cases.
+(ns emon.gfusetest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop]]
+            [emon.evidence :refer [pa-new pa-set pf-flags pf-fill pf-stroke pf-width pf-vis pf-vchk pf-z pf-pfirst pf-pcount
+                                   pg-filled pg-stroked pg-pattern pa-rect pa-other vc-blend
+                                   pt-add po-move po-line]]
+            [emon.glayer :refer [grl-count grl-get gfl-count gfl-get gl-check go-h go-v go-slant gqf-pattern]]
+            [emon.gvec :refer [gv-legacy gv-segments]]
+            [emon.gfuse :refer [gf-doc gfx-mode]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+(defn ^I32 gu-rect [^:mut ^Cells pa ^I32 page ^I32 flags ^I32 fill ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "A painted box with no geometry kept (read by its box).")
+  (let [^I32 r (pa-new pa page (pa-rect) x0 y0 x1 y1)]
+    (pa-set pa r (pf-flags) flags)
+    (pa-set pa r (pf-fill) fill)
+    (return r)))
+
+(deftest test-the-rows-of-a-vector-only-page
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells refs (new-cells) ^Cells ggp (new-cells) ^Cells grg (new-cells)
+        ^I32 h (gu-rect pa 1 (pg-filled) 0 1000 4950 21000 5050)
+        ^I32 v (gu-rect pa 1 (pg-filled) 0 1000 5000 1100 9000)
+        ^I32 b (gu-rect pa 1 (pg-filled) 0 1000 6950 21000 7050)
+        ^I32 x (gu-rect pa 1 (pg-filled) 0 1000 8950 21000 9050)
+        ^I32 f (gu-rect pa 1 (pg-filled) 14540253 2000 12000 12000 15000)
+        ^I32 p (gu-rect pa 1 (+ (pg-filled) (pg-pattern)) -1 3000 12000 8000 15000)
+        ^I32 q (gu-rect pa 2 (pg-filled) 0 1000 9950 21000 10050)]
+    (assert-that (> (+ v (+ f (+ p q))) 0) "the other paths are painted")
+    (pa-set pa b (pf-vchk) (vc-blend))
+    (pa-set pa x (pf-vis) 3)
+    (pa-set pa h (pf-z) 4)
+    (assert-eq (gf-doc pa pts mk im 2 (gv-segments) grl gfl cand) 4 "four rules: the hidden one is nothing")
+    (assert-eq (gfl-count gfl) 2 "two fills")
+    (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")
+    (assert-eq (grl-get grl 0 0) 1 "the first rule's page")
+    (assert-eq (grl-get grl 0 5) 1000 "its centre line starts at its left end")
+    (assert-eq (grl-get grl 0 6) 5000 "on its centre")
+    (assert-eq (grl-get grl 0 9) 100 "one point thick")
+    (assert-eq (grl-get grl 0 10) (go-h) "horizontal")
+    (assert-eq (grl-get grl 0 11) 0 "at angle 0")
+    (assert-eq (grl-get grl 0 12) 0 "black")
+    (assert-eq (grl-get grl 0 14) 1 "from the vector source")
+    (assert-eq (grl-get grl 0 15) 1 "which is the winner")
+    (assert-eq (grl-get grl 0 16) 501 "by rule 501")
+    (assert-eq (grl-get grl 0 17) 900 "at 900")
+    (assert-eq (grl-get grl 0 19) -1 "no group before P7.G")
+    (assert-eq (grl-get grl 0 20) 4 "its path's z")
+    (assert-eq (grl-get grl 1 10) (go-v) "the second is vertical")
+    (assert-eq (grl-get grl 1 11) 9000 "at 9000")
+    (assert-eq (grl-get grl 1 5) 1050 "on its centre")
+    (assert-eq (grl-get grl 2 16) 514 "blended paint is not exactly known")
+    (assert-eq (grl-get grl 2 17) 700 "700")
+    (assert-eq (grl-get grl 3 0) 2 "the fourth is on page 2")
+    (assert-eq (gfl-get gfl 0 9) 560 "a fill by 560")
+    (assert-eq (gfl-get gfl 0 10) 900 "at 900")
+    (assert-eq (gfl-get gfl 0 5) 14540253 "its colour")
+    (assert-eq (gfl-get gfl 0 6) 866 "its lightness")
+    (assert-eq (gfl-get gfl 1 9) 562 "a pattern fill by 562")
+    (assert-eq (gfl-get gfl 1 10) 600 "at 600")
+    (assert-eq (gfl-get gfl 1 5) -1 "of no colour")
+    (assert-eq (gfl-get gfl 1 11) (gqf-pattern) "flagged pattern")))
+
+(deftest test-a-slanted-line-is-a-slant-and-the-modes-agree-on-plain-boxes
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells)
+        ^I32 r (pa-new pa 1 (pa-other) 0 0 10000 10000)]
+    (pa-set pa r (pf-flags) (pg-stroked))
+    (pa-set pa r (pf-stroke) 0)
+    (pa-set pa r (pf-width) 50)
+    (pa-set pa r (pf-pfirst) 0)
+    (pa-set pa r (pf-pcount) 2)
+    (pt-add pts 0 0 (po-move))
+    (pt-add pts 10000 10000 (po-line))
+    (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand) 1 "one rule")
+    (assert-eq (grl-get grl 0 10) (go-slant) "slanted")
+    (assert-eq (grl-get grl 0 11) 13500 "at 135 degrees (page space has y down)")
+    (comment "a plain thin box: the two modes give the same row")
+    (cells-drop pa 0)
+    (gu-rect pa 1 (pg-filled) 0 1000 4950 21000 5050)
+    (assert-eq (gf-doc pa pts mk im 1 (gv-legacy) grl gfl cand) 1 "legacy: one rule")
+    (let [^I32 a (grl-get grl 0 5)
+          ^I32 b (grl-get grl 0 7)
+          ^I32 c (grl-get grl 0 6)]
+      (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand) 1 "segments: one rule")
+      (assert-eq (grl-get grl 0 5) a "the same left end")
+      (assert-eq (grl-get grl 0 7) b "the same right end")
+      (assert-eq (grl-get grl 0 6) c "the same centre"))))

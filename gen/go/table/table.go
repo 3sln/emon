@@ -5,6 +5,7 @@ package table
 
 import (
 	"emon/evidence"
+	"emon/glayer"
 	"emon/model"
 	"emon/normalize"
 	"emon/port"
@@ -220,78 +221,54 @@ func tbRuleAdd(rl *port.Cells, kind int32, pos int32, a0 int32, a1 int32, thick 
 	return 0
 }
 
-func tbCollectOne(pa *port.Cells, i int32, rl *port.Cells, fl *port.Cells) int32 {
-	// One path as a rule (a thin box, or an edge of a stroked rectangle) or a fill (a large filled box).
-	var fg int32 = evidence.PaGet(pa, i, evidence.PfFlags())
-	var x0 int32 = evidence.PaGet(pa, i, evidence.PfX0())
-	var y0 int32 = evidence.PaGet(pa, i, evidence.PfY0())
-	var x1 int32 = evidence.PaGet(pa, i, evidence.PfX1())
-	var y1 int32 = evidence.PaGet(pa, i, evidence.PfY1())
-	var w int32 = x1 - x0
-	var h int32 = y1 - y0
-	var filled int32 = fg & evidence.PgFilled()
-	var stroked int32 = fg & evidence.PgStroked()
-	var kind int32 = evidence.PaGet(pa, i, evidence.PfKind())
-	var lw int32 = evidence.PaGet(pa, i, evidence.PfWidth())
-	var colour int32 = evidence.PaGet(pa, i, evidence.PfFill())
-	var al int32 = evidence.PaGet(pa, i, evidence.PfSalpha())
-	if (fg & evidence.PgClip()) != 0 {
+func tbRunningRule(grl *port.Cells, i int32, ph int32) int32 {
+	// 1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of
+	// the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination
+	// artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D257).
+	if (glayer.GrlGet(grl, i, glayer.GrfFlags()) & glayer.GqArtifactPagination()) == 0 {
 		return 0
 	}
-	if (fg & (evidence.PgPattern() + evidence.PgShading())) != 0 {
-		return 0
+	var ya int32 = glayer.GrlGet(grl, i, glayer.GrfEy0())
+	var yb int32 = glayer.GrlGet(grl, i, glayer.GrfEy1())
+	var lo int32 = tbMin(ya, yb)
+	var hi int32 = tbMax(ya, yb)
+	if hi <= (ph / 8) {
+		return 1
 	}
-	if (filled == 0) && (stroked == 0) {
-		return 0
-	}
-	if filled != 0 {
-		al = evidence.PaGet(pa, i, evidence.PfFalpha())
-		colour = evidence.PaGet(pa, i, evidence.PfFill())
-	} else {
-		colour = evidence.PaGet(pa, i, evidence.PfStroke())
-	}
-	if al <= 0 {
-		return 0
-	}
-	if (tbMin(w, h) <= ruleT) && (tbMax(w, h) >= ruleMin) {
-		if tbLum(colour) < 240 {
-			if w >= h {
-				tbRuleAdd(rl, 0, (y0+y1)/2, x0, x1, h, colour)
-			} else {
-				tbRuleAdd(rl, 1, (x0+x1)/2, y0, y1, w, colour)
-			}
-		}
-		return 0
-	}
-	if (kind == evidence.PaRect()) && (stroked != 0) && (w > ruleMin) && (h > ruleMin) {
-		var hw int32 = lw / 2
-		var sc int32 = evidence.PaGet(pa, i, evidence.PfStroke())
-		if tbLum(sc) < 240 {
-			tbRuleAdd(rl, 0, y0+hw, x0, x1, lw, sc)
-			tbRuleAdd(rl, 0, y1-hw, x0, x1, lw, sc)
-			tbRuleAdd(rl, 1, x0+hw, y0, y1, lw, sc)
-			tbRuleAdd(rl, 1, x1-hw, y0, y1, lw, sc)
-		}
-	}
-	if (filled != 0) && (w > ruleMin) && (h > ruleMin) {
-		port.CellsPush(fl, x0)
-		port.CellsPush(fl, y0)
-		port.CellsPush(fl, x1)
-		port.CellsPush(fl, y1)
-		port.CellsPush(fl, evidence.PaGet(pa, i, evidence.PfFill()))
-		port.CellsPush(fl, 0)
+	if lo >= (ph - (ph / 8)) {
+		return 1
 	}
 	return 0
 }
 
-func tbCollect(pa *port.Cells, p0 int32, p1 int32, rl *port.Cells, fl *port.Cells) int32 {
-	// The page's paths p0..p1 as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness,
-	// colour) and fills (`fl`: box and colour).
-	var i int32 = p0
+func tbCollect(grl *port.Cells, r0 int32, r1 int32, gfl *port.Cells, f0 int32, f1 int32, ph int32, rl *port.Cells, fl *port.Cells) int32 {
+	// The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)
+	// as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1
+	// (`fl`: box and colour). P5.5a (D218, D255): the table stage reads the fused graphics and never `paths`.
+	var i int32 = r0
+	var o int32 = 0
 	port.CellsDrop(rl, 0)
 	port.CellsDrop(fl, 0)
-	for i < p1 {
-		tbCollectOne(pa, i, rl, fl)
+	for i < r1 {
+		o = glayer.GrlGet(grl, i, glayer.GrfOrient())
+		if tbRunningRule(grl, i, ph) == 0 {
+			if o == glayer.GoH() {
+				tbRuleAdd(rl, 0, (glayer.GrlGet(grl, i, glayer.GrfEy0())+glayer.GrlGet(grl, i, glayer.GrfEy1()))/2, glayer.GrlGet(grl, i, glayer.GrfEx0()), glayer.GrlGet(grl, i, glayer.GrfEx1()), glayer.GrlGet(grl, i, glayer.GrfThick()), glayer.GrlGet(grl, i, glayer.GrfColour()))
+			}
+			if o == glayer.GoV() {
+				tbRuleAdd(rl, 1, (glayer.GrlGet(grl, i, glayer.GrfEx0())+glayer.GrlGet(grl, i, glayer.GrfEx1()))/2, glayer.GrlGet(grl, i, glayer.GrfEy0()), glayer.GrlGet(grl, i, glayer.GrfEy1()), glayer.GrlGet(grl, i, glayer.GrfThick()), glayer.GrlGet(grl, i, glayer.GrfColour()))
+			}
+		}
+		i += 1
+	}
+	i = f0
+	for i < f1 {
+		port.CellsPush(fl, glayer.GflGet(gfl, i, glayer.GffX0()))
+		port.CellsPush(fl, glayer.GflGet(gfl, i, glayer.GffY0()))
+		port.CellsPush(fl, glayer.GflGet(gfl, i, glayer.GffX1()))
+		port.CellsPush(fl, glayer.GflGet(gfl, i, glayer.GffY1()))
+		port.CellsPush(fl, glayer.GflGet(gfl, i, glayer.GffColour()))
+		port.CellsPush(fl, 0)
 		i += 1
 	}
 	return 0
@@ -3102,14 +3079,15 @@ func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.
 	return 0
 }
 
-func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells) int32 {
+func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells) int32 {
 	// Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
 	// scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
 	// rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
 	// row extents (one name each in the calls below). Answers the number of tables.
 	var nw int32 = evidence.WdCount(wd)
 	var nl int32 = evidence.LnCount(ln)
-	var nq int32 = evidence.PaCount(pa)
+	var nq int32 = glayer.GrlCount(grl)
+	var nu int32 = glayer.GflCount(gfl)
 	var p int32 = 1
 	var wi int32 = 0
 	var wj int32 = 0
@@ -3117,6 +3095,8 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, np 
 	var lj int32 = 0
 	var qi int32 = 0
 	var qj int32 = 0
+	var ui int32 = 0
+	var uj int32 = 0
 	var t0 int32 = 0
 	var k int32 = 0
 	port.CellsDrop(tb, 0)
@@ -3139,16 +3119,23 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, np 
 		for (lj < nl) && (evidence.LnGet(ln, lj, evidence.LhPage()) == p) {
 			lj += 1
 		}
-		for (qi < nq) && (evidence.PaGet(pa, qi, evidence.PfPage()) < p) {
+		for (qi < nq) && (glayer.GrlGet(grl, qi, glayer.GrfPage()) < p) {
 			qi += 1
 		}
 		qj = qi
-		for (qj < nq) && (evidence.PaGet(pa, qj, evidence.PfPage()) == p) {
+		for (qj < nq) && (glayer.GrlGet(grl, qj, glayer.GrfPage()) == p) {
 			qj += 1
+		}
+		for (ui < nu) && (glayer.GflGet(gfl, ui, glayer.GffPage()) < p) {
+			ui += 1
+		}
+		uj = ui
+		for (uj < nu) && (glayer.GflGet(gfl, uj, glayer.GffPage()) == p) {
+			uj += 1
 		}
 		t0 = tbRowsOf(tb, tbs)
 		if (wj - wi) > 0 {
-			tbCollect(pa, qi, qj, s0, s2)
+			tbCollect(grl, qi, qj, gfl, ui, uj, model.PageH(pages, p-1), s0, s2)
 			if tbRowsOf(s0, rls) <= maxRules {
 				tbMergeRules(s0, s1, s3, s9)
 				tbRuledPage(s1, p, s4, s5, s6, tb, tc, wd, wi, wj, s7, s3, tw, tx)
@@ -3169,6 +3156,7 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, np 
 		wi = wj
 		li = lj
 		qi = qj
+		ui = uj
 		p += 1
 	}
 	tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages)

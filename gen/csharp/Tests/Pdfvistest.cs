@@ -220,6 +220,9 @@ public static class Pdfvistest {
         int gprev = 0;
         int nprev = 0;
         int ii = 0;
+        int pi = 0;
+        int tr = 0;
+        int want = 0;
         int status = 0;
         int p = 0;
         int q = 0;
@@ -242,6 +245,44 @@ public static class Pdfvistest {
                     VtWords(emonT, gl, wd, line);
                     g = 0;
                     ii = 0;
+                    pi = 0;
+                }
+                if (kind == 80) {
+                    // P vis vby backdrop chk tr n
+                    while ((pi < Evidence.PaCount(pa)) && ((Evidence.PaGet(pa, pi, Evidence.PfFlags()) & (Evidence.PgClip() + Evidence.PgShading())) != 0)) {
+                        pi += 1;
+                    }
+                    emon.Testport.AssertThatAt(pi < Evidence.PaCount(pa), "there is a painted path row", line);
+                    if (pi < Evidence.PaCount(pa)) {
+                        p = pos + 2;
+                        q = VtTab(rows, p, e);
+                        emon.Testport.AssertEqAt(Evidence.PaGet(pa, pi, Evidence.PfVis()), VtDec(rows, p, q), "path vis", line);
+                        p = q + 1;
+                        q = VtTab(rows, p, e);
+                        emon.Testport.AssertEqAt(Evidence.PaGet(pa, pi, Evidence.PfVby()), VtDec(rows, p, q), "path vby", line);
+                        p = q + 1;
+                        q = VtTab(rows, p, e);
+                        emon.Testport.AssertEqAt(Evidence.PaGet(pa, pi, Evidence.PfBackdrop()), VtRgb(rows, p, q), "path backdrop", line);
+                        p = q + 1;
+                        q = VtTab(rows, p, e);
+                        want = VtDec(rows, p, q);
+                        emon.Testport.AssertEqAt(Evidence.PaGet(pa, pi, Evidence.PfVchk()) & want, want, "path vchk has the checks that ran", line);
+                        p = q + 1;
+                        q = VtTab(rows, p, e);
+                        want = VtDec(rows, p, q);
+                        tr = 0;
+                        if ((Evidence.PaGet(pa, pi, Evidence.PfFlags()) & Evidence.PgTruncated()) != 0) {
+                            tr = 1;
+                        }
+                        emon.Testport.AssertEqAt(tr, want, "path truncated", line);
+                        p = q + 1;
+                        q = VtTab(rows, p, e);
+                        want = VtDec(rows, p, q);
+                        if (want >= 0) {
+                            emon.Testport.AssertEqAt(Evidence.PaGet(pa, pi, Evidence.PfPcount()), want, "path points kept", line);
+                        }
+                    }
+                    pi += 1;
                 }
                 if (kind == 71) {
                     // G vis vby src ncp text

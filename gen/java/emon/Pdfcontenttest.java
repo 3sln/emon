@@ -515,6 +515,11 @@ public final class Pdfcontenttest {
         emon.Testport.assertThat(r >= 3600, "thirty-six documents were run");
         emon.Testport.assertThat((r % 100) >= 4, "the big ones took several rounds");
     }
+    public static void testEveryVisibilityFixtureIsTheSameThroughAnAsyncSourceOf512ByteChunks() {
+        // P3.6a: the paths' vis, vby, vchk and backdrop are cells of the evidence, so they are held to the same rule.
+        int r = ctAsyncRows(0, emon.Testport.testFile("vis/rows.txt"), 0, 512);
+        emon.Testport.assertThat(r >= 1800, "eighteen visibility fixtures were run");
+    }
     public static void testEveryTaggedDocumentIsTheSameThroughAnAsyncSourceOf512ByteChunks() {
         int r = ctAsyncRows(0, emon.Testport.testFile("content/tagged.txt"), 0, 512);
         emon.Testport.assertThat(r >= 300, "three documents were run");

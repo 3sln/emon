@@ -43,6 +43,9 @@ public final class Tlhealthtest {
         emon.Port.Cells fv = emon.Port.newCells();
         emon.Port.Cells fx = emon.Port.newCells();
         emon.Port.Cells fpa = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells ggp = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
         emon.Port.Cells sl = emon.Port.newCells();
         emon.Port.Cells refs = emon.Port.newCells();
         emon.Port.Cells ledger = emon.Port.newCells();
@@ -116,11 +119,11 @@ public final class Tlhealthtest {
         }
         emon.Testport.assertEqAt(total, Player.fwCount(fw), "the lines hold every word", ctx);
         emon.Testport.assertThatAt(Player.flCount(fl) <= Evidence.lnCount(ln), "no line is made", ctx);
-        emon.Testport.assertEqAt(Player.plCheck(cg, fw, fl, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the layer is sound", ctx);
+        emon.Testport.assertEqAt(Player.plCheck(cg, fw, fl, fv, fa, fx, hl, fpa, sl, gfl, ggp, grg, et, refs, gl), 0, "the layer is sound", ctx);
         // the OCR lines of a scanned page join the flow as they are: every line and word of the evidence, copied
         emon.Testport.assertEqAt(Tlhealth.thAppend(wd, ln, fw2, fl2, 0), Evidence.lnCount(ln), "every line is copied", ctx);
         emon.Testport.assertEqAt(Player.fwCount(fw2), Evidence.wdCount(wd), "and every word", ctx);
-        emon.Testport.assertEqAt(Player.plCheck(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, et, refs, gl), 0, "the copy is sound", ctx);
+        emon.Testport.assertEqAt(Player.plCheck(cg, fw2, fl2, fv, fa, fx, hl, fpa, sl, gfl, ggp, grg, et, refs, gl), 0, "the copy is sound", ctx);
         // the ledger
         rows = Tlhealth.thWrite(fa, wd, et, ledger, text, tmp, tt);
         emon.Testport.assertEqAt(rows, wantRows, "ledger rows", ctx);
