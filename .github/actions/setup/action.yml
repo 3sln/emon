@@ -1,6 +1,6 @@
 name: emon toolchains
 description: >-
-  Everything the gates use, on ubuntu-latest, at the versions the maintainer's machine runs (D259).
+  Everything the gates use, on ubuntu-latest, at the versions the maintainer's machine runs (D266).
   The workspace holds emon/ and kin/ side by side so `../kin` resolves; this action runs after both are checked out.
   Tesseract and pdfium are deliberately NOT installed: the ocr and render gates replay committed transcripts (D127, D216).
 runs:

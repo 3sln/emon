@@ -3081,7 +3081,7 @@ out; archives are deterministic, so an unchanged category is skipped by
 sha256. A pull replaces `corpus/<category>` atomically (extract aside, rename).
 Pure babashka (own SigV4); no aws/rclone/mc. Implementation: `tools/corpus.clj`.
 
-### 15.3 Running the gates on GitHub (D259)
+### 15.3 Running the gates on GitHub (D266)
 
 `.github/workflows/gates.yml` runs every gate on `ubuntu-latest`, in parallel jobs, on demand only (`workflow_dispatch`; no push or pull-request trigger):
 

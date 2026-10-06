@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; CI helpers for the manually triggered gates workflow (D259). NOT a gate.
+;; CI helpers for the manually triggered gates workflow (D266). NOT a gate.
 ;;   bb ci coverage                       every gate of kin/scripts/gates is in a workflow job, and bb.edn has every task the workflow calls
 ;;   bb ci laws-record ARM LOG DIR        write DIR/laws-ARM.txt: the law count `bb unit ARM` printed in LOG
 ;;   bb ci laws-compare DIR               every arm's count in DIR/**/laws-*.txt is the same, and all four arms are there

@@ -1,4 +1,4 @@
-# Every gate, in parallel, on demand (SPEC 15.3, D259). Manual only: no push or pull_request trigger.
+# Every gate, in parallel, on demand (SPEC 15.3, D266). Manual only: no push or pull_request trigger.
 #   gh workflow run gates.yml -f groups=all [-f ref=main]
 # Needs the repository secrets listed in SPEC 15.3 (the corpus bucket). All scripting is babashka.
 name: gates
