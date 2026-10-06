@@ -13,6 +13,7 @@ public final class Asset {
     public static final int AS_PIXFACTOR = 2;
     public static final int AS_MAXPROD = 4096;
     public static final int AS_STRIDE = 32;
+    public static final int AS_OVERLAY_WORK = 100000000;
     public static final int AC_PAGE = 0;
     public static final int AC_BX0 = 1;
     public static final int AC_VX0 = 5;
@@ -627,6 +628,8 @@ public final class Asset {
         int f = 0;
         int rc = 0;
         int zz = 0;
+        int work = 0;
+        int ovl = AS_OVERLAY_WORK;
         int whole = 0;
         emon.Port.cellsDrop(cand, 0);
         while (r < n) {
@@ -706,10 +709,15 @@ public final class Asset {
                             return 12;
                         }
                         if (asGet(cand, row, AC_STATUS) == 0) {
-                            zz = Evidence.imGet(im, r, Evidence.mfZ());
-                            if (asOverlaid(im, pa, gl, r, page, vx0, vy0, vx1, vy1, zz) == 1) {
-                                zz = asGet(cand, row, AC_FLAGS);
-                                asSet(cand, row, AC_FLAGS, zz | Model.afgOverlaid());
+                            // the overlay check reads every later paint of the page: at most AS_OVERLAY_WORK rows in all
+                            work = (n + (emon.Port.cellsLen(pa) / 24)) + Evidence.glCount(gl);
+                            if (ovl >= work) {
+                                ovl -= work;
+                                zz = Evidence.imGet(im, r, Evidence.mfZ());
+                                if (asOverlaid(im, pa, gl, r, page, vx0, vy0, vx1, vy1, zz) == 1) {
+                                    zz = asGet(cand, row, AC_FLAGS);
+                                    asSet(cand, row, AC_FLAGS, zz | Model.afgOverlaid());
+                                }
                             }
                         }
                     }

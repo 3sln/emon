@@ -13,6 +13,7 @@ public static class Asset {
     internal const int AsPixfactor = 2;
     internal const int AsMaxprod = 4096;
     internal const int AsStride = 32;
+    internal const int AsOverlayWork = 100000000;
     internal const int AcPage = 0;
     internal const int AcBx0 = 1;
     internal const int AcVx0 = 5;
@@ -627,6 +628,8 @@ public static class Asset {
         int f = 0;
         int rc = 0;
         int zz = 0;
+        int work = 0;
+        int ovl = AsOverlayWork;
         int whole = 0;
         emon.Port.CellsDrop(cand, 0);
         while (r < n) {
@@ -706,10 +709,15 @@ public static class Asset {
                             return 12;
                         }
                         if (AsGet(cand, row, AcStatus) == 0) {
-                            zz = Evidence.ImGet(im, r, Evidence.MfZ());
-                            if (AsOverlaid(im, pa, gl, r, page, vx0, vy0, vx1, vy1, zz) == 1) {
-                                zz = AsGet(cand, row, AcFlags);
-                                AsSet(cand, row, AcFlags, zz | Model.AfgOverlaid());
+                            // the overlay check reads every later paint of the page: at most AS_OVERLAY_WORK rows in all
+                            work = (n + (emon.Port.CellsLen(pa) / 24)) + Evidence.GlCount(gl);
+                            if (ovl >= work) {
+                                ovl -= work;
+                                zz = Evidence.ImGet(im, r, Evidence.MfZ());
+                                if (AsOverlaid(im, pa, gl, r, page, vx0, vy0, vx1, vy1, zz) == 1) {
+                                    zz = AsGet(cand, row, AcFlags);
+                                    AsSet(cand, row, AcFlags, zz | Model.AfgOverlaid());
+                                }
                             }
                         }
                     }

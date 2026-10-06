@@ -15,6 +15,7 @@ pub(crate) const AS_FIGURE_SIDE: i32 = 1800;
 pub(crate) const AS_PIXFACTOR: i32 = 2;
 pub(crate) const AS_MAXPROD: i32 = 4096;
 pub(crate) const AS_STRIDE: i32 = 32;
+pub(crate) const AS_OVERLAY_WORK: i32 = 100000000;
 pub(crate) const AC_PAGE: i32 = 0;
 pub(crate) const AC_BX0: i32 = 1;
 pub(crate) const AC_VX0: i32 = 5;
@@ -629,6 +630,8 @@ pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut d
     let mut f: i32 = 0;
     let mut rc: i32 = 0;
     let mut zz: i32 = 0;
+    let mut work: i32 = 0;
+    let mut ovl: i32 = AS_OVERLAY_WORK;
     let mut whole: i32 = 0;
     crate::port::cells_drop(cand, 0);
     while r < n {
@@ -708,10 +711,15 @@ pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut d
                         return 12;
                     }
                     if as_get(cand, row, AC_STATUS) == 0 {
-                        zz = im_get(im, r, mf_z());
-                        if as_overlaid(im, pa, gl, r, page, vx0, vy0, vx1, vy1, zz) == 1 {
-                            zz = as_get(cand, row, AC_FLAGS);
-                            as_set(cand, row, AC_FLAGS, zz | afg_overlaid());
+                        // the overlay check reads every later paint of the page: at most AS_OVERLAY_WORK rows in all
+                        work = (n + (crate::port::cells_len(pa) / 24)) + gl_count(gl);
+                        if ovl >= work {
+                            ovl -= work;
+                            zz = im_get(im, r, mf_z());
+                            if as_overlaid(im, pa, gl, r, page, vx0, vy0, vx1, vy1, zz) == 1 {
+                                zz = as_get(cand, row, AC_FLAGS);
+                                as_set(cand, row, AC_FLAGS, zz | afg_overlaid());
+                            }
                         }
                     }
                 }

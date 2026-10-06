@@ -28,6 +28,8 @@ const asMaxprod int32 = 4096
 
 const asStride int32 = 32
 
+const asOverlayWork int32 = 100000000
+
 const acPage int32 = 0
 
 const acBx0 int32 = 1
@@ -679,6 +681,8 @@ func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	var f int32 = 0
 	var rc int32 = 0
 	var zz int32 = 0
+	var work int32 = 0
+	var ovl int32 = asOverlayWork
 	var whole int32 = 0
 	port.CellsDrop(cand, 0)
 	for r < n {
@@ -758,10 +762,15 @@ func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 						return 12
 					}
 					if AsGet(cand, row, acStatus) == 0 {
-						zz = evidence.ImGet(im, r, evidence.MfZ())
-						if asOverlaid(im, pa, gl, r, page, vx0, vy0, vx1, vy1, zz) == 1 {
-							zz = AsGet(cand, row, acFlags)
-							asSet(cand, row, acFlags, zz|model.AfgOverlaid())
+						// the overlay check reads every later paint of the page: at most AS_OVERLAY_WORK rows in all
+						work = (n + (port.CellsLen(pa) / 24)) + evidence.GlCount(gl)
+						if ovl >= work {
+							ovl -= work
+							zz = evidence.ImGet(im, r, evidence.MfZ())
+							if asOverlaid(im, pa, gl, r, page, vx0, vy0, vx1, vy1, zz) == 1 {
+								zz = AsGet(cand, row, acFlags)
+								asSet(cand, row, acFlags, zz|model.AfgOverlaid())
+							}
 						}
 					}
 				}
