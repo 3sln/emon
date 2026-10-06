@@ -41,7 +41,7 @@ runs:
         sudo apt-get install -y -qq poppler-utils python3 python3-pip
         # ImageMagick 7 (`magick`): Ubuntu ships 6, whose CLI has no `magick`. The AppImage runs without FUSE.
         mkdir -p "$HOME/.local/bin"
-        curl -fsSL -o "$HOME/.local/magick.AppImage" https://imagemagick.org/archive/binaries/magick
+        curl -fsSL -o "$HOME/.local/magick.AppImage" https://github.com/ImageMagick/ImageMagick/releases/download/7.1.1-33/ImageMagick-057259c-gcc-x86_64.AppImage
         chmod +x "$HOME/.local/magick.AppImage"
         printf '#!/bin/sh\nexec "$HOME/.local/magick.AppImage" --appimage-extract-and-run "$@"\n' > "$HOME/.local/bin/magick"
         chmod +x "$HOME/.local/bin/magick"
