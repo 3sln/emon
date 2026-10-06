@@ -45,7 +45,7 @@ public static class Restruct {
         }
         return 11;
     }
-    internal static int RsNode(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, int n, int np) {
+    public static int RsNode(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, int n, int np) {
         // Copy node n of the old arenas as the last child of np (-1: a new root): its kind and small fields, text run,
         // attributes (but the item's private `fk-box`) and regions. Not its children. Answers the new node, and writes
         // it in `nm` (old to new).
@@ -634,7 +634,7 @@ public static class Restruct {
         RsCloseAll(nodes, regions, stk, @base);
         return 0;
     }
-    internal static int RsRemap(emon.Port.Cells attrs, emon.Port.Cells nm) {
+    public static int RsRemap(emon.Port.Cells attrs, emon.Port.Cells nm) {
         // Node-valued attributes point at old nodes: point them at the new ones.
         int a = 0;
         int n = emon.Port.CellsLen(attrs) / 5;

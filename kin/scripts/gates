@@ -22,7 +22,7 @@
 set -e
 cd "$(dirname "$0")/../.."
 
-gates="hosts drift lang-test check unit plan ocr render align fusion fuzz png-check slice embedders identity image repeat accuracy"
+gates="hosts drift lang-test check unit plan ocr render align fusion artifacts seals fuzz png-check slice embedders identity image repeat accuracy"
 not_gates="gen emit gates import corpus-push corpus-pull corpus-test png-bench ocr-live fusion-report fusion-live align-record align-report fusion-record ghost-health render-record pdfium-fetch ink trace corpus-index-sha ci"
 
 # `bb gates GATE...` runs only the named gates (the CI shards of .github/workflows/gates.yml, D266); the

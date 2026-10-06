@@ -1,0 +1,132 @@
+#!/usr/bin/env bb
+;; WATERMARKS AND THEIR OCR GHOSTS, replayed from transcripts (P7.5, SPEC 9.5, D204, D300-D306).   kin/scripts/artifacts
+;;
+;; test/artifacts/pdf holds born-digital documents with a RASTER watermark under the text (tools/synth/artifact_pdf.clj): the text layer does not
+;; have it, OCR reads it, and nothing in the page says it is not text but that it recurs. test/artifacts/replay/ID is what pdfium and Tesseract
+;; answered for each, recorded on Rust by `bb fusion-record --artifacts` (slim: answers only, no bitmap). This gate only REPLAYS them, with the
+;; hidden setting `ocr-born-digital`, through the whole Engine on Rust and Go, and holds:
+;;
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump), and it is the bundle the recording made (SHA-256);
+;;   2. THE BODY HAS NO WATERMARK: no word of the watermark is in the body (`watermark-leak` 0), the ledger holds it as `watermark` on every page
+;;      that has it, and the dump names the defence that took each word out (`fa` rows with `defence` 2: recurrence), a row a word;
+;;   3. NO BODY WORD IS LOST: the word error rate of the body against the document's own text (test/artifacts/gold/body.txt: the watermark is in no gold)
+;;      is no worse than the no-engine run's (0), and every gold word is in the body;
+;;   4. WHAT THE DEFENCES ARE WORTH: with EMON_P73_DRIVER=PATH (a driver built from the P7.3 sources) the same transcripts are converted by that
+;;      engine and its watermark-leak and CER are printed beside this one's (skipped otherwise).
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process]]
+         '[cheshire.core :as json]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def abs #(str (fs/absolutize %)))
+(def adir "test/artifacts")
+(def ids (when (fs/exists? (str adir "/replay"))
+           (vec (sort (map fs/file-name (filter #(fs/exists? (str % "/transcript.edn")) (fs/list-dir (str adir "/replay"))))))))
+(def digests (let [f (str adir "/replay/DIGESTS.edn")] (if (fs/exists? f) (read-string (slurp f)) {})))
+;; the pages each fixture has the watermark on, and the defence that is to take it out
+(def wm-pages {"wm-recur-image" #{1 2 3 4} "wm-recur-partial" #{1 2 3}})
+(def want-defence 2)
+(def wm-words #{"confidential" "copy"})
+
+(defn sha256 [s]
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest md (.getBytes ^String s "UTF-8"))))))
+
+(defn build-driver [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r))
+      (str/trim (:out r))
+      (do (bad "the " what " Engine driver did not build:\n" (:err r)) nil))))
+
+(def rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" "Rust")))
+(def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
+(when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
+(when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+
+(defn drive [drv & a]
+  (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+
+(defn body-texts
+  "Every `text` of the body tree, in order."
+  [model]
+  (let [out (atom [])]
+    (letfn [(walk [n] (when (map? n)
+                        (when-let [t (get n "text")] (when (string? t) (swap! out conj t)))
+                        (doseq [c (get n "children")] (walk c))))]
+      (walk (get model "body")))
+    @out))
+
+(defn words [s] (re-seq #"[\p{L}\p{N}]+" (str/lower-case s)))
+
+(defn leak [model] (count (filter wm-words (words (str/join " " (body-texts model))))))
+
+(defn lev
+  "Levenshtein distance of two sequences, by rows (here of words: a character-level distance of the whole body is too slow to interpret)."
+  [as bs]
+  (let [av (vec as) bv (vec bs) n (count bv)]
+    (loop [i 1 prev (vec (range (inc n)))]
+      (if (> i (count av))
+        (peek prev)
+        (recur (inc i)
+               (let [ca (nth av (dec i))]
+                 (reduce (fn [row j]
+                           (conj row (min (inc (peek row)) (inc (nth prev j))
+                                          (+ (nth prev (dec j)) (if (= ca (nth bv (dec j))) 0 1)))))
+                         [i] (range 1 (inc n)))))))))
+
+(def gold-words (words (slurp (str adir "/gold/body.txt"))))
+
+(defn body-quality [model]
+  (let [ws (words (str/join " " (body-texts model)))
+        have (set ws)]
+    {:wer (/ (double (lev ws gold-words)) (count gold-words))
+     :missing (count (remove have gold-words))}))
+
+(when (and rdrv gdrv (seq ids))
+  (doseq [id ids]
+    (let [pdf (abs (str adir "/pdf/" id ".pdf"))
+          rep (abs (str adir "/replay/" id))
+          flag "--ocr-born-digital"
+          rr (drive rdrv flag "--out=bundle" (str "--replay=" rep) pdf)
+          rg (drive gdrv flag "--out=bundle" (str "--replay=" rep) pdf)
+          want (get digests id)]
+      (check (and (zero? (:exit rr)) (= (:out rr) (:out rg)) (= (:err rr) (:err rg)))
+             id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
+      (let [j (drive rdrv flag "--out=json" (str "--replay=" rep) pdf)
+            e (drive rdrv flag "--out=evidence" (str "--replay=" rep) pdf)
+            n (drive rdrv "--out=json" pdf)
+            model (json/parse-string (:out j))
+            base (json/parse-string (:out n))
+            dump (json/parse-string (let [l (first (filter #(str/starts-with? % "evidence: ") (str/split-lines (:out e))))]
+                                      (if l (subs l (count "evidence: ")) (:out e))))
+            fa (get dump "fa")
+            by-def (frequencies (map #(get % "defence" 0) fa))
+            wm-rows (filter #(= "watermark" (get % "reason")) (get model "dropped"))
+            wm-ledger-pages (set (map #(get % "page") wm-rows))
+            q (body-quality model)
+            b (body-quality base)]
+        (check (zero? (leak model)) id ": watermark-leak 0: no word of the watermark is in the body (the no-engine run's: " (leak base) ")")
+        (check (pos? (get by-def want-defence 0)) id ": the dump names defence " want-defence " on " (get by-def want-defence 0)
+               " dropped OCR words (defences: " (pr-str by-def) ")")
+        (check (= (get wm-pages id) wm-ledger-pages) id ": the ledger holds the watermark as `watermark` on pages " (pr-str (sort wm-ledger-pages))
+               " (the watermark is on " (pr-str (sort (get wm-pages id))) ")")
+        (check (<= (:wer q) (+ (:wer b) 0.0005)) id (format ": body WER %.4f against the document's own text, the no-engine run's is %.4f" (:wer q) (:wer b)))
+        (check (zero? (:missing q)) id ": every word of the document is in the body (" (:missing q) " missing; the no-engine run's " (:missing b) ")")
+        ;; what the defences are worth: the same transcript through the engine of P7.3
+        (when-let [old (System/getenv "EMON_P73_DRIVER")]
+          (let [o (drive old flag "--out=json" (str "--replay=" rep) pdf)
+                om (json/parse-string (:out o))
+                oq (body-quality om)]
+            (ok id (format ": through the P7.3 engine: watermark-leak %d (now %d), body WER %.4f (now %.4f)" (leak om) (leak model) (:wer oq) (:wer q)))))))))
+
+(when (empty? ids) (println "  SKIP no watermark transcripts committed (bb fusion-record --artifacts)"))
+(when (pos? @fails) (System/exit 1))
+(when (and rdrv gdrv (seq ids) (zero? @fails))
+  (ok "watermarks: raster watermarks under born-digital text, read by OCR, are held out of the body by the defence that names them, on Rust and Go"))

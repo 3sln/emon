@@ -16,17 +16,19 @@
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-that new-cells]]
             [emon.port :refer [cells-len cells-at cells-set cells-push]]
-            [emon.evidence :refer [wd-new wd-set ln-new ow-new ow-set fe-new fe-set rf-add im-new ep-new or-new
+            [emon.evidence :refer [wd-new wd-set ln-new ow-new ow-set fe-new fe-set rf-add im-new ep-new or-new gl-set gf-mark mk-new mk-set mkf-artype mkf-arsub xt-alpha xo-angle xo-margin xo-rel-height
                                    hd-feat wf-font wf-size wf-style wf-src wf-gfirst wf-gcount wf-wbreak
                                    xt-font-health xt-bad-cp xt-vis xo-implausible xo-conf xo-kin-ink
                                    ea-words ea-owords]]
             [emon.player :refer [cg-new cg-set cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hfirst cgf-hcount cgf-simfold cgf-flags
-                                 plg-in-figure fw-count fl-count fv-get fv-new fa-new fa-count fa-get fx-count pl-check]]
-            [emon.model :refer [sr-text sr-ocr fl-text-layer-suspect fl-low-conf fl-ocr-only dr-ocr-ghost ledger-count ledger-reason ledger-x1 ledger-text-len
+                                 plg-in-figure plg-in-seal fw-count fl-count fv-get fv-new fa-new fa-count fa-get fx-count pl-check]]
+            [emon.model :refer [sr-text sr-ocr fl-text-layer-suspect fl-low-conf fl-ocr-only dr-ocr-ghost dr-watermark dr-background ledger-count ledger-reason ledger-x1 ledger-text-len
                                 model-init node-new node-add-src node-set-conf node-src node-conf node-flags node-add-region node-set-text
                                 nk-paragraph nk-text nk-document page-new]]
             [emon.fuserules :refer [ag-count ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin ag-olen ag-oconf ag-near ag-pageagree
-                                    fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-count fr-block fr-order fw-none fw-text fw-ocr]]
+                                    fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-count fr-block fr-order fr-defence fw-none fw-text fw-ocr
+                                    ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha ag-seal]]
+            [emon.artifact :refer [ax-recur ax-word-class]]
             [emon.arbiter :refer [ar-doc ar-write ar-tag]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -53,6 +55,16 @@
   (cells-set gv (ag-oconf) 900)
   (cells-set gv (ag-near) 0)
   (cells-set gv (ag-pageagree) 1000)
+  (comment "P7.5's columns: nothing says anything (absent or zero)")
+  (cells-set gv (ag-art) 0)
+  (cells-set gv (ag-recur) 0)
+  (cells-set gv (ag-oangle) -1)
+  (cells-set gv (ag-odiag) -1)
+  (cells-set gv (ag-orel) -1)
+  (cells-set gv (ag-margin) -1)
+  (cells-set gv (ag-kink) -1)
+  (cells-set gv (ag-body) -1)
+  (cells-set gv (ag-imalpha) -1)
   (return 0))
 
 (defn ^I32 at-rule [^I32 nt ^I32 no ^I32 nh ^I32 font ^I32 simfold ^I32 garbage ^I32 plaus ^I32 score ^I32 image ^I32 latin]
@@ -124,7 +136,7 @@
   (assert-eq (fr-order 5) -1 "and no more")
   (let [^:mut ^I32 i 0]
     (while (< i (fr-count 0))
-      (do (assert-eq (fr-block i) 100 "every row of this item is in block 100")
+      (do (assert-that (or (or (== (fr-block i) 100) (== (fr-block i) 200)) (== (fr-block i) 400)) "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400")
           (set i (+ i 1))))))
 
 ;; ------------------------------------------------------------- a page by hand
@@ -215,10 +227,21 @@
     (cg-set cg g (cgf-tcount) 1)
     (return g)))
 
-(defn ^I32 at-run [^Cells cg ^Cells refs ^Cells ofw ^Cells ofl ^Cells et ^Cells feats ^Cells ow ^Cells images ^Cells epages
-                   ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv ^:mut ^Cells fx ^:mut ^Cells afa]
-  (comment "`ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group): answers the groups decided.")
+(defn ^I32 at-gl [^:mut ^Cells c]
+  (comment "A glyph arena of ten rows none of which is in a marked-content span (mark -1).")
+  (let [^:mut ^I32 i 0]
+    (at-glyphs c)
+    (while (< i 10)
+      (do (gl-set c i (gf-mark) -1)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 at-run2 [^Cells cg ^Cells refs ^Cells ofw ^Cells ofl ^Cells et ^Cells feats ^Cells ow ^Cells images ^Cells epages
+                    ^Cells gl ^Cells mk ^Cells an ^Cells txt
+                    ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv ^:mut ^Cells fx ^:mut ^Cells afa]
+  (comment "`ar-doc` with the glyphs, marks, annotations and their text given.")
   (let [^Cells gd (new-cells)
+        ^Cells rc (new-cells)
         ^Cells gv (new-cells)
         ^Cells w2g (new-cells)
         ^Cells o2g (new-cells)
@@ -229,7 +252,16 @@
         ^Cells ol (new-cells)
         ^Cells orr (new-cells)
         ^Cells os (new-cells)]
-    (return (ar-doc cg refs ofw ofl et feats ow ol orr os images epages nfw nfl fv fx afa gd gv w2g o2g pp tw tl scr))))
+    (return (ar-doc cg refs ofw ofl et feats ow ol orr os images epages gl mk an txt 0 rc nfw nfl fv fx afa gd gv w2g o2g pp tw tl scr))))
+
+(defn ^I32 at-run [^Cells cg ^Cells refs ^Cells ofw ^Cells ofl ^Cells et ^Cells feats ^Cells ow ^Cells images ^Cells epages
+                   ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv ^:mut ^Cells fx ^:mut ^Cells afa]
+  (comment "`ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group), unmarked glyphs and no annotations: answers the groups decided.")
+  (let [^Cells gl (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells an (new-cells)]
+    (at-gl gl)
+    (return (at-run2 cg refs ofw ofl et feats ow images epages gl mk an (new-cells) nfw nfl fv fx afa))))
 
 (defn ^I32 at-line3 [^:mut ^Cells fl ^I32 first ^I32 count]
   (comment "A line of page 1 over `count` flow words from `first`, 100 high on the baseline 900.")
@@ -463,6 +495,7 @@
       (assert-eq (fa-get afa 0 5) (dr-ocr-ghost) "as an ocr-ghost")
       (assert-eq (fa-get afa 0 9) 1 "from group 1")
       (assert-eq (fa-get afa 0 10) 170 "by rule 170")
+      (assert-eq (fa-get afa 0 8) 6 "which is defence 6 of SPEC 9.5, plausibility")
       (assert-eq (fa-get afa 0 7) 1 "whose OCR word is row 1")
       (assert-eq (cg-get cg g2 (cgf-flags)) (+ 2 (plg-in-figure)) "the figure's word says it is in a figure")
       (assert-eq (cg-get cg g1 (cgf-flags)) 2 "and the ghost does not"))))
@@ -546,3 +579,333 @@
       (assert-eq (node-flags nodes pb) (fl-text-layer-suspect) "flagged text-layer-suspect")
       (assert-eq (node-conf nodes pb) 800 "at OCR's confidence")
       (assert-eq (node-src nodes (+ pb 1)) (sr-ocr) "and its inline follows"))))
+
+;; ------------------------------------------------------------- P7.5: the six defences (SPEC 9.5, D204)
+
+(deftest test-the-defences-are-rows-of-block-200
+  (let [^Cells gv (new-cells)]
+    (comment "defence 1: the PDF says so, of a text-layer group")
+    (at-gv gv 1 0 0 1000 -1 0 -1 -1 0 1)
+    (cells-set gv (ag-art) 1)
+    (assert-eq (fr-number (fr-decide gv)) 201 "an artifact watermark: 201")
+    (assert-eq (fr-winner (fr-decide gv)) (fw-none) "the group is held")
+    (assert-eq (fr-reason (fr-decide gv)) (dr-watermark) "as a watermark")
+    (assert-eq (fr-defence (fr-decide gv)) 1 "by defence 1")
+    (cells-set gv (ag-art) 2)
+    (assert-eq (fr-number (fr-decide gv)) 202 "a background artifact: 202")
+    (assert-eq (fr-reason (fr-decide gv)) (dr-background) "a background")
+    (cells-set gv (ag-art) 3)
+    (assert-eq (fr-number (fr-decide gv)) 203 "a stamp annotation: 203")
+    (cells-set gv (ag-art) 0)
+    (assert-eq (fr-number (fr-decide gv)) 101 "the PDF says nothing: the identity")
+    (at-gv gv 1 1 0 1000 950 0 1000 900 0 1)
+    (assert-eq (fr-number (fr-decide gv)) 110 "and a word the PDF does not call a watermark stays the text layer's")
+    (cells-set gv (ag-art) 1)
+    (assert-eq (fr-number (fr-decide gv)) 201 "(the PDF calls it one, whatever the font and OCR say)"))
+  (let [^Cells gw (new-cells)]
+    (comment "OCR-only groups: the baseline is admitted (140), each defence takes it out")
+    (at-gv gw 0 1 0 -1 -1 0 1000 900 0 0)
+    (assert-eq (fr-number (fr-decide gw)) 140 "baseline: admitted")
+    (cells-set gw (ag-recur) 1)
+    (assert-eq (fr-number (fr-decide gw)) 211 "recurring: 211")
+    (assert-eq (fr-defence (fr-decide gw)) 2 "defence 2")
+    (assert-eq (fr-reason (fr-decide gw)) (dr-watermark) "a watermark")
+    (cells-set gw (ag-recur) 0)
+    (cells-set gw (ag-image) 600)
+    (cells-set gw (ag-imalpha) 300)
+    (assert-eq (fr-number (fr-decide gw)) 205 "in a translucent page-sized image: 205")
+    (assert-eq (fr-reason (fr-decide gw)) (dr-background) "a background")
+    (cells-set gw (ag-imalpha) 1000)
+    (assert-eq (fr-number (fr-decide gw)) 141 "in an opaque page-sized image: a scanned insert, as before")
+    (cells-set gw (ag-image) 0)
+    (cells-set gw (ag-imalpha) -1)
+    (cells-set gw (ag-body) 100)
+    (assert-eq (fr-number (fr-decide gw)) 221 "mostly another layer's ink: 221")
+    (assert-eq (fr-defence (fr-decide gw)) 3 "defence 3")
+    (cells-set gw (ag-body) -1)
+    (assert-eq (fr-number (fr-decide gw)) 140 "(an absent column is no evidence)")
+    (cells-set gw (ag-oangle) 2500)
+    (cells-set gw (ag-odiag) 2500)
+    (assert-eq (fr-number (fr-decide gw)) 231 "on a diagonal: 231")
+    (assert-eq (fr-defence (fr-decide gw)) 4 "defence 4")
+    (cells-set gw (ag-odiag) 0)
+    (assert-eq (fr-number (fr-decide gw)) 140 "turned by a right angle: text, not a watermark")
+    (cells-set gw (ag-oangle) 0)
+    (cells-set gw (ag-orel) 3000)
+    (assert-eq (fr-number (fr-decide gw)) 140 "tall, but on no image")
+    (cells-set gw (ag-image) 600)
+    (cells-set gw (ag-imalpha) 1000)
+    (assert-eq (fr-number (fr-decide gw)) 232 "tall on a page-sized image: 232")
+    (cells-set gw (ag-orel) -1)
+    (cells-set gw (ag-image) 0)
+    (cells-set gw (ag-imalpha) -1)
+    (cells-set gw (ag-kink) 10)
+    (assert-eq (fr-number (fr-decide gw)) 251 "no ink of kin's own: 251")
+    (assert-eq (fr-reason (fr-decide gw)) (dr-ocr-ghost) "an ocr-ghost")
+    (assert-eq (fr-defence (fr-decide gw)) 6 "defence 6")
+    (cells-set gw (ag-kink) -1)
+    (cells-set gw (ag-plaus) 650)
+    (cells-set gw (ag-margin) 400)
+    (assert-eq (fr-number (fr-decide gw)) 140 "plausible enough, and sure of itself: admitted")
+    (cells-set gw (ag-margin) 100)
+    (assert-eq (fr-number (fr-decide gw)) 252 "plausibility low and the margins low: 252")
+    (assert-eq (fr-defence (fr-decide gw)) 6 "defence 6")
+    (assert-eq (fr-defence 0) 0 "a core row names no defence")))
+
+(defn ^I32 at-mark-watermark [^:mut ^Cells gl ^:mut ^Cells mk ^I32 g0]
+  (comment "An /Artifact /Watermark mark row (mark 0) over the two glyph rows from `g0`.")
+  (let [^I32 m (mk-new mk 1 1 0 0 -1 g0)]
+    (mk-set mk m (mkf-artype) 0)
+    (mk-set mk m (mkf-arsub) 3)
+    (gl-set gl g0 (gf-mark) m)
+    (gl-set gl (+ g0 1) (gf-mark) m)
+    (return m)))
+
+(defn ^I32 at-two-words [^:mut ^Cells fw ^:mut ^Cells fl ^:mut ^Cells feats ^:mut ^Cells et ^:mut ^Cells ow ^:mut ^Cells cg ^:mut ^Cells refs]
+  (comment "Two text-layer words (the second on glyph rows 5 and 6) each with an OCR word that agrees, in two groups; one line.")
+  (let [^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)
+        ^I32 w1 (at-tword fw feats et 1000 0 0 1000 0 109 111)
+        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
+        ^I32 o1 (at-oword ow feats et 1000 1900 0 109 111 0)]
+    (wd-set fw w1 (wf-gfirst) 5)
+    (at-line3 fl 0 2)
+    (at-group cg refs w0 1 o0 1 1000)
+    (at-group cg refs w1 1 o1 1 1000)
+    (return 0)))
+
+(defn ^I32 at-dropped [^Cells cg ^Cells refs ^Cells fw ^Cells fl ^Cells et ^Cells feats ^Cells ow ^Cells gl ^Cells mk ^Cells an ^Cells txt
+                       ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv ^:mut ^Cells fx ^:mut ^Cells afa ^I32 reason]
+  (comment "What the second word's dropping must look like, whichever way the PDF said it: the flow has one word and one line, the first word")
+  (comment "unchanged; `afa` has one row with the text as its subject and the defence (1), the group (1) and a rule of block 200 in it; the ledger")
+  (comment "has one row of `reason`, a text-layer one, its text the word's.")
+  (let [^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells text (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells tt (new-cells)]
+    (assert-eq (at-run2 cg refs fw fl et feats ow im ep gl mk an txt nfw nfl fv fx afa) 2 "two groups decided")
+    (assert-eq (fw-count nfw) 1 "one word is left in the flow")
+    (assert-eq (fl-count nfl) 1 "on its line")
+    (assert-eq (cells-at nfw 11) (cells-at fw 11) "the first word is the text layer's own")
+    (assert-eq (fv-get fv 0 2) 110 "and it is rule 110's")
+    (assert-eq (fa-count afa) 1 "the second word is in the set-aside list")
+    (assert-eq (fa-get afa 0 5) reason "under the reason")
+    (assert-eq (fa-get afa 0 6) 5 "its subject is its text")
+    (assert-eq (fa-get afa 0 8) 1 "the defence is the PDF's own say")
+    (assert-eq (fa-get afa 0 9) 1 "the group")
+    (assert-that (>= (fa-get afa 0 10) 201) "and the rule is one of block 200")
+    (assert-eq (fa-get afa 0 11) 2 "two code points")
+    (assert-eq (pl-check cg nfw nfl fv afa fx (new-cells) (new-cells) (new-cells) et refs gl) 0 "the layer is sound")
+    (assert-eq (ar-write afa ow et ledger text tmp tt) 1 "one ledger row")
+    (assert-eq (ledger-reason ledger 0) reason "the reason")
+    (assert-eq (ledger-text-len ledger 0) 2 "its text is the word's")
+    (return 0)))
+
+(deftest test-the-pdf-says-watermark-by-an-artifact-mark
+  (let [^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells) ^Cells ow (new-cells)
+        ^Cells cg (new-cells) ^Cells refs (new-cells) ^Cells nfw (new-cells) ^Cells nfl (new-cells) ^Cells fv (new-cells)
+        ^Cells fx (new-cells) ^Cells afa (new-cells) ^Cells gl (new-cells) ^Cells mk (new-cells) ^Cells an (new-cells)]
+    (at-gl gl)
+    (at-two-words fw fl feats et ow cg refs)
+    (at-mark-watermark gl mk 5)
+    (at-dropped cg refs fw fl et feats ow gl mk an (new-cells) nfw nfl fv fx afa (dr-watermark))))
+
+(deftest test-the-pdf-says-watermark-by-alpha
+  (let [^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells) ^Cells ow (new-cells)
+        ^Cells cg (new-cells) ^Cells refs (new-cells) ^Cells nfw (new-cells) ^Cells nfl (new-cells) ^Cells fv (new-cells)
+        ^Cells fx (new-cells) ^Cells afa (new-cells) ^Cells gl (new-cells) ^Cells mk (new-cells) ^Cells an (new-cells)]
+    (at-gl gl)
+    (at-two-words fw fl feats et ow cg refs)
+    (fe-set feats (cells-at fw (+ 24 15)) (xt-alpha) 300)
+    (at-dropped cg refs fw fl et feats ow gl mk an (new-cells) nfw nfl fv fx afa (dr-watermark))))
+
+(defn ^I32 at-annot [^:mut ^Cells an ^:mut ^Cells txt ^I32 sub]
+  (comment "An annotation of page 1 of `sub` over 900..2000 x -100..1100 (the second word's box and the gap before it) whose appearance text is `xy mo`.")
+  (let [^:mut ^I32 i 0]
+    (while (< i 38)
+      (do (cells-push an 0)
+          (set i (+ i 1))))
+    (cells-set an 0 1)
+    (cells-set an 1 sub)
+    (cells-set an 4 900)
+    (cells-set an 5 -100)
+    (cells-set an 6 2000)
+    (cells-set an 7 1100)
+    (cells-set an 32 (cells-len txt))
+    (cells-set an 33 5)
+    (cells-push txt 120)
+    (cells-push txt 121)
+    (cells-push txt 32)
+    (cells-push txt 109)
+    (cells-push txt 111)
+    (return 0)))
+
+(deftest test-the-pdf-says-watermark-by-an-annotation
+  (let [^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells) ^Cells ow (new-cells)
+        ^Cells cg (new-cells) ^Cells refs (new-cells) ^Cells nfw (new-cells) ^Cells nfl (new-cells) ^Cells fv (new-cells)
+        ^Cells fx (new-cells) ^Cells afa (new-cells) ^Cells gl (new-cells) ^Cells mk (new-cells) ^Cells an (new-cells)
+        ^Cells txt (new-cells)]
+    (at-gl gl)
+    (at-two-words fw fl feats et ow cg refs)
+    (comment "a Watermark annotation (subtype 24) whose text is `xy mo`, over the second word (`mo`)")
+    (at-annot an txt 24)
+    (at-dropped cg refs fw fl et feats ow gl mk an txt nfw nfl fv fx afa (dr-watermark))))
+
+(deftest test-an-annotation-rectangle-alone-says-nothing
+  (let [^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells) ^Cells ow (new-cells)
+        ^Cells cg (new-cells) ^Cells refs (new-cells) ^Cells gl (new-cells) ^Cells mk (new-cells) ^Cells an (new-cells)
+        ^Cells txt (new-cells)]
+    (at-gl gl)
+    (at-two-words fw fl feats et ow cg refs)
+    (at-annot an txt 24)
+    (comment "widen the rectangle over the page: the first word (`he`) is under the annotation but not in its text")
+    (cells-set an 4 -1000)
+    (cells-set an 6 5000)
+    (assert-eq (ax-word-class gl mk an txt et 0 feats fw 0) 0 "body text under a page-sized watermark annotation stays body")
+    (assert-eq (ax-word-class gl mk an txt et 0 feats fw 1) 1 "the word the annotation's appearance says is the watermark")))
+
+(deftest test-a-stamp-annotation-and-a-believed-background
+  (let [^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells) ^Cells ow (new-cells)
+        ^Cells cg (new-cells) ^Cells refs (new-cells) ^Cells gl (new-cells) ^Cells mk (new-cells) ^Cells an (new-cells)
+        ^Cells txt (new-cells)]
+    (at-gl gl)
+    (at-two-words fw fl feats et ow cg refs)
+    (at-annot an txt 13)
+    (assert-eq (ax-word-class gl mk an txt et 0 feats fw 0) 0 "the first word is outside the stamp")
+    (assert-eq (ax-word-class gl mk an txt et 0 feats fw 1) 3 "the second is inside it and in its text")
+    (comment "a Background artifact (type 4) counts only when the tree is believed (trust 300)")
+    (let [^I32 m (mk-new mk 1 1 0 0 -1 5)]
+      (mk-set mk m (mkf-artype) 4)
+      (mk-set mk m (mkf-arsub) 0)
+      (gl-set gl 5 (gf-mark) m)
+      (assert-eq (ax-word-class gl mk (new-cells) (new-cells) et 299 feats fw 1) 0 "a tree nobody can vouch for: only a mark")
+      (assert-eq (ax-word-class gl mk (new-cells) (new-cells) et 300 feats fw 1) 2 "a believed one: a background"))
+    (comment "a pagination artifact (type 1: a header or footer) is never a watermark")
+    (let [^I32 m2 (mk-new mk 1 1 0 0 -1 5)]
+      (mk-set mk m2 (mkf-artype) 1)
+      (mk-set mk m2 (mkf-arsub) 1)
+      (gl-set gl 5 (gf-mark) m2)
+      (assert-eq (ax-word-class gl mk (new-cells) (new-cells) et 1000 feats fw 1) 0 "a header is the furniture stage's"))))
+
+(defn ^I32 at-rgroup [^:mut ^Cells cg ^:mut ^Cells refs ^I32 oword ^I32 page ^I32 x0 ^I32 y0]
+  (comment "An OCR-only group of `page` over a box 1000 wide and 500 high from (x0, y0) with one OCR word.")
+  (let [^I32 g (cg-new cg page x0 y0 (+ x0 1000) (+ y0 500) 0)
+        ^I32 first (rf-add refs (ea-owords) oword)]
+    (cg-set cg g (cgf-ofirst) first)
+    (cg-set cg g (cgf-ocount) 1)
+    (return g)))
+
+(deftest test-recurrence-flags-the-same-text-at-the-same-place
+  (let [^Cells cg (new-cells) ^Cells refs (new-cells) ^Cells ow (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells)
+        ^Cells ep (new-cells) ^Cells rc (new-cells) ^Cells pp (new-cells)
+        ^I32 q1 (at-oword ow feats et 0 100 0 81 81 81)
+        ^I32 q2 (at-oword ow feats et 0 100 0 81 81 81)
+        ^I32 q3 (at-oword ow feats et 0 100 0 113 113 113)
+        ^I32 q4 (at-oword ow feats et 0 100 0 81 81 81)
+        ^I32 other (at-oword ow feats et 0 100 0 88 89 90)
+        ^I32 band (at-oword ow feats et 0 100 0 81 81 81)]
+    (ep-new ep 1 20000 20000)
+    (ep-new ep 2 20000 20000)
+    (ep-new ep 3 20000 20000)
+    (ep-new ep 4 20000 20000)
+    (comment "page 1: the text mid-page, another text elsewhere; page 2: the text moved right; pages 3 (lower case) and 4: at the same place")
+    (comment "(the groups are in page order, as `cg` is; the running head is the last group of each page)")
+    (at-rgroup cg refs q1 1 5000 9000)
+    (at-rgroup cg refs other 1 2000 3000)
+    (at-rgroup cg refs band 1 5000 100)
+    (at-rgroup cg refs q2 2 14000 9000)
+    (at-rgroup cg refs band 2 5000 100)
+    (at-rgroup cg refs q3 3 5000 9000)
+    (at-rgroup cg refs band 3 5000 100)
+    (at-rgroup cg refs q4 4 5100 9100)
+    (assert-eq (ax-recur cg refs ow et ep rc pp) 3 "the text is flagged on the three pages it is at the same place on")
+    (assert-eq (cells-at rc 0) 1 "page 1")
+    (assert-eq (cells-at rc 5) 0 "the other text on page 1 is not")
+    (assert-eq (cells-at rc 10) 0 "a recurring text in the top band (a running head) is not a watermark here")
+    (assert-eq (cells-at rc 15) 0 "page 2: moved, not at the same place")
+    (assert-eq (cells-at rc 25) 1 "page 3, in lower case")
+    (assert-eq (cells-at rc 35) 1 "page 4, a hundredth of a page off")))
+
+(deftest test-recurrence-needs-most-of-the-pages
+  (let [^Cells cg (new-cells) ^Cells refs (new-cells) ^Cells ow (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells)
+        ^Cells ep (new-cells) ^Cells rc (new-cells) ^Cells pp (new-cells)
+        ^I32 a (at-oword ow feats et 0 100 0 81 81 81)
+        ^I32 b (at-oword ow feats et 0 100 0 81 81 81)
+        ^I32 f2 (at-oword ow feats et 0 100 0 70 71 72)
+        ^I32 f4 (at-oword ow feats et 0 100 0 73 74 75)
+        ^I32 f5 (at-oword ow feats et 0 100 0 76 77 78)
+        ^I32 f6 (at-oword ow feats et 0 100 0 79 80 82)]
+    (ep-new ep 1 20000 20000)
+    (ep-new ep 2 20000 20000)
+    (ep-new ep 3 20000 20000)
+    (ep-new ep 4 20000 20000)
+    (ep-new ep 5 20000 20000)
+    (ep-new ep 6 20000 20000)
+    (comment "six pages with groups, the text on two of them: not 60 per cent, and not three pages")
+    (at-rgroup cg refs a 1 5000 9000)
+    (at-rgroup cg refs f2 2 1000 3000)
+    (at-rgroup cg refs b 3 5000 9000)
+    (at-rgroup cg refs f4 4 1000 3000)
+    (at-rgroup cg refs f5 5 1000 3000)
+    (at-rgroup cg refs f6 6 1000 3000)
+    (assert-eq (ax-recur cg refs ow et ep rc pp) 0 "two pages of six: nothing")))
+
+;; ------------------------------------------------------------- P7.7: block 400 (SPEC 9.5 defence 5, 10.7)
+
+(deftest test-a-group-in-a-seal-is-the-seals-and-comes-first
+  (let [^Cells gv (new-cells)]
+    (comment "a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block")
+    (at-gv gv 1 1 0 1000 1000 0 -1 900 0 1)
+    (cells-set gv (ag-seal) 1)
+    (assert-eq (fr-number (fr-decide gv)) 401 "a seal's text-layer group: 401")
+    (assert-eq (fr-block (fr-decide gv)) 400 "of block 400")
+    (assert-eq (fr-winner (fr-decide gv)) (fw-none) "no source wins it: the body does not have it")
+    (assert-eq (fr-reason (fr-decide gv)) 0 "and it is no ledger row (its words are the seal node's text)")
+    (assert-eq (fr-flags (fr-decide gv)) 128 "the row says it is the seal's")
+    (cells-set gv (ag-art) 1)
+    (assert-eq (fr-number (fr-decide gv)) 401 "even a watermark mark does not take it from the seal")
+    (comment "an OCR-only group inside one")
+    (at-gv gv 0 1 0 -1 -1 0 800 900 0 0)
+    (cells-set gv (ag-seal) 1)
+    (assert-eq (fr-number (fr-decide gv)) 402 "an OCR-only group in a seal: 402")
+    (comment "a group that is in none is decided as before")
+    (cells-set gv (ag-seal) 0)
+    (cells-set gv (ag-art) 0)
+    (assert-eq (fr-block (fr-decide gv)) 100 "outside a seal: the core's")))
+
+(deftest test-the-words-of-a-seal-leave-the-flow-and-say-so
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)
+        ^I32 w1 (at-tword fw feats et 1000 0 0 1000 0 109 111)
+        ^I32 w2 (at-tword fw feats et 2000 0 0 1000 0 120 121)
+        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
+        ^I32 o1 (at-oword ow feats et 1000 1900 0 109 111 0)
+        ^I32 o2 (at-oword ow feats et 2000 2900 0 120 121 0)
+        ^I32 o3 (at-oword ow feats et 5000 5900 0 88 89 0)]
+    (at-line3 fl 0 3)
+    (at-group cg refs w0 1 o0 1 1000)
+    (let [^I32 g1 (at-group cg refs w1 1 o1 1 1000)
+          ^I32 g2 (at-group cg refs w2 1 o2 1 1000)
+          ^I32 g3 (at-ocr-only-group cg refs o3)]
+      (cg-set cg g1 (cgf-flags) (plg-in-seal))
+      (cg-set cg g3 (cgf-flags) (+ 2 (plg-in-seal)))
+      (assert-eq (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa) 4 "four groups decided")
+      (assert-eq (fw-count nfw) 2 "the seal's word is not in the flow: the other two are")
+      (assert-eq (fa-count afa) 0 "and nothing is a ledger row: the words are the node's text, not ghosts")
+      (assert-eq (cg-get cg g1 (cgf-flags)) (plg-in-seal) "the seal's group is not also `in-figure`")
+      (assert-eq (cg-get cg g3 (cgf-flags)) (+ 2 (plg-in-seal)) "nor is its OCR-only one")
+      (assert-eq (cg-get cg g2 (cgf-flags)) 0 "and a group outside is as it was"))))

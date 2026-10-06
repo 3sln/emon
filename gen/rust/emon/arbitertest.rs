@@ -2,6 +2,7 @@
 // source: emon.arbitertest
 
 use crate::emon::arbiter::*;
+use crate::emon::artifact::*;
 use crate::emon::evidence::*;
 use crate::emon::fuserules::*;
 use crate::emon::model::*;
@@ -28,6 +29,16 @@ pub(crate) fn at_gv(mut gv: &mut crate::port::Cells, nt: i32, no: i32, nh: i32, 
     crate::port::cells_set(gv, ag_oconf(), 900);
     crate::port::cells_set(gv, ag_near(), 0);
     crate::port::cells_set(gv, ag_pageagree(), 1000);
+    // P7.5's columns: nothing says anything (absent or zero)
+    crate::port::cells_set(gv, ag_art(), 0);
+    crate::port::cells_set(gv, ag_recur(), 0);
+    crate::port::cells_set(gv, ag_oangle(), -1);
+    crate::port::cells_set(gv, ag_odiag(), -1);
+    crate::port::cells_set(gv, ag_orel(), -1);
+    crate::port::cells_set(gv, ag_margin(), -1);
+    crate::port::cells_set(gv, ag_kink(), -1);
+    crate::port::cells_set(gv, ag_body(), -1);
+    crate::port::cells_set(gv, ag_imalpha(), -1);
     return 0;
 }
 pub(crate) fn at_rule(nt: i32, no: i32, nh: i32, font: i32, simfold: i32, garbage: i32, plaus: i32, score: i32, image: i32, latin: i32) -> i32 {
@@ -100,8 +111,8 @@ fn test_the_rows_say_what_they_set() {
     crate::testport::assert_eq(fr_order(4), 100, "then the core");
     crate::testport::assert_eq(fr_order(5), -1, "and no more");
     let mut i: i32 = 0;
-    while i < 17 {
-        crate::testport::assert_eq(fr_block(i), 100, "every row of this item is in block 100");
+    while i < 29 {
+        crate::testport::assert_that(((fr_block(i) == 100) || (fr_block(i) == 200)) || (fr_block(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
         i += 1;
     }
 }
@@ -203,9 +214,20 @@ pub(crate) fn at_text_only_group(mut cg: &mut crate::port::Cells, mut refs: &mut
     cg_set(cg, g, cgf_tcount(), 1);
     return g;
 }
-pub(crate) fn at_run(cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, ofw: &mut crate::port::Cells, ofl: &mut crate::port::Cells, et: &mut crate::port::Cells, feats: &mut crate::port::Cells, ow: &mut crate::port::Cells, images: &mut crate::port::Cells, epages: &mut crate::port::Cells, mut nfw: &mut crate::port::Cells, mut nfl: &mut crate::port::Cells, mut fv: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut afa: &mut crate::port::Cells) -> i32 {
-    // `ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group): answers the groups decided.
+pub(crate) fn at_gl(mut c: &mut crate::port::Cells) -> i32 {
+    // A glyph arena of ten rows none of which is in a marked-content span (mark -1).
+    let mut i: i32 = 0;
+    at_glyphs(c);
+    while i < 10 {
+        gl_set(c, i, gf_mark(), -1);
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn at_run2(cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, ofw: &mut crate::port::Cells, ofl: &mut crate::port::Cells, et: &mut crate::port::Cells, feats: &mut crate::port::Cells, ow: &mut crate::port::Cells, images: &mut crate::port::Cells, epages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, an: &mut crate::port::Cells, txt: &mut crate::port::Cells, mut nfw: &mut crate::port::Cells, mut nfl: &mut crate::port::Cells, mut fv: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut afa: &mut crate::port::Cells) -> i32 {
+    // `ar-doc` with the glyphs, marks, annotations and their text given.
     let gd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let w2g: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let o2g: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -216,7 +238,15 @@ pub(crate) fn at_run(cg: &mut crate::port::Cells, refs: &mut crate::port::Cells,
     let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let orr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let os: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    return ar_doc(cg, refs, ofw, ofl, et, feats, ow, ol, orr, os, images, epages, nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, scr);
+    return ar_doc(cg, refs, ofw, ofl, et, feats, ow, ol, orr, os, images, epages, gl, mk, an, txt, 0, rc, nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, scr);
+}
+pub(crate) fn at_run(cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, ofw: &mut crate::port::Cells, ofl: &mut crate::port::Cells, et: &mut crate::port::Cells, feats: &mut crate::port::Cells, ow: &mut crate::port::Cells, images: &mut crate::port::Cells, epages: &mut crate::port::Cells, mut nfw: &mut crate::port::Cells, mut nfl: &mut crate::port::Cells, mut fv: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut afa: &mut crate::port::Cells) -> i32 {
+    // `ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group), unmarked glyphs and no annotations: answers the groups decided.
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    at_gl(gl);
+    return at_run2(cg, refs, ofw, ofl, et, feats, ow, images, epages, gl, mk, an, &mut crate::port::Cells::new(), nfw, nfl, fv, fx, afa);
 }
 pub(crate) fn at_line3(mut fl: &mut crate::port::Cells, first: i32, count: i32) -> i32 {
     // A line of page 1 over `count` flow words from `first`, 100 high on the baseline 900.
@@ -457,6 +487,7 @@ fn test_ocr_only_groups_are_dropped_held_or_nothing() {
     crate::testport::assert_eq(fa_get(afa, 0, 5), dr_ocr_ghost(), "as an ocr-ghost");
     crate::testport::assert_eq(fa_get(afa, 0, 9), 1, "from group 1");
     crate::testport::assert_eq(fa_get(afa, 0, 10), 170, "by rule 170");
+    crate::testport::assert_eq(fa_get(afa, 0, 8), 6, "which is defence 6 of SPEC 9.5, plausibility");
     crate::testport::assert_eq(fa_get(afa, 0, 7), 1, "whose OCR word is row 1");
     crate::testport::assert_eq(cg_get(cg, g2, cgf_flags()), 2 + plg_in_figure(), "the figure's word says it is in a figure");
     crate::testport::assert_eq(cg_get(cg, g1, cgf_flags()), 2, "and the ghost does not");
@@ -540,4 +571,404 @@ fn test_the_model_says_where_ocr_won_and_changes_nothing_else() {
     crate::testport::assert_eq(node_flags(nodes, pb), fl_text_layer_suspect(), "flagged text-layer-suspect");
     crate::testport::assert_eq(node_conf(nodes, pb), 800, "at OCR's confidence");
     crate::testport::assert_eq(node_src(nodes, pb + 1), sr_ocr(), "and its inline follows");
+}
+#[test]
+fn test_the_defences_are_rows_of_block_200() {
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // defence 1: the PDF says so, of a text-layer group
+    at_gv(gv, 1, 0, 0, 1000, -1, 0, -1, -1, 0, 1);
+    crate::port::cells_set(gv, ag_art(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 201, "an artifact watermark: 201");
+    crate::testport::assert_eq(fr_winner(fr_decide(gv)), fw_none(), "the group is held");
+    crate::testport::assert_eq(fr_reason(fr_decide(gv)), dr_watermark(), "as a watermark");
+    crate::testport::assert_eq(fr_defence(fr_decide(gv)), 1, "by defence 1");
+    crate::port::cells_set(gv, ag_art(), 2);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 202, "a background artifact: 202");
+    crate::testport::assert_eq(fr_reason(fr_decide(gv)), dr_background(), "a background");
+    crate::port::cells_set(gv, ag_art(), 3);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 203, "a stamp annotation: 203");
+    crate::port::cells_set(gv, ag_art(), 0);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 101, "the PDF says nothing: the identity");
+    at_gv(gv, 1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 110, "and a word the PDF does not call a watermark stays the text layer's");
+    crate::port::cells_set(gv, ag_art(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 201, "(the PDF calls it one, whatever the font and OCR say)");
+    let gw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // OCR-only groups: the baseline is admitted (140), each defence takes it out
+    at_gv(gw, 0, 1, 0, -1, -1, 0, 1000, 900, 0, 0);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 140, "baseline: admitted");
+    crate::port::cells_set(gw, ag_recur(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 211, "recurring: 211");
+    crate::testport::assert_eq(fr_defence(fr_decide(gw)), 2, "defence 2");
+    crate::testport::assert_eq(fr_reason(fr_decide(gw)), dr_watermark(), "a watermark");
+    crate::port::cells_set(gw, ag_recur(), 0);
+    crate::port::cells_set(gw, ag_image(), 600);
+    crate::port::cells_set(gw, ag_imalpha(), 300);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 205, "in a translucent page-sized image: 205");
+    crate::testport::assert_eq(fr_reason(fr_decide(gw)), dr_background(), "a background");
+    crate::port::cells_set(gw, ag_imalpha(), 1000);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 141, "in an opaque page-sized image: a scanned insert, as before");
+    crate::port::cells_set(gw, ag_image(), 0);
+    crate::port::cells_set(gw, ag_imalpha(), -1);
+    crate::port::cells_set(gw, ag_body(), 100);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 221, "mostly another layer's ink: 221");
+    crate::testport::assert_eq(fr_defence(fr_decide(gw)), 3, "defence 3");
+    crate::port::cells_set(gw, ag_body(), -1);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 140, "(an absent column is no evidence)");
+    crate::port::cells_set(gw, ag_oangle(), 2500);
+    crate::port::cells_set(gw, ag_odiag(), 2500);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 231, "on a diagonal: 231");
+    crate::testport::assert_eq(fr_defence(fr_decide(gw)), 4, "defence 4");
+    crate::port::cells_set(gw, ag_odiag(), 0);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 140, "turned by a right angle: text, not a watermark");
+    crate::port::cells_set(gw, ag_oangle(), 0);
+    crate::port::cells_set(gw, ag_orel(), 3000);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 140, "tall, but on no image");
+    crate::port::cells_set(gw, ag_image(), 600);
+    crate::port::cells_set(gw, ag_imalpha(), 1000);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 232, "tall on a page-sized image: 232");
+    crate::port::cells_set(gw, ag_orel(), -1);
+    crate::port::cells_set(gw, ag_image(), 0);
+    crate::port::cells_set(gw, ag_imalpha(), -1);
+    crate::port::cells_set(gw, ag_kink(), 10);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 251, "no ink of kin's own: 251");
+    crate::testport::assert_eq(fr_reason(fr_decide(gw)), dr_ocr_ghost(), "an ocr-ghost");
+    crate::testport::assert_eq(fr_defence(fr_decide(gw)), 6, "defence 6");
+    crate::port::cells_set(gw, ag_kink(), -1);
+    crate::port::cells_set(gw, ag_plaus(), 650);
+    crate::port::cells_set(gw, ag_margin(), 400);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 140, "plausible enough, and sure of itself: admitted");
+    crate::port::cells_set(gw, ag_margin(), 100);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 252, "plausibility low and the margins low: 252");
+    crate::testport::assert_eq(fr_defence(fr_decide(gw)), 6, "defence 6");
+    crate::testport::assert_eq(fr_defence(0), 0, "a core row names no defence");
+}
+pub(crate) fn at_mark_watermark(mut gl: &mut crate::port::Cells, mut mk: &mut crate::port::Cells, g0: i32) -> i32 {
+    // An /Artifact /Watermark mark row (mark 0) over the two glyph rows from `g0`.
+    let m: i32 = mk_new(mk, 1, 1, 0, 0, -1, g0);
+    mk_set(mk, m, mkf_artype(), 0);
+    mk_set(mk, m, mkf_arsub(), 3);
+    gl_set(gl, g0, gf_mark(), m);
+    gl_set(gl, g0 + 1, gf_mark(), m);
+    return m;
+}
+pub(crate) fn at_two_words(mut fw: &mut crate::port::Cells, mut fl: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut ow: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells) -> i32 {
+    // Two text-layer words (the second on glyph rows 5 and 6) each with an OCR word that agrees, in two groups; one line.
+    let w0: i32 = at_tword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
+    let w1: i32 = at_tword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
+    let o0: i32 = at_oword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+    let o1: i32 = at_oword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
+    wd_set(fw, w1, wf_gfirst(), 5);
+    at_line3(fl, 0, 2);
+    at_group(cg, refs, w0, 1, o0, 1, 1000);
+    at_group(cg, refs, w1, 1, o1, 1, 1000);
+    return 0;
+}
+pub(crate) fn at_dropped(cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, et: &mut crate::port::Cells, feats: &mut crate::port::Cells, ow: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, an: &mut crate::port::Cells, txt: &mut crate::port::Cells, mut nfw: &mut crate::port::Cells, mut nfl: &mut crate::port::Cells, mut fv: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut afa: &mut crate::port::Cells, reason: i32) -> i32 {
+    // What the second word's dropping must look like, whichever way the PDF said it: the flow has one word and one line, the first word
+    // unchanged; `afa` has one row with the text as its subject and the defence (1), the group (1) and a rule of block 200 in it; the ledger
+    // has one row of `reason`, a text-layer one, its text the word's.
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ep: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(at_run2(cg, refs, fw, fl, et, feats, ow, im, ep, gl, mk, an, txt, nfw, nfl, fv, fx, afa), 2, "two groups decided");
+    crate::testport::assert_eq(fw_count(nfw), 1, "one word is left in the flow");
+    crate::testport::assert_eq(fl_count(nfl), 1, "on its line");
+    crate::testport::assert_eq(crate::port::cells_at(nfw, 11), crate::port::cells_at(fw, 11), "the first word is the text layer's own");
+    crate::testport::assert_eq(fv_get(fv, 0, 2), 110, "and it is rule 110's");
+    crate::testport::assert_eq(fa_count(afa), 1, "the second word is in the set-aside list");
+    crate::testport::assert_eq(fa_get(afa, 0, 5), reason, "under the reason");
+    crate::testport::assert_eq(fa_get(afa, 0, 6), 5, "its subject is its text");
+    crate::testport::assert_eq(fa_get(afa, 0, 8), 1, "the defence is the PDF's own say");
+    crate::testport::assert_eq(fa_get(afa, 0, 9), 1, "the group");
+    crate::testport::assert_that(fa_get(afa, 0, 10) >= 201, "and the rule is one of block 200");
+    crate::testport::assert_eq(fa_get(afa, 0, 11), 2, "two code points");
+    crate::testport::assert_eq(pl_check(cg, nfw, nfl, fv, afa, fx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, refs, gl), 0, "the layer is sound");
+    crate::testport::assert_eq(ar_write(afa, ow, et, ledger, text, tmp, tt), 1, "one ledger row");
+    crate::testport::assert_eq(ledger_reason(ledger, 0), reason, "the reason");
+    crate::testport::assert_eq(ledger_text_len(ledger, 0), 2, "its text is the word's");
+    return 0;
+}
+#[test]
+fn test_the_pdf_says_watermark_by_an_artifact_mark() {
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let afa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    at_gl(gl);
+    at_two_words(fw, fl, feats, et, ow, cg, refs);
+    at_mark_watermark(gl, mk, 5);
+    at_dropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, &mut crate::port::Cells::new(), nfw, nfl, fv, fx, afa, dr_watermark());
+}
+#[test]
+fn test_the_pdf_says_watermark_by_alpha() {
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let afa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    at_gl(gl);
+    at_two_words(fw, fl, feats, et, ow, cg, refs);
+    fe_set(feats, crate::port::cells_at(fw, 24 + 15), xt_alpha(), 300);
+    at_dropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, &mut crate::port::Cells::new(), nfw, nfl, fv, fx, afa, dr_watermark());
+}
+pub(crate) fn at_annot(mut an: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, sub: i32) -> i32 {
+    // An annotation of page 1 of `sub` over 900..2000 x -100..1100 (the second word's box and the gap before it) whose appearance text is `xy mo`.
+    let mut i: i32 = 0;
+    while i < 38 {
+        crate::port::cells_push(an, 0);
+        i += 1;
+    }
+    crate::port::cells_set(an, 0, 1);
+    crate::port::cells_set(an, 1, sub);
+    crate::port::cells_set(an, 4, 900);
+    crate::port::cells_set(an, 5, -100);
+    crate::port::cells_set(an, 6, 2000);
+    crate::port::cells_set(an, 7, 1100);
+    crate::port::cells_set(an, 32, crate::port::cells_len(txt));
+    crate::port::cells_set(an, 33, 5);
+    crate::port::cells_push(txt, 120);
+    crate::port::cells_push(txt, 121);
+    crate::port::cells_push(txt, 32);
+    crate::port::cells_push(txt, 109);
+    crate::port::cells_push(txt, 111);
+    return 0;
+}
+#[test]
+fn test_the_pdf_says_watermark_by_an_annotation() {
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let afa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    at_gl(gl);
+    at_two_words(fw, fl, feats, et, ow, cg, refs);
+    // a Watermark annotation (subtype 24) whose text is `xy mo`, over the second word (`mo`)
+    at_annot(an, txt, 24);
+    at_dropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, dr_watermark());
+}
+#[test]
+fn test_an_annotation_rectangle_alone_says_nothing() {
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    at_gl(gl);
+    at_two_words(fw, fl, feats, et, ow, cg, refs);
+    at_annot(an, txt, 24);
+    // widen the rectangle over the page: the first word (`he`) is under the annotation but not in its text
+    crate::port::cells_set(an, 4, -1000);
+    crate::port::cells_set(an, 6, 5000);
+    crate::testport::assert_eq(ax_word_class(gl, mk, an, txt, et, 0, feats, fw, 0), 0, "body text under a page-sized watermark annotation stays body");
+    crate::testport::assert_eq(ax_word_class(gl, mk, an, txt, et, 0, feats, fw, 1), 1, "the word the annotation's appearance says is the watermark");
+}
+#[test]
+fn test_a_stamp_annotation_and_a_believed_background() {
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    at_gl(gl);
+    at_two_words(fw, fl, feats, et, ow, cg, refs);
+    at_annot(an, txt, 13);
+    crate::testport::assert_eq(ax_word_class(gl, mk, an, txt, et, 0, feats, fw, 0), 0, "the first word is outside the stamp");
+    crate::testport::assert_eq(ax_word_class(gl, mk, an, txt, et, 0, feats, fw, 1), 3, "the second is inside it and in its text");
+    // a Background artifact (type 4) counts only when the tree is believed (trust 300)
+    let m: i32 = mk_new(mk, 1, 1, 0, 0, -1, 5);
+    mk_set(mk, m, mkf_artype(), 4);
+    mk_set(mk, m, mkf_arsub(), 0);
+    gl_set(gl, 5, gf_mark(), m);
+    crate::testport::assert_eq(ax_word_class(gl, mk, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, 299, feats, fw, 1), 0, "a tree nobody can vouch for: only a mark");
+    crate::testport::assert_eq(ax_word_class(gl, mk, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, 300, feats, fw, 1), 2, "a believed one: a background");
+    // a pagination artifact (type 1: a header or footer) is never a watermark
+    let m2: i32 = mk_new(mk, 1, 1, 0, 0, -1, 5);
+    mk_set(mk, m2, mkf_artype(), 1);
+    mk_set(mk, m2, mkf_arsub(), 1);
+    gl_set(gl, 5, gf_mark(), m2);
+    crate::testport::assert_eq(ax_word_class(gl, mk, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, 1000, feats, fw, 1), 0, "a header is the furniture stage's");
+}
+pub(crate) fn at_rgroup(mut cg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, oword: i32, page: i32, x0: i32, y0: i32) -> i32 {
+    // An OCR-only group of `page` over a box 1000 wide and 500 high from (x0, y0) with one OCR word.
+    let g: i32 = cg_new(cg, page, x0, y0, x0 + 1000, y0 + 500, 0);
+    let first: i32 = rf_add(refs, ea_owords(), oword);
+    cg_set(cg, g, cgf_ofirst(), first);
+    cg_set(cg, g, cgf_ocount(), 1);
+    return g;
+}
+#[test]
+fn test_recurrence_flags_the_same_text_at_the_same_place() {
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ep: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let q1: i32 = at_oword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+    let q2: i32 = at_oword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+    let q3: i32 = at_oword(ow, feats, et, 0, 100, 0, 113, 113, 113);
+    let q4: i32 = at_oword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+    let other: i32 = at_oword(ow, feats, et, 0, 100, 0, 88, 89, 90);
+    let band: i32 = at_oword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+    ep_new(ep, 1, 20000, 20000);
+    ep_new(ep, 2, 20000, 20000);
+    ep_new(ep, 3, 20000, 20000);
+    ep_new(ep, 4, 20000, 20000);
+    // page 1: the text mid-page, another text elsewhere; page 2: the text moved right; pages 3 (lower case) and 4: at the same place
+    // (the groups are in page order, as `cg` is; the running head is the last group of each page)
+    at_rgroup(cg, refs, q1, 1, 5000, 9000);
+    at_rgroup(cg, refs, other, 1, 2000, 3000);
+    at_rgroup(cg, refs, band, 1, 5000, 100);
+    at_rgroup(cg, refs, q2, 2, 14000, 9000);
+    at_rgroup(cg, refs, band, 2, 5000, 100);
+    at_rgroup(cg, refs, q3, 3, 5000, 9000);
+    at_rgroup(cg, refs, band, 3, 5000, 100);
+    at_rgroup(cg, refs, q4, 4, 5100, 9100);
+    crate::testport::assert_eq(ax_recur(cg, refs, ow, et, ep, rc, pp), 3, "the text is flagged on the three pages it is at the same place on");
+    crate::testport::assert_eq(crate::port::cells_at(rc, 0), 1, "page 1");
+    crate::testport::assert_eq(crate::port::cells_at(rc, 5), 0, "the other text on page 1 is not");
+    crate::testport::assert_eq(crate::port::cells_at(rc, 10), 0, "a recurring text in the top band (a running head) is not a watermark here");
+    crate::testport::assert_eq(crate::port::cells_at(rc, 15), 0, "page 2: moved, not at the same place");
+    crate::testport::assert_eq(crate::port::cells_at(rc, 25), 1, "page 3, in lower case");
+    crate::testport::assert_eq(crate::port::cells_at(rc, 35), 1, "page 4, a hundredth of a page off");
+}
+#[test]
+fn test_recurrence_needs_most_of_the_pages() {
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ep: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: i32 = at_oword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+    let b: i32 = at_oword(ow, feats, et, 0, 100, 0, 81, 81, 81);
+    let f2: i32 = at_oword(ow, feats, et, 0, 100, 0, 70, 71, 72);
+    let f4: i32 = at_oword(ow, feats, et, 0, 100, 0, 73, 74, 75);
+    let f5: i32 = at_oword(ow, feats, et, 0, 100, 0, 76, 77, 78);
+    let f6: i32 = at_oword(ow, feats, et, 0, 100, 0, 79, 80, 82);
+    ep_new(ep, 1, 20000, 20000);
+    ep_new(ep, 2, 20000, 20000);
+    ep_new(ep, 3, 20000, 20000);
+    ep_new(ep, 4, 20000, 20000);
+    ep_new(ep, 5, 20000, 20000);
+    ep_new(ep, 6, 20000, 20000);
+    // six pages with groups, the text on two of them: not 60 per cent, and not three pages
+    at_rgroup(cg, refs, a, 1, 5000, 9000);
+    at_rgroup(cg, refs, f2, 2, 1000, 3000);
+    at_rgroup(cg, refs, b, 3, 5000, 9000);
+    at_rgroup(cg, refs, f4, 4, 1000, 3000);
+    at_rgroup(cg, refs, f5, 5, 1000, 3000);
+    at_rgroup(cg, refs, f6, 6, 1000, 3000);
+    crate::testport::assert_eq(ax_recur(cg, refs, ow, et, ep, rc, pp), 0, "two pages of six: nothing");
+}
+#[test]
+fn test_a_group_in_a_seal_is_the_seals_and_comes_first() {
+    let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block
+    at_gv(gv, 1, 1, 0, 1000, 1000, 0, -1, 900, 0, 1);
+    crate::port::cells_set(gv, ag_seal(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 401, "a seal's text-layer group: 401");
+    crate::testport::assert_eq(fr_block(fr_decide(gv)), 400, "of block 400");
+    crate::testport::assert_eq(fr_winner(fr_decide(gv)), fw_none(), "no source wins it: the body does not have it");
+    crate::testport::assert_eq(fr_reason(fr_decide(gv)), 0, "and it is no ledger row (its words are the seal node's text)");
+    crate::testport::assert_eq(fr_flags(fr_decide(gv)), 128, "the row says it is the seal's");
+    crate::port::cells_set(gv, ag_art(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 401, "even a watermark mark does not take it from the seal");
+    // an OCR-only group inside one
+    at_gv(gv, 0, 1, 0, -1, -1, 0, 800, 900, 0, 0);
+    crate::port::cells_set(gv, ag_seal(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gv)), 402, "an OCR-only group in a seal: 402");
+    // a group that is in none is decided as before
+    crate::port::cells_set(gv, ag_seal(), 0);
+    crate::port::cells_set(gv, ag_art(), 0);
+    crate::testport::assert_eq(fr_block(fr_decide(gv)), 100, "outside a seal: the core's");
+}
+#[test]
+fn test_the_words_of_a_seal_leave_the_flow_and_say_so() {
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let feats: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ep: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fv: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let afa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let w0: i32 = at_tword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
+    let w1: i32 = at_tword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
+    let w2: i32 = at_tword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121);
+    let o0: i32 = at_oword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+    let o1: i32 = at_oword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
+    let o2: i32 = at_oword(ow, feats, et, 2000, 2900, 0, 120, 121, 0);
+    let o3: i32 = at_oword(ow, feats, et, 5000, 5900, 0, 88, 89, 0);
+    at_line3(fl, 0, 3);
+    at_group(cg, refs, w0, 1, o0, 1, 1000);
+    let g1: i32 = at_group(cg, refs, w1, 1, o1, 1, 1000);
+    let g2: i32 = at_group(cg, refs, w2, 1, o2, 1, 1000);
+    let g3: i32 = at_ocr_only_group(cg, refs, o3);
+    cg_set(cg, g1, cgf_flags(), plg_in_seal());
+    cg_set(cg, g3, cgf_flags(), 2 + plg_in_seal());
+    crate::testport::assert_eq(at_run(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 4, "four groups decided");
+    crate::testport::assert_eq(fw_count(nfw), 2, "the seal's word is not in the flow: the other two are");
+    crate::testport::assert_eq(fa_count(afa), 0, "and nothing is a ledger row: the words are the node's text, not ghosts");
+    crate::testport::assert_eq(cg_get(cg, g1, cgf_flags()), plg_in_seal(), "the seal's group is not also `in-figure`");
+    crate::testport::assert_eq(cg_get(cg, g3, cgf_flags()), 2 + plg_in_seal(), "nor is its OCR-only one");
+    crate::testport::assert_eq(cg_get(cg, g2, cgf_flags()), 0, "and a group outside is as it was");
 }

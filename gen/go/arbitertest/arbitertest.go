@@ -5,6 +5,7 @@ package arbitertest
 
 import (
 	"emon/arbiter"
+	"emon/artifact"
 	"emon/evidence"
 	"emon/fuserules"
 	"emon/model"
@@ -34,6 +35,16 @@ func atGv(gv *port.Cells, nt int32, no int32, nh int32, font int32, simfold int3
 	port.CellsSet(gv, fuserules.AgOconf(), 900)
 	port.CellsSet(gv, fuserules.AgNear(), 0)
 	port.CellsSet(gv, fuserules.AgPageagree(), 1000)
+	// P7.5's columns: nothing says anything (absent or zero)
+	port.CellsSet(gv, fuserules.AgArt(), 0)
+	port.CellsSet(gv, fuserules.AgRecur(), 0)
+	port.CellsSet(gv, fuserules.AgOangle(), -1)
+	port.CellsSet(gv, fuserules.AgOdiag(), -1)
+	port.CellsSet(gv, fuserules.AgOrel(), -1)
+	port.CellsSet(gv, fuserules.AgMargin(), -1)
+	port.CellsSet(gv, fuserules.AgKink(), -1)
+	port.CellsSet(gv, fuserules.AgBody(), -1)
+	port.CellsSet(gv, fuserules.AgImalpha(), -1)
 	return 0
 }
 
@@ -107,8 +118,8 @@ func TestTheRowsSayWhatTheySet(emonT *testing.T) {
 	port.AssertEq(emonT, fuserules.FrOrder(4), 100, "then the core")
 	port.AssertEq(emonT, fuserules.FrOrder(5), -1, "and no more")
 	var i int32 = 0
-	for i < 17 {
-		port.AssertEq(emonT, fuserules.FrBlock(i), 100, "every row of this item is in block 100")
+	for i < 29 {
+		port.AssertThat(emonT, ((fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 200)) || (fuserules.FrBlock(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400")
 		i += 1
 	}
 }
@@ -218,9 +229,21 @@ func atTextOnlyGroup(cg *port.Cells, refs *port.Cells, tword int32) int32 {
 	return g
 }
 
-func atRun(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, et *port.Cells, feats *port.Cells, ow *port.Cells, images *port.Cells, epages *port.Cells, nfw *port.Cells, nfl *port.Cells, fv *port.Cells, fx *port.Cells, afa *port.Cells) int32 {
-	// `ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group): answers the groups decided.
+func atGl(c *port.Cells) int32 {
+	// A glyph arena of ten rows none of which is in a marked-content span (mark -1).
+	var i int32 = 0
+	atGlyphs(c)
+	for i < 10 {
+		evidence.GlSet(c, i, evidence.GfMark(), -1)
+		i += 1
+	}
+	return 0
+}
+
+func atRun2(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, et *port.Cells, feats *port.Cells, ow *port.Cells, images *port.Cells, epages *port.Cells, gl *port.Cells, mk *port.Cells, an *port.Cells, txt *port.Cells, nfw *port.Cells, nfl *port.Cells, fv *port.Cells, fx *port.Cells, afa *port.Cells) int32 {
+	// `ar-doc` with the glyphs, marks, annotations and their text given.
 	var gd *port.Cells = port.NewCells()
+	var rc *port.Cells = port.NewCells()
 	var gv *port.Cells = port.NewCells()
 	var w2g *port.Cells = port.NewCells()
 	var o2g *port.Cells = port.NewCells()
@@ -231,7 +254,16 @@ func atRun(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, e
 	var ol *port.Cells = port.NewCells()
 	var orr *port.Cells = port.NewCells()
 	var os *port.Cells = port.NewCells()
-	return arbiter.ArDoc(cg, refs, ofw, ofl, et, feats, ow, ol, orr, os, images, epages, nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, scr)
+	return arbiter.ArDoc(cg, refs, ofw, ofl, et, feats, ow, ol, orr, os, images, epages, gl, mk, an, txt, 0, rc, nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, scr)
+}
+
+func atRun(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, et *port.Cells, feats *port.Cells, ow *port.Cells, images *port.Cells, epages *port.Cells, nfw *port.Cells, nfl *port.Cells, fv *port.Cells, fx *port.Cells, afa *port.Cells) int32 {
+	// `ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group), unmarked glyphs and no annotations: answers the groups decided.
+	var gl *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	atGl(gl)
+	return atRun2(cg, refs, ofw, ofl, et, feats, ow, images, epages, gl, mk, an, port.NewCells(), nfw, nfl, fv, fx, afa)
 }
 
 func atLine3(fl *port.Cells, first int32, count int32) int32 {
@@ -473,6 +505,7 @@ func TestOcrOnlyGroupsAreDroppedHeldOrNothing(emonT *testing.T) {
 	port.AssertEq(emonT, player.FaGet(afa, 0, 5), model.DrOcrGhost(), "as an ocr-ghost")
 	port.AssertEq(emonT, player.FaGet(afa, 0, 9), 1, "from group 1")
 	port.AssertEq(emonT, player.FaGet(afa, 0, 10), 170, "by rule 170")
+	port.AssertEq(emonT, player.FaGet(afa, 0, 8), 6, "which is defence 6 of SPEC 9.5, plausibility")
 	port.AssertEq(emonT, player.FaGet(afa, 0, 7), 1, "whose OCR word is row 1")
 	port.AssertEq(emonT, player.CgGet(cg, g2, player.CgfFlags()), 2+player.PlgInFigure(), "the figure's word says it is in a figure")
 	port.AssertEq(emonT, player.CgGet(cg, g1, player.CgfFlags()), 2, "and the ghost does not")
@@ -557,4 +590,409 @@ func TestTheModelSaysWhereOcrWonAndChangesNothingElse(emonT *testing.T) {
 	port.AssertEq(emonT, model.NodeFlags(nodes, pb), model.FlTextLayerSuspect(), "flagged text-layer-suspect")
 	port.AssertEq(emonT, model.NodeConf(nodes, pb), 800, "at OCR's confidence")
 	port.AssertEq(emonT, model.NodeSrc(nodes, pb+1), model.SrOcr(), "and its inline follows")
+}
+
+func TestTheDefencesAreRowsOfBlock200(emonT *testing.T) {
+	var gv *port.Cells = port.NewCells()
+	// defence 1: the PDF says so, of a text-layer group
+	atGv(gv, 1, 0, 0, 1000, -1, 0, -1, -1, 0, 1)
+	port.CellsSet(gv, fuserules.AgArt(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 201, "an artifact watermark: 201")
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwNone(), "the group is held")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gv)), model.DrWatermark(), "as a watermark")
+	port.AssertEq(emonT, fuserules.FrDefence(fuserules.FrDecide(gv)), 1, "by defence 1")
+	port.CellsSet(gv, fuserules.AgArt(), 2)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 202, "a background artifact: 202")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gv)), model.DrBackground(), "a background")
+	port.CellsSet(gv, fuserules.AgArt(), 3)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 203, "a stamp annotation: 203")
+	port.CellsSet(gv, fuserules.AgArt(), 0)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 101, "the PDF says nothing: the identity")
+	atGv(gv, 1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 110, "and a word the PDF does not call a watermark stays the text layer's")
+	port.CellsSet(gv, fuserules.AgArt(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 201, "(the PDF calls it one, whatever the font and OCR say)")
+	var gw *port.Cells = port.NewCells()
+	// OCR-only groups: the baseline is admitted (140), each defence takes it out
+	atGv(gw, 0, 1, 0, -1, -1, 0, 1000, 900, 0, 0)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 140, "baseline: admitted")
+	port.CellsSet(gw, fuserules.AgRecur(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 211, "recurring: 211")
+	port.AssertEq(emonT, fuserules.FrDefence(fuserules.FrDecide(gw)), 2, "defence 2")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gw)), model.DrWatermark(), "a watermark")
+	port.CellsSet(gw, fuserules.AgRecur(), 0)
+	port.CellsSet(gw, fuserules.AgImage(), 600)
+	port.CellsSet(gw, fuserules.AgImalpha(), 300)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 205, "in a translucent page-sized image: 205")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gw)), model.DrBackground(), "a background")
+	port.CellsSet(gw, fuserules.AgImalpha(), 1000)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 141, "in an opaque page-sized image: a scanned insert, as before")
+	port.CellsSet(gw, fuserules.AgImage(), 0)
+	port.CellsSet(gw, fuserules.AgImalpha(), -1)
+	port.CellsSet(gw, fuserules.AgBody(), 100)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 221, "mostly another layer's ink: 221")
+	port.AssertEq(emonT, fuserules.FrDefence(fuserules.FrDecide(gw)), 3, "defence 3")
+	port.CellsSet(gw, fuserules.AgBody(), -1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 140, "(an absent column is no evidence)")
+	port.CellsSet(gw, fuserules.AgOangle(), 2500)
+	port.CellsSet(gw, fuserules.AgOdiag(), 2500)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 231, "on a diagonal: 231")
+	port.AssertEq(emonT, fuserules.FrDefence(fuserules.FrDecide(gw)), 4, "defence 4")
+	port.CellsSet(gw, fuserules.AgOdiag(), 0)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 140, "turned by a right angle: text, not a watermark")
+	port.CellsSet(gw, fuserules.AgOangle(), 0)
+	port.CellsSet(gw, fuserules.AgOrel(), 3000)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 140, "tall, but on no image")
+	port.CellsSet(gw, fuserules.AgImage(), 600)
+	port.CellsSet(gw, fuserules.AgImalpha(), 1000)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 232, "tall on a page-sized image: 232")
+	port.CellsSet(gw, fuserules.AgOrel(), -1)
+	port.CellsSet(gw, fuserules.AgImage(), 0)
+	port.CellsSet(gw, fuserules.AgImalpha(), -1)
+	port.CellsSet(gw, fuserules.AgKink(), 10)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 251, "no ink of kin's own: 251")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gw)), model.DrOcrGhost(), "an ocr-ghost")
+	port.AssertEq(emonT, fuserules.FrDefence(fuserules.FrDecide(gw)), 6, "defence 6")
+	port.CellsSet(gw, fuserules.AgKink(), -1)
+	port.CellsSet(gw, fuserules.AgPlaus(), 650)
+	port.CellsSet(gw, fuserules.AgMargin(), 400)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 140, "plausible enough, and sure of itself: admitted")
+	port.CellsSet(gw, fuserules.AgMargin(), 100)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 252, "plausibility low and the margins low: 252")
+	port.AssertEq(emonT, fuserules.FrDefence(fuserules.FrDecide(gw)), 6, "defence 6")
+	port.AssertEq(emonT, fuserules.FrDefence(0), 0, "a core row names no defence")
+}
+
+func atMarkWatermark(gl *port.Cells, mk *port.Cells, g0 int32) int32 {
+	// An /Artifact /Watermark mark row (mark 0) over the two glyph rows from `g0`.
+	var m int32 = evidence.MkNew(mk, 1, 1, 0, 0, -1, g0)
+	evidence.MkSet(mk, m, evidence.MkfArtype(), 0)
+	evidence.MkSet(mk, m, evidence.MkfArsub(), 3)
+	evidence.GlSet(gl, g0, evidence.GfMark(), m)
+	evidence.GlSet(gl, g0+1, evidence.GfMark(), m)
+	return m
+}
+
+func atTwoWords(fw *port.Cells, fl *port.Cells, feats *port.Cells, et *port.Cells, ow *port.Cells, cg *port.Cells, refs *port.Cells) int32 {
+	// Two text-layer words (the second on glyph rows 5 and 6) each with an OCR word that agrees, in two groups; one line.
+	var w0 int32 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101)
+	var w1 int32 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111)
+	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
+	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0)
+	evidence.WdSet(fw, w1, evidence.WfGfirst(), 5)
+	atLine3(fl, 0, 2)
+	atGroup(cg, refs, w0, 1, o0, 1, 1000)
+	atGroup(cg, refs, w1, 1, o1, 1, 1000)
+	return 0
+}
+
+func atDropped(cg *port.Cells, refs *port.Cells, fw *port.Cells, fl *port.Cells, et *port.Cells, feats *port.Cells, ow *port.Cells, gl *port.Cells, mk *port.Cells, an *port.Cells, txt *port.Cells, nfw *port.Cells, nfl *port.Cells, fv *port.Cells, fx *port.Cells, afa *port.Cells, reason int32) int32 {
+	// What the second word's dropping must look like, whichever way the PDF said it: the flow has one word and one line, the first word
+	// unchanged; `afa` has one row with the text as its subject and the defence (1), the group (1) and a rule of block 200 in it; the ledger
+	// has one row of `reason`, a text-layer one, its text the word's.
+	var im *port.Cells = port.NewCells()
+	var ep *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var tt *port.Cells = port.NewCells()
+	port.AssertEq(emonT, atRun2(cg, refs, fw, fl, et, feats, ow, im, ep, gl, mk, an, txt, nfw, nfl, fv, fx, afa), 2, "two groups decided")
+	port.AssertEq(emonT, player.FwCount(nfw), 1, "one word is left in the flow")
+	port.AssertEq(emonT, player.FlCount(nfl), 1, "on its line")
+	port.AssertEq(emonT, port.CellsAt(nfw, 11), port.CellsAt(fw, 11), "the first word is the text layer's own")
+	port.AssertEq(emonT, player.FvGet(fv, 0, 2), 110, "and it is rule 110's")
+	port.AssertEq(emonT, player.FaCount(afa), 1, "the second word is in the set-aside list")
+	port.AssertEq(emonT, player.FaGet(afa, 0, 5), reason, "under the reason")
+	port.AssertEq(emonT, player.FaGet(afa, 0, 6), 5, "its subject is its text")
+	port.AssertEq(emonT, player.FaGet(afa, 0, 8), 1, "the defence is the PDF's own say")
+	port.AssertEq(emonT, player.FaGet(afa, 0, 9), 1, "the group")
+	port.AssertThat(emonT, player.FaGet(afa, 0, 10) >= 201, "and the rule is one of block 200")
+	port.AssertEq(emonT, player.FaGet(afa, 0, 11), 2, "two code points")
+	port.AssertEq(emonT, player.PlCheck(cg, nfw, nfl, fv, afa, fx, port.NewCells(), port.NewCells(), port.NewCells(), et, refs, gl), 0, "the layer is sound")
+	port.AssertEq(emonT, arbiter.ArWrite(afa, ow, et, ledger, text, tmp, tt), 1, "one ledger row")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), reason, "the reason")
+	port.AssertEq(emonT, model.LedgerTextLen(ledger, 0), 2, "its text is the word's")
+	return 0
+}
+
+func TestThePdfSaysWatermarkByAnArtifactMark(emonT *testing.T) {
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var nfw *port.Cells = port.NewCells()
+	var nfl *port.Cells = port.NewCells()
+	var fv *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var afa *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	atGl(gl)
+	atTwoWords(fw, fl, feats, et, ow, cg, refs)
+	atMarkWatermark(gl, mk, 5)
+	atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, port.NewCells(), nfw, nfl, fv, fx, afa, model.DrWatermark())
+}
+
+func TestThePdfSaysWatermarkByAlpha(emonT *testing.T) {
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var nfw *port.Cells = port.NewCells()
+	var nfl *port.Cells = port.NewCells()
+	var fv *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var afa *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	atGl(gl)
+	atTwoWords(fw, fl, feats, et, ow, cg, refs)
+	evidence.FeSet(feats, port.CellsAt(fw, 24+15), evidence.XtAlpha(), 300)
+	atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, port.NewCells(), nfw, nfl, fv, fx, afa, model.DrWatermark())
+}
+
+func atAnnot(an *port.Cells, txt *port.Cells, sub int32) int32 {
+	// An annotation of page 1 of `sub` over 900..2000 x -100..1100 (the second word's box and the gap before it) whose appearance text is `xy mo`.
+	var i int32 = 0
+	for i < 38 {
+		port.CellsPush(an, 0)
+		i += 1
+	}
+	port.CellsSet(an, 0, 1)
+	port.CellsSet(an, 1, sub)
+	port.CellsSet(an, 4, 900)
+	port.CellsSet(an, 5, -100)
+	port.CellsSet(an, 6, 2000)
+	port.CellsSet(an, 7, 1100)
+	port.CellsSet(an, 32, port.CellsLen(txt))
+	port.CellsSet(an, 33, 5)
+	port.CellsPush(txt, 120)
+	port.CellsPush(txt, 121)
+	port.CellsPush(txt, 32)
+	port.CellsPush(txt, 109)
+	port.CellsPush(txt, 111)
+	return 0
+}
+
+func TestThePdfSaysWatermarkByAnAnnotation(emonT *testing.T) {
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var nfw *port.Cells = port.NewCells()
+	var nfl *port.Cells = port.NewCells()
+	var fv *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var afa *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	atGl(gl)
+	atTwoWords(fw, fl, feats, et, ow, cg, refs)
+	// a Watermark annotation (subtype 24) whose text is `xy mo`, over the second word (`mo`)
+	atAnnot(an, txt, 24)
+	atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, model.DrWatermark())
+}
+
+func TestAnAnnotationRectangleAloneSaysNothing(emonT *testing.T) {
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	atGl(gl)
+	atTwoWords(fw, fl, feats, et, ow, cg, refs)
+	atAnnot(an, txt, 24)
+	// widen the rectangle over the page: the first word (`he`) is under the annotation but not in its text
+	port.CellsSet(an, 4, -1000)
+	port.CellsSet(an, 6, 5000)
+	port.AssertEq(emonT, artifact.AxWordClass(gl, mk, an, txt, et, 0, feats, fw, 0), 0, "body text under a page-sized watermark annotation stays body")
+	port.AssertEq(emonT, artifact.AxWordClass(gl, mk, an, txt, et, 0, feats, fw, 1), 1, "the word the annotation's appearance says is the watermark")
+}
+
+func TestAStampAnnotationAndABelievedBackground(emonT *testing.T) {
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	atGl(gl)
+	atTwoWords(fw, fl, feats, et, ow, cg, refs)
+	atAnnot(an, txt, 13)
+	port.AssertEq(emonT, artifact.AxWordClass(gl, mk, an, txt, et, 0, feats, fw, 0), 0, "the first word is outside the stamp")
+	port.AssertEq(emonT, artifact.AxWordClass(gl, mk, an, txt, et, 0, feats, fw, 1), 3, "the second is inside it and in its text")
+	// a Background artifact (type 4) counts only when the tree is believed (trust 300)
+	var m int32 = evidence.MkNew(mk, 1, 1, 0, 0, -1, 5)
+	evidence.MkSet(mk, m, evidence.MkfArtype(), 4)
+	evidence.MkSet(mk, m, evidence.MkfArsub(), 0)
+	evidence.GlSet(gl, 5, evidence.GfMark(), m)
+	port.AssertEq(emonT, artifact.AxWordClass(gl, mk, port.NewCells(), port.NewCells(), et, 299, feats, fw, 1), 0, "a tree nobody can vouch for: only a mark")
+	port.AssertEq(emonT, artifact.AxWordClass(gl, mk, port.NewCells(), port.NewCells(), et, 300, feats, fw, 1), 2, "a believed one: a background")
+	// a pagination artifact (type 1: a header or footer) is never a watermark
+	var m2 int32 = evidence.MkNew(mk, 1, 1, 0, 0, -1, 5)
+	evidence.MkSet(mk, m2, evidence.MkfArtype(), 1)
+	evidence.MkSet(mk, m2, evidence.MkfArsub(), 1)
+	evidence.GlSet(gl, 5, evidence.GfMark(), m2)
+	port.AssertEq(emonT, artifact.AxWordClass(gl, mk, port.NewCells(), port.NewCells(), et, 1000, feats, fw, 1), 0, "a header is the furniture stage's")
+}
+
+func atRgroup(cg *port.Cells, refs *port.Cells, oword int32, page int32, x0 int32, y0 int32) int32 {
+	// An OCR-only group of `page` over a box 1000 wide and 500 high from (x0, y0) with one OCR word.
+	var g int32 = player.CgNew(cg, page, x0, y0, x0+1000, y0+500, 0)
+	var first int32 = evidence.RfAdd(refs, evidence.EaOwords(), oword)
+	player.CgSet(cg, g, player.CgfOfirst(), first)
+	player.CgSet(cg, g, player.CgfOcount(), 1)
+	return g
+}
+
+func TestRecurrenceFlagsTheSameTextAtTheSamePlace(emonT *testing.T) {
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ep *port.Cells = port.NewCells()
+	var rc *port.Cells = port.NewCells()
+	var pp *port.Cells = port.NewCells()
+	var q1 int32 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81)
+	var q2 int32 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81)
+	var q3 int32 = atOword(ow, feats, et, 0, 100, 0, 113, 113, 113)
+	var q4 int32 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81)
+	var other int32 = atOword(ow, feats, et, 0, 100, 0, 88, 89, 90)
+	var band int32 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81)
+	evidence.EpNew(ep, 1, 20000, 20000)
+	evidence.EpNew(ep, 2, 20000, 20000)
+	evidence.EpNew(ep, 3, 20000, 20000)
+	evidence.EpNew(ep, 4, 20000, 20000)
+	// page 1: the text mid-page, another text elsewhere; page 2: the text moved right; pages 3 (lower case) and 4: at the same place
+	// (the groups are in page order, as `cg` is; the running head is the last group of each page)
+	atRgroup(cg, refs, q1, 1, 5000, 9000)
+	atRgroup(cg, refs, other, 1, 2000, 3000)
+	atRgroup(cg, refs, band, 1, 5000, 100)
+	atRgroup(cg, refs, q2, 2, 14000, 9000)
+	atRgroup(cg, refs, band, 2, 5000, 100)
+	atRgroup(cg, refs, q3, 3, 5000, 9000)
+	atRgroup(cg, refs, band, 3, 5000, 100)
+	atRgroup(cg, refs, q4, 4, 5100, 9100)
+	port.AssertEq(emonT, artifact.AxRecur(cg, refs, ow, et, ep, rc, pp), 3, "the text is flagged on the three pages it is at the same place on")
+	port.AssertEq(emonT, port.CellsAt(rc, 0), 1, "page 1")
+	port.AssertEq(emonT, port.CellsAt(rc, 5), 0, "the other text on page 1 is not")
+	port.AssertEq(emonT, port.CellsAt(rc, 10), 0, "a recurring text in the top band (a running head) is not a watermark here")
+	port.AssertEq(emonT, port.CellsAt(rc, 15), 0, "page 2: moved, not at the same place")
+	port.AssertEq(emonT, port.CellsAt(rc, 25), 1, "page 3, in lower case")
+	port.AssertEq(emonT, port.CellsAt(rc, 35), 1, "page 4, a hundredth of a page off")
+}
+
+func TestRecurrenceNeedsMostOfThePages(emonT *testing.T) {
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ep *port.Cells = port.NewCells()
+	var rc *port.Cells = port.NewCells()
+	var pp *port.Cells = port.NewCells()
+	var a int32 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81)
+	var b int32 = atOword(ow, feats, et, 0, 100, 0, 81, 81, 81)
+	var f2 int32 = atOword(ow, feats, et, 0, 100, 0, 70, 71, 72)
+	var f4 int32 = atOword(ow, feats, et, 0, 100, 0, 73, 74, 75)
+	var f5 int32 = atOword(ow, feats, et, 0, 100, 0, 76, 77, 78)
+	var f6 int32 = atOword(ow, feats, et, 0, 100, 0, 79, 80, 82)
+	evidence.EpNew(ep, 1, 20000, 20000)
+	evidence.EpNew(ep, 2, 20000, 20000)
+	evidence.EpNew(ep, 3, 20000, 20000)
+	evidence.EpNew(ep, 4, 20000, 20000)
+	evidence.EpNew(ep, 5, 20000, 20000)
+	evidence.EpNew(ep, 6, 20000, 20000)
+	// six pages with groups, the text on two of them: not 60 per cent, and not three pages
+	atRgroup(cg, refs, a, 1, 5000, 9000)
+	atRgroup(cg, refs, f2, 2, 1000, 3000)
+	atRgroup(cg, refs, b, 3, 5000, 9000)
+	atRgroup(cg, refs, f4, 4, 1000, 3000)
+	atRgroup(cg, refs, f5, 5, 1000, 3000)
+	atRgroup(cg, refs, f6, 6, 1000, 3000)
+	port.AssertEq(emonT, artifact.AxRecur(cg, refs, ow, et, ep, rc, pp), 0, "two pages of six: nothing")
+}
+
+func TestAGroupInASealIsTheSealsAndComesFirst(emonT *testing.T) {
+	var gv *port.Cells = port.NewCells()
+	// a text-layer group in a seal beats a healthy font that OCR agrees with, and every other block
+	atGv(gv, 1, 1, 0, 1000, 1000, 0, -1, 900, 0, 1)
+	port.CellsSet(gv, fuserules.AgSeal(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 401, "a seal's text-layer group: 401")
+	port.AssertEq(emonT, fuserules.FrBlock(fuserules.FrDecide(gv)), 400, "of block 400")
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwNone(), "no source wins it: the body does not have it")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gv)), 0, "and it is no ledger row (its words are the seal node's text)")
+	port.AssertEq(emonT, fuserules.FrFlags(fuserules.FrDecide(gv)), 128, "the row says it is the seal's")
+	port.CellsSet(gv, fuserules.AgArt(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 401, "even a watermark mark does not take it from the seal")
+	// an OCR-only group inside one
+	atGv(gv, 0, 1, 0, -1, -1, 0, 800, 900, 0, 0)
+	port.CellsSet(gv, fuserules.AgSeal(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 402, "an OCR-only group in a seal: 402")
+	// a group that is in none is decided as before
+	port.CellsSet(gv, fuserules.AgSeal(), 0)
+	port.CellsSet(gv, fuserules.AgArt(), 0)
+	port.AssertEq(emonT, fuserules.FrBlock(fuserules.FrDecide(gv)), 100, "outside a seal: the core's")
+}
+
+func TestTheWordsOfASealLeaveTheFlowAndSaySo(emonT *testing.T) {
+	var fw *port.Cells = port.NewCells()
+	var fl *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var ep *port.Cells = port.NewCells()
+	var nfw *port.Cells = port.NewCells()
+	var nfl *port.Cells = port.NewCells()
+	var fv *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var afa *port.Cells = port.NewCells()
+	var w0 int32 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101)
+	var w1 int32 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111)
+	var w2 int32 = atTword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121)
+	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
+	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0)
+	var o2 int32 = atOword(ow, feats, et, 2000, 2900, 0, 120, 121, 0)
+	var o3 int32 = atOword(ow, feats, et, 5000, 5900, 0, 88, 89, 0)
+	atLine3(fl, 0, 3)
+	atGroup(cg, refs, w0, 1, o0, 1, 1000)
+	var g1 int32 = atGroup(cg, refs, w1, 1, o1, 1, 1000)
+	var g2 int32 = atGroup(cg, refs, w2, 1, o2, 1, 1000)
+	var g3 int32 = atOcrOnlyGroup(cg, refs, o3)
+	player.CgSet(cg, g1, player.CgfFlags(), player.PlgInSeal())
+	player.CgSet(cg, g3, player.CgfFlags(), 2+player.PlgInSeal())
+	port.AssertEq(emonT, atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa), 4, "four groups decided")
+	port.AssertEq(emonT, player.FwCount(nfw), 2, "the seal's word is not in the flow: the other two are")
+	port.AssertEq(emonT, player.FaCount(afa), 0, "and nothing is a ledger row: the words are the node's text, not ghosts")
+	port.AssertEq(emonT, player.CgGet(cg, g1, player.CgfFlags()), player.PlgInSeal(), "the seal's group is not also `in-figure`")
+	port.AssertEq(emonT, player.CgGet(cg, g3, player.CgfFlags()), 2+player.PlgInSeal(), "nor is its OCR-only one")
+	port.AssertEq(emonT, player.CgGet(cg, g2, player.CgfFlags()), 0, "and a group outside is as it was")
 }
