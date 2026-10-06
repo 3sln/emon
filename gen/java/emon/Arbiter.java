@@ -376,6 +376,8 @@ public final class Arbiter {
         emon.Port.cellsSet(gv, Fuserules.agKink(), kink);
         emon.Port.cellsSet(gv, Fuserules.agBody(), body);
         emon.Port.cellsSet(gv, Fuserules.agImalpha(), arImageAlpha(images, epages, Player.cgGet(cg, g, Player.cgfPage()), Player.cgGet(cg, g, Player.cgfX0()), Player.cgGet(cg, g, Player.cgfY0()), Player.cgGet(cg, g, Player.cgfX1()), Player.cgGet(cg, g, Player.cgfY1())));
+        // P7.6: the columns of a group of hidden-text words (`emon.hidden`)
+        Hidden.hxFill(g, cg, refs, ofw, etext, feats, owords, gv);
         return 0;
     }
     public static int arSources(emon.Port.Cells cg, int g) {
@@ -442,8 +444,21 @@ public final class Arbiter {
         if ((win == Fuserules.fwNone()) && ((Fuserules.frReason(r) == 0) && ((flags & 128) == 0))) {
             Player.cgSet(cg, g, Player.cgfFlags(), gfl | Player.plgInFigure());
         }
+        // set aside from the hidden layer (P7.6; no OCR word in the group, not a defence's row): one row a hidden word, its text range in cells 8 and 11
+        if ((win == Fuserules.fwNone()) && ((Fuserules.frReason(r) > 0) && ((Fuserules.frDefence(r) == 0) && (Player.cgGet(cg, g, Player.cgfOcount()) == 0)))) {
+            k = 0;
+            while (k < Player.cgGet(cg, g, Player.cgfHcount())) {
+                orow = arRef(refs, Player.cgGet(cg, g, Player.cgfHfirst()) + k, 1);
+                fa = Player.faNew(afa, Player.cgGet(cg, g, Player.cgfPage()), emon.Port.cellsAt(ofw, (orow * 24) + 1), emon.Port.cellsAt(ofw, (orow * 24) + 2), emon.Port.cellsAt(ofw, (orow * 24) + 3), emon.Port.cellsAt(ofw, (orow * 24) + 4), Fuserules.frReason(r), Evidence.eaWords(), orow);
+                Player.faSet(afa, fa, 8, emon.Port.cellsAt(ofw, (orow * 24) + 11));
+                Player.faSet(afa, fa, 11, emon.Port.cellsAt(ofw, (orow * 24) + 12));
+                Player.faSet(afa, fa, 9, g);
+                Player.faSet(afa, fa, 10, Fuserules.frNumber(r));
+                k += 1;
+            }
+        }
         // dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
-        if ((win == Fuserules.fwNone()) && ((Fuserules.frReason(r) > 0) && (Fuserules.frDefence(r) == 0) && (Player.cgGet(cg, g, Player.cgfOcount()) > 0))) {
+        if ((win == Fuserules.fwNone()) && ((Fuserules.frReason(r) > 0) && ((Fuserules.frDefence(r) == 0) && (Player.cgGet(cg, g, Player.cgfOcount()) > 0)))) {
             o0 = Player.cgGet(cg, g, Player.cgfOfirst());
             orow = arRef(refs, o0, 1);
             fa = Player.faNew(afa, Player.cgGet(cg, g, Player.cgfPage()), Player.cgGet(cg, g, Player.cgfX0()), Player.cgGet(cg, g, Player.cgfY0()), Player.cgGet(cg, g, Player.cgfX1()), Player.cgGet(cg, g, Player.cgfY1()), Fuserules.frReason(r), Evidence.eaOwords(), orow);
@@ -512,14 +527,12 @@ public final class Arbiter {
         emon.Port.cellsSet(nfl, (l * 16) + 2, y0);
         emon.Port.cellsSet(nfl, (l * 16) + 3, x1);
         emon.Port.cellsSet(nfl, (l * 16) + 4, y1);
+        // the baseline keeps the line's own heights (a hidden layer's words carry baselines of their own, a sixth of a point apart, and a line
+        // re-measured from them would tilt: P7.6); only its ends move to the first and last word's
         v = emon.Port.cellsAt(nfw, (first * 24) + 5);
         emon.Port.cellsSet(nfl, (l * 16) + 5, v);
-        v = emon.Port.cellsAt(nfw, (first * 24) + 6);
-        emon.Port.cellsSet(nfl, (l * 16) + 6, v);
         v = emon.Port.cellsAt(nfw, (lastw * 24) + 7);
         emon.Port.cellsSet(nfl, (l * 16) + 7, v);
-        v = emon.Port.cellsAt(nfw, (lastw * 24) + 8);
-        emon.Port.cellsSet(nfl, (l * 16) + 8, v);
         return 0;
     }
     public static int arPutFv(emon.Port.Cells fv, int g, int source, int number, int conf, int flags) {
@@ -607,8 +620,11 @@ public final class Arbiter {
             emon.Port.cellsSet(nfw, (r * 24) + 12, Evidence.owGet(owords, orow, Evidence.hdTlen()));
             emon.Port.cellsSet(nfw, (r * 24) + 14, Evidence.owGet(owords, orow, Evidence.hdConf()));
             emon.Port.cellsSet(nfw, (r * 24) + 15, -1);
-            emon.Port.cellsSet(nfw, (r * 24) + 17, -1);
-            emon.Port.cellsSet(nfw, (r * 24) + 18, 0);
+            // a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
+            if (nt > 0) {
+                emon.Port.cellsSet(nfw, (r * 24) + 17, -1);
+                emon.Port.cellsSet(nfw, (r * 24) + 18, 0);
+            }
             emon.Port.cellsSet(nfw, (r * 24) + 23, srcs);
             if (nrep != no) {
                 orot = Evidence.owGet(owords, orow, 9);
@@ -1055,48 +1071,91 @@ public final class Arbiter {
                 i = j;
             } else {
                 j = i + 1;
-                w = Player.faGet(afa, i, 7);
-                line = Evidence.owGet(owords, w, Evidence.hdLine());
-                while ((j < n) && ((Player.faGet(afa, j, 0) == Player.faGet(afa, i, 0)) && ((Player.faGet(afa, j, 5) == Player.faGet(afa, i, 5)) && (Evidence.owGet(owords, Player.faGet(afa, j, 7), Evidence.hdLine()) == line)))) {
-                    j += 1;
+                if (Player.faGet(afa, i, 6) == Evidence.eaWords()) {
+                    // a hidden word set aside (P7.6): a run of rows of one page whose boxes share a line (the next starts above the first's bottom) is one row, `invisible`, src `hidden-text`
+                    while ((j < n) && ((Player.faGet(afa, j, 6) == Evidence.eaWords()) && ((Player.faGet(afa, j, 0) == Player.faGet(afa, i, 0)) && (Player.faGet(afa, j, 2) < Player.faGet(afa, i, 4))))) {
+                        j += 1;
+                    }
+                    x0 = Player.faGet(afa, i, 1);
+                    y0 = Player.faGet(afa, i, 2);
+                    x1 = Player.faGet(afa, i, 3);
+                    y1 = Player.faGet(afa, i, 4);
+                    emon.Port.cellsDrop(tt, 0);
+                    k = i;
+                    while (k < j) {
+                        if (k > i) {
+                            emon.Port.cellsPush(tt, 32);
+                        }
+                        if (Player.faGet(afa, k, 1) < x0) {
+                            x0 = Player.faGet(afa, k, 1);
+                        }
+                        if (Player.faGet(afa, k, 2) < y0) {
+                            y0 = Player.faGet(afa, k, 2);
+                        }
+                        if (Player.faGet(afa, k, 3) > x1) {
+                            x1 = Player.faGet(afa, k, 3);
+                        }
+                        if (Player.faGet(afa, k, 4) > y1) {
+                            y1 = Player.faGet(afa, k, 4);
+                        }
+                        s = Player.faGet(afa, k, 8);
+                        e = s + Player.faGet(afa, k, 11);
+                        while (s < e) {
+                            emon.Port.cellsPush(tt, emon.Port.cellsAt(etext, s));
+                            s += 1;
+                        }
+                        k += 1;
+                    }
+                    lr = Model.ledgerAdd(ledger, Player.faGet(afa, i, 5), Player.faGet(afa, i, 0), x0, y0, x1, y1, 900, Model.srHiddenText());
+                    t0 = emon.Port.cellsLen(text);
+                    Normalize.nzNfc(tt, 0, emon.Port.cellsLen(tt), text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
+                    Model.ledgerSetText(ledger, lr, t0, emon.Port.cellsLen(text) - t0);
+                    rows += 1;
+                    i = j;
+                } else {
+                    w = Player.faGet(afa, i, 7);
+                    line = Evidence.owGet(owords, w, Evidence.hdLine());
+                    while ((j < n) && ((Player.faGet(afa, j, 6) == Evidence.eaOwords()) && ((Player.faGet(afa, j, 0) == Player.faGet(afa, i, 0)) && ((Player.faGet(afa, j, 5) == Player.faGet(afa, i, 5)) && (Evidence.owGet(owords, Player.faGet(afa, j, 7), Evidence.hdLine()) == line))))) {
+                        j += 1;
+                    }
+                    x0 = Player.faGet(afa, i, 1);
+                    y0 = Player.faGet(afa, i, 2);
+                    x1 = Player.faGet(afa, i, 3);
+                    y1 = Player.faGet(afa, i, 4);
+                    emon.Port.cellsDrop(tt, 0);
+                    k = i;
+                    while (k < j) {
+                        if (k > i) {
+                            emon.Port.cellsPush(tt, 32);
+                        }
+                        if (Player.faGet(afa, k, 1) < x0) {
+                            x0 = Player.faGet(afa, k, 1);
+                        }
+                        if (Player.faGet(afa, k, 2) < y0) {
+                            y0 = Player.faGet(afa, k, 2);
+                        }
+                        if (Player.faGet(afa, k, 3) > x1) {
+                            x1 = Player.faGet(afa, k, 3);
+                        }
+                        if (Player.faGet(afa, k, 4) > y1) {
+                            y1 = Player.faGet(afa, k, 4);
+                        }
+                        w = Player.faGet(afa, k, 7);
+                        s = Evidence.owGet(owords, w, Evidence.hdTstart());
+                        e = s + Evidence.owGet(owords, w, Evidence.hdTlen());
+                        while (s < e) {
+                            emon.Port.cellsPush(tt, emon.Port.cellsAt(etext, s));
+                            s += 1;
+                        }
+                        k += 1;
+                    }
+                    lr = Model.ledgerAdd(ledger, Player.faGet(afa, i, 5), Player.faGet(afa, i, 0), x0, y0, x1, y1, 700, Model.srOcr());
+                    t0 = emon.Port.cellsLen(text);
+                    Normalize.nzNfc(tt, 0, emon.Port.cellsLen(tt), text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
+                    Model.ledgerSetText(ledger, lr, t0, emon.Port.cellsLen(text) - t0);
+                    rows += 1;
+                    i = j;
                 }
-                x0 = Player.faGet(afa, i, 1);
-                y0 = Player.faGet(afa, i, 2);
-                x1 = Player.faGet(afa, i, 3);
-                y1 = Player.faGet(afa, i, 4);
-                emon.Port.cellsDrop(tt, 0);
-                k = i;
-                while (k < j) {
-                    if (k > i) {
-                        emon.Port.cellsPush(tt, 32);
-                    }
-                    if (Player.faGet(afa, k, 1) < x0) {
-                        x0 = Player.faGet(afa, k, 1);
-                    }
-                    if (Player.faGet(afa, k, 2) < y0) {
-                        y0 = Player.faGet(afa, k, 2);
-                    }
-                    if (Player.faGet(afa, k, 3) > x1) {
-                        x1 = Player.faGet(afa, k, 3);
-                    }
-                    if (Player.faGet(afa, k, 4) > y1) {
-                        y1 = Player.faGet(afa, k, 4);
-                    }
-                    w = Player.faGet(afa, k, 7);
-                    s = Evidence.owGet(owords, w, Evidence.hdTstart());
-                    e = s + Evidence.owGet(owords, w, Evidence.hdTlen());
-                    while (s < e) {
-                        emon.Port.cellsPush(tt, emon.Port.cellsAt(etext, s));
-                        s += 1;
-                    }
-                    k += 1;
-                }
-                lr = Model.ledgerAdd(ledger, Player.faGet(afa, i, 5), Player.faGet(afa, i, 0), x0, y0, x1, y1, 700, Model.srOcr());
-                t0 = emon.Port.cellsLen(text);
-                Normalize.nzNfc(tt, 0, emon.Port.cellsLen(tt), text, tmp, Normalize.nzFlagLigatures() + Normalize.nzFlagRadicals());
-                Model.ledgerSetText(ledger, lr, t0, emon.Port.cellsLen(text) - t0);
-                rows += 1;
-                i = j;
             }
         }
         return rows;
@@ -1146,6 +1205,7 @@ public final class Arbiter {
         int cy = 0;
         int total = 0;
         int nocr = 0;
+        int nhid = 0;
         int nsus = 0;
         int nonly = 0;
         int nlow = 0;
@@ -1183,6 +1243,7 @@ public final class Arbiter {
                 if (inl == 1) {
                     total = 0;
                     nocr = 0;
+                    nhid = 0;
                     nsus = 0;
                     nonly = 0;
                     nlow = 0;
@@ -1199,6 +1260,9 @@ public final class Arbiter {
                                     total += 1;
                                     if (emon.Port.cellsAt(fv, (w * 8) + 1) == Model.srOcr()) {
                                         nocr += 1;
+                                        if ((emon.Port.cellsAt(fv, (w * 8) + 2) >= 300) && (emon.Port.cellsAt(fv, (w * 8) + 2) < 400)) {
+                                            nhid += 1;
+                                        }
                                         csum += emon.Port.cellsAt(fv, (w * 8) + 3);
                                         if ((emon.Port.cellsAt(fv, (w * 8) + 4) & Model.flTextLayerSuspect()) != 0) {
                                             nsus += 1;
@@ -1224,6 +1288,10 @@ public final class Arbiter {
                         if (nocr == total) {
                             allocr = 1;
                             conf = csum / nocr;
+                            // words a hidden layer's rows (block 300) gave to OCR keep the layer's box and line: the block stays `text` too (P7.6)
+                            if (nhid == nocr) {
+                                allocr = 2;
+                            }
                         }
                         suspect = 0;
                         if (nsus > 0) {

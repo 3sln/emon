@@ -1,4 +1,4 @@
-;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
+;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307). P7.6 re-derived `hidden-older-ocr` and `tl-broken-unmapped` by replaying their committed transcripts under the new rules (no engine ran: D322).
 {"bank-statement"
  "e55a30a7ad657f8222472a825f07a8fd22c6d25dfb2afe1b016a07f33ac2b841",
  "bg-texture"
@@ -10,7 +10,7 @@
  "h-numbered"
  "9ecae7308b0a9a6d11a1386657d4ee659d8e2a8a7daa2f5ab3828914855781c6",
  "hidden-older-ocr"
- "20ab992264d51949238141b81b7eeaa0c827e6d0fd76f0415a6f93105dc856ff",
+ "11bd73e6f99aff8f1e52d536672d969a5bee5cfe841f04dd34c83e8ebc672189",
  "invoice"
  "c6b2f5e97c6534a6c09d312e124e61239810d04f13d338f433bc82f7e5d7ac93",
  "lists-basic"
@@ -30,7 +30,7 @@
  "tl-broken-shift"
  "bd9600901ee154af3038f6a4ca44257dc0b3f43d109cd74a29763744047d0354",
  "tl-broken-unmapped"
- "48643d40577f32d112766efef65aa78af736ca698680a9545e3f206e2e8f39ba",
+ "4563844e8985666270a21063673ecc5af3e4dbabb1787646a3ce9292184c865a",
  "watermark-draft"
  "9947a0c4d7ee562027358da8102f9a7d9f8ddf69d5854ca3204cfa7a63b3d795",
  "wm-annot"

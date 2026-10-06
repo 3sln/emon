@@ -52,6 +52,7 @@
             [emon.health :refer [hh-word-score hh-agree-sim]]
             [emon.scan :refer [sc-prep sc-emit-lines]]
             [emon.artifact :refer [ax-word-class ax-oword-class ax-recur wm-alpha wm-cover]]
+            [emon.hidden :refer [hx-fill]]
             [emon.fuserules :refer [ag-seal ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha fr-defence
                                     ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin
                                     ag-olen ag-oconf ag-near ag-pageagree ag-count fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-npred fr-pcol fw-none fw-text fw-ocr]]
@@ -330,6 +331,8 @@
     (cells-set gv (ag-body) body)
     (cells-set gv (ag-imalpha) (ar-image-alpha images epages (cg-get cg g (cgf-page)) (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0))
                                                (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1))))
+    (comment "P7.6: the columns of a group of hidden-text words (`emon.hidden`)")
+    (hx-fill g cg refs ofw etext feats owords gv)
     (return 0)))
 
 ;; ------------------------------------------------------------- the verdicts
@@ -386,8 +389,21 @@
     (set gfl (cg-get cg g (cgf-flags)))
     (if (and (== win (fw-none)) (and (== (fr-reason r) 0) (== (bit-and flags 128) 0)))
       (cg-set cg g (cgf-flags) (bit-or gfl (plg-in-figure))))
+    (comment "set aside from the hidden layer (P7.6; no OCR word in the group, not a defence's row): one row a hidden word, its text range in cells 8 and 11")
+    (if (and (== win (fw-none)) (and (> (fr-reason r) 0) (and (== (fr-defence r) 0) (== (cg-get cg g (cgf-ocount)) 0))))
+      (do (set k 0)
+          (while (< k (cg-get cg g (cgf-hcount)))
+            (do (set orow (ar-ref refs (+ (cg-get cg g (cgf-hfirst)) k) 1))
+                (set fa (fa-new afa (cg-get cg g (cgf-page)) (cells-at ofw (+ (* orow 24) 1)) (cells-at ofw (+ (* orow 24) 2))
+                                (cells-at ofw (+ (* orow 24) 3)) (cells-at ofw (+ (* orow 24) 4))
+                                (fr-reason r) (ea-words) orow))
+                (fa-set afa fa 8 (cells-at ofw (+ (* orow 24) 11)))
+                (fa-set afa fa 11 (cells-at ofw (+ (* orow 24) 12)))
+                (fa-set afa fa 9 g)
+                (fa-set afa fa 10 (fr-number r))
+                (set k (+ k 1))))))
     (comment "dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list")
-    (if (and (== win (fw-none)) (and (> (fr-reason r) 0) (== (fr-defence r) 0) (> (cg-get cg g (cgf-ocount)) 0)))
+    (if (and (== win (fw-none)) (and (> (fr-reason r) 0) (and (== (fr-defence r) 0) (> (cg-get cg g (cgf-ocount)) 0))))
       (do (set o0 (cg-get cg g (cgf-ofirst)))
           (set orow (ar-ref refs o0 1))
           (set fa (fa-new afa (cg-get cg g (cgf-page)) (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0)) (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1))
@@ -447,14 +463,12 @@
     (cells-set nfl (+ (* l 16) 2) y0)
     (cells-set nfl (+ (* l 16) 3) x1)
     (cells-set nfl (+ (* l 16) 4) y1)
+    (comment "the baseline keeps the line's own heights (a hidden layer's words carry baselines of their own, a sixth of a point apart, and a line")
+    (comment "re-measured from them would tilt: P7.6); only its ends move to the first and last word's")
     (set v (cells-at nfw (+ (* first 24) 5)))
     (cells-set nfl (+ (* l 16) 5) v)
-    (set v (cells-at nfw (+ (* first 24) 6)))
-    (cells-set nfl (+ (* l 16) 6) v)
     (set v (cells-at nfw (+ (* lastw 24) 7)))
     (cells-set nfl (+ (* l 16) 7) v)
-    (set v (cells-at nfw (+ (* lastw 24) 8)))
-    (cells-set nfl (+ (* l 16) 8) v)
     (return 0)))
 
 (defn ^I32 ar-put-fv [^:mut ^Cells fv ^I32 g ^I32 source ^I32 number ^I32 conf ^I32 flags]
@@ -531,8 +545,10 @@
           (cells-set nfw (+ (* r 24) 12) (ow-get owords orow (hd-tlen)))
           (cells-set nfw (+ (* r 24) 14) (ow-get owords orow (hd-conf)))
           (cells-set nfw (+ (* r 24) 15) -1)
-          (cells-set nfw (+ (* r 24) 17) -1)
-          (cells-set nfw (+ (* r 24) 18) 0)
+          (comment "a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)")
+          (if (> nt 0)
+            (do (cells-set nfw (+ (* r 24) 17) -1)
+                (cells-set nfw (+ (* r 24) 18) 0)))
           (cells-set nfw (+ (* r 24) 23) srcs)
           (if (!= nrep no)
             (do (set orot (ow-get owords orow 9))
@@ -901,12 +917,45 @@
                 (set rows (+ rows 1))
                 (set i j))
             (do (set j (+ i 1))
+          (if (== (fa-get afa i 6) (ea-words))
+            (do (comment "a hidden word set aside (P7.6): a run of rows of one page whose boxes share a line (the next starts above the first's bottom) is one row, `invisible`, src `hidden-text`")
+                (while (and (< j n)
+                            (and (== (fa-get afa j 6) (ea-words))
+                                 (and (== (fa-get afa j 0) (fa-get afa i 0))
+                                      (< (fa-get afa j 2) (fa-get afa i 4)))))
+                  (set j (+ j 1)))
+                (set x0 (fa-get afa i 1))
+                (set y0 (fa-get afa i 2))
+                (set x1 (fa-get afa i 3))
+                (set y1 (fa-get afa i 4))
+                (cells-drop tt 0)
+                (set k i)
+                (while (< k j)
+                  (do (if (> k i) (cells-push tt 32))
+                      (if (< (fa-get afa k 1) x0) (set x0 (fa-get afa k 1)))
+                      (if (< (fa-get afa k 2) y0) (set y0 (fa-get afa k 2)))
+                      (if (> (fa-get afa k 3) x1) (set x1 (fa-get afa k 3)))
+                      (if (> (fa-get afa k 4) y1) (set y1 (fa-get afa k 4)))
+                      (set s (fa-get afa k 8))
+                      (set e (+ s (fa-get afa k 11)))
+                      (while (< s e)
+                        (do (cells-push tt (cells-at etext s))
+                            (set s (+ s 1))))
+                      (set k (+ k 1))))
+                (set lr (ledger-add ledger (fa-get afa i 5) (fa-get afa i 0) x0 y0 x1 y1 900 (sr-hidden-text)))
+                (set t0 (cells-len text))
+                (nz-nfc tt 0 (cells-len tt) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+                (ledger-set-text ledger lr t0 (- (cells-len text) t0))
+                (set rows (+ rows 1))
+                (set i j))
+            (do
           (set w (fa-get afa i 7))
           (set line (ow-get owords w (hd-line)))
           (while (and (< j n)
-                      (and (== (fa-get afa j 0) (fa-get afa i 0))
-                           (and (== (fa-get afa j 5) (fa-get afa i 5))
-                                (== (ow-get owords (fa-get afa j 7) (hd-line)) line))))
+                      (and (== (fa-get afa j 6) (ea-owords))
+                           (and (== (fa-get afa j 0) (fa-get afa i 0))
+                                (and (== (fa-get afa j 5) (fa-get afa i 5))
+                                     (== (ow-get owords (fa-get afa j 7) (hd-line)) line)))))
             (set j (+ j 1)))
           (set x0 (fa-get afa i 1))
           (set y0 (fa-get afa i 2))
@@ -932,7 +981,7 @@
           (nz-nfc tt 0 (cells-len tt) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
           (ledger-set-text ledger lr t0 (- (cells-len text) t0))
           (set rows (+ rows 1))
-          (set i j)))))
+          (set i j)))))))
     (return rows)))
 
 (defn ^I32 ar-tag-apply [^:mut ^Cells nodes ^I32 n ^I32 allocr ^I32 suspect ^I32 onlyc ^I32 lowc ^I32 conf]
@@ -968,6 +1017,7 @@
         ^:mut ^I32 cy 0
         ^:mut ^I32 total 0
         ^:mut ^I32 nocr 0
+        ^:mut ^I32 nhid 0
         ^:mut ^I32 nsus 0
         ^:mut ^I32 nonly 0
         ^:mut ^I32 nlow 0
@@ -995,6 +1045,7 @@
                 (if (== inl 1)
                   (do (set total 0)
                       (set nocr 0)
+                      (set nhid 0)
                       (set nsus 0)
                       (set nonly 0)
                       (set nlow 0)
@@ -1012,6 +1063,7 @@
                                           (do (set total (+ total 1))
                                               (if (== (cells-at fv (+ (* w 8) 1)) (sr-ocr))
                                                 (do (set nocr (+ nocr 1))
+                                                    (if (and (>= (cells-at fv (+ (* w 8) 2)) 300) (< (cells-at fv (+ (* w 8) 2)) 400)) (set nhid (+ nhid 1)))
                                                     (set csum (+ csum (cells-at fv (+ (* w 8) 3))))
                                                     (if (!= (bit-and (cells-at fv (+ (* w 8) 4)) (fl-text-layer-suspect)) 0) (set nsus (+ nsus 1)))
                                                     (if (!= (bit-and (cells-at fv (+ (* w 8) 4)) (fl-ocr-only)) 0) (set nonly (+ nonly 1)))
@@ -1024,7 +1076,9 @@
                             (set conf -1)
                             (if (== nocr total)
                               (do (set allocr 1)
-                                  (set conf (quot csum nocr))))
+                                  (set conf (quot csum nocr))
+                                  (comment "words a hidden layer's rows (block 300) gave to OCR keep the layer's box and line: the block stays `text` too (P7.6)")
+                                  (if (== nhid nocr) (set allocr 2))))
                             (set suspect 0)
                             (if (> nsus 0) (set suspect 1))
                             (set onlyc 0)

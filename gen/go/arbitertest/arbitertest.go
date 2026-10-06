@@ -57,7 +57,7 @@ func atRule(nt int32, no int32, nh int32, font int32, simfold int32, garbage int
 func TestEveryRuleDecidesWhatItsNumberSays(emonT *testing.T) {
 	// text only: the identity; a hidden word only: the text layer's too
 	port.AssertEq(emonT, atRule(2, 0, 0, 1000, -1, 0, -1, -1, 0, 1), 101, "a sole text-layer candidate")
-	port.AssertEq(emonT, atRule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 102, "a sole hidden-text candidate")
+	port.AssertEq(emonT, atRule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 301, "a sole hidden-text candidate (P7.6's row 301 now says it first)")
 	// the contract: a healthy font, no bad glyph, OCR present
 	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1), 110, "OCR agrees")
 	port.AssertEq(emonT, atRule(1, 1, 0, 1000, 500, 0, 1000, 900, 0, 1), 111, "OCR differs")
@@ -118,8 +118,8 @@ func TestTheRowsSayWhatTheySet(emonT *testing.T) {
 	port.AssertEq(emonT, fuserules.FrOrder(4), 100, "then the core")
 	port.AssertEq(emonT, fuserules.FrOrder(5), -1, "and no more")
 	var i int32 = 0
-	for i < 29 {
-		port.AssertThat(emonT, ((fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 200)) || (fuserules.FrBlock(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400")
+	for i < 40 {
+		port.AssertThat(emonT, ((fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 200)) || ((fuserules.FrBlock(i) == 300) || (fuserules.FrBlock(i) == 400)), "every row of P7.3, P7.5, P7.6 and P7.7 is in block 100, 200, 300 or 400")
 		i += 1
 	}
 }

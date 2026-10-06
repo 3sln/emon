@@ -109,8 +109,33 @@ public final class Fuserules {
         // defence 5 (P7.7): 1 when the group lies in a seal, stamp or signature candidate (`emon.sealmark`'s `sm-find` flagged it `plg-in-seal`: every visible text-layer word of the group is the candidate's, or it is an OCR-only group inside one), else 0
         return 25;
     }
+    // P7.6's columns (`emon.hidden`'s `hx-fill`), numbered from 32 so that no other item's columns move them; it reads P7.5's `ag-margin` (the lowest engine margin of the group's OCR words), column 35 is not used
+    public static int agHlatin() {
+        // 1 when the group's hidden-text words are in a script the engine reads, else 0
+        return 32;
+    }
+    public static int agHink() {
+        // the mean kin ink (per mille) under the group's hidden-text words; -1 when none was measured
+        return 33;
+    }
+    public static int agHinkwin() {
+        // 1 when the hidden words' ink agreement is at least the OCR words', 0 when lower, -1 when either was not measured
+        return 34;
+    }
+    public static int agPageocr() {
+        // for a group of hidden words with no OCR word: the OCR words the page holds; 0 otherwise
+        return 36;
+    }
+    public static int agHsplit() {
+        // 1 when the group's OCR words are MORE than its hidden words (the engine split what the older layer glued), else 0
+        return 37;
+    }
+    public static int agHsame() {
+        // 1 when the group has as many OCR words as hidden words (one segmentation: a disagreement is about the letters of the words, not about where they break), else 0
+        return 38;
+    }
     public static int agCount() {
-        return 26;
+        return 40;
     }
     public static int fcGe() {
         return 0;
@@ -189,6 +214,14 @@ public final class Fuserules {
     }
     public static int fsThree() {
         return 21;
+    }
+    public static int fsHidMargin() {
+        // P7.6: the engine margin under which an OCR word is a close call
+        return 40;
+    }
+    public static int fsHidInk() {
+        // P7.6: the kin ink (per mille) under a hidden word from which there is ink
+        return 41;
     }
     public static int frSetting(int code) {
         // The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).
@@ -271,6 +304,14 @@ public final class Fuserules {
         if (code == 21) {
             return 3;
         }
+        // `hid-margin` (P7.6): an OCR word whose engine margin (per mille) is under this is a close call, and a hidden word may stand against it
+        if (code == 40) {
+            return 600;
+        }
+        // `hid-ink` (P7.6): the kin ink (per mille of a hidden word's box) from which there is ink under it
+        if (code == 41) {
+            return 30;
+        }
         return 0;
     }
     public static int fwNone() {
@@ -286,6 +327,17 @@ public final class Fuserules {
         return 2;
     }
     public static final int[] FR_ROWS = {
+        301, 300, 1, 0, 0, 600, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        311, 300, 2, 0, 0, -1, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, 37, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        310, 300, 1, 0, 0, 950, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        315, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 32, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        316, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 7, 1, 5, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        321, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 21, 1, 40, 34, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        323, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 21, 1, 40, 38, 2, 1, 34, 3, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        322, 300, 2, 0, 0, -1, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        330, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, 33, 0, 41, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        331, 300, 0, 10, 0, 0, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, 33, 1, 41, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        332, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
         101, 100, 1, 0, 0, 900, 0, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
         102, 100, 1, 0, 0, 900, 0, 2, 0, 2, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
         110, 100, 1, 0, 0, 1000, 0, 0, 1, 1, 0, 1, 3, 0, 2, 6, 2, 0, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -409,7 +461,7 @@ public final class Fuserules {
     public static int frDecide(emon.Port.Cells gv) {
         // The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
         // rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-        int n = 29;
+        int n = 40;
         int b = 0;
         int blk = 0;
         int r = 0;

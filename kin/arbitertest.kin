@@ -75,7 +75,7 @@
 (deftest test-every-rule-decides-what-its-number-says
   (comment "text only: the identity; a hidden word only: the text layer's too")
   (assert-eq (at-rule 2 0 0 1000 -1 0 -1 -1 0 1) 101 "a sole text-layer candidate")
-  (assert-eq (at-rule 0 0 3 -1 -1 0 -1 -1 0 0) 102 "a sole hidden-text candidate")
+  (assert-eq (at-rule 0 0 3 -1 -1 0 -1 -1 0 0) 301 "a sole hidden-text candidate (P7.6's row 301 now says it first)")
   (comment "the contract: a healthy font, no bad glyph, OCR present")
   (assert-eq (at-rule 1 1 0 1000 950 0 1000 900 0 1) 110 "OCR agrees")
   (assert-eq (at-rule 1 1 0 1000 500 0 1000 900 0 1) 111 "OCR differs")
@@ -136,7 +136,7 @@
   (assert-eq (fr-order 5) -1 "and no more")
   (let [^:mut ^I32 i 0]
     (while (< i (fr-count 0))
-      (do (assert-that (or (or (== (fr-block i) 100) (== (fr-block i) 200)) (== (fr-block i) 400)) "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400")
+      (do (assert-that (or (or (== (fr-block i) 100) (== (fr-block i) 200)) (or (== (fr-block i) 300) (== (fr-block i) 400))) "every row of P7.3, P7.5, P7.6 and P7.7 is in block 100, 200, 300 or 400")
           (set i (+ i 1))))))
 
 ;; ------------------------------------------------------------- a page by hand

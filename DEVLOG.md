@@ -3079,7 +3079,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   laws only (D311); P7.0's triage rows keep defence 0 (D312); the live sets (SROIE `*.watermark.png`, mapo80 `stamp-ghost`, `emon-live` scans) were not run: the corpus is not in this worktree.
   `scan/`, `scan-color/` and `scan-ovl/` are not fused (they are OCR-only already), so nothing of P7.5 reaches them until P7.4.
 
-- [ ] **P7.6 — `hidden-text` (prior OCR layers)** (SPEC §9.4's hidden row, D155, D208). **Wave 4.** Depends on P7.3.
+- [x] **P7.6 — `hidden-text` (prior OCR layers)** (SPEC §9.4's hidden row, D155, D208). **Wave 4.** Depends on P7.3.
   *Brief*: `kin/hidden.kin` and rows 300-399: `hidden-text` words (and P7.0's `occluded`-under-a-scan words) are
   candidates of their groups; (301) with no OCR on the page, `hidden-text` is the text, `src` hidden-text, confidence 600 (as
   before P7.0, now explicit); (310) hidden and OCR agree (case-folded similarity ≥ `agree-sim`) → the hidden text's code
@@ -3092,6 +3092,28 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   `*.ocr-layer.pdf` live: CER against SROIE's gold ≤ the lower of the two sources'; the D157 corpus files with Tr 3 layers by
   eye.
   *Done when*: the above in this entry.
+  **DONE (D320-D323), on branch `worktree-agent-a3e96401843698ffc` (built on P7.3's, merged after P7.5 and P7.7).** *Built*: `kin/hidden.kin` (`emon.hidden`: `hx-fill`, the group columns of a hidden group) +
+  laws `kin/hiddentest.kin` (7), rows 301, 310, 311, 315, 316, 321, 322, 323, 330, 331, 332 of `fr-rows` (block 300) with columns 32-38 and settings 40, 41 in
+  `kin/fuserules.kin`, the call in `ar-fill`, the hidden branch of `ar-write` and of the flow copy in `kin/arbiter.kin`, `tools/synth/hidden_pdf.clj` and
+  `test/fusion/hidden/` (two derived fixtures), the gate's new checks in `kin/scripts/fusion`. *Departures from the brief*: (1) THE INK COLUMNS ARE ABSENT:
+  the page unit does not measure kin's ink under a text-layer word (P6.3 is not wired into it, D286) and a replay carries no bitmap, so rule 320's "better kin-ink
+  agreement" and 330's "ink under it" cannot be read; `ag-hink` / `ag-hinkwin` are -1 and the rules that ask for them are written and tested by hand but do not
+  fire on a replay (D321); in their place 323 (a close call about letters, one segmentation, ink not known) and 332 (kept low-conf, never dropped on a guess) stand;
+  (2) 311 is new: an agreeing layer that glued what the engine split takes the engine's segmentation; (3) `hid-margin` is 600 (the brief's value is open),
+  the margin column being the engine's own per mille; (4) row 301 is `no OCR word in the group and none on the page`, and 330-332 take the pages OCR read;
+  (5) `ar-remeasure` (P7.3's) keeps a re-measured line's baseline heights and moves only its ends (a hidden layer's words carry baselines a sixth of a point apart; the line
+  re-measured from them tilted and the paragraph builder moved a line: 14 characters of `hidden-older-ocr`'s error); (6) the live `*.ocr-layer.pdf` (SROIE) and the D157 corpus
+  files were not run (no pdfium here: nothing live ran); the two new fixtures' transcripts are DERIVED from `hidden-older-ocr`'s recording (same scan, same pixels,
+  `tools/synth/hidden_pdf.clj` says so), not recorded; (7) rows 321, 322 produce no `text-layer-suspect` flag: a hidden layer is not the text layer.
+  *Measured* (replay, Rust == Go): **`hidden-older-ocr` CER 0.0801 (hidden layer alone) -> 0.0062 fused** (brief: <= 0.02 and below both; the new OCR's text alone is 0.0068
+  by the evidence dump's words, measured by `bb fusion`'s fixtures' method); rules on the 22 documents: 310 x110, 311 x97, 322 x74, 323 x3 (the 190 x200 default that
+  gave every hidden group to the hidden text, low-conf, is gone); `hidden-exact-ocr` fused CER 0.0050 against 0.0516 hidden alone, 0.0068 OCR alone; `hidden-noisy-ocr`
+  0.0099 against 0.1484 and 0.0068 (the layer agrees to nine tenths on many words and keeps its typos: row 310 is the brief's). Block metrics of `hidden-older-ocr`: heading F1
+  0.27 -> 0.64, paragraph F1 0.15 -> 0.75, bow F1 0.48 -> 0.97. `emon-fusion` scoreboard: 36 metrics improved (`pdf/all` CER 0.007556 -> 0.005606, WER 0.0235 -> 0.0087, paragraph R 0.917
+  -> 0.979), the three regressions the first version had (`heading-level-acc` on `pdf/all` and `pdf/textlayer`, `src-ocr-share` on `pdf/textlayer`) are fixed (D323) and the 36 improvements are recorded (`emon-fusion` 427 metrics, none regressed). `bb accuracy` (`emon` and every other entry) unchanged.
+  *Learnt*: (1) a hidden layer's words abut and glue ("onSoil"), and the engine's segmentation is the better one nearly always; (2) the engine's margin alone is a good signal
+  that a word is a close call (six of the eight wrong OCR words of `hidden-older-ocr` had a margin under 0.6 where the hidden word was right; `hid-margin` 600 takes the ones that are one word for one); (3) the case-folded similarity ignores
+  segmentation, so "agree" must be asked together with the word counts.
 
 - [ ] **P7.7 — Seal, stamp and signature placeholders before P8** (SPEC §9.5 defence 5, §10.7; D016, D205). **Wave 4.**
   Depends on P7.3 and P6.4. P8.2/P8.3 later fill name, date and arc text; this item puts the node where it belongs and
@@ -8931,4 +8953,39 @@ over the corpus; the 19 other documents of the fusion set have no seal node). It
 lowered). The three fusion bundles that changed had their digests re-made with `bb fusion-record --digests`; the live recording of the 22 fusion documents was not repeated.
 **Why**: the corpus has three seal documents and one signature; the fixtures add what they lack: a seal with no colour to tell it from the text, a stamp translucent over body text, a cue that is `By:`, and four things that
 look like seals and are not.
+- [ ] **Signed off** (maintainer)
+
+### D320 — Block 300: a hidden-text group is decided by rows of data, before block 100; OCR wins what it reads differently unless its margin is low (P7.6; SPEC 9.4; D155, D208, D286)
+**Decision**: rows 301 (hidden layer, no OCR word in the group and none on the page: the hidden text, 600), 310 (agree, case-folded similarity at least `agree-sim`: the hidden text's
+code points, sources hidden-text and ocr, 950), 311 (agree on the letters but OCR has more words than the hidden layer: OCR's words, the layer glued what the engine split), 315 (they
+disagree and the hidden text is in a script the engine does not read: the hidden text, low-conf), 316 (they disagree and the OCR is implausible: the hidden text, low-conf), 321 (a close
+call: the OCR margin under `hid-margin` 600, the hidden ink agreeing at least as well: the hidden text, low-conf), 323 (the same, one segmentation, the ink not measured: the hidden
+text, low-conf), 322 (they disagree: this run's OCR, its own score). They apply to a group with hidden words and no visible text-layer word; a visible word is block 100's.
+At the merge with P7.5 and P7.7: the margin column is P7.5's `ag-margin` (21, the same `xo-margin` minimum, filled by `ar-fill`); P7.6's own copy (35) is gone and rows 321 and 323 read 21; the hidden columns stay 32-34, 36-38, settings 40, 41, `ag-count` 40; set-aside hidden words are written only by a row that is not a defence's.
+**Why**: the brief's rows, made executable; 311 and 323 are what the fixture `hidden-older-ocr` needed (CER 0.0801 -> 0.0062).
+**Alternatives**: the hidden text on every agreement (the brief's 310 alone: the glued words of `hidden-older-ocr` stayed glued, CER 0.0429 against 0.0062).
+- [ ] **Signed off** (maintainer)
+
+### D321 — The ink under a hidden word is not measured yet: the ink columns are -1 and the ink rows wait (P7.6; D286)
+**Decision**: `ag-hink` (mean `xt-kin-ink` of the hidden words) and `ag-hinkwin` (it against the OCR words' `xo-kin-ink`) are read from `feats` and are -1 until the page unit measures
+them (`nm-feat-text`); rows 321 (with better ink), 330 (kept, low-conf, ink under it) and 331 (ledger `invisible`, no ink under it) are written and tested by hand on those columns, and 332 keeps
+a hidden word with no OCR counterpart, low-conf, when the ink is unknown: **a word is never dropped on a guess**. The set-aside hidden words are ledger rows (`invisible`, conf 900, src
+`hidden-text`; one row a line), `afa` rows of `ea-words` with the text range in cells 8 and 11.
+**Why**: a replay has no bitmap and the page unit does not run P6.3; dropping text on its absence would lose real text (SPEC 9.4's hidden row).
+**Alternatives**: a column from the OCR's own ink (it is the OCR's: no counterpart is the very case).
+- [ ] **Signed off** (maintainer)
+
+### D322 — Derived fixtures and re-derived digests (P7.6; D209, D290)
+**Decision**: `test/fusion/hidden/{hidden-exact-ocr,hidden-noisy-ocr}` (`tools/synth/hidden_pdf.clj`, checked by `bb unit`): `hidden-older-ocr`'s scan with its older layer exact, and one letter in seven
+substituted. Their transcripts are `hidden-older-ocr`'s recording with the input length (unchanged: a substitution keeps the length), NOT recorded live: what an engine reads of a render is a function
+of its pixels and the layer is invisible. They are outside the pooled corpus (the scoreboards' categories do not move). `bb fusion` replays them on both Engines. `test/fusion/replay/DIGESTS.edn`
+changed for `hidden-older-ocr` (the rules) and `tl-broken-unmapped` (`ar-remeasure` keeps the baseline heights): re-derived by replaying their committed transcripts, no engine ran.
+**Why**: the item asks for agreeing and disagreeing layers, and pdfium is not at hand to record.
+**Alternatives**: adding the two to the corpus (every pooled metric of every gate would move).
+- [ ] **Signed off** (maintainer)
+
+### D323 — An OCR word that replaces a hidden word keeps its glyph run, and a block OCR won wholly from a hidden layer stays `text` too (P7.6; D287, D288, D206)
+**Decision**: `ar-emit-ocr` empties a replacement's glyph run only for a visible text-layer word (D287); one that replaces a hidden word keeps the hidden word's, so the style stage still reads its fill (`sfk-color`) and the line keeps the style class of its neighbours: a heading whose words OCR won had lost its class and `heading-level-acc` fell (1.0 to 0.990 on `pdf/all`). `ar-tag`: when every word of a block that OCR won came from a block-300 rule, the block keeps `text` beside `ocr` (its box, lines and segmentation are the older layer's); `src-ocr-share` counts only blocks that are OCR alone, and it is a lower-is-better metric, so the 0.7296 to 0.7335 was a real (if small) rise, not a neutral share, and is removed rather than excused.
+**Why**: the heading stage and the metric are read as they are; the data say where the words stand.
+**Alternatives**: re-baselining (refused); carrying the style through a new column (the glyph run already is it).
 - [ ] **Signed off** (maintainer)

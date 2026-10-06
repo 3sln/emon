@@ -50,7 +50,7 @@ pub(crate) fn at_rule(nt: i32, no: i32, nh: i32, font: i32, simfold: i32, garbag
 fn test_every_rule_decides_what_its_number_says() {
     // text only: the identity; a hidden word only: the text layer's too
     crate::testport::assert_eq(at_rule(2, 0, 0, 1000, -1, 0, -1, -1, 0, 1), 101, "a sole text-layer candidate");
-    crate::testport::assert_eq(at_rule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 102, "a sole hidden-text candidate");
+    crate::testport::assert_eq(at_rule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 301, "a sole hidden-text candidate (P7.6's row 301 now says it first)");
     // the contract: a healthy font, no bad glyph, OCR present
     crate::testport::assert_eq(at_rule(1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1), 110, "OCR agrees");
     crate::testport::assert_eq(at_rule(1, 1, 0, 1000, 500, 0, 1000, 900, 0, 1), 111, "OCR differs");
@@ -111,8 +111,8 @@ fn test_the_rows_say_what_they_set() {
     crate::testport::assert_eq(fr_order(4), 100, "then the core");
     crate::testport::assert_eq(fr_order(5), -1, "and no more");
     let mut i: i32 = 0;
-    while i < 29 {
-        crate::testport::assert_that(((fr_block(i) == 100) || (fr_block(i) == 200)) || (fr_block(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
+    while i < 40 {
+        crate::testport::assert_that(((fr_block(i) == 100) || (fr_block(i) == 200)) || ((fr_block(i) == 300) || (fr_block(i) == 400)), "every row of P7.3, P7.5, P7.6 and P7.7 is in block 100, 200, 300 or 400");
         i += 1;
     }
 }

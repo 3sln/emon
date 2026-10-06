@@ -1,0 +1,356 @@
+;; Laws for `emon.hidden` and rows 300-399 of `emon.fuserules` (P7.6; SPEC 9.4; D155, D208, D286), on every target. Everything is built by hand.
+;;
+;;   * each row of block 300 decides what its number says on the columns that make it hold, and none of them fires for a group with a
+;;     visible text-layer word (the born-digital contract is block 100's);
+;;   * `hx-fill` measures the group columns: script, mean ink, ink against OCR's, the lowest margin, the page's OCR;
+;;   * a hidden layer and OCR that AGREE give the hidden text's code points, its sources both and a higher confidence; they DISAGREE and
+;;     the group is OCR's (a close call with better hidden ink is the hidden word's, low-conf);
+;;   * a hidden word with no OCR counterpart on a page OCR read is kept low-conf when there is ink or it was not measured, and is set aside
+;;     (`invisible`, one ledger row a line, src `hidden-text`) when there is none.
+(ns emon.hiddentest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push]]
+            [emon.evidence :refer [wd-new wd-set ln-new ow-new ow-set fe-new fe-set rf-add gl-set gf-mark
+                                   hd-feat wf-font wf-size wf-style wf-src wf-gfirst wf-gcount wf-wbreak
+                                   xt-font-health xt-kin-ink xo-kin-ink xo-margin xo-conf xo-implausible ea-words ea-owords]]
+            [emon.player :refer [cg-new cg-set cgf-hfirst cgf-hcount cgf-ofirst cgf-ocount cgf-simfold
+                                 fw-count fl-count fv-get fa-count fa-get]]
+            [emon.model :refer [sr-hidden-text dr-invisible ledger-count ledger-reason ledger-text-len]]
+            [emon.fuserules :refer [ag-count ag-nt ag-no ag-nh ag-font ag-simfold ag-plaus ag-hlatin ag-hink ag-hinkwin ag-margin ag-pageocr ag-hsplit ag-hsame
+                                    fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fw-none fw-text fw-ocr]]
+            [emon.hidden :refer [hx-fill]]
+            [emon.arbiter :refer [ar-doc ar-write]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------- the rule table
+
+(defn ^I32 ht-gv [^:mut ^Cells gv ^I32 nt ^I32 no ^I32 nh ^I32 simfold ^I32 plaus ^I32 hlatin ^I32 hink ^I32 hinkwin ^I32 margin ^I32 pageocr]
+  (comment "A hidden group's columns (the others zero, the OCR plausibility `plaus`).")
+  (while (< (cells-len gv) (ag-count))
+    (cells-push gv 0))
+  (cells-set gv (ag-nt) nt)
+  (cells-set gv (ag-no) no)
+  (cells-set gv (ag-nh) nh)
+  (cells-set gv (ag-simfold) simfold)
+  (cells-set gv (ag-plaus) plaus)
+  (cells-set gv (ag-hlatin) hlatin)
+  (cells-set gv (ag-hink) hink)
+  (cells-set gv (ag-hinkwin) hinkwin)
+  (cells-set gv (ag-margin) margin)
+  (cells-set gv (ag-pageocr) pageocr)
+  (return 0))
+
+(defn ^I32 ht-rule-split [^I32 simfold]
+  (comment "a group of one hidden word and two OCR words")
+  (let [^Cells gv (new-cells)]
+    (ht-gv gv 0 2 1 simfold 1000 1 -1 -1 -1 0)
+    (cells-set gv (ag-hsplit) 1)
+    (return (fr-number (fr-decide gv)))))
+
+(defn ^I32 ht-rule-same [^I32 hinkwin ^I32 margin]
+  (comment "a group of one hidden word and one OCR word that disagree")
+  (let [^Cells gv (new-cells)]
+    (ht-gv gv 0 1 1 100 1000 1 -1 hinkwin margin 0)
+    (cells-set gv (ag-hsame) 1)
+    (return (fr-number (fr-decide gv)))))
+
+(defn ^I32 ht-rule [^I32 nt ^I32 no ^I32 nh ^I32 simfold ^I32 plaus ^I32 hlatin ^I32 hink ^I32 hinkwin ^I32 margin ^I32 pageocr]
+  (let [^Cells gv (new-cells)]
+    (ht-gv gv nt no nh simfold plaus hlatin hink hinkwin margin pageocr)
+    (return (fr-number (fr-decide gv)))))
+
+(deftest test-every-hidden-rule-decides-what-its-number-says
+  (comment "args: nt no nh simfold plaus hlatin hink hinkwin margin pageocr")
+  (assert-eq (ht-rule 0 0 2 -1 -1 1 -1 -1 -1 0) 301 "a hidden layer and no OCR on the page")
+  (assert-eq (ht-rule 0 1 2 950 1000 1 -1 -1 -1 0) 310 "hidden and OCR agree")
+  (assert-eq (ht-rule 0 1 2 900 1000 1 -1 -1 -1 0) 310 "exactly `agree-sim`")
+  (assert-eq (ht-rule-split 950) 311 "they agree on the letters but OCR split the hidden word: OCR's segmentation")
+  (assert-eq (ht-rule-split 100) 322 "they disagree: OCR as ever")
+  (assert-eq (ht-rule 0 1 2 899 1000 0 -1 -1 -1 0) 315 "they disagree, in a script the engine does not read")
+  (assert-eq (ht-rule 0 1 2 100 500 1 -1 -1 -1 0) 316 "they disagree and the OCR is implausible")
+  (assert-eq (ht-rule 0 1 2 100 1000 1 -1 -1 100 0) 322 "they disagree: OCR (the hidden ink is not known)")
+  (assert-eq (ht-rule 0 1 2 100 1000 1 300 1 100 0) 321 "a close call (margin 100) and better hidden ink: the hidden word")
+  (assert-eq (ht-rule 0 1 2 100 1000 1 300 0 100 0) 322 "a close call but worse hidden ink: OCR")
+  (assert-eq (ht-rule 0 1 2 100 1000 1 300 1 600 0) 322 "a margin of exactly `hid-margin` is not a close call")
+  (assert-eq (ht-rule-same -1 350) 323 "one segmentation, a close call, no ink measured: the hidden word")
+  (assert-eq (ht-rule-same 1 350) 321 "(with better ink it is 321's)")
+  (assert-eq (ht-rule-same 0 350) 322 "(with worse ink it is OCR's)")
+  (assert-eq (ht-rule-same -1 900) 322 "(a confident OCR word stays)")
+  (assert-eq (ht-rule 0 1 2 100 1000 1 300 1 -1 0) 322 "no margin: not a close call")
+  (assert-eq (ht-rule 0 0 2 -1 -1 1 100 -1 -1 4) 330 "no OCR counterpart on a page OCR read, ink under the word: kept")
+  (assert-eq (ht-rule 0 0 2 -1 -1 1 30 -1 -1 4) 330 "exactly `hid-ink`")
+  (assert-eq (ht-rule 0 0 2 -1 -1 1 29 -1 -1 4) 331 "no ink: invisible")
+  (assert-eq (ht-rule 0 0 2 -1 -1 1 0 -1 -1 4) 331 "no ink at all")
+  (assert-eq (ht-rule 0 0 2 -1 -1 1 -1 -1 -1 4) 332 "ink not measured: kept, never dropped on a guess")
+  (comment "a visible text-layer word is block 100's, whatever hidden words stand beside it")
+  (let [^Cells gv (new-cells)]
+    (ht-gv gv 1 1 0 950 1000 1 -1 -1 -1 0)
+    (cells-set gv (ag-font) 1000)
+    (assert-eq (fr-number (fr-decide gv)) 110 "a visible word and OCR agree: the contract's row, not 310")))
+
+(deftest test-the-hidden-rows-say-what-they-set
+  (let [^Cells gv (new-cells)]
+    (ht-gv gv 0 0 2 -1 -1 1 -1 -1 -1 0)
+    (assert-eq (fr-winner (fr-decide gv)) (fw-text) "301 is the text layer's")
+    (assert-eq (fr-conf (fr-decide gv)) 600 "at confidence 600")
+    (ht-gv gv 0 1 2 950 1000 1 -1 -1 -1 0)
+    (assert-eq (fr-winner (fr-decide gv)) (fw-text) "310 is the hidden text's")
+    (assert-eq (fr-conf (fr-decide gv)) 950 "confidence up")
+    (assert-eq (fr-flags (fr-decide gv)) 0 "unflagged")
+    (ht-gv gv 0 1 2 100 1000 1 -1 -1 -1 0)
+    (assert-eq (fr-winner (fr-decide gv)) (fw-ocr) "322 is OCR's")
+    (assert-eq (fr-conf (fr-decide gv)) -1 "with the OCR's own score for confidence")
+    (ht-gv gv 0 1 2 100 1000 1 300 1 100 0)
+    (assert-eq (fr-flags (fr-decide gv)) 1 "321 is low-conf")
+    (ht-gv gv 0 0 2 -1 -1 1 0 -1 -1 4)
+    (assert-eq (fr-winner (fr-decide gv)) (fw-none) "331 holds the word")
+    (assert-eq (fr-reason (fr-decide gv)) (dr-invisible) "as invisible")))
+
+;; ------------------------------------------------------------- a page by hand
+
+(defn ^I32 ht-text [^:mut ^Cells et ^I32 a ^I32 b]
+  (let [^I32 start (cells-len et)]
+    (cells-push et a)
+    (cells-push et b)
+    (return start)))
+
+(defn ^I32 ht-hword [^:mut ^Cells fw ^:mut ^Cells feats ^:mut ^Cells et ^I32 x0 ^I32 line ^I32 a ^I32 b ^I32 ink]
+  (comment "A HIDDEN-TEXT word of page 1 over x0..x0+900, y 0..1000, of two letters, its feature row (ink -1: not measured). Answers its row.")
+  (let [^I32 ts (ht-text et a b)
+        ^I32 w (wd-new fw 1 x0 0 (+ x0 900) 1000 x0 900 (+ x0 900) 900 0 0 ts 2 line -1 -1)
+        ^I32 f (fe-new feats (ea-words) w)]
+    (wd-set fw w (wf-font) 0)
+    (wd-set fw w (wf-size) 1200)
+    (wd-set fw w (wf-style) 7)
+    (wd-set fw w (wf-gfirst) 3)
+    (wd-set fw w (wf-gcount) 2)
+    (wd-set fw w (wf-src) 2)
+    (wd-set fw w (wf-wbreak) 1)
+    (wd-set fw w (hd-feat) f)
+    (fe-set feats f (xt-kin-ink) ink)
+    (return w)))
+
+(defn ^I32 ht-oword [^:mut ^Cells ow ^:mut ^Cells feats ^:mut ^Cells et ^I32 x0 ^I32 a ^I32 b ^I32 margin ^I32 ink]
+  (comment "An OCR word of page 1 over x0..x0+900, y 100..800, of two letters. Answers its row.")
+  (let [^I32 ts (ht-text et a b)
+        ^I32 w (ow-new ow 1 x0 100 (+ x0 900) 800 x0 800 (+ x0 900) 800 0 0 ts 2 0 888 -1)
+        ^I32 f (fe-new feats (ea-owords) w)]
+    (ow-set ow w 12 2)
+    (ow-set ow w (hd-feat) f)
+    (fe-set feats f (xo-conf) 888)
+    (fe-set feats f (xo-implausible) 0)
+    (fe-set feats f (xo-margin) margin)
+    (fe-set feats f (xo-kin-ink) ink)
+    (return w)))
+
+(defn ^I32 ht-group [^:mut ^Cells cg ^:mut ^Cells refs ^I32 hword ^I32 nh ^I32 oword ^I32 no ^I32 simfold]
+  (comment "A group of page 1 over `nh` hidden words from `hword` and `no` OCR words from `oword` (no visible word); answers it.")
+  (let [^I32 g (cg-new cg 1 0 0 3000 1000 0)
+        ^:mut ^I32 first -1
+        ^:mut ^I32 i 0]
+    (if (> nh 0)
+      (do (set first (rf-add refs (ea-words) hword))
+          (set i 1)
+          (while (< i nh)
+            (do (rf-add refs (ea-words) (+ hword i))
+                (set i (+ i 1))))
+          (cg-set cg g (cgf-hfirst) first)
+          (cg-set cg g (cgf-hcount) nh)))
+    (if (> no 0)
+      (do (set first (rf-add refs (ea-owords) oword))
+          (set i 1)
+          (while (< i no)
+            (do (rf-add refs (ea-owords) (+ oword i))
+                (set i (+ i 1))))
+          (cg-set cg g (cgf-ofirst) first)
+          (cg-set cg g (cgf-ocount) no)))
+    (cg-set cg g (cgf-simfold) simfold)
+    (return g)))
+
+(defn ^I32 ht-glyphs [^:mut ^Cells gl]
+  (let [^:mut ^I32 i 0]
+    (while (< i 320)
+      (do (cells-push gl 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 10)
+      (do (gl-set gl i (gf-mark) -1)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ht-run [^Cells cg ^Cells refs ^Cells ofw ^Cells ofl ^Cells et ^Cells feats ^Cells ow
+                   ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv ^:mut ^Cells fx ^:mut ^Cells afa]
+  (let [^Cells gd (new-cells)
+        ^Cells gv (new-cells)
+        ^Cells w2g (new-cells)
+        ^Cells o2g (new-cells)
+        ^Cells pp (new-cells)
+        ^Cells tw (new-cells)
+        ^Cells tl (new-cells)
+        ^Cells scr (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells orr (new-cells)
+        ^Cells os (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells rc (new-cells)]
+    (comment "P7.5's inputs: a glyph arena of ten rows none of which is in a marked-content span, no marks, no annotations")
+    (ht-glyphs gl)
+    (return (ar-doc cg refs ofw ofl et feats ow ol orr os im ep gl mk an txt 0 rc nfw nfl fv fx afa gd gv w2g o2g pp tw tl scr))))
+
+(deftest test-hx-fill-measures-the-hidden-columns
+  (let [^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells gv (new-cells)
+        ^I32 h0 (ht-hword fw feats et 0 0 104 101 200)
+        ^I32 h1 (ht-hword fw feats et 1000 0 109 111 400)
+        ^I32 h2 (ht-hword fw feats et 2000 0 120 121 -1)
+        ^I32 o0 (ht-oword ow feats et 0 104 101 120 100)
+        ^I32 o1 (ht-oword ow feats et 1000 109 111 80 100)
+        ^I32 g0 (ht-group cg refs h0 2 o0 2 950)
+        ^I32 g1 (ht-group cg refs h2 1 0 0 -1)]
+    (while (< (cells-len gv) (ag-count))
+      (cells-push gv 0))
+    (hx-fill g0 cg refs fw et feats ow gv)
+    (assert-eq (cells-at gv (ag-hlatin)) 1 "Latin hidden words are read by the engine")
+    (assert-eq (cells-at gv (ag-hink)) 300 "the mean ink of the two hidden words")
+    (assert-eq (cells-at gv (ag-hinkwin)) 1 "300 against 100: the hidden ink agrees better")
+    (assert-eq (cells-at gv (ag-margin)) 80 "the lowest margin of the OCR words")
+    (assert-eq (cells-at gv (ag-pageocr)) 0 "a group with OCR has no page count")
+    (assert-eq (cells-at gv (ag-hsplit)) 0 "two words and two words: no split")
+    (assert-eq (cells-at gv (ag-hsame)) 1 "and one segmentation")
+    (hx-fill g1 cg refs fw et feats ow gv)
+    (assert-eq (cells-at gv (ag-hink)) -1 "ink not measured")
+    (assert-eq (cells-at gv (ag-hinkwin)) -1 "so the comparison is not made")
+    (assert-eq (cells-at gv (ag-margin)) -1 "no OCR word: no margin")
+    (assert-eq (cells-at gv (ag-pageocr)) 2 "the page's OCR words, for a group with none")))
+
+(deftest test-a-hidden-script-the-engine-does-not-read
+  (let [^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells gv (new-cells)
+        ^I32 h0 (ht-hword fw feats et 0 0 1488 1489 -1)
+        ^I32 g0 (ht-group cg refs h0 1 0 0 -1)]
+    (while (< (cells-len gv) (ag-count))
+      (cells-push gv 0))
+    (hx-fill g0 cg refs fw et feats ow gv)
+    (assert-eq (cells-at gv (ag-hlatin)) 0 "Hebrew letters: a script the engine lacks")))
+
+;; ------------------------------------------------------------- the fused flow
+
+(defn ^I32 ht-line [^:mut ^Cells fl ^I32 count]
+  (return (ln-new fl 1 0 0 (* count 1000) 1000 0 900 (* count 1000) 900 0 0 0 count)))
+
+(deftest test-a-hidden-layer-and-ocr-that-agree-give-the-hidden-text-both-sources
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^I32 h0 (ht-hword fw feats et 0 0 104 101 -1)
+        ^I32 h1 (ht-hword fw feats et 1000 0 109 111 -1)
+        ^I32 o0 (ht-oword ow feats et 0 72 101 500 -1)
+        ^I32 o1 (ht-oword ow feats et 1000 77 79 990 -1)]
+    (ht-line fl 2)
+    (comment "the first agrees (case folded), the second does not")
+    (ht-group cg refs h0 1 o0 1 950)
+    (ht-group cg refs h1 1 o1 1 200)
+    (assert-eq (ht-run cg refs fw fl et feats ow nfw nfl fv fx afa) 2 "two groups decided")
+    (assert-eq (fw-count nfw) 2 "two words")
+    (assert-eq (fv-get fv 0 2) 310 "agreement: rule 310")
+    (assert-eq (fv-get fv 0 3) 950 "confidence up")
+    (assert-eq (cells-at nfw 11) (cells-at fw 11) "the hidden text's own code points (h, e), not OCR's (H, e)")
+    (assert-eq (cells-at et (cells-at nfw 11)) 104 "the first letter is the hidden word's")
+    (assert-eq (cells-at nfw 23) 6 "src: hidden-text and ocr both")
+    (assert-eq (fv-get fv 1 2) 322 "disagreement: rule 322")
+    (assert-eq (fv-get fv 1 1) 4 "OCR's word")
+    (assert-eq (cells-at et (cells-at nfw (+ 24 11))) 77 "this run's OCR text")
+    (assert-eq (cells-at nfw (+ 24 17)) 3 "the hidden word's glyph run is kept (the style stage reads its fill: D323)")
+    (assert-eq (cells-at nfw (+ 24 1)) 1000 "the hidden word's geometry")))
+
+(deftest test-a-hidden-word-with-no-ink-is-set-aside-as-invisible
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells text (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells tt (new-cells)
+        ^I32 h0 (ht-hword fw feats et 0 0 104 101 -1)
+        ^I32 h1 (ht-hword fw feats et 1000 0 109 111 0)
+        ^I32 h2 (ht-hword fw feats et 2000 0 120 121 500)
+        ^I32 h3 (ht-hword fw feats et 3000 0 98 98 -1)
+        ^I32 o0 (ht-oword ow feats et 0 104 101 500 -1)]
+    (ht-line fl 4)
+    (ht-group cg refs h0 1 o0 1 1000)
+    (ht-group cg refs h1 1 0 0 -1)
+    (ht-group cg refs h2 1 0 0 -1)
+    (ht-group cg refs h3 1 0 0 -1)
+    (assert-eq (ht-run cg refs fw fl et feats ow nfw nfl fv fx afa) 4 "four groups decided")
+    (assert-eq (fw-count nfw) 3 "the word with no ink is not in the flow")
+    (assert-eq (fv-get fv 0 2) 310 "the agreeing one stays")
+    (assert-eq (fv-get fv 1 2) 330 "the one with ink is kept")
+    (assert-eq (fv-get fv 1 4) 1 "low-conf")
+    (assert-eq (fv-get fv 2 2) 332 "the unmeasured one is kept")
+    (assert-eq (cells-at nfw (+ 24 1)) 2000 "in its own place")
+    (assert-eq (fa-count afa) 1 "one word set aside")
+    (assert-eq (fa-get afa 0 5) (dr-invisible) "as invisible")
+    (assert-eq (ar-write afa ow et ledger text tmp tt) 1 "one ledger row")
+    (assert-eq (ledger-count ledger) 1 "in the ledger")
+    (assert-eq (ledger-reason ledger 0) (dr-invisible) "invisible")
+    (assert-eq (ledger-text-len ledger 0) 2 "the word's text")))
+
+(deftest test-a-hidden-layer-on-a-page-the-engine-read-nothing-of-stays
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^I32 h0 (ht-hword fw feats et 0 0 104 101 -1)
+        ^I32 h1 (ht-hword fw feats et 1000 0 109 111 -1)]
+    (ht-line fl 2)
+    (ht-group cg refs h0 1 0 0 -1)
+    (ht-group cg refs h1 1 0 0 -1)
+    (assert-eq (ht-run cg refs fw fl et feats ow nfw nfl fv fx afa) 2 "two groups decided")
+    (assert-eq (fw-count nfw) 2 "both stay")
+    (assert-eq (fv-get fv 0 2) 301 "rule 301")
+    (assert-eq (fv-get fv 0 3) 600 "confidence 600")
+    (assert-eq (cells-at nfw 23) 2 "src hidden-text alone")
+    (assert-eq (fa-count afa) 0 "nothing set aside")))

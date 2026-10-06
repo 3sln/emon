@@ -5,6 +5,7 @@ use crate::emon::artifact::*;
 use crate::emon::evidence::*;
 use crate::emon::fuserules::*;
 use crate::emon::health::*;
+use crate::emon::hidden::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
 use crate::emon::player::*;
@@ -381,6 +382,8 @@ pub(crate) fn ar_fill(g: i32, pageagree: i32, cg: &mut crate::port::Cells, refs:
     crate::port::cells_set(gv, ag_kink(), kink);
     crate::port::cells_set(gv, ag_body(), body);
     crate::port::cells_set(gv, ag_imalpha(), ar_image_alpha(images, epages, cg_get(cg, g, cgf_page()), cg_get(cg, g, cgf_x0()), cg_get(cg, g, cgf_y0()), cg_get(cg, g, cgf_x1()), cg_get(cg, g, cgf_y1())));
+    // P7.6: the columns of a group of hidden-text words (`emon.hidden`)
+    hx_fill(g, cg, refs, ofw, etext, feats, owords, gv);
     return 0;
 }
 pub(crate) fn ar_sources(cg: &mut crate::port::Cells, g: i32) -> i32 {
@@ -447,8 +450,21 @@ pub(crate) fn ar_decide(g: i32, mut cg: &mut crate::port::Cells, refs: &mut crat
     if (win == fw_none()) && ((fr_reason(r) == 0) && ((flags & 128) == 0)) {
         cg_set(cg, g, cgf_flags(), gfl | plg_in_figure());
     }
+    // set aside from the hidden layer (P7.6; no OCR word in the group, not a defence's row): one row a hidden word, its text range in cells 8 and 11
+    if (win == fw_none()) && ((fr_reason(r) > 0) && ((fr_defence(r) == 0) && (cg_get(cg, g, cgf_ocount()) == 0))) {
+        k = 0;
+        while k < cg_get(cg, g, cgf_hcount()) {
+            orow = ar_ref(refs, cg_get(cg, g, cgf_hfirst()) + k, 1);
+            fa = fa_new(afa, cg_get(cg, g, cgf_page()), crate::port::cells_at(ofw, (orow * 24) + 1), crate::port::cells_at(ofw, (orow * 24) + 2), crate::port::cells_at(ofw, (orow * 24) + 3), crate::port::cells_at(ofw, (orow * 24) + 4), fr_reason(r), ea_words(), orow);
+            fa_set(afa, fa, 8, crate::port::cells_at(ofw, (orow * 24) + 11));
+            fa_set(afa, fa, 11, crate::port::cells_at(ofw, (orow * 24) + 12));
+            fa_set(afa, fa, 9, g);
+            fa_set(afa, fa, 10, fr_number(r));
+            k += 1;
+        }
+    }
     // dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
-    if (win == fw_none()) && ((fr_reason(r) > 0) && (fr_defence(r) == 0) && (cg_get(cg, g, cgf_ocount()) > 0)) {
+    if (win == fw_none()) && ((fr_reason(r) > 0) && ((fr_defence(r) == 0) && (cg_get(cg, g, cgf_ocount()) > 0))) {
         o0 = cg_get(cg, g, cgf_ofirst());
         orow = ar_ref(refs, o0, 1);
         fa = fa_new(afa, cg_get(cg, g, cgf_page()), cg_get(cg, g, cgf_x0()), cg_get(cg, g, cgf_y0()), cg_get(cg, g, cgf_x1()), cg_get(cg, g, cgf_y1()), fr_reason(r), ea_owords(), orow);
@@ -517,14 +533,12 @@ pub(crate) fn ar_remeasure(mut nfl: &mut crate::port::Cells, nfw: &mut crate::po
     crate::port::cells_set(nfl, (l * 16) + 2, y0);
     crate::port::cells_set(nfl, (l * 16) + 3, x1);
     crate::port::cells_set(nfl, (l * 16) + 4, y1);
+    // the baseline keeps the line's own heights (a hidden layer's words carry baselines of their own, a sixth of a point apart, and a line
+    // re-measured from them would tilt: P7.6); only its ends move to the first and last word's
     v = crate::port::cells_at(nfw, (first * 24) + 5);
     crate::port::cells_set(nfl, (l * 16) + 5, v);
-    v = crate::port::cells_at(nfw, (first * 24) + 6);
-    crate::port::cells_set(nfl, (l * 16) + 6, v);
     v = crate::port::cells_at(nfw, (lastw * 24) + 7);
     crate::port::cells_set(nfl, (l * 16) + 7, v);
-    v = crate::port::cells_at(nfw, (lastw * 24) + 8);
-    crate::port::cells_set(nfl, (l * 16) + 8, v);
     return 0;
 }
 pub(crate) fn ar_put_fv(mut fv: &mut crate::port::Cells, g: i32, source: i32, number: i32, conf: i32, flags: i32) -> i32 {
@@ -612,8 +626,11 @@ pub(crate) fn ar_emit_ocr(g: i32, cg: &mut crate::port::Cells, refs: &mut crate:
         crate::port::cells_set(nfw, (r * 24) + 12, ow_get(owords, orow, hd_tlen()));
         crate::port::cells_set(nfw, (r * 24) + 14, ow_get(owords, orow, hd_conf()));
         crate::port::cells_set(nfw, (r * 24) + 15, -1);
-        crate::port::cells_set(nfw, (r * 24) + 17, -1);
-        crate::port::cells_set(nfw, (r * 24) + 18, 0);
+        // a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
+        if nt > 0 {
+            crate::port::cells_set(nfw, (r * 24) + 17, -1);
+            crate::port::cells_set(nfw, (r * 24) + 18, 0);
+        }
         crate::port::cells_set(nfw, (r * 24) + 23, srcs);
         if nrep != no {
             orot = ow_get(owords, orow, 9);
@@ -1060,48 +1077,91 @@ pub fn ar_write(afa: &mut crate::port::Cells, owords: &mut crate::port::Cells, e
             i = j;
         } else {
             j = i + 1;
-            w = fa_get(afa, i, 7);
-            line = ow_get(owords, w, hd_line());
-            while (j < n) && ((fa_get(afa, j, 0) == fa_get(afa, i, 0)) && ((fa_get(afa, j, 5) == fa_get(afa, i, 5)) && (ow_get(owords, fa_get(afa, j, 7), hd_line()) == line))) {
-                j += 1;
+            if fa_get(afa, i, 6) == ea_words() {
+                // a hidden word set aside (P7.6): a run of rows of one page whose boxes share a line (the next starts above the first's bottom) is one row, `invisible`, src `hidden-text`
+                while (j < n) && ((fa_get(afa, j, 6) == ea_words()) && ((fa_get(afa, j, 0) == fa_get(afa, i, 0)) && (fa_get(afa, j, 2) < fa_get(afa, i, 4)))) {
+                    j += 1;
+                }
+                x0 = fa_get(afa, i, 1);
+                y0 = fa_get(afa, i, 2);
+                x1 = fa_get(afa, i, 3);
+                y1 = fa_get(afa, i, 4);
+                crate::port::cells_drop(tt, 0);
+                k = i;
+                while k < j {
+                    if k > i {
+                        crate::port::cells_push(tt, 32);
+                    }
+                    if fa_get(afa, k, 1) < x0 {
+                        x0 = fa_get(afa, k, 1);
+                    }
+                    if fa_get(afa, k, 2) < y0 {
+                        y0 = fa_get(afa, k, 2);
+                    }
+                    if fa_get(afa, k, 3) > x1 {
+                        x1 = fa_get(afa, k, 3);
+                    }
+                    if fa_get(afa, k, 4) > y1 {
+                        y1 = fa_get(afa, k, 4);
+                    }
+                    s = fa_get(afa, k, 8);
+                    e = s + fa_get(afa, k, 11);
+                    while s < e {
+                        crate::port::cells_push(tt, crate::port::cells_at(etext, s));
+                        s += 1;
+                    }
+                    k += 1;
+                }
+                lr = ledger_add(ledger, fa_get(afa, i, 5), fa_get(afa, i, 0), x0, y0, x1, y1, 900, sr_hidden_text());
+                t0 = crate::port::cells_len(text);
+                nz_nfc(tt, 0, crate::port::cells_len(tt), text, tmp, nz_flag_ligatures() + nz_flag_radicals());
+                ledger_set_text(ledger, lr, t0, crate::port::cells_len(text) - t0);
+                rows += 1;
+                i = j;
+            } else {
+                w = fa_get(afa, i, 7);
+                line = ow_get(owords, w, hd_line());
+                while (j < n) && ((fa_get(afa, j, 6) == ea_owords()) && ((fa_get(afa, j, 0) == fa_get(afa, i, 0)) && ((fa_get(afa, j, 5) == fa_get(afa, i, 5)) && (ow_get(owords, fa_get(afa, j, 7), hd_line()) == line)))) {
+                    j += 1;
+                }
+                x0 = fa_get(afa, i, 1);
+                y0 = fa_get(afa, i, 2);
+                x1 = fa_get(afa, i, 3);
+                y1 = fa_get(afa, i, 4);
+                crate::port::cells_drop(tt, 0);
+                k = i;
+                while k < j {
+                    if k > i {
+                        crate::port::cells_push(tt, 32);
+                    }
+                    if fa_get(afa, k, 1) < x0 {
+                        x0 = fa_get(afa, k, 1);
+                    }
+                    if fa_get(afa, k, 2) < y0 {
+                        y0 = fa_get(afa, k, 2);
+                    }
+                    if fa_get(afa, k, 3) > x1 {
+                        x1 = fa_get(afa, k, 3);
+                    }
+                    if fa_get(afa, k, 4) > y1 {
+                        y1 = fa_get(afa, k, 4);
+                    }
+                    w = fa_get(afa, k, 7);
+                    s = ow_get(owords, w, hd_tstart());
+                    e = s + ow_get(owords, w, hd_tlen());
+                    while s < e {
+                        crate::port::cells_push(tt, crate::port::cells_at(etext, s));
+                        s += 1;
+                    }
+                    k += 1;
+                }
+                lr = ledger_add(ledger, fa_get(afa, i, 5), fa_get(afa, i, 0), x0, y0, x1, y1, 700, sr_ocr());
+                t0 = crate::port::cells_len(text);
+                nz_nfc(tt, 0, crate::port::cells_len(tt), text, tmp, nz_flag_ligatures() + nz_flag_radicals());
+                ledger_set_text(ledger, lr, t0, crate::port::cells_len(text) - t0);
+                rows += 1;
+                i = j;
             }
-            x0 = fa_get(afa, i, 1);
-            y0 = fa_get(afa, i, 2);
-            x1 = fa_get(afa, i, 3);
-            y1 = fa_get(afa, i, 4);
-            crate::port::cells_drop(tt, 0);
-            k = i;
-            while k < j {
-                if k > i {
-                    crate::port::cells_push(tt, 32);
-                }
-                if fa_get(afa, k, 1) < x0 {
-                    x0 = fa_get(afa, k, 1);
-                }
-                if fa_get(afa, k, 2) < y0 {
-                    y0 = fa_get(afa, k, 2);
-                }
-                if fa_get(afa, k, 3) > x1 {
-                    x1 = fa_get(afa, k, 3);
-                }
-                if fa_get(afa, k, 4) > y1 {
-                    y1 = fa_get(afa, k, 4);
-                }
-                w = fa_get(afa, k, 7);
-                s = ow_get(owords, w, hd_tstart());
-                e = s + ow_get(owords, w, hd_tlen());
-                while s < e {
-                    crate::port::cells_push(tt, crate::port::cells_at(etext, s));
-                    s += 1;
-                }
-                k += 1;
-            }
-            lr = ledger_add(ledger, fa_get(afa, i, 5), fa_get(afa, i, 0), x0, y0, x1, y1, 700, sr_ocr());
-            t0 = crate::port::cells_len(text);
-            nz_nfc(tt, 0, crate::port::cells_len(tt), text, tmp, nz_flag_ligatures() + nz_flag_radicals());
-            ledger_set_text(ledger, lr, t0, crate::port::cells_len(text) - t0);
-            rows += 1;
-            i = j;
         }
     }
     return rows;
@@ -1151,6 +1211,7 @@ pub fn ar_tag(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cel
     let mut cy: i32 = 0;
     let mut total: i32 = 0;
     let mut nocr: i32 = 0;
+    let mut nhid: i32 = 0;
     let mut nsus: i32 = 0;
     let mut nonly: i32 = 0;
     let mut nlow: i32 = 0;
@@ -1188,6 +1249,7 @@ pub fn ar_tag(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cel
             if inl == 1 {
                 total = 0;
                 nocr = 0;
+                nhid = 0;
                 nsus = 0;
                 nonly = 0;
                 nlow = 0;
@@ -1204,6 +1266,9 @@ pub fn ar_tag(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cel
                                 total += 1;
                                 if crate::port::cells_at(fv, (w * 8) + 1) == sr_ocr() {
                                     nocr += 1;
+                                    if (crate::port::cells_at(fv, (w * 8) + 2) >= 300) && (crate::port::cells_at(fv, (w * 8) + 2) < 400) {
+                                        nhid += 1;
+                                    }
                                     csum += crate::port::cells_at(fv, (w * 8) + 3);
                                     if (crate::port::cells_at(fv, (w * 8) + 4) & fl_text_layer_suspect()) != 0 {
                                         nsus += 1;
@@ -1229,6 +1294,10 @@ pub fn ar_tag(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cel
                     if nocr == total {
                         allocr = 1;
                         conf = csum / nocr;
+                        // words a hidden layer's rows (block 300) gave to OCR keep the layer's box and line: the block stays `text` too (P7.6)
+                        if nhid == nocr {
+                            allocr = 2;
+                        }
                     }
                     suspect = 0;
                     if nsus > 0 {

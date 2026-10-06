@@ -140,8 +140,40 @@ func AgSeal() int32 {
 	return 25
 }
 
+// P7.6's columns (`emon.hidden`'s `hx-fill`), numbered from 32 so that no other item's columns move them; it reads P7.5's `ag-margin` (the lowest engine margin of the group's OCR words), column 35 is not used
+
+func AgHlatin() int32 {
+	// 1 when the group's hidden-text words are in a script the engine reads, else 0
+	return 32
+}
+
+func AgHink() int32 {
+	// the mean kin ink (per mille) under the group's hidden-text words; -1 when none was measured
+	return 33
+}
+
+func AgHinkwin() int32 {
+	// 1 when the hidden words' ink agreement is at least the OCR words', 0 when lower, -1 when either was not measured
+	return 34
+}
+
+func AgPageocr() int32 {
+	// for a group of hidden words with no OCR word: the OCR words the page holds; 0 otherwise
+	return 36
+}
+
+func AgHsplit() int32 {
+	// 1 when the group's OCR words are MORE than its hidden words (the engine split what the older layer glued), else 0
+	return 37
+}
+
+func AgHsame() int32 {
+	// 1 when the group has as many OCR words as hidden words (one segmentation: a disagreement is about the letters of the words, not about where they break), else 0
+	return 38
+}
+
 func AgCount() int32 {
-	return 26
+	return 40
 }
 
 func FcGe() int32 {
@@ -248,6 +280,16 @@ func FsThree() int32 {
 	return 21
 }
 
+func FsHidMargin() int32 {
+	// P7.6: the engine margin under which an OCR word is a close call
+	return 40
+}
+
+func FsHidInk() int32 {
+	// P7.6: the kin ink (per mille) under a hidden word from which there is ink
+	return 41
+}
+
 func FrSetting(code int32) int32 {
 	// The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).
 	if code == 0 {
@@ -329,6 +371,14 @@ func FrSetting(code int32) int32 {
 	if code == 21 {
 		return 3
 	}
+	// `hid-margin` (P7.6): an OCR word whose engine margin (per mille) is under this is a close call, and a hidden word may stand against it
+	if code == 40 {
+		return 600
+	}
+	// `hid-ink` (P7.6): the kin ink (per mille of a hidden word's box) from which there is ink under it
+	if code == 41 {
+		return 30
+	}
 	return 0
 }
 
@@ -347,7 +397,18 @@ func FwOcr() int32 {
 	return 2
 }
 
-var FrRows [1044]int32 = [1044]int32{
+var FrRows [1440]int32 = [1440]int32{
+	301, 300, 1, 0, 0, 600, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	311, 300, 2, 0, 0, -1, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, 37, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	310, 300, 1, 0, 0, 950, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	315, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 32, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	316, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 7, 1, 5, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	321, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 21, 1, 40, 34, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	323, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, 21, 1, 40, 38, 2, 1, 34, 3, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	322, 300, 2, 0, 0, -1, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 1, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	330, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, 33, 0, 41, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	331, 300, 0, 10, 0, 0, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, 33, 1, 41, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	332, 300, 1, 0, 1, 500, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 0, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	101, 100, 1, 0, 0, 900, 0, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	102, 100, 1, 0, 0, 900, 0, 2, 0, 2, 0, 1, 1, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	110, 100, 1, 0, 0, 1000, 0, 0, 1, 1, 0, 1, 3, 0, 2, 6, 2, 0, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -486,7 +547,7 @@ func frHolds(row int32, gv *port.Cells) int32 {
 func FrDecide(gv *port.Cells) int32 {
 	// The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
 	// rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-	var n int32 = 29
+	var n int32 = 40
 	var b int32 = 0
 	var blk int32 = 0
 	var r int32 = 0

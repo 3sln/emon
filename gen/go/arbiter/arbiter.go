@@ -8,6 +8,7 @@ import (
 	"emon/evidence"
 	"emon/fuserules"
 	"emon/health"
+	"emon/hidden"
 	"emon/model"
 	"emon/normalize"
 	"emon/player"
@@ -396,6 +397,8 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 	port.CellsSet(gv, fuserules.AgKink(), kink)
 	port.CellsSet(gv, fuserules.AgBody(), body)
 	port.CellsSet(gv, fuserules.AgImalpha(), arImageAlpha(images, epages, player.CgGet(cg, g, player.CgfPage()), player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1())))
+	// P7.6: the columns of a group of hidden-text words (`emon.hidden`)
+	hidden.HxFill(g, cg, refs, ofw, etext, feats, owords, gv)
 	return 0
 }
 
@@ -464,8 +467,21 @@ func arDecide(g int32, cg *port.Cells, refs *port.Cells, ofw *port.Cells, etext 
 	if (win == fuserules.FwNone()) && ((fuserules.FrReason(r) == 0) && ((flags & 128) == 0)) {
 		player.CgSet(cg, g, player.CgfFlags(), gfl|player.PlgInFigure())
 	}
+	// set aside from the hidden layer (P7.6; no OCR word in the group, not a defence's row): one row a hidden word, its text range in cells 8 and 11
+	if (win == fuserules.FwNone()) && ((fuserules.FrReason(r) > 0) && ((fuserules.FrDefence(r) == 0) && (player.CgGet(cg, g, player.CgfOcount()) == 0))) {
+		k = 0
+		for k < player.CgGet(cg, g, player.CgfHcount()) {
+			orow = arRef(refs, player.CgGet(cg, g, player.CgfHfirst())+k, 1)
+			fa = player.FaNew(afa, player.CgGet(cg, g, player.CgfPage()), port.CellsAt(ofw, (orow*24)+1), port.CellsAt(ofw, (orow*24)+2), port.CellsAt(ofw, (orow*24)+3), port.CellsAt(ofw, (orow*24)+4), fuserules.FrReason(r), evidence.EaWords(), orow)
+			player.FaSet(afa, fa, 8, port.CellsAt(ofw, (orow*24)+11))
+			player.FaSet(afa, fa, 11, port.CellsAt(ofw, (orow*24)+12))
+			player.FaSet(afa, fa, 9, g)
+			player.FaSet(afa, fa, 10, fuserules.FrNumber(r))
+			k += 1
+		}
+	}
 	// dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
-	if (win == fuserules.FwNone()) && ((fuserules.FrReason(r) > 0) && (fuserules.FrDefence(r) == 0) && (player.CgGet(cg, g, player.CgfOcount()) > 0)) {
+	if (win == fuserules.FwNone()) && ((fuserules.FrReason(r) > 0) && ((fuserules.FrDefence(r) == 0) && (player.CgGet(cg, g, player.CgfOcount()) > 0))) {
 		o0 = player.CgGet(cg, g, player.CgfOfirst())
 		orow = arRef(refs, o0, 1)
 		fa = player.FaNew(afa, player.CgGet(cg, g, player.CgfPage()), player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1()), fuserules.FrReason(r), evidence.EaOwords(), orow)
@@ -535,14 +551,12 @@ func arRemeasure(nfl *port.Cells, nfw *port.Cells, l int32, first int32, cnt int
 	port.CellsSet(nfl, (l*16)+2, y0)
 	port.CellsSet(nfl, (l*16)+3, x1)
 	port.CellsSet(nfl, (l*16)+4, y1)
+	// the baseline keeps the line's own heights (a hidden layer's words carry baselines of their own, a sixth of a point apart, and a line
+	// re-measured from them would tilt: P7.6); only its ends move to the first and last word's
 	v = port.CellsAt(nfw, (first*24)+5)
 	port.CellsSet(nfl, (l*16)+5, v)
-	v = port.CellsAt(nfw, (first*24)+6)
-	port.CellsSet(nfl, (l*16)+6, v)
 	v = port.CellsAt(nfw, (lastw*24)+7)
 	port.CellsSet(nfl, (l*16)+7, v)
-	v = port.CellsAt(nfw, (lastw*24)+8)
-	port.CellsSet(nfl, (l*16)+8, v)
 	return 0
 }
 
@@ -633,8 +647,11 @@ func arEmitOcr(g int32, cg *port.Cells, refs *port.Cells, ofw *port.Cells, etext
 		port.CellsSet(nfw, (r*24)+12, evidence.OwGet(owords, orow, evidence.HdTlen()))
 		port.CellsSet(nfw, (r*24)+14, evidence.OwGet(owords, orow, evidence.HdConf()))
 		port.CellsSet(nfw, (r*24)+15, -1)
-		port.CellsSet(nfw, (r*24)+17, -1)
-		port.CellsSet(nfw, (r*24)+18, 0)
+		// a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
+		if nt > 0 {
+			port.CellsSet(nfw, (r*24)+17, -1)
+			port.CellsSet(nfw, (r*24)+18, 0)
+		}
 		port.CellsSet(nfw, (r*24)+23, srcs)
 		if nrep != no {
 			orot = evidence.OwGet(owords, orow, 9)
@@ -1089,48 +1106,91 @@ func ArWrite(afa *port.Cells, owords *port.Cells, etext *port.Cells, ledger *por
 			i = j
 		} else {
 			j = i + 1
-			w = player.FaGet(afa, i, 7)
-			line = evidence.OwGet(owords, w, evidence.HdLine())
-			for (j < n) && ((player.FaGet(afa, j, 0) == player.FaGet(afa, i, 0)) && ((player.FaGet(afa, j, 5) == player.FaGet(afa, i, 5)) && (evidence.OwGet(owords, player.FaGet(afa, j, 7), evidence.HdLine()) == line))) {
-				j += 1
+			if player.FaGet(afa, i, 6) == evidence.EaWords() {
+				// a hidden word set aside (P7.6): a run of rows of one page whose boxes share a line (the next starts above the first's bottom) is one row, `invisible`, src `hidden-text`
+				for (j < n) && ((player.FaGet(afa, j, 6) == evidence.EaWords()) && ((player.FaGet(afa, j, 0) == player.FaGet(afa, i, 0)) && (player.FaGet(afa, j, 2) < player.FaGet(afa, i, 4)))) {
+					j += 1
+				}
+				x0 = player.FaGet(afa, i, 1)
+				y0 = player.FaGet(afa, i, 2)
+				x1 = player.FaGet(afa, i, 3)
+				y1 = player.FaGet(afa, i, 4)
+				port.CellsDrop(tt, 0)
+				k = i
+				for k < j {
+					if k > i {
+						port.CellsPush(tt, 32)
+					}
+					if player.FaGet(afa, k, 1) < x0 {
+						x0 = player.FaGet(afa, k, 1)
+					}
+					if player.FaGet(afa, k, 2) < y0 {
+						y0 = player.FaGet(afa, k, 2)
+					}
+					if player.FaGet(afa, k, 3) > x1 {
+						x1 = player.FaGet(afa, k, 3)
+					}
+					if player.FaGet(afa, k, 4) > y1 {
+						y1 = player.FaGet(afa, k, 4)
+					}
+					s = player.FaGet(afa, k, 8)
+					e = s + player.FaGet(afa, k, 11)
+					for s < e {
+						port.CellsPush(tt, port.CellsAt(etext, s))
+						s += 1
+					}
+					k += 1
+				}
+				lr = model.LedgerAdd(ledger, player.FaGet(afa, i, 5), player.FaGet(afa, i, 0), x0, y0, x1, y1, 900, model.SrHiddenText())
+				t0 = port.CellsLen(text)
+				normalize.NzNfc(tt, 0, port.CellsLen(tt), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+				model.LedgerSetText(ledger, lr, t0, port.CellsLen(text)-t0)
+				rows += 1
+				i = j
+			} else {
+				w = player.FaGet(afa, i, 7)
+				line = evidence.OwGet(owords, w, evidence.HdLine())
+				for (j < n) && ((player.FaGet(afa, j, 6) == evidence.EaOwords()) && ((player.FaGet(afa, j, 0) == player.FaGet(afa, i, 0)) && ((player.FaGet(afa, j, 5) == player.FaGet(afa, i, 5)) && (evidence.OwGet(owords, player.FaGet(afa, j, 7), evidence.HdLine()) == line)))) {
+					j += 1
+				}
+				x0 = player.FaGet(afa, i, 1)
+				y0 = player.FaGet(afa, i, 2)
+				x1 = player.FaGet(afa, i, 3)
+				y1 = player.FaGet(afa, i, 4)
+				port.CellsDrop(tt, 0)
+				k = i
+				for k < j {
+					if k > i {
+						port.CellsPush(tt, 32)
+					}
+					if player.FaGet(afa, k, 1) < x0 {
+						x0 = player.FaGet(afa, k, 1)
+					}
+					if player.FaGet(afa, k, 2) < y0 {
+						y0 = player.FaGet(afa, k, 2)
+					}
+					if player.FaGet(afa, k, 3) > x1 {
+						x1 = player.FaGet(afa, k, 3)
+					}
+					if player.FaGet(afa, k, 4) > y1 {
+						y1 = player.FaGet(afa, k, 4)
+					}
+					w = player.FaGet(afa, k, 7)
+					s = evidence.OwGet(owords, w, evidence.HdTstart())
+					e = s + evidence.OwGet(owords, w, evidence.HdTlen())
+					for s < e {
+						port.CellsPush(tt, port.CellsAt(etext, s))
+						s += 1
+					}
+					k += 1
+				}
+				lr = model.LedgerAdd(ledger, player.FaGet(afa, i, 5), player.FaGet(afa, i, 0), x0, y0, x1, y1, 700, model.SrOcr())
+				t0 = port.CellsLen(text)
+				normalize.NzNfc(tt, 0, port.CellsLen(tt), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+				model.LedgerSetText(ledger, lr, t0, port.CellsLen(text)-t0)
+				rows += 1
+				i = j
 			}
-			x0 = player.FaGet(afa, i, 1)
-			y0 = player.FaGet(afa, i, 2)
-			x1 = player.FaGet(afa, i, 3)
-			y1 = player.FaGet(afa, i, 4)
-			port.CellsDrop(tt, 0)
-			k = i
-			for k < j {
-				if k > i {
-					port.CellsPush(tt, 32)
-				}
-				if player.FaGet(afa, k, 1) < x0 {
-					x0 = player.FaGet(afa, k, 1)
-				}
-				if player.FaGet(afa, k, 2) < y0 {
-					y0 = player.FaGet(afa, k, 2)
-				}
-				if player.FaGet(afa, k, 3) > x1 {
-					x1 = player.FaGet(afa, k, 3)
-				}
-				if player.FaGet(afa, k, 4) > y1 {
-					y1 = player.FaGet(afa, k, 4)
-				}
-				w = player.FaGet(afa, k, 7)
-				s = evidence.OwGet(owords, w, evidence.HdTstart())
-				e = s + evidence.OwGet(owords, w, evidence.HdTlen())
-				for s < e {
-					port.CellsPush(tt, port.CellsAt(etext, s))
-					s += 1
-				}
-				k += 1
-			}
-			lr = model.LedgerAdd(ledger, player.FaGet(afa, i, 5), player.FaGet(afa, i, 0), x0, y0, x1, y1, 700, model.SrOcr())
-			t0 = port.CellsLen(text)
-			normalize.NzNfc(tt, 0, port.CellsLen(tt), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
-			model.LedgerSetText(ledger, lr, t0, port.CellsLen(text)-t0)
-			rows += 1
-			i = j
 		}
 	}
 	return rows
@@ -1182,6 +1242,7 @@ func ArTag(nodes *port.Cells, regions *port.Cells, nfw *port.Cells, fv *port.Cel
 	var cy int32 = 0
 	var total int32 = 0
 	var nocr int32 = 0
+	var nhid int32 = 0
 	var nsus int32 = 0
 	var nonly int32 = 0
 	var nlow int32 = 0
@@ -1219,6 +1280,7 @@ func ArTag(nodes *port.Cells, regions *port.Cells, nfw *port.Cells, fv *port.Cel
 			if inl == 1 {
 				total = 0
 				nocr = 0
+				nhid = 0
 				nsus = 0
 				nonly = 0
 				nlow = 0
@@ -1235,6 +1297,9 @@ func ArTag(nodes *port.Cells, regions *port.Cells, nfw *port.Cells, fv *port.Cel
 								total += 1
 								if port.CellsAt(fv, (w*8)+1) == model.SrOcr() {
 									nocr += 1
+									if (port.CellsAt(fv, (w*8)+2) >= 300) && (port.CellsAt(fv, (w*8)+2) < 400) {
+										nhid += 1
+									}
 									csum += port.CellsAt(fv, (w*8)+3)
 									if (port.CellsAt(fv, (w*8)+4) & model.FlTextLayerSuspect()) != 0 {
 										nsus += 1
@@ -1260,6 +1325,10 @@ func ArTag(nodes *port.Cells, regions *port.Cells, nfw *port.Cells, fv *port.Cel
 					if nocr == total {
 						allocr = 1
 						conf = csum / nocr
+						// words a hidden layer's rows (block 300) gave to OCR keep the layer's box and line: the block stays `text` too (P7.6)
+						if nhid == nocr {
+							allocr = 2
+						}
 					}
 					suspect = 0
 					if nsus > 0 {

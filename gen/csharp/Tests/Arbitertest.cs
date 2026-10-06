@@ -47,7 +47,7 @@ public static class Arbitertest {
     public static void TestEveryRuleDecidesWhatItsNumberSays() {
         // text only: the identity; a hidden word only: the text layer's too
         emon.Testport.AssertEq(AtRule(2, 0, 0, 1000, -1, 0, -1, -1, 0, 1), 101, "a sole text-layer candidate");
-        emon.Testport.AssertEq(AtRule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 102, "a sole hidden-text candidate");
+        emon.Testport.AssertEq(AtRule(0, 0, 3, -1, -1, 0, -1, -1, 0, 0), 301, "a sole hidden-text candidate (P7.6's row 301 now says it first)");
         // the contract: a healthy font, no bad glyph, OCR present
         emon.Testport.AssertEq(AtRule(1, 1, 0, 1000, 950, 0, 1000, 900, 0, 1), 110, "OCR agrees");
         emon.Testport.AssertEq(AtRule(1, 1, 0, 1000, 500, 0, 1000, 900, 0, 1), 111, "OCR differs");
@@ -108,8 +108,8 @@ public static class Arbitertest {
         emon.Testport.AssertEq(Fuserules.FrOrder(4), 100, "then the core");
         emon.Testport.AssertEq(Fuserules.FrOrder(5), -1, "and no more");
         int i = 0;
-        while (i < 29) {
-            emon.Testport.AssertThat(((Fuserules.FrBlock(i) == 100) || (Fuserules.FrBlock(i) == 200)) || (Fuserules.FrBlock(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
+        while (i < 40) {
+            emon.Testport.AssertThat(((Fuserules.FrBlock(i) == 100) || (Fuserules.FrBlock(i) == 200)) || ((Fuserules.FrBlock(i) == 300) || (Fuserules.FrBlock(i) == 400)), "every row of P7.3, P7.5, P7.6 and P7.7 is in block 100, 200, 300 or 400");
             i += 1;
         }
     }
