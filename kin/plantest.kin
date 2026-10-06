@@ -172,7 +172,8 @@
       (assert-eq (an-arg ans at3 5) 1 "one frame"))
     (let [^Cells ans2 (new-cells)]
       (an-decode-img ans2 4 32 16 1 1)
-      (assert-eq (an-arg ans2 (an-find ans2 4) 4) 1 "bilevel")
+      (let [^I32 at4a (an-find ans2 4)]
+        (assert-eq (an-arg ans2 at4a 4) 1 "bilevel"))
       (assert-eq (rec-len ans2 0) 10 "the header and seven fields"))))
 
 (deftest test-answers-carry-the-id-and-a-status

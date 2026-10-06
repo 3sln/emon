@@ -153,7 +153,8 @@ public final class Plantest {
         emon.Testport.assertEq(Plan.anArg(ans, at3, 5), 1, "one frame");
         emon.Port.Cells ans2 = emon.Port.newCells();
         Plan.anDecodeImg(ans2, 4, 32, 16, 1, 1);
-        emon.Testport.assertEq(Plan.anArg(ans2, Plan.anFind(ans2, 4), 4), 1, "bilevel");
+        int at4a = Plan.anFind(ans2, 4);
+        emon.Testport.assertEq(Plan.anArg(ans2, at4a, 4), 1, "bilevel");
         emon.Testport.assertEq(Plan.recLen(ans2, 0), 10, "the header and seven fields");
     }
     public static void testAnswersCarryTheIdAndAStatus() {

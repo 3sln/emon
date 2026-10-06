@@ -161,7 +161,8 @@ public static class Plantest {
         emon.Testport.AssertEq(Plan.AnArg(ans, at3, 5), 1, "one frame");
         emon.Port.Cells ans2 = emon.Port.NewCells();
         Plan.AnDecodeImg(ans2, 4, 32, 16, 1, 1);
-        emon.Testport.AssertEq(Plan.AnArg(ans2, Plan.AnFind(ans2, 4), 4), 1, "bilevel");
+        int at4a = Plan.AnFind(ans2, 4);
+        emon.Testport.AssertEq(Plan.AnArg(ans2, at4a, 4), 1, "bilevel");
         emon.Testport.AssertEq(Plan.RecLen(ans2, 0), 10, "the header and seven fields");
     }
     [Xunit.Fact]

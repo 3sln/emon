@@ -28,6 +28,7 @@
 ;;   rows (tab separated; # a comment)
 ;;   P name file obj pv-code                                the JPEG passthrough verdict (`pv`)
 ;;   D name file obj orient crop fill w h channels alpha sha the decoded pixels (crop: `-` or bx0,by0,bx1,by1,cx0,cy0,cx1,cy1,whole)
+;;   H name file obj orient crop fill w h channels alpha sha   as D, for an image the HOST decodes (a codec): kin's own samples cannot make it
 ;;   R name file obj filter w h comps bpc k cols rows cflags where off len gwhere goff glen sha gsha   the decode-img request
 ;;     (the codec's own bytes: where 0 = the input's span, -2 = kin's payload; the globals are always the payload, -2)
 ;;   O a b c d code                                         a placement matrix (x1000, integers) and its orientation
@@ -357,7 +358,7 @@
 (defn d-row!
   "A decoded-pixels row: the expected oriented, cut pixels hashed; also a PNG for eyes. `crop` is nil or
   {:box :clip :whole}; `fill` the stencil colour."
-  [name file obj spec & {:keys [orient crop view]}]
+  [name file obj spec & {:keys [orient crop view kind]}]
   (let [px (expected-rgba spec)
         orient (or orient 0)
         oriented (orient-pixels px orient)
@@ -372,11 +373,15 @@
       (fs/write-bytes raw bs)
       (sh! "magick" "-size" (str (count (first cut)) "x" (count cut)) "-depth" "8" (str "rgba:" raw) "-strip" (path "png/" name ".png"))
       (fs/delete raw))
-    (row! "D" name file obj orient
+    (row! (or kind "D") name file obj orient
           (if crop (str/join "," (concat (:box crop) (:clip crop) [(:whole crop)])) "-")
           (if fill (+ (* 65536 (fill 0)) (* 256 (fill 1)) (fill 2)) 0)
           (count (first cut)) (count cut) chs (if has-alpha 1 0) (sha256-hex bs))
     px))
+
+(defn h-row!
+  "A row of expected pixels for an image the HOST decodes (kind H: kin's own samples cannot make them, so `kin/pdfimagetest.kin` skips it; `kin/scripts/asset-check` holds the Engine to it)."
+  [& args] (apply d-row! (concat args [:kind "H"])))
 
 (defn poppler-check!
   "pdfimages -png of the file's image must equal the expected colour (alpha ignored: poppler writes masks beside)."
@@ -851,20 +856,20 @@
       (let [data (gs-ccitt rows w enc)
             file (str nm ".pdf")]
         (image-pdf file (gray1-dict w h "CCITTFaxDecode" (str "/DecodeParms<</Columns " w "/Rows " h (when (seq parms) (str parms)) ">>")) data)
-        (let [px (d-row! nm file 5 spec)]
+        (let [px (h-row! nm file 5 spec)]
           ;; poppler (its own CCITT decoder) must read what ghostscript wrote, to the very samples
           (poppler-check! file px))))
     ;; an image mask: the same, 0 paints (the default /Decode [0 1]), in the stencil colour
     (let [data (gs-ccitt rows w {:k -1 :align true})
           mspec {:w w :h h :bpc 1 :imask? true :fill [0 0 0] :rows rows}]
       (image-pdf "ccitt-g4-mask.pdf" (str "/Type/XObject/Subtype/Image/Width " w "/Height " h "/ImageMask true/BitsPerComponent 1/Filter/CCITTFaxDecode/DecodeParms<</K -1/Columns " w "/Rows " h "/EncodedByteAlign true>>") data)
-      (d-row! "ccitt-g4-mask" "ccitt-g4-mask.pdf" 5 mspec))
+      (h-row! "ccitt-g4-mask" "ccitt-g4-mask.pdf" 5 mspec))
     ;; Columns that are not the image's Width: the stream is `Columns` wide and the image is cut or padded (white) to its size
     (let [cw 64
           cut (mapv (fn [r] (vec (take cw r))) rows)
           data64 (gs-ccitt cut cw {:k -1})]
       (image-pdf "ccitt-g4-narrow.pdf" (gray1-dict 70 h "CCITTFaxDecode" (str "/DecodeParms<</K -1/Columns " cw "/Rows " h ">>")) data64)
-      (d-row! "ccitt-g4-narrow" "ccitt-g4-narrow.pdf" 5 {:w 70 :h h :bpc 1 :cs :gray :rows (mapv (fn [r] (into r (repeat 6 1))) cut)}))
+      (h-row! "ccitt-g4-narrow" "ccitt-g4-narrow.pdf" 5 {:w 70 :h h :bpc 1 :cs :gray :rows (mapv (fn [r] (into r (repeat 6 1))) cut)}))
     ;; the request each plans: filter 4, w h comps bpc k columns rows cflags, the input's own span, no globals (R rows)
     (doseq [[nm enc parms] cases :let [file (str nm ".pdf") data (gs-ccitt rows w enc)
                                        fl (+ (if (:black-is-1 enc) 1 0) (if (:align enc) 2 0) (if (:eol enc) 4 0) (if (false? (:eob enc)) 8 0))]]
@@ -901,7 +906,7 @@
     (doseq [[nm file spec data bpc] [["jpx" "jpx.pdf" {:w 16 :h 12 :bpc 8 :cs :rgb :rows rows} j2k 8]
                                      ["jpx-jp2" "jpx-jp2.pdf" {:w 16 :h 12 :bpc 8 :cs :rgb :rows rows} jp2 8]
                                      ["jpx-gray" "jpx-gray.pdf" {:w 16 :h 12 :bpc 8 :cs :gray :rows grows} gj2k 8]]]
-      (let [px (d-row! nm file 5 spec)]
+      (let [px (h-row! nm file 5 spec)]
         (poppler-check! file px))
       (row! "R" nm file 5 2 16 12 0 bpc 0 0 0 0 0 (stream-off file) (alength ^bytes data) -1 0 0 "-" "-"))))
 
@@ -918,7 +923,7 @@
         spec {:w w :h h :bpc 1 :cs :gray :rows inv}
         dict (gray1-dict w h "JBIG2Decode" "")]
     (image-pdf "jbig2.pdf" dict whole)
-    (let [px (d-row! "jbig2" "jbig2.pdf" 5 spec)]
+    (let [px (h-row! "jbig2" "jbig2.pdf" 5 spec)]
       (poppler-check! "jbig2.pdf" px))
     (row! "R" "jbig2" "jbig2.pdf" 5 3 w h 0 1 0 0 0 0 0 (stream-off "jbig2.pdf") (alength ^bytes whole) -1 0 0 "-" "-")
     ;; the globals: a global symbol dictionary (empty: no encoder here makes symbols) in the JBIG2Globals stream, the page's segments the
@@ -927,7 +932,7 @@
           img (cat-bytes (jbig2-page-info 1 w h) (jbig2-mmr-region 2 w h g4))]
       (image-pdf "jbig2-globals.pdf" (gray1-dict w h "JBIG2Decode" "/DecodeParms<</JBIG2Globals 6 0 R>>") img
                  :extra {6 {:dict "" :stream glob}})
-      (let [px (d-row! "jbig2-globals" "jbig2-globals.pdf" 5 spec)]
+      (let [px (h-row! "jbig2-globals" "jbig2-globals.pdf" 5 spec)]
         (poppler-check! "jbig2-globals.pdf" px))
       (row! "R" "jbig2-globals" "jbig2-globals.pdf" 5 3 w h 0 1 0 0 0 0 0 (stream-off "jbig2-globals.pdf") (alength ^bytes img) -2 0 (alength ^bytes glob) "-" (sha256-hex glob)))))
 

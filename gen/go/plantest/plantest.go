@@ -167,7 +167,8 @@ func TestADecodeImgRequestIsFoundByItsIdAndAnsweredAsADecode(emonT *testing.T) {
 	port.AssertEq(emonT, plan.AnArg(ans, at3, 5), 1, "one frame")
 	var ans2 *port.Cells = port.NewCells()
 	plan.AnDecodeImg(ans2, 4, 32, 16, 1, 1)
-	port.AssertEq(emonT, plan.AnArg(ans2, plan.AnFind(ans2, 4), 4), 1, "bilevel")
+	var at4a int32 = plan.AnFind(ans2, 4)
+	port.AssertEq(emonT, plan.AnArg(ans2, at4a, 4), 1, "bilevel")
 	port.AssertEq(emonT, plan.RecLen(ans2, 0), 10, "the header and seven fields")
 }
 

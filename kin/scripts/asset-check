@@ -55,7 +55,7 @@
 ;; ---------------------------------------------------------------- the generator's rows
 (def rows (->> (str/split-lines (slurp "test/assets/rows.txt")) (remove #(or (str/blank? %) (str/starts-with? % "#"))) (map #(str/split % #"\t"))))
 (def d-rows (into {} (for [[k name file obj orient crop fill w h ch alpha sha] rows
-                           :when (= k "D")] [name {:file file :obj obj :orient (parse-long orient) :crop crop :fill (parse-long fill)
+                           :when (#{"D" "H"} k)] [name {:file file :obj obj :orient (parse-long orient) :crop crop :fill (parse-long fill)
                                                    :w (parse-long w) :h (parse-long h) :sha sha}])))
 
 ;; ------------------------------------------------------------------ one document, one host

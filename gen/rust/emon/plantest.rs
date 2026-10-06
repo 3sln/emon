@@ -161,7 +161,8 @@ fn test_a_decode_img_request_is_found_by_its_id_and_answered_as_a_decode() {
     crate::testport::assert_eq(an_arg(ans, at3, 5), 1, "one frame");
     let ans2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     an_decode_img(ans2, 4, 32, 16, 1, 1);
-    crate::testport::assert_eq(an_arg(ans2, an_find(ans2, 4), 4), 1, "bilevel");
+    let at4a: i32 = an_find(ans2, 4);
+    crate::testport::assert_eq(an_arg(ans2, at4a, 4), 1, "bilevel");
     crate::testport::assert_eq(rec_len(ans2, 0), 10, "the header and seven fields");
 }
 #[test]
