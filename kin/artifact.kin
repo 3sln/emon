@@ -19,7 +19,7 @@
 ;;       `pp` is scratch (the candidates). Answers the groups flagged.
 ;;
 ;; WHAT IS NOT HERE, AND WHY. Defence 3 (the body-ink layer), the ink halves of 4 and 6, and bleed-through need P6.3's layers and P6.4's `tlines` (a word's
-;; `xo-kin-ink`, `xo-body-share`, a `light` layer, a mirrored line); they are not wired into the page unit (D260), so those columns are absent and the rows that
+;; `xo-kin-ink`, `xo-body-share`, a `light` layer, a mirrored line); they are not wired into the page unit (D286), so those columns are absent and the rows that
 ;; read them (221, 251) stay in the table, inert until they are. An OCG's NAME is not in the marks (only its object and default state: the state is
 ;; P7.0's triage, `ocg-hidden`), so "named like a watermark" is not read.
 (ns emon.artifact

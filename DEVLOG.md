@@ -2891,7 +2891,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   lost: a removed word the gold has is listed in this entry); mapo80 `stamp-ghost` recorded (first target ≤ 0.2, P7.7 lowers
   it); the per-defence ledger counts from `bb fusion-report`.
   *Done when*: the above; every ledger row of the fusion set names its defence in the dump.
-  **DONE IN PART (D300-D306), on branch `worktree-agent-a5d9fdaeb4ddd2f4a` (on top of P7.3's).** *Built*: `kin/artifact.kin` (`emon.artifact`: `ax-word-class`, `ax-oword-class`,
+  **DONE IN PART (D307-D313), on branch `worktree-agent-a5d9fdaeb4ddd2f4a` (on top of P7.3's).** *Built*: `kin/artifact.kin` (`emon.artifact`: `ax-word-class`, `ax-oword-class`,
   `ax-annot-class`, `ax-recur`, the named settings `wm-*`), rows 201-203, 205, 211, 221, 231, 232, 251, 252 of block 200 in `kin/fuserules.kin` (nine new group columns
   `ag-art` .. `ag-imalpha`, eleven new settings, `fr-defence`), `kin/arbiter.kin` (the columns, the text-layer words a defence drops, `ar-write` of them, the
   defence in column 8 of `fa`), `pa-run` in the document pass of both Engines (under the born-digital setting), laws in `kin/arbitertest.kin` (12 new), the fixtures
@@ -2906,10 +2906,10 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   `text infer` and 600; `wm-gray-behind`/`wm-image-behind`/`wm-marked`: their ghost rows say defence 6), digests re-made by `bb fusion-record --digests`. Per-defence ledger rows of the fusion
   set (`bb fusion`): defence 1 x4 (the two `SPECIMEN`s of `wm-marked` and the two `DRAFT`s of `watermark-draft`), defence 6 x28 (the core ghost rows), defence 0 x2 (P7.0's triage of `wm-ocg`).
   *Departures from the brief, each a decision below*: defence 1 reads the PDF's own say through marks, alpha and annotations' TEXT, not an optional-content group's name (not in the
-  marks) (D301, D302); the Watermark annotation's rectangle alone classifies nothing (the first version dropped the whole page of `wm-annot`, CER 0.5618: D302); defence 3 (the body-ink
-  pass is P7.4's; the ink layers are not wired into the page unit), the ink halves of 4 and 6, and bleed-through are rows and columns that stay inert until they are (D304); defence 4's geometry
+  marks) (D308, D309); the Watermark annotation's rectangle alone classifies nothing (the first version dropped the whole page of `wm-annot`, CER 0.5618: D309); defence 3 (the body-ink
+  pass is P7.4's; the ink layers are not wired into the page unit), the ink halves of 4 and 6, and bleed-through are rows and columns that stay inert until they are (D311); defence 4's geometry
   is the OCR word's own angle (the `tlines` half needs P6.4 in the page unit) and no committed transcript has a diagonal ghost (Tesseract does not read text turned by 20 degrees), so 231/232 are
-  laws only (D304); P7.0's triage rows keep defence 0 (D305); the live sets (SROIE `*.watermark.png`, mapo80 `stamp-ghost`, `emon-live` scans) were not run: the corpus is not in this worktree.
+  laws only (D311); P7.0's triage rows keep defence 0 (D312); the live sets (SROIE `*.watermark.png`, mapo80 `stamp-ghost`, `emon-live` scans) were not run: the corpus is not in this worktree.
   `scan/`, `scan-color/` and `scan-ovl/` are not fused (they are OCR-only already), so nothing of P7.5 reaches them until P7.4.
 
 - [ ] **P7.6 — `hidden-text` (prior OCR layers)** (SPEC §9.4's hidden row, D155, D208). **Wave 4.** Depends on P7.3.
@@ -2946,7 +2946,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   0 on `pdf/`, ≤ 0.005 on scans; `pdf/seals` CER ≤ 0.10 (0.318 now); seal `color` accuracy ≥ 0.9; mapo80 live: candidate
   recall ≥ P6.4's baseline and `stamp-ghost` ≤ 0.1.
   *Done when*: the above in this entry.
-  **DONE IN PART (D400-D405), on branch `worktree-agent-a3c1f38e42a52b140` (on top of P7.5's, so P7.3's).** *Built*: `kin/sealmark.kin` (`emon.sealmark`: `sm-find`, `sm-write`, the named settings `sm-*`, `sm-hue` and
+  **DONE IN PART (D314-D319), on branch `worktree-agent-a3c1f38e42a52b140` (on top of P7.5's, so P7.3's).** *Built*: `kin/sealmark.kin` (`emon.sealmark`: `sm-find`, `sm-write`, the named settings `sm-*`, `sm-hue` and
   the 14 colour names), rows 401 and 402 of block 400 in `kin/fuserules.kin` (one new group column, `ag-seal`; `fr-order` already tried 400 first), `kin/arbiter.kin` (`ag-seal` from the group's flag `plg-in-seal`; a seal's
   group is held by its own row, not `in-figure`; page agreement ignores it), `rs-node` and `rs-remap` made public in `kin/restruct.kin`, `sm_find` before `ar_doc` and `sm_write` after `ar_tag` in both Engines (`host/rust/src/engine.rs`,
   `host/go/engine.go`: the paths' points kept in `PdfDoc` under the born-digital setting, the `sl` arena passed to `pl_check` and `pl_emit`), laws `kin/sealmarktest.kin` (10) and `kin/arbitertest.kin` (2 new), the fixtures
@@ -2957,9 +2957,9 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   double ring with arc text, a translucent red stamp over two paragraphs, a signature over `By:`, and a page with a coloured callout, a black diagram node, a dashed ring and a chart that are NOT seals: nodes exactly the gold's,
   no seal word in the body, no body word lost (0 missing). **P7.1's deferred `stamp-seal` coverage** (0.5789: 32 text-only groups): 31 of the 32 are now the seal's or the stamp's (28 arc letters, `SEAL`, `PAID`, the date; the 32nd is
   the signature line `____`, body text), so the share of its text-layer words that an OCR group or a seal explains is (44 + 31) / 76 = 0.987; the alignment gate itself (`bb align`) is P7.1's and unchanged.
-  *Departures from the brief, each a decision below*: candidates are read from the page's VECTOR paths and the glyphs' inks, not from P6.4's primitives and colour components (D400); a word is a seal's by its ink or its turn
-  along the arc, and black upright text inside a ring is body text (D401); raster candidates, `scan-ovl`, mapo80's `stamp-ghost` and the P6.3/P6.4 wiring are NOT done (D402); `name` and `date` are P8.2's (as briefed).
-  *Open*: the items of D402. This entry stays open until a raster seal is a candidate (P7.S fuses image pages; the tracer's wiring then has pixels to run on) and `stamp-ghost` is measured.
+  *Departures from the brief, each a decision below*: candidates are read from the page's VECTOR paths and the glyphs' inks, not from P6.4's primitives and colour components (D314); a word is a seal's by its ink or its turn
+  along the arc, and black upright text inside a ring is body text (D315); raster candidates, `scan-ovl`, mapo80's `stamp-ghost` and the P6.3/P6.4 wiring are NOT done (D316); `name` and `date` are P8.2's (as briefed).
+  *Open*: the items of D316. This entry stays open until a raster seal is a candidate (P7.S fuses image pages; the tracer's wiring then has pixels to run on) and `stamp-ghost` is measured.
 
 - [ ] **P7.G — Graphics fusion: the tracer and OCR as witnesses of rules and fills; health per region; regions;
   where graphics meet words** (SPEC §9.9, §9.3, §9.7, §8.4.5 columns 30-31; D218, D221-D224, D228). **Wave 4.** Depends
@@ -8401,7 +8401,7 @@ worse than the no-engine run's plus 0.0005; the broken documents' CER under half
 **Why**: the gates take over an hour serially and nothing runs them but the maintainer's machine; sharding them is the cheapest way to a second opinion, and manual-only keeps a 12 GB corpus's credentials and minutes out of every push. Linux differences, not yet measured: poppler is Ubuntu's (older than macOS's), which `content-check` uses only for word-box comparison, and ImageMagick's version is whatever the AppImage is; a first run decides whether either needs pinning.
 - [ ] **Signed off** (maintainer)
 
-### D300 — The watermark fixtures and `bb artifacts`: a raster watermark under sparse text, replayed from transcripts, with its own gold (P7.5; D008, D095, D264)
+### D307 — The watermark fixtures and `bb artifacts`: a raster watermark under sparse text, replayed from transcripts, with its own gold (P7.5; D008, D095, D290)
 **Decision**: `test/artifacts/pdf` holds `wm-recur-image` (four pages) and `wm-recur-partial` (the same on pages 1 to 3), made by `tools/synth/artifact_pdf.clj` from ghostscript's
 own text (six lines at the top and five at the foot of each page from a seeded list of plain words, the middle bare) with a page-sized image of CONFIDENTIAL COPY in grey (#909090, 56 pt)
 underlaid by qpdf. The body's text is the gold (`test/artifacts/gold/body.txt`: the watermark is in no gold). `test/artifacts/replay/ID` are the slim transcripts `bb fusion-record --artifacts`
@@ -8418,7 +8418,7 @@ rather than new documents of `test/corpus/synth`: the corpus is made by a Chrome
 `CONFBENTIAE ORY`, dropped as a ghost before and after).
 - [ ] **Signed off** (maintainer)
 
-### D301 — Defence 1 at arbitration: the group's class from the PDF, a dropped text-layer word is a `fa` row of its own, the OCR words aligned only to it go with it (P7.5; SPEC 9.5; D204)
+### D308 — Defence 1 at arbitration: the group's class from the PDF, a dropped text-layer word is a `fa` row of its own, the OCR words aligned only to it go with it (P7.5; SPEC 9.5; D204)
 **Decision**: `ag-art` is what the PDF says of the group's visible text-layer words, all alike: 1 watermark (the nearest `/Artifact` on a glyph's mark chain has the subtype Watermark, whatever the tree's
 trust; or the word's alpha, `xt-alpha`, is under `wm-alpha` 500; or it is a token of a Watermark annotation's appearance text inside its rectangle), 2 background (the artifact's type is Background and
 `tg-trust` is at least `wm-trust` 300: a Background mark of a tree nobody can vouch for is only a mark), 3 a Stamp annotation's text (P7.7 makes the rectangle a `seal` node; until then its words are
@@ -8434,7 +8434,7 @@ counts without the tree's trust because the file states it in as many words; Bac
 `ocg-hidden`).
 - [ ] **Signed off** (maintainer)
 
-### D302 — `pa-run` is in the document pass, under the born-digital setting; a Watermark annotation's rectangle alone says nothing (P7.5; D120, D204)
+### D309 — `pa-run` is in the document pass, under the born-digital setting; a Watermark annotation's rectangle alone says nothing (P7.5; D120, D204)
 **Decision**: both Engines call `pa-run` in `attempt`/`attempt` after the tagged tree, when `ocr-born-digital` is set, and keep its `an` arena for the document unit; the arena is passed to `ar-doc`
 with the document's text arena. A word is a watermark by an annotation only when its centre lies in the rectangle AND it is a token (case-folded, space-separated) of the annotation's appearance
 text; an annotation whose text could not be read (a composite font) classifies nothing. Without the setting nothing is read and no output changes.
@@ -8443,7 +8443,7 @@ had never been called; reading it only where arbitration reads it keeps every pu
 **Alternatives**: calling it always (the annotations' ledger rows are P3.8's and nobody reads them yet); matching the rectangle alone (measured: a regression).
 - [ ] **Signed off** (maintainer)
 
-### D303 — Defence 2: recurrence of OCR-only text, in `ax-recur`, before any group is decided (P7.5; SPEC 9.5; D173-D177)
+### D310 — Defence 2: recurrence of OCR-only text, in `ax-recur`, before any group is decided (P7.5; SPEC 9.5; D173-D177)
 **Decision**: `ax-recur` flags the OCR-only groups (no text-layer word, no hidden word, at least `wm-min-alnum` 3 Latin letters or digits) whose case-folded text (two 31/37-multiplier hashes, with the
 words joined by a space) is the same, within `wm-recur-pos` 20 per mille of the page in both directions, on at least `max(3, ceil(wm-recur-pages 600 per mille of the pages that have groups))` pages,
 outside the top and bottom `wm-band` 100 per mille of the page; `ag-recur` is its flag and row 211 holds such a group as `watermark` (defence 2). A page is counted once; more than `wm-max-candidates` 1500
@@ -8455,20 +8455,20 @@ same place.
 the shape needs the tracer: neither is wired into the page unit).
 - [ ] **Signed off** (maintainer)
 
-### D304 — Defences 3, 4 and 6: the rows are the table's, the columns that need the ink layers are absent until P6.3/P6.4 are wired, geometry reads the OCR word's own angle (P7.5; SPEC 9.5; D260)
+### D311 — Defences 3, 4 and 6: the rows are the table's, the columns that need the ink layers are absent until P6.3/P6.4 are wired, geometry reads the OCR word's own angle (P7.5; SPEC 9.5; D286)
 **Decision**: block 200 has row 221 (an OCR-only word whose body-ink share `xo-body-share` is under `wm-body-share` 300: watermark), 231 (an OCR-only group whose OCR words are at least `wm-angle` 1500
 centi-degrees off the page's text lines AND off every right angle: watermark; text turned by a right angle is text), 232 (an OCR-only group at least `wm-size` 2500 per mille of its line's median height on an
 image covering `wm-cover` of the page: watermark), 251 (kin ink `xo-kin-ink` under `ghost-ink` 50: ocr-ghost) and 252 (plausibility under `ghost-plausible` 700, that is 1000 minus `ghost-implausible`
 300, together with the least symbol margin under `ghost-margin` 150: ocr-ghost). The columns that read kin's ink (`ag-kink`, `ag-body`) are the least of the group's OCR words' `xo-kin-ink` and `xo-body-share`:
 absent (-1) in every run today, so 221 and 251 fire when P6.3/P6.4 are wired into the page unit and P7.4's body-ink pass fills them, and not before; a law holds each row to its number. Defence 3's other half
 (absence from the body-ink OCR pass) is P7.4's. Bleed-through (a `light` layer, mirrored `tlines`) needs the same layers and has no row. Defence 5 is P7.7's block 400, tried first.
-**Why**: the rows are data a reviewer reads; a value of the first column that is absent is "unknown", never a number (D260). The geometry rows read only what the OCR word has (its own angle against its
+**Why**: the rows are data a reviewer reads; a value of the first column that is absent is "unknown", never a number (D286). The geometry rows read only what the OCR word has (its own angle against its
 page's lines, its height against its line's, the image it lies in): without the layers they cannot tell a watermark from a tilted figure label except by being OCR-only, off every right angle and large, which
-is what the rows say. The two numbers 150 and 700 are first values; P10.1 calibrates them. No committed transcript has such a ghost (D300), so 231, 232 and 252 are laws, not measurements.
+is what the rows say. The two numbers 150 and 700 are first values; P10.1 calibrates them. No committed transcript has such a ghost (D307), so 231, 232 and 252 are laws, not measurements.
 **Alternatives**: wiring `nm-view`/`tr-page` into the page unit here (P6.3/P6.4's integration: its own item, and the rows' conditions are the same when it lands).
 - [ ] **Signed off** (maintainer)
 
-### D305 — The dump names the defence: column 8 of `fa`, a row a word for a defence, defence 6 for the core ghost rows; P7.0's triage rows keep 0 (P7.5; SPEC 9.5, 9.7; D262)
+### D312 — The dump names the defence: column 8 of `fa`, a row a word for a defence, defence 6 for the core ghost rows; P7.0's triage rows keep 0 (P7.5; SPEC 9.5, 9.7; D288)
 **Decision**: a row of `fa` that arbitration made has its defence (SPEC 9.5's number) in column 8: 1 to 6 by the tens digit of the rule (`fr-defence`; 24x is P7.7's), 6 for the core ghost rows (145, 170,
 175-178: they judge plausibility), one row per dropped word of an OCR-only group that a defence took (a phrase is not its first word; the core ghost rows keep one row a group, as P7.3 made them), column 9
 the group, 10 the rule. `bb fusion-report` and `bb fusion` print the counts per defence and per reason. The set-aside rows of P7.0's triage (`ocg-hidden`, white, transparent, occluded words) are the
@@ -8477,7 +8477,7 @@ text layer's own and keep defence 0: naming them would change the evidence dump 
 **Alternatives**: setting the defence in `th-run` (changes the committed evidence goldens).
 - [ ] **Signed off** (maintainer)
 
-### D306 — What P7.5 did not measure or build (P7.5)
+### D313 — What P7.5 did not measure or build (P7.5)
 **Decision**: not built: the body-ink OCR pass and the ink-layer halves of defences 3, 4 and 6 (P7.4 and the wiring of P6.3/P6.4 into the page unit), bleed-through, an optional-content group's name, the
 same image XObject or component shape recurring (defence 2's other keys). Not measured: SROIE `*.watermark.png` and mapo80 `stamp-ghost` (live sets, not in this worktree), `emon-live` on `scan/`,
 `scan-color/` and `scan-ovl/` (not fused: they are OCR-only already, so P7.5 does not reach them), the live recording of the 22 fusion documents again (their transcripts are the P7.3 ones; their bundles
@@ -8486,21 +8486,21 @@ were re-derived from them). A watermark on one page only, over the body, with no
 - [ ] **Signed off** (maintainer)
 
 
-### D400 — Seal, stamp and signature candidates are read from the page's vector paths and the glyphs' inks, not from the tracer (P7.7; SPEC 9.5 defence 5, 10.7; D016, D205, D259)
+### D314 — Seal, stamp and signature candidates are read from the page's vector paths and the glyphs' inks, not from the tracer (P7.7; SPEC 9.5 defence 5, 10.7; D016, D205, D285)
 **Decision**: `sm-find` reads `pa` (the content stream's paths, kept with their points under the born-digital setting), the text layer's glyph inks and the flow's words; it needs no pixel. A SEAL is a stroked, unfilled
 path whose end points are within `sm-round` 8 per cent of one radius from the centre of their box (a square within 12 per cent), at least four Bezier segments, radius at least `sm-seal-min` 2268 cpt (8 mm), with words of its
-own ink or turned along its arc (D401) or another round path concentric inside it (0.4 to 0.95 of its radius); a path of more than 128 points keeps its box only (`PATH_KEEP`, Chrome draws a circle in about forty
+own ink or turned along its arc (D315) or another round path concentric inside it (0.4 to 0.95 of its radius); a path of more than 128 points keeps its box only (`PATH_KEEP`, Chrome draws a circle in about forty
 segments), and a curve whose box less its stroke is a square is then taken for a ring with its roundness unverified (flag 16). A STAMP is a stroked, unfilled quadrilateral (rotated or not) with a border of at least
 `sm-stamp-width` 150 cpt of a chromatic ink (spread of the channels over `sm-chroma` 48), at least 10 pt a side, under `sm-page-share` 35 per cent of the page, holding words of that ink. A SIGNATURE is stroked, unfilled,
 open curves no wider than `sm-sig-width` 250 cpt merged within `sm-sig-gap` 800 cpt, at least `sm-sig-segs` 3 Bezier segments, 30 pt wide and 1.5 times wider than high, within `sm-cue-lines` 3 line heights of a cue
 word (`signature`, `signed`, `sign here`, `by:`). Every constant is a named setting of `emon.sealmark`; P10.1 calibrates them.
-**Why**: a replayed transcript holds no pixel (D259: "a replay reads no pixel"), so a gate cannot run the tracer's seal candidates, and nothing in a fused born-digital page asks for the P6.3/P6.4 views (D260, D304); the same
+**Why**: a replayed transcript holds no pixel (D285: "a replay reads no pixel"), so a gate cannot run the tracer's seal candidates, and nothing in a fused born-digital page asks for the P6.3/P6.4 views (D286, D311); the same
 shapes and inks are in the vector page, which both Engines read identically, so the placeholders are replayable, byte for byte, on Rust and Go. The brief's raster stroke width (median at most 1.2 pt) is a measure of a
 raster; a vector pen stroke is measured as drawn (at most 2.5 pt).
 **Alternatives**: wiring `nm-view` and `tr-page` into the page unit for this item alone (no committed bitmap to test it on, and scans are not fused); raising `PATH_KEEP` (changes what every later stage reads of every path).
 - [ ] **Signed off** (maintainer)
 
-### D401 — Which words are a seal's: its ink, or turned along its arc; OCR-only groups inside a seal are its; body text under a stamp stays body (P7.7; SPEC 9.4, 9.5; D201)
+### D315 — Which words are a seal's: its ink, or turned along its arc; OCR-only groups inside a seal are its; body text under a stamp stays body (P7.7; SPEC 9.4, 9.5; D201)
 **Decision**: a text-layer word whose centre is inside a seal's disc (6 per cent beyond) or a stamp's box belongs to it when its first glyph's fill is chromatic and within `sm-ink-dist` 192 (the sum of the channel
 differences) of the candidate's ink, or, for a ring, when it is turned (at least `sm-arc-turn` 100 centi-degrees off every right angle) and lies between half the radius and the ring: the arc text, whose rotation varies
 along the ring. Nothing else is: the black, upright body text under a translucent stamp or inside a ring is body text and rule 110's contract (D201) is untouched. A correspondence group whose every text-layer word belongs to
@@ -8513,7 +8513,7 @@ a black seal's upright centre text, and a glyph of its arc within a degree of up
 **Alternatives**: a seal's whole disc as an exclusion zone (loses the body text it is stamped over, which is the case that matters).
 - [ ] **Signed off** (maintainer)
 
-### D402 — What P7.7 did not build or measure: raster candidates, the scans, mapo80, the P6.3/P6.4 wiring (P7.7)
+### D316 — What P7.7 did not build or measure: raster candidates, the scans, mapo80, the P6.3/P6.4 wiring (P7.7)
 **Decision**: not built: candidates from the tracer's `ring`/`circle`/`ellipse` primitives and `colour`-layer components (the `sl` row keeps its ink-row and primitive cells for them), a signature of raster strokes
 (median stroke width, run variance, tracer plausibility), a seal that is only an image placement or outlines, and the wiring of P6.3's ink layers and P6.4's tracer into the page unit. Not measured: `scan-ovl/` (scans are
 not fused: they are OCR-only already, so nothing of this item reaches them until P7.S), mapo80's `stamp-ghost` (its images are raster, and `bb fusion-live --stamps` reads evidence dumps that only P7.S's driver writes), the
@@ -8522,7 +8522,7 @@ pixel: it comes with P7.S, where an image page is fused and a live recording has
 **Why**: a number or a mechanism claimed without its set would be a guess; the brief's raster half needs pixels the gates do not have.
 - [ ] **Signed off** (maintainer)
 
-### D403 — The rows and the arbiter: `ag-seal` from a flag set before arbitration; `ar-doc` keeps its signature (P7.7; SPEC 9.4, 9.7)
+### D317 — The rows and the arbiter: `ag-seal` from a flag set before arbitration; `ar-doc` keeps its signature (P7.7; SPEC 9.4, 9.7)
 **Decision**: `sm-find` runs in the document unit after the fonts are judged and before `ar-doc`, over the flow as the text layer made it, and sets `plg-in-seal` (SPEC 9.7's `cg` flag `in-seal`) on the groups that are a
 candidate's; `ar-fill` turns the flag into the group column `ag-seal` (26 columns now); rows 401 and 402 read it. `ar-decide` does not mark such a group `in-figure`. The page agreement (`ar-page-agreement`) leaves the
 flagged groups out: OCR's garbage over an arc is not a disagreement about the page. The candidates are the layer's `sl` arena (dump version 2 prints them: page, box, kind, the primitive's path, confidence, the OCR
@@ -8530,7 +8530,7 @@ words inside as a `refs` run, flags (1 chromatic, 2 double ring, 4 inner ring of
 **Why**: the signature of `ar-doc` is called by a score of laws and both Engines; a flag in `cg` is the layer's own vocabulary and keeps every other block's rows free of seal logic.
 - [ ] **Signed off** (maintainer)
 
-### D404 — The seal node is written by a second copy of the body, in reading order: after the block it overlaps, else before the first block below it (P7.7; SPEC 10.7; D180)
+### D318 — The seal node is written by a second copy of the body, in reading order: after the block it overlaps, else before the first block below it (P7.7; SPEC 10.7; D180)
 **Decision**: `sm-write` copies the finished Model (after `rs-run`, `fu-write`, `ar-tag`) into empty arenas with `rs-node` and `rs-remap` (now public), and writes each `seal` node (subkind, `color`, `text` flagged `low-conf`,
 `src` infer plus text or ocr, the box as its region) as a child of the document or section: after the LAST top-level block whose region on the candidate's page covers at least half as much of its box as the block that
 covers most (and that most is at least `sm-overlap` 5 per cent of the box), after that block's subtree (a stamp over a table is after the table, not after the paragraph its corner touches; a ring over the end of a
@@ -8541,7 +8541,7 @@ the signature of `sig-over-name`); the text a seal covers is what it belongs to.
 **Alternatives**: the seal's top, its centre, its bottom (each wrong for one of the five corpus nodes); inserting leaves at the end of the arena (breaks preorder).
 - [ ] **Signed off** (maintainer)
 
-### D405 — The fixtures and `bb seals`: four vector pages recorded live, replayed on both Engines; the pdfium of the pin was fetched to record them (P7.7; D008, D095, D264, D300)
+### D319 — The fixtures and `bb seals`: four vector pages recorded live, replayed on both Engines; the pdfium of the pin was fetched to record them (P7.7; D008, D095, D290, D307)
 **Decision**: `tools/synth/seal_pdf.clj` writes four born-digital pages byte for byte (no producer): `seal-black-ring`, `stamp-translucent`, `sig-by-line`, `seal-negatives` (a blue-bordered callout holding black text, a
 black circle with its label, a dashed ring, a blue line chart and a `Signed` far from it: none is a seal). `bb fusion-record --seals` records them with pdfium and Tesseract (slim transcripts in `test/seals/replay/`, their
 bundles' SHA-256 in `DIGESTS.edn`), `test/seals/gold.edn` holds the words of each page, the nodes expected and the words that must not be in the body. `bb seals` replays them and the three seal documents of the

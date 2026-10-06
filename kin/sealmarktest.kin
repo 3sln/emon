@@ -1,4 +1,4 @@
-;; Laws for `emon.sealmark` (P7.7; SPEC 9.5 defence 5, 10.7; D016, D205, D400-D405), on every target. Everything is built by hand: vector paths and their points, the
+;; Laws for `emon.sealmark` (P7.7; SPEC 9.5 defence 5, 10.7; D016, D205, D314-D319), on every target. Everything is built by hand: vector paths and their points, the
 ;; text layer's words with their glyph's ink, the correspondence groups, and a three-paragraph Model.
 ;;
 ;;   * the colour names (12 hue buckets, and black, gray and white for an ink with no chroma);

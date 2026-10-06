@@ -12,7 +12,7 @@
 ;; replay's canonical JSON and evidence dump must be the recording's, byte for byte. The SHA-256 of each document's replay bundle (JSON,
 ;; HTML, evidence) is written to test/fusion/replay/DIGESTS.edn: what `bb fusion` holds both Engines to.
 ;;
-;; Two more modes (P7.5, D300):
+;; Two more modes (P7.5, D307):
 ;;     --artifacts   records the watermark fixtures of test/artifacts/pdf (tools/synth/artifact_pdf.clj) into test/artifacts/replay/ instead
 ;;     --seals       records the seal, stamp and signature fixtures of test/seals/pdf (tools/synth/seal_pdf.clj, P7.7) into test/seals/replay/
 ;;     --digests     reads NO live engine: it replays the committed transcripts with the plain driver and rewrites DIGESTS.edn (what a change to
@@ -76,5 +76,5 @@
     (swap! digests assoc id (sha256 (:out rp)))
     (println "digest" id)))
 
-(spit digests-file (str ";; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of " replay-dir "ID, as `bb fusion-record` made it (P7.3, D259-D264; P7.5, D300).\n"
+(spit digests-file (str ";; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of " replay-dir "ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).\n"
                         (with-out-str (clojure.pprint/pprint (into (sorted-map) @digests)))))

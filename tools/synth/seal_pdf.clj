@@ -1,5 +1,5 @@
 (ns synth.seal-pdf
-  "The fixtures of P7.7 (seals, stamps and signatures, D400-D406): four born-digital pages written byte for byte, no PDF producer and no library
+  "The fixtures of P7.7 (seals, stamps and signatures, D314-D319): four born-digital pages written byte for byte, no PDF producer and no library
   (D094), with the seal drawn as VECTOR paths and its text in the TEXT LAYER, which is where `emon.sealmark` reads it.
 
       bb -cp tools:tools/lib tools/synth/seal_pdf.clj            write test/seals/pdf/*.pdf and test/seals/gold.edn

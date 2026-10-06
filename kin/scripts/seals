@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; SEALS, STAMPS AND SIGNATURES, replayed from transcripts (P7.7, SPEC 9.5 defence 5, 10.7, D016, D205, D400-D405).   kin/scripts/seals
+;; SEALS, STAMPS AND SIGNATURES, replayed from transcripts (P7.7, SPEC 9.5 defence 5, 10.7, D016, D205, D314-D319).   kin/scripts/seals
 ;;
 ;; Born-digital pages with a seal, a stamp or a signature drawn as vector paths, their words in the text layer, read by a real OCR engine; recorded on
 ;; Rust (pdfium and Tesseract) and only REPLAYED here, with the hidden setting `ocr-born-digital`, through the whole Engine on Rust and Go.

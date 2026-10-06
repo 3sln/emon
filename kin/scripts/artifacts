@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; WATERMARKS AND THEIR OCR GHOSTS, replayed from transcripts (P7.5, SPEC 9.5, D204, D300-D306).   kin/scripts/artifacts
+;; WATERMARKS AND THEIR OCR GHOSTS, replayed from transcripts (P7.5, SPEC 9.5, D204, D307-D313).   kin/scripts/artifacts
 ;;
 ;; test/artifacts/pdf holds born-digital documents with a RASTER watermark under the text (tools/synth/artifact_pdf.clj): the text layer does not
 ;; have it, OCR reads it, and nothing in the page says it is not text but that it recurs. test/artifacts/replay/ID is what pdfium and Tesseract

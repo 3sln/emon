@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; The fixtures of P7.5 (watermarks, backgrounds and OCR ghosts of them, D204, D300-D306): born-digital pages with a RASTER watermark UNDER the
+;; The fixtures of P7.5 (watermarks, backgrounds and OCR ghosts of them, D204, D307-D313): born-digital pages with a RASTER watermark UNDER the
 ;; text, so the text layer says nothing about it and OCR reads it as text no text-layer word explains.
 ;;
 ;; THE BODY is four letter pages of ghostscript's own text (a seeded list of 60 plain words, six lines at the top and five at the foot of each

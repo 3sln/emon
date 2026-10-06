@@ -1,4 +1,4 @@
-;; SEALS, STAMPS AND SIGNATURES: candidates, their words, and the `seal` nodes (P7.7; SPEC 9.5 defence 5, 10.7; D016, D205, D400-D405). emon's own
+;; SEALS, STAMPS AND SIGNATURES: candidates, their words, and the `seal` nodes (P7.7; SPEC 9.5 defence 5, 10.7; D016, D205, D314-D319). emon's own
 ;; module (D039). The VERDICTS on the words are rows of `emon.fuserules` (block 400, tried before every other block: `fr-order`); this module measures
 ;; what those rows read (which groups lie in a seal) and writes the placeholders:
 ;;
@@ -13,8 +13,8 @@
 ;;       in READING ORDER: after the last top-level block that covers most of it (a stamp is drawn over the text it belongs to: at least a twentieth of its
 ;;       box, and at least half as much as any other block), else before the first block that starts below its top. `pa-build` is not touched.
 ;;
-;; WHAT A CANDIDATE IS HERE (D400). The tracer's primitives (P6.4's `ring`, `circle`, `ellipse`, a coloured `rect`) and its colour-layer components need pixels,
-;; and a replayed transcript holds none (a replay "reads no pixel", D259): a gate could not run what it asks. The same shapes are in a born-digital page's VECTOR
+;; WHAT A CANDIDATE IS HERE (D314). The tracer's primitives (P6.4's `ring`, `circle`, `ellipse`, a coloured `rect`) and its colour-layer components need pixels,
+;; and a replayed transcript holds none (a replay "reads no pixel", D285): a gate could not run what it asks. The same shapes are in a born-digital page's VECTOR
 ;; paths (`pa`, with their geometry in `pts`) and the same inks in its glyphs' colours, so the candidates are read from those, which every host answers identically:
 ;;
 ;;   a SEAL       a stroked, unfilled path that is ROUND (its end points all within `sm-round` of one radius from their common centre; at least four
@@ -29,11 +29,11 @@
 ;; A WORD OF A SEAL OR STAMP is a text-layer word whose centre is inside the candidate and (its first glyph's fill is within `sm-ink-dist` of the candidate's ink
 ;; and chromatic) or (the candidate is round and the word is TURNED: its rotation at least `sm-arc-turn` off every right angle, in the ring between half the
 ;; radius and the ring itself: the arc text of a seal, where the glyphs' rotation varies along the ring). Ordinary body text under a stamp is neither (its
-;; ink is the body's and it stands upright), so it stays body: the contract of rule 110 is not touched (D401).
+;; ink is the body's and it stands upright), so it stays body: the contract of rule 110 is not touched (D315).
 ;; An OCR-ONLY group (no text-layer word) whose words' centres all lie inside a seal, a stamp or a signature is the ring's or the stroke's own ink read as
 ;; letters: it joins the candidate (its words are the node's text only when the candidate has no text-layer word).
 ;;
-;; WHAT IS NOT HERE (D402): the tracer's colour-layer components and primitives (no pixels in a replay; the page unit does not wire P6.3/P6.4 and nothing in a
+;; WHAT IS NOT HERE (D316): the tracer's colour-layer components and primitives (no pixels in a replay; the page unit does not wire P6.3/P6.4 and nothing in a
 ;; fused born-digital page asks for them), so a seal that is only RASTER (an image placement) or only outlined is no candidate; raster pages (scans, the
 ;; `scan-ovl` variants and mapo80) are not fused until P7.S. The candidate row keeps its ink-row and primitive cells for them.
 (ns emon.sealmark
