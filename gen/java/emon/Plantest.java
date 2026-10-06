@@ -85,6 +85,66 @@ public final class Plantest {
         emon.Testport.assertEq(Plan.rqArg(c, 0, 1), 65536, "offset");
         emon.Testport.assertEq(Plan.rqArg(c, 0, 2), 131072, "length");
     }
+    public static void testADecodeImgRequestNamesBytesAndNeverCarriesThem() {
+        // Kind 6 (D291): the codestream's parameters, then WHERE the bytes are (an input's span, or the unit's payload)
+        // and the SHA-256 of a payload as eight words; the globals the same, `gwhere` -1 for none.
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.Cells shas = emon.Port.newCells();
+        int i = 0;
+        while (i < 16) {
+            emon.Port.cellsPush(shas, 1000 + i);
+            i += 1;
+        }
+        emon.Testport.assertEq(Plan.pkDecodeImg(), 6, "kind 6");
+        emon.Testport.assertEq(Plan.fltCcitt(), 4, "the CCITT filter");
+        emon.Testport.assertEq(Plan.rqDecodeImg(c, 9, Plan.fltCcitt(), 64, 32, 1, 1, -1, 64, 32, 10, 0, 499, 552, shas, 0, -2, 0, 24, 8), 0, "starts at 0");
+        emon.Testport.assertEq(Plan.recLen(c, 0), 34, "three header cells and 31 arguments");
+        emon.Testport.assertEq(Plan.recKind(c, 0), 6, "kind");
+        emon.Testport.assertEq(Plan.recId(c, 0), 9, "id");
+        emon.Testport.assertEq(Plan.rqNargs(c, 0), Plan.dqNargs(), "31 arguments");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqFilter()), 4, "filter");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqW()), 64, "w");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqH()), 32, "h");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqComps()), 1, "comps");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqBpc()), 1, "bpc");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqK()), -1, "k");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqColumns()), 64, "columns");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqRows()), 32, "rows");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqCcitt()), 10, "ccitt flags");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqWhere()), 0, "where");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqOffset()), 499, "offset");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqLength()), 552, "length");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqSha()), 1000, "the first SHA word");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqSha() + 7), 1007, "the eighth SHA word");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqGwhere()), -2, "gwhere: the payload");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqGoffset()), 0, "goffset");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqGlength()), 24, "glength");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqGsha()), 1008, "the first globals SHA word");
+        emon.Testport.assertEq(Plan.rqArg(c, 0, Plan.dqGsha() + 7), 1015, "the last globals SHA word");
+        emon.Testport.assertEq(Plan.recCheck(c, 1, 6), 0, "well formed, in the legal kinds");
+        emon.Testport.assertEq(Plan.recCheck(c, 1, 5), 2, "a kind past the legal range is refused");
+        emon.Testport.assertEq(Plan.recCount(c), 1, "one record");
+    }
+    public static void testADecodeImgRequestIsFoundByItsIdAndAnsweredAsADecode() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.Cells shas = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        int i = 0;
+        while (i < 16) {
+            emon.Port.cellsPush(shas, 0);
+            i += 1;
+        }
+        Plan.rqDecodeImg(c, 3, Plan.fltJpx(), 16, 12, 0, 8, 0, 0, 0, 0, 0, 440, 1013, shas, 0, -1, 0, 0, 8);
+        Plan.rqDecodeImg(c, 4, Plan.fltJbig2(), 32, 16, 0, 1, 0, 0, 0, 0, 0, 476, 50, shas, 0, -2, 0, 24, 8);
+        emon.Testport.assertEq(Plan.recCount(c), 2, "two records");
+        int second = Plan.recNext(c, 0);
+        int at4 = Plan.recFind(c, 4);
+        emon.Testport.assertEq(Plan.recId(c, second), 4, "the second is request 4");
+        emon.Testport.assertEq(Plan.rqArg(c, at4, Plan.dqFilter()), 3, "request 4 is JBIG2");
+        emon.Testport.assertEq(Plan.anDecode(ans, 3, 16, 12, 3, 0, 0, 1), 0, "its answer is a decode answer");
+        int at3 = Plan.anFind(ans, 3);
+        emon.Testport.assertEq(Plan.anStatus(ans, at3), 0, "ok");
+    }
     public static void testAnswersCarryTheIdAndAStatus() {
         emon.Port.Cells c = emon.Port.newCells();
         int a1 = Plan.anRender(c, 1, 612, 792, 1, 300);

@@ -198,7 +198,7 @@ func (m *Model) ToJSON(o JSONOptions) string {
 		if o.Pretty {
 			pretty = 1
 		}
-		json.JsEmit(&sb, pretty, a.nodes, a.attrs, a.regions, a.text, a.pages, a.ledger, a.layout)
+		json.JsEmit(&sb, pretty, a.nodes, a.attrs, a.regions, a.text, a.pages, a.ledger, a.layout, a.assets, a.uses)
 	})
 	return sb.String()
 }
@@ -207,8 +207,12 @@ func (m *Model) ToJSON(o JSONOptions) string {
 func (m *Model) ToHTML(o HTMLOptions) string {
 	bits, below := o.bits()
 	var sb strings.Builder
+	prefix := port.NewCells()
+	for _, ch := range o.AssetPrefix {
+		port.CellsPush(prefix, int32(ch))
+	}
 	m.with(func(a *arenas) {
-		html.HtmlEmit(&sb, bits, below, a.nodes, a.attrs, a.regions, a.text, a.pages, a.ledger, a.layout)
+		html.HtmlEmit(&sb, bits, below, a.nodes, a.attrs, a.regions, a.text, a.pages, a.ledger, a.layout, a.assets, a.uses, a.abytes, prefix)
 	})
 	return sb.String()
 }
@@ -222,6 +226,201 @@ func (m *Model) Serialize(o Output) string {
 		return m.ToJSON(*o.JSON)
 	}
 	return m.ToJSON(JSONOptions{})
+}
+
+
+// ------------------------------------------------------------------ assets (P3.13, SPEC 10.11, D117)
+//
+// An asset is a picture the Model carries beside its tree: a `figure` or `seal` whose content is one image the document embeds
+// (its original JPEG bytes, or its pixels as the canonical PNG). The bytes live in the Model (kin's `abytes`); Bytes copies them out
+// (the arenas sit behind a lock). Nothing here exists unless `Options.Assets` was on.
+
+// AssetUse is one use of an asset: the node and the page region its pixels map to.
+type AssetUse struct {
+	Node   int32
+	Region Region
+}
+
+// AssetFile is one asset as a file for the caller to write beside the HTML: its name, media type and bytes.
+type AssetFile struct {
+	Name      string
+	MediaType string
+	Bytes     []byte
+}
+
+// Asset is a view of the Model's asset table (an index, like a Node).
+type Asset struct {
+	m  *Model
+	id int32
+}
+
+func (a Asset) String() string { return "Asset(" + itoa(a.id) + " " + a.Name() + ")" }
+
+func (a Asset) num(f func(c *port.Cells, i int32) int32) int32 {
+	var v int32
+	a.m.with(func(x *arenas) { v = f(x.assets, a.id) })
+	return v
+}
+
+// ID is the asset's id: its index in Model.Assets, in admission order.
+func (a Asset) ID() int32 { return a.id }
+
+// Name is the file name, `a<id>.jpg` or `a<id>.png`.
+func (a Asset) Name() string {
+	if a.num(model.AssetType) == model.AmtJpeg() {
+		return "a" + itoa(a.id) + ".jpg"
+	}
+	return "a" + itoa(a.id) + ".png"
+}
+
+// MediaType is `image/jpeg` or `image/png`.
+func (a Asset) MediaType() string {
+	var sb strings.Builder
+	model.AmtEmitName(&sb, a.num(model.AssetType))
+	return sb.String()
+}
+
+// Origin is `embedded` or `decoded` (`cropped` and `rendered` arrive with the `figures` level).
+func (a Asset) Origin() string {
+	var sb strings.Builder
+	model.AoEmitName(&sb, a.num(model.AssetOrigin))
+	return sb.String()
+}
+
+// From is what the pixels were before: `dct`, `flate`, `lzw`, `runlength`, `raw`, ...
+func (a Asset) From() string {
+	var sb strings.Builder
+	model.AfmEmitName(&sb, a.num(model.AssetFrom))
+	return sb.String()
+}
+
+// Object is the image XObject's object number, when it has one.
+func (a Asset) Object() (int32, bool) {
+	o := a.num(model.AssetObject)
+	return o, o >= 0
+}
+
+// SHA256 is the SHA-256 of the encoded bytes, 64 lower-case hex digits.
+func (a Asset) SHA256() string {
+	const digits = "0123456789abcdef"
+	var sb strings.Builder
+	a.m.with(func(x *arenas) {
+		for i := int32(0); i < 8; i++ {
+			w := uint32(model.AssetSha(x.assets, a.id, i))
+			for k := 28; k >= 0; k -= 4 {
+				sb.WriteByte(digits[(w>>uint(k))&15])
+			}
+		}
+	})
+	return sb.String()
+}
+
+// Width is the asset's pixel width.
+func (a Asset) Width() int32 { return a.num(model.AssetW) }
+
+// Height is the asset's pixel height.
+func (a Asset) Height() int32 { return a.num(model.AssetH) }
+
+// DPI is the render's resolution; only a rendered asset has one.
+func (a Asset) DPI() (int32, bool) {
+	d := a.num(model.AssetDpi)
+	return d, d > 0
+}
+
+// Flags are `overlaid`, `clip-bbox`, `transformed`, `icc`, `scaled`, `text-overlap`.
+func (a Asset) Flags() []string {
+	bits := a.num(model.AssetFlags)
+	var out []string
+	for b := 0; b < 6; b++ {
+		bit := int32(1) << b
+		if bits&bit != 0 {
+			var sb strings.Builder
+			model.AfgEmitName(&sb, bit)
+			out = append(out, sb.String())
+		}
+	}
+	return out
+}
+
+// Uses is every node that shows it, with the page region its pixels map to.
+func (a Asset) Uses() []AssetUse {
+	var out []AssetUse
+	a.m.with(func(x *arenas) {
+		for u := model.AssetUseHead(x.assets, a.id); u >= 0; u = model.UseNext(x.uses, u) {
+			out = append(out, AssetUse{Node: model.UseNode(x.uses, u),
+				Region: Region{model.UsePage(x.uses, u), model.UseX0(x.uses, u), model.UseY0(x.uses, u), model.UseX1(x.uses, u), model.UseY1(x.uses, u)}})
+		}
+	})
+	return out
+}
+
+// Bytes is the encoded bytes (a copy: the Model's arenas sit behind a lock).
+func (a Asset) Bytes() []byte {
+	var out []byte
+	a.m.with(func(x *arenas) {
+		s, n := model.AssetBstart(x.assets, a.id), model.AssetBlen(x.assets, a.id)
+		out = make([]byte, 0, n)
+		for i := s; i < s+n; i++ {
+			out = append(out, byte(port.BufAt(x.abytes, i)))
+		}
+	})
+	return out
+}
+
+// Assets is the asset table, in admission order; empty unless `Options.Assets` was on.
+func (m *Model) Assets() []Asset {
+	var n int32
+	m.with(func(a *arenas) { n = model.AssetCount(a.assets) })
+	out := make([]Asset, 0, n)
+	for id := int32(0); id < n; id++ {
+		out = append(out, Asset{m: m, id: id})
+	}
+	return out
+}
+
+// Asset is the asset with this id, if there is one.
+func (m *Model) Asset(id int32) (Asset, bool) {
+	var n int32
+	m.with(func(a *arenas) { n = model.AssetCount(a.assets) })
+	if id < 0 || id >= n {
+		return Asset{}, false
+	}
+	return Asset{m: m, id: id}, true
+}
+
+// AssetFiles is the sidecar: every asset's file name, media type and bytes, for the caller to write beside the HTML (`external`).
+func (m *Model) AssetFiles() []AssetFile {
+	var out []AssetFile
+	for _, a := range m.Assets() {
+		out = append(out, AssetFile{Name: a.Name(), MediaType: a.MediaType(), Bytes: a.Bytes()})
+	}
+	return out
+}
+
+// Asset is the asset this `figure` or `seal` shows, if it has one (SPEC 10.11).
+func (n Node) Asset() (Asset, bool) {
+	at, ok := n.Attr("asset")
+	if !ok || at.Kind != AttrInt {
+		return Asset{}, false
+	}
+	return n.m.Asset(at.Int)
+}
+
+// NoAsset is why it has no asset (`withheld`, `part`, `vector`, `composite`, `colorspace`, `codec`, `render`, `too-large`,
+// `budget`), when `Options.Assets` was on and it has none.
+func (n Node) NoAsset() (string, bool) {
+	var s string
+	var found bool
+	n.m.with(func(a *arenas) {
+		at := model.AttrFind(a.attrs, model.NodeAttrHead(a.nodes, n.n), model.FkNoasset())
+		if at < 0 {
+			return
+		}
+		var sb strings.Builder
+		model.NzEmitName(&sb, model.AttrValue(a.attrs, at))
+		s, found = sb.String(), true
+	})
+	return s, found
 }
 
 // Node is a node: the Model and an index. It borrows, it never copies.

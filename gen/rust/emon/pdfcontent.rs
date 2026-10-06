@@ -8,6 +8,7 @@ use crate::emon::model::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdffont::*;
 use crate::emon::pdfgfx::*;
+use crate::emon::pdfimage::*;
 use crate::emon::pdflex::*;
 use crate::emon::pdfnames::*;
 use crate::emon::pdfsrc::*;
@@ -2925,6 +2926,7 @@ pub(crate) fn pc_image_place(mut cx: &mut crate::port::Cells, mut im: &mut crate
     let mut skew: i32 = 1;
     let mut fl: i32 = flags;
     let mut chk: i32 = 0;
+    let mut ori: i32 = 0;
     let mut r: i32 = 0;
     if crate::port::cells_at(cx, C_CUR + G_BM) != 0 {
         fl += mg_blend();
@@ -2957,6 +2959,13 @@ pub(crate) fn pc_image_place(mut cx: &mut crate::port::Cells, mut im: &mut crate
     im_set(im, r, mf_flags(), fl);
     im_set(im, r, mf_rot(), rot);
     im_set(im, r, mf_skewed(), skew);
+    // The CTM here maps to the displayed page, whose y runs down: `pi-orient` reads a y-up matrix, so the y axis is flipped
+    // back (b and d change sign). 0 is upright on the page AS DISPLAYED (a page's /Rotate is in it), 8 not rectilinear.
+    ori = pi_orient(ma, (mb).wrapping_mul(-1 as i64), mc, (md).wrapping_mul(-1 as i64));
+    if ori < 0 {
+        ori = 8;
+    }
+    im_set(im, r, mf_placement(), ori);
     im_set(im, r, mf_z(), crate::port::cells_at(cx, C_Z));
     crate::port::cells_set(cx, C_Z, crate::port::cells_at(cx, C_Z) + 1);
     im_set(im, r, mf_clip(), crate::port::cells_at(cx, C_CUR + G_CLIP));

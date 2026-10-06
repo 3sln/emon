@@ -414,6 +414,132 @@ func jsEDisplay(t *strings.Builder, pr int32, d int32, started int32, v int32) i
 	return 1
 }
 
+func jsFNoasset(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *port.Cells, n int32, started int32) int32 {
+	// `noasset`: why a figure or seal has no pixels (SPEC 10.11), an `nz` name.
+	var a int32 = model.NodeAttr(nodes, attrs, n, model.FkNoasset())
+	if a < 0 {
+		return started
+	}
+	jsBegin(t, pr, d, started, model.FkNoasset())
+	port.TextAscii(t, "\"")
+	model.NzEmitName(t, model.AttrValue(attrs, a))
+	port.TextAscii(t, "\"")
+	return 1
+}
+
+func jsShaHex(t *strings.Builder, assets *port.Cells, a int32) int32 {
+	// The asset's SHA-256, 64 lower-case hex digits.
+	var i int32 = 0
+	var k int32 = 0
+	var w int32 = 0
+	for i < 8 {
+		w = model.AssetSha(assets, a, i)
+		k = 0
+		for k < 8 {
+			JsHex(t, ((w)>>uint(28-(k*4)))&15)
+			k += 1
+		}
+		i += 1
+	}
+	return 0
+}
+
+func jsAsset(t *strings.Builder, pr int32, d int32, assets *port.Cells, uses *port.Cells, a int32) int32 {
+	// One asset (SPEC 10.11): id, name, type, origin, from, object, bytes, sha256, w, h, dpi, flags, uses.
+	var s int32 = 0
+	var u int32 = 0
+	var k int32 = 0
+	var b int32 = 0
+	var j int32 = 0
+	var fl int32 = model.AssetFlags(assets, a)
+	port.TextAscii(t, "{")
+	s = jsBegin(t, pr, d, s, model.FkId())
+	port.TextI32(t, a)
+	s = jsBegin(t, pr, d, s, model.FkName())
+	port.TextAscii(t, "\"a")
+	port.TextI32(t, a)
+	if model.AssetType(assets, a) == 1 {
+		port.TextAscii(t, ".jpg")
+	}
+	if model.AssetType(assets, a) != 1 {
+		port.TextAscii(t, ".png")
+	}
+	port.TextAscii(t, "\"")
+	s = jsBegin(t, pr, d, s, model.FkType())
+	port.TextAscii(t, "\"")
+	model.AmtEmitName(t, model.AssetType(assets, a))
+	port.TextAscii(t, "\"")
+	s = jsBegin(t, pr, d, s, model.FkOrigin())
+	port.TextAscii(t, "\"")
+	model.AoEmitName(t, model.AssetOrigin(assets, a))
+	port.TextAscii(t, "\"")
+	s = jsBegin(t, pr, d, s, model.FkFrom())
+	port.TextAscii(t, "\"")
+	model.AfmEmitName(t, model.AssetFrom(assets, a))
+	port.TextAscii(t, "\"")
+	if model.AssetObject(assets, a) >= 0 {
+		s = jsBegin(t, pr, d, s, model.FkObject())
+		port.TextI32(t, model.AssetObject(assets, a))
+	}
+	s = jsBegin(t, pr, d, s, model.FkBytes())
+	port.TextI32(t, model.AssetBlen(assets, a))
+	s = jsBegin(t, pr, d, s, model.FkSha256())
+	port.TextAscii(t, "\"")
+	jsShaHex(t, assets, a)
+	port.TextAscii(t, "\"")
+	s = jsBegin(t, pr, d, s, model.FkW())
+	port.TextI32(t, model.AssetW(assets, a))
+	s = jsBegin(t, pr, d, s, model.FkH())
+	port.TextI32(t, model.AssetH(assets, a))
+	if model.AssetDpi(assets, a) > 0 {
+		s = jsBegin(t, pr, d, s, model.FkDpi())
+		port.TextI32(t, model.AssetDpi(assets, a))
+	}
+	if fl != 0 {
+		s = jsBegin(t, pr, d, s, model.FkFlags())
+		port.TextAscii(t, "[")
+		b = 0
+		for b < 6 {
+			if (fl & ((1) << uint(b))) != 0 {
+				JsFsep(t, pr, k)
+				port.TextAscii(t, "\"")
+				model.AfgEmitName(t, (1)<<uint(b))
+				port.TextAscii(t, "\"")
+				k += 1
+			}
+			b += 1
+		}
+		port.TextAscii(t, "]")
+	}
+	s = jsBegin(t, pr, d, s, model.FkUses())
+	port.TextAscii(t, "[")
+	u = model.AssetUseHead(assets, a)
+	for u >= 0 {
+		JsAelem(t, pr, d+1, j)
+		port.TextAscii(t, "{")
+		jsBegin(t, pr, d+2, 0, model.FkNode())
+		port.TextI32(t, model.UseNode(uses, u))
+		jsBegin(t, pr, d+2, 1, model.FkAt())
+		port.TextAscii(t, "[")
+		port.TextI32(t, model.UsePage(uses, u))
+		JsFsep(t, pr, 1)
+		JsCpt(t, model.UseX0(uses, u))
+		JsFsep(t, pr, 1)
+		JsCpt(t, model.UseY0(uses, u))
+		JsFsep(t, pr, 1)
+		JsCpt(t, model.UseX1(uses, u))
+		JsFsep(t, pr, 1)
+		JsCpt(t, model.UseY1(uses, u))
+		port.TextAscii(t, "]")
+		JsClose(t, pr, d+2, 1)
+		j += 1
+		u = model.UseNext(uses, u)
+	}
+	JsAend(t, pr, d+1, j)
+	JsClose(t, pr, d, s)
+	return 0
+}
+
 func jsKfields(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *port.Cells, text *port.Cells, n int32, kind int32, started int32) int32 {
 	// The fields only this kind has, in the order SPEC 3.2 lists them.
 	// WHERE EACH LIVES in the arena: a level, an alignment, a role, a
@@ -483,12 +609,16 @@ func jsKfields(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkLabel(), s)
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkAlt(), s)
 		s = jsFarrText(t, pr, d, nodes, attrs, text, n, model.FkLabels(), s)
+		s = jsFint(t, pr, d, nodes, attrs, n, model.FkAsset(), s)
+		s = jsFNoasset(t, pr, d, nodes, attrs, n, s)
 	}
 	if kind == model.NkSeal() {
 		s = jsESeal(t, pr, d, s, sub)
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkName(), s)
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkDate(), s)
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkColor(), s)
+		s = jsFint(t, pr, d, nodes, attrs, n, model.FkAsset(), s)
+		s = jsFNoasset(t, pr, d, nodes, attrs, n, s)
 	}
 	if kind == model.NkFormula() {
 		s = jsEDisplay(t, pr, d, s, sub)
@@ -898,6 +1028,13 @@ func jsSettings(t *strings.Builder, pr int32, nodes *port.Cells, attrs *port.Cel
 	}
 	s = jsFtext(t, pr, 1, nodes, attrs, text, 0, model.FkOcr(), s)
 	s = jsFtext(t, pr, 1, nodes, attrs, text, 0, model.FkDetail(), s)
+	// the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was
+	s = jsFtext(t, pr, 1, nodes, attrs, text, 0, model.FkAssets(), s)
+	s = jsFint(t, pr, 1, nodes, attrs, 0, model.FkAssetDpi(), s)
+	s = jsFint(t, pr, 1, nodes, attrs, 0, model.FkAssetPixels(), s)
+	s = jsFint(t, pr, 1, nodes, attrs, 0, model.FkAssetBytes(), s)
+	s = jsFint(t, pr, 1, nodes, attrs, 0, model.FkAssetsBytes(), s)
+	s = jsFtext(t, pr, 1, nodes, attrs, text, 0, model.FkAssetSignatures(), s)
 	JsClose(t, pr, 1, s)
 	return 0
 }
@@ -917,7 +1054,7 @@ func jsMeta(t *strings.Builder, pr int32, nodes *port.Cells, attrs *port.Cells, 
 	return 0
 }
 
-func JsEmit(t *strings.Builder, pretty int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
+func JsEmit(t *strings.Builder, pretty int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, assets *port.Cells, uses *port.Cells) int32 {
 	// Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1
 	// for the indented form, 0 for the compact one. The root (node 0)
 	// must be a document: run `model-check` first on a Model of unknown
@@ -975,6 +1112,18 @@ func JsEmit(t *strings.Builder, pretty int32, nodes *port.Cells, attrs *port.Cel
 		i += 1
 	}
 	JsAend(t, pretty, 1, nl)
+	// the asset table, after `dropped`, only when the `assets` setting is on (then always, `[]` when empty: SPEC 4.2)
+	if jsHas(nodes, attrs, model.FkAssets()) == 1 {
+		s = jsBegin(t, pretty, 0, s, model.FkAssets())
+		port.TextAscii(t, "[")
+		i = 0
+		for i < model.AssetCount(assets) {
+			JsAelem(t, pretty, 1, i)
+			jsAsset(t, pretty, 2, assets, uses, i)
+			i += 1
+		}
+		JsAend(t, pretty, 1, model.AssetCount(assets))
+	}
 	JsClose(t, pretty, 0, s)
 	return 0
 }

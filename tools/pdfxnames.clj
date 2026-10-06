@@ -41,7 +41,9 @@
    "AllOn" "AnyOn" "AnyOff" "AllOff" ["VE" "ve"] "And" "Or" "Not" "Unchanged"
    "ShadingType" "PatternType" "Extend"
    ;; inline styles (P4.7): what a FontDescriptor says of weight and slant
-   "StemV" "ItalicAngle" "FontWeight"])
+   "StemV" "ItalicAngle" "FontWeight"
+   ;; image XObjects and inline images (P3.12, D117): /Matte, the CCITT parameters, the JBIG2 globals, an inline image's /DP
+   "Matte" "K" "Rows" "BlackIs1" "EncodedByteAlign" "EndOfLine" "EndOfBlock" "JBIG2Globals" "DP"])
 
 ;; XMP (P3.9): namespace URIs and the local names the reader meets, as [symbol string].
 (def xstrings

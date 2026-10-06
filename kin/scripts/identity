@@ -28,6 +28,11 @@
 ;;   bb identity --corpus [--limit N] [--sample K]   INSTEAD the PDFs of `corpus/` (never committed): a non-gate, slow
 ;;   bb identity --only SUBSTR          documents whose path contains SUBSTR
 ;;
+;; AND WITH `assets` ON (P3.13, SPEC 14.1.5, D117): the same arms and the same transcript trip over the documents that have
+;; images (P3.12's fixtures and the synthetic documents with pictures), each given `--assets=images`: the bundle then also has
+;; the HTML in `external` and `omit` mode and every asset file, byte for byte (hex), so the asset files and the three HTML
+;; modes are identical on every arm, in memory and through the 512-byte async source (a gate of its own below).
+;;
 ;; A difference prints the first differing section and byte offset, and the arms.
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [process shell destroy-tree]]
@@ -42,6 +47,7 @@
 (def corpus? (some #{"--corpus"} args))
 (defn opt [k] (some->> (map-indexed vector args) (some (fn [[i a]] (when (= a k) (get args (inc i)))))))
 (def only (opt "--only"))
+(def extra (atom []))   ; flags every arm is given (the assets pass sets one)
 (def limit (some-> (opt "--limit") parse-long))
 (def sample (some-> (opt "--sample") parse-long))
 
@@ -108,7 +114,7 @@
   [host args {:keys [file pw]}]
   (let [exe (if (= host :rust) rust go)
         p (apply process {:out :bytes :err :string}
-                 exe "--out=bundle" (concat args (when pw [(str "--password=" pw)]) [file]))
+                 exe "--out=bundle" (concat args @extra (when pw [(str "--password=" pw)]) [file]))
         r (deref p 120000 ::timeout)]
     (if (= r ::timeout)
       (do (destroy-tree p) {:exit -1 :out (byte-array 0) :err "TIMEOUT"})
@@ -184,6 +190,28 @@
         (str/join ", " (for [[k v] (sort-by (comp str key) (dissoc outcomes :document))] (str k " " v)))
         "), " (count arms) " arms each, byte-identical bundles (JSON compact and pretty, HTML default and full, evidence, intake) and exit and stderr; "
         "the record/replay trip across hosts is the same (" (quot (- (System/currentTimeMillis) t0) 1000) " s)")))
+
+;; ---------------------------------------------------------------- the assets pass (P3.13)
+
+(def asset-corpus
+  (vec (for [f (concat (globs "test/assets" "*.pdf")
+                       (map #(str "test/corpus/synth/pdf/" % ".pdf")
+                            ["figures-charts" "figures-logo-screenshot" "initial-image" "gfx-image-rules"
+                             "mixed-table-image-shaded" "mixed-table-image" "columns-span-figure"]))
+             :when (and (fs/exists? f) (or (not only) (str/includes? f only)))]
+         {:file f :pw nil})))
+
+(when (and (not corpus?) (zero? @fails))
+  (reset! extra ["--assets=images"])
+  (let [t1 (System/currentTimeMillis)
+        res (doall (pmap (fn [[i item]] [item (one (+ 100000 i) item)]) (map-indexed vector asset-corpus)))]
+    (doseq [[item {:keys [probs]}] res :when (seq probs)]
+      (bad "[assets=images] " (:file item) ": " (str/join "; " probs)))
+    (when (zero? @fails)
+      (let [n (count (filter #(= :document (:outcome (second %))) res))]
+        (ok "IDENTITY (assets=images): " (count res) " documents (" n " converted), " (count arms) " arms each: byte-identical JSON with its `assets`, HTML in the "
+            "default, full, external and omit modes and every asset file (hex), the record/replay trip across hosts the same ("
+            (quot (- (System/currentTimeMillis) t1) 1000) " s)")))))
 
 (if (zero? @fails)
   (System/exit 0)

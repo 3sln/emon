@@ -993,6 +993,33 @@ public final class Pdfxnames {
     public static int pxFontWeight() {
         return 193;
     }
+    public static int pxMatte() {
+        return 194;
+    }
+    public static int pxK() {
+        return 195;
+    }
+    public static int pxRows() {
+        return 196;
+    }
+    public static int pxBlackIs1() {
+        return 197;
+    }
+    public static int pxEncodedByteAlign() {
+        return 198;
+    }
+    public static int pxEndOfLine() {
+        return 199;
+    }
+    public static int pxEndOfBlock() {
+        return 200;
+    }
+    public static int pxJbig2Globals() {
+        return 201;
+    }
+    public static int pxDp() {
+        return 202;
+    }
     public static int pxEmitName(StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.textAscii(t, "Annots");
@@ -1770,6 +1797,42 @@ public final class Pdfxnames {
             emon.Port.textAscii(t, "FontWeight");
             return 1;
         }
+        if (code == 194) {
+            emon.Port.textAscii(t, "Matte");
+            return 1;
+        }
+        if (code == 195) {
+            emon.Port.textAscii(t, "K");
+            return 1;
+        }
+        if (code == 196) {
+            emon.Port.textAscii(t, "Rows");
+            return 1;
+        }
+        if (code == 197) {
+            emon.Port.textAscii(t, "BlackIs1");
+            return 1;
+        }
+        if (code == 198) {
+            emon.Port.textAscii(t, "EncodedByteAlign");
+            return 1;
+        }
+        if (code == 199) {
+            emon.Port.textAscii(t, "EndOfLine");
+            return 1;
+        }
+        if (code == 200) {
+            emon.Port.textAscii(t, "EndOfBlock");
+            return 1;
+        }
+        if (code == 201) {
+            emon.Port.textAscii(t, "JBIG2Globals");
+            return 1;
+        }
+        if (code == 202) {
+            emon.Port.textAscii(t, "DP");
+            return 1;
+        }
         return 0;
     }
     public static final int[] PX_CHARS = {
@@ -1841,7 +1904,11 @@ public final class Pdfxnames {
         99, 104, 97, 110, 103, 101, 100, 83, 104, 97, 100, 105, 110, 103, 84, 121,
         112, 101, 80, 97, 116, 116, 101, 114, 110, 84, 121, 112, 101, 69, 120, 116,
         101, 110, 100, 83, 116, 101, 109, 86, 73, 116, 97, 108, 105, 99, 65, 110,
-        103, 108, 101, 70, 111, 110, 116, 87, 101, 105, 103, 104, 116
+        103, 108, 101, 70, 111, 110, 116, 87, 101, 105, 103, 104, 116, 77, 97, 116,
+        116, 101, 75, 82, 111, 119, 115, 66, 108, 97, 99, 107, 73, 115, 49, 69,
+        110, 99, 111, 100, 101, 100, 66, 121, 116, 101, 65, 108, 105, 103, 110, 69,
+        110, 100, 79, 102, 76, 105, 110, 101, 69, 110, 100, 79, 102, 66, 108, 111,
+        99, 107, 74, 66, 73, 71, 50, 71, 108, 111, 98, 97, 108, 115, 68, 80
     };
     public static final int[] PX_SPAN = {
         0, 6,
@@ -2037,6 +2104,15 @@ public final class Pdfxnames {
         1069, 6,
         1075, 5,
         1080, 11,
-        1091, 10
+        1091, 10,
+        1101, 5,
+        1106, 1,
+        1107, 4,
+        1111, 8,
+        1119, 16,
+        1135, 9,
+        1144, 10,
+        1154, 12,
+        1166, 2
     };
 }

@@ -19,7 +19,7 @@ public final class Htmltest {
         StringBuilder out = emon.Testport.newText();
         emon.Testport.assertEq(Mscript.jtBuild(emon.Testport.testFile(mfile), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
         emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
-        emon.Testport.assertEq(Html.htmlEmit(out, opts, below, nodes, attrs, regions, text, pages, ledger, layout), 0, "it emits");
+        emon.Testport.assertEq(Html.htmlEmit(out, opts, below, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells()), 0, "it emits");
         emon.Testport.assertTextSpan(out, emon.Testport.testFile(hfile), 0, Mscript.jtEnd(emon.Testport.testFile(hfile)), "the golden", 0);
         return 0;
     }
@@ -75,7 +75,7 @@ public final class Htmltest {
         emon.Port.Cells layout = emon.Port.newCells();
         StringBuilder out = emon.Testport.newText();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
-        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
         emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "the smallest document");
     }
     public static void testHeadingLevelsAndEscapes() {
@@ -98,7 +98,7 @@ public final class Htmltest {
         h = Model.nodeNew(nodes, Model.nkHeading(), 0);
         Model.nodeSetSub(nodes, h, 7);
         htSet(nodes, text, h, emon.Testport.textBlob("say \"seven\""));
-        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.htmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
         emon.Testport.assertText(out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><h1>a &amp; b</h1><h6>&lt;six&gt;</h6><h6 aria-level=\"7\">say &quot;seven&quot;</h6></main></body></html>", "levels, and the four escapes");
     }
     public static void testOptionsAddIdsGeometryAndConfidence() {
@@ -118,9 +118,9 @@ public final class Htmltest {
         htSet(nodes, text, p, emon.Testport.textBlob("x"));
         Model.nodeAddRegion(nodes, regions, p, 1, 7250, -5, 54000, 100);
         Model.nodeSetConf(nodes, p, 500);
-        Html.htmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout);
-        Html.htmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout);
-        Html.htmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.htmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
+        Html.htmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
+        Html.htmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
         emon.Testport.assertText(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options");
         emon.Testport.assertText(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default");
         emon.Testport.assertText(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold");
@@ -141,8 +141,8 @@ public final class Htmltest {
         Model.nodeSetSub(nodes, n, 2);
         n = Model.nodeNew(nodes, Model.nkFurniture(), -1);
         Model.nodeSetSub(nodes, n, 7);
-        Html.htmlEmit(kept, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
-        Html.htmlEmit(bare, 96, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.htmlEmit(kept, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
+        Html.htmlEmit(bare, 96, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
         emon.Testport.assertText(kept, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>", "furniture once at the top, then the milestone");
         emon.Testport.assertText(bare, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "both off");
     }
@@ -161,7 +161,7 @@ public final class Htmltest {
         while (at != -1) {
             at = Model.nodeNew(nodes, Model.nkSection(), at);
         }
-        emon.Testport.assertEq(Html.htmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "compact");
-        emon.Testport.assertEq(Html.htmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "pretty");
+        emon.Testport.assertEq(Html.htmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells()), 0, "compact");
+        emon.Testport.assertEq(Html.htmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells()), 0, "pretty");
     }
 }

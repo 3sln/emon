@@ -46,6 +46,14 @@ func HoAlignStyle() int32 {
 	return 256
 }
 
+func HoAssetsExternal() int32 {
+	return 512
+}
+
+func HoAssetsOmit() int32 {
+	return 1024
+}
+
 func hOn(o int32, bit int32) int32 {
 	if (o & bit) != 0 {
 		return 1
@@ -262,7 +270,7 @@ func hCommon(t *strings.Builder, o int32, nodes *port.Cells, regions *port.Cells
 	if (hOn(o, 2) == 1) && (model.NodeIsInline(nodes, n) == 0) && (model.NodeRegionCount(nodes, n) > 0) && (model.LayoutCount(layout) > 0) {
 		hColumns(t, nodes, regions, pages, layout, n)
 	}
-	if (hOn(o, 4) == 1) && (cf >= 0) && (cf < (o / 1024)) {
+	if (hOn(o, 4) == 1) && (cf >= 0) && (cf < (o / 4096)) {
 		port.TextAscii(t, " data-emon-conf=\"")
 		port.TextI32(t, cf)
 		port.TextAscii(t, "\"")
@@ -592,27 +600,240 @@ func hInline(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, 
 	return 0
 }
 
-func hBlocks(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, n int32, d int32) int32 {
+func hSealWord(t *strings.Builder, sub int32) int32 {
+	// A seal's kind as the start of its accessible name.
+	if sub == 1 {
+		port.TextAscii(t, "Seal")
+	}
+	if sub == 2 {
+		port.TextAscii(t, "Stamp")
+	}
+	if sub == 3 {
+		port.TextAscii(t, "Signature")
+	}
+	if sub == 4 {
+		port.TextAscii(t, "Initials")
+	}
+	if sub == 5 {
+		port.TextAscii(t, "Digital signature")
+	}
+	if (sub < 1) || (sub > 5) {
+		port.TextAscii(t, "Seal")
+	}
+	return 0
+}
+
+func hAssetId(nodes *port.Cells, attrs *port.Cells, n int32, o int32) int32 {
+	// The asset id of node n when this HTML shows it (the node has one and the option is not `omit`), else -1.
+	var a int32 = hIattr(nodes, attrs, n, model.FkAsset())
+	if hOn(o, 1024) == 1 {
+		return -1
+	}
+	if a < 0 {
+		return -1
+	}
+	return model.AttrValue(attrs, a)
+}
+
+func hNoasset(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, n int32) int32 {
+	//  data-emon-noasset="reason" for a node that has none (never under `omit`).
+	var a int32 = hIattr(nodes, attrs, n, model.FkNoasset())
+	if hOn(o, 1024) == 1 {
+		return 0
+	}
+	if a < 0 {
+		return 0
+	}
+	port.TextAscii(t, " data-emon-noasset=\"")
+	model.NzEmitName(t, model.AttrValue(attrs, a))
+	port.TextAscii(t, "\"")
+	return 1
+}
+
+func hB64Char(t *strings.Builder, v int32) int32 {
+	if v < 26 {
+		port.TextCp(t, 65+v)
+	}
+	if (v >= 26) && (v < 52) {
+		port.TextCp(t, 71+v)
+	}
+	if (v >= 52) && (v < 62) {
+		port.TextCp(t, v-4)
+	}
+	if v == 62 {
+		port.TextCp(t, 43)
+	}
+	if v == 63 {
+		port.TextCp(t, 47)
+	}
+	return 0
+}
+
+func hB64(t *strings.Builder, abytes *port.Buf, start int32, ln int32) int32 {
+	// RFC 4648 base64 (standard alphabet, padded, no line breaks) of abytes[start, start+ln).
+	var i int32 = 0
+	var b0 int32 = 0
+	var b1 int32 = 0
+	var b2 int32 = 0
+	for i < ln {
+		b0 = port.BufAt(abytes, start+i)
+		b1 = 0
+		b2 = 0
+		if (i + 1) < ln {
+			b1 = port.BufAt(abytes, start+(i+1))
+		}
+		if (i + 2) < ln {
+			b2 = port.BufAt(abytes, start+(i+2))
+		}
+		hB64Char(t, b0/4)
+		hB64Char(t, ((b0%4)*16)+(b1/16))
+		if (i + 1) < ln {
+			hB64Char(t, ((b1%16)*4)+(b2/64))
+		} else {
+			port.TextCp(t, 61)
+		}
+		if (i + 2) < ln {
+			hB64Char(t, b2%64)
+		} else {
+			port.TextCp(t, 61)
+		}
+		i += 3
+	}
+	return 0
+}
+
+func hHasCaption(nodes *port.Cells, n int32) int32 {
+	var c int32 = model.NodeFirstChild(nodes, n)
+	for c >= 0 {
+		if model.NodeKind(nodes, c) == model.NkCaption() {
+			return 1
+		}
+		c = model.NodeNext(nodes, c)
+	}
+	return 0
+}
+
+func hAltEmpty(nodes *port.Cells, attrs *port.Cells, n int32) int32 {
+	// 1 when the placeholder's accessible name is empty: a figure with no `alt`. A seal always has its word.
+	var a int32 = hTattr(nodes, attrs, n, model.FkAlt())
+	if model.NodeKind(nodes, n) == model.NkSeal() {
+		return 0
+	}
+	if a < 0 {
+		return 1
+	}
+	if model.AttrLen(attrs, a) == 0 {
+		return 1
+	}
+	return 0
+}
+
+func hAlt(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, text *port.Cells, n int32) int32 {
+	// The text the placeholder's `aria-label` would have had: a figure's `alt`, a seal's `Stamp: ...` label (D069).
+	var a int32 = hTattr(nodes, attrs, n, model.FkAlt())
+	var b int32 = -1
+	if model.NodeKind(nodes, n) == model.NkFigure() {
+		if a >= 0 {
+			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
+		}
+		return 0
+	}
+	b = hTattr(nodes, attrs, n, model.FkName())
+	hSealWord(t, model.NodeSub(nodes, n))
+	if (model.NodeHasText(nodes, n) == 1) || (b >= 0) {
+		port.TextAscii(t, ": ")
+	}
+	if model.NodeHasText(nodes, n) == 1 {
+		hRun(t, text, model.NodeTextStart(nodes, n), model.NodeTextLen(nodes, n))
+	}
+	if (model.NodeHasText(nodes, n) == 0) && (b >= 0) {
+		hRun(t, text, model.AttrValue(attrs, b), model.AttrLen(attrs, b))
+	}
+	return 0
+}
+
+func hPx(cpt int32) int32 {
+	// A length in centipoints as CSS pixels: cpt * 4 / 300 rounded half up, at least 1.
+	var v int32 = ((cpt * 8) + 300) / 600
+	if v < 1 {
+		return 1
+	}
+	return v
+}
+
+func hImg(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, text *port.Cells, assets *port.Cells, uses *port.Cells, abytes *port.Buf, prefix *port.Cells, n int32, id int32) int32 {
+	// The `<img>` of node n's asset `id`: src, alt, width and height (the node's own use: the size the picture had on the
+	// page), `data-emon-asset`, and `data-emon-alt=missing` when there is no alt and no caption to be the description.
+	var u int32 = model.AssetUseHead(assets, id)
+	var w int32 = 1
+	var h int32 = 1
+	var i int32 = 0
+	for u >= 0 {
+		if model.UseNode(uses, u) == n {
+			w = hPx(model.UseX1(uses, u) - model.UseX0(uses, u))
+			h = hPx(model.UseY1(uses, u) - model.UseY0(uses, u))
+			u = -1
+		} else {
+			u = model.UseNext(uses, u)
+		}
+	}
+	port.TextAscii(t, "<img src=\"")
+	if hOn(o, 512) == 1 {
+		for i < port.CellsLen(prefix) {
+			HCp(t, port.CellsAt(prefix, i))
+			i += 1
+		}
+		port.TextAscii(t, "a")
+		port.TextI32(t, id)
+		if model.AssetType(assets, id) == 1 {
+			port.TextAscii(t, ".jpg")
+		}
+		if model.AssetType(assets, id) != 1 {
+			port.TextAscii(t, ".png")
+		}
+	} else {
+		port.TextAscii(t, "data:")
+		model.AmtEmitName(t, model.AssetType(assets, id))
+		port.TextAscii(t, ";base64,")
+		hB64(t, abytes, model.AssetBstart(assets, id), model.AssetBlen(assets, id))
+	}
+	port.TextAscii(t, "\" alt=\"")
+	hAlt(t, nodes, attrs, text, n)
+	port.TextAscii(t, "\" width=\"")
+	port.TextI32(t, w)
+	port.TextAscii(t, "\" height=\"")
+	port.TextI32(t, h)
+	port.TextAscii(t, "\" data-emon-asset=\"")
+	port.TextI32(t, id)
+	port.TextAscii(t, "\"")
+	if (hAltEmpty(nodes, attrs, n) == 1) && (hHasCaption(nodes, n) == 0) {
+		port.TextAscii(t, " data-emon-alt=\"missing\"")
+	}
+	port.TextAscii(t, ">")
+	return 0
+}
+
+func hBlocks(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, assets *port.Cells, uses *port.Cells, abytes *port.Buf, prefix *port.Cells, n int32, d int32) int32 {
 	// Every non-inline child of n as a block at depth d. Answers how many
 	// wrote anything (a milestone turned off writes nothing).
 	var c int32 = model.NodeFirstChild(nodes, n)
 	var k int32 = 0
 	for c >= 0 {
 		if model.NodeIsInline(nodes, c) == 0 {
-			k += hBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d)
+			k += hBlock(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, c, d)
 		}
 		c = model.NodeNext(nodes, c)
 	}
 	return k
 }
 
-func hBody(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, n int32, d int32) int32 {
+func hBody(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, assets *port.Cells, uses *port.Cells, abytes *port.Buf, prefix *port.Cells, n int32, d int32) int32 {
 	// What goes inside a block's element: its line of text (inline
 	// children, else its own run), then its block children at depth d.
 	// Answers how many block children were written, so the caller knows
 	// whether its closing tag starts a new line (pretty mode).
 	hInner(t, o, nodes, attrs, regions, pages, layout, text, n)
-	return hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d)
+	return hBlocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d)
 }
 
 func hListType(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, text *port.Cells, n int32) int32 {
@@ -646,30 +867,7 @@ func hListType(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, text *p
 	return 0
 }
 
-func hSealWord(t *strings.Builder, sub int32) int32 {
-	// A seal's kind as the start of its accessible name.
-	if sub == 1 {
-		port.TextAscii(t, "Seal")
-	}
-	if sub == 2 {
-		port.TextAscii(t, "Stamp")
-	}
-	if sub == 3 {
-		port.TextAscii(t, "Signature")
-	}
-	if sub == 4 {
-		port.TextAscii(t, "Initials")
-	}
-	if sub == 5 {
-		port.TextAscii(t, "Digital signature")
-	}
-	if (sub < 1) || (sub > 5) {
-		port.TextAscii(t, "Seal")
-	}
-	return 0
-}
-
-func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, n int32, d int32) int32 {
+func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, layout *port.Cells, text *port.Cells, assets *port.Cells, uses *port.Cells, abytes *port.Buf, prefix *port.Cells, n int32, d int32) int32 {
 	// One node as a block element at depth d (SPEC 5.1), on its own line
 	// in pretty mode. Answers 1 if it wrote anything, 0 if not. An inline
 	// kind met where a block belongs is written as itself.
@@ -681,6 +879,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 	var c int32 = 0
 	var lv int32 = 0
 	var pk int32 = 0
+	var asid int32 = -1
 	if model.NodeIsInline(nodes, n) == 1 {
 		hNl(t, o, d)
 		hInline(t, o, nodes, attrs, regions, pages, layout, text, n)
@@ -699,7 +898,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		port.TextAscii(t, "<section")
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -735,7 +934,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
 			port.TextAscii(t, " ")
 		}
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -749,7 +948,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		hAlign(t, o, sub)
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -772,7 +971,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		}
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -800,7 +999,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		}
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -814,14 +1013,14 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		c = model.NodeFirstChild(nodes, n)
 		for c >= 0 {
 			if model.NodeKind(nodes, c) == model.NkCaption() {
-				hBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d+1)
+				hBlock(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, c, d+1)
 			}
 			c = model.NodeNext(nodes, c)
 		}
 		c = model.NodeFirstChild(nodes, n)
 		for c >= 0 {
 			if model.NodeKind(nodes, c) != model.NkCaption() {
-				hBlock(t, o, nodes, attrs, regions, pages, layout, text, c, d+1)
+				hBlock(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, c, d+1)
 			}
 			c = model.NodeNext(nodes, c)
 		}
@@ -841,7 +1040,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		}
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -863,7 +1062,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		}
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -894,7 +1093,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		hAlignAttr(t, o, nodes, attrs, n)
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -930,7 +1129,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		hAlignAttr(t, o, nodes, attrs, n)
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -946,6 +1145,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		return 1
 	}
 	if kind == model.NkFigure() {
+		asid = hAssetId(nodes, attrs, n, o)
 		port.TextAscii(t, "<figure data-emon-kind=\"")
 		if sub > 0 {
 			model.FgEmitName(t, sub)
@@ -953,12 +1153,15 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		if sub <= 0 {
 			port.TextAscii(t, "unknown")
 		}
-		port.TextAscii(t, "\" role=\"img\"")
-		a = hTattr(nodes, attrs, n, model.FkAlt())
-		if a >= 0 {
-			port.TextAscii(t, " aria-label=\"")
-			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
-			port.TextAscii(t, "\"")
+		port.TextAscii(t, "\"")
+		if asid < 0 {
+			port.TextAscii(t, " role=\"img\"")
+			a = hTattr(nodes, attrs, n, model.FkAlt())
+			if a >= 0 {
+				port.TextAscii(t, " aria-label=\"")
+				hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
+				port.TextAscii(t, "\"")
+			}
 		}
 		a = hTattr(nodes, attrs, n, model.FkLabel())
 		if a >= 0 {
@@ -966,8 +1169,15 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
 			port.TextAscii(t, "\"")
 		}
+		hNoasset(t, o, nodes, attrs, n)
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
+		hb = 0
+		if asid >= 0 {
+			hNl(t, o, d+1)
+			hImg(t, o, nodes, attrs, text, assets, uses, abytes, prefix, n, asid)
+			hb = 1
+		}
 		hInner(t, o, nodes, attrs, regions, pages, layout, text, n)
 		a = model.NodeAttr(nodes, attrs, n, model.FkLabels())
 		for a >= 0 {
@@ -976,7 +1186,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 			port.TextAscii(t, "</span>")
 			a = model.AttrFindNext(attrs, a, model.FkLabels())
 		}
-		hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb += hBlocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -984,6 +1194,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		return 1
 	}
 	if kind == model.NkSeal() {
+		asid = hAssetId(nodes, attrs, n, o)
 		port.TextAscii(t, "<figure data-emon-kind=\"")
 		if sub > 0 {
 			model.SlEmitName(t, sub)
@@ -1010,20 +1221,20 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 			hRun(t, text, model.AttrValue(attrs, b), model.AttrLen(attrs, b))
 			port.TextAscii(t, "\"")
 		}
-		port.TextAscii(t, " role=\"img\" aria-label=\"")
-		hSealWord(t, sub)
-		if (model.NodeHasText(nodes, n) == 1) || (a >= 0) {
-			port.TextAscii(t, ": ")
+		if asid < 0 {
+			port.TextAscii(t, " role=\"img\" aria-label=\"")
+			hAlt(t, nodes, attrs, text, n)
+			port.TextAscii(t, "\"")
 		}
-		if model.NodeHasText(nodes, n) == 1 {
-			hRun(t, text, model.NodeTextStart(nodes, n), model.NodeTextLen(nodes, n))
-		}
-		if (model.NodeHasText(nodes, n) == 0) && (a >= 0) {
-			hRun(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
-		}
-		port.TextAscii(t, "\"")
+		hNoasset(t, o, nodes, attrs, n)
 		hCommon(t, o, nodes, regions, pages, layout, n)
-		port.TextAscii(t, "></figure>")
+		port.TextAscii(t, ">")
+		if asid >= 0 {
+			hNl(t, o, d+1)
+			hImg(t, o, nodes, attrs, text, assets, uses, abytes, prefix, n, asid)
+			hNl(t, o, d)
+		}
+		port.TextAscii(t, "</figure>")
 		return 1
 	}
 	if kind == model.NkFormula() {
@@ -1046,7 +1257,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		port.TextAscii(t, "><code>")
 		hInner(t, o, nodes, attrs, regions, pages, layout, text, n)
 		port.TextAscii(t, "</code>")
-		hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBlocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -1057,7 +1268,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		port.TextAscii(t, "<blockquote")
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -1093,7 +1304,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		}
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
-		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -1144,7 +1355,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 			port.TextAscii(t, "</p>")
 			hb = 1
 		}
-		hb += hBlocks(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+		hb += hBlocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)
 		}
@@ -1156,7 +1367,7 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 	port.TextAscii(t, "\"")
 	hCommon(t, o, nodes, regions, pages, layout, n)
 	port.TextAscii(t, ">")
-	hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, n, d+1)
+	hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 	if hb > 0 {
 		hNl(t, o, d)
 	}
@@ -1209,13 +1420,13 @@ func hMeta(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, te
 	return 1
 }
 
-func HtmlEmit(t *strings.Builder, opts int32, confBelow int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
+func HtmlEmit(t *strings.Builder, opts int32, confBelow int32, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, assets *port.Cells, uses *port.Cells, abytes *port.Buf, prefix *port.Cells) int32 {
 	// Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;
 	// `conf-below` is the threshold for `ho-confidence` (nodes with a
 	// conf under it get `data-emon-conf`). The root (node 0) must be a
 	// document: run `model-check` first on a Model of unknown origin.
 	// Answers 0.
-	var o int32 = (opts & 1023) + (confBelow * 1024)
+	var o int32 = (opts & 4095) + (confBelow * 4096)
 	var nn int32 = model.NodeCount(nodes)
 	var nl int32 = model.LedgerCount(ledger)
 	var a int32 = -1
@@ -1259,12 +1470,12 @@ func HtmlEmit(t *strings.Builder, opts int32, confBelow int32, nodes *port.Cells
 		i = 0
 		for i < nn {
 			if (model.NodeKind(nodes, i) == model.NkFurniture()) && (model.NodeParent(nodes, i) == -1) {
-				hBlock(t, o, nodes, attrs, regions, pages, layout, text, i, 3)
+				hBlock(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, i, 3)
 			}
 			i += 1
 		}
 	}
-	hBlocks(t, o, nodes, attrs, regions, pages, layout, text, 0, 3)
+	hBlocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, 0, 3)
 	if hOn(o, 8) == 1 {
 		i = 0
 		for i < nl {

@@ -21,7 +21,8 @@
 // canonical PNG and `replay` needs no codec. There is no OCR yet (P6.5): an image page has no text. What is
 // not an image or a PDF is still `unsupported-format`; an image the port cannot read is `undecodable` (damaged)
 // or `unsupported-image` (a coding it does not read: D187).
-//   * `assets` other than `none` (D117: specified, not implemented: `Error::Unsupported`),
+//   * `assets` `figures` (D117): it is accepted and runs as `images` (the cropping and rendering of every other figure arrive
+//     with P8.5); at `images` a figure or seal that is one embedded image gets its bytes or its pixels as PNG (P3.13),
 //   * document metadata in the header (`source`, `meta`) and every structure above the paragraph.
 //
 // THE LOOP IS WIRED (D058 revised, D089-D091). `convert` runs `plan::run` over one unit (everything kin
@@ -46,7 +47,8 @@ use crate::emon::furniture::{fu_find, fu_write};
 use crate::emon::inline::{il_analyze, il_fonts};
 use crate::emon::lists::ls_analyze;
 use crate::emon::notes::nt_analyze;
-use crate::emon::restruct::rs_run;
+use crate::emon::restruct::{rs_figures, rs_run};
+use crate::emon::asset::*;
 use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::table::*;
@@ -67,7 +69,7 @@ use crate::emon::player::pl_emit_gfx;
 use crate::emon::tlhealth::{th_append, th_run, th_write};
 use crate::imgdec;
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
-use crate::port::{self, cells_at, cells_len, cells_push, BitmapSet, Cells, Src, SrcBacking};
+use crate::port::{self, cells_at, cells_len, cells_push, BitmapSet, Buf, Cells, Src, SrcBacking};
 use crate::render::{KindMux, RenderFulfiller, RenderInput, Renderer};
 use crate::source::{ByteSource, Input, Inputs};
 use std::collections::BTreeSet;
@@ -201,12 +203,25 @@ impl std::fmt::Debug for OcrPort {
     }
 }
 
-// SPEC 13's `assets` (D117). Only `None` is implemented; the others are refused, not ignored.
+// SPEC 13's `assets` (D117): `None` (the default: nothing runs, every output is what it was without the feature), `Images` (a
+// figure or seal that is one embedded image gets it), `Figures` (also the others, cropped or rendered: P8.5; it runs as
+// `Images` until then, D294).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Assets {
     None,
     Images,
     Figures,
+}
+
+impl Assets {
+    // The level kin's `emon.asset` reads: 0 none, 1 images, 2 figures.
+    pub(crate) fn level(&self) -> i32 {
+        match self {
+            Assets::None => 0,
+            Assets::Images => 1,
+            Assets::Figures => 2,
+        }
+    }
 }
 
 // SPEC 13's `furniture` (D017, D153): `Policy` drops what the output already says and keeps the rest as asides, `Keep` leaves
@@ -236,6 +251,14 @@ pub struct Options {
     pub locale: Option<String>,
     pub ocr: OcrPolicy,
     pub assets: Assets,
+    // The settings that go with `assets` (SPEC 10.11), written to the Model's header when it is on: the render-crop resolution
+    // (150, 36..600), pixels per asset (2048 squared), encoded bytes per asset (4 MiB) and per document (32 MiB), and whether a
+    // handwritten signature's or initials' pixels are kept (off: they are a forgery kit).
+    pub asset_dpi: i32,
+    pub asset_pixels: i32,
+    pub asset_bytes: i32,
+    pub assets_bytes: i32,
+    pub asset_signatures: bool,
     pub furniture: Furniture,
     // Keep the text layer's evidence dump (`Model::evidence`): a test and debugging aid.
     pub keep_evidence: bool,
@@ -248,7 +271,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Options {
-        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, furniture: Furniture::Policy, keep_evidence: false, ocr_born_digital: false }
+        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, asset_dpi: 150, asset_pixels: 4_194_304, asset_bytes: 4_194_304, assets_bytes: 33_554_432, asset_signatures: false, furniture: Furniture::Policy, keep_evidence: false, ocr_born_digital: false }
     }
 }
 
@@ -287,7 +310,7 @@ pub struct JsonOptions {
 
 // HTML options (SPEC 5.2, D133). `Default` is clean HTML: no ids, no geometry, milestones on, furniture
 // templates kept, the ledger off. The option bits are `kin/html.kin`'s (`ho-*`).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct HtmlOptions {
     pub ids: bool,
     pub geometry: bool,
@@ -299,11 +322,23 @@ pub struct HtmlOptions {
     pub milestones: bool,
     pub initials_plain: bool,
     pub align_style: bool,
+    // What the HTML does with the Model's assets (SPEC 10.11): `Inline` (the default) writes `data:` URIs, `External` writes
+    // `asset_prefix` + the file name (the caller writes `Model::asset_files()` beside it), `Omit` writes the placeholders as if
+    // no asset existed. A Model without assets gives the same HTML under all three.
+    pub assets: HtmlAssets,
+    pub asset_prefix: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HtmlAssets {
+    Inline,
+    External,
+    Omit,
 }
 
 impl Default for HtmlOptions {
     fn default() -> HtmlOptions {
-        HtmlOptions { ids: false, geometry: false, confidence_below: None, ledger: false, pretty: false, furniture_drop: false, milestones: true, initials_plain: false, align_style: false }
+        HtmlOptions { ids: false, geometry: false, confidence_below: None, ledger: false, pretty: false, furniture_drop: false, milestones: true, initials_plain: false, align_style: false, assets: HtmlAssets::Inline, asset_prefix: String::new() }
     }
 }
 
@@ -319,12 +354,17 @@ impl HtmlOptions {
         if !self.milestones { o |= ho_no_milestones(); }
         if self.initials_plain { o |= ho_initials_plain(); }
         if self.align_style { o |= ho_align_style(); }
+        match self.assets {
+            HtmlAssets::Inline => {}
+            HtmlAssets::External => o |= ho_assets_external(),
+            HtmlAssets::Omit => o |= ho_assets_omit(),
+        }
         (o, self.confidence_below.unwrap_or(0).min(1000) as i32)
     }
 }
 
 // An output format, for callers (and the driver) that choose one by value.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Output {
     Json(JsonOptions),
     Html(HtmlOptions),
@@ -870,10 +910,22 @@ fn finish_raster(d: RasterDoc, opts: &Options) -> Outcome {
         let n = cells_len(&m.text) - start;
         node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), start, n);
     }
+    if opts.assets != Assets::None {
+        // a raster input is one picture a page: its own image is the candidate, `part` of which no figure or seal can be at `images`
+        let (mut cand, mut cbytes) = (Cells::new(), Buf::new());
+        as_page_cands(&mut m.pages, &mut cand);
+        asset_stage(&mut m, &mut cand, &mut cbytes, opts);
+    }
     let mut chk = Cells::new();
     let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
     if c != 0 {
         return Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0))));
+    }
+    if opts.assets != Assets::None {
+        let c = model_check_assets(&mut m.nodes, &mut m.attrs, &mut m.assets, &mut m.uses, &mut m.abytes, &mut chk);
+        if c != 0 {
+            return Outcome::Failed(Error::Internal(format!("model-check-assets {} at {}", c, cells_at(&chk, 0))));
+        }
     }
     Outcome::Built(Built { arenas: m, evidence, intake: info })
 }
@@ -999,7 +1051,7 @@ fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
-// The seven arenas of the Model (SPEC 3.8).
+// The seven arenas of the Model (SPEC 3.8), and the asset table, its uses and its bytes (SPEC 10.11: empty unless `assets` is on).
 struct Arenas {
     nodes: Cells,
     attrs: Cells,
@@ -1008,13 +1060,17 @@ struct Arenas {
     pages: Cells,
     ledger: Cells,
     layout: Cells,
+    assets: Cells,
+    uses: Cells,
+    abytes: Buf,
 }
 
 impl Arenas {
     fn new() -> Arenas {
-        Arenas { nodes: Cells::new(), attrs: Cells::new(), regions: Cells::new(), text: Cells::new(), pages: Cells::new(), ledger: Cells::new(), layout: Cells::new() }
+        Arenas { nodes: Cells::new(), attrs: Cells::new(), regions: Cells::new(), text: Cells::new(), pages: Cells::new(), ledger: Cells::new(), layout: Cells::new(), assets: Cells::new(), uses: Cells::new(), abytes: Buf::new() }
     }
 }
+
 
 // How the loop runs: live (no transcript), recording one, or replaying one.
 enum Mode<'a> {
@@ -1082,6 +1138,9 @@ struct PdfDoc {
     // the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence
     // dump has always shown (kept only when the evidence is asked for)
     snap: Option<(Cells, Cells, Cells)>,
+    // P3.13: the image placements as asset candidates and their encoded bytes (empty unless `assets` is on)
+    cand: Cells,
+    cbytes: Buf,
     info: Intake,
 }
 
@@ -1167,6 +1226,16 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     // (until P7.3 moves it into the page units, SPEC 9.9).
     let (mut grl, mut gfl, mut gcand) = (Cells::new(), Cells::new(), Cells::new());
     gf_doc(&mut pa, &mut pts, &mut mk, &mut im, np, gfx_mode(), &mut grl, &mut gfl, &mut gcand);
+    // P3.13 (SPEC 10.11): the asset candidates, the one place the input's image bytes are read. Off, nothing runs.
+    let (mut cand, mut cbytes) = (Cells::new(), Buf::new());
+    if opts.assets != Assets::None {
+        let (mut aout, mut arec, mut amrec, mut asmp, mut amsmp, mut adata, mut arows, mut atmp, mut aws) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+        let mut az = Buf::new();
+        let rc = as_collect(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut im, &mut pa, &mut gl, &mut pg, opts.asset_pixels, opts.assets_bytes, &mut cand, &mut cbytes, &mut aout, &mut arec, &mut amrec, &mut asmp, &mut amsmp, &mut adata, &mut arows, &mut atmp, &mut aws, &mut az);
+        if view.missed() || rc == 12 {
+            return Step::Miss;
+        }
+    }
     let snap = if opts.keep_evidence { Some((gl.clone(), mk.clone(), fnt.clone())) } else { None };
     // With fusion on, the text layer's `epages` and `feats` are the evidence's own: the OCR of a born-digital page adds its feature rows
     // to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
@@ -1196,7 +1265,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, info }))
 }
 
 // One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
@@ -1216,7 +1285,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1319,6 +1388,10 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
     il_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut ift, &mut sf, &mut an, &mut txt, &mut pg, &mut m.pages, np, &mut m.text, &mut hc, &mut isw);
     pa_build(&mut fw, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
+    // the provisional figures (P3.13): only with `assets`, and before the restructuring, which pairs a caption with the figure beside it
+    if opts.assets != Assets::None {
+        figures_stage(&mut m, &mut cand);
+    }
     // restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
     // body is copied into new arenas, in document order, and they replace the old ones
     {
@@ -1346,10 +1419,19 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
         let n = cells_len(&m.text) - start;
         node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), start, n);
     }
+    if opts.assets != Assets::None {
+        asset_stage(&mut m, &mut cand, &mut cbytes, opts);
+    }
     let mut chk = Cells::new();
     let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
     if c != 0 {
         return Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0))));
+    }
+    if opts.assets != Assets::None {
+        let c = model_check_assets(&mut m.nodes, &mut m.attrs, &mut m.assets, &mut m.uses, &mut m.abytes, &mut chk);
+        if c != 0 {
+            return Outcome::Failed(Error::Internal(format!("model-check-assets {} at {}", c, cells_at(&chk, 0))));
+        }
     }
     Outcome::Built(Built { arenas: m, evidence, intake: info })
 }
@@ -1413,9 +1495,6 @@ impl Engine {
     fn convert_with(&self, inputs: Vec<Input>, opts: &Options, mode: Mode) -> Result<(Model, RunStats), Error> {
         if inputs.is_empty() {
             return Err(Error::NoInput);
-        }
-        if opts.assets != Assets::None {
-            return Err(Error::Unsupported("assets other than `none` are specified (D117) and not implemented"));
         }
         if inputs.len() > 1 {
             return Err(Error::Unsupported("several inputs as one document are not wired yet (`intake` takes any number; convert one at a time)"));
@@ -1647,6 +1726,31 @@ impl Kind {
     }
 }
 
+
+// P3.13 (SPEC 10.11): the provisional figures, before `rs_run` (a caption next to one finds it as its object). Only when
+// `assets` is on (D294): a default run's Model is what it was.
+fn figures_stage(m: &mut Arenas, cand: &mut Cells) {
+    let mut fg = Cells::new();
+    as_figure_rows(cand, &mut m.pages, &mut fg);
+    let (mut fnodes, mut fattrs, mut fregions, mut fnm) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    rs_figures(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut fnodes, &mut fattrs, &mut fregions, &mut fnm, cand, &mut fg);
+    std::mem::swap(&mut m.nodes, &mut fnodes);
+    std::mem::swap(&mut m.attrs, &mut fattrs);
+    std::mem::swap(&mut m.regions, &mut fregions);
+}
+
+// P3.13: the settings on the root, then each figure's and seal's pixels or reason, in node-id order. The candidates `cand` and
+// their bytes `cbytes` were made by the document pass (`as_collect`), which is where the input is read.
+fn asset_stage(m: &mut Arenas, cand: &mut Cells, cbytes: &mut Buf, opts: &Options) {
+    let sigs = if opts.asset_signatures { 1 } else { 0 };
+    as_settings(&mut m.nodes, &mut m.attrs, &mut m.text, opts.assets.level(), opts.asset_dpi, opts.asset_pixels, opts.asset_bytes, opts.assets_bytes, sigs);
+    let mut bx = Cells::new();
+    for _ in 0..5 {
+        cells_push(&mut bx, 0);
+    }
+    as_run(&mut m.nodes, &mut m.attrs, &mut m.regions, cand, cbytes, &mut m.assets, &mut m.uses, &mut m.abytes, opts.asset_bytes, opts.assets_bytes, sigs, &mut bx);
+}
+
 // A page of the Model's page table (SPEC 3.7). Sizes are in centipoints (1/100 point), as displayed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Page {
@@ -1767,7 +1871,7 @@ impl Model {
     pub fn to_json(&self, o: &JsonOptions) -> String {
         self.with(|a| {
             let mut t = String::new();
-            js_emit(&mut t, if o.pretty { 1 } else { 0 }, &mut a.nodes, &mut a.attrs, &mut a.regions, &mut a.text, &mut a.pages, &mut a.ledger, &mut a.layout);
+            js_emit(&mut t, if o.pretty { 1 } else { 0 }, &mut a.nodes, &mut a.attrs, &mut a.regions, &mut a.text, &mut a.pages, &mut a.ledger, &mut a.layout, &mut a.assets, &mut a.uses);
             t
         })
     }
@@ -1775,9 +1879,13 @@ impl Model {
     // SPEC 5: HTML for crawlers.
     pub fn to_html(&self, o: &HtmlOptions) -> String {
         let (bits, below) = o.bits();
+        let mut prefix = Cells::new();
+        for ch in o.asset_prefix.chars() {
+            cells_push(&mut prefix, ch as i32);
+        }
         self.with(|a| {
             let mut t = String::new();
-            html_emit(&mut t, bits, below, &mut a.nodes, &mut a.attrs, &mut a.regions, &mut a.text, &mut a.pages, &mut a.ledger, &mut a.layout);
+            html_emit(&mut t, bits, below, &mut a.nodes, &mut a.attrs, &mut a.regions, &mut a.text, &mut a.pages, &mut a.ledger, &mut a.layout, &mut a.assets, &mut a.uses, &mut a.abytes, &mut prefix);
             t
         })
     }
@@ -1789,9 +1897,149 @@ impl Model {
             Output::Html(h) => self.to_html(h),
         }
     }
-    // SPEC 3.9's asset accessors (`assets`, `asset`, `asset_files`) arrive with D117's implementation; under
-    // `assets: none`, the only one accepted, a Model has none.
+
+    // SPEC 3.9 / 10.11: the asset table, in admission order; empty unless `Options::assets` was on.
+    pub fn assets(&self) -> Vec<Asset<'_>> {
+        let n = self.with(|a| asset_count(&mut a.assets));
+        (0..n).map(|id| Asset { m: self, id }).collect()
+    }
+
+    // The asset with this id, if there is one.
+    pub fn asset(&self, id: i32) -> Option<Asset<'_>> {
+        if id >= 0 && id < self.with(|a| asset_count(&mut a.assets)) { Some(Asset { m: self, id }) } else { None }
+    }
+
+    // The sidecar: every asset's (file name, media type, bytes), for the caller to write beside the HTML (`external`).
+    pub fn asset_files(&self) -> Vec<AssetFile> {
+        self.assets().iter().map(|a| AssetFile { name: a.name(), media_type: a.media_type(), bytes: a.bytes() }).collect()
+    }
 }
+
+// ------------------------------------------------------------------ assets (P3.13, SPEC 10.11, D117)
+//
+// An asset is a picture the Model carries beside its tree: a `figure` or `seal` whose content is one image the document embeds
+// (its original JPEG bytes, or its pixels as the canonical PNG). The bytes live in the Model (kin's `abytes`); `bytes()` copies
+// them out (the arenas sit behind a lock, so a borrow cannot leave it). Nothing here exists unless `Options::assets` was on.
+
+// One use of an asset: the node and the page region its pixels map to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssetUse {
+    pub node: i32,
+    pub region: Region,
+}
+
+// One asset as a file for the caller to write beside the HTML: its name, media type and bytes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssetFile {
+    pub name: String,
+    pub media_type: String,
+    pub bytes: Vec<u8>,
+}
+
+// An asset: a view of the Model's table (an index, like a `Node`).
+#[derive(Clone, Copy)]
+pub struct Asset<'a> {
+    m: &'a Model,
+    id: i32,
+}
+
+impl<'a> std::fmt::Debug for Asset<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Asset({} {})", self.id, self.name())
+    }
+}
+
+impl<'a> Asset<'a> {
+    // The asset's id: its index in `Model::assets()`, in admission order.
+    pub fn id(&self) -> i32 {
+        self.id
+    }
+    // The file name, `a<id>.jpg` or `a<id>.png`.
+    pub fn name(&self) -> String {
+        let jpg = self.m.with(|a| asset_type(&mut a.assets, self.id)) == amt_jpeg();
+        format!("a{}.{}", self.id, if jpg { "jpg" } else { "png" })
+    }
+    // `image/jpeg` or `image/png`.
+    pub fn media_type(&self) -> String {
+        let mut s = String::new();
+        amt_emit_name(&mut s, self.m.with(|a| asset_type(&mut a.assets, self.id)));
+        s
+    }
+    // `embedded` or `decoded` (`cropped` and `rendered` arrive with the `figures` level).
+    pub fn origin(&self) -> String {
+        let mut s = String::new();
+        ao_emit_name(&mut s, self.m.with(|a| asset_origin(&mut a.assets, self.id)));
+        s
+    }
+    // What the pixels were before: `dct`, `flate`, `lzw`, `runlength`, `raw`, ...
+    pub fn from(&self) -> String {
+        let mut s = String::new();
+        afm_emit_name(&mut s, self.m.with(|a| asset_from(&mut a.assets, self.id)));
+        s
+    }
+    // The image XObject's object number, when it has one.
+    pub fn object(&self) -> Option<i32> {
+        let o = self.m.with(|a| asset_object(&mut a.assets, self.id));
+        if o >= 0 { Some(o) } else { None }
+    }
+    // The SHA-256 of the encoded bytes, 64 lower-case hex digits.
+    pub fn sha256(&self) -> String {
+        self.m.with(|a| {
+            let mut s = String::new();
+            for i in 0..8 {
+                s.push_str(&format!("{:08x}", asset_sha(&mut a.assets, self.id, i) as u32));
+            }
+            s
+        })
+    }
+    pub fn width(&self) -> i32 {
+        self.m.with(|a| asset_w(&mut a.assets, self.id))
+    }
+    pub fn height(&self) -> i32 {
+        self.m.with(|a| asset_h(&mut a.assets, self.id))
+    }
+    // The render's resolution; only a rendered asset has one.
+    pub fn dpi(&self) -> Option<i32> {
+        let d = self.m.with(|a| asset_dpi(&mut a.assets, self.id));
+        if d > 0 { Some(d) } else { None }
+    }
+    // `overlaid`, `clip-bbox`, `transformed`, `icc`, `scaled`, `text-overlap`.
+    pub fn flags(&self) -> Vec<String> {
+        let bits = self.m.with(|a| asset_flags(&mut a.assets, self.id));
+        (0..6)
+            .map(|b| 1 << b)
+            .filter(|bit| bits & bit != 0)
+            .map(|bit| {
+                let mut s = String::new();
+                afg_emit_name(&mut s, bit);
+                s
+            })
+            .collect()
+    }
+    // Every node that shows it, with the page region its pixels map to.
+    pub fn uses(&self) -> Vec<AssetUse> {
+        self.m.with(|a| {
+            let mut out = Vec::new();
+            let mut u = asset_use_head(&mut a.assets, self.id);
+            while u >= 0 {
+                out.push(AssetUse {
+                    node: use_node(&mut a.uses, u),
+                    region: Region { page: use_page(&mut a.uses, u), x0: use_x0(&mut a.uses, u), y0: use_y0(&mut a.uses, u), x1: use_x1(&mut a.uses, u), y1: use_y1(&mut a.uses, u) },
+                });
+                u = use_next(&mut a.uses, u);
+            }
+            out
+        })
+    }
+    // The encoded bytes (a copy: the Model's arenas sit behind a lock).
+    pub fn bytes(&self) -> Vec<u8> {
+        self.m.with(|a| {
+            let (s, n) = (asset_bstart(&mut a.assets, self.id), asset_blen(&mut a.assets, self.id));
+            (s..s + n).map(|i| port::buf_at(&mut a.abytes, i) as u8).collect()
+        })
+    }
+}
+
 
 // A node: the Model and an index. It borrows, it never copies.
 #[derive(Clone, Copy)]
@@ -1902,6 +2150,27 @@ impl<'a> Node<'a> {
                 r = region_next(&mut a.regions, r);
             }
             out
+        })
+    }
+
+    // The asset this `figure` or `seal` shows, if it has one (SPEC 10.11).
+    pub fn asset(&self) -> Option<Asset<'a>> {
+        match self.attr("asset") {
+            Some(Attr::Int(id)) => self.m.asset(id),
+            _ => None,
+        }
+    }
+    // Why it has no asset (`withheld`, `part`, `vector`, `composite`, `colorspace`, `codec`, `render`, `too-large`,
+    // `budget`), when `Options::assets` was on and it has none.
+    pub fn noasset(&self) -> Option<String> {
+        self.m.with(|a| {
+            let at = attr_find(&mut a.attrs, node_attr_head(&mut a.nodes, self.n), fk_noasset());
+            if at < 0 {
+                return None;
+            }
+            let mut s = String::new();
+            nz_emit_name(&mut s, attr_value(&mut a.attrs, at));
+            Some(s)
         })
     }
     // An attribute by its JSON name (`level`, `align`, `locale`, ...), typed; None when absent.

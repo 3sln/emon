@@ -19,6 +19,9 @@ public final class Plan {
     public static int pkCrop() {
         return 5;
     }
+    public static int pkDecodeImg() {
+        return 6;
+    }
     public static int psOk() {
         return 0;
     }
@@ -295,6 +298,93 @@ public final class Plan {
         emon.Port.cellsPush(c, length);
         recEnd(c, at);
         return at;
+    }
+    public static int rqDecodeImg(emon.Port.Cells c, int id, int filter, int w, int h, int comps, int bpc, int k, int columns, int rows, int ccitt, int where, int offset, int length, emon.Port.Cells shas, int shaat, int gwhere, int goffset, int glength, int gshaat) {
+        // Ask the host to decode a PDF image's codestream (kind 6): see the header. `shas` is a Cells holding the eight
+        // words of each SHA-256, the data's from index `shaat` and the globals' from `gshaat`; the words of a span that is
+        // an input's are zero.
+        int at = recBegin(c, pkDecodeImg(), id);
+        int i = 0;
+        emon.Port.cellsPush(c, filter);
+        emon.Port.cellsPush(c, w);
+        emon.Port.cellsPush(c, h);
+        emon.Port.cellsPush(c, comps);
+        emon.Port.cellsPush(c, bpc);
+        emon.Port.cellsPush(c, k);
+        emon.Port.cellsPush(c, columns);
+        emon.Port.cellsPush(c, rows);
+        emon.Port.cellsPush(c, ccitt);
+        emon.Port.cellsPush(c, where);
+        emon.Port.cellsPush(c, offset);
+        emon.Port.cellsPush(c, length);
+        while (i < 8) {
+            emon.Port.cellsPush(c, emon.Port.cellsAt(shas, shaat + i));
+            i += 1;
+        }
+        emon.Port.cellsPush(c, gwhere);
+        emon.Port.cellsPush(c, goffset);
+        emon.Port.cellsPush(c, glength);
+        i = 0;
+        while (i < 8) {
+            emon.Port.cellsPush(c, emon.Port.cellsAt(shas, gshaat + i));
+            i += 1;
+        }
+        recEnd(c, at);
+        return at;
+    }
+    public static int dqFilter() {
+        return 0;
+    }
+    public static int dqW() {
+        return 1;
+    }
+    public static int dqH() {
+        return 2;
+    }
+    public static int dqComps() {
+        return 3;
+    }
+    public static int dqBpc() {
+        return 4;
+    }
+    public static int dqK() {
+        return 5;
+    }
+    public static int dqColumns() {
+        return 6;
+    }
+    public static int dqRows() {
+        return 7;
+    }
+    public static int dqCcitt() {
+        return 8;
+    }
+    public static int dqWhere() {
+        return 9;
+    }
+    public static int dqOffset() {
+        return 10;
+    }
+    public static int dqLength() {
+        return 11;
+    }
+    public static int dqSha() {
+        return 12;
+    }
+    public static int dqGwhere() {
+        return 20;
+    }
+    public static int dqGoffset() {
+        return 21;
+    }
+    public static int dqGlength() {
+        return 22;
+    }
+    public static int dqGsha() {
+        return 23;
+    }
+    public static int dqNargs() {
+        return 31;
     }
     public static int anStatus(emon.Port.Cells c, int at) {
         return emon.Port.cellsAt(c, at + 3);

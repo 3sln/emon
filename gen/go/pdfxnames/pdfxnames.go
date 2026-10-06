@@ -1000,6 +1000,33 @@ func PxItalicAngle() int32 {
 func PxFontWeight() int32 {
 	return 193
 }
+func PxMatte() int32 {
+	return 194
+}
+func PxK() int32 {
+	return 195
+}
+func PxRows() int32 {
+	return 196
+}
+func PxBlackIs1() int32 {
+	return 197
+}
+func PxEncodedByteAlign() int32 {
+	return 198
+}
+func PxEndOfLine() int32 {
+	return 199
+}
+func PxEndOfBlock() int32 {
+	return 200
+}
+func PxJbig2Globals() int32 {
+	return 201
+}
+func PxDp() int32 {
+	return 202
+}
 func PxEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "Annots")
@@ -1777,10 +1804,46 @@ func PxEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "FontWeight")
 		return 1
 	}
+	if code == 194 {
+		port.TextAscii(t, "Matte")
+		return 1
+	}
+	if code == 195 {
+		port.TextAscii(t, "K")
+		return 1
+	}
+	if code == 196 {
+		port.TextAscii(t, "Rows")
+		return 1
+	}
+	if code == 197 {
+		port.TextAscii(t, "BlackIs1")
+		return 1
+	}
+	if code == 198 {
+		port.TextAscii(t, "EncodedByteAlign")
+		return 1
+	}
+	if code == 199 {
+		port.TextAscii(t, "EndOfLine")
+		return 1
+	}
+	if code == 200 {
+		port.TextAscii(t, "EndOfBlock")
+		return 1
+	}
+	if code == 201 {
+		port.TextAscii(t, "JBIG2Globals")
+		return 1
+	}
+	if code == 202 {
+		port.TextAscii(t, "DP")
+		return 1
+	}
 	return 0
 }
 
-var PxChars [1101]int32 = [1101]int32{
+var PxChars [1168]int32 = [1168]int32{
 	65, 110, 110, 111, 116, 115, 65, 110, 110, 111, 116, 82, 101, 99, 116, 65,
 	83, 85, 82, 73, 71, 111, 84, 111, 71, 111, 84, 111, 82, 71, 111, 84,
 	111, 69, 76, 97, 117, 110, 99, 104, 78, 97, 109, 101, 100, 74, 97, 118,
@@ -1849,10 +1912,14 @@ var PxChars [1101]int32 = [1101]int32{
 	99, 104, 97, 110, 103, 101, 100, 83, 104, 97, 100, 105, 110, 103, 84, 121,
 	112, 101, 80, 97, 116, 116, 101, 114, 110, 84, 121, 112, 101, 69, 120, 116,
 	101, 110, 100, 83, 116, 101, 109, 86, 73, 116, 97, 108, 105, 99, 65, 110,
-	103, 108, 101, 70, 111, 110, 116, 87, 101, 105, 103, 104, 116,
+	103, 108, 101, 70, 111, 110, 116, 87, 101, 105, 103, 104, 116, 77, 97, 116,
+	116, 101, 75, 82, 111, 119, 115, 66, 108, 97, 99, 107, 73, 115, 49, 69,
+	110, 99, 111, 100, 101, 100, 66, 121, 116, 101, 65, 108, 105, 103, 110, 69,
+	110, 100, 79, 102, 76, 105, 110, 101, 69, 110, 100, 79, 102, 66, 108, 111,
+	99, 107, 74, 66, 73, 71, 50, 71, 108, 111, 98, 97, 108, 115, 68, 80,
 }
 
-var PxSpan [388]int32 = [388]int32{
+var PxSpan [406]int32 = [406]int32{
 	0, 6,
 	6, 5,
 	11, 4,
@@ -2047,4 +2114,13 @@ var PxSpan [388]int32 = [388]int32{
 	1075, 5,
 	1080, 11,
 	1091, 10,
+	1101, 5,
+	1106, 1,
+	1107, 4,
+	1111, 8,
+	1119, 16,
+	1135, 9,
+	1144, 10,
+	1154, 12,
+	1166, 2,
 }

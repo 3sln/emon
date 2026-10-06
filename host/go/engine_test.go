@@ -8,7 +8,8 @@
 //   - D040's three encryption errors, distinct; a password opens what it opens, and equals the plain twin;
 //   - the input-bytes limit is checked against the SIZE before any byte is read; a source that lies about its
 //     size is `source-changed`;
-//   - `assets` other than `none` and several inputs as one document are refused, not approximated;
+//   - several inputs as one document are refused, not approximated; `assets` (P3.13) is opt-in, a JPEG passes through, a
+//     Flate image is a PNG, a codec image says why not, and a 512-byte async source gives the same files;
 //   - record and replay; the walkable Model; and that the library names no filesystem;
 //   - (render_test.go) the Renderer port, P6.2, D127.
 package emon
@@ -310,13 +311,6 @@ func TestASourceThatGivesFewerBytesThanItsSizeIsSourceChanged(t *testing.T) {
 func TestWhatIsNotImplementedIsRefused(t *testing.T) {
 	e := NewEngine(DefaultConfig())
 	b := synth(t, "h-plain")
-	for _, a := range []Assets{AssetsImages, AssetsFigures} {
-		o := DefaultOptions()
-		o.Assets = a
-		if _, err := e.Convert(one(BytesInput(b)), o); errName(err) != "unsupported" {
-			t.Errorf("assets %d: %v", a, err)
-		}
-	}
 	if _, err := e.Convert([]Input{BytesInput(b), BytesInput(b)}, DefaultOptions()); errName(err) != "unsupported" {
 		t.Errorf("two inputs: %v", err)
 	}
@@ -774,5 +768,109 @@ func TestAnImageThatCannotBeReadIsRefusedByName(t *testing.T) {
 	c.Limits = append(c.Limits, [2]int32{9, 1000})
 	if _, err := NewEngine(c).Convert(one(BytesInput(imageFx(t, "png-rgb8.png"))), DefaultOptions()); errName(err) != "pixels" {
 		t.Errorf("the pixels bound: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------- assets (P3.13, SPEC 10.11, D117)
+
+func TestAssetsAreOptInAndAJPEGPassesThroughAndAFlateImageBecomesAPNG(t *testing.T) {
+	e := NewEngine(DefaultConfig())
+	figure, _ := KindNamed("figure")
+	// off: no assets, nothing in the JSON, and no figure is made
+	m0, err := e.Convert(one(BytesInput(read(t, "test/assets/dct-rgb.pdf"))), DefaultOptions())
+	must(t, m0, err)
+	if len(m0.Assets()) != 0 || len(m0.Find(figure)) != 0 || strings.Contains(js(m0), "\"assets\"") || strings.Contains(m0.ToHTML(DefaultHTMLOptions()), "<img") {
+		t.Error("assets off is not off")
+	}
+	// a DCT image: its own bytes, a JPEG
+	o := DefaultOptions()
+	o.Assets = AssetsImages
+	m, err := e.Convert(one(BytesInput(read(t, "test/assets/dct-rgb.pdf"))), o)
+	must(t, m, err)
+	a := m.Assets()
+	if len(a) != 1 {
+		t.Fatalf("%d assets", len(a))
+	}
+	a0 := a[0]
+	if a0.ID() != 0 || a0.Name() != "a0.jpg" || a0.MediaType() != "image/jpeg" || a0.Origin() != "embedded" || a0.From() != "dct" {
+		t.Errorf("asset %v %s %s %s %s", a0.ID(), a0.Name(), a0.MediaType(), a0.Origin(), a0.From())
+	}
+	if a0.Width() != 24 || a0.Height() != 16 || len(a0.Uses()) != 1 || len(a0.SHA256()) != 64 {
+		t.Errorf("asset %dx%d uses %d sha %q", a0.Width(), a0.Height(), len(a0.Uses()), a0.SHA256())
+	}
+	if b := a0.Bytes(); len(b) < 2 || b[0] != 0xFF || b[1] != 0xD8 {
+		t.Error("not a JPEG")
+	}
+	figs := m.Find(figure)
+	if len(figs) != 1 {
+		t.Fatalf("%d figures", len(figs))
+	}
+	if x, ok := figs[0].Asset(); !ok || x.ID() != 0 || a0.Uses()[0].Node != figs[0].ID() {
+		t.Error("the figure is not asset 0")
+	}
+	if f := m.AssetFiles(); len(f) != 1 || f[0].Name != "a0.jpg" {
+		t.Errorf("files %v", f)
+	}
+	// the HTML in the three modes
+	h := func(mode HTMLAssets, prefix string) string {
+		ho := DefaultHTMLOptions()
+		ho.Assets, ho.AssetPrefix = mode, prefix
+		return m.ToHTML(ho)
+	}
+	if !strings.Contains(h(HTMLAssetsInline, ""), "<img src=\"data:image/jpeg;base64,/9j/") ||
+		!strings.Contains(h(HTMLAssetsExternal, "img/"), "<img src=\"img/a0.jpg\"") ||
+		strings.Contains(h(HTMLAssetsOmit, ""), "<img") {
+		t.Error("the three HTML modes")
+	}
+	// a Flate image is a canonical PNG, decoded
+	p, err := e.Convert(one(BytesInput(read(t, "test/assets/flate-rgb8.pdf"))), o)
+	must(t, p, err)
+	pa := p.Assets()
+	if len(pa) != 1 || pa[0].MediaType() != "image/png" || pa[0].Origin() != "decoded" || pa[0].From() != "flate" || !bytes.HasPrefix(pa[0].Bytes(), []byte{0x89, 0x50, 0x4E, 0x47}) {
+		t.Error("a Flate image is not a decoded PNG")
+	}
+	// an image no browser can be relied on to show says why not
+	c, err := e.Convert(one(BytesInput(read(t, "test/assets/jpx.pdf"))), o)
+	must(t, c, err)
+	if r, ok := c.Find(figure)[0].NoAsset(); len(c.Assets()) != 0 || !ok || r != "codec" {
+		t.Errorf("jpx: %q", r)
+	}
+	// `figures` runs as `images` until P8.5
+	of := o
+	of.Assets = AssetsFigures
+	f, err := e.Convert(one(BytesInput(read(t, "test/assets/dct-rgb.pdf"))), of)
+	must(t, f, err)
+	if js(f) != strings.Replace(js(m), "\"assets\": \"images\"", "\"assets\": \"figures\"", 1) {
+		t.Error("figures is not images")
+	}
+	// a document with no image: the table is there and empty
+	n, err := e.Convert(one(BytesInput(synth(t, "h-plain"))), o)
+	must(t, n, err)
+	if len(n.Assets()) != 0 || !strings.Contains(js(n), "\"assets\": []") {
+		t.Error("an empty table")
+	}
+}
+
+func TestAssetsThroughA512ByteAsyncSourceAreTheInMemoryOnes(t *testing.T) {
+	o := DefaultOptions()
+	o.Assets = AssetsImages
+	for _, name := range []string{"dct-rgb", "flate-rgb8", "place-twice", "smask", "indexed16"} {
+		b := read(t, "test/assets/"+name+".pdf")
+		mem, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(b)), o)
+		must(t, mem, err)
+		asy, err := asyncEngine(512).Convert(one(BytesInput(b)), o)
+		must(t, asy, err)
+		if js(asy) != js(mem) || asy.ToHTML(DefaultHTMLOptions()) != mem.ToHTML(DefaultHTMLOptions()) {
+			t.Errorf("%s: the async run differs", name)
+		}
+		fa, fm := asy.AssetFiles(), mem.AssetFiles()
+		if len(fa) != len(fm) {
+			t.Fatalf("%s: %d files vs %d", name, len(fa), len(fm))
+		}
+		for i := range fa {
+			if fa[i].Name != fm[i].Name || !bytes.Equal(fa[i].Bytes, fm[i].Bytes) {
+				t.Errorf("%s: file %d differs", name, i)
+			}
+		}
 	}
 }

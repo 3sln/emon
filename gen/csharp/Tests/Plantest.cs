@@ -92,6 +92,68 @@ public static class Plantest {
         emon.Testport.AssertEq(Plan.RqArg(c, 0, 2), 131072, "length");
     }
     [Xunit.Fact]
+    public static void TestADecodeImgRequestNamesBytesAndNeverCarriesThem() {
+        // Kind 6 (D291): the codestream's parameters, then WHERE the bytes are (an input's span, or the unit's payload)
+        // and the SHA-256 of a payload as eight words; the globals the same, `gwhere` -1 for none.
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.Cells shas = emon.Port.NewCells();
+        int i = 0;
+        while (i < 16) {
+            emon.Port.CellsPush(shas, 1000 + i);
+            i += 1;
+        }
+        emon.Testport.AssertEq(Plan.PkDecodeImg(), 6, "kind 6");
+        emon.Testport.AssertEq(Plan.FltCcitt(), 4, "the CCITT filter");
+        emon.Testport.AssertEq(Plan.RqDecodeImg(c, 9, Plan.FltCcitt(), 64, 32, 1, 1, -1, 64, 32, 10, 0, 499, 552, shas, 0, -2, 0, 24, 8), 0, "starts at 0");
+        emon.Testport.AssertEq(Plan.RecLen(c, 0), 34, "three header cells and 31 arguments");
+        emon.Testport.AssertEq(Plan.RecKind(c, 0), 6, "kind");
+        emon.Testport.AssertEq(Plan.RecId(c, 0), 9, "id");
+        emon.Testport.AssertEq(Plan.RqNargs(c, 0), Plan.DqNargs(), "31 arguments");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqFilter()), 4, "filter");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqW()), 64, "w");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqH()), 32, "h");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqComps()), 1, "comps");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqBpc()), 1, "bpc");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqK()), -1, "k");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqColumns()), 64, "columns");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqRows()), 32, "rows");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqCcitt()), 10, "ccitt flags");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqWhere()), 0, "where");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqOffset()), 499, "offset");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqLength()), 552, "length");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqSha()), 1000, "the first SHA word");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqSha() + 7), 1007, "the eighth SHA word");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqGwhere()), -2, "gwhere: the payload");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqGoffset()), 0, "goffset");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqGlength()), 24, "glength");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqGsha()), 1008, "the first globals SHA word");
+        emon.Testport.AssertEq(Plan.RqArg(c, 0, Plan.DqGsha() + 7), 1015, "the last globals SHA word");
+        emon.Testport.AssertEq(Plan.RecCheck(c, 1, 6), 0, "well formed, in the legal kinds");
+        emon.Testport.AssertEq(Plan.RecCheck(c, 1, 5), 2, "a kind past the legal range is refused");
+        emon.Testport.AssertEq(Plan.RecCount(c), 1, "one record");
+    }
+    [Xunit.Fact]
+    public static void TestADecodeImgRequestIsFoundByItsIdAndAnsweredAsADecode() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.Cells shas = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        int i = 0;
+        while (i < 16) {
+            emon.Port.CellsPush(shas, 0);
+            i += 1;
+        }
+        Plan.RqDecodeImg(c, 3, Plan.FltJpx(), 16, 12, 0, 8, 0, 0, 0, 0, 0, 440, 1013, shas, 0, -1, 0, 0, 8);
+        Plan.RqDecodeImg(c, 4, Plan.FltJbig2(), 32, 16, 0, 1, 0, 0, 0, 0, 0, 476, 50, shas, 0, -2, 0, 24, 8);
+        emon.Testport.AssertEq(Plan.RecCount(c), 2, "two records");
+        int second = Plan.RecNext(c, 0);
+        int at4 = Plan.RecFind(c, 4);
+        emon.Testport.AssertEq(Plan.RecId(c, second), 4, "the second is request 4");
+        emon.Testport.AssertEq(Plan.RqArg(c, at4, Plan.DqFilter()), 3, "request 4 is JBIG2");
+        emon.Testport.AssertEq(Plan.AnDecode(ans, 3, 16, 12, 3, 0, 0, 1), 0, "its answer is a decode answer");
+        int at3 = Plan.AnFind(ans, 3);
+        emon.Testport.AssertEq(Plan.AnStatus(ans, at3), 0, "ok");
+    }
+    [Xunit.Fact]
     public static void TestAnswersCarryTheIdAndAStatus() {
         emon.Port.Cells c = emon.Port.NewCells();
         int a1 = Plan.AnRender(c, 1, 612, 792, 1, 300);

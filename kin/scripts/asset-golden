@@ -1,0 +1,202 @@
+#!/usr/bin/env bb
+;; THE ASSET GOLDENS (P3.13, D117, SPEC 4.2, 5, 10.11): a small Model with assets, written as the line scripts kin builds it from
+;; (`test/asset/assets.model`, `assets.assets`: `emon.mscript`) AND as the JSON and HTML SPEC 4.2, 5.1 and 10.11 say it is, by an
+;; implementation written here from the SPEC and sharing no code with kin: the JSON (compact and pretty), the HTML inline,
+;; external (prefix `img/`), omit and pretty.   kin/scripts/asset-golden [--check]
+;;
+;; `kin/assettest.kin` builds the Model from the two scripts and holds `js-emit` and `html-emit` to these bytes, on every target.
+;; `--check` regenerates in memory and compares with the committed files (a gate of `kin/scripts/asset-check`).
+(require '[babashka.fs :as fs] '[clojure.string :as str]
+         '[clojure.java.io :as io])
+(import '(java.security MessageDigest) '(java.util Base64))
+
+(def check? (some #{"--check"} *command-line-args*))
+(def gdir "test/asset")
+
+;; ------------------------------------------------------------------ the Model, as data
+;; Codes: fk 28 label 30 alt 32 name; sub: figure 10 unknown / 1 chart, seal 2 stamp / 3 signature.
+(def jpeg-hex "ffd8ffe000104a46494600010100000100010000ffdb004300080606070605080707070909080a0c140d0c0b0b0c1912130f141d1a1f1e1d1a1c1c20242e2720222c231c1c2837292c30313434341f27393d38323c2e333432ffd9")
+(def png-hex "89504e470d0a1a0a0000000d49484452000000020000000208020000007b40e8dd0000000e49444154789c6360f8cfc0f0ff3f0000140303ffb0e9f60000000049454e44ae426082")
+(def assets
+  [{:type 1 :origin 1 :from 1 :object 41 :w 24 :h 16 :dpi 0 :flags 8 :hex jpeg-hex}
+   {:type 2 :origin 2 :from 5 :object -1 :w 2 :h 2 :dpi 0 :flags 0 :hex png-hex}])
+(def uses [[0 1 1 7200 9000 30000 21000] [0 3 1 7200 30000 30000 40000] [1 5 1 40000 50000 43000 53000]])
+;; nodes: [id kind sub parent attrs regions]; text for caption, seal
+(def nodes
+  [{:id 1 :kind 12 :sub 10 :label "Figure 1." :alt "The harbour at dawn" :asset 0 :at [1 7200 9000 30000 21000]}
+   {:id 2 :kind 11 :parent 1 :label "Figure 1." :text "The harbour" :at [1 7200 21500 30000 23000]}
+   {:id 3 :kind 12 :sub 10 :asset 0 :at [1 7200 30000 30000 40000]}
+   {:id 4 :kind 12 :sub 1 :alt "Revenue <by> \"quarter\" & year" :noasset 6 :at [1 7200 41000 30000 50000]}
+   {:id 5 :kind 13 :sub 2 :name "Paid" :text "PAID 2025" :asset 1 :at [1 40000 50000 43000 53000]}
+   {:id 6 :kind 13 :sub 3 :name "J. Smith" :noasset 1 :at [1 40000 60000 50000 64000]}
+   {:id 7 :kind 12 :sub 10 :noasset 2 :at [1 7200 65000 30000 70000]}])
+(def settings {"assets" "images" "asset-dpi" 150 "asset-pixels" 4194304 "asset-bytes" 4194304 "assets-bytes" 33554432 "asset-signatures" "off"})
+(def kind-name {11 "caption" 12 "figure" 13 "seal"})
+(def figure-name {1 "chart" 10 "unknown"})
+(def seal-name {2 "stamp" 3 "signature"})
+(def nz-name {1 "withheld" 2 "part" 3 "vector" 4 "composite" 5 "colorspace" 6 "codec" 7 "render" 8 "too-large" 9 "budget"})
+(def type-name {1 "image/jpeg" 2 "image/png"})
+(def origin-name {1 "embedded" 2 "decoded"})
+(def from-name {1 "dct" 5 "flate"})
+(def flag-names [[1 "overlaid"] [2 "clip-bbox"] [4 "transformed"] [8 "icc"] [16 "scaled"] [32 "text-overlap"]])
+
+(defn hex->bytes [h] (byte-array (map #(unchecked-byte (Integer/parseInt (apply str %) 16)) (partition 2 h))))
+(defn sha256 [bs] (apply str (map #(format "%02x" (bit-and % 255)) (.digest (MessageDigest/getInstance "SHA-256") bs))))
+(defn b64 [bs] (.encodeToString (Base64/getEncoder) bs))
+(defn pts [cpt] (let [q (quot (Math/abs (long cpt)) 100) r (rem (Math/abs (long cpt)) 100)
+                      s (cond (zero? r) (str q) (zero? (rem r 10)) (str q "." (quot r 10)) :else (str q "." (format "%02d" r)))]
+                  (if (neg? cpt) (str "-" s) s)))
+
+;; ------------------------------------------------------------------ the scripts kin builds from
+(defn model-script []
+  (str/join "\n"
+    (concat
+     ["# P3.13: assets in the Model, JSON and HTML (SPEC 4.2, 5, 10.11). WRITTEN by kin/scripts/asset-golden, with `assets.assets`,"
+      "# the JSON and the HTML it is held to: never edit by hand. Keys (emon.model fk): 28 label 30 alt 32 name 44 generator 59 format"
+      "# 60 version 42 pages 61 tagged 62 encrypted 82 asset 83 noasset 84 assets 85 asset-dpi 86 asset-pixels 87 asset-bytes"
+      "# 88 assets-bytes 89 asset-signatures."
+      "at 0 44 emon 0.1.0" "at 0 59 pdf" "at 0 60 1.7" "ai 0 42 1" "ab 0 61 0" "ab 0 62 0"
+      "at 0 84 images" "ai 0 85 150" "ai 0 86 4194304" "ai 0 87 4194304" "ai 0 88 33554432" "at 0 89 off"
+      "pg 1 61200 79200 0 1"]
+     (mapcat (fn [{:keys [id kind sub parent label alt name text asset noasset at]}]
+               (concat [(str "n " kind " " (or parent 0))]
+                       (when sub [(str "s " id " " sub)])
+                       (when text [(str "t " id " " text)])
+                       (when label [(str "at " id " 28 " label)])
+                       (when (= kind 11) [(str "an " id " 29 " parent)])
+                       (when alt [(str "at " id " 30 " alt)])
+                       (when name [(str "at " id " 32 " name)])
+                       (when asset [(str "ai " id " 82 " asset)])
+                       (when noasset [(str "ai " id " 83 " noasset)])
+                       [(str "r " id " " (str/join " " at))]
+                       [(str "sr " id " 256")]
+                       [(str "c " id " 500")]))
+             nodes))))
+
+(defn assets-script []
+  (str/join "\n"
+    (concat ["# the asset table of `assets.model`: a TYPE ORIGIN FROM OBJECT W H DPI FLAGS HEX, u ASSET NODE PAGE X0 Y0 X1 Y1 (emon.mscript)"]
+            (map (fn [{:keys [type origin from object w h dpi flags hex]}]
+                   (str "a " type " " origin " " from " " object " " w " " h " " dpi " " flags " " hex)) assets)
+            (map (fn [u] (str "u " (str/join " " u))) uses))))
+
+;; ------------------------------------------------------------------ the JSON
+;; a value is a string, a number, a boolean, nil (null), [:o [k v] ...] (an object), [:a v ...] (an array)
+(defn node-json [{:keys [id kind sub parent label alt name text asset noasset at]} children]
+  (let [r nil]
+    (into [:o ["id" id] ["kind" (kind-name kind)]]
+          (concat
+           (when (= kind 11) (concat (when label [["label" label]]) [["target" 1]] [["text" text]]))
+           (when (= kind 12) (concat [["subkind" (figure-name sub)]] (when label [["label" label]]) (when alt [["alt" alt]])
+                                     (when asset [["asset" asset]]) (when noasset [["noasset" (nz-name noasset)]])))
+           (when (= kind 13) (concat [["subkind" (seal-name sub)]] (when name [["name" name]])
+                                     (when asset [["asset" asset]]) (when noasset [["noasset" (nz-name noasset)]])
+                                     (when text [["text" text]])))
+           (when (seq children) [["children" (into [:a] children)]])
+           [["at" [:a (into [:a] (cons (first at) (map (fn [c] [:raw (pts c)]) (rest at))))]]]
+           [["src" [:a "infer"]] ["conf" 500]]))))
+
+(defn asset-json [i {:keys [type origin from object w h dpi flags hex]}]
+  (let [bs (hex->bytes hex)]
+    (into [:o ["id" i] ["name" (str "a" i (if (= type 1) ".jpg" ".png"))] ["type" (type-name type)] ["origin" (origin-name origin)]
+           ["from" (from-name from)]]
+          (concat (when (>= object 0) [["object" object]])
+                  [["bytes" (count bs)] ["sha256" (sha256 bs)] ["w" w] ["h" h]]
+                  (when (pos? dpi) [["dpi" dpi]])
+                  (when (pos? flags) [["flags" (into [:a] (keep (fn [[b n]] (when (pos? (bit-and flags b)) n)) flag-names))]])
+                  [["uses" (into [:a] (for [[a node page x0 y0 x1 y1] uses :when (= a i)]
+                                        [:o ["node" node] ["at" [:a page [:raw (pts x0)] [:raw (pts y0)] [:raw (pts x1)] [:raw (pts y1)]]]]))]]))))
+
+(defn model-json []
+  (let [by-parent (group-by #(or (:parent %) 0) nodes)
+        build (fn build [n] (node-json n (map build (get by-parent (:id n)))))]
+    [:o ["emon" "1.1"] ["generator" "emon 0.1.0"]
+     ["source" [:o ["format" "pdf"] ["version" "1.7"] ["pages" 1] ["tagged" false] ["encrypted" false]]]
+     ["settings" (into [:o ["locale" nil]] (map (fn [k] [k (settings k)]) ["assets" "asset-dpi" "asset-pixels" "asset-bytes" "assets-bytes" "asset-signatures"]))]
+     ["conf" "uncalibrated"]
+     ["pages" [:a [:o ["n" 1] ["w" 612] ["h" 792] ["rot" 0] ["kind" "vector"]]]]
+     ["body" [:o ["id" 0] ["kind" "document"] ["children" (into [:a] (map build (get by-parent 0)))]]]
+     ["furniture" [:a]] ["dropped" [:a]]
+     ["assets" (into [:a] (map-indexed asset-json assets))]]))
+
+(defn jstr [s]
+  (str "\"" (str/join (map (fn [c] (case c \" "\\\"" \\ "\\\\" \newline "\\n" \tab "\\t" (str c))) s)) "\""))
+(defn num [v] (if (integer? v) (str v) (str v)))
+(defn compact [v]
+  (cond (nil? v) "null" (string? v) (jstr v) (boolean? v) (str v)
+        (number? v) (num v)
+        (and (vector? v) (= :raw (first v))) (second v)
+        (= :o (first v)) (str "{" (str/join "," (map (fn [[k x]] (str (jstr k) ":" (compact x))) (rest v))) "}")
+        :else (str "[" (str/join "," (map compact (rest v))) "]")))
+(defn flat? [v] (or (not (vector? v)) (= :raw (first v)) (and (= :a (first v)) (every? flat? (rest v)))))
+(defn pretty
+  ([v] (pretty v 0))
+  ([v d]
+   (let [ind (fn [n] (apply str (repeat (* 2 n) " ")))]
+     (cond (or (not (vector? v)) (= :raw (first v))) (compact v)
+           (flat? v) (str "[" (str/join ", " (map #(pretty % d) (rest v))) "]")
+           (= :o (first v)) (str "{\n" (str/join ",\n" (map (fn [[k x]] (str (ind (inc d)) (jstr k) ": " (pretty x (inc d)))) (rest v))) "\n" (ind d) "}")
+           :else (str "[\n" (str/join ",\n" (map #(str (ind (inc d)) (pretty % (inc d))) (rest v))) "\n" (ind d) "]")))))
+
+;; ------------------------------------------------------------------ the HTML
+(defn esc [s] (-> s (str/replace "&" "&amp;") (str/replace "<" "&lt;") (str/replace ">" "&gt;") (str/replace "\"" "&quot;")))
+(defn px [cpt] (max 1 (quot (+ (* cpt 8) 300) 600)))
+(defn use-of [i node] (some (fn [[a n p x0 y0 x1 y1]] (when (and (= a i) (= n node)) [x0 y0 x1 y1])) uses))
+(defn node-html [mode prefix {:keys [id kind sub label alt name text asset noasset at]} children pretty? d]
+  (let [nl (fn [n] (if pretty? (str "\n" (apply str (repeat (* 2 n) " "))) ""))
+        asset (when (not= mode :omit) asset)
+        noasset-attr (when (and noasset (not= mode :omit)) (str " data-emon-noasset=\"" (nz-name noasset) "\""))
+        has-caption (some #(= 11 (:kind %)) children)
+        alt-text (if (= kind 13) (str (case sub 2 "Stamp" 3 "Signature") (when (or text name) ": ") (or text name)) (or alt ""))
+        img (when asset
+              (let [a (nth assets asset) [x0 y0 x1 y1] (use-of asset id)]
+                (str "<img src=\""
+                     (if (= mode :external) (str (esc prefix) "a" asset (if (= 1 (:type a)) ".jpg" ".png"))
+                         (str "data:" (type-name (:type a)) ";base64," (b64 (hex->bytes (:hex a)))))
+                     "\" alt=\"" (esc alt-text) "\" width=\"" (px (- x1 x0)) "\" height=\"" (px (- y1 y0)) "\" data-emon-asset=\"" asset "\""
+                     (when (and (= kind 12) (str/blank? alt-text) (not has-caption)) " data-emon-alt=\"missing\"") ">")))]
+    (case kind
+      11 (str "<figcaption" (when label (str " data-emon-label=\"" (esc label) "\"")) ">" (esc text) "</figcaption>")
+      12 (let [kids (map #(str (nl (inc d)) (node-html mode prefix % [] pretty? (inc d))) children)]
+           (str "<figure data-emon-kind=\"" (figure-name sub) "\""
+                (when-not asset (str " role=\"img\"" (when alt (str " aria-label=\"" (esc alt) "\""))))
+                (when label (str " data-emon-label=\"" (esc label) "\""))
+                noasset-attr ">"
+                (when img (str (nl (inc d)) img))
+                (apply str kids)
+                (when (or img (seq kids)) (nl d))
+                "</figure>"))
+      13 (str "<figure data-emon-kind=\"" (seal-name sub) "\""
+              (when name (str " data-emon-name=\"" (esc name) "\""))
+              (when-not asset (str " role=\"img\" aria-label=\"" (esc alt-text) "\""))
+              noasset-attr ">"
+              (when img (str (nl (inc d)) img (nl d)))
+              "</figure>"))))
+
+(defn model-html [mode prefix pretty?]
+  (let [by-parent (group-by #(or (:parent %) 0) nodes)
+        nl (fn [n] (if pretty? (str "\n" (apply str (repeat (* 2 n) " "))) ""))
+        blocks (for [n (get by-parent 0)] (str (nl 3) (node-html mode prefix n (get by-parent (:id n)) pretty? 3)))]
+    (str "<!doctype html>" (nl 0) "<html>" (nl 1) "<head>" (nl 2) "<meta charset=\"utf-8\">" (nl 2) "<title></title>" (nl 2)
+         "<meta name=\"generator\" content=\"emon 0.1.0\">" (nl 1) "</head>" (nl 1) "<body>" (nl 2) "<main>"
+         (apply str blocks) (nl 2) "</main>" (nl 1) "</body>" (nl 0) "</html>")))
+
+;; ------------------------------------------------------------------ the files
+(def files
+  {"assets.model" (str (model-script) "\n")
+   "assets.assets" (str (assets-script) "\n")
+   "assets.json" (str (compact (model-json)) "\n")
+   "assets.pretty.json" (str (pretty (model-json)) "\n")
+   "assets.html" (str (model-html :inline "" false) "\n")
+   "assets.external.html" (str (model-html :external "img/" false) "\n")
+   "assets.omit.html" (str (model-html :omit "" false) "\n")
+   "assets.pretty.html" (str (model-html :inline "" true) "\n")})
+
+(if check?
+  (let [bad (remove (fn [[n c]] (and (fs/exists? (str gdir "/" n)) (= c (slurp (str gdir "/" n))))) files)]
+    (if (seq bad)
+      (do (println "  FAIL asset-golden: not what the generator writes:" (str/join " " (map first bad))) (System/exit 1))
+      (println "  ok   asset-golden:" (count files) "files in test/asset/ are what the generator writes")))
+  (do (fs/create-dirs gdir)
+      (doseq [[n c] files] (spit (str gdir "/" n) c))
+      (println "wrote" (count files) "files to" gdir)))

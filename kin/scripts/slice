@@ -158,7 +158,20 @@
            "driver test/image/tiff-multi3-g4.tif -> a Model of three image pages"))
   (err "unsupported-image" 4 "test/image/tiff-jpeg.tif")
   (err "undecodable" 4 "test/image/png-truncated.png")
-  (err "unsupported" 4 "--assets=images" (pdf "h-plain"))
+  ;; assets (P3.13, D117): `--assets=images` converts, writes its settings and an `assets` array (empty when no figure is an
+  ;; image), and a figure that is one embedded JPEG becomes asset 0 with its file written beside by the driver; off is a run
+  ;; without the flag
+  (let [r (drive "--assets=images" (pdf "h-plain"))
+        d (drive "--assets=images" "test/assets/dct-rgb.pdf")
+        n (drive "--assets=none" (pdf "h-plain"))
+        p (drive (pdf "h-plain"))]
+    (check (and (zero? (:exit r)) (str/includes? (:out r) "\"assets\":\"images\"") (str/ends-with? (str/trim (:out r)) "\"assets\":[]}"))
+           "driver --assets=images -> the settings and an empty `assets` array for a document with no image")
+    (check (and (zero? (:exit d)) (str/includes? (:out d) "\"asset\":0") (str/includes? (:out d) "\"origin\":\"embedded\"")
+                (str/includes? (:out d) "\"type\":\"image/jpeg\""))
+           "driver --assets=images test/assets/dct-rgb.pdf -> asset 0, an embedded JPEG")
+    (check (and (zero? (:exit n)) (= (:out n) (:out p)) (not (str/includes? (:out n) "\"assets\"")))
+           "driver --assets=none is a run without the flag: no `assets` anywhere"))
   (let [r (drive "--password=user-secret" "test/pdf/p3/crypt-aes-128-user.pdf")
         p (drive "test/pdf/p3/plain.pdf")]
     (check (and (zero? (:exit r)) (= (:out r) (:out p))) "--password=user-secret opens the locked file to the plain twin's Model"))

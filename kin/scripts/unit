@@ -104,6 +104,11 @@ command -v python3 > /dev/null && python3 kin/scripts/json-check.py
 # structure. Tooling, not runtime (D067).
 command -v python3 > /dev/null && python3 kin/scripts/html-check.py
 
+# THE ASSET GOLDENS (P3.13, D117): `test/asset/assets.{model,assets}`, its JSON and its HTML in four modes are what
+# `kin/scripts/asset-golden` writes: the Model's scripts and the bytes the SPEC says they give, by an implementation
+# that shares no code with kin (babashka). `kin/assettest.kin` holds js-emit and html-emit to those bytes.
+bb kin/scripts/asset-golden --check
+
 # THE SYNTHETIC GOLD (P2.8, D041, D063): the committed gold files validate
 # against schema/emon-gold-1.json, equal what tools/synth/html2gold.clj says of
 # the committed HTML, and MANIFEST.json matches the committed PDFs. No PDF
@@ -160,6 +165,15 @@ kin/scripts/para-check
 # THE VISIBILITY FIXTURES (P3.5, P3.6, D152-D157): the PDFs and the by-hand expectation rows are what the babashka script writes
 # (the colours of the colour-space fixture come from its second evaluator). The laws of kin/pdfvistest.kin are the gate.
 kin/scripts/vis-fixtures --check
+
+# THE ASSET FIXTURES (P3.12, D291-D293; babashka): the PDFs, source images and expectation rows of test/assets are what
+# kin/scripts/asset-fixtures writes. It needs ImageMagick, pdfimages (poppler) and qpdf, and the ImageMagick that wrote the
+# corpus (its encoders are in the bytes): without them it SKIPS, loudly. The laws of kin/pdfimagetest.kin are the gate.
+if command -v magick > /dev/null && command -v pdfimages > /dev/null && command -v qpdf > /dev/null; then
+  kin/scripts/asset-fixtures --check
+else
+  echo "  SKIP asset-fixtures --check: magick, pdfimages and qpdf are all needed (test/assets is read as committed)"
+fi
 
 # THE HEADING STAGE'S INDEPENDENT WITNESS (P4.2, P4.4, D167-D171; babashka, reads only committed files): the
 # headings of each golden Model in test/heading are, in order, the headings of the synthetic gold (the HTML's

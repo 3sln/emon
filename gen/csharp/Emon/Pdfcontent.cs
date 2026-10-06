@@ -2915,6 +2915,7 @@ public static class Pdfcontent {
         int skew = 1;
         int fl = flags;
         int chk = 0;
+        int ori = 0;
         int r = 0;
         if (emon.Port.CellsAt(cx, CCur + GBm) != 0) {
             fl += Evidence.MgBlend();
@@ -2947,6 +2948,13 @@ public static class Pdfcontent {
         Evidence.ImSet(im, r, Evidence.MfFlags(), fl);
         Evidence.ImSet(im, r, Evidence.MfRot(), rot);
         Evidence.ImSet(im, r, Evidence.MfSkewed(), skew);
+        // The CTM here maps to the displayed page, whose y runs down: `pi-orient` reads a y-up matrix, so the y axis is flipped
+        // back (b and d change sign). 0 is upright on the page AS DISPLAYED (a page's /Rotate is in it), 8 not rectilinear.
+        ori = Pdfimage.PiOrient(ma, unchecked(mb * ((long) -1)), mc, unchecked(md * ((long) -1)));
+        if (ori < 0) {
+            ori = 8;
+        }
+        Evidence.ImSet(im, r, Evidence.MfPlacement(), ori);
         Evidence.ImSet(im, r, Evidence.MfZ(), emon.Port.CellsAt(cx, CZ));
         emon.Port.CellsSet(cx, CZ, emon.Port.CellsAt(cx, CZ) + 1);
         Evidence.ImSet(im, r, Evidence.MfClip(), emon.Port.CellsAt(cx, CCur + GClip));

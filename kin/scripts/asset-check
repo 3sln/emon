@@ -1,0 +1,224 @@
+#!/usr/bin/env bb
+;; ASSET CHECK (P3.13, D117, SPEC 10.11, 14.1): are the assets right, by what is NOT kin?   kin/scripts/asset-check
+;;
+;; The Rust and the Go driver (`--assets=images`, `--asset-dir`) over P3.12's fixtures (test/assets/*.pdf) and the synthetic
+;; documents that have images, and:
+;;
+;;   1. HOSTS. The same JSON, the same HTML in all three modes and the same asset files, byte for byte, on both.
+;;   2. THE TABLE. Every asset's `bytes` is its file's length and its `sha256` is that file's SHA-256, computed here (Java), and
+;;      the JSON validates against schema/emon-1.json (python `jsonschema`, when it can be found: else SKIP, loudly).
+;;   3. THE PIXELS. Every PNG decodes (ImageMagick) to the pixels the generator of test/assets says (`D` rows of rows.txt: the SHA-256
+;;      of the RGBA8 of an upright, whole image), or, for a placed image (place-*.pdf), to the pixels poppler extracts of the source
+;;      with the orientation and the cut applied by ImageMagick (the operations are calibrated against the D rows of the eight
+;;      orientations, so they are what P3.12 decided and not what kin does). Every JPEG is, byte for byte, poppler's extraction of
+;;      the PDF's stream (`pdfimages -all`).
+;;   4. THE HTML. `inline`'s `data:` URI decodes (Java) to the very asset file; `external` writes `prefix` + the file's name; `omit`
+;;      has no <img> at all; and with `assets` off (`--assets=none`) the JSON and the HTML are what a run without the flag writes.
+;;   5. THE GOLDENS: `kin/scripts/asset-golden --check`.
+;;
+;; Needs ImageMagick (`magick`), poppler (`pdfimages`) and the toolchains of the drivers. A missing tool is a SKIP of what it checks.
+(require '[babashka.fs :as fs] '[babashka.process :refer [shell process]] '[cheshire.core :as json] '[clojure.string :as str])
+(import '(java.security MessageDigest) '(java.util Base64))
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn skip [& xs] (println (str "  SKIP " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+(defn have? [tool] (zero? (:exit (shell {:out :string :err :string :continue true} "which" tool))))
+
+(defn sha256 [^bytes bs] (apply str (map #(format "%02x" (bit-and % 255)) (.digest (MessageDigest/getInstance "SHA-256") bs))))
+(defn run [& args] @(apply process {:out :string :err :string} args))
+(defn run-bytes [& args] @(apply process {:out :bytes :err :string} args))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+(defn build [script what]
+  (let [r (run script)]
+    (when-not (zero? (:exit r)) (println "  FAIL the" what "driver did not build:\n" (:err r)) (System/exit 1))
+    (str/trim (:out r))))
+(def rs (build "kin/scripts/emon-rs-build" "Rust"))
+(def go (build "kin/scripts/emon-go-build" "Go"))
+
+(def tmp (str (fs/create-temp-dir {:prefix "asset-check"})))
+
+;; ---------------------------------------------------------------- the generator's rows
+(def rows (->> (str/split-lines (slurp "test/assets/rows.txt")) (remove #(or (str/blank? %) (str/starts-with? % "#"))) (map #(str/split % #"\t"))))
+(def d-rows (into {} (for [[k name file obj orient crop fill w h ch alpha sha] rows
+                           :when (= k "D")] [name {:file file :obj obj :orient (parse-long orient) :crop crop :fill (parse-long fill)
+                                                   :w (parse-long w) :h (parse-long h) :sha sha}])))
+
+;; ------------------------------------------------------------------ one document, one host
+(defn convert [exe pdf dir & flags]
+  (fs/delete-tree dir)
+  (let [r (apply run exe "--assets=images" (str "--asset-dir=" dir) (concat flags [pdf]))]
+    (when-not (zero? (:exit r)) (println "  FAIL" exe pdf (:err r)))
+    (:out r)))
+
+(def pdfs (concat (sort (map str (fs/glob "test/assets" "*.pdf")))
+                  (map #(str "test/corpus/synth/pdf/" % ".pdf")
+                       ["figures-charts" "figures-logo-screenshot" "initial-image" "gfx-image-rules" "mixed-table-image-shaded"
+                        "mixed-table-image" "columns-span-figure"])))
+
+;; 1 + 2 ------------------------------------------------------------------
+(def per-doc
+  (doall
+   (for [pdf pdfs :when (fs/exists? pdf)]
+     (let [stem (fs/strip-ext (fs/file-name pdf))
+           dr (str tmp "/rs/" stem) dg (str tmp "/go/" stem)
+           jr (convert rs pdf dr "--pretty") jg (convert go pdf dg "--pretty")
+           hr (map (fn [m] (:out (apply run rs "--out=html" "--assets=images" (concat m [pdf])))) [["--html=assets=inline"] ["--html=assets=external,prefix=img/"] ["--html=assets=omit"]])
+           hg (map (fn [m] (:out (apply run go "--out=html" "--assets=images" (concat m [pdf])))) [["--html=assets=inline"] ["--html=assets=external,prefix=img/"] ["--html=assets=omit"]])
+           files (fn [d] (into (sorted-map) (for [f (fs/list-dir d)] [(fs/file-name f) (vec (fs/read-all-bytes f))])))
+           fr (when (fs/exists? dr) (files dr)) fg (when (fs/exists? dg) (files dg))]
+       {:pdf pdf :stem stem :json jr :jg jg :hr hr :hg hg :dir dr :fr (or fr {}) :fg (or fg {})}))))
+
+(let [diffs (for [{:keys [pdf json jg hr hg fr fg]} per-doc
+                  :when (or (not= json jg) (not= hr hg) (not= fr fg))] pdf)]
+  (check (empty? diffs) "HOSTS: the JSON, the HTML in the three modes and every asset file are identical on Rust and Go over "
+         (count per-doc) " documents" (when (seq diffs) (str ": " (str/join " " diffs)))))
+
+(let [total (atom 0)
+      wrong (atom [])]
+  (doseq [{:keys [pdf json dir]} per-doc
+          :let [j (json/parse-string json)]
+          a (get j "assets")]
+    (swap! total inc)
+    (let [f (str dir "/" (get a "name"))]
+      (if-not (fs/exists? f)
+        (swap! wrong conj (str pdf " " (get a "name") " has no file"))
+        (let [bs (fs/read-all-bytes f)]
+          (when (not= (alength bs) (get a "bytes")) (swap! wrong conj (str pdf " " (get a "name") " bytes")))
+          (when (not= (sha256 bs) (get a "sha256")) (swap! wrong conj (str pdf " " (get a "name") " sha256")))))))
+  (check (empty? @wrong) "THE TABLE: every one of " @total " assets' `bytes` and `sha256` are its file's (recomputed here)"
+         (when (seq @wrong) (str ": " (str/join "; " (take 5 @wrong))))))
+
+;; the schema
+(let [pylib (or (System/getenv "EMON_PYLIB") (str (System/getProperty "user.home") "/.cache/emon/pylib"))
+      probe (run "env" (str "PYTHONPATH=" pylib) "python3" "-c" "import jsonschema")]
+  (if-not (zero? (:exit probe))
+    (skip "SCHEMA: python `jsonschema` is not on the path or in $EMON_PYLIB; the asset JSON was not validated against schema/emon-1.json")
+    (let [py "import json,sys,jsonschema\ns=json.load(open('schema/emon-1.json'))\nv=jsonschema.Draft202012Validator(s)\nbad=0\nfor f in sys.argv[1:]:\n    e=list(v.iter_errors(json.load(open(f))))\n    if e:\n        bad+=1\n        print(f, e[0].message[:200])\nprint('bad', bad)\n"
+          files (for [{:keys [stem json]} per-doc]
+                  (let [f (str tmp "/" stem ".json")] (spit f json) f))
+          golden ["test/asset/assets.json"]
+          r (apply run "env" (str "PYTHONPATH=" pylib) "python3" "-c" py (concat files golden))]
+      (check (str/includes? (:out r) "bad 0") "SCHEMA: " (count files) " asset documents and the golden validate against schema/emon-1.json"
+             (when-not (str/includes? (:out r) "bad 0") (str "\n" (:out r) (:err r)))))))
+
+;; 3 ----------------------------------------------------------------------
+(if-not (and (have? "magick") (have? "pdfimages"))
+  (skip "THE PIXELS: needs ImageMagick (`magick`) and poppler (`pdfimages`)")
+  (let [rgba-sha (fn [f] (sha256 (:out (run-bytes "magick" f "-depth" "8" "-alpha" "on" "RGBA:-"))))
+        size (fn [f] (mapv parse-long (str/split (str/trim (:out (run "magick" "identify" "-format" "%w %h" (str f "[0]")))) #" ")))
+        pdfimages-png (fn [pdf out] (fs/create-dirs out) (run "pdfimages" "-png" pdf (str out "/p")) (first (sort (map str (fs/glob out "*.png")))))
+        ;; the operations that are the eight orientations, calibrated against kin-independent D rows
+        ops {0 [] 1 ["-flop"] 2 ["-rotate" "180"] 3 ["-flip"] 4 ["-rotate" "90"] 5 ["-rotate" "270"] 6 ["-transpose"] 7 ["-transverse"]}
+        src-png (pdfimages-png "test/assets/flate-rgb8.pdf" (str tmp "/calib"))
+        oriented (fn [png code out] (apply run "magick" png (concat (ops code) ["-alpha" "on" out])) out)
+        calib (for [c (range 8)
+                    :let [row (d-rows (if (zero? c) "flate-rgb8" (str "flate-rgb8-o" c)))
+                          out (oriented src-png c (str tmp "/calib/o" c ".png"))]]
+                (= (rgba-sha out) (:sha row)))
+        ;; the codes of P3.12's O rows for each place-* file (`M` row, then its `O` row)
+        codes {"place-upright" 0 "place-rot90" 5 "place-rot90cw" 4 "place-rot180" 2 "place-flip-h" 1 "place-flip-v" 3 "place-transpose" 6 "place-antitranspose" 7}]
+    (check (every? true? calib) "THE PIXELS: the eight ImageMagick operations equal the generator's oriented rows (calibration)")
+    ;; (a) the D rows of whole, upright images
+    (let [checked (atom 0) wrong (atom [])]
+      (doseq [{:keys [pdf stem json dir]} per-doc
+              :let [row (d-rows stem) j (json/parse-string json)
+                    fig (first (filter #(get % "asset") (tree-seq map? #(get % "children") (get j "body"))))]
+              :when (and row (zero? (:orient row)) (= "-" (:crop row)) (zero? (:fill row)) (not (str/starts-with? (:obj row) "c")) fig)]
+        (let [a (nth (get j "assets") (get fig "asset")) f (str dir "/" (get a "name"))]
+          (swap! checked inc)
+          (cond (= "image/jpeg" (get a "type")) nil
+                (not= (size f) [(:w row) (:h row)]) (swap! wrong conj (str stem " size " (size f) " vs " [(:w row) (:h row)]))
+                (not= (rgba-sha f) (:sha row)) (swap! wrong conj (str stem " pixels")))))
+      (check (and (pos? @checked) (empty? @wrong)) "THE PIXELS: " @checked " decoded assets (and the JPEG-sourced D rows' sizes) are the generator's pixels, "
+             "RGBA8 SHA-256 each, by ImageMagick" (when (seq @wrong) (str ": " (str/join "; " (take 5 @wrong))))))
+    ;; (b) placed images: poppler's source, oriented or cut
+    (let [wrong (atom []) n (atom 0)]
+      (doseq [{:keys [pdf stem json dir]} per-doc :when (str/starts-with? stem "place-")
+              :let [j (json/parse-string json) a (first (get j "assets")) f (when a (str dir "/" (get a "name")))
+                    src (pdfimages-png pdf (str tmp "/src-" stem))]]
+        (swap! n inc)
+        (cond
+          (nil? a) (when-not (= stem "place-skew") (swap! wrong conj (str stem " has no asset")))
+          (contains? codes stem)
+          (let [exp (oriented src (codes stem) (str tmp "/exp-" stem ".png"))]
+            (when (not= (rgba-sha f) (rgba-sha exp)) (swap! wrong conj (str stem " pixels"))))
+          (= stem "place-skew")
+          (when (not= (rgba-sha f) (rgba-sha src)) (swap! wrong conj "place-skew is not the unrotated source"))
+          (= stem "place-clip-rect")
+          (let [out (str tmp "/exp-" stem ".png")]
+            (run "magick" src "-crop" "15x7+2+2" "+repage" "-alpha" "on" out)
+            (when (not= (rgba-sha f) (rgba-sha out)) (swap! wrong conj (str stem " cut"))))
+          (= stem "place-clip-circle")
+          (let [out (str tmp "/exp-" stem ".png")]
+            (run "magick" src "-crop" "9x11+0+0" "+repage" "-alpha" "on" out)
+            (when (not= (rgba-sha f) (rgba-sha out)) (swap! wrong conj (str stem " cut"))))))
+      (check (empty? @wrong) "THE PIXELS: " @n " placed images (eight orientations, a skew, two clips) are poppler's source oriented or cut by ImageMagick"
+             (when (seq @wrong) (str ": " (str/join "; " @wrong)))))
+    ;; (c) a JPEG is the PDF's stream, byte for byte (poppler)
+    (let [wrong (atom []) n (atom 0)]
+      (doseq [{:keys [pdf stem json dir]} per-doc
+              :let [j (json/parse-string json)]
+              a (get j "assets") :when (= "image/jpeg" (get a "type"))
+              :let [out (str tmp "/jpg-" stem)]]
+        (fs/create-dirs out)
+        (run "pdfimages" "-all" pdf (str out "/p"))
+        (let [theirs (sort (map str (fs/glob out "*.jpg")))
+              mine (vec (fs/read-all-bytes (str dir "/" (get a "name"))))]
+          (swap! n inc)
+          (when-not (some #(= mine (vec (fs/read-all-bytes %))) theirs) (swap! wrong conj stem))))
+      (check (and (pos? @n) (empty? @wrong)) "THE PIXELS: " @n " embedded JPEGs are, byte for byte, poppler's extraction of the stream"
+             (when (seq @wrong) (str ": " (str/join " " @wrong)))))))
+
+;; 4 ----------------------------------------------------------------------
+(let [wrong (atom []) n (atom 0)
+      b64 (fn [html] (map second (re-seq #"src=\"data:image/[a-z]+;base64,([A-Za-z0-9+/=]+)\"" html)))]
+  (doseq [{:keys [stem json hr dir]} per-doc
+          :let [j (json/parse-string json) assets (get j "assets")]
+          :when (seq assets)]
+    (swap! n inc)
+    (let [[inline external omit] hr
+          uris (b64 inline)
+          uses (mapcat (fn [a] (for [u (get a "uses")] a)) assets)
+          want (map (fn [a] (vec (fs/read-all-bytes (str dir "/" (get a "name"))))) uses)
+          got (map (fn [s] (vec (.decode (Base64/getDecoder) ^String s))) uris)]
+      (when-not (= (sort-by hash want) (sort-by hash got)) (swap! wrong conj (str stem " inline")))
+      (when-not (every? #(str/includes? external (str "src=\"img/" (get % "name") "\"")) assets) (swap! wrong conj (str stem " external")))
+      (when (str/includes? omit "<img") (swap! wrong conj (str stem " omit has an <img>")))))
+  (check (and (pos? @n) (empty? @wrong)) "THE HTML: in " @n " documents `inline` decodes to the asset files, `external` names them and `omit` has no <img>"
+         (when (seq @wrong) (str ": " (str/join "; " (take 5 @wrong))))))
+
+(let [wrong (atom [])]
+  (doseq [exe [rs go] pdf (take 12 pdfs)]
+    (let [plain (run exe pdf) none (run exe "--assets=none" pdf)
+          hplain (run exe "--out=html" pdf) hnone (run exe "--out=html" "--assets=none" pdf)]
+      (when (or (not= (:out plain) (:out none)) (not= (:out hplain) (:out hnone))
+                (str/includes? (:out plain) "\"assets\"") (str/includes? (:out hplain) "<img"))
+        (swap! wrong conj pdf))))
+  (check (empty? @wrong) "OFF: `--assets=none` is a run without the flag (JSON and HTML), with no `assets`, no `<img>`, on both hosts"
+         (when (seq @wrong) (str ": " (str/join " " @wrong)))))
+
+;; the HTML is HTML: html5lib in strict mode, zero errors (the goldens and every document's three modes)
+(let [pylib (or (System/getenv "EMON_PYLIB") (str (System/getProperty "user.home") "/.cache/emon/pylib"))
+      probe (run "env" (str "PYTHONPATH=" pylib) "python3" "-c" "import html5lib")]
+  (if-not (zero? (:exit probe))
+    (skip "HTML5: python `html5lib` is not on the path or in $EMON_PYLIB; the asset HTML was not parsed strictly")
+    (let [py "import sys,html5lib\nbad=0\nfor f in sys.argv[1:]:\n    p=html5lib.HTMLParser(strict=False)\n    p.parse(open(f,encoding='utf-8').read())\n    if p.errors:\n        bad+=1\n        print(f, p.errors[:2])\nprint('bad', bad)\n"
+          files (concat (for [g ["assets" "assets.external" "assets.omit" "assets.pretty"]] (str "test/asset/" g ".html"))
+                        (for [{:keys [stem hr]} per-doc, [i h] (map-indexed vector hr)
+                              :let [f (str tmp "/" stem "." i ".html")]]
+                          (do (spit f h) f)))
+          r (apply run "env" (str "PYTHONPATH=" pylib) "python3" "-c" py files)]
+      (check (str/includes? (:out r) "bad 0") "HTML5: " (count files) " documents (the four goldens and every document in the three modes) parse with html5lib, zero errors"
+             (when-not (str/includes? (:out r) "bad 0") (str "\n" (:out r) (:err r)))))))
+
+;; 5 ----------------------------------------------------------------------
+(let [r (run "bb" "kin/scripts/asset-golden" "--check")]
+  (if (zero? (:exit r)) (println (str/trimr (:out r))) (bad (str/trim (str (:out r) (:err r))))))
+
+(fs/delete-tree tmp)
+(println (if (zero? @fails) "asset-check: all green" (str "asset-check: " @fails " FAILED")))
+(System/exit (if (zero? @fails) 0 1))

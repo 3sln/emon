@@ -432,6 +432,54 @@ public final class Model {
     public static int fkBox() {
         return 81;
     }
+    public static int fkAsset() {
+        return 82;
+    }
+    public static int fkNoasset() {
+        return 83;
+    }
+    public static int fkAssets() {
+        return 84;
+    }
+    public static int fkAssetDpi() {
+        return 85;
+    }
+    public static int fkAssetPixels() {
+        return 86;
+    }
+    public static int fkAssetBytes() {
+        return 87;
+    }
+    public static int fkAssetsBytes() {
+        return 88;
+    }
+    public static int fkAssetSignatures() {
+        return 89;
+    }
+    public static int fkImage() {
+        return 90;
+    }
+    public static int fkOrigin() {
+        return 91;
+    }
+    public static int fkFrom() {
+        return 92;
+    }
+    public static int fkObject() {
+        return 93;
+    }
+    public static int fkBytes() {
+        return 94;
+    }
+    public static int fkSha256() {
+        return 95;
+    }
+    public static int fkUses() {
+        return 96;
+    }
+    public static int fkNode() {
+        return 97;
+    }
     public static int fkEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "id");
@@ -755,6 +803,70 @@ public final class Model {
         }
         if (code == 81) {
             emon.Port.textAscii(t, "box");
+            return 1;
+        }
+        if (code == 82) {
+            emon.Port.textAscii(t, "asset");
+            return 1;
+        }
+        if (code == 83) {
+            emon.Port.textAscii(t, "noasset");
+            return 1;
+        }
+        if (code == 84) {
+            emon.Port.textAscii(t, "assets");
+            return 1;
+        }
+        if (code == 85) {
+            emon.Port.textAscii(t, "asset-dpi");
+            return 1;
+        }
+        if (code == 86) {
+            emon.Port.textAscii(t, "asset-pixels");
+            return 1;
+        }
+        if (code == 87) {
+            emon.Port.textAscii(t, "asset-bytes");
+            return 1;
+        }
+        if (code == 88) {
+            emon.Port.textAscii(t, "assets-bytes");
+            return 1;
+        }
+        if (code == 89) {
+            emon.Port.textAscii(t, "asset-signatures");
+            return 1;
+        }
+        if (code == 90) {
+            emon.Port.textAscii(t, "image");
+            return 1;
+        }
+        if (code == 91) {
+            emon.Port.textAscii(t, "origin");
+            return 1;
+        }
+        if (code == 92) {
+            emon.Port.textAscii(t, "from");
+            return 1;
+        }
+        if (code == 93) {
+            emon.Port.textAscii(t, "object");
+            return 1;
+        }
+        if (code == 94) {
+            emon.Port.textAscii(t, "bytes");
+            return 1;
+        }
+        if (code == 95) {
+            emon.Port.textAscii(t, "sha256");
+            return 1;
+        }
+        if (code == 96) {
+            emon.Port.textAscii(t, "uses");
+            return 1;
+        }
+        if (code == 97) {
+            emon.Port.textAscii(t, "node");
             return 1;
         }
         return 0;
@@ -1306,6 +1418,252 @@ public final class Model {
         }
         return 0;
     }
+    public static int aoEmbedded() {
+        return 1;
+    }
+    public static int aoDecoded() {
+        return 2;
+    }
+    public static int aoCropped() {
+        return 3;
+    }
+    public static int aoRendered() {
+        return 4;
+    }
+    public static int aoEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "embedded");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "decoded");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.textAscii(t, "cropped");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.textAscii(t, "rendered");
+            return 1;
+        }
+        return 0;
+    }
+    public static int afmDct() {
+        return 1;
+    }
+    public static int afmJpx() {
+        return 2;
+    }
+    public static int afmJbig2() {
+        return 3;
+    }
+    public static int afmCcitt() {
+        return 4;
+    }
+    public static int afmFlate() {
+        return 5;
+    }
+    public static int afmLzw() {
+        return 6;
+    }
+    public static int afmRunlength() {
+        return 7;
+    }
+    public static int afmRaw() {
+        return 8;
+    }
+    public static int afmPng() {
+        return 9;
+    }
+    public static int afmJpeg() {
+        return 10;
+    }
+    public static int afmTiff() {
+        return 11;
+    }
+    public static int afmRender() {
+        return 12;
+    }
+    public static int afmEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "dct");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "jpx");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.textAscii(t, "jbig2");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.textAscii(t, "ccitt");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.textAscii(t, "flate");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.textAscii(t, "lzw");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.textAscii(t, "runlength");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.textAscii(t, "raw");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.textAscii(t, "png");
+            return 1;
+        }
+        if (code == 10) {
+            emon.Port.textAscii(t, "jpeg");
+            return 1;
+        }
+        if (code == 11) {
+            emon.Port.textAscii(t, "tiff");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.textAscii(t, "render");
+            return 1;
+        }
+        return 0;
+    }
+    public static int amtJpeg() {
+        return 1;
+    }
+    public static int amtPng() {
+        return 2;
+    }
+    public static int amtEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "image/jpeg");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "image/png");
+            return 1;
+        }
+        return 0;
+    }
+    public static int afgOverlaid() {
+        return 1;
+    }
+    public static int afgClipBbox() {
+        return 2;
+    }
+    public static int afgTransformed() {
+        return 4;
+    }
+    public static int afgIcc() {
+        return 8;
+    }
+    public static int afgScaled() {
+        return 16;
+    }
+    public static int afgTextOverlap() {
+        return 32;
+    }
+    public static int afgEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "overlaid");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "clip-bbox");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.textAscii(t, "transformed");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.textAscii(t, "icc");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.textAscii(t, "scaled");
+            return 1;
+        }
+        if (code == 32) {
+            emon.Port.textAscii(t, "text-overlap");
+            return 1;
+        }
+        return 0;
+    }
+    public static int nzWithheld() {
+        return 1;
+    }
+    public static int nzPart() {
+        return 2;
+    }
+    public static int nzVector() {
+        return 3;
+    }
+    public static int nzComposite() {
+        return 4;
+    }
+    public static int nzColorspace() {
+        return 5;
+    }
+    public static int nzCodec() {
+        return 6;
+    }
+    public static int nzRender() {
+        return 7;
+    }
+    public static int nzTooLarge() {
+        return 8;
+    }
+    public static int nzBudget() {
+        return 9;
+    }
+    public static int nzEmitName(StringBuilder t, int code) {
+        if (code == 1) {
+            emon.Port.textAscii(t, "withheld");
+            return 1;
+        }
+        if (code == 2) {
+            emon.Port.textAscii(t, "part");
+            return 1;
+        }
+        if (code == 3) {
+            emon.Port.textAscii(t, "vector");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.textAscii(t, "composite");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.textAscii(t, "colorspace");
+            return 1;
+        }
+        if (code == 6) {
+            emon.Port.textAscii(t, "codec");
+            return 1;
+        }
+        if (code == 7) {
+            emon.Port.textAscii(t, "render");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.textAscii(t, "too-large");
+            return 1;
+        }
+        if (code == 9) {
+            emon.Port.textAscii(t, "budget");
+            return 1;
+        }
+        return 0;
+    }
     public static int mcOk() {
         return 0;
     }
@@ -1347,6 +1705,9 @@ public final class Model {
     }
     public static int mcBadLayout() {
         return 13;
+    }
+    public static int mcBadAsset() {
+        return 14;
     }
     public static int mcEmitName(StringBuilder t, int code) {
         if (code == 0) {
@@ -1405,6 +1766,10 @@ public final class Model {
             emon.Port.textAscii(t, "bad-layout");
             return 1;
         }
+        if (code == 14) {
+            emon.Port.textAscii(t, "bad-asset");
+            return 1;
+        }
         return 0;
     }
     public static int avInt() {
@@ -1435,6 +1800,12 @@ public final class Model {
         return 10;
     }
     public static int layoutStride() {
+        return 8;
+    }
+    public static int assetsStride() {
+        return 24;
+    }
+    public static int usesStride() {
         return 8;
     }
     public static int maxDepth() {
@@ -2458,5 +2829,266 @@ public final class Model {
         h = mhFold(h, ledger);
         h = mhFold(h, layout);
         return h;
+    }
+    public static int xget(emon.Port.Cells assets, int a, int f) {
+        return emon.Port.cellsAt(assets, (a * 24) + f);
+    }
+    public static int xset(emon.Port.Cells assets, int a, int f, int v) {
+        emon.Port.cellsSet(assets, (a * 24) + f, v);
+        return 0;
+    }
+    public static int assetAdd(emon.Port.Cells assets, int mtype, int origin, int afrom, int object, int bstart, int blen, int w, int h, int dpi, int flags) {
+        // Append an asset (no uses yet, the hash zero) and answer its id. `object` is -1 for none, `dpi` 0.
+        int id = emon.Port.cellsLen(assets) / 24;
+        int i = 0;
+        emon.Port.cellsPush(assets, mtype);
+        emon.Port.cellsPush(assets, origin);
+        emon.Port.cellsPush(assets, afrom);
+        emon.Port.cellsPush(assets, object);
+        emon.Port.cellsPush(assets, bstart);
+        emon.Port.cellsPush(assets, blen);
+        while (i < 8) {
+            emon.Port.cellsPush(assets, 0);
+            i += 1;
+        }
+        emon.Port.cellsPush(assets, w);
+        emon.Port.cellsPush(assets, h);
+        emon.Port.cellsPush(assets, dpi);
+        emon.Port.cellsPush(assets, flags);
+        emon.Port.cellsPush(assets, -1);
+        emon.Port.cellsPush(assets, 0);
+        emon.Port.cellsPush(assets, -1);
+        emon.Port.cellsPush(assets, 0);
+        emon.Port.cellsPush(assets, 0);
+        emon.Port.cellsPush(assets, 0);
+        return id;
+    }
+    public static int assetSetSha(emon.Port.Cells assets, int a, int i, int v) {
+        // Word i (0..7) of asset a's SHA-256.
+        return xset(assets, a, 6 + i, v);
+    }
+    public static int assetSetFlags(emon.Port.Cells assets, int a, int v) {
+        return xset(assets, a, 17, v);
+    }
+    public static int useAdd(emon.Port.Cells assets, emon.Port.Cells uses, int a, int node, int page, int x0, int y0, int x1, int y1) {
+        // Append a use of asset a by `node`, at the page region given, to the END of the asset's chain; answers its index.
+        int u = emon.Port.cellsLen(uses) / 8;
+        int tail = xget(assets, a, 20);
+        int cnt = xget(assets, a, 19);
+        emon.Port.cellsPush(uses, a);
+        emon.Port.cellsPush(uses, node);
+        emon.Port.cellsPush(uses, page);
+        emon.Port.cellsPush(uses, x0);
+        emon.Port.cellsPush(uses, y0);
+        emon.Port.cellsPush(uses, x1);
+        emon.Port.cellsPush(uses, y1);
+        emon.Port.cellsPush(uses, -1);
+        if (tail < 0) {
+            xset(assets, a, 18, u);
+        } else {
+            emon.Port.cellsSet(uses, (tail * 8) + 7, u);
+        }
+        xset(assets, a, 20, u);
+        xset(assets, a, 19, cnt + 1);
+        return u;
+    }
+    public static int assetCount(emon.Port.Cells assets) {
+        return emon.Port.cellsLen(assets) / 24;
+    }
+    public static int assetType(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 0);
+    }
+    public static int assetOrigin(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 1);
+    }
+    public static int assetFrom(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 2);
+    }
+    public static int assetObject(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 3);
+    }
+    public static int assetBstart(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 4);
+    }
+    public static int assetBlen(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 5);
+    }
+    public static int assetSha(emon.Port.Cells assets, int a, int i) {
+        return xget(assets, a, 6 + i);
+    }
+    public static int assetW(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 14);
+    }
+    public static int assetH(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 15);
+    }
+    public static int assetDpi(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 16);
+    }
+    public static int assetFlags(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 17);
+    }
+    public static int assetUseHead(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 18);
+    }
+    public static int assetUseCount(emon.Port.Cells assets, int a) {
+        return xget(assets, a, 19);
+    }
+    public static int uget(emon.Port.Cells uses, int u, int f) {
+        return emon.Port.cellsAt(uses, (u * 8) + f);
+    }
+    public static int useCount(emon.Port.Cells uses) {
+        return emon.Port.cellsLen(uses) / 8;
+    }
+    public static int useAsset(emon.Port.Cells uses, int u) {
+        return uget(uses, u, 0);
+    }
+    public static int useNode(emon.Port.Cells uses, int u) {
+        return uget(uses, u, 1);
+    }
+    public static int usePage(emon.Port.Cells uses, int u) {
+        return uget(uses, u, 2);
+    }
+    public static int useX0(emon.Port.Cells uses, int u) {
+        return uget(uses, u, 3);
+    }
+    public static int useY0(emon.Port.Cells uses, int u) {
+        return uget(uses, u, 4);
+    }
+    public static int useX1(emon.Port.Cells uses, int u) {
+        return uget(uses, u, 5);
+    }
+    public static int useY1(emon.Port.Cells uses, int u) {
+        return uget(uses, u, 6);
+    }
+    public static int useNext(emon.Port.Cells uses, int u) {
+        return uget(uses, u, 7);
+    }
+    public static int assetExtIsJpg(emon.Port.Cells assets, int a) {
+        if (xget(assets, a, 0) == 1) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int assetFind(emon.Port.Cells assets, int blen, int s0, int s1, int s2, int s3, int s4, int s5, int s6, int s7) {
+        // The first asset whose encoded bytes are `blen` long with this SHA-256, or -1 (admission's dedup).
+        int n = emon.Port.cellsLen(assets) / 24;
+        int a = 0;
+        while (a < n) {
+            if ((xget(assets, a, 5) == blen) && ((xget(assets, a, 6) == s0) && (xget(assets, a, 7) == s1) && ((xget(assets, a, 8) == s2) && (xget(assets, a, 9) == s3) && ((xget(assets, a, 10) == s4) && (xget(assets, a, 11) == s5) && ((xget(assets, a, 12) == s6) && (xget(assets, a, 13) == s7)))))) {
+                return a;
+            }
+            a += 1;
+        }
+        return -1;
+    }
+    public static int modelCheckAssets(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, emon.Port.Cells st) {
+        // Are the asset table, its uses and the nodes' `asset`/`noasset` well formed? 0, or `mc-bad-asset` (the index in
+        // `st[0]`: the asset, the use or the node). Run it after `model-check` when `assets` is on.
+        int na = emon.Port.cellsLen(assets) / 24;
+        int nu = emon.Port.cellsLen(uses) / 8;
+        int nn = emon.Port.cellsLen(nodes) / 16;
+        int bl = emon.Port.bufLen(abytes);
+        int i = 0;
+        int u = 0;
+        int k = 0;
+        int a = 0;
+        int v = 0;
+        int total = 0;
+        emon.Port.cellsDrop(st, 0);
+        emon.Port.cellsPush(st, 0);
+        if ((emon.Port.cellsLen(assets) % 24) != 0) {
+            return mcFail(st, mcBadAsset(), 0);
+        }
+        if ((emon.Port.cellsLen(uses) % 8) != 0) {
+            return mcFail(st, mcBadAsset(), 0);
+        }
+        while (i < na) {
+            if ((xget(assets, i, 0) < 1) || (xget(assets, i, 0) > 2)) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            if ((xget(assets, i, 1) < 1) || (xget(assets, i, 1) > 4)) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            if ((xget(assets, i, 2) < 1) || (xget(assets, i, 2) > 12)) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            if ((xget(assets, i, 4) < 0) || (xget(assets, i, 5) < 0)) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            if (xget(assets, i, 4) > bl) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            if (xget(assets, i, 5) > (bl - xget(assets, i, 4))) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            if ((xget(assets, i, 14) < 0) || (xget(assets, i, 15) < 0)) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            if ((xget(assets, i, 17) < 0) || (xget(assets, i, 17) > 63)) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            u = xget(assets, i, 18);
+            k = 0;
+            while (u >= 0) {
+                if (u >= nu) {
+                    return mcFail(st, mcBadAsset(), i);
+                }
+                if (k > nu) {
+                    return mcFail(st, mcBadAsset(), i);
+                }
+                if (uget(uses, u, 0) != i) {
+                    return mcFail(st, mcBadAsset(), i);
+                }
+                if ((uget(uses, u, 1) < 0) || (uget(uses, u, 1) >= nn)) {
+                    return mcFail(st, mcBadAsset(), u);
+                }
+                if (mcLinkOk(uget(uses, u, 7), nu) == 0) {
+                    return mcFail(st, mcBadAsset(), u);
+                }
+                k += 1;
+                u = uget(uses, u, 7);
+            }
+            if (k != xget(assets, i, 19)) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            total += k;
+            i += 1;
+        }
+        if (total != nu) {
+            return mcFail(st, mcBadAsset(), 0);
+        }
+        i = 0;
+        while (i < nn) {
+            a = attrFind(attrs, nget(nodes, i, 6), fkAsset());
+            v = attrFind(attrs, nget(nodes, i, 6), fkNoasset());
+            if ((a >= 0) && (v >= 0)) {
+                return mcFail(st, mcBadAsset(), i);
+            }
+            if (a >= 0) {
+                if ((aget(attrs, a, 2) < 0) || (aget(attrs, a, 2) >= na)) {
+                    return mcFail(st, mcBadAsset(), i);
+                }
+            }
+            if (v >= 0) {
+                if ((aget(attrs, v, 2) < 1) || (aget(attrs, v, 2) > 9)) {
+                    return mcFail(st, mcBadAsset(), i);
+                }
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static long modelHashAssets(long h, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes) {
+        // Fold the asset table, its uses and the bytes into a `model-hash` value `h` (FNV-1a, as `model-hash`).
+        long acc = mhFold(h, assets);
+        int i = 0;
+        int bl = emon.Port.bufLen(abytes);
+        acc = mhFold(acc, uses);
+        while (i < bl) {
+            acc = (acc ^ ((long) emon.Port.bufAt(abytes, i))) * 1099511628211L;
+            i += 1;
+        }
+        return (acc ^ ((long) bl)) * 1099511628211L;
     }
 }

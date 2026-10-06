@@ -183,6 +183,7 @@ jobs:
           - {name: repeat, gates: "repeat", corpus: false}
           - {name: accuracy, gates: "accuracy", corpus: false}
           - {name: png-check, gates: "png-check", corpus: true}
+          - {name: asset, gates: "asset", corpus: false}
           - {name: image, gates: "image", corpus: true}
     steps:
       - uses: actions/checkout@v4

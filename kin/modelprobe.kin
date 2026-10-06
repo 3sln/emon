@@ -50,5 +50,6 @@
 
 (defn ^:pub ^I32 probe-json [^:mut ^Text t ^Cells nodes ^Cells attrs
                              ^Cells regions ^Cells text ^Cells pages
-                             ^Cells ledger ^Cells layout]
-  (return (js-emit t 0 nodes attrs regions text pages ledger layout)))
+                             ^Cells ledger ^Cells layout ^Cells assets ^Cells uses]
+  (comment "`assets` and `uses` are the (empty) asset table: a Model built without `assets` has none (SPEC 10.11).")
+  (return (js-emit t 0 nodes attrs regions text pages ledger layout assets uses)))

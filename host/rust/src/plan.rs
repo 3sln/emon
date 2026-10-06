@@ -38,6 +38,7 @@ pub const KIND_DECODE: i32 = 2;
 pub const KIND_OCR: i32 = 3;
 pub const KIND_BYTES: i32 = 4;
 pub const KIND_CROP: i32 = 5;
+pub const KIND_DECODE_IMG: i32 = 6;
 
 pub const STATUS_OK: i32 = 0;
 pub const STATUS_FAILED: i32 = 1;
@@ -263,7 +264,7 @@ fn read_requests(rq: &Cells, answered: &HashSet<i32>) -> Result<Vec<Request>, Pl
             return Err(PlanError::Bad(format!("a request at {} has length {}", at, len)));
         }
         let rec = record_at(rq, at, len);
-        if rec[1] < KIND_RENDER || (rec[1] > KIND_OCR && rec[1] != KIND_CROP) {
+        if rec[1] < KIND_RENDER || (rec[1] > KIND_OCR && rec[1] != KIND_CROP && rec[1] != KIND_DECODE_IMG) {
             return Err(PlanError::Bad(format!("request {} has kind {}, which kin may not ask for", rec[2], rec[1])));
         }
         if rec[2] < 1 {
@@ -440,6 +441,7 @@ fn kind_name(k: i32) -> &'static str {
         KIND_DECODE => "decode",
         KIND_OCR => "ocr",
         KIND_CROP => "crop",
+        KIND_DECODE_IMG => "decode-img",
         _ => "unknown",
     }
 }
@@ -450,6 +452,7 @@ fn kind_code(s: &str) -> Option<i32> {
         "decode" => Some(KIND_DECODE),
         "ocr" => Some(KIND_OCR),
         "crop" => Some(KIND_CROP),
+        "decode-img" => Some(KIND_DECODE_IMG),
         _ => None,
     }
 }

@@ -44,6 +44,8 @@
        :task (apply shell "bb" "kin/scripts/ink" *command-line-args*)}
   trace {:doc "How well does kin's tracer find rules, tints, text lines (watermarks too), rings and rects: against the vector paths of the no-text renders, the text layer's lines, the PDF's own watermark matrix, and (live) mapo80's labelled stamps; counts and time per page, Rust and Go (P6.4, D252-D258). NOT a gate; needs poppler, ghostscript, qpdf, ImageMagick.  bb trace [--go] [--limit N] [--only STEM] [--rebuild] [--mapo N]"
          :task (apply shell "bb" "kin/scripts/trace" *command-line-args*)}
+  asset {:doc "Are the opt-in assets (assets=images) right, by what is not kin: both drivers over P3.12's fixtures give the same JSON, HTML in three modes and asset files; every sha256 and byte count is its file's; every PNG decodes (ImageMagick) to the generator's pixels, every JPEG is poppler's extraction; the goldens (P3.13, D117).  bb asset"
+         :task (shell "kin/scripts/asset-check")}
   png-bench {:doc "ms per target to write a real scanned page and a photo as PNG, and whether the four write the same file (NOT a gate; needs corpus/).  bb png-bench [N]"
              :task (apply shell "kin/scripts/png-bench" *command-line-args*)}
   drift {:doc "Is the committed generated code what the sources say?"

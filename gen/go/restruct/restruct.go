@@ -4,6 +4,7 @@
 package restruct
 
 import (
+	"emon/asset"
 	"emon/links"
 	"emon/model"
 	"emon/port"
@@ -939,5 +940,184 @@ func RsRun(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, no
 	rsLinkRefs(nodes, attrs, text, used)
 	rsResolveLinks(nodes, attrs, regions, used)
 	rsScrubText(text)
+	return model.NodeCount(nodes)
+}
+
+func rfNode(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, n int32, np int32) int32 {
+	// `rs-node`, but every attribute is kept (the item's private `fk-box` too: `rs-run` reads it).
+	var nn int32 = model.NodeNew(nodes, model.NodeKind(on, n), np)
+	if nn < 0 {
+		nn = model.NodeNew(nodes, model.NodeKind(on, n), 0)
+	}
+	if nn < 0 {
+		return -1
+	}
+	model.NodeSetSub(nodes, nn, model.NodeSub(on, n))
+	model.NodeSetAux(nodes, nn, model.NodeAux(on, n))
+	model.NodeSetSrc(nodes, nn, model.NodeSrc(on, n))
+	model.NodeSetConf(nodes, nn, model.NodeConf(on, n))
+	model.NodeSetFlags(nodes, nn, model.NodeFlags(on, n))
+	if model.NodeHasText(on, n) == 1 {
+		model.NodeSetText(nodes, nn, model.NodeTextStart(on, n), model.NodeTextLen(on, n))
+	}
+	var a int32 = model.NodeAttrHead(on, n)
+	for a >= 0 {
+		var k int32 = model.AttrKey(oa, a)
+		var vk int32 = model.AttrVkind(oa, a)
+		var v int32 = model.AttrValue(oa, a)
+		var l int32 = model.AttrLen(oa, a)
+		if vk == model.AvText() {
+			model.NodeAddAttrText(nodes, attrs, nn, k, v, l)
+		}
+		if vk == model.AvInt() {
+			model.NodeAddAttrInt(nodes, attrs, nn, k, v)
+		}
+		if vk == model.AvNode() {
+			model.NodeSetAttrNode(nodes, attrs, nn, k, v)
+		}
+		if vk == model.AvBool() {
+			model.NodeSetAttrBool(nodes, attrs, nn, k, v)
+		}
+		a = model.AttrNext(oa, a)
+	}
+	var r int32 = model.NodeRegionHead(on, n)
+	for r >= 0 {
+		model.NodeAddRegion(nodes, regions, nn, model.RegionPage(orr, r), model.RegionX0(orr, r), model.RegionY0(orr, r), model.RegionX1(orr, r), model.RegionY1(orr, r))
+		r = model.RegionNext(orr, r)
+	}
+	port.CellsSet(nm, n, nn)
+	return nn
+}
+
+func rfRegion(on *port.Cells, c int32) int32 {
+	// The first region row of node c, or of its first descendant that has one; -1 when there is none.
+	var r int32 = model.NodeRegionHead(on, c)
+	var q int32 = model.NodeFirstChild(on, c)
+	var found int32 = -1
+	if r >= 0 {
+		return r
+	}
+	for (q >= 0) && (found < 0) {
+		found = rfRegion(on, q)
+		q = model.NodeNext(on, q)
+	}
+	return found
+}
+
+func rfNextRegion(on *port.Cells, c int32) int32 {
+	// The first region row of a sibling after c (or of what is in it); -1 when none has one.
+	var q int32 = model.NodeNext(on, c)
+	var r int32 = -1
+	for (q >= 0) && (r < 0) {
+		r = rfRegion(on, q)
+		q = model.NodeNext(on, q)
+	}
+	return r
+}
+
+func rfFlush(cand *port.Cells, fg *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, np int32, lpage int32, ly int32) int32 {
+	// Make the pending figures whose top edge is before the position (lpage, ly) as children of np; lpage -1 is no
+	// limit. `fg`[0] is the cursor.
+	var cur int32 = port.CellsAt(fg, 0)
+	var row int32 = 0
+	var nn int32 = 0
+	var more int32 = 1
+	for (more == 1) && ((cur + 1) < port.CellsLen(fg)) {
+		row = port.CellsAt(fg, cur+1)
+		more = 0
+		if lpage < 0 {
+			more = 1
+		}
+		if (lpage >= 0) && (asset.AsGet(cand, row, 0) < lpage) {
+			more = 1
+		}
+		if (lpage >= 0) && ((asset.AsGet(cand, row, 0) == lpage) && (asset.AsGet(cand, row, 6) < ly)) {
+			more = 1
+		}
+		if more == 1 {
+			nn = model.NodeNew(nodes, model.NkFigure(), np)
+			if nn >= 0 {
+				model.NodeSetSub(nodes, nn, model.FgUnknown())
+				model.NodeSetConf(nodes, nn, 500)
+				model.NodeAddSrc(nodes, nn, model.SrInfer())
+				model.NodeAddRegion(nodes, regions, nn, asset.AsGet(cand, row, 0), asset.AsGet(cand, row, 5), asset.AsGet(cand, row, 6), asset.AsGet(cand, row, 7), asset.AsGet(cand, row, 8))
+				model.NodeSetAttrInt(nodes, attrs, nn, model.FkImage(), row)
+			}
+			cur += 1
+			port.CellsSet(fg, 0, cur)
+		}
+	}
+	return 0
+}
+
+func rfChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, cand *port.Cells, fg *port.Cells, p int32, np int32, flush int32, lpage int32, ly int32) int32 {
+	// Copy the children of old node p under new node np; when `flush` is 1 the pending figures above each child go in
+	// before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins).
+	var c int32 = model.NodeFirstChild(on, p)
+	var r int32 = 0
+	var r2 int32 = 0
+	var pg2 int32 = 0
+	var y2 int32 = 0
+	var nn int32 = 0
+	for c >= 0 {
+		if flush == 1 {
+			r = rfRegion(on, c)
+			if r >= 0 {
+				rfFlush(cand, fg, nodes, attrs, regions, np, model.RegionPage(orr, r), model.RegionY0(orr, r))
+			}
+		}
+		nn = rfNode(on, oa, orr, nodes, attrs, regions, nm, c, np)
+		if nn >= 0 {
+			if (flush == 1) && (model.NodeKind(on, c) == model.NkSection()) {
+				r2 = rfNextRegion(on, c)
+				if r2 >= 0 {
+					pg2 = model.RegionPage(orr, r2)
+					y2 = model.RegionY0(orr, r2)
+					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, pg2, y2)
+				} else {
+					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, lpage, ly)
+				}
+			} else {
+				rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 0, lpage, ly)
+			}
+		}
+		c = model.NodeNext(on, c)
+	}
+	if flush == 1 {
+		rfFlush(cand, fg, nodes, attrs, regions, np, lpage, ly)
+	}
+	return 0
+}
+
+func RsFigures(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, cand *port.Cells, fg *port.Cells) int32 {
+	// Copy the old Model's trees into the empty arenas `nodes`, `attrs`, `regions` (the text is shared), with the
+	// provisional figures `fg` (`as-figure-rows`) placed among the document's and the sections' blocks. `nm` is scratch
+	// (old node to new). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
+	var n int32 = model.NodeCount(on)
+	var r int32 = 0
+	var i int32 = 0
+	var nr int32 = 0
+	port.CellsDrop(nodes, 0)
+	port.CellsDrop(attrs, 0)
+	port.CellsDrop(regions, 0)
+	port.CellsDrop(nm, 0)
+	for i < n {
+		port.CellsPush(nm, -1)
+		i += 1
+	}
+	for r < n {
+		if model.NodeParent(on, r) < 0 {
+			nr = rfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1)
+			if nr >= 0 {
+				if model.NodeKind(on, r) == model.NkDocument() {
+					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 1, -1, -1)
+				} else {
+					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 0, -1, -1)
+				}
+			}
+		}
+		r += 1
+	}
+	rsRemap(attrs, nm)
 	return model.NodeCount(nodes)
 }

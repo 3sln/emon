@@ -1198,7 +1198,7 @@
           (if (== ea 10) (assert-eq cells 24 "marks: every cell"))
           (if (== ea 11) (assert-eq cells 16 "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)"))
           (if (== ea 12) (assert-eq (- (ev-strides-at 0 11) cells) 1 "paths: one spare (D219 printed vis, vby, vchk and backdrop)"))
-          (if (== ea 13) (assert-eq (- (ev-strides-at 0 12) cells) 1 "images: one spare"))
+          (if (== ea 13) (assert-eq cells 20 "images: every cell (P3.13 printed the placement orientation in the last)"))
           (if (== ea 14) (assert-eq cells 28 "oruns: every cell"))
           (if (== ea 15) (assert-eq (- (ev-strides-at 0 14) cells) 2 "oblocks: two spare"))
           (if (== ea 16) (assert-eq (- (ev-strides-at 0 15) cells) 1 "olines: one spare"))

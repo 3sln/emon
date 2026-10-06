@@ -1203,7 +1203,7 @@ public final class Evidencetest {
                 emon.Testport.assertEq(Evidence.EV_STRIDES[11] - cells, 1, "paths: one spare (D219 printed vis, vby, vchk and backdrop)");
             }
             if (ea == 13) {
-                emon.Testport.assertEq(Evidence.EV_STRIDES[12] - cells, 1, "images: one spare");
+                emon.Testport.assertEq(cells, 20, "images: every cell (P3.13 printed the placement orientation in the last)");
             }
             if (ea == 14) {
                 emon.Testport.assertEq(cells, 28, "oruns: every cell");

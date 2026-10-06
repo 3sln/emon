@@ -660,7 +660,7 @@ public static class Pdfdoc {
         }
         return k;
     }
-    internal static int PdFilterCode(emon.Port.Cells ar, int h) {
+    public static int PdFilterCode(emon.Port.Cells ar, int h) {
         // A filter name (or an inline image's abbreviation) as a `pf-filter`
         // code; 0 for a name that is not a filter.
         if ((Pdflex.PlNameIs(ar, h, Pdfnames.PnFlateDecode()) == 1) || (Pdflex.PlNameIs(ar, h, Pdfnames.PnFl()) == 1)) {

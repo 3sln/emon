@@ -1221,7 +1221,7 @@ public static class Evidencetest {
                 emon.Testport.AssertEq(Evidence.EvStrides[11] - cells, 1, "paths: one spare (D219 printed vis, vby, vchk and backdrop)");
             }
             if (ea == 13) {
-                emon.Testport.AssertEq(Evidence.EvStrides[12] - cells, 1, "images: one spare");
+                emon.Testport.AssertEq(cells, 20, "images: every cell (P3.13 printed the placement orientation in the last)");
             }
             if (ea == 14) {
                 emon.Testport.AssertEq(cells, 28, "oruns: every cell");

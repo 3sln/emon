@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 
+	"emon/asset"
 	"emon/columns"
 	"emon/evidence"
 	"emon/furniture"
@@ -220,7 +221,9 @@ type Ocr interface {
 	Producer() [][2]string
 }
 
-// Assets is SPEC 13's `assets` (D117). Only AssetsNone is implemented; the others are refused, not ignored.
+// Assets is SPEC 13's `assets` (D117): AssetsNone (the default: nothing runs, every output is what it was without the
+// feature), AssetsImages (a figure or seal that is one embedded image gets it) and AssetsFigures (also the others, cropped or
+// rendered: P8.5; it runs as AssetsImages until then, D294).
 type Assets int
 
 const (
@@ -228,6 +231,9 @@ const (
 	AssetsImages
 	AssetsFigures
 )
+
+// level is the level kin's `emon.asset` reads: 0 none, 1 images, 2 figures.
+func (a Assets) level() int32 { return int32(a) }
 
 // Furniture is SPEC 13's `furniture` (D017, D153): Policy drops what the output already says and keeps the rest as asides, Keep leaves
 // every running header, footer and page number in the flow, Drop takes them all out (the ledger says what).
@@ -249,6 +255,14 @@ type Options struct {
 	Locale string
 	Ocr    OcrPolicy
 	Assets Assets
+	// AssetDPI, AssetPixels, AssetBytes, AssetsBytes and AssetSignatures are the settings that go with Assets (SPEC 10.11), written
+	// to the Model's header when it is on: the render-crop resolution (150, 36..600), pixels per asset (2048 squared), encoded
+	// bytes per asset (4 MiB) and per document (32 MiB), and whether a handwritten signature's or initials' pixels are kept.
+	AssetDPI        int32
+	AssetPixels     int32
+	AssetBytes      int32
+	AssetsBytes     int32
+	AssetSignatures bool
 	// Furniture is what to do with running headers, footers and page numbers (SPEC 10.2).
 	Furniture Furniture
 	// KeepEvidence keeps the text layer's evidence dump (`Model.Evidence`): a test and debugging aid.
@@ -261,7 +275,7 @@ type Options struct {
 
 // DefaultOptions is SPEC 13's defaults.
 func DefaultOptions() Options {
-	return Options{Ocr: OcrAlways, Assets: AssetsNone, Furniture: FurniturePolicy}
+	return Options{Ocr: OcrAlways, Assets: AssetsNone, AssetDPI: 150, AssetPixels: 4194304, AssetBytes: 4194304, AssetsBytes: 33554432, Furniture: FurniturePolicy}
 }
 
 // Config is the ports and bounds an Engine is made with. Limits are SPEC 7.4's `port.LimitOf` kinds
@@ -310,7 +324,21 @@ type HTMLOptions struct {
 	Milestones      bool
 	InitialsPlain   bool
 	AlignStyle      bool
+	// Assets is what the HTML does with the Model's assets (SPEC 10.11): HTMLAssetsInline (the default) writes `data:` URIs,
+	// HTMLAssetsExternal writes AssetPrefix + the file name (the caller writes Model.AssetFiles() beside it), HTMLAssetsOmit
+	// writes the placeholders as if no asset existed. A Model without assets gives the same HTML under all three.
+	Assets      HTMLAssets
+	AssetPrefix string
 }
+
+// HTMLAssets is HTMLOptions.Assets.
+type HTMLAssets int
+
+const (
+	HTMLAssetsInline HTMLAssets = iota
+	HTMLAssetsExternal
+	HTMLAssetsOmit
+)
 
 // DefaultHTMLOptions is clean HTML.
 func DefaultHTMLOptions() HTMLOptions {
@@ -345,6 +373,12 @@ func (o HTMLOptions) bits() (int32, int32) {
 	}
 	if o.AlignStyle {
 		b |= html.HoAlignStyle()
+	}
+	switch o.Assets {
+	case HTMLAssetsExternal:
+		b |= html.HoAssetsExternal()
+	case HTMLAssetsOmit:
+		b |= html.HoAssetsOmit()
 	}
 	var below uint32
 	if o.ConfidenceBelow != nil {
@@ -891,11 +925,59 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 		}
 		model.NodeSetAttrText(m.nodes, m.attrs, 0, model.FkLocale(), start, port.CellsLen(m.text)-start)
 	}
+	if opts.Assets != AssetsNone {
+		// a raster input is one picture a page: its own image is the candidate, `part` of which no figure or seal can be at `images`
+		cand, cbytes := port.NewCells(), port.NewBuf()
+		asset.AsPageCands(m.pages, cand)
+		assetStage(m, cand, cbytes, opts)
+	}
 	chk := port.NewCells()
 	if code := model.ModelCheck(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout, chk); code != 0 {
 		return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", code, port.CellsAt(chk, 0))}}
 	}
+	if o := checkAssets(m, chk, opts); o != nil {
+		return *o
+	}
 	return outcome{built: &built{arenas: m, evidence: evs, intake: info}}
+}
+
+
+
+
+// figuresStage is P3.13's provisional figures (SPEC 10.11, 10.6), before RsRun (a caption next to one finds it as its object). Only
+// when `assets` is on (D294): a default run's Model is what it was.
+func figuresStage(m *arenas, cand *port.Cells) {
+	f := newCellsN(5)
+	fg, fnodes, fattrs, fregions, fnm := f[0], f[1], f[2], f[3], f[4]
+	asset.AsFigureRows(cand, m.pages, fg)
+	restruct.RsFigures(m.nodes, m.attrs, m.regions, fnodes, fattrs, fregions, fnm, cand, fg)
+	m.nodes, fnodes = fnodes, m.nodes
+	m.attrs, fattrs = fattrs, m.attrs
+	m.regions, fregions = fregions, m.regions
+}
+
+// assetStage is P3.13's asset stage (SPEC 10.11): the settings on the root, then each figure's and seal's pixels or reason, in
+// node-id order. The candidates `cand` and their bytes `cbytes` were made by the document pass (asset.AsCollect), which is where
+// the input is read.
+func assetStage(m *arenas, cand *port.Cells, cbytes *port.Buf, opts Options) {
+	sigs := boolInt(opts.AssetSignatures)
+	asset.AsSettings(m.nodes, m.attrs, m.text, opts.Assets.level(), opts.AssetDPI, opts.AssetPixels, opts.AssetBytes, opts.AssetsBytes, sigs)
+	bx := newCellsN(1)[0]
+	for i := 0; i < 5; i++ {
+		port.CellsPush(bx, 0)
+	}
+	asset.AsRun(m.nodes, m.attrs, m.regions, cand, cbytes, m.assets, m.uses, m.abytes, opts.AssetBytes, opts.AssetsBytes, sigs, bx)
+}
+
+// checkAssets is `model-check-assets` after `model-check`, when `assets` is on.
+func checkAssets(m *arenas, chk *port.Cells, opts Options) *outcome {
+	if opts.Assets == AssetsNone {
+		return nil
+	}
+	if code := model.ModelCheckAssets(m.nodes, m.attrs, m.assets, m.uses, m.abytes, chk); code != 0 {
+		return &outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check-assets %d at %d", code, port.CellsAt(chk, 0))}}
+	}
+	return nil
 }
 
 func boolInt(b bool) int32 {
@@ -1040,10 +1122,13 @@ func panicMessage(p any) string {
 // arenas are the seven arenas of the Model (SPEC 3.8).
 type arenas struct {
 	nodes, attrs, regions, text, pages, ledger, layout *port.Cells
+	// the asset table, its uses and the encoded bytes (SPEC 10.11): empty unless `assets` is on
+	assets, uses *port.Cells
+	abytes       *port.Buf
 }
 
 func newArenas() *arenas {
-	return &arenas{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
+	return &arenas{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewBuf()}
 }
 
 func cellsVec(c *port.Cells) []int32 { return append([]int32(nil), c.V...) }
@@ -1134,6 +1219,16 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	gx3 := newCellsN(3)
 	grl, gfl, gcand := gx3[0], gx3[1], gx3[2]
 	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, gcand)
+	// P3.13 (SPEC 10.11): the asset candidates, the one place the input's image bytes are read. Off, nothing runs.
+	cand, cbytes := port.NewCells(), port.NewBuf()
+	if opts.Assets != AssetsNone {
+		w := newCellsN(10)
+		z := port.NewBuf()
+		rc := asset.AsCollect(view, ar, dc, ca, cb, st, im, pa, gl, pg, opts.AssetPixels, opts.AssetsBytes, cand, cbytes, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], z)
+		if view.Missed() || rc == 12 {
+			return step{miss: true}
+		}
+	}
 	var snap []*port.Cells
 	if opts.KeepEvidence {
 		snap = []*port.Cells{cloneCells(gl), cloneCells(mk), cloneCells(fnt)}
@@ -1169,7 +1264,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 		port.CellsPush(mask, 0)
 	}
 	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
-		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, info: info}}
+		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, cand: cand, cbytes: cbytes, info: info}}
 }
 
 // pdfDoc is what the PDF document pass leaves for its page units and the document unit (P7.U, D195).
@@ -1188,7 +1283,10 @@ type pdfDoc struct {
 	// the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence dump has
 	// always shown (kept only when the evidence is asked for)
 	snap []*port.Cells
-	info Intake
+	// P3.13: the image placements as asset candidates and their encoded bytes (empty unless `assets` is on)
+	cand   *port.Cells
+	cbytes *port.Buf
+	info   Intake
 }
 
 // cloneCells is a copy of a Cells.
@@ -1304,6 +1402,10 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	inline.IlAnalyze(fw, c[0], et, gl, ift, h[0], van, qtxt, pg, m.pages, np, m.text, h[2], isw)
 	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
+	// the provisional figures (P3.13): only with `assets`, and before the restructuring, which pairs a caption with the figure beside it
+	if opts.Assets != AssetsNone {
+		figuresStage(m, d.cand)
+	}
 	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
 	// body is copied into new arenas, in document order, and they replace the old ones
 	r := newCellsN(10)
@@ -1327,9 +1429,15 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 		}
 		model.NodeSetAttrText(m.nodes, m.attrs, 0, model.FkLocale(), start, port.CellsLen(m.text)-start)
 	}
+	if opts.Assets != AssetsNone {
+		assetStage(m, d.cand, d.cbytes, opts)
+	}
 	chk := port.NewCells()
 	if c := model.ModelCheck(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout, chk); c != 0 {
 		return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", c, port.CellsAt(chk, 0))}}
+	}
+	if o := checkAssets(m, chk, opts); o != nil {
+		return *o
 	}
 	return outcome{built: &built{arenas: m, evidence: evs, intake: info}}
 }
@@ -1384,9 +1492,6 @@ func (e *Engine) Replay(inputs []Input, opts Options, t *Transcript) (*Model, er
 func (e *Engine) convertWith(inputs []Input, opts Options, rec, replay *Transcript) (*Model, RunStats, error) {
 	if len(inputs) == 0 {
 		return nil, RunStats{}, &Error{Kind: ErrNoInput}
-	}
-	if opts.Assets != AssetsNone {
-		return nil, RunStats{}, &Error{Kind: ErrUnsupported, Message: "assets other than `none` are specified (D117) and not implemented"}
 	}
 	if len(inputs) > 1 {
 		return nil, RunStats{}, &Error{Kind: ErrUnsupported, Message: "several inputs as one document are not wired yet (`intake` takes any number; convert one at a time)"}

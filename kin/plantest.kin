@@ -6,7 +6,10 @@
             [emon.test :refer [deftest assert-eq assert-that assert-text text-blob
                                new-cells new-text]]
             [emon.port :refer [cells-len cells-at cells-push cells-drop src-of-blob]]
-            [emon.plan :refer [pk-render pk-decode pk-ocr pk-bytes pk-crop rq-crop
+            [emon.plan :refer [pk-render pk-decode pk-ocr pk-bytes pk-crop pk-decode-img rq-crop rq-decode-img
+                               flt-jpx flt-jbig2 flt-ccitt dq-filter dq-w dq-h dq-comps dq-bpc dq-k dq-columns
+                               dq-rows dq-ccitt dq-where dq-offset dq-length dq-sha dq-gwhere dq-goffset
+                               dq-glength dq-gsha dq-nargs
                                lay-no-watermark lay-watermark-only ps-ok ps-failed
                                ps-unsupported ps-limit us-done us-requests us-need-bytes
                                lay-full lay-text-only flt-none flt-dct
@@ -102,6 +105,64 @@
     (assert-eq (rec-kind c 0) 4 "kind")
     (assert-eq (rq-arg c 0 1) 65536 "offset")
     (assert-eq (rq-arg c 0 2) 131072 "length")))
+
+(deftest test-a-decode-img-request-names-bytes-and-never-carries-them
+  (comment "Kind 6 (D291): the codestream's parameters, then WHERE the bytes are (an input's span, or the unit's payload)")
+  (comment "and the SHA-256 of a payload as eight words; the globals the same, `gwhere` -1 for none.")
+  (let [^Cells c (new-cells)
+        ^Cells shas (new-cells)]
+    (let [^:mut ^I32 i 0]
+      (while (< i 16)
+        (do (cells-push shas (+ 1000 i))
+            (set i (+ i 1)))))
+    (assert-eq (pk-decode-img) 6 "kind 6")
+    (assert-eq (flt-ccitt) 4 "the CCITT filter")
+    (assert-eq (rq-decode-img c 9 (flt-ccitt) 64 32 1 1 -1 64 32 10 0 499 552 shas 0 -2 0 24 8) 0 "starts at 0")
+    (assert-eq (rec-len c 0) 34 "three header cells and 31 arguments")
+    (assert-eq (rec-kind c 0) 6 "kind")
+    (assert-eq (rec-id c 0) 9 "id")
+    (assert-eq (rq-nargs c 0) (dq-nargs) "31 arguments")
+    (assert-eq (rq-arg c 0 (dq-filter)) 4 "filter")
+    (assert-eq (rq-arg c 0 (dq-w)) 64 "w")
+    (assert-eq (rq-arg c 0 (dq-h)) 32 "h")
+    (assert-eq (rq-arg c 0 (dq-comps)) 1 "comps")
+    (assert-eq (rq-arg c 0 (dq-bpc)) 1 "bpc")
+    (assert-eq (rq-arg c 0 (dq-k)) -1 "k")
+    (assert-eq (rq-arg c 0 (dq-columns)) 64 "columns")
+    (assert-eq (rq-arg c 0 (dq-rows)) 32 "rows")
+    (assert-eq (rq-arg c 0 (dq-ccitt)) 10 "ccitt flags")
+    (assert-eq (rq-arg c 0 (dq-where)) 0 "where")
+    (assert-eq (rq-arg c 0 (dq-offset)) 499 "offset")
+    (assert-eq (rq-arg c 0 (dq-length)) 552 "length")
+    (assert-eq (rq-arg c 0 (dq-sha)) 1000 "the first SHA word")
+    (assert-eq (rq-arg c 0 (+ (dq-sha) 7)) 1007 "the eighth SHA word")
+    (assert-eq (rq-arg c 0 (dq-gwhere)) -2 "gwhere: the payload")
+    (assert-eq (rq-arg c 0 (dq-goffset)) 0 "goffset")
+    (assert-eq (rq-arg c 0 (dq-glength)) 24 "glength")
+    (assert-eq (rq-arg c 0 (dq-gsha)) 1008 "the first globals SHA word")
+    (assert-eq (rq-arg c 0 (+ (dq-gsha) 7)) 1015 "the last globals SHA word")
+    (assert-eq (rec-check c 1 6) 0 "well formed, in the legal kinds")
+    (assert-eq (rec-check c 1 5) 2 "a kind past the legal range is refused")
+    (assert-eq (rec-count c) 1 "one record")))
+
+(deftest test-a-decode-img-request-is-found-by-its-id-and-answered-as-a-decode
+  (let [^Cells c (new-cells)
+        ^Cells shas (new-cells)
+        ^Cells ans (new-cells)]
+    (let [^:mut ^I32 i 0]
+      (while (< i 16)
+        (do (cells-push shas 0)
+            (set i (+ i 1)))))
+    (rq-decode-img c 3 (flt-jpx) 16 12 0 8 0 0 0 0 0 440 1013 shas 0 -1 0 0 8)
+    (rq-decode-img c 4 (flt-jbig2) 32 16 0 1 0 0 0 0 0 476 50 shas 0 -2 0 24 8)
+    (assert-eq (rec-count c) 2 "two records")
+    (let [^I32 second (rec-next c 0)
+          ^I32 at4 (rec-find c 4)]
+      (assert-eq (rec-id c second) 4 "the second is request 4")
+      (assert-eq (rq-arg c at4 (dq-filter)) 3 "request 4 is JBIG2"))
+    (assert-eq (an-decode ans 3 16 12 3 0 0 1) 0 "its answer is a decode answer")
+    (let [^I32 at3 (an-find ans 3)]
+      (assert-eq (an-status ans at3) 0 "ok"))))
 
 (deftest test-answers-carry-the-id-and-a-status
   (let [^Cells c (new-cells)

@@ -1,0 +1,858 @@
+;; ASSETS: opt-in pixels for figures and seals (P3.13; D117, D294-D301, SPEC 10.11). emon's own module (D039).
+;;
+;; At the level `images` a `figure` or `seal` whose content IS one image the document embeds gets that image: its original
+;; bytes where a browser shows them as the PDF did (`embedded`), else its pixels as the canonical PNG (`decoded`). No
+;; region detection decides pixels, only which image. Nothing in this module runs, and no arena it writes is touched, when
+;; the `assets` setting is `none`: every output is then byte for byte what it was.
+;;
+;; TWO PHASES, because the bytes of the input are read in the DOCUMENT PASS (the one place that reads it, P7.U) and the
+;; Model is only known at the end:
+;;
+;;   (as-collect ...)   the document pass: every image placement that passed P3.6's checks becomes a CANDIDATE ROW (stride
+;;                      32, below) and, when a browser or a PNG can show it, its encoded bytes are appended to `cbytes`
+;;                      (`cand` and `cbytes` ride in the document's state to the document unit). No node is known yet.
+;;   (as-figure-rows ...) the provisional figures (SPEC 10.6, P8.1 replaces the rule): the candidates that become `figure`
+;;                      nodes, sorted by their top edge, for `emon.restruct`'s `rs-figures` to place.
+;;   (as-run ...)       the document unit: per `figure`/`seal` in node-id order, SPEC 10.11's source rules, admission
+;;                      (dedup by SHA-256 and length, `asset-bytes`, the first-overflow `assets-bytes`), the Model's
+;;                      `assets`, `uses` and `abytes`, and the node's `asset` or `noasset`.
+;;
+;; THE CANDIDATE ROW (stride 32):
+;;   0 page  1..4 the placement's box  5..8 its visible box (box and clip box), page space, centipoints
+;;   9 status: 0 pixels were made, else the `nz` code of why not    10 type (`amt`)  11 byte start in `cbytes`  12 length
+;;   13..20 SHA-256 (eight words)  21 w  22 h (the asset's pixels)  23 flags (`afg`)  24 from (`afm`)  25 object (-1 none)
+;;   26 origin (`ao`)  27..31 the key a placement with the same pixels shares: orientation and the view in image pixels
+;; The key is why a logo placed on every page is decoded and written once, not once a page.
+;;
+;; SOURCES (SPEC 10.11), the thresholds named constants of this module and not settings: `AS_COVER` 950 per mille, `AS_WHOLE`
+;; 980, `AS_OVERLAY` 20. A placement is a candidate when it passed the P3.6 checks (`vis` 0) and has pixels. A PAGE-SIZED
+;; placement (a scan, a background: 800 per mille of its page and more) is a candidate whose pixels are not made, status
+;; `part`: no node of an `images` run can be that image, and a scan's page image would take the budget for nothing.
+(ns emon.asset
+  (:require [emon.lang :refer [I32 I64 Src Cells Bitmap Buf i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
+                               buf-len buf-push buf-blob buf-append-blob
+                               bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
+                               crypto-sha256]]
+            [emon.model :refer [node-count node-kind node-sub node-region-head node-region-count node-attr
+                                node-set-attr-int node-set-attr-text node-attr-int-or text-append-cp
+                                region-page region-x0 region-y0 region-x1 region-y1 region-next
+                                attr-value attr-len page-count page-number page-w page-h
+                                asset-add asset-set-sha asset-find use-add asset-count
+                                node-add-region node-new node-set-sub node-set-conf node-add-src
+                                nk-figure nk-seal sl-signature sl-initials sl-digital-signature fg-unknown sr-infer
+                                fk-asset fk-noasset fk-image fk-assets fk-asset-dpi fk-asset-pixels
+                                fk-asset-bytes fk-assets-bytes fk-asset-signatures
+                                nz-withheld nz-part nz-vector nz-composite nz-colorspace nz-codec nz-too-large nz-budget
+                                ao-embedded ao-decoded amt-jpeg amt-png afm-dct afm-flate afm-lzw afm-runlength afm-raw
+                                afg-clip-bbox afg-transformed afg-icc afg-scaled afg-overlaid]]
+            [emon.evidence :refer [im-count im-get mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj mf-z mf-clip mf-vis
+                                   mf-placement pa-get pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-z pf-flags pf-vis
+                                   pg-clip pa-rect gl-count gl-get gf-z gf-vis]]
+            [emon.pdfdoc :refer [pd-get pd-pg-count pd-pg-crop pd-pg-rotate]]
+            [emon.pdfimage :refer [pi-info pi-samples pi-passthrough pi-view pi-crop pi-pixels pi-get pi-out-w pi-out-h
+                                   pi-out-channels pi-has-alpha pi-palette-rgb pi-f-class pi-f-w pi-f-h pi-f-bpc
+                                   pi-f-codec pi-f-imask pi-f-mkind pi-f-mobj pi-f-flags pi-f-nf pi-f-hival pi-f-ncomp
+                                   pv-ok]]
+            [emon.png :refer [png-begin png-row png-end]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+(defconst ^I32 AS_COVER 950)
+(defconst ^I32 AS_WHOLE 980)
+(defconst ^I32 AS_OVERLAY 20)
+(defconst ^I32 AS_BIG 800)          ;; per mille of the page: a scan or a background, not a figure
+(defconst ^I32 AS_FIGURE_SIDE 1800) ;; a provisional figure's sides, centipoints (18 pt)
+(defconst ^I32 AS_PIXFACTOR 2)      ;; samples of an image are held whole: at most this many times `asset-pixels`
+(defconst ^I32 AS_MAXPROD 4096)     ;; placements that make pixels, a document (the rest are `budget`)
+(defconst ^I32 AS_STRIDE 32)
+(defconst ^I32 AS_OVERLAY_WORK 100000000) ;; rows the `overlaid` flag may read in all; past it the flag is not set
+
+;; candidate row fields
+(defconst ^I32 AC_PAGE 0)
+(defconst ^I32 AC_BX0 1)
+(defconst ^I32 AC_VX0 5)
+(defconst ^I32 AC_STATUS 9)
+(defconst ^I32 AC_TYPE 10)
+(defconst ^I32 AC_BSTART 11)
+(defconst ^I32 AC_BLEN 12)
+(defconst ^I32 AC_SHA 13)
+(defconst ^I32 AC_W 21)
+(defconst ^I32 AC_H 22)
+(defconst ^I32 AC_FLAGS 23)
+(defconst ^I32 AC_FROM 24)
+(defconst ^I32 AC_OBJ 25)
+(defconst ^I32 AC_ORIGIN 26)
+(defconst ^I32 AC_KORI 27)
+(defconst ^I32 AC_KX0 28)
+
+(defn ^:pub ^I32 as-row-cells [] (return AS_STRIDE))
+(defn ^:pub ^I32 as-count [^Cells cand] (return (quot (cells-len cand) AS_STRIDE)))
+(defn ^:pub ^I32 as-get [^Cells cand ^I32 r ^I32 f] (return (cells-at cand (+ (* r AS_STRIDE) f))))
+
+;; ---------------------------------------------------------------------- geometry
+
+(defn ^I64 as-area [^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (if (or (<= x1 x0) (<= y1 y0)) (return (i64 0)))
+  (return (mul64 (i64 (- x1 x0)) (i64 (- y1 y0)))))
+
+(defn ^I64 as-ia [^I32 ax0 ^I32 ay0 ^I32 ax1 ^I32 ay1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "The area of the intersection of two boxes.")
+  (let [^:mut ^I32 x0 ax0
+        ^:mut ^I32 y0 ay0
+        ^:mut ^I32 x1 ax1
+        ^:mut ^I32 y1 ay1]
+    (if (> bx0 x0) (set x0 bx0))
+    (if (> by0 y0) (set y0 by0))
+    (if (< bx1 x1) (set x1 bx1))
+    (if (< by1 y1) (set y1 by1))
+    (return (as-area x0 y0 x1 y1))))
+
+(defn ^I32 as-ge [^I64 a ^I64 b ^I32 per]
+  (comment "1 when a >= per/1000 of b (b > 0).")
+  (if (>= (mul64 a (i64 1000)) (mul64 (i64 per) b)) (return 1))
+  (return 0))
+
+(defn ^I32 as-page-w [^Cells pg ^I32 p]
+  (comment "The displayed width of page index p, as the Model's `pa-pages` gives it (`/Rotate` turns it).")
+  (let [^I32 rot (pd-pg-rotate pg p)]
+    (if (or (== rot 90) (== rot 270))
+      (return (- (pd-pg-crop pg p 3) (pd-pg-crop pg p 1))))
+    (return (- (pd-pg-crop pg p 2) (pd-pg-crop pg p 0)))))
+
+(defn ^I32 as-page-h [^Cells pg ^I32 p]
+  (let [^I32 rot (pd-pg-rotate pg p)]
+    (if (or (== rot 90) (== rot 270))
+      (return (- (pd-pg-crop pg p 2) (pd-pg-crop pg p 0))))
+    (return (- (pd-pg-crop pg p 3) (pd-pg-crop pg p 1)))))
+
+;; ---------------------------------------------------------------------- hashing
+
+(defn ^I32 as-sha [^Buf bytes ^I32 start ^I32 nbytes ^:mut ^Cells tmp ^:mut ^Cells cand ^I32 row]
+  (comment "SHA-256 of bytes[start, start+nbytes) into the candidate row's eight words (big-endian, signed 32-bit).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I64 u (i64 0)]
+    (cells-drop tmp 0)
+    (crypto-sha256 (buf-blob bytes) start nbytes tmp)
+    (while (< i 8)
+      (do (set u (add64 (mul64 (i64 (cells-at tmp (* i 4))) (i64 16777216))
+                        (i64 (+ (* (cells-at tmp (+ (* i 4) 1)) 65536)
+                                (+ (* (cells-at tmp (+ (* i 4) 2)) 256) (cells-at tmp (+ (* i 4) 3)))))))
+          (cells-set cand (+ (* row AS_STRIDE) (+ AC_SHA i)) (i32 u))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------ the pixels' PNG
+
+(defn ^I32 as-scale-k [^I32 w ^I32 h ^I32 maxpix]
+  (comment "The smallest integer factor k that brings a w x h image within `maxpix` pixels (ceil(w/k) * ceil(h/k)).")
+  (let [^:mut ^I32 k 1]
+    (while (> (* (quot (+ w (- k 1)) k) (quot (+ h (- k 1)) k)) maxpix)
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 as-scale-into [^Bitmap src ^Bitmap dst ^I32 k]
+  (comment "dst (ceil(w/k) x ceil(h/k)) = the mean over the k x k blocks of src, the partial ones over the pixels they have,")
+  (comment "rounded half up (SPEC 10.11).")
+  (let [^I32 w (bitmap-w src)
+        ^I32 h (bitmap-h src)
+        ^I32 ch (bitmap-channels src)
+        ^I32 dw (bitmap-w dst)
+        ^I32 dh (bitmap-h dst)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 xx 0
+        ^:mut ^I32 yy 0
+        ^:mut ^I32 sum 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0]
+    (while (< y dh)
+      (do (set x 0)
+          (while (< x dw)
+            (do (set x1 (* (+ x 1) k))
+                (if (> x1 w) (set x1 w))
+                (set y1 (* (+ y 1) k))
+                (if (> y1 h) (set y1 h))
+                (set c 0)
+                (while (< c ch)
+                  (do (set sum 0)
+                      (set cnt 0)
+                      (set yy (* y k))
+                      (while (< yy y1)
+                        (do (set xx (* x k))
+                            (while (< xx x1)
+                              (do (set sum (+ sum (bitmap-u8 src xx yy c)))
+                                  (set cnt (+ cnt 1))
+                                  (set xx (+ xx 1))))
+                            (set yy (+ yy 1))))
+                      (bitmap-set-u8 dst x y c (quot (+ (* sum 2) cnt) (* cnt 2)))
+                      (set c (+ c 1))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 as-pix [^Bitmap bm ^I32 x ^I32 y ^I32 c]
+  (if (< c (bitmap-channels bm)) (return (bitmap-u8 bm x y c)))
+  (return (bitmap-u8 bm x y 0)))
+
+(defn ^I32 as-rgb-of [^Bitmap bm ^I32 x ^I32 y]
+  (comment "The pixel as 0xRRGGBB (a gray is r = g = b).")
+  (return (+ (* (as-pix bm x y 0) 65536) (+ (* (as-pix bm x y 1) 256) (as-pix bm x y 2)))))
+
+(defn ^I32 as-slot [^Cells hs ^I32 key]
+  (comment "The slot of `key` in the 1,024-slot open-addressing table `hs` (two cells a slot: key + 1, index): its own, or the")
+  (comment "empty one it would take.")
+  (let [^:mut ^I32 s (rem (+ (* (bit-and key 65535) 31) (quot key 65536)) 1021)
+        ^:mut ^I32 n 0]
+    (while (and (!= (cells-at hs (* s 2)) 0) (!= (cells-at hs (* s 2)) (+ key 1)))
+      (do (set s (rem (+ s 1) 1024))
+          (set n (+ n 1))))
+    (return s)))
+
+(defn ^I32 as-png [^:mut ^Cells ws ^:mut ^Buf cbytes ^:mut ^Buf z ^:mut ^Cells row ^:mut ^Cells hs
+                   ^Cells rec ^Bitmap pic ^Bitmap al ^I32 alpha ^I32 bilevel]
+  (comment "The canonical PNG of the pixels (`emon.png`), appended to `cbytes`. Gray 8 bits (1 for a bilevel image), RGB, a")
+  (comment "palette for an Indexed image with no alpha (PLTE the image's palette, the pixel's index the first entry of that")
+  (comment "colour), gray + alpha, RGBA. `hs` (2,048 cells), `row` are scratch.")
+  (let [^I32 w (bitmap-w pic)
+        ^I32 h (bitmap-h pic)
+        ^I32 ch (bitmap-channels pic)
+        ^:mut ^I32 ct 0
+        ^:mut ^I32 depth 8
+        ^:mut ^I32 npal 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 rgb 0
+        ^:mut ^I32 acc 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 hival 0]
+    (if (== alpha 1)
+      (do (if (== ch 1) (set ct 4) (set ct 6)))
+      (do (if (== ch 1) (set ct 0) (set ct 2))
+          (if (== (pi-get rec (pi-f-class)) 4) (set ct 3))
+          (if (and (== ct 0) (== bilevel 1)) (set depth 1))))
+    (cells-drop hs 0)
+    (if (== ct 3)
+      (do (set hival (pi-get rec (pi-f-hival)))
+          (set i 0)
+          (while (< i 2048)
+            (do (cells-push hs 0)
+                (set i (+ i 1))))
+          (comment "PLTE: the image's own palette; the first entry of a colour is the one a pixel of it uses")
+          (set i 0)
+          (while (<= i hival)
+            (do (set rgb (pi-palette-rgb rec i))
+                (set s (as-slot hs rgb))
+                (if (== (cells-at hs (* s 2)) 0)
+                  (do (cells-set hs (* s 2) (+ rgb 1))
+                      (cells-set hs (+ (* s 2) 1) i)))
+                (set i (+ i 1))))
+          (set npal (+ hival 1))))
+    (cells-drop row 0)
+    (comment "the palette cells go after the table: four a colour")
+    (set i 0)
+    (while (and (== ct 3) (<= i hival))
+      (do (set rgb (pi-palette-rgb rec i))
+          (cells-push row (quot rgb 65536))
+          (cells-push row (rem (quot rgb 256) 256))
+          (cells-push row (rem rgb 256))
+          (cells-push row 255)
+          (set i (+ i 1))))
+    (png-begin ws cbytes z w h ct depth 0 row npal 0)
+    (while (< y h)
+      (do (cells-drop row 0)
+          (set x 0)
+          (set acc 0)
+          (set nb 0)
+          (while (< x w)
+            (do (if (== ct 0)
+                  (do (set v (bitmap-u8 pic x y 0))
+                      (if (== depth 8)
+                        (cells-push row v)
+                        (do (set acc (* acc 2))
+                            (if (>= v 128) (set acc (+ acc 1)))
+                            (set nb (+ nb 1))
+                            (if (== nb 8)
+                              (do (cells-push row acc)
+                                  (set acc 0)
+                                  (set nb 0))))))
+                  (if (== ct 2)
+                    (do (cells-push row (bitmap-u8 pic x y 0))
+                        (cells-push row (bitmap-u8 pic x y 1))
+                        (cells-push row (bitmap-u8 pic x y 2)))
+                    (if (== ct 3)
+                      (do (set rgb (as-rgb-of pic x y))
+                          (set s (as-slot hs rgb))
+                          (if (== (cells-at hs (* s 2)) 0)
+                            (cells-push row 0)
+                            (cells-push row (cells-at hs (+ (* s 2) 1)))))
+                      (if (== ct 4)
+                        (do (cells-push row (bitmap-u8 pic x y 0))
+                            (cells-push row (bitmap-u8 al x y 0)))
+                        (do (cells-push row (bitmap-u8 pic x y 0))
+                            (cells-push row (bitmap-u8 pic x y 1))
+                            (cells-push row (bitmap-u8 pic x y 2))
+                            (cells-push row (bitmap-u8 al x y 0)))))))
+                (set x (+ x 1))))
+          (if (and (== ct 0) (== depth 1) (> nb 0))
+            (do (while (< nb 8)
+                  (do (set acc (* acc 2))
+                      (set nb (+ nb 1))))
+                (cells-push row acc)))
+          (png-row ws cbytes z row 0)
+          (set y (+ y 1))))
+    (png-end ws cbytes z)
+    (return 0)))
+
+;; ------------------------------------------------------------- a candidate's pixels
+
+(defn ^I32 as-set [^:mut ^Cells cand ^I32 row ^I32 f ^I32 v]
+  (cells-set cand (+ (* row AS_STRIDE) f) v)
+  (return 0))
+
+(defn ^I32 as-from-chain [^Cells rec]
+  (comment "`from` of a Flate, LZW, RunLength or no-filter image: the last of those filters in its chain.")
+  (let [^:mut ^I32 i (- (pi-get rec (pi-f-nf)) 1)
+        ^:mut ^I32 code 0]
+    (while (>= i 0)
+      (do (set code (cells-at rec (+ 64 i)))
+          (if (== code 4) (return (afm-flate)))
+          (if (== code 3) (return (afm-lzw)))
+          (if (== code 5) (return (afm-runlength)))
+          (set i (- i 1))))
+    (return (afm-raw))))
+
+(defn ^I32 as-same-key [^Cells cand ^I32 r ^I32 obj ^I32 ori ^I32 vx0 ^I32 vy0 ^I32 vx1 ^I32 vy1]
+  (let [^I32 b (* r AS_STRIDE)]
+    (if (!= (cells-at cand (+ b AC_OBJ)) obj) (return 0))
+    (if (!= (cells-at cand (+ b AC_KORI)) ori) (return 0))
+    (if (!= (cells-at cand (+ b AC_KX0)) vx0) (return 0))
+    (if (!= (cells-at cand (+ b (+ AC_KX0 1))) vy0) (return 0))
+    (if (!= (cells-at cand (+ b (+ AC_KX0 2))) vx1) (return 0))
+    (if (!= (cells-at cand (+ b (+ AC_KX0 3))) vy1) (return 0))
+    (return 1)))
+
+(defn ^I32 as-copy-result [^:mut ^Cells cand ^I32 from ^I32 to]
+  (comment "The outcome (status, type, bytes, hash, size, flags, from, origin) of row `from` for row `to`.")
+  (let [^:mut ^I32 f AC_STATUS
+        ^:mut ^I32 v 0]
+    (while (<= f AC_ORIGIN)
+      (do (if (or (< f AC_OBJ) (> f AC_OBJ))
+            (do (set v (as-get cand from f))
+                (as-set cand to f v)))
+          (set f (+ f 1))))
+    (return 0)))
+
+(defn ^I32 as-make [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                    ^I32 maxpix ^:mut ^Cells cand ^I32 row ^I32 obj ^I32 ori ^I32 whole-ok
+                    ^:mut ^Buf cbytes ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells mrec ^:mut ^Cells smp
+                    ^:mut ^Cells msmp ^:mut ^Cells data ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells ws
+                    ^:mut ^Buf z]
+  (comment "Make the pixels of the image object `obj` as placed by candidate `row` (whose box, visible box and flags are set):")
+  (comment "the row's status, type, bytes, hash, size and `from`. Answers 0, or 12 when the source missed (stop, re-run).")
+  (let [^I32 sh (pd-get src ar dc a b st obj)
+        ^I32 vx0 (as-get cand row (+ AC_VX0 0))
+        ^I32 vy0 (as-get cand row (+ AC_VX0 1))
+        ^I32 vx1 (as-get cand row (+ AC_VX0 2))
+        ^I32 vy1 (as-get cand row (+ AC_VX0 3))
+        ^I32 bx0 (as-get cand row (+ AC_BX0 0))
+        ^I32 by0 (as-get cand row (+ AC_BX0 1))
+        ^I32 bx1 (as-get cand row (+ AC_BX0 2))
+        ^I32 by1 (as-get cand row (+ AC_BX0 3))
+        ^:mut ^I32 vori 0
+        ^:mut ^I32 cut 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 pv 0
+        ^:mut ^I32 start 0
+        ^:mut ^I32 mk 0
+        ^:mut ^I32 have 0
+        ^:mut ^I32 msh 0
+        ^:mut ^I32 ow 0
+        ^:mut ^I32 oh 0
+        ^:mut ^I32 ch 0
+        ^:mut ^I32 alpha 0
+        ^:mut ^I32 k 1
+        ^:mut ^I32 bil 0
+        ^:mut ^I32 kf 0
+        ^:mut ^I32 flags (as-get cand row AC_FLAGS)]
+    (if (== sh 0) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+    (if (!= (pi-info src ar dc a b st out rec sh obj) 0)
+      (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+    (set w (pi-get rec (pi-f-w)))
+    (set h (pi-get rec (pi-f-h)))
+    (if (or (< w 1) (< h 1)) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+    (if (== (bit-and (pi-get rec (pi-f-flags)) 1) 1) (set flags (bit-or flags (afg-icc))))
+    (comment "the view: the orientation of the placement (a skewed or rotated one is written unrotated), cut to what is visible")
+    (if (and (>= ori 0) (<= ori 7)) (set vori ori))
+    (pi-view rec vori)
+    (set cut (pi-crop rec bx0 by0 bx1 by1 vx0 vy0 vx1 vy1 AS_WHOLE))
+    (if (< cut 0) (do (as-set cand row AC_STATUS (nz-part)) (return 0)))
+    (as-set cand row AC_KORI (+ vori (* cut 16)))
+    (comment "the view's rectangle: cells 29..32 of the record (PI_VX0, PI_VY0, PI_VX1, PI_VY1)")
+    (as-set cand row AC_KX0 (cells-at rec 29))
+    (as-set cand row (+ AC_KX0 1) (cells-at rec 30))
+    (as-set cand row (+ AC_KX0 2) (cells-at rec 31))
+    (as-set cand row (+ AC_KX0 3) (cells-at rec 32))
+    (as-set cand row AC_OBJ obj)
+    (comment "the same pixels already made for another placement: reuse them")
+    (set i 0)
+    (while (< i row)
+      (do (if (== (as-same-key cand i obj (+ vori (* cut 16)) (cells-at rec 29) (cells-at rec 30) (cells-at rec 31) (cells-at rec 32)) 1)
+            (do (as-copy-result cand i row)
+                (comment "what is the pixels' (scaled) is the first placement's; what is this placement's (clip, transform, icc) is its own")
+                (set kf (bit-or (bit-and (as-get cand i AC_FLAGS) (afg-scaled)) flags))
+                (as-set cand row AC_FLAGS kf)
+                (return 0)))
+          (set i (+ i 1))))
+    (if (== (pi-get rec (pi-f-class)) 9) (do (as-set cand row AC_STATUS (nz-colorspace)) (return 0)))
+    (comment "A browser shows this JPEG as the PDF painted it: the original bytes, passed through")
+    (if (== (pi-get rec (pi-f-codec)) 7)
+      (do (set rc (pi-samples src ar dc a b st rec sh data))
+          (if (== rc 12) (return 12))
+          (set pv (pi-passthrough rec data))
+          (if (and (== pv (pv-ok)) (and (== cut 0) (and (== ori 0) (<= (mul64 (i64 w) (i64 h)) (i64 maxpix)))))
+            (do (set start (buf-len cbytes))
+                (set i 0)
+                (while (< i (cells-len data))
+                  (do (buf-push cbytes (cells-at data i))
+                      (set i (+ i 1))))
+                (as-set cand row AC_STATUS 0)
+                (as-set cand row AC_TYPE (amt-jpeg))
+                (as-set cand row AC_BSTART start)
+                (as-set cand row AC_BLEN (- (buf-len cbytes) start))
+                (as-sha cbytes start (- (buf-len cbytes) start) tmp cand row)
+                (as-set cand row AC_W w)
+                (as-set cand row AC_H h)
+                (as-set cand row AC_FLAGS flags)
+                (as-set cand row AC_FROM (afm-dct))
+                (as-set cand row AC_ORIGIN (ao-embedded))
+                (return 0)))
+          (comment "DCT that cannot pass through is the host's (decode-img, P6.1a)")
+          (as-set cand row AC_STATUS (nz-codec))
+          (return 0)))
+    (if (!= (pi-get rec (pi-f-codec)) 0) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+    (if (> (mul64 (i64 w) (i64 h)) (mul64 (i64 maxpix) (i64 AS_PIXFACTOR)))
+      (do (as-set cand row AC_STATUS (nz-too-large)) (return 0)))
+    (comment "kin's own samples")
+    (set rc (pi-samples src ar dc a b st rec sh smp))
+    (if (== rc 12) (return 12))
+    (if (== rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+    (set mk (pi-get rec (pi-f-mkind)))
+    (if (or (== mk 2) (== mk 3))
+      (do (set msh (pd-get src ar dc a b st (pi-get rec (pi-f-mobj))))
+          (if (== msh 0) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+          (if (!= (pi-info src ar dc a b st out mrec msh (pi-get rec (pi-f-mobj))) 0)
+            (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+          (if (!= (pi-get mrec (pi-f-codec)) 0) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+          (set rc (pi-samples src ar dc a b st mrec msh msmp))
+          (if (== rc 12) (return 12))
+          (if (== rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+          (set have 1)))
+    (set ow (pi-out-w rec))
+    (set oh (pi-out-h rec))
+    (set ch (pi-out-channels rec))
+    (set alpha (pi-has-alpha rec))
+    (let [^Bitmap pic (bitmap-new ow oh ch)
+          ^Bitmap al (bitmap-new ow oh 1)
+          ^Bitmap dummy (bitmap-new 1 1 1)]
+      (if (!= (pi-pixels rec smp dummy mrec msmp dummy have 0 pic al) 0)
+        (do (as-set cand row AC_STATUS (nz-colorspace)) (return 0)))
+      (set start (buf-len cbytes))
+      (if (> (* ow oh) maxpix)
+        (do (set k (as-scale-k ow oh maxpix))
+            (set flags (bit-or flags (afg-scaled)))
+            (let [^Bitmap pic2 (bitmap-new (quot (+ ow (- k 1)) k) (quot (+ oh (- k 1)) k) ch)
+                  ^Bitmap al2 (bitmap-new (quot (+ ow (- k 1)) k) (quot (+ oh (- k 1)) k) 1)]
+              (as-scale-into pic pic2 k)
+              (as-scale-into al al2 k)
+              (as-png ws cbytes z rows tmp rec pic2 al2 alpha 0)
+              (set w (bitmap-w pic2))
+              (set h (bitmap-h pic2))))
+        (do (set bil 0)
+            (if (and (== (pi-get rec (pi-f-bpc)) 1) (== (pi-get rec (pi-f-class)) 1)) (set bil 1))
+            (as-png ws cbytes z rows tmp rec pic al alpha bil)
+            (set w ow)
+            (set h oh))))
+    (as-set cand row AC_STATUS 0)
+    (as-set cand row AC_TYPE (amt-png))
+    (as-set cand row AC_BSTART start)
+    (as-set cand row AC_BLEN (- (buf-len cbytes) start))
+    (as-sha cbytes start (- (buf-len cbytes) start) tmp cand row)
+    (as-set cand row AC_W w)
+    (as-set cand row AC_H h)
+    (as-set cand row AC_FLAGS flags)
+    (as-set cand row AC_FROM (as-from-chain rec))
+    (as-set cand row AC_ORIGIN (ao-decoded))
+    (return 0)))
+
+;; -------------------------------------------------------------------- overlay
+
+(defn ^I32 as-overlaid [^Cells im ^Cells pa ^Cells gl ^I32 r ^I32 page ^I32 vx0 ^I32 vy0 ^I32 vx1 ^I32 vy1 ^I32 z]
+  (comment "1 when paint drawn after image row r (paths, images, glyphs that are visible and on its page) covers more than")
+  (comment "`AS_OVERLAY` per mille of its visible box. Overlapping paints count twice: an over-estimate, on the side of")
+  (comment "saying what the reader saw was not the image alone.")
+  (let [^I64 area (as-area vx0 vy0 vx1 vy1)
+        ^:mut ^I64 acc (i64 0)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n (im-count im)]
+    (if (<= area (i64 0)) (return 0))
+    (while (< i n)
+      (do (if (and (!= i r) (and (== (im-get im i (mf-page)) page) (and (> (im-get im i (mf-z)) z) (== (im-get im i (mf-vis)) 0))))
+            (set acc (add64 acc (as-ia vx0 vy0 vx1 vy1 (im-get im i (mf-x0)) (im-get im i (mf-y0)) (im-get im i (mf-x1)) (im-get im i (mf-y1))))))
+          (set i (+ i 1))))
+    (set i 0)
+    (set n (quot (cells-len pa) 24))
+    (while (< i n)
+      (do (if (and (== (pa-get pa i 0) page)
+                   (and (> (pa-get pa i (pf-z)) z) (and (== (pa-get pa i (pf-vis)) 0)
+                        (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0))))
+            (set acc (add64 acc (as-ia vx0 vy0 vx1 vy1 (pa-get pa i (pf-x0)) (pa-get pa i (pf-y0)) (pa-get pa i (pf-x1)) (pa-get pa i (pf-y1))))))
+          (set i (+ i 1))))
+    (set i 0)
+    (set n (gl-count gl))
+    (while (< i n)
+      (do (if (and (== (gl-get gl i 0) page)
+                   (and (> (gl-get gl i (gf-z)) z) (== (gl-get gl i (gf-vis)) 0)))
+            (set acc (add64 acc (as-ia vx0 vy0 vx1 vy1 (gl-get gl i 1) (gl-get gl i 2) (gl-get gl i 3) (gl-get gl i 4)))))
+          (set i (+ i 1))))
+    (if (> (mul64 acc (i64 1000)) (mul64 (i64 AS_OVERLAY) area)) (return 1))
+    (return 0)))
+
+;; ------------------------------------------------------------------- collection
+
+(defn ^:pub ^I32 as-collect [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                             ^Cells im ^Cells pa ^Cells gl ^Cells pg
+                             ^I32 maxpix ^I32 totbytes
+                             ^:mut ^Cells cand ^:mut ^Buf cbytes
+                             ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells mrec ^:mut ^Cells smp ^:mut ^Cells msmp
+                             ^:mut ^Cells data ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells ws ^:mut ^Buf z]
+  (comment "The document pass: a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with")
+  (comment "its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice")
+  (comment "`totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.")
+  (comment "`out rec mrec smp msmp data rows tmp ws z` are scratch. Answers 0, or 12 when the source missed (stop, re-run).")
+  (let [^I32 n (im-count im)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 prod 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 vx0 0
+        ^:mut ^I32 vy0 0
+        ^:mut ^I32 vx1 0
+        ^:mut ^I32 vy1 0
+        ^:mut ^I32 clip -1
+        ^:mut ^I32 flags 0
+        ^:mut ^I32 ori 0
+        ^:mut ^I32 obj 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 zz 0
+        ^:mut ^I32 work 0
+        ^:mut ^I32 ovl AS_OVERLAY_WORK
+        ^:mut ^I32 whole 0]
+    (cells-drop cand 0)
+    (while (< r n)
+      (do (if (== (im-get im r (mf-vis)) 0)
+            (do (set page (im-get im r (mf-page)))
+                (set bx0 (im-get im r (mf-x0)))
+                (set by0 (im-get im r (mf-y0)))
+                (set bx1 (im-get im r (mf-x1)))
+                (set by1 (im-get im r (mf-y1)))
+                (set vx0 bx0)
+                (set vy0 by0)
+                (set vx1 bx1)
+                (set vy1 by1)
+                (set flags 0)
+                (set clip (im-get im r (mf-clip)))
+                (if (and (>= clip 0) (< clip (quot (cells-len pa) 24)))
+                  (do (if (> (pa-get pa clip (pf-x0)) vx0) (set vx0 (pa-get pa clip (pf-x0))))
+                      (if (> (pa-get pa clip (pf-y0)) vy0) (set vy0 (pa-get pa clip (pf-y0))))
+                      (if (< (pa-get pa clip (pf-x1)) vx1) (set vx1 (pa-get pa clip (pf-x1))))
+                      (if (< (pa-get pa clip (pf-y1)) vy1) (set vy1 (pa-get pa clip (pf-y1))))
+                      (if (!= (pa-get pa clip (pf-kind)) (pa-rect)) (set flags (bit-or flags (afg-clip-bbox))))))
+                (set ori (im-get im r (mf-placement)))
+                (if (== ori 8) (set flags (bit-or flags (afg-transformed))))
+                (set obj (im-get im r (mf-obj)))
+                (if (and (> vx1 vx0) (> vy1 vy0) (>= page 1) (<= page (pd-pg-count pg)))
+                  (do (set row (quot (cells-len cand) AS_STRIDE))
+                      (set f 0)
+                      (while (< f AS_STRIDE)
+                        (do (cells-push cand 0)
+                            (set f (+ f 1))))
+                      (as-set cand row AC_PAGE page)
+                      (as-set cand row AC_BX0 bx0)
+                      (as-set cand row (+ AC_BX0 1) by0)
+                      (as-set cand row (+ AC_BX0 2) bx1)
+                      (as-set cand row (+ AC_BX0 3) by1)
+                      (as-set cand row AC_VX0 vx0)
+                      (as-set cand row (+ AC_VX0 1) vy0)
+                      (as-set cand row (+ AC_VX0 2) vx1)
+                      (as-set cand row (+ AC_VX0 3) vy1)
+                      (as-set cand row AC_OBJ obj)
+                      (as-set cand row AC_FROM (afm-raw))
+                      (as-set cand row AC_ORIGIN (ao-decoded))
+                      (as-set cand row AC_TYPE (amt-png))
+                      (as-set cand row AC_KORI -1)
+                      (as-set cand row AC_FLAGS flags)
+                      (set pw (as-page-w pg (- page 1)))
+                      (set ph (as-page-h pg (- page 1)))
+                      (if (> (as-ia vx0 vy0 vx1 vy1 0 0 pw ph) (i64 0))
+                        (set whole (as-ge (as-ia vx0 vy0 vx1 vy1 0 0 pw ph) (as-area 0 0 pw ph) AS_BIG))
+                        (set whole 0))
+                      (if (== whole 1)
+                        (as-set cand row AC_STATUS (nz-part))
+                        (if (<= obj 0)
+                          (as-set cand row AC_STATUS (nz-codec))
+                          (if (or (>= prod AS_MAXPROD) (> (quot (buf-len cbytes) 2) totbytes))
+                            (as-set cand row AC_STATUS (nz-budget))
+                            (do (set prod (+ prod 1))
+                                (set rc (as-make src ar dc a b st maxpix cand row obj ori 1 cbytes out rec mrec smp msmp data rows tmp ws z))
+                                (if (== rc 12) (return 12))
+                                (if (== (as-get cand row AC_STATUS) 0)
+                                  (do (comment "the overlay check reads every later paint of the page: at most AS_OVERLAY_WORK rows in all")
+                                      (set work (+ (+ n (quot (cells-len pa) 24)) (gl-count gl)))
+                                      (if (>= ovl work)
+                                        (do (set ovl (- ovl work))
+                                            (set zz (im-get im r (mf-z)))
+                                            (if (== (as-overlaid im pa gl r page vx0 vy0 vx1 vy1 zz) 1)
+                                              (do (set zz (as-get cand row AC_FLAGS))
+                                                  (as-set cand row AC_FLAGS (bit-or zz (afg-overlaid)))))))))))))))))
+          (set r (+ r 1))))
+    (return 0)))
+
+;; --------------------------------------------------------- the provisional figures
+
+(defn ^:pub ^I32 as-figure-rows [^Cells cand ^Cells pages ^:mut ^Cells fg]
+  (comment "The candidates that are provisional `figure`s (SPEC 10.6, until P8.1): not page-sized (under 800 per mille of its")
+  (comment "page) and both sides of the visible box at least 18 pt. `fg` = [cursor 0, then the candidate rows sorted by (page,")
+  (comment "top, left, row)]. Answers how many.")
+  (let [^I32 n (quot (cells-len cand) AS_STRIDE)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 pgi 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 ins 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0]
+    (cells-drop fg 0)
+    (cells-push fg 0)
+    (while (< r n)
+      (do (set x0 (as-get cand r AC_VX0))
+          (set y0 (as-get cand r (+ AC_VX0 1)))
+          (set x1 (as-get cand r (+ AC_VX0 2)))
+          (set y1 (as-get cand r (+ AC_VX0 3)))
+          (set pgi (- (as-get cand r AC_PAGE) 1))
+          (if (and (>= pgi 0) (< pgi (page-count pages)))
+            (do (set pw (page-w pages pgi))
+                (set ph (page-h pages pgi))
+                (if (and (>= (- x1 x0) AS_FIGURE_SIDE) (>= (- y1 y0) AS_FIGURE_SIDE)
+                         (== (as-ge (as-ia x0 y0 x1 y1 0 0 pw ph) (as-area 0 0 pw ph) AS_BIG) 0))
+                  (do (comment "insert in order of (page, top, left, row)")
+                      (set ins (+ cnt 1))
+                      (set j 1)
+                      (while (<= j cnt)
+                        (do (let [^I32 q (cells-at fg j)]
+                              (if (and (== ins (+ cnt 1))
+                                       (or (> (as-get cand q AC_PAGE) (as-get cand r AC_PAGE))
+                                           (and (== (as-get cand q AC_PAGE) (as-get cand r AC_PAGE))
+                                                (or (> (as-get cand q (+ AC_VX0 1)) y0)
+                                                    (and (== (as-get cand q (+ AC_VX0 1)) y0) (> (as-get cand q AC_VX0) x0))))))
+                                (set ins j)))
+                            (set j (+ j 1))))
+                      (cells-push fg 0)
+                      (set j (+ cnt 1))
+                      (while (> j ins)
+                        (do (cells-set fg j (cells-at fg (- j 1)))
+                            (set j (- j 1))))
+                      (cells-set fg ins r)
+                      (set cnt (+ cnt 1))))))
+          (set r (+ r 1))))
+    (return cnt)))
+
+;; ---------------------------------------------------------------------- admission
+
+(defn ^I32 as-first-region [^Cells nodes ^Cells regions ^I32 n ^:mut ^Cells box]
+  (comment "The node's first region into box[0..5): page x0 y0 x1 y1. 0 when it has none.")
+  (let [^I32 r (node-region-head nodes n)]
+    (if (< r 0) (return 0))
+    (cells-set box 0 (region-page regions r))
+    (cells-set box 1 (region-x0 regions r))
+    (cells-set box 2 (region-y0 regions r))
+    (cells-set box 3 (region-x1 regions r))
+    (cells-set box 4 (region-y1 regions r))
+    (return 1)))
+
+(defn ^I32 as-match [^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^:mut ^Cells box]
+  (comment "Which candidate a region is, geometrically (SPEC 10.11 steps 2-4 at `images`): box[0] the candidate row when the")
+  (comment "region IS one whole image; else a negative `nz` code: -`nz-part` when it lies inside one image's visible box,")
+  (comment "-`nz-composite` when it overlaps several or part of one and more, -`nz-vector` when no image is under it.")
+  (let [^I32 n (quot (cells-len cand) AS_STRIDE)
+        ^I64 ra (as-area x0 y0 x1 y1)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 hits 0
+        ^:mut ^I32 only -1
+        ^:mut ^I64 ia (i64 0)
+        ^:mut ^I64 va (i64 0)]
+    (while (< r n)
+      (do (if (== (as-get cand r AC_PAGE) page)
+            (do (set ia (as-ia x0 y0 x1 y1 (as-get cand r AC_VX0) (as-get cand r (+ AC_VX0 1)) (as-get cand r (+ AC_VX0 2)) (as-get cand r (+ AC_VX0 3))))
+                (if (> ia (i64 0))
+                  (do (set hits (+ hits 1))
+                      (set only r)))))
+          (set r (+ r 1))))
+    (cells-set box 0 -1)
+    (if (== hits 0) (return (- 0 (nz-vector))))
+    (if (> hits 1) (return (- 0 (nz-composite))))
+    (set ia (as-ia x0 y0 x1 y1 (as-get cand only AC_VX0) (as-get cand only (+ AC_VX0 1)) (as-get cand only (+ AC_VX0 2)) (as-get cand only (+ AC_VX0 3))))
+    (set va (as-area (as-get cand only AC_VX0) (as-get cand only (+ AC_VX0 1)) (as-get cand only (+ AC_VX0 2)) (as-get cand only (+ AC_VX0 3))))
+    (if (and (== (as-ge ia ra AS_COVER) 1) (== (as-ge ia va AS_COVER) 1))
+      (do (cells-set box 0 only)
+          (return 0)))
+    (if (== (as-ge ia ra AS_COVER) 1) (return (- 0 (nz-part))))
+    (return (- 0 (nz-composite)))))
+
+(defn ^I32 as-set-noasset [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^I32 reason]
+  (node-set-attr-int nodes attrs n (fk-noasset) reason)
+  (return 0))
+
+(defn ^:pub ^I32 as-run [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells regions ^Cells cand ^Buf cbytes
+                         ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
+                         ^I32 maxbytes ^I32 totbytes ^I32 sigs ^:mut ^Cells box]
+  (comment "The document unit's asset stage, in node-id order, over the figures and seals of the final tree: SPEC 10.11's source")
+  (comment "per node, then admission. A node with pixels gets `fk-asset` (an asset id), else `fk-noasset` (an `nz`). The Model's")
+  (comment "`assets`, `uses` and `abytes` are written. `box` is 5 scratch cells. A figure made from a placement (`fk-image`")
+  (comment "names its candidate row) is that image; any other is matched by where it is. Answers the number of assets.")
+  (let [^I32 nn (node-count nodes)
+        ^:mut ^I32 n 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 c -1
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 attr -1
+        ^:mut ^I32 id -1
+        ^:mut ^I32 total 0
+        ^:mut ^I32 closed 0
+        ^:mut ^I32 blen 0
+        ^:mut ^I32 bs 0]
+    (while (< n nn)
+      (do (set kind (node-kind nodes n))
+          (if (or (== kind (nk-figure)) (== kind (nk-seal)))
+            (do (set sub (node-sub nodes n))
+                (set c -1)
+                (set rc 0)
+                (if (== kind (nk-seal))
+                  (do (if (== sub (sl-digital-signature)) (set rc -1))
+                      (if (and (or (== sub (sl-signature)) (== sub (sl-initials))) (== sigs 0))
+                        (do (as-set-noasset nodes attrs n (nz-withheld))
+                            (set rc -1)))))
+                (if (== rc 0)
+                  (do (set attr (node-attr nodes attrs n (fk-image)))
+                      (if (>= attr 0)
+                        (set c (attr-value attrs attr))
+                        (if (== (as-first-region nodes regions n box) 1)
+                          (do (set rc (as-match cand (cells-at box 0) (cells-at box 1) (cells-at box 2) (cells-at box 3) (cells-at box 4) box))
+                              (if (== rc 0) (set c (cells-at box 0)))
+                              (if (< rc 0) (set rc (- 0 rc))))
+                          (set rc (nz-vector))))
+                      (if (and (< c 0) (> rc 0))
+                        (as-set-noasset nodes attrs n rc))
+                      (if (>= c 0)
+                        (do (if (!= (as-get cand c AC_STATUS) 0)
+                              (as-set-noasset nodes attrs n (as-get cand c AC_STATUS))
+                              (do (set blen (as-get cand c AC_BLEN))
+                                  (set id (asset-find assets blen (as-get cand c (+ AC_SHA 0)) (as-get cand c (+ AC_SHA 1))
+                                                      (as-get cand c (+ AC_SHA 2)) (as-get cand c (+ AC_SHA 3))
+                                                      (as-get cand c (+ AC_SHA 4)) (as-get cand c (+ AC_SHA 5))
+                                                      (as-get cand c (+ AC_SHA 6)) (as-get cand c (+ AC_SHA 7))))
+                                  (if (and (< id 0) (> blen maxbytes))
+                                    (as-set-noasset nodes attrs n (nz-too-large))
+                                    (do (if (and (< id 0) (or (== closed 1) (> blen (- totbytes total))))
+                                          (do (set closed 1)
+                                              (as-set-noasset nodes attrs n (nz-budget)))
+                                          (do (if (< id 0)
+                                                (do (set bs (buf-len abytes))
+                                                    (buf-append-blob abytes (buf-blob cbytes) (as-get cand c AC_BSTART) (+ (as-get cand c AC_BSTART) blen))
+                                                    (set total (+ total blen))
+                                                    (set id (asset-add assets (as-get cand c AC_TYPE) (as-get cand c AC_ORIGIN)
+                                                                       (as-get cand c AC_FROM) (as-get cand c AC_OBJ) bs blen
+                                                                       (as-get cand c AC_W) (as-get cand c AC_H) 0 (as-get cand c AC_FLAGS)))
+                                                    (asset-set-sha assets id 0 (as-get cand c (+ AC_SHA 0)))
+                                                    (asset-set-sha assets id 1 (as-get cand c (+ AC_SHA 1)))
+                                                    (asset-set-sha assets id 2 (as-get cand c (+ AC_SHA 2)))
+                                                    (asset-set-sha assets id 3 (as-get cand c (+ AC_SHA 3)))
+                                                    (asset-set-sha assets id 4 (as-get cand c (+ AC_SHA 4)))
+                                                    (asset-set-sha assets id 5 (as-get cand c (+ AC_SHA 5)))
+                                                    (asset-set-sha assets id 6 (as-get cand c (+ AC_SHA 6)))
+                                                    (asset-set-sha assets id 7 (as-get cand c (+ AC_SHA 7)))))
+                                              (use-add assets uses id n (as-get cand c AC_PAGE)
+                                                       (as-get cand c (+ AC_VX0 0)) (as-get cand c (+ AC_VX0 1))
+                                                       (as-get cand c (+ AC_VX0 2)) (as-get cand c (+ AC_VX0 3)))
+                                              (node-set-attr-int nodes attrs n (fk-asset) id)))))))))))))
+          (set n (+ n 1))))
+    (return (asset-count assets))))
+
+(defn ^:pub ^I32 as-settings [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 level ^I32 dpi ^I32 maxpix
+                              ^I32 maxbytes ^I32 totbytes ^I32 sigs]
+  (comment "The settings that go with the level, on the root (SPEC 10.11): `assets` (`images` 1, `figures` 2), `asset-dpi`,")
+  (comment "`asset-pixels`, `asset-bytes`, `assets-bytes` and `asset-signatures` (`off` 0, `on` 1).")
+  (let [^:mut ^I32 s (cells-len text)]
+    (if (== level 1)
+      (do (text-append-cp text 105) (text-append-cp text 109) (text-append-cp text 97) (text-append-cp text 103)
+          (text-append-cp text 101) (text-append-cp text 115)))
+    (if (== level 2)
+      (do (text-append-cp text 102) (text-append-cp text 105) (text-append-cp text 103) (text-append-cp text 117)
+          (text-append-cp text 114) (text-append-cp text 101) (text-append-cp text 115)))
+    (node-set-attr-text nodes attrs 0 (fk-assets) s (- (cells-len text) s))
+    (node-set-attr-int nodes attrs 0 (fk-asset-dpi) dpi)
+    (node-set-attr-int nodes attrs 0 (fk-asset-pixels) maxpix)
+    (node-set-attr-int nodes attrs 0 (fk-asset-bytes) maxbytes)
+    (node-set-attr-int nodes attrs 0 (fk-assets-bytes) totbytes)
+    (set s (cells-len text))
+    (if (== sigs 1)
+      (do (text-append-cp text 111) (text-append-cp text 110)))
+    (if (== sigs 0)
+      (do (text-append-cp text 111) (text-append-cp text 102) (text-append-cp text 102)))
+    (node-set-attr-text nodes attrs 0 (fk-asset-signatures) s (- (cells-len text) s))
+    (return 0)))
+
+(defn ^:pub ^I32 as-page-cands [^Cells pages ^:mut ^Cells cand]
+  (comment "A raster input is one picture a page (a frame): each page's own image is a candidate whose status is `part` (SPEC")
+  (comment "10.11): at `images` no figure or seal of it can be that picture, and `figures` cuts from it (P8.5, `cropped`).")
+  (let [^I32 n (page-count pages)
+        ^:mut ^I32 p 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 f 0]
+    (cells-drop cand 0)
+    (while (< p n)
+      (do (set row (quot (cells-len cand) AS_STRIDE))
+          (set f 0)
+          (while (< f AS_STRIDE)
+            (do (cells-push cand 0)
+                (set f (+ f 1))))
+          (as-set cand row AC_PAGE (page-number pages p))
+          (as-set cand row (+ AC_BX0 2) (page-w pages p))
+          (as-set cand row (+ AC_BX0 3) (page-h pages p))
+          (as-set cand row (+ AC_VX0 2) (page-w pages p))
+          (as-set cand row (+ AC_VX0 3) (page-h pages p))
+          (as-set cand row AC_STATUS (nz-part))
+          (as-set cand row AC_OBJ -1)
+          (as-set cand row AC_KORI -1)
+          (set p (+ p 1))))
+    (return n)))

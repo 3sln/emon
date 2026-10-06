@@ -208,11 +208,11 @@
 
 (def go-const-prefix
   "Go enums are a named int and constants `<Prefix><Variant>`; Rust's are variants `Type.Variant`."
-  {"OcrPolicy" "Ocr" "Assets" "Assets" "Furniture" "Furniture" "ErrorKind" "Err" "AttrKind" "Attr"})
+  {"OcrPolicy" "Ocr" "Assets" "Assets" "Furniture" "Furniture" "ErrorKind" "Err" "AttrKind" "Attr" "HTMLAssets" "HTMLAssets"})
 
 (def go-const-type-as
   "The Rust enum a Go constant type stands for."
-  {"OcrPolicy" "OcrPolicy" "Assets" "Assets" "Furniture" "Furniture" "ErrorKind" "Error" "AttrKind" "Attr"})
+  {"OcrPolicy" "OcrPolicy" "Assets" "Assets" "Furniture" "Furniture" "ErrorKind" "Error" "AttrKind" "Attr" "HTMLAssets" "HtmlAssets"})
 
 (def go-struct-as-enum
   "A Rust enum with payloads is, in Go, a struct with one field per variant (set or nil) and, for Attr, a tag."
@@ -244,7 +244,8 @@
    [:field "Page" "HasLabel"] "Rust's `label: Option<String>` is a string and a flag in Go"
    [:field "Intake" "VersionMinor"] "the second half of Rust's (major, minor) tuple"
    [:method "Input" "String"] "fmt.Stringer, which never prints the password (Rust: a Debug impl that does the same)"
-   [:method "Node" "String"] "fmt.Stringer (Rust: Debug)"})
+   [:method "Node" "String"] "fmt.Stringer (Rust: Debug)"
+   [:method "Asset" "String"] "fmt.Stringer (Rust: Debug)"})
 
 ;; -------------------------------------------------------------- the compare
 
@@ -343,14 +344,18 @@
    ["Model" "to_json" 1] ["Model" "to_html" 1]
    ["Node" "kind" 0] ["Node" "id" 0] ["Node" "conf" 0] ["Node" "sources" 0] ["Node" "flags" 0]
    ["Node" "children" 0] ["Node" "text" 0] ["Node" "regions" 0] ["Node" "attr" 1]
+   ;; assets (P3.13, D117, SPEC 3.9 / 10.11)
+   ["Model" "assets" 0] ["Model" "asset" 1] ["Model" "asset_files" 0] ["Node" "asset" 0] ["Node" "noasset" 0]
+   ["Asset" "id" 0] ["Asset" "name" 0] ["Asset" "media_type" 0] ["Asset" "origin" 0] ["Asset" "sha256" 0]
+   ["Asset" "width" 0] ["Asset" "height" 0] ["Asset" "uses" 0] ["Asset" "bytes" 0]
    ["Options" "ocr"] ["Options" "locale"] ["Options" "assets"]
    ["Config" "limits"] ["Config" "max_rounds"] ["Config" "fetch_rounds"]])
 
 (def spec-pending
-  "Specified and built by neither host yet (D117's asset accessors, SPEC 3.9)."
-  ["Model.assets" "Model.asset" "Model.asset_files" "Node.asset" "Asset (id name media_type origin sha256 width height uses bytes)"])
+  "Specified and built by neither host yet."
+  [])
 
-(def spec-types ["Engine" "Input" "Model" "Node" "Transcript" "ByteSource" "Options" "Config" "Intake"])
+(def spec-types ["Engine" "Input" "Model" "Node" "Transcript" "ByteSource" "Options" "Config" "Intake" "Asset"])
 
 (let [rk (set (keys rust-surface)) gk (set (keys go-surface))
       missing (atom [])]
@@ -374,9 +379,9 @@
       (swap! missing conj (str host " has no input adapter " nmv))))
   (doseq [m @missing] (bad "SPEC 3.9/13: " m))
   (when (empty? @missing)
-    (ok "SPEC 3.9/13: every spelled name (" (count spec-names) " members of Engine, Input, Model, Node, Options, Config; "
-        (count spec-types) " types; the byte-source adapters of 13.1) exists on Rust and on Go; "
-        "PENDING on both, specified and not built (D117): " (str/join ", " spec-pending))))
+    (ok "SPEC 3.9/13: every spelled name (" (count spec-names) " members of Engine, Input, Model, Node, Asset, Options, Config; "
+        (count spec-types) " types; the byte-source adapters of 13.1; the asset accessors of 3.9, D117) exists on Rust and on Go"
+        (when (seq spec-pending) (str "; PENDING on both: " (str/join ", " spec-pending))))))
 
 ;; ------------------------------------------------------ no filesystem (D058)
 

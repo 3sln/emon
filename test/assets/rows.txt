@@ -1,0 +1,113 @@
+# P3.12 fixture rows: written by kin/scripts/asset-fixtures (babashka); do not edit
+D	flate-rgb8	assets/flate-rgb8.pdf	5	0	-	0	17	11	3	0	d287d0b3b1f25680b8b09fc6a32ed874d9d878d66d649ac9611c170a84ca6992
+D	flate-rgb8-o1	assets/flate-rgb8.pdf	5	1	-	0	17	11	3	0	c389a5c348c2057bf12b3c3f6feb2fab7e5b633e21fca6df5727bf96222d566c
+D	flate-rgb8-o2	assets/flate-rgb8.pdf	5	2	-	0	17	11	3	0	ae5c59af3da7eb5acf2e69164579b6739b1cefe7cacbfd36152908dc6b89a115
+D	flate-rgb8-o3	assets/flate-rgb8.pdf	5	3	-	0	17	11	3	0	4fb6ef9a9c2e9a81ac8f310395b2e228063b21c862587f6452cc48ed6b5471e7
+D	flate-rgb8-o4	assets/flate-rgb8.pdf	5	4	-	0	11	17	3	0	e0dfbe9419bce56afd70e00cbb6baa2f02a9016dc71cb501114a400a55fbcb1e
+D	flate-rgb8-o5	assets/flate-rgb8.pdf	5	5	-	0	11	17	3	0	500e9031e510295a3da43caaef40ae533d41c6137dbf91f6b865fa5329c34902
+D	flate-rgb8-o6	assets/flate-rgb8.pdf	5	6	-	0	11	17	3	0	8757e4586b3629c803b2e82f0e53acc94fb3b17c37ec7a166f69d2fbf1686339
+D	flate-rgb8-o7	assets/flate-rgb8.pdf	5	7	-	0	11	17	3	0	eb63bc9983714b544a233c7ef970fd8dae088624ab69f2dc348897b7263475ae
+D	flate-rgb8-cut	assets/flate-rgb8.pdf	5	0	2000,4000,14000,12000,5000,4000,14000,9000,980	0	13	7	3	0	c118db016d69f525edb4d8deb6ec8bcf0fff0df6807947e9ced33bba2bc2a89a
+D	flate-rgb8-o4-cut	assets/flate-rgb8.pdf	5	4	2000,4000,14000,12000,5000,4000,14000,9000,980	0	9	11	3	0	765cd008f8079ce8779269f970ae1837702aee4f60165da47040e8bd9cebc6b8
+D	flate-rgb8-whole	assets/flate-rgb8.pdf	5	0	2000,4000,14000,12000,2000,4000,13900,12000,980	0	17	11	3	0	d287d0b3b1f25680b8b09fc6a32ed874d9d878d66d649ac9611c170a84ca6992
+D	flate-rgb8-png	assets/flate-rgb8-png.pdf	5	0	-	0	17	11	3	0	3dadce978cc136a8c7c17377fb4a125d078fb7c035c3f9e5ff950610f2b14d43
+D	flate-rgb16	assets/flate-rgb16.pdf	5	0	-	0	17	11	3	0	a60dab02b04a9abbd5735d0c638eb8bdb24be955c474734a9bb935369e33da37
+D	flate-rgb16-b	assets/flate-rgb16-b.pdf	5	0	-	0	17	11	3	0	baf305a0ce5e0591915533116b30097a5b3351e4900e9b883386350f14813389
+D	gray1	assets/gray1.pdf	5	0	-	0	17	11	1	0	c28a700f67428f1f7c3cdb4e6acdad8c9b7920484b9834ceaf6e50dd9aad43d6
+D	gray2	assets/gray2.pdf	5	0	-	0	17	11	1	0	5fd8e27e8494e537f60df0b2c883025947780a8091ef123cfeb6f2af9f9f061a
+D	gray4	assets/gray4.pdf	5	0	-	0	17	11	1	0	dfde3d4a2b64892e1f4bd695e6c5a83cb540e1039784ae78297a04aecad7e67d
+D	gray8	assets/gray8.pdf	5	0	-	0	17	11	1	0	9fd8fc89cf72205c2947a429d166cb0b5ff85fd83bd7ca8197373ff79c1796ca
+D	gray8-decode	assets/gray8-decode.pdf	5	0	-	0	17	11	1	0	e08d037ae5bdb4ca8d0ab8914fab48268b84b2f9fbaebd940ba7f17fc6aef465
+D	gray4-decode	assets/gray4-decode.pdf	5	0	-	0	17	11	1	0	ed999525f9d9ecc03b28e2d110f7a2d6d606a1379a1d07f7eef26c329a418b4f
+D	rgb8-decode	assets/rgb8-decode.pdf	5	0	-	0	17	11	3	0	7a4271b4336f678349052153cbe9c3eeb24a4f145a17f27a5de45a0dd2a2220d
+D	lzw-rgb8	assets/lzw-rgb8.pdf	5	0	-	0	17	11	3	0	8feb268a154f9483b6f271b5f6d1cd37334889bee23e3148c8794923ef4c174c
+D	runlength-rgb8	assets/runlength-rgb8.pdf	5	0	-	0	17	11	3	0	9cf287f547045562a0d84db6b97452908dd29f79916673a831141bc934147f6d
+D	asciihex-rgb8	assets/asciihex-rgb8.pdf	5	0	-	0	17	11	3	0	76494ded0b309c09899227ec5eda1d26b24bfa5ce769d2d9687059bba0738fcf
+D	a85-flate-rgb8	assets/a85-flate-rgb8.pdf	5	0	-	0	17	11	3	0	1a9f9e5f915557cdc727ab7223f913ee3e01a1d95ed3dffbd63a3f4785e73a9d
+D	indexed16	assets/indexed16.pdf	5	0	-	0	17	11	3	0	0a1ec0634aa976a1b08d11925dc636abb90bcbd6104985f6b88b66782c1fd621
+D	indexed16-stream	assets/indexed16-stream.pdf	5	0	-	0	17	11	1	0	67a9f3ac7031832092f9e1526d0cef60c6afaeff87b259d3b76f60fc367f8999
+D	indexed4-cmyk	assets/indexed4-cmyk.pdf	5	0	-	0	17	11	3	0	ef59b2d0469406ee75b13dc18f0f6312c2e0cd9b3fe055d7392bfff16cbbc9df
+D	indexed16-decode	assets/indexed16-decode.pdf	5	0	-	0	17	11	3	0	e6ce24f3978596a3aaf47dfbf28dd647af8b58305bedf7f368b61061c139aee5
+D	cmyk8	assets/cmyk8.pdf	5	0	-	0	17	11	3	0	d3bf701efbe332901b4c9fc7d44f073f670e369c35d8476d9d9a2c996d05a6b3
+D	icc-rgb	assets/icc-rgb.pdf	5	0	-	0	17	11	3	0	962a163c1743f7222f0c951f9d0670a6e7bba4de0327fea8a7b18fedd7570aed
+D	cal-rgb	assets/cal-rgb.pdf	5	0	-	0	17	11	3	0	962a163c1743f7222f0c951f9d0670a6e7bba4de0327fea8a7b18fedd7570aed
+D	icc-gray	assets/icc-gray.pdf	5	0	-	0	17	11	1	0	fb9fb3be5038da9debee8d4f299f71bb6f6a5698c7933deff4b8d8dab274063f
+X	lab	assets/lab.pdf	5	9
+X	separation	assets/separation.pdf	5	9
+D	imagemask	assets/imagemask.pdf	5	0	-	16711680	19	13	3	1	c731f5b4fa44adfbb9f55b5b22f939e458bfab69f9ba4e5ba8d9ec4ae3466f2b
+D	imagemask-decode	assets/imagemask-decode.pdf	5	0	-	16711680	19	13	3	1	51dc27be7fac89b37f82bead0c839ead61db55ad33527d028a489d022700beee
+D	colorkey	assets/colorkey.pdf	5	0	-	0	17	11	3	1	eccc65e34114a77570ef6361b8ef286380904b361b4b4e2fb727bf1c743e148d
+D	colorkey-gray4	assets/colorkey-gray4.pdf	5	0	-	0	17	11	1	1	f09c1590773b8c1208e76c3fe75b09ae7d6975dad35d4fbb1703906d0d0af2c6
+D	mask-stencil	assets/mask-stencil.pdf	5	0	-	0	17	11	3	1	7862343a7a6792ae6032841d2ed5a888fb13857a77d79b806bf442f98434d1b6
+D	smask	assets/smask.pdf	5	0	-	0	17	11	3	1	9f57bc8b87a27a3a4190f88e0ac2677c34dbf5a36278a2c605fdc85ff9ead391
+D	smask-matte	assets/smask-matte.pdf	5	0	-	0	17	11	3	1	72252b9d028dac3fa0f7094ea3c716d5253ecafecd9a7aa1a31f3063b42e9b22
+D	inline-rgb	assets/inline-rgb.pdf	c4	0	-	0	6	4	3	0	0615608c7c8132357023e0043678c384afff7929494d617db28db388491c2c69
+I	inline-rgb	assets/inline-rgb.pdf	4	0
+D	inline-gray-ahx	assets/inline-gray-ahx.pdf	c4	0	-	0	7	3	1	0	5168f8cef2b688ef8ab5773d1a1e2a2a54926b0c34ac9e0d8fbd903613dd1638
+I	inline-gray-ahx	assets/inline-gray-ahx.pdf	4	0
+D	inline-indexed	assets/inline-indexed.pdf	c4	0	-	0	5	3	3	0	71a365f482d26681c1393fded7ea71eb32b63d3df29060d037fcde0e4cd55d2f
+I	inline-indexed	assets/inline-indexed.pdf	4	0
+D	form-image	assets/form-image.pdf	5	0	-	0	17	11	3	0	6cf016346358f312be50988ebee6605c5c02cf3863873b009de4864f74488a7f
+M	form-image	assets/form-image.pdf	1	5,3000,7000,13000,13000,0
+M	place-upright	assets/place-upright.pdf	1	5,2000,6000,12000,12000,0
+O	100000	0	0	60000	0
+M	place-rot90	assets/place-rot90.pdf	1	5,4000,4000,10000,14000,0
+O	0	100000	-60000	0	5
+M	place-rot90cw	assets/place-rot90cw.pdf	1	5,2000,3000,8000,13000,0
+O	0	-100000	60000	0	4
+M	place-rot180	assets/place-rot180.pdf	1	5,3000,5000,13000,11000,0
+O	-100000	0	0	-60000	2
+M	place-flip-h	assets/place-flip-h.pdf	1	5,3000,6000,13000,12000,0
+O	-100000	0	0	60000	1
+M	place-flip-v	assets/place-flip-v.pdf	1	5,2000,5000,12000,11000,0
+O	100000	0	0	-60000	3
+M	place-transpose	assets/place-transpose.pdf	1	5,4000,3000,10000,13000,0
+O	0	-100000	-60000	0	6
+M	place-antitranspose	assets/place-antitranspose.pdf	1	5,2000,4000,8000,14000,0
+O	0	100000	60000	0	7
+M	place-skew	assets/place-skew.pdf	1	5,2000,4000,15000,12000,1
+O	100000	20000	30000	60000	-1
+M	place-clip-rect	assets/place-clip-rect.pdf	1	5,2000,4000,14000,12000,0
+M	place-clip-circle	assets/place-clip-circle.pdf	1	5,2000,4000,14000,12000,0
+M	place-twice	assets/place-twice.pdf	2	5,1000,10000,9000,15000,0	5,10000,2000,16000,6000,0
+D	flate-rgb8-aes128	assets/flate-rgb8-aes128.pdf	5	0	-	0	17	11	3	0	d287d0b3b1f25680b8b09fc6a32ed874d9d878d66d649ac9611c170a84ca6992
+P	dct-rgb	assets/dct-rgb.pdf	5	0
+P	dct-gray	assets/dct-gray.pdf	5	0
+P	dct-progressive	assets/dct-progressive.pdf	5	0
+P	dct-icc-rgb	assets/dct-icc-rgb.pdf	5	0
+P	dct-calrgb	assets/dct-calrgb.pdf	5	0
+P	dct-a85	assets/dct-a85.pdf	5	0
+P	dct-decode	assets/dct-decode.pdf	5	10
+P	dct-cmyk	assets/dct-cmyk.pdf	5	8
+P	dct-exif6	assets/dct-exif6.pdf	5	14
+P	dct-exif6mm	assets/dct-exif6mm.pdf	5	14
+P	dct-exif1	assets/dct-exif1.pdf	5	0
+P	dct-size	assets/dct-size.pdf	5	15
+P	dct-arith	assets/dct-arith.pdf	5	4
+P	dct-mask	assets/dct-mask.pdf	5	11
+P	dct-smask	assets/dct-smask.pdf	5	12
+R	dct-decode	assets/dct-decode.pdf	5	1	24	16	3	8	0	0	0	0	0	460	644	-1	0	0	-	-
+R	dct-cmyk	assets/dct-cmyk.pdf	5	1	24	16	4	8	0	0	0	0	0	465	950	-1	0	0	-	-
+R	dct-exif6	assets/dct-exif6.pdf	5	1	24	16	3	8	0	0	0	0	0	440	691	-1	0	0	-	-
+R	dct-exif6mm	assets/dct-exif6mm.pdf	5	1	24	16	3	8	0	0	0	0	0	440	691	-1	0	0	-	-
+R	dct-arith	assets/dct-arith.pdf	5	1	24	16	3	8	0	0	0	0	0	440	644	-1	0	0	-	-
+R	dct-a85	assets/dct-a85.pdf	5	1	24	16	3	8	0	0	0	0	-2	0	644	-1	0	0	b618faef0164d3b9a119ffd3e3161643152a238c7be072edd67967ab9e0aaac9	-
+R	ccitt-g4	assets/ccitt-g4.pdf	5	4	64	32	1	1	-1	64	32	1	0	499	552	-1	0	0	-	-
+R	ccitt-g4-mask	assets/ccitt-g4-mask.pdf	5	4	64	32	1	1	-1	64	32	10	0	517	552	-1	0	0	-	-
+R	jpx	assets/jpx.pdf	5	2	16	12	0	8	0	0	0	0	0	440	1013	-1	0	0	-	-
+R	jbig2	assets/jbig2.pdf	5	3	32	16	0	1	0	0	0	0	0	476	50	-2	0	24	-	470f585d12d6aeca6cf44e8c4291928afe234d96cfc7963d09e16304d572e72e
+O	1000	0	0	1000	0
+O	-1000	0	0	1000	1
+O	-1000	0	0	-1000	2
+O	1000	0	0	-1000	3
+O	0	-1000	1000	0	4
+O	0	1000	-1000	0	5
+O	0	1000	1000	0	7
+O	0	-1000	-1000	0	6
+O	100000	2000	3000	60000	-1
+O	100000	0	0	0	-1
+O	0	0	0	0	-1
+O	100000	0	0	60000	0
+O	0	100000	-60000	0	5
+O	50000	1000	1000	-50000	-1
+O	100000	50	-30	60000	0

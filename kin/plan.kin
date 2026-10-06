@@ -39,6 +39,17 @@
 ;;                 code of up to four ASCII chars packed big-endian, "deu"; none = every model the engine
 ;;                 has, D038. The answer's extension is `emon.ocr`'s, version 2, D214)
 ;;   bytes   args  input offset length
+;;   decode-img  args  filter w h comps bpc k columns rows ccitt-flags  where offset length sha*8  gwhere goffset glength gsha*8
+;;                 (kind 6, D117 and D291: the host decodes ONE PDF IMAGE's codestream, DCT that cannot pass through, JPX,
+;;                 JBIG2 with its globals, CCITT with its parameters (`filter` is `flt`; `k` `columns` `rows` and
+;;                 `ccitt-flags` are CCITT's: bit 1 BlackIs1, 2 EncodedByteAlign, 4 EndOfLine, 8 EndOfBlock false;
+;;                 `comps` and `bpc` are the PDF dictionary's, 0 for none). The BYTES are named, not carried: `where` is
+;;                 an input index (>= 0: offset and length are a span of that input, `sha` all zero) or -2 (the unit's
+;;                 PAYLOAD `Buf`, where kin put bytes it made itself, decrypted or pre-filtered, and `sha` is their SHA-256
+;;                 as eight big-endian words); `gwhere` -1 is no globals. The payload is never written to a transcript:
+;;                 a transcript is keyed by this record, whose `sha` makes different bytes a different key, so a replay
+;;                 of different bytes answers `transcript-miss`. Answered as `decode`; the pixels are the codestream's,
+;;                 never with the PDF's /Decode, masks or /Matte applied, those are kin's.)
 ;;
 ;;   render answer  status w h channels dpi        (pixels are the host's; the bitmap's handle
 ;;                                                   is the answer's id; channels 1 gray or 3 RGB)
@@ -78,6 +89,7 @@
 (defn ^:pub ^I32 pk-ocr [] (return 3))
 (defn ^:pub ^I32 pk-bytes [] (return 4))
 (defn ^:pub ^I32 pk-crop [] (return 5))
+(defn ^:pub ^I32 pk-decode-img [] (return 6))
 
 (defn ^:pub ^I32 ps-ok [] (return 0))
 (defn ^:pub ^I32 ps-failed [] (return 1))
@@ -281,6 +293,59 @@
     (cells-push c length)
     (rec-end c at)
     (return at)))
+
+(defn ^:pub ^I32 rq-decode-img [^:mut ^Cells c ^I32 id ^I32 filter ^I32 w ^I32 h ^I32 comps ^I32 bpc ^I32 k ^I32 columns
+                               ^I32 rows ^I32 ccitt ^I32 where ^I32 offset ^I32 length ^Cells shas ^I32 shaat
+                               ^I32 gwhere ^I32 goffset ^I32 glength ^I32 gshaat]
+  (comment "Ask the host to decode a PDF image's codestream (kind 6): see the header. `shas` is a Cells holding the eight")
+  (comment "words of each SHA-256, the data's from index `shaat` and the globals' from `gshaat`; the words of a span that is")
+  (comment "an input's are zero.")
+  (let [^I32 at (rec-begin c (pk-decode-img) id)
+        ^:mut ^I32 i 0]
+    (cells-push c filter)
+    (cells-push c w)
+    (cells-push c h)
+    (cells-push c comps)
+    (cells-push c bpc)
+    (cells-push c k)
+    (cells-push c columns)
+    (cells-push c rows)
+    (cells-push c ccitt)
+    (cells-push c where)
+    (cells-push c offset)
+    (cells-push c length)
+    (while (< i 8)
+      (do (cells-push c (cells-at shas (+ shaat i)))
+          (set i (+ i 1))))
+    (cells-push c gwhere)
+    (cells-push c goffset)
+    (cells-push c glength)
+    (set i 0)
+    (while (< i 8)
+      (do (cells-push c (cells-at shas (+ gshaat i)))
+          (set i (+ i 1))))
+    (rec-end c at)
+    (return at)))
+
+;; The fields of a `decode-img` request, as offsets into `rq-arg` (read with `rq-arg c at (dq-where)`).
+(defn ^:pub ^I32 dq-filter [] (return 0))
+(defn ^:pub ^I32 dq-w [] (return 1))
+(defn ^:pub ^I32 dq-h [] (return 2))
+(defn ^:pub ^I32 dq-comps [] (return 3))
+(defn ^:pub ^I32 dq-bpc [] (return 4))
+(defn ^:pub ^I32 dq-k [] (return 5))
+(defn ^:pub ^I32 dq-columns [] (return 6))
+(defn ^:pub ^I32 dq-rows [] (return 7))
+(defn ^:pub ^I32 dq-ccitt [] (return 8))
+(defn ^:pub ^I32 dq-where [] (return 9))
+(defn ^:pub ^I32 dq-offset [] (return 10))
+(defn ^:pub ^I32 dq-length [] (return 11))
+(defn ^:pub ^I32 dq-sha [] (return 12))
+(defn ^:pub ^I32 dq-gwhere [] (return 20))
+(defn ^:pub ^I32 dq-goffset [] (return 21))
+(defn ^:pub ^I32 dq-glength [] (return 22))
+(defn ^:pub ^I32 dq-gsha [] (return 23))
+(defn ^:pub ^I32 dq-nargs [] (return 31))
 
 ;; --------------------------------------------------------------- answers
 

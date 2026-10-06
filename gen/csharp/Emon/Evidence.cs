@@ -1673,6 +1673,9 @@ public static class Evidence {
     public static int EkBackdrop() {
         return 151;
     }
+    public static int EkPlacement() {
+        return 152;
+    }
     public static int EkEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "emon-evidence");
@@ -2276,6 +2279,10 @@ public static class Evidence {
         }
         if (code == 151) {
             emon.Port.TextAscii(t, "backdrop");
+            return 1;
+        }
+        if (code == 152) {
+            emon.Port.TextAscii(t, "placement");
             return 1;
         }
         return 0;
@@ -3316,6 +3323,9 @@ public static class Evidence {
     public static int MfVchk() {
         return 18;
     }
+    public static int MfPlacement() {
+        return 19;
+    }
     public static int OrfPage() {
         return 0;
     }
@@ -3916,6 +3926,7 @@ public static class Evidence {
         13, 16, 8, 21, 0, 2,
         13, 17, 1, 102, -1, 0,
         13, 18, 9, 103, 0, 11,
+        13, 19, 1, 152, 0, 0,
         14, 0, 1, 9, -2147483648, 0,
         14, 1, 1, 119, -1, 0,
         14, 2, 1, 120, -1, 0,
@@ -4063,18 +4074,18 @@ public static class Evidence {
         80, 17,
         97, 15,
         112, 19,
-        131, 15,
-        146, 21,
-        167, 10,
-        177, 13,
-        190, 16,
-        206, 9,
-        215, 3,
-        218, 9,
-        227, 16,
-        243, 11,
-        254, 15,
-        269, 10
+        131, 16,
+        147, 21,
+        168, 10,
+        178, 13,
+        191, 16,
+        207, 9,
+        216, 3,
+        219, 9,
+        228, 16,
+        244, 11,
+        255, 15,
+        270, 10
     };
     public static readonly int[] EvStrides = new int[] {
         12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,

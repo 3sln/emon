@@ -1220,7 +1220,7 @@ fn test_every_cell_of_every_stride_is_printed_or_spare() {
             crate::testport::assert_eq(EV_STRIDES[(11) as usize] - cells, 1, "paths: one spare (D219 printed vis, vby, vchk and backdrop)");
         }
         if ea == 13 {
-            crate::testport::assert_eq(EV_STRIDES[(12) as usize] - cells, 1, "images: one spare");
+            crate::testport::assert_eq(cells, 20, "images: every cell (P3.13 printed the placement orientation in the last)");
         }
         if ea == 14 {
             crate::testport::assert_eq(cells, 28, "oruns: every cell");

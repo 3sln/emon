@@ -894,4 +894,177 @@ public final class Restruct {
         rsScrubText(text);
         return Model.nodeCount(nodes);
     }
+    public static int rfNode(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, int n, int np) {
+        // `rs-node`, but every attribute is kept (the item's private `fk-box` too: `rs-run` reads it).
+        int nn = Model.nodeNew(nodes, Model.nodeKind(on, n), np);
+        if (nn < 0) {
+            nn = Model.nodeNew(nodes, Model.nodeKind(on, n), 0);
+        }
+        if (nn < 0) {
+            return -1;
+        }
+        Model.nodeSetSub(nodes, nn, Model.nodeSub(on, n));
+        Model.nodeSetAux(nodes, nn, Model.nodeAux(on, n));
+        Model.nodeSetSrc(nodes, nn, Model.nodeSrc(on, n));
+        Model.nodeSetConf(nodes, nn, Model.nodeConf(on, n));
+        Model.nodeSetFlags(nodes, nn, Model.nodeFlags(on, n));
+        if (Model.nodeHasText(on, n) == 1) {
+            Model.nodeSetText(nodes, nn, Model.nodeTextStart(on, n), Model.nodeTextLen(on, n));
+        }
+        int a = Model.nodeAttrHead(on, n);
+        while (a >= 0) {
+            int k = Model.attrKey(oa, a);
+            int vk = Model.attrVkind(oa, a);
+            int v = Model.attrValue(oa, a);
+            int l = Model.attrLen(oa, a);
+            if (vk == Model.avText()) {
+                Model.nodeAddAttrText(nodes, attrs, nn, k, v, l);
+            }
+            if (vk == Model.avInt()) {
+                Model.nodeAddAttrInt(nodes, attrs, nn, k, v);
+            }
+            if (vk == Model.avNode()) {
+                Model.nodeSetAttrNode(nodes, attrs, nn, k, v);
+            }
+            if (vk == Model.avBool()) {
+                Model.nodeSetAttrBool(nodes, attrs, nn, k, v);
+            }
+            a = Model.attrNext(oa, a);
+        }
+        int r = Model.nodeRegionHead(on, n);
+        while (r >= 0) {
+            Model.nodeAddRegion(nodes, regions, nn, Model.regionPage(orr, r), Model.regionX0(orr, r), Model.regionY0(orr, r), Model.regionX1(orr, r), Model.regionY1(orr, r));
+            r = Model.regionNext(orr, r);
+        }
+        emon.Port.cellsSet(nm, n, nn);
+        return nn;
+    }
+    public static int rfRegion(emon.Port.Cells on, int c) {
+        // The first region row of node c, or of its first descendant that has one; -1 when there is none.
+        int r = Model.nodeRegionHead(on, c);
+        int q = Model.nodeFirstChild(on, c);
+        int found = -1;
+        if (r >= 0) {
+            return r;
+        }
+        while ((q >= 0) && (found < 0)) {
+            found = rfRegion(on, q);
+            q = Model.nodeNext(on, q);
+        }
+        return found;
+    }
+    public static int rfNextRegion(emon.Port.Cells on, int c) {
+        // The first region row of a sibling after c (or of what is in it); -1 when none has one.
+        int q = Model.nodeNext(on, c);
+        int r = -1;
+        while ((q >= 0) && (r < 0)) {
+            r = rfRegion(on, q);
+            q = Model.nodeNext(on, q);
+        }
+        return r;
+    }
+    public static int rfFlush(emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, int np, int lpage, int ly) {
+        // Make the pending figures whose top edge is before the position (lpage, ly) as children of np; lpage -1 is no
+        // limit. `fg`[0] is the cursor.
+        int cur = emon.Port.cellsAt(fg, 0);
+        int row = 0;
+        int nn = 0;
+        int more = 1;
+        while ((more == 1) && ((cur + 1) < emon.Port.cellsLen(fg))) {
+            row = emon.Port.cellsAt(fg, cur + 1);
+            more = 0;
+            if (lpage < 0) {
+                more = 1;
+            }
+            if ((lpage >= 0) && (Asset.asGet(cand, row, 0) < lpage)) {
+                more = 1;
+            }
+            if ((lpage >= 0) && ((Asset.asGet(cand, row, 0) == lpage) && (Asset.asGet(cand, row, 6) < ly))) {
+                more = 1;
+            }
+            if (more == 1) {
+                nn = Model.nodeNew(nodes, Model.nkFigure(), np);
+                if (nn >= 0) {
+                    Model.nodeSetSub(nodes, nn, Model.fgUnknown());
+                    Model.nodeSetConf(nodes, nn, 500);
+                    Model.nodeAddSrc(nodes, nn, Model.srInfer());
+                    Model.nodeAddRegion(nodes, regions, nn, Asset.asGet(cand, row, 0), Asset.asGet(cand, row, 5), Asset.asGet(cand, row, 6), Asset.asGet(cand, row, 7), Asset.asGet(cand, row, 8));
+                    Model.nodeSetAttrInt(nodes, attrs, nn, Model.fkImage(), row);
+                }
+                cur += 1;
+                emon.Port.cellsSet(fg, 0, cur);
+            }
+        }
+        return 0;
+    }
+    public static int rfChildren(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells cand, emon.Port.Cells fg, int p, int np, int flush, int lpage, int ly) {
+        // Copy the children of old node p under new node np; when `flush` is 1 the pending figures above each child go in
+        // before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins).
+        int c = Model.nodeFirstChild(on, p);
+        int r = 0;
+        int r2 = 0;
+        int pg2 = 0;
+        int y2 = 0;
+        int nn = 0;
+        while (c >= 0) {
+            if (flush == 1) {
+                r = rfRegion(on, c);
+                if (r >= 0) {
+                    rfFlush(cand, fg, nodes, attrs, regions, np, Model.regionPage(orr, r), Model.regionY0(orr, r));
+                }
+            }
+            nn = rfNode(on, oa, orr, nodes, attrs, regions, nm, c, np);
+            if (nn >= 0) {
+                if ((flush == 1) && (Model.nodeKind(on, c) == Model.nkSection())) {
+                    r2 = rfNextRegion(on, c);
+                    if (r2 >= 0) {
+                        pg2 = Model.regionPage(orr, r2);
+                        y2 = Model.regionY0(orr, r2);
+                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, pg2, y2);
+                    } else {
+                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, lpage, ly);
+                    }
+                } else {
+                    rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 0, lpage, ly);
+                }
+            }
+            c = Model.nodeNext(on, c);
+        }
+        if (flush == 1) {
+            rfFlush(cand, fg, nodes, attrs, regions, np, lpage, ly);
+        }
+        return 0;
+    }
+    public static int rsFigures(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells cand, emon.Port.Cells fg) {
+        // Copy the old Model's trees into the empty arenas `nodes`, `attrs`, `regions` (the text is shared), with the
+        // provisional figures `fg` (`as-figure-rows`) placed among the document's and the sections' blocks. `nm` is scratch
+        // (old node to new). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
+        int n = Model.nodeCount(on);
+        int r = 0;
+        int i = 0;
+        int nr = 0;
+        emon.Port.cellsDrop(nodes, 0);
+        emon.Port.cellsDrop(attrs, 0);
+        emon.Port.cellsDrop(regions, 0);
+        emon.Port.cellsDrop(nm, 0);
+        while (i < n) {
+            emon.Port.cellsPush(nm, -1);
+            i += 1;
+        }
+        while (r < n) {
+            if (Model.nodeParent(on, r) < 0) {
+                nr = rfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1);
+                if (nr >= 0) {
+                    if (Model.nodeKind(on, r) == Model.nkDocument()) {
+                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 1, -1, -1);
+                    } else {
+                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 0, -1, -1);
+                    }
+                }
+            }
+            r += 1;
+        }
+        rsRemap(attrs, nm);
+        return Model.nodeCount(nodes);
+    }
 }

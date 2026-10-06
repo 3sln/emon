@@ -32,7 +32,8 @@ public final class Modelprobe {
         emon.Port.textI32(t, Splitmix.smLo(h));
         return 0;
     }
-    public static int probeJson(StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
-        return Json.jsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout);
+    public static int probeJson(StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells assets, emon.Port.Cells uses) {
+        // `assets` and `uses` are the (empty) asset table: a Model built without `assets` has none (SPEC 10.11).
+        return Json.jsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, assets, uses);
     }
 }

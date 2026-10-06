@@ -98,6 +98,68 @@ func TestABytesRequestIsASpan(emonT *testing.T) {
 	port.AssertEq(emonT, plan.RqArg(c, 0, 2), 131072, "length")
 }
 
+func TestADecodeImgRequestNamesBytesAndNeverCarriesThem(emonT *testing.T) {
+	// Kind 6 (D291): the codestream's parameters, then WHERE the bytes are (an input's span, or the unit's payload)
+	// and the SHA-256 of a payload as eight words; the globals the same, `gwhere` -1 for none.
+	var c *port.Cells = port.NewCells()
+	var shas *port.Cells = port.NewCells()
+	var i int32 = 0
+	for i < 16 {
+		port.CellsPush(shas, 1000+i)
+		i += 1
+	}
+	port.AssertEq(emonT, plan.PkDecodeImg(), 6, "kind 6")
+	port.AssertEq(emonT, plan.FltCcitt(), 4, "the CCITT filter")
+	port.AssertEq(emonT, plan.RqDecodeImg(c, 9, plan.FltCcitt(), 64, 32, 1, 1, -1, 64, 32, 10, 0, 499, 552, shas, 0, -2, 0, 24, 8), 0, "starts at 0")
+	port.AssertEq(emonT, plan.RecLen(c, 0), 34, "three header cells and 31 arguments")
+	port.AssertEq(emonT, plan.RecKind(c, 0), 6, "kind")
+	port.AssertEq(emonT, plan.RecId(c, 0), 9, "id")
+	port.AssertEq(emonT, plan.RqNargs(c, 0), plan.DqNargs(), "31 arguments")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqFilter()), 4, "filter")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqW()), 64, "w")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqH()), 32, "h")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqComps()), 1, "comps")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqBpc()), 1, "bpc")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqK()), -1, "k")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqColumns()), 64, "columns")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqRows()), 32, "rows")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqCcitt()), 10, "ccitt flags")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqWhere()), 0, "where")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqOffset()), 499, "offset")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqLength()), 552, "length")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqSha()), 1000, "the first SHA word")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqSha()+7), 1007, "the eighth SHA word")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqGwhere()), -2, "gwhere: the payload")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqGoffset()), 0, "goffset")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqGlength()), 24, "glength")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqGsha()), 1008, "the first globals SHA word")
+	port.AssertEq(emonT, plan.RqArg(c, 0, plan.DqGsha()+7), 1015, "the last globals SHA word")
+	port.AssertEq(emonT, plan.RecCheck(c, 1, 6), 0, "well formed, in the legal kinds")
+	port.AssertEq(emonT, plan.RecCheck(c, 1, 5), 2, "a kind past the legal range is refused")
+	port.AssertEq(emonT, plan.RecCount(c), 1, "one record")
+}
+
+func TestADecodeImgRequestIsFoundByItsIdAndAnsweredAsADecode(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var shas *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	var i int32 = 0
+	for i < 16 {
+		port.CellsPush(shas, 0)
+		i += 1
+	}
+	plan.RqDecodeImg(c, 3, plan.FltJpx(), 16, 12, 0, 8, 0, 0, 0, 0, 0, 440, 1013, shas, 0, -1, 0, 0, 8)
+	plan.RqDecodeImg(c, 4, plan.FltJbig2(), 32, 16, 0, 1, 0, 0, 0, 0, 0, 476, 50, shas, 0, -2, 0, 24, 8)
+	port.AssertEq(emonT, plan.RecCount(c), 2, "two records")
+	var second int32 = plan.RecNext(c, 0)
+	var at4 int32 = plan.RecFind(c, 4)
+	port.AssertEq(emonT, plan.RecId(c, second), 4, "the second is request 4")
+	port.AssertEq(emonT, plan.RqArg(c, at4, plan.DqFilter()), 3, "request 4 is JBIG2")
+	port.AssertEq(emonT, plan.AnDecode(ans, 3, 16, 12, 3, 0, 0, 1), 0, "its answer is a decode answer")
+	var at3 int32 = plan.AnFind(ans, 3)
+	port.AssertEq(emonT, plan.AnStatus(ans, at3), 0, "ok")
+}
+
 func TestAnswersCarryTheIdAndAStatus(emonT *testing.T) {
 	var c *port.Cells = port.NewCells()
 	var a1 int32 = plan.AnRender(c, 1, 612, 792, 1, 300)

@@ -41,8 +41,8 @@
 ;; RECURSION DEPTH is bounded by the Model (`max-depth`): `node-new` refuses
 ;; a deeper node, so a Model that was built cannot overflow a stack.
 (ns emon.html
-  (:require [emon.lang :refer [I32 Cells Text emit-ascii shl32]]
-            [emon.port :refer [cells-at text-cp text-i32]]
+  (:require [emon.lang :refer [I32 Cells Text Buf emit-ascii shl32]]
+            [emon.port :refer [cells-at cells-len text-cp text-i32 buf-at]]
             [emon.json :refer [js-cpt]]
             [emon.model :refer [node-count node-kind node-parent node-first-child
                                 node-next node-text-start node-text-len
@@ -75,9 +75,11 @@
                                 fk-color fk-href fk-title fk-lang fk-generator
                                 fk-author fk-subject fk-keywords fk-creator
                                 fk-producer fk-created fk-modified fk-type
-                                fk-checked fk-pages]]
+                                fk-checked fk-pages fk-asset fk-noasset
+                                asset-type asset-bstart asset-blen asset-use-head use-node use-x0 use-x1 use-y0 use-y1
+                                use-next amt-emit-name nz-emit-name]]
             [kin.lang :refer [defn declarefn return let set while if do comment
-                              + - * < > <= >= == != and or bit-and quot]]))
+                              + - * < > <= >= == != and or bit-and quot rem]]))
 
 (declarefn h-inline)
 (declarefn h-block)
@@ -95,10 +97,12 @@
 (defn ^:pub ^I32 ho-no-milestones [] (return 64))
 (defn ^:pub ^I32 ho-initials-plain [] (return 128))
 (defn ^:pub ^I32 ho-align-style [] (return 256))
+(defn ^:pub ^I32 ho-assets-external [] (return 512))
+(defn ^:pub ^I32 ho-assets-omit [] (return 1024))
 
-;; THE OPTIONS TRAVEL AS ONE INTEGER, `o`: the bits above in the low ten bits, and
+;; THE OPTIONS TRAVEL AS ONE INTEGER, `o`: the bits above in the low twelve bits, and
 ;; the confidence threshold (nodes with 0 <= conf < it get `data-emon-conf`)
-;; times 1024 above them. One parameter fewer through every function.
+;; times 4096 above them. One parameter fewer through every function.
 (defn ^I32 h-on [^I32 o ^I32 bit]
   (if (!= (bit-and o bit) 0) (return 1))
   (return 0))
@@ -258,7 +262,7 @@
     (if (and (== (h-on o 2) 1) (== (node-is-inline nodes n) 0)
              (> (node-region-count nodes n) 0) (> (layout-count layout) 0))
       (h-columns t nodes regions pages layout n))
-    (if (and (== (h-on o 4) 1) (>= cf 0) (< cf (quot o 1024)))
+    (if (and (== (h-on o 4) 1) (>= cf 0) (< cf (quot o 4096)))
       (do (emit-ascii t " data-emon-conf=\"")
           (text-i32 t cf)
           (emit-ascii t "\"")))
@@ -491,28 +495,170 @@
           (return 0)))
     (return 0)))
 
+
+(defn ^I32 h-seal-word [^:mut ^Text t ^I32 sub]
+  (comment "A seal's kind as the start of its accessible name.")
+  (if (== sub 1) (emit-ascii t "Seal"))
+  (if (== sub 2) (emit-ascii t "Stamp"))
+  (if (== sub 3) (emit-ascii t "Signature"))
+  (if (== sub 4) (emit-ascii t "Initials"))
+  (if (== sub 5) (emit-ascii t "Digital signature"))
+  (if (or (< sub 1) (> sub 5)) (emit-ascii t "Seal"))
+  (return 0))
+
+;; ------------------------------------------------------------------ assets (P3.13, SPEC 10.11)
+;;
+;; `ho-assets-external` writes `src` as `asset-prefix` + the file's name; `ho-assets-omit` writes the placeholders as if no
+;; asset existed (and no `data-emon-noasset`); neither writes a `data:` URI, base64 by kin. The Model's `assets`, `uses` and
+;; `abytes` come in as arguments of every block function (a `data:` URI needs the bytes where the figure is).
+
+(defn ^I32 h-asset-id [^Cells nodes ^Cells attrs ^I32 n ^I32 o]
+  (comment "The asset id of node n when this HTML shows it (the node has one and the option is not `omit`), else -1.")
+  (let [^I32 a (h-iattr nodes attrs n (fk-asset))]
+    (if (== (h-on o 1024) 1) (return -1))
+    (if (< a 0) (return -1))
+    (return (attr-value attrs a))))
+
+(defn ^I32 h-noasset [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs ^I32 n]
+  (comment " data-emon-noasset=\"reason\" for a node that has none (never under `omit`).")
+  (let [^I32 a (h-iattr nodes attrs n (fk-noasset))]
+    (if (== (h-on o 1024) 1) (return 0))
+    (if (< a 0) (return 0))
+    (emit-ascii t " data-emon-noasset=\"")
+    (nz-emit-name t (attr-value attrs a))
+    (emit-ascii t "\"")
+    (return 1)))
+
+(defn ^I32 h-b64-char [^:mut ^Text t ^I32 v]
+  (if (< v 26) (text-cp t (+ 65 v)))
+  (if (and (>= v 26) (< v 52)) (text-cp t (+ 71 v)))
+  (if (and (>= v 52) (< v 62)) (text-cp t (- v 4)))
+  (if (== v 62) (text-cp t 43))
+  (if (== v 63) (text-cp t 47))
+  (return 0))
+
+(defn ^I32 h-b64 [^:mut ^Text t ^Buf abytes ^I32 start ^I32 ln]
+  (comment "RFC 4648 base64 (standard alphabet, padded, no line breaks) of abytes[start, start+ln).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 b0 0
+        ^:mut ^I32 b1 0
+        ^:mut ^I32 b2 0]
+    (while (< i ln)
+      (do (set b0 (buf-at abytes (+ start i)))
+          (set b1 0)
+          (set b2 0)
+          (if (< (+ i 1) ln) (set b1 (buf-at abytes (+ start (+ i 1)))))
+          (if (< (+ i 2) ln) (set b2 (buf-at abytes (+ start (+ i 2)))))
+          (h-b64-char t (quot b0 4))
+          (h-b64-char t (+ (* (rem b0 4) 16) (quot b1 16)))
+          (if (< (+ i 1) ln) (h-b64-char t (+ (* (rem b1 16) 4) (quot b2 64))) (text-cp t 61))
+          (if (< (+ i 2) ln) (h-b64-char t (rem b2 64)) (text-cp t 61))
+          (set i (+ i 3))))
+    (return 0)))
+
+(defn ^I32 h-has-caption [^Cells nodes ^I32 n]
+  (let [^:mut ^I32 c (node-first-child nodes n)]
+    (while (>= c 0)
+      (do (if (== (node-kind nodes c) (nk-caption)) (return 1))
+          (set c (node-next nodes c))))
+    (return 0)))
+
+(defn ^I32 h-alt-empty [^Cells nodes ^Cells attrs ^I32 n]
+  (comment "1 when the placeholder's accessible name is empty: a figure with no `alt`. A seal always has its word.")
+  (let [^I32 a (h-tattr nodes attrs n (fk-alt))]
+    (if (== (node-kind nodes n) (nk-seal)) (return 0))
+    (if (< a 0) (return 1))
+    (if (== (attr-len attrs a) 0) (return 1))
+    (return 0)))
+
+(defn ^I32 h-alt [^:mut ^Text t ^Cells nodes ^Cells attrs ^Cells text ^I32 n]
+  (comment "The text the placeholder's `aria-label` would have had: a figure's `alt`, a seal's `Stamp: ...` label (D069).")
+  (let [^:mut ^I32 a (h-tattr nodes attrs n (fk-alt))
+        ^:mut ^I32 b -1]
+    (if (== (node-kind nodes n) (nk-figure))
+      (do (if (>= a 0) (h-run t text (attr-value attrs a) (attr-len attrs a)))
+          (return 0)))
+    (set b (h-tattr nodes attrs n (fk-name)))
+    (h-seal-word t (node-sub nodes n))
+    (if (or (== (node-has-text nodes n) 1) (>= b 0))
+      (emit-ascii t ": "))
+    (if (== (node-has-text nodes n) 1)
+      (h-run t text (node-text-start nodes n) (node-text-len nodes n)))
+    (if (and (== (node-has-text nodes n) 0) (>= b 0))
+      (h-run t text (attr-value attrs b) (attr-len attrs b)))
+    (return 0)))
+
+(defn ^I32 h-px [^I32 cpt]
+  (comment "A length in centipoints as CSS pixels: cpt * 4 / 300 rounded half up, at least 1.")
+  (let [^I32 v (quot (+ (* cpt 8) 300) 600)]
+    (if (< v 1) (return 1))
+    (return v)))
+
+(defn ^I32 h-img [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs ^Cells text ^Cells assets ^Cells uses ^Buf abytes
+                  ^Cells prefix ^I32 n ^I32 id]
+  (comment "The `<img>` of node n's asset `id`: src, alt, width and height (the node's own use: the size the picture had on the")
+  (comment "page), `data-emon-asset`, and `data-emon-alt=missing` when there is no alt and no caption to be the description.")
+  (let [^:mut ^I32 u (asset-use-head assets id)
+        ^:mut ^I32 w 1
+        ^:mut ^I32 h 1
+        ^:mut ^I32 i 0]
+    (while (>= u 0)
+      (do (if (== (use-node uses u) n)
+            (do (set w (h-px (- (use-x1 uses u) (use-x0 uses u))))
+                (set h (h-px (- (use-y1 uses u) (use-y0 uses u))))
+                (set u -1))
+            (set u (use-next uses u)))))
+    (emit-ascii t "<img src=\"")
+    (if (== (h-on o 512) 1)
+      (do (while (< i (cells-len prefix))
+            (do (h-cp t (cells-at prefix i))
+                (set i (+ i 1))))
+          (emit-ascii t "a")
+          (text-i32 t id)
+          (if (== (asset-type assets id) 1) (emit-ascii t ".jpg"))
+          (if (!= (asset-type assets id) 1) (emit-ascii t ".png")))
+      (do (emit-ascii t "data:")
+          (amt-emit-name t (asset-type assets id))
+          (emit-ascii t ";base64,")
+          (h-b64 t abytes (asset-bstart assets id) (asset-blen assets id))))
+    (emit-ascii t "\" alt=\"")
+    (h-alt t nodes attrs text n)
+    (emit-ascii t "\" width=\"")
+    (text-i32 t w)
+    (emit-ascii t "\" height=\"")
+    (text-i32 t h)
+    (emit-ascii t "\" data-emon-asset=\"")
+    (text-i32 t id)
+    (emit-ascii t "\"")
+    (if (and (== (h-alt-empty nodes attrs n) 1) (== (h-has-caption nodes n) 0))
+      (emit-ascii t " data-emon-alt=\"missing\""))
+    (emit-ascii t ">")
+    (return 0)))
+
 ;; ----------------------------------------------------------------- blocks
 
 (defn ^I32 h-blocks [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                     ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n ^I32 d]
+                     ^Cells regions ^Cells pages ^Cells layout ^Cells text
+                     ^Cells assets ^Cells uses ^Buf abytes ^Cells prefix ^I32 n ^I32 d]
   (comment "Every non-inline child of n as a block at depth d. Answers how many")
   (comment "wrote anything (a milestone turned off writes nothing).")
   (let [^:mut ^I32 c (node-first-child nodes n)
         ^:mut ^I32 k 0]
     (while (>= c 0)
       (do (if (== (node-is-inline nodes c) 0)
-            (set k (+ k (h-block t o nodes attrs regions pages layout text c d))))
+            (set k (+ k (h-block t o nodes attrs regions pages layout text assets uses abytes prefix c d))))
           (set c (node-next nodes c))))
     (return k)))
 
 (defn ^I32 h-body [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                   ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n ^I32 d]
+                   ^Cells regions ^Cells pages ^Cells layout ^Cells text
+                   ^Cells assets ^Cells uses ^Buf abytes ^Cells prefix ^I32 n ^I32 d]
   (comment "What goes inside a block's element: its line of text (inline")
   (comment "children, else its own run), then its block children at depth d.")
   (comment "Answers how many block children were written, so the caller knows")
   (comment "whether its closing tag starts a new line (pretty mode).")
   (h-inner t o nodes attrs regions pages layout text n)
-  (return (h-blocks t o nodes attrs regions pages layout text n d)))
+  (return (h-blocks t o nodes attrs regions pages layout text assets uses abytes prefix n d)))
 
 (defn ^I32 h-list-type [^:mut ^Text t ^Cells nodes ^Cells attrs ^Cells text ^I32 n]
   (comment "An ordered list's `type` from its scheme: `lower-alpha` a,")
@@ -532,18 +678,9 @@
     (if (and (== c0 117) (== c6 114)) (emit-ascii t " type=\"I\""))
     (return 0)))
 
-(defn ^I32 h-seal-word [^:mut ^Text t ^I32 sub]
-  (comment "A seal's kind as the start of its accessible name.")
-  (if (== sub 1) (emit-ascii t "Seal"))
-  (if (== sub 2) (emit-ascii t "Stamp"))
-  (if (== sub 3) (emit-ascii t "Signature"))
-  (if (== sub 4) (emit-ascii t "Initials"))
-  (if (== sub 5) (emit-ascii t "Digital signature"))
-  (if (or (< sub 1) (> sub 5)) (emit-ascii t "Seal"))
-  (return 0))
-
 (defn ^I32 h-block [^:mut ^Text t ^I32 o ^Cells nodes ^Cells attrs
-                    ^Cells regions ^Cells pages ^Cells layout ^Cells text ^I32 n ^I32 d]
+                    ^Cells regions ^Cells pages ^Cells layout ^Cells text
+                    ^Cells assets ^Cells uses ^Buf abytes ^Cells prefix ^I32 n ^I32 d]
   (comment "One node as a block element at depth d (SPEC 5.1), on its own line")
   (comment "in pretty mode. Answers 1 if it wrote anything, 0 if not. An inline")
   (comment "kind met where a block belongs is written as itself.")
@@ -554,7 +691,8 @@
         ^:mut ^I32 b -1
         ^:mut ^I32 c 0
         ^:mut ^I32 lv 0
-        ^:mut ^I32 pk 0]
+        ^:mut ^I32 pk 0
+        ^:mut ^I32 asid -1]
     (if (== (node-is-inline nodes n) 1)
       (do (h-nl t o d)
           (h-inline t o nodes attrs regions pages layout text n)
@@ -571,7 +709,7 @@
       (do (emit-ascii t "<section")
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</section>")
           (return 1)))
@@ -599,7 +737,7 @@
           (if (>= a 0)
             (do (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t " ")))
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</h")
           (text-i32 t pk)
@@ -611,7 +749,7 @@
           (h-align t o sub)
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</p>")
           (return 1)))
@@ -628,7 +766,7 @@
           (if (!= sub 2) (emit-ascii t "<ul"))
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (== sub 2) (emit-ascii t "</ol>"))
           (if (!= sub 2) (emit-ascii t "</ul>"))
@@ -647,7 +785,7 @@
                 (emit-ascii t "\"")))
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</li>")
           (return 1)))
@@ -659,12 +797,12 @@
           (set c (node-first-child nodes n))
           (while (>= c 0)
             (do (if (== (node-kind nodes c) (nk-caption))
-                  (h-block t o nodes attrs regions pages layout text c (+ d 1)))
+                  (h-block t o nodes attrs regions pages layout text assets uses abytes prefix c (+ d 1)))
                 (set c (node-next nodes c))))
           (set c (node-first-child nodes n))
           (while (>= c 0)
             (do (if (!= (node-kind nodes c) (nk-caption))
-                  (h-block t o nodes attrs regions pages layout text c (+ d 1)))
+                  (h-block t o nodes attrs regions pages layout text assets uses abytes prefix c (+ d 1)))
                 (set c (node-next nodes c))))
           (h-nl t o d)
           (emit-ascii t "</table>")
@@ -675,7 +813,7 @@
           (if (and (!= sub 1) (!= sub 3)) (emit-ascii t "<tbody"))
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-blocks t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (== sub 1) (emit-ascii t "</thead>"))
           (if (== sub 3) (emit-ascii t "</tfoot>"))
@@ -686,7 +824,7 @@
           (if (== sub 1) (emit-ascii t " data-emon-repeated=\"true\""))
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-blocks t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</tr>")
           (return 1)))
@@ -709,7 +847,7 @@
           (h-align-attr t o nodes attrs n)
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (> sub 0) (emit-ascii t "</th>"))
           (if (<= sub 0) (emit-ascii t "</td>"))
@@ -732,31 +870,40 @@
           (h-align-attr t o nodes attrs n)
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (== pk (nk-table)) (emit-ascii t "</caption>"))
           (if (== pk (nk-figure)) (emit-ascii t "</figcaption>"))
           (if (and (!= pk (nk-table)) (!= pk (nk-figure)))
             (emit-ascii t "</p>"))
           (return 1)))
-    ;; ---- figure: no <img>, ever; the alt is the accessible name
+    ;; ---- figure: an <img> only when it has an asset (SPEC 10.11); the alt is the accessible name
     (if (== kind (nk-figure))
-      (do (emit-ascii t "<figure data-emon-kind=\"")
+      (do (set asid (h-asset-id nodes attrs n o))
+          (emit-ascii t "<figure data-emon-kind=\"")
           (if (> sub 0) (fg-emit-name t sub))
           (if (<= sub 0) (emit-ascii t "unknown"))
-          (emit-ascii t "\" role=\"img\"")
-          (set a (h-tattr nodes attrs n (fk-alt)))
-          (if (>= a 0)
-            (do (emit-ascii t " aria-label=\"")
-                (h-run t text (attr-value attrs a) (attr-len attrs a))
-                (emit-ascii t "\"")))
+          (emit-ascii t "\"")
+          (if (< asid 0)
+            (do (emit-ascii t " role=\"img\"")
+                (set a (h-tattr nodes attrs n (fk-alt)))
+                (if (>= a 0)
+                  (do (emit-ascii t " aria-label=\"")
+                      (h-run t text (attr-value attrs a) (attr-len attrs a))
+                      (emit-ascii t "\"")))))
           (set a (h-tattr nodes attrs n (fk-label)))
           (if (>= a 0)
             (do (emit-ascii t " data-emon-label=\"")
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "\"")))
+          (h-noasset t o nodes attrs n)
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
+          (set hb 0)
+          (if (>= asid 0)
+            (do (h-nl t o (+ d 1))
+                (h-img t o nodes attrs text assets uses abytes prefix n asid)
+                (set hb 1)))
           (h-inner t o nodes attrs regions pages layout text n)
           (set a (node-attr nodes attrs n (fk-labels)))
           (while (>= a 0)
@@ -764,13 +911,14 @@
                 (h-run t text (attr-value attrs a) (attr-len attrs a))
                 (emit-ascii t "</span>")
                 (set a (attr-find-next attrs a (fk-labels)))))
-          (set hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (+ hb (h-blocks t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1))))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</figure>")
           (return 1)))
-    ;; ---- seal: an empty figure; what it says is in its accessible name
+    ;; ---- seal: an empty figure; what it says is in its accessible name (in the <img alt> when it has an asset)
     (if (== kind (nk-seal))
-      (do (emit-ascii t "<figure data-emon-kind=\"")
+      (do (set asid (h-asset-id nodes attrs n o))
+          (emit-ascii t "<figure data-emon-kind=\"")
           (if (> sub 0) (sl-emit-name t sub))
           (if (<= sub 0) (emit-ascii t "seal"))
           (emit-ascii t "\"")
@@ -789,17 +937,18 @@
             (do (emit-ascii t " data-emon-color=\"")
                 (h-run t text (attr-value attrs b) (attr-len attrs b))
                 (emit-ascii t "\"")))
-          (emit-ascii t " role=\"img\" aria-label=\"")
-          (h-seal-word t sub)
-          (if (or (== (node-has-text nodes n) 1) (>= a 0))
-            (emit-ascii t ": "))
-          (if (== (node-has-text nodes n) 1)
-            (h-run t text (node-text-start nodes n) (node-text-len nodes n)))
-          (if (and (== (node-has-text nodes n) 0) (>= a 0))
-            (h-run t text (attr-value attrs a) (attr-len attrs a)))
-          (emit-ascii t "\"")
+          (if (< asid 0)
+            (do (emit-ascii t " role=\"img\" aria-label=\"")
+                (h-alt t nodes attrs text n)
+                (emit-ascii t "\"")))
+          (h-noasset t o nodes attrs n)
           (h-common t o nodes regions pages layout n)
-          (emit-ascii t "></figure>")
+          (emit-ascii t ">")
+          (if (>= asid 0)
+            (do (h-nl t o (+ d 1))
+                (h-img t o nodes attrs text assets uses abytes prefix n asid)
+                (h-nl t o d)))
+          (emit-ascii t "</figure>")
           (return 1)))
     ;; ---- formula: the linear text in aria-label (MathML is parked)
     (if (== kind (nk-formula))
@@ -823,7 +972,7 @@
           (emit-ascii t "><code>")
           (h-inner t o nodes attrs regions pages layout text n)
           (emit-ascii t "</code>")
-          (set hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-blocks t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</pre>")
           (return 1)))
@@ -831,7 +980,7 @@
       (do (emit-ascii t "<blockquote")
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</blockquote>")
           (return 1)))
@@ -858,7 +1007,7 @@
                 (emit-ascii t "\"")))
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
-          (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+          (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</aside>")
           (return 1)))
@@ -898,7 +1047,7 @@
                 (h-run t text (node-text-start nodes n) (node-text-len nodes n))
                 (emit-ascii t "</p>")
                 (set hb 1)))
-          (set hb (+ hb (h-blocks t o nodes attrs regions pages layout text n (+ d 1))))
+          (set hb (+ hb (h-blocks t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1))))
           (if (> hb 0) (h-nl t o d))
           (emit-ascii t "</aside>")
           (return 1)))
@@ -909,7 +1058,7 @@
     (emit-ascii t "\"")
     (h-common t o nodes regions pages layout n)
     (emit-ascii t ">")
-    (set hb (h-body t o nodes attrs regions pages layout text n (+ d 1)))
+    (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
     (if (> hb 0) (h-nl t o d))
     (emit-ascii t "</div>")
     (return 1)))
@@ -956,13 +1105,14 @@
 
 (defn ^:pub ^I32 html-emit [^:mut ^Text t ^I32 opts ^I32 conf-below ^Cells nodes
                             ^Cells attrs ^Cells regions ^Cells text
-                            ^Cells pages ^Cells ledger ^Cells layout]
+                            ^Cells pages ^Cells ledger ^Cells layout
+                            ^Cells assets ^Cells uses ^Buf abytes ^Cells prefix]
   (comment "Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;")
   (comment "`conf-below` is the threshold for `ho-confidence` (nodes with a")
   (comment "conf under it get `data-emon-conf`). The root (node 0) must be a")
   (comment "document: run `model-check` first on a Model of unknown origin.")
   (comment "Answers 0.")
-  (let [^I32 o (+ (bit-and opts 1023) (* conf-below 1024))
+  (let [^I32 o (+ (bit-and opts 4095) (* conf-below 4096))
         ^I32 nn (node-count nodes)
         ^I32 nl (ledger-count ledger)
         ^:mut ^I32 a -1
@@ -1006,9 +1156,9 @@
           (while (< i nn)
             (do (if (and (== (node-kind nodes i) (nk-furniture))
                          (== (node-parent nodes i) -1))
-                  (h-block t o nodes attrs regions pages layout text i 3))
+                  (h-block t o nodes attrs regions pages layout text assets uses abytes prefix i 3))
                 (set i (+ i 1))))))
-    (h-blocks t o nodes attrs regions pages layout text 0 3)
+    (h-blocks t o nodes attrs regions pages layout text assets uses abytes prefix 0 3)
     ;; the ledger: what was dropped, inert but present
     (if (== (h-on o 8) 1)
       (do (set i 0)

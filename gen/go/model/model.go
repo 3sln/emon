@@ -437,6 +437,54 @@ func FkCol() int32 {
 func FkBox() int32 {
 	return 81
 }
+func FkAsset() int32 {
+	return 82
+}
+func FkNoasset() int32 {
+	return 83
+}
+func FkAssets() int32 {
+	return 84
+}
+func FkAssetDpi() int32 {
+	return 85
+}
+func FkAssetPixels() int32 {
+	return 86
+}
+func FkAssetBytes() int32 {
+	return 87
+}
+func FkAssetsBytes() int32 {
+	return 88
+}
+func FkAssetSignatures() int32 {
+	return 89
+}
+func FkImage() int32 {
+	return 90
+}
+func FkOrigin() int32 {
+	return 91
+}
+func FkFrom() int32 {
+	return 92
+}
+func FkObject() int32 {
+	return 93
+}
+func FkBytes() int32 {
+	return 94
+}
+func FkSha256() int32 {
+	return 95
+}
+func FkUses() int32 {
+	return 96
+}
+func FkNode() int32 {
+	return 97
+}
 func FkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "id")
@@ -760,6 +808,70 @@ func FkEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 81 {
 		port.TextAscii(t, "box")
+		return 1
+	}
+	if code == 82 {
+		port.TextAscii(t, "asset")
+		return 1
+	}
+	if code == 83 {
+		port.TextAscii(t, "noasset")
+		return 1
+	}
+	if code == 84 {
+		port.TextAscii(t, "assets")
+		return 1
+	}
+	if code == 85 {
+		port.TextAscii(t, "asset-dpi")
+		return 1
+	}
+	if code == 86 {
+		port.TextAscii(t, "asset-pixels")
+		return 1
+	}
+	if code == 87 {
+		port.TextAscii(t, "asset-bytes")
+		return 1
+	}
+	if code == 88 {
+		port.TextAscii(t, "assets-bytes")
+		return 1
+	}
+	if code == 89 {
+		port.TextAscii(t, "asset-signatures")
+		return 1
+	}
+	if code == 90 {
+		port.TextAscii(t, "image")
+		return 1
+	}
+	if code == 91 {
+		port.TextAscii(t, "origin")
+		return 1
+	}
+	if code == 92 {
+		port.TextAscii(t, "from")
+		return 1
+	}
+	if code == 93 {
+		port.TextAscii(t, "object")
+		return 1
+	}
+	if code == 94 {
+		port.TextAscii(t, "bytes")
+		return 1
+	}
+	if code == 95 {
+		port.TextAscii(t, "sha256")
+		return 1
+	}
+	if code == 96 {
+		port.TextAscii(t, "uses")
+		return 1
+	}
+	if code == 97 {
+		port.TextAscii(t, "node")
 		return 1
 	}
 	return 0
@@ -1324,6 +1436,257 @@ func DrEmitName(t *strings.Builder, code int32) int32 {
 	return 0
 }
 
+func AoEmbedded() int32 {
+	return 1
+}
+func AoDecoded() int32 {
+	return 2
+}
+func AoCropped() int32 {
+	return 3
+}
+func AoRendered() int32 {
+	return 4
+}
+func AoEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "embedded")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "decoded")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "cropped")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "rendered")
+		return 1
+	}
+	return 0
+}
+
+func AfmDct() int32 {
+	return 1
+}
+func AfmJpx() int32 {
+	return 2
+}
+func AfmJbig2() int32 {
+	return 3
+}
+func AfmCcitt() int32 {
+	return 4
+}
+func AfmFlate() int32 {
+	return 5
+}
+func AfmLzw() int32 {
+	return 6
+}
+func AfmRunlength() int32 {
+	return 7
+}
+func AfmRaw() int32 {
+	return 8
+}
+func AfmPng() int32 {
+	return 9
+}
+func AfmJpeg() int32 {
+	return 10
+}
+func AfmTiff() int32 {
+	return 11
+}
+func AfmRender() int32 {
+	return 12
+}
+func AfmEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "dct")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "jpx")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "jbig2")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "ccitt")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "flate")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "lzw")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "runlength")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "raw")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "png")
+		return 1
+	}
+	if code == 10 {
+		port.TextAscii(t, "jpeg")
+		return 1
+	}
+	if code == 11 {
+		port.TextAscii(t, "tiff")
+		return 1
+	}
+	if code == 12 {
+		port.TextAscii(t, "render")
+		return 1
+	}
+	return 0
+}
+
+func AmtJpeg() int32 {
+	return 1
+}
+func AmtPng() int32 {
+	return 2
+}
+func AmtEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "image/jpeg")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "image/png")
+		return 1
+	}
+	return 0
+}
+
+func AfgOverlaid() int32 {
+	return 1
+}
+func AfgClipBbox() int32 {
+	return 2
+}
+func AfgTransformed() int32 {
+	return 4
+}
+func AfgIcc() int32 {
+	return 8
+}
+func AfgScaled() int32 {
+	return 16
+}
+func AfgTextOverlap() int32 {
+	return 32
+}
+func AfgEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "overlaid")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "clip-bbox")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "transformed")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "icc")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "scaled")
+		return 1
+	}
+	if code == 32 {
+		port.TextAscii(t, "text-overlap")
+		return 1
+	}
+	return 0
+}
+
+func NzWithheld() int32 {
+	return 1
+}
+func NzPart() int32 {
+	return 2
+}
+func NzVector() int32 {
+	return 3
+}
+func NzComposite() int32 {
+	return 4
+}
+func NzColorspace() int32 {
+	return 5
+}
+func NzCodec() int32 {
+	return 6
+}
+func NzRender() int32 {
+	return 7
+}
+func NzTooLarge() int32 {
+	return 8
+}
+func NzBudget() int32 {
+	return 9
+}
+func NzEmitName(t *strings.Builder, code int32) int32 {
+	if code == 1 {
+		port.TextAscii(t, "withheld")
+		return 1
+	}
+	if code == 2 {
+		port.TextAscii(t, "part")
+		return 1
+	}
+	if code == 3 {
+		port.TextAscii(t, "vector")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "composite")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "colorspace")
+		return 1
+	}
+	if code == 6 {
+		port.TextAscii(t, "codec")
+		return 1
+	}
+	if code == 7 {
+		port.TextAscii(t, "render")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "too-large")
+		return 1
+	}
+	if code == 9 {
+		port.TextAscii(t, "budget")
+		return 1
+	}
+	return 0
+}
+
 func McOk() int32 {
 	return 0
 }
@@ -1365,6 +1728,9 @@ func McBadLedger() int32 {
 }
 func McBadLayout() int32 {
 	return 13
+}
+func McBadAsset() int32 {
+	return 14
 }
 func McEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
@@ -1423,6 +1789,10 @@ func McEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "bad-layout")
 		return 1
 	}
+	if code == 14 {
+		port.TextAscii(t, "bad-asset")
+		return 1
+	}
 	return 0
 }
 
@@ -1463,6 +1833,14 @@ func LedgerStride() int32 {
 }
 
 func LayoutStride() int32 {
+	return 8
+}
+
+func AssetsStride() int32 {
+	return 24
+}
+
+func UsesStride() int32 {
 	return 8
 }
 
@@ -2608,4 +2986,299 @@ func ModelHash(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *
 	h = mhFold(h, ledger)
 	h = mhFold(h, layout)
 	return h
+}
+
+func xget(assets *port.Cells, a int32, f int32) int32 {
+	return port.CellsAt(assets, (a*24)+f)
+}
+
+func xset(assets *port.Cells, a int32, f int32, v int32) int32 {
+	port.CellsSet(assets, (a*24)+f, v)
+	return 0
+}
+
+func AssetAdd(assets *port.Cells, mtype int32, origin int32, afrom int32, object int32, bstart int32, blen int32, w int32, h int32, dpi int32, flags int32) int32 {
+	// Append an asset (no uses yet, the hash zero) and answer its id. `object` is -1 for none, `dpi` 0.
+	var id int32 = port.CellsLen(assets) / 24
+	var i int32 = 0
+	port.CellsPush(assets, mtype)
+	port.CellsPush(assets, origin)
+	port.CellsPush(assets, afrom)
+	port.CellsPush(assets, object)
+	port.CellsPush(assets, bstart)
+	port.CellsPush(assets, blen)
+	for i < 8 {
+		port.CellsPush(assets, 0)
+		i += 1
+	}
+	port.CellsPush(assets, w)
+	port.CellsPush(assets, h)
+	port.CellsPush(assets, dpi)
+	port.CellsPush(assets, flags)
+	port.CellsPush(assets, -1)
+	port.CellsPush(assets, 0)
+	port.CellsPush(assets, -1)
+	port.CellsPush(assets, 0)
+	port.CellsPush(assets, 0)
+	port.CellsPush(assets, 0)
+	return id
+}
+
+func AssetSetSha(assets *port.Cells, a int32, i int32, v int32) int32 {
+	// Word i (0..7) of asset a's SHA-256.
+	return xset(assets, a, 6+i, v)
+}
+
+func AssetSetFlags(assets *port.Cells, a int32, v int32) int32 {
+	return xset(assets, a, 17, v)
+}
+
+func UseAdd(assets *port.Cells, uses *port.Cells, a int32, node int32, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// Append a use of asset a by `node`, at the page region given, to the END of the asset's chain; answers its index.
+	var u int32 = port.CellsLen(uses) / 8
+	var tail int32 = xget(assets, a, 20)
+	var cnt int32 = xget(assets, a, 19)
+	port.CellsPush(uses, a)
+	port.CellsPush(uses, node)
+	port.CellsPush(uses, page)
+	port.CellsPush(uses, x0)
+	port.CellsPush(uses, y0)
+	port.CellsPush(uses, x1)
+	port.CellsPush(uses, y1)
+	port.CellsPush(uses, -1)
+	if tail < 0 {
+		xset(assets, a, 18, u)
+	} else {
+		port.CellsSet(uses, (tail*8)+7, u)
+	}
+	xset(assets, a, 20, u)
+	xset(assets, a, 19, cnt+1)
+	return u
+}
+
+func AssetCount(assets *port.Cells) int32 {
+	return port.CellsLen(assets) / 24
+}
+
+func AssetType(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 0)
+}
+
+func AssetOrigin(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 1)
+}
+
+func AssetFrom(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 2)
+}
+
+func AssetObject(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 3)
+}
+
+func AssetBstart(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 4)
+}
+
+func AssetBlen(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 5)
+}
+
+func AssetSha(assets *port.Cells, a int32, i int32) int32 {
+	return xget(assets, a, 6+i)
+}
+
+func AssetW(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 14)
+}
+
+func AssetH(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 15)
+}
+
+func AssetDpi(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 16)
+}
+
+func AssetFlags(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 17)
+}
+
+func AssetUseHead(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 18)
+}
+
+func AssetUseCount(assets *port.Cells, a int32) int32 {
+	return xget(assets, a, 19)
+}
+
+func uget(uses *port.Cells, u int32, f int32) int32 {
+	return port.CellsAt(uses, (u*8)+f)
+}
+
+func UseCount(uses *port.Cells) int32 {
+	return port.CellsLen(uses) / 8
+}
+
+func UseAsset(uses *port.Cells, u int32) int32 {
+	return uget(uses, u, 0)
+}
+
+func UseNode(uses *port.Cells, u int32) int32 {
+	return uget(uses, u, 1)
+}
+
+func UsePage(uses *port.Cells, u int32) int32 {
+	return uget(uses, u, 2)
+}
+
+func UseX0(uses *port.Cells, u int32) int32 {
+	return uget(uses, u, 3)
+}
+
+func UseY0(uses *port.Cells, u int32) int32 {
+	return uget(uses, u, 4)
+}
+
+func UseX1(uses *port.Cells, u int32) int32 {
+	return uget(uses, u, 5)
+}
+
+func UseY1(uses *port.Cells, u int32) int32 {
+	return uget(uses, u, 6)
+}
+
+func UseNext(uses *port.Cells, u int32) int32 {
+	return uget(uses, u, 7)
+}
+
+func AssetExtIsJpg(assets *port.Cells, a int32) int32 {
+	if xget(assets, a, 0) == 1 {
+		return 1
+	}
+	return 0
+}
+
+func AssetFind(assets *port.Cells, blen int32, s0 int32, s1 int32, s2 int32, s3 int32, s4 int32, s5 int32, s6 int32, s7 int32) int32 {
+	// The first asset whose encoded bytes are `blen` long with this SHA-256, or -1 (admission's dedup).
+	var n int32 = port.CellsLen(assets) / 24
+	var a int32 = 0
+	for a < n {
+		if (xget(assets, a, 5) == blen) && ((xget(assets, a, 6) == s0) && (xget(assets, a, 7) == s1) && ((xget(assets, a, 8) == s2) && (xget(assets, a, 9) == s3) && ((xget(assets, a, 10) == s4) && (xget(assets, a, 11) == s5) && ((xget(assets, a, 12) == s6) && (xget(assets, a, 13) == s7))))) {
+			return a
+		}
+		a += 1
+	}
+	return -1
+}
+
+func ModelCheckAssets(nodes *port.Cells, attrs *port.Cells, assets *port.Cells, uses *port.Cells, abytes *port.Buf, st *port.Cells) int32 {
+	// Are the asset table, its uses and the nodes' `asset`/`noasset` well formed? 0, or `mc-bad-asset` (the index in
+	// `st[0]`: the asset, the use or the node). Run it after `model-check` when `assets` is on.
+	var na int32 = port.CellsLen(assets) / 24
+	var nu int32 = port.CellsLen(uses) / 8
+	var nn int32 = port.CellsLen(nodes) / 16
+	var bl int32 = port.BufLen(abytes)
+	var i int32 = 0
+	var u int32 = 0
+	var k int32 = 0
+	var a int32 = 0
+	var v int32 = 0
+	var total int32 = 0
+	port.CellsDrop(st, 0)
+	port.CellsPush(st, 0)
+	if (port.CellsLen(assets) % 24) != 0 {
+		return mcFail(st, McBadAsset(), 0)
+	}
+	if (port.CellsLen(uses) % 8) != 0 {
+		return mcFail(st, McBadAsset(), 0)
+	}
+	for i < na {
+		if (xget(assets, i, 0) < 1) || (xget(assets, i, 0) > 2) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		if (xget(assets, i, 1) < 1) || (xget(assets, i, 1) > 4) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		if (xget(assets, i, 2) < 1) || (xget(assets, i, 2) > 12) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		if (xget(assets, i, 4) < 0) || (xget(assets, i, 5) < 0) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		if xget(assets, i, 4) > bl {
+			return mcFail(st, McBadAsset(), i)
+		}
+		if xget(assets, i, 5) > (bl - xget(assets, i, 4)) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		if (xget(assets, i, 14) < 0) || (xget(assets, i, 15) < 0) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		if (xget(assets, i, 17) < 0) || (xget(assets, i, 17) > 63) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		u = xget(assets, i, 18)
+		k = 0
+		for u >= 0 {
+			if u >= nu {
+				return mcFail(st, McBadAsset(), i)
+			}
+			if k > nu {
+				return mcFail(st, McBadAsset(), i)
+			}
+			if uget(uses, u, 0) != i {
+				return mcFail(st, McBadAsset(), i)
+			}
+			if (uget(uses, u, 1) < 0) || (uget(uses, u, 1) >= nn) {
+				return mcFail(st, McBadAsset(), u)
+			}
+			if mcLinkOk(uget(uses, u, 7), nu) == 0 {
+				return mcFail(st, McBadAsset(), u)
+			}
+			k += 1
+			u = uget(uses, u, 7)
+		}
+		if k != xget(assets, i, 19) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		total += k
+		i += 1
+	}
+	if total != nu {
+		return mcFail(st, McBadAsset(), 0)
+	}
+	i = 0
+	for i < nn {
+		a = AttrFind(attrs, nget(nodes, i, 6), FkAsset())
+		v = AttrFind(attrs, nget(nodes, i, 6), FkNoasset())
+		if (a >= 0) && (v >= 0) {
+			return mcFail(st, McBadAsset(), i)
+		}
+		if a >= 0 {
+			if (aget(attrs, a, 2) < 0) || (aget(attrs, a, 2) >= na) {
+				return mcFail(st, McBadAsset(), i)
+			}
+		}
+		if v >= 0 {
+			if (aget(attrs, v, 2) < 1) || (aget(attrs, v, 2) > 9) {
+				return mcFail(st, McBadAsset(), i)
+			}
+		}
+		i += 1
+	}
+	return 0
+}
+
+func ModelHashAssets(h int64, assets *port.Cells, uses *port.Cells, abytes *port.Buf) int64 {
+	// Fold the asset table, its uses and the bytes into a `model-hash` value `h` (FNV-1a, as `model-hash`).
+	var acc int64 = mhFold(h, assets)
+	var i int32 = 0
+	var bl int32 = port.BufLen(abytes)
+	acc = mhFold(acc, uses)
+	for i < bl {
+		acc = (acc ^ int64(port.BufAt(abytes, i))) * 1099511628211
+		i += 1
+	}
+	return (acc ^ int64(bl)) * 1099511628211
 }

@@ -40,6 +40,7 @@ func ProbeHash(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions
 	return 0
 }
 
-func ProbeJson(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
-	return json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout)
+func ProbeJson(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, assets *port.Cells, uses *port.Cells) int32 {
+	// `assets` and `uses` are the (empty) asset table: a Model built without `assets` has none (SPEC 10.11).
+	return json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, assets, uses)
 }

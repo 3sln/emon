@@ -894,4 +894,177 @@ public static class Restruct {
         RsScrubText(text);
         return Model.NodeCount(nodes);
     }
+    internal static int RfNode(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, int n, int np) {
+        // `rs-node`, but every attribute is kept (the item's private `fk-box` too: `rs-run` reads it).
+        int nn = Model.NodeNew(nodes, Model.NodeKind(on, n), np);
+        if (nn < 0) {
+            nn = Model.NodeNew(nodes, Model.NodeKind(on, n), 0);
+        }
+        if (nn < 0) {
+            return -1;
+        }
+        Model.NodeSetSub(nodes, nn, Model.NodeSub(on, n));
+        Model.NodeSetAux(nodes, nn, Model.NodeAux(on, n));
+        Model.NodeSetSrc(nodes, nn, Model.NodeSrc(on, n));
+        Model.NodeSetConf(nodes, nn, Model.NodeConf(on, n));
+        Model.NodeSetFlags(nodes, nn, Model.NodeFlags(on, n));
+        if (Model.NodeHasText(on, n) == 1) {
+            Model.NodeSetText(nodes, nn, Model.NodeTextStart(on, n), Model.NodeTextLen(on, n));
+        }
+        int a = Model.NodeAttrHead(on, n);
+        while (a >= 0) {
+            int k = Model.AttrKey(oa, a);
+            int vk = Model.AttrVkind(oa, a);
+            int v = Model.AttrValue(oa, a);
+            int l = Model.AttrLen(oa, a);
+            if (vk == Model.AvText()) {
+                Model.NodeAddAttrText(nodes, attrs, nn, k, v, l);
+            }
+            if (vk == Model.AvInt()) {
+                Model.NodeAddAttrInt(nodes, attrs, nn, k, v);
+            }
+            if (vk == Model.AvNode()) {
+                Model.NodeSetAttrNode(nodes, attrs, nn, k, v);
+            }
+            if (vk == Model.AvBool()) {
+                Model.NodeSetAttrBool(nodes, attrs, nn, k, v);
+            }
+            a = Model.AttrNext(oa, a);
+        }
+        int r = Model.NodeRegionHead(on, n);
+        while (r >= 0) {
+            Model.NodeAddRegion(nodes, regions, nn, Model.RegionPage(orr, r), Model.RegionX0(orr, r), Model.RegionY0(orr, r), Model.RegionX1(orr, r), Model.RegionY1(orr, r));
+            r = Model.RegionNext(orr, r);
+        }
+        emon.Port.CellsSet(nm, n, nn);
+        return nn;
+    }
+    internal static int RfRegion(emon.Port.Cells on, int c) {
+        // The first region row of node c, or of its first descendant that has one; -1 when there is none.
+        int r = Model.NodeRegionHead(on, c);
+        int q = Model.NodeFirstChild(on, c);
+        int found = -1;
+        if (r >= 0) {
+            return r;
+        }
+        while ((q >= 0) && (found < 0)) {
+            found = RfRegion(on, q);
+            q = Model.NodeNext(on, q);
+        }
+        return found;
+    }
+    internal static int RfNextRegion(emon.Port.Cells on, int c) {
+        // The first region row of a sibling after c (or of what is in it); -1 when none has one.
+        int q = Model.NodeNext(on, c);
+        int r = -1;
+        while ((q >= 0) && (r < 0)) {
+            r = RfRegion(on, q);
+            q = Model.NodeNext(on, q);
+        }
+        return r;
+    }
+    internal static int RfFlush(emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, int np, int lpage, int ly) {
+        // Make the pending figures whose top edge is before the position (lpage, ly) as children of np; lpage -1 is no
+        // limit. `fg`[0] is the cursor.
+        int cur = emon.Port.CellsAt(fg, 0);
+        int row = 0;
+        int nn = 0;
+        int more = 1;
+        while ((more == 1) && ((cur + 1) < emon.Port.CellsLen(fg))) {
+            row = emon.Port.CellsAt(fg, cur + 1);
+            more = 0;
+            if (lpage < 0) {
+                more = 1;
+            }
+            if ((lpage >= 0) && (Asset.AsGet(cand, row, 0) < lpage)) {
+                more = 1;
+            }
+            if ((lpage >= 0) && ((Asset.AsGet(cand, row, 0) == lpage) && (Asset.AsGet(cand, row, 6) < ly))) {
+                more = 1;
+            }
+            if (more == 1) {
+                nn = Model.NodeNew(nodes, Model.NkFigure(), np);
+                if (nn >= 0) {
+                    Model.NodeSetSub(nodes, nn, Model.FgUnknown());
+                    Model.NodeSetConf(nodes, nn, 500);
+                    Model.NodeAddSrc(nodes, nn, Model.SrInfer());
+                    Model.NodeAddRegion(nodes, regions, nn, Asset.AsGet(cand, row, 0), Asset.AsGet(cand, row, 5), Asset.AsGet(cand, row, 6), Asset.AsGet(cand, row, 7), Asset.AsGet(cand, row, 8));
+                    Model.NodeSetAttrInt(nodes, attrs, nn, Model.FkImage(), row);
+                }
+                cur += 1;
+                emon.Port.CellsSet(fg, 0, cur);
+            }
+        }
+        return 0;
+    }
+    internal static int RfChildren(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells cand, emon.Port.Cells fg, int p, int np, int flush, int lpage, int ly) {
+        // Copy the children of old node p under new node np; when `flush` is 1 the pending figures above each child go in
+        // before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins).
+        int c = Model.NodeFirstChild(on, p);
+        int r = 0;
+        int r2 = 0;
+        int pg2 = 0;
+        int y2 = 0;
+        int nn = 0;
+        while (c >= 0) {
+            if (flush == 1) {
+                r = RfRegion(on, c);
+                if (r >= 0) {
+                    RfFlush(cand, fg, nodes, attrs, regions, np, Model.RegionPage(orr, r), Model.RegionY0(orr, r));
+                }
+            }
+            nn = RfNode(on, oa, orr, nodes, attrs, regions, nm, c, np);
+            if (nn >= 0) {
+                if ((flush == 1) && (Model.NodeKind(on, c) == Model.NkSection())) {
+                    r2 = RfNextRegion(on, c);
+                    if (r2 >= 0) {
+                        pg2 = Model.RegionPage(orr, r2);
+                        y2 = Model.RegionY0(orr, r2);
+                        RfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, pg2, y2);
+                    } else {
+                        RfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, lpage, ly);
+                    }
+                } else {
+                    RfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 0, lpage, ly);
+                }
+            }
+            c = Model.NodeNext(on, c);
+        }
+        if (flush == 1) {
+            RfFlush(cand, fg, nodes, attrs, regions, np, lpage, ly);
+        }
+        return 0;
+    }
+    public static int RsFigures(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells cand, emon.Port.Cells fg) {
+        // Copy the old Model's trees into the empty arenas `nodes`, `attrs`, `regions` (the text is shared), with the
+        // provisional figures `fg` (`as-figure-rows`) placed among the document's and the sections' blocks. `nm` is scratch
+        // (old node to new). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
+        int n = Model.NodeCount(on);
+        int r = 0;
+        int i = 0;
+        int nr = 0;
+        emon.Port.CellsDrop(nodes, 0);
+        emon.Port.CellsDrop(attrs, 0);
+        emon.Port.CellsDrop(regions, 0);
+        emon.Port.CellsDrop(nm, 0);
+        while (i < n) {
+            emon.Port.CellsPush(nm, -1);
+            i += 1;
+        }
+        while (r < n) {
+            if (Model.NodeParent(on, r) < 0) {
+                nr = RfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1);
+                if (nr >= 0) {
+                    if (Model.NodeKind(on, r) == Model.NkDocument()) {
+                        RfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 1, -1, -1);
+                    } else {
+                        RfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 0, -1, -1);
+                    }
+                }
+            }
+            r += 1;
+        }
+        RsRemap(attrs, nm);
+        return Model.NodeCount(nodes);
+    }
 }

@@ -322,4 +322,94 @@ public final class Mscript {
         }
         return n;
     }
+    public static int jtWord(emon.Port.Cells tmp, int at) {
+        // Four bytes of `tmp` at `at`, big-endian, as a 32-bit word.
+        return (int) ((((long) emon.Port.cellsAt(tmp, at)) * ((long) 16777216)) + ((long) ((emon.Port.cellsAt(tmp, at + 1) * 65536) + ((emon.Port.cellsAt(tmp, at + 2) * 256) + emon.Port.cellsAt(tmp, at + 3)))));
+    }
+    public static int jtHexBytes(byte[] b, int end, emon.Port.Cells st, emon.Port.Buf abytes) {
+        // The rest of the line as hex pairs, appended to `abytes`; `-` is none. Answers how many bytes.
+        int i = jtSkip(b, end, st);
+        int n = 0;
+        if ((i < end) && (emon.Port.blobU8(b, i) == 45)) {
+            return 0;
+        }
+        while ((i + 1) < end) {
+            emon.Port.bufPush(abytes, (jtHexval(emon.Port.blobU8(b, i)) * 16) + jtHexval(emon.Port.blobU8(b, i + 1)));
+            n += 1;
+            i += 2;
+        }
+        return n;
+    }
+    public static int jtAssets(byte[] b, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, emon.Port.Cells st, emon.Port.Cells tmp) {
+        // Build the asset table a script describes. 0, or the first bad line.
+        int pos = 0;
+        int e = 0;
+        int lineno = 0;
+        int c = 0;
+        int ty = 0;
+        int og = 0;
+        int fr = 0;
+        int ob = 0;
+        int w = 0;
+        int h = 0;
+        int dp = 0;
+        int fl = 0;
+        int start = 0;
+        int n = 0;
+        int id = 0;
+        int i = 0;
+        int p = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int nd = 0;
+        emon.Port.cellsDrop(assets, 0);
+        emon.Port.cellsDrop(uses, 0);
+        emon.Port.cellsDrop(st, 0);
+        emon.Port.cellsPush(st, 0);
+        while (pos < emon.Port.blobLen(b)) {
+            e = jtEol(b, pos);
+            lineno += 1;
+            if ((pos < e) && (emon.Port.blobU8(b, pos) != 35)) {
+                c = emon.Port.blobU8(b, pos);
+                emon.Port.cellsSet(st, 0, pos + 1);
+                if (c == 97) {
+                    ty = jtInt(b, e, st);
+                    og = jtInt(b, e, st);
+                    fr = jtInt(b, e, st);
+                    ob = jtInt(b, e, st);
+                    w = jtInt(b, e, st);
+                    h = jtInt(b, e, st);
+                    dp = jtInt(b, e, st);
+                    fl = jtInt(b, e, st);
+                    start = emon.Port.bufLen(abytes);
+                    n = jtHexBytes(b, e, st, abytes);
+                    id = Model.assetAdd(assets, ty, og, fr, ob, start, n, w, h, dp, fl);
+                    emon.Port.cellsDrop(tmp, 0);
+                    emon.Port.cryptoSha256(emon.Port.bufBlob(abytes), start, n, tmp);
+                    i = 0;
+                    while (i < 8) {
+                        Model.assetSetSha(assets, id, i, jtWord(tmp, i * 4));
+                        i += 1;
+                    }
+                }
+                if (c == 117) {
+                    id = jtInt(b, e, st);
+                    nd = jtInt(b, e, st);
+                    p = jtInt(b, e, st);
+                    x0 = jtInt(b, e, st);
+                    y0 = jtInt(b, e, st);
+                    x1 = jtInt(b, e, st);
+                    y1 = jtInt(b, e, st);
+                    Model.useAdd(assets, uses, id, nd, p, x0, y0, x1, y1);
+                }
+                if ((c != 97) && (c != 117)) {
+                    return lineno;
+                }
+            }
+            pos = e + 1;
+        }
+        return 0;
+    }
 }

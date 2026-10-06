@@ -1,0 +1,1 @@
+arith.jpg is rgb.jpg with the SOF0 marker (FF C0) changed to SOF9 (FF C9): kin only walks its markers

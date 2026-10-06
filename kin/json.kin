@@ -40,7 +40,7 @@
 ;; RECURSION DEPTH is bounded by the Model (`max-depth`), not here: `node-new`
 ;; refuses a deeper node, so a Model that was built cannot overflow a stack.
 (ns emon.json
-  (:require [emon.lang :refer [I32 Cells Text emit-ascii shl32]]
+  (:require [emon.lang :refer [I32 Cells Text emit-ascii shl32 sar32]]
             [emon.port :refer [cells-len cells-at text-cp text-i32]]
             [emon.model :refer [node-count node-kind node-parent node-first-child
                                 node-next node-text-start node-text-len
@@ -89,7 +89,14 @@
                                 fk-encrypted fk-locale fk-ocr fk-detail
                                 fk-author fk-subject fk-keywords fk-creator
                                 fk-producer fk-created fk-modified fk-type
-                                fk-checked fk-subkind fk-conf]]
+                                fk-checked fk-subkind fk-conf
+                                fk-asset fk-noasset fk-assets fk-asset-dpi fk-asset-pixels fk-asset-bytes
+                                fk-assets-bytes fk-asset-signatures fk-origin fk-from fk-object fk-bytes
+                                fk-sha256 fk-uses fk-node
+                                asset-count asset-type asset-origin asset-from asset-object asset-blen asset-sha
+                                asset-w asset-h asset-dpi asset-flags asset-use-head use-node use-page use-x0
+                                use-y0 use-x1 use-y1 use-next amt-emit-name ao-emit-name afm-emit-name
+                                afg-emit-name nz-emit-name]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or bit-and quot rem]]))
 
@@ -403,6 +410,117 @@
   (emit-ascii t "\"")
   (return 1))
 
+;; ------------------------------------------------------------------ assets
+
+(defn ^I32 js-f-noasset [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs ^I32 n ^I32 started]
+  (comment "`noasset`: why a figure or seal has no pixels (SPEC 10.11), an `nz` name.")
+  (let [^I32 a (node-attr nodes attrs n (fk-noasset))]
+    (if (< a 0) (return started))
+    (js-begin t pr d started (fk-noasset))
+    (emit-ascii t "\"")
+    (nz-emit-name t (attr-value attrs a))
+    (emit-ascii t "\"")
+    (return 1)))
+
+(defn ^I32 js-sha-hex [^:mut ^Text t ^Cells assets ^I32 a]
+  (comment "The asset's SHA-256, 64 lower-case hex digits.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 w 0]
+    (while (< i 8)
+      (do (set w (asset-sha assets a i))
+          (set k 0)
+          (while (< k 8)
+            (do (js-hex t (bit-and (sar32 w (- 28 (* k 4))) 15))
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 js-asset [^:mut ^Text t ^I32 pr ^I32 d ^Cells assets ^Cells uses ^I32 a]
+  (comment "One asset (SPEC 10.11): id, name, type, origin, from, object, bytes, sha256, w, h, dpi, flags, uses.")
+  (let [^:mut ^I32 s 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 j 0
+        ^I32 fl (asset-flags assets a)]
+    (emit-ascii t "{")
+    (set s (js-begin t pr d s (fk-id)))
+    (text-i32 t a)
+    (set s (js-begin t pr d s (fk-name)))
+    (emit-ascii t "\"a")
+    (text-i32 t a)
+    (if (== (asset-type assets a) 1) (emit-ascii t ".jpg"))
+    (if (!= (asset-type assets a) 1) (emit-ascii t ".png"))
+    (emit-ascii t "\"")
+    (set s (js-begin t pr d s (fk-type)))
+    (emit-ascii t "\"")
+    (amt-emit-name t (asset-type assets a))
+    (emit-ascii t "\"")
+    (set s (js-begin t pr d s (fk-origin)))
+    (emit-ascii t "\"")
+    (ao-emit-name t (asset-origin assets a))
+    (emit-ascii t "\"")
+    (set s (js-begin t pr d s (fk-from)))
+    (emit-ascii t "\"")
+    (afm-emit-name t (asset-from assets a))
+    (emit-ascii t "\"")
+    (if (>= (asset-object assets a) 0)
+      (do (set s (js-begin t pr d s (fk-object)))
+          (text-i32 t (asset-object assets a))))
+    (set s (js-begin t pr d s (fk-bytes)))
+    (text-i32 t (asset-blen assets a))
+    (set s (js-begin t pr d s (fk-sha256)))
+    (emit-ascii t "\"")
+    (js-sha-hex t assets a)
+    (emit-ascii t "\"")
+    (set s (js-begin t pr d s (fk-w)))
+    (text-i32 t (asset-w assets a))
+    (set s (js-begin t pr d s (fk-h)))
+    (text-i32 t (asset-h assets a))
+    (if (> (asset-dpi assets a) 0)
+      (do (set s (js-begin t pr d s (fk-dpi)))
+          (text-i32 t (asset-dpi assets a))))
+    (if (!= fl 0)
+      (do (set s (js-begin t pr d s (fk-flags)))
+          (emit-ascii t "[")
+          (set b 0)
+          (while (< b 6)
+            (do (if (!= (bit-and fl (shl32 1 b)) 0)
+                  (do (js-fsep t pr k)
+                      (emit-ascii t "\"")
+                      (afg-emit-name t (shl32 1 b))
+                      (emit-ascii t "\"")
+                      (set k (+ k 1))))
+                (set b (+ b 1))))
+          (emit-ascii t "]")))
+    (set s (js-begin t pr d s (fk-uses)))
+    (emit-ascii t "[")
+    (set u (asset-use-head assets a))
+    (while (>= u 0)
+      (do (js-aelem t pr (+ d 1) j)
+          (emit-ascii t "{")
+          (js-begin t pr (+ d 2) 0 (fk-node))
+          (text-i32 t (use-node uses u))
+          (js-begin t pr (+ d 2) 1 (fk-at))
+          (emit-ascii t "[")
+          (text-i32 t (use-page uses u))
+          (js-fsep t pr 1)
+          (js-cpt t (use-x0 uses u))
+          (js-fsep t pr 1)
+          (js-cpt t (use-y0 uses u))
+          (js-fsep t pr 1)
+          (js-cpt t (use-x1 uses u))
+          (js-fsep t pr 1)
+          (js-cpt t (use-y1 uses u))
+          (emit-ascii t "]")
+          (js-close t pr (+ d 2) 1)
+          (set j (+ j 1))
+          (set u (use-next uses u))))
+    (js-aend t pr (+ d 1) j)
+    (js-close t pr d s)
+    (return 0)))
+
 ;; ------------------------------------------------------- kind-specific
 
 (defn ^I32 js-kfields [^:mut ^Text t ^I32 pr ^I32 d ^Cells nodes ^Cells attrs
@@ -460,12 +578,16 @@
       (do (set s (js-e-figure t pr d s sub))
           (set s (js-ftext t pr d nodes attrs text n (fk-label) s))
           (set s (js-ftext t pr d nodes attrs text n (fk-alt) s))
-          (set s (js-farr-text t pr d nodes attrs text n (fk-labels) s))))
+          (set s (js-farr-text t pr d nodes attrs text n (fk-labels) s))
+          (set s (js-fint t pr d nodes attrs n (fk-asset) s))
+          (set s (js-f-noasset t pr d nodes attrs n s))))
     (if (== kind (nk-seal))
       (do (set s (js-e-seal t pr d s sub))
           (set s (js-ftext t pr d nodes attrs text n (fk-name) s))
           (set s (js-ftext t pr d nodes attrs text n (fk-date) s))
-          (set s (js-ftext t pr d nodes attrs text n (fk-color) s))))
+          (set s (js-ftext t pr d nodes attrs text n (fk-color) s))
+          (set s (js-fint t pr d nodes attrs n (fk-asset) s))
+          (set s (js-f-noasset t pr d nodes attrs n s))))
     (if (== kind (nk-formula))
       (set s (js-e-display t pr d s sub)))
     (if (== kind (nk-note))
@@ -809,6 +931,13 @@
     (if (>= a 0) (js-str t text (attr-value attrs a) (attr-len attrs a)))
     (set s (js-ftext t pr 1 nodes attrs text 0 (fk-ocr) s))
     (set s (js-ftext t pr 1 nodes attrs text 0 (fk-detail) s))
+    (comment "the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was")
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-assets) s))
+    (set s (js-fint t pr 1 nodes attrs 0 (fk-asset-dpi) s))
+    (set s (js-fint t pr 1 nodes attrs 0 (fk-asset-pixels) s))
+    (set s (js-fint t pr 1 nodes attrs 0 (fk-asset-bytes) s))
+    (set s (js-fint t pr 1 nodes attrs 0 (fk-assets-bytes) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-asset-signatures) s))
     (js-close t pr 1 s)
     (return 0)))
 
@@ -826,11 +955,12 @@
     (js-close t pr 1 s)
     (return 0)))
 
+
 ;; ------------------------------------------------------------- the whole
 
 (defn ^:pub ^I32 js-emit [^:mut ^Text t ^I32 pretty ^Cells nodes ^Cells attrs
                           ^Cells regions ^Cells text ^Cells pages ^Cells ledger
-                          ^Cells layout]
+                          ^Cells layout ^Cells assets ^Cells uses]
   (comment "Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1")
   (comment "for the indented form, 0 for the compact one. The root (node 0)")
   (comment "must be a document: run `model-check` first on a Model of unknown")
@@ -894,5 +1024,15 @@
           (js-dropped t pretty 2 ledger text i)
           (set i (+ i 1))))
     (js-aend t pretty 1 nl)
+    (comment "the asset table, after `dropped`, only when the `assets` setting is on (then always, `[]` when empty: SPEC 4.2)")
+    (if (== (js-has nodes attrs (fk-assets)) 1)
+      (do (set s (js-begin t pretty 0 s (fk-assets)))
+          (emit-ascii t "[")
+          (set i 0)
+          (while (< i (asset-count assets))
+            (do (js-aelem t pretty 1 i)
+                (js-asset t pretty 2 assets uses i)
+                (set i (+ i 1))))
+          (js-aend t pretty 1 (asset-count assets))))
     (js-close t pretty 0 s)
     (return 0)))

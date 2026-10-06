@@ -429,6 +429,54 @@ pub fn fk_col() -> i32 {
 pub fn fk_box() -> i32 {
     return 81;
 }
+pub fn fk_asset() -> i32 {
+    return 82;
+}
+pub fn fk_noasset() -> i32 {
+    return 83;
+}
+pub fn fk_assets() -> i32 {
+    return 84;
+}
+pub fn fk_asset_dpi() -> i32 {
+    return 85;
+}
+pub fn fk_asset_pixels() -> i32 {
+    return 86;
+}
+pub fn fk_asset_bytes() -> i32 {
+    return 87;
+}
+pub fn fk_assets_bytes() -> i32 {
+    return 88;
+}
+pub fn fk_asset_signatures() -> i32 {
+    return 89;
+}
+pub fn fk_image() -> i32 {
+    return 90;
+}
+pub fn fk_origin() -> i32 {
+    return 91;
+}
+pub fn fk_from() -> i32 {
+    return 92;
+}
+pub fn fk_object() -> i32 {
+    return 93;
+}
+pub fn fk_bytes() -> i32 {
+    return 94;
+}
+pub fn fk_sha256() -> i32 {
+    return 95;
+}
+pub fn fk_uses() -> i32 {
+    return 96;
+}
+pub fn fk_node() -> i32 {
+    return 97;
+}
 pub fn fk_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "id");
@@ -752,6 +800,70 @@ pub fn fk_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 81 {
         crate::port::text_ascii(t, "box");
+        return 1;
+    }
+    if code == 82 {
+        crate::port::text_ascii(t, "asset");
+        return 1;
+    }
+    if code == 83 {
+        crate::port::text_ascii(t, "noasset");
+        return 1;
+    }
+    if code == 84 {
+        crate::port::text_ascii(t, "assets");
+        return 1;
+    }
+    if code == 85 {
+        crate::port::text_ascii(t, "asset-dpi");
+        return 1;
+    }
+    if code == 86 {
+        crate::port::text_ascii(t, "asset-pixels");
+        return 1;
+    }
+    if code == 87 {
+        crate::port::text_ascii(t, "asset-bytes");
+        return 1;
+    }
+    if code == 88 {
+        crate::port::text_ascii(t, "assets-bytes");
+        return 1;
+    }
+    if code == 89 {
+        crate::port::text_ascii(t, "asset-signatures");
+        return 1;
+    }
+    if code == 90 {
+        crate::port::text_ascii(t, "image");
+        return 1;
+    }
+    if code == 91 {
+        crate::port::text_ascii(t, "origin");
+        return 1;
+    }
+    if code == 92 {
+        crate::port::text_ascii(t, "from");
+        return 1;
+    }
+    if code == 93 {
+        crate::port::text_ascii(t, "object");
+        return 1;
+    }
+    if code == 94 {
+        crate::port::text_ascii(t, "bytes");
+        return 1;
+    }
+    if code == 95 {
+        crate::port::text_ascii(t, "sha256");
+        return 1;
+    }
+    if code == 96 {
+        crate::port::text_ascii(t, "uses");
+        return 1;
+    }
+    if code == 97 {
+        crate::port::text_ascii(t, "node");
         return 1;
     }
     return 0;
@@ -1303,6 +1415,252 @@ pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     return 0;
 }
+pub fn ao_embedded() -> i32 {
+    return 1;
+}
+pub fn ao_decoded() -> i32 {
+    return 2;
+}
+pub fn ao_cropped() -> i32 {
+    return 3;
+}
+pub fn ao_rendered() -> i32 {
+    return 4;
+}
+pub fn ao_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "embedded");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "decoded");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "cropped");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "rendered");
+        return 1;
+    }
+    return 0;
+}
+pub fn afm_dct() -> i32 {
+    return 1;
+}
+pub fn afm_jpx() -> i32 {
+    return 2;
+}
+pub fn afm_jbig2() -> i32 {
+    return 3;
+}
+pub fn afm_ccitt() -> i32 {
+    return 4;
+}
+pub fn afm_flate() -> i32 {
+    return 5;
+}
+pub fn afm_lzw() -> i32 {
+    return 6;
+}
+pub fn afm_runlength() -> i32 {
+    return 7;
+}
+pub fn afm_raw() -> i32 {
+    return 8;
+}
+pub fn afm_png() -> i32 {
+    return 9;
+}
+pub fn afm_jpeg() -> i32 {
+    return 10;
+}
+pub fn afm_tiff() -> i32 {
+    return 11;
+}
+pub fn afm_render() -> i32 {
+    return 12;
+}
+pub fn afm_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "dct");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "jpx");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "jbig2");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "ccitt");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "flate");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "lzw");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "runlength");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "raw");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "png");
+        return 1;
+    }
+    if code == 10 {
+        crate::port::text_ascii(t, "jpeg");
+        return 1;
+    }
+    if code == 11 {
+        crate::port::text_ascii(t, "tiff");
+        return 1;
+    }
+    if code == 12 {
+        crate::port::text_ascii(t, "render");
+        return 1;
+    }
+    return 0;
+}
+pub fn amt_jpeg() -> i32 {
+    return 1;
+}
+pub fn amt_png() -> i32 {
+    return 2;
+}
+pub fn amt_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "image/jpeg");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "image/png");
+        return 1;
+    }
+    return 0;
+}
+pub fn afg_overlaid() -> i32 {
+    return 1;
+}
+pub fn afg_clip_bbox() -> i32 {
+    return 2;
+}
+pub fn afg_transformed() -> i32 {
+    return 4;
+}
+pub fn afg_icc() -> i32 {
+    return 8;
+}
+pub fn afg_scaled() -> i32 {
+    return 16;
+}
+pub fn afg_text_overlap() -> i32 {
+    return 32;
+}
+pub fn afg_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "overlaid");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "clip-bbox");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "transformed");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "icc");
+        return 1;
+    }
+    if code == 16 {
+        crate::port::text_ascii(t, "scaled");
+        return 1;
+    }
+    if code == 32 {
+        crate::port::text_ascii(t, "text-overlap");
+        return 1;
+    }
+    return 0;
+}
+pub fn nz_withheld() -> i32 {
+    return 1;
+}
+pub fn nz_part() -> i32 {
+    return 2;
+}
+pub fn nz_vector() -> i32 {
+    return 3;
+}
+pub fn nz_composite() -> i32 {
+    return 4;
+}
+pub fn nz_colorspace() -> i32 {
+    return 5;
+}
+pub fn nz_codec() -> i32 {
+    return 6;
+}
+pub fn nz_render() -> i32 {
+    return 7;
+}
+pub fn nz_too_large() -> i32 {
+    return 8;
+}
+pub fn nz_budget() -> i32 {
+    return 9;
+}
+pub fn nz_emit_name(mut t: &mut String, code: i32) -> i32 {
+    if code == 1 {
+        crate::port::text_ascii(t, "withheld");
+        return 1;
+    }
+    if code == 2 {
+        crate::port::text_ascii(t, "part");
+        return 1;
+    }
+    if code == 3 {
+        crate::port::text_ascii(t, "vector");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "composite");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "colorspace");
+        return 1;
+    }
+    if code == 6 {
+        crate::port::text_ascii(t, "codec");
+        return 1;
+    }
+    if code == 7 {
+        crate::port::text_ascii(t, "render");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "too-large");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "budget");
+        return 1;
+    }
+    return 0;
+}
 pub fn mc_ok() -> i32 {
     return 0;
 }
@@ -1344,6 +1702,9 @@ pub fn mc_bad_ledger() -> i32 {
 }
 pub fn mc_bad_layout() -> i32 {
     return 13;
+}
+pub fn mc_bad_asset() -> i32 {
+    return 14;
 }
 pub fn mc_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
@@ -1402,6 +1763,10 @@ pub fn mc_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "bad-layout");
         return 1;
     }
+    if code == 14 {
+        crate::port::text_ascii(t, "bad-asset");
+        return 1;
+    }
     return 0;
 }
 pub fn av_int() -> i32 {
@@ -1432,6 +1797,12 @@ pub fn ledger_stride() -> i32 {
     return 10;
 }
 pub fn layout_stride() -> i32 {
+    return 8;
+}
+pub fn assets_stride() -> i32 {
+    return 24;
+}
+pub fn uses_stride() -> i32 {
     return 8;
 }
 pub fn max_depth() -> i32 {
@@ -2455,4 +2826,265 @@ pub fn model_hash(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells
     h = mh_fold(h, ledger);
     h = mh_fold(h, layout);
     return h;
+}
+pub(crate) fn xget(assets: &mut crate::port::Cells, a: i32, f: i32) -> i32 {
+    return crate::port::cells_at(assets, (a * 24) + f);
+}
+pub(crate) fn xset(mut assets: &mut crate::port::Cells, a: i32, f: i32, v: i32) -> i32 {
+    crate::port::cells_set(assets, (a * 24) + f, v);
+    return 0;
+}
+pub fn asset_add(mut assets: &mut crate::port::Cells, mtype: i32, origin: i32, afrom: i32, object: i32, bstart: i32, blen: i32, w: i32, h: i32, dpi: i32, flags: i32) -> i32 {
+    // Append an asset (no uses yet, the hash zero) and answer its id. `object` is -1 for none, `dpi` 0.
+    let id: i32 = crate::port::cells_len(assets) / 24;
+    let mut i: i32 = 0;
+    crate::port::cells_push(assets, mtype);
+    crate::port::cells_push(assets, origin);
+    crate::port::cells_push(assets, afrom);
+    crate::port::cells_push(assets, object);
+    crate::port::cells_push(assets, bstart);
+    crate::port::cells_push(assets, blen);
+    while i < 8 {
+        crate::port::cells_push(assets, 0);
+        i += 1;
+    }
+    crate::port::cells_push(assets, w);
+    crate::port::cells_push(assets, h);
+    crate::port::cells_push(assets, dpi);
+    crate::port::cells_push(assets, flags);
+    crate::port::cells_push(assets, -1);
+    crate::port::cells_push(assets, 0);
+    crate::port::cells_push(assets, -1);
+    crate::port::cells_push(assets, 0);
+    crate::port::cells_push(assets, 0);
+    crate::port::cells_push(assets, 0);
+    return id;
+}
+pub fn asset_set_sha(mut assets: &mut crate::port::Cells, a: i32, i: i32, v: i32) -> i32 {
+    // Word i (0..7) of asset a's SHA-256.
+    return xset(assets, a, 6 + i, v);
+}
+pub fn asset_set_flags(mut assets: &mut crate::port::Cells, a: i32, v: i32) -> i32 {
+    return xset(assets, a, 17, v);
+}
+pub fn use_add(mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, a: i32, node: i32, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // Append a use of asset a by `node`, at the page region given, to the END of the asset's chain; answers its index.
+    let u: i32 = crate::port::cells_len(uses) / 8;
+    let tail: i32 = xget(assets, a, 20);
+    let cnt: i32 = xget(assets, a, 19);
+    crate::port::cells_push(uses, a);
+    crate::port::cells_push(uses, node);
+    crate::port::cells_push(uses, page);
+    crate::port::cells_push(uses, x0);
+    crate::port::cells_push(uses, y0);
+    crate::port::cells_push(uses, x1);
+    crate::port::cells_push(uses, y1);
+    crate::port::cells_push(uses, -1);
+    if tail < 0 {
+        xset(assets, a, 18, u);
+    } else {
+        crate::port::cells_set(uses, (tail * 8) + 7, u);
+    }
+    xset(assets, a, 20, u);
+    xset(assets, a, 19, cnt + 1);
+    return u;
+}
+pub fn asset_count(assets: &mut crate::port::Cells) -> i32 {
+    return crate::port::cells_len(assets) / 24;
+}
+pub fn asset_type(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 0);
+}
+pub fn asset_origin(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 1);
+}
+pub fn asset_from(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 2);
+}
+pub fn asset_object(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 3);
+}
+pub fn asset_bstart(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 4);
+}
+pub fn asset_blen(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 5);
+}
+pub fn asset_sha(assets: &mut crate::port::Cells, a: i32, i: i32) -> i32 {
+    return xget(assets, a, 6 + i);
+}
+pub fn asset_w(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 14);
+}
+pub fn asset_h(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 15);
+}
+pub fn asset_dpi(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 16);
+}
+pub fn asset_flags(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 17);
+}
+pub fn asset_use_head(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 18);
+}
+pub fn asset_use_count(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    return xget(assets, a, 19);
+}
+pub(crate) fn uget(uses: &mut crate::port::Cells, u: i32, f: i32) -> i32 {
+    return crate::port::cells_at(uses, (u * 8) + f);
+}
+pub fn use_count(uses: &mut crate::port::Cells) -> i32 {
+    return crate::port::cells_len(uses) / 8;
+}
+pub fn use_asset(uses: &mut crate::port::Cells, u: i32) -> i32 {
+    return uget(uses, u, 0);
+}
+pub fn use_node(uses: &mut crate::port::Cells, u: i32) -> i32 {
+    return uget(uses, u, 1);
+}
+pub fn use_page(uses: &mut crate::port::Cells, u: i32) -> i32 {
+    return uget(uses, u, 2);
+}
+pub fn use_x0(uses: &mut crate::port::Cells, u: i32) -> i32 {
+    return uget(uses, u, 3);
+}
+pub fn use_y0(uses: &mut crate::port::Cells, u: i32) -> i32 {
+    return uget(uses, u, 4);
+}
+pub fn use_x1(uses: &mut crate::port::Cells, u: i32) -> i32 {
+    return uget(uses, u, 5);
+}
+pub fn use_y1(uses: &mut crate::port::Cells, u: i32) -> i32 {
+    return uget(uses, u, 6);
+}
+pub fn use_next(uses: &mut crate::port::Cells, u: i32) -> i32 {
+    return uget(uses, u, 7);
+}
+pub fn asset_ext_is_jpg(assets: &mut crate::port::Cells, a: i32) -> i32 {
+    if xget(assets, a, 0) == 1 {
+        return 1;
+    }
+    return 0;
+}
+pub fn asset_find(assets: &mut crate::port::Cells, blen: i32, s0: i32, s1: i32, s2: i32, s3: i32, s4: i32, s5: i32, s6: i32, s7: i32) -> i32 {
+    // The first asset whose encoded bytes are `blen` long with this SHA-256, or -1 (admission's dedup).
+    let n: i32 = crate::port::cells_len(assets) / 24;
+    let mut a: i32 = 0;
+    while a < n {
+        if (xget(assets, a, 5) == blen) && ((xget(assets, a, 6) == s0) && (xget(assets, a, 7) == s1) && ((xget(assets, a, 8) == s2) && (xget(assets, a, 9) == s3) && ((xget(assets, a, 10) == s4) && (xget(assets, a, 11) == s5) && ((xget(assets, a, 12) == s6) && (xget(assets, a, 13) == s7))))) {
+            return a;
+        }
+        a += 1;
+    }
+    return -1;
+}
+pub fn model_check_assets(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells, abytes: &mut crate::port::Buf, mut st: &mut crate::port::Cells) -> i32 {
+    // Are the asset table, its uses and the nodes' `asset`/`noasset` well formed? 0, or `mc-bad-asset` (the index in
+    // `st[0]`: the asset, the use or the node). Run it after `model-check` when `assets` is on.
+    let na: i32 = crate::port::cells_len(assets) / 24;
+    let nu: i32 = crate::port::cells_len(uses) / 8;
+    let nn: i32 = crate::port::cells_len(nodes) / 16;
+    let bl: i32 = crate::port::buf_len(abytes);
+    let mut i: i32 = 0;
+    let mut u: i32 = 0;
+    let mut k: i32 = 0;
+    let mut a: i32 = 0;
+    let mut v: i32 = 0;
+    let mut total: i32 = 0;
+    crate::port::cells_drop(st, 0);
+    crate::port::cells_push(st, 0);
+    if (crate::port::cells_len(assets) % 24) != 0 {
+        return mc_fail(st, mc_bad_asset(), 0);
+    }
+    if (crate::port::cells_len(uses) % 8) != 0 {
+        return mc_fail(st, mc_bad_asset(), 0);
+    }
+    while i < na {
+        if (xget(assets, i, 0) < 1) || (xget(assets, i, 0) > 2) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        if (xget(assets, i, 1) < 1) || (xget(assets, i, 1) > 4) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        if (xget(assets, i, 2) < 1) || (xget(assets, i, 2) > 12) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        if (xget(assets, i, 4) < 0) || (xget(assets, i, 5) < 0) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        if xget(assets, i, 4) > bl {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        if xget(assets, i, 5) > (bl - xget(assets, i, 4)) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        if (xget(assets, i, 14) < 0) || (xget(assets, i, 15) < 0) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        if (xget(assets, i, 17) < 0) || (xget(assets, i, 17) > 63) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        u = xget(assets, i, 18);
+        k = 0;
+        while u >= 0 {
+            if u >= nu {
+                return mc_fail(st, mc_bad_asset(), i);
+            }
+            if k > nu {
+                return mc_fail(st, mc_bad_asset(), i);
+            }
+            if uget(uses, u, 0) != i {
+                return mc_fail(st, mc_bad_asset(), i);
+            }
+            if (uget(uses, u, 1) < 0) || (uget(uses, u, 1) >= nn) {
+                return mc_fail(st, mc_bad_asset(), u);
+            }
+            if mc_link_ok(uget(uses, u, 7), nu) == 0 {
+                return mc_fail(st, mc_bad_asset(), u);
+            }
+            k += 1;
+            u = uget(uses, u, 7);
+        }
+        if k != xget(assets, i, 19) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        total += k;
+        i += 1;
+    }
+    if total != nu {
+        return mc_fail(st, mc_bad_asset(), 0);
+    }
+    i = 0;
+    while i < nn {
+        a = attr_find(attrs, nget(nodes, i, 6), fk_asset());
+        v = attr_find(attrs, nget(nodes, i, 6), fk_noasset());
+        if (a >= 0) && (v >= 0) {
+            return mc_fail(st, mc_bad_asset(), i);
+        }
+        if a >= 0 {
+            if (aget(attrs, a, 2) < 0) || (aget(attrs, a, 2) >= na) {
+                return mc_fail(st, mc_bad_asset(), i);
+            }
+        }
+        if v >= 0 {
+            if (aget(attrs, v, 2) < 1) || (aget(attrs, v, 2) > 9) {
+                return mc_fail(st, mc_bad_asset(), i);
+            }
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub fn model_hash_assets(h: i64, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells, abytes: &mut crate::port::Buf) -> i64 {
+    // Fold the asset table, its uses and the bytes into a `model-hash` value `h` (FNV-1a, as `model-hash`).
+    let mut acc: i64 = mh_fold(h, assets);
+    let mut i: i32 = 0;
+    let bl: i32 = crate::port::buf_len(abytes);
+    acc = mh_fold(acc, uses);
+    while i < bl {
+        acc = (acc ^ (crate::port::buf_at(abytes, i) as i64)).wrapping_mul(1099511628211);
+        i += 1;
+    }
+    return (acc ^ (bl as i64)).wrapping_mul(1099511628211);
 }
