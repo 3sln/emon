@@ -9,9 +9,18 @@
 ;; A page unit is re-run from scratch on every round, like every unit (SPEC 7.3), so it WRITES NOTHING until the round in
 ;; which every answer it asked for is in: a call that asks leaves the arenas as it found them.
 ;;
-;; THE PAGE'S LAYER. Until fusion (P7.3) a page's words and lines are the document's `words`/`lines` rows of that page, in
-;; the text layer's own layouts; a scanned page's OCR lines are appended to them by `sc-page` (D213). Stage 3 is handed the
-;; same arenas as before, so a run whose engines answer `unsupported` gives every gate the Model it always gave (D195 (3)).
+;; THE PAGE'S LAYER. A page's words and lines are the document's `words`/`lines` rows of that page, in the text layer's own
+;; layouts (the flow `fw`/`fl` of P7.0 is their copy); a scanned page's OCR lines are appended to them by `sc-page` (D213). Stage 3
+;; is handed the same arenas as before, so a run whose engines answer `unsupported` gives every gate the Model it always gave
+;; (D195 (3)).
+;;
+;; FUSION (P7.3). A BORN-DIGITAL page is not OCR'd (D201, D212 (3)): P7.S flips that policy. Until it does, the hidden test setting
+;; `fuse` (the Engines' `ocr_born_digital`, which the replay gate and `bb fusion` set) makes the unit ask what P7.S will ask under
+;; `always`: the page's two rasters (`pu-ask-rasters`, one round), then the OCR of the one with its text (a second round); and, when
+;; both answers are in and ok, it writes the OCR's evidence (`sc-answer`) and aligns the page (`xa-page`: its correspondence groups
+;; in `cg`/`refs`) and scores it (`hl-page`). WHICH SOURCE WINS is not decided here: arbitration needs the document's verdict on every
+;; font (`hl-doc`: an encoding is a document fact), so `emon.arbiter` runs in the document unit (D285). A page whose renders or OCR
+;; came back `unsupported` or failed is left as the text layer made it, which is what a run with no engine gives, byte for byte.
 ;;
 ;; IDS are `emon.plan`'s `pu-id` (D207).
 (ns emon.pageunit
@@ -20,9 +29,11 @@
             [emon.pdfsrc :refer [ps-missed]]
             [emon.plan :refer [rq-decode rq-render an-find an-ok an-arg flt-dct us-requests us-done
                                pu-id pi-render-text pi-render-no-text pi-decode pi-ocr lay-full lay-no-text]]
-            [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj]]
+            [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj vw-new vk-render]]
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
-            [emon.scan :refer [sc-eligible sc-dct-span sc-request sc-page sc-lang]]
+            [emon.scan :refer [sc-eligible sc-dct-span sc-request sc-page sc-lang sc-answer]]
+            [emon.xalign :refer [xa-page]]
+            [emon.health :refer [hl-page-fw]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -122,20 +133,60 @@
           (return (us-requests)))))
   (return (us-done)))
 
+;; FUSION: a born-digital page's rasters, the OCR of the one with its text, and its alignment and health. Answers `us-requests` when it asked,
+;; else `us-done`; writes only in the round in which both answers are in and ok (see the head of this file).
+(defn ^I32 pu-run-born [^I32 i ^I32 input ^I32 policy ^Cells ans ^:mut ^Cells rq ^Cells loc
+                        ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
+                        ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                        ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                        ^Cells fw ^:mut ^Cells hl ^:mut ^Cells refs ^:mut ^Cells cg ^:mut ^Cells tlines
+                        ^:mut ^Cells xscr ^:mut ^Cells xgp ^:mut ^Cells xdp ^:mut ^Cells xta ^:mut ^Cells xtb ^:mut ^Cells xtt]
+  (if (== (pu-ask-rasters i input policy ans rq) (us-requests)) (return (us-requests)))
+  (if (!= policy 2) (return (us-done)))
+  (let [^I32 rid (pu-id i (pi-render-text))
+        ^I32 oid (pu-id i (pi-ocr))
+        ^I32 ar (an-find ans rid)
+        ^:mut ^I32 ao -1
+        ^:mut ^I32 view 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 dpi 0]
+    (if (< ar 0) (return (us-done)))
+    (if (!= (an-ok ans ar) 1) (return (us-done)))
+    (set ao (an-find ans oid))
+    (if (< ao 0)
+      (do (sc-request rq oid rid (pu-dpi) loc)
+          (return (us-requests))))
+    (if (!= (an-ok ans ao) 1) (return (us-done)))
+    (set w (an-arg ans ar 0))
+    (set h (an-arg ans ar 1))
+    (set dpi (an-arg ans ar 3))
+    (set view (vw-new views (+ i 1) (vk-render) rid -1 w h (* dpi 100) (lay-full) -1 0 0 0 0 0))
+    (sc-answer ans ao (+ i 1) view oid (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats)
+    (xa-page (+ i 1) epages fw owords tlines feats etext refs cg xscr xgp xdp xta xtb xtt)
+    (hl-page-fw (+ i 1) cg refs fw etext feats oblocks olines owords hl)
+    (return (us-done))))
+
 (defn ^:pub ^I32 pu-run-pdf [^I32 i ^I32 input ^I32 policy ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc
                              ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
                              ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
                              ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                              ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
-                             ^:mut ^Cells words ^:mut ^Cells lines]
+                             ^:mut ^Cells words ^:mut ^Cells lines
+                             ^I32 fuse ^Cells fw ^:mut ^Cells hl ^:mut ^Cells refs ^:mut ^Cells cg ^:mut ^Cells tlines
+                             ^:mut ^Cells xscr ^:mut ^Cells xgp ^:mut ^Cells xdp ^:mut ^Cells xta ^:mut ^Cells xtb ^:mut ^Cells xtt]
   (comment "The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR")
   (comment "of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`")
   (comment "and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`")
   (comment "when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).")
   (if (== policy 0) (return (us-done)))
-  (comment "A BORN-DIGITAL page asks for NOTHING here (D251, revised by the coordinator): its two rasters are lazy, asked by")
-  (comment "`pu-ask-rasters` when a stage that reads pixels exists (P7.1, P7.3); and nothing is OCR'd on it (D201, D212 (3)).")
-  (if (== (pu-kind pl i) (pk-born)) (return (us-done)))
+  (comment "A BORN-DIGITAL page asks for NOTHING here unless `fuse` (D251, revised by the coordinator): its two rasters are lazy, asked")
+  (comment "by `pu-ask-rasters` when a stage that reads pixels runs, and nothing is OCR'd on it (D201, D212 (3)) until P7.S; `fuse` is the")
+  (comment "hidden test setting that asks what P7.S will (see the head of this file).")
+  (if (== (pu-kind pl i) (pk-born))
+    (do (if (== fuse 0) (return (us-done)))
+        (return (pu-run-born i input policy ans rq loc epages views etext feats oruns oblocks olines owords osyms oalts
+                             fw hl refs cg tlines xscr xgp xdp xta xtb xtt))))
   (if (!= (pu-kind pl i) (pk-scan)) (return (us-done)))
   (let [^I32 did (pu-id i (pi-decode))
         ^I32 oid (pu-id i (pi-ocr))

@@ -22,8 +22,12 @@ pub(crate) fn plan_of(pl: &mut crate::port::Cells, pages: i32, kind: i32) -> i32
     }
     return 0;
 }
+pub(crate) fn run_page_fused(i: i32, policy: i32, fuse: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells) -> i32 {
+    // A page unit with the fusion arguments (P7.3): `fuse` the hidden setting.
+    return pu_run_pdf(i, 3, policy, pl, ans, rq, &mut crate::port::Cells::new(), &crate::port::BitmapSet::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), fuse, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+}
 pub(crate) fn run_page(i: i32, policy: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells) -> i32 {
-    return pu_run_pdf(i, 3, policy, pl, ans, rq, &mut crate::port::Cells::new(), &crate::port::BitmapSet::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    return run_page_fused(i, policy, 0, pl, ans, rq);
 }
 #[test]
 fn test_ids_are_per_page_unit() {
@@ -99,6 +103,33 @@ fn test_a_born_digital_page_asks_for_nothing_until_a_consumer_asks_for_its_raste
     plan_of(plan3, 1, pk_none());
     crate::testport::assert_eq(run_page(0, 2, plan3, &mut crate::port::Cells::new(), rq3), us_done(), "no image: done");
     crate::testport::assert_eq(crate::port::cells_len(rq3), 0, "no request");
+}
+#[test]
+fn test_a_born_digital_page_asks_what_fusion_needs_only_under_the_hidden_setting() {
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    plan_of(pl, 2, pk_born());
+    crate::testport::assert_eq(run_page_fused(1, 2, 1, pl, ans, rq), us_requests(), "fuse, always: it asks");
+    crate::testport::assert_eq(crate::port::cells_len(rq), 14, "the two renders, in one round");
+    crate::testport::assert_eq(rec_id(rq, 0), 513, "with its text");
+    crate::testport::assert_eq(rec_id(rq, 7), 514, "and without it");
+    // the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's
+    an_fail(ans, pk_render(), 513, ps_unsupported());
+    an_fail(ans, pk_render(), 514, ps_unsupported());
+    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(run_page_fused(1, 2, 1, pl, ans, rq2), us_done(), "no render, no OCR, done");
+    crate::testport::assert_eq(crate::port::cells_len(rq2), 0, "nothing asked");
+    let pl3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    plan_of(pl3, 1, pk_born());
+    crate::testport::assert_eq(run_page_fused(0, 1, 1, pl3, &mut crate::port::Cells::new(), rq3), us_done(), "fuse under `auto`: only `always` asks");
+    crate::testport::assert_eq(crate::port::cells_len(rq3), 0, "nothing asked");
+    let pl4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    plan_of(pl4, 1, pk_born());
+    crate::testport::assert_eq(run_page_fused(0, 2, 0, pl4, &mut crate::port::Cells::new(), rq4), us_done(), "without the setting: lazy, nothing asked");
+    crate::testport::assert_eq(crate::port::cells_len(rq4), 0, "nothing asked");
 }
 #[test]
 fn test_the_bitmap_set_keeps_what_kin_makes() {

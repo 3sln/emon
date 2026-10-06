@@ -5,11 +5,13 @@ package pageunit
 
 import (
 	"emon/evidence"
+	"emon/health"
 	"emon/pdfdoc"
 	"emon/pdfsrc"
 	"emon/plan"
 	"emon/port"
 	"emon/scan"
+	"emon/xalign"
 )
 
 func PuDpi() int32 {
@@ -139,7 +141,46 @@ func PuAskRasters(i int32, input int32, policy int32, ans *port.Cells, rq *port.
 	return plan.UsDone()
 }
 
-func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells) int32 {
+func puRunBorn(i int32, input int32, policy int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, fw *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells) int32 {
+	if PuAskRasters(i, input, policy, ans, rq) == plan.UsRequests() {
+		return plan.UsRequests()
+	}
+	if policy != 2 {
+		return plan.UsDone()
+	}
+	var rid int32 = plan.PuId(i, plan.PiRenderText())
+	var oid int32 = plan.PuId(i, plan.PiOcr())
+	var ar int32 = plan.AnFind(ans, rid)
+	var ao int32 = -1
+	var view int32 = 0
+	var w int32 = 0
+	var h int32 = 0
+	var dpi int32 = 0
+	if ar < 0 {
+		return plan.UsDone()
+	}
+	if plan.AnOk(ans, ar) != 1 {
+		return plan.UsDone()
+	}
+	ao = plan.AnFind(ans, oid)
+	if ao < 0 {
+		scan.ScRequest(rq, oid, rid, PuDpi(), loc)
+		return plan.UsRequests()
+	}
+	if plan.AnOk(ans, ao) != 1 {
+		return plan.UsDone()
+	}
+	w = plan.AnArg(ans, ar, 0)
+	h = plan.AnArg(ans, ar, 1)
+	dpi = plan.AnArg(ans, ar, 3)
+	view = evidence.VwNew(views, i+1, evidence.VkRender(), rid, -1, w, h, dpi*100, plan.LayFull(), -1, 0, 0, 0, 0, 0)
+	scan.ScAnswer(ans, ao, i+1, view, oid, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	xalign.XaPage(i+1, epages, fw, owords, tlines, feats, etext, refs, cg, xscr, xgp, xdp, xta, xtb, xtt)
+	health.HlPageFw(i+1, cg, refs, fw, etext, feats, oblocks, olines, owords, hl)
+	return plan.UsDone()
+}
+
+func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, fuse int32, fw *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells) int32 {
 	// The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
 	// of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`
 	// and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`
@@ -147,10 +188,14 @@ func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cell
 	if policy == 0 {
 		return plan.UsDone()
 	}
-	// A BORN-DIGITAL page asks for NOTHING here (D251, revised by the coordinator): its two rasters are lazy, asked by
-	// `pu-ask-rasters` when a stage that reads pixels exists (P7.1, P7.3); and nothing is OCR'd on it (D201, D212 (3)).
+	// A BORN-DIGITAL page asks for NOTHING here unless `fuse` (D251, revised by the coordinator): its two rasters are lazy, asked
+	// by `pu-ask-rasters` when a stage that reads pixels runs, and nothing is OCR'd on it (D201, D212 (3)) until P7.S; `fuse` is the
+	// hidden test setting that asks what P7.S will (see the head of this file).
 	if PuKind(pl, i) == PkBorn() {
-		return plan.UsDone()
+		if fuse == 0 {
+			return plan.UsDone()
+		}
+		return puRunBorn(i, input, policy, ans, rq, loc, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt)
 	}
 	if PuKind(pl, i) != PkScan() {
 		return plan.UsDone()

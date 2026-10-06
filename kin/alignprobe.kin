@@ -1,0 +1,209 @@
+;; THE ALIGNMENT PROBE UNIT (P7.1; SPEC 9.2; D278-D280): the text layer of a PDF aligned with what a real renderer and a real OCR engine
+;; made of its pages, in miniature, with no Engine around it.
+;;
+;;   document pass   `pd-open`, `pc-document`, `th-run`: the text layer's evidence, its stage-1 features (so `xt-vis`), `epages`
+;;   round 1         one `render` a page: id `pu-id page pi-render-text`, input 0, 300 dpi, WITH its text (D199)
+;;   round 2         one `ocr` a page, of that render's bitmap (`sc-request`: psm 3, symbols, orientation)
+;;   then            per page: a `views` row for the render, the OCR answer as evidence (`sc-answer`, the OCR arenas and the
+;;                   words' feature rows), and `xa-page`: the page's correspondence groups
+;;
+;; The dump written at the end is one line a group, in the order of `cg`: `g<n> p<page> t<text words> o<OCR words> h<hidden words>
+;; f<flags> s<sim> c<simfold> l<tracer line> | T <text> | O <text> | H <text>` (the words of a run joined by a space), then a line a
+;; page: its counts. A gate compares it across hosts and `tools/fusion/align_report.clj` measures it.
+;;
+;; THE UNIT IS PURE like every unit: it restarts from `ev-init` every attempt and reads only its `Src` and the answers, so a replay of
+;; a transcript recorded on one host gives the dump the other host gives. A page whose render or OCR failed has its text layer's groups
+;; alone (text-only), which is what the Engine's own run without an engine gives (SPEC 7.3).
+(ns emon.alignprobe
+  (:require [emon.lang :refer [I32 Cells Src Text emit-ascii]]
+            [emon.port :refer [src-missed cells-len cells-at cells-drop text-i32 text-cp]]
+            [emon.plan :refer [us-done us-requests us-need-bytes lay-full rq-render an-find an-ok an-arg pu-id pi-render-text pi-ocr]]
+            [emon.pdfdoc :refer [pd-open pd-pg-count]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.tlhealth :refer [th-run]]
+            [emon.scan :refer [sc-request sc-answer]]
+            [emon.evidence :refer [ev-init vw-new vk-render hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 ea-owords wf-font]]
+            [emon.player :refer [cg-count cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hfirst cgf-hcount cgf-tline
+                                 cgf-sim cgf-simfold cgf-flags]]
+            [emon.xalign :refer [xa-page]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^I32 ap-dpi [] (return 300))
+
+(defn ^I32 ap-put-word [^:mut ^Text t ^Cells etext ^Cells arr ^I32 stride ^I32 row]
+  (let [^I32 ts (cells-at arr (+ (* row stride) (hd-tstart)))
+        ^I32 tl (cells-at arr (+ (* row stride) (hd-tlen)))
+        ^:mut ^I32 k 0]
+    (while (< k tl)
+      (do (text-cp t (cells-at etext (+ ts k)))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 ap-put-box [^:mut ^Text t ^Cells arr ^I32 stride ^I32 row]
+  (comment "`[x0,y0,x1,y1]` in whole points (the head's box, centipoints over 100).")
+  (emit-ascii t "[")
+  (text-i32 t (quot (cells-at arr (+ (* row stride) (hd-x0))) 100))
+  (emit-ascii t ",")
+  (text-i32 t (quot (cells-at arr (+ (* row stride) (hd-y0))) 100))
+  (emit-ascii t ",")
+  (text-i32 t (quot (cells-at arr (+ (* row stride) (hd-x1))) 100))
+  (emit-ascii t ",")
+  (text-i32 t (quot (cells-at arr (+ (* row stride) (hd-y1))) 100))
+  (emit-ascii t "]")
+  (return 0))
+
+(defn ^I32 ap-put-run [^:mut ^Text t ^Cells etext ^Cells refs ^Cells words ^Cells owords ^I32 first ^I32 cnt]
+  (comment "The words of a run of `refs`, joined by a space.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 ea 0
+        ^:mut ^I32 row 0]
+    (while (< k cnt)
+      (do (if (> k 0) (emit-ascii t " "))
+          (set ea (cells-at refs (* (+ first k) 2)))
+          (set row (cells-at refs (+ (* (+ first k) 2) 1)))
+          (if (== ea (ea-owords))
+            (do (ap-put-word t etext owords 28 row)
+                (ap-put-box t owords 28 row))
+            (do (ap-put-word t etext words 24 row)
+                (ap-put-box t words 24 row)))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 ap-font [^Cells refs ^Cells words ^I32 first ^I32 cnt]
+  (comment "The font of the first text-layer word of a run of `refs`, -1 for an empty run.")
+  (if (<= cnt 0) (return -1))
+  (let [^I32 row (cells-at refs (+ (* first 2) 1))]
+    (return (cells-at words (+ (* row 24) (wf-font))))))
+
+(defn ^I32 ap-dump [^:mut ^Text t ^Cells etext ^Cells refs ^Cells words ^Cells owords ^Cells cg]
+  (let [^I32 n (cg-count cg)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 v 0]
+    (while (< g n)
+      (do (set v (cells-at cg (* g 16)))
+          (emit-ascii t "g")
+          (text-i32 t g)
+          (emit-ascii t " p")
+          (text-i32 t v)
+          (emit-ascii t " t")
+          (text-i32 t (cg-get cg g (cgf-tcount)))
+          (emit-ascii t " o")
+          (text-i32 t (cg-get cg g (cgf-ocount)))
+          (emit-ascii t " h")
+          (text-i32 t (cg-get cg g (cgf-hcount)))
+          (emit-ascii t " f")
+          (text-i32 t (cg-get cg g (cgf-flags)))
+          (emit-ascii t " s")
+          (text-i32 t (cg-get cg g (cgf-sim)))
+          (emit-ascii t " c")
+          (text-i32 t (cg-get cg g (cgf-simfold)))
+          (emit-ascii t " l")
+          (text-i32 t (cg-get cg g (cgf-tline)))
+          (emit-ascii t " n")
+          (text-i32 t (ap-font refs words (cg-get cg g (cgf-tfirst)) (cg-get cg g (cgf-tcount))))
+          (emit-ascii t " | T ")
+          (if (> (cg-get cg g (cgf-tcount)) 0)
+            (ap-put-run t etext refs words owords (cg-get cg g (cgf-tfirst)) (cg-get cg g (cgf-tcount))))
+          (emit-ascii t " | O ")
+          (if (> (cg-get cg g (cgf-ocount)) 0)
+            (ap-put-run t etext refs words owords (cg-get cg g (cgf-ofirst)) (cg-get cg g (cgf-ocount))))
+          (emit-ascii t " | H ")
+          (if (> (cg-get cg g (cgf-hcount)) 0)
+            (ap-put-run t etext refs words owords (cg-get cg g (cgf-hfirst)) (cg-get cg g (cgf-hcount))))
+          (text-cp t 10)
+          (set g (+ g 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 ap-unit [^Src s ^Cells an ^:mut ^Cells rq ^Cells loc ^:mut ^Text dump ^I32 reps
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
+                          ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
+                          ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                          ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+                          ^:mut ^Cells images
+                          ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+                          ^:mut ^Cells prims ^:mut ^Cells tlines
+                          ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                          ^:mut ^Cells cx ^:mut ^Cells ox ^:mut ^Cells cs ^:mut ^Cells out
+                          ^:mut ^Cells f0 ^:mut ^Cells f1 ^:mut ^Cells f2 ^:mut ^Cells f3
+                          ^:mut ^Cells pg ^:mut ^Cells gx ^:mut ^Cells fw ^:mut ^Cells fl ^:mut ^Cells fa
+                          ^:mut ^Cells hl ^:mut ^Cells hsc
+                          ^:mut ^Cells cg ^:mut ^Cells scr ^:mut ^Cells gp ^:mut ^Cells dp
+                          ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.")
+  (ev-init epages views pts refs etext feats glyphs words lines marks fonts paths images
+           oruns oblocks olines owords osyms oalts inks components rules prims tlines)
+  (cells-drop cg 0)
+  (let [^I32 o (pd-open s ar dc a b st)]
+    (if (src-missed s) (return (us-need-bytes)))
+    (if (!= o 0) (return (us-done)))
+    (let [^I32 status (pc-document s ar dc a b st cx ox cs out f0 f1 f2 f3 glyphs etext marks fonts pg words lines paths images pts gx)]
+      (if (src-missed s) (return (us-need-bytes)))
+      (if (!= status 0) (return (us-done)))
+      (th-run pg glyphs etext marks fonts words lines images epages feats fw fl fa hl hsc)
+      (let [^I32 np (pd-pg-count pg)
+            ^:mut ^I32 i 0
+            ^:mut ^I32 asked 0
+            ^:mut ^I32 rid 0
+            ^:mut ^I32 oid 0
+            ^:mut ^I32 ar1 0
+            ^:mut ^I32 ao 0
+            ^:mut ^I32 view 0
+            ^:mut ^I32 w 0
+            ^:mut ^I32 h 0
+            ^:mut ^I32 r0 0
+            ^:mut ^I32 rep 0
+            ^:mut ^I32 dpi 0]
+        (comment "round 1: the renders of every page, with their text")
+        (if (< (an-find an (pu-id 0 (pi-render-text))) 0)
+          (do (while (< i np)
+                (do (rq-render rq (pu-id i (pi-render-text)) 0 i (ap-dpi) (lay-full))
+                    (set asked (+ asked 1))
+                    (set i (+ i 1))))
+              (if (> asked 0) (return (us-requests)))))
+        (comment "round 2: the OCR of every render that came")
+        (set i 0)
+        (set asked 0)
+        (while (< i np)
+          (do (set rid (pu-id i (pi-render-text)))
+              (set oid (pu-id i (pi-ocr)))
+              (set ar1 (an-find an rid))
+              (if (>= ar1 0)
+                (if (== (an-ok an ar1) 1)
+                  (if (< (an-find an oid) 0)
+                    (do (sc-request rq oid rid (ap-dpi) loc)
+                        (set asked (+ asked 1))))))
+              (set i (+ i 1))))
+        (if (> asked 0) (return (us-requests)))
+        (comment "the evidence of every page that was read, then the alignment of every page")
+        (set i 0)
+        (while (< i np)
+          (do (set rid (pu-id i (pi-render-text)))
+              (set oid (pu-id i (pi-ocr)))
+              (set ar1 (an-find an rid))
+              (set ao (an-find an oid))
+              (if (>= ar1 0)
+                (if (>= ao 0)
+                  (if (== (an-ok an ar1) 1)
+                    (if (== (an-ok an ao) 1)
+                      (do (set w (an-arg an ar1 0))
+                          (set h (an-arg an ar1 1))
+                          (set dpi (an-arg an ar1 3))
+                          (set view (vw-new views (+ i 1) (vk-render) rid -1 w h (* dpi 100) (lay-full) -1 0 0 0 0 0))
+                          (sc-answer an ao (+ i 1) view oid 0 views epages etext oruns oblocks olines owords osyms oalts feats))))))
+              (set i (+ i 1))))
+        (comment "the alignment; `reps` > 1 repeats it (clearing what it appended) so a host can time it apart from the document pass")
+        (set r0 (cells-len refs))
+        (set rep 0)
+        (while (< rep (+ reps 0))
+          (do (cells-drop cg 0)
+              (cells-drop refs r0)
+              (set i 0)
+              (while (< i np)
+                (do (xa-page (+ i 1) epages words owords tlines feats etext refs cg scr gp dp ta tb tt)
+                    (set i (+ i 1))))
+              (set rep (+ rep 1))))
+        (ap-dump dump etext refs words owords cg)
+        (return (us-done))))))

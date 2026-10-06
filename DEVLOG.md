@@ -2502,7 +2502,7 @@ rest is off the critical path.
 | `kin/trace.kin`, `kin/tracetest.kin` | P6.4 | — |
 | `kin/tlhealth.kin`, `kin/player.kin` (+ tests) | P7.0 | P7.3 adds `fv`/`fx` builders below P7.0's in `player.kin`; P5.5a adds ONE block `;; P5.5a graphics arenas` (the `gl-*` calls in `pl-append`/`pl-check`/`pl-emit`) |
 | `kin/pageunit.kin` (+ test) | P7.U | P7.3 fills its stage calls (including `gv-page` + `gf-page` before `al-page`); P7.4, P7.5, P7.6, P7.7, P7.S each add ONE call at the hook comment `;; HOOK P7.n` P7.3 leaves; P7.G changes only the arguments of the `gf-page` call |
-| `kin/align.kin` / `kin/health.kin` / `kin/arbiter.kin` | P7.1 / P7.2 / P7.3 | — |
+| `kin/xalign.kin` (+ test, probe; D278: `kin/align.kin` is P4.11's) / `kin/health.kin` / `kin/arbiter.kin` | P7.1 / P7.2 / P7.3 | — |
 | `kin/fuserules.kin` | P7.3 (rows 100-199, the block headers of 100-699, `fr-order` 400, 600, 200, 300, 100) | P7.5 rows 200-299, P7.6 300-399, P7.7 400-499, P7.G 500-599 and 600-699, each inside its own block |
 | `kin/glayer.kin`, `kin/gvec.kin` (+ tests) | P5.5a | — |
 | `kin/gfuse.kin` (+ test) | P5.5a (the vector-only `gf-page`) | P7.G (everything else in it) |
@@ -2546,7 +2546,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
       sc evidence + nm-feat-*                 OCR evidence (P6.5) and its raster features
       gv-page, gf-page                        P5.5a (vector only, every page) / P7.G (+ tracer, OCR blocks, regions,
                                               xo 30-31): grl gfl ggp grg, graphics hl rows (SPEC 9.9, D218)
-      al-page, hl-page, ar-page               P7.1, P7.2, P7.3 (+ P7.5/P7.6/P7.7/P7.G rule blocks)
+      xa-page (D278), hl-page, ar-page        P7.1, P7.2, P7.3 (+ P7.5/P7.6/P7.7/P7.G rule blocks)
       rt-plan                                 P7.4 (targeted requests while rounds remain)
       -> the page's PageLayer (fw fl fv fa cg fx hl grl gfl ggp grg sl, SPEC 9.7)
     document unit (no pixels):
@@ -2681,7 +2681,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   (bind the read first: `th-hl-add`).
   *Commit*: on branch `worktree-agent-a491e23853d8396e1` (D037).
 
-- [ ] **P7.1 — Alignment and correspondence groups** (SPEC §9.2 "As designed", D202). **Wave 2.** Depends on P7.0
+- [x] **P7.1 — Alignment and correspondence groups** (SPEC §9.2 "As designed", D202). **Wave 2.** Depends on P7.0
   (`player.kin`, `fw`); not on P7.U (it is tested through a probe).
   *Brief*: `kin/align.kin` (`emon.align`), `al-page`: one page's candidates (the visible text-layer words of `words` with
   their `vis` and `src`; `hidden-text` words; every `owords` run of the page; `tlines`) → `cg` rows with their `refs` runs,
@@ -2702,8 +2702,61 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   *Files*: `kin/align.kin`, `kin/aligntest.kin`, `kin/alignprobe.kin`, `kin/scripts/align`, `tools/fusion/record-align.clj`,
   `test/fusion/align/`.
   *Done when*: the laws on four targets, `bb align` green on Rust and Go, the measured numbers in this entry.
+  **DONE (D278-D280).** `kin/xalign.kin` (`emon.xalign`, entry `xa-page`) holds the algorithm, `kin/xaligntest.kin` its 12 laws
+  (run on all four targets), `kin/alignprobe.kin` the probe unit, `test/fusion/align/` the fixtures (the six documents of the
+  brief and three more), `tools/fusion/record-align.clj` (`bb align-record`, live) records them, `tools/fusion/align_report.clj`
+  (`bb align-report`) measures them, `kin/scripts/align` (`bb align`, a gate) replays them on Rust and Go. **Two departures
+  from the brief's file names**: the module is `emon.xalign` with prefix `xa-` and the entry `xa-page`, not `kin/align.kin`,
+  `emon.align` and `al-page`, because `kin/align.kin` is P4.11's paragraph alignment (`al-line`, `al-pass`, D184) and the
+  prefix collides (D278); the fixture files hold nine documents, not six (D280). **Nothing is wired into the Engine**: P7.3
+  owns the stage calls in `kin/pageunit.kin` (the who-edits-what table), which is untouched, so no stage reads `cg` yet and no
+  existing gate moved. The only consumer of a born-digital render at 300 dpi with its text is the fixtures' recorder (D199,
+  D251: born-digital rasters are lazy), where the brief says to ask for it: the probe asks one `render` and one `ocr` a page itself, with `rq-render`, and nothing else; the Engine's way to ask is `pu-ask-rasters`, which P7.3 calls when it wires `xa-page`.
+  *The fixtures*: `tools/fusion/record-align.clj` builds `test/fusion/align/rust/main.rs` with `--cfg pdfium --cfg live` and runs
+  the probe against the pinned pdfium (chromium/8076) and Tesseract 5.5.3 (no language named: every installed model, D038); the
+  transcript is committed slim (answers and `:producer`, no bitmap, as `test/ocr/scan/`) with the dump of its replay
+  (`ID.dump`: one line a group, with each member's text and box). `bb align` replays every one on Rust and Go: identical on
+  all nine, and equal to the committed dump. *Measured* (the dumps; `bb align-report`):
 
-- [ ] **P7.2 — Health per source and region** (SPEC §9.3 "As designed", D203). **Wave 2.** Depends on P7.0; uses P7.1's
+  | document | groups | text words | coverage | 1:1 groups | precision | merged | text-only | OCR-only |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | `h-numbered` (2 pages) | 399 | 399 | 1.0000 | 399 | 1.0000 | 0 | 0 | 0 |
+  | `columns-two` (2) | 732 | 732 | 1.0000 | 732 | 1.0000 | 0 | 0 | 0 |
+  | `table-simple-ruled` | 98 | 98 | 1.0000 | 98 | 1.0000 | 0 | 0 | 0 |
+  | `watermark-draft` (2) | 915 | 915 | 0.9978 | 913 | 1.0000 | 0 | 2 | 0 |
+  | `stamp-seal` | 76 | 76 | 0.5789 | 44 | 1.0000 | 0 | 32 | 0 |
+  | `tl-broken-shift` (2) | 651 | 654 | 1.0000 | 647 | 0.0788 | 3 | 0 | 1 |
+
+  Coverage (visible text-layer words in a group with an OCR candidate) is at least 0.99 on the four documents whose text
+  OCR can read (the watermark's own two `DRAFT` words are the text-only ones: no OCR reads a grey diagonal watermark at 300 dpi,
+  which is what SPEC 9.5 expects of one). **`stamp-seal` is 0.5789, under the brief's 0.99, and is not an alignment error**:
+  its 32 text-only groups are the seal's arc text (28 one-letter words set on a circle, which Tesseract cannot read), the stamp's
+  `SEAL`, `PAID` and its date, and the signature line (`____`); they are ink the text layer says is text and OCR does not see,
+  which is what P7.7 (seals) and P7.5 (defence 1) decide. The gate holds the other four to 0.99, `stamp-seal` to its
+  recorded 0.57, and its words with no OCR to the seal's, the stamp's and the signature line's. **Precision** (1:1 groups with
+  case-folded similarity at least 800) is 1.0000 over the 2186 1:1 groups of the five healthy documents (floor 0.98): every
+  pair the geometry made, the letters confirm. **`tl-broken-shift`**: its body font (Georgia, font row 1; the ToUnicode
+  rewritten so every letter maps to the next one) has 594 words, **all 594 grouped with an OCR word by geometry and all 594
+  with case-folded similarity under 300** (floor: 90 %); the font's words read `Foe` for `End`, and the headings and the table in
+  the other fonts agree at 1000. The three merges are the document's `Face` `change`, `Large` `almost` `line` and `City` `come`,
+  which OCR read as one word each (a narrow space in the proportional font). **Time**: 0.58 ms a page at worst over the nine
+  documents (Rust `-O`, the best of three, the alignment repeated 21 times against once to take the document pass out; ceiling 10).
+  *The three extra documents* (identity and their numbers only): `tl-broken-unmapped` (a text layer whose spaces and letters are
+  unmapped, one U+FFFD word a line): 40 of its 104 groups are a whole line's word against its 10 or more OCR words (a split of 1:k,
+  attached by D279), their similarity 0, and its 62 1:1 groups (the headings and the table) agree at 0.9194; `hidden-older-ocr` (an
+  older OCR layer under a scan: the `hidden-text` source): all 200 hidden words are in a group with this run's OCR words (65 of them
+  a hidden word against two or more), the older layer agreeing with the new reading; `align-rtl` (Hebrew, which the
+  English model cannot read): 197 of 201 groups are 1:1 by geometry and the words are paired with their right neighbours
+  (similarity 0, an OCR that read nothing; the reversal of a right-to-left line is what pairs them).
+  *What measuring found, and what changed*: (1) the first cost, the overlap of the merged BOXES, paired `water`/`even`/`work`
+  wrongly on a real page (a text-layer box is the font's ascent and descent, an OCR box is its ink: their heights differ by
+  half, so the true pairs cost 400-500 and a 1:2 plus a 2:1 cost less than three 1:1s): the cost is now over the words' extents
+  ALONG THE LINE, which the sources agree on (D279); (2) a word that a pairing step cannot reach (`Section2.1` read as three, a
+  line with no mapped spaces) left the rest of it as OCR-only words that arbitration would have written a second time, so what no
+  step matched is attached when the other source covers it (D279). The grid, the 64 x 64 cells and the candidate test are as
+  SPEC 9.2 says; the page unit and the Engine do not call `xa-page` until P7.3.
+
+- [x] **P7.2 — Health per source and region** (SPEC §9.3 "As designed", D203). **Wave 2.** Depends on P7.0; uses P7.1's
   `cg` and P6.3's ink columns when present (laws build them by hand, so it can start with P7.1).
   *Brief*: `kin/health.kin` (`emon.health`), `hl-page`: (1) the text layer per (font, page): P7.0's components plus the
   **agreement rate** (groups with both candidates whose case-folded similarity ≥ `agree-sim` 900, over groups with both;
@@ -2718,8 +2771,44 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   ≥ 95 % of pages (live).
   *Done when*: laws (a healthy font; a shifted font that agrees on nothing; a font that is bad on one page only and stays
   healthy elsewhere; an OCR block over blank paper) on four targets and the numbers above in this entry.
+  *Done (D281-D284).* `kin/health.kin` (`emon.health`): `hl-page` (the agreement of every (font, page), the score made again with it
+  and written into each word's `xt` 13, one `hl` row per OCR block), `hl-doc` (a font that disagrees on every page that has the
+  groups is unhealthy on all), `hl-regions` (D223's graphics regions from the tracer's rules), `hh-word-score` (one OCR word, for
+  P7.3's rules), `hh-score`/`hh-ocr-score`/`hh-region-score` over D150's shape (`hh-blend`); every threshold a named setting at
+  the head (`agree-sim` 900, `agree-min` 600, `agree-words` 8, the agreement ramp 200-800, its weight 5, `ink-bad` 10, `ink-ok` 60,
+  `skew-ok` 30, `skew-bad` 300). Laws: `kin/healthtest.kin` (11, hand-built groups, words, blocks, rules) and
+  `kin/healthfusiontest.kin` (7, 67 documents of the fusion set against the OCR of their first page); both on four targets.
+  `tools/fusion/record_health.clj` (live, Tesseract through `tess.rs`) made `test/fusion/health/pdf/*.ocr` (4.7 MB of integers, the
+  engine's answers; no pixel is committed); `bb ghost-health` (not a gate) and `bench/mains/health.rs` measure the OCR side on the
+  overlay scans. `hl-page` costs 0.01 ms a page (mean, ~250 words; Rust).
+  *Measured* (the text layer: Tesseract 5.5.3 at 150 dpi on page 1 of the 67 `pdf/` documents, the alignment the stand-in of
+  `healthfusiontest.kin`, which is the lower bound P7.1's will beat). **Without OCR (P7.0) the shifted font is not seen**:
+  `tl-broken-shift` has 5 of 5 fonts at `tl-trusted`. **With agreement** 4 of 5: the shifted font scores **68** (agreement 0 of its
+  groups; < 300) and the other four stay at 1000. `tl-broken-unmapped`'s broken font is **34** with or without OCR (its glyphs
+  have no letters to count: P7.0 sees it). **The 63 healthy documents** (the other 67 less `tl-broken-*`, `script-devanagari` and
+  `script-mixed`): **295 of 295 (font, page 1) rows at least `tl-trusted`** (700), 55 of the 63 have a font with the groups to
+  count and its lowest agreement is **777** (`figures-charts`), over `agree-min` 600. `script-devanagari` (616) and `script-mixed`
+  (201) keep P7.0's scores: their ToUnicode really loses the matras (D240). **Without D281's Latin rule five healthy documents
+  would be condemned** (`align-rtl`, `initial-rtl`, `script-arabic`, `script-hebrew`, `script-devanagari` all fall to 66-68 on an
+  agreement of 0: the English model reads Hebrew and Arabic as soup).
+  *Measured* (the OCR side: P6.6's 39 pages of `scan-ovl/` at 130 dpi, Tesseract, kin's `nm-view` and `nm-feat-ocr`, truth the corpus's own
+  overlay masks). **NOT MET: the OCR blocks over a watermark, seal or signature do not score under every text block of their
+  page on 95 % of pages.** Tesseract itself reads almost no overlay: 293 blocks, none that is a pure ghost; the 32 words it reads
+  over no true text ink (rule fragments, blank paper, a seal's rim) score **371** against **810** for the 9,641 text words (69 % of
+  them under 700 against 12 %; of the pairs of one page the ghost scores lower in 61 % and ties in 17 %). To measure the
+  case the brief names, one word is put over each overlay's strokes (a watermark's letters, a seal, a signature: 201 words, 39
+  pages): ghosts 565, text blocks 842; **a ghost under every text block on 7 of 37 pages (letters) or 18 of 37 (union boxes)**;
+  ordered pairs 0.65 and 0.88. The columns that would separate them are the overlap with a seal and an artifact (`xo` 22, 23: P7.7,
+  P7.5) and the tracer's (14, 15), none written yet: a watermark's box lies over the text it is behind, so kin's ink and body share
+  see mostly text. The score has the components; P7.3's rule blocks 200 and 400 read the overlap columns when they exist.
+  *Learnt*: a font's agreement says nothing where the engine cannot read the script, and is a wrong witness there (D281); an
+  engine's rule fragment is a ghost the ink alone cannot see when its box is a few pixels all inked (the `bank-statement` rule
+  fragments score 1000); kin's body layer is two or three layers in a noisy scan (the dark core and its edge), so
+  `bench/mains/health.rs` takes their union; rustc rejects a function that returns a `Cells` (a helper that builds one must fill the
+  caller's).
+  *Commit*: on branch `worktree-agent-a1c5eb27a82a00546` (D037).
 
-- [ ] **P7.3 — Arbitration, the PageLayer, and the stages wired into the page unit** (SPEC §9.4 with the born-digital
+- [x] **P7.3 — Arbitration, the PageLayer, and the stages wired into the page unit** (SPEC §9.4 with the born-digital
   contract, §9.7; D014, D195, D201, D203). **Wave 3, critical path.** Depends on P7.U, P7.1, P7.2, P6.3, P6.4, P5.5a (`grl`/`gfl` and the
   vector-only `gf-page`).
   *Brief*:
@@ -2771,6 +2860,41 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   CER ≤ 0.03; `outlined-heading` CER ≤ 0.01; `ghost-rate` ≤ 0.002 (P7.5 brings it down); `bb fusion-report` per-source win
   rates and per-rule counts recorded in this entry. Fusion's kin time ≤ 30 ms a page (Rust).
   *Done when*: all of the above, `bb fusion-replay` green on Rust and Go and in `bb gates`.
+  **DONE (D285-D290), on branch `worktree-agent-a252f8d059ccee04e`.** *Built*: `kin/fuserules.kin` (the rule table as data: `fr-rows`, 17 rows of block
+  100, `fr-order`, the group columns `ag-*`, the named settings `fr-setting`), `kin/arbiter.kin` (`ar-doc`, `ar-write`, `ar-tag`),
+  `kin/pageunit.kin` (`pu-run-born`: the born-digital page asks `pu-ask-rasters`, then the OCR of the render with its text, then writes the OCR
+  evidence and runs `xa-page` and `hl-page-fw`), the two Engines (the hidden setting `ocr_born_digital` / `OcrBornDigital`; the document unit: `hl_doc`,
+  `ar_doc`, `pl_check`, dump version "2", `ar_write`, `ar_tag`), laws `kin/arbitertest.kin` (10) and `kin/pageunittest.kin`, `bb fusion` and
+  `bb fusion-record` (`kin/scripts/fusion`, `tools/fusion/record-replay.clj`, `test/fusion/replay/`: 22 slim transcripts, 2.8 MB), the predictors
+  `emon-fusion` (replay, the scoreboard's new entry) and `emon-fusion-live`, `tools/fusion/compare.clj`, `explain.clj`/`explain.py` (debugging aids).
+  *Departures from the brief, each a decision below*: arbitration runs in the document unit after `hl-doc`, not in the page unit (D285);
+  `nm-view`, `tr-page`, `gv-page`/`gf-page` are not called from the unit yet (P6.3/P6.4 are not wired into the page unit, and the
+  rules that need the ink layers, body-ink share, are not read: D286); row 160 (two OCR runs) waits for P7.4; `sc-tag` stays (it tags
+  the scanned pages and the fusion tag is a second function, `ar-tag`: D288); the OCR-only line is measured by `sc-emit-lines`, made public,
+  and joins no text-layer line (D287).
+  *Measured* (live: pdfium chromium/8076 and Tesseract 5.5.3 through the whole Engine, `bb tools/fusion/compare.clj --predictor emon-fusion-live --all`;
+  BEFORE is the Engine with no engine, the scoreboard's `emon`). **All 99 `pdf/` documents: pooled CER 0.0445 -> 0.0086, and not one document
+  worse** (the first run of the rules had four worse, every one of them an admission of OCR-only words that were a bullet, soup over a script the
+  engine cannot read, or a text-layer word's own ink read again, which is what rows 145, 176-178 and the page agreement now stop).
+  **The broken documents: `tl-broken-shift` CER 0.7116 -> 0.0000, `tl-broken-unmapped` 0.8853 -> 0.0000** (brief: <= 0.03); `outlined-heading`
+  0.0099 -> 0.0000 (brief: <= 0.01). `src-ocr-share` is 0.8933 and 0.8935 on the two broken documents (the Model says the body is OCR's), 0.0104 on
+  `outlined-heading` (its heading); `tl-override` is 0.0000 on every one of the other 20 documents of the fusion set (the metric is not counted on a
+  document whose gold says its text layer is untrusted). **Replay** (`bb fusion`, the 22 fusion documents, Rust == Go on every bundle): 10,034 groups
+  with both candidates, **win rates text 0.8871, ocr 0.1129** (OCR 0.9083 of `tl-broken-shift`'s 654 decided groups and 0.9096 of
+  `tl-broken-unmapped`'s 664), rules 101 x141, 110 x9271, 111 x141, 112 x5, 120 x604, 130 x594, 140 x5, 190 x200. No engine, no change: the same setting with no
+  transcript and no port converts to the bundle of a run without it, on both Engines. **The scoreboard's `emon` entry did not move** (2316
+  metrics, none regressed); `emon-fusion` is a new entry (427 metrics, recorded).
+  *Not measured here*: `scan-color/` and `scan-ovl/` (scanned pages do not go through fusion: they are OCR-only already, and P7.4 and P7.5 are what
+  change them); per-defence counts (no defence is built); the 30 ms a page budget (the fusion stages are linear in the page's groups; P7.1's alignment
+  is 0.6 ms a page).
+  *Learnt*: (1) the bullets, rule fragments and symbols an engine reads over ink the text layer has no word for are what an admission of OCR-only
+  words must be defended against, and no single column does it: the group's letters (not symbols), the engine's confidence, the overlap with a
+  text-layer word (a text-layer box can be a line off the ink it draws: `script-mixed`, `script-cjk`), the plausibility, the page's agreement
+  with the text layer in any script and the share of the page's words in a script the engine lacks all had to be rows; (2) a font's health
+  alone is not a reason to replace its words (`initial-letter-headings`: a drop-cap font scored under `tl-trusted` and OCR agreed with its
+  words): rule 130 needs OCR to read something else (similarity under `agree-low`); (3) the group's font is the HIGHEST of its words', a healthy
+  word protects its group; (4) a Rust borrow cannot be given one arena twice, so `hl-page-fw` is `hl-page` with one text-layer parameter; (5) every
+  `Cells` of a kin function is `&mut` in Rust.
 
 - [ ] **P7.4 — Targeted re-OCR rounds** (SPEC §8.3 targeted passes, §7.3 kin-made views; D196, D207). **Wave 4.**
   Depends on P7.3. Parallel with P7.5, P7.6, P7.7.
@@ -7899,6 +8023,7 @@ renders a page for nothing.
 **Decision**: (1) the harness gives the renders to norm as `render` views (`TRACE_DECODE=1` restores `decode`): a render is not a scan, and a decode view is deskewed; (2) a vector rule is truth only where the no-text render has a pixel darker than 240 within 1 px (runs of 10 px or more, gaps up to 24 px bridged); (3) a page that paints an image (`Do`), a shading (`sh`) or a dash pattern has no precision score from its paths; (4) the `gfx-*` documents (shadings, patterns, images, curves, hidden pieces) use P6.8's `gold/STEM.rules.json`, rules and fills; (5) the fill truth is lightness 600 to 959; (6) each cache directory keeps its PDF's SHA-1 and is dropped when it changes (P6.8 regenerated `table-multipage-*` and others after P6.4's renders were cached: a with-text render of page 1 was page 3 of the new PDF); (7) `--legacy` is P6.4's scoring (no visibility check, no oracle, no exemptions, fills under 900), `--tl` the with-text half, `--misses FILE` the text-layer lines no `tlines` row matches. Not changed: the pooled samples, the 2.5 px matching, the endpoint rule, the IoU of lines.
 **Why**: P6.4's "vertical P/R .958/.963" and "endpoint p95 2.75" were mostly the three artefacts above; a tuning pass aimed at them would have tuned the tracer to the truth's errors. `--legacy` keeps the old numbers reproducible (.925/.957 vertical, 2.75/1.75 endpoint on the 99 documents, both before and after this item).
 **Measured**: see P6.4b.
+- [ ] **Signed off** (maintainer)
 
 ### D266 — A manually triggered GitHub Actions workflow runs every gate and `unit red` in parallel jobs (SPEC 15.3)
 **Decision**: `gates.yml` (`workflow_dispatch` only: `groups` all | unit-only | fast-only, `ref`) checks emon and `3sln/kin` out side by side (`../kin`) and runs, on `ubuntu-latest`: `bb unit ARM` and `bb unit red ARM` per arm (go, rust, java, csharp; `unit red` now takes an optional arm), and `bb gates G...` shards for the rest (`bb gates` now takes gate names; its completeness check still runs). A summary job compares the four arms' law counts (`bb ci laws-compare`, what `bb unit` does in one process) and fails if any selected job failed; `bb ci coverage` (in the `static` shard) fails if a gate of `kin/scripts/gates` is in no shard or the workflow calls a missing bb task. Toolchains are pinned to the maintainer's (bb 1.3.190, Rust 1.92.0, Go 1.21, Temurin 25, .NET 10, ImageMagick 7 by AppImage, Python oracles at the versions of `~/.cache/emon/pylib`). Tesseract and pdfium are NOT installed: `ocr` and `render` replay committed transcripts (D127, D216). The corpus (`formats`, `financial`: all `png-check` and `image` read) is written from repository secrets into `.env`, pulled by `bb corpus-pull` only when `bb corpus-index-sha` (the SHA-256 of the remote `index.json`) changes, and cached under that key; missing secrets fail the run with a message naming them.
@@ -8023,6 +8148,7 @@ for the furniture zones; `tb-running-rule`), where SPEC 10.5 and the brief skipp
 tag a table's own rules as `/Artifact /Pagination`: all 104 rules of Publication 15's withholding table on page 46 carry it, and reading none of them
 lost every ruled table of pages 32-51 (12 of 12). The flag stays in `grl` for the readers that ask. The numbers, the documents and the survey are in
 the P5.5a entry above. **Alternatives**: skipping every pagination rule (above); reading them all (a header's underline closes a table).
+- [ ] **Signed off** (maintainer)
 
 ### D273 — P4.7: every character has a state (style bits and a link) before the paragraph stage; the paragraph stage writes spans and links from markers in its text
 **Decision** (`kin/inline.kin`, `il-analyze`). Run after `ls-analyze` and before `pa-build`, it writes after the lists' rows in `hc` a block: for every word the states of its characters (style bits of `sy` in the low 8 bits, 256 times a link's number plus one above), 1 state when all of them agree, none when all are plain; the evidence is not touched and `pa-build`'s signature did not change. A word whose text is its glyphs one for one (no ligature, no group of another stage in it) has one state per glyph (its glyph's font, its glyph's place against the line's baseline, the centre of its glyph's box against the link rectangles), any other the state of its dominant font and the centre of its box. `pa-add-line` leaves a MARKER (a group of noncharacters, U+FDD5, the state's digits, U+FDD1) where the state changes; the space between two words has what the two share (so `gamma delta` in italic has its space inside the span and a space between a bold and an italic word is plain), a group at the start of a word (an item's marker) is not a character, a heading line has no markers (its number is found by offset), and the space `pa-join` pushed is taken back and pushed after the marker, the fragment's raw start moving with it. `pa-flush` makes the BASE style of the paragraph (bold, italic, monospace, small capitals that more than half of its characters that are not spaces have) and writes against it: a paragraph set wholly bold has no span, bold in a mostly roman paragraph is a `<b>`. If nothing is written the markers are taken out in one pass (`pa-compact`) and the paragraph is what it was, byte for byte; otherwise its text is `text`/`span`/`link`/`ref` children (`pa-inlines`), a `link` outside a `span`, a reference ending both. `<b>`, `<i>`, `<sup>`, `<sub>`, `<code>` are the HTML emitter's already (SPEC 5.1: `<b>`/`<i>`, not `<strong>`/`<em>`, because emon knows the text was bold and not that it was important). **Alternatives**: styles on the words in the evidence (the evidence is a published schema); a style per word only (a superscript is a glyph, and a bold letter inside a word is real); marking every style change including the paragraph's own (every heading and every bold caption a span).
@@ -8042,6 +8168,198 @@ the P5.5a entry above. **Alternatives**: skipping every pagination rule (above);
 
 ### D277 — P4.7 verified
 **Result**. Laws in `kin/inlinetest.kin` on all four targets (spans from fonts, a space between two of one style inside the span, a paragraph set in one style with no span, a paragraph with nothing marked as it was, superscript and subscript from glyphs, a link from an annotation and a `javascript:` one refused, an internal link finding its block, no second link for a bare URL; the small functions). `bb accuracy` (real `emon`, 160 documents): `pdf/all` `span-bold` P/R 0.667/0.857, `span-italic` and `span-mono` 1.0, `link` 1.0 (the synthetic gold has 16 spans and one link); CER/WER unchanged. The misses and extras are named: the table cells of `invoice` (P5 writes a cell from words: no spans inside a table), the small capitals of `initial-firstletter`, and the labels of `bank-statement` and the raised initials of `initial-raised`, which ARE set bold in the PDF but are not `<b>` in the HTML the gold was made from (CSS bold is not emphasis in the gold; a raised initial is now skipped by the half-as-large-again rule, and P4.10's merge should make `pa-lead-end` skip its group as it does an item's). By eye on the arXiv corpus (Transformer, BERT): 104 and 282 links, BERT's citations land on the right bibliography entry and its footnote marks on the footnote, subscripts and italic titles are spans. Rust == Go (`bb identity`: 275 inputs x 9 arms byte-identical). `bb slice` takes `furn-informative` (a bold span in a paragraph; its HTML check no longer reads the running furniture's `<p>`) as a fixture. Found while verifying: a Rust borrow error (a `Cells` that is an argument and in an argument, D163 again), an `if` as an argument that kin printed as malformed Go (D190 again), Go's `len` as a parameter name.
+- [ ] **Signed off** (maintainer)
+
+### D278 — Cross-source alignment is `emon.xalign` (`kin/xalign.kin`, prefix `xa-`, entry `xa-page`), not `emon.align` (P7.1; SPEC 9.2; D184, D202)
+**Decision**: the brief's `kin/align.kin` / `emon.align` / `al-page` are named `kin/xalign.kin` / `emon.xalign` / `xa-page`
+(and `kin/xaligntest.kin`, `kin/alignprobe.kin`; the file table, the who-edits-what row and SPEC 9.2 name the new file). The
+page unit calls `xa-page` where D195's order says `al-page`.
+**Why**: `kin/align.kin` already exists and is `emon.align`, the paragraph alignment of P4.11 (D110, D184: `al-line`,
+`al-mark`, `al-pass`, `al-judge`); two modules cannot share a namespace in the four generated trees, and the `al-` prefix
+is taken by its functions.
+**Alternatives**: renaming P4.11's module to `emon.parenalign` (a change to merged, golden-bound code for a name).
+- [ ] **Signed off** (maintainer)
+
+### D279 — Alignment as built: cost along the line, one extent per word; what the steps do not reach is attached; groups are connected sets over every run and layer (P7.1; SPEC 9.2; D202)
+**Decision**: SPEC 9.2's grid, candidate test (`align-overlap` 500, `align-angle` 300) and per-line dynamic program stand
+(1:1, 1:2, 2:1, 1:0, 0:1; `align-gap` 400; ties toward 1:1, 1:2, 2:1, an unmatched text-layer word, an unmatched OCR word),
+with these made precise. (1) A pairing's cost is 1000 minus the intersection over union of the merged words' EXTENTS ALONG THE
+LINE (the half of the box projected on the line's axis), not of the boxes; the candidate test is still on the boxes. (2) A
+text-layer line is a maximal run of consecutive candidates with one `line`; an OCR word belongs to the line of the candidate
+with the most overlap (ties: the earlier word) and is ordered by its centre's position along that line's baseline, reversed for
+a right-to-left line, so both sides are in logical order whatever order the engine gave. (3) The visible layer and the
+`hidden-text` layer are aligned separately, each against every OCR run separately; a group is the connected set (union-find) of
+all the steps, so one group holds a word of each source and each run. (4) What no step matched is ATTACHED when the other
+source covers it: an OCR word that is a candidate of a text-layer word joins that word's group (flag `split`), a text-layer
+word that is a candidate of an OCR word joins its group (flag `merged`); an OCR word still unmatched joins only an overlapping
+OCR word of another run. (5) Similarity is `1000 * (max - lev) / max` over NFC code points (ligatures, soft hyphens and CJK
+radicals normalised) of the sides' words joined without a separator, capped at 256 code points a side; `simfold` keeps letters
+and digits and folds case (ASCII, Latin-1, Latin Extended-A, Greek, Cyrillic; other scripts unfolded). A group's sides are its
+visible text words (its hidden ones when it has none) and the lowest-numbered OCR run's words; the group's `sim` and `simfold` are -1 when a side is empty, and a word's columns stay -1 where no step touched it. (6) The dynamic program is exact
+for a line up to 1000 x 1000 words; a longer line is paired greedily along the line. (7) A line's angle and direction are its
+first candidate's; mixed-direction lines (Latin words in a right-to-left line) are ordered by the line's direction, not by bidi.
+**Why**: (1) measured: the sources draw a word's height differently, so a box overlap ranks the wrong pairing first (the page
+that showed it is in the DEVLOG entry); (2) the engines' orders differ and the evidence is positional; (4) arbitration would
+otherwise write a covered word's text twice (an unmapped-spaces line is one text word and 15 OCR words); (5) whitespace is
+where the sources disagree most and the letters are the claim; the cap bounds the cost of a hostile line.
+**Alternatives**: a Hungarian match on box overlap (ignores order); bidi-aware ordering (needs the bidi levels in the
+heads, which the evidence does not carry); a 1:k step for every k in the dynamic program (k times the cost for words that
+are rare once attached).
+- [ ] **Signed off** (maintainer)
+
+### D280 — The alignment fixtures: nine documents rendered by pdfium and read by Tesseract, recorded live, replayed on Rust and Go; the floors the gate holds (P7.1; SPEC 9.2, 14; D008, D127, D199, D211)
+**Decision**: `test/fusion/align/ID/transcript.edn` and `ID.dump` for the brief's six documents and `tl-broken-unmapped`,
+`hidden-older-ocr` and `align-rtl`: a render of every page at 300 dpi WITH its text (pdfium, the pinned build) and the OCR
+of each render (Tesseract 5.5.3, every installed model), recorded by `bb align-record` with no Engine around (the
+probe unit, `emon.alignprobe`, run by the drivers `test/fusion/align/{rust,go}`), the transcripts slim (no bitmap) like
+`test/ocr/scan/`. `bb align` is a gate: Rust and Go print the same dump as committed; coverage at least 0.99 on four
+documents and at least 0.57 on `stamp-seal` (its seal and stamp text, which Tesseract cannot read); precision at least 0.98
+over the five; at least 90 % of `tl-broken-shift`'s shifted font grouped with similarity under 300; at least 99 % of
+`hidden-older-ocr`'s hidden words grouped; at most 10 ms a page (Rust, best of three).
+**Why**: a unit test with hand-made heads proves the algorithm; only real renders, a real OCR engine and real broken fonts
+show that the geometry of two sources pairs (the first cost did not); and the floors are what a later change to the OCR
+adapter, the renderer pin or the tracer must not cost the alignment.
+**Cost to decide**: about 1.0 MB of transcripts (the OCR answers carry every symbol and alternative) and 0.45 MB of dumps,
+committed; the corpus PDFs are the synthetic ones already committed. `stamp-seal`'s 0.5789 is below the brief's 0.99 and is
+held as a floor of its own with its cause; the maintainer may prefer a metric that excludes seal and stamp regions once P7.7
+names them.
+**Alternatives**: recording through the Engine (it does not request OCR of a born-digital page, D201, and P7.3 owns that
+wiring); hand-built fixtures only (they cannot show the first cost's failure).
+- [ ] **Signed off** (maintainer)
+
+### D281 — Agreement is a fifth component of a font's score, counted only where the engine can read the script, a font's own fact across pages (P7.2; SPEC 9.3; D150, D203, D240)
+**Decision**: after alignment `hl-page` counts, per (font, page) of the page, the groups that have a text-layer and an OCR candidate
+and the ones whose case-folded similarity is at least `agree-sim` (900), keeps both counts in the row's spare cells 10 and 11 and the
+per-mille in the agreement cell; with at least `agree-words` (8) groups the score is the weighted harmonic mean of D240's four
+components (4, 3, 2, 1) and the agreement (a ramp, 0 at 200 and 1000 at 800, weight 5) scaled by the weakest, which with no agreement is
+exactly `th-score`; the page's words' `xt` 13 follow. A group counts only when a text-layer candidate holds a Latin letter or digit.
+`hl-doc` finds a font whose agreement is under `agree-min` (600) on every page that has the groups (and at least one such page) and
+makes its score again on all of its pages with the page's own agreement or, where the page has too few groups, the document's pooled one.
+**Why**: the text layer cannot tell a plausible wrong mapping from a right one; the engine reads the pixels. Measured on 67 documents
+(DEVLOG P7.2): the shifted font 68, 295 of 295 healthy rows trusted, the lowest healthy agreement 777. The script rule is the only
+way English Tesseract's soup over Hebrew, Arabic and Devanagari does not condemn five correct text layers; a shifted font maps to
+Latin letters (that is what plausible means), so the rule costs it nothing. The ramp's ends and the weight are first values, P10.1
+calibrates; 8 groups is where a page's agreement stops being three words.
+**Alternatives**: counting every group (measured: five healthy documents at 66-68); a flag instead of a score (P7.3's rules read a
+score and its components); a new `hl` stride for the counts (the dump of every layer would change; the counts are what the dump's agreement
+is made of, and they are recomputed from `cg`).
+- [ ] **Signed off** (maintainer)
+
+### D282 — OCR reliability is scored from the evidence's columns and never from the engine's confidence: per block as `hl` rows, per word by `hh-word-score`; an absent column is not a bad one; the overlay target is not met (P7.2; SPEC 8.4.5, 9.3; D130, D150)
+**Decision**: six components pooled over a block's words by code points (words of the lines of its paragraphs): ink support (the larger
+of kin's and the engine's ink under the box, a ramp from `ink-bad` 10 to `ink-ok` 60 per mille, averaged with the tracer's share of the
+word's symbols that have a text-like component, `xo` 15, when the tracer has run), plausibility (1000 - `xo` 8), script
+consistency (1000 - 9), the share of the word's ink on the body layers (13), freedom from a seal (1000 - 22) and from a watermark or
+artifact (1000 - 23). A column that was not computed (-1) is left out of the mean and the score, never counted as zero; the weights are
+3, 2, 1, 3, 3, 3 and the shape D150's. The engine's confidence is not a component (D130). The row (`plh-ocr-block`, subject the block's
+`oblocks` row) keeps the components in cells 3-8 (`hob-*`); `hh-word-score` gives a word's score by the same weights for the
+arbitration that decides words.
+**Why**: a word the network is unsure of scores exactly 0 and a misspelling can score high (D130); ink under the box, the layer the ink is
+on and what the box overlaps are what a ghost lacks. Measured, and not as the brief wanted: on the overlay scans the engine barely reads
+the overlays (one word over each overlay's strokes: ghosts 565 against 842 for text, a ghost under every text block on 7 of 37
+pages), because a watermark lies over the text it is behind, so the box's ink is the text's. The two columns that name it (22, 23) and
+the tracer's (14, 15) are not written until P7.7, P7.5 and P7.3's wiring; with them present the components already carry them.
+**Alternatives**: engine confidence or symbol margins as a component (D130's warning; unmeasured here); scoring words only (the brief's
+unit is the block, and a block is what an arbitration of regions reads); a 0 for an absent column (every scan without an engine binary
+would lose a third of its score).
+- [ ] **Signed off** (maintainer)
+
+### D283 — Graphics health: `hl-regions` writes D223's rows from the tracer's rules and takes the vector witness and the tracer's precision from the caller (P7.2; SPEC 9.3, 9.9; D223)
+**Decision**: per page, `hl-regions` writes a row of kind `region` for R0 (subject -1: the page outside the visible image placements
+of at least `img-min`, 5669 centipoints each way) and one for each such placement (subject its `images` row), with components vector
+witness, tracer precision, skew spread, tracer confidence and the number of rules (`hrg-*`), and the score of D223's shape (weights 3, 3,
+2, 2). The skew spread is 1000 at a spread of at most 30 centi-degrees of the deviation from its axis of the region's rules that lie
+within 15 degrees of one, falling to 0 at 300, -1 with fewer than two; the confidence is the mean of the rules' (`rlf-conf`); an image's
+precision is R0's. The witness and the precision are arguments, -1 when unknown, because they compare the tracer with the vector
+rules, which are P5.5a's and P7.G's and which this module never sees.
+**Why**: the tracer's reliability differs most between a render of vector art and a photographed table pasted into a report, and the
+image placement is the boundary known without pixels (D223); the two comparisons need the vector candidates, so they belong to the stage
+that has them. The rows are built here so P7.G only supplies two numbers.
+**Alternatives**: building the vector candidates here (P5.5a's work, and a second reading of the same paths); one row a page (a mixed page
+averages a perfect R0 with a noisy image).
+- [ ] **Signed off** (maintainer)
+
+### D284 — The text layer's health is measured on page 1 of the fusion set against committed engine answers, with a stand-in alignment; the OCR side by a not-a-gate harness (P7.2)
+**Decision**: `test/fusion/health/pdf/ID.ocr` is Tesseract's answer to page 1 of each of the 67 `pdf/` documents rendered at 150 dpi (one
+line of integers: the width and height, then the answer's cells; 4.7 MB in all; the producer is `PRODUCER.edn`); `healthfusiontest`
+reads it back with `sc-answer`, aligns it to the text layer by connected overlap with the groups' words joined in order (the stand-in
+P7.1's `al-page` replaces; it is a lower bound on agreement) and runs the document pass, `hl-page` and `hl-doc`, on four targets, with no
+engine and no pixel. The OCR side needs pixels: `bb ghost-health` (`tools/fusion/ghost_health.clj`, `bench/mains/health.rs`, Rust only,
+not a gate) reads kin's rasters and truth masks from `bb ink`.
+**Why**: the laws on hand-built groups say the arithmetic is right; only a real engine on real documents says whether agreement separates
+a shifted font from the healthy ones, and a replayed answer makes that a gate on every target without an engine (D008, D095). P7.1's
+fixtures (`test/fusion/align/`, six documents) are its own; these 67 were wanted because the claim is about every font of the set.
+**Alternatives**: waiting for P7.1 (the order of the plan has them in parallel); recording through the whole Engine (born-digital pages
+are not OCR'd until P7.S).
+- [ ] **Signed off** (maintainer)
+
+### D285 — Arbitration runs in the document unit, after `hl-doc`; the page unit aligns and scores; the setting is `ocr_born_digital` (P7.3; SPEC 9.4; D195, D201, D212)
+**Decision**: the page unit of a born-digital page (only under the hidden test setting `ocr_born_digital` / `OcrBornDigital`, off by default and in no
+public document) asks `pu-ask-rasters` (the render with and without its text, one round), then the OCR of the render with its text, and writes the OCR
+evidence (`sc-answer`), `xa-page` (the groups, aligned over the flow `fw`, so a triaged word is no candidate) and `hl-page-fw`. The document unit then
+runs `hl-doc` (a font that disagrees on every page that has the groups is unhealthy on all), `ar-doc` (the verdicts and the fused flow), `pl-check`, and
+writes the dump version "2". With no answer (no Renderer, no Ocr, a failure) no group exists and nothing runs: every output is byte-identical to a run
+without the setting (a law of `bb fusion`, on both Engines). The text layer's `epages` and `feats` become the evidence's own when the setting is on (the
+OCR's feature rows join them and alignment reads both) and are given back when nothing was read.
+**Why**: an encoding is a document fact (SPEC 9.3), so no page can decide a font alone; the brief's `ar-page` in `pu-run` would have to guess it. The page
+units keep their one job and their independence (they only write arenas the document unit reads).
+**Alternatives**: `ar-page` in the page unit with the page's own agreement (a font bad on one page and good on the rest would be replaced there, against
+the contract); a public option (SPEC 13 is not changed until P7.S flips the policy).
+- [ ] **Signed off** (maintainer)
+
+### D286 — The rule table is data (`fr-rows`, stride 36, ten predicates); block 100 as built; what is not read (P7.3; SPEC 9.4, 9.7; D203, D224)
+**Decision**: `kin/fuserules.kin`. A row: number, block, winner (`fw-none`, `fw-text`, `fw-ocr`), ledger reason, flags, confidence (-1: the group's mean OCR
+score, at most 900), and ten `(group column, comparison, setting)` predicates, all of which must hold; an absent column (-1) fails every comparison. The
+group columns `ag-*` and the settings are named at the head of the file. Rows: 101/102 identity; 110/111/112 a healthy font (the HIGHEST health of the
+group's words) with no bad glyph wins whatever OCR reads (1000, 700, 500 low-conf); 120 a bad glyph of the word's own and 130 an unhealthy font that OCR
+reads differently from (similarity under `agree-low` 300) go to OCR when the engine reads the script (no word of the group in another script) and it is
+plausible; 140/141 OCR-only words are admitted when plausible, scored, at least 2 Latin letters or digits, confident (700), touching no text-layer word
+(under 150), on a page where OCR and the text layer agree (600; and not in an image, or in one covering half the page); 145, 170, 175, 176, 177, 178 are
+the ways such a group is a ghost, 150 holds it in a smaller image (`in-figure` on the group), 190 is the default. Not read: kin's ink layers (P6.3 is not
+wired into the page unit: the body-ink share, seal and artifact columns are absent, so those rows' conditions are the engine's own), the second OCR run
+(row 160), blocks 200-699 (empty; `fr-order` is D224's).
+**Why**: SPEC 9.4's table made executable, with the contract (D201) as its first rows; every number is a first value (P10.1 calibrates).
+**Alternatives**: the rules as code branches (the brief asks for data); admitting every OCR-only word that is plausible (measured: bullets, soup over CJK and a
+text-layer word's own ink read again each cost CER on four documents).
+- [ ] **Signed off** (maintainer)
+
+### D287 — The fused flow: a replaced word keeps the text layer's geometry, an admitted OCR-only group is a line of its own measured as an OCR line (P7.3; SPEC 9.7; D195, D196, D213)
+**Decision**: `ar-doc` writes `nfw`/`nfl` in the layouts of `words`/`lines` so stage 3 is unchanged. A text-layer word that won is copied as it was (its glyph run
+kept, `src` the bitset of every source with a candidate). When OCR wins a group with as many OCR words as text words, the j-th takes the j-th word's box,
+baseline, rotation, direction, style, size, font and spacing, its text and confidence being OCR's and its glyph run empty; when the counts differ the OCR word keeps
+its own extent along the line and takes the group's band across it and its baseline (a rotated one keeps all of OCR's); the line is measured again. An admitted
+OCR-only group is a line of its own after its page's lines, measured by `sc-emit-lines` (made public: D213's size and box), not joined to a text-layer line.
+`fv` has a row per `fw` row, `fx` a run per group (the columns the deciding rule read), `fa` the dropped ghosts.
+**Why**: the text layer's geometry is exact and OCR's is ink; stage 3 compares sizes and boxes across a page.
+**Alternatives**: joining the nearest text-layer line (the brief; it needs a reordering inside a line and a baseline test, and no corpus document needs it).
+- [ ] **Signed off** (maintainer)
+
+### D288 — Provenance by block: `ar-tag` and `ar-write`; `sc-tag` stays (P7.3; SPEC 3.4, 9.4; D206)
+**Decision**: paragraph building does not carry a word's source into the node, so the Model's provenance is written after it, from the verdicts: a block (a node with
+an inline child or a text run, and a region) is judged by the words whose centre lies in its region on its page. When OCR won any, its source gets `ocr` (and loses
+`text` when OCR won all), `text-layer-suspect` is set when OCR replaced a text-layer word, `ocr-only` when OCR won all and one was admitted from OCR alone, `low-conf`
+when a verdict was, its inlines follow, and its confidence is lowered to OCR's mean when it won all. A block no OCR word touched is not changed. The ghosts dropped
+become ledger rows (`ocr-ghost`, conf 700, src `ocr`), one per page and OCR line. `sc-tag` (the scanned pages) is kept: the brief retires it for `fz-write`, which would
+move every scanned page's provenance for no gain in this item.
+**Why**: `src-ocr-share` and `tl-override` read the Model; a mixed block over-approximates `tl-override` (one replaced word flags the block), which is the conservative side.
+**Alternatives**: carrying the source through `para.kin` (not this item's file).
+- [ ] **Signed off** (maintainer)
+
+### D289 — Rust and Go engines wired alike; the recording build; the new predictors (P7.3; D058, D127, D211)
+**Decision**: both Engines add the hidden option, the fusion arenas of `PdfDoc`, the arguments of `pu_run_pdf` and the document tail of D285; the Rust driver gets `--ocr-born-digital`
+and `--pdfium` (built by `EMON_RS_PDFIUM=<libdir> kin/scripts/emon-rs-build` into `.cache/emon-rs-fusion`), the Go driver `--ocr-born-digital`. `fusion_report.clj` reads the dump's
+`source` as the `sr` code it prints.
+**Why**: the gate replays; only the recorder links an engine.
+**Alternatives**: a second driver (more to keep in step).
+- [ ] **Signed off** (maintainer)
+
+### D290 — `bb fusion`: the replay set, its digests, and what the gate holds (P7.3; D008, D095, D209)
+**Decision**: `test/fusion/replay/ID/transcript.edn` for the 22 documents of `test/corpus/synth/FUSION` (recorded live by `bb fusion-record`, slim: answers and `:producer`, no bitmap;
+2.8 MB), `DIGESTS.edn` (SHA-256 of each replay bundle). The gate holds: Rust and Go replay every transcript to the identical bundle, equal to the recording's digest; a changed request
+is `transcript-miss` on both; the setting with no transcript and no port equals the plain run; `tl-override` is zero on every document with a sound encoding; per-document CER no
+worse than the no-engine run's plus 0.0005; the broken documents' CER under half of theirs; the scoreboard's `emon-fusion` entry. Win rates and rule counts are printed, not gated.
+**Why**: the brief's `bb fusion-replay`, named `bb fusion` as the coordinator asked.
+**Alternatives**: committing the bitmaps (2.8 MB against 25 MB of PNGs: kin reads no pixel yet).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here

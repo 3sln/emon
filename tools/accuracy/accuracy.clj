@@ -12,6 +12,9 @@
     bb accuracy --ids ID,ID            score only these documents
     bb accuracy --predictor emon-live  the Rust Engine WITH LIVE TESSERACT (P6.5, D211): the scan variants through real OCR.
                                        NOT a gate (it needs Tesseract and takes minutes); `bb ocr-live` runs it for the scans
+    bb accuracy --predictor emon-fusion  the Rust Engine converting BORN-DIGITAL documents with the hidden setting ocr-born-digital, REPLAYING the
+                                       committed transcripts of test/fusion/replay/ID/ (a gate's: `bb fusion`; P7.3, D285-D290)
+    bb accuracy --predictor emon-fusion-live  the same LIVE (pdfium and Tesseract). NOT a gate (needs both; takes minutes)
     bb accuracy --predictor emon-replay  the Rust Engine REPLAYING the committed OCR transcripts of test/ocr/scan/ID/ (a gate's:
                                        `bb ocr` scores the documents that have one; no engine runs)
 
@@ -59,7 +62,9 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "degraded" degraded/predict
    "emon" ["sh" (str (fs/path HERE "predict-emon.sh"))]
    "emon-live" ["sh" (str (fs/path HERE "predict-emon-live.sh"))]
-   "emon-replay" ["sh" (str (fs/path HERE "predict-emon-replay.sh"))]})
+   "emon-replay" ["sh" (str (fs/path HERE "predict-emon-replay.sh"))]
+   "emon-fusion" ["sh" (str (fs/path HERE "predict-emon-fusion.sh"))]
+   "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]})
 (def FAMILY {"h" "headings" "table" "tables" "furn" "furniture" "figures" "figures"
              "lists" "lists" "script" "scripts" "columns" "columns" "footnotes" "footnotes"
              "stamp" "seals" "watermark" "watermarks" "invoice" "forms" "bank" "forms"

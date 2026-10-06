@@ -1,0 +1,458 @@
+;; Laws for `emon.health` (P7.2; SPEC 9.3; D130, D150, D203, D223, D240), on every target. Everything here is built by hand: the groups
+;; (P7.1's `cg`, which the page unit will fill) are rows with their runs in `refs`, the words are `fw` rows with feature rows, the OCR
+;; blocks are `oblocks`/`olines`/`owords` rows with the columns the stages before this one write.
+;;
+;;   * the score is D150's shape: with no agreement `hh-score` IS `th-score` on a grid of components, an absent component (-1) is
+;;     ignored (never zero), nothing present is -1;
+;;   * a healthy font that OCR agrees with stays trusted; a shifted font that agrees on almost nothing falls under 300 and its words'
+;;     `xt` column 13 follows; no OCR leaves agreement -1 and the score P7.0's; a page with fewer than `agree-words` groups records the
+;;     agreement and does not count it;
+;;   * a font that is bad on ONE page only stays healthy on the others, and `hl-doc` leaves it so; a font that is bad on every page that
+;;     has the groups is unhealthy on all of them, a page with too few groups of its own taking the document's agreement;
+;;   * the text-layer word of a group may be named as a `words` row or an `fw` row;
+;;   * an OCR block over blank paper, one over a seal, one of soup and one of a watermark score under a body block, each in its own
+;;     component; an absent column is ignored; the engine's confidence is never read;
+;;   * a second `hl-page` overwrites its rows; the regions of a page: the skew spread of its rules, the confidence, the image borrowing
+;;     the page's precision.
+(ns emon.healthtest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at new-cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push]]
+            [emon.evidence :refer [wd-new wd-set wf-font fe-new fe-set fe-get rf-add
+                                   ow-new ow-set ob-new ob-set ol-new ow-count im-new rl-new rl-set
+                                   hd-feat hd-tstart lh-first lh-count obf-first obf-count obf-conf
+                                   ea-words ea-owords
+                                   xt-font-health xo-kin-ink xo-engine-ink xo-implausible xo-script xo-body-share xo-seal xo-artifact
+                                   xo-length xo-conf xo-comp-ratio rlf-conf ob-block ob-paragraph]]
+            [emon.player :refer [cg-new cg-set cg-get fw-copy-word hl-new hl-get hl-set hl-count pl-ea-fw
+                                 cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-simfold
+                                 hlf-mapped hlf-garbage hlf-overlap hlf-gap hlf-agreement hlf-score plh-font-page plh-ocr-block plh-region]]
+            [emon.tlhealth :refer [th-score th-trusted]]
+            [emon.health :refer [hh-score hh-blend hh-ocr-score hh-region-score hh-word-score hl-page hl-doc hl-regions hlf-both hlf-agree
+                                 hob-ink hob-plausible hob-script hob-body hob-seal hob-artifact
+                                 hrg-witness hrg-precision hrg-skew hrg-conf hrg-rules]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------- the score
+
+(deftest test-no-agreement-is-th-score
+  (comment "the font score without agreement is P7.0's, on a grid of components")
+  (let [^:mut ^I32 m 1000
+        ^:mut ^I32 g 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 p 0]
+    (while (>= m 0)
+      (do (set g 0)
+          (while (<= g 1000)
+            (do (set o 0)
+                (while (<= o 1000)
+                  (do (set p 0)
+                      (while (<= p 4000)
+                        (do (assert-eq (hh-score m g o p -1) (th-score m g o p) "hh-score is th-score without agreement")
+                            (set p (+ p 1333))))
+                      (set o (+ o 250))))
+                (set g (+ g 250))))
+          (set m (- m 333))))))
+
+(deftest test-blend
+  (assert-eq (hh-blend 1000 4 1000 3 1000 2 1000 1 1000 5 -1 0) 1000 "all perfect")
+  (assert-eq (hh-blend -1 4 -1 3 -1 2 -1 1 -1 5 -1 0) -1 "nothing present")
+  (comment "an absent component is ignored, never zero")
+  (assert-eq (hh-blend 800 3 -1 3 -1 2 -1 2 -1 0 -1 0) 720 "one present: its own value, scaled by the weakest, which it is")
+  (assert-eq (hh-blend 1000 3 1000 3 -1 2 1000 2 -1 0 -1 0) 1000 "the absent one does not drag")
+  (comment "the weakest scales the harmonic mean: 15e6 / (10000 + 5e6/100) = 250, times (1000 + 100) / 2000")
+  (assert-eq (hh-blend 1000 4 1000 3 1000 2 1000 1 100 5 -1 0) 137 "one weak component pulls the whole down")
+  (comment "agreement 0 is floored at 50 for the mean and counts as 0 for the scale")
+  (assert-eq (hh-blend 1000 4 1000 3 1000 2 1000 1 0 5 -1 0) 68 "no agreement at all")
+  (assert-eq (hh-score 1000 0 0 0 900) 1000 "agreement 900 is fully trusted")
+  (assert-eq (hh-score 1000 0 0 0 100) 68 "agreement 100 is under the bad line: the same as none at all")
+  (assert-eq (hh-ocr-score 1000 1000 -1 1000 -1 -1) 1000 "a clean block")
+  (assert-eq (hh-region-score -1 -1 1000 900) 899 "a region with only skew and confidence: 947 scaled by 0.95"))
+
+;; ------------------------------------------------------------- the text layer
+
+(defn ^I32 ht-word-in [^:mut ^Cells words ^:mut ^Cells fw ^:mut ^Cells feats ^:mut ^Cells et ^I32 page ^I32 font ^I32 script]
+  (comment "One text-layer word of `page` in `font`, its feature row of the `xt` columns a healthy font has, copied into `fw`; answers its `fw` row.")
+  (let [^I32 ts (cells-len et)
+        ^I32 w (wd-new words page 0 0 1000 1000 0 900 1000 900 0 0 ts 2 -1 -1 -1)
+        ^I32 f (fe-new feats (ea-words) w)
+        ^:mut ^I32 r 0]
+    (if (== script 0)
+      (do (cells-push et 97)
+          (cells-push et 98))
+      (do (cells-push et 1488)
+          (cells-push et 1489)))
+    (wd-set words w (wf-font) font)
+    (fe-set feats f (xt-font-health) 1000)
+    (wd-set words w (hd-feat) f)
+    (set r (quot (cells-len fw) 24))
+    (fw-copy-word fw words w -1)
+    (return r)))
+
+(defn ^I32 ht-word [^:mut ^Cells words ^:mut ^Cells fw ^:mut ^Cells feats ^:mut ^Cells et ^I32 page ^I32 font]
+  (return (ht-word-in words fw feats et page font 0)))
+
+(defn ^I32 ht-font-row [^:mut ^Cells hl ^I32 page ^I32 font]
+  (comment "A font-page row of P7.0's: components of a healthy font, score 1000.")
+  (let [^I32 r (hl-new hl (plh-font-page) page font)]
+    (hl-set hl r (hlf-mapped) 1000)
+    (hl-set hl r (hlf-garbage) 0)
+    (hl-set hl r (hlf-overlap) 0)
+    (hl-set hl r (hlf-gap) 0)
+    (hl-set hl r (hlf-score) 1000)
+    (return r)))
+
+(defn ^I32 ht-group [^:mut ^Cells cg ^:mut ^Cells refs ^I32 page ^I32 ea ^I32 widx ^I32 simfold]
+  (comment "A group of `page` with one text-layer candidate (the `ea` row `widx`) and one OCR word; its folded similarity.")
+  (let [^I32 g (cg-new cg page 0 0 1000 1000 0)
+        ^I32 t (rf-add refs ea widx)
+        ^I32 o (rf-add refs (ea-owords) 0)]
+    (cg-set cg g (cgf-tfirst) t)
+    (cg-set cg g (cgf-tcount) 1)
+    (cg-set cg g (cgf-ofirst) o)
+    (cg-set cg g (cgf-ocount) 1)
+    (cg-set cg g (cgf-simfold) simfold)
+    (return g)))
+
+(defn ^I32 ht-groups [^:mut ^Cells cg ^:mut ^Cells refs ^I32 page ^I32 ea ^I32 widx ^I32 total ^I32 agreeing]
+  (comment "`total` groups on one word, the first `agreeing` of them at similarity 950, the rest at 100.")
+  (let [^:mut ^I32 i 0]
+    (while (< i total)
+      (do (if (< i agreeing) (ht-group cg refs page ea widx 950) (ht-group cg refs page ea widx 100))
+          (set i (+ i 1))))
+    (return total)))
+
+(defn ^I32 ht-score-of [^Cells hl ^I32 page ^I32 font]
+  (let [^I32 n (hl-count hl)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (and (== (hl-get hl i 0) (plh-font-page)) (and (== (hl-get hl i 1) page) (== (hl-get hl i 2) font)))
+            (return (hl-get hl i (hlf-score))))
+          (set i (+ i 1))))
+    (return -2)))
+
+(defn ^I32 ht-agreement-of [^Cells hl ^I32 page ^I32 font]
+  (let [^I32 n (hl-count hl)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (and (== (hl-get hl i 0) (plh-font-page)) (and (== (hl-get hl i 1) page) (== (hl-get hl i 2) font)))
+            (return (hl-get hl i (hlf-agreement))))
+          (set i (+ i 1))))
+    (return -2)))
+
+(deftest test-a-healthy-font-and-a-shifted-one
+  (let [^Cells words (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells ob (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^I32 healthy (ht-word words fw feats et 1 0)
+        ^I32 shifted (ht-word words fw feats et 1 1)]
+    (ht-font-row hl 1 0)
+    (ht-font-row hl 1 1)
+    (comment "font 0: 12 groups, 11 agree; font 1: 12 groups, 1 agrees")
+    (ht-groups cg refs 1 (pl-ea-fw) healthy 12 11)
+    (ht-groups cg refs 1 (pl-ea-fw) shifted 12 1)
+    (hl-page 1 cg refs fw words et feats ob ol ow hl)
+    (assert-eq (ht-agreement-of hl 1 0) 916 "11 of 12")
+    (assert-eq (ht-agreement-of hl 1 1) 83 "1 of 12")
+    (assert-that (>= (ht-score-of hl 1 0) (th-trusted)) "the healthy font is trusted")
+    (assert-that (< (ht-score-of hl 1 1) 300) "the shifted font is under 300")
+    (assert-eq (fe-get feats 0 (xt-font-health)) (ht-score-of hl 1 0) "its word's column 13")
+    (assert-eq (fe-get feats 1 (xt-font-health)) (ht-score-of hl 1 1) "the shifted word's column 13")
+    (comment "the groups it was made of")
+    (assert-eq (hl-get hl 1 (hlf-both)) 12 "groups with both")
+    (assert-eq (hl-get hl 1 (hlf-agree)) 1 "agreeing groups")
+    (comment "a second call is the same")
+    (hl-page 1 cg refs fw words et feats ob ol ow hl)
+    (assert-eq (hl-count hl) 2 "no row is added")
+    (assert-eq (ht-agreement-of hl 1 1) 83 "and no count doubles")))
+
+(deftest test-no-ocr-and-too-few-groups
+  (let [^Cells words (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells ob (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^I32 a (ht-word words fw feats et 1 0)
+        ^I32 b (ht-word words fw feats et 1 1)]
+    (assert-eq a 0 "the first flow word")
+    (ht-font-row hl 1 0)
+    (ht-font-row hl 1 1)
+    (ht-groups cg refs 1 (pl-ea-fw) b 3 0)
+    (hl-page 1 cg refs fw words et feats ob ol ow hl)
+    (assert-eq (ht-agreement-of hl 1 0) -1 "no OCR candidate at all: -1")
+    (assert-eq (ht-score-of hl 1 0) 1000 "and the score is P7.0's")
+    (assert-eq (ht-agreement-of hl 1 1) 0 "three groups, none agreeing: recorded")
+    (assert-eq (ht-score-of hl 1 1) 1000 "but under `agree-words` it does not count")))
+
+(deftest test-a-font-bad-on-one-page-only
+  (let [^Cells words (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells ob (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^I32 p1 (ht-word words fw feats et 1 7)
+        ^I32 p2 (ht-word words fw feats et 2 7)
+        ^I32 p3 (ht-word words fw feats et 3 7)]
+    (ht-font-row hl 1 7)
+    (ht-font-row hl 2 7)
+    (ht-font-row hl 3 7)
+    (ht-groups cg refs 1 (pl-ea-fw) p1 10 10)
+    (ht-groups cg refs 2 (pl-ea-fw) p2 10 0)
+    (ht-groups cg refs 3 (pl-ea-fw) p3 10 9)
+    (hl-page 1 cg refs fw words et feats ob ol ow hl)
+    (hl-page 2 cg refs fw words et feats ob ol ow hl)
+    (hl-page 3 cg refs fw words et feats ob ol ow hl)
+    (assert-that (>= (ht-score-of hl 1 7) (th-trusted)) "page 1 is healthy")
+    (assert-that (< (ht-score-of hl 2 7) 300) "page 2 is not")
+    (assert-that (>= (ht-score-of hl 3 7) (th-trusted)) "page 3 is healthy")
+    (assert-eq (hl-doc feats fw hl) 0 "the document pass leaves a font that is bad on one page alone")
+    (assert-that (>= (ht-score-of hl 1 7) (th-trusted)) "still")
+    (assert-that (< (ht-score-of hl 2 7) 300) "still")))
+
+(deftest test-a-font-bad-everywhere-is-bad-on-every-page
+  (let [^Cells words (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells ob (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^I32 p1 (ht-word words fw feats et 1 7)
+        ^I32 p2 (ht-word words fw feats et 2 7)
+        ^I32 p3 (ht-word words fw feats et 3 7)
+        ^I32 o1 (ht-word words fw feats et 1 8)
+        ^I32 o2 (ht-word words fw feats et 2 8)]
+    (ht-font-row hl 1 7)
+    (ht-font-row hl 2 7)
+    (ht-font-row hl 3 7)
+    (ht-font-row hl 1 8)
+    (ht-font-row hl 2 8)
+    (comment "font 7: 10 groups on page 1 (1 agrees), 9 on page 2 (0), 2 on page 3 (0: too few); font 8 is good")
+    (ht-groups cg refs 1 (pl-ea-fw) p1 10 1)
+    (ht-groups cg refs 2 (pl-ea-fw) p2 9 0)
+    (ht-groups cg refs 3 (pl-ea-fw) p3 2 0)
+    (ht-groups cg refs 1 (pl-ea-fw) o1 10 10)
+    (ht-groups cg refs 2 (pl-ea-fw) o2 10 10)
+    (hl-page 1 cg refs fw words et feats ob ol ow hl)
+    (hl-page 2 cg refs fw words et feats ob ol ow hl)
+    (hl-page 3 cg refs fw words et feats ob ol ow hl)
+    (assert-eq (ht-score-of hl 3 7) 1000 "page 3 alone counts nothing")
+    (assert-eq (hl-doc feats fw hl) 3 "three rows of font 7")
+    (assert-that (< (ht-score-of hl 3 7) 300) "page 3 is unhealthy through the document")
+    (assert-eq (ht-agreement-of hl 3 7) 47 "taking the document's pooled agreement: 1 of 21")
+    (assert-eq (ht-agreement-of hl 1 7) 100 "pages with their own groups keep theirs")
+    (assert-eq (fe-get feats p3 (xt-font-health)) (ht-score-of hl 3 7) "its word's column 13")
+    (assert-that (>= (ht-score-of hl 1 8) (th-trusted)) "the other font is untouched")))
+
+(deftest test-a-script-the-engine-cannot-read-is-not-counted
+  (let [^Cells words (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells ob (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^I32 w (ht-word-in words fw feats et 1 5 1)]
+    (comment "the word's text is the two Hebrew letters: ten groups that all disagree, and the font is still trusted")
+    (ht-font-row hl 1 5)
+    (ht-groups cg refs 1 (pl-ea-fw) w 10 0)
+    (hl-page 1 cg refs fw words et feats ob ol ow hl)
+    (assert-eq (ht-agreement-of hl 1 5) -1 "no group counted: no agreement")
+    (assert-eq (ht-score-of hl 1 5) 1000 "and the score is P7.0's")
+    (assert-eq (hl-doc feats fw hl) 0 "the document pass has nothing to say")))
+
+(deftest test-text-layer-candidates-named-as-words-rows
+  (let [^Cells words (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells ob (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^I32 w (ht-word words fw feats et 1 4)]
+    (ht-font-row hl 1 4)
+    (ht-groups cg refs 1 (ea-words) w 10 0)
+    (hl-page 1 cg refs fw words et feats ob ol ow hl)
+    (assert-eq (ht-agreement-of hl 1 4) 0 "found through `words`")
+    (assert-that (< (ht-score-of hl 1 4) 300) "and scored")))
+
+;; ------------------------------------------------------------- OCR blocks
+
+(defn ^I32 ht-ocr-word [^:mut ^Cells ow ^:mut ^Cells feats ^I32 length ^I32 ink ^I32 implausible ^I32 body ^I32 seal ^I32 artifact]
+  (comment "An OCR word whose feature row has these columns (-1 leaves one absent) and an engine confidence of 0, which means nothing.")
+  (let [^I32 w (ow-new ow 1 0 0 1000 1000 0 900 1000 900 0 0 0 length -1 0 -1)
+        ^I32 f (fe-new feats (ea-owords) w)]
+    (ow-set ow w (hd-feat) f)
+    (fe-set feats f (xo-conf) 0)
+    (fe-set feats f (xo-length) length)
+    (fe-set feats f (xo-kin-ink) ink)
+    (fe-set feats f (xo-implausible) implausible)
+    (fe-set feats f (xo-body-share) body)
+    (fe-set feats f (xo-seal) seal)
+    (fe-set feats f (xo-artifact) artifact)
+    (return f)))
+
+(defn ^I32 ht-block [^:mut ^Cells ob ^:mut ^Cells ol ^I32 first-word ^I32 nwords]
+  (comment "A block of one paragraph of one line over `nwords` words from `first-word`; answers the block's row.")
+  (let [^I32 line (ol-new ol 1 0 0 1000 1000 0 900 1000 900 0 0 first-word nwords)
+        ^I32 b (ob-new ob 1 0 0 1000 1000 (ob-block) -1 0)
+        ^I32 p (ob-new ob 1 0 0 1000 1000 (ob-paragraph) b 0)]
+    (ob-set ob b (obf-first) p)
+    (ob-set ob b (obf-count) 1)
+    (ob-set ob p (obf-first) line)
+    (ob-set ob p (obf-count) 1)
+    (return b)))
+
+(defn ^I32 ht-block-score [^Cells hl ^I32 b]
+  (let [^I32 n (hl-count hl)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (and (== (hl-get hl i 0) (plh-ocr-block)) (== (hl-get hl i 2) b)) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 ht-bget [^Cells hl ^I32 b ^I32 field]
+  (comment "Cell `field` of the health row of OCR block `b`.")
+  (let [^I32 r (ht-block-score hl b)]
+    (return (hl-get hl r field))))
+
+(deftest test-ocr-blocks
+  (let [^Cells words (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells ob (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)]
+    (comment "block 0: body text (ink 150, nothing implausible, 95 % on the body layer, no seal, no artifact); 1: over blank paper;")
+    (comment "2: under a seal; 3: soup; 4: watermark (artifact 900, light ink); 5: no ink columns at all, only the plausibility")
+    (ht-ocr-word ow feats 5 150 0 950 0 0)
+    (ht-ocr-word ow feats 6 140 0 960 0 0)
+    (ht-block ob ol 0 2)
+    (ht-ocr-word ow feats 6 2 0 0 0 0)
+    (ht-block ob ol 2 1)
+    (ht-ocr-word ow feats 6 150 0 100 900 0)
+    (ht-block ob ol 3 1)
+    (ht-ocr-word ow feats 6 150 800 950 0 0)
+    (ht-block ob ol 4 1)
+    (ht-ocr-word ow feats 6 40 0 100 0 900)
+    (ht-block ob ol 5 1)
+    (ht-ocr-word ow feats 6 -1 0 -1 -1 -1)
+    (ht-block ob ol 6 1)
+    (assert-eq (hl-page 1 cg refs fw words et feats ob ol ow hl) 6 "six blocks scored")
+    (assert-eq (hl-count hl) 6 "and six rows")
+    (let [^I32 body (ht-bget hl 0 (hlf-score))
+          ^I32 blank (ht-bget hl 2 (hlf-score))
+          ^I32 seal (ht-bget hl 4 (hlf-score))
+          ^I32 soup (ht-bget hl 6 (hlf-score))
+          ^I32 mark (ht-bget hl 8 (hlf-score))
+          ^I32 bare (ht-bget hl 10 (hlf-score))]
+      (assert-that (>= body 900) "a body block is trusted")
+      (assert-that (< blank body) "blank paper scores under the body")
+      (assert-that (< seal body) "a seal scores under the body")
+      (assert-that (< soup body) "soup scores under the body")
+      (assert-that (< mark body) "a watermark scores under the body")
+      (assert-that (< blank 300) "blank paper is far under")
+      (assert-that (< seal 300) "a seal is far under")
+      (assert-eq bare 1000 "a block with only a plausibility is scored on it: what is absent does not drag")
+      (assert-eq (ht-bget hl 0 (hob-seal)) 1000 "the body's seal component: 1000 - 0")
+      (assert-eq (ht-bget hl 4 (hob-seal)) 100 "the seal block's: 1000 - 900")
+      (assert-eq (ht-bget hl 4 (hob-body)) 100 "and its body share")
+      (assert-eq (ht-bget hl 8 (hob-artifact)) 100 "the watermark's artifact component")
+      (assert-eq (ht-bget hl 10 (hob-ink)) -1 "an absent column is -1")
+      (assert-eq (ht-bget hl 10 (hob-seal)) -1 "and stays absent")
+      (assert-eq (ht-bget hl 10 (hob-plausible)) 1000 "while the plausibility is there")
+      (assert-eq (ht-bget hl 0 (hob-script)) -1 "no script column: ignored")
+      (assert-eq (ht-bget hl 0 (hob-plausible)) 1000 "the body's plausibility")
+      (assert-eq (ht-bget hl 0 (hob-ink)) 1000 "the body's ink support: 150 is over `ink-ok`")
+      (assert-eq (ht-bget hl 2 (hob-ink)) 0 "blank paper's: 2 is under `ink-bad`"))
+    (comment "a second call overwrites")
+    (hl-page 1 cg refs fw words et feats ob ol ow hl)
+    (assert-eq (hl-count hl) 6 "no row is added")))
+
+;; ------------------------------------------------------------- regions
+
+(defn ^I32 ht-rule [^:mut ^Cells rl ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 conf]
+  (let [^I32 r (rl-new rl page (- x0 0) (- y0 0) x1 y1 0)]
+    (rl-set rl r 6 x0)
+    (rl-set rl r 7 y0)
+    (rl-set rl r 8 x1)
+    (rl-set rl r 9 y1)
+    (rl-set rl r (rlf-conf) conf)
+    (return r)))
+
+(deftest test-regions
+  (let [^Cells hl (new-cells)
+        ^Cells im (new-cells)
+        ^Cells rl (new-cells)]
+    (comment "an image placement of 10 x 10 cm at (10000, 10000); a page of rules outside it, parallel to the axes within 10 centi-degrees")
+    (im-new im 1 10000 10000 20000 20000 5 800 800)
+    (ht-rule rl 1 1000 1000 50000 1000 900)
+    (ht-rule rl 1 1000 5000 50000 5003 950)
+    (ht-rule rl 1 1000 1000 1000 40000 850)
+    (comment "inside the image: skewed 1.5 degrees, far from parallel to each other")
+    (ht-rule rl 1 11000 12000 19000 12100 700)
+    (ht-rule rl 1 11000 15000 19000 15000 700)
+    (ht-rule rl 1 12000 11000 12150 19000 600)
+    (assert-eq (hl-regions 1 im rl 920 960 hl) 2 "R0 and one image")
+    (assert-eq (hl-get hl 0 2) -1 "R0's subject")
+    (assert-eq (hl-get hl 0 (hrg-rules)) 3 "three rules outside the image")
+    (assert-eq (hl-get hl 0 (hrg-witness)) 920 "the witness is the caller's")
+    (assert-eq (hl-get hl 0 (hrg-precision)) 960 "and so is the precision")
+    (assert-eq (hl-get hl 0 (hrg-conf)) 900 "the mean confidence of 900, 950, 850")
+    (assert-that (>= (hl-get hl 0 (hrg-skew)) 900) "parallel rules: the skew component is high")
+    (assert-that (>= (hl-get hl 0 (hlf-score)) 800) "R0's score is high")
+    (assert-eq (hl-get hl 1 2) 0 "the image's subject is its row")
+    (assert-eq (hl-get hl 1 (hrg-rules)) 3 "three rules inside it")
+    (assert-eq (hl-get hl 1 (hrg-witness)) -1 "no witness of its own")
+    (assert-eq (hl-get hl 1 (hrg-precision)) 960 "it borrows the page's precision")
+    (assert-eq (hl-get hl 1 (hrg-conf)) 666 "the mean of 700, 700, 600")
+    (assert-that (< (hl-get hl 1 (hrg-skew)) 1000) "a spread over 30 centi-degrees costs")
+    (assert-that (< (hl-get hl 1 (hlf-score)) (hl-get hl 0 (hlf-score))) "the image scores under R0")
+    (comment "again: overwritten")
+    (hl-regions 1 im rl 920 960 hl)
+    (assert-eq (hl-count hl) 2 "no row is added")))
+
+(deftest test-the-tracers-symbol-support-joins-the-ink-support
+  (let [^Cells feats (new-cells)
+        ^Cells ow (new-cells)]
+    (comment "ink 150 is full support alone; with the tracer saying none of the symbols has a text-like component it is half")
+    (ht-ocr-word ow feats 5 150 0 1000 0 0)
+    (ht-ocr-word ow feats 5 150 0 1000 0 0)
+    (fe-set feats 1 (xo-comp-ratio) 0)
+    (ht-ocr-word ow feats 5 -1 0 1000 0 0)
+    (fe-set feats 2 (xo-comp-ratio) 400)
+    (assert-eq (hh-word-score feats 0) 1000 "the word with ink alone")
+    (assert-that (< (hh-word-score feats 1) (hh-word-score feats 0)) "the same word with no component in its symbols scores under it")
+    (assert-eq (hh-word-score feats 2) 529 "a word with only the tracer's share is scored on it: 14e6 / 18500 = 756, times 1400 / 2000")
+    (assert-eq (hh-word-score feats -1) -1 "no feature row: no score")))

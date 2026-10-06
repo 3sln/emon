@@ -46,6 +46,9 @@ import (
 	"emon/html"
 	"emon/model"
 	"emon/pageunit"
+	"emon/arbiter"
+	"emon/health"
+	"emon/player"
 	"emon/para"
 	"emon/table"
 	"emon/pdfcontent"
@@ -251,6 +254,10 @@ type Options struct {
 	Furniture Furniture
 	// KeepEvidence keeps the text layer's evidence dump (`Model.Evidence`): a test and debugging aid.
 	KeepEvidence bool
+	// OcrBornDigital is a HIDDEN TEST SETTING (P7.3, D285-D290): OCR the born-digital pages too, as P7.S will under `always`, and fuse the two
+	// readings (render, OCR, align, arbitrate). Off by default: until P7.S a born-digital page is not OCR'd (D201, D212 (3)). The replay
+	// gate and `bb fusion` set it; an embedder never needs to.
+	OcrBornDigital bool
 }
 
 // DefaultOptions is SPEC 13's defaults.
@@ -1132,6 +1139,13 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	if opts.KeepEvidence {
 		snap = []*port.Cells{cloneCells(gl), cloneCells(mk), cloneCells(fnt)}
 	}
+	// With fusion on, the text layer's epages and feats are the evidence's own: the OCR of a born-digital page adds its feature rows to
+	// the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
+	ev0 := newEvArenas()
+	if opts.OcrBornDigital {
+		ev0.epages = tlEpages
+		ev0.feats = tlFeats
+	}
 	// The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
 	// (D076), which the furniture stage weighs the tree's /Artifact marks by.
 	q := newCellsN(24)
@@ -1155,7 +1169,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	for i := int32(0); i < max(np, 0); i++ {
 		port.CellsPush(mask, 0)
 	}
-	return step{pdf: &pdfDoc{ev: newEvArenas(), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
+	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
 		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, info: info}}
 }
 
@@ -1167,6 +1181,9 @@ type pdfDoc struct {
 	// the flow stage 3 reads (P7.0), the words set aside, and how many lines the text layer had before any page unit
 	fw, fl, fa *port.Cells
 	nl0        int32
+	// fusion (P7.3): the fonts' health, the correspondence groups the page units made, and the alignment's scratch
+	hl, cg *port.Cells
+	xs     []*port.Cells
 	// the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence dump has
 	// always shown (kept only when the evidence is asked for)
 	snap []*port.Cells
@@ -1187,7 +1204,8 @@ func cloneCells(c *port.Cells) *port.Cells {
 func unitPdf(d *pdfDoc, i, idx int, opts Options, answers, rq *port.Cells, bms *port.BitmapSet) int32 {
 	scr := port.NewCells()
 	return pageunit.PuRunPdf(int32(i), int32(idx), opts.Ocr.code(), d.plan, answers, rq, d.loc, bms, d.mask, scr,
-		d.ev.epages, d.ev.views, d.et, d.ev.feats, d.ev.images, d.ev.oruns, d.ev.oblocks, d.ev.olines, d.ev.owords, d.ev.osyms, d.ev.oalts, d.wd, d.ln)
+		d.ev.epages, d.ev.views, d.et, d.ev.feats, d.ev.images, d.ev.oruns, d.ev.oblocks, d.ev.olines, d.ev.owords, d.ev.osyms, d.ev.oalts, d.wd, d.ln,
+		boolInt(opts.OcrBornDigital), d.fw, d.hl, d.ev.refs, d.cg, d.ev.tlines, d.xs[0], d.xs[1], d.xs[2], d.xs[3], d.xs[4], d.xs[5])
 }
 
 // finishPdf is the document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
@@ -1199,13 +1217,50 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	np := pdfdoc.PdPgCount(pg)
 	// the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
 	tlhealth.ThAppend(wd, ln, fw, fl, d.nl0)
+	// FUSION (P7.3, D285-D290): the page units aligned every OCR'd born-digital page (cg); with the document's verdict on every font (HlDoc)
+	// the arbiter picks each group's source and makes the fused flow stage 3 reads. With no group (no engine, or the engine answered
+	// nothing) none of this runs and nothing below is different.
+	fused := port.CellsLen(d.cg) > 0
+	if opts.OcrBornDigital && !fused && port.CellsLen(ev.owords) == 0 {
+		// nothing was read: the evidence is what a run without the setting dumps (the text layer's own features were borrowed for alignment)
+		ev.epages = port.NewCells()
+		ev.feats = port.NewCells()
+	}
+	fz := newCellsN(3)
+	fv, fx, afa := fz[0], fz[1], fz[2]
+	if fused {
+		fb := newCellsN(9)
+		nfw, nfl, gd, gv, w2g, o2g, pp, tw, tl := fb[0], fb[1], fb[2], fb[3], fb[4], fb[5], fb[6], fb[7], fb[8]
+		health.HlDoc(ev.feats, fw, d.hl)
+		arbiter.ArDoc(d.cg, ev.refs, fw, fl, et, ev.feats, ev.owords, ev.olines, ev.oruns, ev.osyms, ev.images, ev.epages,
+			nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, d.xs[0])
+		fw, nfw = nfw, fw
+		fl, nfl = nfl, fl
+		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, port.NewCells(), port.NewCells(), et, ev.refs, gl); c != 0 {
+			return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("pl-check %d", c)}}
+		}
+	}
 	var evs *string
 	if opts.KeepEvidence {
 		g, k, f := gl, mk, fnt
 		if d.snap != nil {
 			g, k, f = d.snap[0], d.snap[1], d.snap[2]
 		}
-		s := evidenceDump(ev, et, g, wd, ln, k, f, grl, gfl)
+		var s string
+		if fused {
+			// the dump, VERSION "2" (SPEC 9.7): the evidence's arrays, then the layer's; the set-aside list is the text layer's and the dropped ghosts'
+			fad := cloneCells(fa)
+			for i := int32(0); i < port.CellsLen(afa); i++ {
+				port.CellsPush(fad, port.CellsAt(afa, i))
+			}
+			var sb strings.Builder
+			player.PlEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, g, wd, ln, k, f, ev.paths, ev.images,
+				ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines,
+				d.cg, fw, fl, fv, fad, fx, d.hl, grl, port.NewCells(), gfl, port.NewCells(), port.NewCells())
+			s = sb.String()
+		} else {
+			s = evidenceDump(ev, et, g, wd, ln, k, f, grl, gfl)
+		}
 		evs = &s
 	}
 	m := newArenas()
@@ -1258,6 +1313,11 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	// the words the triage set aside (P7.0): ledger rows, after the furniture's
 	tlhealth.ThWrite(fa, wd, et, m.ledger, m.text, t[2], port.NewCells())
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
+	// fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
+	if fused {
+		arbiter.ArWrite(afa, ev.owords, et, m.ledger, m.text, t[2], port.NewCells())
+		arbiter.ArTag(m.nodes, m.regions, fw, fv)
+	}
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)
 		for _, ch := range opts.Locale {

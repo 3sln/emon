@@ -1493,6 +1493,19 @@ column 24) and over case-folded letters only (kept in the group, for the
 broken-encoding test of §9.4). Every group's text-layer candidates in
 content-stream order and OCR candidates in engine order are runs of `refs`.
 
+**As built (P7.1, D278-D280).** `emon.xalign` (`kin/xalign.kin`, entry `xa-page`; not `emon.align`, which is the paragraph
+alignment of §10.10) is as designed, with these made precise. A pairing's cost is 1000 minus the intersection over union of the
+merged words' **extents along the line** (not of their boxes: the sources draw a word's height differently and agree on where
+along the line it is); the candidate test stays on the boxes. An OCR word belongs to the text-layer line of its best candidate
+and is ordered by its centre along that line's baseline, reversed for a right-to-left line. The visible layer and the
+`hidden-text` layer are aligned apart, each against every OCR run; a group is the connected set of all the steps, so one group
+holds a word of each source and each run. What no step matched is **attached** when the other source covers it (an OCR word
+inside a text-layer word joins its group as a `split`, a text-layer word inside an OCR word as `merged`); an OCR word still
+unmatched joins only an overlapping OCR word of another run. Similarity concatenates a side's words without a separator and is
+capped at 256 code points; the folded form keeps letters and digits. The columns written are `xt-sim-ocr` (the first run),
+`xt-sim-ocr2` (the second), `xo-sim-text` and `xo-sim-hidden`, per step with case kept. It is measured on nine real
+documents (`bb align`: pdfium renders, Tesseract's reading, replayed on Rust and Go; DEVLOG P7.1).
+
 ### 9.3 Health
 
 Before comparing words, each source is scored **per region** (per font × page
@@ -1536,6 +1549,16 @@ is unhealthy everywhere (a font's encoding is a document fact). An OCR
 **region** (an `oblocks` block) is scored from its words' `xo` columns (ink
 support 10-13, plausibility 8, script 9, layer 13, artifact and seal overlap
 22-23). Every component and the score are rows of `hl`, so the dump says why.
+
+**Step two as built (P7.2, D281-D283).** The agreement is a fifth component (a ramp from 200 to 800, weight 5) that counts only on a
+page with at least `agree-words` (8) groups and only for a group whose text-layer candidate holds a Latin letter or digit (an engine
+without the script's model reads soup, and the text layer is not wrong for that); its two counts are the row's spare cells 10 and 11.
+A font under `agree-min` (600) on every page that has the groups is unhealthy on all of them (`hl-doc`). An OCR block's row has
+the components ink support (averaged with the tracer's symbols-with-a-component share), plausibility, script, body share, seal and
+artifact freedom in cells 3-8; a column not computed is absent (-1), never zero, and the engine's confidence is not one (D130).
+`hh-word-score` is the same for one word. A graphics region's row (kind `region`, subject -1 for R0 or the `images` row) has the
+vector witness and the tracer's precision from the caller (the vector rules are not this module's), the skew spread and the mean
+confidence of the region's rules, and their number.
 
 ### 9.4 Arbitration
 
@@ -1593,6 +1616,21 @@ run on graphics groups, not on word groups), 600-699 where graphics meet words
 blocks are tried for a word group in the order 400, 600, 200, 300, 100
 (`fr-order`, D224): what belongs to a seal, to a rule's ink or to an artifact
 is decided before which source reads it best.
+
+**As built (P7.3, D285-D290).** `kin/fuserules.kin` holds the table as data (`fr-rows`: number, block, winner, ledger reason, flags,
+confidence, six `(group column, comparison, setting)` predicates; the settings are named in `fr-setting`, the group columns `ag-*`) and
+`fr-order`; `kin/arbiter.kin` measures each group's columns and applies the first row that holds. Block 100 is built: 101/102 the identity
+(a sole text-layer or hidden candidate), 110-112 a healthy font with no bad glyph of its own wins whatever OCR reads (only the confidence
+moves: 1000, 700, 500 with `low-conf`), 120 a bad glyph of the word's own and 130 an unhealthy font give the group to OCR when the engine
+reads the script (a Latin letter or digit in the text layer's word) and the OCR is plausible (`text-layer-suspect`), 140/141 an OCR-only
+group that is plausible and well scored is admitted when it lies in no image or in a scanned insert, 150 in a smaller image it is held
+(`in-figure` on the group), 170/175 an implausible or poorly scored OCR-only group is dropped as an `ocr-ghost`, 190 the default. Row 160
+(two OCR passes) waits for P7.4's second run. The conditions that need kin's ink layers (body-ink share) are not read: P6.3's views are
+not wired into the page unit yet. **Arbitration runs in the document unit**, after every page unit has aligned and scored its page and
+`hl-doc` has judged the fonts (an encoding is a document fact); the page unit asks the two rasters (`pu-ask-rasters`), the OCR of the one
+with its text, and runs `xa-page` and `hl-page`. The fused flow keeps the text layer's geometry for a word OCR replaced; OCR-only words
+admitted are lines of their own after the page's others. Under the hidden test setting `ocr-born-digital` only: until P7.S a born-digital
+page is not OCR'd, and with no engine nothing here runs and every output is byte-identical.
 
 ### 9.5 Watermarks, backgrounds and ghosts (D015)
 

@@ -15,7 +15,7 @@
 
   THE DUMP'S FIELD NAMES are the arena columns of SPEC 9.7, as the dump (version \"2\") writes every arena: an array
   of objects under the arena's name. Read here: `cg` rows (`text`, `ocr`: a candidate run, given as an array or a
-  count), `fv` rows (`group`, `src`: a source name `text`, `hidden-text`, `ocr` or `trace`, `rule`), `fx` rows
+  count), `fv` rows (`group`, `source` (the dump's name; `src` in the self-test's): a source name `text`, `hidden-text`, `ocr` or `trace`, `rule`), `fx` rows
   (`group`, `rule`), `fa` rows (`defence` 1-6 or 0, `reason`). P7.1 and P7.3 own the dump; when a name there differs
   from these, this one file changes (and its self-test, which is the format's only witness until fusion exists)."
   (:require [cheshire.core :as json]
@@ -30,6 +30,12 @@
     (json/parse-string (subs l (count "evidence: ")))
     (json/parse-string text)))
 
+(def SRC-NAMES {1 "text" 2 "hidden-text" 4 "ocr" 8 "trace"})
+
+(defn- src-name
+  "The `source` of an `fv` row: the dump prints the `sr` code (1 text, 2 hidden-text, 4 ocr, 8 trace); a name passes as it is."
+  [v] (if (number? v) (get SRC-NAMES v (str v)) v))
+
 (defn analyse
   "One dump -> {:both n :wins {src n} :rules {rule n} :reads {rule n} :defences {d n} :reasons {r n}}."
   [dump]
@@ -39,7 +45,7 @@
         fv (filter #(contains? both (get % "group")) (get dump "fv"))]
     {:both (count both)
      :decided (count fv)
-     :wins (frequencies (map #(get % "src") fv))
+     :wins (frequencies (map #(src-name (or (get % "source") (get % "src"))) fv))
      :rules (frequencies (map #(get % "rule") (get dump "fv")))
      :reads (frequencies (map #(get % "rule") (get dump "fx")))
      :defences (frequencies (map #(get % "defence" 0) (get dump "fa")))

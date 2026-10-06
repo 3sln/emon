@@ -1,0 +1,858 @@
+;; ARBITRATION: which source reads each correspondence group, and the fused page (P7.3; SPEC 9.4, 9.7; D014, D195, D201, D203).
+;; emon's own module (D039).
+;;
+;;   (ar-doc cg refs ofw ofl etext feats owords olines oruns osyms images epages
+;;           nfw nfl fv fx afa gd gv w2g o2g tw tl scr)
+;;       The document unit's call, after every page unit has aligned its page (`xa-page`, in `cg`/`refs`) and `hl-doc` has judged the
+;;       fonts. `ofw`/`ofl` are the text layer's flow (`th-run`'s copy, with the scanned pages' OCR lines `th-append`ed after it).
+;;       Per group it measures the group columns (`ag-*` of `emon.fuserules`), takes the first rule of `fr-rows` that holds, and writes
+;;
+;;         nfw nfl   the FUSED FLOW, in the layouts of `words`/`lines` (SPEC 9.7), so stage 3 reads it exactly as it read the text layer's:
+;;                   a text-layer word that won is copied as it was (its glyph run kept, `src` the bitset of every source that had a
+;;                   candidate); the words a group's OCR won stand where the text layer's words of that group stood; an admitted
+;;                   OCR-only group is a line of its own (measured as an OCR line is, D213) after the page's other lines
+;;         fv        one row per `nfw` row: group, winning source (`sr`), rule number, confidence, flags (`fl`)
+;;         fx        a run per group: the deciding rule's number, and each column it read with the value read
+;;         afa       the OCR groups dropped as ghosts: the layer's `fa` layout, the subject an `owords` row
+;;
+;;       `cg` gets the flag `in-figure` on a group held by rule 150. Answers the number of groups decided.
+;;   (ar-write afa owords etext ledger text tmp tt)   the dropped ghosts as ledger rows (after `fu-write`, as `th-write` does the text layer's)
+;;   (ar-tag nodes regions pages nfw fv)              the Model's provenance (`src`, `conf`, `ocr-only`, `text-layer-suspect`, `low-conf`)
+;;
+;; WHAT A WORD OF OCR TAKES FROM THE TEXT LAYER WORD IT REPLACES. The text layer's geometry is exact and its font, style and size are
+;; real, so when the group has as many OCR words as text words the j-th OCR word takes the j-th text word's box, baseline, rotation,
+;; direction, style, size, font and spacing, and only its text and confidence are OCR's. When the counts differ (a word read as three,
+;; three read as one: the split and merged groups of alignment) the OCR word keeps its own extent along the line and takes the line
+;; band (the group's text-layer words' extent across it) and the baseline of the text layer; a rotated word keeps all of OCR's. Its
+;; glyph run is empty (no glyph says this word: SPEC 9.7), its feature row absent, like a scanned page's.
+;;
+;; THE BORN-DIGITAL CONTRACT (D201) lives in the rows of `emon.fuserules`; this module only applies a rule's verdict. A group no rule
+;; reaches, and the words of a page the engine never read, pass through as the text layer made them (rule 101, the identity).
+(ns emon.arbiter
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
+            [emon.model :refer [sr-text sr-hidden-text sr-ocr fl-ocr-only ledger-add ledger-set-text dr-ocr-ghost
+                                node-count node-parent node-first-child node-next node-is-inline node-has-text node-src
+                                node-set-src node-conf node-set-conf node-flags node-add-flag node-add-src node-region-head
+                                node-region-count node-kind region-page region-x0 region-y0 region-x1 region-y1 region-next
+                                fl-text-layer-suspect fl-low-conf]]
+            [emon.evidence :refer [ev-overlap-small ev-page-row ev-rot-median ep-get epf-width epf-height fe-get
+                                   rf-get ow-get ow-count or-count or-get orf-page orf-lfirst orf-lcount ol-get lh-first lh-count
+                                   im-count im-get mf-page mf-x0 mf-y0 mf-x1 mf-y1
+                                   hd-feat hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-line
+                                   wf-gfirst wf-gcount wf-font wf-size wf-style wf-gap wf-wbreak wf-src wb-space
+                                   xt-font-health xt-bad-cp xo-implausible ea-words ea-owords]]
+            [emon.player :refer [cg-count cg-get cg-set cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount
+                                 cgf-hfirst cgf-hcount cgf-sim cgf-simfold cgf-flags plg-in-figure
+                                 fw-count fl-count fw-copy-word fl-copy-line fv-new fx-new fa-new fa-count fa-get fa-set]]
+            [emon.health :refer [hh-word-score hh-agree-sim]]
+            [emon.scan :refer [sc-prep sc-emit-lines]]
+            [emon.fuserules :refer [ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin
+                                    ag-olen ag-oconf ag-near ag-pageagree ag-count fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-npred fr-pcol fw-none fw-text fw-ocr]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+;; ------------------------------------------------------------- small helpers
+
+(defn ^I32 ar-ref [^Cells refs ^I32 i ^I32 k]
+  (return (cells-at refs (+ (* i 2) k))))
+
+(defn ^I32 ar-latin-cp [^I32 c]
+  (comment "1 for a Latin letter or a digit: ASCII, Latin-1 (without the multiplication and division signs), Latin Extended-A and -B.")
+  (if (and (>= c 48) (<= c 57)) (return 1))
+  (if (and (>= c 65) (<= c 90)) (return 1))
+  (if (and (>= c 97) (<= c 122)) (return 1))
+  (if (and (>= c 192) (<= c 591) (and (!= c 215) (!= c 247))) (return 1))
+  (return 0))
+
+(defn ^I32 ar-foreign-cp [^I32 c]
+  (comment "1 for a letter of a script the engine (a Latin model) cannot read: Greek and everything to the Georgian and beyond up to the")
+  (comment "Latin Extended Additional block, then Hebrew to the Hangul syllables (CJK, Kangxi radicals, Arabic and Devanagari among them),")
+  (comment "the compatibility ideographs and the Arabic presentation forms. Garbage (U+FFFD, the Private Use Area) is no script.")
+  (if (and (>= c 880) (< c 7680)) (return 1))
+  (if (and (>= c 7936) (<= c 8191)) (return 1))
+  (if (and (>= c 11904) (<= c 55215)) (return 1))
+  (if (and (>= c 63744) (<= c 64975)) (return 1))
+  (if (and (>= c 65136) (<= c 65276)) (return 1))
+  (return 0))
+
+(defn ^I32 ar-word-latin [^Cells fw ^Cells etext ^I32 row]
+  (comment "1 when the engine can read the word: it holds a Latin letter or digit, or it holds no letter of any other script (a word of nothing")
+  (comment "but U+FFFD, private-use or control code points, which is what an unmapped font leaves, names no script the engine lacks).")
+  (let [^I32 ts (cells-at fw (+ (* row 24) 11))
+        ^I32 tl (cells-at fw (+ (* row 24) 12))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 foreign 0]
+    (while (< j tl)
+      (do (if (== (ar-latin-cp (cells-at etext (+ ts j))) 1) (return 1))
+          (if (== (ar-foreign-cp (cells-at etext (+ ts j))) 1) (set foreign 1))
+          (set j (+ j 1))))
+    (if (and (== foreign 0) (> tl 0)) (return 1))
+    (return 0)))
+
+(defn ^I32 ar-alnum [^Cells owords ^Cells etext ^I32 row]
+  (comment "The Latin letters and digits of an OCR word (what `ag-olen` counts: symbols are not text).")
+  (let [^I32 ts (ow-get owords row (hd-tstart))
+        ^I32 tl (ow-get owords row (hd-tlen))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 n 0]
+    (while (< j tl)
+      (do (set n (+ n (ar-latin-cp (cells-at etext (+ ts j)))))
+          (set j (+ j 1))))
+    (return n)))
+
+(defn ^I32 ar-min-pos [^I32 cur ^I32 v]
+  (comment "The smaller of two values where -1 is absent.")
+  (if (< v 0) (return cur))
+  (if (< cur 0) (return v))
+  (if (< v cur) (return v))
+  (return cur))
+
+;; ------------------------------------------------------------- the group columns
+
+(defn ^I32 ar-image-share [^Cells images ^Cells epages ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "0 when the box lies (at least 600 per mille of it) in no image placement of the page, else the largest share of the page's")
+  (comment "area (per mille, at least 1) of a placement it lies in.")
+  (let [^I32 n (im-count images)
+        ^I32 ep (ev-page-row epages page)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 ix0 0
+        ^:mut ^I32 iy0 0
+        ^:mut ^I32 ix1 0
+        ^:mut ^I32 iy1 0
+        ^:mut ^I64 pa (i64 0)
+        ^:mut ^I64 ia (i64 0)]
+    (if (>= ep 0)
+      (do (set pw (ep-get epages ep (epf-width)))
+          (set ph (ep-get epages ep (epf-height)))))
+    (set pa (mul64 (i64 pw) (i64 ph)))
+    (while (< j n)
+      (do (if (== (im-get images j (mf-page)) page)
+            (do (set ix0 (im-get images j (mf-x0)))
+                (set iy0 (im-get images j (mf-y0)))
+                (set ix1 (im-get images j (mf-x1)))
+                (set iy1 (im-get images j (mf-y1)))
+                (if (>= (ev-overlap-small x0 y0 x1 y1 ix0 iy0 ix1 iy1) 600)
+                  (do (set ia (mul64 (i64 (- ix1 ix0)) (i64 (- iy1 iy0))))
+                      (set s 1)
+                      (if (> pa (i64 0)) (set s (i32 (quot (mul64 ia (i64 1000)) pa))))
+                      (if (> s 1000) (set s 1000))
+                      (if (< s 1) (set s 1))
+                      (if (> s best) (set best s))))))
+          (set j (+ j 1))))
+    (return best)))
+
+(defn ^I32 ar-fill [^I32 g ^I32 pageagree ^Cells cg ^Cells refs ^Cells ofw ^Cells etext ^Cells feats ^Cells owords ^Cells images ^Cells epages
+                    ^:mut ^Cells gv]
+  (comment "The group columns of group g (see `emon.fuserules`) into `gv` (`ag-count` cells).")
+  (let [^I32 nt (cg-get cg g (cgf-tcount))
+        ^I32 tf (cg-get cg g (cgf-tfirst))
+        ^I32 no (cg-get cg g (cgf-ocount))
+        ^I32 of (cg-get cg g (cgf-ofirst))
+        ^I32 nh (cg-get cg g (cgf-hcount))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 font -1
+        ^:mut ^I32 garbage 0
+        ^:mut ^I32 latin 0
+        ^:mut ^I32 plaus -1
+        ^:mut ^I32 ssum 0
+        ^:mut ^I32 scount 0
+        ^:mut ^I32 foreign 0
+        ^:mut ^I32 olen 0
+        ^:mut ^I32 csum 0
+        ^:mut ^I32 near 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 gx0 0
+        ^:mut ^I32 gy0 0
+        ^:mut ^I32 gx1 0
+        ^:mut ^I32 gy1 0
+        ^:mut ^I32 gpage 0]
+    (while (< k nt)
+      (do (set row (ar-ref refs (+ tf k) 1))
+          (set f (cells-at ofw (+ (* row 24) (hd-feat))))
+          (if (>= f 0)
+            (do (set v (fe-get feats f (xt-font-health)))
+                (if (> v font) (set font v))
+                (set v (fe-get feats f (xt-bad-cp)))
+                (if (> v garbage) (set garbage v))))
+          (if (== (ar-word-latin ofw etext row) 1) (set latin (+ latin 1)) (set foreign (+ foreign 1)))
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k no)
+      (do (set row (ar-ref refs (+ of k) 1))
+          (set olen (+ olen (ar-alnum owords etext row)))
+          (set csum (+ csum (ow-get owords row (hd-conf))))
+          (set f (ow-get owords row (hd-feat)))
+          (if (>= f 0)
+            (do (set v (fe-get feats f (xo-implausible)))
+                (if (>= v 0) (set plaus (ar-min-pos plaus (- 1000 v))))
+                (set v (hh-word-score feats f))
+                (if (>= v 0)
+                  (do (set ssum (+ ssum v))
+                      (set scount (+ scount 1))))))
+          (set k (+ k 1))))
+    (cells-set gv (ag-nt) nt)
+    (cells-set gv (ag-no) no)
+    (cells-set gv (ag-nh) nh)
+    (cells-set gv (ag-font) font)
+    (cells-set gv (ag-simfold) (cg-get cg g (cgf-simfold)))
+    (cells-set gv (ag-sim) (cg-get cg g (cgf-sim)))
+    (cells-set gv (ag-garbage) garbage)
+    (cells-set gv (ag-plaus) plaus)
+    (if (> scount 0)
+      (cells-set gv (ag-score) (quot ssum scount))
+      (cells-set gv (ag-score) -1))
+    (cells-set gv (ag-image) (ar-image-share images epages (cg-get cg g (cgf-page)) (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0))
+                                             (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1))))
+    (cells-set gv (ag-flags) (cg-get cg g (cgf-flags)))
+    (comment "the engine reads the group's text-layer words only when none of them is in a script it lacks")
+    (if (and (> latin 0) (== foreign 0))
+      (cells-set gv (ag-latin) 1)
+      (cells-set gv (ag-latin) 0))
+    (cells-set gv (ag-pageagree) pageagree)
+    (cells-set gv (ag-olen) olen)
+    (if (> no 0) (cells-set gv (ag-oconf) (quot csum no)) (cells-set gv (ag-oconf) -1))
+    (comment "an OCR-only group: how much it overlaps a text-layer word of its page (that word's ink read again, not new text)")
+    (if (and (== nt 0) (== nh 0))
+      (do (set gpage (cg-get cg g (cgf-page)))
+          (set gx0 (cg-get cg g (cgf-x0)))
+          (set gy0 (cg-get cg g (cgf-y0)))
+          (set gx1 (cg-get cg g (cgf-x1)))
+          (set gy1 (cg-get cg g (cgf-y1)))
+          (set j 0)
+          (while (< j (fw-count ofw))
+            (do (if (== (cells-at ofw (* j 24)) gpage)
+                  (do (set v (ev-overlap-small gx0 gy0 gx1 gy1 (cells-at ofw (+ (* j 24) 1)) (cells-at ofw (+ (* j 24) 2))
+                                               (cells-at ofw (+ (* j 24) 3)) (cells-at ofw (+ (* j 24) 4))))
+                      (if (> v near) (set near v))))
+                (set j (+ j 1))))))
+    (cells-set gv (ag-near) near)
+    (return 0)))
+
+;; ------------------------------------------------------------- the verdicts
+;; `gd`, ten cells a group: 0 `fr-rows` row, 1 rule number, 2 winner (`fw-*`), 3 confidence, 4 flags (`fl`), 5 ledger reason, 6 emitted, 7
+;; the sources that had a candidate (`sr` bits), 8 the agreement of its page (see `ar-page-agreement`)
+
+(defn ^I32 ar-sources [^Cells cg ^I32 g]
+  (let [^:mut ^I32 s 0]
+    (if (> (cg-get cg g (cgf-tcount)) 0) (set s (+ s (sr-text))))
+    (if (> (cg-get cg g (cgf-hcount)) 0) (set s (+ s (sr-hidden-text))))
+    (if (> (cg-get cg g (cgf-ocount)) 0) (set s (+ s (sr-ocr))))
+    (return s)))
+
+(defn ^I32 ar-decide [^I32 g ^:mut ^Cells cg ^Cells refs ^Cells ofw ^Cells etext ^Cells feats ^Cells owords ^Cells images ^Cells epages
+                      ^:mut ^Cells gv ^:mut ^Cells gd ^:mut ^Cells fx ^:mut ^Cells afa]
+  (comment "Decide group g: fill its columns, take the first rule that holds, record the verdict in `gd`, the columns the rule read in")
+  (comment "`fx`, and a dropped ghost in `afa`.")
+  (let [^I32 r (fr-decide gv)
+        ^I32 base (* g 10)
+        ^:mut ^I32 win (fr-winner r)
+        ^:mut ^I32 flags (fr-flags r)
+        ^:mut ^I32 conf (fr-conf r)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 col 0
+        ^:mut ^I32 sc 0
+        ^:mut ^I32 o0 0
+        ^:mut ^I32 orow 0
+        ^:mut ^I32 gfl 0
+        ^:mut ^I32 fa 0]
+    (if (< conf 0)
+      (do (set sc (cells-at gv (ag-score)))
+          (set conf 500)
+          (if (>= sc 0)
+            (do (set conf sc)
+                (if (> conf 900) (set conf 900))))))
+    (comment "a verdict for the text layer in a group that has none is the default's: OCR, low confidence")
+    (if (and (== win (fw-text)) (and (== (cells-at gv (ag-nt)) 0) (== (cells-at gv (ag-nh)) 0)))
+      (do (set win (fw-ocr))
+          (set flags (bit-or flags (fl-ocr-only)))))
+    (cells-set gd base r)
+    (cells-set gd (+ base 1) (fr-number r))
+    (cells-set gd (+ base 2) win)
+    (cells-set gd (+ base 3) conf)
+    (cells-set gd (+ base 4) flags)
+    (cells-set gd (+ base 5) (fr-reason r))
+    (cells-set gd (+ base 6) 0)
+    (cells-set gd (+ base 7) (ar-sources cg g))
+    (comment "the explanation: every column the deciding rule read, and the value it read")
+    (while (< k (fr-npred))
+      (do (set col (fr-pcol r k))
+          (if (>= col 0) (fx-new fx g (fr-number r) col (cells-at gv col)))
+          (set k (+ k 1))))
+    (comment "held in a figure: the group says so")
+    (set gfl (cg-get cg g (cgf-flags)))
+    (if (and (== win (fw-none)) (== (fr-reason r) 0))
+      (cg-set cg g (cgf-flags) (bit-or gfl (plg-in-figure))))
+    (comment "dropped as a ghost: the first OCR word's box stands for the group in the set-aside list")
+    (if (and (== win (fw-none)) (> (fr-reason r) 0))
+      (do (set o0 (cg-get cg g (cgf-ofirst)))
+          (set orow (ar-ref refs o0 1))
+          (set fa (fa-new afa (cg-get cg g (cgf-page)) (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0)) (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1))
+                          (fr-reason r) (ea-owords) orow))
+          (fa-set afa fa 9 g)
+          (fa-set afa fa 10 (fr-number r))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the fused flow
+
+(defn ^I32 ar-remeasure [^:mut ^Cells nfl ^Cells nfw ^I32 l ^I32 first ^I32 cnt]
+  (comment "Line l of `nfl` measured again from its words (a run of `nfw`): the union of their boxes, the baseline from the first")
+  (comment "word's start to the last word's end (as `th-run` does for a line that lost a word).")
+  (let [^:mut ^I32 x0 (cells-at nfw (+ (* first 24) 1))
+        ^:mut ^I32 y0 (cells-at nfw (+ (* first 24) 2))
+        ^:mut ^I32 x1 (cells-at nfw (+ (* first 24) 3))
+        ^:mut ^I32 y1 (cells-at nfw (+ (* first 24) 4))
+        ^:mut ^I32 i 1
+        ^:mut ^I32 v 0
+        ^I32 lastw (+ first (- cnt 1))]
+    (while (< i cnt)
+      (do (set v (cells-at nfw (+ (* (+ first i) 24) 1)))
+          (if (< v x0) (set x0 v))
+          (set v (cells-at nfw (+ (* (+ first i) 24) 2)))
+          (if (< v y0) (set y0 v))
+          (set v (cells-at nfw (+ (* (+ first i) 24) 3)))
+          (if (> v x1) (set x1 v))
+          (set v (cells-at nfw (+ (* (+ first i) 24) 4)))
+          (if (> v y1) (set y1 v))
+          (set i (+ i 1))))
+    (cells-set nfl (+ (* l 16) 1) x0)
+    (cells-set nfl (+ (* l 16) 2) y0)
+    (cells-set nfl (+ (* l 16) 3) x1)
+    (cells-set nfl (+ (* l 16) 4) y1)
+    (set v (cells-at nfw (+ (* first 24) 5)))
+    (cells-set nfl (+ (* l 16) 5) v)
+    (set v (cells-at nfw (+ (* first 24) 6)))
+    (cells-set nfl (+ (* l 16) 6) v)
+    (set v (cells-at nfw (+ (* lastw 24) 7)))
+    (cells-set nfl (+ (* l 16) 7) v)
+    (set v (cells-at nfw (+ (* lastw 24) 8)))
+    (cells-set nfl (+ (* l 16) 8) v)
+    (return 0)))
+
+(defn ^I32 ar-put-fv [^:mut ^Cells fv ^I32 g ^I32 source ^I32 number ^I32 conf ^I32 flags]
+  (fv-new fv g source number conf flags)
+  (return 0))
+
+(defn ^I32 ar-copy-word [^:mut ^Cells nfw ^Cells ofw ^I32 w ^I32 lrow ^I32 src]
+  (comment "Copy word w of the old flow into the new one, on line `lrow`, with its `src` cell set; answers its row.")
+  (let [^I32 r (fw-copy-word nfw ofw w lrow)]
+    (cells-set nfw (+ (* r 24) (wf-src)) src)
+    (return r)))
+
+(defn ^I32 ar-emit-ocr [^I32 g ^Cells cg ^Cells refs ^Cells ofw ^Cells etext ^Cells owords
+                        ^:mut ^Cells nfw ^:mut ^Cells fv ^Cells gd ^I32 lrow]
+  (comment "The OCR words of group g, in place of its text-layer words (see the head of this file), appended to `nfw` on line `lrow`.")
+  (let [^I32 nt (cg-get cg g (cgf-tcount))
+        ^I32 nh (cg-get cg g (cgf-hcount))
+        ^I32 no (cg-get cg g (cgf-ocount))
+        ^I32 of (cg-get cg g (cgf-ofirst))
+        ^I32 base (* g 10)
+        ^I32 number (cells-at gd (+ base 1))
+        ^I32 conf (cells-at gd (+ base 3))
+        ^I32 flags (cells-at gd (+ base 4))
+        ^I32 srcs (cells-at gd (+ base 7))
+        ^:mut ^I32 tf (cg-get cg g (cgf-tfirst))
+        ^:mut ^I32 nrep nt
+        ^:mut ^I32 j 0
+        ^:mut ^I32 orow 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 tj 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 ux0 0
+        ^:mut ^I32 uy0 0
+        ^:mut ^I32 ux1 0
+        ^:mut ^I32 uy1 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 rot 0
+        ^:mut ^I32 orot 0]
+    (if (== nt 0)
+      (do (set tf (cg-get cg g (cgf-hfirst)))
+          (set nrep nh)))
+    (set t0 (ar-ref refs tf 1))
+    (set tl (ar-ref refs (+ tf (- nrep 1)) 1))
+    (comment "the union of the replaced words' boxes")
+    (set ux0 (cells-at ofw (+ (* t0 24) 1)))
+    (set uy0 (cells-at ofw (+ (* t0 24) 2)))
+    (set ux1 (cells-at ofw (+ (* t0 24) 3)))
+    (set uy1 (cells-at ofw (+ (* t0 24) 4)))
+    (set k 1)
+    (while (< k nrep)
+      (do (set tj (ar-ref refs (+ tf k) 1))
+          (set v (cells-at ofw (+ (* tj 24) 1)))
+          (if (< v ux0) (set ux0 v))
+          (set v (cells-at ofw (+ (* tj 24) 2)))
+          (if (< v uy0) (set uy0 v))
+          (set v (cells-at ofw (+ (* tj 24) 3)))
+          (if (> v ux1) (set ux1 v))
+          (set v (cells-at ofw (+ (* tj 24) 4)))
+          (if (> v uy1) (set uy1 v))
+          (set k (+ k 1))))
+    (set rot (cells-at ofw (+ (* t0 24) 9)))
+    (while (< j no)
+      (do (set orow (ar-ref refs (+ of j) 1))
+          (if (== nrep no)
+            (set tj (ar-ref refs (+ tf j) 1))
+            (set tj t0))
+          (set r (fw-copy-word nfw ofw tj lrow))
+          (cells-set nfw (+ (* r 24) 11) (ow-get owords orow (hd-tstart)))
+          (cells-set nfw (+ (* r 24) 12) (ow-get owords orow (hd-tlen)))
+          (cells-set nfw (+ (* r 24) 14) (ow-get owords orow (hd-conf)))
+          (cells-set nfw (+ (* r 24) 15) -1)
+          (cells-set nfw (+ (* r 24) 17) -1)
+          (cells-set nfw (+ (* r 24) 18) 0)
+          (cells-set nfw (+ (* r 24) 23) srcs)
+          (if (!= nrep no)
+            (do (set orot (ow-get owords orow 9))
+                (comment "an unrotated line: OCR's extent along it, the text layer's band across it and its baseline")
+                (if (and (== rot 0) (== orot 0))
+                  (do (set bx0 (ow-get owords orow (hd-x0)))
+                      (set bx1 (ow-get owords orow (hd-x1)))
+                      (set by0 (cells-at ofw (+ (* t0 24) 6)))
+                      (cells-set nfw (+ (* r 24) 1) bx0)
+                      (cells-set nfw (+ (* r 24) 2) uy0)
+                      (cells-set nfw (+ (* r 24) 3) bx1)
+                      (cells-set nfw (+ (* r 24) 4) uy1)
+                      (cells-set nfw (+ (* r 24) 5) bx0)
+                      (cells-set nfw (+ (* r 24) 6) by0)
+                      (cells-set nfw (+ (* r 24) 7) bx1)
+                      (cells-set nfw (+ (* r 24) 8) by0))
+                  (do (set k 1)
+                      (while (< k 11)
+                        (do (cells-set nfw (+ (* r 24) k) (ow-get owords orow k))
+                            (set k (+ k 1))))))
+                (comment "spacing: a space between the OCR words, the last one ends as the text layer's last word did")
+                (if (< (+ j 1) no)
+                  (do (cells-set nfw (+ (* r 24) (wf-wbreak)) (wb-space))
+                      (set v (- (ow-get owords (ar-ref refs (+ of (+ j 1)) 1) (hd-x0)) (cells-at nfw (+ (* r 24) 3))))
+                      (if (< v 0) (set v 0))
+                      (cells-set nfw (+ (* r 24) (wf-gap)) v))
+                  (do (set v (cells-at ofw (+ (* tl 24) (wf-wbreak))))
+                      (cells-set nfw (+ (* r 24) (wf-wbreak)) v)
+                      (set v (cells-at ofw (+ (* tl 24) (wf-gap))))
+                      (cells-set nfw (+ (* r 24) (wf-gap)) v)))))
+          (ar-put-fv fv g (sr-ocr) number conf flags)
+          (set j (+ j 1))))
+    (return no)))
+
+(defn ^I32 ar-word-source [^Cells ofw ^I32 w]
+  (comment "The source a word stands for when no group decided it: `ocr` for an OCR line's word, `hidden-text`, else `text`.")
+  (let [^I32 s (cells-at ofw (+ (* w 24) (wf-src)))]
+    (if (!= (bit-and s (sr-ocr)) 0) (return (sr-ocr)))
+    (if (!= (bit-and s (sr-hidden-text)) 0) (return (sr-hidden-text)))
+    (return (sr-text))))
+
+(defn ^I32 ar-flush-ocr-only [^I32 page ^Cells cg ^Cells refs ^Cells etext ^Cells owords ^Cells olines ^Cells oruns ^Cells osyms
+                              ^Cells gd ^Cells o2g ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv
+                              ^:mut ^Cells tw ^:mut ^Cells tl ^:mut ^Cells scr]
+  (comment "The admitted OCR-only words of `page`, each OCR line's own as a line of the fused flow, measured as an OCR line is (D213).")
+  (let [^I32 nr (or-count oruns)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 l0 0
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 rotmed 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 tli 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 orow 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 twr 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 kept 0
+        ^:mut ^I32 lrow 0
+        ^:mut ^I32 trow 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 nrow 0]
+    (while (< r nr)
+      (do (if (== (or-get oruns r (orf-page)) page)
+            (do (set l0 (or-get oruns r (orf-lfirst)))
+                (set nl (or-get oruns r (orf-lcount)))
+                (set rotmed (ev-rot-median olines l0 nl))
+                (cells-drop tw 0)
+                (cells-drop tl 0)
+                (sc-prep scr)
+                (sc-emit-lines olines owords osyms l0 nl page rotmed scr tw tl)
+                (set l l0)
+                (set tli 0)
+                (set twr 0)
+                (while (< l (+ l0 nl))
+                  (do (set cnt (ol-get olines l (lh-count)))
+                      (if (> cnt 0)
+                        (do (set w0 (ol-get olines l (lh-first)))
+                            (set first (fw-count nfw))
+                            (set lrow (fl-count nfl))
+                            (set kept 0)
+                            (set j 0)
+                            (while (< j cnt)
+                              (do (set orow (+ w0 j))
+                                  (set g (cells-at o2g orow))
+                                  (if (>= g 0)
+                                    (if (and (== (cells-at gd (+ (* g 10) 2)) (fw-ocr))
+                                             (and (== (cg-get cg g (cgf-tcount)) 0) (== (cg-get cg g (cgf-hcount)) 0)))
+                                      (do (set trow (+ twr j))
+                                          (set nrow (fw-copy-word nfw tw trow lrow))
+                                          (cells-set nfw (+ (* nrow 24) (wf-src)) (cells-at gd (+ (* g 10) 7)))
+                                          (fv-new fv g (sr-ocr) (cells-at gd (+ (* g 10) 1)) (cells-at gd (+ (* g 10) 3)) (cells-at gd (+ (* g 10) 4)))
+                                          (set kept (+ kept 1)))))
+                                  (set j (+ j 1))))
+                            (if (> kept 0)
+                              (do (fl-copy-line nfl tl tli first kept)
+                                  (if (< kept cnt) (ar-remeasure nfl nfw lrow first kept))
+                                  (set made (+ made 1))))
+                            (set twr (+ twr cnt))
+                            (set tli (+ tli 1))))
+                      (set l (+ l 1))))))
+          (set r (+ r 1))))
+    (return made)))
+
+(defn ^I32 ar-page-agreement [^Cells cg ^I32 g0 ^I32 g1 ^Cells refs ^Cells ofw ^Cells etext]
+  (comment "How far the engine can be trusted on a page (per mille), from the groups [g0, g1) of that page. Of the groups with a visible")
+  (comment "text-layer candidate and an OCR candidate, the share whose case-folded similarity is at least `agree-sim`, in ANY script (an")
+  (comment "engine that cannot read the page agrees with nothing); 1000 when fewer than three groups have both. And 0 when 30 per cent or more of")
+  (comment "the page's text-layer words are in a script the engine lacks (it cannot read what it was not trained on, whatever it says).")
+  (let [^:mut ^I32 g g0
+        ^:mut ^I32 both 0
+        ^:mut ^I32 agree 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 words 0
+        ^:mut ^I32 foreign 0]
+    (while (< g g1)
+      (do (if (and (> (cg-get cg g (cgf-tcount)) 0) (> (cg-get cg g (cgf-ocount)) 0))
+            (do (set both (+ both 1))
+                (if (>= (cg-get cg g (cgf-simfold)) (hh-agree-sim)) (set agree (+ agree 1)))))
+          (set k 0)
+          (while (< k (cg-get cg g (cgf-tcount)))
+            (do (set words (+ words 1))
+                (if (== (ar-word-latin ofw etext (ar-ref refs (+ (cg-get cg g (cgf-tfirst)) k) 1)) 0) (set foreign (+ foreign 1)))
+                (set k (+ k 1))))
+          (set g (+ g 1))))
+    (if (and (> words 0) (>= (* foreign 10) (* words 3))) (return 0))
+    (if (< both 3) (return 1000))
+    (return (quot (* agree 1000) both))))
+
+(defn ^:pub ^I32 ar-doc [^:mut ^Cells cg ^Cells refs ^Cells ofw ^Cells ofl ^Cells etext ^Cells feats ^Cells owords ^Cells olines
+                         ^Cells oruns ^Cells osyms ^Cells images ^Cells epages
+                         ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv ^:mut ^Cells fx ^:mut ^Cells afa
+                         ^:mut ^Cells gd ^:mut ^Cells gv ^:mut ^Cells w2g ^:mut ^Cells o2g ^:mut ^Cells pp
+                         ^:mut ^Cells tw ^:mut ^Cells tl ^:mut ^Cells scr]
+  (comment "See the head of this file. The new arenas and the scratch are the caller's (any contents; they are emptied here).")
+  (let [^I32 ng (cg-count cg)
+        ^I32 nofw (fw-count ofw)
+        ^I32 nofl (fl-count ofl)
+        ^I32 now (ow-count owords)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 wend 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 cur -1
+        ^:mut ^I32 first 0
+        ^:mut ^I32 lrow 0
+        ^:mut ^I32 changed 0
+        ^:mut ^I32 base 0
+        ^:mut ^I32 win 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 np 0
+        ^:mut ^I32 pend 0]
+    (cells-drop nfw 0)
+    (cells-drop nfl 0)
+    (cells-drop fv 0)
+    (cells-drop fx 0)
+    (cells-drop afa 0)
+    (cells-drop gd 0)
+    (cells-drop gv 0)
+    (cells-drop w2g 0)
+    (cells-drop o2g 0)
+    (cells-drop pp 0)
+    (set i 0)
+    (while (< i (ag-count))
+      (do (cells-push gv 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nofw)
+      (do (cells-push w2g -1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i now)
+      (do (cells-push o2g -1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (* ng 10))
+      (do (cells-push gd 0)
+          (set i (+ i 1))))
+    (comment "the agreement of each group's page with OCR, before any group is decided (a page where the engine and the text layer do not agree")
+    (comment "is a page whose OCR-only words are not to be admitted)")
+    (set g 0)
+    (while (< g ng)
+      (do (set k g)
+          (while (and (< k ng) (== (cg-get cg k (cgf-page)) (cg-get cg g (cgf-page))))
+            (set k (+ k 1)))
+          (set s (ar-page-agreement cg g k refs ofw etext))
+          (set i g)
+          (while (< i k)
+            (do (cells-set gd (+ (* i 10) 8) s)
+                (set i (+ i 1))))
+          (set g k)))
+    (comment "the map from a word to its group, and from an OCR word to its group")
+    (set g 0)
+    (while (< g ng)
+      (do (set k 0)
+          (while (< k (cg-get cg g (cgf-tcount)))
+            (do (set r (ar-ref refs (+ (cg-get cg g (cgf-tfirst)) k) 1))
+                (cells-set w2g r g)
+                (set k (+ k 1))))
+          (set k 0)
+          (while (< k (cg-get cg g (cgf-hcount)))
+            (do (set r (ar-ref refs (+ (cg-get cg g (cgf-hfirst)) k) 1))
+                (cells-set w2g r g)
+                (set k (+ k 1))))
+          (set k 0)
+          (while (< k (cg-get cg g (cgf-ocount)))
+            (do (set r (ar-ref refs (+ (cg-get cg g (cgf-ofirst)) k) 1))
+                (cells-set o2g r g)
+                (set k (+ k 1))))
+          (ar-fill g (cells-at gd (+ (* g 10) 8)) cg refs ofw etext feats owords images epages gv)
+          (ar-decide g cg refs ofw etext feats owords images epages gv gd fx afa)
+          (set g (+ g 1))))
+    (comment "the pages that have an admitted OCR-only group, ascending (a group's page; `cg` is in page order)")
+    (set g 0)
+    (while (< g ng)
+      (do (if (and (== (cells-at gd (+ (* g 10) 2)) (fw-ocr))
+                   (and (== (cg-get cg g (cgf-tcount)) 0) (== (cg-get cg g (cgf-hcount)) 0)))
+            (do (set page (cg-get cg g (cgf-page)))
+                (if (!= page cur)
+                  (do (set cur page)
+                      (cells-push pp page)))))
+          (set g (+ g 1))))
+    (set pend 0)
+    (set cur -1)
+    (set l 0)
+    (while (< l nofl)
+      (do (set page (cells-at ofl (* l 16)))
+          (if (!= page cur)
+            (do (comment "the previous page's OCR-only lines, then every pending page before this one")
+                (if (>= cur 0)
+                  (if (and (< pend (cells-len pp)) (== (cells-at pp pend) cur))
+                    (do (ar-flush-ocr-only cur cg refs etext owords olines oruns osyms gd o2g nfw nfl fv tw tl scr)
+                        (set pend (+ pend 1)))))
+                (while (and (< pend (cells-len pp)) (< (cells-at pp pend) page))
+                  (do (ar-flush-ocr-only (cells-at pp pend) cg refs etext owords olines oruns osyms gd o2g nfw nfl fv tw tl scr)
+                      (set pend (+ pend 1))))
+                (set cur page)))
+          (set first (fw-count nfw))
+          (set lrow (fl-count nfl))
+          (set changed 0)
+          (set w (cells-at ofl (+ (* l 16) 11)))
+          (set wend (+ w (cells-at ofl (+ (* l 16) 12))))
+          (while (< w wend)
+            (do (set g (cells-at w2g w))
+                (if (< g 0)
+                  (do (set s (ar-word-source ofw w))
+                      (ar-copy-word nfw ofw w lrow (cells-at ofw (+ (* w 24) (wf-src))))
+                      (if (== s (sr-ocr))
+                        (ar-put-fv fv -1 s 101 500 (fl-ocr-only))
+                        (ar-put-fv fv -1 s 101 900 0)))
+                  (do (set base (* g 10))
+                      (set win (cells-at gd (+ base 2)))
+                      (if (== win (fw-ocr))
+                        (do (if (== (cells-at gd (+ base 6)) 0)
+                              (do (cells-set gd (+ base 6) 1)
+                                  (ar-emit-ocr g cg refs ofw etext owords nfw fv gd lrow)))
+                            (set changed 1))
+                        (do (set s (ar-word-source ofw w))
+                            (set r (ar-copy-word nfw ofw w lrow (bit-or (cells-at ofw (+ (* w 24) (wf-src))) (cells-at gd (+ base 7)))))
+                            (ar-put-fv fv g s (cells-at gd (+ base 1)) (cells-at gd (+ base 3)) (cells-at gd (+ base 4)))))))
+                (set w (+ w 1))))
+          (set np (- (fw-count nfw) first))
+          (if (> np 0)
+            (do (fl-copy-line nfl ofl l first np)
+                (if (== changed 1) (ar-remeasure nfl nfw lrow first np))))
+          (set l (+ l 1))))
+    (comment "the last page's OCR-only lines, and the pages after it")
+    (if (and (>= cur 0) (and (< pend (cells-len pp)) (== (cells-at pp pend) cur)))
+      (do (ar-flush-ocr-only cur cg refs etext owords olines oruns osyms gd o2g nfw nfl fv tw tl scr)
+          (set pend (+ pend 1))))
+    (while (< pend (cells-len pp))
+      (do (ar-flush-ocr-only (cells-at pp pend) cg refs etext owords olines oruns osyms gd o2g nfw nfl fv tw tl scr)
+          (set pend (+ pend 1))))
+    (return ng)))
+
+;; ------------------------------------------------------------- the Model: ledger and provenance
+
+(defn ^:pub ^I32 ar-write [^Cells afa ^Cells owords ^Cells etext ^:mut ^Cells ledger ^:mut ^Cells text ^:mut ^Cells tmp ^:mut ^Cells tt]
+  (comment "The OCR groups dropped as ghosts (`afa`) as ledger rows, after `fu-write`: a run of rows of one page and one OCR line is ONE row,")
+  (comment "its box the union of theirs, its text the first words joined by a space (NFC, ligatures folded, as every ledger text), its")
+  (comment "confidence 700 (an engine's reading of nothing the text layer or the ink explains), src `ocr`. Answers the rows written.")
+  (let [^I32 n (fa-count afa)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 lr 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 w 0]
+    (while (< i n)
+      (do (set j (+ i 1))
+          (set w (fa-get afa i 7))
+          (set line (ow-get owords w (hd-line)))
+          (while (and (< j n)
+                      (and (== (fa-get afa j 0) (fa-get afa i 0))
+                           (and (== (fa-get afa j 5) (fa-get afa i 5))
+                                (== (ow-get owords (fa-get afa j 7) (hd-line)) line))))
+            (set j (+ j 1)))
+          (set x0 (fa-get afa i 1))
+          (set y0 (fa-get afa i 2))
+          (set x1 (fa-get afa i 3))
+          (set y1 (fa-get afa i 4))
+          (cells-drop tt 0)
+          (set k i)
+          (while (< k j)
+            (do (if (> k i) (cells-push tt 32))
+                (if (< (fa-get afa k 1) x0) (set x0 (fa-get afa k 1)))
+                (if (< (fa-get afa k 2) y0) (set y0 (fa-get afa k 2)))
+                (if (> (fa-get afa k 3) x1) (set x1 (fa-get afa k 3)))
+                (if (> (fa-get afa k 4) y1) (set y1 (fa-get afa k 4)))
+                (set w (fa-get afa k 7))
+                (set s (ow-get owords w (hd-tstart)))
+                (set e (+ s (ow-get owords w (hd-tlen))))
+                (while (< s e)
+                  (do (cells-push tt (cells-at etext s))
+                      (set s (+ s 1))))
+                (set k (+ k 1))))
+          (set lr (ledger-add ledger (fa-get afa i 5) (fa-get afa i 0) x0 y0 x1 y1 700 (sr-ocr)))
+          (set t0 (cells-len text))
+          (nz-nfc tt 0 (cells-len tt) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
+          (ledger-set-text ledger lr t0 (- (cells-len text) t0))
+          (set rows (+ rows 1))
+          (set i j)))
+    (return rows)))
+
+(defn ^I32 ar-tag-apply [^:mut ^Cells nodes ^I32 n ^I32 allocr ^I32 suspect ^I32 onlyc ^I32 lowc ^I32 conf]
+  (comment "Provenance of one node: `ocr` is added to its source (`text` leaves it when every word was OCR's), the flags and the confidence.")
+  (let [^I32 s (node-src nodes n)]
+    (if (== allocr 1)
+      (do (if (!= (bit-and s (sr-text)) 0) (node-set-src nodes n (- s (sr-text))))
+          (node-add-src nodes n (sr-ocr)))
+      (node-add-src nodes n (sr-ocr)))
+    (if (== suspect 1) (node-add-flag nodes n (fl-text-layer-suspect)))
+    (if (== onlyc 1) (node-add-flag nodes n (fl-ocr-only)))
+    (if (== lowc 1) (node-add-flag nodes n (fl-low-conf)))
+    (if (and (>= conf 0) (or (< (node-conf nodes n) 0) (< conf (node-conf nodes n)))) (node-set-conf nodes n conf))
+    (return 0)))
+
+(defn ^:pub ^I32 ar-tag [^:mut ^Cells nodes ^Cells regions ^Cells nfw ^Cells fv]
+  (comment "The Model's provenance, after the paragraphs are built, from the fused flow's verdicts (`fv`, one row a word of `nfw`). A LEAF BLOCK")
+  (comment "(a block that has an inline child or a text run of its own) is judged by the words whose centre lies in its region on its page: when OCR won any of")
+  (comment "them its source gets `ocr` (and loses `text` when OCR won all of them), `text-layer-suspect` when OCR replaced a text-layer")
+  (comment "word, `ocr-only` when OCR won all and one of them was admitted from OCR alone, `low-conf` when a verdict was; its inlines")
+  (comment "follow, and its confidence is lowered to the mean of the OCR words' when they won all. A block no OCR word touched is not")
+  (comment "changed: the Model of a page where the text layer won everywhere is the text layer's, byte for byte. (A block is the grain")
+  (comment "because paragraph building does not carry a word's source into the node; D285.) Answers the blocks tagged.")
+  (let [^I32 nn (node-count nodes)
+        ^I32 nw (fw-count nfw)
+        ^:mut ^I32 n 1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 inl 0
+        ^:mut ^I32 rg 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 nocr 0
+        ^:mut ^I32 nsus 0
+        ^:mut ^I32 nonly 0
+        ^:mut ^I32 nlow 0
+        ^:mut ^I32 csum 0
+        ^:mut ^I32 any 0
+        ^:mut ^I32 tagged 0
+        ^:mut ^I32 conf -1
+        ^:mut ^I32 allocr 0
+        ^:mut ^I32 suspect 0
+        ^:mut ^I32 onlyc 0
+        ^:mut ^I32 lowc 0]
+    (set w 0)
+    (while (< w nw)
+      (do (if (== (cells-at fv (+ (* w 8) 1)) (sr-ocr)) (set any 1))
+          (set w (+ w 1))))
+    (if (== any 0) (return 0))
+    (while (< n nn)
+      (do (if (and (== (node-is-inline nodes n) 0) (> (node-region-count nodes n) 0))
+            (do (set inl 0)
+                (set c (node-first-child nodes n))
+                (while (>= c 0)
+                  (do (if (== (node-is-inline nodes c) 1) (set inl 1))
+                      (set c (node-next nodes c))))
+                (if (== (node-has-text nodes n) 1) (set inl 1))
+                (if (== inl 1)
+                  (do (set total 0)
+                      (set nocr 0)
+                      (set nsus 0)
+                      (set nonly 0)
+                      (set nlow 0)
+                      (set csum 0)
+                      (set rg (node-region-head nodes n))
+                      (while (>= rg 0)
+                        (do (set page (region-page regions rg))
+                            (set w 0)
+                            (while (< w nw)
+                              (do (if (== (cells-at nfw (* w 24)) page)
+                                    (do (set cx (quot (+ (cells-at nfw (+ (* w 24) 1)) (cells-at nfw (+ (* w 24) 3))) 2))
+                                        (set cy (quot (+ (cells-at nfw (+ (* w 24) 2)) (cells-at nfw (+ (* w 24) 4))) 2))
+                                        (if (and (>= cx (region-x0 regions rg)) (and (<= cx (region-x1 regions rg))
+                                                 (and (>= cy (region-y0 regions rg)) (<= cy (region-y1 regions rg)))))
+                                          (do (set total (+ total 1))
+                                              (if (== (cells-at fv (+ (* w 8) 1)) (sr-ocr))
+                                                (do (set nocr (+ nocr 1))
+                                                    (set csum (+ csum (cells-at fv (+ (* w 8) 3))))
+                                                    (if (!= (bit-and (cells-at fv (+ (* w 8) 4)) (fl-text-layer-suspect)) 0) (set nsus (+ nsus 1)))
+                                                    (if (!= (bit-and (cells-at fv (+ (* w 8) 4)) (fl-ocr-only)) 0) (set nonly (+ nonly 1)))
+                                                    (if (!= (bit-and (cells-at fv (+ (* w 8) 4)) (fl-low-conf)) 0) (set nlow (+ nlow 1))))
+                                                (if (!= (bit-and (cells-at fv (+ (* w 8) 4)) (fl-low-conf)) 0) (set nlow (+ nlow 1))))))))
+                                  (set w (+ w 1))))
+                            (set rg (region-next regions rg))))
+                      (if (> nocr 0)
+                        (do (set allocr 0)
+                            (set conf -1)
+                            (if (== nocr total)
+                              (do (set allocr 1)
+                                  (set conf (quot csum nocr))))
+                            (set suspect 0)
+                            (if (> nsus 0) (set suspect 1))
+                            (set onlyc 0)
+                            (if (and (== allocr 1) (> nonly 0)) (set onlyc 1))
+                            (set lowc 0)
+                            (if (> nlow 0) (set lowc 1))
+                            (ar-tag-apply nodes n allocr suspect onlyc lowc conf)
+                            (set c (node-first-child nodes n))
+                            (while (>= c 0)
+                              (do (if (== (node-is-inline nodes c) 1)
+                                    (ar-tag-apply nodes c allocr suspect onlyc lowc conf))
+                                  (set c (node-next nodes c))))
+                            (set tagged (+ tagged 1))))))))
+          (set n (+ n 1))))
+    (return tagged)))

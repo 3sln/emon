@@ -23,8 +23,12 @@ public static class Pageunittest {
         }
         return 0;
     }
+    internal static int RunPageFused(int i, int policy, int fuse, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq) {
+        // A page unit with the fusion arguments (P7.3): `fuse` the hidden setting.
+        return Pageunit.PuRunPdf(i, 3, policy, pl, ans, rq, emon.Port.NewCells(), emon.Port.NewBitmapSet(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), fuse, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+    }
     internal static int RunPage(int i, int policy, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq) {
-        return Pageunit.PuRunPdf(i, 3, policy, pl, ans, rq, emon.Port.NewCells(), emon.Port.NewBitmapSet(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        return RunPageFused(i, policy, 0, pl, ans, rq);
     }
     [Xunit.Fact]
     public static void TestIdsArePerPageUnit() {
@@ -100,6 +104,33 @@ public static class Pageunittest {
         PlanOf(plan3, 1, Pageunit.PkNone());
         emon.Testport.AssertEq(RunPage(0, 2, plan3, emon.Port.NewCells(), rq3), Plan.UsDone(), "no image: done");
         emon.Testport.AssertEq(emon.Port.CellsLen(rq3), 0, "no request");
+    }
+    [Xunit.Fact]
+    public static void TestABornDigitalPageAsksWhatFusionNeedsOnlyUnderTheHiddenSetting() {
+        emon.Port.Cells pl = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        PlanOf(pl, 2, Pageunit.PkBorn());
+        emon.Testport.AssertEq(RunPageFused(1, 2, 1, pl, ans, rq), Plan.UsRequests(), "fuse, always: it asks");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq), 14, "the two renders, in one round");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), 513, "with its text");
+        emon.Testport.AssertEq(Plan.RecId(rq, 7), 514, "and without it");
+        // the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's
+        Plan.AnFail(ans, Plan.PkRender(), 513, Plan.PsUnsupported());
+        Plan.AnFail(ans, Plan.PkRender(), 514, Plan.PsUnsupported());
+        emon.Port.Cells rq2 = emon.Port.NewCells();
+        emon.Testport.AssertEq(RunPageFused(1, 2, 1, pl, ans, rq2), Plan.UsDone(), "no render, no OCR, done");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq2), 0, "nothing asked");
+        emon.Port.Cells pl3 = emon.Port.NewCells();
+        emon.Port.Cells rq3 = emon.Port.NewCells();
+        PlanOf(pl3, 1, Pageunit.PkBorn());
+        emon.Testport.AssertEq(RunPageFused(0, 1, 1, pl3, emon.Port.NewCells(), rq3), Plan.UsDone(), "fuse under `auto`: only `always` asks");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq3), 0, "nothing asked");
+        emon.Port.Cells pl4 = emon.Port.NewCells();
+        emon.Port.Cells rq4 = emon.Port.NewCells();
+        PlanOf(pl4, 1, Pageunit.PkBorn());
+        emon.Testport.AssertEq(RunPageFused(0, 2, 0, pl4, emon.Port.NewCells(), rq4), Plan.UsDone(), "without the setting: lazy, nothing asked");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq4), 0, "nothing asked");
     }
     [Xunit.Fact]
     public static void TestTheBitmapSetKeepsWhatKinMakes() {

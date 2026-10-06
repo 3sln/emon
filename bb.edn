@@ -52,10 +52,22 @@
          :task (shell "kin/scripts/hosts")}
   accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (a gate since P1.10, D145).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
             :task (apply shell "bb" "tools/accuracy/accuracy.clj" *command-line-args*)}
+  fusion {:doc "Fusion on real renders and a real OCR engine's reading of BORN-DIGITAL pages, replayed from transcripts: recorded on Rust (pdfium and Tesseract) through the whole Engine with the hidden setting ocr-born-digital, replayed on Rust and Go to the identical bundle; the born-digital contract (a healthy font is never replaced by OCR), per-document CER no worse than the no-engine run's, the broken-mapping documents where OCR now wins, win rates (P7.3, D285-D290). Recording is `bb fusion-record` (live, not a gate)."
+          :task (shell "bb" "kin/scripts/fusion")}
+  fusion-record {:doc "Record the fusion replay set LIVE: the whole Engine with pdfium and Tesseract and the hidden setting ocr-born-digital, into test/fusion/replay/. NOT a gate (needs the pinned pdfium and Tesseract; P7.3).  bb fusion-record [ID...]"
+                 :task (apply shell "bb" "tools/fusion/record-replay.clj" *command-line-args*)}
+  align {:doc "Cross-source alignment (P7.1, D278-D280): six fusion documents rendered at 300 dpi with their text and read by Tesseract, replayed on Rust and Go to identical correspondence groups; coverage, precision, the broken-mapping signature and the time held. Recording is `bb align-record` (live, not a gate)."
+         :task (shell "bb" "kin/scripts/align")}
+  align-record {:doc "Record the alignment fixtures LIVE: pdfium renders and Tesseract's reading, on the Rust host, into test/fusion/align/. NOT a gate (needs the pinned pdfium and Tesseract; P7.1).  bb align-record [ID...]"
+                :task (apply shell "bb" "tools/fusion/record-align.clj" *command-line-args*)}
+  align-report {:doc "Alignment coverage, precision, splits, merges and mismatch rates from the alignment dumps, per document and pooled (P7.1). NOT a gate.  bb align-report [DUMP...] | --self-test"
+                :task (apply shell "bb" "-cp" "tools" "tools/fusion/align_report.clj" *command-line-args*)}
   fusion-report {:doc "What fusion did, from evidence dumps (version 2): per-source win rates, per-rule and per-defence counts, per document and pooled (P6.6, D206). NOT a gate.  bb fusion-report DUMP... | --self-test"
                  :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/accuracy/fusion_report.clj" *command-line-args*)}
   fusion-live {:doc "The live fusion sets (SROIE derived, mapo80 val; never committed, tools/fusion/live-sets.edn): `stamp-ghost` from evidence dumps (P6.6, D209). NOT a gate.  bb fusion-live --stamps [--dumps DIR] | --self-test"
                :task (apply shell "bb" "-cp" "tools:tools/lib" "tools/fusion/fusion_live.clj" *command-line-args*)}
+  ghost-health {:doc "Do the OCR blocks over a watermark, seal, signature or blank paper score under the blocks of the page's text? On P6.6's overlay scans of known truth, kin's own ink layers and `hl-page` (P7.2, D282). NOT a gate; needs Tesseract, rustc, poppler, ImageMagick and the rasters `bb ink` builds.  bb ghost-health [--limit N] [--reocr] [--verbose]"
+                :task (apply shell "bb" "tools/fusion/ghost_health.clj" *command-line-args*)}
   import {:doc "Run every public-dataset importer into corpus/_gold/, validate, report counts (NOT a gate: the corpus is not in git).  bb import [--limit N] [name ...]"
           :task (apply shell "bb" "tools/import/import_all.clj" *command-line-args*)}
   gates {:doc "Run every gate; fail if one exits non-zero or prints no score.  bb gates [GATE...] runs only those (CI shards, D266)."

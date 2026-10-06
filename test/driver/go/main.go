@@ -14,6 +14,7 @@
 //	--out=bundle     one conversion, every output, for `bb identity` (see the Rust driver: the sections are the same)
 //	--out=pixels     one recording as one line per decode entry (see the Rust driver; `bb image` compares them)
 //	--dump=DIR       with --out=pixels, also write each frame's pixels to DIR/frame-N.raw
+//	--ocr-born-digital  the hidden test setting (P7.3, D285-D290): OCR the born-digital pages too and fuse the readings; a replay (or live) arm
 //	--tesseract[=D]  give the Engine the Tesseract `Ocr` port (D211), reading models from D (default: $TESSDATA_PREFIX and the usual
 //	                 places). LIVE: only a build with the `tesseract` tag has it (`EMON_GO_LIVE=1 kin/scripts/emon-go-build`, cgo); no gate
 //	                 uses it. Without the flag an `ocr` request is answered `unsupported` and a page that needed OCR has no text.
@@ -171,6 +172,8 @@ func main() {
 			cfg.ChunkSize = n
 		case a == "--async":
 			cfg.SimulateAsync = true
+		case a == "--ocr-born-digital":
+			opts.OcrBornDigital = true
 		case a == "--tesseract":
 			tess = true
 		case strings.HasPrefix(a, "--tesseract="):

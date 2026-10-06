@@ -29,10 +29,16 @@
           (set i (+ i 1))))
     (return 0)))
 
-(defn ^I32 run-page [^I32 i ^I32 policy ^Cells pl ^Cells ans ^Cells rq]
+(defn ^I32 run-page-fused [^I32 i ^I32 policy ^I32 fuse ^Cells pl ^Cells ans ^Cells rq]
+  (comment "A page unit with the fusion arguments (P7.3): `fuse` the hidden setting.")
   (return (pu-run-pdf i 3 policy pl ans rq (new-cells) (new-bitmap-set) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      fuse (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+
+(defn ^I32 run-page [^I32 i ^I32 policy ^Cells pl ^Cells ans ^Cells rq]
+  (return (run-page-fused i policy 0 pl ans rq)))
 
 (deftest test-ids-are-per-page-unit
   (assert-eq (pu-id 0 (pi-decode)) 260 "page 0 decode")
@@ -104,6 +110,32 @@
     (plan-of plan3 1 (pk-none))
     (assert-eq (run-page 0 2 plan3 (new-cells) rq3) (us-done) "no image: done")
     (assert-eq (cells-len rq3) 0 "no request")))
+
+(deftest test-a-born-digital-page-asks-what-fusion-needs-only-under-the-hidden-setting
+  (let [^Cells pl (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells ans (new-cells)]
+    (plan-of pl 2 (pk-born))
+    (assert-eq (run-page-fused 1 2 1 pl ans rq) (us-requests) "fuse, always: it asks")
+    (assert-eq (cells-len rq) 14 "the two renders, in one round")
+    (assert-eq (rec-id rq 0) 513 "with its text")
+    (assert-eq (rec-id rq 7) 514 "and without it")
+    (comment "the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's")
+    (an-fail ans (pk-render) 513 (ps-unsupported))
+    (an-fail ans (pk-render) 514 (ps-unsupported))
+    (let [^Cells rq2 (new-cells)]
+      (assert-eq (run-page-fused 1 2 1 pl ans rq2) (us-done) "no render, no OCR, done")
+      (assert-eq (cells-len rq2) 0 "nothing asked")))
+  (let [^Cells pl3 (new-cells)
+        ^Cells rq3 (new-cells)]
+    (plan-of pl3 1 (pk-born))
+    (assert-eq (run-page-fused 0 1 1 pl3 (new-cells) rq3) (us-done) "fuse under `auto`: only `always` asks")
+    (assert-eq (cells-len rq3) 0 "nothing asked"))
+  (let [^Cells pl4 (new-cells)
+        ^Cells rq4 (new-cells)]
+    (plan-of pl4 1 (pk-born))
+    (assert-eq (run-page-fused 0 2 0 pl4 (new-cells) rq4) (us-done) "without the setting: lazy, nothing asked")
+    (assert-eq (cells-len rq4) 0 "nothing asked")))
 
 (deftest test-the-bitmap-set-keeps-what-kin-makes
   (let [^BitmapSet s (new-bitmap-set)]
