@@ -2024,7 +2024,7 @@ analysis beyond "top-to-bottom lines on a single column".
   letting several geometric rows map onto one tagged row (and columns alike) would, I expect (not tried), turn the five multi-line tables from contradicted to
   confirmed and let their head rows and spans through; the cost is one more pass over the same counts.
   *Gates* (targeted, the machine at load 15-20; the full `bb gates` and the four-target `bb unit` were left to the merge step): `bb accuracy` (none
-  regressed, `tag-verdict-acc` recorded), `bb drift`, `bb hosts`, `bb identity`, `bb check`: see the commit message; `tabletest` (16 laws, the nine new goldens
+  regressed, `tag-verdict-acc` recorded), `bb drift`, `bb hosts`, `bb identity` (475 inputs, Rust == Go, `tb` included), `bb check` (four languages, one answer): all green; `tabletest` (16 laws, the nine new goldens
   and verdict texts included) and `tagtabletest` (9 laws) pass on Rust; a full `bb unit rust` here also fails 6 corpus-reading laws because this
   worktree has no `corpus/` (they read it by path), none of them P5.5's; Go, Java and C# run the same generated laws (`bb check` builds them).
 - [ ] P5.5b — `form` profile (key/value grids: label cells and value cells, often ruled; SPEC 10.5), moved out of P5.5
