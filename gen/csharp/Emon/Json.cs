@@ -268,7 +268,7 @@ public static class Json {
         int k = 0;
         int bit = 0;
         emon.Port.TextAscii(t, "[");
-        while (b < 7) {
+        while (b < 9) {
             bit = (1) << (b);
             if ((bits & bit) != 0) {
                 JsFsep(t, pr, k);

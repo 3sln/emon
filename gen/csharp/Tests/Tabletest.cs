@@ -235,10 +235,23 @@ public static class Tabletest {
         emon.Port.Cells gpts = emon.Port.NewCells();
         emon.Port.Cells gmk = emon.Port.NewCells();
         emon.Port.Cells gim = emon.Port.NewCells();
+        emon.Port.Cells t0e = emon.Port.NewCells();
+        emon.Port.Cells t1e = emon.Port.NewCells();
+        emon.Port.Cells t2e = emon.Port.NewCells();
+        emon.Port.Cells t3e = emon.Port.NewCells();
+        emon.Port.Cells t4e = emon.Port.NewCells();
+        emon.Port.Cells t5e = emon.Port.NewCells();
+        emon.Port.Cells t6e = emon.Port.NewCells();
+        emon.Port.Cells t7e = emon.Port.NewCells();
+        emon.Port.Cells t8e = emon.Port.NewCells();
+        emon.Port.Cells t9e = emon.Port.NewCells();
+        emon.Port.Cells t10e = emon.Port.NewCells();
+        emon.Port.Cells t11e = emon.Port.NewCells();
+        emon.Port.Cells t12e = emon.Port.NewCells();
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
         Gfuse.GfDoc(pa, gpts, gmk, gim, 1, Gfuse.GfxMode(), grl, gfl, cand);
-        Table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
         Columns.LcCopy(ln, lt);
         Para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         TtBrief(t, nodes, attrs, text);
@@ -378,9 +391,10 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "caption: well formed");
         emon.Testport.AssertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph");
     }
-    internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t) {
+    internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
-        // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`.
+        // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the
+        // verdicts of its tables, as the evidence dump's `tb` writes them, are `tvt`.
         emon.Port.Cells ar = emon.Port.NewCells();
         emon.Port.Cells dc = emon.Port.NewCells();
         emon.Port.Cells a = emon.Port.NewCells();
@@ -458,6 +472,34 @@ public static class Tabletest {
         emon.Port.Cells grl = emon.Port.NewCells();
         emon.Port.Cells gfl = emon.Port.NewCells();
         emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells t5e = emon.Port.NewCells();
+        emon.Port.Cells t6e = emon.Port.NewCells();
+        emon.Port.Cells t7e = emon.Port.NewCells();
+        emon.Port.Cells t8e = emon.Port.NewCells();
+        emon.Port.Cells t9e = emon.Port.NewCells();
+        emon.Port.Cells t10e = emon.Port.NewCells();
+        emon.Port.Cells t11e = emon.Port.NewCells();
+        emon.Port.Cells t12e = emon.Port.NewCells();
+        emon.Port.Cells idx = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells wq = emon.Port.NewCells();
+        emon.Port.Cells seen = emon.Port.NewCells();
+        emon.Port.Cells md = emon.Port.NewCells();
+        emon.Port.Cells xm = emon.Port.NewCells();
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells lb = emon.Port.NewCells();
+        emon.Port.Cells nd = emon.Port.NewCells();
+        emon.Port.Cells nt = emon.Port.NewCells();
+        emon.Port.Cells ss2 = emon.Port.NewCells();
+        emon.Port.Cells se2 = emon.Port.NewCells();
+        emon.Port.Cells sk2 = emon.Port.NewCells();
+        emon.Port.Cells sc2 = emon.Port.NewCells();
+        emon.Port.Cells so2 = emon.Port.NewCells();
+        emon.Port.Cells sa2 = emon.Port.NewCells();
+        emon.Port.Cells wk2 = emon.Port.NewCells();
+        emon.Port.Cells ha = emon.Port.NewCells();
+        emon.Port.Cells hb = emon.Port.NewCells();
+        emon.Port.Cells hh = emon.Port.NewCells();
         emon.Port.Cells sf = emon.Port.NewCells();
         emon.Port.Cells sc = emon.Port.NewCells();
         emon.Port.Cells ws = emon.Port.NewCells();
@@ -475,11 +517,20 @@ public static class Tabletest {
         if (Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0) {
             return 2;
         }
+        Pdfx.PxIndexBuild(src, ar, dc, a, b, st, pg, idx);
+        if (Pdfmeta.PmRun(src, ar, dc, a, b, st, pg, idx, txt, wq, seen, md, xm, ol, lb, nd, nt) < 0) {
+            return 4;
+        }
+        if (Pdfstruct.TgRead(src, ar, dc, a, b, st, pg, idx, txt, wq, seen, ss2, se2, sk2, sc2, so2, wk2, md) < 0) {
+            return 5;
+        }
+        Pdfstruct.TgJoin(ss2, se2, sk2, sc2, so2, sa2, gl, mk, fnt, pg, ha, hb, hh);
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.PaPages(pg, pages);
         int np = emon.Port.CellsLen(pages) / 16;
         Gfuse.GfDoc(pa, pts, mk, im, np, Gfuse.GfxMode(), grl, gfl, cand);
-        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+        Tagtable.TtEmit(tvt, t12e);
         Columns.LcCopy(ln, lt);
         Initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
         Heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
@@ -490,6 +541,54 @@ public static class Tabletest {
         Json.JsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout);
         return 0;
     }
+    internal static int TtTagged(byte[] pdf, byte[] golden, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
+        // A tagged document through the stage: the Model, byte for byte, and the verdicts of its tables (the evidence dump's `tb`) in `tvt`.
+        int r = TtGolden(pdf, t, tvt);
+        if (r != 0) {
+            return r;
+        }
+        emon.Testport.AssertTextSpan(t, golden, 0, Mscript.JtEnd(golden), "the Model of a tagged-table fixture", 0);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestTaggedTablesAreVerifiedAgainstThePage() {
+        System.Text.StringBuilder t0 = emon.Testport.NewText();
+        System.Text.StringBuilder v0 = emon.Testport.NewText();
+        System.Text.StringBuilder t1 = emon.Testport.NewText();
+        System.Text.StringBuilder v1 = emon.Testport.NewText();
+        System.Text.StringBuilder t2 = emon.Testport.NewText();
+        System.Text.StringBuilder v2 = emon.Testport.NewText();
+        System.Text.StringBuilder t3 = emon.Testport.NewText();
+        System.Text.StringBuilder v3 = emon.Testport.NewText();
+        System.Text.StringBuilder t4 = emon.Testport.NewText();
+        System.Text.StringBuilder v4 = emon.Testport.NewText();
+        System.Text.StringBuilder t5 = emon.Testport.NewText();
+        System.Text.StringBuilder v5 = emon.Testport.NewText();
+        System.Text.StringBuilder t6 = emon.Testport.NewText();
+        System.Text.StringBuilder v6 = emon.Testport.NewText();
+        System.Text.StringBuilder t7 = emon.Testport.NewText();
+        System.Text.StringBuilder v7 = emon.Testport.NewText();
+        System.Text.StringBuilder t8 = emon.Testport.NewText();
+        System.Text.StringBuilder v8 = emon.Testport.NewText();
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-good.pdf"), emon.Testport.TestFile("table/ttab-good.json"), t0, v0), 0, "ttab-good runs");
+        emon.Testport.AssertText(v0, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":931,\"checks\":[900,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good: a correct grid, ruled, with spans and a header: confirmed, and the tags are among the table's sources");
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-good-ws.pdf"), emon.Testport.TestFile("table/ttab-good-ws.json"), t1, v1), 0, "ttab-good-ws runs");
+        emon.Testport.AssertText(v1, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good-ws: a table without a rule, correctly tagged: confirmed, and `struct` is among its sources");
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-th-as-td.pdf"), emon.Testport.TestFile("table/ttab-th-as-td.json"), t2, v2), 0, "ttab-th-as-td runs");
+        emon.Testport.AssertText(v2, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-th-as-td: headers tagged TD are still a table that agrees with the page");
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-bad-spans.pdf"), emon.Testport.TestFile("table/ttab-bad-spans.json"), t3, v3), 0, "ttab-bad-spans runs");
+        emon.Testport.AssertText(v3, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":5,\"verdict\":\"partial\",\"score\":821,\"checks\":[900,1000,1000,1000,1000,785],\"trust\":937}]", "ttab-bad-spans: ColSpan 3 where the rules close at 2: the geometry agrees with 785 of the words, so the verdict is partial, flagged struct-disagree and tag-span-conflict");
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-bad-rows.pdf"), emon.Testport.TestFile("table/ttab-bad-rows.json"), t4, v4), 0, "ttab-bad-rows runs");
+        emon.Testport.AssertText(v4, "[{\"page\":1,\"se\":4,\"rows\":3,\"cols\":8,\"verdict\":\"contradicted\",\"score\":86,\"checks\":[923,1000,846,1000,1000,0],\"trust\":937}]", "ttab-bad-rows: two visual rows in one TR: contradicted, and the Model is the geometry's alone");
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-layout.pdf"), emon.Testport.TestFile("table/ttab-layout.json"), t5, v5), 0, "ttab-layout runs");
+        emon.Testport.AssertText(v5, "[{\"page\":1,\"se\":4,\"rows\":1,\"cols\":2,\"verdict\":\"contradicted\",\"score\":1000,\"checks\":[1000,-1,1000,1000,1000,-1],\"trust\":923}]", "ttab-layout: prose in two columns tagged Table is a layout table: refused (D180), so contradicted, and there is no table in the Model");
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-missing-row.pdf"), emon.Testport.TestFile("table/ttab-missing-row.json"), t6, v6), 0, "ttab-missing-row runs");
+        emon.Testport.AssertText(v6, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"partial\",\"score\":864,\"checks\":[1000,1000,1000,800,1000,1000],\"trust\":118}]", "ttab-missing-row: the last row is an artifact; the tree's trust is under 300, so it can confirm nothing: partial");
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-allp.pdf"), emon.Testport.TestFile("table/ttab-allp.json"), t7, v7), 0, "ttab-allp runs");
+        emon.Testport.AssertText(v7, "[]", "ttab-allp: cells tagged P: the tree has no Table, so no verdict");
+        emon.Testport.AssertEq(TtTagged(emon.Testport.TestFile("corpus/synth/pdf/ttab-good-ws-untagged.pdf"), emon.Testport.TestFile("table/ttab-good-ws-untagged.json"), t8, v8), 0, "ttab-good-ws-untagged runs");
+        emon.Testport.AssertText(v8, "[]", "the same table with no tree: no verdict");
+    }
     [Xunit.Fact]
     public static void TestRealDocumentsMakeTheGoldenModels() {
         System.Text.StringBuilder t1 = emon.Testport.NewText();
@@ -499,20 +598,20 @@ public static class Tabletest {
         System.Text.StringBuilder t5 = emon.Testport.NewText();
         System.Text.StringBuilder t6 = emon.Testport.NewText();
         System.Text.StringBuilder t7 = emon.Testport.NewText();
-        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-simple-ruled.pdf"), t1), 0, "table-simple-ruled runs");
+        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-simple-ruled.pdf"), t1, emon.Testport.NewText()), 0, "table-simple-ruled runs");
         emon.Testport.AssertTextSpan(t1, emon.Testport.TestFile("table/table-simple-ruled.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/table-simple-ruled.json")), "table-simple-ruled", 0);
-        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-shaded.pdf"), t2), 0, "table-shaded runs");
+        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-shaded.pdf"), t2, emon.Testport.NewText()), 0, "table-shaded runs");
         emon.Testport.AssertTextSpan(t2, emon.Testport.TestFile("table/table-shaded.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/table-shaded.json")), "table-shaded", 0);
-        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-spans-partial.pdf"), t3), 0, "table-spans-partial runs");
+        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-spans-partial.pdf"), t3, emon.Testport.NewText()), 0, "table-spans-partial runs");
         emon.Testport.AssertTextSpan(t3, emon.Testport.TestFile("table/table-spans-partial.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/table-spans-partial.json")), "table-spans-partial", 0);
-        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-whitespace.pdf"), t4), 0, "table-whitespace runs");
+        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-whitespace.pdf"), t4, emon.Testport.NewText()), 0, "table-whitespace runs");
         emon.Testport.AssertTextSpan(t4, emon.Testport.TestFile("table/table-whitespace.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/table-whitespace.json")), "table-whitespace", 0);
-        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/align-table-numeric.pdf"), t5), 0, "align-table-numeric runs");
+        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/align-table-numeric.pdf"), t5, emon.Testport.NewText()), 0, "align-table-numeric runs");
         emon.Testport.AssertTextSpan(t5, emon.Testport.TestFile("table/align-table-numeric.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/align-table-numeric.json")), "align-table-numeric", 0);
-        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-multipage-thead.pdf"), t7), 0, "table-multipage-thead runs");
+        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/table-multipage-thead.pdf"), t7, emon.Testport.NewText()), 0, "table-multipage-thead runs");
         emon.Testport.AssertTextSpan(t7, emon.Testport.TestFile("table/table-multipage-thead.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("table/table-multipage-thead.json")), "table-multipage-thead: one table on four pages, the repeated header in the ledger", 0);
         // A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
-        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/h-plain.pdf"), t6), 0, "h-plain runs");
+        emon.Testport.AssertEq(TtGolden(emon.Testport.TestFile("corpus/synth/pdf/h-plain.pdf"), t6, emon.Testport.NewText()), 0, "h-plain runs");
         emon.Testport.AssertTextSpan(t6, emon.Testport.TestFile("para/h-plain.json"), 0, Mscript.JtEnd(emon.Testport.TestFile("para/h-plain.json")), "h-plain makes no table", 0);
     }
 }

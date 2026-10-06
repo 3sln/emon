@@ -853,6 +853,12 @@ func FlRotated() int32 {
 func FlVertical() int32 {
 	return 64
 }
+func FlStructDisagree() int32 {
+	return 128
+}
+func FlTagSpanConflict() int32 {
+	return 256
+}
 func FlEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "low-conf")
@@ -880,6 +886,14 @@ func FlEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 64 {
 		port.TextAscii(t, "vertical")
+		return 1
+	}
+	if code == 128 {
+		port.TextAscii(t, "struct-disagree")
+		return 1
+	}
+	if code == 256 {
+		port.TextAscii(t, "tag-span-conflict")
 		return 1
 	}
 	return 0

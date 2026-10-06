@@ -6,7 +6,7 @@ package emon;
 
 public final class Table {
     public static final int TB_HELD = 1073741824;
-    public static final int TBS = 24;
+    public static final int TBS = 28;
     public static final int TCS = 16;
     public static final int RLS = 8;
     public static final int RWS = 10;
@@ -17,6 +17,13 @@ public final class Table {
     public static final int PF_PARTIAL = 2;
     public static final int PF_SHADED = 3;
     public static final int PF_WHITESPACE = 4;
+    public static final int PF_STRUCT = 5;
+    public static final int TB_TAG_TRUST = 300;
+    public static final int TB_TAG_WIN = 700;
+    public static final int TB_TAG_VETO_TRUST = 800;
+    public static final int TB_TAG_VETO = 150;
+    public static final int TB_TIE = 25;
+    public static final int TB_GEO_AGREE = 900;
     public static final int RULE_T = 400;
     public static final int RULE_MIN = 500;
     public static final int POS_TOL = 200;
@@ -423,6 +430,10 @@ public final class Table {
         emon.Port.cellsPush(tb, 0);
         emon.Port.cellsPush(tb, 0);
         emon.Port.cellsPush(tb, 0);
+        emon.Port.cellsPush(tb, 0);
+        emon.Port.cellsPush(tb, -1);
+        emon.Port.cellsPush(tb, 0);
+        emon.Port.cellsPush(tb, 0);
         return k;
     }
     public static int tbCellAdd(emon.Port.Cells tc, int row, int col, int rowspan, int colspan, int x0, int y0, int x1, int y1) {
@@ -771,7 +782,48 @@ public final class Table {
         int by1 = emon.Port.cellsAt(tb, (b * TBS) + 4);
         return ((tbMin(ax1, bx1) - tbMax(ax0, bx0)) > POS_TOL) && ((tbMin(ay1, by1) - tbMax(ay0, by0)) > POS_TOL);
     }
-    public static int tbSelect(emon.Port.Cells tb, int t0, emon.Port.Cells so, emon.Port.Cells vals, emon.Port.Cells sa) {
+    public static int tbHintIou(emon.Port.Cells tb, int i, emon.Port.Cells grg) {
+        // The best IoU, per mille, of candidate i's box with an OCR `table-hint` region of its page (`grg` kind 3, D228); 0 when none.
+        int n = Glayer.grgCount(grg);
+        int b = i * TBS;
+        int r = 0;
+        int best = 0;
+        int v = 0;
+        while (r < n) {
+            if ((Glayer.grgGet(grg, r, 5) == 3) && (Glayer.grgGet(grg, r, 0) == emon.Port.cellsAt(tb, b))) {
+                v = Tagtable.ttIou(emon.Port.cellsAt(tb, b + 1), emon.Port.cellsAt(tb, b + 2), emon.Port.cellsAt(tb, b + 3), emon.Port.cellsAt(tb, b + 4), Glayer.grgGet(grg, r, 1), Glayer.grgGet(grg, r, 2), Glayer.grgGet(grg, r, 3), Glayer.grgGet(grg, r, 4));
+                if (v > best) {
+                    best = v;
+                }
+            }
+            r += 1;
+        }
+        return best;
+    }
+    public static int tbTieBonus(emon.Port.Cells tb, int i, int t0, int n, emon.Port.Cells grg) {
+        // D225 case 7: OCR's table blocks break ties and only ties. Candidate i gets a bonus that puts it first when it overlaps a candidate
+        // within `tb-tie` of its score and has the higher IoU with a table hint.
+        if (Glayer.grgCount(grg) == 0) {
+            return 0;
+        }
+        int j = t0;
+        int d = 0;
+        while (j < n) {
+            if (j != i) {
+                if (tbOverlap(tb, i, j)) {
+                    d = tbAbs(emon.Port.cellsAt(tb, (i * TBS) + 6) - emon.Port.cellsAt(tb, (j * TBS) + 6));
+                    if (d <= TB_TIE) {
+                        if (tbHintIou(tb, i, grg) > tbHintIou(tb, j, grg)) {
+                            return TB_TIE + 1;
+                        }
+                    }
+                }
+            }
+            j += 1;
+        }
+        return 0;
+    }
+    public static int tbSelect(emon.Port.Cells tb, int t0, emon.Port.Cells so, emon.Port.Cells vals, emon.Port.Cells sa, emon.Port.Cells grg) {
         // Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and
         // leave them in tb in the order of their tops. Answers how many are kept.
         int n = tbRowsOf(tb, TBS);
@@ -783,7 +835,7 @@ public final class Table {
         emon.Port.cellsDrop(vals, 0);
         while (i < n) {
             emon.Port.cellsPush(so, i - t0);
-            emon.Port.cellsPush(vals, 0 - emon.Port.cellsAt(tb, (i * TBS) + 6));
+            emon.Port.cellsPush(vals, 0 - (emon.Port.cellsAt(tb, (i * TBS) + 6) + tbTieBonus(tb, i, t0, n, grg)));
             emon.Port.cellsPush(vals, i);
             i += 1;
         }
@@ -889,6 +941,14 @@ public final class Table {
             Model.textAppendCp(text, 100);
             Model.textAppendCp(text, 101);
             Model.textAppendCp(text, 100);
+        }
+        if (prof == PF_STRUCT) {
+            Model.textAppendCp(text, 115);
+            Model.textAppendCp(text, 116);
+            Model.textAppendCp(text, 114);
+            Model.textAppendCp(text, 117);
+            Model.textAppendCp(text, 99);
+            Model.textAppendCp(text, 116);
         }
         if (prof == PF_WHITESPACE) {
             Model.textAppendCp(text, 119);
@@ -1156,6 +1216,15 @@ public final class Table {
         Model.nodeAddSrc(nodes, t, Model.srInfer());
         if (prof == PF_RULED) {
             Model.nodeAddSrc(nodes, t, Model.srVector());
+        }
+        if ((prof == PF_STRUCT) || ((emon.Port.cellsAt(tb, b + 24) & 1) != 0)) {
+            Model.nodeAddSrc(nodes, t, Model.srStruct());
+        }
+        if ((emon.Port.cellsAt(tb, b + 24) & 2) != 0) {
+            Model.nodeAddFlag(nodes, t, Model.flTagSpanConflict());
+        }
+        if ((emon.Port.cellsAt(tb, b + 24) & 4) != 0) {
+            Model.nodeAddFlag(nodes, t, Model.flStructDisagree());
         }
         int s = emon.Port.cellsLen(text);
         tbPutProfile(text, prof);
@@ -2929,16 +2998,444 @@ public final class Table {
         }
         return 0;
     }
-    public static int tbFinish(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells ln, int l0, int l1, emon.Port.Cells tq) {
-        // What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows, the footer,
-        // which cells are header cells (`col` in the header, `row` in the footer), each cell's alignment, the caption.
+    public static int tbProseRole(int role) {
+        // 1 for the block roles that say "this is text, not a table": P, H, Hn, L, LI, Lbl and LBody.
+        if ((role == 15) || ((role == 16) || ((role == 17) || ((role == 19) || ((role == 20) || ((role == 21) || (role == 22))))))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int tbVeto(emon.Port.Cells tb, int t0, emon.Port.Cells wd, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells mi) {
+        // D225 case 6: a tree trusted to `tb-tag-veto-trust` that gives every word of a whitespace candidate to a P, L, LI or H element
+        // says it is not a table: the candidate's score goes down by `tb-tag-veto`. Only whitespace: it alone has no rule or fill to vouch for it.
+        int n = tbRowsOf(tb, TBS);
+        int t = t0;
+        int c = 0;
+        int j = 0;
+        int ok = 1;
+        int words = 0;
+        int s = 0;
+        while (t < n) {
+            if (emon.Port.cellsAt(tb, (t * TBS) + 5) == PF_WHITESPACE) {
+                ok = 1;
+                words = 0;
+                c = emon.Port.cellsAt(tb, (t * TBS) + 9);
+                while ((ok == 1) && (c < (emon.Port.cellsAt(tb, (t * TBS) + 9) + emon.Port.cellsAt(tb, (t * TBS) + 10)))) {
+                    j = 0;
+                    while ((ok == 1) && (j < emon.Port.cellsAt(tc, (c * TCS) + 9))) {
+                        s = Tagtable.ttOwnerEl(sc, gl, mk, mi, Evidence.wdGet(wd, emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, (c * TCS) + 8) + j), Evidence.wfGfirst()));
+                        if (s == -1) {
+                            ok = 0;
+                        } else if (tbProseRole(Tagtable.ttBlockRole(se, s)) == 0) {
+                            ok = 0;
+                        }
+                        words += 1;
+                        j += 1;
+                    }
+                    c += 1;
+                }
+                if ((ok == 1) && (words > 0)) {
+                    emon.Port.cellsSet(tb, (t * TBS) + 6, tbMax(0, emon.Port.cellsAt(tb, (t * TBS) + 6) - TB_TAG_VETO));
+                }
+            }
+            t += 1;
+        }
+        return 0;
+    }
+    public static int tbStructCand(emon.Port.Cells wd, emon.Port.Cells et, int p, int w0, int w1, emon.Port.Cells tg, int k, emon.Port.Cells ta, emon.Port.Cells wo, int trust, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells ws, int keep) {
+        // D225 case 3: a confirmed tagged table that no geometry found, as a candidate of its own: its cells are the tagged cells with their
+        // text boxes grown to their row and column bands, scored 850 x trust / 1000, and refused as any text candidate is (`tb-score`: prose in
+        // a `Table` is a layout table). `keep` 0 only asks whether it would be refused: the candidate is dropped again. Answers the candidate, -1
+        // when refused or dropped.
+        int nr = Tagtable.ttGet(tg, k, 2);
+        int nc = Tagtable.ttGet(tg, k, 3);
+        int cf = Tagtable.ttGet(tg, k, 4);
+        int ce = cf + Tagtable.ttGet(tg, k, 5);
+        int bx0 = Tagtable.ttGet(tg, k, 6);
+        int by0 = Tagtable.ttGet(tg, k, 7);
+        int bx1 = Tagtable.ttGet(tg, k, 8);
+        int by1 = Tagtable.ttGet(tg, k, 9);
+        int nt = tbRowsOf(tb, TBS);
+        int c0 = tbRowsOf(tc, TCS);
+        int wl0 = emon.Port.cellsLen(tw);
+        int xl0 = emon.Port.cellsLen(tx);
+        int nct = Tagtable.ttGet(tg, k, 5);
+        int i = 0;
+        int c = 0;
+        int col = 0;
+        int row = 0;
+        int w = 0;
+        int t = 0;
+        int hi = 0;
+        if ((nc < 2) || (nr < 2)) {
+            return -2;
+        }
+        emon.Port.cellsDrop(ws, 0);
+        while (i < (nc + nr)) {
+            emon.Port.cellsPush(ws, 2000000000);
+            emon.Port.cellsPush(ws, -2000000000);
+            i += 1;
+        }
+        c = cf;
+        while (c < ce) {
+            if (Tagtable.ttCget(ta, c, 6) > 0) {
+                col = Tagtable.ttCget(ta, c, 2);
+                row = Tagtable.ttCget(ta, c, 1);
+                if ((Tagtable.ttCget(ta, c, 4) == 1) && (col < nc)) {
+                    emon.Port.cellsSet(ws, 2 * col, tbMin(emon.Port.cellsAt(ws, 2 * col), Tagtable.ttCget(ta, c, 7)));
+                    emon.Port.cellsSet(ws, (2 * col) + 1, tbMax(emon.Port.cellsAt(ws, (2 * col) + 1), Tagtable.ttCget(ta, c, 9)));
+                }
+                if ((Tagtable.ttCget(ta, c, 3) == 1) && (row < nr)) {
+                    emon.Port.cellsSet(ws, (2 * nc) + (2 * row), tbMin(emon.Port.cellsAt(ws, (2 * nc) + (2 * row)), Tagtable.ttCget(ta, c, 8)));
+                    emon.Port.cellsSet(ws, ((2 * nc) + (2 * row)) + 1, tbMax(emon.Port.cellsAt(ws, ((2 * nc) + (2 * row)) + 1), Tagtable.ttCget(ta, c, 10)));
+                }
+            }
+            c += 1;
+        }
+        i = 0;
+        while (i < nc) {
+            if (emon.Port.cellsAt(ws, 2 * i) > emon.Port.cellsAt(ws, (2 * i) + 1)) {
+                emon.Port.cellsSet(ws, 2 * i, bx0 + (((bx1 - bx0) * i) / nc));
+                emon.Port.cellsSet(ws, (2 * i) + 1, bx0 + (((bx1 - bx0) * (i + 1)) / nc));
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < nr) {
+            if (emon.Port.cellsAt(ws, (2 * nc) + (2 * i)) > emon.Port.cellsAt(ws, ((2 * nc) + (2 * i)) + 1)) {
+                emon.Port.cellsSet(ws, (2 * nc) + (2 * i), by0 + (((by1 - by0) * i) / nr));
+                emon.Port.cellsSet(ws, ((2 * nc) + (2 * i)) + 1, by0 + (((by1 - by0) * (i + 1)) / nr));
+            }
+            i += 1;
+        }
+        c = cf;
+        while (c < ce) {
+            col = Tagtable.ttCget(ta, c, 2);
+            row = Tagtable.ttCget(ta, c, 1);
+            hi = tbMin(nc - 1, (col + Tagtable.ttCget(ta, c, 4)) - 1);
+            i = tbMin(nr - 1, (row + Tagtable.ttCget(ta, c, 3)) - 1);
+            tbCellAdd(tc, row, col, Tagtable.ttCget(ta, c, 3), Tagtable.ttCget(ta, c, 4), emon.Port.cellsAt(ws, 2 * col), emon.Port.cellsAt(ws, (2 * nc) + (2 * row)), emon.Port.cellsAt(ws, (2 * hi) + 1), emon.Port.cellsAt(ws, ((2 * nc) + (2 * i)) + 1));
+            c += 1;
+        }
+        emon.Port.cellsDrop(pr, 0);
+        w = w0;
+        while (w < w1) {
+            c = emon.Port.cellsAt(wo, w - w0);
+            if ((c >= cf) && (c < ce)) {
+                tbPairAdd(pr, wd, c0 + (c - cf), w);
+            }
+            w += 1;
+        }
+        tbFlushPairs(pr, so, wd, tc, tw);
+        t = tbAdd(tb, p, bx0, by0, bx1, by1, PF_STRUCT, (850 * trust) / 1000, nr, nc, c0, nct);
+        if ((keep == 0) || (tbScore(tb, t, wd, et, tc, tw) == 0)) {
+            hi = tbScore(tb, t, wd, et, tc, tw);
+            tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0);
+            if (hi == 0) {
+                return -2;
+            }
+            return -1;
+        }
+        emon.Port.cellsSet(tb, (t * TBS) + 16, emon.Port.cellsLen(tx));
+        emon.Port.cellsSet(tb, (t * TBS) + 17, nc + 1);
+        emon.Port.cellsPush(tx, bx0);
+        i = 1;
+        while (i < nc) {
+            emon.Port.cellsPush(tx, tbMax(emon.Port.cellsAt(tx, emon.Port.cellsLen(tx) - 1), (emon.Port.cellsAt(ws, (2 * (i - 1)) + 1) + emon.Port.cellsAt(ws, 2 * i)) / 2));
+            i += 1;
+        }
+        emon.Port.cellsPush(tx, tbMax(bx1, emon.Port.cellsAt(tx, emon.Port.cellsLen(tx) - 1)));
+        emon.Port.cellsSet(tb, (t * TBS) + 24, 1);
+        emon.Port.cellsSet(tb, (t * TBS) + 25, k);
+        emon.Port.cellsSet(tb, (t * TBS) + 26, Tagtable.ttGet(tg, k, 10));
+        emon.Port.cellsSet(tb, (t * TBS) + 27, Tagtable.ttGet(tg, k, 11));
+        return t;
+    }
+    public static int tbTags(emon.Port.Cells wd, emon.Port.Cells et, int p, int w0, int w1, emon.Port.Cells grl, int q0, int q1, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells mi, emon.Port.Cells tg, emon.Port.Cells ta, emon.Port.Cells wo, emon.Port.Cells ws, emon.Port.Cells acc, emon.Port.Cells tv, emon.Port.Cells tb, int t0, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells pr, emon.Port.Cells so) {
+        // The tagged tables of page p against the candidates t0.. that `tb-select` kept (see the head of this section): each is checked and
+        // scored, recorded in `tv`, and, by its verdict, attached to the candidate it overlaps or made a candidate. Answers the tagged tables.
+        int trust = Pdfstruct.tgTrust(ss);
+        int use = 0;
+        int nt0 = tbRowsOf(tb, TBS);
+        int nt = 0;
+        int k = 0;
+        int g = 0;
+        int geo = 0;
+        int owned = 0;
+        int agree = 0;
+        int keep = 0;
+        int v = 0;
+        if (trust >= TB_TAG_TRUST) {
+            use = 1;
+        }
+        nt = Tagtable.ttGrids(se, ss, p, tg, ta, ws);
+        if (nt == 0) {
+            return 0;
+        }
+        Tagtable.ttWords(wd, w0, w1, se, sc, gl, mk, mi, tg, ta, wo);
+        while (k < nt) {
+            owned = Tagtable.ttGet(tg, k, 14);
+            g = Tagtable.ttGeoTb(tg, k, tb, t0, nt0);
+            if (g >= 0) {
+                Tagtable.ttFold(tg, (k * 24) + 6, emon.Port.cellsAt(tb, (g * TBS) + 1), emon.Port.cellsAt(tb, (g * TBS) + 2), emon.Port.cellsAt(tb, (g * TBS) + 3), emon.Port.cellsAt(tb, (g * TBS) + 4));
+            }
+            Tagtable.ttChecks(tg, k, ta, wd, w0, w1, wo, grl, q0, q1, ws);
+            geo = -1;
+            if ((g >= 0) && (owned > 0)) {
+                agree = Tagtable.ttGeoMap(tg, k, ta, wo, w0, tb, g, tc, tw, ws);
+                if (agree >= 0) {
+                    geo = Tagtable.ttPm(agree, owned);
+                }
+            }
+            Tagtable.ttSet(tg, k, 12, g);
+            Tagtable.ttSet(tg, k, 21, geo);
+            Tagtable.ttScore(tg, k, acc);
+            v = Tagtable.ttGet(tg, k, 10);
+            if ((v == 1) && ((g < 0) && (owned > 0))) {
+                keep = 0;
+                if ((use == 1) && (trust >= TB_TAG_WIN)) {
+                    keep = 1;
+                }
+                agree = tbStructCand(wd, et, p, w0, w1, tg, k, ta, wo, trust, tb, tc, tw, tx, pr, so, ws, keep);
+                if (agree == -2) {
+                    Tagtable.ttSet(tg, k, 10, 3);
+                    v = 3;
+                }
+            }
+            if ((use == 0) && (v == 1)) {
+                Tagtable.ttSet(tg, k, 10, 2);
+                v = 2;
+            }
+            if ((use == 1) && (v == 1)) {
+                Tagtable.ttOr(tg, k, 15, 4);
+            }
+            if ((use == 1) && ((v == 1) && ((g >= 0) && ((geo >= 0) && (geo < TB_GEO_AGREE))))) {
+                Tagtable.ttSet(tg, k, 10, 2);
+                emon.Port.cellsSet(tb, (g * TBS) + 24, emon.Port.cellsAt(tb, (g * TBS) + 24) | 4);
+            }
+            if ((use == 1) && (g >= 0)) {
+                emon.Port.cellsSet(tb, (g * TBS) + 25, k);
+                emon.Port.cellsSet(tb, (g * TBS) + 26, Tagtable.ttGet(tg, k, 10));
+                emon.Port.cellsSet(tb, (g * TBS) + 27, Tagtable.ttGet(tg, k, 11));
+            }
+            Tagtable.ttRecord(tg, k, trust, tv);
+            k += 1;
+        }
+        return nt;
+    }
+    public static int tbTagMap(emon.Port.Cells tb, int k, emon.Port.Cells tg, emon.Port.Cells ta, emon.Port.Cells wo, int w0, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells ws) {
+        // Fill ws with the maps of candidate k's tagged table onto it (`tt-geo-map`: a candidate row for each tagged row, then a column for each
+        // tagged column); for a table made of the tags the identity. Answers 1 when ws holds them, 0 when it does not.
+        int b = k * TBS;
+        int tgi = emon.Port.cellsAt(tb, b + 25);
+        int i = 0;
+        if (tgi < 0) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(tb, b + 5) == PF_STRUCT) {
+            emon.Port.cellsDrop(ws, 0);
+            while (i < Tagtable.ttGet(tg, tgi, 2)) {
+                emon.Port.cellsPush(ws, i);
+                i += 1;
+            }
+            i = 0;
+            while (i < Tagtable.ttGet(tg, tgi, 3)) {
+                emon.Port.cellsPush(ws, i);
+                i += 1;
+            }
+            return 1;
+        }
+        if (Tagtable.ttGeoMap(tg, tgi, ta, wo, w0, tb, k, tc, tw, ws) < 0) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int tbTagHead(emon.Port.Cells tb, int k, emon.Port.Cells tg, emon.Port.Cells ta, emon.Port.Cells wo, int w0, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells ws) {
+        // The head rows the tags give candidate k: the tagged head when the tags are confirmed and map the candidate's first rows one to one,
+        // or when they are partial and have as many rows as the candidate (case 4); a table made of the tags has its own. 0 when not.
+        int b = k * TBS;
+        int tgi = emon.Port.cellsAt(tb, b + 25);
+        int nrows = emon.Port.cellsAt(tb, b + 7);
+        int r = 0;
+        if (tgi < 0) {
+            return 0;
+        }
+        int nh = Tagtable.ttGet(tg, tgi, 13);
+        int fg = Tagtable.ttGet(tg, tgi, 15);
+        int v = Tagtable.ttGet(tg, tgi, 10);
+        if ((nh <= 0) || (nh >= nrows)) {
+            return 0;
+        }
+        if (v == 3) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(tb, b + 5) == PF_STRUCT) {
+            return nh;
+        }
+        if ((fg & 4) != 0) {
+            if (tbTagMap(tb, k, tg, ta, wo, w0, tc, tw, ws) == 0) {
+                return 0;
+            }
+            while (r < nh) {
+                if (emon.Port.cellsAt(ws, r) != r) {
+                    return 0;
+                }
+                r += 1;
+            }
+            emon.Port.cellsSet(tb, b + 24, emon.Port.cellsAt(tb, b + 24) | 1);
+            return nh;
+        }
+        if ((v == 2) && (Tagtable.ttGet(tg, tgi, 2) == nrows)) {
+            emon.Port.cellsSet(tb, b + 24, emon.Port.cellsAt(tb, b + 24) | 1);
+            return nh;
+        }
+        return 0;
+    }
+    public static int tbTagSpan(emon.Port.Cells tb, int k, emon.Port.Cells tc, int cfirst, int cend, int gr, int gc, int rs, int cs) {
+        // A tagged cell that spans rs rows and cs columns, at the candidate's cell (gr, gc). A ruled table keeps its lattice's spans: when a
+        // cell of the block is another cell than the one at its corner a rule closes the edge, and the table is flagged (`tag-span-conflict`).
+        // Any other profile takes the tagged span when every other slot of the block is a plain, empty cell: they are absorbed.
+        int b = k * TBS;
+        int e = tbCellAt(tc, cfirst, cend, gr, gc);
+        int rr = 0;
+        int cc = 0;
+        int n = 0;
+        int ok = 1;
+        int x1 = 0;
+        int y1 = 0;
+        if (e < 0) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(tc, e * TCS) != gr) || (emon.Port.cellsAt(tc, (e * TCS) + 1) != gc)) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(tb, b + 5) == PF_RULED) {
+            while (rr < rs) {
+                cc = 0;
+                while (cc < cs) {
+                    n = tbCellAt(tc, cfirst, cend, gr + rr, gc + cc);
+                    if ((n >= 0) && (n != e)) {
+                        emon.Port.cellsSet(tb, b + 24, emon.Port.cellsAt(tb, b + 24) | 2);
+                    }
+                    cc += 1;
+                }
+                rr += 1;
+            }
+            return 0;
+        }
+        if ((emon.Port.cellsAt(tc, (e * TCS) + 2) != 1) || (emon.Port.cellsAt(tc, (e * TCS) + 3) != 1)) {
+            return 0;
+        }
+        x1 = emon.Port.cellsAt(tc, (e * TCS) + 6);
+        y1 = emon.Port.cellsAt(tc, (e * TCS) + 7);
+        while ((rr < rs) && (ok == 1)) {
+            cc = 0;
+            while ((cc < cs) && (ok == 1)) {
+                if ((rr > 0) || (cc > 0)) {
+                    n = tbCellAt(tc, cfirst, cend, gr + rr, gc + cc);
+                    if (n < 0) {
+                        ok = 0;
+                    } else if ((emon.Port.cellsAt(tc, n * TCS) != (gr + rr)) || ((emon.Port.cellsAt(tc, (n * TCS) + 1) != (gc + cc)) || ((emon.Port.cellsAt(tc, (n * TCS) + 2) != 1) || ((emon.Port.cellsAt(tc, (n * TCS) + 3) != 1) || (emon.Port.cellsAt(tc, (n * TCS) + 9) > 0))))) {
+                        ok = 0;
+                    }
+                }
+                cc += 1;
+            }
+            rr += 1;
+        }
+        if (ok == 0) {
+            return 0;
+        }
+        rr = 0;
+        while (rr < rs) {
+            cc = 0;
+            while (cc < cs) {
+                if ((rr > 0) || (cc > 0)) {
+                    n = tbCellAt(tc, cfirst, cend, gr + rr, gc + cc);
+                    emon.Port.cellsSet(tc, (n * TCS) + 12, emon.Port.cellsAt(tc, (n * TCS) + 12) | 1);
+                    x1 = tbMax(x1, emon.Port.cellsAt(tc, (n * TCS) + 6));
+                    y1 = tbMax(y1, emon.Port.cellsAt(tc, (n * TCS) + 7));
+                }
+                cc += 1;
+            }
+            rr += 1;
+        }
+        emon.Port.cellsSet(tc, (e * TCS) + 2, rs);
+        emon.Port.cellsSet(tc, (e * TCS) + 3, cs);
+        emon.Port.cellsSet(tc, (e * TCS) + 6, x1);
+        emon.Port.cellsSet(tc, (e * TCS) + 7, y1);
+        emon.Port.cellsSet(tb, b + 24, emon.Port.cellsAt(tb, b + 24) | 1);
+        return 1;
+    }
+    public static int tbTagRest(emon.Port.Cells tb, int k, emon.Port.Cells tg, emon.Port.Cells ta, emon.Port.Cells wo, int w0, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells ws) {
+        // What else the confirmed tags give candidate k (cases 1 and 2, and a table made of the tags): the tagged spans (`tb-tag-span`) and the
+        // cells of `TH` with Scope Row, which are row headers.
+        int b = k * TBS;
+        int tgi = emon.Port.cellsAt(tb, b + 25);
+        int cfirst = emon.Port.cellsAt(tb, b + 9);
+        int cend = cfirst + emon.Port.cellsAt(tb, b + 10);
+        int c = 0;
+        int e = 0;
+        int gr = 0;
+        int gc = 0;
+        int nr = 0;
+        int cf = 0;
+        int ce = 0;
+        if (tgi < 0) {
+            return 0;
+        }
+        if (Tagtable.ttGet(tg, tgi, 10) == 3) {
+            return 0;
+        }
+        if (((Tagtable.ttGet(tg, tgi, 15) & 4) == 0) && (emon.Port.cellsAt(tb, b + 5) != PF_STRUCT)) {
+            return 0;
+        }
+        if (tbTagMap(tb, k, tg, ta, wo, w0, tc, tw, ws) == 0) {
+            return 0;
+        }
+        nr = Tagtable.ttGet(tg, tgi, 2);
+        cf = Tagtable.ttGet(tg, tgi, 4);
+        ce = cf + Tagtable.ttGet(tg, tgi, 5);
+        c = cf;
+        while (c < ce) {
+            gr = emon.Port.cellsAt(ws, Tagtable.ttCget(ta, c, 1));
+            gc = emon.Port.cellsAt(ws, nr + Tagtable.ttCget(ta, c, 2));
+            if ((gr >= 0) && (gc >= 0)) {
+                if ((Tagtable.ttCget(ta, c, 3) > 1) || (Tagtable.ttCget(ta, c, 4) > 1)) {
+                    tbTagSpan(tb, k, tc, cfirst, cend, gr, gc, Tagtable.ttCget(ta, c, 3), Tagtable.ttCget(ta, c, 4));
+                }
+                if ((Tagtable.ttCget(ta, c, 5) & 4) != 0) {
+                    e = tbCellAt(tc, cfirst, cend, gr, gc);
+                    if (e >= 0) {
+                        if (emon.Port.cellsAt(tc, (e * TCS) + 10) == 0) {
+                            emon.Port.cellsSet(tc, (e * TCS) + 10, 2);
+                            emon.Port.cellsSet(tb, b + 24, emon.Port.cellsAt(tb, b + 24) | 1);
+                        }
+                    }
+                }
+            }
+            c += 1;
+        }
+        return 0;
+    }
+    public static int tbFinish(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells ln, int l0, int l1, emon.Port.Cells tq, emon.Port.Cells tg, emon.Port.Cells ta, emon.Port.Cells wo, int w0, emon.Port.Cells ws) {
+        // What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows (the tags', when they are confirmed and agree,
+        // D225), the footer, which cells are header cells (`col` in the header, `row` in the footer and for the tags' row headers), the tagged
+        // spans, each cell's alignment, the caption.
         int b = k * TBS;
         int nrows = emon.Port.cellsAt(tb, b + 7);
         int cfirst = emon.Port.cellsAt(tb, b + 9);
         int cend = cfirst + emon.Port.cellsAt(tb, b + 10);
-        int nhead = tbHeadRows(tb, k, wd, et, tc, tw);
-        int nfoot = tbFootRows(tb, k, nhead, wd, et, tc, tw);
+        int nht = tbTagHead(tb, k, tg, ta, wo, w0, tc, tw, ws);
+        int nhead = 0;
+        int nfoot = 0;
         int c = cfirst;
+        if (nht > 0) {
+            nhead = nht;
+        } else {
+            nhead = tbHeadRows(tb, k, wd, et, tc, tw);
+        }
+        nfoot = tbFootRows(tb, k, nhead, wd, et, tc, tw);
         emon.Port.cellsSet(tb, b + 11, nhead);
         emon.Port.cellsSet(tb, b + 12, nfoot);
         while (c < cend) {
@@ -2954,15 +3451,20 @@ public final class Table {
         if (emon.Port.cellsAt(tb, b + 5) != PF_RULED) {
             tbHeaderSpans(tb, k, tc);
         }
+        tbTagRest(tb, k, tg, ta, wo, w0, tc, tw, ws);
         tbAligns(tb, k, wd, tc, tw);
         tbCaption(tb, k, wd, et, ln, l0, l1, tq);
         return 0;
     }
-    public static int tbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages) {
+    public static int tbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv) {
         // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
         // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
         // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
-        // row extents (one name each in the calls below). Answers the number of tables.
+        // row extents (one name each in the calls below). `gl mk se sc ss` are the text layer's glyphs and marks and the tagged tree's elements,
+        // marked-content references and document row (P5.5: `ss` empty and the rest unread for a document with no tree), `grg` the graphic
+        // regions (OCR's table hints, D228: empty until P7.G), `g0..g5` the tagged tables' scratch (the marks' join, the page's grids and cells,
+        // the words' cells, a work area, three cells for the score), `tv` the verdicts of every tagged table (answers to the dump's `tb`).
+        // Answers the number of tables.
         int nw = Evidence.wdCount(wd);
         int nl = Evidence.lnCount(ln);
         int nq = Glayer.grlCount(grl);
@@ -2977,8 +3479,13 @@ public final class Table {
         int ui = 0;
         int uj = 0;
         int t0 = 0;
+        int nk = 0;
         int k = 0;
         emon.Port.cellsDrop(tb, 0);
+        emon.Port.cellsDrop(tv, 0);
+        if (emon.Port.cellsLen(se) > 0) {
+            Tagtable.ttIndex(mk, sc, g0);
+        }
         emon.Port.cellsDrop(tc, 0);
         emon.Port.cellsDrop(tw, 0);
         emon.Port.cellsDrop(tq, 0);
@@ -3024,10 +3531,18 @@ public final class Table {
                     tbShadedPage(s2, p, wd, et, wi, wj, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
                 }
                 tbWhitespacePage(p, wd, et, wi, wj, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
-                tbSelect(tb, t0, s3, s9, s8);
+                if (Pdfstruct.tgTrust(ss) >= TB_TAG_VETO_TRUST) {
+                    tbVeto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0);
+                }
+                tbSelect(tb, t0, s3, s9, s8, grg);
+                nk = tbRowsOf(tb, TBS);
+                tbTags(wd, et, p, wi, wj, grl, qi, qj, se, sc, ss, gl, mk, g0, g1, g2, g3, g4, g5, tv, tb, t0, tc, tw, tx, s7, s3);
+                if (tbRowsOf(tb, TBS) > nk) {
+                    tbSelect(tb, t0, s3, s9, s8, grg);
+                }
                 k = t0;
                 while (k < tbRowsOf(tb, TBS)) {
-                    tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq);
+                    tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4);
                     k += 1;
                 }
                 tbClaim(tb, t0, ln, li, lj);

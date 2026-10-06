@@ -1,0 +1,302 @@
+{
+  "emon": "1.1",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "pages": [
+    {
+      "n": 1,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 59.08, 212.04, 75.73]
+        },
+        {
+          "band": 1,
+          "col": 0,
+          "role": "body",
+          "box": [72, 94.1, 344.06, 310.28]
+        },
+        {
+          "band": 1,
+          "col": 1,
+          "role": "margin",
+          "box": [408, 199.32, 435.23, 274.57]
+        }
+      ]
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "text": "Supplies Ledger",
+            "at": [[1, 72, 59.08, 212.04, 75.73]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "text": "The table below was extracted from the supplies ledger. Figures are totals for the quarter.",
+            "at": [[1, 72, 94.1, 344.06, 118.28]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 4,
+            "kind": "note",
+            "role": "margin",
+            "children": [
+              {
+                "id": 5,
+                "kind": "paragraph",
+                "text": "Stock",
+                "at": [[1, 408, 199.32, 435.23, 208.57]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 6,
+                "kind": "paragraph",
+                "align": "start",
+                "text": "yes no yes",
+                "at": [[1, 408, 221.32, 423.56, 274.57]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "at": [[1, 408, 199.32, 435.23, 274.57]],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 7,
+            "kind": "table",
+            "profile": "ruled",
+            "columns": 4,
+            "children": [
+              {
+                "id": 8,
+                "kind": "rowgroup",
+                "role": "head",
+                "children": [
+                  {
+                    "id": 9,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 10,
+                        "kind": "cell",
+                        "header": "col",
+                        "text": "Item",
+                        "at": [[1, 72, 192, 182, 214]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 11,
+                        "kind": "cell",
+                        "header": "col",
+                        "text": "Qty",
+                        "at": [[1, 182, 192, 292, 214]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 12,
+                        "kind": "cell",
+                        "header": "col",
+                        "text": "Price",
+                        "at": [[1, 292, 192, 402, 214]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 13,
+                        "kind": "cell",
+                        "header": "col",
+                        "text": "Stock",
+                        "at": [[1, 402, 192, 512, 214]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              },
+              {
+                "id": 14,
+                "kind": "rowgroup",
+                "role": "body",
+                "children": [
+                  {
+                    "id": 15,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 16,
+                        "kind": "cell",
+                        "text": "Pens",
+                        "at": [[1, 72, 214, 182, 236]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 17,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "12",
+                        "at": [[1, 182, 214, 292, 236]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 18,
+                        "kind": "cell",
+                        "text": "3.40",
+                        "at": [[1, 292, 214, 402, 236]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 19,
+                        "kind": "cell",
+                        "text": "yes",
+                        "at": [[1, 402, 214, 512, 236]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 20,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 21,
+                        "kind": "cell",
+                        "text": "Paper",
+                        "at": [[1, 72, 236, 182, 258]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 22,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "4",
+                        "at": [[1, 182, 236, 292, 258]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 23,
+                        "kind": "cell",
+                        "text": "7.25",
+                        "at": [[1, 292, 236, 402, 258]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 24,
+                        "kind": "cell",
+                        "text": "no",
+                        "at": [[1, 402, 236, 512, 258]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 25,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 26,
+                        "kind": "cell",
+                        "text": "Tape",
+                        "at": [[1, 72, 258, 182, 280]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 27,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "9",
+                        "at": [[1, 182, 258, 292, 280]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 28,
+                        "kind": "cell",
+                        "text": "2.10",
+                        "at": [[1, 292, 258, 402, 280]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 29,
+                        "kind": "cell",
+                        "text": "yes",
+                        "at": [[1, 402, 258, 512, 280]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              }
+            ],
+            "at": [[1, 72, 192, 512, 280]],
+            "src": ["text", "vector", "infer"],
+            "conf": 600
+          },
+          {
+            "id": 30,
+            "kind": "paragraph",
+            "align": "start",
+            "text": "Questions go to the purchasing office.",
+            "at": [[1, 72, 300.1, 256.66, 310.28]],
+            "src": ["text", "infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      }
+    ]
+  },
+  "furniture": [],
+  "dropped": []
+}

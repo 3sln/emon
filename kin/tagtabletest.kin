@@ -1,0 +1,329 @@
+;; Laws for `emon.tagtable` and the table stage's use of it (P5.5; SPEC 10.5 "Tagged tables"; D225, D034, D148-D150), on every target.
+;;
+;; The tree is written by hand, one row of `se` per element (the fields the reader fills that the grids read: the parent, the role, the
+;; size of the subtree, the page of the first text, Scope, RowSpan, ColSpan), so each law says what a tagged grid is and what a check is
+;; made of; what the stage MAKES of real tagged documents (the eight `ttab-*` fixtures of P6.8, with the untagged twin of one) is
+;; `tabletest`'s goldens, `test/table/ttab-*.json`, and `bb accuracy`'s `tag-verdict-acc`.
+(ns emon.tagtabletest
+  (:require [emon.lang :refer [I32 Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-text assert-that new-cells new-text]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.tagtable :refer [tt-grids tt-checks tt-score tt-iou tt-emit tt-record tt-get tt-set tt-cget tt-pm]]
+            [emon.table :refer [tb-tag-span tb-tie-bonus tb-hint-iou]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------------ the tree
+
+(defn ^I32 ttt-el [^:mut ^Cells se ^I32 parent ^I32 role ^I32 size ^I32 fpg ^I32 scope ^I32 rs ^I32 cs]
+  (comment "Append an element: parent, standard type (`sr`: Table 42, TR 43, TH 44, TD 45, THead 46, TBody 47, TFoot 48), the rows of its subtree,")
+  (comment "the page of its first text, Scope (0 none, 1 Row, 2 Column, 3 Both), RowSpan, ColSpan. Answers its row.")
+  (let [^:mut ^I32 i 0]
+    (while (< i 64)
+      (do (cells-push se 0)
+          (set i (+ i 1))))
+    (let [^I32 at (- (cells-len se) 64)]
+      (cells-set se (+ at 1) parent)
+      (cells-set se (+ at 5) role)
+      (cells-set se (+ at 40) size)
+      (cells-set se (+ at 49) fpg)
+      (cells-set se (+ at 29) scope)
+      (cells-set se (+ at 30) rs)
+      (cells-set se (+ at 31) cs)
+      (return (- (quot (cells-len se) 64) 1)))))
+
+(defn ^I32 ttt-ss [^:mut ^Cells ss ^I32 tables]
+  (comment "The document row with the count of tables the tree has, which is what `tt-grids` asks first.")
+  (cells-drop ss 0)
+  (let [^:mut ^I32 i 0]
+    (while (< i 96)
+      (do (cells-push ss 0)
+          (set i (+ i 1))))
+    (cells-set ss 58 tables)
+    (return 0)))
+
+(defn ^I32 ttt-sample [^:mut ^Cells se ^I32 page0]
+  (comment "Document / Table / THead { TR { TH(Column) TH(Column, ColSpan 2) } } / TBody { TR { TD(RowSpan 2) TD TD } TR { TD TD } }: three")
+  (comment "rows and three columns, the second body row's cells placed after the rowspan's column. Every row's text is on page `page0` (0-based).")
+  (cells-drop se 0)
+  (ttt-el se -1 0 14 -1 0 -1 -1)
+  (ttt-el se 0 42 13 -1 0 -1 -1)
+  (ttt-el se 1 46 4 -1 0 -1 -1)
+  (ttt-el se 2 43 3 page0 0 -1 -1)
+  (ttt-el se 3 44 1 page0 2 -1 -1)
+  (ttt-el se 3 44 1 page0 2 -1 2)
+  (ttt-el se 1 47 8 -1 0 -1 -1)
+  (ttt-el se 6 43 4 page0 0 -1 -1)
+  (ttt-el se 7 45 1 page0 0 2 -1)
+  (ttt-el se 7 45 1 page0 0 -1 -1)
+  (ttt-el se 7 45 1 page0 0 -1 -1)
+  (ttt-el se 6 43 3 page0 0 -1 -1)
+  (ttt-el se 11 45 1 page0 0 -1 -1)
+  (ttt-el se 11 45 1 page0 0 -1 -1)
+  (return 0))
+
+(deftest test-a-tagged-grid-places-its-spans
+  (let [^Cells se (new-cells) ^Cells ss (new-cells) ^Cells tg (new-cells) ^Cells ta (new-cells) ^Cells oc (new-cells)]
+    (ttt-sample se 0)
+    (ttt-ss ss 1)
+    (assert-eq (tt-grids se ss 1 tg ta oc) 1 "one tagged table on page 1")
+    (assert-eq (tt-get tg 0 0) 1 "it is the Table element")
+    (assert-eq (tt-get tg 0 2) 3 "three rows")
+    (assert-eq (tt-get tg 0 3) 3 "three columns: the second header spans two")
+    (assert-eq (tt-get tg 0 5) 7 "seven cells")
+    (assert-eq (tt-get tg 0 13) 1 "one head row: the TH of the THead")
+    (assert-eq (tt-cget ta 1 4) 2 "the second header's ColSpan")
+    (assert-eq (tt-cget ta 1 2) 1 "placed in the second column")
+    (assert-eq (tt-cget ta 2 3) 2 "the first body cell's RowSpan")
+    (assert-eq (tt-cget ta 3 2) 1 "the next cell of its row is in the second column")
+    (assert-eq (tt-cget ta 5 1) 2 "the third row")
+    (assert-eq (tt-cget ta 5 2) 1 "its first cell skips the column the rowspan holds")
+    (assert-eq (tt-cget ta 6 2) 2 "and its second is the third column")
+    (assert-eq (tt-cget ta 0 5) 11 "a TH with Scope Column in a THead: a header (1), for its column (2), in the head (8)")
+    (assert-eq (tt-cget ta 2 5) 0 "a plain TD")
+    (assert-eq (tt-grids se ss 2 tg ta oc) 0 "no table has text on page 2")
+    (assert-eq (tt-grids se ss 1 tg ta oc) 1 "and the arenas are emptied each time")
+    (cells-set ss 58 0)
+    (assert-eq (tt-grids se ss 1 tg ta oc) 0 "a tree with no Table has none")))
+
+(deftest test-a-table-inside-a-table-is-refused-and-a-cell-outside-a-row-too
+  (let [^Cells se (new-cells) ^Cells ss (new-cells) ^Cells tg (new-cells) ^Cells ta (new-cells) ^Cells oc (new-cells)]
+    (cells-drop se 0)
+    (ttt-el se -1 0 7 -1 0 -1 -1)
+    (ttt-el se 0 42 6 -1 0 -1 -1)
+    (ttt-el se 1 43 5 0 0 -1 -1)
+    (ttt-el se 2 45 4 0 0 -1 -1)
+    (ttt-el se 3 42 3 -1 0 -1 -1)
+    (ttt-el se 4 43 2 0 0 -1 -1)
+    (ttt-el se 5 45 1 0 0 -1 -1)
+    (ttt-ss ss 2)
+    (assert-eq (tt-grids se ss 1 tg ta oc) 1 "the outer table is refused (it holds a table), the inner one is read")
+    (assert-eq (tt-get tg 0 0) 4 "the inner Table")
+    (cells-drop se 0)
+    (ttt-el se -1 0 4 -1 0 -1 -1)
+    (ttt-el se 0 42 3 -1 0 -1 -1)
+    (ttt-el se 1 43 2 0 0 -1 -1)
+    (ttt-el se 1 45 1 0 0 -1 -1)
+    (ttt-ss ss 1)
+    (assert-eq (tt-grids se ss 1 tg ta oc) 0 "a cell directly under the table, not in a row, is not a grid")))
+
+;; ------------------------------------------------------------------ the checks
+
+(defn ^I32 ttt-box [^:mut ^Cells ta ^I32 c ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Give tagged cell c the text box (cp) and one word.")
+  (cells-set ta (+ (* c 16) 6) 1)
+  (cells-set ta (+ (* c 16) 7) x0)
+  (cells-set ta (+ (* c 16) 8) y0)
+  (cells-set ta (+ (* c 16) 9) x1)
+  (cells-set ta (+ (* c 16) 10) y1)
+  (return 0))
+
+(defn ^I32 ttt-grid [^:mut ^Cells se ^:mut ^Cells ss ^:mut ^Cells tg ^:mut ^Cells ta ^:mut ^Cells oc]
+  (comment "The sample's grid with every cell given a box on a regular lattice: column c at x 10000 + 3000 c, row r at y 10000 + 1500 r (cp), 2000 wide")
+  (comment "and 600 high; the spanning cells at their anchors.")
+  (let [^:mut ^I32 c 0
+        ^:mut ^I32 col 0
+        ^:mut ^I32 row 0]
+    (ttt-sample se 0)
+    (ttt-ss ss 1)
+    (tt-grids se ss 1 tg ta oc)
+    (while (< c 7)
+      (do (set col (tt-cget ta c 2))
+          (set row (tt-cget ta c 1))
+          (ttt-box ta c (+ 10000 (* 3000 col)) (+ 10000 (* 1500 row)) (+ 12000 (* 3000 col)) (+ 10600 (* 1500 row)))
+          (set c (+ c 1))))
+    (return 0)))
+
+(deftest test-a-correct-grid-passes-every-check-and-two-visual-rows-in-one-tr-fail-row-band
+  (let [^Cells se (new-cells) ^Cells ss (new-cells) ^Cells tg (new-cells) ^Cells ta (new-cells) ^Cells oc (new-cells)
+        ^Cells wd (new-cells) ^Cells wo (new-cells) ^Cells grl (new-cells) ^Cells ws (new-cells) ^Cells acc (new-cells)]
+    (ttt-grid se ss tg ta oc)
+    (tt-set tg 0 14 7)
+    (tt-checks tg 0 ta wd 0 0 wo grl 0 0 ws)
+    (assert-eq (tt-get tg 0 16) 1000 "row-band: the cells of a row share a band")
+    (assert-eq (tt-get tg 0 17) 1000 "col-band: the cells of a column share a band")
+    (assert-eq (tt-get tg 0 18) 1000 "order: the cells of a row run left to right")
+    (assert-eq (tt-get tg 0 19) -1 "cover: no word on the page to be inside the box")
+    (assert-eq (tt-get tg 0 20) 1000 "rules: no rule crosses any text")
+    (tt-set tg 0 21 1000)
+    (assert-eq (tt-score tg 0 acc) 1000 "all checks at 1000 score 1000")
+    (assert-eq (tt-get tg 0 10) 1 "confirmed")
+    ;; the second body row's two cells drop a visual row, as a TR with the cells of two rows would
+    (ttt-box ta 6 10000 11500 12000 12100)
+    (ttt-box ta 5 13000 10000 15000 10600)
+    (tt-checks tg 0 ta wd 0 0 wo grl 0 0 ws)
+    (assert-eq (tt-get tg 0 16) 750 "row-band: one of the four adjacent pairs of the table no longer shares a band")
+    (assert-that (< (tt-get tg 0 17) 1000) "col-band: and the column moved with it")))
+
+(deftest test-a-fused-rule-through-the-text-fails-rules
+  (let [^Cells se (new-cells) ^Cells ss (new-cells) ^Cells tg (new-cells) ^Cells ta (new-cells) ^Cells oc (new-cells)
+        ^Cells wd (new-cells) ^Cells wo (new-cells) ^Cells grl (new-cells) ^Cells ws (new-cells)
+        ^:mut ^I32 i 0]
+    (ttt-grid se ss tg ta oc)
+    ;; one `grl` row (stride 24): page 1, a horizontal rule at y 10300, 9000 to 20000, confidence 900, through the first row's cells
+    (while (< i 24)
+      (do (cells-push grl 0)
+          (set i (+ i 1))))
+    (cells-set grl 0 1)
+    (cells-set grl 5 9000)
+    (cells-set grl 6 10300)
+    (cells-set grl 7 20000)
+    (cells-set grl 8 10300)
+    (cells-set grl 10 1)
+    (cells-set grl 17 900)
+    (tt-checks tg 0 ta wd 0 0 wo grl 0 1 ws)
+    (assert-eq (tt-get tg 0 20) 714 "two of the seven cells have a rule through their text")
+    (cells-set grl 17 700)
+    (tt-checks tg 0 ta wd 0 0 wo grl 0 1 ws)
+    (assert-eq (tt-get tg 0 20) 1000 "a rule under confidence 800 is not evidence")))
+
+(deftest test-the-score-is-a-weighted-harmonic-mean-scaled-by-the-weakest-check
+  (let [^Cells tg (new-cells) ^Cells acc (new-cells) ^:mut ^I32 i 0]
+    (while (< i 24)
+      (do (cells-push tg 0)
+          (set i (+ i 1))))
+    (tt-set tg 0 16 1000)
+    (tt-set tg 0 17 1000)
+    (tt-set tg 0 18 1000)
+    (tt-set tg 0 19 800)
+    (tt-set tg 0 20 1000)
+    (tt-set tg 0 21 1000)
+    (assert-eq (tt-score tg 0 acc) 864 "one check at 800 (the cover of a table that misses a row): 960 scaled by 900/1000")
+    (assert-eq (tt-get tg 0 10) 1 "still confirmed")
+    (tt-set tg 0 21 714)
+    (assert-eq (tt-score tg 0 acc) 749 "the geometry agrees on 714 of the words and the cover is 800: partial")
+    (assert-eq (tt-get tg 0 10) 2 "partial")
+    (tt-set tg 0 16 667)
+    (tt-set tg 0 19 1000)
+    (tt-set tg 0 21 0)
+    (assert-eq (tt-score tg 0 acc) 85 "two visual rows in a TR and a geometry that agrees with none of the words")
+    (assert-eq (tt-get tg 0 10) 3 "contradicted")
+    (tt-set tg 0 16 -1)
+    (tt-set tg 0 17 -1)
+    (tt-set tg 0 18 -1)
+    (tt-set tg 0 19 -1)
+    (tt-set tg 0 20 -1)
+    (tt-set tg 0 21 -1)
+    (assert-eq (tt-score tg 0 acc) 0 "a table with nothing to check scores nothing")
+    (assert-eq (tt-get tg 0 10) 3 "and is not believed")))
+
+(deftest test-intersection-over-union
+  (assert-eq (tt-iou 0 0 1000 1000 0 0 1000 1000) 1000 "the same box")
+  (assert-eq (tt-iou 0 0 1000 1000 2000 2000 3000 3000) 0 "apart")
+  (assert-eq (tt-iou 0 0 2000 1000 0 0 1000 1000) 500 "half of the larger is the smaller")
+  (assert-eq (tt-iou 0 0 61200 79200 0 0 61200 79200) 1000 "a page of centipoints does not overflow"))
+
+;; ------------------------------------------------------------------ what a table does with the tags
+
+(defn ^I32 ttt-tb [^:mut ^Cells tb ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 profile ^I32 score ^I32 nrows ^I32 ncols ^I32 cfirst ^I32 ncells]
+  (comment "A candidate row of `tb` (stride 28): page 1, the box, the profile (1 ruled .. 5 struct), the score, the grid, its cells.")
+  (let [^:mut ^I32 i 0]
+    (cells-push tb 1)
+    (cells-push tb x0)
+    (cells-push tb y0)
+    (cells-push tb x1)
+    (cells-push tb y1)
+    (cells-push tb profile)
+    (cells-push tb score)
+    (cells-push tb nrows)
+    (cells-push tb ncols)
+    (cells-push tb cfirst)
+    (cells-push tb ncells)
+    (while (< i 17)
+      (do (cells-push tb 0)
+          (set i (+ i 1))))
+    (cells-set tb (- (cells-len tb) 10) 1)
+    (cells-set tb (- (cells-len tb) 3) -1)
+    (return (- (quot (cells-len tb) 28) 1))))
+
+(defn ^I32 ttt-tc [^:mut ^Cells tc ^I32 row ^I32 col ^I32 words]
+  (comment "A cell of `tc` (stride 16) at a place on a lattice of 3000 x 1500: 1 x 1, `words` words (words 0 is an empty cell).")
+  (let [^:mut ^I32 i 0]
+    (cells-push tc row)
+    (cells-push tc col)
+    (cells-push tc 1)
+    (cells-push tc 1)
+    (cells-push tc (+ 10000 (* 3000 col)))
+    (cells-push tc (+ 10000 (* 1500 row)))
+    (cells-push tc (+ 13000 (* 3000 col)))
+    (cells-push tc (+ 11500 (* 1500 row)))
+    (cells-push tc 0)
+    (cells-push tc words)
+    (while (< i 6)
+      (do (cells-push tc 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-a-tagged-span-is-taken-by-a-table-without-rules-and-flagged-in-a-ruled-one
+  (let [^Cells tb (new-cells) ^Cells tc (new-cells)]
+    (ttt-tb tb 10000 10000 16000 13000 1 900 2 2 0 4)
+    (ttt-tc tc 0 0 1)
+    (ttt-tc tc 0 1 1)
+    (ttt-tc tc 1 0 1)
+    (ttt-tc tc 1 1 1)
+    (assert-eq (tb-tag-span tb 0 tc 0 4 0 0 1 2) 0 "a ruled table keeps its lattice: the first row's two cells stay two")
+    (assert-eq (cells-at tb 24) 2 "and the table is flagged: a tagged span crosses an edge the rules close")
+    (assert-eq (cells-at tc 3) 1 "the cell is unchanged")
+    (cells-drop tb 0)
+    (cells-drop tc 0)
+    (ttt-tb tb 10000 10000 16000 13000 4 700 2 2 0 4)
+    (ttt-tc tc 0 0 1)
+    (ttt-tc tc 0 1 0)
+    (ttt-tc tc 1 0 1)
+    (ttt-tc tc 1 1 1)
+    (assert-eq (tb-tag-span tb 0 tc 0 4 0 0 1 2) 1 "a whitespace table takes the tagged span over an empty cell")
+    (assert-eq (cells-at tc 3) 2 "the cell spans two columns")
+    (assert-eq (cells-at tc (+ 16 12)) 1 "the empty cell is absorbed")
+    (assert-eq (cells-at tc (+ 6 0)) 16000 "and the cell's box grows to cover it")
+    (assert-eq (cells-at tb 24) 1 "the tags shaped the table")
+    (cells-drop tb 0)
+    (cells-drop tc 0)
+    (ttt-tb tb 10000 10000 16000 13000 4 700 2 2 0 4)
+    (ttt-tc tc 0 0 1)
+    (ttt-tc tc 0 1 1)
+    (ttt-tc tc 1 0 1)
+    (ttt-tc tc 1 1 1)
+    (assert-eq (tb-tag-span tb 0 tc 0 4 0 0 1 2) 0 "a span over a cell that has text is not taken")
+    (assert-eq (cells-at tb 24) 0 "and nothing is flagged: no rule closes it")))
+
+(deftest test-ocr-table-hints-break-ties-and-only-ties
+  (let [^Cells tb (new-cells) ^Cells grg (new-cells) ^:mut ^I32 i 0]
+    (ttt-tb tb 10000 10000 16000 13000 4 700 2 2 0 0)
+    (ttt-tb tb 10100 10000 16000 13000 3 720 2 2 0 0)
+    (assert-eq (tb-tie-bonus tb 0 0 2 grg) 0 "no hint, no bonus")
+    (while (< i 16)
+      (do (cells-push grg 0)
+          (set i (+ i 1))))
+    (cells-set grg 0 1)
+    (cells-set grg 1 10000)
+    (cells-set grg 2 10000)
+    (cells-set grg 3 16000)
+    (cells-set grg 4 13000)
+    (cells-set grg 5 3)
+    (assert-eq (tb-hint-iou tb 0 grg) 1000 "the hint is the first candidate's box")
+    (assert-that (< (tb-hint-iou tb 1 grg) 1000) "and only nearly the second's")
+    (assert-eq (tb-tie-bonus tb 0 0 2 grg) 26 "the first candidate wins the tie: a bonus over the 25 the scores may differ by")
+    (assert-eq (tb-tie-bonus tb 1 0 2 grg) 0 "the second does not")
+    (cells-set tb (+ 28 6) 900)
+    (assert-eq (tb-tie-bonus tb 0 0 2 grg) 0 "a candidate 200 better is no tie: OCR does not override the score")
+    (cells-set grg 5 2)
+    (cells-set tb (+ 28 6) 720)
+    (assert-eq (tb-tie-bonus tb 0 0 2 grg) 0 "a region that is not a table hint is not read")))
+
+;; ------------------------------------------------------------------ the dump
+
+(deftest test-the-verdicts-are-the-dumps-tb
+  (let [^Cells se (new-cells) ^Cells ss (new-cells) ^Cells tg (new-cells) ^Cells ta (new-cells) ^Cells oc (new-cells)
+        ^Cells tv (new-cells) ^Cells acc (new-cells) ^Text t (new-text)]
+    (ttt-grid se ss tg ta oc)
+    (tt-set tg 0 16 1000)
+    (tt-set tg 0 17 900)
+    (tt-set tg 0 18 1000)
+    (tt-set tg 0 19 -1)
+    (tt-set tg 0 20 1000)
+    (tt-set tg 0 21 928)
+    (tt-score tg 0 acc)
+    (tt-record tg 0 500 tv)
+    (tt-emit t tv)
+    (assert-text t "[{\"page\":1,\"se\":1,\"rows\":3,\"cols\":3,\"verdict\":\"confirmed\",\"score\":908,\"checks\":[1000,900,1000,-1,1000,928],\"trust\":500}]"
+                 "one tagged table: the verdict, the score, the six checks and the tree's trust")))

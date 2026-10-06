@@ -1,0 +1,747 @@
+;; Tagged tables, verified against the page (P5.5; SPEC 10.5 "Tagged tables"; D225, D034, D148-D150). emon's own module (D039).
+;;
+;;   (tt-index mk sc mi)                                     marks row -> `sc` row, once a document
+;;   (tt-grids se ss p tg ta oc)                             the page's tagged grids (a `Table` the tree is trusted for)
+;;   (tt-words wd w0 w1 se sc gl mk mi tg ta wo)             each word's tagged cell, each cell's and table's text box
+;;   (tt-checks tg k ta wd w0 w1 wo grl q0 q1 ws)            row-band, col-band, order, cover, rules
+;;   (tt-geo-map tg k ta wo w0 tb t tc tw ws)                the majority mapping of the tagged rows and columns onto a candidate
+;;   (tt-score tg k)                                         D150's weighted harmonic mean, and the verdict
+;;   (tt-block-role se s)                                    the block element a word's glyphs sit in (the "not a table" veto)
+;;   (tt-emit t tv)                                          the verdict rows as JSON (the evidence dump's `tb`)
+;;
+;; THE TREE IS EVIDENCE, NOT AN ORDER (D034). A `Table` element is read into a GRID (HTML's placement of `ColSpan` and `RowSpan` into
+;; the first free slot, D225); a word belongs to the cell whose subtree owns its first glyph (D149's ownership: the glyph's mark, the
+;; mark's `sc` row, the element, its nearest `TH` or `TD`); and the grid is then CHECKED against the page, five checks that need only the
+;; grid and the words, one that needs a geometric candidate (`geo`). What the verdict means to a table is `emon.table`'s
+;; (`tb-tags`), not this file's.
+;;
+;; THE ARENAS (`Cells`, one page at a time, but `tv` the document's):
+;;   tg  the tagged tables of the page, stride 24: 0 `Table` row of `se`, 1 page, 2 rows, 3 columns, 4 first cell in `ta`, 5 cells,
+;;       6-9 box of the words it owns (cp), 10 verdict (`tv-`: 0 unchecked, 1 confirmed, 2 partial, 3 contradicted), 11 score,
+;;       12 the geometric candidate it overlaps (`tb` row, -1), 13 head rows the tags give, 14 words it owns, 15 flags (1 the
+;;       tags put a head row, 2 a cell spans across a closed edge), 16-21 the checks (row-band col-band order cover rules geo, -1
+;;       when nothing could be checked), 22-23 spare
+;;   ta  the tagged cells, stride 16, in tree order (so by `se` row): 0 `se` row, 1 row, 2 column, 3 rowspan, 4 colspan, 5 kind (bits:
+;;       1 TH, 2 header for its column (Scope Column or Both, or under THead), 4 header for its row (Scope Row or Both), 8 in a
+;;       THead, 16 in a TFoot), 6 words, 7-10 box of its text (cp), 11-12 the candidate's row and column it maps to (-1), 13-15 spare
+;;   wo  per word of the page, one cell: its `ta` row, -1 when no tagged cell owns it
+;;   tv  the document's verdicts, stride 13: page, `se` row, rows, columns, verdict, score, the six checks, the tree's trust
+(ns emon.tagtable
+  (:require [emon.lang :refer [I32 Bool Cells Text emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32]]
+            [emon.evidence :refer [wd-get mk-get mk-count gl-get hd-x0 hd-y0 hd-x1 hd-y1 hd-tlen wf-gfirst gf-mark mkf-parent]]
+            [emon.glayer :refer [grl-get grf-ex0 grf-ey0 grf-ex1 grf-ey1 grf-orient grf-conf go-h go-v]]
+            [emon.pdfstruct :refer [tg-trust]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or not quot rem bit-and bit-or]]))
+
+;; ------------------------------------------------------------------ settings (first values, P10.1 calibrates)
+
+(defconst ^I32 TB_TAG_TRUST 300)      ;; the tree's trust (D150) a table is read at all
+(defconst ^I32 TB_STRUCT_OK 800)      ;; a score at least this confirms
+(defconst ^I32 TB_STRUCT_BAD 500)     ;; a score under this contradicts
+(defconst ^I32 TT_RULE_CONF 800)      ;; a rule counts against a cell's text at this confidence
+
+(defconst ^I32 TGS 24)
+(defconst ^I32 TAS 16)
+(defconst ^I32 TVS 13)
+(defconst ^I32 SEW 64)                ;; the stride of `se`
+(defconst ^I32 SCW 24)                ;; the stride of `sc`
+(defconst ^I32 TT_BIG 2000000000)
+(defconst ^I32 SS_TABLES 58)         ;; `ss`: the `Table` elements of the tree
+
+;; the standard structure types (the codes of `sr` in `emon.pdfsnames`)
+(defconst ^I32 R_P 15)
+(defconst ^I32 R_H 16)
+(defconst ^I32 R_HN 17)
+(defconst ^I32 R_L 19)
+(defconst ^I32 R_LI 20)
+(defconst ^I32 R_LBL 21)
+(defconst ^I32 R_LBODY 22)
+(defconst ^I32 R_SPAN 23)
+(defconst ^I32 R_QUOTE 24)
+(defconst ^I32 R_REF 27)
+(defconst ^I32 R_CODE 29)
+(defconst ^I32 R_LINK 30)
+(defconst ^I32 R_EM 32)
+(defconst ^I32 R_STRONG 33)
+(defconst ^I32 R_SUB 34)
+(defconst ^I32 R_TABLE 42)
+(defconst ^I32 R_TR 43)
+(defconst ^I32 R_TH 44)
+(defconst ^I32 R_TD 45)
+(defconst ^I32 R_THEAD 46)
+(defconst ^I32 R_TBODY 47)
+(defconst ^I32 R_TFOOT 48)
+
+(defn ^I32 tt-min [^I32 a ^I32 b] (if (< a b) (return a)) (return b))
+(defn ^I32 tt-max [^I32 a ^I32 b] (if (> a b) (return a)) (return b))
+
+(defn ^:pub ^I32 tt-pm [^I32 x ^I32 y]
+  (comment "x per mille of y (y > 0), without overflow.")
+  (if (<= y 0) (return 0))
+  (if (<= x 2000000) (return (quot (* x 1000) y)))
+  (return (quot (+ x (quot y 2000)) (tt-max 1 (quot y 1000)))))
+
+;; ------------------------------------------------------------------ the join
+
+(defn ^:pub ^I32 tt-index [^Cells mk ^Cells sc ^:mut ^Cells mi]
+  (comment "`mi`: for each `marks` row the `sc` row that joined it (-1 none). Built once a document. Answers the marks.")
+  (let [^I32 nm (mk-count mk)
+        ^I32 ns (quot (cells-len sc) SCW)
+        ^:mut ^I32 i 0]
+    (cells-drop mi 0)
+    (while (< i nm)
+      (do (cells-push mi -1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i ns)
+      (do (let [^I32 m (cells-at sc (+ (* i SCW) 5))]
+            (if (and (>= m 0) (< m nm)) (cells-set mi m i)))
+          (set i (+ i 1))))
+    (return nm)))
+
+(defn ^:pub ^I32 tt-owner-el [^Cells sc ^Cells gl ^Cells mk ^Cells mi ^I32 g]
+  (comment "The `se` row of the element that owns glyph g: its innermost mark with a marked-content reference; -1 when it has none.")
+  (if (< g 0) (return -1))
+  (let [^:mut ^I32 m (gl-get gl g (gf-mark))
+        ^:mut ^I32 n 0]
+    (while (and (>= m 0) (and (< m (cells-len mi)) (and (< n 64) (< (cells-at mi m) 0))))
+      (do (set m (mk-get mk m (mkf-parent)))
+          (set n (+ n 1))))
+    (if (or (< m 0) (>= m (cells-len mi))) (return -1))
+    (if (< (cells-at mi m) 0) (return -1))
+    (return (cells-at sc (* (cells-at mi m) SCW)))))
+
+(defn ^:pub ^I32 tt-cell-of [^Cells se ^I32 s]
+  (comment "The nearest `TH` or `TD` at or above element s, -1 when there is none.")
+  (let [^:mut ^I32 e s
+        ^:mut ^I32 n 0
+        ^:mut ^I32 role 0]
+    (while (and (>= e 0) (< n 72))
+      (do (set role (cells-at se (+ (* e SEW) 5)))
+          (if (or (== role R_TH) (== role R_TD)) (return e))
+          (set e (cells-at se (+ (* e SEW) 1)))
+          (set n (+ n 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 tt-block-role [^Cells se ^I32 s]
+  (comment "The role of the block element at or above s: the inline ones (Span, Link, Em, Strong, Sub, Quote, Code, Reference) are")
+  (comment "looked through. 0 when s is -1.")
+  (let [^:mut ^I32 e s
+        ^:mut ^I32 n 0
+        ^:mut ^I32 role 0]
+    (while (and (>= e 0) (< n 72))
+      (do (set role (cells-at se (+ (* e SEW) 5)))
+          (if (not (or (== role R_SPAN) (or (== role R_LINK) (or (== role R_EM) (or (== role R_STRONG) (or (== role R_SUB) (or (== role R_QUOTE) (or (== role R_CODE) (== role R_REF)))))))))
+            (return role))
+          (set e (cells-at se (+ (* e SEW) 1)))
+          (set n (+ n 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------ grids
+
+(defn ^I32 tt-place [^Cells oc ^I32 row ^I32 col]
+  (comment "The first free column at or after col in row: rowspans of the rows above hold their columns (`oc`: c0 c1 last-row + 1).")
+  (let [^:mut ^I32 c col
+        ^:mut ^I32 moved 1
+        ^:mut ^I32 i 0]
+    (while (== moved 1)
+      (do (set moved 0)
+          (set i 0)
+          (while (< i (cells-len oc))
+            (do (if (and (> (cells-at oc (+ i 2)) row) (and (<= (cells-at oc i) c) (< c (cells-at oc (+ i 1)))))
+                  (do (set c (cells-at oc (+ i 1)))
+                      (set moved 1)))
+                (set i (+ i 3))))))
+    (return c)))
+
+(defn ^I32 tt-one [^Cells se ^I32 p ^I32 t ^:mut ^Cells tg ^:mut ^Cells ta ^:mut ^Cells oc]
+  (comment "Read the page's rows of `Table` t: its `TR` rows whose first text is on page p, under the table or its THead, TBody and")
+  (comment "TFoot, its cells placed by the spans. Nothing is added when the nesting is wrong (a table inside it, a row under a cell, a")
+  (comment "cell outside a row) or there is no cell. Answers the cells added.")
+  (let [^:mut ^I32 end (+ t (cells-at se (+ (* t SEW) 40)))
+        ^I32 c0 (quot (cells-len ta) TAS)
+        ^:mut ^I32 r (+ t 1)
+        ^:mut ^I32 row -1
+        ^:mut ^I32 col 0
+        ^:mut ^I32 tr -1
+        ^:mut ^I32 incl 0
+        ^:mut ^I32 lastp -2
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 ncols 0
+        ^:mut ^I32 nrows 0
+        ^:mut ^I32 role 0
+        ^:mut ^I32 par 0
+        ^:mut ^I32 prole 0
+        ^:mut ^I32 fp 0
+        ^:mut ^I32 rowkind 0
+        ^:mut ^I32 rs 1
+        ^:mut ^I32 cs 1
+        ^:mut ^I32 sp 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 n 0]
+    (if (> end (quot (cells-len se) SEW)) (set end (quot (cells-len se) SEW)))
+    (cells-drop oc 0)
+    (while (and (< r end) (== ok 1))
+      (do (set role (cells-at se (+ (* r SEW) 5)))
+          (if (== role R_TABLE) (set ok 0))
+          (if (== role R_TR)
+            (do (set par (cells-at se (+ (* r SEW) 1)))
+                (set prole (cells-at se (+ (* par SEW) 5)))
+                (set rowkind 0)
+                (if (== prole R_THEAD) (set rowkind 8))
+                (if (== prole R_TFOOT) (set rowkind 16))
+                (if (not (or (== par t) (or (== prole R_THEAD) (or (== prole R_TBODY) (== prole R_TFOOT))))) (set ok 0))
+                (if (and (!= par t) (!= (cells-at se (+ (* par SEW) 1)) t)) (set ok 0))
+                (set fp (cells-at se (+ (* r SEW) 49)))
+                (if (>= fp 0) (set lastp fp))
+                (if (< fp 0) (set fp lastp))
+                (set tr r)
+                (set incl 0)
+                (if (== fp (- p 1))
+                  (do (set incl 1)
+                      (set row (+ row 1))
+                      (set col 0)))))
+          (if (or (== role R_TH) (== role R_TD))
+            (if (== (cells-at se (+ (* r SEW) 1)) tr)
+              (if (== incl 1)
+                (do (set cs (tt-max 1 (tt-min 64 (cells-at se (+ (* r SEW) 31)))))
+                    (set rs (tt-max 1 (tt-min 256 (cells-at se (+ (* r SEW) 30)))))
+                    (set col (tt-place oc row col))
+                    (set kind rowkind)
+                    (if (== role R_TH)
+                      (do (set kind (bit-or kind 1))
+                          (set sp (cells-at se (+ (* r SEW) 29)))
+                          (if (or (== sp 2) (== sp 3)) (set kind (bit-or kind 2)))
+                          (if (or (== sp 1) (== sp 3)) (set kind (bit-or kind 4)))))
+                    (if (== rowkind 8) (set kind (bit-or kind 2)))
+                    (cells-push ta r)
+                    (cells-push ta row)
+                    (cells-push ta col)
+                    (cells-push ta rs)
+                    (cells-push ta cs)
+                    (cells-push ta kind)
+                    (cells-push ta 0)
+                    (cells-push ta TT_BIG)
+                    (cells-push ta TT_BIG)
+                    (cells-push ta (- 0 TT_BIG))
+                    (cells-push ta (- 0 TT_BIG))
+                    (cells-push ta -1)
+                    (cells-push ta -1)
+                    (cells-push ta 0)
+                    (cells-push ta 0)
+                    (cells-push ta 0)
+                    (if (or (> rs 1) (> cs 1))
+                      (do (cells-push oc col)
+                          (cells-push oc (+ col cs))
+                          (cells-push oc (+ row rs))))
+                    (if (> (+ col cs) ncols) (set ncols (+ col cs)))
+                    (set col (+ col cs))))
+              (set ok 0)))
+          (set r (+ r 1))))
+    (set nrows (+ row 1))
+    (set n (- (quot (cells-len ta) TAS) c0))
+    (if (or (== ok 0) (or (< n 1) (< nrows 1)))
+      (do (cells-drop ta (* c0 TAS))
+          (return 0)))
+    ;; the head rows the tags give: leading rows all of whose cells are headers for their columns
+    (let [^:mut ^I32 nhead 0
+          ^:mut ^I32 more 1
+          ^:mut ^I32 has 0]
+      (while (and (== more 1) (< nhead nrows))
+        (do (set has 0)
+            (set c c0)
+            (while (< c (+ c0 n))
+              (do (if (== (cells-at ta (+ (* c TAS) 1)) nhead)
+                    (do (set has 1)
+                        (if (== (bit-and (cells-at ta (+ (* c TAS) 5)) 2) 0) (set more 0))))
+                  (set c (+ c 1))))
+            (if (== has 0) (set more 0))
+            (if (== more 1) (set nhead (+ nhead 1)))))
+      (cells-push tg t)
+      (cells-push tg p)
+      (cells-push tg nrows)
+      (cells-push tg ncols)
+      (cells-push tg c0)
+      (cells-push tg n)
+      (cells-push tg TT_BIG)
+      (cells-push tg TT_BIG)
+      (cells-push tg (- 0 TT_BIG))
+      (cells-push tg (- 0 TT_BIG))
+      (cells-push tg 0)
+      (cells-push tg 0)
+      (cells-push tg -1)
+      (cells-push tg nhead)
+      (cells-push tg 0)
+      (cells-push tg 0)
+      (cells-push tg -1)
+      (cells-push tg -1)
+      (cells-push tg -1)
+      (cells-push tg -1)
+      (cells-push tg -1)
+      (cells-push tg -1)
+      (cells-push tg 0)
+      (cells-push tg 0))
+    (return n)))
+
+(defn ^:pub ^I32 tt-grids [^Cells se ^Cells ss ^I32 p ^:mut ^Cells tg ^:mut ^Cells ta ^:mut ^Cells oc]
+  (comment "The tagged grids of page p (1-based) into `tg` and `ta`, which are emptied first; none when the tree has no `Table`. Whether what they")
+  (comment "say is believed is the tree's trust (D150) and the table stage's to weigh: the grids are read and checked at any trust, so the")
+  (comment "evidence dump can say what the tags are worth. Answers the tables.")
+  (cells-drop tg 0)
+  (cells-drop ta 0)
+  (if (<= (cells-len ss) SS_TABLES) (return 0))
+  (if (== (cells-at ss SS_TABLES) 0) (return 0))
+  (let [^I32 nse (quot (cells-len se) SEW)
+        ^:mut ^I32 r 1]
+    (while (< r nse)
+      (do (if (== (cells-at se (+ (* r SEW) 5)) R_TABLE)
+            (tt-one se p r tg ta oc))
+          (set r (+ r 1))))
+    (return (quot (cells-len tg) TGS))))
+
+;; ------------------------------------------------------------------ words
+
+(defn ^I32 tt-find [^Cells ta ^I32 s]
+  (comment "The cell of `ta` for `se` row s (the cells are in tree order), -1 when there is none.")
+  (let [^:mut ^I32 lo 0
+        ^:mut ^I32 hi (quot (cells-len ta) TAS)
+        ^:mut ^I32 mid 0
+        ^:mut ^I32 v 0]
+    (while (< lo hi)
+      (do (set mid (quot (+ lo hi) 2))
+          (set v (cells-at ta (* mid TAS)))
+          (if (== v s) (return mid))
+          (if (< v s) (set lo (+ mid 1)) (set hi mid))))
+    (return -1)))
+
+(defn ^I32 tt-table-of [^Cells tg ^I32 c]
+  (comment "The table of `tg` that holds cell c of `ta`.")
+  (let [^I32 n (quot (cells-len tg) TGS)
+        ^:mut ^I32 k 0]
+    (while (< k n)
+      (do (if (and (>= c (cells-at tg (+ (* k TGS) 4))) (< c (+ (cells-at tg (+ (* k TGS) 4)) (cells-at tg (+ (* k TGS) 5)))))
+            (return k))
+          (set k (+ k 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 tt-fold [^:mut ^Cells c ^I32 at ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Grow the box at c[at..at+4) by a box.")
+  (if (< x0 (cells-at c at)) (cells-set c at x0))
+  (if (< y0 (cells-at c (+ at 1))) (cells-set c (+ at 1) y0))
+  (if (> x1 (cells-at c (+ at 2))) (cells-set c (+ at 2) x1))
+  (if (> y1 (cells-at c (+ at 3))) (cells-set c (+ at 3) y1))
+  (return 0))
+
+(defn ^:pub ^I32 tt-words [^Cells wd ^I32 w0 ^I32 w1 ^Cells se ^Cells sc ^Cells gl ^Cells mk ^Cells mi
+                     ^:mut ^Cells tg ^:mut ^Cells ta ^:mut ^Cells wo]
+  (comment "`wo` for the words w0..w1 of the page: the tagged cell that owns each (-1 none); the cells' and tables' text boxes and word")
+  (comment "counts grow by what they own. Answers the words owned.")
+  (let [^:mut ^I32 w w0
+        ^:mut ^I32 owned 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 s 0]
+    (cells-drop wo 0)
+    (while (< w w1)
+      (do (set c -1)
+          (if (> (wd-get wd w (hd-tlen)) 0)
+            (do (set s (tt-owner-el sc gl mk mi (wd-get wd w (wf-gfirst))))
+                (if (>= s 0)
+                  (do (set s (tt-cell-of se s))
+                      (if (>= s 0) (set c (tt-find ta s)))))))
+          (cells-push wo c)
+          (if (>= c 0)
+            (do (set owned (+ owned 1))
+                (cells-set ta (+ (* c TAS) 6) (+ (cells-at ta (+ (* c TAS) 6)) 1))
+                (tt-fold ta (+ (* c TAS) 7) (wd-get wd w (hd-x0)) (wd-get wd w (hd-y0)) (wd-get wd w (hd-x1)) (wd-get wd w (hd-y1)))
+                (set k (tt-table-of tg c))
+                (if (>= k 0)
+                  (do (cells-set tg (+ (* k TGS) 14) (+ (cells-at tg (+ (* k TGS) 14)) 1))
+                      (tt-fold tg (+ (* k TGS) 6) (wd-get wd w (hd-x0)) (wd-get wd w (hd-y0)) (wd-get wd w (hd-x1)) (wd-get wd w (hd-y1)))))))
+          (set w (+ w 1))))
+    (return owned)))
+
+;; ------------------------------------------------------------------ checks
+
+(defn ^I32 tt-band [^I32 a0 ^I32 a1 ^I32 b0 ^I32 b1]
+  (comment "1 when two extents share a band: they overlap by at least half of the smaller.")
+  (let [^I32 ov (- (tt-min a1 b1) (tt-max a0 b0))
+        ^I32 sm (tt-min (- a1 a0) (- b1 b0))]
+    (if (<= ov 0) (return 0))
+    (if (>= (* ov 2) (tt-max 1 sm)) (return 1))
+    (return 0)))
+
+(defn ^I32 tt-crossed [^Cells grl ^I32 q0 ^I32 q1 ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Does a fused rule of confidence at least 800 pass through the text box (shrunk by a tenth of its height at the ends of the")
+  (comment "extent a horizontal rule crosses): a horizontal rule inside the box's height, a vertical one inside its width.")
+  (let [^I32 mh (quot (- y1 y0) 10)
+        ^I32 mw (quot (- x1 x0) 10)
+        ^:mut ^I32 q q0
+        ^:mut ^I32 o 0]
+    (while (< q q1)
+      (do (if (>= (grl-get grl q (grf-conf)) TT_RULE_CONF)
+            (do (set o (grl-get grl q (grf-orient)))
+                (if (== o (go-h))
+                  (if (and (> (grl-get grl q (grf-ey0)) (+ y0 mh)) (< (grl-get grl q (grf-ey0)) (- y1 mh)))
+                    (if (> (- (tt-min (grl-get grl q (grf-ex1)) x1) (tt-max (grl-get grl q (grf-ex0)) x0)) 0)
+                      (return 1))))
+                (if (== o (go-v))
+                  (if (and (> (grl-get grl q (grf-ex0)) (+ x0 mw)) (< (grl-get grl q (grf-ex0)) (- x1 mw)))
+                    (if (> (- (tt-min (grl-get grl q (grf-ey1)) y1) (tt-max (grl-get grl q (grf-ey0)) y0)) 0)
+                      (return 1))))))
+          (set q (+ q 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 tt-checks [^:mut ^Cells tg ^I32 k ^Cells ta ^Cells wd ^I32 w0 ^I32 w1 ^Cells wo
+                      ^Cells grl ^I32 q0 ^I32 q1 ^:mut ^Cells ws]
+  (comment "The five checks of table k that need only its grid and the page (SPEC 10.5), per mille, -1 when there is nothing to check, into")
+  (comment "tg cells 16-20. A pair is two non-empty cells that follow one another in a row (`row-band`, `order`) or in a column (`col-band`).")
+  (let [^I32 b (* k TGS)
+        ^I32 cf (cells-at tg (+ b 4))
+        ^I32 ce (+ cf (cells-at tg (+ b 5)))
+        ^I32 ncols (cells-at tg (+ b 3))
+        ^:mut ^I32 c cf
+        ^:mut ^I32 prev -1
+        ^:mut ^I32 currow -1
+        ^:mut ^I32 rbn 0
+        ^:mut ^I32 rbok 0
+        ^:mut ^I32 cbn 0
+        ^:mut ^I32 cbok 0
+        ^:mut ^I32 asc 0
+        ^:mut ^I32 desc 0
+        ^:mut ^I32 ne 0
+        ^:mut ^I32 crossed 0
+        ^:mut ^I32 inside 0
+        ^:mut ^I32 mine 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 pc 0
+        ^:mut ^I32 col 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 px 0]
+    (cells-drop ws 0)
+    (while (< (cells-len ws) ncols)
+      (cells-push ws -1))
+    (while (< c ce)
+      (do (let [^I32 a (* c TAS)]
+            (if (!= (cells-at ta (+ a 1)) currow)
+              (do (set currow (cells-at ta (+ a 1)))
+                  (set prev -1)))
+            (if (> (cells-at ta (+ a 6)) 0)
+              (do (set ne (+ ne 1))
+                  (set cx (quot (+ (cells-at ta (+ a 7)) (cells-at ta (+ a 9))) 2))
+                  (if (>= prev 0)
+                    (do (set pc (* prev TAS))
+                        (set px (quot (+ (cells-at ta (+ pc 7)) (cells-at ta (+ pc 9))) 2))
+                        (set rbn (+ rbn 1))
+                        (set rbok (+ rbok (tt-band (cells-at ta (+ pc 8)) (cells-at ta (+ pc 10)) (cells-at ta (+ a 8)) (cells-at ta (+ a 10)))))
+                        (if (>= cx px) (set asc (+ asc 1)))
+                        (if (<= cx px) (set desc (+ desc 1)))))
+                  (set prev c)
+                  (set col (cells-at ta (+ a 2)))
+                  (if (< col ncols)
+                    (do (if (>= (cells-at ws col) 0)
+                          (do (set pc (* (cells-at ws col) TAS))
+                              (set cbn (+ cbn 1))
+                              (set cbok (+ cbok (tt-band (cells-at ta (+ pc 7)) (cells-at ta (+ pc 9)) (cells-at ta (+ a 7)) (cells-at ta (+ a 9)))))))
+                        (cells-set ws col c)))
+                  (if (< (- q1 q0) 3000)
+                    (set crossed (+ crossed (tt-crossed grl q0 q1 (cells-at ta (+ a 7)) (cells-at ta (+ a 8)) (cells-at ta (+ a 9)) (cells-at ta (+ a 10)))))))))
+          (set c (+ c 1))))
+    (cells-set tg (+ b 16) -1)
+    (cells-set tg (+ b 17) -1)
+    (cells-set tg (+ b 18) -1)
+    (cells-set tg (+ b 19) -1)
+    (cells-set tg (+ b 20) -1)
+    (if (> rbn 0) (cells-set tg (+ b 16) (tt-pm rbok rbn)))
+    (if (> cbn 0) (cells-set tg (+ b 17) (tt-pm cbok cbn)))
+    (if (> rbn 0)
+      (cells-set tg (+ b 18) (tt-max 0 (- (* (tt-pm (tt-max asc desc) rbn) 2) 1000))))
+    (if (and (> ne 0) (< (- q1 q0) 3000))
+      (cells-set tg (+ b 20) (tt-pm (- ne crossed) ne)))
+    ;; cover: the words inside the table's box, over those it owns
+    (if (> (cells-at tg (+ b 14)) 0)
+      (do (set w w0)
+          (while (< w w1)
+            (do (let [^I32 wx (quot (+ (wd-get wd w (hd-x0)) (wd-get wd w (hd-x1))) 2)
+                      ^I32 wy (quot (+ (wd-get wd w (hd-y0)) (wd-get wd w (hd-y1))) 2)]
+                  (if (> (wd-get wd w (hd-tlen)) 0)
+                    (if (and (>= wx (cells-at tg (+ b 6))) (<= wx (cells-at tg (+ b 8))))
+                      (if (and (>= wy (cells-at tg (+ b 7))) (<= wy (cells-at tg (+ b 9))))
+                        (do (set inside (+ inside 1))
+                            (if (and (>= (cells-at wo (- w w0)) cf) (< (cells-at wo (- w w0)) ce))
+                              (set mine (+ mine 1))))))))
+                (set w (+ w 1))))
+          (if (> inside 0) (cells-set tg (+ b 19) (tt-pm mine inside)))))
+    (return 0)))
+
+;; ------------------------------------------------------------------ the geometric candidate
+
+(defn ^:pub ^I32 tt-iou [^I32 ax0 ^I32 ay0 ^I32 ax1 ^I32 ay1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "The intersection over union of two boxes (cp), per mille. Areas in tenths of a point so they fit.")
+  (let [^I32 iw (quot (tt-max 0 (- (tt-min ax1 bx1) (tt-max ax0 bx0))) 10)
+        ^I32 ih (quot (tt-max 0 (- (tt-min ay1 by1) (tt-max ay0 by0))) 10)
+        ^I32 inter (* iw ih)
+        ^I32 aa (* (quot (tt-max 0 (- ax1 ax0)) 10) (quot (tt-max 0 (- ay1 ay0)) 10))
+        ^I32 ab (* (quot (tt-max 0 (- bx1 bx0)) 10) (quot (tt-max 0 (- by1 by0)) 10))
+        ^I32 un (- (+ aa ab) inter)]
+    (if (<= un 0) (return 0))
+    (return (tt-pm inter un))))
+
+(defn ^I32 tt-mode [^Cells ws ^I32 at0 ^I32 n ^I32 m ^I32 i]
+  (comment "The column of the matrix at ws[base..] (n rows of m) with the most words in row i; -1 when the row has none; ties go to the")
+  (comment "lowest column.")
+  (let [^:mut ^I32 j 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bv 0]
+    (while (< j m)
+      (do (if (> (cells-at ws (+ at0 (+ (* i m) j))) bv)
+            (do (set bv (cells-at ws (+ at0 (+ (* i m) j))))
+                (set best j)))
+          (set j (+ j 1))))
+    (return best)))
+
+(defn ^:pub ^I32 tt-geo-map [^Cells tg ^I32 k ^Cells ta ^Cells wo ^I32 w0 ^Cells tb ^I32 t ^Cells tc ^Cells tw
+                       ^:mut ^Cells ws]
+  (comment "The majority mapping of table k's rows and columns onto candidate t of `tb` (stride 28, cells of stride 16): ws[0..nrows) is the")
+  (comment "candidate row of each tagged row, ws[nrows..nrows+ncols) the candidate column of each tagged column (-1 none). Answers the words")
+  (comment "that agree: the tagged row and column map one-to-one and a word's candidate cell is the one they name; -2 when the matrices")
+  (comment "would not fit (more than a million cells), and the arena is left as the maps. The words' cells are in `ws` after the maps.")
+  (let [^I32 b (* k TGS)
+        ^I32 cf (cells-at tg (+ b 4))
+        ^I32 ce (+ cf (cells-at tg (+ b 5)))
+        ^I32 nr (cells-at tg (+ b 2))
+        ^I32 nc (cells-at tg (+ b 3))
+        ^I32 tb0 (* t 28)
+        ^I32 gnr (cells-at tb (+ tb0 7))
+        ^I32 gnc (cells-at tb (+ tb0 8))
+        ^I32 gcf (cells-at tb (+ tb0 9))
+        ^I32 gce (+ gcf (cells-at tb (+ tb0 10)))
+        ^I32 nw (quot (cells-len wo) 1)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 cell 0
+        ^:mut ^I32 tr 0
+        ^:mut ^I32 tcc 0
+        ^:mut ^I32 gr 0
+        ^:mut ^I32 gc 0
+        ^:mut ^I32 agree 0
+        ^:mut ^I32 mv 0
+        ^:mut ^I32 dup 0]
+    (cells-drop ws 0)
+    (if (> (+ (* nr gnr) (* nc gnc)) 1000000) (return -2))
+    ;; maps, then the word -> candidate cell (row, column) pairs, then the two count matrices
+    (set i 0)
+    (while (< i (+ nr nc))
+      (do (cells-push ws -1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (* nw 2))
+      (do (cells-push ws -1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (+ (* nr gnr) (* nc gnc)))
+      (do (cells-push ws 0)
+          (set i (+ i 1))))
+    ;; the candidate's cell of each word (the words of the candidate's cells are in `tw`)
+    (set g gcf)
+    (while (< g gce)
+      (do (set i (cells-at tc (+ (* g 16) 9)))
+          (set j 0)
+          (while (< j i)
+            (do (set wi (- (cells-at tw (+ (cells-at tc (+ (* g 16) 8)) j)) w0))
+                (if (and (>= wi 0) (< wi nw))
+                  (do (cells-set ws (+ (+ nr nc) (* wi 2)) (cells-at tc (* g 16)))
+                      (cells-set ws (+ (+ (+ nr nc) (* wi 2)) 1) (cells-at tc (+ (* g 16) 1)))))
+                (set j (+ j 1))))
+          (set g (+ g 1))))
+    (set wi 0)
+    (while (< wi nw)
+      (do (set cell (cells-at wo wi))
+          (if (and (>= cell cf) (< cell ce))
+            (do (set tr (cells-at ta (+ (* cell TAS) 1)))
+                (set tcc (cells-at ta (+ (* cell TAS) 2)))
+                (set gr (cells-at ws (+ (+ nr nc) (* wi 2))))
+                (set gc (cells-at ws (+ (+ (+ nr nc) (* wi 2)) 1)))
+                (if (and (>= gr 0) (and (>= gc 0) (and (< tr nr) (and (< tcc nc) (and (< gr gnr) (< gc gnc))))))
+                  (do (cells-set ws (+ (+ (+ nr nc) (* nw 2)) (+ (* tr gnr) gr)) (+ (cells-at ws (+ (+ (+ nr nc) (* nw 2)) (+ (* tr gnr) gr))) 1))
+                      (cells-set ws (+ (+ (+ (+ nr nc) (* nw 2)) (* nr gnr)) (+ (* tcc gnc) gc))
+                                  (+ (cells-at ws (+ (+ (+ (+ nr nc) (* nw 2)) (* nr gnr)) (+ (* tcc gnc) gc))) 1))))))
+          (set wi (+ wi 1))))
+    (set i 0)
+    (while (< i nr)
+      (do (set mv (tt-mode ws (+ (+ nr nc) (* nw 2)) nr gnr i))
+          (cells-set ws i mv)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nc)
+      (do (set mv (tt-mode ws (+ (+ (+ nr nc) (* nw 2)) (* nr gnr)) nc gnc i))
+          (cells-set ws (+ nr i) mv)
+          (set i (+ i 1))))
+    ;; one-to-one: a tagged row (column) whose candidate row (column) another also names is not
+    (set i 0)
+    (while (< i nr)
+      (do (set j 0)
+          (set dup 0)
+          (while (< j nr)
+            (do (if (and (!= j i) (and (>= (cells-at ws i) 0) (== (cells-at ws j) (cells-at ws i)))) (set dup 1))
+                (set j (+ j 1))))
+          (if (== dup 1) (cells-set ws i (- 0 2)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nc)
+      (do (set j 0)
+          (set dup 0)
+          (while (< j nc)
+            (do (if (and (!= j i) (and (>= (cells-at ws (+ nr i)) 0) (== (cells-at ws (+ nr j)) (cells-at ws (+ nr i))))) (set dup 1))
+                (set j (+ j 1))))
+          (if (== dup 1) (cells-set ws (+ nr i) (- 0 2)))
+          (set i (+ i 1))))
+    (set wi 0)
+    (while (< wi nw)
+      (do (set cell (cells-at wo wi))
+          (if (and (>= cell cf) (< cell ce))
+            (do (set tr (cells-at ta (+ (* cell TAS) 1)))
+                (set tcc (cells-at ta (+ (* cell TAS) 2)))
+                (if (and (< tr nr) (< tcc nc))
+                  (if (and (>= (cells-at ws tr) 0) (>= (cells-at ws (+ nr tcc)) 0))
+                    (if (and (== (cells-at ws tr) (cells-at ws (+ (+ nr nc) (* wi 2))))
+                             (== (cells-at ws (+ nr tcc)) (cells-at ws (+ (+ (+ nr nc) (* wi 2)) 1))))
+                      (set agree (+ agree 1)))))))
+          (set wi (+ wi 1))))
+    (return agree)))
+
+(defn ^:pub ^I32 tt-geo-tb [^Cells tg ^I32 k ^Cells tb ^I32 t0 ^I32 t1]
+  (comment "The candidate of tb t0..t1 (not a struct one) whose box overlaps table k's at IoU 500 or more, the best; -1 when none (or when the")
+  (comment "table owns no word, so has no box).")
+  (let [^I32 b (* k TGS)
+        ^:mut ^I32 t t0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bv 499
+        ^:mut ^I32 v 0]
+    (if (== (cells-at tg (+ b 14)) 0) (return -1))
+    (while (< t t1)
+      (do (if (!= (cells-at tb (+ (* t 28) 5)) 5)
+            (do (set v (tt-iou (cells-at tg (+ b 6)) (cells-at tg (+ b 7)) (cells-at tg (+ b 8)) (cells-at tg (+ b 9))
+                               (cells-at tb (+ (* t 28) 1)) (cells-at tb (+ (* t 28) 2)) (cells-at tb (+ (* t 28) 3)) (cells-at tb (+ (* t 28) 4))))
+                (if (> v bv)
+                  (do (set bv v)
+                      (set best t)))))
+          (set t (+ t 1))))
+    (return best)))
+
+;; ------------------------------------------------------------------ the score
+
+(defn ^I32 tt-hv [^I32 v ^I32 w ^:mut ^Cells acc]
+  (comment "Add a check to the harmonic mean (acc: weights, weight / value in millionths, the weakest): -1 is left out, a value is floored at 50.")
+  (if (< v 0) (return 0))
+  (cells-set acc 0 (+ (cells-at acc 0) w))
+  (cells-set acc 1 (+ (cells-at acc 1) (quot (* w 1000000) (tt-max v 50))))
+  (if (< v (cells-at acc 2)) (cells-set acc 2 v))
+  (return 0))
+
+(defn ^:pub ^I32 tt-score [^:mut ^Cells tg ^I32 k ^:mut ^Cells acc]
+  (comment "D150's shape over the six checks (weights 2 2 1 2 2 3): the weighted harmonic mean, scaled by (1000 + the weakest) / 2000; the")
+  (comment "verdict is confirmed at `tb-struct-ok`, contradicted under `tb-struct-bad`, else partial. A table with nothing to check scores 0.")
+  (let [^I32 b (* k TGS)
+        ^:mut ^I32 score 0]
+    (cells-drop acc 0)
+    (cells-push acc 0)
+    (cells-push acc 0)
+    (cells-push acc 1000)
+    (tt-hv (cells-at tg (+ b 16)) 2 acc)
+    (tt-hv (cells-at tg (+ b 17)) 2 acc)
+    (tt-hv (cells-at tg (+ b 18)) 1 acc)
+    (tt-hv (cells-at tg (+ b 19)) 2 acc)
+    (tt-hv (cells-at tg (+ b 20)) 2 acc)
+    (tt-hv (cells-at tg (+ b 21)) 3 acc)
+    (if (> (cells-at acc 1) 0)
+      (do (set score (quot (* (cells-at acc 0) 1000000) (cells-at acc 1)))
+          (set score (quot (* score (+ 1000 (cells-at acc 2))) 2000))))
+    (if (> score 1000) (set score 1000))
+    (cells-set tg (+ b 11) score)
+    (cells-set tg (+ b 10) 2)
+    (if (>= score TB_STRUCT_OK) (cells-set tg (+ b 10) 1))
+    (if (< score TB_STRUCT_BAD) (cells-set tg (+ b 10) 3))
+    (return score)))
+
+;; ------------------------------------------------------------------ the dump
+
+(defn ^I32 tt-emit-verdict [^:mut ^Text t ^I32 v]
+  (if (== v 1) (emit-ascii t "confirmed"))
+  (if (== v 2) (emit-ascii t "partial"))
+  (if (== v 3) (emit-ascii t "contradicted"))
+  (if (== v 0) (emit-ascii t "none"))
+  (return 0))
+
+(defn ^:pub ^I32 tt-emit [^:mut ^Text t ^Cells tv]
+  (comment "The document's tagged-table verdicts as a JSON array, `[{\"page\":1,\"se\":N,\"rows\":R,\"cols\":C,\"verdict\":\"confirmed\",")
+  (comment "\"score\":S,\"checks\":[row-band,col-band,order,cover,rules,geo],\"trust\":T},...]`; these are the evidence dump's `tb` (SPEC 9.7).")
+  (let [^I32 n (quot (cells-len tv) TVS)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0]
+    (emit-ascii t "[")
+    (while (< i n)
+      (do (if (> i 0) (emit-ascii t ","))
+          (emit-ascii t "{\"page\":")
+          (text-i32 t (cells-at tv (* i TVS)))
+          (emit-ascii t ",\"se\":")
+          (text-i32 t (cells-at tv (+ (* i TVS) 1)))
+          (emit-ascii t ",\"rows\":")
+          (text-i32 t (cells-at tv (+ (* i TVS) 2)))
+          (emit-ascii t ",\"cols\":")
+          (text-i32 t (cells-at tv (+ (* i TVS) 3)))
+          (emit-ascii t ",\"verdict\":\"")
+          (tt-emit-verdict t (cells-at tv (+ (* i TVS) 4)))
+          (emit-ascii t "\",\"score\":")
+          (text-i32 t (cells-at tv (+ (* i TVS) 5)))
+          (emit-ascii t ",\"checks\":[")
+          (set j 0)
+          (while (< j 6)
+            (do (if (> j 0) (emit-ascii t ","))
+                (text-i32 t (cells-at tv (+ (+ (* i TVS) 6) j)))
+                (set j (+ j 1))))
+          (emit-ascii t "],\"trust\":")
+          (text-i32 t (cells-at tv (+ (* i TVS) 12)))
+          (emit-ascii t "}")
+          (set i (+ i 1))))
+    (emit-ascii t "]")
+    (return 0)))
+
+(defn ^:pub ^I32 tt-record [^Cells tg ^I32 k ^I32 trust ^:mut ^Cells tv]
+  (comment "Append table k's verdict row to the document's `tv`.")
+  (let [^I32 b (* k TGS)
+        ^:mut ^I32 j 0]
+    (cells-push tv (cells-at tg (+ b 1)))
+    (cells-push tv (cells-at tg b))
+    (cells-push tv (cells-at tg (+ b 2)))
+    (cells-push tv (cells-at tg (+ b 3)))
+    (cells-push tv (cells-at tg (+ b 10)))
+    (cells-push tv (cells-at tg (+ b 11)))
+    (while (< j 6)
+      (do (cells-push tv (cells-at tg (+ (+ b 16) j)))
+          (set j (+ j 1))))
+    (cells-push tv trust)
+    (return 0)))
+
+(defn ^:pub ^I32 tt-get [^Cells tg ^I32 k ^I32 f]
+  (comment "Field f of tagged table k.")
+  (return (cells-at tg (+ (* k TGS) f))))
+
+(defn ^:pub ^I32 tt-set [^:mut ^Cells tg ^I32 k ^I32 f ^I32 v]
+  (cells-set tg (+ (* k TGS) f) v)
+  (return 0))
+
+(defn ^:pub ^I32 tt-cget [^Cells ta ^I32 c ^I32 f]
+  (comment "Field f of tagged cell c.")
+  (return (cells-at ta (+ (* c TAS) f))))
+
+(defn ^:pub ^I32 tt-or [^:mut ^Cells tg ^I32 k ^I32 f ^I32 bits]
+  (comment "Set bits in field f of tagged table k.")
+  (let [^I32 v (bit-or (cells-at tg (+ (* k TGS) f)) bits)]
+    (cells-set tg (+ (* k TGS) f) v)
+    (return 0)))

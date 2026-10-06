@@ -201,7 +201,9 @@
           "reconstructed",
           "dpi-unknown",
           "rotated",
-          "vertical"
+          "vertical",
+          "struct-disagree",
+          "tag-span-conflict"
         ]
       }
     },

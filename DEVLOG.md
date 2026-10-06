@@ -1958,7 +1958,7 @@ analysis beyond "top-to-bottom lines on a single column".
   `bb identity` (475 inputs, Rust == Go, the dumps with `grl`/`gfl` included) green; the new laws (`glayertest`, `gvectest`, `gfusetest`, with `playertest`,
   `tabletest`, `tlhealthtest`) pass on Rust, Go, Java and C#, and fail inverted (`EMON_TEST_INVERT=1`) on Rust and Go; the full `bb unit` and `bb gates` were
   left to the merge step because the machine could not finish them (load 40).
-- [ ] **P5.5 — `struct` (tagged) tables verified against geometry** (SPEC §10.5 "Tagged tables"; D225, D034, D148-D150).
+- [x] **P5.5 — `struct` (tagged) tables verified against geometry** (SPEC §10.5 "Tagged tables"; D225, D034, D148-D150).
   **Wave 3** of the Phase 7 table, parallel with P7.3 (disjoint files). Depends on P5.5a and P6.8's tagged-table
   fixtures. `form` moved to P5.5b.
   *Brief*:
@@ -1984,6 +1984,49 @@ analysis beyond "top-to-bottom lines on a single column".
   corpus PDFs: `tag-table-agree` and the verdict histogram recorded here, with ten contradicted tables looked at by eye.
   *Done when*: the above; laws (a correct grid confirmed; two visual rows in one `TR` fail `row-band`; a span across a
   closed edge flags `tag-span-conflict`; prose tagged `Table` refused) on four targets; `bb gates` green.
+  *Done* (D320-D324). **Built**: `kin/tagtable.kin` (`emon.tagtable`: the grids, the word join, the six checks, the score and verdict, the
+  dump's `tb`), `kin/table.kin` (`tb-tags` after `tb-select`: the seven cases; `tb-struct-cand`, `tb-veto`, `tb-tag-head`, `tb-tag-rest`,
+  `tb-tag-span`; `tb-tie-bonus` in `tb-select`; `tb` stride 24 -> 28 with provenance in cells 24-27; `tb-emit`'s `struct` source and the two flags),
+  `kin/model.kin` + `schema/emon-1.json` + `json-check.py` + SPEC 3.3 (the flags `struct-disagree`, `tag-span-conflict`), both Engines (`PdfDoc`
+  keeps `se sc`; `tb-build` takes `gl mk se sc ss grg` and six scratch arenas and `tv`; the dump splices `tb` after the arenas), `kin/tagtabletest.kin`
+  (9 laws), `kin/tabletest.kin` (the tree is read; 9 goldens `test/table/ttab-*.json` and the nine verdict texts), `kin/scripts/table-goldens`.
+  **Measured** (BEFORE = P5.5a, AFTER = this; `bb accuracy`, 2,316 metrics, none regressed beyond 0.002): `tag-verdict-acc` **0.5625 -> 1.0** on
+  `pdf/all` and `pdf/graphics` (P5.5a's dumps had no verdict, so every document was "none": the 9 of 16 `ttab-*` documents that say none);
+  each fixture reaches its declared verdict (good, good-ws, th-as-td confirmed; bad-spans, missing-row partial; bad-rows, layout contradicted;
+  allp none). **TEDS-lite did not move anywhere**: every `ttab-*` document, tagged or untagged, scores TEDS-lite 1.0 and struct-lite 1.0 before and
+  after (the geometry already finds all eight tables, the ruleless one too), so the gain the tags give a ruleless table is not visible in TEDS on
+  these fixtures; what the tags add is in the Model: `struct` among the sources of `ttab-good` (head from the tags), `ttab-good-ws` (head) and
+  `ttab-bad-spans`, with `struct-disagree` and `tag-span-conflict` on the last (the goldens). A wrong tag costs nothing: `ttab-bad-rows`,
+  `ttab-layout`, `ttab-allp`, `ttab-missing-row` and `ttab-th-as-td` (headers the geometry finds itself) are the same Model, as JSON, as their
+  untagged twin.
+  `pdf/all`, `pdf-tagged/*` and every other category: not one metric changed. **The 498 tagged corpus PDFs** (every PDF of `corpus/` with a
+  StructTreeRoot that pypdf can open; D151 counts 504, six unreadable here), through `--out=evidence`: no panic (the first run found one:
+  `tt-iou` on a tagged table that owns no word, fixed), 193 documents have a `Table`; **1,522 tagged tables: 431 confirmed (28.3%), 335 partial,
+  756 contradicted** (at tree trust >= 300: 431, 125, 380; under 300: 0, 210, 376, since an untrusted tree can confirm nothing, D320).
+  **`tag-table-agree`** (the tagged tables a kept geometric candidate overlaps whose geometry agrees, `geo` >= 900): **340 of 511 = 0.665**;
+  of those 511, 232 are confirmed, 197 partial and 82 contradicted. **Their Models, BEFORE (P5.5a) and AFTER** (all 498, JSON): 463 byte-identical;
+  14 differ in the tables' `src` and `flags` alone (the `struct` source: a head or row headers from the tags); 21 differ in their tables, 2,079 -> 2,093 in all:
+  66 tables have the `struct` source in 28 documents, 10 carry `struct-disagree`, 1 `tag-span-conflict`, and the net 14 more tables are the
+  `struct` candidates of confirmed tagged tables no geometry found (trust >= 700, at least two rows and two columns: the first build made
+  eleven one-column tables of a roster in `pdfa-eng-wds/2720219`, four names lists a page, and the rule that a struct table has two of each
+  was added; D321). The struct tables of three of the gainers read as tables (`0848893` p.4 a Name / Email / Authorized Representative table, `3609981` p.1 a three-column
+  table of numbers, `6074345` p.1 a four-column case list); the other gainers were not looked at. **Ten contradicted tables looked at by eye** (checked ones: trust >= 300,
+  score under 500; 97 tables in 21 documents; one per document, in path order, ten of the first fourteen; the pages rendered with pdftoppm): the
+  Table 4 of IRS Publication 15 p.44 (tagged 8 rows by 3, the page shows a header and four rows by 3: the tags and the page count the
+  rows differently; I did not open the tag tree), the "Table 2" practices table of `pdfa-eng-wds/0669638` p.20, the complaints tables of `1289258` p.2, the three session boxes of `1784620` p.2,
+  the contact-numbers box of `3787957` p.1, the "Energy Panel" tabulation of `5279629` p.19: **five real tables, tagged as they look, whose cells hold
+  several lines**, where the text geometry has a row for every line, so the majority mapping is not one-to-one and the table is "contradicted":
+  the verdict says the tags and the geometry disagree, not that the tags are wrong, and the geometry decides, as before (no table of the
+  corpus is worse than P5.5a's); the empty ruled logs of `4937536` p.3 and `5800249` p.10 (a table of blank lines: the tags' empty rows
+  against rules the words do not fill), the cash-flow statement of `6283393` p.1 and the partnership form of `f1065` p.6: **four forms and
+  statements** where the tags and the page's fills or rules cut the cells differently. Not one of the ten is a case where the tags were wrong
+  and emon right in a way that would have cost a table. **Finding for the maintainer** (not changed here: SPEC 10.5's `geo` says one-to-one):
+  letting several geometric rows map onto one tagged row (and columns alike) would, I expect (not tried), turn the five multi-line tables from contradicted to
+  confirmed and let their head rows and spans through; the cost is one more pass over the same counts.
+  *Gates* (targeted, the machine at load 15-20; the full `bb gates` and the four-target `bb unit` were left to the merge step): `bb accuracy` (none
+  regressed, `tag-verdict-acc` recorded), `bb drift`, `bb hosts`, `bb identity`, `bb check`: see the commit message; `tabletest` (16 laws, the nine new goldens
+  and verdict texts included) and `tagtabletest` (9 laws) pass on Rust; a full `bb unit rust` here also fails 6 corpus-reading laws because this
+  worktree has no `corpus/` (they read it by path), none of them P5.5's; Go, Java and C# run the same generated laws (`bb check` builds them).
 - [ ] P5.5b — `form` profile (key/value grids: label cells and value cells, often ruled; SPEC 10.5), moved out of P5.5
   unchanged; reads `grl`/`gfl` like every profile. The `bank-statement` miss of D182 is its first fixture.
 - [ ] P5.6 — TEDS in `bb accuracy`; PubTabNet/FinTabNet/ICDAR scored. ICDAR 2013's adjacency F1 (`table-adj-f1`) comes
@@ -7889,6 +7932,67 @@ for the furniture zones; `tb-running-rule`), where SPEC 10.5 and the brief skipp
 tag a table's own rules as `/Artifact /Pagination`: all 104 rules of Publication 15's withholding table on page 46 carry it, and reading none of them
 lost every ruled table of pages 32-51 (12 of 12). The flag stays in `grl` for the readers that ask. The numbers, the documents and the survey are in
 the P5.5a entry above. **Alternatives**: skipping every pagination rule (above); reading them all (a header's underline closes a table).
+- [ ] **Signed off** (maintainer)
+
+### D320 — Tagged tables as built: read at any trust, confirmed only by a trusted tree; the checks' pairs are adjacent ones; `cover` counts the words in the page's table; `tb` in the evidence dump (P5.5; SPEC 9.7, 10.5; D225, D150)
+**Decision**: (1) `tt-grids` reads and `tb-tags` checks every `Table` whose nesting holds, whatever the tree's trust, because the dump's verdict
+(`tb`, per tagged table: page, element, rows, cols, verdict, score, the six checks, trust) is the evidence `tag-verdict-acc` and the survey read; but a
+tree under `tb-tag-trust` (300) **confirms nothing**: its tables are at best `partial` and no case of SPEC 10.5 applies (nothing is attached to a
+candidate, no struct table is made). SPEC 10.5 said "not read at all" under 300; `ttab-missing-row` (an artifact row in the middle of the table:
+artifact fit 0, trust 118) declares `partial`, which only a table that is read can say. (2) `row-band`, `order` and `col-band` take a non-empty cell
+and the next non-empty cell of its row (column), not every pair: linear in the cells (an all-pairs check is quadratic in the 62 x 29 tables of the
+corpus) and the two visual rows of `ttab-bad-rows` still fail it. `order` is the larger of the left-to-right and right-to-left agreements, chance
+corrected (D150). (3) `cover` counts the words inside the table's box, which is the tagged cells' text box grown by the box of the geometric
+candidate when there is one: a table whose tags leave out a row the page shows covers fewer of the words inside it (`ttab-missing-row`: 800).
+(4) The grid of a table across pages is one grid per page (the `TR`s whose first text is on the page; `tb-link` joins the fragments as it does any);
+spans are clamped (ColSpan 64, RowSpan 256) and RowSpan 0 is 1. (5) The dump gains a key, `tb`, after the arenas and only when a tagged table was
+read; the Engines splice it after `tb-build` (the evidence string is made before the tables are found, and `ln` is changed by claiming). (6) `tb`
+(the table arena) is stride 28: 24 what the tags did (1 shaped it, 2 a tagged span crosses a closed edge, 4 the tags disagree), 25 the tagged
+table, 26 its verdict, 27 its score (the brief said 20-23; 19-21 are `tb-link`'s since P5.4). **Why**: D034, D225; each is the smallest
+reading of the SPEC that the eight fixtures and the corpus survey (no panic on 498 tagged PDFs) both accept. **Alternatives**: all pairs; the
+tagged box alone for `cover` (the missing row is then invisible: 1000); skipping an untrusted tree (the verdict `none` for `ttab-missing-row`).
+- [ ] **Signed off** (maintainer)
+
+### D321 — The tags are checked against the geometric candidates `tb-select` kept, and a table of the tags alone is selected with them; a layout table is a verdict (P5.5; SPEC 10.5 cases 1-5; D225, D180)
+**Decision**: `tb-tags` runs after `tb-select`, so `geo` is measured on the candidate that will be a table (before it, the best IoU was a whitespace
+or partial candidate that the lattice then beat, and the tags attached to a table that was not emitted: the first build's `ttab-good` had no
+`struct` source); a confirmed table that no kept candidate overlaps at IoU 500 is tried as a `struct` candidate (SPEC case 3: cells grown to their
+row and column bands, 850 x trust / 1000, refused by `tb-score` as any text candidate is) and, when `tg-trust` >= `tb-tag-win` (700) and it is not refused,
+`tb-select` runs again so it competes by score and overlap with the kept ones. When `tb-score` refuses it (prose tagged `Table`: fewer than four
+cells with text, long cells, cells that end like sentences) the verdict is **`contradicted`, whatever the trust**: that is what "a layout table"
+means (`ttab-layout`). Confirmed with geometry that agrees (`geo` >= 900) is case 1; confirmed and disagreeing is case 2 (the verdict is `partial`, the
+candidate is flagged `struct-disagree`; the tags still give the head, row headers and spans); partial is case 4 (the tagged head when the row
+counts are equal); contradicted is case 5 (in the dump, used for nothing). **Why**: a verdict about a table the page does not have is no verdict.
+**Alternatives**: attaching before the selection to every candidate that overlaps (each would need its own `geo`: the maps are the cost).
+- [ ] **Signed off** (maintainer)
+
+### D322 — What the confirmed tags give a candidate: head rows that map one to one, row headers, spans taken by a ruleless table and flagged against a ruled one (P5.5; SPEC 10.5 case 1; D181)
+**Decision**: `tb-tag-head`: the tagged head (the rows under `THead`, or of `TH` with `Scope` Column or Both) becomes the candidate's head when the
+majority map sends tagged rows 0..h-1 to candidate rows 0..h-1 (confirmed tags), or when the tagged table has as many rows as the candidate (partial,
+case 4), or always for a table made of the tags; else the heuristic head (`tb-head-rows`) stands. `tb-tag-rest`: a `TH` with `Scope` Row (or Both) is a
+row header (`header: row`) on the candidate cell its row and column map to, unless it is already a header; a tagged span (ColSpan, RowSpan) is
+taken by a candidate that is not ruled when every other slot of the block is a plain, empty, unspanned cell (they are absorbed and the cell's
+box grows over them), and by a ruled one **never**: when a cell of the block is another cell than the one at its corner a rule closes the edge, and
+the table is flagged `tag-span-conflict` (rules are seen, SPEC 10.5). Any of these sets the table's `struct` source. The majority map (`tt-geo-map`):
+for each tagged row (column) the candidate row (column) most of its words are in, a map that sends two tagged rows to one candidate row
+is no map for either (so the words of both disagree), and a word agrees when its tagged cell's row and column both map to its candidate cell's;
+`geo` is the share of the tagged table's words that agree (-1 when no candidate or more than a million matrix cells). **Why**: SPEC 10.5; the head
+and the headers are what only the tags know. **Alternatives**: many geometric rows to one tagged row (the finding in the P5.5 entry).
+- [ ] **Signed off** (maintainer)
+
+### D323 — The two new warning flags are the table's, and the dump's `tb` is the only dump key written after the table stage (P5.5; SPEC 3.3, 9.7; D055)
+**Decision**: `fl` gains `struct-disagree` (128) and `tag-span-conflict` (256), additive (D055): `schema/emon-1.json`, `kin/scripts/json-check.py`, SPEC 3.3 and
+`js-bits-flags` (nine bits, not seven). P7.G adds the same two to its list of flags and need not (they are here). The Engines' `evidence` string is
+made first, from the arenas as the page units left them, and `tb` is added when the tables are found (a string splice of the closing brace in Rust
+and Go, which `bb identity` holds equal): a document with no tagged table has no `tb` and its dump is byte for byte what it was.
+- [ ] **Signed off** (maintainer)
+
+### D324 — Where P5.5's checks run and what they cost (P5.5; D320)
+**Decision**: a document pays for the tree only when it has a `Table` (`ss` cell 58, the count `tg-j-tables` keeps): `tt-index` (marks -> `sc` rows) is built
+once, `tt-grids` returns at once on a tree with none, and a page's work is the words of its tagged tables (`tt-words`: a glyph's mark, the mark's
+`sc` row, the element, its `TD`; the cells are found by binary search because they are in tree order) and the checks. There is no timing gate; the survey of the 498 tagged
+corpus PDFs ran four at a time in under ten minutes on a machine at load 15-20. **Alternatives**: a per-document index of tables (not needed at
+this size).
 - [ ] **Signed off** (maintainer)
 
 ## Found in kin, not ours to fix here

@@ -37,6 +37,7 @@ import (
 	"emon/evidence"
 	"emon/furniture"
 	"emon/gfuse"
+	"emon/tagtable"
 	"emon/initial"
 	"emon/lists"
 	"emon/notes"
@@ -849,7 +850,8 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 	// (pa stays: the lists stage takes an empty paths arena.)
 	pa := port.NewCells()
 	tb := newCellsN(24)
-	table.TbBuild(fw, fl, et, grl, gfl, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
+	tg := newCellsN(7) // the tagged tables' scratch and verdicts (P5.5, emon.tagtable)
+	table.TbBuild(fw, fl, et, grl, gfl, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages, gl, mk, port.NewCells(), port.NewCells(), ss, port.NewCells(), tg[0], tg[1], tg[2], tg[3], tg[4], tg[5], tg[6])
 	t := newCellsN(5)
 	c := newCellsN(13)
 	// initials (P4.10) on the lines' copy, before the headings read it, exactly as `attempt` does; OCR words have no glyph or
@@ -1148,7 +1150,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	for i := int32(0); i < max(np, 0); i++ {
 		port.CellsPush(mask, 0)
 	}
-	return step{pdf: &pdfDoc{ev: newEvArenas(), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
+	return step{pdf: &pdfDoc{ev: newEvArenas(), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, se: se, sc: sc,
 		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, info: info}}
 }
 
@@ -1157,6 +1159,8 @@ type pdfDoc struct {
 	ev                                   *evArenas
 	et, gl, mk, fnt, wd, ln, pa, grl, gfl, pg *port.Cells
 	txt, md, lb, ol, ss, plan, mask, loc *port.Cells
+	// the tagged tree's elements and marked-content references (P5.5: the table stage verifies the tags against the page)
+	se, sc *port.Cells
 	// the flow stage 3 reads (P7.0), the words set aside, and how many lines the text layer had before any page unit
 	fw, fl, fa *port.Cells
 	nl0        int32
@@ -1189,6 +1193,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	ev, et, gl, mk, fnt, wd, ln, pa, grl, gfl, pg := d.ev, d.et, d.gl, d.mk, d.fnt, d.wd, d.ln, d.pa, d.grl, d.gfl, d.pg
 	fw, fl, fa := d.fw, d.fl, d.fa
 	qtxt, md, lb, ol, ss, mask, info := d.txt, d.md, d.lb, d.ol, d.ss, d.mask, d.info
+	se, sc := d.se, d.sc
 	np := pdfdoc.PdPgCount(pg)
 	// the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
 	tlhealth.ThAppend(wd, ln, fw, fl, d.nl0)
@@ -1211,7 +1216,15 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	furniture.FuFind(fw, fl, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
 	// Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
 	tb := newCellsN(24)
-	table.TbBuild(fw, fl, et, grl, gfl, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages)
+	tg := newCellsN(7) // the tagged tables' scratch and verdicts (P5.5, emon.tagtable)
+	table.TbBuild(fw, fl, et, grl, gfl, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages, gl, mk, se, sc, ss, port.NewCells(), tg[0], tg[1], tg[2], tg[3], tg[4], tg[5], tg[6])
+	// P5.5: a document with tagged tables adds their verdicts to its evidence dump, as tb
+	if evs != nil && port.CellsLen(tg[6]) > 0 && strings.HasSuffix(*evs, "}") {
+		var sb strings.Builder
+		tagtable.TtEmit(&sb, tg[6])
+		e := (*evs)[:len(*evs)-1] + ",\"tb\":" + sb.String() + "}"
+		evs = &e
+	}
 	t := newCellsN(5)
 	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
 	c := newCellsN(13)

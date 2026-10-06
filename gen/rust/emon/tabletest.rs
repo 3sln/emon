@@ -12,7 +12,11 @@ use crate::emon::mscript::*;
 use crate::emon::para::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
+use crate::emon::pdfmeta::*;
+use crate::emon::pdfstruct::*;
+use crate::emon::pdfx::*;
 use crate::emon::table::*;
+use crate::emon::tagtable::*;
 
 pub(crate) fn tt_w(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], x0: i32, y0: i32, x1: i32, y1: i32, style: i32) -> i32 {
     // One word with its own box (page 1, size 1000, baseline 200 above the bottom).
@@ -244,10 +248,23 @@ pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, e
     let gpts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gmk: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gim: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t0e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t2e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t3e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t4e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t5e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t6e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t7e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t8e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t9e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t10e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t11e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t12e: &mut crate::port::Cells = &mut crate::port::Cells::new();
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
     gf_doc(pa, gpts, gmk, gim, 1, gfx_mode(), grl, gfl, cand);
-    tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+    tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
     lc_copy(ln, lt);
     pa_build(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
     tt_brief(t, nodes, attrs, text);
@@ -387,9 +404,10 @@ fn test_a_caption_and_a_bold_last_row() {
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "caption: well formed");
     crate::testport::assert_text(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph");
 }
-pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
+pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) -> i32 {
     // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
-    // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`.
+    // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the
+    // verdicts of its tables, as the evidence dump's `tb` writes them, are `tvt`.
     let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -467,6 +485,34 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t5e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t6e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t7e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t8e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t9e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t10e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t11e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t12e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let idx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let seen: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let md: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let xm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ss2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let se2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sk2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let so2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sa2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wk2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ha: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hh: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -484,11 +530,20 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     if pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0 {
         return 2;
     }
+    px_index_build(src, ar, dc, a, b, st, pg, idx);
+    if pm_run(src, ar, dc, a, b, st, pg, idx, txt, wq, seen, md, xm, ol, lb, nd, nt) < 0 {
+        return 4;
+    }
+    if tg_read(src, ar, dc, a, b, st, pg, idx, txt, wq, seen, ss2, se2, sk2, sc2, so2, wk2, md) < 0 {
+        return 5;
+    }
+    tg_join(ss2, se2, sk2, sc2, so2, sa2, gl, mk, fnt, pg, ha, hb, hh);
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
     gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand);
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+    tt_emit(tvt, t12e);
     lc_copy(ln, lt);
     in_detect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
     hd_analyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
@@ -499,6 +554,54 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     js_emit(t, 1, nodes, attrs, regions, text, pages, ledger, layout);
     return 0;
 }
+pub(crate) fn tt_tagged(pdf: &[u8], golden: &[u8], mut t: &mut String, mut tvt: &mut String) -> i32 {
+    // A tagged document through the stage: the Model, byte for byte, and the verdicts of its tables (the evidence dump's `tb`) in `tvt`.
+    let r: i32 = tt_golden(pdf, t, tvt);
+    if r != 0 {
+        return r;
+    }
+    crate::testport::assert_text_span(t, golden, 0, jt_end(golden), "the Model of a tagged-table fixture", 0);
+    return 0;
+}
+#[test]
+fn test_tagged_tables_are_verified_against_the_page() {
+    let t0: &mut String = &mut crate::port::new_text();
+    let v0: &mut String = &mut crate::port::new_text();
+    let t1: &mut String = &mut crate::port::new_text();
+    let v1: &mut String = &mut crate::port::new_text();
+    let t2: &mut String = &mut crate::port::new_text();
+    let v2: &mut String = &mut crate::port::new_text();
+    let t3: &mut String = &mut crate::port::new_text();
+    let v3: &mut String = &mut crate::port::new_text();
+    let t4: &mut String = &mut crate::port::new_text();
+    let v4: &mut String = &mut crate::port::new_text();
+    let t5: &mut String = &mut crate::port::new_text();
+    let v5: &mut String = &mut crate::port::new_text();
+    let t6: &mut String = &mut crate::port::new_text();
+    let v6: &mut String = &mut crate::port::new_text();
+    let t7: &mut String = &mut crate::port::new_text();
+    let v7: &mut String = &mut crate::port::new_text();
+    let t8: &mut String = &mut crate::port::new_text();
+    let v8: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-good.pdf")[..], &crate::testport::test_file("table/ttab-good.json")[..], t0, v0), 0, "ttab-good runs");
+    crate::testport::assert_text(v0, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":931,\"checks\":[900,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good: a correct grid, ruled, with spans and a header: confirmed, and the tags are among the table's sources");
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-good-ws.pdf")[..], &crate::testport::test_file("table/ttab-good-ws.json")[..], t1, v1), 0, "ttab-good-ws runs");
+    crate::testport::assert_text(v1, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good-ws: a table without a rule, correctly tagged: confirmed, and `struct` is among its sources");
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-th-as-td.pdf")[..], &crate::testport::test_file("table/ttab-th-as-td.json")[..], t2, v2), 0, "ttab-th-as-td runs");
+    crate::testport::assert_text(v2, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-th-as-td: headers tagged TD are still a table that agrees with the page");
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-bad-spans.pdf")[..], &crate::testport::test_file("table/ttab-bad-spans.json")[..], t3, v3), 0, "ttab-bad-spans runs");
+    crate::testport::assert_text(v3, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":5,\"verdict\":\"partial\",\"score\":821,\"checks\":[900,1000,1000,1000,1000,785],\"trust\":937}]", "ttab-bad-spans: ColSpan 3 where the rules close at 2: the geometry agrees with 785 of the words, so the verdict is partial, flagged struct-disagree and tag-span-conflict");
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-bad-rows.pdf")[..], &crate::testport::test_file("table/ttab-bad-rows.json")[..], t4, v4), 0, "ttab-bad-rows runs");
+    crate::testport::assert_text(v4, "[{\"page\":1,\"se\":4,\"rows\":3,\"cols\":8,\"verdict\":\"contradicted\",\"score\":86,\"checks\":[923,1000,846,1000,1000,0],\"trust\":937}]", "ttab-bad-rows: two visual rows in one TR: contradicted, and the Model is the geometry's alone");
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-layout.pdf")[..], &crate::testport::test_file("table/ttab-layout.json")[..], t5, v5), 0, "ttab-layout runs");
+    crate::testport::assert_text(v5, "[{\"page\":1,\"se\":4,\"rows\":1,\"cols\":2,\"verdict\":\"contradicted\",\"score\":1000,\"checks\":[1000,-1,1000,1000,1000,-1],\"trust\":923}]", "ttab-layout: prose in two columns tagged Table is a layout table: refused (D180), so contradicted, and there is no table in the Model");
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-missing-row.pdf")[..], &crate::testport::test_file("table/ttab-missing-row.json")[..], t6, v6), 0, "ttab-missing-row runs");
+    crate::testport::assert_text(v6, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"partial\",\"score\":864,\"checks\":[1000,1000,1000,800,1000,1000],\"trust\":118}]", "ttab-missing-row: the last row is an artifact; the tree's trust is under 300, so it can confirm nothing: partial");
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-allp.pdf")[..], &crate::testport::test_file("table/ttab-allp.json")[..], t7, v7), 0, "ttab-allp runs");
+    crate::testport::assert_text(v7, "[]", "ttab-allp: cells tagged P: the tree has no Table, so no verdict");
+    crate::testport::assert_eq(tt_tagged(&crate::testport::test_file("corpus/synth/pdf/ttab-good-ws-untagged.pdf")[..], &crate::testport::test_file("table/ttab-good-ws-untagged.json")[..], t8, v8), 0, "ttab-good-ws-untagged runs");
+    crate::testport::assert_text(v8, "[]", "the same table with no tree: no verdict");
+}
 #[test]
 fn test_real_documents_make_the_golden_models() {
     let t1: &mut String = &mut crate::port::new_text();
@@ -508,19 +611,19 @@ fn test_real_documents_make_the_golden_models() {
     let t5: &mut String = &mut crate::port::new_text();
     let t6: &mut String = &mut crate::port::new_text();
     let t7: &mut String = &mut crate::port::new_text();
-    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-simple-ruled.pdf")[..], t1), 0, "table-simple-ruled runs");
+    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-simple-ruled.pdf")[..], t1, &mut crate::port::new_text()), 0, "table-simple-ruled runs");
     crate::testport::assert_text_span(t1, &crate::testport::test_file("table/table-simple-ruled.json")[..], 0, jt_end(&crate::testport::test_file("table/table-simple-ruled.json")[..]), "table-simple-ruled", 0);
-    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-shaded.pdf")[..], t2), 0, "table-shaded runs");
+    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-shaded.pdf")[..], t2, &mut crate::port::new_text()), 0, "table-shaded runs");
     crate::testport::assert_text_span(t2, &crate::testport::test_file("table/table-shaded.json")[..], 0, jt_end(&crate::testport::test_file("table/table-shaded.json")[..]), "table-shaded", 0);
-    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-spans-partial.pdf")[..], t3), 0, "table-spans-partial runs");
+    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-spans-partial.pdf")[..], t3, &mut crate::port::new_text()), 0, "table-spans-partial runs");
     crate::testport::assert_text_span(t3, &crate::testport::test_file("table/table-spans-partial.json")[..], 0, jt_end(&crate::testport::test_file("table/table-spans-partial.json")[..]), "table-spans-partial", 0);
-    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-whitespace.pdf")[..], t4), 0, "table-whitespace runs");
+    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-whitespace.pdf")[..], t4, &mut crate::port::new_text()), 0, "table-whitespace runs");
     crate::testport::assert_text_span(t4, &crate::testport::test_file("table/table-whitespace.json")[..], 0, jt_end(&crate::testport::test_file("table/table-whitespace.json")[..]), "table-whitespace", 0);
-    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/align-table-numeric.pdf")[..], t5), 0, "align-table-numeric runs");
+    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/align-table-numeric.pdf")[..], t5, &mut crate::port::new_text()), 0, "align-table-numeric runs");
     crate::testport::assert_text_span(t5, &crate::testport::test_file("table/align-table-numeric.json")[..], 0, jt_end(&crate::testport::test_file("table/align-table-numeric.json")[..]), "align-table-numeric", 0);
-    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-multipage-thead.pdf")[..], t7), 0, "table-multipage-thead runs");
+    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/table-multipage-thead.pdf")[..], t7, &mut crate::port::new_text()), 0, "table-multipage-thead runs");
     crate::testport::assert_text_span(t7, &crate::testport::test_file("table/table-multipage-thead.json")[..], 0, jt_end(&crate::testport::test_file("table/table-multipage-thead.json")[..]), "table-multipage-thead: one table on four pages, the repeated header in the ledger", 0);
     // A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
-    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/h-plain.pdf")[..], t6), 0, "h-plain runs");
+    crate::testport::assert_eq(tt_golden(&crate::testport::test_file("corpus/synth/pdf/h-plain.pdf")[..], t6, &mut crate::port::new_text()), 0, "h-plain runs");
     crate::testport::assert_text_span(t6, &crate::testport::test_file("para/h-plain.json")[..], 0, jt_end(&crate::testport::test_file("para/h-plain.json")[..]), "h-plain makes no table", 0);
 }

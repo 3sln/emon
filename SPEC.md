@@ -286,7 +286,7 @@ API expose.
 | `at` | Zero or more regions `[page, x0, y0, x1, y1]` in page space (§3.4). A node spanning pages or columns has one region per **fragment** (per page and column, in reading order; D112); the column of a region is the page's `layout` cell that contains it (§3.7). Inline `text` nodes have regions only at `detail: words` (§13). |
 | `src` | Provenance: the set of sources that contributed (§3.5). |
 | `conf` | Confidence, integer 0..1000 (§3.5). |
-| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`. |
+| `flags` | Small closed set of warnings: `low-conf`, `ocr-only`, `text-layer-suspect`, `reconstructed` (e.g. a repaired table), `dpi-unknown`, `rotated`, `vertical`, `struct-disagree` (a table's tags disagree with its geometry, D225), `tag-span-conflict` (a tagged span crosses an edge the rules close). |
 
 ### 3.4 Geometry and units (D009)
 
@@ -1703,6 +1703,13 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 | `grg` | 16 | **graphic regions**: page, box, kind (`rk`: table-in-image, figure, table-hint), sources (`gs`: vector, trace, ocr, struct, image), subject (`(ea, index)`: the image placement, the `oblocks` block, the `se` element, -1), fused rules inside (count), fills inside (count), confidence, flags, spare (3) |
 | `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference, confidence, OCR words inside (a `refs` run), flags, spare |
 
+**The tagged tables' verdicts, `tb` (D320, P5.5).** A document whose tagged tree has a `Table` adds one key after the arenas, `tb`, an
+array with a row for every tagged table the table stage read (§10.5), in document order: `page`, `se` (the `Table` element's row), `rows`,
+`cols` (its grid), `verdict` (`confirmed`, `partial`, `contradicted`), `score` (per-mille), `checks` (six per-mille values: `row-band`,
+`col-band`, `order`, `cover`, `rules`, `geo`; -1 where there was nothing to check) and `trust` (the tree's, D150). It is written once the
+tables are found, so it is the only key not computed from the arenas as they stood at the start of stage 3; a document with no tagged table
+has no `tb`, and `bb accuracy` reads "no `tb`" as the verdict `none` (D227).
+
 `fr`, the rule table, is `defdata` in `kin/fuserules.kin`: per row its
 number, its block, the winner, the ledger reason, flags to set, and up to
 six `(feature column, comparison, setting name)` predicates, all of which
@@ -2157,8 +2164,9 @@ table's `src` is the union of the sources of the rules and fills it used
 or `ocr` for its words; its confidence is the profile score scaled by the mean
 confidence of those rules.
 
-**Tagged tables (D225).** A `Table` element on the page, when `tg-trust` ≥
-`tb-tag-trust` (300) and the tree's nesting check holds for it, is read into a
+**Tagged tables (D225).** A `Table` element on the page whose nesting check
+holds (no table inside it, every `TR` under the table or its `THead`, `TBody`
+or `TFoot`, every cell directly under a `TR`) is read, at any trust, into a
 **tagged grid**: rows are its `TR`s in order (under `THead`, `TBody`, `TFoot`
 or the table), cells its `TH`/`TD`s placed by `ColSpan`/`RowSpan` into the
 first free slot (HTML's algorithm); a word belongs to the cell whose subtree
@@ -2169,9 +2177,13 @@ vertical band), `col-band` (likewise for columns, horizontally), `order`
 (cells of a row in reading direction, chance-corrected as D150), `cover`
 (words inside the table's box that it owns, over the words inside its box),
 `rules` (non-empty cells whose text no fused `h`/`v` rule of confidence ≥ 800
-crosses) and `geo` (when a geometric candidate overlaps it at IoU ≥ 500: the
+crosses) and `geo` (when a geometric candidate that `tb-select` kept overlaps it at IoU ≥ 500: the
 share of the table's words whose tagged row and column map one-to-one onto
-the candidate's under the majority mapping). The **score** is D150's shape
+the candidate's under the majority mapping). As built (D320): the pairs of `row-band`, `order` and
+`col-band` are adjacent ones (a non-empty cell and the next non-empty cell of its row, or of its column), and the box that `cover`
+counts the words inside is the table's own, grown by the candidate's when there is one (a tagged table that leaves out a row
+the page shows covers fewer of the words inside it). A tree under `tb-tag-trust` (300) is still read and its tables checked, for
+the evidence dump's sake, but it can confirm nothing: its tables are at best `partial` and no case below applies. The **score** is D150's shape
 (weights 2, 2, 1, 2, 2, 3); the **verdict** is `confirmed` at ≥
 `tb-struct-ok` (800), `contradicted` under `tb-struct-bad` (500), else
 `partial`. Then, in `tb-select`:
@@ -2192,7 +2204,7 @@ the candidate's under the majority mapping). The **score** is D150's shape
    cells; a `struct` table (provenance `source: tags`) whose cells are the
    cells' text boxes grown to their row and column bands, scored 850 ×
    `tg-trust` / 1000, still subject to D180's refusals (prose tagged `Table`
-   is a layout table and is refused). Under 700, or with the cells empty of
+   is a layout table and is refused: its verdict becomes `contradicted`, whatever the trust). Under 700, or with the cells empty of
    text, nothing is emitted.
 4. *Partial*: the geometry decides; the tagged head is used when its row count
    equals the geometry's.

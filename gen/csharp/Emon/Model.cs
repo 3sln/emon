@@ -846,6 +846,12 @@ public static class Model {
     public static int FlVertical() {
         return 64;
     }
+    public static int FlStructDisagree() {
+        return 128;
+    }
+    public static int FlTagSpanConflict() {
+        return 256;
+    }
     public static int FlEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "low-conf");
@@ -873,6 +879,14 @@ public static class Model {
         }
         if (code == 64) {
             emon.Port.TextAscii(t, "vertical");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.TextAscii(t, "struct-disagree");
+            return 1;
+        }
+        if (code == 256) {
+            emon.Port.TextAscii(t, "tag-span-conflict");
             return 1;
         }
         return 0;

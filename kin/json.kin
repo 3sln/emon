@@ -306,7 +306,7 @@
         ^:mut ^I32 k 0
         ^:mut ^I32 bit 0]
     (emit-ascii t "[")
-    (while (< b 7)
+    (while (< b 9)
       (do (set bit (shl32 1 b))
           (if (!= (bit-and bits bit) 0)
             (do (js-fsep t pr k)
