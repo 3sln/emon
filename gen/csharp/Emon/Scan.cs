@@ -750,7 +750,7 @@ public static class Scan {
     internal static int ScCap() {
         return 400;
     }
-    internal static int ScPrep(emon.Port.Cells scr) {
+    public static int ScPrep(emon.Port.Cells scr) {
         // The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
         // `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
         // cluster's members; made once.
@@ -1039,7 +1039,7 @@ public static class Scan {
         ScCluster(scr, n);
         return r;
     }
-    internal static int ScEmitLines(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l0, int nl, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines) {
+    public static int ScEmitLines(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, int l0, int nl, int page, int rotmed, emon.Port.Cells scr, emon.Port.Cells words, emon.Port.Cells lines) {
         // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
         // the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
         // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.

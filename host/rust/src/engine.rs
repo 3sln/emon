@@ -50,6 +50,9 @@ use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::table::*;
 use crate::emon::pageunit::{pu_plan, pu_run_pdf};
+use crate::emon::arbiter::{ar_doc, ar_tag, ar_write};
+use crate::emon::health::hl_doc;
+use crate::emon::player::{pl_check, pl_emit};
 use crate::emon::rasterin::*;
 use crate::emon::scan::*;
 use crate::emon::pdfcontent::*;
@@ -232,11 +235,16 @@ pub struct Options {
     pub furniture: Furniture,
     // Keep the text layer's evidence dump (`Model::evidence`): a test and debugging aid.
     pub keep_evidence: bool,
+    // HIDDEN TEST SETTING (P7.3, D259-D264): OCR the born-digital pages too, as P7.S will under `always`, and fuse the two readings
+    // (render, OCR, align, arbitrate). Off by default: until P7.S a born-digital page is not OCR'd (D201, D212 (3)). The replay gate
+    // and `bb fusion` set it; an embedder never needs to.
+    #[doc(hidden)]
+    pub ocr_born_digital: bool,
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, furniture: Furniture::Policy, keep_evidence: false }
+        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, furniture: Furniture::Policy, keep_evidence: false, ocr_born_digital: false }
     }
 }
 
@@ -1050,6 +1058,10 @@ struct PdfDoc {
     plan: Cells,
     mask: Cells,
     loc: Cells,
+    // fusion (P7.3): the fonts' health, the correspondence groups the page units made, and the alignment's scratch
+    hl: Cells,
+    cg: Cells,
+    xs: [Cells; 6],
     // the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence
     // dump has always shown (kept only when the evidence is asked for)
     snap: Option<(Cells, Cells, Cells)>,
@@ -1135,6 +1147,13 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
         return Step::Miss;
     }
     let snap = if opts.keep_evidence { Some((gl.clone(), mk.clone(), fnt.clone())) } else { None };
+    // With fusion on, the text layer's `epages` and `feats` are the evidence's own: the OCR of a born-digital page adds its feature rows
+    // to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
+    let mut ev0 = EvArenas::new();
+    if opts.ocr_born_digital {
+        ev0.epages = tl_epages;
+        ev0.feats = tl_feats;
+    }
     // The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
     // (D076), which the furniture stage weighs the tree's /Artifact marks by.
     let (mut idx, mut txt, mut w, mut seen) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
@@ -1152,33 +1171,77 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: EvArenas::new(), et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, info }))
 }
 
 // One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
 // left as the text layer made it. It writes nothing until its answers are in, and never reads the input.
 fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
     let mut scr = Cells::new();
+    let [xa, xb, xc, xd, xe, xf] = &mut d.xs;
     pu_run_pdf(
         i as i32, idx as i32, opts.ocr.code(), &mut d.plan, answers, rq, &mut d.loc, bms, &mut d.mask, &mut scr,
         &mut d.ev.epages, &mut d.ev.views, &mut d.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
         &mut d.wd, &mut d.ln,
+        opts.ocr_born_digital as i32, &mut d.fw, &mut d.hl, &mut d.ev.refs, &mut d.cg, &mut d.ev.tlines,
+        xa, xb, xc, xd, xe, xf,
     )
 }
 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, snap, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
     th_append(&mut wd, &mut ln, &mut fw, &mut fl, nl0);
+    // FUSION (P7.3, D259-D264): the page units aligned every OCR'd born-digital page (`cg`); with the document's verdict on every font
+    // (`hl_doc`) the arbiter picks each group's source and makes the fused flow stage 3 reads. With no group (no engine, or the
+    // engine answered nothing) none of this runs and nothing below is different.
+    let fused = cells_len(&cg) > 0;
+    if opts.ocr_born_digital && !fused && cells_len(&ev.owords) == 0 {
+        // nothing was read: the evidence is what a run without the setting dumps (the text layer's own features were borrowed for alignment)
+        ev.epages = Cells::new();
+        ev.feats = Cells::new();
+    }
+    let (mut fv, mut fx, mut afa) = (Cells::new(), Cells::new(), Cells::new());
+    if fused {
+        let [mut xscr, mut xgp, mut xdp, mut xta, mut xtb, mut xtt] = xs;
+        let (mut nfw, mut nfl, mut gd, mut gv, mut w2g, mut o2g, mut pp, mut tw, mut tl) =
+            (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+        hl_doc(&mut ev.feats, &mut fw, &mut hl);
+        ar_doc(&mut cg, &mut ev.refs, &mut fw, &mut fl, &mut et, &mut ev.feats, &mut ev.owords, &mut ev.olines, &mut ev.oruns, &mut ev.osyms, &mut ev.images, &mut ev.epages,
+               &mut nfw, &mut nfl, &mut fv, &mut fx, &mut afa, &mut gd, &mut gv, &mut w2g, &mut o2g, &mut pp, &mut tw, &mut tl, &mut xscr);
+        std::mem::swap(&mut fw, &mut nfw);
+        std::mem::swap(&mut fl, &mut nfl);
+        let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut Cells::new(), &mut Cells::new(), &mut et, &mut ev.refs, &mut gl);
+        if c != 0 {
+            return Outcome::Failed(Error::Internal(format!("pl-check {}", c)));
+        }
+    }
     let evidence = if opts.keep_evidence {
-        Some(match snap {
-            Some((mut g, mut k, mut f)) => evidence_dump(&mut ev, &mut et, &mut g, &mut wd, &mut ln, &mut k, &mut f),
-            None => evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt),
-        })
+        if fused {
+            // the dump, VERSION "2" (SPEC 9.7): the evidence's arrays, then the layer's; the set-aside list is the text layer's and the dropped ghosts'
+            let mut fad = fa.clone();
+            for i in 0..cells_len(&afa) {
+                cells_push(&mut fad, cells_at(&afa, i));
+            }
+            let (mut g, mut k, mut f) = match snap {
+                Some((g, k, f)) => (g, k, f),
+                None => (gl.clone(), mk.clone(), fnt.clone()),
+            };
+            let mut t = String::new();
+            pl_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, &mut et, &mut ev.feats, &mut g, &mut wd, &mut ln, &mut k, &mut f, &mut ev.paths, &mut ev.images,
+                    &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines,
+                    &mut cg, &mut fw, &mut fl, &mut fv, &mut fad, &mut fx, &mut hl, &mut Cells::new(), &mut Cells::new());
+            Some(t)
+        } else {
+            Some(match snap {
+                Some((mut g, mut k, mut f)) => evidence_dump(&mut ev, &mut et, &mut g, &mut wd, &mut ln, &mut k, &mut f),
+                None => evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt),
+            })
+        }
     } else {
         None
     };
@@ -1242,6 +1305,11 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
     let mut ttx = Cells::new();
     th_write(&mut fa, &mut wd, &mut et, &mut m.ledger, &mut m.text, &mut tmp, &mut ttx);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
+    // fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
+    if fused {
+        ar_write(&mut afa, &mut ev.owords, &mut et, &mut m.ledger, &mut m.text, &mut tmp, &mut ttx);
+        ar_tag(&mut m.nodes, &mut m.regions, &mut fw, &mut fv);
+    }
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
         for ch in loc.chars() {

@@ -1,0 +1,203 @@
+;; THE RULE TABLE OF ARBITRATION (P7.3; SPEC 9.4, 9.7; D014, D195, D201, D203, D224). emon's own module (D039).
+;;
+;; A RULE is a ROW OF DATA, not a branch of code: its number, its block, the winner, the ledger reason and flags it sets, the confidence
+;; it gives, and up to six predicates `(column, comparison, setting)` of which ALL must hold. The columns are the GROUP COLUMNS `ag-*`
+;; below (what `emon.arbiter` measures of one correspondence group: the words each source offered, the health of the text layer's font,
+;; how the two readings agree, how plausible the OCR is, where the group lies); the settings are NAMED, with their defaults here
+;; (`fr-setting`), so a tuning is a reviewed diff of this one file. `fr-decide` answers the first row whose predicates all hold, trying
+;; the blocks in `fr-order`.
+;;
+;; BLOCKS (SPEC 9.4; independent items never renumber each other's rows): 100-199 the core rules (this item), 200-299 watermarks,
+;; backgrounds and ghosts (P7.5), 300-399 `hidden-text` (P7.6), 400-499 seals and signatures (P7.7), 500-599 graphics (they run on
+;; graphics groups, not word groups; P7.G), 600-699 where graphics meet words (P7.G). `fr-order` is the order they are tried in for a
+;; WORD group: 400, 600, 200, 300, 100 (D224: what belongs to a seal, a rule's ink or an artifact is decided before which source reads
+;; it best). The blocks other than 100 are EMPTY here and each owner adds rows inside its own block.
+;;
+;; A COLUMN THAT IS ABSENT is -1 and fails every comparison: a rule never reads "unknown" as a number. (A column that cannot be absent
+;; says so below: `ag-garbage` is 0 for a group with no glyphs to count.)
+;;
+;; THE BORN-DIGITAL CONTRACT (D201) as rows: 110-112 a visible text-layer word of a font at least `tl-trusted` and with no bad glyph of
+;; its own wins whatever OCR reads (the disagreement only lowers its confidence); the only rows that give such a group to OCR are 120
+;; (the word has a bad glyph itself) and 130 (its font is unhealthy), and both need the text to be in a script the engine reads.
+(ns emon.fuserules
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at]]
+            [emon.tlhealth :refer [th-trusted]]
+            [emon.health :refer [hh-agree-sim hh-agree-min]]
+            [kin.lang :refer [defdata defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------- the group columns
+
+(defn ^:pub ^I32 ag-nt [] (comment "visible text-layer words in the group") (return 0))
+(defn ^:pub ^I32 ag-no [] (comment "OCR words in the group") (return 1))
+(defn ^:pub ^I32 ag-nh [] (comment "hidden-text words in the group") (return 2))
+(defn ^:pub ^I32 ag-font [] (comment "the HIGHEST score of the text-layer words' (font, page) health, per mille; -1 absent (a healthy word protects its group)") (return 3))
+(defn ^:pub ^I32 ag-simfold [] (comment "the group's case-folded similarity, per mille; -1 absent") (return 4))
+(defn ^:pub ^I32 ag-sim [] (comment "the group's similarity with case kept, per mille; -1 absent") (return 5))
+(defn ^:pub ^I32 ag-garbage [] (comment "the largest share (per mille) of a text-layer word's glyphs that are PUA, control, U+FFFD or unmapped; 0 when none is counted") (return 6))
+(defn ^:pub ^I32 ag-plaus [] (comment "the lowest plausibility (1000 minus the implausible share) of the group's OCR words; -1 absent") (return 7))
+(defn ^:pub ^I32 ag-score [] (comment "the mean OCR word score (`hh-word-score`); -1 absent") (return 8))
+(defn ^:pub ^I32 ag-image [] (comment "0 when the group's box lies in no image placement, else the share of the page (per mille) the placement covers; at least 1") (return 9))
+(defn ^:pub ^I32 ag-flags [] (comment "the group's own flags (`plg`)") (return 10))
+(defn ^:pub ^I32 ag-latin [] (comment "1 when a text-layer word of the group holds a Latin letter or digit (a script the engine reads), else 0") (return 11))
+(defn ^:pub ^I32 ag-olen [] (comment "the Latin letters and digits of the group's OCR words, together (symbols are not text)") (return 12))
+(defn ^:pub ^I32 ag-oconf [] (comment "the mean engine confidence (per mille) of the group's OCR words; one column of an admission, never the answer (D130)") (return 13))
+(defn ^:pub ^I32 ag-near [] (comment "for a group with no text-layer word: the most (per mille of the smaller box) its box overlaps a text-layer word of its page; else 0") (return 14))
+(defn ^:pub ^I32 ag-pageagree [] (comment "the agreement of the group's page between the text layer and OCR, per mille (1000 when too few groups have both)") (return 15))
+(defn ^:pub ^I32 ag-count [] (return 16))
+
+;; ------------------------------------------------------------- comparisons and settings
+
+(defn ^:pub ^I32 fc-ge [] (return 0))
+(defn ^:pub ^I32 fc-lt [] (return 1))
+(defn ^:pub ^I32 fc-eq [] (return 2))
+(defn ^:pub ^I32 fc-ne [] (return 3))
+
+;; The settings, by code (the third cell of a predicate).
+(defn ^:pub ^I32 fs-zero [] (return 0))
+(defn ^:pub ^I32 fs-one [] (return 1))
+(defn ^:pub ^I32 fs-trusted [] (return 2))
+(defn ^:pub ^I32 fs-agree-sim [] (return 3))
+(defn ^:pub ^I32 fs-agree-low [] (return 4))
+(defn ^:pub ^I32 fs-plausible [] (return 5))
+(defn ^:pub ^I32 fs-admit [] (return 6))
+(defn ^:pub ^I32 fs-scan-region [] (return 7))
+(defn ^:pub ^I32 fs-min-len [] (return 8))
+(defn ^:pub ^I32 fs-admit-conf [] (return 9))
+(defn ^:pub ^I32 fs-near-max [] (return 10))
+(defn ^:pub ^I32 fs-agree-min [] (return 11))
+
+(defn ^:pub ^I32 fr-setting [^I32 code]
+  (comment "The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).")
+  (if (== code 0) (return 0))
+  (if (== code 1) (return 1))
+  (if (== code 2) (return (th-trusted)))
+  (if (== code 3) (return (hh-agree-sim)))
+  (comment "`agree-low`: the case-folded similarity under which a healthy text layer and its OCR are in real disagreement")
+  (if (== code 4) (return 300))
+  (comment "`ocr-plausible`: the plausibility (1000 minus 8) an OCR word needs to replace or to be admitted")
+  (if (== code 5) (return 600))
+  (comment "`ocr-admit`: the mean word score an OCR-only word needs to be admitted to the body")
+  (if (== code 6) (return 600))
+  (comment "`scan-region`: the share of the page (per mille) an image placement covers for text in it to be admitted (a scanned insert)")
+  (if (== code 7) (return 500))
+  (comment "`ocr-min-len`: the code points an OCR-only group needs to be admitted (a bullet or a rule fragment read as one letter is not text)")
+  (if (== code 8) (return 2))
+  (comment "`ocr-admit-conf`: the engine confidence an OCR-only group needs to be admitted")
+  (if (== code 9) (return 700))
+  (comment "`ocr-near-max`: an OCR-only group overlapping a text-layer word this much (per mille) is that word's ink read again, not new text")
+  (if (== code 10) (return 150))
+  (comment "`agree-min` (P7.2): the page agreement under which OCR-only words are not admitted")
+  (if (== code 11) (return (hh-agree-min)))
+  (return 0))
+
+;; ------------------------------------------------------------- the winners
+
+(defn ^:pub ^I32 fw-none [] (comment "nothing is emitted: the group is held (in the layer or the ledger)") (return 0))
+(defn ^:pub ^I32 fw-text [] (comment "the text layer: its visible words, or its hidden ones when it has no other") (return 1))
+(defn ^:pub ^I32 fw-ocr [] (comment "the OCR words") (return 2))
+
+;; ------------------------------------------------------------- the rows
+;; stride 36: number, block, winner, reason (`dr`; 0 none), flags (`fl`; 1 low-conf, 2 ocr-only, 4 text-layer-suspect), confidence
+;; (per mille; -1: the group's mean OCR score, at most 900), then ten predicates of three cells (column or -1, comparison, setting).
+
+(defdata ^:pub fr-rows
+  :emitter kin.lang/flat-array
+  :stride 36
+  :data [;; 101 the identity: a sole text-layer candidate wins (no engine, or the engine saw nothing there)
+         101 100 1 0 0 900   0 0 1 1 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; ... a sole hidden-text candidate is the text layer's too
+         102 100 1 0 0 900   0 2 0 2 0 1 1 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 110 healthy font, no bad glyph, OCR agrees: the text layer, exact code points, high confidence
+         110 100 1 0 0 1000   0 0 1 1 0 1 3 0 2 6 2 0 4 0 3 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 111 ... OCR differs: the text layer still wins; the confidence is lowered
+         111 100 1 0 0 700   0 0 1 1 0 1 3 0 2 6 2 0 4 0 4 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 112 ... OCR differs a great deal: the text layer wins, the group is low-conf
+         112 100 1 0 1 500   0 0 1 1 0 1 3 0 2 6 2 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 120 a glyph of the word itself is unmapped, PUA or U+FFFD and OCR (of a script it reads) is plausible: OCR, text-layer-suspect
+         120 100 2 0 4 -1   0 0 1 1 0 1 11 0 1 6 0 1 7 0 5 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 130 the font is unhealthy, OCR (of a script it reads) is plausible and READS SOMETHING ELSE (similarity under `agree-low`): OCR, text-layer-suspect
+         130 100 2 0 4 -1   0 0 1 1 0 1 11 0 1 3 1 2 7 0 5 4 1 4 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 140 OCR only, plausible, well scored, long enough, confident, on a page OCR reads, touching no text-layer word, in no image: admitted (outlined text)
+         140 100 2 0 2 -1   0 2 0 2 2 0 7 0 5 8 0 6 9 2 0 12 0 8 13 0 9 14 1 10 15 0 11 -1 0 0
+         ;; 141 ... in an image that covers `scan-region` of the page (a scanned insert): admitted
+         141 100 2 0 2 -1   0 2 0 2 2 0 7 0 5 8 0 6 9 0 7 12 0 8 13 0 9 14 1 10 15 0 11 -1 0 0
+         ;; 145 OCR only over a text-layer word: that word's ink read again, dropped as an OCR ghost
+         145 100 0 7 0 0   0 2 0 2 2 0 1 0 1 14 0 10 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 150 OCR only in a smaller image: the figure's text, held with in-figure (not emitted to the body)
+         150 100 0 0 0 0   0 2 0 2 2 0 1 0 1 7 0 5 9 0 1 9 1 7 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 170 OCR only and implausible: dropped as an OCR ghost
+         170 100 0 7 0 0   0 2 0 2 2 0 1 0 1 7 1 5 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 175 OCR only with a low score: dropped as an OCR ghost
+         175 100 0 7 0 0   0 2 0 2 2 0 1 0 1 8 1 6 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 176 OCR only and too short (a bullet, a rule fragment): dropped as an OCR ghost
+         176 100 0 7 0 0   0 2 0 2 2 0 1 0 1 12 1 8 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 177 OCR only and not confident: dropped as an OCR ghost
+         177 100 0 7 0 0   0 2 0 2 2 0 1 0 1 13 1 9 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 178 OCR only on a page where OCR and the text layer do not agree (an engine that cannot read it): dropped as an OCR ghost
+         178 100 0 7 0 0   0 2 0 2 2 0 1 0 1 15 1 11 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 190 the default: the text layer when there is one (low-conf), else OCR (low-conf)
+         190 100 1 0 1 600   -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0]
+  :accessors {^I32 fr-count [^I32 ignored]
+              ^I32 fr-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^:pub ^I32 fr-w [] (comment "cells of a row") (return 36))
+(defn ^:pub ^I32 fr-npred [] (return 10))
+(defn ^:pub ^I32 fr-number [^I32 row] (return (fr-at 0 row 0)))
+(defn ^:pub ^I32 fr-block [^I32 row] (return (fr-at 0 row 1)))
+(defn ^:pub ^I32 fr-winner [^I32 row] (return (fr-at 0 row 2)))
+(defn ^:pub ^I32 fr-reason [^I32 row] (return (fr-at 0 row 3)))
+(defn ^:pub ^I32 fr-flags [^I32 row] (return (fr-at 0 row 4)))
+(defn ^:pub ^I32 fr-conf [^I32 row] (return (fr-at 0 row 5)))
+(defn ^:pub ^I32 fr-pcol [^I32 row ^I32 k] (return (fr-at 0 row (+ 6 (* k 3)))))
+(defn ^:pub ^I32 fr-pcmp [^I32 row ^I32 k] (return (fr-at 0 row (+ 7 (* k 3)))))
+(defn ^:pub ^I32 fr-pset [^I32 row ^I32 k] (return (fr-at 0 row (+ 8 (* k 3)))))
+
+(defn ^:pub ^I32 fr-order [^I32 k]
+  (comment "The k-th block a word group is tried against (D224); -1 after the last.")
+  (if (== k 0) (return 400))
+  (if (== k 1) (return 600))
+  (if (== k 2) (return 200))
+  (if (== k 3) (return 300))
+  (if (== k 4) (return 100))
+  (return -1))
+
+;; ------------------------------------------------------------- deciding
+
+(defn ^I32 fr-holds [^I32 row ^Cells gv]
+  (comment "1 when every predicate of `row` holds on the group columns `gv`.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 col 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 c 0]
+    (while (< k (fr-npred))
+      (do (set col (fr-pcol row k))
+          (if (>= col 0)
+            (do (set v (cells-at gv col))
+                (set s (fr-setting (fr-pset row k)))
+                (set c (fr-pcmp row k))
+                (if (and (== c (fc-eq)) (!= v s)) (return 0))
+                (if (and (== c (fc-ne)) (== v s)) (return 0))
+                (if (and (== c (fc-ge)) (or (< v 0) (< v s))) (return 0))
+                (if (and (== c (fc-lt)) (or (< v 0) (>= v s))) (return 0))))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 fr-decide [^Cells gv]
+  (comment "The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the")
+  (comment "rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).")
+  (let [^I32 n (fr-count 0)
+        ^:mut ^I32 b 0
+        ^:mut ^I32 blk 0
+        ^:mut ^I32 r 0]
+    (while (>= (fr-order b) 0)
+      (do (set blk (fr-order b))
+          (set r 0)
+          (while (< r n)
+            (do (if (== (fr-block r) blk)
+                  (if (== (fr-holds r gv) 1) (return r)))
+                (set r (+ r 1))))
+          (set b (+ b 1))))
+    (return -1)))

@@ -771,7 +771,7 @@ func scCap() int32 {
 	return 400
 }
 
-func scPrep(scr *port.Cells) int32 {
+func ScPrep(scr *port.Cells) int32 {
 	// The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
 	// `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
 	// cluster's members; made once.
@@ -1068,7 +1068,7 @@ func scFit(scr *port.Cells, n int32) int32 {
 	return r
 }
 
-func scEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
+func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
 	// Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
 	// the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
 	// the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
@@ -1208,7 +1208,7 @@ func ScPage(an *port.Cells, at int32, page int32, request int32, decreq int32, w
 	// the OCR request; the raster is `pxw x pxh` at `dpi100` (dots per inch x 100) and its top-left corner is at (`cropx`,
 	// `cropy`) centipoints of the page; `obj` is the image's object number (0 none) and (`ix0` `iy0`)-(`ix1` `iy1`) its box.
 	// `scr` is scratch (at least 242 cells). Answers the number of OCR lines the pipeline got.
-	scPrep(scr)
+	ScPrep(scr)
 	evidence.ImNew(images, page, ix0, iy0, ix1, iy1, obj, pxw, pxh)
 	var ep int32 = evidence.EpNew(epages, page, wcpt, hcpt)
 	var vdec int32 = evidence.VwNew(views, page, evidence.VkDecode(), decreq, -1, pxw, pxh, dpi100, plan.LayFull(), -1, 0, 0, cropx, cropy, 0)
@@ -1227,7 +1227,7 @@ func ScPage(an *port.Cells, at int32, page int32, request int32, decreq int32, w
 		}
 	}
 	rotmed = evidence.EvRotMedian(olines, l0, nl)
-	return scEmitLines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines)
+	return ScEmitLines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines)
 }
 
 func scNodePage(nodes *port.Cells, regions *port.Cells, n int32) int32 {

@@ -523,6 +523,113 @@ pub fn hl_page(page: i32, cg: &mut crate::port::Cells, refs: &mut crate::port::C
     }
     return rows;
 }
+pub(crate) fn hh_font_of_f(refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, r#ref: i32) -> i32 {
+    let ea: i32 = rf_get(refs, r#ref, 0);
+    let ix: i32 = rf_get(refs, r#ref, 1);
+    if ((ea == pl_ea_fw()) || (ea == ea_words())) && ((ix >= 0) && (ix < fw_count(fw))) {
+        return crate::port::cells_at(fw, (ix * 24) + 19);
+    }
+    return -1;
+}
+pub(crate) fn hh_latin_f(refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, etext: &mut crate::port::Cells, first: i32, count: i32) -> i32 {
+    let mut k: i32 = 0;
+    let mut ix: i32 = 0;
+    let mut ts: i32 = -1;
+    let mut tl: i32 = 0;
+    let mut j: i32 = 0;
+    while k < count {
+        ix = rf_get(refs, first + k, 1);
+        ts = -1;
+        tl = 0;
+        if (ix >= 0) && (ix < fw_count(fw)) {
+            ts = crate::port::cells_at(fw, (ix * 24) + 11);
+            tl = crate::port::cells_at(fw, (ix * 24) + 12);
+        }
+        j = 0;
+        if ts >= 0 {
+            while j < tl {
+                if hh_latin_cp(crate::port::cells_at(etext, ts + j)) == 1 {
+                    return 1;
+                }
+                j += 1;
+            }
+        }
+        k += 1;
+    }
+    return 0;
+}
+pub(crate) fn hh_count_agreement_f(page: i32, cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, etext: &mut crate::port::Cells, mut hl: &mut crate::port::Cells) -> i32 {
+    let n: i32 = crate::port::cells_len(cg) / 16;
+    let nh: i32 = hl_count(hl);
+    let mut i: i32 = 0;
+    let mut r: i32 = 0;
+    let mut font: i32 = 0;
+    let mut total: i32 = 0;
+    let mut b: i32 = 0;
+    let mut a: i32 = 0;
+    while r < nh {
+        if (hl_get(hl, r, hlf_kind()) == plh_font_page()) && (hl_get(hl, r, hlf_page()) == page) {
+            hl_set(hl, r, hlf_both(), 0);
+            hl_set(hl, r, hlf_agree(), 0);
+        }
+        r += 1;
+    }
+    while i < n {
+        if (cg_get(cg, i, cgf_page()) == page) && ((cg_get(cg, i, cgf_tcount()) > 0) && ((cg_get(cg, i, cgf_ocount()) > 0) && (hh_latin_f(refs, fw, etext, cg_get(cg, i, cgf_tfirst()), cg_get(cg, i, cgf_tcount())) == 1))) {
+            font = hh_font_of_f(refs, fw, cg_get(cg, i, cgf_tfirst()));
+            r = hh_find(hl, plh_font_page(), page, font);
+            if r >= 0 {
+                b = hl_get(hl, r, hlf_both());
+                hl_set(hl, r, hlf_both(), b + 1);
+                if cg_get(cg, i, cgf_simfold()) >= hh_agree_sim() {
+                    a = hl_get(hl, r, hlf_agree());
+                    hl_set(hl, r, hlf_agree(), a + 1);
+                }
+                total += 1;
+            }
+        }
+        i += 1;
+    }
+    return total;
+}
+pub fn hl_page_fw(page: i32, cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, oblocks: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, mut hl: &mut crate::port::Cells) -> i32 {
+    // `hl-page` for a caller whose groups name rows of the flow `fw` under `ea-words` (the page unit's): one arena for the text layer.
+    let nh: i32 = hl_count(hl);
+    let nb: i32 = crate::port::cells_len(oblocks) / 16;
+    let mut r: i32 = 0;
+    let mut b: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut both: i32 = 0;
+    let mut usea: i32 = 0;
+    let mut agree: i32 = 0;
+    hh_count_agreement_f(page, cg, refs, fw, etext, hl);
+    while r < nh {
+        if (hl_get(hl, r, hlf_kind()) == plh_font_page()) && (hl_get(hl, r, hlf_page()) == page) {
+            both = hl_get(hl, r, hlf_both());
+            agree = hl_get(hl, r, hlf_agree());
+            if both > 0 {
+                hl_set(hl, r, hlf_agreement(), (agree * 1000) / both);
+            } else {
+                hl_set(hl, r, hlf_agreement(), -1);
+            }
+            usea = 0;
+            if both >= hh_agree_words() {
+                usea = 1;
+            }
+            hh_font_rescore(hl, r, usea);
+        }
+        r += 1;
+    }
+    hh_set_fonts(page, fw, feats, hl);
+    while b < nb {
+        if (ob_get(oblocks, b, obf_page()) == page) && (ob_get(oblocks, b, obf_kind()) == ob_block()) {
+            hh_add_block(hl, page, b, oblocks, olines, owords, feats);
+            rows += 1;
+        }
+        b += 1;
+    }
+    return rows;
+}
 pub(crate) fn hh_doc_agree(hl: &mut crate::port::Cells, font: i32, from: i32, want: i32) -> i32 {
     // For font `font`: with `want` 0 the number of pages that have at least `agree-words` groups, with 1 the number of those under
     // `agree-min`, with 2 the groups with both candidates over the whole document, with 3 the agreeing ones.

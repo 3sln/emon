@@ -596,7 +596,7 @@
 
 (defn ^I32 sc-cap [] (return 400))   ;; the lines of a page whose size is clustered; later ones keep their own
 
-(defn ^I32 sc-prep [^:mut ^Cells scr]
+(defn ^:pub ^I32 sc-prep [^:mut ^Cells scr]
   (comment "The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first")
   (comment "`sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a")
   (comment "cluster's members; made once.")
@@ -820,7 +820,7 @@
     (sc-cluster scr n)
     (return r)))
 
-(defn ^I32 sc-emit-lines [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
+(defn ^:pub ^I32 sc-emit-lines [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
                           ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines]
   (comment "Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas")
   (comment "the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is")

@@ -417,6 +417,100 @@
           (set b (+ b 1))))
     (return rows)))
 
+;; ------------------------------------------------------------- the flow as its own words (P7.3, D259)
+;; The page unit aligns the FLOW `fw` (its words are the visible and hidden-text ones: `xa-page` takes it as `words`), so its groups name
+;; `fw` rows under `ea-words`, and `hl-page` has one arena for both of its text-layer parameters. A Rust borrow cannot be given the same
+;; arena twice, so these are the same functions with that one parameter.
+
+(defn ^I32 hh-font-of-f [^Cells refs ^Cells fw ^I32 ref]
+  (let [^I32 ea (rf-get refs ref 0)
+        ^I32 ix (rf-get refs ref 1)]
+    (if (and (or (== ea (pl-ea-fw)) (== ea (ea-words))) (and (>= ix 0) (< ix (fw-count fw)))) (return (cells-at fw (+ (* ix 24) 19))))
+    (return -1)))
+
+(defn ^I32 hh-latin-f [^Cells refs ^Cells fw ^Cells etext ^I32 first ^I32 count]
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 ix 0
+        ^:mut ^I32 ts -1
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 j 0]
+    (while (< k count)
+      (do (set ix (rf-get refs (+ first k) 1))
+          (set ts -1)
+          (set tl 0)
+          (if (and (>= ix 0) (< ix (fw-count fw)))
+            (do (set ts (cells-at fw (+ (* ix 24) 11)))
+                (set tl (cells-at fw (+ (* ix 24) 12)))))
+          (set j 0)
+          (if (>= ts 0)
+            (while (< j tl)
+              (do (if (== (hh-latin-cp (cells-at etext (+ ts j))) 1) (return 1))
+                  (set j (+ j 1)))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 hh-count-agreement-f [^I32 page ^Cells cg ^Cells refs ^Cells fw ^Cells etext ^:mut ^Cells hl]
+  (let [^I32 n (quot (cells-len cg) 16)
+        ^I32 nh (hl-count hl)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 font 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 a 0]
+    (while (< r nh)
+      (do (if (and (== (hl-get hl r (hlf-kind)) (plh-font-page)) (== (hl-get hl r (hlf-page)) page))
+            (do (hl-set hl r (hlf-both) 0)
+                (hl-set hl r (hlf-agree) 0)))
+          (set r (+ r 1))))
+    (while (< i n)
+      (do (if (and (== (cg-get cg i (cgf-page)) page)
+                   (and (> (cg-get cg i (cgf-tcount)) 0)
+                        (and (> (cg-get cg i (cgf-ocount)) 0)
+                             (== (hh-latin-f refs fw etext (cg-get cg i (cgf-tfirst)) (cg-get cg i (cgf-tcount))) 1))))
+            (do (set font (hh-font-of-f refs fw (cg-get cg i (cgf-tfirst))))
+                (set r (hh-find hl (plh-font-page) page font))
+                (if (>= r 0)
+                  (do (set b (hl-get hl r (hlf-both)))
+                      (hl-set hl r (hlf-both) (+ b 1))
+                      (if (>= (cg-get cg i (cgf-simfold)) (hh-agree-sim))
+                        (do (set a (hl-get hl r (hlf-agree)))
+                            (hl-set hl r (hlf-agree) (+ a 1))))
+                      (set total (+ total 1))))))
+          (set i (+ i 1))))
+    (return total)))
+
+(defn ^:pub ^I32 hl-page-fw [^I32 page ^Cells cg ^Cells refs ^Cells fw ^Cells etext ^:mut ^Cells feats
+                             ^Cells oblocks ^Cells olines ^Cells owords ^:mut ^Cells hl]
+  (comment "`hl-page` for a caller whose groups name rows of the flow `fw` under `ea-words` (the page unit's): one arena for the text layer.")
+  (let [^I32 nh (hl-count hl)
+        ^I32 nb (quot (cells-len oblocks) 16)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 rows 0
+        ^:mut ^I32 both 0
+        ^:mut ^I32 usea 0
+        ^:mut ^I32 agree 0]
+    (hh-count-agreement-f page cg refs fw etext hl)
+    (while (< r nh)
+      (do (if (and (== (hl-get hl r (hlf-kind)) (plh-font-page)) (== (hl-get hl r (hlf-page)) page))
+            (do (set both (hl-get hl r (hlf-both)))
+                (set agree (hl-get hl r (hlf-agree)))
+                (if (> both 0)
+                  (hl-set hl r (hlf-agreement) (quot (* agree 1000) both))
+                  (hl-set hl r (hlf-agreement) -1))
+                (set usea 0)
+                (if (>= both (hh-agree-words)) (set usea 1))
+                (hh-font-rescore hl r usea)))
+          (set r (+ r 1))))
+    (hh-set-fonts page fw feats hl)
+    (while (< b nb)
+      (do (if (and (== (ob-get oblocks b (obf-page)) page) (== (ob-get oblocks b (obf-kind)) (ob-block)))
+            (do (hh-add-block hl page b oblocks olines owords feats)
+                (set rows (+ rows 1))))
+          (set b (+ b 1))))
+    (return rows)))
+
 (defn ^I32 hh-doc-agree [^Cells hl ^I32 font ^I32 from ^I32 want]
   (comment "For font `font`: with `want` 0 the number of pages that have at least `agree-words` groups, with 1 the number of those under")
   (comment "`agree-min`, with 2 the groups with both candidates over the whole document, with 3 the agreeing ones.")

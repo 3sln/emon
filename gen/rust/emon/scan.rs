@@ -754,7 +754,7 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
 pub(crate) fn sc_cap() -> i32 {
     return 400;
 }
-pub(crate) fn sc_prep(mut scr: &mut crate::port::Cells) -> i32 {
+pub fn sc_prep(mut scr: &mut crate::port::Cells) -> i32 {
     // The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
     // `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
     // cluster's members; made once.
@@ -1043,7 +1043,7 @@ pub(crate) fn sc_fit(mut scr: &mut crate::port::Cells, n: i32) -> i32 {
     sc_cluster(scr, n);
     return r;
 }
-pub(crate) fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
+pub fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
     // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
     // the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
     // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.

@@ -123,7 +123,45 @@ public final class Pageunit {
         }
         return Plan.usDone();
     }
-    public static int puRunPdf(int i, int input, int policy, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines) {
+    public static int puRunBorn(int i, int input, int policy, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells fw, emon.Port.Cells hl, emon.Port.Cells refs, emon.Port.Cells cg, emon.Port.Cells tlines, emon.Port.Cells xscr, emon.Port.Cells xgp, emon.Port.Cells xdp, emon.Port.Cells xta, emon.Port.Cells xtb, emon.Port.Cells xtt) {
+        if (puAskRasters(i, input, policy, ans, rq) == Plan.usRequests()) {
+            return Plan.usRequests();
+        }
+        if (policy != 2) {
+            return Plan.usDone();
+        }
+        int rid = Plan.puId(i, Plan.piRenderText());
+        int oid = Plan.puId(i, Plan.piOcr());
+        int ar = Plan.anFind(ans, rid);
+        int ao = -1;
+        int view = 0;
+        int w = 0;
+        int h = 0;
+        int dpi = 0;
+        if (ar < 0) {
+            return Plan.usDone();
+        }
+        if (Plan.anOk(ans, ar) != 1) {
+            return Plan.usDone();
+        }
+        ao = Plan.anFind(ans, oid);
+        if (ao < 0) {
+            Scan.scRequest(rq, oid, rid, puDpi(), loc);
+            return Plan.usRequests();
+        }
+        if (Plan.anOk(ans, ao) != 1) {
+            return Plan.usDone();
+        }
+        w = Plan.anArg(ans, ar, 0);
+        h = Plan.anArg(ans, ar, 1);
+        dpi = Plan.anArg(ans, ar, 3);
+        view = Evidence.vwNew(views, i + 1, Evidence.vkRender(), rid, -1, w, h, dpi * 100, Plan.layFull(), -1, 0, 0, 0, 0, 0);
+        Scan.scAnswer(ans, ao, i + 1, view, oid, Scan.scLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+        Xalign.xaPage(i + 1, epages, fw, owords, tlines, feats, etext, refs, cg, xscr, xgp, xdp, xta, xtb, xtt);
+        Health.hlPageFw(i + 1, cg, refs, fw, etext, feats, oblocks, olines, owords, hl);
+        return Plan.usDone();
+    }
+    public static int puRunPdf(int i, int input, int policy, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, int fuse, emon.Port.Cells fw, emon.Port.Cells hl, emon.Port.Cells refs, emon.Port.Cells cg, emon.Port.Cells tlines, emon.Port.Cells xscr, emon.Port.Cells xgp, emon.Port.Cells xdp, emon.Port.Cells xta, emon.Port.Cells xtb, emon.Port.Cells xtt) {
         // The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
         // of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`
         // and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`
@@ -131,10 +169,14 @@ public final class Pageunit {
         if (policy == 0) {
             return Plan.usDone();
         }
-        // A BORN-DIGITAL page asks for NOTHING here (D251, revised by the coordinator): its two rasters are lazy, asked by
-        // `pu-ask-rasters` when a stage that reads pixels exists (P7.1, P7.3); and nothing is OCR'd on it (D201, D212 (3)).
+        // A BORN-DIGITAL page asks for NOTHING here unless `fuse` (D251, revised by the coordinator): its two rasters are lazy, asked
+        // by `pu-ask-rasters` when a stage that reads pixels runs, and nothing is OCR'd on it (D201, D212 (3)) until P7.S; `fuse` is the
+        // hidden test setting that asks what P7.S will (see the head of this file).
         if (puKind(pl, i) == pkBorn()) {
-            return Plan.usDone();
+            if (fuse == 0) {
+                return Plan.usDone();
+            }
+            return puRunBorn(i, input, policy, ans, rq, loc, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt);
         }
         if (puKind(pl, i) != pkScan()) {
             return Plan.usDone();

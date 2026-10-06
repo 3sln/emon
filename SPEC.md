@@ -1617,6 +1617,21 @@ blocks are tried for a word group in the order 400, 600, 200, 300, 100
 (`fr-order`, D224): what belongs to a seal, to a rule's ink or to an artifact
 is decided before which source reads it best.
 
+**As built (P7.3, D259-D264).** `kin/fuserules.kin` holds the table as data (`fr-rows`: number, block, winner, ledger reason, flags,
+confidence, six `(group column, comparison, setting)` predicates; the settings are named in `fr-setting`, the group columns `ag-*`) and
+`fr-order`; `kin/arbiter.kin` measures each group's columns and applies the first row that holds. Block 100 is built: 101/102 the identity
+(a sole text-layer or hidden candidate), 110-112 a healthy font with no bad glyph of its own wins whatever OCR reads (only the confidence
+moves: 1000, 700, 500 with `low-conf`), 120 a bad glyph of the word's own and 130 an unhealthy font give the group to OCR when the engine
+reads the script (a Latin letter or digit in the text layer's word) and the OCR is plausible (`text-layer-suspect`), 140/141 an OCR-only
+group that is plausible and well scored is admitted when it lies in no image or in a scanned insert, 150 in a smaller image it is held
+(`in-figure` on the group), 170/175 an implausible or poorly scored OCR-only group is dropped as an `ocr-ghost`, 190 the default. Row 160
+(two OCR passes) waits for P7.4's second run. The conditions that need kin's ink layers (body-ink share) are not read: P6.3's views are
+not wired into the page unit yet. **Arbitration runs in the document unit**, after every page unit has aligned and scored its page and
+`hl-doc` has judged the fonts (an encoding is a document fact); the page unit asks the two rasters (`pu-ask-rasters`), the OCR of the one
+with its text, and runs `xa-page` and `hl-page`. The fused flow keeps the text layer's geometry for a word OCR replaced; OCR-only words
+admitted are lines of their own after the page's others. Under the hidden test setting `ocr-born-digital` only: until P7.S a born-digital
+page is not OCR'd, and with no engine nothing here runs and every output is byte-identical.
+
 ### 9.5 Watermarks, backgrounds and ghosts (D015)
 
 Dropping a background image behind text is easy: it is an image placement

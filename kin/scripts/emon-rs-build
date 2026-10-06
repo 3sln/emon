@@ -24,6 +24,10 @@ cd "$(dirname "$0")/../.."
 crate=.cache/emon-rs
 live=0
 if [ "${EMON_RS_LIVE:-}" = 1 ]; then crate=.cache/emon-rs-live; live=1; fi
+# FUSION RECORDING (P7.3, D259-D264): EMON_RS_PDFIUM=DIR (the pinned pdfium's lib directory, `bb pdfium-fetch`) builds the same crate with
+# `--cfg pdfium` linked to it (the `--pdfium` flag of the driver) into .cache/emon-rs-fusion, with Tesseract too; it is NOT a gate's.
+pdfium_lib="${EMON_RS_PDFIUM:-}"
+if [ -n "$pdfium_lib" ]; then crate=.cache/emon-rs-fusion; live=1; fi
 mkdir -p "$crate/src/emon"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -88,6 +92,9 @@ cargo_features=""
 if [ "$live" = 1 ]; then
   flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
   cargo_features="--features tesseract"
+fi
+if [ -n "$pdfium_lib" ]; then
+  flags="$flags --cfg pdfium -L native=$pdfium_lib -C link-arg=-Wl,-rpath,$pdfium_lib"
 fi
 # the lock file is committed (host/rust/Cargo.lock); the registry is reached only when a crate is not cached
 put host/rust/Cargo.lock "$crate/Cargo.lock"

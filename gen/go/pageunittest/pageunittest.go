@@ -29,8 +29,13 @@ func planOf(pl *port.Cells, pages int32, kind int32) int32 {
 	return 0
 }
 
+func runPageFused(i int32, policy int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells) int32 {
+	// A page unit with the fusion arguments (P7.3): `fuse` the hidden setting.
+	return pageunit.PuRunPdf(i, 3, policy, pl, ans, rq, port.NewCells(), port.NewBitmapSet(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), fuse, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+}
+
 func runPage(i int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells) int32 {
-	return pageunit.PuRunPdf(i, 3, policy, pl, ans, rq, port.NewCells(), port.NewBitmapSet(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	return runPageFused(i, policy, 0, pl, ans, rq)
 }
 
 func TestIdsArePerPageUnit(emonT *testing.T) {
@@ -106,6 +111,33 @@ func TestABornDigitalPageAsksForNothingUntilAConsumerAsksForItsRasters(emonT *te
 	planOf(plan3, 1, pageunit.PkNone())
 	port.AssertEq(emonT, runPage(0, 2, plan3, port.NewCells(), rq3), plan.UsDone(), "no image: done")
 	port.AssertEq(emonT, port.CellsLen(rq3), 0, "no request")
+}
+
+func TestABornDigitalPageAsksWhatFusionNeedsOnlyUnderTheHiddenSetting(emonT *testing.T) {
+	var pl *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	planOf(pl, 2, pageunit.PkBorn())
+	port.AssertEq(emonT, runPageFused(1, 2, 1, pl, ans, rq), plan.UsRequests(), "fuse, always: it asks")
+	port.AssertEq(emonT, port.CellsLen(rq), 14, "the two renders, in one round")
+	port.AssertEq(emonT, plan.RecId(rq, 0), 513, "with its text")
+	port.AssertEq(emonT, plan.RecId(rq, 7), 514, "and without it")
+	// the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's
+	plan.AnFail(ans, plan.PkRender(), 513, plan.PsUnsupported())
+	plan.AnFail(ans, plan.PkRender(), 514, plan.PsUnsupported())
+	var rq2 *port.Cells = port.NewCells()
+	port.AssertEq(emonT, runPageFused(1, 2, 1, pl, ans, rq2), plan.UsDone(), "no render, no OCR, done")
+	port.AssertEq(emonT, port.CellsLen(rq2), 0, "nothing asked")
+	var pl3 *port.Cells = port.NewCells()
+	var rq3 *port.Cells = port.NewCells()
+	planOf(pl3, 1, pageunit.PkBorn())
+	port.AssertEq(emonT, runPageFused(0, 1, 1, pl3, port.NewCells(), rq3), plan.UsDone(), "fuse under `auto`: only `always` asks")
+	port.AssertEq(emonT, port.CellsLen(rq3), 0, "nothing asked")
+	var pl4 *port.Cells = port.NewCells()
+	var rq4 *port.Cells = port.NewCells()
+	planOf(pl4, 1, pageunit.PkBorn())
+	port.AssertEq(emonT, runPageFused(0, 2, 0, pl4, port.NewCells(), rq4), plan.UsDone(), "without the setting: lazy, nothing asked")
+	port.AssertEq(emonT, port.CellsLen(rq4), 0, "nothing asked")
 }
 
 func TestTheBitmapSetKeepsWhatKinMakes(emonT *testing.T) {

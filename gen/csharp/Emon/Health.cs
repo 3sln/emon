@@ -523,6 +523,113 @@ public static class Health {
         }
         return rows;
     }
+    internal static int HhFontOfF(emon.Port.Cells refs, emon.Port.Cells fw, int @ref) {
+        int ea = Evidence.RfGet(refs, @ref, 0);
+        int ix = Evidence.RfGet(refs, @ref, 1);
+        if (((ea == Player.PlEaFw()) || (ea == Evidence.EaWords())) && ((ix >= 0) && (ix < Player.FwCount(fw)))) {
+            return emon.Port.CellsAt(fw, (ix * 24) + 19);
+        }
+        return -1;
+    }
+    internal static int HhLatinF(emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells etext, int first, int count) {
+        int k = 0;
+        int ix = 0;
+        int ts = -1;
+        int tl = 0;
+        int j = 0;
+        while (k < count) {
+            ix = Evidence.RfGet(refs, first + k, 1);
+            ts = -1;
+            tl = 0;
+            if ((ix >= 0) && (ix < Player.FwCount(fw))) {
+                ts = emon.Port.CellsAt(fw, (ix * 24) + 11);
+                tl = emon.Port.CellsAt(fw, (ix * 24) + 12);
+            }
+            j = 0;
+            if (ts >= 0) {
+                while (j < tl) {
+                    if (HhLatinCp(emon.Port.CellsAt(etext, ts + j)) == 1) {
+                        return 1;
+                    }
+                    j += 1;
+                }
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    internal static int HhCountAgreementF(int page, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells etext, emon.Port.Cells hl) {
+        int n = emon.Port.CellsLen(cg) / 16;
+        int nh = Player.HlCount(hl);
+        int i = 0;
+        int r = 0;
+        int font = 0;
+        int total = 0;
+        int b = 0;
+        int a = 0;
+        while (r < nh) {
+            if ((Player.HlGet(hl, r, Player.HlfKind()) == Player.PlhFontPage()) && (Player.HlGet(hl, r, Player.HlfPage()) == page)) {
+                Player.HlSet(hl, r, HlfBoth(), 0);
+                Player.HlSet(hl, r, HlfAgree(), 0);
+            }
+            r += 1;
+        }
+        while (i < n) {
+            if ((Player.CgGet(cg, i, Player.CgfPage()) == page) && ((Player.CgGet(cg, i, Player.CgfTcount()) > 0) && ((Player.CgGet(cg, i, Player.CgfOcount()) > 0) && (HhLatinF(refs, fw, etext, Player.CgGet(cg, i, Player.CgfTfirst()), Player.CgGet(cg, i, Player.CgfTcount())) == 1)))) {
+                font = HhFontOfF(refs, fw, Player.CgGet(cg, i, Player.CgfTfirst()));
+                r = HhFind(hl, Player.PlhFontPage(), page, font);
+                if (r >= 0) {
+                    b = Player.HlGet(hl, r, HlfBoth());
+                    Player.HlSet(hl, r, HlfBoth(), b + 1);
+                    if (Player.CgGet(cg, i, Player.CgfSimfold()) >= HhAgreeSim()) {
+                        a = Player.HlGet(hl, r, HlfAgree());
+                        Player.HlSet(hl, r, HlfAgree(), a + 1);
+                    }
+                    total += 1;
+                }
+            }
+            i += 1;
+        }
+        return total;
+    }
+    public static int HlPageFw(int page, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells hl) {
+        // `hl-page` for a caller whose groups name rows of the flow `fw` under `ea-words` (the page unit's): one arena for the text layer.
+        int nh = Player.HlCount(hl);
+        int nb = emon.Port.CellsLen(oblocks) / 16;
+        int r = 0;
+        int b = 0;
+        int rows = 0;
+        int both = 0;
+        int usea = 0;
+        int agree = 0;
+        HhCountAgreementF(page, cg, refs, fw, etext, hl);
+        while (r < nh) {
+            if ((Player.HlGet(hl, r, Player.HlfKind()) == Player.PlhFontPage()) && (Player.HlGet(hl, r, Player.HlfPage()) == page)) {
+                both = Player.HlGet(hl, r, HlfBoth());
+                agree = Player.HlGet(hl, r, HlfAgree());
+                if (both > 0) {
+                    Player.HlSet(hl, r, Player.HlfAgreement(), (agree * 1000) / both);
+                } else {
+                    Player.HlSet(hl, r, Player.HlfAgreement(), -1);
+                }
+                usea = 0;
+                if (both >= HhAgreeWords()) {
+                    usea = 1;
+                }
+                HhFontRescore(hl, r, usea);
+            }
+            r += 1;
+        }
+        HhSetFonts(page, fw, feats, hl);
+        while (b < nb) {
+            if ((Evidence.ObGet(oblocks, b, Evidence.ObfPage()) == page) && (Evidence.ObGet(oblocks, b, Evidence.ObfKind()) == Evidence.ObBlock())) {
+                HhAddBlock(hl, page, b, oblocks, olines, owords, feats);
+                rows += 1;
+            }
+            b += 1;
+        }
+        return rows;
+    }
     internal static int HhDocAgree(emon.Port.Cells hl, int font, int from, int want) {
         // For font `font`: with `want` 0 the number of pages that have at least `agree-words` groups, with 1 the number of those under
         // `agree-min`, with 2 the groups with both candidates over the whole document, with 3 the agreeing ones.

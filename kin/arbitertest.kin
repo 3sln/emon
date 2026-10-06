@@ -1,0 +1,548 @@
+;; Laws for `emon.fuserules` and `emon.arbiter` (P7.3; SPEC 9.4; D201, D203, D259), on every target. Everything is built by hand: the flow
+;; (`fw`/`fl`) with its feature rows, the OCR words with theirs, the correspondence groups (P7.1's `cg`) with their runs in `refs`.
+;;
+;;   * every row of the rule table decides what its number says, on the group columns that make it hold, and the blocks are tried in
+;;     `fr-order`;
+;;   * THE BORN-DIGITAL CONTRACT: a healthy font's word wins its group however OCR reads it (the verdict is the text layer's, its text run,
+;;     glyph run and box exactly as they were; only the confidence moves), and the words of a page with no group pass through as they were;
+;;   * an unhealthy font gives its group to OCR (the box, style, size and font stay the text layer's; the text is OCR's; the glyph run is empty;
+;;     the line is measured again), a word read as three keeps OCR's extents with the text layer's band and baseline;
+;;   * a word with a bad glyph of its own in a healthy font goes to OCR, and one in a script the engine does not read does not;
+;;   * an OCR-only group is dropped as a ghost when implausible (a `fa` row, nothing in the flow), held with `in-figure` when it lies in a
+;;     small image, admitted as a line of its own when it is plausible;
+;;   * `fv` has one row per `fw` row, and the layer passes `pl-check`;
+;;   * `ar-write` makes one ledger row of a line's ghosts, `ar-tag` changes only the blocks OCR won words of.
+(ns emon.arbitertest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push]]
+            [emon.evidence :refer [wd-new wd-set ln-new ow-new ow-set fe-new fe-set rf-add im-new ep-new or-new
+                                   hd-feat wf-font wf-size wf-style wf-src wf-gfirst wf-gcount wf-wbreak
+                                   xt-font-health xt-bad-cp xt-vis xo-implausible xo-conf xo-kin-ink
+                                   ea-words ea-owords]]
+            [emon.player :refer [cg-new cg-set cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hfirst cgf-hcount cgf-simfold cgf-flags
+                                 plg-in-figure fw-count fl-count fv-get fv-new fa-new fa-count fa-get fx-count pl-check]]
+            [emon.model :refer [sr-text sr-ocr fl-text-layer-suspect fl-low-conf fl-ocr-only dr-ocr-ghost ledger-count ledger-reason ledger-x1 ledger-text-len
+                                model-init node-new node-add-src node-set-conf node-src node-conf node-flags node-add-region node-set-text
+                                nk-paragraph nk-text nk-document page-new]]
+            [emon.fuserules :refer [ag-count ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin ag-olen ag-oconf ag-near ag-pageagree
+                                    fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-count fr-block fr-order fw-none fw-text fw-ocr]]
+            [emon.arbiter :refer [ar-doc ar-write ar-tag]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+;; ------------------------------------------------------------- the rule table
+
+(defn ^I32 at-gv [^:mut ^Cells gv ^I32 nt ^I32 no ^I32 nh ^I32 font ^I32 simfold ^I32 garbage ^I32 plaus ^I32 score ^I32 image ^I32 latin]
+  (comment "A group's columns (the others absent or zero).")
+  (while (< (cells-len gv) (ag-count))
+    (cells-push gv 0))
+  (cells-set gv (ag-nt) nt)
+  (cells-set gv (ag-no) no)
+  (cells-set gv (ag-nh) nh)
+  (cells-set gv (ag-font) font)
+  (cells-set gv (ag-simfold) simfold)
+  (cells-set gv (ag-sim) simfold)
+  (cells-set gv (ag-garbage) garbage)
+  (cells-set gv (ag-plaus) plaus)
+  (cells-set gv (ag-score) score)
+  (cells-set gv (ag-image) image)
+  (cells-set gv (ag-flags) 0)
+  (cells-set gv (ag-latin) latin)
+  (cells-set gv (ag-olen) 5)
+  (cells-set gv (ag-oconf) 900)
+  (cells-set gv (ag-near) 0)
+  (cells-set gv (ag-pageagree) 1000)
+  (return 0))
+
+(defn ^I32 at-rule [^I32 nt ^I32 no ^I32 nh ^I32 font ^I32 simfold ^I32 garbage ^I32 plaus ^I32 score ^I32 image ^I32 latin]
+  (let [^Cells gv (new-cells)]
+    (at-gv gv nt no nh font simfold garbage plaus score image latin)
+    (return (fr-number (fr-decide gv)))))
+
+(deftest test-every-rule-decides-what-its-number-says
+  (comment "text only: the identity; a hidden word only: the text layer's too")
+  (assert-eq (at-rule 2 0 0 1000 -1 0 -1 -1 0 1) 101 "a sole text-layer candidate")
+  (assert-eq (at-rule 0 0 3 -1 -1 0 -1 -1 0 0) 102 "a sole hidden-text candidate")
+  (comment "the contract: a healthy font, no bad glyph, OCR present")
+  (assert-eq (at-rule 1 1 0 1000 950 0 1000 900 0 1) 110 "OCR agrees")
+  (assert-eq (at-rule 1 1 0 1000 500 0 1000 900 0 1) 111 "OCR differs")
+  (assert-eq (at-rule 1 1 0 1000 100 0 1000 900 0 1) 112 "OCR differs a great deal")
+  (assert-eq (at-rule 1 1 0 700 100 0 1000 900 0 1) 112 "the font is exactly trusted")
+  (comment "even when OCR is perfectly plausible and the text layer is not")
+  (assert-eq (at-rule 1 1 0 1000 0 0 1000 1000 0 1) 112 "a healthy font is untouchable by OCR's plausibility")
+  (comment "OCR wins only where the text layer is bad")
+  (assert-eq (at-rule 1 1 0 1000 0 250 1000 1000 0 1) 120 "a glyph of the word itself is bad")
+  (assert-eq (at-rule 1 1 0 699 0 0 1000 1000 0 1) 130 "the font is just under trusted")
+  (assert-eq (at-rule 1 1 0 699 500 0 1000 1000 0 1) 190 "an unhealthy font OCR half agrees with: the text layer stays (low-conf)")
+  (assert-eq (at-rule 1 1 0 699 950 0 1000 1000 0 1) 190 "an unhealthy font OCR agrees with: the text layer stays")
+  (assert-eq (at-rule 1 1 0 50 0 0 1000 1000 0 1) 130 "the font is unhealthy")
+  (assert-eq (at-rule 1 1 0 50 0 0 500 1000 0 1) 190 "OCR implausible: the default (the text layer, low-conf)")
+  (assert-eq (at-rule 1 1 0 50 0 0 1000 1000 0 0) 190 "a script the engine does not read: the default")
+  (assert-eq (at-rule 1 1 0 1000 0 250 1000 1000 0 0) 190 "a bad glyph in a script the engine does not read: the text layer stays (the default)")
+  (comment "OCR only")
+  (assert-eq (at-rule 0 1 0 -1 -1 0 1000 900 0 0) 140 "OCR only, plausible, scored, in no image: admitted")
+  (assert-eq (at-rule 0 1 0 -1 -1 0 1000 900 600 0) 141 "in an image of most of the page: a scanned insert")
+  (assert-eq (at-rule 0 1 0 -1 -1 0 1000 900 100 0) 150 "in a small image: the figure's")
+  (assert-eq (at-rule 0 1 0 -1 -1 0 400 900 0 0) 170 "implausible: a ghost")
+  (assert-eq (at-rule 0 1 0 -1 -1 0 1000 300 0 0) 175 "poorly scored: a ghost")
+  (let [^Cells gv (new-cells)]
+    (at-gv gv 0 1 0 -1 -1 0 1000 900 0 0)
+    (cells-set gv (ag-olen) 1)
+    (assert-eq (fr-number (fr-decide gv)) 176 "one letter (a bullet): a ghost")
+    (cells-set gv (ag-olen) 5)
+    (cells-set gv (ag-oconf) 300)
+    (assert-eq (fr-number (fr-decide gv)) 177 "not confident: a ghost")
+    (cells-set gv (ag-oconf) 900)
+    (cells-set gv (ag-near) 800)
+    (assert-eq (fr-number (fr-decide gv)) 145 "over a text-layer word: that word's ink again, a ghost")
+    (cells-set gv (ag-near) 0)
+    (cells-set gv (ag-latin) 0)
+    (assert-eq (fr-number (fr-decide gv)) 140 "(admitted again)")
+    (cells-set gv (ag-pageagree) 200)
+    (assert-eq (fr-number (fr-decide gv)) 178 "on a page where OCR and the text layer do not agree: a ghost"))
+  (assert-eq (at-rule 0 1 1 -1 -1 0 1000 900 0 0) 190 "a hidden word and OCR: the default, the text layer"))
+
+(deftest test-the-rows-say-what-they-set
+  (let [^Cells gv (new-cells)]
+    (at-gv gv 1 1 0 1000 950 0 1000 900 0 1)
+    (assert-eq (fr-winner (fr-decide gv)) (fw-text) "110 is the text layer's")
+    (assert-eq (fr-conf (fr-decide gv)) 1000 "at confidence 1000")
+    (at-gv gv 1 1 0 100 0 0 1000 900 0 1)
+    (assert-eq (fr-winner (fr-decide gv)) (fw-ocr) "130 is OCR's")
+    (assert-eq (fr-flags (fr-decide gv)) 4 "flagged text-layer-suspect")
+    (assert-eq (fr-conf (fr-decide gv)) -1 "with the OCR's own score for confidence")
+    (at-gv gv 0 1 0 -1 -1 0 400 900 0 0)
+    (assert-eq (fr-winner (fr-decide gv)) (fw-none) "170 holds the group")
+    (assert-eq (fr-reason (fr-decide gv)) (dr-ocr-ghost) "as an OCR ghost"))
+  (comment "only block 100 has rows here, and `fr-order` is D224's")
+  (assert-eq (fr-order 0) 400 "seals first")
+  (assert-eq (fr-order 1) 600 "then rule ghosts")
+  (assert-eq (fr-order 2) 200 "then artifacts")
+  (assert-eq (fr-order 3) 300 "then hidden text")
+  (assert-eq (fr-order 4) 100 "then the core")
+  (assert-eq (fr-order 5) -1 "and no more")
+  (let [^:mut ^I32 i 0]
+    (while (< i (fr-count 0))
+      (do (assert-eq (fr-block i) 100 "every row of this item is in block 100")
+          (set i (+ i 1))))))
+
+;; ------------------------------------------------------------- a page by hand
+
+(defn ^I32 at-text [^:mut ^Cells et ^I32 a ^I32 b ^I32 c]
+  (comment "Append up to three code points (0 for none) to the text; answers where they start.")
+  (let [^I32 start (cells-len et)]
+    (if (> a 0) (cells-push et a))
+    (if (> b 0) (cells-push et b))
+    (if (> c 0) (cells-push et c))
+    (return start)))
+
+(defn ^I32 at-tword [^:mut ^Cells fw ^:mut ^Cells feats ^:mut ^Cells et ^I32 x0 ^I32 line ^I32 font ^I32 health ^I32 garbage ^I32 a ^I32 b]
+  (comment "A text-layer word of page 1 at x0..x0+900, y 0..1000, baseline y 900, in `font`, of two letters, with its feature row. Answers its row.")
+  (let [^I32 ts (at-text et a b 0)
+        ^I32 w (wd-new fw 1 x0 0 (+ x0 900) 1000 x0 900 (+ x0 900) 900 0 0 ts 2 line -1 -1)
+        ^I32 f (fe-new feats (ea-words) w)]
+    (wd-set fw w (wf-font) font)
+    (wd-set fw w (wf-size) 1200)
+    (wd-set fw w (wf-style) 7)
+    (wd-set fw w (wf-gfirst) 3)
+    (wd-set fw w (wf-gcount) 2)
+    (wd-set fw w (wf-src) 1)
+    (wd-set fw w (wf-wbreak) 1)
+    (wd-set fw w (hd-feat) f)
+    (fe-set feats f (xt-font-health) health)
+    (fe-set feats f (xt-bad-cp) garbage)
+    (fe-set feats f (xt-vis) 0)
+    (return w)))
+
+(defn ^I32 at-oword [^:mut ^Cells ow ^:mut ^Cells feats ^:mut ^Cells et ^I32 x0 ^I32 x1 ^I32 implausible ^I32 a ^I32 b ^I32 c]
+  (comment "An OCR word of page 1 over x0..x1, y 100..800 (ink, not ascent and descent), of up to three letters, its feature row set. Answers its row.")
+  (let [^I32 ts (at-text et a b c)
+        ^:mut ^I32 n 2
+        ^I32 w (ow-new ow 1 x0 100 x1 800 x0 800 x1 800 0 0 ts 2 0 888 -1)
+        ^I32 f (fe-new feats (ea-owords) w)]
+    (if (> c 0) (set n 3))
+    (ow-set ow w 12 n)
+    (ow-set ow w (hd-feat) f)
+    (fe-set feats f (xo-conf) 888)
+    (fe-set feats f (xo-implausible) implausible)
+    (return w)))
+
+(defn ^I32 at-group [^:mut ^Cells cg ^:mut ^Cells refs ^I32 tword ^I32 nt ^I32 oword ^I32 no ^I32 simfold]
+  (comment "A group of page 1 over `nt` consecutive text-layer words from `tword` and `no` consecutive OCR words from `oword`; answers it.")
+  (let [^I32 g (cg-new cg 1 0 0 3000 1000 0)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 first -1]
+    (set first (rf-add refs (ea-words) tword))
+    (set i 1)
+    (while (< i nt)
+      (do (rf-add refs (ea-words) (+ tword i))
+          (set i (+ i 1))))
+    (if (> nt 0)
+      (do (cg-set cg g (cgf-tfirst) first)
+          (cg-set cg g (cgf-tcount) nt)))
+    (set first (rf-add refs (ea-owords) oword))
+    (set i 1)
+    (while (< i no)
+      (do (rf-add refs (ea-owords) (+ oword i))
+          (set i (+ i 1))))
+    (cg-set cg g (cgf-ofirst) first)
+    (cg-set cg g (cgf-ocount) no)
+    (cg-set cg g (cgf-simfold) simfold)
+    (return g)))
+
+(defn ^I32 at-ocr-only-group [^:mut ^Cells cg ^:mut ^Cells refs ^I32 oword]
+  (comment "A group of page 1 with one OCR word and no text-layer candidate; answers it.")
+  (let [^I32 g (cg-new cg 1 0 0 3000 1000 0)
+        ^I32 first (rf-add refs (ea-owords) oword)]
+    (cg-set cg g (cgf-ofirst) first)
+    (cg-set cg g (cgf-ocount) 1)
+    (cg-set cg g (cgf-flags) 2)
+    (return g)))
+
+(defn ^I32 at-glyphs [^:mut ^Cells c]
+  (comment "Fill a glyph arena of ten rows (the text-layer words of these laws point at rows 3 and 4).")
+  (let [^:mut ^I32 i 0]
+    (while (< i 320)
+      (do (cells-push c 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 at-text-only-group [^:mut ^Cells cg ^:mut ^Cells refs ^I32 tword]
+  (let [^I32 g (cg-new cg 1 0 0 3000 1000 0)
+        ^I32 first (rf-add refs (ea-words) tword)]
+    (cg-set cg g (cgf-tfirst) first)
+    (cg-set cg g (cgf-tcount) 1)
+    (return g)))
+
+(defn ^I32 at-run [^Cells cg ^Cells refs ^Cells ofw ^Cells ofl ^Cells et ^Cells feats ^Cells ow ^Cells images ^Cells epages
+                   ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv ^:mut ^Cells fx ^:mut ^Cells afa]
+  (comment "`ar-doc` on a hand-built page with no OCR lines (so no admitted OCR-only group): answers the groups decided.")
+  (let [^Cells gd (new-cells)
+        ^Cells gv (new-cells)
+        ^Cells w2g (new-cells)
+        ^Cells o2g (new-cells)
+        ^Cells pp (new-cells)
+        ^Cells tw (new-cells)
+        ^Cells tl (new-cells)
+        ^Cells scr (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells orr (new-cells)
+        ^Cells os (new-cells)]
+    (return (ar-doc cg refs ofw ofl et feats ow ol orr os images epages nfw nfl fv fx afa gd gv w2g o2g pp tw tl scr))))
+
+(defn ^I32 at-line3 [^:mut ^Cells fl ^I32 first ^I32 count]
+  (comment "A line of page 1 over `count` flow words from `first`, 100 high on the baseline 900.")
+  (return (ln-new fl 1 0 0 (+ (* count 1000) 0) 1000 0 900 (* count 1000) 900 0 0 first count)))
+
+(deftest test-a-healthy-font-is-untouchable
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^Cells gls (new-cells)
+        ^I32 gz (at-glyphs gls)
+        ^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)
+        ^I32 w1 (at-tword fw feats et 1000 0 0 1000 0 109 111)
+        ^I32 w2 (at-tword fw feats et 2000 0 0 1000 0 120 121)
+        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
+        ^I32 o1 (at-oword ow feats et 1000 1900 0 88 89 0)
+        ^I32 o2 (at-oword ow feats et 2000 2900 0 90 90 0)]
+    (at-line3 fl 0 3)
+    (comment "OCR agrees on the first, differs on the second, reads something else entirely (and plausibly) on the third")
+    (at-group cg refs w0 1 o0 1 1000)
+    (at-group cg refs w1 1 o1 1 500)
+    (at-group cg refs w2 1 o2 1 0)
+    (assert-eq (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa) 3 "three groups decided")
+    (assert-eq (fw-count nfw) 3 "three words")
+    (assert-eq (fl-count nfl) 1 "one line")
+    (let [^:mut ^I32 i 0]
+      (while (< i 3)
+        (do (assert-eq (cells-at nfw (+ (* i 24) 11)) (cells-at fw (+ (* i 24) 11)) "the text run is the text layer's")
+            (assert-eq (cells-at nfw (+ (* i 24) 12)) 2 "its length")
+            (assert-eq (cells-at nfw (+ (* i 24) 17)) 3 "its glyph run is kept")
+            (assert-eq (cells-at nfw (+ (* i 24) 1)) (cells-at fw (+ (* i 24) 1)) "its box is the text layer's")
+            (assert-eq (cells-at nfw (+ (* i 24) 23)) 5 "src: text and ocr both had a candidate")
+            (assert-eq (fv-get fv i 1) 1 "the verdict says `text`")
+            (set i (+ i 1)))))
+    (assert-eq (fv-get fv 0 2) 110 "agreement: rule 110")
+    (assert-eq (fv-get fv 0 3) 1000 "at confidence 1000")
+    (assert-eq (fv-get fv 1 2) 111 "disagreement: rule 111")
+    (assert-eq (fv-get fv 1 3) 700 "at a lowered confidence")
+    (assert-eq (fv-get fv 2 2) 112 "OCR reading something else entirely: rule 112, the text layer still wins")
+    (assert-eq (fv-get fv 2 4) 1 "low-conf")
+    (assert-eq (fa-count afa) 0 "nothing was set aside")
+    (assert-that (> (fx-count fx) 8) "the explanation has the columns each rule read")
+    (assert-eq (pl-check cg nfw nfl fv (new-cells) fx (new-cells) (new-cells) (new-cells) et refs gls) 0 "the layer is sound")))
+
+(deftest test-a-page-no-group-saw-passes-through
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)
+        ^I32 w1 (at-tword fw feats et 1000 0 0 1000 0 109 111)
+        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)]
+    (at-line3 fl 0 2)
+    (at-group cg refs w0 1 o0 1 1000)
+    (comment "the second word is in no group: the identity")
+    (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
+    (assert-eq (fw-count nfw) 2 "both words")
+    (assert-eq (fv-get fv 1 0) -1 "no group")
+    (assert-eq (fv-get fv 1 2) 101 "rule 101, the identity")
+    (assert-eq (fv-get fv 1 3) 900 "without an OCR witness: 900")
+    (assert-eq (cells-at nfw (+ 24 23)) 1 "and its src is as it was")))
+
+(deftest test-an-unhealthy-font-gives-its-group-to-ocr
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^Cells gls (new-cells)
+        ^I32 gz (at-glyphs gls)
+        ^I32 w0 (at-tword fw feats et 0 0 5 60 0 105 102)
+        ^I32 w1 (at-tword fw feats et 1000 0 5 60 0 110 112)
+        ^I32 w2 (at-tword fw feats et 2000 0 0 1000 0 97 97)
+        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
+        ^I32 o1 (at-oword ow feats et 1000 1900 0 109 111 0)
+        ^I32 o2 (at-oword ow feats et 2000 2900 0 97 97 0)]
+    (at-line3 fl 0 3)
+    (at-group cg refs w0 1 o0 1 0)
+    (at-group cg refs w1 1 o1 1 0)
+    (at-group cg refs w2 1 o2 1 1000)
+    (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
+    (assert-eq (fw-count nfw) 3 "three words")
+    (assert-eq (cells-at nfw 11) (cells-at ow 11) "the first word's text is OCR's")
+    (assert-eq (cells-at nfw (+ 24 11)) (cells-at ow (+ 28 11)) "so is the second's")
+    (assert-eq (cells-at nfw (+ 48 11)) (cells-at fw (+ 48 11)) "the healthy font's is the text layer's")
+    (assert-eq (cells-at nfw 1) 0 "the box is the text layer's")
+    (assert-eq (cells-at nfw 4) 1000 "all of it, ascent and descent")
+    (assert-eq (cells-at nfw 17) -1 "no glyph run says the word")
+    (assert-eq (cells-at nfw 18) 0 "none")
+    (assert-eq (cells-at nfw 15) -1 "no feature row")
+    (assert-eq (cells-at nfw 19) 5 "the font stays (style and size are the text layer's)")
+    (assert-eq (cells-at nfw 20) 1200 "the size")
+    (assert-eq (cells-at nfw 16) 7 "the style")
+    (assert-eq (cells-at nfw 23) 5 "src: both had a candidate")
+    (assert-eq (fv-get fv 0 1) 4 "the verdict says `ocr`")
+    (assert-eq (fv-get fv 0 2) 130 "rule 130")
+    (assert-eq (fv-get fv 0 4) 4 "text-layer-suspect")
+    (assert-eq (fv-get fv 2 1) 1 "the healthy font's word is the text layer's")
+    (assert-eq (fv-get fv 2 2) 110 "by 110")
+    (assert-eq (pl-check cg nfw nfl fv (new-cells) fx (new-cells) (new-cells) (new-cells) et refs gls) 0 "the layer is sound")))
+
+(deftest test-a-word-read-as-three-keeps-ocrs-extents-and-the-text-layers-band
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^I32 w0 (at-tword fw feats et 0 0 5 60 0 255 255)
+        ^I32 o0 (at-oword ow feats et 0 250 0 97 98 0)
+        ^I32 o1 (at-oword ow feats et 300 600 0 99 100 0)
+        ^I32 o2 (at-oword ow feats et 650 900 0 101 102 0)]
+    (at-line3 fl 0 1)
+    (at-group cg refs w0 1 o0 3 0)
+    (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
+    (assert-eq (fw-count nfw) 3 "one word became three")
+    (assert-eq (fv-get fv 2 0) 0 "all in group 0")
+    (assert-eq (cells-at nfw 1) 0 "the first one's extent is OCR's")
+    (assert-eq (cells-at nfw 3) 250 "to here")
+    (assert-eq (cells-at nfw (+ 24 1)) 300 "the second starts where OCR says")
+    (assert-eq (cells-at nfw 2) 0 "the band is the text layer's: its top")
+    (assert-eq (cells-at nfw 4) 1000 "its bottom")
+    (assert-eq (cells-at nfw 6) 900 "and its baseline")
+    (assert-eq (cells-at nfw 22) 1 "a space after the first")
+    (assert-eq (cells-at nfw (+ 24 22)) 1 "and the second")
+    (assert-eq (cells-at nfw (+ 48 22)) 1 "the last ends as the text layer's word did")
+    (assert-eq (cells-at nfl 12) 3 "the line has three words")
+    (assert-eq (cells-at nfl 3) 900 "and is measured again: its right edge is the last word's")))
+
+(deftest test-a-bad-glyph-in-a-healthy-font-goes-to-ocr-but-only-where-the-engine-reads
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^I32 w0 (at-tword fw feats et 0 0 0 1000 500 65 65)
+        ^I32 w1 (at-tword fw feats et 1000 0 0 1000 500 1488 1489)
+        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
+        ^I32 o1 (at-oword ow feats et 1000 1900 0 104 101 0)]
+    (at-line3 fl 0 2)
+    (at-group cg refs w0 1 o0 1 0)
+    (at-group cg refs w1 1 o1 1 0)
+    (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
+    (assert-eq (fv-get fv 0 2) 120 "a Latin word with a bad glyph of its own: 120")
+    (assert-eq (fv-get fv 0 1) 4 "OCR's")
+    (assert-eq (fv-get fv 1 2) 190 "a Hebrew word with one: the engine cannot read it, so the text layer stays (the default)")
+    (assert-eq (fv-get fv 1 1) 1 "the text layer's")))
+
+(deftest test-ocr-only-groups-are-dropped-held-or-nothing
+  (let [^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells im (new-cells)
+        ^Cells ep (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells nfl (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells fx (new-cells)
+        ^Cells afa (new-cells)
+        ^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)
+        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
+        ^I32 o1 (at-oword ow feats et 5000 5900 900 88 89 0)
+        ^I32 o2 (at-oword ow feats et 6000 6900 0 90 91 0)]
+    (at-line3 fl 0 1)
+    (ep-new ep 1 20000 20000)
+    (comment "a small image holds the third OCR word's box (the area of the page is 400e6; the image 50e6: 125 per mille)")
+    (im-new im 1 5900 0 8000 1000 0 10 10)
+    (at-group cg refs w0 1 o0 1 1000)
+    (let [^I32 g1 (at-ocr-only-group cg refs o1)
+          ^I32 g2 (at-ocr-only-group cg refs o2)]
+      (assert-eq g1 1 "the second group")
+      (assert-eq g2 2 "the third group")
+      (cg-set cg g1 1 5000)
+      (cg-set cg g1 3 5900)
+      (cg-set cg g2 1 6000)
+      (cg-set cg g2 3 7000)
+      (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
+      (assert-eq (fw-count nfw) 1 "only the text layer's word is in the flow: the ghost and the figure's word are not")
+      (assert-eq (fa-count afa) 1 "one ghost is set aside")
+      (assert-eq (fa-get afa 0 5) (dr-ocr-ghost) "as an ocr-ghost")
+      (assert-eq (fa-get afa 0 9) 1 "from group 1")
+      (assert-eq (fa-get afa 0 10) 170 "by rule 170")
+      (assert-eq (fa-get afa 0 7) 1 "whose OCR word is row 1")
+      (assert-eq (cg-get cg g2 (cgf-flags)) (+ 2 (plg-in-figure)) "the figure's word says it is in a figure")
+      (assert-eq (cg-get cg g1 (cgf-flags)) 2 "and the ghost does not"))))
+
+;; ------------------------------------------------------------- the ledger and the Model
+
+(deftest test-the-ghosts-of-a-line-are-one-ledger-row
+  (let [^Cells afa (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells text (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells tt (new-cells)
+        ^I32 a (at-oword ow feats et 0 100 900 88 89 0)
+        ^I32 b (at-oword ow feats et 200 300 900 90 91 0)
+        ^I32 c (at-oword ow feats et 400 500 900 92 93 0)]
+    (ow-set ow a 13 0)
+    (ow-set ow b 13 0)
+    (ow-set ow c 13 1)
+    (comment "three dropped groups: two on OCR line 0, one on line 1")
+    (fa-new afa 1 0 100 100 800 (dr-ocr-ghost) (ea-owords) a)
+    (fa-new afa 1 200 100 300 800 (dr-ocr-ghost) (ea-owords) b)
+    (fa-new afa 1 400 100 500 800 (dr-ocr-ghost) (ea-owords) c)
+    (assert-eq (ar-write afa ow et ledger text tmp tt) 2 "two ledger rows")
+    (assert-eq (ledger-count ledger) 2 "in the ledger")
+    (assert-eq (ledger-reason ledger 0) (dr-ocr-ghost) "an ocr-ghost")
+    (assert-eq (ledger-x1 ledger 0) 300 "the first row spans both words")
+    (assert-eq (ledger-text-len ledger 0) 5 "`XY ZZ`: the words joined by a space")
+    (assert-eq (ledger-text-len ledger 1) 2 "the second is one word")))
+
+(defn ^I32 at-block [^:mut ^Cells nodes ^:mut ^Cells regions ^:mut ^Cells text ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 a]
+  (comment "A paragraph of page 1 over a box with one inline text of one letter; answers the paragraph's row.")
+  (let [^I32 p (node-new nodes (nk-paragraph) 0)
+        ^I32 t (node-new nodes (nk-text) p)
+        ^I32 ts (cells-len text)]
+    (cells-push text a)
+    (node-set-text nodes t ts 1)
+    (node-add-region nodes regions p 1 x0 y0 x1 y1)
+    (node-add-src nodes p (sr-text))
+    (node-add-src nodes t (sr-text))
+    (return p)))
+
+(deftest test-the-model-says-where-ocr-won-and-changes-nothing-else
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells nfw (new-cells)
+        ^Cells fv (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells et (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (comment "two paragraphs: the first over words 0 and 1, the second over word 2")
+    (let [^I32 pa (at-block nodes regions text 0 0 2000 1000 65)
+          ^I32 pb (at-block nodes regions text 0 2000 1000 3000 66)]
+      (at-tword nfw feats et 0 0 0 1000 0 97 97)
+      (at-tword nfw feats et 1000 0 0 1000 0 98 98)
+      (comment "word 2 sits in the second paragraph's box")
+      (let [^I32 w2 (at-tword nfw feats et 0 0 0 1000 0 99 99)]
+        (wd-set nfw w2 2 2200))
+      (wd-set nfw 2 4 2800)
+      (fv-new fv 0 1 101 900 0)
+      (fv-new fv 0 1 101 900 0)
+      (fv-new fv 1 1 101 900 0)
+      (assert-eq (ar-tag nodes regions nfw fv) 0 "nothing was OCR's: nothing is tagged")
+      (assert-eq (node-src nodes pa) (sr-text) "the first paragraph is as it was")
+      (assert-eq (node-src nodes pb) (sr-text) "so is the second")
+      (comment "now OCR wins the third word")
+      (cells-set fv 17 4)
+      (cells-set fv 19 800)
+      (cells-set fv 20 4)
+      (assert-eq (ar-tag nodes regions nfw fv) 1 "one block was tagged")
+      (assert-eq (node-src nodes pa) (sr-text) "the paragraph OCR did not touch is not changed")
+      (assert-eq (node-flags nodes pa) 0 "nor flagged")
+      (assert-eq (node-src nodes pb) (sr-ocr) "the one OCR read in full is `ocr`, not `text`")
+      (assert-eq (node-flags nodes pb) (fl-text-layer-suspect) "flagged text-layer-suspect")
+      (assert-eq (node-conf nodes pb) 800 "at OCR's confidence")
+      (assert-eq (node-src nodes (+ pb 1)) (sr-ocr) "and its inline follows"))))

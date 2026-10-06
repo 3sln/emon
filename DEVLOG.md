@@ -2721,7 +2721,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   caller's).
   *Commit*: on branch `worktree-agent-a1c5eb27a82a00546` (D037).
 
-- [ ] **P7.3 — Arbitration, the PageLayer, and the stages wired into the page unit** (SPEC §9.4 with the born-digital
+- [x] **P7.3 — Arbitration, the PageLayer, and the stages wired into the page unit** (SPEC §9.4 with the born-digital
   contract, §9.7; D014, D195, D201, D203). **Wave 3, critical path.** Depends on P7.U, P7.1, P7.2, P6.3, P6.4, P5.5a (`grl`/`gfl` and the
   vector-only `gf-page`).
   *Brief*:
@@ -2773,6 +2773,41 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   CER ≤ 0.03; `outlined-heading` CER ≤ 0.01; `ghost-rate` ≤ 0.002 (P7.5 brings it down); `bb fusion-report` per-source win
   rates and per-rule counts recorded in this entry. Fusion's kin time ≤ 30 ms a page (Rust).
   *Done when*: all of the above, `bb fusion-replay` green on Rust and Go and in `bb gates`.
+  **DONE (D259-D264), on branch `worktree-agent-a252f8d059ccee04e`.** *Built*: `kin/fuserules.kin` (the rule table as data: `fr-rows`, 17 rows of block
+  100, `fr-order`, the group columns `ag-*`, the named settings `fr-setting`), `kin/arbiter.kin` (`ar-doc`, `ar-write`, `ar-tag`),
+  `kin/pageunit.kin` (`pu-run-born`: the born-digital page asks `pu-ask-rasters`, then the OCR of the render with its text, then writes the OCR
+  evidence and runs `xa-page` and `hl-page-fw`), the two Engines (the hidden setting `ocr_born_digital` / `OcrBornDigital`; the document unit: `hl_doc`,
+  `ar_doc`, `pl_check`, dump version "2", `ar_write`, `ar_tag`), laws `kin/arbitertest.kin` (10) and `kin/pageunittest.kin`, `bb fusion` and
+  `bb fusion-record` (`kin/scripts/fusion`, `tools/fusion/record-replay.clj`, `test/fusion/replay/`: 22 slim transcripts, 2.8 MB), the predictors
+  `emon-fusion` (replay, the scoreboard's new entry) and `emon-fusion-live`, `tools/fusion/compare.clj`, `explain.clj`/`explain.py` (debugging aids).
+  *Departures from the brief, each a decision below*: arbitration runs in the document unit after `hl-doc`, not in the page unit (D259);
+  `nm-view`, `tr-page`, `gv-page`/`gf-page` are not called from the unit yet (P6.3/P6.4 are not wired into the page unit, and the
+  rules that need the ink layers, body-ink share, are not read: D260); row 160 (two OCR runs) waits for P7.4; `sc-tag` stays (it tags
+  the scanned pages and the fusion tag is a second function, `ar-tag`: D262); the OCR-only line is measured by `sc-emit-lines`, made public,
+  and joins no text-layer line (D261).
+  *Measured* (live: pdfium chromium/8076 and Tesseract 5.5.3 through the whole Engine, `bb tools/fusion/compare.clj --predictor emon-fusion-live --all`;
+  BEFORE is the Engine with no engine, the scoreboard's `emon`). **All 99 `pdf/` documents: pooled CER 0.0445 -> 0.0086, and not one document
+  worse** (the first run of the rules had four worse, every one of them an admission of OCR-only words that were a bullet, soup over a script the
+  engine cannot read, or a text-layer word's own ink read again, which is what rows 145, 176-178 and the page agreement now stop).
+  **The broken documents: `tl-broken-shift` CER 0.7116 -> 0.0000, `tl-broken-unmapped` 0.8853 -> 0.0000** (brief: <= 0.03); `outlined-heading`
+  0.0099 -> 0.0000 (brief: <= 0.01). `src-ocr-share` is 0.8933 and 0.8935 on the two broken documents (the Model says the body is OCR's), 0.0104 on
+  `outlined-heading` (its heading); `tl-override` is 0.0000 on every one of the other 20 documents of the fusion set (the metric is not counted on a
+  document whose gold says its text layer is untrusted). **Replay** (`bb fusion`, the 22 fusion documents, Rust == Go on every bundle): 10,034 groups
+  with both candidates, **win rates text 0.8871, ocr 0.1129** (OCR 0.9083 of `tl-broken-shift`'s 654 decided groups and 0.9096 of
+  `tl-broken-unmapped`'s 664), rules 101 x141, 110 x9271, 111 x141, 112 x5, 120 x604, 130 x594, 140 x5, 190 x200. No engine, no change: the same setting with no
+  transcript and no port converts to the bundle of a run without it, on both Engines. **The scoreboard's `emon` entry did not move** (2316
+  metrics, none regressed); `emon-fusion` is a new entry (427 metrics, recorded).
+  *Not measured here*: `scan-color/` and `scan-ovl/` (scanned pages do not go through fusion: they are OCR-only already, and P7.4 and P7.5 are what
+  change them); per-defence counts (no defence is built); the 30 ms a page budget (the fusion stages are linear in the page's groups; P7.1's alignment
+  is 0.6 ms a page).
+  *Learnt*: (1) the bullets, rule fragments and symbols an engine reads over ink the text layer has no word for are what an admission of OCR-only
+  words must be defended against, and no single column does it: the group's letters (not symbols), the engine's confidence, the overlap with a
+  text-layer word (a text-layer box can be a line off the ink it draws: `script-mixed`, `script-cjk`), the plausibility, the page's agreement
+  with the text layer in any script and the share of the page's words in a script the engine lacks all had to be rows; (2) a font's health
+  alone is not a reason to replace its words (`initial-letter-headings`: a drop-cap font scored under `tl-trusted` and OCR agreed with its
+  words): rule 130 needs OCR to read something else (similarity under `agree-low`); (3) the group's font is the HIGHEST of its words', a healthy
+  word protects its group; (4) a Rust borrow cannot be given one arena twice, so `hl-page-fw` is `hl-page` with one text-layer parameter; (5) every
+  `Cells` of a kin function is `&mut` in Rust.
 
 - [ ] **P7.4 — Targeted re-OCR rounds** (SPEC §8.3 targeted passes, §7.3 kin-made views; D196, D207). **Wave 4.**
   Depends on P7.3. Parallel with P7.5, P7.6, P7.7.
@@ -8179,4 +8214,73 @@ a shifted font from the healthy ones, and a replayed answer makes that a gate on
 fixtures (`test/fusion/align/`, six documents) are its own; these 67 were wanted because the claim is about every font of the set.
 **Alternatives**: waiting for P7.1 (the order of the plan has them in parallel); recording through the whole Engine (born-digital pages
 are not OCR'd until P7.S).
+- [ ] **Signed off** (maintainer)
+
+### D259 — Arbitration runs in the document unit, after `hl-doc`; the page unit aligns and scores; the setting is `ocr_born_digital` (P7.3; SPEC 9.4; D195, D201, D212)
+**Decision**: the page unit of a born-digital page (only under the hidden test setting `ocr_born_digital` / `OcrBornDigital`, off by default and in no
+public document) asks `pu-ask-rasters` (the render with and without its text, one round), then the OCR of the render with its text, and writes the OCR
+evidence (`sc-answer`), `xa-page` (the groups, aligned over the flow `fw`, so a triaged word is no candidate) and `hl-page-fw`. The document unit then
+runs `hl-doc` (a font that disagrees on every page that has the groups is unhealthy on all), `ar-doc` (the verdicts and the fused flow), `pl-check`, and
+writes the dump version "2". With no answer (no Renderer, no Ocr, a failure) no group exists and nothing runs: every output is byte-identical to a run
+without the setting (a law of `bb fusion`, on both Engines). The text layer's `epages` and `feats` become the evidence's own when the setting is on (the
+OCR's feature rows join them and alignment reads both) and are given back when nothing was read.
+**Why**: an encoding is a document fact (SPEC 9.3), so no page can decide a font alone; the brief's `ar-page` in `pu-run` would have to guess it. The page
+units keep their one job and their independence (they only write arenas the document unit reads).
+**Alternatives**: `ar-page` in the page unit with the page's own agreement (a font bad on one page and good on the rest would be replaced there, against
+the contract); a public option (SPEC 13 is not changed until P7.S flips the policy).
+- [ ] **Signed off** (maintainer)
+
+### D260 — The rule table is data (`fr-rows`, stride 36, ten predicates); block 100 as built; what is not read (P7.3; SPEC 9.4, 9.7; D203, D224)
+**Decision**: `kin/fuserules.kin`. A row: number, block, winner (`fw-none`, `fw-text`, `fw-ocr`), ledger reason, flags, confidence (-1: the group's mean OCR
+score, at most 900), and ten `(group column, comparison, setting)` predicates, all of which must hold; an absent column (-1) fails every comparison. The
+group columns `ag-*` and the settings are named at the head of the file. Rows: 101/102 identity; 110/111/112 a healthy font (the HIGHEST health of the
+group's words) with no bad glyph wins whatever OCR reads (1000, 700, 500 low-conf); 120 a bad glyph of the word's own and 130 an unhealthy font that OCR
+reads differently from (similarity under `agree-low` 300) go to OCR when the engine reads the script (no word of the group in another script) and it is
+plausible; 140/141 OCR-only words are admitted when plausible, scored, at least 2 Latin letters or digits, confident (700), touching no text-layer word
+(under 150), on a page where OCR and the text layer agree (600; and not in an image, or in one covering half the page); 145, 170, 175, 176, 177, 178 are
+the ways such a group is a ghost, 150 holds it in a smaller image (`in-figure` on the group), 190 is the default. Not read: kin's ink layers (P6.3 is not
+wired into the page unit: the body-ink share, seal and artifact columns are absent, so those rows' conditions are the engine's own), the second OCR run
+(row 160), blocks 200-699 (empty; `fr-order` is D224's).
+**Why**: SPEC 9.4's table made executable, with the contract (D201) as its first rows; every number is a first value (P10.1 calibrates).
+**Alternatives**: the rules as code branches (the brief asks for data); admitting every OCR-only word that is plausible (measured: bullets, soup over CJK and a
+text-layer word's own ink read again each cost CER on four documents).
+- [ ] **Signed off** (maintainer)
+
+### D261 — The fused flow: a replaced word keeps the text layer's geometry, an admitted OCR-only group is a line of its own measured as an OCR line (P7.3; SPEC 9.7; D195, D196, D213)
+**Decision**: `ar-doc` writes `nfw`/`nfl` in the layouts of `words`/`lines` so stage 3 is unchanged. A text-layer word that won is copied as it was (its glyph run
+kept, `src` the bitset of every source with a candidate). When OCR wins a group with as many OCR words as text words, the j-th takes the j-th word's box,
+baseline, rotation, direction, style, size, font and spacing, its text and confidence being OCR's and its glyph run empty; when the counts differ the OCR word keeps
+its own extent along the line and takes the group's band across it and its baseline (a rotated one keeps all of OCR's); the line is measured again. An admitted
+OCR-only group is a line of its own after its page's lines, measured by `sc-emit-lines` (made public: D213's size and box), not joined to a text-layer line.
+`fv` has a row per `fw` row, `fx` a run per group (the columns the deciding rule read), `fa` the dropped ghosts.
+**Why**: the text layer's geometry is exact and OCR's is ink; stage 3 compares sizes and boxes across a page.
+**Alternatives**: joining the nearest text-layer line (the brief; it needs a reordering inside a line and a baseline test, and no corpus document needs it).
+- [ ] **Signed off** (maintainer)
+
+### D262 — Provenance by block: `ar-tag` and `ar-write`; `sc-tag` stays (P7.3; SPEC 3.4, 9.4; D206)
+**Decision**: paragraph building does not carry a word's source into the node, so the Model's provenance is written after it, from the verdicts: a block (a node with
+an inline child or a text run, and a region) is judged by the words whose centre lies in its region on its page. When OCR won any, its source gets `ocr` (and loses
+`text` when OCR won all), `text-layer-suspect` is set when OCR replaced a text-layer word, `ocr-only` when OCR won all and one was admitted from OCR alone, `low-conf`
+when a verdict was, its inlines follow, and its confidence is lowered to OCR's mean when it won all. A block no OCR word touched is not changed. The ghosts dropped
+become ledger rows (`ocr-ghost`, conf 700, src `ocr`), one per page and OCR line. `sc-tag` (the scanned pages) is kept: the brief retires it for `fz-write`, which would
+move every scanned page's provenance for no gain in this item.
+**Why**: `src-ocr-share` and `tl-override` read the Model; a mixed block over-approximates `tl-override` (one replaced word flags the block), which is the conservative side.
+**Alternatives**: carrying the source through `para.kin` (not this item's file).
+- [ ] **Signed off** (maintainer)
+
+### D263 — Rust and Go engines wired alike; the recording build; the new predictors (P7.3; D058, D127, D211)
+**Decision**: both Engines add the hidden option, the fusion arenas of `PdfDoc`, the arguments of `pu_run_pdf` and the document tail of D259; the Rust driver gets `--ocr-born-digital`
+and `--pdfium` (built by `EMON_RS_PDFIUM=<libdir> kin/scripts/emon-rs-build` into `.cache/emon-rs-fusion`), the Go driver `--ocr-born-digital`. `fusion_report.clj` reads the dump's
+`source` as the `sr` code it prints.
+**Why**: the gate replays; only the recorder links an engine.
+**Alternatives**: a second driver (more to keep in step).
+- [ ] **Signed off** (maintainer)
+
+### D264 — `bb fusion`: the replay set, its digests, and what the gate holds (P7.3; D008, D095, D209)
+**Decision**: `test/fusion/replay/ID/transcript.edn` for the 22 documents of `test/corpus/synth/FUSION` (recorded live by `bb fusion-record`, slim: answers and `:producer`, no bitmap;
+2.8 MB), `DIGESTS.edn` (SHA-256 of each replay bundle). The gate holds: Rust and Go replay every transcript to the identical bundle, equal to the recording's digest; a changed request
+is `transcript-miss` on both; the setting with no transcript and no port equals the plain run; `tl-override` is zero on every document with a sound encoding; per-document CER no
+worse than the no-engine run's plus 0.0005; the broken documents' CER under half of theirs; the scoreboard's `emon-fusion` entry. Win rates and rule counts are printed, not gated.
+**Why**: the brief's `bb fusion-replay`, named `bb fusion` as the coordinator asked.
+**Alternatives**: committing the bitmaps (2.8 MB against 25 MB of PNGs: kin reads no pixel yet).
 - [ ] **Signed off** (maintainer)

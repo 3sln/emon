@@ -578,6 +578,117 @@ func HlPage(page int32, cg *port.Cells, refs *port.Cells, fw *port.Cells, wd *po
 	return rows
 }
 
+func hhFontOfF(refs *port.Cells, fw *port.Cells, ref int32) int32 {
+	var ea int32 = evidence.RfGet(refs, ref, 0)
+	var ix int32 = evidence.RfGet(refs, ref, 1)
+	if ((ea == player.PlEaFw()) || (ea == evidence.EaWords())) && ((ix >= 0) && (ix < player.FwCount(fw))) {
+		return port.CellsAt(fw, (ix*24)+19)
+	}
+	return -1
+}
+
+func hhLatinF(refs *port.Cells, fw *port.Cells, etext *port.Cells, first int32, count int32) int32 {
+	var k int32 = 0
+	var ix int32 = 0
+	var ts int32 = -1
+	var tl int32 = 0
+	var j int32 = 0
+	for k < count {
+		ix = evidence.RfGet(refs, first+k, 1)
+		ts = -1
+		tl = 0
+		if (ix >= 0) && (ix < player.FwCount(fw)) {
+			ts = port.CellsAt(fw, (ix*24)+11)
+			tl = port.CellsAt(fw, (ix*24)+12)
+		}
+		j = 0
+		if ts >= 0 {
+			for j < tl {
+				if hhLatinCp(port.CellsAt(etext, ts+j)) == 1 {
+					return 1
+				}
+				j += 1
+			}
+		}
+		k += 1
+	}
+	return 0
+}
+
+func hhCountAgreementF(page int32, cg *port.Cells, refs *port.Cells, fw *port.Cells, etext *port.Cells, hl *port.Cells) int32 {
+	var n int32 = port.CellsLen(cg) / 16
+	var nh int32 = player.HlCount(hl)
+	var i int32 = 0
+	var r int32 = 0
+	var font int32 = 0
+	var total int32 = 0
+	var b int32 = 0
+	var a int32 = 0
+	for r < nh {
+		if (player.HlGet(hl, r, player.HlfKind()) == player.PlhFontPage()) && (player.HlGet(hl, r, player.HlfPage()) == page) {
+			player.HlSet(hl, r, HlfBoth(), 0)
+			player.HlSet(hl, r, HlfAgree(), 0)
+		}
+		r += 1
+	}
+	for i < n {
+		if (player.CgGet(cg, i, player.CgfPage()) == page) && ((player.CgGet(cg, i, player.CgfTcount()) > 0) && ((player.CgGet(cg, i, player.CgfOcount()) > 0) && (hhLatinF(refs, fw, etext, player.CgGet(cg, i, player.CgfTfirst()), player.CgGet(cg, i, player.CgfTcount())) == 1))) {
+			font = hhFontOfF(refs, fw, player.CgGet(cg, i, player.CgfTfirst()))
+			r = hhFind(hl, player.PlhFontPage(), page, font)
+			if r >= 0 {
+				b = player.HlGet(hl, r, HlfBoth())
+				player.HlSet(hl, r, HlfBoth(), b+1)
+				if player.CgGet(cg, i, player.CgfSimfold()) >= HhAgreeSim() {
+					a = player.HlGet(hl, r, HlfAgree())
+					player.HlSet(hl, r, HlfAgree(), a+1)
+				}
+				total += 1
+			}
+		}
+		i += 1
+	}
+	return total
+}
+
+func HlPageFw(page int32, cg *port.Cells, refs *port.Cells, fw *port.Cells, etext *port.Cells, feats *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, hl *port.Cells) int32 {
+	// `hl-page` for a caller whose groups name rows of the flow `fw` under `ea-words` (the page unit's): one arena for the text layer.
+	var nh int32 = player.HlCount(hl)
+	var nb int32 = port.CellsLen(oblocks) / 16
+	var r int32 = 0
+	var b int32 = 0
+	var rows int32 = 0
+	var both int32 = 0
+	var usea int32 = 0
+	var agree int32 = 0
+	hhCountAgreementF(page, cg, refs, fw, etext, hl)
+	for r < nh {
+		if (player.HlGet(hl, r, player.HlfKind()) == player.PlhFontPage()) && (player.HlGet(hl, r, player.HlfPage()) == page) {
+			both = player.HlGet(hl, r, HlfBoth())
+			agree = player.HlGet(hl, r, HlfAgree())
+			if both > 0 {
+				player.HlSet(hl, r, player.HlfAgreement(), (agree*1000)/both)
+			} else {
+				player.HlSet(hl, r, player.HlfAgreement(), -1)
+			}
+			usea = 0
+			if both >= HhAgreeWords() {
+				usea = 1
+			}
+			hhFontRescore(hl, r, usea)
+		}
+		r += 1
+	}
+	hhSetFonts(page, fw, feats, hl)
+	for b < nb {
+		if (evidence.ObGet(oblocks, b, evidence.ObfPage()) == page) && (evidence.ObGet(oblocks, b, evidence.ObfKind()) == evidence.ObBlock()) {
+			hhAddBlock(hl, page, b, oblocks, olines, owords, feats)
+			rows += 1
+		}
+		b += 1
+	}
+	return rows
+}
+
 func hhDocAgree(hl *port.Cells, font int32, from int32, want int32) int32 {
 	// For font `font`: with `want` 0 the number of pages that have at least `agree-words` groups, with 1 the number of those under
 	// `agree-min`, with 2 the groups with both candidates over the whole document, with 3 the agreeing ones.
