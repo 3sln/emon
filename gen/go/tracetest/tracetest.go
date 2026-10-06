@@ -510,6 +510,8 @@ func TestAGridIsOneComponentAndItsEdgesAreStillRules(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.CoGet(comps, 0, evidence.CfKind()), evidence.CkBlob(), "large")
 	port.AssertEq(emonT, evidence.RlCount(rules), 6, "four edges and two inner lines, crossings bridged")
 	port.AssertEq(emonT, evidence.RlGet(rules, 0, evidence.RlfRcount()), 1, "each has the one component as its member")
+	port.AssertEq(emonT, evidence.RlGet(rules, 0, evidence.RlfFlags()), 0, "a table's rule is not a figure's")
+	port.AssertEq(emonT, evidence.RlGet(rules, 5, evidence.RlfFlags()), 0, "none of them")
 }
 
 func TestASlantedRuleIsFoundAtAnyAngleWithinAShallowSlope(emonT *testing.T) {
@@ -853,4 +855,182 @@ func TestTheKeySortIsStableByIndex(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(idx, 1), 1, "then")
 	port.AssertEq(emonT, port.CellsAt(idx, 2), 0, "equal keys by index")
 	port.AssertEq(emonT, port.CellsAt(idx, 3), 2, "the later one last")
+}
+
+func ttTraceBin(bin *port.Bitmap, dpi100 int32, comps *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, pts *port.Cells, refs *port.Cells, views *port.Cells, inks *port.Cells) int32 {
+	// As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
+	var lab *port.Bitmap = port.BitmapNew(port.BitmapW(bin), port.BitmapH(bin), 1)
+	var rn *port.Cells = port.NewCells()
+	var ri *port.Cells = port.NewCells()
+	var cs *port.Cells = port.NewCells()
+	var vr *port.Cells = port.NewCells()
+	var pc *port.Cells = port.NewCells()
+	var sg *port.Cells = port.NewCells()
+	var mem *port.Cells = port.NewCells()
+	var s1 *port.Cells = port.NewCells()
+	var s2 *port.Cells = port.NewCells()
+	var s3 *port.Cells = port.NewCells()
+	var s4 *port.Cells = port.NewCells()
+	var s5 *port.Cells = port.NewCells()
+	var s6 *port.Cells = port.NewCells()
+	evidence.VwNew(views, 0, evidence.VkBinary(), -1, -1, port.BitmapW(bin), port.BitmapH(bin), dpi100, 0, -1, 0, 0, 0, 0, 0)
+	evidence.IkNew(inks, 0, 0)
+	port.CellsSet(inks, 2, 8421504)
+	return trace.TrTrace(views, inks, 0, 0, -1, 0, bin, bin, lab, comps, rules, prims, tlines, pts, refs, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+}
+
+func ttGray(g *port.Bitmap, x0 int32, y0 int32, x1 int32, y1 int32, v int32) int32 {
+	// Gray `v` in [x0, x1) x [y0, y1).
+	var x int32 = 0
+	var y int32 = y0
+	for y < y1 {
+		x = x0
+		for x < x1 {
+			port.BitmapSetU8(g, x, y, 0, v)
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func TestALightFillNearerThePaperThanALayerIsATintAndGlyphsInItDoNotCutIt(emonT *testing.T) {
+	var g *port.Bitmap = port.BitmapNew(160, 100, 1)
+	var m *port.Bitmap = port.BitmapNew(160, 100, 1)
+	var prims *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var s1 *port.Cells = port.NewCells()
+	var s2 *port.Cells = port.NewCells()
+	evidence.VwNew(views, 0, evidence.VkBinary(), -1, -1, 160, 100, 14400, 0, -1, 0, 0, 0, 0, 0)
+	ttGray(g, 0, 0, 160, 100, 255)
+	// a header fill at gray 235 (20 under the paper: P6.3's 24 gives it no layer), 120 x 30; two 3 px glyph stems of gray 40 inside it
+	ttGray(g, 20, 10, 140, 40, 235)
+	ttGray(g, 50, 15, 53, 35, 40)
+	ttGray(g, 90, 12, 93, 30, 40)
+	// paper noise 4 under (not a fill), and a hairline of gray 235 (a rule is not a fill)
+	ttGray(g, 20, 60, 140, 90, 251)
+	ttGray(g, 20, 95, 140, 97, 235)
+	port.AssertEq(emonT, trace.TrLightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 1, "one tint: the header")
+	port.AssertEq(emonT, evidence.PmGet(prims, 0, evidence.PmfKind()), evidence.PmRect(), "a rect")
+	port.AssertEq(emonT, evidence.PmGet(prims, 0, evidence.PmfFlags()), 11, "closed + filled + tint")
+	port.AssertEq(emonT, evidence.PmGet(prims, 0, evidence.PmfColor()), 15461355, "of the gray 235")
+	port.AssertEq(emonT, ttNear(evidence.PmGet(prims, 0, evidence.PmfCx()), 4000, 150), 1, "centred at x 80 px (144 dpi: 50 cpt a pixel)")
+	port.AssertEq(emonT, ttNear(evidence.PmGet(prims, 0, evidence.PmfFill()), 1000, 40), 1, "and covered: the glyph stems are bridged")
+	port.AssertEq(emonT, trace.TrLightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "a tint already traced from a layer's mask is not traced again")
+}
+
+func TestAGradientOrAPhotographIsNotAUniformFillAndAWholePageOfFillIsThePaper(emonT *testing.T) {
+	var g *port.Bitmap = port.BitmapNew(160, 100, 1)
+	var m *port.Bitmap = port.BitmapNew(160, 100, 1)
+	var prims *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var s1 *port.Cells = port.NewCells()
+	var s2 *port.Cells = port.NewCells()
+	var x int32 = 0
+	var y int32 = 0
+	evidence.VwNew(views, 0, evidence.VkBinary(), -1, -1, 160, 100, 14400, 0, -1, 0, 0, 0, 0, 0)
+	ttGray(g, 0, 0, 160, 100, 255)
+	// a texture: 100 x 60 pixels alternating 230 and 215 across
+	y = 10
+	for y < 70 {
+		x = 20
+		for x < 120 {
+			port.BitmapSetU8(g, x, y, 0, 215+(15*(x%2)))
+			x += 1
+		}
+		y += 1
+	}
+	port.AssertEq(emonT, trace.TrLightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "no tint on a texture")
+	ttGray(g, 0, 0, 160, 100, 230)
+	port.AssertEq(emonT, trace.TrLightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "no tint when the page is all fill: the paper was misjudged")
+}
+
+func TestAPageOfFiguresHasNoTextSoTheRulesOfAChartAreFound(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(400, 300, 1)
+	var comps *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	port.AssertEq(emonT, trace.TrTextMax(14400, 0), 96, "48 pt at 144 dpi is 96 px on the binary view")
+	port.AssertEq(emonT, trace.TrTextMax(14400, 1), 400, "and 200 pt on an ink mask")
+	// three blocks of 40 x 110 (glyph-sized to a 200 pt limit, not to a 48 pt one), and an L: a 4 px axis up, a 4 px axis along, a bar on it
+	ttRect(b, 200, 20, 240, 130)
+	ttRect(b, 260, 20, 300, 130)
+	ttRect(b, 320, 20, 360, 130)
+	ttRect(b, 20, 100, 24, 280)
+	ttRect(b, 20, 276, 190, 280)
+	ttRect(b, 30, 200, 70, 276)
+	ttTraceBin(b, 14400, comps, rules, prims, tlines, pts, refs, views, inks)
+	port.AssertEq(emonT, evidence.RlCount(rules), 2, "the vertical axis and the horizontal one: they are not text")
+	port.AssertEq(emonT, evidence.RlGet(rules, 0, evidence.RlfFlags()), trace.TrRfFigure(), "and they are flagged as a figure's: their component holds a bar's ink too")
+	port.AssertEq(emonT, evidence.RlGet(rules, 1, evidence.RlfFlags()), trace.TrRfFigure(), "both")
+}
+
+func TestLettersHiddenInDifferentPlacesDoNotBendAWatermarksAngle(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(500, 400, 1)
+	var comps *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var x int32 = 0
+	var y int32 = 0
+	var u int32 = 0
+	var v int32 = 0
+	var k int32 = 0
+	var cut int32 = 0
+	// five letters (rectangles 40 x 90 px) on a line rising 40 in 70 (29.74 degrees), a pitch of 70 px: in the frame u = 70x - 40y + 9900, v = 70y + 40x - 22200 (both
+	// scaled by 80.6) the k-th is u 5600k .. +3200, v 0 .. 7200; body text hides the bottoms of four of them, by 0, 4000, 2400, 800 and 4800 of those units
+	for y < 400 {
+		x = 0
+		for x < 500 {
+			u = ((70 * x) - (40 * y)) + 9900
+			v = ((70 * y) + (40 * x)) - 22200
+			k = u / 5600
+			if (u >= 0) && ((k < 5) && ((u - (k * 5600)) < 3200)) {
+				cut = (k * 4000) % 5200
+				if (v >= 0) && (v < (7200 - cut)) {
+					port.BitmapSetU8(b, x, y, 0, 255)
+				}
+			}
+			x += 1
+		}
+		y += 1
+	}
+	ttTrace(b, 14400, comps, rules, prims, tlines, pts, refs, views, inks)
+	port.AssertEq(emonT, evidence.TlCount(tlines), 1, "one line")
+	port.AssertEq(emonT, evidence.TlGet(tlines, 0, 12), 5, "of five letters")
+	port.AssertEq(emonT, ttNear(evidence.TlGet(tlines, 0, 9), 2974, 60), 1, "at the angle of the letters' tops, not the one the ragged bottoms would draw")
+}
+
+func TestAJustifiedWordSpaceJoinsALineAndAGutterDoesNot(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(300, 120, 1)
+	var comps *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var tlines *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var views *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	// glyphs 8 x 10 every 14: four, then a space of 22 px (2.2 heights), then four: one line
+	ttGlyphs(b, 20, 30, 4, 14, 0)
+	ttGlyphs(b, 84, 30, 4, 14, 0)
+	// a second row with a gap of 40 px (4 heights): two lines
+	ttGlyphs(b, 20, 80, 4, 14, 0)
+	ttGlyphs(b, 102, 80, 4, 14, 0)
+	ttTrace(b, 7200, comps, rules, prims, tlines, pts, refs, views, inks)
+	port.AssertEq(emonT, evidence.TlCount(tlines), 3, "one line above, two below")
+	port.AssertEq(emonT, evidence.TlGet(tlines, 0, 12), 8, "the first of eight components")
 }

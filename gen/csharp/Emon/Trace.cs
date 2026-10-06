@@ -85,6 +85,15 @@ public static class Trace {
         // The smallest text-like height: 3 pt.
         return TrPt(dpi100, 3);
     }
+    public static int TrTextMax(int dpi100, int weighted) {
+        // The tallest provisional glyph, the components that decide the page's median text height: 200 pt on an ink mask (a watermark's
+        // letters are huge), 48 pt on the binary view (P6.4b, D260): on a page of figures a bar or a box is not text, and a median taken
+        // over them made every chart of a text-free page `text`, so the rules inside it were never looked for.
+        if (weighted == 1) {
+            return TrPt(dpi100, 200);
+        }
+        return TrPt(dpi100, 48);
+    }
     internal const int KRs = 6;
     internal const int KCs = 24;
     internal const int CTop = 0;
@@ -110,6 +119,7 @@ public static class Trace {
     internal const int CPrim = 20;
     internal const int CCx2 = 21;
     internal const int CCy2 = 22;
+    internal const int CRink = 23;
     public static int TrKNoise() {
         return 0;
     }
@@ -121,6 +131,10 @@ public static class Trace {
     }
     public static int TrKLarge() {
         return 3;
+    }
+    public static int TrRfFigure() {
+        // `rules` flag (D263): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.
+        return 1;
     }
     public static int TrPfClosed() {
         return 1;
@@ -815,7 +829,7 @@ public static class Trace {
         int nc = emon.Port.CellsLen(cs) / 24;
         int noise = TrNoise(dpi100);
         int tmin = TrTextMin(dpi100);
-        int tmax = TrPt(dpi100, 200);
+        int tmax = TrTextMax(dpi100, weighted);
         int rmin = TrRuleMin(dpi100);
         int rthick = TrRuleThick(dpi100);
         int c = 0;
@@ -2374,6 +2388,24 @@ public static class Trace {
         int sx = 0;
         int sy = 0;
         int ln = 0;
+        // the ink each component's rules account for (the figure flag compares it with the component's own)
+        i = 0;
+        while ((i * 24) < emon.Port.CellsLen(cs)) {
+            TrCset(cs, i, CRink, 0);
+            i += 1;
+        }
+        i = 0;
+        while (i < ns) {
+            if (emon.Port.CellsAt(sg, (i * KSg) + GStyle) > 0) {
+                c = emon.Port.CellsAt(sg, (i * KSg) + GComp);
+                if (c >= 0) {
+                    k = TrCg(cs, c, CRink) + ((emon.Port.CellsAt(sg, (i * KSg) + GLen) * emon.Port.CellsAt(sg, (i * KSg) + GThk)) / 8);
+                    TrCset(cs, c, CRink, k);
+                }
+            }
+            i += 1;
+        }
+        i = 0;
         while (i < ns) {
             style = emon.Port.CellsAt(sg, (i * KSg) + GStyle);
             if (style > 0) {
@@ -2442,6 +2474,9 @@ public static class Trace {
                     conf = 0;
                 }
                 Evidence.RlSet(rules, r, Evidence.RlfConf(), conf);
+                if (TrCg(cs, c, CInk) > (2 * TrCg(cs, c, CRink))) {
+                    Evidence.RlSet(rules, r, Evidence.RlfFlags(), TrRfFigure());
+                }
                 // members
                 Evidence.RlSet(rules, r, Evidence.RlfRfirst(), emon.Port.CellsLen(refs) / 2);
                 Evidence.RlSet(rules, r, Evidence.RlfRcount(), emon.Port.CellsAt(sg, (i * KSg) + GMcount));
@@ -3136,10 +3171,190 @@ public static class Trace {
         }
         return n;
     }
+    public static int TrLightLo() {
+        // A pixel is a light fill at least this many gray levels darker than the paper (below it: paper, JPEG noise included).
+        return 10;
+    }
+    public static int TrLightHi() {
+        // ...and at most this many (darker is ink: P6.3's layers and the binary view have it).
+        return 104;
+    }
+    public static int TrLightStep() {
+        // ...and within this many levels of its left neighbour (a glyph's antialiased edge is steeper; a band's flat part is not).
+        return 4;
+    }
+    public static int TrLightBridge(int dpi100) {
+        // Ink or edge pixels between two fill pixels of a row are fill when no wider than 3 pt (a glyph's stem inside a header cell).
+        return TrPt(dpi100, 3);
+    }
+    public static int TrLightMask(emon.Port.Bitmap gray, int paper, int bridge, emon.Port.Bitmap mask) {
+        // The light-fill mask of `gray` into `mask` (both 1-channel, one size): per row, the pixels whose gray lies `tr-light-lo` .. `tr-light-hi`
+        // under `paper` and within `tr-light-step` of the pixel to their left are fill (1), the rest 0; a run of ink or edge pixels (neither paper nor
+        // fill) of at most `bridge` between two fill pixels is fill too (text inside a tinted cell), a paper pixel ends the bridge. Answers the fill
+        // pixels. This is a path of its own: P6.3's layers answer to the ink-paper distance (D237), a tint nearer the paper than that has no layer.
+        int w = emon.Port.BitmapW(gray);
+        int h = emon.Port.BitmapH(gray);
+        int lo = TrLightLo();
+        int hi = TrLightHi();
+        int stp = TrLightStep();
+        int y = 0;
+        int x = 0;
+        int g = 0;
+        int pg = 0;
+        int d = 0;
+        int st = 0;
+        int gs = 0;
+        int k = 0;
+        int cov = 0;
+        while (y < h) {
+            st = 0;
+            gs = 0;
+            pg = emon.Port.BitmapU8(gray, 0, y, 0);
+            x = 0;
+            while (x < w) {
+                g = emon.Port.BitmapU8(gray, x, y, 0);
+                d = paper - g;
+                if (d < lo) {
+                    emon.Port.BitmapSetU8(mask, x, y, 0, 0);
+                    st = 0;
+                } else if ((d <= hi) && (TrAbs(g - pg) <= stp)) {
+                    if (st == 2) {
+                        if ((x - gs) <= bridge) {
+                            k = gs;
+                            while (k < x) {
+                                emon.Port.BitmapSetU8(mask, k, y, 0, 1);
+                                cov += 1;
+                                k += 1;
+                            }
+                        }
+                    }
+                    emon.Port.BitmapSetU8(mask, x, y, 0, 1);
+                    cov += 1;
+                    st = 1;
+                } else {
+                    emon.Port.BitmapSetU8(mask, x, y, 0, 0);
+                    if (st == 1) {
+                        st = 2;
+                        gs = x;
+                    }
+                }
+                pg = g;
+                x += 1;
+            }
+            y += 1;
+        }
+        return cov;
+    }
+    public static int TrLightfills(emon.Port.Cells views, int page, int view, int dpi100, emon.Port.Bitmap gray, int paper, emon.Port.Bitmap mask, emon.Port.Cells inks, emon.Port.Cells prims, emon.Port.Cells refs, emon.Port.Cells s1, emon.Port.Cells s2) {
+        // Tints and shading fills too light for a layer (P6.4b, D259): `tr-light-mask` of the page's gray view (`view` is its `views` row),
+        // then `tr-tints` on that mask (inkrow -1), then the ones that cover half of a tint of an ink layer already in `prims` are dropped and the
+        // colour of the rest is the gray (0xGGGGGG) of the fill pixels at nine points of the rectangle. A page more than 60 per cent "fill" has
+        // a wrong paper and gets none. Nothing here reads or writes the layers' masks or the binary view. Answers the tints added.
+        int w = emon.Port.BitmapW(gray);
+        int h = emon.Port.BitmapH(gray);
+        int cov = TrLightMask(gray, paper, TrLightBridge(dpi100), mask);
+        int from = Evidence.PmCount(prims);
+        int n = 0;
+        int r = 0;
+        int q = 0;
+        int wr = 0;
+        int f = 0;
+        int dup = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int iw = 0;
+        int ih = 0;
+        int px = 0;
+        int py = 0;
+        int ax = 0;
+        int ay = 0;
+        int bx = 0;
+        int by = 0;
+        int sum = 0;
+        int cnt = 0;
+        int i = 0;
+        int j = 0;
+        int tmp = 0;
+        long area = 0;
+        if (cov > (((w * h) / 10) * 6)) {
+            return 0;
+        }
+        n = TrTints(views, page, view, dpi100, mask, -1, inks, prims, refs, s1, s2);
+        if (n == 0) {
+            return 0;
+        }
+        wr = from;
+        r = from;
+        while (r < Evidence.PmCount(prims)) {
+            x0 = Evidence.PmGet(prims, r, Evidence.PmfX0());
+            y0 = Evidence.PmGet(prims, r, Evidence.PmfY0());
+            x1 = Evidence.PmGet(prims, r, Evidence.PmfX1());
+            y1 = Evidence.PmGet(prims, r, Evidence.PmfY1());
+            area = unchecked(((long) (x1 - x0)) * ((long) (y1 - y0)));
+            dup = 0;
+            q = 0;
+            while (q < from) {
+                if ((Evidence.PmGet(prims, q, Evidence.PmfFlags()) & 8) != 0) {
+                    iw = TrMin(x1, Evidence.PmGet(prims, q, Evidence.PmfX1())) - TrMax(x0, Evidence.PmGet(prims, q, Evidence.PmfX0()));
+                    ih = TrMin(y1, Evidence.PmGet(prims, q, Evidence.PmfY1())) - TrMax(y0, Evidence.PmGet(prims, q, Evidence.PmfY0()));
+                    if ((iw > 0) && (ih > 0)) {
+                        if ((((long) 2) * unchecked(((long) iw) * ((long) ih))) >= area) {
+                            dup = 1;
+                        }
+                    }
+                }
+                q += 1;
+            }
+            if (dup == 0) {
+                // the colour: the mean gray of the fill pixels at a 3 x 3 grid of the rectangle
+                ax = Evidence.VwCptToPx(views, view, 0, x0, y0);
+                ay = Evidence.VwCptToPx(views, view, 1, x0, y0);
+                bx = Evidence.VwCptToPx(views, view, 0, x1, y1);
+                by = Evidence.VwCptToPx(views, view, 1, x1, y1);
+                sum = 0;
+                cnt = 0;
+                i = 1;
+                while (i <= 3) {
+                    j = 1;
+                    while (j <= 3) {
+                        px = TrMin(w - 1, TrMax(0, ax + (((bx - ax) * i) / 4)));
+                        py = TrMin(h - 1, TrMax(0, ay + (((by - ay) * j) / 4)));
+                        tmp = paper - emon.Port.BitmapU8(gray, px, py, 0);
+                        if ((emon.Port.BitmapU8(mask, px, py, 0) != 0) && ((tmp >= TrLightLo()) && (tmp <= TrLightHi()))) {
+                            sum += emon.Port.BitmapU8(gray, px, py, 0);
+                            cnt += 1;
+                        }
+                        j += 1;
+                    }
+                    i += 1;
+                }
+                f = 0;
+                while (f < 24) {
+                    tmp = Evidence.PmGet(prims, r, f);
+                    Evidence.PmSet(prims, wr, f, tmp);
+                    f += 1;
+                }
+                if (cnt > 0) {
+                    sum = sum / cnt;
+                    Evidence.PmSet(prims, wr, Evidence.PmfColor(), (((sum) << (16)) + ((sum) << (8))) + sum);
+                }
+                wr += 1;
+            }
+            r += 1;
+        }
+        emon.Port.CellsDrop(prims, wr * 24);
+        return wr - from;
+    }
     internal const int KIt = 10;
     public static int TrTlMin() {
         // A text line has at least this many components.
         return 3;
+    }
+    public static int TrTlGap2() {
+        // Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D262), it was 9 (1.5).
+        return 23;
     }
     internal static int TrIfind(emon.Port.Cells it, int a) {
         int x = a;
@@ -3360,9 +3575,34 @@ public static class Trace {
             }
             pass += 1;
         }
+        // the residual of the kept bottoms about the fit (px^2, rounded down) and the lowest bottom: `tr-tlines` distrusts a baseline whose
+        // bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D261)
+        k = 0;
+        nn = (long) 0;
+        den = (long) 0;
+        hsum = -1000000000;
+        while (k < m) {
+            u = emon.Port.CellsAt(s5, k * 6);
+            v = emon.Port.CellsAt(s5, (k * 6) + 1);
+            if (v > hsum) {
+                hsum = v;
+            }
+            e = v - ((int) (((slope * ((long) u)) + icpt) / ((long) 65536)));
+            if ((4 * e) <= hbar) {
+                nn += (long) 1;
+                den += unchecked(((long) e) * ((long) e));
+            }
+            k += 1;
+        }
         emon.Port.CellsSet(@out, 0, (int) slope);
         emon.Port.CellsSet(@out, 1, (int) icpt);
         emon.Port.CellsSet(@out, 2, hbar);
+        if (nn > ((long) 0)) {
+            emon.Port.CellsSet(@out, 3, (int) (den / nn));
+        } else {
+            emon.Port.CellsSet(@out, 3, 0);
+        }
+        emon.Port.CellsSet(@out, 4, hsum);
         return m;
     }
     internal static int TrExtentAt(emon.Port.Cells rn, emon.Port.Cells it, int head, emon.Port.Cells idx, emon.Port.Cells off, int th) {
@@ -3458,6 +3698,7 @@ public static class Trace {
         int row = 0;
         int alpha = 0;
         int th = 0;
+        int th0 = 0;
         int co = 0;
         int si = 0;
         int x0 = 0;
@@ -3532,7 +3773,7 @@ public static class Trace {
                         gy = TrMax(0, dy - ((emon.Port.CellsAt(s1, (i * KIt) + 4) + emon.Port.CellsAt(s1, (j * KIt) + 4)) / 2));
                         hmax = TrMax(hmax, 1);
                         // gap within 1.5 mean heights: gap^2 * 4 <= 9 * mean_h^2 (mean_h = (hi + hj) / 2)
-                        if ((((gx * gx) + (gy * gy)) * 16) <= (9 * ((emon.Port.CellsAt(s1, (i * KIt) + 4) + emon.Port.CellsAt(s1, (j * KIt) + 4)) * (emon.Port.CellsAt(s1, (i * KIt) + 4) + emon.Port.CellsAt(s1, (j * KIt) + 4))))) {
+                        if ((((gx * gx) + (gy * gy)) * 16) <= (TrTlGap2() * ((emon.Port.CellsAt(s1, (i * KIt) + 4) + emon.Port.CellsAt(s1, (j * KIt) + 4)) * (emon.Port.CellsAt(s1, (i * KIt) + 4) + emon.Port.CellsAt(s1, (j * KIt) + 4))))) {
                             emon.Port.CellsPush(s6, (dx * dx) + (dy * dy));
                             emon.Port.CellsPush(s5, i);
                             emon.Port.CellsPush(s5, j);
@@ -3585,6 +3826,7 @@ public static class Trace {
                 }
                 rms = TrIsqrt((long) TrMax(0, emon.Port.CellsAt(s4, 1))) / 4;
                 th = TrRefineAngle(rn, s1, i, th, 1000, s2, s3);
+                th0 = th;
                 pass = 0;
                 while (pass < 2) {
                     m = TrLineFrame(rn, cs, s1, i, th, s2, s3, s5, s4);
@@ -3603,7 +3845,25 @@ public static class Trace {
                     }
                     pass += 1;
                 }
+                // bottoms that do not line up (rms over 1/8 of the mean height, or the fit pulls the angle 1.5 degrees from the strip's) say nothing
+                // about the direction: a watermark's letters, hidden in
+                // places by body text, are cut at a different place each (P6.4b, D261). The thinnest strip's angle stands, the baseline is the
+                // strip's lower edge.
                 hbar = emon.Port.CellsAt(s4, 2);
+                dx = th - th0;
+                if (dx > 18000) {
+                    dx -= 36000;
+                }
+                if (dx < -18000) {
+                    dx += 36000;
+                }
+                if (((64 * emon.Port.CellsAt(s4, 3)) > (hbar * hbar)) || (TrAbs(dx) >= 150)) {
+                    th = th0;
+                    m = TrLineFrame(rn, cs, s1, i, th, s2, s3, s5, s4);
+                    hbar = emon.Port.CellsAt(s4, 2);
+                    emon.Port.CellsSet(s4, 0, 0);
+                    emon.Port.CellsSet(s4, 1, emon.Port.CellsAt(s4, 4) * 65536);
+                }
                 co = Evidence.EvCos(th);
                 si = Evidence.EvSin(th);
                 slope = (long) emon.Port.CellsAt(s4, 0);

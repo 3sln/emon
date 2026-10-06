@@ -10,14 +10,14 @@
             [emon.evidence :refer [vw-new vk-binary ik-new co-count co-get rl-count rl-get pm-count pm-get tl-count tl-get
                                    cf-x0 cf-y0 cf-x1 cf-y1 cf-pxx cf-pxy cf-pxw cf-pxh cf-area cf-fill cf-stroke cf-kind cf-conf cf-holes cf-parent
                                    cf-pfirst cf-pcount cf-gray
-                                   rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-style rlf-conf rlf-rcount
-                                   pmf-kind pmf-cx pmf-cy pmf-rx pmf-ry pmf-fill pmf-conf pmf-flags pmf-rcount pmf-pcount
+                                   rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-style rlf-conf rlf-rcount rlf-flags
+                                   pmf-kind pmf-cx pmf-cy pmf-rx pmf-ry pmf-fill pmf-conf pmf-flags pmf-rcount pmf-pcount pmf-color
                                    tlf-ink tlf-height tlf-conf
                                    ck-blob ck-rule-h ck-rule-v ck-text-like rs-solid rs-dashed rs-double
                                    pm-rect pm-ellipse pm-circle pm-ring pm-polygon
                                    fe-new fe-get xo-components xo-comp-ratio xt-tline-overlap]]
             [emon.trace :refer [tr-isqrt tr-runs tr-unify tr-label tr-simplify tr-contour-raw tr-trace tr-tints tr-fg tr-pt tr-noise
-                                tr-feat-ocr tr-feat-text tr-orient-hint tr-sort-keys tr-h2cpt]]
+                                tr-feat-ocr tr-feat-text tr-orient-hint tr-sort-keys tr-h2cpt tr-lightfills tr-light-mask tr-rf-figure tr-text-max]]
             [kin.lang :refer [defn let set while do comment return if
                               + - * < > <= >= == != and or quot rem bit-and]]))
 
@@ -384,7 +384,9 @@
     (assert-eq (co-count comps) 51 "the grid is one large component, besides the fifty glyphs")
     (assert-eq (co-get comps 0 (cf-kind)) (ck-blob) "large")
     (assert-eq (rl-count rules) 6 "four edges and two inner lines, crossings bridged")
-    (assert-eq (rl-get rules 0 (rlf-rcount)) 1 "each has the one component as its member")))
+    (assert-eq (rl-get rules 0 (rlf-rcount)) 1 "each has the one component as its member")
+    (assert-eq (rl-get rules 0 (rlf-flags)) 0 "a table's rule is not a figure's")
+    (assert-eq (rl-get rules 5 (rlf-flags)) 0 "none of them")))
 
 (deftest test-a-slanted-rule-is-found-at-any-angle-within-a-shallow-slope
   (let [^Bitmap b (bitmap-new 200 100 1)
@@ -610,3 +612,142 @@
     (assert-eq (cells-at idx 1) 1 "then")
     (assert-eq (cells-at idx 2) 0 "equal keys by index")
     (assert-eq (cells-at idx 3) 2 "the later one last")))
+
+;; ---------------------------------------------------------------- P6.4b (D259-D265)
+
+(defn ^I32 tt-trace-bin [^Bitmap bin ^I32 dpi100 ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tlines ^:mut ^Cells pts
+                         ^:mut ^Cells refs ^:mut ^Cells views ^:mut ^Cells inks]
+  (comment "As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).")
+  (let [^Bitmap lab (bitmap-new (bitmap-w bin) (bitmap-h bin) 1)
+        ^:mut ^Cells rn (new-cells)
+        ^:mut ^Cells ri (new-cells)
+        ^:mut ^Cells cs (new-cells)
+        ^:mut ^Cells vr (new-cells)
+        ^:mut ^Cells pc (new-cells)
+        ^:mut ^Cells sg (new-cells)
+        ^:mut ^Cells mem (new-cells)
+        ^:mut ^Cells s1 (new-cells)
+        ^:mut ^Cells s2 (new-cells)
+        ^:mut ^Cells s3 (new-cells)
+        ^:mut ^Cells s4 (new-cells)
+        ^:mut ^Cells s5 (new-cells)
+        ^:mut ^Cells s6 (new-cells)]
+    (vw-new views 0 (vk-binary) -1 -1 (bitmap-w bin) (bitmap-h bin) dpi100 0 -1 0 0 0 0 0)
+    (ik-new inks 0 0)
+    (cells-set inks 2 8421504)
+    (return (tr-trace views inks 0 0 -1 0 bin bin lab comps rules prims tlines pts refs rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6))))
+
+(defn ^I32 tt-gray [^Bitmap g ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 v]
+  (comment "Gray `v` in [x0, x1) x [y0, y1).")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y y0]
+    (while (< y y1)
+      (do (set x x0)
+          (while (< x x1)
+            (do (bitmap-set-u8 g x y 0 v)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(deftest test-a-light-fill-nearer-the-paper-than-a-layer-is-a-tint-and-glyphs-in-it-do-not-cut-it
+  (let [^Bitmap g (bitmap-new 160 100 1)
+        ^Bitmap m (bitmap-new 160 100 1)
+        ^Cells prims (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^Cells s1 (new-cells) ^Cells s2 (new-cells)]
+    (vw-new views 0 (vk-binary) -1 -1 160 100 14400 0 -1 0 0 0 0 0)
+    (tt-gray g 0 0 160 100 255)
+    (comment "a header fill at gray 235 (20 under the paper: P6.3's 24 gives it no layer), 120 x 30; two 3 px glyph stems of gray 40 inside it")
+    (tt-gray g 20 10 140 40 235)
+    (tt-gray g 50 15 53 35 40)
+    (tt-gray g 90 12 93 30 40)
+    (comment "paper noise 4 under (not a fill), and a hairline of gray 235 (a rule is not a fill)")
+    (tt-gray g 20 60 140 90 251)
+    (tt-gray g 20 95 140 97 235)
+    (assert-eq (tr-lightfills views 0 0 14400 g 255 m inks prims refs s1 s2) 1 "one tint: the header")
+    (assert-eq (pm-get prims 0 (pmf-kind)) (pm-rect) "a rect")
+    (assert-eq (pm-get prims 0 (pmf-flags)) 11 "closed + filled + tint")
+    (assert-eq (pm-get prims 0 (pmf-color)) 15461355 "of the gray 235")
+    (assert-eq (tt-near (pm-get prims 0 (pmf-cx)) 4000 150) 1 "centred at x 80 px (144 dpi: 50 cpt a pixel)")
+    (assert-eq (tt-near (pm-get prims 0 (pmf-fill)) 1000 40) 1 "and covered: the glyph stems are bridged")
+    (assert-eq (tr-lightfills views 0 0 14400 g 255 m inks prims refs s1 s2) 0 "a tint already traced from a layer's mask is not traced again")))
+
+(deftest test-a-gradient-or-a-photograph-is-not-a-uniform-fill-and-a-whole-page-of-fill-is-the-paper
+  (let [^Bitmap g (bitmap-new 160 100 1)
+        ^Bitmap m (bitmap-new 160 100 1)
+        ^Cells prims (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^Cells s1 (new-cells) ^Cells s2 (new-cells)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (vw-new views 0 (vk-binary) -1 -1 160 100 14400 0 -1 0 0 0 0 0)
+    (tt-gray g 0 0 160 100 255)
+    (comment "a texture: 100 x 60 pixels alternating 230 and 215 across")
+    (set y 10)
+    (while (< y 70)
+      (do (set x 20)
+          (while (< x 120)
+            (do (bitmap-set-u8 g x y 0 (+ 215 (* 15 (rem x 2))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (assert-eq (tr-lightfills views 0 0 14400 g 255 m inks prims refs s1 s2) 0 "no tint on a texture")
+    (tt-gray g 0 0 160 100 230)
+    (assert-eq (tr-lightfills views 0 0 14400 g 255 m inks prims refs s1 s2) 0 "no tint when the page is all fill: the paper was misjudged")))
+
+(deftest test-a-page-of-figures-has-no-text-so-the-rules-of-a-chart-are-found
+  (let [^Bitmap b (bitmap-new 400 300 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (assert-eq (tr-text-max 14400 0) 96 "48 pt at 144 dpi is 96 px on the binary view")
+    (assert-eq (tr-text-max 14400 1) 400 "and 200 pt on an ink mask")
+    (comment "three blocks of 40 x 110 (glyph-sized to a 200 pt limit, not to a 48 pt one), and an L: a 4 px axis up, a 4 px axis along, a bar on it")
+    (tt-rect b 200 20 240 130)
+    (tt-rect b 260 20 300 130)
+    (tt-rect b 320 20 360 130)
+    (tt-rect b 20 100 24 280)
+    (tt-rect b 20 276 190 280)
+    (tt-rect b 30 200 70 276)
+    (tt-trace-bin b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (rl-count rules) 2 "the vertical axis and the horizontal one: they are not text")
+    (assert-eq (rl-get rules 0 (rlf-flags)) (tr-rf-figure) "and they are flagged as a figure's: their component holds a bar's ink too")
+    (assert-eq (rl-get rules 1 (rlf-flags)) (tr-rf-figure) "both")))
+
+(deftest test-letters-hidden-in-different-places-do-not-bend-a-watermarks-angle
+  (let [^Bitmap b (bitmap-new 500 400 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 cut 0]
+    (comment "five letters (rectangles 40 x 90 px) on a line rising 40 in 70 (29.74 degrees), a pitch of 70 px: in the frame u = 70x - 40y + 9900, v = 70y + 40x - 22200 (both")
+    (comment "scaled by 80.6) the k-th is u 5600k .. +3200, v 0 .. 7200; body text hides the bottoms of four of them, by 0, 4000, 2400, 800 and 4800 of those units")
+    (while (< y 400)
+      (do (set x 0)
+          (while (< x 500)
+            (do (set u (+ (- (* 70 x) (* 40 y)) 9900))
+                (set v (- (+ (* 70 y) (* 40 x)) 22200))
+                (set k (quot u 5600))
+                (if (and (>= u 0) (and (< k 5) (< (- u (* k 5600)) 3200)))
+                  (do (set cut (rem (* k 4000) 5200))
+                      (if (and (>= v 0) (< v (- 7200 cut))) (bitmap-set-u8 b x y 0 255))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (tt-trace b 14400 comps rules prims tlines pts refs views inks)
+    (assert-eq (tl-count tlines) 1 "one line")
+    (assert-eq (tl-get tlines 0 12) 5 "of five letters")
+    (assert-eq (tt-near (tl-get tlines 0 9) 2974 60) 1 "at the angle of the letters' tops, not the one the ragged bottoms would draw")))
+
+(deftest test-a-justified-word-space-joins-a-line-and-a-gutter-does-not
+  (let [^Bitmap b (bitmap-new 300 120 1)
+        ^Cells comps (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells tlines (new-cells)
+        ^Cells pts (new-cells) ^Cells refs (new-cells) ^Cells views (new-cells) ^Cells inks (new-cells)]
+    (comment "glyphs 8 x 10 every 14: four, then a space of 22 px (2.2 heights), then four: one line")
+    (tt-glyphs b 20 30 4 14 0)
+    (tt-glyphs b 84 30 4 14 0)
+    (comment "a second row with a gap of 40 px (4 heights): two lines")
+    (tt-glyphs b 20 80 4 14 0)
+    (tt-glyphs b 102 80 4 14 0)
+    (tt-trace b 7200 comps rules prims tlines pts refs views inks)
+    (assert-eq (tl-count tlines) 3 "one line above, two below")
+    (assert-eq (tl-get tlines 0 12) 8 "the first of eight components")))

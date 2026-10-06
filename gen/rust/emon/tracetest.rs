@@ -497,6 +497,8 @@ fn test_a_grid_is_one_component_and_its_edges_are_still_rules() {
     crate::testport::assert_eq(co_get(comps, 0, cf_kind()), ck_blob(), "large");
     crate::testport::assert_eq(rl_count(rules), 6, "four edges and two inner lines, crossings bridged");
     crate::testport::assert_eq(rl_get(rules, 0, rlf_rcount()), 1, "each has the one component as its member");
+    crate::testport::assert_eq(rl_get(rules, 0, rlf_flags()), 0, "a table's rule is not a figure's");
+    crate::testport::assert_eq(rl_get(rules, 5, rlf_flags()), 0, "none of them");
 }
 #[test]
 fn test_a_slanted_rule_is_found_at_any_angle_within_a_shallow_slope() {
@@ -839,4 +841,180 @@ fn test_the_key_sort_is_stable_by_index() {
     crate::testport::assert_eq(crate::port::cells_at(idx, 1), 1, "then");
     crate::testport::assert_eq(crate::port::cells_at(idx, 2), 0, "equal keys by index");
     crate::testport::assert_eq(crate::port::cells_at(idx, 3), 2, "the later one last");
+}
+pub(crate) fn tt_trace_bin(bin: &crate::port::Bitmap, dpi100: i32, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut inks: &mut crate::port::Cells) -> i32 {
+    // As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
+    let lab: &crate::port::Bitmap = &crate::port::bitmap_new(crate::port::bitmap_w(bin), crate::port::bitmap_h(bin), 1);
+    let mut rn: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut ri: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut cs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut vr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut pc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut sg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut mem: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut s3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut s4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut s5: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut s6: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    vw_new(views, 0, vk_binary(), -1, -1, crate::port::bitmap_w(bin), crate::port::bitmap_h(bin), dpi100, 0, -1, 0, 0, 0, 0, 0);
+    ik_new(inks, 0, 0);
+    crate::port::cells_set(inks, 2, 8421504);
+    return tr_trace(views, inks, 0, 0, -1, 0, bin, bin, lab, comps, rules, prims, tlines, pts, refs, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+}
+pub(crate) fn tt_gray(g: &crate::port::Bitmap, x0: i32, y0: i32, x1: i32, y1: i32, v: i32) -> i32 {
+    // Gray `v` in [x0, x1) x [y0, y1).
+    let mut x: i32 = 0;
+    let mut y: i32 = y0;
+    while y < y1 {
+        x = x0;
+        while x < x1 {
+            crate::port::bitmap_set_u8(g, x, y, 0, v);
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_a_light_fill_nearer_the_paper_than_a_layer_is_a_tint_and_glyphs_in_it_do_not_cut_it() {
+    let g: &crate::port::Bitmap = &crate::port::bitmap_new(160, 100, 1);
+    let m: &crate::port::Bitmap = &crate::port::bitmap_new(160, 100, 1);
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    vw_new(views, 0, vk_binary(), -1, -1, 160, 100, 14400, 0, -1, 0, 0, 0, 0, 0);
+    tt_gray(g, 0, 0, 160, 100, 255);
+    // a header fill at gray 235 (20 under the paper: P6.3's 24 gives it no layer), 120 x 30; two 3 px glyph stems of gray 40 inside it
+    tt_gray(g, 20, 10, 140, 40, 235);
+    tt_gray(g, 50, 15, 53, 35, 40);
+    tt_gray(g, 90, 12, 93, 30, 40);
+    // paper noise 4 under (not a fill), and a hairline of gray 235 (a rule is not a fill)
+    tt_gray(g, 20, 60, 140, 90, 251);
+    tt_gray(g, 20, 95, 140, 97, 235);
+    crate::testport::assert_eq(tr_lightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 1, "one tint: the header");
+    crate::testport::assert_eq(pm_get(prims, 0, pmf_kind()), pm_rect(), "a rect");
+    crate::testport::assert_eq(pm_get(prims, 0, pmf_flags()), 11, "closed + filled + tint");
+    crate::testport::assert_eq(pm_get(prims, 0, pmf_color()), 15461355, "of the gray 235");
+    crate::testport::assert_eq(tt_near(pm_get(prims, 0, pmf_cx()), 4000, 150), 1, "centred at x 80 px (144 dpi: 50 cpt a pixel)");
+    crate::testport::assert_eq(tt_near(pm_get(prims, 0, pmf_fill()), 1000, 40), 1, "and covered: the glyph stems are bridged");
+    crate::testport::assert_eq(tr_lightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "a tint already traced from a layer's mask is not traced again");
+}
+#[test]
+fn test_a_gradient_or_a_photograph_is_not_a_uniform_fill_and_a_whole_page_of_fill_is_the_paper() {
+    let g: &crate::port::Bitmap = &crate::port::bitmap_new(160, 100, 1);
+    let m: &crate::port::Bitmap = &crate::port::bitmap_new(160, 100, 1);
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    vw_new(views, 0, vk_binary(), -1, -1, 160, 100, 14400, 0, -1, 0, 0, 0, 0, 0);
+    tt_gray(g, 0, 0, 160, 100, 255);
+    // a texture: 100 x 60 pixels alternating 230 and 215 across
+    y = 10;
+    while y < 70 {
+        x = 20;
+        while x < 120 {
+            crate::port::bitmap_set_u8(g, x, y, 0, 215 + (15 * (x % 2)));
+            x += 1;
+        }
+        y += 1;
+    }
+    crate::testport::assert_eq(tr_lightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "no tint on a texture");
+    tt_gray(g, 0, 0, 160, 100, 230);
+    crate::testport::assert_eq(tr_lightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "no tint when the page is all fill: the paper was misjudged");
+}
+#[test]
+fn test_a_page_of_figures_has_no_text_so_the_rules_of_a_chart_are_found() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(400, 300, 1);
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(tr_text_max(14400, 0), 96, "48 pt at 144 dpi is 96 px on the binary view");
+    crate::testport::assert_eq(tr_text_max(14400, 1), 400, "and 200 pt on an ink mask");
+    // three blocks of 40 x 110 (glyph-sized to a 200 pt limit, not to a 48 pt one), and an L: a 4 px axis up, a 4 px axis along, a bar on it
+    tt_rect(b, 200, 20, 240, 130);
+    tt_rect(b, 260, 20, 300, 130);
+    tt_rect(b, 320, 20, 360, 130);
+    tt_rect(b, 20, 100, 24, 280);
+    tt_rect(b, 20, 276, 190, 280);
+    tt_rect(b, 30, 200, 70, 276);
+    tt_trace_bin(b, 14400, comps, rules, prims, tlines, pts, refs, views, inks);
+    crate::testport::assert_eq(rl_count(rules), 2, "the vertical axis and the horizontal one: they are not text");
+    crate::testport::assert_eq(rl_get(rules, 0, rlf_flags()), tr_rf_figure(), "and they are flagged as a figure's: their component holds a bar's ink too");
+    crate::testport::assert_eq(rl_get(rules, 1, rlf_flags()), tr_rf_figure(), "both");
+}
+#[test]
+fn test_letters_hidden_in_different_places_do_not_bend_a_watermarks_angle() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(500, 400, 1);
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut u: i32 = 0;
+    let mut v: i32 = 0;
+    let mut k: i32 = 0;
+    let mut cut: i32 = 0;
+    // five letters (rectangles 40 x 90 px) on a line rising 40 in 70 (29.74 degrees), a pitch of 70 px: in the frame u = 70x - 40y + 9900, v = 70y + 40x - 22200 (both
+    // scaled by 80.6) the k-th is u 5600k .. +3200, v 0 .. 7200; body text hides the bottoms of four of them, by 0, 4000, 2400, 800 and 4800 of those units
+    while y < 400 {
+        x = 0;
+        while x < 500 {
+            u = ((70 * x) - (40 * y)) + 9900;
+            v = ((70 * y) + (40 * x)) - 22200;
+            k = u / 5600;
+            if (u >= 0) && ((k < 5) && ((u - (k * 5600)) < 3200)) {
+                cut = (k * 4000) % 5200;
+                if (v >= 0) && (v < (7200 - cut)) {
+                    crate::port::bitmap_set_u8(b, x, y, 0, 255);
+                }
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+    tt_trace(b, 14400, comps, rules, prims, tlines, pts, refs, views, inks);
+    crate::testport::assert_eq(tl_count(tlines), 1, "one line");
+    crate::testport::assert_eq(tl_get(tlines, 0, 12), 5, "of five letters");
+    crate::testport::assert_eq(tt_near(tl_get(tlines, 0, 9), 2974, 60), 1, "at the angle of the letters' tops, not the one the ragged bottoms would draw");
+}
+#[test]
+fn test_a_justified_word_space_joins_a_line_and_a_gutter_does_not() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(300, 120, 1);
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rules: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prims: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tlines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let views: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let inks: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    // glyphs 8 x 10 every 14: four, then a space of 22 px (2.2 heights), then four: one line
+    tt_glyphs(b, 20, 30, 4, 14, 0);
+    tt_glyphs(b, 84, 30, 4, 14, 0);
+    // a second row with a gap of 40 px (4 heights): two lines
+    tt_glyphs(b, 20, 80, 4, 14, 0);
+    tt_glyphs(b, 102, 80, 4, 14, 0);
+    tt_trace(b, 7200, comps, rules, prims, tlines, pts, refs, views, inks);
+    crate::testport::assert_eq(tl_count(tlines), 3, "one line above, two below");
+    crate::testport::assert_eq(tl_get(tlines, 0, 12), 8, "the first of eight components");
 }

@@ -973,7 +973,9 @@ public final class Norm {
         }
         return ink;
     }
-    public static int nmSkewPoints(emon.Port.Bitmap m, emon.Port.Cells pts, int ystep, int limit) {
+    public static int nmSkewPointsCap(emon.Port.Bitmap m, emon.Port.Cells pts, int ystep, int limit, int maxrun) {
+        // As `nm-skew-points`, but a run longer than `maxrun` is not a point: a rule or an underline is not a text cluster, and its midpoint
+        // stands for its pixels only while it is short against the angle (P6.4b, D264).
         // The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its
         // midpoint x with its length as the weight (a run's pixels all project within a pixel of its midpoint at the angles
         // tried, so this is the row projection of the ink without visiting a pixel twice). At most `limit` runs. Answers how many.
@@ -991,15 +993,22 @@ public final class Norm {
                 while ((ce < w) && (emon.Port.bitmapU8(m, ce, y, 0) != 0)) {
                     ce += 1;
                 }
-                emon.Port.cellsPush(pts, (x + ce) / 2);
-                emon.Port.cellsPush(pts, y);
-                emon.Port.cellsPush(pts, ce - x);
-                np += 1;
+                if ((ce - x) <= maxrun) {
+                    emon.Port.cellsPush(pts, (x + ce) / 2);
+                    emon.Port.cellsPush(pts, y);
+                    emon.Port.cellsPush(pts, ce - x);
+                    np += 1;
+                }
                 x = emon.Port.bitmapNextNonzero(m, ce, y);
             }
             y += ystep;
         }
         return np;
+    }
+    public static int nmSkewPoints(emon.Port.Bitmap m, emon.Port.Cells pts, int ystep, int limit) {
+        // The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its
+        // midpoint x with its length as the weight; no run is too long. At most `limit` runs. Answers how many.
+        return nmSkewPointsCap(m, pts, ystep, limit, emon.Port.bitmapW(m));
     }
     public static long nmSkewScore(emon.Port.Cells pts, int np, emon.Port.Cells prof, int cdeg, int off, int nb) {
         // The projection profile's sharpness at one angle: with the text lines at `cdeg` (they RISE to the right by it,
@@ -1048,7 +1057,7 @@ public final class Norm {
         if (h > 16000) {
             return 0;
         }
-        np = nmSkewPoints(m, pts, ystep, 120000);
+        np = nmSkewPointsCap(m, pts, ystep, 120000, w / 12);
         if (np < 50) {
             return 0;
         }

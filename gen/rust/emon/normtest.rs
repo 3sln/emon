@@ -907,3 +907,32 @@ fn test_nm_view_measures_the_skew_of_a_decode_and_writes_it_everywhere() {
     crate::testport::assert_eq(vw_get(views, 2, vwf_deskew()), vw_get(views, 0, vwf_deskew()), "and the binary");
     crate::testport::assert_eq(vw_get(views, 3, vwf_deskew()), vw_get(views, 0, vwf_deskew()), "and the mask");
 }
+#[test]
+fn test_a_run_longer_than_the_cap_is_not_a_skew_point() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(200, 10, 1);
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    nt_rect(b, 10, 3, 20, 4, 255, 0, 0);
+    nt_rect(b, 40, 3, 190, 4, 255, 0, 0);
+    crate::testport::assert_eq(nm_skew_points_cap(b, pts, 1, 100, 50), 1, "a rule 150 px long is not a text cluster at a cap of 50: its midpoint stands for none of its pixels");
+    crate::testport::assert_eq(crate::port::cells_at(pts, 2), 10, "the short run is the point");
+    crate::testport::assert_eq(nm_skew_points_cap(b, pts, 1, 100, 150), 2, "at a cap of 150 both are");
+    crate::testport::assert_eq(nm_skew_points(b, pts, 1, 100), 2, "and `nm-skew-points` has no cap");
+}
+#[test]
+fn test_a_page_of_a_ruled_table_and_no_text_is_not_skewed() {
+    let b: &crate::port::Bitmap = &crate::port::bitmap_new(1000, 700, 1);
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let prof: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut k: i32 = 0;
+    // a 500 x 300 table, 3 px rules: seven rows of lines, five columns; nothing else on the page
+    while k < 8 {
+        nt_rect(b, 250, 200 + (k * 43), 750, (200 + (k * 43)) + 3, 255, 0, 0);
+        k += 1;
+    }
+    k = 0;
+    while k < 6 {
+        nt_rect(b, 250 + (k * 99), 200, (250 + (k * 99)) + 3, 503, 255, 0, 0);
+        k += 1;
+    }
+    crate::testport::assert_eq(nm_deskew(b, pts, prof), 0, "rules are not lines of text: a table alone has no skew to find");
+}

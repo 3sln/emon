@@ -906,4 +906,33 @@ public static class Normtest {
         emon.Testport.AssertEq(Evidence.VwGet(views, 2, Evidence.VwfDeskew()), Evidence.VwGet(views, 0, Evidence.VwfDeskew()), "and the binary");
         emon.Testport.AssertEq(Evidence.VwGet(views, 3, Evidence.VwfDeskew()), Evidence.VwGet(views, 0, Evidence.VwfDeskew()), "and the mask");
     }
+    [Xunit.Fact]
+    public static void TestARunLongerThanTheCapIsNotASkewPoint() {
+        emon.Port.Bitmap b = emon.Port.BitmapNew(200, 10, 1);
+        emon.Port.Cells pts = emon.Port.NewCells();
+        NtRect(b, 10, 3, 20, 4, 255, 0, 0);
+        NtRect(b, 40, 3, 190, 4, 255, 0, 0);
+        emon.Testport.AssertEq(Norm.NmSkewPointsCap(b, pts, 1, 100, 50), 1, "a rule 150 px long is not a text cluster at a cap of 50: its midpoint stands for none of its pixels");
+        emon.Testport.AssertEq(emon.Port.CellsAt(pts, 2), 10, "the short run is the point");
+        emon.Testport.AssertEq(Norm.NmSkewPointsCap(b, pts, 1, 100, 150), 2, "at a cap of 150 both are");
+        emon.Testport.AssertEq(Norm.NmSkewPoints(b, pts, 1, 100), 2, "and `nm-skew-points` has no cap");
+    }
+    [Xunit.Fact]
+    public static void TestAPageOfARuledTableAndNoTextIsNotSkewed() {
+        emon.Port.Bitmap b = emon.Port.BitmapNew(1000, 700, 1);
+        emon.Port.Cells pts = emon.Port.NewCells();
+        emon.Port.Cells prof = emon.Port.NewCells();
+        int k = 0;
+        // a 500 x 300 table, 3 px rules: seven rows of lines, five columns; nothing else on the page
+        while (k < 8) {
+            NtRect(b, 250, 200 + (k * 43), 750, (200 + (k * 43)) + 3, 255, 0, 0);
+            k += 1;
+        }
+        k = 0;
+        while (k < 6) {
+            NtRect(b, 250 + (k * 99), 200, (250 + (k * 99)) + 3, 503, 255, 0, 0);
+            k += 1;
+        }
+        emon.Testport.AssertEq(Norm.NmDeskew(b, pts, prof), 0, "rules are not lines of text: a table alone has no skew to find");
+    }
 }

@@ -932,3 +932,32 @@ func TestNmViewMeasuresTheSkewOfADecodeAndWritesItEverywhere(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.VwGet(views, 2, evidence.VwfDeskew()), evidence.VwGet(views, 0, evidence.VwfDeskew()), "and the binary")
 	port.AssertEq(emonT, evidence.VwGet(views, 3, evidence.VwfDeskew()), evidence.VwGet(views, 0, evidence.VwfDeskew()), "and the mask")
 }
+
+func TestARunLongerThanTheCapIsNotASkewPoint(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(200, 10, 1)
+	var pts *port.Cells = port.NewCells()
+	ntRect(b, 10, 3, 20, 4, 255, 0, 0)
+	ntRect(b, 40, 3, 190, 4, 255, 0, 0)
+	port.AssertEq(emonT, norm.NmSkewPointsCap(b, pts, 1, 100, 50), 1, "a rule 150 px long is not a text cluster at a cap of 50: its midpoint stands for none of its pixels")
+	port.AssertEq(emonT, port.CellsAt(pts, 2), 10, "the short run is the point")
+	port.AssertEq(emonT, norm.NmSkewPointsCap(b, pts, 1, 100, 150), 2, "at a cap of 150 both are")
+	port.AssertEq(emonT, norm.NmSkewPoints(b, pts, 1, 100), 2, "and `nm-skew-points` has no cap")
+}
+
+func TestAPageOfARuledTableAndNoTextIsNotSkewed(emonT *testing.T) {
+	var b *port.Bitmap = port.BitmapNew(1000, 700, 1)
+	var pts *port.Cells = port.NewCells()
+	var prof *port.Cells = port.NewCells()
+	var k int32 = 0
+	// a 500 x 300 table, 3 px rules: seven rows of lines, five columns; nothing else on the page
+	for k < 8 {
+		ntRect(b, 250, 200+(k*43), 750, (200+(k*43))+3, 255, 0, 0)
+		k += 1
+	}
+	k = 0
+	for k < 6 {
+		ntRect(b, 250+(k*99), 200, (250+(k*99))+3, 503, 255, 0, 0)
+		k += 1
+	}
+	port.AssertEq(emonT, norm.NmDeskew(b, pts, prof), 0, "rules are not lines of text: a table alone has no skew to find")
+}

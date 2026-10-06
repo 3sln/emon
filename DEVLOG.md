@@ -2183,6 +2183,39 @@ analysis beyond "top-to-bottom lines on a single column".
     300 dpi (mean stroke 3.0-4.4 px; the two agree on the mean within 0.4 px).
   * **Counts and time** (per 300 dpi Letter page, best of one, loaded machine): components median 136, max 3233; runs median 12,059, max 120,454; trace
     Rust mean 20 ms, p95 54, max 102; Go mean 23 ms; norm alone 74 ms. Java and C# were not timed (their laws pass).
+  **P6.4b — tuning pass on P6.4's measured misses (D259-D265), `kin/trace.kin`, `kin/norm.kin` (one function), `kin/scripts/trace`, `bench/mains/trace.{rs,go}`.**
+  *Measured, same harness (`bb trace --go`, 99 documents, 310 pages, 300 dpi; BEFORE = P6.4's tracer, AFTER = this; Rust and Go dumps identical on 310 of 310 pages).
+  Most of what P6.4 recorded as misses was the harness's, not the tracer's, so the harness was corrected FIRST (D265) and both columns are on the corrected one;
+  `--legacy` re-scores with P6.4's own rules.*
+
+  | | BEFORE (P6.4's tracer) | AFTER |
+  |---|---|---|
+  | 1. vertical rules, P / R, corrected truth (targets .98) | .985 / .995 | .985 / .997 |
+  | 1. horizontal rules, P / R | .987 / .994 | .987 / .995 |
+  | 1. vertical rules, P6.4's own scoring (`--legacy`, `decode` views, 99 documents; P6.4 recorded .958 / .963 on 55) | .926 / .955 (first run, before the render cache was keyed by the PDF hash, D265) | .925 / .957 |
+  | 2. endpoint error p95, horizontal / vertical, px (target 2) | 1.33 / 1.75 (legacy 2.75 / 1.75) | 1.81 / 1.75 (legacy 2.75 / 1.75) |
+  | 3. tints, area recall / precision (truth: vector fills 600-959 and `gfx-*` fills; P6.4's 600-899 gave .109 on 55) | .334 / .960 | .976 / .928 |
+  | 4. `tlines` against the text layer, lines at least 3 heights wide (target .97) / all lines | .942 / .863 | .9735 / .885 |
+  | 4. DRAFT angle (PDF: 30.00 degrees; target +-0.5) | 34.51 | 29.99 |
+  | time, trace per page, mean / p95 / max ms (Rust, quiet machine, norm alone 70 mean) | 17.9 / 54.7 / 193 | 29.7 / 68.8 / 132 |
+
+  What the numbers say. (1) The vertical-rule "misses" were three things, none of them a missed rule: the harness fed every PDF render to norm as a `decode` view, and
+  `nm-deskew` turned a page of table rules and no text (`script-cjk`, `table-slanted-header`) by 3.18 and 0.61 degrees, so its rules were found where the truth
+  was not (the "sheared table"); the truth kept vector pieces that are clipped, painted over or off the page (`columns-three-news` p2: 1680 of 1856 samples of a rule the
+  page does not show); and pages that paint images, shadings or dash patterns have rules their paths do not say, so their detections were counted false. Two real
+  tracer faults were found by the same pages and are fixed: on a page of figures with no text the median text height was taken over bars and boxes, so a chart was
+  `text` and the rules inside it were never looked for (`figures-charts` p1: the second chart's axes, D260); and the deskew (D264, `bb ink` identical on every
+  layer line, deskew within 0.1 degree .892 -> .946 on scan-ovl and .919 -> .973 on scan-color). The axis, bar-edge and plot-frame rules are kept as rules and
+  FLAGGED (D263): 48 of 1153 rules on the no-text renders carry `rf-figure`, all of them in `hidden-older-ocr`, `figures-charts`, `columns-span-figure`,
+  `align-paragraphs` and `initial-image`, none in a table. (2) The endpoint error was not above 2 px on the corrected truth; it moved from 1.33 to 1.81 because the
+  charts' axes are now found, and their ends sit on the figure. (3) D259. (4) D261 and D262. What is left: `tlines` of all lines (.885) is dominated by lines of one
+  or two components, which are not chains; of the long lines that still miss (119 of 4484), 46 have no `tlines` row near them at all (CJK lines in `initial-cjk` 21,
+  `script-cjk` 10, `script-mixed` 5: not chained, a mixed-size line of kana, kanji and stops; to do), the rest are lines cut in two at a gap wider than 2.4 heights
+  (justified lines of `h-numbered`, the numbered headings' number, `columns-newspaper` gutters) and text-layer lines the render does not carry (`wm-*`, `tl-broken-*`). The brief's items that were NOT done: slanted lines steeper than 45 degrees inside a large component
+  (P6.4's own known limit); a Hough vote over centroids for the watermark (D261: measured on the page's own mask, the five letters' centroids lie on a 35 degree line, because a letter's centroid depends on the letter; the tops of the
+  five lie on a 30.0 degree line to a pixel, and the thinnest strip finds that, so it is what stands and what the bottoms' fit may no longer bend).
+  **Time**: the light-fill pass adds 11.8 ms on average to a 300 dpi Letter page (one pass over the gray view and one over the mask's runs); a loaded machine
+  makes every figure 3 to 4 times larger, the table above is from a quiet one.
 - [x] P6.5 — `Ocr` port with Tesseract in Rust and Go; capabilities; the
   first-pass plan; OCR-only pipeline for images and scanned PDFs (D033). *Done (D211-D216), minus the `Renderer` (P6.2: a PDF page
   that is not one upright JPEG covering it is not OCR'd), fusion (P7: a born-digital page keeps its text layer, D212) and acting
@@ -7628,6 +7661,8 @@ when those goldens move with it; until then the layer is read through `kin/tlhea
 the memory of the document pass.
 **Alternatives**: a render-based contrast (not available before P6.2/P6.3 and needs pixels); features per glyph (SPEC 8.4.5: a
 glyph has none, its word speaks for it).
+- [ ] **Signed off** (maintainer)
+
 
 ### D243 — P6.8 as built: what the corpus holds, the dump names the scorer reads, and where the brief was cut to the pixel budget (P6.8; D227, D209)
 **Decision**: 32 new documents (99 in the corpus): six Chrome tables (`table-dashed`, `-double`, `-zebra`, `-header-fill`,
@@ -7685,7 +7720,6 @@ crossing rule defeats the contrast test), inside the matching tolerance.
 **Why**: D095's lesson: a gate that runs a live engine tests whose engine is installed. The measurement tells an embedder how far a live host may stray, and the pin and its re-record procedure (`tools/pdfium/pdfium.edn`) say how to move.
 **Alternatives**: a gate that renders live and compares within the tolerance (machine-dependent, which D008 exists to prevent); a bigger committed transcript (230 KB is enough to hold layers, crops and failures).
 - [ ] **Signed off** (maintainer)
-
 
 ## Found in kin, not ours to fix here
 
@@ -7913,4 +7947,48 @@ renders a page for nothing.
 
 ### D258 — `bb trace`: truth is the vector content of ghostscript's text-free copy; scoring by length and by area (P6.4; D227)
 **Decision**: `gs -dFILTERTEXT` removes the text and keeps the paths (it is also the `no-text` render), qpdf's QDF is read by a small content-stream interpreter (q Q cm re m l S f B w colours): a filled rectangle at most 3 pt thick and 4 times as long, or a stroked segment at most 3 pt wide and 3 pt long, is a rule; a filled rectangle over 5 pt each way, lightness at least 600 and not the paper's white, is a fill. Rule precision and recall are the share of samples (every 3 px) within 2.5 px of the other set; fills are compared as areas on a 4 px grid. Not a gate; P7.S owns the ratchet.
+- [ ] **Signed off** (maintainer)
+
+### D259 — Light fills from the gray view: a separate path, uniform pixels in a band under the paper, bridged across glyphs, deduplicated against the layers' tints (P6.4b; D226, D237)
+**Decision**: `tr-lightfills` (`kin/trace.kin`) runs once a page after the ink layers' traces, on the GRAY view and the paper gray (`nm-paper-gray`), and nothing in P6.3 or in the binary view changes. `tr-light-mask` marks a pixel as fill when it is 10 to 104 levels under the paper and within 4 levels of the pixel to its left (an antialiased glyph edge is steeper, a band's flat part and a scan's noise are not), and bridges a run of non-fill, non-paper pixels of at most 3 pt between two fill pixels of a row (a stem in a header cell; a paper pixel ends the bridge). `tr-tints` then runs on that mask (a rectangle at least 6 pt each way whose rows move at most 2 px), the rows whose box is half inside a tint already written by a layer's mask are dropped, and the rest get the mean gray of their fill pixels at nine points as colour. A page more than 60 per cent fill is not traced (the paper was misjudged). The flags are `tr-tints`': closed, filled, tint.
+**Why**: P6.3 gives a layer to a colour bin farther than 24 of 255 from the paper bin (D237), by mass; a header fill of lightness 0.89 on one row of a table has no layer, so P6.4 gave `table-multipage-thead` 0.000 of its fills. Banding (`gfx-shading-bands`, `gfx-pattern-bands`) is the same case: flat bands under the paper.
+**Measured**: tints, area recall .334 -> .976 and precision .960 -> .928 on 95 truth fills of 18 pages (the vector fills of lightness 600-959 and P6.8's `gfx-*` fills); the lost precision is fills of pages without a truth list. Time +11.8 ms a page (mean). `bb ink`: identical.
+**Alternatives**: lowering `nm-ink-paper` (it moves every layer, body ink separation included, `bb ink` is the guard); a per-layer lower threshold for tints only (a layer needs a mass to be a layer).
+- [ ] **Signed off** (maintainer)
+
+### D260 — The median text height is taken over glyphs of at most 48 pt on the binary view, 200 pt on an ink mask (P6.4b; D252)
+**Decision**: `tr-text-max`: the provisional glyphs that give `tr-kinds` its median height M are at most 48 pt tall on the binary view (200 pt on a mask, where a watermark's letters are huge). With fewer than three, M is 0 and nothing on the page is `text`.
+**Why**: on a page of figures with no text (the harness's no-text renders; a figure page whose text is an image) the bars, boxes and charts were provisional glyphs, M became their height, and a whole chart (axes, ticks and a curve: one component) was `text`, so no rule was looked for in it (`figures-charts` p1's second chart). 48 pt is above any body or heading text the median is for; a headline above it was never `text` (4 M).
+**Measured**: vertical rule recall .995 -> .997, horizontal .994 -> .995, all other rule and component numbers within noise.
+- [ ] **Signed off** (maintainer)
+
+### D261 — A text line's direction is the thinnest strip's; the bottoms' fit refines it only where the bottoms line up (P6.4b; D256)
+**Decision**: in `tr-tlines`, after the two refinement passes, the fit's angle is dropped, and the baseline is the strip's lower edge, when the bottoms' residual rms is over 1/8 of the mean member height or the fit would pull the angle 1.5 degrees from the strip's. `tr-line-frame` answers the residual and the lowest bottom for that.
+**Why**: DRAFT's body text hides the bottom of each letter at a different height, so the least-squares line of the bottoms (rms 51 px of a 421 px letter) bent the 30.02 degree strip to 34.5 (two clamped 1.5 degree steps). The tops of the five letters lie on a 30.0 degree line to a pixel; the five centroids lie on a 35 degree one (measured on the page's mask), so a vote over centroids is not what the brief expected: a letter's centroid is a property of the letter. The thinnest strip was already right.
+**Measured**: DRAFT 34.51 -> 29.99 degrees (target 30 +- 0.5); `tlines` otherwise unchanged by this step.
+**Alternatives**: a Hough vote over centroids (above); a vote over pairs of tops and bottoms (the strip is that, with all the pixels).
+- [ ] **Signed off** (maintainer)
+
+### D262 — Two components of a line may be 2.4 mean heights apart (P6.4b; D256)
+**Decision**: `tr-tl-gap2` 23 (it was 9): the candidate edge of an agglomeration is at most 2.4 mean heights between the boxes (it was 1.5). Swept on the first, partly stale renders: 2.1 -> .9496, 2.4 -> .9514, 3.0 -> .9438 on the long lines; the fresh renders were run at 2.4 only.
+**Why**: a justified word space and a CJK stop are 2 to 2.3 heights; the chain-ok test (centres on a line within 0.3 of a height) keeps the line a line, and past 2.7 columns join across their gutters.
+**Measured**: `tlines` recall of the lines at least 3 heights wide .942 -> .9735 (target .97); of all lines .863 -> .885.
+- [ ] **Signed off** (maintainer)
+
+### D263 — A rule whose component holds more than twice its rules' ink carries the `rf-figure` flag (P6.4b; D226, SPEC 8.4.4)
+**Decision**: `rules.flags` bit 1 (`tr-rf-figure`): the rule's component has more than twice the ink the rules in it account for (half-pixel length x quarter-pixel thickness / 8, summed over the component's rules). An axis with its bars, a tick, a bar's edge or a plot's frame has it; a table grid (all rules), a rule alone, and a ruled line of text do not. The rule stays a rule with its confidence; a consumer that wants only a table's rules drops the flagged ones.
+**Why**: the brief wants axes and bar edges kept as rules and told from table rules. P7.G's fusion has `in-figure` and `box-edge` on the fused rule (`gq`); this is the tracer witness for them.
+**Measured**: 48 of 1153 rules on the no-text renders are flagged, all of them in `hidden-older-ocr` (17), `figures-charts` (12), `columns-span-figure` (11), `align-paragraphs` (6) and `initial-image` (2): no table document has one.
+- [ ] **Signed off** (maintainer)
+
+### D264 — `nm-deskew` ignores ink runs longer than 1/12 of the page width (P6.4b; D238)
+**Decision**: `nm-skew-points-cap` (`nm-skew-points` is the same with no cap): a run longer than `w / 12` is not a point of the projection profile; `nm-deskew` uses the cap. The midpoint of a run stands for its pixels only while the run is short against the angle (D238's own argument), which a table's rule 535 px long is not.
+**Why**: a page of table rules and no text (`script-cjk`: 3.18 degrees; `table-slanted-header` p2: 0.61) was deskewed by a wrong angle that moved every rule by 120 to 145 px; a few long runs outweighed the text that was not there.
+**Measured**: `bb ink`: every layer line identical; deskew within 0.1 degree .892 -> .946 (scan-ovl) and .919 -> .973 (scan-color), within 0.3 degree and the worst unchanged on scan-ovl (.973, 0.37) and better on scan-color (worst 0.17 -> 0.13). Laws: a ruled table alone is not skewed (fails without the cap).
+- [ ] **Signed off** (maintainer)
+
+### D265 — `bb trace`'s truth is what the render shows; render views; the PDF's hash guards the cache (P6.4b; D258, D238)
+**Decision**: (1) the harness gives the renders to norm as `render` views (`TRACE_DECODE=1` restores `decode`): a render is not a scan, and a decode view is deskewed; (2) a vector rule is truth only where the no-text render has a pixel darker than 240 within 1 px (runs of 10 px or more, gaps up to 24 px bridged); (3) a page that paints an image (`Do`), a shading (`sh`) or a dash pattern has no precision score from its paths; (4) the `gfx-*` documents (shadings, patterns, images, curves, hidden pieces) use P6.8's `gold/STEM.rules.json`, rules and fills; (5) the fill truth is lightness 600 to 959; (6) each cache directory keeps its PDF's SHA-1 and is dropped when it changes (P6.8 regenerated `table-multipage-*` and others after P6.4's renders were cached: a with-text render of page 1 was page 3 of the new PDF); (7) `--legacy` is P6.4's scoring (no visibility check, no oracle, no exemptions, fills under 900), `--tl` the with-text half, `--misses FILE` the text-layer lines no `tlines` row matches. Not changed: the pooled samples, the 2.5 px matching, the endpoint rule, the IoU of lines.
+**Why**: P6.4's "vertical P/R .958/.963" and "endpoint p95 2.75" were mostly the three artefacts above; a tuning pass aimed at them would have tuned the tracer to the truth's errors. `--legacy` keeps the old numbers reproducible (.925/.957 vertical, 2.75/1.75 endpoint on the 99 documents, both before and after this item).
+**Measured**: see P6.4b.
 - [ ] **Signed off** (maintainer)
