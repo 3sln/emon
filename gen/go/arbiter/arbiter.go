@@ -4,6 +4,7 @@
 package arbiter
 
 import (
+	"emon/artifact"
 	"emon/evidence"
 	"emon/fuserules"
 	"emon/health"
@@ -155,7 +156,75 @@ func arImageShare(images *port.Cells, epages *port.Cells, page int32, x0 int32, 
 	return best
 }
 
-func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *port.Cells, etext *port.Cells, feats *port.Cells, owords *port.Cells, images *port.Cells, epages *port.Cells, gv *port.Cells) int32 {
+func arOffaxis(rot int32) int32 {
+	// How far (centi-degrees) an angle is off the nearest right angle: 0 for upright and turned text.
+	var r int32 = rot % 9000
+	if r < 0 {
+		r += 9000
+	}
+	if (9000 - r) < r {
+		return 9000 - r
+	}
+	return r
+}
+
+func arMaxPos(cur int32, v int32) int32 {
+	// The larger of two values where -1 is absent.
+	if v < 0 {
+		return cur
+	}
+	if v > cur {
+		return v
+	}
+	return cur
+}
+
+func arImageAlpha(images *port.Cells, epages *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// The least alpha (per mille) of an image placement the box lies in (at least 600 per mille of it) that covers at least `wm-cover` of the
+	// page; -1 when there is none (defence 1: a translucent page-sized image is a background).
+	var n int32 = evidence.ImCount(images)
+	var ep int32 = evidence.EvPageRow(epages, page)
+	var j int32 = 0
+	var best int32 = -1
+	var s int32 = 0
+	var pw int32 = 0
+	var ph int32 = 0
+	var ix0 int32 = 0
+	var iy0 int32 = 0
+	var ix1 int32 = 0
+	var iy1 int32 = 0
+	var pa int64 = int64(0)
+	var ia int64 = int64(0)
+	if ep >= 0 {
+		pw = evidence.EpGet(epages, ep, evidence.EpfWidth())
+		ph = evidence.EpGet(epages, ep, evidence.EpfHeight())
+	}
+	pa = int64(pw) * int64(ph)
+	for j < n {
+		if evidence.ImGet(images, j, evidence.MfPage()) == page {
+			ix0 = evidence.ImGet(images, j, evidence.MfX0())
+			iy0 = evidence.ImGet(images, j, evidence.MfY0())
+			ix1 = evidence.ImGet(images, j, evidence.MfX1())
+			iy1 = evidence.ImGet(images, j, evidence.MfY1())
+			if evidence.EvOverlapSmall(x0, y0, x1, y1, ix0, iy0, ix1, iy1) >= 600 {
+				ia = int64(ix1-ix0) * int64(iy1-iy0)
+				s = 0
+				if pa > int64(0) {
+					s = int32((ia * int64(1000)) / pa)
+				}
+				if s >= artifact.WmCover() {
+					if (best < 0) || (evidence.ImGet(images, j, evidence.MfAlpha()) < best) {
+						best = evidence.ImGet(images, j, evidence.MfAlpha())
+					}
+				}
+			}
+		}
+		j += 1
+	}
+	return best
+}
+
+func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *port.Cells, etext *port.Cells, feats *port.Cells, owords *port.Cells, images *port.Cells, epages *port.Cells, gl *port.Cells, mk *port.Cells, an *port.Cells, txt *port.Cells, trust int32, rc *port.Cells, gv *port.Cells) int32 {
 	// The group columns of group g (see `emon.fuserules`) into `gv` (`ag-count` cells).
 	var nt int32 = player.CgGet(cg, g, player.CgfTcount())
 	var tf int32 = player.CgGet(cg, g, player.CgfTfirst())
@@ -182,8 +251,22 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 	var gx1 int32 = 0
 	var gy1 int32 = 0
 	var gpage int32 = 0
+	var art int32 = -1
+	var oangle int32 = -1
+	var odiag int32 = -1
+	var orel int32 = -1
+	var margin int32 = -1
+	var kink int32 = -1
+	var body int32 = -1
 	for k < nt {
 		row = arRef(refs, tf+k, 1)
+		v = artifact.AxWordClass(gl, mk, an, txt, etext, trust, feats, ofw, row)
+		if art == -1 {
+			art = v
+		}
+		if art != v {
+			art = 0
+		}
 		f = port.CellsAt(ofw, (row*24)+evidence.HdFeat())
 		if f >= 0 {
 			v = evidence.FeGet(feats, f, evidence.XtFontHealth())
@@ -218,7 +301,13 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 				ssum += v
 				scount += 1
 			}
+			oangle = arMinPos(oangle, evidence.FeGet(feats, f, evidence.XoAngle()))
+			orel = arMaxPos(orel, evidence.FeGet(feats, f, evidence.XoRelHeight()))
+			margin = arMinPos(margin, evidence.FeGet(feats, f, evidence.XoMargin()))
+			kink = arMinPos(kink, evidence.FeGet(feats, f, evidence.XoKinInk()))
+			body = arMinPos(body, evidence.FeGet(feats, f, evidence.XoBodyShare()))
 		}
+		odiag = arMinPos(odiag, arOffaxis(evidence.OwGet(owords, row, 9)))
 		k += 1
 	}
 	port.CellsSet(gv, fuserules.AgNt(), nt)
@@ -268,6 +357,39 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 		}
 	}
 	port.CellsSet(gv, fuserules.AgNear(), near)
+	// P7.5: what the PDF says (defence 1), recurrence (2), the OCR words' geometry (4), margins and ink (3, 6)
+	// an OCR-only group: only an annotation's appearance, read as text by the engine, says it is a watermark
+	if (nt == 0) && ((nh == 0) && (no > 0)) {
+		art = -1
+		k = 0
+		for k < no {
+			v = artifact.AxOwordClass(an, txt, etext, owords, arRef(refs, of+k, 1))
+			if art == -1 {
+				art = v
+			}
+			if art != v {
+				art = 0
+			}
+			k += 1
+		}
+	}
+	if nt == 0 {
+		if nh != 0 {
+			art = 0
+		}
+	}
+	if art < 0 {
+		art = 0
+	}
+	port.CellsSet(gv, fuserules.AgArt(), art)
+	port.CellsSet(gv, fuserules.AgRecur(), port.CellsAt(rc, g*5))
+	port.CellsSet(gv, fuserules.AgOangle(), oangle)
+	port.CellsSet(gv, fuserules.AgOdiag(), odiag)
+	port.CellsSet(gv, fuserules.AgOrel(), orel)
+	port.CellsSet(gv, fuserules.AgMargin(), margin)
+	port.CellsSet(gv, fuserules.AgKink(), kink)
+	port.CellsSet(gv, fuserules.AgBody(), body)
+	port.CellsSet(gv, fuserules.AgImalpha(), arImageAlpha(images, epages, player.CgGet(cg, g, player.CgfPage()), player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1())))
 	return 0
 }
 
@@ -336,13 +458,40 @@ func arDecide(g int32, cg *port.Cells, refs *port.Cells, ofw *port.Cells, etext 
 	if (win == fuserules.FwNone()) && (fuserules.FrReason(r) == 0) {
 		player.CgSet(cg, g, player.CgfFlags(), gfl|player.PlgInFigure())
 	}
-	// dropped as a ghost: the first OCR word's box stands for the group in the set-aside list
-	if (win == fuserules.FwNone()) && (fuserules.FrReason(r) > 0) {
+	// dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
+	if (win == fuserules.FwNone()) && ((fuserules.FrReason(r) > 0) && (fuserules.FrDefence(r) == 0) && (player.CgGet(cg, g, player.CgfOcount()) > 0)) {
 		o0 = player.CgGet(cg, g, player.CgfOfirst())
 		orow = arRef(refs, o0, 1)
 		fa = player.FaNew(afa, player.CgGet(cg, g, player.CgfPage()), player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1()), fuserules.FrReason(r), evidence.EaOwords(), orow)
+		player.FaSet(afa, fa, 8, 6)
 		player.FaSet(afa, fa, 9, g)
 		player.FaSet(afa, fa, 10, fuserules.FrNumber(r))
+	}
+	// P7.5, dropped by a defence: an OCR-only group's every OCR word is a row (a watermark is a phrase), the rule's defence in column 8; a text-layer
+	// group's every visible word is a row whose subject is its text (the OCR words aligned to it go with it, not listed again)
+	if (win == fuserules.FwNone()) && ((fuserules.FrReason(r) > 0) && (fuserules.FrDefence(r) > 0)) {
+		if player.CgGet(cg, g, player.CgfTcount()) > 0 {
+			k = 0
+			for k < player.CgGet(cg, g, player.CgfTcount()) {
+				o0 = arRef(refs, player.CgGet(cg, g, player.CgfTfirst())+k, 1)
+				fa = player.FaNew(afa, port.CellsAt(ofw, o0*24), port.CellsAt(ofw, (o0*24)+1), port.CellsAt(ofw, (o0*24)+2), port.CellsAt(ofw, (o0*24)+3), port.CellsAt(ofw, (o0*24)+4), fuserules.FrReason(r), evidence.EaEtext(), port.CellsAt(ofw, (o0*24)+11))
+				player.FaSet(afa, fa, 8, fuserules.FrDefence(r))
+				player.FaSet(afa, fa, 9, g)
+				player.FaSet(afa, fa, 10, fuserules.FrNumber(r))
+				player.FaSet(afa, fa, 11, port.CellsAt(ofw, (o0*24)+12))
+				k += 1
+			}
+		} else {
+			k = 0
+			for k < player.CgGet(cg, g, player.CgfOcount()) {
+				orow = arRef(refs, player.CgGet(cg, g, player.CgfOfirst())+k, 1)
+				fa = player.FaNew(afa, evidence.OwGet(owords, orow, evidence.HdPage()), evidence.OwGet(owords, orow, evidence.HdX0()), evidence.OwGet(owords, orow, evidence.HdY0()), evidence.OwGet(owords, orow, evidence.HdX1()), evidence.OwGet(owords, orow, evidence.HdY1()), fuserules.FrReason(r), evidence.EaOwords(), orow)
+				player.FaSet(afa, fa, 8, fuserules.FrDefence(r))
+				player.FaSet(afa, fa, 9, g)
+				player.FaSet(afa, fa, 10, fuserules.FrNumber(r))
+				k += 1
+			}
+		}
 	}
 	return 0
 }
@@ -646,7 +795,7 @@ func arPageAgreement(cg *port.Cells, g0 int32, g1 int32, refs *port.Cells, ofw *
 	return (agree * 1000) / both
 }
 
-func ArDoc(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, etext *port.Cells, feats *port.Cells, owords *port.Cells, olines *port.Cells, oruns *port.Cells, osyms *port.Cells, images *port.Cells, epages *port.Cells, nfw *port.Cells, nfl *port.Cells, fv *port.Cells, fx *port.Cells, afa *port.Cells, gd *port.Cells, gv *port.Cells, w2g *port.Cells, o2g *port.Cells, pp *port.Cells, tw *port.Cells, tl *port.Cells, scr *port.Cells) int32 {
+func ArDoc(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, etext *port.Cells, feats *port.Cells, owords *port.Cells, olines *port.Cells, oruns *port.Cells, osyms *port.Cells, images *port.Cells, epages *port.Cells, gl *port.Cells, mk *port.Cells, an *port.Cells, txt *port.Cells, trust int32, rc *port.Cells, nfw *port.Cells, nfl *port.Cells, fv *port.Cells, fx *port.Cells, afa *port.Cells, gd *port.Cells, gv *port.Cells, w2g *port.Cells, o2g *port.Cells, pp *port.Cells, tw *port.Cells, tl *port.Cells, scr *port.Cells) int32 {
 	// See the head of this file. The new arenas and the scratch are the caller's (any contents; they are emptied here).
 	var ng int32 = player.CgCount(cg)
 	var nofw int32 = player.FwCount(ofw)
@@ -699,6 +848,9 @@ func ArDoc(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, e
 		port.CellsPush(gd, 0)
 		i += 1
 	}
+	// P7.5 defence 2: the OCR-only groups that recur at the same place on most pages (`rc`, a flag a group)
+	artifact.AxRecur(cg, refs, owords, etext, epages, rc, pp)
+	port.CellsDrop(pp, 0)
 	// the agreement of each group's page with OCR, before any group is decided (a page where the engine and the text layer do not agree
 	// is a page whose OCR-only words are not to be admitted)
 	g = 0
@@ -736,7 +888,7 @@ func ArDoc(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, e
 			port.CellsSet(o2g, r, g)
 			k += 1
 		}
-		arFill(g, port.CellsAt(gd, (g*10)+8), cg, refs, ofw, etext, feats, owords, images, epages, gv)
+		arFill(g, port.CellsAt(gd, (g*10)+8), cg, refs, ofw, etext, feats, owords, images, epages, gl, mk, an, txt, trust, rc, gv)
 		arDecide(g, cg, refs, ofw, etext, feats, owords, images, epages, gv, gd, fx, afa)
 		g += 1
 	}
@@ -795,6 +947,8 @@ func ArDoc(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, e
 						arEmitOcr(g, cg, refs, ofw, etext, owords, nfw, fv, gd, lrow)
 					}
 					changed = 1
+				} else if win == fuserules.FwNone() {
+					changed = 1
 				} else {
 					s = arWordSource(ofw, w)
 					r = arCopyWord(nfw, ofw, w, lrow, port.CellsAt(ofw, (w*24)+evidence.WfSrc())|port.CellsAt(gd, base+7))
@@ -824,6 +978,85 @@ func ArDoc(cg *port.Cells, refs *port.Cells, ofw *port.Cells, ofl *port.Cells, e
 	return ng
 }
 
+func arLo(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func arHi(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func arWriteText(afa *port.Cells, i int32, etext *port.Cells, ledger *port.Cells, text *port.Cells, tmp *port.Cells, tt *port.Cells) int32 {
+	// One ledger row for the run of text-layer words (subject `etext`) that starts at row i of `afa`: the words of one page, one reason and one
+	// line (a box that overlaps the last one's vertically by at least half the smaller height), joined by a space; confidence 900, src `text`.
+	// Answers the row after the run.
+	var n int32 = player.FaCount(afa)
+	var j int32 = i + 1
+	var k int32 = 0
+	var s int32 = 0
+	var e int32 = 0
+	var x0 int32 = player.FaGet(afa, i, 1)
+	var y0 int32 = player.FaGet(afa, i, 2)
+	var x1 int32 = player.FaGet(afa, i, 3)
+	var y1 int32 = player.FaGet(afa, i, 4)
+	var ov int32 = 0
+	var hs int32 = 0
+	var lr int32 = 0
+	var t0 int32 = 0
+	var more int32 = 1
+	for (j < n) && (more == 1) {
+		more = 0
+		if (player.FaGet(afa, j, 0) == player.FaGet(afa, i, 0)) && ((player.FaGet(afa, j, 5) == player.FaGet(afa, i, 5)) && (player.FaGet(afa, j, 6) == evidence.EaEtext())) {
+			ov = arLo(player.FaGet(afa, j, 4), player.FaGet(afa, j-1, 4)) - arHi(player.FaGet(afa, j, 2), player.FaGet(afa, j-1, 2))
+			hs = player.FaGet(afa, j, 4) - player.FaGet(afa, j, 2)
+			if hs > (player.FaGet(afa, j-1, 4) - player.FaGet(afa, j-1, 2)) {
+				hs = player.FaGet(afa, j-1, 4) - player.FaGet(afa, j-1, 2)
+			}
+			if (hs > 0) && ((ov * 2) >= hs) {
+				more = 1
+				j += 1
+			}
+		}
+	}
+	port.CellsDrop(tt, 0)
+	k = i
+	for k < j {
+		if k > i {
+			port.CellsPush(tt, 32)
+		}
+		if player.FaGet(afa, k, 1) < x0 {
+			x0 = player.FaGet(afa, k, 1)
+		}
+		if player.FaGet(afa, k, 2) < y0 {
+			y0 = player.FaGet(afa, k, 2)
+		}
+		if player.FaGet(afa, k, 3) > x1 {
+			x1 = player.FaGet(afa, k, 3)
+		}
+		if player.FaGet(afa, k, 4) > y1 {
+			y1 = player.FaGet(afa, k, 4)
+		}
+		s = player.FaGet(afa, k, 7)
+		e = s + player.FaGet(afa, k, 11)
+		for s < e {
+			port.CellsPush(tt, port.CellsAt(etext, s))
+			s += 1
+		}
+		k += 1
+	}
+	lr = model.LedgerAdd(ledger, player.FaGet(afa, i, 5), player.FaGet(afa, i, 0), x0, y0, x1, y1, 900, model.SrText())
+	t0 = port.CellsLen(text)
+	normalize.NzNfc(tt, 0, port.CellsLen(tt), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+	model.LedgerSetText(ledger, lr, t0, port.CellsLen(text)-t0)
+	return j
+}
+
 func ArWrite(afa *port.Cells, owords *port.Cells, etext *port.Cells, ledger *port.Cells, text *port.Cells, tmp *port.Cells, tt *port.Cells) int32 {
 	// The OCR groups dropped as ghosts (`afa`) as ledger rows, after `fu-write`: a run of rows of one page and one OCR line is ONE row,
 	// its box the union of theirs, its text the first words joined by a space (NFC, ligatures folded, as every ledger text), its
@@ -844,49 +1077,55 @@ func ArWrite(afa *port.Cells, owords *port.Cells, etext *port.Cells, ledger *por
 	var line int32 = 0
 	var w int32 = 0
 	for i < n {
-		j = i + 1
-		w = player.FaGet(afa, i, 7)
-		line = evidence.OwGet(owords, w, evidence.HdLine())
-		for (j < n) && ((player.FaGet(afa, j, 0) == player.FaGet(afa, i, 0)) && ((player.FaGet(afa, j, 5) == player.FaGet(afa, i, 5)) && (evidence.OwGet(owords, player.FaGet(afa, j, 7), evidence.HdLine()) == line))) {
-			j += 1
+		if player.FaGet(afa, i, 6) == evidence.EaEtext() {
+			j = arWriteText(afa, i, etext, ledger, text, tmp, tt)
+			rows += 1
+			i = j
+		} else {
+			j = i + 1
+			w = player.FaGet(afa, i, 7)
+			line = evidence.OwGet(owords, w, evidence.HdLine())
+			for (j < n) && ((player.FaGet(afa, j, 0) == player.FaGet(afa, i, 0)) && ((player.FaGet(afa, j, 5) == player.FaGet(afa, i, 5)) && (evidence.OwGet(owords, player.FaGet(afa, j, 7), evidence.HdLine()) == line))) {
+				j += 1
+			}
+			x0 = player.FaGet(afa, i, 1)
+			y0 = player.FaGet(afa, i, 2)
+			x1 = player.FaGet(afa, i, 3)
+			y1 = player.FaGet(afa, i, 4)
+			port.CellsDrop(tt, 0)
+			k = i
+			for k < j {
+				if k > i {
+					port.CellsPush(tt, 32)
+				}
+				if player.FaGet(afa, k, 1) < x0 {
+					x0 = player.FaGet(afa, k, 1)
+				}
+				if player.FaGet(afa, k, 2) < y0 {
+					y0 = player.FaGet(afa, k, 2)
+				}
+				if player.FaGet(afa, k, 3) > x1 {
+					x1 = player.FaGet(afa, k, 3)
+				}
+				if player.FaGet(afa, k, 4) > y1 {
+					y1 = player.FaGet(afa, k, 4)
+				}
+				w = player.FaGet(afa, k, 7)
+				s = evidence.OwGet(owords, w, evidence.HdTstart())
+				e = s + evidence.OwGet(owords, w, evidence.HdTlen())
+				for s < e {
+					port.CellsPush(tt, port.CellsAt(etext, s))
+					s += 1
+				}
+				k += 1
+			}
+			lr = model.LedgerAdd(ledger, player.FaGet(afa, i, 5), player.FaGet(afa, i, 0), x0, y0, x1, y1, 700, model.SrOcr())
+			t0 = port.CellsLen(text)
+			normalize.NzNfc(tt, 0, port.CellsLen(tt), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
+			model.LedgerSetText(ledger, lr, t0, port.CellsLen(text)-t0)
+			rows += 1
+			i = j
 		}
-		x0 = player.FaGet(afa, i, 1)
-		y0 = player.FaGet(afa, i, 2)
-		x1 = player.FaGet(afa, i, 3)
-		y1 = player.FaGet(afa, i, 4)
-		port.CellsDrop(tt, 0)
-		k = i
-		for k < j {
-			if k > i {
-				port.CellsPush(tt, 32)
-			}
-			if player.FaGet(afa, k, 1) < x0 {
-				x0 = player.FaGet(afa, k, 1)
-			}
-			if player.FaGet(afa, k, 2) < y0 {
-				y0 = player.FaGet(afa, k, 2)
-			}
-			if player.FaGet(afa, k, 3) > x1 {
-				x1 = player.FaGet(afa, k, 3)
-			}
-			if player.FaGet(afa, k, 4) > y1 {
-				y1 = player.FaGet(afa, k, 4)
-			}
-			w = player.FaGet(afa, k, 7)
-			s = evidence.OwGet(owords, w, evidence.HdTstart())
-			e = s + evidence.OwGet(owords, w, evidence.HdTlen())
-			for s < e {
-				port.CellsPush(tt, port.CellsAt(etext, s))
-				s += 1
-			}
-			k += 1
-		}
-		lr = model.LedgerAdd(ledger, player.FaGet(afa, i, 5), player.FaGet(afa, i, 0), x0, y0, x1, y1, 700, model.SrOcr())
-		t0 = port.CellsLen(text)
-		normalize.NzNfc(tt, 0, port.CellsLen(tt), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
-		model.LedgerSetText(ledger, lr, t0, port.CellsLen(text)-t0)
-		rows += 1
-		i = j
 	}
 	return rows
 }

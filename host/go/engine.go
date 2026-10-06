@@ -49,6 +49,7 @@ import (
 	"emon/player"
 	"emon/para"
 	"emon/table"
+	"emon/pdfannot"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
 	"emon/pdfmeta"
@@ -1141,6 +1142,13 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	pdfmeta.PmRun(view, ar, dc, ca, cb, st, pg, qidx, qtxt, qw, qseen, md, xm, ol, lb, nd, nt)
 	pdfstruct.TgRead(view, ar, dc, ca, cb, st, pg, qidx, qtxt, qw, qseen, ss, se, sk, sc, so, wk, md)
 	pdfstruct.TgJoin(ss, se, sk, sc, so, sa, gl, mk, fnt, pg, ha, hb, hh)
+	// The annotations (P3.8's PaRun, wired into the document pass by P7.5): the Watermark and Stamp rectangles are defence 1's evidence, which only
+	// arbitration reads, so they are read when it runs; nothing else of a run changes (txt is appended to, and nobody reads past its own runs).
+	an := port.NewCells()
+	if opts.OcrBornDigital {
+		x := newCellsN(5)
+		pdfannot.PaRun(view, ar, dc, ca, cb, st, pg, qidx, qtxt, qw, x[0], qseen, x[1], an, x[2], x[3], x[4])
+	}
 	if view.Missed() {
 		return step{miss: true}
 	}
@@ -1148,7 +1156,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	for i := int32(0); i < max(np, 0); i++ {
 		port.CellsPush(mask, 0)
 	}
-	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
+	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, an: an,
 		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, info: info}}
 }
 
@@ -1156,7 +1164,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 type pdfDoc struct {
 	ev                                   *evArenas
 	et, gl, mk, fnt, wd, ln, pa, pg      *port.Cells
-	txt, md, lb, ol, ss, plan, mask, loc *port.Cells
+	txt, md, lb, ol, ss, an, plan, mask, loc *port.Cells
 	// the flow stage 3 reads (P7.0), the words set aside, and how many lines the text layer had before any page unit
 	fw, fl, fa *port.Cells
 	nl0        int32
@@ -1212,7 +1220,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 		nfw, nfl, gd, gv, w2g, o2g, pp, tw, tl := fb[0], fb[1], fb[2], fb[3], fb[4], fb[5], fb[6], fb[7], fb[8]
 		health.HlDoc(ev.feats, fw, d.hl)
 		arbiter.ArDoc(d.cg, ev.refs, fw, fl, et, ev.feats, ev.owords, ev.olines, ev.oruns, ev.osyms, ev.images, ev.epages,
-			nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, d.xs[0])
+			gl, mk, d.an, qtxt, pdfstruct.TgTrust(ss), port.NewCells(), nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, d.xs[0])
 		fw, nfw = nfw, fw
 		fl, nfl = nfl, fl
 		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, port.NewCells(), port.NewCells(), et, ev.refs, gl); c != 0 {

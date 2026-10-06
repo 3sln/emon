@@ -139,7 +139,72 @@ public static class Arbiter {
         }
         return best;
     }
-    internal static int ArFill(int g, int pageagree, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells ofw, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells owords, emon.Port.Cells images, emon.Port.Cells epages, emon.Port.Cells gv) {
+    internal static int ArOffaxis(int rot) {
+        // How far (centi-degrees) an angle is off the nearest right angle: 0 for upright and turned text.
+        int r = rot % 9000;
+        if (r < 0) {
+            r += 9000;
+        }
+        if ((9000 - r) < r) {
+            return 9000 - r;
+        }
+        return r;
+    }
+    internal static int ArMaxPos(int cur, int v) {
+        // The larger of two values where -1 is absent.
+        if (v < 0) {
+            return cur;
+        }
+        if (v > cur) {
+            return v;
+        }
+        return cur;
+    }
+    internal static int ArImageAlpha(emon.Port.Cells images, emon.Port.Cells epages, int page, int x0, int y0, int x1, int y1) {
+        // The least alpha (per mille) of an image placement the box lies in (at least 600 per mille of it) that covers at least `wm-cover` of the
+        // page; -1 when there is none (defence 1: a translucent page-sized image is a background).
+        int n = Evidence.ImCount(images);
+        int ep = Evidence.EvPageRow(epages, page);
+        int j = 0;
+        int best = -1;
+        int s = 0;
+        int pw = 0;
+        int ph = 0;
+        int ix0 = 0;
+        int iy0 = 0;
+        int ix1 = 0;
+        int iy1 = 0;
+        long pa = (long) 0;
+        long ia = (long) 0;
+        if (ep >= 0) {
+            pw = Evidence.EpGet(epages, ep, Evidence.EpfWidth());
+            ph = Evidence.EpGet(epages, ep, Evidence.EpfHeight());
+        }
+        pa = unchecked(((long) pw) * ((long) ph));
+        while (j < n) {
+            if (Evidence.ImGet(images, j, Evidence.MfPage()) == page) {
+                ix0 = Evidence.ImGet(images, j, Evidence.MfX0());
+                iy0 = Evidence.ImGet(images, j, Evidence.MfY0());
+                ix1 = Evidence.ImGet(images, j, Evidence.MfX1());
+                iy1 = Evidence.ImGet(images, j, Evidence.MfY1());
+                if (Evidence.EvOverlapSmall(x0, y0, x1, y1, ix0, iy0, ix1, iy1) >= 600) {
+                    ia = unchecked(((long) (ix1 - ix0)) * ((long) (iy1 - iy0)));
+                    s = 0;
+                    if (pa > ((long) 0)) {
+                        s = (int) (unchecked(ia * ((long) 1000)) / pa);
+                    }
+                    if (s >= Artifact.WmCover()) {
+                        if ((best < 0) || (Evidence.ImGet(images, j, Evidence.MfAlpha()) < best)) {
+                            best = Evidence.ImGet(images, j, Evidence.MfAlpha());
+                        }
+                    }
+                }
+            }
+            j += 1;
+        }
+        return best;
+    }
+    internal static int ArFill(int g, int pageagree, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells ofw, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells owords, emon.Port.Cells images, emon.Port.Cells epages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells an, emon.Port.Cells txt, int trust, emon.Port.Cells rc, emon.Port.Cells gv) {
         // The group columns of group g (see `emon.fuserules`) into `gv` (`ag-count` cells).
         int nt = Player.CgGet(cg, g, Player.CgfTcount());
         int tf = Player.CgGet(cg, g, Player.CgfTfirst());
@@ -166,8 +231,22 @@ public static class Arbiter {
         int gx1 = 0;
         int gy1 = 0;
         int gpage = 0;
+        int art = -1;
+        int oangle = -1;
+        int odiag = -1;
+        int orel = -1;
+        int margin = -1;
+        int kink = -1;
+        int body = -1;
         while (k < nt) {
             row = ArRef(refs, tf + k, 1);
+            v = Artifact.AxWordClass(gl, mk, an, txt, etext, trust, feats, ofw, row);
+            if (art == -1) {
+                art = v;
+            }
+            if (art != v) {
+                art = 0;
+            }
             f = emon.Port.CellsAt(ofw, (row * 24) + Evidence.HdFeat());
             if (f >= 0) {
                 v = Evidence.FeGet(feats, f, Evidence.XtFontHealth());
@@ -202,7 +281,13 @@ public static class Arbiter {
                     ssum += v;
                     scount += 1;
                 }
+                oangle = ArMinPos(oangle, Evidence.FeGet(feats, f, Evidence.XoAngle()));
+                orel = ArMaxPos(orel, Evidence.FeGet(feats, f, Evidence.XoRelHeight()));
+                margin = ArMinPos(margin, Evidence.FeGet(feats, f, Evidence.XoMargin()));
+                kink = ArMinPos(kink, Evidence.FeGet(feats, f, Evidence.XoKinInk()));
+                body = ArMinPos(body, Evidence.FeGet(feats, f, Evidence.XoBodyShare()));
             }
+            odiag = ArMinPos(odiag, ArOffaxis(Evidence.OwGet(owords, row, 9)));
             k += 1;
         }
         emon.Port.CellsSet(gv, Fuserules.AgNt(), nt);
@@ -252,6 +337,39 @@ public static class Arbiter {
             }
         }
         emon.Port.CellsSet(gv, Fuserules.AgNear(), near);
+        // P7.5: what the PDF says (defence 1), recurrence (2), the OCR words' geometry (4), margins and ink (3, 6)
+        // an OCR-only group: only an annotation's appearance, read as text by the engine, says it is a watermark
+        if ((nt == 0) && ((nh == 0) && (no > 0))) {
+            art = -1;
+            k = 0;
+            while (k < no) {
+                v = Artifact.AxOwordClass(an, txt, etext, owords, ArRef(refs, of + k, 1));
+                if (art == -1) {
+                    art = v;
+                }
+                if (art != v) {
+                    art = 0;
+                }
+                k += 1;
+            }
+        }
+        if (nt == 0) {
+            if (nh != 0) {
+                art = 0;
+            }
+        }
+        if (art < 0) {
+            art = 0;
+        }
+        emon.Port.CellsSet(gv, Fuserules.AgArt(), art);
+        emon.Port.CellsSet(gv, Fuserules.AgRecur(), emon.Port.CellsAt(rc, g * 5));
+        emon.Port.CellsSet(gv, Fuserules.AgOangle(), oangle);
+        emon.Port.CellsSet(gv, Fuserules.AgOdiag(), odiag);
+        emon.Port.CellsSet(gv, Fuserules.AgOrel(), orel);
+        emon.Port.CellsSet(gv, Fuserules.AgMargin(), margin);
+        emon.Port.CellsSet(gv, Fuserules.AgKink(), kink);
+        emon.Port.CellsSet(gv, Fuserules.AgBody(), body);
+        emon.Port.CellsSet(gv, Fuserules.AgImalpha(), ArImageAlpha(images, epages, Player.CgGet(cg, g, Player.CgfPage()), Player.CgGet(cg, g, Player.CgfX0()), Player.CgGet(cg, g, Player.CgfY0()), Player.CgGet(cg, g, Player.CgfX1()), Player.CgGet(cg, g, Player.CgfY1())));
         return 0;
     }
     internal static int ArSources(emon.Port.Cells cg, int g) {
@@ -318,13 +436,40 @@ public static class Arbiter {
         if ((win == Fuserules.FwNone()) && (Fuserules.FrReason(r) == 0)) {
             Player.CgSet(cg, g, Player.CgfFlags(), gfl | Player.PlgInFigure());
         }
-        // dropped as a ghost: the first OCR word's box stands for the group in the set-aside list
-        if ((win == Fuserules.FwNone()) && (Fuserules.FrReason(r) > 0)) {
+        // dropped as a ghost (plausibility: defence 6 of SPEC 9.5, whichever the core row): the first OCR word's box stands for the group in the set-aside list
+        if ((win == Fuserules.FwNone()) && ((Fuserules.FrReason(r) > 0) && (Fuserules.FrDefence(r) == 0) && (Player.CgGet(cg, g, Player.CgfOcount()) > 0))) {
             o0 = Player.CgGet(cg, g, Player.CgfOfirst());
             orow = ArRef(refs, o0, 1);
             fa = Player.FaNew(afa, Player.CgGet(cg, g, Player.CgfPage()), Player.CgGet(cg, g, Player.CgfX0()), Player.CgGet(cg, g, Player.CgfY0()), Player.CgGet(cg, g, Player.CgfX1()), Player.CgGet(cg, g, Player.CgfY1()), Fuserules.FrReason(r), Evidence.EaOwords(), orow);
+            Player.FaSet(afa, fa, 8, 6);
             Player.FaSet(afa, fa, 9, g);
             Player.FaSet(afa, fa, 10, Fuserules.FrNumber(r));
+        }
+        // P7.5, dropped by a defence: an OCR-only group's every OCR word is a row (a watermark is a phrase), the rule's defence in column 8; a text-layer
+        // group's every visible word is a row whose subject is its text (the OCR words aligned to it go with it, not listed again)
+        if ((win == Fuserules.FwNone()) && ((Fuserules.FrReason(r) > 0) && (Fuserules.FrDefence(r) > 0))) {
+            if (Player.CgGet(cg, g, Player.CgfTcount()) > 0) {
+                k = 0;
+                while (k < Player.CgGet(cg, g, Player.CgfTcount())) {
+                    o0 = ArRef(refs, Player.CgGet(cg, g, Player.CgfTfirst()) + k, 1);
+                    fa = Player.FaNew(afa, emon.Port.CellsAt(ofw, o0 * 24), emon.Port.CellsAt(ofw, (o0 * 24) + 1), emon.Port.CellsAt(ofw, (o0 * 24) + 2), emon.Port.CellsAt(ofw, (o0 * 24) + 3), emon.Port.CellsAt(ofw, (o0 * 24) + 4), Fuserules.FrReason(r), Evidence.EaEtext(), emon.Port.CellsAt(ofw, (o0 * 24) + 11));
+                    Player.FaSet(afa, fa, 8, Fuserules.FrDefence(r));
+                    Player.FaSet(afa, fa, 9, g);
+                    Player.FaSet(afa, fa, 10, Fuserules.FrNumber(r));
+                    Player.FaSet(afa, fa, 11, emon.Port.CellsAt(ofw, (o0 * 24) + 12));
+                    k += 1;
+                }
+            } else {
+                k = 0;
+                while (k < Player.CgGet(cg, g, Player.CgfOcount())) {
+                    orow = ArRef(refs, Player.CgGet(cg, g, Player.CgfOfirst()) + k, 1);
+                    fa = Player.FaNew(afa, Evidence.OwGet(owords, orow, Evidence.HdPage()), Evidence.OwGet(owords, orow, Evidence.HdX0()), Evidence.OwGet(owords, orow, Evidence.HdY0()), Evidence.OwGet(owords, orow, Evidence.HdX1()), Evidence.OwGet(owords, orow, Evidence.HdY1()), Fuserules.FrReason(r), Evidence.EaOwords(), orow);
+                    Player.FaSet(afa, fa, 8, Fuserules.FrDefence(r));
+                    Player.FaSet(afa, fa, 9, g);
+                    Player.FaSet(afa, fa, 10, Fuserules.FrNumber(r));
+                    k += 1;
+                }
+            }
         }
         return 0;
     }
@@ -620,7 +765,7 @@ public static class Arbiter {
         }
         return (agree * 1000) / both;
     }
-    public static int ArDoc(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells ofw, emon.Port.Cells ofl, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells owords, emon.Port.Cells olines, emon.Port.Cells oruns, emon.Port.Cells osyms, emon.Port.Cells images, emon.Port.Cells epages, emon.Port.Cells nfw, emon.Port.Cells nfl, emon.Port.Cells fv, emon.Port.Cells fx, emon.Port.Cells afa, emon.Port.Cells gd, emon.Port.Cells gv, emon.Port.Cells w2g, emon.Port.Cells o2g, emon.Port.Cells pp, emon.Port.Cells tw, emon.Port.Cells tl, emon.Port.Cells scr) {
+    public static int ArDoc(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells ofw, emon.Port.Cells ofl, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells owords, emon.Port.Cells olines, emon.Port.Cells oruns, emon.Port.Cells osyms, emon.Port.Cells images, emon.Port.Cells epages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells an, emon.Port.Cells txt, int trust, emon.Port.Cells rc, emon.Port.Cells nfw, emon.Port.Cells nfl, emon.Port.Cells fv, emon.Port.Cells fx, emon.Port.Cells afa, emon.Port.Cells gd, emon.Port.Cells gv, emon.Port.Cells w2g, emon.Port.Cells o2g, emon.Port.Cells pp, emon.Port.Cells tw, emon.Port.Cells tl, emon.Port.Cells scr) {
         // See the head of this file. The new arenas and the scratch are the caller's (any contents; they are emptied here).
         int ng = Player.CgCount(cg);
         int nofw = Player.FwCount(ofw);
@@ -673,6 +818,9 @@ public static class Arbiter {
             emon.Port.CellsPush(gd, 0);
             i += 1;
         }
+        // P7.5 defence 2: the OCR-only groups that recur at the same place on most pages (`rc`, a flag a group)
+        Artifact.AxRecur(cg, refs, owords, etext, epages, rc, pp);
+        emon.Port.CellsDrop(pp, 0);
         // the agreement of each group's page with OCR, before any group is decided (a page where the engine and the text layer do not agree
         // is a page whose OCR-only words are not to be admitted)
         g = 0;
@@ -710,7 +858,7 @@ public static class Arbiter {
                 emon.Port.CellsSet(o2g, r, g);
                 k += 1;
             }
-            ArFill(g, emon.Port.CellsAt(gd, (g * 10) + 8), cg, refs, ofw, etext, feats, owords, images, epages, gv);
+            ArFill(g, emon.Port.CellsAt(gd, (g * 10) + 8), cg, refs, ofw, etext, feats, owords, images, epages, gl, mk, an, txt, trust, rc, gv);
             ArDecide(g, cg, refs, ofw, etext, feats, owords, images, epages, gv, gd, fx, afa);
             g += 1;
         }
@@ -769,6 +917,8 @@ public static class Arbiter {
                             ArEmitOcr(g, cg, refs, ofw, etext, owords, nfw, fv, gd, lrow);
                         }
                         changed = 1;
+                    } else if (win == Fuserules.FwNone()) {
+                        changed = 1;
                     } else {
                         s = ArWordSource(ofw, w);
                         r = ArCopyWord(nfw, ofw, w, lrow, emon.Port.CellsAt(ofw, (w * 24) + Evidence.WfSrc()) | emon.Port.CellsAt(gd, @base + 7));
@@ -797,6 +947,82 @@ public static class Arbiter {
         }
         return ng;
     }
+    internal static int ArLo(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    internal static int ArHi(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    internal static int ArWriteText(emon.Port.Cells afa, int i, emon.Port.Cells etext, emon.Port.Cells ledger, emon.Port.Cells text, emon.Port.Cells tmp, emon.Port.Cells tt) {
+        // One ledger row for the run of text-layer words (subject `etext`) that starts at row i of `afa`: the words of one page, one reason and one
+        // line (a box that overlaps the last one's vertically by at least half the smaller height), joined by a space; confidence 900, src `text`.
+        // Answers the row after the run.
+        int n = Player.FaCount(afa);
+        int j = i + 1;
+        int k = 0;
+        int s = 0;
+        int e = 0;
+        int x0 = Player.FaGet(afa, i, 1);
+        int y0 = Player.FaGet(afa, i, 2);
+        int x1 = Player.FaGet(afa, i, 3);
+        int y1 = Player.FaGet(afa, i, 4);
+        int ov = 0;
+        int hs = 0;
+        int lr = 0;
+        int t0 = 0;
+        int more = 1;
+        while ((j < n) && (more == 1)) {
+            more = 0;
+            if ((Player.FaGet(afa, j, 0) == Player.FaGet(afa, i, 0)) && ((Player.FaGet(afa, j, 5) == Player.FaGet(afa, i, 5)) && (Player.FaGet(afa, j, 6) == Evidence.EaEtext()))) {
+                ov = ArLo(Player.FaGet(afa, j, 4), Player.FaGet(afa, j - 1, 4)) - ArHi(Player.FaGet(afa, j, 2), Player.FaGet(afa, j - 1, 2));
+                hs = Player.FaGet(afa, j, 4) - Player.FaGet(afa, j, 2);
+                if (hs > (Player.FaGet(afa, j - 1, 4) - Player.FaGet(afa, j - 1, 2))) {
+                    hs = Player.FaGet(afa, j - 1, 4) - Player.FaGet(afa, j - 1, 2);
+                }
+                if ((hs > 0) && ((ov * 2) >= hs)) {
+                    more = 1;
+                    j += 1;
+                }
+            }
+        }
+        emon.Port.CellsDrop(tt, 0);
+        k = i;
+        while (k < j) {
+            if (k > i) {
+                emon.Port.CellsPush(tt, 32);
+            }
+            if (Player.FaGet(afa, k, 1) < x0) {
+                x0 = Player.FaGet(afa, k, 1);
+            }
+            if (Player.FaGet(afa, k, 2) < y0) {
+                y0 = Player.FaGet(afa, k, 2);
+            }
+            if (Player.FaGet(afa, k, 3) > x1) {
+                x1 = Player.FaGet(afa, k, 3);
+            }
+            if (Player.FaGet(afa, k, 4) > y1) {
+                y1 = Player.FaGet(afa, k, 4);
+            }
+            s = Player.FaGet(afa, k, 7);
+            e = s + Player.FaGet(afa, k, 11);
+            while (s < e) {
+                emon.Port.CellsPush(tt, emon.Port.CellsAt(etext, s));
+                s += 1;
+            }
+            k += 1;
+        }
+        lr = Model.LedgerAdd(ledger, Player.FaGet(afa, i, 5), Player.FaGet(afa, i, 0), x0, y0, x1, y1, 900, Model.SrText());
+        t0 = emon.Port.CellsLen(text);
+        Normalize.NzNfc(tt, 0, emon.Port.CellsLen(tt), text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
+        Model.LedgerSetText(ledger, lr, t0, emon.Port.CellsLen(text) - t0);
+        return j;
+    }
     public static int ArWrite(emon.Port.Cells afa, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells ledger, emon.Port.Cells text, emon.Port.Cells tmp, emon.Port.Cells tt) {
         // The OCR groups dropped as ghosts (`afa`) as ledger rows, after `fu-write`: a run of rows of one page and one OCR line is ONE row,
         // its box the union of theirs, its text the first words joined by a space (NFC, ligatures folded, as every ledger text), its
@@ -817,49 +1043,55 @@ public static class Arbiter {
         int line = 0;
         int w = 0;
         while (i < n) {
-            j = i + 1;
-            w = Player.FaGet(afa, i, 7);
-            line = Evidence.OwGet(owords, w, Evidence.HdLine());
-            while ((j < n) && ((Player.FaGet(afa, j, 0) == Player.FaGet(afa, i, 0)) && ((Player.FaGet(afa, j, 5) == Player.FaGet(afa, i, 5)) && (Evidence.OwGet(owords, Player.FaGet(afa, j, 7), Evidence.HdLine()) == line)))) {
-                j += 1;
+            if (Player.FaGet(afa, i, 6) == Evidence.EaEtext()) {
+                j = ArWriteText(afa, i, etext, ledger, text, tmp, tt);
+                rows += 1;
+                i = j;
+            } else {
+                j = i + 1;
+                w = Player.FaGet(afa, i, 7);
+                line = Evidence.OwGet(owords, w, Evidence.HdLine());
+                while ((j < n) && ((Player.FaGet(afa, j, 0) == Player.FaGet(afa, i, 0)) && ((Player.FaGet(afa, j, 5) == Player.FaGet(afa, i, 5)) && (Evidence.OwGet(owords, Player.FaGet(afa, j, 7), Evidence.HdLine()) == line)))) {
+                    j += 1;
+                }
+                x0 = Player.FaGet(afa, i, 1);
+                y0 = Player.FaGet(afa, i, 2);
+                x1 = Player.FaGet(afa, i, 3);
+                y1 = Player.FaGet(afa, i, 4);
+                emon.Port.CellsDrop(tt, 0);
+                k = i;
+                while (k < j) {
+                    if (k > i) {
+                        emon.Port.CellsPush(tt, 32);
+                    }
+                    if (Player.FaGet(afa, k, 1) < x0) {
+                        x0 = Player.FaGet(afa, k, 1);
+                    }
+                    if (Player.FaGet(afa, k, 2) < y0) {
+                        y0 = Player.FaGet(afa, k, 2);
+                    }
+                    if (Player.FaGet(afa, k, 3) > x1) {
+                        x1 = Player.FaGet(afa, k, 3);
+                    }
+                    if (Player.FaGet(afa, k, 4) > y1) {
+                        y1 = Player.FaGet(afa, k, 4);
+                    }
+                    w = Player.FaGet(afa, k, 7);
+                    s = Evidence.OwGet(owords, w, Evidence.HdTstart());
+                    e = s + Evidence.OwGet(owords, w, Evidence.HdTlen());
+                    while (s < e) {
+                        emon.Port.CellsPush(tt, emon.Port.CellsAt(etext, s));
+                        s += 1;
+                    }
+                    k += 1;
+                }
+                lr = Model.LedgerAdd(ledger, Player.FaGet(afa, i, 5), Player.FaGet(afa, i, 0), x0, y0, x1, y1, 700, Model.SrOcr());
+                t0 = emon.Port.CellsLen(text);
+                Normalize.NzNfc(tt, 0, emon.Port.CellsLen(tt), text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
+                Model.LedgerSetText(ledger, lr, t0, emon.Port.CellsLen(text) - t0);
+                rows += 1;
+                i = j;
             }
-            x0 = Player.FaGet(afa, i, 1);
-            y0 = Player.FaGet(afa, i, 2);
-            x1 = Player.FaGet(afa, i, 3);
-            y1 = Player.FaGet(afa, i, 4);
-            emon.Port.CellsDrop(tt, 0);
-            k = i;
-            while (k < j) {
-                if (k > i) {
-                    emon.Port.CellsPush(tt, 32);
-                }
-                if (Player.FaGet(afa, k, 1) < x0) {
-                    x0 = Player.FaGet(afa, k, 1);
-                }
-                if (Player.FaGet(afa, k, 2) < y0) {
-                    y0 = Player.FaGet(afa, k, 2);
-                }
-                if (Player.FaGet(afa, k, 3) > x1) {
-                    x1 = Player.FaGet(afa, k, 3);
-                }
-                if (Player.FaGet(afa, k, 4) > y1) {
-                    y1 = Player.FaGet(afa, k, 4);
-                }
-                w = Player.FaGet(afa, k, 7);
-                s = Evidence.OwGet(owords, w, Evidence.HdTstart());
-                e = s + Evidence.OwGet(owords, w, Evidence.HdTlen());
-                while (s < e) {
-                    emon.Port.CellsPush(tt, emon.Port.CellsAt(etext, s));
-                    s += 1;
-                }
-                k += 1;
-            }
-            lr = Model.LedgerAdd(ledger, Player.FaGet(afa, i, 5), Player.FaGet(afa, i, 0), x0, y0, x1, y1, 700, Model.SrOcr());
-            t0 = emon.Port.CellsLen(text);
-            Normalize.NzNfc(tt, 0, emon.Port.CellsLen(tt), text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
-            Model.LedgerSetText(ledger, lr, t0, emon.Port.CellsLen(text) - t0);
-            rows += 1;
-            i = j;
         }
         return rows;
     }

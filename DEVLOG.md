@@ -2891,6 +2891,26 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   lost: a removed word the gold has is listed in this entry); mapo80 `stamp-ghost` recorded (first target ≤ 0.2, P7.7 lowers
   it); the per-defence ledger counts from `bb fusion-report`.
   *Done when*: the above; every ledger row of the fusion set names its defence in the dump.
+  **DONE IN PART (D300-D306), on branch `worktree-agent-a5d9fdaeb4ddd2f4a` (on top of P7.3's).** *Built*: `kin/artifact.kin` (`emon.artifact`: `ax-word-class`, `ax-oword-class`,
+  `ax-annot-class`, `ax-recur`, the named settings `wm-*`), rows 201-203, 205, 211, 221, 231, 232, 251, 252 of block 200 in `kin/fuserules.kin` (nine new group columns
+  `ag-art` .. `ag-imalpha`, eleven new settings, `fr-defence`), `kin/arbiter.kin` (the columns, the text-layer words a defence drops, `ar-write` of them, the
+  defence in column 8 of `fa`), `pa-run` in the document pass of both Engines (under the born-digital setting), laws in `kin/arbitertest.kin` (12 new), the fixtures
+  `test/artifacts/{pdf,gold,replay}` with `tools/synth/artifact_pdf.clj`, `bb artifacts` (a gate, `kin/scripts/artifacts`), `bb fusion-record --artifacts | --digests`,
+  and the per-defence counts in `bb fusion`.
+  *Measured* (replay; BEFORE is the P7.3 driver on the same transcripts): **`wm-recur-image`** (a raster CONFIDENTIAL COPY under four pages of text, Tesseract reads it on
+  every page) **watermark words in the body 8 -> 0, body word error rate 0.0202 -> 0.0000**; **`wm-recur-partial`** (the watermark on 3 of 4 pages) **6 -> 0, 0.0152 -> 0.0000**;
+  the ledger holds the watermark as `watermark` on exactly the pages that have it and the dump names defence 2 on every dropped word; no word of the document is lost (0 missing).
+  The 22 documents of the fusion set (`bb fusion`): every body byte-identical to P7.3's, CER, `tl-override`, win rates (ocr 0.1129 / text 0.8871) and the `emon-fusion`
+  scoreboard entry unchanged (427 metrics, none regressed, 0 improved); `watermark-leak` 0.0 and `ghost-rate` 0.0 there already. Three bundles changed, as they must (`wm-marked`,
+  `watermark-draft`: their text-layer watermark is now dropped by rule 201 at arbitration, ledger src `text` and confidence 900, where the furniture stage dropped it with src
+  `text infer` and 600; `wm-gray-behind`/`wm-image-behind`/`wm-marked`: their ghost rows say defence 6), digests re-made by `bb fusion-record --digests`. Per-defence ledger rows of the fusion
+  set (`bb fusion`): defence 1 x4 (the two `SPECIMEN`s of `wm-marked` and the two `DRAFT`s of `watermark-draft`), defence 6 x28 (the core ghost rows), defence 0 x2 (P7.0's triage of `wm-ocg`).
+  *Departures from the brief, each a decision below*: defence 1 reads the PDF's own say through marks, alpha and annotations' TEXT, not an optional-content group's name (not in the
+  marks) (D301, D302); the Watermark annotation's rectangle alone classifies nothing (the first version dropped the whole page of `wm-annot`, CER 0.5618: D302); defence 3 (the body-ink
+  pass is P7.4's; the ink layers are not wired into the page unit), the ink halves of 4 and 6, and bleed-through are rows and columns that stay inert until they are (D304); defence 4's geometry
+  is the OCR word's own angle (the `tlines` half needs P6.4 in the page unit) and no committed transcript has a diagonal ghost (Tesseract does not read text turned by 20 degrees), so 231/232 are
+  laws only (D304); P7.0's triage rows keep defence 0 (D305); the live sets (SROIE `*.watermark.png`, mapo80 `stamp-ghost`, `emon-live` scans) were not run: the corpus is not in this worktree.
+  `scan/`, `scan-color/` and `scan-ovl/` are not fused (they are OCR-only already), so nothing of P7.5 reaches them until P7.4.
 
 - [ ] **P7.6 — `hidden-text` (prior OCR layers)** (SPEC §9.4's hidden row, D155, D208). **Wave 4.** Depends on P7.3.
   *Brief*: `kin/hidden.kin` and rows 300-399: `hidden-text` words (and P7.0's `occluded`-under-a-scan words) are
@@ -8365,4 +8385,88 @@ worse than the no-engine run's plus 0.0005; the broken documents' CER under half
 ### D259 — A manually triggered GitHub Actions workflow runs every gate and `unit red` in parallel jobs (SPEC 15.3)
 **Decision**: `gates.yml` (`workflow_dispatch` only: `groups` all | unit-only | fast-only, `ref`) checks emon and `3sln/kin` out side by side (`../kin`) and runs, on `ubuntu-latest`: `bb unit ARM` and `bb unit red ARM` per arm (go, rust, java, csharp; `unit red` now takes an optional arm), and `bb gates G...` shards for the rest (`bb gates` now takes gate names; its completeness check still runs). A summary job compares the four arms' law counts (`bb ci laws-compare`, what `bb unit` does in one process) and fails if any selected job failed; `bb ci coverage` (in the `static` shard) fails if a gate of `kin/scripts/gates` is in no shard or the workflow calls a missing bb task. Toolchains are pinned to the maintainer's (bb 1.3.190, Rust 1.92.0, Go 1.21, Temurin 25, .NET 10, ImageMagick 7 by AppImage, Python oracles at the versions of `~/.cache/emon/pylib`). Tesseract and pdfium are NOT installed: `ocr` and `render` replay committed transcripts (D127, D216). The corpus (`formats`, `financial`: all `png-check` and `image` read) is written from repository secrets into `.env`, pulled by `bb corpus-pull` only when `bb corpus-index-sha` (the SHA-256 of the remote `index.json`) changes, and cached under that key; missing secrets fail the run with a message naming them.
 **Why**: the gates take over an hour serially and nothing runs them but the maintainer's machine; sharding them is the cheapest way to a second opinion, and manual-only keeps a 12 GB corpus's credentials and minutes out of every push. Linux differences, not yet measured: poppler is Ubuntu's (older than macOS's), which `content-check` uses only for word-box comparison, and ImageMagick's version is whatever the AppImage is; a first run decides whether either needs pinning.
+- [ ] **Signed off** (maintainer)
+
+### D300 — The watermark fixtures and `bb artifacts`: a raster watermark under sparse text, replayed from transcripts, with its own gold (P7.5; D008, D095, D264)
+**Decision**: `test/artifacts/pdf` holds `wm-recur-image` (four pages) and `wm-recur-partial` (the same on pages 1 to 3), made by `tools/synth/artifact_pdf.clj` from ghostscript's
+own text (six lines at the top and five at the foot of each page from a seeded list of plain words, the middle bare) with a page-sized image of CONFIDENTIAL COPY in grey (#909090, 56 pt)
+underlaid by qpdf. The body's text is the gold (`test/artifacts/gold/body.txt`: the watermark is in no gold). `test/artifacts/replay/ID` are the slim transcripts `bb fusion-record --artifacts`
+recorded (pdfium chromium/8076, Tesseract 5.5.3, Rust) with `DIGESTS.edn`. `bb artifacts` (a gate: `kin/scripts/artifacts`, in `kin/scripts/gates`) replays them with `ocr-born-digital` on Rust
+and Go and holds: the identical bundle, equal to the recording's digest; no watermark word in the body; the ledger's `watermark` rows on exactly the pages that have it; the dump's defence 2 on
+every dropped word; the body's word error rate no worse than the no-engine run's and no word of the document missing. With `EMON_P73_DRIVER=PATH` it prints the same numbers for a driver
+built from the P7.3 sources (BEFORE). `bb fusion-record --digests` replays the committed transcripts with the plain driver and rewrites a `DIGESTS.edn` (what a change to the arbitration
+does to the bundles while the engines' answers are the same).
+**Why**: the 22 fusion documents never put a watermark in front of OCR as OCR-only text (the render without the page's text hides the text watermarks, the image ones are too faint or too
+garbled under dense text, and what OCR does read is dropped by the core ghost rules), so no recorded document could show what a defence is worth. Under dense text Tesseract reads a grey
+watermark as garbage that rule 170 already drops; the middle of the page is therefore left bare, which is what a watermark over a title page or a letter looks like. A new directory and gate
+rather than new documents of `test/corpus/synth`: the corpus is made by a Chrome print with a gold, a MANIFEST row and ten gates that enumerate it, and a fixture of P7.5's would touch all of them.
+**Alternatives**: the diagonal watermark (tried: Tesseract does not read text turned by 20 degrees, so there is no diagonal ghost to take out); a watermark under the dense `furn-odd-even` (read as
+`CONFBENTIAE ORY`, dropped as a ghost before and after).
+- [ ] **Signed off** (maintainer)
+
+### D301 — Defence 1 at arbitration: the group's class from the PDF, a dropped text-layer word is a `fa` row of its own, the OCR words aligned only to it go with it (P7.5; SPEC 9.5; D204)
+**Decision**: `ag-art` is what the PDF says of the group's visible text-layer words, all alike: 1 watermark (the nearest `/Artifact` on a glyph's mark chain has the subtype Watermark, whatever the tree's
+trust; or the word's alpha, `xt-alpha`, is under `wm-alpha` 500; or it is a token of a Watermark annotation's appearance text inside its rectangle), 2 background (the artifact's type is Background and
+`tg-trust` is at least `wm-trust` 300: a Background mark of a tree nobody can vouch for is only a mark), 3 a Stamp annotation's text (P7.7 makes the rectangle a `seal` node; until then its words are
+`background` in the ledger and not in the body). In a group with no text-layer word the same classes read the OCR words (an annotation's appearance, read by the engine). Rows 201 (watermark), 202 and 203
+(background) hold the group (`fw-none`) and the first of block 200 tried, ahead of rule 110: a healthy font's word is untouchable by OCR and by colour, angle and ink, never by the PDF's own say (D201).
+A dropped text-layer word is a row of `afa` (subject `etext`, its text run's start; cell 11 the length; cell 8 the defence, 9 the group, 10 the rule); `ar-write` joins the words of one line into
+one ledger row (confidence 900, src `text`); the OCR words of the group are not listed again (they are the same watermark). The main loop of `ar-doc` skips a word whose group's verdict is
+`fw-none`, and the line is measured again. Rows 205 (OCR-only text in an image that covers `wm-cover` 400 of the page and is drawn with alpha under `wm-alpha`: background) completes the defence for
+images; image alpha is `mf-alpha` of the placement the group lies in.
+**Why**: the strongest signal is the file's own and costs nothing; pdfium cannot render without the marks (D247), so the words go from the text layer, not from a masked render. A Watermark artifact
+counts without the tree's trust because the file states it in as many words; Background does not because many producers mark page furniture that way.
+**Alternatives**: dropping the words in the furniture stage (it has no OCR words to take along); an OCG's name (not in the marks: only its object and default state, which P7.0's triage reads as
+`ocg-hidden`).
+- [ ] **Signed off** (maintainer)
+
+### D302 — `pa-run` is in the document pass, under the born-digital setting; a Watermark annotation's rectangle alone says nothing (P7.5; D120, D204)
+**Decision**: both Engines call `pa-run` in `attempt`/`attempt` after the tagged tree, when `ocr-born-digital` is set, and keep its `an` arena for the document unit; the arena is passed to `ar-doc`
+with the document's text arena. A word is a watermark by an annotation only when its centre lies in the rectangle AND it is a token (case-folded, space-separated) of the annotation's appearance
+text; an annotation whose text could not be read (a composite font) classifies nothing. Without the setting nothing is read and no output changes.
+**Why**: the first version classified by the rectangle and dropped every word of `wm-annot`'s page (CER 0.5618): a watermark annotation's rectangle is the page, and the body is under it. `pa-run`
+had never been called; reading it only where arbitration reads it keeps every public run, `bb identity` and the fuzz gate as they were.
+**Alternatives**: calling it always (the annotations' ledger rows are P3.8's and nobody reads them yet); matching the rectangle alone (measured: a regression).
+- [ ] **Signed off** (maintainer)
+
+### D303 — Defence 2: recurrence of OCR-only text, in `ax-recur`, before any group is decided (P7.5; SPEC 9.5; D173-D177)
+**Decision**: `ax-recur` flags the OCR-only groups (no text-layer word, no hidden word, at least `wm-min-alnum` 3 Latin letters or digits) whose case-folded text (two 31/37-multiplier hashes, with the
+words joined by a space) is the same, within `wm-recur-pos` 20 per mille of the page in both directions, on at least `max(3, ceil(wm-recur-pages 600 per mille of the pages that have groups))` pages,
+outside the top and bottom `wm-band` 100 per mille of the page; `ag-recur` is its flag and row 211 holds such a group as `watermark` (defence 2). A page is counted once; more than `wm-max-candidates` 1500
+candidates and the pass does nothing (it is quadratic in them).
+**Why**: a watermark is the one OCR-only text that repeats at a place; the furniture stage has the whole document to decide the running heads and feet with and keeps its rule as it is, so the band is
+a fixed 10 per cent here and only keeps a recurring running head from being called a watermark twice. The two hashes stand for the text: a collision needs the same length-31 and -37 polynomials and the
+same place.
+**Alternatives**: the furniture stage's bands (not computed until after arbitration); the same image XObject or the same component shape (the image check needs `images` rows for the same object, and
+the shape needs the tracer: neither is wired into the page unit).
+- [ ] **Signed off** (maintainer)
+
+### D304 — Defences 3, 4 and 6: the rows are the table's, the columns that need the ink layers are absent until P6.3/P6.4 are wired, geometry reads the OCR word's own angle (P7.5; SPEC 9.5; D260)
+**Decision**: block 200 has row 221 (an OCR-only word whose body-ink share `xo-body-share` is under `wm-body-share` 300: watermark), 231 (an OCR-only group whose OCR words are at least `wm-angle` 1500
+centi-degrees off the page's text lines AND off every right angle: watermark; text turned by a right angle is text), 232 (an OCR-only group at least `wm-size` 2500 per mille of its line's median height on an
+image covering `wm-cover` of the page: watermark), 251 (kin ink `xo-kin-ink` under `ghost-ink` 50: ocr-ghost) and 252 (plausibility under `ghost-plausible` 700, that is 1000 minus `ghost-implausible`
+300, together with the least symbol margin under `ghost-margin` 150: ocr-ghost). The columns that read kin's ink (`ag-kink`, `ag-body`) are the least of the group's OCR words' `xo-kin-ink` and `xo-body-share`:
+absent (-1) in every run today, so 221 and 251 fire when P6.3/P6.4 are wired into the page unit and P7.4's body-ink pass fills them, and not before; a law holds each row to its number. Defence 3's other half
+(absence from the body-ink OCR pass) is P7.4's. Bleed-through (a `light` layer, mirrored `tlines`) needs the same layers and has no row. Defence 5 is P7.7's block 400, tried first.
+**Why**: the rows are data a reviewer reads; a value of the first column that is absent is "unknown", never a number (D260). The geometry rows read only what the OCR word has (its own angle against its
+page's lines, its height against its line's, the image it lies in): without the layers they cannot tell a watermark from a tilted figure label except by being OCR-only, off every right angle and large, which
+is what the rows say. The two numbers 150 and 700 are first values; P10.1 calibrates them. No committed transcript has such a ghost (D300), so 231, 232 and 252 are laws, not measurements.
+**Alternatives**: wiring `nm-view`/`tr-page` into the page unit here (P6.3/P6.4's integration: its own item, and the rows' conditions are the same when it lands).
+- [ ] **Signed off** (maintainer)
+
+### D305 — The dump names the defence: column 8 of `fa`, a row a word for a defence, defence 6 for the core ghost rows; P7.0's triage rows keep 0 (P7.5; SPEC 9.5, 9.7; D262)
+**Decision**: a row of `fa` that arbitration made has its defence (SPEC 9.5's number) in column 8: 1 to 6 by the tens digit of the rule (`fr-defence`; 24x is P7.7's), 6 for the core ghost rows (145, 170,
+175-178: they judge plausibility), one row per dropped word of an OCR-only group that a defence took (a phrase is not its first word; the core ghost rows keep one row a group, as P7.3 made them), column 9
+the group, 10 the rule. `bb fusion-report` and `bb fusion` print the counts per defence and per reason. The set-aside rows of P7.0's triage (`ocg-hidden`, white, transparent, occluded words) are the
+text layer's own and keep defence 0: naming them would change the evidence dump of every run, fused or not, and with it the goldens of `bb identity`.
+**Why**: "every ledger row of the fusion set names its defence" is met for every row arbitration writes; the triage rows are P7.0's, written before there is any OCR.
+**Alternatives**: setting the defence in `th-run` (changes the committed evidence goldens).
+- [ ] **Signed off** (maintainer)
+
+### D306 — What P7.5 did not measure or build (P7.5)
+**Decision**: not built: the body-ink OCR pass and the ink-layer halves of defences 3, 4 and 6 (P7.4 and the wiring of P6.3/P6.4 into the page unit), bleed-through, an optional-content group's name, the
+same image XObject or component shape recurring (defence 2's other keys). Not measured: SROIE `*.watermark.png` and mapo80 `stamp-ghost` (live sets, not in this worktree), `emon-live` on `scan/`,
+`scan-color/` and `scan-ovl/` (not fused: they are OCR-only already, so P7.5 does not reach them), the live recording of the 22 fusion documents again (their transcripts are the P7.3 ones; their bundles
+were re-derived from them). A watermark on one page only, over the body, with no PDF mark, is not caught: nothing in a single page's text distinguishes it, and P7.4's body-ink pass is what will.
+**Why**: the brief's own measures need what is listed, and a number claimed without its set would be a guess.
 - [ ] **Signed off** (maintainer)

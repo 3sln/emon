@@ -1,4 +1,4 @@
-;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D259-D264).
+;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D259-D264; P7.5, D300).
 {"bank-statement"
  "d1a556f09c94e85ada713ddb133279f667219230bb42a77ee20ef50f1d4568a6",
  "bg-texture"
@@ -6,7 +6,7 @@
  "columns-two"
  "8d39dfd663b0d841d177f2f7abdaeb366552bddd221507861eba65a6e61614c7",
  "figures-logo-screenshot"
- "0e1c793a305edbe0238399f767a94aa7461c3e4421f4ac6ed57c7be3243eaf47",
+ "6c9d11daadcb8870ee6e66c0ea6b9088da3d7a107073aa24ccf98f5a7cf56749",
  "h-numbered"
  "f225c7b5247eb2e37fe6ce17a3cf853c9f26dfcf530c4e37cad1c47e4f8a1265",
  "hidden-older-ocr"
@@ -14,11 +14,11 @@
  "invoice"
  "d7ff8d69df270aa58d802137c1e7adf8f23566299d4856e1ae2b0cc558154ce1",
  "lists-basic"
- "9b049e33210edd41a5b4c1197abebb6ff105370ca702d018e51c7e9e8fa92225",
+ "a8f7208574ded9a4e37992a19f5928ca63ec127dc431f6cadd08e3624c12a0fd",
  "outlined-heading"
- "25b05fdb0a9c3799f4a06ec61e64a809c92eb13873a19ecc325bbfcf8c14d1d3",
+ "663582f0fc324c63ec7aae907ed3bda5fe4f13625cba95c92351b5a2af136b42",
  "script-mixed"
- "11b5fd84fc43a5e10ff1f2de246e7b44639d4717da66bd427a5077f5b076c6f0",
+ "4aa3b35e0d71d45fc64012a5afcbd1d89480884403912539f45049997af6b316",
  "seal-over-text"
  "ea02fea8e40e7fbddd5cd12053f956abbfcf2bf91739fea0fa55e1fce429fb38",
  "sig-over-name"
@@ -28,18 +28,18 @@
  "table-simple-ruled"
  "92ae37a1d41e0defa40ba4cced7b1fe26331b26cda3628048edffd10ab336b3a",
  "tl-broken-shift"
- "78ff5e8479806a84c5dc3700199c3369f4367f039db6f41cdd6d0080d808ee5d",
+ "04fff677c19af50a14b4020f0f1049de75e5d6b9af9ca793f76453e2c56b131d",
  "tl-broken-unmapped"
- "0df65d2488e1e560a0a6fc8a68403fdcc8fe6e5a49307e221defb202795a693d",
+ "c45c59131c413368ba915f7541b27e79f4f8bbcf0b993410ac16196d1cad44c4",
  "watermark-draft"
- "ecbb531ac089736cddb6f43f7e983accb05b77050f86583fbf6b0c85a7818667",
+ "248c849d0d5162be2de01b1665b0cfab6e15f823309a15775983e0484d6f40d0",
  "wm-annot"
  "7305ef1a1d1aa1cc0ccabe3ed6b263dbafc8b43df5466e7087056bf332d3a72b",
  "wm-gray-behind"
- "f91929aa49cf06a07db7717931928969968eb28b449732c1ee0f220b27e7ff5f",
+ "1bdb6ac96abf5d4faf7763024386fd33713d8b144f08db25a2db9ecab0ec903a",
  "wm-image-behind"
- "4ba28ea0503dd8070b45162a02d4b9fe636caea558aaceb4d278affb4df1e8ac",
+ "c5a14c521b0fcd0b01bff75a125a464e3a96f3852589f3096306293ad7ab8542",
  "wm-marked"
- "b0a8700bea37d2f811ab95ae5222e23ca3763984b21651e83348d535db1b9a3b",
+ "d8918bc9d26047dcb50a631d24f7f665a7420b69be0c7e2f2106e2decdafc5fd",
  "wm-ocg"
  "79f947ef289d0d087bd08bb8f55a47bf68d86f103138db07a06976ed56230415"}

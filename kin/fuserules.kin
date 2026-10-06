@@ -7,11 +7,14 @@
 ;; (`fr-setting`), so a tuning is a reviewed diff of this one file. `fr-decide` answers the first row whose predicates all hold, trying
 ;; the blocks in `fr-order`.
 ;;
+;; P7.5 FILLS BLOCK 200 (rows 201-299): the six defences of SPEC 9.5, each tens digit one of them (20x the PDF says so, 21x recurrence, 22x ink layers,
+;; 23x geometry, 24x seals (P7.7's block 400 takes that), 25x plausibility), so `fr-defence` names the defence a row is.
+;;
 ;; BLOCKS (SPEC 9.4; independent items never renumber each other's rows): 100-199 the core rules (this item), 200-299 watermarks,
 ;; backgrounds and ghosts (P7.5), 300-399 `hidden-text` (P7.6), 400-499 seals and signatures (P7.7), 500-599 graphics (they run on
 ;; graphics groups, not word groups; P7.G), 600-699 where graphics meet words (P7.G). `fr-order` is the order they are tried in for a
 ;; WORD group: 400, 600, 200, 300, 100 (D224: what belongs to a seal, a rule's ink or an artifact is decided before which source reads
-;; it best). The blocks other than 100 are EMPTY here and each owner adds rows inside its own block.
+;; it best). The blocks other than 100 and 200 are EMPTY here and each owner adds rows inside its own block.
 ;;
 ;; A COLUMN THAT IS ABSENT is -1 and fails every comparison: a rule never reads "unknown" as a number. (A column that cannot be absent
 ;; says so below: `ag-garbage` is 0 for a group with no glyphs to count.)
@@ -23,6 +26,7 @@
   (:require [emon.lang :refer [I32 Cells]]
             [emon.port :refer [cells-len cells-at]]
             [emon.tlhealth :refer [th-trusted]]
+            [emon.artifact :refer [wm-cover wm-alpha]]
             [emon.health :refer [hh-agree-sim hh-agree-min]]
             [kin.lang :refer [defdata defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -45,7 +49,16 @@
 (defn ^:pub ^I32 ag-oconf [] (comment "the mean engine confidence (per mille) of the group's OCR words; one column of an admission, never the answer (D130)") (return 13))
 (defn ^:pub ^I32 ag-near [] (comment "for a group with no text-layer word: the most (per mille of the smaller box) its box overlaps a text-layer word of its page; else 0") (return 14))
 (defn ^:pub ^I32 ag-pageagree [] (comment "the agreement of the group's page between the text layer and OCR, per mille (1000 when too few groups have both)") (return 15))
-(defn ^:pub ^I32 ag-count [] (return 16))
+(defn ^:pub ^I32 ag-art [] (comment "defence 1 (D204): what the PDF says of the group's visible text-layer words, all alike: 0 nothing, 1 watermark (an /Artifact /Watermark mark, a Watermark annotation, alpha under `wm-alpha`), 2 background (an /Artifact /Background mark of a tree that can be believed), 3 a Stamp annotation's rectangle") (return 16))
+(defn ^:pub ^I32 ag-recur [] (comment "defence 2: 1 when the group is an OCR-only group that recurs at the same place on `wm-recur-pages` of the pages (`emon.artifact`'s `ax-recur`), else 0") (return 17))
+(defn ^:pub ^I32 ag-oangle [] (comment "defence 4: the least angle (centi-degrees) of the group's OCR words to the page's OCR lines (`xo-angle`); -1 absent") (return 18))
+(defn ^:pub ^I32 ag-odiag [] (comment "defence 4: the least angle (centi-degrees) of the group's OCR words off the nearest right angle (0 for upright and turned text); -1 absent") (return 19))
+(defn ^:pub ^I32 ag-orel [] (comment "defence 4: the largest height (per mille) of the group's OCR words relative to their line's median (`xo-rel-height`); -1 absent") (return 20))
+(defn ^:pub ^I32 ag-margin [] (comment "defence 6: the least symbol margin (`xo-margin`) of the group's OCR words; -1 absent") (return 21))
+(defn ^:pub ^I32 ag-kink [] (comment "defences 3 and 6: the least kin ink (`xo-kin-ink`, per mille) under the group's OCR words; -1 absent (P6.3's layers are not wired into the page unit)") (return 22))
+(defn ^:pub ^I32 ag-body [] (comment "defence 3: the least body-ink share (`xo-body-share`, per mille) of the group's OCR words; -1 absent (as `ag-kink`)") (return 23))
+(defn ^:pub ^I32 ag-imalpha [] (comment "defence 1: the least alpha (per mille) of an image placement covering at least `wm-cover` of the page that the group lies in; -1 when there is none") (return 24))
+(defn ^:pub ^I32 ag-count [] (return 25))
 
 ;; ------------------------------------------------------------- comparisons and settings
 
@@ -67,6 +80,16 @@
 (defn ^:pub ^I32 fs-admit-conf [] (return 9))
 (defn ^:pub ^I32 fs-near-max [] (return 10))
 (defn ^:pub ^I32 fs-agree-min [] (return 11))
+(defn ^:pub ^I32 fs-wm-cover [] (return 12))
+(defn ^:pub ^I32 fs-wm-alpha [] (return 13))
+(defn ^:pub ^I32 fs-wm-angle [] (return 14))
+(defn ^:pub ^I32 fs-wm-size [] (return 15))
+(defn ^:pub ^I32 fs-wm-body-share [] (return 16))
+(defn ^:pub ^I32 fs-ghost-ink [] (return 17))
+(defn ^:pub ^I32 fs-ghost-plausible [] (return 18))
+(defn ^:pub ^I32 fs-ghost-margin [] (return 19))
+(defn ^:pub ^I32 fs-two [] (return 20))
+(defn ^:pub ^I32 fs-three [] (return 21))
 
 (defn ^:pub ^I32 fr-setting [^I32 code]
   (comment "The named settings (SPEC 9.4, 13): `tl-trusted` (P7.0), `agree-sim` (P7.2) are theirs; the rest are first values (P10.1 calibrates).")
@@ -90,6 +113,21 @@
   (if (== code 10) (return 150))
   (comment "`agree-min` (P7.2): the page agreement under which OCR-only words are not admitted")
   (if (== code 11) (return (hh-agree-min)))
+  (comment "P7.5 (SPEC 9.5, 13): `wm-cover` the share of the page (per mille) an image covers to be a background; `wm-alpha` the alpha (per mille) under which")
+  (comment "text or an image is a watermark; `wm-angle` (centi-degrees) the angle off the page's text and off the right angles that is a watermark's;")
+  (comment "`wm-size` the height (per mille of the line's median) that is a watermark's; `wm-body-share` the body-ink share (per mille) under which a word is")
+  (comment "another layer's; `ghost-ink` the kin ink (per mille) under which an OCR word has no ink of its own; `ghost-plausible` is 1000 minus `ghost-implausible`")
+  (comment "(300), the plausibility an OCR-only word with low symbol margins needs; `ghost-margin` the symbol margin under which a reading is a guess.")
+  (if (== code 12) (return (wm-cover)))
+  (if (== code 13) (return (wm-alpha)))
+  (if (== code 14) (return 1500))
+  (if (== code 15) (return 2500))
+  (if (== code 16) (return 300))
+  (if (== code 17) (return 50))
+  (if (== code 18) (return 700))
+  (if (== code 19) (return 150))
+  (if (== code 20) (return 2))
+  (if (== code 21) (return 3))
   (return 0))
 
 ;; ------------------------------------------------------------- the winners
@@ -138,7 +176,27 @@
          ;; 178 OCR only on a page where OCR and the text layer do not agree (an engine that cannot read it): dropped as an OCR ghost
          178 100 0 7 0 0   0 2 0 2 2 0 1 0 1 15 1 11 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 190 the default: the text layer when there is one (low-conf), else OCR (low-conf)
-         190 100 1 0 1 600   -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0]
+         190 100 1 0 1 600   -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 201 defence 1: the PDF says watermark (an /Artifact /Watermark mark, a Watermark annotation's text, alpha under wm-alpha) of every visible text-layer word of the group (or, in a group with no text-layer word, an annotation's text read by OCR): the group (and the OCR words aligned to it) goes to the ledger as a watermark
+         201 200 0 1 0 900 16 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 202 defence 1: an /Artifact /Background mark of a tree that can be believed: background
+         202 200 0 2 0 900 16 2 20 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 203 defence 1: a token of a Stamp annotation's appearance text, inside its rectangle (until P7.7 makes it a seal node): background
+         203 200 0 2 0 900 16 2 21 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 205 defence 1: OCR-only text in an image that covers wm-cover of the page and is drawn with alpha under wm-alpha: background
+         205 200 0 2 0 800 0 2 0 2 2 0 1 0 1 9 0 12 24 1 13 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 211 defence 2: an OCR-only group recurring at the same place on wm-recur-pages of the pages: watermark
+         211 200 0 1 0 800 0 2 0 2 2 0 1 0 1 17 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 221 defence 3: an OCR-only word whose ink is mostly another layer's (body-ink share under wm-body-share): watermark (reads columns P6.3 fills; absent until the ink layers are wired)
+         221 200 0 1 0 700 0 2 0 2 2 0 1 0 1 23 1 16 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 231 defence 4: an OCR-only group on a diagonal (at least wm-angle off the page's text and off every right angle): watermark
+         231 200 0 1 0 700 0 2 0 2 2 0 1 0 1 18 0 14 19 0 14 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 232 defence 4: an OCR-only group much taller than its line's median (wm-size) on a page-sized image: watermark
+         232 200 0 1 0 700 0 2 0 2 2 0 1 0 1 20 0 15 9 0 12 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 251 defence 6: an OCR-only group with no ink of kin's own under it (kin ink under ghost-ink): ocr-ghost (absent column until the ink layers are wired)
+         251 200 0 7 0 700 0 2 0 2 2 0 1 0 1 22 1 17 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 252 defence 6: an OCR-only group with low plausibility together with low symbol margins: ocr-ghost
+         252 200 0 7 0 700 0 2 0 2 2 0 1 0 1 7 1 18 21 1 19 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0]
   :accessors {^I32 fr-count [^I32 ignored]
               ^I32 fr-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -153,6 +211,11 @@
 (defn ^:pub ^I32 fr-pcol [^I32 row ^I32 k] (return (fr-at 0 row (+ 6 (* k 3)))))
 (defn ^:pub ^I32 fr-pcmp [^I32 row ^I32 k] (return (fr-at 0 row (+ 7 (* k 3)))))
 (defn ^:pub ^I32 fr-pset [^I32 row ^I32 k] (return (fr-at 0 row (+ 8 (* k 3)))))
+
+(defn ^:pub ^I32 fr-defence [^I32 row]
+  (comment "The defence of SPEC 9.5 a row of block 200 is (1-6, by the tens digit of its number minus 19; 24x is the seals', 5), 0 for every other row.")
+  (if (!= (fr-block row) 200) (return 0))
+  (return (- (quot (fr-number row) 10) 19)))
 
 (defn ^:pub ^I32 fr-order [^I32 k]
   (comment "The k-th block a word group is tried against (D224); -1 after the last.")

@@ -51,6 +51,7 @@ use crate::emon::para::*;
 use crate::emon::table::*;
 use crate::emon::pageunit::{pu_plan, pu_run_pdf};
 use crate::emon::arbiter::{ar_doc, ar_tag, ar_write};
+use crate::emon::pdfannot::pa_run;
 use crate::emon::health::hl_doc;
 use crate::emon::player::{pl_check, pl_emit};
 use crate::emon::rasterin::*;
@@ -1055,6 +1056,8 @@ struct PdfDoc {
     lb: Cells,
     ol: Cells,
     ss: Cells,
+    // the annotations (P7.5, defence 1: Watermark and Stamp rectangles), read only when fusion is on
+    an: Cells,
     plan: Cells,
     mask: Cells,
     loc: Cells,
@@ -1164,6 +1167,13 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     pm_run(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut seen, &mut md, &mut xm, &mut ol, &mut lb, &mut nd, &mut nt);
     tg_read(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut seen, &mut ss, &mut se, &mut sk, &mut sc, &mut so, &mut wk, &mut md);
     tg_join(&mut ss, &mut se, &mut sk, &mut sc, &mut so, &mut sa, &mut gl, &mut mk, &mut fnt, &mut pg, &mut ha, &mut hb, &mut hh);
+    // The annotations (P3.8's `pa_run`, wired into the document pass by P7.5): the Watermark and Stamp rectangles are defence 1's evidence, which only
+    // arbitration reads, so they are read when it runs; nothing else of a run changes (`txt` is appended to, and nobody reads past its own runs).
+    let mut an = Cells::new();
+    if opts.ocr_born_digital {
+        let (mut fs, mut fm, mut aq, mut fd, mut sg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+        pa_run(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut idx, &mut txt, &mut w, &mut fs, &mut seen, &mut fm, &mut an, &mut aq, &mut fd, &mut sg);
+    }
     if view.missed() {
         return Step::Miss;
     }
@@ -1171,7 +1181,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, pg, txt, md, lb, ol, ss, an, plan, mask, loc: locale_cells(opts), snap, info }))
 }
 
 // One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
@@ -1191,7 +1201,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut an, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1211,8 +1221,9 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
         let (mut nfw, mut nfl, mut gd, mut gv, mut w2g, mut o2g, mut pp, mut tw, mut tl) =
             (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
         hl_doc(&mut ev.feats, &mut fw, &mut hl);
+        let (trust0, mut rc) = (tg_trust(&mut ss), Cells::new());
         ar_doc(&mut cg, &mut ev.refs, &mut fw, &mut fl, &mut et, &mut ev.feats, &mut ev.owords, &mut ev.olines, &mut ev.oruns, &mut ev.osyms, &mut ev.images, &mut ev.epages,
-               &mut nfw, &mut nfl, &mut fv, &mut fx, &mut afa, &mut gd, &mut gv, &mut w2g, &mut o2g, &mut pp, &mut tw, &mut tl, &mut xscr);
+               &mut gl, &mut mk, &mut an, &mut txt, trust0, &mut rc, &mut nfw, &mut nfl, &mut fv, &mut fx, &mut afa, &mut gd, &mut gv, &mut w2g, &mut o2g, &mut pp, &mut tw, &mut tl, &mut xscr);
         std::mem::swap(&mut fw, &mut nfw);
         std::mem::swap(&mut fl, &mut nfl);
         let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut Cells::new(), &mut Cells::new(), &mut et, &mut ev.refs, &mut gl);
