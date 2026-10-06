@@ -131,8 +131,8 @@ fn render(engine: &Engine, input: &Input, model: &emon::Model, out: &str, pretty
                 let external = HtmlOptions { assets: HtmlAssets::External, asset_prefix: "assets/".to_string(), ..HtmlOptions::default() };
                 let omit = HtmlOptions { assets: HtmlAssets::Omit, ..HtmlOptions::default() };
                 s.push_str(&format!("== html-external\n{}\n== html-omit\n{}\n== assets\n", model.serialize(&Output::Html(external)), model.serialize(&Output::Html(omit))));
-                for (name, ty, bytes) in model.asset_files() {
-                    s.push_str(&format!("{} {} {}\n{}\n", name, ty, bytes.len(), hex(&bytes)));
+                for f in model.asset_files() {
+                    s.push_str(&format!("{} {} {}\n{}\n", f.name, f.media_type, f.bytes.len(), hex(&f.bytes)));
                 }
             }
             s
@@ -330,8 +330,8 @@ fn main() {
         };
         if let Some(dir) = &asset_dir {
             std::fs::create_dir_all(dir).unwrap_or_else(|e| io(e));
-            for (name, _, bytes) in model.asset_files() {
-                std::fs::write(std::path::Path::new(dir).join(name), bytes).unwrap_or_else(|e| io(e));
+            for f in model.asset_files() {
+                std::fs::write(std::path::Path::new(dir).join(f.name), f.bytes).unwrap_or_else(|e| io(e));
             }
         }
         let text = render(&engine, &input, &model, &out, pretty, html.clone());

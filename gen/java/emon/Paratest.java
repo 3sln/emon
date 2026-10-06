@@ -678,8 +678,8 @@ public final class Paratest {
         ptLine(wd, ln, et, emon.Testport.textBlob("Hello wide world"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
         ptLine(wd, ln, et, emon.Testport.textBlob("and so on"), 2, 7200, 10000, 50000, 11200, 0, 0, 1000);
         emon.Testport.assertEq(ptRun(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "json: well formed");
-        Json.jsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
-        Html.htmlEmit(h, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.newBuf(), layout);
+        Json.jsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells());
+        Html.htmlEmit(h, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
         emon.Testport.assertText(t, "{\"emon\":\"1.1\",\"settings\":{\"locale\":null},\"conf\":\"uncalibrated\",\"pages\":[{\"n\":1,\"w\":612,\"h\":792,\"rot\":0,\"kind\":\"vector\",\"layout\":[{\"band\":0,\"col\":0,\"role\":\"body\",\"box\":[72,100,500,112]}]},{\"n\":2,\"w\":612,\"h\":792,\"rot\":0,\"kind\":\"vector\",\"layout\":[{\"band\":0,\"col\":0,\"role\":\"body\",\"box\":[72,100,500,112]}]}],\"body\":{\"id\":0,\"kind\":\"document\",\"children\":[{\"id\":1,\"kind\":\"paragraph\",\"text\":\"Hello wide world and so on\",\"inlines\":[{\"kind\":\"text\",\"text\":\"Hello wide world \",\"at\":[[1,72,100,500,112]],\"src\":[\"text\"],\"conf\":1000},{\"kind\":\"break\",\"page\":2,\"src\":[\"infer\"],\"conf\":500},{\"kind\":\"text\",\"text\":\"and so on\",\"at\":[[2,72,100,500,112]],\"src\":[\"text\"],\"conf\":1000}],\"at\":[[1,72,100,500,112],[2,72,100,500,112]],\"src\":[\"text\",\"infer\"],\"conf\":500}]},\"furniture\":[],\"dropped\":[]}", "a paragraph on two pages, in JSON");
         emon.Testport.assertText(h, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Hello wide world <span data-emon-page=\"2\"></span>and so on</p></main></body></html>", "and in HTML: the milestone inside the paragraph, in order");
     }
@@ -722,7 +722,7 @@ public final class Paratest {
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0) {
             return 3;
         }
-        Json.jsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
+        Json.jsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells());
         return 0;
     }
     public static void testRealDocumentsMakeTheGoldenModels() {

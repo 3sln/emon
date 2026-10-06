@@ -1,0 +1,66 @@
+# P3.13: assets in the Model, JSON and HTML (SPEC 4.2, 5, 10.11). WRITTEN by kin/scripts/asset-golden, with `assets.assets`,
+# the JSON and the HTML it is held to: never edit by hand. Keys (emon.model fk): 28 label 30 alt 32 name 44 generator 59 format
+# 60 version 42 pages 61 tagged 62 encrypted 82 asset 83 noasset 84 assets 85 asset-dpi 86 asset-pixels 87 asset-bytes
+# 88 assets-bytes 89 asset-signatures.
+at 0 44 emon 0.1.0
+at 0 59 pdf
+at 0 60 1.7
+ai 0 42 1
+ab 0 61 0
+ab 0 62 0
+at 0 84 images
+ai 0 85 150
+ai 0 86 4194304
+ai 0 87 4194304
+ai 0 88 33554432
+at 0 89 off
+pg 1 61200 79200 0 1
+n 12 0
+s 1 10
+at 1 28 Figure 1.
+at 1 30 The harbour at dawn
+ai 1 82 0
+r 1 1 7200 9000 30000 21000
+sr 1 256
+c 1 500
+n 11 1
+t 2 The harbour
+at 2 28 Figure 1.
+an 2 29 1
+r 2 1 7200 21500 30000 23000
+sr 2 256
+c 2 500
+n 12 0
+s 3 10
+ai 3 82 0
+r 3 1 7200 30000 30000 40000
+sr 3 256
+c 3 500
+n 12 0
+s 4 1
+at 4 30 Revenue <by> "quarter" & year
+ai 4 83 6
+r 4 1 7200 41000 30000 50000
+sr 4 256
+c 4 500
+n 13 0
+s 5 2
+t 5 PAID 2025
+at 5 32 Paid
+ai 5 82 1
+r 5 1 40000 50000 43000 53000
+sr 5 256
+c 5 500
+n 13 0
+s 6 3
+at 6 32 J. Smith
+ai 6 83 1
+r 6 1 40000 60000 50000 64000
+sr 6 256
+c 6 500
+n 12 0
+s 7 10
+ai 7 83 2
+r 7 1 7200 65000 30000 70000
+sr 7 256
+c 7 500

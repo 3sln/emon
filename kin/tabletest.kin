@@ -358,7 +358,7 @@
       (hd-analyze wd lt et gl sf sc hc ws htmp hpr hptxt)
       (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al))
     (if (!= (model-check nodes attrs regions text pages ledger layout st) 0) (return 3))
-    (js-emit t 1 nodes attrs regions text pages ledger layout layout layout)
+    (js-emit t 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
     (return 0)))
 
 (deftest test-real-documents-make-the-golden-models

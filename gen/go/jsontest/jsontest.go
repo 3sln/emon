@@ -25,8 +25,8 @@ func TestGoldenMinimal(emonT *testing.T) {
 	var pretty *strings.Builder = port.NewText()
 	port.AssertEq(emonT, mscript.JtBuild(port.TestFile("json/minimal.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds")
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed")
-	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
-	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
+	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
+	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
 	port.AssertTextSpan(emonT, compact, port.TestFile("json/minimal.json"), 0, mscript.JtEnd(port.TestFile("json/minimal.json")), "compact", 0)
 	port.AssertTextSpan(emonT, pretty, port.TestFile("json/minimal.pretty.json"), 0, mscript.JtEnd(port.TestFile("json/minimal.pretty.json")), "pretty", 0)
 }
@@ -44,8 +44,8 @@ func TestGoldenSample(emonT *testing.T) {
 	var pretty *strings.Builder = port.NewText()
 	port.AssertEq(emonT, mscript.JtBuild(port.TestFile("json/sample.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds")
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed")
-	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
-	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
+	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
+	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
 	port.AssertTextSpan(emonT, compact, port.TestFile("json/sample.json"), 0, mscript.JtEnd(port.TestFile("json/sample.json")), "compact", 0)
 	port.AssertTextSpan(emonT, pretty, port.TestFile("json/sample.pretty.json"), 0, mscript.JtEnd(port.TestFile("json/sample.pretty.json")), "pretty", 0)
 }
@@ -63,8 +63,8 @@ func TestGoldenKinds(emonT *testing.T) {
 	var pretty *strings.Builder = port.NewText()
 	port.AssertEq(emonT, mscript.JtBuild(port.TestFile("json/kinds.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds")
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed")
-	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
-	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
+	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
+	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
 	port.AssertTextSpan(emonT, compact, port.TestFile("json/kinds.json"), 0, mscript.JtEnd(port.TestFile("json/kinds.json")), "compact", 0)
 	port.AssertTextSpan(emonT, pretty, port.TestFile("json/kinds.pretty.json"), 0, mscript.JtEnd(port.TestFile("json/kinds.pretty.json")), "pretty", 0)
 }
@@ -82,8 +82,8 @@ func TestGoldenCorners(emonT *testing.T) {
 	var pretty *strings.Builder = port.NewText()
 	port.AssertEq(emonT, mscript.JtBuild(port.TestFile("json/corners.model"), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds")
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed")
-	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
-	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
+	json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
+	json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
 	port.AssertTextSpan(emonT, compact, port.TestFile("json/corners.json"), 0, mscript.JtEnd(port.TestFile("json/corners.json")), "compact", 0)
 	port.AssertTextSpan(emonT, pretty, port.TestFile("json/corners.pretty.json"), 0, mscript.JtEnd(port.TestFile("json/corners.pretty.json")), "pretty", 0)
 }
@@ -157,6 +157,6 @@ func TestTheDeepestTreeSerializes(emonT *testing.T) {
 		at = model.NodeNew(nodes, model.NkSection(), at)
 	}
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "well formed")
-	port.AssertEq(emonT, json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout), 0, "compact")
-	port.AssertEq(emonT, json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout), 0, "pretty")
+	port.AssertEq(emonT, json.JsEmit(compact, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells()), 0, "compact")
+	port.AssertEq(emonT, json.JsEmit(pretty, 1, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells()), 0, "pretty")
 }

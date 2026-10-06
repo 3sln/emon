@@ -35,9 +35,9 @@
 ;; `jt-build` answers 0, or the 1-based number of the first line that is
 ;; wrong (an unknown command, or a node the Model refused).
 (ns emon.mscript
-  (:require [emon.lang :refer [I32 Blob Cells]]
+  (:require [emon.lang :refer [I32 I64 Blob Cells Buf i64 i32 add64 mul64]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
-                               cells-push cells-drop]]
+                               cells-push cells-drop buf-len buf-push buf-blob crypto-sha256]]
             [emon.model :refer [model-init node-new node-set-text node-set-sub
                                 node-set-aux node-set-src node-set-conf
                                 node-set-flags node-add-region
@@ -47,7 +47,8 @@
                                 node-add-attr-int node-add-attr-text
                                 text-len text-append-cp text-append-utf8
                                 page-new page-set-label page-set-health
-                                page-set-resolution ledger-add ledger-set-text]]
+                                page-set-resolution ledger-add ledger-set-text
+                                asset-add asset-set-sha use-add]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or]]))
 
@@ -283,3 +284,97 @@
   (let [^I32 n (blob-len b)]
     (if (and (> n 0) (== (blob-u8 b (- n 1)) 10)) (return (- n 1)))
     (return n)))
+
+;; ----------------------------------------------------------- the asset table (P3.13)
+;;
+;; A golden with assets has a second file, `NAME.assets`, one command a line (`#` a comment), built over the same Model:
+;;
+;;   a TYPE ORIGIN FROM OBJECT W H DPI FLAGS HEX    asset-add: the codes of `amt`, `ao`, `afm` (OBJECT -1 for none, DPI 0), the
+;;                                                  `afg` bits, and the asset's bytes in hex (`-` for none); the SHA-256 is
+;;                                                  computed here (the Crypto port), so the golden's `sha256` is a real one
+;;   u ASSET NODE PAGE X0 Y0 X1 Y1                  use-add
+;;
+;; and the nodes' `asset` and `noasset` are `ai NODE 82 ID` and `ai NODE 83 CODE` of the node script, the settings the root's
+;; `at 0 84 images`, `ai 0 85 150`, ... (`fk` 84..89).
+
+(defn ^I32 jt-word [^Cells tmp ^I32 at]
+  (comment "Four bytes of `tmp` at `at`, big-endian, as a 32-bit word.")
+  (return (i32 (add64 (mul64 (i64 (cells-at tmp at)) (i64 16777216))
+                      (i64 (+ (* (cells-at tmp (+ at 1)) 65536) (+ (* (cells-at tmp (+ at 2)) 256) (cells-at tmp (+ at 3)))))))))
+
+(defn ^I32 jt-hex-bytes [^Blob b ^I32 end ^:mut ^Cells st ^:mut ^Buf abytes]
+  (comment "The rest of the line as hex pairs, appended to `abytes`; `-` is none. Answers how many bytes.")
+  (let [^:mut ^I32 i (jt-skip b end st)
+        ^:mut ^I32 n 0]
+    (if (and (< i end) (== (blob-u8 b i) 45)) (return 0))
+    (while (< (+ i 1) end)
+      (do (buf-push abytes (+ (* (jt-hexval (blob-u8 b i)) 16) (jt-hexval (blob-u8 b (+ i 1)))))
+          (set n (+ n 1))
+          (set i (+ i 2))))
+    (return n)))
+
+(defn ^:pub ^I32 jt-assets [^Blob b ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
+                            ^:mut ^Cells st ^:mut ^Cells tmp]
+  (comment "Build the asset table a script describes. 0, or the first bad line.")
+  (let [^:mut ^I32 pos 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 lineno 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ty 0
+        ^:mut ^I32 og 0
+        ^:mut ^I32 fr 0
+        ^:mut ^I32 ob 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 dp 0
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 start 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 id 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 nd 0]
+    (cells-drop assets 0)
+    (cells-drop uses 0)
+    (cells-drop st 0)
+    (cells-push st 0)
+    (while (< pos (blob-len b))
+      (do (set e (jt-eol b pos))
+          (set lineno (+ lineno 1))
+          (if (and (< pos e) (!= (blob-u8 b pos) 35))
+            (do (set c (blob-u8 b pos))
+                (cells-set st 0 (+ pos 1))
+                (if (== c 97)
+                  (do (set ty (jt-int b e st))
+                      (set og (jt-int b e st))
+                      (set fr (jt-int b e st))
+                      (set ob (jt-int b e st))
+                      (set w (jt-int b e st))
+                      (set h (jt-int b e st))
+                      (set dp (jt-int b e st))
+                      (set fl (jt-int b e st))
+                      (set start (buf-len abytes))
+                      (set n (jt-hex-bytes b e st abytes))
+                      (set id (asset-add assets ty og fr ob start n w h dp fl))
+                      (cells-drop tmp 0)
+                      (crypto-sha256 (buf-blob abytes) start n tmp)
+                      (set i 0)
+                      (while (< i 8)
+                        (do (asset-set-sha assets id i (jt-word tmp (* i 4)))
+                            (set i (+ i 1))))))
+                (if (== c 117)
+                  (do (set id (jt-int b e st))
+                      (set nd (jt-int b e st))
+                      (set p (jt-int b e st))
+                      (set x0 (jt-int b e st))
+                      (set y0 (jt-int b e st))
+                      (set x1 (jt-int b e st))
+                      (set y1 (jt-int b e st))
+                      (use-add assets uses id nd p x0 y0 x1 y1)))
+                (if (and (!= c 97) (!= c 117)) (return lineno))))
+          (set pos (+ e 1))))
+    (return 0)))

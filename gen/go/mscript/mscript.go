@@ -332,3 +332,96 @@ func JtEnd(b []byte) int32 {
 	}
 	return n
 }
+
+func jtWord(tmp *port.Cells, at int32) int32 {
+	// Four bytes of `tmp` at `at`, big-endian, as a 32-bit word.
+	return int32((int64(port.CellsAt(tmp, at)) * int64(16777216)) + int64((port.CellsAt(tmp, at+1)*65536)+((port.CellsAt(tmp, at+2)*256)+port.CellsAt(tmp, at+3))))
+}
+
+func jtHexBytes(b []byte, end int32, st *port.Cells, abytes *port.Buf) int32 {
+	// The rest of the line as hex pairs, appended to `abytes`; `-` is none. Answers how many bytes.
+	var i int32 = jtSkip(b, end, st)
+	var n int32 = 0
+	if (i < end) && (port.BlobU8(b, i) == 45) {
+		return 0
+	}
+	for (i + 1) < end {
+		port.BufPush(abytes, (jtHexval(port.BlobU8(b, i))*16)+jtHexval(port.BlobU8(b, i+1)))
+		n += 1
+		i += 2
+	}
+	return n
+}
+
+func JtAssets(b []byte, assets *port.Cells, uses *port.Cells, abytes *port.Buf, st *port.Cells, tmp *port.Cells) int32 {
+	// Build the asset table a script describes. 0, or the first bad line.
+	var pos int32 = 0
+	var e int32 = 0
+	var lineno int32 = 0
+	var c int32 = 0
+	var ty int32 = 0
+	var og int32 = 0
+	var fr int32 = 0
+	var ob int32 = 0
+	var w int32 = 0
+	var h int32 = 0
+	var dp int32 = 0
+	var fl int32 = 0
+	var start int32 = 0
+	var n int32 = 0
+	var id int32 = 0
+	var i int32 = 0
+	var p int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var nd int32 = 0
+	port.CellsDrop(assets, 0)
+	port.CellsDrop(uses, 0)
+	port.CellsDrop(st, 0)
+	port.CellsPush(st, 0)
+	for pos < port.BlobLen(b) {
+		e = jtEol(b, pos)
+		lineno += 1
+		if (pos < e) && (port.BlobU8(b, pos) != 35) {
+			c = port.BlobU8(b, pos)
+			port.CellsSet(st, 0, pos+1)
+			if c == 97 {
+				ty = jtInt(b, e, st)
+				og = jtInt(b, e, st)
+				fr = jtInt(b, e, st)
+				ob = jtInt(b, e, st)
+				w = jtInt(b, e, st)
+				h = jtInt(b, e, st)
+				dp = jtInt(b, e, st)
+				fl = jtInt(b, e, st)
+				start = port.BufLen(abytes)
+				n = jtHexBytes(b, e, st, abytes)
+				id = model.AssetAdd(assets, ty, og, fr, ob, start, n, w, h, dp, fl)
+				port.CellsDrop(tmp, 0)
+				port.CryptoSha256(port.BufBlob(abytes), start, n, tmp)
+				i = 0
+				for i < 8 {
+					model.AssetSetSha(assets, id, i, jtWord(tmp, i*4))
+					i += 1
+				}
+			}
+			if c == 117 {
+				id = jtInt(b, e, st)
+				nd = jtInt(b, e, st)
+				p = jtInt(b, e, st)
+				x0 = jtInt(b, e, st)
+				y0 = jtInt(b, e, st)
+				x1 = jtInt(b, e, st)
+				y1 = jtInt(b, e, st)
+				model.UseAdd(assets, uses, id, nd, p, x0, y0, x1, y1)
+			}
+			if (c != 97) && (c != 117) {
+				return lineno
+			}
+		}
+		pos = e + 1
+	}
+	return 0
+}

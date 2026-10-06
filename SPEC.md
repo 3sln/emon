@@ -604,7 +604,8 @@ The rest of the mapping this table leaves open (extra `data-emon-*` attributes,
 forbidden code points, `pretty` layout, what a caption or a seal's label is)
 is DEVLOG D068-D069 and D133; the code is `kin/html.kin`. The option bits are `ids` 1,
 `geometry` 2, `confidence` 4, `ledger` 8, `pretty` 16, furniture-drop 32, no-milestones 64,
-`initials: plain` 128 and `align-style` 256 (D133).
+`initials: plain` 128 and `align-style` 256 (D133); `assets: external` 512 and `assets: omit` 1024 (P3.13: the 128 and 256 §10.11 first
+named were taken by then). The option integer is those twelve bits and the confidence threshold times 4096.
 
 ---
 
@@ -1244,7 +1245,7 @@ linear-part cells.
 | `marks` | 24 | page, kind (`mk`: artifact, optional-content, tag), tag `tstart tlen`, parent span, `mcid`, artifact `/Type` (`ar`), artifact `/Subtype` (`as`), `/ActualText`, `/Alt`, `/E`, `/Lang` (each an `etext` run: 8 cells), OCG or OCMD object number, its default state (1 on, 0 off, -1 unknown), `gfirst gcount` (glyphs inside), `zfirst zlast` (painted objects inside), flags (`/Properties` reference, inline dictionary, name not found, closed by the page end), `stm` (the object number of the Form XObject whose stream the span is in, 0 the page's: P3.7 joins a structure element's MCID on `(stm, mcid)`, D101) |
 | `fonts` | 16 | object number, subtype (`ft`), descriptor `/Flags` verbatim, embedded program kind (0 none), has `ToUnicode`, base encoding, `/BaseFont` `tstart tlen`, ascent, descent (1/1000 em), space width (D083 units), italic angle (centi-degrees), `/StemV`, style (`sy` inferred from flags and name), `/CapHeight`, `/XHeight` (1/1000 em, -1 absent: the initials rule of §10.9 needs them, P4.10 reads them into the two cells that were spare) |
 | `paths` | 24 | page, kind (`pa`), box, fill, stroke, width (cpt), fill alpha, stroke alpha, flags (`pg`: closed, even-odd, **clip**: a clip is a `paths` row, filled, stroked, shading, pattern fill, non-Normal blend, soft mask in force, **truncated**: its geometry in `pts` is cut, D219), `z` (-1 for a clip), `clip`, `mark`, `ocg`, `pfirst pcount` (its geometry in `pts`: a vector rule's exact endpoints, a table grid's segments), dash (0 solid, else the first dash length, cpt), `vis`, `vby`, `vchk` (P3.6a, D219: as a glyph's), backdrop (the colour behind it that the white check found, 0xRRGGBB, -1 unknown), spare |
-| `images` | 20 | page, box, object number, pixel width, height, alpha, flags (`mg`: stencil mask, /SMask, inline, /Mask, blend, soft mask in force), `rot` (the image matrix's x axis, as for a baseline), skewed (0/1), `z`, `clip`, `mark`, `ocg`, `vis`, `vby`, `vchk`, spare |
+| `images` | 20 | page, box, object number, pixel width, height, alpha, flags (`mg`: stencil mask, /SMask, inline, /Mask, blend, soft mask in force), `rot` (the image matrix's x axis, as for a baseline), skewed (0/1), `z`, `clip`, `mark`, `ocg`, `vis`, `vby`, `vchk`, `placement` (P3.13, D362: the orientation of the matrix on the page AS DISPLAYED, `pi-orient`'s code 0..7, 8 for one that is not rectilinear; written to the dump when not 0) |
 
 **Visibility hooks (P3.6, D155).** `vis` is the `vz` code of the FIRST check that failed (0 none): `clipped` 1,
 `offpage` 2, `white-on-white` 3, `zero-size` 4, `occluded` 5, `ocg-hidden` 6, `transparent` 7. `vchk` has one bit for each
@@ -2253,6 +2254,12 @@ them; an embedder who does has the region and can crop, or turns on
 | `qr` / `barcode` | finder patterns / parallel bar runs (decoding parked) |
 | `unknown` | graphic of any other sort |
 
+**Provisional figures (P3.13, until P8.1 detects figures; D360).** With `assets` on, an image placement that passed P3.6's
+checks, covers less than 800 per mille of its page and has both sides of its visible box at least 18 pt is a `figure` of
+`subkind` `unknown`, placed among the document's and the sections' blocks by its top edge (a section ends where its next
+sibling begins), so that a caption beside it finds it as its object. With `assets` off no such figure is made: a default
+run's Model is what it was, and P8.1 owns the rule that makes every output have them.
+
 Captions are linked by label pattern (`Figure 3`, `Fig. 3`, `Chart`,
 `Exhibit`, locale forms) and proximity. Text inside a figure (axis labels,
 diagram labels) is **not** body text; it may be kept as the figure's
@@ -2582,6 +2589,21 @@ budget: it and every later new asset are `noasset: "budget"` (reuses still
 admitted, they cost nothing). A decode or render that fails or is
 unsupported is `noasset: "codec"` or `"render"`. **An asset never fails a
 page**: every problem is a `noasset` reason.
+
+**What P3.13 builds (D360-D367).** The level `images`, on both hosts; `figures` is accepted and runs as `images`
+until P8.5 (cropping a scan and rendering a chart). Settings travel in `Options` (`asset_dpi`, `asset_pixels`,
+`asset_bytes`, `assets_bytes`, `asset_signatures`), not `setting-of` (an environment poke), and are written to the header
+only when `assets` is on. The input is read in the document pass (`as-collect`): every placement that passed the P3.6
+checks is a candidate whose bytes (the JPEG's own, or the PNG) are made there, and the document unit admits them in node-id
+order (`as-run`). A candidate is a placement with its object; **an inline image (`BI`) is `noasset: "codec"`** until the
+interpreter hands its bytes on, and DCT that cannot pass through is `codec` until P6.1a's host decoder. A placement of
+800 per mille of its page or more (a scan, a background) is a candidate whose pixels are not made (`part`). An `ImageMask`
+is written in black (the fill colour is not in the placement's row). A palette PNG's PLTE is the image's own palette and a
+pixel's index is the first entry of its colour; a bilevel gray image is 1-bit; alpha exists only when the image has a mask;
+no PNG has `pHYs` (the resolution is the page's, not the image's). Images are held whole: more than twice `asset-pixels`
+samples is `too-large`; between one and two times it is scaled by the smallest integer factor (box mean, flag `scaled`).
+At most 4,096 placements make pixels and the candidates' bytes stop at twice `assets-bytes` (`budget`), so a hostile file
+cannot ask for unbounded work.
 
 **The Model and JSON.** Asset ids are 0.. in admission order; the file name
 is `a<id>.jpg` or `a<id>.png`. A `figure` or `seal` has `asset` (an id) or

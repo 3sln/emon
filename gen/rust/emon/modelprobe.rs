@@ -32,6 +32,7 @@ pub fn probe_hash(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mu
     crate::port::text_i32(t, sm_lo(h));
     return 0;
 }
-pub fn probe_json(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i32 {
-    return js_emit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
+pub fn probe_json(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells) -> i32 {
+    // `assets` and `uses` are the (empty) asset table: a Model built without `assets` has none (SPEC 10.11).
+    return js_emit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, assets, uses);
 }

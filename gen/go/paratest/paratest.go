@@ -717,8 +717,8 @@ func TestTheModelOfOneParagraphOnTwoPagesInJson(emonT *testing.T) {
 	ptLine(wd, ln, et, port.TextBlob("Hello wide world"), 1, 7200, 10000, 50000, 11200, 0, 0, 1000)
 	ptLine(wd, ln, et, port.TextBlob("and so on"), 2, 7200, 10000, 50000, 11200, 0, 0, 1000)
 	port.AssertEq(emonT, ptRun(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "json: well formed")
-	json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
-	html.HtmlEmit(h, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout)
+	json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
+	html.HtmlEmit(h, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
 	port.AssertText(emonT, t, "{\"emon\":\"1.1\",\"settings\":{\"locale\":null},\"conf\":\"uncalibrated\",\"pages\":[{\"n\":1,\"w\":612,\"h\":792,\"rot\":0,\"kind\":\"vector\",\"layout\":[{\"band\":0,\"col\":0,\"role\":\"body\",\"box\":[72,100,500,112]}]},{\"n\":2,\"w\":612,\"h\":792,\"rot\":0,\"kind\":\"vector\",\"layout\":[{\"band\":0,\"col\":0,\"role\":\"body\",\"box\":[72,100,500,112]}]}],\"body\":{\"id\":0,\"kind\":\"document\",\"children\":[{\"id\":1,\"kind\":\"paragraph\",\"text\":\"Hello wide world and so on\",\"inlines\":[{\"kind\":\"text\",\"text\":\"Hello wide world \",\"at\":[[1,72,100,500,112]],\"src\":[\"text\"],\"conf\":1000},{\"kind\":\"break\",\"page\":2,\"src\":[\"infer\"],\"conf\":500},{\"kind\":\"text\",\"text\":\"and so on\",\"at\":[[2,72,100,500,112]],\"src\":[\"text\"],\"conf\":1000}],\"at\":[[1,72,100,500,112],[2,72,100,500,112]],\"src\":[\"text\",\"infer\"],\"conf\":500}]},\"furniture\":[],\"dropped\":[]}", "a paragraph on two pages, in JSON")
 	port.AssertText(emonT, h, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Hello wide world <span data-emon-page=\"2\"></span>and so on</p></main></body></html>", "and in HTML: the milestone inside the paragraph, in order")
 }
@@ -762,7 +762,7 @@ func ptGolden(pdf []byte, t *strings.Builder, ar *port.Cells, dc *port.Cells, a 
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
 		return 3
 	}
-	json.JsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
+	json.JsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells())
 	return 0
 }
 

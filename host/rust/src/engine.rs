@@ -1830,8 +1830,8 @@ impl Model {
     }
 
     // The sidecar: every asset's (file name, media type, bytes), for the caller to write beside the HTML (`external`).
-    pub fn asset_files(&self) -> Vec<(String, String, Vec<u8>)> {
-        self.assets().iter().map(|a| (a.name(), a.media_type(), a.bytes())).collect()
+    pub fn asset_files(&self) -> Vec<AssetFile> {
+        self.assets().iter().map(|a| AssetFile { name: a.name(), media_type: a.media_type(), bytes: a.bytes() }).collect()
     }
 }
 
@@ -1846,6 +1846,14 @@ impl Model {
 pub struct AssetUse {
     pub node: i32,
     pub region: Region,
+}
+
+// One asset as a file for the caller to write beside the HTML: its name, media type and bytes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssetFile {
+    pub name: String,
+    pub media_type: String,
+    pub bytes: Vec<u8>,
 }
 
 // An asset: a view of the Model's table (an index, like a `Node`).

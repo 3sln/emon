@@ -697,8 +697,8 @@ fn test_the_model_of_one_paragraph_on_two_pages_in_json() {
     pt_line(wd, ln, et, &crate::testport::text_blob("Hello wide world")[..], 1, 7200, 10000, 50000, 11200, 0, 0, 1000);
     pt_line(wd, ln, et, &crate::testport::text_blob("and so on")[..], 2, 7200, 10000, 50000, 11200, 0, 0, 1000);
     crate::testport::assert_eq(pt_run(wd, ln, et, 2, nodes, attrs, regions, text, pages, ledger, layout, ord, raw, tmp, fr, gp, st), 0, "json: well formed");
-    js_emit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
-    html_emit(h, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, &mut crate::port::Buf::new(), layout);
+    js_emit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    html_emit(h, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Buf::new(), &mut crate::port::Cells::new());
     crate::testport::assert_text(t, "{\"emon\":\"1.1\",\"settings\":{\"locale\":null},\"conf\":\"uncalibrated\",\"pages\":[{\"n\":1,\"w\":612,\"h\":792,\"rot\":0,\"kind\":\"vector\",\"layout\":[{\"band\":0,\"col\":0,\"role\":\"body\",\"box\":[72,100,500,112]}]},{\"n\":2,\"w\":612,\"h\":792,\"rot\":0,\"kind\":\"vector\",\"layout\":[{\"band\":0,\"col\":0,\"role\":\"body\",\"box\":[72,100,500,112]}]}],\"body\":{\"id\":0,\"kind\":\"document\",\"children\":[{\"id\":1,\"kind\":\"paragraph\",\"text\":\"Hello wide world and so on\",\"inlines\":[{\"kind\":\"text\",\"text\":\"Hello wide world \",\"at\":[[1,72,100,500,112]],\"src\":[\"text\"],\"conf\":1000},{\"kind\":\"break\",\"page\":2,\"src\":[\"infer\"],\"conf\":500},{\"kind\":\"text\",\"text\":\"and so on\",\"at\":[[2,72,100,500,112]],\"src\":[\"text\"],\"conf\":1000}],\"at\":[[1,72,100,500,112],[2,72,100,500,112]],\"src\":[\"text\",\"infer\"],\"conf\":500}]},\"furniture\":[],\"dropped\":[]}", "a paragraph on two pages, in JSON");
     crate::testport::assert_text(h, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Hello wide world <span data-emon-page=\"2\"></span>and so on</p></main></body></html>", "and in HTML: the milestone inside the paragraph, in order");
 }
@@ -741,7 +741,7 @@ pub(crate) fn pt_golden(pdf: &[u8], mut t: &mut String, mut ar: &mut crate::port
     if model_check(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
         return 3;
     }
-    js_emit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
+    js_emit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
     return 0;
 }
 #[test]

@@ -510,7 +510,7 @@
     (let [^I32 np (quot (cells-len pages) 16)]
       (ht-pa wd ln et np pages layout nodes attrs regions text ord raw tmp fr gp hc))
     (if (!= (model-check nodes attrs regions text pages ledger layout mst) 0) (return 3))
-    (js-emit t 1 nodes attrs regions text pages ledger layout layout layout)
+    (js-emit t 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
     (return 0)))
 
 (deftest test-real-documents-make-the-golden-models

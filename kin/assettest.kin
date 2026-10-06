@@ -1,0 +1,650 @@
+;; Laws for assets (P3.13; D117, D360-D367, SPEC 10.11), on every target.
+;;
+;;   THE GOLDENS: `test/asset/assets.{model,assets}` is a Model with assets, and its JSON (compact and pretty) and HTML (inline,
+;;   external, omit, pretty) are the bytes `kin/scripts/asset-golden` writes, from the SPEC, with no code shared with kin.
+;;   THE FIXTURES: `test/asset/cands.txt` says what `as-collect` makes of each placement of `test/assets/*.pdf` (P3.12's files):
+;;   the status, type, origin, `from`, size and flags, in the order of the provisional figures; the bytes of an asset hash to
+;;   the SHA-256 in its row, and the placements record their orientation as `test/assets/rows.txt`'s O rows say.
+;;   THE RULES: admission (dedup by SHA-256 and length, `asset-bytes`, the first-overflow `assets-bytes`), the sources of a
+;;   figure or seal by where it is, `withheld` signatures, the provisional figures' order and place, a raster page's `part`,
+;;   and a Model whose arenas are wrong is refused by `model-check-assets`.
+(ns emon.assettest
+  (:require [emon.lang :refer [I32 I64 Blob Src Cells Buf Text i64 i32 add64 mul64]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at new-cells new-buf new-text
+                               test-file test-file-span test-t Str TestT assert-text-span]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop buf-len buf-at buf-push
+                               buf-blob src-of-blob crypto-sha256 text-cp]]
+            [emon.pdfdoc :refer [pd-open]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.para :refer [pa-pages]]
+            [emon.model :refer [model-init model-check node-new node-count node-kind node-parent node-first-child node-next
+                                node-add-region node-set-attr-int node-attr-int-or node-set-sub node-set-attr-text
+                                page-new pk-vector nk-figure nk-seal nk-section nk-document nk-heading nk-paragraph
+                                fk-image fk-asset fk-noasset fg-unknown sl-signature sl-initials sl-stamp
+                                sl-digital-signature node-set-conf
+                                asset-count asset-blen asset-bstart asset-use-count asset-use-head use-node use-next
+                                asset-add use-add model-check-assets model-hash-assets mc-bad-asset
+                                nz-withheld nz-part nz-vector nz-composite nz-codec nz-too-large nz-budget]]
+            [emon.mscript :refer [jt-build jt-assets jt-end]]
+            [emon.json :refer [js-emit]]
+            [emon.html :refer [html-emit]]
+            [emon.evidence :refer [im-count im-get mf-placement]]
+            [emon.restruct :refer [rs-figures]]
+            [emon.asset :refer [as-collect as-run as-settings as-figure-rows as-page-cands as-count as-get]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ---------------------------------------------------------------------- the goldens
+
+(defn ^I32 at-build [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^:mut ^Cells pages
+                     ^:mut ^Cells ledger ^:mut ^Cells layout ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
+                     ^:mut ^Cells st ^:mut ^Cells tmp]
+  (comment "The Model of `test/asset/assets.model` with its asset table.")
+  (let [^I32 r (jt-build (test-file "asset/assets.model") nodes attrs regions text pages ledger layout st)]
+    (if (!= r 0) (return r))
+    (return (jt-assets (test-file "asset/assets.assets") assets uses abytes st tmp))))
+
+(defn ^I32 at-golden [^TestT emon-t ^Str hfile ^I32 opts ^I32 prefix]
+  (comment "html-emit of the asset Model under `opts` (with the prefix `img/` when `prefix` is 1) is the bytes of the golden.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells st (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells pre (new-cells)
+        ^Buf abytes (new-buf)
+        ^Text out (new-text)]
+    (assert-eq (at-build nodes attrs regions text pages ledger layout assets uses abytes st tmp) 0 "the scripts build")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
+    (assert-eq (model-check-assets nodes attrs assets uses abytes st) 0 "the asset table is well formed")
+    (if (== prefix 1)
+      (do (cells-push pre 105) (cells-push pre 109) (cells-push pre 103) (cells-push pre 47)))
+    (assert-eq (html-emit out opts 0 nodes attrs regions text pages ledger layout assets uses abytes pre) 0 "it emits")
+    (assert-text-span out (test-file hfile) 0 (jt-end (test-file hfile)) "the golden" 0)
+    (return 0)))
+
+(deftest test-golden-json
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells st (new-cells)
+        ^Cells tmp (new-cells)
+        ^Buf abytes (new-buf)
+        ^Text compact (new-text)
+        ^Text pretty (new-text)]
+    (assert-eq (at-build nodes attrs regions text pages ledger layout assets uses abytes st tmp) 0 "the scripts build")
+    (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
+    (assert-eq (model-check-assets nodes attrs assets uses abytes st) 0 "the asset table is well formed")
+    (js-emit compact 0 nodes attrs regions text pages ledger layout assets uses)
+    (js-emit pretty 1 nodes attrs regions text pages ledger layout assets uses)
+    (assert-text-span compact (test-file "asset/assets.json") 0 (jt-end (test-file "asset/assets.json")) "compact" 0)
+    (assert-text-span pretty (test-file "asset/assets.pretty.json") 0 (jt-end (test-file "asset/assets.pretty.json")) "pretty" 0)))
+
+(deftest test-golden-html-inline
+  (at-golden (test-t) "asset/assets.html" 0 0))
+
+(deftest test-golden-html-external
+  (comment "ho-assets-external is 512: `src` is the prefix and the file's name")
+  (at-golden (test-t) "asset/assets.external.html" 512 1))
+
+(deftest test-golden-html-omit
+  (comment "ho-assets-omit is 1024: the placeholders, as if no asset existed (and no noasset)")
+  (at-golden (test-t) "asset/assets.omit.html" 1024 0))
+
+(deftest test-golden-html-pretty
+  (at-golden (test-t) "asset/assets.pretty.html" 16 0))
+
+(defn ^I32 at-same [^TestT emon-t ^I32 opts]
+  (comment "A Model without assets gives the HTML of the plain golden under every assets option.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells st (new-cells)
+        ^Text out (new-text)]
+    (assert-eq (jt-build (test-file "json/sample.model") nodes attrs regions text pages ledger layout st) 0 "the script builds")
+    (assert-eq (html-emit out opts 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells)) 0 "it emits")
+    (assert-text-span out (test-file "html/sample.html") 0 (jt-end (test-file "html/sample.html")) "the plain golden" 0)
+    (return 0)))
+
+(deftest test-a-model-without-assets-emits-the-same-html-in-all-three-modes
+  (at-same (test-t) 0)
+  (at-same (test-t) 512)
+  (at-same (test-t) 1024))
+
+;; ----------------------------------------------------------------- the arenas are checked
+
+(defn ^I32 at-break [^I32 which]
+  (comment "The asset Model with one thing wrong (by `which`); what `model-check-assets` says. 0 broken: well formed. `which` 5")
+  (comment "does not break it but adds a byte, and answers 1 when `model-hash-assets` sees the byte (else 0).")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells st (new-cells)
+        ^Cells tmp (new-cells)
+        ^Buf abytes (new-buf)
+        ^:mut ^I64 h0 (i64 0)]
+    (at-build nodes attrs regions text pages ledger layout assets uses abytes st tmp)
+    (if (== which 1) (cells-set assets 29 (+ (cells-at assets 29) 1)))
+    (if (== which 2) (cells-set uses 1 9999))
+    (if (== which 3) (node-set-attr-int nodes attrs 7 (fk-asset) 5))
+    (if (== which 4) (node-set-attr-int nodes attrs 1 (fk-noasset) 2))
+    (if (== which 5)
+      (do (set h0 (model-hash-assets (i64 0) assets uses abytes))
+          (buf-push abytes 7)
+          (if (!= (model-hash-assets (i64 0) assets uses abytes) h0) (return 1))
+          (return 0)))
+    (return (model-check-assets nodes attrs assets uses abytes st))))
+
+(deftest test-model-check-assets-refuses-what-is-wrong
+  (assert-eq (at-break 0) 0 "well formed")
+  (assert-eq (at-break 1) (mc-bad-asset) "an asset's bytes run past the buffer")
+  (assert-eq (at-break 2) (mc-bad-asset) "a use of a node that is not there")
+  (assert-eq (at-break 3) (mc-bad-asset) "a node with an asset that is not in the table")
+  (assert-eq (at-break 4) (mc-bad-asset) "a node with an asset and a reason")
+  (assert-eq (at-break 5) 1 "the hash covers the bytes: one more byte is another Model"))
+
+;; ------------------------------------------------------------------ hand-made candidates
+
+(defn ^I32 at-cand [^:mut ^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 status ^I32 bstart ^I32 blen ^I32 sha]
+  (comment "A candidate row (kin/asset.kin's layout) by hand: a PNG of 4 x 4, decoded from raw samples, object 7; `sha` is the")
+  (comment "first word of its hash, the others zero. Answers its row.")
+  (let [^I32 r (quot (cells-len cand) 32)
+        ^:mut ^I32 i 0]
+    (while (< i 32)
+      (do (cells-push cand 0)
+          (set i (+ i 1))))
+    (cells-set cand (+ (* r 32) 0) page)
+    (cells-set cand (+ (* r 32) 1) x0)
+    (cells-set cand (+ (* r 32) 2) y0)
+    (cells-set cand (+ (* r 32) 3) x1)
+    (cells-set cand (+ (* r 32) 4) y1)
+    (cells-set cand (+ (* r 32) 5) x0)
+    (cells-set cand (+ (* r 32) 6) y0)
+    (cells-set cand (+ (* r 32) 7) x1)
+    (cells-set cand (+ (* r 32) 8) y1)
+    (cells-set cand (+ (* r 32) 9) status)
+    (cells-set cand (+ (* r 32) 10) 2)
+    (cells-set cand (+ (* r 32) 11) bstart)
+    (cells-set cand (+ (* r 32) 12) blen)
+    (cells-set cand (+ (* r 32) 13) sha)
+    (cells-set cand (+ (* r 32) 21) 4)
+    (cells-set cand (+ (* r 32) 22) 4)
+    (cells-set cand (+ (* r 32) 24) 8)
+    (cells-set cand (+ (* r 32) 25) 7)
+    (cells-set cand (+ (* r 32) 26) 2)
+    (return r)))
+
+(defn ^I32 at-bytes [^:mut ^Buf b ^I32 n ^I32 v]
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (buf-push b v)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 at-fig [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 row]
+  (comment "A figure under the root that is the candidate `row` (as a provisional figure is): its region is empty.")
+  (let [^I32 n (node-new nodes (nk-figure) 0)]
+    (node-set-sub nodes n (fg-unknown))
+    (node-set-attr-int nodes attrs n (fk-image) row)
+    (return n)))
+
+(defn ^I32 at-box [^:mut ^Cells box]
+  (cells-push box 0)
+  (cells-push box 0)
+  (cells-push box 0)
+  (cells-push box 0)
+  (cells-push box 0)
+  (return 0))
+
+(deftest test-admission-dedups-bounds-and-budgets
+  (comment "asset-bytes 8, assets-bytes 12. In node order: a new asset; the same bytes (one asset, a second use); 10 bytes (over")
+  (comment "asset-bytes: too-large); a codec image (its reason); a new asset of 5; one that takes the document over 12 (budget:")
+  (comment "it closes the budget); the first asset again (a reuse is still admitted); a new one (budget: it is closed).")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells box (new-cells)
+        ^Cells st (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf abytes (new-buf)
+        ^:mut ^I32 u0 0
+        ^:mut ^I32 u1 0
+        ^:mut ^I32 u2 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (at-bytes cbytes 4 97)
+    (at-bytes cbytes 4 97)
+    (at-bytes cbytes 10 98)
+    (at-bytes cbytes 5 99)
+    (at-bytes cbytes 4 100)
+    (at-bytes cbytes 4 97)
+    (at-bytes cbytes 1 101)
+    (at-cand cand 1 0 0 10 10 0 0 4 1)
+    (at-cand cand 1 0 0 10 10 0 4 4 1)
+    (at-cand cand 1 0 0 10 10 0 8 10 2)
+    (at-cand cand 1 0 0 10 10 6 0 0 0)
+    (at-cand cand 1 0 0 10 10 0 18 5 3)
+    (at-cand cand 1 0 0 10 10 0 23 4 4)
+    (at-cand cand 1 0 0 10 10 0 27 4 1)
+    (at-cand cand 1 0 0 10 10 0 31 1 5)
+    (at-fig nodes attrs 0)
+    (at-fig nodes attrs 1)
+    (at-fig nodes attrs 2)
+    (at-fig nodes attrs 3)
+    (at-fig nodes attrs 4)
+    (at-fig nodes attrs 5)
+    (at-fig nodes attrs 6)
+    (at-fig nodes attrs 7)
+    (at-box box)
+    (assert-eq (as-run nodes attrs regions cand cbytes assets uses abytes 8 12 0 box) 2 "two assets")
+    (assert-eq (node-attr-int-or nodes attrs 1 (fk-asset) -1) 0 "the first is asset 0")
+    (assert-eq (node-attr-int-or nodes attrs 2 (fk-asset) -1) 0 "the same bytes are the same asset")
+    (assert-eq (node-attr-int-or nodes attrs 3 (fk-noasset) -1) (nz-too-large) "10 bytes are over asset-bytes")
+    (assert-eq (node-attr-int-or nodes attrs 4 (fk-noasset) -1) (nz-codec) "a codec image says so")
+    (assert-eq (node-attr-int-or nodes attrs 5 (fk-asset) -1) 1 "the next new one is asset 1")
+    (assert-eq (node-attr-int-or nodes attrs 6 (fk-noasset) -1) (nz-budget) "over assets-bytes: budget")
+    (assert-eq (node-attr-int-or nodes attrs 7 (fk-asset) -1) 0 "a reuse costs nothing, the budget is closed or not")
+    (assert-eq (node-attr-int-or nodes attrs 8 (fk-noasset) -1) (nz-budget) "after the first overflow every new asset is budget")
+    (assert-eq (asset-use-count assets 0) 3 "asset 0 is used by three nodes")
+    (set u0 (asset-use-head assets 0))
+    (set u1 (use-next uses u0))
+    (set u2 (use-next uses u1))
+    (assert-eq (use-node uses u0) 1 "in node order: 1")
+    (assert-eq (use-node uses u1) 2 "2")
+    (assert-eq (use-node uses u2) 7 "7")
+    (assert-eq (asset-bstart assets 0) 0 "asset 0 starts the bytes")
+    (assert-eq (asset-blen assets 0) 4 "of 4 bytes")
+    (assert-eq (asset-bstart assets 1) 4 "asset 1 follows")
+    (assert-eq (asset-blen assets 1) 5 "5 bytes")
+    (assert-eq (buf-len abytes) 9 "9 bytes in all")
+    (assert-eq (buf-at abytes 3) 97 "asset 0's bytes")
+    (assert-eq (buf-at abytes 4) 99 "asset 1's bytes")
+    (assert-eq (model-check-assets nodes attrs assets uses abytes st) 0 "the table is well formed")))
+
+;; ------------------------------------------------------- which source, by where a node is
+
+(defn ^I32 at-fig-at [^:mut ^Cells nodes ^:mut ^Cells regions ^I32 kind ^I32 sub ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (let [^I32 n (node-new nodes kind 0)]
+    (node-set-sub nodes n sub)
+    (if (>= page 0)
+      (node-add-region nodes regions n page x0 y0 x1 y1))
+    (return n)))
+
+(defn ^I32 at-geo [^:mut ^Cells res ^I32 sigs]
+  (comment "Nine figures and seals that are not provisional figures, placed against three candidates; their outcomes into `res`.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells box (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf abytes (new-buf)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (at-bytes cbytes 4 97)
+    (at-bytes cbytes 4 98)
+    (comment "C0 and C1 are images, C2 a page-sized one (its pixels are not made: part)")
+    (at-cand cand 1 10000 10000 30000 30000 0 0 4 1)
+    (at-cand cand 1 50000 10000 70000 30000 0 4 4 2)
+    (at-cand cand 1 100000 100000 120000 120000 2 0 0 0)
+    (at-fig-at nodes regions (nk-figure) (fg-unknown) 1 10000 10000 30000 30000)
+    (at-fig-at nodes regions (nk-figure) (fg-unknown) 1 12000 12000 20000 20000)
+    (at-fig-at nodes regions (nk-figure) (fg-unknown) 1 20000 10000 60000 30000)
+    (at-fig-at nodes regions (nk-figure) (fg-unknown) 1 200000 200000 220000 220000)
+    (at-fig-at nodes regions (nk-seal) (sl-signature) 1 10000 10000 30000 30000)
+    (at-fig-at nodes regions (nk-seal) (sl-digital-signature) 1 10000 10000 30000 30000)
+    (at-fig-at nodes regions (nk-seal) (sl-stamp) 1 50000 10000 70000 30000)
+    (at-fig-at nodes regions (nk-figure) (fg-unknown) 1 100000 100000 120000 120000)
+    (at-fig-at nodes regions (nk-figure) (fg-unknown) -1 0 0 0 0)
+    (at-box box)
+    (as-run nodes attrs regions cand cbytes assets uses abytes 8 100 sigs box)
+    (cells-drop res 0)
+    (let [^:mut ^I32 n 1]
+      (while (<= n 9)
+        (do (cells-push res (node-attr-int-or nodes attrs n (fk-asset) -1))
+            (cells-push res (node-attr-int-or nodes attrs n (fk-noasset) -1))
+            (set n (+ n 1)))))
+    (return 0)))
+
+(deftest test-a-node-is-the-image-it-is-or-says-why-not
+  (let [^Cells res (new-cells)]
+    (at-geo res 0)
+    (assert-eq (cells-at res 0) 0 "a figure that is one whole image gets it (asset 0)")
+    (assert-eq (cells-at res 3) (nz-part) "a figure inside one image's box is part of it")
+    (assert-eq (cells-at res 5) (nz-composite) "a figure over two images is a composite")
+    (assert-eq (cells-at res 7) (nz-vector) "a figure with no image under it is vector")
+    (assert-eq (cells-at res 9) (nz-withheld) "a signature seal is withheld")
+    (assert-eq (cells-at res 10) -1 "a digital signature has no pixels and no field")
+    (assert-eq (cells-at res 11) -1 "no reason either")
+    (assert-eq (cells-at res 12) 1 "a stamp seal that is one image gets it (asset 1)")
+    (assert-eq (cells-at res 15) (nz-part) "an image the size of a page is never an asset at images")
+    (assert-eq (cells-at res 17) (nz-vector) "a node with no region is vector")
+    (comment "with asset-signatures on, the signature seal is the image")
+    (at-geo res 1)
+    (assert-eq (cells-at res 8) 0 "a signature seal gets the image when signatures are on")
+    (assert-eq (cells-at res 9) -1 "and has no reason")))
+
+;; -------------------------------------------------------------- the provisional figures
+
+(defn ^I32 at-page [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^:mut ^Cells pages
+                    ^:mut ^Cells ledger ^:mut ^Cells layout]
+  (model-init nodes attrs regions text pages ledger layout)
+  (page-new pages 1 61200 79200 0 (pk-vector))
+  (page-new pages 2 61200 79200 0 (pk-vector))
+  (return 0))
+
+(deftest test-the-provisional-figures-are-found-and-ordered-by-their-top
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells fg (new-cells)]
+    (at-page nodes attrs regions text pages ledger layout)
+    (comment "row 0 on page 2; row 1 page 1, top 20000; row 2 too small (a side under 18 pt); row 3 covers the page; row 4 page 1,")
+    (comment "top 3000, right; row 5 the same top and further left: the left one first")
+    (at-cand cand 2 5000 5000 25000 25000 0 0 0 1)
+    (at-cand cand 1 5000 20000 25000 40000 0 0 0 2)
+    (at-cand cand 1 5000 50000 6000 70000 0 0 0 3)
+    (at-cand cand 1 0 0 61200 79200 2 0 0 4)
+    (at-cand cand 1 30000 3000 50000 20000 0 0 0 5)
+    (at-cand cand 1 5000 3000 25000 20000 0 0 0 6)
+    (assert-eq (as-figure-rows cand pages fg) 4 "four are figures")
+    (assert-eq (cells-at fg 0) 0 "the cursor is at the start")
+    (assert-eq (cells-at fg 1) 5 "page 1, top 3000, left first")
+    (assert-eq (cells-at fg 2) 4 "then the one to its right")
+    (assert-eq (cells-at fg 3) 1 "then page 1, top 20000")
+    (assert-eq (cells-at fg 4) 0 "then page 2")))
+
+(defn ^I32 at-para [^:mut ^Cells nodes ^:mut ^Cells regions ^I32 parent ^I32 kind ^I32 y0 ^I32 y1]
+  (let [^I32 n (node-new nodes kind parent)]
+    (node-add-region nodes regions n 1 7200 y0 54000 y1)
+    (return n)))
+
+(deftest test-a-figure-goes-where-its-top-edge-falls-among-the-blocks
+  (comment "document > section [heading 1000, paragraph 10000, paragraph 40000], paragraph 70000; figures at 20000 (inside the")
+  (comment "section, between its paragraphs), 50000 (after the section's last child, before the next sibling: still inside it)")
+  (comment "and 95000 (after everything: the document's last child).")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells fg (new-cells)
+        ^Cells nn (new-cells)
+        ^Cells na (new-cells)
+        ^Cells nr (new-cells)
+        ^Cells nm (new-cells)
+        ^Cells st (new-cells)
+        ^:mut ^I32 sec 0]
+    (at-page nodes attrs regions text pages ledger layout)
+    (set sec (node-new nodes (nk-section) 0))
+    (at-para nodes regions sec (nk-heading) 1000 2000)
+    (at-para nodes regions sec (nk-paragraph) 10000 12000)
+    (at-para nodes regions sec (nk-paragraph) 40000 42000)
+    (at-para nodes regions 0 (nk-paragraph) 70000 72000)
+    (at-cand cand 1 7200 20000 30000 30000 0 0 0 1)
+    (at-cand cand 1 7200 50000 30000 60000 0 0 0 2)
+    (at-cand cand 1 7200 95000 30000 100000 0 0 0 3)
+    (assert-eq (as-figure-rows cand pages fg) 3 "three figures")
+    (rs-figures nodes attrs regions nn na nr nm cand fg)
+    (assert-eq (node-count nn) 9 "nine nodes: the six and three figures")
+    (comment "preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE")
+    (assert-eq (node-kind nn 0) (nk-document) "the document")
+    (assert-eq (node-kind nn 1) (nk-section) "the section")
+    (assert-eq (node-kind nn 2) (nk-heading) "its heading")
+    (assert-eq (node-kind nn 3) (nk-paragraph) "its paragraph")
+    (assert-eq (node-kind nn 4) (nk-figure) "the figure at 20000 is between the section's paragraphs")
+    (assert-eq (node-parent nn 4) 1 "inside the section")
+    (assert-eq (node-kind nn 5) (nk-paragraph) "the second paragraph")
+    (assert-eq (node-kind nn 6) (nk-figure) "the figure at 50000 ends the section")
+    (assert-eq (node-parent nn 6) 1 "still inside the section")
+    (assert-eq (node-kind nn 7) (nk-paragraph) "the paragraph after the section")
+    (assert-eq (node-parent nn 7) 0 "in the document")
+    (assert-eq (node-kind nn 8) (nk-figure) "the figure after everything")
+    (assert-eq (node-parent nn 8) 0 "is the document's last child")
+    (assert-eq (node-attr-int-or nn na 4 (fk-image) -1) 0 "a figure keeps the candidate row it came from")
+    (assert-eq (node-attr-int-or nn na 6 (fk-image) -1) 1 "the second")
+    (assert-eq (node-attr-int-or nn na 8 (fk-image) -1) 2 "the third")
+    (assert-eq (model-check nn na nr text pages ledger layout st) 0 "the Model is well formed")))
+
+(deftest test-a-raster-input-has-one-picture-a-page-and-no-node-is-it
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells box (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf abytes (new-buf)]
+    (at-page nodes attrs regions text pages ledger layout)
+    (assert-eq (as-page-cands pages cand) 2 "one candidate a page")
+    (assert-eq (as-get cand 0 9) (nz-part) "its status is part")
+    (at-fig-at nodes regions (nk-figure) (fg-unknown) 1 10000 10000 20000 20000)
+    (at-fig-at nodes regions (nk-seal) (sl-stamp) 2 10000 10000 20000 20000)
+    (at-box box)
+    (as-run nodes attrs regions cand cbytes assets uses abytes 100 1000 0 box)
+    (assert-eq (node-attr-int-or nodes attrs 1 (fk-noasset) -1) (nz-part) "a figure on a scan is part of it")
+    (assert-eq (node-attr-int-or nodes attrs 2 (fk-noasset) -1) (nz-part) "so is a seal on page 2")
+    (assert-eq (asset-count assets) 0 "no assets")))
+
+;; ----------------------------------------------------------------------- the fixtures
+
+(defn ^I32 at-nl [^Blob b ^I32 i]
+  (let [^:mut ^I32 k i]
+    (while (and (< k (blob-len b)) (!= (blob-u8 b k) 10))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 at-sep [^Blob b ^I32 i ^I32 lim ^I32 ch]
+  (comment "Index of the next `ch` in [i, lim), or lim.")
+  (let [^:mut ^I32 k i]
+    (while (and (< k lim) (!= (blob-u8 b k) ch))
+      (set k (+ k 1)))
+    (return k)))
+
+(defn ^I32 at-field [^Blob b ^I32 pos ^I32 e ^I32 n]
+  (comment "Where the n-th tab-separated field of the row [pos, e) starts.")
+  (let [^:mut ^I32 p pos
+        ^:mut ^I32 k 0]
+    (while (< k n)
+      (do (set p (+ (at-sep b p e 9) 1))
+          (set k (+ k 1))))
+    (return p)))
+
+(defn ^I32 at-int [^Blob b ^I32 from ^I32 to]
+  (let [^:mut ^I32 k from
+        ^:mut ^I32 v 0]
+    (while (< k to)
+      (do (set v (+ (* v 10) (- (blob-u8 b k) 48)))
+          (set k (+ k 1))))
+    (return v)))
+
+(defn ^I32 at-cint [^Blob b ^I32 from ^I32 to ^I32 n]
+  (comment "The n-th colon-separated integer of b[from, to).")
+  (let [^:mut ^I32 p from
+        ^:mut ^I32 k 0]
+    (while (< k n)
+      (do (set p (+ (at-sep b p to 58) 1))
+          (set k (+ k 1))))
+    (return (at-int b p (at-sep b p to 58)))))
+
+(defn ^I32 at-word [^Cells tmp ^I32 i]
+  (return (i32 (add64 (mul64 (i64 (cells-at tmp (* i 4))) (i64 16777216))
+                      (i64 (+ (* (cells-at tmp (+ (* i 4) 1)) 65536) (+ (* (cells-at tmp (+ (* i 4) 2)) 256) (cells-at tmp (+ (* i 4) 3)))))))))
+
+(defn ^I32 at-run [^Src src ^:mut ^Cells cand ^:mut ^Buf cbytes ^:mut ^Cells pages ^:mut ^Cells fg ^:mut ^Cells im]
+  (comment "Open the document, run its pages, collect its asset candidates into `cand` and `cbytes`, and find the provisional")
+  (comment "figures into `fg` (pages are the Model's). Answers 0, or the failing step.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^Cells o2 (new-cells)
+        ^Cells rec (new-cells)
+        ^Cells mrec (new-cells)
+        ^Cells smp (new-cells)
+        ^Cells msmp (new-cells)
+        ^Cells data (new-cells)
+        ^Cells rows (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells ws (new-cells)
+        ^Buf z (new-buf)]
+    (if (!= (pd-open src ar dc a b st) 0) (return 1))
+    (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx) 0) (return 2))
+    (if (!= (as-collect src ar dc a b st im pa gl pg 4194304 33554432 cand cbytes o2 rec mrec smp msmp data rows tmp ws z) 0) (return 3))
+    (pa-pages pg pages)
+    (as-figure-rows cand pages fg)
+    (return 0)))
+
+(defn ^I32 at-cands-row [^TestT emon-t ^Blob rows ^I32 pos ^I32 e ^I32 line]
+  (comment "file n cand...: each candidate status:type:origin:from:w:h:flags, in the order of the provisional figures")
+  (let [^Cells cand (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells fg (new-cells)
+        ^Cells im (new-cells)
+        ^Cells tmp (new-cells)
+        ^Buf cbytes (new-buf)
+        ^I32 fs (at-field rows pos e 0)
+        ^I32 fe (at-sep rows fs e 9)
+        ^I32 ns (at-field rows pos e 1)
+        ^I32 n (at-int rows ns (at-sep rows ns e 9))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 i 0]
+    (assert-eq-at (at-run (src-of-blob (test-file-span rows fs fe)) cand cbytes pages fg im) 0 "the document runs" line)
+    (assert-eq-at (cells-len fg) (+ n 1) "the provisional figures" line)
+    (if (== (cells-len fg) (+ n 1))
+      (while (< k n)
+        (do (set r (cells-at fg (+ k 1)))
+            (set p (at-field rows pos e (+ 2 k)))
+            (set q (at-sep rows p e 9))
+            (assert-eq-at (as-get cand r 9) (at-cint rows p q 0) "the status" line)
+            (if (== (at-cint rows p q 0) 0)
+              (do (assert-eq-at (as-get cand r 10) (at-cint rows p q 1) "the media type" line)
+                  (assert-eq-at (as-get cand r 26) (at-cint rows p q 2) "the origin" line)
+                  (assert-eq-at (as-get cand r 24) (at-cint rows p q 3) "from" line)
+                  (assert-eq-at (as-get cand r 21) (at-cint rows p q 4) "the width" line)
+                  (assert-eq-at (as-get cand r 22) (at-cint rows p q 5) "the height" line)
+                  (assert-eq-at (as-get cand r 23) (at-cint rows p q 6) "the flags" line)
+                  (comment "the bytes hash to the row's SHA-256, and a JPEG is a JPEG, a PNG a PNG")
+                  (cells-drop tmp 0)
+                  (crypto-sha256 (buf-blob cbytes) (as-get cand r 11) (as-get cand r 12) tmp)
+                  (set i 0)
+                  (while (< i 8)
+                    (do (assert-eq-at (as-get cand r (+ 13 i)) (at-word tmp i) "the SHA-256 word" line)
+                        (set i (+ i 1))))
+                  (if (== (at-cint rows p q 1) 1)
+                    (do (assert-eq-at (buf-at cbytes (as-get cand r 11)) 255 "SOI" line)
+                        (assert-eq-at (buf-at cbytes (+ (as-get cand r 11) 1)) 216 "SOI" line)
+                        (assert-eq-at (buf-at cbytes (- (+ (as-get cand r 11) (as-get cand r 12)) 2)) 255 "EOI" line)
+                        (assert-eq-at (buf-at cbytes (- (+ (as-get cand r 11) (as-get cand r 12)) 1)) 217 "EOI" line)))
+                  (if (== (at-cint rows p q 1) 2)
+                    (do (assert-eq-at (buf-at cbytes (as-get cand r 11)) 137 "PNG signature" line)
+                        (assert-eq-at (buf-at cbytes (+ (as-get cand r 11) 1)) 80 "PNG signature" line)))))
+            (set k (+ k 1)))))
+    (return 0)))
+
+(deftest test-the-fixtures-make-their-candidates
+  (let [^Blob rows (test-file "asset/cands.txt")
+        ^I32 n (blob-len rows)
+        ^:mut ^I32 pos 0
+        ^:mut ^I32 line 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 checked 0]
+    (while (< pos n)
+      (do (set line (+ line 1))
+          (set e (at-nl rows pos))
+          (if (and (< pos e) (!= (blob-u8 rows pos) 35))
+            (do (at-cands-row (test-t) rows pos e line)
+                (set checked (+ checked 1))))
+          (set pos (+ e 1))))
+    (assert-that (> checked 60) "every file of test/asset/cands.txt is checked")))
+
+(defn ^I32 at-ori [^TestT emon-t ^Blob file ^I32 want ^I32 line]
+  (let [^Cells cand (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells fg (new-cells)
+        ^Cells im (new-cells)
+        ^Buf cbytes (new-buf)]
+    (assert-eq-at (at-run (src-of-blob file) cand cbytes pages fg im) 0 "the document runs" line)
+    (assert-eq-at (im-count im) 1 "one placement" line)
+    (assert-eq-at (im-get im 0 (mf-placement)) want "the placement's orientation" line)
+    (return 0)))
+
+(deftest test-a-placement-records-its-orientation-as-the-page-shows-it
+  (comment "P3.12's O rows: the matrix of each place-* file and its code; -1 (not rectilinear) is recorded as 8")
+  (at-ori (test-t) (test-file "assets/place-upright.pdf") 0 1)
+  (at-ori (test-t) (test-file "assets/place-rot90.pdf") 5 2)
+  (at-ori (test-t) (test-file "assets/place-rot90cw.pdf") 4 3)
+  (at-ori (test-t) (test-file "assets/place-rot180.pdf") 2 4)
+  (at-ori (test-t) (test-file "assets/place-flip-h.pdf") 1 5)
+  (at-ori (test-t) (test-file "assets/place-flip-v.pdf") 3 6)
+  (at-ori (test-t) (test-file "assets/place-transpose.pdf") 6 7)
+  (at-ori (test-t) (test-file "assets/place-antitranspose.pdf") 7 8)
+  (at-ori (test-t) (test-file "assets/place-skew.pdf") 8 9))

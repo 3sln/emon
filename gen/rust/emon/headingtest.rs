@@ -604,7 +604,7 @@ pub(crate) fn ht_golden(pdf: &[u8], mut t: &mut String, mut ar: &mut crate::port
     if model_check(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
         return 3;
     }
-    js_emit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
+    js_emit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
     return 0;
 }
 #[test]

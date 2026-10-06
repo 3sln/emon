@@ -26,7 +26,7 @@ func htGolden(emonT *testing.T, mfile string, hfile string, opts int32, below in
 	var out *strings.Builder = port.NewText()
 	port.AssertEq(emonT, mscript.JtBuild(port.TestFile(mfile), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds")
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed")
-	port.AssertEq(emonT, html.HtmlEmit(out, opts, below, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout), 0, "it emits")
+	port.AssertEq(emonT, html.HtmlEmit(out, opts, below, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells()), 0, "it emits")
 	port.AssertTextSpan(emonT, out, port.TestFile(hfile), 0, mscript.JtEnd(port.TestFile(hfile)), "the golden", 0)
 	return 0
 }
@@ -89,7 +89,7 @@ func TestAnEmptyDocument(emonT *testing.T) {
 	var layout *port.Cells = port.NewCells()
 	var out *strings.Builder = port.NewText()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
-	html.HtmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout)
+	html.HtmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
 	port.AssertText(emonT, out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "the smallest document")
 }
 
@@ -113,7 +113,7 @@ func TestHeadingLevelsAndEscapes(emonT *testing.T) {
 	h = model.NodeNew(nodes, model.NkHeading(), 0)
 	model.NodeSetSub(nodes, h, 7)
 	htSet(nodes, text, h, port.TextBlob("say \"seven\""))
-	html.HtmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout)
+	html.HtmlEmit(out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
 	port.AssertText(emonT, out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><h1>a &amp; b</h1><h6>&lt;six&gt;</h6><h6 aria-level=\"7\">say &quot;seven&quot;</h6></main></body></html>", "levels, and the four escapes")
 }
 
@@ -134,9 +134,9 @@ func TestOptionsAddIdsGeometryAndConfidence(emonT *testing.T) {
 	htSet(nodes, text, p, port.TextBlob("x"))
 	model.NodeAddRegion(nodes, regions, p, 1, 7250, -5, 54000, 100)
 	model.NodeSetConf(nodes, p, 500)
-	html.HtmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout)
-	html.HtmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout)
-	html.HtmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout)
+	html.HtmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
+	html.HtmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
+	html.HtmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
 	port.AssertText(emonT, all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options")
 	port.AssertText(emonT, none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default")
 	port.AssertText(emonT, edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold")
@@ -158,8 +158,8 @@ func TestFurnitureDropsAndMilestonesSwitchOff(emonT *testing.T) {
 	model.NodeSetSub(nodes, n, 2)
 	n = model.NodeNew(nodes, model.NkFurniture(), -1)
 	model.NodeSetSub(nodes, n, 7)
-	html.HtmlEmit(kept, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout)
-	html.HtmlEmit(bare, 96, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout)
+	html.HtmlEmit(kept, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
+	html.HtmlEmit(bare, 96, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
 	port.AssertText(emonT, kept, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>", "furniture once at the top, then the milestone")
 	port.AssertText(emonT, bare, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "both off")
 }
@@ -179,6 +179,6 @@ func TestTheDeepestTreeEmits(emonT *testing.T) {
 	for at != -1 {
 		at = model.NodeNew(nodes, model.NkSection(), at)
 	}
-	port.AssertEq(emonT, html.HtmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout), 0, "compact")
-	port.AssertEq(emonT, html.HtmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, port.NewBuf(), layout), 0, "pretty")
+	port.AssertEq(emonT, html.HtmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells()), 0, "compact")
+	port.AssertEq(emonT, html.HtmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells()), 0, "pretty")
 }

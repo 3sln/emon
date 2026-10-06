@@ -32,7 +32,8 @@ public static class Modelprobe {
         emon.Port.TextI32(t, Splitmix.SmLo(h));
         return 0;
     }
-    public static int ProbeJson(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
-        return Json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
+    public static int ProbeJson(System.Text.StringBuilder t, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells assets, emon.Port.Cells uses) {
+        // `assets` and `uses` are the (empty) asset table: a Model built without `assets` has none (SPEC 10.11).
+        return Json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, assets, uses);
     }
 }

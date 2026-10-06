@@ -320,3 +320,93 @@ pub fn jt_end(b: &[u8]) -> i32 {
     }
     return n;
 }
+pub(crate) fn jt_word(tmp: &mut crate::port::Cells, at: i32) -> i32 {
+    // Four bytes of `tmp` at `at`, big-endian, as a 32-bit word.
+    return ((crate::port::cells_at(tmp, at) as i64).wrapping_mul(16777216 as i64)).wrapping_add(((crate::port::cells_at(tmp, at + 1) * 65536) + ((crate::port::cells_at(tmp, at + 2) * 256) + crate::port::cells_at(tmp, at + 3))) as i64) as i32;
+}
+pub(crate) fn jt_hex_bytes(b: &[u8], end: i32, mut st: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf) -> i32 {
+    // The rest of the line as hex pairs, appended to `abytes`; `-` is none. Answers how many bytes.
+    let mut i: i32 = jt_skip(b, end, st);
+    let mut n: i32 = 0;
+    if (i < end) && (crate::port::blob_u8(b, i) == 45) {
+        return 0;
+    }
+    while (i + 1) < end {
+        crate::port::buf_push(abytes, (jt_hexval(crate::port::blob_u8(b, i)) * 16) + jt_hexval(crate::port::blob_u8(b, i + 1)));
+        n += 1;
+        i += 2;
+    }
+    return n;
+}
+pub fn jt_assets(b: &[u8], mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, mut st: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells) -> i32 {
+    // Build the asset table a script describes. 0, or the first bad line.
+    let mut pos: i32 = 0;
+    let mut e: i32 = 0;
+    let mut lineno: i32 = 0;
+    let mut c: i32 = 0;
+    let mut ty: i32 = 0;
+    let mut og: i32 = 0;
+    let mut fr: i32 = 0;
+    let mut ob: i32 = 0;
+    let mut w: i32 = 0;
+    let mut h: i32 = 0;
+    let mut dp: i32 = 0;
+    let mut fl: i32 = 0;
+    let mut start: i32 = 0;
+    let mut n: i32 = 0;
+    let mut id: i32 = 0;
+    let mut i: i32 = 0;
+    let mut p: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut nd: i32 = 0;
+    crate::port::cells_drop(assets, 0);
+    crate::port::cells_drop(uses, 0);
+    crate::port::cells_drop(st, 0);
+    crate::port::cells_push(st, 0);
+    while pos < crate::port::blob_len(b) {
+        e = jt_eol(b, pos);
+        lineno += 1;
+        if (pos < e) && (crate::port::blob_u8(b, pos) != 35) {
+            c = crate::port::blob_u8(b, pos);
+            crate::port::cells_set(st, 0, pos + 1);
+            if c == 97 {
+                ty = jt_int(b, e, st);
+                og = jt_int(b, e, st);
+                fr = jt_int(b, e, st);
+                ob = jt_int(b, e, st);
+                w = jt_int(b, e, st);
+                h = jt_int(b, e, st);
+                dp = jt_int(b, e, st);
+                fl = jt_int(b, e, st);
+                start = crate::port::buf_len(abytes);
+                n = jt_hex_bytes(b, e, st, abytes);
+                id = asset_add(assets, ty, og, fr, ob, start, n, w, h, dp, fl);
+                crate::port::cells_drop(tmp, 0);
+                crate::port::crypto_sha256(crate::port::buf_blob(abytes), start, n, tmp);
+                i = 0;
+                while i < 8 {
+                    asset_set_sha(assets, id, i, jt_word(tmp, i * 4));
+                    i += 1;
+                }
+            }
+            if c == 117 {
+                id = jt_int(b, e, st);
+                nd = jt_int(b, e, st);
+                p = jt_int(b, e, st);
+                x0 = jt_int(b, e, st);
+                y0 = jt_int(b, e, st);
+                x1 = jt_int(b, e, st);
+                y1 = jt_int(b, e, st);
+                use_add(assets, uses, id, nd, p, x0, y0, x1, y1);
+            }
+            if (c != 97) && (c != 117) {
+                return lineno;
+            }
+        }
+        pos = e + 1;
+    }
+    return 0;
+}

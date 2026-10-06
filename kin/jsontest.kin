@@ -28,8 +28,8 @@
         ^Text pretty (new-text)]
     (assert-eq (jt-build (test-file "json/minimal.model") nodes attrs regions text pages ledger layout st) 0 "the script builds")
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
-    (js-emit compact 0 nodes attrs regions text pages ledger layout layout layout)
-    (js-emit pretty 1 nodes attrs regions text pages ledger layout layout layout)
+    (js-emit compact 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
+    (js-emit pretty 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
     (assert-text-span compact (test-file "json/minimal.json") 0 (jt-end (test-file "json/minimal.json")) "compact" 0)
     (assert-text-span pretty (test-file "json/minimal.pretty.json") 0 (jt-end (test-file "json/minimal.pretty.json")) "pretty" 0)))
 
@@ -46,8 +46,8 @@
         ^Text pretty (new-text)]
     (assert-eq (jt-build (test-file "json/sample.model") nodes attrs regions text pages ledger layout st) 0 "the script builds")
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
-    (js-emit compact 0 nodes attrs regions text pages ledger layout layout layout)
-    (js-emit pretty 1 nodes attrs regions text pages ledger layout layout layout)
+    (js-emit compact 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
+    (js-emit pretty 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
     (assert-text-span compact (test-file "json/sample.json") 0 (jt-end (test-file "json/sample.json")) "compact" 0)
     (assert-text-span pretty (test-file "json/sample.pretty.json") 0 (jt-end (test-file "json/sample.pretty.json")) "pretty" 0)))
 
@@ -64,8 +64,8 @@
         ^Text pretty (new-text)]
     (assert-eq (jt-build (test-file "json/kinds.model") nodes attrs regions text pages ledger layout st) 0 "the script builds")
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
-    (js-emit compact 0 nodes attrs regions text pages ledger layout layout layout)
-    (js-emit pretty 1 nodes attrs regions text pages ledger layout layout layout)
+    (js-emit compact 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
+    (js-emit pretty 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
     (assert-text-span compact (test-file "json/kinds.json") 0 (jt-end (test-file "json/kinds.json")) "compact" 0)
     (assert-text-span pretty (test-file "json/kinds.pretty.json") 0 (jt-end (test-file "json/kinds.pretty.json")) "pretty" 0)))
 
@@ -82,8 +82,8 @@
         ^Text pretty (new-text)]
     (assert-eq (jt-build (test-file "json/corners.model") nodes attrs regions text pages ledger layout st) 0 "the script builds")
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
-    (js-emit compact 0 nodes attrs regions text pages ledger layout layout layout)
-    (js-emit pretty 1 nodes attrs regions text pages ledger layout layout layout)
+    (js-emit compact 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
+    (js-emit pretty 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells))
     (assert-text-span compact (test-file "json/corners.json") 0 (jt-end (test-file "json/corners.json")) "compact" 0)
     (assert-text-span pretty (test-file "json/corners.pretty.json") 0 (jt-end (test-file "json/corners.pretty.json")) "pretty" 0)))
 
@@ -141,5 +141,5 @@
     (while (!= at -1)
       (set at (node-new nodes (nk-section) at)))
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "well formed")
-    (assert-eq (js-emit compact 0 nodes attrs regions text pages ledger layout layout layout) 0 "compact")
-    (assert-eq (js-emit pretty 1 nodes attrs regions text pages ledger layout layout layout) 0 "pretty")))
+    (assert-eq (js-emit compact 0 nodes attrs regions text pages ledger layout (new-cells) (new-cells)) 0 "compact")
+    (assert-eq (js-emit pretty 1 nodes attrs regions text pages ledger layout (new-cells) (new-cells)) 0 "pretty")))

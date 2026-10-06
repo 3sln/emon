@@ -129,7 +129,7 @@ fn main() {
     emon::modelprobe::probe_hash(&mut h, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml, &mut my);
     println!("{}", h);
     let mut j = String::new();
-    emon::modelprobe::probe_json(&mut j, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml, &mut my);
+    emon::modelprobe::probe_json(&mut j, &mut mn, &mut ma, &mut mr, &mut mt, &mut mp, &mut ml, &mut my, &mut port::Cells::new(), &mut port::Cells::new());
     println!("{}", j);
     let (mut qws, mut qrow, mut qst, mut qpal, mut qdig) = (port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new(), port::Cells::new());
     let (mut qo, mut qz, mut qr) = (port::Buf::new(), port::Buf::new(), port::Buf::new());
@@ -190,7 +190,7 @@ func main() {
 	modelprobe.ProbeHash(&h, mn, ma, mr, mt, mp, ml, my)
 	fmt.Println(h.String())
 	var j strings.Builder
-	modelprobe.ProbeJson(&j, mn, ma, mr, mt, mp, ml, my)
+	modelprobe.ProbeJson(&j, mn, ma, mr, mt, mp, ml, my, port.NewCells(), port.NewCells())
 	fmt.Println(j.String())
 	qws, qrow, qst, qpal, qdig := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
 	qo, qz, qr := port.NewBuf(), port.NewBuf(), port.NewBuf()
@@ -242,7 +242,7 @@ public class Main {
         emon.Modelprobe.probeHash(ph, mn, ma, mr, mt, mp, ml, my);
         out.println(ph.toString());
         StringBuilder pj = new StringBuilder();
-        emon.Modelprobe.probeJson(pj, mn, ma, mr, mt, mp, ml, my);
+        emon.Modelprobe.probeJson(pj, mn, ma, mr, mt, mp, ml, my, emon.Port.newCells(), emon.Port.newCells());
         out.println(pj.toString());
         emon.Port.Cells qws = emon.Port.newCells(), qrow = emon.Port.newCells(), qst = emon.Port.newCells(),
             qpal = emon.Port.newCells(), qdig = emon.Port.newCells();
@@ -290,7 +290,7 @@ var h = new System.Text.StringBuilder();
 emon.Modelprobe.ProbeHash(h, mn, ma, mr, mt, mp, ml, my);
 System.Console.WriteLine(h.ToString());
 var j = new System.Text.StringBuilder();
-emon.Modelprobe.ProbeJson(j, mn, ma, mr, mt, mp, ml, my);
+emon.Modelprobe.ProbeJson(j, mn, ma, mr, mt, mp, ml, my, emon.Port.NewCells(), emon.Port.NewCells());
 System.Console.WriteLine(j.ToString());
 var qws = emon.Port.NewCells(); var qrow = emon.Port.NewCells(); var qst = emon.Port.NewCells();
 var qpal = emon.Port.NewCells(); var qdig = emon.Port.NewCells();
