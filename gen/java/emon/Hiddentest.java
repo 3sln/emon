@@ -196,10 +196,10 @@ public final class Hiddentest {
         emon.Port.Cells refs = emon.Port.newCells();
         emon.Port.Cells gv = emon.Port.newCells();
         int h0 = htHword(fw, feats, et, 0, 0, 104, 101, 200);
-        int h1 = htHword(fw, feats, et, 1000, 0, 109, 111, 400);
+        htHword(fw, feats, et, 1000, 0, 109, 111, 400);
         int h2 = htHword(fw, feats, et, 2000, 0, 120, 121, -1);
         int o0 = htOword(ow, feats, et, 0, 104, 101, 120, 100);
-        int o1 = htOword(ow, feats, et, 1000, 109, 111, 80, 100);
+        htOword(ow, feats, et, 1000, 109, 111, 80, 100);
         int g0 = htGroup(cg, refs, h0, 2, o0, 2, 950);
         int g1 = htGroup(cg, refs, h2, 1, 0, 0, -1);
         while (emon.Port.cellsLen(gv) < Fuserules.agCount()) {

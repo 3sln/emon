@@ -202,10 +202,10 @@ fn test_hx_fill_measures_the_hidden_columns() {
     let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gv: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let h0: i32 = ht_hword(fw, feats, et, 0, 0, 104, 101, 200);
-    let h1: i32 = ht_hword(fw, feats, et, 1000, 0, 109, 111, 400);
+    ht_hword(fw, feats, et, 1000, 0, 109, 111, 400);
     let h2: i32 = ht_hword(fw, feats, et, 2000, 0, 120, 121, -1);
     let o0: i32 = ht_oword(ow, feats, et, 0, 104, 101, 120, 100);
-    let o1: i32 = ht_oword(ow, feats, et, 1000, 109, 111, 80, 100);
+    ht_oword(ow, feats, et, 1000, 109, 111, 80, 100);
     let g0: i32 = ht_group(cg, refs, h0, 2, o0, 2, 950);
     let g1: i32 = ht_group(cg, refs, h2, 1, 0, 0, -1);
     while crate::port::cells_len(gv) < ag_count() {

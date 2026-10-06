@@ -199,10 +199,10 @@ public static class Hiddentest {
         emon.Port.Cells refs = emon.Port.NewCells();
         emon.Port.Cells gv = emon.Port.NewCells();
         int h0 = HtHword(fw, feats, et, 0, 0, 104, 101, 200);
-        int h1 = HtHword(fw, feats, et, 1000, 0, 109, 111, 400);
+        HtHword(fw, feats, et, 1000, 0, 109, 111, 400);
         int h2 = HtHword(fw, feats, et, 2000, 0, 120, 121, -1);
         int o0 = HtOword(ow, feats, et, 0, 104, 101, 120, 100);
-        int o1 = HtOword(ow, feats, et, 1000, 109, 111, 80, 100);
+        HtOword(ow, feats, et, 1000, 109, 111, 80, 100);
         int g0 = HtGroup(cg, refs, h0, 2, o0, 2, 950);
         int g1 = HtGroup(cg, refs, h2, 1, 0, 0, -1);
         while (emon.Port.CellsLen(gv) < Fuserules.AgCount()) {

@@ -217,10 +217,10 @@ func TestHxFillMeasuresTheHiddenColumns(emonT *testing.T) {
 	var refs *port.Cells = port.NewCells()
 	var gv *port.Cells = port.NewCells()
 	var h0 int32 = htHword(fw, feats, et, 0, 0, 104, 101, 200)
-	var h1 int32 = htHword(fw, feats, et, 1000, 0, 109, 111, 400)
+	htHword(fw, feats, et, 1000, 0, 109, 111, 400)
 	var h2 int32 = htHword(fw, feats, et, 2000, 0, 120, 121, -1)
 	var o0 int32 = htOword(ow, feats, et, 0, 104, 101, 120, 100)
-	var o1 int32 = htOword(ow, feats, et, 1000, 109, 111, 80, 100)
+	htOword(ow, feats, et, 1000, 109, 111, 80, 100)
 	var g0 int32 = htGroup(cg, refs, h0, 2, o0, 2, 950)
 	var g1 int32 = htGroup(cg, refs, h2, 1, 0, 0, -1)
 	for port.CellsLen(gv) < fuserules.AgCount() {

@@ -212,13 +212,13 @@
         ^Cells cg (new-cells)
         ^Cells refs (new-cells)
         ^Cells gv (new-cells)
-        ^I32 h0 (ht-hword fw feats et 0 0 104 101 200)
-        ^I32 h1 (ht-hword fw feats et 1000 0 109 111 400)
-        ^I32 h2 (ht-hword fw feats et 2000 0 120 121 -1)
-        ^I32 o0 (ht-oword ow feats et 0 104 101 120 100)
-        ^I32 o1 (ht-oword ow feats et 1000 109 111 80 100)
-        ^I32 g0 (ht-group cg refs h0 2 o0 2 950)
-        ^I32 g1 (ht-group cg refs h2 1 0 0 -1)]
+        ^I32 h0 (ht-hword fw feats et 0 0 104 101 200)]
+    (ht-hword fw feats et 1000 0 109 111 400)
+    (let [^I32 h2 (ht-hword fw feats et 2000 0 120 121 -1)
+          ^I32 o0 (ht-oword ow feats et 0 104 101 120 100)]
+      (ht-oword ow feats et 1000 109 111 80 100)
+      (let [^I32 g0 (ht-group cg refs h0 2 o0 2 950)
+            ^I32 g1 (ht-group cg refs h2 1 0 0 -1)]
     (while (< (cells-len gv) (ag-count))
       (cells-push gv 0))
     (hx-fill g0 cg refs fw et feats ow gv)
@@ -233,7 +233,7 @@
     (assert-eq (cells-at gv (ag-hink)) -1 "ink not measured")
     (assert-eq (cells-at gv (ag-hinkwin)) -1 "so the comparison is not made")
     (assert-eq (cells-at gv (ag-margin)) -1 "no OCR word: no margin")
-    (assert-eq (cells-at gv (ag-pageocr)) 2 "the page's OCR words, for a group with none")))
+    (assert-eq (cells-at gv (ag-pageocr)) 2 "the page's OCR words, for a group with none")))))
 
 (deftest test-a-hidden-script-the-engine-does-not-read
   (let [^Cells fw (new-cells)
