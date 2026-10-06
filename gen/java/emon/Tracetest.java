@@ -481,6 +481,8 @@ public final class Tracetest {
         emon.Testport.assertEq(Evidence.coGet(comps, 0, Evidence.cfKind()), Evidence.ckBlob(), "large");
         emon.Testport.assertEq(Evidence.rlCount(rules), 6, "four edges and two inner lines, crossings bridged");
         emon.Testport.assertEq(Evidence.rlGet(rules, 0, Evidence.rlfRcount()), 1, "each has the one component as its member");
+        emon.Testport.assertEq(Evidence.rlGet(rules, 0, Evidence.rlfFlags()), 0, "a table's rule is not a figure's");
+        emon.Testport.assertEq(Evidence.rlGet(rules, 5, Evidence.rlfFlags()), 0, "none of them");
     }
     public static void testASlantedRuleIsFoundAtAnyAngleWithinAShallowSlope() {
         emon.Port.Bitmap b = emon.Port.bitmapNew(200, 100, 1);
@@ -808,5 +810,176 @@ public final class Tracetest {
         emon.Testport.assertEq(emon.Port.cellsAt(idx, 1), 1, "then");
         emon.Testport.assertEq(emon.Port.cellsAt(idx, 2), 0, "equal keys by index");
         emon.Testport.assertEq(emon.Port.cellsAt(idx, 3), 2, "the later one last");
+    }
+    public static int ttTraceBin(emon.Port.Bitmap bin, int dpi100, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells views, emon.Port.Cells inks) {
+        // As `tt-trace`, but as the BINARY view of a page (fixed layer -1, every component takes the majority layer of an all-zero label image).
+        emon.Port.Bitmap lab = emon.Port.bitmapNew(emon.Port.bitmapW(bin), emon.Port.bitmapH(bin), 1);
+        emon.Port.Cells rn = emon.Port.newCells();
+        emon.Port.Cells ri = emon.Port.newCells();
+        emon.Port.Cells cs = emon.Port.newCells();
+        emon.Port.Cells vr = emon.Port.newCells();
+        emon.Port.Cells pc = emon.Port.newCells();
+        emon.Port.Cells sg = emon.Port.newCells();
+        emon.Port.Cells mem = emon.Port.newCells();
+        emon.Port.Cells s1 = emon.Port.newCells();
+        emon.Port.Cells s2 = emon.Port.newCells();
+        emon.Port.Cells s3 = emon.Port.newCells();
+        emon.Port.Cells s4 = emon.Port.newCells();
+        emon.Port.Cells s5 = emon.Port.newCells();
+        emon.Port.Cells s6 = emon.Port.newCells();
+        Evidence.vwNew(views, 0, Evidence.vkBinary(), -1, -1, emon.Port.bitmapW(bin), emon.Port.bitmapH(bin), dpi100, 0, -1, 0, 0, 0, 0, 0);
+        Evidence.ikNew(inks, 0, 0);
+        emon.Port.cellsSet(inks, 2, 8421504);
+        return Trace.trTrace(views, inks, 0, 0, -1, 0, bin, bin, lab, comps, rules, prims, tlines, pts, refs, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6);
+    }
+    public static int ttGray(emon.Port.Bitmap g, int x0, int y0, int x1, int y1, int v) {
+        // Gray `v` in [x0, x1) x [y0, y1).
+        int x = 0;
+        int y = y0;
+        while (y < y1) {
+            x = x0;
+            while (x < x1) {
+                emon.Port.bitmapSetU8(g, x, y, 0, v);
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static void testALightFillNearerThePaperThanALayerIsATintAndGlyphsInItDoNotCutIt() {
+        emon.Port.Bitmap g = emon.Port.bitmapNew(160, 100, 1);
+        emon.Port.Bitmap m = emon.Port.bitmapNew(160, 100, 1);
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells s1 = emon.Port.newCells();
+        emon.Port.Cells s2 = emon.Port.newCells();
+        Evidence.vwNew(views, 0, Evidence.vkBinary(), -1, -1, 160, 100, 14400, 0, -1, 0, 0, 0, 0, 0);
+        ttGray(g, 0, 0, 160, 100, 255);
+        // a header fill at gray 235 (20 under the paper: P6.3's 24 gives it no layer), 120 x 30; two 3 px glyph stems of gray 40 inside it
+        ttGray(g, 20, 10, 140, 40, 235);
+        ttGray(g, 50, 15, 53, 35, 40);
+        ttGray(g, 90, 12, 93, 30, 40);
+        // paper noise 4 under (not a fill), and a hairline of gray 235 (a rule is not a fill)
+        ttGray(g, 20, 60, 140, 90, 251);
+        ttGray(g, 20, 95, 140, 97, 235);
+        emon.Testport.assertEq(Trace.trLightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 1, "one tint: the header");
+        emon.Testport.assertEq(Evidence.pmGet(prims, 0, Evidence.pmfKind()), Evidence.pmRect(), "a rect");
+        emon.Testport.assertEq(Evidence.pmGet(prims, 0, Evidence.pmfFlags()), 11, "closed + filled + tint");
+        emon.Testport.assertEq(Evidence.pmGet(prims, 0, Evidence.pmfColor()), 15461355, "of the gray 235");
+        emon.Testport.assertEq(ttNear(Evidence.pmGet(prims, 0, Evidence.pmfCx()), 4000, 150), 1, "centred at x 80 px (144 dpi: 50 cpt a pixel)");
+        emon.Testport.assertEq(ttNear(Evidence.pmGet(prims, 0, Evidence.pmfFill()), 1000, 40), 1, "and covered: the glyph stems are bridged");
+        emon.Testport.assertEq(Trace.trLightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "a tint already traced from a layer's mask is not traced again");
+    }
+    public static void testAGradientOrAPhotographIsNotAUniformFillAndAWholePageOfFillIsThePaper() {
+        emon.Port.Bitmap g = emon.Port.bitmapNew(160, 100, 1);
+        emon.Port.Bitmap m = emon.Port.bitmapNew(160, 100, 1);
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells s1 = emon.Port.newCells();
+        emon.Port.Cells s2 = emon.Port.newCells();
+        int x = 0;
+        int y = 0;
+        Evidence.vwNew(views, 0, Evidence.vkBinary(), -1, -1, 160, 100, 14400, 0, -1, 0, 0, 0, 0, 0);
+        ttGray(g, 0, 0, 160, 100, 255);
+        // a texture: 100 x 60 pixels alternating 230 and 215 across
+        y = 10;
+        while (y < 70) {
+            x = 20;
+            while (x < 120) {
+                emon.Port.bitmapSetU8(g, x, y, 0, 215 + (15 * (x % 2)));
+                x += 1;
+            }
+            y += 1;
+        }
+        emon.Testport.assertEq(Trace.trLightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "no tint on a texture");
+        ttGray(g, 0, 0, 160, 100, 230);
+        emon.Testport.assertEq(Trace.trLightfills(views, 0, 0, 14400, g, 255, m, inks, prims, refs, s1, s2), 0, "no tint when the page is all fill: the paper was misjudged");
+    }
+    public static void testAPageOfFiguresHasNoTextSoTheRulesOfAChartAreFound() {
+        emon.Port.Bitmap b = emon.Port.bitmapNew(400, 300, 1);
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Testport.assertEq(Trace.trTextMax(14400, 0), 96, "48 pt at 144 dpi is 96 px on the binary view");
+        emon.Testport.assertEq(Trace.trTextMax(14400, 1), 400, "and 200 pt on an ink mask");
+        // three blocks of 40 x 110 (glyph-sized to a 200 pt limit, not to a 48 pt one), and an L: a 4 px axis up, a 4 px axis along, a bar on it
+        ttRect(b, 200, 20, 240, 130);
+        ttRect(b, 260, 20, 300, 130);
+        ttRect(b, 320, 20, 360, 130);
+        ttRect(b, 20, 100, 24, 280);
+        ttRect(b, 20, 276, 190, 280);
+        ttRect(b, 30, 200, 70, 276);
+        ttTraceBin(b, 14400, comps, rules, prims, tlines, pts, refs, views, inks);
+        emon.Testport.assertEq(Evidence.rlCount(rules), 2, "the vertical axis and the horizontal one: they are not text");
+        emon.Testport.assertEq(Evidence.rlGet(rules, 0, Evidence.rlfFlags()), Trace.trRfFigure(), "and they are flagged as a figure's: their component holds a bar's ink too");
+        emon.Testport.assertEq(Evidence.rlGet(rules, 1, Evidence.rlfFlags()), Trace.trRfFigure(), "both");
+    }
+    public static void testLettersHiddenInDifferentPlacesDoNotBendAWatermarksAngle() {
+        emon.Port.Bitmap b = emon.Port.bitmapNew(500, 400, 1);
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        int x = 0;
+        int y = 0;
+        int u = 0;
+        int v = 0;
+        int k = 0;
+        int cut = 0;
+        // five letters (rectangles 40 x 90 px) on a line rising 40 in 70 (29.74 degrees), a pitch of 70 px: in the frame u = 70x - 40y + 9900, v = 70y + 40x - 22200 (both
+        // scaled by 80.6) the k-th is u 5600k .. +3200, v 0 .. 7200; body text hides the bottoms of four of them, by 0, 4000, 2400, 800 and 4800 of those units
+        while (y < 400) {
+            x = 0;
+            while (x < 500) {
+                u = ((70 * x) - (40 * y)) + 9900;
+                v = ((70 * y) + (40 * x)) - 22200;
+                k = u / 5600;
+                if ((u >= 0) && ((k < 5) && ((u - (k * 5600)) < 3200))) {
+                    cut = (k * 4000) % 5200;
+                    if ((v >= 0) && (v < (7200 - cut))) {
+                        emon.Port.bitmapSetU8(b, x, y, 0, 255);
+                    }
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+        ttTrace(b, 14400, comps, rules, prims, tlines, pts, refs, views, inks);
+        emon.Testport.assertEq(Evidence.tlCount(tlines), 1, "one line");
+        emon.Testport.assertEq(Evidence.tlGet(tlines, 0, 12), 5, "of five letters");
+        emon.Testport.assertEq(ttNear(Evidence.tlGet(tlines, 0, 9), 2974, 60), 1, "at the angle of the letters' tops, not the one the ragged bottoms would draw");
+    }
+    public static void testAJustifiedWordSpaceJoinsALineAndAGutterDoesNot() {
+        emon.Port.Bitmap b = emon.Port.bitmapNew(300, 120, 1);
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells tlines = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells views = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        // glyphs 8 x 10 every 14: four, then a space of 22 px (2.2 heights), then four: one line
+        ttGlyphs(b, 20, 30, 4, 14, 0);
+        ttGlyphs(b, 84, 30, 4, 14, 0);
+        // a second row with a gap of 40 px (4 heights): two lines
+        ttGlyphs(b, 20, 80, 4, 14, 0);
+        ttGlyphs(b, 102, 80, 4, 14, 0);
+        ttTrace(b, 7200, comps, rules, prims, tlines, pts, refs, views, inks);
+        emon.Testport.assertEq(Evidence.tlCount(tlines), 3, "one line above, two below");
+        emon.Testport.assertEq(Evidence.tlGet(tlines, 0, 12), 8, "the first of eight components");
     }
 }

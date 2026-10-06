@@ -83,6 +83,15 @@ pub fn tr_text_min(dpi100: i32) -> i32 {
     // The smallest text-like height: 3 pt.
     return tr_pt(dpi100, 3);
 }
+pub fn tr_text_max(dpi100: i32, weighted: i32) -> i32 {
+    // The tallest provisional glyph, the components that decide the page's median text height: 200 pt on an ink mask (a watermark's
+    // letters are huge), 48 pt on the binary view (P6.4b, D260): on a page of figures a bar or a box is not text, and a median taken
+    // over them made every chart of a text-free page `text`, so the rules inside it were never looked for.
+    if weighted == 1 {
+        return tr_pt(dpi100, 200);
+    }
+    return tr_pt(dpi100, 48);
+}
 pub(crate) const K_RS: i32 = 6;
 pub(crate) const K_CS: i32 = 24;
 pub(crate) const C_TOP: i32 = 0;
@@ -108,6 +117,7 @@ pub(crate) const C_RULE: i32 = 19;
 pub(crate) const C_PRIM: i32 = 20;
 pub(crate) const C_CX2: i32 = 21;
 pub(crate) const C_CY2: i32 = 22;
+pub(crate) const C_RINK: i32 = 23;
 pub fn tr_k_noise() -> i32 {
     return 0;
 }
@@ -119,6 +129,10 @@ pub fn tr_k_rule() -> i32 {
 }
 pub fn tr_k_large() -> i32 {
     return 3;
+}
+pub fn tr_rf_figure() -> i32 {
+    // `rules` flag (D263): the rule's component holds more than twice the ink of its rules: an axis, a tick, a bar's edge, a plot's frame, a rule that touches a drawing. A table grid, a rule alone or a ruled line of text does not.
+    return 1;
 }
 pub fn tr_pf_closed() -> i32 {
     return 1;
@@ -813,7 +827,7 @@ pub fn tr_kinds(dpi100: i32, weighted: i32, mut cs: &mut crate::port::Cells, mut
     let nc: i32 = crate::port::cells_len(cs) / 24;
     let noise: i32 = tr_noise(dpi100);
     let tmin: i32 = tr_text_min(dpi100);
-    let tmax: i32 = tr_pt(dpi100, 200);
+    let tmax: i32 = tr_text_max(dpi100, weighted);
     let rmin: i32 = tr_rule_min(dpi100);
     let rthick: i32 = tr_rule_thick(dpi100);
     let mut c: i32 = 0;
@@ -2372,6 +2386,24 @@ pub fn tr_rule_rows(views: &mut crate::port::Cells, page: i32, view: i32, dpi100
     let mut sx: i32 = 0;
     let mut sy: i32 = 0;
     let mut ln: i32 = 0;
+    // the ink each component's rules account for (the figure flag compares it with the component's own)
+    i = 0;
+    while (i * 24) < crate::port::cells_len(cs) {
+        tr_cset(cs, i, C_RINK, 0);
+        i += 1;
+    }
+    i = 0;
+    while i < ns {
+        if crate::port::cells_at(sg, (i * K_SG) + G_STYLE) > 0 {
+            c = crate::port::cells_at(sg, (i * K_SG) + G_COMP);
+            if c >= 0 {
+                k = tr_cg(cs, c, C_RINK) + ((crate::port::cells_at(sg, (i * K_SG) + G_LEN) * crate::port::cells_at(sg, (i * K_SG) + G_THK)) / 8);
+                tr_cset(cs, c, C_RINK, k);
+            }
+        }
+        i += 1;
+    }
+    i = 0;
     while i < ns {
         style = crate::port::cells_at(sg, (i * K_SG) + G_STYLE);
         if style > 0 {
@@ -2440,6 +2472,9 @@ pub fn tr_rule_rows(views: &mut crate::port::Cells, page: i32, view: i32, dpi100
                 conf = 0;
             }
             rl_set(rules, r, rlf_conf(), conf);
+            if tr_cg(cs, c, C_INK) > (2 * tr_cg(cs, c, C_RINK)) {
+                rl_set(rules, r, rlf_flags(), tr_rf_figure());
+            }
             // members
             rl_set(rules, r, rlf_rfirst(), crate::port::cells_len(refs) / 2);
             rl_set(rules, r, rlf_rcount(), crate::port::cells_at(sg, (i * K_SG) + G_MCOUNT));
@@ -3134,10 +3169,190 @@ pub fn tr_tints(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i3
     }
     return n;
 }
+pub fn tr_light_lo() -> i32 {
+    // A pixel is a light fill at least this many gray levels darker than the paper (below it: paper, JPEG noise included).
+    return 10;
+}
+pub fn tr_light_hi() -> i32 {
+    // ...and at most this many (darker is ink: P6.3's layers and the binary view have it).
+    return 104;
+}
+pub fn tr_light_step() -> i32 {
+    // ...and within this many levels of its left neighbour (a glyph's antialiased edge is steeper; a band's flat part is not).
+    return 4;
+}
+pub fn tr_light_bridge(dpi100: i32) -> i32 {
+    // Ink or edge pixels between two fill pixels of a row are fill when no wider than 3 pt (a glyph's stem inside a header cell).
+    return tr_pt(dpi100, 3);
+}
+pub fn tr_light_mask(gray: &crate::port::Bitmap, paper: i32, bridge: i32, mask: &crate::port::Bitmap) -> i32 {
+    // The light-fill mask of `gray` into `mask` (both 1-channel, one size): per row, the pixels whose gray lies `tr-light-lo` .. `tr-light-hi`
+    // under `paper` and within `tr-light-step` of the pixel to their left are fill (1), the rest 0; a run of ink or edge pixels (neither paper nor
+    // fill) of at most `bridge` between two fill pixels is fill too (text inside a tinted cell), a paper pixel ends the bridge. Answers the fill
+    // pixels. This is a path of its own: P6.3's layers answer to the ink-paper distance (D237), a tint nearer the paper than that has no layer.
+    let w: i32 = crate::port::bitmap_w(gray);
+    let h: i32 = crate::port::bitmap_h(gray);
+    let lo: i32 = tr_light_lo();
+    let hi: i32 = tr_light_hi();
+    let stp: i32 = tr_light_step();
+    let mut y: i32 = 0;
+    let mut x: i32 = 0;
+    let mut g: i32 = 0;
+    let mut pg: i32 = 0;
+    let mut d: i32 = 0;
+    let mut st: i32 = 0;
+    let mut gs: i32 = 0;
+    let mut k: i32 = 0;
+    let mut cov: i32 = 0;
+    while y < h {
+        st = 0;
+        gs = 0;
+        pg = crate::port::bitmap_u8(gray, 0, y, 0);
+        x = 0;
+        while x < w {
+            g = crate::port::bitmap_u8(gray, x, y, 0);
+            d = paper - g;
+            if d < lo {
+                crate::port::bitmap_set_u8(mask, x, y, 0, 0);
+                st = 0;
+            } else if (d <= hi) && (tr_abs(g - pg) <= stp) {
+                if st == 2 {
+                    if (x - gs) <= bridge {
+                        k = gs;
+                        while k < x {
+                            crate::port::bitmap_set_u8(mask, k, y, 0, 1);
+                            cov += 1;
+                            k += 1;
+                        }
+                    }
+                }
+                crate::port::bitmap_set_u8(mask, x, y, 0, 1);
+                cov += 1;
+                st = 1;
+            } else {
+                crate::port::bitmap_set_u8(mask, x, y, 0, 0);
+                if st == 1 {
+                    st = 2;
+                    gs = x;
+                }
+            }
+            pg = g;
+            x += 1;
+        }
+        y += 1;
+    }
+    return cov;
+}
+pub fn tr_lightfills(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i32, gray: &crate::port::Bitmap, paper: i32, mask: &crate::port::Bitmap, inks: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells) -> i32 {
+    // Tints and shading fills too light for a layer (P6.4b, D259): `tr-light-mask` of the page's gray view (`view` is its `views` row),
+    // then `tr-tints` on that mask (inkrow -1), then the ones that cover half of a tint of an ink layer already in `prims` are dropped and the
+    // colour of the rest is the gray (0xGGGGGG) of the fill pixels at nine points of the rectangle. A page more than 60 per cent "fill" has
+    // a wrong paper and gets none. Nothing here reads or writes the layers' masks or the binary view. Answers the tints added.
+    let w: i32 = crate::port::bitmap_w(gray);
+    let h: i32 = crate::port::bitmap_h(gray);
+    let cov: i32 = tr_light_mask(gray, paper, tr_light_bridge(dpi100), mask);
+    let from: i32 = pm_count(prims);
+    let mut n: i32 = 0;
+    let mut r: i32 = 0;
+    let mut q: i32 = 0;
+    let mut wr: i32 = 0;
+    let mut f: i32 = 0;
+    let mut dup: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut iw: i32 = 0;
+    let mut ih: i32 = 0;
+    let mut px: i32 = 0;
+    let mut py: i32 = 0;
+    let mut ax: i32 = 0;
+    let mut ay: i32 = 0;
+    let mut bx: i32 = 0;
+    let mut by: i32 = 0;
+    let mut sum: i32 = 0;
+    let mut cnt: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut tmp: i32 = 0;
+    let mut area: i64 = 0;
+    if cov > (((w * h) / 10) * 6) {
+        return 0;
+    }
+    n = tr_tints(views, page, view, dpi100, mask, -1, inks, prims, refs, s1, s2);
+    if n == 0 {
+        return 0;
+    }
+    wr = from;
+    r = from;
+    while r < pm_count(prims) {
+        x0 = pm_get(prims, r, pmf_x0());
+        y0 = pm_get(prims, r, pmf_y0());
+        x1 = pm_get(prims, r, pmf_x1());
+        y1 = pm_get(prims, r, pmf_y1());
+        area = ((x1 - x0) as i64).wrapping_mul((y1 - y0) as i64);
+        dup = 0;
+        q = 0;
+        while q < from {
+            if (pm_get(prims, q, pmf_flags()) & 8) != 0 {
+                iw = tr_min(x1, pm_get(prims, q, pmf_x1())) - tr_max(x0, pm_get(prims, q, pmf_x0()));
+                ih = tr_min(y1, pm_get(prims, q, pmf_y1())) - tr_max(y0, pm_get(prims, q, pmf_y0()));
+                if (iw > 0) && (ih > 0) {
+                    if ((2 as i64) * (iw as i64).wrapping_mul(ih as i64)) >= area {
+                        dup = 1;
+                    }
+                }
+            }
+            q += 1;
+        }
+        if dup == 0 {
+            // the colour: the mean gray of the fill pixels at a 3 x 3 grid of the rectangle
+            ax = vw_cpt_to_px(views, view, 0, x0, y0);
+            ay = vw_cpt_to_px(views, view, 1, x0, y0);
+            bx = vw_cpt_to_px(views, view, 0, x1, y1);
+            by = vw_cpt_to_px(views, view, 1, x1, y1);
+            sum = 0;
+            cnt = 0;
+            i = 1;
+            while i <= 3 {
+                j = 1;
+                while j <= 3 {
+                    px = tr_min(w - 1, tr_max(0, ax + (((bx - ax) * i) / 4)));
+                    py = tr_min(h - 1, tr_max(0, ay + (((by - ay) * j) / 4)));
+                    tmp = paper - crate::port::bitmap_u8(gray, px, py, 0);
+                    if (crate::port::bitmap_u8(mask, px, py, 0) != 0) && ((tmp >= tr_light_lo()) && (tmp <= tr_light_hi())) {
+                        sum += crate::port::bitmap_u8(gray, px, py, 0);
+                        cnt += 1;
+                    }
+                    j += 1;
+                }
+                i += 1;
+            }
+            f = 0;
+            while f < 24 {
+                tmp = pm_get(prims, r, f);
+                pm_set(prims, wr, f, tmp);
+                f += 1;
+            }
+            if cnt > 0 {
+                sum = sum / cnt;
+                pm_set(prims, wr, pmf_color(), (((sum) << (16)) + ((sum) << (8))) + sum);
+            }
+            wr += 1;
+        }
+        r += 1;
+    }
+    crate::port::cells_drop(prims, wr * 24);
+    return wr - from;
+}
 pub(crate) const K_IT: i32 = 10;
 pub fn tr_tl_min() -> i32 {
     // A text line has at least this many components.
     return 3;
+}
+pub fn tr_tl_gap2() -> i32 {
+    // Two components of a text line are at most this much x 4 / 16 squared mean heights apart: 23 is 2.4 mean heights (a justified word space, a CJK stop; D262), it was 9 (1.5).
+    return 23;
 }
 pub(crate) fn tr_ifind(mut it: &mut crate::port::Cells, a: i32) -> i32 {
     let mut x: i32 = a;
@@ -3358,9 +3573,34 @@ pub(crate) fn tr_line_frame(rn: &mut crate::port::Cells, cs: &mut crate::port::C
         }
         pass += 1;
     }
+    // the residual of the kept bottoms about the fit (px^2, rounded down) and the lowest bottom: `tr-tlines` distrusts a baseline whose
+    // bottoms do not line up (a watermark's letters hidden by body text: P6.4b, D261)
+    k = 0;
+    nn = 0 as i64;
+    den = 0 as i64;
+    hsum = -1000000000;
+    while k < m {
+        u = crate::port::cells_at(s5, k * 6);
+        v = crate::port::cells_at(s5, (k * 6) + 1);
+        if v > hsum {
+            hsum = v;
+        }
+        e = v - ((((slope * (u as i64)) + icpt) / (65536 as i64)) as i32);
+        if (4 * e) <= hbar {
+            nn += 1 as i64;
+            den += (e as i64).wrapping_mul(e as i64);
+        }
+        k += 1;
+    }
     crate::port::cells_set(out, 0, slope as i32);
     crate::port::cells_set(out, 1, icpt as i32);
     crate::port::cells_set(out, 2, hbar);
+    if nn > (0 as i64) {
+        crate::port::cells_set(out, 3, (den / nn) as i32);
+    } else {
+        crate::port::cells_set(out, 3, 0);
+    }
+    crate::port::cells_set(out, 4, hsum);
     return m;
 }
 pub(crate) fn tr_extent_at(rn: &mut crate::port::Cells, it: &mut crate::port::Cells, head: i32, idx: &mut crate::port::Cells, off: &mut crate::port::Cells, th: i32) -> i32 {
@@ -3456,6 +3696,7 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
     let mut row: i32 = 0;
     let mut alpha: i32 = 0;
     let mut th: i32 = 0;
+    let mut th0: i32 = 0;
     let mut co: i32 = 0;
     let mut si: i32 = 0;
     let mut x0: i32 = 0;
@@ -3530,7 +3771,7 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
                     gy = tr_max(0, dy - ((crate::port::cells_at(s1, (i * K_IT) + 4) + crate::port::cells_at(s1, (j * K_IT) + 4)) / 2));
                     hmax = tr_max(hmax, 1);
                     // gap within 1.5 mean heights: gap^2 * 4 <= 9 * mean_h^2 (mean_h = (hi + hj) / 2)
-                    if (((gx * gx) + (gy * gy)) * 16) <= (9 * ((crate::port::cells_at(s1, (i * K_IT) + 4) + crate::port::cells_at(s1, (j * K_IT) + 4)) * (crate::port::cells_at(s1, (i * K_IT) + 4) + crate::port::cells_at(s1, (j * K_IT) + 4)))) {
+                    if (((gx * gx) + (gy * gy)) * 16) <= (tr_tl_gap2() * ((crate::port::cells_at(s1, (i * K_IT) + 4) + crate::port::cells_at(s1, (j * K_IT) + 4)) * (crate::port::cells_at(s1, (i * K_IT) + 4) + crate::port::cells_at(s1, (j * K_IT) + 4)))) {
                         crate::port::cells_push(s6, (dx * dx) + (dy * dy));
                         crate::port::cells_push(s5, i);
                         crate::port::cells_push(s5, j);
@@ -3583,6 +3824,7 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
             }
             rms = tr_isqrt(tr_max(0, crate::port::cells_at(s4, 1)) as i64) / 4;
             th = tr_refine_angle(rn, s1, i, th, 1000, s2, s3);
+            th0 = th;
             pass = 0;
             while pass < 2 {
                 m = tr_line_frame(rn, cs, s1, i, th, s2, s3, s5, s4);
@@ -3601,7 +3843,25 @@ pub fn tr_tlines(views: &mut crate::port::Cells, page: i32, view: i32, dpi100: i
                 }
                 pass += 1;
             }
+            // bottoms that do not line up (rms over 1/8 of the mean height, or the fit pulls the angle 1.5 degrees from the strip's) say nothing
+            // about the direction: a watermark's letters, hidden in
+            // places by body text, are cut at a different place each (P6.4b, D261). The thinnest strip's angle stands, the baseline is the
+            // strip's lower edge.
             hbar = crate::port::cells_at(s4, 2);
+            dx = th - th0;
+            if dx > 18000 {
+                dx -= 36000;
+            }
+            if dx < -18000 {
+                dx += 36000;
+            }
+            if ((64 * crate::port::cells_at(s4, 3)) > (hbar * hbar)) || (tr_abs(dx) >= 150) {
+                th = th0;
+                m = tr_line_frame(rn, cs, s1, i, th, s2, s3, s5, s4);
+                hbar = crate::port::cells_at(s4, 2);
+                crate::port::cells_set(s4, 0, 0);
+                crate::port::cells_set(s4, 1, crate::port::cells_at(s4, 4) * 65536);
+            }
             co = ev_cos(th);
             si = ev_sin(th);
             slope = crate::port::cells_at(s4, 0) as i64;

@@ -1044,7 +1044,9 @@ func NmSauvola(g *port.Bitmap, m *port.Bitmap, r int32, k int32, sv *port.Cells)
 	return ink
 }
 
-func NmSkewPoints(m *port.Bitmap, pts *port.Cells, ystep int32, limit int32) int32 {
+func NmSkewPointsCap(m *port.Bitmap, pts *port.Cells, ystep int32, limit int32, maxrun int32) int32 {
+	// As `nm-skew-points`, but a run longer than `maxrun` is not a point: a rule or an underline is not a text cluster, and its midpoint
+	// stands for its pixels only while it is short against the angle (P6.4b, D264).
 	// The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its
 	// midpoint x with its length as the weight (a run's pixels all project within a pixel of its midpoint at the angles
 	// tried, so this is the row projection of the ink without visiting a pixel twice). At most `limit` runs. Answers how many.
@@ -1062,15 +1064,23 @@ func NmSkewPoints(m *port.Bitmap, pts *port.Cells, ystep int32, limit int32) int
 			for (ce < w) && (port.BitmapU8(m, ce, y, 0) != 0) {
 				ce += 1
 			}
-			port.CellsPush(pts, (x+ce)/2)
-			port.CellsPush(pts, y)
-			port.CellsPush(pts, ce-x)
-			np += 1
+			if (ce - x) <= maxrun {
+				port.CellsPush(pts, (x+ce)/2)
+				port.CellsPush(pts, y)
+				port.CellsPush(pts, ce-x)
+				np += 1
+			}
 			x = port.BitmapNextNonzero(m, ce, y)
 		}
 		y += ystep
 	}
 	return np
+}
+
+func NmSkewPoints(m *port.Bitmap, pts *port.Cells, ystep int32, limit int32) int32 {
+	// The ink RUNS of a binary view into `pts` as (x, y, weight) triples: on every `ystep`-th row, each run of ink by its
+	// midpoint x with its length as the weight; no run is too long. At most `limit` runs. Answers how many.
+	return NmSkewPointsCap(m, pts, ystep, limit, port.BitmapW(m))
 }
 
 func nmSkewScore(pts *port.Cells, np int32, prof *port.Cells, cdeg int32, off int32, nb int32) int64 {
@@ -1121,7 +1131,7 @@ func NmDeskew(m *port.Bitmap, pts *port.Cells, prof *port.Cells) int32 {
 	if h > 16000 {
 		return 0
 	}
-	np = NmSkewPoints(m, pts, ystep, 120000)
+	np = NmSkewPointsCap(m, pts, ystep, 120000, w/12)
 	if np < 50 {
 		return 0
 	}

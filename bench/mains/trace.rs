@@ -67,7 +67,7 @@ fn main() {
         tlines = Cells::new();
         pts = Cells::new();
         refs = Cells::new();
-        vw_new(&mut views, 0, vk_decode(), -1, -1, w, h, dpi100, 0, -1, 0, 0, 0, 0, 0);
+        vw_new(&mut views, 0, if std::env::var("TRACE_DECODE").is_ok() { vk_decode() } else { vk_render() }, -1, -1, w, h, dpi100, 0, -1, 0, 0, 0, 0, 0);
         let t0 = Instant::now();
         nl = nm_view(&mut views, &mut inks, 0, 0, &src, &gray, &binary, &mut ws, &mut sv, &mut aux);
         nm_label_into(&src, &mut ws, &labels);
@@ -89,6 +89,9 @@ fn main() {
                 }
             }
         }
+        let gview = nm_gray_view(&mut ws);
+        let pg = nm_paper_gray(&mut ws);
+        tr_lightfills(&mut views, 0, gview, dpi100, &gray, pg, &mask, &mut inks, &mut prims, &mut refs, &mut s1, &mut s2);
         let t3 = Instant::now();
         let ph = [ms(t0, t1), ms(t1, t2), ms(t2, t3), ms(t1, t3), ms(t0, t3)];
         for k in 0..5 {
@@ -112,6 +115,7 @@ fn main() {
         cells_len(&pts) / 3,
         cells_len(&refs) / 2
     );
+    println!("K {}", vw_get(&mut views, 0, vwf_deskew()));
     for k in 0..ik_count(&mut inks) {
         println!("I {} {} {}", k, ik_get(&mut inks, k, ikf_count()), ik_get(&mut inks, k, ikf_role()));
     }

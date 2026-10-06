@@ -12,7 +12,7 @@
              :task (shell "kin/scripts/lang-test")}
   check {:doc "Generate, compile and run every target; require one answer."
          :task (shell "kin/scripts/check")}
-  unit  {:doc "Do the laws hold as native tests on every target?  bb unit [go|rust|java|csharp|red]"
+  unit  {:doc "Do the laws hold as native tests on every target?  bb unit [go|rust|java|csharp|red [ARM]]"
          :task (apply shell "kin/scripts/unit" *command-line-args*)}
   plan {:doc "The plan/fulfil protocol: a transcript recorded on Rust, replayed on Go, identical evidence (P2.5)."
         :task (shell "kin/scripts/plan")}
@@ -70,12 +70,16 @@
                 :task (apply shell "bb" "tools/fusion/ghost_health.clj" *command-line-args*)}
   import {:doc "Run every public-dataset importer into corpus/_gold/, validate, report counts (NOT a gate: the corpus is not in git).  bb import [--limit N] [name ...]"
           :task (apply shell "bb" "tools/import/import_all.clj" *command-line-args*)}
-  gates {:doc "Run every gate; fail if one exits non-zero or prints no score."
-         :task (shell "kin/scripts/gates")}
+  gates {:doc "Run every gate; fail if one exits non-zero or prints no score.  bb gates [GATE...] runs only those (CI shards, D266)."
+         :task (apply shell "kin/scripts/gates" *command-line-args*)}
   corpus-push {:doc "Zip each corpus category and push to S3-compatible storage (.env).  bb corpus-push [--dry-run] [category...]"
                :task (apply shell "bb" "tools/corpus.clj" "push" *command-line-args*)}
   corpus-pull {:doc "Pull changed archives from S3-compatible storage into corpus/.  bb corpus-pull [--dry-run] [--force] [category...]"
                :task (apply shell "bb" "tools/corpus.clj" "pull" *command-line-args*)}
+  corpus-index-sha {:doc "Print the SHA-256 of the remote index.json (the CI corpus cache key, D266). NOT a gate."
+                    :task (shell "bb" "tools/corpus.clj" "index-sha")}
+  ci {:doc "CI helpers: bb ci coverage (every gate is in a gates.yml job) | laws-record ARM LOG DIR | laws-compare DIR (D266). NOT a gate."
+      :task (apply shell "bb" "tools/ci.clj" *command-line-args*)}
   corpus-test {:doc "SigV4 vectors, then a push/pull round trip against a local MinIO. NOT a gate."
                :task (do (shell "bb" "-cp" "tools" "tools/corpus_test.clj")
                          (shell "bb" "-cp" "tools" "tools/corpus_roundtrip.clj"))}}}

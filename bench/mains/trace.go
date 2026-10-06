@@ -48,7 +48,11 @@ func main() {
 	var nl, ncomp, nruns int32
 	for it := 0; it < n; it++ {
 		views, inks, comps, rules, prims, tlines, pts, refs = port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
-		evidence.VwNew(views, 0, evidence.VkDecode(), -1, -1, w, h, dpi100, 0, -1, 0, 0, 0, 0, 0)
+		vkind := evidence.VkRender()
+		if os.Getenv("TRACE_DECODE") != "" {
+			vkind = evidence.VkDecode()
+		}
+		evidence.VwNew(views, 0, vkind, -1, -1, w, h, dpi100, 0, -1, 0, 0, 0, 0, 0)
 		t0 := time.Now()
 		nl = norm.NmView(views, inks, 0, 0, src, gray, binary, ws, sv, aux)
 		norm.NmLabelInto(src, ws, labels)
@@ -70,6 +74,8 @@ func main() {
 				}
 			}
 		}
+		gview := norm.NmGrayView(ws)
+		trace.TrLightfills(views, 0, gview, dpi100, gray, norm.NmPaperGray(ws), mask, inks, prims, refs, s1, s2)
 		t3 := time.Now()
 		ph := [5]float64{ms(t0, t1), ms(t1, t2), ms(t2, t3), ms(t1, t3), ms(t0, t3)}
 		for k := 0; k < 5; k++ {
