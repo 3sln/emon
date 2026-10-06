@@ -272,7 +272,7 @@ func TestAHiddenLayerAndOcrThatAgreeGiveTheHiddenTextBothSources(emonT *testing.
 	port.AssertEq(emonT, player.FvGet(fv, 1, 2), 322, "disagreement: rule 322")
 	port.AssertEq(emonT, player.FvGet(fv, 1, 1), 4, "OCR's word")
 	port.AssertEq(emonT, port.CellsAt(et, port.CellsAt(nfw, 24+11)), 77, "this run's OCR text")
-	port.AssertEq(emonT, port.CellsAt(nfw, 24+17), -1, "no glyph run: the word is OCR's")
+	port.AssertEq(emonT, port.CellsAt(nfw, 24+17), 3, "the hidden word's glyph run is kept (the style stage reads its fill: D383)")
 	port.AssertEq(emonT, port.CellsAt(nfw, 24+1), 1000, "the hidden word's geometry")
 }
 

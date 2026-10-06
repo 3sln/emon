@@ -249,7 +249,7 @@ public final class Hiddentest {
         emon.Testport.assertEq(Player.fvGet(fv, 1, 2), 322, "disagreement: rule 322");
         emon.Testport.assertEq(Player.fvGet(fv, 1, 1), 4, "OCR's word");
         emon.Testport.assertEq(emon.Port.cellsAt(et, emon.Port.cellsAt(nfw, 24 + 11)), 77, "this run's OCR text");
-        emon.Testport.assertEq(emon.Port.cellsAt(nfw, 24 + 17), -1, "no glyph run: the word is OCR's");
+        emon.Testport.assertEq(emon.Port.cellsAt(nfw, 24 + 17), 3, "the hidden word's glyph run is kept (the style stage reads its fill: D383)");
         emon.Testport.assertEq(emon.Port.cellsAt(nfw, 24 + 1), 1000, "the hidden word's geometry");
     }
     public static void testAHiddenWordWithNoInkIsSetAsideAsInvisible() {

@@ -257,7 +257,7 @@ fn test_a_hidden_layer_and_ocr_that_agree_give_the_hidden_text_both_sources() {
     crate::testport::assert_eq(fv_get(fv, 1, 2), 322, "disagreement: rule 322");
     crate::testport::assert_eq(fv_get(fv, 1, 1), 4, "OCR's word");
     crate::testport::assert_eq(crate::port::cells_at(et, crate::port::cells_at(nfw, 24 + 11)), 77, "this run's OCR text");
-    crate::testport::assert_eq(crate::port::cells_at(nfw, 24 + 17), -1, "no glyph run: the word is OCR's");
+    crate::testport::assert_eq(crate::port::cells_at(nfw, 24 + 17), 3, "the hidden word's glyph run is kept (the style stage reads its fill: D383)");
     crate::testport::assert_eq(crate::port::cells_at(nfw, 24 + 1), 1000, "the hidden word's geometry");
 }
 #[test]

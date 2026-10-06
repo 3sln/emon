@@ -268,7 +268,7 @@
     (assert-eq (fv-get fv 1 2) 322 "disagreement: rule 322")
     (assert-eq (fv-get fv 1 1) 4 "OCR's word")
     (assert-eq (cells-at et (cells-at nfw (+ 24 11))) 77 "this run's OCR text")
-    (assert-eq (cells-at nfw (+ 24 17)) -1 "no glyph run: the word is OCR's")
+    (assert-eq (cells-at nfw (+ 24 17)) 3 "the hidden word's glyph run is kept (the style stage reads its fill: D383)")
     (assert-eq (cells-at nfw (+ 24 1)) 1000 "the hidden word's geometry")))
 
 (deftest test-a-hidden-word-with-no-ink-is-set-aside-as-invisible
