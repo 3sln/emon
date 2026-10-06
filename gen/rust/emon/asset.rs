@@ -5,6 +5,8 @@ use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdfimage::*;
+use crate::emon::pdfsrc::*;
+use crate::emon::plan::*;
 use crate::emon::png::*;
 
 pub(crate) const AS_COVER: i32 = 950;
@@ -13,6 +15,14 @@ pub(crate) const AS_OVERLAY: i32 = 20;
 pub(crate) const AS_BIG: i32 = 800;
 pub(crate) const AS_FIGURE_SIDE: i32 = 1800;
 pub(crate) const AS_PIXFACTOR: i32 = 2;
+pub(crate) const AS_HOSTFACTOR: i32 = 8;
+pub(crate) fn as_hcap(maxpix: i32) -> i32 {
+    // The most host pixels asked for in one document: `AS_HOSTFACTOR` times `asset-pixels`, saturated.
+    if maxpix > 268435455 {
+        return 2147483647;
+    }
+    return maxpix * AS_HOSTFACTOR;
+}
 pub(crate) const AS_MAXPROD: i32 = 4096;
 pub(crate) const AS_STRIDE: i32 = 32;
 pub(crate) const AS_OVERLAY_WORK: i32 = 100000000;
@@ -334,6 +344,19 @@ pub(crate) fn as_from_chain(rec: &mut crate::port::Cells) -> i32 {
     }
     return afm_raw();
 }
+pub(crate) fn as_from_codec(codec: i32) -> i32 {
+    // `from` of an image whose last filter is an image codec (`pi-f-codec` 7 DCT, 8 JPX, 9 CCITT, 10 JBIG2).
+    if codec == 7 {
+        return afm_dct();
+    }
+    if codec == 8 {
+        return afm_jpx();
+    }
+    if codec == 9 {
+        return afm_ccitt();
+    }
+    return afm_jbig2();
+}
 pub(crate) fn as_same_key(cand: &mut crate::port::Cells, r: i32, obj: i32, ori: i32, vx0: i32, vy0: i32, vx1: i32, vy1: i32) -> i32 {
     let b: i32 = r * AS_STRIDE;
     if crate::port::cells_at(cand, b + AC_OBJ) != obj {
@@ -369,7 +392,56 @@ pub(crate) fn as_copy_result(mut cand: &mut crate::port::Cells, from: i32, to: i
     }
     return 0;
 }
-pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, maxpix: i32, mut cand: &mut crate::port::Cells, row: i32, obj: i32, ori: i32, whole_ok: i32, mut cbytes: &mut crate::port::Buf, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut mrec: &mut crate::port::Cells, mut smp: &mut crate::port::Cells, mut msmp: &mut crate::port::Cells, mut data: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf) -> i32 {
+pub(crate) fn as_id(row: i32, k: i32) -> i32 {
+    // The id of the `decode-img` request of candidate `row`: k 0 its image, 1 its mask.
+    return ((row * 2) + k) + 1;
+}
+pub(crate) fn as_host(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, input: i32, mut rec: &mut crate::port::Cells, data: &mut crate::port::Cells, id: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut payload: &mut crate::port::Buf, bms: &crate::port::BitmapSet, mut glob: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut hs: &mut crate::port::Cells, hcap: i32) -> i32 {
+    // The host's pixels of the codec image `rec` (its codestream is `data`, `pi-samples`' answer 1), request `id` (P6.1a,
+    // D117, D291). Answers 0: the answer is in and its pixels are `bms-get bms id` (the record has adopted them); 1: the host
+    // cannot (unsupported, failed, or not the image's size); 2: over its pixel limit; 3: the request is written (the
+    // caller answers codec for now, the host's loop asks again with the answers); 4: the host's pixels in all would pass `hcap`
+    // (a bound on what the answers hold at once); 12: the source missed. `hs` cell 0 counts the pixels asked for.
+    let at: i32 = an_find(ans, id);
+    let mut gsh: i32 = 0;
+    let px: i32 = pi_get(rec, pi_f_w()) * pi_get(rec, pi_f_h());
+    if at >= 0 {
+        if an_ok(ans, at) == 1 {
+            if crate::port::bms_has(bms, id) == 0 {
+                return 1;
+            }
+            if (an_arg(ans, at, 0) != pi_get(rec, pi_f_w())) || (an_arg(ans, at, 1) != pi_get(rec, pi_f_h())) {
+                return 1;
+            }
+            if (an_arg(ans, at, 2) != 1) && (an_arg(ans, at, 2) != 3) {
+                return 1;
+            }
+            pi_adopt(rec, an_arg(ans, at, 0), an_arg(ans, at, 1), an_arg(ans, at, 2));
+            return 0;
+        }
+        if an_status(ans, at) == ps_limit() {
+            return 2;
+        }
+        return 1;
+    }
+    if (crate::port::cells_at(hs, 0) + px) > hcap {
+        return 4;
+    }
+    crate::port::cells_set(hs, 0, crate::port::cells_at(hs, 0) + px);
+    crate::port::cells_drop(glob, 0);
+    if pi_get(rec, pi_f_gobj()) != 0 {
+        gsh = pd_get(src, ar, dc, a, b, st, pi_get(rec, pi_f_gobj()));
+        if gsh != 0 {
+            pd_stream_data(src, ar, dc, a, b, st, gsh, glob);
+        }
+        if ps_missed(src) {
+            return 12;
+        }
+    }
+    pi_request(rq, id, input, rec, data, glob, payload, tmp, words);
+    return 3;
+}
+pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, maxpix: i32, mut cand: &mut crate::port::Cells, row: i32, obj: i32, ori: i32, whole_ok: i32, mut cbytes: &mut crate::port::Buf, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut mrec: &mut crate::port::Cells, mut smp: &mut crate::port::Cells, mut msmp: &mut crate::port::Cells, mut data: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, input: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut payload: &mut crate::port::Buf, bms: &crate::port::BitmapSet, mut glob: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut hs: &mut crate::port::Cells) -> i32 {
     // Make the pixels of the image object `obj` as placed by candidate `row` (whose box, visible box and flags are set):
     // the row's status, type, bytes, hash, size and `from`. Answers 0, or 12 when the source missed (stop, re-run).
     let sh: i32 = pd_get(src, ar, dc, a, b, st, obj);
@@ -399,6 +471,9 @@ pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
     let mut k: i32 = 1;
     let mut bil: i32 = 0;
     let mut kf: i32 = 0;
+    let mut hrc: i32 = 0;
+    let mut pend: i32 = 0;
+    let mut codec: i32 = 0;
     let mut flags: i32 = as_get(cand, row, AC_FLAGS);
     if sh == 0 {
         as_set(cand, row, AC_STATUS, nz_codec());
@@ -446,8 +521,14 @@ pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
         }
         i += 1;
     }
-    if pi_get(rec, pi_f_class()) == 9 {
+    // a colour space kin does not read is `colorspace`; a JPX with none (the codestream says) is the host's, and Indexed over a codec whose
+    // samples are not the indices (DCT, JPX: the host scales them) is not asked for
+    if (pi_get(rec, pi_f_class()) == 9) && ((pi_get(rec, pi_f_codec()) != 8) || ((pi_get(rec, pi_f_flags()) & 8) != 8)) {
         as_set(cand, row, AC_STATUS, nz_colorspace());
+        return 0;
+    }
+    if (pi_get(rec, pi_f_class()) == 4) && ((pi_get(rec, pi_f_codec()) == 7) || (pi_get(rec, pi_f_codec()) == 8)) {
+        as_set(cand, row, AC_STATUS, nz_codec());
         return 0;
     }
     // A browser shows this JPEG as the PDF painted it: the original bytes, passed through
@@ -476,26 +557,59 @@ pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
             as_set(cand, row, AC_ORIGIN, ao_embedded());
             return 0;
         }
-        // DCT that cannot pass through is the host's (decode-img, P6.1a)
-        as_set(cand, row, AC_STATUS, nz_codec());
-        return 0;
-    }
-    if pi_get(rec, pi_f_codec()) != 0 {
-        as_set(cand, row, AC_STATUS, nz_codec());
-        return 0;
+        // DCT that cannot pass through is the host's (`decode-img`, P6.1a): below
+        if rc != 1 {
+            as_set(cand, row, AC_STATUS, nz_codec());
+            return 0;
+        }
     }
     if (w as i64).wrapping_mul(h as i64) > (maxpix as i64).wrapping_mul(AS_PIXFACTOR as i64) {
         as_set(cand, row, AC_STATUS, nz_too_large());
         return 0;
     }
-    // kin's own samples
-    rc = pi_samples(src, ar, dc, a, b, st, rec, sh, smp);
-    if rc == 12 {
-        return 12;
-    }
-    if rc == 1 {
-        as_set(cand, row, AC_STATUS, nz_codec());
-        return 0;
+    codec = pi_get(rec, pi_f_codec());
+    if codec != 0 {
+        // a codec's pixels are the host's: its bytes are asked for in one round, and the answers are adopted in the next
+        as_set(cand, row, AC_FROM, as_from_codec(codec));
+        if codec != 7 {
+            rc = pi_samples(src, ar, dc, a, b, st, rec, sh, data);
+            if rc == 12 {
+                return 12;
+            }
+            if rc != 1 {
+                as_set(cand, row, AC_STATUS, nz_codec());
+                return 0;
+            }
+        }
+        hrc = as_host(src, ar, dc, a, b, st, input, rec, data, as_id(row, 0), ans, rq, payload, bms, glob, tmp, words, hs, as_hcap(maxpix));
+        if hrc == 12 {
+            return 12;
+        }
+        if hrc == 1 {
+            as_set(cand, row, AC_STATUS, nz_codec());
+            return 0;
+        }
+        if hrc == 2 {
+            as_set(cand, row, AC_STATUS, nz_too_large());
+            return 0;
+        }
+        if hrc == 4 {
+            as_set(cand, row, AC_STATUS, nz_budget());
+            return 0;
+        }
+        if hrc == 3 {
+            pend = 1;
+        }
+    } else {
+        // kin's own samples
+        rc = pi_samples(src, ar, dc, a, b, st, rec, sh, smp);
+        if rc == 12 {
+            return 12;
+        }
+        if rc == 1 {
+            as_set(cand, row, AC_STATUS, nz_codec());
+            return 0;
+        }
     }
     mk = pi_get(rec, pi_f_mkind());
     if (mk == 2) || (mk == 3) {
@@ -509,18 +623,49 @@ pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
             return 0;
         }
         if pi_get(mrec, pi_f_codec()) != 0 {
-            as_set(cand, row, AC_STATUS, nz_codec());
-            return 0;
-        }
-        rc = pi_samples(src, ar, dc, a, b, st, mrec, msh, msmp);
-        if rc == 12 {
-            return 12;
-        }
-        if rc == 1 {
-            as_set(cand, row, AC_STATUS, nz_codec());
-            return 0;
+            rc = pi_samples(src, ar, dc, a, b, st, mrec, msh, data);
+            if rc == 12 {
+                return 12;
+            }
+            if rc != 1 {
+                as_set(cand, row, AC_STATUS, nz_codec());
+                return 0;
+            }
+            hrc = as_host(src, ar, dc, a, b, st, input, mrec, data, as_id(row, 1), ans, rq, payload, bms, glob, tmp, words, hs, as_hcap(maxpix));
+            if hrc == 12 {
+                return 12;
+            }
+            if hrc == 1 {
+                as_set(cand, row, AC_STATUS, nz_codec());
+                return 0;
+            }
+            if hrc == 2 {
+                as_set(cand, row, AC_STATUS, nz_too_large());
+                return 0;
+            }
+            if hrc == 4 {
+                as_set(cand, row, AC_STATUS, nz_budget());
+                return 0;
+            }
+            if hrc == 3 {
+                pend = 1;
+            }
+        } else {
+            rc = pi_samples(src, ar, dc, a, b, st, mrec, msh, msmp);
+            if rc == 12 {
+                return 12;
+            }
+            if rc == 1 {
+                as_set(cand, row, AC_STATUS, nz_codec());
+                return 0;
+            }
         }
         have = 1;
+    }
+    // asked: this attempt is only the request (the host's loop runs the unit again with the answers)
+    if pend == 1 {
+        as_set(cand, row, AC_STATUS, nz_codec());
+        return 0;
     }
     ow = pi_out_w(rec);
     oh = pi_out_h(rec);
@@ -528,8 +673,9 @@ pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
     alpha = pi_has_alpha(rec);
     let pic: &crate::port::Bitmap = &crate::port::bitmap_new(ow, oh, ch);
     let al: &crate::port::Bitmap = &crate::port::bitmap_new(ow, oh, 1);
-    let dummy: &crate::port::Bitmap = &crate::port::bitmap_new(1, 1, 1);
-    if pi_pixels(rec, smp, dummy, mrec, msmp, dummy, have, 0, pic, al) != 0 {
+    let hbm: &crate::port::Bitmap = crate::port::bms_get(bms, as_id(row, 0));
+    let hmbm: &crate::port::Bitmap = crate::port::bms_get(bms, as_id(row, 1));
+    if pi_pixels(rec, smp, hbm, mrec, msmp, hmbm, have, 0, pic, al) != 0 {
         as_set(cand, row, AC_STATUS, nz_colorspace());
         return 0;
     }
@@ -561,7 +707,9 @@ pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
     as_set(cand, row, AC_W, w);
     as_set(cand, row, AC_H, h);
     as_set(cand, row, AC_FLAGS, flags);
-    as_set(cand, row, AC_FROM, as_from_chain(rec));
+    if codec == 0 {
+        as_set(cand, row, AC_FROM, as_from_chain(rec));
+    }
     as_set(cand, row, AC_ORIGIN, ao_decoded());
     return 0;
 }
@@ -603,11 +751,15 @@ pub(crate) fn as_overlaid(im: &mut crate::port::Cells, pa: &mut crate::port::Cel
     }
     return 0;
 }
-pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, im: &mut crate::port::Cells, pa: &mut crate::port::Cells, gl: &mut crate::port::Cells, pg: &mut crate::port::Cells, maxpix: i32, totbytes: i32, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut mrec: &mut crate::port::Cells, mut smp: &mut crate::port::Cells, mut msmp: &mut crate::port::Cells, mut data: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf) -> i32 {
-    // The document pass: a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
+pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, im: &mut crate::port::Cells, pa: &mut crate::port::Cells, gl: &mut crate::port::Cells, pg: &mut crate::port::Cells, maxpix: i32, totbytes: i32, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut mrec: &mut crate::port::Cells, mut smp: &mut crate::port::Cells, mut msmp: &mut crate::port::Cells, mut data: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, input: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut payload: &mut crate::port::Buf, bms: &crate::port::BitmapSet, mut glob: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut hs: &mut crate::port::Cells) -> i32 {
+    // The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
     // its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice
     // `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.
-    // `out rec mrec smp msmp data rows tmp ws z` are scratch. Answers 0, or 12 when the source missed (stop, re-run).
+    // `out rec mrec smp msmp data rows tmp ws z glob words hs` are scratch. A codec image's pixels are the HOST's: the
+    // first attempt writes a `decode-img` request for each (`rq`, with its bytes in `payload` when they are not the input's
+    // own; `input` is the input's index) and answers 1; the host fulfils them and runs the unit again with `ans` and the
+    // bitmaps `bms`, and the same call makes the candidates. Answers 0 (done), 1 (requests written: fulfil and run again) or
+    // 12 when the source missed (stop, re-run).
     let n: i32 = im_count(im);
     let mut r: i32 = 0;
     let mut row: i32 = 0;
@@ -634,6 +786,8 @@ pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut d
     let mut ovl: i32 = AS_OVERLAY_WORK;
     let mut whole: i32 = 0;
     crate::port::cells_drop(cand, 0);
+    crate::port::cells_drop(hs, 0);
+    crate::port::cells_push(hs, 0);
     while r < n {
         if im_get(im, r, mf_vis()) == 0 {
             page = im_get(im, r, mf_page());
@@ -706,7 +860,7 @@ pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut d
                     as_set(cand, row, AC_STATUS, nz_budget());
                 } else {
                     prod += 1;
-                    rc = as_make(src, ar, dc, a, b, st, maxpix, cand, row, obj, ori, 1, cbytes, out, rec, mrec, smp, msmp, data, rows, tmp, ws, z);
+                    rc = as_make(src, ar, dc, a, b, st, maxpix, cand, row, obj, ori, 1, cbytes, out, rec, mrec, smp, msmp, data, rows, tmp, ws, z, input, ans, rq, payload, bms, glob, words, hs);
                     if rc == 12 {
                         return 12;
                     }
@@ -726,6 +880,9 @@ pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut d
             }
         }
         r += 1;
+    }
+    if crate::port::cells_len(rq) > 0 {
+        return 1;
     }
     return 0;
 }

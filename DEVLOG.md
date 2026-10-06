@@ -2130,8 +2130,43 @@ analysis beyond "top-to-bottom lines on a single column".
   what one of them cannot read; the Go JPEG decoder replicates chroma (differences of 60 at a colour edge) where libjpeg and
   zune filter it, so the Go host now filters it as libjpeg does (differences of 2-5).
   *Commit*: on branch `worktree-agent-a69e90e20db79475c` (D037).
-- [ ] **P6.1a — Host decoding for assets: `decode-img`** (D117). Depends on P6.1
+- [x] **P6.1a — Host decoding for assets: `decode-img`** (D117; D460-D466). Depends on P6.1
   and P3.12.
+  **DONE (D460-D466).** Both hosts fulfil `decode-img` (kind 6). **Plumbing** (D460): the unit's payload `Buf` reaches the
+  fulfiller (`Request.payload` / `PlanRequest.Payload`, one `Buf` a round, never in a transcript, which stays keyed by the
+  record's SHA-256), `an-decode-img` is the kind-6 answer. **The asset unit** (D461): `as-collect` moved out of the document
+  pass into a plan/fulfil unit of its own (`asset_unit` / `assetUnit`, after the document pass and before the page units): its
+  first attempt writes one request per codec image and codec mask (ids `2 * row + 1 + k`), the host answers them all in one
+  round, the second attempt adopts the pixels (`pi-adopt`, then kin's own colour, mask and `/Matte` code) and makes the
+  candidates; with `assets` off nothing changed (`bb identity`, `bb slice`). **Codecs**: DCT (Rust `zune-jpeg` directly, Go
+  `image/jpeg`; no EXIF; four components only with an Adobe marker, honoured: D462), CCITT (Rust: `fax`'s code tables under our
+  own row loop, so K < 0, K = 0 with or without EOLs, K > 0, `EncodedByteAlign`, `EndOfLine`, `EndOfBlock`, `Rows`, `Columns`;
+  Go: `x/image/ccitt`: Group 4 with alignment and Group 3 one-dimensional with EOLs: D463), JPX and JBIG2 with its globals (Rust:
+  OpenJPEG and jbig2dec through a hand FFI under `--cfg codecs`, live only; Go: `unsupported`: D464). `bb asset-record`
+  recorded the 26 documents that ask the host (every DCT that cannot pass through, CCITT, JPX, JBIG2 fixture) live on Rust with
+  the codecs into `test/assets/transcripts/`; `bb asset` replays them on Rust and Go and holds the files byte-identical, JPX,
+  JBIG2 and CCITT to the generator's pixels exactly (82 files and 145 rows now: CCITT by Ghostscript's encoder, JPX lossless by
+  ImageMagick, JBIG2 hand-built with MMR; poppler's own decoders read each to the same pixels when the fixtures are written),
+  DCT within 2 per channel of `pdfimages -png` (4 for the sub-sampled one and for the CMYK one, held to ImageMagick), and each
+  host live to the transcript or to its honest `codec`. **Departures** (D460-D466): (1) the asset unit re-opens the document
+  and runs `as-collect` twice when there is a codec image (D461), where the brief did not say where the request is written;
+  (2) Go `unsupported` for JPX and JBIG2 (the brief allows it), **and, beyond the brief, for CCITT Group 3 two-dimensional, byte
+  aligned or without EOLs** (`x/image/ccitt` reads Group 4 and EOL-framed one-dimensional Group 3; the Rust host reads all, so the
+  two disagree there, held by `asset-check`'s table: D463); (3) JPX and JBIG2 are LIVE-only in Rust and in the gates only
+  through a transcript, like pdfium and Tesseract; (4) the JBIG2 fixtures are hand-built (a page-information segment and a
+  generic region coded with MMR; the globals a global symbol dictionary with no symbols): no `jbig2enc` here, so symbols and
+  a text region are unexercised; (5) DCT live differs between hosts by the libraries' own difference (D190: 2 on 4:4:4 and gray,
+  4-6 on a sub-sampled one), exact only through a transcript, so the gates replay it; (6) a four-component JPEG without an
+  Adobe marker is `unsupported` on both, and the PDF's `/Decode` is not applied to an Adobe CMYK (D462); (7) Indexed over DCT
+  or JPX is `codec`; (8) **inline images stay `codec`** (D466): the interpreter's row does not record the data span.
+  *Learnt*: ImageMagick's `jp2:quality=100` is lossy (`jp2:rate=1` is lossless); a G4 strip from ImageMagick's TIFF has the
+  opposite polarity to T.6's black (the first JBIG2 fixture was the exact complement; Ghostscript's encoder with `BlackIs1`
+  is unambiguous); jbig2dec refuses segments that need a page in a global context (a page-information segment in the globals
+  stream is poppler's reading and not jbig2dec's: the globals fixture holds a symbol dictionary instead); `fax`'s decoders
+  read neither byte-aligned, EOL-less nor two-dimensional Group 3, but its code tables are public; zune-jpeg's 4:2:0
+  upsampling and Go's filtered one differ from libjpeg's by 3-4 on a smooth image.
+  Scoreboard: no metric of the ratchet moved (nothing here is measured by it).
+  *Commit*: on branch `worktree-agent-af8b5679a8780308e` (D037).
   *Brief*: Rust and Go fulfil kind 6: DCT (Rust `zune-jpeg`; Go `image/jpeg`), JPX
   (Rust through OpenJPEG; Go `unsupported` unless a pure-Go decoder is adopted),
   JBIG2 with its globals (Rust through `jbig2dec`; Go `unsupported`), CCITT G3/G4
@@ -8657,7 +8692,7 @@ them; offer them upstream when they have proved general.
 - **Signature validation** (cryptographic) — out of scope unless asked.
 
 ### D291 — `decode-img` (kind 6) is in the host loops now: the bytes are named, the payload is not plumbed yet (P3.12; D117, D089, SPEC 7.3)
-**Decision**: (1) `emon.plan` has `pk-decode-img` 6, `rq-decode-img` (31 arguments after the id: `filter w h comps bpc k columns rows ccitt-flags`, then `where offset length sha*8` and `gwhere goffset glength gsha*8`; `where` an input index, or -2 for the unit's payload `Buf`; `gwhere` -1 for no globals) and the readers `dq-*`, held by `plantest`; the answer is a `decode` answer. `sha` is zero for an input's span and the SHA-256 (eight big-endian words) of the bytes kin made otherwise, so the record, which is the transcript key, never holds bytes and different bytes are a different key (a replay of them answers `transcript-miss`). The globals are always put in the payload (they are a stream's decoded bytes). `ccitt-flags`: 1 BlackIs1, 2 EncodedByteAlign, 4 EndOfLine, 8 EndOfBlock false. `comps` is the colour space's for DCT and CCITT and 0 otherwise. (2) Rust (`plan.rs`) and Go (`plan.go`) accept kind 6 from a unit, give it the transcript name `decode-img` and read it back; nothing else in the loop changed. (3) **Not done**: handing the unit's payload to the fulfiller. No unit makes a payload until P3.13 and no fulfiller reads one until P6.1a; adding a parameter to `run`/`Run` and to `Fulfiller::start` with no user would be an API with nothing to hold it to, so it comes with P6.1a, which has the host decoder to test it against (the brief's "payload never in a transcript" already holds: an `Entry` is the request, the answer and the answer's bitmap).
+**Decision**: (1) `emon.plan` has `pk-decode-img` 6, `rq-decode-img` (31 arguments after the id: `filter w h comps bpc k columns rows ccitt-flags`, then `where offset length sha*8` and `gwhere goffset glength gsha*8`; `where` an input index, or -2 for the unit's payload `Buf`; `gwhere` -1 for no globals) and the readers `dq-*`, held by `plantest`; the answer is a `decode` answer. `sha` is zero for an input's span and the SHA-256 (eight big-endian words) of the bytes kin made otherwise, so the record, which is the transcript key, never holds bytes and different bytes are a different key (a replay of them answers `transcript-miss`). The globals are always put in the payload (they are a stream's decoded bytes). `ccitt-flags`: 1 BlackIs1, 2 EncodedByteAlign, 4 EndOfLine, 8 EndOfBlock false. `comps` is the colour space's for DCT and CCITT and 0 otherwise. (2) Rust (`plan.rs`) and Go (`plan.go`) accept kind 6 from a unit, give it the transcript name `decode-img` and read it back; nothing else in the loop changed. (3) **Not done** (done by P6.1a, D460): handing the unit's payload to the fulfiller. No unit makes a payload until P3.13 and no fulfiller reads one until P6.1a; adding a parameter to `run`/`Run` and to `Fulfiller::start` with no user would be an API with nothing to hold it to, so it comes with P6.1a, which has the host decoder to test it against (the brief's "payload never in a transcript" already holds: an `Entry` is the request, the answer and the answer's bitmap).
 **Why**: the record is what both hosts and kin must agree on; the payload is a host-memory matter.
 **Alternatives**: carrying the bytes in the request (a transcript would hold input-derived bytes: SPEC 7.3 forbids it); one payload offset per codec (the globals need a second span anyway).
 - [ ] **Signed off** (maintainer)
@@ -8717,7 +8752,7 @@ them; offer them upstream when they have proved general.
 - [ ] **Signed off** (maintainer)
 
 ### D301 — Not in P3.13 (P3.13; D117, D291)
-**Decision**: left, each with its owner: an inline image's pixels (the interpreter does not hand the data on: `codec`; P6.1a or a follow-up that records the data span), DCT that cannot pass through (rotated, EXIF, masked, CMYK) and every other codec image (`codec`, P6.1a: the payload `Buf` is plumbed there with its first user), `cropped` and `rendered` (P8.5, P6.2 requests), `text-overlap` and the render fields (`dpi`), the stencil's fill colour, Chrome-made synthetic documents with `<img>` and the measurement of whether Chrome passes a JPEG through, the JS SDK's `asset.blob()` (P9.3), and Java and C# hosts' Engine layers (P2-later).
+**Decision**: left, each with its owner: an inline image's pixels (the interpreter does not hand the data on: `codec`; a follow-up that records the data span: D466), DCT that cannot pass through (rotated, EXIF, masked, CMYK) and every other codec image (`codec` until P6.1a, D460-D466: the payload `Buf` is plumbed there with its first user), `cropped` and `rendered` (P8.5, P6.2 requests), `text-overlap` and the render fields (`dpi`), the stencil's fill colour, Chrome-made synthetic documents with `<img>` and the measurement of whether Chrome passes a JPEG through, the JS SDK's `asset.blob()` (P9.3), and Java and C# hosts' Engine layers (P2-later).
 **Why**: each needs something P3.13 was not given (a host decoder, a request, a graphics state, a browser).
 - [ ] **Signed off** (maintainer)
 

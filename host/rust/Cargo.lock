@@ -54,6 +54,8 @@ dependencies = [
  "fax",
  "image",
  "miniz_oxide 0.8.9",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]

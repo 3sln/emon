@@ -300,6 +300,10 @@ type Config struct {
 	// `unsupported` (D199). A replay never calls it (D008). `pdfium.New()` (build tag `pdfium`) is the default
 	// engine.
 	Renderer port.Renderer
+	// PdfCodecs is the JPX and JBIG2 decoder of the `decode-img` request (P6.1a, D117, D464): what an embedder brings for the two PDF
+	// image codecs no pure library here reads. nil (the default, and the only Go host there is): those two are answered
+	// `unsupported` and the image is `noasset: "codec"`. DCT and CCITT are the host's own. A replay never calls it (D008).
+	PdfCodecs PdfCodecs
 }
 
 // DefaultConfig is SPEC 13.1's defaults.
@@ -678,8 +682,11 @@ func (s spanSource) ReadAt(p []byte, off int64) (int, error) {
 // No Renderer is configured (P6.2). `keep` holds the pixels in a decode answer (a recording wants them, as canonical PNG,
 // and so does a live OCR engine; a plain conversion needs only the numbers); `recording` also keeps the OCR engine's
 // thresholded image, which only a transcript wants (D211).
-func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr) *port.PlanSync {
+func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr, codecs PdfCodecs) *port.PlanSync {
 	return &port.PlanSync{F: func(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
+		if req.Kind() == port.PlanKindDecodeImg {
+			return decodeImg(req, source, idx, codecs)
+		}
 		if req.Kind() == port.PlanKindOcr {
 			failed := func(status int32) (port.PlanAnswer, error) {
 				c := port.NewCells()
@@ -744,6 +751,97 @@ func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr) *p
 		}
 		return a, nil
 	}}
+}
+
+// readSpan is a span of the input, whole or an error (the `decode-img` request names bytes of the input by offset and length).
+func readSpan(source ByteSource, off, n int64) ([]byte, error) {
+	if off < 0 || n < 0 || off+n > source.Size() {
+		return nil, &port.PlanError{Name: "fulfil-failed", Msg: "a decode-img request names bytes the input does not have"}
+	}
+	b := make([]byte, n)
+	got := 0
+	for got < len(b) {
+		k, err := source.ReadAt(b[got:], off+int64(got))
+		got += k
+		if got >= len(b) {
+			break
+		}
+		if err != nil || k == 0 {
+			return nil, &port.PlanError{Name: "fulfil-failed", Msg: "a read of the source failed"}
+		}
+	}
+	return b, nil
+}
+
+// namedBytes is the bytes a `decode-img` request names (kin's `dq-where` / `dq-offset` / `dq-length`): a span of this input (where is
+// its index), or of the unit's PAYLOAD (where -2); -1 names none (P6.1a, D291).
+func namedBytes(req port.PlanRequest, source ByteSource, idx, at int) ([]byte, error) {
+	wh, off, n := req.Arg(at), int64(req.Arg(at+1)), int64(req.Arg(at+2))
+	switch {
+	case wh == -1:
+		return nil, nil
+	case wh == -2:
+		if off < 0 || n < 0 || off+n > int64(len(req.Payload)) {
+			return nil, &port.PlanError{Name: "fulfil-failed", Msg: "a decode-img request names payload bytes the unit did not make"}
+		}
+		return req.Payload[off : off+n], nil
+	case int(wh) == idx:
+		return readSpan(source, off, n)
+	}
+	return nil, &port.PlanError{Name: "fulfil-failed", Msg: "a decode-img request names an input this run does not have"}
+}
+
+// decodeImg is the `decode-img` request (kind 6; P6.1a, D117, D291): one PDF image's codestream to its 8-bit pixels (`pdfimg.go`). The
+// answer always carries the pixels (kin adopts them); a transcript stores them, never the codestream.
+func decodeImg(req port.PlanRequest, source ByteSource, idx int, codecs PdfCodecs) (port.PlanAnswer, error) {
+	a := pdfArgs{filter: req.Arg(0), w: req.Arg(1), h: req.Arg(2), comps: req.Arg(3), bpc: req.Arg(4), k: req.Arg(5), columns: req.Arg(6), rows: req.Arg(7), flags: req.Arg(8)}
+	data, err := namedBytes(req, source, idx, 9)
+	if err != nil {
+		return port.PlanAnswer{}, err
+	}
+	globals, err := namedBytes(req, source, idx, 20)
+	if err != nil {
+		return port.PlanAnswer{}, err
+	}
+	fail := func(status int32) (port.PlanAnswer, error) {
+		c := port.NewCells()
+		plan.AnFail(c, port.PlanKindDecodeImg, req.ID(), status)
+		return port.PlanAnswer{Rec: cellsVec(c)}, nil
+	}
+	p, derr := pdfDecodeSafe(a, data, globals, codecs, uint64(port.LimitOf(9)))
+	if derr != nil {
+		var f *imgFail
+		if errors.As(derr, &f) {
+			switch f.Kind {
+			case imgUnsupported:
+				return fail(plan.PsUnsupported())
+			case imgLimit:
+				actual := int32(1<<31 - 1)
+				if f.Pixels < uint64(actual) {
+					actual = int32(f.Pixels)
+				}
+				return port.PlanAnswer{Rec: []int32{5, port.PlanKindDecodeImg, req.ID(), plan.PsLimit(), actual}}, nil
+			}
+		}
+		return fail(plan.PsFailed())
+	}
+	c := port.NewCells()
+	bl := int32(0)
+	if p.Bilevel {
+		bl = 1
+	}
+	plan.AnDecodeImg(c, req.ID(), p.W, p.H, p.Ch, bl)
+	return port.PlanAnswer{Rec: cellsVec(c), Bitmap: port.BitmapFromBytes(p.W, p.H, p.Ch, p.Px)}, nil
+}
+
+// pdfDecodeSafe is pdfDecode, a panic of a codec on damage being a damaged image and not a crashed process.
+func pdfDecodeSafe(a pdfArgs, data, globals []byte, codecs PdfCodecs, maxPixels uint64) (p *PdfPix, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			p, err = nil, imgFailedf("the decoder panicked")
+		}
+	}()
+	return pdfDecode(a, data, globals, codecs, maxPixels)
 }
 
 // ocrSafe calls the Ocr port; an engine that panics on a page is a failed OCR of it, not a crashed process.
@@ -1222,15 +1320,12 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	gx3 := newCellsN(3)
 	grl, gfl, gcand := gx3[0], gx3[1], gx3[2]
 	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, gcand)
-	// P3.13 (SPEC 10.11): the asset candidates, the one place the input's image bytes are read. Off, nothing runs.
+	// P3.13 (SPEC 10.11): the asset candidates are made by the ASSET UNIT (`assetUnit`, P6.1a), which runs after this pass and reads
+	// the input again, because a codec image's pixels are the host's and ask the plan/fulfil loop; the placements it works from are kept.
 	cand, cbytes := port.NewCells(), port.NewBuf()
+	aim := port.NewCells()
 	if opts.Assets != AssetsNone {
-		w := newCellsN(10)
-		z := port.NewBuf()
-		rc := asset.AsCollect(view, ar, dc, ca, cb, st, im, pa, gl, pg, opts.AssetPixels, opts.AssetsBytes, cand, cbytes, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], z)
-		if view.Missed() || rc == 12 {
-			return step{miss: true}
-		}
+		aim = im
 	}
 	var snap []*port.Cells
 	if opts.KeepEvidence {
@@ -1271,7 +1366,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 		ptsKept = pts
 	}
 	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, grl: grl, gfl: gfl, pts: ptsKept, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, se: se, sc: sc,
-		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, cand: cand, cbytes: cbytes, info: info}}
+		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, cand: cand, cbytes: cbytes, aim: aim, info: info}}
 }
 
 // pdfDoc is what the PDF document pass leaves for its page units and the document unit (P7.U, D195).
@@ -1297,7 +1392,34 @@ type pdfDoc struct {
 	// P3.13: the image placements as asset candidates and their encoded bytes (empty unless `assets` is on)
 	cand   *port.Cells
 	cbytes *port.Buf
-	info   Intake
+	// the image placements the asset unit makes candidates of (the evidence's `images` rows; empty unless `assets` is on)
+	aim  *port.Cells
+	info Intake
+}
+
+// assetUnit is THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil
+// loop. It re-opens the document (the document pass's arenas are gone) and runs AsCollect over the placements the document pass kept: a
+// codec image whose pixels are the host's is asked for, with the bytes kin made itself in `payload`; the unit is run again with the
+// answers and makes the candidates. Answers 0 (the candidates are in d.cand, d.cbytes), 1 (it asked) or 7 (the source missed).
+func assetUnit(view, pw *port.Src, d *pdfDoc, opts Options, idx int, answers, rq *port.Cells, bms *port.BitmapSet, payload *port.Buf) int32 {
+	a := newCellsN(5)
+	ar, dc, ca, cb, st := a[0], a[1], a[2], a[3], a[4]
+	ostatus := pdfdoc.PdOpenPw(view, pw, ar, dc, ca, cb, st)
+	if view.Missed() || ostatus == pdfdoc.PdNeedBytes() {
+		return 7
+	}
+	if ostatus != 0 {
+		return 100 + ostatus
+	}
+	w := newCellsN(10)
+	z := port.NewBuf()
+	glob, words, hs := port.NewCells(), port.NewCells(), port.NewCells()
+	d.cbytes = port.NewBuf()
+	rc := asset.AsCollect(view, ar, dc, ca, cb, st, d.aim, d.pa, d.gl, d.pg, opts.AssetPixels, opts.AssetsBytes, d.cand, d.cbytes, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], z, int32(idx), answers, rq, payload, bms, glob, words, hs)
+	if view.Missed() || rc == 12 {
+		return 7
+	}
+	return rc
 }
 
 // cloneCells is a copy of a Cells.
@@ -1605,7 +1727,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		rf := port.NewRenderFulfillerFor(e.cfg.Renderer, idx, port.RenderInput{Source: in.Source, Password: in.Password})
 		mux.With([]int32{port.PlanKindRender, port.PlanKindCrop}, rf)
 	}
-	var ports port.PlanFulfiller = mux.With([]int32{port.PlanKindRender, port.PlanKindCrop, port.PlanKindDecode, port.PlanKindOcr}, portFulfiller(in.Source, idx, rec != nil || e.cfg.Ocr != nil, rec != nil, e.cfg.Ocr))
+	var ports port.PlanFulfiller = mux.With([]int32{port.PlanKindRender, port.PlanKindCrop, port.PlanKindDecode, port.PlanKindOcr, port.PlanKindDecodeImg}, portFulfiller(in.Source, idx, rec != nil || e.cfg.Ocr != nil, rec != nil, e.cfg.Ocr, e.cfg.PdfCodecs))
 	var replayer *port.Replayer
 	if rec != nil {
 		rec.Inputs = thisInput
@@ -1643,6 +1765,58 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	// the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never reads the input. Then
 	// the document unit, stage 3, on what the units left.
 	if docPdf != nil || docRaster != nil {
+		// THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are asked of the
+		// host (`decode-img`, one round for them all); it reads the input (and so may miss, like the document pass)
+		if docPdf != nil && opts.Assets != AssetsNone {
+			var afailed *Error
+			unitA := func(answers, rq *port.Cells, bms *port.BitmapSet, payload *port.Buf) (st int32) {
+				view := base.View()
+				defer func() {
+					if p := recover(); p != nil {
+						if view.Missed() {
+							st = port.PlanUnitNeedBytes
+						} else {
+							afailed = panicError(panicMessage(p))
+							st = port.PlanUnitDone
+						}
+					}
+				}()
+				switch s := assetUnit(view, pw, docPdf, opts, idx, answers, rq, bms, payload); {
+				case s == 0:
+					return port.PlanUnitDone
+				case s == 1:
+					return port.PlanUnitRequests
+				case s == 7 || view.Missed():
+					return port.PlanUnitNeedBytes
+				default:
+					afailed = &Error{Kind: ErrInternal, Message: fmt.Sprintf("the asset unit answered status %d", s)}
+				}
+				return port.PlanUnitDone
+			}
+			ast, aerr := port.PlanRunBms(pcfg, unitA, ports, bytesF, misses, rec)
+			if cache != nil {
+				if failed, short, msg := cache.fail(); failed {
+					if short {
+						return outcome{}, RunStats{}, &Error{Kind: ErrSourceChanged, Input: idx}
+					}
+					return outcome{}, RunStats{}, &Error{Kind: ErrIO, Input: idx, Message: msg}
+				}
+			}
+			if aerr != nil {
+				var pe *port.PlanError
+				if errors.As(aerr, &pe) {
+					return outcome{}, RunStats{}, planError(pe)
+				}
+				return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: aerr.Error()}
+			}
+			if afailed != nil {
+				return outcome{}, RunStats{}, afailed
+			}
+			stats.Requests += ast.Requests
+			stats.Attempts += ast.Attempts
+			stats.FetchRounds += ast.FetchRounds
+			stats.BytesRequests += ast.BytesRequests
+		}
 		np := 0
 		if docPdf != nil {
 			np = docPdf.info.Pages
@@ -1651,7 +1825,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		}
 		for i := 0; i < np; i++ {
 			var failed *Error
-			unitP := func(answers, rq *port.Cells, bms *port.BitmapSet) (st int32) {
+			unitP := func(answers, rq *port.Cells, bms *port.BitmapSet, _ *port.Buf) (st int32) {
 				defer func() {
 					if p := recover(); p != nil {
 						failed = panicError(panicMessage(p))

@@ -3,14 +3,28 @@
 # nz code of why not (1 withheld 2 part 3 vector 4 composite 5 colorspace 6 codec 7 render 8 too-large 9 budget); type 1 jpeg 2 png;
 # origin 1 embedded 2 decoded; from 1 dct 5 flate 6 lzw 7 runlength 8 raw; flags 2 clip-bbox 4 transformed 8 icc 16 scaled.
 # Reviewed against the generator's rows (test/assets/rows.txt) and checked, pixel for pixel, by kin/scripts/asset-check (ImageMagick, poppler).
+# P6.1a: the laws run kin with NO HOST, so a codec image the host decodes (DCT that cannot pass through, CCITT, JPX, JBIG2) is `codec` (6) here:
+# its `decode-img` request is written and not answered (`assettest`'s `test-a-codec-image-...` answers it). What the Engine makes of them,
+# with the host's pixels, is held by kin/scripts/asset-check (the transcripts of test/assets/transcripts/, replayed).
 assets/a85-flate-rgb8.pdf	1	0:2:2:5:17:11:0
 assets/asciihex-rgb8.pdf	1	0:2:2:8:17:11:0
 assets/cal-rgb.pdf	1	0:2:2:5:17:11:0
+assets/ccitt-g3-1d-align-noeol.pdf	1	6:0:0:0:0:0:0
+assets/ccitt-g3-1d-align.pdf	1	6:0:0:0:0:0:0
+assets/ccitt-g3-1d-noeol.pdf	1	6:0:0:0:0:0:0
+assets/ccitt-g3-1d.pdf	1	6:0:0:0:0:0:0
+assets/ccitt-g3-2d.pdf	1	6:0:0:0:0:0:0
+assets/ccitt-g4-align.pdf	1	6:0:0:0:0:0:0
+assets/ccitt-g4-b1.pdf	1	6:0:0:0:0:0:0
 assets/ccitt-g4-mask.pdf	1	6:0:0:0:0:0:0
+assets/ccitt-g4-narrow.pdf	1	6:0:0:0:0:0:0
+assets/ccitt-g4-noeob.pdf	1	6:0:0:0:0:0:0
 assets/ccitt-g4.pdf	1	6:0:0:0:0:0:0
 assets/cmyk8.pdf	1	0:2:2:5:17:11:0
 assets/colorkey-gray4.pdf	1	0:2:2:5:17:11:0
 assets/colorkey.pdf	1	0:2:2:5:17:11:0
+assets/dct-420-decode.pdf	1	6:0:0:0:0:0:0
+assets/dct-a85-decode.pdf	1	6:0:0:0:0:0:0
 assets/dct-a85.pdf	1	0:1:1:1:24:16:0
 assets/dct-arith.pdf	1	6:0:0:0:0:0:0
 assets/dct-calrgb.pdf	1	0:1:1:1:24:16:0
@@ -19,6 +33,7 @@ assets/dct-decode.pdf	1	6:0:0:0:0:0:0
 assets/dct-exif1.pdf	1	0:1:1:1:24:16:0
 assets/dct-exif6.pdf	1	6:0:0:0:0:0:0
 assets/dct-exif6mm.pdf	1	6:0:0:0:0:0:0
+assets/dct-gray-decode.pdf	1	6:0:0:0:0:0:0
 assets/dct-gray.pdf	1	0:1:1:1:24:16:0
 assets/dct-icc-rgb.pdf	1	0:1:1:1:24:16:8
 assets/dct-mask.pdf	1	6:0:0:0:0:0:0
@@ -49,7 +64,10 @@ assets/indexed4-cmyk.pdf	1	0:2:2:5:17:11:0
 assets/inline-gray-ahx.pdf	1	6:0:0:0:0:0:0
 assets/inline-indexed.pdf	1	6:0:0:0:0:0:0
 assets/inline-rgb.pdf	1	6:0:0:0:0:0:0
+assets/jbig2-globals.pdf	1	6:0:0:0:0:0:0
 assets/jbig2.pdf	1	6:0:0:0:0:0:0
+assets/jpx-gray.pdf	1	6:0:0:0:0:0:0
+assets/jpx-jp2.pdf	1	6:0:0:0:0:0:0
 assets/jpx.pdf	1	6:0:0:0:0:0:0
 assets/lab.pdf	1	5:0:0:0:0:0:0
 assets/lzw-rgb8.pdf	1	0:2:2:6:17:11:0

@@ -772,7 +772,7 @@ host implement it however it likes.
   (JPEG, PNG `eXIf`) or the TIFF tag, and CMYK is the naive `(255 - c)(255 - k)`
   with no ICC (the platforms have none the four hosts share). What the port
   does not read is refused by name (`unsupported-image`): CMYK JPEG and the PDF
-  filters until P6.1a, JPEG in TIFF, float samples, Lab. Pixels are identical on
+  filters (a PDF image's codec is the `decode-img` request's, §10.11, P6.1a), JPEG in TIFF, float samples, Lab. Pixels are identical on
   Rust and Go for PNG and TIFF; a JPEG's live decode may differ by at most 6 per
   byte between hosts, and is exact through a transcript (D190).
 * **`ImageDecode` and `Renderer` read the input from the host's byte
@@ -2666,10 +2666,18 @@ page**: every problem is a `noasset` reason.
 **What P3.13 builds (D294-D301).** The level `images`, on both hosts; `figures` is accepted and runs as `images`
 until P8.5 (cropping a scan and rendering a chart). Settings travel in `Options` (`asset_dpi`, `asset_pixels`,
 `asset_bytes`, `assets_bytes`, `asset_signatures`), not `setting-of` (an environment poke), and are written to the header
-only when `assets` is on. The input is read in the document pass (`as-collect`): every placement that passed the P3.6
+only when `assets` is on. The input is read by the asset unit (`as-collect`, D461): every placement that passed the P3.6
 checks is a candidate whose bytes (the JPEG's own, or the PNG) are made there, and the document unit admits them in node-id
 order (`as-run`). A candidate is a placement with its object; **an inline image (`BI`) is `noasset: "codec"`** until the
-interpreter hands its bytes on, and DCT that cannot pass through is `codec` until P6.1a's host decoder. A placement of
+interpreter hands its bytes on. **What P6.1a builds (D460-D466)**: the asset unit runs in a plan/fulfil loop of its own, after
+the document pass and before the page units, and asks the host (`decode-img`, kind 6, one round for every codec image and
+mask) for the pixels of an image whose codec kin does not read: DCT that cannot pass through, JPX, JBIG2 (with its globals) and
+CCITT. The pixels are the codestream's, 8-bit, gray or RGB, never with `/Decode`, masks or `/Matte` applied (those are kin's)
+and never with an EXIF orientation; a four-component DCT is converted to RGB honouring the Adobe marker. A host that cannot
+answers `unsupported` or `failed` and the image is `codec`; pixels of another size than the dictionary's are `codec`. The two
+hosts' pixels agree where both decode (CCITT exactly; DCT within the tolerance of D190 live, exactly through a transcript);
+JPX and JBIG2 are the Rust host's, through OpenJPEG and jbig2dec (`--cfg codecs`, live; a gate replays a transcript), and the Go
+host answers `unsupported`. A placement of
 800 per mille of its page or more (a scan, a background) is a candidate whose pixels are not made (`part`). An `ImageMask`
 is written in black (the fill colour is not in the placement's row). A palette PNG's PLTE is the image's own palette and a
 pixel's index is the first entry of its colour; a bilevel gray image is 1-bit; alpha exists only when the image has a mask;

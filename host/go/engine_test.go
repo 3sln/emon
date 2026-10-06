@@ -19,6 +19,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -871,6 +872,90 @@ func TestAssetsThroughA512ByteAsyncSourceAreTheInMemoryOnes(t *testing.T) {
 			if fa[i].Name != fm[i].Name || !bytes.Equal(fa[i].Bytes, fm[i].Bytes) {
 				t.Errorf("%s: file %d differs", name, i)
 			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------- decode-img (P6.1a, D117, D291)
+
+// seenCodecs is a JBIG2 and JPX decoder that records what it was handed and answers a fixed bitmap: the request names the image's
+// bytes (the input's own) and the globals (kin's, in the unit's payload), and the fulfiller must be given both.
+type seenCodecs struct{ seen [][2]int }
+
+func (s *seenCodecs) Jpx(data []byte, max uint64) (*PdfPix, error) { return nil, ErrPdfUnsupported }
+func (s *seenCodecs) Jbig2(data, globals []byte, max uint64) (*PdfPix, error) {
+	s.seen = append(s.seen, [2]int{len(data), len(globals)})
+	px := make([]byte, 64*32)
+	for i := range px {
+		px[i] = 255
+		if i%3 == 0 {
+			px[i] = 0
+		}
+	}
+	return &PdfPix{W: 64, H: 32, Ch: 1, Px: px, Bilevel: true}, nil
+}
+
+func TestACodecImageIsDecodedByTheHostAndThePayloadReachesTheFulfiller(t *testing.T) {
+	o := DefaultOptions()
+	o.Assets = AssetsImages
+	figure, _ := KindNamed("figure")
+	// DCT that cannot pass through (a /Decode) and CCITT: the host's own codecs, no port configured
+	for _, c := range []struct {
+		name, from string
+		w, h       int
+	}{{"dct-decode", "dct", 24, 16}, {"dct-a85-decode", "dct", 24, 16}, {"ccitt-g4", "ccitt", 70, 24}, {"ccitt-g4-align", "ccitt", 70, 24}, {"ccitt-g3-1d", "ccitt", 70, 24}} {
+		m, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(read(t, "test/assets/"+c.name+".pdf"))), o)
+		must(t, m, err)
+		a := m.Assets()
+		if len(a) != 1 || a[0].MediaType() != "image/png" || a[0].Origin() != "decoded" || a[0].From() != c.from || int(a[0].Width()) != c.w || int(a[0].Height()) != c.h || !bytes.HasPrefix(a[0].Bytes(), []byte{0x89, 0x50, 0x4E, 0x47}) {
+			t.Errorf("%s: not a decoded PNG of %s", c.name, c.from)
+		}
+	}
+	// what this host does not read says `codec`: Group 3 two-dimensional, Group 3 without EOLs, JPX, JBIG2
+	for _, name := range []string{"ccitt-g3-2d", "ccitt-g3-1d-noeol", "jpx", "jbig2-globals"} {
+		m, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(read(t, "test/assets/"+name+".pdf"))), o)
+		must(t, m, err)
+		if r, ok := m.Find(figure)[0].NoAsset(); len(m.Assets()) != 0 || !ok || r != "codec" {
+			t.Errorf("%s: %q", name, r)
+		}
+	}
+	// JBIG2 with its globals, through an embedder's PdfCodecs: the fulfiller sees the image's bytes and the globals (the payload)
+	seen := &seenCodecs{}
+	cfg := DefaultConfig()
+	cfg.PdfCodecs = seen
+	e := NewEngine(cfg)
+	m, err := e.Convert(one(BytesInput(read(t, "test/assets/jbig2-globals.pdf"))), o)
+	must(t, m, err)
+	a := m.Assets()
+	if len(a) != 1 || a[0].From() != "jbig2" || a[0].Width() != 64 || a[0].Height() != 32 || a[0].Origin() != "decoded" {
+		t.Fatalf("the JBIG2 asset: %d", len(a))
+	}
+	if len(seen.seen) != 1 || seen.seen[0][0] <= 20 || seen.seen[0][1] != 21 {
+		t.Errorf("the fulfiller saw %v; wanted the image's bytes and 21 bytes of globals (a global symbol dictionary)", seen.seen)
+	}
+	// a transcript of that run replays without the codecs
+	m2, tr, err := e.Record(one(BytesInput(read(t, "test/assets/jbig2-globals.pdf"))), o)
+	must(t, m2, err)
+	r, err := NewEngine(DefaultConfig()).Replay(one(BytesInput(read(t, "test/assets/jbig2-globals.pdf"))), o, tr)
+	must(t, r, err)
+	if js(r) != js(m) || !reflect.DeepEqual(r.AssetFiles(), m.AssetFiles()) {
+		t.Error("the replay is not the run")
+	}
+}
+
+func TestATranscriptOfDecodedImagesReplaysToTheSameFilesThroughAnAsyncSource(t *testing.T) {
+	o := DefaultOptions()
+	o.Assets = AssetsImages
+	for _, name := range []string{"dct-decode", "ccitt-g4", "ccitt-g4-mask", "dct-smask"} {
+		b := read(t, "test/assets/"+name+".pdf")
+		live, tr, err := NewEngine(DefaultConfig()).Record(one(BytesInput(b)), o)
+		must(t, live, err)
+		cfg := DefaultConfig()
+		cfg.SimulateAsync, cfg.ChunkSize = true, 512
+		asy, err := NewEngine(cfg).Replay(one(BytesInput(b)), o, tr)
+		must(t, asy, err)
+		if js(asy) != js(live) || !reflect.DeepEqual(asy.AssetFiles(), live.AssetFiles()) {
+			t.Errorf("%s: the replay through an async source is not the run", name)
 		}
 	}
 }

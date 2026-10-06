@@ -26,7 +26,7 @@
 // the order, which is what makes a transcript the same however the answers
 // arrived.
 
-use crate::port::{cells_at, cells_len, cells_push, Bitmap, BitmapSet, Cells};
+use crate::port::{cells_at, cells_len, cells_push, Bitmap, BitmapSet, Buf, Cells};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
@@ -128,9 +128,16 @@ pub type Bitmaps = BTreeMap<i32, Arc<Bitmap>>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Request {
     pub rec: Vec<i32>,
+    // The unit's PAYLOAD (P6.1a, D291): the bytes kin made itself in the attempt that wrote this request (a `decode-img`'s
+    // codestream when it is not the input's own, a JBIG2 globals stream), shared by every request of the round. Never
+    // recorded in a transcript: the record names them by SHA-256. Empty for a request that names none.
+    pub payload: Arc<Vec<u8>>,
 }
 
 impl Request {
+    pub fn new(rec: Vec<i32>) -> Request {
+        Request { rec, payload: Arc::new(Vec::new()) }
+    }
     pub fn kind(&self) -> i32 {
         self.rec[1]
     }
@@ -273,7 +280,7 @@ fn read_requests(rq: &Cells, answered: &HashSet<i32>) -> Result<Vec<Request>, Pl
         if !seen.insert(rec[2]) || answered.contains(&rec[2]) {
             return Err(PlanError::Bad(format!("request id {} is used twice", rec[2])));
         }
-        out.push(Request { rec });
+        out.push(Request::new(rec));
         at += len;
     }
     out.sort_by_key(|r| r.id());
@@ -316,7 +323,7 @@ pub fn run(
     misses: &mut dyn Misses,
     rec: Option<&mut Transcript>,
 ) -> Result<Stats, PlanError> {
-    run_bms(cfg, &mut |a, r, _| unit(a, r), ports, bytes, misses, rec)
+    run_bms(cfg, &mut |a, r, _, _| unit(a, r), ports, bytes, misses, rec)
 }
 
 // `run` for a PAGE UNIT (P7.U, D196): the unit is also handed the `BitmapSet` of this attempt, made from the bitmaps its answers
@@ -324,7 +331,7 @@ pub fn run(
 // kin-made view. The bitmaps are this run's alone: they are dropped when the unit ends, so a conversion holds one page's.
 pub fn run_bms(
     cfg: &Config,
-    unit: &mut dyn FnMut(&mut Cells, &mut Cells, &BitmapSet) -> i32,
+    unit: &mut dyn FnMut(&mut Cells, &mut Cells, &BitmapSet, &mut Buf) -> i32,
     ports: &mut dyn Fulfiller,
     bytes: &mut dyn Fulfiller,
     misses: &mut dyn Misses,
@@ -340,7 +347,8 @@ pub fn run_bms(
         let mut rq = Cells::new();
         st.attempts += 1;
         let bms = BitmapSet::with_answers(&bitmaps);
-        let status = unit(&mut answers, &mut rq, &bms);
+        let mut payload = Buf::new();
+        let status = unit(&mut answers, &mut rq, &bms, &mut payload);
         let made = bms.made();
         drop(bms);
         match status {
@@ -359,7 +367,7 @@ pub fn run_bms(
                 let mut reqs: Vec<Request> = Vec::new();
                 for r in &ranges {
                     st.bytes_requests += 1;
-                    reqs.push(Request { rec: vec![6, KIND_BYTES, -st.bytes_requests, r.input, r.offset, r.length] });
+                    reqs.push(Request::new(vec![6, KIND_BYTES, -st.bytes_requests, r.input, r.offset, r.length]));
                 }
                 for a in fulfil(bytes, &reqs, &no_bitmaps)? {
                     if a.status() != STATUS_OK {
@@ -378,7 +386,13 @@ pub fn run_bms(
             other => return Err(PlanError::Unit(other)),
         }
         fetch_round = 0;
-        let reqs = read_requests(&rq, &answered)?;
+        let mut reqs = read_requests(&rq, &answered)?;
+        if !payload.0.is_empty() {
+            let shared = Arc::new(std::mem::take(&mut payload.0));
+            for r in reqs.iter_mut() {
+                r.payload = shared.clone();
+            }
+        }
         if reqs.is_empty() {
             return Err(PlanError::Bad("the unit asked for requests and wrote none".to_string()));
         }

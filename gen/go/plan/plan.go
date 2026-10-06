@@ -519,6 +519,21 @@ func AnDecode(c *port.Cells, id int32, w int32, h int32, channels int32, dpi100 
 	return at
 }
 
+func AnDecodeImg(c *port.Cells, id int32, w int32, h int32, channels int32, bilevel int32) int32 {
+	// The answer to a `decode-img` request (kind 6, D117, D291): a `decode` answer's fields (no resolution, one frame) under
+	// the request's own kind. The pixels are the answer's `Bitmap`.
+	var at int32 = RecBegin(c, PkDecodeImg(), id)
+	port.CellsPush(c, PsOk())
+	port.CellsPush(c, w)
+	port.CellsPush(c, h)
+	port.CellsPush(c, channels)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, bilevel)
+	port.CellsPush(c, 1)
+	RecEnd(c, at)
+	return at
+}
+
 func AnOcr(c *port.Cells, id int32) int32 {
 	// Start an OCR answer (ok, no words yet); add words with `an-ocr-word`
 	// and `an-ocr-cp`, close with `an-ocr-end`. Answers its start.

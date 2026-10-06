@@ -149,9 +149,20 @@ fn test_a_decode_img_request_is_found_by_its_id_and_answered_as_a_decode() {
     let at4: i32 = rec_find(c, 4);
     crate::testport::assert_eq(rec_id(c, second), 4, "the second is request 4");
     crate::testport::assert_eq(rq_arg(c, at4, dq_filter()), 3, "request 4 is JBIG2");
-    crate::testport::assert_eq(an_decode(ans, 3, 16, 12, 3, 0, 0, 1), 0, "its answer is a decode answer");
+    crate::testport::assert_eq(an_decode_img(ans, 3, 16, 12, 3, 0), 0, "its answer is a decode answer");
     let at3: i32 = an_find(ans, 3);
     crate::testport::assert_eq(an_status(ans, at3), 0, "ok");
+    crate::testport::assert_eq(rec_kind(ans, at3), pk_decode_img(), "under the request's own kind (6)");
+    crate::testport::assert_eq(an_arg(ans, at3, 0), 16, "w");
+    crate::testport::assert_eq(an_arg(ans, at3, 1), 12, "h");
+    crate::testport::assert_eq(an_arg(ans, at3, 2), 3, "channels");
+    crate::testport::assert_eq(an_arg(ans, at3, 3), 0, "no resolution");
+    crate::testport::assert_eq(an_arg(ans, at3, 4), 0, "not bilevel");
+    crate::testport::assert_eq(an_arg(ans, at3, 5), 1, "one frame");
+    let ans2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    an_decode_img(ans2, 4, 32, 16, 1, 1);
+    crate::testport::assert_eq(an_arg(ans2, an_find(ans2, 4), 4), 1, "bilevel");
+    crate::testport::assert_eq(rec_len(ans2, 0), 10, "the header and seven fields");
 }
 #[test]
 fn test_answers_carry_the_id_and_a_status() {

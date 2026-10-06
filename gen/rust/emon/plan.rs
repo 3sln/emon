@@ -429,6 +429,20 @@ pub fn an_decode(mut c: &mut crate::port::Cells, id: i32, w: i32, h: i32, channe
     rec_end(c, at);
     return at;
 }
+pub fn an_decode_img(mut c: &mut crate::port::Cells, id: i32, w: i32, h: i32, channels: i32, bilevel: i32) -> i32 {
+    // The answer to a `decode-img` request (kind 6, D117, D291): a `decode` answer's fields (no resolution, one frame) under
+    // the request's own kind. The pixels are the answer's `Bitmap`.
+    let at: i32 = rec_begin(c, pk_decode_img(), id);
+    crate::port::cells_push(c, ps_ok());
+    crate::port::cells_push(c, w);
+    crate::port::cells_push(c, h);
+    crate::port::cells_push(c, channels);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, bilevel);
+    crate::port::cells_push(c, 1);
+    rec_end(c, at);
+    return at;
+}
 pub fn an_ocr(mut c: &mut crate::port::Cells, id: i32) -> i32 {
     // Start an OCR answer (ok, no words yet); add words with `an-ocr-word`
     // and `an-ocr-cp`, close with `an-ocr-end`. Answers its start.

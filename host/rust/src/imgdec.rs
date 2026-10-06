@@ -180,7 +180,7 @@ fn clamp8(v: i32) -> u8 {
     v.clamp(0, 255) as u8
 }
 
-fn ycc_rgb(y: i32, cb: i32, cr: i32) -> [u8; 3] {
+pub(crate) fn ycc_rgb(y: i32, cb: i32, cr: i32) -> [u8; 3] {
     let (cb, cr) = (cb - 128, cr - 128);
     [clamp8(y + ((91881 * cr + 32768) >> 16)), clamp8(y - ((22554 * cb + 46802 * cr + 32768) >> 16)), clamp8(y + ((116130 * cb + 32768) >> 16))]
 }

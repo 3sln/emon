@@ -141,9 +141,20 @@ public final class Plantest {
         int at4 = Plan.recFind(c, 4);
         emon.Testport.assertEq(Plan.recId(c, second), 4, "the second is request 4");
         emon.Testport.assertEq(Plan.rqArg(c, at4, Plan.dqFilter()), 3, "request 4 is JBIG2");
-        emon.Testport.assertEq(Plan.anDecode(ans, 3, 16, 12, 3, 0, 0, 1), 0, "its answer is a decode answer");
+        emon.Testport.assertEq(Plan.anDecodeImg(ans, 3, 16, 12, 3, 0), 0, "its answer is a decode answer");
         int at3 = Plan.anFind(ans, 3);
         emon.Testport.assertEq(Plan.anStatus(ans, at3), 0, "ok");
+        emon.Testport.assertEq(Plan.recKind(ans, at3), Plan.pkDecodeImg(), "under the request's own kind (6)");
+        emon.Testport.assertEq(Plan.anArg(ans, at3, 0), 16, "w");
+        emon.Testport.assertEq(Plan.anArg(ans, at3, 1), 12, "h");
+        emon.Testport.assertEq(Plan.anArg(ans, at3, 2), 3, "channels");
+        emon.Testport.assertEq(Plan.anArg(ans, at3, 3), 0, "no resolution");
+        emon.Testport.assertEq(Plan.anArg(ans, at3, 4), 0, "not bilevel");
+        emon.Testport.assertEq(Plan.anArg(ans, at3, 5), 1, "one frame");
+        emon.Port.Cells ans2 = emon.Port.newCells();
+        Plan.anDecodeImg(ans2, 4, 32, 16, 1, 1);
+        emon.Testport.assertEq(Plan.anArg(ans2, Plan.anFind(ans2, 4), 4), 1, "bilevel");
+        emon.Testport.assertEq(Plan.recLen(ans2, 0), 10, "the header and seven fields");
     }
     public static void testAnswersCarryTheIdAndAStatus() {
         emon.Port.Cells c = emon.Port.newCells();

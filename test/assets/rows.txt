@@ -77,7 +77,10 @@ P	dct-progressive	assets/dct-progressive.pdf	5	0
 P	dct-icc-rgb	assets/dct-icc-rgb.pdf	5	0
 P	dct-calrgb	assets/dct-calrgb.pdf	5	0
 P	dct-a85	assets/dct-a85.pdf	5	0
+P	dct-a85-decode	assets/dct-a85-decode.pdf	5	10
 P	dct-decode	assets/dct-decode.pdf	5	10
+P	dct-420-decode	assets/dct-420-decode.pdf	5	10
+P	dct-gray-decode	assets/dct-gray-decode.pdf	5	10
 P	dct-cmyk	assets/dct-cmyk.pdf	5	8
 P	dct-exif6	assets/dct-exif6.pdf	5	14
 P	dct-exif6mm	assets/dct-exif6mm.pdf	5	14
@@ -87,15 +90,46 @@ P	dct-arith	assets/dct-arith.pdf	5	4
 P	dct-mask	assets/dct-mask.pdf	5	11
 P	dct-smask	assets/dct-smask.pdf	5	12
 R	dct-decode	assets/dct-decode.pdf	5	1	24	16	3	8	0	0	0	0	0	460	644	-1	0	0	-	-
+R	dct-420-decode	assets/dct-420-decode.pdf	5	1	24	16	3	8	0	0	0	0	0	460	394	-1	0	0	-	-
+R	dct-gray-decode	assets/dct-gray-decode.pdf	5	1	24	16	1	8	0	0	0	0	0	453	338	-1	0	0	-	-
 R	dct-cmyk	assets/dct-cmyk.pdf	5	1	24	16	4	8	0	0	0	0	0	465	950	-1	0	0	-	-
 R	dct-exif6	assets/dct-exif6.pdf	5	1	24	16	3	8	0	0	0	0	0	440	691	-1	0	0	-	-
 R	dct-exif6mm	assets/dct-exif6mm.pdf	5	1	24	16	3	8	0	0	0	0	0	440	691	-1	0	0	-	-
 R	dct-arith	assets/dct-arith.pdf	5	1	24	16	3	8	0	0	0	0	0	440	644	-1	0	0	-	-
 R	dct-a85	assets/dct-a85.pdf	5	1	24	16	3	8	0	0	0	0	-2	0	644	-1	0	0	b618faef0164d3b9a119ffd3e3161643152a238c7be072edd67967ab9e0aaac9	-
-R	ccitt-g4	assets/ccitt-g4.pdf	5	4	64	32	1	1	-1	64	32	1	0	499	552	-1	0	0	-	-
-R	ccitt-g4-mask	assets/ccitt-g4-mask.pdf	5	4	64	32	1	1	-1	64	32	10	0	517	552	-1	0	0	-	-
-R	jpx	assets/jpx.pdf	5	2	16	12	0	8	0	0	0	0	0	440	1013	-1	0	0	-	-
-R	jbig2	assets/jbig2.pdf	5	3	32	16	0	1	0	0	0	0	0	476	50	-2	0	24	-	470f585d12d6aeca6cf44e8c4291928afe234d96cfc7963d09e16304d572e72e
+R	dct-a85-decode	assets/dct-a85-decode.pdf	5	1	24	16	3	8	0	0	0	0	-2	0	644	-1	0	0	b618faef0164d3b9a119ffd3e3161643152a238c7be072edd67967ab9e0aaac9	-
+D	ccitt-g4-b1	assets/ccitt-g4-b1.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g4	assets/ccitt-g4.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g4-align	assets/ccitt-g4-align.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g4-noeob	assets/ccitt-g4-noeob.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g3-1d	assets/ccitt-g3-1d.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g3-1d-align	assets/ccitt-g3-1d-align.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g3-1d-noeol	assets/ccitt-g3-1d-noeol.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g3-1d-align-noeol	assets/ccitt-g3-1d-align-noeol.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g3-2d	assets/ccitt-g3-2d.pdf	5	0	-	0	70	24	1	0	b5c882ccca54c7d98d4fd2af15b2b971c2816b8b82f723950db9adcc1c441c20
+D	ccitt-g4-mask	assets/ccitt-g4-mask.pdf	5	0	-	0	70	24	3	1	0e0826e2c2ed0231f73973f7f2394ce9b782ee6663749a51d2427d7edbc3aad5
+D	ccitt-g4-narrow	assets/ccitt-g4-narrow.pdf	5	0	-	0	70	24	1	0	c87f9debb43128ec28974b6db00aae6225b85cb0c17e3c9436d1d546f07d77d5
+R	ccitt-g4-b1	assets/ccitt-g4-b1.pdf	5	4	70	24	1	1	-1	70	24	1	0	499	455	-1	0	0	-	-
+R	ccitt-g4	assets/ccitt-g4.pdf	5	4	70	24	1	1	-1	70	24	0	0	485	454	-1	0	0	-	-
+R	ccitt-g4-align	assets/ccitt-g4-align.pdf	5	4	70	24	1	1	-1	70	24	2	0	507	462	-1	0	0	-	-
+R	ccitt-g4-noeob	assets/ccitt-g4-noeob.pdf	5	4	70	24	1	1	-1	70	24	8	0	502	451	-1	0	0	-	-
+R	ccitt-g3-1d	assets/ccitt-g3-1d.pdf	5	4	70	24	1	1	0	70	24	4	0	499	472	-1	0	0	-	-
+R	ccitt-g3-1d-align	assets/ccitt-g3-1d-align.pdf	5	4	70	24	1	1	0	70	24	6	0	521	483	-1	0	0	-	-
+R	ccitt-g3-1d-noeol	assets/ccitt-g3-1d-noeol.pdf	5	4	70	24	1	1	0	70	24	0	0	484	436	-1	0	0	-	-
+R	ccitt-g3-1d-align-noeol	assets/ccitt-g3-1d-align-noeol.pdf	5	4	70	24	1	1	0	70	24	2	0	506	447	-1	0	0	-	-
+R	ccitt-g3-2d	assets/ccitt-g3-2d.pdf	5	4	70	24	1	1	4	70	24	4	0	499	489	-1	0	0	-	-
+R	ccitt-g4-mask	assets/ccitt-g4-mask.pdf	5	4	70	24	1	1	-1	70	24	2	0	500	462	-1	0	0	-	-
+R	ccitt-g4-narrow	assets/ccitt-g4-narrow.pdf	5	4	70	24	1	1	-1	64	24	0	0	485	417	-1	0	0	-	-
+D	jpx	assets/jpx.pdf	5	0	-	0	16	12	3	0	156193bb3b2d80cace20df327795afdd2c847377499fdf6fbf822690a660afc1
+R	jpx	assets/jpx.pdf	5	2	16	12	0	8	0	0	0	0	0	439	933	-1	0	0	-	-
+D	jpx-jp2	assets/jpx-jp2.pdf	5	0	-	0	16	12	3	0	156193bb3b2d80cace20df327795afdd2c847377499fdf6fbf822690a660afc1
+R	jpx-jp2	assets/jpx-jp2.pdf	5	2	16	12	0	8	0	0	0	0	0	400	1018	-1	0	0	-	-
+D	jpx-gray	assets/jpx-gray.pdf	5	0	-	0	16	12	1	0	86d09343c3a75d5ba8efdc4c245ec8c09dd9efcd7f4835a7d4f957fa819e9e97
+R	jpx-gray	assets/jpx-gray.pdf	5	2	16	12	0	8	0	0	0	0	0	440	390	-1	0	0	-	-
+D	jbig2	assets/jbig2.pdf	5	0	-	0	64	32	1	0	4ee6a3a233e0de0adba80d6554e2c9c6f635bd1bc0b47cc210a4e070f882f770
+R	jbig2	assets/jbig2.pdf	5	3	64	32	0	1	0	0	0	0	0	442	598	-1	0	0	-	-
+D	jbig2-globals	assets/jbig2-globals.pdf	5	0	-	0	64	32	1	0	4ee6a3a233e0de0adba80d6554e2c9c6f635bd1bc0b47cc210a4e070f882f770
+R	jbig2-globals	assets/jbig2-globals.pdf	5	3	64	32	0	1	0	0	0	0	0	477	598	-2	0	21	-	656c99df5758e2cd9621876bedf41b158d0a6cd5736f1076f96c399541f5955d
 O	1000	0	0	1000	0
 O	-1000	0	0	1000	1
 O	-1000	0	0	-1000	2

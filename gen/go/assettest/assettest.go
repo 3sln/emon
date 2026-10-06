@@ -13,6 +13,7 @@ import (
 	"emon/para"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
+	"emon/plan"
 	"emon/port"
 	"emon/restruct"
 	"strings"
@@ -542,9 +543,10 @@ func atWord(tmp *port.Cells, i int32) int32 {
 	return int32((int64(port.CellsAt(tmp, i*4)) * int64(16777216)) + int64((port.CellsAt(tmp, (i*4)+1)*65536)+((port.CellsAt(tmp, (i*4)+2)*256)+port.CellsAt(tmp, (i*4)+3))))
 }
 
-func atRun(src *port.Src, cand *port.Cells, cbytes *port.Buf, pages *port.Cells, fg *port.Cells, im *port.Cells) int32 {
+func atRunAsk(src *port.Src, cand *port.Cells, cbytes *port.Buf, pages *port.Cells, fg *port.Cells, im *port.Cells, ans *port.Cells, rq *port.Cells, payload *port.Buf, bms *port.BitmapSet) int32 {
 	// Open the document, run its pages, collect its asset candidates into `cand` and `cbytes`, and find the provisional
-	// figures into `fg` (pages are the Model's). Answers 0, or the failing step.
+	// figures into `fg` (pages are the Model's). `ans` and `bms` are the host's answers (none: a codec image is asked for
+	// in `rq` and `payload`, status 1 at step 3). Answers 0, or the failing step.
 	var ar *port.Cells = port.NewCells()
 	var dc *port.Cells = port.NewCells()
 	var a *port.Cells = port.NewCells()
@@ -577,6 +579,10 @@ func atRun(src *port.Src, cand *port.Cells, cbytes *port.Buf, pages *port.Cells,
 	var rows *port.Cells = port.NewCells()
 	var tmp *port.Cells = port.NewCells()
 	var ws *port.Cells = port.NewCells()
+	var rc int32 = 0
+	var glob *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var hs *port.Cells = port.NewCells()
 	var z *port.Buf = port.NewBuf()
 	if pdfdoc.PdOpen(src, ar, dc, a, b, st) != 0 {
 		return 1
@@ -584,12 +590,29 @@ func atRun(src *port.Src, cand *port.Cells, cbytes *port.Buf, pages *port.Cells,
 	if pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0 {
 		return 2
 	}
-	if asset.AsCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0 {
+	rc = asset.AsCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z, 0, ans, rq, payload, bms, glob, words, hs)
+	if rc > 1 {
 		return 3
 	}
 	para.PaPages(pg, pages)
 	asset.AsFigureRows(cand, pages, fg)
+	if rc == 1 {
+		return 4
+	}
 	return 0
+}
+
+func atRun(src *port.Src, cand *port.Cells, cbytes *port.Buf, pages *port.Cells, fg *port.Cells, im *port.Cells) int32 {
+	// `at-run-ask` with no host answers: 0, or the failing step. A codec image is `codec` here (its request is written and
+	// not answered), which is what the host's loop would have seen on its first attempt.
+	var rq *port.Cells = port.NewCells()
+	var payload *port.Buf = port.NewBuf()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var r int32 = atRunAsk(src, cand, cbytes, pages, fg, im, port.NewCells(), rq, payload, bms)
+	if r == 4 {
+		return 0
+	}
+	return r
 }
 
 func atCandsRow(emonT *testing.T, rows []byte, pos int32, e int32, line int32) int32 {
@@ -666,6 +689,114 @@ func TestTheFixturesMakeTheirCandidates(emonT *testing.T) {
 		pos = e + 1
 	}
 	port.AssertThat(emonT, checked > 60, "every file of test/asset/cands.txt is checked")
+}
+
+func atFill(b *port.Bitmap, w int32, h int32, ch int32) int32 {
+	var x int32 = 0
+	var y int32 = 0
+	var c int32 = 0
+	for y < h {
+		x = 0
+		for x < w {
+			c = 0
+			for c < ch {
+				port.BitmapSetU8(b, x, y, c, ((x*7)+((y*13)+(c*50)))%256)
+				c += 1
+			}
+			x += 1
+		}
+		y += 1
+	}
+	return 0
+}
+
+func TestACodecImageIsAskedOfTheHostAndThenAdopted(emonT *testing.T) {
+	// P6.1a: a DCT image that cannot pass through (a /Decode) is a `decode-img` request on the first attempt (the input's own bytes,
+	// no payload), and with the host's answer the same call makes the asset.
+	var cand *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	var cbytes *port.Buf = port.NewBuf()
+	var payload *port.Buf = port.NewBuf()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var file []byte = port.TestFile("assets/dct-decode.pdf")
+	port.AssertEq(emonT, atRunAsk(port.SrcOfBlob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms), 4, "the request is written")
+	port.AssertEq(emonT, plan.RecCount(rq), 1, "one request")
+	port.AssertEq(emonT, plan.RecKind(rq, 0), plan.PkDecodeImg(), "kind 6")
+	port.AssertEq(emonT, plan.RecId(rq, 0), 1, "request 1: the first candidate's image")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, plan.DqFilter()), plan.FltDct(), "DCT")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, plan.DqW()), 24, "its width")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, plan.DqH()), 16, "its height")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, plan.DqWhere()), 0, "the input's own bytes")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, plan.DqGwhere()), -1, "no globals")
+	port.AssertEq(emonT, port.BufLen(payload), 0, "nothing in the payload")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 9), 6, "until it is answered the image is `codec`")
+	var cand *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	var cbytes *port.Buf = port.NewBuf()
+	var payload *port.Buf = port.NewBuf()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var file []byte = port.TestFile("assets/dct-decode.pdf")
+	plan.AnDecodeImg(ans, 1, 24, 16, 3, 0)
+	atFill(port.BmsPut(bms, 1, 24, 16, 3), 24, 16, 3)
+	port.AssertEq(emonT, atRunAsk(port.SrcOfBlob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms), 0, "with the answer nothing is asked")
+	port.AssertEq(emonT, port.CellsLen(rq), 0, "no request")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 9), 0, "pixels were made")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 10), 2, "a PNG")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 26), 2, "decoded")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 24), 1, "from DCT")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 21), 24, "width")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 22), 16, "height")
+	port.AssertEq(emonT, port.BufAt(cbytes, asset.AsGet(cand, 0, 11)), 137, "PNG signature")
+	// the host cannot (unsupported): the image stays `codec`
+	var cand *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	var cbytes *port.Buf = port.NewBuf()
+	var payload *port.Buf = port.NewBuf()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var file []byte = port.TestFile("assets/dct-decode.pdf")
+	plan.AnFail(ans, plan.PkDecodeImg(), 1, plan.PsUnsupported())
+	port.AssertEq(emonT, atRunAsk(port.SrcOfBlob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms), 0, "answered: nothing is asked")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 9), 6, "unsupported is `codec`")
+	// pixels that are not the dictionary's size are not adopted
+	var cand *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	var cbytes *port.Buf = port.NewBuf()
+	var payload *port.Buf = port.NewBuf()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var file []byte = port.TestFile("assets/dct-decode.pdf")
+	plan.AnDecodeImg(ans, 1, 20, 16, 3, 0)
+	atFill(port.BmsPut(bms, 1, 20, 16, 3), 20, 16, 3)
+	port.AssertEq(emonT, atRunAsk(port.SrcOfBlob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms), 0, "answered")
+	port.AssertEq(emonT, asset.AsGet(cand, 0, 9), 6, "pixels that are not the dictionary's size are `codec`")
+	// a JBIG2 image with globals: the image is the input's own bytes, the globals (a stream's decoded bytes) ride in the payload
+	var cand *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var fg *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	var cbytes *port.Buf = port.NewBuf()
+	var payload *port.Buf = port.NewBuf()
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	port.AssertEq(emonT, atRunAsk(port.SrcOfBlob(port.TestFile("assets/jbig2-globals.pdf")), cand, cbytes, pages, fg, im, port.NewCells(), rq, payload, bms), 4, "asked")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, plan.DqWhere()), 0, "the image is the input's own bytes")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, plan.DqGwhere()), -2, "the globals are in the payload")
+	port.AssertEq(emonT, port.BufLen(payload), plan.RqArg(rq, 0, plan.DqGwhere()+2), "the payload is the globals")
 }
 
 func atOri(emonT *testing.T, file []byte, want int32, line int32) int32 {

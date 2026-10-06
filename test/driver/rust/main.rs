@@ -32,6 +32,9 @@
 //                    live with --tesseract and --pdfium)
 //   --pdfium         give the Engine the pdfium `Renderer` (D127). LIVE: only a build with `--cfg pdfium` has it (`EMON_RS_PDFIUM=DIR
 //                    kin/scripts/emon-rs-build`); no gate uses it. Without it a `render` request is answered `unsupported`.
+//   --codecs         give the Engine the JPX and JBIG2 decoders of the `decode-img` request (OpenJPEG, jbig2dec: P6.1a, D464). LIVE: only a
+//                    build with `--cfg codecs` has them (`EMON_RS_CODECS=DIR kin/scripts/emon-rs-build`); no gate uses it (the gates replay
+//                    the transcript `bb asset-record` made with it). Without it a JPX or JBIG2 image is answered `unsupported`.
 //   --tesseract[=D]  give the Engine the Tesseract `Ocr` port (D211), reading models from D (default: $TESSDATA_PREFIX and the usual
 //                    places). LIVE: only a build with the `tesseract` feature has it (`EMON_RS_LIVE=1 kin/scripts/emon-rs-build`); no gate
 //                    uses it. Without the flag an `ocr` request is answered `unsupported` and a page that needed OCR has no text.
@@ -48,7 +51,7 @@ use std::io::Read;
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--ocr-born-digital] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--codecs] [--ocr-born-digital] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
     std::process::exit(2);
 }
 
@@ -165,6 +168,7 @@ fn main() {
     let mut asset_dir: Option<String> = None;
     let mut tess: Option<Option<String>> = None;
     let mut use_pdfium = false;
+    let mut use_codecs = false;
     for a in std::env::args().skip(1) {
         if let Some(v) = a.strip_prefix("--out=") {
             out = v.to_string();
@@ -232,6 +236,8 @@ fn main() {
             opts.ocr_born_digital = true;
         } else if a == "--pdfium" {
             use_pdfium = true;
+        } else if a == "--codecs" {
+            use_codecs = true;
         } else if a == "--tesseract" {
             tess = Some(None);
         } else if let Some(v) = a.strip_prefix("--tesseract=") {
@@ -313,6 +319,14 @@ fn main() {
         }
         #[cfg(not(pdfium))]
         usage("--pdfium needs a build with --cfg pdfium (EMON_RS_PDFIUM=DIR kin/scripts/emon-rs-build)");
+    }
+    if use_codecs {
+        #[cfg(codecs)]
+        {
+            cfg.pdf_codecs = Some(std::sync::Arc::new(emon::pdfcodecs::Codecs::new()));
+        }
+        #[cfg(not(codecs))]
+        usage("--codecs needs a build with --cfg codecs (EMON_RS_CODECS=DIR kin/scripts/emon-rs-build)");
     }
     let engine = Engine::new(cfg);
     let fail = |e: emon::Error| -> ! {

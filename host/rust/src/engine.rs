@@ -70,6 +70,7 @@ use crate::emon::gfuse::{gf_doc, gfx_mode};
 use crate::emon::player::pl_emit_gfx;
 use crate::emon::tlhealth::{th_append, th_run, th_write};
 use crate::imgdec;
+use crate::pdfimg::{self, PdfCodecs};
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
 use crate::port::{self, cells_at, cells_len, cells_push, BitmapSet, Buf, Cells, Src, SrcBacking};
 use crate::render::{KindMux, RenderFulfiller, RenderInput, Renderer};
@@ -296,11 +297,16 @@ pub struct Config {
     // or records. `None` (the default): none is configured, and a request for one is answered `unsupported` (D199;
     // an Engine with no Renderer is a gate with no engine). A replay never calls it (D008). `pdfium::Pdfium` is the default engine (`--cfg pdfium`).
     pub renderer: Option<Arc<dyn Renderer>>,
+    // The JPX and JBIG2 decoders of the `decode-img` request (P6.1a, D117, D464): what an embedder brings for the two PDF image
+    // codecs no pure library here reads (`pdfcodecs::Codecs`, OpenJPEG and jbig2dec, under `--cfg codecs`). `None` (the default):
+    // those two are answered `unsupported` and the image is `noasset: "codec"`. DCT and CCITT are the host's own. A replay never
+    // calls it (D008).
+    pub pdf_codecs: Option<Arc<dyn PdfCodecs>>,
 }
 
 impl Default for Config {
     fn default() -> Config {
-        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS, ocr: None, renderer: None }
+        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS, ocr: None, renderer: None, pdf_codecs: None }
     }
 }
 
@@ -653,8 +659,11 @@ impl imgdec::Source for Span {
 // Renderer is configured (P6.2). `keep` holds the pixels in a decode answer (a recording wants them, as canonical
 // PNG, and so does a live OCR engine; a plain conversion needs only the numbers); `recording` also keeps the OCR
 // engine's thresholded image, which only a transcript wants (D211).
-fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording: bool, ocr: Option<OcrPort>) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
+fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording: bool, ocr: Option<OcrPort>, codecs: Option<Arc<dyn PdfCodecs>>) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
     move |req: &Request, bm: &plan::Bitmaps| -> Result<Answer, PlanError> {
+        if req.kind() == plan::KIND_DECODE_IMG {
+            return decode_img(req, &source, idx, codecs.as_deref());
+        }
         if req.kind() == plan::KIND_OCR {
             let failed = |status: i32| {
                 let mut c = Cells::new();
@@ -710,6 +719,65 @@ fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording
             Err(imgdec::Fail::Unsupported(_)) => fail(&mut c, crate::emon::plan::ps_unsupported()),
             Err(imgdec::Fail::Limit(n)) => Ok(Answer { rec: vec![5, plan::KIND_DECODE, req.id(), crate::emon::plan::ps_limit(), std::cmp::min(n, i32::MAX as u64) as i32], bitmap: None }),
         }
+    }
+}
+
+// A span of the input, whole or an error (the `decode-img` request names bytes of the input by offset and length).
+fn read_span(source: &Arc<dyn ByteSource>, off: i64, len: i64) -> Result<Vec<u8>, PlanError> {
+    if off < 0 || len < 0 || off as u64 + len as u64 > source.len() {
+        return Err(PlanError::Fulfil("a decode-img request names bytes the input does not have".to_string()));
+    }
+    let mut v = vec![0u8; len as usize];
+    let mut got = 0usize;
+    while got < v.len() {
+        let n = source.read_at(off as u64 + got as u64, &mut v[got..]).map_err(|e| PlanError::Fulfil(format!("a read of the source failed: {}", e)))?;
+        if n == 0 {
+            return Err(PlanError::Fulfil("the source is shorter than it said".to_string()));
+        }
+        got += n;
+    }
+    Ok(v)
+}
+
+// The bytes a `decode-img` request names (kin's `dq-where` / `dq-offset` / `dq-length`): a span of this input (where is its
+// index), or of the unit's PAYLOAD (where -2); -1 names none (P6.1a, D291).
+fn named_bytes(req: &Request, source: &Arc<dyn ByteSource>, idx: usize, at: usize) -> Result<Vec<u8>, PlanError> {
+    let (wh, off, len) = (req.arg(at), req.arg(at + 1), req.arg(at + 2));
+    match wh {
+        -1 => Ok(Vec::new()),
+        -2 => {
+            if off < 0 || len < 0 || off as u64 + len as u64 > req.payload.len() as u64 {
+                return Err(PlanError::Fulfil("a decode-img request names payload bytes the unit did not make".to_string()));
+            }
+            Ok(req.payload[off as usize..(off + len) as usize].to_vec())
+        }
+        w if w == idx as i32 => read_span(source, off as i64, len as i64),
+        _ => Err(PlanError::Fulfil("a decode-img request names an input this run does not have".to_string())),
+    }
+}
+
+// The `decode-img` request (kind 6; P6.1a, D117, D291): one PDF image's codestream to its 8-bit pixels (`pdfimg`). The answer
+// always carries the pixels (kin adopts them); a transcript stores them, never the codestream.
+fn decode_img(req: &Request, source: &Arc<dyn ByteSource>, idx: usize, codecs: Option<&dyn PdfCodecs>) -> Result<Answer, PlanError> {
+    let a = pdfimg::Args { filter: req.arg(0), w: req.arg(1), h: req.arg(2), comps: req.arg(3), bpc: req.arg(4), k: req.arg(5), columns: req.arg(6), rows: req.arg(7), flags: req.arg(8) };
+    let data = named_bytes(req, source, idx, 9)?;
+    let globals = named_bytes(req, source, idx, 20)?;
+    let mut c = Cells::new();
+    let fail = |c: &mut Cells, status: i32| {
+        crate::emon::plan::an_fail(c, plan::KIND_DECODE_IMG, req.id(), status);
+        Ok(Answer { rec: to_vec(c), bitmap: None })
+    };
+    // a codec that panics on damage is a damaged image, not a crashed process
+    let decoded = std::panic::catch_unwind(AssertUnwindSafe(|| pdfimg::decode(&a, &data, &globals, codecs, port::limit_of(9) as u64)))
+        .unwrap_or_else(|_| Err(pdfimg::CodecFail::Failed("the decoder panicked".to_string())));
+    match decoded {
+        Ok(p) => {
+            crate::emon::plan::an_decode_img(&mut c, req.id(), p.w, p.h, p.ch, p.bilevel as i32);
+            Ok(Answer { rec: to_vec(&c), bitmap: Some(Arc::new(port::Bitmap::from_bytes(p.w, p.h, p.ch, &p.px))) })
+        }
+        Err(pdfimg::CodecFail::Failed(_)) => fail(&mut c, plan::STATUS_FAILED),
+        Err(pdfimg::CodecFail::Unsupported(_)) => fail(&mut c, crate::emon::plan::ps_unsupported()),
+        Err(pdfimg::CodecFail::Limit(n)) => Ok(Answer { rec: vec![5, plan::KIND_DECODE_IMG, req.id(), crate::emon::plan::ps_limit(), std::cmp::min(n, i32::MAX as u64) as i32], bitmap: None }),
     }
 }
 
@@ -1148,6 +1216,8 @@ struct PdfDoc {
     // P3.13: the image placements as asset candidates and their encoded bytes (empty unless `assets` is on)
     cand: Cells,
     cbytes: Buf,
+    // the image placements the asset unit makes candidates of (the evidence's `images` rows; empty unless `assets` is on)
+    aim: Cells,
     info: Intake,
 }
 
@@ -1233,16 +1303,10 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     // (until P7.3 moves it into the page units, SPEC 9.9).
     let (mut grl, mut gfl, mut gcand) = (Cells::new(), Cells::new(), Cells::new());
     gf_doc(&mut pa, &mut pts, &mut mk, &mut im, np, gfx_mode(), &mut grl, &mut gfl, &mut gcand);
-    // P3.13 (SPEC 10.11): the asset candidates, the one place the input's image bytes are read. Off, nothing runs.
-    let (mut cand, mut cbytes) = (Cells::new(), Buf::new());
-    if opts.assets != Assets::None {
-        let (mut aout, mut arec, mut amrec, mut asmp, mut amsmp, mut adata, mut arows, mut atmp, mut aws) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-        let mut az = Buf::new();
-        let rc = as_collect(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut im, &mut pa, &mut gl, &mut pg, opts.asset_pixels, opts.assets_bytes, &mut cand, &mut cbytes, &mut aout, &mut arec, &mut amrec, &mut asmp, &mut amsmp, &mut adata, &mut arows, &mut atmp, &mut aws, &mut az);
-        if view.missed() || rc == 12 {
-            return Step::Miss;
-        }
-    }
+    // P3.13 (SPEC 10.11): the asset candidates are made by the ASSET UNIT (`asset_unit`, P6.1a), which runs after this pass and reads
+    // the input again, because a codec image's pixels are the host's and ask the plan/fulfil loop; the placements it works from are kept.
+    let (cand, cbytes) = (Cells::new(), Buf::new());
+    let aim = if opts.assets != Assets::None { im } else { Cells::new() };
     let snap = if opts.keep_evidence { Some((gl.clone(), mk.clone(), fnt.clone())) } else { None };
     // With fusion on, the text layer's `epages` and `feats` are the evidence's own: the OCR of a born-digital page adds its feature rows
     // to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
@@ -1272,7 +1336,32 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, aim, info }))
+}
+
+// THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil
+// loop. It re-opens the document (the document pass's arenas are gone) and runs `as_collect` over the placements the document
+// pass kept: a codec image whose pixels are the host's is asked for, with the bytes kin made itself in `payload`; the unit is
+// run again with the answers and makes the candidates. Answers 0 (the candidates are in `d.cand`, `d.cbytes`), 1 (it asked) or
+// 7 (the source missed).
+fn asset_unit(view: &Src, pw: &Src, idx: usize, d: &mut PdfDoc, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf) -> i32 {
+    let (mut ar, mut dc, mut a, mut b, mut st) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let ostatus = pd_open_pw(view, pw, &mut ar, &mut dc, &mut a, &mut b, &mut st);
+    if view.missed() || ostatus == pd_need_bytes() {
+        return 7;
+    }
+    if ostatus != 0 {
+        return 100 + ostatus;
+    }
+    let (mut aout, mut arec, mut amrec, mut asmp, mut amsmp, mut adata, mut arows, mut atmp, mut aws) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut glob, mut words, mut hs) = (Cells::new(), Cells::new(), Cells::new());
+    let mut az = Buf::new();
+    d.cbytes = Buf::new();
+    let rc = as_collect(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut d.aim, &mut d.pa, &mut d.gl, &mut d.pg, opts.asset_pixels, opts.assets_bytes, &mut d.cand, &mut d.cbytes, &mut aout, &mut arec, &mut amrec, &mut asmp, &mut amsmp, &mut adata, &mut arows, &mut atmp, &mut aws, &mut az, idx as i32, answers, rq, payload, bms, &mut glob, &mut words, &mut hs);
+    if view.missed() || rc == 12 {
+        return 7;
+    }
+    rc
 }
 
 // One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
@@ -1292,7 +1381,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, aim: _, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1616,13 +1705,13 @@ impl Engine {
         // answers them `unsupported` (D199). Pixels are kept in the answers when a transcript is being recorded or an
         // OCR engine will read them.
         let is_recording = matches!(mode, Mode::Record(_));
-        let nop = SyncFulfiller::new(port_fulfiller(input.source.clone(), idx, is_recording || self.cfg.ocr.is_some(), is_recording, self.cfg.ocr.clone()));
+        let nop = SyncFulfiller::new(port_fulfiller(input.source.clone(), idx, is_recording || self.cfg.ocr.is_some(), is_recording, self.cfg.ocr.clone(), self.cfg.pdf_codecs.clone()));
         let mut mux = KindMux::new();
         if let Some(r) = &self.cfg.renderer {
             let f = RenderFulfiller::for_input(r.clone(), idx, RenderInput { source: input.source.clone(), password: input.password.clone() });
             mux = mux.with(&[plan::KIND_RENDER, plan::KIND_CROP], Box::new(f));
         }
-        let mut live = mux.with(&[plan::KIND_RENDER, plan::KIND_CROP, plan::KIND_DECODE, plan::KIND_OCR], Box::new(nop));
+        let mut live = mux.with(&[plan::KIND_RENDER, plan::KIND_CROP, plan::KIND_DECODE, plan::KIND_OCR, plan::KIND_DECODE_IMG], Box::new(nop));
         let mut recording: Option<&mut Transcript> = None;
         match mode {
             Mode::Live => {}
@@ -1665,7 +1754,46 @@ impl Engine {
         // THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and `BitmapSet`, which
         // are dropped when the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never
         // reads the input. Then the document unit, stage 3, on what the units left.
-        if let Some(d) = docslot {
+        if let Some(mut d) = docslot {
+            // THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are asked of the
+            // host (`decode-img`, one round for them all); it reads the input (and so may miss, like the document pass)
+            if let (DocKind::Pdf(doc), true) = (&mut d, opts.assets != Assets::None) {
+                let mut unit_a = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf| -> i32 {
+                    let view = base.view();
+                    match catch_unwind(AssertUnwindSafe(|| asset_unit(&view, &pw, idx, doc, opts, answers, rq, bms, payload))) {
+                        Ok(0) => plan::UNIT_DONE,
+                        Ok(1) => plan::UNIT_REQUESTS,
+                        Ok(_) if view.missed() => plan::UNIT_NEED_BYTES,
+                        Ok(7) => plan::UNIT_NEED_BYTES,
+                        Ok(s) => {
+                            outcome = Outcome::Failed(Error::Internal(format!("the asset unit answered status {}", s)));
+                            plan::UNIT_DONE
+                        }
+                        Err(p) => {
+                            if view.missed() {
+                                plan::UNIT_NEED_BYTES
+                            } else {
+                                outcome = Outcome::Failed(panic_error(panic_message(p)));
+                                plan::UNIT_DONE
+                            }
+                        }
+                    }
+                };
+                let ast = plan::run_bms(&pcfg, &mut unit_a, &mut *ports, &mut bytes, &mut *misses, recording.as_deref_mut());
+                if let Some(c) = &cache {
+                    if let Some((short, msg)) = c.failure() {
+                        return Err(if short { Error::SourceChanged { input: idx } } else { Error::Io { input: idx, message: msg } });
+                    }
+                }
+                let ast = ast?;
+                stats.requests += ast.requests;
+                stats.attempts += ast.attempts;
+                stats.fetch_rounds += ast.fetch_rounds;
+                stats.bytes_requests += ast.bytes_requests;
+                if let Outcome::Failed(e) = std::mem::replace(&mut outcome, Outcome::None) {
+                    return Err(e);
+                }
+            }
             let page_cfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
             let mut no_misses = NoMisses;
             let mut failed: Option<Error> = None;
@@ -1675,7 +1803,7 @@ impl Engine {
             };
             let mut d = d;
             for i in 0..np {
-                let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet| -> i32 {
+                let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
                     let r = catch_unwind(AssertUnwindSafe(|| match &mut d {
                         DocKind::Pdf(doc) => unit_pdf(doc, i, idx, opts, answers, rq, bms),
                         DocKind::Raster(doc) => unit_raster(doc, i, idx, len, opts, answers, rq, bms),

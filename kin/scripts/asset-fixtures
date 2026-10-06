@@ -2,12 +2,16 @@
 ;; Write P3.12's fixtures: PDFs whose image XObjects and inline images cover every case SPEC 10.11 and the P3.12 brief
 ;; list, and the rows that say what kin must make of each.   bb kin/scripts/asset-fixtures
 ;;
-;; A DEVELOPMENT TOOL (babashka; needs ImageMagick 7 (`magick`), `pdfimages` (poppler) and `qpdf`), run by a person,
+;; A DEVELOPMENT TOOL (babashka; needs ImageMagick 7 (`magick`), `pdfimages` (poppler), `qpdf` and Ghostscript (`gs`)), run by a person,
 ;; not a gate. The fixtures are COMMITTED so a test run needs none of them:
 ;;
 ;;   test/assets/*.pdf          one file a case (the encrypted copy is qpdf's)
-;;   test/assets/src/*          the source JPEGs (ImageMagick's), the CCITT G4 strip (ImageMagick's TIFF) and the
-;;                              JPEG 2000 codestream (ImageMagick's), as embedded
+;;   test/assets/src/*          the source JPEGs (ImageMagick's) and the JPEG 2000 codestreams (ImageMagick's, lossless, each
+;;                              checked here to decode back to its source), as embedded. CCITT data is written by GHOSTSCRIPT's
+;;                              CCITTFaxEncode filter (every PDF parameter: K, EncodedByteAlign, EndOfLine, BlackIs1, EndOfBlock) and
+;;                              JBIG2 is HAND-BUILT (no encoder is installed): a page-information segment and an immediate generic
+;;                              region coded with MMR, whose data is a Group 4 strip. Poppler's own CCITT, JBIG2 and JPX decoders are
+;;                              held to the expected pixels of every one of them when they are written (`poppler-check!`).
 ;;   test/assets/png/*.png      what each decoded case must look like, for eyes (ImageMagick writes them from the
 ;;                              expected RGBA; the committed rows hold the SHA-256 of that RGBA)
 ;;   test/assets/rows.txt       the rows kin/pdfimagetest.kin reads
@@ -25,6 +29,7 @@
 ;;   P name file obj pv-code                                the JPEG passthrough verdict (`pv`)
 ;;   D name file obj orient crop fill w h channels alpha sha the decoded pixels (crop: `-` or bx0,by0,bx1,by1,cx0,cy0,cx1,cy1,whole)
 ;;   R name file obj filter w h comps bpc k cols rows cflags where off len gwhere goff glen sha gsha   the decode-img request
+;;     (the codec's own bytes: where 0 = the input's span, -2 = kin's payload; the globals are always the payload, -2)
 ;;   O a b c d code                                         a placement matrix (x1000, integers) and its orientation
 ;;   X name file obj class                                  an image whose colour space kin does not read (class 9)
 ;;   M name file n obj,x0,y0,x1,y1,skewed ...               the placements pc-document finds
@@ -728,7 +733,9 @@
         exif6 (with-exif base-e 6 true)
         exif6mm (with-exif base-e 6 false)
         exif1 (with-exif base-e 1 true)
-        odd (make-jpeg! "size" 20 12 3 106 "-quality" "90")]
+        odd (make-jpeg! "size" 20 12 3 106 "-quality" "90")
+        sub (make-jpeg! "sub420" jw jh 3 107 "-blur" "0x2" "-quality" "90" "-sampling-factor" "4:2:0")
+        gray-d (make-jpeg! "gray-decode" jw jh 1 108 "-quality" "90")]
     (assert (= 192 (:sof (jpeg-info rgb) 192)) "baseline")
     (assert (= 0xC2 (:sof (jpeg-info prog))) "the progressive file is progressive")
     (assert (= 4 (:nc (jpeg-info cmyk))) "four components")
@@ -748,6 +755,9 @@
     ;; does not
     (dct-pdf! "dct-decode.pdf" rgb :extra-dict "/Decode[1 0 1 0 1 0]")
     (dct-pdf! "dct-cmyk.pdf" cmyk :cs "/DeviceCMYK" :extra-dict "/Decode[1 0 1 0 1 0 1 0]")
+    ;; chroma sub-sampled (the hosts' upsampling differs a little) and gray with a Decode
+    (dct-pdf! "dct-420-decode.pdf" sub :extra-dict "/Decode[1 0 1 0 1 0]")
+    (dct-pdf! "dct-gray-decode.pdf" gray-d :cs "/DeviceGray" :extra-dict "/Decode[1 0]")
     (dct-pdf! "dct-exif6.pdf" exif6)
     (dct-pdf! "dct-exif6mm.pdf" exif6mm)
     (dct-pdf! "dct-exif1.pdf" exif1)
@@ -761,12 +771,14 @@
       (dct-pdf! "dct-arith.pdf" patched))
     (dct-pdf! "dct-mask.pdf" rgb :extra-dict "/Mask[0 10 0 10 0 10]")
     (dct-pdf! "dct-a85.pdf" (a85-encode rgb) :filter "[/ASCII85Decode/DCTDecode]" :w jw :h jh)
+    ;; the same and a /Decode: the host decodes it, and the codestream (kin's own bytes, ASCII85 undone) rides in the payload
+    (dct-pdf! "dct-a85-decode.pdf" (a85-encode rgb) :filter "[/ASCII85Decode/DCTDecode]" :w jw :h jh :extra-dict "/Decode[1 0 1 0 1 0]")
     (let [sm (path "dct-smask.pdf")]
       (image-pdf "dct-smask.pdf" (str "/Type/XObject/Subtype/Image/Width " jw "/Height " jh "/ColorSpace/DeviceRGB/BitsPerComponent 8/SMask 6 0 R/Filter/DCTDecode") rgb
                  :extra {6 {:dict "/Type/XObject/Subtype/Image/Width 2/Height 2/ColorSpace/DeviceGray/BitsPerComponent 8" :stream (ubytes [0 85 170 255])}}))
     ;; verdicts (`pv` codes: 0 ok, 8 colorspace, 10 decode, 14 exif orientation, 15 size, 4 arithmetic, 11 mask, 12 smask)
-    (doseq [[nm v] [["dct-rgb" 0] ["dct-gray" 0] ["dct-progressive" 0] ["dct-icc-rgb" 0] ["dct-calrgb" 0] ["dct-a85" 0]
-                    ["dct-decode" 10] ["dct-cmyk" 8] ["dct-exif6" 14] ["dct-exif6mm" 14] ["dct-exif1" 0] ["dct-size" 15] ["dct-arith" 4] ["dct-mask" 11] ["dct-smask" 12]]]
+    (doseq [[nm v] [["dct-rgb" 0] ["dct-gray" 0] ["dct-progressive" 0] ["dct-icc-rgb" 0] ["dct-calrgb" 0] ["dct-a85" 0] ["dct-a85-decode" 10]
+                    ["dct-decode" 10] ["dct-420-decode" 10] ["dct-gray-decode" 10] ["dct-cmyk" 8] ["dct-exif6" 14] ["dct-exif6mm" 14] ["dct-exif1" 0] ["dct-size" 15] ["dct-arith" 4] ["dct-mask" 11] ["dct-smask" 12]]]
       (row! "P" nm (str nm ".pdf") 5 v))
     ;; poppler hands back the very bytes that pass through
     (doseq [[nm jpg] [["dct-rgb" rgb] ["dct-gray" gray] ["dct-progressive" prog] ["dct-exif1" exif1]]]
@@ -776,50 +788,153 @@
           (assert (java.util.Arrays/equals ^bytes got ^bytes jpg) (str "pdfimages -all bytes differ for " nm)))
         (fs/delete-tree dir)))
     ;; the requests a DCT image that cannot pass through plans: the input's own span, no payload; and the A85 case's payload
-    (doseq [[nm jpg comps] [["dct-decode" rgb 3] ["dct-cmyk" cmyk 4] ["dct-exif6" exif6 3] ["dct-exif6mm" exif6mm 3] ["dct-arith" (fs/read-all-bytes (path "src/arith.jpg")) 3]]]
+    (doseq [[nm jpg comps] [["dct-decode" rgb 3] ["dct-420-decode" sub 3] ["dct-gray-decode" gray-d 1] ["dct-cmyk" cmyk 4] ["dct-exif6" exif6 3] ["dct-exif6mm" exif6mm 3] ["dct-arith" (fs/read-all-bytes (path "src/arith.jpg")) 3]]]
       (row! "R" nm (str nm ".pdf") 5 1 24 16 comps 8 0 0 0 0 0 (stream-off (str nm ".pdf")) (alength ^bytes jpg) -1 0 0 "-" "-"))
-    (row! "R" "dct-a85" "dct-a85.pdf" 5 1 24 16 3 8 0 0 0 0 -2 0 (alength ^bytes rgb) -1 0 0 (sha256-hex rgb) "-")))
+    (row! "R" "dct-a85" "dct-a85.pdf" 5 1 24 16 3 8 0 0 0 0 -2 0 (alength ^bytes rgb) -1 0 0 (sha256-hex rgb) "-")
+    (row! "R" "dct-a85-decode" "dct-a85-decode.pdf" 5 1 24 16 3 8 0 0 0 0 -2 0 (alength ^bytes rgb) -1 0 0 (sha256-hex rgb) "-")))
 
-(defn tiff-g4-strip
-  "The one CCITT G4 strip of a TIFF written by ImageMagick, and its width and rows."
-  [^bytes bs]
-  (let [v (mapv #(bit-and 0xff %) bs) le (= 73 (v 0))
-        r16 (fn [o] (if le (+ (v o) (* 256 (v (inc o)))) (+ (* 256 (v o)) (v (inc o)))))
-        r32 (fn [o] (if le (+ (r16 o) (* 65536 (r16 (+ o 2)))) (+ (* 65536 (r16 o)) (r16 (+ o 2)))))
-        ifd (r32 4) n (r16 ifd)
-        tags (into {} (for [k (range n) :let [e (+ ifd 2 (* k 12)) ty (r16 (+ e 2))]]
-                        [(r16 e) (if (= ty 3) (r16 (+ e 8)) (r32 (+ e 8)))]))]
-    {:w (tags 256) :h (tags 257) :comp (tags 259)
-     :data (java.util.Arrays/copyOfRange bs (long (tags 273)) (long (+ (tags 273) (tags 279))))}))
+(defn gs-ccitt
+  "CCITT data by GHOSTSCRIPT's CCITTFaxEncode filter (an independent encoder, with every PDF parameter): `rows` of 1-bit samples
+  (`w` wide) encoded as `params` say ({:k :align :eol :black-is-1 :eob})."
+  [rows w {:keys [k align eol black-is-1 eob] :or {k -1 eob true}}]
+  (let [h (count rows) stride (quot (+ w 7) 8)
+        raw (path "src/ccitt.raw") out (path "src/ccitt.out") ps (path "src/ccitt.ps")
+        _ (fs/write-bytes raw (pack rows 1))
+        prm (str "/K " k " /Columns " w " /Rows " h (when align " /EncodedByteAlign true") (when eol " /EndOfLine true")
+                 (when black-is-1 " /BlackIs1 true") (when-not eob " /EndOfBlock false"))]
+    (spit ps (str "/in (" raw ") (r) file def\n/f (" out ") (w) file def\n/e f << " prm " >> /CCITTFaxEncode filter def\n/buf " stride " string def\n"
+                  h " { in buf readstring pop e exch writestring } repeat\ne closefile f closefile in closefile\nquit\n"))
+    (sh! "gs" "-q" "-dNODISPLAY" "-dNOSAFER" "-dBATCH" "-dNOPAUSE" ps)
+    (let [data (fs/read-all-bytes out)]
+      (fs/delete raw) (fs/delete out) (fs/delete ps)
+      data)))
+
+(defn u32 [v] [(bit-and 255 (bit-shift-right v 24)) (bit-and 255 (bit-shift-right v 16)) (bit-and 255 (bit-shift-right v 8)) (bit-and 255 v)])
+
+(defn jbig2-seg
+  "A JBIG2 segment (T.88 7.2): number, type, page association (0 = global), no referred-to segments, then its data."
+  [num type page ^bytes data]
+  (cat-bytes (ubytes (concat (u32 num) [type 0 page] (u32 (alength data)))) data))
+
+(defn jbig2-page-info [num w h] (jbig2-seg num 48 1 (ubytes (concat (u32 w) (u32 h) (u32 0) (u32 0) [0] [0 0]))))
+
+(defn jbig2-empty-symbol-dict
+  "A GLOBAL symbol dictionary (type 0, page association 0) with no symbols, Huffman coded: flags SDHUFF 1, no exported and no new
+  symbols. What a decoder keeps from a globals stream; the page does not use it."
+  [num]
+  (jbig2-seg num 0 0 (ubytes (concat [0 1] (u32 0) (u32 0)))))
+
+(defn jbig2-mmr-region
+  "An immediate generic region (type 38) coded with MMR: `g4` is a T.6 (Group 4) strip of the w x h bitmap, 1 = black."
+  [num w h ^bytes g4]
+  (jbig2-seg num 38 1 (cat-bytes (ubytes (concat (u32 w) (u32 h) (u32 0) (u32 0) [0] [1])) g4)))
+
+(defn gray1-dict [w h filter parms]
+  (str "/Type/XObject/Subtype/Image/Width " w "/Height " h "/ColorSpace/DeviceGray/BitsPerComponent 1/Filter/" filter parms))
+
+(defn case-ccitt []
+  (let [w 70 h 24
+        rows (gen-rows 111 w h 1 1)
+        spec {:w w :h h :bpc 1 :cs :gray :rows rows}
+        ;; (name, parameters of the encoder, the DecodeParms the PDF carries): the samples a decoder gives back are `rows` whatever
+        ;; the parameters, because the encoder and the decoder read the same BlackIs1
+        cases [["ccitt-g4-b1" {:k -1 :black-is-1 true} "/K -1/BlackIs1 true"]
+               ["ccitt-g4" {:k -1} "/K -1"]
+               ["ccitt-g4-align" {:k -1 :align true} "/K -1/EncodedByteAlign true"]
+               ["ccitt-g4-noeob" {:k -1 :eob false} "/K -1/EndOfBlock false"]
+               ["ccitt-g3-1d" {:k 0 :eol true} "/K 0/EndOfLine true"]
+               ["ccitt-g3-1d-align" {:k 0 :eol true :align true} "/K 0/EndOfLine true/EncodedByteAlign true"]
+               ["ccitt-g3-1d-noeol" {:k 0} "/K 0"]
+               ["ccitt-g3-1d-align-noeol" {:k 0 :align true} "/K 0/EncodedByteAlign true"]
+               ["ccitt-g3-2d" {:k 4 :eol true} "/K 4/EndOfLine true"]]]
+    (doseq [[nm enc parms] cases]
+      (let [data (gs-ccitt rows w enc)
+            file (str nm ".pdf")]
+        (image-pdf file (gray1-dict w h "CCITTFaxDecode" (str "/DecodeParms<</Columns " w "/Rows " h (when (seq parms) (str parms)) ">>")) data)
+        (let [px (d-row! nm file 5 spec)]
+          ;; poppler (its own CCITT decoder) must read what ghostscript wrote, to the very samples
+          (poppler-check! file px))))
+    ;; an image mask: the same, 0 paints (the default /Decode [0 1]), in the stencil colour
+    (let [data (gs-ccitt rows w {:k -1 :align true})
+          mspec {:w w :h h :bpc 1 :imask? true :fill [0 0 0] :rows rows}]
+      (image-pdf "ccitt-g4-mask.pdf" (str "/Type/XObject/Subtype/Image/Width " w "/Height " h "/ImageMask true/BitsPerComponent 1/Filter/CCITTFaxDecode/DecodeParms<</K -1/Columns " w "/Rows " h "/EncodedByteAlign true>>") data)
+      (d-row! "ccitt-g4-mask" "ccitt-g4-mask.pdf" 5 mspec))
+    ;; Columns that are not the image's Width: the stream is `Columns` wide and the image is cut or padded (white) to its size
+    (let [cw 64
+          cut (mapv (fn [r] (vec (take cw r))) rows)
+          data64 (gs-ccitt cut cw {:k -1})]
+      (image-pdf "ccitt-g4-narrow.pdf" (gray1-dict 70 h "CCITTFaxDecode" (str "/DecodeParms<</K -1/Columns " cw "/Rows " h ">>")) data64)
+      (d-row! "ccitt-g4-narrow" "ccitt-g4-narrow.pdf" 5 {:w 70 :h h :bpc 1 :cs :gray :rows (mapv (fn [r] (into r (repeat 6 1))) cut)}))
+    ;; the request each plans: filter 4, w h comps bpc k columns rows cflags, the input's own span, no globals (R rows)
+    (doseq [[nm enc parms] cases :let [file (str nm ".pdf") data (gs-ccitt rows w enc)
+                                       fl (+ (if (:black-is-1 enc) 1 0) (if (:align enc) 2 0) (if (:eol enc) 4 0) (if (false? (:eob enc)) 8 0))]]
+      (row! "R" nm file 5 4 w h 1 1 (:k enc) w h fl 0 (stream-off file) (alength ^bytes data) -1 0 0 "-" "-"))
+    (let [data (gs-ccitt rows w {:k -1 :align true})]
+      (row! "R" "ccitt-g4-mask" "ccitt-g4-mask.pdf" 5 4 w h 1 1 -1 w h 2 0 (stream-off "ccitt-g4-mask.pdf") (alength ^bytes data) -1 0 0 "-" "-"))
+    (let [cut (mapv (fn [r] (vec (take 64 r))) rows) data64 (gs-ccitt cut 64 {:k -1})]
+      (row! "R" "ccitt-g4-narrow" "ccitt-g4-narrow.pdf" 5 4 70 h 1 1 -1 64 h 0 0 (stream-off "ccitt-g4-narrow.pdf") (alength ^bytes data64) -1 0 0 "-" "-"))))
+
+(defn case-jpx []
+  ;; JPEG 2000 by ImageMagick (OpenJPEG), LOSSLESS: checked here to decode back to the source samples
+  (let [rows (gen-rows 112 16 12 3 8) grows (gen-rows 113 16 12 1 8)
+        ppm (path "src/jpx.ppm") pgm (path "src/jpx.pgm")
+        _ (fs/write-bytes ppm (cat-bytes "P6\n16 12\n255\n" (pack rows 8)))
+        _ (fs/write-bytes pgm (cat-bytes "P5\n16 12\n255\n" (pack grows 8)))
+        make! (fn [src dst fmt] (sh! "magick" src "-define" "jp2:rate=1" (str fmt ":" dst))
+                (fs/read-all-bytes dst))
+        j2k (make! ppm (path "src/jpx.j2k") "j2k")
+        jp2 (make! ppm (path "src/jpx-jp2.jp2") "jp2")
+        gj2k (make! pgm (path "src/jpx-gray.j2k") "j2k")
+        check! (fn [nm data src]
+                 (let [f (path "src/" nm ".chk") _ (fs/write-bytes f data)
+                       r (sh "magick" (str (if (= "jpx-jp2" nm) "jp2:" "j2k:") f) "-depth" "8" "-compress" "none" (str "pnm:" (path "src/" nm ".out.pnm")))
+                       r2 (sh "magick" "compare" "-metric" "AE" src (path "src/" nm ".out.pnm") "null:")]
+                   (fs/delete f) (fs/delete (path "src/" nm ".out.pnm"))
+                   (assert (str/starts-with? (str/trim (str (:err r2))) "0") (str nm " is not lossless: " (:err r) (:err r2)))))]
+    (assert (= [0xFF 0x4F] (map #(bit-and 255 %) (take 2 j2k))) "a raw codestream")
+    (assert (= [0 0 0 12] (map #(bit-and 255 %) (take 4 jp2))) "a JP2 file")
+    (check! "jpx" j2k ppm) (check! "jpx-jp2" jp2 ppm) (check! "jpx-gray" gj2k pgm)
+    (fs/delete ppm) (fs/delete pgm)
+    (image-pdf "jpx.pdf" "/Type/XObject/Subtype/Image/Width 16/Height 12/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/JPXDecode" j2k)
+    (image-pdf "jpx-jp2.pdf" "/Type/XObject/Subtype/Image/Width 16/Height 12/Filter/JPXDecode" jp2)
+    (image-pdf "jpx-gray.pdf" "/Type/XObject/Subtype/Image/Width 16/Height 12/ColorSpace/DeviceGray/BitsPerComponent 8/Filter/JPXDecode" gj2k)
+    (doseq [[nm file spec data bpc] [["jpx" "jpx.pdf" {:w 16 :h 12 :bpc 8 :cs :rgb :rows rows} j2k 8]
+                                     ["jpx-jp2" "jpx-jp2.pdf" {:w 16 :h 12 :bpc 8 :cs :rgb :rows rows} jp2 8]
+                                     ["jpx-gray" "jpx-gray.pdf" {:w 16 :h 12 :bpc 8 :cs :gray :rows grows} gj2k 8]]]
+      (let [px (d-row! nm file 5 spec)]
+        (poppler-check! file px))
+      (row! "R" nm file 5 2 16 12 0 bpc 0 0 0 0 0 (stream-off file) (alength ^bytes data) -1 0 0 "-" "-"))))
+
+(defn case-jbig2 []
+  ;; JBIG2, hand-built (no encoder is installed): a page-information segment and an immediate generic region coded with MMR,
+  ;; whose data is the Group 4 strip libtiff writes for the bitmap. The image is DeviceGray 1 bit: JBIG2's black (1) is a sample 0.
+  (let [w 64 h 32 rows (gen-rows 114 w h 1 1)
+        ;; the MMR data: Group 4 of the bitmap in which 1 is a BLACK pixel (ghostscript's encoder with BlackIs1: a T.6 black run is a 1)
+        g4 (gs-ccitt rows w {:k -1 :black-is-1 true})
+        page (jbig2-page-info 0 w h)
+        region (jbig2-mmr-region 1 w h g4)
+        whole (cat-bytes page region)
+        inv (mapv (fn [r] (mapv #(- 1 %) r)) rows)
+        spec {:w w :h h :bpc 1 :cs :gray :rows inv}
+        dict (gray1-dict w h "JBIG2Decode" "")]
+    (image-pdf "jbig2.pdf" dict whole)
+    (let [px (d-row! "jbig2" "jbig2.pdf" 5 spec)]
+      (poppler-check! "jbig2.pdf" px))
+    (row! "R" "jbig2" "jbig2.pdf" 5 3 w h 0 1 0 0 0 0 0 (stream-off "jbig2.pdf") (alength ^bytes whole) -1 0 0 "-" "-")
+    ;; the globals: a global symbol dictionary (empty: no encoder here makes symbols) in the JBIG2Globals stream, the page's segments the
+    ;; image's own. The decoder must be handed both (the globals are kin's own bytes, a stream's decoded data: the unit's payload)
+    (let [glob (jbig2-empty-symbol-dict 0)
+          img (cat-bytes (jbig2-page-info 1 w h) (jbig2-mmr-region 2 w h g4))]
+      (image-pdf "jbig2-globals.pdf" (gray1-dict w h "JBIG2Decode" "/DecodeParms<</JBIG2Globals 6 0 R>>") img
+                 :extra {6 {:dict "" :stream glob}})
+      (let [px (d-row! "jbig2-globals" "jbig2-globals.pdf" 5 spec)]
+        (poppler-check! "jbig2-globals.pdf" px))
+      (row! "R" "jbig2-globals" "jbig2-globals.pdf" 5 3 w h 0 1 0 0 0 0 0 (stream-off "jbig2-globals.pdf") (alength ^bytes img) -2 0 (alength ^bytes glob) "-" (sha256-hex glob)))))
 
 (defn case-codecs []
-  ;; CCITT G4 from ImageMagick's TIFF, JPX from ImageMagick's codestream, JBIG2 with globals: bytes of the right shape
-  ;; (kin plans the request; it never decodes, and no JBIG2 encoder is installed here)
-  (let [w 64 h 32 rows (gen-rows 111 w h 1 1) pbm (path "src/g4.pbm")
-        _ (fs/write-bytes pbm (cat-bytes (str "P4\n" w " " h "\n") (pack rows 1)))
-        tif (path "src/g4.tif")
-        _ (sh! "magick" pbm "-compress" "Group4" tif)
-        {:keys [data comp]} (tiff-g4-strip (fs/read-all-bytes tif))]
-    (assert (= 4 comp) "ImageMagick wrote CCITT G4")
-    (fs/write-bytes (path "src/g4.bin") data)
-    (fs/delete pbm) (fs/delete tif)
-    (image-pdf "ccitt-g4.pdf" (str "/Type/XObject/Subtype/Image/Width " w "/Height " h "/ColorSpace/DeviceGray/BitsPerComponent 1/Filter/CCITTFaxDecode/DecodeParms<</K -1/Columns " w "/Rows " h "/BlackIs1 true>>") data)
-    (image-pdf "ccitt-g4-mask.pdf" (str "/Type/XObject/Subtype/Image/Width " w "/Height " h "/ImageMask true/BitsPerComponent 1/Filter/CCITTFaxDecode/DecodeParms<</K -1/Columns " w "/Rows " h "/EncodedByteAlign true/EndOfBlock false>>") data)
-    (row! "R" "ccitt-g4" "ccitt-g4.pdf" 5 4 w h 1 1 -1 w h 1 0 (stream-off "ccitt-g4.pdf") (alength ^bytes data) -1 0 0 "-" "-")
-    (row! "R" "ccitt-g4-mask" "ccitt-g4-mask.pdf" 5 4 w h 1 1 -1 w h 10 0 (stream-off "ccitt-g4-mask.pdf") (alength ^bytes data) -1 0 0 "-" "-"))
-  (let [pgm (path "src/jpx.pgm") rows (gen-rows 112 16 12 3 8)
-        _ (fs/write-bytes (path "src/jpx.ppm") (cat-bytes "P6\n16 12\n255\n" (pack rows 8)))
-        j2k (path "src/jpx.j2k")
-        _ (sh! "magick" (path "src/jpx.ppm") "-define" "jp2:quality=100" (str "jp2:" j2k))
-        data (fs/read-all-bytes j2k)]
-    (fs/delete (path "src/jpx.ppm"))
-    (image-pdf "jpx.pdf" "/Type/XObject/Subtype/Image/Width 16/Height 12/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/JPXDecode" data)
-    (row! "R" "jpx" "jpx.pdf" 5 2 16 12 0 8 0 0 0 0 0 (stream-off "jpx.pdf") (alength ^bytes data) -1 0 0 "-" "-"))
-  ;; JBIG2 embedded stream with a globals stream (bytes of the right shape: kin does not decode, nothing here does)
-  (let [data (ubytes (range 40 90)) globals (ubytes (range 200 224))]
-    (image-pdf "jbig2.pdf" "/Type/XObject/Subtype/Image/Width 32/Height 16/ColorSpace/DeviceGray/BitsPerComponent 1/Filter/JBIG2Decode/DecodeParms<</JBIG2Globals 6 0 R>>" data
-               :extra {6 {:dict "" :stream globals}})
-    (row! "R" "jbig2" "jbig2.pdf" 5 3 32 16 0 1 0 0 0 0 0 (stream-off "jbig2.pdf") 50 -2 0 24 "-" (sha256-hex globals))))
+  (case-ccitt)
+  (case-jpx)
+  (case-jbig2))
 
 ;; ------------------------------------------------------------------ the orientation and cut rows
 
@@ -855,7 +970,8 @@
 (spit (path "version.txt")
       (str "ImageMagick " (:imagemagick @tool-versions) "\npdfimages " (first (str/split-lines (str/trim (str (:err (sh "pdfimages" "-v")))))) "\nqpdf " (first (str/split-lines (:out (sh "qpdf" "--version")))) "\n"))
 (if check?
-  (let [rel (fn [d] (into (sorted-set) (map #(str (fs/relativize d %)) (filter fs/regular-file? (file-seq (fs/file d))))))
+  ;; (`transcripts/` is `bb asset-record`'s, made with the live codecs: not this generator's)
+  (let [rel (fn [d] (into (sorted-set) (remove #(str/starts-with? % "transcripts/") (map #(str (fs/relativize d %)) (filter fs/regular-file? (file-seq (fs/file d)))))))
         a (rel out-dir) b (rel committed)
         diff (vec (concat (map #(str "missing from the corpus: " %) (remove b a))
                      (map #(str "not written by the generator: " %) (remove a b))

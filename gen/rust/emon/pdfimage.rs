@@ -432,6 +432,7 @@ pub(crate) fn pi_cs_read(src: &crate::port::Src, mut ar: &mut crate::port::Cells
     if c == 0 {
         crate::port::cells_set(im, PI_CLASS, 9);
         crate::port::cells_set(im, PI_NCOMP, 1);
+        crate::port::cells_set(im, PI_FLAGS, crate::port::cells_at(im, PI_FLAGS) | 8);
         return 0;
     }
     if c != 8 {
@@ -1264,6 +1265,9 @@ pub fn pi_adopt(mut im: &mut crate::port::Cells, w: i32, h: i32, channels: i32) 
         return 0;
     }
     if (cls == 1) && (channels == 1) {
+        crate::port::cells_set(im, PI_NCOMP, 1);
+    } else if (cls == 4) && (channels == 1) {
+        // an Indexed image the host decoded to its indices (a bilevel codec's): the palette stays
         crate::port::cells_set(im, PI_NCOMP, 1);
     } else if (cls == 2) && (channels == 3) {
         crate::port::cells_set(im, PI_NCOMP, 3);

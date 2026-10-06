@@ -801,10 +801,22 @@ func imgJpeg(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 	if uint64(iw) != w || uint64(ih) != h {
 		return nil, imgFailedf("a JPEG whose pixels are not the size its header says")
 	}
+	px, err := imgJpegRaw(img, int(m.ncomp), iw, ih)
+	if err != nil {
+		return nil, err
+	}
+	px, _, _ = imgOrient(px, iw, ih, int(out.Ch), o)
+	out.Pixels = px
+	return out, nil
+}
+
+// imgJpegRaw is the pixels of a decoded 1 or 3 component JPEG: gray, or RGB (the chroma filtered as libjpeg does, `imgUpsample`). It
+// applies no orientation: the ImageDecode port orients after it, a PDF image (`pdfDCT`) never does.
+func imgJpegRaw(img image.Image, ncomp, iw, ih int) ([]byte, error) {
 	var px []byte
 	switch im := img.(type) {
 	case *image.Gray:
-		if m.ncomp != 1 {
+		if ncomp != 1 {
 			return nil, imgFailedf("a JPEG the decoder gave in a form that does not match its header")
 		}
 		px = make([]byte, iw*ih)
@@ -812,7 +824,7 @@ func imgJpeg(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 			copy(px[y*iw:(y+1)*iw], im.Pix[y*im.Stride:y*im.Stride+iw])
 		}
 	case *image.YCbCr:
-		if m.ncomp != 3 {
+		if ncomp != 3 {
 			return nil, imgFailedf("a JPEG the decoder gave in a form that does not match its header")
 		}
 		px = make([]byte, iw*ih*3)
@@ -825,7 +837,7 @@ func imgJpeg(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 			}
 		}
 	case *image.RGBA:
-		if m.ncomp != 3 {
+		if ncomp != 3 {
 			return nil, imgFailedf("a JPEG the decoder gave in a form that does not match its header")
 		}
 		px = make([]byte, iw*ih*3)
@@ -838,9 +850,7 @@ func imgJpeg(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 	default:
 		return nil, imgFailedf("a JPEG the decoder gave in a form we do not read")
 	}
-	px, _, _ = imgOrient(px, iw, ih, int(out.Ch), o)
-	out.Pixels = px
-	return out, nil
+	return px, nil
 }
 
 // imgUpsample brings a subsampled chroma plane to the size of the image with libjpeg's "fancy" (triangle)

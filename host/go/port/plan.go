@@ -87,8 +87,13 @@ func planLimit(name string, limit, actual int32) *PlanError {
 // PlanBitmaps maps an answer's id to its (port) Bitmap.
 type PlanBitmaps map[int32]*Bitmap
 
-// PlanRequest is a request record.
-type PlanRequest struct{ Rec []int32 }
+// PlanRequest is a request record and the unit's PAYLOAD (P6.1a, D291): the bytes kin made itself in the attempt that wrote
+// it (a `decode-img`'s codestream when it is not the input's own, a JBIG2 globals stream), shared by every request of the round.
+// Never recorded in a transcript: the record names them by SHA-256. Empty for a request that names none.
+type PlanRequest struct {
+	Rec     []int32
+	Payload []byte
+}
 
 func (r PlanRequest) Kind() int32 { return r.Rec[1] }
 func (r PlanRequest) ID() int32   { return r.Rec[2] }
@@ -221,7 +226,7 @@ func planReadRequests(rq *Cells, answered map[int32]bool) ([]PlanRequest, error)
 			return nil, planErr("bad-record", "request id %d is used twice", rec[2])
 		}
 		seen[rec[2]] = true
-		out = append(out, PlanRequest{rec})
+		out = append(out, PlanRequest{Rec: rec})
 		at += ln
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].ID() < out[j].ID() })
@@ -261,13 +266,13 @@ func planFulfil(f PlanFulfiller, reqs []PlanRequest, bm PlanBitmaps) ([]PlanAnsw
 // `bytesF` fulfils the loop's own `bytes` requests; `rec`, when not nil, records
 // every render/decode/ocr pair (never `bytes`) in a deterministic order.
 func PlanRun(cfg PlanConfig, unit PlanUnit, ports, bytesF PlanFulfiller, misses PlanMisses, rec *Transcript) (PlanStats, error) {
-	return PlanRunBms(cfg, func(a, r *Cells, _ *BitmapSet) int32 { return unit(a, r) }, ports, bytesF, misses, rec)
+	return PlanRunBms(cfg, func(a, r *Cells, _ *BitmapSet, _ *Buf) int32 { return unit(a, r) }, ports, bytesF, misses, rec)
 }
 
 // PlanRunBms is PlanRun for a PAGE UNIT (P7.U, D196): the unit is also handed the BitmapSet of this attempt, made from the
 // bitmaps its answers carried so far; what kin made in it (`bms-put`) is added to the bitmaps a fulfiller sees, so an `ocr`
 // request may name a kin-made view. The bitmaps are this run's alone and are dropped when the unit ends.
-func PlanRunBms(cfg PlanConfig, unit func(answers, rq *Cells, bms *BitmapSet) int32, ports, bytesF PlanFulfiller, misses PlanMisses, rec *Transcript) (PlanStats, error) {
+func PlanRunBms(cfg PlanConfig, unit func(answers, rq *Cells, bms *BitmapSet, payload *Buf) int32, ports, bytesF PlanFulfiller, misses PlanMisses, rec *Transcript) (PlanStats, error) {
 	answers := NewCells()
 	bitmaps := PlanBitmaps{}
 	answered := map[int32]bool{}
@@ -280,7 +285,8 @@ func PlanRunBms(cfg PlanConfig, unit func(answers, rq *Cells, bms *BitmapSet) in
 		for id, b := range bitmaps {
 			bms.Answered[id] = b
 		}
-		status := unit(answers, rq, bms)
+		payload := NewBuf()
+		status := unit(answers, rq, bms, payload)
 		made := bms.Made
 		switch status {
 		case PlanUnitNeedBytes:
@@ -298,7 +304,7 @@ func PlanRunBms(cfg PlanConfig, unit func(answers, rq *Cells, bms *BitmapSet) in
 			var reqs []PlanRequest
 			for _, r := range ranges {
 				st.BytesRequests++
-				reqs = append(reqs, PlanRequest{[]int32{6, PlanKindBytes, -st.BytesRequests, r.Input, r.Offset, r.Length}})
+				reqs = append(reqs, PlanRequest{Rec: []int32{6, PlanKindBytes, -st.BytesRequests, r.Input, r.Offset, r.Length}})
 			}
 			got, err := planFulfil(bytesF, reqs, PlanBitmaps{})
 			if err != nil {
@@ -323,6 +329,11 @@ func PlanRunBms(cfg PlanConfig, unit func(answers, rq *Cells, bms *BitmapSet) in
 		reqs, err := planReadRequests(rq, answered)
 		if err != nil {
 			return st, err
+		}
+		if len(payload.B) > 0 {
+			for i := range reqs {
+				reqs[i].Payload = payload.B
+			}
 		}
 		if len(reqs) == 0 {
 			return st, planErr("bad-record", "the unit asked for requests and wrote none")
