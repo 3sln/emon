@@ -425,8 +425,10 @@
           (cells-set nfw (+ (* r 24) 12) (ow-get owords orow (hd-tlen)))
           (cells-set nfw (+ (* r 24) 14) (ow-get owords orow (hd-conf)))
           (cells-set nfw (+ (* r 24) 15) -1)
-          (cells-set nfw (+ (* r 24) 17) -1)
-          (cells-set nfw (+ (* r 24) 18) 0)
+          (comment "a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)")
+          (if (> nt 0)
+            (do (cells-set nfw (+ (* r 24) 17) -1)
+                (cells-set nfw (+ (* r 24) 18) 0)))
           (cells-set nfw (+ (* r 24) 23) srcs)
           (if (!= nrep no)
             (do (set orot (ow-get owords orow 9))
@@ -833,6 +835,7 @@
         ^:mut ^I32 cy 0
         ^:mut ^I32 total 0
         ^:mut ^I32 nocr 0
+        ^:mut ^I32 nhid 0
         ^:mut ^I32 nsus 0
         ^:mut ^I32 nonly 0
         ^:mut ^I32 nlow 0
@@ -860,6 +863,7 @@
                 (if (== inl 1)
                   (do (set total 0)
                       (set nocr 0)
+                      (set nhid 0)
                       (set nsus 0)
                       (set nonly 0)
                       (set nlow 0)
@@ -877,6 +881,7 @@
                                           (do (set total (+ total 1))
                                               (if (== (cells-at fv (+ (* w 8) 1)) (sr-ocr))
                                                 (do (set nocr (+ nocr 1))
+                                                    (if (and (>= (cells-at fv (+ (* w 8) 2)) 300) (< (cells-at fv (+ (* w 8) 2)) 400)) (set nhid (+ nhid 1)))
                                                     (set csum (+ csum (cells-at fv (+ (* w 8) 3))))
                                                     (if (!= (bit-and (cells-at fv (+ (* w 8) 4)) (fl-text-layer-suspect)) 0) (set nsus (+ nsus 1)))
                                                     (if (!= (bit-and (cells-at fv (+ (* w 8) 4)) (fl-ocr-only)) 0) (set nonly (+ nonly 1)))
@@ -889,7 +894,9 @@
                             (set conf -1)
                             (if (== nocr total)
                               (do (set allocr 1)
-                                  (set conf (quot csum nocr))))
+                                  (set conf (quot csum nocr))
+                                  (comment "words a hidden layer's rows (block 300) gave to OCR keep the layer's box and line: the block stays `text` too (P7.6)")
+                                  (if (== nhid nocr) (set allocr 2))))
                             (set suspect 0)
                             (if (> nsus 0) (set suspect 1))
                             (set onlyc 0)

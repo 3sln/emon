@@ -474,8 +474,11 @@ pub(crate) fn ar_emit_ocr(g: i32, cg: &mut crate::port::Cells, refs: &mut crate:
         crate::port::cells_set(nfw, (r * 24) + 12, ow_get(owords, orow, hd_tlen()));
         crate::port::cells_set(nfw, (r * 24) + 14, ow_get(owords, orow, hd_conf()));
         crate::port::cells_set(nfw, (r * 24) + 15, -1);
-        crate::port::cells_set(nfw, (r * 24) + 17, -1);
-        crate::port::cells_set(nfw, (r * 24) + 18, 0);
+        // a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
+        if nt > 0 {
+            crate::port::cells_set(nfw, (r * 24) + 17, -1);
+            crate::port::cells_set(nfw, (r * 24) + 18, 0);
+        }
         crate::port::cells_set(nfw, (r * 24) + 23, srcs);
         if nrep != no {
             orot = ow_get(owords, orow, 9);
@@ -971,6 +974,7 @@ pub fn ar_tag(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cel
     let mut cy: i32 = 0;
     let mut total: i32 = 0;
     let mut nocr: i32 = 0;
+    let mut nhid: i32 = 0;
     let mut nsus: i32 = 0;
     let mut nonly: i32 = 0;
     let mut nlow: i32 = 0;
@@ -1008,6 +1012,7 @@ pub fn ar_tag(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cel
             if inl == 1 {
                 total = 0;
                 nocr = 0;
+                nhid = 0;
                 nsus = 0;
                 nonly = 0;
                 nlow = 0;
@@ -1024,6 +1029,9 @@ pub fn ar_tag(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cel
                                 total += 1;
                                 if crate::port::cells_at(fv, (w * 8) + 1) == sr_ocr() {
                                     nocr += 1;
+                                    if (crate::port::cells_at(fv, (w * 8) + 2) >= 300) && (crate::port::cells_at(fv, (w * 8) + 2) < 400) {
+                                        nhid += 1;
+                                    }
                                     csum += crate::port::cells_at(fv, (w * 8) + 3);
                                     if (crate::port::cells_at(fv, (w * 8) + 4) & fl_text_layer_suspect()) != 0 {
                                         nsus += 1;
@@ -1049,6 +1057,10 @@ pub fn ar_tag(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cel
                     if nocr == total {
                         allocr = 1;
                         conf = csum / nocr;
+                        // words a hidden layer's rows (block 300) gave to OCR keep the layer's box and line: the block stays `text` too (P7.6)
+                        if nhid == nocr {
+                            allocr = 2;
+                        }
                     }
                     suspect = 0;
                     if nsus > 0 {

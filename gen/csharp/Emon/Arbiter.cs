@@ -469,8 +469,11 @@ public static class Arbiter {
             emon.Port.CellsSet(nfw, (r * 24) + 12, Evidence.OwGet(owords, orow, Evidence.HdTlen()));
             emon.Port.CellsSet(nfw, (r * 24) + 14, Evidence.OwGet(owords, orow, Evidence.HdConf()));
             emon.Port.CellsSet(nfw, (r * 24) + 15, -1);
-            emon.Port.CellsSet(nfw, (r * 24) + 17, -1);
-            emon.Port.CellsSet(nfw, (r * 24) + 18, 0);
+            // a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
+            if (nt > 0) {
+                emon.Port.CellsSet(nfw, (r * 24) + 17, -1);
+                emon.Port.CellsSet(nfw, (r * 24) + 18, 0);
+            }
             emon.Port.CellsSet(nfw, (r * 24) + 23, srcs);
             if (nrep != no) {
                 orot = Evidence.OwGet(owords, orow, 9);
@@ -966,6 +969,7 @@ public static class Arbiter {
         int cy = 0;
         int total = 0;
         int nocr = 0;
+        int nhid = 0;
         int nsus = 0;
         int nonly = 0;
         int nlow = 0;
@@ -1003,6 +1007,7 @@ public static class Arbiter {
                 if (inl == 1) {
                     total = 0;
                     nocr = 0;
+                    nhid = 0;
                     nsus = 0;
                     nonly = 0;
                     nlow = 0;
@@ -1019,6 +1024,9 @@ public static class Arbiter {
                                     total += 1;
                                     if (emon.Port.CellsAt(fv, (w * 8) + 1) == Model.SrOcr()) {
                                         nocr += 1;
+                                        if ((emon.Port.CellsAt(fv, (w * 8) + 2) >= 300) && (emon.Port.CellsAt(fv, (w * 8) + 2) < 400)) {
+                                            nhid += 1;
+                                        }
                                         csum += emon.Port.CellsAt(fv, (w * 8) + 3);
                                         if ((emon.Port.CellsAt(fv, (w * 8) + 4) & Model.FlTextLayerSuspect()) != 0) {
                                             nsus += 1;
@@ -1044,6 +1052,10 @@ public static class Arbiter {
                         if (nocr == total) {
                             allocr = 1;
                             conf = csum / nocr;
+                            // words a hidden layer's rows (block 300) gave to OCR keep the layer's box and line: the block stays `text` too (P7.6)
+                            if (nhid == nocr) {
+                                allocr = 2;
+                            }
                         }
                         suspect = 0;
                         if (nsus > 0) {

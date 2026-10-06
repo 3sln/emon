@@ -2923,10 +2923,7 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   gave every hidden group to the hidden text, low-conf, is gone); `hidden-exact-ocr` fused CER 0.0050 against 0.0516 hidden alone, 0.0068 OCR alone; `hidden-noisy-ocr`
   0.0099 against 0.1484 and 0.0068 (the layer agrees to nine tenths on many words and keeps its typos: row 310 is the brief's). Block metrics of `hidden-older-ocr`: heading F1
   0.27 -> 0.64, paragraph F1 0.15 -> 0.75, bow F1 0.48 -> 0.97. `emon-fusion` scoreboard: 36 metrics improved (`pdf/all` CER 0.007556 -> 0.005606, WER 0.0235 -> 0.0087, paragraph R 0.917
-  -> 0.979), **3 regressed beyond the tolerance and are NOT recorded** (D079): `pdf/all` and `pdf/textlayer` `heading-level-acc` (1.0 -> 0.990 and 0.941: the fused
-  `hidden-older-ocr` now matches seven headings of fifteen and one of them is a level off, the hidden layer having no weight to tell a level-4 heading from a paragraph) and `pdf/textlayer`
-  `src-ocr-share` (0.7296 -> 0.7335: OCR now wins words of a document whose layer it replaces). They follow from the intended behaviour; `bb fusion`'s scoreboard line is red until the
-  maintainer signs off the new values (a decision for the coordinator). `bb accuracy` (`emon` and every other entry) unchanged.
+  -> 0.979), the three regressions the first version had (`heading-level-acc` on `pdf/all` and `pdf/textlayer`, `src-ocr-share` on `pdf/textlayer`) are fixed (D383) and the 36 improvements are recorded (`emon-fusion` 427 metrics, none regressed). `bb accuracy` (`emon` and every other entry) unchanged.
   *Learnt*: (1) a hidden layer's words abut and glue ("onSoil"), and the engine's segmentation is the better one nearly always; (2) the engine's margin alone is a good signal
   that a word is a close call (six of the eight wrong OCR words of `hidden-older-ocr` had a margin under 0.6 where the hidden word was right; `hid-margin` 600 takes the ones that are one word for one); (3) the case-folded similarity ignores
   segmentation, so "agree" must be asked together with the word counts.
@@ -8418,4 +8415,10 @@ of its pixels and the layer is invisible. They are outside the pooled corpus (th
 changed for `hidden-older-ocr` (the rules) and `tl-broken-unmapped` (`ar-remeasure` keeps the baseline heights): re-derived by replaying their committed transcripts, no engine ran.
 **Why**: the item asks for agreeing and disagreeing layers, and pdfium is not at hand to record.
 **Alternatives**: adding the two to the corpus (every pooled metric of every gate would move).
+- [ ] **Signed off** (maintainer)
+
+### D383 — An OCR word that replaces a hidden word keeps its glyph run, and a block OCR won wholly from a hidden layer stays `text` too (P7.6; D261, D262, D206)
+**Decision**: `ar-emit-ocr` empties a replacement's glyph run only for a visible text-layer word (D261); one that replaces a hidden word keeps the hidden word's, so the style stage still reads its fill (`sfk-color`) and the line keeps the style class of its neighbours: a heading whose words OCR won had lost its class and `heading-level-acc` fell (1.0 to 0.990 on `pdf/all`). `ar-tag`: when every word of a block that OCR won came from a block-300 rule, the block keeps `text` beside `ocr` (its box, lines and segmentation are the older layer's); `src-ocr-share` counts only blocks that are OCR alone, and it is a lower-is-better metric, so the 0.7296 to 0.7335 was a real (if small) rise, not a neutral share, and is removed rather than excused.
+**Why**: the heading stage and the metric are read as they are; the data say where the words stand.
+**Alternatives**: re-baselining (refused); carrying the style through a new column (the glyph run already is it).
 - [ ] **Signed off** (maintainer)

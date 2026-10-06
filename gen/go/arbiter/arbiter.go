@@ -492,8 +492,11 @@ func arEmitOcr(g int32, cg *port.Cells, refs *port.Cells, ofw *port.Cells, etext
 		port.CellsSet(nfw, (r*24)+12, evidence.OwGet(owords, orow, evidence.HdTlen()))
 		port.CellsSet(nfw, (r*24)+14, evidence.OwGet(owords, orow, evidence.HdConf()))
 		port.CellsSet(nfw, (r*24)+15, -1)
-		port.CellsSet(nfw, (r*24)+17, -1)
-		port.CellsSet(nfw, (r*24)+18, 0)
+		// a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
+		if nt > 0 {
+			port.CellsSet(nfw, (r*24)+17, -1)
+			port.CellsSet(nfw, (r*24)+18, 0)
+		}
 		port.CellsSet(nfw, (r*24)+23, srcs)
 		if nrep != no {
 			orot = evidence.OwGet(owords, orow, 9)
@@ -996,6 +999,7 @@ func ArTag(nodes *port.Cells, regions *port.Cells, nfw *port.Cells, fv *port.Cel
 	var cy int32 = 0
 	var total int32 = 0
 	var nocr int32 = 0
+	var nhid int32 = 0
 	var nsus int32 = 0
 	var nonly int32 = 0
 	var nlow int32 = 0
@@ -1033,6 +1037,7 @@ func ArTag(nodes *port.Cells, regions *port.Cells, nfw *port.Cells, fv *port.Cel
 			if inl == 1 {
 				total = 0
 				nocr = 0
+				nhid = 0
 				nsus = 0
 				nonly = 0
 				nlow = 0
@@ -1049,6 +1054,9 @@ func ArTag(nodes *port.Cells, regions *port.Cells, nfw *port.Cells, fv *port.Cel
 								total += 1
 								if port.CellsAt(fv, (w*8)+1) == model.SrOcr() {
 									nocr += 1
+									if (port.CellsAt(fv, (w*8)+2) >= 300) && (port.CellsAt(fv, (w*8)+2) < 400) {
+										nhid += 1
+									}
 									csum += port.CellsAt(fv, (w*8)+3)
 									if (port.CellsAt(fv, (w*8)+4) & model.FlTextLayerSuspect()) != 0 {
 										nsus += 1
@@ -1074,6 +1082,10 @@ func ArTag(nodes *port.Cells, regions *port.Cells, nfw *port.Cells, fv *port.Cel
 					if nocr == total {
 						allocr = 1
 						conf = csum / nocr
+						// words a hidden layer's rows (block 300) gave to OCR keep the layer's box and line: the block stays `text` too (P7.6)
+						if nhid == nocr {
+							allocr = 2
+						}
 					}
 					suspect = 0
 					if nsus > 0 {
