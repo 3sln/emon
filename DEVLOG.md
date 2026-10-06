@@ -1573,9 +1573,45 @@ analysis beyond "top-to-bottom lines on a single column".
   the probe's 12 digests are equal on four targets, `png-check` green, and the
   measurement is written here. **Not** in scope: transcript PNGs (D090) keep
   stored blocks until a decision moves them to this writer.
-- [ ] **P3.12 — PDF image pixels in kin** (D117, SPEC §10.11 "embedded" and
+- [x] **P3.12 — PDF image pixels in kin** (D117, SPEC §10.11 "embedded" and
   "decoded"). Depends on P3.5 (image placements with CTM and clip in `images`
   rows) and P3.11.
+  **DONE (D340-D342).** `kin/pdfimage.kin` (`emon.pdfimage`), `decode-img` (kind 6) in `kin/plan.kin` and both host loops,
+  the laws `kin/pdfimagetest.kin` (9) and two in `kin/plantest.kin`, and the fixtures `kin/scripts/asset-fixtures`
+  (babashka) -> `test/assets/` (68 PDFs, 113 rows). **Decoded in kin**: Flate (with PNG predictors 10-15), LZW (early
+  change), RunLength, ASCIIHex, ASCII85 (chains of them); 1, 2, 4, 8, 16 bits per component (16 -> 8 by the stated
+  rule); DeviceGray, DeviceRGB, DeviceCMYK (naive), CalGray, CalRGB, ICCBased by `/N` (flag `icc`), Indexed over any of
+  those (palette from a string or a stream); `/Decode` (a table per component; an Indexed image's is its index);
+  `/ImageMask` stencils in the fill colour, `/Mask` colour keys, stencil `/Mask` and `/SMask` of another size (nearest
+  neighbour), `/Matte`; inline images (abbreviated keys and names, `/F /AHx`, an Indexed palette in the dictionary);
+  Separation, DeviceN, Lab and a colour space named from the page's resources (inline) are class 9, answered
+  `colorspace` by `pi-pixels`. **Planned for the host** (`decode-img`, never decoded here): DCT that cannot pass
+  through, JPX, JBIG2 (with globals), CCITT (`K`, `Columns`, `Rows`, `BlackIs1`, `EncodedByteAlign`, `EndOfLine`,
+  `EndOfBlock`); the host's `Bitmap` goes through `pi-adopt` and then the same `/Decode`, colour, mask and `/Matte` code
+  as kin's own samples. **Passthrough** (`pi-passthrough`): the JPEG marker walk (SOF0/1/2 only, 1 or 3 components of 8
+  bits, the SOF size the dictionary's, Exif orientation 1 or none, both endiannesses; SOF3 and 5-7 reason `sof`, 9-15
+  `arithmetic`) plus the dictionary's own conditions (`/Decode`, masks, `/ImageMask`, class, depth, DCT last), with a
+  `pv` enum of 15 reasons. **Orientation and cut**: `pi-orient` (eight codes, `-1` transformed), `pi-view`, `pi-crop`
+  (the visible box in the oriented image's pixels, floor and ceiling, whole at the caller's per-mille).
+  **Verified**: every `D` row's SHA-256 of RGBA8 equals the generator's (exact ratio arithmetic, written separately from
+  kin) on every arm; poppler's `pdfimages -png` equals the expectation (`magick compare -metric AE`, 0) for every gray,
+  RGB, Indexed, LZW, RunLength, ASCIIHex, ASCII85 and predictor case (16-bit held to 1 %: poppler truncates and wraps
+  65535, D342); `pdfimages -all` returns the very bytes of every passing JPEG; 27 hand-made marker-walk cases.
+  **Departures** (D340-D342): (1) the placement rows of `images` carry the box, `rot` and `skewed` but not the CTM, so
+  `pi-orient` takes the matrix as arguments; P3.13 must record the matrix (the rows have a spare cell, 19) or pass it
+  from the interpreter; (2) the unit's payload `Buf` is not plumbed through `plan::run`/`Run` to the fulfiller: the host
+  loops accept, record and replay kind 6 (the transcript key holds the SHA, the payload is never in a transcript) but no
+  unit makes a payload until P3.13 and no fulfiller reads one until P6.1a, which adds the parameter with its first user;
+  (3) the arithmetic-coded JPEG is a baseline JPEG whose SOF0 marker was changed to SOF9 (no arithmetic encoder is
+  installed, and kin only walks markers), JBIG2 streams are bytes of the right shape (no JBIG2 encoder is installed),
+  JPX and CCITT G4 are ImageMagick's, and the Exif block is built by the generator (ImageMagick's `-orient` writes none);
+  (4) `kin/scripts/asset-fixtures --check` (regenerate into a temporary directory and compare byte for byte, 127 files) is
+  in `bb unit` beside the other fixture checks and skips loudly when `magick`, `pdfimages` or `qpdf` is missing or the
+  ImageMagick is not the one in `test/assets/version.txt` (its JPEG and PNG encoders are in the bytes); (5) `pd-filter-code` of `emon.pdfdoc` is public now (nothing else changed there), and
+  `tools/pdfxnames.clj` has nine more names (`Matte K Rows BlackIs1 EncodedByteAlign EndOfLine EndOfBlock JBIG2Globals
+  DP`), appended. **Not in scope here**: the PNG encoding of these pixels and the Model (P3.13), crops of a scan or a
+  raster input (`cropped` at P8.5/P3.13), host decoders (P6.1a), 2-pass mask codecs, `/Mask` or `/SMask` on an image the
+  host decodes with its own alpha (JPX `/SMaskInData`).
   *Brief*: `kin/pdfimage.kin` (`emon.pdfimage`). (1) `pi-info`: an image XObject or
   an inline image (`BI`…`EI`, whose abbreviations `/W /H /BPC /CS /D /F /DP /IM`
   and abbreviated filter and colour-space names are expanded) → a `Cells` record:
@@ -7995,4 +8031,22 @@ renders a page for nothing.
 ### D259 — A manually triggered GitHub Actions workflow runs every gate and `unit red` in parallel jobs (SPEC 15.3)
 **Decision**: `gates.yml` (`workflow_dispatch` only: `groups` all | unit-only | fast-only, `ref`) checks emon and `3sln/kin` out side by side (`../kin`) and runs, on `ubuntu-latest`: `bb unit ARM` and `bb unit red ARM` per arm (go, rust, java, csharp; `unit red` now takes an optional arm), and `bb gates G...` shards for the rest (`bb gates` now takes gate names; its completeness check still runs). A summary job compares the four arms' law counts (`bb ci laws-compare`, what `bb unit` does in one process) and fails if any selected job failed; `bb ci coverage` (in the `static` shard) fails if a gate of `kin/scripts/gates` is in no shard or the workflow calls a missing bb task. Toolchains are pinned to the maintainer's (bb 1.3.190, Rust 1.92.0, Go 1.21, Temurin 25, .NET 10, ImageMagick 7 by AppImage, Python oracles at the versions of `~/.cache/emon/pylib`). Tesseract and pdfium are NOT installed: `ocr` and `render` replay committed transcripts (D127, D216). The corpus (`formats`, `financial`: all `png-check` and `image` read) is written from repository secrets into `.env`, pulled by `bb corpus-pull` only when `bb corpus-index-sha` (the SHA-256 of the remote `index.json`) changes, and cached under that key; missing secrets fail the run with a message naming them.
 **Why**: the gates take over an hour serially and nothing runs them but the maintainer's machine; sharding them is the cheapest way to a second opinion, and manual-only keeps a 12 GB corpus's credentials and minutes out of every push. Linux differences, not yet measured: poppler is Ubuntu's (older than macOS's), which `content-check` uses only for word-box comparison, and ImageMagick's version is whatever the AppImage is; a first run decides whether either needs pinning.
+- [ ] **Signed off** (maintainer)
+
+### D340 — `decode-img` (kind 6) is in the host loops now: the bytes are named, the payload is not plumbed yet (P3.12; D117, D089, SPEC 7.3)
+**Decision**: (1) `emon.plan` has `pk-decode-img` 6, `rq-decode-img` (31 arguments after the id: `filter w h comps bpc k columns rows ccitt-flags`, then `where offset length sha*8` and `gwhere goffset glength gsha*8`; `where` an input index, or -2 for the unit's payload `Buf`; `gwhere` -1 for no globals) and the readers `dq-*`, held by `plantest`; the answer is a `decode` answer. `sha` is zero for an input's span and the SHA-256 (eight big-endian words) of the bytes kin made otherwise, so the record, which is the transcript key, never holds bytes and different bytes are a different key (a replay of them answers `transcript-miss`). The globals are always put in the payload (they are a stream's decoded bytes). `ccitt-flags`: 1 BlackIs1, 2 EncodedByteAlign, 4 EndOfLine, 8 EndOfBlock false. `comps` is the colour space's for DCT and CCITT and 0 otherwise. (2) Rust (`plan.rs`) and Go (`plan.go`) accept kind 6 from a unit, give it the transcript name `decode-img` and read it back; nothing else in the loop changed. (3) **Not done**: handing the unit's payload to the fulfiller. No unit makes a payload until P3.13 and no fulfiller reads one until P6.1a; adding a parameter to `run`/`Run` and to `Fulfiller::start` with no user would be an API with nothing to hold it to, so it comes with P6.1a, which has the host decoder to test it against (the brief's "payload never in a transcript" already holds: an `Entry` is the request, the answer and the answer's bitmap).
+**Why**: the record is what both hosts and kin must agree on; the payload is a host-memory matter.
+**Alternatives**: carrying the bytes in the request (a transcript would hold input-derived bytes: SPEC 7.3 forbids it); one payload offset per codec (the globals need a second span anyway).
+- [ ] **Signed off** (maintainer)
+
+### D341 — The image record, the decode table, the host's pixels, orientation and cut, as built (P3.12; D117, SPEC 10.11)
+**Decision**: (1) **One `Cells` a record**: a 128-cell header, a 1,024-cell palette slab and four 256-entry decode tables; `pi-info` (an XObject) and `pi-info-inline` (a content stream's `BI`: the dictionary is parsed between synthetic `<<` `>>`, its data span found by length when there is no filter and by the first `EI` that stands alone otherwise) fill it; a mask has its own. (2) **`/Decode` is a table**, not arithmetic per pixel: value `floor((d0*M + v*(d1-d0)) * 255 / M + 1/2)` over the sample reduced to at most 8 bits (16 -> 8 first, as SPEC 10.11 orders it); for an Indexed image the same without the 255 gives the index, clamped to `hival`. A `/Decode` equal to the default is not "present" (`PI_DECODE` 0). (3) **The host's pixels are the authority on size and colour**: `pi-adopt` takes the answer's width, height and 1 or 3 channels; a class that disagrees (a 4-component DCT the host made RGB, a JPX with no colour space) becomes gray or RGB, the dictionary's `/Decode` is then not applied, and a bilevel image keeps its own 1, 2 or 4 bits (a host pixel of 0 or 255 is a sample of 0 or the maximum). (4) **Masks**: `/SMask` wins over `/Mask`; the `/Matte` is read from the soft mask's own dictionary, as the standard has it, and converted to 8-bit values; the un-premultiplication rounds half away from zero and clamps; a colour key is compared with the sample reduced to at most 8 bits; the mask pixel of the source pixel (x, y) is `(floor(x * mw / w), floor(y * mh / h))`. (5) **Orientation codes** (what `pi-orient` answers and `pi-view` takes): 0 upright, 1 mirrored left-right, 2 half a turn, 3 mirrored top-bottom, 4 a quarter turn clockwise, 5 counter-clockwise, 6 transposed, 7 anti-transposed, from the signs of `[a b c d]` in PDF user space with an entry under 1/1024 of the largest taken as zero (the generator derives the codes from where the image's corners land, independently); the cut (`pi-crop`) is made in the ORIENTED image's pixels from the visible box (clip box and placement box, page space, centipoints), floor at the low edges and ceiling at the high, and the image stays whole when the visible area is at least `whole` per mille of the box. (6) **Passthrough** is the image's, not the placement's: whole, upright and `asset-pixels` stay with the caller (P3.13); an `Indexed` space, a filter after DCT, a non-8 depth and any `/Mask` are reasons (`pv`, 15 of them, codes never reused). (7) `pi-pixels` is a loop over the output pixels; it allocates nothing, the caller makes the `Bitmap`s (its speed is not measured here: the pixel count is bounded by `asset-pixels`, P3.13).
+**Why**: each is a reading of SPEC 10.11 where the sentence leaves room; the generator's rows hold them.
+**Alternatives**: floating point (no: four targets); applying `/Decode` before the 16 -> 8 reduction (the spec's order is the other way).
+- [ ] **Signed off** (maintainer)
+
+### D342 — The P3.12 fixtures are the generator's, with poppler as the second opinion where its rules are the standard's (P3.12; D117)
+**Decision**: `kin/scripts/asset-fixtures` (babashka) writes `test/assets/` from deterministic source samples (SplitMix, the extremes common) and the expected pixels in Clojure ratios, written apart from kin. Poppler is held to the expectation (`pdfimages -png`, `magick compare -metric AE`) for every gray, RGB, Indexed and filter case; not for CMYK (its conversion is not the naive one), masks and `/Matte` (`pdfimages` does not apply them), nor 16 bits exactly: poppler's 16-bit PNG of a sample of 65535 or 65534 is 0, and it truncates where the standard rounds, so the 16-bit file poppler is held to has no sample above 60,000 and a 1 % fuzz, and the file with every extreme is the generator's alone. Every JPEG that passes through is extracted with `pdfimages -all` and compared byte for byte with the embedded file. The encrypted case is qpdf's AES-128 copy of the Flate RGB case (the same object numbers). The corpus was written with ImageMagick 7.1.1-33, poppler 26.08.0 and qpdf 12.4.2 (`test/assets/version.txt`).
+**Why**: an expectation that shares code with the thing it checks proves agreement and nothing else.
+**Alternatives**: committed PNGs as the truth (they come from the same generator), `pdfimages` for everything (it is wrong at 16 bits and silent about masks).
 - [ ] **Signed off** (maintainer)

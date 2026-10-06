@@ -39,7 +39,9 @@
    ["OCProperties" "oc-properties"] ["OCGs" "ocgs"] "OCG" "OCMD" "BaseState" ["ON" "on-upper"] ["OFF" "off-upper"]
    "Event" "Category" "Usage" "View" "ViewState" "Print" "PrintState" "Export" "ExportState"
    "AllOn" "AnyOn" "AnyOff" "AllOff" ["VE" "ve"] "And" "Or" "Not" "Unchanged"
-   "ShadingType" "PatternType" "Extend"])
+   "ShadingType" "PatternType" "Extend"
+   ;; image XObjects and inline images (P3.12, D117): /Matte, the CCITT parameters, the JBIG2 globals, an inline image's /DP
+   "Matte" "K" "Rows" "BlackIs1" "EncodedByteAlign" "EndOfLine" "EndOfBlock" "JBIG2Globals" "DP"])
 
 ;; XMP (P3.9): namespace URIs and the local names the reader meets, as [symbol string].
 (def xstrings

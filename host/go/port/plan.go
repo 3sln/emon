@@ -30,11 +30,12 @@ import (
 
 // The numbers are `emon.plan`'s (a kin law holds them; the driver asserts them).
 const (
-	PlanKindRender int32 = 1
-	PlanKindDecode int32 = 2
-	PlanKindOcr    int32 = 3
-	PlanKindBytes  int32 = 4
-	PlanKindCrop   int32 = 5
+	PlanKindRender    int32 = 1
+	PlanKindDecode    int32 = 2
+	PlanKindOcr       int32 = 3
+	PlanKindBytes     int32 = 4
+	PlanKindCrop      int32 = 5
+	PlanKindDecodeImg int32 = 6
 
 	PlanStatusOk     int32 = 0
 	PlanStatusFailed int32 = 1
@@ -210,7 +211,7 @@ func planReadRequests(rq *Cells, answered map[int32]bool) ([]PlanRequest, error)
 			return nil, planErr("bad-record", "a request at %d has length %d", at, ln)
 		}
 		rec := planRecordAt(rq, at, ln)
-		if rec[1] < PlanKindRender || (rec[1] > PlanKindOcr && rec[1] != PlanKindCrop) {
+		if rec[1] < PlanKindRender || (rec[1] > PlanKindOcr && rec[1] != PlanKindCrop && rec[1] != PlanKindDecodeImg) {
 			return nil, planErr("bad-record", "request %d has kind %d, which kin may not ask for", rec[2], rec[1])
 		}
 		if rec[2] < 1 {
@@ -401,6 +402,8 @@ func planKindName(k int32) string {
 		return "ocr"
 	case PlanKindCrop:
 		return "crop"
+	case PlanKindDecodeImg:
+		return "decode-img"
 	}
 	return "unknown"
 }
@@ -415,6 +418,8 @@ func planKindCode(s string) (int32, bool) {
 		return PlanKindOcr, true
 	case "crop":
 		return PlanKindCrop, true
+	case "decode-img":
+		return PlanKindDecodeImg, true
 	}
 	return 0, false
 }

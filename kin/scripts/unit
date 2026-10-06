@@ -161,6 +161,15 @@ kin/scripts/para-check
 # (the colours of the colour-space fixture come from its second evaluator). The laws of kin/pdfvistest.kin are the gate.
 kin/scripts/vis-fixtures --check
 
+# THE ASSET FIXTURES (P3.12, D340-D342; babashka): the PDFs, source images and expectation rows of test/assets are what
+# kin/scripts/asset-fixtures writes. It needs ImageMagick, pdfimages (poppler) and qpdf, and the ImageMagick that wrote the
+# corpus (its encoders are in the bytes): without them it SKIPS, loudly. The laws of kin/pdfimagetest.kin are the gate.
+if command -v magick > /dev/null && command -v pdfimages > /dev/null && command -v qpdf > /dev/null; then
+  kin/scripts/asset-fixtures --check
+else
+  echo "  SKIP asset-fixtures --check: magick, pdfimages and qpdf are all needed (test/assets is read as committed)"
+fi
+
 # THE HEADING STAGE'S INDEPENDENT WITNESS (P4.2, P4.4, D167-D171; babashka, reads only committed files): the
 # headings of each golden Model in test/heading are, in order, the headings of the synthetic gold (the HTML's
 # own): text, level, number and numbering scheme; each is the first child of a section of its own level, and

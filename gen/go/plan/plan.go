@@ -27,6 +27,10 @@ func PkCrop() int32 {
 	return 5
 }
 
+func PkDecodeImg() int32 {
+	return 6
+}
+
 func PsOk() int32 {
 	return 0
 }
@@ -354,6 +358,112 @@ func RqBytes(c *port.Cells, id int32, input int32, offset int32, length int32) i
 	port.CellsPush(c, length)
 	RecEnd(c, at)
 	return at
+}
+
+func RqDecodeImg(c *port.Cells, id int32, filter int32, w int32, h int32, comps int32, bpc int32, k int32, columns int32, rows int32, ccitt int32, where int32, offset int32, length int32, shas *port.Cells, shaat int32, gwhere int32, goffset int32, glength int32, gshaat int32) int32 {
+	// Ask the host to decode a PDF image's codestream (kind 6): see the header. `shas` is a Cells holding the eight
+	// words of each SHA-256, the data's from index `shaat` and the globals' from `gshaat`; the words of a span that is
+	// an input's are zero.
+	var at int32 = RecBegin(c, PkDecodeImg(), id)
+	var i int32 = 0
+	port.CellsPush(c, filter)
+	port.CellsPush(c, w)
+	port.CellsPush(c, h)
+	port.CellsPush(c, comps)
+	port.CellsPush(c, bpc)
+	port.CellsPush(c, k)
+	port.CellsPush(c, columns)
+	port.CellsPush(c, rows)
+	port.CellsPush(c, ccitt)
+	port.CellsPush(c, where)
+	port.CellsPush(c, offset)
+	port.CellsPush(c, length)
+	for i < 8 {
+		port.CellsPush(c, port.CellsAt(shas, shaat+i))
+		i += 1
+	}
+	port.CellsPush(c, gwhere)
+	port.CellsPush(c, goffset)
+	port.CellsPush(c, glength)
+	i = 0
+	for i < 8 {
+		port.CellsPush(c, port.CellsAt(shas, gshaat+i))
+		i += 1
+	}
+	RecEnd(c, at)
+	return at
+}
+
+func DqFilter() int32 {
+	return 0
+}
+
+func DqW() int32 {
+	return 1
+}
+
+func DqH() int32 {
+	return 2
+}
+
+func DqComps() int32 {
+	return 3
+}
+
+func DqBpc() int32 {
+	return 4
+}
+
+func DqK() int32 {
+	return 5
+}
+
+func DqColumns() int32 {
+	return 6
+}
+
+func DqRows() int32 {
+	return 7
+}
+
+func DqCcitt() int32 {
+	return 8
+}
+
+func DqWhere() int32 {
+	return 9
+}
+
+func DqOffset() int32 {
+	return 10
+}
+
+func DqLength() int32 {
+	return 11
+}
+
+func DqSha() int32 {
+	return 12
+}
+
+func DqGwhere() int32 {
+	return 20
+}
+
+func DqGoffset() int32 {
+	return 21
+}
+
+func DqGlength() int32 {
+	return 22
+}
+
+func DqGsha() int32 {
+	return 23
+}
+
+func DqNargs() int32 {
+	return 31
 }
 
 func AnStatus(c *port.Cells, at int32) int32 {

@@ -662,7 +662,7 @@ pub(crate) fn pd_nth(ar: &mut crate::port::Cells, arr: i32, i: i32) -> i32 {
     }
     return k;
 }
-pub(crate) fn pd_filter_code(ar: &mut crate::port::Cells, h: i32) -> i32 {
+pub fn pd_filter_code(ar: &mut crate::port::Cells, h: i32) -> i32 {
     // A filter name (or an inline image's abbreviation) as a `pf-filter`
     // code; 0 for a name that is not a filter.
     if (pl_name_is(ar, h, pn_flate_decode()) == 1) || (pl_name_is(ar, h, pn_fl()) == 1) {

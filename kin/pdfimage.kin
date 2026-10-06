@@ -1,0 +1,1328 @@
+;; PDF IMAGE PIXELS IN kin (P3.12; D117, D340-D342, SPEC 10.11 "embedded" and "decoded"). emon's own module (D039),
+;; written from ISO 32000-1 8.9 (images), 7.4 (filters), the JPEG (ITU T.81) marker syntax and the Exif orientation tag.
+;;
+;;   pi-info          an image XObject (a stream handle) -> the INFO record, a `Cells`
+;;   pi-info-inline   an inline image (BI ... ID ... EI of a content stream, in a `Cells`) -> the same record
+;;   pi-passthrough   SPEC 10.11's JPEG conditions, by a walk of the markers: 0, or a `pv` reason
+;;   pi-samples       the image's raw samples through kin's own filters (raw, Flate, LZW, RunLength, ASCII, predictors),
+;;                    or, for an image codec (DCT that cannot pass through, JPX, JBIG2, CCITT), "ask the host"
+;;   pi-adopt         the host's pixels (a `Bitmap` the decode answer carried) take the place of samples
+;;   pi-pixels        samples or the host's pixels -> a gray or RGB `Bitmap` and a one-channel alpha `Bitmap`, in integers
+;;   pi-orient        the eight rectilinear orientations of a placement's matrix (else -1, `transformed`)
+;;   pi-view, pi-crop the oriented view of the image and the cut to the visible part
+;;   pi-request       a codec image -> a `decode-img` request (kind 6, `emon.plan`)
+;;
+;; NOTHING HERE DECODES A CODEC. DCT, JPX, JBIG2 and CCITT are the host's (D058, D187): kin plans a `decode-img` request
+;; and gets a `Bitmap`; the pixels are the codestream's, and kin applies `/Decode`, colour, masks and `/Matte` to
+;; them as it does to its own samples, so the two routes give one image. kin NEVER reads a file (D058): every byte
+;; is in a `Src` (the document) or a `Cells` (a content stream, a decoded stream).
+;;
+;; THE INFO RECORD is one `Cells`, `im` (a fixed header of `PI_HDR` cells, then a palette slab of 1,024 cells and a
+;; decode table of 1,024). Read it with `pi-get` and the `pi-f-*` names; `pi-reset` clears it. A mask has its own record
+;; (a stencil `/Mask` and an `/SMask` are image XObjects), made by the same call, and `pi-pixels` takes both.
+;;
+;; THE CASES this decides, as SPEC 10.11 lists them. COLOUR: DeviceGray, DeviceRGB, DeviceCMYK (naive: `r = 255 -
+;; min(255, c + k)`), CalGray and CalRGB (as gray and RGB), ICCBased by `/N` (1, 3, 4; flag `icc`), Indexed over any
+;; of those (the palette from a string or a stream); Separation, DeviceN, Lab and a colour space this module cannot
+;; name are class 9 (`colorspace`), and `pi-pixels` answers 1. A colour space an INLINE image names from the page's
+;; resources is class 9 as well (the resources are not here). BITS: 1, 2, 4, 8 and 16 per component; 16 -> 8 is
+;; `(v * 255 + 32767) / 65535`. `/Decode`: a table per component, `floor((d0*M + v*(d1-d0))*255 / M + 1/2)` in integers
+;; over the 8-bit value (an Indexed image's decoded value is the index). MASKS: `/ImageMask` is a stencil in the fill
+;; colour (alpha 255 where the decoded sample is 0), `/Mask` colour-key ranges (alpha 0 where every component is in its
+;; range), `/Mask` stencil and `/SMask` of any size (nearest neighbour, `floor(x * mw / w)`), and `/Matte`
+;; un-premultiplied: `c = m + (c' - m) * 255 / a`, rounded half away from zero, 0 where `a` is 0.
+;;
+;; THE ROW LAYOUT of samples is the PDF's: `ceil(w * ncomp * bpc / 8)` bytes a row, top row first. A sample past the
+;; end of a short stream is 0 (D030: a damaged stream still yields what could be read).
+(ns emon.pdfimage
+  (:require [emon.lang :refer [I32 I64 Src Cells Bitmap Buf defenum i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop cells-bytes bitmap-w bitmap-h
+                               bitmap-channels bitmap-u8 bitmap-set-u8 buf-len buf-push src-of-cells
+                               crypto-sha256]]
+            [emon.pdfsrc :refer [ps-u8 ps-missed]]
+            [emon.pdfnames :refer [pn-width pn-w pn-f pn-height pn-bits-per-component pn-color-space pn-filter
+                                   pn-decode-parms pn-columns pn-n pn-predictor pn-colors pn-early-change
+                                   pn-device-gray pn-device-rgb pn-device-cmyk]]
+            [emon.pdfxnames :refer [px-h px-bpc px-cs px-d px-decode px-im px-image-mask px-mask px-s-mask
+                                    px-matte px-k px-rows px-black-is1 px-encoded-byte-align px-end-of-line
+                                    px-end-of-block px-jbig2-globals px-dp px-g px-rgb px-cmyk px-i
+                                    px-cal-gray px-cal-rgb px-icc-based px-indexed]]
+            [emon.pdfx :refer [px-is px-get px-dget px-nth px-int-of]]
+            [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-count pl-int-value pl-name-is pl-stream-dict
+                                 pl-stream-start pl-stream-len pl-str-len pl-str-byte pl-seek pl-parse
+                                 pl-is-ws]]
+            [emon.pdfdoc :refer [pd-resolve pd-dget pd-dint pd-stream-plan pd-run-plan pd-filter-code]]
+            [emon.pdffilter :refer [pf-run pf-predict]]
+            [emon.pdfgfx :refer [gx-num]]
+            [emon.fx :refer [fx-one fx-abs fx-get fx-put]]
+            [emon.plan :refer [rq-decode-img flt-dct flt-jpx flt-jbig2 flt-ccitt]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+;; ------------------------------------------------------------------ the record
+
+(defconst ^I32 PI_OBJ 0)       ;; the XObject's object number; -1 an inline image
+(defconst ^I32 PI_W 1)
+(defconst ^I32 PI_H 2)
+(defconst ^I32 PI_BPC 3)       ;; as the dictionary says (an ImageMask is 1); 8 when absent or odd
+(defconst ^I32 PI_CLASS 4)     ;; 0 stencil, 1 gray, 2 RGB, 3 CMYK, 4 Indexed, 9 not read
+(defconst ^I32 PI_NCOMP 5)     ;; samples per pixel as stored (an Indexed image has 1)
+(defconst ^I32 PI_BASE 6)      ;; Indexed: the base class 1, 2 or 3
+(defconst ^I32 PI_ICCN 7)      ;; an ICCBased space's /N
+(defconst ^I32 PI_HIVAL 8)
+(defconst ^I32 PI_DECODE 9)    ;; 1 when /Decode is present and not the default
+(defconst ^I32 PI_IMASK 10)
+(defconst ^I32 PI_MKIND 11)    ;; 0 none, 1 colour key, 2 stencil /Mask, 3 /SMask
+(defconst ^I32 PI_MOBJ 12)     ;; the object number of the stencil or the soft mask
+(defconst ^I32 PI_MATTE 13)    ;; 1 when /Matte is present (a gray or RGB one)
+(defconst ^I32 PI_NF 14)       ;; filters in the chain
+(defconst ^I32 PI_CODEC 15)    ;; the `pf-filter` code of an image filter that ends the chain, else 0
+(defconst ^I32 PI_OWN 16)      ;; 1: the codec's bytes are exactly the input's span (not decrypted, no other filter)
+(defconst ^I32 PI_SSTART 17)   ;; the stream's span in the input
+(defconst ^I32 PI_SLEN 18)
+(defconst ^I32 PI_K 19)        ;; CCITT /K
+(defconst ^I32 PI_COLS 20)     ;; CCITT /Columns
+(defconst ^I32 PI_ROWS 21)     ;; CCITT /Rows
+(defconst ^I32 PI_CFLAGS 22)   ;; CCITT: 1 BlackIs1, 2 EncodedByteAlign, 4 EndOfLine, 8 EndOfBlock false
+(defconst ^I32 PI_GOBJ 23)     ;; JBIG2Globals' object number
+(defconst ^I32 PI_DSTART 24)   ;; inline: the data's span in the content stream
+(defconst ^I32 PI_DEND 25)
+(defconst ^I32 PI_DNEXT 26)    ;; inline: where the lexer goes on (after `EI`)
+(defconst ^I32 PI_FLAGS 27)    ;; 1 icc, 2 an inline colour space named from the resources, 4 chain too long
+(defconst ^I32 PI_ORI 28)
+(defconst ^I32 PI_VX0 29)      ;; the view: a rectangle of the ORIENTED image, in its pixels
+(defconst ^I32 PI_VY0 30)
+(defconst ^I32 PI_VX1 31)
+(defconst ^I32 PI_VY1 32)
+(defconst ^I32 PI_UB 33)       ;; 1: pixels come from the host's `Bitmap` (`pi-adopt`)
+(defconst ^I32 PI_CKEY 36)     ;; 8 cells: colour-key ranges
+(defconst ^I32 PI_MAT 44)      ;; 3 cells: /Matte as 8-bit values
+(defconst ^I32 PI_DEC 48)      ;; 16 cells: /Decode as Fx pairs, four components
+(defconst ^I32 PI_FC 64)       ;; 8 cells: the filter codes
+(defconst ^I32 PI_FP 72)       ;; 8 cells: each filter's /DecodeParms handle
+(defconst ^I32 PI_PAR 80)      ;; 48 cells: per filter predictor colors bpc columns early (and one spare)
+(defconst ^I32 PI_HDR 128)
+(defconst ^I32 PI_PAL 128)     ;; 1,024 cells: the Indexed palette, bytes
+(defconst ^I32 PI_TAB 1152)    ;; 1,024 cells: four tables of 256
+(defconst ^I32 PI_SIZE 2176)
+
+(defn ^:pub ^I32 pi-get [^Cells im ^I32 f] (return (cells-at im f)))
+(defn ^:pub ^I32 pi-f-obj [] (return PI_OBJ))
+(defn ^:pub ^I32 pi-f-w [] (return PI_W))
+(defn ^:pub ^I32 pi-f-h [] (return PI_H))
+(defn ^:pub ^I32 pi-f-bpc [] (return PI_BPC))
+(defn ^:pub ^I32 pi-f-class [] (return PI_CLASS))
+(defn ^:pub ^I32 pi-f-ncomp [] (return PI_NCOMP))
+(defn ^:pub ^I32 pi-f-base [] (return PI_BASE))
+(defn ^:pub ^I32 pi-f-iccn [] (return PI_ICCN))
+(defn ^:pub ^I32 pi-f-hival [] (return PI_HIVAL))
+(defn ^:pub ^I32 pi-f-decode [] (return PI_DECODE))
+(defn ^:pub ^I32 pi-f-imask [] (return PI_IMASK))
+(defn ^:pub ^I32 pi-f-mkind [] (return PI_MKIND))
+(defn ^:pub ^I32 pi-f-mobj [] (return PI_MOBJ))
+(defn ^:pub ^I32 pi-f-matte [] (return PI_MATTE))
+(defn ^:pub ^I32 pi-f-nf [] (return PI_NF))
+(defn ^:pub ^I32 pi-f-codec [] (return PI_CODEC))
+(defn ^:pub ^I32 pi-f-own [] (return PI_OWN))
+(defn ^:pub ^I32 pi-f-sstart [] (return PI_SSTART))
+(defn ^:pub ^I32 pi-f-slen [] (return PI_SLEN))
+(defn ^:pub ^I32 pi-f-k [] (return PI_K))
+(defn ^:pub ^I32 pi-f-cols [] (return PI_COLS))
+(defn ^:pub ^I32 pi-f-rows [] (return PI_ROWS))
+(defn ^:pub ^I32 pi-f-cflags [] (return PI_CFLAGS))
+(defn ^:pub ^I32 pi-f-gobj [] (return PI_GOBJ))
+(defn ^:pub ^I32 pi-f-flags [] (return PI_FLAGS))
+(defn ^:pub ^I32 pi-f-dstart [] (return PI_DSTART))
+(defn ^:pub ^I32 pi-f-dend [] (return PI_DEND))
+(defn ^:pub ^I32 pi-f-dnext [] (return PI_DNEXT))
+
+;; Why a JPEG does not pass through (SPEC 10.11). Codes are never reused (D050).
+(defenum ^:pub pv
+  [[pv-ok 0 "ok"]
+   [pv-not-dct 1 "not-dct"]
+   [pv-chain 2 "dct-not-last"]
+   [pv-bad-jpeg 3 "bad-jpeg"]
+   [pv-arithmetic 4 "arithmetic"]
+   [pv-sof 5 "sof"]
+   [pv-components 6 "components"]
+   [pv-precision 7 "precision"]
+   [pv-colorspace 8 "colorspace"]
+   [pv-bpc 9 "bpc"]
+   [pv-decode 10 "decode"]
+   [pv-mask 11 "mask"]
+   [pv-smask 12 "smask"]
+   [pv-imagemask 13 "imagemask"]
+   [pv-exif 14 "exif-orientation"]
+   [pv-size 15 "size"]])
+
+(defn ^:pub ^I32 pi-reset [^:mut ^Cells im]
+  (let [^:mut ^I32 i 0]
+    (cells-drop im 0)
+    (while (< i PI_SIZE)
+      (do (cells-push im 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+;; --------------------------------------------------------------- small helpers
+
+(defn ^I32 pi-int [^Cells ar ^I32 h ^I32 dflt]
+  (return (px-int-of ar h dflt)))
+
+(defn ^I32 pi-bool [^Cells ar ^I32 h]
+  (if (== h 0) (return 0))
+  (if (and (== (pl-kind-of ar h) 1) (== (pl-int-value ar h) 1)) (return 1))
+  (return 0))
+
+(defn ^I32 pi-not-true [^Cells ar ^I32 h]
+  (comment "1 when the value is the boolean false (an absent value is the default, true).")
+  (if (== h 0) (return 0))
+  (if (and (== (pl-kind-of ar h) 1) (== (pl-int-value ar h) 0)) (return 1))
+  (return 0))
+
+(defn ^I32 pi-nth-r [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                     ^I32 arr ^I32 i]
+  (comment "Element i of an array, resolved; 0 when there is none.")
+  (let [^I32 e (px-nth ar arr i)]
+    (if (== e 0) (return 0))
+    (return (pd-resolve src ar dc a b st e))))
+
+(defn ^I32 pi-ref-num [^Cells ar ^I32 raw]
+  (comment "The object number of a raw value that is a reference, else 0.")
+  (if (== raw 0) (return 0))
+  (if (== (pl-kind-of ar raw) 9) (return (pl-int-value ar raw)))
+  (return 0))
+
+(defn ^I32 pi-clamp-i [^I64 v ^I32 hi]
+  (if (> v (i64 hi)) (return hi))
+  (if (< v (i64 0)) (return 0))
+  (return (i32 v)))
+
+(defn ^I32 pi-byte-of [^I64 v]
+  (comment "A number in 0..1 (Fx) as 0..255, rounded half up.")
+  (let [^I64 t (add64 (mul64 v (i64 255)) (i64 8388608))]
+    (if (< t (i64 0)) (return 0))
+    (return (pi-clamp-i (quot t (i64 16777216)) 255))))
+
+(defn ^I32 pi-comps-of [^I32 cls]
+  (if (== cls 1) (return 1))
+  (if (== cls 2) (return 3))
+  (if (== cls 3) (return 4))
+  (return 1))
+
+(defn ^I32 pi-maxv [^I32 bits]
+  (let [^:mut ^I32 m 1
+        ^:mut ^I32 i 0]
+    (while (< i bits)
+      (do (set m (* m 2))
+          (set i (+ i 1))))
+    (return (- m 1))))
+
+(defn ^I32 pi-b [^Cells d ^I32 i]
+  (if (or (< i 0) (>= i (cells-len d))) (return 0))
+  (return (cells-at d i)))
+
+;; ------------------------------------------------------------------- colour space
+
+(defn ^I32 pi-cs-simple [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                         ^:mut ^Cells im ^I32 cs]
+  (comment "The class of a colour space that is not Indexed: 1 gray, 2 RGB, 3 CMYK, 9 not read; 8 for an Indexed one;")
+  (comment "0 when there is none. An ICCBased space notes `icc` and its /N.")
+  (if (== cs 0) (return 0))
+  (let [^I32 k (pl-kind-of ar cs)
+        ^:mut ^I32 head 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 n 0]
+    (if (== k 4)
+      (do (if (or (== (pl-name-is ar cs (pn-device-gray)) 1) (== (px-is ar cs (px-g)) 1)) (return 1))
+          (if (or (== (pl-name-is ar cs (pn-device-rgb)) 1) (== (px-is ar cs (px-rgb)) 1)) (return 2))
+          (if (or (== (pl-name-is ar cs (pn-device-cmyk)) 1) (== (px-is ar cs (px-cmyk)) 1)) (return 3))
+          (return 9)))
+    (if (!= k 6) (return 9))
+    (set head (pi-nth-r src ar dc a b st cs 0))
+    (if (== head 0) (return 9))
+    (if (or (== (px-is ar head (px-indexed)) 1) (== (px-is ar head (px-i)) 1)) (return 8))
+    (if (== (px-is ar head (px-cal-gray)) 1) (return 1))
+    (if (== (px-is ar head (px-cal-rgb)) 1) (return 2))
+    (if (== (px-is ar head (px-icc-based)) 1)
+      (do (set s (pi-nth-r src ar dc a b st cs 1))
+          (if (== s 0) (return 9))
+          (if (!= (pl-kind-of ar s) 8) (return 9))
+          (set d (pl-stream-dict ar s))
+          (set n (pd-dint src ar dc a b st d (pn-n) 0))
+          (cells-set im PI_ICCN n)
+          (cells-set im PI_FLAGS (bit-or (cells-at im PI_FLAGS) 1))
+          (if (== n 1) (return 1))
+          (if (== n 3) (return 2))
+          (if (== n 4) (return 3))
+          (return 9)))
+    (return 9)))
+
+(defn ^I32 pi-stream-into [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                           ^I32 sh ^:mut ^Cells out]
+  (comment "The decoded bytes of stream `sh` into `out` (what `pd-stream-data` does).")
+  (let [^I32 plan (pd-stream-plan src ar dc a b st sh)]
+    (return (pd-run-plan src ar plan sh b st out))))
+
+(defn ^I32 pi-cs-read [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                       ^:mut ^Cells out ^:mut ^Cells im ^I32 cs]
+  (comment "The colour space into the record: class, components, and an Indexed palette (from a string or a stream).")
+  (let [^I32 c (pi-cs-simple src ar dc a b st im cs)
+        ^:mut ^I32 base 0
+        ^:mut ^I32 hival 0
+        ^:mut ^I32 lk 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 want 0
+        ^:mut ^I32 i 0]
+    (if (== c 0)
+      (do (cells-set im PI_CLASS 9)
+          (cells-set im PI_NCOMP 1)
+          (return 0)))
+    (if (!= c 8)
+      (do (cells-set im PI_CLASS c)
+          (cells-set im PI_NCOMP (pi-comps-of c))
+          (return 0)))
+    (comment "Indexed: [/Indexed base hival lookup]")
+    (set lk (pi-nth-r src ar dc a b st cs 1))
+    (set base (pi-cs-simple src ar dc a b st im lk))
+    (if (or (== base 0) (or (== base 8) (== base 9)))
+      (do (cells-set im PI_CLASS 9)
+          (cells-set im PI_NCOMP 1)
+          (return 0)))
+    (set lk (pi-nth-r src ar dc a b st cs 2))
+    (set hival (pi-int ar lk 0))
+    (if (> hival 255) (set hival 255))
+    (if (< hival 0) (set hival 0))
+    (set nb (pi-comps-of base))
+    (set want (* (+ hival 1) nb))
+    (cells-set im PI_CLASS 4)
+    (cells-set im PI_NCOMP 1)
+    (cells-set im PI_BASE base)
+    (cells-set im PI_HIVAL hival)
+    (set lk (pi-nth-r src ar dc a b st cs 3))
+    (if (== lk 0) (return 0))
+    (if (== (pl-kind-of ar lk) 5)
+      (do (while (and (< i want) (< i (pl-str-len ar lk)))
+            (do (cells-set im (+ PI_PAL i) (pl-str-byte ar lk i))
+                (set i (+ i 1))))
+          (return 0)))
+    (if (== (pl-kind-of ar lk) 8)
+      (do (pi-stream-into src ar dc a b st lk out)
+          (while (and (< i want) (< i (cells-len out)))
+            (do (cells-set im (+ PI_PAL i) (cells-at out i))
+                (set i (+ i 1))))
+          (return 0)))
+    (return 0)))
+
+;; ------------------------------------------------------------------ the decode table
+
+(defn ^I32 pi-bpc-eff [^Cells im]
+  (comment "The bit depth the table is indexed by: 16 -> 8; the others as they are.")
+  (let [^I32 bpc (cells-at im PI_BPC)]
+    (if (or (== bpc 1) (or (== bpc 2) (or (== bpc 4) (== bpc 8)))) (return bpc))
+    (return 8)))
+
+(defn ^I32 pi-lut-comps [^Cells im]
+  (let [^I32 c (cells-at im PI_CLASS)]
+    (if (== c 2) (return 3))
+    (if (== c 3) (return 4))
+    (return 1)))
+
+(defn ^I32 pi-build-lut [^:mut ^Cells im]
+  (comment "The decode table: for each component and each value v of the (reduced) sample, the 8-bit decoded value, or")
+  (comment "for an Indexed image the palette index. The default /Decode makes `(v * 255 + M/2) / M`.")
+  (let [^I32 bits (pi-bpc-eff im)
+        ^I32 m (pi-maxv bits)
+        ^I32 nc (pi-lut-comps im)
+        ^I32 indexed (cells-at im PI_CLASS)
+        ^I32 hival (cells-at im PI_HIVAL)
+        ^I64 half (mul64 (i64 m) (i64 8388608))
+        ^I64 den (mul64 (i64 m) (i64 16777216))
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I64 d0 (i64 0)
+        ^:mut ^I64 d1 (fx-one)
+        ^:mut ^I64 num (i64 0)
+        ^:mut ^I64 t (i64 0)
+        ^:mut ^I32 r 0]
+    (while (< c nc)
+      (do (set d0 (i64 0))
+          (set d1 (fx-one))
+          (if (== indexed 4) (set d1 (mul64 (i64 m) (fx-one))))
+          (if (== (cells-at im PI_DECODE) 1)
+            (do (set d0 (fx-get im (+ PI_DEC (* c 4))))
+                (set d1 (fx-get im (+ PI_DEC (+ (* c 4) 2))))))
+          (set v 0)
+          (while (<= v m)
+            (do (set num (add64 (mul64 d0 (i64 m)) (mul64 (i64 v) (- d1 d0))))
+                (if (== indexed 4)
+                  (set t (add64 num half))
+                  (set t (add64 (mul64 num (i64 255)) half)))
+                (if (< t (i64 0))
+                  (set r 0)
+                  (if (== indexed 4)
+                    (set r (pi-clamp-i (quot t den) hival))
+                    (set r (pi-clamp-i (quot t den) 255))))
+                (cells-set im (+ PI_TAB (+ (* c 256) v)) r)
+                (set v (+ v 1))))
+          (set c (+ c 1))))
+    (return 0)))
+
+(defn ^I32 pi-read-decode [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                           ^:mut ^Cells im ^I32 arr]
+  (comment "/Decode into PI_DEC, and PI_DECODE 1 when it differs from the default.")
+  (let [^I32 nc (pi-lut-comps im)
+        ^I32 bpc (cells-at im PI_BPC)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 diff 0
+        ^:mut ^I64 v (i64 0)
+        ^:mut ^I64 want (i64 0)
+        ^:mut ^I32 e 0]
+    (if (== arr 0) (return 0))
+    (if (!= (pl-kind-of ar arr) 6) (return 0))
+    (if (< (pl-count ar arr) (* nc 2)) (return 0))
+    (while (< i (* nc 2))
+      (do (set e (pi-nth-r src ar dc a b st arr i))
+          (set v (gx-num ar e))
+          (fx-put im (+ PI_DEC (* i 2)) v)
+          (set want (i64 0))
+          (if (== (rem i 2) 1)
+            (do (set want (fx-one))
+                (if (== (cells-at im PI_CLASS) 4)
+                  (set want (mul64 (i64 (pi-maxv bpc)) (fx-one))))))
+          (if (!= v want) (set diff 1))
+          (set i (+ i 1))))
+    (cells-set im PI_DECODE diff)
+    (return 0)))
+
+;; ----------------------------------------------------------------- the info record
+
+(defn ^I32 pi-read-chain [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                          ^:mut ^Cells im ^I32 d ^I32 inline]
+  (comment "/Filter and /DecodeParms into the record: the codes, the parameter handles and the predictor parameters of")
+  (comment "the chain, and for an image codec that ends it, its parameters (CCITT, the JBIG2 globals).")
+  (let [^:mut ^I32 fl (pd-dget src ar dc a b st d (pn-filter))
+        ^:mut ^I32 pl (pd-dget src ar dc a b st d (pn-decode-parms))
+        ^:mut ^I32 nf 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 fh 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 last 0
+        ^:mut ^I32 lastp 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 fl2 0
+        ^:mut ^I32 par 0]
+    (if (and (== fl 0) (== inline 1)) (set fl (pd-dget src ar dc a b st d (pn-f))))
+    (if (and (== pl 0) (== inline 1)) (set pl (px-dget src ar dc a b st d (px-dp))))
+    (if (== fl 0) (return 0))
+    (if (== (pl-kind-of ar fl) 4) (set nf 1))
+    (if (== (pl-kind-of ar fl) 6) (set nf (pl-count ar fl)))
+    (if (> nf 8)
+      (do (cells-set im PI_FLAGS (bit-or (cells-at im PI_FLAGS) 4))
+          (set nf 8)))
+    (cells-set im PI_NF nf)
+    (while (< i nf)
+      (do (if (== (pl-kind-of ar fl) 4)
+            (set fh fl)
+            (set fh (pi-nth-r src ar dc a b st fl i)))
+          (set code 0)
+          (if (!= fh 0) (if (== (pl-kind-of ar fh) 4) (set code (pd-filter-code ar fh))))
+          (set ph 0)
+          (if (and (!= pl 0) (== (pl-kind-of ar pl) 6)) (set ph (pi-nth-r src ar dc a b st pl i)))
+          (if (and (!= pl 0) (== (pl-kind-of ar pl) 7) (== nf 1)) (set ph pl))
+          (if (and (!= ph 0) (!= (pl-kind-of ar ph) 7)) (set ph 0))
+          (cells-set im (+ PI_FC i) code)
+          (cells-set im (+ PI_FP i) ph)
+          (set par (+ PI_PAR (* i 6)))
+          (cells-set im par 1)
+          (cells-set im (+ par 1) 1)
+          (cells-set im (+ par 2) 8)
+          (cells-set im (+ par 3) 1)
+          (cells-set im (+ par 4) 1)
+          (if (!= ph 0)
+            (do (cells-set im par (pd-dint src ar dc a b st ph (pn-predictor) 1))
+                (cells-set im (+ par 1) (pd-dint src ar dc a b st ph (pn-colors) 1))
+                (cells-set im (+ par 2) (pd-dint src ar dc a b st ph (pn-bits-per-component) 8))
+                (cells-set im (+ par 3) (pd-dint src ar dc a b st ph (pn-columns) 1))
+                (cells-set im (+ par 4) (pd-dint src ar dc a b st ph (pn-early-change) 1))))
+          (set last code)
+          (set lastp ph)
+          (set i (+ i 1))))
+    (if (and (>= last 7) (<= last 10))
+      (do (cells-set im PI_CODEC last)
+          (if (== last 9)
+            (do (set v (px-dget src ar dc a b st lastp (px-k)))
+                (cells-set im PI_K (pi-int ar v 0))
+                (set v (pd-dget src ar dc a b st lastp (pn-columns)))
+                (cells-set im PI_COLS (pi-int ar v 1728))
+                (set v (px-dget src ar dc a b st lastp (px-rows)))
+                (cells-set im PI_ROWS (pi-int ar v 0))
+                (set fl2 0)
+                (set v (px-dget src ar dc a b st lastp (px-black-is1)))
+                (set fl2 (+ fl2 (pi-bool ar v)))
+                (set v (px-dget src ar dc a b st lastp (px-encoded-byte-align)))
+                (set fl2 (+ fl2 (* 2 (pi-bool ar v))))
+                (set v (px-dget src ar dc a b st lastp (px-end-of-line)))
+                (set fl2 (+ fl2 (* 4 (pi-bool ar v))))
+                (set v (px-dget src ar dc a b st lastp (px-end-of-block)))
+                (set fl2 (+ fl2 (* 8 (pi-not-true ar v))))
+                (cells-set im PI_CFLAGS fl2)))
+          (if (== last 10)
+            (do (set v (px-get ar lastp (px-jbig2-globals)))
+                (cells-set im PI_GOBJ (pi-ref-num ar v))))))
+    (return 0)))
+
+(defn ^I32 pi-fill [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                    ^:mut ^Cells out ^:mut ^Cells im ^I32 d ^I32 inline]
+  (comment "Everything the dictionary `d` says about an image (an XObject's, or an inline image's with its abbreviations).")
+  (let [^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 bpc 8
+        ^:mut ^I32 v 0
+        ^:mut ^I32 raw 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 mc 0]
+    (set v (pd-dget src ar dc a b st d (pn-width)))
+    (if (== v 0) (set v (pd-dget src ar dc a b st d (pn-w))))
+    (set w (pi-int ar v 0))
+    (cells-set im PI_W w)
+    (set v (pd-dget src ar dc a b st d (pn-height)))
+    (if (== v 0) (set v (px-dget src ar dc a b st d (px-h))))
+    (set h (pi-int ar v 0))
+    (cells-set im PI_H h)
+    (set v (pd-dget src ar dc a b st d (pn-bits-per-component)))
+    (if (== v 0) (set v (px-dget src ar dc a b st d (px-bpc))))
+    (set bpc (pi-int ar v 8))
+    (set v (px-dget src ar dc a b st d (px-image-mask)))
+    (if (== v 0) (set v (px-dget src ar dc a b st d (px-im))))
+    (if (== (pi-bool ar v) 1)
+      (do (cells-set im PI_IMASK 1)
+          (cells-set im PI_CLASS 0)
+          (cells-set im PI_NCOMP 1)
+          (set bpc 1))
+      (do (set v (pd-dget src ar dc a b st d (pn-color-space)))
+          (if (== v 0) (set v (px-dget src ar dc a b st d (px-cs))))
+          (pi-cs-read src ar dc a b st out im v)))
+    (if (or (== bpc 1) (or (== bpc 2) (or (== bpc 4) (or (== bpc 8) (== bpc 16)))))
+      (cells-set im PI_BPC bpc)
+      (cells-set im PI_BPC 8))
+    (comment "/Decode")
+    (set v (px-dget src ar dc a b st d (px-decode)))
+    (if (== v 0) (set v (px-dget src ar dc a b st d (px-d))))
+    (pi-read-decode src ar dc a b st im v)
+    (comment "masks: /SMask wins over /Mask")
+    (set raw (px-get ar d (px-s-mask)))
+    (set i (pi-ref-num ar raw))
+    (if (!= i 0)
+      (do (cells-set im PI_MKIND 3)
+          (cells-set im PI_MOBJ i))
+      (do (set raw (px-get ar d (px-mask)))
+          (set i (pi-ref-num ar raw))
+          (if (!= raw 0)
+            (if (!= i 0)
+              (do (cells-set im PI_MKIND 2)
+                  (cells-set im PI_MOBJ i))
+              (do (set v (pd-resolve src ar dc a b st raw))
+                  (if (and (!= v 0) (== (pl-kind-of ar v) 6))
+                    (do (cells-set im PI_MKIND 1)
+                        (set mc (pl-count ar v))
+                        (if (> mc 8) (set mc 8))
+                        (set i 0)
+                        (while (< i mc)
+                          (do (set e (pi-nth-r src ar dc a b st v i))
+                              (cells-set im (+ PI_CKEY i) (pi-int ar e 0))
+                              (set i (+ i 1)))))))))))
+    (comment "/Matte: 1 or 3 numbers in the image's own colour space, kept as 8-bit values")
+    (set v (px-dget src ar dc a b st d (px-matte)))
+    (if (and (!= v 0) (== (pl-kind-of ar v) 6))
+      (do (set mc (pl-count ar v))
+          (if (or (== mc 1) (== mc 3))
+            (do (cells-set im PI_MATTE 1)
+                (set i 0)
+                (while (< i mc)
+                  (do (set e (pi-nth-r src ar dc a b st v i))
+                      (cells-set im (+ PI_MAT i) (pi-byte-of (gx-num ar e)))
+                      (set i (+ i 1))))
+                (if (== mc 1)
+                  (do (cells-set im (+ PI_MAT 1) (cells-at im PI_MAT))
+                      (cells-set im (+ PI_MAT 2) (cells-at im PI_MAT))))))))
+    (pi-build-lut im)
+    (pi-read-chain src ar dc a b st im d inline)
+    (return 0)))
+
+(defn ^:pub ^I32 pi-info [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                          ^:mut ^Cells out ^:mut ^Cells im ^I32 sh ^I32 objnum]
+  (comment "The record of the image XObject whose stream handle is `sh` (object `objnum`). `a` `b` `st` and `out` are")
+  (comment "scratch (a palette stream is decoded into `out`). Answers 0, or 1 when `sh` is not a stream.")
+  (pi-reset im)
+  (if (== sh 0) (return 1))
+  (if (!= (pl-kind-of ar sh) 8) (return 1))
+  (cells-set im PI_OBJ objnum)
+  (cells-set im PI_SSTART (pl-stream-start ar sh))
+  (cells-set im PI_SLEN (pl-stream-len ar sh))
+  (let [^I32 d (pl-stream-dict ar sh)]
+    (pi-fill src ar dc a b st out im d 0)
+    (return 0)))
+
+;; ------------------------------------------------------------------ inline images
+
+(defn ^I32 pi-ws [^I32 c]
+  (return (pl-is-ws c)))
+
+(defn ^I32 pi-find-id [^Cells cs ^I32 from ^I32 end]
+  (comment "Where the `ID` that ends an inline image's dictionary starts (the index of its `I`), or -1.")
+  (let [^:mut ^I32 p from]
+    (while (< (+ p 2) end)
+      (do (if (and (== (pi-ws (cells-at cs p)) 1)
+                   (and (== (cells-at cs (+ p 1)) 73)
+                        (and (== (cells-at cs (+ p 2)) 68)
+                             (or (>= (+ p 3) end) (== (pi-ws (cells-at cs (+ p 3))) 1)))))
+            (return (+ p 1)))
+          (set p (+ p 1))))
+    (return -1)))
+
+(defn ^I32 pi-find-ei [^Cells cs ^I32 from ^I32 end]
+  (comment "The index of the `E` of the first `EI` at or after `from` that stands alone (white space before, white space")
+  (comment "or the end after), or -1.")
+  (let [^:mut ^I32 p from]
+    (while (< (+ p 1) end)
+      (do (if (and (== (cells-at cs p) 69)
+                   (and (== (cells-at cs (+ p 1)) 73)
+                        (and (or (== p 0) (== (pi-ws (cells-at cs (- p 1))) 1))
+                             (or (>= (+ p 2) end) (== (pi-ws (cells-at cs (+ p 2))) 1)))))
+            (return p))
+          (set p (+ p 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 pi-info-inline [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                                 ^:mut ^Cells out ^:mut ^Cells im ^Cells cs ^I32 from ^I32 end]
+  (comment "The record of the inline image whose `BI` ends at `from` in the content stream `cs` (bytes in cells, `end`")
+  (comment "the end of the stream). The dictionary is parsed (`out` is scratch) with its abbreviations; the data span and")
+  (comment "the place after `EI` are PI_DSTART, PI_DEND and PI_DNEXT. Answers 0, or 1 when there is no `ID`, 2 when the")
+  (comment "dictionary does not parse.")
+  (pi-reset im)
+  (let [^I32 idp (pi-find-id cs from end)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 ds 0
+        ^:mut ^I32 ei 0
+        ^:mut ^I32 want 0
+        ^:mut ^I32 rowb 0]
+    (if (< idp 0) (return 1))
+    (cells-drop out 0)
+    (cells-push out 60)
+    (cells-push out 60)
+    (set i from)
+    (while (< i idp)
+      (do (cells-push out (cells-at cs i))
+          (set i (+ i 1))))
+    (cells-push out 32)
+    (cells-push out 62)
+    (cells-push out 62)
+    (pl-seek ar 0 (cells-len out))
+    (set d (pl-parse (src-of-cells out) ar))
+    (if (== d 0) (return 2))
+    (if (!= (pl-kind-of ar d) 7) (return 2))
+    (cells-set im PI_OBJ -1)
+    (pi-fill src ar dc a b st out im d 1)
+    (comment "The data: one white space after `ID`. Without a filter its length is known; else read to `EI`.")
+    (set ds (+ idp 2))
+    (if (< ds end)
+      (if (== (pi-ws (cells-at cs ds)) 1) (set ds (+ ds 1))))
+    (if (and (== (cells-at im PI_NF) 0) (> (cells-at im PI_W) 0))
+      (do (set rowb (quot (+ (* (* (cells-at im PI_W) (cells-at im PI_NCOMP)) (cells-at im PI_BPC)) 7) 8))
+          (set want (* rowb (cells-at im PI_H)))
+          (if (<= (+ ds want) end)
+            (do (set ei (pi-find-ei cs (+ ds want) end))
+                (if (>= ei 0)
+                  (do (cells-set im PI_DSTART ds)
+                      (cells-set im PI_DEND (+ ds want))
+                      (cells-set im PI_DNEXT (+ ei 2))
+                      (return 0)))))))
+    (set ei (pi-find-ei cs ds end))
+    (cells-set im PI_DSTART ds)
+    (if (< ei 0)
+      (do (cells-set im PI_DEND end)
+          (cells-set im PI_DNEXT end)
+          (return 0)))
+    (set want ei)
+    (if (> want ds) (set want (- want 1)))
+    (cells-set im PI_DEND want)
+    (cells-set im PI_DNEXT (+ ei 2))
+    (return 0)))
+
+;; ----------------------------------------------------------------------- samples
+
+(defn ^I32 pi-copy-into [^Cells from ^I32 s ^I32 e ^:mut ^Cells to]
+  (let [^:mut ^I32 i s]
+    (cells-drop to 0)
+    (while (< i e)
+      (do (cells-push to (cells-at from i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pi-samples [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                             ^:mut ^Cells im ^I32 sh ^:mut ^Cells out]
+  (comment "The raw samples of the image XObject `sh` into `out` (cleared first) through kin's filters. Answers 0 (the")
+  (comment "samples are in `out`), 1 (an image codec ends the chain: `out` holds ITS bytes, for `pi-request` and")
+  (comment "`pi-passthrough`; PI_OWN says whether they are exactly the input's own), 2 (a filter was damaged: `out`")
+  (comment "holds what could be read) or 12 (the source missed: stop, re-run).")
+  (let [^I32 plan (pd-stream-plan src ar dc a b st sh)
+        ^I32 status (pd-run-plan src ar plan sh b st out)
+        ^I32 start (pl-stream-start ar sh)
+        ^I32 ln (pl-stream-len ar sh)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 same 1]
+    (if (== status 12) (return 12))
+    (if (== status 10)
+      (do (cells-set im PI_OWN 0)
+          (if (and (== (cells-at im PI_NF) 1) (== (cells-len out) ln))
+            (do (while (and (< i ln) (== same 1))
+                  (do (if (!= (cells-at out i) (ps-u8 src (+ start i))) (set same 0))
+                      (set i (+ i 1))))
+                (if (ps-missed src) (return 12))
+                (cells-set im PI_OWN same)))
+          (return 1)))
+    (if (!= status 0) (return 2))
+    (return 0)))
+
+(defn ^:pub ^I32 pi-samples-inline [^:mut ^Cells im ^Cells cs ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells out]
+  (comment "`pi-samples` for an inline image: its data is cs[PI_DSTART, PI_DEND) and its chain is the record's. Answers")
+  (comment "0, 1 (an image codec: `out` holds its bytes) or 2 (damaged).")
+  (let [^I32 nf (cells-at im PI_NF)
+        ^I32 ds (cells-at im PI_DSTART)
+        ^I32 de (cells-at im PI_DEND)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 cur 0
+        ^:mut ^I32 status 0
+        ^:mut ^I32 s2 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 par 0
+        ^:mut ^I32 pred 1]
+    (cells-drop out 0)
+    (cells-drop b 0)
+    (if (== nf 0)
+      (do (pi-copy-into cs ds de out)
+          (return 0)))
+    (while (< i nf)
+      (do (set code (cells-at im (+ PI_FC i)))
+          (set par (+ PI_PAR (* i 6)))
+          (set pred (cells-at im par))
+          (if (and (>= code 7) (<= code 10))
+            (do (if (== cur 0) (pi-copy-into cs ds de out))
+                (if (== cur 2) (pi-copy-into b 0 (cells-len b) out))
+                (cells-set im PI_OWN 0)
+                (return 1)))
+          (if (== cur 0)
+            (do (set s2 (pf-run code (cells-bytes cs) ds de out st (cells-at im (+ par 4))))
+                (set cur 1))
+            (if (== cur 1)
+              (do (cells-drop b 0)
+                  (set s2 (pf-run code (cells-bytes out) 0 (cells-len out) b st (cells-at im (+ par 4))))
+                  (set cur 2))
+              (do (cells-drop out 0)
+                  (set s2 (pf-run code (cells-bytes b) 0 (cells-len b) out st (cells-at im (+ par 4))))
+                  (set cur 1))))
+          (if (and (== status 0) (!= s2 0)) (set status s2))
+          (if (and (> pred 1) (or (== code 3) (== code 4)))
+            (if (== cur 1)
+              (do (cells-drop b 0)
+                  (set s2 (pf-predict out 0 (cells-len out) b pred (cells-at im (+ par 1)) (cells-at im (+ par 2))
+                                      (cells-at im (+ par 3))))
+                  (set cur 2))
+              (do (cells-drop out 0)
+                  (set s2 (pf-predict b 0 (cells-len b) out pred (cells-at im (+ par 1)) (cells-at im (+ par 2))
+                                      (cells-at im (+ par 3))))
+                  (set cur 1)))
+            (set s2 0))
+          (if (and (== status 0) (!= s2 0)) (set status s2))
+          (set i (+ i 1))))
+    (if (== cur 2) (pi-copy-into b 0 (cells-len b) out))
+    (if (!= status 0) (return 2))
+    (return 0)))
+
+;; --------------------------------------------------------------------- passthrough
+
+(defn ^I32 pi-u16 [^Cells d ^I32 i]
+  (return (+ (* (pi-b d i) 256) (pi-b d (+ i 1)))))
+
+(defn ^I32 pi-le [^Cells d ^I32 t]
+  (comment "1 for little endian (II), 0 for big endian (MM), -1 for neither.")
+  (if (and (== (pi-b d t) 73) (== (pi-b d (+ t 1)) 73)) (return 1))
+  (if (and (== (pi-b d t) 77) (== (pi-b d (+ t 1)) 77)) (return 0))
+  (return -1))
+
+(defn ^I32 pi-t16 [^Cells d ^I32 i ^I32 le]
+  (if (== le 1) (return (+ (pi-b d i) (* (pi-b d (+ i 1)) 256))))
+  (return (+ (* (pi-b d i) 256) (pi-b d (+ i 1)))))
+
+(defn ^I32 pi-hi [^Cells d ^I32 i ^I32 le]
+  (if (== le 1) (return (pi-t16 d (+ i 2) 1)))
+  (return (pi-t16 d i 0)))
+
+(defn ^I32 pi-lo [^Cells d ^I32 i ^I32 le]
+  (if (== le 1) (return (pi-t16 d i 1)))
+  (return (pi-t16 d (+ i 2) 0)))
+
+(defn ^I32 pi-t32 [^Cells d ^I32 i ^I32 le]
+  (comment "A 32-bit TIFF offset, saturated at 2^30 (every sane one is far below).")
+  (let [^I32 hi (pi-hi d i le)
+        ^I32 lo (pi-lo d i le)]
+    (if (> hi 16383) (return 1073741824))
+    (return (+ (* hi 65536) lo))))
+
+(defn ^I32 pi-exif-orient [^Cells d ^I32 seg ^I32 slen]
+  (comment "The Exif orientation (tag 0x0112) of an APP1 segment whose payload starts at `seg` (after the length), 1 when")
+  (comment "there is none. A malformed Exif block is orientation 1.")
+  (let [^I32 t (+ seg 6)
+        ^I32 le (pi-le d t)
+        ^:mut ^I32 ifd 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 tag 0]
+    (if (< slen 14) (return 1))
+    (if (or (!= (pi-b d seg) 69) (or (!= (pi-b d (+ seg 1)) 120) (or (!= (pi-b d (+ seg 2)) 105) (!= (pi-b d (+ seg 3)) 102))))
+      (return 1))
+    (if (< le 0) (return 1))
+    (set ifd (pi-t32 d (+ t 4) le))
+    (if (or (< ifd 8) (> (+ t ifd) (+ seg slen))) (return 1))
+    (set n (pi-t16 d (+ t ifd) le))
+    (while (< k n)
+      (do (set at (+ (+ (+ t ifd) 2) (* k 12)))
+          (if (> (+ at 12) (+ seg slen)) (return 1))
+          (set tag (pi-t16 d at le))
+          (if (== tag 274) (return (pi-t16 d (+ at 8) le)))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 pi-arith [^I32 m]
+  (comment "Reason for an SOF kind that is not baseline or progressive Huffman: arithmetic coding, else lossless or hierarchical.")
+  (if (or (>= m 201) (and (>= m 205) (<= m 207))) (return 4))
+  (return 5))
+
+(defn ^I32 pi-bad-sof [^I32 m]
+  (comment "1 for a start-of-frame marker that is not baseline or progressive Huffman: SOF3, 5-7, 9-11, 13-15.")
+  (if (== m 195) (return 1))
+  (if (and (>= m 197) (<= m 199)) (return 1))
+  (if (and (>= m 201) (<= m 203)) (return 1))
+  (if (and (>= m 205) (<= m 207)) (return 1))
+  (return 0))
+
+(defn ^I32 pi-jpeg [^Cells im ^Cells d]
+  (comment "The marker walk: SOF0/1/2 only, 1 or 3 components of 8 bits, the SOF size the dictionary's, and no Exif")
+  (comment "orientation but 1. Answers a `pv` reason (0 passes).")
+  (let [^I32 n (cells-len d)
+        ^:mut ^I32 i 2
+        ^:mut ^I32 m 0
+        ^:mut ^I32 slen 0
+        ^:mut ^I32 done 0
+        ^:mut ^I32 sof 0
+        ^:mut ^I32 prec 0
+        ^:mut ^I32 sh 0
+        ^:mut ^I32 sw 0
+        ^:mut ^I32 nc 0
+        ^:mut ^I32 orient 1
+        ^:mut ^I32 res 0
+        ^:mut ^I32 o2 1]
+    (if (or (< n 4) (or (!= (pi-b d 0) 255) (!= (pi-b d 1) 216))) (return 3))
+    (while (and (< i n) (== done 0))
+      (do (if (!= (pi-b d i) 255)
+            (do (set res 3)
+                (set done 1)))
+          (if (== done 0)
+            (do (while (and (< i n) (== (pi-b d i) 255))
+                  (set i (+ i 1)))
+                (set m (pi-b d i))
+                (set i (+ i 1))
+                (set slen 0)
+                (if (or (== m 217) (== m 218)) (set done 1))
+                (if (and (== done 0) (and (!= m 0) (and (!= m 1) (or (< m 208) (> m 216)))))
+                  (do (set slen (pi-u16 d i))
+                      (if (or (< slen 2) (> (+ i slen) n))
+                        (do (set res 3)
+                            (set done 1)))))
+                (if (== done 0)
+                  (do (if (and (>= m 192) (<= m 194))
+                        (do (set sof (+ sof 1))
+                            (set prec (pi-b d (+ i 2)))
+                            (set sh (pi-u16 d (+ i 3)))
+                            (set sw (pi-u16 d (+ i 5)))
+                            (set nc (pi-b d (+ i 7)))))
+                      (if (== (pi-bad-sof m) 1)
+                        (do (set res (pi-arith m))
+                            (set done 1)))
+                      (if (== m 225)
+                        (do (set o2 (pi-exif-orient d (+ i 2) (- slen 2)))
+                            (if (!= o2 1) (set orient o2))))
+                      (set i (+ i slen))))))))
+    (if (!= res 0) (return res))
+    (if (== sof 0) (return 3))
+    (if (and (!= nc 1) (!= nc 3)) (return 6))
+    (if (!= prec 8) (return 7))
+    (if (and (== (cells-at im PI_CLASS) 1) (!= nc 1)) (return 6))
+    (if (and (== (cells-at im PI_CLASS) 2) (!= nc 3)) (return 6))
+    (if (or (!= sw (cells-at im PI_W)) (!= sh (cells-at im PI_H))) (return 15))
+    (if (and (!= orient 1) (!= orient 0)) (return 14))
+    (return 0)))
+
+(defn ^:pub ^I32 pi-passthrough [^Cells im ^Cells data]
+  (comment "SPEC 10.11's conditions for an `embedded` JPEG, from the record and the codec's bytes `data` (what `pi-samples`")
+  (comment "left in `out`): 0, or a `pv` reason. The placement's conditions (whole, upright, within `asset-pixels`) are")
+  (comment "the caller's: they are not the image's.")
+  (let [^I32 cls (cells-at im PI_CLASS)]
+    (if (!= (cells-at im PI_CODEC) 7) (return 1))
+    (if (!= (cells-at im (+ PI_FC (- (cells-at im PI_NF) 1))) 7) (return 2))
+    (if (== (cells-at im PI_IMASK) 1) (return 13))
+    (if (== (cells-at im PI_MKIND) 3) (return 12))
+    (if (!= (cells-at im PI_MKIND) 0) (return 11))
+    (if (!= (cells-at im PI_BPC) 8) (return 9))
+    (if (and (!= cls 1) (!= cls 2)) (return 8))
+    (if (== (cells-at im PI_DECODE) 1) (return 10))
+    (return (pi-jpeg im data))))
+
+;; -------------------------------------------------------------- the host's pixels
+
+(defn ^:pub ^I32 pi-adopt [^:mut ^Cells im ^I32 w ^I32 h ^I32 channels]
+  (comment "The host decoded the image: its pixels are `w` x `h` with `channels` 1 (gray) or 3 (RGB), 8 bits (a bilevel")
+  (comment "image is 0 and 255). They replace the samples: size and colour class follow the answer; a 4-component DCT")
+  (comment "arrives as RGB (the host honoured the Adobe marker) and its /Decode, if any, is not applied. The decode table is")
+  (comment "built again for 8-bit values (or the image's own 1, 2, 4 bits when it is bilevel).")
+  (let [^I32 cls (cells-at im PI_CLASS)]
+    (cells-set im PI_UB 1)
+    (cells-set im PI_W w)
+    (cells-set im PI_H h)
+    (if (== (cells-at im PI_IMASK) 1)
+      (do (cells-set im PI_NCOMP channels)
+          (pi-build-lut im)
+          (return 0)))
+    (if (and (== cls 1) (== channels 1))
+      (do (cells-set im PI_NCOMP 1))
+      (if (and (== cls 2) (== channels 3))
+        (do (cells-set im PI_NCOMP 3))
+        (do (cells-set im PI_DECODE 0)
+            (if (== channels 1) (cells-set im PI_CLASS 1) (cells-set im PI_CLASS 2))
+            (cells-set im PI_NCOMP channels))))
+    (pi-build-lut im)
+    (return 0)))
+
+;; --------------------------------------------------------------------- the pixels
+
+(defn ^I32 pi-pow2 [^I32 n]
+  (let [^:mut ^I32 m 1
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (set m (* m 2))
+          (set i (+ i 1))))
+    (return m)))
+
+(defn ^I32 pi-rowb [^Cells im]
+  (return (quot (+ (* (* (cells-at im PI_W) (cells-at im PI_NCOMP)) (cells-at im PI_BPC)) 7) 8)))
+
+(defn ^I32 pi-sample [^Cells im ^Cells smp ^Bitmap bm ^I32 x ^I32 y ^I32 c]
+  (comment "Component `c` of the pixel (x, y) as the table's input: the sample reduced to at most 8 bits (16 -> 8 by")
+  (comment "`(v*255 + 32767)/65535`), or the host's 8-bit value shifted down to the image's own depth.")
+  (let [^I32 bpc (cells-at im PI_BPC)
+        ^I32 bits (pi-bpc-eff im)]
+    (if (== (cells-at im PI_UB) 1)
+      (do (if (>= c (bitmap-channels bm)) (return 0))
+          (if (< bits 8) (return (quot (bitmap-u8 bm x y c) (pi-pow2 (- 8 bits)))))
+          (return (bitmap-u8 bm x y c))))
+    (let [^I32 nc (cells-at im PI_NCOMP)
+          ^I32 rowb (pi-rowb im)
+          ^I32 idx (+ (* x nc) c)
+          ^:mut ^I32 at 0
+          ^:mut ^I32 v 0
+          ^:mut ^I32 bit 0]
+      (if (== bpc 8)
+        (do (set at (+ (* y rowb) idx))
+            (if (>= at (cells-len smp)) (return 0))
+            (return (cells-at smp at))))
+      (if (== bpc 16)
+        (do (set at (+ (* y rowb) (* idx 2)))
+            (if (>= (+ at 1) (cells-len smp)) (return 0))
+            (set v (+ (* (cells-at smp at) 256) (cells-at smp (+ at 1))))
+            (return (quot (+ (* v 255) 32767) 65535))))
+      (set bit (* idx bpc))
+      (set at (+ (* y rowb) (quot bit 8)))
+      (if (>= at (cells-len smp)) (return 0))
+      (set v (cells-at smp at))
+      (return (rem (quot v (pi-pow2 (- (- 8 bpc) (rem bit 8)))) (pi-pow2 bpc))))))
+
+(defn ^:pub ^I32 pi-out-channels [^Cells im]
+  (comment "Channels of the colour `Bitmap` `pi-pixels` writes: 1 gray, 3 RGB (a stencil is RGB, in the fill colour).")
+  (let [^I32 c (cells-at im PI_CLASS)]
+    (if (== (cells-at im PI_IMASK) 1) (return 3))
+    (if (== c 1) (return 1))
+    (if (and (== c 4) (== (cells-at im PI_BASE) 1)) (return 1))
+    (return 3)))
+
+(defn ^:pub ^I32 pi-has-alpha [^Cells im]
+  (comment "1 when the image has an alpha channel: a stencil, a colour key, a stencil `/Mask` or an `/SMask`.")
+  (if (== (cells-at im PI_IMASK) 1) (return 1))
+  (if (!= (cells-at im PI_MKIND) 0) (return 1))
+  (return 0))
+
+(defn ^I32 pi-lut [^Cells im ^I32 c ^I32 v]
+  (return (cells-at im (+ PI_TAB (+ (* c 256) v)))))
+
+(defn ^I32 pi-cmyk [^I32 c ^I32 m ^I32 y ^I32 k]
+  (comment "ISO 32000's naive conversion: r = 255 - min(255, c + k), likewise g and b.")
+  (let [^:mut ^I32 r (+ c k)
+        ^:mut ^I32 g (+ m k)
+        ^:mut ^I32 b (+ y k)]
+    (if (> r 255) (set r 255))
+    (if (> g 255) (set g 255))
+    (if (> b 255) (set b 255))
+    (return (+ (* (- 255 r) 65536) (+ (* (- 255 g) 256) (- 255 b))))))
+
+(defn ^I32 pi-px [^Cells im ^Cells smp ^Bitmap bm ^I32 x ^I32 y ^I32 c]
+  (comment "Component c of the pixel (x, y) through the decode table.")
+  (let [^I32 v (pi-sample im smp bm x y c)]
+    (return (pi-lut im c v))))
+
+(defn ^I32 pi-rgb [^Cells im ^Cells smp ^Bitmap bm ^I32 x ^I32 y]
+  (comment "The pixel's colour as 0xRRGGBB (a gray is r = g = b), after /Decode and the colour space.")
+  (let [^I32 cls (cells-at im PI_CLASS)
+        ^:mut ^I32 c0 0
+        ^:mut ^I32 c1 0
+        ^:mut ^I32 c2 0
+        ^:mut ^I32 c3 0
+        ^:mut ^I32 idx 0
+        ^:mut ^I32 pal 0
+        ^:mut ^I32 base 0]
+    (if (== cls 1)
+      (do (set c0 (pi-px im smp bm x y 0))
+          (return (+ (* c0 65536) (+ (* c0 256) c0)))))
+    (if (== cls 2)
+      (do (set c0 (pi-px im smp bm x y 0))
+          (set c1 (pi-px im smp bm x y 1))
+          (set c2 (pi-px im smp bm x y 2))
+          (return (+ (* c0 65536) (+ (* c1 256) c2)))))
+    (if (== cls 3)
+      (do (set c0 (pi-px im smp bm x y 0))
+          (set c1 (pi-px im smp bm x y 1))
+          (set c2 (pi-px im smp bm x y 2))
+          (set c3 (pi-px im smp bm x y 3))
+          (return (pi-cmyk c0 c1 c2 c3))))
+    (if (== cls 4)
+      (do (set idx (pi-px im smp bm x y 0))
+          (set base (cells-at im PI_BASE))
+          (if (== base 1)
+            (do (set c0 (cells-at im (+ PI_PAL idx)))
+                (return (+ (* c0 65536) (+ (* c0 256) c0)))))
+          (if (== base 2)
+            (do (set pal (+ PI_PAL (* idx 3)))
+                (set c0 (cells-at im pal))
+                (set c1 (cells-at im (+ pal 1)))
+                (set c2 (cells-at im (+ pal 2)))
+                (return (+ (* c0 65536) (+ (* c1 256) c2)))))
+          (set pal (+ PI_PAL (* idx 4)))
+          (set c0 (cells-at im pal))
+          (set c1 (cells-at im (+ pal 1)))
+          (set c2 (cells-at im (+ pal 2)))
+          (set c3 (cells-at im (+ pal 3)))
+          (return (pi-cmyk c0 c1 c2 c3))))
+    (return 0)))
+
+(defn ^I32 pi-key-hit [^Cells im ^Cells smp ^Bitmap bm ^I32 x ^I32 y]
+  (comment "1 when every component is inside its colour-key range.")
+  (let [^I32 nc (cells-at im PI_NCOMP)
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0]
+    (while (< c nc)
+      (do (set v (pi-sample im smp bm x y c))
+          (if (or (< v (cells-at im (+ PI_CKEY (* c 2)))) (> v (cells-at im (+ PI_CKEY (+ (* c 2) 1)))))
+            (return 0))
+          (set c (+ c 1))))
+    (return 1)))
+
+(defn ^I32 pi-unmatte [^I32 c ^I32 m ^I32 a]
+  (comment "c = m + (c' - m) * 255 / a, rounded half away from zero, clamped; 0 where a is 0.")
+  (let [^:mut ^I32 n (* (- c m) 255)
+        ^:mut ^I32 q 0
+        ^:mut ^I32 neg 0]
+    (if (== a 0) (return 0))
+    (if (< n 0) (do (set n (- 0 n)) (set neg 1)))
+    (set q (quot (+ n (quot a 2)) a))
+    (if (== neg 1) (set q (- 0 q)))
+    (set q (+ m q))
+    (if (< q 0) (return 0))
+    (if (> q 255) (return 255))
+    (return q)))
+
+(defn ^I32 pi-alpha [^Cells im ^Cells smp ^Bitmap bm ^I32 x ^I32 y
+                     ^Cells mi ^Cells msmp ^Bitmap mbm ^I32 have]
+  (comment "The alpha of the source pixel (x, y): a stencil's, a colour key's, or a mask image's at the pixel it covers.")
+  (let [^I32 kind (cells-at im PI_MKIND)
+        ^:mut ^I32 mx 0
+        ^:mut ^I32 my 0
+        ^:mut ^I32 v 0]
+    (if (== (cells-at im PI_IMASK) 1)
+      (do (set v (pi-px im smp bm x y 0))
+          (if (== v 0) (return 255))
+          (return 0)))
+    (if (== kind 1)
+      (do (if (== (pi-key-hit im smp bm x y) 1) (return 0))
+          (return 255)))
+    (if (or (== have 0) (== kind 0)) (return 255))
+    (if (or (< (cells-at mi PI_W) 1) (< (cells-at mi PI_H) 1)) (return 255))
+    (set mx (quot (* x (cells-at mi PI_W)) (cells-at im PI_W)))
+    (set my (quot (* y (cells-at mi PI_H)) (cells-at im PI_H)))
+    (set v (pi-px mi msmp mbm mx my 0))
+    (if (== kind 2)
+      (do (if (== v 0) (return 255))
+          (return 0)))
+    (return v)))
+
+(defn ^I32 pi-sign [^I64 v ^I64 mx]
+  (if (< (mul64 (fx-abs v) (i64 1024)) mx) (return 0))
+  (if (> v (i64 0)) (return 1))
+  (return -1))
+
+(defn ^:pub ^I32 pi-orient [^I64 a ^I64 b ^I64 c ^I64 d]
+  (comment "The orientation of a placement whose matrix is [a b c d] (PDF user space, y up; Fx): the eight rectilinear")
+  (comment "ones, or -1 (`transformed`). 0 upright, 1 mirrored left-right, 2 turned half a turn, 3 mirrored top-bottom,")
+  (comment "4 turned a quarter clockwise, 5 a quarter counter-clockwise, 6 transposed, 7 anti-transposed. A value under")
+  (comment "1/1024 of the largest entry is zero.")
+  (let [^:mut ^I64 mx (fx-abs a)
+        ^:mut ^I32 sa 0
+        ^:mut ^I32 sb 0
+        ^:mut ^I32 sc 0
+        ^:mut ^I32 sd 0]
+    (if (> (fx-abs b) mx) (set mx (fx-abs b)))
+    (if (> (fx-abs c) mx) (set mx (fx-abs c)))
+    (if (> (fx-abs d) mx) (set mx (fx-abs d)))
+    (if (== mx (i64 0)) (return -1))
+    (set sa (pi-sign a mx))
+    (set sb (pi-sign b mx))
+    (set sc (pi-sign c mx))
+    (set sd (pi-sign d mx))
+    (if (and (== sb 0) (== sc 0))
+      (do (if (or (== sa 0) (== sd 0)) (return -1))
+          (if (and (== sa 1) (== sd 1)) (return 0))
+          (if (and (== sa -1) (== sd 1)) (return 1))
+          (if (and (== sa -1) (== sd -1)) (return 2))
+          (return 3)))
+    (if (and (== sa 0) (== sd 0))
+      (do (if (or (== sb 0) (== sc 0)) (return -1))
+          (if (and (== sb -1) (== sc 1)) (return 4))
+          (if (and (== sb 1) (== sc -1)) (return 5))
+          (if (and (== sb -1) (== sc -1)) (return 6))
+          (return 7)))
+    (return -1)))
+
+(defn ^:pub ^I32 pi-view [^:mut ^Cells im ^I32 orient]
+  (comment "Set the orientation and the view to the whole oriented image (its size swapped for a quarter turn).")
+  (let [^I32 w (cells-at im PI_W)
+        ^I32 h (cells-at im PI_H)]
+    (cells-set im PI_ORI orient)
+    (cells-set im PI_VX0 0)
+    (cells-set im PI_VY0 0)
+    (if (>= orient 4)
+      (do (cells-set im PI_VX1 h)
+          (cells-set im PI_VY1 w))
+      (do (cells-set im PI_VX1 w)
+          (cells-set im PI_VY1 h)))
+    (return 0)))
+
+(defn ^I32 pi-fdiv [^I32 a ^I32 b ^I32 den]
+  (comment "floor(a * b / den) for non-negative a, b and positive den, without overflowing 32 bits.")
+  (return (i32 (quot (mul64 (i64 a) (i64 b)) (i64 den)))))
+
+(defn ^I32 pi-cdiv [^I32 a ^I32 b ^I32 den]
+  (return (i32 (quot (add64 (mul64 (i64 a) (i64 b)) (i64 (- den 1))) (i64 den)))))
+
+(defn ^:pub ^I32 pi-crop [^:mut ^Cells im ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1 ^I32 cx0 ^I32 cy0 ^I32 cx1 ^I32 cy1
+                          ^I32 whole]
+  (comment "Cut the view to what the clip box leaves visible of the placement's box (page space, centipoints, the box the")
+  (comment "image fills; `pi-view` first). When the visible part is at least `whole` per mille of the box the view stays")
+  (comment "whole. The cut is in the oriented image's pixels: floor at the low edges, ceiling at the high. Answers 1 when")
+  (comment "cut, 0 when whole, -1 when nothing is visible.")
+  (let [^I32 dw (- (cells-at im PI_VX1) (cells-at im PI_VX0))
+        ^I32 dh (- (cells-at im PI_VY1) (cells-at im PI_VY0))
+        ^:mut ^I32 vx0 bx0
+        ^:mut ^I32 vy0 by0
+        ^:mut ^I32 vx1 bx1
+        ^:mut ^I32 vy1 by1
+        ^I32 bw (- bx1 bx0)
+        ^I32 bh (- by1 by0)
+        ^:mut ^I32 px0 0
+        ^:mut ^I32 py0 0
+        ^:mut ^I32 px1 0
+        ^:mut ^I32 py1 0]
+    (if (> cx0 vx0) (set vx0 cx0))
+    (if (> cy0 vy0) (set vy0 cy0))
+    (if (< cx1 vx1) (set vx1 cx1))
+    (if (< cy1 vy1) (set vy1 cy1))
+    (if (or (>= vx0 vx1) (>= vy0 vy1)) (return -1))
+    (if (or (<= bw 0) (<= bh 0)) (return 0))
+    (if (>= (quot (mul64 (mul64 (i64 (- vx1 vx0)) (i64 (- vy1 vy0))) (i64 1000)) (mul64 (i64 bw) (i64 bh)))
+            (i64 whole))
+      (return 0))
+    (set px0 (pi-fdiv (- vx0 bx0) dw bw))
+    (set py0 (pi-fdiv (- vy0 by0) dh bh))
+    (set px1 (pi-cdiv (- vx1 bx0) dw bw))
+    (set py1 (pi-cdiv (- vy1 by0) dh bh))
+    (if (> px1 dw) (set px1 dw))
+    (if (> py1 dh) (set py1 dh))
+    (if (>= px0 px1) (set px0 (- px1 1)))
+    (if (>= py0 py1) (set py0 (- py1 1)))
+    (if (< px0 0) (set px0 0))
+    (if (< py0 0) (set py0 0))
+    (cells-set im PI_VX0 px0)
+    (cells-set im PI_VY0 py0)
+    (cells-set im PI_VX1 px1)
+    (cells-set im PI_VY1 py1)
+    (return 1)))
+
+(defn ^:pub ^I32 pi-out-w [^Cells im] (return (- (cells-at im PI_VX1) (cells-at im PI_VX0))))
+(defn ^:pub ^I32 pi-out-h [^Cells im] (return (- (cells-at im PI_VY1) (cells-at im PI_VY0))))
+
+(defn ^I32 pi-src-x [^I32 orient ^I32 w ^I32 h ^I32 xx ^I32 yy]
+  (comment "The source column of the oriented image's pixel (xx, yy).")
+  (if (or (== orient 0) (== orient 3)) (return xx))
+  (if (or (== orient 1) (== orient 2)) (return (- (- w 1) xx)))
+  (if (or (== orient 4) (== orient 6)) (return yy))
+  (return (- (- w 1) yy)))
+
+(defn ^I32 pi-src-y [^I32 orient ^I32 w ^I32 h ^I32 xx ^I32 yy]
+  (comment "The source row of the oriented image's pixel (xx, yy).")
+  (if (or (== orient 0) (== orient 1)) (return yy))
+  (if (or (== orient 2) (== orient 3)) (return (- (- h 1) yy)))
+  (if (or (== orient 4) (== orient 7)) (return (- (- h 1) xx)))
+  (return xx))
+
+(defn ^I32 pi-matte-on [^Cells im ^Cells mi ^I32 have]
+  (comment "1 when an /SMask with a /Matte applies.")
+  (if (and (== have 1) (and (== (cells-at im PI_MKIND) 3) (== (cells-at mi PI_MATTE) 1))) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 pi-pixels [^Cells im ^Cells smp ^Bitmap bm ^Cells mi ^Cells msmp ^Bitmap mbm ^I32 have
+                            ^I32 fill ^Bitmap out ^Bitmap alpha]
+  (comment "Write the image's pixels: `out` (`pi-out-channels` channels) and `alpha` (one channel), both `pi-out-w` by")
+  (comment "`pi-out-h`, with the orientation and the view applied. `smp` holds the samples (or `bm` the host's pixels when")
+  (comment "`pi-adopt` was called); `have` 1 says `mi`, `msmp`, `mbm` are the mask's record, samples and pixels (a stencil")
+  (comment "`/Mask` or an `/SMask`: `pi-info` on its object). `fill` is a stencil's colour, 0xRRGGBB. Answers 0, 1 for a")
+  (comment "colour space that is not read, 2 when `out` or `alpha` is not the right size, 3 for an image with no size.")
+  (let [^I32 w (cells-at im PI_W)
+        ^I32 h (cells-at im PI_H)
+        ^I32 ow (pi-out-w im)
+        ^I32 oh (pi-out-h im)
+        ^I32 orient (cells-at im PI_ORI)
+        ^I32 ch (pi-out-channels im)
+        ^I32 matte (pi-matte-on im mi have)
+        ^:mut ^I32 ox 0
+        ^:mut ^I32 oy 0
+        ^:mut ^I32 sx 0
+        ^:mut ^I32 sy 0
+        ^:mut ^I32 rgb 0
+        ^:mut ^I32 al 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 b 0]
+    (if (or (< w 1) (< h 1)) (return 3))
+    (if (== (cells-at im PI_CLASS) 9) (return 1))
+    (if (or (< ow 1) (< oh 1)) (return 3))
+    (if (or (!= (bitmap-w out) ow) (or (!= (bitmap-h out) oh) (!= (bitmap-channels out) ch))) (return 2))
+    (if (or (!= (bitmap-w alpha) ow) (or (!= (bitmap-h alpha) oh) (!= (bitmap-channels alpha) 1))) (return 2))
+    (while (< oy oh)
+      (do (set ox 0)
+          (while (< ox ow)
+            (do (set sx (pi-src-x orient w h (+ (cells-at im PI_VX0) ox) (+ (cells-at im PI_VY0) oy)))
+                (set sy (pi-src-y orient w h (+ (cells-at im PI_VX0) ox) (+ (cells-at im PI_VY0) oy)))
+                (set al (pi-alpha im smp bm sx sy mi msmp mbm have))
+                (if (== (cells-at im PI_IMASK) 1)
+                  (set rgb fill)
+                  (set rgb (pi-rgb im smp bm sx sy)))
+                (set r (quot rgb 65536))
+                (set g (rem (quot rgb 256) 256))
+                (set b (rem rgb 256))
+                (if (== matte 1)
+                  (do (set r (pi-unmatte r (cells-at mi PI_MAT) al))
+                      (set g (pi-unmatte g (cells-at mi (+ PI_MAT 1)) al))
+                      (set b (pi-unmatte b (cells-at mi (+ PI_MAT 2)) al))))
+                (if (== ch 1)
+                  (bitmap-set-u8 out ox oy 0 r)
+                  (do (bitmap-set-u8 out ox oy 0 r)
+                      (bitmap-set-u8 out ox oy 1 g)
+                      (bitmap-set-u8 out ox oy 2 b)))
+                (bitmap-set-u8 alpha ox oy 0 al)
+                (set ox (+ ox 1))))
+          (set oy (+ oy 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------ the request
+
+(defn ^I32 pi-sha-words [^Cells data ^:mut ^Cells tmp ^:mut ^Cells words ^I32 at]
+  (comment "SHA-256 of `data` as eight signed 32-bit words (big-endian) into words[at..at+8); `tmp` is scratch.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I64 u (i64 0)
+        ^:mut ^I32 v 0]
+    (cells-drop tmp 0)
+    (crypto-sha256 (cells-bytes data) 0 (cells-len data) tmp)
+    (while (< i 8)
+      (do (set u (add64 (mul64 (i64 (cells-at tmp (* i 4))) (i64 16777216))
+                        (i64 (+ (* (cells-at tmp (+ (* i 4) 1)) 65536)
+                                (+ (* (cells-at tmp (+ (* i 4) 2)) 256) (cells-at tmp (+ (* i 4) 3)))))))
+          (set v (i32 u))
+          (cells-set words (+ at i) v)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 pi-flt [^I32 code]
+  (if (== code 7) (return (flt-dct)))
+  (if (== code 8) (return (flt-jpx)))
+  (if (== code 9) (return (flt-ccitt)))
+  (return (flt-jbig2)))
+
+(defn ^:pub ^I32 pi-request [^:mut ^Cells rq ^I32 id ^I32 input ^Cells im ^Cells data ^Cells globals
+                             ^:mut ^Buf payload ^:mut ^Cells tmp ^:mut ^Cells words]
+  (comment "Write the `decode-img` request (kind 6) for a codec image into `rq` as request `id`. `data` is the codec's bytes")
+  (comment "(`pi-samples`' `out`) and `globals` the JBIG2 globals' decoded bytes (empty for none). The bytes are NAMED, not")
+  (comment "carried: when they are the input's own (PI_OWN) by `input`, offset and length with a zero SHA-256; else they are")
+  (comment "appended to `payload` (where -2) with their SHA-256 in the record, so the host reads them from the unit's")
+  (comment "payload `Buf` and a transcript, which holds only the record, keys on what the bytes were. `tmp` and `words`")
+  (comment "(16 cells) are scratch. Answers 0, or 1 when the image has no image codec.")
+  (let [^I32 codec (cells-at im PI_CODEC)
+        ^:mut ^I32 where input
+        ^:mut ^I32 off 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 gwhere -1
+        ^:mut ^I32 goff 0
+        ^:mut ^I32 gln 0
+        ^:mut ^I32 comps 0
+        ^:mut ^I32 i 0]
+    (if (== codec 0) (return 1))
+    (cells-drop words 0)
+    (while (< i 16)
+      (do (cells-push words 0)
+          (set i (+ i 1))))
+    (if (== (cells-at im PI_OWN) 1)
+      (do (set off (cells-at im PI_SSTART))
+          (set ln (cells-at im PI_SLEN)))
+      (do (set where -2)
+          (set off (buf-len payload))
+          (set ln (cells-len data))
+          (set i 0)
+          (while (< i ln)
+            (do (buf-push payload (cells-at data i))
+                (set i (+ i 1))))
+          (pi-sha-words data tmp words 0)))
+    (if (> (cells-len globals) 0)
+      (do (set gwhere -2)
+          (set goff (buf-len payload))
+          (set gln (cells-len globals))
+          (set i 0)
+          (while (< i gln)
+            (do (buf-push payload (cells-at globals i))
+                (set i (+ i 1))))
+          (pi-sha-words globals tmp words 8)))
+    (if (or (== codec 7) (== codec 9))
+      (set comps (cells-at im PI_NCOMP)))
+    (rq-decode-img rq id (pi-flt codec) (cells-at im PI_W) (cells-at im PI_H) comps (cells-at im PI_BPC)
+                   (cells-at im PI_K) (cells-at im PI_COLS) (cells-at im PI_ROWS) (cells-at im PI_CFLAGS)
+                   where off ln words 0 gwhere goff gln 8)
+    (return 0)))

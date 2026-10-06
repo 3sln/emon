@@ -984,6 +984,33 @@ public static class Pdfxnames {
     public static int PxExtend() {
         return 190;
     }
+    public static int PxMatte() {
+        return 191;
+    }
+    public static int PxK() {
+        return 192;
+    }
+    public static int PxRows() {
+        return 193;
+    }
+    public static int PxBlackIs1() {
+        return 194;
+    }
+    public static int PxEncodedByteAlign() {
+        return 195;
+    }
+    public static int PxEndOfLine() {
+        return 196;
+    }
+    public static int PxEndOfBlock() {
+        return 197;
+    }
+    public static int PxJbig2Globals() {
+        return 198;
+    }
+    public static int PxDp() {
+        return 199;
+    }
     public static int PxEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.TextAscii(t, "Annots");
@@ -1749,6 +1776,42 @@ public static class Pdfxnames {
             emon.Port.TextAscii(t, "Extend");
             return 1;
         }
+        if (code == 191) {
+            emon.Port.TextAscii(t, "Matte");
+            return 1;
+        }
+        if (code == 192) {
+            emon.Port.TextAscii(t, "K");
+            return 1;
+        }
+        if (code == 193) {
+            emon.Port.TextAscii(t, "Rows");
+            return 1;
+        }
+        if (code == 194) {
+            emon.Port.TextAscii(t, "BlackIs1");
+            return 1;
+        }
+        if (code == 195) {
+            emon.Port.TextAscii(t, "EncodedByteAlign");
+            return 1;
+        }
+        if (code == 196) {
+            emon.Port.TextAscii(t, "EndOfLine");
+            return 1;
+        }
+        if (code == 197) {
+            emon.Port.TextAscii(t, "EndOfBlock");
+            return 1;
+        }
+        if (code == 198) {
+            emon.Port.TextAscii(t, "JBIG2Globals");
+            return 1;
+        }
+        if (code == 199) {
+            emon.Port.TextAscii(t, "DP");
+            return 1;
+        }
         return 0;
     }
     public static readonly int[] PxChars = new int[] {
@@ -1819,7 +1882,11 @@ public static class Pdfxnames {
         108, 79, 102, 102, 86, 69, 65, 110, 100, 79, 114, 78, 111, 116, 85, 110,
         99, 104, 97, 110, 103, 101, 100, 83, 104, 97, 100, 105, 110, 103, 84, 121,
         112, 101, 80, 97, 116, 116, 101, 114, 110, 84, 121, 112, 101, 69, 120, 116,
-        101, 110, 100
+        101, 110, 100, 77, 97, 116, 116, 101, 75, 82, 111, 119, 115, 66, 108, 97,
+        99, 107, 73, 115, 49, 69, 110, 99, 111, 100, 101, 100, 66, 121, 116, 101,
+        65, 108, 105, 103, 110, 69, 110, 100, 79, 102, 76, 105, 110, 101, 69, 110,
+        100, 79, 102, 66, 108, 111, 99, 107, 74, 66, 73, 71, 50, 71, 108, 111,
+        98, 97, 108, 115, 68, 80
     };
     public static readonly int[] PxSpan = new int[] {
         0, 6,
@@ -2012,6 +2079,15 @@ public static class Pdfxnames {
         1038, 9,
         1047, 11,
         1058, 11,
-        1069, 6
+        1069, 6,
+        1075, 5,
+        1080, 1,
+        1081, 4,
+        1085, 8,
+        1093, 16,
+        1109, 9,
+        1118, 10,
+        1128, 12,
+        1140, 2
     };
 }

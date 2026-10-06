@@ -548,7 +548,7 @@
           (set j (+ j 1))))
     (return k)))
 
-(defn ^I32 pd-filter-code [^Cells ar ^I32 h]
+(defn ^:pub ^I32 pd-filter-code [^Cells ar ^I32 h]
   (comment "A filter name (or an inline image's abbreviation) as a `pf-filter`")
   (comment "code; 0 for a name that is not a filter.")
   (if (or (== (pl-name-is ar h (pn-flate-decode)) 1) (== (pl-name-is ar h (pn-fl)) 1))

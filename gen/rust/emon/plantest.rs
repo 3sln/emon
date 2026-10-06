@@ -92,6 +92,68 @@ fn test_a_bytes_request_is_a_span() {
     crate::testport::assert_eq(rq_arg(c, 0, 2), 131072, "length");
 }
 #[test]
+fn test_a_decode_img_request_names_bytes_and_never_carries_them() {
+    // Kind 6 (D340): the codestream's parameters, then WHERE the bytes are (an input's span, or the unit's payload)
+    // and the SHA-256 of a payload as eight words; the globals the same, `gwhere` -1 for none.
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let shas: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    while i < 16 {
+        crate::port::cells_push(shas, 1000 + i);
+        i += 1;
+    }
+    crate::testport::assert_eq(pk_decode_img(), 6, "kind 6");
+    crate::testport::assert_eq(flt_ccitt(), 4, "the CCITT filter");
+    crate::testport::assert_eq(rq_decode_img(c, 9, flt_ccitt(), 64, 32, 1, 1, -1, 64, 32, 10, 0, 499, 552, shas, 0, -2, 0, 24, 8), 0, "starts at 0");
+    crate::testport::assert_eq(rec_len(c, 0), 34, "three header cells and 31 arguments");
+    crate::testport::assert_eq(rec_kind(c, 0), 6, "kind");
+    crate::testport::assert_eq(rec_id(c, 0), 9, "id");
+    crate::testport::assert_eq(rq_nargs(c, 0), dq_nargs(), "31 arguments");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_filter()), 4, "filter");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_w()), 64, "w");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_h()), 32, "h");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_comps()), 1, "comps");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_bpc()), 1, "bpc");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_k()), -1, "k");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_columns()), 64, "columns");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_rows()), 32, "rows");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_ccitt()), 10, "ccitt flags");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_where()), 0, "where");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_offset()), 499, "offset");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_length()), 552, "length");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_sha()), 1000, "the first SHA word");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_sha() + 7), 1007, "the eighth SHA word");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_gwhere()), -2, "gwhere: the payload");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_goffset()), 0, "goffset");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_glength()), 24, "glength");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_gsha()), 1008, "the first globals SHA word");
+    crate::testport::assert_eq(rq_arg(c, 0, dq_gsha() + 7), 1015, "the last globals SHA word");
+    crate::testport::assert_eq(rec_check(c, 1, 6), 0, "well formed, in the legal kinds");
+    crate::testport::assert_eq(rec_check(c, 1, 5), 2, "a kind past the legal range is refused");
+    crate::testport::assert_eq(rec_count(c), 1, "one record");
+}
+#[test]
+fn test_a_decode_img_request_is_found_by_its_id_and_answered_as_a_decode() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let shas: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    while i < 16 {
+        crate::port::cells_push(shas, 0);
+        i += 1;
+    }
+    rq_decode_img(c, 3, flt_jpx(), 16, 12, 0, 8, 0, 0, 0, 0, 0, 440, 1013, shas, 0, -1, 0, 0, 8);
+    rq_decode_img(c, 4, flt_jbig2(), 32, 16, 0, 1, 0, 0, 0, 0, 0, 476, 50, shas, 0, -2, 0, 24, 8);
+    crate::testport::assert_eq(rec_count(c), 2, "two records");
+    let second: i32 = rec_next(c, 0);
+    let at4: i32 = rec_find(c, 4);
+    crate::testport::assert_eq(rec_id(c, second), 4, "the second is request 4");
+    crate::testport::assert_eq(rq_arg(c, at4, dq_filter()), 3, "request 4 is JBIG2");
+    crate::testport::assert_eq(an_decode(ans, 3, 16, 12, 3, 0, 0, 1), 0, "its answer is a decode answer");
+    let at3: i32 = an_find(ans, 3);
+    crate::testport::assert_eq(an_status(ans, at3), 0, "ok");
+}
+#[test]
 fn test_answers_carry_the_id_and_a_status() {
     let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let a1: i32 = an_render(c, 1, 612, 792, 1, 300);

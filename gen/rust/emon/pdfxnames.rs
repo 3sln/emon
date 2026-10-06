@@ -981,6 +981,33 @@ pub fn px_pattern_type() -> i32 {
 pub fn px_extend() -> i32 {
     return 190;
 }
+pub fn px_matte() -> i32 {
+    return 191;
+}
+pub fn px_k() -> i32 {
+    return 192;
+}
+pub fn px_rows() -> i32 {
+    return 193;
+}
+pub fn px_black_is1() -> i32 {
+    return 194;
+}
+pub fn px_encoded_byte_align() -> i32 {
+    return 195;
+}
+pub fn px_end_of_line() -> i32 {
+    return 196;
+}
+pub fn px_end_of_block() -> i32 {
+    return 197;
+}
+pub fn px_jbig2_globals() -> i32 {
+    return 198;
+}
+pub fn px_dp() -> i32 {
+    return 199;
+}
 pub fn px_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "Annots");
@@ -1746,9 +1773,45 @@ pub fn px_emit_name(mut t: &mut String, code: i32) -> i32 {
         crate::port::text_ascii(t, "Extend");
         return 1;
     }
+    if code == 191 {
+        crate::port::text_ascii(t, "Matte");
+        return 1;
+    }
+    if code == 192 {
+        crate::port::text_ascii(t, "K");
+        return 1;
+    }
+    if code == 193 {
+        crate::port::text_ascii(t, "Rows");
+        return 1;
+    }
+    if code == 194 {
+        crate::port::text_ascii(t, "BlackIs1");
+        return 1;
+    }
+    if code == 195 {
+        crate::port::text_ascii(t, "EncodedByteAlign");
+        return 1;
+    }
+    if code == 196 {
+        crate::port::text_ascii(t, "EndOfLine");
+        return 1;
+    }
+    if code == 197 {
+        crate::port::text_ascii(t, "EndOfBlock");
+        return 1;
+    }
+    if code == 198 {
+        crate::port::text_ascii(t, "JBIG2Globals");
+        return 1;
+    }
+    if code == 199 {
+        crate::port::text_ascii(t, "DP");
+        return 1;
+    }
     return 0;
 }
-pub static PX_CHARS: [i32; 1075] = [
+pub static PX_CHARS: [i32; 1142] = [
     65, 110, 110, 111, 116, 115, 65, 110, 110, 111, 116, 82, 101, 99, 116, 65,
     83, 85, 82, 73, 71, 111, 84, 111, 71, 111, 84, 111, 82, 71, 111, 84,
     111, 69, 76, 97, 117, 110, 99, 104, 78, 97, 109, 101, 100, 74, 97, 118,
@@ -1816,9 +1879,13 @@ pub static PX_CHARS: [i32; 1075] = [
     108, 79, 102, 102, 86, 69, 65, 110, 100, 79, 114, 78, 111, 116, 85, 110,
     99, 104, 97, 110, 103, 101, 100, 83, 104, 97, 100, 105, 110, 103, 84, 121,
     112, 101, 80, 97, 116, 116, 101, 114, 110, 84, 121, 112, 101, 69, 120, 116,
-    101, 110, 100
+    101, 110, 100, 77, 97, 116, 116, 101, 75, 82, 111, 119, 115, 66, 108, 97,
+    99, 107, 73, 115, 49, 69, 110, 99, 111, 100, 101, 100, 66, 121, 116, 101,
+    65, 108, 105, 103, 110, 69, 110, 100, 79, 102, 76, 105, 110, 101, 69, 110,
+    100, 79, 102, 66, 108, 111, 99, 107, 74, 66, 73, 71, 50, 71, 108, 111,
+    98, 97, 108, 115, 68, 80
 ];
-pub static PX_SPAN: [i32; 382] = [
+pub static PX_SPAN: [i32; 400] = [
     0, 6,
     6, 5,
     11, 4,
@@ -2009,5 +2076,14 @@ pub static PX_SPAN: [i32; 382] = [
     1038, 9,
     1047, 11,
     1058, 11,
-    1069, 6
+    1069, 6,
+    1075, 5,
+    1080, 1,
+    1081, 4,
+    1085, 8,
+    1093, 16,
+    1109, 9,
+    1118, 10,
+    1128, 12,
+    1140, 2
 ];

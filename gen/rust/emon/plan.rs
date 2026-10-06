@@ -16,6 +16,9 @@ pub fn pk_bytes() -> i32 {
 pub fn pk_crop() -> i32 {
     return 5;
 }
+pub fn pk_decode_img() -> i32 {
+    return 6;
+}
 pub fn ps_ok() -> i32 {
     return 0;
 }
@@ -292,6 +295,93 @@ pub fn rq_bytes(mut c: &mut crate::port::Cells, id: i32, input: i32, offset: i32
     crate::port::cells_push(c, length);
     rec_end(c, at);
     return at;
+}
+pub fn rq_decode_img(mut c: &mut crate::port::Cells, id: i32, filter: i32, w: i32, h: i32, comps: i32, bpc: i32, k: i32, columns: i32, rows: i32, ccitt: i32, r#where: i32, offset: i32, length: i32, shas: &mut crate::port::Cells, shaat: i32, gwhere: i32, goffset: i32, glength: i32, gshaat: i32) -> i32 {
+    // Ask the host to decode a PDF image's codestream (kind 6): see the header. `shas` is a Cells holding the eight
+    // words of each SHA-256, the data's from index `shaat` and the globals' from `gshaat`; the words of a span that is
+    // an input's are zero.
+    let at: i32 = rec_begin(c, pk_decode_img(), id);
+    let mut i: i32 = 0;
+    crate::port::cells_push(c, filter);
+    crate::port::cells_push(c, w);
+    crate::port::cells_push(c, h);
+    crate::port::cells_push(c, comps);
+    crate::port::cells_push(c, bpc);
+    crate::port::cells_push(c, k);
+    crate::port::cells_push(c, columns);
+    crate::port::cells_push(c, rows);
+    crate::port::cells_push(c, ccitt);
+    crate::port::cells_push(c, r#where);
+    crate::port::cells_push(c, offset);
+    crate::port::cells_push(c, length);
+    while i < 8 {
+        crate::port::cells_push(c, crate::port::cells_at(shas, shaat + i));
+        i += 1;
+    }
+    crate::port::cells_push(c, gwhere);
+    crate::port::cells_push(c, goffset);
+    crate::port::cells_push(c, glength);
+    i = 0;
+    while i < 8 {
+        crate::port::cells_push(c, crate::port::cells_at(shas, gshaat + i));
+        i += 1;
+    }
+    rec_end(c, at);
+    return at;
+}
+pub fn dq_filter() -> i32 {
+    return 0;
+}
+pub fn dq_w() -> i32 {
+    return 1;
+}
+pub fn dq_h() -> i32 {
+    return 2;
+}
+pub fn dq_comps() -> i32 {
+    return 3;
+}
+pub fn dq_bpc() -> i32 {
+    return 4;
+}
+pub fn dq_k() -> i32 {
+    return 5;
+}
+pub fn dq_columns() -> i32 {
+    return 6;
+}
+pub fn dq_rows() -> i32 {
+    return 7;
+}
+pub fn dq_ccitt() -> i32 {
+    return 8;
+}
+pub fn dq_where() -> i32 {
+    return 9;
+}
+pub fn dq_offset() -> i32 {
+    return 10;
+}
+pub fn dq_length() -> i32 {
+    return 11;
+}
+pub fn dq_sha() -> i32 {
+    return 12;
+}
+pub fn dq_gwhere() -> i32 {
+    return 20;
+}
+pub fn dq_goffset() -> i32 {
+    return 21;
+}
+pub fn dq_glength() -> i32 {
+    return 22;
+}
+pub fn dq_gsha() -> i32 {
+    return 23;
+}
+pub fn dq_nargs() -> i32 {
+    return 31;
 }
 pub fn an_status(c: &mut crate::port::Cells, at: i32) -> i32 {
     return crate::port::cells_at(c, at + 3);

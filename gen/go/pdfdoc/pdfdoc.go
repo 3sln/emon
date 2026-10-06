@@ -717,7 +717,7 @@ func pdNth(ar *port.Cells, arr int32, i int32) int32 {
 	return k
 }
 
-func pdFilterCode(ar *port.Cells, h int32) int32 {
+func PdFilterCode(ar *port.Cells, h int32) int32 {
 	// A filter name (or an inline image's abbreviation) as a `pf-filter`
 	// code; 0 for a name that is not a filter.
 	if (pdflex.PlNameIs(ar, h, pdfnames.PnFlateDecode()) == 1) || (pdflex.PlNameIs(ar, h, pdfnames.PnFl()) == 1) {
@@ -914,7 +914,7 @@ func PdStreamPlan(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, 
 		code = 0
 		if fh != 0 {
 			if pdflex.PlKindOf(ar, fh) == 4 {
-				code = pdFilterCode(ar, fh)
+				code = PdFilterCode(ar, fh)
 			}
 		}
 		if code == 0 {

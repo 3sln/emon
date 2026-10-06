@@ -1,0 +1,870 @@
+#!/usr/bin/env bb
+;; Write P3.12's fixtures: PDFs whose image XObjects and inline images cover every case SPEC 10.11 and the P3.12 brief
+;; list, and the rows that say what kin must make of each.   bb kin/scripts/asset-fixtures
+;;
+;; A DEVELOPMENT TOOL (babashka; needs ImageMagick 7 (`magick`), `pdfimages` (poppler) and `qpdf`), run by a person,
+;; not a gate. The fixtures are COMMITTED so a test run needs none of them:
+;;
+;;   test/assets/*.pdf          one file a case (the encrypted copy is qpdf's)
+;;   test/assets/src/*          the source JPEGs (ImageMagick's), the CCITT G4 strip (ImageMagick's TIFF) and the
+;;                              JPEG 2000 codestream (ImageMagick's), as embedded
+;;   test/assets/png/*.png      what each decoded case must look like, for eyes (ImageMagick writes them from the
+;;                              expected RGBA; the committed rows hold the SHA-256 of that RGBA)
+;;   test/assets/rows.txt       the rows kin/pdfimagetest.kin reads
+;;   test/assets/version.txt    the tool versions
+;;
+;; EXPECTED PIXELS ARE THE GENERATOR'S, NOT kin'S. They are computed here from the source samples by the rules of
+;; SPEC 10.11 in Clojure ratios (exact arithmetic, no integer shortcut shared with kin/pdfimage.kin): unpacking, 16 -> 8,
+;; /Decode, the colour space, masks, /Matte, orientation and cut. A kin result is a SHA-256 of the RGBA8 row-major bytes
+;; (gray as r = g = b; alpha 255 when the image has none). Poppler is the second opinion: every case whose rules poppler
+;; shares (not CMYK, not /Matte, not masks: poppler does not apply them to `pdfimages` output) is extracted with
+;; `pdfimages -png` and compared to the expectation (`magick compare -metric AE`, 0); every JPEG that passes through is
+;; extracted with `pdfimages -all` and compared BYTE FOR BYTE with the file embedded.
+;;
+;;   rows (tab separated; # a comment)
+;;   P name file obj pv-code                                the JPEG passthrough verdict (`pv`)
+;;   D name file obj orient crop fill w h channels alpha sha the decoded pixels (crop: `-` or bx0,by0,bx1,by1,cx0,cy0,cx1,cy1,whole)
+;;   R name file obj filter w h comps bpc k cols rows cflags where off len gwhere goff glen sha gsha   the decode-img request
+;;   O a b c d code                                         a placement matrix (x1000, integers) and its orientation
+;;   X name file obj class                                  an image whose colour space kin does not read (class 9)
+;;   M name file n obj,x0,y0,x1,y1,skewed ...               the placements pc-document finds
+;;   I name file obj n                                      an inline image: the n-th BI of content stream obj, as a D row
+(require '[babashka.process :as p]
+         '[babashka.fs :as fs]
+         '[clojure.string :as str])
+(import '[java.security MessageDigest]
+        '[java.util.zip Deflater])
+
+(def root (-> *file* java.io.File. .getCanonicalFile .getParentFile .getParentFile .getParent))
+(def check? (boolean (some #{"--check"} *command-line-args*)))
+(def committed (str root "/test/assets"))
+(def out-dir (if check? (str (fs/create-temp-dir {:prefix "assetcheck"})) committed))
+(when check?
+  ;; --check regenerates into a temporary directory and compares every file with the committed one. The corpus was
+  ;; written with one ImageMagick (its JPEG and PNG encoders are part of the bytes), so another version is a skip, said
+  ;; aloud: a gate may skip a missing input, not pass quietly.
+  (let [want (second (re-find #"ImageMagick (ImageMagick [^\s]+)" (str (slurp (str committed "/version.txt")))))
+        have (second (re-find #"Version: (ImageMagick [^\s]+)" (str (:out (p/shell {:out :string :continue true} "magick" "-version")))))]
+    (when (not= want have)
+      (println (str "  SKIP asset-fixtures --check: the corpus was written with " want ", this machine has " (or have "no ImageMagick")))
+      (System/exit 0))))
+(fs/create-dirs (str out-dir "/src"))
+(fs/create-dirs (str out-dir "/png"))
+(defn path [& xs] (apply str out-dir "/" xs))
+
+(defn sh [& args] (apply p/shell {:out :string :err :string :continue true :dir root} args))
+(defn sh! [& args]
+  (let [r (apply sh args)]
+    (when-not (zero? (:exit r)) (throw (ex-info (str "failed: " (pr-str args) "\n" (:err r)) {})))
+    r))
+(defn bytes-of [s] (.getBytes ^String s "ISO-8859-1"))
+(defn cat-bytes [& xs]
+  (let [bo (java.io.ByteArrayOutputStream.)]
+    (doseq [x xs] (.write bo ^bytes (if (string? x) (bytes-of x) x)))
+    (.toByteArray bo)))
+(defn ubytes [coll] (byte-array (map #(unchecked-byte (long %)) coll)))
+(defn sha256-hex [^bytes bs]
+  (apply str (map #(format "%02x" (bit-and 0xff %)) (.digest (MessageDigest/getInstance "SHA-256") bs))))
+(defn hex [^bytes bs] (apply str (map #(format "%02x" (bit-and 0xff %)) bs)))
+
+;; ------------------------------------------------------------------ source samples
+
+(defn mix64 [z0]
+  (let [z (unchecked-add z0 (unchecked-long 0x9E3779B97F4A7C15))
+        z (unchecked-multiply (bit-xor z (unsigned-bit-shift-right z 30)) (unchecked-long 0xBF58476D1CE4E5B9))
+        z (unchecked-multiply (bit-xor z (unsigned-bit-shift-right z 27)) (unchecked-long 0x94D049BB133111EB))]
+    (bit-xor z (unsigned-bit-shift-right z 31))))
+
+(defn sample [seed x y c bpc]
+  ;; deterministic, with the extremes (0 and the maximum) common enough to matter
+  (let [m (dec (bit-shift-left 1 bpc))
+        r (bit-and (mix64 (+ (* seed 1000003) (* x 7919) (* y 104729) (* c 15485863))) 0x7fffffff)
+        k (mod r 11)]
+    (cond (= k 0) 0 (= k 1) m :else (mod (quot r 11) (inc m)))))
+
+(defn gen-rows [seed w h nc bpc]
+  (vec (for [y (range h)] (vec (for [x (range w) c (range nc)] (sample seed x y c bpc))))))
+
+(defn pack-row [row bpc]
+  (case (long bpc)
+    8 (ubytes row)
+    16 (ubytes (mapcat (fn [v] [(bit-shift-right v 8) (bit-and v 255)]) row))
+    (let [per (quot 8 bpc)]
+      (ubytes (for [chunk (partition-all per row)]
+                (reduce (fn [acc [i v]] (bit-or acc (bit-shift-left v (- 8 bpc (* i bpc)))))
+                        0 (map-indexed vector chunk)))))))
+
+(defn pack [rows bpc] (apply cat-bytes (map #(pack-row % bpc) rows)))
+
+;; ------------------------------------------------------------------ encoders
+
+(defn deflate ^bytes [^bytes bs]
+  (let [d (Deflater. 6) out (java.io.ByteArrayOutputStream.) buf (byte-array 4096)]
+    (.setInput d bs) (.finish d)
+    (while (not (.finished d)) (.write out buf 0 (.deflate d buf)))
+    (.toByteArray out)))
+
+(defn png-filter-rows
+  "PNG-predict `bs` (rows of `rowb` bytes, `bpp` bytes a pixel): row y uses filter (mod y 5), each written independently."
+  [^bytes bs rowb bpp]
+  (let [rows (partition rowb (map #(bit-and 0xff %) bs))
+        zero (vec (repeat rowb 0))]
+    (ubytes
+     (loop [rows rows prev zero y 0 acc []]
+       (if-let [row (first rows)]
+         (let [row (vec row) f (mod y 5)
+               a (fn [i] (if (>= i bpp) (row (- i bpp)) 0))
+               b (fn [i] (prev i))
+               c (fn [i] (if (>= i bpp) (prev (- i bpp)) 0))
+               paeth (fn [i] (let [A (a i) B (b i) C (c i) p (- (+ A B) C)
+                                   pa (Math/abs (- p A)) pb (Math/abs (- p B)) pc (Math/abs (- p C))]
+                               (cond (and (<= pa pb) (<= pa pc)) A (<= pb pc) B :else C)))
+               out (for [i (range rowb)]
+                     (bit-and 255 (- (row i) (case f 0 0 1 (a i) 2 (b i) 3 (quot (+ (a i) (b i)) 2) 4 (paeth i)))))]
+           (recur (rest rows) row (inc y) (into acc (cons f out))))
+         acc)))))
+
+(defn lzw-encode
+  "ISO 32000-1 7.4.4 LZWDecode with /EarlyChange 1: clear code first, codes 9..12 bits, width up one code early."
+  [^bytes bs]
+  (let [bits (java.io.ByteArrayOutputStream.) acc (atom 0) nacc (atom 0)
+        put (fn [code width]
+              (reset! acc (bit-or (bit-shift-left @acc width) code))
+              (swap! nacc + width)
+              (while (>= @nacc 8)
+                (.write bits (bit-and 255 (bit-shift-right @acc (- @nacc 8))))
+                (swap! nacc - 8)
+                (swap! acc bit-and (dec (bit-shift-left 1 @nacc)))))
+        fresh (fn [] (into {} (map (fn [i] [[i] i]) (range 256))))]
+    (loop [table (fresh) next-code 258 width 9 s [] in (map #(bit-and 0xff %) bs) started false]
+      (when-not started (put 256 9))
+      (cond
+        (empty? in)
+        (do (when (seq s) (put (table s) width))
+            ;; the width the decoder will have after this entry
+            (put 257 (cond (>= (inc next-code) 2048) 12 (>= (inc next-code) 1024) 11 (>= (inc next-code) 512) 10 :else 9))
+            (when (pos? @nacc) (.write bits (bit-shift-left @acc (- 8 @nacc))))
+            (.toByteArray bits))
+        :else
+        (let [c (first in) sc (conj s c)]
+          (if (contains? table sc)
+            (recur table next-code width sc (rest in) true)
+            (let [_ (put (table s) width)
+                  table (assoc table sc next-code)
+                  next-code (inc next-code)
+                  ;; after adding entry n the decoder is one entry behind: it widens when (next-code + 1 - 1)... see below
+                  width (cond (>= next-code 2047) 12 (>= next-code 1023) 11 (>= next-code 511) 10 :else 9)]
+              (if (>= next-code 4094)
+                (do (put 256 width)
+                    (recur (fresh) 258 9 [c] (rest in) true))
+                (recur table next-code width [c] (rest in) true)))))))))
+
+(defn rl-encode [^bytes bs]
+  ;; runs of 2+ equal bytes as repeats, the rest literal in groups of up to 128
+  (let [v (mapv #(bit-and 0xff %) bs) out (java.io.ByteArrayOutputStream.)]
+    (loop [i 0 lit []]
+      (let [flush! (fn [] (when (seq lit) (.write out (dec (count lit))) (doseq [b lit] (.write out b))))]
+        (cond
+          (>= i (count v)) (do (flush!) (.write out 128))
+          :else
+          (let [b (v i) run (loop [j i] (if (and (< j (count v)) (= (v j) b) (< (- j i) 128)) (recur (inc j)) (- j i)))]
+            (if (>= run 2)
+              (do (flush!) (.write out (- 257 run)) (.write out b) (recur (+ i run) []))
+              (if (= (count lit) 127)
+                (do (.write out 127) (doseq [x (conj lit b)] (.write out x)) (recur (inc i) []))
+                (recur (inc i) (conj lit b))))))))
+    (.toByteArray out)))
+
+(defn ahx-encode [^bytes bs] (bytes-of (str (hex bs) ">")))
+
+(defn a85-encode [^bytes bs]
+  (let [v (mapv #(bit-and 0xff %) bs) sb (StringBuilder.)]
+    (doseq [g (partition-all 4 v)]
+      (let [n (count g) padded (vec (concat g (repeat (- 4 n) 0)))
+            val (reduce (fn [a b] (+ (* a 256) b)) 0 padded)]
+        (if (and (= n 4) (zero? val))
+          (.append sb "z")
+          (let [digs (loop [x val k 5 acc '()] (if (zero? k) acc (recur (quot x 85) (dec k) (cons (rem x 85) acc))))]
+            (doseq [d (take (inc n) digs)] (.append sb (char (+ d 33))))))))
+    (bytes-of (str sb "~>"))))
+
+;; ------------------------------------------------------------------ the PDF writer
+
+(defn build-pdf
+  "objs: {num {:dict \"...\" :stream bytes-or-nil}}. Answers {:bytes :stream-at {num offset}}."
+  [objs trailer-extra]
+  (let [bo (java.io.ByteArrayOutputStream.) offs (atom {}) sat (atom {})
+        pos (fn [] (.size bo))]
+    (.write bo (bytes-of "%PDF-1.7\n%âãÏÓ\n"))
+    (doseq [[num {:keys [dict stream]}] (sort-by key objs)]
+      (swap! offs assoc num (pos))
+      (.write bo (bytes-of (str num " 0 obj\n")))
+      (if stream
+        (do (.write bo (bytes-of (str "<<" dict "/Length " (alength ^bytes stream) ">>\nstream\n")))
+            (swap! sat assoc num (pos))
+            (.write bo ^bytes stream)
+            (.write bo (bytes-of "\nendstream\n")))
+        (.write bo (bytes-of (str dict "\n"))))
+      (.write bo (bytes-of "endobj\n")))
+    (let [xr (pos) size (inc (apply max (keys @offs)))]
+      (.write bo (bytes-of (str "xref\n0 " size "\n0000000000 65535 f \n")))
+      (doseq [i (range 1 size)]
+        (.write bo (bytes-of (if-let [o (@offs i)] (format "%010d 00000 n \n" o) "0000000000 00000 f \n"))))
+      (.write bo (bytes-of (str "trailer\n<</Size " size "/Root 1 0 R" trailer-extra ">>\nstartxref\n" xr "\n%%EOF\n"))))
+    {:bytes (.toByteArray bo) :stream-at @sat}))
+
+(def rows-out (atom []))
+(defn row!
+  "A row; a file name (as the laws read them: relative to test/) gets its directory."
+  [& fields]
+  (swap! rows-out conj (str/join "\t" (map (fn [f] (let [f (str f)] (if (str/ends-with? f ".pdf") (str "assets/" f) f))) fields))))
+(defn comment! [s] (swap! rows-out conj (str "# " s)))
+
+(def page-w 200)
+(def page-h 160)
+
+(defn image-pdf
+  "A one-page file: the image object 5 (dict, stream) placed by `cm`, extra objects as {num obj}."
+  [file img-dict img-stream & {:keys [cm extra content res trailer] :or {cm "120 0 0 80 20 40"}}]
+  (let [content (or content (str "q " cm " cm /Im Do Q\n"))
+        objs (merge {1 {:dict "<</Type/Catalog/Pages 2 0 R>>"}
+                     2 {:dict "<</Type/Pages/Kids[3 0 R]/Count 1>>"}
+                     3 {:dict (str "<</Type/Page/Parent 2 0 R/MediaBox[0 0 " page-w " " page-h "]/Contents 4 0 R/Resources<</XObject<</Im 5 0 R>>"
+                                   (or res "") ">>>>")}
+                     4 {:dict "" :stream (bytes-of content)}
+                     5 {:dict img-dict :stream img-stream}}
+                    extra)
+        {:keys [bytes stream-at]} (build-pdf objs (or trailer ""))]
+    (fs/write-bytes (path file) bytes)
+    stream-at))
+
+;; ------------------------------------------------------------------ the expected pixels
+
+(defn rnd-half-up
+  "floor(x + 1/2), exactly (x a long or a ratio)."
+  [x] (let [r (+ (rationalize x) 1/2)] (Math/floorDiv (long (numerator r)) (long (denominator r)))))
+
+(defn reduce-sample [v bpc] (if (= bpc 16) (quot (+ (* v 255) 32767) 65535) v))
+(defn maxv [bpc] (if (= bpc 16) 255 (dec (bit-shift-left 1 bpc))))
+
+(defn decode-value
+  "The decoded value of reduced sample v: d0 + v (d1 - d0) / M."
+  [v m d0 d1] (+ d0 (/ (* v (- d1 d0)) m)))
+
+(defn to255 [x] (max 0 (min 255 (rnd-half-up (* x 255)))))
+
+(defn cmyk->rgb [[c m y k]] [(- 255 (min 255 (+ c k))) (- 255 (min 255 (+ m k))) (- 255 (min 255 (+ y k)))])
+
+(defn pixel-rgb
+  "The colour of the source pixel from its raw samples. cs: :gray :rgb :cmyk or [:indexed base hival palette]."
+  [{:keys [bpc cs decode]} samples]
+  (let [m (maxv bpc)
+        vs (mapv #(reduce-sample % bpc) samples)
+        idxd (vector? cs)
+        n (cond idxd 1 (= cs :gray) 1 (= cs :rgb) 3 :else 4)]
+    (let [dec-of (fn [i] (let [[a b] (if decode [(nth decode (* 2 i)) (nth decode (inc (* 2 i)))] (if idxd [0 m] [0 1]))]
+                           (decode-value (vs i) m a b)))]
+      (if idxd
+        (let [[_ base hival pal] cs
+              idx (max 0 (min hival (rnd-half-up (dec-of 0))))
+              nb (case base :gray 1 :rgb 3 :cmyk 4)
+              ent (mapv #(bit-and 0xff %) (take nb (drop (* idx nb) pal)))
+              ent (vec (concat ent (repeat (- nb (count ent)) 0)))]
+          (case base :gray [(ent 0) (ent 0) (ent 0)] :rgb ent :cmyk (cmyk->rgb ent)))
+        (let [cs8 (mapv (fn [i] (to255 (dec-of i))) (range n))]
+          (case cs :gray [(cs8 0) (cs8 0) (cs8 0)] :rgb cs8 :cmyk (cmyk->rgb cs8)))))))
+
+(defn expected-rgba
+  "Rows of [r g b a] for an image spec: {:w :h :bpc :cs :decode :rows :fill :imask? :key :mask {:img :smask? :matte}}."
+  [{:keys [w h bpc rows fill imask? decode mask key] :as spec}]
+  (let [m (maxv bpc)]
+    (vec
+     (for [y (range h)]
+       (vec
+        (for [x (range w)]
+          (let [nc (cond imask? 1 (vector? (:cs spec)) 1 (= (:cs spec) :gray) 1 (= (:cs spec) :rgb) 3 :else 4)
+                smp (subvec (rows y) (* x nc) (* (inc x) nc))
+                [r g b] (if imask? fill (pixel-rgb spec smp))
+                alpha (cond
+                        imask? (let [v (reduce-sample (smp 0) 1)
+                                     [d0 d1] (if decode decode [0 1])]
+                                 (if (zero? (rnd-half-up (* 255 (decode-value v 1 d0 d1)))) 255 0))
+                        key (if (every? true? (map (fn [s i] (<= (nth key (* 2 i)) (reduce-sample s bpc) (nth key (inc (* 2 i)))))
+                                                   smp (range nc))) 0 255)
+                        mask (let [{mw :w mh :h mrows :rows mbpc :bpc kind :kind mdecode :decode} mask
+                                   mx (quot (* x mw) w) my (quot (* y mh) h)
+                                   mv (reduce-sample ((mrows my) mx) mbpc)
+                                   mm (maxv mbpc)
+                                   [d0 d1] (if mdecode mdecode [0 1])
+                                   dv (to255 (decode-value mv mm d0 d1))]
+                               (if (= kind :stencil) (if (zero? dv) 255 0) dv))
+                        :else 255)
+                matte (:matte mask)
+                [r g b] (if (and matte mask)
+                          (let [unm (fn [c mt] (if (zero? alpha) 0
+                                                   (let [n (* (- c mt) 255) q (quot (+ (Math/abs (long n)) (quot alpha 2)) alpha)]
+                                                     (max 0 (min 255 (+ mt (if (neg? n) (- q) q)))))))]
+                            [(unm r (matte 0)) (unm g (matte 1)) (unm b (matte 2))])
+                          [r g b])]
+            [r g b alpha])))))))
+
+(defn orient-pixels
+  "The oriented image of rows of pixels, `code` 0..7 as kin/pdfimage.kin names them, written here from the pictures:
+  0 as is, 1 mirrored left-right, 2 half a turn, 3 mirrored top-bottom, 4 a quarter turn clockwise, 5 counter-clockwise,
+  6 transposed, 7 anti-transposed."
+  [px code]
+  (let [h (count px) w (count (first px))
+        at (fn [x y] ((px y) x))]
+    (case (long code)
+      0 px
+      1 (vec (for [y (range h)] (vec (for [x (range w)] (at (- w 1 x) y)))))
+      2 (vec (for [y (range h)] (vec (for [x (range w)] (at (- w 1 x) (- h 1 y))))))
+      3 (vec (for [y (range h)] (vec (for [x (range w)] (at x (- h 1 y))))))
+      4 (vec (for [Y (range w)] (vec (for [X (range h)] (at Y (- h 1 X))))))
+      5 (vec (for [Y (range w)] (vec (for [X (range h)] (at (- w 1 Y) X)))))
+      6 (vec (for [Y (range w)] (vec (for [X (range h)] (at Y X)))))
+      7 (vec (for [Y (range w)] (vec (for [X (range h)] (at (- w 1 Y) (- h 1 X)))))))))
+
+(defn rgba-bytes [px] (ubytes (mapcat (fn [row] (mapcat identity row)) px)))
+
+(defn corner-orient
+  "The orientation of the matrix [a b c d] (PDF user space, y up) by where the image's top-left and top-right corners
+  land on the page (display y is -y), found independently of kin's signs-and-zeros rule. nil: not rectilinear."
+  [a b c d]
+  (let [tl [(* c 1) (* d 1)] tr [(+ a c) (+ b d)] bl [0 0] br [a b]
+        pts {:tl tl :tr tr :bl bl :br br}
+        disp (fn [[x y]] [x (- y)])
+        d* (update-vals pts disp)
+        xs (map first (vals d*)) ys (map second (vals d*))
+        minx (apply min xs) maxx (apply max xs) miny (apply min ys) maxy (apply max ys)
+        where (fn [[x y]] (cond (and (= x minx) (= y miny)) :tl (and (= x maxx) (= y miny)) :tr
+                                (and (= x minx) (= y maxy)) :bl (and (= x maxx) (= y maxy)) :br))
+        wtl (where (d* :tl)) wtr (where (d* :tr))
+        rectilinear (and (or (and (zero? b) (zero? c)) (and (zero? a) (zero? d)))
+                         (not (and (zero? a) (zero? b))) (not (and (zero? c) (zero? d))))]
+    (when (and rectilinear wtl wtr)
+      ({[:tl :tr] 0 [:tr :tl] 1 [:br :bl] 2 [:bl :br] 3 [:tr :br] 4 [:bl :tl] 5 [:tl :bl] 6 [:br :tr] 7} [wtl wtr]))))
+
+;; ------------------------------------------------------------------ cases: decoded
+
+(def tool-versions (atom {}))
+
+(defn d-row!
+  "A decoded-pixels row: the expected oriented, cut pixels hashed; also a PNG for eyes. `crop` is nil or
+  {:box :clip :whole}; `fill` the stencil colour."
+  [name file obj spec & {:keys [orient crop view]}]
+  (let [px (expected-rgba spec)
+        orient (or orient 0)
+        oriented (orient-pixels px orient)
+        ow (count (first oriented)) oh (count oriented)
+        [vx0 vy0 vx1 vy1] (or view [0 0 ow oh])
+        cut (vec (for [y (range vy0 vy1)] (subvec (oriented y) vx0 vx1)))
+        bs (rgba-bytes cut)
+        has-alpha (boolean (or (:imask? spec) (:key spec) (:mask spec)))
+        chs (cond (:imask? spec) 3 (= (:cs spec) :gray) 1 (and (vector? (:cs spec)) (= (second (:cs spec)) :gray)) 1 :else 3)
+        fill (:fill spec)]
+    (let [raw (path "png/" name ".raw")]
+      (fs/write-bytes raw bs)
+      (sh! "magick" "-size" (str (count (first cut)) "x" (count cut)) "-depth" "8" (str "rgba:" raw) "-strip" (path "png/" name ".png"))
+      (fs/delete raw))
+    (row! "D" name file obj orient
+          (if crop (str/join "," (concat (:box crop) (:clip crop) [(:whole crop)])) "-")
+          (if fill (+ (* 65536 (fill 0)) (* 256 (fill 1)) (fill 2)) 0)
+          (count (first cut)) (count cut) chs (if has-alpha 1 0) (sha256-hex bs))
+    px))
+
+(defn poppler-check!
+  "pdfimages -png of the file's image must equal the expected colour (alpha ignored: poppler writes masks beside)."
+  [file expect-px & {:keys [fuzz]}]
+  (let [dir (str (fs/create-temp-dir {:prefix "assetfix"}))
+        r (sh "pdfimages" "-png" (path file) (str dir "/x"))]
+    (when-not (zero? (:exit r)) (throw (ex-info (str "pdfimages failed on " file ": " (:err r)) {})))
+    (let [got (first (sort (map str (fs/glob dir "x-*.png"))))
+          h (count expect-px) w (count (first expect-px))
+          raw (str dir "/e.rgb")]
+      (fs/write-bytes raw (ubytes (mapcat (fn [row] (mapcat (fn [[r g b _]] [r g b]) row)) expect-px)))
+      (sh! "magick" "-size" (str w "x" h) "-depth" "8" (str "rgb:" raw) (str dir "/e.png"))
+      (let [r (sh "magick" "compare" "-metric" "AE" "-fuzz" (or fuzz "0") got (str dir "/e.png") "null:")
+            ae (try (Long/parseLong (re-find #"^\d+" (str/trim (:err r)))) (catch Exception _ -1))]
+        (fs/delete-tree dir)
+        (when-not (zero? ae)
+          (throw (ex-info (str "poppler's pixels differ from the expectation for " file ": AE " ae) {})))))))
+
+(def S 17) ;; image width
+(def T 11) ;; image height
+
+(defn case-flate-rgb8 []
+  (let [rows (gen-rows 1 S T 3 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows}]
+    (image-pdf "flate-rgb8.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/FlateDecode") (deflate bs))
+    (let [px (d-row! "flate-rgb8" "flate-rgb8.pdf" 5 spec)]
+      (poppler-check! "flate-rgb8.pdf" px))
+    (doseq [o (range 1 8)]
+      (d-row! (str "flate-rgb8-o" o) "flate-rgb8.pdf" 5 spec :orient o))
+    ;; a cut: the placement box 120 x 80 pt at (20, 40); clip box on the page's own scale, centipoints, y down
+    (let [box [2000 4000 14000 12000] clip [5000 4000 14000 9000]]
+      ;; kin's rule: visible = box ∩ clip; cut in oriented pixels, floor low edge, ceiling high edge
+      (let [bw (- (box 2) (box 0)) bh (- (box 3) (box 1))
+            vx0 (max (box 0) (clip 0)) vy0 (max (box 1) (clip 1)) vx1 (min (box 2) (clip 2)) vy1 (min (box 3) (clip 3))
+            px0 (long (Math/floor (/ (* (- vx0 (box 0)) S) bw))) py0 (long (Math/floor (/ (* (- vy0 (box 1)) T) bh)))
+            px1 (long (Math/ceil (/ (* (- vx1 (box 0)) S) bw))) py1 (long (Math/ceil (/ (* (- vy1 (box 1)) T) bh)))]
+        (d-row! "flate-rgb8-cut" "flate-rgb8.pdf" 5 spec
+                :crop {:box box :clip clip :whole 980} :view [px0 py0 px1 py1])
+        ;; the same cut after a quarter turn: the display grid is T wide and S high
+        (let [dw T dh S
+              qx0 (long (Math/floor (/ (* (- vx0 (box 0)) dw) bw))) qy0 (long (Math/floor (/ (* (- vy0 (box 1)) dh) bh)))
+              qx1 (long (Math/ceil (/ (* (- vx1 (box 0)) dw) bw))) qy1 (long (Math/ceil (/ (* (- vy1 (box 1)) dh) bh)))]
+          (d-row! "flate-rgb8-o4-cut" "flate-rgb8.pdf" 5 spec :orient 4
+                  :crop {:box box :clip clip :whole 980} :view [qx0 qy0 qx1 qy1]))))
+    ;; whole enough: a clip that leaves 99 per cent keeps the whole image
+    (let [box [2000 4000 14000 12000]]
+      (d-row! "flate-rgb8-whole" "flate-rgb8.pdf" 5 spec
+              :crop {:box box :clip [2000 4000 13900 12000] :whole 980}))))
+
+(defn case-flate-rgb8-predictor []
+  (let [rows (gen-rows 2 S T 3 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows}]
+    (image-pdf "flate-rgb8-png.pdf"
+               (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/FlateDecode/DecodeParms<</Predictor 15/Colors 3/BitsPerComponent 8/Columns " S ">>")
+               (deflate (png-filter-rows bs (* S 3) 3)))
+    (let [px (d-row! "flate-rgb8-png" "flate-rgb8-png.pdf" 5 spec)]
+      (poppler-check! "flate-rgb8-png.pdf" px))))
+
+(defn case-flate-rgb16 []
+  (let [rows (gen-rows 3 S T 3 16) bs (pack rows 16)
+        spec {:w S :h T :bpc 16 :cs :rgb :rows rows}]
+    (image-pdf "flate-rgb16.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 16/Filter/FlateDecode") (deflate bs))
+    (d-row! "flate-rgb16" "flate-rgb16.pdf" 5 spec))
+  ;; poppler turns a 16-bit sample of 65535 (and 65534) into 0 (checked: its own 16-bit PNG), so the file it is held to has none
+  (let [rows (mapv (fn [r] (mapv #(min % 60000) r)) (gen-rows 3 S T 3 16)) bs (pack rows 16)
+        spec {:w S :h T :bpc 16 :cs :rgb :rows rows}]
+    (image-pdf "flate-rgb16-b.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 16/Filter/FlateDecode") (deflate bs))
+    (let [px (d-row! "flate-rgb16-b" "flate-rgb16-b.pdf" 5 spec)]
+      (poppler-check! "flate-rgb16-b.pdf" px :fuzz "1%"))))
+
+(defn case-gray [bpc seed]
+  (let [rows (gen-rows seed S T 1 bpc) bs (pack rows bpc)
+        spec {:w S :h T :bpc bpc :cs :gray :rows rows}
+        file (str "gray" bpc ".pdf")]
+    (image-pdf file (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceGray/BitsPerComponent " bpc "/Filter/FlateDecode") (deflate bs))
+    (let [px (d-row! (str "gray" bpc) file 5 spec)]
+      (poppler-check! file px))))
+
+(defn case-decode-gray []
+  (let [rows (gen-rows 21 S T 1 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :gray :rows rows :decode [1 0]}]
+    (image-pdf "gray8-decode.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceGray/BitsPerComponent 8/Decode[1 0]/Filter/FlateDecode") (deflate bs))
+    (let [px (d-row! "gray8-decode" "gray8-decode.pdf" 5 spec)]
+      (poppler-check! "gray8-decode.pdf" px))
+    ;; a fractional decode on 4-bit gray: [0.25 0.75]
+    (let [rows (gen-rows 22 S T 1 4) bs (pack rows 4)
+          spec {:w S :h T :bpc 4 :cs :gray :rows rows :decode [1/4 3/4]}]
+      (image-pdf "gray4-decode.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceGray/BitsPerComponent 4/Decode[0.25 0.75]/Filter/FlateDecode") (deflate bs))
+      (d-row! "gray4-decode" "gray4-decode.pdf" 5 spec))
+    (let [rows (gen-rows 23 S T 3 8) bs (pack rows 8)
+          spec {:w S :h T :bpc 8 :cs :rgb :rows rows :decode [1 0 0 1 1 0]}]
+      (image-pdf "rgb8-decode.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Decode[1 0 0 1 1 0]/Filter/FlateDecode") (deflate bs))
+      (d-row! "rgb8-decode" "rgb8-decode.pdf" 5 spec))))
+
+(defn case-filters []
+  (doseq [[nm flt enc seed] [["lzw" "/LZWDecode" lzw-encode 31] ["runlength" "/RunLengthDecode" rl-encode 32]
+                             ["asciihex" "/ASCIIHexDecode" ahx-encode 33]]]
+    (let [rows (gen-rows seed S T 3 8) bs (pack rows 8)
+          rows2 (vec (map (fn [r] (vec (map-indexed (fn [i v] (if (< (mod i 9) 6) 40 v)) r))) rows)) ; runs for run length
+          bs2 (pack rows2 8)
+          spec {:w S :h T :bpc 8 :cs :rgb :rows rows2}
+          file (str nm "-rgb8.pdf")]
+      (image-pdf file (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter " flt) (enc bs2))
+      (let [px (d-row! (str nm "-rgb8") file 5 spec)]
+        (poppler-check! file px))))
+  ;; LZW with the TIFF predictor, two filters in a chain (A85 then Flate)
+  (let [rows (gen-rows 34 S T 3 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows}]
+    (image-pdf "a85-flate-rgb8.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter[/ASCII85Decode/FlateDecode]") (a85-encode (deflate bs)))
+    (let [px (d-row! "a85-flate-rgb8" "a85-flate-rgb8.pdf" 5 spec)]
+      (poppler-check! "a85-flate-rgb8.pdf" px))))
+
+(defn case-indexed []
+  (let [pal (ubytes (mapcat identity (for [i (range 16)] [(* i 17) (mod (* i 53) 256) (- 255 (* i 13))])))
+        rows (gen-rows 41 S T 1 4) bs (pack rows 4)
+        spec {:w S :h T :bpc 4 :cs [:indexed :rgb 15 pal] :rows rows}
+        hexpal (hex pal)]
+    (image-pdf "indexed16.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/Indexed/DeviceRGB 15<" hexpal ">]/BitsPerComponent 4/Filter/FlateDecode") (deflate bs))
+    (let [px (d-row! "indexed16" "indexed16.pdf" 5 spec)]
+      (poppler-check! "indexed16.pdf" px))
+    ;; the palette in a stream, the colours gray
+    (let [gpal (ubytes (map #(* % 17) (range 16)))
+          spec {:w S :h T :bpc 4 :cs [:indexed :gray 15 gpal] :rows rows}]
+      (image-pdf "indexed16-stream.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/Indexed/DeviceGray 15 8 0 R]/BitsPerComponent 4/Filter/FlateDecode") (deflate bs)
+                 :extra {8 {:dict "" :stream gpal}})
+      (let [px (d-row! "indexed16-stream" "indexed16-stream.pdf" 5 spec)]
+        (poppler-check! "indexed16-stream.pdf" px)))
+    ;; Indexed over CMYK, and a /Decode on an Indexed image
+    (let [cpal (ubytes (mapcat identity (for [i (range 4)] [(* i 60) (* i 20) 10 (* i 30)])))
+          rows (gen-rows 42 S T 1 2) bs (pack rows 2)
+          spec {:w S :h T :bpc 2 :cs [:indexed :cmyk 3 cpal] :rows rows}]
+      (image-pdf "indexed4-cmyk.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/Indexed/DeviceCMYK 3<" (hex cpal) ">]/BitsPerComponent 2/Filter/FlateDecode") (deflate bs))
+      (d-row! "indexed4-cmyk" "indexed4-cmyk.pdf" 5 spec))
+    (let [spec {:w S :h T :bpc 4 :cs [:indexed :rgb 15 pal] :rows rows :decode [15 0]}]
+      (image-pdf "indexed16-decode.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/Indexed/DeviceRGB 15<" hexpal ">]/BitsPerComponent 4/Decode[15 0]/Filter/FlateDecode") (deflate bs))
+      (let [px (d-row! "indexed16-decode" "indexed16-decode.pdf" 5 spec)]
+        (poppler-check! "indexed16-decode.pdf" px)))))
+
+(defn case-cmyk-icc-cal []
+  (let [rows (gen-rows 51 S T 4 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :cmyk :rows rows}]
+    (image-pdf "cmyk8.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceCMYK/BitsPerComponent 8/Filter/FlateDecode") (deflate bs))
+    (d-row! "cmyk8" "cmyk8.pdf" 5 spec))
+  (let [rows (gen-rows 52 S T 3 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows}]
+    ;; the profile is not a profile: kin reads /N and nothing else
+    (image-pdf "icc-rgb.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/ICCBased 8 0 R]/BitsPerComponent 8/Filter/FlateDecode") (deflate bs)
+               :extra {8 {:dict "/N 3" :stream (bytes-of "not a profile")}})
+    (d-row! "icc-rgb" "icc-rgb.pdf" 5 spec)
+    (image-pdf "cal-rgb.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/CalRGB<</WhitePoint[0.95 1 1.09]>>]/BitsPerComponent 8/Filter/FlateDecode") (deflate bs))
+    (d-row! "cal-rgb" "cal-rgb.pdf" 5 spec))
+  (let [rows (gen-rows 53 S T 1 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :gray :rows rows}]
+    (image-pdf "icc-gray.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/ICCBased 8 0 R]/BitsPerComponent 8/Filter/FlateDecode") (deflate bs)
+               :extra {8 {:dict "/N 1" :stream (bytes-of "not a profile")}})
+    (d-row! "icc-gray" "icc-gray.pdf" 5 spec))
+  ;; the colour spaces kin does not read: Lab, Separation, DeviceN
+  (let [bs (pack (gen-rows 54 S T 3 8) 8)]
+    (image-pdf "lab.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/Lab<</WhitePoint[0.95 1 1.09]>>]/BitsPerComponent 8/Filter/FlateDecode") (deflate bs))
+    (row! "X" "lab" "lab.pdf" 5 9)
+    (image-pdf "separation.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace[/Separation/Spot/DeviceGray 8 0 R]/BitsPerComponent 8/Filter/FlateDecode")
+               (deflate (pack (gen-rows 55 S T 1 8) 8))
+               :extra {8 {:dict "/FunctionType 2/Domain[0 1]/N 1" :stream nil}})
+    (row! "X" "separation" "separation.pdf" 5 9)))
+
+(defn case-masks []
+  ;; an image mask in red, and with /Decode [1 0]
+  (let [W 19 H 13
+        rows (gen-rows 61 W H 1 1) bs (pack rows 1)
+        spec {:w W :h H :bpc 1 :cs :gray :rows rows :imask? true :fill [255 0 0]}]
+    (image-pdf "imagemask.pdf" (str "/Type/XObject/Subtype/Image/Width " W "/Height " H "/ImageMask true/BitsPerComponent 1/Filter/FlateDecode") (deflate bs)
+               :content "q 1 0 0 rg 120 0 0 80 20 40 cm /Im Do Q\n")
+    (d-row! "imagemask" "imagemask.pdf" 5 spec)
+    (let [spec (assoc spec :decode [1 0])]
+      (image-pdf "imagemask-decode.pdf" (str "/Type/XObject/Subtype/Image/Width " W "/Height " H "/ImageMask true/BitsPerComponent 1/Decode[1 0]/Filter/FlateDecode") (deflate bs)
+                 :content "q 1 0 0 rg 120 0 0 80 20 40 cm /Im Do Q\n")
+      (d-row! "imagemask-decode" "imagemask-decode.pdf" 5 spec)))
+  ;; a colour key
+  (let [rows (gen-rows 62 S T 3 8) bs (pack rows 8)
+        key [0 40 0 255 0 90]
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows :key key}]
+    (image-pdf "colorkey.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Mask[0 40 0 255 0 90]/Filter/FlateDecode") (deflate bs))
+    (d-row! "colorkey" "colorkey.pdf" 5 spec)
+    ;; the colour key on a 4-bit gray image
+    (let [rows (gen-rows 63 S T 1 4) bs (pack rows 4)
+          spec {:w S :h T :bpc 4 :cs :gray :rows rows :key [0 3]}]
+      (image-pdf "colorkey-gray4.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceGray/BitsPerComponent 4/Mask[0 3]/Filter/FlateDecode") (deflate bs))
+      (d-row! "colorkey-gray4" "colorkey-gray4.pdf" 5 spec)))
+  ;; a stencil /Mask of another size (10 x 7: the image's pixels map by floor(x * 10 / 17))
+  (let [rows (gen-rows 64 S T 3 8) bs (pack rows 8)
+        mrows (gen-rows 65 10 7 1 1) mbs (pack mrows 1)
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows :mask {:w 10 :h 7 :rows mrows :bpc 1 :kind :stencil}}]
+    (image-pdf "mask-stencil.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Mask 6 0 R/Filter/FlateDecode") (deflate bs)
+               :extra {6 {:dict "/Type/XObject/Subtype/Image/Width 10/Height 7/ImageMask true/BitsPerComponent 1/Filter/FlateDecode" :stream (deflate mbs)}})
+    (d-row! "mask-stencil" "mask-stencil.pdf" 5 spec))
+  ;; /SMask of another size, then with /Matte
+  (let [rows (gen-rows 66 S T 3 8) bs (pack rows 8)
+        mrows (gen-rows 67 9 6 1 8) mbs (pack mrows 8)
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows :mask {:w 9 :h 6 :rows mrows :bpc 8 :kind :soft}}]
+    (image-pdf "smask.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/SMask 6 0 R/Filter/FlateDecode") (deflate bs)
+               :extra {6 {:dict "/Type/XObject/Subtype/Image/Width 9/Height 6/ColorSpace/DeviceGray/BitsPerComponent 8/Filter/FlateDecode" :stream (deflate mbs)}})
+    (d-row! "smask" "smask.pdf" 5 spec)
+    (let [matte [200 100 50]
+          mspec (assoc-in spec [:mask :matte] matte)]
+      (image-pdf "smask-matte.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/SMask 6 0 R/Filter/FlateDecode") (deflate bs)
+                 :extra {6 {:dict (str "/Type/XObject/Subtype/Image/Width 9/Height 6/ColorSpace/DeviceGray/BitsPerComponent 8/Matte["
+                                       (str/join " " (map #(format "%.6f" (double (/ % 255))) matte)) "]/Filter/FlateDecode")
+                            :stream (deflate mbs)}})
+      (d-row! "smask-matte" "smask-matte.pdf" 5 mspec))))
+
+(defn case-inline []
+  ;; inline images in the page's own content: raw RGB with the abbreviations, then gray through AHx
+  (let [w 6 h 4
+        rows (gen-rows 71 w h 3 8) bs (pack rows 8)
+        content (cat-bytes "q 60 0 0 40 20 40 cm\nBI /W 6 /H 4 /BPC 8 /CS /RGB ID " bs "\nEI Q\n")
+        spec {:w w :h h :bpc 8 :cs :rgb :rows rows}]
+    (image-pdf "inline-rgb.pdf" "/Type/XObject/Subtype/Image/Width 1/Height 1/ColorSpace/DeviceGray/BitsPerComponent 8" (bytes-of "x")
+               :content (String. ^bytes content "ISO-8859-1"))
+    (d-row! "inline-rgb" "inline-rgb.pdf" "c4" spec)
+    (row! "I" "inline-rgb" "inline-rgb.pdf" 4 0))
+  (let [w 7 h 3
+        rows (gen-rows 72 w h 1 8) bs (pack rows 8)
+        content (cat-bytes "q 70 0 0 30 20 40 cm\nBI /W 7 /H 3 /BPC 8 /CS /G /F [/AHx] ID " (ahx-encode bs) "\nEI Q\n")
+        spec {:w w :h h :bpc 8 :cs :gray :rows rows}]
+    (image-pdf "inline-gray-ahx.pdf" "/Type/XObject/Subtype/Image/Width 1/Height 1/ColorSpace/DeviceGray/BitsPerComponent 8" (bytes-of "x")
+               :content (String. ^bytes content "ISO-8859-1"))
+    (d-row! "inline-gray-ahx" "inline-gray-ahx.pdf" "c4" spec)
+    (row! "I" "inline-gray-ahx" "inline-gray-ahx.pdf" 4 0))
+  ;; an inline indexed image with the palette in the dictionary: /CS [/I /RGB 3 <...>], 2 bits
+  (let [w 5 h 3 pal (ubytes [255 0 0 0 255 0 0 0 255 255 255 0])
+        rows (gen-rows 73 w h 1 2) bs (pack rows 2)
+        content (cat-bytes "q 50 0 0 30 20 40 cm\nBI /W 5 /H 3 /BPC 2 /CS [/I /RGB 3 <ff000000ff000000ffffff00>] ID " bs "\nEI Q\n")
+        spec {:w w :h h :bpc 2 :cs [:indexed :rgb 3 pal] :rows rows}]
+    (image-pdf "inline-indexed.pdf" "/Type/XObject/Subtype/Image/Width 1/Height 1/ColorSpace/DeviceGray/BitsPerComponent 8" (bytes-of "x")
+               :content (String. ^bytes content "ISO-8859-1"))
+    (d-row! "inline-indexed" "inline-indexed.pdf" "c4" spec)
+    (row! "I" "inline-indexed" "inline-indexed.pdf" 4 0)))
+
+(defn case-form []
+  ;; the image reached through a Form XObject: the same object, a different route
+  (let [rows (gen-rows 81 S T 3 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows}]
+    (image-pdf "form-image.pdf" (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/FlateDecode") (deflate bs)
+               :content "q 1 0 0 1 10 10 cm /Fm Do Q\n"
+               :res "/XObject<</Im 5 0 R/Fm 6 0 R>>"
+               :extra {6 {:dict "/Type/XObject/Subtype/Form/BBox[0 0 180 140]/Resources<</XObject<</Im 5 0 R>>>>" :stream (bytes-of "q 100 0 0 60 20 20 cm /Im Do Q\n")}})
+    (d-row! "form-image" "form-image.pdf" 5 spec)
+    (row! "M" "form-image" "form-image.pdf" 1 "5,3000,7000,13000,13000,0")))
+
+(defn case-placements []
+  (let [rows (gen-rows 91 S T 3 8) bs (pack rows 8)
+        img (str "/Type/XObject/Subtype/Image/Width " S "/Height " T "/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/FlateDecode")
+        z (deflate bs)
+        cases [["upright" "100 0 0 60 20 40" [100 0 0 60]]
+               ["rot90" "0 100 -60 0 100 20" [0 100 -60 0]]
+               ["rot90cw" "0 -100 60 0 20 130" [0 -100 60 0]]
+               ["rot180" "-100 0 0 -60 130 110" [-100 0 0 -60]]
+               ["flip-h" "-100 0 0 60 130 40" [-100 0 0 60]]
+               ["flip-v" "100 0 0 -60 20 110" [100 0 0 -60]]
+               ["transpose" "0 -100 -60 0 100 130" [0 -100 -60 0]]
+               ["antitranspose" "0 100 60 0 20 20" [0 100 60 0]]
+               ["skew" "100 20 30 60 20 40" [100 20 30 60]]]]
+    (doseq [[nm cm [a b c d]] cases]
+      (let [file (str "place-" nm ".pdf")
+            ex (fn [px py] [(+ (* a px) (* c py)) (+ (* b px) (* d py))])
+            pts (map (fn [[px py]] (let [[x y] (ex px py)] [x y])) [[0 0] [1 0] [0 1] [1 1]])
+            [e f] (map #(Double/parseDouble %) (take-last 2 (str/split cm #" ")))
+            xs (map #(+ e (first %)) pts) ys (map #(+ f (second %)) pts)
+            x0 (apply min xs) x1 (apply max xs) y0 (apply min ys) y1 (apply max ys)
+            skewed (if (and (or (zero? b) (zero? c)) (or (zero? a) (zero? d))) 0 (if (zero? (+ (* a c) (* b d))) 0 1))]
+        (image-pdf file img z :cm cm)
+        (row! "M" (str "place-" nm) file 1
+              (str "5," (Math/round (* 100 x0)) "," (Math/round (* 100 (- page-h y1))) "," (Math/round (* 100 x1)) "," (Math/round (* 100 (- page-h y0))) "," skewed))
+        (when-let [code (corner-orient a b c d)]
+          (row! "O" (* 1000 a) (* 1000 b) (* 1000 c) (* 1000 d) code))
+        (when-not (corner-orient a b c d)
+          (row! "O" (* 1000 a) (* 1000 b) (* 1000 c) (* 1000 d) -1))))
+    ;; a clip to a rectangle, to a circle, and the image drawn twice
+    (image-pdf "place-clip-rect.pdf" img z :content "q 40 60 100 40 re W n 120 0 0 80 20 40 cm /Im Do Q\n")
+    (row! "M" "place-clip-rect" "place-clip-rect.pdf" 1 "5,2000,4000,14000,12000,0")
+    (image-pdf "place-clip-circle.pdf" img z
+               :content "q 80 80 m 80 102 62 120 40 120 c 18 120 0 102 0 80 c 0 58 18 40 40 40 c 62 40 80 58 80 80 c h W n 120 0 0 80 20 40 cm /Im Do Q\n")
+    (row! "M" "place-clip-circle" "place-clip-circle.pdf" 1 "5,2000,4000,14000,12000,0")
+    (image-pdf "place-twice.pdf" img z :content "q 80 0 0 50 10 10 cm /Im Do Q\nq 60 0 0 40 100 100 cm /Im Do Q\n")
+    (row! "M" "place-twice" "place-twice.pdf" 2 "5,1000,10000,9000,15000,0" "5,10000,2000,16000,6000,0")))
+
+(defn case-encrypted []
+  ;; the Flate RGB case, AES-128 by qpdf: the same object numbers, the same pixels
+  (let [rows (gen-rows 1 S T 3 8) bs (pack rows 8)
+        spec {:w S :h T :bpc 8 :cs :rgb :rows rows}
+        src (path "flate-rgb8.pdf") dst (path "flate-rgb8-aes128.pdf")]
+    (sh! "qpdf" "--static-id" "--static-aes-iv" "--object-streams=disable" "--encrypt" "" "" "128" "--use-aes=y" "--" src dst)
+    (d-row! "flate-rgb8-aes128" "flate-rgb8-aes128.pdf" 5 spec)))
+
+;; ------------------------------------------------------------------ cases: JPEG
+
+(defn jpeg-info [^bytes bs]
+  (let [v (mapv #(bit-and 0xff %) bs)]
+    (loop [i 2 acc {}]
+      (if (>= (+ i 4) (count v)) acc
+          (let [m (v (inc i)) len (+ (* 256 (v (+ i 2))) (v (+ i 3)))]
+            (cond
+              (= m 0xDA) acc
+              (<= 0xC0 m 0xCF) (if (#{0xC4 0xC8 0xCC} m) (recur (+ i 2 len) acc)
+                                   (recur (+ i 2 len) (assoc acc :sof m :h (+ (* 256 (v (+ i 5))) (v (+ i 6))) :w (+ (* 256 (v (+ i 7))) (v (+ i 8))) :nc (v (+ i 9)))))
+              (= m 0xE1) (recur (+ i 2 len) (assoc acc :exif (when (= [69 120 105 102] (subvec v (+ i 4) (+ i 8)))
+                                                                 (let [t (+ i 10) le (= 73 (v t))
+                                                                       r16 (fn [o] (if le (+ (v o) (* 256 (v (inc o)))) (+ (* 256 (v o)) (v (inc o)))))
+                                                                       r32 (fn [o] (if le (+ (r16 o) (* 65536 (r16 (+ o 2)))) (+ (* 65536 (r16 o)) (r16 (+ o 2)))))
+                                                                       ifd (r32 (+ t 4)) n (r16 (+ t ifd))]
+                                                                   (first (for [k (range n) :let [e (+ t ifd 2 (* k 12))] :when (= 274 (r16 e))] (r16 (+ e 8))))))))
+              :else (recur (+ i 2 len) acc)))))))
+
+(defn make-jpeg!
+  "A JPEG by ImageMagick from generated samples; `args` are convert options."
+  [name w h nc seed & args]
+  (let [rows (gen-rows seed w h nc 8)
+        ppm (path "src/" name (if (= nc 1) ".pgm" ".ppm"))
+        _ (fs/write-bytes ppm (cat-bytes (str (if (= nc 1) "P5" "P6") "\n" w " " h "\n255\n") (pack rows 8)))
+        ;; smooth the noise so the JPEG is a plausible one
+        out (path "src/" name ".jpg")]
+    (apply sh! "magick" ppm "-blur" "0x0.8" (concat args [out]))
+    (fs/delete ppm)
+    (fs/read-all-bytes out)))
+
+(defn with-exif
+  "The JPEG with an Exif APP1 segment (orientation `o`, little or big endian) after its SOI. ImageMagick writes none for
+  `-orient`, so the segment is made here: TIFF header, one IFD entry (tag 0x0112, SHORT), no next IFD."
+  [^bytes jpg o le?]
+  (let [u16 (fn [v] (if le? [(bit-and v 255) (bit-shift-right v 8)] [(bit-shift-right v 8) (bit-and v 255)]))
+        u32 (fn [v] (if le? [v 0 0 0] [0 0 0 v]))
+        tiff (concat (if le? [73 73 42 0] [77 77 0 42]) (u32 8) (u16 1) (u16 0x0112) (u16 3) (u32 1) (u16 o) [0 0] [0 0 0 0])
+        payload (concat (map int "Exif") [0 0] tiff)
+        seg (concat [0xFF 0xE1] [(bit-shift-right (+ 2 (count payload)) 8) (bit-and (+ 2 (count payload)) 255)] payload)]
+    (cat-bytes (java.util.Arrays/copyOfRange jpg 0 2) (ubytes seg) (java.util.Arrays/copyOfRange jpg 2 (alength jpg)))))
+
+(defn dct-pdf! [file jpg & {:keys [cs extra-dict w h filter extra] :or {cs "/DeviceRGB" filter "/DCTDecode"}}]
+  (let [i (when-not (and w h) (jpeg-info jpg))
+        w (or w (:w i)) h (or h (:h i))]
+    (image-pdf file (str "/Type/XObject/Subtype/Image/Width " w "/Height " h "/ColorSpace" cs "/BitsPerComponent 8" (or extra-dict "") "/Filter " filter) jpg
+               :extra extra)))
+
+(defn stream-off [file]
+  (let [s (String. (fs/read-all-bytes (path file)) "ISO-8859-1")]
+    (+ 7 (.indexOf s "stream\n" (.indexOf s "5 0 obj")))))
+
+(defn case-dct []
+  (let [jw 24 jh 16
+        rgb (make-jpeg! "rgb" jw jh 3 101 "-quality" "90" "-sampling-factor" "4:4:4")
+        gray (make-jpeg! "gray" jw jh 1 102 "-quality" "90")
+        prog (make-jpeg! "progressive" jw jh 3 103 "-quality" "90" "-interlace" "Plane")
+        cmyk (make-jpeg! "cmyk" jw jh 3 104 "-colorspace" "CMYK" "-quality" "90")
+        base-e (make-jpeg! "exif-base" jw jh 3 105 "-quality" "90")
+        exif6 (with-exif base-e 6 true)
+        exif6mm (with-exif base-e 6 false)
+        exif1 (with-exif base-e 1 true)
+        odd (make-jpeg! "size" 20 12 3 106 "-quality" "90")]
+    (assert (= 192 (:sof (jpeg-info rgb) 192)) "baseline")
+    (assert (= 0xC2 (:sof (jpeg-info prog))) "the progressive file is progressive")
+    (assert (= 4 (:nc (jpeg-info cmyk))) "four components")
+    (assert (= 6 (:exif (jpeg-info exif6))) "the Exif orientation 6 (little endian) reads back")
+    (assert (= 6 (:exif (jpeg-info exif6mm))) "the Exif orientation 6 (big endian) reads back")
+    (fs/write-bytes (path "src/exif6.jpg") exif6)
+    (fs/write-bytes (path "src/exif6mm.jpg") exif6mm)
+    (fs/write-bytes (path "src/exif1.jpg") exif1)
+    (fs/delete (path "src/exif-base.jpg"))
+    (swap! tool-versions assoc :imagemagick (second (re-find #"Version: (ImageMagick [^\s]+)" (:out (sh "magick" "-version")))))
+    ;; passes through
+    (dct-pdf! "dct-rgb.pdf" rgb)
+    (dct-pdf! "dct-gray.pdf" gray :cs "/DeviceGray")
+    (dct-pdf! "dct-progressive.pdf" prog)
+    (dct-pdf! "dct-icc-rgb.pdf" rgb :cs "[/ICCBased 8 0 R]" :extra {8 {:dict "/N 3" :stream (bytes-of "not a profile")}})
+    (dct-pdf! "dct-calrgb.pdf" rgb :cs "[/CalRGB<</WhitePoint[0.95 1 1.09]>>]")
+    ;; does not
+    (dct-pdf! "dct-decode.pdf" rgb :extra-dict "/Decode[1 0 1 0 1 0]")
+    (dct-pdf! "dct-cmyk.pdf" cmyk :cs "/DeviceCMYK" :extra-dict "/Decode[1 0 1 0 1 0 1 0]")
+    (dct-pdf! "dct-exif6.pdf" exif6)
+    (dct-pdf! "dct-exif6mm.pdf" exif6mm)
+    (dct-pdf! "dct-exif1.pdf" exif1)
+    (dct-pdf! "dct-size.pdf" odd :w 24 :h 16)
+    (let [v (vec rgb)
+          at (first (for [i (range (dec (count v))) :when (and (= 255 (bit-and 255 (v i))) (= 0xC0 (bit-and 255 (v (inc i)))))] i))
+          patched (let [a (aclone ^bytes rgb)] (aset-byte a (inc at) (unchecked-byte 0xC9)) a)]
+      ;; SOF0 -> SOF9: the marker walk's concern, the stream is not meant to decode
+      (spit (path "src/arith-note.txt") "arith.jpg is rgb.jpg with the SOF0 marker (FF C0) changed to SOF9 (FF C9): kin only walks its markers\n")
+      (fs/write-bytes (path "src/arith.jpg") patched)
+      (dct-pdf! "dct-arith.pdf" patched))
+    (dct-pdf! "dct-mask.pdf" rgb :extra-dict "/Mask[0 10 0 10 0 10]")
+    (dct-pdf! "dct-a85.pdf" (a85-encode rgb) :filter "[/ASCII85Decode/DCTDecode]" :w jw :h jh)
+    (let [sm (path "dct-smask.pdf")]
+      (image-pdf "dct-smask.pdf" (str "/Type/XObject/Subtype/Image/Width " jw "/Height " jh "/ColorSpace/DeviceRGB/BitsPerComponent 8/SMask 6 0 R/Filter/DCTDecode") rgb
+                 :extra {6 {:dict "/Type/XObject/Subtype/Image/Width 2/Height 2/ColorSpace/DeviceGray/BitsPerComponent 8" :stream (ubytes [0 85 170 255])}}))
+    ;; verdicts (`pv` codes: 0 ok, 8 colorspace, 10 decode, 14 exif orientation, 15 size, 4 arithmetic, 11 mask, 12 smask)
+    (doseq [[nm v] [["dct-rgb" 0] ["dct-gray" 0] ["dct-progressive" 0] ["dct-icc-rgb" 0] ["dct-calrgb" 0] ["dct-a85" 0]
+                    ["dct-decode" 10] ["dct-cmyk" 8] ["dct-exif6" 14] ["dct-exif6mm" 14] ["dct-exif1" 0] ["dct-size" 15] ["dct-arith" 4] ["dct-mask" 11] ["dct-smask" 12]]]
+      (row! "P" nm (str nm ".pdf") 5 v))
+    ;; poppler hands back the very bytes that pass through
+    (doseq [[nm jpg] [["dct-rgb" rgb] ["dct-gray" gray] ["dct-progressive" prog] ["dct-exif1" exif1]]]
+      (let [dir (str (fs/create-temp-dir {:prefix "assetfix"}))]
+        (sh! "pdfimages" "-all" (path nm ".pdf") (str dir "/x"))
+        (let [got (fs/read-all-bytes (first (sort (map str (fs/glob dir "x-*.jpg")))))]
+          (assert (java.util.Arrays/equals ^bytes got ^bytes jpg) (str "pdfimages -all bytes differ for " nm)))
+        (fs/delete-tree dir)))
+    ;; the requests a DCT image that cannot pass through plans: the input's own span, no payload; and the A85 case's payload
+    (doseq [[nm jpg comps] [["dct-decode" rgb 3] ["dct-cmyk" cmyk 4] ["dct-exif6" exif6 3] ["dct-exif6mm" exif6mm 3] ["dct-arith" (fs/read-all-bytes (path "src/arith.jpg")) 3]]]
+      (row! "R" nm (str nm ".pdf") 5 1 24 16 comps 8 0 0 0 0 0 (stream-off (str nm ".pdf")) (alength ^bytes jpg) -1 0 0 "-" "-"))
+    (row! "R" "dct-a85" "dct-a85.pdf" 5 1 24 16 3 8 0 0 0 0 -2 0 (alength ^bytes rgb) -1 0 0 (sha256-hex rgb) "-")))
+
+(defn tiff-g4-strip
+  "The one CCITT G4 strip of a TIFF written by ImageMagick, and its width and rows."
+  [^bytes bs]
+  (let [v (mapv #(bit-and 0xff %) bs) le (= 73 (v 0))
+        r16 (fn [o] (if le (+ (v o) (* 256 (v (inc o)))) (+ (* 256 (v o)) (v (inc o)))))
+        r32 (fn [o] (if le (+ (r16 o) (* 65536 (r16 (+ o 2)))) (+ (* 65536 (r16 o)) (r16 (+ o 2)))))
+        ifd (r32 4) n (r16 ifd)
+        tags (into {} (for [k (range n) :let [e (+ ifd 2 (* k 12)) ty (r16 (+ e 2))]]
+                        [(r16 e) (if (= ty 3) (r16 (+ e 8)) (r32 (+ e 8)))]))]
+    {:w (tags 256) :h (tags 257) :comp (tags 259)
+     :data (java.util.Arrays/copyOfRange bs (long (tags 273)) (long (+ (tags 273) (tags 279))))}))
+
+(defn case-codecs []
+  ;; CCITT G4 from ImageMagick's TIFF, JPX from ImageMagick's codestream, JBIG2 with globals: bytes of the right shape
+  ;; (kin plans the request; it never decodes, and no JBIG2 encoder is installed here)
+  (let [w 64 h 32 rows (gen-rows 111 w h 1 1) pbm (path "src/g4.pbm")
+        _ (fs/write-bytes pbm (cat-bytes (str "P4\n" w " " h "\n") (pack rows 1)))
+        tif (path "src/g4.tif")
+        _ (sh! "magick" pbm "-compress" "Group4" tif)
+        {:keys [data comp]} (tiff-g4-strip (fs/read-all-bytes tif))]
+    (assert (= 4 comp) "ImageMagick wrote CCITT G4")
+    (fs/write-bytes (path "src/g4.bin") data)
+    (fs/delete pbm) (fs/delete tif)
+    (image-pdf "ccitt-g4.pdf" (str "/Type/XObject/Subtype/Image/Width " w "/Height " h "/ColorSpace/DeviceGray/BitsPerComponent 1/Filter/CCITTFaxDecode/DecodeParms<</K -1/Columns " w "/Rows " h "/BlackIs1 true>>") data)
+    (image-pdf "ccitt-g4-mask.pdf" (str "/Type/XObject/Subtype/Image/Width " w "/Height " h "/ImageMask true/BitsPerComponent 1/Filter/CCITTFaxDecode/DecodeParms<</K -1/Columns " w "/Rows " h "/EncodedByteAlign true/EndOfBlock false>>") data)
+    (row! "R" "ccitt-g4" "ccitt-g4.pdf" 5 4 w h 1 1 -1 w h 1 0 (stream-off "ccitt-g4.pdf") (alength ^bytes data) -1 0 0 "-" "-")
+    (row! "R" "ccitt-g4-mask" "ccitt-g4-mask.pdf" 5 4 w h 1 1 -1 w h 10 0 (stream-off "ccitt-g4-mask.pdf") (alength ^bytes data) -1 0 0 "-" "-"))
+  (let [pgm (path "src/jpx.pgm") rows (gen-rows 112 16 12 3 8)
+        _ (fs/write-bytes (path "src/jpx.ppm") (cat-bytes "P6\n16 12\n255\n" (pack rows 8)))
+        j2k (path "src/jpx.j2k")
+        _ (sh! "magick" (path "src/jpx.ppm") "-define" "jp2:quality=100" (str "jp2:" j2k))
+        data (fs/read-all-bytes j2k)]
+    (fs/delete (path "src/jpx.ppm"))
+    (image-pdf "jpx.pdf" "/Type/XObject/Subtype/Image/Width 16/Height 12/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/JPXDecode" data)
+    (row! "R" "jpx" "jpx.pdf" 5 2 16 12 0 8 0 0 0 0 0 (stream-off "jpx.pdf") (alength ^bytes data) -1 0 0 "-" "-"))
+  ;; JBIG2 embedded stream with a globals stream (bytes of the right shape: kin does not decode, nothing here does)
+  (let [data (ubytes (range 40 90)) globals (ubytes (range 200 224))]
+    (image-pdf "jbig2.pdf" "/Type/XObject/Subtype/Image/Width 32/Height 16/ColorSpace/DeviceGray/BitsPerComponent 1/Filter/JBIG2Decode/DecodeParms<</JBIG2Globals 6 0 R>>" data
+               :extra {6 {:dict "" :stream globals}})
+    (row! "R" "jbig2" "jbig2.pdf" 5 3 32 16 0 1 0 0 0 0 0 (stream-off "jbig2.pdf") 50 -2 0 24 "-" (sha256-hex globals))))
+
+;; ------------------------------------------------------------------ the orientation and cut rows
+
+(defn case-orient-rows []
+  (doseq [m [[1 0 0 1] [-1 0 0 1] [-1 0 0 -1] [1 0 0 -1] [0 -1 1 0] [0 1 -1 0] [0 1 1 0] [0 -1 -1 0]
+             [100 2 3 60] [100 0 0 0] [0 0 0 0] [100 0 0 60] [0 100 -60 0] [50 1 1 -50]]]
+    (let [[a b c d] m code (corner-orient a b c d)]
+      (row! "O" (* 1000 a) (* 1000 b) (* 1000 c) (* 1000 d) (or code -1))))
+  ;; a matrix with a tiny shear below the zero threshold (1/1024 of the largest entry) is still rectilinear
+  (row! "O" 100000 50 -30 60000 0))
+
+;; ------------------------------------------------------------------ main
+
+(comment! "P3.12 fixture rows: written by kin/scripts/asset-fixtures (babashka); do not edit")
+(case-flate-rgb8)
+(case-flate-rgb8-predictor)
+(case-flate-rgb16)
+(doseq [[b s] [[1 1] [2 2] [4 4] [8 8]]] (case-gray b (+ 10 s)))
+(case-decode-gray)
+(case-filters)
+(case-indexed)
+(case-cmyk-icc-cal)
+(case-masks)
+(case-inline)
+(case-form)
+(case-placements)
+(case-encrypted)
+(case-dct)
+(case-codecs)
+(case-orient-rows)
+
+(fs/write-bytes (path "rows.txt") (bytes-of (str (str/join "\n" @rows-out) "\n")))
+(spit (path "version.txt")
+      (str "ImageMagick " (:imagemagick @tool-versions) "\npdfimages " (first (str/split-lines (str/trim (str (:err (sh "pdfimages" "-v")))))) "\nqpdf " (first (str/split-lines (:out (sh "qpdf" "--version")))) "\n"))
+(if check?
+  (let [rel (fn [d] (into (sorted-set) (map #(str (fs/relativize d %)) (filter fs/regular-file? (file-seq (fs/file d))))))
+        a (rel out-dir) b (rel committed)
+        diff (vec (concat (map #(str "missing from the corpus: " %) (remove b a))
+                     (map #(str "not written by the generator: " %) (remove a b))
+                     (for [f (filter b a) :when (not (java.util.Arrays/equals ^bytes (fs/read-all-bytes (str out-dir "/" f))
+                                                                              ^bytes (fs/read-all-bytes (str committed "/" f))))]
+                       (str "differs: " f))))]
+    (fs/delete-tree out-dir)
+    (if (seq diff)
+      (do (println "  FAIL test/assets is not what kin/scripts/asset-fixtures writes:") (doseq [d (take 20 diff)] (println "   " d)) (System/exit 1))
+      (println (str "  ok   test/assets is what kin/scripts/asset-fixtures writes (" (count a) " files)"))))
+  (println "wrote" (count @rows-out) "rows,"
+           (count (fs/glob out-dir "*.pdf")) "files in test/assets"))
