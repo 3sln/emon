@@ -3186,6 +3186,9 @@ public final class Table {
                 if (agree >= 0) {
                     geo = Tagtable.ttPm(agree, owned);
                 }
+                if ((agree >= 0) && (emon.Port.cellsAt(ws, emon.Port.cellsLen(ws) - 1) == 1)) {
+                    Tagtable.ttOr(tg, k, 15, 8);
+                }
             }
             Tagtable.ttSet(tg, k, 12, g);
             Tagtable.ttSet(tg, k, 21, geo);
@@ -3267,6 +3270,9 @@ public final class Table {
             return 0;
         }
         if (v == 3) {
+            return 0;
+        }
+        if ((fg & 8) != 0) {
             return 0;
         }
         if (emon.Port.cellsAt(tb, b + 5) == PF_STRUCT) {
@@ -3385,6 +3391,9 @@ public final class Table {
             return 0;
         }
         if (Tagtable.ttGet(tg, tgi, 10) == 3) {
+            return 0;
+        }
+        if ((Tagtable.ttGet(tg, tgi, 15) & 8) != 0) {
             return 0;
         }
         if (((Tagtable.ttGet(tg, tgi, 15) & 4) == 0) && (emon.Port.cellsAt(tb, b + 5) != PF_STRUCT)) {

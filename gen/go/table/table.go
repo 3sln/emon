@@ -3320,6 +3320,9 @@ func tbTags(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, grl *po
 			if agree >= 0 {
 				geo = tagtable.TtPm(agree, owned)
 			}
+			if (agree >= 0) && (port.CellsAt(ws, port.CellsLen(ws)-1) == 1) {
+				tagtable.TtOr(tg, k, 15, 8)
+			}
 		}
 		tagtable.TtSet(tg, k, 12, g)
 		tagtable.TtSet(tg, k, 21, geo)
@@ -3403,6 +3406,9 @@ func tbTagHead(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port
 		return 0
 	}
 	if v == 3 {
+		return 0
+	}
+	if (fg & 8) != 0 {
 		return 0
 	}
 	if port.CellsAt(tb, b+5) == pfStruct {
@@ -3523,6 +3529,9 @@ func tbTagRest(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port
 		return 0
 	}
 	if tagtable.TtGet(tg, tgi, 10) == 3 {
+		return 0
+	}
+	if (tagtable.TtGet(tg, tgi, 15) & 8) != 0 {
 		return 0
 	}
 	if ((tagtable.TtGet(tg, tgi, 15) & 4) == 0) && (port.CellsAt(tb, b+5) != pfStruct) {

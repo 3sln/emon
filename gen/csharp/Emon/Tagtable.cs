@@ -628,6 +628,11 @@ public static class Tagtable {
         int agree = 0;
         int mv = 0;
         int dup = 0;
+        int ob = 0;
+        int lo = 0;
+        int hi = 0;
+        int rowok = 0;
+        int multi = 0;
         emon.Port.CellsDrop(ws, 0);
         if (((nr * gnr) + (nc * gnc)) > 1000000) {
             return -2;
@@ -718,6 +723,49 @@ public static class Tagtable {
             }
             i += 1;
         }
+        ob = emon.Port.CellsLen(ws);
+        g = 0;
+        while (g < gnr) {
+            mv = -1;
+            dup = 0;
+            i = 0;
+            while (i < nr) {
+                if (emon.Port.CellsAt(ws, ((nr + nc) + (nw * 2)) + ((i * gnr) + g)) > dup) {
+                    dup = emon.Port.CellsAt(ws, ((nr + nc) + (nw * 2)) + ((i * gnr) + g));
+                    mv = i;
+                }
+                i += 1;
+            }
+            emon.Port.CellsPush(ws, mv);
+            g += 1;
+        }
+        i = 0;
+        while (i < nr) {
+            lo = -1;
+            hi = -1;
+            g = 0;
+            while (g < gnr) {
+                if (emon.Port.CellsAt(ws, ob + g) == i) {
+                    if (lo < 0) {
+                        lo = g;
+                    }
+                    hi = g;
+                }
+                g += 1;
+            }
+            g = lo;
+            while ((lo >= 0) && (g <= hi)) {
+                mv = emon.Port.CellsAt(ws, ob + g);
+                if ((mv >= 0) && (mv != i)) {
+                    lo = -1;
+                    hi = -1;
+                }
+                g += 1;
+            }
+            emon.Port.CellsPush(ws, lo);
+            emon.Port.CellsPush(ws, hi);
+            i += 1;
+        }
         wi = 0;
         while (wi < nw) {
             cell = emon.Port.CellsAt(wo, wi);
@@ -725,15 +773,29 @@ public static class Tagtable {
                 tr = emon.Port.CellsAt(ta, (cell * Tas) + 1);
                 tcc = emon.Port.CellsAt(ta, (cell * Tas) + 2);
                 if ((tr < nr) && (tcc < nc)) {
-                    if ((emon.Port.CellsAt(ws, tr) >= 0) && (emon.Port.CellsAt(ws, nr + tcc) >= 0)) {
-                        if ((emon.Port.CellsAt(ws, tr) == emon.Port.CellsAt(ws, (nr + nc) + (wi * 2))) && (emon.Port.CellsAt(ws, nr + tcc) == emon.Port.CellsAt(ws, ((nr + nc) + (wi * 2)) + 1))) {
-                            agree += 1;
+                    if (emon.Port.CellsAt(ws, nr + tcc) >= 0) {
+                        if (emon.Port.CellsAt(ws, nr + tcc) == emon.Port.CellsAt(ws, ((nr + nc) + (wi * 2)) + 1)) {
+                            gr = emon.Port.CellsAt(ws, (nr + nc) + (wi * 2));
+                            rowok = 0;
+                            if ((emon.Port.CellsAt(ws, tr) >= 0) && (emon.Port.CellsAt(ws, tr) == gr)) {
+                                rowok = 1;
+                            }
+                            if ((rowok == 0) && ((gr >= 0) && ((emon.Port.CellsAt(ws, (ob + gnr) + (tr * 2)) >= 0) && ((gr >= emon.Port.CellsAt(ws, (ob + gnr) + (tr * 2))) && (gr <= emon.Port.CellsAt(ws, ((ob + gnr) + (tr * 2)) + 1)))))) {
+                                if (emon.Port.CellsAt(ws, ob + gr) == tr) {
+                                    rowok = 1;
+                                    multi = 1;
+                                }
+                            }
+                            if (rowok == 1) {
+                                agree += 1;
+                            }
                         }
                     }
                 }
             }
             wi += 1;
         }
+        emon.Port.CellsPush(ws, multi);
         return agree;
     }
     public static int TtGeoTb(emon.Port.Cells tg, int k, emon.Port.Cells tb, int t0, int t1) {

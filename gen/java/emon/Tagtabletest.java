@@ -351,4 +351,67 @@ public final class Tagtabletest {
         Tagtable.ttEmit(t, tv);
         emon.Testport.assertText(t, "[{\"page\":1,\"se\":1,\"rows\":3,\"cols\":3,\"verdict\":\"confirmed\",\"score\":908,\"checks\":[1000,900,1000,-1,1000,928],\"trust\":500}]", "one tagged table: the verdict, the score, the six checks and the tree's trust");
     }
+    public static int tttZeros(emon.Port.Cells c, int n) {
+        int i = 0;
+        while (i < n) {
+            emon.Port.cellsPush(c, 0);
+            i += 1;
+        }
+        return 0;
+    }
+    public static int tttMulti(emon.Port.Cells tg, emon.Port.Cells ta, emon.Port.Cells wo, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, int r0, int r1, int r2) {
+        // Two tagged rows of one column over a candidate of three rows of one column; three words, the tagged row of each given (0 or 1) as
+        // r0 r1 r2, the candidate row of word i being i.
+        tttZeros(tg, 24);
+        emon.Port.cellsSet(tg, 2, 2);
+        emon.Port.cellsSet(tg, 3, 1);
+        emon.Port.cellsSet(tg, 4, 0);
+        emon.Port.cellsSet(tg, 5, 2);
+        tttZeros(ta, 32);
+        emon.Port.cellsSet(ta, 1, 0);
+        emon.Port.cellsSet(ta, 17, 1);
+        emon.Port.cellsPush(wo, 0 + r0);
+        emon.Port.cellsPush(wo, 0 + r1);
+        emon.Port.cellsPush(wo, 0 + r2);
+        tttZeros(tb, 28);
+        emon.Port.cellsSet(tb, 7, 3);
+        emon.Port.cellsSet(tb, 8, 1);
+        emon.Port.cellsSet(tb, 9, 0);
+        emon.Port.cellsSet(tb, 10, 3);
+        tttZeros(tc, 48);
+        emon.Port.cellsSet(tc, 0, 0);
+        emon.Port.cellsSet(tc, 8, 0);
+        emon.Port.cellsSet(tc, 9, 1);
+        emon.Port.cellsSet(tc, 16, 1);
+        emon.Port.cellsSet(tc, 24, 1);
+        emon.Port.cellsSet(tc, 25, 1);
+        emon.Port.cellsSet(tc, 32, 2);
+        emon.Port.cellsSet(tc, 40, 2);
+        emon.Port.cellsSet(tc, 41, 1);
+        emon.Port.cellsPush(tw, 0);
+        emon.Port.cellsPush(tw, 1);
+        emon.Port.cellsPush(tw, 2);
+        return 0;
+    }
+    public static void testAdjacentCandidateRowsMayMapToOneTaggedRow() {
+        emon.Port.Cells tg = emon.Port.newCells();
+        emon.Port.Cells ta = emon.Port.newCells();
+        emon.Port.Cells wo = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        tttMulti(tg, ta, wo, tb, tc, tw, 0, 0, 1);
+        emon.Testport.assertEq(Tagtable.ttGeoMap(tg, 0, ta, wo, 0, tb, 0, tc, tw, ws), 3, "all three words agree: two adjacent candidate rows are one tagged row");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, emon.Port.cellsLen(ws) - 1), 1, "and the table says it needed that");
+        emon.Port.cellsDrop(tg, 0);
+        emon.Port.cellsDrop(ta, 0);
+        emon.Port.cellsDrop(wo, 0);
+        emon.Port.cellsDrop(tb, 0);
+        emon.Port.cellsDrop(tc, 0);
+        emon.Port.cellsDrop(tw, 0);
+        tttMulti(tg, ta, wo, tb, tc, tw, 0, 1, 0);
+        emon.Testport.assertEq(Tagtable.ttGeoMap(tg, 0, ta, wo, 0, tb, 0, tc, tw, ws), 2, "a tagged row split around another's candidate row is not one: only the words the old mapping agreed on");
+        emon.Testport.assertEq(emon.Port.cellsAt(ws, emon.Port.cellsLen(ws) - 1), 0, "and nothing was granted by the new one");
+    }
 }

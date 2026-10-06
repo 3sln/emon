@@ -3186,6 +3186,9 @@ public static class Table {
                 if (agree >= 0) {
                     geo = Tagtable.TtPm(agree, owned);
                 }
+                if ((agree >= 0) && (emon.Port.CellsAt(ws, emon.Port.CellsLen(ws) - 1) == 1)) {
+                    Tagtable.TtOr(tg, k, 15, 8);
+                }
             }
             Tagtable.TtSet(tg, k, 12, g);
             Tagtable.TtSet(tg, k, 21, geo);
@@ -3267,6 +3270,9 @@ public static class Table {
             return 0;
         }
         if (v == 3) {
+            return 0;
+        }
+        if ((fg & 8) != 0) {
             return 0;
         }
         if (emon.Port.CellsAt(tb, b + 5) == PfStruct) {
@@ -3385,6 +3391,9 @@ public static class Table {
             return 0;
         }
         if (Tagtable.TtGet(tg, tgi, 10) == 3) {
+            return 0;
+        }
+        if ((Tagtable.TtGet(tg, tgi, 15) & 8) != 0) {
             return 0;
         }
         if (((Tagtable.TtGet(tg, tgi, 15) & 4) == 0) && (emon.Port.CellsAt(tb, b + 5) != PfStruct)) {

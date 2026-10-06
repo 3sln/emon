@@ -8932,3 +8932,23 @@ lowered). The three fusion bundles that changed had their digests re-made with `
 **Why**: the corpus has three seal documents and one signature; the fixtures add what they lack: a seal with no colour to tell it from the text, a stamp translucent over body text, a cue that is `By:`, and four things that
 look like seals and are not.
 - [ ] **Signed off** (maintainer)
+
+### D440 — Several adjacent geometric rows may map to one tagged row (P5.5 finding; SPEC 10.5 `geo`; D225, D302, D305)
+**Decision**: in `tt-geo-map`, a tagged row is also mapped onto the candidate rows it OWNS: the owner of a candidate row is the tagged row with most words
+in it, a tagged row's rows are the candidate rows it owns, and they count only when no candidate row between its first and its last belongs to another tagged
+row (adjacent). A word agrees when its tagged row and column map one-to-one (as before) OR its tagged row owns its candidate row in that sense (the column test
+is unchanged). So the one-to-one mapping is a special case and `geo` can only rise. A table that needed the new reading (a flag, bit 8 of `tg` cell 15, set by
+`tt-geo-map`'s last cell) is not given head rows, spans or row headers by its tags (`tb-tag-head` and `tb-tag-rest` stand down): those assume one candidate row
+to a tagged row, and a tagged `rowspan` laid on a multi-line candidate would land on the wrong rows. Columns are unchanged (a multi-line cell does not change them).
+**Why (measured, 476 tagged PDFs of `corpus/`, `Tagged: yes` in `pdfinfo`, 1,322 tagged tables; the 498 of P5.5 were those with a StructTreeRoot that pypdf opens)**:
+BEFORE 311 confirmed, 296 partial, 715 contradicted; AFTER 318, 316, 688 (26 contradicted to partial, 1 contradicted to confirmed, 6 partial to confirmed;
+no table the other way). Six Models changed, each only in a table's `flags`: `struct-disagree` appears on 5 tables that are now confirmed by the tags yet still
+disagree with the geometry on 900 per mille of the words (the case 2 of SPEC 10.5, as written), and goes from 2 tables whose tags now agree; `tag-span-conflict`
+goes from one (its table no longer takes the tags' spans). `bb accuracy`: 2,424 metrics, none regressed, 0 improved. The five multi-line tables P5.5 looked at
+were not all turned into confirmed ones: their rows now map, but the other checks (`row-band` for the lines of one cell) are what a tag that holds several
+lines costs, and the verdict reads them too.
+**Alternatives**: mapping columns the same way (a cell of several lines does not widen its column; spans are the tags' `ColSpan`, which `tb-tag-span` handles);
+applying the tags' spans and head to the multi-row table by translating row numbers (a row map the tags and the geometry could disagree on in both directions;
+the cost is a table's head rows, which the geometry's own `tb-head-rows` finds as before); making the OWNER map the only reading (a one-to-one table whose
+modal row differs from its owner would change verdict: the `OR` keeps the old reading as a floor).
+- [ ] **Signed off** (maintainer)

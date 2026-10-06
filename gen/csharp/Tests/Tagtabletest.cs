@@ -360,4 +360,68 @@ public static class Tagtabletest {
         Tagtable.TtEmit(t, tv);
         emon.Testport.AssertText(t, "[{\"page\":1,\"se\":1,\"rows\":3,\"cols\":3,\"verdict\":\"confirmed\",\"score\":908,\"checks\":[1000,900,1000,-1,1000,928],\"trust\":500}]", "one tagged table: the verdict, the score, the six checks and the tree's trust");
     }
+    internal static int TttZeros(emon.Port.Cells c, int n) {
+        int i = 0;
+        while (i < n) {
+            emon.Port.CellsPush(c, 0);
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int TttMulti(emon.Port.Cells tg, emon.Port.Cells ta, emon.Port.Cells wo, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, int r0, int r1, int r2) {
+        // Two tagged rows of one column over a candidate of three rows of one column; three words, the tagged row of each given (0 or 1) as
+        // r0 r1 r2, the candidate row of word i being i.
+        TttZeros(tg, 24);
+        emon.Port.CellsSet(tg, 2, 2);
+        emon.Port.CellsSet(tg, 3, 1);
+        emon.Port.CellsSet(tg, 4, 0);
+        emon.Port.CellsSet(tg, 5, 2);
+        TttZeros(ta, 32);
+        emon.Port.CellsSet(ta, 1, 0);
+        emon.Port.CellsSet(ta, 17, 1);
+        emon.Port.CellsPush(wo, 0 + r0);
+        emon.Port.CellsPush(wo, 0 + r1);
+        emon.Port.CellsPush(wo, 0 + r2);
+        TttZeros(tb, 28);
+        emon.Port.CellsSet(tb, 7, 3);
+        emon.Port.CellsSet(tb, 8, 1);
+        emon.Port.CellsSet(tb, 9, 0);
+        emon.Port.CellsSet(tb, 10, 3);
+        TttZeros(tc, 48);
+        emon.Port.CellsSet(tc, 0, 0);
+        emon.Port.CellsSet(tc, 8, 0);
+        emon.Port.CellsSet(tc, 9, 1);
+        emon.Port.CellsSet(tc, 16, 1);
+        emon.Port.CellsSet(tc, 24, 1);
+        emon.Port.CellsSet(tc, 25, 1);
+        emon.Port.CellsSet(tc, 32, 2);
+        emon.Port.CellsSet(tc, 40, 2);
+        emon.Port.CellsSet(tc, 41, 1);
+        emon.Port.CellsPush(tw, 0);
+        emon.Port.CellsPush(tw, 1);
+        emon.Port.CellsPush(tw, 2);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAdjacentCandidateRowsMayMapToOneTaggedRow() {
+        emon.Port.Cells tg = emon.Port.NewCells();
+        emon.Port.Cells ta = emon.Port.NewCells();
+        emon.Port.Cells wo = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        TttMulti(tg, ta, wo, tb, tc, tw, 0, 0, 1);
+        emon.Testport.AssertEq(Tagtable.TtGeoMap(tg, 0, ta, wo, 0, tb, 0, tc, tw, ws), 3, "all three words agree: two adjacent candidate rows are one tagged row");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, emon.Port.CellsLen(ws) - 1), 1, "and the table says it needed that");
+        emon.Port.CellsDrop(tg, 0);
+        emon.Port.CellsDrop(ta, 0);
+        emon.Port.CellsDrop(wo, 0);
+        emon.Port.CellsDrop(tb, 0);
+        emon.Port.CellsDrop(tc, 0);
+        emon.Port.CellsDrop(tw, 0);
+        TttMulti(tg, ta, wo, tb, tc, tw, 0, 1, 0);
+        emon.Testport.AssertEq(Tagtable.TtGeoMap(tg, 0, ta, wo, 0, tb, 0, tc, tw, ws), 2, "a tagged row split around another's candidate row is not one: only the words the old mapping agreed on");
+        emon.Testport.AssertEq(emon.Port.CellsAt(ws, emon.Port.CellsLen(ws) - 1), 0, "and nothing was granted by the new one");
+    }
 }

@@ -2228,8 +2228,9 @@ vertical band), `col-band` (likewise for columns, horizontally), `order`
 (words inside the table's box that it owns, over the words inside its box),
 `rules` (non-empty cells whose text no fused `h`/`v` rule of confidence ≥ 800
 crosses) and `geo` (when a geometric candidate that `tb-select` kept overlaps it at IoU ≥ 500: the
-share of the table's words whose tagged row and column map one-to-one onto
-the candidate's under the majority mapping). As built (D302): the pairs of `row-band`, `order` and
+share of the table's words whose tagged row and column map onto
+the candidate's under the majority mapping: one-to-one, except that several ADJACENT candidate rows may be one tagged row, a cell of several lines (D440);
+a table that needed that gives its candidate no head rows, spans or row headers from the tags, which assume one-to-one rows). As built (D302): the pairs of `row-band`, `order` and
 `col-band` are adjacent ones (a non-empty cell and the next non-empty cell of its row, or of its column), and the box that `cover`
 counts the words inside is the table's own, grown by the candidate's when there is one (a tagged table that leaves out a row
 the page shows covers fewer of the words inside it). A tree under `tb-tag-trust` (300) is still read and its tables checked, for

@@ -685,6 +685,11 @@ func TtGeoMap(tg *port.Cells, k int32, ta *port.Cells, wo *port.Cells, w0 int32,
 	var agree int32 = 0
 	var mv int32 = 0
 	var dup int32 = 0
+	var ob int32 = 0
+	var lo int32 = 0
+	var hi int32 = 0
+	var rowok int32 = 0
+	var multi int32 = 0
 	port.CellsDrop(ws, 0)
 	if ((nr * gnr) + (nc * gnc)) > 1000000 {
 		return -2
@@ -775,6 +780,49 @@ func TtGeoMap(tg *port.Cells, k int32, ta *port.Cells, wo *port.Cells, w0 int32,
 		}
 		i += 1
 	}
+	ob = port.CellsLen(ws)
+	g = 0
+	for g < gnr {
+		mv = -1
+		dup = 0
+		i = 0
+		for i < nr {
+			if port.CellsAt(ws, ((nr+nc)+(nw*2))+((i*gnr)+g)) > dup {
+				dup = port.CellsAt(ws, ((nr+nc)+(nw*2))+((i*gnr)+g))
+				mv = i
+			}
+			i += 1
+		}
+		port.CellsPush(ws, mv)
+		g += 1
+	}
+	i = 0
+	for i < nr {
+		lo = -1
+		hi = -1
+		g = 0
+		for g < gnr {
+			if port.CellsAt(ws, ob+g) == i {
+				if lo < 0 {
+					lo = g
+				}
+				hi = g
+			}
+			g += 1
+		}
+		g = lo
+		for (lo >= 0) && (g <= hi) {
+			mv = port.CellsAt(ws, ob+g)
+			if (mv >= 0) && (mv != i) {
+				lo = -1
+				hi = -1
+			}
+			g += 1
+		}
+		port.CellsPush(ws, lo)
+		port.CellsPush(ws, hi)
+		i += 1
+	}
 	wi = 0
 	for wi < nw {
 		cell = port.CellsAt(wo, wi)
@@ -782,15 +830,29 @@ func TtGeoMap(tg *port.Cells, k int32, ta *port.Cells, wo *port.Cells, w0 int32,
 			tr = port.CellsAt(ta, (cell*tas)+1)
 			tcc = port.CellsAt(ta, (cell*tas)+2)
 			if (tr < nr) && (tcc < nc) {
-				if (port.CellsAt(ws, tr) >= 0) && (port.CellsAt(ws, nr+tcc) >= 0) {
-					if (port.CellsAt(ws, tr) == port.CellsAt(ws, (nr+nc)+(wi*2))) && (port.CellsAt(ws, nr+tcc) == port.CellsAt(ws, ((nr+nc)+(wi*2))+1)) {
-						agree += 1
+				if port.CellsAt(ws, nr+tcc) >= 0 {
+					if port.CellsAt(ws, nr+tcc) == port.CellsAt(ws, ((nr+nc)+(wi*2))+1) {
+						gr = port.CellsAt(ws, (nr+nc)+(wi*2))
+						rowok = 0
+						if (port.CellsAt(ws, tr) >= 0) && (port.CellsAt(ws, tr) == gr) {
+							rowok = 1
+						}
+						if (rowok == 0) && ((gr >= 0) && ((port.CellsAt(ws, (ob+gnr)+(tr*2)) >= 0) && ((gr >= port.CellsAt(ws, (ob+gnr)+(tr*2))) && (gr <= port.CellsAt(ws, ((ob+gnr)+(tr*2))+1))))) {
+							if port.CellsAt(ws, ob+gr) == tr {
+								rowok = 1
+								multi = 1
+							}
+						}
+						if rowok == 1 {
+							agree += 1
+						}
 					}
 				}
 			}
 		}
 		wi += 1
 	}
+	port.CellsPush(ws, multi)
 	return agree
 }
 
