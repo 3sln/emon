@@ -1673,6 +1673,9 @@ pub fn ek_outline() -> i32 {
 pub fn ek_backdrop() -> i32 {
     return 151;
 }
+pub fn ek_placement() -> i32 {
+    return 152;
+}
 pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "emon-evidence");
@@ -2276,6 +2279,10 @@ pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 151 {
         crate::port::text_ascii(t, "backdrop");
+        return 1;
+    }
+    if code == 152 {
+        crate::port::text_ascii(t, "placement");
         return 1;
     }
     return 0;
@@ -3316,6 +3323,9 @@ pub fn mf_vby() -> i32 {
 pub fn mf_vchk() -> i32 {
     return 18;
 }
+pub fn mf_placement() -> i32 {
+    return 19;
+}
 pub fn orf_page() -> i32 {
     return 0;
 }
@@ -3769,7 +3779,7 @@ pub fn tlf_gap() -> i32 {
 pub fn tlf_conf() -> i32 {
     return 16;
 }
-pub static EV_FD: [i32; 1674] = [
+pub static EV_FD: [i32; 1680] = [
     1, 0, 1, 9, -2147483648, 0,
     1, 1, 2, 34, 0, 0,
     1, 2, 2, 74, 0, 0,
@@ -3916,6 +3926,7 @@ pub static EV_FD: [i32; 1674] = [
     13, 16, 8, 21, 0, 2,
     13, 17, 1, 102, -1, 0,
     13, 18, 9, 103, 0, 11,
+    13, 19, 1, 152, 0, 0,
     14, 0, 1, 9, -2147483648, 0,
     14, 1, 1, 119, -1, 0,
     14, 2, 1, 120, -1, 0,

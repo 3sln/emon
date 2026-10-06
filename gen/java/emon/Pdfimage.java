@@ -1425,6 +1425,39 @@ public final class Pdfimage {
         }
         return 0;
     }
+    public static int piPaletteRgb(emon.Port.Cells im, int idx) {
+        // The colour (0xRRGGBB) of entry `idx` of an Indexed image's palette (class 4), through its base space: what P3.13's
+        // palette PNG writes in PLTE. 0 for an image that is not Indexed.
+        int base = emon.Port.cellsAt(im, PI_BASE);
+        int c0 = 0;
+        int c1 = 0;
+        int c2 = 0;
+        int c3 = 0;
+        int pal = 0;
+        if (emon.Port.cellsAt(im, PI_CLASS) != 4) {
+            return 0;
+        }
+        if ((idx < 0) || (idx > 255)) {
+            return 0;
+        }
+        if (base == 1) {
+            c0 = emon.Port.cellsAt(im, PI_PAL + idx);
+            return (c0 * 65536) + ((c0 * 256) + c0);
+        }
+        if (base == 2) {
+            pal = PI_PAL + (idx * 3);
+            c0 = emon.Port.cellsAt(im, pal);
+            c1 = emon.Port.cellsAt(im, pal + 1);
+            c2 = emon.Port.cellsAt(im, pal + 2);
+            return (c0 * 65536) + ((c1 * 256) + c2);
+        }
+        pal = PI_PAL + (idx * 4);
+        c0 = emon.Port.cellsAt(im, pal);
+        c1 = emon.Port.cellsAt(im, pal + 1);
+        c2 = emon.Port.cellsAt(im, pal + 2);
+        c3 = emon.Port.cellsAt(im, pal + 3);
+        return piCmyk(c0, c1, c2, c3);
+    }
     public static int piKeyHit(emon.Port.Cells im, emon.Port.Cells smp, emon.Port.Bitmap bm, int x, int y) {
         // 1 when every component is inside its colour-key range.
         int nc = emon.Port.cellsAt(im, PI_NCOMP);

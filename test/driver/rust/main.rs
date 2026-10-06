@@ -3,13 +3,17 @@
 // itself and hands the Engine bytes, a seekable `File` or a spooled `Read` (D058).
 //
 //     emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool]
+//             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none|images|figures] [--password=TEXT] [--source=bytes|seek|spool]
+//             [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //             [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE
 //
 //   --furniture=     running headers, footers and page numbers (SPEC 10.2, D017): `policy` (the default), `keep`, `drop`
 //   --out=json       the canonical JSON (compact; --pretty indents)           (default)
 //   --out=html       the HTML; OPTS is a comma list of ids,geometry,confidence=N,ledger,pretty,
-//                    drop-furniture,no-milestones,initials-plain,align-style
+//                    drop-furniture,no-milestones,initials-plain,align-style,assets=inline|external|omit,prefix=TEXT
+//   --assets=        SPEC 10.11 (D117): `none` (the default), `images` (a figure or seal that is one embedded image gets its
+//                    bytes or its pixels as PNG), `figures` (runs as `images` until P8.5); the limits that go with it
+//   --asset-dir=D    write `Model::asset_files()` (a0.png, a1.jpg, ...) into D: the driver writes them, the library never does
 //   --out=evidence   the text layer's evidence dump (compact JSON)
 //   --out=bundle     one conversion, every output, for `bb identity`: sections `== json`, `== json-pretty`, `== html`,
 //                    `== html-full` (ids,geometry,confidence=950,ledger,pretty), `== evidence`, `== intake`, each a line
@@ -33,12 +37,12 @@
 // `test/driver/go/main.go` is its twin: the same flags (it adds `--source=readerat`), stdout and exit codes (`bb identity`).
 //
 // Exit: 0 ok; 2 usage; 4 a named emon error (`error: NAME` on stderr, nothing on stdout); 1 anything else.
-use emon::{Assets, Config, Engine, Furniture, HtmlOptions, Input, JsonOptions, OcrPolicy, Options, Output};
+use emon::{Assets, Config, Engine, Furniture, HtmlAssets, HtmlOptions, Input, JsonOptions, OcrPolicy, Options, Output};
 use std::io::Read;
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
     std::process::exit(2);
 }
 
@@ -54,9 +58,13 @@ fn html_options(list: &str) -> HtmlOptions {
             "no-milestones" => o.milestones = false,
             "initials-plain" => o.initials_plain = true,
             "align-style" => o.align_style = true,
-            other => match other.strip_prefix("confidence=") {
-                Some(n) => o.confidence_below = Some(n.parse().unwrap_or_else(|_| usage("confidence=N wants a number"))),
-                None => usage(&format!("unknown html option {}", other)),
+            "assets=inline" => o.assets = HtmlAssets::Inline,
+            "assets=external" => o.assets = HtmlAssets::External,
+            "assets=omit" => o.assets = HtmlAssets::Omit,
+            other => match (other.strip_prefix("confidence="), other.strip_prefix("prefix=")) {
+                (Some(n), _) => o.confidence_below = Some(n.parse().unwrap_or_else(|_| usage("confidence=N wants a number"))),
+                (_, Some(p)) => o.asset_prefix = p.to_string(),
+                _ => usage(&format!("unknown html option {}", other)),
             },
         }
     }
@@ -93,6 +101,11 @@ fn pixel_lines(t: &emon::Transcript, dump: Option<&str>) -> String {
     s
 }
 
+// The hex of some bytes, for the bundle's asset section (byte for byte, the whole file).
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{:02x}", x)).collect()
+}
+
 fn render(engine: &Engine, input: &Input, model: &emon::Model, out: &str, pretty: bool, html: HtmlOptions) -> String {
     match out {
         "json" => model.serialize(&Output::Json(JsonOptions { pretty })),
@@ -104,7 +117,7 @@ fn render(engine: &Engine, input: &Input, model: &emon::Model, out: &str, pretty
                 Ok(v) => v.iter().map(|i| format!("{} {}.{} pages={} encrypted={} bytes={}", i.format, i.version.0, i.version.1, i.pages, i.encrypted, i.bytes)).collect::<Vec<_>>().join("\n"),
                 Err(e) => format!("error: {}", e.name()),
             };
-            format!(
+            let mut s = format!(
                 "== json\n{}\n== json-pretty\n{}\n== html\n{}\n== html-full\n{}\n== evidence\n{}\n== intake\n{}\n",
                 model.serialize(&Output::Json(JsonOptions { pretty: false })),
                 model.serialize(&Output::Json(JsonOptions { pretty: true })),
@@ -112,7 +125,17 @@ fn render(engine: &Engine, input: &Input, model: &emon::Model, out: &str, pretty
                 model.serialize(&Output::Html(full)),
                 model.evidence().unwrap_or(""),
                 intake
-            )
+            );
+            // SPEC 10.11 / 14.1: with assets on, the HTML in the other two modes and every asset file, byte for byte (hex)
+            if model.root().attr("assets").is_some() {
+                let external = HtmlOptions { assets: HtmlAssets::External, asset_prefix: "assets/".to_string(), ..HtmlOptions::default() };
+                let omit = HtmlOptions { assets: HtmlAssets::Omit, ..HtmlOptions::default() };
+                s.push_str(&format!("== html-external\n{}\n== html-omit\n{}\n== assets\n", model.serialize(&Output::Html(external)), model.serialize(&Output::Html(omit))));
+                for (name, ty, bytes) in model.asset_files() {
+                    s.push_str(&format!("{} {} {}\n{}\n", name, ty, bytes.len(), hex(&bytes)));
+                }
+            }
+            s
         }
     }
 }
@@ -131,6 +154,7 @@ fn main() {
     let mut replay: Option<String> = None;
     let mut parallel: usize = 1;
     let mut dump: Option<String> = None;
+    let mut asset_dir: Option<String> = None;
     let mut tess: Option<Option<String>> = None;
     for a in std::env::args().skip(1) {
         if let Some(v) = a.strip_prefix("--out=") {
@@ -162,6 +186,22 @@ fn main() {
                 "figures" => Assets::Figures,
                 _ => usage("--assets is none, images or figures"),
             };
+        } else if let Some(v) = a.strip_prefix("--asset-dpi=") {
+            opts.asset_dpi = v.parse().unwrap_or_else(|_| usage("--asset-dpi=N wants a number"));
+        } else if let Some(v) = a.strip_prefix("--asset-pixels=") {
+            opts.asset_pixels = v.parse().unwrap_or_else(|_| usage("--asset-pixels=N wants a number"));
+        } else if let Some(v) = a.strip_prefix("--asset-bytes=") {
+            opts.asset_bytes = v.parse().unwrap_or_else(|_| usage("--asset-bytes=N wants a number"));
+        } else if let Some(v) = a.strip_prefix("--assets-bytes=") {
+            opts.assets_bytes = v.parse().unwrap_or_else(|_| usage("--assets-bytes=N wants a number"));
+        } else if let Some(v) = a.strip_prefix("--asset-signatures=") {
+            opts.asset_signatures = match v {
+                "on" => true,
+                "off" => false,
+                _ => usage("--asset-signatures is on or off"),
+            };
+        } else if let Some(v) = a.strip_prefix("--asset-dir=") {
+            asset_dir = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--password=") {
             password = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--source=") {
@@ -288,13 +328,19 @@ fn main() {
         } else {
             engine.convert_stats(input.clone(), &opts)?
         };
-        let text = render(&engine, &input, &model, &out, pretty, html);
+        if let Some(dir) = &asset_dir {
+            std::fs::create_dir_all(dir).unwrap_or_else(|e| io(e));
+            for (name, _, bytes) in model.asset_files() {
+                std::fs::write(std::path::Path::new(dir).join(name), bytes).unwrap_or_else(|e| io(e));
+            }
+        }
+        let text = render(&engine, &input, &model, &out, pretty, html.clone());
         Ok((text, rs))
     };
     // the parallel arm owns no transcript (a Transcript is not Send)
     let plain = || -> Answer {
         let (model, rs) = engine.convert_stats(input.clone(), &opts)?;
-        let text = render(&engine, &input, &model, &out, pretty, html);
+        let text = render(&engine, &input, &model, &out, pretty, html.clone());
         Ok((text, rs))
     };
     let mut results: Vec<Answer> = Vec::new();

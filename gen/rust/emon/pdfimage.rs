@@ -1432,6 +1432,39 @@ pub(crate) fn pi_rgb(im: &mut crate::port::Cells, smp: &mut crate::port::Cells, 
     }
     return 0;
 }
+pub fn pi_palette_rgb(im: &mut crate::port::Cells, idx: i32) -> i32 {
+    // The colour (0xRRGGBB) of entry `idx` of an Indexed image's palette (class 4), through its base space: what P3.13's
+    // palette PNG writes in PLTE. 0 for an image that is not Indexed.
+    let base: i32 = crate::port::cells_at(im, PI_BASE);
+    let mut c0: i32 = 0;
+    let mut c1: i32 = 0;
+    let mut c2: i32 = 0;
+    let mut c3: i32 = 0;
+    let mut pal: i32 = 0;
+    if crate::port::cells_at(im, PI_CLASS) != 4 {
+        return 0;
+    }
+    if (idx < 0) || (idx > 255) {
+        return 0;
+    }
+    if base == 1 {
+        c0 = crate::port::cells_at(im, PI_PAL + idx);
+        return (c0 * 65536) + ((c0 * 256) + c0);
+    }
+    if base == 2 {
+        pal = PI_PAL + (idx * 3);
+        c0 = crate::port::cells_at(im, pal);
+        c1 = crate::port::cells_at(im, pal + 1);
+        c2 = crate::port::cells_at(im, pal + 2);
+        return (c0 * 65536) + ((c1 * 256) + c2);
+    }
+    pal = PI_PAL + (idx * 4);
+    c0 = crate::port::cells_at(im, pal);
+    c1 = crate::port::cells_at(im, pal + 1);
+    c2 = crate::port::cells_at(im, pal + 2);
+    c3 = crate::port::cells_at(im, pal + 3);
+    return pi_cmyk(c0, c1, c2, c3);
+}
 pub(crate) fn pi_key_hit(im: &mut crate::port::Cells, smp: &mut crate::port::Cells, bm: &crate::port::Bitmap, x: i32, y: i32) -> i32 {
     // 1 when every component is inside its colour-key range.
     let nc: i32 = crate::port::cells_at(im, PI_NCOMP);

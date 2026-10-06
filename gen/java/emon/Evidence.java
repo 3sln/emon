@@ -1673,6 +1673,9 @@ public final class Evidence {
     public static int ekBackdrop() {
         return 151;
     }
+    public static int ekPlacement() {
+        return 152;
+    }
     public static int ekEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "emon-evidence");
@@ -2276,6 +2279,10 @@ public final class Evidence {
         }
         if (code == 151) {
             emon.Port.textAscii(t, "backdrop");
+            return 1;
+        }
+        if (code == 152) {
+            emon.Port.textAscii(t, "placement");
             return 1;
         }
         return 0;
@@ -3316,6 +3323,9 @@ public final class Evidence {
     public static int mfVchk() {
         return 18;
     }
+    public static int mfPlacement() {
+        return 19;
+    }
     public static int orfPage() {
         return 0;
     }
@@ -3916,6 +3926,7 @@ public final class Evidence {
         13, 16, 8, 21, 0, 2,
         13, 17, 1, 102, -1, 0,
         13, 18, 9, 103, 0, 11,
+        13, 19, 1, 152, 0, 0,
         14, 0, 1, 9, -2147483648, 0,
         14, 1, 1, 119, -1, 0,
         14, 2, 1, 120, -1, 0,

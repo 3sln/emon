@@ -11,6 +11,7 @@ import (
 	"emon/pdfdoc"
 	"emon/pdffont"
 	"emon/pdfgfx"
+	"emon/pdfimage"
 	"emon/pdflex"
 	"emon/pdfnames"
 	"emon/pdfsrc"
@@ -3222,6 +3223,7 @@ func pcImagePlace(cx *port.Cells, im *port.Cells, obj int32, pxw int32, pxh int3
 	var skew int32 = 1
 	var fl int32 = flags
 	var chk int32 = 0
+	var ori int32 = 0
 	var r int32 = 0
 	if port.CellsAt(cx, cCur+gBm) != 0 {
 		fl += evidence.MgBlend()
@@ -3254,6 +3256,13 @@ func pcImagePlace(cx *port.Cells, im *port.Cells, obj int32, pxw int32, pxh int3
 	evidence.ImSet(im, r, evidence.MfFlags(), fl)
 	evidence.ImSet(im, r, evidence.MfRot(), rot)
 	evidence.ImSet(im, r, evidence.MfSkewed(), skew)
+	// The CTM here maps to the displayed page, whose y runs down: `pi-orient` reads a y-up matrix, so the y axis is flipped
+	// back (b and d change sign). 0 is upright on the page AS DISPLAYED (a page's /Rotate is in it), 8 not rectilinear.
+	ori = pdfimage.PiOrient(ma, mb*int64(-1), mc, md*int64(-1))
+	if ori < 0 {
+		ori = 8
+	}
+	evidence.ImSet(im, r, evidence.MfPlacement(), ori)
 	evidence.ImSet(im, r, evidence.MfZ(), port.CellsAt(cx, cZ))
 	port.CellsSet(cx, cZ, port.CellsAt(cx, cZ)+1)
 	evidence.ImSet(im, r, evidence.MfClip(), port.CellsAt(cx, cCur+gClip))

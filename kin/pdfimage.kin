@@ -1027,6 +1027,33 @@
           (return (pi-cmyk c0 c1 c2 c3))))
     (return 0)))
 
+(defn ^:pub ^I32 pi-palette-rgb [^Cells im ^I32 idx]
+  (comment "The colour (0xRRGGBB) of entry `idx` of an Indexed image's palette (class 4), through its base space: what P3.13's")
+  (comment "palette PNG writes in PLTE. 0 for an image that is not Indexed.")
+  (let [^I32 base (cells-at im PI_BASE)
+        ^:mut ^I32 c0 0
+        ^:mut ^I32 c1 0
+        ^:mut ^I32 c2 0
+        ^:mut ^I32 c3 0
+        ^:mut ^I32 pal 0]
+    (if (!= (cells-at im PI_CLASS) 4) (return 0))
+    (if (or (< idx 0) (> idx 255)) (return 0))
+    (if (== base 1)
+      (do (set c0 (cells-at im (+ PI_PAL idx)))
+          (return (+ (* c0 65536) (+ (* c0 256) c0)))))
+    (if (== base 2)
+      (do (set pal (+ PI_PAL (* idx 3)))
+          (set c0 (cells-at im pal))
+          (set c1 (cells-at im (+ pal 1)))
+          (set c2 (cells-at im (+ pal 2)))
+          (return (+ (* c0 65536) (+ (* c1 256) c2)))))
+    (set pal (+ PI_PAL (* idx 4)))
+    (set c0 (cells-at im pal))
+    (set c1 (cells-at im (+ pal 1)))
+    (set c2 (cells-at im (+ pal 2)))
+    (set c3 (cells-at im (+ pal 3)))
+    (return (pi-cmyk c0 c1 c2 c3))))
+
 (defn ^I32 pi-key-hit [^Cells im ^Cells smp ^Bitmap bm ^I32 x ^I32 y]
   (comment "1 when every component is inside its colour-key range.")
   (let [^I32 nc (cells-at im PI_NCOMP)

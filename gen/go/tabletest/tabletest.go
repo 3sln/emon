@@ -513,7 +513,7 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
 		return 3
 	}
-	json.JsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout)
+	json.JsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
 	return 0
 }
 

@@ -19,7 +19,7 @@ public static class Htmltest {
         System.Text.StringBuilder @out = emon.Testport.NewText();
         emon.Testport.AssertEq(Mscript.JtBuild(emon.Testport.TestFile(mfile), nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the script builds");
         emon.Testport.AssertEq(Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st), 0, "the Model is well formed");
-        emon.Testport.AssertEq(Html.HtmlEmit(@out, opts, below, nodes, attrs, regions, text, pages, ledger, layout), 0, "it emits");
+        emon.Testport.AssertEq(Html.HtmlEmit(@out, opts, below, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout), 0, "it emits");
         emon.Testport.AssertTextSpan(@out, emon.Testport.TestFile(hfile), 0, Mscript.JtEnd(emon.Testport.TestFile(hfile)), "the golden", 0);
         return 0;
     }
@@ -81,7 +81,7 @@ public static class Htmltest {
         emon.Port.Cells layout = emon.Port.NewCells();
         System.Text.StringBuilder @out = emon.Testport.NewText();
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
-        Html.HtmlEmit(@out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.HtmlEmit(@out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout);
         emon.Testport.AssertText(@out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "the smallest document");
     }
     [Xunit.Fact]
@@ -105,7 +105,7 @@ public static class Htmltest {
         h = Model.NodeNew(nodes, Model.NkHeading(), 0);
         Model.NodeSetSub(nodes, h, 7);
         HtSet(nodes, text, h, emon.Testport.TextBlob("say \"seven\""));
-        Html.HtmlEmit(@out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.HtmlEmit(@out, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout);
         emon.Testport.AssertText(@out, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><h1>a &amp; b</h1><h6>&lt;six&gt;</h6><h6 aria-level=\"7\">say &quot;seven&quot;</h6></main></body></html>", "levels, and the four escapes");
     }
     [Xunit.Fact]
@@ -126,9 +126,9 @@ public static class Htmltest {
         HtSet(nodes, text, p, emon.Testport.TextBlob("x"));
         Model.NodeAddRegion(nodes, regions, p, 1, 7250, -5, 54000, 100);
         Model.NodeSetConf(nodes, p, 500);
-        Html.HtmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout);
-        Html.HtmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout);
-        Html.HtmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.HtmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout);
+        Html.HtmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout);
+        Html.HtmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout);
         emon.Testport.AssertText(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options");
         emon.Testport.AssertText(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default");
         emon.Testport.AssertText(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold");
@@ -150,8 +150,8 @@ public static class Htmltest {
         Model.NodeSetSub(nodes, n, 2);
         n = Model.NodeNew(nodes, Model.NkFurniture(), -1);
         Model.NodeSetSub(nodes, n, 7);
-        Html.HtmlEmit(kept, 0, 0, nodes, attrs, regions, text, pages, ledger, layout);
-        Html.HtmlEmit(bare, 96, 0, nodes, attrs, regions, text, pages, ledger, layout);
+        Html.HtmlEmit(kept, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout);
+        Html.HtmlEmit(bare, 96, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout);
         emon.Testport.AssertText(kept, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>", "furniture once at the top, then the milestone");
         emon.Testport.AssertText(bare, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>", "both off");
     }
@@ -171,7 +171,7 @@ public static class Htmltest {
         while (at != -1) {
             at = Model.NodeNew(nodes, Model.NkSection(), at);
         }
-        emon.Testport.AssertEq(Html.HtmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "compact");
-        emon.Testport.AssertEq(Html.HtmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout), 0, "pretty");
+        emon.Testport.AssertEq(Html.HtmlEmit(compact, 0, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout), 0, "compact");
+        emon.Testport.AssertEq(Html.HtmlEmit(pretty, 16, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout, emon.Port.NewBuf(), layout), 0, "pretty");
     }
 }

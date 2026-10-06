@@ -33,5 +33,5 @@ pub fn probe_hash(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mu
     return 0;
 }
 pub fn probe_json(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i32 {
-    return js_emit(t, 0, nodes, attrs, regions, text, pages, ledger, layout);
+    return js_emit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
 }

@@ -16,7 +16,7 @@
 (ns emon.htmltest
   (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
             [emon.test :refer [deftest assert-eq assert-text assert-text-span
-                               test-file test-t new-cells new-text text-blob
+                               test-file test-t new-cells new-text new-buf text-blob
                                Str TestT]]
             [emon.port :refer [blob-len]]
             [emon.mscript :refer [jt-build jt-end]]
@@ -45,7 +45,7 @@
         ^Text out (new-text)]
     (assert-eq (jt-build (test-file mfile) nodes attrs regions text pages ledger layout st) 0 "the script builds")
     (assert-eq (model-check nodes attrs regions text pages ledger layout st) 0 "the Model is well formed")
-    (assert-eq (html-emit out opts below nodes attrs regions text pages ledger layout) 0 "it emits")
+    (assert-eq (html-emit out opts below nodes attrs regions text pages ledger layout layout layout (new-buf) layout) 0 "it emits")
     (assert-text-span out (test-file hfile) 0 (jt-end (test-file hfile)) "the golden" 0)
     (return 0)))
 
@@ -105,7 +105,7 @@
         ^Cells layout (new-cells)
         ^Text out (new-text)]
     (model-init nodes attrs regions text pages ledger layout)
-    (html-emit out 0 0 nodes attrs regions text pages ledger layout)
+    (html-emit out 0 0 nodes attrs regions text pages ledger layout layout layout (new-buf) layout)
     (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>" "the smallest document")))
 
 (deftest test-heading-levels-and-escapes
@@ -128,7 +128,7 @@
     (set h (node-new nodes (nk-heading) 0))
     (node-set-sub nodes h 7)
     (ht-set nodes text h (text-blob "say \"seven\""))
-    (html-emit out 0 0 nodes attrs regions text pages ledger layout)
+    (html-emit out 0 0 nodes attrs regions text pages ledger layout layout layout (new-buf) layout)
     (assert-text out "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><h1>a &amp; b</h1><h6>&lt;six&gt;</h6><h6 aria-level=\"7\">say &quot;seven&quot;</h6></main></body></html>" "levels, and the four escapes")))
 
 (deftest test-options-add-ids-geometry-and-confidence
@@ -148,9 +148,9 @@
     (ht-set nodes text p (text-blob "x"))
     (node-add-region nodes regions p 1 7250 -5 54000 100)
     (node-set-conf nodes p 500)
-    (html-emit all 7 600 nodes attrs regions text pages ledger layout)
-    (html-emit none 0 600 nodes attrs regions text pages ledger layout)
-    (html-emit edge 4 500 nodes attrs regions text pages ledger layout)
+    (html-emit all 7 600 nodes attrs regions text pages ledger layout layout layout (new-buf) layout)
+    (html-emit none 0 600 nodes attrs regions text pages ledger layout layout layout (new-buf) layout)
+    (html-emit edge 4 500 nodes attrs regions text pages ledger layout layout layout (new-buf) layout)
     (assert-text all "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>" "all three options")
     (assert-text none "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>" "clean by default")
     (assert-text edge "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>" "conf is only written strictly below the threshold")))
@@ -171,8 +171,8 @@
     (node-set-sub nodes n 2)
     (set n (node-new nodes (nk-furniture) -1))
     (node-set-sub nodes n 7)
-    (html-emit kept 0 0 nodes attrs regions text pages ledger layout)
-    (html-emit bare 96 0 nodes attrs regions text pages ledger layout)
+    (html-emit kept 0 0 nodes attrs regions text pages ledger layout layout layout (new-buf) layout)
+    (html-emit bare 96 0 nodes attrs regions text pages ledger layout layout layout (new-buf) layout)
     (assert-text kept "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><aside data-emon=\"furniture\" data-emon-role=\"header\"></aside><span data-emon-page=\"2\"></span></main></body></html>" "furniture once at the top, then the milestone")
     (assert-text bare "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main></main></body></html>" "both off")))
 
@@ -190,5 +190,5 @@
     (model-init nodes attrs regions text pages ledger layout)
     (while (!= at -1)
       (set at (node-new nodes (nk-section) at)))
-    (assert-eq (html-emit compact 0 0 nodes attrs regions text pages ledger layout) 0 "compact")
-    (assert-eq (html-emit pretty 16 0 nodes attrs regions text pages ledger layout) 0 "pretty")))
+    (assert-eq (html-emit compact 0 0 nodes attrs regions text pages ledger layout layout layout (new-buf) layout) 0 "compact")
+    (assert-eq (html-emit pretty 16 0 nodes attrs regions text pages ledger layout layout layout (new-buf) layout) 0 "pretty")))

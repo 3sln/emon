@@ -621,7 +621,7 @@ func htGolden(pdf []byte, t *strings.Builder, ar *port.Cells, dc *port.Cells, a 
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, mst) != 0 {
 		return 3
 	}
-	json.JsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout)
+	json.JsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
 	return 0
 }
 

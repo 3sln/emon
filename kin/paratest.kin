@@ -14,7 +14,7 @@
 ;; (`kin/scripts/para-goldens` wrote them; `kin/scripts/para-check` holds them to the HTML they were printed from).
 (ns emon.paratest
   (:require [emon.lang :refer [I32 Blob Src Cells Text]]
-            [emon.test :refer [deftest assert-eq assert-text assert-text-span new-cells new-text
+            [emon.test :refer [deftest assert-eq assert-text assert-text-span new-cells new-text new-buf
                                test-file text-blob]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-drop text-cp text-i32 src-of-blob]]
             [emon.mscript :refer [jt-end]]
@@ -546,8 +546,8 @@
     (pt-line wd ln et (text-blob "Hello wide world") 1 7200 10000 50000 11200 0 0 1000)
     (pt-line wd ln et (text-blob "and so on") 2 7200 10000 50000 11200 0 0 1000)
     (assert-eq (pt-run wd ln et 2 nodes attrs regions text pages ledger layout ord raw tmp fr gp st) 0 "json: well formed")
-    (js-emit t 0 nodes attrs regions text pages ledger layout)
-    (html-emit h 0 0 nodes attrs regions text pages ledger layout)
+    (js-emit t 0 nodes attrs regions text pages ledger layout layout layout)
+    (html-emit h 0 0 nodes attrs regions text pages ledger layout layout layout (new-buf) layout)
     (assert-text t "{\"emon\":\"1.1\",\"settings\":{\"locale\":null},\"conf\":\"uncalibrated\",\"pages\":[{\"n\":1,\"w\":612,\"h\":792,\"rot\":0,\"kind\":\"vector\",\"layout\":[{\"band\":0,\"col\":0,\"role\":\"body\",\"box\":[72,100,500,112]}]},{\"n\":2,\"w\":612,\"h\":792,\"rot\":0,\"kind\":\"vector\",\"layout\":[{\"band\":0,\"col\":0,\"role\":\"body\",\"box\":[72,100,500,112]}]}],\"body\":{\"id\":0,\"kind\":\"document\",\"children\":[{\"id\":1,\"kind\":\"paragraph\",\"text\":\"Hello wide world and so on\",\"inlines\":[{\"kind\":\"text\",\"text\":\"Hello wide world \",\"at\":[[1,72,100,500,112]],\"src\":[\"text\"],\"conf\":1000},{\"kind\":\"break\",\"page\":2,\"src\":[\"infer\"],\"conf\":500},{\"kind\":\"text\",\"text\":\"and so on\",\"at\":[[2,72,100,500,112]],\"src\":[\"text\"],\"conf\":1000}],\"at\":[[1,72,100,500,112],[2,72,100,500,112]],\"src\":[\"text\",\"infer\"],\"conf\":500}]},\"furniture\":[],\"dropped\":[]}" "a paragraph on two pages, in JSON")
     (assert-text h "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>Hello wide world <span data-emon-page=\"2\"></span>and so on</p></main></body></html>" "and in HTML: the milestone inside the paragraph, in order")))
 
@@ -588,7 +588,7 @@
       (hd-analyze wd lt et gl sf sc hc ws htmp hpr hptxt)
       (pt-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp hc lt ii))
     (if (!= (model-check nodes attrs regions text pages ledger layout mst) 0) (return 3))
-    (js-emit t 1 nodes attrs regions text pages ledger layout)
+    (js-emit t 1 nodes attrs regions text pages ledger layout layout layout)
     (return 0)))
 
 (deftest test-real-documents-make-the-golden-models

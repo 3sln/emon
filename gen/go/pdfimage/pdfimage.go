@@ -1561,6 +1561,40 @@ func piRgb(im *port.Cells, smp *port.Cells, bm *port.Bitmap, x int32, y int32) i
 	return 0
 }
 
+func PiPaletteRgb(im *port.Cells, idx int32) int32 {
+	// The colour (0xRRGGBB) of entry `idx` of an Indexed image's palette (class 4), through its base space: what P3.13's
+	// palette PNG writes in PLTE. 0 for an image that is not Indexed.
+	var base int32 = port.CellsAt(im, piBase)
+	var c0 int32 = 0
+	var c1 int32 = 0
+	var c2 int32 = 0
+	var c3 int32 = 0
+	var pal int32 = 0
+	if port.CellsAt(im, piClass) != 4 {
+		return 0
+	}
+	if (idx < 0) || (idx > 255) {
+		return 0
+	}
+	if base == 1 {
+		c0 = port.CellsAt(im, piPal+idx)
+		return (c0 * 65536) + ((c0 * 256) + c0)
+	}
+	if base == 2 {
+		pal = piPal + (idx * 3)
+		c0 = port.CellsAt(im, pal)
+		c1 = port.CellsAt(im, pal+1)
+		c2 = port.CellsAt(im, pal+2)
+		return (c0 * 65536) + ((c1 * 256) + c2)
+	}
+	pal = piPal + (idx * 4)
+	c0 = port.CellsAt(im, pal)
+	c1 = port.CellsAt(im, pal+1)
+	c2 = port.CellsAt(im, pal+2)
+	c3 = port.CellsAt(im, pal+3)
+	return piCmyk(c0, c1, c2, c3)
+}
+
 func piKeyHit(im *port.Cells, smp *port.Cells, bm *port.Bitmap, x int32, y int32) int32 {
 	// 1 when every component is inside its colour-key range.
 	var nc int32 = port.CellsAt(im, piNcomp)

@@ -5,7 +5,8 @@
 // or a spooled `io.Reader` (D058).
 //
 //	emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//	        [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none] [--password=TEXT]
+//	        [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--assets=none|images|figures] [--password=TEXT]
+//	        [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //	        [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats]
 //	        [--record=DIR | --replay=DIR] [--parallel=N] FILE
 //
@@ -40,7 +41,7 @@ import (
 
 func usage(msg string) {
 	fmt.Fprintf(os.Stderr, "emon-go: %s\n", msg)
-	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--assets=none] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
+	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
 	os.Exit(2)
 }
 
@@ -65,6 +66,14 @@ func htmlOptions(list string) emon.HTMLOptions {
 			o.InitialsPlain = true
 		case item == "align-style":
 			o.AlignStyle = true
+		case item == "assets=inline":
+			o.Assets = emon.HTMLAssetsInline
+		case item == "assets=external":
+			o.Assets = emon.HTMLAssetsExternal
+		case item == "assets=omit":
+			o.Assets = emon.HTMLAssetsOmit
+		case strings.HasPrefix(item, "prefix="):
+			o.AssetPrefix = strings.TrimPrefix(item, "prefix=")
 		case strings.HasPrefix(item, "confidence="):
 			n, err := strconv.ParseUint(strings.TrimPrefix(item, "confidence="), 10, 32)
 			if err != nil {
@@ -77,6 +86,15 @@ func htmlOptions(list string) emon.HTMLOptions {
 		}
 	}
 	return o
+}
+
+// intFlag is the number of a `--name=N` flag.
+func intFlag(a, prefix string) int32 {
+	n, err := strconv.ParseInt(strings.TrimPrefix(a, prefix), 10, 32)
+	if err != nil {
+		usage(prefix + "N wants a number")
+	}
+	return int32(n)
 }
 
 func readDir(dir string) (map[string][]byte, error) {
@@ -112,7 +130,7 @@ func main() {
 	var password *string
 	source := "bytes"
 	stats := false
-	var file, record, replay, dump string
+	var file, record, replay, dump, assetDir string
 	tess, tessdata := false, ""
 	parallel := 1
 	for _, a := range os.Args[1:] {
@@ -158,6 +176,25 @@ func main() {
 			default:
 				usage("--assets is none, images or figures")
 			}
+		case strings.HasPrefix(a, "--asset-dpi="):
+			opts.AssetDPI = intFlag(a, "--asset-dpi=")
+		case strings.HasPrefix(a, "--asset-pixels="):
+			opts.AssetPixels = intFlag(a, "--asset-pixels=")
+		case strings.HasPrefix(a, "--asset-bytes="):
+			opts.AssetBytes = intFlag(a, "--asset-bytes=")
+		case strings.HasPrefix(a, "--assets-bytes="):
+			opts.AssetsBytes = intFlag(a, "--assets-bytes=")
+		case strings.HasPrefix(a, "--asset-signatures="):
+			switch strings.TrimPrefix(a, "--asset-signatures=") {
+			case "on":
+				opts.AssetSignatures = true
+			case "off":
+				opts.AssetSignatures = false
+			default:
+				usage("--asset-signatures is on or off")
+			}
+		case strings.HasPrefix(a, "--asset-dir="):
+			assetDir = strings.TrimPrefix(a, "--asset-dir=")
 		case strings.HasPrefix(a, "--password="):
 			p := strings.TrimPrefix(a, "--password=")
 			password = &p
@@ -330,6 +367,16 @@ func main() {
 			r.err = err
 			return r
 		}
+		if assetDir != "" && parallel == 1 {
+			if err := os.MkdirAll(assetDir, 0o755); err != nil {
+				fail(assetDir, err)
+			}
+			for _, f := range m.AssetFiles() {
+				if err := os.WriteFile(filepath.Join(assetDir, f.Name), f.Bytes, 0o644); err != nil {
+					fail(assetDir, err)
+				}
+			}
+		}
 		r.text = render(engine, inputs, m, out, pretty, html)
 		return r
 	}
@@ -438,8 +485,20 @@ func render(engine *emon.Engine, inputs []emon.Input, m *emon.Model, out string,
 	}
 	ev, _ := m.Evidence()
 	def := emon.DefaultHTMLOptions()
-	return "== json\n" + m.ToJSON(emon.JSONOptions{}) + "\n== json-pretty\n" + m.ToJSON(emon.JSONOptions{Pretty: true}) +
+	s := "== json\n" + m.ToJSON(emon.JSONOptions{}) + "\n== json-pretty\n" + m.ToJSON(emon.JSONOptions{Pretty: true}) +
 		"\n== html\n" + m.ToHTML(def) + "\n== html-full\n" + m.ToHTML(full) + "\n== evidence\n" + ev + "\n== intake\n" + intake + "\n"
+	// SPEC 10.11 / 14.1: with assets on, the HTML in the other two modes and every asset file, byte for byte (hex)
+	if _, on := m.Root().Attr("assets"); on {
+		external := emon.DefaultHTMLOptions()
+		external.Assets, external.AssetPrefix = emon.HTMLAssetsExternal, "assets/"
+		omit := emon.DefaultHTMLOptions()
+		omit.Assets = emon.HTMLAssetsOmit
+		s += "== html-external\n" + m.ToHTML(external) + "\n== html-omit\n" + m.ToHTML(omit) + "\n== assets\n"
+		for _, f := range m.AssetFiles() {
+			s += fmt.Sprintf("%s %s %d\n%x\n", f.Name, f.MediaType, len(f.Bytes), f.Bytes)
+		}
+	}
+	return s
 }
 
 // forward hides everything of an *os.File but Read.

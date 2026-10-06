@@ -380,6 +380,129 @@ public static class Json {
         emon.Port.TextAscii(t, "\"");
         return 1;
     }
+    internal static int JsFNoasset(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells nodes, emon.Port.Cells attrs, int n, int started) {
+        // `noasset`: why a figure or seal has no pixels (SPEC 10.11), an `nz` name.
+        int a = Model.NodeAttr(nodes, attrs, n, Model.FkNoasset());
+        if (a < 0) {
+            return started;
+        }
+        JsBegin(t, pr, d, started, Model.FkNoasset());
+        emon.Port.TextAscii(t, "\"");
+        Model.NzEmitName(t, Model.AttrValue(attrs, a));
+        emon.Port.TextAscii(t, "\"");
+        return 1;
+    }
+    internal static int JsShaHex(System.Text.StringBuilder t, emon.Port.Cells assets, int a) {
+        // The asset's SHA-256, 64 lower-case hex digits.
+        int i = 0;
+        int k = 0;
+        int w = 0;
+        while (i < 8) {
+            w = Model.AssetSha(assets, a, i);
+            k = 0;
+            while (k < 8) {
+                JsHex(t, ((w) >> (28 - (k * 4))) & 15);
+                k += 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    internal static int JsAsset(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells assets, emon.Port.Cells uses, int a) {
+        // One asset (SPEC 10.11): id, name, type, origin, from, object, bytes, sha256, w, h, dpi, flags, uses.
+        int s = 0;
+        int u = 0;
+        int k = 0;
+        int b = 0;
+        int j = 0;
+        int fl = Model.AssetFlags(assets, a);
+        emon.Port.TextAscii(t, "{");
+        s = JsBegin(t, pr, d, s, Model.FkId());
+        emon.Port.TextI32(t, a);
+        s = JsBegin(t, pr, d, s, Model.FkName());
+        emon.Port.TextAscii(t, "\"a");
+        emon.Port.TextI32(t, a);
+        if (Model.AssetType(assets, a) == 1) {
+            emon.Port.TextAscii(t, ".jpg");
+        }
+        if (Model.AssetType(assets, a) != 1) {
+            emon.Port.TextAscii(t, ".png");
+        }
+        emon.Port.TextAscii(t, "\"");
+        s = JsBegin(t, pr, d, s, Model.FkType());
+        emon.Port.TextAscii(t, "\"");
+        Model.AmtEmitName(t, Model.AssetType(assets, a));
+        emon.Port.TextAscii(t, "\"");
+        s = JsBegin(t, pr, d, s, Model.FkOrigin());
+        emon.Port.TextAscii(t, "\"");
+        Model.AoEmitName(t, Model.AssetOrigin(assets, a));
+        emon.Port.TextAscii(t, "\"");
+        s = JsBegin(t, pr, d, s, Model.FkFrom());
+        emon.Port.TextAscii(t, "\"");
+        Model.AfmEmitName(t, Model.AssetFrom(assets, a));
+        emon.Port.TextAscii(t, "\"");
+        if (Model.AssetObject(assets, a) >= 0) {
+            s = JsBegin(t, pr, d, s, Model.FkObject());
+            emon.Port.TextI32(t, Model.AssetObject(assets, a));
+        }
+        s = JsBegin(t, pr, d, s, Model.FkBytes());
+        emon.Port.TextI32(t, Model.AssetBlen(assets, a));
+        s = JsBegin(t, pr, d, s, Model.FkSha256());
+        emon.Port.TextAscii(t, "\"");
+        JsShaHex(t, assets, a);
+        emon.Port.TextAscii(t, "\"");
+        s = JsBegin(t, pr, d, s, Model.FkW());
+        emon.Port.TextI32(t, Model.AssetW(assets, a));
+        s = JsBegin(t, pr, d, s, Model.FkH());
+        emon.Port.TextI32(t, Model.AssetH(assets, a));
+        if (Model.AssetDpi(assets, a) > 0) {
+            s = JsBegin(t, pr, d, s, Model.FkDpi());
+            emon.Port.TextI32(t, Model.AssetDpi(assets, a));
+        }
+        if (fl != 0) {
+            s = JsBegin(t, pr, d, s, Model.FkFlags());
+            emon.Port.TextAscii(t, "[");
+            b = 0;
+            while (b < 6) {
+                if ((fl & ((1) << (b))) != 0) {
+                    JsFsep(t, pr, k);
+                    emon.Port.TextAscii(t, "\"");
+                    Model.AfgEmitName(t, (1) << (b));
+                    emon.Port.TextAscii(t, "\"");
+                    k += 1;
+                }
+                b += 1;
+            }
+            emon.Port.TextAscii(t, "]");
+        }
+        s = JsBegin(t, pr, d, s, Model.FkUses());
+        emon.Port.TextAscii(t, "[");
+        u = Model.AssetUseHead(assets, a);
+        while (u >= 0) {
+            JsAelem(t, pr, d + 1, j);
+            emon.Port.TextAscii(t, "{");
+            JsBegin(t, pr, d + 2, 0, Model.FkNode());
+            emon.Port.TextI32(t, Model.UseNode(uses, u));
+            JsBegin(t, pr, d + 2, 1, Model.FkAt());
+            emon.Port.TextAscii(t, "[");
+            emon.Port.TextI32(t, Model.UsePage(uses, u));
+            JsFsep(t, pr, 1);
+            JsCpt(t, Model.UseX0(uses, u));
+            JsFsep(t, pr, 1);
+            JsCpt(t, Model.UseY0(uses, u));
+            JsFsep(t, pr, 1);
+            JsCpt(t, Model.UseX1(uses, u));
+            JsFsep(t, pr, 1);
+            JsCpt(t, Model.UseY1(uses, u));
+            emon.Port.TextAscii(t, "]");
+            JsClose(t, pr, d + 2, 1);
+            j += 1;
+            u = Model.UseNext(uses, u);
+        }
+        JsAend(t, pr, d + 1, j);
+        JsClose(t, pr, d, s);
+        return 0;
+    }
     internal static int JsKfields(System.Text.StringBuilder t, int pr, int d, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int n, int kind, int started) {
         // The fields only this kind has, in the order SPEC 3.2 lists them.
         // WHERE EACH LIVES in the arena: a level, an alignment, a role, a
@@ -449,12 +572,16 @@ public static class Json {
             s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkLabel(), s);
             s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkAlt(), s);
             s = JsFarrText(t, pr, d, nodes, attrs, text, n, Model.FkLabels(), s);
+            s = JsFint(t, pr, d, nodes, attrs, n, Model.FkAsset(), s);
+            s = JsFNoasset(t, pr, d, nodes, attrs, n, s);
         }
         if (kind == Model.NkSeal()) {
             s = JsESeal(t, pr, d, s, sub);
             s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkName(), s);
             s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkDate(), s);
             s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkColor(), s);
+            s = JsFint(t, pr, d, nodes, attrs, n, Model.FkAsset(), s);
+            s = JsFNoasset(t, pr, d, nodes, attrs, n, s);
         }
         if (kind == Model.NkFormula()) {
             s = JsEDisplay(t, pr, d, s, sub);
@@ -851,6 +978,13 @@ public static class Json {
         }
         s = JsFtext(t, pr, 1, nodes, attrs, text, 0, Model.FkOcr(), s);
         s = JsFtext(t, pr, 1, nodes, attrs, text, 0, Model.FkDetail(), s);
+        // the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was
+        s = JsFtext(t, pr, 1, nodes, attrs, text, 0, Model.FkAssets(), s);
+        s = JsFint(t, pr, 1, nodes, attrs, 0, Model.FkAssetDpi(), s);
+        s = JsFint(t, pr, 1, nodes, attrs, 0, Model.FkAssetPixels(), s);
+        s = JsFint(t, pr, 1, nodes, attrs, 0, Model.FkAssetBytes(), s);
+        s = JsFint(t, pr, 1, nodes, attrs, 0, Model.FkAssetsBytes(), s);
+        s = JsFtext(t, pr, 1, nodes, attrs, text, 0, Model.FkAssetSignatures(), s);
         JsClose(t, pr, 1, s);
         return 0;
     }
@@ -868,7 +1002,7 @@ public static class Json {
         JsClose(t, pr, 1, s);
         return 0;
     }
-    public static int JsEmit(System.Text.StringBuilder t, int pretty, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout) {
+    public static int JsEmit(System.Text.StringBuilder t, int pretty, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells assets, emon.Port.Cells uses) {
         // Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1
         // for the indented form, 0 for the compact one. The root (node 0)
         // must be a document: run `model-check` first on a Model of unknown
@@ -926,6 +1060,18 @@ public static class Json {
             i += 1;
         }
         JsAend(t, pretty, 1, nl);
+        // the asset table, after `dropped`, only when the `assets` setting is on (then always, `[]` when empty: SPEC 4.2)
+        if (JsHas(nodes, attrs, Model.FkAssets()) == 1) {
+            s = JsBegin(t, pretty, 0, s, Model.FkAssets());
+            emon.Port.TextAscii(t, "[");
+            i = 0;
+            while (i < Model.AssetCount(assets)) {
+                JsAelem(t, pretty, 1, i);
+                JsAsset(t, pretty, 2, assets, uses, i);
+                i += 1;
+            }
+            JsAend(t, pretty, 1, Model.AssetCount(assets));
+        }
         JsClose(t, pretty, 0, s);
         return 0;
     }

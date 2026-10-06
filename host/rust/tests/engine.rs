@@ -219,10 +219,6 @@ fn a_source_that_gives_fewer_bytes_than_its_length_is_source_changed() {
 fn what_is_not_implemented_is_refused() {
     let e = Engine::new(Config::default());
     let b = synth("h-plain");
-    for a in [Assets::Images, Assets::Figures] {
-        let r = e.convert(Input::bytes(b.clone()), &Options { assets: a, ..Options::default() });
-        assert_eq!(r.err().map(|e| e.name()), Some("unsupported".to_string()));
-    }
     let r = e.convert(vec![Input::bytes(b.clone()), Input::bytes(b.clone())], &Options::default());
     assert_eq!(r.err().map(|e| e.name()), Some("unsupported".to_string()));
     assert_eq!(e.convert(Vec::<Input>::new(), &Options::default()).err().map(|e| e.name()), Some("no-input".to_string()));

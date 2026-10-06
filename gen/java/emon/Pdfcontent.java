@@ -2915,6 +2915,7 @@ public final class Pdfcontent {
         int skew = 1;
         int fl = flags;
         int chk = 0;
+        int ori = 0;
         int r = 0;
         if (emon.Port.cellsAt(cx, C_CUR + G_BM) != 0) {
             fl += Evidence.mgBlend();
@@ -2947,6 +2948,13 @@ public final class Pdfcontent {
         Evidence.imSet(im, r, Evidence.mfFlags(), fl);
         Evidence.imSet(im, r, Evidence.mfRot(), rot);
         Evidence.imSet(im, r, Evidence.mfSkewed(), skew);
+        // The CTM here maps to the displayed page, whose y runs down: `pi-orient` reads a y-up matrix, so the y axis is flipped
+        // back (b and d change sign). 0 is upright on the page AS DISPLAYED (a page's /Rotate is in it), 8 not rectilinear.
+        ori = Pdfimage.piOrient(ma, mb * ((long) -1), mc, md * ((long) -1));
+        if (ori < 0) {
+            ori = 8;
+        }
+        Evidence.imSet(im, r, Evidence.mfPlacement(), ori);
         Evidence.imSet(im, r, Evidence.mfZ(), emon.Port.cellsAt(cx, C_Z));
         emon.Port.cellsSet(cx, C_Z, emon.Port.cellsAt(cx, C_Z) + 1);
         Evidence.imSet(im, r, Evidence.mfClip(), emon.Port.cellsAt(cx, C_CUR + G_CLIP));

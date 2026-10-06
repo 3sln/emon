@@ -378,6 +378,129 @@ pub(crate) fn js_e_display(mut t: &mut String, pr: i32, d: i32, started: i32, v:
     crate::port::text_ascii(t, "\"");
     return 1;
 }
+pub(crate) fn js_f_noasset(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, n: i32, started: i32) -> i32 {
+    // `noasset`: why a figure or seal has no pixels (SPEC 10.11), an `nz` name.
+    let a: i32 = node_attr(nodes, attrs, n, fk_noasset());
+    if a < 0 {
+        return started;
+    }
+    js_begin(t, pr, d, started, fk_noasset());
+    crate::port::text_ascii(t, "\"");
+    nz_emit_name(t, attr_value(attrs, a));
+    crate::port::text_ascii(t, "\"");
+    return 1;
+}
+pub(crate) fn js_sha_hex(mut t: &mut String, assets: &mut crate::port::Cells, a: i32) -> i32 {
+    // The asset's SHA-256, 64 lower-case hex digits.
+    let mut i: i32 = 0;
+    let mut k: i32 = 0;
+    let mut w: i32 = 0;
+    while i < 8 {
+        w = asset_sha(assets, a, i);
+        k = 0;
+        while k < 8 {
+            js_hex(t, ((w) >> (28 - (k * 4))) & 15);
+            k += 1;
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn js_asset(mut t: &mut String, pr: i32, d: i32, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells, a: i32) -> i32 {
+    // One asset (SPEC 10.11): id, name, type, origin, from, object, bytes, sha256, w, h, dpi, flags, uses.
+    let mut s: i32 = 0;
+    let mut u: i32 = 0;
+    let mut k: i32 = 0;
+    let mut b: i32 = 0;
+    let mut j: i32 = 0;
+    let fl: i32 = asset_flags(assets, a);
+    crate::port::text_ascii(t, "{");
+    s = js_begin(t, pr, d, s, fk_id());
+    crate::port::text_i32(t, a);
+    s = js_begin(t, pr, d, s, fk_name());
+    crate::port::text_ascii(t, "\"a");
+    crate::port::text_i32(t, a);
+    if asset_type(assets, a) == 1 {
+        crate::port::text_ascii(t, ".jpg");
+    }
+    if asset_type(assets, a) != 1 {
+        crate::port::text_ascii(t, ".png");
+    }
+    crate::port::text_ascii(t, "\"");
+    s = js_begin(t, pr, d, s, fk_type());
+    crate::port::text_ascii(t, "\"");
+    amt_emit_name(t, asset_type(assets, a));
+    crate::port::text_ascii(t, "\"");
+    s = js_begin(t, pr, d, s, fk_origin());
+    crate::port::text_ascii(t, "\"");
+    ao_emit_name(t, asset_origin(assets, a));
+    crate::port::text_ascii(t, "\"");
+    s = js_begin(t, pr, d, s, fk_from());
+    crate::port::text_ascii(t, "\"");
+    afm_emit_name(t, asset_from(assets, a));
+    crate::port::text_ascii(t, "\"");
+    if asset_object(assets, a) >= 0 {
+        s = js_begin(t, pr, d, s, fk_object());
+        crate::port::text_i32(t, asset_object(assets, a));
+    }
+    s = js_begin(t, pr, d, s, fk_bytes());
+    crate::port::text_i32(t, asset_blen(assets, a));
+    s = js_begin(t, pr, d, s, fk_sha256());
+    crate::port::text_ascii(t, "\"");
+    js_sha_hex(t, assets, a);
+    crate::port::text_ascii(t, "\"");
+    s = js_begin(t, pr, d, s, fk_w());
+    crate::port::text_i32(t, asset_w(assets, a));
+    s = js_begin(t, pr, d, s, fk_h());
+    crate::port::text_i32(t, asset_h(assets, a));
+    if asset_dpi(assets, a) > 0 {
+        s = js_begin(t, pr, d, s, fk_dpi());
+        crate::port::text_i32(t, asset_dpi(assets, a));
+    }
+    if fl != 0 {
+        s = js_begin(t, pr, d, s, fk_flags());
+        crate::port::text_ascii(t, "[");
+        b = 0;
+        while b < 6 {
+            if (fl & ((1) << (b))) != 0 {
+                js_fsep(t, pr, k);
+                crate::port::text_ascii(t, "\"");
+                afg_emit_name(t, (1) << (b));
+                crate::port::text_ascii(t, "\"");
+                k += 1;
+            }
+            b += 1;
+        }
+        crate::port::text_ascii(t, "]");
+    }
+    s = js_begin(t, pr, d, s, fk_uses());
+    crate::port::text_ascii(t, "[");
+    u = asset_use_head(assets, a);
+    while u >= 0 {
+        js_aelem(t, pr, d + 1, j);
+        crate::port::text_ascii(t, "{");
+        js_begin(t, pr, d + 2, 0, fk_node());
+        crate::port::text_i32(t, use_node(uses, u));
+        js_begin(t, pr, d + 2, 1, fk_at());
+        crate::port::text_ascii(t, "[");
+        crate::port::text_i32(t, use_page(uses, u));
+        js_fsep(t, pr, 1);
+        js_cpt(t, use_x0(uses, u));
+        js_fsep(t, pr, 1);
+        js_cpt(t, use_y0(uses, u));
+        js_fsep(t, pr, 1);
+        js_cpt(t, use_x1(uses, u));
+        js_fsep(t, pr, 1);
+        js_cpt(t, use_y1(uses, u));
+        crate::port::text_ascii(t, "]");
+        js_close(t, pr, d + 2, 1);
+        j += 1;
+        u = use_next(uses, u);
+    }
+    js_aend(t, pr, d + 1, j);
+    js_close(t, pr, d, s);
+    return 0;
+}
 pub(crate) fn js_kfields(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, kind: i32, started: i32) -> i32 {
     // The fields only this kind has, in the order SPEC 3.2 lists them.
     // WHERE EACH LIVES in the arena: a level, an alignment, a role, a
@@ -447,12 +570,16 @@ pub(crate) fn js_kfields(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate:
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_label(), s);
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_alt(), s);
         s = js_farr_text(t, pr, d, nodes, attrs, text, n, fk_labels(), s);
+        s = js_fint(t, pr, d, nodes, attrs, n, fk_asset(), s);
+        s = js_f_noasset(t, pr, d, nodes, attrs, n, s);
     }
     if kind == nk_seal() {
         s = js_e_seal(t, pr, d, s, sub);
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_name(), s);
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_date(), s);
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_color(), s);
+        s = js_fint(t, pr, d, nodes, attrs, n, fk_asset(), s);
+        s = js_f_noasset(t, pr, d, nodes, attrs, n, s);
     }
     if kind == nk_formula() {
         s = js_e_display(t, pr, d, s, sub);
@@ -849,6 +976,13 @@ pub(crate) fn js_settings(mut t: &mut String, pr: i32, nodes: &mut crate::port::
     }
     s = js_ftext(t, pr, 1, nodes, attrs, text, 0, fk_ocr(), s);
     s = js_ftext(t, pr, 1, nodes, attrs, text, 0, fk_detail(), s);
+    // the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was
+    s = js_ftext(t, pr, 1, nodes, attrs, text, 0, fk_assets(), s);
+    s = js_fint(t, pr, 1, nodes, attrs, 0, fk_asset_dpi(), s);
+    s = js_fint(t, pr, 1, nodes, attrs, 0, fk_asset_pixels(), s);
+    s = js_fint(t, pr, 1, nodes, attrs, 0, fk_asset_bytes(), s);
+    s = js_fint(t, pr, 1, nodes, attrs, 0, fk_assets_bytes(), s);
+    s = js_ftext(t, pr, 1, nodes, attrs, text, 0, fk_asset_signatures(), s);
     js_close(t, pr, 1, s);
     return 0;
 }
@@ -866,7 +1000,7 @@ pub(crate) fn js_meta(mut t: &mut String, pr: i32, nodes: &mut crate::port::Cell
     js_close(t, pr, 1, s);
     return 0;
 }
-pub fn js_emit(mut t: &mut String, pretty: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i32 {
+pub fn js_emit(mut t: &mut String, pretty: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells) -> i32 {
     // Write the Model as canonical JSON (SPEC 4.2, 4.3). `pretty` is 1
     // for the indented form, 0 for the compact one. The root (node 0)
     // must be a document: run `model-check` first on a Model of unknown
@@ -924,6 +1058,18 @@ pub fn js_emit(mut t: &mut String, pretty: i32, nodes: &mut crate::port::Cells, 
         i += 1;
     }
     js_aend(t, pretty, 1, nl);
+    // the asset table, after `dropped`, only when the `assets` setting is on (then always, `[]` when empty: SPEC 4.2)
+    if js_has(nodes, attrs, fk_assets()) == 1 {
+        s = js_begin(t, pretty, 0, s, fk_assets());
+        crate::port::text_ascii(t, "[");
+        i = 0;
+        while i < asset_count(assets) {
+            js_aelem(t, pretty, 1, i);
+            js_asset(t, pretty, 2, assets, uses, i);
+            i += 1;
+        }
+        js_aend(t, pretty, 1, asset_count(assets));
+    }
     js_close(t, pretty, 0, s);
     return 0;
 }

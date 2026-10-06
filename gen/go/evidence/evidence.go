@@ -1706,6 +1706,9 @@ func EkOutline() int32 {
 func EkBackdrop() int32 {
 	return 151
 }
+func EkPlacement() int32 {
+	return 152
+}
 func EkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "emon-evidence")
@@ -2309,6 +2312,10 @@ func EkEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 151 {
 		port.TextAscii(t, "backdrop")
+		return 1
+	}
+	if code == 152 {
+		port.TextAscii(t, "placement")
 		return 1
 	}
 	return 0
@@ -3567,6 +3574,10 @@ func MfVchk() int32 {
 	return 18
 }
 
+func MfPlacement() int32 {
+	return 19
+}
+
 func OrfPage() int32 {
 	return 0
 }
@@ -4171,7 +4182,7 @@ func TlfConf() int32 {
 	return 16
 }
 
-var EvFd [1674]int32 = [1674]int32{
+var EvFd [1680]int32 = [1680]int32{
 	1, 0, 1, 9, -2147483648, 0,
 	1, 1, 2, 34, 0, 0,
 	1, 2, 2, 74, 0, 0,
@@ -4318,6 +4329,7 @@ var EvFd [1674]int32 = [1674]int32{
 	13, 16, 8, 21, 0, 2,
 	13, 17, 1, 102, -1, 0,
 	13, 18, 9, 103, 0, 11,
+	13, 19, 1, 152, 0, 0,
 	14, 0, 1, 9, -2147483648, 0,
 	14, 1, 1, 119, -1, 0,
 	14, 2, 1, 120, -1, 0,

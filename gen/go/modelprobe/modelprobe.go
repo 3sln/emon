@@ -41,5 +41,5 @@ func ProbeHash(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions
 }
 
 func ProbeJson(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells) int32 {
-	return json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout)
+	return json.JsEmit(t, 0, nodes, attrs, regions, text, pages, ledger, layout, layout, layout)
 }

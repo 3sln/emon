@@ -31,6 +31,12 @@ pub fn ho_initials_plain() -> i32 {
 pub fn ho_align_style() -> i32 {
     return 256;
 }
+pub fn ho_assets_external() -> i32 {
+    return 512;
+}
+pub fn ho_assets_omit() -> i32 {
+    return 1024;
+}
 pub(crate) fn h_on(o: i32, bit: i32) -> i32 {
     if (o & bit) != 0 {
         return 1;
@@ -237,7 +243,7 @@ pub(crate) fn h_common(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
     if (h_on(o, 2) == 1) && (node_is_inline(nodes, n) == 0) && (node_region_count(nodes, n) > 0) && (layout_count(layout) > 0) {
         h_columns(t, nodes, regions, pages, layout, n);
     }
-    if (h_on(o, 4) == 1) && (cf >= 0) && (cf < (o / 1024)) {
+    if (h_on(o, 4) == 1) && (cf >= 0) && (cf < (o / 4096)) {
         crate::port::text_ascii(t, " data-emon-conf=\"");
         crate::port::text_i32(t, cf);
         crate::port::text_ascii(t, "\"");
@@ -555,26 +561,229 @@ pub(crate) fn h_inline(mut t: &mut String, o: i32, nodes: &mut crate::port::Cell
     }
     return 0;
 }
-pub(crate) fn h_blocks(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
+pub(crate) fn h_seal_word(mut t: &mut String, sub: i32) -> i32 {
+    // A seal's kind as the start of its accessible name.
+    if sub == 1 {
+        crate::port::text_ascii(t, "Seal");
+    }
+    if sub == 2 {
+        crate::port::text_ascii(t, "Stamp");
+    }
+    if sub == 3 {
+        crate::port::text_ascii(t, "Signature");
+    }
+    if sub == 4 {
+        crate::port::text_ascii(t, "Initials");
+    }
+    if sub == 5 {
+        crate::port::text_ascii(t, "Digital signature");
+    }
+    if (sub < 1) || (sub > 5) {
+        crate::port::text_ascii(t, "Seal");
+    }
+    return 0;
+}
+pub(crate) fn h_asset_id(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, n: i32, o: i32) -> i32 {
+    // The asset id of node n when this HTML shows it (the node has one and the option is not `omit`), else -1.
+    let a: i32 = h_iattr(nodes, attrs, n, fk_asset());
+    if h_on(o, 1024) == 1 {
+        return -1;
+    }
+    if a < 0 {
+        return -1;
+    }
+    return attr_value(attrs, a);
+}
+pub(crate) fn h_noasset(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, n: i32) -> i32 {
+    //  data-emon-noasset="reason" for a node that has none (never under `omit`).
+    let a: i32 = h_iattr(nodes, attrs, n, fk_noasset());
+    if h_on(o, 1024) == 1 {
+        return 0;
+    }
+    if a < 0 {
+        return 0;
+    }
+    crate::port::text_ascii(t, " data-emon-noasset=\"");
+    nz_emit_name(t, attr_value(attrs, a));
+    crate::port::text_ascii(t, "\"");
+    return 1;
+}
+pub(crate) fn h_b64_char(mut t: &mut String, v: i32) -> i32 {
+    if v < 26 {
+        crate::port::text_cp(t, 65 + v);
+    }
+    if (v >= 26) && (v < 52) {
+        crate::port::text_cp(t, 71 + v);
+    }
+    if (v >= 52) && (v < 62) {
+        crate::port::text_cp(t, v - 4);
+    }
+    if v == 62 {
+        crate::port::text_cp(t, 43);
+    }
+    if v == 63 {
+        crate::port::text_cp(t, 47);
+    }
+    return 0;
+}
+pub(crate) fn h_b64(mut t: &mut String, abytes: &mut crate::port::Buf, start: i32, ln: i32) -> i32 {
+    // RFC 4648 base64 (standard alphabet, padded, no line breaks) of abytes[start, start+ln).
+    let mut i: i32 = 0;
+    let mut b0: i32 = 0;
+    let mut b1: i32 = 0;
+    let mut b2: i32 = 0;
+    while i < ln {
+        b0 = crate::port::buf_at(abytes, start + i);
+        b1 = 0;
+        b2 = 0;
+        if (i + 1) < ln {
+            b1 = crate::port::buf_at(abytes, start + (i + 1));
+        }
+        if (i + 2) < ln {
+            b2 = crate::port::buf_at(abytes, start + (i + 2));
+        }
+        h_b64_char(t, b0 / 4);
+        h_b64_char(t, ((b0 % 4) * 16) + (b1 / 16));
+        if (i + 1) < ln {
+            h_b64_char(t, ((b1 % 16) * 4) + (b2 / 64));
+        } else {
+            crate::port::text_cp(t, 61);
+        }
+        if (i + 2) < ln {
+            h_b64_char(t, b2 % 64);
+        } else {
+            crate::port::text_cp(t, 61);
+        }
+        i += 3;
+    }
+    return 0;
+}
+pub(crate) fn h_has_caption(nodes: &mut crate::port::Cells, n: i32) -> i32 {
+    let mut c: i32 = node_first_child(nodes, n);
+    while c >= 0 {
+        if node_kind(nodes, c) == nk_caption() {
+            return 1;
+        }
+        c = node_next(nodes, c);
+    }
+    return 0;
+}
+pub(crate) fn h_alt_empty(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, n: i32) -> i32 {
+    // 1 when the placeholder's accessible name is empty: a figure with no `alt`. A seal always has its word.
+    let a: i32 = h_tattr(nodes, attrs, n, fk_alt());
+    if node_kind(nodes, n) == nk_seal() {
+        return 0;
+    }
+    if a < 0 {
+        return 1;
+    }
+    if attr_len(attrs, a) == 0 {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn h_alt(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
+    // The text the placeholder's `aria-label` would have had: a figure's `alt`, a seal's `Stamp: ...` label (D069).
+    let mut a: i32 = h_tattr(nodes, attrs, n, fk_alt());
+    let mut b: i32 = -1;
+    if node_kind(nodes, n) == nk_figure() {
+        if a >= 0 {
+            h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
+        }
+        return 0;
+    }
+    b = h_tattr(nodes, attrs, n, fk_name());
+    h_seal_word(t, node_sub(nodes, n));
+    if (node_has_text(nodes, n) == 1) || (b >= 0) {
+        crate::port::text_ascii(t, ": ");
+    }
+    if node_has_text(nodes, n) == 1 {
+        h_run(t, text, node_text_start(nodes, n), node_text_len(nodes, n));
+    }
+    if (node_has_text(nodes, n) == 0) && (b >= 0) {
+        h_run(t, text, attr_value(attrs, b), attr_len(attrs, b));
+    }
+    return 0;
+}
+pub(crate) fn h_px(cpt: i32) -> i32 {
+    // A length in centipoints as CSS pixels: cpt * 4 / 300 rounded half up, at least 1.
+    let v: i32 = ((cpt * 8) + 300) / 600;
+    if v < 1 {
+        return 1;
+    }
+    return v;
+}
+pub(crate) fn h_img(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, text: &mut crate::port::Cells, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells, abytes: &mut crate::port::Buf, prefix: &mut crate::port::Cells, n: i32, id: i32) -> i32 {
+    // The `<img>` of node n's asset `id`: src, alt, width and height (the node's own use: the size the picture had on the
+    // page), `data-emon-asset`, and `data-emon-alt=missing` when there is no alt and no caption to be the description.
+    let mut u: i32 = asset_use_head(assets, id);
+    let mut w: i32 = 1;
+    let mut h: i32 = 1;
+    let mut i: i32 = 0;
+    while u >= 0 {
+        if use_node(uses, u) == n {
+            w = h_px(use_x1(uses, u) - use_x0(uses, u));
+            h = h_px(use_y1(uses, u) - use_y0(uses, u));
+            u = -1;
+        } else {
+            u = use_next(uses, u);
+        }
+    }
+    crate::port::text_ascii(t, "<img src=\"");
+    if h_on(o, 512) == 1 {
+        while i < crate::port::cells_len(prefix) {
+            h_cp(t, crate::port::cells_at(prefix, i));
+            i += 1;
+        }
+        crate::port::text_ascii(t, "a");
+        crate::port::text_i32(t, id);
+        if asset_type(assets, id) == 1 {
+            crate::port::text_ascii(t, ".jpg");
+        }
+        if asset_type(assets, id) != 1 {
+            crate::port::text_ascii(t, ".png");
+        }
+    } else {
+        crate::port::text_ascii(t, "data:");
+        amt_emit_name(t, asset_type(assets, id));
+        crate::port::text_ascii(t, ";base64,");
+        h_b64(t, abytes, asset_bstart(assets, id), asset_blen(assets, id));
+    }
+    crate::port::text_ascii(t, "\" alt=\"");
+    h_alt(t, nodes, attrs, text, n);
+    crate::port::text_ascii(t, "\" width=\"");
+    crate::port::text_i32(t, w);
+    crate::port::text_ascii(t, "\" height=\"");
+    crate::port::text_i32(t, h);
+    crate::port::text_ascii(t, "\" data-emon-asset=\"");
+    crate::port::text_i32(t, id);
+    crate::port::text_ascii(t, "\"");
+    if (h_alt_empty(nodes, attrs, n) == 1) && (h_has_caption(nodes, n) == 0) {
+        crate::port::text_ascii(t, " data-emon-alt=\"missing\"");
+    }
+    crate::port::text_ascii(t, ">");
+    return 0;
+}
+pub(crate) fn h_blocks(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells, abytes: &mut crate::port::Buf, prefix: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
     // Every non-inline child of n as a block at depth d. Answers how many
     // wrote anything (a milestone turned off writes nothing).
     let mut c: i32 = node_first_child(nodes, n);
     let mut k: i32 = 0;
     while c >= 0 {
         if node_is_inline(nodes, c) == 0 {
-            k += h_block(t, o, nodes, attrs, regions, pages, layout, text, c, d);
+            k += h_block(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, c, d);
         }
         c = node_next(nodes, c);
     }
     return k;
 }
-pub(crate) fn h_body(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
+pub(crate) fn h_body(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells, abytes: &mut crate::port::Buf, prefix: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
     // What goes inside a block's element: its line of text (inline
     // children, else its own run), then its block children at depth d.
     // Answers how many block children were written, so the caller knows
     // whether its closing tag starts a new line (pretty mode).
     h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
-    return h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d);
+    return h_blocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d);
 }
 pub(crate) fn h_list_type(mut t: &mut String, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32) -> i32 {
     // An ordered list's `type` from its scheme: `lower-alpha` a,
@@ -606,29 +815,7 @@ pub(crate) fn h_list_type(mut t: &mut String, nodes: &mut crate::port::Cells, at
     }
     return 0;
 }
-pub(crate) fn h_seal_word(mut t: &mut String, sub: i32) -> i32 {
-    // A seal's kind as the start of its accessible name.
-    if sub == 1 {
-        crate::port::text_ascii(t, "Seal");
-    }
-    if sub == 2 {
-        crate::port::text_ascii(t, "Stamp");
-    }
-    if sub == 3 {
-        crate::port::text_ascii(t, "Signature");
-    }
-    if sub == 4 {
-        crate::port::text_ascii(t, "Initials");
-    }
-    if sub == 5 {
-        crate::port::text_ascii(t, "Digital signature");
-    }
-    if (sub < 1) || (sub > 5) {
-        crate::port::text_ascii(t, "Seal");
-    }
-    return 0;
-}
-pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
+pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, layout: &mut crate::port::Cells, text: &mut crate::port::Cells, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells, abytes: &mut crate::port::Buf, prefix: &mut crate::port::Cells, n: i32, d: i32) -> i32 {
     // One node as a block element at depth d (SPEC 5.1), on its own line
     // in pretty mode. Answers 1 if it wrote anything, 0 if not. An inline
     // kind met where a block belongs is written as itself.
@@ -640,6 +827,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     let mut c: i32 = 0;
     let mut lv: i32 = 0;
     let mut pk: i32 = 0;
+    let mut asid: i32 = -1;
     if node_is_inline(nodes, n) == 1 {
         h_nl(t, o, d);
         h_inline(t, o, nodes, attrs, regions, pages, layout, text, n);
@@ -658,7 +846,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         crate::port::text_ascii(t, "<section");
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -694,7 +882,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, " ");
         }
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -708,7 +896,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         h_align(t, o, sub);
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -731,7 +919,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         }
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -759,7 +947,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         }
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -773,14 +961,14 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         c = node_first_child(nodes, n);
         while c >= 0 {
             if node_kind(nodes, c) == nk_caption() {
-                h_block(t, o, nodes, attrs, regions, pages, layout, text, c, d + 1);
+                h_block(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, c, d + 1);
             }
             c = node_next(nodes, c);
         }
         c = node_first_child(nodes, n);
         while c >= 0 {
             if node_kind(nodes, c) != nk_caption() {
-                h_block(t, o, nodes, attrs, regions, pages, layout, text, c, d + 1);
+                h_block(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, c, d + 1);
             }
             c = node_next(nodes, c);
         }
@@ -800,7 +988,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         }
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -822,7 +1010,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         }
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -853,7 +1041,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         h_align_attr(t, o, nodes, attrs, n);
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -889,7 +1077,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         h_align_attr(t, o, nodes, attrs, n);
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -905,6 +1093,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         return 1;
     }
     if kind == nk_figure() {
+        asid = h_asset_id(nodes, attrs, n, o);
         crate::port::text_ascii(t, "<figure data-emon-kind=\"");
         if sub > 0 {
             fg_emit_name(t, sub);
@@ -912,12 +1101,15 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         if sub <= 0 {
             crate::port::text_ascii(t, "unknown");
         }
-        crate::port::text_ascii(t, "\" role=\"img\"");
-        a = h_tattr(nodes, attrs, n, fk_alt());
-        if a >= 0 {
-            crate::port::text_ascii(t, " aria-label=\"");
-            h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
-            crate::port::text_ascii(t, "\"");
+        crate::port::text_ascii(t, "\"");
+        if asid < 0 {
+            crate::port::text_ascii(t, " role=\"img\"");
+            a = h_tattr(nodes, attrs, n, fk_alt());
+            if a >= 0 {
+                crate::port::text_ascii(t, " aria-label=\"");
+                h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
+                crate::port::text_ascii(t, "\"");
+            }
         }
         a = h_tattr(nodes, attrs, n, fk_label());
         if a >= 0 {
@@ -925,8 +1117,15 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
             crate::port::text_ascii(t, "\"");
         }
+        h_noasset(t, o, nodes, attrs, n);
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
+        hb = 0;
+        if asid >= 0 {
+            h_nl(t, o, d + 1);
+            h_img(t, o, nodes, attrs, text, assets, uses, abytes, prefix, n, asid);
+            hb = 1;
+        }
         h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
         a = node_attr(nodes, attrs, n, fk_labels());
         while a >= 0 {
@@ -935,7 +1134,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             crate::port::text_ascii(t, "</span>");
             a = attr_find_next(attrs, a, fk_labels());
         }
-        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb += h_blocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -943,6 +1142,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         return 1;
     }
     if kind == nk_seal() {
+        asid = h_asset_id(nodes, attrs, n, o);
         crate::port::text_ascii(t, "<figure data-emon-kind=\"");
         if sub > 0 {
             sl_emit_name(t, sub);
@@ -969,20 +1169,20 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, b), attr_len(attrs, b));
             crate::port::text_ascii(t, "\"");
         }
-        crate::port::text_ascii(t, " role=\"img\" aria-label=\"");
-        h_seal_word(t, sub);
-        if (node_has_text(nodes, n) == 1) || (a >= 0) {
-            crate::port::text_ascii(t, ": ");
+        if asid < 0 {
+            crate::port::text_ascii(t, " role=\"img\" aria-label=\"");
+            h_alt(t, nodes, attrs, text, n);
+            crate::port::text_ascii(t, "\"");
         }
-        if node_has_text(nodes, n) == 1 {
-            h_run(t, text, node_text_start(nodes, n), node_text_len(nodes, n));
-        }
-        if (node_has_text(nodes, n) == 0) && (a >= 0) {
-            h_run(t, text, attr_value(attrs, a), attr_len(attrs, a));
-        }
-        crate::port::text_ascii(t, "\"");
+        h_noasset(t, o, nodes, attrs, n);
         h_common(t, o, nodes, regions, pages, layout, n);
-        crate::port::text_ascii(t, "></figure>");
+        crate::port::text_ascii(t, ">");
+        if asid >= 0 {
+            h_nl(t, o, d + 1);
+            h_img(t, o, nodes, attrs, text, assets, uses, abytes, prefix, n, asid);
+            h_nl(t, o, d);
+        }
+        crate::port::text_ascii(t, "</figure>");
         return 1;
     }
     if kind == nk_formula() {
@@ -1005,7 +1205,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         crate::port::text_ascii(t, "><code>");
         h_inner(t, o, nodes, attrs, regions, pages, layout, text, n);
         crate::port::text_ascii(t, "</code>");
-        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_blocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -1016,7 +1216,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         crate::port::text_ascii(t, "<blockquote");
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -1052,7 +1252,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         }
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
-        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -1103,7 +1303,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             crate::port::text_ascii(t, "</p>");
             hb = 1;
         }
-        hb += h_blocks(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+        hb += h_blocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);
         }
@@ -1115,7 +1315,7 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
     crate::port::text_ascii(t, "\"");
     h_common(t, o, nodes, regions, pages, layout, n);
     crate::port::text_ascii(t, ">");
-    hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, n, d + 1);
+    hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
     if hb > 0 {
         h_nl(t, o, d);
     }
@@ -1165,13 +1365,13 @@ pub(crate) fn h_meta(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells,
     crate::port::text_ascii(t, "\">");
     return 1;
 }
-pub fn html_emit(mut t: &mut String, opts: i32, conf_below: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells) -> i32 {
+pub fn html_emit(mut t: &mut String, opts: i32, conf_below: i32, nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells, assets: &mut crate::port::Cells, uses: &mut crate::port::Cells, abytes: &mut crate::port::Buf, prefix: &mut crate::port::Cells) -> i32 {
     // Write the Model as HTML (SPEC 5). `opts` is an OR of `ho-*`;
     // `conf-below` is the threshold for `ho-confidence` (nodes with a
     // conf under it get `data-emon-conf`). The root (node 0) must be a
     // document: run `model-check` first on a Model of unknown origin.
     // Answers 0.
-    let o: i32 = (opts & 1023) + (conf_below * 1024);
+    let o: i32 = (opts & 4095) + (conf_below * 4096);
     let nn: i32 = node_count(nodes);
     let nl: i32 = ledger_count(ledger);
     let mut a: i32 = -1;
@@ -1215,12 +1415,12 @@ pub fn html_emit(mut t: &mut String, opts: i32, conf_below: i32, nodes: &mut cra
         i = 0;
         while i < nn {
             if (node_kind(nodes, i) == nk_furniture()) && (node_parent(nodes, i) == -1) {
-                h_block(t, o, nodes, attrs, regions, pages, layout, text, i, 3);
+                h_block(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, i, 3);
             }
             i += 1;
         }
     }
-    h_blocks(t, o, nodes, attrs, regions, pages, layout, text, 0, 3);
+    h_blocks(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, 0, 3);
     if h_on(o, 8) == 1 {
         i = 0;
         while i < nl {

@@ -496,7 +496,7 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String) -> i32 {
     if model_check(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
         return 3;
     }
-    js_emit(t, 1, nodes, attrs, regions, text, pages, ledger, layout);
+    js_emit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, layout, layout);
     return 0;
 }
 #[test]

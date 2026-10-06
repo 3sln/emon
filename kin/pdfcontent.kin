@@ -83,6 +83,7 @@
             [emon.pdfgfx :refer [gx-page gx-key-of gx-lookup gx-entry-rgb gx-initial gx-class gx-ncomp
                                  gx-is-pattern gx-input gx-oc-read gx-oc-state]]
             [emon.pdfvis :refer [pv-page]]
+            [emon.pdfimage :refer [pi-orient]]
             [emon.pdfx :refer [px-dget px-get px-is px-nth px-int-of px-is-num]]
             [emon.pdfxnames :refer [px-ca px-bm px-s-mask px-s px-lw px-image-mask px-mask px-oc px-h px-im
                                     px-alpha px-normal px-compatible px-multiply px-screen px-overlay
@@ -126,7 +127,7 @@
                                    pf-z pf-clip pf-mark pf-ocg pf-pfirst pf-pcount pf-dash
                                    pa-line pa-rect pa-curve pa-other
                                    pg-closed pg-evenodd pg-clip pg-filled pg-stroked pg-shading pg-pattern pg-blend pg-softmask pg-truncated
-                                   mf-alpha mf-flags mf-rot mf-skewed mf-z mf-clip mf-mark mf-ocg mf-vchk
+                                   mf-alpha mf-flags mf-rot mf-skewed mf-placement mf-z mf-clip mf-mark mf-ocg mf-vchk
                                    mg-mask mg-smask mg-inline mg-masked mg-blend mg-softmask
                                    vc-blend vc-softmask mc-xobject mkf-ocgdef
                                    mkf-parent mkf-mcid mkf-artype mkf-arsub mkf-actual mkf-actuallen mkf-alt mkf-altlen
@@ -2377,6 +2378,7 @@
         ^:mut ^I32 skew 1
         ^:mut ^I32 fl flags
         ^:mut ^I32 chk 0
+        ^:mut ^I32 ori 0
         ^:mut ^I32 r 0]
     (if (!= (cells-at cx (+ C_CUR G_BM)) 0) (set fl (+ fl (mg-blend))))
     (if (!= (cells-at cx (+ C_CUR G_SMASK)) 0) (set fl (+ fl (mg-softmask))))
@@ -2397,6 +2399,11 @@
     (im-set im r (mf-flags) fl)
     (im-set im r (mf-rot) rot)
     (im-set im r (mf-skewed) skew)
+    (comment "The CTM here maps to the displayed page, whose y runs down: `pi-orient` reads a y-up matrix, so the y axis is flipped")
+    (comment "back (b and d change sign). 0 is upright on the page AS DISPLAYED (a page's /Rotate is in it), 8 not rectilinear.")
+    (set ori (pi-orient ma (mul64 mb (i64 -1)) mc (mul64 md (i64 -1))))
+    (if (< ori 0) (set ori 8))
+    (im-set im r (mf-placement) ori)
     (im-set im r (mf-z) (cells-at cx C_Z))
     (cells-set cx C_Z (+ (cells-at cx C_Z) 1))
     (im-set im r (mf-clip) (cells-at cx (+ C_CUR G_CLIP)))
