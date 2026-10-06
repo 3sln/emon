@@ -14,7 +14,7 @@
 ;;   * `ar-write` makes one ledger row of a line's ghosts, `ar-tag` changes only the blocks OCR won words of.
 (ns emon.arbitertest
   (:require [emon.lang :refer [I32 Cells]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells test-t TestT]]
             [emon.port :refer [cells-len cells-at cells-set cells-push]]
             [emon.evidence :refer [wd-new wd-set ln-new ow-new ow-set fe-new fe-set rf-add im-new ep-new or-new gl-set gf-mark mk-new mk-set mkf-artype mkf-arsub xt-alpha xo-angle xo-margin xo-rel-height
                                    hd-feat wf-font wf-size wf-style wf-src wf-gfirst wf-gcount wf-wbreak
@@ -283,13 +283,13 @@
         ^Cells fx (new-cells)
         ^Cells afa (new-cells)
         ^Cells gls (new-cells)
-        ^I32 gz (at-glyphs gls)
         ^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)
         ^I32 w1 (at-tword fw feats et 1000 0 0 1000 0 109 111)
         ^I32 w2 (at-tword fw feats et 2000 0 0 1000 0 120 121)
         ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
         ^I32 o1 (at-oword ow feats et 1000 1900 0 88 89 0)
         ^I32 o2 (at-oword ow feats et 2000 2900 0 90 90 0)]
+    (at-glyphs gls)
     (at-line3 fl 0 3)
     (comment "OCR agrees on the first, differs on the second, reads something else entirely (and plausibly) on the third")
     (at-group cg refs w0 1 o0 1 1000)
@@ -332,18 +332,19 @@
         ^Cells fv (new-cells)
         ^Cells fx (new-cells)
         ^Cells afa (new-cells)
-        ^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)
-        ^I32 w1 (at-tword fw feats et 1000 0 0 1000 0 109 111)
-        ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)]
-    (at-line3 fl 0 2)
-    (at-group cg refs w0 1 o0 1 1000)
-    (comment "the second word is in no group: the identity")
-    (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
-    (assert-eq (fw-count nfw) 2 "both words")
-    (assert-eq (fv-get fv 1 0) -1 "no group")
-    (assert-eq (fv-get fv 1 2) 101 "rule 101, the identity")
-    (assert-eq (fv-get fv 1 3) 900 "without an OCR witness: 900")
-    (assert-eq (cells-at nfw (+ 24 23)) 1 "and its src is as it was")))
+        ^I32 w0 (at-tword fw feats et 0 0 0 1000 0 104 101)]
+    (comment "the second word is a text-layer word like the first, set up before the OCR word (the row order is the same), and is in no group")
+    (at-tword fw feats et 1000 0 0 1000 0 109 111)
+    (let [^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)]
+      (at-line3 fl 0 2)
+      (at-group cg refs w0 1 o0 1 1000)
+      (comment "the second word is in no group: the identity")
+      (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
+      (assert-eq (fw-count nfw) 2 "both words")
+      (assert-eq (fv-get fv 1 0) -1 "no group")
+      (assert-eq (fv-get fv 1 2) 101 "rule 101, the identity")
+      (assert-eq (fv-get fv 1 3) 900 "without an OCR witness: 900")
+      (assert-eq (cells-at nfw (+ 24 23)) 1 "and its src is as it was"))))
 
 (deftest test-an-unhealthy-font-gives-its-group-to-ocr
   (let [^Cells fw (new-cells)
@@ -361,13 +362,13 @@
         ^Cells fx (new-cells)
         ^Cells afa (new-cells)
         ^Cells gls (new-cells)
-        ^I32 gz (at-glyphs gls)
         ^I32 w0 (at-tword fw feats et 0 0 5 60 0 105 102)
         ^I32 w1 (at-tword fw feats et 1000 0 5 60 0 110 112)
         ^I32 w2 (at-tword fw feats et 2000 0 0 1000 0 97 97)
         ^I32 o0 (at-oword ow feats et 0 900 0 104 101 0)
         ^I32 o1 (at-oword ow feats et 1000 1900 0 109 111 0)
         ^I32 o2 (at-oword ow feats et 2000 2900 0 97 97 0)]
+    (at-glyphs gls)
     (at-line3 fl 0 3)
     (at-group cg refs w0 1 o0 1 0)
     (at-group cg refs w1 1 o1 1 0)
@@ -409,9 +410,9 @@
         ^Cells fx (new-cells)
         ^Cells afa (new-cells)
         ^I32 w0 (at-tword fw feats et 0 0 5 60 0 255 255)
-        ^I32 o0 (at-oword ow feats et 0 250 0 97 98 0)
-        ^I32 o1 (at-oword ow feats et 300 600 0 99 100 0)
-        ^I32 o2 (at-oword ow feats et 650 900 0 101 102 0)]
+        ^I32 o0 (at-oword ow feats et 0 250 0 97 98 0)]
+    (at-oword ow feats et 300 600 0 99 100 0)
+    (at-oword ow feats et 650 900 0 101 102 0)
     (at-line3 fl 0 1)
     (at-group cg refs w0 1 o0 3 0)
     (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
@@ -673,7 +674,7 @@
     (at-group cg refs w1 1 o1 1 1000)
     (return 0)))
 
-(defn ^I32 at-dropped [^Cells cg ^Cells refs ^Cells fw ^Cells fl ^Cells et ^Cells feats ^Cells ow ^Cells gl ^Cells mk ^Cells an ^Cells txt
+(defn ^I32 at-dropped [^TestT emon-t ^Cells cg ^Cells refs ^Cells fw ^Cells fl ^Cells et ^Cells feats ^Cells ow ^Cells gl ^Cells mk ^Cells an ^Cells txt
                        ^:mut ^Cells nfw ^:mut ^Cells nfl ^:mut ^Cells fv ^:mut ^Cells fx ^:mut ^Cells afa ^I32 reason]
   (comment "What the second word's dropping must look like, whichever way the PDF said it: the flow has one word and one line, the first word")
   (comment "unchanged; `afa` has one row with the text as its subject and the defence (1), the group (1) and a rule of block 200 in it; the ledger")
@@ -709,7 +710,7 @@
     (at-gl gl)
     (at-two-words fw fl feats et ow cg refs)
     (at-mark-watermark gl mk 5)
-    (at-dropped cg refs fw fl et feats ow gl mk an (new-cells) nfw nfl fv fx afa (dr-watermark))))
+    (at-dropped (test-t) cg refs fw fl et feats ow gl mk an (new-cells) nfw nfl fv fx afa (dr-watermark))))
 
 (deftest test-the-pdf-says-watermark-by-alpha
   (let [^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells) ^Cells ow (new-cells)
@@ -718,7 +719,7 @@
     (at-gl gl)
     (at-two-words fw fl feats et ow cg refs)
     (fe-set feats (cells-at fw (+ 24 15)) (xt-alpha) 300)
-    (at-dropped cg refs fw fl et feats ow gl mk an (new-cells) nfw nfl fv fx afa (dr-watermark))))
+    (at-dropped (test-t) cg refs fw fl et feats ow gl mk an (new-cells) nfw nfl fv fx afa (dr-watermark))))
 
 (defn ^I32 at-annot [^:mut ^Cells an ^:mut ^Cells txt ^I32 sub]
   (comment "An annotation of page 1 of `sub` over 900..2000 x -100..1100 (the second word's box and the gap before it) whose appearance text is `xy mo`.")
@@ -750,7 +751,7 @@
     (at-two-words fw fl feats et ow cg refs)
     (comment "a Watermark annotation (subtype 24) whose text is `xy mo`, over the second word (`mo`)")
     (at-annot an txt 24)
-    (at-dropped cg refs fw fl et feats ow gl mk an txt nfw nfl fv fx afa (dr-watermark))))
+    (at-dropped (test-t) cg refs fw fl et feats ow gl mk an txt nfw nfl fv fx afa (dr-watermark))))
 
 (deftest test-an-annotation-rectangle-alone-says-nothing
   (let [^Cells fw (new-cells) ^Cells fl (new-cells) ^Cells feats (new-cells) ^Cells et (new-cells) ^Cells ow (new-cells)

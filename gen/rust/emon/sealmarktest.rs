@@ -364,8 +364,8 @@ fn test_a_signature_is_pen_strokes_near_a_cue() {
     st_stroke(pa, pts, 10000, 20000, 4);
     st_stroke(pa, pts, 10500, 20400, 1);
     // the cue `By:` just to the left, and another word elsewhere
-    let cue: i32 = st_text(fw, gl, et, 7200, 20300, 66, 121, 58);
-    let other: i32 = st_text(fw, gl, et, 7200, 40000, 84, 111, 116);
+    st_text(fw, gl, et, 7200, 20300, 66, 121, 58);
+    st_text(fw, gl, et, 7200, 40000, 84, 111, 116);
     crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "two strokes of five segments together and a cue beside them: a signature");
     crate::testport::assert_eq(sl_get(sm, 0, 5), pls_signature(), "a signature");
     crate::testport::assert_eq(sl_get(sm, 0, 1), 10000, "the box is the union of the strokes");
@@ -450,9 +450,9 @@ fn test_a_seal_node_is_written_after_the_block_it_overlaps() {
     let nm: &mut crate::port::Cells = &mut crate::port::Cells::new();
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     let sec: i32 = node_new(nodes, nk_section(), 0);
-    let a: i32 = st_block(nodes, regions, sec, 1, 10000, 20000);
-    let b: i32 = st_block(nodes, regions, sec, 1, 30000, 40000);
-    let c: i32 = st_block(nodes, regions, sec, 1, 50000, 60000);
+    st_block(nodes, regions, sec, 1, 10000, 20000);
+    st_block(nodes, regions, sec, 1, 30000, 40000);
+    st_block(nodes, regions, sec, 1, 50000, 60000);
     // S1 over the end of A and the start of B (as much of each: the later); S2 in the gap above C; S3 on page 9, after everything
     st_seal_row(sm, 1, 20000, 15000, 50000, 35000, pls_seal(), 2047903);
     st_seal_row(sm, 1, 20000, 42000, 50000, 48000, pls_stamp(), 12591135);
