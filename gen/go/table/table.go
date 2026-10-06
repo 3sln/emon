@@ -8,12 +8,14 @@ import (
 	"emon/glayer"
 	"emon/model"
 	"emon/normalize"
+	"emon/pdfstruct"
 	"emon/port"
+	"emon/tagtable"
 )
 
 const tbHeld int32 = 1073741824
 
-const tbs int32 = 24
+const tbs int32 = 28
 
 const tcs int32 = 16
 
@@ -34,6 +36,20 @@ const pfPartial int32 = 2
 const pfShaded int32 = 3
 
 const pfWhitespace int32 = 4
+
+const pfStruct int32 = 5
+
+const tbTagTrust int32 = 300
+
+const tbTagWin int32 = 700
+
+const tbTagVetoTrust int32 = 800
+
+const tbTagVeto int32 = 150
+
+const tbTie int32 = 25
+
+const tbGeoAgree int32 = 900
 
 const ruleT int32 = 400
 
@@ -469,6 +485,10 @@ func tbAdd(tb *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, p
 	port.CellsPush(tb, 0)
 	port.CellsPush(tb, 0)
 	port.CellsPush(tb, 0)
+	port.CellsPush(tb, 0)
+	port.CellsPush(tb, -1)
+	port.CellsPush(tb, 0)
+	port.CellsPush(tb, 0)
 	return k
 }
 
@@ -828,7 +848,50 @@ func tbOverlap(tb *port.Cells, a int32, b int32) bool {
 	return ((tbMin(ax1, bx1) - tbMax(ax0, bx0)) > posTol) && ((tbMin(ay1, by1) - tbMax(ay0, by0)) > posTol)
 }
 
-func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *port.Cells) int32 {
+func TbHintIou(tb *port.Cells, i int32, grg *port.Cells) int32 {
+	// The best IoU, per mille, of candidate i's box with an OCR `table-hint` region of its page (`grg` kind 3, D228); 0 when none.
+	var n int32 = glayer.GrgCount(grg)
+	var b int32 = i * tbs
+	var r int32 = 0
+	var best int32 = 0
+	var v int32 = 0
+	for r < n {
+		if (glayer.GrgGet(grg, r, 5) == 3) && (glayer.GrgGet(grg, r, 0) == port.CellsAt(tb, b)) {
+			v = tagtable.TtIou(port.CellsAt(tb, b+1), port.CellsAt(tb, b+2), port.CellsAt(tb, b+3), port.CellsAt(tb, b+4), glayer.GrgGet(grg, r, 1), glayer.GrgGet(grg, r, 2), glayer.GrgGet(grg, r, 3), glayer.GrgGet(grg, r, 4))
+			if v > best {
+				best = v
+			}
+		}
+		r += 1
+	}
+	return best
+}
+
+func TbTieBonus(tb *port.Cells, i int32, t0 int32, n int32, grg *port.Cells) int32 {
+	// D225 case 7: OCR's table blocks break ties and only ties. Candidate i gets a bonus that puts it first when it overlaps a candidate
+	// within `tb-tie` of its score and has the higher IoU with a table hint.
+	if glayer.GrgCount(grg) == 0 {
+		return 0
+	}
+	var j int32 = t0
+	var d int32 = 0
+	for j < n {
+		if j != i {
+			if tbOverlap(tb, i, j) {
+				d = tbAbs(port.CellsAt(tb, (i*tbs)+6) - port.CellsAt(tb, (j*tbs)+6))
+				if d <= tbTie {
+					if TbHintIou(tb, i, grg) > TbHintIou(tb, j, grg) {
+						return tbTie + 1
+					}
+				}
+			}
+		}
+		j += 1
+	}
+	return 0
+}
+
+func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *port.Cells, grg *port.Cells) int32 {
 	// Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and
 	// leave them in tb in the order of their tops. Answers how many are kept.
 	var n int32 = tbRowsOf(tb, tbs)
@@ -840,7 +903,7 @@ func tbSelect(tb *port.Cells, t0 int32, so *port.Cells, vals *port.Cells, sa *po
 	port.CellsDrop(vals, 0)
 	for i < n {
 		port.CellsPush(so, i-t0)
-		port.CellsPush(vals, 0-port.CellsAt(tb, (i*tbs)+6))
+		port.CellsPush(vals, 0-(port.CellsAt(tb, (i*tbs)+6)+TbTieBonus(tb, i, t0, n, grg)))
 		port.CellsPush(vals, i)
 		i += 1
 	}
@@ -948,6 +1011,14 @@ func tbPutProfile(text *port.Cells, prof int32) int32 {
 		model.TextAppendCp(text, 100)
 		model.TextAppendCp(text, 101)
 		model.TextAppendCp(text, 100)
+	}
+	if prof == pfStruct {
+		model.TextAppendCp(text, 115)
+		model.TextAppendCp(text, 116)
+		model.TextAppendCp(text, 114)
+		model.TextAppendCp(text, 117)
+		model.TextAppendCp(text, 99)
+		model.TextAppendCp(text, 116)
 	}
 	if prof == pfWhitespace {
 		model.TextAppendCp(text, 119)
@@ -1227,6 +1298,15 @@ func TbEmit(tb *port.Cells, k int32, parent int32, wd *port.Cells, et *port.Cell
 	model.NodeAddSrc(nodes, t, model.SrInfer())
 	if prof == pfRuled {
 		model.NodeAddSrc(nodes, t, model.SrVector())
+	}
+	if (prof == pfStruct) || ((port.CellsAt(tb, b+24) & 1) != 0) {
+		model.NodeAddSrc(nodes, t, model.SrStruct())
+	}
+	if (port.CellsAt(tb, b+24) & 2) != 0 {
+		model.NodeAddFlag(nodes, t, model.FlTagSpanConflict())
+	}
+	if (port.CellsAt(tb, b+24) & 4) != 0 {
+		model.NodeAddFlag(nodes, t, model.FlStructDisagree())
 	}
 	var s int32 = port.CellsLen(text)
 	tbPutProfile(text, prof)
@@ -3049,16 +3129,452 @@ func tbHeaderSpans(tb *port.Cells, k int32, tc *port.Cells) int32 {
 	return 0
 }
 
-func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, ln *port.Cells, l0 int32, l1 int32, tq *port.Cells) int32 {
-	// What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows, the footer,
-	// which cells are header cells (`col` in the header, `row` in the footer), each cell's alignment, the caption.
+func tbProseRole(role int32) int32 {
+	// 1 for the block roles that say "this is text, not a table": P, H, Hn, L, LI, Lbl and LBody.
+	if (role == 15) || ((role == 16) || ((role == 17) || ((role == 19) || ((role == 20) || ((role == 21) || (role == 22)))))) {
+		return 1
+	}
+	return 0
+}
+
+func tbVeto(tb *port.Cells, t0 int32, wd *port.Cells, tc *port.Cells, tw *port.Cells, se *port.Cells, sc *port.Cells, gl *port.Cells, mk *port.Cells, mi *port.Cells) int32 {
+	// D225 case 6: a tree trusted to `tb-tag-veto-trust` that gives every word of a whitespace candidate to a P, L, LI or H element
+	// says it is not a table: the candidate's score goes down by `tb-tag-veto`. Only whitespace: it alone has no rule or fill to vouch for it.
+	var n int32 = tbRowsOf(tb, tbs)
+	var t int32 = t0
+	var c int32 = 0
+	var j int32 = 0
+	var ok int32 = 1
+	var words int32 = 0
+	var s int32 = 0
+	for t < n {
+		if port.CellsAt(tb, (t*tbs)+5) == pfWhitespace {
+			ok = 1
+			words = 0
+			c = port.CellsAt(tb, (t*tbs)+9)
+			for (ok == 1) && (c < (port.CellsAt(tb, (t*tbs)+9) + port.CellsAt(tb, (t*tbs)+10))) {
+				j = 0
+				for (ok == 1) && (j < port.CellsAt(tc, (c*tcs)+9)) {
+					s = tagtable.TtOwnerEl(sc, gl, mk, mi, evidence.WdGet(wd, port.CellsAt(tw, port.CellsAt(tc, (c*tcs)+8)+j), evidence.WfGfirst()))
+					if s == -1 {
+						ok = 0
+					} else if tbProseRole(tagtable.TtBlockRole(se, s)) == 0 {
+						ok = 0
+					}
+					words += 1
+					j += 1
+				}
+				c += 1
+			}
+			if (ok == 1) && (words > 0) {
+				port.CellsSet(tb, (t*tbs)+6, tbMax(0, port.CellsAt(tb, (t*tbs)+6)-tbTagVeto))
+			}
+		}
+		t += 1
+	}
+	return 0
+}
+
+func tbStructCand(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, tg *port.Cells, k int32, ta *port.Cells, wo *port.Cells, trust int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, pr *port.Cells, so *port.Cells, ws *port.Cells, keep int32) int32 {
+	// D225 case 3: a confirmed tagged table that no geometry found, as a candidate of its own: its cells are the tagged cells with their
+	// text boxes grown to their row and column bands, scored 850 x trust / 1000, and refused as any text candidate is (`tb-score`: prose in
+	// a `Table` is a layout table). `keep` 0 only asks whether it would be refused: the candidate is dropped again. Answers the candidate, -1
+	// when refused or dropped.
+	var nr int32 = tagtable.TtGet(tg, k, 2)
+	var nc int32 = tagtable.TtGet(tg, k, 3)
+	var cf int32 = tagtable.TtGet(tg, k, 4)
+	var ce int32 = cf + tagtable.TtGet(tg, k, 5)
+	var bx0 int32 = tagtable.TtGet(tg, k, 6)
+	var by0 int32 = tagtable.TtGet(tg, k, 7)
+	var bx1 int32 = tagtable.TtGet(tg, k, 8)
+	var by1 int32 = tagtable.TtGet(tg, k, 9)
+	var nt int32 = tbRowsOf(tb, tbs)
+	var c0 int32 = tbRowsOf(tc, tcs)
+	var wl0 int32 = port.CellsLen(tw)
+	var xl0 int32 = port.CellsLen(tx)
+	var nct int32 = tagtable.TtGet(tg, k, 5)
+	var i int32 = 0
+	var c int32 = 0
+	var col int32 = 0
+	var row int32 = 0
+	var w int32 = 0
+	var t int32 = 0
+	var hi int32 = 0
+	if (nc < 2) || (nr < 2) {
+		return -2
+	}
+	port.CellsDrop(ws, 0)
+	for i < (nc + nr) {
+		port.CellsPush(ws, 2000000000)
+		port.CellsPush(ws, -2000000000)
+		i += 1
+	}
+	c = cf
+	for c < ce {
+		if tagtable.TtCget(ta, c, 6) > 0 {
+			col = tagtable.TtCget(ta, c, 2)
+			row = tagtable.TtCget(ta, c, 1)
+			if (tagtable.TtCget(ta, c, 4) == 1) && (col < nc) {
+				port.CellsSet(ws, 2*col, tbMin(port.CellsAt(ws, 2*col), tagtable.TtCget(ta, c, 7)))
+				port.CellsSet(ws, (2*col)+1, tbMax(port.CellsAt(ws, (2*col)+1), tagtable.TtCget(ta, c, 9)))
+			}
+			if (tagtable.TtCget(ta, c, 3) == 1) && (row < nr) {
+				port.CellsSet(ws, (2*nc)+(2*row), tbMin(port.CellsAt(ws, (2*nc)+(2*row)), tagtable.TtCget(ta, c, 8)))
+				port.CellsSet(ws, ((2*nc)+(2*row))+1, tbMax(port.CellsAt(ws, ((2*nc)+(2*row))+1), tagtable.TtCget(ta, c, 10)))
+			}
+		}
+		c += 1
+	}
+	i = 0
+	for i < nc {
+		if port.CellsAt(ws, 2*i) > port.CellsAt(ws, (2*i)+1) {
+			port.CellsSet(ws, 2*i, bx0+(((bx1-bx0)*i)/nc))
+			port.CellsSet(ws, (2*i)+1, bx0+(((bx1-bx0)*(i+1))/nc))
+		}
+		i += 1
+	}
+	i = 0
+	for i < nr {
+		if port.CellsAt(ws, (2*nc)+(2*i)) > port.CellsAt(ws, ((2*nc)+(2*i))+1) {
+			port.CellsSet(ws, (2*nc)+(2*i), by0+(((by1-by0)*i)/nr))
+			port.CellsSet(ws, ((2*nc)+(2*i))+1, by0+(((by1-by0)*(i+1))/nr))
+		}
+		i += 1
+	}
+	c = cf
+	for c < ce {
+		col = tagtable.TtCget(ta, c, 2)
+		row = tagtable.TtCget(ta, c, 1)
+		hi = tbMin(nc-1, (col+tagtable.TtCget(ta, c, 4))-1)
+		i = tbMin(nr-1, (row+tagtable.TtCget(ta, c, 3))-1)
+		tbCellAdd(tc, row, col, tagtable.TtCget(ta, c, 3), tagtable.TtCget(ta, c, 4), port.CellsAt(ws, 2*col), port.CellsAt(ws, (2*nc)+(2*row)), port.CellsAt(ws, (2*hi)+1), port.CellsAt(ws, ((2*nc)+(2*i))+1))
+		c += 1
+	}
+	port.CellsDrop(pr, 0)
+	w = w0
+	for w < w1 {
+		c = port.CellsAt(wo, w-w0)
+		if (c >= cf) && (c < ce) {
+			tbPairAdd(pr, wd, c0+(c-cf), w)
+		}
+		w += 1
+	}
+	tbFlushPairs(pr, so, wd, tc, tw)
+	t = tbAdd(tb, p, bx0, by0, bx1, by1, pfStruct, (850*trust)/1000, nr, nc, c0, nct)
+	if (keep == 0) || (tbScore(tb, t, wd, et, tc, tw) == 0) {
+		hi = tbScore(tb, t, wd, et, tc, tw)
+		tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)
+		if hi == 0 {
+			return -2
+		}
+		return -1
+	}
+	port.CellsSet(tb, (t*tbs)+16, port.CellsLen(tx))
+	port.CellsSet(tb, (t*tbs)+17, nc+1)
+	port.CellsPush(tx, bx0)
+	i = 1
+	for i < nc {
+		port.CellsPush(tx, tbMax(port.CellsAt(tx, port.CellsLen(tx)-1), (port.CellsAt(ws, (2*(i-1))+1)+port.CellsAt(ws, 2*i))/2))
+		i += 1
+	}
+	port.CellsPush(tx, tbMax(bx1, port.CellsAt(tx, port.CellsLen(tx)-1)))
+	port.CellsSet(tb, (t*tbs)+24, 1)
+	port.CellsSet(tb, (t*tbs)+25, k)
+	port.CellsSet(tb, (t*tbs)+26, tagtable.TtGet(tg, k, 10))
+	port.CellsSet(tb, (t*tbs)+27, tagtable.TtGet(tg, k, 11))
+	return t
+}
+
+func tbTags(wd *port.Cells, et *port.Cells, p int32, w0 int32, w1 int32, grl *port.Cells, q0 int32, q1 int32, se *port.Cells, sc *port.Cells, ss *port.Cells, gl *port.Cells, mk *port.Cells, mi *port.Cells, tg *port.Cells, ta *port.Cells, wo *port.Cells, ws *port.Cells, acc *port.Cells, tv *port.Cells, tb *port.Cells, t0 int32, tc *port.Cells, tw *port.Cells, tx *port.Cells, pr *port.Cells, so *port.Cells) int32 {
+	// The tagged tables of page p against the candidates t0.. that `tb-select` kept (see the head of this section): each is checked and
+	// scored, recorded in `tv`, and, by its verdict, attached to the candidate it overlaps or made a candidate. Answers the tagged tables.
+	var trust int32 = pdfstruct.TgTrust(ss)
+	var use int32 = 0
+	var nt0 int32 = tbRowsOf(tb, tbs)
+	var nt int32 = 0
+	var k int32 = 0
+	var g int32 = 0
+	var geo int32 = 0
+	var owned int32 = 0
+	var agree int32 = 0
+	var keep int32 = 0
+	var v int32 = 0
+	if trust >= tbTagTrust {
+		use = 1
+	}
+	nt = tagtable.TtGrids(se, ss, p, tg, ta, ws)
+	if nt == 0 {
+		return 0
+	}
+	tagtable.TtWords(wd, w0, w1, se, sc, gl, mk, mi, tg, ta, wo)
+	for k < nt {
+		owned = tagtable.TtGet(tg, k, 14)
+		g = tagtable.TtGeoTb(tg, k, tb, t0, nt0)
+		if g >= 0 {
+			tagtable.TtFold(tg, (k*24)+6, port.CellsAt(tb, (g*tbs)+1), port.CellsAt(tb, (g*tbs)+2), port.CellsAt(tb, (g*tbs)+3), port.CellsAt(tb, (g*tbs)+4))
+		}
+		tagtable.TtChecks(tg, k, ta, wd, w0, w1, wo, grl, q0, q1, ws)
+		geo = -1
+		if (g >= 0) && (owned > 0) {
+			agree = tagtable.TtGeoMap(tg, k, ta, wo, w0, tb, g, tc, tw, ws)
+			if agree >= 0 {
+				geo = tagtable.TtPm(agree, owned)
+			}
+		}
+		tagtable.TtSet(tg, k, 12, g)
+		tagtable.TtSet(tg, k, 21, geo)
+		tagtable.TtScore(tg, k, acc)
+		v = tagtable.TtGet(tg, k, 10)
+		if (v == 1) && ((g < 0) && (owned > 0)) {
+			keep = 0
+			if (use == 1) && (trust >= tbTagWin) {
+				keep = 1
+			}
+			agree = tbStructCand(wd, et, p, w0, w1, tg, k, ta, wo, trust, tb, tc, tw, tx, pr, so, ws, keep)
+			if agree == -2 {
+				tagtable.TtSet(tg, k, 10, 3)
+				v = 3
+			}
+		}
+		if (use == 0) && (v == 1) {
+			tagtable.TtSet(tg, k, 10, 2)
+			v = 2
+		}
+		if (use == 1) && (v == 1) {
+			tagtable.TtOr(tg, k, 15, 4)
+		}
+		if (use == 1) && ((v == 1) && ((g >= 0) && ((geo >= 0) && (geo < tbGeoAgree)))) {
+			tagtable.TtSet(tg, k, 10, 2)
+			port.CellsSet(tb, (g*tbs)+24, port.CellsAt(tb, (g*tbs)+24)|4)
+		}
+		if (use == 1) && (g >= 0) {
+			port.CellsSet(tb, (g*tbs)+25, k)
+			port.CellsSet(tb, (g*tbs)+26, tagtable.TtGet(tg, k, 10))
+			port.CellsSet(tb, (g*tbs)+27, tagtable.TtGet(tg, k, 11))
+		}
+		tagtable.TtRecord(tg, k, trust, tv)
+		k += 1
+	}
+	return nt
+}
+
+func tbTagMap(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port.Cells, w0 int32, tc *port.Cells, tw *port.Cells, ws *port.Cells) int32 {
+	// Fill ws with the maps of candidate k's tagged table onto it (`tt-geo-map`: a candidate row for each tagged row, then a column for each
+	// tagged column); for a table made of the tags the identity. Answers 1 when ws holds them, 0 when it does not.
+	var b int32 = k * tbs
+	var tgi int32 = port.CellsAt(tb, b+25)
+	var i int32 = 0
+	if tgi < 0 {
+		return 0
+	}
+	if port.CellsAt(tb, b+5) == pfStruct {
+		port.CellsDrop(ws, 0)
+		for i < tagtable.TtGet(tg, tgi, 2) {
+			port.CellsPush(ws, i)
+			i += 1
+		}
+		i = 0
+		for i < tagtable.TtGet(tg, tgi, 3) {
+			port.CellsPush(ws, i)
+			i += 1
+		}
+		return 1
+	}
+	if tagtable.TtGeoMap(tg, tgi, ta, wo, w0, tb, k, tc, tw, ws) < 0 {
+		return 0
+	}
+	return 1
+}
+
+func tbTagHead(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port.Cells, w0 int32, tc *port.Cells, tw *port.Cells, ws *port.Cells) int32 {
+	// The head rows the tags give candidate k: the tagged head when the tags are confirmed and map the candidate's first rows one to one,
+	// or when they are partial and have as many rows as the candidate (case 4); a table made of the tags has its own. 0 when not.
+	var b int32 = k * tbs
+	var tgi int32 = port.CellsAt(tb, b+25)
+	var nrows int32 = port.CellsAt(tb, b+7)
+	var r int32 = 0
+	if tgi < 0 {
+		return 0
+	}
+	var nh int32 = tagtable.TtGet(tg, tgi, 13)
+	var fg int32 = tagtable.TtGet(tg, tgi, 15)
+	var v int32 = tagtable.TtGet(tg, tgi, 10)
+	if (nh <= 0) || (nh >= nrows) {
+		return 0
+	}
+	if v == 3 {
+		return 0
+	}
+	if port.CellsAt(tb, b+5) == pfStruct {
+		return nh
+	}
+	if (fg & 4) != 0 {
+		if tbTagMap(tb, k, tg, ta, wo, w0, tc, tw, ws) == 0 {
+			return 0
+		}
+		for r < nh {
+			if port.CellsAt(ws, r) != r {
+				return 0
+			}
+			r += 1
+		}
+		port.CellsSet(tb, b+24, port.CellsAt(tb, b+24)|1)
+		return nh
+	}
+	if (v == 2) && (tagtable.TtGet(tg, tgi, 2) == nrows) {
+		port.CellsSet(tb, b+24, port.CellsAt(tb, b+24)|1)
+		return nh
+	}
+	return 0
+}
+
+func TbTagSpan(tb *port.Cells, k int32, tc *port.Cells, cfirst int32, cend int32, gr int32, gc int32, rs int32, cs int32) int32 {
+	// A tagged cell that spans rs rows and cs columns, at the candidate's cell (gr, gc). A ruled table keeps its lattice's spans: when a
+	// cell of the block is another cell than the one at its corner a rule closes the edge, and the table is flagged (`tag-span-conflict`).
+	// Any other profile takes the tagged span when every other slot of the block is a plain, empty cell: they are absorbed.
+	var b int32 = k * tbs
+	var e int32 = tbCellAt(tc, cfirst, cend, gr, gc)
+	var rr int32 = 0
+	var cc int32 = 0
+	var n int32 = 0
+	var ok int32 = 1
+	var x1 int32 = 0
+	var y1 int32 = 0
+	if e < 0 {
+		return 0
+	}
+	if (port.CellsAt(tc, e*tcs) != gr) || (port.CellsAt(tc, (e*tcs)+1) != gc) {
+		return 0
+	}
+	if port.CellsAt(tb, b+5) == pfRuled {
+		for rr < rs {
+			cc = 0
+			for cc < cs {
+				n = tbCellAt(tc, cfirst, cend, gr+rr, gc+cc)
+				if (n >= 0) && (n != e) {
+					port.CellsSet(tb, b+24, port.CellsAt(tb, b+24)|2)
+				}
+				cc += 1
+			}
+			rr += 1
+		}
+		return 0
+	}
+	if (port.CellsAt(tc, (e*tcs)+2) != 1) || (port.CellsAt(tc, (e*tcs)+3) != 1) {
+		return 0
+	}
+	x1 = port.CellsAt(tc, (e*tcs)+6)
+	y1 = port.CellsAt(tc, (e*tcs)+7)
+	for (rr < rs) && (ok == 1) {
+		cc = 0
+		for (cc < cs) && (ok == 1) {
+			if (rr > 0) || (cc > 0) {
+				n = tbCellAt(tc, cfirst, cend, gr+rr, gc+cc)
+				if n < 0 {
+					ok = 0
+				} else if (port.CellsAt(tc, n*tcs) != (gr + rr)) || ((port.CellsAt(tc, (n*tcs)+1) != (gc + cc)) || ((port.CellsAt(tc, (n*tcs)+2) != 1) || ((port.CellsAt(tc, (n*tcs)+3) != 1) || (port.CellsAt(tc, (n*tcs)+9) > 0)))) {
+					ok = 0
+				}
+			}
+			cc += 1
+		}
+		rr += 1
+	}
+	if ok == 0 {
+		return 0
+	}
+	rr = 0
+	for rr < rs {
+		cc = 0
+		for cc < cs {
+			if (rr > 0) || (cc > 0) {
+				n = tbCellAt(tc, cfirst, cend, gr+rr, gc+cc)
+				port.CellsSet(tc, (n*tcs)+12, port.CellsAt(tc, (n*tcs)+12)|1)
+				x1 = tbMax(x1, port.CellsAt(tc, (n*tcs)+6))
+				y1 = tbMax(y1, port.CellsAt(tc, (n*tcs)+7))
+			}
+			cc += 1
+		}
+		rr += 1
+	}
+	port.CellsSet(tc, (e*tcs)+2, rs)
+	port.CellsSet(tc, (e*tcs)+3, cs)
+	port.CellsSet(tc, (e*tcs)+6, x1)
+	port.CellsSet(tc, (e*tcs)+7, y1)
+	port.CellsSet(tb, b+24, port.CellsAt(tb, b+24)|1)
+	return 1
+}
+
+func tbTagRest(tb *port.Cells, k int32, tg *port.Cells, ta *port.Cells, wo *port.Cells, w0 int32, tc *port.Cells, tw *port.Cells, ws *port.Cells) int32 {
+	// What else the confirmed tags give candidate k (cases 1 and 2, and a table made of the tags): the tagged spans (`tb-tag-span`) and the
+	// cells of `TH` with Scope Row, which are row headers.
+	var b int32 = k * tbs
+	var tgi int32 = port.CellsAt(tb, b+25)
+	var cfirst int32 = port.CellsAt(tb, b+9)
+	var cend int32 = cfirst + port.CellsAt(tb, b+10)
+	var c int32 = 0
+	var e int32 = 0
+	var gr int32 = 0
+	var gc int32 = 0
+	var nr int32 = 0
+	var cf int32 = 0
+	var ce int32 = 0
+	if tgi < 0 {
+		return 0
+	}
+	if tagtable.TtGet(tg, tgi, 10) == 3 {
+		return 0
+	}
+	if ((tagtable.TtGet(tg, tgi, 15) & 4) == 0) && (port.CellsAt(tb, b+5) != pfStruct) {
+		return 0
+	}
+	if tbTagMap(tb, k, tg, ta, wo, w0, tc, tw, ws) == 0 {
+		return 0
+	}
+	nr = tagtable.TtGet(tg, tgi, 2)
+	cf = tagtable.TtGet(tg, tgi, 4)
+	ce = cf + tagtable.TtGet(tg, tgi, 5)
+	c = cf
+	for c < ce {
+		gr = port.CellsAt(ws, tagtable.TtCget(ta, c, 1))
+		gc = port.CellsAt(ws, nr+tagtable.TtCget(ta, c, 2))
+		if (gr >= 0) && (gc >= 0) {
+			if (tagtable.TtCget(ta, c, 3) > 1) || (tagtable.TtCget(ta, c, 4) > 1) {
+				TbTagSpan(tb, k, tc, cfirst, cend, gr, gc, tagtable.TtCget(ta, c, 3), tagtable.TtCget(ta, c, 4))
+			}
+			if (tagtable.TtCget(ta, c, 5) & 4) != 0 {
+				e = tbCellAt(tc, cfirst, cend, gr, gc)
+				if e >= 0 {
+					if port.CellsAt(tc, (e*tcs)+10) == 0 {
+						port.CellsSet(tc, (e*tcs)+10, 2)
+						port.CellsSet(tb, b+24, port.CellsAt(tb, b+24)|1)
+					}
+				}
+			}
+		}
+		c += 1
+	}
+	return 0
+}
+
+func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, ln *port.Cells, l0 int32, l1 int32, tq *port.Cells, tg *port.Cells, ta *port.Cells, wo *port.Cells, w0 int32, ws *port.Cells) int32 {
+	// What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows (the tags', when they are confirmed and agree,
+	// D225), the footer, which cells are header cells (`col` in the header, `row` in the footer and for the tags' row headers), the tagged
+	// spans, each cell's alignment, the caption.
 	var b int32 = k * tbs
 	var nrows int32 = port.CellsAt(tb, b+7)
 	var cfirst int32 = port.CellsAt(tb, b+9)
 	var cend int32 = cfirst + port.CellsAt(tb, b+10)
-	var nhead int32 = tbHeadRows(tb, k, wd, et, tc, tw)
-	var nfoot int32 = tbFootRows(tb, k, nhead, wd, et, tc, tw)
+	var nht int32 = tbTagHead(tb, k, tg, ta, wo, w0, tc, tw, ws)
+	var nhead int32 = 0
+	var nfoot int32 = 0
 	var c int32 = cfirst
+	if nht > 0 {
+		nhead = nht
+	} else {
+		nhead = tbHeadRows(tb, k, wd, et, tc, tw)
+	}
+	nfoot = tbFootRows(tb, k, nhead, wd, et, tc, tw)
 	port.CellsSet(tb, b+11, nhead)
 	port.CellsSet(tb, b+12, nfoot)
 	for c < cend {
@@ -3074,16 +3590,21 @@ func tbFinish(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.
 	if port.CellsAt(tb, b+5) != pfRuled {
 		tbHeaderSpans(tb, k, tc)
 	}
+	tbTagRest(tb, k, tg, ta, wo, w0, tc, tw, ws)
 	tbAligns(tb, k, wd, tc, tw)
 	tbCaption(tb, k, wd, et, ln, l0, l1, tq)
 	return 0
 }
 
-func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells) int32 {
+func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells) int32 {
 	// Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
 	// scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
 	// rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
-	// row extents (one name each in the calls below). Answers the number of tables.
+	// row extents (one name each in the calls below). `gl mk se sc ss` are the text layer's glyphs and marks and the tagged tree's elements,
+	// marked-content references and document row (P5.5: `ss` empty and the rest unread for a document with no tree), `grg` the graphic
+	// regions (OCR's table hints, D228: empty until P7.G), `g0..g5` the tagged tables' scratch (the marks' join, the page's grids and cells,
+	// the words' cells, a work area, three cells for the score), `tv` the verdicts of every tagged table (answers to the dump's `tb`).
+	// Answers the number of tables.
 	var nw int32 = evidence.WdCount(wd)
 	var nl int32 = evidence.LnCount(ln)
 	var nq int32 = glayer.GrlCount(grl)
@@ -3098,8 +3619,13 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 	var ui int32 = 0
 	var uj int32 = 0
 	var t0 int32 = 0
+	var nk int32 = 0
 	var k int32 = 0
 	port.CellsDrop(tb, 0)
+	port.CellsDrop(tv, 0)
+	if port.CellsLen(se) > 0 {
+		tagtable.TtIndex(mk, sc, g0)
+	}
 	port.CellsDrop(tc, 0)
 	port.CellsDrop(tw, 0)
 	port.CellsDrop(tq, 0)
@@ -3145,10 +3671,18 @@ func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gf
 				tbShadedPage(s2, p, wd, et, wi, wj, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
 			}
 			tbWhitespacePage(p, wd, et, wi, wj, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx)
-			tbSelect(tb, t0, s3, s9, s8)
+			if pdfstruct.TgTrust(ss) >= tbTagVetoTrust {
+				tbVeto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0)
+			}
+			tbSelect(tb, t0, s3, s9, s8, grg)
+			nk = tbRowsOf(tb, tbs)
+			tbTags(wd, et, p, wi, wj, grl, qi, qj, se, sc, ss, gl, mk, g0, g1, g2, g3, g4, g5, tv, tb, t0, tc, tw, tx, s7, s3)
+			if tbRowsOf(tb, tbs) > nk {
+				tbSelect(tb, t0, s3, s9, s8, grg)
+			}
 			k = t0
 			for k < tbRowsOf(tb, tbs) {
-				tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq)
+				tbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4)
 				k += 1
 			}
 			tbClaim(tb, t0, ln, li, lj)

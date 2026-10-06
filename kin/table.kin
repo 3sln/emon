@@ -32,28 +32,31 @@
 (ns emon.table
   (:require [emon.lang :refer [I32 Bool Cells]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count
+            [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count wf-gfirst
                                    hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-by0 hd-by1 hd-rot hd-tstart hd-tlen
                                    wf-style wf-size
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-first lh-count
                                    ]]
-            [emon.glayer :refer [grl-get grl-count gfl-get gfl-count grf-page grf-ex0 grf-ey0 grf-ex1 grf-ey1 grf-thick grf-orient
+            [emon.pdfstruct :refer [tg-trust]]
+            [emon.tagtable :refer [tt-index tt-grids tt-words tt-checks tt-geo-map tt-geo-tb tt-score tt-record tt-owner-el tt-cell-of
+                                   tt-block-role tt-iou tt-pm tt-get tt-set tt-or tt-cget tt-fold]]
+            [emon.glayer :refer [grg-get grg-count grl-get grl-count gfl-get gfl-count grf-page grf-ex0 grf-ey0 grf-ex1 grf-ey1 grf-thick grf-orient
                                  grf-colour grf-flags gff-page gff-x0 gff-y0 gff-x1 gff-y1 gff-colour go-h go-v gq-artifact-pagination]]
             [emon.model :refer [node-new node-set-text node-set-sub node-set-aux node-set-conf node-add-src
                                 node-add-region ledger-add ledger-set-text page-h dr-duplicate-header-row node-set-attr-int node-set-attr-text node-set-align
                                 text-append-cp nk-table nk-rowgroup nk-row nk-cell nk-caption
-                                sr-text sr-infer sr-vector fk-profile fk-columns fk-rowspan fk-colspan
+                                sr-text sr-infer sr-vector sr-struct fl-struct-disagree fl-tag-span-conflict node-add-flag fk-profile fk-columns fk-rowspan fk-colspan
                                 fk-label fk-continued rl-head rl-body rl-foot sy-bold fl-reconstructed]]
             [emon.normalize :refer [nz-nfc nz-flag-ligatures nz-flag-radicals]]
             [kin.lang :refer [defn defconst defdata return let set while if do comment
                               + - * < > <= >= == != and or not quot rem
-                              bit-and]]))
+                              bit-and bit-or]]))
 
 ;; strides
 ;; Cell 15 of a line the tables hold is TB_HELD + the table's index (D178; D186): a bit of its own, so that the initials' codes
 ;; (`emon.initial`, small, signed) never meet it. `emon.initial` and `emon.columns` know the value as 1073741824.
 (defconst ^I32 TB_HELD 1073741824)
-(defconst ^I32 TBS 24)
+(defconst ^I32 TBS 28)
 (defconst ^I32 TCS 16)
 (defconst ^I32 RLS 8)
 (defconst ^I32 RWS 10)           ;; text rows, see `tb-rows`
@@ -66,6 +69,16 @@
 (defconst ^I32 PF_PARTIAL 2)
 (defconst ^I32 PF_SHADED 3)
 (defconst ^I32 PF_WHITESPACE 4)
+(defconst ^I32 PF_STRUCT 5)       ;; P5.5: the tags alone (D225 case 3)
+
+;; THE TAGGED TABLES' SETTINGS (P5.5, D225; first values, P10.1 calibrates them). `tb-struct-ok` and `tb-struct-bad` are the verdicts' in
+;; `emon.tagtable`.
+(defconst ^I32 TB_TAG_TRUST 300)      ;; the tree is read for tables at all at this trust (D150)
+(defconst ^I32 TB_TAG_WIN 700)        ;; a confirmed table that no geometry found is emitted on the tags alone at this trust
+(defconst ^I32 TB_TAG_VETO_TRUST 800) ;; a tree this trusted that says "not a table" lowers a whitespace candidate ...
+(defconst ^I32 TB_TAG_VETO 150)       ;; ... by this much
+(defconst ^I32 TB_TIE 25)             ;; candidates this close in score are a tie, broken by an OCR table hint
+(defconst ^I32 TB_GEO_AGREE 900)      ;; `geo` at least this is "the geometry agrees"
 
 ;; thresholds, centipoints
 (defconst ^I32 RULE_T 400)        ;; a rule is at most 4 pt thick
@@ -413,6 +426,12 @@
     (cells-push tb 0)
     (cells-push tb 0)
     (cells-push tb 0)
+    ;; P5.5 (D225): 24 what the tags did (1 shaped it, 2 a tagged span crosses a closed edge, 4 the tags disagree), 25 the tagged
+    ;; table (`tg` row of the page, -1), 26 its verdict (`tg` 10), 27 its score
+    (cells-push tb 0)
+    (cells-push tb -1)
+    (cells-push tb 0)
+    (cells-push tb 0)
     (return k)))
 
 (defn ^I32 tb-cell-add [^:mut ^Cells tc ^I32 row ^I32 col ^I32 rowspan ^I32 colspan
@@ -710,7 +729,37 @@
     (return (and (> (- (tb-min ax1 bx1) (tb-max ax0 bx0)) POS_TOL)
                  (> (- (tb-min ay1 by1) (tb-max ay0 by0)) POS_TOL)))))
 
-(defn ^I32 tb-select [^:mut ^Cells tb ^I32 t0 ^:mut ^Cells so ^:mut ^Cells vals ^:mut ^Cells sa]
+(defn ^:pub ^I32 tb-hint-iou [^Cells tb ^I32 i ^Cells grg]
+  (comment "The best IoU, per mille, of candidate i's box with an OCR `table-hint` region of its page (`grg` kind 3, D228); 0 when none.")
+  (let [^I32 n (grg-count grg)
+        ^I32 b (* i TBS)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 v 0]
+    (while (< r n)
+      (do (if (and (== (grg-get grg r 5) 3) (== (grg-get grg r 0) (cells-at tb b)))
+            (do (set v (tt-iou (cells-at tb (+ b 1)) (cells-at tb (+ b 2)) (cells-at tb (+ b 3)) (cells-at tb (+ b 4))
+                               (grg-get grg r 1) (grg-get grg r 2) (grg-get grg r 3) (grg-get grg r 4)))
+                (if (> v best) (set best v))))
+          (set r (+ r 1))))
+    (return best)))
+
+(defn ^:pub ^I32 tb-tie-bonus [^Cells tb ^I32 i ^I32 t0 ^I32 n ^Cells grg]
+  (comment "D225 case 7: OCR's table blocks break ties and only ties. Candidate i gets a bonus that puts it first when it overlaps a candidate")
+  (comment "within `tb-tie` of its score and has the higher IoU with a table hint.")
+  (if (== (grg-count grg) 0) (return 0))
+  (let [^:mut ^I32 j t0
+        ^:mut ^I32 d 0]
+    (while (< j n)
+      (do (if (!= j i)
+            (if (tb-overlap tb i j)
+              (do (set d (tb-abs (- (cells-at tb (+ (* i TBS) 6)) (cells-at tb (+ (* j TBS) 6)))))
+                  (if (<= d TB_TIE)
+                    (if (> (tb-hint-iou tb i grg) (tb-hint-iou tb j grg)) (return (+ TB_TIE 1)))))))
+          (set j (+ j 1))))
+    (return 0)))
+
+(defn ^I32 tb-select [^:mut ^Cells tb ^I32 t0 ^:mut ^Cells so ^:mut ^Cells vals ^:mut ^Cells sa ^Cells grg]
   (comment "Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and")
   (comment "leave them in tb in the order of their tops. Answers how many are kept.")
   (let [^I32 n (tb-rows-of tb TBS)
@@ -722,7 +771,7 @@
     (cells-drop vals 0)
     (while (< i n)
       (do (cells-push so (- i t0))
-          (cells-push vals (- 0 (cells-at tb (+ (* i TBS) 6))))
+          (cells-push vals (- 0 (+ (cells-at tb (+ (* i TBS) 6)) (tb-tie-bonus tb i t0 n grg))))
           (cells-push vals i)
           (set i (+ i 1))))
     (tb-sort-idx so vals 2 0 1)
@@ -801,6 +850,9 @@
   (if (== prof PF_SHADED)
     (do (text-append-cp text 115) (text-append-cp text 104) (text-append-cp text 97)
         (text-append-cp text 100) (text-append-cp text 101) (text-append-cp text 100)))
+  (if (== prof PF_STRUCT)
+    (do (text-append-cp text 115) (text-append-cp text 116) (text-append-cp text 114)
+        (text-append-cp text 117) (text-append-cp text 99) (text-append-cp text 116)))
   (if (== prof PF_WHITESPACE)
     (do (text-append-cp text 119) (text-append-cp text 104) (text-append-cp text 105)
         (text-append-cp text 116) (text-append-cp text 101) (text-append-cp text 115)
@@ -1005,6 +1057,11 @@
     (node-add-src nodes t (sr-text))
     (node-add-src nodes t (sr-infer))
     (if (== prof PF_RULED) (node-add-src nodes t (sr-vector)))
+    ;; P5.5 (D225): the tags shaped it (a head, row headers, spans, or all of it), a tagged span crosses an edge the rules close, the
+    ;; tags disagree with the geometry
+    (if (or (== prof PF_STRUCT) (!= (bit-and (cells-at tb (+ b 24)) 1) 0)) (node-add-src nodes t (sr-struct)))
+    (if (!= (bit-and (cells-at tb (+ b 24)) 2) 0) (node-add-flag nodes t (fl-tag-span-conflict)))
+    (if (!= (bit-and (cells-at tb (+ b 24)) 4) 0) (node-add-flag nodes t (fl-struct-disagree)))
     (let [^I32 s (cells-len text)]
       (tb-put-profile text prof)
       (node-set-attr-text nodes attrs t (fk-profile) s (- (cells-len text) s)))
@@ -2416,17 +2473,368 @@
             (set c (+ c 1)))))
     (return 0)))
 
+;; ====================================================== the tags (P5.5, SPEC 10.5 "Tagged tables", D225)
+;;
+;; `emon.tagtable` reads the tree into grids and checks each against the page; this section is what a table does with the verdict. For each
+;; tagged grid of a page (`tb-tags`, after `tb-select` has kept the geometric candidates): the best of them that overlaps it at IoU 500 (`geo`
+;; is measured on it), the score and the verdict, and then, by the seven cases of SPEC 10.5: confirmed with agreeing geometry (1) or
+;; disagreeing (2: the geometry decides, the table is flagged), confirmed with none (3: a `struct` candidate, which `tb-select` then selects with the others), partial (4), contradicted
+;; (5: kept in the dump, used for nothing), a trusted tree that says "not a table" (6: `tb-veto`, before the selection), OCR's table hints (7:
+;; `tb-select`). What the tags give a chosen candidate is applied in `tb-finish`: head rows (`tb-tag-head`), then row headers and spans
+;; (`tb-tag-rest`). The candidate's cells 24-27 hold what was done (24: 1 the tags shaped it, 2 a tagged span crosses an edge the rules
+;; close, 4 the tags disagree), the tagged table (25: its row in the page's `tg`), its verdict and its score.
+
+(defn ^I32 tb-prose-role [^I32 role]
+  (comment "1 for the block roles that say \"this is text, not a table\": P, H, Hn, L, LI, Lbl and LBody.")
+  (if (or (== role 15) (or (== role 16) (or (== role 17) (or (== role 19) (or (== role 20) (or (== role 21) (== role 22)))))))
+    (return 1))
+  (return 0))
+
+(defn ^I32 tb-veto [^:mut ^Cells tb ^I32 t0 ^Cells wd ^Cells tc ^Cells tw ^Cells se ^Cells sc ^Cells gl ^Cells mk ^Cells mi]
+  (comment "D225 case 6: a tree trusted to `tb-tag-veto-trust` that gives every word of a whitespace candidate to a P, L, LI or H element")
+  (comment "says it is not a table: the candidate's score goes down by `tb-tag-veto`. Only whitespace: it alone has no rule or fill to vouch for it.")
+  (let [^I32 n (tb-rows-of tb TBS)
+        ^:mut ^I32 t t0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 words 0
+        ^:mut ^I32 s 0]
+    (while (< t n)
+      (do (if (== (cells-at tb (+ (* t TBS) 5)) PF_WHITESPACE)
+            (do (set ok 1)
+                (set words 0)
+                (set c (cells-at tb (+ (* t TBS) 9)))
+                (while (and (== ok 1) (< c (+ (cells-at tb (+ (* t TBS) 9)) (cells-at tb (+ (* t TBS) 10)))))
+                  (do (set j 0)
+                      (while (and (== ok 1) (< j (cells-at tc (+ (* c TCS) 9))))
+                        (do (set s (tt-owner-el sc gl mk mi (wd-get wd (cells-at tw (+ (cells-at tc (+ (* c TCS) 8)) j)) (wf-gfirst))))
+                            (if (== s -1)
+                              (set ok 0)
+                              (if (== (tb-prose-role (tt-block-role se s)) 0) (set ok 0)))
+                            (set words (+ words 1))
+                            (set j (+ j 1))))
+                      (set c (+ c 1))))
+                (if (and (== ok 1) (> words 0))
+                  (cells-set tb (+ (* t TBS) 6) (tb-max 0 (- (cells-at tb (+ (* t TBS) 6)) TB_TAG_VETO))))))
+          (set t (+ t 1))))
+    (return 0)))
+
+(defn ^I32 tb-struct-cand [^Cells wd ^Cells et ^I32 p ^I32 w0 ^I32 w1 ^Cells tg ^I32 k ^Cells ta ^Cells wo ^I32 trust
+                           ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx
+                           ^:mut ^Cells pr ^:mut ^Cells so ^:mut ^Cells ws ^I32 keep]
+  (comment "D225 case 3: a confirmed tagged table that no geometry found, as a candidate of its own: its cells are the tagged cells with their")
+  (comment "text boxes grown to their row and column bands, scored 850 x trust / 1000, and refused as any text candidate is (`tb-score`: prose in")
+  (comment "a `Table` is a layout table). `keep` 0 only asks whether it would be refused: the candidate is dropped again. Answers the candidate, -1")
+  (comment "when refused or dropped.")
+  (let [^I32 nr (tt-get tg k 2)
+        ^I32 nc (tt-get tg k 3)
+        ^I32 cf (tt-get tg k 4)
+        ^I32 ce (+ cf (tt-get tg k 5))
+        ^I32 bx0 (tt-get tg k 6)
+        ^I32 by0 (tt-get tg k 7)
+        ^I32 bx1 (tt-get tg k 8)
+        ^I32 by1 (tt-get tg k 9)
+        ^I32 nt (tb-rows-of tb TBS)
+        ^I32 c0 (tb-rows-of tc TCS)
+        ^I32 wl0 (cells-len tw)
+        ^I32 xl0 (cells-len tx)
+        ^I32 nct (tt-get tg k 5)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 col 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 hi 0]
+    ;; a column of names, or a lone row, is a list or a line and not a table (the geometric profiles ask two each way too)
+    (if (or (< nc 2) (< nr 2)) (return -2))
+    (cells-drop ws 0)
+    (while (< i (+ nc nr))
+      (do (cells-push ws 2000000000)
+          (cells-push ws -2000000000)
+          (set i (+ i 1))))
+    (set c cf)
+    (while (< c ce)
+      (do (if (> (tt-cget ta c 6) 0)
+            (do (set col (tt-cget ta c 2))
+                (set row (tt-cget ta c 1))
+                (if (and (== (tt-cget ta c 4) 1) (< col nc))
+                  (do (cells-set ws (* 2 col) (tb-min (cells-at ws (* 2 col)) (tt-cget ta c 7)))
+                      (cells-set ws (+ (* 2 col) 1) (tb-max (cells-at ws (+ (* 2 col) 1)) (tt-cget ta c 9)))))
+                (if (and (== (tt-cget ta c 3) 1) (< row nr))
+                  (do (cells-set ws (+ (* 2 nc) (* 2 row)) (tb-min (cells-at ws (+ (* 2 nc) (* 2 row))) (tt-cget ta c 8)))
+                      (cells-set ws (+ (+ (* 2 nc) (* 2 row)) 1) (tb-max (cells-at ws (+ (+ (* 2 nc) (* 2 row)) 1)) (tt-cget ta c 10)))))))
+          (set c (+ c 1))))
+    ;; a band nobody single fills is its share of the box
+    (set i 0)
+    (while (< i nc)
+      (do (if (> (cells-at ws (* 2 i)) (cells-at ws (+ (* 2 i) 1)))
+            (do (cells-set ws (* 2 i) (+ bx0 (quot (* (- bx1 bx0) i) nc)))
+                (cells-set ws (+ (* 2 i) 1) (+ bx0 (quot (* (- bx1 bx0) (+ i 1)) nc)))))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nr)
+      (do (if (> (cells-at ws (+ (* 2 nc) (* 2 i))) (cells-at ws (+ (+ (* 2 nc) (* 2 i)) 1)))
+            (do (cells-set ws (+ (* 2 nc) (* 2 i)) (+ by0 (quot (* (- by1 by0) i) nr)))
+                (cells-set ws (+ (+ (* 2 nc) (* 2 i)) 1) (+ by0 (quot (* (- by1 by0) (+ i 1)) nr)))))
+          (set i (+ i 1))))
+    (set c cf)
+    (while (< c ce)
+      (do (set col (tt-cget ta c 2))
+          (set row (tt-cget ta c 1))
+          (set hi (tb-min (- nc 1) (- (+ col (tt-cget ta c 4)) 1)))
+          (set i (tb-min (- nr 1) (- (+ row (tt-cget ta c 3)) 1)))
+          (tb-cell-add tc row col (tt-cget ta c 3) (tt-cget ta c 4)
+                       (cells-at ws (* 2 col)) (cells-at ws (+ (* 2 nc) (* 2 row)))
+                       (cells-at ws (+ (* 2 hi) 1)) (cells-at ws (+ (+ (* 2 nc) (* 2 i)) 1)))
+          (set c (+ c 1))))
+    (cells-drop pr 0)
+    (set w w0)
+    (while (< w w1)
+      (do (set c (cells-at wo (- w w0)))
+          (if (and (>= c cf) (< c ce))
+            (tb-pair-add pr wd (+ c0 (- c cf)) w))
+          (set w (+ w 1))))
+    (tb-flush-pairs pr so wd tc tw)
+    (set t (tb-add tb p bx0 by0 bx1 by1 PF_STRUCT (quot (* 850 trust) 1000) nr nc c0 nct))
+    (if (or (== keep 0) (== (tb-score tb t wd et tc tw) 0))
+      (do (set hi (tb-score tb t wd et tc tw))
+          (tb-reject tb tc tw tx nt c0 wl0 xl0)
+          (if (== hi 0) (return -2))
+          (return -1)))
+    (cells-set tb (+ (* t TBS) 16) (cells-len tx))
+    (cells-set tb (+ (* t TBS) 17) (+ nc 1))
+    (cells-push tx bx0)
+    (set i 1)
+    (while (< i nc)
+      (do (cells-push tx (tb-max (cells-at tx (- (cells-len tx) 1)) (quot (+ (cells-at ws (+ (* 2 (- i 1)) 1)) (cells-at ws (* 2 i))) 2)))
+          (set i (+ i 1))))
+    (cells-push tx (tb-max bx1 (cells-at tx (- (cells-len tx) 1))))
+    (cells-set tb (+ (* t TBS) 24) 1)
+    (cells-set tb (+ (* t TBS) 25) k)
+    (cells-set tb (+ (* t TBS) 26) (tt-get tg k 10))
+    (cells-set tb (+ (* t TBS) 27) (tt-get tg k 11))
+    (return t)))
+
+(defn ^I32 tb-tags [^Cells wd ^Cells et ^I32 p ^I32 w0 ^I32 w1 ^Cells grl ^I32 q0 ^I32 q1
+                    ^Cells se ^Cells sc ^Cells ss ^Cells gl ^Cells mk ^Cells mi
+                    ^:mut ^Cells tg ^:mut ^Cells ta ^:mut ^Cells wo ^:mut ^Cells ws ^:mut ^Cells acc ^:mut ^Cells tv
+                    ^:mut ^Cells tb ^I32 t0 ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tx
+                    ^:mut ^Cells pr ^:mut ^Cells so]
+  (comment "The tagged tables of page p against the candidates t0.. that `tb-select` kept (see the head of this section): each is checked and")
+  (comment "scored, recorded in `tv`, and, by its verdict, attached to the candidate it overlaps or made a candidate. Answers the tagged tables.")
+  (let [^I32 trust (tg-trust ss)
+        ^:mut ^I32 use 0
+        ^I32 nt0 (tb-rows-of tb TBS)
+        ^:mut ^I32 nt 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 geo 0
+        ^:mut ^I32 owned 0
+        ^:mut ^I32 agree 0
+        ^:mut ^I32 keep 0
+        ^:mut ^I32 v 0]
+    (if (>= trust TB_TAG_TRUST) (set use 1))
+    (set nt (tt-grids se ss p tg ta ws))
+    (if (== nt 0) (return 0))
+    (tt-words wd w0 w1 se sc gl mk mi tg ta wo)
+    (while (< k nt)
+      (do (set owned (tt-get tg k 14))
+          (set g (tt-geo-tb tg k tb t0 nt0))
+          ;; the table's box, for `cover`, is what the page shows of it too: where the geometry found one it is the candidate's as well
+          (if (>= g 0)
+            (tt-fold tg (+ (* k 24) 6) (cells-at tb (+ (* g TBS) 1)) (cells-at tb (+ (* g TBS) 2)) (cells-at tb (+ (* g TBS) 3)) (cells-at tb (+ (* g TBS) 4))))
+          (tt-checks tg k ta wd w0 w1 wo grl q0 q1 ws)
+          (set geo -1)
+          (if (and (>= g 0) (> owned 0))
+            (do (set agree (tt-geo-map tg k ta wo w0 tb g tc tw ws))
+                (if (>= agree 0) (set geo (tt-pm agree owned)))))
+          (tt-set tg k 12 g)
+          (tt-set tg k 21 geo)
+          (tt-score tg k acc)
+          (set v (tt-get tg k 10))
+          ;; a layout table: confirmed, no geometry, and what the tags make of it is refused as prose (D180)
+          (if (and (== v 1) (and (< g 0) (> owned 0)))
+            (do (set keep 0)
+                (if (and (== use 1) (>= trust TB_TAG_WIN)) (set keep 1))
+                (set agree (tb-struct-cand wd et p w0 w1 tg k ta wo trust tb tc tw tx pr so ws keep))
+                (if (== agree -2)
+                  (do (tt-set tg k 10 3)
+                      (set v 3)))))
+          ;; a tree that is not trusted can confirm nothing: its tables are at best partial, and used for nothing
+          (if (and (== use 0) (== v 1))
+            (do (tt-set tg k 10 2)
+                (set v 2)))
+          (if (and (== use 1) (== v 1)) (tt-or tg k 15 4))
+          (if (and (== use 1) (and (== v 1) (and (>= g 0) (and (>= geo 0) (< geo TB_GEO_AGREE)))))
+            (do (tt-set tg k 10 2)
+                (cells-set tb (+ (* g TBS) 24) (bit-or (cells-at tb (+ (* g TBS) 24)) 4))))
+          (if (and (== use 1) (>= g 0))
+            (do (cells-set tb (+ (* g TBS) 25) k)
+                (cells-set tb (+ (* g TBS) 26) (tt-get tg k 10))
+                (cells-set tb (+ (* g TBS) 27) (tt-get tg k 11))))
+          (tt-record tg k trust tv)
+          (set k (+ k 1))))
+    (return nt)))
+
+(defn ^I32 tb-tag-map [^Cells tb ^I32 k ^Cells tg ^Cells ta ^Cells wo ^I32 w0 ^Cells tc ^Cells tw ^:mut ^Cells ws]
+  (comment "Fill ws with the maps of candidate k's tagged table onto it (`tt-geo-map`: a candidate row for each tagged row, then a column for each")
+  (comment "tagged column); for a table made of the tags the identity. Answers 1 when ws holds them, 0 when it does not.")
+  (let [^I32 b (* k TBS)
+        ^I32 tgi (cells-at tb (+ b 25))
+        ^:mut ^I32 i 0]
+    (if (< tgi 0) (return 0))
+    (if (== (cells-at tb (+ b 5)) PF_STRUCT)
+      (do (cells-drop ws 0)
+          (while (< i (tt-get tg tgi 2))
+            (do (cells-push ws i)
+                (set i (+ i 1))))
+          (set i 0)
+          (while (< i (tt-get tg tgi 3))
+            (do (cells-push ws i)
+                (set i (+ i 1))))
+          (return 1)))
+    (if (< (tt-geo-map tg tgi ta wo w0 tb k tc tw ws) 0) (return 0))
+    (return 1)))
+
+(defn ^I32 tb-tag-head [^:mut ^Cells tb ^I32 k ^Cells tg ^Cells ta ^Cells wo ^I32 w0 ^Cells tc ^Cells tw ^:mut ^Cells ws]
+  (comment "The head rows the tags give candidate k: the tagged head when the tags are confirmed and map the candidate's first rows one to one,")
+  (comment "or when they are partial and have as many rows as the candidate (case 4); a table made of the tags has its own. 0 when not.")
+  (let [^I32 b (* k TBS)
+        ^I32 tgi (cells-at tb (+ b 25))
+        ^I32 nrows (cells-at tb (+ b 7))
+        ^:mut ^I32 r 0]
+    (if (< tgi 0) (return 0))
+    (let [^I32 nh (tt-get tg tgi 13)
+          ^I32 fg (tt-get tg tgi 15)
+          ^I32 v (tt-get tg tgi 10)]
+      (if (or (<= nh 0) (>= nh nrows)) (return 0))
+      (if (== v 3) (return 0))
+      (if (== (cells-at tb (+ b 5)) PF_STRUCT) (return nh))
+      (if (!= (bit-and fg 4) 0)
+        (do (if (== (tb-tag-map tb k tg ta wo w0 tc tw ws) 0) (return 0))
+            (while (< r nh)
+              (do (if (!= (cells-at ws r) r) (return 0))
+                  (set r (+ r 1))))
+            (cells-set tb (+ b 24) (bit-or (cells-at tb (+ b 24)) 1))
+            (return nh)))
+      (if (and (== v 2) (== (tt-get tg tgi 2) nrows))
+        (do (cells-set tb (+ b 24) (bit-or (cells-at tb (+ b 24)) 1))
+            (return nh)))
+      (return 0))))
+
+(defn ^:pub ^I32 tb-tag-span [^:mut ^Cells tb ^I32 k ^:mut ^Cells tc ^I32 cfirst ^I32 cend ^I32 gr ^I32 gc ^I32 rs ^I32 cs]
+  (comment "A tagged cell that spans rs rows and cs columns, at the candidate's cell (gr, gc). A ruled table keeps its lattice's spans: when a")
+  (comment "cell of the block is another cell than the one at its corner a rule closes the edge, and the table is flagged (`tag-span-conflict`).")
+  (comment "Any other profile takes the tagged span when every other slot of the block is a plain, empty cell: they are absorbed.")
+  (let [^I32 b (* k TBS)
+        ^I32 e (tb-cell-at tc cfirst cend gr gc)
+        ^:mut ^I32 rr 0
+        ^:mut ^I32 cc 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0]
+    (if (< e 0) (return 0))
+    (if (or (!= (cells-at tc (* e TCS)) gr) (!= (cells-at tc (+ (* e TCS) 1)) gc)) (return 0))
+    (if (== (cells-at tb (+ b 5)) PF_RULED)
+      (do (while (< rr rs)
+            (do (set cc 0)
+                (while (< cc cs)
+                  (do (set n (tb-cell-at tc cfirst cend (+ gr rr) (+ gc cc)))
+                      (if (and (>= n 0) (!= n e))
+                        (cells-set tb (+ b 24) (bit-or (cells-at tb (+ b 24)) 2)))
+                      (set cc (+ cc 1))))
+                (set rr (+ rr 1))))
+          (return 0)))
+    (if (or (!= (cells-at tc (+ (* e TCS) 2)) 1) (!= (cells-at tc (+ (* e TCS) 3)) 1)) (return 0))
+    (set x1 (cells-at tc (+ (* e TCS) 6)))
+    (set y1 (cells-at tc (+ (* e TCS) 7)))
+    (while (and (< rr rs) (== ok 1))
+      (do (set cc 0)
+          (while (and (< cc cs) (== ok 1))
+            (do (if (or (> rr 0) (> cc 0))
+                  (do (set n (tb-cell-at tc cfirst cend (+ gr rr) (+ gc cc)))
+                      (if (< n 0)
+                        (set ok 0)
+                        (if (or (!= (cells-at tc (* n TCS)) (+ gr rr)) (or (!= (cells-at tc (+ (* n TCS) 1)) (+ gc cc))
+                                (or (!= (cells-at tc (+ (* n TCS) 2)) 1) (or (!= (cells-at tc (+ (* n TCS) 3)) 1) (> (cells-at tc (+ (* n TCS) 9)) 0)))))
+                          (set ok 0)))))
+                (set cc (+ cc 1))))
+          (set rr (+ rr 1))))
+    (if (== ok 0) (return 0))
+    (set rr 0)
+    (while (< rr rs)
+      (do (set cc 0)
+          (while (< cc cs)
+            (do (if (or (> rr 0) (> cc 0))
+                  (do (set n (tb-cell-at tc cfirst cend (+ gr rr) (+ gc cc)))
+                      (cells-set tc (+ (* n TCS) 12) (bit-or (cells-at tc (+ (* n TCS) 12)) 1))
+                      (set x1 (tb-max x1 (cells-at tc (+ (* n TCS) 6))))
+                      (set y1 (tb-max y1 (cells-at tc (+ (* n TCS) 7))))))
+                (set cc (+ cc 1))))
+          (set rr (+ rr 1))))
+    (cells-set tc (+ (* e TCS) 2) rs)
+    (cells-set tc (+ (* e TCS) 3) cs)
+    (cells-set tc (+ (* e TCS) 6) x1)
+    (cells-set tc (+ (* e TCS) 7) y1)
+    (cells-set tb (+ b 24) (bit-or (cells-at tb (+ b 24)) 1))
+    (return 1)))
+
+(defn ^I32 tb-tag-rest [^:mut ^Cells tb ^I32 k ^Cells tg ^Cells ta ^Cells wo ^I32 w0 ^:mut ^Cells tc ^Cells tw ^:mut ^Cells ws]
+  (comment "What else the confirmed tags give candidate k (cases 1 and 2, and a table made of the tags): the tagged spans (`tb-tag-span`) and the")
+  (comment "cells of `TH` with Scope Row, which are row headers.")
+  (let [^I32 b (* k TBS)
+        ^I32 tgi (cells-at tb (+ b 25))
+        ^I32 cfirst (cells-at tb (+ b 9))
+        ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
+        ^:mut ^I32 c 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 gr 0
+        ^:mut ^I32 gc 0
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 cf 0
+        ^:mut ^I32 ce 0]
+    (if (< tgi 0) (return 0))
+    (if (== (tt-get tg tgi 10) 3) (return 0))
+    (if (and (== (bit-and (tt-get tg tgi 15) 4) 0) (!= (cells-at tb (+ b 5)) PF_STRUCT)) (return 0))
+    (if (== (tb-tag-map tb k tg ta wo w0 tc tw ws) 0) (return 0))
+    (set nr (tt-get tg tgi 2))
+    (set cf (tt-get tg tgi 4))
+    (set ce (+ cf (tt-get tg tgi 5)))
+    (set c cf)
+    (while (< c ce)
+      (do (set gr (cells-at ws (tt-cget ta c 1)))
+          (set gc (cells-at ws (+ nr (tt-cget ta c 2))))
+          (if (and (>= gr 0) (>= gc 0))
+            (do (if (or (> (tt-cget ta c 3) 1) (> (tt-cget ta c 4) 1))
+                  (tb-tag-span tb k tc cfirst cend gr gc (tt-cget ta c 3) (tt-cget ta c 4)))
+                (if (!= (bit-and (tt-cget ta c 5) 4) 0)
+                  (do (set e (tb-cell-at tc cfirst cend gr gc))
+                      (if (>= e 0)
+                        (if (== (cells-at tc (+ (* e TCS) 10)) 0)
+                          (do (cells-set tc (+ (* e TCS) 10) 2)
+                              (cells-set tb (+ b 24) (bit-or (cells-at tb (+ b 24)) 1)))))))))
+          (set c (+ c 1))))
+    (return 0)))
+
 (defn ^I32 tb-finish [^:mut ^Cells tb ^I32 k ^Cells wd ^Cells et ^:mut ^Cells tc ^Cells tw
-                      ^:mut ^Cells ln ^I32 l0 ^I32 l1 ^:mut ^Cells tq]
-  (comment "What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows, the footer,")
-  (comment "which cells are header cells (`col` in the header, `row` in the footer), each cell's alignment, the caption.")
+                      ^:mut ^Cells ln ^I32 l0 ^I32 l1 ^:mut ^Cells tq
+                      ^Cells tg ^Cells ta ^Cells wo ^I32 w0 ^:mut ^Cells ws]
+  (comment "What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows (the tags', when they are confirmed and agree,")
+  (comment "D225), the footer, which cells are header cells (`col` in the header, `row` in the footer and for the tags' row headers), the tagged")
+  (comment "spans, each cell's alignment, the caption.")
   (let [^I32 b (* k TBS)
         ^I32 nrows (cells-at tb (+ b 7))
         ^I32 cfirst (cells-at tb (+ b 9))
         ^I32 cend (+ cfirst (cells-at tb (+ b 10)))
-        ^I32 nhead (tb-head-rows tb k wd et tc tw)
-        ^I32 nfoot (tb-foot-rows tb k nhead wd et tc tw)
+        ^I32 nht (tb-tag-head tb k tg ta wo w0 tc tw ws)
+        ^:mut ^I32 nhead 0
+        ^:mut ^I32 nfoot 0
         ^:mut ^I32 c cfirst]
+    (if (> nht 0) (set nhead nht) (set nhead (tb-head-rows tb k wd et tc tw)))
+    (set nfoot (tb-foot-rows tb k nhead wd et tc tw))
     (cells-set tb (+ b 11) nhead)
     (cells-set tb (+ b 12) nfoot)
     (while (< c cend)
@@ -2435,6 +2843,7 @@
             (if (>= r (- nrows nfoot)) (cells-set tc (+ (* c TCS) 10) 2)))
           (set c (+ c 1))))
     (if (!= (cells-at tb (+ b 5)) PF_RULED) (tb-header-spans tb k tc))
+    (tb-tag-rest tb k tg ta wo w0 tc tw ws)
     (tb-aligns tb k wd tc tw)
     (tb-caption tb k wd et ln l0 l1 tq)
     (return 0)))
@@ -2445,11 +2854,18 @@
                            ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells s7 ^:mut ^Cells s8 ^:mut ^Cells s9
                            ^:mut ^Cells s10 ^:mut ^Cells s11 ^:mut ^Cells s12 ^:mut ^Cells s13 ^:mut ^Cells s14
                            ^:mut ^Cells s15 ^:mut ^Cells s16 ^:mut ^Cells s17 ^:mut ^Cells s18
-                           ^Cells pages]
+                           ^Cells pages
+                           ^Cells gl ^Cells mk ^Cells se ^Cells sc ^Cells ss ^Cells grg
+                           ^:mut ^Cells g0 ^:mut ^Cells g1 ^:mut ^Cells g2 ^:mut ^Cells g3 ^:mut ^Cells g4 ^:mut ^Cells g5
+                           ^:mut ^Cells tv]
   (comment "Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are")
   (comment "scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb")
   (comment "rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and")
-  (comment "row extents (one name each in the calls below). Answers the number of tables.")
+  (comment "row extents (one name each in the calls below). `gl mk se sc ss` are the text layer's glyphs and marks and the tagged tree's elements,")
+  (comment "marked-content references and document row (P5.5: `ss` empty and the rest unread for a document with no tree), `grg` the graphic")
+  (comment "regions (OCR's table hints, D228: empty until P7.G), `g0..g5` the tagged tables' scratch (the marks' join, the page's grids and cells,")
+  (comment "the words' cells, a work area, three cells for the score), `tv` the verdicts of every tagged table (answers to the dump's `tb`).")
+  (comment "Answers the number of tables.")
   (let [^I32 nw (wd-count wd)
         ^I32 nl (ln-count ln)
         ^I32 nq (grl-count grl)
@@ -2464,8 +2880,11 @@
         ^:mut ^I32 ui 0
         ^:mut ^I32 uj 0
         ^:mut ^I32 t0 0
+        ^:mut ^I32 nk 0
         ^:mut ^I32 k 0]
     (cells-drop tb 0)
+    (cells-drop tv 0)
+    (if (> (cells-len se) 0) (tt-index mk sc g0))
     (cells-drop tc 0)
     (cells-drop tw 0)
     (cells-drop tq 0)
@@ -2501,10 +2920,15 @@
                 (if (<= (tb-rows-of s2 6) MAX_RULES)
                   (tb-shaded-page s2 p wd et wi wj s8 s9 s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx))
                 (tb-whitespace-page p wd et wi wj s10 s11 s12 s13 s14 s15 s16 s6 s17 s18 s7 s3 tb tc tw tx)
-                (tb-select tb t0 s3 s9 s8)
+                (if (>= (tg-trust ss) TB_TAG_VETO_TRUST) (tb-veto tb t0 wd tc tw se sc gl mk g0))
+                (tb-select tb t0 s3 s9 s8 grg)
+                ;; the tags are checked against the candidates that were kept (a table of the tags alone joins them and is selected with them)
+                (set nk (tb-rows-of tb TBS))
+                (tb-tags wd et p wi wj grl qi qj se sc ss gl mk g0 g1 g2 g3 g4 g5 tv tb t0 tc tw tx s7 s3)
+                (if (> (tb-rows-of tb TBS) nk) (tb-select tb t0 s3 s9 s8 grg))
                 (set k t0)
                 (while (< k (tb-rows-of tb TBS))
-                  (do (tb-finish tb k wd et tc tw ln li lj tq)
+                  (do (tb-finish tb k wd et tc tw ln li lj tq g1 g2 g3 wi g4)
                       (set k (+ k 1))))
                 (tb-claim tb t0 ln li lj)))
           (set wi wj)

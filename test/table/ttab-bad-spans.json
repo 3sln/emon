@@ -1,0 +1,318 @@
+{
+  "emon": "1.1",
+  "settings": {
+    "locale": null
+  },
+  "conf": "uncalibrated",
+  "pages": [
+    {
+      "n": 1,
+      "w": 612,
+      "h": 792,
+      "rot": 0,
+      "kind": "vector",
+      "layout": [
+        {
+          "band": 0,
+          "col": 0,
+          "role": "body",
+          "box": [72, 59.08, 212.04, 75.73]
+        },
+        {
+          "band": 1,
+          "col": 0,
+          "role": "body",
+          "box": [72, 94.1, 344.06, 310.28]
+        },
+        {
+          "band": 1,
+          "col": 1,
+          "role": "margin",
+          "box": [408, 199.32, 435.78, 274.57]
+        }
+      ]
+    }
+  ],
+  "body": {
+    "id": 0,
+    "kind": "document",
+    "children": [
+      {
+        "id": 1,
+        "kind": "section",
+        "level": 1,
+        "children": [
+          {
+            "id": 2,
+            "kind": "heading",
+            "level": 1,
+            "text": "Supplies Ledger",
+            "at": [[1, 72, 59.08, 212.04, 75.73]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 3,
+            "kind": "paragraph",
+            "text": "The table below was extracted from the supplies ledger.",
+            "at": [[1, 72, 94.1, 344.06, 104.28]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 4,
+            "kind": "paragraph",
+            "align": "start",
+            "text": "Figures are totals for the quarter.",
+            "at": [[1, 72, 108.1, 232.18, 118.28]],
+            "src": ["text", "infer"],
+            "conf": 500
+          },
+          {
+            "id": 5,
+            "kind": "note",
+            "role": "margin",
+            "children": [
+              {
+                "id": 6,
+                "kind": "paragraph",
+                "text": "Notes",
+                "at": [[1, 408, 199.32, 435.78, 208.57]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 7,
+                "kind": "paragraph",
+                "align": "start",
+                "text": "up",
+                "at": [[1, 408, 221.32, 419.12, 230.57]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 8,
+                "kind": "paragraph",
+                "align": "start",
+                "text": "flat",
+                "at": [[1, 408, 243.32, 421.34, 252.57]],
+                "src": ["text", "infer"],
+                "conf": 500
+              },
+              {
+                "id": 9,
+                "kind": "paragraph",
+                "align": "start",
+                "text": "up",
+                "at": [[1, 408, 265.32, 419.12, 274.57]],
+                "src": ["text", "infer"],
+                "conf": 500
+              }
+            ],
+            "at": [[1, 408, 199.32, 435.78, 274.57]],
+            "src": ["infer"],
+            "conf": 500
+          },
+          {
+            "id": 10,
+            "kind": "table",
+            "profile": "ruled",
+            "columns": 4,
+            "children": [
+              {
+                "id": 11,
+                "kind": "rowgroup",
+                "role": "head",
+                "children": [
+                  {
+                    "id": 12,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 13,
+                        "kind": "cell",
+                        "header": "col",
+                        "text": "Region",
+                        "at": [[1, 72, 192, 182, 214]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 14,
+                        "kind": "cell",
+                        "colspan": 2,
+                        "header": "col",
+                        "text": "Sales",
+                        "at": [[1, 182, 192, 402, 214]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 15,
+                        "kind": "cell",
+                        "header": "col",
+                        "text": "Notes",
+                        "at": [[1, 402, 192, 512, 214]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              },
+              {
+                "id": 16,
+                "kind": "rowgroup",
+                "role": "body",
+                "children": [
+                  {
+                    "id": 17,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 18,
+                        "kind": "cell",
+                        "rowspan": 2,
+                        "text": "North",
+                        "at": [[1, 72, 214, 182, 258]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 19,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "120",
+                        "at": [[1, 182, 214, 292, 236]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 20,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "135",
+                        "at": [[1, 292, 214, 402, 236]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 21,
+                        "kind": "cell",
+                        "text": "up",
+                        "at": [[1, 402, 214, 512, 236]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 22,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 23,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "98",
+                        "at": [[1, 182, 236, 292, 258]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 24,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "104",
+                        "at": [[1, 292, 236, 402, 258]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 25,
+                        "kind": "cell",
+                        "text": "flat",
+                        "at": [[1, 402, 236, 512, 258]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 600
+                  },
+                  {
+                    "id": 26,
+                    "kind": "row",
+                    "children": [
+                      {
+                        "id": 27,
+                        "kind": "cell",
+                        "text": "South",
+                        "at": [[1, 72, 258, 182, 280]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 28,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "75",
+                        "at": [[1, 182, 258, 292, 280]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 29,
+                        "kind": "cell",
+                        "align": "start",
+                        "text": "80",
+                        "at": [[1, 292, 258, 402, 280]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      },
+                      {
+                        "id": 30,
+                        "kind": "cell",
+                        "text": "up",
+                        "at": [[1, 402, 258, 512, 280]],
+                        "src": ["text", "infer"],
+                        "conf": 600
+                      }
+                    ],
+                    "src": ["infer"],
+                    "conf": 600
+                  }
+                ],
+                "src": ["infer"],
+                "conf": 600
+              }
+            ],
+            "at": [[1, 72, 192, 512, 280]],
+            "src": ["text", "vector", "struct", "infer"],
+            "conf": 600,
+            "flags": ["struct-disagree", "tag-span-conflict"]
+          },
+          {
+            "id": 31,
+            "kind": "paragraph",
+            "align": "start",
+            "text": "Questions go to the purchasing office.",
+            "at": [[1, 72, 300.1, 256.66, 310.28]],
+            "src": ["text", "infer"],
+            "conf": 500
+          }
+        ],
+        "src": ["infer"],
+        "conf": 500
+      }
+    ]
+  },
+  "furniture": [],
+  "dropped": []
+}

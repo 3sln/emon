@@ -63,7 +63,8 @@ K = {v: k for k, v in KEYS.items()}
 SRC = [(1, "text"), (2, "hidden-text"), (4, "ocr"), (8, "trace"), (16, "vector"),
        (32, "struct"), (64, "annot"), (128, "outline"), (256, "infer")]
 FLAGS = [(1, "low-conf"), (2, "ocr-only"), (4, "text-layer-suspect"),
-         (8, "reconstructed"), (16, "dpi-unknown"), (32, "rotated"), (64, "vertical")]
+         (8, "reconstructed"), (16, "dpi-unknown"), (32, "rotated"), (64, "vertical"),
+         (128, "struct-disagree"), (256, "tag-span-conflict")]
 STYLE = [(1, "bold"), (2, "italic"), (4, "underline"), (8, "strike"), (16, "sub"),
          (32, "sup"), (64, "mono"), (128, "smallcaps")]
 ALIGN = {1: "start", 2: "center", 3: "end", 4: "justify"}

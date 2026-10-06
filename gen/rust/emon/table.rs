@@ -5,9 +5,11 @@ use crate::emon::evidence::*;
 use crate::emon::glayer::*;
 use crate::emon::model::*;
 use crate::emon::normalize::*;
+use crate::emon::pdfstruct::*;
+use crate::emon::tagtable::*;
 
 pub(crate) const TB_HELD: i32 = 1073741824;
-pub(crate) const TBS: i32 = 24;
+pub(crate) const TBS: i32 = 28;
 pub(crate) const TCS: i32 = 16;
 pub(crate) const RLS: i32 = 8;
 pub(crate) const RWS: i32 = 10;
@@ -18,6 +20,13 @@ pub(crate) const PF_RULED: i32 = 1;
 pub(crate) const PF_PARTIAL: i32 = 2;
 pub(crate) const PF_SHADED: i32 = 3;
 pub(crate) const PF_WHITESPACE: i32 = 4;
+pub(crate) const PF_STRUCT: i32 = 5;
+pub(crate) const TB_TAG_TRUST: i32 = 300;
+pub(crate) const TB_TAG_WIN: i32 = 700;
+pub(crate) const TB_TAG_VETO_TRUST: i32 = 800;
+pub(crate) const TB_TAG_VETO: i32 = 150;
+pub(crate) const TB_TIE: i32 = 25;
+pub(crate) const TB_GEO_AGREE: i32 = 900;
 pub(crate) const RULE_T: i32 = 400;
 pub(crate) const RULE_MIN: i32 = 500;
 pub(crate) const POS_TOL: i32 = 200;
@@ -424,6 +433,10 @@ pub(crate) fn tb_add(mut tb: &mut crate::port::Cells, page: i32, x0: i32, y0: i3
     crate::port::cells_push(tb, 0);
     crate::port::cells_push(tb, 0);
     crate::port::cells_push(tb, 0);
+    crate::port::cells_push(tb, 0);
+    crate::port::cells_push(tb, -1);
+    crate::port::cells_push(tb, 0);
+    crate::port::cells_push(tb, 0);
     return k;
 }
 pub(crate) fn tb_cell_add(mut tc: &mut crate::port::Cells, row: i32, col: i32, rowspan: i32, colspan: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
@@ -772,7 +785,48 @@ pub(crate) fn tb_overlap(tb: &mut crate::port::Cells, a: i32, b: i32) -> bool {
     let by1: i32 = crate::port::cells_at(tb, (b * TBS) + 4);
     return ((tb_min(ax1, bx1) - tb_max(ax0, bx0)) > POS_TOL) && ((tb_min(ay1, by1) - tb_max(ay0, by0)) > POS_TOL);
 }
-pub(crate) fn tb_select(mut tb: &mut crate::port::Cells, t0: i32, mut so: &mut crate::port::Cells, mut vals: &mut crate::port::Cells, mut sa: &mut crate::port::Cells) -> i32 {
+pub fn tb_hint_iou(tb: &mut crate::port::Cells, i: i32, grg: &mut crate::port::Cells) -> i32 {
+    // The best IoU, per mille, of candidate i's box with an OCR `table-hint` region of its page (`grg` kind 3, D228); 0 when none.
+    let n: i32 = grg_count(grg);
+    let b: i32 = i * TBS;
+    let mut r: i32 = 0;
+    let mut best: i32 = 0;
+    let mut v: i32 = 0;
+    while r < n {
+        if (grg_get(grg, r, 5) == 3) && (grg_get(grg, r, 0) == crate::port::cells_at(tb, b)) {
+            v = tt_iou(crate::port::cells_at(tb, b + 1), crate::port::cells_at(tb, b + 2), crate::port::cells_at(tb, b + 3), crate::port::cells_at(tb, b + 4), grg_get(grg, r, 1), grg_get(grg, r, 2), grg_get(grg, r, 3), grg_get(grg, r, 4));
+            if v > best {
+                best = v;
+            }
+        }
+        r += 1;
+    }
+    return best;
+}
+pub fn tb_tie_bonus(tb: &mut crate::port::Cells, i: i32, t0: i32, n: i32, grg: &mut crate::port::Cells) -> i32 {
+    // D225 case 7: OCR's table blocks break ties and only ties. Candidate i gets a bonus that puts it first when it overlaps a candidate
+    // within `tb-tie` of its score and has the higher IoU with a table hint.
+    if grg_count(grg) == 0 {
+        return 0;
+    }
+    let mut j: i32 = t0;
+    let mut d: i32 = 0;
+    while j < n {
+        if j != i {
+            if tb_overlap(tb, i, j) {
+                d = tb_abs(crate::port::cells_at(tb, (i * TBS) + 6) - crate::port::cells_at(tb, (j * TBS) + 6));
+                if d <= TB_TIE {
+                    if tb_hint_iou(tb, i, grg) > tb_hint_iou(tb, j, grg) {
+                        return TB_TIE + 1;
+                    }
+                }
+            }
+        }
+        j += 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_select(mut tb: &mut crate::port::Cells, t0: i32, mut so: &mut crate::port::Cells, mut vals: &mut crate::port::Cells, mut sa: &mut crate::port::Cells, grg: &mut crate::port::Cells) -> i32 {
     // Of the candidates t0.. of one page keep, best score first, those that overlap no better one, and
     // leave them in tb in the order of their tops. Answers how many are kept.
     let n: i32 = tb_rows_of(tb, TBS);
@@ -784,7 +838,7 @@ pub(crate) fn tb_select(mut tb: &mut crate::port::Cells, t0: i32, mut so: &mut c
     crate::port::cells_drop(vals, 0);
     while i < n {
         crate::port::cells_push(so, i - t0);
-        crate::port::cells_push(vals, 0 - crate::port::cells_at(tb, (i * TBS) + 6));
+        crate::port::cells_push(vals, 0 - (crate::port::cells_at(tb, (i * TBS) + 6) + tb_tie_bonus(tb, i, t0, n, grg)));
         crate::port::cells_push(vals, i);
         i += 1;
     }
@@ -890,6 +944,14 @@ pub(crate) fn tb_put_profile(mut text: &mut crate::port::Cells, prof: i32) -> i3
         text_append_cp(text, 100);
         text_append_cp(text, 101);
         text_append_cp(text, 100);
+    }
+    if prof == PF_STRUCT {
+        text_append_cp(text, 115);
+        text_append_cp(text, 116);
+        text_append_cp(text, 114);
+        text_append_cp(text, 117);
+        text_append_cp(text, 99);
+        text_append_cp(text, 116);
     }
     if prof == PF_WHITESPACE {
         text_append_cp(text, 119);
@@ -1157,6 +1219,15 @@ pub fn tb_emit(tb: &mut crate::port::Cells, k: i32, parent: i32, wd: &mut crate:
     node_add_src(nodes, t, sr_infer());
     if prof == PF_RULED {
         node_add_src(nodes, t, sr_vector());
+    }
+    if (prof == PF_STRUCT) || ((crate::port::cells_at(tb, b + 24) & 1) != 0) {
+        node_add_src(nodes, t, sr_struct());
+    }
+    if (crate::port::cells_at(tb, b + 24) & 2) != 0 {
+        node_add_flag(nodes, t, fl_tag_span_conflict());
+    }
+    if (crate::port::cells_at(tb, b + 24) & 4) != 0 {
+        node_add_flag(nodes, t, fl_struct_disagree());
     }
     let s: i32 = crate::port::cells_len(text);
     tb_put_profile(text, prof);
@@ -2930,16 +3001,444 @@ pub(crate) fn tb_header_spans(tb: &mut crate::port::Cells, k: i32, mut tc: &mut 
     }
     return 0;
 }
-pub(crate) fn tb_finish(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, l0: i32, l1: i32, mut tq: &mut crate::port::Cells) -> i32 {
-    // What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows, the footer,
-    // which cells are header cells (`col` in the header, `row` in the footer), each cell's alignment, the caption.
+pub(crate) fn tb_prose_role(role: i32) -> i32 {
+    // 1 for the block roles that say "this is text, not a table": P, H, Hn, L, LI, Lbl and LBody.
+    if (role == 15) || ((role == 16) || ((role == 17) || ((role == 19) || ((role == 20) || ((role == 21) || (role == 22)))))) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_veto(mut tb: &mut crate::port::Cells, t0: i32, wd: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, mi: &mut crate::port::Cells) -> i32 {
+    // D225 case 6: a tree trusted to `tb-tag-veto-trust` that gives every word of a whitespace candidate to a P, L, LI or H element
+    // says it is not a table: the candidate's score goes down by `tb-tag-veto`. Only whitespace: it alone has no rule or fill to vouch for it.
+    let n: i32 = tb_rows_of(tb, TBS);
+    let mut t: i32 = t0;
+    let mut c: i32 = 0;
+    let mut j: i32 = 0;
+    let mut ok: i32 = 1;
+    let mut words: i32 = 0;
+    let mut s: i32 = 0;
+    while t < n {
+        if crate::port::cells_at(tb, (t * TBS) + 5) == PF_WHITESPACE {
+            ok = 1;
+            words = 0;
+            c = crate::port::cells_at(tb, (t * TBS) + 9);
+            while (ok == 1) && (c < (crate::port::cells_at(tb, (t * TBS) + 9) + crate::port::cells_at(tb, (t * TBS) + 10))) {
+                j = 0;
+                while (ok == 1) && (j < crate::port::cells_at(tc, (c * TCS) + 9)) {
+                    s = tt_owner_el(sc, gl, mk, mi, wd_get(wd, crate::port::cells_at(tw, crate::port::cells_at(tc, (c * TCS) + 8) + j), wf_gfirst()));
+                    if s == -1 {
+                        ok = 0;
+                    } else if tb_prose_role(tt_block_role(se, s)) == 0 {
+                        ok = 0;
+                    }
+                    words += 1;
+                    j += 1;
+                }
+                c += 1;
+            }
+            if (ok == 1) && (words > 0) {
+                crate::port::cells_set(tb, (t * TBS) + 6, tb_max(0, crate::port::cells_at(tb, (t * TBS) + 6) - TB_TAG_VETO));
+            }
+        }
+        t += 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_struct_cand(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, p: i32, w0: i32, w1: i32, tg: &mut crate::port::Cells, k: i32, ta: &mut crate::port::Cells, wo: &mut crate::port::Cells, trust: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, keep: i32) -> i32 {
+    // D225 case 3: a confirmed tagged table that no geometry found, as a candidate of its own: its cells are the tagged cells with their
+    // text boxes grown to their row and column bands, scored 850 x trust / 1000, and refused as any text candidate is (`tb-score`: prose in
+    // a `Table` is a layout table). `keep` 0 only asks whether it would be refused: the candidate is dropped again. Answers the candidate, -1
+    // when refused or dropped.
+    let nr: i32 = tt_get(tg, k, 2);
+    let nc: i32 = tt_get(tg, k, 3);
+    let cf: i32 = tt_get(tg, k, 4);
+    let ce: i32 = cf + tt_get(tg, k, 5);
+    let bx0: i32 = tt_get(tg, k, 6);
+    let by0: i32 = tt_get(tg, k, 7);
+    let bx1: i32 = tt_get(tg, k, 8);
+    let by1: i32 = tt_get(tg, k, 9);
+    let nt: i32 = tb_rows_of(tb, TBS);
+    let c0: i32 = tb_rows_of(tc, TCS);
+    let wl0: i32 = crate::port::cells_len(tw);
+    let xl0: i32 = crate::port::cells_len(tx);
+    let nct: i32 = tt_get(tg, k, 5);
+    let mut i: i32 = 0;
+    let mut c: i32 = 0;
+    let mut col: i32 = 0;
+    let mut row: i32 = 0;
+    let mut w: i32 = 0;
+    let mut t: i32 = 0;
+    let mut hi: i32 = 0;
+    if (nc < 2) || (nr < 2) {
+        return -2;
+    }
+    crate::port::cells_drop(ws, 0);
+    while i < (nc + nr) {
+        crate::port::cells_push(ws, 2000000000);
+        crate::port::cells_push(ws, -2000000000);
+        i += 1;
+    }
+    c = cf;
+    while c < ce {
+        if tt_cget(ta, c, 6) > 0 {
+            col = tt_cget(ta, c, 2);
+            row = tt_cget(ta, c, 1);
+            if (tt_cget(ta, c, 4) == 1) && (col < nc) {
+                crate::port::cells_set(ws, 2 * col, tb_min(crate::port::cells_at(ws, 2 * col), tt_cget(ta, c, 7)));
+                crate::port::cells_set(ws, (2 * col) + 1, tb_max(crate::port::cells_at(ws, (2 * col) + 1), tt_cget(ta, c, 9)));
+            }
+            if (tt_cget(ta, c, 3) == 1) && (row < nr) {
+                crate::port::cells_set(ws, (2 * nc) + (2 * row), tb_min(crate::port::cells_at(ws, (2 * nc) + (2 * row)), tt_cget(ta, c, 8)));
+                crate::port::cells_set(ws, ((2 * nc) + (2 * row)) + 1, tb_max(crate::port::cells_at(ws, ((2 * nc) + (2 * row)) + 1), tt_cget(ta, c, 10)));
+            }
+        }
+        c += 1;
+    }
+    i = 0;
+    while i < nc {
+        if crate::port::cells_at(ws, 2 * i) > crate::port::cells_at(ws, (2 * i) + 1) {
+            crate::port::cells_set(ws, 2 * i, bx0 + (((bx1 - bx0) * i) / nc));
+            crate::port::cells_set(ws, (2 * i) + 1, bx0 + (((bx1 - bx0) * (i + 1)) / nc));
+        }
+        i += 1;
+    }
+    i = 0;
+    while i < nr {
+        if crate::port::cells_at(ws, (2 * nc) + (2 * i)) > crate::port::cells_at(ws, ((2 * nc) + (2 * i)) + 1) {
+            crate::port::cells_set(ws, (2 * nc) + (2 * i), by0 + (((by1 - by0) * i) / nr));
+            crate::port::cells_set(ws, ((2 * nc) + (2 * i)) + 1, by0 + (((by1 - by0) * (i + 1)) / nr));
+        }
+        i += 1;
+    }
+    c = cf;
+    while c < ce {
+        col = tt_cget(ta, c, 2);
+        row = tt_cget(ta, c, 1);
+        hi = tb_min(nc - 1, (col + tt_cget(ta, c, 4)) - 1);
+        i = tb_min(nr - 1, (row + tt_cget(ta, c, 3)) - 1);
+        tb_cell_add(tc, row, col, tt_cget(ta, c, 3), tt_cget(ta, c, 4), crate::port::cells_at(ws, 2 * col), crate::port::cells_at(ws, (2 * nc) + (2 * row)), crate::port::cells_at(ws, (2 * hi) + 1), crate::port::cells_at(ws, ((2 * nc) + (2 * i)) + 1));
+        c += 1;
+    }
+    crate::port::cells_drop(pr, 0);
+    w = w0;
+    while w < w1 {
+        c = crate::port::cells_at(wo, w - w0);
+        if (c >= cf) && (c < ce) {
+            tb_pair_add(pr, wd, c0 + (c - cf), w);
+        }
+        w += 1;
+    }
+    tb_flush_pairs(pr, so, wd, tc, tw);
+    t = tb_add(tb, p, bx0, by0, bx1, by1, PF_STRUCT, (850 * trust) / 1000, nr, nc, c0, nct);
+    if (keep == 0) || (tb_score(tb, t, wd, et, tc, tw) == 0) {
+        hi = tb_score(tb, t, wd, et, tc, tw);
+        tb_reject(tb, tc, tw, tx, nt, c0, wl0, xl0);
+        if hi == 0 {
+            return -2;
+        }
+        return -1;
+    }
+    crate::port::cells_set(tb, (t * TBS) + 16, crate::port::cells_len(tx));
+    crate::port::cells_set(tb, (t * TBS) + 17, nc + 1);
+    crate::port::cells_push(tx, bx0);
+    i = 1;
+    while i < nc {
+        crate::port::cells_push(tx, tb_max(crate::port::cells_at(tx, crate::port::cells_len(tx) - 1), (crate::port::cells_at(ws, (2 * (i - 1)) + 1) + crate::port::cells_at(ws, 2 * i)) / 2));
+        i += 1;
+    }
+    crate::port::cells_push(tx, tb_max(bx1, crate::port::cells_at(tx, crate::port::cells_len(tx) - 1)));
+    crate::port::cells_set(tb, (t * TBS) + 24, 1);
+    crate::port::cells_set(tb, (t * TBS) + 25, k);
+    crate::port::cells_set(tb, (t * TBS) + 26, tt_get(tg, k, 10));
+    crate::port::cells_set(tb, (t * TBS) + 27, tt_get(tg, k, 11));
+    return t;
+}
+pub(crate) fn tb_tags(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, p: i32, w0: i32, w1: i32, grl: &mut crate::port::Cells, q0: i32, q1: i32, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, mi: &mut crate::port::Cells, mut tg: &mut crate::port::Cells, mut ta: &mut crate::port::Cells, mut wo: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut acc: &mut crate::port::Cells, mut tv: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, t0: i32, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells) -> i32 {
+    // The tagged tables of page p against the candidates t0.. that `tb-select` kept (see the head of this section): each is checked and
+    // scored, recorded in `tv`, and, by its verdict, attached to the candidate it overlaps or made a candidate. Answers the tagged tables.
+    let trust: i32 = tg_trust(ss);
+    let mut r#use: i32 = 0;
+    let nt0: i32 = tb_rows_of(tb, TBS);
+    let mut nt: i32 = 0;
+    let mut k: i32 = 0;
+    let mut g: i32 = 0;
+    let mut geo: i32 = 0;
+    let mut owned: i32 = 0;
+    let mut agree: i32 = 0;
+    let mut keep: i32 = 0;
+    let mut v: i32 = 0;
+    if trust >= TB_TAG_TRUST {
+        r#use = 1;
+    }
+    nt = tt_grids(se, ss, p, tg, ta, ws);
+    if nt == 0 {
+        return 0;
+    }
+    tt_words(wd, w0, w1, se, sc, gl, mk, mi, tg, ta, wo);
+    while k < nt {
+        owned = tt_get(tg, k, 14);
+        g = tt_geo_tb(tg, k, tb, t0, nt0);
+        if g >= 0 {
+            tt_fold(tg, (k * 24) + 6, crate::port::cells_at(tb, (g * TBS) + 1), crate::port::cells_at(tb, (g * TBS) + 2), crate::port::cells_at(tb, (g * TBS) + 3), crate::port::cells_at(tb, (g * TBS) + 4));
+        }
+        tt_checks(tg, k, ta, wd, w0, w1, wo, grl, q0, q1, ws);
+        geo = -1;
+        if (g >= 0) && (owned > 0) {
+            agree = tt_geo_map(tg, k, ta, wo, w0, tb, g, tc, tw, ws);
+            if agree >= 0 {
+                geo = tt_pm(agree, owned);
+            }
+        }
+        tt_set(tg, k, 12, g);
+        tt_set(tg, k, 21, geo);
+        tt_score(tg, k, acc);
+        v = tt_get(tg, k, 10);
+        if (v == 1) && ((g < 0) && (owned > 0)) {
+            keep = 0;
+            if (r#use == 1) && (trust >= TB_TAG_WIN) {
+                keep = 1;
+            }
+            agree = tb_struct_cand(wd, et, p, w0, w1, tg, k, ta, wo, trust, tb, tc, tw, tx, pr, so, ws, keep);
+            if agree == -2 {
+                tt_set(tg, k, 10, 3);
+                v = 3;
+            }
+        }
+        if (r#use == 0) && (v == 1) {
+            tt_set(tg, k, 10, 2);
+            v = 2;
+        }
+        if (r#use == 1) && (v == 1) {
+            tt_or(tg, k, 15, 4);
+        }
+        if (r#use == 1) && ((v == 1) && ((g >= 0) && ((geo >= 0) && (geo < TB_GEO_AGREE)))) {
+            tt_set(tg, k, 10, 2);
+            crate::port::cells_set(tb, (g * TBS) + 24, crate::port::cells_at(tb, (g * TBS) + 24) | 4);
+        }
+        if (r#use == 1) && (g >= 0) {
+            crate::port::cells_set(tb, (g * TBS) + 25, k);
+            crate::port::cells_set(tb, (g * TBS) + 26, tt_get(tg, k, 10));
+            crate::port::cells_set(tb, (g * TBS) + 27, tt_get(tg, k, 11));
+        }
+        tt_record(tg, k, trust, tv);
+        k += 1;
+    }
+    return nt;
+}
+pub(crate) fn tb_tag_map(tb: &mut crate::port::Cells, k: i32, tg: &mut crate::port::Cells, ta: &mut crate::port::Cells, wo: &mut crate::port::Cells, w0: i32, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
+    // Fill ws with the maps of candidate k's tagged table onto it (`tt-geo-map`: a candidate row for each tagged row, then a column for each
+    // tagged column); for a table made of the tags the identity. Answers 1 when ws holds them, 0 when it does not.
+    let b: i32 = k * TBS;
+    let tgi: i32 = crate::port::cells_at(tb, b + 25);
+    let mut i: i32 = 0;
+    if tgi < 0 {
+        return 0;
+    }
+    if crate::port::cells_at(tb, b + 5) == PF_STRUCT {
+        crate::port::cells_drop(ws, 0);
+        while i < tt_get(tg, tgi, 2) {
+            crate::port::cells_push(ws, i);
+            i += 1;
+        }
+        i = 0;
+        while i < tt_get(tg, tgi, 3) {
+            crate::port::cells_push(ws, i);
+            i += 1;
+        }
+        return 1;
+    }
+    if tt_geo_map(tg, tgi, ta, wo, w0, tb, k, tc, tw, ws) < 0 {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn tb_tag_head(mut tb: &mut crate::port::Cells, k: i32, tg: &mut crate::port::Cells, ta: &mut crate::port::Cells, wo: &mut crate::port::Cells, w0: i32, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
+    // The head rows the tags give candidate k: the tagged head when the tags are confirmed and map the candidate's first rows one to one,
+    // or when they are partial and have as many rows as the candidate (case 4); a table made of the tags has its own. 0 when not.
+    let b: i32 = k * TBS;
+    let tgi: i32 = crate::port::cells_at(tb, b + 25);
+    let nrows: i32 = crate::port::cells_at(tb, b + 7);
+    let mut r: i32 = 0;
+    if tgi < 0 {
+        return 0;
+    }
+    let nh: i32 = tt_get(tg, tgi, 13);
+    let fg: i32 = tt_get(tg, tgi, 15);
+    let v: i32 = tt_get(tg, tgi, 10);
+    if (nh <= 0) || (nh >= nrows) {
+        return 0;
+    }
+    if v == 3 {
+        return 0;
+    }
+    if crate::port::cells_at(tb, b + 5) == PF_STRUCT {
+        return nh;
+    }
+    if (fg & 4) != 0 {
+        if tb_tag_map(tb, k, tg, ta, wo, w0, tc, tw, ws) == 0 {
+            return 0;
+        }
+        while r < nh {
+            if crate::port::cells_at(ws, r) != r {
+                return 0;
+            }
+            r += 1;
+        }
+        crate::port::cells_set(tb, b + 24, crate::port::cells_at(tb, b + 24) | 1);
+        return nh;
+    }
+    if (v == 2) && (tt_get(tg, tgi, 2) == nrows) {
+        crate::port::cells_set(tb, b + 24, crate::port::cells_at(tb, b + 24) | 1);
+        return nh;
+    }
+    return 0;
+}
+pub fn tb_tag_span(mut tb: &mut crate::port::Cells, k: i32, mut tc: &mut crate::port::Cells, cfirst: i32, cend: i32, gr: i32, gc: i32, rs: i32, cs: i32) -> i32 {
+    // A tagged cell that spans rs rows and cs columns, at the candidate's cell (gr, gc). A ruled table keeps its lattice's spans: when a
+    // cell of the block is another cell than the one at its corner a rule closes the edge, and the table is flagged (`tag-span-conflict`).
+    // Any other profile takes the tagged span when every other slot of the block is a plain, empty cell: they are absorbed.
+    let b: i32 = k * TBS;
+    let e: i32 = tb_cell_at(tc, cfirst, cend, gr, gc);
+    let mut rr: i32 = 0;
+    let mut cc: i32 = 0;
+    let mut n: i32 = 0;
+    let mut ok: i32 = 1;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    if e < 0 {
+        return 0;
+    }
+    if (crate::port::cells_at(tc, e * TCS) != gr) || (crate::port::cells_at(tc, (e * TCS) + 1) != gc) {
+        return 0;
+    }
+    if crate::port::cells_at(tb, b + 5) == PF_RULED {
+        while rr < rs {
+            cc = 0;
+            while cc < cs {
+                n = tb_cell_at(tc, cfirst, cend, gr + rr, gc + cc);
+                if (n >= 0) && (n != e) {
+                    crate::port::cells_set(tb, b + 24, crate::port::cells_at(tb, b + 24) | 2);
+                }
+                cc += 1;
+            }
+            rr += 1;
+        }
+        return 0;
+    }
+    if (crate::port::cells_at(tc, (e * TCS) + 2) != 1) || (crate::port::cells_at(tc, (e * TCS) + 3) != 1) {
+        return 0;
+    }
+    x1 = crate::port::cells_at(tc, (e * TCS) + 6);
+    y1 = crate::port::cells_at(tc, (e * TCS) + 7);
+    while (rr < rs) && (ok == 1) {
+        cc = 0;
+        while (cc < cs) && (ok == 1) {
+            if (rr > 0) || (cc > 0) {
+                n = tb_cell_at(tc, cfirst, cend, gr + rr, gc + cc);
+                if n < 0 {
+                    ok = 0;
+                } else if (crate::port::cells_at(tc, n * TCS) != (gr + rr)) || ((crate::port::cells_at(tc, (n * TCS) + 1) != (gc + cc)) || ((crate::port::cells_at(tc, (n * TCS) + 2) != 1) || ((crate::port::cells_at(tc, (n * TCS) + 3) != 1) || (crate::port::cells_at(tc, (n * TCS) + 9) > 0)))) {
+                    ok = 0;
+                }
+            }
+            cc += 1;
+        }
+        rr += 1;
+    }
+    if ok == 0 {
+        return 0;
+    }
+    rr = 0;
+    while rr < rs {
+        cc = 0;
+        while cc < cs {
+            if (rr > 0) || (cc > 0) {
+                n = tb_cell_at(tc, cfirst, cend, gr + rr, gc + cc);
+                crate::port::cells_set(tc, (n * TCS) + 12, crate::port::cells_at(tc, (n * TCS) + 12) | 1);
+                x1 = tb_max(x1, crate::port::cells_at(tc, (n * TCS) + 6));
+                y1 = tb_max(y1, crate::port::cells_at(tc, (n * TCS) + 7));
+            }
+            cc += 1;
+        }
+        rr += 1;
+    }
+    crate::port::cells_set(tc, (e * TCS) + 2, rs);
+    crate::port::cells_set(tc, (e * TCS) + 3, cs);
+    crate::port::cells_set(tc, (e * TCS) + 6, x1);
+    crate::port::cells_set(tc, (e * TCS) + 7, y1);
+    crate::port::cells_set(tb, b + 24, crate::port::cells_at(tb, b + 24) | 1);
+    return 1;
+}
+pub(crate) fn tb_tag_rest(mut tb: &mut crate::port::Cells, k: i32, tg: &mut crate::port::Cells, ta: &mut crate::port::Cells, wo: &mut crate::port::Cells, w0: i32, mut tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
+    // What else the confirmed tags give candidate k (cases 1 and 2, and a table made of the tags): the tagged spans (`tb-tag-span`) and the
+    // cells of `TH` with Scope Row, which are row headers.
+    let b: i32 = k * TBS;
+    let tgi: i32 = crate::port::cells_at(tb, b + 25);
+    let cfirst: i32 = crate::port::cells_at(tb, b + 9);
+    let cend: i32 = cfirst + crate::port::cells_at(tb, b + 10);
+    let mut c: i32 = 0;
+    let mut e: i32 = 0;
+    let mut gr: i32 = 0;
+    let mut gc: i32 = 0;
+    let mut nr: i32 = 0;
+    let mut cf: i32 = 0;
+    let mut ce: i32 = 0;
+    if tgi < 0 {
+        return 0;
+    }
+    if tt_get(tg, tgi, 10) == 3 {
+        return 0;
+    }
+    if ((tt_get(tg, tgi, 15) & 4) == 0) && (crate::port::cells_at(tb, b + 5) != PF_STRUCT) {
+        return 0;
+    }
+    if tb_tag_map(tb, k, tg, ta, wo, w0, tc, tw, ws) == 0 {
+        return 0;
+    }
+    nr = tt_get(tg, tgi, 2);
+    cf = tt_get(tg, tgi, 4);
+    ce = cf + tt_get(tg, tgi, 5);
+    c = cf;
+    while c < ce {
+        gr = crate::port::cells_at(ws, tt_cget(ta, c, 1));
+        gc = crate::port::cells_at(ws, nr + tt_cget(ta, c, 2));
+        if (gr >= 0) && (gc >= 0) {
+            if (tt_cget(ta, c, 3) > 1) || (tt_cget(ta, c, 4) > 1) {
+                tb_tag_span(tb, k, tc, cfirst, cend, gr, gc, tt_cget(ta, c, 3), tt_cget(ta, c, 4));
+            }
+            if (tt_cget(ta, c, 5) & 4) != 0 {
+                e = tb_cell_at(tc, cfirst, cend, gr, gc);
+                if e >= 0 {
+                    if crate::port::cells_at(tc, (e * TCS) + 10) == 0 {
+                        crate::port::cells_set(tc, (e * TCS) + 10, 2);
+                        crate::port::cells_set(tb, b + 24, crate::port::cells_at(tb, b + 24) | 1);
+                    }
+                }
+            }
+        }
+        c += 1;
+    }
+    return 0;
+}
+pub(crate) fn tb_finish(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, l0: i32, l1: i32, mut tq: &mut crate::port::Cells, tg: &mut crate::port::Cells, ta: &mut crate::port::Cells, wo: &mut crate::port::Cells, w0: i32, mut ws: &mut crate::port::Cells) -> i32 {
+    // What the cells of table k say once they are placed (SPEC 10.5, 10.10): the header rows (the tags', when they are confirmed and agree,
+    // D225), the footer, which cells are header cells (`col` in the header, `row` in the footer and for the tags' row headers), the tagged
+    // spans, each cell's alignment, the caption.
     let b: i32 = k * TBS;
     let nrows: i32 = crate::port::cells_at(tb, b + 7);
     let cfirst: i32 = crate::port::cells_at(tb, b + 9);
     let cend: i32 = cfirst + crate::port::cells_at(tb, b + 10);
-    let nhead: i32 = tb_head_rows(tb, k, wd, et, tc, tw);
-    let nfoot: i32 = tb_foot_rows(tb, k, nhead, wd, et, tc, tw);
+    let nht: i32 = tb_tag_head(tb, k, tg, ta, wo, w0, tc, tw, ws);
+    let mut nhead: i32 = 0;
+    let mut nfoot: i32 = 0;
     let mut c: i32 = cfirst;
+    if nht > 0 {
+        nhead = nht;
+    } else {
+        nhead = tb_head_rows(tb, k, wd, et, tc, tw);
+    }
+    nfoot = tb_foot_rows(tb, k, nhead, wd, et, tc, tw);
     crate::port::cells_set(tb, b + 11, nhead);
     crate::port::cells_set(tb, b + 12, nfoot);
     while c < cend {
@@ -2955,15 +3454,20 @@ pub(crate) fn tb_finish(mut tb: &mut crate::port::Cells, k: i32, wd: &mut crate:
     if crate::port::cells_at(tb, b + 5) != PF_RULED {
         tb_header_spans(tb, k, tc);
     }
+    tb_tag_rest(tb, k, tg, ta, wo, w0, tc, tw, ws);
     tb_aligns(tb, k, wd, tc, tw);
     tb_caption(tb, k, wd, et, ln, l0, l1, tq);
     return 0;
 }
-pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells) -> i32 {
+pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, grg: &mut crate::port::Cells, mut g0: &mut crate::port::Cells, mut g1: &mut crate::port::Cells, mut g2: &mut crate::port::Cells, mut g3: &mut crate::port::Cells, mut g4: &mut crate::port::Cells, mut g5: &mut crate::port::Cells, mut tv: &mut crate::port::Cells) -> i32 {
     // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
     // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
     // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
-    // row extents (one name each in the calls below). Answers the number of tables.
+    // row extents (one name each in the calls below). `gl mk se sc ss` are the text layer's glyphs and marks and the tagged tree's elements,
+    // marked-content references and document row (P5.5: `ss` empty and the rest unread for a document with no tree), `grg` the graphic
+    // regions (OCR's table hints, D228: empty until P7.G), `g0..g5` the tagged tables' scratch (the marks' join, the page's grids and cells,
+    // the words' cells, a work area, three cells for the score), `tv` the verdicts of every tagged table (answers to the dump's `tb`).
+    // Answers the number of tables.
     let nw: i32 = wd_count(wd);
     let nl: i32 = ln_count(ln);
     let nq: i32 = grl_count(grl);
@@ -2978,8 +3482,13 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
     let mut ui: i32 = 0;
     let mut uj: i32 = 0;
     let mut t0: i32 = 0;
+    let mut nk: i32 = 0;
     let mut k: i32 = 0;
     crate::port::cells_drop(tb, 0);
+    crate::port::cells_drop(tv, 0);
+    if crate::port::cells_len(se) > 0 {
+        tt_index(mk, sc, g0);
+    }
     crate::port::cells_drop(tc, 0);
     crate::port::cells_drop(tw, 0);
     crate::port::cells_drop(tq, 0);
@@ -3025,10 +3534,18 @@ pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et
                 tb_shaded_page(s2, p, wd, et, wi, wj, s8, s9, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
             }
             tb_whitespace_page(p, wd, et, wi, wj, s10, s11, s12, s13, s14, s15, s16, s6, s17, s18, s7, s3, tb, tc, tw, tx);
-            tb_select(tb, t0, s3, s9, s8);
+            if tg_trust(ss) >= TB_TAG_VETO_TRUST {
+                tb_veto(tb, t0, wd, tc, tw, se, sc, gl, mk, g0);
+            }
+            tb_select(tb, t0, s3, s9, s8, grg);
+            nk = tb_rows_of(tb, TBS);
+            tb_tags(wd, et, p, wi, wj, grl, qi, qj, se, sc, ss, gl, mk, g0, g1, g2, g3, g4, g5, tv, tb, t0, tc, tw, tx, s7, s3);
+            if tb_rows_of(tb, TBS) > nk {
+                tb_select(tb, t0, s3, s9, s8, grg);
+            }
             k = t0;
             while k < tb_rows_of(tb, TBS) {
-                tb_finish(tb, k, wd, et, tc, tw, ln, li, lj, tq);
+                tb_finish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4);
                 k += 1;
             }
             tb_claim(tb, t0, ln, li, lj);

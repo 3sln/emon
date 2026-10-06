@@ -63,6 +63,7 @@ use crate::emon::pdfdoc::*;
 use crate::emon::pdfannot::pa_run;
 use crate::emon::pdfmeta::pm_run;
 use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
+use crate::emon::tagtable::tt_emit;
 use crate::emon::pdfx::px_index_build;
 use crate::emon::gfuse::{gf_doc, gfx_mode};
 use crate::emon::player::pl_emit_gfx;
@@ -874,7 +875,7 @@ fn finish_raster(d: RasterDoc, opts: &Options) -> Outcome {
     let (mut s5, mut s6, mut s7, mut s8, mut s9) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s10, mut s11, mut s12, mut s13, mut s14) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s15, mut s16, mut s17, mut s18) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    tb_build(&mut fw, &mut fl, &mut et, &mut grl, &mut gfl, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
+    tb_build(&mut fw, &mut fl, &mut et, &mut grl, &mut gfl, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages, &mut gl, &mut mk, &mut Cells::new(), &mut Cells::new(), &mut ss, &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new());
     let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
@@ -1128,6 +1129,9 @@ struct PdfDoc {
     lb: Cells,
     ol: Cells,
     ss: Cells,
+    // the tagged tree's elements and marked-content references (P5.5: the table stage verifies the tags against the page)
+    se: Cells,
+    sc: Cells,
     plan: Cells,
     mask: Cells,
     loc: Cells,
@@ -1265,7 +1269,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pg, txt, md, lb, ol, ss, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, grl, gfl, ift, an, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, info }))
 }
 
 // One page's unit (P7.U, D195): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
@@ -1285,7 +1289,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut grl, mut gfl, mut ift, mut an, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1314,7 +1318,7 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
             return Outcome::Failed(Error::Internal(format!("pl-check {}", c)));
         }
     }
-    let evidence = if opts.keep_evidence {
+    let mut evidence = if opts.keep_evidence {
         if fused {
             // the dump, VERSION "2" (SPEC 9.7): the evidence's arrays, then the layer's; the set-aside list is the text layer's and the dropped ghosts'
             let mut fad = fa.clone();
@@ -1353,7 +1357,18 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
     let (mut s5, mut s6, mut s7, mut s8, mut s9) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s10, mut s11, mut s12, mut s13, mut s14) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut s15, mut s16, mut s17, mut s18) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    tb_build(&mut fw, &mut fl, &mut et, &mut grl, &mut gfl, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages);
+    // the tagged tables' scratch and verdicts (P5.5, `emon.tagtable`)
+    let (mut g0, mut g1, mut g2, mut g3, mut g4, mut g5, mut tv) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    tb_build(&mut fw, &mut fl, &mut et, &mut grl, &mut gfl, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages, &mut gl, &mut mk, &mut se, &mut sc, &mut ss, &mut Cells::new(), &mut g0, &mut g1, &mut g2, &mut g3, &mut g4, &mut g5, &mut tv);
+    if let Some(e) = evidence.as_mut() {
+        // P5.5: a document with tagged tables adds their verdicts to its evidence dump, as `tb`
+        if cells_len(&tv) > 0 && e.ends_with('}') {
+            e.pop();
+            e.push_str(",\"tb\":");
+            tt_emit(e, &mut tv);
+            e.push('}');
+        }
+    }
     let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     // the column stage's scratch (kin/columns.kin), and its debug log (`dbg`: one row of eight per join decision)
     let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());

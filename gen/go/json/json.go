@@ -292,7 +292,7 @@ func JsBitsFlags(t *strings.Builder, pr int32, bits int32) int32 {
 	var k int32 = 0
 	var bit int32 = 0
 	port.TextAscii(t, "[")
-	for b < 7 {
+	for b < 9 {
 		bit = (1) << uint(b)
 		if (bits & bit) != 0 {
 			JsFsep(t, pr, k)

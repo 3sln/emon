@@ -209,7 +209,9 @@
    [fl-reconstructed 8 "reconstructed"]
    [fl-dpi-unknown 16 "dpi-unknown"]
    [fl-rotated 32 "rotated"]
-   [fl-vertical 64 "vertical"]])
+   [fl-vertical 64 "vertical"]
+   [fl-struct-disagree 128 "struct-disagree"]
+   [fl-tag-span-conflict 256 "tag-span-conflict"]])
 
 ;; A span's `style` bits, stored in its `sub`.
 (defenum ^:pub sy

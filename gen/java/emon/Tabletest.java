@@ -235,10 +235,23 @@ public final class Tabletest {
         emon.Port.Cells gpts = emon.Port.newCells();
         emon.Port.Cells gmk = emon.Port.newCells();
         emon.Port.Cells gim = emon.Port.newCells();
+        emon.Port.Cells t0e = emon.Port.newCells();
+        emon.Port.Cells t1e = emon.Port.newCells();
+        emon.Port.Cells t2e = emon.Port.newCells();
+        emon.Port.Cells t3e = emon.Port.newCells();
+        emon.Port.Cells t4e = emon.Port.newCells();
+        emon.Port.Cells t5e = emon.Port.newCells();
+        emon.Port.Cells t6e = emon.Port.newCells();
+        emon.Port.Cells t7e = emon.Port.newCells();
+        emon.Port.Cells t8e = emon.Port.newCells();
+        emon.Port.Cells t9e = emon.Port.newCells();
+        emon.Port.Cells t10e = emon.Port.newCells();
+        emon.Port.Cells t11e = emon.Port.newCells();
+        emon.Port.Cells t12e = emon.Port.newCells();
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
         Gfuse.gfDoc(pa, gpts, gmk, gim, 1, Gfuse.gfxMode(), grl, gfl, cand);
-        Table.tbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Table.tbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
         Columns.lcCopy(ln, lt);
         Para.paBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
         ttBrief(t, nodes, attrs, text);
@@ -373,9 +386,10 @@ public final class Tabletest {
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "caption: well formed");
         emon.Testport.assertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph");
     }
-    public static int ttGolden(byte[] pdf, StringBuilder t) {
+    public static int ttGolden(byte[] pdf, StringBuilder t, StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
-        // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`.
+        // code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the
+        // verdicts of its tables, as the evidence dump's `tb` writes them, are `tvt`.
         emon.Port.Cells ar = emon.Port.newCells();
         emon.Port.Cells dc = emon.Port.newCells();
         emon.Port.Cells a = emon.Port.newCells();
@@ -453,6 +467,34 @@ public final class Tabletest {
         emon.Port.Cells grl = emon.Port.newCells();
         emon.Port.Cells gfl = emon.Port.newCells();
         emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells t5e = emon.Port.newCells();
+        emon.Port.Cells t6e = emon.Port.newCells();
+        emon.Port.Cells t7e = emon.Port.newCells();
+        emon.Port.Cells t8e = emon.Port.newCells();
+        emon.Port.Cells t9e = emon.Port.newCells();
+        emon.Port.Cells t10e = emon.Port.newCells();
+        emon.Port.Cells t11e = emon.Port.newCells();
+        emon.Port.Cells t12e = emon.Port.newCells();
+        emon.Port.Cells idx = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells wq = emon.Port.newCells();
+        emon.Port.Cells seen = emon.Port.newCells();
+        emon.Port.Cells md = emon.Port.newCells();
+        emon.Port.Cells xm = emon.Port.newCells();
+        emon.Port.Cells ol = emon.Port.newCells();
+        emon.Port.Cells lb = emon.Port.newCells();
+        emon.Port.Cells nd = emon.Port.newCells();
+        emon.Port.Cells nt = emon.Port.newCells();
+        emon.Port.Cells ss2 = emon.Port.newCells();
+        emon.Port.Cells se2 = emon.Port.newCells();
+        emon.Port.Cells sk2 = emon.Port.newCells();
+        emon.Port.Cells sc2 = emon.Port.newCells();
+        emon.Port.Cells so2 = emon.Port.newCells();
+        emon.Port.Cells sa2 = emon.Port.newCells();
+        emon.Port.Cells wk2 = emon.Port.newCells();
+        emon.Port.Cells ha = emon.Port.newCells();
+        emon.Port.Cells hb = emon.Port.newCells();
+        emon.Port.Cells hh = emon.Port.newCells();
         emon.Port.Cells sf = emon.Port.newCells();
         emon.Port.Cells sc = emon.Port.newCells();
         emon.Port.Cells ws = emon.Port.newCells();
@@ -470,11 +512,20 @@ public final class Tabletest {
         if (Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0) {
             return 2;
         }
+        Pdfx.pxIndexBuild(src, ar, dc, a, b, st, pg, idx);
+        if (Pdfmeta.pmRun(src, ar, dc, a, b, st, pg, idx, txt, wq, seen, md, xm, ol, lb, nd, nt) < 0) {
+            return 4;
+        }
+        if (Pdfstruct.tgRead(src, ar, dc, a, b, st, pg, idx, txt, wq, seen, ss2, se2, sk2, sc2, so2, wk2, md) < 0) {
+            return 5;
+        }
+        Pdfstruct.tgJoin(ss2, se2, sk2, sc2, so2, sa2, gl, mk, fnt, pg, ha, hb, hh);
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
         Gfuse.gfDoc(pa, pts, mk, im, np, Gfuse.gfxMode(), grl, gfl, cand);
-        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages);
+        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
+        Tagtable.ttEmit(tvt, t12e);
         Columns.lcCopy(ln, lt);
         Initial.inDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
         Heading.hdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
@@ -485,6 +536,53 @@ public final class Tabletest {
         Json.jsEmit(t, 1, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells());
         return 0;
     }
+    public static int ttTagged(byte[] pdf, byte[] golden, StringBuilder t, StringBuilder tvt) {
+        // A tagged document through the stage: the Model, byte for byte, and the verdicts of its tables (the evidence dump's `tb`) in `tvt`.
+        int r = ttGolden(pdf, t, tvt);
+        if (r != 0) {
+            return r;
+        }
+        emon.Testport.assertTextSpan(t, golden, 0, Mscript.jtEnd(golden), "the Model of a tagged-table fixture", 0);
+        return 0;
+    }
+    public static void testTaggedTablesAreVerifiedAgainstThePage() {
+        StringBuilder t0 = emon.Testport.newText();
+        StringBuilder v0 = emon.Testport.newText();
+        StringBuilder t1 = emon.Testport.newText();
+        StringBuilder v1 = emon.Testport.newText();
+        StringBuilder t2 = emon.Testport.newText();
+        StringBuilder v2 = emon.Testport.newText();
+        StringBuilder t3 = emon.Testport.newText();
+        StringBuilder v3 = emon.Testport.newText();
+        StringBuilder t4 = emon.Testport.newText();
+        StringBuilder v4 = emon.Testport.newText();
+        StringBuilder t5 = emon.Testport.newText();
+        StringBuilder v5 = emon.Testport.newText();
+        StringBuilder t6 = emon.Testport.newText();
+        StringBuilder v6 = emon.Testport.newText();
+        StringBuilder t7 = emon.Testport.newText();
+        StringBuilder v7 = emon.Testport.newText();
+        StringBuilder t8 = emon.Testport.newText();
+        StringBuilder v8 = emon.Testport.newText();
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-good.pdf"), emon.Testport.testFile("table/ttab-good.json"), t0, v0), 0, "ttab-good runs");
+        emon.Testport.assertText(v0, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":931,\"checks\":[900,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good: a correct grid, ruled, with spans and a header: confirmed, and the tags are among the table's sources");
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-good-ws.pdf"), emon.Testport.testFile("table/ttab-good-ws.json"), t1, v1), 0, "ttab-good-ws runs");
+        emon.Testport.assertText(v1, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good-ws: a table without a rule, correctly tagged: confirmed, and `struct` is among its sources");
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-th-as-td.pdf"), emon.Testport.testFile("table/ttab-th-as-td.json"), t2, v2), 0, "ttab-th-as-td runs");
+        emon.Testport.assertText(v2, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-th-as-td: headers tagged TD are still a table that agrees with the page");
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-bad-spans.pdf"), emon.Testport.testFile("table/ttab-bad-spans.json"), t3, v3), 0, "ttab-bad-spans runs");
+        emon.Testport.assertText(v3, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":5,\"verdict\":\"partial\",\"score\":821,\"checks\":[900,1000,1000,1000,1000,785],\"trust\":937}]", "ttab-bad-spans: ColSpan 3 where the rules close at 2: the geometry agrees with 785 of the words, so the verdict is partial, flagged struct-disagree and tag-span-conflict");
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-bad-rows.pdf"), emon.Testport.testFile("table/ttab-bad-rows.json"), t4, v4), 0, "ttab-bad-rows runs");
+        emon.Testport.assertText(v4, "[{\"page\":1,\"se\":4,\"rows\":3,\"cols\":8,\"verdict\":\"contradicted\",\"score\":86,\"checks\":[923,1000,846,1000,1000,0],\"trust\":937}]", "ttab-bad-rows: two visual rows in one TR: contradicted, and the Model is the geometry's alone");
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-layout.pdf"), emon.Testport.testFile("table/ttab-layout.json"), t5, v5), 0, "ttab-layout runs");
+        emon.Testport.assertText(v5, "[{\"page\":1,\"se\":4,\"rows\":1,\"cols\":2,\"verdict\":\"contradicted\",\"score\":1000,\"checks\":[1000,-1,1000,1000,1000,-1],\"trust\":923}]", "ttab-layout: prose in two columns tagged Table is a layout table: refused (D180), so contradicted, and there is no table in the Model");
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-missing-row.pdf"), emon.Testport.testFile("table/ttab-missing-row.json"), t6, v6), 0, "ttab-missing-row runs");
+        emon.Testport.assertText(v6, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"partial\",\"score\":864,\"checks\":[1000,1000,1000,800,1000,1000],\"trust\":118}]", "ttab-missing-row: the last row is an artifact; the tree's trust is under 300, so it can confirm nothing: partial");
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-allp.pdf"), emon.Testport.testFile("table/ttab-allp.json"), t7, v7), 0, "ttab-allp runs");
+        emon.Testport.assertText(v7, "[]", "ttab-allp: cells tagged P: the tree has no Table, so no verdict");
+        emon.Testport.assertEq(ttTagged(emon.Testport.testFile("corpus/synth/pdf/ttab-good-ws-untagged.pdf"), emon.Testport.testFile("table/ttab-good-ws-untagged.json"), t8, v8), 0, "ttab-good-ws-untagged runs");
+        emon.Testport.assertText(v8, "[]", "the same table with no tree: no verdict");
+    }
     public static void testRealDocumentsMakeTheGoldenModels() {
         StringBuilder t1 = emon.Testport.newText();
         StringBuilder t2 = emon.Testport.newText();
@@ -493,20 +591,20 @@ public final class Tabletest {
         StringBuilder t5 = emon.Testport.newText();
         StringBuilder t6 = emon.Testport.newText();
         StringBuilder t7 = emon.Testport.newText();
-        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-simple-ruled.pdf"), t1), 0, "table-simple-ruled runs");
+        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-simple-ruled.pdf"), t1, emon.Testport.newText()), 0, "table-simple-ruled runs");
         emon.Testport.assertTextSpan(t1, emon.Testport.testFile("table/table-simple-ruled.json"), 0, Mscript.jtEnd(emon.Testport.testFile("table/table-simple-ruled.json")), "table-simple-ruled", 0);
-        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-shaded.pdf"), t2), 0, "table-shaded runs");
+        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-shaded.pdf"), t2, emon.Testport.newText()), 0, "table-shaded runs");
         emon.Testport.assertTextSpan(t2, emon.Testport.testFile("table/table-shaded.json"), 0, Mscript.jtEnd(emon.Testport.testFile("table/table-shaded.json")), "table-shaded", 0);
-        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-spans-partial.pdf"), t3), 0, "table-spans-partial runs");
+        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-spans-partial.pdf"), t3, emon.Testport.newText()), 0, "table-spans-partial runs");
         emon.Testport.assertTextSpan(t3, emon.Testport.testFile("table/table-spans-partial.json"), 0, Mscript.jtEnd(emon.Testport.testFile("table/table-spans-partial.json")), "table-spans-partial", 0);
-        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-whitespace.pdf"), t4), 0, "table-whitespace runs");
+        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-whitespace.pdf"), t4, emon.Testport.newText()), 0, "table-whitespace runs");
         emon.Testport.assertTextSpan(t4, emon.Testport.testFile("table/table-whitespace.json"), 0, Mscript.jtEnd(emon.Testport.testFile("table/table-whitespace.json")), "table-whitespace", 0);
-        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/align-table-numeric.pdf"), t5), 0, "align-table-numeric runs");
+        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/align-table-numeric.pdf"), t5, emon.Testport.newText()), 0, "align-table-numeric runs");
         emon.Testport.assertTextSpan(t5, emon.Testport.testFile("table/align-table-numeric.json"), 0, Mscript.jtEnd(emon.Testport.testFile("table/align-table-numeric.json")), "align-table-numeric", 0);
-        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-multipage-thead.pdf"), t7), 0, "table-multipage-thead runs");
+        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/table-multipage-thead.pdf"), t7, emon.Testport.newText()), 0, "table-multipage-thead runs");
         emon.Testport.assertTextSpan(t7, emon.Testport.testFile("table/table-multipage-thead.json"), 0, Mscript.jtEnd(emon.Testport.testFile("table/table-multipage-thead.json")), "table-multipage-thead: one table on four pages, the repeated header in the ledger", 0);
         // A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
-        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/h-plain.pdf"), t6), 0, "h-plain runs");
+        emon.Testport.assertEq(ttGolden(emon.Testport.testFile("corpus/synth/pdf/h-plain.pdf"), t6, emon.Testport.newText()), 0, "h-plain runs");
         emon.Testport.assertTextSpan(t6, emon.Testport.testFile("para/h-plain.json"), 0, Mscript.jtEnd(emon.Testport.testFile("para/h-plain.json")), "h-plain makes no table", 0);
     }
 }

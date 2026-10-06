@@ -958,6 +958,12 @@ public final class Model {
     public static int flVertical() {
         return 64;
     }
+    public static int flStructDisagree() {
+        return 128;
+    }
+    public static int flTagSpanConflict() {
+        return 256;
+    }
     public static int flEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "low-conf");
@@ -985,6 +991,14 @@ public final class Model {
         }
         if (code == 64) {
             emon.Port.textAscii(t, "vertical");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.textAscii(t, "struct-disagree");
+            return 1;
+        }
+        if (code == 256) {
+            emon.Port.textAscii(t, "tag-span-conflict");
             return 1;
         }
         return 0;

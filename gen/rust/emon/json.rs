@@ -266,7 +266,7 @@ pub fn js_bits_flags(mut t: &mut String, pr: i32, bits: i32) -> i32 {
     let mut k: i32 = 0;
     let mut bit: i32 = 0;
     crate::port::text_ascii(t, "[");
-    while b < 7 {
+    while b < 9 {
         bit = (1) << (b);
         if (bits & bit) != 0 {
             js_fsep(t, pr, k);

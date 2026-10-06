@@ -2723,7 +2723,7 @@
         :table-continued-acc 0.918033
         :table-teds-lite 0.851766
         :table-teds-struct-lite 0.906827
-        :tag-verdict-acc 0.5625
+        :tag-verdict-acc 1.0
         :tl-override 0.0
         :watermark-leak 0.0
         :wer 0.060406}
@@ -2987,7 +2987,7 @@
         :table-continued-acc 0.884615
         :table-teds-lite 0.807692
         :table-teds-struct-lite 0.871795
-        :tag-verdict-acc 0.5625
+        :tag-verdict-acc 1.0
         :tl-override 0.0
         :wer 0.142648}
       "pdf/headings" {

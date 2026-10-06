@@ -15,8 +15,12 @@ import (
 	"emon/para"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
+	"emon/pdfmeta"
+	"emon/pdfstruct"
+	"emon/pdfx"
 	"emon/port"
 	"emon/table"
+	"emon/tagtable"
 	"strings"
 	"testing"
 )
@@ -260,10 +264,23 @@ func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *st
 	var gpts *port.Cells = port.NewCells()
 	var gmk *port.Cells = port.NewCells()
 	var gim *port.Cells = port.NewCells()
+	var t0e *port.Cells = port.NewCells()
+	var t1e *port.Cells = port.NewCells()
+	var t2e *port.Cells = port.NewCells()
+	var t3e *port.Cells = port.NewCells()
+	var t4e *port.Cells = port.NewCells()
+	var t5e *port.Cells = port.NewCells()
+	var t6e *port.Cells = port.NewCells()
+	var t7e *port.Cells = port.NewCells()
+	var t8e *port.Cells = port.NewCells()
+	var t9e *port.Cells = port.NewCells()
+	var t10e *port.Cells = port.NewCells()
+	var t11e *port.Cells = port.NewCells()
+	var t12e *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
 	gfuse.GfDoc(pa, gpts, gmk, gim, 1, gfuse.GfxMode(), grl, gfl, cand)
-	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
+	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
 	columns.LcCopy(ln, lt)
 	para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	ttBrief(t, nodes, attrs, text)
@@ -404,9 +421,10 @@ func TestACaptionAndABoldLastRow(emonT *testing.T) {
 	port.AssertText(emonT, t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph")
 }
 
-func ttGolden(pdf []byte, t *strings.Builder) int32 {
+func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	// PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a
-	// code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`.
+	// code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the
+	// verdicts of its tables, as the evidence dump's `tb` writes them, are `tvt`.
 	var ar *port.Cells = port.NewCells()
 	var dc *port.Cells = port.NewCells()
 	var a *port.Cells = port.NewCells()
@@ -484,6 +502,34 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	var grl *port.Cells = port.NewCells()
 	var gfl *port.Cells = port.NewCells()
 	var cand *port.Cells = port.NewCells()
+	var t5e *port.Cells = port.NewCells()
+	var t6e *port.Cells = port.NewCells()
+	var t7e *port.Cells = port.NewCells()
+	var t8e *port.Cells = port.NewCells()
+	var t9e *port.Cells = port.NewCells()
+	var t10e *port.Cells = port.NewCells()
+	var t11e *port.Cells = port.NewCells()
+	var t12e *port.Cells = port.NewCells()
+	var idx *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var wq *port.Cells = port.NewCells()
+	var seen *port.Cells = port.NewCells()
+	var md *port.Cells = port.NewCells()
+	var xm *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var lb *port.Cells = port.NewCells()
+	var nd *port.Cells = port.NewCells()
+	var nt *port.Cells = port.NewCells()
+	var ss2 *port.Cells = port.NewCells()
+	var se2 *port.Cells = port.NewCells()
+	var sk2 *port.Cells = port.NewCells()
+	var sc2 *port.Cells = port.NewCells()
+	var so2 *port.Cells = port.NewCells()
+	var sa2 *port.Cells = port.NewCells()
+	var wk2 *port.Cells = port.NewCells()
+	var ha *port.Cells = port.NewCells()
+	var hb *port.Cells = port.NewCells()
+	var hh *port.Cells = port.NewCells()
 	var sf *port.Cells = port.NewCells()
 	var sc *port.Cells = port.NewCells()
 	var ws *port.Cells = port.NewCells()
@@ -501,11 +547,20 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	if pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0 {
 		return 2
 	}
+	pdfx.PxIndexBuild(src, ar, dc, a, b, st, pg, idx)
+	if pdfmeta.PmRun(src, ar, dc, a, b, st, pg, idx, txt, wq, seen, md, xm, ol, lb, nd, nt) < 0 {
+		return 4
+	}
+	if pdfstruct.TgRead(src, ar, dc, a, b, st, pg, idx, txt, wq, seen, ss2, se2, sk2, sc2, so2, wk2, md) < 0 {
+		return 5
+	}
+	pdfstruct.TgJoin(ss2, se2, sk2, sc2, so2, sa2, gl, mk, fnt, pg, ha, hb, hh)
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
 	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand)
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e)
+	tagtable.TtEmit(tvt, t12e)
 	columns.LcCopy(ln, lt)
 	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)
 	heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt)
@@ -517,6 +572,55 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	return 0
 }
 
+func ttTagged(pdf []byte, golden []byte, t *strings.Builder, tvt *strings.Builder) int32 {
+	// A tagged document through the stage: the Model, byte for byte, and the verdicts of its tables (the evidence dump's `tb`) in `tvt`.
+	var r int32 = ttGolden(pdf, t, tvt)
+	if r != 0 {
+		return r
+	}
+	port.AssertTextSpan(emonT, t, golden, 0, mscript.JtEnd(golden), "the Model of a tagged-table fixture", 0)
+	return 0
+}
+
+func TestTaggedTablesAreVerifiedAgainstThePage(emonT *testing.T) {
+	var t0 *strings.Builder = port.NewText()
+	var v0 *strings.Builder = port.NewText()
+	var t1 *strings.Builder = port.NewText()
+	var v1 *strings.Builder = port.NewText()
+	var t2 *strings.Builder = port.NewText()
+	var v2 *strings.Builder = port.NewText()
+	var t3 *strings.Builder = port.NewText()
+	var v3 *strings.Builder = port.NewText()
+	var t4 *strings.Builder = port.NewText()
+	var v4 *strings.Builder = port.NewText()
+	var t5 *strings.Builder = port.NewText()
+	var v5 *strings.Builder = port.NewText()
+	var t6 *strings.Builder = port.NewText()
+	var v6 *strings.Builder = port.NewText()
+	var t7 *strings.Builder = port.NewText()
+	var v7 *strings.Builder = port.NewText()
+	var t8 *strings.Builder = port.NewText()
+	var v8 *strings.Builder = port.NewText()
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-good.pdf"), port.TestFile("table/ttab-good.json"), t0, v0), 0, "ttab-good runs")
+	port.AssertText(emonT, v0, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":931,\"checks\":[900,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good: a correct grid, ruled, with spans and a header: confirmed, and the tags are among the table's sources")
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-good-ws.pdf"), port.TestFile("table/ttab-good-ws.json"), t1, v1), 0, "ttab-good-ws runs")
+	port.AssertText(emonT, v1, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-good-ws: a table without a rule, correctly tagged: confirmed, and `struct` is among its sources")
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-th-as-td.pdf"), port.TestFile("table/ttab-th-as-td.json"), t2, v2), 0, "ttab-th-as-td runs")
+	port.AssertText(emonT, v2, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"confirmed\",\"score\":1000,\"checks\":[1000,1000,1000,1000,1000,1000],\"trust\":937}]", "ttab-th-as-td: headers tagged TD are still a table that agrees with the page")
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-bad-spans.pdf"), port.TestFile("table/ttab-bad-spans.json"), t3, v3), 0, "ttab-bad-spans runs")
+	port.AssertText(emonT, v3, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":5,\"verdict\":\"partial\",\"score\":821,\"checks\":[900,1000,1000,1000,1000,785],\"trust\":937}]", "ttab-bad-spans: ColSpan 3 where the rules close at 2: the geometry agrees with 785 of the words, so the verdict is partial, flagged struct-disagree and tag-span-conflict")
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-bad-rows.pdf"), port.TestFile("table/ttab-bad-rows.json"), t4, v4), 0, "ttab-bad-rows runs")
+	port.AssertText(emonT, v4, "[{\"page\":1,\"se\":4,\"rows\":3,\"cols\":8,\"verdict\":\"contradicted\",\"score\":86,\"checks\":[923,1000,846,1000,1000,0],\"trust\":937}]", "ttab-bad-rows: two visual rows in one TR: contradicted, and the Model is the geometry's alone")
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-layout.pdf"), port.TestFile("table/ttab-layout.json"), t5, v5), 0, "ttab-layout runs")
+	port.AssertText(emonT, v5, "[{\"page\":1,\"se\":4,\"rows\":1,\"cols\":2,\"verdict\":\"contradicted\",\"score\":1000,\"checks\":[1000,-1,1000,1000,1000,-1],\"trust\":923}]", "ttab-layout: prose in two columns tagged Table is a layout table: refused (D180), so contradicted, and there is no table in the Model")
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-missing-row.pdf"), port.TestFile("table/ttab-missing-row.json"), t6, v6), 0, "ttab-missing-row runs")
+	port.AssertText(emonT, v6, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":4,\"verdict\":\"partial\",\"score\":864,\"checks\":[1000,1000,1000,800,1000,1000],\"trust\":118}]", "ttab-missing-row: the last row is an artifact; the tree's trust is under 300, so it can confirm nothing: partial")
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-allp.pdf"), port.TestFile("table/ttab-allp.json"), t7, v7), 0, "ttab-allp runs")
+	port.AssertText(emonT, v7, "[]", "ttab-allp: cells tagged P: the tree has no Table, so no verdict")
+	port.AssertEq(emonT, ttTagged(port.TestFile("corpus/synth/pdf/ttab-good-ws-untagged.pdf"), port.TestFile("table/ttab-good-ws-untagged.json"), t8, v8), 0, "ttab-good-ws-untagged runs")
+	port.AssertText(emonT, v8, "[]", "the same table with no tree: no verdict")
+}
+
 func TestRealDocumentsMakeTheGoldenModels(emonT *testing.T) {
 	var t1 *strings.Builder = port.NewText()
 	var t2 *strings.Builder = port.NewText()
@@ -525,19 +629,19 @@ func TestRealDocumentsMakeTheGoldenModels(emonT *testing.T) {
 	var t5 *strings.Builder = port.NewText()
 	var t6 *strings.Builder = port.NewText()
 	var t7 *strings.Builder = port.NewText()
-	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-simple-ruled.pdf"), t1), 0, "table-simple-ruled runs")
+	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-simple-ruled.pdf"), t1, port.NewText()), 0, "table-simple-ruled runs")
 	port.AssertTextSpan(emonT, t1, port.TestFile("table/table-simple-ruled.json"), 0, mscript.JtEnd(port.TestFile("table/table-simple-ruled.json")), "table-simple-ruled", 0)
-	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-shaded.pdf"), t2), 0, "table-shaded runs")
+	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-shaded.pdf"), t2, port.NewText()), 0, "table-shaded runs")
 	port.AssertTextSpan(emonT, t2, port.TestFile("table/table-shaded.json"), 0, mscript.JtEnd(port.TestFile("table/table-shaded.json")), "table-shaded", 0)
-	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-spans-partial.pdf"), t3), 0, "table-spans-partial runs")
+	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-spans-partial.pdf"), t3, port.NewText()), 0, "table-spans-partial runs")
 	port.AssertTextSpan(emonT, t3, port.TestFile("table/table-spans-partial.json"), 0, mscript.JtEnd(port.TestFile("table/table-spans-partial.json")), "table-spans-partial", 0)
-	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-whitespace.pdf"), t4), 0, "table-whitespace runs")
+	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-whitespace.pdf"), t4, port.NewText()), 0, "table-whitespace runs")
 	port.AssertTextSpan(emonT, t4, port.TestFile("table/table-whitespace.json"), 0, mscript.JtEnd(port.TestFile("table/table-whitespace.json")), "table-whitespace", 0)
-	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/align-table-numeric.pdf"), t5), 0, "align-table-numeric runs")
+	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/align-table-numeric.pdf"), t5, port.NewText()), 0, "align-table-numeric runs")
 	port.AssertTextSpan(emonT, t5, port.TestFile("table/align-table-numeric.json"), 0, mscript.JtEnd(port.TestFile("table/align-table-numeric.json")), "align-table-numeric", 0)
-	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-multipage-thead.pdf"), t7), 0, "table-multipage-thead runs")
+	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/table-multipage-thead.pdf"), t7, port.NewText()), 0, "table-multipage-thead runs")
 	port.AssertTextSpan(emonT, t7, port.TestFile("table/table-multipage-thead.json"), 0, mscript.JtEnd(port.TestFile("table/table-multipage-thead.json")), "table-multipage-thead: one table on four pages, the repeated header in the ledger", 0)
 	// A document of paragraphs and two columns has no table (the stage's other half: it must not make one).
-	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/h-plain.pdf"), t6), 0, "h-plain runs")
+	port.AssertEq(emonT, ttGolden(port.TestFile("corpus/synth/pdf/h-plain.pdf"), t6, port.NewText()), 0, "h-plain runs")
 	port.AssertTextSpan(emonT, t6, port.TestFile("para/h-plain.json"), 0, mscript.JtEnd(port.TestFile("para/h-plain.json")), "h-plain makes no table", 0)
 }

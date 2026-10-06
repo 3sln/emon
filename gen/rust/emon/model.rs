@@ -955,6 +955,12 @@ pub fn fl_rotated() -> i32 {
 pub fn fl_vertical() -> i32 {
     return 64;
 }
+pub fn fl_struct_disagree() -> i32 {
+    return 128;
+}
+pub fn fl_tag_span_conflict() -> i32 {
+    return 256;
+}
 pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "low-conf");
@@ -982,6 +988,14 @@ pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 64 {
         crate::port::text_ascii(t, "vertical");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "struct-disagree");
+        return 1;
+    }
+    if code == 256 {
+        crate::port::text_ascii(t, "tag-span-conflict");
         return 1;
     }
     return 0;
