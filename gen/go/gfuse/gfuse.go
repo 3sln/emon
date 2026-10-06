@@ -545,7 +545,6 @@ func gfBuild(gc *port.Cells, ctx *port.Cells, og *port.Cells, ofl *port.Cells, r
 	// The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its
 	// rectangles, then OCR's line blocks. Answers how many.
 	var i int32 = 0
-	var c int32 = 0
 	var f int32 = 0
 	var sw int32 = 0
 	var half int32 = 0
@@ -562,7 +561,7 @@ func gfBuild(gc *port.Cells, ctx *port.Cells, og *port.Cells, ofl *port.Cells, r
 		if (f & glayer.GqFromImage()) != 0 {
 			ea = evidence.EaImages()
 		}
-		c = gfCandRule(gc, 1, ea, i, port.CellsAt(og, (i*24)+22), port.CellsAt(og, (i*24)+5), port.CellsAt(og, (i*24)+6), port.CellsAt(og, (i*24)+7), port.CellsAt(og, (i*24)+8), port.CellsAt(og, (i*24)+9), port.CellsAt(og, (i*24)+12), port.CellsAt(og, (i*24)+13), f, -1, gfEq(port.CellsAt(og, (i*24)+16), 501))
+		gfCandRule(gc, 1, ea, i, port.CellsAt(og, (i*24)+22), port.CellsAt(og, (i*24)+5), port.CellsAt(og, (i*24)+6), port.CellsAt(og, (i*24)+7), port.CellsAt(og, (i*24)+8), port.CellsAt(og, (i*24)+9), port.CellsAt(og, (i*24)+12), port.CellsAt(og, (i*24)+13), f, -1, gfEq(port.CellsAt(og, (i*24)+16), 501))
 		i += 1
 	}
 	i = port.CellsAt(ctx, xF0)
@@ -814,7 +813,6 @@ func gfGroups(gc *port.Cells, aux *port.Cells, n int32, ctx *port.Cells, og *por
 	var g int32 = 0
 	var k int32 = 0
 	var c int32 = 0
-	var nv int32 = 0
 	var nt int32 = 0
 	var no int32 = 0
 	var nx int32 = 0
@@ -829,7 +827,7 @@ func gfGroups(gc *port.Cells, aux *port.Cells, n int32, ctx *port.Cells, og *por
 				kind = glayer.GkFill()
 			}
 			g = glayer.GgpNew(ggp, port.CellsAt(ctx, xPage), kind)
-			nv = gfRefsRun(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0)
+			gfRefsRun(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0)
 			nt = gfRefsRun(gc, aux, n, s, e, 2, og, ofl, refs, ggp, g, 1)
 			no = gfRefsRun(gc, aux, n, s, e, 4, og, ofl, refs, ggp, g, 2)
 			nx = 0
@@ -1463,7 +1461,6 @@ func gfEmitTraceUnits(ctx *port.Cells, un *port.Cells, im *port.Cells, hl *port.
 	var score int32 = 0
 	var ocr int32 = 0
 	var kept int32 = 0
-	var ang int32 = 0
 	var gid int32 = 0
 	var src int32 = 0
 	for u < nu {
@@ -1661,7 +1658,6 @@ func gfLattice(grl *port.Cells, g0 int32, g1 int32, rx0 int32, ry0 int32, rx1 in
 	var a int32 = g0
 	var b int32 = 0
 	var c int32 = 0
-	var d int32 = 0
 	var tried int32 = 0
 	var v1 int32 = -1
 	for a < g1 {
@@ -1817,7 +1813,6 @@ func gfFigClusters(ctx *port.Cells, pa *port.Cells, gc *port.Cells, un *port.Cel
 	var dy int32 = 0
 	var lab int32 = 0
 	var added int32 = 0
-	var ux0 int32 = 0
 	for p < port.CellsAt(ctx, xP1) {
 		if (evidence.PaGet(pa, p, evidence.PfKind()) == evidence.PaCurve()) || (evidence.PaGet(pa, p, evidence.PfKind()) == evidence.PaOther()) {
 			np += 1
@@ -1936,7 +1931,6 @@ func gfRegions(ctx *port.Cells, grl *port.Cells, gfl *port.Cells, im *port.Cells
 	var x1 int32 = 0
 	var y1 int32 = 0
 	var ok int32 = 0
-	var t int32 = 0
 	var ra int32 = 0
 	var rb int32 = 0
 	var src int32 = 0

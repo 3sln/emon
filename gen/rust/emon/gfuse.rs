@@ -447,7 +447,6 @@ pub(crate) fn gf_build(mut gc: &mut crate::port::Cells, ctx: &mut crate::port::C
     // The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its
     // rectangles, then OCR's line blocks. Answers how many.
     let mut i: i32 = 0;
-    let mut c: i32 = 0;
     let mut f: i32 = 0;
     let mut sw: i32 = 0;
     let mut half: i32 = 0;
@@ -464,7 +463,7 @@ pub(crate) fn gf_build(mut gc: &mut crate::port::Cells, ctx: &mut crate::port::C
         if (f & gq_from_image()) != 0 {
             ea = ea_images();
         }
-        c = gf_cand_rule(gc, 1, ea, i, crate::port::cells_at(og, (i * 24) + 22), crate::port::cells_at(og, (i * 24) + 5), crate::port::cells_at(og, (i * 24) + 6), crate::port::cells_at(og, (i * 24) + 7), crate::port::cells_at(og, (i * 24) + 8), crate::port::cells_at(og, (i * 24) + 9), crate::port::cells_at(og, (i * 24) + 12), crate::port::cells_at(og, (i * 24) + 13), f, -1, gf_eq(crate::port::cells_at(og, (i * 24) + 16), 501));
+        gf_cand_rule(gc, 1, ea, i, crate::port::cells_at(og, (i * 24) + 22), crate::port::cells_at(og, (i * 24) + 5), crate::port::cells_at(og, (i * 24) + 6), crate::port::cells_at(og, (i * 24) + 7), crate::port::cells_at(og, (i * 24) + 8), crate::port::cells_at(og, (i * 24) + 9), crate::port::cells_at(og, (i * 24) + 12), crate::port::cells_at(og, (i * 24) + 13), f, -1, gf_eq(crate::port::cells_at(og, (i * 24) + 16), 501));
         i += 1;
     }
     i = crate::port::cells_at(ctx, X_F0);
@@ -705,7 +704,6 @@ pub(crate) fn gf_groups(mut gc: &mut crate::port::Cells, mut aux: &mut crate::po
     let mut g: i32 = 0;
     let mut k: i32 = 0;
     let mut c: i32 = 0;
-    let mut nv: i32 = 0;
     let mut nt: i32 = 0;
     let mut no: i32 = 0;
     let mut nx: i32 = 0;
@@ -720,7 +718,7 @@ pub(crate) fn gf_groups(mut gc: &mut crate::port::Cells, mut aux: &mut crate::po
                 kind = gk_fill();
             }
             g = ggp_new(ggp, crate::port::cells_at(ctx, X_PAGE), kind);
-            nv = gf_refs_run(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0);
+            gf_refs_run(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0);
             nt = gf_refs_run(gc, aux, n, s, e, 2, og, ofl, refs, ggp, g, 1);
             no = gf_refs_run(gc, aux, n, s, e, 4, og, ofl, refs, ggp, g, 2);
             nx = 0;
@@ -1333,7 +1331,6 @@ pub(crate) fn gf_emit_trace_units(ctx: &mut crate::port::Cells, un: &mut crate::
     let mut score: i32 = 0;
     let mut ocr: i32 = 0;
     let mut kept: i32 = 0;
-    let mut ang: i32 = 0;
     let mut gid: i32 = 0;
     let mut src: i32 = 0;
     while u < nu {
@@ -1527,7 +1524,6 @@ pub(crate) fn gf_lattice(grl: &mut crate::port::Cells, g0: i32, g1: i32, rx0: i3
     let mut a: i32 = g0;
     let mut b: i32 = 0;
     let mut c: i32 = 0;
-    let mut d: i32 = 0;
     let mut tried: i32 = 0;
     let mut v1: i32 = -1;
     while a < g1 {
@@ -1677,7 +1673,6 @@ pub(crate) fn gf_fig_clusters(ctx: &mut crate::port::Cells, pa: &mut crate::port
     let mut dy: i32 = 0;
     let mut lab: i32 = 0;
     let mut added: i32 = 0;
-    let mut ux0: i32 = 0;
     while p < crate::port::cells_at(ctx, X_P1) {
         if (pa_get(pa, p, pf_kind()) == pa_curve()) || (pa_get(pa, p, pf_kind()) == pa_other()) {
             np += 1;
@@ -1795,7 +1790,6 @@ pub(crate) fn gf_regions(ctx: &mut crate::port::Cells, grl: &mut crate::port::Ce
     let mut x1: i32 = 0;
     let mut y1: i32 = 0;
     let mut ok: i32 = 0;
-    let mut t: i32 = 0;
     let mut ra: i32 = 0;
     let mut rb: i32 = 0;
     let mut src: i32 = 0;

@@ -443,7 +443,6 @@ public static class Gfuse {
         // The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its
         // rectangles, then OCR's line blocks. Answers how many.
         int i = 0;
-        int c = 0;
         int f = 0;
         int sw = 0;
         int half = 0;
@@ -460,7 +459,7 @@ public static class Gfuse {
             if ((f & Glayer.GqFromImage()) != 0) {
                 ea = Evidence.EaImages();
             }
-            c = GfCandRule(gc, 1, ea, i, emon.Port.CellsAt(og, (i * 24) + 22), emon.Port.CellsAt(og, (i * 24) + 5), emon.Port.CellsAt(og, (i * 24) + 6), emon.Port.CellsAt(og, (i * 24) + 7), emon.Port.CellsAt(og, (i * 24) + 8), emon.Port.CellsAt(og, (i * 24) + 9), emon.Port.CellsAt(og, (i * 24) + 12), emon.Port.CellsAt(og, (i * 24) + 13), f, -1, GfEq(emon.Port.CellsAt(og, (i * 24) + 16), 501));
+            GfCandRule(gc, 1, ea, i, emon.Port.CellsAt(og, (i * 24) + 22), emon.Port.CellsAt(og, (i * 24) + 5), emon.Port.CellsAt(og, (i * 24) + 6), emon.Port.CellsAt(og, (i * 24) + 7), emon.Port.CellsAt(og, (i * 24) + 8), emon.Port.CellsAt(og, (i * 24) + 9), emon.Port.CellsAt(og, (i * 24) + 12), emon.Port.CellsAt(og, (i * 24) + 13), f, -1, GfEq(emon.Port.CellsAt(og, (i * 24) + 16), 501));
             i += 1;
         }
         i = emon.Port.CellsAt(ctx, XF0);
@@ -701,7 +700,6 @@ public static class Gfuse {
         int g = 0;
         int k = 0;
         int c = 0;
-        int nv = 0;
         int nt = 0;
         int no = 0;
         int nx = 0;
@@ -716,7 +714,7 @@ public static class Gfuse {
                     kind = Glayer.GkFill();
                 }
                 g = Glayer.GgpNew(ggp, emon.Port.CellsAt(ctx, XPage), kind);
-                nv = GfRefsRun(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0);
+                GfRefsRun(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0);
                 nt = GfRefsRun(gc, aux, n, s, e, 2, og, ofl, refs, ggp, g, 1);
                 no = GfRefsRun(gc, aux, n, s, e, 4, og, ofl, refs, ggp, g, 2);
                 nx = 0;
@@ -1329,7 +1327,6 @@ public static class Gfuse {
         int score = 0;
         int ocr = 0;
         int kept = 0;
-        int ang = 0;
         int gid = 0;
         int src = 0;
         while (u < nu) {
@@ -1523,7 +1520,6 @@ public static class Gfuse {
         int a = g0;
         int b = 0;
         int c = 0;
-        int d = 0;
         int tried = 0;
         int v1 = -1;
         while (a < g1) {
@@ -1673,7 +1669,6 @@ public static class Gfuse {
         int dy = 0;
         int lab = 0;
         int added = 0;
-        int ux0 = 0;
         while (p < emon.Port.CellsAt(ctx, XP1)) {
             if ((Evidence.PaGet(pa, p, Evidence.PfKind()) == Evidence.PaCurve()) || (Evidence.PaGet(pa, p, Evidence.PfKind()) == Evidence.PaOther())) {
                 np += 1;
@@ -1791,7 +1786,6 @@ public static class Gfuse {
         int x1 = 0;
         int y1 = 0;
         int ok = 0;
-        int t = 0;
         int ra = 0;
         int rb = 0;
         int src = 0;

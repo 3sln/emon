@@ -403,7 +403,6 @@
   (comment "The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its")
   (comment "rectangles, then OCR's line blocks. Answers how many.")
   (let [^:mut ^I32 i 0
-        ^:mut ^I32 c 0
         ^:mut ^I32 f 0
         ^:mut ^I32 sw 0
         ^:mut ^I32 half 0
@@ -418,10 +417,10 @@
       (do (set f (cells-at og (+ (* i 24) 18)))
           (set ea (ea-paths))
           (if (!= (bit-and f (gq-from-image)) 0) (set ea (ea-images)))
-          (set c (gf-cand-rule gc 1 ea i (cells-at og (+ (* i 24) 22))
-                               (cells-at og (+ (* i 24) 5)) (cells-at og (+ (* i 24) 6)) (cells-at og (+ (* i 24) 7)) (cells-at og (+ (* i 24) 8))
-                               (cells-at og (+ (* i 24) 9)) (cells-at og (+ (* i 24) 12)) (cells-at og (+ (* i 24) 13)) f -1
-                               (gf-eq (cells-at og (+ (* i 24) 16)) 501)))
+          (gf-cand-rule gc 1 ea i (cells-at og (+ (* i 24) 22))
+                        (cells-at og (+ (* i 24) 5)) (cells-at og (+ (* i 24) 6)) (cells-at og (+ (* i 24) 7)) (cells-at og (+ (* i 24) 8))
+                        (cells-at og (+ (* i 24) 9)) (cells-at og (+ (* i 24) 12)) (cells-at og (+ (* i 24) 13)) f -1
+                        (gf-eq (cells-at og (+ (* i 24) 16)) 501))
           (set i (+ i 1))))
     (set i (cells-at ctx X_F0))
     (while (< i (cells-at ctx X_F1))
@@ -607,7 +606,6 @@
         ^:mut ^I32 g 0
         ^:mut ^I32 k 0
         ^:mut ^I32 c 0
-        ^:mut ^I32 nv 0
         ^:mut ^I32 nt 0
         ^:mut ^I32 no 0
         ^:mut ^I32 nx 0
@@ -620,7 +618,7 @@
                 (set kind (gk-rule))
                 (if (== (gcat gc r C_KIND) 2) (set kind (gk-fill)))
                 (set g (ggp-new ggp (cells-at ctx X_PAGE) kind))
-                (set nv (gf-refs-run gc aux n s e 1 og ofl refs ggp g 0))
+                (gf-refs-run gc aux n s e 1 og ofl refs ggp g 0)
                 (set nt (gf-refs-run gc aux n s e 2 og ofl refs ggp g 1))
                 (set no (gf-refs-run gc aux n s e 4 og ofl refs ggp g 2))
                 (set nx 0)
@@ -1113,7 +1111,6 @@
         ^:mut ^I32 score 0
         ^:mut ^I32 ocr 0
         ^:mut ^I32 kept 0
-        ^:mut ^I32 ang 0
         ^:mut ^I32 gid 0
         ^:mut ^I32 src 0]
     (while (< u nu)
@@ -1268,7 +1265,6 @@
   (let [^:mut ^I32 a g0
         ^:mut ^I32 b 0
         ^:mut ^I32 c 0
-        ^:mut ^I32 d 0
         ^:mut ^I32 tried 0
         ^:mut ^I32 v1 -1]
     (while (< a g1)
@@ -1393,8 +1389,7 @@
         ^:mut ^I32 dx 0
         ^:mut ^I32 dy 0
         ^:mut ^I32 lab 0
-        ^:mut ^I32 added 0
-        ^:mut ^I32 ux0 0]
+        ^:mut ^I32 added 0]
     (while (< p (cells-at ctx X_P1))
       (do (if (or (== (pa-get pa p (pf-kind)) (pa-curve)) (== (pa-get pa p (pf-kind)) (pa-other)))
             (do (set np (+ np 1))
@@ -1493,7 +1488,6 @@
         ^:mut ^I32 x1 0
         ^:mut ^I32 y1 0
         ^:mut ^I32 ok 0
-        ^:mut ^I32 t 0
         ^:mut ^I32 ra 0
         ^:mut ^I32 rb 0
         ^:mut ^I32 src 0
