@@ -1217,7 +1217,7 @@ fn test_every_cell_of_every_stride_is_printed_or_spare() {
             crate::testport::assert_eq(cells, 16, "fonts: every cell (D108 gave the two spare to /CapHeight and /XHeight)");
         }
         if ea == 12 {
-            crate::testport::assert_eq(EV_STRIDES[(11) as usize] - cells, 5, "paths: five spare");
+            crate::testport::assert_eq(EV_STRIDES[(11) as usize] - cells, 1, "paths: one spare (D219 printed vis, vby, vchk and backdrop)");
         }
         if ea == 13 {
             crate::testport::assert_eq(EV_STRIDES[(12) as usize] - cells, 1, "images: one spare");

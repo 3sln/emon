@@ -522,6 +522,12 @@ public static class Pdfcontenttest {
         emon.Testport.AssertThat((r % 100) >= 4, "the big ones took several rounds");
     }
     [Xunit.Fact]
+    public static void TestEveryVisibilityFixtureIsTheSameThroughAnAsyncSourceOf512ByteChunks() {
+        // P3.6a: the paths' vis, vby, vchk and backdrop are cells of the evidence, so they are held to the same rule.
+        int r = CtAsyncRows(0, emon.Testport.TestFile("vis/rows.txt"), 0, 512);
+        emon.Testport.AssertThat(r >= 1800, "eighteen visibility fixtures were run");
+    }
+    [Xunit.Fact]
     public static void TestEveryTaggedDocumentIsTheSameThroughAnAsyncSourceOf512ByteChunks() {
         int r = CtAsyncRows(0, emon.Testport.TestFile("content/tagged.txt"), 0, 512);
         emon.Testport.AssertThat(r >= 300, "three documents were run");

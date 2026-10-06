@@ -312,6 +312,9 @@ pub fn pg_blend() -> i32 {
 pub fn pg_softmask() -> i32 {
     return 256;
 }
+pub fn pg_truncated() -> i32 {
+    return 512;
+}
 pub fn pg_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "closed");
@@ -347,6 +350,10 @@ pub fn pg_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 256 {
         crate::port::text_ascii(t, "softmask");
+        return 1;
+    }
+    if code == 512 {
+        crate::port::text_ascii(t, "truncated");
         return 1;
     }
     return 0;
@@ -1663,6 +1670,9 @@ pub fn ek_radii() -> i32 {
 pub fn ek_outline() -> i32 {
     return 150;
 }
+pub fn ek_backdrop() -> i32 {
+    return 151;
+}
 pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "emon-evidence");
@@ -2262,6 +2272,10 @@ pub fn ek_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 150 {
         crate::port::text_ascii(t, "outline");
+        return 1;
+    }
+    if code == 151 {
+        crate::port::text_ascii(t, "backdrop");
         return 1;
     }
     return 0;
@@ -3233,6 +3247,18 @@ pub fn pf_pcount() -> i32 {
 pub fn pf_dash() -> i32 {
     return 18;
 }
+pub fn pf_vis() -> i32 {
+    return 19;
+}
+pub fn pf_vby() -> i32 {
+    return 20;
+}
+pub fn pf_vchk() -> i32 {
+    return 21;
+}
+pub fn pf_backdrop() -> i32 {
+    return 22;
+}
 pub fn mf_page() -> i32 {
     return 0;
 }
@@ -3743,7 +3769,7 @@ pub fn tlf_gap() -> i32 {
 pub fn tlf_conf() -> i32 {
     return 16;
 }
-pub static EV_FD: [i32; 1650] = [
+pub static EV_FD: [i32; 1674] = [
     1, 0, 1, 9, -2147483648, 0,
     1, 1, 2, 34, 0, 0,
     1, 2, 2, 74, 0, 0,
@@ -3871,6 +3897,10 @@ pub static EV_FD: [i32; 1650] = [
     12, 15, 1, 101, -1, 0,
     12, 16, 7, 57, -1, 0,
     12, 18, 2, 117, 0, 0,
+    12, 19, 8, 21, 0, 2,
+    12, 20, 1, 102, -1, 0,
+    12, 21, 9, 103, 0, 11,
+    12, 22, 5, 151, -2147483648, 0,
     13, 0, 1, 9, -2147483648, 0,
     13, 1, 3, 15, -2147483648, 0,
     13, 5, 1, 35, -2147483648, 0,
@@ -4032,19 +4062,19 @@ pub static EV_FX: [i32; 48] = [
     72, 8,
     80, 17,
     97, 15,
-    112, 15,
-    127, 15,
-    142, 21,
-    163, 10,
-    173, 13,
-    186, 16,
-    202, 9,
-    211, 3,
-    214, 9,
-    223, 16,
-    239, 11,
-    250, 15,
-    265, 10
+    112, 19,
+    131, 15,
+    146, 21,
+    167, 10,
+    177, 13,
+    190, 16,
+    206, 9,
+    215, 3,
+    218, 9,
+    227, 16,
+    243, 11,
+    254, 15,
+    269, 10
 ];
 pub static EV_STRIDES: [i32; 24] = [
     12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
@@ -4438,6 +4468,8 @@ pub fn pa_new(mut c: &mut crate::port::Cells, v_page: i32, v_kind: i32, v_x0: i3
     ev_set(c, 24, r, 14, -1);
     ev_set(c, 24, r, 15, -1);
     ev_set(c, 24, r, 16, -1);
+    ev_set(c, 24, r, 20, -1);
+    ev_set(c, 24, r, 22, -1);
     return r;
 }
 pub fn im_count(c: &mut crate::port::Cells) -> i32 {

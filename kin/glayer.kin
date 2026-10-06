@@ -1,0 +1,589 @@
+;; The graphics arenas of the PageLayer (P5.5a; SPEC 9.7, 9.9; D218, D220, D228). emon's own module (D039).
+;;
+;; FOUR integer arenas in `Cells`, like the layer's others (`emon.player`): absent -1, runs `first count`, references `(ea, index)`
+;; in `refs`. They are made by `gf-page` (`emon.gfuse`) from the candidates `gv-page` (`emon.gvec`) reads off the vector source, and
+;; are the ONLY geometry `emon.table` reads (D218).
+;;
+;;   grl 24  the fused rules     page, box (4), centre line ex0 ey0 ex1 ey1 (4), thickness, orientation (`go`), angle (centi-degrees,
+;;                               [0, 18000)), colour (0xRRGGBB, -1), style (`rs`), sources (`gs` bitset), winning source (`gs`),
+;;                               rule (the `fr` number), confidence (per mille), flags (`gq`), group (`ggp` row, -1), z (the vector
+;;                               member's, -1), spare (3)
+;;   gfl 16  the fused fills     page, box (4), colour, lightness (0..1000, -1), sources, winning source, rule, confidence, flags
+;;                               (`gqf`), group, z, spare (2)
+;;   ggp 12  graphics groups     page, kind (`gk`), vector members run `(paths, i)`/`(pts, k)` pairs in `refs`, tracer members run,
+;;                               OCR members run, flags, spare (3)
+;;   grg 16  graphic regions     page, box (4), kind (`rk`), sources, subject `(ea, index)` (2), rules inside, fills inside,
+;;                               confidence, flags, spare (3)
+;;
+;; THE SPEC'S SPARE COUNT for `grg` is 2; its fields are 13 cells, so the stride 16 leaves 3 (as D240 corrected `cg` and `fa`).
+;;
+;; THEIR `ea` CODES (the layer's: cg 34 ... hl 40, `grl` 41 in `fpa`'s place, sl 42): gfl 43, ggp 44, grg 45.
+;;
+;; THE DUMP is table driven (`gl-fd`, one row per printed field, as `pl-fd` is), and a law checks that every cell of every stride is
+;; printed or named spare. `gl-check` is the layer's checker for these arenas (every run and every reference), `gl-append` re-bases a
+;; page's arenas onto a document's.
+(ns emon.glayer
+  (:require [emon.lang :refer [I32 Cells Text defenum emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push text-i32]]
+            [emon.json :refer [js-indent js-close js-aelem js-aend js-fsep js-cpt]]
+            [emon.evidence :refer [ea-emit-name rs-emit-name]]
+            [kin.lang :refer [defn defdata return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ------------------------------------------------------------- the codes
+
+;; A rule's orientation: `h` within `gf-axis` of horizontal, `v` of vertical, else `slant` (slanted rules are figure material).
+(defenum ^:pub go
+  [[go-h 1 "h"]
+   [go-v 2 "v"]
+   [go-slant 3 "slant"]])
+
+;; A rule's flags, one bit each in the order SPEC 9.7 writes them; `from-image` (a thin image placement drawn as a rule, SPEC 9.9) is
+;; appended (D270).
+(defenum ^:pub gq
+  [[gq-traced 1 "traced"]
+   [gq-unwitnessed 2 "unwitnessed"]
+   [gq-in-image 4 "in-image"]
+   [gq-box-edge 8 "box-edge"]
+   [gq-from-fill 16 "from-fill"]
+   [gq-artifact-layout 32 "artifact-layout"]
+   [gq-artifact-pagination 64 "artifact-pagination"]
+   [gq-in-figure 128 "in-figure"]
+   [gq-from-image 256 "from-image"]])
+
+;; A fill's flags: shading, pattern, in-image, tint-coloured (the colour came from the tracer).
+(defenum ^:pub gqf
+  [[gqf-shading 1 "shading"]
+   [gqf-pattern 2 "pattern"]
+   [gqf-in-image 4 "in-image"]
+   [gqf-tint-coloured 8 "tint-coloured"]])
+
+;; What a graphics group (`ggp`) is of.
+(defenum ^:pub gk
+  [[gk-rule 1 "rule"]
+   [gk-fill 2 "fill"]
+   [gk-region 3 "region"]])
+
+;; What a graphic region (`grg`) is.
+(defenum ^:pub rk
+  [[rk-table-in-image 1 "table-in-image"]
+   [rk-figure 2 "figure"]
+   [rk-table-hint 3 "table-hint"]])
+
+;; The sources of a graphic, a bitset (SPEC 9.9): the PDF's paths, the tracer, OCR's layout, the tagged tree, an image placement.
+(defenum ^:pub gs
+  [[gs-vector 1 "vector"]
+   [gs-trace 2 "trace"]
+   [gs-ocr 4 "ocr"]
+   [gs-struct 8 "struct"]
+   [gs-image 16 "image"]])
+
+;; The dump's keys of these four arenas (new rows at the end: codes are forever).
+(defenum ^:pub glk
+  [[glk-grl 1 "grl"]
+   [glk-gfl 2 "gfl"]
+   [glk-ggp 3 "ggp"]
+   [glk-grg 4 "grg"]
+   [glk-page 5 "page"]
+   [glk-box 6 "box"]
+   [glk-ex0 7 "ex0"]
+   [glk-ey0 8 "ey0"]
+   [glk-ex1 9 "ex1"]
+   [glk-ey1 10 "ey1"]
+   [glk-thickness 11 "thickness"]
+   [glk-orient 12 "orient"]
+   [glk-angle 13 "angle"]
+   [glk-color 14 "color"]
+   [glk-style 15 "style"]
+   [glk-sources 16 "sources"]
+   [glk-source 17 "source"]
+   [glk-rule 18 "rule"]
+   [glk-conf 19 "conf"]
+   [glk-flags 20 "flags"]
+   [glk-group 21 "group"]
+   [glk-z 22 "z"]
+   [glk-lightness 23 "lightness"]
+   [glk-kind 24 "kind"]
+   [glk-vector 25 "vector"]
+   [glk-tracer 26 "tracer"]
+   [glk-ocr 27 "ocr"]
+   [glk-subject 28 "subject"]
+   [glk-rules 29 "rules"]
+   [glk-fills 30 "fills"]])
+
+(defn ^:pub ^I32 gl-ea-grl [] (return 41))
+(defn ^:pub ^I32 gl-ea-gfl [] (return 43))
+(defn ^:pub ^I32 gl-ea-ggp [] (return 44))
+(defn ^:pub ^I32 gl-ea-grg [] (return 45))
+
+(defn ^:pub ^I32 grl-stride [] (return 24))
+(defn ^:pub ^I32 gfl-stride [] (return 16))
+(defn ^:pub ^I32 ggp-stride [] (return 12))
+(defn ^:pub ^I32 grg-stride [] (return 16))
+
+;; grl
+(defn ^:pub ^I32 grf-page [] (return 0))
+(defn ^:pub ^I32 grf-x0 [] (return 1))
+(defn ^:pub ^I32 grf-y0 [] (return 2))
+(defn ^:pub ^I32 grf-x1 [] (return 3))
+(defn ^:pub ^I32 grf-y1 [] (return 4))
+(defn ^:pub ^I32 grf-ex0 [] (return 5))
+(defn ^:pub ^I32 grf-ey0 [] (return 6))
+(defn ^:pub ^I32 grf-ex1 [] (return 7))
+(defn ^:pub ^I32 grf-ey1 [] (return 8))
+(defn ^:pub ^I32 grf-thick [] (return 9))
+(defn ^:pub ^I32 grf-orient [] (return 10))
+(defn ^:pub ^I32 grf-angle [] (return 11))
+(defn ^:pub ^I32 grf-colour [] (return 12))
+(defn ^:pub ^I32 grf-style [] (return 13))
+(defn ^:pub ^I32 grf-sources [] (return 14))
+(defn ^:pub ^I32 grf-source [] (return 15))
+(defn ^:pub ^I32 grf-rule [] (return 16))
+(defn ^:pub ^I32 grf-conf [] (return 17))
+(defn ^:pub ^I32 grf-flags [] (return 18))
+(defn ^:pub ^I32 grf-group [] (return 19))
+(defn ^:pub ^I32 grf-z [] (return 20))
+;; gfl
+(defn ^:pub ^I32 gff-page [] (return 0))
+(defn ^:pub ^I32 gff-x0 [] (return 1))
+(defn ^:pub ^I32 gff-y0 [] (return 2))
+(defn ^:pub ^I32 gff-x1 [] (return 3))
+(defn ^:pub ^I32 gff-y1 [] (return 4))
+(defn ^:pub ^I32 gff-colour [] (return 5))
+(defn ^:pub ^I32 gff-light [] (return 6))
+(defn ^:pub ^I32 gff-sources [] (return 7))
+(defn ^:pub ^I32 gff-source [] (return 8))
+(defn ^:pub ^I32 gff-rule [] (return 9))
+(defn ^:pub ^I32 gff-conf [] (return 10))
+(defn ^:pub ^I32 gff-flags [] (return 11))
+(defn ^:pub ^I32 gff-group [] (return 12))
+(defn ^:pub ^I32 gff-z [] (return 13))
+;; ggp
+(defn ^:pub ^I32 ggf-page [] (return 0))
+(defn ^:pub ^I32 ggf-kind [] (return 1))
+(defn ^:pub ^I32 ggf-vfirst [] (return 2))
+(defn ^:pub ^I32 ggf-vcount [] (return 3))
+(defn ^:pub ^I32 ggf-tfirst [] (return 4))
+(defn ^:pub ^I32 ggf-tcount [] (return 5))
+(defn ^:pub ^I32 ggf-ofirst [] (return 6))
+(defn ^:pub ^I32 ggf-ocount [] (return 7))
+(defn ^:pub ^I32 ggf-flags [] (return 8))
+;; grg
+(defn ^:pub ^I32 gcf-page [] (return 0))
+(defn ^:pub ^I32 gcf-x0 [] (return 1))
+(defn ^:pub ^I32 gcf-y0 [] (return 2))
+(defn ^:pub ^I32 gcf-x1 [] (return 3))
+(defn ^:pub ^I32 gcf-y1 [] (return 4))
+(defn ^:pub ^I32 gcf-kind [] (return 5))
+(defn ^:pub ^I32 gcf-sources [] (return 6))
+(defn ^:pub ^I32 gcf-sea [] (return 7))
+(defn ^:pub ^I32 gcf-sidx [] (return 8))
+(defn ^:pub ^I32 gcf-rules [] (return 9))
+(defn ^:pub ^I32 gcf-fills [] (return 10))
+(defn ^:pub ^I32 gcf-conf [] (return 11))
+(defn ^:pub ^I32 gcf-flags [] (return 12))
+
+;; ------------------------------------------------------------- the builders
+
+(defn ^I32 gl-push [^:mut ^Cells c ^I32 stride]
+  (comment "Append a row of zeros and answer its index.")
+  (let [^I32 row (quot (cells-len c) stride)
+        ^:mut ^I32 i 0]
+    (while (< i stride)
+      (do (cells-push c 0)
+          (set i (+ i 1))))
+    (return row)))
+
+(defn ^:pub ^I32 grl-count [^Cells c] (return (quot (cells-len c) 24)))
+(defn ^:pub ^I32 grl-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 24) f))))
+(defn ^:pub ^I32 grl-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (cells-set c (+ (* i 24) f) v) (return 0))
+(defn ^:pub ^I32 grl-new [^:mut ^Cells c ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                          ^I32 ex0 ^I32 ey0 ^I32 ex1 ^I32 ey1 ^I32 thick ^I32 orient]
+  (comment "Append a fused rule: page, box, centre line, thickness and orientation (`go`). Angle 0, colour -1, style solid (1),")
+  (comment "sources, winner, rule, confidence and flags 0, no group and no z (-1). Answers its row.")
+  (let [^I32 r (gl-push c 24)]
+    (grl-set c r 0 page)
+    (grl-set c r 1 x0)
+    (grl-set c r 2 y0)
+    (grl-set c r 3 x1)
+    (grl-set c r 4 y1)
+    (grl-set c r 5 ex0)
+    (grl-set c r 6 ey0)
+    (grl-set c r 7 ex1)
+    (grl-set c r 8 ey1)
+    (grl-set c r 9 thick)
+    (grl-set c r 10 orient)
+    (grl-set c r 12 -1)
+    (grl-set c r 13 1)
+    (grl-set c r 19 -1)
+    (grl-set c r 20 -1)
+    (return r)))
+
+(defn ^:pub ^I32 gfl-count [^Cells c] (return (quot (cells-len c) 16)))
+(defn ^:pub ^I32 gfl-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 16) f))))
+(defn ^:pub ^I32 gfl-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (cells-set c (+ (* i 16) f) v) (return 0))
+(defn ^:pub ^I32 gfl-new [^:mut ^Cells c ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 colour]
+  (comment "Append a fused fill: page, box and colour; lightness -1, the rest 0, no group and no z (-1). Answers its row.")
+  (let [^I32 r (gl-push c 16)]
+    (gfl-set c r 0 page)
+    (gfl-set c r 1 x0)
+    (gfl-set c r 2 y0)
+    (gfl-set c r 3 x1)
+    (gfl-set c r 4 y1)
+    (gfl-set c r 5 colour)
+    (gfl-set c r 6 -1)
+    (gfl-set c r 12 -1)
+    (gfl-set c r 13 -1)
+    (return r)))
+
+(defn ^:pub ^I32 ggp-count [^Cells c] (return (quot (cells-len c) 12)))
+(defn ^:pub ^I32 ggp-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 12) f))))
+(defn ^:pub ^I32 ggp-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (cells-set c (+ (* i 12) f) v) (return 0))
+(defn ^:pub ^I32 ggp-new [^:mut ^Cells c ^I32 page ^I32 kind]
+  (comment "Append a graphics group of `kind` (`gk`) with its three member runs empty (first -1). Answers its row.")
+  (let [^I32 r (gl-push c 12)]
+    (ggp-set c r 0 page)
+    (ggp-set c r 1 kind)
+    (ggp-set c r 2 -1)
+    (ggp-set c r 4 -1)
+    (ggp-set c r 6 -1)
+    (return r)))
+
+(defn ^:pub ^I32 grg-count [^Cells c] (return (quot (cells-len c) 16)))
+(defn ^:pub ^I32 grg-get [^Cells c ^I32 i ^I32 f] (return (cells-at c (+ (* i 16) f))))
+(defn ^:pub ^I32 grg-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (cells-set c (+ (* i 16) f) v) (return 0))
+(defn ^:pub ^I32 grg-new [^:mut ^Cells c ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 kind]
+  (comment "Append a graphic region of `kind` (`rk`); no subject (-1 -1), counts 0. Answers its row.")
+  (let [^I32 r (gl-push c 16)]
+    (grg-set c r 0 page)
+    (grg-set c r 1 x0)
+    (grg-set c r 2 y0)
+    (grg-set c r 3 x1)
+    (grg-set c r 4 y1)
+    (grg-set c r 5 kind)
+    (grg-set c r 7 -1)
+    (grg-set c r 8 -1)
+    (return r)))
+
+;; ------------------------------------------------------------- append
+
+(defn ^I32 gl-add-if [^I32 v ^I32 by]
+  (comment "v + by for a present value (v >= 0); an absent one stays -1.")
+  (if (< v 0) (return v))
+  (return (+ v by)))
+
+(defn ^:pub ^I32 gl-append [^:mut ^Cells dgrl ^:mut ^Cells dgfl ^:mut ^Cells dggp ^:mut ^Cells dgrg
+                            ^Cells pgrl ^Cells pgfl ^Cells pggp ^Cells pgrg ^I32 orf]
+  (comment "Concatenate a page's graphics arenas onto the document's. Re-based: every `group` (by the document's `ggp` rows so far)")
+  (comment "and every member run of a group (by `orf`, the rows of `refs` the document had before the page's were appended). Not")
+  (comment "re-based: a region's subject (an evidence row) and a member reference's own index (evidence rows). Answers 0.")
+  (let [^I32 og (quot (cells-len dggp) 12)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 v 0]
+    (set n (quot (cells-len pgrl) 24))
+    (while (< i n)
+      (do (set k 0)
+          (while (< k 24)
+            (do (set v (cells-at pgrl (+ (* i 24) k)))
+                (if (== k 19) (set v (gl-add-if v og)))
+                (cells-push dgrl v)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (set i 0)
+    (set n (quot (cells-len pgfl) 16))
+    (while (< i n)
+      (do (set k 0)
+          (while (< k 16)
+            (do (set v (cells-at pgfl (+ (* i 16) k)))
+                (if (== k 12) (set v (gl-add-if v og)))
+                (cells-push dgfl v)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (set i 0)
+    (set n (quot (cells-len pggp) 12))
+    (while (< i n)
+      (do (set k 0)
+          (while (< k 12)
+            (do (set v (cells-at pggp (+ (* i 12) k)))
+                (if (or (== k 2) (or (== k 4) (== k 6))) (set v (gl-add-if v orf)))
+                (cells-push dggp v)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (set i 0)
+    (set n (cells-len pgrg))
+    (while (< i n)
+      (do (cells-push dgrg (cells-at pgrg i))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- check
+
+(defn ^I32 gl-run-ok [^I32 first ^I32 cnt ^I32 limit]
+  (comment "1 when (first, count) is absent (first -1, count 0) or lies inside [0, limit).")
+  (if (< first 0)
+    (do (if (== cnt 0) (return 1))
+        (return 0)))
+  (if (< cnt 0) (return 0))
+  (if (> (+ first cnt) limit) (return 0))
+  (return 1))
+
+(defn ^:pub ^I32 gl-check [^Cells grl ^Cells gfl ^Cells ggp ^Cells grg ^Cells refs]
+  (comment "0 for sound graphics arenas, else the first broken thing: 1 a stride; 2 a `grl` or `gfl` group outside `ggp` (or below -1);")
+  (comment "3 a `ggp` member run outside `refs` or a `ggp` of an unknown kind; 4 a `grl` orientation outside `go`, a negative")
+  (comment "thickness, or a box that is upside down (in `grl`, `gfl` or `grg`); 5 a `grg` of an unknown kind or a half subject (an")
+  (comment "arena and no row, or a row and no arena); 6 a `refs` reference into one of these arenas (`ea` 41, 43, 44, 45) that has no")
+  (comment "such row.")
+  (let [^I32 nr (quot (cells-len grl) 24)
+        ^I32 nf (quot (cells-len gfl) 16)
+        ^I32 ng (quot (cells-len ggp) 12)
+        ^I32 nc (quot (cells-len grg) 16)
+        ^I32 nrf (quot (cells-len refs) 2)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 w 0]
+    (if (!= (rem (cells-len grl) 24) 0) (return 1))
+    (if (!= (rem (cells-len gfl) 16) 0) (return 1))
+    (if (!= (rem (cells-len ggp) 12) 0) (return 1))
+    (if (!= (rem (cells-len grg) 16) 0) (return 1))
+    (if (!= (rem (cells-len refs) 2) 0) (return 1))
+    (while (< i nr)
+      (do (set v (cells-at grl (+ (* i 24) 19)))
+          (if (or (< v -1) (>= v ng)) (return 2))
+          (set v (cells-at grl (+ (* i 24) 10)))
+          (if (or (< v 1) (> v 3)) (return 4))
+          (if (< (cells-at grl (+ (* i 24) 9)) 0) (return 4))
+          (if (or (> (cells-at grl (+ (* i 24) 1)) (cells-at grl (+ (* i 24) 3))) (> (cells-at grl (+ (* i 24) 2)) (cells-at grl (+ (* i 24) 4)))) (return 4))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nf)
+      (do (set v (cells-at gfl (+ (* i 16) 12)))
+          (if (or (< v -1) (>= v ng)) (return 2))
+          (if (or (> (cells-at gfl (+ (* i 16) 1)) (cells-at gfl (+ (* i 16) 3))) (> (cells-at gfl (+ (* i 16) 2)) (cells-at gfl (+ (* i 16) 4)))) (return 4))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i ng)
+      (do (if (== (gl-run-ok (cells-at ggp (+ (* i 12) 2)) (cells-at ggp (+ (* i 12) 3)) nrf) 0) (return 3))
+          (if (== (gl-run-ok (cells-at ggp (+ (* i 12) 4)) (cells-at ggp (+ (* i 12) 5)) nrf) 0) (return 3))
+          (if (== (gl-run-ok (cells-at ggp (+ (* i 12) 6)) (cells-at ggp (+ (* i 12) 7)) nrf) 0) (return 3))
+          (set v (cells-at ggp (+ (* i 12) 1)))
+          (if (or (< v 1) (> v 3)) (return 3))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nc)
+      (do (set v (cells-at grg (+ (* i 16) 5)))
+          (if (or (< v 1) (> v 3)) (return 5))
+          (set v (cells-at grg (+ (* i 16) 7)))
+          (set w (cells-at grg (+ (* i 16) 8)))
+          (if (and (< v 0) (>= w 0)) (return 5))
+          (if (and (>= v 0) (< w 0)) (return 5))
+          (if (or (> (cells-at grg (+ (* i 16) 1)) (cells-at grg (+ (* i 16) 3))) (> (cells-at grg (+ (* i 16) 2)) (cells-at grg (+ (* i 16) 4)))) (return 4))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nrf)
+      (do (set v (cells-at refs (* i 2)))
+          (set w (cells-at refs (+ (* i 2) 1)))
+          (if (== v 41) (if (or (< w 0) (>= w nr)) (return 6)))
+          (if (== v 43) (if (or (< w 0) (>= w nf)) (return 6)))
+          (if (== v 44) (if (or (< w 0) (>= w ng)) (return 6)))
+          (if (== v 45) (if (or (< w 0) (>= w nc)) (return 6)))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the dump
+
+;; THE FIELD TABLE of the four arenas: [arena first-cell kind key default arg], arenas 1 `grl`, 2 `gfl`, 3 `ggp`, 4 `grg`. Kinds: 1 int,
+;; 2 centi-units as points, 3 box (4 cells), 4 run `[first,count]` (omitted when it is (default, arg)), 5 reference `["arena", index]`
+;; (the arena cell first; omitted when the index cell is -1), 6 `go` name, 7 `rs` name, 8 `gk` name, 9 `rk` name, 10 a `gq` bit set as
+;; an array of names, 11 a `gqf` bit set, 12 a `gs` bit set. A cell equal to the default is omitted (not for MIN).
+(defdata ^:pub gl-fd
+  :emitter kin.lang/flat-array
+  :stride 6
+  :data [1 0 1 5 -2147483648 0
+         1 1 3 6 -2147483648 0
+         1 5 2 7 -2147483648 0
+         1 6 2 8 -2147483648 0
+         1 7 2 9 -2147483648 0
+         1 8 2 10 -2147483648 0
+         1 9 2 11 -2147483648 0
+         1 10 6 12 -2147483648 0
+         1 11 1 13 0 0
+         1 12 1 14 -1 0
+         1 13 7 15 1 0
+         1 14 12 16 0 0
+         1 15 12 17 0 0
+         1 16 1 18 0 0
+         1 17 1 19 0 0
+         1 18 10 20 0 0
+         1 19 1 21 -1 0
+         1 20 1 22 -1 0
+         2 0 1 5 -2147483648 0
+         2 1 3 6 -2147483648 0
+         2 5 1 14 -1 0
+         2 6 1 23 -1 0
+         2 7 12 16 0 0
+         2 8 12 17 0 0
+         2 9 1 18 0 0
+         2 10 1 19 0 0
+         2 11 11 20 0 0
+         2 12 1 21 -1 0
+         2 13 1 22 -1 0
+         3 0 1 5 -2147483648 0
+         3 1 8 24 -2147483648 0
+         3 2 4 25 -1 0
+         3 4 4 26 -1 0
+         3 6 4 27 -1 0
+         3 8 1 20 0 0
+         4 0 1 5 -2147483648 0
+         4 1 3 6 -2147483648 0
+         4 5 9 24 -2147483648 0
+         4 6 12 16 0 0
+         4 7 5 28 -1 0
+         4 9 1 29 0 0
+         4 10 1 30 0 0
+         4 11 1 19 0 0
+         4 12 1 20 0 0]
+  :accessors {^I32 gl-fd-count [^I32 ignored]
+              ^I32 gl-fd-at [^I32 ignored ^I32 row ^I32 field]})
+
+;; where an arena's rows of `gl-fd` start and how many, its stride, and how many of its cells are spare
+(defdata ^:pub gl-fx
+  :emitter kin.lang/flat-array
+  :stride 4
+  :data [0 18 24 3
+         18 11 16 2
+         29 6 12 3
+         35 9 16 3]
+  :accessors {^I32 gl-fx-count [^I32 ignored]
+              ^I32 gl-fx-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^I32 gl-begin [^:mut ^Text t ^I32 pr ^I32 started ^I32 code]
+  (if (== started 1) (emit-ascii t ","))
+  (if (== pr 1) (js-indent t 3))
+  (emit-ascii t "\"")
+  (glk-emit-name t code)
+  (emit-ascii t "\":")
+  (if (== pr 1) (emit-ascii t " "))
+  (return 1))
+
+(defn ^I32 gl-bits [^:mut ^Text t ^I32 pr ^I32 v ^I32 which]
+  (comment "A bit set as an array of names (which 10 `gq`, 11 `gqf`, 12 `gs`).")
+  (let [^:mut ^I32 b 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 bit 1]
+    (emit-ascii t "[")
+    (while (< b 16)
+      (do (if (!= (bit-and v bit) 0)
+            (do (js-fsep t pr k)
+                (emit-ascii t "\"")
+                (if (== which 10) (gq-emit-name t bit))
+                (if (== which 11) (gqf-emit-name t bit))
+                (if (== which 12) (gs-emit-name t bit))
+                (emit-ascii t "\"")
+                (set k (+ k 1))))
+          (set bit (* bit 2))
+          (set b (+ b 1))))
+    (emit-ascii t "]")
+    (return 0)))
+
+(defn ^I32 gl-field [^:mut ^Text t ^I32 pr ^Cells c ^I32 stride ^I32 row ^I32 r ^I32 started]
+  (comment "One printed field of a row, by row `r` of `gl-fd`.")
+  (let [^I32 f (gl-fd-at 0 r 1)
+        ^I32 kind (gl-fd-at 0 r 2)
+        ^I32 key (gl-fd-at 0 r 3)
+        ^I32 dflt (gl-fd-at 0 r 4)
+        ^I32 arg (gl-fd-at 0 r 5)
+        ^I32 p (+ (* row stride) f)
+        ^:mut ^I32 s started]
+    (if (and (or (== kind 1) (or (== kind 2) (or (and (>= kind 6) (<= kind 9)) (>= kind 10)))) (== (cells-at c p) dflt))
+      (return started))
+    (if (== kind 1) (do (set s (gl-begin t pr s key)) (text-i32 t (cells-at c p)) (return s)))
+    (if (== kind 2) (do (set s (gl-begin t pr s key)) (js-cpt t (cells-at c p)) (return s)))
+    (if (== kind 3)
+      (do (set s (gl-begin t pr s key))
+          (emit-ascii t "[")
+          (js-cpt t (cells-at c p))
+          (js-fsep t pr 1)
+          (js-cpt t (cells-at c (+ p 1)))
+          (js-fsep t pr 1)
+          (js-cpt t (cells-at c (+ p 2)))
+          (js-fsep t pr 1)
+          (js-cpt t (cells-at c (+ p 3)))
+          (emit-ascii t "]")
+          (return s)))
+    (if (== kind 4)
+      (do (if (and (== (cells-at c p) dflt) (== (cells-at c (+ p 1)) arg)) (return started))
+          (set s (gl-begin t pr s key))
+          (emit-ascii t "[")
+          (text-i32 t (cells-at c p))
+          (js-fsep t pr 1)
+          (text-i32 t (cells-at c (+ p 1)))
+          (emit-ascii t "]")
+          (return s)))
+    (if (== kind 5)
+      (do (if (== (cells-at c (+ p 1)) dflt) (return started))
+          (set s (gl-begin t pr s key))
+          (emit-ascii t "[\"")
+          (ea-emit-name t (cells-at c p))
+          (emit-ascii t "\",")
+          (if (== pr 1) (emit-ascii t " "))
+          (text-i32 t (cells-at c (+ p 1)))
+          (emit-ascii t "]")
+          (return s)))
+    (if (and (>= kind 6) (<= kind 9))
+      (do (set s (gl-begin t pr s key))
+          (emit-ascii t "\"")
+          (if (== kind 6) (go-emit-name t (cells-at c p)))
+          (if (== kind 7) (rs-emit-name t (cells-at c p)))
+          (if (== kind 8) (gk-emit-name t (cells-at c p)))
+          (if (== kind 9) (rk-emit-name t (cells-at c p)))
+          (emit-ascii t "\"")
+          (return s)))
+    (if (>= kind 10)
+      (do (set s (gl-begin t pr s key))
+          (gl-bits t pr (cells-at c p) kind)
+          (return s)))
+    (return started)))
+
+(defn ^I32 gl-row [^:mut ^Text t ^I32 pr ^I32 a ^Cells c ^I32 row]
+  (comment "One row of arena a (1 `grl` .. 4 `grg`) as an object, its fields in stride order.")
+  (let [^I32 first (gl-fx-at 0 (- a 1) 0)
+        ^I32 cnt (gl-fx-at 0 (- a 1) 1)
+        ^I32 stride (gl-fx-at 0 (- a 1) 2)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 k 0]
+    (emit-ascii t "{")
+    (while (< k cnt)
+      (do (set s (gl-field t pr c stride row (+ first k) s))
+          (set k (+ k 1))))
+    (js-close t pr 2 s)
+    (return 0)))
+
+(defn ^:pub ^I32 gl-arena [^:mut ^Text t ^I32 pr ^I32 started ^I32 a ^Cells c]
+  (comment "`\"key\":[row, ...]` for arena a (1 `grl`, 2 `gfl`, 3 `ggp`, 4 `grg`), as a member of the dump's object; answers 1.")
+  (let [^I32 stride (gl-fx-at 0 (- a 1) 2)
+        ^I32 n (quot (cells-len c) stride)
+        ^:mut ^I32 i 0]
+    (if (== started 1) (emit-ascii t ","))
+    (if (== pr 1) (js-indent t 1))
+    (emit-ascii t "\"")
+    (glk-emit-name t a)
+    (emit-ascii t "\":")
+    (if (== pr 1) (emit-ascii t " "))
+    (emit-ascii t "[")
+    (while (< i n)
+      (do (js-aelem t pr 1 i)
+          (gl-row t pr a c i)
+          (set i (+ i 1))))
+    (js-aend t pr 1 n)
+    (return 1)))
+
+(defn ^:pub ^I32 gl-emit [^:mut ^Text t ^I32 pretty ^I32 s0 ^Cells grl ^Cells gfl ^Cells ggp ^Cells grg]
+  (comment "The four arrays as members of the dump's object, `s0` being 1 when a member came before. Answers 1.")
+  (let [^:mut ^I32 s s0]
+    (set s (gl-arena t pretty s 1 grl))
+    (set s (gl-arena t pretty s 2 gfl))
+    (set s (gl-arena t pretty s 3 ggp))
+    (set s (gl-arena t pretty s 4 grg))
+    (return s)))

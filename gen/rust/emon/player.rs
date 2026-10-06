@@ -2,6 +2,7 @@
 // source: emon.player
 
 use crate::emon::evidence::*;
+use crate::emon::glayer::*;
 use crate::emon::json::*;
 use crate::emon::model::*;
 
@@ -360,7 +361,7 @@ pub fn pl_ea_fx() -> i32 {
 pub fn pl_ea_hl() -> i32 {
     return 40;
 }
-pub fn pl_ea_fpa() -> i32 {
+pub fn pl_ea_grl() -> i32 {
     return 41;
 }
 pub fn pl_ea_sl() -> i32 {
@@ -386,9 +387,6 @@ pub fn fx_stride() -> i32 {
 }
 pub fn hl_stride() -> i32 {
     return 12;
-}
-pub fn fpa_stride() -> i32 {
-    return 24;
 }
 pub fn sl_stride() -> i32 {
     return 16;
@@ -733,7 +731,7 @@ pub fn sl_new(mut c: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i
     crate::port::cells_set(c, (r * 16) + 10, -1);
     return r;
 }
-pub(crate) fn pl_off(ea: i32, ocg: i32, ofw: i32, ofl: i32, ofv: i32, ofa: i32, ofx: i32, ohl: i32, ofpa: i32, osl: i32) -> i32 {
+pub(crate) fn pl_off(ea: i32, ocg: i32, ofw: i32, ofl: i32, ofv: i32, ofa: i32, ofx: i32, ohl: i32, ogrl: i32, osl: i32, ogfl: i32, oggp: i32, ogrg: i32) -> i32 {
     // The offset a reference into layer arena `ea` is re-based by (0 for an evidence arena).
     if ea == 34 {
         return ocg;
@@ -757,10 +755,19 @@ pub(crate) fn pl_off(ea: i32, ocg: i32, ofw: i32, ofl: i32, ofv: i32, ofa: i32, 
         return ohl;
     }
     if ea == 41 {
-        return ofpa;
+        return ogrl;
     }
     if ea == 42 {
         return osl;
+    }
+    if ea == 43 {
+        return ogfl;
+    }
+    if ea == 44 {
+        return oggp;
+    }
+    if ea == 45 {
+        return ogrg;
     }
     return 0;
 }
@@ -771,7 +778,7 @@ pub(crate) fn pl_add_if(v: i32, by: i32) -> i32 {
     }
     return v + by;
 }
-pub fn pl_append(mut dcg: &mut crate::port::Cells, mut dfw: &mut crate::port::Cells, mut dfl: &mut crate::port::Cells, mut dfv: &mut crate::port::Cells, mut dfa: &mut crate::port::Cells, mut dfx: &mut crate::port::Cells, mut dhl: &mut crate::port::Cells, mut dfpa: &mut crate::port::Cells, mut dsl: &mut crate::port::Cells, mut detext: &mut crate::port::Cells, mut drefs: &mut crate::port::Cells, pcg: &mut crate::port::Cells, pfw: &mut crate::port::Cells, pfl: &mut crate::port::Cells, pfv: &mut crate::port::Cells, pfa: &mut crate::port::Cells, pfx: &mut crate::port::Cells, phl: &mut crate::port::Cells, pfpa: &mut crate::port::Cells, psl: &mut crate::port::Cells, petext: &mut crate::port::Cells, prefs: &mut crate::port::Cells) -> i32 {
+pub fn pl_append(mut dcg: &mut crate::port::Cells, mut dfw: &mut crate::port::Cells, mut dfl: &mut crate::port::Cells, mut dfv: &mut crate::port::Cells, mut dfa: &mut crate::port::Cells, mut dfx: &mut crate::port::Cells, mut dhl: &mut crate::port::Cells, mut dgrl: &mut crate::port::Cells, mut dsl: &mut crate::port::Cells, mut dgfl: &mut crate::port::Cells, mut dggp: &mut crate::port::Cells, mut dgrg: &mut crate::port::Cells, mut detext: &mut crate::port::Cells, mut drefs: &mut crate::port::Cells, pcg: &mut crate::port::Cells, pfw: &mut crate::port::Cells, pfl: &mut crate::port::Cells, pfv: &mut crate::port::Cells, pfa: &mut crate::port::Cells, pfx: &mut crate::port::Cells, phl: &mut crate::port::Cells, pgrl: &mut crate::port::Cells, psl: &mut crate::port::Cells, pgfl: &mut crate::port::Cells, pggp: &mut crate::port::Cells, pgrg: &mut crate::port::Cells, petext: &mut crate::port::Cells, prefs: &mut crate::port::Cells) -> i32 {
     // Concatenate a page's layer (its arenas, and its own `etext` and `refs`) onto the document's, re-basing as the head of
     // this file says. Answers 0.
     let ocg: i32 = crate::port::cells_len(dcg) / 16;
@@ -781,8 +788,11 @@ pub fn pl_append(mut dcg: &mut crate::port::Cells, mut dfw: &mut crate::port::Ce
     let ofa: i32 = crate::port::cells_len(dfa) / 12;
     let ofx: i32 = crate::port::cells_len(dfx) / 4;
     let ohl: i32 = crate::port::cells_len(dhl) / 12;
-    let ofpa: i32 = crate::port::cells_len(dfpa) / 24;
+    let ogrl: i32 = crate::port::cells_len(dgrl) / 24;
     let osl: i32 = crate::port::cells_len(dsl) / 16;
+    let ogfl: i32 = crate::port::cells_len(dgfl) / 16;
+    let oggp: i32 = crate::port::cells_len(dggp) / 12;
+    let ogrg: i32 = crate::port::cells_len(dgrg) / 16;
     let oet: i32 = crate::port::cells_len(detext);
     let orf: i32 = crate::port::cells_len(drefs) / 2;
     let mut i: i32 = 0;
@@ -801,7 +811,7 @@ pub fn pl_append(mut dcg: &mut crate::port::Cells, mut dfw: &mut crate::port::Ce
     while i < n {
         v = crate::port::cells_at(prefs, i * 2);
         crate::port::cells_push(drefs, v);
-        crate::port::cells_push(drefs, crate::port::cells_at(prefs, (i * 2) + 1) + pl_off(v, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl));
+        crate::port::cells_push(drefs, crate::port::cells_at(prefs, (i * 2) + 1) + pl_off(v, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg));
         i += 1;
     }
     // cg: its three runs of refs, and nothing else
@@ -872,7 +882,7 @@ pub fn pl_append(mut dcg: &mut crate::port::Cells, mut dfw: &mut crate::port::Ce
         while k < 12 {
             v = crate::port::cells_at(pfa, (i * 12) + k);
             if k == 7 {
-                v += pl_off(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl);
+                v += pl_off(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg);
             }
             if k == 9 {
                 v = pl_add_if(v, ocg);
@@ -893,17 +903,11 @@ pub fn pl_append(mut dcg: &mut crate::port::Cells, mut dfw: &mut crate::port::Ce
         crate::port::cells_push(dfx, v);
         i += 1;
     }
-    // hl and fpa: nothing to re-base
+    // hl: nothing to re-base
     i = 0;
     n = crate::port::cells_len(phl);
     while i < n {
         crate::port::cells_push(dhl, crate::port::cells_at(phl, i));
-        i += 1;
-    }
-    i = 0;
-    n = crate::port::cells_len(pfpa);
-    while i < n {
-        crate::port::cells_push(dfpa, crate::port::cells_at(pfpa, i));
         i += 1;
     }
     // sl: its run of OCR words in refs, and its reference when that is a layer row
@@ -915,7 +919,7 @@ pub fn pl_append(mut dcg: &mut crate::port::Cells, mut dfw: &mut crate::port::Ce
         while k < 16 {
             v = crate::port::cells_at(psl, (i * 16) + k);
             if k == 8 {
-                v = pl_add_if(v, pl_off(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl));
+                v = pl_add_if(v, pl_off(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg));
             }
             if k == 10 {
                 v = pl_add_if(v, orf);
@@ -925,6 +929,7 @@ pub fn pl_append(mut dcg: &mut crate::port::Cells, mut dfw: &mut crate::port::Ce
         }
         i += 1;
     }
+    gl_append(dgrl, dgfl, dggp, dgrg, pgrl, pgfl, pggp, pgrg, orf);
     return 0;
 }
 pub(crate) fn pl_run_ok(first: i32, cnt: i32, limit: i32) -> i32 {
@@ -943,11 +948,12 @@ pub(crate) fn pl_run_ok(first: i32, cnt: i32, limit: i32) -> i32 {
     }
     return 1;
 }
-pub fn pl_check(cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, fv: &mut crate::port::Cells, fa: &mut crate::port::Cells, fx: &mut crate::port::Cells, hl: &mut crate::port::Cells, fpa: &mut crate::port::Cells, sl: &mut crate::port::Cells, etext: &mut crate::port::Cells, refs: &mut crate::port::Cells, glyphs: &mut crate::port::Cells) -> i32 {
+pub fn pl_check(cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, fv: &mut crate::port::Cells, fa: &mut crate::port::Cells, fx: &mut crate::port::Cells, hl: &mut crate::port::Cells, grl: &mut crate::port::Cells, sl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, ggp: &mut crate::port::Cells, grg: &mut crate::port::Cells, etext: &mut crate::port::Cells, refs: &mut crate::port::Cells, glyphs: &mut crate::port::Cells) -> i32 {
     // 0 for a sound layer, else the first broken thing: 1 a stride; 2 a `cg` run outside `refs`; 3 an `fw` text run outside
     // `etext`; 4 an `fw` line outside `fl`; 5 an `fw` glyph run outside `glyphs`; 6 an `fl` run outside `fw`; 7 `fv` neither
     // empty nor one row per `fw` row, or a group outside `cg`; 8 an `fa` group outside `cg` or a negative subject; 9 an `fx`
-    // group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row.
+    // group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row;
+    // 12 + `gl-check`'s answer when the graphics arenas are broken (13 a stride, 14 a group outside `ggp`, ... see `emon.glayer`).
     let ncg: i32 = crate::port::cells_len(cg) / 16;
     let nfw: i32 = crate::port::cells_len(fw) / 24;
     let nfl: i32 = crate::port::cells_len(fl) / 16;
@@ -980,9 +986,6 @@ pub fn pl_check(cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &m
         return 1;
     }
     if (crate::port::cells_len(hl) % 12) != 0 {
-        return 1;
-    }
-    if (crate::port::cells_len(fpa) % 24) != 0 {
         return 1;
     }
     if (crate::port::cells_len(sl) % 16) != 0 {
@@ -1095,6 +1098,10 @@ pub fn pl_check(cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &m
             }
         }
         i += 1;
+    }
+    v = gl_check(grl, gfl, ggp, grg, refs);
+    if v != 0 {
+        return 11 + v;
     }
     return 0;
 }
@@ -1308,8 +1315,8 @@ pub(crate) fn pl_arena(mut t: &mut String, pr: i32, started: i32, key: i32, a: i
     js_aend(t, pr, 1, n);
     return 1;
 }
-pub fn pl_emit_layer(mut t: &mut String, pretty: i32, s0: i32, cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, fv: &mut crate::port::Cells, fa: &mut crate::port::Cells, fx: &mut crate::port::Cells, hl: &mut crate::port::Cells, fpa: &mut crate::port::Cells, sl: &mut crate::port::Cells, etext: &mut crate::port::Cells) -> i32 {
-    // The layer's nine arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.
+pub fn pl_emit_layer(mut t: &mut String, pretty: i32, s0: i32, cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, fv: &mut crate::port::Cells, fa: &mut crate::port::Cells, fx: &mut crate::port::Cells, hl: &mut crate::port::Cells, grl: &mut crate::port::Cells, sl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, ggp: &mut crate::port::Cells, grg: &mut crate::port::Cells, etext: &mut crate::port::Cells) -> i32 {
+    // The layer's twelve arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.
     let mut s: i32 = s0;
     s = pl_arena(t, pretty, s, plk_cg(), 1, 0, cg, etext);
     s = pl_arena(t, pretty, s, plk_fw(), 0, 8, fw, etext);
@@ -1318,18 +1325,35 @@ pub fn pl_emit_layer(mut t: &mut String, pretty: i32, s0: i32, cg: &mut crate::p
     s = pl_arena(t, pretty, s, plk_fa(), 3, 0, fa, etext);
     s = pl_arena(t, pretty, s, plk_fx(), 4, 0, fx, etext);
     s = pl_arena(t, pretty, s, plk_hl(), 5, 0, hl, etext);
-    s = pl_arena(t, pretty, s, plk_fpa(), 0, 12, fpa, etext);
+    s = gl_arena(t, pretty, s, 1, grl);
     s = pl_arena(t, pretty, s, plk_sl(), 6, 0, sl, etext);
+    s = gl_arena(t, pretty, s, 2, gfl);
+    s = gl_arena(t, pretty, s, 3, ggp);
+    s = gl_arena(t, pretty, s, 4, grg);
     return s;
 }
-pub fn pl_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, fv: &mut crate::port::Cells, fa: &mut crate::port::Cells, fx: &mut crate::port::Cells, hl: &mut crate::port::Cells, fpa: &mut crate::port::Cells, sl: &mut crate::port::Cells) -> i32 {
-    // The evidence dump, VERSION "2" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's nine.
+pub fn pl_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, cg: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, fv: &mut crate::port::Cells, fa: &mut crate::port::Cells, fx: &mut crate::port::Cells, hl: &mut crate::port::Cells, grl: &mut crate::port::Cells, sl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, ggp: &mut crate::port::Cells, grg: &mut crate::port::Cells) -> i32 {
+    // The evidence dump, VERSION "2" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's twelve.
     let mut s: i32 = 0;
     crate::port::text_ascii(t, "{");
     s = ev_begin(t, pretty, 0, s, ek_version());
     crate::port::text_ascii(t, "\"2\"");
     s = ev_emit_body(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
-    s = pl_emit_layer(t, pretty, s, cg, fw, fl, fv, fa, fx, hl, fpa, sl, etext);
+    s = pl_emit_layer(t, pretty, s, cg, fw, fl, fv, fa, fx, hl, grl, sl, gfl, ggp, grg, etext);
+    js_close(t, pretty, 0, s);
+    return 0;
+}
+pub fn pl_emit_gfx(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, ggp: &mut crate::port::Cells, grg: &mut crate::port::Cells) -> i32 {
+    // The evidence dump as `pl-emit` writes it, version "2", with `grl gfl ggp grg` as the only layer arrays.
+    let mut s: i32 = 0;
+    crate::port::text_ascii(t, "{");
+    s = ev_begin(t, pretty, 0, s, ek_version());
+    crate::port::text_ascii(t, "\"2\"");
+    s = ev_emit_body(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    s = gl_arena(t, pretty, s, 1, grl);
+    s = gl_arena(t, pretty, s, 2, gfl);
+    s = gl_arena(t, pretty, s, 3, ggp);
+    s = gl_arena(t, pretty, s, 4, grg);
     js_close(t, pretty, 0, s);
     return 0;
 }

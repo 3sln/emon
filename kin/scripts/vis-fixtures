@@ -22,6 +22,10 @@
 ;;                                 0 off, 2 on in the configuration but off by the group's /Usage /View /ViewState)
 ;;   I  vis vby                    the next image placement
 ;;   N  glyphs images              the page(s) made this many glyph rows and image rows
+;;   P  vis vby backdrop chk tr n  the next painted path (not a clip, not a shading: P3.6a, D219): its `vis`, `vby`, the
+;;                                 backdrop the white check found (rrggbb, -1 none), the `vchk` bits that must be set (a
+;;                                 mask), whether it is `truncated` (1) or not (0), and how many points of geometry it keeps
+;;                                 (-1: not asked); then the text, for a person
 ;;
 ;; THE LINES. A text item sits on a line k of a page: baseline 740 - 36 k, x 50, 14 pt Helvetica (a glyph's cell
 ;; is its baseline - 2.9 to + 10.1). A `rect` covers a line (x 40..580, baseline - 8 .. + 16) or part of it.
@@ -86,6 +90,13 @@
 
 (defn paint [name ops & [{:keys [n] :or {n 1}}]] {:kind :paint :name name :ops ops :z n})
 (defn raw [ops] {:kind :raw :ops ops :z 0})
+(defn path-item
+  "A path painted by `ops` (one paint operator: z 1). opts: :vis, :by (the name of what covers it), :backdrop (rrggbb or
+  \"-1\"), :chk (bits of `vchk` that must be set), :tr (1 when truncated), :pcount (points kept), :name."
+  [text ops {:keys [vis by backdrop chk tr pcount name] :or {vis 0 chk 0 tr 0 pcount -1}}]
+  {:kind :path :text text :ops ops :z 1 :name name :by by :vis vis
+   ;; the white check runs unless the path was clipped away or is off the page; on a page with nothing behind it finds the paper
+   :backdrop (or backdrop (if (#{1 2} vis) "-1" "FFFFFF")) :chk chk :tr tr :pcount pcount})
 (defn image-item [name ops {:keys [vis by] :or {vis 0}}] {:kind :image :name name :ops ops :vis vis :by by :z 1})
 
 (defn line-rect
@@ -114,6 +125,8 @@
                                   (count (:text it)) "\t" (:text it)
                                   (when (:ocgdef it) (str "\nO\t" (:ocgdef it) "\t" (count (:text it)))))
                        :ctext (:crow it)
+                       :path (str "P\t" (:vis it) "\t" (if (:by it) (get names (:by it)) -1) "\t" (:backdrop it) "\t" (:chk it) "\t"
+                                  (:tr it) "\t" (:pcount it) "\t" (:text it))
                        :image (str "I\t" (:vis it) "\t" (if (:by it) (get names (:by it)) -1))
                        nil))
                    items)]
@@ -559,6 +572,86 @@
    :extra (merge (into {} (map (fn [[k v]] [k (:obj v)]) spaces-fns))
                  {34 (stream "/N 4" "x") 35 (stream "/N 1" "x")})}
   (spaces-items))
+
+;; 12. paths: the same checks on rules, thin rectangles and grids (P3.6a, D219) ---------------------------------
+;;
+;; Item k sits in column (quot k 22) at x = 40 + 290 col, y = 770 - 30 (rem k 22); a rule runs 240 pt right of x, a thin
+;; rectangle is 1 pt high. The grids are at the foot of the page. `chk` 127 is every check from `clip` to `transparent`.
+(def pk (atom -1))
+(defn pos [k] {:x (+ 40 (* 290 (quot k 22))) :y (- 770 (* 30 (rem k 22)))})
+(defn pitem
+  "A path item on the next position (or the last one with :same): `f` makes the operators from x and y."
+  [text f {:keys [same] :as opts}]
+  (let [k (if same @pk (swap! pk inc)) {:keys [x y]} (pos k)]
+    (path-item text (f x y) opts)))
+(defn rule [pre & [extra]]
+  (fn [x y] (str "q " (or extra "") " " pre " 1 w " x " " y " m " (+ x 240) " " y " l S Q")))
+(defn thin [pre & [extra]]
+  (fn [x y] (str "q " (or extra "") " " pre " " x " " (- y 0.5) " 240 1 re f Q")))
+(defn under-clip [f clip] (fn [x y] (str "q " (clip x y) " re W n " (f x y) " Q")))
+(defn wall [color & [gs]]
+  (fn [x y] (str "q " (or gs "") " " color " " (- x 10) " " (- y 6) " 260 12 re f Q")))
+(defn half-wall [color] (fn [x y] (str "q " color " " (- x 10) " " (- y 6) " 130 12 re f Q")))
+(defn grid [n cols w h x0 y0]
+  (str "q 0 G 0.5 w "
+       (str/join " " (for [i (range n)] (str (+ x0 (* w (rem i cols))) " " (+ y0 (* h (quot i cols))) " " w " " h " re")))
+       " S Q"))
+
+(def paths-items
+  [(pitem "rule clipped away" (under-clip (rule "0 G") (fn [x y] (str (+ x 250) " " (- y 10) " 30 20"))) {:vis 1})
+   (pitem "thin rectangle clipped away" (under-clip (thin "0 g") (fn [x y] (str (+ x 250) " " (- y 10) " 30 20"))) {:vis 1})
+   (pitem "rule half clipped is seen" (under-clip (rule "0 G") (fn [x y] (str (+ x 100) " " (- y 10) " 200 20"))) {:backdrop "FFFFFF" :chk 127})
+   (pitem "thin rectangle half clipped is seen" (under-clip (thin "0 g") (fn [x y] (str (+ x 100) " " (- y 10) " 200 20"))) {:backdrop "FFFFFF" :chk 127})
+   (pitem "rule off the page" (fn [x y] (str "q 0 G 1 w -600 " y " m -400 " y " l S Q")) {:vis 2})
+   (pitem "thin rectangle off the page" (fn [x y] (str "q 0 g " x " 2000 240 1 re f Q")) {:vis 2})
+   (pitem "white rule on white" (rule "1 G") {:vis 3 :backdrop "FFFFFF"})
+   (pitem "white thin rectangle on white" (thin "1 g") {:vis 3 :backdrop "FFFFFF"})
+   (pitem "almost white rule on white" (rule "0.99 G") {:vis 3 :backdrop "FFFFFF"})
+   (pitem "black rectangle (seen on the white page)" (fn [x y] (str "q 0 g " (- x 10) " " (- y 8) " 260 16 re f Q")) {:backdrop "FFFFFF" :chk 127})
+   (pitem "white rule on the black rectangle is seen" (rule "1 G") {:same true :backdrop "000000" :chk 127})
+   (pitem "black rectangle two" (fn [x y] (str "q 0 g " (- x 10) " " (- y 8) " 260 16 re f Q")) {:backdrop "FFFFFF"})
+   (pitem "white thin rectangle on the black rectangle is seen" (thin "1 g") {:same true :backdrop "000000" :chk 127})
+   (pitem "black rectangle under half of the rule" (fn [x y] (str "q 0 g " x " " (- y 8) " 100 16 re f Q")) {:backdrop "FFFFFF"})
+   (pitem "white rule over half a black rectangle: backdrop unknown, seen" (rule "1 G") {:same true :backdrop "-1" :chk 7})
+   (pitem "the first of two identical thin rectangles is hidden by the second (the second is the ink)" (thin "0 g") {:vis 5 :by :twice})
+   (pitem "drawn twice: the second is the ink" (thin "0 g") {:same true :name :twice :backdrop "FFFFFF" :chk 127})
+   (pitem "black rectangle three" (fn [x y] (str "q 0 g " (- x 10) " " (- y 8) " 260 16 re f Q")) {:backdrop "FFFFFF"})
+   (pitem "a black thin rectangle inside it is not seen" (thin "0 g") {:same true :vis 3 :backdrop "000000"})
+   (pitem "rule under a later white rectangle" (rule "0 G") {:vis 5 :by :w1})
+   (pitem "the white rectangle that covers it" (wall "1 g") {:same true :vis 3 :backdrop "FFFFFF" :name :w1})
+   (pitem "thin rectangle under a later white rectangle" (thin "0 g") {:vis 5 :by :w2})
+   (pitem "the white rectangle over the thin rectangle: it is seen, the paint behind it is not a plain rectangle" (wall "1 g") {:same true :vis 0 :backdrop "-1" :name :w2})
+   (pitem "rule under a later picture" (rule "0 G") {:vis 5 :by :pic})
+   {:kind :image :name :pic :vis 0 :by nil :z 1
+    :ops (let [{:keys [x y]} (pos @pk)] (str "q 260 0 0 12 " (- x 10) " " (- y 6) " cm /Im0 Do Q"))}
+   (pitem "rule half covered by a white rectangle is seen" (rule "0 G") {:chk 127})
+   (pitem "the half wall" (half-wall "1 g") {:same true :vis 3 :backdrop "FFFFFF"})
+   (pitem "rule under a half transparent white rectangle is seen" (rule "0 G") {:chk 127})
+   (pitem "the glass" (wall "1 g" "/Half gs") {:same true :vis 3 :backdrop "FFFFFF"})
+   (pitem "rule under a multiply white rectangle is seen" (rule "0 G") {:chk 127})
+   (pitem "the multiply wall" (wall "1 g" "/Mult gs") {:same true :vis 3 :backdrop "FFFFFF" :chk 135})
+   (pitem "rule in a layer that is off" (fn [x y] (str "/OC /Off BDC " ((rule "0 G") x y) " EMC")) {:vis 6 :backdrop "FFFFFF"})
+   (pitem "thin rectangle in a layer that is off" (fn [x y] (str "/OC /Off BDC " ((thin "0 g") x y) " EMC")) {:vis 6})
+   (pitem "rule in a print only layer is seen" (fn [x y] (str "/OC /Pr BDC " ((rule "0 G") x y) " EMC")) {:chk 127})
+   (pitem "rule at alpha zero" (rule "0 G" "/Clear gs") {:vis 7})
+   (pitem "thin rectangle at alpha zero" (thin "0 g" "/Clear gs") {:vis 7})
+   (pitem "filled and stroked with a clear fill is seen by its stroke" (fn [x y] (str "q /FillClear gs 0 g 0 G 1 w " x " " y " 240 1 re B Q")) {:chk 127})
+   (pitem "rule under a multiply blend is seen" (rule "0 G" "/Mult gs") {:chk 255})
+   (pitem "rule under a soft mask is seen" (rule "0 G" "/Soft gs") {:chk 383})
+   (pitem "a zero width hairline is seen" (fn [x y] (str "q 0 G 0 w " x " " y " m " (+ x 240) " " y " l S Q")) {:chk 127})
+   (pitem "a filled point has no size" (fn [x y] (str "q 0 g " x " " y " m " x " " y " l f Q")) {:vis 4 :chk 15})
+   (pitem "a stroked zero width point is a hairline, seen" (fn [x y] (str "q 0 G 0 w " x " " y " m " x " " y " l S Q")) {:chk 127})
+   (path-item "a grid of 30 squares drawn as one path keeps its geometry" (grid 30 6 20 20 40 20) {:backdrop "FFFFFF" :chk 127 :pcount 150})
+   (path-item "a grid of 1100 squares is truncated" (grid 1100 55 4 5 340 20) {:backdrop "FFFFFF" :chk 127 :tr 1 :pcount 0})])
+
+(fixture! "paths.pdf"
+  {:resources "/ExtGState << /Half << /ca 0.5 >> /Mult << /BM /Multiply >> /Soft << /SMask << /Type /Mask /S /Luminosity /G 12 0 R >> >> /Clear << /ca 0 /CA 0 >> /FillClear << /ca 0 /CA 1 >> >> /XObject << /Im0 11 0 R >> /Properties << /Off 20 0 R /Pr 21 0 R >>"
+   :catalog-extra " /OCProperties << /OCGs [20 0 R 21 0 R] /D << /BaseState /ON /OFF [20 0 R] /AS [<< /Event /View /Category [/View] /OCGs [21 0 R] >>] >> >>"
+   :extra {11 img-uniform
+           12 (stream "/Type /XObject /Subtype /Form /BBox [0 0 612 792] /Group << /S /Transparency /CS /DeviceGray >>" "0.5 g 0 0 612 792 re f")
+           20 "<< /Type /OCG /Name (Hidden) >>"
+           21 "<< /Type /OCG /Name (Print only) /Usage << /View << /ViewState /OFF >> /Print << /PrintState /ON >> >> >>"}}
+  paths-items)
 
 ;; ---------------------------------------------------------------- the multi-page one
 

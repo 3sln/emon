@@ -10,6 +10,10 @@ import (
 
 const pvScan int32 = 4096
 
+const pvBusy int32 = 20000
+
+const pvFloor int32 = 64
+
 const pvTol int32 = 4
 
 const zeroSizeCpt int32 = 100
@@ -225,9 +229,35 @@ func pvPainted(mode int32, comp int32) int32 {
 	return 0
 }
 
-func pvBackdrop(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, gz int32, jp int32, ji int32, p0 int32, i0 int32) int32 {
+func pvFullK(pa *port.Cells, r int32, k int32) int32 {
+	// Component k of the region path row r paints in full: its box (the stroke included) intersected with its clip.
+	var cl int32 = evidence.PaGet(pa, r, evidence.PfClip())
+	var cv int32 = pvClipK(pa, cl, k)
+	var v int32 = 0
+	if k == 0 {
+		v = evidence.PaGet(pa, r, evidence.PfX0())
+	}
+	if k == 1 {
+		v = evidence.PaGet(pa, r, evidence.PfY0())
+	}
+	if k == 2 {
+		v = evidence.PaGet(pa, r, evidence.PfX1())
+	}
+	if k == 3 {
+		v = evidence.PaGet(pa, r, evidence.PfY1())
+	}
+	if k < 2 {
+		return pvMax(v, cv)
+	}
+	return pvMin(v, cv)
+}
+
+func pvBackdrop(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, gz int32, jp int32, ji int32, p0 int32, i0 int32, me int32, lim int32) int32 {
 	// The colour behind a glyph cell with this box and paint number: 0xRRGGBB, or -2 when it cannot be told. Paths
-	// are searched backwards from row jp (the first with a later z), images from row ji.
+	// are searched backwards from row jp (the first with a later z), images from row ji. `me` is the path row being
+	// classified (-1 for a glyph): an earlier rectangle that this path, itself an exactly known opaque rectangle,
+	// covers completely is not what it is painted on, it is painted OVER (a rule drawn twice is one rule: of two paints
+	// of the same colour on the same box the later is the ink and the earlier the one it hides, never both hidden).
 	var r int32 = jp - 1
 	var steps int32 = 0
 	var zp int32 = -1
@@ -239,13 +269,18 @@ func pvBackdrop(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int
 	var ry1 int32 = 0
 	var zi int32 = -1
 	var found int32 = 0
-	for (r >= p0) && ((steps < pvScan) && (found == 0)) {
+	for (r >= p0) && ((steps < lim) && (found == 0)) {
 		fl = evidence.PaGet(pa, r, evidence.PfFlags())
 		if ((fl & evidence.PgClip()) == 0) && ((fl & evidence.PgFilled()) != 0) {
 			rx0 = pvPathK(pa, r, 0)
 			ry0 = pvPathK(pa, r, 1)
 			rx1 = pvPathK(pa, r, 2)
 			ry1 = pvPathK(pa, r, 3)
+			if (me >= 0) && (pvOpaqueRect(pa, mk, me) == 1) {
+				if pvCovers(pvPathK(pa, me, 0), pvPathK(pa, me, 1), pvPathK(pa, me, 2), pvPathK(pa, me, 3), pvFullK(pa, r, 0), pvFullK(pa, r, 1), pvFullK(pa, r, 2), pvFullK(pa, r, 3)) == 1 {
+					rx1 = rx0 - 1
+				}
+			}
 			if pvHit(x0, y0, x1, y1, rx0, ry0, rx1, ry1) == 1 {
 				found = 1
 				zp = evidence.PaGet(pa, r, evidence.PfZ())
@@ -263,7 +298,7 @@ func pvBackdrop(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int
 	r = ji - 1
 	steps = 0
 	found = 0
-	for (r >= i0) && ((steps < pvScan) && (found == 0)) {
+	for (r >= i0) && ((steps < lim) && (found == 0)) {
 		rx0 = pvImgK(im, pa, r, 0)
 		ry0 = pvImgK(im, pa, r, 1)
 		rx1 = pvImgK(im, pa, r, 2)
@@ -281,14 +316,14 @@ func pvBackdrop(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int
 	return res
 }
 
-func pvOccluder(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, jp int32, ji int32, p1 int32, i1 int32) int32 {
+func pvOccluder(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, jp int32, ji int32, p1 int32, i1 int32, lim int32) int32 {
 	// The `z` of the first later paint that is opaque, exactly known and covers the whole box, else -1. Paths
 	// are searched forwards from row jp to p1, images from ji to i1.
 	var r int32 = jp
 	var steps int32 = 0
 	var zp int32 = -1
 	var zi int32 = -1
-	for (r < p1) && ((steps < pvScan) && (zp < 0)) {
+	for (r < p1) && ((steps < lim) && (zp < 0)) {
 		if pvOpaqueRect(pa, mk, r) == 1 {
 			if pvCovers(pvPathK(pa, r, 0), pvPathK(pa, r, 1), pvPathK(pa, r, 2), pvPathK(pa, r, 3), x0, y0, x1, y1) == 1 {
 				zp = evidence.PaGet(pa, r, evidence.PfZ())
@@ -299,7 +334,7 @@ func pvOccluder(pa *port.Cells, im *port.Cells, mk *port.Cells, x0 int32, y0 int
 	}
 	r = ji
 	steps = 0
-	for (r < i1) && ((steps < pvScan) && (zi < 0)) {
+	for (r < i1) && ((steps < lim) && (zi < 0)) {
 		if pvOpaqueImg(im, mk, r) == 1 {
 			if pvCovers(pvImgK(im, pa, r, 0), pvImgK(im, pa, r, 1), pvImgK(im, pa, r, 2), pvImgK(im, pa, r, 3), x0, y0, x1, y1) == 1 {
 				zi = evidence.ImGet(im, r, evidence.MfZ())
@@ -376,7 +411,7 @@ func pvGlyph(gl *port.Cells, mk *port.Cells, pa *port.Cells, im *port.Cells, pw 
 	// 3. the ink against what is behind it (only for glyphs that paint).
 	if (vis == 0) && ((pvPainted(mode, 0) == 1) || (pvPainted(mode, 1) == 1)) {
 		chk = pvBit(chk, evidence.VcWhite())
-		back = pvBackdrop(pa, im, mk, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0)
+		back = pvBackdrop(pa, im, mk, vx0, vy0, vx1, vy1, gz, jp, ji, p0, i0, -1, pvScan)
 		if back >= 0 {
 			npaint = 0
 			nsame = 0
@@ -410,7 +445,7 @@ func pvGlyph(gl *port.Cells, mk *port.Cells, pa *port.Cells, im *port.Cells, pw 
 	if (vis == 0) && ((pvPainted(mode, 0) == 1) || (pvPainted(mode, 1) == 1)) {
 		chk = pvBit(chk, evidence.VcOcclusion())
 		if (vx0 < vx1) && (vy0 < vy1) {
-			occ = pvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1)
+			occ = pvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, pvScan)
 			if occ >= 0 {
 				vis = evidence.VzOccluded()
 				vby = occ
@@ -497,7 +532,7 @@ func pvImage(mk *port.Cells, pa *port.Cells, im *port.Cells, pw int32, ph int32,
 	if vis == 0 {
 		chk = pvBit(chk, evidence.VcOcclusion())
 		if (vx0 < vx1) && (vy0 < vy1) {
-			occ = pvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1)
+			occ = pvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, jp, ji, p1, i1, pvScan)
 			if occ >= 0 {
 				vis = evidence.VzOccluded()
 				vby = occ
@@ -522,6 +557,163 @@ func pvImage(mk *port.Cells, pa *port.Cells, im *port.Cells, pw int32, ph int32,
 	return 0
 }
 
+func pvTouch(x0 int32, y0 int32, x1 int32, y1 int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
+	// 1 when two CLOSED boxes share a point; a box with a negative extent (an empty clip) shares none.
+	if (bx0 > bx1) || (by0 > by1) {
+		return 0
+	}
+	if (x0 <= bx1) && ((bx0 <= x1) && ((y0 <= by1) && (by0 <= y1))) {
+		return 1
+	}
+	return 0
+}
+
+func pvPath(mk *port.Cells, pa *port.Cells, im *port.Cells, pw int32, ph int32, r int32, ji int32, p0 int32, i0 int32, p1 int32, i1 int32) int32 {
+	// Classify path row r (see the section header). ji is the first image row painted after it.
+	var fl int32 = evidence.PaGet(pa, r, evidence.PfFlags())
+	var x0 int32 = evidence.PaGet(pa, r, evidence.PfX0())
+	var y0 int32 = evidence.PaGet(pa, r, evidence.PfY0())
+	var x1 int32 = evidence.PaGet(pa, r, evidence.PfX1())
+	var y1 int32 = evidence.PaGet(pa, r, evidence.PfY1())
+	var clip int32 = evidence.PaGet(pa, r, evidence.PfClip())
+	var mark int32 = evidence.PaGet(pa, r, evidence.PfMark())
+	var z int32 = evidence.PaGet(pa, r, evidence.PfZ())
+	var filled int32 = 0
+	var stroked int32 = 0
+	var lim int32 = pvScan
+	var gx int32 = 0
+	var gy int32 = 0
+	var chk int32 = fl & (evidence.VcBlend() + evidence.VcSoftmask())
+	var vis int32 = 0
+	var vby int32 = -1
+	var vx0 int32 = x0
+	var vy0 int32 = y0
+	var vx1 int32 = x1
+	var vy1 int32 = y1
+	var back int32 = 0
+	var bout int32 = -1
+	var ink int32 = 0
+	var npaint int32 = 0
+	var nsame int32 = 0
+	var nclear int32 = 0
+	var occ int32 = -1
+	if (p1 - p0) > pvBusy {
+		lim = (pvScan * pvBusy) / (p1 - p0)
+		if lim < pvFloor {
+			lim = pvFloor
+		}
+	}
+	if (fl & evidence.PgFilled()) != 0 {
+		filled = 1
+	}
+	if (fl & evidence.PgStroked()) != 0 {
+		stroked = 1
+	}
+	// 1. the clip in force.
+	chk = pvBit(chk, evidence.VcClip())
+	if clip >= 0 {
+		vx0 = pvMax(x0, pvClipK(pa, clip, 0))
+		vy0 = pvMax(y0, pvClipK(pa, clip, 1))
+		vx1 = pvMin(x1, pvClipK(pa, clip, 2))
+		vy1 = pvMin(y1, pvClipK(pa, clip, 3))
+		if pvTouch(x0, y0, x1, y1, pvClipK(pa, clip, 0), pvClipK(pa, clip, 1), pvClipK(pa, clip, 2), pvClipK(pa, clip, 3)) == 0 {
+			vis = evidence.VzClipped()
+		}
+	}
+	// 2. the page.
+	if vis == 0 {
+		chk = pvBit(chk, evidence.VcOffpage())
+		if pvTouch(x0, y0, x1, y1, 0, 0, pw, ph) == 0 {
+			vis = evidence.VzOffpage()
+		}
+	}
+	// 3. the ink against what is behind it. A region with no extent one way (a hairline) is grown by a centipoint that way,
+	// so it has an area to look under; nothing else is grown (a box that only touches its neighbour does not overlap it).
+	if vx1 <= vx0 {
+		gx = 1
+	}
+	if vy1 <= vy0 {
+		gy = 1
+	}
+	if vis == 0 {
+		chk = pvBit(chk, evidence.VcWhite())
+		back = pvBackdrop(pa, im, mk, vx0-gx, vy0-gy, vx1+gx, vy1+gy, z, r, ji, p0, i0, r, lim)
+		if back >= 0 {
+			bout = back
+			if filled == 1 {
+				npaint += 1
+				ink = evidence.PaGet(pa, r, evidence.PfFill())
+				if (fl & evidence.PgPattern()) != 0 {
+					ink = -1
+				}
+				if pvClose(ink, back) == 1 {
+					nsame += 1
+				}
+			}
+			if stroked == 1 {
+				npaint += 1
+				if pvClose(evidence.PaGet(pa, r, evidence.PfStroke()), back) == 1 {
+					nsame += 1
+				}
+			}
+			if (npaint > 0) && (nsame == npaint) {
+				vis = evidence.VzWhite()
+			}
+		}
+	}
+	// 4. a region of no extent either way (a point); a stroke of width 0 is a hairline, which is drawn.
+	if vis == 0 {
+		chk = pvBit(chk, evidence.VcZeroSize())
+		if (vx1 <= vx0) && (vy1 <= vy0) {
+			if (stroked == 0) || (evidence.PaGet(pa, r, evidence.PfWidth()) > 0) {
+				vis = evidence.VzZeroSize()
+			}
+		}
+	}
+	// 5. a later opaque paint over the whole region.
+	if vis == 0 {
+		chk = pvBit(chk, evidence.VcOcclusion())
+		occ = pvOccluder(pa, im, mk, vx0, vy0, vx1, vy1, r+1, ji, p1, i1, lim)
+		if occ >= 0 {
+			vis = evidence.VzOccluded()
+			vby = occ
+		}
+	}
+	// 6. optional content that is off.
+	if vis == 0 {
+		chk = pvBit(chk, evidence.VcOcg())
+		if pvChainOff(mk, mark) == 1 {
+			vis = evidence.VzOcgHidden()
+		}
+	}
+	// 7. every painted component at alpha 0.
+	if vis == 0 {
+		chk = pvBit(chk, evidence.VcTransparent())
+		npaint = 0
+		nclear = 0
+		if filled == 1 {
+			npaint += 1
+			if evidence.PaGet(pa, r, evidence.PfFalpha()) == 0 {
+				nclear += 1
+			}
+		}
+		if stroked == 1 {
+			npaint += 1
+			if evidence.PaGet(pa, r, evidence.PfSalpha()) == 0 {
+				nclear += 1
+			}
+		}
+		if (npaint > 0) && (nclear == npaint) {
+			vis = evidence.VzTransparent()
+		}
+	}
+	evidence.PaSet(pa, r, evidence.PfVis(), vis)
+	evidence.PaSet(pa, r, evidence.PfVby(), vby)
+	evidence.PaSet(pa, r, evidence.PfVchk(), chk)
+	evidence.PaSet(pa, r, evidence.PfBackdrop(), bout)
+	return 0
+}
+
 func PvPage(gl *port.Cells, mk *port.Cells, pa *port.Cells, im *port.Cells, pw int32, ph int32, g0 int32, p0 int32, i0 int32) int32 {
 	// Classify the glyphs from row g0, and the images from row i0, of the page whose paths start at row p0 and
 	// whose size (the crop box in page space) is pw by ph centipoints. Rows are in paint order, so for each
@@ -534,6 +726,8 @@ func PvPage(gl *port.Cells, mk *port.Cells, pa *port.Cells, im *port.Cells, pw i
 	var ji int32 = i0
 	var gz int32 = 0
 	var ig int32 = i0
+	var rp int32 = p0
+	var fl int32 = 0
 	for g < g1 {
 		gz = evidence.GlGet(gl, g, evidence.GfZ())
 		for (jp < p1) && ((evidence.PaGet(pa, jp, evidence.PfZ()) < 0) || (evidence.PaGet(pa, jp, evidence.PfZ()) < gz)) {
@@ -554,6 +748,19 @@ func PvPage(gl *port.Cells, mk *port.Cells, pa *port.Cells, im *port.Cells, pw i
 		ji = ig + 1
 		pvImage(mk, pa, im, pw, ph, ig, jp, ji, p1, i1)
 		ig += 1
+	}
+	// The paths: a clip and a shading are not classified (their `vchk` stays 0).
+	ji = i0
+	for rp < p1 {
+		fl = evidence.PaGet(pa, rp, evidence.PfFlags())
+		if ((fl & evidence.PgClip()) == 0) && ((fl & evidence.PgShading()) == 0) {
+			gz = evidence.PaGet(pa, rp, evidence.PfZ())
+			for (ji < i1) && (evidence.ImGet(im, ji, evidence.MfZ()) < gz) {
+				ji += 1
+			}
+			pvPath(mk, pa, im, pw, ph, rp, ji, p0, i0, p1, i1)
+		}
+		rp += 1
 	}
 	return 0
 }

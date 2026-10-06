@@ -1,10 +1,11 @@
 ;; Tables (P5.1-P5.3; SPEC 10.5, 10.10; D178-D182). emon's own module (D039).
 ;;
-;;   (tb-build wd ln et pa np tb tc tw tq tx  <scratch>)      find every page's tables, claim their lines
+;;   (tb-build wd ln et grl gfl np tb tc tw tq tx  <scratch>)      find every page's tables, claim their lines
 ;;   (tb-emit tb k parent wd et ln tc tw tq nodes attrs regions text raw tmp)   one table as Model nodes
 ;;
-;; WHAT IT READS is the text layer's `words` and `lines` and `etext` and the vector evidence `paths` (SPEC 8.4.3):
-;; every thin filled rectangle and every stroked line is a RULE; a filled rectangle is a FILL. Rules are merged
+;; WHAT IT READS is the text layer's `words` and `lines` and `etext` and the fused graphics `grl` and `gfl` (P5.5a, SPEC 9.9,
+;; 10.5; D218): a fused rule of orientation `h` or `v` (never an `artifact-pagination` one) is a RULE; a fused fill is a FILL.
+;; It never reads `paths`: what is a rule is `emon.gvec`'s and `emon.gfuse`'s to say. Rules are merged
 ;; (collinear pieces that touch are one rule, Chrome and Word draw a table border cell by cell), positions are
 ;; clustered, and the rules that touch each other are one component.
 ;;
@@ -31,13 +32,13 @@
 (ns emon.table
   (:require [emon.lang :refer [I32 Bool Cells]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count pa-get pa-count
+            [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count
                                    hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-by0 hd-by1 hd-rot hd-tstart hd-tlen
                                    wf-style wf-size
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-first lh-count
-                                   pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-width
-                                   pf-falpha pf-salpha pf-flags pg-clip pg-filled pg-stroked pg-pattern pg-shading
-                                   pa-rect]]
+                                   ]]
+            [emon.glayer :refer [grl-get grl-count gfl-get gfl-count grf-page grf-ex0 grf-ey0 grf-ex1 grf-ey1 grf-thick grf-orient
+                                 grf-colour grf-flags gff-page gff-x0 gff-y0 gff-x1 gff-y1 gff-colour go-h go-v gq-artifact-pagination]]
             [emon.model :refer [node-new node-set-text node-set-sub node-set-aux node-set-conf node-add-src
                                 node-add-region ledger-add ledger-set-text page-h dr-duplicate-header-row node-set-attr-int node-set-attr-text node-set-align
                                 text-append-cp nk-table nk-rowgroup nk-row nk-cell nk-caption
@@ -212,60 +213,45 @@
   (cells-push rl 0)
   (return 0))
 
-(defn ^I32 tb-collect-one [^Cells pa ^I32 i ^:mut ^Cells rl ^:mut ^Cells fl]
-  (comment "One path as a rule (a thin box, or an edge of a stroked rectangle) or a fill (a large filled box).")
-  (let [^I32 fg (pa-get pa i (pf-flags))
-        ^I32 x0 (pa-get pa i (pf-x0))
-        ^I32 y0 (pa-get pa i (pf-y0))
-        ^I32 x1 (pa-get pa i (pf-x1))
-        ^I32 y1 (pa-get pa i (pf-y1))
-        ^I32 w (- x1 x0)
-        ^I32 h (- y1 y0)
-        ^I32 filled (bit-and fg (pg-filled))
-        ^I32 stroked (bit-and fg (pg-stroked))
-        ^I32 kind (pa-get pa i (pf-kind))
-        ^I32 lw (pa-get pa i (pf-width))
-        ^:mut ^I32 colour (pa-get pa i (pf-fill))
-        ^:mut ^I32 al (pa-get pa i (pf-salpha))]
-    (if (!= (bit-and fg (pg-clip)) 0) (return 0))
-    (if (!= (bit-and fg (+ (pg-pattern) (pg-shading))) 0) (return 0))
-    (if (and (== filled 0) (== stroked 0)) (return 0))
-    (if (!= filled 0)
-      (do (set al (pa-get pa i (pf-falpha)))
-          (set colour (pa-get pa i (pf-fill))))
-      (set colour (pa-get pa i (pf-stroke))))
-    (if (<= al 0) (return 0))
-    (if (and (<= (tb-min w h) RULE_T) (>= (tb-max w h) RULE_MIN))
-      (do (if (< (tb-lum colour) 240)
-            (do (if (>= w h)
-                  (tb-rule-add rl 0 (quot (+ y0 y1) 2) x0 x1 h colour)
-                  (tb-rule-add rl 1 (quot (+ x0 x1) 2) y0 y1 w colour))))
-          (return 0)))
-    (if (and (== kind (pa-rect)) (!= stroked 0) (> w RULE_MIN) (> h RULE_MIN))
-      (let [^I32 hw (quot lw 2)
-            ^I32 sc (pa-get pa i (pf-stroke))]
-        (if (< (tb-lum sc) 240)
-          (do (tb-rule-add rl 0 (+ y0 hw) x0 x1 lw sc)
-              (tb-rule-add rl 0 (- y1 hw) x0 x1 lw sc)
-              (tb-rule-add rl 1 (+ x0 hw) y0 y1 lw sc)
-              (tb-rule-add rl 1 (- x1 hw) y0 y1 lw sc)))))
-    (if (and (!= filled 0) (> w RULE_MIN) (> h RULE_MIN))
-      (do (cells-push fl x0)
-          (cells-push fl y0)
-          (cells-push fl x1)
-          (cells-push fl y1)
-          (cells-push fl (pa-get pa i (pf-fill)))
-          (cells-push fl 0)))
+(defn ^I32 tb-running-rule [^Cells grl ^I32 i ^I32 ph]
+  (comment "1 when fused rule i is a running header's or footer's: flagged `artifact-pagination` AND lying wholly in the top or bottom eighth of")
+  (comment "the page (`ph` its height; D182's stand-in for the furniture zones). A producer that tags a table's own rules as pagination")
+  (comment "artifacts (InDesign's withholding tables, 104 rules of one IRS page) is read, as the base read it (D272).")
+  (if (== (bit-and (grl-get grl i (grf-flags)) (gq-artifact-pagination)) 0) (return 0))
+  (let [^I32 ya (grl-get grl i (grf-ey0))
+        ^I32 yb (grl-get grl i (grf-ey1))
+        ^I32 lo (tb-min ya yb)
+        ^I32 hi (tb-max ya yb)]
+    (if (<= hi (quot ph 8)) (return 1))
+    (if (>= lo (- ph (quot ph 8))) (return 1))
     (return 0)))
 
-(defn ^I32 tb-collect [^Cells pa ^I32 p0 ^I32 p1 ^:mut ^Cells rl ^:mut ^Cells fl]
-  (comment "The page's paths p0..p1 as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness,")
-  (comment "colour) and fills (`fl`: box and colour).")
-  (let [^:mut ^I32 i p0]
+(defn ^I32 tb-collect [^Cells grl ^I32 r0 ^I32 r1 ^Cells gfl ^I32 f0 ^I32 f1 ^I32 ph ^:mut ^Cells rl ^:mut ^Cells fl]
+  (comment "The page's fused rules `grl` r0..r1 (`h` and `v` ones, never a running header's or footer's: `tb-running-rule`, `ph` the page's height)")
+  (comment "as rules (`rl`: kind 0 horizontal 1 vertical, position, from, to, thickness, colour) and its fused fills `gfl` f0..f1")
+  (comment "(`fl`: box and colour). P5.5a (D218, D270): the table stage reads the fused graphics and never `paths`.")
+  (let [^:mut ^I32 i r0
+        ^:mut ^I32 o 0]
     (cells-drop rl 0)
     (cells-drop fl 0)
-    (while (< i p1)
-      (do (tb-collect-one pa i rl fl)
+    (while (< i r1)
+      (do (set o (grl-get grl i (grf-orient)))
+          (if (== (tb-running-rule grl i ph) 0)
+            (do (if (== o (go-h))
+                  (tb-rule-add rl 0 (quot (+ (grl-get grl i (grf-ey0)) (grl-get grl i (grf-ey1))) 2)
+                               (grl-get grl i (grf-ex0)) (grl-get grl i (grf-ex1)) (grl-get grl i (grf-thick)) (grl-get grl i (grf-colour))))
+                (if (== o (go-v))
+                  (tb-rule-add rl 1 (quot (+ (grl-get grl i (grf-ex0)) (grl-get grl i (grf-ex1))) 2)
+                               (grl-get grl i (grf-ey0)) (grl-get grl i (grf-ey1)) (grl-get grl i (grf-thick)) (grl-get grl i (grf-colour))))))
+          (set i (+ i 1))))
+    (set i f0)
+    (while (< i f1)
+      (do (cells-push fl (gfl-get gfl i (gff-x0)))
+          (cells-push fl (gfl-get gfl i (gff-y0)))
+          (cells-push fl (gfl-get gfl i (gff-x1)))
+          (cells-push fl (gfl-get gfl i (gff-y1)))
+          (cells-push fl (gfl-get gfl i (gff-colour)))
+          (cells-push fl 0)
           (set i (+ i 1))))
     (return 0)))
 
@@ -2453,7 +2439,7 @@
     (tb-caption tb k wd et ln l0 l1 tq)
     (return 0)))
 
-(defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells pa ^I32 np
+(defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
                            ^:mut ^Cells s0 ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4
                            ^:mut ^Cells s5 ^:mut ^Cells s6 ^:mut ^Cells s7 ^:mut ^Cells s8 ^:mut ^Cells s9
@@ -2466,7 +2452,8 @@
   (comment "row extents (one name each in the calls below). Answers the number of tables.")
   (let [^I32 nw (wd-count wd)
         ^I32 nl (ln-count ln)
-        ^I32 nq (pa-count pa)
+        ^I32 nq (grl-count grl)
+        ^I32 nu (gfl-count gfl)
         ^:mut ^I32 p 1
         ^:mut ^I32 wi 0
         ^:mut ^I32 wj 0
@@ -2474,6 +2461,8 @@
         ^:mut ^I32 lj 0
         ^:mut ^I32 qi 0
         ^:mut ^I32 qj 0
+        ^:mut ^I32 ui 0
+        ^:mut ^I32 uj 0
         ^:mut ^I32 t0 0
         ^:mut ^I32 k 0]
     (cells-drop tb 0)
@@ -2492,14 +2481,19 @@
           (set lj li)
           (while (and (< lj nl) (== (ln-get ln lj (lh-page)) p))
             (set lj (+ lj 1)))
-          (while (and (< qi nq) (< (pa-get pa qi (pf-page)) p))
+          (while (and (< qi nq) (< (grl-get grl qi (grf-page)) p))
             (set qi (+ qi 1)))
           (set qj qi)
-          (while (and (< qj nq) (== (pa-get pa qj (pf-page)) p))
+          (while (and (< qj nq) (== (grl-get grl qj (grf-page)) p))
             (set qj (+ qj 1)))
+          (while (and (< ui nu) (< (gfl-get gfl ui (gff-page)) p))
+            (set ui (+ ui 1)))
+          (set uj ui)
+          (while (and (< uj nu) (== (gfl-get gfl uj (gff-page)) p))
+            (set uj (+ uj 1)))
           (set t0 (tb-rows-of tb TBS))
           (if (> (- wj wi) 0)
-            (do (tb-collect pa qi qj s0 s2)
+            (do (tb-collect grl qi qj gfl ui uj (page-h pages (- p 1)) s0 s2)
                 (if (<= (tb-rows-of s0 RLS) MAX_RULES)
                   (do (tb-merge-rules s0 s1 s3 s9)
                       (tb-ruled-page s1 p s4 s5 s6 tb tc wd wi wj s7 s3 tw tx)
@@ -2516,6 +2510,7 @@
           (set wi wj)
           (set li lj)
           (set qi qj)
+          (set ui uj)
           (set p (+ p 1))))
     (tb-link tb tc tw tx tq wd et ln pages)
     (return (tb-rows-of tb TBS))))

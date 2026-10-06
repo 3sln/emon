@@ -1,0 +1,606 @@
+;; The vector source of graphics fusion (P5.5a; SPEC 9.9 "Vector candidates"; D220, D179, D270). emon's own module (D039).
+;;
+;;   (gv-page pa pts mk im p0 p1 i0 i1 mode out)
+;;       the page's paths `p0..p1` (rows of `paths`) and image placements `i0..i1` (rows of `images`) as CANDIDATES appended to
+;;       `out`, a scratch `Cells` of stride 16, in paint order:
+;;
+;;           0 kind (1 rule, 2 fill)  1 the `paths` row (a `from-image` rule: the `images` row)  2 the first `pts` row of the segment
+;;           (-1: a candidate that is a path's box only)  3 page  4-7 box  8-11 the centre line `x0 y0 x1 y1` (a rule's; a fill's
+;;           are 0)  12 thickness  13 colour (0xRRGGBB, -1)  14 style (`rs`)  15 flags: a rule's `gq` bits, a fill's `gqf` bits, and
+;;           GVF_HIDDEN (65536) when the source's `vis` is not 0.
+;;
+;;       TWO MODES (`mode`):
+;;
+;;       `legacy` (0) reproduces `tb-collect-one` EXACTLY, as P5.1 wrote it: a path's box is ONE candidate (a thin box a rule along its
+;;       long axis, "mean channel under 240"; a stroked rectangle of `pa-rect` kind four edges, inset by half the stroke; a large filled
+;;       box a fill), no pattern or shading, no clip trimming, no visibility, no artifacts: the byte-identity step of P5.5a (D270).
+;;
+;;       `segments` (1) is SPEC 9.9's. A path is read by its `pts` (a truncated path, or one with no geometry kept, by its box, as D179
+;;       did): a rectangle subpath (four axis-aligned corners, closed or not for a fill, closed for a stroke) is ONE candidate when it is
+;;       thin (its extent, a stroked one's grown by the stroke, at most RULE_T on one side and at least RULE_MIN on the other: a rule
+;;       along the long axis, `from-fill` when it is a fill) and otherwise a fill (filled) and/or four `box-edge` rules at the EXACT
+;;       corners (stroked, both sides over RULE_MIN); any other subpath is its straight segments (`l`, a closing edge, a curve whose
+;;       control points lie within GF_FLAT of its chord), each a rule when stroked, at most RULE_T thick (a zero width counts as
+;;       GV_HAIR, 24 cpt: one device pixel) and at least RULE_MIN long; a curve that is not flat is figure material and is dropped. A thin box
+;;       under RULE_MIN long is a PIECE: a run of GV_PIECES of one path on one line, GV_GAP apart at most, is the dashes of a dashed rule and
+;;       each stays a candidate (`gv-piece`, `gv-pieces-finish`; D271); the others are dropped. A rectangle may be written `re` (five rows) or
+;;       as a move, four lines and a close (Skia: six).
+;;       A candidate is TRIMMED to its clip's box (a rule's extent along its axis; a rule whose band misses the box, or that the trim
+;;       leaves shorter than RULE_MIN, goes; a fill is intersected), keeps its path's `vis` (`GVF_HIDDEN`: kept but flagged, for
+;;       `gf-page` to record) and must CONTRAST with the backdrop P3.6a found (the luminance difference of its ink and the backdrop,
+;;       at least GF_CONTRAST of 255; an ink of -1 and a backdrop of -1, "cannot tell", are not tested), which replaces D179's "mean
+;;       channel under 240" (a white rule on a dark header is a rule). A pattern fill and a shading are fills of colour -1 over their
+;;       box. A visible image placement at most RULE_T thick and at least RULE_MIN long is a rule candidate of colour -1 (`from-image`).
+;;       The `/Artifact` of the path's `mark` chain flags `artifact-pagination` and `artifact-layout` (a header's rule is not a table's).
+(ns emon.gvec
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.evidence :refer [pa-get pt-get pt-count mk-artifact-of mk-artifact-class im-get ev-angle
+                                   pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-width pf-falpha pf-salpha pf-flags
+                                   pf-clip pf-mark pf-pfirst pf-pcount pf-dash pf-vis pf-backdrop pf-z
+                                   pg-clip pg-filled pg-stroked pg-shading pg-pattern pg-truncated pg-closed pa-rect
+                                   ptf-x ptf-y ptf-op po-move po-line po-curve po-close
+                                   mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-vis
+                                   rs-solid rs-dashed rs-dotted ar-pagination ar-layout]]
+            [emon.glayer :refer [gq-box-edge gq-from-fill gq-artifact-layout gq-artifact-pagination gq-from-image
+                                 gqf-shading gqf-pattern]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+(defconst ^I32 GV_RULE_T 400)       ;; D179: a rule is at most 4 pt thick
+(defconst ^I32 GV_RULE_MIN 500)     ;; ... and at least 5 pt long
+(defconst ^I32 GV_HAIR 24)          ;; a stroke of width 0 is one device pixel, 24 cpt
+(defconst ^I32 GV_FLAT 50)          ;; `gf-flat`: a curve within this of its chord is a straight segment
+(defconst ^I32 GV_CONTRAST 16)      ;; `gf-contrast`: of 255
+(defconst ^I32 GVF_HIDDEN 65536)     ;; flag: the source's `vis` is not 0
+(defconst ^I32 GVF_PIECE 131072)     ;; flag, in the scratch only: a thin box too short to be a rule, which may be a dash of one (see `gv-piece`)
+(defconst ^I32 GV_GAP 300)          ;; D179: pieces of a dashed line this close (3 pt) are one line
+(defconst ^I32 GV_PIECES 3)         ;; ... and a dashed line is at least this many pieces
+
+(defn ^:pub ^I32 gv-legacy [] (return 0))
+(defn ^:pub ^I32 gv-segments [] (return 1))
+(defn ^:pub ^I32 gv-hidden [] (return GVF_HIDDEN))
+
+;; ------------------------------------------------------------- small things
+
+(defn ^I32 gv-abs [^I32 a] (if (< a 0) (return (- 0 a))) (return a))
+(defn ^I32 gv-min [^I32 a ^I32 b] (if (< a b) (return a)) (return b))
+(defn ^I32 gv-max [^I32 a ^I32 b] (if (> a b) (return a)) (return b))
+
+(defn ^I32 gv-sel [^I32 c ^I32 a ^I32 b]
+  (comment "a when c is not 0, else b (both are evaluated).")
+  (if (!= c 0) (return a))
+  (return b))
+
+(defn ^I32 gv-lum255 [^I32 rgb]
+  (comment "The luminance of 0xRRGGBB in 0..255 (Rec. 601 weights, integer), 255 for none (-1).")
+  (if (< rgb 0) (return 255))
+  (return (quot (+ (+ (* 299 (bit-and (quot rgb 65536) 255)) (* 587 (bit-and (quot rgb 256) 255))) (* 114 (bit-and rgb 255))) 1000)))
+
+(defn ^I32 gv-mean-lum [^I32 rgb]
+  (comment "`tb-lum`: the mean of the three channels, 255 for none (the legacy test).")
+  (if (< rgb 0) (return 255))
+  (return (quot (+ (+ (bit-and (quot rgb 65536) 255) (bit-and (quot rgb 256) 255)) (bit-and rgb 255)) 3)))
+
+(defn ^I32 gv-push [^:mut ^Cells out ^I32 kind ^I32 row ^I32 pt ^I32 page
+                    ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1 ^I32 ex0 ^I32 ey0 ^I32 ex1 ^I32 ey1
+                    ^I32 thick ^I32 colour ^I32 style ^I32 flags]
+  (cells-push out kind)
+  (cells-push out row)
+  (cells-push out pt)
+  (cells-push out page)
+  (cells-push out bx0)
+  (cells-push out by0)
+  (cells-push out bx1)
+  (cells-push out by1)
+  (cells-push out ex0)
+  (cells-push out ey0)
+  (cells-push out ex1)
+  (cells-push out ey1)
+  (cells-push out thick)
+  (cells-push out colour)
+  (cells-push out style)
+  (cells-push out flags)
+  (return 0))
+
+(defn ^I32 gv-style-of [^I32 dash ^I32 thick]
+  (comment "`rs` of a stroke from its first dash length (0: solid): a dash at most twice the thickness is dotted.")
+  (if (<= dash 0) (return (rs-solid)))
+  (if (<= dash (* 2 thick)) (return (rs-dotted)))
+  (return (rs-dashed)))
+
+;; ------------------------------------------------------------- legacy
+
+(defn ^I32 gv-legacy-rule [^:mut ^Cells out ^I32 page ^I32 row ^I32 horiz ^I32 pos ^I32 a0 ^I32 a1 ^I32 thick ^I32 colour]
+  (comment "A legacy rule: the centre line at `pos` from `a0` to `a1`, its box the stroke's extent.")
+  (let [^I32 lo (- pos (quot thick 2))
+        ^I32 hi (+ lo thick)]
+    (if (== horiz 1)
+      (gv-push out 1 row -1 page a0 lo a1 hi a0 pos a1 pos thick colour (rs-solid) 0)
+      (gv-push out 1 row -1 page lo a0 hi a1 pos a0 pos a1 thick colour (rs-solid) 0))
+    (return 0)))
+
+(defn ^I32 gv-legacy-one [^Cells pa ^I32 i ^:mut ^Cells out]
+  (comment "`tb-collect-one` of P5.1, with the same tests in the same order, as candidates.")
+  (let [^I32 fg (pa-get pa i (pf-flags))
+        ^I32 x0 (pa-get pa i (pf-x0))
+        ^I32 y0 (pa-get pa i (pf-y0))
+        ^I32 x1 (pa-get pa i (pf-x1))
+        ^I32 y1 (pa-get pa i (pf-y1))
+        ^I32 w (- x1 x0)
+        ^I32 h (- y1 y0)
+        ^I32 filled (bit-and fg (pg-filled))
+        ^I32 stroked (bit-and fg (pg-stroked))
+        ^I32 kind (pa-get pa i (pf-kind))
+        ^I32 lw (pa-get pa i (pf-width))
+        ^I32 page (pa-get pa i (pf-page))
+        ^:mut ^I32 colour (pa-get pa i (pf-fill))
+        ^:mut ^I32 al (pa-get pa i (pf-salpha))]
+    (if (!= (bit-and fg (pg-clip)) 0) (return 0))
+    (if (!= (bit-and fg (+ (pg-pattern) (pg-shading))) 0) (return 0))
+    (if (and (== filled 0) (== stroked 0)) (return 0))
+    (if (!= filled 0)
+      (do (set al (pa-get pa i (pf-falpha)))
+          (set colour (pa-get pa i (pf-fill))))
+      (set colour (pa-get pa i (pf-stroke))))
+    (if (<= al 0) (return 0))
+    (if (and (<= (gv-min w h) GV_RULE_T) (>= (gv-max w h) GV_RULE_MIN))
+      (do (if (< (gv-mean-lum colour) 240)
+            (do (if (>= w h)
+                  (gv-legacy-rule out page i 1 (quot (+ y0 y1) 2) x0 x1 h colour)
+                  (gv-legacy-rule out page i 0 (quot (+ x0 x1) 2) y0 y1 w colour))))
+          (return 0)))
+    (if (and (== kind (pa-rect)) (!= stroked 0) (> w GV_RULE_MIN) (> h GV_RULE_MIN))
+      (let [^I32 hw (quot lw 2)
+            ^I32 sc (pa-get pa i (pf-stroke))]
+        (if (< (gv-mean-lum sc) 240)
+          (do (gv-legacy-rule out page i 1 (+ y0 hw) x0 x1 lw sc)
+              (gv-legacy-rule out page i 1 (- y1 hw) x0 x1 lw sc)
+              (gv-legacy-rule out page i 0 (+ x0 hw) y0 y1 lw sc)
+              (gv-legacy-rule out page i 0 (- x1 hw) y0 y1 lw sc)))))
+    (if (and (!= filled 0) (> w GV_RULE_MIN) (> h GV_RULE_MIN))
+      (gv-push out 2 i -1 page x0 y0 x1 y1 0 0 0 0 0 (pa-get pa i (pf-fill)) 0 0))
+    (return 0)))
+
+;; ------------------------------------------------------------- segments: the shared tests
+
+(defn ^I32 gv-path-flags [^Cells pa ^Cells mk ^I32 i]
+  (comment "The flags every candidate of path i carries: the `/Artifact` of its mark chain, and hidden when `vis` is not 0.")
+  (let [^I32 m (pa-get pa i (pf-mark))
+        ^:mut ^I32 f 0]
+    (if (>= m 0)
+      (let [^I32 packed (mk-artifact-of mk m)
+            ^I32 cls (mk-artifact-class 1 (quot packed 16) (rem packed 16))]
+        (if (== cls (ar-pagination)) (set f (+ f (gq-artifact-pagination))))
+        (if (== cls (ar-layout)) (set f (+ f (gq-artifact-layout))))))
+    (if (!= (pa-get pa i (pf-vis)) 0) (set f (+ f GVF_HIDDEN)))
+    (return f)))
+
+(defn ^I32 gv-contrasts [^I32 ink ^I32 backdrop]
+  (comment "1 when ink and backdrop differ by at least GF_CONTRAST of 255 in luminance. An ink of -1 is untested, and so is a backdrop of -1:")
+  (comment "P3.6a could not tell what is under the path (a partial cover, an image, a shading), and 'seen' is all that is known (D269, D271).")
+  (if (< ink 0) (return 1))
+  (if (< backdrop 0) (return 1))
+  (if (>= (gv-abs (- (gv-lum255 ink) (gv-lum255 backdrop))) GV_CONTRAST) (return 1))
+  (return 0))
+
+(defn ^I32 gv-piece [^:mut ^Cells out ^I32 row ^I32 ptrow ^I32 page
+                     ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1 ^I32 ex0 ^I32 ey0 ^I32 ex1 ^I32 ey1
+                     ^I32 thick ^I32 colour ^I32 flags ^I32 horiz]
+  (comment "A PIECE: a thin box too short to be a rule, which may be a dash of one (Chrome draws a dashed border as the dashes' polygons")
+  (comment "in one path, and the whole path's box was D179's one rule). It is pushed as a candidate of its own, flagged GVF_PIECE, and its")
+  (comment "cell 14 says whether it is LINKED to the candidate before it: a piece of the same path, on the same axis and line (within 1 pt),")
+  (comment "as thick (within 0.5 pt), of the same colour and no more than GV_GAP (D179's 3 pt) away. `gv-pieces-finish` keeps the chains.")
+  (comment "Nothing is bridged here: a gap stays a gap (SPEC 9.9) and `tb-build` merges the pieces as it merges any collinear rules.")
+  (let [^I32 n (quot (cells-len out) 16)
+        ^I32 b (* (- n 1) 16)
+        ^:mut ^I32 ok 0]
+    (if (> n 0)
+      (if (and (== (cells-at out b) 1) (and (== (cells-at out (+ b 1)) row) (!= (bit-and (cells-at out (+ b 15)) GVF_PIECE) 0)))
+        (if (and (<= (gv-abs (- (cells-at out (+ b 12)) thick)) 50) (== (cells-at out (+ b 13)) colour))
+          (if (== horiz 1)
+            (if (and (== (cells-at out (+ b 9)) (cells-at out (+ b 11))) (<= (gv-abs (- (cells-at out (+ b 9)) ey0)) 100))
+              (if (<= (- (gv-max (cells-at out (+ b 8)) ex0) (gv-min (cells-at out (+ b 10)) ex1)) GV_GAP) (set ok 1)))
+            (if (and (== (cells-at out (+ b 8)) (cells-at out (+ b 10))) (<= (gv-abs (- (cells-at out (+ b 8)) ex0)) 100))
+              (if (<= (- (gv-max (cells-at out (+ b 9)) ey0) (gv-min (cells-at out (+ b 11)) ey1)) GV_GAP) (set ok 1)))))))
+    (gv-push out 1 row ptrow page bx0 by0 bx1 by1 ex0 ey0 ex1 ey1 thick colour ok flags)
+    (return 0)))
+
+(defn ^I32 gv-pieces-finish [^:mut ^Cells out ^I32 start]
+  (comment "After a path: the CHAINS of its pieces (rows from `start` on: a row and the rows linked to it) of at least GV_PIECES pieces")
+  (comment "whose extent is at least GV_RULE_MIN are dashed rules (dotted when the period is within four thicknesses): their pieces stay,")
+  (comment "each its own candidate, no longer pieces. Every other piece is dropped.")
+  (let [^I32 n (quot (cells-len out) 16)
+        ^:mut ^I32 r start
+        ^:mut ^I32 w start
+        ^:mut ^I32 r1 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 lo2 0
+        ^:mut ^I32 hi2 0
+        ^:mut ^I32 span 0
+        ^:mut ^I32 style 0
+        ^:mut ^I32 keep 0]
+    (while (< r n)
+      (do (set b (* r 16))
+          (if (== (bit-and (cells-at out (+ b 15)) GVF_PIECE) 0)
+            (do (if (< w r)
+                  (do (set k 0)
+                      (while (< k 16)
+                        (do (cells-set out (+ (* w 16) k) (cells-at out (+ b k)))
+                            (set k (+ k 1))))))
+                (set w (+ w 1))
+                (set r (+ r 1)))
+            (do (comment "a chain: rows r..r1, each piece after the first linked to the one before")
+                (set r1 r)
+                (set lo (cells-at out (+ b 8)))
+                (set hi (cells-at out (+ b 10)))
+                (set lo2 (cells-at out (+ b 9)))
+                (set hi2 (cells-at out (+ b 11)))
+                (while (and (< (+ r1 1) n)
+                            (and (!= (bit-and (cells-at out (+ (* (+ r1 1) 16) 15)) GVF_PIECE) 0)
+                                 (== (cells-at out (+ (* (+ r1 1) 16) 14)) 1)))
+                  (do (set r1 (+ r1 1))
+                      (set lo (gv-min lo (cells-at out (+ (* r1 16) 8))))
+                      (set hi (gv-max hi (cells-at out (+ (* r1 16) 10))))
+                      (set lo2 (gv-min lo2 (cells-at out (+ (* r1 16) 9))))
+                      (set hi2 (gv-max hi2 (cells-at out (+ (* r1 16) 11))))))
+                (set span (gv-max (- hi lo) (- hi2 lo2)))
+                (set keep 0)
+                (if (and (>= (+ (- r1 r) 1) GV_PIECES) (>= span GV_RULE_MIN)) (set keep 1))
+                (set style (rs-dashed))
+                (if (<= (quot span (+ (- r1 r) 1)) (* 4 (cells-at out (+ b 12)))) (set style (rs-dotted)))
+                (set j r)
+                (while (<= j r1)
+                  (do (if (== keep 1)
+                        (do (cells-set out (+ (* j 16) 15) (- (cells-at out (+ (* j 16) 15)) GVF_PIECE))
+                            (cells-set out (+ (* j 16) 14) style)
+                            (if (< w j)
+                              (do (set k 0)
+                                  (while (< k 16)
+                                    (do (cells-set out (+ (* w 16) k) (cells-at out (+ (* j 16) k)))
+                                        (set k (+ k 1))))))
+                            (set w (+ w 1))))
+                      (set j (+ j 1))))
+                (set r (+ r1 1))))))
+    (cells-drop out (* w 16))
+    (return 0)))
+
+(defn ^I32 gv-seg-rule [^Cells pa ^I32 i ^I32 ptrow ^:mut ^Cells out
+                        ^I32 xa ^I32 ya ^I32 xb ^I32 yb ^I32 thick ^I32 colour ^I32 style ^I32 flags]
+  (comment "One straight stroke as a rule candidate: ordered along its axis, trimmed to the clip, contrast-tested.")
+  (let [^I32 page (pa-get pa i (pf-page))
+        ^I32 clip (pa-get pa i (pf-clip))
+        ^:mut ^I32 ex0 xa
+        ^:mut ^I32 ey0 ya
+        ^:mut ^I32 ex1 xb
+        ^:mut ^I32 ey1 yb
+        ^:mut ^I32 half 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 cx0 0
+        ^:mut ^I32 cy0 0
+        ^:mut ^I32 cx1 0
+        ^:mut ^I32 cy1 0
+        ^:mut ^I32 horiz 0]
+    (set half (quot (+ thick 1) 2))
+    (if (>= (gv-abs (- xb xa)) (gv-abs (- yb ya))) (set horiz 1))
+    (if (== horiz 1)
+      (if (> xa xb)
+        (do (set ex0 xb) (set ey0 yb) (set ex1 xa) (set ey1 ya))))
+    (if (== horiz 0)
+      (if (> ya yb)
+        (do (set ex0 xb) (set ey0 yb) (set ex1 xa) (set ey1 ya))))
+    (comment "an axis rule is trimmed to the clip's box along its axis; its band must meet the box")
+    (if (>= clip 0)
+      (do (set cx0 (pa-get pa clip (pf-x0)))
+          (set cy0 (pa-get pa clip (pf-y0)))
+          (set cx1 (pa-get pa clip (pf-x1)))
+          (set cy1 (pa-get pa clip (pf-y1)))
+          (if (and (== horiz 1) (== ey0 ey1))
+            (do (if (or (< (+ ey0 half) cy0) (> (- ey0 half) cy1)) (return 0))
+                (if (< ex0 cx0) (set ex0 cx0))
+                (if (> ex1 cx1) (set ex1 cx1))))
+          (if (and (== horiz 0) (== ex0 ex1))
+            (do (if (or (< (+ ex0 half) cx0) (> (- ex0 half) cx1)) (return 0))
+                (if (< ey0 cy0) (set ey0 cy0))
+                (if (> ey1 cy1) (set ey1 cy1))))))
+    (if (and (== (bit-and flags GVF_PIECE) 0) (< (gv-max (- ex1 ex0) (gv-abs (- ey1 ey0))) GV_RULE_MIN)) (return 0))
+    (if (== (gv-contrasts colour (pa-get pa i (pf-backdrop))) 0) (return 0))
+    (set bx0 (- (gv-min ex0 ex1) half))
+    (set bx1 (+ (gv-max ex0 ex1) half))
+    (set by0 (- (gv-min ey0 ey1) half))
+    (set by1 (+ (gv-max ey0 ey1) half))
+    (if (and (== horiz 1) (== ey0 ey1))
+      (do (set bx0 ex0) (set bx1 ex1)))
+    (if (and (== horiz 0) (== ex0 ex1))
+      (do (set by0 ey0) (set by1 ey1)))
+    (if (!= (bit-and flags GVF_PIECE) 0)
+      (gv-piece out i ptrow page bx0 by0 bx1 by1 ex0 ey0 ex1 ey1 thick colour flags horiz)
+      (gv-push out 1 i ptrow page bx0 by0 bx1 by1 ex0 ey0 ex1 ey1 thick colour style flags))
+    (return 0)))
+
+(defn ^I32 gv-seg-fill [^Cells pa ^I32 i ^:mut ^Cells out ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 colour ^I32 flags]
+  (comment "A filled box: intersected with the clip, contrast-tested (a colour of -1 is untested).")
+  (let [^I32 clip (pa-get pa i (pf-clip))
+        ^:mut ^I32 a0 x0
+        ^:mut ^I32 b0 y0
+        ^:mut ^I32 a1 x1
+        ^:mut ^I32 b1 y1]
+    (if (>= clip 0)
+      (do (set a0 (gv-max a0 (pa-get pa clip (pf-x0))))
+          (set b0 (gv-max b0 (pa-get pa clip (pf-y0))))
+          (set a1 (gv-min a1 (pa-get pa clip (pf-x1))))
+          (set b1 (gv-min b1 (pa-get pa clip (pf-y1))))))
+    (if (or (>= a0 a1) (>= b0 b1)) (return 0))
+    (if (== (gv-contrasts colour (pa-get pa i (pf-backdrop))) 0) (return 0))
+    (gv-push out 2 i -1 (pa-get pa i (pf-page)) a0 b0 a1 b1 0 0 0 0 0 colour 0 flags)
+    (return 0)))
+
+;; ------------------------------------------------------------- segments: one rectangle
+
+(defn ^I32 gv-rect [^Cells pa ^I32 i ^I32 ptrow ^:mut ^Cells out ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 closed ^I32 flags]
+  (comment "A rectangle subpath of path i: a thin one is a rule, else a fill and/or four box edges.")
+  (let [^I32 fg (pa-get pa i (pf-flags))
+        ^I32 filled (bit-and fg (pg-filled))
+        ^I32 stroked (bit-and fg (pg-stroked))
+        ^I32 w (- x1 x0)
+        ^I32 h (- y1 y0)
+        ^I32 hid (bit-and flags GVF_HIDDEN)
+        ^:mut ^I32 lwe (pa-get pa i (pf-width))
+        ^:mut ^I32 ew w
+        ^:mut ^I32 eh h
+        ^:mut ^I32 colour (pa-get pa i (pf-fill))
+        ^:mut ^I32 al (pa-get pa i (pf-falpha))
+        ^:mut ^I32 fillflags 0]
+    (if (== lwe 0) (set lwe GV_HAIR))
+    (if (!= stroked 0)
+      (do (set ew (+ w lwe))
+          (set eh (+ h lwe))))
+    (if (!= (bit-and fg (pg-pattern)) 0) (set fillflags (gqf-pattern)))
+    (if (!= (bit-and fg (pg-shading)) 0) (set fillflags (+ fillflags (gqf-shading))))
+    (comment "thin and too short for a rule: a piece, maybe a dash of one (`gv-piece`)")
+    (if (and (<= (gv-min ew eh) GV_RULE_T) (< (gv-max ew eh) GV_RULE_MIN) (> (gv-min ew eh) 0))
+      (do (if (== filled 0)
+            (do (set colour (pa-get pa i (pf-stroke)))
+                (set al (pa-get pa i (pf-salpha)))))
+          (if (<= al 0) (return 0))
+          (if (and (!= filled 0) (!= fillflags 0)) (return 0))
+          (let [^I32 th (gv-min ew eh)
+                ^I32 fl (+ (gv-sel stroked flags (+ flags (gq-from-fill))) GVF_PIECE)
+                ^I32 ym (quot (+ y0 y1) 2)
+                ^I32 xm (quot (+ x0 x1) 2)]
+            (if (>= ew eh)
+              (gv-seg-rule pa i ptrow out x0 ym x1 ym th colour (rs-solid) fl)
+              (gv-seg-rule pa i ptrow out xm y0 xm y1 th colour (rs-solid) fl)))
+          (return 0)))
+    (comment "thin: one rule along the long axis; its ink is the fill's when it is filled, else the stroke's")
+    (if (and (<= (gv-min ew eh) GV_RULE_T) (>= (gv-max ew eh) GV_RULE_MIN))
+      (do (if (== filled 0)
+            (do (set colour (pa-get pa i (pf-stroke)))
+                (set al (pa-get pa i (pf-salpha)))))
+          (if (<= al 0) (return 0))
+          (if (and (!= filled 0) (!= fillflags 0)) (return 0))
+          (let [^I32 th (gv-min ew eh)
+                ^I32 fl (gv-sel stroked flags (+ flags (gq-from-fill)))
+                ^I32 st (gv-sel filled (rs-solid) (gv-style-of (pa-get pa i (pf-dash)) th))
+                ^I32 ym (quot (+ y0 y1) 2)
+                ^I32 xm (quot (+ x0 x1) 2)]
+            (if (>= ew eh)
+              (gv-seg-rule pa i ptrow out x0 ym x1 ym th colour st fl)
+              (gv-seg-rule pa i ptrow out xm y0 xm y1 th colour st fl)))
+          (return 0)))
+    (comment "a filled box larger both ways is a fill (a pattern fill's or a shading's colour is -1)")
+    (if (and (!= filled 0) (> w GV_RULE_MIN) (> h GV_RULE_MIN) (> al 0))
+      (do (if (!= fillflags 0) (set colour -1))
+          (gv-seg-fill pa i out x0 y0 x1 y1 colour (+ fillflags hid))))
+    (comment "a stroked box larger than a rule is its four edges at the corners, a rule each (the closed subpath only)")
+    (if (and (!= stroked 0) (== closed 1) (> w GV_RULE_MIN) (> h GV_RULE_MIN) (> (pa-get pa i (pf-salpha)) 0))
+      (let [^I32 sc (pa-get pa i (pf-stroke))
+            ^I32 st (gv-style-of (pa-get pa i (pf-dash)) lwe)
+            ^I32 fl (+ flags (gq-box-edge))]
+        (gv-seg-rule pa i ptrow out x0 y0 x1 y0 lwe sc st fl)
+        (gv-seg-rule pa i ptrow out x0 y1 x1 y1 lwe sc st fl)
+        (gv-seg-rule pa i ptrow out x0 y0 x0 y1 lwe sc st fl)
+        (gv-seg-rule pa i ptrow out x1 y0 x1 y1 lwe sc st fl)))
+    (return 0)))
+
+;; ------------------------------------------------------------- segments: one path
+
+(defn ^I32 gv-near-chord [^I32 ax ^I32 ay ^I32 bx ^I32 by ^I32 px ^I32 py]
+  (comment "1 when point p lies within GV_FLAT of the chord a-b (the perpendicular distance, in cpt, by the cross product over the")
+  (comment "chord's longer extent; a degenerate chord is flat when p is near a).")
+  (let [^I32 dx (- bx ax)
+        ^I32 dy (- by ay)
+        ^I32 span (gv-max (gv-abs dx) (gv-abs dy))]
+    (if (== span 0)
+      (do (if (and (<= (gv-abs (- px ax)) GV_FLAT) (<= (gv-abs (- py ay)) GV_FLAT)) (return 1))
+          (return 0)))
+    (comment "cross / |chord| with |chord| <= sqrt 2 * len: a distance over this bound is under the true one by at most 41 per cent;")
+    (comment "the bound is the cheap one the 50 cpt is calibrated to, not a hypot")
+    (let [^I32 cr (gv-abs (- (* dx (- py ay)) (* dy (- px ax))))]
+      (if (<= (quot cr span) GV_FLAT) (return 1))
+      (return 0))))
+
+(defn ^I32 gv-subpath [^Cells pa ^Cells pts ^I32 i ^I32 a ^I32 b ^:mut ^Cells out ^I32 flags]
+  (comment "The subpath of path i in rows a..b of `pts` (a move and what follows it).")
+  (let [^I32 fg (pa-get pa i (pf-flags))
+        ^I32 filled (bit-and fg (pg-filled))
+        ^I32 stroked (bit-and fg (pg-stroked))
+        ^I32 lw (pa-get pa i (pf-width))
+        ^I32 n (- b a)
+        ^I32 strokec (pa-get pa i (pf-stroke))
+        ^I32 dash (pa-get pa i (pf-dash))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 op 0
+        ^:mut ^I32 curve 0
+        ^:mut ^I32 thick 0
+        ^:mut ^I32 sx 0
+        ^:mut ^I32 sy 0
+        ^:mut ^I32 px 0
+        ^:mut ^I32 py 0]
+    (set thick lw)
+    (if (== thick 0) (set thick GV_HAIR))
+    (comment "any curve?")
+    (set k 0)
+    (while (< k n)
+      (do (set op (pt-get pts (+ a k) (ptf-op)))
+          (if (== op (po-curve)) (set curve 1))
+          (set k (+ k 1))))
+    (set sx (pt-get pts a (ptf-x)))
+    (set sy (pt-get pts a (ptf-y)))
+    (comment "a rectangle: four corners, then (optionally) a line back to the start and/or a close (`re`: a move, three lines, a close; Skia:")
+    (comment "a move, four lines, a close). `m` is the number of rows that are corners; `closed` says the shape was closed")
+    (if (and (== curve 0) (>= n 4) (<= n 6))
+      (let [^:mut ^I32 m n
+            ^:mut ^I32 closedr 0
+            ^:mut ^I32 isr 0]
+        (if (== (pt-get pts (+ a (- m 1)) (ptf-op)) (po-close))
+          (do (set m (- m 1))
+              (set closedr 1)))
+        (if (and (> m 4) (and (== (pt-get pts (+ a (- m 1)) (ptf-x)) sx) (== (pt-get pts (+ a (- m 1)) (ptf-y)) sy)))
+          (do (set m (- m 1))
+              (set closedr 1)))
+        (if (== m 4)
+          (let [^I32 x0 (pt-get pts a (ptf-x))
+                ^I32 y0 (pt-get pts a (ptf-y))
+                ^I32 x1 (pt-get pts (+ a 1) (ptf-x))
+                ^I32 y1 (pt-get pts (+ a 1) (ptf-y))
+                ^I32 x2 (pt-get pts (+ a 2) (ptf-x))
+                ^I32 y2 (pt-get pts (+ a 2) (ptf-y))
+                ^I32 x3 (pt-get pts (+ a 3) (ptf-x))
+                ^I32 y3 (pt-get pts (+ a 3) (ptf-y))]
+            (if (and (== x0 x1) (and (== y1 y2) (and (== x2 x3) (== y3 y0)))) (set isr 1))
+            (if (and (== y0 y1) (and (== x1 x2) (and (== y2 y3) (== x3 x0)))) (set isr 1))
+            (if (and (== isr 1) (or (== closedr 1) (!= filled 0)))
+              (do (gv-rect pa i a out (gv-min (gv-min x0 x1) (gv-min x2 x3)) (gv-min (gv-min y0 y1) (gv-min y2 y3))
+                           (gv-max (gv-max x0 x1) (gv-max x2 x3)) (gv-max (gv-max y0 y1) (gv-max y2 y3)) closedr flags)
+                  (return 0)))))))
+    (comment "otherwise: straight segments, each a rule when the path is stroked")
+    (if (== stroked 0) (return 0))
+    (if (<= (pa-get pa i (pf-salpha)) 0) (return 0))
+    (if (> thick GV_RULE_T) (return 0))
+    (set px sx)
+    (set py sy)
+    (set k 1)
+    (while (< k n)
+      (do (set op (pt-get pts (+ a k) (ptf-op)))
+          (if (== op (po-line))
+            (do (gv-seg-rule pa i (+ a k) out px py (pt-get pts (+ a k) (ptf-x)) (pt-get pts (+ a k) (ptf-y))
+                             thick strokec (gv-style-of dash thick) flags)
+                (set px (pt-get pts (+ a k) (ptf-x)))
+                (set py (pt-get pts (+ a k) (ptf-y)))
+                (set k (+ k 1))))
+          (if (== op (po-curve))
+            (do (comment "three rows: two control points and the end; flat when both controls are near the chord")
+                (if (>= (+ k 2) n)
+                  (do (set k n))
+                  (let [^I32 ex (pt-get pts (+ a (+ k 2)) (ptf-x))
+                        ^I32 ey (pt-get pts (+ a (+ k 2)) (ptf-y))]
+                    (if (and (== (gv-near-chord px py ex ey (pt-get pts (+ a k) (ptf-x)) (pt-get pts (+ a k) (ptf-y))) 1)
+                             (== (gv-near-chord px py ex ey (pt-get pts (+ a (+ k 1)) (ptf-x)) (pt-get pts (+ a (+ k 1)) (ptf-y))) 1))
+                      (gv-seg-rule pa i (+ a k) out px py ex ey
+                                   thick strokec (gv-style-of dash thick) flags))
+                    (set px ex)
+                    (set py ey)
+                    (set k (+ k 3))))))
+          (if (== op (po-close))
+            (do (if (or (!= px sx) (!= py sy))
+                  (gv-seg-rule pa i (+ a k) out px py sx sy
+                               thick strokec (gv-style-of dash thick) flags))
+                (set px sx)
+                (set py sy)
+                (set k (+ k 1))))
+          (if (== op (po-move))
+            (set k (+ k 1)))))
+    (return 0)))
+
+(defn ^I32 gv-box-only [^Cells pa ^I32 i ^:mut ^Cells out ^I32 flags]
+  (comment "A path with no geometry kept (truncated, or built by hand): its box, as D179 read every path. The box holds half the stroke,")
+  (comment "so a stroked one is taken back to the path's own box and read as a rectangle (closed when the path's kind is `rect`).")
+  (let [^I32 fg (pa-get pa i (pf-flags))
+        ^I32 hw (gv-sel (bit-and fg (pg-stroked)) (quot (pa-get pa i (pf-width)) 2) 0)
+        ^I32 x0 (+ (pa-get pa i (pf-x0)) hw)
+        ^I32 y0 (+ (pa-get pa i (pf-y0)) hw)
+        ^I32 x1 (- (pa-get pa i (pf-x1)) hw)
+        ^I32 y1 (- (pa-get pa i (pf-y1)) hw)
+        ^:mut ^I32 closed 0]
+    (if (== (pa-get pa i (pf-kind)) (pa-rect)) (set closed 1))
+    (gv-rect pa i -1 out x0 y0 x1 y1 closed flags)
+    (return 0)))
+
+(defn ^I32 gv-path [^Cells pa ^Cells pts ^Cells mk ^I32 i ^:mut ^Cells out]
+  (comment "One painted path in `segments` mode.")
+  (let [^I32 fg (pa-get pa i (pf-flags))
+        ^I32 first (pa-get pa i (pf-pfirst))
+        ^I32 cnt (pa-get pa i (pf-pcount))
+        ^I32 flags (gv-path-flags pa mk i)
+        ^I32 start (quot (cells-len out) 16)
+        ^:mut ^I32 a 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 op 0]
+    (if (!= (bit-and fg (pg-clip)) 0) (return 0))
+    (if (and (== (bit-and fg (pg-filled)) 0) (== (bit-and fg (pg-stroked)) 0)) (return 0))
+    (comment "a shading, a path with no geometry kept or a truncated one: its box")
+    (if (or (!= (bit-and fg (pg-shading)) 0) (or (!= (bit-and fg (pg-truncated)) 0) (or (< first 0) (<= cnt 0))))
+      (do (if (!= (bit-and fg (pg-shading)) 0)
+            (do (let [^I32 x0 (pa-get pa i (pf-x0))
+                      ^I32 y0 (pa-get pa i (pf-y0))
+                      ^I32 x1 (pa-get pa i (pf-x1))
+                      ^I32 y1 (pa-get pa i (pf-y1))]
+                  (if (and (> (- x1 x0) GV_RULE_MIN) (> (- y1 y0) GV_RULE_MIN))
+                    (if (> (pa-get pa i (pf-falpha)) 0)
+                      (gv-seg-fill pa i out x0 y0 x1 y1 -1 (+ flags (gqf-shading))))))
+                (return 0)))
+          (gv-box-only pa i out flags)
+          (gv-pieces-finish out start)
+          (return 0)))
+    (comment "the subpaths: from a move to the next move")
+    (set a first)
+    (set k 1)
+    (while (< k cnt)
+      (do (set op (pt-get pts (+ first k) (ptf-op)))
+          (if (== op (po-move))
+            (do (gv-subpath pa pts i a (+ first k) out flags)
+                (set a (+ first k))))
+          (set k (+ k 1))))
+    (gv-subpath pa pts i a (+ first cnt) out flags)
+    (gv-pieces-finish out start)
+    (return 0)))
+
+(defn ^I32 gv-image-rule [^Cells im ^I32 j ^:mut ^Cells out]
+  (comment "A visible, thin image placement as a rule candidate of colour -1 (`from-image`).")
+  (let [^I32 x0 (im-get im j (mf-x0))
+        ^I32 y0 (im-get im j (mf-y0))
+        ^I32 x1 (im-get im j (mf-x1))
+        ^I32 y1 (im-get im j (mf-y1))
+        ^I32 w (- x1 x0)
+        ^I32 h (- y1 y0)
+        ^I32 page (im-get im j (mf-page))]
+    (if (!= (im-get im j (mf-vis)) 0) (return 0))
+    (if (and (<= (gv-min w h) GV_RULE_T) (>= (gv-max w h) GV_RULE_MIN))
+      (if (>= w h)
+        (gv-push out 1 j -1 page x0 y0 x1 y1 x0 (quot (+ y0 y1) 2) x1 (quot (+ y0 y1) 2) h -1 (rs-solid) (gq-from-image))
+        (gv-push out 1 j -1 page x0 y0 x1 y1 (quot (+ x0 x1) 2) y0 (quot (+ x0 x1) 2) y1 w -1 (rs-solid) (gq-from-image))))
+    (return 0)))
+
+(defn ^:pub ^I32 gv-page [^Cells pa ^Cells pts ^Cells mk ^Cells im ^I32 p0 ^I32 p1 ^I32 i0 ^I32 i1 ^I32 mode ^:mut ^Cells out]
+  (comment "The page's candidates (see the head of this file), appended to `out` in paint order; answers how many.")
+  (let [^I32 before (quot (cells-len out) 16)
+        ^:mut ^I32 i p0
+        ^:mut ^I32 j i0]
+    (while (< i p1)
+      (do (if (== mode 0)
+            (gv-legacy-one pa i out)
+            (gv-path pa pts mk i out))
+          (set i (+ i 1))))
+    (if (== mode 1)
+      (while (< j i1)
+        (do (gv-image-rule im j out)
+            (set j (+ j 1)))))
+    (return (- (quot (cells-len out) 16) before))))

@@ -294,11 +294,17 @@ const cNimg int32 = 17209
 
 const cPkeep int32 = 17210
 
+const cPts0 int32 = 17211
+
 const cBb int32 = 17212
 
 const cSize int32 = 17248
 
 const pathKeep int32 = 128
+
+const pathKeepStraight int32 = 4096
+
+const ptsPage int32 = 1000000
 
 const pathRows int32 = 200000
 
@@ -2376,10 +2382,13 @@ func pcPathAdd(cx *port.Cells, pts *port.Cells, px int64, py int64, op int32) in
 	if y > port.CellsAt(cx, cPby1) {
 		port.CellsSet(cx, cPby1, y)
 	}
-	if keep < pathKeep {
+	if (keep < pathKeepStraight) && ((evidence.PtCount(pts) - port.CellsAt(cx, cPts0)) < ptsPage) {
 		evidence.PtAdd(pts, x, y, op)
 		port.CellsSet(cx, cPkeep, keep+1)
 	} else {
+		if keep < pathKeepStraight {
+			pcWarnSet(cx, wPaths)
+		}
 		port.CellsSet(cx, cPflags, pcFlagOr(port.CellsAt(cx, cPflags), 4))
 	}
 	port.CellsSet(cx, cPn, port.CellsAt(cx, cPn)+1)
@@ -2715,8 +2724,12 @@ func pcKindOfPath(cx *port.Cells, pts *port.Cells) int32 {
 }
 
 func pcGeomKept(cx *port.Cells) int32 {
-	// 1 when the whole path is in `pts` (it had no more than PATH_KEEP points).
+	// 1 when the whole path is in `pts`: a path of `m l h re` alone had no more than PATH_KEEP_STRAIGHT points (and the
+	// page's `pts` was not full), a path with a curve no more than PATH_KEEP (D219).
 	if (port.CellsAt(cx, cPflags) & 4) != 0 {
+		return 0
+	}
+	if ((port.CellsAt(cx, cPflags) & 1) != 0) && (port.CellsAt(cx, cPn) > pathKeep) {
 		return 0
 	}
 	return 1
@@ -2740,6 +2753,7 @@ func pcEndPath(cx *port.Cells, pa *port.Cells, pts *port.Cells, fill int32, stro
 	var pfst int32 = -1
 	var geom int32 = 0
 	var painted int32 = 0
+	var tr int32 = 0
 	port.CellsSet(cx, cClipp, 0)
 	if n == 0 {
 		pcPathReset(cx, pts)
@@ -2749,6 +2763,9 @@ func pcEndPath(cx *port.Cells, pa *port.Cells, pts *port.Cells, fill int32, stro
 	nrows = n
 	if kept == 0 {
 		nrows = 0
+	}
+	if kept == 0 {
+		tr = evidence.PgTruncated()
 	}
 	if nrows > 0 {
 		pfst = start
@@ -2762,7 +2779,7 @@ func pcEndPath(cx *port.Cells, pa *port.Cells, pts *port.Cells, fill int32, stro
 			pcWarnSet(cx, wPaths)
 		} else {
 			painted = 1
-			fl = 0
+			fl = tr
 			if closed != 0 {
 				fl += evidence.PgClosed()
 			}
@@ -2810,9 +2827,9 @@ func pcEndPath(cx *port.Cells, pa *port.Cells, pts *port.Cells, fill int32, stro
 		}
 	}
 	if pend != 0 {
-		fl = 0
+		fl = tr
 		if pend == 2 {
-			fl = evidence.PgEvenodd()
+			fl += evidence.PgEvenodd()
 		}
 		pcClipBox(cx, pa, port.CellsAt(cx, cPbx0), port.CellsAt(cx, cPby0), port.CellsAt(cx, cPbx1), port.CellsAt(cx, cPby1), kind, fl, pfst, geom)
 	}
@@ -4717,6 +4734,7 @@ func PcPage(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	var eh int32 = 0
 	var endcs int32 = 0
 	pcBeginPage(cx, page)
+	port.CellsSet(cx, cPts0, evidence.PtCount(pts))
 	pcBaseMatrix(cx, pdfdoc.PdPgCrop(pg, pi, 0), pdfdoc.PdPgCrop(pg, pi, 1), pdfdoc.PdPgCrop(pg, pi, 2), pdfdoc.PdPgCrop(pg, pi, 3), pdfdoc.PdPgRotate(pg, pi))
 	pcGsReset(cx)
 	pdfgfx.GxPage(gx)

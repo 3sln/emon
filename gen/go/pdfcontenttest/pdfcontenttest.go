@@ -548,6 +548,12 @@ func TestEverySyntheticDocumentIsTheSameThroughAnAsyncSourceOf512ByteChunks(emon
 	port.AssertThat(emonT, (r%100) >= 4, "the big ones took several rounds")
 }
 
+func TestEveryVisibilityFixtureIsTheSameThroughAnAsyncSourceOf512ByteChunks(emonT *testing.T) {
+	// P3.6a: the paths' vis, vby, vchk and backdrop are cells of the evidence, so they are held to the same rule.
+	var r int32 = ctAsyncRows(emonT, port.TestFile("vis/rows.txt"), 0, 512)
+	port.AssertThat(emonT, r >= 1800, "eighteen visibility fixtures were run")
+}
+
 func TestEveryTaggedDocumentIsTheSameThroughAnAsyncSourceOf512ByteChunks(emonT *testing.T) {
 	var r int32 = ctAsyncRows(emonT, port.TestFile("content/tagged.txt"), 0, 512)
 	port.AssertThat(emonT, r >= 300, "three documents were run")

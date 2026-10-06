@@ -4,10 +4,11 @@
 ;; `refs`), made by a page unit (or, until P7.U, by the document pass: `th-run` in `emon.tlhealth` writes `fw fl fa hl`), appended
 ;; to the document's by `pl-append`, checked by `pl-check` and dumped by `pl-emit` as the evidence dump's VERSION "2".
 ;;
-;;   cg 16  fw 24 (the layout of `words`)  fl 16 (the layout of `lines`)  fv 8  fa 12  fx 4  hl 12  fpa 24 (the layout of `paths`)  sl 16
+;;   cg 16  fw 24 (the layout of `words`)  fl 16 (the layout of `lines`)  fv 8  fa 12  fx 4  hl 12  grl 24  sl 16
+;;   and, since P5.5a (D270), the graphics arenas of `emon.glayer`: gfl 16  ggp 12  grg 16 (grl took `fpa`'s place and its code)
 ;;
 ;; Their `ea` codes continue the evidence's (24 are taken; the tagged tree's nine are reserved): cg 34, fw 35, fl 36, fv 37, fa 38,
-;; fx 39, hl 40, fpa 41, sl 42. The accessors are the evidence's (`wd-get`, `ln-get`, `wf-*`, `hd-*`, `lh-*`, `pf-*`) for the three
+;; fx 39, hl 40, grl 41, sl 42, gfl 43, ggp 44, grg 45. The accessors are the evidence's (`wd-get`, `ln-get`, `wf-*`, `hd-*`, `lh-*`, `pf-*`) for the three
 ;; that share a layout, and the prefixes below for the others:
 ;;
 ;;   cgf- cg  fvf- fv  faf- fa  fxf- fx  hlf- hl  slf- sl
@@ -18,10 +19,11 @@
 ;; APPEND (`pl-append`): a page's arenas, and its own `etext` and `refs` (the text of its OCR-won words, the references of its
 ;; groups), are concatenated onto the document's. What is re-based: `etext` runs (`fw` text, an `fa` is not text), `refs` runs of
 ;; `cg` and `sl`, `fl`'s word run, `fw`'s `line`, every group index of `fv fa fx`, and a `refs` or `fa` reference INTO a layer arena
-;; by that arena's offset. What is not: glyph runs (they point into the document pass's `glyphs`), `feat`, `hl` subjects, `fpa`'s
+;; by that arena's offset. What is not: glyph runs (they point into the document pass's `glyphs`), `feat`, `hl` subjects, the graphics
+;; arenas' (`gl-append` re-bases their groups and member runs; a region's subject is an evidence row), `grl`'s
 ;; `pts` runs and every reference into the evidence (the evidence is document-wide).
 ;;
-;; THE DUMP is table driven (`pl-fd`, one row per printed field), and `fw fl fpa` reuse the evidence's own tables (`ev-row`): a law
+;; THE DUMP is table driven (`pl-fd`, one row per printed field), and `fw fl` reuse the evidence's own tables (`ev-row`): a law
 ;; checks that every cell of every stride is printed or named spare.
 (ns emon.player
   (:require [emon.lang :refer [I32 Cells Text defenum emit-ascii]]
@@ -29,6 +31,7 @@
             [emon.json :refer [js-indent js-close js-aelem js-aend js-fsep js-cpt]]
             [emon.model :refer [dr-emit-name]]
             [emon.evidence :refer [ea-emit-name ev-begin ev-row ev-emit-body ek-version]]
+            [emon.glayer :refer [gl-append gl-check gl-arena gl-ea-grl gl-ea-gfl gl-ea-ggp gl-ea-grg]]
             [kin.lang :refer [defn defdata return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -100,7 +103,7 @@
 (defn ^:pub ^I32 pl-ea-fa [] (return 38))
 (defn ^:pub ^I32 pl-ea-fx [] (return 39))
 (defn ^:pub ^I32 pl-ea-hl [] (return 40))
-(defn ^:pub ^I32 pl-ea-fpa [] (return 41))
+(defn ^:pub ^I32 pl-ea-grl [] (return 41))
 (defn ^:pub ^I32 pl-ea-sl [] (return 42))
 
 (defn ^:pub ^I32 cg-stride [] (return 16))
@@ -110,7 +113,6 @@
 (defn ^:pub ^I32 fa-stride [] (return 12))
 (defn ^:pub ^I32 fx-stride [] (return 4))
 (defn ^:pub ^I32 hl-stride [] (return 12))
-(defn ^:pub ^I32 fpa-stride [] (return 24))
 (defn ^:pub ^I32 sl-stride [] (return 16))
 
 ;; cg
@@ -308,7 +310,8 @@
 
 ;; ------------------------------------------------------------- append
 
-(defn ^I32 pl-off [^I32 ea ^I32 ocg ^I32 ofw ^I32 ofl ^I32 ofv ^I32 ofa ^I32 ofx ^I32 ohl ^I32 ofpa ^I32 osl]
+(defn ^I32 pl-off [^I32 ea ^I32 ocg ^I32 ofw ^I32 ofl ^I32 ofv ^I32 ofa ^I32 ofx ^I32 ohl ^I32 ogrl ^I32 osl
+                   ^I32 ogfl ^I32 oggp ^I32 ogrg]
   (comment "The offset a reference into layer arena `ea` is re-based by (0 for an evidence arena).")
   (if (== ea 34) (return ocg))
   (if (== ea 35) (return ofw))
@@ -317,8 +320,11 @@
   (if (== ea 38) (return ofa))
   (if (== ea 39) (return ofx))
   (if (== ea 40) (return ohl))
-  (if (== ea 41) (return ofpa))
+  (if (== ea 41) (return ogrl))
   (if (== ea 42) (return osl))
+  (if (== ea 43) (return ogfl))
+  (if (== ea 44) (return oggp))
+  (if (== ea 45) (return ogrg))
   (return 0))
 
 (defn ^I32 pl-add-if [^I32 v ^I32 by]
@@ -327,10 +333,12 @@
   (return (+ v by)))
 
 (defn ^:pub ^I32 pl-append [^:mut ^Cells dcg ^:mut ^Cells dfw ^:mut ^Cells dfl ^:mut ^Cells dfv ^:mut ^Cells dfa
-                            ^:mut ^Cells dfx ^:mut ^Cells dhl ^:mut ^Cells dfpa ^:mut ^Cells dsl
+                            ^:mut ^Cells dfx ^:mut ^Cells dhl ^:mut ^Cells dgrl ^:mut ^Cells dsl
+                            ^:mut ^Cells dgfl ^:mut ^Cells dggp ^:mut ^Cells dgrg
                             ^:mut ^Cells detext ^:mut ^Cells drefs
                             ^Cells pcg ^Cells pfw ^Cells pfl ^Cells pfv ^Cells pfa
-                            ^Cells pfx ^Cells phl ^Cells pfpa ^Cells psl
+                            ^Cells pfx ^Cells phl ^Cells pgrl ^Cells psl
+                            ^Cells pgfl ^Cells pggp ^Cells pgrg
                             ^Cells petext ^Cells prefs]
   (comment "Concatenate a page's layer (its arenas, and its own `etext` and `refs`) onto the document's, re-basing as the head of")
   (comment "this file says. Answers 0.")
@@ -341,8 +349,11 @@
         ^I32 ofa (quot (cells-len dfa) 12)
         ^I32 ofx (quot (cells-len dfx) 4)
         ^I32 ohl (quot (cells-len dhl) 12)
-        ^I32 ofpa (quot (cells-len dfpa) 24)
+        ^I32 ogrl (quot (cells-len dgrl) 24)
         ^I32 osl (quot (cells-len dsl) 16)
+        ^I32 ogfl (quot (cells-len dgfl) 16)
+        ^I32 oggp (quot (cells-len dggp) 12)
+        ^I32 ogrg (quot (cells-len dgrg) 16)
         ^I32 oet (cells-len detext)
         ^I32 orf (quot (cells-len drefs) 2)
         ^:mut ^I32 i 0
@@ -360,7 +371,7 @@
     (while (< i n)
       (do (set v (cells-at prefs (* i 2)))
           (cells-push drefs v)
-          (cells-push drefs (+ (cells-at prefs (+ (* i 2) 1)) (pl-off v ocg ofw ofl ofv ofa ofx ohl ofpa osl)))
+          (cells-push drefs (+ (cells-at prefs (+ (* i 2) 1)) (pl-off v ocg ofw ofl ofv ofa ofx ohl ogrl osl ogfl oggp ogrg)))
           (set i (+ i 1))))
     (comment "cg: its three runs of refs, and nothing else")
     (set i 0)
@@ -412,7 +423,7 @@
           (set k 0)
           (while (< k 12)
             (do (set v (cells-at pfa (+ (* i 12) k)))
-                (if (== k 7) (set v (+ v (pl-off b ocg ofw ofl ofv ofa ofx ohl ofpa osl))))
+                (if (== k 7) (set v (+ v (pl-off b ocg ofw ofl ofv ofa ofx ohl ogrl osl ogfl oggp ogrg))))
                 (if (== k 9) (set v (pl-add-if v ocg)))
                 (cells-push dfa v)
                 (set k (+ k 1))))
@@ -425,16 +436,11 @@
           (if (== (rem i 4) 0) (set v (pl-add-if v ocg)))
           (cells-push dfx v)
           (set i (+ i 1))))
-    (comment "hl and fpa: nothing to re-base")
+    (comment "hl: nothing to re-base")
     (set i 0)
     (set n (cells-len phl))
     (while (< i n)
       (do (cells-push dhl (cells-at phl i))
-          (set i (+ i 1))))
-    (set i 0)
-    (set n (cells-len pfpa))
-    (while (< i n)
-      (do (cells-push dfpa (cells-at pfpa i))
           (set i (+ i 1))))
     (comment "sl: its run of OCR words in refs, and its reference when that is a layer row")
     (set i 0)
@@ -444,11 +450,12 @@
           (set k 0)
           (while (< k 16)
             (do (set v (cells-at psl (+ (* i 16) k)))
-                (if (== k 8) (set v (pl-add-if v (pl-off b ocg ofw ofl ofv ofa ofx ohl ofpa osl))))
+                (if (== k 8) (set v (pl-add-if v (pl-off b ocg ofw ofl ofv ofa ofx ohl ogrl osl ogfl oggp ogrg))))
                 (if (== k 10) (set v (pl-add-if v orf)))
                 (cells-push dsl v)
                 (set k (+ k 1))))
           (set i (+ i 1))))
+    (gl-append dgrl dgfl dggp dgrg pgrl pgfl pggp pgrg orf)
     (return 0)))
 
 ;; ------------------------------------------------------------- check
@@ -462,12 +469,14 @@
   (if (> (+ first cnt) limit) (return 0))
   (return 1))
 
-(defn ^:pub ^I32 pl-check [^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells fpa ^Cells sl
+(defn ^:pub ^I32 pl-check [^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells grl ^Cells sl
+                           ^Cells gfl ^Cells ggp ^Cells grg
                            ^Cells etext ^Cells refs ^Cells glyphs]
   (comment "0 for a sound layer, else the first broken thing: 1 a stride; 2 a `cg` run outside `refs`; 3 an `fw` text run outside")
   (comment "`etext`; 4 an `fw` line outside `fl`; 5 an `fw` glyph run outside `glyphs`; 6 an `fl` run outside `fw`; 7 `fv` neither")
   (comment "empty nor one row per `fw` row, or a group outside `cg`; 8 an `fa` group outside `cg` or a negative subject; 9 an `fx`")
-  (comment "group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row.")
+  (comment "group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row;")
+  (comment "12 + `gl-check`'s answer when the graphics arenas are broken (13 a stride, 14 a group outside `ggp`, ... see `emon.glayer`).")
   (let [^I32 ncg (quot (cells-len cg) 16)
         ^I32 nfw (quot (cells-len fw) 24)
         ^I32 nfl (quot (cells-len fl) 16)
@@ -488,7 +497,6 @@
     (if (!= (rem (cells-len fa) 12) 0) (return 1))
     (if (!= (rem (cells-len fx) 4) 0) (return 1))
     (if (!= (rem (cells-len hl) 12) 0) (return 1))
-    (if (!= (rem (cells-len fpa) 24) 0) (return 1))
     (if (!= (rem (cells-len sl) 16) 0) (return 1))
     (if (!= (rem (cells-len refs) 2) 0) (return 1))
     (while (< i ncg)
@@ -540,6 +548,8 @@
           (if (== v 37) (if (or (< w 0) (>= w nfv)) (return 11)))
           (if (== v 38) (if (or (< w 0) (>= w nfa)) (return 11)))
           (set i (+ i 1))))
+    (set v (gl-check grl gfl ggp grg refs))
+    (if (!= v 0) (return (+ 11 v)))
     (return 0)))
 
 ;; ------------------------------------------------------------- the dump
@@ -717,9 +727,9 @@
     (return 1)))
 
 (defn ^:pub ^I32 pl-emit-layer [^:mut ^Text t ^I32 pretty ^I32 s0
-                                ^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells fpa ^Cells sl
-                                ^Cells etext]
-  (comment "The layer's nine arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.")
+                                ^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells grl ^Cells sl
+                                ^Cells gfl ^Cells ggp ^Cells grg ^Cells etext]
+  (comment "The layer's twelve arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.")
   (let [^:mut ^I32 s s0]
     (set s (pl-arena t pretty s (plk-cg) 1 0 cg etext))
     (set s (pl-arena t pretty s (plk-fw) 0 8 fw etext))
@@ -728,8 +738,11 @@
     (set s (pl-arena t pretty s (plk-fa) 3 0 fa etext))
     (set s (pl-arena t pretty s (plk-fx) 4 0 fx etext))
     (set s (pl-arena t pretty s (plk-hl) 5 0 hl etext))
-    (set s (pl-arena t pretty s (plk-fpa) 0 12 fpa etext))
+    (set s (gl-arena t pretty s 1 grl))
     (set s (pl-arena t pretty s (plk-sl) 6 0 sl etext))
+    (set s (gl-arena t pretty s 2 gfl))
+    (set s (gl-arena t pretty s 3 ggp))
+    (set s (gl-arena t pretty s 4 grg))
     (return s)))
 
 (defn ^:pub ^I32 pl-emit [^:mut ^Text t ^I32 pretty
@@ -742,14 +755,43 @@
                           ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
                           ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
                           ^:mut ^Cells prims ^:mut ^Cells tlines
-                          ^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells fpa ^Cells sl]
-  (comment "The evidence dump, VERSION \"2\" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's nine.")
+                          ^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells grl ^Cells sl
+                          ^Cells gfl ^Cells ggp ^Cells grg]
+  (comment "The evidence dump, VERSION \"2\" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's twelve.")
   (let [^:mut ^I32 s 0]
     (emit-ascii t "{")
     (set s (ev-begin t pretty 0 s (ek-version)))
     (emit-ascii t "\"2\"")
     (set s (ev-emit-body t pretty s epages views pts refs etext feats glyphs words lines marks fonts paths images
                          oruns oblocks olines owords osyms oalts inks components rules prims tlines))
-    (set s (pl-emit-layer t pretty s cg fw fl fv fa fx hl fpa sl etext))
+    (set s (pl-emit-layer t pretty s cg fw fl fv fa fx hl grl sl gfl ggp grg etext))
+    (js-close t pretty 0 s)
+    (return 0)))
+
+;; P5.5a graphics arenas (D270). The Engines' `keep_evidence` dump stays version "1", the interpreter's own (D242), unless the document has
+;; fused graphics: then it is version "2" with the four graphics arrays after the evidence's, and nothing else of the layer (the other
+;; arenas join it with P7.3, when the goldens move). `bb accuracy` reads `grl` and `gfl` from it (tools/accuracy/graphics.clj).
+(defn ^:pub ^I32 pl-emit-gfx [^:mut ^Text t ^I32 pretty
+                              ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
+                              ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
+                              ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                              ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+                              ^:mut ^Cells images
+                              ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                              ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                              ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+                              ^:mut ^Cells prims ^:mut ^Cells tlines
+                              ^Cells grl ^Cells gfl ^Cells ggp ^Cells grg]
+  (comment "The evidence dump as `pl-emit` writes it, version \"2\", with `grl gfl ggp grg` as the only layer arrays.")
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-begin t pretty 0 s (ek-version)))
+    (emit-ascii t "\"2\"")
+    (set s (ev-emit-body t pretty s epages views pts refs etext feats glyphs words lines marks fonts paths images
+                         oruns oblocks olines owords osyms oalts inks components rules prims tlines))
+    (set s (gl-arena t pretty s 1 grl))
+    (set s (gl-arena t pretty s 2 gfl))
+    (set s (gl-arena t pretty s 3 ggp))
+    (set s (gl-arena t pretty s 4 grg))
     (js-close t pretty 0 s)
     (return 0)))

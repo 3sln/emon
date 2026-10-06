@@ -525,6 +525,12 @@ fn test_every_synthetic_document_is_the_same_through_an_async_source_of_512_byte
     crate::testport::assert_that((r % 100) >= 4, "the big ones took several rounds");
 }
 #[test]
+fn test_every_visibility_fixture_is_the_same_through_an_async_source_of_512_byte_chunks() {
+    // P3.6a: the paths' vis, vby, vchk and backdrop are cells of the evidence, so they are held to the same rule.
+    let r: i32 = ct_async_rows(0, &crate::testport::test_file("vis/rows.txt")[..], 0, 512);
+    crate::testport::assert_that(r >= 1800, "eighteen visibility fixtures were run");
+}
+#[test]
 fn test_every_tagged_document_is_the_same_through_an_async_source_of_512_byte_chunks() {
     let r: i32 = ct_async_rows(0, &crate::testport::test_file("content/tagged.txt")[..], 0, 512);
     crate::testport::assert_that(r >= 300, "three documents were run");

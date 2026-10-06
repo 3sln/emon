@@ -360,7 +360,7 @@ public static class Player {
     public static int PlEaHl() {
         return 40;
     }
-    public static int PlEaFpa() {
+    public static int PlEaGrl() {
         return 41;
     }
     public static int PlEaSl() {
@@ -386,9 +386,6 @@ public static class Player {
     }
     public static int HlStride() {
         return 12;
-    }
-    public static int FpaStride() {
-        return 24;
     }
     public static int SlStride() {
         return 16;
@@ -733,7 +730,7 @@ public static class Player {
         emon.Port.CellsSet(c, (r * 16) + 10, -1);
         return r;
     }
-    internal static int PlOff(int ea, int ocg, int ofw, int ofl, int ofv, int ofa, int ofx, int ohl, int ofpa, int osl) {
+    internal static int PlOff(int ea, int ocg, int ofw, int ofl, int ofv, int ofa, int ofx, int ohl, int ogrl, int osl, int ogfl, int oggp, int ogrg) {
         // The offset a reference into layer arena `ea` is re-based by (0 for an evidence arena).
         if (ea == 34) {
             return ocg;
@@ -757,10 +754,19 @@ public static class Player {
             return ohl;
         }
         if (ea == 41) {
-            return ofpa;
+            return ogrl;
         }
         if (ea == 42) {
             return osl;
+        }
+        if (ea == 43) {
+            return ogfl;
+        }
+        if (ea == 44) {
+            return oggp;
+        }
+        if (ea == 45) {
+            return ogrg;
         }
         return 0;
     }
@@ -771,7 +777,7 @@ public static class Player {
         }
         return v + by;
     }
-    public static int PlAppend(emon.Port.Cells dcg, emon.Port.Cells dfw, emon.Port.Cells dfl, emon.Port.Cells dfv, emon.Port.Cells dfa, emon.Port.Cells dfx, emon.Port.Cells dhl, emon.Port.Cells dfpa, emon.Port.Cells dsl, emon.Port.Cells detext, emon.Port.Cells drefs, emon.Port.Cells pcg, emon.Port.Cells pfw, emon.Port.Cells pfl, emon.Port.Cells pfv, emon.Port.Cells pfa, emon.Port.Cells pfx, emon.Port.Cells phl, emon.Port.Cells pfpa, emon.Port.Cells psl, emon.Port.Cells petext, emon.Port.Cells prefs) {
+    public static int PlAppend(emon.Port.Cells dcg, emon.Port.Cells dfw, emon.Port.Cells dfl, emon.Port.Cells dfv, emon.Port.Cells dfa, emon.Port.Cells dfx, emon.Port.Cells dhl, emon.Port.Cells dgrl, emon.Port.Cells dsl, emon.Port.Cells dgfl, emon.Port.Cells dggp, emon.Port.Cells dgrg, emon.Port.Cells detext, emon.Port.Cells drefs, emon.Port.Cells pcg, emon.Port.Cells pfw, emon.Port.Cells pfl, emon.Port.Cells pfv, emon.Port.Cells pfa, emon.Port.Cells pfx, emon.Port.Cells phl, emon.Port.Cells pgrl, emon.Port.Cells psl, emon.Port.Cells pgfl, emon.Port.Cells pggp, emon.Port.Cells pgrg, emon.Port.Cells petext, emon.Port.Cells prefs) {
         // Concatenate a page's layer (its arenas, and its own `etext` and `refs`) onto the document's, re-basing as the head of
         // this file says. Answers 0.
         int ocg = emon.Port.CellsLen(dcg) / 16;
@@ -781,8 +787,11 @@ public static class Player {
         int ofa = emon.Port.CellsLen(dfa) / 12;
         int ofx = emon.Port.CellsLen(dfx) / 4;
         int ohl = emon.Port.CellsLen(dhl) / 12;
-        int ofpa = emon.Port.CellsLen(dfpa) / 24;
+        int ogrl = emon.Port.CellsLen(dgrl) / 24;
         int osl = emon.Port.CellsLen(dsl) / 16;
+        int ogfl = emon.Port.CellsLen(dgfl) / 16;
+        int oggp = emon.Port.CellsLen(dggp) / 12;
+        int ogrg = emon.Port.CellsLen(dgrg) / 16;
         int oet = emon.Port.CellsLen(detext);
         int orf = emon.Port.CellsLen(drefs) / 2;
         int i = 0;
@@ -801,7 +810,7 @@ public static class Player {
         while (i < n) {
             v = emon.Port.CellsAt(prefs, i * 2);
             emon.Port.CellsPush(drefs, v);
-            emon.Port.CellsPush(drefs, emon.Port.CellsAt(prefs, (i * 2) + 1) + PlOff(v, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl));
+            emon.Port.CellsPush(drefs, emon.Port.CellsAt(prefs, (i * 2) + 1) + PlOff(v, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg));
             i += 1;
         }
         // cg: its three runs of refs, and nothing else
@@ -872,7 +881,7 @@ public static class Player {
             while (k < 12) {
                 v = emon.Port.CellsAt(pfa, (i * 12) + k);
                 if (k == 7) {
-                    v += PlOff(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl);
+                    v += PlOff(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg);
                 }
                 if (k == 9) {
                     v = PlAddIf(v, ocg);
@@ -893,17 +902,11 @@ public static class Player {
             emon.Port.CellsPush(dfx, v);
             i += 1;
         }
-        // hl and fpa: nothing to re-base
+        // hl: nothing to re-base
         i = 0;
         n = emon.Port.CellsLen(phl);
         while (i < n) {
             emon.Port.CellsPush(dhl, emon.Port.CellsAt(phl, i));
-            i += 1;
-        }
-        i = 0;
-        n = emon.Port.CellsLen(pfpa);
-        while (i < n) {
-            emon.Port.CellsPush(dfpa, emon.Port.CellsAt(pfpa, i));
             i += 1;
         }
         // sl: its run of OCR words in refs, and its reference when that is a layer row
@@ -915,7 +918,7 @@ public static class Player {
             while (k < 16) {
                 v = emon.Port.CellsAt(psl, (i * 16) + k);
                 if (k == 8) {
-                    v = PlAddIf(v, PlOff(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ofpa, osl));
+                    v = PlAddIf(v, PlOff(b, ocg, ofw, ofl, ofv, ofa, ofx, ohl, ogrl, osl, ogfl, oggp, ogrg));
                 }
                 if (k == 10) {
                     v = PlAddIf(v, orf);
@@ -925,6 +928,7 @@ public static class Player {
             }
             i += 1;
         }
+        Glayer.GlAppend(dgrl, dgfl, dggp, dgrg, pgrl, pgfl, pggp, pgrg, orf);
         return 0;
     }
     internal static int PlRunOk(int first, int cnt, int limit) {
@@ -943,11 +947,12 @@ public static class Player {
         }
         return 1;
     }
-    public static int PlCheck(emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells fpa, emon.Port.Cells sl, emon.Port.Cells etext, emon.Port.Cells refs, emon.Port.Cells glyphs) {
+    public static int PlCheck(emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells grl, emon.Port.Cells sl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Port.Cells etext, emon.Port.Cells refs, emon.Port.Cells glyphs) {
         // 0 for a sound layer, else the first broken thing: 1 a stride; 2 a `cg` run outside `refs`; 3 an `fw` text run outside
         // `etext`; 4 an `fw` line outside `fl`; 5 an `fw` glyph run outside `glyphs`; 6 an `fl` run outside `fw`; 7 `fv` neither
         // empty nor one row per `fw` row, or a group outside `cg`; 8 an `fa` group outside `cg` or a negative subject; 9 an `fx`
-        // group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row.
+        // group outside `cg`; 10 an `sl` run outside `refs`; 11 a `refs` reference into a layer arena that has no such row;
+        // 12 + `gl-check`'s answer when the graphics arenas are broken (13 a stride, 14 a group outside `ggp`, ... see `emon.glayer`).
         int ncg = emon.Port.CellsLen(cg) / 16;
         int nfw = emon.Port.CellsLen(fw) / 24;
         int nfl = emon.Port.CellsLen(fl) / 16;
@@ -980,9 +985,6 @@ public static class Player {
             return 1;
         }
         if ((emon.Port.CellsLen(hl) % 12) != 0) {
-            return 1;
-        }
-        if ((emon.Port.CellsLen(fpa) % 24) != 0) {
             return 1;
         }
         if ((emon.Port.CellsLen(sl) % 16) != 0) {
@@ -1095,6 +1097,10 @@ public static class Player {
                 }
             }
             i += 1;
+        }
+        v = Glayer.GlCheck(grl, gfl, ggp, grg, refs);
+        if (v != 0) {
+            return 11 + v;
         }
         return 0;
     }
@@ -1308,8 +1314,8 @@ public static class Player {
         Json.JsAend(t, pr, 1, n);
         return 1;
     }
-    public static int PlEmitLayer(System.Text.StringBuilder t, int pretty, int s0, emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells fpa, emon.Port.Cells sl, emon.Port.Cells etext) {
-        // The layer's nine arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.
+    public static int PlEmitLayer(System.Text.StringBuilder t, int pretty, int s0, emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells grl, emon.Port.Cells sl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Port.Cells etext) {
+        // The layer's twelve arrays as members of the dump's object, after the evidence's; `s0` is 1 when a member came before.
         int s = s0;
         s = PlArena(t, pretty, s, PlkCg(), 1, 0, cg, etext);
         s = PlArena(t, pretty, s, PlkFw(), 0, 8, fw, etext);
@@ -1318,18 +1324,35 @@ public static class Player {
         s = PlArena(t, pretty, s, PlkFa(), 3, 0, fa, etext);
         s = PlArena(t, pretty, s, PlkFx(), 4, 0, fx, etext);
         s = PlArena(t, pretty, s, PlkHl(), 5, 0, hl, etext);
-        s = PlArena(t, pretty, s, PlkFpa(), 0, 12, fpa, etext);
+        s = Glayer.GlArena(t, pretty, s, 1, grl);
         s = PlArena(t, pretty, s, PlkSl(), 6, 0, sl, etext);
+        s = Glayer.GlArena(t, pretty, s, 2, gfl);
+        s = Glayer.GlArena(t, pretty, s, 3, ggp);
+        s = Glayer.GlArena(t, pretty, s, 4, grg);
         return s;
     }
-    public static int PlEmit(System.Text.StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells fpa, emon.Port.Cells sl) {
-        // The evidence dump, VERSION "2" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's nine.
+    public static int PlEmit(System.Text.StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells grl, emon.Port.Cells sl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg) {
+        // The evidence dump, VERSION "2" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's twelve.
         int s = 0;
         emon.Port.TextAscii(t, "{");
         s = Evidence.EvBegin(t, pretty, 0, s, Evidence.EkVersion());
         emon.Port.TextAscii(t, "\"2\"");
         s = Evidence.EvEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
-        s = PlEmitLayer(t, pretty, s, cg, fw, fl, fv, fa, fx, hl, fpa, sl, etext);
+        s = PlEmitLayer(t, pretty, s, cg, fw, fl, fv, fa, fx, hl, grl, sl, gfl, ggp, grg, etext);
+        Json.JsClose(t, pretty, 0, s);
+        return 0;
+    }
+    public static int PlEmitGfx(System.Text.StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg) {
+        // The evidence dump as `pl-emit` writes it, version "2", with `grl gfl ggp grg` as the only layer arrays.
+        int s = 0;
+        emon.Port.TextAscii(t, "{");
+        s = Evidence.EvBegin(t, pretty, 0, s, Evidence.EkVersion());
+        emon.Port.TextAscii(t, "\"2\"");
+        s = Evidence.EvEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        s = Glayer.GlArena(t, pretty, s, 1, grl);
+        s = Glayer.GlArena(t, pretty, s, 2, gfl);
+        s = Glayer.GlArena(t, pretty, s, 3, ggp);
+        s = Glayer.GlArena(t, pretty, s, 4, grg);
         Json.JsClose(t, pretty, 0, s);
         return 0;
     }

@@ -6,6 +6,7 @@ package tabletest
 import (
 	"emon/columns"
 	"emon/evidence"
+	"emon/gfuse"
 	"emon/heading"
 	"emon/initial"
 	"emon/json"
@@ -253,9 +254,16 @@ func ttRun(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *st
 	var s16 *port.Cells = port.NewCells()
 	var s17 *port.Cells = port.NewCells()
 	var s18 *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var gpts *port.Cells = port.NewCells()
+	var gmk *port.Cells = port.NewCells()
+	var gim *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
-	table.TbBuild(wd, ln, et, pa, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
+	gfuse.GfDoc(pa, gpts, gmk, gim, 1, gfuse.GfxMode(), grl, gfl, cand)
+	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
 	columns.LcCopy(ln, lt)
 	para.PaBuild(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al)
 	ttBrief(t, nodes, attrs, text)
@@ -473,6 +481,9 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	var s16 *port.Cells = port.NewCells()
 	var s17 *port.Cells = port.NewCells()
 	var s18 *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
 	var sf *port.Cells = port.NewCells()
 	var sc *port.Cells = port.NewCells()
 	var ws *port.Cells = port.NewCells()
@@ -493,7 +504,8 @@ func ttGolden(pdf []byte, t *strings.Builder) int32 {
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
-	table.TbBuild(wd, ln, et, pa, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
+	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand)
+	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages)
 	columns.LcCopy(ln, lt)
 	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)
 	heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt)
