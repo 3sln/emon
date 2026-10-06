@@ -60,3 +60,6 @@ runs:
         bb --version; rustc --version; go version; dotnet --version; java -version 2>&1 | head -1
         pdftotext -v 2>&1 | head -1; python3 --version
         echo "EMON_JDK=$JAVA_HOME" >> "$GITHUB_ENV"
+        echo "PYTHONPATH=$HOME/.cache/emon/pylib" >> "$GITHUB_ENV"
+        magick -list format | grep -i ' JPEG ' || echo "NO JPEG DELEGATE"
+        magick emon/test/image/jpeg-gray.jpg -depth 8 gray:- 2>&1 | wc -c || true
