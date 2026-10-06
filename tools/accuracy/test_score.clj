@@ -467,13 +467,13 @@ the same, the stream is not Python's.)"
 
 ;; ------------------------------------------------- inline styles and links (P4.7, D194) ----
 
-(defn T [t] {"kind" "text" "text" t})
-(defn SP [styles t] {"kind" "span" "style" styles "children" [(T t)]})
-(defn LK [href t] {"kind" "link" "href" href "children" [(T t)]})
+(defn IT [t] {"kind" "text" "text" t})
+(defn SP [styles t] {"kind" "span" "style" styles "children" [(IT t)]})
+(defn LK [href t] {"kind" "link" "href" href "children" [(IT t)]})
 (defn IP [inl] {"kind" "paragraph" "text" "x" "inlines" inl})
 (defn ic [g p] (counts (gold [g] :inlines true) (pred [p])))
 
-(def INL-GOLD (IP [(T "a ") (SP ["bold"] "b c") (T " d ") (SP ["italic"] "e") (LK "http://x" "f")]))
+(def INL-GOLD (IP [(IT "a ") (SP ["bold"] "b c") (IT " d ") (SP ["italic"] "e") (LK "http://x" "f")]))
 
 (deftest inline-perfect
   ;; one bold span, one italic, one link: each tp 1, gold 1, pred 1; no other style is counted at all
@@ -489,7 +489,7 @@ the same, the stream is not Python's.)"
   ;; pred: bold on "b" (not "b c"), no italic, an extra mono span "z", no link
   ;; bold: tp 0 of gold 1 and pred 1 -> P 0, R 0; italic: tp 0, gold 1, pred 0 -> P 0 (nothing predicted, something there), R 0;
   ;; mono: gold 0, pred 1 -> P 0, R 0; link: tp 0, gold 1, pred 0 -> P 0, R 0
-  (let [p (IP [(T "a ") (SP ["bold"] "b") (SP ["mono"] "z")])
+  (let [p (IP [(IT "a ") (SP ["bold"] "b") (SP ["mono"] "z")])
         c (ic INL-GOLD p) m (M c)]
     (is (= [0 1 1] [(c "span.bold.tp") (c "span.bold.gold") (c "span.bold.pred")]))
     (is (= [0 1 0] [(c "span.italic.tp") (c "span.italic.gold") (c "span.italic.pred")]))
@@ -517,8 +517,8 @@ the same, the stream is not Python's.)"
 (deftest inline-internal-link-is-hash-and-a-span-in-a-link-is-both
   ;; an internal link (a `target`) in the gold matches an internal link in the pred whatever node it names;
   ;; a bold span inside a link counts as a span and the link counts with the text of the whole
-  (let [gl {"kind" "link" "target" 5 "children" [(T "see ") (SP ["bold"] "p. 3")]}
-        pl {"kind" "link" "target" 9 "children" [(T "see ") (SP ["bold"] "p. 3")]}
+  (let [gl {"kind" "link" "target" 5 "children" [(IT "see ") (SP ["bold"] "p. 3")]}
+        pl {"kind" "link" "target" 9 "children" [(IT "see ") (SP ["bold"] "p. 3")]}
         c (ic (IP [gl]) (IP [pl]))]
     (is (= [1 1 1] [(c "link.tp") (c "link.gold") (c "link.pred")]))
     (is (= [1 1 1] [(c "span.bold.tp") (c "span.bold.gold") (c "span.bold.pred")])))
