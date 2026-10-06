@@ -1,0 +1,176 @@
+#!/usr/bin/env bb
+;; TARGETED RE-OCR ROUNDS, replayed from transcripts WITH THEIR PIXELS (P7.4, SPEC 8.3, 7.3, D196, D207, D420-D426).   kin/scripts/retarget
+;;
+;; test/retarget/FIXTURES.edn names a few documents, scanned and born-digital, whose first OCR pass calls for the passes of `emon.retarget`: a scan under a
+;; seal (the body-ink pass, and the lines and the table cells it reads again), a scan fed upside down (the quarter-turned view), a watermark behind born-digital
+;; text. test/retarget/replay/ID is what the live ports answered, recorded by `bb retarget-record` on Rust (Tesseract, and pdfium for the born-digital ones) WITH the
+;; bitmaps the page units read (D196: from P6.3 on kin reads pixels, so a transcript must carry them) and nothing that kin does not read. This gate only REPLAYS
+;; them, through the whole Engine on Rust and Go, and holds:
+;;
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256);
+;;   2. THE ROUNDS: the plan/fulfil rounds of every page unit are at most 5 (D207), its targeted requests at most `rt-max` (24); every kin-made-view request names
+;;      its view from `KIN_VIEW_BASE` up and carries the view's pixel hash (two cells after the pixel box); the dump names the pass each run was (`oruns` `pass`):
+;;      the fixture's passes are there;
+;;   3. WHAT THEY ARE WORTH: the body's word error rate against the document's own text is no worse than the same transcript's replayed with the hidden setting
+;;      `no-retarget` (the Engine as it was before the ink layers and the targeted passes) by more than 0.005; where the fixture says what leaves the body (a
+;;      watermark, a seal's words), it does;
+;;   4. NOTHING IS GUESSED: a replay of a transcript whose decode bitmap has ONE other pixel is `transcript-miss` on both Engines: the view kin made from it
+;;      has another hash, and the transcript holds no answer for that request.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process]]
+         '[cheshire.core :as json]
+         '[clojure.edn :as edn]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def abs #(str (fs/absolutize %)))
+(def fixtures (edn/read-string (slurp "test/retarget/FIXTURES.edn")))
+(def ids (vec (sort (filter #(fs/exists? (str "test/retarget/replay/" % "/transcript.edn")) (keys fixtures)))))
+(def digests (let [f "test/retarget/replay/DIGESTS.edn"] (if (fs/exists? f) (read-string (slurp f)) {})))
+(def work (str (fs/create-temp-dir {:prefix "emon-retarget."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. #(fs/delete-tree work)))
+
+(defn sha256 [s]
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest md (.getBytes ^String s "UTF-8"))))))
+
+(defn build-driver [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r))
+      (str/trim (:out r))
+      (do (bad "the " what " Engine driver did not build:\n" (:err r)) nil))))
+
+(def rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" "Rust")))
+(def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
+(when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
+(when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+
+(defn drive [drv & a]
+  (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+(defn same? [a b] (and (= (:exit a) (:exit b)) (= (:out a) (:out b)) (= (:err a) (:err b))))
+
+(defn pdf-of [id] (abs (:pdf (get fixtures id))))
+(defn flags-of [id] (if (= :born (:kind (get fixtures id))) ["--ocr-born-digital"] []))
+
+(defn body-texts [model]
+  (let [out (atom [])]
+    (letfn [(walk [n] (when (map? n)
+                        (when-let [t (get n "text")] (when (string? t) (swap! out conj t)))
+                        (doseq [c (get n "children")] (walk c))))]
+      (walk (get model "body")))
+    @out))
+
+(defn words [s] (re-seq #"[\p{L}\p{N}]+" (str/lower-case s)))
+
+(defn lev [as bs]
+  (let [av (vec as) bv (vec bs) n (count bv)]
+    (loop [i 1 prev (vec (range (inc n)))]
+      (if (> i (count av))
+        (peek prev)
+        (recur (inc i)
+               (let [ca (nth av (dec i))]
+                 (reduce (fn [row j]
+                           (conj row (min (inc (peek row)) (inc (nth prev j))
+                                          (+ (nth prev (dec j)) (if (= ca (nth bv (dec j))) 0 1)))))
+                         [i] (range 1 (inc n)))))))))
+
+(defn gold-words [id]
+  (let [g (json/parse-string (slurp (str "test/corpus/synth/gold/" (:gold (get fixtures id) (last (str/split (str/replace (:pdf (get fixtures id)) #"\.pdf$" "") #"/"))) ".gold.json")))]
+    (words (str/join " " (body-texts (get g "model" g))))))
+
+(defn wer [model gold]
+  (let [ws (words (str/join " " (body-texts model)))]
+    (/ (double (lev ws gold)) (max 1 (count gold)))))
+
+(defn entries
+  "Every entry of a transcript.edn as [round kind-keyword req-ints]."
+  [dir]
+  (for [[_ round kind req] (re-seq #"\{:round (\d+) :kind :(\w+) :req \[([^\]]*)\]" (slurp (str dir "/transcript.edn")))]
+    [(parse-long round) (keyword kind) (mapv parse-long (str/split req #" "))]))
+
+(def VIEW-BASE 16777216)
+
+(defn first-pass-only
+  "A copy of a transcript with only what the Engine asks WITHOUT the targeted passes (a page's render or decode and its first OCR pass), the bitmaps kept: what
+   the same run with the hidden setting `no-retarget` replays (a replay refuses entries it never asked for)."
+  [dir out]
+  (fs/delete-tree out)
+  (fs/create-dirs out)
+  (doseq [f (fs/list-dir dir) :when (str/ends-with? (str f) ".png")] (fs/copy f (str out "/" (fs/file-name f))))
+  (spit (str out "/transcript.edn")
+        (str/replace (slurp (str dir "/transcript.edn"))
+                     #"\n  \{:round (\d+) :kind :(\w+) :req \[([^\]]*)\] :ans \[[^\]]*\]( :bitmap \"[^\"]*\")?\}"
+                     (fn [[whole _ _ req]]
+                       (if (contains? #{1 2 3 4 16} (mod (parse-long (nth (str/split req #" ") 2)) 256)) whole ""))))
+  out)
+
+(when (and rdrv gdrv (seq ids))
+  (doseq [id ids]
+    (let [{:keys [passes leak gold-leak]} (get fixtures id)
+          pdf (pdf-of id)
+          rep (abs (str "test/retarget/replay/" id))
+          flags (flags-of id)
+          rr (apply drive rdrv (concat flags ["--out=bundle" (str "--replay=" rep) pdf]))
+          rg (apply drive gdrv (concat flags ["--out=bundle" (str "--replay=" rep) pdf]))
+          want (get digests id)]
+      ;; 1 ---------------------------------------------------------------------------------------------------------------------------
+      (check (and (zero? (:exit rr)) (same? rr rg))
+             id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
+      ;; 2 ---------------------------------------------------------------------------------------------------------------------------
+      (let [es (entries rep)
+            ocr (filter #(= :ocr (second %)) es)
+            per-page (group-by (fn [[_ _ req]] (dec (quot (nth req 2) 256))) es)
+            views (filter (fn [[_ _ req]] (>= (nth req 3) VIEW-BASE)) ocr)
+            e (apply drive rdrv (concat flags ["--out=evidence" (str "--replay=" rep) pdf]))
+            dump (json/parse-string (let [l (first (filter #(str/starts-with? % "evidence: ") (str/split-lines (:out e))))]
+                                      (if l (subs l (count "evidence: ")) (:out e))))
+            got (frequencies (map #(get % "pass") (get dump "oruns")))]
+        (check (every? (fn [[_ rs]] (<= (inc (apply max (map first rs))) 5)) per-page)
+               id ": no page unit took more than 5 rounds (the most: " (apply max (map (fn [[_ rs]] (inc (apply max (map first rs)))) per-page)) ")")
+        (check (every? (fn [[_ rs]] (<= (count (filter (fn [[_ _ req]] (> (mod (nth req 2) 256) 16)) rs)) 24)) per-page)
+               id ": no page unit asked more than rt-max (24) targeted requests (the most: "
+               (apply max (map (fn [[_ rs]] (count (filter (fn [[_ _ req]] (> (mod (nth req 2) 256) 16)) rs))) per-page)) ", of "
+               (count es) " requests over " (count per-page) " pages)")
+        (check (every? (fn [[_ _ req]] (and (>= (nth req 3) VIEW-BASE) (>= (count req) 12))) views)
+               id ": the " (count views) " requests that name a kin-made view carry its pixel hash (two cells after the pixel box)")
+        (check (every? #(contains? got %) passes)
+               id ": the dump names the passes the runs were: " (pr-str got) " (wanted " (pr-str (sort passes)) ")"))
+      ;; 3 ---------------------------------------------------------------------------------------------------------------------------
+      (let [j (apply drive rdrv (concat flags ["--out=json" (str "--replay=" rep) pdf]))
+            fp (first-pass-only rep (str work "/first-" id))
+            b (apply drive rdrv (concat flags ["--no-retarget" "--out=json" (str "--replay=" fp) pdf]))
+            gw (gold-words id)
+            mj (json/parse-string (:out j))
+            mb (json/parse-string (:out b))
+            wj (wer mj gw)
+            wb (wer mb gw)
+            lk (fn [m] (count (filter (set leak) (words (str/join " " (body-texts m))))))]
+        (check (and (zero? (:exit j)) (zero? (:exit b)) (<= wj (+ wb 0.005)))
+               id (format ": body word error rate %.4f with the targeted passes, %.4f without (the same transcript, `no-retarget`)" wj wb))
+        (when (seq leak)
+          (check (<= (lk mj) (lk mb))
+                 id ": words of what is not the body (" (pr-str leak) ") in the body: " (lk mj) " with the passes, " (lk mb) " without")))
+      ;; 4 ---------------------------------------------------------------------------------------------------------------------------
+      (when (:miss (get fixtures id))
+        (let [tam (str work "/tamper-" id)
+              [x y] (:miss (get fixtures id))
+              png (str tam "/bitmap-0000.png")]
+          (fs/create-dirs tam)
+          (doseq [f (fs/list-dir rep)] (fs/copy f (str tam "/" (fs/file-name f)) {:replace-existing true}))
+          (let [m @(process {:out :string :err :string} "magick" png "-fill" "black" "-draw" (str "point " x "," y) png)
+                tr (apply drive rdrv (concat flags ["--out=bundle" (str "--replay=" tam) pdf]))
+                tg (apply drive gdrv (concat flags ["--out=bundle" (str "--replay=" tam) pdf]))]
+            (check (and (zero? (:exit m)) (= 4 (:exit tr)) (= 4 (:exit tg))
+                        (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss"))
+                   id ": a replay whose decode bitmap has one other pixel is transcript-miss on both Engines (the view kin made has another hash), nothing guessed"))))))
+  (when (zero? @fails)
+    (ok "targeted rounds: the passes the first pass calls for, in at most 5 rounds, from recorded pixels, on Rust and Go")))
+
+(when (empty? ids) (println "  SKIP no retarget transcripts committed (bb retarget-record)"))
+(when (pos? @fails) (System/exit 1))

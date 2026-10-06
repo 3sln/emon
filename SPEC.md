@@ -907,9 +907,15 @@ of `KIN_VIEW_BASE` (2^24) or above). An `ocr` request may name such a
 strip) as its bitmap; its record then carries the view's FNV-1a 64-bit pixel
 hash (two cells, by the `bitmap-hash` form), so the transcript is keyed by
 what was asked and never stores kin's pixels (they are a function of the
-transcribed answers). **A transcript carries every answered bitmap kin
+transcribed answers). **As built (P7.4, D421):** the two cells follow `h`
+(`bitmap psm flags x y w h hash-hi hash-lo lang...`, `rq-ocr-view`), so a
+host reads the languages from argument 9 rather than 7 when `bitmap` is from
+`KIN_VIEW_BASE` up; a replay of a request whose view came out with one other
+pixel is `transcript-miss`. **A transcript carries every answered bitmap kin
 reads**: a "slim" transcript (D214) replays only units that read no pixels,
-which from P6.3 on is none that has a raster.
+which from P6.3 on is none that has a raster. A page unit whose answers carry
+no bitmap (no `Renderer`, or a slim transcript) reads none: it skips the ink
+layers and the targeted passes and is what it was before them, byte for byte.
 `max-rounds` is 5 per page unit (D207): render or decode; the first OCR pass;
 targeted passes (§8.3); their answers; one spare.
 
@@ -1096,7 +1102,11 @@ within `fill-tol` (2 px), at least `fill-min` (6 pt) each way.
   construction): projection profiles of the ink runs of the body layers' mask
   (each run by its midpoint, weighted by its length, on every few rows) at
   candidate angles (±5°, 0.1° then 0.01°), with `ev-sin`/`ev-cos`; the angle
-  goes to the decode view and every view derived from it (D238). Kin
+  goes to the decode view and every view derived from it (D238), **and as
+  wired into the page unit (P7.4, D420) it is measured and then NOT applied**:
+  the OCR evidence reads the engine's pixel angles as the page's (a line's
+  `rot` is its baseline's angle less the page's median, D213), and a view that
+  rotated the boxes by the measured skew put every word twice as far off. Kin
   never resamples for its own analysis; it maps coordinates through the
   view. **Orientation** (0/90/180/270) is OSD's when its confidence passes
   `osd-conf`, else the `tlines`' dominant direction; a page not upright is
@@ -1139,6 +1149,19 @@ raster stages run once per round that has OCR answers (§7.3):
 | Born-digital, `ocr: auto` | nothing, unless the page's text-layer health (§9.3, without OCR) is under `auto-health`, or images cover over `auto-image` of it, or it has `hidden-text`: then as `full` |
 
 Targeted passes (round 3, §9.4 / P7.4) follow fusion's flags.
+
+**As built (P7.4, D420-D426).** `kin/pageink.kin` runs P6.3 and P6.4 in the page unit, on every raster whose pixels the unit was given (a scan's decode; a
+born-digital page's `with-text` render, and its `no-text` render for the tracer): the ink layers, the OCR words' ink columns (`xo` 10-14, 16), the rules and
+text lines. `kin/retarget.kin` then asks, in round 3 (round 4 for the text-only pass, which needs its render first), within `rt-max` (24, less the four kept for
+the page-level passes) requests a page: **op-cell** (a table cell at `psm` 7, when the page has a lattice of long rules and a first-pass line crosses a column
+border; the cell's box is cut inside the rules), **op-line** (a line the engine was unsure of, `psm` 7), **op-body-ink** (the view in which every `light`,
+`colour` and `background` layer is painted the paper's colour, except what lies against body ink, which on a scan is the glyphs' own edge; asked when foreign ink
+lies under a first-pass line or covers 1.5 per cent of the page), **op-re-rotated** (the page turned by the quarter turns OSD is sure of, or names when the tracer's
+text lines run up and down; the page is then read in the upright frame) and **op-text-only** (built, asked by nothing yet). **Which reading the pipeline gets** is
+decided line by line for a scanned page, never by a page's score: a first-pass line is kept unless a better reading of it exists that loses no text (same words,
+surer; the body-ink run's line that is its partner both ways), or its ink is mostly foreign and the body-ink run read nothing over it (a ghost); lines the body-ink
+run read where the first pass read none are taken, in reading order, on a page that runs down in one column. On a born-digital page the runs are written after the
+page is aligned and scored: they are evidence, and the body-ink run is a witness (`plg-bink`, `ag-bink`, row 222), never a candidate.
 
 ### 8.4 The evidence schema, v2 (D056, revised by D096)
 
@@ -1625,8 +1648,9 @@ moves: 1000, 700, 500 with `low-conf`), 120 a bad glyph of the word's own and 13
 reads the script (a Latin letter or digit in the text layer's word) and the OCR is plausible (`text-layer-suspect`), 140/141 an OCR-only
 group that is plausible and well scored is admitted when it lies in no image or in a scanned insert, 150 in a smaller image it is held
 (`in-figure` on the group), 170/175 an implausible or poorly scored OCR-only group is dropped as an `ocr-ghost`, 190 the default. Row 160
-(two OCR passes) waits for P7.4's second run. The conditions that need kin's ink layers (body-ink share) are not read: P6.3's views are
-not wired into the page unit yet. **Arbitration runs in the document unit**, after every page unit has aligned and scored its page and
+(two OCR passes) is still not built: P7.4's targeted runs are written after the page is aligned (`emon.retarget`), so they are evidence and, for the body-ink one, a
+witness (row 222), and arbitration never chooses between two readings of a group. The conditions that need kin's ink layers (body-ink share, kin ink) are read
+wherever the Engine was given pixels (P7.4, D420). **Arbitration runs in the document unit**, after every page unit has aligned and scored its page and
 `hl-doc` has judged the fonts (an encoding is a document fact); the page unit asks the two rasters (`pu-ask-rasters`), the OCR of the one
 with its text, and runs `xa-page` and `hl-page`. The fused flow keeps the text layer's geometry for a word OCR replaced; OCR-only words
 admitted are lines of their own after the page's others. Under the hidden test setting `ocr-born-digital` only: until P7.S a born-digital
@@ -1692,7 +1716,10 @@ classified by (3) and (6).
    to that layer. The **body-ink OCR pass** (`op-body-ink`, P7.4) OCRs a
    kin-made view in which every non-body layer is painted paper (§7.3); a
    word in the first pass with no counterpart in the body-ink pass is the
-   other layer's.
+   other layer's. **As built (P7.4):** rows 221 (the ink's body share) and 222
+   (absent from the body-ink run) of block 200, for an OCR-only group of at
+   least three letters or digits outside every image placement (what is in a
+   picture has the picture's ink, and what is shorter is a speck: ghost rows).
 4. *Geometry*: column 19 (angle to the page's text) over `wm-angle` with a
    matching `tlines` row on a non-body layer; column 18 over `wm-size`.
 5. *Seal overlap*: until P8.2, a seal candidate is a P6.4 primitive (`ring`,
@@ -1737,7 +1764,7 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (ONE cell, its arena being known: D240), similarity (case kept), similarity (case-folded letters), flags (`plg`: text-only, OCR-only, split, merged, in-figure, in-seal) |
+| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (ONE cell, its arena being known: D240), similarity (case kept), similarity (case-folded letters), flags (`plg`: text-only, OCR-only, split, merged, in-figure, in-seal, **bink** and **bink-absent**: the page has a body-ink OCR run and no word of it lies over the group, P7.4) |
 | `fw` | 24 | **the layout of `words`** (word head 16, style, glyph run, font, size, gap, `wbreak`, `src`): `src` is the sources bitset (`sr`: text, hidden-text, ocr, trace), the glyph run is the text-layer word's when it won, empty otherwise |
 | `fl` | 16 | **the layout of `lines`**; a line of OCR-won words is measured as D213 measures an OCR line |
 | `fv` | 8 | per `fw` row: group, winning source (`sr` code), rule (`fr` number), confidence (per-mille, uncalibrated until P10.1), flags (`fl`: low-conf, ocr-only, text-layer-suspect), spare (3) |

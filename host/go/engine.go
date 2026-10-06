@@ -258,6 +258,9 @@ type Options struct {
 	// readings (render, OCR, align, arbitrate). Off by default: until P7.S a born-digital page is not OCR'd (D201, D212 (3)). The replay
 	// gate and `bb fusion` set it; an embedder never needs to.
 	OcrBornDigital bool
+	// NoRetarget is a HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units, as the Engine was before the ink layers and the targeted
+	// passes (a measurement's baseline; an embedder never needs it).
+	NoRetarget bool
 }
 
 // DefaultOptions is SPEC 13's defaults.
@@ -1173,7 +1176,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	if opts.OcrBornDigital {
 		ptsKept = pts
 	}
-	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, pts: ptsKept, grl: grl, gfl: gfl, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
+	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), ys: newCellsN(19), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, pts: ptsKept, grl: grl, gfl: gfl, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss,
 		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, info: info}}
 }
 
@@ -1190,6 +1193,8 @@ type pdfDoc struct {
 	// fusion (P7.3): the fonts' health, the correspondence groups the page units made, and the alignment's scratch
 	hl, cg *port.Cells
 	xs     []*port.Cells
+	// the ink stage's and the targeted passes' scratch (P7.4: layer workspaces, the unit's arena snapshot, the plan, the tracer's)
+	ys []*port.Cells
 	// the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence dump has
 	// always shown (kept only when the evidence is asked for)
 	snap []*port.Cells
@@ -1211,7 +1216,9 @@ func unitPdf(d *pdfDoc, i, idx int, opts Options, answers, rq *port.Cells, bms *
 	scr := port.NewCells()
 	return pageunit.PuRunPdf(int32(i), int32(idx), opts.Ocr.code(), d.plan, answers, rq, d.loc, bms, d.mask, scr,
 		d.ev.epages, d.ev.views, d.et, d.ev.feats, d.ev.images, d.ev.oruns, d.ev.oblocks, d.ev.olines, d.ev.owords, d.ev.osyms, d.ev.oalts, d.wd, d.ln,
-		boolInt(opts.OcrBornDigital), d.fw, d.hl, d.ev.refs, d.cg, d.ev.tlines, d.xs[0], d.xs[1], d.xs[2], d.xs[3], d.xs[4], d.xs[5])
+		boolInt(opts.OcrBornDigital)+2*boolInt(opts.NoRetarget), d.fw, d.hl, d.ev.refs, d.cg, d.ev.tlines, d.xs[0], d.xs[1], d.xs[2], d.xs[3], d.xs[4], d.xs[5],
+		d.ev.inks, d.ev.comps, d.ev.rules, d.ev.prims, d.ev.pts,
+		d.ys[0], d.ys[1], d.ys[2], d.ys[3], d.ys[4], d.ys[5], d.ys[6], d.ys[7], d.ys[8], d.ys[9], d.ys[10], d.ys[11], d.ys[12], d.ys[13], d.ys[14], d.ys[15], d.ys[16], d.ys[17], d.ys[18])
 }
 
 // finishPdf is the document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,

@@ -27,7 +27,7 @@
                                 nk-paragraph nk-text nk-document page-new]]
             [emon.fuserules :refer [ag-count ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin ag-olen ag-oconf ag-near ag-pageagree
                                     fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-count fr-block fr-order fr-defence fw-none fw-text fw-ocr
-                                    ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha ag-seal]]
+                                    ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-bink ag-imalpha ag-seal]]
             [emon.artifact :refer [ax-recur ax-word-class]]
             [emon.arbiter :refer [ar-doc ar-write ar-tag]]
             [kin.lang :refer [defn return let set while if do comment
@@ -64,6 +64,7 @@
   (cells-set gv (ag-margin) -1)
   (cells-set gv (ag-kink) -1)
   (cells-set gv (ag-body) -1)
+  (cells-set gv (ag-bink) -1)
   (cells-set gv (ag-imalpha) -1)
   (return 0))
 
@@ -622,8 +623,21 @@
     (cells-set gw (ag-body) 100)
     (assert-eq (fr-number (fr-decide gw)) 221 "mostly another layer's ink: 221")
     (assert-eq (fr-defence (fr-decide gw)) 3 "defence 3")
+    (cells-set gw (ag-olen) 2)
+    (assert-that (!= (fr-number (fr-decide gw)) 221) "a speck of two characters is no watermark (it is a ghost, not a layer's text)")
+    (cells-set gw (ag-olen) 5)
+    (cells-set gw (ag-image) 400)
+    (assert-that (!= (fr-number (fr-decide gw)) 221) "nor is a word in a picture: its ink is the picture's")
+    (cells-set gw (ag-image) 0)
     (cells-set gw (ag-body) -1)
     (assert-eq (fr-number (fr-decide gw)) 140 "(an absent column is no evidence)")
+    (cells-set gw (ag-bink) 0)
+    (assert-eq (fr-number (fr-decide gw)) 140 "read by the body-ink pass too: text")
+    (cells-set gw (ag-bink) 1)
+    (assert-eq (fr-number (fr-decide gw)) 222 "the body-ink pass did not read it: 222")
+    (assert-eq (fr-defence (fr-decide gw)) 3 "defence 3")
+    (assert-eq (fr-reason (fr-decide gw)) (dr-watermark) "a watermark")
+    (cells-set gw (ag-bink) -1)
     (cells-set gw (ag-oangle) 2500)
     (cells-set gw (ag-odiag) 2500)
     (assert-eq (fr-number (fr-decide gw)) 231 "on a diagonal: 231")
@@ -696,7 +710,7 @@
     (assert-eq (fa-get afa 0 9) 1 "the group")
     (assert-that (>= (fa-get afa 0 10) 201) "and the rule is one of block 200")
     (assert-eq (fa-get afa 0 11) 2 "two code points")
-    (assert-eq (pl-check cg nfw nfl fv afa fx (new-cells) (new-cells) (new-cells) et refs gl) 0 "the layer is sound")
+    (assert-eq (pl-check cg nfw nfl fv afa fx (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) et refs gl) 0 "the layer is sound")
     (assert-eq (ar-write afa ow et ledger text tmp tt) 1 "one ledger row")
     (assert-eq (ledger-reason ledger 0) reason "the reason")
     (assert-eq (ledger-text-len ledger 0) 2 "its text is the word's")

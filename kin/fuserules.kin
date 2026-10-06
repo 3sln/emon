@@ -61,7 +61,8 @@
 (defn ^:pub ^I32 ag-body [] (comment "defence 3: the least body-ink share (`xo-body-share`, per mille) of the group's OCR words; -1 absent (as `ag-kink`)") (return 23))
 (defn ^:pub ^I32 ag-imalpha [] (comment "defence 1: the least alpha (per mille) of an image placement covering at least `wm-cover` of the page that the group lies in; -1 when there is none") (return 24))
 (defn ^:pub ^I32 ag-seal [] (comment "defence 5 (P7.7): 1 when the group lies in a seal, stamp or signature candidate (`emon.sealmark`'s `sm-find` flagged it `plg-in-seal`: every visible text-layer word of the group is the candidate's, or it is an OCR-only group inside one), else 0") (return 25))
-(defn ^:pub ^I32 ag-count [] (return 26))
+(defn ^:pub ^I32 ag-bink [] (comment "defence 3 (P7.4): 1 when the page has a body-ink OCR run and no word of it lies over the group (what the body-ink pass did not read is not body text), 0 when one does, -1 when the page has no such run") (return 26))
+(defn ^:pub ^I32 ag-count [] (return 27))
 
 ;; ------------------------------------------------------------- comparisons and settings
 
@@ -190,8 +191,10 @@
          205 200 0 2 0 800 0 2 0 2 2 0 1 0 1 9 0 12 24 1 13 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 211 defence 2: an OCR-only group recurring at the same place on wm-recur-pages of the pages: watermark
          211 200 0 1 0 800 0 2 0 2 2 0 1 0 1 17 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
-         ;; 221 defence 3: an OCR-only word whose ink is mostly another layer's (body-ink share under wm-body-share): watermark (reads columns P6.3 fills; absent until the ink layers are wired)
-         221 200 0 1 0 700 0 2 0 2 2 0 1 0 1 23 1 16 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 221 defence 3: an OCR-only word of at least three letters or digits outside every image placement whose ink is mostly another layer's (body-ink share under wm-body-share): watermark (a word in a picture has the picture's ink, which says nothing: the figure's text, rows 150 and 170; what is shorter is a speck, row 176)
+         221 200 0 1 0 700 0 2 0 2 2 0 1 0 1 23 1 16 9 2 0 12 0 21 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 222 defence 3 (P7.4): an OCR-only group of at least three letters or digits outside every image placement that the body-ink pass (the page with every foreign ink painted the paper's) did not read: watermark
+         222 200 0 1 0 700 0 2 0 2 2 0 1 0 1 26 2 1 9 2 0 12 0 21 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 231 defence 4: an OCR-only group on a diagonal (at least wm-angle off the page's text and off every right angle): watermark
          231 200 0 1 0 700 0 2 0 2 2 0 1 0 1 18 0 14 19 0 14 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 232 defence 4: an OCR-only group much taller than its line's median (wm-size) on a page-sized image: watermark

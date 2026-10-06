@@ -277,6 +277,21 @@ public final class Plan {
         emon.Port.cellsPush(c, h);
         return at;
     }
+    public static int rqOcrView(emon.Port.Cells c, int id, int view, int hhi, int hlo, int psm, int flags, int x, int y, int w, int h) {
+        // Ask for OCR of the kin-made view `view` (an id from `view-base`, `pu-view-id`), whose `bitmap-hash` is the two cells
+        // `hhi` `hlo`: the request is `rq-ocr` with the hash after `h` (D196). Add languages with `rq-ocr-lang`, close with `rq-ocr-end`.
+        int at = recBegin(c, pkOcr(), id);
+        emon.Port.cellsPush(c, view);
+        emon.Port.cellsPush(c, psm);
+        emon.Port.cellsPush(c, flags);
+        emon.Port.cellsPush(c, x);
+        emon.Port.cellsPush(c, y);
+        emon.Port.cellsPush(c, w);
+        emon.Port.cellsPush(c, h);
+        emon.Port.cellsPush(c, hhi);
+        emon.Port.cellsPush(c, hlo);
+        return at;
+    }
     public static int rqOcrLang(emon.Port.Cells c, int a, int b, int d, int e) {
         // Append a language: up to four ASCII chars, 0 for none ("eng" = e n g 0).
         int hi = (a * 256) + b;

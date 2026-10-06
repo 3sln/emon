@@ -313,6 +313,12 @@ pub fn plg_in_figure() -> i32 {
 pub fn plg_in_seal() -> i32 {
     return 32;
 }
+pub fn plg_bink() -> i32 {
+    return 64;
+}
+pub fn plg_bink_absent() -> i32 {
+    return 128;
+}
 pub fn plg_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "text-only");
@@ -336,6 +342,14 @@ pub fn plg_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 32 {
         crate::port::text_ascii(t, "in-seal");
+        return 1;
+    }
+    if code == 64 {
+        crate::port::text_ascii(t, "bink");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "bink-absent");
         return 1;
     }
     return 0;

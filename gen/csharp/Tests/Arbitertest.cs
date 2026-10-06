@@ -35,6 +35,7 @@ public static class Arbitertest {
         emon.Port.CellsSet(gv, Fuserules.AgMargin(), -1);
         emon.Port.CellsSet(gv, Fuserules.AgKink(), -1);
         emon.Port.CellsSet(gv, Fuserules.AgBody(), -1);
+        emon.Port.CellsSet(gv, Fuserules.AgBink(), -1);
         emon.Port.CellsSet(gv, Fuserules.AgImalpha(), -1);
         return 0;
     }
@@ -108,7 +109,7 @@ public static class Arbitertest {
         emon.Testport.AssertEq(Fuserules.FrOrder(4), 100, "then the core");
         emon.Testport.AssertEq(Fuserules.FrOrder(5), -1, "and no more");
         int i = 0;
-        while (i < 29) {
+        while (i < 30) {
             emon.Testport.AssertThat(((Fuserules.FrBlock(i) == 100) || (Fuserules.FrBlock(i) == 200)) || (Fuserules.FrBlock(i) == 400), "every row of P7.3, P7.5 and P7.7 is in block 100, 200 or 400");
             i += 1;
         }
@@ -610,8 +611,21 @@ public static class Arbitertest {
         emon.Port.CellsSet(gw, Fuserules.AgBody(), 100);
         emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gw)), 221, "mostly another layer's ink: 221");
         emon.Testport.AssertEq(Fuserules.FrDefence(Fuserules.FrDecide(gw)), 3, "defence 3");
+        emon.Port.CellsSet(gw, Fuserules.AgOlen(), 2);
+        emon.Testport.AssertThat(Fuserules.FrNumber(Fuserules.FrDecide(gw)) != 221, "a speck of two characters is no watermark (it is a ghost, not a layer's text)");
+        emon.Port.CellsSet(gw, Fuserules.AgOlen(), 5);
+        emon.Port.CellsSet(gw, Fuserules.AgImage(), 400);
+        emon.Testport.AssertThat(Fuserules.FrNumber(Fuserules.FrDecide(gw)) != 221, "nor is a word in a picture: its ink is the picture's");
+        emon.Port.CellsSet(gw, Fuserules.AgImage(), 0);
         emon.Port.CellsSet(gw, Fuserules.AgBody(), -1);
         emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gw)), 140, "(an absent column is no evidence)");
+        emon.Port.CellsSet(gw, Fuserules.AgBink(), 0);
+        emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gw)), 140, "read by the body-ink pass too: text");
+        emon.Port.CellsSet(gw, Fuserules.AgBink(), 1);
+        emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gw)), 222, "the body-ink pass did not read it: 222");
+        emon.Testport.AssertEq(Fuserules.FrDefence(Fuserules.FrDecide(gw)), 3, "defence 3");
+        emon.Testport.AssertEq(Fuserules.FrReason(Fuserules.FrDecide(gw)), Model.DrWatermark(), "a watermark");
+        emon.Port.CellsSet(gw, Fuserules.AgBink(), -1);
         emon.Port.CellsSet(gw, Fuserules.AgOangle(), 2500);
         emon.Port.CellsSet(gw, Fuserules.AgOdiag(), 2500);
         emon.Testport.AssertEq(Fuserules.FrNumber(Fuserules.FrDecide(gw)), 231, "on a diagonal: 231");
@@ -683,7 +697,7 @@ public static class Arbitertest {
         emon.Testport.AssertEq(Player.FaGet(afa, 0, 9), 1, "the group");
         emon.Testport.AssertThat(Player.FaGet(afa, 0, 10) >= 201, "and the rule is one of block 200");
         emon.Testport.AssertEq(Player.FaGet(afa, 0, 11), 2, "two code points");
-        emon.Testport.AssertEq(Player.PlCheck(cg, nfw, nfl, fv, afa, fx, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), et, refs, gl), 0, "the layer is sound");
+        emon.Testport.AssertEq(Player.PlCheck(cg, nfw, nfl, fv, afa, fx, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), et, refs, gl), 0, "the layer is sound");
         emon.Testport.AssertEq(Arbiter.ArWrite(afa, ow, et, ledger, text, tmp, tt), 1, "one ledger row");
         emon.Testport.AssertEq(Model.LedgerReason(ledger, 0), reason, "the reason");
         emon.Testport.AssertEq(Model.LedgerTextLen(ledger, 0), 2, "its text is the word's");

@@ -177,6 +177,8 @@ fn main() {
             cfg.simulate_async = true;
         } else if a == "--ocr-born-digital" {
             opts.ocr_born_digital = true;
+        } else if a == "--no-retarget" {
+            opts.no_retarget = true;
         } else if a == "--pdfium" {
             use_pdfium = true;
         } else if a == "--tesseract" {
@@ -345,6 +347,14 @@ fn main() {
         eprintln!(
             "stats: attempts={} fetch-rounds={} bytes-requests={} source-reads={} bytes-fetched={} of {} requests={}",
             rs.attempts, rs.fetch_rounds, rs.bytes_requests, rs.source_reads, rs.bytes_fetched, rs.input_bytes, rs.requests
+        );
+        // P7.4: the page units' rounds and requests, and the OCR wall time of the first pass against the targeted ones (microseconds)
+        eprintln!(
+            "page-stats: rounds={:?} requests={:?} ocr-first-us={} ocr-targeted-us={}",
+            rs.page_rounds,
+            rs.page_requests,
+            emon::engine::OCR_US[0].load(std::sync::atomic::Ordering::Relaxed),
+            emon::engine::OCR_US[1].load(std::sync::atomic::Ordering::Relaxed)
         );
     }
     print!("{}", text);

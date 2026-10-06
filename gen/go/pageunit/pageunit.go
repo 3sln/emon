@@ -6,10 +6,13 @@ package pageunit
 import (
 	"emon/evidence"
 	"emon/health"
+	"emon/pageink"
 	"emon/pdfdoc"
 	"emon/pdfsrc"
 	"emon/plan"
+	"emon/player"
 	"emon/port"
+	"emon/retarget"
 	"emon/scan"
 	"emon/xalign"
 )
@@ -141,7 +144,16 @@ func PuAskRasters(i int32, input int32, policy int32, ans *port.Cells, rq *port.
 	return plan.UsDone()
 }
 
-func puRunBorn(i int32, input int32, policy int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, fw *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells) int32 {
+func puPx(bms *port.BitmapSet, id int32, fuse int32) int32 {
+	// 1 when the page unit may read the pixels of the bitmap under `id`: it has them, and the hidden setting `no-retarget` (`fuse` bit 2) does
+	// not say to leave them (the Engine then does what it did before P7.4: no ink layers, no targeted pass; a measurement's baseline).
+	if (fuse & 2) == 2 {
+		return 0
+	}
+	return pageink.PnHas(bms, id)
+}
+
+func puRunBorn(i int32, input int32, policy int32, fuse int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, fw *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells, scr *port.Cells, images *port.Cells, words *port.Cells, lines *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, ws2 *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
 	if PuAskRasters(i, input, policy, ans, rq) == plan.UsRequests() {
 		return plan.UsRequests()
 	}
@@ -149,13 +161,19 @@ func puRunBorn(i int32, input int32, policy int32, ans *port.Cells, rq *port.Cel
 		return plan.UsDone()
 	}
 	var rid int32 = plan.PuId(i, plan.PiRenderText())
+	var nid int32 = plan.PuId(i, plan.PiRenderNoText())
 	var oid int32 = plan.PuId(i, plan.PiOcr())
 	var ar int32 = plan.AnFind(ans, rid)
 	var ao int32 = -1
 	var view int32 = 0
+	var nview int32 = 0
 	var w int32 = 0
 	var h int32 = 0
 	var dpi int32 = 0
+	var w0 int32 = 0
+	var nw int32 = 0
+	var run int32 = 0
+	var g0 int32 = 0
 	if ar < 0 {
 		return plan.UsDone()
 	}
@@ -173,33 +191,41 @@ func puRunBorn(i int32, input int32, policy int32, ans *port.Cells, rq *port.Cel
 	w = plan.AnArg(ans, ar, 0)
 	h = plan.AnArg(ans, ar, 1)
 	dpi = plan.AnArg(ans, ar, 3)
+	pageink.PnMark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
 	view = evidence.VwNew(views, i+1, evidence.VkRender(), rid, -1, w, h, dpi*100, plan.LayFull(), -1, 0, 0, 0, 0, 0)
-	scan.ScAnswer(ans, ao, i+1, view, oid, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	w0 = evidence.OwCount(owords)
+	run = scan.ScAnswer(ans, ao, i+1, view, oid, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	nw = evidence.OwCount(owords) - w0
+	// the ink layers, where the transcript or the Renderer gave pixels: those of the raster the OCR read, then the tracer's on the text-free one
+	if puPx(bms, rid, fuse) == 1 {
+		pageink.PnInk(i+1, view, bms, pageink.PnKText(), port.BmsGet(bms, rid), dpi*100, 0, views, inks, comps, rules, prims, tpts, tlines, refs, ws, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+		if puPx(bms, nid, fuse) == 1 {
+			nview = evidence.VwNew(views, i+1, evidence.VkRender(), nid, -1, w, h, dpi*100, plan.LayNoText(), -1, 0, 0, 0, 0, 0)
+			pageink.PnInk(i+1, nview, bms, pageink.PnKClean(), port.BmsGet(bms, nid), dpi*100, 1, views, inks, comps, rules, prims, tpts, tlines, refs, ws2, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+		}
+		pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, rid), oid, w0, nw, ws, comps, owords, feats, scr)
+		scan.ScPrep(scr)
+		retarget.RtPrep(rtp)
+		if retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr) == 1 {
+			pageink.PnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
+			return plan.UsRequests()
+		}
+	}
+	g0 = player.CgCount(cg)
 	xalign.XaPage(i+1, epages, fw, owords, tlines, feats, etext, refs, cg, xscr, xgp, xdp, xta, xtb, xtt)
 	health.HlPageFw(i+1, cg, refs, fw, etext, feats, oblocks, olines, owords, hl)
+	// the targeted runs are written after the page is aligned and scored: evidence, and (the body-ink one) a witness for arbitration, no candidate
+	if puPx(bms, rid, fuse) == 1 {
+		retarget.RtRecord(i, view, dpi*100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+		retarget.RtWitness(g0, player.CgCount(cg), cg, rtp, oruns, owords)
+	}
 	return plan.UsDone()
 }
 
-func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, fuse int32, fw *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells) int32 {
-	// The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
-	// of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`
-	// and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`
-	// when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).
-	if policy == 0 {
-		return plan.UsDone()
-	}
-	// A BORN-DIGITAL page asks for NOTHING here unless `fuse` (D251, revised by the coordinator): its two rasters are lazy, asked
-	// by `pu-ask-rasters` when a stage that reads pixels runs, and nothing is OCR'd on it (D201, D212 (3)) until P7.S; `fuse` is the
-	// hidden test setting that asks what P7.S will (see the head of this file).
-	if PuKind(pl, i) == PkBorn() {
-		if fuse == 0 {
-			return plan.UsDone()
-		}
-		return puRunBorn(i, input, policy, ans, rq, loc, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt)
-	}
-	if PuKind(pl, i) != PkScan() {
-		return plan.UsDone()
-	}
+func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+	// A SCANNED page: `decode` of its stream, the OCR of the bitmap, the ink layers of the bitmap and the targeted passes they and the
+	// first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded slim) the
+	// page is what it always was: the first pass's lines.
 	var did int32 = plan.PuId(i, plan.PiDecode())
 	var oid int32 = plan.PuId(i, plan.PiOcr())
 	var ad int32 = plan.AnFind(ans, did)
@@ -208,6 +234,14 @@ func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cell
 	var pxh int32 = 0
 	var wp int32 = 0
 	var dpi100 int32 = 0
+	var vdec int32 = 0
+	var l0 int32 = 0
+	var w0 int32 = 0
+	var nw int32 = 0
+	var run int32 = 0
+	var nl int32 = 0
+	var rotmed int32 = 0
+	var nsel int32 = 0
 	if ad < 0 {
 		plan.RqDecode(rq, did, input, PuField(pl, i, 2), PuField(pl, i, 3), plan.FltDct(), 0)
 		return plan.UsRequests()
@@ -224,9 +258,57 @@ func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cell
 		scan.ScRequest(rq, oid, did, (dpi100+50)/100, loc)
 		return plan.UsRequests()
 	}
-	if plan.AnOk(ans, ao) == 1 {
+	if plan.AnOk(ans, ao) != 1 {
+		return plan.UsDone()
+	}
+	scan.ScPrep(scr)
+	if puPx(bms, did, fuse) == 0 {
 		scan.ScPage(ans, ao, i+1, oid, did, PuField(pl, i, 8), PuField(pl, i, 9), pxw, pxh, dpi100, PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 1), PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 6), PuField(pl, i, 7), scan.ScLang(loc), epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, scr)
 		port.CellsSet(mask, i, 2)
+		return plan.UsDone()
 	}
+	pageink.PnMark(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
+	vdec = scan.ScPageView(epages, views, images, i+1, did, PuField(pl, i, 8), PuField(pl, i, 9), pxw, pxh, dpi100, PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 1), PuField(pl, i, 4), PuField(pl, i, 5), PuField(pl, i, 6), PuField(pl, i, 7))
+	pageink.PnInk(i+1, vdec, bms, pageink.PnKText(), port.BmsGet(bms, did), dpi100, 1, views, inks, comps, rules, prims, tpts, tlines, refs, ws, sv, aux, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	l0 = evidence.OlCount(olines)
+	w0 = evidence.OwCount(owords)
+	run = scan.ScPageEvidence(ans, ao, i+1, oid, vdec, dpi100, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	nw = evidence.OwCount(owords) - w0
+	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, did), oid, w0, nw, ws, comps, owords, feats, scr)
+	retarget.RtPrep(rtp)
+	if retarget.RtPlan(i, input, 0, 0, did, (dpi100+50)/100, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, did), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr) == 1 {
+		pageink.PnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
+		return plan.UsRequests()
+	}
+	retarget.RtRecord(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, scr)
+	retarget.RtUpright(rtp, run, epages, i+1)
+	nl = evidence.OrGet(oruns, run, evidence.OrfLcount())
+	rotmed = evidence.EvRotMedian(olines, l0, nl)
+	scan.ScEmitSel(olines, owords, osyms, nsel, i+1, rotmed, scr, words, lines)
+	port.CellsSet(mask, i, 2)
 	return plan.UsDone()
+}
+
+func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, fuse int32, fw *port.Cells, hl *port.Cells, refs *port.Cells, cg *port.Cells, tlines *port.Cells, xscr *port.Cells, xgp *port.Cells, xdp *port.Cells, xta *port.Cells, xtb *port.Cells, xtt *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, ws2 *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+	// The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR
+	// of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`
+	// and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`
+	// when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).
+	if policy == 0 {
+		return plan.UsDone()
+	}
+	// A BORN-DIGITAL page asks for NOTHING here unless `fuse` (D251, revised by the coordinator): its two rasters are lazy, asked
+	// by `pu-ask-rasters` when a stage that reads pixels runs, and nothing is OCR'd on it (D201, D212 (3)) until P7.S; `fuse` is the
+	// hidden test setting that asks what P7.S will (see the head of this file).
+	if PuKind(pl, i) == PkBorn() {
+		if (fuse & 1) == 0 {
+			return plan.UsDone()
+		}
+		return puRunBorn(i, input, policy, fuse, ans, rq, loc, bms, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, fw, hl, refs, cg, tlines, xscr, xgp, xdp, xta, xtb, xtt, scr, images, words, lines, inks, comps, rules, prims, tpts, ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	}
+	if PuKind(pl, i) != PkScan() {
+		return plan.UsDone()
+	}
+	return puRunScan(i, input, fuse, pl, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 }

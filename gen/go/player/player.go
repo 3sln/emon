@@ -322,6 +322,12 @@ func PlgInFigure() int32 {
 func PlgInSeal() int32 {
 	return 32
 }
+func PlgBink() int32 {
+	return 64
+}
+func PlgBinkAbsent() int32 {
+	return 128
+}
 func PlgEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "text-only")
@@ -345,6 +351,14 @@ func PlgEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 32 {
 		port.TextAscii(t, "in-seal")
+		return 1
+	}
+	if code == 64 {
+		port.TextAscii(t, "bink")
+		return 1
+	}
+	if code == 128 {
+		port.TextAscii(t, "bink-absent")
 		return 1
 	}
 	return 0

@@ -174,6 +174,8 @@ func main() {
 			cfg.SimulateAsync = true
 		case a == "--ocr-born-digital":
 			opts.OcrBornDigital = true
+		case a == "--no-retarget":
+			opts.NoRetarget = true
 		case a == "--tesseract":
 			tess = true
 		case strings.HasPrefix(a, "--tesseract="):
