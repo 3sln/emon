@@ -201,9 +201,23 @@
   (check (empty? @wrong) "OFF: `--assets=none` is a run without the flag (JSON and HTML), with no `assets`, no `<img>`, on both hosts"
          (when (seq @wrong) (str ": " (str/join " " @wrong)))))
 
+;; the HTML is HTML: html5lib in strict mode, zero errors (the goldens and every document's three modes)
+(let [pylib (or (System/getenv "EMON_PYLIB") (str (System/getProperty "user.home") "/.cache/emon/pylib"))
+      probe (run "env" (str "PYTHONPATH=" pylib) "python3" "-c" "import html5lib")]
+  (if-not (zero? (:exit probe))
+    (skip "HTML5: python `html5lib` is not on the path or in $EMON_PYLIB; the asset HTML was not parsed strictly")
+    (let [py "import sys,html5lib\nbad=0\nfor f in sys.argv[1:]:\n    p=html5lib.HTMLParser(strict=False)\n    p.parse(open(f,encoding='utf-8').read())\n    if p.errors:\n        bad+=1\n        print(f, p.errors[:2])\nprint('bad', bad)\n"
+          files (concat (for [g ["assets" "assets.external" "assets.omit" "assets.pretty"]] (str "test/asset/" g ".html"))
+                        (for [{:keys [stem hr]} per-doc, [i h] (map-indexed vector hr)
+                              :let [f (str tmp "/" stem "." i ".html")]]
+                          (do (spit f h) f)))
+          r (apply run "env" (str "PYTHONPATH=" pylib) "python3" "-c" py files)]
+      (check (str/includes? (:out r) "bad 0") "HTML5: " (count files) " documents (the four goldens and every document in the three modes) parse with html5lib, zero errors"
+             (when-not (str/includes? (:out r) "bad 0") (str "\n" (:out r) (:err r)))))))
+
 ;; 5 ----------------------------------------------------------------------
 (let [r (run "bb" "kin/scripts/asset-golden" "--check")]
-  (if (zero? (:exit r)) (println (str/trim (:out r))) (bad (str/trim (str (:out r) (:err r))))))
+  (if (zero? (:exit r)) (println (str/trimr (:out r))) (bad (str/trim (str (:out r) (:err r))))))
 
 (fs/delete-tree tmp)
 (println (if (zero? @fails) "asset-check: all green" (str "asset-check: " @fails " FAILED")))

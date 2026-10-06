@@ -29,7 +29,7 @@ public final class Asset {
     public static final int AC_ORIGIN = 26;
     public static final int AC_KORI = 27;
     public static final int AC_KX0 = 28;
-    public static int asStride() {
+    public static int asRowCells() {
         return AS_STRIDE;
     }
     public static int asCount(emon.Port.Cells cand) {
@@ -697,7 +697,7 @@ public final class Asset {
                         asSet(cand, row, AC_STATUS, Model.nzPart());
                     } else if (obj <= 0) {
                         asSet(cand, row, AC_STATUS, Model.nzCodec());
-                    } else if ((prod >= AS_MAXPROD) || (emon.Port.bufLen(cbytes) > (totbytes * 2))) {
+                    } else if ((prod >= AS_MAXPROD) || ((emon.Port.bufLen(cbytes) / 2) > totbytes)) {
                         asSet(cand, row, AC_STATUS, Model.nzBudget());
                     } else {
                         prod += 1;
@@ -886,7 +886,7 @@ public final class Asset {
                             if ((id < 0) && (blen > maxbytes)) {
                                 asSetNoasset(nodes, attrs, n, Model.nzTooLarge());
                             } else {
-                                if ((id < 0) && ((closed == 1) || ((total + blen) > totbytes))) {
+                                if ((id < 0) && ((closed == 1) || (blen > (totbytes - total)))) {
                                     closed = 1;
                                     asSetNoasset(nodes, attrs, n, Model.nzBudget());
                                 } else {

@@ -435,7 +435,9 @@ cannot drift the way nome's did.
     model.assets()                     → iterable Asset (§10.11)
     model.asset(id) / node.asset()     → Asset or absent
     asset.id() / .name() / .media_type() / .origin() / .sha256()
-         / .width() / .height() / .uses() / .bytes()   (a borrow; JS: a copy or a Blob)
+         / .width() / .height() / .uses() / .bytes()   (a borrow; JS: a copy or a Blob; P3.13: Rust and Go copy)
+         / .from() / .object() / .dpi() / .flags()     (P3.13: the rest of the table's fields)
+    node.noasset()                     → the reason a figure or seal has no pixels, or absent (P3.13)
     model.asset_files()                → iterable (name, media type, bytes): the sidecar
 
 ---

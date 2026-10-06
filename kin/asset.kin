@@ -85,7 +85,7 @@
 (defconst ^I32 AC_KORI 27)
 (defconst ^I32 AC_KX0 28)
 
-(defn ^:pub ^I32 as-stride [] (return AS_STRIDE))
+(defn ^:pub ^I32 as-row-cells [] (return AS_STRIDE))
 (defn ^:pub ^I32 as-count [^Cells cand] (return (quot (cells-len cand) AS_STRIDE)))
 (defn ^:pub ^I32 as-get [^Cells cand ^I32 r ^I32 f] (return (cells-at cand (+ (* r AS_STRIDE) f))))
 
@@ -613,7 +613,7 @@
                         (as-set cand row AC_STATUS (nz-part))
                         (if (<= obj 0)
                           (as-set cand row AC_STATUS (nz-codec))
-                          (if (or (>= prod AS_MAXPROD) (> (buf-len cbytes) (* totbytes 2)))
+                          (if (or (>= prod AS_MAXPROD) (> (quot (buf-len cbytes) 2) totbytes))
                             (as-set cand row AC_STATUS (nz-budget))
                             (do (set prod (+ prod 1))
                                 (set rc (as-make src ar dc a b st maxpix cand row obj ori 1 cbytes out rec mrec smp msmp data rows tmp ws z))
@@ -776,7 +776,7 @@
                                                       (as-get cand c (+ AC_SHA 6)) (as-get cand c (+ AC_SHA 7))))
                                   (if (and (< id 0) (> blen maxbytes))
                                     (as-set-noasset nodes attrs n (nz-too-large))
-                                    (do (if (and (< id 0) (or (== closed 1) (> (+ total blen) totbytes)))
+                                    (do (if (and (< id 0) (or (== closed 1) (> blen (- totbytes total))))
                                           (do (set closed 1)
                                               (as-set-noasset nodes attrs n (nz-budget)))
                                           (do (if (< id 0)

@@ -31,7 +31,7 @@ pub(crate) const AC_OBJ: i32 = 25;
 pub(crate) const AC_ORIGIN: i32 = 26;
 pub(crate) const AC_KORI: i32 = 27;
 pub(crate) const AC_KX0: i32 = 28;
-pub fn as_stride() -> i32 {
+pub fn as_row_cells() -> i32 {
     return AS_STRIDE;
 }
 pub fn as_count(cand: &mut crate::port::Cells) -> i32 {
@@ -699,7 +699,7 @@ pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut d
                     as_set(cand, row, AC_STATUS, nz_part());
                 } else if obj <= 0 {
                     as_set(cand, row, AC_STATUS, nz_codec());
-                } else if (prod >= AS_MAXPROD) || (crate::port::buf_len(cbytes) > (totbytes * 2)) {
+                } else if (prod >= AS_MAXPROD) || ((crate::port::buf_len(cbytes) / 2) > totbytes) {
                     as_set(cand, row, AC_STATUS, nz_budget());
                 } else {
                     prod += 1;
@@ -888,7 +888,7 @@ pub fn as_run(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::C
                         if (id < 0) && (blen > maxbytes) {
                             as_set_noasset(nodes, attrs, n, nz_too_large());
                         } else {
-                            if (id < 0) && ((closed == 1) || ((total + blen) > totbytes)) {
+                            if (id < 0) && ((closed == 1) || (blen > (totbytes - total))) {
                                 closed = 1;
                                 as_set_noasset(nodes, attrs, n, nz_budget());
                             } else {

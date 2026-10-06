@@ -29,7 +29,7 @@ public static class Asset {
     internal const int AcOrigin = 26;
     internal const int AcKori = 27;
     internal const int AcKx0 = 28;
-    public static int AsStride() {
+    public static int AsRowCells() {
         return AsStride;
     }
     public static int AsCount(emon.Port.Cells cand) {
@@ -697,7 +697,7 @@ public static class Asset {
                         AsSet(cand, row, AcStatus, Model.NzPart());
                     } else if (obj <= 0) {
                         AsSet(cand, row, AcStatus, Model.NzCodec());
-                    } else if ((prod >= AsMaxprod) || (emon.Port.BufLen(cbytes) > (totbytes * 2))) {
+                    } else if ((prod >= AsMaxprod) || ((emon.Port.BufLen(cbytes) / 2) > totbytes)) {
                         AsSet(cand, row, AcStatus, Model.NzBudget());
                     } else {
                         prod += 1;
@@ -886,7 +886,7 @@ public static class Asset {
                             if ((id < 0) && (blen > maxbytes)) {
                                 AsSetNoasset(nodes, attrs, n, Model.NzTooLarge());
                             } else {
-                                if ((id < 0) && ((closed == 1) || ((total + blen) > totbytes))) {
+                                if ((id < 0) && ((closed == 1) || (blen > (totbytes - total)))) {
                                     closed = 1;
                                     AsSetNoasset(nodes, attrs, n, Model.NzBudget());
                                 } else {

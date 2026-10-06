@@ -60,7 +60,7 @@ const acKori int32 = 27
 
 const acKx0 int32 = 28
 
-func AsStride() int32 {
+func AsRowCells() int32 {
 	return asStride
 }
 
@@ -749,7 +749,7 @@ func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 					asSet(cand, row, acStatus, model.NzPart())
 				} else if obj <= 0 {
 					asSet(cand, row, acStatus, model.NzCodec())
-				} else if (prod >= asMaxprod) || (port.BufLen(cbytes) > (totbytes * 2)) {
+				} else if (prod >= asMaxprod) || ((port.BufLen(cbytes) / 2) > totbytes) {
 					asSet(cand, row, acStatus, model.NzBudget())
 				} else {
 					prod += 1
@@ -943,7 +943,7 @@ func AsRun(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, cand *port
 						if (id < 0) && (blen > maxbytes) {
 							asSetNoasset(nodes, attrs, n, model.NzTooLarge())
 						} else {
-							if (id < 0) && ((closed == 1) || ((total + blen) > totbytes)) {
+							if (id < 0) && ((closed == 1) || (blen > (totbytes - total))) {
 								closed = 1
 								asSetNoasset(nodes, attrs, n, model.NzBudget())
 							} else {

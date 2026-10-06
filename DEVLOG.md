@@ -1673,9 +1673,40 @@ analysis beyond "top-to-bottom lines on a single column".
   arm (`bb unit`); passthrough bytes equal poppler's `pdfimages -all` output byte for
   byte; unmasked decoded cases equal `pdfimages -png` (`magick compare -metric AE`
   0); every codec case plans the expected `decode-img` record; `bb plan` still green.
-- [ ] **P3.13 — Assets in the Model, JSON, HTML and the API, level `images`**
+- [x] **P3.13 — Assets in the Model, JSON, HTML and the API, level `images`**
   (D117, SPEC §3.7-3.9, §4.2, §5, §10.11). Depends on P1.10, P3.6, P3.12 (P2.1 for
   the Go arm).
+  **DONE (D360-D367).** `kin/asset.kin` (`emon.asset`: `as-collect` in the document pass, `as-figure-rows`, `as-run`,
+  `as-settings`, `as-page-cands`), `rs-figures` in `kin/restruct.kin`, the Model's `assets`/`uses`/`abytes` and
+  `model-check-assets`/`model-hash-assets` in `kin/model.kin`, the `assets` array, `asset`/`noasset` and the settings in
+  `kin/json.kin`, `<img>` with `data:` URIs (base64 in kin), `external` and `omit` in `kin/html.kin`, `schema/emon-1.json`
+  extended additively, Rust and Go (`Options` asset settings, `Asset`, `AssetFile`, `Model::assets/asset/asset_files`,
+  `Node::asset/noasset`, `HtmlOptions::assets/asset_prefix`), the drivers' `--assets`, `--asset-*`, `--asset-dir` and
+  `--html=assets=...,prefix=...`. **Laws**: `kin/assettest.kin` (14: the JSON and four HTML goldens against an independent
+  bb implementation of SPEC 4.2/5/10.11 -- `kin/scripts/asset-golden` writes the Model's scripts AND the expected bytes --,
+  admission, the source rules by place, the provisional figures' order and place, a raster page's `part`, 68 fixtures'
+  candidates, the orientation of eight placements). **Gate** `bb asset` (`kin/scripts/asset-check`, in `bb gates`, CI job
+  `asset`): Rust and Go give the same JSON, HTML in the three modes and asset files over 75 documents; every `sha256` and
+  byte count recomputed from the files; the JSON validates against the schema; **every decoded PNG is, by ImageMagick, the
+  generator's pixels** (30 `D` rows of P3.12, RGBA8 SHA-256), the placed images are poppler's source oriented and cut by
+  ImageMagick (the eight operations calibrated against the generator's oriented rows), **every embedded JPEG is, byte for
+  byte, poppler's extraction**; `inline` decodes to the files, `external` names them, `omit` has no `<img>`; `--assets=none`
+  is a run without the flag. With the level off nothing runs and no arena is written: every committed golden is unchanged
+  (`bb identity`, `bb slice` green). **Departures** (D360-D367): (1) a provisional figure is made only with `assets` on
+  (SPEC 10.6 owed it with or without; P8.1 owns the rule that makes it default, so a default Model and every golden are
+  what they were); (2) `figures` is accepted and runs as `images` (cropping and rendering are P8.5/P6.2); (3) settings
+  are `Options` fields, not `setting-of` (an environment poke), the header's `assets`... keys appear only when on; (4) the
+  placements' CTM is not recorded: **their orientation is**, in `images` cell 19 (`placement`, evidence key 152, written when
+  not 0), read from the matrix on the page AS DISPLAYED; (5) an inline image (`BI`) is `noasset: "codec"` and DCT that
+  cannot pass through (a rotated JPEG, EXIF, a mask, CMYK) is `codec` until P6.1a: the payload `Buf` is still not
+  handed to a fulfiller (no unit needs it yet); (6) an `ImageMask` is written in black (the fill is not in the row);
+  (7) `ho-assets-external` is 512 and `ho-assets-omit` 1024 (128 and 256 were taken by D133) and the option integer
+  grew to twelve bits (the threshold is times 4096); (8) the independent references are babashka (`asset-golden`,
+  `asset-check`), not extensions of `json-check.py`/`html-check.py`; (9) a placement of 800 per mille of its page or more
+  is a candidate whose pixels are not made (`part`), at most 4,096 placements make pixels and the candidates' bytes stop
+  at twice `assets-bytes`; (10) the synthetic Chrome documents with `<img>` (item 8) are not made: P3.12's 68 PDFs and the
+  existing synthetic corpus carry the end-to-end checks, and whether Chrome passes a JPEG through is still unmeasured.
+  Scoreboard: no metric of the ratchet moved (nothing new is measured here).
   *Brief*: (1) Settings `assets`, `asset-dpi`, `asset-pixels`, `asset-bytes`,
   `assets-bytes`, `asset-signatures` through `setting-of` and the Engine `Config`.
   (2) `kin/model.kin`: arenas `assets` (stride 24: type, origin, from, object, byte
@@ -8219,4 +8250,51 @@ them; offer them upstream when they have proved general.
 **Decision**: `kin/scripts/asset-fixtures` (babashka) writes `test/assets/` from deterministic source samples (SplitMix, the extremes common) and the expected pixels in Clojure ratios, written apart from kin. Poppler is held to the expectation (`pdfimages -png`, `magick compare -metric AE`) for every gray, RGB, Indexed and filter case; not for CMYK (its conversion is not the naive one), masks and `/Matte` (`pdfimages` does not apply them), nor 16 bits exactly: poppler's 16-bit PNG of a sample of 65535 or 65534 is 0, and it truncates where the standard rounds, so the 16-bit file poppler is held to has no sample above 60,000 and a 1 % fuzz, and the file with every extreme is the generator's alone. Every JPEG that passes through is extracted with `pdfimages -all` and compared byte for byte with the embedded file. The encrypted case is qpdf's AES-128 copy of the Flate RGB case (the same object numbers). The corpus was written with ImageMagick 7.1.1-33, poppler 26.08.0 and qpdf 12.4.2 (`test/assets/version.txt`).
 **Why**: an expectation that shares code with the thing it checks proves agreement and nothing else.
 **Alternatives**: committed PNGs as the truth (they come from the same generator), `pdfimages` for everything (it is wrong at 16 bits and silent about masks).
+- [ ] **Signed off** (maintainer)
+
+### D360 — Assets at `images`: provisional figures only with the level on, `figures` runs as `images`, settings are `Options` (P3.13; D117, SPEC 10.6, 10.11)
+**Decision**: (1) The provisional figure (an image placement that passed P3.6, under 800 per mille of its page, both sides of its visible box at least 18 pt: SPEC 10.6's placeholder) is made **only when `assets` is not `none`**. The brief said "owed with or without `assets`" and that every golden is unchanged "except where a provisional figure now appears"; the maintainer's rule for this item is the stronger one, that with the level off every output is byte-identical to before, and P8.1 replaces the rule anyway. A default run's Model, JSON and HTML are what they were; `bb identity` and `bb slice` hold it. (2) `figures` is accepted by the API and the drivers and runs as `images` until P8.5 (`cropped`) and P6.2's `crop` request (`rendered`); the reasons are `images`'. (3) The six settings are `Options` fields (`asset_dpi` 150, `asset_pixels` 4,194,304, `asset_bytes` 4 MiB, `assets_bytes` 32 MiB, `asset_signatures` off), passed to kin as arguments, not read through `setting-of` (that is an environment poke for choices that are not part of the call, SPEC 7.4's table); they are root attributes `fk-assets` ... `fk-asset-signatures` and written to `settings` only when `assets` is on (SPEC 4.2: the JSON is otherwise byte for byte what it was). (4) `ho-assets-external` is 512 and `ho-assets-omit` 1024: 128 and 256, which the brief named, are `initials: plain` and `align-style` (D133); the HTML option integer is now twelve bits and the confidence threshold is times 4096.
+**Why**: (1) the stronger rule is what a crawler's golden depends on; (3) a setting that must differ per conversion is an argument; (4) the numbers in the brief were stale.
+**Alternatives**: provisional figures always (changes every golden with an image and the accuracy ratchet's figure metrics for a rule P8.1 replaces); `setting-of` kinds (four ports and a table for nothing).
+- [ ] **Signed off** (maintainer)
+
+### D361 — Two phases: candidates where the input is read, admission where the Model is known (P3.13; D117, SPEC 10.11, 13.1)
+**Decision**: the document pass is the one place that reads the input (P7.U), and the Model is only known at its end, so `as-collect` runs in the document pass over the text layer's `images` rows: every placement that passed the P3.6 checks becomes a **candidate row** (32 cells: page, box, visible box = box and clip box, status, type, byte span in `cbytes`, SHA-256, size, flags, `from`, object, origin, and the key of the pixels: orientation and the view in image pixels) and, when a browser or a PNG can show it, its encoded bytes are appended to `cbytes`. `PdfDoc` carries `cand` and `cbytes` to the document unit, where `as-run` visits every `figure` and `seal` in node-id order: a figure made from a placement (`fk-image`) is that candidate; any other is matched by where it is (the SPEC's steps 2-4: one image whose visible box and the node's region each cover 950 per mille of the other is the whole image, inside one is `part`, over several or part of one and more is `composite`, over none is `vector`); a `signature`/`initials` seal with `asset-signatures` off is `withheld`; a `digital-signature` has no field. Admission is the SPEC's: dedup by (SHA-256, length), a new asset over `asset-bytes` is `too-large`, the first new one over `assets-bytes` closes the budget (`budget`; reuses are still admitted). The same placement of the same image (the same object, orientation and view) is decoded once (a logo on every page). Bounds that make a hostile file cheap: at most 4,096 placements make pixels, the candidates' bytes stop at twice `assets-bytes`, an image of more than twice `asset-pixels` samples is `too-large` (Flate images are held whole, four bytes a sample) and between one and two times it is scaled. A raster input has one candidate a page (`as-page-cands`, status `part`).
+**Why**: the page units never read the input and an async source re-runs the document pass on a miss; a stage that needed the bytes after the Model would need a second input read inside the document unit.
+**Alternatives**: reading the input in the document unit (it has no `Src`; a miss there has no re-run); decoding every image whatever the Model does with it (unbounded).
+- [ ] **Signed off** (maintainer)
+
+### D362 — A placement's orientation is recorded, in `images` cell 19, on the page as displayed (P3.13; D117, SPEC 8.4.3, P3.12's departure 1)
+**Decision**: P3.12's `pi-orient` takes the matrix as arguments and the rows had no CTM. The interpreter now computes the code when it records a placement (`pc-image-place`: `pi-orient` of the CTM with the y axis flipped back, because the CTM maps to the displayed page, whose y runs down) and writes it to the spare cell 19, `placement` (evidence key 152): 0 upright (not written to the dump), 1..7 the other rectilinear orientations, 8 not rectilinear (`transformed`). It is the orientation of the image AS THE PAGE SHOWS IT (a page's `/Rotate` is in it). So an evidence dump differs from before only for an image that is not upright; `ev-fx` and the stride law are updated (images: every cell printed).
+**Why**: the matrix has four Fx entries and the row has one spare cell; the code is all `pi-view` takes.
+**Alternatives**: four cells (no room; every stride changes), the user-space matrix (then a rotated page's picture is written turned against the reader).
+- [ ] **Signed off** (maintainer)
+
+### D363 — The emitters and the API: arguments, the shape of the HTML and JSON, the views (P3.13; SPEC 4.2, 5, 10.11)
+**Decision**: (1) `js-emit` takes `assets` and `uses`, `html-emit` also `abytes` and `prefix` (an `asset-prefix` as code points) and `h-block`/`h-blocks`/`h-body` carry them (a `data:` URI needs the bytes where the figure is); `model-check-assets` and `model-hash-assets` are separate functions run when `assets` is on (the seven-arena `model-check` and `model-hash` keep their signatures). (2) JSON: node `asset` (an id) or `noasset` (a name) after the kind's own fields; `assets` after `dropped` when the root has the `assets` setting (then always, `[]` when empty), each asset's `id name type origin from object bytes sha256 w h dpi flags uses` with `object`, `dpi` and `flags` only when present; settings `assets asset-dpi asset-pixels asset-bytes assets-bytes asset-signatures` after `detail`. (3) HTML: the `<img>` is a figure's first child (`src alt width height data-emon-asset`, then `data-emon-alt="missing"` when `alt` is empty and there is no `<figcaption>`), `role="img"` and `aria-label` leave the figure (and a seal's `Stamp: ...` moves to `alt`), `width`/`height` are the node's own use in CSS pixels (`cpt*4/300` rounded half up, at least 1), `inline` is RFC 4648 base64 written by kin, `external` writes the prefix and the file's name, `omit` writes the placeholders as if no asset existed (no `data-emon-noasset` either), `data-emon-noasset` otherwise. (4) Rust: `Asset<'a>` is a (Model, id) view like `Node` (`id name media_type origin from object sha256 width height dpi flags uses bytes`), `bytes()` is a copy (the arenas sit behind a lock), `Model::asset_files()` is `Vec<AssetFile>`, `Node::asset()` and `noasset()`; `HtmlOptions` is no longer `Copy` (it owns the prefix); Go: the same with `(T, bool)` for Rust's `Option`. The driver writes the files (`--asset-dir`); the library never does. The bundle gains `== html-external`, `== html-omit` and `== assets` (name, type, length, hex) when assets are on, which `bb identity` compares.
+**Why**: each is the SPEC's sentence made exact; the golden's independent implementation holds them.
+**Alternatives**: a borrow of the bytes (Rust cannot lend out of a lock), Go's `[]byte` as a view (a copy is safer across the lock).
+- [ ] **Signed off** (maintainer)
+
+### D364 — The canonical PNG's choices where the SPEC leaves room, and the stencil colour (P3.13; D117, SPEC 10.11)
+**Decision**: colour type 0 (8-bit gray; 1-bit for a bilevel gray image with no alpha), 2 (RGB), 3 (a palette for an Indexed image with no alpha: PLTE is the image's own palette in index order, a pixel's index is the first entry of its colour), 4 and 6 (alpha, only when the image has a mask or a stencil); no `pHYs` (the resolution of an image on a page is the page's, and the file is a function of the pixels alone); a decoded image is oriented by the placement and cut to the visible part (`pi-view`, `pi-crop`, whole at 980 per mille); one over `asset-pixels` is reduced by the smallest integer factor (box mean, partial blocks over the pixels they have, half up) and flagged `scaled`. An `ImageMask` is painted in black: the fill colour at the `Do` is not in the placement's row.
+**Why**: each is the least a function of the pixels; the stencil's colour needs the graphics state at the paint, which `images` rows do not keep (a follow-up may add it with the CTM).
+**Alternatives**: the stencil in white (it would vanish on the reader's page); `pHYs` from the placement (a different file for the same pixels).
+- [ ] **Signed off** (maintainer)
+
+### D365 — Provisional figures are placed by a copy before the restructuring (P3.13; SPEC 10.6)
+**Decision**: `rs-figures` copies the body into new arenas (the node copy keeps every attribute, `fk-box` too) with the figures put in among the children of the document and of its sections, by their top edge (page, then top, then left): before the first child whose first region is later; after a section's last child those above where its next sibling begins stay in the section; the rest end the document. It runs BEFORE `rs-run`, which then pairs a caption above or below with the figure beside it as with any figure (so the figure and its caption are one `figure` with a `figcaption`). A figure keeps `fk-image`, the candidate row it came from, which JSON and HTML never write (the key is private like `fk-box`). A table, list, note or cell takes none. The figure's region is the placement's visible box, so a caption of its own makes a second region only through its child.
+**Why**: the order is the SPEC's "reading order by its top edge"; P8.1 replaces it, and column-aware placement is its to do.
+**Alternatives**: inserting inside `pa-build` as tables are (a signature change through every stage's test); after `rs-run` (the caption would already be a figure of its own).
+- [ ] **Signed off** (maintainer)
+
+### D366 — How P3.13 is held, apart from kin (P3.13; SPEC 14.1.5, D054, D067)
+**Decision**: the independent references are babashka. `kin/scripts/asset-golden` writes `test/asset/assets.{model,assets}` (the Model as the scripts kin builds it from) AND the JSON (compact, pretty) and HTML (inline, external, omit, pretty) the SPEC says it is, by an implementation sharing no code with kin (the laws hold `js-emit` and `html-emit` to those bytes on every target). `kin/scripts/asset-check` (`bb asset`, a gate) runs both drivers over the fixtures and holds the rest to what is not kin: the pixels to ImageMagick's decoding against the generator's rows and poppler's source (the orientation operations calibrated against the generator's own oriented rows), the JPEGs to poppler's extraction, the table to the files, the HTML to the files, the JSON to the schema (python `jsonschema`, SKIP when absent). `test/asset/cands.txt` is the engine's reviewed output per placement (the laws), derived by running the driver. The existing `json-check.py`/`html-check.py` are not extended (new scripts are babashka only).
+**Why**: a check that shares code with what it checks proves agreement and nothing else (D342).
+**Alternatives**: extending the Python references (new Python); committed PNG goldens as the truth (they would come from the writer they check).
+- [ ] **Signed off** (maintainer)
+
+### D367 — Not in P3.13 (P3.13; D117, D340)
+**Decision**: left, each with its owner: an inline image's pixels (the interpreter does not hand the data on: `codec`; P6.1a or a follow-up that records the data span), DCT that cannot pass through (rotated, EXIF, masked, CMYK) and every other codec image (`codec`, P6.1a: the payload `Buf` is plumbed there with its first user), `cropped` and `rendered` (P8.5, P6.2 requests), `text-overlap` and the render fields (`dpi`), the stencil's fill colour, Chrome-made synthetic documents with `<img>` and the measurement of whether Chrome passes a JPEG through, the JS SDK's `asset.blob()` (P9.3), and Java and C# hosts' Engine layers (P2-later).
+**Why**: each needs something P3.13 was not given (a host decoder, a request, a graphics state, a browser).
 - [ ] **Signed off** (maintainer)

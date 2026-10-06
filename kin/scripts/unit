@@ -104,6 +104,11 @@ command -v python3 > /dev/null && python3 kin/scripts/json-check.py
 # structure. Tooling, not runtime (D067).
 command -v python3 > /dev/null && python3 kin/scripts/html-check.py
 
+# THE ASSET GOLDENS (P3.13, D117): `test/asset/assets.{model,assets}`, its JSON and its HTML in four modes are what
+# `kin/scripts/asset-golden` writes: the Model's scripts and the bytes the SPEC says they give, by an implementation
+# that shares no code with kin (babashka). `kin/assettest.kin` holds js-emit and html-emit to those bytes.
+bb kin/scripts/asset-golden --check
+
 # THE SYNTHETIC GOLD (P2.8, D041, D063): the committed gold files validate
 # against schema/emon-gold-1.json, equal what tools/synth/html2gold.clj says of
 # the committed HTML, and MANIFEST.json matches the committed PDFs. No PDF

@@ -9,7 +9,8 @@
 //   * D040's three encryption errors, distinct; a password opens what it opens, and equals the plain twin;
 //   * the input-bytes limit is checked against the LENGTH before any byte is read; a source that lies
 //     about its length is `source-changed`;
-//   * `assets` other than `none` and several inputs as one document are refused, not approximated;
+//   * several inputs as one document are refused, not approximated; `assets` (P3.13) is opt-in, a JPEG passes through, a
+//     Flate image is a PNG, a codec image says why not, and a 512-byte async source gives the same files;
 //   * record and replay; the walkable Model; and that the library names no filesystem;
 //   * the Renderer port (P6.2, D127): a fake engine through `RenderFulfiller` and through the Engine's Config.
 use emon::{Assets, ByteSource, Config, Engine, Error, HtmlOptions, Input, JsonOptions, Kind, Ocr, OcrPolicy, OcrPort, Options, SeekSource};
@@ -599,4 +600,63 @@ fn an_engine_with_a_renderer_is_the_same_engine_and_a_born_digital_page_is_not_r
     }
     let n = fake.calls.load(Ordering::SeqCst);
     assert_eq!(n, 0, "the renderer was called {} times: a born-digital page's rasters are lazy", n);
+}
+
+// ---------------------------------------------------------------------------- assets (P3.13, SPEC 10.11, D117)
+
+#[test]
+fn assets_are_opt_in_and_a_jpeg_passes_through_and_a_flate_image_becomes_a_png() {
+    let e = Engine::new(Config::default());
+    let figure = Kind::named("figure").unwrap();
+    // off: no assets, nothing in the JSON, and no figure is made
+    let off = e.convert(Input::bytes(read("test/assets/dct-rgb.pdf")), &Options::default()).unwrap();
+    assert!(off.assets().is_empty() && off.find(figure).is_empty());
+    assert!(!json(&off).contains("\"assets\"") && !off.to_html(&HtmlOptions::default()).contains("<img"));
+    // a DCT image: its own bytes, a JPEG
+    let o = Options { assets: Assets::Images, ..Options::default() };
+    let m = e.convert(Input::bytes(read("test/assets/dct-rgb.pdf")), &o).unwrap();
+    let a = m.assets();
+    assert_eq!(a.len(), 1);
+    let a0 = a[0];
+    assert_eq!((a0.id(), a0.name().as_str(), a0.media_type().as_str(), a0.origin().as_str(), a0.from().as_str()), (0, "a0.jpg", "image/jpeg", "embedded", "dct"));
+    assert_eq!((a0.width(), a0.height(), a0.uses().len(), a0.sha256().len()), (24, 16, 1, 64));
+    assert_eq!(&a0.bytes()[..2], &[0xFF, 0xD8]);
+    let figs = m.find(figure);
+    assert_eq!(figs.len(), 1);
+    assert_eq!(figs[0].asset().map(|x| x.id()), Some(0));
+    assert_eq!(a0.uses()[0].node, figs[0].id());
+    assert_eq!(m.asset_files()[0].name, "a0.jpg");
+    // the HTML in the three modes
+    let h = |a, p: &str| m.to_html(&HtmlOptions { assets: a, asset_prefix: p.to_string(), ..HtmlOptions::default() });
+    assert!(h(emon::HtmlAssets::Inline, "").contains("<img src=\"data:image/jpeg;base64,/9j/"));
+    assert!(h(emon::HtmlAssets::External, "img/").contains("<img src=\"img/a0.jpg\""));
+    assert!(!h(emon::HtmlAssets::Omit, "").contains("<img"));
+    // a Flate image is a canonical PNG, decoded
+    let p = e.convert(Input::bytes(read("test/assets/flate-rgb8.pdf")), &o).unwrap();
+    let pa = p.assets();
+    assert_eq!((pa[0].media_type().as_str(), pa[0].origin().as_str(), pa[0].from().as_str()), ("image/png", "decoded", "flate"));
+    assert_eq!(&pa[0].bytes()[..4], &[0x89, 0x50, 0x4E, 0x47]);
+    // an image no browser can be relied on to show says why not
+    let c = e.convert(Input::bytes(read("test/assets/jpx.pdf")), &o).unwrap();
+    assert!(c.assets().is_empty());
+    assert_eq!(c.find(figure)[0].noasset().as_deref(), Some("codec"));
+    // `figures` runs as `images` until P8.5
+    let f = e.convert(Input::bytes(read("test/assets/dct-rgb.pdf")), &Options { assets: Assets::Figures, ..Options::default() }).unwrap();
+    assert_eq!(json(&f), json(&m).replace("\"assets\": \"images\"", "\"assets\": \"figures\""));
+    // a document with no image: the table is there and empty
+    let n = e.convert(Input::bytes(synth("h-plain")), &o).unwrap();
+    assert!(n.assets().is_empty() && json(&n).contains("\"assets\": []"));
+}
+
+#[test]
+fn assets_through_a_512_byte_async_source_are_the_in_memory_ones() {
+    let o = Options { assets: Assets::Images, ..Options::default() };
+    for name in ["dct-rgb", "flate-rgb8", "place-twice", "smask", "indexed16"] {
+        let b = read(&format!("test/assets/{}.pdf", name));
+        let mem = Engine::new(Config::default()).convert(Input::bytes(b.clone()), &o).unwrap();
+        let asy = async_engine(512).convert(Input::bytes(b), &o).unwrap();
+        assert_eq!(json(&asy), json(&mem), "{}", name);
+        assert_eq!(asy.asset_files(), mem.asset_files(), "{}", name);
+        assert_eq!(asy.to_html(&HtmlOptions::default()), mem.to_html(&HtmlOptions::default()), "{}", name);
+    }
 }
