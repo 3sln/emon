@@ -681,21 +681,24 @@ pub(crate) fn at_fill(b: &crate::port::Bitmap, w: i32, h: i32, ch: i32) -> i32 {
     }
     return 0;
 }
-#[test]
-fn test_a_codec_image_is_asked_of_the_host_and_then_adopted() {
-    // P6.1a: a DCT image that cannot pass through (a /Decode) is a `decode-img` request on the first attempt (the input's own bytes,
-    // no payload), and with the host's answer the same call makes the asset.
-    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+pub(crate) fn at_codec_run(file: &[u8], ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut cand: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut payload: &mut crate::port::Buf) -> i32 {
+    // `at-run-ask` over a document with the host's answers (and, written to `rq` and `payload`, its requests): its answer.
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return at_run_ask(&crate::port::src_of_blob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms);
+}
+#[test]
+fn test_a_codec_image_is_asked_of_the_host() {
+    // P6.1a: a DCT image that cannot pass through (a /Decode) is a `decode-img` request on the first attempt (the input's own bytes,
+    // no payload), and until it is answered the image is `codec`.
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
-    let file: &[u8] = &crate::testport::test_file("assets/dct-decode.pdf")[..];
-    crate::testport::assert_eq(at_run_ask(&crate::port::src_of_blob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms), 4, "the request is written");
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/dct-decode.pdf")[..], ans, bms, cand, rq, cbytes, payload), 4, "the request is written");
     crate::testport::assert_eq(rec_count(rq), 1, "one request");
     crate::testport::assert_eq(rec_kind(rq, 0), pk_decode_img(), "kind 6");
     crate::testport::assert_eq(rec_id(rq, 0), 1, "request 1: the first candidate's image");
@@ -706,19 +709,19 @@ fn test_a_codec_image_is_asked_of_the_host_and_then_adopted() {
     crate::testport::assert_eq(rq_arg(rq, 0, dq_gwhere()), -1, "no globals");
     crate::testport::assert_eq(crate::port::buf_len(payload), 0, "nothing in the payload");
     crate::testport::assert_eq(as_get(cand, 0, 9), 6, "until it is answered the image is `codec`");
+}
+#[test]
+fn test_a_codec_image_is_adopted_from_the_hosts_answer() {
+    // With the host's pixels (a bitmap and its record in the answers) the same call makes the asset: a PNG, decoded, from DCT.
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
-    let file: &[u8] = &crate::testport::test_file("assets/dct-decode.pdf")[..];
     an_decode_img(ans, 1, 24, 16, 3, 0);
     at_fill(crate::port::bms_put(bms, 1, 24, 16, 3), 24, 16, 3);
-    crate::testport::assert_eq(at_run_ask(&crate::port::src_of_blob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms), 0, "with the answer nothing is asked");
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/dct-decode.pdf")[..], ans, bms, cand, rq, cbytes, payload), 0, "with the answer nothing is asked");
     crate::testport::assert_eq(crate::port::cells_len(rq), 0, "no request");
     crate::testport::assert_eq(as_get(cand, 0, 9), 0, "pixels were made");
     crate::testport::assert_eq(as_get(cand, 0, 10), 2, "a PNG");
@@ -727,45 +730,43 @@ fn test_a_codec_image_is_asked_of_the_host_and_then_adopted() {
     crate::testport::assert_eq(as_get(cand, 0, 21), 24, "width");
     crate::testport::assert_eq(as_get(cand, 0, 22), 16, "height");
     crate::testport::assert_eq(crate::port::buf_at(cbytes, as_get(cand, 0, 11)), 137, "PNG signature");
-    // the host cannot (unsupported): the image stays `codec`
+}
+#[test]
+fn test_a_host_that_cannot_leaves_the_image_codec() {
+    // The host cannot (unsupported): the image stays `codec` and nothing is asked again.
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
-    let file: &[u8] = &crate::testport::test_file("assets/dct-decode.pdf")[..];
     an_fail(ans, pk_decode_img(), 1, ps_unsupported());
-    crate::testport::assert_eq(at_run_ask(&crate::port::src_of_blob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms), 0, "answered: nothing is asked");
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/dct-decode.pdf")[..], ans, bms, cand, rq, cbytes, payload), 0, "answered: nothing is asked");
     crate::testport::assert_eq(as_get(cand, 0, 9), 6, "unsupported is `codec`");
-    // pixels that are not the dictionary's size are not adopted
+}
+#[test]
+fn test_pixels_that_are_not_the_dictionarys_size_are_not_adopted() {
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
-    let file: &[u8] = &crate::testport::test_file("assets/dct-decode.pdf")[..];
     an_decode_img(ans, 1, 20, 16, 3, 0);
     at_fill(crate::port::bms_put(bms, 1, 20, 16, 3), 20, 16, 3);
-    crate::testport::assert_eq(at_run_ask(&crate::port::src_of_blob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms), 0, "answered");
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/dct-decode.pdf")[..], ans, bms, cand, rq, cbytes, payload), 0, "answered");
     crate::testport::assert_eq(as_get(cand, 0, 9), 6, "pixels that are not the dictionary's size are `codec`");
-    // a JBIG2 image with globals: the image is the input's own bytes, the globals (a stream's decoded bytes) ride in the payload
+}
+#[test]
+fn test_the_globals_of_a_jbig2_image_ride_in_the_payload() {
+    // The image is the input's own bytes; the globals (a stream's decoded bytes, kin's own) are in the payload.
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
     let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
-    crate::testport::assert_eq(at_run_ask(&crate::port::src_of_blob(&crate::testport::test_file("assets/jbig2-globals.pdf")[..]), cand, cbytes, pages, fg, im, &mut crate::port::Cells::new(), rq, payload, bms), 4, "asked");
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/jbig2-globals.pdf")[..], ans, bms, cand, rq, cbytes, payload), 4, "asked");
     crate::testport::assert_eq(rq_arg(rq, 0, dq_where()), 0, "the image is the input's own bytes");
     crate::testport::assert_eq(rq_arg(rq, 0, dq_gwhere()), -2, "the globals are in the payload");
     crate::testport::assert_eq(crate::port::buf_len(payload), rq_arg(rq, 0, dq_gwhere() + 2), "the payload is the globals");
