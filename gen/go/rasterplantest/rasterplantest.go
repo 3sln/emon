@@ -263,3 +263,31 @@ func TestWitnessesThatDisagreeWithTheTextEscalateThePage(emonT *testing.T) {
 	rptReading(oruns, owords, rasterplan.RiWitness()+0, bw0, bw1)
 	port.AssertEq(emonT, rasterplan.RpWeak(2, 0, pl, fw, fl, et, rasterplan.RiWitness(), 0, 1, owords, oruns, scr, ta, tb, tt), 0, "one compared line: not enough")
 }
+
+func TestAFontWithNoMappingIsWeakWhereTheEngineReadsLetters(emonT *testing.T) {
+	// the text layer has code points of the private use area (what an unmapped font gives); two witness lines read letters over them
+	var pl2 *port.Cells = port.NewCells()
+	var fw2 *port.Cells = port.NewCells()
+	var fl2 *port.Cells = port.NewCells()
+	var et2 *port.Cells = port.NewCells()
+	var oruns2 *port.Cells = port.NewCells()
+	var owords2 *port.Cells = port.NewCells()
+	var scr2 *port.Cells = port.NewCells()
+	var ta2 *port.Cells = port.NewCells()
+	var tb2 *port.Cells = port.NewCells()
+	var tt2 *port.Cells = port.NewCells()
+	var pw0 int32 = rptWord(et2, 57345, 57346, 57347, 57348, 57349)
+	var pw1 int32 = rptWord(et2, 57350, 57351, 57352, 57353, 57354)
+	var qw0 int32 = rptWord(et2, 104, 101, 108, 108, 111)
+	var qw1 int32 = rptWord(et2, 119, 111, 114, 108, 100)
+	evidence.WdNew(fw2, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, pw0, 5, 0, 900, -1)
+	evidence.WdNew(fw2, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, pw1, 5, 0, 900, -1)
+	evidence.WdSet(fw2, 0, evidence.WfFont(), 7)
+	evidence.WdSet(fw2, 1, evidence.WfFont(), 7)
+	evidence.LnNew(fl2, 1, 100, 100, 1200, 200, 100, 100, 1200, 200, 0, 0, 0, 2)
+	rptWitnessRow(pl2, 0, 7)
+	rptWitnessRow(pl2, 0, 7)
+	rptReading(oruns2, owords2, rasterplan.RiWitness()+0, qw0, qw1)
+	rptReading(oruns2, owords2, rasterplan.RiWitness()+1, qw0, qw1)
+	port.AssertEq(emonT, rasterplan.RpWeak(2, 0, pl2, fw2, fl2, et2, rasterplan.RiWitness(), 0, 2, owords2, oruns2, scr2, ta2, tb2, tt2), 1, "a text with no letter against letters: weak")
+}

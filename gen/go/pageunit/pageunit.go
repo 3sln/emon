@@ -316,15 +316,14 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 				rasterplan.RpRequest(rq, eid, rid, 3, PuDpi(), 0, 0, 0, 0, loc, scripts)
 				return plan.UsRequests()
 			}
-			// the page is read whole after all: the witness lines are given up (two readings of one line would be two candidates) and the page goes on as `full`
+			// the page is read whole after all: the witness lines AND the render without the text are given up (the whole render with its text holds what they read, and two readings of one line would be two candidates of one group) and the page goes on as `full`
 			if plan.AnOk(ans, ae) == 1 {
 				pageink.PnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
 				view = evidence.VwNew(views, i+1, evidence.VkRender(), rid, -1, w, h, dpi*100, plan.LayFull(), -1, 0, 0, 0, 0, 0)
 				nview = evidence.VwNew(views, i+1, evidence.VkRender(), nid, -1, w, h, dpi*100, plan.LayNoText(), -1, 0, 0, 0, 0, 0)
 				w0 = evidence.OwCount(owords)
-				run = scan.ScAnswer(ans, ao, i+1, nview, oid, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-				nw = evidence.OwCount(owords) - w0
-				w1 = evidence.OwCount(owords)
+				nw = 0
+				w1 = w0
 				w3 = w1
 				esc = scan.ScAnswer(ans, ae, i+1, view, eid, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 				retarget.RtRunMeta(oruns, esc, evidence.OpFirst(), 3, 3, 0, 0, 0, 0)

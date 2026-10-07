@@ -251,3 +251,31 @@ fn test_witnesses_that_disagree_with_the_text_escalate_the_page() {
     rpt_reading(oruns, owords, ri_witness() + 0, bw0, bw1);
     crate::testport::assert_eq(rp_weak(2, 0, pl, fw, fl, et, ri_witness(), 0, 1, owords, oruns, scr, ta, tb, tt), 0, "one compared line: not enough");
 }
+#[test]
+fn test_a_font_with_no_mapping_is_weak_where_the_engine_reads_letters() {
+    // the text layer has code points of the private use area (what an unmapped font gives); two witness lines read letters over them
+    let pl2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fl2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let oruns2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let owords2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ta2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tt2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pw0: i32 = rpt_word(et2, 57345, 57346, 57347, 57348, 57349);
+    let pw1: i32 = rpt_word(et2, 57350, 57351, 57352, 57353, 57354);
+    let qw0: i32 = rpt_word(et2, 104, 101, 108, 108, 111);
+    let qw1: i32 = rpt_word(et2, 119, 111, 114, 108, 100);
+    wd_new(fw2, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, pw0, 5, 0, 900, -1);
+    wd_new(fw2, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, pw1, 5, 0, 900, -1);
+    wd_set(fw2, 0, wf_font(), 7);
+    wd_set(fw2, 1, wf_font(), 7);
+    ln_new(fl2, 1, 100, 100, 1200, 200, 100, 100, 1200, 200, 0, 0, 0, 2);
+    rpt_witness_row(pl2, 0, 7);
+    rpt_witness_row(pl2, 0, 7);
+    rpt_reading(oruns2, owords2, ri_witness() + 0, qw0, qw1);
+    rpt_reading(oruns2, owords2, ri_witness() + 1, qw0, qw1);
+    crate::testport::assert_eq(rp_weak(2, 0, pl2, fw2, fl2, et2, ri_witness(), 0, 2, owords2, oruns2, scr2, ta2, tb2, tt2), 1, "a text with no letter against letters: weak");
+}

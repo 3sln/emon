@@ -288,14 +288,12 @@ func RpRequest(rq *port.Cells, id int32, bitmap int32, psm int32, dpi int32, x i
 }
 
 func rpLineEligible(fw *port.Cells, fl *port.Cells, et *port.Cells, l int32) int32 {
-	// 1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` letters and digits.
+	// 1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` code points.
 	var first int32 = evidence.LnGet(fl, l, evidence.LhFirst())
 	var n int32 = evidence.LnGet(fl, l, evidence.LhCount())
 	var font int32 = evidence.WdGet(fw, first, evidence.WfFont())
 	var k int32 = 0
-	var j int32 = 0
 	var cps int32 = 0
-	var ts int32 = 0
 	var tl int32 = 0
 	var src int32 = 0
 	if evidence.LnGet(fl, l, evidence.LhRot()) != 0 {
@@ -312,15 +310,9 @@ func rpLineEligible(fw *port.Cells, fl *port.Cells, et *port.Cells, l int32) int
 		if evidence.WdGet(fw, first+k, evidence.WfFont()) != font {
 			return 0
 		}
-		ts = evidence.WdGet(fw, first+k, evidence.HdTstart())
 		tl = evidence.WdGet(fw, first+k, evidence.HdTlen())
-		j = 0
-		for j < tl {
-			if xalign.XaFoldCp(port.CellsAt(et, ts+j)) != 0 {
-				cps += 1
-			}
-			j += 1
-		}
+		// every code point counts, not only the letters: the lines of an unmapped font (no letter in the text layer) are the very ones a witness must read
+		cps += tl
 		k += 1
 	}
 	if cps < RpWitnessMinCps() {
@@ -611,6 +603,13 @@ func rpFoldLine(fw *port.Cells, et *port.Cells, first int32, n int32, out *port.
 		q = 0
 		for q < tl {
 			f = xalign.XaFoldCp(port.CellsAt(et, ts+q))
+			// what a font with no mapping gives (the private use area, U+FFFD) is no letter: a line of it reads as an empty text
+			if (f >= 57344) && (f <= 63743) {
+				f = 0
+			}
+			if f == 65533 {
+				f = 0
+			}
 			if f != 0 {
 				port.CellsPush(out, f)
 			}
@@ -691,6 +690,10 @@ func RpWeak(n int32, at int32, pl *port.Cells, fw *port.Cells, fl *port.Cells, e
 				} else {
 					port.CellsSet(scr, j, 1)
 				}
+			}
+			// a text with no letter at all (an unmapped font) against a reading that has some: the text layer says nothing of what is there
+			if (port.CellsLen(ta) == 0) && (port.CellsLen(tb) >= 3) {
+				port.CellsSet(scr, j, 1)
 			}
 		}
 		r += 1

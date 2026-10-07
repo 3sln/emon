@@ -292,15 +292,14 @@ public static class Pageunit {
                     Rasterplan.RpRequest(rq, eid, rid, 3, PuDpi(), 0, 0, 0, 0, loc, scripts);
                     return Plan.UsRequests();
                 }
-                // the page is read whole after all: the witness lines are given up (two readings of one line would be two candidates) and the page goes on as `full`
+                // the page is read whole after all: the witness lines AND the render without the text are given up (the whole render with its text holds what they read, and two readings of one line would be two candidates of one group) and the page goes on as `full`
                 if (Plan.AnOk(ans, ae) == 1) {
                     Pageink.PnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
                     view = Evidence.VwNew(views, i + 1, Evidence.VkRender(), rid, -1, w, h, dpi * 100, Plan.LayFull(), -1, 0, 0, 0, 0, 0);
                     nview = Evidence.VwNew(views, i + 1, Evidence.VkRender(), nid, -1, w, h, dpi * 100, Plan.LayNoText(), -1, 0, 0, 0, 0, 0);
                     w0 = Evidence.OwCount(owords);
-                    run = Scan.ScAnswer(ans, ao, i + 1, nview, oid, Scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-                    nw = Evidence.OwCount(owords) - w0;
-                    w1 = Evidence.OwCount(owords);
+                    nw = 0;
+                    w1 = w0;
                     w3 = w1;
                     esc = Scan.ScAnswer(ans, ae, i + 1, view, eid, Scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
                     Retarget.RtRunMeta(oruns, esc, Evidence.OpFirst(), 3, 3, 0, 0, 0, 0);

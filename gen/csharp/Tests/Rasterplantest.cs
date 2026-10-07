@@ -249,4 +249,32 @@ public static class Rasterplantest {
         RptReading(oruns, owords, Rasterplan.RiWitness() + 0, bw0, bw1);
         emon.Testport.AssertEq(Rasterplan.RpWeak(2, 0, pl, fw, fl, et, Rasterplan.RiWitness(), 0, 1, owords, oruns, scr, ta, tb, tt), 0, "one compared line: not enough");
     }
+    [Xunit.Fact]
+    public static void TestAFontWithNoMappingIsWeakWhereTheEngineReadsLetters() {
+        // the text layer has code points of the private use area (what an unmapped font gives); two witness lines read letters over them
+        emon.Port.Cells pl2 = emon.Port.NewCells();
+        emon.Port.Cells fw2 = emon.Port.NewCells();
+        emon.Port.Cells fl2 = emon.Port.NewCells();
+        emon.Port.Cells et2 = emon.Port.NewCells();
+        emon.Port.Cells oruns2 = emon.Port.NewCells();
+        emon.Port.Cells owords2 = emon.Port.NewCells();
+        emon.Port.Cells scr2 = emon.Port.NewCells();
+        emon.Port.Cells ta2 = emon.Port.NewCells();
+        emon.Port.Cells tb2 = emon.Port.NewCells();
+        emon.Port.Cells tt2 = emon.Port.NewCells();
+        int pw0 = RptWord(et2, 57345, 57346, 57347, 57348, 57349);
+        int pw1 = RptWord(et2, 57350, 57351, 57352, 57353, 57354);
+        int qw0 = RptWord(et2, 104, 101, 108, 108, 111);
+        int qw1 = RptWord(et2, 119, 111, 114, 108, 100);
+        Evidence.WdNew(fw2, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, pw0, 5, 0, 900, -1);
+        Evidence.WdNew(fw2, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, pw1, 5, 0, 900, -1);
+        Evidence.WdSet(fw2, 0, Evidence.WfFont(), 7);
+        Evidence.WdSet(fw2, 1, Evidence.WfFont(), 7);
+        Evidence.LnNew(fl2, 1, 100, 100, 1200, 200, 100, 100, 1200, 200, 0, 0, 0, 2);
+        RptWitnessRow(pl2, 0, 7);
+        RptWitnessRow(pl2, 0, 7);
+        RptReading(oruns2, owords2, Rasterplan.RiWitness() + 0, qw0, qw1);
+        RptReading(oruns2, owords2, Rasterplan.RiWitness() + 1, qw0, qw1);
+        emon.Testport.AssertEq(Rasterplan.RpWeak(2, 0, pl2, fw2, fl2, et2, Rasterplan.RiWitness(), 0, 2, owords2, oruns2, scr2, ta2, tb2, tt2), 1, "a text with no letter against letters: weak");
+    }
 }

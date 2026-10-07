@@ -244,4 +244,31 @@ public final class Rasterplantest {
         rptReading(oruns, owords, Rasterplan.riWitness() + 0, bw0, bw1);
         emon.Testport.assertEq(Rasterplan.rpWeak(2, 0, pl, fw, fl, et, Rasterplan.riWitness(), 0, 1, owords, oruns, scr, ta, tb, tt), 0, "one compared line: not enough");
     }
+    public static void testAFontWithNoMappingIsWeakWhereTheEngineReadsLetters() {
+        // the text layer has code points of the private use area (what an unmapped font gives); two witness lines read letters over them
+        emon.Port.Cells pl2 = emon.Port.newCells();
+        emon.Port.Cells fw2 = emon.Port.newCells();
+        emon.Port.Cells fl2 = emon.Port.newCells();
+        emon.Port.Cells et2 = emon.Port.newCells();
+        emon.Port.Cells oruns2 = emon.Port.newCells();
+        emon.Port.Cells owords2 = emon.Port.newCells();
+        emon.Port.Cells scr2 = emon.Port.newCells();
+        emon.Port.Cells ta2 = emon.Port.newCells();
+        emon.Port.Cells tb2 = emon.Port.newCells();
+        emon.Port.Cells tt2 = emon.Port.newCells();
+        int pw0 = rptWord(et2, 57345, 57346, 57347, 57348, 57349);
+        int pw1 = rptWord(et2, 57350, 57351, 57352, 57353, 57354);
+        int qw0 = rptWord(et2, 104, 101, 108, 108, 111);
+        int qw1 = rptWord(et2, 119, 111, 114, 108, 100);
+        Evidence.wdNew(fw2, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, pw0, 5, 0, 900, -1);
+        Evidence.wdNew(fw2, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, pw1, 5, 0, 900, -1);
+        Evidence.wdSet(fw2, 0, Evidence.wfFont(), 7);
+        Evidence.wdSet(fw2, 1, Evidence.wfFont(), 7);
+        Evidence.lnNew(fl2, 1, 100, 100, 1200, 200, 100, 100, 1200, 200, 0, 0, 0, 2);
+        rptWitnessRow(pl2, 0, 7);
+        rptWitnessRow(pl2, 0, 7);
+        rptReading(oruns2, owords2, Rasterplan.riWitness() + 0, qw0, qw1);
+        rptReading(oruns2, owords2, Rasterplan.riWitness() + 1, qw0, qw1);
+        emon.Testport.assertEq(Rasterplan.rpWeak(2, 0, pl2, fw2, fl2, et2, Rasterplan.riWitness(), 0, 2, owords2, oruns2, scr2, ta2, tb2, tt2), 1, "a text with no letter against letters: weak");
+    }
 }

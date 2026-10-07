@@ -164,14 +164,12 @@
 ;; ------------------------------------------------------------- the plan
 
 (defn ^I32 rp-line-eligible [^Cells fw ^Cells fl ^Cells et ^I32 l]
-  (comment "1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` letters and digits.")
+  (comment "1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` code points.")
   (let [^I32 first (ln-get fl l (lh-first))
         ^I32 n (ln-get fl l (lh-count))
         ^I32 font (wd-get fw first (wf-font))
         ^:mut ^I32 k 0
-        ^:mut ^I32 j 0
         ^:mut ^I32 cps 0
-        ^:mut ^I32 ts 0
         ^:mut ^I32 tl 0
         ^:mut ^I32 src 0]
     (if (!= (ln-get fl l (lh-rot)) 0) (return 0))
@@ -180,12 +178,9 @@
       (do (set src (wd-get fw (+ first k) (wf-src)))
           (if (!= src 1) (return 0))
           (if (!= (wd-get fw (+ first k) (wf-font)) font) (return 0))
-          (set ts (wd-get fw (+ first k) (hd-tstart)))
           (set tl (wd-get fw (+ first k) (hd-tlen)))
-          (set j 0)
-          (while (< j tl)
-            (do (if (!= (xa-fold-cp (cells-at et (+ ts j))) 0) (set cps (+ cps 1)))
-                (set j (+ j 1))))
+          (comment "every code point counts, not only the letters: the lines of an unmapped font (no letter in the text layer) are the very ones a witness must read")
+          (set cps (+ cps tl))
           (set k (+ k 1))))
     (if (< cps (rp-witness-min-cps)) (return 0))
     (return 1)))
@@ -414,6 +409,9 @@
           (set q 0)
           (while (< q tl)
             (do (set f (xa-fold-cp (cells-at et (+ ts q))))
+                (comment "what a font with no mapping gives (the private use area, U+FFFD) is no letter: a line of it reads as an empty text")
+                (if (and (>= f 57344) (<= f 63743)) (set f 0))
+                (if (== f 65533) (set f 0))
                 (if (!= f 0) (cells-push out f))
                 (set q (+ q 1))))
           (set k (+ k 1))))
@@ -477,7 +475,10 @@
                       (set d (xa-lev ta tb tt))
                       (if (>= (* (- mx d) 1000) (* mx (hh-agree-sim)))
                         (cells-set scr j 2)
-                        (cells-set scr j 1))))))
+                        (cells-set scr j 1))))
+                (comment "a text with no letter at all (an unmapped font) against a reading that has some: the text layer says nothing of what is there")
+                (if (and (== (cells-len ta) 0) (>= (cells-len tb) 3))
+                  (cells-set scr j 1))))
           (set r (+ r 1))))
     (comment "per font: the compared lines and the agreeing ones")
     (set j 0)

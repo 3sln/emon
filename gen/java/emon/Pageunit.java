@@ -292,15 +292,14 @@ public final class Pageunit {
                     Rasterplan.rpRequest(rq, eid, rid, 3, puDpi(), 0, 0, 0, 0, loc, scripts);
                     return Plan.usRequests();
                 }
-                // the page is read whole after all: the witness lines are given up (two readings of one line would be two candidates) and the page goes on as `full`
+                // the page is read whole after all: the witness lines AND the render without the text are given up (the whole render with its text holds what they read, and two readings of one line would be two candidates of one group) and the page goes on as `full`
                 if (Plan.anOk(ans, ae) == 1) {
                     Pageink.pnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
                     view = Evidence.vwNew(views, i + 1, Evidence.vkRender(), rid, -1, w, h, dpi * 100, Plan.layFull(), -1, 0, 0, 0, 0, 0);
                     nview = Evidence.vwNew(views, i + 1, Evidence.vkRender(), nid, -1, w, h, dpi * 100, Plan.layNoText(), -1, 0, 0, 0, 0, 0);
                     w0 = Evidence.owCount(owords);
-                    run = Scan.scAnswer(ans, ao, i + 1, nview, oid, Scan.scLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-                    nw = Evidence.owCount(owords) - w0;
-                    w1 = Evidence.owCount(owords);
+                    nw = 0;
+                    w1 = w0;
                     w3 = w1;
                     esc = Scan.scAnswer(ans, ae, i + 1, view, eid, Scan.scLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
                     Retarget.rtRunMeta(oruns, esc, Evidence.opFirst(), 3, 3, 0, 0, 0, 0);

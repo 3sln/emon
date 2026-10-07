@@ -300,15 +300,14 @@ pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
                 rp_request(rq, eid, rid, 3, pu_dpi(), 0, 0, 0, 0, loc, scripts);
                 return us_requests();
             }
-            // the page is read whole after all: the witness lines are given up (two readings of one line would be two candidates) and the page goes on as `full`
+            // the page is read whole after all: the witness lines AND the render without the text are given up (the whole render with its text holds what they read, and two readings of one line would be two candidates of one group) and the page goes on as `full`
             if an_ok(ans, ae) == 1 {
                 pn_undo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
                 view = vw_new(views, i + 1, vk_render(), rid, -1, w, h, dpi * 100, lay_full(), -1, 0, 0, 0, 0, 0);
                 nview = vw_new(views, i + 1, vk_render(), nid, -1, w, h, dpi * 100, lay_no_text(), -1, 0, 0, 0, 0, 0);
                 w0 = ow_count(owords);
-                run = sc_answer(ans, ao, i + 1, nview, oid, sc_lang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-                nw = ow_count(owords) - w0;
-                w1 = ow_count(owords);
+                nw = 0;
+                w1 = w0;
                 w3 = w1;
                 esc = sc_answer(ans, ae, i + 1, view, eid, sc_lang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
                 rt_run_meta(oruns, esc, op_first(), 3, 3, 0, 0, 0, 0);

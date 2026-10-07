@@ -257,14 +257,12 @@ pub fn rp_request(mut rq: &mut crate::port::Cells, id: i32, bitmap: i32, psm: i3
     return q;
 }
 pub(crate) fn rp_line_eligible(fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, et: &mut crate::port::Cells, l: i32) -> i32 {
-    // 1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` letters and digits.
+    // 1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` code points.
     let first: i32 = ln_get(fl, l, lh_first());
     let n: i32 = ln_get(fl, l, lh_count());
     let font: i32 = wd_get(fw, first, wf_font());
     let mut k: i32 = 0;
-    let mut j: i32 = 0;
     let mut cps: i32 = 0;
-    let mut ts: i32 = 0;
     let mut tl: i32 = 0;
     let mut src: i32 = 0;
     if ln_get(fl, l, lh_rot()) != 0 {
@@ -281,15 +279,9 @@ pub(crate) fn rp_line_eligible(fw: &mut crate::port::Cells, fl: &mut crate::port
         if wd_get(fw, first + k, wf_font()) != font {
             return 0;
         }
-        ts = wd_get(fw, first + k, hd_tstart());
         tl = wd_get(fw, first + k, hd_tlen());
-        j = 0;
-        while j < tl {
-            if xa_fold_cp(crate::port::cells_at(et, ts + j)) != 0 {
-                cps += 1;
-            }
-            j += 1;
-        }
+        // every code point counts, not only the letters: the lines of an unmapped font (no letter in the text layer) are the very ones a witness must read
+        cps += tl;
         k += 1;
     }
     if cps < rp_witness_min_cps() {
@@ -577,6 +569,13 @@ pub(crate) fn rp_fold_line(fw: &mut crate::port::Cells, et: &mut crate::port::Ce
         q = 0;
         while q < tl {
             f = xa_fold_cp(crate::port::cells_at(et, ts + q));
+            // what a font with no mapping gives (the private use area, U+FFFD) is no letter: a line of it reads as an empty text
+            if (f >= 57344) && (f <= 63743) {
+                f = 0;
+            }
+            if f == 65533 {
+                f = 0;
+            }
             if f != 0 {
                 crate::port::cells_push(out, f);
             }
@@ -656,6 +655,10 @@ pub fn rp_weak(n: i32, at: i32, pl: &mut crate::port::Cells, fw: &mut crate::por
                 } else {
                     crate::port::cells_set(scr, j, 1);
                 }
+            }
+            // a text with no letter at all (an unmapped font) against a reading that has some: the text layer says nothing of what is there
+            if (crate::port::cells_len(ta) == 0) && (crate::port::cells_len(tb) >= 3) {
+                crate::port::cells_set(scr, j, 1);
             }
         }
         r += 1;

@@ -250,14 +250,12 @@ public final class Rasterplan {
         return q;
     }
     public static int rpLineEligible(emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells et, int l) {
-        // 1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` letters and digits.
+        // 1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` code points.
         int first = Evidence.lnGet(fl, l, Evidence.lhFirst());
         int n = Evidence.lnGet(fl, l, Evidence.lhCount());
         int font = Evidence.wdGet(fw, first, Evidence.wfFont());
         int k = 0;
-        int j = 0;
         int cps = 0;
-        int ts = 0;
         int tl = 0;
         int src = 0;
         if (Evidence.lnGet(fl, l, Evidence.lhRot()) != 0) {
@@ -274,15 +272,9 @@ public final class Rasterplan {
             if (Evidence.wdGet(fw, first + k, Evidence.wfFont()) != font) {
                 return 0;
             }
-            ts = Evidence.wdGet(fw, first + k, Evidence.hdTstart());
             tl = Evidence.wdGet(fw, first + k, Evidence.hdTlen());
-            j = 0;
-            while (j < tl) {
-                if (Xalign.xaFoldCp(emon.Port.cellsAt(et, ts + j)) != 0) {
-                    cps += 1;
-                }
-                j += 1;
-            }
+            // every code point counts, not only the letters: the lines of an unmapped font (no letter in the text layer) are the very ones a witness must read
+            cps += tl;
             k += 1;
         }
         if (cps < rpWitnessMinCps()) {
@@ -570,6 +562,13 @@ public final class Rasterplan {
             q = 0;
             while (q < tl) {
                 f = Xalign.xaFoldCp(emon.Port.cellsAt(et, ts + q));
+                // what a font with no mapping gives (the private use area, U+FFFD) is no letter: a line of it reads as an empty text
+                if ((f >= 57344) && (f <= 63743)) {
+                    f = 0;
+                }
+                if (f == 65533) {
+                    f = 0;
+                }
                 if (f != 0) {
                     emon.Port.cellsPush(out, f);
                 }
@@ -649,6 +648,10 @@ public final class Rasterplan {
                     } else {
                         emon.Port.cellsSet(scr, j, 1);
                     }
+                }
+                // a text with no letter at all (an unmapped font) against a reading that has some: the text layer says nothing of what is there
+                if ((emon.Port.cellsLen(ta) == 0) && (emon.Port.cellsLen(tb) >= 3)) {
+                    emon.Port.cellsSet(scr, j, 1);
                 }
             }
             r += 1;
