@@ -709,7 +709,7 @@ public final class Json {
         // `at`, `src`, `conf`, `flags`: the provenance every node may carry.
         int s = started;
         int sr = Model.nodeSrc(nodes, n);
-        int cf = Model.nodeConf(nodes, n);
+        int cf = Calib.calConf(Model.nodeKind(nodes, n), Model.nodeSrc(nodes, n), Model.nodeConf(nodes, n));
         int fg = Model.nodeFlags(nodes, n);
         s = jsAt(t, pr, d, nodes, regions, n, s);
         if (sr != 0) {
@@ -934,7 +934,7 @@ public final class Json {
         }
         if (Model.ledgerConf(ledger, l) >= 0) {
             s = jsBegin(t, pr, d, s, Model.fkConf());
-            emon.Port.textI32(t, Model.ledgerConf(ledger, l));
+            emon.Port.textI32(t, Calib.calConf(Calib.calDropped(), Model.ledgerSrc(ledger, l), Model.ledgerConf(ledger, l)));
         }
         if (Model.ledgerSrc(ledger, l) != 0) {
             s = jsBegin(t, pr, d, s, Model.fkSrc());
@@ -1024,7 +1024,7 @@ public final class Json {
         s = jsBegin(t, pretty, 0, s, Model.fkSettings());
         jsSettings(t, pretty, nodes, attrs, text);
         s = jsBegin(t, pretty, 0, s, Model.fkConf());
-        emon.Port.textAscii(t, "\"uncalibrated\"");
+        emon.Port.textAscii(t, "\"calibrated\"");
         if ((jsHas(nodes, attrs, Model.fkTitle()) == 1) || (jsHas(nodes, attrs, Model.fkAuthor()) == 1) || (jsHas(nodes, attrs, Model.fkSubject()) == 1) || (jsHas(nodes, attrs, Model.fkKeywords()) == 1) || (jsHas(nodes, attrs, Model.fkCreator()) == 1) || (jsHas(nodes, attrs, Model.fkProducer()) == 1) || (jsHas(nodes, attrs, Model.fkCreated()) == 1) || (jsHas(nodes, attrs, Model.fkModified()) == 1)) {
             s = jsBegin(t, pretty, 0, s, Model.fkMeta());
             jsMeta(t, pretty, nodes, attrs, text);

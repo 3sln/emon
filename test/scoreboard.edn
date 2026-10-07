@@ -2419,6 +2419,56 @@
         :bow-p 0.924303
         :bow-r 0.987234
         :cer 0.012214
+        :conf-brier-all 0.04378
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.108116
+        :conf-brier-heading-text 0.108116
+        :conf-brier-item 0.000961
+        :conf-brier-item-text 0.000961
+        :conf-brier-list 0.005929
+        :conf-brier-list-infer 0.005929
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.108797
+        :conf-brier-section-infer 0.108797
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.049869
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.065647
+        :conf-ece-heading-text 0.065647
+        :conf-ece-item 0.031
+        :conf-ece-item-text 0.031
+        :conf-ece-list 0.077
+        :conf-ece-list-infer 0.077
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.070647
+        :conf-ece-section-infer 0.070647
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :fill-p 1.0
         :fill-r 1.0
         :furniture-f1 1.0
@@ -2461,6 +2511,20 @@
         :bow-p 0.886228
         :bow-r 0.980132
         :cer 0.018724
+        :conf-brier-all 0.114522
+        :conf-brier-heading 0.130704
+        :conf-brier-heading-text 0.130704
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-section 0.131638
+        :conf-brier-section-infer 0.131638
+        :conf-ece-all 0.157238
+        :conf-ece-heading 0.090857
+        :conf-ece-heading-text 0.090857
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-section 0.095857
+        :conf-ece-section-infer 0.095857
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -2499,6 +2563,36 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.011312
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-item 0.000961
+        :conf-brier-item-text 0.000961
+        :conf-brier-list 0.005929
+        :conf-brier-list-infer 0.005929
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.07731
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-item 0.031
+        :conf-ece-item-text 0.031
+        :conf-ece-list 0.077
+        :conf-ece-list-infer 0.077
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -2540,6 +2634,40 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.003984
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-ece-all 0.032706
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
         :fill-p 1.0
         :fill-r 1.0
         :furniture-f1 1.0
@@ -2602,6 +2730,52 @@
         :bow-p 0.991379
         :bow-r 0.997831
         :cer 0.006316
+        :conf-brier-all 0.05935
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-figure 0.008281
+        :conf-brier-figure-infer 0.008281
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-note 0.25
+        :conf-brier-note-infer 0.25
+        :conf-brier-paragraph 0.259156
+        :conf-brier-paragraph-text 0.259156
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.022124
+        :conf-brier-text-text 0.022124
+        :conf-ece-all 0.058833
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-figure 0.091
+        :conf-ece-figure-infer 0.091
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-note 0.5
+        :conf-ece-note-infer 0.5
+        :conf-ece-paragraph 0.128793
+        :conf-ece-paragraph-text 0.128793
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.1485
+        :conf-ece-text-text 0.1485
         :figure-subkind-acc 0.0
         :fill-p 1.0
         :fill-r 1.0
@@ -2675,6 +2849,80 @@
         :bow-p 0.965678
         :bow-r 0.948998
         :cer 0.044269
+        :conf-brier-all 0.051476
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-cell 0.015812
+        :conf-brier-cell-text 0.015812
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-figure 0.008281
+        :conf-brier-figure-infer 0.008281
+        :conf-brier-furniture 0.005041
+        :conf-brier-furniture-text 0.005041
+        :conf-brier-heading 0.043169
+        :conf-brier-heading-text 0.043169
+        :conf-brier-initial 0.002025
+        :conf-brier-initial-text 0.002025
+        :conf-brier-item 0.029385
+        :conf-brier-item-text 0.029385
+        :conf-brier-link 0.0
+        :conf-brier-link-infer 0.0
+        :conf-brier-list 0.066358
+        :conf-brier-list-infer 0.066358
+        :conf-brier-note 0.25
+        :conf-brier-note-infer 0.25
+        :conf-brier-paragraph 0.221466
+        :conf-brier-paragraph-text 0.221466
+        :conf-brier-row 0.028586
+        :conf-brier-row-infer 0.028586
+        :conf-brier-rowgroup 0.052965
+        :conf-brier-rowgroup-infer 0.052965
+        :conf-brier-section 0.03728
+        :conf-brier-section-infer 0.03728
+        :conf-brier-span 0.104118
+        :conf-brier-span-text 0.104118
+        :conf-brier-table 0.081328
+        :conf-brier-table-text 0.081328
+        :conf-brier-text 0.157321
+        :conf-brier-text-text 0.157321
+        :conf-ece-all 0.006519
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-cell 0.003061
+        :conf-ece-cell-text 0.003061
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-figure 0.091
+        :conf-ece-figure-infer 0.091
+        :conf-ece-furniture 0.071
+        :conf-ece-furniture-text 0.071
+        :conf-ece-heading 0.006839
+        :conf-ece-heading-text 0.006839
+        :conf-ece-initial 0.045
+        :conf-ece-initial-text 0.045
+        :conf-ece-item 0.000697
+        :conf-ece-item-text 0.000697
+        :conf-ece-link 0.0
+        :conf-ece-link-infer 0.0
+        :conf-ece-list 0.005571
+        :conf-ece-list-infer 0.005571
+        :conf-ece-note 0.089744
+        :conf-ece-note-infer 0.089744
+        :conf-ece-paragraph 0.041142
+        :conf-ece-paragraph-text 0.041142
+        :conf-ece-row 0.000453
+        :conf-ece-row-infer 0.000453
+        :conf-ece-rowgroup 0.005925
+        :conf-ece-rowgroup-infer 0.005925
+        :conf-ece-section 0.00829
+        :conf-ece-section-infer 0.00829
+        :conf-ece-span 0.017647
+        :conf-ece-span-text 0.017647
+        :conf-ece-table 0.003714
+        :conf-ece-table-text 0.003714
+        :conf-ece-text 0.020584
+        :conf-ece-text-text 0.020584
         :figure-subkind-acc 0.0
         :fill-p 1.0
         :fill-r 0.942613
@@ -2753,6 +3001,52 @@
         :bow-p 0.996229
         :bow-r 1.0
         :cer 0.004427
+        :conf-brier-all 0.144196
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-figure 0.008281
+        :conf-brier-figure-infer 0.008281
+        :conf-brier-heading 0.162704
+        :conf-brier-heading-text 0.162704
+        :conf-brier-note 0.25
+        :conf-brier-note-infer 0.25
+        :conf-brier-paragraph 0.179295
+        :conf-brier-paragraph-text 0.179295
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.163995
+        :conf-brier-section-infer 0.163995
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.086821
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-figure 0.091
+        :conf-ece-figure-infer 0.091
+        :conf-ece-heading 0.126571
+        :conf-ece-heading-text 0.126571
+        :conf-ece-note 0.5
+        :conf-ece-note-infer 0.5
+        :conf-ece-paragraph 0.05693
+        :conf-ece-paragraph-text 0.05693
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.131571
+        :conf-ece-section-infer 0.131571
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :figure-subkind-acc 0.0
         :frag-col-acc 0.704545
         :furniture-f1 1.0
@@ -2800,6 +3094,28 @@
         :bow-p 0.857143
         :bow-r 1.0
         :cer 0.147059
+        :conf-brier-all 0.268401
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-figure 0.008281
+        :conf-brier-figure-infer 0.008281
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.419082
+        :conf-brier-paragraph-text 0.419082
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-ece-all 0.342773
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-figure 0.091
+        :conf-ece-figure-infer 0.091
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.500714
+        :conf-ece-paragraph-text 0.500714
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
         :figure-subkind-acc 0.0
         :furniture-f1 1.0
         :furniture-p 1.0
@@ -2836,6 +3152,36 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.080691
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-note 0.25
+        :conf-brier-note-infer 0.25
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-text 0.047225
+        :conf-brier-text-text 0.047225
+        :conf-ece-all 0.209341
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-note 0.5
+        :conf-ece-note-infer 0.5
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-text 0.085
+        :conf-ece-text-text 0.085
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -2874,6 +3220,52 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.012397
+        :conf-brier-all 0.011754
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-furniture 0.005041
+        :conf-brier-furniture-text 0.005041
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.403725
+        :conf-brier-paragraph-text 0.403725
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-span 0.81
+        :conf-brier-span-text 0.81
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.025565
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-furniture 0.071
+        :conf-ece-furniture-text 0.071
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.465
+        :conf-ece-paragraph-text 0.465
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-span 0.9
+        :conf-ece-span-text 0.9
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :fill-p 1.0
         :fill-r 0.998606
         :furniture-f1 1.0
@@ -2916,6 +3308,36 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.042771
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-furniture 0.005041
+        :conf-brier-furniture-text 0.005041
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.170986
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-furniture 0.071
+        :conf-ece-furniture-text 0.071
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :fill-p 1.0
         :fill-r 1.0
         :furniture-f1 1.0
@@ -2964,6 +3386,40 @@
         :bow-p 0.939462
         :bow-r 0.919532
         :cer 0.1249
+        :conf-brier-all 0.108037
+        :conf-brier-cell 0.066278
+        :conf-brier-cell-text 0.066278
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-note 0.25
+        :conf-brier-note-infer 0.25
+        :conf-brier-paragraph 0.333944
+        :conf-brier-paragraph-text 0.333944
+        :conf-brier-row 0.096963
+        :conf-brier-row-infer 0.096963
+        :conf-brier-rowgroup 0.043662
+        :conf-brier-rowgroup-infer 0.043662
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.079432
+        :conf-brier-table-text 0.079432
+        :conf-ece-all 0.09156
+        :conf-ece-cell 0.054873
+        :conf-ece-cell-text 0.054873
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-note 0.5
+        :conf-ece-note-infer 0.5
+        :conf-ece-paragraph 0.302719
+        :conf-ece-paragraph-text 0.302719
+        :conf-ece-row 0.073041
+        :conf-ece-row-infer 0.073041
+        :conf-ece-rowgroup 0.016545
+        :conf-ece-rowgroup-infer 0.016545
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.006043
+        :conf-ece-table-text 0.006043
         :fill-p 1.0
         :fill-r 0.805305
         :furniture-f1 1.0
@@ -3007,6 +3463,36 @@
         :bow-p 0.982648
         :bow-r 0.994914
         :cer 0.005506
+        :conf-brier-all 0.037021
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.023541
+        :conf-brier-heading-text 0.023541
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.023279
+        :conf-brier-section-infer 0.023279
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-ece-all 0.102384
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.028744
+        :conf-ece-heading-text 0.028744
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.023744
+        :conf-ece-section-infer 0.023744
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -3042,6 +3528,32 @@
         :bow-p 0.991096
         :bow-r 0.996556
         :cer 0.001383
+        :conf-brier-all 0.109462
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-initial 0.002025
+        :conf-brier-initial-text 0.002025
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-text 0.222292
+        :conf-brier-text-text 0.222292
+        :conf-ece-all 0.14111
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-initial 0.045
+        :conf-ece-initial-text 0.045
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-text 0.117633
+        :conf-ece-text-text 0.117633
         :first-word-acc 0.652174
         :frag-col-acc 1.0
         :furniture-f1 1.0
@@ -3093,6 +3605,44 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.02544
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-item 0.000961
+        :conf-brier-item-text 0.000961
+        :conf-brier-link 0.0
+        :conf-brier-link-infer 0.0
+        :conf-brier-list 0.005929
+        :conf-brier-list-infer 0.005929
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-text 0.263316
+        :conf-brier-text-text 0.263316
+        :conf-ece-all 0.057126
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-item 0.031
+        :conf-ece-item-text 0.031
+        :conf-ece-link 0.0
+        :conf-ece-link-infer 0.0
+        :conf-ece-list 0.077
+        :conf-ece-list-infer 0.077
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-text 0.178636
+        :conf-ece-text-text 0.178636
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -3146,6 +3696,44 @@
         :bow-p 0.775735
         :bow-r 0.802281
         :cer 0.089751
+        :conf-brier-all 0.187456
+        :conf-brier-cell 0.118949
+        :conf-brier-cell-text 0.118949
+        :conf-brier-heading 0.122171
+        :conf-brier-heading-text 0.122171
+        :conf-brier-item 0.235461
+        :conf-brier-item-text 0.235461
+        :conf-brier-list 0.217429
+        :conf-brier-list-infer 0.217429
+        :conf-brier-paragraph 0.147379
+        :conf-brier-paragraph-text 0.147379
+        :conf-brier-row 0.393341
+        :conf-brier-row-infer 0.393341
+        :conf-brier-rowgroup 0.441844
+        :conf-brier-rowgroup-infer 0.441844
+        :conf-brier-section 0.123009
+        :conf-brier-section-infer 0.123009
+        :conf-brier-table 0.551316
+        :conf-brier-table-text 0.551316
+        :conf-ece-all 0.169176
+        :conf-ece-cell 0.108951
+        :conf-ece-cell-text 0.108951
+        :conf-ece-heading 0.081333
+        :conf-ece-heading-text 0.081333
+        :conf-ece-item 0.219
+        :conf-ece-item-text 0.219
+        :conf-ece-list 0.173
+        :conf-ece-list-infer 0.173
+        :conf-ece-paragraph 0.131154
+        :conf-ece-paragraph-text 0.131154
+        :conf-ece-row 0.387667
+        :conf-ece-row-infer 0.387667
+        :conf-ece-rowgroup 0.438
+        :conf-ece-rowgroup-infer 0.438
+        :conf-ece-section 0.086333
+        :conf-ece-section-infer 0.086333
+        :conf-ece-table 0.573667
+        :conf-ece-table-text 0.573667
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -3187,6 +3775,44 @@
         :bow-p 0.961379
         :bow-r 0.992171
         :cer 0.027342
+        :conf-brier-all 0.187061
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.077371
+        :conf-brier-heading-text 0.077371
+        :conf-brier-paragraph 0.396225
+        :conf-brier-paragraph-text 0.396225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.077709
+        :conf-brier-section-infer 0.077709
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.20686
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.031333
+        :conf-ece-heading-text 0.031333
+        :conf-ece-paragraph 0.447558
+        :conf-ece-paragraph-text 0.447558
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.036333
+        :conf-ece-section-infer 0.036333
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -3232,6 +3858,44 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.015595
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-cell 0.011597
+        :conf-brier-cell-text 0.011597
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.167225
+        :conf-brier-paragraph-text 0.167225
+        :conf-brier-row 0.015522
+        :conf-brier-row-infer 0.015522
+        :conf-brier-rowgroup 0.064258
+        :conf-brier-rowgroup-infer 0.064258
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.062916
+        :conf-brier-table-text 0.062916
+        :conf-ece-all 0.005443
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-cell 0.001267
+        :conf-ece-cell-text 0.001267
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.085
+        :conf-ece-paragraph-text 0.085
+        :conf-ece-row 0.013416
+        :conf-ece-row-infer 0.013416
+        :conf-ece-rowgroup 0.006966
+        :conf-ece-rowgroup-infer 0.006966
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.026333
+        :conf-ece-table-text 0.026333
         :fill-p 1.0
         :fill-r 1.0
         :furniture-f1 1.0
@@ -3274,6 +3938,36 @@
         :bow-p 0.246862
         :bow-r 0.147316
         :cer 0.668628
+        :conf-brier-all 0.150576
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.213528
+        :conf-brier-heading-text 0.213528
+        :conf-brier-paragraph 0.482558
+        :conf-brier-paragraph-text 0.482558
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.108797
+        :conf-brier-section-infer 0.108797
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-ece-all 0.174331
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.183294
+        :conf-ece-heading-text 0.183294
+        :conf-ece-paragraph 0.648333
+        :conf-ece-paragraph-text 0.648333
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.070647
+        :conf-ece-section-infer 0.070647
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -3311,6 +4005,44 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.014078
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.067497
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :furniture-f1 0.8
         :furniture-p 1.0
         :furniture-r 0.666667
@@ -3382,6 +4114,9 @@
         :rule-p 0.0
         :rule-r 0.0
         :seal-leak 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 0.0
         :table-adj-p 0.0
         :table-adj-r 0.0
@@ -3483,6 +4218,9 @@
         :para-boundary-r 0.0
         :rule-p 0.0
         :rule-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 0.0
         :table-adj-p 0.0
         :table-adj-r 0.0
@@ -3592,6 +4330,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
         :table-adj-r 1.0
@@ -3661,6 +4402,9 @@
         :para-boundary-p 0.0
         :para-boundary-r 0.0
         :seal-leak 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 0.0
         :table-adj-p 0.0
         :table-adj-r 0.0
@@ -3824,6 +4568,9 @@
         :rule-p 0.0
         :rule-r 0.0
         :seal-leak 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 0.0
         :table-adj-p 0.0
         :table-adj-r 0.0
@@ -3939,6 +4686,9 @@
         :rule-p 0.0
         :rule-r 0.0
         :seal-leak 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 0.0
         :table-adj-p 0.0
         :table-adj-r 0.0
@@ -4020,6 +4770,9 @@
         :para-boundary-p 0.0
         :para-boundary-r 0.0
         :seal-leak 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
         :table-adj-r 1.0
@@ -4095,6 +4848,9 @@
         :para-boundary-p 0.0
         :para-boundary-r 0.0
         :seal-leak 0.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :table-adj-f1 0.0
         :table-adj-p 0.0
         :table-adj-r 0.0
@@ -4871,8 +5627,8 @@
         :block-list-f1 1.0
         :block-list-p 1.0
         :block-list-r 1.0
-        :block-paragraph-f1 0.855072
-        :block-paragraph-p 0.800905
+        :block-paragraph-f1 0.913043
+        :block-paragraph-p 0.855204
         :block-paragraph-r 0.979275
         :block-seal-f1 1.0
         :block-seal-p 1.0
@@ -4880,10 +5636,86 @@
         :block-table-f1 0.9375
         :block-table-p 1.0
         :block-table-r 0.882353
-        :bow-f1 0.995732
-        :bow-p 0.993589
-        :bow-r 0.997884
-        :cer 0.004163
+        :bow-f1 0.998436
+        :bow-p 0.998345
+        :bow-r 0.998528
+        :cer 0.002213
+        :conf-brier-all 0.025067
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-cell 0.003496
+        :conf-brier-cell-text 0.003496
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-figure 0.008281
+        :conf-brier-figure-infer 0.008281
+        :conf-brier-furniture 0.005041
+        :conf-brier-furniture-text 0.005041
+        :conf-brier-heading 0.012037
+        :conf-brier-heading-fused 0.002704
+        :conf-brier-heading-ocr 0.04
+        :conf-brier-heading-text 0.011664
+        :conf-brier-item 0.000961
+        :conf-brier-item-text 0.000961
+        :conf-brier-list 0.005929
+        :conf-brier-list-infer 0.005929
+        :conf-brier-paragraph 0.147003
+        :conf-brier-paragraph-fused 0.146521
+        :conf-brier-paragraph-ocr 0.105172
+        :conf-brier-paragraph-text 0.152104
+        :conf-brier-row 0.018448
+        :conf-brier-row-infer 0.018448
+        :conf-brier-rowgroup 0.033044
+        :conf-brier-rowgroup-infer 0.033044
+        :conf-brier-seal 0.218
+        :conf-brier-seal-infer 0.25
+        :conf-brier-seal-text 0.21
+        :conf-brier-section 0.010921
+        :conf-brier-section-infer 0.010921
+        :conf-brier-span 0.41
+        :conf-brier-span-text 0.41
+        :conf-brier-table 0.062916
+        :conf-brier-table-text 0.062916
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.026678
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-cell 0.009584
+        :conf-ece-cell-text 0.009584
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-figure 0.091
+        :conf-ece-figure-infer 0.091
+        :conf-ece-furniture 0.071
+        :conf-ece-furniture-text 0.071
+        :conf-ece-heading 0.045231
+        :conf-ece-heading-fused 0.052
+        :conf-ece-heading-ocr 0.2
+        :conf-ece-heading-text 0.042
+        :conf-ece-item 0.031
+        :conf-ece-item-text 0.031
+        :conf-ece-list 0.077
+        :conf-ece-list-infer 0.077
+        :conf-ece-paragraph 0.116557
+        :conf-ece-paragraph-fused 0.034529
+        :conf-ece-paragraph-ocr 0.150091
+        :conf-ece-paragraph-text 0.120165
+        :conf-ece-row 0.010308
+        :conf-ece-row-infer 0.010308
+        :conf-ece-rowgroup 0.028667
+        :conf-ece-rowgroup-infer 0.028667
+        :conf-ece-seal 0.22
+        :conf-ece-seal-infer 0.5
+        :conf-ece-seal-text 0.15
+        :conf-ece-section 0.037385
+        :conf-ece-section-infer 0.037385
+        :conf-ece-span 0.4
+        :conf-ece-span-text 0.4
+        :conf-ece-table 0.026333
+        :conf-ece-table-text 0.026333
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :figure-subkind-acc 0.0
         :furniture-f1 0.909091
         :furniture-p 1.0
@@ -4897,10 +5729,13 @@
         :heading-r 0.911504
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.910448
-        :para-boundary-p 0.851163
+        :para-boundary-f1 0.925373
+        :para-boundary-p 0.865116
         :para-boundary-r 0.994652
         :seal-leak 0.0
+        :span-bold-f1 0.5
+        :span-bold-p 0.5
+        :span-bold-r 0.5
         :src-ocr-share 0.105875
         :table-adj-f1 0.991045
         :table-adj-p 0.995638
@@ -4910,7 +5745,7 @@
         :table-teds-struct-lite 0.882353
         :tl-override 0.0
         :watermark-leak 0.0
-        :wer 0.008738}
+        :wer 0.002851}
       "pdf/columns" {
         :block-heading-f1 0.833333
         :block-heading-p 1.0
@@ -4922,6 +5757,20 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.103065
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.180456
+        :conf-brier-paragraph-text 0.180456
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-ece-all 0.052174
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.054231
+        :conf-ece-paragraph-text 0.054231
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -4960,6 +5809,28 @@
         :bow-p 0.968254
         :bow-r 1.0
         :cer 0.05988
+        :conf-brier-all 0.150242
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-figure 0.008281
+        :conf-brier-figure-infer 0.008281
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.296225
+        :conf-brier-paragraph-text 0.296225
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-ece-all 0.139
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-figure 0.091
+        :conf-ece-figure-infer 0.091
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.215
+        :conf-ece-paragraph-text 0.215
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
         :figure-subkind-acc 0.0
         :furniture-f1 1.0
         :furniture-p 1.0
@@ -4996,6 +5867,52 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.012397
+        :conf-brier-all 0.011754
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-furniture 0.005041
+        :conf-brier-furniture-text 0.005041
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.403725
+        :conf-brier-paragraph-text 0.403725
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-span 0.81
+        :conf-brier-span-text 0.81
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.025565
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-furniture 0.071
+        :conf-ece-furniture-text 0.071
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.465
+        :conf-ece-paragraph-text 0.465
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-span 0.9
+        :conf-ece-span-text 0.9
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -5011,6 +5928,9 @@
         :para-boundary-f1 0.434783
         :para-boundary-p 0.277778
         :para-boundary-r 1.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :src-ocr-share 0.0
         :table-adj-f1 0.991924
         :table-adj-p 1.0
@@ -5034,6 +5954,38 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.021079
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.005812
+        :conf-brier-heading-ocr 0.04
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-ece-all 0.095969
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.064333
+        :conf-ece-heading-ocr 0.2
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -5075,6 +6027,36 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.011312
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-item 0.000961
+        :conf-brier-item-text 0.000961
+        :conf-brier-list 0.005929
+        :conf-brier-list-infer 0.005929
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.07731
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-item 0.031
+        :conf-ece-item-text 0.031
+        :conf-ece-list 0.077
+        :conf-ece-list-infer 0.077
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -5090,6 +6072,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -5110,6 +6095,36 @@
         :bow-p 0.882353
         :bow-r 0.882353
         :cer 0.086538
+        :conf-brier-all 0.315341
+        :conf-brier-cell 0.194969
+        :conf-brier-cell-text 0.194969
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-row 0.754441
+        :conf-brier-row-infer 0.754441
+        :conf-brier-rowgroup 0.879844
+        :conf-brier-rowgroup-infer 0.879844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.822649
+        :conf-brier-table-text 0.822649
+        :conf-ece-all 0.320867
+        :conf-ece-cell 0.187
+        :conf-ece-cell-text 0.187
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-row 0.771
+        :conf-ece-row-infer 0.771
+        :conf-ece-rowgroup 0.938
+        :conf-ece-rowgroup-infer 0.938
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.907
+        :conf-ece-table-text 0.907
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -5151,6 +6166,50 @@
         :bow-p 0.997153
         :bow-r 0.997153
         :cer 0.001139
+        :conf-brier-all 0.044125
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.077371
+        :conf-brier-heading-text 0.077371
+        :conf-brier-paragraph 0.114302
+        :conf-brier-paragraph-text 0.114302
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-seal 0.218
+        :conf-brier-seal-infer 0.25
+        :conf-brier-seal-text 0.21
+        :conf-brier-section 0.077709
+        :conf-brier-section-infer 0.077709
+        :conf-brier-span 0.01
+        :conf-brier-span-text 0.01
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.04887
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.031333
+        :conf-ece-heading-text 0.031333
+        :conf-ece-paragraph 0.208077
+        :conf-ece-paragraph-text 0.208077
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-seal 0.22
+        :conf-ece-seal-infer 0.5
+        :conf-ece-seal-text 0.15
+        :conf-ece-section 0.036333
+        :conf-ece-section-infer 0.036333
+        :conf-ece-span 0.1
+        :conf-ece-span-text 0.1
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -5167,6 +6226,9 @@
         :para-boundary-p 1.0
         :para-boundary-r 1.0
         :seal-leak 0.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -5193,6 +6255,40 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.003984
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-text 0.003844
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-ece-all 0.032706
+        :conf-ece-caption 0.062
+        :conf-ece-caption-text 0.062
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -5231,6 +6327,42 @@
         :bow-p 0.995006
         :bow-r 0.995006
         :cer 0.001132
+        :conf-brier-all 0.049386
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-fused 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.189243
+        :conf-brier-paragraph-fused 0.146521
+        :conf-brier-paragraph-ocr 0.105172
+        :conf-brier-paragraph-text 0.511225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-ece-all 0.029792
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-heading 0.052
+        :conf-ece-heading-fused 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.038957
+        :conf-ece-paragraph-fused 0.034529
+        :conf-ece-paragraph-ocr 0.150091
+        :conf-ece-paragraph-text 0.715
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -5268,6 +6400,44 @@
         :bow-p 1.0
         :bow-r 1.0
         :cer 0.0
+        :conf-brier-all 0.014078
+        :conf-brier-cell 0.000169
+        :conf-brier-cell-text 0.000169
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-heading 0.002704
+        :conf-brier-heading-text 0.002704
+        :conf-brier-paragraph 0.081225
+        :conf-brier-paragraph-text 0.081225
+        :conf-brier-row 0.000841
+        :conf-brier-row-infer 0.000841
+        :conf-brier-rowgroup 0.003844
+        :conf-brier-rowgroup-infer 0.003844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.008649
+        :conf-brier-table-text 0.008649
+        :conf-brier-text 0.034225
+        :conf-brier-text-text 0.034225
+        :conf-ece-all 0.067497
+        :conf-ece-cell 0.013
+        :conf-ece-cell-text 0.013
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-heading 0.052
+        :conf-ece-heading-text 0.052
+        :conf-ece-paragraph 0.285
+        :conf-ece-paragraph-text 0.285
+        :conf-ece-row 0.029
+        :conf-ece-row-infer 0.029
+        :conf-ece-rowgroup 0.062
+        :conf-ece-rowgroup-infer 0.062
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.093
+        :conf-ece-table-text 0.093
+        :conf-ece-text 0.185
+        :conf-ece-text-text 0.185
         :furniture-f1 0.8
         :furniture-p 1.0
         :furniture-r 0.666667
@@ -5823,9 +6993,48 @@
         :bow-p 0.922438
         :bow-r 0.925428
         :cer 0.032352
+        :conf-brier-all 0.153965
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-ocr 0.003844
+        :conf-brier-cell 0.054447
+        :conf-brier-cell-ocr 0.054447
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-heading 0.156129
+        :conf-brier-heading-ocr 0.156129
+        :conf-brier-paragraph 0.207335
+        :conf-brier-paragraph-ocr 0.207335
+        :conf-brier-row 0.135412
+        :conf-brier-row-infer 0.135412
+        :conf-brier-rowgroup 0.441844
+        :conf-brier-rowgroup-infer 0.441844
+        :conf-brier-section 0.177564
+        :conf-brier-section-infer 0.177564
+        :conf-brier-table 0.008649
+        :conf-brier-table-ocr 0.008649
+        :conf-ece-all 0.04762
+        :conf-ece-caption 0.062
+        :conf-ece-caption-ocr 0.062
+        :conf-ece-cell 0.023857
+        :conf-ece-cell-ocr 0.023857
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-heading 0.006452
+        :conf-ece-heading-ocr 0.006452
+        :conf-ece-paragraph 0.047136
+        :conf-ece-paragraph-ocr 0.047136
+        :conf-ece-row 0.113857
+        :conf-ece-row-infer 0.113857
+        :conf-ece-rowgroup 0.438
+        :conf-ece-rowgroup-infer 0.438
+        :conf-ece-section 0.146548
+        :conf-ece-section-infer 0.146548
+        :conf-ece-table 0.093
+        :conf-ece-table-ocr 0.093
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.077562
         :heading-f1 0.885714
         :heading-level-acc 0.806452
         :heading-level-e2e 0.641026
@@ -5837,6 +7046,10 @@
         :para-boundary-f1 0.819048
         :para-boundary-p 0.781818
         :para-boundary-r 0.86
+        :src-ocr-share 1.0
+        :table-adj-f1 0.913793
+        :table-adj-p 0.913793
+        :table-adj-r 0.913793
         :table-continued-acc 1.0
         :table-teds-lite 0.942857
         :table-teds-struct-lite 1.0
@@ -5852,9 +7065,24 @@
         :bow-p 0.922131
         :bow-r 0.922131
         :cer 0.041636
+        :conf-brier-all 0.164652
+        :conf-brier-heading 0.04
+        :conf-brier-heading-ocr 0.04
+        :conf-brier-paragraph 0.297158
+        :conf-brier-paragraph-ocr 0.297158
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-ece-all 0.17396
+        :conf-ece-heading 0.2
+        :conf-ece-heading-ocr 0.2
+        :conf-ece-paragraph 0.220538
+        :conf-ece-paragraph-ocr 0.220538
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.077869
         :heading-f1 0.923077
         :heading-level-acc 1.0
         :heading-level-e2e 0.857143
@@ -5866,6 +7094,10 @@
         :para-boundary-f1 0.782609
         :para-boundary-p 0.75
         :para-boundary-r 0.818182
+        :src-ocr-share 1.0
+        :table-adj-f1 1.0
+        :table-adj-p 1.0
+        :table-adj-r 1.0
         :wer 0.102459}
       "scan/furniture" {
         :block-heading-f1 0.909091
@@ -5878,9 +7110,28 @@
         :bow-p 0.920415
         :bow-r 0.919355
         :cer 0.026118
+        :conf-brier-all 0.195382
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-heading 0.16
+        :conf-brier-heading-ocr 0.16
+        :conf-brier-paragraph 0.248923
+        :conf-brier-paragraph-ocr 0.248923
+        :conf-brier-section 0.183409
+        :conf-brier-section-infer 0.183409
+        :conf-ece-all 0.094606
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-heading 0.0
+        :conf-ece-heading-ocr 0.0
+        :conf-ece-paragraph 0.127421
+        :conf-ece-paragraph-ocr 0.127421
+        :conf-ece-section 0.153
+        :conf-ece-section-infer 0.153
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.079585
         :heading-f1 0.909091
         :heading-level-acc 0.8
         :heading-level-e2e 0.666667
@@ -5892,6 +7143,10 @@
         :para-boundary-f1 0.875
         :para-boundary-p 0.777778
         :para-boundary-r 1.0
+        :src-ocr-share 1.0
+        :table-adj-f1 1.0
+        :table-adj-p 1.0
+        :table-adj-r 1.0
         :wer 0.087558}
       "scan/headings" {
         :block-heading-f1 0.863636
@@ -5904,9 +7159,24 @@
         :bow-p 0.929936
         :bow-r 0.946004
         :cer 0.031262
+        :conf-brier-all 0.18819
+        :conf-brier-heading 0.197895
+        :conf-brier-heading-ocr 0.197895
+        :conf-brier-paragraph 0.140961
+        :conf-brier-paragraph-ocr 0.140961
+        :conf-brier-section 0.24063
+        :conf-brier-section-infer 0.24063
+        :conf-ece-all 0.116381
+        :conf-ece-heading 0.063158
+        :conf-ece-heading-ocr 0.063158
+        :conf-ece-paragraph 0.081
+        :conf-ece-paragraph-ocr 0.081
+        :conf-ece-section 0.216158
+        :conf-ece-section-infer 0.216158
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.070064
         :heading-f1 0.863636
         :heading-level-acc 0.736842
         :heading-level-e2e 0.56
@@ -5918,6 +7188,10 @@
         :para-boundary-f1 0.782609
         :para-boundary-p 0.782609
         :para-boundary-r 0.782609
+        :src-ocr-share 1.0
+        :table-adj-f1 1.0
+        :table-adj-p 1.0
+        :table-adj-r 1.0
         :wer 0.071274}
       "scan/tables" {
         :block-caption-f1 1.0
@@ -5936,9 +7210,44 @@
         :bow-p 0.90625
         :bow-r 0.90625
         :cer 0.022634
+        :conf-brier-all 0.078161
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-ocr 0.003844
+        :conf-brier-cell 0.054447
+        :conf-brier-cell-ocr 0.054447
+        :conf-brier-heading 0.04
+        :conf-brier-heading-ocr 0.04
+        :conf-brier-paragraph 0.058081
+        :conf-brier-paragraph-ocr 0.058081
+        :conf-brier-row 0.135412
+        :conf-brier-row-infer 0.135412
+        :conf-brier-rowgroup 0.441844
+        :conf-brier-rowgroup-infer 0.441844
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-brier-table 0.008649
+        :conf-brier-table-ocr 0.008649
+        :conf-ece-all 0.02636
+        :conf-ece-caption 0.062
+        :conf-ece-caption-ocr 0.062
+        :conf-ece-cell 0.023857
+        :conf-ece-cell-ocr 0.023857
+        :conf-ece-heading 0.2
+        :conf-ece-heading-ocr 0.2
+        :conf-ece-paragraph 0.241
+        :conf-ece-paragraph-ocr 0.241
+        :conf-ece-row 0.113857
+        :conf-ece-row-infer 0.113857
+        :conf-ece-rowgroup 0.438
+        :conf-ece-rowgroup-infer 0.438
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :conf-ece-table 0.093
+        :conf-ece-table-ocr 0.093
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
+        :ghost-rate 0.09375
         :heading-f1 1.0
         :heading-level-acc 1.0
         :heading-level-e2e 1.0
@@ -5950,6 +7259,10 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :src-ocr-share 1.0
+        :table-adj-f1 0.913793
+        :table-adj-p 0.913793
+        :table-adj-r 0.913793
         :table-continued-acc 1.0
         :table-teds-lite 0.942857
         :table-teds-struct-lite 1.0

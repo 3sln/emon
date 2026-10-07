@@ -42,6 +42,7 @@
 (ns emon.json
   (:require [emon.lang :refer [I32 Cells Text emit-ascii shl32 sar32]]
             [emon.port :refer [cells-len cells-at text-cp text-i32]]
+            [emon.calib :refer [cal-conf cal-dropped]]
             [emon.model :refer [node-count node-kind node-parent node-first-child
                                 node-next node-text-start node-text-len
                                 node-has-text node-region-head
@@ -689,7 +690,7 @@
   (comment "`at`, `src`, `conf`, `flags`: the provenance every node may carry.")
   (let [^:mut ^I32 s started
         ^I32 sr (node-src nodes n)
-        ^I32 cf (node-conf nodes n)
+        ^I32 cf (cal-conf (node-kind nodes n) (node-src nodes n) (node-conf nodes n))
         ^I32 fg (node-flags nodes n)]
     (set s (js-at t pr d nodes regions n s))
     (if (!= sr 0)
@@ -893,7 +894,7 @@
           (js-str t text (ledger-text-start ledger l) (ledger-text-len ledger l))))
     (if (>= (ledger-conf ledger l) 0)
       (do (set s (js-begin t pr d s (fk-conf)))
-          (text-i32 t (ledger-conf ledger l))))
+          (text-i32 t (cal-conf (cal-dropped) (ledger-src ledger l) (ledger-conf ledger l)))))
     (if (!= (ledger-src ledger l) 0)
       (do (set s (js-begin t pr d s (fk-src)))
           (js-bits-src t pr (ledger-src ledger l))))
@@ -986,7 +987,7 @@
     (set s (js-begin t pretty 0 s (fk-settings)))
     (js-settings t pretty nodes attrs text)
     (set s (js-begin t pretty 0 s (fk-conf)))
-    (emit-ascii t "\"uncalibrated\"")
+    (emit-ascii t "\"calibrated\"")
     (if (or (== (js-has nodes attrs (fk-title)) 1)
             (== (js-has nodes attrs (fk-author)) 1)
             (== (js-has nodes attrs (fk-subject)) 1)

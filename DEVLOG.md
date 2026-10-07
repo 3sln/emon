@@ -3410,7 +3410,40 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
 
 ## Phase 10 — Calibration, performance, hardening
 
-- [ ] P10.1 — Confidence calibration per kind; reliability diagrams (SPEC §9.6).
+- [x] P10.1 — Confidence calibration per kind; reliability diagrams (SPEC §9.6).
+  **DONE (D640-D645), on branch `worktree-agent-a73e5e210d77733fa`.** *Built*: `bb calibration` (`tools/calibration/calibration.clj`: report;
+  `--write` the committed reliability data; `--fit` / `--refit` the fit), `tools/accuracy/{calib,confrows}.clj` (the arithmetic and what "right"
+  means per kind; laws `test_calib.clj`, 17), the `conf-ece-*` / `conf-brier-*` rows of `bb accuracy`, `kin/calib.kin` (`cal-conf`; laws
+  `kin/calibtest.kin`, 6, Go and Rust arms) reading the generated `kin/calibdata.kin`, applied by `emon.json` and `emon.html`; data under
+  `test/calibration/`. **Reliability before the map, per kind** (raw confidence as the rules write it, 8419 nodes of 129 documents: the
+  real Engine over every input form, the OCR replays and the fusion replays; `raw-reliability.svg` is the diagram, `raw-reliability.csv` its bins):
+
+  | kind | n | mean conf | accuracy | ECE raw | Brier raw | ECE held out | Brier held out |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | all | 8419 | .583 | .939 | .362 | .185 | .010 | .049 |
+  | cell | 4790 | .600 | .987 | .387 | .163 | .005 | .013 |
+  | paragraph | 1086 | .500 | .716 | .216 | .250 | .038 | .205 |
+  | row | 941 | .600 | .972 | .372 | .166 | .009 | .028 |
+  | heading | 462 | .500 | .950 | .450 | .250 | .018 | .051 |
+  | section | 462 | .500 | .955 | .455 | .250 | .007 | .045 |
+  | text (inline run) | 129 | 1.000 | .820 | .180 | .174 | .139 | .159 |
+  | item | 127 | .500 | .976 | .476 | .250 | .028 | .026 |
+  | rowgroup | 142 | .600 | .944 | .344 | .171 | .009 | .055 |
+  | table | 73 | .600 | .918 | .318 | .176 | .105 | .081 |
+  | dropped (ledger) | 61 | .851 | 1.000 | .149 | .042 | .021 | .000 |
+  | list | 24 | .500 | .958 | .458 | .250 | .147 | .068 |
+  | caption | 14 | .536 | 1.000 | .464 | .218 | .289 | .120 |
+  | furniture | 12 | .842 | 1.000 | .158 | .041 | .071 | .005 |
+  | initial | 20 | .725 | 1.000 | .275 | .093 | .066 | .005 |
+  | figure | 9 | .500 | 1.000 | .500 | .250 | .456 | .223 |
+  | note / span / seal / link | 39 / 22 / 5 / 1 | | | no map: the held-out error did not beat the raw one, or too few nodes | | | |
+
+  **Calibration was applied** to the 15 kinds above with a map (the table `kin/calibdata.kin`, 19 rows); `note`, `span`, `seal` and `link` keep the
+  rules' raw confidence. After the map the in-sample ECE of every mapped kind is under 0.1 (0.003 over all) (`reliability.svg`, `summary.csv`). The raw
+  confidences were nearly constants (one per rule and kind), so the map is a lookup per kind and source class, not a curve: the reliability
+  diagram of a raw kind is one or two points. What it cannot do (paragraph Brier .205 held out): say which document is the hard one. No
+  non-confidence metric moved (`bb accuracy` emon, emon-replay: none regressed, none improved; emon-fusion's nine improvements are the same
+  at the base commit, a stale scoreboard entry, D644).
 - [ ] P10.2 — Parallel runners in the hosts; `bb repeat` serial vs parallel;
   default stays serial until a benchmark on a real document says otherwise
   (nome §6).
@@ -9341,4 +9374,40 @@ and CER rose 0.0858 to 0.1046; that was a line made of cells of confidence well 
 **Decision**: (1) `kin/scripts/asset-fig-fixtures` writes `test/assets/fig/fig-vector-chart.pdf` (a bar chart and a box-and-arrow diagram), `fig-logo-pages.pdf` (a two-path logo in one place on three pages) and `fig-over-image.pdf` (five pictures of one 8 x 8 image: alone, under a rectangle, under text, rotated 10 degrees, clipped by a circle), byte for byte (`--check`), with Helvetica from the standard 14 and raw RGB samples. (2) `kin/scripts/asset-record` (`bb asset-fig-record`, live, not a gate) records them and `figures-charts`, `figures-logo-screenshot`, `columns-span-figure` with the pinned pdfium (fetched: `bb pdfium-fetch`) into `test/asset/figures/<stem>/` (a transcript of `crop` entries and their PNGs, 120 KB in all) and writes `DIGESTS.edn` (the SHA-256 of the JSON, the HTML in three modes and every asset file of the live run). (3) `bb asset` section 7 replays them on both hosts with no renderer: identical JSON, HTML and asset files, equal to the digests; each rendered asset is a crop of the computed rectangle (restated in the script), the very pixels of the transcript's bitmap (`magick compare -metric AE` 0), and within a mean absolute difference of 8 of `pdftoppm -r d -x -y -W -H` (worst 6.90 over 15 crops: two rasterisers); the logo is one asset with three uses; of the five pictures one is its own pixels and four are rendered; with no renderer the figures say `render`, the same on both hosts; the rules of a table (ruled, zebra, header-fill, bank statement) make no figure. (4) `bb identity` has a third pass at `figures` (the same nine arms, async included, and the record/replay trip across hosts, over 18 documents). (5) `kin/assetfigtest.kin` (13 laws on four targets): the rectangle, its step-down and its limits; the protocol (the same requests every time, none once answered); a raster figure's request and its pixels byte for byte; a render's size, dpi, `text-overlap`; `render` and `too-large`; which source each candidate gets; the caption-only figure; one asset for equal pixels; vector clusters, the `grg` hook and the table rule. (6) Rust and Go engine tests (`at_figures_a_vector_figure_is_a_crop_of_the_page_and_replays_without_a_renderer`, `TestAtFiguresAVectorFigureIsACropOfThePageAndReplaysWithoutARenderer`): a Letter page's fake renderer whose pixels are a function of (x, y), the asset equal to the rectangle's pixels, the page rendered once for its two crops, the replay without a renderer identical, the default run unchanged. The pdfium of the pin was fetched into this worktree's `.cache`; nothing under `corpus/` was used.
 **Why**: the gate compares the committed transcript, not a re-render (D008, D127); the second rasteriser is a sanity bound, as D127 says.
 **Alternatives**: committing Chrome-made documents (no browser); a MAD bound tighter than 8 (worst was 6.9: text edges differ between rasterisers).
+- [ ] **Signed off** (maintainer)
+
+### D640 — Calibration is applied where the Model leaves it: the serializers; the arenas keep the raw score (P10.1; SPEC 3.5, 9.6; D010)
+**Decision**: every rule writes a RAW score (a constant per rule and kind; fusion's rows; `ar-tag-apply` and `sc-tag` read and lower them) and the arenas keep it. `emon.calib`'s `cal-conf kind src raw` (a step function read from the generated `defdata` table `emon.calibdata`) is applied by `js-emit` (a node's `conf`, a ledger row's `conf`) and by `html-emit` (`data-emon-conf`: the threshold is on the calibrated value). The Model header says `"conf":"calibrated"` (schema const changed). The lookup: the steps of (kind, class of the node's own `src`: text layer, OCR, both, neither) if any, else the kind's `any` steps, else the raw score; the last step whose raw-lo is at most the raw score, the first below it. Hosts are untouched (`engine.rs` and `engine.go` not edited: the sequencing is moving into kin, and the serializers are the one place every output passes).
+**Why**: the rules read raw scores, so a map in the arena would feed back into them; one choke point keeps Rust == Go by construction (both run generated kin).
+**Alternatives**: an arena pass called by each host (touches the engines being re-sequenced, and runs after stages that read confidences); changing each rule's constant (hundreds of numbers, circular with the fit).
+- [ ] **Signed off** (maintainer)
+
+### D641 — What "right" is, per node kind, and what is measured (P10.1; SPEC 3.5, 14.2)
+**Decision**: `tools/accuracy/confrows.clj`. A node is right when the gold agrees, by the scorer's own block match: block kinds (heading paragraph list item table figure caption seal note code quote): matched to a gold block of the same kind, text at least 0.9 similar, a heading's level the gold's when annotated; section: a gold section of the same level has the same first heading; cell: its [row colspan rowspan text] is in the matched gold table; row and rowgroup: all their cells are; text run: the share of its words the difflib alignment finds in the matched block (so `y` is fractional there); span, link, initial: the scorer's multiset keys; furniture and dropped: the (role or reason, page, text) keys are the gold's. A kind the gold does not annotate has no row. Per node: kind, class (own `src`: text, ocr, fused, infer), document category (id family), run (emon, emon-replay, emon-fusion). Ten equal bins; ECE = sum n_b/N |acc_b - conf_b|; Brier = mean (conf - y)^2; counts are integers (per mille) so documents pool by addition (D077).
+**Why**: the one definition of correct the scorer already has; the data are the committed corpus through the real Engine and the committed replays (no live engine).
+**Alternatives**: node-level gold geometry (the synthetic gold has none); word-level only (blocks carry most confidences).
+- [ ] **Signed off** (maintainer)
+
+### D642 — The fit: isotonic per kind and class, Laplace-smoothed, kept only if it holds on unseen documents (P10.1; SPEC 9.6)
+**Decision**: `bb calibration --fit`. Per kind, over the distinct raw values, pool-adjacent-violators on the outcome (equal means pool too), smoothed (right + 1) / (n + 2) so 1000 of 1000 is 999; a class with its own steps only if it differs from the kind's by more than 20 per mille and has 8 nodes; a kind with fewer than 8 nodes has no map. HELD-OUT test: five folds by a hash of the document id, fitted without the fold and applied to it; a kind keeps its map only if its held-out ECE is strictly below its raw ECE. That dropped `note` (39 nodes in a few documents: .090 raw, .24 held out) and `span` (.082 raw, .36), and `seal` (5) and `link` (1) have no data. The in-sample ECE after the map is optimistic by construction; the held-out column is the honest one (`summary.csv`, `ece_cv`). Limits stated, not hidden: the raw scores are constants, so the map makes a kind true on average and cannot rank within it (the paragraphs of a chart's labels share the prose paragraph's number).
+**Why**: a map fitted on a handful of documents is an anecdote, and calibration that worsens unseen data is not one.
+**Alternatives**: a per-category map (the feature the rules lack; the scorecard of SPEC 8.4.5 is where it belongs); no smoothing (confidence 1000 from 12 nodes).
+- [ ] **Signed off** (maintainer)
+
+### D643 — The public output changed in `conf` only; goldens and digests re-derived (P10.1; D054, D117, D322)
+**Decision**: the changed bytes are `"conf":"calibrated"` and every node's and ledger row's `conf` value; HTML changes only in `data-emon-conf` (which nodes fall under a threshold). Re-derived, not hand-edited: `test/json` and `test/html` by their independent references (`json-check.py`, `html-check.py`, which now read the committed fit `test/calibration/fit.edn` and implement the lookup from the SPEC, sharing nothing with kin), `test/asset` by `asset-golden` (same), `test/heading`, `para`, `table` by their golden scripts (the two stale heading goldens, `lists-basic` and `initial-letter-headings`, which predate P4.5 and which the laws still hold the module pipeline to, were mapped from their committed text, not regenerated; every other one equals the committed text mapped through the fit, checked by a script), `test/slice/*.full.html` by `bb slice --update`, and the SHA-256 digests of the fusion, artifacts, seals and retarget replays and of the figures' JSON by replaying their committed transcripts (no engine ran). `paratest.kin`'s and `htmltest.kin`'s literal bytes were edited (the latter now uses a `quote`, which has no map, so its threshold law does not move at a refit).
+**Why**: SPEC 3.5's promise; the references stay independent witnesses.
+**Alternatives**: leaving the header `uncalibrated` (a lie once the map is applied).
+- [ ] **Signed off** (maintainer)
+
+### D644 — Scoreboard rows for calibration (P10.1; D023, D077, D079)
+**Decision**: `bb accuracy` adds `conf-ece-KIND`, `conf-brier-KIND` for every kind, `conf-ece-KIND-CLASS` for every kind and class, and `conf-ece-all`, `conf-brier-all` (lower is better, ratcheted like cer); recorded with `--update` after the map was applied, so the recorded values are in-sample and near zero for mapped kinds, and the raw ones are in `test/calibration/raw-summary.csv`. The `confidence.ece` stub is gone from the scorer's stub list. A Model with no `conf` (the oracle's, the degraded fixture's) has none of them. `--update` of `emon-fusion` also records nine improvements of non-confidence metrics (block-paragraph, bow, cer, wer, para-boundary) that are already in the engine at the base commit (checked on a detached worktree of it: the same nine), so the committed entry was stale; nothing in this item moved a non-confidence metric.
+**Why**: the ratchet makes a later change that un-calibrates a kind fail loudly.
+**Alternatives**: a gate on a fixed ECE (the numbers are corpus-bound).
+- [ ] **Signed off** (maintainer)
+
+### D645 — `bb calibration` and how to recalibrate (P10.1; SPEC 9.6)
+**Decision**: `bb calibration` reports (reliability, ECE, Brier, held-out ECE, per kind); `--write` writes `reliability.csv`, `summary.csv`, `reliability.svg` (babashka, no Python) of what the Engine now writes; `--refit` is the whole recalibration (identity table, `bb emit`, collect raw confidences, fit, write `fit.edn`, `kin/calibdata.kin` and the `raw-*` files, `bb emit`), after which the goldens of D643 are re-derived by the same scripts. A report, not a gate. A refit is a reviewed change with the raw reliability diagram in its DEVLOG entry (this one's: `test/calibration/raw-reliability.svg`).
+**Why**: the fit needs raw confidences, and the Engine writes calibrated ones, so the identity table is how raw ones are obtained; no host flag is added.
+**Alternatives**: a hidden setting that turns the map off (a host option in the engines being re-sequenced).
 - [ ] **Signed off** (maintainer)

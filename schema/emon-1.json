@@ -109,7 +109,7 @@
       }
     },
     "conf": {
-      "const": "uncalibrated"
+      "const": "calibrated"
     },
     "meta": {
       "type": "object",

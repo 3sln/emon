@@ -120,6 +120,9 @@ command -v python3 > /dev/null && python3 kin/scripts/gold-check.py
 # and the oracle predictor scoring perfect on real gold while the degraded
 # fixture does not. `bb accuracy` itself is NOT a gate (D078).
 bb -cp tools:tools/lib tools/accuracy/test_score.clj
+# THE CALIBRATION'S OWN LAWS (P10.1, D640-D645): the reliability arithmetic (bins, ECE, Brier), the isotonic fit and its
+# held-out selection, the lookup, the kin table, and what 'right' means per node kind, all by hand on hand-made Models.
+bb -cp tools:tools/lib tools/accuracy/test_calib.clj
 # THE FUSION TOOLS' OWN WITNESSES (P6.6, D206, D209): `bb fusion-report` on a hand-made evidence dump (win rates, rule and
 # defence counts, pooled) and `bb fusion-live`'s stamp-ghost on hand-made words and boxes. Neither reads a corpus.
 bb -cp tools:tools/lib tools/accuracy/fusion_report.clj --self-test

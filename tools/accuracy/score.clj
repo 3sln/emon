@@ -459,7 +459,6 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
 (def STUBS
   ["table.teds: real TEDS (tree edit distance over table HTML) not implemented; table-teds-lite is a cell-sequence stand-in"
    "heading.hierarchy-teds: hierarchy TEDS not implemented (heading detection and level accuracy are)"
-   "confidence.ece: expected calibration error needs calibrated confidences (Model conf is 'uncalibrated', SPEC 14.2)"
    "seals.name-cer: seal name/text CER is not split out of block text"
    "gold has no geometry: the IoU >= 0.5 rule is implemented and unit-tested but unexercised on the synthetic corpus"])
 
@@ -472,7 +471,7 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
 
 (defn- attr? [ann kind a] (contains? (set (get-in ann ["attributes" kind])) a))
 
-(defn- leaf-text
+(defn leaf-text
   "The text of an inline subtree: its own `text`, else its leaves' in order."
   [n]
   (if (string? (get n "text"))

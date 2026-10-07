@@ -32,6 +32,17 @@
    {:id 7 :kind 12 :sub 10 :noasset 2 :at [1 7200 65000 30000 70000]}])
 (def settings {"assets" "images" "asset-dpi" 150 "asset-pixels" 4194304 "asset-bytes" 4194304 "assets-bytes" 33554432 "asset-signatures" "off"})
 (def kind-name {11 "caption" 12 "figure" 13 "seal"})
+;; SPEC 9.6 (P10.1): a node's `conf` is written CALIBRATED from the fitted table test/calibration/fit.edn (rows
+;; [kind class raw-lo calibrated n]): the steps of (kind, the class of its source) if any, else the kind's `any`
+;; steps, else the raw score as it is; the last step whose raw-lo is at most the raw score, below the first the
+;; first. Every node here is `infer` only (class `infer`). Written from the SPEC, sharing no code with kin/calib.kin.
+(def cal-table
+  (reduce (fn [m [_ k c lo cal]] (update m [k c] (fnil conj []) [(parse-long lo) (parse-long cal)]))
+          {} (re-seq #"\[\"([a-z-]+)\" \"([a-z]+)\" (\d+) (\d+) \d+\]" (slurp "test/calibration/fit.edn"))))
+(defn calibrated [kind-nm cls raw]
+  (if-let [steps (or (cal-table [kind-nm cls]) (cal-table [kind-nm "any"]))]
+    (second (or (last (filter #(<= (first %) raw) steps)) (first steps)))
+    raw))
 (def figure-name {1 "chart" 10 "unknown"})
 (def seal-name {2 "stamp" 3 "signature"})
 (def nz-name {1 "withheld" 2 "part" 3 "vector" 4 "composite" 5 "colorspace" 6 "codec" 7 "render" 8 "too-large" 9 "budget"})
@@ -94,7 +105,7 @@
                                      (when text [["text" text]])))
            (when (seq children) [["children" (into [:a] children)]])
            [["at" [:a (into [:a] (cons (first at) (map (fn [c] [:raw (pts c)]) (rest at))))]]]
-           [["src" [:a "infer"]] ["conf" 500]]))))
+           [["src" [:a "infer"]] ["conf" (calibrated (kind-name kind) "infer" 500)]]))))
 
 (defn asset-json [i {:keys [type origin from object w h dpi flags hex]}]
   (let [bs (hex->bytes hex)]
@@ -113,7 +124,7 @@
     [:o ["emon" "1.1"] ["generator" "emon 0.1.0"]
      ["source" [:o ["format" "pdf"] ["version" "1.7"] ["pages" 1] ["tagged" false] ["encrypted" false]]]
      ["settings" (into [:o ["locale" nil]] (map (fn [k] [k (settings k)]) ["assets" "asset-dpi" "asset-pixels" "asset-bytes" "assets-bytes" "asset-signatures"]))]
-     ["conf" "uncalibrated"]
+     ["conf" "calibrated"]
      ["pages" [:a [:o ["n" 1] ["w" 612] ["h" 792] ["rot" 0] ["kind" "vector"]]]]
      ["body" [:o ["id" 0] ["kind" "document"] ["children" (into [:a] (map build (get by-parent 0)))]]]
      ["furniture" [:a]] ["dropped" [:a]]

@@ -4,7 +4,7 @@
   "settings": {
     "locale": null
   },
-  "conf": "uncalibrated",
+  "conf": "calibrated",
   "meta": {
     "title": "A \"quoted\" <title> & more"
   },
@@ -88,7 +88,7 @@
             "kind": "paragraph",
             "text": "a & b < c > d \"e\" cr:\u000d nul:\u0000 c1: del: ctl:\u0001 ff:\u000c tab:\t lf:\n ls:\u2028 nc:￾ ﷐ 😀",
             "at": [[1, 72, 90, 540, 120]],
-            "conf": 500
+            "conf": 715
           },
           {
             "id": 5,
@@ -573,7 +573,7 @@
       "page": 1,
       "at": [1, 1, 2, 3, 4],
       "text": "x & \"y\" <z>",
-      "conf": 500,
+      "conf": 984,
       "src": ["ocr"]
     },
     {

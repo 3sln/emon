@@ -130,16 +130,18 @@ func TestOptionsAddIdsGeometryAndConfidence(emonT *testing.T) {
 	var edge *strings.Builder = port.NewText()
 	var p int32 = 0
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
-	p = model.NodeNew(nodes, model.NkParagraph(), 0)
+	// A quote: the fit has no row for the kind yet (P10.1: the corpus has none), so its confidence is written as it is. A refit that gives
+	// quotes a row moves the number of this law, not what it holds: the threshold is on the confidence as written.
+	p = model.NodeNew(nodes, model.NkQuote(), 0)
 	htSet(nodes, text, p, port.TextBlob("x"))
 	model.NodeAddRegion(nodes, regions, p, 1, 7250, -5, 54000, 100)
 	model.NodeSetConf(nodes, p, 500)
 	html.HtmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
 	html.HtmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
 	html.HtmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout, port.NewCells(), port.NewCells(), port.NewBuf(), port.NewCells())
-	port.AssertText(emonT, all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options")
-	port.AssertText(emonT, none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default")
-	port.AssertText(emonT, edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold")
+	port.AssertText(emonT, all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</blockquote></main></body></html>", "all three options")
+	port.AssertText(emonT, none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>", "clean by default")
+	port.AssertText(emonT, edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>", "conf is only written strictly below the threshold")
 }
 
 func TestFurnitureDropsAndMilestonesSwitchOff(emonT *testing.T) {

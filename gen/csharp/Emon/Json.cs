@@ -709,7 +709,7 @@ public static class Json {
         // `at`, `src`, `conf`, `flags`: the provenance every node may carry.
         int s = started;
         int sr = Model.NodeSrc(nodes, n);
-        int cf = Model.NodeConf(nodes, n);
+        int cf = Calib.CalConf(Model.NodeKind(nodes, n), Model.NodeSrc(nodes, n), Model.NodeConf(nodes, n));
         int fg = Model.NodeFlags(nodes, n);
         s = JsAt(t, pr, d, nodes, regions, n, s);
         if (sr != 0) {
@@ -934,7 +934,7 @@ public static class Json {
         }
         if (Model.LedgerConf(ledger, l) >= 0) {
             s = JsBegin(t, pr, d, s, Model.FkConf());
-            emon.Port.TextI32(t, Model.LedgerConf(ledger, l));
+            emon.Port.TextI32(t, Calib.CalConf(Calib.CalDropped(), Model.LedgerSrc(ledger, l), Model.LedgerConf(ledger, l)));
         }
         if (Model.LedgerSrc(ledger, l) != 0) {
             s = JsBegin(t, pr, d, s, Model.FkSrc());
@@ -1024,7 +1024,7 @@ public static class Json {
         s = JsBegin(t, pretty, 0, s, Model.FkSettings());
         JsSettings(t, pretty, nodes, attrs, text);
         s = JsBegin(t, pretty, 0, s, Model.FkConf());
-        emon.Port.TextAscii(t, "\"uncalibrated\"");
+        emon.Port.TextAscii(t, "\"calibrated\"");
         if ((JsHas(nodes, attrs, Model.FkTitle()) == 1) || (JsHas(nodes, attrs, Model.FkAuthor()) == 1) || (JsHas(nodes, attrs, Model.FkSubject()) == 1) || (JsHas(nodes, attrs, Model.FkKeywords()) == 1) || (JsHas(nodes, attrs, Model.FkCreator()) == 1) || (JsHas(nodes, attrs, Model.FkProducer()) == 1) || (JsHas(nodes, attrs, Model.FkCreated()) == 1) || (JsHas(nodes, attrs, Model.FkModified()) == 1)) {
             s = JsBegin(t, pretty, 0, s, Model.FkMeta());
             JsMeta(t, pretty, nodes, attrs, text);

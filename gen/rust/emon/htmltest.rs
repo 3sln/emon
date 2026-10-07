@@ -122,16 +122,18 @@ fn test_options_add_ids_geometry_and_confidence() {
     let edge: &mut String = &mut crate::port::new_text();
     let mut p: i32 = 0;
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
-    p = node_new(nodes, nk_paragraph(), 0);
+    // A quote: the fit has no row for the kind yet (P10.1: the corpus has none), so its confidence is written as it is. A refit that gives
+    // quotes a row moves the number of this law, not what it holds: the threshold is on the confidence as written.
+    p = node_new(nodes, nk_quote(), 0);
     ht_set(nodes, text, p, &crate::testport::text_blob("x")[..]);
     node_add_region(nodes, regions, p, 1, 7250, -5, 54000, 100);
     node_set_conf(nodes, p, 500);
     html_emit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Buf::new(), &mut crate::port::Cells::new());
     html_emit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Buf::new(), &mut crate::port::Cells::new());
     html_emit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Buf::new(), &mut crate::port::Cells::new());
-    crate::testport::assert_text(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options");
-    crate::testport::assert_text(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default");
-    crate::testport::assert_text(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold");
+    crate::testport::assert_text(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</blockquote></main></body></html>", "all three options");
+    crate::testport::assert_text(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>", "clean by default");
+    crate::testport::assert_text(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>", "conf is only written strictly below the threshold");
 }
 #[test]
 fn test_furniture_drops_and_milestones_switch_off() {

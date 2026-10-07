@@ -1,0 +1,89 @@
+;; Laws for `emon.calib` (P10.1; SPEC 3.5, 9.6; D640), on every target.
+;;
+;; The table is FITTED data (`bb calibration --fit` rewrites `emon.calibdata`), so these laws hold what any fit must
+;; satisfy, never a fitted number: the table is sorted, its steps are monotone in the raw score within a kind and a
+;; class, every value is a confidence, the lookup clamps at the ends of a step function, a kind with no row and an
+;; absent confidence go through as they are, and a more specific class beats `any`. The bytes a calibrated confidence
+;; has in the JSON are laws of `emon.jsontest`; the fit itself is measured, not tested (`bb calibration`).
+(ns emon.calibtest
+  (:require [emon.lang :refer [I32]]
+            [emon.test :refer [deftest assert-eq assert-that assert-eq-at]]
+            [emon.calibdata :refer [cd-count cd-at]]
+            [emon.calib :refer [cal-class cal-conf cal-lookup cal-dropped]]
+            [emon.model :refer [sr-text sr-hidden-text sr-ocr sr-infer sr-struct nk-paragraph]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or bit-or]]))
+
+(deftest test-a-source-bitset-has-one-class
+  (assert-eq (cal-class (sr-text)) 0 "text layer")
+  (assert-eq (cal-class (sr-hidden-text)) 0 "hidden text is the text layer's")
+  (assert-eq (cal-class (bit-or (sr-text) (sr-infer))) 0 "text and inferred structure: the text layer's")
+  (assert-eq (cal-class (sr-ocr)) 1 "OCR")
+  (assert-eq (cal-class (bit-or (sr-ocr) (sr-infer))) 1 "OCR and inferred structure: OCR's")
+  (assert-eq (cal-class (bit-or (sr-text) (sr-ocr))) 2 "both")
+  (assert-eq (cal-class (bit-or (sr-hidden-text) (sr-ocr))) 2 "hidden text and OCR: both")
+  (assert-eq (cal-class (sr-infer)) 3 "inferred only")
+  (assert-eq (cal-class (sr-struct)) 3 "the tagged tree only: neither")
+  (assert-eq (cal-class 0) 3 "no source"))
+
+(deftest test-the-ledger-has-a-kind-code-no-node-kind-has
+  (assert-eq (cal-dropped) 100 "the dropped ledger")
+  (assert-that (> (cal-dropped) 26) "above the last node kind"))
+
+(deftest test-an-absent-confidence-stays-absent
+  (assert-eq (cal-conf (nk-paragraph) (sr-text) -1) -1 "paragraph")
+  (assert-eq (cal-conf (cal-dropped) (sr-ocr) -1) -1 "dropped"))
+
+(deftest test-a-kind-with-no-row-goes-through-as-it-is
+  (comment "Kind 99 is no node kind and no ledger code: no fit has a row for it.")
+  (assert-eq (cal-conf 99 (sr-text) 123) 123 "123")
+  (assert-eq (cal-conf 99 (sr-ocr) 0) 0 "0")
+  (assert-eq (cal-conf 99 0 1000) 1000 "1000"))
+
+(deftest test-the-table-is-sorted-and-monotone-in-the-raw-score
+  (comment "Rows are [kind class raw-lo calibrated], sorted by kind, class, raw-lo; within one kind and class the raw-lo rises strictly")
+  (comment "and the calibrated value never falls (isotonic), and a value is a confidence.")
+  (let [^I32 n (cd-count 0)
+        ^:mut ^I32 i 1]
+    (assert-that (> n 0) "the table has a row (the identity table has one that no node matches)")
+    (while (< i n)
+      (do (let [^I32 k0 (cd-at 0 (- i 1) 0)
+                ^I32 c0 (cd-at 0 (- i 1) 1)
+                ^I32 k1 (cd-at 0 i 0)
+                ^I32 c1 (cd-at 0 i 1)]
+            (assert-that (or (< k0 k1) (and (== k0 k1) (<= c0 c1))) "sorted by kind then class")
+            (if (and (== k0 k1) (== c0 c1))
+              (do (assert-that (< (cd-at 0 (- i 1) 2) (cd-at 0 i 2)) "raw-lo rises within a kind and class")
+                  (assert-that (<= (cd-at 0 (- i 1) 3) (cd-at 0 i 3)) "calibrated never falls with the raw score")))
+            (assert-that (and (>= (cd-at 0 i 3) 0) (<= (cd-at 0 i 3) 1000)) "a calibrated value is 0..1000"))
+          (set i (+ i 1))))))
+
+(deftest test-every-step-of-the-table-answers-with-its-own-value
+  (comment "At a step's raw-lo (and one above it, if that is still below the next step) the lookup is the step's value,")
+  (comment "for the class the row names (an `any` row is read through a class that has no row of its own: a class code")
+  (comment "the table never names, 9, falls back to `any`).")
+  (let [^I32 n (cd-count 0)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (cd-at 0 i 1) -1)
+            (do (assert-eq-at (cal-lookup (cd-at 0 i 0) 9 (cd-at 0 i 2)) (cd-at 0 i 3) "an any-row at its raw-lo" i)))
+          (set i (+ i 1))))))
+
+(deftest test-the-lookup-clamps-at-both-ends-of-a-step-function
+  (comment "Below a row's first step the first step's value; above the last the last's (no extrapolation).")
+  (let [^I32 n (cd-count 0)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (cd-at 0 i 1) -1)
+            (do (let [^I32 kind (cd-at 0 i 0)
+                      ^:mut ^I32 first-v -1
+                      ^:mut ^I32 last-v -1
+                      ^:mut ^I32 j 0]
+                  (while (< j n)
+                    (do (if (and (== (cd-at 0 j 0) kind) (== (cd-at 0 j 1) -1))
+                          (do (if (< first-v 0) (set first-v (cd-at 0 j 3)))
+                              (set last-v (cd-at 0 j 3))))
+                        (set j (+ j 1))))
+                  (assert-eq-at (cal-lookup kind 9 0) first-v "raw 0 takes the first step" i)
+                  (assert-eq-at (cal-lookup kind 9 1000) last-v "raw 1000 takes the last step" i))))
+          (set i (+ i 1))))))

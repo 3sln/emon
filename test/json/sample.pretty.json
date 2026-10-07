@@ -14,7 +14,7 @@
     "ocr": "always",
     "detail": "blocks"
   },
-  "conf": "uncalibrated",
+  "conf": "calibrated",
   "meta": {
     "title": "Annual Report 2025",
     "author": "A. N. Author",
@@ -48,7 +48,7 @@
             "text": "Introduction",
             "at": [[1, 72, 90.5, 540, 110.25]],
             "src": ["text", "ocr", "infer"],
-            "conf": 962
+            "conf": 948
           },
           {
             "id": 3,
@@ -76,7 +76,7 @@
             ],
             "at": [[1, 72, 120, 540, 188]],
             "src": ["text", "ocr", "infer"],
-            "conf": 991
+            "conf": 789
           }
         ]
       }
@@ -96,7 +96,7 @@
       "page": 1,
       "at": [1, 290, 760, 322, 772],
       "text": "1",
-      "conf": 998
+      "conf": 984
     }
   ]
 }

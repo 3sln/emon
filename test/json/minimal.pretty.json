@@ -3,7 +3,7 @@
   "settings": {
     "locale": null
   },
-  "conf": "uncalibrated",
+  "conf": "calibrated",
   "pages": [],
   "body": {
     "id": 0,

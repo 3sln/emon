@@ -3,7 +3,7 @@
   "settings": {
     "locale": null
   },
-  "conf": "uncalibrated",
+  "conf": "calibrated",
   "pages": [
     {
       "n": 1,
@@ -38,7 +38,7 @@
             "text": "An Image Initial",
             "at": [[1, 72, 95.6, 219.77, 115.6]],
             "src": ["text", "infer"],
-            "conf": 500
+            "conf": 948
           },
           {
             "id": 3,
@@ -47,7 +47,7 @@
             "text": "Policy hard both such word sound house were look children is want best. Figure why should do could door along high so body first used make only between. Came want measure until using best measure our could than not came turn face several on. Turned below later let sea turned look red far but was name. Feet form she so while man more head usually review long into night important almost left long.",
             "at": [[1, 72, 124.17, 536.5, 200.41]],
             "src": ["text", "infer"],
-            "conf": 500
+            "conf": 715
           },
           {
             "id": 4,
@@ -55,7 +55,7 @@
             "text": "hen the last boat had gone out, the town went quiet in a way that visitors found hard to describe. Room above school people one cut around picture two through men measure morning heard just top five. Hard up food once at thought what kind answer usually like however budget near. Great got your answer above as best other light any try still told however red. Mother however country mother today review one once keep never her boy seen around. Of quarter as by next always old ever answer why color only. Read me well been world keep sound land the keep than morning done every name same take. Turned using without money read high day did measure did not policy here other.",
             "at": [[1, 72, 211.92, 537.48, 336.16]],
             "src": ["text", "infer"],
-            "conf": 500
+            "conf": 715
           },
           {
             "id": 5,
@@ -64,11 +64,11 @@
             "text": "Also move along market little below earth asked told live live number same policy part around. Went region sound right called than always had sure left review turned review budget has whole children. Young let now live many time like got side because since. Story may find why budget young want or like up to always tell. Does down however have such hand try its end used picture air these need of done big.",
             "at": [[1, 72, 346.92, 537.4, 423.16]],
             "src": ["text", "infer"],
-            "conf": 500
+            "conf": 715
           }
         ],
         "src": ["infer"],
-        "conf": 500
+        "conf": 953
       }
     ]
   },

@@ -329,8 +329,12 @@ API expose.
 **Confidence** is an integer 0..1000 whose *meaning is calibrated*: on the
 evaluation corpora, among nodes of a kind with confidence *c*, about *c*/1000
 of them are correct (§9.6). A confidence that is not calibrated is a ranking,
-and the API must not pretend otherwise; until calibration lands the Model
-header says `"conf": "uncalibrated"`.
+and the API must not pretend otherwise; the Model header says
+`"conf": "calibrated"` since P10.1 (it said `"uncalibrated"` before: the
+rules' own raw scores went out as they were). What leaves the Model is the
+per-kind map of §9.6 applied to the rule's raw score, by the serializers (JSON
+`conf`, HTML `data-emon-conf`); a kind the corpora gave too few nodes to fit
+has no map and keeps its raw score, and `bb calibration` says which.
 
 ### 3.6 Text
 
@@ -468,7 +472,7 @@ citing is the other thing they do.
  "source":{"format":"pdf","version":"1.7","pages":2,"tagged":false,
            "encrypted":false,"lang":"en"},
  "settings":{"locale":null,"ocr":"always","detail":"blocks"},
- "conf":"uncalibrated",
+ "conf":"calibrated",
  "meta":{"title":"Annual Report 2025","author":"…","created":"2025-03-01T10:00:00Z"},
  "pages":[{"n":1,"label":"1","w":612,"h":792,"rot":0,"kind":"vector","health":987}],
  "body":{"id":0,"kind":"document","children":[
@@ -1396,9 +1400,11 @@ the gold (the synthetic round trip and its degraded copies, SPEC 14.3), and
 committed; a refit is a reviewed change with its reliability diagram. A
 scorecard rather than a learned model because it is integer, exact on four
 targets, and explainable column by column in the evidence dump, which is
-what §9.4's "every decision can be explained" asks. Until P10.1, the §9.4
+what §9.4's "every decision can be explained" asks. The §9.4
 and §9.5 rules read feature columns against named thresholds (settings), and
-the Model says `"conf": "uncalibrated"` (D010).
+the rules' own scores are RAW (per kind, mostly one constant per rule): what P10.1
+calibrates is what leaves the Model, node kind by node kind (§9.6, D640-D642); the
+scorecard and the per-word calibrated confidence above stay the later item they were.
 
 **Ghosts and watermarks** (§9.5) are decided from features, not from raw
 confidence: a word with engine ink (col 11) but no kin ink (col 10) is an
@@ -1756,6 +1762,24 @@ isotonic mapping fitted on the evaluation corpora (§14), then committed as a
 scorecard over the feature columns of §8.4.5 (D096); an engine's own
 confidence is one column of it, never the answer. Recalibration is a reviewed change with its reliability
 diagram in the DEVLOG entry.
+
+**As built (P10.1, D640-D645).** The rules' own scores are RAW (one constant per rule and kind, §3.5) and
+stay raw in the arenas, where the rules read them. What leaves the Model (JSON `conf`, HTML `data-emon-conf`)
+is `cal-conf kind src raw` of `kin/calib.kin`: a step function of the raw score, per **node kind** (the
+ledger of dropped words is the kind `dropped`) and **source class** (`text` layer, `ocr`, `fused`, `infer`:
+the node's own `src`), read from the `defdata` table `emon.calibdata` that `bb calibration --fit` writes
+(`kin/calibdata.kin`, with `test/calibration/fit.edn`); the Model header says `"conf":"calibrated"`. The
+measure is `bb calibration` (a report, §14.2's `confidence.ece`), whose data are committed under
+`test/calibration/`: the reliability diagram as CSV (`reliability.csv`: per kind, per kind and class, and per
+category and run: ten bins of the confidence, how many nodes, their mean confidence, how often they were
+right) and SVG, `summary.csv` (ECE, the Brier score, and both held out), and the `raw-` twins of them from
+before the map was applied. A node is RIGHT when the gold agrees (D641); the fit is isotonic regression of
+that outcome on the raw score, Laplace-smoothed, with a kind of fewer than 8 nodes left as it is (D642). The
+scoreboard ratchets `conf-ece-KIND` and `conf-brier-KIND` (lower is better) for every kind and every kind and
+class (D644). The honest limit: a rule's raw score is one number for every document, so the map can make
+a kind's confidence TRUE ON AVERAGE and cannot say WHICH document is the hard one (the paragraphs of a
+chart's labels are as sure as a prose paragraph's); that needs features the rules do not carry, which is
+the scorecard of §8.4.5 (still to come) and not a better map.
 
 ### 9.7 The PageLayer arenas (D195, D203)
 

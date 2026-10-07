@@ -1,0 +1,23 @@
+;; The fitted confidence calibration (P10.1, SPEC 9.6): [kind class raw-lo calibrated n] per step, per mille.
+;; `bb calibration --fit` writes it with kin/calibdata.kin, which is these rows without n.
+{:min-n 8 :smoothing :laplace
+ :rows [
+  ["caption" "any" 500 938 14]
+  ["cell" "any" 600 987 4790]
+  ["cell" "ocr" 600 919 35]
+  ["dropped" "any" 600 984 61]
+  ["figure" "any" 500 909 9]
+  ["furniture" "any" 600 929 12]
+  ["heading" "any" 500 948 462]
+  ["heading" "ocr" 500 800 33]
+  ["initial" "any" 500 955 20]
+  ["item" "any" 500 969 127]
+  ["list" "any" 500 923 24]
+  ["paragraph" "any" 500 715 1086]
+  ["paragraph" "fused" 500 789 17]
+  ["paragraph" "ocr" 500 759 81]
+  ["row" "any" 600 971 941]
+  ["rowgroup" "any" 600 938 142]
+  ["section" "any" 500 953 462]
+  ["table" "any" 600 907 73]
+  ["text" "any" 1000 815 129]]}
