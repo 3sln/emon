@@ -389,7 +389,9 @@ impl Tess {
         let (rx, ry, rw, rh) = (req.arg(3), req.arg(4), req.arg(5), req.arg(6));
         let installed = self.installed();
         let mut langs: Vec<String> = Vec::new();
-        for k in 7..req.rec.len() - 3 {
+        // the languages follow `h`, and the pixel hash of a kin-made view (D196: its id is from `KIN_VIEW_BASE`, 2^24)
+        let first_lang = if req.arg(0) >= 16777216 { 9 } else { 7 };
+        for k in first_lang..req.rec.len() - 3 {
             let m = model_name(&unpack4(req.arg(k)));
             if installed.contains(&m) {
                 langs.push(m);

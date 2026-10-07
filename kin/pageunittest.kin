@@ -35,7 +35,10 @@
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       fuse (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      (new-cells) (new-cells) (new-cells) (new-cells))))
 
 (defn ^I32 run-page [^I32 i ^I32 policy ^Cells pl ^Cells ans ^Cells rq]
   (return (run-page-fused i policy 0 pl ans rq)))

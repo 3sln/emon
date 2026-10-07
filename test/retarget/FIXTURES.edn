@@ -1,0 +1,16 @@
+;; The documents of the targeted-rounds gate (`kin/scripts/retarget`, P7.4, D347). Recorded LIVE by `bb retarget-record` (Tesseract, pdfium for :born), with pixels.
+;;   :pdf     the document;  :kind :scan (the scan variants, fed as images) or :born (born-digital text, OCR'd as a witness, `--ocr-born-digital`)
+;;   :gold    the gold file's name under test/corpus/synth/gold (default: the PDF's name)
+;;   :passes  the passes the evidence dump's `oruns` must name (`pass`)
+;;   :leak    words of what is not the body (a watermark, a seal): the body holds no more of them with the targeted passes than without
+;;   :miss    [x y] a pixel of the first decode bitmap to change: the replay must then be `transcript-miss` (nothing guessed)
+{"ovl-stamp-seal"        {:pdf "test/corpus/synth/scan-ovl/stamp-seal.pdf" :gold "stamp-seal" :kind :scan
+                          :passes ["first" "body-ink" "line" "cell"] :leak ["copy"] :miss [100 100]}
+ "ovl-watermark-draft"   {:pdf "test/corpus/synth/scan-ovl/watermark-draft.pdf" :gold "watermark-draft" :kind :scan
+                          :passes ["first" "body-ink" "cell"] :leak ["copy"] :miss [100 100]}
+ "ovl-h-numbered"        {:pdf "test/corpus/synth/scan-ovl/h-numbered.pdf" :gold "h-numbered" :kind :scan
+                          :passes ["first" "body-ink" "re-rotated"] :leak ["copy"] :miss [100 100]}
+ "ovl-table-simple-ruled" {:pdf "test/corpus/synth/scan-ovl/table-simple-ruled.pdf" :gold "table-simple-ruled" :kind :scan
+                          :passes ["first" "re-rotated"] :leak ["copy"] :miss [100 100]}
+ "born-wm-gray-behind"   {:pdf "test/corpus/synth/pdf/wm-gray-behind.pdf" :gold "wm-gray-behind" :kind :born
+                          :passes ["first" "body-ink"] :miss [100 100]}}

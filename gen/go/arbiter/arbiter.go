@@ -403,6 +403,14 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 	port.CellsSet(gv, fuserules.AgBody(), body)
 	port.CellsSet(gv, fuserules.AgTableimg(), tim)
 	port.CellsSet(gv, fuserules.AgRulelike(), rlk)
+	// P7.4: looked for in the body-ink run of its page, and not found there
+	if (player.CgGet(cg, g, player.CgfFlags()) & player.PlgBink()) == 0 {
+		port.CellsSet(gv, fuserules.AgBink(), -1)
+	} else if (player.CgGet(cg, g, player.CgfFlags()) & player.PlgBinkAbsent()) == 0 {
+		port.CellsSet(gv, fuserules.AgBink(), 0)
+	} else {
+		port.CellsSet(gv, fuserules.AgBink(), 1)
+	}
 	port.CellsSet(gv, fuserules.AgImalpha(), arImageAlpha(images, epages, player.CgGet(cg, g, player.CgfPage()), player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1())))
 	// P7.6: the columns of a group of hidden-text words (`emon.hidden`)
 	hidden.HxFill(g, cg, refs, ofw, etext, feats, owords, gv)

@@ -247,6 +247,11 @@ func AgRulelike() int32 {
 	return 27
 }
 
+func AgBink() int32 {
+	// defence 3 (P7.4): 1 when the page has a body-ink OCR run and no word of it lies over the group (what the body-ink pass did not read is not body text), 0 when one does, -1 when the page has no such run; numbered 39 (the one free column below `ag-count`)
+	return 39
+}
+
 func AgCount() int32 {
 	return 40
 }
@@ -546,7 +551,7 @@ func FwOcr() int32 {
 	return 2
 }
 
-var FrRows [2340]int32 = [2340]int32{
+var FrRows [2376]int32 = [2376]int32{
 	301, 300, 1, 0, 0, 600, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	311, 300, 2, 0, 0, -1, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, 37, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	310, 300, 1, 0, 0, 950, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -580,7 +585,8 @@ var FrRows [2340]int32 = [2340]int32{
 	203, 200, 0, 2, 0, 900, 16, 2, 21, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	205, 200, 0, 2, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 9, 0, 12, 24, 1, 13, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	211, 200, 0, 1, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 17, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
-	221, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 23, 1, 16, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	221, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 23, 1, 16, 9, 2, 0, 12, 0, 21, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+	222, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 39, 2, 1, 9, 2, 0, 12, 0, 21, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	231, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 18, 0, 14, 19, 0, 14, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	232, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 20, 0, 15, 9, 0, 12, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
 	251, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 22, 1, 17, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -721,7 +727,7 @@ func frHolds(row int32, gv *port.Cells) int32 {
 func FrDecide(gv *port.Cells) int32 {
 	// The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
 	// rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-	var n int32 = 65
+	var n int32 = 66
 	var b int32 = 0
 	var blk int32 = 0
 	var r int32 = 0
@@ -744,7 +750,7 @@ func FrDecide(gv *port.Cells) int32 {
 func FrDecideBlock(gv *port.Cells, blk int32) int32 {
 	// The row (an index of `fr-rows`) of the first rule OF BLOCK `blk` that holds on the measures `gv`; -1 when none does. Block 500 reads the graphics
 	// measures (`gmz`, codes 100 and up, in a vector of 128 cells), which have a default row (599) so that the answer is never -1 there.
-	var n int32 = 65
+	var n int32 = 66
 	var r int32 = 0
 	for r < n {
 		if FrBlock(r) == blk {

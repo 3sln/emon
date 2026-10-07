@@ -38,6 +38,7 @@ pub(crate) fn at_gv(mut gv: &mut crate::port::Cells, nt: i32, no: i32, nh: i32, 
     crate::port::cells_set(gv, ag_margin(), -1);
     crate::port::cells_set(gv, ag_kink(), -1);
     crate::port::cells_set(gv, ag_body(), -1);
+    crate::port::cells_set(gv, ag_bink(), -1);
     crate::port::cells_set(gv, ag_imalpha(), -1);
     return 0;
 }
@@ -111,7 +112,7 @@ fn test_the_rows_say_what_they_set() {
     crate::testport::assert_eq(fr_order(4), 100, "then the core");
     crate::testport::assert_eq(fr_order(5), -1, "and no more");
     let mut i: i32 = 0;
-    while i < 65 {
+    while i < 66 {
         crate::testport::assert_that((((fr_block(i) == 100) || (fr_block(i) == 200)) || ((fr_block(i) == 300) || (fr_block(i) == 400))) || ((fr_block(i) == 500) || (fr_block(i) == 600)), "every row of P7.3, P7.5, P7.6, P7.7 and P7.G is in block 100, 200, 300, 400, 500 or 600");
         i += 1;
     }
@@ -614,8 +615,21 @@ fn test_the_defences_are_rows_of_block_200() {
     crate::port::cells_set(gw, ag_body(), 100);
     crate::testport::assert_eq(fr_number(fr_decide(gw)), 221, "mostly another layer's ink: 221");
     crate::testport::assert_eq(fr_defence(fr_decide(gw)), 3, "defence 3");
+    crate::port::cells_set(gw, ag_olen(), 2);
+    crate::testport::assert_that(fr_number(fr_decide(gw)) != 221, "a speck of two characters is no watermark (it is a ghost, not a layer's text)");
+    crate::port::cells_set(gw, ag_olen(), 5);
+    crate::port::cells_set(gw, ag_image(), 400);
+    crate::testport::assert_that(fr_number(fr_decide(gw)) != 221, "nor is a word in a picture: its ink is the picture's");
+    crate::port::cells_set(gw, ag_image(), 0);
     crate::port::cells_set(gw, ag_body(), -1);
     crate::testport::assert_eq(fr_number(fr_decide(gw)), 140, "(an absent column is no evidence)");
+    crate::port::cells_set(gw, ag_bink(), 0);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 140, "read by the body-ink pass too: text");
+    crate::port::cells_set(gw, ag_bink(), 1);
+    crate::testport::assert_eq(fr_number(fr_decide(gw)), 222, "the body-ink pass did not read it: 222");
+    crate::testport::assert_eq(fr_defence(fr_decide(gw)), 3, "defence 3");
+    crate::testport::assert_eq(fr_reason(fr_decide(gw)), dr_watermark(), "a watermark");
+    crate::port::cells_set(gw, ag_bink(), -1);
     crate::port::cells_set(gw, ag_oangle(), 2500);
     crate::port::cells_set(gw, ag_odiag(), 2500);
     crate::testport::assert_eq(fr_number(fr_decide(gw)), 231, "on a diagonal: 231");

@@ -338,6 +338,22 @@ func RqOcr(c *port.Cells, id int32, bitmap int32, psm int32, flags int32, x int3
 	return at
 }
 
+func RqOcrView(c *port.Cells, id int32, view int32, hhi int32, hlo int32, psm int32, flags int32, x int32, y int32, w int32, h int32) int32 {
+	// Ask for OCR of the kin-made view `view` (an id from `view-base`, `pu-view-id`), whose `bitmap-hash` is the two cells
+	// `hhi` `hlo`: the request is `rq-ocr` with the hash after `h` (D196). Add languages with `rq-ocr-lang`, close with `rq-ocr-end`.
+	var at int32 = RecBegin(c, PkOcr(), id)
+	port.CellsPush(c, view)
+	port.CellsPush(c, psm)
+	port.CellsPush(c, flags)
+	port.CellsPush(c, x)
+	port.CellsPush(c, y)
+	port.CellsPush(c, w)
+	port.CellsPush(c, h)
+	port.CellsPush(c, hhi)
+	port.CellsPush(c, hlo)
+	return at
+}
+
 func RqOcrLang(c *port.Cells, a int32, b int32, d int32, e int32) int32 {
 	// Append a language: up to four ASCII chars, 0 for none ("eng" = e n g 0).
 	var hi int32 = (a * 256) + b

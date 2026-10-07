@@ -19,4 +19,5 @@ if [ ! -x "$bin" ] || [ "$(cat "$root/.cache/emon-rs-live/stamp" 2>/dev/null)" !
   EMON_RS_LIVE=1 "$root/kin/scripts/emon-rs-build" > /dev/null || exit 1
   printf '%s' "$stamp" > "$root/.cache/emon-rs-live/stamp"
 fi
-exec "$bin" --tesseract "$3"
+# EMON_RS_FLAGS: extra driver flags (P7.4: `--no-retarget` is the baseline of a measurement)
+exec "$bin" --tesseract $EMON_RS_FLAGS "$3"

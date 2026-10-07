@@ -77,6 +77,7 @@ use crate::render::{KindMux, RenderFulfiller, RenderInput, Renderer};
 use crate::source::{ByteSource, Input, Inputs};
 use std::collections::BTreeSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub use crate::plan::Transcript;
@@ -270,11 +271,14 @@ pub struct Options {
     // and `bb fusion` set it; an embedder never needs to.
     #[doc(hidden)]
     pub ocr_born_digital: bool,
+    // A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units, as the Engine was before the ink layers and the targeted passes (a measurement's
+    // baseline; an embedder never needs it). The output of a run with no Renderer and no OCR engine is the same either way.
+    pub no_retarget: bool,
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, asset_dpi: 150, asset_pixels: 4_194_304, asset_bytes: 4_194_304, assets_bytes: 33_554_432, asset_signatures: false, furniture: Furniture::Policy, keep_evidence: false, ocr_born_digital: false }
+        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, asset_dpi: 150, asset_pixels: 4_194_304, asset_bytes: 4_194_304, assets_bytes: 33_554_432, asset_signatures: false, furniture: Furniture::Policy, keep_evidence: false, ocr_born_digital: false, no_retarget: false }
     }
 }
 
@@ -654,6 +658,11 @@ impl imgdec::Source for Span {
     }
 }
 
+// OCR wall time, in microseconds, of the FIRST pass of a page (`pi-ocr`, page-local id 16) and of the TARGETED passes (P7.4: every other `ocr`
+// request), summed over a process's requests: what `--stats` of the driver prints and `bb fusion-bench` reads. Counters, not a result: the Engine's
+// output never depends on them.
+pub static OCR_US: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
+
 // The LIVE ports' fulfiller (SPEC 7.2): `ImageDecode` (D187) answers `decode` requests for this input from the host's
 // codecs; `Ocr` (D211) answers `ocr` requests from the embedder's engine, or `unsupported` when it has none. No
 // Renderer is configured (P6.2). `keep` holds the pixels in a decode answer (a recording wants them, as canonical
@@ -672,7 +681,12 @@ fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording
             };
             return match &ocr {
                 // an engine that panics on a page is a failed OCR of it, not a crashed process
-                Some(p) => match std::panic::catch_unwind(AssertUnwindSafe(|| p.0.fulfil(req, bm, recording))) {
+                Some(p) => match std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    let t0 = std::time::Instant::now();
+                    let r = p.0.fulfil(req, bm, recording);
+                    OCR_US[if req.id() % 256 == 16 { 0 } else { 1 }].fetch_add(t0.elapsed().as_micros() as u64, Ordering::Relaxed);
+                    r
+                })) {
                     Ok(r) => r,
                     Err(_) => failed(plan::STATUS_FAILED),
                 },
@@ -1211,6 +1225,8 @@ struct PdfDoc {
     hl: Cells,
     cg: Cells,
     xs: [Cells; 6],
+    // the ink stage's and the targeted passes' scratch (P7.4: layer workspaces, the unit's arena snapshot, the plan, the tracer's)
+    ys: [Cells; 19],
     // the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence
     // dump has always shown (kept only when the evidence is asked for)
     snap: Option<(Cells, Cells, Cells)>,
@@ -1337,7 +1353,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, im, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, aim, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], ys: std::array::from_fn(|_| Cells::new()), et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, im, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, aim, info }))
 }
 
 // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil
@@ -1370,19 +1386,22 @@ fn asset_unit(view: &Src, pw: &Src, idx: usize, d: &mut PdfDoc, opts: &Options, 
 fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
     let mut scr = Cells::new();
     let [xa, xb, xc, xd, xe, xf] = &mut d.xs;
+    let [ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6] = &mut d.ys;
     pu_run_pdf(
         i as i32, idx as i32, opts.ocr.code(), &mut d.plan, answers, rq, &mut d.loc, bms, &mut d.mask, &mut scr,
         &mut d.ev.epages, &mut d.ev.views, &mut d.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
         &mut d.wd, &mut d.ln,
-        opts.ocr_born_digital as i32, &mut d.fw, &mut d.hl, &mut d.ev.refs, &mut d.cg, &mut d.ev.tlines,
+        opts.ocr_born_digital as i32 + 2 * opts.no_retarget as i32, &mut d.fw, &mut d.hl, &mut d.ev.refs, &mut d.cg, &mut d.ev.tlines,
         xa, xb, xc, xd, xe, xf,
+        &mut d.ev.inks, &mut d.ev.comps, &mut d.ev.rules, &mut d.ev.prims, &mut d.ev.pts,
+        ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6,
     )
 }
 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut im, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, snap, mut cand, mut cbytes, aim: _, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut im, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, ys: _, snap, mut cand, mut cbytes, aim: _, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)

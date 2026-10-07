@@ -396,7 +396,12 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 		have[l] = true
 	}
 	var langs []string
-	for k := 7; k < len(req.Rec)-3; k++ {
+	// the languages follow `h`, and the pixel hash of a kin-made view (D196: its id is from KIN_VIEW_BASE, 2^24)
+	firstLang := 7
+	if req.Arg(0) >= 16777216 {
+		firstLang = 9
+	}
+	for k := firstLang; k < len(req.Rec)-3; k++ {
 		m := modelName(unpack4(req.Arg(k)))
 		if have[m] {
 			langs = append(langs, m)

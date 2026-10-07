@@ -47,13 +47,13 @@
                                    wf-gfirst wf-gcount wf-font wf-size wf-style wf-gap wf-wbreak wf-src wb-space
                                    xt-font-health xt-bad-cp xo-implausible ea-words ea-owords]]
             [emon.player :refer [cg-count cg-get cg-set cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount
-                                 cgf-hfirst cgf-hcount cgf-sim cgf-simfold cgf-flags plg-in-figure plg-in-seal
+                                 cgf-hfirst cgf-hcount cgf-sim cgf-simfold cgf-flags plg-in-figure plg-in-seal plg-bink plg-bink-absent
                                  fw-count fl-count fw-copy-word fl-copy-line fv-new fx-new fa-new fa-count fa-get fa-set]]
             [emon.health :refer [hh-word-score hh-agree-sim]]
             [emon.scan :refer [sc-prep sc-emit-lines]]
             [emon.artifact :refer [ax-word-class ax-oword-class ax-recur wm-alpha wm-cover]]
             [emon.hidden :refer [hx-fill]]
-            [emon.fuserules :refer [ag-seal ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha fr-defence
+            [emon.fuserules :refer [ag-seal ag-bink ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha fr-defence
                                     ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin
                                     ag-olen ag-oconf ag-near ag-pageagree ag-tableimg ag-rulelike ag-count fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-npred fr-pcol fw-none fw-text fw-ocr]]
             [kin.lang :refer [defn return let set while if do comment
@@ -336,6 +336,12 @@
     (cells-set gv (ag-body) body)
     (cells-set gv (ag-tableimg) tim)
     (cells-set gv (ag-rulelike) rlk)
+    (comment "P7.4: looked for in the body-ink run of its page, and not found there")
+    (if (== (bit-and (cg-get cg g (cgf-flags)) (plg-bink)) 0)
+      (cells-set gv (ag-bink) -1)
+      (if (== (bit-and (cg-get cg g (cgf-flags)) (plg-bink-absent)) 0)
+        (cells-set gv (ag-bink) 0)
+        (cells-set gv (ag-bink) 1)))
     (cells-set gv (ag-imalpha) (ar-image-alpha images epages (cg-get cg g (cgf-page)) (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0))
                                                (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1))))
     (comment "P7.6: the columns of a group of hidden-text words (`emon.hidden`)")

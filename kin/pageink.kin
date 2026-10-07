@@ -1,0 +1,180 @@
+;; THE INK LAYERS IN THE PAGE UNIT (P7.4's prerequisite; SPEC 8.2, 7.3; D195, D196, D197, D198, D226; wiring left open by D304, D402).
+;; emon's own module (D039).
+;;
+;; P6.3's normalization (`emon.norm`) and P6.4's tracer (`emon.trace`) allocate no bitmap and were never called by the Engines: D195 put
+;; them in the page unit, between the OCR evidence and alignment, and no item did. This module is that call, once, for ONE raster of
+;; ONE page: `pn-ink` normalizes it (gray, binary, the ink layers and one mask a layer), traces it, and `pn-features` writes the
+;; OCR words' ink columns (`xo` 10-13 and 16) from what it made. Every bitmap kin fills is `bms-put` into the unit's `BitmapSet` at an id
+;; of `pu-view-id` (D196, D207): the host holds them for the unit and a fulfiller can read them, so a view made here can be OCR'd.
+;;
+;; WHAT RUNS WHEN. A page unit is re-run from scratch on every round and writes nothing until its last (SPEC 7.3). The ink layers
+;; are what the targeted requests of `emon.retarget` are chosen from, so the attempt that asks writes them, asks, and gives them back:
+;; `pn-mark` records the length of every arena the unit appends to and `pn-undo` truncates them to it (the arenas are append-only for the
+;; unit, and the rows it appends are only ever referred to by the rows after them). The attempt that asks nothing keeps what it wrote.
+;; NO PIXEL, NO INK: a unit whose answers carry no bitmap (the Engine has no Renderer, or a transcript was recorded slim) skips all of this
+;; and writes what it always wrote, byte for byte (`pn-has`).
+;;
+;; THE ID SPACE of the kin-made bitmaps of a page (`pu-view-id page k`): a raster's own group is `k0 + 0 .. 7` (gray, binary, labels, mask,
+;; body mask), k0 = `pn-k-text` (8) for the raster the OCR read and `pn-k-clean` (16) for the born-digital page's text-free render; `emon.retarget`
+;; takes 32 and up.
+(ns emon.pageink
+  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+            [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-put bms-get bms-has bitmap-w bitmap-h]]
+            [emon.plan :refer [pu-view-id]]
+            [emon.evidence :refer [ik-count ik-get ikf-role ikf-mask ir-body ir-light ir-background vw-count vw-get vwf-deskew
+                                   ow-get ow-count owf-px owf-py owf-pw owf-ph hd-feat hd-x0 hd-y0 hd-x1 hd-y1]]
+            [emon.norm :refer [nm-reskew nm-view nm-label-into nm-binary-view nm-gray-view nm-paper-gray nm-mask-into nm-role-mask-into nm-feat-ocr]]
+            [emon.trace :refer [tr-trace tr-tints tr-lightfills tr-feat-ocr]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^:pub ^I32 pn-k-text [] (comment "The first view id (page-local) of the raster the OCR read.") (return 8))
+(defn ^:pub ^I32 pn-k-clean [] (comment "The first view id of the born-digital page's text-free render.") (return 16))
+
+(defn ^:pub ^I32 pn-has [^BitmapSet bms ^I32 id]
+  (comment "1 when the set holds a bitmap with pixels under `id` (a 0 x 0 stand-in is what a transcript with no bitmap answers).")
+  (if (== (bms-has bms id) 0) (return 0))
+  (if (> (bitmap-w (bms-get bms id)) 0) (return 1))
+  (return 0))
+
+;; ------------------------------------------------------------- the arenas a unit appends to, marked and given back
+
+(defn ^:pub ^I32 pn-mark [^:mut ^Cells snap
+                          ^Cells epages ^Cells views ^Cells etext ^Cells feats ^Cells oruns ^Cells oblocks ^Cells olines
+                          ^Cells owords ^Cells osyms ^Cells oalts ^Cells inks ^Cells comps ^Cells rules ^Cells prims
+                          ^Cells tpts ^Cells tlines ^Cells refs ^Cells images ^Cells words ^Cells lines]
+  (comment "Record the length of every arena a page unit appends to, in the order `pn-undo` reads them back.")
+  (cells-drop snap 0)
+  (cells-push snap (cells-len epages))
+  (cells-push snap (cells-len views))
+  (cells-push snap (cells-len etext))
+  (cells-push snap (cells-len feats))
+  (cells-push snap (cells-len oruns))
+  (cells-push snap (cells-len oblocks))
+  (cells-push snap (cells-len olines))
+  (cells-push snap (cells-len owords))
+  (cells-push snap (cells-len osyms))
+  (cells-push snap (cells-len oalts))
+  (cells-push snap (cells-len inks))
+  (cells-push snap (cells-len comps))
+  (cells-push snap (cells-len rules))
+  (cells-push snap (cells-len prims))
+  (cells-push snap (cells-len tpts))
+  (cells-push snap (cells-len tlines))
+  (cells-push snap (cells-len refs))
+  (cells-push snap (cells-len images))
+  (cells-push snap (cells-len words))
+  (cells-push snap (cells-len lines))
+  (return 0))
+
+(defn ^:pub ^I32 pn-undo [^Cells snap
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats ^:mut ^Cells oruns ^:mut ^Cells oblocks
+                          ^:mut ^Cells olines ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts ^:mut ^Cells inks ^:mut ^Cells comps
+                          ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts ^:mut ^Cells tlines ^:mut ^Cells refs ^:mut ^Cells images
+                          ^:mut ^Cells words ^:mut ^Cells lines]
+  (comment "Truncate every arena to the length `pn-mark` recorded: the attempt that asked leaves them as it found them.")
+  (cells-drop epages (cells-at snap 0))
+  (cells-drop views (cells-at snap 1))
+  (cells-drop etext (cells-at snap 2))
+  (cells-drop feats (cells-at snap 3))
+  (cells-drop oruns (cells-at snap 4))
+  (cells-drop oblocks (cells-at snap 5))
+  (cells-drop olines (cells-at snap 6))
+  (cells-drop owords (cells-at snap 7))
+  (cells-drop osyms (cells-at snap 8))
+  (cells-drop oalts (cells-at snap 9))
+  (cells-drop inks (cells-at snap 10))
+  (cells-drop comps (cells-at snap 11))
+  (cells-drop rules (cells-at snap 12))
+  (cells-drop prims (cells-at snap 13))
+  (cells-drop tpts (cells-at snap 14))
+  (cells-drop tlines (cells-at snap 15))
+  (cells-drop refs (cells-at snap 16))
+  (cells-drop images (cells-at snap 17))
+  (cells-drop words (cells-at snap 18))
+  (cells-drop lines (cells-at snap 19))
+  (return 0))
+
+;; ------------------------------------------------------------- one raster
+
+(defn ^:pub ^I32 pn-deskew-clear [^:mut ^Cells views ^I32 srcview]
+  (comment "`nm-view` writes the skew it measures (`nm-deskew`) to the decode view and every view made from it as `vwf-deskew`, which turns every pixel")
+  (comment "box that is mapped through the view into a rotated one. The OCR evidence (`sc-ev-lines`, `sc-ev-words`) reads the engine's pixel angles as the PAGE's (the")
+  (comment "pipeline takes a page's tilt out as the median of its lines', D213) and nothing yet takes the view's skew out of them: applied, a scan of lines that fall by")
+  (comment "2.77 degrees came out with words 2.8 degrees off in the other direction and every paragraph split. So the Engine's wiring leaves the page's geometry as it")
+  (comment "was: the rows `nm-view` appended and the source's own go back to no skew (the tracer reads them so too, and agrees with the OCR); the angle is `orf-deskew`'s")
+  (comment "(the engine's) and `nm-view`'s return is not kept. Answers 0.")
+  (let [^I32 n (vw-count views)
+        ^:mut ^I32 v srcview
+        ^:mut ^I32 d 0]
+    (while (< v n)
+      (do (set d (vw-get views v (vwf-deskew)))
+          (if (!= d 0) (nm-reskew views v 0))
+          (set v (+ v 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pn-ink [^I32 page ^I32 srcview ^BitmapSet bms ^I32 k0 ^Bitmap src ^I32 dpi100 ^I32 traced
+                         ^:mut ^Cells views ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims
+                         ^:mut ^Cells tpts ^:mut ^Cells tlines ^:mut ^Cells refs
+                         ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux
+                         ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
+                         ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6]
+  (comment "Normalize the raster `src` (the bitmap of `views` row `srcview`, of `page`, at `dpi100`): its gray and binary views, its ink")
+  (comment "layers and a mask a layer (`nm-view`), and with `traced` 1 trace it as P6.4's harness does: the binary view with the majority")
+  (comment "layer of every component, every layer that is not `body` as a bitmap of its own (with its tints, for a `light` or `background`")
+  (comment "one), then the fills too light for any layer. Answers the number of ink layers. The bitmaps are made under ids `k0`..`k0 + 4`")
+  (comment "of the page's view ids, so a raster may be put through this once an attempt.")
+  (let [^I32 w (bitmap-w src)
+        ^I32 h (bitmap-h src)
+        ^Bitmap gray (bms-put bms (pu-view-id (- page 1) k0) w h 1)
+        ^Bitmap binary (bms-put bms (pu-view-id (- page 1) (+ k0 1)) w h 1)
+        ^I32 nl (nm-view views inks page srcview src gray binary ws sv aux)
+        ^I32 ink0 (- (ik-count inks) nl)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 role 0
+        ^:mut ^I32 mv 0]
+    (pn-deskew-clear views srcview)
+    (if (== traced 1)
+      (let [^Bitmap labels (bms-put bms (pu-view-id (- page 1) (+ k0 2)) w h 1)
+            ^Bitmap mask (bms-put bms (pu-view-id (- page 1) (+ k0 3)) w h 1)]
+        (nm-label-into src ws labels)
+        (tr-trace views inks page (nm-binary-view ws) -1 ink0 binary gray labels comps rules prims tlines tpts refs
+                  rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)
+        (while (< k nl)
+          (do (set role (ik-get inks (+ ink0 k) (ikf-role)))
+              (if (!= role (ir-body))
+                (do (nm-mask-into src ws (+ k 1) mask)
+                    (set mv (ik-get inks (+ ink0 k) (ikf-mask)))
+                    (tr-trace views inks page mv (+ ink0 k) ink0 mask gray mask comps rules prims tlines tpts refs
+                              rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)
+                    (if (or (== role (ir-light)) (== role (ir-background)))
+                      (tr-tints views page mv dpi100 mask (+ ink0 k) inks prims refs s1 s2))))
+              (set k (+ k 1))))
+        (tr-lightfills views page (nm-gray-view ws) dpi100 gray (nm-paper-gray ws) mask inks prims refs s1 s2)))
+    (return nl)))
+
+(defn ^:pub ^I32 pn-features [^I32 page ^BitmapSet bms ^I32 k0 ^Bitmap src ^I32 engid ^I32 w0 ^I32 nw
+                              ^Cells ws ^Cells comps ^Cells owords ^:mut ^Cells feats ^:mut ^Cells scr]
+  (comment "The ink columns of the OCR words [w0, w0 + nw) that were read off `src` (the raster `pn-ink` normalized under `k0`): `xo` 10")
+  (comment "kin ink, 11 the engine's own binary (the bitmap of the OCR answer `engid`, when the transcript kept it), 12 the Jaccard of the two,")
+  (comment "13 the share of the ink on the body layers, 16 its contrast, and 14 the text-like components centred in the word. Answers the words done.")
+  (let [^Bitmap binary (bms-get bms (pu-view-id (- page 1) (+ k0 1)))
+        ^Bitmap gray (bms-get bms (pu-view-id (- page 1) k0))
+        ^Bitmap body (bms-put bms (pu-view-id (- page 1) (+ k0 4)) (bitmap-w src) (bitmap-h src) 1)
+        ^Bitmap eng (bms-get bms engid)
+        ^:mut ^I32 has 0
+        ^I32 paper (nm-paper-gray ws)
+        ^:mut ^I32 i w0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0]
+    (if (> (bitmap-w eng) 0) (set has 1))
+    (nm-role-mask-into src ws (ir-body) body)
+    (while (< i (+ w0 nw))
+      (do (set f (ow-get owords i (hd-feat)))
+          (set x0 (ow-get owords i (owf-px)))
+          (set y0 (ow-get owords i (owf-py)))
+          (nm-feat-ocr feats f x0 y0 (+ x0 (ow-get owords i (owf-pw))) (+ y0 (ow-get owords i (owf-ph))) binary eng has body gray paper)
+          (tr-feat-ocr feats f comps page (ow-get owords i (hd-x0)) (ow-get owords i (hd-y0)) (ow-get owords i (hd-x1)) (ow-get owords i (hd-y1)) scr 0)
+          (set i (+ i 1))))
+    (return nw)))

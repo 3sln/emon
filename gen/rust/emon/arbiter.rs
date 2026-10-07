@@ -388,6 +388,14 @@ pub(crate) fn ar_fill(g: i32, pageagree: i32, cg: &mut crate::port::Cells, refs:
     crate::port::cells_set(gv, ag_body(), body);
     crate::port::cells_set(gv, ag_tableimg(), tim);
     crate::port::cells_set(gv, ag_rulelike(), rlk);
+    // P7.4: looked for in the body-ink run of its page, and not found there
+    if (cg_get(cg, g, cgf_flags()) & plg_bink()) == 0 {
+        crate::port::cells_set(gv, ag_bink(), -1);
+    } else if (cg_get(cg, g, cgf_flags()) & plg_bink_absent()) == 0 {
+        crate::port::cells_set(gv, ag_bink(), 0);
+    } else {
+        crate::port::cells_set(gv, ag_bink(), 1);
+    }
     crate::port::cells_set(gv, ag_imalpha(), ar_image_alpha(images, epages, cg_get(cg, g, cgf_page()), cg_get(cg, g, cgf_x0()), cg_get(cg, g, cgf_y0()), cg_get(cg, g, cgf_x1()), cg_get(cg, g, cgf_y1())));
     // P7.6: the columns of a group of hidden-text words (`emon.hidden`)
     hx_fill(g, cg, refs, ofw, etext, feats, owords, gv);

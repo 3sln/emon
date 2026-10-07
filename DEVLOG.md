@@ -9226,3 +9226,77 @@ table TEDS-lite on the graphics set, `twin-gap`, the ghost counts, ICDAR) cannot
 **Why**: the full corpus for every tool would score colour and overlay cases with no field claim; the subset is fixed and written down so a rerun is the same measurement.
 **Alternatives**: all five input forms for every tool (OCR through docling, hours on this machine, no new claim).
 - [ ] **Signed off** (maintainer)
+
+### D343 — The ink layers and the deskew are wired into the page unit (`emon.pageink`); the skew is cleared on the decode view, not applied (P7.4; SPEC 7.3, 8.2; D196, P6.3, P6.4)
+**Decision**: P6.3's normalization and P6.4's tracer were never called by the page unit. `kin/pageink.kin` (`pn-ink`, `pn-features`, `pn-mark`/`pn-undo`, `pn-has`, `pn-deskew-clear`) runs them in `pu-run-born`,
+`pu-run-scan` and `pu-run-pdf` (24 more scratch params; `fuse` is a bit field, bit 0 fuse, bit 1 `no-retarget`), after the first-pass OCR and BEFORE `rt-record`/`rt-witness`, and `xa-page` and `hl-page-fw` run before them. Pixels
+are read only when `pu-px` says the page has a bitmap. The measured skew is NOT applied to the view: `nm-deskew` (positive: lines rise) and `vw-new` have opposite sign conventions, and `sc-ev-*` read the pixel angles as the
+page's, so applying it doubled the skew (5.6 degrees) and split paragraphs; `pn-deskew-clear` sets the skew to 0 on the decode view and the views made from it. SPEC 8.2 says so.
+**Why**: measured on `scan-ovl`: a deskew applied cost paragraphs; the first pass reads the page as it is and the targeted passes read views of the same geometry, so lines align by box.
+**Alternatives**: fixing the sign in `vw-new` (changes every committed view hash).
+- [ ] **Signed off** (maintainer)
+
+### D344 — The targeted requests and the layout of `emon.retarget`: `rq-ocr-view`, the body-ink view, line, cell and quarter-turned passes; at most 24 a page, 5 rounds (P7.4; SPEC 8.3 "As built (P7.4)", 7.3)
+**Decision**: `rq-ocr-view` names a kin-made view (bitmap id at least 2^24) and carries its pixel hash in two cells after the pixel box, the languages in argument 9; hosts fulfil it from the `BitmapSet`'s entry
+(Rust `engine.rs`, `tess.rs`; Go `engine.go`, `tess.go`). `rt-plan` asks, within `rt-max` 24: (1) the BODY-INK view (every foreign layer painted the paper colour, but foreign pixels within `rt-halo` px per 100 dpi of
+body pixels are kept, because on JPEG and gray scans glyph edges form a large `light` layer: 60k px against 17k body px, so layer-role shares are unreliable), asked when foreign ink touches a first-pass line (share at least
+`rt-touch` 100 per mille, measured with an erase map) or the erased area is at least 1.5 per cent of the page; (2) the line (`op-line`, psm 7) and (3) the cell passes (`op-cell`, only inside a LATTICE: at least 3 long vertical and
+2 horizontal rules, boxes cut inside the rules); (4) the quarter-turned view (`op-re-rotated`) when Tesseract's OSD says the page is turned (the upright turn is `4 - q`, so 90 gives 3; the tracer's vertical lines are the
+fallback when OSD is unsure; the turned row has turn 0, swapped dimensions, and the page's epages row swapped for odd q: `rt-upright`; `rt-turn-gain` 90). The text-only pass (3 of the brief) is built but never asked.
+Rows 160 is not built.
+**Why**: the measures below. **Alternatives**: layer shares to decide (garbage lines replaced real ones).
+- [ ] **Signed off** (maintainer)
+
+### D345 — Scan adoption rules, and what was tried and failed (P7.4; SPEC 8.3)
+**Decision**: `rt-line-state` decides per first-pass line: 0 stays; 1 the body-ink run's line replaces it when it is the line's MUTUAL best overlap partner and loses no text (`rt-keep`); 2 it is dropped as a GHOST when
+at least `rt-ghost` 600 per mille of its ink is foreign, the body-ink run read nothing over it AND the first pass itself was unsure of it (mean word confidence below `rt-ghost-conf` 500); 3 its own re-reading replaces it
+(confidence at least `rt-trust-conf` 600 and `rt-better` 100 higher, same number of words, `rt-keep`); 4 its cells' readings do (the same). Body-ink-only lines (confidence at least 700, at least 2 words) are taken and placed
+in reading order on single-column pages (`rt-monotone`). A drop is not a decision from layer shares.
+Tried and worse: line state from layer shares; cell re-reads of every line (polluted with `|`); a replacement that cuts the words another way (`Chapter1` for `Chapter 1`: hence the same-word-count requirement);
+a ghost drop with no confidence ceiling (`table-header-fill` header on a coloured fill, 0.0106 to 0.0396: the header was read surely, 850 did not help, 500 does).
+**Why**: each rule is the one that stopped a measured regression. The remainder this left (`scan-color/tables` 0.0639 to 0.0686) is removed by D350.
+- [ ] **Signed off** (maintainer)
+
+### D346 — Born-digital: the targeted runs are witnesses, written after alignment; rows 221 and 222 (P7.4, P7.5; SPEC 9.4, 9.5)
+**Decision**: on a born-digital page the targeted runs join the dump after alignment (`rt-witness`), so they are witnesses and not candidates (`ar-emit-ocr` would duplicate words). Row 222 is the body-ink run's
+absence witness (`ag-bink`, column 26, `ag-count` 27; flags `plg-bink` 64 and `plg-bink-absent` 128, filled by the arbiter); 221 and 222 gained the predicates `ag-image == 0` and `ag-olen >= 3`, because before them 221
+fired on a logo's `O` and 251 on small marks. After the predicates, on the 22 born fusion documents recorded with pixels, 221 and 222 do not fire, 251 fires 8 times and 201 four times, and no metric differs by more
+than 0.002 from the first-pass-only baseline (`bb fusion` fusion set is unchanged: its slim transcripts replay the old path).
+**Why**: a rule that fires where the first pass was right is a regression. P7.5's rows 221 and 251: 221 does not fire on the corpus now; 251 does fire (8 times).
+- [ ] **Signed off** (maintainer)
+
+### D347 — The fixtures, `bb retarget`, `bb retarget-record` and the transcript-miss law (P7.4; D196, D207)
+**Decision**: `test/retarget/FIXTURES.edn` names five documents (scan-ovl `stamp-seal`, `watermark-draft`, `h-numbered`, `table-simple-ruled`; born `wm-gray-behind`), recorded live WITH the bitmaps kin reads
+(`tools/retarget/record.clj`; the thresholded images of the targeted passes are not read and are dropped; the replay is checked against the recording before it is kept, digests in
+`test/retarget/replay/DIGESTS.edn`). `kin/scripts/retarget` replays them on Rust and Go: identical bundles equal to the recording's SHA-256; at most 5 rounds and at most 24 targeted requests a page; every view request
+carries its pixel hash; the fixtures' passes are named by the dump; body word error rate no worse than the same transcript replayed with `no-retarget` plus 0.005 (the baseline replays a `first-pass-only` copy:
+replaying a retarget-recorded transcript with `--no-retarget` is `transcript-bad`, entries never asked for); the leak is no larger; and the LAW: a replay whose decode bitmap has ONE other pixel is `transcript-miss` on both
+Engines. Measured (word error rate): h-numbered 0.4947 to 0.1429, table-simple-ruled 0.8144 to 0.3608, watermark-draft 0.4370 to 0.4074, stamp-seal unchanged. A transcript recorded by older code breaks if the view
+hashes or requests change: re-record with `bb retarget-record`.
+**Why**: replay needs pixels from P6.3 on (D196), and a slim transcript cannot replay a view.
+- [ ] **Signed off** (maintainer)
+
+### D348 — `no-retarget`, `--stats`, `bb fusion-bench` and what was measured (P7.4)
+**Decision**: a hidden setting `no-retarget` (bit 1 of `fuse`; the drivers' `--no-retarget`) runs the Engine without the ink layers' use and the targeted passes (the baseline of every comparison); `--stats` prints `page-stats`
+(requests and rounds a page) and `OCR_US` counters (first-pass and targeted OCR time) on stderr; `bb fusion-bench` runs the live driver over the 49 documents of `scan-ovl` and `scan-color`: 86 pages, requests a page
+median 3 (most 23), rounds median 3 (most 3, the limit 5), OCR time targeted 193 s against first pass 332 s: 0.58 (limit 1.5). `tools/accuracy/predict-emon-live.sh` takes `EMON_RS_FLAGS`. Accuracy (live, against the
+same binary with `--no-retarget`; scoreboard not updated): `scan-ovl/all` CER 0.2497 to 0.2161 (13.5 per cent relative; heading F1 0.7512 to 0.8531), `scan-ovl/seals` 0.4130 to 0.2903, `scan-ovl/tables` 0.6152 to
+0.3340, `scan-color/all` 0.1520 to 0.1513, `scan/all` 0.0938 to 0.0941 (within noise), `watermark-leak` 0 everywhere. `scan/all` and `scan-color/all` are not 10 per cent lower: their pages hold no foreign ink to lift; the
+brief's measure is met on `scan-ovl` only.
+**Why**: the numbers are the binary's; none was taken from another.
+- [ ] **Signed off** (maintainer)
+
+### D349 — What P7.4 did not build (P7.4)
+**Decision**: not built: raster-input TIFF page units, the text-only pass asked, row 160, `op-line` and `op-cell` for born-digital pages, the live Go driver for recording, SROIE and mapo80 measures, the `emon-live`
+scoreboard update. `bb unit go` does not build `arbitertest` (pre-existing: unused lets and `emonT` from P7.3 and P7.5).
+**Why**: out of the item's measured reach; stated, not hidden.
+- [ ] **Signed off** (maintainer)
+
+### D350 — The cells' readings need the same trust as a line's re-reading; the two table regressions are gone (P7.4; D345)
+**Decision**: `rt-line-state` state 4 (the line's cells' readings replace it) now also needs the cells' mean confidence at least `rt-trust-conf` 600, as state 3 did. Found with a word diff of the new and the
+`--no-retarget` text of `scan-color/table-white-rules`: the header line `nn en` (confidence 358, a white-on-fill header) was replaced by a cell reading `pasion` (231) whose words the arbiter then placed elsewhere on the page,
+and CER rose 0.0858 to 0.1046; that was a line made of cells of confidence well below the line's neighbours, accepted only because it was above the line's own. Measured against `--no-retarget` (live, same binary):
+`scan-color/tables` CER 0.0639 and `table-white-rules` 0.0858, both identical to without; `scan-color/all` 0.1520 to 0.1511; `scan-ovl/all` 0.2497 to 0.2161, `scan-ovl/tables` 0.6152 to 0.3340, `scan-ovl/seals`
+0.4130 to 0.2903 (unchanged by this); `scan/all` 0.0938 to 0.0941 (+0.0003, `scan/tables` better: 0.1030 to 0.1028). The five fixtures re-recorded give the same bundles (digests unchanged).
+**Why**: a reading is adopted over the first pass only when it is itself sure.
+- [ ] **Signed off** (maintainer)

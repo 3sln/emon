@@ -382,6 +382,14 @@ public static class Arbiter {
         emon.Port.CellsSet(gv, Fuserules.AgBody(), body);
         emon.Port.CellsSet(gv, Fuserules.AgTableimg(), tim);
         emon.Port.CellsSet(gv, Fuserules.AgRulelike(), rlk);
+        // P7.4: looked for in the body-ink run of its page, and not found there
+        if ((Player.CgGet(cg, g, Player.CgfFlags()) & Player.PlgBink()) == 0) {
+            emon.Port.CellsSet(gv, Fuserules.AgBink(), -1);
+        } else if ((Player.CgGet(cg, g, Player.CgfFlags()) & Player.PlgBinkAbsent()) == 0) {
+            emon.Port.CellsSet(gv, Fuserules.AgBink(), 0);
+        } else {
+            emon.Port.CellsSet(gv, Fuserules.AgBink(), 1);
+        }
         emon.Port.CellsSet(gv, Fuserules.AgImalpha(), ArImageAlpha(images, epages, Player.CgGet(cg, g, Player.CgfPage()), Player.CgGet(cg, g, Player.CgfX0()), Player.CgGet(cg, g, Player.CgfY0()), Player.CgGet(cg, g, Player.CgfX1()), Player.CgGet(cg, g, Player.CgfY1())));
         // P7.6: the columns of a group of hidden-text words (`emon.hidden`)
         Hidden.HxFill(g, cg, refs, ofw, etext, feats, owords, gv);

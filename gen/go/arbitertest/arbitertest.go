@@ -44,6 +44,7 @@ func atGv(gv *port.Cells, nt int32, no int32, nh int32, font int32, simfold int3
 	port.CellsSet(gv, fuserules.AgMargin(), -1)
 	port.CellsSet(gv, fuserules.AgKink(), -1)
 	port.CellsSet(gv, fuserules.AgBody(), -1)
+	port.CellsSet(gv, fuserules.AgBink(), -1)
 	port.CellsSet(gv, fuserules.AgImalpha(), -1)
 	return 0
 }
@@ -118,7 +119,7 @@ func TestTheRowsSayWhatTheySet(emonT *testing.T) {
 	port.AssertEq(emonT, fuserules.FrOrder(4), 100, "then the core")
 	port.AssertEq(emonT, fuserules.FrOrder(5), -1, "and no more")
 	var i int32 = 0
-	for i < 65 {
+	for i < 66 {
 		port.AssertThat(emonT, (((fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 200)) || ((fuserules.FrBlock(i) == 300) || (fuserules.FrBlock(i) == 400))) || ((fuserules.FrBlock(i) == 500) || (fuserules.FrBlock(i) == 600)), "every row of P7.3, P7.5, P7.6, P7.7 and P7.G is in block 100, 200, 300, 400, 500 or 600")
 		i += 1
 	}
@@ -633,8 +634,21 @@ func TestTheDefencesAreRowsOfBlock200(emonT *testing.T) {
 	port.CellsSet(gw, fuserules.AgBody(), 100)
 	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 221, "mostly another layer's ink: 221")
 	port.AssertEq(emonT, fuserules.FrDefence(fuserules.FrDecide(gw)), 3, "defence 3")
+	port.CellsSet(gw, fuserules.AgOlen(), 2)
+	port.AssertThat(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)) != 221, "a speck of two characters is no watermark (it is a ghost, not a layer's text)")
+	port.CellsSet(gw, fuserules.AgOlen(), 5)
+	port.CellsSet(gw, fuserules.AgImage(), 400)
+	port.AssertThat(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)) != 221, "nor is a word in a picture: its ink is the picture's")
+	port.CellsSet(gw, fuserules.AgImage(), 0)
 	port.CellsSet(gw, fuserules.AgBody(), -1)
 	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 140, "(an absent column is no evidence)")
+	port.CellsSet(gw, fuserules.AgBink(), 0)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 140, "read by the body-ink pass too: text")
+	port.CellsSet(gw, fuserules.AgBink(), 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 222, "the body-ink pass did not read it: 222")
+	port.AssertEq(emonT, fuserules.FrDefence(fuserules.FrDecide(gw)), 3, "defence 3")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gw)), model.DrWatermark(), "a watermark")
+	port.CellsSet(gw, fuserules.AgBink(), -1)
 	port.CellsSet(gw, fuserules.AgOangle(), 2500)
 	port.CellsSet(gw, fuserules.AgOdiag(), 2500)
 	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gw)), 231, "on a diagonal: 231")

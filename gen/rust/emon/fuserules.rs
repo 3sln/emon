@@ -194,6 +194,10 @@ pub fn ag_rulelike() -> i32 {
     // P7.G (D224): the largest rule-likeness (`xo` 31) of the group's OCR words; -1 absent
     return 27;
 }
+pub fn ag_bink() -> i32 {
+    // defence 3 (P7.4): 1 when the page has a body-ink OCR run and no word of it lies over the group (what the body-ink pass did not read is not body text), 0 when one does, -1 when the page has no such run; numbered 39 (the one free column below `ag-count`)
+    return 39;
+}
 pub fn ag_count() -> i32 {
     return 40;
 }
@@ -450,7 +454,7 @@ pub fn fw_ocr() -> i32 {
     // the OCR words
     return 2;
 }
-pub static FR_ROWS: [i32; 2340] = [
+pub static FR_ROWS: [i32; 2376] = [
     301, 300, 1, 0, 0, 600, 2, 0, 1, 0, 2, 0, 1, 2, 0, 36, 2, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     311, 300, 2, 0, 0, -1, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, 37, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     310, 300, 1, 0, 0, 950, 2, 0, 1, 0, 2, 0, 1, 0, 1, 4, 0, 3, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -484,7 +488,8 @@ pub static FR_ROWS: [i32; 2340] = [
     203, 200, 0, 2, 0, 900, 16, 2, 21, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     205, 200, 0, 2, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 9, 0, 12, 24, 1, 13, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     211, 200, 0, 1, 0, 800, 0, 2, 0, 2, 2, 0, 1, 0, 1, 17, 2, 1, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
-    221, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 23, 1, 16, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    221, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 23, 1, 16, 9, 2, 0, 12, 0, 21, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+    222, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 39, 2, 1, 9, 2, 0, 12, 0, 21, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     231, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 18, 0, 14, 19, 0, 14, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     232, 200, 0, 1, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 20, 0, 15, 9, 0, 12, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
     251, 200, 0, 7, 0, 700, 0, 2, 0, 2, 2, 0, 1, 0, 1, 22, 1, 17, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
@@ -610,7 +615,7 @@ pub(crate) fn fr_holds(row: i32, gv: &mut crate::port::Cells) -> i32 {
 pub fn fr_decide(gv: &mut crate::port::Cells) -> i32 {
     // The row (an index of `fr-rows`) of the first rule that holds on the group columns `gv`, trying the blocks in `fr-order` and the
     // rows of a block in table order; -1 when none holds (the default row 190 holds for every group, so never in practice).
-    let n: i32 = 65;
+    let n: i32 = 66;
     let mut b: i32 = 0;
     let mut blk: i32 = 0;
     let mut r: i32 = 0;
@@ -632,7 +637,7 @@ pub fn fr_decide(gv: &mut crate::port::Cells) -> i32 {
 pub fn fr_decide_block(gv: &mut crate::port::Cells, blk: i32) -> i32 {
     // The row (an index of `fr-rows`) of the first rule OF BLOCK `blk` that holds on the measures `gv`; -1 when none does. Block 500 reads the graphics
     // measures (`gmz`, codes 100 and up, in a vector of 128 cells), which have a default row (599) so that the answer is never -1 there.
-    let n: i32 = 65;
+    let n: i32 = 66;
     let mut r: i32 = 0;
     while r < n {
         if fr_block(r) == blk {

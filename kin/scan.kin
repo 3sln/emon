@@ -38,14 +38,14 @@
   (:require [emon.lang :refer [I32 I64 Cells Src i64 i32 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.pdfsrc :refer [ps-len ps-u8 ps-missed]]
-            [emon.plan :refer [rq-ocr rq-ocr-lang rq-ocr-end rq-decode an-find an-ok an-arg an-status
+            [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end rq-decode an-find an-ok an-arg an-status
                                an-ocr-count an-ocr-first aw-get aw-cp aw-next aw-x aw-y aw-w aw-h aw-conf
                                aw-line aw-block aw-len flt-dct us-requests us-done lay-full]]
             [emon.ocr :refer [ocf-symbols ocf-osd ocf-dpi-unit ox-find ox-line-at ox-first-word ox-block-at
                               ox-wflags ox-wlang ox-wpsize ox-wdflags ox-nsym ox-first-sym ox-sym-next
                               ox-sym-alts ox-alt-next ox-word-next ox-nlines ox-nblocks ox-orient ox-wdir
                               ox-tlorder ox-deskew ox-osd ox-script ox-sconf ox-oconf ox-binary ox-bw ox-bh]]
-            [emon.evidence :refer [ep-new ep-set vw-new vw-px-to-cpt vw-box-to-cpt im-new im-get im-count
+            [emon.evidence :refer [ep-new ep-set vw-new vw-get vwf-cropx vwf-cropy vw-px-to-cpt vw-box-to-cpt im-new im-get im-count
                                    or-new or-set or-count ob-new ob-set ob-get ob-count
                                    ol-new ol-set ol-get ol-count ow-new ow-set ow-get ow-count
                                    os-new os-set os-get os-count oa-add oa-count wd-new wd-set wd-get wd-count
@@ -238,6 +238,26 @@
   (comment "automatic page segmentation), symbols with their alternatives and orientation and script detection wanted, the")
   (comment "resolution `dpi` as a hint in the flags (D211), and the language the locale hint names, if any.")
   (let [^I32 q (rq-ocr rq id bitmap 3 (+ (+ (ocf-symbols) (ocf-osd)) (* dpi (ocf-dpi-unit))) 0 0 0 0)
+        ^I32 lg (sc-lang loc)]
+    (if (> lg 0)
+      (rq-ocr-lang rq (quot lg 65536) (rem (quot lg 256) 256) (rem lg 256) 0))
+    (rq-ocr-end rq q)
+    (return q)))
+
+(defn ^:pub ^I32 sc-request-at [^:mut ^Cells rq ^I32 id ^I32 bitmap ^I32 psm ^I32 dpi ^I32 x ^I32 y ^I32 w ^I32 h ^Cells loc]
+  (comment "`sc-request` for a REGION of the bitmap (P7.4: a line at `psm` 7, a table cell): the pixel box x y w h, symbols with their")
+  (comment "alternatives, no orientation detection, the resolution hint and the locale's language.")
+  (let [^I32 q (rq-ocr rq id bitmap psm (+ (ocf-symbols) (* dpi (ocf-dpi-unit))) x y w h)
+        ^I32 lg (sc-lang loc)]
+    (if (> lg 0)
+      (rq-ocr-lang rq (quot lg 65536) (rem (quot lg 256) 256) (rem lg 256) 0))
+    (rq-ocr-end rq q)
+    (return q)))
+
+(defn ^:pub ^I32 sc-request-view [^:mut ^Cells rq ^I32 id ^I32 view ^I32 hhi ^I32 hlo ^I32 dpi ^Cells loc]
+  (comment "`sc-request` for a KIN-MADE VIEW (D196): the whole view at `psm` 3 with symbols and the resolution hint, its pixel hash")
+  (comment "`hhi` `hlo` (`bitmap-hash`) in the record so the transcript is keyed by what was asked.")
+  (let [^I32 q (rq-ocr-view rq id view hhi hlo 3 (+ (ocf-symbols) (* dpi (ocf-dpi-unit))) 0 0 0 0)
         ^I32 lg (sc-lang loc)]
     (if (> lg 0)
       (rq-ocr-lang rq (quot lg 65536) (rem (quot lg 256) 256) (rem lg 256) 0))
@@ -596,11 +616,18 @@
 
 (defn ^I32 sc-cap [] (return 400))   ;; the lines of a page whose size is clustered; later ones keep their own
 
+(defn ^:pub ^I32 sc-sel-base [] (comment "Where `sc-emit-sel`'s selection starts in the scratch.") (return 2300))
+(defn ^:pub ^I32 sc-sel-max [] (comment "The most lines a selection holds.") (return 1500))
+(defn ^:pub ^I32 sc-aux-base [] (comment "A scratch region after the selection (P7.4: one cell for each line of the first pass: what becomes of it).") (return 3800))
+(defn ^:pub ^I32 sc-share-base [] (comment "...and another: the share (per mille) of the line's ink that the body-ink view paints over (-1 none).") (return 5300))
+(defn ^:pub ^I32 sc-partner-base [] (comment "...and another: the line of the body-ink run that replaces it.") (return 6800))
+(defn ^:pub ^I32 sc-bonly-base [] (comment "...and another: one cell for each line of the body-ink run (1 a line no first-pass line covers, to be taken; 2 taken).") (return 8300))
+
 (defn ^:pub ^I32 sc-prep [^:mut ^Cells scr]
   (comment "The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first")
   (comment "`sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a")
   (comment "cluster's members; made once.")
-  (while (< (cells-len scr) (+ 242 (* 5 (sc-cap))))
+  (while (< (cells-len scr) (+ (sc-bonly-base) (sc-sel-max)))
     (cells-push scr 0))
   (return 0))
 
@@ -820,11 +847,8 @@
     (sc-cluster scr n)
     (return r)))
 
-(defn ^:pub ^I32 sc-emit-lines [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
-                          ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines]
-  (comment "Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas")
-  (comment "the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is")
-  (comment "the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.")
+(defn ^I32 sc-emit-core [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
+                         ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines ^I32 usesel]
   (let [^:mut ^I32 k 0
         ^:mut ^I32 made 0
         ^:mut ^I32 l 0
@@ -858,7 +882,7 @@
     (comment "Pass 1: every line's metrics, then their sizes clustered over the page.")
     (while (< k nl)
       (do (if (< k (sc-cap))
-            (do (set l (+ l0 k))
+            (do (do (set l (+ l0 k)) (if (== usesel 1) (set l (cells-at scr (+ (sc-sel-base) k)))))
                 (cells-set scr (+ 244 (* 4 k)) 0)
                 (cells-set scr (+ 242 (* 4 k)) -1)
                 (cells-set scr (+ 243 (* 4 k)) -1)
@@ -874,7 +898,7 @@
       (sc-fit scr (sc-cap)))
     (set k 0)
     (while (< k nl)
-      (do (set l (+ l0 k))
+      (do (do (set l (+ l0 k)) (if (== usesel 1) (set l (cells-at scr (+ (sc-sel-base) k)))))
           (set cnt (ol-get olines l (lh-count)))
           (if (> cnt 0)
             (do (set w0 (ol-get olines l (lh-first)))
@@ -939,6 +963,55 @@
           (set k (+ k 1))))
     (return made)))
 
+(defn ^:pub ^I32 sc-emit-lines [^Cells olines ^Cells owords ^Cells osyms ^I32 l0 ^I32 nl ^I32 page ^I32 rotmed
+                          ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines]
+  (comment "Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas")
+  (comment "the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is")
+  (comment "the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.")
+  (return (sc-emit-core olines owords osyms l0 nl page rotmed scr words lines 0)))
+
+(defn ^:pub ^I32 sc-emit-sel [^Cells olines ^Cells owords ^Cells osyms ^I32 nsel ^I32 page ^I32 rotmed
+                              ^:mut ^Cells scr ^:mut ^Cells words ^:mut ^Cells lines]
+  (comment "`sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`")
+  (comment "cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen")
+  (comment "line by line, their size clustered over the chosen lines. Answers the lines made.")
+  (return (sc-emit-core olines owords osyms 0 nsel page rotmed scr words lines 1)))
+
+(defn ^:pub ^I32 sc-sel-set [^:mut ^Cells scr ^I32 k ^I32 row]
+  (cells-set scr (+ (sc-sel-base) k) row)
+  (return 0))
+
+(defn ^:pub ^I32 sc-page-view [^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells images ^I32 page ^I32 decreq
+                              ^I32 wcpt ^I32 hcpt ^I32 pxw ^I32 pxh ^I32 dpi100
+                              ^I32 cropx ^I32 cropy ^I32 obj ^I32 ix0 ^I32 iy0 ^I32 ix1 ^I32 iy1]
+  (comment "The first half of a page of OCR: the image's placement, the page's `epages` row and the `views` row of the raster that")
+  (comment "is read (a decode, `decreq` its request, `pxw x pxh` pixels at `dpi100`, its top-left corner at (`cropx`, `cropy`)")
+  (comment "centipoints). Answers the view's row: P7.4 normalizes the raster (its skew goes to this row) BEFORE the OCR answer is")
+  (comment "mapped through it (`sc-page-evidence`), as SPEC 8.2 says.")
+  (im-new images page ix0 iy0 ix1 iy1 obj pxw pxh)
+  (let [^I32 ep (ep-new epages page wcpt hcpt)]
+    (ep-set epages ep (epf-flags) (eg-raster))
+    (ep-set epages ep (epf-dpi) dpi100)
+    (return (vw-new views page (vk-decode) decreq -1 pxw pxh dpi100 (lay-full) -1 0 0 cropx cropy 0))))
+
+(defn ^:pub ^I32 sc-page-evidence [^Cells an ^I32 at ^I32 page ^I32 request ^I32 vdec ^I32 dpi100 ^I32 lang
+                                   ^:mut ^Cells views ^Cells epages ^:mut ^Cells etext ^:mut ^Cells oruns
+                                   ^:mut ^Cells oblocks ^:mut ^Cells olines ^:mut ^Cells owords
+                                   ^:mut ^Cells osyms ^:mut ^Cells oalts ^:mut ^Cells feats]
+  (comment "The second half: the OCR answer at `at` as the page's evidence (the run with everything under it, and the engine's")
+  (comment "thresholded image as a view of its own when the answer says it carries one), mapped through the view `vdec`. Answers the")
+  (comment "run's row. The pipeline's lines are `sc-emit-lines`' or `sc-emit-sel`'s.")
+  (let [^I32 cropx (vw-get views vdec (vwf-cropx))
+        ^I32 cropy (vw-get views vdec (vwf-cropy))
+        ^I32 run (sc-answer an at page vdec request lang views epages etext oruns oblocks olines owords osyms oalts feats)
+        ^I32 ext (ox-find an at)
+        ^:mut ^I32 vbin -1]
+    (if (>= ext 0)
+      (if (== (ox-binary an ext) 1)
+        (do (set vbin (vw-new views page (vk-engine-binary) request vdec (ox-bw an ext) (ox-bh an ext) dpi100 (lay-full) -1 0 0 cropx cropy 1))
+            (or-set oruns run (orf-bview) vbin))))
+    (return run)))
+
 (defn ^:pub ^I32 sc-page [^Cells an ^I32 at ^I32 page ^I32 request ^I32 decreq
                           ^I32 wcpt ^I32 hcpt ^I32 pxw ^I32 pxh ^I32 dpi100
                           ^I32 cropx ^I32 cropy ^I32 obj ^I32 ix0 ^I32 iy0 ^I32 ix1 ^I32 iy1 ^I32 lang
@@ -946,30 +1019,19 @@
                           ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                           ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
                           ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells scr]
-  (comment "One page whose OCR answer is at `at`: the page's evidence (`epages`, the `views` row of the raster read, the image's")
+  (comment "One page whose OCR answer is at `an`/`at`: the page's evidence (`epages`, the `views` row of the raster read, the image's")
   (comment "placement, the run with everything under it, the engine's thresholded image as a view of its own when the answer says")
   (comment "it carries one) and its lines in the pipeline's arenas. `decreq` is the decode request that made the bitmap, `request`")
   (comment "the OCR request; the raster is `pxw x pxh` at `dpi100` (dots per inch x 100) and its top-left corner is at (`cropx`,")
   (comment "`cropy`) centipoints of the page; `obj` is the image's object number (0 none) and (`ix0` `iy0`)-(`ix1` `iy1`) its box.")
   (comment "`scr` is scratch (at least 242 cells). Answers the number of OCR lines the pipeline got.")
   (sc-prep scr)
-  (im-new images page ix0 iy0 ix1 iy1 obj pxw pxh)
-  (let [^I32 ep (ep-new epages page wcpt hcpt)
-        ^I32 vdec (vw-new views page (vk-decode) decreq -1 pxw pxh dpi100 (lay-full) -1 0 0 cropx cropy 0)
-        ^I32 l0 (ol-count olines)
-        ^I32 run (sc-answer an at page vdec request lang views epages etext oruns oblocks olines owords osyms oalts feats)
-        ^I32 ext (ox-find an at)
-        ^I32 nl (- (ol-count olines) l0)
-        ^:mut ^I32 vbin -1
-        ^:mut ^I32 rotmed 0]
-    (ep-set epages ep (epf-flags) (eg-raster))
-    (ep-set epages ep (epf-dpi) dpi100)
-    (if (>= ext 0)
-      (if (== (ox-binary an ext) 1)
-        (do (set vbin (vw-new views page (vk-engine-binary) request vdec (ox-bw an ext) (ox-bh an ext) dpi100 (lay-full) -1 0 0 cropx cropy 1))
-            (or-set oruns run (orf-bview) vbin))))
-    (set rotmed (ev-rot-median olines l0 nl))
-    (return (sc-emit-lines olines owords osyms l0 nl page rotmed scr words lines))))
+  (let [^I32 vdec (sc-page-view epages views images page decreq wcpt hcpt pxw pxh dpi100 cropx cropy obj ix0 iy0 ix1 iy1)
+        ^I32 l0 (ol-count olines)]
+    (sc-page-evidence an at page request vdec dpi100 lang views epages etext oruns oblocks olines owords osyms oalts feats)
+    (let [^I32 nl (- (ol-count olines) l0)
+          ^I32 rotmed (ev-rot-median olines l0 nl)]
+      (return (sc-emit-lines olines owords osyms l0 nl page rotmed scr words lines)))))
 
 ;; ================================================================== the Model
 

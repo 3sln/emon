@@ -312,6 +312,12 @@ public final class Player {
     public static int plgInSeal() {
         return 32;
     }
+    public static int plgBink() {
+        return 64;
+    }
+    public static int plgBinkAbsent() {
+        return 128;
+    }
     public static int plgEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "text-only");
@@ -335,6 +341,14 @@ public final class Player {
         }
         if (code == 32) {
             emon.Port.textAscii(t, "in-seal");
+            return 1;
+        }
+        if (code == 64) {
+            emon.Port.textAscii(t, "bink");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.textAscii(t, "bink-absent");
             return 1;
         }
         return 0;

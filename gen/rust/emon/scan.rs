@@ -371,6 +371,28 @@ pub fn sc_request(mut rq: &mut crate::port::Cells, id: i32, bitmap: i32, dpi: i3
     rq_ocr_end(rq, q);
     return q;
 }
+pub fn sc_request_at(mut rq: &mut crate::port::Cells, id: i32, bitmap: i32, psm: i32, dpi: i32, x: i32, y: i32, w: i32, h: i32, loc: &mut crate::port::Cells) -> i32 {
+    // `sc-request` for a REGION of the bitmap (P7.4: a line at `psm` 7, a table cell): the pixel box x y w h, symbols with their
+    // alternatives, no orientation detection, the resolution hint and the locale's language.
+    let q: i32 = rq_ocr(rq, id, bitmap, psm, ocf_symbols() + (dpi * ocf_dpi_unit()), x, y, w, h);
+    let lg: i32 = sc_lang(loc);
+    if lg > 0 {
+        rq_ocr_lang(rq, lg / 65536, (lg / 256) % 256, lg % 256, 0);
+    }
+    rq_ocr_end(rq, q);
+    return q;
+}
+pub fn sc_request_view(mut rq: &mut crate::port::Cells, id: i32, view: i32, hhi: i32, hlo: i32, dpi: i32, loc: &mut crate::port::Cells) -> i32 {
+    // `sc-request` for a KIN-MADE VIEW (D196): the whole view at `psm` 3 with symbols and the resolution hint, its pixel hash
+    // `hhi` `hlo` (`bitmap-hash`) in the record so the transcript is keyed by what was asked.
+    let q: i32 = rq_ocr_view(rq, id, view, hhi, hlo, 3, ocf_symbols() + (dpi * ocf_dpi_unit()), 0, 0, 0, 0);
+    let lg: i32 = sc_lang(loc);
+    if lg > 0 {
+        rq_ocr_lang(rq, lg / 65536, (lg / 256) % 256, lg % 256, 0);
+    }
+    rq_ocr_end(rq, q);
+    return q;
+}
 pub(crate) fn sc_cpt_len(views: &mut crate::port::Cells, view: i32, v: i32) -> i32 {
     // A length of `v` pixels down the view's y axis, in centipoints; -1 stays -1.
     if v < 0 {
@@ -754,11 +776,35 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
 pub(crate) fn sc_cap() -> i32 {
     return 400;
 }
+pub fn sc_sel_base() -> i32 {
+    // Where `sc-emit-sel`'s selection starts in the scratch.
+    return 2300;
+}
+pub fn sc_sel_max() -> i32 {
+    // The most lines a selection holds.
+    return 1500;
+}
+pub fn sc_aux_base() -> i32 {
+    // A scratch region after the selection (P7.4: one cell for each line of the first pass: what becomes of it).
+    return 3800;
+}
+pub fn sc_share_base() -> i32 {
+    // ...and another: the share (per mille) of the line's ink that the body-ink view paints over (-1 none).
+    return 5300;
+}
+pub fn sc_partner_base() -> i32 {
+    // ...and another: the line of the body-ink run that replaces it.
+    return 6800;
+}
+pub fn sc_bonly_base() -> i32 {
+    // ...and another: one cell for each line of the body-ink run (1 a line no first-pass line covers, to be taken; 2 taken).
+    return 8300;
+}
 pub fn sc_prep(mut scr: &mut crate::port::Cells) -> i32 {
     // The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
     // `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
     // cluster's members; made once.
-    while crate::port::cells_len(scr) < (242 + (5 * sc_cap())) {
+    while crate::port::cells_len(scr) < (sc_bonly_base() + sc_sel_max()) {
         crate::port::cells_push(scr, 0);
     }
     return 0;
@@ -1043,10 +1089,7 @@ pub(crate) fn sc_fit(mut scr: &mut crate::port::Cells, n: i32) -> i32 {
     sc_cluster(scr, n);
     return r;
 }
-pub fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
-    // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
-    // the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
-    // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
+pub(crate) fn sc_emit_core(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, usesel: i32) -> i32 {
     let mut k: i32 = 0;
     let mut made: i32 = 0;
     let mut l: i32 = 0;
@@ -1081,6 +1124,9 @@ pub fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::
     while k < nl {
         if k < sc_cap() {
             l = l0 + k;
+            if usesel == 1 {
+                l = crate::port::cells_at(scr, sc_sel_base() + k);
+            }
             crate::port::cells_set(scr, 244 + (4 * k), 0);
             crate::port::cells_set(scr, 242 + (4 * k), -1);
             crate::port::cells_set(scr, 243 + (4 * k), -1);
@@ -1102,6 +1148,9 @@ pub fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::
     k = 0;
     while k < nl {
         l = l0 + k;
+        if usesel == 1 {
+            l = crate::port::cells_at(scr, sc_sel_base() + k);
+        }
         cnt = ol_get(olines, l, lh_count());
         if cnt > 0 {
             w0 = ol_get(olines, l, lh_first());
@@ -1175,32 +1224,63 @@ pub fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::
     }
     return made;
 }
-pub fn sc_page(an: &mut crate::port::Cells, at: i32, page: i32, request: i32, decreq: i32, wcpt: i32, hcpt: i32, pxw: i32, pxh: i32, dpi100: i32, cropx: i32, cropy: i32, obj: i32, ix0: i32, iy0: i32, ix1: i32, iy1: i32, lang: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
-    // One page whose OCR answer is at `at`: the page's evidence (`epages`, the `views` row of the raster read, the image's
-    // placement, the run with everything under it, the engine's thresholded image as a view of its own when the answer says
-    // it carries one) and its lines in the pipeline's arenas. `decreq` is the decode request that made the bitmap, `request`
-    // the OCR request; the raster is `pxw x pxh` at `dpi100` (dots per inch x 100) and its top-left corner is at (`cropx`,
-    // `cropy`) centipoints of the page; `obj` is the image's object number (0 none) and (`ix0` `iy0`)-(`ix1` `iy1`) its box.
-    // `scr` is scratch (at least 242 cells). Answers the number of OCR lines the pipeline got.
-    sc_prep(scr);
+pub fn sc_emit_lines(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, l0: i32, nl: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
+    // Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
+    // the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
+    // the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
+    return sc_emit_core(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines, 0);
+}
+pub fn sc_emit_sel(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, osyms: &mut crate::port::Cells, nsel: i32, page: i32, rotmed: i32, mut scr: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells) -> i32 {
+    // `sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`
+    // cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen
+    // line by line, their size clustered over the chosen lines. Answers the lines made.
+    return sc_emit_core(olines, owords, osyms, 0, nsel, page, rotmed, scr, words, lines, 1);
+}
+pub fn sc_sel_set(mut scr: &mut crate::port::Cells, k: i32, row: i32) -> i32 {
+    crate::port::cells_set(scr, sc_sel_base() + k, row);
+    return 0;
+}
+pub fn sc_page_view(mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut images: &mut crate::port::Cells, page: i32, decreq: i32, wcpt: i32, hcpt: i32, pxw: i32, pxh: i32, dpi100: i32, cropx: i32, cropy: i32, obj: i32, ix0: i32, iy0: i32, ix1: i32, iy1: i32) -> i32 {
+    // The first half of a page of OCR: the image's placement, the page's `epages` row and the `views` row of the raster that
+    // is read (a decode, `decreq` its request, `pxw x pxh` pixels at `dpi100`, its top-left corner at (`cropx`, `cropy`)
+    // centipoints). Answers the view's row: P7.4 normalizes the raster (its skew goes to this row) BEFORE the OCR answer is
+    // mapped through it (`sc-page-evidence`), as SPEC 8.2 says.
     im_new(images, page, ix0, iy0, ix1, iy1, obj, pxw, pxh);
     let ep: i32 = ep_new(epages, page, wcpt, hcpt);
-    let vdec: i32 = vw_new(views, page, vk_decode(), decreq, -1, pxw, pxh, dpi100, lay_full(), -1, 0, 0, cropx, cropy, 0);
-    let l0: i32 = ol_count(olines);
-    let run: i32 = sc_answer(an, at, page, vdec, request, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-    let ext: i32 = ox_find(an, at);
-    let nl: i32 = ol_count(olines) - l0;
-    let mut vbin: i32 = -1;
-    let mut rotmed: i32 = 0;
     ep_set(epages, ep, epf_flags(), eg_raster());
     ep_set(epages, ep, epf_dpi(), dpi100);
+    return vw_new(views, page, vk_decode(), decreq, -1, pxw, pxh, dpi100, lay_full(), -1, 0, 0, cropx, cropy, 0);
+}
+pub fn sc_page_evidence(an: &mut crate::port::Cells, at: i32, page: i32, request: i32, vdec: i32, dpi100: i32, lang: i32, mut views: &mut crate::port::Cells, epages: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut feats: &mut crate::port::Cells) -> i32 {
+    // The second half: the OCR answer at `at` as the page's evidence (the run with everything under it, and the engine's
+    // thresholded image as a view of its own when the answer says it carries one), mapped through the view `vdec`. Answers the
+    // run's row. The pipeline's lines are `sc-emit-lines`' or `sc-emit-sel`'s.
+    let cropx: i32 = vw_get(views, vdec, vwf_cropx());
+    let cropy: i32 = vw_get(views, vdec, vwf_cropy());
+    let run: i32 = sc_answer(an, at, page, vdec, request, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+    let ext: i32 = ox_find(an, at);
+    let mut vbin: i32 = -1;
     if ext >= 0 {
         if ox_binary(an, ext) == 1 {
             vbin = vw_new(views, page, vk_engine_binary(), request, vdec, ox_bw(an, ext), ox_bh(an, ext), dpi100, lay_full(), -1, 0, 0, cropx, cropy, 1);
             or_set(oruns, run, orf_bview(), vbin);
         }
     }
-    rotmed = ev_rot_median(olines, l0, nl);
+    return run;
+}
+pub fn sc_page(an: &mut crate::port::Cells, at: i32, page: i32, request: i32, decreq: i32, wcpt: i32, hcpt: i32, pxw: i32, pxh: i32, dpi100: i32, cropx: i32, cropy: i32, obj: i32, ix0: i32, iy0: i32, ix1: i32, iy1: i32, lang: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut scr: &mut crate::port::Cells) -> i32 {
+    // One page whose OCR answer is at `an`/`at`: the page's evidence (`epages`, the `views` row of the raster read, the image's
+    // placement, the run with everything under it, the engine's thresholded image as a view of its own when the answer says
+    // it carries one) and its lines in the pipeline's arenas. `decreq` is the decode request that made the bitmap, `request`
+    // the OCR request; the raster is `pxw x pxh` at `dpi100` (dots per inch x 100) and its top-left corner is at (`cropx`,
+    // `cropy`) centipoints of the page; `obj` is the image's object number (0 none) and (`ix0` `iy0`)-(`ix1` `iy1`) its box.
+    // `scr` is scratch (at least 242 cells). Answers the number of OCR lines the pipeline got.
+    sc_prep(scr);
+    let vdec: i32 = sc_page_view(epages, views, images, page, decreq, wcpt, hcpt, pxw, pxh, dpi100, cropx, cropy, obj, ix0, iy0, ix1, iy1);
+    let l0: i32 = ol_count(olines);
+    sc_page_evidence(an, at, page, request, vdec, dpi100, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+    let nl: i32 = ol_count(olines) - l0;
+    let rotmed: i32 = ev_rot_median(olines, l0, nl);
     return sc_emit_lines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines);
 }
 pub(crate) fn sc_node_page(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, n: i32) -> i32 {

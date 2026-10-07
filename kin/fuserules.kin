@@ -87,6 +87,7 @@
 (defn ^:pub ^I32 ag-hsame [] (comment "1 when the group has as many OCR words as hidden words (one segmentation: a disagreement is about the letters of the words, not about where they break), else 0") (return 38))
 (defn ^:pub ^I32 ag-tableimg [] (comment "P7.G (D224): the largest share (per mille) of an OCR word's box of the group that lies in a `table-in-image` region (`xo` 30); -1 absent") (return 26))
 (defn ^:pub ^I32 ag-rulelike [] (comment "P7.G (D224): the largest rule-likeness (`xo` 31) of the group's OCR words; -1 absent") (return 27))
+(defn ^:pub ^I32 ag-bink [] (comment "defence 3 (P7.4): 1 when the page has a body-ink OCR run and no word of it lies over the group (what the body-ink pass did not read is not body text), 0 when one does, -1 when the page has no such run; numbered 39 (the one free column below `ag-count`)") (return 39))
 (defn ^:pub ^I32 ag-count [] (return 40))
 
 ;; ------------------------------------------------------------- comparisons and settings
@@ -272,8 +273,10 @@
          205 200 0 2 0 800 0 2 0 2 2 0 1 0 1 9 0 12 24 1 13 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 211 defence 2: an OCR-only group recurring at the same place on wm-recur-pages of the pages: watermark
          211 200 0 1 0 800 0 2 0 2 2 0 1 0 1 17 2 1 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
-         ;; 221 defence 3: an OCR-only word whose ink is mostly another layer's (body-ink share under wm-body-share): watermark (reads columns P6.3 fills; absent until the ink layers are wired)
-         221 200 0 1 0 700 0 2 0 2 2 0 1 0 1 23 1 16 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 221 defence 3: an OCR-only word of at least three letters or digits outside every image placement whose ink is mostly another layer's (body-ink share under wm-body-share): watermark (a word in a picture has the picture's ink, which says nothing: the figure's text, rows 150 and 170; what is shorter is a speck, row 176)
+         221 200 0 1 0 700 0 2 0 2 2 0 1 0 1 23 1 16 9 2 0 12 0 21 -1 0 0 -1 0 0 -1 0 0 -1 0 0
+         ;; 222 defence 3 (P7.4): an OCR-only group of at least three letters or digits outside every image placement that the body-ink pass (the page with every foreign ink painted the paper's) did not read: watermark
+         222 200 0 1 0 700 0 2 0 2 2 0 1 0 1 39 2 1 9 2 0 12 0 21 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 231 defence 4: an OCR-only group on a diagonal (at least wm-angle off the page's text and off every right angle): watermark
          231 200 0 1 0 700 0 2 0 2 2 0 1 0 1 18 0 14 19 0 14 -1 0 0 -1 0 0 -1 0 0 -1 0 0 -1 0 0
          ;; 232 defence 4: an OCR-only group much taller than its line's median (wm-size) on a page-sized image: watermark

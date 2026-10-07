@@ -277,6 +277,21 @@ pub fn rq_ocr(mut c: &mut crate::port::Cells, id: i32, bitmap: i32, psm: i32, fl
     crate::port::cells_push(c, h);
     return at;
 }
+pub fn rq_ocr_view(mut c: &mut crate::port::Cells, id: i32, view: i32, hhi: i32, hlo: i32, psm: i32, flags: i32, x: i32, y: i32, w: i32, h: i32) -> i32 {
+    // Ask for OCR of the kin-made view `view` (an id from `view-base`, `pu-view-id`), whose `bitmap-hash` is the two cells
+    // `hhi` `hlo`: the request is `rq-ocr` with the hash after `h` (D196). Add languages with `rq-ocr-lang`, close with `rq-ocr-end`.
+    let at: i32 = rec_begin(c, pk_ocr(), id);
+    crate::port::cells_push(c, view);
+    crate::port::cells_push(c, psm);
+    crate::port::cells_push(c, flags);
+    crate::port::cells_push(c, x);
+    crate::port::cells_push(c, y);
+    crate::port::cells_push(c, w);
+    crate::port::cells_push(c, h);
+    crate::port::cells_push(c, hhi);
+    crate::port::cells_push(c, hlo);
+    return at;
+}
 pub fn rq_ocr_lang(mut c: &mut crate::port::Cells, a: i32, b: i32, d: i32, e: i32) -> i32 {
     // Append a language: up to four ASCII chars, 0 for none ("eng" = e n g 0).
     let hi: i32 = (a * 256) + b;

@@ -381,6 +381,30 @@ func ScRequest(rq *port.Cells, id int32, bitmap int32, dpi int32, loc *port.Cell
 	return q
 }
 
+func ScRequestAt(rq *port.Cells, id int32, bitmap int32, psm int32, dpi int32, x int32, y int32, w int32, h int32, loc *port.Cells) int32 {
+	// `sc-request` for a REGION of the bitmap (P7.4: a line at `psm` 7, a table cell): the pixel box x y w h, symbols with their
+	// alternatives, no orientation detection, the resolution hint and the locale's language.
+	var q int32 = plan.RqOcr(rq, id, bitmap, psm, ocr.OcfSymbols()+(dpi*ocr.OcfDpiUnit()), x, y, w, h)
+	var lg int32 = ScLang(loc)
+	if lg > 0 {
+		plan.RqOcrLang(rq, lg/65536, (lg/256)%256, lg%256, 0)
+	}
+	plan.RqOcrEnd(rq, q)
+	return q
+}
+
+func ScRequestView(rq *port.Cells, id int32, view int32, hhi int32, hlo int32, dpi int32, loc *port.Cells) int32 {
+	// `sc-request` for a KIN-MADE VIEW (D196): the whole view at `psm` 3 with symbols and the resolution hint, its pixel hash
+	// `hhi` `hlo` (`bitmap-hash`) in the record so the transcript is keyed by what was asked.
+	var q int32 = plan.RqOcrView(rq, id, view, hhi, hlo, 3, ocr.OcfSymbols()+(dpi*ocr.OcfDpiUnit()), 0, 0, 0, 0)
+	var lg int32 = ScLang(loc)
+	if lg > 0 {
+		plan.RqOcrLang(rq, lg/65536, (lg/256)%256, lg%256, 0)
+	}
+	plan.RqOcrEnd(rq, q)
+	return q
+}
+
 func scCptLen(views *port.Cells, view int32, v int32) int32 {
 	// A length of `v` pixels down the view's y axis, in centipoints; -1 stays -1.
 	if v < 0 {
@@ -771,11 +795,41 @@ func scCap() int32 {
 	return 400
 }
 
+func ScSelBase() int32 {
+	// Where `sc-emit-sel`'s selection starts in the scratch.
+	return 2300
+}
+
+func ScSelMax() int32 {
+	// The most lines a selection holds.
+	return 1500
+}
+
+func ScAuxBase() int32 {
+	// A scratch region after the selection (P7.4: one cell for each line of the first pass: what becomes of it).
+	return 3800
+}
+
+func ScShareBase() int32 {
+	// ...and another: the share (per mille) of the line's ink that the body-ink view paints over (-1 none).
+	return 5300
+}
+
+func ScPartnerBase() int32 {
+	// ...and another: the line of the body-ink run that replaces it.
+	return 6800
+}
+
+func ScBonlyBase() int32 {
+	// ...and another: one cell for each line of the body-ink run (1 a line no first-pass line covers, to be taken; 2 taken).
+	return 8300
+}
+
 func ScPrep(scr *port.Cells) int32 {
 	// The scratch of `sc-sample` and `sc-cluster`: 242 cells (two for the metrics and 240 samples), three for each of the first
 	// `sc-cap` lines of a page (its ascender line, its descender depth, whether clustered), and `sc-cap` more for sorting a
 	// cluster's members; made once.
-	for port.CellsLen(scr) < (242 + (5 * scCap())) {
+	for port.CellsLen(scr) < (ScBonlyBase() + ScSelMax()) {
 		port.CellsPush(scr, 0)
 	}
 	return 0
@@ -1068,10 +1122,7 @@ func scFit(scr *port.Cells, n int32) int32 {
 	return r
 }
 
-func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
-	// Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
-	// the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
-	// the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
+func scEmitCore(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells, usesel int32) int32 {
 	var k int32 = 0
 	var made int32 = 0
 	var l int32 = 0
@@ -1106,6 +1157,9 @@ func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 i
 	for k < nl {
 		if k < scCap() {
 			l = l0 + k
+			if usesel == 1 {
+				l = port.CellsAt(scr, ScSelBase()+k)
+			}
 			port.CellsSet(scr, 244+(4*k), 0)
 			port.CellsSet(scr, 242+(4*k), -1)
 			port.CellsSet(scr, 243+(4*k), -1)
@@ -1127,6 +1181,9 @@ func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 i
 	k = 0
 	for k < nl {
 		l = l0 + k
+		if usesel == 1 {
+			l = port.CellsAt(scr, ScSelBase()+k)
+		}
 		cnt = evidence.OlGet(olines, l, evidence.LhCount())
 		if cnt > 0 {
 			w0 = evidence.OlGet(olines, l, evidence.LhFirst())
@@ -1201,32 +1258,68 @@ func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 i
 	return made
 }
 
-func ScPage(an *port.Cells, at int32, page int32, request int32, decreq int32, wcpt int32, hcpt int32, pxw int32, pxh int32, dpi100 int32, cropx int32, cropy int32, obj int32, ix0 int32, iy0 int32, ix1 int32, iy1 int32, lang int32, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells) int32 {
-	// One page whose OCR answer is at `at`: the page's evidence (`epages`, the `views` row of the raster read, the image's
-	// placement, the run with everything under it, the engine's thresholded image as a view of its own when the answer says
-	// it carries one) and its lines in the pipeline's arenas. `decreq` is the decode request that made the bitmap, `request`
-	// the OCR request; the raster is `pxw x pxh` at `dpi100` (dots per inch x 100) and its top-left corner is at (`cropx`,
-	// `cropy`) centipoints of the page; `obj` is the image's object number (0 none) and (`ix0` `iy0`)-(`ix1` `iy1`) its box.
-	// `scr` is scratch (at least 242 cells). Answers the number of OCR lines the pipeline got.
-	ScPrep(scr)
+func ScEmitLines(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 int32, nl int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
+	// Every OCR line of the run [l0, l0 + nl) that has words as a `lines` row, and its words as `words` rows, in the arenas
+	// the text layer fills (D213: size, box and rotation are the line's, see the head of this file). The words' text is
+	// the shared `etext`'s: `hd-tstart` and `hd-tlen` of an OCR word are read as they are. Answers the lines made.
+	return scEmitCore(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines, 0)
+}
+
+func ScEmitSel(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nsel int32, page int32, rotmed int32, scr *port.Cells, words *port.Cells, lines *port.Cells) int32 {
+	// `sc-emit-lines` over the OCR lines the scratch names (P7.4): `nsel` `olines` rows, in the order to emit them, at `scr`
+	// cells `sc-sel-base` and up (`sc-sel-set`; `sc-prep` makes room for `sc-sel-max` of them): the lines of several runs chosen
+	// line by line, their size clustered over the chosen lines. Answers the lines made.
+	return scEmitCore(olines, owords, osyms, 0, nsel, page, rotmed, scr, words, lines, 1)
+}
+
+func ScSelSet(scr *port.Cells, k int32, row int32) int32 {
+	port.CellsSet(scr, ScSelBase()+k, row)
+	return 0
+}
+
+func ScPageView(epages *port.Cells, views *port.Cells, images *port.Cells, page int32, decreq int32, wcpt int32, hcpt int32, pxw int32, pxh int32, dpi100 int32, cropx int32, cropy int32, obj int32, ix0 int32, iy0 int32, ix1 int32, iy1 int32) int32 {
+	// The first half of a page of OCR: the image's placement, the page's `epages` row and the `views` row of the raster that
+	// is read (a decode, `decreq` its request, `pxw x pxh` pixels at `dpi100`, its top-left corner at (`cropx`, `cropy`)
+	// centipoints). Answers the view's row: P7.4 normalizes the raster (its skew goes to this row) BEFORE the OCR answer is
+	// mapped through it (`sc-page-evidence`), as SPEC 8.2 says.
 	evidence.ImNew(images, page, ix0, iy0, ix1, iy1, obj, pxw, pxh)
 	var ep int32 = evidence.EpNew(epages, page, wcpt, hcpt)
-	var vdec int32 = evidence.VwNew(views, page, evidence.VkDecode(), decreq, -1, pxw, pxh, dpi100, plan.LayFull(), -1, 0, 0, cropx, cropy, 0)
-	var l0 int32 = evidence.OlCount(olines)
-	var run int32 = ScAnswer(an, at, page, vdec, request, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-	var ext int32 = ocr.OxFind(an, at)
-	var nl int32 = evidence.OlCount(olines) - l0
-	var vbin int32 = -1
-	var rotmed int32 = 0
 	evidence.EpSet(epages, ep, evidence.EpfFlags(), evidence.EgRaster())
 	evidence.EpSet(epages, ep, evidence.EpfDpi(), dpi100)
+	return evidence.VwNew(views, page, evidence.VkDecode(), decreq, -1, pxw, pxh, dpi100, plan.LayFull(), -1, 0, 0, cropx, cropy, 0)
+}
+
+func ScPageEvidence(an *port.Cells, at int32, page int32, request int32, vdec int32, dpi100 int32, lang int32, views *port.Cells, epages *port.Cells, etext *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, feats *port.Cells) int32 {
+	// The second half: the OCR answer at `at` as the page's evidence (the run with everything under it, and the engine's
+	// thresholded image as a view of its own when the answer says it carries one), mapped through the view `vdec`. Answers the
+	// run's row. The pipeline's lines are `sc-emit-lines`' or `sc-emit-sel`'s.
+	var cropx int32 = evidence.VwGet(views, vdec, evidence.VwfCropx())
+	var cropy int32 = evidence.VwGet(views, vdec, evidence.VwfCropy())
+	var run int32 = ScAnswer(an, at, page, vdec, request, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	var ext int32 = ocr.OxFind(an, at)
+	var vbin int32 = -1
 	if ext >= 0 {
 		if ocr.OxBinary(an, ext) == 1 {
 			vbin = evidence.VwNew(views, page, evidence.VkEngineBinary(), request, vdec, ocr.OxBw(an, ext), ocr.OxBh(an, ext), dpi100, plan.LayFull(), -1, 0, 0, cropx, cropy, 1)
 			evidence.OrSet(oruns, run, evidence.OrfBview(), vbin)
 		}
 	}
-	rotmed = evidence.EvRotMedian(olines, l0, nl)
+	return run
+}
+
+func ScPage(an *port.Cells, at int32, page int32, request int32, decreq int32, wcpt int32, hcpt int32, pxw int32, pxh int32, dpi100 int32, cropx int32, cropy int32, obj int32, ix0 int32, iy0 int32, ix1 int32, iy1 int32, lang int32, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, scr *port.Cells) int32 {
+	// One page whose OCR answer is at `an`/`at`: the page's evidence (`epages`, the `views` row of the raster read, the image's
+	// placement, the run with everything under it, the engine's thresholded image as a view of its own when the answer says
+	// it carries one) and its lines in the pipeline's arenas. `decreq` is the decode request that made the bitmap, `request`
+	// the OCR request; the raster is `pxw x pxh` at `dpi100` (dots per inch x 100) and its top-left corner is at (`cropx`,
+	// `cropy`) centipoints of the page; `obj` is the image's object number (0 none) and (`ix0` `iy0`)-(`ix1` `iy1`) its box.
+	// `scr` is scratch (at least 242 cells). Answers the number of OCR lines the pipeline got.
+	ScPrep(scr)
+	var vdec int32 = ScPageView(epages, views, images, page, decreq, wcpt, hcpt, pxw, pxh, dpi100, cropx, cropy, obj, ix0, iy0, ix1, iy1)
+	var l0 int32 = evidence.OlCount(olines)
+	ScPageEvidence(an, at, page, request, vdec, dpi100, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	var nl int32 = evidence.OlCount(olines) - l0
+	var rotmed int32 = evidence.EvRotMedian(olines, l0, nl)
 	return ScEmitLines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines)
 }
 
