@@ -1,0 +1,334 @@
+;; Laws for the figures (P8.1; SPEC 10.6, D020), on every target.
+;;
+;;   THE KINDS from geometry and ink: axes with ticks and bars are a chart; boxes with words in them and an arrow are a diagram; a lone
+;;   shaded fill is a photograph; a small coloured drawing at the head of the page is a logo and in the middle of it is not; a raster
+;;   is told by the bits it needed a pixel and its shape (photograph, barcode, code, screenshot, logo, illustration).
+;;   WHAT IS NO FIGURE: lines of prose in a region, rings drawn one in another (a seal).
+;;   THE PLACEHOLDER: a short paragraph on a figure is its label and not body text, a long one stays; a figure with a caption goes in
+;;   just before it, whatever its top edge says (a column of text between).
+(ns emon.figclasstest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [model-init node-new node-set-text node-add-region node-set-aux node-count node-kind node-parent node-attr
+                                node-sub node-conf page-new pk-vector text-append-cp
+                                nk-figure nk-paragraph nk-caption nk-document fg-chart fg-diagram fg-photo fg-logo fg-screenshot fg-qr
+                                fg-barcode fg-illustration fg-unknown fk-labels fk-image]]
+            [emon.figclass :refer [fc-measure fc-vector-kind fc-image-kind fc-reject]]
+            [emon.restruct :refer [rs-figures]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------------------------------------------ scenes
+
+(defn ^I32 ft-path [^:mut ^Cells pa ^I32 page ^I32 kind ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 fill ^I32 stroke ^I32 flags]
+  (comment "A row of `paths` (stride 24): kind 1 line, 2 rect, 3 curve, 4 other; flags 8 filled, 16 stroked, 1 closed, 64 pattern.")
+  (let [^:mut ^I32 k 0]
+    (cells-push pa page)
+    (cells-push pa kind)
+    (cells-push pa x0)
+    (cells-push pa y0)
+    (cells-push pa x1)
+    (cells-push pa y1)
+    (cells-push pa fill)
+    (cells-push pa stroke)
+    (cells-push pa 75)
+    (cells-push pa 1000)
+    (cells-push pa 1000)
+    (cells-push pa flags)
+    (set k 12)
+    (while (< k 24)
+      (do (cells-push pa 0)
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 ft-ws [^:mut ^Cells ws]
+  (let [^:mut ^I32 i 0]
+    (while (< i 728)
+      (do (cells-push ws 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ft-word [^:mut ^Cells fw ^:mut ^Cells et ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 cp0 ^I32 cp1]
+  (comment "A word of two code points: a row of `words` (stride 24: page, box, text run at 11 and 12).")
+  (let [^:mut ^I32 k 5
+        ^I32 at (cells-len et)]
+    (cells-push et cp0)
+    (cells-push et cp1)
+    (cells-push fw page)
+    (cells-push fw x0)
+    (cells-push fw y0)
+    (cells-push fw x1)
+    (cells-push fw y1)
+    (while (< k 11)
+      (do (cells-push fw 0)
+          (set k (+ k 1))))
+    (cells-push fw at)
+    (cells-push fw 2)
+    (set k 13)
+    (while (< k 24)
+      (do (cells-push fw 0)
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 ft-line [^:mut ^Cells fl ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 words]
+  (comment "A row of `lines` (stride 16: page, box, first word at 11, count of words at 12).")
+  (let [^:mut ^I32 k 5]
+    (cells-push fl page)
+    (cells-push fl x0)
+    (cells-push fl y0)
+    (cells-push fl x1)
+    (cells-push fl y1)
+    (while (< k 11)
+      (do (cells-push fl 0)
+          (set k (+ k 1))))
+    (cells-push fl 0)
+    (cells-push fl words)
+    (cells-push fl 0)
+    (cells-push fl 0)
+    (cells-push fl 0)
+    (return 0)))
+
+(defn ^I32 ft-kind [^Cells pa ^Cells fw ^Cells fl ^Cells et ^:mut ^Cells ws ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 pageh]
+  (comment "Measure the region of page 1 and answer the packed kind and confidence (kind * 1024 + confidence); 0 when it is no figure.")
+  (let [^Cells grl (new-cells)]
+    (cells-drop ws 0)
+    (ft-ws ws)
+    (fc-measure pa grl fw fl et 1 x0 y0 x1 y1 ws)
+    (if (== (fc-reject ws) 1) (return 0))
+    (return (fc-vector-kind ws x0 y0 x1 y1 pageh 0))))
+
+;; ------------------------------------------------------------------------------------------------ the kinds
+
+(deftest test-axes-with-ticks-and-bars-are-a-chart
+  (let [^Cells pa (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ws (new-cells)
+        ^:mut ^I32 pk 0]
+    (comment "the vertical axis, the horizontal axis, three ticks on the vertical, three bars on one baseline of different heights")
+    (ft-path pa 1 1 10162 15712 10238 28538 -1 0 16)
+    (ft-path pa 1 1 10162 28462 37988 28538 -1 0 16)
+    (ft-path pa 1 1 9862 28462 10238 28538 -1 0 16)
+    (ft-path pa 1 1 9862 22000 10238 22076 -1 0 16)
+    (ft-path pa 1 1 9862 16000 10238 16076 -1 0 16)
+    (ft-path pa 1 2 10800 21750 16313 28500 3894949 -1 8)
+    (ft-path pa 1 2 17363 18375 22875 28500 3894949 -1 8)
+    (ft-path pa 1 2 23925 20063 29438 28500 3894949 -1 8)
+    (set pk (ft-kind pa fw fl et ws 9800 15700 38000 28600 79200))
+    (assert-eq (cells-at ws 3) 1 "the two long rules meet: axes")
+    (assert-that (>= (cells-at ws 4) 3) "three short rules across the axis: ticks")
+    (assert-eq (cells-at ws 5) 3 "three bars on one baseline")
+    (assert-eq (quot pk 1024) (fg-chart) "a chart")
+    (assert-that (>= (rem pk 1024) 700) "and a sure one: axes, ticks and bars")))
+
+(deftest test-boxes-with-words-and-an-arrow-are-a-diagram-and-with-no-axes
+  (let [^Cells pa (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ws (new-cells)
+        ^:mut ^I32 pk 0]
+    (ft-path pa 1 2 10000 30000 20000 34000 -1 0 16)
+    (ft-path pa 1 2 25000 30000 35000 34000 -1 0 16)
+    (ft-path pa 1 1 20000 31960 25000 32040 -1 0 16)
+    (ft-path pa 1 4 24400 31700 25000 32300 0 -1 8)
+    (ft-word fw et 1 12000 31000 15000 32000 67 108)
+    (ft-word fw et 1 28000 31000 31000 32000 83 118)
+    (set pk (ft-kind pa fw fl et ws 9800 29800 35200 34200 79200))
+    (assert-eq (cells-at ws 3) 0 "no axes")
+    (assert-eq (cells-at ws 9) 2 "two boxes have a word in them")
+    (assert-that (>= (cells-at ws 10) 2) "a rule and an arrow head join them")
+    (assert-eq (quot pk 1024) (fg-diagram) "a diagram")))
+
+(deftest test-a-lone-shaded-fill-is-a-photograph-and-nothing-else-is
+  (let [^Cells pa (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ws (new-cells)]
+    (ft-path pa 1 2 10000 10000 30000 20000 -1 -1 72)
+    (assert-eq (quot (ft-kind pa fw fl et ws 10000 10000 30000 20000 79200) 1024) (fg-photo) "one pattern fill with no words: continuous tone")
+    (ft-word fw et 1 12000 12000 14000 13000 65 66)
+    (assert-that (!= (quot (ft-kind pa fw fl et ws 10000 10000 30000 20000 79200) 1024) (fg-photo)) "a word in it is not a photograph")))
+
+(deftest test-a-small-coloured-drawing-at-the-head-of-the-page-is-a-logo-and-in-the-middle-is-not
+  (let [^Cells pa (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells pb (new-cells)]
+    (ft-path pa 1 3 7300 7300 10300 10300 43639 -1 9)
+    (ft-path pa 1 2 8500 8500 9100 9100 16777215 -1 8)
+    (assert-eq (quot (ft-kind pa fw fl et ws 7300 7300 10300 10300 79200) 1024) (fg-logo) "in the header band")
+    (ft-path pb 1 3 7300 40000 10300 43000 43639 -1 9)
+    (ft-path pb 1 2 8500 41200 9100 41800 16777215 -1 8)
+    (assert-eq (quot (ft-kind pb fw fl et ws 7300 40000 10300 43000 79200) 1024) (fg-unknown) "the same drawing mid-page is unknown, and no figure without a caption")))
+
+(deftest test-rings-one-in-another-are-a-seal-and-prose-is-no-figure
+  (let [^Cells pa (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells grl (new-cells)]
+    (ft-path pa 1 3 10000 10000 22000 22000 -1 2000000 17)
+    (ft-path pa 1 3 11500 11500 20500 20500 -1 2000000 17)
+    (cells-drop ws 0)
+    (ft-ws ws)
+    (fc-measure pa grl fw fl et 1 10000 10000 22000 22000 ws)
+    (assert-eq (fc-reject ws) 1 "two concentric rings: a seal")
+    (comment "a box with prose in it")
+    (cells-drop pa 0)
+    (cells-drop ws 0)
+    (ft-ws ws)
+    (ft-path pa 1 2 10000 10000 30000 30000 15658734 5666423 24)
+    (ft-line fl 1 11000 12000 29000 13000 9)
+    (ft-line fl 1 11000 14000 29000 15000 8)
+    (fc-measure pa grl fw fl et 1 10000 10000 30000 30000 ws)
+    (assert-eq (cells-at ws 19) 2 "two lines of five words or more")
+    (assert-eq (fc-reject ws) 1 "a sidebar is no figure")))
+
+;; ------------------------------------------------------------------------------------------------ rasters
+
+(defn ^I32 ft-fi [^:mut ^Cells fi ^I32 valid ^I32 codec ^I32 cls ^I32 ncomp ^I32 bpc ^I32 bpp ^I32 mkind]
+  (cells-drop fi 0)
+  (cells-push fi valid)
+  (cells-push fi codec)
+  (cells-push fi cls)
+  (cells-push fi ncomp)
+  (cells-push fi bpc)
+  (cells-push fi 100)
+  (cells-push fi 100)
+  (cells-push fi bpp)
+  (cells-push fi 0)
+  (cells-push fi mkind)
+  (cells-push fi 0)
+  (cells-push fi 0)
+  (return 0))
+
+(deftest test-a-raster-is-a-photograph-a-code-a-screenshot-a-logo-or-line-art-by-its-bits-and-its-shape
+  (let [^Cells fi (new-cells)]
+    (ft-fi fi 1 7 2 3 8 300 0)
+    (assert-eq (quot (fc-image-kind fi 0 20000 15000 20000 35000 79200 0) 1024) (fg-photo) "a JPEG that needed three bits a pixel")
+    (assert-that (>= (rem (fc-image-kind fi 0 20000 15000 20000 35000 79200 0) 1024) 600) "a sure one")
+    (ft-fi fi 1 0 2 3 8 60 0)
+    (assert-eq (quot (fc-image-kind fi 0 30000 20000 20000 40000 79200 0) 1024) (fg-screenshot) "a large flat one")
+    (assert-that (< (rem (fc-image-kind fi 0 30000 20000 20000 40000 79200 0) 1024) 500) "which is not sure enough for a figure with no caption")
+    (assert-eq (quot (fc-image-kind fi 0 4000 4000 5000 9000 79200 0) 1024) (fg-logo) "a small flat one at the head of the page")
+    (assert-eq (quot (fc-image-kind fi 0 4000 4000 30000 34000 79200 0) 1024) (fg-unknown) "and in the middle of it")
+    (ft-fi fi 1 9 1 1 1 20 0)
+    (assert-eq (quot (fc-image-kind fi 0 20000 5000 20000 25000 79200 0) 1024) (fg-barcode) "a two-colour one far wider than high")
+    (assert-eq (quot (fc-image-kind fi 0 8000 8000 20000 28000 79200 0) 1024) (fg-qr) "a square two-colour one")
+    (assert-eq (quot (fc-image-kind fi 0 12000 8000 20000 28000 79200 0) 1024) (fg-illustration) "any other two-colour one is line art")
+    (assert-eq (quot (fc-image-kind fi 5 12000 8000 20000 28000 79200 0) 1024) (fg-unknown) "a placement with no row says nothing")))
+
+;; ------------------------------------------------------------------------------------------------ the placeholder
+
+(defn ^I32 ft-cand [^:mut ^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (let [^:mut ^I32 f 0]
+    (cells-push cand page)
+    (cells-push cand x0)
+    (cells-push cand y0)
+    (cells-push cand x1)
+    (cells-push cand y1)
+    (cells-push cand x0)
+    (cells-push cand y0)
+    (cells-push cand x1)
+    (cells-push cand y1)
+    (set f 9)
+    (while (< f 32)
+      (do (cells-push cand 0)
+          (set f (+ f 1))))
+    (return 0)))
+
+(defn ^I32 ft-fd [^:mut ^Cells fd ^I32 kind ^I32 conf]
+  (cells-push fd kind)
+  (cells-push fd conf)
+  (cells-push fd 16)
+  (cells-push fd -1)
+  (cells-push fd -1)
+  (cells-push fd 0)
+  (cells-push fd 0)
+  (cells-push fd 0)
+  (return 0))
+
+(defn ^I32 ft-para [^:mut ^Cells nodes ^:mut ^Cells regions ^:mut ^Cells text ^I32 kind ^I32 nch ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "A node of `kind` with `nch` letters of text and one region on page 1.")
+  (let [^I32 n (node-new nodes kind 0)
+        ^I32 at (cells-len text)
+        ^:mut ^I32 i 0]
+    (while (< i nch)
+      (do (text-append-cp text 97)
+          (set i (+ i 1))))
+    (node-set-text nodes n at nch)
+    (node-add-region nodes regions n 1 x0 y0 x1 y1)
+    (return n)))
+
+(deftest test-a-short-paragraph-on-a-figure-is-its-label-and-a-long-one-stays
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells nn (new-cells)
+        ^Cells na (new-cells)
+        ^Cells nr (new-cells)
+        ^Cells nm (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells fg (new-cells)
+        ^Cells fd (new-cells)
+        ^Cells ab (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (ft-para nodes regions text (nk-paragraph) 3 8000 12000 9600 12750)
+    (ft-para nodes regions text (nk-paragraph) 60 7200 50000 54000 51250)
+    (ft-para nodes regions text (nk-paragraph) 4 15000 31000 17000 31750)
+    (ft-cand cand 1 10000 10000 40000 30000)
+    (ft-fd fd (fg-chart) 760)
+    (cells-push fg 0)
+    (cells-push fg 0)
+    (rs-figures nodes attrs regions text nn na nr nm cand fg fd ab)
+    (assert-eq (node-count nn) 3 "the document, the figure and the long paragraph: the two short ones are labels")
+    (assert-eq (node-kind nn 1) (nk-figure) "the figure goes in by its top edge (30000 is above the paragraph at 50000)")
+    (assert-eq (node-sub nn 1) (fg-chart) "its kind")
+    (assert-eq (node-conf nn 1) 760 "its confidence")
+    (assert-that (>= (node-attr nn na 1 (fk-labels)) 0) "it has labels")
+    (assert-eq (node-kind nn 2) (nk-paragraph) "the long paragraph is still body text")))
+
+(deftest test-a-figure-goes-in-before-its-caption-whatever-its-top-edge-says
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells nn (new-cells)
+        ^Cells na (new-cells)
+        ^Cells nr (new-cells)
+        ^Cells nm (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells fg (new-cells)
+        ^Cells fd (new-cells)
+        ^Cells ab (new-cells)
+        ^:mut ^I32 c 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (comment "document > paragraph (top), paragraph (far below: the other column), caption (just under the figure)")
+    (ft-para nodes regions text (nk-paragraph) 60 7200 5000 54000 6250)
+    (ft-para nodes regions text (nk-paragraph) 60 7200 40000 54000 41250)
+    (set c (ft-para nodes regions text (nk-caption) 20 10000 31000 30000 32000))
+    (node-set-aux nodes c 1)
+    (ft-cand cand 1 10000 10000 30000 30000)
+    (ft-fd fd (fg-chart) 760)
+    (cells-push fg 0)
+    (cells-push fg 0)
+    (rs-figures nodes attrs regions text nn na nr nm cand fg fd ab)
+    (assert-eq (node-count nn) 5 "the document, three blocks and the figure")
+    (assert-eq (node-kind nn 3) (nk-figure) "the figure is just before its caption, after the paragraph that is lower on the page")
+    (assert-eq (node-kind nn 4) (nk-caption) "and the caption follows it")))

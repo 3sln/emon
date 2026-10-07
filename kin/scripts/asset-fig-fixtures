@@ -58,7 +58,7 @@
            (latin1 "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")]
           (mapcat (fn [i c]
                     [(latin1 (str "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents " (+ first-page (* 2 i) 1) " 0 R "
-                                  "/Resources << /Font << /F1 3 0 R >> " (str/replace (get extras i "") "IMG" (str img-base)) " >> >>"))
+                                  "/Resources << /Font << /F1 3 0 R >> " (str/replace (get extras i "") #"IMG(\d*)" (fn [[_ n]] (str (+ img-base (if (str/blank? n) 0 (parse-long n)))))) " >> >>"))
                      (text-stream c)])
                   (range) contents)
           images))))
@@ -121,7 +121,143 @@
 
 ;; ----------------------------------------------------------------------------------------------------------------- go
 
-(def files {"fig-vector-chart.pdf" chart-pdf "fig-logo-pages.pdf" logo-pdf "fig-over-image.pdf" over-pdf})
+;; --------------------------------------------------------------------------------------------------- the kinds (P8.1, SPEC 10.6)
+;; Ten pages, one figure each, of the kinds the classifier tells apart by geometry, ink and bytes a pixel; and a page of things that are
+;; NO figure. `test/assets/fig/kinds.edn` is the gold: the `kind`s of the figures, in order, of each fixture. Everything is deterministic.
+
+(defn lcg [seed] (iterate #(mod (+ (* % 1103515245) 12345) 2147483648) seed))
+(defn f2 [x] (format "%.2f" (double x)))
+(defn gray-g [g] (format "%.2f g\n" (double g)))
+
+(defn pie-page []
+  (let [cx 200 cy 600 r 80
+        wedge (fn [a0 a1 col]
+                (str col " rg " (f2 cx) " " (f2 cy) " m "
+                     (str/join " " (for [a (range a0 (inc a1) 10)]
+                                     (str (f2 (+ cx (* r (Math/cos (Math/toRadians a))))) " " (f2 (+ cy (* r (Math/sin (Math/toRadians a))))) " l")))
+                     " h f\n"))]
+    (str (t 14 72 740 "Market share by region")
+         (wedge 0 100 "0.20 0.40 0.70") (wedge 100 190 "0.85 0.45 0.15") (wedge 190 290 "0.30 0.65 0.35") (wedge 290 360 "0.70 0.25 0.55")
+         (t 9 300 640 "North") (t 9 300 620 "South") (t 9 300 600 "East") (t 9 300 580 "West")
+         (t 10 72 490 "Figure 1. Share of sales")
+         (t 11 72 460 "Closing paragraph after the pie."))))
+
+(defn line-page []
+  (str (t 14 72 740 "Monthly trend")
+       "0.75 w 0 G 100 450 m 100 650 l S 100 450 m 400 450 l S\n"
+       (apply str (for [i (range 5)] (let [y (+ 450 (* 50 i))] (str "96 " y " m 100 " y " l S\n" (t 9 78 (- y 3) (str (* 50 i)))))))
+       "0.80 0.20 0.20 RG 1.5 w 100 470 m 160 500 l 220 490 l 280 560 l 340 600 l 400 640 l S\n"
+       (apply str (for [[i m] (map-indexed vector ["Jan" "Feb" "Mar" "Apr" "May" "Jun"])] (t 9 (+ 94 (* 60 i)) 436 m)))
+       (t 10 72 410 "Figure 2. Monthly trend")
+       (t 11 72 380 "Closing paragraph after the chart.")))
+
+(defn barcode-page []
+  (let [ws [1 2 1 3 1 1 2 1 3 2 1 1 3 1 2 1 1 2 3 1 1 2 1 2]]
+    (str (t 14 72 740 "Shipping label")
+         "0 g\n"
+         (loop [x 100.0 ws ws out ""]
+           (if (empty? ws) out
+               (recur (+ x (first ws) 1.4) (rest ws) (str out (f2 x) " 600 " (f2 (first ws)) " 40 re f\n"))))
+         (t 10 72 570 "Figure 3. Parcel code")
+         (t 11 72 540 "Closing paragraph after the label."))))
+
+(defn qr-page []
+  (let [n 21 cell 3.5 bits (vec (take (* n n) (map #(bit-and (bit-shift-right % 16) 1) (lcg 7))))
+        finder? (fn [x y] (or (and (< x 7) (< y 7)) (and (>= x (- n 7)) (< y 7)) (and (< x 7) (>= y (- n 7)))))
+        on? (fn [x y] (if (finder? x y)
+                        (let [fx (mod x (- n 7)) fy (mod y (- n 7))
+                              lx (if (>= x (- n 7)) (- x (- n 7)) x) ly (if (>= y (- n 7)) (- y (- n 7)) y)]
+                          (or (#{0 6} lx) (#{0 6} ly) (and (<= 2 lx 4) (<= 2 ly 4))))
+                        (= 1 (nth bits (+ (* y n) x)))))]
+    (str (t 14 72 740 "Link")
+         "0 g\n"
+         (apply str (for [y (range n) x (range n) :when (on? x y)]
+                      (str (f2 (+ 100 (* x cell))) " " (f2 (+ 600 (* (- (dec n) y) cell))) " " (f2 cell) " " (f2 cell) " re f\n")))
+         (t 10 72 570 "Figure 4. Page address")
+         (t 11 72 540 "Closing paragraph after the code."))))
+
+(defn map-page []
+  (let [rnd (vec (take 4000 (map #(- (mod (quot % 65536) 15) 7) (lcg 11))))
+        pt (fn [k] (nth rnd k))
+        segs (for [j (range 9) i (range 10)]
+               (let [x (+ 100 (* 30 i)) y (+ 440 (* 30 j)) k (* 6 (+ i (* 10 j)))]
+                 (str (f2 x) " " (f2 y) " m " (f2 (+ x 10 (pt k))) " " (f2 (+ y (pt (+ k 1)))) " " (f2 (+ x 20 (pt (+ k 2)))) " " (f2 (+ y (pt (+ k 3)))) " " (f2 (+ x 30)) " " (f2 y) " c S\n")))
+        vsegs (for [j (range 8) i (range 10)]
+                (let [x (+ 100 (* 30 i)) y (+ 440 (* 30 j)) k (+ 400 (* 6 (+ i (* 10 j))))]
+                  (str (f2 x) " " (f2 y) " m " (f2 (+ x (pt k))) " " (f2 (+ y 10 (pt (+ k 1)))) " " (f2 (+ x (pt (+ k 2)))) " " (f2 (+ y 20 (pt (+ k 3)))) " " (f2 x) " " (f2 (+ y 30)) " c S\n")))]
+    (str (t 14 72 740 "Survey area")
+         "0.35 0.25 0.15 RG 0.5 w\n"
+         (apply str segs) (apply str vsegs)
+         "0 g\n"
+         (apply str (for [[k [x y n]] (map-indexed vector [[120 470 "Alder"] [200 500 "Brook"] [280 460 "Cairn"] [150 560 "Dale"] [240 600 "Elm"] [330 530 "Ford"] [180 650 "Glen"] [300 660 "Heath"]])]
+                      (t 8 x y n)))
+         (t 10 72 410 "Figure 5. Survey area")
+         (t 11 72 380 "Closing paragraph after the map."))))
+
+(defn illus-page []
+  (let [circle (fn [cx cy r]
+                 (let [k (* 0.5523 r)]
+                   (str (f2 (+ cx r)) " " (f2 cy) " m "
+                        (f2 (+ cx r)) " " (f2 (+ cy k)) " " (f2 (+ cx k)) " " (f2 (+ cy r)) " " (f2 cx) " " (f2 (+ cy r)) " c "
+                        (f2 (- cx k)) " " (f2 (+ cy r)) " " (f2 (- cx r)) " " (f2 (+ cy k)) " " (f2 (- cx r)) " " (f2 cy) " c "
+                        (f2 (- cx r)) " " (f2 (- cy k)) " " (f2 (- cx k)) " " (f2 (- cy r)) " " (f2 cx) " " (f2 (- cy r)) " c "
+                        (f2 (+ cx k)) " " (f2 (- cy r)) " " (f2 (+ cx r)) " " (f2 (- cy k)) " " (f2 (+ cx r)) " " (f2 cy) " c h S\n")))]
+    (str (t 14 72 740 "Ornament")
+         "0.3 0.1 0.4 RG 1 w\n"
+         (apply str (for [a (range 0 360 36)]
+                      (circle (+ 300 (* 30 (Math/cos (Math/toRadians a)))) (+ 560 (* 30 (Math/sin (Math/toRadians a)))) 30)))
+         (t 11 72 460 "Closing paragraph after the ornament."))))
+
+(defn screenshot-page []
+  (str (t 14 72 740 "Settings")
+       "0.95 g 100 450 300 150 re f\n0.20 G 2 w 100 450 300 150 re S\n"
+       "0 g BT /F1 12 Tf 110 578 Td (Preferences) Tj ET\n"
+       "0.80 g 300 460 80 24 re f\n0 G 1 w 300 460 80 24 re S\n0 g BT /F1 10 Tf 326 468 Td (OK) Tj ET\n"
+       (t 10 72 420 "Figure 7. Settings dialog")
+       (t 11 72 390 "Closing paragraph after the dialog.")))
+
+(def photo-data (byte-array (take (* 64 64 3) (map #(unchecked-byte (bit-and (bit-shift-right % 16) 255)) (lcg 3)))))
+(def qrbits-data
+  (byte-array (for [y (range 21) b (range 3)]
+                (unchecked-byte (reduce (fn [acc k] (let [x (+ (* b 8) k)] (if (and (< x 21) (= 1 (bit-and (bit-shift-right (nth (lcg (+ 5 (* y 21) x)) 3) 16) 1))) (bit-or acc (bit-shift-right 128 k)) acc))) 0 (range 8))))))
+(def barbits-data
+  (byte-array (for [y (range 20) b (range 15)]
+                (unchecked-byte (reduce (fn [acc k] (let [x (+ (* b 8) k)] (if (odd? (+ (quot x 2) (quot x 7))) (bit-or acc (bit-shift-right 128 k)) acc))) 0 (range 8))))))
+(defn img-obj [w h cs bpc data] (stream (str "/Type /XObject /Subtype /Image /Width " w " /Height " h " /ColorSpace /" cs " /BitsPerComponent " bpc) data))
+
+(def kinds-pages
+  [(pie-page) (line-page) (barcode-page) (qr-page) (map-page) (illus-page) (screenshot-page)
+   (str (t 14 72 740 "Photograph") "q 150 0 0 150 100 520 cm /Im1 Do Q\n" (t 10 72 490 "Figure 8. Site photograph") (t 11 72 460 "Closing paragraph after the photograph."))
+   (str (t 14 72 740 "Code") "q 100 0 0 100 100 600 cm /Im1 Do Q\n" (t 10 72 570 "Figure 9. Scanned code") (t 11 72 540 "Closing paragraph after the code."))
+   (str (t 14 72 740 "Label") "q 180 0 0 33 100 650 cm /Im1 Do Q\n" (t 10 72 620 "Figure 10. Scanned label") (t 11 72 590 "Closing paragraph after the label."))])
+
+(def kinds-pdf
+  (pdf (page-objs kinds-pages (vec (concat (repeat 7 "") ["/XObject << /Im1 IMG0 0 R >>" "/XObject << /Im1 IMG1 0 R >>" "/XObject << /Im1 IMG2 0 R >>"]))
+                  [(img-obj 64 64 "DeviceRGB" 8 photo-data) (img-obj 21 21 "DeviceGray" 1 qrbits-data) (img-obj 120 20 "DeviceGray" 1 barbits-data)])))
+
+;; what is NO figure: a sidebar of prose, a seal (two rings and a word) and a rule
+(def notfig-page
+  (let [circle (fn [cx cy r]
+                 (let [k (* 0.5523 r)]
+                   (str (f2 (+ cx r)) " " (f2 cy) " m "
+                        (f2 (+ cx r)) " " (f2 (+ cy k)) " " (f2 (+ cx k)) " " (f2 (+ cy r)) " " (f2 cx) " " (f2 (+ cy r)) " c "
+                        (f2 (- cx k)) " " (f2 (+ cy r)) " " (f2 (- cx r)) " " (f2 (+ cy k)) " " (f2 (- cx r)) " " (f2 cy) " c "
+                        (f2 (- cx r)) " " (f2 (- cy k)) " " (f2 (- cx k)) " " (f2 (- cy r)) " " (f2 cx) " " (f2 (- cy r)) " c "
+                        (f2 (+ cx k)) " " (f2 (- cy r)) " " (f2 (+ cx r)) " " (f2 (- cy k)) " " (f2 (+ cx r)) " " (f2 cy) " c h S\n")))]
+    (str (t 14 72 740 "Things that are not figures")
+         "0.93 g 100 560 300 110 re f\n0.4 G 1 w 100 560 300 110 re S\n0 g\n"
+         (t 9 108 650 "A sidebar sets out a short note in a box beside the text of the page.")
+         (t 9 108 636 "It holds whole sentences of prose and so it is read as text and not drawn.")
+         (t 9 108 622 "Each of its lines has many words, which no label of a chart ever has.")
+         (t 9 108 608 "A reader would take the box for a callout and the lines for body text.")
+         "0.75 0.10 0.10 RG 2 w\n" (circle 480 400 60) (circle 480 400 45)
+         "0.75 0.10 0.10 rg BT /F1 14 Tf 462 396 Td (PAID) Tj ET\n"
+         "0 G 0.75 w 100 300 m 500 300 l S\n"
+         (t 11 72 260 "Closing paragraph after a rule."))))
+(def notfig-pdf (pdf (page-objs [notfig-page] [""] [])))
+
+(def files {"fig-vector-chart.pdf" chart-pdf "fig-logo-pages.pdf" logo-pdf "fig-over-image.pdf" over-pdf
+            "fig-kinds.pdf" kinds-pdf "fig-notfigures.pdf" notfig-pdf})
 
 (if check?
   (let [bad (for [[n b] files :when (not (and (fs/exists? (str out "/" n)) (java.util.Arrays/equals ^bytes b ^bytes (fs/read-all-bytes (str out "/" n)))))] n)]

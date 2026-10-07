@@ -2,4 +2,4 @@
  :inputs [{:index 0 :length 35340}]
  :entries [
   {:round 0 :kind :crop :req [11 5 8388609 0 0 150 0 148 148 72 72] :ans [8 5 8388609 0 72 72 3 150] :bitmap "bitmap-0000.png"}
-  {:round 0 :kind :crop :req [11 5 8388614 0 0 150 0 145 444 535 268] :ans [8 5 8388614 0 535 268 3 150] :bitmap "bitmap-0001.png"}]}
+  {:round 0 :kind :crop :req [11 5 8388613 0 0 150 0 145 444 535 268] :ans [8 5 8388613 0 535 268 3 150] :bitmap "bitmap-0001.png"}]}

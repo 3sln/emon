@@ -963,12 +963,171 @@ public final class Restruct {
         }
         return r;
     }
-    public static int rfFlush(emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, int np, int lpage, int ly) {
+    public static final int RF_FD = 8;
+    public static final int RF_CAPGAP = 4000;
+    public static int rfMin(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    public static int rfMax(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    public static final int RF_ZONE = 2400;
+    public static final int RF_LABEL_H = 1800;
+    public static final int RF_LABEL_CP = 48;
+    public static final int RF_LABEL_WORDS = 6;
+    public static int rfFdv(emon.Port.Cells fd, int row, int f, int dflt) {
+        if (emon.Port.cellsLen(fd) < ((row + 1) * RF_FD)) {
+            return dflt;
+        }
+        return emon.Port.cellsAt(fd, (row * RF_FD) + f);
+    }
+    public static boolean rfLabelText(emon.Port.Cells on, emon.Port.Cells text, int p) {
+        // A paragraph's text that a label can be: few code points and words, not a sentence (no final full stop).
+        int s = Model.nodeTextStart(on, p);
+        int l = Model.nodeTextLen(on, p);
+        int i = 0;
+        int words = 1;
+        if ((l < 1) || (l > RF_LABEL_CP)) {
+            return 0 == 1;
+        }
+        if (emon.Port.cellsAt(text, s + (l - 1)) == 46) {
+            return 0 == 1;
+        }
+        while (i < l) {
+            if (emon.Port.cellsAt(text, s + i) == 32) {
+                words += 1;
+            }
+            i += 1;
+        }
+        return words <= RF_LABEL_WORDS;
+    }
+    public static int rfLabelOf(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, int p) {
+        // The candidate row of the figure that paragraph p labels, or -1.
+        int r = Model.nodeRegionHead(on, p);
+        int i = 1;
+        int row = 0;
+        if (r < 0) {
+            return -1;
+        }
+        if (Model.nodeRegionCount(on, p) != 1) {
+            return -1;
+        }
+        if (Model.nodeHasText(on, p) == 0) {
+            return -1;
+        }
+        if ((Model.regionY1(orr, r) - Model.regionY0(orr, r)) > RF_LABEL_H) {
+            return -1;
+        }
+        if (!rfLabelText(on, text, p)) {
+            return -1;
+        }
+        while (i < emon.Port.cellsLen(fg)) {
+            row = emon.Port.cellsAt(fg, i);
+            if ((Asset.asGet(cand, row, 0) == Model.regionPage(orr, r)) && ((Model.regionX1(orr, r) > (Asset.asGet(cand, row, 5) - RF_ZONE)) && ((Model.regionX0(orr, r) < (Asset.asGet(cand, row, 7) + RF_ZONE)) && ((((Model.regionY0(orr, r) + Model.regionY1(orr, r)) / 2) >= (Asset.asGet(cand, row, 6) - RF_ZONE)) && ((((Model.regionY0(orr, r) + Model.regionY1(orr, r)) / 2) <= (Asset.asGet(cand, row, 8) + RF_ZONE)) && ((Model.regionX1(orr, r) - Model.regionX0(orr, r)) <= ((2 * (Asset.asGet(cand, row, 7) - Asset.asGet(cand, row, 5))) + 2000))))))) {
+                return row;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static int rfAbsorbNote(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int n) {
+        // A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is
+        // dropped with them: the note and its paragraphs are marked.
+        int c = Model.nodeFirstChild(on, n);
+        int f = -1;
+        int g = 0;
+        int ok = 1;
+        int cnt = 0;
+        while (c >= 0) {
+            g = -1;
+            if (Model.nodeKind(on, c) == Model.nkParagraph()) {
+                g = rfLabelOf(on, orr, text, cand, fg, fd, c);
+            }
+            if (g < 0) {
+                ok = 0;
+            }
+            if ((g >= 0) && ((f >= 0) && (g != f))) {
+                ok = 0;
+            }
+            if (g >= 0) {
+                f = g;
+            }
+            cnt += 1;
+            c = Model.nodeNext(on, c);
+        }
+        if ((ok == 1) && (cnt > 0)) {
+            emon.Port.cellsSet(ab, n, f);
+            c = Model.nodeFirstChild(on, n);
+            while (c >= 0) {
+                emon.Port.cellsSet(ab, c, f);
+                c = Model.nodeNext(on, c);
+            }
+        }
+        return 0;
+    }
+    public static int rfAbsorb(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int p) {
+        // Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
+        int c = Model.nodeFirstChild(on, p);
+        int f = -1;
+        while (c >= 0) {
+            if (Model.nodeKind(on, c) == Model.nkSection()) {
+                rfAbsorb(on, orr, text, cand, fg, fd, ab, c);
+            }
+            if (Model.nodeKind(on, c) == Model.nkNote()) {
+                rfAbsorbNote(on, orr, text, cand, fg, fd, ab, c);
+            }
+            if (Model.nodeKind(on, c) == Model.nkParagraph()) {
+                f = rfLabelOf(on, orr, text, cand, fg, fd, c);
+                if (f >= 0) {
+                    emon.Port.cellsSet(ab, c, f);
+                }
+            }
+            c = Model.nodeNext(on, c);
+        }
+        return 0;
+    }
+    public static int rfLabels(emon.Port.Cells on, emon.Port.Cells ab, emon.Port.Cells nodes, emon.Port.Cells attrs, int nn, int row) {
+        // The texts of the paragraphs marked as labels of the figure `row`, in node order, as `labels` of the new figure nn.
+        int n = Model.nodeCount(on);
+        int c = 0;
+        while (c < n) {
+            if ((emon.Port.cellsAt(ab, c) == row) && (Model.nodeKind(on, c) == Model.nkParagraph())) {
+                Model.nodeAddAttrText(nodes, attrs, nn, Model.fkLabels(), Model.nodeTextStart(on, c), Model.nodeTextLen(on, c));
+            }
+            c += 1;
+        }
+        return 0;
+    }
+    public static int rfMake(emon.Port.Cells on, emon.Port.Cells ab, emon.Port.Cells cand, emon.Port.Cells fd, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, int np, int row) {
+        // The figure node of candidate row `row` as the last child of np: its kind, confidence, sources, region, asset row and labels.
+        int nn = Model.nodeNew(nodes, Model.nkFigure(), np);
+        int link = 0;
+        if (nn >= 0) {
+            Model.nodeSetSub(nodes, nn, rfFdv(fd, row, 0, Model.fgUnknown()));
+            Model.nodeSetConf(nodes, nn, rfFdv(fd, row, 1, 500));
+            Model.nodeAddSrc(nodes, nn, rfFdv(fd, row, 2, 0) | Model.srInfer());
+            Model.nodeAddRegion(nodes, regions, nn, Asset.asGet(cand, row, 0), Asset.asGet(cand, row, 5), Asset.asGet(cand, row, 6), Asset.asGet(cand, row, 7), Asset.asGet(cand, row, 8));
+            link = rfFdv(fd, row, 3, row);
+            if (link >= 0) {
+                Model.nodeSetAttrInt(nodes, attrs, nn, Model.fkImage(), link);
+            }
+            if (emon.Port.cellsLen(fd) > 0) {
+                rfLabels(on, ab, nodes, attrs, nn, row);
+            }
+        }
+        return nn;
+    }
+    public static int rfFlush(emon.Port.Cells on, emon.Port.Cells ab, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, int np, int lpage, int ly) {
         // Make the pending figures whose top edge is before the position (lpage, ly) as children of np; lpage -1 is no
         // limit. `fg`[0] is the cursor.
         int cur = emon.Port.cellsAt(fg, 0);
         int row = 0;
-        int nn = 0;
         int more = 1;
         while ((more == 1) && ((cur + 1) < emon.Port.cellsLen(fg))) {
             row = emon.Port.cellsAt(fg, cur + 1);
@@ -983,62 +1142,126 @@ public final class Restruct {
                 more = 1;
             }
             if (more == 1) {
-                nn = Model.nodeNew(nodes, Model.nkFigure(), np);
-                if (nn >= 0) {
-                    Model.nodeSetSub(nodes, nn, Model.fgUnknown());
-                    Model.nodeSetConf(nodes, nn, 500);
-                    Model.nodeAddSrc(nodes, nn, Model.srInfer());
-                    Model.nodeAddRegion(nodes, regions, nn, Asset.asGet(cand, row, 0), Asset.asGet(cand, row, 5), Asset.asGet(cand, row, 6), Asset.asGet(cand, row, 7), Asset.asGet(cand, row, 8));
-                    Model.nodeSetAttrInt(nodes, attrs, nn, Model.fkImage(), row);
-                }
+                rfMake(on, ab, cand, fd, nodes, attrs, regions, np, row);
                 cur += 1;
                 emon.Port.cellsSet(fg, 0, cur);
             }
         }
         return 0;
     }
-    public static int rfChildren(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells cand, emon.Port.Cells fg, int p, int np, int flush, int lpage, int ly) {
+    public static int rfFlushAnchor(emon.Port.Cells on, emon.Port.Cells ab, emon.Port.Cells cand, emon.Port.Cells fd, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, int np, int cpn) {
+        // Make the figures whose caption is the old node `cpn` (`fd` cell 4), just before it: a figure belongs with its caption, whatever
+        // column it stands in.
+        int rows = emon.Port.cellsLen(fd) / RF_FD;
+        int row = 0;
+        while (row < rows) {
+            if (emon.Port.cellsAt(fd, (row * RF_FD) + 4) == cpn) {
+                rfMake(on, ab, cand, fd, nodes, attrs, regions, np, row);
+            }
+            row += 1;
+        }
+        return 0;
+    }
+    public static int rfAnchor(emon.Port.Cells on, emon.Port.Cells orr, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd) {
+        // Each figure that has a figure caption (`caption`, kind 1) among the blocks of the document or a section just below it, within
+        // `RF_CAPGAP`, and overlapping it in x, is anchored to the nearest one: `fd` cell 4 is that caption, and the figure leaves `fg`
+        // (it goes in before its caption, `rf-flush-anchor`).
+        int n = Model.nodeCount(on);
+        int i = 1;
+        int out = 1;
+        int row = 0;
+        int c = 0;
+        int r = 0;
+        int p = 0;
+        int gap = 0;
+        int best = -1;
+        int bestgap = 1000000;
+        while (i < emon.Port.cellsLen(fg)) {
+            row = emon.Port.cellsAt(fg, i);
+            best = -1;
+            bestgap = 1000000;
+            c = 0;
+            while (c < n) {
+                if ((Model.nodeKind(on, c) == Model.nkCaption()) && (Model.nodeAux(on, c) == 1)) {
+                    p = Model.nodeParent(on, c);
+                    r = Model.nodeRegionHead(on, c);
+                    if ((p >= 0) && (r >= 0)) {
+                        if (((Model.nodeKind(on, p) == Model.nkDocument()) || (Model.nodeKind(on, p) == Model.nkSection())) && ((Model.regionPage(orr, r) == Asset.asGet(cand, row, 0)) && ((rfMin(Model.regionX1(orr, r), Asset.asGet(cand, row, 7)) > rfMax(Model.regionX0(orr, r), Asset.asGet(cand, row, 5))) && (1 == 1)))) {
+                            gap = Model.regionY0(orr, r) - Asset.asGet(cand, row, 8);
+                            if ((gap >= -200) && ((gap <= RF_CAPGAP) && (gap < bestgap))) {
+                                best = c;
+                                bestgap = gap;
+                            }
+                        }
+                    }
+                }
+                c += 1;
+            }
+            if (best >= 0) {
+                emon.Port.cellsSet(fd, (row * RF_FD) + 4, best);
+            } else {
+                emon.Port.cellsSet(fg, out, row);
+                out += 1;
+            }
+            i += 1;
+        }
+        emon.Port.cellsDrop(fg, out);
+        return 0;
+    }
+    public static int rfChildren(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, int p, int np, int flush, int lpage, int ly) {
         // Copy the children of old node p under new node np; when `flush` is 1 the pending figures above each child go in
-        // before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins).
+        // before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins). A paragraph
+        // that labels a figure (`ab`) is not copied.
         int c = Model.nodeFirstChild(on, p);
         int r = 0;
         int r2 = 0;
         int pg2 = 0;
         int y2 = 0;
+        int bp = 0;
         int nn = 0;
         while (c >= 0) {
-            if (flush == 1) {
-                r = rfRegion(on, c);
-                if (r >= 0) {
-                    rfFlush(cand, fg, nodes, attrs, regions, np, Model.regionPage(orr, r), Model.regionY0(orr, r));
+            if ((emon.Port.cellsLen(ab) == 0) || (emon.Port.cellsAt(ab, c) < 0)) {
+                if ((flush == 1) && (Model.nodeKind(on, c) == Model.nkBreak())) {
+                    bp = Model.nodeAttrIntOr(on, oa, c, Model.fkPage(), 0);
+                    rfFlush(on, ab, cand, fg, fd, nodes, attrs, regions, np, bp, 0);
                 }
-            }
-            nn = rfNode(on, oa, orr, nodes, attrs, regions, nm, c, np);
-            if (nn >= 0) {
-                if ((flush == 1) && (Model.nodeKind(on, c) == Model.nkSection())) {
-                    r2 = rfNextRegion(on, c);
-                    if (r2 >= 0) {
-                        pg2 = Model.regionPage(orr, r2);
-                        y2 = Model.regionY0(orr, r2);
-                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, pg2, y2);
-                    } else {
-                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, lpage, ly);
+                if (flush == 1) {
+                    r = rfRegion(on, c);
+                    if (r >= 0) {
+                        rfFlush(on, ab, cand, fg, fd, nodes, attrs, regions, np, Model.regionPage(orr, r), Model.regionY0(orr, r));
                     }
-                } else {
-                    rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 0, lpage, ly);
+                }
+                if ((flush == 1) && ((emon.Port.cellsLen(fd) > 0) && (Model.nodeKind(on, c) == Model.nkCaption()))) {
+                    rfFlushAnchor(on, ab, cand, fd, nodes, attrs, regions, np, c);
+                }
+                nn = rfNode(on, oa, orr, nodes, attrs, regions, nm, c, np);
+                if (nn >= 0) {
+                    if ((flush == 1) && (Model.nodeKind(on, c) == Model.nkSection())) {
+                        r2 = rfNextRegion(on, c);
+                        if (r2 >= 0) {
+                            pg2 = Model.regionPage(orr, r2);
+                            y2 = Model.regionY0(orr, r2);
+                            rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 1, pg2, y2);
+                        } else {
+                            rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 1, lpage, ly);
+                        }
+                    } else {
+                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 0, lpage, ly);
+                    }
                 }
             }
             c = Model.nodeNext(on, c);
         }
         if (flush == 1) {
-            rfFlush(cand, fg, nodes, attrs, regions, np, lpage, ly);
+            rfFlush(on, ab, cand, fg, fd, nodes, attrs, regions, np, lpage, ly);
         }
         return 0;
     }
-    public static int rsFigures(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells cand, emon.Port.Cells fg) {
+    public static int rsFigures(emon.Port.Cells on, emon.Port.Cells oa, emon.Port.Cells orr, emon.Port.Cells text, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells nm, emon.Port.Cells cand, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab) {
         // Copy the old Model's trees into the empty arenas `nodes`, `attrs`, `regions` (the text is shared), with the
-        // provisional figures `fg` (`as-figure-rows`) placed among the document's and the sections' blocks. `nm` is scratch
-        // (old node to new). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
+        // figures `fg` (rows of `cand`, sorted: `as-figure-rows`; what they are: `fd`) placed among the document's and the
+        // sections' blocks, and the paragraphs that label them left out. `nm` and `ab` are scratch (old node to new; old node to
+        // the figure it labels). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
         int n = Model.nodeCount(on);
         int r = 0;
         int i = 0;
@@ -1047,18 +1270,33 @@ public final class Restruct {
         emon.Port.cellsDrop(attrs, 0);
         emon.Port.cellsDrop(regions, 0);
         emon.Port.cellsDrop(nm, 0);
+        emon.Port.cellsDrop(ab, 0);
         while (i < n) {
             emon.Port.cellsPush(nm, -1);
+            if (emon.Port.cellsLen(fd) > 0) {
+                emon.Port.cellsPush(ab, -1);
+            }
             i += 1;
+        }
+        if (emon.Port.cellsLen(fd) > 0) {
+            r = 0;
+            while (r < n) {
+                if ((Model.nodeParent(on, r) < 0) && (Model.nodeKind(on, r) == Model.nkDocument())) {
+                    rfAbsorb(on, orr, text, cand, fg, fd, ab, r);
+                }
+                r += 1;
+            }
+            rfAnchor(on, orr, cand, fg, fd);
+            r = 0;
         }
         while (r < n) {
             if (Model.nodeParent(on, r) < 0) {
                 nr = rfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1);
                 if (nr >= 0) {
                     if (Model.nodeKind(on, r) == Model.nkDocument()) {
-                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 1, -1, -1);
+                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 1, -1, -1);
                     } else {
-                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 0, -1, -1);
+                        rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 0, -1, -1);
                     }
                 }
             }

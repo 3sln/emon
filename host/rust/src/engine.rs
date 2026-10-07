@@ -51,7 +51,8 @@ use crate::emon::furniture::{fu_find, fu_write};
 use crate::emon::inline::{il_analyze, il_fonts};
 use crate::emon::lists::ls_analyze;
 use crate::emon::notes::nt_analyze;
-use crate::emon::restruct::{rs_figures, rs_run};
+use crate::emon::restruct::rs_run;
+use crate::emon::figclass::{fc_images, fc_stage};
 use crate::emon::asset::*;
 use crate::emon::sealmark::{sm_find, sm_write};
 use crate::emon::model::*;
@@ -1399,6 +1400,8 @@ struct PdfDoc {
     cbytes: Buf,
     // the image placements the asset unit makes candidates of (the evidence's `images` rows; empty unless `assets` is on)
     aim: Cells,
+    // P8.1: what the dictionary of each image placement says (`fc_images`), for the figures' kinds
+    fi: Cells,
     info: Intake,
 }
 
@@ -1488,6 +1491,12 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     // the input again, because a codec image's pixels are the host's and ask the plan/fulfil loop; the placements it works from are kept.
     let (cand, cbytes) = (Cells::new(), Buf::new());
     let aim = if opts.assets != Assets::None { im.clone() } else { Cells::new() };
+    // P8.1 (SPEC 10.6): what each image placement's dictionary says, which the figures' kinds are read from (one more read of the input)
+    let (mut fi, mut fo, mut fr) = (Cells::new(), Cells::new(), Cells::new());
+    fc_images(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut im, &mut fo, &mut fr, &mut fi);
+    if view.missed() {
+        return Step::Miss;
+    }
     let snap = if opts.keep_evidence { Some((gl.clone(), mk.clone(), fnt.clone())) } else { None };
     // With fusion on, the text layer's `epages` and `feats` are the evidence's own: the OCR of a born-digital page adds its feature rows
     // to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
@@ -1517,7 +1526,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], ys: std::array::from_fn(|_| Cells::new()), et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, im, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, aim, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], ys: std::array::from_fn(|_| Cells::new()), et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, im, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, aim, fi, info }))
 }
 
 // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil
@@ -1565,7 +1574,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
 // The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
 // paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut im, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, ys: _, snap, mut cand, mut cbytes, aim: _, info } = d;
+    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut im, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, ys: _, snap, mut cand, mut cbytes, aim: _, mut fi, info } = d;
     let mut mask = mask;
     let np = pd_pg_count(&mut pg);
     // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
@@ -1692,10 +1701,8 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
     il_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut ift, &mut sf, &mut an, &mut txt, &mut pg, &mut m.pages, np, &mut m.text, &mut hc, &mut isw);
     pa_build(&mut fw, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
-    // the provisional figures (P3.13): only with `assets`, and before the restructuring, which pairs a caption with the figure beside it
-    if opts.assets != Assets::None {
-        figures_stage(&mut m, &mut cand, opts);
-    }
+    // the figures (P8.1, SPEC 10.6): at every level of `assets`, before the restructuring, which pairs a caption with the figure beside it
+    figures_stage(&mut m, &mut cand, &mut pa, &mut im, &mut fi, &mut grg, &mut grl, &mut fw, &mut fl, &mut et, &mut pg, opts);
     // restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
     // body is copied into new arenas, in document order, and they replace the old ones
     {
@@ -2324,13 +2331,13 @@ impl Kind {
 }
 
 
-// P3.13 (SPEC 10.11): the provisional figures, before `rs_run` (a caption next to one finds it as its object). Only when
-// `assets` is on (D294): a default run's Model is what it was.
-fn figures_stage(m: &mut Arenas, cand: &mut Cells, opts: &Options) {
-    let mut fg = Cells::new();
-    as_figure_rows(cand, &mut m.pages, &mut m.nodes, &mut m.regions, opts.assets.level(), &mut fg);
+// P8.1 (SPEC 10.6): the figures, before `rs_run` (a caption next to one finds it as its object): every output has them, at every level of
+// `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
+fn figures_stage(m: &mut Arenas, cand: &mut Cells, pa: &mut Cells, im: &mut Cells, fi: &mut Cells, grg: &mut Cells, grl: &mut Cells, fw: &mut Cells, fl: &mut Cells, et: &mut Cells, pg: &mut Cells, opts: &Options) {
     let (mut fnodes, mut fattrs, mut fregions, mut fnm) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    rs_figures(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut fnodes, &mut fattrs, &mut fregions, &mut fnm, cand, &mut fg);
+    let (mut fcand, mut cl, mut fg, mut fd, mut ab, mut ws) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    fc_stage(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut fnodes, &mut fattrs, &mut fregions, &mut fnm,
+             pa, im, fi, grg, grl, fw, fl, et, pg, cand, opts.assets.level(), &mut fcand, &mut cl, &mut fg, &mut fd, &mut ab, &mut ws);
     std::mem::swap(&mut m.nodes, &mut fnodes);
     std::mem::swap(&mut m.attrs, &mut fattrs);
     std::mem::swap(&mut m.regions, &mut fregions);

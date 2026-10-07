@@ -3333,8 +3333,18 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
 
 ## Phase 8 — Figures, seals, signatures
 
-- [ ] P8.1 — Figure classification and placeholders (SPEC §10.6, D020). Its candidate regions are P7.G's `grg` `figure`
+- [x] **P8.1 — Figure classification and placeholders (SPEC §10.6, D020).** Its candidate regions are P7.G's `grg` `figure`
   rows and its graphics evidence the fused `grl`/`gfl` inside them (D228).
+  **Built (D680-D684)**: `kin/figclass.kin` (`emon.figclass`): `fc-images` (the document pass: each image placement's dictionary, bytes a pixel,
+  no pixel decoded) and `fc-stage` (the document unit: candidate regions from images, P8.5's vector clusters, shaded fills and `grg`; measured by
+  geometry, ink and the shape of the text near them; kind and confidence or no figure; `rs-figures` places them, with `labels`, before the
+  restructuring; the asset stage's candidate rows are fed through `as-region-add` and `fk-image`). The placeholders are in every output at every
+  level of `assets`. `kin/figclasstest.kin` (8 laws), the fixtures `test/assets/fig/fig-kinds.pdf`, `fig-notfigures.pdf` and gold
+  `test/assets/fig/kinds.edn` (`bb asset` section 8), and per-kind figure metrics in `tools/accuracy/score.clj`. **Measured** (synthetic corpus,
+  `emon` predictor, born-digital): `figure-subkind-acc` 0.0 to 1.0, `block-figure-r` 0.8 to 0.9, `block-figure-p` held at 1.0, and the chart labels
+  no longer body paragraphs (`block-paragraph-p` pdf/all 0.692 to 0.733, pdf/columns 0.798 to 0.938). **Not built**: raster inputs' figures
+  (`finish_raster` has no `grg`), `alt` from the PDF, the tagged `Figure` source, recurrence (P8.4's hook `fc-recur`), pixel-level classes of a DCT
+  image (a table photographed as a JPEG is a flat raster and is no figure without a caption), P10.1's refit of `conf` for the new values.
 - [ ] P8.2 — Seals and stamps: detection, polar unwarp, targeted OCR, name
   and date extraction (D016). Refines P7.7's `seal` nodes (D205): the polar strip is a kin-made view OCR'd as
   `op-seal-strip` through D196's mechanism.
@@ -9530,4 +9540,58 @@ A tag defined by a file is not usable in that file (kin: `kin/tag` resolves thro
 includes them); recorded under "Found in kin".
 **Why**: every stage or arena edits four hand-written Engines; the last merge left ~240 Go/~220 Rust lines unported to Java, and Java's plCheck already disagrees with Rust. Alternatives rejected: generating Engine glue
 from a declaration (a second generator outside bb drift); a context type alone (first step, not the end); patching kin's defstruct upstream (later, once defctx is proven).
+- [ ] **Signed off** (maintainer)
+
+### D680 — Figure regions are measured and judged: a kind and a confidence, or no figure at all (P8.1; SPEC 10.6; D020, D228, D353)
+**Decision** (`kin/figclass.kin`). (1) CANDIDATES: the image placements that passed P3.6 (the box cut to its clip), the vector clusters of P8.5 (`as-vector-regions`, called as it is), lone shaded or patterned fills of at least 60 x 40 pt
+that lie under no image or cluster (a CSS gradient is one path, which a cluster of two paths misses), and P7.G's `figure` rows of `grg` (a region mostly in a cluster grows it; mostly in an image or a cluster, it is that one; else
+its own); the filters are `as-figure-rows`'s (under 800 per mille of the page, both sides 18 pt, not half in a `table`). (2) MEASURED, per region, from the paths inside it (kind, box, ink, flags), the fused rules `grl` when it has
+no path (a scan), the words near it (digits and signs, shortness, lines of five words or more), with a budget of 40 million rows a document and 128 regions: axes (the longest horizontal and vertical rules, each at least 45 and
+40 per cent of the region and at least 30 and 25 pt, which meet), ticks (rules of 1.5 to 11 pt across an axis), bars (filled rects on one baseline or left edge, whether of different lengths), series (long open strokes), wedges
+(three or more filled curves or polygons of three or more colours in a square-ish region), boxes with words in them, connectors and arrow heads, thin parallel filled bars, tiny filled squares, a framing path, round paths drawn
+one in another, patterned fills. (3) KINDS, as the SPEC's table, each rule a named constant with a first value (`chart` 640 to 800, a pie 560 to 620, `diagram` 600 to 700, `logo` 480 to 580, `photo` 520, `barcode` and `qr` 700,
+`map` 540, `illustration` 520, `screenshot` 520, unknown 300), uncalibrated: P10.1 refits `conf` per node kind at the merge (the figure confidences are new numbers). (4) NO FIGURE: two lines of prose in the region (a text box,
+a sidebar, a background texture, a watermark over text), rings one in another (a seal: P7.7's nodes, not a figure), a lattice of three rules each way with no axes. (5) EMISSION: confidence at least 500, or a caption just below
+(`fc-captioned`: a `Figure`-kind caption within 40 pt under the box, or above it when no other region lies above that caption); an unclear captioned region is `unknown` at 400.
+**Why**: the synthetic corpus holds eleven things in `pdf/` that a looser rule made figures and gold does not (a sidebar, a background, a watermark image, three seals, a drop-cap image, three pictures of tables); each is
+rejected by what it is, and the emission threshold is what leaves a flat uncaptioned picture of a table alone. The kinds are the SPEC's signals, written as geometry.
+**Alternatives**: classifying only what has a caption (misses every uncaptioned logo, chart and photograph); a pixel classifier (the host's decode is a plan/fulfil request, and the default run asks for none); keeping the
+provisional rule (every image and cluster a figure of `unknown`: the corpus's `block-figure-p` would be 0.45).
+- [ ] **Signed off** (maintainer)
+
+### D681 — The placeholders are the same at every level of `assets`; labels leave the body; a figure goes before its caption (P8.1; SPEC 10.6, 10.11; D294, D353)
+**Decision**: (1) `fc-stage` runs at every level and replaces P3.13's provisional rule (`figures_stage` is called always; `as_figure_rows` stays, as a function `fc-stage` calls with level 2 over its own scratch rows and the laws
+of `emon.assettest` still test). `assets` only adds pixels: an image figure learns its candidate row by the box (`fk-image`), and at `figures` a region of ours that P8.5 did not find (a shaded fill, a P7.G region) is added
+to the asset stage's candidates with `as-region-add`; the vector clusters are the ones `as-collect` found, so P8.5's crop requests and committed transcripts are unchanged. At `images` a vector figure is `noasset: vector`.
+(2) LABELS: a one-line paragraph of at most 48 code points, six words and 18 pt whose centre is within 24 pt of a figure's visible box (a `note` whose every child is one) is dropped from the body and its text is a `labels`
+attribute of the figure, in node order (the order of reading, not of the HTML the gold was made from). No final full stop (a sentence is body text). (3) PLACEMENT: a figure goes in before the nearest `Figure` caption just
+below it (within 40 pt, overlapping in x) among the blocks of the document or a section, so that two columns of text between them (the `columns-span-figure` page) do not part it from its caption; any other by its top edge
+as before, and a page `break` takes the figures of the earlier pages first. (4) A figure with no `alt` has none: `alt` from the PDF is not read.
+**Why**: the placeholder is the SPEC's output, not an asset feature; labels were the corpus's paragraph errors (`block-paragraph-p` of pdf/columns 0.798 to 0.938). **Alternatives**: keeping figures an assets feature (default
+output would not have them: the brief); a label zone on the figure's own box (the labels of an axis lie outside its rules); absorbing every paragraph in the zone (a one-line body paragraph under a figure).
+- [ ] **Signed off** (maintainer)
+
+### D682 — A raster's kind from its dictionary and its bytes a pixel, with no pixel decoded (P8.1; SPEC 10.6; D117, D291)
+**Decision**: `fc-images` runs `pi-info` (the image record P3.12 reads) in the document pass, once per object placed, and keeps the codec, class, components, bits a component, size, an Indexed palette's size, the mask kind and
+`bits a pixel x 100 = stream length x 800 / (w x h)`. A bilevel image (1 bit, a stencil, CCITT or JBIG2) is a barcode (at least 2.2 times wider than high), a code (0.8 to 1.25 square, at most 200 pt) or line art
+(`illustration`); one at 1.3 bits a pixel or more is a photograph (560 plus half of the excess, at most 800); a flat one is a logo when it is at most 150 pt and in the header or footer band (the top or bottom fifth) or has a
+soft mask, a screenshot at 450 when it is at least 200 x 120 pt, else unknown. **Why**: the encoder's own work says photograph or drawing and the host's decode is a plan/fulfil request a default run does not make. The measured
+limit: a table photographed as a JPEG (`mixed-table-image`) is 1.08 bits a pixel, flat, 450 and so no figure without a caption; one at 1.3 or more would be a photograph. **Alternatives**: a decode by the host in a figure unit
+(a third loop for a default run); the colour histogram of kin's own samples (does not reach a DCT image, the common one).
+- [ ] **Signed off** (maintainer)
+
+### D683 — The scoreboard: per-kind figure metrics, and three metrics that went because their false positives did (P8.1; D077-D079)
+**Decision**: `tools/accuracy/score.clj` adds `figure-kind-<kind>-p/-r/-f1` (over the figures that matched, per kind either side has), recorded for `emon`, `oracle` and `degraded` by `--update`. Measured, `emon`, pdf/all: `figure-subkind-acc`
+0.0 to 1.0 (nine figures matched), `block-figure-r` 0.8 to 0.9 (the empty dashed box of `figures-charts`, a gold `chart`, has nothing a chart has), `block-figure-p` 1.0 held. `block-note-f1/-p/-r` of pdf/align were 0.0 because the
+column stage made margin notes of a chart's tick labels; they are labels now, no note remains, so the metric has no gold and no prediction and does not exist: the three lines were deleted from `test/scoreboard.edn` by hand
+(the ratchet fails a vanished metric and `--update` cannot remove one). No other value was lowered; 42 rose.
+- [ ] **Signed off** (maintainer)
+
+### D684 — Departures of P8.1: what it leaves, and where the engines were touched (P8.1; D362)
+**Decision**: (1) `fc_images` is one more call in the document pass (`attempt`, both hosts: it reads the input) and `figures_stage` takes the evidence arrays: the only host edits (`host/rust/src/engine.rs`, `host/go/engine.go`),
+no new stage in the unit, a field `fi` of `PdfDoc`. (2) A raster input (`finish_raster`) has no `grg` and no paths: no figures there until P7.4 wires the tracer into it. (3) Recurrence (P8.4) is a hook returning 0
+(`fc-recur`); a logo is found by size, band and colour alone. (4) The Engine API tests that said "assets off makes no figure" say that it makes the figure and no asset. (5) `test/assets/fig/` gains two fixtures made by
+`kin/scripts/asset-fig-fixtures`; the three of P8.5 are byte for byte what they were. (6) The Model's figure confidences are new (see D680): `bb calibration --refit` at the merge with P10.1; no node kind or attribute was added. (7) The P8.5 figures transcripts are keyed by node id (`au-id`), and the figure nodes' ids moved (labels left the body): the ids of the committed entries were RENUMBERED by a script
+(crop rectangles and pixels untouched), DIGESTS.edn recomputed from the replays, and `figures-charts` has one new crop (the gradient photograph, page 2, 416 x 158 px at 150 dpi, `bitmap-0003.png`) whose pixels are
+**pdftoppm's, not pdfium's** (no pinned pdfium here) and an old one (the empty dashed box, no longer a figure) removed: re-run `bb asset-fig-record` where pdfium is fetched to make the transcript honest.
 - [ ] **Signed off** (maintainer)

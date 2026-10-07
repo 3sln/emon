@@ -1,4 +1,4 @@
-;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307). P7.6 re-derived `hidden-older-ocr` and `tl-broken-unmapped` by replaying their committed transcripts under the new rules (no engine ran: D322).
+;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307). P7.6 re-derived `hidden-older-ocr` and `tl-broken-unmapped` by replaying their committed transcripts under the new rules (no engine ran: D322). P8.1 re-derived `figures-logo-screenshot` the same way (its logo is a figure placeholder now: D680).
 {"bank-statement"
  "e55a30a7ad657f8222472a825f07a8fd22c6d25dfb2afe1b016a07f33ac2b841",
  "bg-texture"
@@ -6,7 +6,7 @@
  "columns-two"
  "d2d38b234bf8ce438e641fb902affe47fe217b9b98fda6b9478c223f3c37bd12",
  "figures-logo-screenshot"
- "c9d77591e448fa03300fe5708d309fcc266aeb3eda5724052d32bbb141f8889d",
+ "cd2d784f11704d6bfdcacfb7cba9aef35b1e761cd3d8c0c5253b993469f25857",
  "h-numbered"
  "9ecae7308b0a9a6d11a1386657d4ee659d8e2a8a7daa2f5ab3828914855781c6",
  "hidden-older-ocr"

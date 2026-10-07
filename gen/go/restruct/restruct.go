@@ -1015,12 +1015,186 @@ func rfNextRegion(on *port.Cells, c int32) int32 {
 	return r
 }
 
-func rfFlush(cand *port.Cells, fg *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, np int32, lpage int32, ly int32) int32 {
+const rfFd int32 = 8
+
+const rfCapgap int32 = 4000
+
+func rfMin(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func rfMax(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+const rfZone int32 = 2400
+
+const rfLabelH int32 = 1800
+
+const rfLabelCp int32 = 48
+
+const rfLabelWords int32 = 6
+
+func rfFdv(fd *port.Cells, row int32, f int32, dflt int32) int32 {
+	if port.CellsLen(fd) < ((row + 1) * rfFd) {
+		return dflt
+	}
+	return port.CellsAt(fd, (row*rfFd)+f)
+}
+
+func rfLabelText(on *port.Cells, text *port.Cells, p int32) bool {
+	// A paragraph's text that a label can be: few code points and words, not a sentence (no final full stop).
+	var s int32 = model.NodeTextStart(on, p)
+	var l int32 = model.NodeTextLen(on, p)
+	var i int32 = 0
+	var words int32 = 1
+	if (l < 1) || (l > rfLabelCp) {
+		return 0 == 1
+	}
+	if port.CellsAt(text, s+(l-1)) == 46 {
+		return 0 == 1
+	}
+	for i < l {
+		if port.CellsAt(text, s+i) == 32 {
+			words += 1
+		}
+		i += 1
+	}
+	return words <= rfLabelWords
+}
+
+func rfLabelOf(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, p int32) int32 {
+	// The candidate row of the figure that paragraph p labels, or -1.
+	var r int32 = model.NodeRegionHead(on, p)
+	var i int32 = 1
+	var row int32 = 0
+	if r < 0 {
+		return -1
+	}
+	if model.NodeRegionCount(on, p) != 1 {
+		return -1
+	}
+	if model.NodeHasText(on, p) == 0 {
+		return -1
+	}
+	if (model.RegionY1(orr, r) - model.RegionY0(orr, r)) > rfLabelH {
+		return -1
+	}
+	if !rfLabelText(on, text, p) {
+		return -1
+	}
+	for i < port.CellsLen(fg) {
+		row = port.CellsAt(fg, i)
+		if (asset.AsGet(cand, row, 0) == model.RegionPage(orr, r)) && ((model.RegionX1(orr, r) > (asset.AsGet(cand, row, 5) - rfZone)) && ((model.RegionX0(orr, r) < (asset.AsGet(cand, row, 7) + rfZone)) && ((((model.RegionY0(orr, r) + model.RegionY1(orr, r)) / 2) >= (asset.AsGet(cand, row, 6) - rfZone)) && ((((model.RegionY0(orr, r) + model.RegionY1(orr, r)) / 2) <= (asset.AsGet(cand, row, 8) + rfZone)) && ((model.RegionX1(orr, r) - model.RegionX0(orr, r)) <= ((2 * (asset.AsGet(cand, row, 7) - asset.AsGet(cand, row, 5))) + 2000)))))) {
+			return row
+		}
+		i += 1
+	}
+	return -1
+}
+
+func rfAbsorbNote(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, n int32) int32 {
+	// A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is
+	// dropped with them: the note and its paragraphs are marked.
+	var c int32 = model.NodeFirstChild(on, n)
+	var f int32 = -1
+	var g int32 = 0
+	var ok int32 = 1
+	var cnt int32 = 0
+	for c >= 0 {
+		g = -1
+		if model.NodeKind(on, c) == model.NkParagraph() {
+			g = rfLabelOf(on, orr, text, cand, fg, fd, c)
+		}
+		if g < 0 {
+			ok = 0
+		}
+		if (g >= 0) && ((f >= 0) && (g != f)) {
+			ok = 0
+		}
+		if g >= 0 {
+			f = g
+		}
+		cnt += 1
+		c = model.NodeNext(on, c)
+	}
+	if (ok == 1) && (cnt > 0) {
+		port.CellsSet(ab, n, f)
+		c = model.NodeFirstChild(on, n)
+		for c >= 0 {
+			port.CellsSet(ab, c, f)
+			c = model.NodeNext(on, c)
+		}
+	}
+	return 0
+}
+
+func rfAbsorb(on *port.Cells, orr *port.Cells, text *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, p int32) int32 {
+	// Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
+	var c int32 = model.NodeFirstChild(on, p)
+	var f int32 = -1
+	for c >= 0 {
+		if model.NodeKind(on, c) == model.NkSection() {
+			rfAbsorb(on, orr, text, cand, fg, fd, ab, c)
+		}
+		if model.NodeKind(on, c) == model.NkNote() {
+			rfAbsorbNote(on, orr, text, cand, fg, fd, ab, c)
+		}
+		if model.NodeKind(on, c) == model.NkParagraph() {
+			f = rfLabelOf(on, orr, text, cand, fg, fd, c)
+			if f >= 0 {
+				port.CellsSet(ab, c, f)
+			}
+		}
+		c = model.NodeNext(on, c)
+	}
+	return 0
+}
+
+func rfLabels(on *port.Cells, ab *port.Cells, nodes *port.Cells, attrs *port.Cells, nn int32, row int32) int32 {
+	// The texts of the paragraphs marked as labels of the figure `row`, in node order, as `labels` of the new figure nn.
+	var n int32 = model.NodeCount(on)
+	var c int32 = 0
+	for c < n {
+		if (port.CellsAt(ab, c) == row) && (model.NodeKind(on, c) == model.NkParagraph()) {
+			model.NodeAddAttrText(nodes, attrs, nn, model.FkLabels(), model.NodeTextStart(on, c), model.NodeTextLen(on, c))
+		}
+		c += 1
+	}
+	return 0
+}
+
+func rfMake(on *port.Cells, ab *port.Cells, cand *port.Cells, fd *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, np int32, row int32) int32 {
+	// The figure node of candidate row `row` as the last child of np: its kind, confidence, sources, region, asset row and labels.
+	var nn int32 = model.NodeNew(nodes, model.NkFigure(), np)
+	var link int32 = 0
+	if nn >= 0 {
+		model.NodeSetSub(nodes, nn, rfFdv(fd, row, 0, model.FgUnknown()))
+		model.NodeSetConf(nodes, nn, rfFdv(fd, row, 1, 500))
+		model.NodeAddSrc(nodes, nn, rfFdv(fd, row, 2, 0)|model.SrInfer())
+		model.NodeAddRegion(nodes, regions, nn, asset.AsGet(cand, row, 0), asset.AsGet(cand, row, 5), asset.AsGet(cand, row, 6), asset.AsGet(cand, row, 7), asset.AsGet(cand, row, 8))
+		link = rfFdv(fd, row, 3, row)
+		if link >= 0 {
+			model.NodeSetAttrInt(nodes, attrs, nn, model.FkImage(), link)
+		}
+		if port.CellsLen(fd) > 0 {
+			rfLabels(on, ab, nodes, attrs, nn, row)
+		}
+	}
+	return nn
+}
+
+func rfFlush(on *port.Cells, ab *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, np int32, lpage int32, ly int32) int32 {
 	// Make the pending figures whose top edge is before the position (lpage, ly) as children of np; lpage -1 is no
 	// limit. `fg`[0] is the cursor.
 	var cur int32 = port.CellsAt(fg, 0)
 	var row int32 = 0
-	var nn int32 = 0
 	var more int32 = 1
 	for (more == 1) && ((cur + 1) < port.CellsLen(fg)) {
 		row = port.CellsAt(fg, cur+1)
@@ -1035,14 +1209,7 @@ func rfFlush(cand *port.Cells, fg *port.Cells, nodes *port.Cells, attrs *port.Ce
 			more = 1
 		}
 		if more == 1 {
-			nn = model.NodeNew(nodes, model.NkFigure(), np)
-			if nn >= 0 {
-				model.NodeSetSub(nodes, nn, model.FgUnknown())
-				model.NodeSetConf(nodes, nn, 500)
-				model.NodeAddSrc(nodes, nn, model.SrInfer())
-				model.NodeAddRegion(nodes, regions, nn, asset.AsGet(cand, row, 0), asset.AsGet(cand, row, 5), asset.AsGet(cand, row, 6), asset.AsGet(cand, row, 7), asset.AsGet(cand, row, 8))
-				model.NodeSetAttrInt(nodes, attrs, nn, model.FkImage(), row)
-			}
+			rfMake(on, ab, cand, fd, nodes, attrs, regions, np, row)
 			cur += 1
 			port.CellsSet(fg, 0, cur)
 		}
@@ -1050,49 +1217,122 @@ func rfFlush(cand *port.Cells, fg *port.Cells, nodes *port.Cells, attrs *port.Ce
 	return 0
 }
 
-func rfChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, cand *port.Cells, fg *port.Cells, p int32, np int32, flush int32, lpage int32, ly int32) int32 {
+func rfFlushAnchor(on *port.Cells, ab *port.Cells, cand *port.Cells, fd *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, np int32, cpn int32) int32 {
+	// Make the figures whose caption is the old node `cpn` (`fd` cell 4), just before it: a figure belongs with its caption, whatever
+	// column it stands in.
+	var rows int32 = port.CellsLen(fd) / rfFd
+	var row int32 = 0
+	for row < rows {
+		if port.CellsAt(fd, (row*rfFd)+4) == cpn {
+			rfMake(on, ab, cand, fd, nodes, attrs, regions, np, row)
+		}
+		row += 1
+	}
+	return 0
+}
+
+func rfAnchor(on *port.Cells, orr *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells) int32 {
+	// Each figure that has a figure caption (`caption`, kind 1) among the blocks of the document or a section just below it, within
+	// `RF_CAPGAP`, and overlapping it in x, is anchored to the nearest one: `fd` cell 4 is that caption, and the figure leaves `fg`
+	// (it goes in before its caption, `rf-flush-anchor`).
+	var n int32 = model.NodeCount(on)
+	var i int32 = 1
+	var out int32 = 1
+	var row int32 = 0
+	var c int32 = 0
+	var r int32 = 0
+	var p int32 = 0
+	var gap int32 = 0
+	var best int32 = -1
+	var bestgap int32 = 1000000
+	for i < port.CellsLen(fg) {
+		row = port.CellsAt(fg, i)
+		best = -1
+		bestgap = 1000000
+		c = 0
+		for c < n {
+			if (model.NodeKind(on, c) == model.NkCaption()) && (model.NodeAux(on, c) == 1) {
+				p = model.NodeParent(on, c)
+				r = model.NodeRegionHead(on, c)
+				if (p >= 0) && (r >= 0) {
+					if ((model.NodeKind(on, p) == model.NkDocument()) || (model.NodeKind(on, p) == model.NkSection())) && ((model.RegionPage(orr, r) == asset.AsGet(cand, row, 0)) && ((rfMin(model.RegionX1(orr, r), asset.AsGet(cand, row, 7)) > rfMax(model.RegionX0(orr, r), asset.AsGet(cand, row, 5))) && (1 == 1))) {
+						gap = model.RegionY0(orr, r) - asset.AsGet(cand, row, 8)
+						if (gap >= -200) && ((gap <= rfCapgap) && (gap < bestgap)) {
+							best = c
+							bestgap = gap
+						}
+					}
+				}
+			}
+			c += 1
+		}
+		if best >= 0 {
+			port.CellsSet(fd, (row*rfFd)+4, best)
+		} else {
+			port.CellsSet(fg, out, row)
+			out += 1
+		}
+		i += 1
+	}
+	port.CellsDrop(fg, out)
+	return 0
+}
+
+func rfChildren(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, p int32, np int32, flush int32, lpage int32, ly int32) int32 {
 	// Copy the children of old node p under new node np; when `flush` is 1 the pending figures above each child go in
-	// before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins).
+	// before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins). A paragraph
+	// that labels a figure (`ab`) is not copied.
 	var c int32 = model.NodeFirstChild(on, p)
 	var r int32 = 0
 	var r2 int32 = 0
 	var pg2 int32 = 0
 	var y2 int32 = 0
+	var bp int32 = 0
 	var nn int32 = 0
 	for c >= 0 {
-		if flush == 1 {
-			r = rfRegion(on, c)
-			if r >= 0 {
-				rfFlush(cand, fg, nodes, attrs, regions, np, model.RegionPage(orr, r), model.RegionY0(orr, r))
+		if (port.CellsLen(ab) == 0) || (port.CellsAt(ab, c) < 0) {
+			if (flush == 1) && (model.NodeKind(on, c) == model.NkBreak()) {
+				bp = model.NodeAttrIntOr(on, oa, c, model.FkPage(), 0)
+				rfFlush(on, ab, cand, fg, fd, nodes, attrs, regions, np, bp, 0)
 			}
-		}
-		nn = rfNode(on, oa, orr, nodes, attrs, regions, nm, c, np)
-		if nn >= 0 {
-			if (flush == 1) && (model.NodeKind(on, c) == model.NkSection()) {
-				r2 = rfNextRegion(on, c)
-				if r2 >= 0 {
-					pg2 = model.RegionPage(orr, r2)
-					y2 = model.RegionY0(orr, r2)
-					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, pg2, y2)
-				} else {
-					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, lpage, ly)
+			if flush == 1 {
+				r = rfRegion(on, c)
+				if r >= 0 {
+					rfFlush(on, ab, cand, fg, fd, nodes, attrs, regions, np, model.RegionPage(orr, r), model.RegionY0(orr, r))
 				}
-			} else {
-				rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 0, lpage, ly)
+			}
+			if (flush == 1) && ((port.CellsLen(fd) > 0) && (model.NodeKind(on, c) == model.NkCaption())) {
+				rfFlushAnchor(on, ab, cand, fd, nodes, attrs, regions, np, c)
+			}
+			nn = rfNode(on, oa, orr, nodes, attrs, regions, nm, c, np)
+			if nn >= 0 {
+				if (flush == 1) && (model.NodeKind(on, c) == model.NkSection()) {
+					r2 = rfNextRegion(on, c)
+					if r2 >= 0 {
+						pg2 = model.RegionPage(orr, r2)
+						y2 = model.RegionY0(orr, r2)
+						rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 1, pg2, y2)
+					} else {
+						rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 1, lpage, ly)
+					}
+				} else {
+					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 0, lpage, ly)
+				}
 			}
 		}
 		c = model.NodeNext(on, c)
 	}
 	if flush == 1 {
-		rfFlush(cand, fg, nodes, attrs, regions, np, lpage, ly)
+		rfFlush(on, ab, cand, fg, fd, nodes, attrs, regions, np, lpage, ly)
 	}
 	return 0
 }
 
-func RsFigures(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, cand *port.Cells, fg *port.Cells) int32 {
+func RsFigures(on *port.Cells, oa *port.Cells, orr *port.Cells, text *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, nm *port.Cells, cand *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells) int32 {
 	// Copy the old Model's trees into the empty arenas `nodes`, `attrs`, `regions` (the text is shared), with the
-	// provisional figures `fg` (`as-figure-rows`) placed among the document's and the sections' blocks. `nm` is scratch
-	// (old node to new). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
+	// figures `fg` (rows of `cand`, sorted: `as-figure-rows`; what they are: `fd`) placed among the document's and the
+	// sections' blocks, and the paragraphs that label them left out. `nm` and `ab` are scratch (old node to new; old node to
+	// the figure it labels). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
 	var n int32 = model.NodeCount(on)
 	var r int32 = 0
 	var i int32 = 0
@@ -1101,18 +1341,33 @@ func RsFigures(on *port.Cells, oa *port.Cells, orr *port.Cells, nodes *port.Cell
 	port.CellsDrop(attrs, 0)
 	port.CellsDrop(regions, 0)
 	port.CellsDrop(nm, 0)
+	port.CellsDrop(ab, 0)
 	for i < n {
 		port.CellsPush(nm, -1)
+		if port.CellsLen(fd) > 0 {
+			port.CellsPush(ab, -1)
+		}
 		i += 1
+	}
+	if port.CellsLen(fd) > 0 {
+		r = 0
+		for r < n {
+			if (model.NodeParent(on, r) < 0) && (model.NodeKind(on, r) == model.NkDocument()) {
+				rfAbsorb(on, orr, text, cand, fg, fd, ab, r)
+			}
+			r += 1
+		}
+		rfAnchor(on, orr, cand, fg, fd)
+		r = 0
 	}
 	for r < n {
 		if model.NodeParent(on, r) < 0 {
 			nr = rfNode(on, oa, orr, nodes, attrs, regions, nm, r, -1)
 			if nr >= 0 {
 				if model.NodeKind(on, r) == model.NkDocument() {
-					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 1, -1, -1)
+					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 1, -1, -1)
 				} else {
-					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 0, -1, -1)
+					rfChildren(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 0, -1, -1)
 				}
 			}
 		}

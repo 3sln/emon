@@ -27,6 +27,8 @@
 ;;           decoders), or the host's own answer for what it does not read (`noasset: codec`): the Go host reads no JPX or JBIG2, nor
 ;;           CCITT Group 3 two-dimensional, byte-aligned or without EOLs; the Rust host without `--codecs` reads no JPX or JBIG2.
 ;;   7. THE LEVEL `figures` (P8.5): the committed pdfium transcripts of test/asset/figures/ replay on both hosts (below).
+;;   8. THE FIGURES' KINDS (P8.1): the hand-made fixtures of test/assets/fig/ have the figures test/assets/fig/kinds.edn says, of the kinds
+;;      it says, on both hosts and at every level of `assets`; the kinds' accuracy and the placeholders' precision and recall are printed.
 ;;
 ;; Needs ImageMagick (`magick`), poppler (`pdfimages`) and the toolchains of the drivers. A missing tool is a SKIP of what it checks.
 (require '[babashka.fs :as fs] '[babashka.process :refer [shell process]] '[cheshire.core :as json] '[clojure.string :as str])
@@ -404,6 +406,39 @@
     (when (not= (n "images") (n "figures")) (swap! bad? conj (str stem " " (n "images") " figures at images, " (n "figures") " at figures"))))
   (check (empty? @bad?) "FIGURES: the rules of a table are no figure (ruled, zebra, header-fill and bank statement have the figures at `figures` they have at `images`)"
          (when (seq @bad?) (str ": " (str/join "; " @bad?)))))
+
+;; 8 THE FIGURES' KINDS (P8.1, SPEC 10.6, D680) ----------------------------------------------------------------------------------------
+;; The hand-made fixtures of test/assets/fig/ (kin/scripts/asset-fig-fixtures) against test/assets/fig/kinds.edn: both hosts give the same
+;; Model at every level of `assets` (the placeholders do not depend on it: pixels are all it decides) and the figures' `subkind`s, in
+;; order, are the gold's. Accuracy of the kind and precision and recall of the placeholder are counted over all of them.
+(let [gold (edn/read-string (slurp "test/assets/fig/kinds.edn"))
+      figs (fn [out] (filter #(= "figure" (get % "kind")) (tree-seq map? #(get % "children") (get (json/parse-string out) "body"))))
+      kinds (fn [out] (mapv #(get % "subkind") (figs out)))
+      wrong (atom []) tp (atom 0) npred (atom 0) ngold (atom 0) kok (atom 0) kn (atom 0)
+      per-kind (atom {})]
+  (doseq [[stem want] (sort gold)
+          :let [pdf (str "test/assets/fig/" stem ".pdf")
+                at-level (fn [exe lvl] (:out (fig-run exe (str "--assets=" lvl) pdf)))
+                r0 (:out (fig-run rs pdf)) g0 (:out (fig-run go pdf))
+                got (kinds r0)]]
+    (when-not (= r0 g0) (swap! wrong conj (str stem " differs between the hosts")))
+    (doseq [lvl ["images" "figures"] exe [rs go]]
+      (when-not (= got (kinds (at-level exe lvl))) (swap! wrong conj (str stem " has other figures at --assets=" lvl))))
+    (when-not (= want got) (swap! wrong conj (str stem ": the kinds are " got ", the gold's " want)))
+    (swap! npred + (count got)) (swap! ngold + (count want))
+    (let [n (min (count got) (count want))]
+      (swap! tp + n)
+      (swap! kn + n) (swap! kok + (count (filter true? (map = (take n got) (take n want)))))
+      (doseq [[a b] (map vector (take n got) (take n want))]
+        (swap! per-kind update b (fnil update {:gold 0 :pred 0 :tp 0}) :gold inc)
+        (swap! per-kind update a (fnil update {:gold 0 :pred 0 :tp 0}) :pred inc)
+        (when (= a b) (swap! per-kind update a (fnil update {:gold 0 :pred 0 :tp 0}) :tp inc)))))
+  (let [pr (if (pos? @npred) (/ (double @tp) @npred) 1.0) rc (if (pos? @ngold) (/ (double @tp) @ngold) 1.0)]
+    (check (empty? @wrong)
+           "KINDS: " (count gold) " fixtures, both hosts, every level of `assets`: the figures' kinds are the gold's (" @kn " figures: accuracy "
+           (format "%.3f" (if (pos? @kn) (/ (double @kok) @kn) 1.0)) ", placeholder P " (format "%.3f" pr) " R " (format "%.3f" rc) "; "
+           (str/join " " (for [[k {:keys [gold pred tp]}] (sort @per-kind)] (str k " " tp "/" pred "/" gold)))
+           (when (seq @wrong) (str ":\n    " (str/join "\n    " (take 12 @wrong)))))))
 
 (fs/delete-tree tmp)
 (println (if (zero? @fails) "asset-check: all green" (str "asset-check: " @fails " FAILED")))

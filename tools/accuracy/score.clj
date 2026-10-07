@@ -43,6 +43,7 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
                   "caption" "seal" "note" "code" "quote"])
 (def TEXT-KINDS #{"heading" "paragraph" "item" "caption" "cell" "code" "quote" "seal"})
 (def CONTAINERS #{"figure" "table" "list" "note"})
+(def FIGURE-KINDS ["chart" "diagram" "photo" "logo" "map" "illustration" "screenshot" "qr" "barcode" "unknown"])
 (def IOU 0.5)
 (def SIM 0.5)
 (def LOWER-IS-BETTER #{"cer" "wer" "watermark-leak" "initial-false-heading" "align-wrong"
@@ -817,7 +818,14 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
       (when (and (contains? kset "figure") (contains? (set (get attrs "figure")) "subkind"))
         (let [fp (filter (fn [[i j]] (and (= (gk i) "figure") (= "figure" (pk j)))) pairs)]
           (add "figure.subkind.n" (count fp))
-          (add "figure.subkind.ok" (count (filter (fn [[i j]] (pyeq (get-in g [i "subkind"]) (get-in p [j "subkind"]))) fp)))))
+          (add "figure.subkind.ok" (count (filter (fn [[i j]] (pyeq (get-in g [i "subkind"]) (get-in p [j "subkind"]))) fp)))
+          ;; per kind (P8.1): among the figures that matched, how many of each kind the gold has, the prediction says, and both
+          (doseq [k FIGURE-KINDS]
+            (let [kg (count (filter (fn [[i _]] (= k (get-in g [i "subkind"]))) fp))
+                  kp (count (filter (fn [[_ j]] (= k (get-in p [j "subkind"]))) fp))
+                  ktp (count (filter (fn [[i j]] (and (= k (get-in g [i "subkind"])) (= k (get-in p [j "subkind"])))) fp))]
+              (when (or (pos? kg) (pos? kp))
+                (add (str "figure.kind." k ".tp") ktp) (add (str "figure.kind." k ".gold") kg) (add (str "figure.kind." k ".pred") kp))))))
       ;; tables
       (when (contains? kset "table")
         (let [ng (count (filter #(= "table" (get % "kind")) g))]
@@ -902,6 +910,8 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
         m (if (contains? c "figure.subkind.n")
             (set* m "figure-subkind-acc" (ratio (c "figure.subkind.ok") (c "figure.subkind.n")))
             m)
+        ;; per kind: precision and recall over the matched figures (placement is block-figure-*)
+        m (reduce (fn [m k] (prf m c (str "figure.kind." k) (str "figure-kind-" k))) m FIGURE-KINDS)
         m (if (pos? (get c "table.n" 0))
             (let [m (-> m
                         (set* "table-teds-lite" (div (c "table.teds-lite-sum") (c "table.n")))

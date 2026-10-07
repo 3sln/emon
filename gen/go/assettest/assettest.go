@@ -442,7 +442,7 @@ func TestAFigureGoesWhereItsTopEdgeFallsAmongTheBlocks(emonT *testing.T) {
 	atCand(cand, 1, 7200, 50000, 30000, 60000, 0, 0, 0, 2)
 	atCand(cand, 1, 7200, 95000, 30000, 100000, 0, 0, 0, 3)
 	port.AssertEq(emonT, asset.AsFigureRows(cand, pages, nodes, regions, 1, fg), 3, "three figures")
-	restruct.RsFigures(nodes, attrs, regions, nn, na, nr, nm, cand, fg)
+	restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, port.NewCells(), port.NewCells())
 	port.AssertEq(emonT, model.NodeCount(nn), 9, "nine nodes: the six and three figures")
 	// preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE
 	port.AssertEq(emonT, model.NodeKind(nn, 0), model.NkDocument(), "the document")

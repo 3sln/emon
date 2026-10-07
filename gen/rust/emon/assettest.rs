@@ -424,7 +424,7 @@ fn test_a_figure_goes_where_its_top_edge_falls_among_the_blocks() {
     at_cand(cand, 1, 7200, 50000, 30000, 60000, 0, 0, 0, 2);
     at_cand(cand, 1, 7200, 95000, 30000, 100000, 0, 0, 0, 3);
     crate::testport::assert_eq(as_figure_rows(cand, pages, nodes, regions, 1, fg), 3, "three figures");
-    rs_figures(nodes, attrs, regions, nn, na, nr, nm, cand, fg);
+    rs_figures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
     crate::testport::assert_eq(node_count(nn), 9, "nine nodes: the six and three figures");
     // preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE
     crate::testport::assert_eq(node_kind(nn, 0), nk_document(), "the document");

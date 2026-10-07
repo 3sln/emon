@@ -44,13 +44,13 @@
                                 node-set-attr-node node-set-attr-bool node-attr node-attr-int-or
                                 av-int av-text av-node av-bool text-append-cp
                                 nk-list nk-item nk-caption nk-figure nk-table nk-note nk-ref nk-link nk-text nk-break
-                                nk-paragraph nk-heading nk-quote nk-cell nk-section nk-document fk-image
+                                nk-paragraph nk-heading nk-quote nk-cell nk-section nk-document fk-image fk-labels fk-page
                                 fk-scheme fk-start fk-value fk-box fk-marker fk-label fk-target fk-href
                                 sr-text sr-infer fg-unknown]]
             [emon.links :refer [lk-find]]
             [emon.asset :refer [as-get]]
             [kin.lang :refer [defn defconst defdata return let set while if do comment
-                              + - * < > <= >= == != and or not quot rem]]))
+                              + - * < > <= >= == != and or not quot rem bit-and bit-or]]))
 
 (defconst ^I32 RS_FR 8)            ;; a list frame: list, indent, scheme, last value, last item, first value, parent
 (defconst ^I32 RS_DEEP 24)         ;; lists nested no deeper than this (a hostile file's indents)
@@ -810,13 +810,140 @@
           (set q (node-next on q))))
     (return r)))
 
-(defn ^I32 rf-flush [^Cells cand ^:mut ^Cells fg ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+;; THE FIGURES OF P8.1. `fd` (stride `RF_FD`, one row per candidate row of `cand`: `emon.figclass` makes it) says what each figure
+;; is: its kind, its confidence, where it came from and the candidate row of the asset stage it is (`fk-image`); with `fd` empty
+;; every figure is of kind `unknown`, confidence 500, `fk-image` the candidate row (P3.13's rule, kept for its laws). A paragraph that
+;; is a LABEL of a figure (a short one-line paragraph on the figure or within `RF_ZONE` of it: an axis tick, a diagram's word, a
+;; logo's name) is not body text (SPEC 10.6): it is not copied, its text is the figure's `labels`, in reading order. `ab` (old node
+;; -> the candidate row of the figure it labels, -1 none) is made here.
+
+(defconst ^I32 RF_FD 8)             ;; cells of a figure's row in `fd`: 0 kind, 1 confidence, 2 sources (`sr`), 3 asset row (-1 none)
+(defconst ^I32 RF_CAPGAP 4000)      ;; a figure caption this close below a figure (40 pt) is its caption
+
+(defn ^I32 rf-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 rf-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defconst ^I32 RF_ZONE 2400)        ;; a label lies within this many centipoints of its figure (24 pt)
+(defconst ^I32 RF_LABEL_H 1800)     ;; a label is a line at most this tall (18 pt: `0` and `Jan` on two baselines are one paragraph)
+(defconst ^I32 RF_LABEL_CP 48)      ;; and at most this many code points
+(defconst ^I32 RF_LABEL_WORDS 6)    ;; and this many words
+
+(defn ^I32 rf-fdv [^Cells fd ^I32 row ^I32 f ^I32 dflt]
+  (if (< (cells-len fd) (* (+ row 1) RF_FD)) (return dflt))
+  (return (cells-at fd (+ (* row RF_FD) f))))
+
+(defn ^Bool rf-label-text [^Cells on ^Cells text ^I32 p]
+  (comment "A paragraph's text that a label can be: few code points and words, not a sentence (no final full stop).")
+  (let [^I32 s (node-text-start on p)
+        ^I32 l (node-text-len on p)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 words 1]
+    (if (or (< l 1) (> l RF_LABEL_CP)) (return (== 0 1)))
+    (if (== (cells-at text (+ s (- l 1))) 46) (return (== 0 1)))
+    (while (< i l)
+      (do (if (== (cells-at text (+ s i)) 32) (set words (+ words 1)))
+          (set i (+ i 1))))
+    (return (<= words RF_LABEL_WORDS))))
+
+(defn ^I32 rf-label-of [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^I32 p]
+  (comment "The candidate row of the figure that paragraph p labels, or -1.")
+  (let [^I32 r (node-region-head on p)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 row 0]
+    (if (< r 0) (return -1))
+    (if (!= (node-region-count on p) 1) (return -1))
+    (if (== (node-has-text on p) 0) (return -1))
+    (if (> (- (region-y1 orr r) (region-y0 orr r)) RF_LABEL_H) (return -1))
+    (if (not (rf-label-text on text p)) (return -1))
+    (while (< i (cells-len fg))
+      (do (set row (cells-at fg i))
+          (if (and (== (as-get cand row 0) (region-page orr r))
+                   (and (> (region-x1 orr r) (- (as-get cand row 5) RF_ZONE))
+                        (and (< (region-x0 orr r) (+ (as-get cand row 7) RF_ZONE))
+                             (and (>= (quot (+ (region-y0 orr r) (region-y1 orr r)) 2) (- (as-get cand row 6) RF_ZONE))
+                                  (and (<= (quot (+ (region-y0 orr r) (region-y1 orr r)) 2) (+ (as-get cand row 8) RF_ZONE))
+                                       (<= (- (region-x1 orr r) (region-x0 orr r))
+                                           (+ (* 2 (- (as-get cand row 7) (as-get cand row 5))) 2000)))))))
+            (return row))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 rf-absorb-note [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^:mut ^Cells ab ^I32 n]
+  (comment "A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is")
+  (comment "dropped with them: the note and its paragraphs are marked.")
+  (let [^:mut ^I32 c (node-first-child on n)
+        ^:mut ^I32 f -1
+        ^:mut ^I32 g 0
+        ^:mut ^I32 ok 1
+        ^:mut ^I32 cnt 0]
+    (while (>= c 0)
+      (do (set g -1)
+          (if (== (node-kind on c) (nk-paragraph)) (set g (rf-label-of on orr text cand fg fd c)))
+          (if (< g 0) (set ok 0))
+          (if (and (>= g 0) (and (>= f 0) (!= g f))) (set ok 0))
+          (if (>= g 0) (set f g))
+          (set cnt (+ cnt 1))
+          (set c (node-next on c))))
+    (if (and (== ok 1) (> cnt 0))
+      (do (cells-set ab n f)
+          (set c (node-first-child on n))
+          (while (>= c 0)
+            (do (cells-set ab c f)
+                (set c (node-next on c))))))
+    (return 0)))
+
+(defn ^I32 rf-absorb [^Cells on ^Cells orr ^Cells text ^Cells cand ^Cells fg ^Cells fd ^:mut ^Cells ab ^I32 p]
+  (comment "Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.")
+  (let [^:mut ^I32 c (node-first-child on p)
+        ^:mut ^I32 f -1]
+    (while (>= c 0)
+      (do (if (== (node-kind on c) (nk-section))
+            (rf-absorb on orr text cand fg fd ab c))
+          (if (== (node-kind on c) (nk-note))
+            (rf-absorb-note on orr text cand fg fd ab c))
+          (if (== (node-kind on c) (nk-paragraph))
+            (do (set f (rf-label-of on orr text cand fg fd c))
+                (if (>= f 0) (cells-set ab c f))))
+          (set c (node-next on c))))
+    (return 0)))
+
+(defn ^I32 rf-labels [^Cells on ^Cells ab ^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 nn ^I32 row]
+  (comment "The texts of the paragraphs marked as labels of the figure `row`, in node order, as `labels` of the new figure nn.")
+  (let [^I32 n (node-count on)
+        ^:mut ^I32 c 0]
+    (while (< c n)
+      (do (if (and (== (cells-at ab c) row) (== (node-kind on c) (nk-paragraph)))
+            (node-add-attr-text nodes attrs nn (fk-labels) (node-text-start on c) (node-text-len on c)))
+          (set c (+ c 1))))
+    (return 0)))
+
+(defn ^I32 rf-make [^Cells on ^Cells ab ^Cells cand ^Cells fd ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                    ^I32 np ^I32 row]
+  (comment "The figure node of candidate row `row` as the last child of np: its kind, confidence, sources, region, asset row and labels.")
+  (let [^I32 nn (node-new nodes (nk-figure) np)
+        ^:mut ^I32 link 0]
+    (if (>= nn 0)
+      (do (node-set-sub nodes nn (rf-fdv fd row 0 (fg-unknown)))
+          (node-set-conf nodes nn (rf-fdv fd row 1 500))
+          (node-add-src nodes nn (bit-or (rf-fdv fd row 2 0) (sr-infer)))
+          (node-add-region nodes regions nn (as-get cand row 0) (as-get cand row 5) (as-get cand row 6)
+                           (as-get cand row 7) (as-get cand row 8))
+          (set link (rf-fdv fd row 3 row))
+          (if (>= link 0) (node-set-attr-int nodes attrs nn (fk-image) link))
+          (if (> (cells-len fd) 0) (rf-labels on ab nodes attrs nn row))))
+    (return nn)))
+
+(defn ^I32 rf-flush [^Cells on ^Cells ab ^Cells cand ^:mut ^Cells fg ^Cells fd ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
                      ^I32 np ^I32 lpage ^I32 ly]
   (comment "Make the pending figures whose top edge is before the position (lpage, ly) as children of np; lpage -1 is no")
   (comment "limit. `fg`[0] is the cursor.")
   (let [^:mut ^I32 cur (cells-at fg 0)
         ^:mut ^I32 row 0
-        ^:mut ^I32 nn 0
         ^:mut ^I32 more 1]
     (while (and (== more 1) (< (+ cur 1) (cells-len fg)))
       (do (set row (cells-at fg (+ cur 1)))
@@ -825,53 +952,108 @@
           (if (and (>= lpage 0) (< (as-get cand row 0) lpage)) (set more 1))
           (if (and (>= lpage 0) (and (== (as-get cand row 0) lpage) (< (as-get cand row 6) ly))) (set more 1))
           (if (== more 1)
-            (do (set nn (node-new nodes (nk-figure) np))
-                (if (>= nn 0)
-                  (do (node-set-sub nodes nn (fg-unknown))
-                      (node-set-conf nodes nn 500)
-                      (node-add-src nodes nn (sr-infer))
-                      (node-add-region nodes regions nn (as-get cand row 0) (as-get cand row 5) (as-get cand row 6)
-                                       (as-get cand row 7) (as-get cand row 8))
-                      (node-set-attr-int nodes attrs nn (fk-image) row)))
+            (do (rf-make on ab cand fd nodes attrs regions np row)
                 (set cur (+ cur 1))
                 (cells-set fg 0 cur)))))
     (return 0)))
 
+(defn ^I32 rf-flush-anchor [^Cells on ^Cells ab ^Cells cand ^Cells fd ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                            ^I32 np ^I32 cpn]
+  (comment "Make the figures whose caption is the old node `cpn` (`fd` cell 4), just before it: a figure belongs with its caption, whatever")
+  (comment "column it stands in.")
+  (let [^I32 rows (quot (cells-len fd) RF_FD)
+        ^:mut ^I32 row 0]
+    (while (< row rows)
+      (do (if (== (cells-at fd (+ (* row RF_FD) 4)) cpn)
+            (rf-make on ab cand fd nodes attrs regions np row))
+          (set row (+ row 1))))
+    (return 0)))
+
+(defn ^I32 rf-anchor [^Cells on ^Cells orr ^Cells cand ^:mut ^Cells fg ^:mut ^Cells fd]
+  (comment "Each figure that has a figure caption (`caption`, kind 1) among the blocks of the document or a section just below it, within")
+  (comment "`RF_CAPGAP`, and overlapping it in x, is anchored to the nearest one: `fd` cell 4 is that caption, and the figure leaves `fg`")
+  (comment "(it goes in before its caption, `rf-flush-anchor`).")
+  (let [^I32 n (node-count on)
+        ^:mut ^I32 i 1
+        ^:mut ^I32 out 1
+        ^:mut ^I32 row 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 gap 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestgap 1000000]
+    (while (< i (cells-len fg))
+      (do (set row (cells-at fg i))
+          (set best -1)
+          (set bestgap 1000000)
+          (set c 0)
+          (while (< c n)
+            (do (if (and (== (node-kind on c) (nk-caption)) (== (node-aux on c) 1))
+                  (do (set p (node-parent on c))
+                      (set r (node-region-head on c))
+                      (if (and (>= p 0) (>= r 0))
+                        (if (and (or (== (node-kind on p) (nk-document)) (== (node-kind on p) (nk-section)))
+                                 (and (== (region-page orr r) (as-get cand row 0))
+                                      (and (> (rf-min (region-x1 orr r) (as-get cand row 7)) (rf-max (region-x0 orr r) (as-get cand row 5)))
+                                           (== 1 1))))
+                          (do (set gap (- (region-y0 orr r) (as-get cand row 8)))
+                              (if (and (>= gap -200) (and (<= gap RF_CAPGAP) (< gap bestgap)))
+                                (do (set best c)
+                                    (set bestgap gap))))))))
+                (set c (+ c 1))))
+          (if (>= best 0)
+            (cells-set fd (+ (* row RF_FD) 4) best)
+            (do (cells-set fg out row)
+                (set out (+ out 1))))
+          (set i (+ i 1))))
+    (cells-drop fg out)
+    (return 0)))
+
 (defn ^I32 rf-children [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
-                        ^:mut ^Cells nm ^Cells cand ^:mut ^Cells fg ^I32 p ^I32 np ^I32 flush ^I32 lpage ^I32 ly]
+                        ^:mut ^Cells nm ^Cells cand ^:mut ^Cells fg ^Cells fd ^Cells ab ^I32 p ^I32 np ^I32 flush ^I32 lpage ^I32 ly]
   (comment "Copy the children of old node p under new node np; when `flush` is 1 the pending figures above each child go in")
-  (comment "before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins).")
+  (comment "before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins). A paragraph")
+  (comment "that labels a figure (`ab`) is not copied.")
   (let [^:mut ^I32 c (node-first-child on p)
         ^:mut ^I32 r 0
         ^:mut ^I32 r2 0
         ^:mut ^I32 pg2 0
         ^:mut ^I32 y2 0
+        ^:mut ^I32 bp 0
         ^:mut ^I32 nn 0]
     (while (>= c 0)
-      (do (if (== flush 1)
-            (do (set r (rf-region on c))
-                (if (>= r 0)
-                  (rf-flush cand fg nodes attrs regions np (region-page orr r) (region-y0 orr r)))))
-          (set nn (rf-node on oa orr nodes attrs regions nm c np))
-          (if (>= nn 0)
-            (do (if (and (== flush 1) (== (node-kind on c) (nk-section)))
-                  (do (set r2 (rf-next-region on c))
-                      (if (>= r2 0)
-                        (do (set pg2 (region-page orr r2))
-                            (set y2 (region-y0 orr r2))
-                            (rf-children on oa orr nodes attrs regions nm cand fg c nn 1 pg2 y2))
-                        (rf-children on oa orr nodes attrs regions nm cand fg c nn 1 lpage ly)))
-                  (rf-children on oa orr nodes attrs regions nm cand fg c nn 0 lpage ly))))
+      (do (if (or (== (cells-len ab) 0) (< (cells-at ab c) 0))
+            (do (if (and (== flush 1) (== (node-kind on c) (nk-break)))
+                  (do (set bp (node-attr-int-or on oa c (fk-page) 0))
+                      (rf-flush on ab cand fg fd nodes attrs regions np bp 0)))
+                (if (== flush 1)
+                  (do (set r (rf-region on c))
+                      (if (>= r 0)
+                        (rf-flush on ab cand fg fd nodes attrs regions np (region-page orr r) (region-y0 orr r)))))
+                (if (and (== flush 1) (and (> (cells-len fd) 0) (== (node-kind on c) (nk-caption))))
+                  (rf-flush-anchor on ab cand fd nodes attrs regions np c))
+                (set nn (rf-node on oa orr nodes attrs regions nm c np))
+                (if (>= nn 0)
+                  (do (if (and (== flush 1) (== (node-kind on c) (nk-section)))
+                        (do (set r2 (rf-next-region on c))
+                            (if (>= r2 0)
+                              (do (set pg2 (region-page orr r2))
+                                  (set y2 (region-y0 orr r2))
+                                  (rf-children on oa orr nodes attrs regions nm cand fg fd ab c nn 1 pg2 y2))
+                              (rf-children on oa orr nodes attrs regions nm cand fg fd ab c nn 1 lpage ly)))
+                        (rf-children on oa orr nodes attrs regions nm cand fg fd ab c nn 0 lpage ly))))))
           (set c (node-next on c))))
     (if (== flush 1)
-      (rf-flush cand fg nodes attrs regions np lpage ly))
+      (rf-flush on ab cand fg fd nodes attrs regions np lpage ly))
     (return 0)))
 
-(defn ^:pub ^I32 rs-figures [^Cells on ^Cells oa ^Cells orr ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
-                             ^:mut ^Cells nm ^Cells cand ^:mut ^Cells fg]
+(defn ^:pub ^I32 rs-figures [^Cells on ^Cells oa ^Cells orr ^Cells text ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions
+                             ^:mut ^Cells nm ^Cells cand ^:mut ^Cells fg ^Cells fd ^:mut ^Cells ab]
   (comment "Copy the old Model's trees into the empty arenas `nodes`, `attrs`, `regions` (the text is shared), with the")
-  (comment "provisional figures `fg` (`as-figure-rows`) placed among the document's and the sections' blocks. `nm` is scratch")
-  (comment "(old node to new). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.")
+  (comment "figures `fg` (rows of `cand`, sorted: `as-figure-rows`; what they are: `fd`) placed among the document's and the")
+  (comment "sections' blocks, and the paragraphs that label them left out. `nm` and `ab` are scratch (old node to new; old node to")
+  (comment "the figure it labels). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.")
   (let [^I32 n (node-count on)
         ^:mut ^I32 r 0
         ^:mut ^I32 i 0
@@ -880,16 +1062,26 @@
     (cells-drop attrs 0)
     (cells-drop regions 0)
     (cells-drop nm 0)
+    (cells-drop ab 0)
     (while (< i n)
       (do (cells-push nm -1)
+          (if (> (cells-len fd) 0) (cells-push ab -1))
           (set i (+ i 1))))
+    (if (> (cells-len fd) 0)
+      (do (set r 0)
+          (while (< r n)
+            (do (if (and (< (node-parent on r) 0) (== (node-kind on r) (nk-document)))
+                  (rf-absorb on orr text cand fg fd ab r))
+                (set r (+ r 1))))
+          (rf-anchor on orr cand fg fd)
+          (set r 0)))
     (while (< r n)
       (do (if (< (node-parent on r) 0)
             (do (set nr (rf-node on oa orr nodes attrs regions nm r -1))
                 (if (>= nr 0)
                   (do (if (== (node-kind on r) (nk-document))
-                        (rf-children on oa orr nodes attrs regions nm cand fg r nr 1 -1 -1)
-                        (rf-children on oa orr nodes attrs regions nm cand fg r nr 0 -1 -1))))))
+                        (rf-children on oa orr nodes attrs regions nm cand fg fd ab r nr 1 -1 -1)
+                        (rf-children on oa orr nodes attrs regions nm cand fg fd ab r nr 0 -1 -1))))))
           (set r (+ r 1))))
     (rs-remap attrs nm)
     (return (node-count nodes))))
