@@ -9,6 +9,7 @@
 ;;                  page units' kin time, from `--stats`' `time-stats`; the document unit), requests and rounds a page, the peak memory of the process, and the accuracy
 ;;                  of `full` against `witness` (per-document CER and tl-override, and every pooled metric that moved, by `accuracy.accuracy`'s scorer). The OCR time of
 ;;                  `witness` is held against 30 % of `full`'s on the median page (SPEC 12.3).
+;; --no-cost        with --scopes: the accuracy table only (the cost runs are the long part)
 ;; --born           the born-digital set, one scope (`--ocr-scope=S` is passed on)
 ;; --scans          the scan variants (scan-ovl and scan-color by default), as P7.4 measured the targeted passes
 ;; --no-retarget    the baseline: the Engine with the page units reading no pixel
@@ -95,19 +96,20 @@
 (cond
   (and born? scopes?)
   (do (ensure-driver!)
-      (let [doc-ids (if (seq ids) ids fusion-ids)
-            base (run-scope doc-ids ["--no-retarget"])
-            full (run-scope doc-ids ["--ocr-scope=full"])
-            wit (run-scope doc-ids ["--ocr-scope=witness"])]
-        (println "COST, per page (A4, 300 dpi), Rust host, live (SPEC 12.3's table; D210):")
-        (report "no pixel read" base)
-        (let [f (report "scope full" full)
-              w (report "scope witness" wit)
-              pm (fn [rs] (median (map #(/ (+ (:ocr-first %) (:ocr-later %)) (max 1 (:n %))) rs)))
-              fm (pm full) wm (pm wit)]
-          (println (format "OCR time a page, the median document's: full %.3fs, witness %.3fs: witness is %.2f of full (SPEC 12.3: 0.30 or less); pooled %.2f"
-                           (secs fm) (secs wm) (/ (double wm) (max 1 fm)) (/ (double (:ocr w)) (max 1 (:ocr f)))))
-          (println (format "OCR time over the %d pages: full %.1fs, witness %.1fs" (:pages f) (secs (:ocr f)) (secs (:ocr w))))))
+      (when-not (some #{"--no-cost"} args)
+        (let [doc-ids (if (seq ids) ids fusion-ids)
+              base (run-scope doc-ids ["--no-retarget"])
+              full (run-scope doc-ids ["--ocr-scope=full"])
+              wit (run-scope doc-ids ["--ocr-scope=witness"])]
+          (println "COST, per page (A4, 300 dpi), Rust host, live (SPEC 12.3's table; D210):")
+          (report "no pixel read" base)
+          (let [f (report "scope full" full)
+                w (report "scope witness" wit)
+                pm (fn [rs] (median (map #(/ (+ (:ocr-first %) (:ocr-later %)) (max 1 (:n %))) rs)))
+                fm (pm full) wm (pm wit)]
+            (println (format "OCR time a page, the median document's: full %.3fs, witness %.3fs: witness is %.2f of full (SPEC 12.3: 0.30 or less); pooled %.2f"
+                             (secs fm) (secs wm) (/ (double wm) (max 1 fm)) (/ (double (:ocr w)) (max 1 (:ocr f)))))
+            (println (format "OCR time over the %d pages: full %.1fs, witness %.1fs" (:pages f) (secs (:ocr f)) (secs (:ocr w)))))))
       (println "ACCURACY, full against witness (the live Engine, scored by `bb accuracy`'s scorer; CER and the fusion metrics):")
       (let [[bf pf] (accuracy-of (if (seq ids) ids fusion-ids) "full")
             [bw pw] (accuracy-of (if (seq ids) ids fusion-ids) "witness")

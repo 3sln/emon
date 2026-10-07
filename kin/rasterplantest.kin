@@ -105,31 +105,37 @@
         ^:mut ^I32 at 0
         ^:mut ^I32 l 0
         ^:mut ^I32 same 0
-        ^:mut ^I32 q 0]
+        ^:mut ^I32 q 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 base 0
+        ^:mut ^I32 other 0]
     (assert-eq np 2 "two pages")
     (while (< i np)
-      (do (assert-eq (rpt-row pl i (rp-f-ask)) (rp-ask-witness) "witness")
-          (assert-that (> (rpt-row pl i (rp-f-wn)) 0) "a page of text has witness lines")
-          (assert-that (<= (rpt-row pl i (rp-f-wn)) (rp-witness-max)) "within the page's ceiling")
+      (do (set cnt (rpt-row pl i (rp-f-wn)))
+          (set base (rpt-row pl i (rp-f-wat)))
+          (assert-eq (rpt-row pl i (rp-f-ask)) (rp-ask-witness) "witness")
+          (assert-that (> cnt 0) "a page of text has witness lines")
+          (assert-that (<= cnt (rp-witness-max)) "within the page's ceiling")
           (set j 0)
-          (while (< j (rpt-row pl i (rp-f-wn)))
-            (do (set at (+ (rpt-row pl i (rp-f-wat)) (* j (rp-ww))))
+          (while (< j cnt)
+            (do (set at (+ base (* j (rp-ww))))
                 (set l (cells-at pl (+ at 1)))
                 (assert-eq (cells-at pl at) i "the row's page")
                 (assert-eq (ln-get fl l (lh-page)) (+ i 1) "its line is on that page")
                 (assert-eq (ln-get fl l (lh-rot)) 0 "upright")
                 (assert-eq (wd-get fw (ln-get fl l (lh-first)) (wf-font)) (cells-at pl (+ at 6)) "of the row's font")
-                (comment "no line twice, and at most `witness-lines` a font")
+                (comment "no line twice")
                 (set same 0)
                 (set q 0)
-                (while (< q (rpt-row pl i (rp-f-wn)))
-                  (do (if (== (cells-at pl (+ (rpt-row pl i (rp-f-wat)) (+ (* q (rp-ww)) 1))) l) (set same (+ same 1)))
+                (while (< q cnt)
+                  (do (set other (cells-at pl (+ (+ base (* q (rp-ww))) 1)))
+                      (if (== other l) (set same (+ same 1)))
                       (set q (+ q 1))))
                 (assert-eq same 1 "a line once")
                 (set j (+ j 1))))
           (set i (+ i 1))))))
 
-(defn ^I32 rpt-field [^TestT emon-t ^Blob file ^I32 policy ^I32 scope ^I32 page ^I32 f]
+(defn ^I32 rpt-field[^TestT emon-t ^Blob file ^I32 policy ^I32 scope ^I32 page ^I32 f]
   (comment "Plan the document and answer one field of one page's row.")
   (let [^Cells pl (new-cells)
         ^Cells fw (new-cells)

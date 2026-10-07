@@ -1325,11 +1325,12 @@ func gfHealth(ctx *port.Cells, gc *port.Cells, n int32, im *port.Cells, rules *p
 			i += 1
 		}
 	}
+	// the lengths are sums over the page's rules in centipoints: times 1000 they pass 2^31 on a page of many rules (bank-statement, live), so in 64 bits
 	if vl > 0 {
-		witness = (vw * 1000) / vl
+		witness = int32((int64(vw) * int64(1000)) / int64(vl))
 	}
 	if tl > 0 {
-		precision = (te * 1000) / tl
+		precision = int32((int64(te) * int64(1000)) / int64(tl))
 	}
 	port.CellsSet(ctx, xWit, witness)
 	port.CellsSet(ctx, xPrec, precision)

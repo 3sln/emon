@@ -92,24 +92,30 @@ public final class Rasterplantest {
         int l = 0;
         int same = 0;
         int q = 0;
+        int cnt = 0;
+        int base = 0;
+        int other = 0;
         emon.Testport.assertEq(np, 2, "two pages");
         while (i < np) {
+            cnt = rptRow(pl, i, Rasterplan.rpFWn());
+            base = rptRow(pl, i, Rasterplan.rpFWat());
             emon.Testport.assertEq(rptRow(pl, i, Rasterplan.rpFAsk()), Rasterplan.rpAskWitness(), "witness");
-            emon.Testport.assertThat(rptRow(pl, i, Rasterplan.rpFWn()) > 0, "a page of text has witness lines");
-            emon.Testport.assertThat(rptRow(pl, i, Rasterplan.rpFWn()) <= Rasterplan.rpWitnessMax(), "within the page's ceiling");
+            emon.Testport.assertThat(cnt > 0, "a page of text has witness lines");
+            emon.Testport.assertThat(cnt <= Rasterplan.rpWitnessMax(), "within the page's ceiling");
             j = 0;
-            while (j < rptRow(pl, i, Rasterplan.rpFWn())) {
-                at = rptRow(pl, i, Rasterplan.rpFWat()) + (j * Rasterplan.rpWw());
+            while (j < cnt) {
+                at = base + (j * Rasterplan.rpWw());
                 l = emon.Port.cellsAt(pl, at + 1);
                 emon.Testport.assertEq(emon.Port.cellsAt(pl, at), i, "the row's page");
                 emon.Testport.assertEq(Evidence.lnGet(fl, l, Evidence.lhPage()), i + 1, "its line is on that page");
                 emon.Testport.assertEq(Evidence.lnGet(fl, l, Evidence.lhRot()), 0, "upright");
                 emon.Testport.assertEq(Evidence.wdGet(fw, Evidence.lnGet(fl, l, Evidence.lhFirst()), Evidence.wfFont()), emon.Port.cellsAt(pl, at + 6), "of the row's font");
-                // no line twice, and at most `witness-lines` a font
+                // no line twice
                 same = 0;
                 q = 0;
-                while (q < rptRow(pl, i, Rasterplan.rpFWn())) {
-                    if (emon.Port.cellsAt(pl, rptRow(pl, i, Rasterplan.rpFWat()) + ((q * Rasterplan.rpWw()) + 1)) == l) {
+                while (q < cnt) {
+                    other = emon.Port.cellsAt(pl, (base + (q * Rasterplan.rpWw())) + 1);
+                    if (other == l) {
                         same += 1;
                     }
                     q += 1;

@@ -94,24 +94,30 @@ public static class Rasterplantest {
         int l = 0;
         int same = 0;
         int q = 0;
+        int cnt = 0;
+        int @base = 0;
+        int other = 0;
         emon.Testport.AssertEq(np, 2, "two pages");
         while (i < np) {
+            cnt = RptRow(pl, i, Rasterplan.RpFWn());
+            @base = RptRow(pl, i, Rasterplan.RpFWat());
             emon.Testport.AssertEq(RptRow(pl, i, Rasterplan.RpFAsk()), Rasterplan.RpAskWitness(), "witness");
-            emon.Testport.AssertThat(RptRow(pl, i, Rasterplan.RpFWn()) > 0, "a page of text has witness lines");
-            emon.Testport.AssertThat(RptRow(pl, i, Rasterplan.RpFWn()) <= Rasterplan.RpWitnessMax(), "within the page's ceiling");
+            emon.Testport.AssertThat(cnt > 0, "a page of text has witness lines");
+            emon.Testport.AssertThat(cnt <= Rasterplan.RpWitnessMax(), "within the page's ceiling");
             j = 0;
-            while (j < RptRow(pl, i, Rasterplan.RpFWn())) {
-                at = RptRow(pl, i, Rasterplan.RpFWat()) + (j * Rasterplan.RpWw());
+            while (j < cnt) {
+                at = @base + (j * Rasterplan.RpWw());
                 l = emon.Port.CellsAt(pl, at + 1);
                 emon.Testport.AssertEq(emon.Port.CellsAt(pl, at), i, "the row's page");
                 emon.Testport.AssertEq(Evidence.LnGet(fl, l, Evidence.LhPage()), i + 1, "its line is on that page");
                 emon.Testport.AssertEq(Evidence.LnGet(fl, l, Evidence.LhRot()), 0, "upright");
                 emon.Testport.AssertEq(Evidence.WdGet(fw, Evidence.LnGet(fl, l, Evidence.LhFirst()), Evidence.WfFont()), emon.Port.CellsAt(pl, at + 6), "of the row's font");
-                // no line twice, and at most `witness-lines` a font
+                // no line twice
                 same = 0;
                 q = 0;
-                while (q < RptRow(pl, i, Rasterplan.RpFWn())) {
-                    if (emon.Port.CellsAt(pl, RptRow(pl, i, Rasterplan.RpFWat()) + ((q * Rasterplan.RpWw()) + 1)) == l) {
+                while (q < cnt) {
+                    other = emon.Port.CellsAt(pl, (@base + (q * Rasterplan.RpWw())) + 1);
+                    if (other == l) {
                         same += 1;
                     }
                     q += 1;

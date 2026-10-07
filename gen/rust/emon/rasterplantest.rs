@@ -96,24 +96,30 @@ fn test_witness_reads_the_render_without_the_text_and_a_few_lines_of_every_font(
     let mut l: i32 = 0;
     let mut same: i32 = 0;
     let mut q: i32 = 0;
+    let mut cnt: i32 = 0;
+    let mut base: i32 = 0;
+    let mut other: i32 = 0;
     crate::testport::assert_eq(np, 2, "two pages");
     while i < np {
+        cnt = rpt_row(pl, i, rp_f_wn());
+        base = rpt_row(pl, i, rp_f_wat());
         crate::testport::assert_eq(rpt_row(pl, i, rp_f_ask()), rp_ask_witness(), "witness");
-        crate::testport::assert_that(rpt_row(pl, i, rp_f_wn()) > 0, "a page of text has witness lines");
-        crate::testport::assert_that(rpt_row(pl, i, rp_f_wn()) <= rp_witness_max(), "within the page's ceiling");
+        crate::testport::assert_that(cnt > 0, "a page of text has witness lines");
+        crate::testport::assert_that(cnt <= rp_witness_max(), "within the page's ceiling");
         j = 0;
-        while j < rpt_row(pl, i, rp_f_wn()) {
-            at = rpt_row(pl, i, rp_f_wat()) + (j * rp_ww());
+        while j < cnt {
+            at = base + (j * rp_ww());
             l = crate::port::cells_at(pl, at + 1);
             crate::testport::assert_eq(crate::port::cells_at(pl, at), i, "the row's page");
             crate::testport::assert_eq(ln_get(fl, l, lh_page()), i + 1, "its line is on that page");
             crate::testport::assert_eq(ln_get(fl, l, lh_rot()), 0, "upright");
             crate::testport::assert_eq(wd_get(fw, ln_get(fl, l, lh_first()), wf_font()), crate::port::cells_at(pl, at + 6), "of the row's font");
-            // no line twice, and at most `witness-lines` a font
+            // no line twice
             same = 0;
             q = 0;
-            while q < rpt_row(pl, i, rp_f_wn()) {
-                if crate::port::cells_at(pl, rpt_row(pl, i, rp_f_wat()) + ((q * rp_ww()) + 1)) == l {
+            while q < cnt {
+                other = crate::port::cells_at(pl, (base + (q * rp_ww())) + 1);
+                if other == l {
                     same += 1;
                 }
                 q += 1;

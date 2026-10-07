@@ -103,24 +103,30 @@ func TestWitnessReadsTheRenderWithoutTheTextAndAFewLinesOfEveryFont(emonT *testi
 	var l int32 = 0
 	var same int32 = 0
 	var q int32 = 0
+	var cnt int32 = 0
+	var base int32 = 0
+	var other int32 = 0
 	port.AssertEq(emonT, np, 2, "two pages")
 	for i < np {
+		cnt = rptRow(pl, i, rasterplan.RpFWn())
+		base = rptRow(pl, i, rasterplan.RpFWat())
 		port.AssertEq(emonT, rptRow(pl, i, rasterplan.RpFAsk()), rasterplan.RpAskWitness(), "witness")
-		port.AssertThat(emonT, rptRow(pl, i, rasterplan.RpFWn()) > 0, "a page of text has witness lines")
-		port.AssertThat(emonT, rptRow(pl, i, rasterplan.RpFWn()) <= rasterplan.RpWitnessMax(), "within the page's ceiling")
+		port.AssertThat(emonT, cnt > 0, "a page of text has witness lines")
+		port.AssertThat(emonT, cnt <= rasterplan.RpWitnessMax(), "within the page's ceiling")
 		j = 0
-		for j < rptRow(pl, i, rasterplan.RpFWn()) {
-			at = rptRow(pl, i, rasterplan.RpFWat()) + (j * rasterplan.RpWw())
+		for j < cnt {
+			at = base + (j * rasterplan.RpWw())
 			l = port.CellsAt(pl, at+1)
 			port.AssertEq(emonT, port.CellsAt(pl, at), i, "the row's page")
 			port.AssertEq(emonT, evidence.LnGet(fl, l, evidence.LhPage()), i+1, "its line is on that page")
 			port.AssertEq(emonT, evidence.LnGet(fl, l, evidence.LhRot()), 0, "upright")
 			port.AssertEq(emonT, evidence.WdGet(fw, evidence.LnGet(fl, l, evidence.LhFirst()), evidence.WfFont()), port.CellsAt(pl, at+6), "of the row's font")
-			// no line twice, and at most `witness-lines` a font
+			// no line twice
 			same = 0
 			q = 0
-			for q < rptRow(pl, i, rasterplan.RpFWn()) {
-				if port.CellsAt(pl, rptRow(pl, i, rasterplan.RpFWat())+((q*rasterplan.RpWw())+1)) == l {
+			for q < cnt {
+				other = port.CellsAt(pl, (base+(q*rasterplan.RpWw()))+1)
+				if other == l {
 					same += 1
 				}
 				q += 1
