@@ -1,0 +1,70 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 3 /Kids [4 0 R 6 0 R 8 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >>  >> >>
+endobj
+5 0 obj
+<<  /Length 380 >>
+stream
+0.10 0.60 0.40 rg 72 720 m 72 735 80 750 96 750 c 112 750 120 735 120 720 c 120 705 112 690 96 690 c 80 690 72 705 72 720 c f
+1 g 86 710 20 20 re f
+BT /F1 12 Tf 128 714 Td (NorthWind) Tj ET
+BT /F1 11 Tf 72 640 Td (Page 1 of the report. The logo above is the same drawing on every page.) Tj ET
+BT /F1 11 Tf 72 620 Td (A second paragraph so that there is body text under it.) Tj ET
+
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 3 0 R >>  >> >>
+endobj
+7 0 obj
+<<  /Length 380 >>
+stream
+0.10 0.60 0.40 rg 72 720 m 72 735 80 750 96 750 c 112 750 120 735 120 720 c 120 705 112 690 96 690 c 80 690 72 705 72 720 c f
+1 g 86 710 20 20 re f
+BT /F1 12 Tf 128 714 Td (NorthWind) Tj ET
+BT /F1 11 Tf 72 640 Td (Page 2 of the report. The logo above is the same drawing on every page.) Tj ET
+BT /F1 11 Tf 72 620 Td (A second paragraph so that there is body text under it.) Tj ET
+
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 3 0 R >>  >> >>
+endobj
+9 0 obj
+<<  /Length 380 >>
+stream
+0.10 0.60 0.40 rg 72 720 m 72 735 80 750 96 750 c 112 750 120 735 120 720 c 120 705 112 690 96 690 c 80 690 72 705 72 720 c f
+1 g 86 710 20 20 re f
+BT /F1 12 Tf 128 714 Td (NorthWind) Tj ET
+BT /F1 11 Tf 72 640 Td (Page 3 of the report. The logo above is the same drawing on every page.) Tj ET
+BT /F1 11 Tf 72 620 Td (A second paragraph so that there is body text under it.) Tj ET
+
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000133 00000 n 
+0000000230 00000 n 
+0000000357 00000 n 
+0000000789 00000 n 
+0000000916 00000 n 
+0000001348 00000 n 
+0000001475 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1907
+%%EOF

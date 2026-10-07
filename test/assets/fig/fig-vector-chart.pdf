@@ -1,0 +1,45 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 1 /Kids [4 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >>  >> >>
+endobj
+5 0 obj
+<<  /Length 787 >>
+stream
+BT /F1 14 Tf 72 740 Td (Quarterly units sold) Tj ET
+BT /F1 11 Tf 72 718 Td (The chart below shows units per quarter and the diagram how a request travels.) Tj ET
+0.75 w 0 G 100 450 m 100 650 l S 100 450 m 300 450 l S
+0.20 0.40 0.70 rg 110 451 30 90 re f 150 451 30 130 re f 190 451 30 110 re f 230 451 30 160 re f
+BT /F1 10 Tf 72 432 Td (Figure 1. Units per quarter) Tj ET
+0.75 w 0 G 100 300 70 40 re S 230 300 70 40 re S 360 300 70 40 re S
+170 320 m 230 320 l S 300 320 m 360 320 l S 222 316 m 230 320 l 222 324 l S 352 316 m 360 320 l 352 324 l S
+BT /F1 9 Tf 112 316 Td (Client) Tj ET
+BT /F1 9 Tf 240 316 Td (Gateway) Tj ET
+BT /F1 9 Tf 376 316 Td (Service) Tj ET
+BT /F1 10 Tf 72 282 Td (Figure 2. Request path) Tj ET
+BT /F1 11 Tf 72 250 Td (Closing paragraph after the figures.) Tj ET
+
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000218 00000 n 
+0000000345 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1184
+%%EOF

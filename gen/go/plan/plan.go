@@ -111,6 +111,14 @@ func PiOcr() int32 {
 	return 16
 }
 
+func AuId(k int32) int32 {
+	return 8388608 + k
+}
+
+func AuDecode() int32 {
+	return 4194304
+}
+
 func FltNone() int32 {
 	return 0
 }

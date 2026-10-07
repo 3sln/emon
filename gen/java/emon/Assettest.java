@@ -364,7 +364,7 @@ public final class Assettest {
         atCand(cand, 1, 0, 0, 61200, 79200, 2, 0, 0, 4);
         atCand(cand, 1, 30000, 3000, 50000, 20000, 0, 0, 0, 5);
         atCand(cand, 1, 5000, 3000, 25000, 20000, 0, 0, 0, 6);
-        emon.Testport.assertEq(Asset.asFigureRows(cand, pages, fg), 4, "four are figures");
+        emon.Testport.assertEq(Asset.asFigureRows(cand, pages, nodes, regions, 1, fg), 4, "four are figures");
         emon.Testport.assertEq(emon.Port.cellsAt(fg, 0), 0, "the cursor is at the start");
         emon.Testport.assertEq(emon.Port.cellsAt(fg, 1), 5, "page 1, top 3000, left first");
         emon.Testport.assertEq(emon.Port.cellsAt(fg, 2), 4, "then the one to its right");
@@ -404,7 +404,7 @@ public final class Assettest {
         atCand(cand, 1, 7200, 20000, 30000, 30000, 0, 0, 0, 1);
         atCand(cand, 1, 7200, 50000, 30000, 60000, 0, 0, 0, 2);
         atCand(cand, 1, 7200, 95000, 30000, 100000, 0, 0, 0, 3);
-        emon.Testport.assertEq(Asset.asFigureRows(cand, pages, fg), 3, "three figures");
+        emon.Testport.assertEq(Asset.asFigureRows(cand, pages, nodes, regions, 1, fg), 3, "three figures");
         Restruct.rsFigures(nodes, attrs, regions, nn, na, nr, nm, cand, fg);
         emon.Testport.assertEq(Model.nodeCount(nn), 9, "nine nodes: the six and three figures");
         // preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE
@@ -540,11 +540,11 @@ public final class Assettest {
         if (Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0) {
             return 2;
         }
-        if (Asset.asCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0) {
+        if (Asset.asCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, 1, emon.Port.newCells(), cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0) {
             return 3;
         }
         Para.paPages(pg, pages);
-        Asset.asFigureRows(cand, pages, fg);
+        Asset.asFigureRows(cand, pages, emon.Port.newCells(), emon.Port.newCells(), 1, fg);
         return 0;
     }
     public static int atCandsRow(int emonT, byte[] rows, int pos, int e, int line) {

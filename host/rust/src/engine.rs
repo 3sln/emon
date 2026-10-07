@@ -912,24 +912,45 @@ fn finish_raster(d: RasterDoc, opts: &Options) -> Outcome {
         let n = cells_len(&m.text) - start;
         node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), start, n);
     }
+    let mut pending: Option<PendingAssets> = None;
     if opts.assets != Assets::None {
         // a raster input is one picture a page: its own image is the candidate, `part` of which no figure or seal can be at `images`
         let (mut cand, mut cbytes) = (Cells::new(), Buf::new());
         as_page_cands(&mut m.pages, &mut cand);
-        asset_stage(&mut m, &mut cand, &mut cbytes, opts);
+        if opts.assets == Assets::Figures {
+            // the asset unit (D560) cuts a figure from its frame: it needs the format the pixels came from
+            let rfrom = match info.format {
+                "png" => afm_png(),
+                "jpeg" => afm_jpeg(),
+                _ => afm_tiff(),
+            };
+            pending = Some(PendingAssets { cand, cbytes, rfrom });
+        } else {
+            asset_stage(&mut m, &mut cand, &mut cbytes, opts);
+        }
     }
+    if pending.is_none() {
+        if let Some(e) = seal_arenas(&mut m, opts) {
+            return Outcome::Failed(e);
+        }
+    }
+    Outcome::Built(Built { arenas: m, evidence, intake: info, pending })
+}
+
+// The checks of a finished Model: `model-check`, and `model-check-assets` when `assets` is on.
+fn seal_arenas(m: &mut Arenas, opts: &Options) -> Option<Error> {
     let mut chk = Cells::new();
     let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
     if c != 0 {
-        return Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0))));
+        return Some(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0))));
     }
     if opts.assets != Assets::None {
         let c = model_check_assets(&mut m.nodes, &mut m.attrs, &mut m.assets, &mut m.uses, &mut m.abytes, &mut chk);
         if c != 0 {
-            return Outcome::Failed(Error::Internal(format!("model-check-assets {} at {}", c, cells_at(&chk, 0))));
+            return Some(Error::Internal(format!("model-check-assets {} at {}", c, cells_at(&chk, 0))));
         }
     }
-    Outcome::Built(Built { arenas: m, evidence, intake: info })
+    None
 }
 
 // The unit of one input: a PNG, JPEG or TIFF (by kin's sniff) is read by the raster unit, anything else by the
@@ -999,6 +1020,17 @@ struct Built {
     arenas: Arenas,
     evidence: Option<String>,
     intake: Intake,
+    // At `assets: figures` the document unit stops before the asset stage (D560): what the asset unit still needs. None otherwise.
+    pending: Option<PendingAssets>,
+}
+
+// The asset unit's input at the level `figures` (SPEC 10.11, D560): the candidate rows and their bytes the document pass made, and
+// `rfrom`, 0 for a PDF or the `afm` of a raster input's format.
+#[derive(Clone)]
+struct PendingAssets {
+    cand: Cells,
+    cbytes: Buf,
+    rfrom: i32,
 }
 
 enum Outcome {
@@ -1054,6 +1086,8 @@ fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
 }
 
 // The seven arenas of the Model (SPEC 3.8), and the asset table, its uses and its bytes (SPEC 10.11: empty unless `assets` is on).
+// `Clone` for the asset unit (D560), which runs on a copy until it has every answer.
+#[derive(Clone)]
 struct Arenas {
     nodes: Cells,
     attrs: Cells,
@@ -1238,7 +1272,9 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     if opts.assets != Assets::None {
         let (mut aout, mut arec, mut amrec, mut asmp, mut amsmp, mut adata, mut arows, mut atmp, mut aws) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
         let mut az = Buf::new();
-        let rc = as_collect(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut im, &mut pa, &mut gl, &mut pg, opts.asset_pixels, opts.assets_bytes, &mut cand, &mut cbytes, &mut aout, &mut arec, &mut amrec, &mut asmp, &mut amsmp, &mut adata, &mut arows, &mut atmp, &mut aws, &mut az);
+        // `grg` is the graphics layer's regions (P7.G, SPEC 9.9): the hook for its `figure` rows; empty until the page units fill it
+        let mut agrg = Cells::new();
+        let rc = as_collect(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut im, &mut pa, &mut gl, &mut pg, opts.asset_pixels, opts.assets_bytes, opts.assets.level(), &mut agrg, &mut cand, &mut cbytes, &mut aout, &mut arec, &mut amrec, &mut asmp, &mut amsmp, &mut adata, &mut arows, &mut atmp, &mut aws, &mut az);
         if view.missed() || rc == 12 {
             return Step::Miss;
         }
@@ -1415,7 +1451,7 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
              &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
     // the provisional figures (P3.13): only with `assets`, and before the restructuring, which pairs a caption with the figure beside it
     if opts.assets != Assets::None {
-        figures_stage(&mut m, &mut cand);
+        figures_stage(&mut m, &mut cand, opts);
     }
     // restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
     // body is copied into new arenas, in document order, and they replace the old ones
@@ -1451,21 +1487,19 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
         let n = cells_len(&m.text) - start;
         node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), start, n);
     }
-    if opts.assets != Assets::None {
+    // `figures` leaves the asset stage to the asset unit (D560), which asks the Renderer; so it does the checks after it too
+    let mut pending: Option<PendingAssets> = None;
+    if opts.assets == Assets::Figures {
+        pending = Some(PendingAssets { cand, cbytes, rfrom: 0 });
+    } else if opts.assets != Assets::None {
         asset_stage(&mut m, &mut cand, &mut cbytes, opts);
     }
-    let mut chk = Cells::new();
-    let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
-    if c != 0 {
-        return Outcome::Failed(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0))));
-    }
-    if opts.assets != Assets::None {
-        let c = model_check_assets(&mut m.nodes, &mut m.attrs, &mut m.assets, &mut m.uses, &mut m.abytes, &mut chk);
-        if c != 0 {
-            return Outcome::Failed(Error::Internal(format!("model-check-assets {} at {}", c, cells_at(&chk, 0))));
+    if pending.is_none() {
+        if let Some(e) = seal_arenas(&mut m, opts) {
+            return Outcome::Failed(e);
         }
     }
-    Outcome::Built(Built { arenas: m, evidence, intake: info })
+    Outcome::Built(Built { arenas: m, evidence, intake: info, pending })
 }
 
 impl ChunkCache {
@@ -1713,6 +1747,49 @@ impl Engine {
                 DocKind::Pdf(doc) => finish_pdf(*doc, opts),
                 DocKind::Raster(doc) => finish_raster(*doc, opts),
             };
+            // THE ASSET UNIT (P8.5, D560): at `figures` the Model is final but for its assets, whose renders and crops are requests,
+            // so one more plan/fulfil loop runs over it, with its own answers and `BitmapSet`, on copies until every answer is in.
+            if let Outcome::Built(b) = &mut outcome {
+                if let Some(pend) = b.pending.take() {
+                    let mut done: Option<Arenas> = None;
+                    let mut afailed: Option<Error> = None;
+                    {
+                        let base = &b.arenas;
+                        let mut unit_a = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet| -> i32 {
+                            let r = catch_unwind(AssertUnwindSafe(|| {
+                                let mut t = base.clone();
+                                let mut p = pend.clone();
+                                asset_stage_figures(&mut t, &mut p, opts, idx as i32, len as i32, answers, rq, bms);
+                                if cells_len(rq) > 0 {
+                                    plan::UNIT_REQUESTS
+                                } else {
+                                    done = Some(t);
+                                    plan::UNIT_DONE
+                                }
+                            }));
+                            match r {
+                                Ok(s) => s,
+                                Err(p) => {
+                                    afailed = Some(panic_error(panic_message(p)));
+                                    plan::UNIT_DONE
+                                }
+                            }
+                        };
+                        let ast = plan::run_bms(&page_cfg, &mut unit_a, &mut *ports, &mut bytes, &mut no_misses, recording.as_deref_mut())?;
+                        stats.requests += ast.requests;
+                    }
+                    if let Some(e) = afailed {
+                        return Err(e);
+                    }
+                    match done {
+                        Some(a) => b.arenas = a,
+                        None => return Err(Error::Internal("the asset unit finished with no Model".to_string())),
+                    }
+                    if let Some(e) = seal_arenas(&mut b.arenas, opts) {
+                        return Err(e);
+                    }
+                }
+            }
         }
         if let Some(r) = &replayer {
             if r.unused() != 0 {
@@ -1761,9 +1838,9 @@ impl Kind {
 
 // P3.13 (SPEC 10.11): the provisional figures, before `rs_run` (a caption next to one finds it as its object). Only when
 // `assets` is on (D294): a default run's Model is what it was.
-fn figures_stage(m: &mut Arenas, cand: &mut Cells) {
+fn figures_stage(m: &mut Arenas, cand: &mut Cells, opts: &Options) {
     let mut fg = Cells::new();
-    as_figure_rows(cand, &mut m.pages, &mut fg);
+    as_figure_rows(cand, &mut m.pages, &mut m.nodes, &mut m.regions, opts.assets.level(), &mut fg);
     let (mut fnodes, mut fattrs, mut fregions, mut fnm) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
     rs_figures(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut fnodes, &mut fattrs, &mut fregions, &mut fnm, cand, &mut fg);
     std::mem::swap(&mut m.nodes, &mut fnodes);
@@ -1781,6 +1858,21 @@ fn asset_stage(m: &mut Arenas, cand: &mut Cells, cbytes: &mut Buf, opts: &Option
         cells_push(&mut bx, 0);
     }
     as_run(&mut m.nodes, &mut m.attrs, &mut m.regions, cand, cbytes, &mut m.assets, &mut m.uses, &mut m.abytes, opts.asset_bytes, opts.assets_bytes, sigs, &mut bx);
+}
+
+// P8.5 (SPEC 10.11, D560): the asset stage at the level `figures`, one attempt of the asset unit, on copies the caller made. It writes
+// the Model's settings and every figure's and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq`
+// (then its results are meaningless: the loop answers and runs it again).
+fn asset_stage_figures(m: &mut Arenas, p: &mut PendingAssets, opts: &Options, input: i32, nbytes: i32, ans: &mut Cells, rq: &mut Cells, bms: &BitmapSet) {
+    let sigs = if opts.asset_signatures { 1 } else { 0 };
+    as_settings(&mut m.nodes, &mut m.attrs, &mut m.text, opts.assets.level(), opts.asset_dpi, opts.asset_pixels, opts.asset_bytes, opts.assets_bytes, sigs);
+    let (mut ws, mut rows, mut tmp, mut rec, mut bx) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let mut z = Buf::new();
+    as_run_figures(
+        &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.pages, &mut p.cand, &mut p.cbytes, &mut m.assets, &mut m.uses, &mut m.abytes,
+        opts.asset_bytes, opts.assets_bytes, sigs, opts.asset_dpi, opts.asset_pixels, input, nbytes, p.rfrom, ans, rq, bms,
+        &mut ws, &mut z, &mut rows, &mut tmp, &mut rec, &mut bx,
+    );
 }
 
 // A page of the Model's page table (SPEC 3.7). Sizes are in centipoints (1/100 point), as displayed.

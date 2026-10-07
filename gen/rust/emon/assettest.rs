@@ -381,7 +381,7 @@ fn test_the_provisional_figures_are_found_and_ordered_by_their_top() {
     at_cand(cand, 1, 0, 0, 61200, 79200, 2, 0, 0, 4);
     at_cand(cand, 1, 30000, 3000, 50000, 20000, 0, 0, 0, 5);
     at_cand(cand, 1, 5000, 3000, 25000, 20000, 0, 0, 0, 6);
-    crate::testport::assert_eq(as_figure_rows(cand, pages, fg), 4, "four are figures");
+    crate::testport::assert_eq(as_figure_rows(cand, pages, nodes, regions, 1, fg), 4, "four are figures");
     crate::testport::assert_eq(crate::port::cells_at(fg, 0), 0, "the cursor is at the start");
     crate::testport::assert_eq(crate::port::cells_at(fg, 1), 5, "page 1, top 3000, left first");
     crate::testport::assert_eq(crate::port::cells_at(fg, 2), 4, "then the one to its right");
@@ -422,7 +422,7 @@ fn test_a_figure_goes_where_its_top_edge_falls_among_the_blocks() {
     at_cand(cand, 1, 7200, 20000, 30000, 30000, 0, 0, 0, 1);
     at_cand(cand, 1, 7200, 50000, 30000, 60000, 0, 0, 0, 2);
     at_cand(cand, 1, 7200, 95000, 30000, 100000, 0, 0, 0, 3);
-    crate::testport::assert_eq(as_figure_rows(cand, pages, fg), 3, "three figures");
+    crate::testport::assert_eq(as_figure_rows(cand, pages, nodes, regions, 1, fg), 3, "three figures");
     rs_figures(nodes, attrs, regions, nn, na, nr, nm, cand, fg);
     crate::testport::assert_eq(node_count(nn), 9, "nine nodes: the six and three figures");
     // preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE
@@ -559,11 +559,11 @@ pub(crate) fn at_run(src: &crate::port::Src, mut cand: &mut crate::port::Cells, 
     if pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0 {
         return 2;
     }
-    if as_collect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0 {
+    if as_collect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, 1, &mut crate::port::Cells::new(), cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0 {
         return 3;
     }
     pa_pages(pg, pages);
-    as_figure_rows(cand, pages, fg);
+    as_figure_rows(cand, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, fg);
     return 0;
 }
 pub(crate) fn at_cands_row(emon_t: i32, rows: &[u8], pos: i32, e: i32, line: i32) -> i32 {

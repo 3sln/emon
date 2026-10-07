@@ -1,0 +1,678 @@
+;; Laws for assets at the level `figures` (P8.5; D117, D560-D563, SPEC 10.11), on every target.
+;;
+;;   THE RECTANGLE of a render crop: the 2 pt pad, the page's edge, floor and ceiling, the `d * 3 / 4` step-down, too-large.
+;;   THE ASSET UNIT'S PROTOCOL: with no answer it writes the request (a `crop` for a rendered figure, a `decode` of the frame for a
+;;   cropped one) under the ids `au-id` gives, and the same requests every time; with the answers it is the asset.
+;;   CROPPED: a fixed region of a raster frame is exactly the pixels of the rectangle the region maps to (the PNG is compared
+;;   with one this file encodes from the formula, byte for byte).
+;;   RENDERED: the crop's bitmap is the asset (its size, its dpi, `text-overlap` when body text is under it); an answer that is not
+;;   ok is `render`; a rectangle that cannot fit is `too-large`.
+;;   THE SOURCES: which figure is rendered and which is its image; the caption-only figure; the budget and the reuse still hold.
+;;   THE REGIONS: vector art is found as clusters of paths (and not a table's, nor an image's), P7.G's `figure` regions are the hook.
+(ns emon.assetfigtest
+  (:require [emon.lang :refer [I32 Cells Buf Bitmap BitmapSet]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells new-buf new-bitmap-set]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop buf-len buf-at buf-push
+                               bms-put bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
+            [emon.model :refer [model-init node-new node-set-sub node-set-text node-add-region node-set-attr-int node-attr-int-or
+                                page-new page-set-resolution pk-image pk-vector
+                                nk-figure nk-seal nk-paragraph nk-caption nk-table nk-document fg-unknown sl-stamp
+                                fk-asset fk-noasset fk-image
+                                asset-count asset-origin asset-from asset-w asset-h asset-dpi asset-flags asset-use-count asset-blen
+                                asset-bstart asset-type
+                                nz-part nz-vector nz-composite nz-colorspace nz-codec nz-render nz-too-large nz-budget
+                                ao-embedded ao-decoded ao-cropped ao-rendered afm-png afm-render afg-text-overlap afg-overlaid amt-png]]
+            [emon.plan :refer [au-id au-decode rec-count rec-kind rec-id rq-arg an-decode an-render an-fail
+                               pk-crop pk-decode ps-unsupported flt-none]]
+            [emon.png :refer [png-begin png-row png-end]]
+            [emon.glayer :refer [grg-new rk-figure rk-table-in-image]]
+            [emon.asset :refer [as-run-figures as-page-cands as-render-rect as-vector-regions as-grg-regions as-figure-rows
+                                as-region-add as-count as-get]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ------------------------------------------------------------------------- the rectangle
+
+(defn ^I32 af-rect [^:mut ^Cells res ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 dpi ^I32 maxpix]
+  (comment "`as-render-rect` of a region of a 612 x 792 pt page: d, px, py, pw, ph into `res`.")
+  (let [^Cells rc (new-cells)]
+    (cells-push rc 0)
+    (cells-push rc 0)
+    (cells-push rc 0)
+    (cells-push rc 0)
+    (cells-drop res 0)
+    (cells-push res (as-render-rect x0 y0 x1 y1 61200 79200 dpi maxpix rc))
+    (cells-push res (cells-at rc 0))
+    (cells-push res (cells-at rc 1))
+    (cells-push res (cells-at rc 2))
+    (cells-push res (cells-at rc 3))
+    (return 0)))
+
+(deftest test-the-render-rectangle-is-padded-floored-ceiled-and-held-to-the-page
+  (let [^Cells res (new-cells)]
+    (af-rect res 10000 10000 30000 30000 150 4194304)
+    (assert-eq (cells-at res 0) 150 "the setting's dpi when it fits")
+    (assert-eq (cells-at res 1) 204 "px = floor(9800 * 150 / 7200)")
+    (assert-eq (cells-at res 2) 204 "py likewise")
+    (assert-eq (cells-at res 3) 426 "pw = ceil(30200 * 150 / 7200) - px = 630 - 204")
+    (assert-eq (cells-at res 4) 426 "ph likewise")
+    (comment "the pad is clipped to the page: a region at the corner starts at pixel 0")
+    (af-rect res 0 0 1000 1000 150 4194304)
+    (assert-eq (cells-at res 1) 0 "px 0")
+    (assert-eq (cells-at res 3) 25 "ceil(1200 * 150 / 7200) = 25")
+    (comment "and its far edge is the whole page's size, floor(w * d / 7200 + 1/2) pixels (1275 at 150 dpi)")
+    (af-rect res 60000 78000 61200 79200 150 4194304)
+    (assert-eq (cells-at res 1) 1245 "px = floor(59800 * 150 / 7200)")
+    (assert-eq (cells-at res 3) 30 "to the page's edge, pixel 1275")
+    (assert-eq (cells-at res 4) 30 "in y too")))
+
+(deftest test-too-many-pixels-step-the-dpi-down-by-three-quarters
+  (let [^Cells res (new-cells)]
+    (af-rect res 10000 10000 30000 30000 150 100000)
+    (assert-eq (cells-at res 0) 84 "150 -> 112 (426 squared is over 100000, 318 squared too) -> 84")
+    (assert-eq (cells-at res 1) 114 "px at 84 dpi")
+    (assert-eq (cells-at res 3) 239 "pw at 84 dpi: 239 * 239 fits")
+    (af-rect res 10000 10000 30000 30000 150 100)
+    (assert-eq (cells-at res 0) 0 "under 36 dpi: too large")
+    (af-rect res 10000 20000 40000 50000 72 4194304)
+    (assert-eq (cells-at res 0) 72 "the given dpi, not 150")
+    (assert-eq (cells-at res 3) 304 "304 pixels across")
+    (af-rect res 5000 5000 5000 5000 150 4194304)
+    (assert-eq (cells-at res 0) 150 "a point is still a rectangle (the pad makes it one)")))
+
+;; ---------------------------------------------------------------------------- scenes
+
+(defn ^I32 af-px [^I32 x ^I32 y ^I32 c]
+  (comment "The pattern of the frames and the renders: a pixel that tells where it is.")
+  (return (bit-and (+ (* x 7) (+ (* y 13) (* c 29))) 255)))
+
+(defn ^I32 af-fill [^Bitmap b ^I32 w ^I32 h ^I32 ch]
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 c 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (set c 0)
+                (while (< c ch)
+                  (do (bitmap-set-u8 b x y c (af-px x y c))
+                      (set c (+ c 1))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 af-node [^:mut ^Cells nodes ^:mut ^Cells regions ^I32 parent ^I32 kind ^I32 sub ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (let [^I32 n (node-new nodes kind parent)]
+    (node-set-sub nodes n sub)
+    (if (>= page 0)
+      (node-add-region nodes regions n page x0 y0 x1 y1))
+    (return n)))
+
+(defn ^I32 af-text [^:mut ^Cells nodes ^:mut ^Cells regions ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "A paragraph with a text run (an empty one: it is the run's existence that says a node has text) and a region.")
+  (let [^I32 n (node-new nodes (nk-paragraph) 0)]
+    (node-set-text nodes n 0 0)
+    (node-add-region nodes regions n page x0 y0 x1 y1)
+    (return n)))
+
+(defn ^I32 af-cand [^:mut ^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 status ^I32 flags ^I32 kori ^I32 sha ^I32 start ^I32 blen]
+  (comment "A candidate row as `as-collect` makes one (stride 32): box, visible box, status, type png, bytes, hash, size 4 x 4, flags,")
+  (comment "origin decoded; `kori` -1 (an image) or -2 (a region); `sha` the first word of a hash that tells it from another's.")
+  (let [^I32 r (quot (cells-len cand) 32)
+        ^:mut ^I32 f 0]
+    (while (< f 32)
+      (do (cells-push cand 0)
+          (set f (+ f 1))))
+    (cells-set cand (+ (* r 32) 0) page)
+    (cells-set cand (+ (* r 32) 1) x0)
+    (cells-set cand (+ (* r 32) 2) y0)
+    (cells-set cand (+ (* r 32) 3) x1)
+    (cells-set cand (+ (* r 32) 4) y1)
+    (cells-set cand (+ (* r 32) 5) x0)
+    (cells-set cand (+ (* r 32) 6) y0)
+    (cells-set cand (+ (* r 32) 7) x1)
+    (cells-set cand (+ (* r 32) 8) y1)
+    (cells-set cand (+ (* r 32) 9) status)
+    (cells-set cand (+ (* r 32) 10) 2)
+    (cells-set cand (+ (* r 32) 11) start)
+    (cells-set cand (+ (* r 32) 12) blen)
+    (cells-set cand (+ (* r 32) 13) sha)
+    (cells-set cand (+ (* r 32) 21) 4)
+    (cells-set cand (+ (* r 32) 22) 4)
+    (cells-set cand (+ (* r 32) 23) flags)
+    (cells-set cand (+ (* r 32) 24) 8)
+    (cells-set cand (+ (* r 32) 25) -1)
+    (cells-set cand (+ (* r 32) 26) 2)
+    (cells-set cand (+ (* r 32) 27) kori)
+    (return r)))
+
+(defn ^I32 af-boxcells [^:mut ^Cells box]
+  (cells-push box 0) (cells-push box 0) (cells-push box 0) (cells-push box 0) (cells-push box 0)
+  (return 0))
+
+;; ----------------------------------------------------------------------------- cropped
+
+(defn ^I32 af-raster [^:mut ^Cells res ^I32 stage]
+  (comment "A one-page raster input (306 x 396 pixels, 200 centipoints a pixel, in a frame of the pattern) with a figure at")
+  (comment "(20000 30000)-(40100 50050) cpt, which is the pixels 100..201 x 150..251. Stage 0: no answers; stage 1: the decode")
+  (comment "answer and the frame. Results into `res`: requests, the request, the node's fields, the asset's, whether its bytes")
+  (comment "are those of the rectangle encoded here.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells box (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells rows (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells rec (new-cells)
+        ^Cells ews (new-cells)
+        ^Cells erow (new-cells)
+        ^Cells epal (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf abytes (new-buf)
+        ^Buf z (new-buf)
+        ^Buf ebytes (new-buf)
+        ^Buf ez (new-buf)
+        ^BitmapSet bms (new-bitmap-set)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 same 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-image))
+    (page-set-resolution pages 0 36 306 396)
+    (as-page-cands pages cand)
+    (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 20000 30000 40100 50050)
+    (af-boxcells box)
+    (if (== stage 1)
+      (do (an-decode ans (au-id (au-decode)) 306 396 3 3600 0 1)
+          (af-fill (bms-put bms (au-id (au-decode)) 306 396 3) 306 396 3)))
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 (afm-png)
+                    ans rq bms ws z rows tmp rec box)
+    (cells-drop res 0)
+    (cells-push res (cells-len rq))
+    (cells-push res (rec-count rq))
+    (if (> (cells-len rq) 0)
+      (do (cells-push res (rec-kind rq 0))
+          (cells-push res (rec-id rq 0))
+          (cells-push res (rq-arg rq 0 0))
+          (cells-push res (rq-arg rq 0 1))
+          (cells-push res (rq-arg rq 0 2))
+          (cells-push res (rq-arg rq 0 3))
+          (cells-push res (rq-arg rq 0 4)))
+      (do (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0)))
+    (cells-push res (asset-count assets))
+    (cells-push res (node-attr-int-or nodes attrs 1 (fk-asset) -1))
+    (cells-push res (node-attr-int-or nodes attrs 1 (fk-noasset) -1))
+    (if (> (asset-count assets) 0)
+      (do (cells-push res (asset-origin assets 0))
+          (cells-push res (asset-from assets 0))
+          (cells-push res (asset-w assets 0))
+          (cells-push res (asset-h assets 0))
+          (cells-push res (asset-dpi assets 0))
+          (cells-push res (asset-flags assets 0))
+          (comment "the rectangle, encoded here from the formula: rows 150..250, columns 100..200 of the frame, RGB, 36 dpi")
+          (png-begin ews ebytes ez 101 101 2 8 3600 epal 0 0)
+          (set y 0)
+          (while (< y 101)
+            (do (cells-drop erow 0)
+                (set x 0)
+                (while (< x 101)
+                  (do (set c 0)
+                      (while (< c 3)
+                        (do (cells-push erow (af-px (+ 100 x) (+ 150 y) c))
+                            (set c (+ c 1))))
+                      (set x (+ x 1))))
+                (png-row ews ebytes ez erow 0)
+                (set y (+ y 1))))
+          (png-end ews ebytes ez)
+          (set same 1)
+          (if (!= (buf-len ebytes) (asset-blen assets 0)) (set same 0))
+          (set x 0)
+          (while (and (== same 1) (< x (buf-len ebytes)))
+            (do (if (!= (buf-at ebytes x) (buf-at abytes (+ (asset-bstart assets 0) x))) (set same 0))
+                (set x (+ x 1))))
+          (cells-push res same))
+      (do (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0)))
+    (return 0)))
+
+(deftest test-a-raster-figure-asks-for-its-frame-and-is-the-pixels-of-its-rectangle
+  (let [^Cells res (new-cells)]
+    (af-raster res 0)
+    (assert-eq (cells-at res 0) 8 "one request of eight cells (header, input, offset, length, filter, frame)")
+    (assert-eq (cells-at res 1) 1 "one record")
+    (assert-eq (cells-at res 2) (pk-decode) "a decode")
+    (assert-eq (cells-at res 3) (au-id (au-decode)) "of frame 0, under the asset unit's id")
+    (assert-eq (cells-at res 4) 3 "of the input")
+    (assert-eq (cells-at res 5) 0 "from its first byte")
+    (assert-eq (cells-at res 6) 1234 "to its last")
+    (assert-eq (cells-at res 7) (flt-none) "a whole image file")
+    (assert-eq (cells-at res 8) 0 "frame 0")
+    (af-raster res 1)
+    (assert-eq (cells-at res 0) 0 "with the answer nothing more is asked")
+    (assert-eq (cells-at res 9) 1 "one asset")
+    (assert-eq (cells-at res 10) 0 "the figure has it")
+    (assert-eq (cells-at res 11) -1 "and no reason")
+    (assert-eq (cells-at res 12) (ao-cropped) "cropped")
+    (assert-eq (cells-at res 13) (afm-png) "from a PNG input")
+    (assert-eq (cells-at res 14) 101 "101 pixels across: floor(20000 * 306 / 61200) = 100 to ceil(40100 * 306 / 61200) = 201")
+    (assert-eq (cells-at res 15) 101 "and down: 150 to 251")
+    (assert-eq (cells-at res 16) 0 "no render dpi")
+    (assert-eq (cells-at res 17) 0 "no flags")
+    (assert-eq (cells-at res 18) 1 "the PNG is the pixels of the rectangle, byte for byte, with no resampling")))
+
+;; ---------------------------------------------------------------------------- rendered
+
+(defn ^I32 af-pdf [^:mut ^Cells res ^I32 stage ^I32 dpi ^I32 maxpix ^I32 body]
+  (comment "A PDF page (612 x 792 pt) with a figure at (10000 10000)-(30000 30000) cpt, no candidate under it. Stage 0 no answer, 1 the")
+  (comment "crop's answer (a bitmap of the rectangle's size), 2 an answer that is unsupported. `body` 1 puts a paragraph with text over")
+  (comment "the figure's pad. Results: requests, the request's fields (kind id input page dpi layer px py pw ph), then the asset's.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells box (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells rows (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells rec (new-cells)
+        ^Cells rc (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf abytes (new-buf)
+        ^Buf z (new-buf)
+        ^BitmapSet bms (new-bitmap-set)
+        ^:mut ^I32 n 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (set n (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 10000 10000 30000 30000))
+    (if (== body 1)
+      (af-text nodes regions 1 30100 12000 50000 14000))
+    (if (== body 2)
+      (af-text nodes regions 1 31000 12000 50000 14000))
+    (af-boxcells box)
+    (cells-push rc 0) (cells-push rc 0) (cells-push rc 0) (cells-push rc 0)
+    (as-render-rect 10000 10000 30000 30000 61200 79200 dpi maxpix rc)
+    (if (== stage 1)
+      (do (an-render ans (au-id n) (cells-at rc 2) (cells-at rc 3) 3 dpi)
+          (af-fill (bms-put bms (au-id n) (cells-at rc 2) (cells-at rc 3) 3) (cells-at rc 2) (cells-at rc 3) 3)))
+    (if (== stage 2)
+      (an-fail ans (pk-crop) (au-id n) (ps-unsupported)))
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 dpi maxpix 3 1234 0
+                    ans rq bms ws z rows tmp rec box)
+    (cells-drop res 0)
+    (cells-push res (rec-count rq))
+    (if (> (cells-len rq) 0)
+      (do (cells-push res (rec-kind rq 0)) (cells-push res (rec-id rq 0))
+          (cells-push res (rq-arg rq 0 0)) (cells-push res (rq-arg rq 0 1)) (cells-push res (rq-arg rq 0 2)) (cells-push res (rq-arg rq 0 3))
+          (cells-push res (rq-arg rq 0 4)) (cells-push res (rq-arg rq 0 5)) (cells-push res (rq-arg rq 0 6)) (cells-push res (rq-arg rq 0 7)))
+      (do (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0)
+          (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0)))
+    (cells-push res (node-attr-int-or nodes attrs n (fk-asset) -1))
+    (cells-push res (node-attr-int-or nodes attrs n (fk-noasset) -1))
+    (if (> (asset-count assets) 0)
+      (do (cells-push res (asset-origin assets 0)) (cells-push res (asset-from assets 0)) (cells-push res (asset-w assets 0))
+          (cells-push res (asset-h assets 0)) (cells-push res (asset-dpi assets 0)) (cells-push res (asset-flags assets 0)))
+      (do (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0) (cells-push res 0)))
+    (return 0)))
+
+(deftest test-a-vector-figure-asks-for-a-crop-and-is-the-bitmap
+  (let [^Cells res (new-cells)]
+    (af-pdf res 0 150 4194304 0)
+    (assert-eq (cells-at res 0) 1 "one request")
+    (assert-eq (cells-at res 1) (pk-crop) "a crop")
+    (assert-eq (cells-at res 2) (au-id 1) "under the asset unit's id of the node")
+    (assert-eq (cells-at res 3) 3 "of the input")
+    (assert-eq (cells-at res 4) 0 "page 0 (0-based)")
+    (assert-eq (cells-at res 5) 150 "at asset-dpi")
+    (assert-eq (cells-at res 6) 0 "with text")
+    (assert-eq (cells-at res 7) 204 "px")
+    (assert-eq (cells-at res 8) 204 "py")
+    (assert-eq (cells-at res 9) 426 "pw")
+    (assert-eq (cells-at res 10) 426 "ph")
+    (af-pdf res 1 150 4194304 0)
+    (assert-eq (cells-at res 0) 0 "answered: nothing more is asked")
+    (assert-eq (cells-at res 11) 0 "the figure has asset 0")
+    (assert-eq (cells-at res 12) -1 "and no reason")
+    (assert-eq (cells-at res 13) (ao-rendered) "rendered")
+    (assert-eq (cells-at res 14) (afm-render) "from the render")
+    (assert-eq (cells-at res 15) 426 "the bitmap's width")
+    (assert-eq (cells-at res 16) 426 "its height")
+    (assert-eq (cells-at res 17) 150 "at the dpi it was asked at")
+    (assert-eq (cells-at res 18) 0 "no body text is over it")))
+
+(deftest test-the-render-steps-down-and-says-the-dpi-it-used
+  (let [^Cells res (new-cells)]
+    (af-pdf res 0 150 100000 0)
+    (assert-eq (cells-at res 5) 84 "asked at 84 dpi: 150 -> 112 -> 84")
+    (assert-eq (cells-at res 7) 114 "its px")
+    (assert-eq (cells-at res 9) 239 "its pw")
+    (af-pdf res 1 150 100000 0)
+    (assert-eq (cells-at res 17) 84 "the asset says 84")
+    (assert-eq (cells-at res 15) 239 "and is 239 across")
+    (af-pdf res 0 150 100 0)
+    (assert-eq (cells-at res 0) 0 "a figure that cannot fit even at 36 dpi asks nothing")
+    (assert-eq (cells-at res 12) (nz-too-large) "it is too-large")))
+
+(deftest test-a-render-the-host-cannot-make-is-render
+  (let [^Cells res (new-cells)]
+    (af-pdf res 2 150 4194304 0)
+    (assert-eq (cells-at res 0) 0 "an unsupported answer asks nothing more")
+    (assert-eq (cells-at res 11) -1 "the figure has no asset")
+    (assert-eq (cells-at res 12) (nz-render) "and says render")))
+
+(deftest test-body-text-over-the-render-is-flagged
+  (let [^Cells res (new-cells)]
+    (af-pdf res 1 150 4194304 1)
+    (assert-eq (cells-at res 18) (afg-text-overlap) "a paragraph in the padded rectangle: text-overlap")
+    (af-pdf res 1 150 4194304 2)
+    (assert-eq (cells-at res 18) 0 "a paragraph beyond the pad: no flag")))
+
+;; ------------------------------------------------------------------------- the sources
+
+(defn ^I32 af-source [^:mut ^Cells res ^I32 which]
+  (comment "One figure that is the candidate `which` names, no answers; the number of requests it makes and its reason (or -1):")
+  (comment "0 a whole image (status 0, no flags): its own, no request; 1 the same with `overlaid`; 2 `colorspace`; 3 `codec`; 4 `part` (page-sized);")
+  (comment "5 `too-large`; 6 `budget`; 7 a region candidate; 8 a whole image that is `clip-bbox`; 9 `transformed`.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells box (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells rows (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells rec (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf abytes (new-buf)
+        ^Buf z (new-buf)
+        ^BitmapSet bms (new-bitmap-set)
+        ^:mut ^I32 status 0
+        ^:mut ^I32 flags 0
+        ^:mut ^I32 kori -1
+        ^:mut ^I32 n 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (buf-push cbytes 97) (buf-push cbytes 97) (buf-push cbytes 97) (buf-push cbytes 97)
+    (if (== which 1) (set flags (afg-overlaid)))
+    (if (== which 2) (set status (nz-colorspace)))
+    (if (== which 3) (set status (nz-codec)))
+    (if (== which 4) (set status (nz-part)))
+    (if (== which 5) (set status (nz-too-large)))
+    (if (== which 6) (set status (nz-budget)))
+    (if (== which 7) (do (set status (nz-vector)) (set kori -2)))
+    (if (== which 8) (set flags 2))
+    (if (== which 9) (set flags 4))
+    (if (== which 4)
+      (af-cand cand 1 0 0 61200 79200 status flags kori 5 0 4)
+      (af-cand cand 1 10000 10000 30000 30000 status flags kori 5 0 4))
+    (if (== which 4)
+      (set n (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 0 0 61200 79200))
+      (set n (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 10000 10000 30000 30000)))
+    (node-set-attr-int nodes attrs n (fk-image) 0)
+    (af-boxcells box)
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0
+                    ans rq bms ws z rows tmp rec box)
+    (cells-drop res 0)
+    (cells-push res (rec-count rq))
+    (cells-push res (node-attr-int-or nodes attrs n (fk-noasset) -1))
+    (cells-push res (node-attr-int-or nodes attrs n (fk-asset) -1))
+    (return 0)))
+
+(deftest test-which-figures-are-the-image-and-which-are-rendered
+  (let [^Cells res (new-cells)]
+    (af-source res 0)
+    (assert-eq (cells-at res 0) 0 "a whole clean image is its own: no request")
+    (assert-eq (cells-at res 2) 0 "it is asset 0")
+    (af-source res 1)
+    (assert-eq (cells-at res 0) 1 "paint over it (overlaid): rendered, a crop is asked")
+    (af-source res 8)
+    (assert-eq (cells-at res 0) 1 "a clip that is not a rectangle (clip-bbox): rendered")
+    (af-source res 9)
+    (assert-eq (cells-at res 0) 1 "a placement that is not rectilinear (transformed): rendered")
+    (af-source res 2)
+    (assert-eq (cells-at res 0) 1 "colorspace at images is rendered at figures")
+    (af-source res 3)
+    (assert-eq (cells-at res 0) 1 "so is codec")
+    (af-source res 4)
+    (assert-eq (cells-at res 0) 1 "a page-sized image in a PDF is rendered (its pixels need the host's decode-img, D563)")
+    (af-source res 7)
+    (assert-eq (cells-at res 0) 1 "a region candidate is rendered")
+    (af-source res 5)
+    (assert-eq (cells-at res 0) 0 "an image too large is not rendered")
+    (assert-eq (cells-at res 1) (nz-too-large) "it says so")
+    (af-source res 6)
+    (assert-eq (cells-at res 0) 0 "a budget reason is the candidate's own")
+    (assert-eq (cells-at res 1) (nz-budget) "it says so")))
+
+(defn ^I32 af-caption-only [^:mut ^Cells res]
+  (comment "Two figures with no image: one whose region is its caption's (the pairing made it out of nothing), one with a region of its")
+  (comment "own and a caption elsewhere. Requests and the first figure's reason.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells box (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells rows (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells rec (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf abytes (new-buf)
+        ^Buf z (new-buf)
+        ^BitmapSet bms (new-bitmap-set)
+        ^:mut ^I32 f1 0
+        ^:mut ^I32 f2 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (set f1 (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 7200 50000 20000 52000))
+    (af-node nodes regions f1 (nk-caption) 0 1 7200 50000 20000 52000)
+    (set f2 (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 7200 10000 30000 30000))
+    (af-node nodes regions f2 (nk-caption) 0 1 7200 32000 20000 34000)
+    (af-boxcells box)
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0
+                    ans rq bms ws z rows tmp rec box)
+    (cells-drop res 0)
+    (cells-push res (rec-count rq))
+    (cells-push res (rec-id rq 0))
+    (cells-push res (node-attr-int-or nodes attrs f1 (fk-noasset) -1))
+    (cells-push res (au-id f2))
+    (return 0)))
+
+(deftest test-a-figure-made-of-its-caption-has-no-picture-to-render
+  (let [^Cells res (new-cells)]
+    (af-caption-only res)
+    (assert-eq (cells-at res 0) 1 "only the figure with a region of its own is asked for")
+    (assert-eq (cells-at res 1) (cells-at res 3) "its crop")
+    (assert-eq (cells-at res 2) (nz-vector) "the caption's figure is vector: no picture")))
+
+(defn ^I32 af-reuse [^:mut ^Cells res]
+  (comment "Two figures whose renders are the same pixels are one asset with two uses; a third whose are not is asset 1.")
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells assets (new-cells)
+        ^Cells uses (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells box (new-cells)
+        ^Cells ws (new-cells)
+        ^Cells rows (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells rec (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf abytes (new-buf)
+        ^Buf z (new-buf)
+        ^BitmapSet bms (new-bitmap-set)
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 d 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (set a (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 10000 10000 20000 20000))
+    (set b (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 30000 10000 40000 20000))
+    (set d (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 10000 30000 21000 41000))
+    (af-boxcells box)
+    (comment "the three crops, 36 dpi: 100 x 100 px each or so; the first two the same bitmap, the third another size")
+    (an-render ans (au-id a) 105 105 3 150)
+    (af-fill (bms-put bms (au-id a) 105 105 3) 105 105 3)
+    (an-render ans (au-id b) 105 105 3 150)
+    (af-fill (bms-put bms (au-id b) 105 105 3) 105 105 3)
+    (an-render ans (au-id d) 110 110 3 150)
+    (af-fill (bms-put bms (au-id d) 110 110 3) 110 110 3)
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0
+                    ans rq bms ws z rows tmp rec box)
+    (cells-drop res 0)
+    (cells-push res (cells-len rq))
+    (cells-push res (asset-count assets))
+    (cells-push res (node-attr-int-or nodes attrs a (fk-asset) -1))
+    (cells-push res (node-attr-int-or nodes attrs b (fk-asset) -1))
+    (cells-push res (node-attr-int-or nodes attrs d (fk-asset) -1))
+    (cells-push res (asset-use-count assets 0))
+    (return 0)))
+
+(deftest test-renders-of-the-same-pixels-are-one-asset
+  (let [^Cells res (new-cells)]
+    (af-reuse res)
+    (assert-eq (cells-at res 0) 0 "everything answered")
+    (assert-eq (cells-at res 1) 2 "two assets")
+    (assert-eq (cells-at res 2) 0 "the first figure's")
+    (assert-eq (cells-at res 3) 0 "the second figure has the same asset")
+    (assert-eq (cells-at res 4) 1 "the third, other pixels, its own")
+    (assert-eq (cells-at res 5) 2 "asset 0 has two uses")))
+
+;; ------------------------------------------------------------------------------ the regions
+
+(defn ^I32 af-path [^:mut ^Cells pa ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 flags ^I32 vis]
+  (comment "A path row (stride 24) with a page, a box, flags (`pg`: clip 4) and a verdict (`vis`, cell 19).")
+  (let [^I32 r (quot (cells-len pa) 24)
+        ^:mut ^I32 f 0]
+    (while (< f 24)
+      (do (cells-push pa 0)
+          (set f (+ f 1))))
+    (cells-set pa (+ (* r 24) 0) page)
+    (cells-set pa (+ (* r 24) 2) x0)
+    (cells-set pa (+ (* r 24) 3) y0)
+    (cells-set pa (+ (* r 24) 4) x1)
+    (cells-set pa (+ (* r 24) 5) y1)
+    (cells-set pa (+ (* r 24) 11) flags)
+    (cells-set pa (+ (* r 24) 19) vis)
+    (return r)))
+
+(defn ^I32 af-pages [^:mut ^Cells pg ^I32 n]
+  (comment "n page records (16 cells) of 612 x 792 pt: media and crop box, no rotation.")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (cells-push pg 0)
+          (cells-push pg 0) (cells-push pg 0) (cells-push pg 61200) (cells-push pg 79200)
+          (cells-push pg 0) (cells-push pg 0) (cells-push pg 61200) (cells-push pg 79200)
+          (cells-push pg 0) (cells-push pg 0) (cells-push pg 0) (cells-push pg 0) (cells-push pg 0) (cells-push pg 0) (cells-push pg 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-vector-art-is-a-cluster-of-paths
+  (comment "page 1: four paths 1 pt apart (a chart's axes and bars) form one region; two far-off paths are no figure (a lone path is a rule); a clip")
+  (comment "and a hidden path join nothing; a page-sized path (a background) is not part of one. Page 2: three paths that sit")
+  (comment "under an image's visible box are the image's, not a region. Page 3: a cluster narrower than 18 pt is no figure.")
+  (let [^Cells pa (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells cl (new-cells)]
+    (af-pages pg 3)
+    (af-path pa 1 10000 10000 30000 10100 0 0)
+    (af-path pa 1 10000 10000 10100 30000 0 0)
+    (af-path pa 1 10200 20000 15000 29900 0 0)
+    (af-path pa 1 15100 18000 18000 29900 0 0)
+    (af-path pa 1 40000 60000 50000 60100 0 0)
+    (af-path pa 1 45000 70000 50000 70100 0 0)
+    (af-path pa 1 20000 12000 30000 25000 4 0)
+    (af-path pa 1 20000 40000 30000 45000 0 3)
+    (af-path pa 1 0 0 61200 79200 0 0)
+    (af-path pa 2 10000 10000 30000 10100 0 0)
+    (af-path pa 2 10000 10000 10100 30000 0 0)
+    (af-path pa 2 10200 20000 15000 29900 0 0)
+    (af-path pa 3 10000 10000 11500 10100 0 0)
+    (af-path pa 3 10000 10000 10100 11500 0 0)
+    (af-path pa 3 10800 10800 11500 10900 0 0)
+    (comment "the image on page 2: a candidate row of kind -1 over the whole cluster")
+    (af-cand cand 2 5000 5000 35000 35000 0 0 -1 1 0 0)
+    (as-vector-regions pa pg cand cl)
+    (assert-eq (as-count cand) 2 "the image's row and one region")
+    (assert-eq (as-get cand 1 0) 1 "on page 1")
+    (assert-eq (as-get cand 1 5) 10000 "the cluster's left")
+    (assert-eq (as-get cand 1 6) 10000 "its top")
+    (assert-eq (as-get cand 1 7) 30000 "its right")
+    (assert-eq (as-get cand 1 8) 30000 "its bottom")
+    (assert-eq (as-get cand 1 27) -2 "a region candidate")
+    (assert-eq (as-get cand 1 9) (nz-vector) "whose status is vector")))
+
+(deftest test-a-grg-figure-region-is-a-region-candidate
+  (let [^Cells grg (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells cand (new-cells)]
+    (af-pages pg 2)
+    (grg-new grg 1 10000 10000 40000 40000 (rk-figure))
+    (grg-new grg 1 10000 50000 40000 70000 (rk-table-in-image))
+    (grg-new grg 2 8000 9000 28000 29000 (rk-figure))
+    (as-grg-regions grg cand pg)
+    (assert-eq (as-count cand) 2 "the two figure regions, not the table-in-image")
+    (assert-eq (as-get cand 0 0) 1 "the first on page 1")
+    (assert-eq (as-get cand 1 0) 2 "the second on page 2")
+    (assert-eq (as-get cand 1 5) 8000 "with its box")
+    (assert-eq (as-get cand 1 27) -2 "both are regions")))
+
+(deftest test-a-region-is-a-figure-only-at-figures-and-never-in-a-table
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells fg (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (as-region-add cand 1 10000 10000 30000 30000)
+    (as-region-add cand 1 10000 40000 30000 60000)
+    (af-node nodes regions 0 (nk-table) 0 1 9000 39000 31000 61000)
+    (assert-eq (as-figure-rows cand pages nodes regions 1 fg) 0 "at images a region is no figure")
+    (assert-eq (as-figure-rows cand pages nodes regions 2 fg) 1 "at figures the one outside the table is")
+    (assert-eq (cells-at fg 1) 0 "the first region")))

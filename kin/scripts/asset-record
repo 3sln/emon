@@ -1,0 +1,66 @@
+#!/usr/bin/env bb
+;; Record the figures-level asset transcripts LIVE with the pinned pdfium (P8.5, D117, D560-D563).   kin/scripts/asset-record
+;;
+;;     bb asset-record [--scratch] [STEM ...]
+;;
+;; NOT a gate: it needs the pinned pdfium (`bb pdfium-fetch`, a cache under .cache/pdfium/) and builds the Rust driver against it
+;; (`EMON_RS_PDFIUM`, the same build `bb fusion-record` uses). For each document of `docs` it converts at `--assets=figures` with a
+;; real Renderer, RECORDING the plan/fulfil transcript (the asset unit's `crop` requests and their pixels) into
+;; test/asset/figures/STEM/ (transcript.edn + PNGs), and writes test/asset/figures/DIGESTS.edn: the SHA-256 of the JSON, of the HTML in
+;; its three modes and of every asset file the live run wrote. `kin/scripts/asset-check` replays the committed transcripts on Rust and Go
+;; (no pdfium, no renderer) and holds the output to those digests, and the crops to pdftoppm (D127: a different rasteriser, a sanity bound).
+;;
+;;   --scratch   record into .cache/asset-scratch/ and do not touch the committed files (to look at a change first)
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process shell]]
+         '[clojure.edn :as edn]
+         '[clojure.string :as str])
+(import '(java.security MessageDigest))
+
+(def args (set *command-line-args*))
+(def stems (vec (remove #(str/starts-with? % "--") *command-line-args*)))
+
+;; [stem pdf]: documents whose figures are vector art, an image with something over it, or a composite (SPEC 10.11 `rendered`)
+(def docs
+  [["figures-charts" "test/corpus/synth/pdf/figures-charts.pdf"]
+   ["figures-logo-screenshot" "test/corpus/synth/pdf/figures-logo-screenshot.pdf"]
+   ["mixed-table-image" "test/corpus/synth/pdf/mixed-table-image.pdf"]
+   ["gfx-image-rules" "test/corpus/synth/pdf/gfx-image-rules.pdf"]
+   ["columns-span-figure" "test/corpus/synth/pdf/columns-span-figure.pdf"]
+   ["initial-image" "test/corpus/synth/pdf/initial-image.pdf"]])
+
+(def out-root (if (args "--scratch") ".cache/asset-scratch" "test/asset/figures"))
+
+(defn sha256 [^bytes bs] (apply str (map #(format "%02x" (bit-and % 255)) (.digest (MessageDigest/getInstance "SHA-256") bs))))
+(defn run [& cmd] @(apply process {:out :bytes :err :string} cmd))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+(shell "bb" "tools/pdfium/fetch.clj")
+(def cur (str (fs/real-path ".cache/pdfium/current")))
+(def exe
+  (let [r @(process {:out :string :err :string :extra-env {"EMON_RS_PDFIUM" (str cur "/lib")}} "kin/scripts/emon-rs-build")]
+    (when-not (zero? (:exit r)) (println "FAIL build:\n" (:err r)) (System/exit 1))
+    (str/trim (:out r))))
+(println "pdfium at" cur "; driver" exe)
+
+(fs/create-dirs out-root)
+(def digests
+  (into (sorted-map)
+        (for [[stem pdf] docs :when (or (empty? stems) (some #{stem} stems))]
+          (let [t (str out-root "/" stem) d (str ".cache/asset-rec-" stem)]
+            (fs/delete-tree t) (fs/delete-tree d)
+            (let [r (run exe "--pdfium" "--assets=figures" (str "--asset-dir=" d) (str "--record=" t) pdf)]
+              (when-not (zero? (:exit r)) (println "FAIL" stem (:err r)) (System/exit 1))
+              (let [json (:out r)
+                    html (fn [mode] (:out (run exe "--pdfium" "--out=html" "--assets=figures" mode (str "--replay=" t) pdf)))
+                    files (if (fs/exists? d) (into (sorted-map) (for [f (fs/list-dir d)] [(fs/file-name f) (sha256 (fs/read-all-bytes f))])) {})
+                    entry {:json (sha256 json)
+                           :html-inline (sha256 (html "--html=assets=inline"))
+                           :html-external (sha256 (html "--html=assets=external,prefix=img/"))
+                           :html-omit (sha256 (html "--html=assets=omit"))
+                           :assets files}]
+                (fs/delete-tree d)
+                (println (format "  %-26s %d asset file(s), transcript %d file(s)" stem (count files) (count (fs/list-dir t))))
+                [stem entry]))))))
+(spit (str out-root "/DIGESTS.edn") (str (pr-str digests) "\n"))
+(println "recorded" (count digests) "documents into" out-root)

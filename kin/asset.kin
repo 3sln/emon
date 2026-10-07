@@ -1,9 +1,14 @@
-;; ASSETS: opt-in pixels for figures and seals (P3.13; D117, D294-D301, SPEC 10.11). emon's own module (D039).
+;; ASSETS: opt-in pixels for figures and seals (P3.13, P8.5; D117, D294-D301, D560-D563, SPEC 10.11). emon's own module (D039).
 ;;
 ;; At the level `images` a `figure` or `seal` whose content IS one image the document embeds gets that image: its original
 ;; bytes where a browser shows them as the PDF did (`embedded`), else its pixels as the canonical PNG (`decoded`). No
 ;; region detection decides pixels, only which image. Nothing in this module runs, and no arena it writes is touched, when
 ;; the `assets` setting is `none`: every output is then byte for byte what it was.
+;;
+;; At the level `figures` (P8.5) every other figure and seal gets pixels too: `rendered` (a `crop` request the Renderer answers: vector
+;; art, a composite, an image with paint over it) or `cropped` (a rectangle of a raster input's decoded frame). That needs the host, so
+;; the asset stage becomes a UNIT of its own with plan/fulfil requests (`as-run-figures`, below); and the regions that are not an
+;; image (vector art, P7.G's `figure` regions) become provisional figures (`as-vector-regions`, `as-grg-regions`).
 ;;
 ;; TWO PHASES, because the bytes of the input are read in the DOCUMENT PASS (the one place that reads it, P7.U) and the
 ;; Model is only known at the end:
@@ -29,23 +34,27 @@
 ;; placement (a scan, a background: 800 per mille of its page and more) is a candidate whose pixels are not made, status
 ;; `part`: no node of an `images` run can be that image, and a scan's page image would take the budget for nothing.
 (ns emon.asset
-  (:require [emon.lang :refer [I32 I64 Src Cells Bitmap Buf i64 i32 add64 mul64]]
+  (:require [emon.lang :refer [I32 I64 Src Cells Bitmap BitmapSet Buf i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
                                buf-len buf-push buf-blob buf-append-blob
-                               bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
+                               bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8 bms-get
                                crypto-sha256]]
             [emon.model :refer [node-count node-kind node-sub node-region-head node-region-count node-attr
                                 node-set-attr-int node-set-attr-text node-attr-int-or text-append-cp
+                                node-parent node-has-text node-first-child node-next page-dpi
                                 region-page region-x0 region-y0 region-x1 region-y1 region-next
                                 attr-value attr-len page-count page-number page-w page-h
                                 asset-add asset-set-sha asset-find use-add asset-count
                                 node-add-region node-new node-set-sub node-set-conf node-add-src
-                                nk-figure nk-seal sl-signature sl-initials sl-digital-signature fg-unknown sr-infer
+                                nk-figure nk-seal nk-table nk-caption sl-signature sl-initials sl-digital-signature fg-unknown sr-infer
                                 fk-asset fk-noasset fk-image fk-assets fk-asset-dpi fk-asset-pixels
                                 fk-asset-bytes fk-assets-bytes fk-asset-signatures
-                                nz-withheld nz-part nz-vector nz-composite nz-colorspace nz-codec nz-too-large nz-budget
-                                ao-embedded ao-decoded amt-jpeg amt-png afm-dct afm-flate afm-lzw afm-runlength afm-raw
-                                afg-clip-bbox afg-transformed afg-icc afg-scaled afg-overlaid]]
+                                nz-withheld nz-part nz-vector nz-composite nz-colorspace nz-codec nz-render nz-too-large nz-budget
+                                ao-embedded ao-decoded ao-cropped ao-rendered amt-jpeg amt-png afm-dct afm-flate afm-lzw afm-runlength afm-raw
+                                afm-render
+                                afg-clip-bbox afg-transformed afg-icc afg-scaled afg-overlaid afg-text-overlap]]
+            [emon.plan :refer [au-id au-decode rq-crop rq-decode an-find an-ok an-status rec-find flt-none]]
+            [emon.glayer :refer [grg-count grg-get rk-figure]]
             [emon.evidence :refer [im-count im-get mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj mf-z mf-clip mf-vis
                                    mf-placement pa-get pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-z pf-flags pf-vis
                                    pg-clip pa-rect gl-count gl-get gf-z gf-vis]]
@@ -67,6 +76,14 @@
 (defconst ^I32 AS_MAXPROD 4096)     ;; placements that make pixels, a document (the rest are `budget`)
 (defconst ^I32 AS_STRIDE 32)
 (defconst ^I32 AS_OVERLAY_WORK 100000000) ;; rows the `overlaid` flag may read in all; past it the flag is not set
+(defconst ^I32 AS_PAD 200)          ;; a render's pad, centipoints (2 pt, SPEC 10.11)
+(defconst ^I32 AS_MIN_DPI 36)       ;; below this a render is `too-large`
+(defconst ^I32 AS_VMIN 2)           ;; paths a vector region has at least (D562)
+(defconst ^I32 AS_VSIDE 1800)       ;; both sides of a vector region, at least (18 pt, D562)
+(defconst ^I32 AS_VGAP 200)         ;; paths this close (centipoints) are one region
+(defconst ^I32 AS_VWORK 50000000)   ;; cluster tests the vector regions may make in all
+(defconst ^I32 AS_VOVER 500)        ;; per mille of a vector region under an image's visible box: the image is the figure
+(defconst ^I32 AS_REGION -2)        ;; AC_KORI of a candidate that is a REGION (vector art, a P7.G `figure`): no image, rendered
 
 ;; candidate row fields
 (defconst ^I32 AC_PAGE 0)
@@ -212,7 +229,7 @@
     (return s)))
 
 (defn ^I32 as-png [^:mut ^Cells ws ^:mut ^Buf cbytes ^:mut ^Buf z ^:mut ^Cells row ^:mut ^Cells hs
-                   ^Cells rec ^Bitmap pic ^Bitmap al ^I32 alpha ^I32 bilevel]
+                   ^Cells rec ^Bitmap pic ^Bitmap al ^I32 alpha ^I32 bilevel ^I32 dpi100]
   (comment "The canonical PNG of the pixels (`emon.png`), appended to `cbytes`. Gray 8 bits (1 for a bilevel image), RGB, a")
   (comment "palette for an Indexed image with no alpha (PLTE the image's palette, the pixel's index the first entry of that")
   (comment "colour), gray + alpha, RGBA. `hs` (2,048 cells), `row` are scratch.")
@@ -263,7 +280,7 @@
           (cells-push row (rem rgb 256))
           (cells-push row 255)
           (set i (+ i 1))))
-    (png-begin ws cbytes z w h ct depth 0 row npal 0)
+    (png-begin ws cbytes z w h ct depth dpi100 row npal 0)
     (while (< y h)
       (do (cells-drop row 0)
           (set x 0)
@@ -473,12 +490,12 @@
                   ^Bitmap al2 (bitmap-new (quot (+ ow (- k 1)) k) (quot (+ oh (- k 1)) k) 1)]
               (as-scale-into pic pic2 k)
               (as-scale-into al al2 k)
-              (as-png ws cbytes z rows tmp rec pic2 al2 alpha 0)
+              (as-png ws cbytes z rows tmp rec pic2 al2 alpha 0 0)
               (set w (bitmap-w pic2))
               (set h (bitmap-h pic2))))
         (do (set bil 0)
             (if (and (== (pi-get rec (pi-f-bpc)) 1) (== (pi-get rec (pi-f-class)) 1)) (set bil 1))
-            (as-png ws cbytes z rows tmp rec pic al alpha bil)
+            (as-png ws cbytes z rows tmp rec pic al alpha bil 0)
             (set w ow)
             (set h oh))))
     (as-set cand row AC_STATUS 0)
@@ -526,11 +543,182 @@
     (if (> (mul64 acc (i64 1000)) (mul64 (i64 AS_OVERLAY) area)) (return 1))
     (return 0)))
 
+;; ------------------------------------------------------------ regions that are not an image (D562)
+;;
+;; At `figures` a figure need not be an image: vector art (a chart, a diagram) and the graphics layer's `figure` regions (P7.G's
+;; `grg`, SPEC 9.9) are CANDIDATE ROWS too, with no object, `AC_KORI` = `AS_REGION` and status `vector`. They are rendered, never
+;; cut, and they exist only at the level `figures`, so a run at `images` or `none` never sees one.
+
+(defn ^I32 as-new-row [^:mut ^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Append a candidate row (all zero but what an asset needs) for a region of `page` and answer its index. The visible box")
+  (comment "is the region's.")
+  (let [^I32 row (quot (cells-len cand) AS_STRIDE)
+        ^:mut ^I32 f 0]
+    (while (< f AS_STRIDE)
+      (do (cells-push cand 0)
+          (set f (+ f 1))))
+    (as-set cand row AC_PAGE page)
+    (as-set cand row AC_BX0 x0)
+    (as-set cand row (+ AC_BX0 1) y0)
+    (as-set cand row (+ AC_BX0 2) x1)
+    (as-set cand row (+ AC_BX0 3) y1)
+    (as-set cand row AC_VX0 x0)
+    (as-set cand row (+ AC_VX0 1) y0)
+    (as-set cand row (+ AC_VX0 2) x1)
+    (as-set cand row (+ AC_VX0 3) y1)
+    (as-set cand row AC_OBJ -1)
+    (as-set cand row AC_FROM (afm-raw))
+    (as-set cand row AC_ORIGIN (ao-decoded))
+    (as-set cand row AC_TYPE (amt-png))
+    (as-set cand row AC_KORI -1)
+    (return row)))
+
+(defn ^:pub ^I32 as-region-add [^:mut ^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "THE HOOK for a region another stage finds (P7.G's tracer-fed `figure` regions, P8.1): a candidate row that is a")
+  (comment "region, to be rendered. Answers its row.")
+  (let [^I32 row (as-new-row cand page x0 y0 x1 y1)]
+    (as-set cand row AC_KORI AS_REGION)
+    (as-set cand row AC_STATUS (nz-vector))
+    (return row)))
+
+(defn ^I32 as-under-image [^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "1 when at least `AS_VOVER` per mille of the box lies under the visible box of one image's candidate row of the page.")
+  (let [^I32 n (quot (cells-len cand) AS_STRIDE)
+        ^I64 area (as-area x0 y0 x1 y1)
+        ^:mut ^I32 r 0]
+    (if (<= area (i64 0)) (return 0))
+    (while (< r n)
+      (do (if (and (== (as-get cand r AC_PAGE) page) (>= (as-get cand r AC_KORI) -1))
+            (if (== (as-ge (as-ia x0 y0 x1 y1 (as-get cand r AC_VX0) (as-get cand r (+ AC_VX0 1)) (as-get cand r (+ AC_VX0 2)) (as-get cand r (+ AC_VX0 3))) area AS_VOVER) 1)
+              (return 1)))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 as-clu-add [^:mut ^Cells cl ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Add the box of one path to the clusters `cl` (six cells each: box, paths, alive): every live cluster within `AS_VGAP` of")
+  (comment "the box, which grows as it takes them, joins it, into the first such cluster's slot. Answers how many it looked at.")
+  (let [^I32 nc (quot (cells-len cl) 6)
+        ^:mut ^I32 bx0 x0
+        ^:mut ^I32 by0 y0
+        ^:mut ^I32 bx1 x1
+        ^:mut ^I32 by1 y1
+        ^:mut ^I32 cnt 1
+        ^:mut ^I32 slot -1
+        ^:mut ^I32 changed 1
+        ^:mut ^I32 seen 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 b 0]
+    (while (== changed 1)
+      (do (set changed 0)
+          (set i 0)
+          (while (< i nc)
+            (do (set b (* i 6))
+                (set seen (+ seen 1))
+                (if (and (== (cells-at cl (+ b 5)) 1)
+                         (and (<= (cells-at cl b) (+ bx1 AS_VGAP))
+                              (and (>= (cells-at cl (+ b 2)) (- bx0 AS_VGAP))
+                                   (and (<= (cells-at cl (+ b 1)) (+ by1 AS_VGAP))
+                                        (>= (cells-at cl (+ b 3)) (- by0 AS_VGAP))))))
+                  (do (if (< (cells-at cl b) bx0) (set bx0 (cells-at cl b)))
+                      (if (< (cells-at cl (+ b 1)) by0) (set by0 (cells-at cl (+ b 1))))
+                      (if (> (cells-at cl (+ b 2)) bx1) (set bx1 (cells-at cl (+ b 2))))
+                      (if (> (cells-at cl (+ b 3)) by1) (set by1 (cells-at cl (+ b 3))))
+                      (set cnt (+ cnt (cells-at cl (+ b 4))))
+                      (cells-set cl (+ b 5) 0)
+                      (if (< slot 0) (set slot i))
+                      (set changed 1)))
+                (set i (+ i 1))))))
+    (if (< slot 0)
+      (do (cells-push cl bx0) (cells-push cl by0) (cells-push cl bx1) (cells-push cl by1) (cells-push cl cnt) (cells-push cl 1))
+      (do (set b (* slot 6))
+          (cells-set cl b bx0)
+          (cells-set cl (+ b 1) by0)
+          (cells-set cl (+ b 2) bx1)
+          (cells-set cl (+ b 3) by1)
+          (cells-set cl (+ b 4) cnt)
+          (cells-set cl (+ b 5) 1)))
+    (return seen)))
+
+(defn ^I32 as-flush [^:mut ^Cells cand ^Cells cl ^I32 page ^Cells pg]
+  (comment "The live clusters of `page` that are figures: at least `AS_VMIN` paths, both sides at least 18 pt, under 800 per mille of")
+  (comment "the page, and not mostly under an image (which is the figure then): each a region candidate.")
+  (let [^I32 nc (quot (cells-len cl) 6)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0]
+    (if (or (< page 1) (> page (pd-pg-count pg))) (return 0))
+    (set pw (as-page-w pg (- page 1)))
+    (set ph (as-page-h pg (- page 1)))
+    (while (< i nc)
+      (do (set b (* i 6))
+          (if (and (== (cells-at cl (+ b 5)) 1) (>= (cells-at cl (+ b 4)) AS_VMIN))
+            (if (and (>= (- (cells-at cl (+ b 2)) (cells-at cl b)) AS_VSIDE)
+                     (and (>= (- (cells-at cl (+ b 3)) (cells-at cl (+ b 1))) AS_VSIDE)
+                          (== (as-ge (as-ia (cells-at cl b) (cells-at cl (+ b 1)) (cells-at cl (+ b 2)) (cells-at cl (+ b 3)) 0 0 pw ph) (as-area 0 0 pw ph) AS_BIG) 0)))
+              (if (== (as-under-image cand page (cells-at cl b) (cells-at cl (+ b 1)) (cells-at cl (+ b 2)) (cells-at cl (+ b 3))) 0)
+                (as-region-add cand page (cells-at cl b) (cells-at cl (+ b 1)) (cells-at cl (+ b 2)) (cells-at cl (+ b 3))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 as-vector-regions [^Cells pa ^Cells pg ^:mut ^Cells cand ^:mut ^Cells cl]
+  (comment "VECTOR ART (D562): the document's paths (`pa`, a page at a time), the visible ones that are not clips and not page-sized,")
+  (comment "joined into clusters of paths within `AS_VGAP` of each other; a cluster that is a figure (`as-flush`) is a region")
+  (comment "candidate. At most `AS_VWORK` cluster tests in all (past it no more paths are joined). `cl` is scratch.")
+  (let [^I32 n (quot (cells-len pa) 24)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 cur -1
+        ^:mut ^I32 page 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 work 0]
+    (cells-drop cl 0)
+    (while (< i n)
+      (do (set page (pa-get pa i 0))
+          (if (!= page cur)
+            (do (as-flush cand cl cur pg)
+                (cells-drop cl 0)
+                (set cur page)))
+          (if (and (== (pa-get pa i (pf-vis)) 0)
+                   (and (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0)
+                        (and (>= page 1) (and (<= page (pd-pg-count pg)) (< work AS_VWORK)))))
+            (do (set x0 (pa-get pa i (pf-x0)))
+                (set y0 (pa-get pa i (pf-y0)))
+                (set x1 (pa-get pa i (pf-x1)))
+                (set y1 (pa-get pa i (pf-y1)))
+                (set pw (as-page-w pg (- page 1)))
+                (set ph (as-page-h pg (- page 1)))
+                (if (and (>= x1 x0) (and (>= y1 y0)
+                         (== (as-ge (as-ia x0 y0 x1 y1 0 0 pw ph) (as-area 0 0 pw ph) AS_BIG) 0)))
+                  (set work (+ work (as-clu-add cl x0 y0 x1 y1))))))
+          (set i (+ i 1))))
+    (as-flush cand cl cur pg)
+    (return 0)))
+
+(defn ^:pub ^I32 as-grg-regions [^Cells grg ^:mut ^Cells cand ^Cells pg]
+  (comment "THE HOOK for P7.G (SPEC 9.9, D228): every `figure` row of the graphics layer's regions `grg` (page, box in cells 0..4, the")
+  (comment "kind in 5) that is not mostly under an image is a region candidate. Empty until the page units fill `grg`.")
+  (let [^I32 n (grg-count grg)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 page 0]
+    (while (< i n)
+      (do (if (== (grg-get grg i 5) (rk-figure))
+            (do (set page (grg-get grg i 0))
+                (if (and (>= page 1) (and (<= page (pd-pg-count pg))
+                         (== (as-under-image cand page (grg-get grg i 1) (grg-get grg i 2) (grg-get grg i 3) (grg-get grg i 4)) 0)))
+                  (as-region-add cand page (grg-get grg i 1) (grg-get grg i 2) (grg-get grg i 3) (grg-get grg i 4)))))
+          (set i (+ i 1))))
+    (return 0)))
+
 ;; ------------------------------------------------------------------- collection
 
 (defn ^:pub ^I32 as-collect [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                              ^Cells im ^Cells pa ^Cells gl ^Cells pg
-                             ^I32 maxpix ^I32 totbytes
+                             ^I32 maxpix ^I32 totbytes ^I32 level ^Cells grg
                              ^:mut ^Cells cand ^:mut ^Buf cbytes
                              ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells mrec ^:mut ^Cells smp ^:mut ^Cells msmp
                              ^:mut ^Cells data ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells ws ^:mut ^Buf z]
@@ -631,14 +819,36 @@
                                               (do (set zz (as-get cand row AC_FLAGS))
                                                   (as-set cand row AC_FLAGS (bit-or zz (afg-overlaid)))))))))))))))))
           (set r (+ r 1))))
+    (comment "at `figures` the regions that are not an image: vector art (D562), then the graphics layer's `figure` regions")
+    (if (== level 2)
+      (do (as-vector-regions pa pg cand data)
+          (as-grg-regions grg cand pg)))
     (return 0)))
 
 ;; --------------------------------------------------------- the provisional figures
 
-(defn ^:pub ^I32 as-figure-rows [^Cells cand ^Cells pages ^:mut ^Cells fg]
+(defn ^I32 as-in-table [^Cells nodes ^Cells regions ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "1 when at least half of the box lies inside a `table` node's region on the page (vector art that is a table's rules).")
+  (let [^I32 nn (node-count nodes)
+        ^I64 area (as-area x0 y0 x1 y1)
+        ^:mut ^I32 n 0
+        ^:mut ^I32 r -1]
+    (while (< n nn)
+      (do (if (== (node-kind nodes n) (nk-table))
+            (do (set r (node-region-head nodes n))
+                (while (>= r 0)
+                  (do (if (and (== (region-page regions r) page)
+                               (== (as-ge (as-ia x0 y0 x1 y1 (region-x0 regions r) (region-y0 regions r) (region-x1 regions r) (region-y1 regions r)) area 500) 1))
+                        (return 1))
+                      (set r (region-next regions r))))))
+          (set n (+ n 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 as-figure-rows [^Cells cand ^Cells pages ^Cells nodes ^Cells regions ^I32 level ^:mut ^Cells fg]
   (comment "The candidates that are provisional `figure`s (SPEC 10.6, until P8.1): not page-sized (under 800 per mille of its")
-  (comment "page) and both sides of the visible box at least 18 pt. `fg` = [cursor 0, then the candidate rows sorted by (page,")
-  (comment "top, left, row)]. Answers how many.")
+  (comment "page) and both sides of the visible box at least 18 pt. At `figures` (`level` 2) the region candidates (vector art, a")
+  (comment "P7.G `figure`) are figures too, unless half of one lies in a table. `fg` = [cursor 0, then the candidate rows sorted")
+  (comment "by (page, top, left, row)]. Answers how many.")
   (let [^I32 n (quot (cells-len cand) AS_STRIDE)
         ^:mut ^I32 r 0
         ^:mut ^I32 j 0
@@ -663,7 +873,10 @@
             (do (set pw (page-w pages pgi))
                 (set ph (page-h pages pgi))
                 (if (and (>= (- x1 x0) AS_FIGURE_SIDE) (>= (- y1 y0) AS_FIGURE_SIDE)
-                         (== (as-ge (as-ia x0 y0 x1 y1 0 0 pw ph) (as-area 0 0 pw ph) AS_BIG) 0))
+                         (== (as-ge (as-ia x0 y0 x1 y1 0 0 pw ph) (as-area 0 0 pw ph) AS_BIG) 0)
+                         (or (!= (as-get cand r AC_KORI) AS_REGION)
+                             (and (== level 2)
+                                  (== (as-in-table nodes regions (as-get cand r AC_PAGE) x0 y0 x1 y1) 0))))
                   (do (comment "insert in order of (page, top, left, row)")
                       (set ins (+ cnt 1))
                       (set j 1)
@@ -732,25 +945,71 @@
   (node-set-attr-int nodes attrs n (fk-noasset) reason)
   (return 0))
 
+(defn ^I32 as-admit [^:mut ^Cells nodes ^:mut ^Cells attrs ^I32 n ^Cells cand ^I32 c ^Buf cbytes
+                     ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
+                     ^I32 maxbytes ^I32 totbytes ^:mut ^Cells st ^I32 dpi]
+  (comment "ADMISSION of candidate row `c` for node `n` (SPEC 10.11), in node-id order: its own reason when it has no pixels;")
+  (comment "else dedup by SHA-256 and length (one more use of the earlier asset), `asset-bytes`, and the first overflow of")
+  (comment "`assets-bytes`, which closes the budget. `st` holds the run's two cells at 5 and 6: [bytes admitted so far, budget")
+  (comment "closed] (cells 0..4 are the caller's); `dpi` is")
+  (comment "the asset's render resolution (0 for none). The node gets `fk-asset` or `fk-noasset`.")
+  (let [^:mut ^I32 id -1
+        ^I32 blen (as-get cand c AC_BLEN)
+        ^:mut ^I32 bs 0]
+    (if (!= (as-get cand c AC_STATUS) 0)
+      (do (as-set-noasset nodes attrs n (as-get cand c AC_STATUS))
+          (return 0)))
+    (set id (asset-find assets blen (as-get cand c (+ AC_SHA 0)) (as-get cand c (+ AC_SHA 1))
+                        (as-get cand c (+ AC_SHA 2)) (as-get cand c (+ AC_SHA 3))
+                        (as-get cand c (+ AC_SHA 4)) (as-get cand c (+ AC_SHA 5))
+                        (as-get cand c (+ AC_SHA 6)) (as-get cand c (+ AC_SHA 7))))
+    (if (and (< id 0) (> blen maxbytes))
+      (do (as-set-noasset nodes attrs n (nz-too-large))
+          (return 0)))
+    (if (and (< id 0) (or (== (cells-at st 6) 1) (> blen (- totbytes (cells-at st 5)))))
+      (do (cells-set st 6 1)
+          (as-set-noasset nodes attrs n (nz-budget))
+          (return 0)))
+    (if (< id 0)
+      (do (set bs (buf-len abytes))
+          (buf-append-blob abytes (buf-blob cbytes) (as-get cand c AC_BSTART) (+ (as-get cand c AC_BSTART) blen))
+          (cells-set st 5 (+ (cells-at st 5) blen))
+          (set id (asset-add assets (as-get cand c AC_TYPE) (as-get cand c AC_ORIGIN)
+                             (as-get cand c AC_FROM) (as-get cand c AC_OBJ) bs blen
+                             (as-get cand c AC_W) (as-get cand c AC_H) dpi (as-get cand c AC_FLAGS)))
+          (asset-set-sha assets id 0 (as-get cand c (+ AC_SHA 0)))
+          (asset-set-sha assets id 1 (as-get cand c (+ AC_SHA 1)))
+          (asset-set-sha assets id 2 (as-get cand c (+ AC_SHA 2)))
+          (asset-set-sha assets id 3 (as-get cand c (+ AC_SHA 3)))
+          (asset-set-sha assets id 4 (as-get cand c (+ AC_SHA 4)))
+          (asset-set-sha assets id 5 (as-get cand c (+ AC_SHA 5)))
+          (asset-set-sha assets id 6 (as-get cand c (+ AC_SHA 6)))
+          (asset-set-sha assets id 7 (as-get cand c (+ AC_SHA 7)))))
+    (use-add assets uses id n (as-get cand c AC_PAGE)
+             (as-get cand c (+ AC_VX0 0)) (as-get cand c (+ AC_VX0 1))
+             (as-get cand c (+ AC_VX0 2)) (as-get cand c (+ AC_VX0 3)))
+    (node-set-attr-int nodes attrs n (fk-asset) id)
+    (return 0)))
+
 (defn ^:pub ^I32 as-run [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells regions ^Cells cand ^Buf cbytes
                          ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
                          ^I32 maxbytes ^I32 totbytes ^I32 sigs ^:mut ^Cells box]
   (comment "The document unit's asset stage, in node-id order, over the figures and seals of the final tree: SPEC 10.11's source")
   (comment "per node, then admission. A node with pixels gets `fk-asset` (an asset id), else `fk-noasset` (an `nz`). The Model's")
-  (comment "`assets`, `uses` and `abytes` are written. `box` is 5 scratch cells. A figure made from a placement (`fk-image`")
-  (comment "names its candidate row) is that image; any other is matched by where it is. Answers the number of assets.")
+  (comment "`assets`, `uses` and `abytes` are written. `box` is 5 scratch cells, and 2 more it grows to (`as-admit`'s). A figure")
+  (comment "made from a placement (`fk-image` names its candidate row) is that image; any other is matched by where it is.")
+  (comment "Answers the number of assets. This is the level `images`; `figures` is `as-run-figures`.")
   (let [^I32 nn (node-count nodes)
         ^:mut ^I32 n 0
         ^:mut ^I32 kind 0
         ^:mut ^I32 sub 0
         ^:mut ^I32 c -1
         ^:mut ^I32 rc 0
-        ^:mut ^I32 attr -1
-        ^:mut ^I32 id -1
-        ^:mut ^I32 total 0
-        ^:mut ^I32 closed 0
-        ^:mut ^I32 blen 0
-        ^:mut ^I32 bs 0]
+        ^:mut ^I32 attr -1]
+    (while (< (cells-len box) 7)
+      (cells-push box 0))
+    (cells-set box 5 0)
+    (cells-set box 6 0)
     (while (< n nn)
       (do (set kind (node-kind nodes n))
           (if (or (== kind (nk-figure)) (== kind (nk-seal)))
@@ -774,37 +1033,346 @@
                       (if (and (< c 0) (> rc 0))
                         (as-set-noasset nodes attrs n rc))
                       (if (>= c 0)
-                        (do (if (!= (as-get cand c AC_STATUS) 0)
-                              (as-set-noasset nodes attrs n (as-get cand c AC_STATUS))
-                              (do (set blen (as-get cand c AC_BLEN))
-                                  (set id (asset-find assets blen (as-get cand c (+ AC_SHA 0)) (as-get cand c (+ AC_SHA 1))
-                                                      (as-get cand c (+ AC_SHA 2)) (as-get cand c (+ AC_SHA 3))
-                                                      (as-get cand c (+ AC_SHA 4)) (as-get cand c (+ AC_SHA 5))
-                                                      (as-get cand c (+ AC_SHA 6)) (as-get cand c (+ AC_SHA 7))))
-                                  (if (and (< id 0) (> blen maxbytes))
-                                    (as-set-noasset nodes attrs n (nz-too-large))
-                                    (do (if (and (< id 0) (or (== closed 1) (> blen (- totbytes total))))
-                                          (do (set closed 1)
-                                              (as-set-noasset nodes attrs n (nz-budget)))
-                                          (do (if (< id 0)
-                                                (do (set bs (buf-len abytes))
-                                                    (buf-append-blob abytes (buf-blob cbytes) (as-get cand c AC_BSTART) (+ (as-get cand c AC_BSTART) blen))
-                                                    (set total (+ total blen))
-                                                    (set id (asset-add assets (as-get cand c AC_TYPE) (as-get cand c AC_ORIGIN)
-                                                                       (as-get cand c AC_FROM) (as-get cand c AC_OBJ) bs blen
-                                                                       (as-get cand c AC_W) (as-get cand c AC_H) 0 (as-get cand c AC_FLAGS)))
-                                                    (asset-set-sha assets id 0 (as-get cand c (+ AC_SHA 0)))
-                                                    (asset-set-sha assets id 1 (as-get cand c (+ AC_SHA 1)))
-                                                    (asset-set-sha assets id 2 (as-get cand c (+ AC_SHA 2)))
-                                                    (asset-set-sha assets id 3 (as-get cand c (+ AC_SHA 3)))
-                                                    (asset-set-sha assets id 4 (as-get cand c (+ AC_SHA 4)))
-                                                    (asset-set-sha assets id 5 (as-get cand c (+ AC_SHA 5)))
-                                                    (asset-set-sha assets id 6 (as-get cand c (+ AC_SHA 6)))
-                                                    (asset-set-sha assets id 7 (as-get cand c (+ AC_SHA 7)))))
-                                              (use-add assets uses id n (as-get cand c AC_PAGE)
-                                                       (as-get cand c (+ AC_VX0 0)) (as-get cand c (+ AC_VX0 1))
-                                                       (as-get cand c (+ AC_VX0 2)) (as-get cand c (+ AC_VX0 3)))
-                                              (node-set-attr-int nodes attrs n (fk-asset) id)))))))))))))
+                        (as-admit nodes attrs n cand c cbytes assets uses abytes maxbytes totbytes box 0))))))
+          (set n (+ n 1))))
+    (return (asset-count assets))))
+
+;; ----------------------------------------------------------------------- the level `figures` (P8.5, D560-D563)
+;;
+;; THE ASSET UNIT. At `figures` the Engine runs this unit over the finished Model (the document unit made it), as one more plan/fulfil
+;; loop with its own answers and `BitmapSet` (SPEC 7.3, D089): `as-run-figures` is run from scratch on every answer so far, writes
+;; the `crop` and `decode` requests it has no answer to (ids `au-id`, `emon.plan`) and, when it wrote any, its results are the
+;; host's to discard (the host runs it on copies). With every answer in, it is `as-run` plus the sources `images` leaves out
+;; (SPEC 10.11, steps 2-4):
+;;
+;;   a whole image that what the reader saw is not alone (paint over it: the `overlaid` flag, a clip that is not a rectangle:
+;;   `clip-bbox`, a placement that is not one of the eight rectilinear ones: `transformed`), one that is `colorspace` or `codec`
+;;   at `images`, a page-sized one, a part of one, several, none (vector art, a region candidate)   ->  `rendered`; and
+;;   in a RASTER input (`rfrom` is the format's `afm`: its pages ARE the images)                      ->  `cropped` from its frame.
+;;
+;; A `rendered` asset is a `crop` (layer 0, with text: a chart's axis labels are part of the picture) of the region padded by
+;; 2 pt and clipped to the page, at `asset-dpi`, stepped down by 3/4 while over `asset-pixels`; under 36 dpi it is `too-large`;
+;; an answer that is not ok is `render`. A `cropped` asset is a rectangle of the frame's `decode` bitmap, floor and ceiling of
+;; the region's box in pixels, no resampling; a decode that is not ok is `codec`. An image in a PDF is never `cropped` here: its
+;; pixels need the host's `decode-img` (P6.1a), so a part of one is `rendered` (D563).
+
+(defn ^I32 as-text-over [^Cells nodes ^Cells regions ^I32 n ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "1 when a node with text that is not inside node `n` (the figure's own caption and labels are) has a region on the page")
+  (comment "that overlaps the box: body text drawn in the picture (SPEC 10.11's `text-overlap`).")
+  (let [^I32 nn (node-count nodes)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 a -1
+        ^:mut ^I32 r -1]
+    (while (< k nn)
+      (do (if (and (!= k n) (== (node-has-text nodes k) 1))
+            (do (set a (node-parent nodes k))
+                (while (and (>= a 0) (!= a n))
+                  (set a (node-parent nodes a)))
+                (if (< a 0)
+                  (do (set r (node-region-head nodes k))
+                      (while (>= r 0)
+                        (do (if (and (== (region-page regions r) page)
+                                     (> (as-ia x0 y0 x1 y1 (region-x0 regions r) (region-y0 regions r) (region-x1 regions r) (region-y1 regions r)) (i64 0)))
+                              (return 1))
+                            (set r (region-next regions r))))))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 as-caption-only [^Cells nodes ^Cells regions ^I32 n]
+  (comment "1 when the figure's first region is its caption's: a figure the caption pairing made out of nothing, whose place is the")
+  (comment "caption's, not a picture's. There is nothing to render or cut (`noasset: vector`, D562).")
+  (let [^I32 r (node-region-head nodes n)
+        ^:mut ^I32 k (node-first-child nodes n)
+        ^:mut ^I32 q -1]
+    (if (< r 0) (return 0))
+    (while (>= k 0)
+      (do (if (== (node-kind nodes k) (nk-caption))
+            (do (set q (node-region-head nodes k))
+                (if (and (>= q 0)
+                         (and (== (region-page regions q) (region-page regions r))
+                              (and (== (region-x0 regions q) (region-x0 regions r))
+                                   (and (== (region-y0 regions q) (region-y0 regions r))
+                                        (and (== (region-x1 regions q) (region-x1 regions r))
+                                             (== (region-y1 regions q) (region-y1 regions r)))))))
+                  (return 1))))
+          (set k (node-next nodes k))))
+    (return 0)))
+
+(defn ^:pub ^I32 as-render-rect [^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 pgw ^I32 pgh ^I32 dpi ^I32 maxpix ^:mut ^Cells rc]
+  (comment "The pixel rectangle of a render crop (SPEC 10.11): the region padded by 2 pt and held to the page, at d = `dpi`:")
+  (comment "px = floor(x0 d / 7200), px1 = ceil(x1 d / 7200), likewise y, pw = px1 - px; while pw * ph is over `maxpix`, d = d * 3 / 4")
+  (comment "(integer). The whole page is floor(w d / 7200 + 1/2) pixels a side (D245), and the rectangle is held inside it. Writes")
+  (comment "rc[0..4) = px py pw ph and answers d; 0 when d falls under 36, -1 when the rectangle is empty.")
+  (let [^:mut ^I32 d dpi
+        ^:mut ^I32 ax0 (- x0 AS_PAD)
+        ^:mut ^I32 ay0 (- y0 AS_PAD)
+        ^:mut ^I32 ax1 (+ x1 AS_PAD)
+        ^:mut ^I32 ay1 (+ y1 AS_PAD)
+        ^:mut ^I32 px 0
+        ^:mut ^I32 py 0
+        ^:mut ^I32 px1 0
+        ^:mut ^I32 py1 0
+        ^:mut ^I32 wpx 0
+        ^:mut ^I32 hpx 0
+        ^:mut ^I32 done 0]
+    (if (< ax0 0) (set ax0 0))
+    (if (< ay0 0) (set ay0 0))
+    (if (> ax1 pgw) (set ax1 pgw))
+    (if (> ay1 pgh) (set ay1 pgh))
+    (if (or (<= ax1 ax0) (<= ay1 ay0)) (return -1))
+    (while (== done 0)
+      (do (set px (i32 (quot (mul64 (i64 ax0) (i64 d)) (i64 7200))))
+          (set py (i32 (quot (mul64 (i64 ay0) (i64 d)) (i64 7200))))
+          (set px1 (i32 (quot (add64 (mul64 (i64 ax1) (i64 d)) (i64 7199)) (i64 7200))))
+          (set py1 (i32 (quot (add64 (mul64 (i64 ay1) (i64 d)) (i64 7199)) (i64 7200))))
+          (set wpx (i32 (quot (add64 (mul64 (i64 pgw) (i64 d)) (i64 3600)) (i64 7200))))
+          (set hpx (i32 (quot (add64 (mul64 (i64 pgh) (i64 d)) (i64 3600)) (i64 7200))))
+          (if (< wpx 1) (set wpx 1))
+          (if (< hpx 1) (set hpx 1))
+          (if (> px1 wpx) (set px1 wpx))
+          (if (> py1 hpx) (set py1 hpx))
+          (if (>= px px1) (set px (- px1 1)))
+          (if (>= py py1) (set py (- py1 1)))
+          (if (> (mul64 (i64 (- px1 px)) (i64 (- py1 py))) (i64 maxpix))
+            (do (set d (quot (* d 3) 4))
+                (if (< d AS_MIN_DPI) (return 0)))
+            (set done 1))))
+    (cells-set rc 0 px)
+    (cells-set rc 1 py)
+    (cells-set rc 2 (- px1 px))
+    (cells-set rc 3 (- py1 py))
+    (return d)))
+
+(defn ^I32 as-emit-row [^:mut ^Cells cand ^I32 row ^:mut ^Buf cbytes ^Bitmap pic ^I32 maxpix ^I32 dpi100
+                        ^I32 flags ^I32 afrom ^I32 origin
+                        ^:mut ^Cells ws ^:mut ^Buf z ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells rec]
+  (comment "The canonical PNG of `pic` (gray or RGB; the box mean by the smallest k that fits `maxpix`, flag `scaled`) appended to")
+  (comment "`cbytes`, and candidate row `row` made its asset: status 0, type, bytes, hash, size, flags, `from`, origin. `rows`,")
+  (comment "`tmp`, `rec` are scratch; `dpi100` is the pHYs (0 none).")
+  (let [^I32 w (bitmap-w pic)
+        ^I32 h (bitmap-h pic)
+        ^I32 ch (bitmap-channels pic)
+        ^I32 start (buf-len cbytes)
+        ^:mut ^I32 fl flags
+        ^:mut ^I32 ow w
+        ^:mut ^I32 oh h
+        ^:mut ^I32 k 1
+        ^:mut ^I32 i 0
+        ^Bitmap al (bitmap-new 1 1 1)]
+    (cells-drop rec 0)
+    (while (< i 96)
+      (do (cells-push rec 0)
+          (set i (+ i 1))))
+    (if (> (mul64 (i64 w) (i64 h)) (i64 maxpix))
+      (do (set k (as-scale-k w h maxpix))
+          (set fl (bit-or fl (afg-scaled)))
+          (let [^Bitmap pic2 (bitmap-new (quot (+ w (- k 1)) k) (quot (+ h (- k 1)) k) ch)]
+            (as-scale-into pic pic2 k)
+            (as-png ws cbytes z rows tmp rec pic2 al 0 0 dpi100)
+            (set ow (bitmap-w pic2))
+            (set oh (bitmap-h pic2))))
+      (as-png ws cbytes z rows tmp rec pic al 0 0 dpi100))
+    (as-set cand row AC_STATUS 0)
+    (as-set cand row AC_TYPE (amt-png))
+    (as-set cand row AC_BSTART start)
+    (as-set cand row AC_BLEN (- (buf-len cbytes) start))
+    (as-sha cbytes start (- (buf-len cbytes) start) tmp cand row)
+    (as-set cand row AC_W ow)
+    (as-set cand row AC_H oh)
+    (as-set cand row AC_FLAGS fl)
+    (as-set cand row AC_FROM afrom)
+    (as-set cand row AC_ORIGIN origin)
+    (return 0)))
+
+(defn ^I32 as-do-render [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells regions ^Cells pages
+                         ^:mut ^Cells cand ^:mut ^Buf cbytes ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
+                         ^I32 maxbytes ^I32 totbytes ^I32 n ^I32 pg ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                         ^I32 dpi ^I32 maxpix ^I32 input ^Cells ans ^:mut ^Cells rq ^BitmapSet bms
+                         ^:mut ^Cells ws ^:mut ^Buf z ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells rec ^:mut ^Cells box]
+  (comment "Node `n`'s render: its `crop` request when no answer is in (answers 1), else the asset, or the node's reason (answers 0).")
+  (comment "`box` is the run's scratch: cells 0..3 are the rectangle's, 5 and 6 are `as-admit`'s.")
+  (let [^I32 pgi (- pg 1)
+        ^I32 d (as-render-rect x0 y0 x1 y1 (page-w pages pgi) (page-h pages pgi) dpi maxpix box)
+        ^I32 id (au-id n)
+        ^I32 a (an-find ans id)]
+    (if (== d 0)
+      (do (as-set-noasset nodes attrs n (nz-too-large))
+          (return 0)))
+    (if (< d 0)
+      (do (as-set-noasset nodes attrs n (nz-render))
+          (return 0)))
+    (if (< a 0)
+      (do (if (< (rec-find rq id) 0)
+            (rq-crop rq id input pgi d 0 (cells-at box 0) (cells-at box 1) (cells-at box 2) (cells-at box 3)))
+          (return 1)))
+    (if (== (an-ok ans a) 0)
+      (do (as-set-noasset nodes attrs n (nz-render))
+          (return 0)))
+    (let [^Bitmap pic (bms-get bms id)]
+      (if (or (< (bitmap-w pic) 1) (< (bitmap-h pic) 1))
+        (do (as-set-noasset nodes attrs n (nz-render))
+            (return 0)))
+      (let [^I32 row (as-new-row cand pg x0 y0 x1 y1)
+            ^:mut ^I32 fl 0
+            ^:mut ^I32 tx0 (- x0 AS_PAD)
+            ^:mut ^I32 ty0 (- y0 AS_PAD)
+            ^:mut ^I32 tx1 (+ x1 AS_PAD)
+            ^:mut ^I32 ty1 (+ y1 AS_PAD)]
+        (if (< tx0 0) (set tx0 0))
+        (if (< ty0 0) (set ty0 0))
+        (if (> tx1 (page-w pages pgi)) (set tx1 (page-w pages pgi)))
+        (if (> ty1 (page-h pages pgi)) (set ty1 (page-h pages pgi)))
+        (if (== (as-text-over nodes regions n pg tx0 ty0 tx1 ty1) 1) (set fl (afg-text-overlap)))
+        (as-emit-row cand row cbytes pic maxpix (* d 100) fl (afm-render) (ao-rendered) ws z rows tmp rec)
+        (as-admit nodes attrs n cand row cbytes assets uses abytes maxbytes totbytes box d)
+        (return 0)))))
+
+(defn ^I32 as-do-crop [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells pages
+                       ^:mut ^Cells cand ^:mut ^Buf cbytes ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
+                       ^I32 maxbytes ^I32 totbytes ^I32 n ^I32 pg ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
+                       ^I32 maxpix ^I32 input ^I32 nbytes ^I32 rfrom ^Cells ans ^:mut ^Cells rq ^BitmapSet bms
+                       ^:mut ^Cells ws ^:mut ^Buf z ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells rec ^:mut ^Cells box]
+  (comment "Node `n` cut from its raster frame: the frame's `decode` request when no answer is in (answers 1), else the rectangle of")
+  (comment "the decoded pixels the region maps to (floor at the low edge, ceiling at the high, exact samples), or the reason.")
+  (let [^I32 pgi (- pg 1)
+        ^I32 id (au-id (+ (au-decode) pgi))
+        ^I32 a (an-find ans id)]
+    (if (< a 0)
+      (do (if (< (rec-find rq id) 0)
+            (rq-decode rq id input 0 nbytes (flt-none) pgi))
+          (return 1)))
+    (if (== (an-ok ans a) 0)
+      (do (as-set-noasset nodes attrs n (nz-codec))
+          (return 0)))
+    (let [^Bitmap src (bms-get bms id)
+          ^I32 sw (bitmap-w src)
+          ^I32 sh (bitmap-h src)
+          ^I32 pw (page-w pages pgi)
+          ^I32 ph (page-h pages pgi)]
+      (if (or (< sw 1) (or (< sh 1) (or (< pw 1) (< ph 1))))
+        (do (as-set-noasset nodes attrs n (nz-codec))
+            (return 0)))
+      (let [^:mut ^I32 cx0 (i32 (quot (mul64 (i64 x0) (i64 sw)) (i64 pw)))
+            ^:mut ^I32 cy0 (i32 (quot (mul64 (i64 y0) (i64 sh)) (i64 ph)))
+            ^:mut ^I32 cx1 (i32 (quot (add64 (mul64 (i64 x1) (i64 sw)) (i64 (- pw 1))) (i64 pw)))
+            ^:mut ^I32 cy1 (i32 (quot (add64 (mul64 (i64 y1) (i64 sh)) (i64 (- ph 1))) (i64 ph)))
+            ^:mut ^I32 ch 1
+            ^:mut ^I32 x 0
+            ^:mut ^I32 y 0
+            ^:mut ^I32 c 0]
+        (if (< cx0 0) (set cx0 0))
+        (if (< cy0 0) (set cy0 0))
+        (if (> cx1 sw) (set cx1 sw))
+        (if (> cy1 sh) (set cy1 sh))
+        (if (or (<= cx1 cx0) (<= cy1 cy0))
+          (do (as-set-noasset nodes attrs n (nz-part))
+              (return 0)))
+        (if (>= (bitmap-channels src) 3) (set ch 3))
+        (let [^Bitmap pic (bitmap-new (- cx1 cx0) (- cy1 cy0) ch)
+              ^I32 row (as-new-row cand pg x0 y0 x1 y1)]
+          (while (< y (- cy1 cy0))
+            (do (set x 0)
+                (while (< x (- cx1 cx0))
+                  (do (set c 0)
+                      (while (< c ch)
+                        (do (bitmap-set-u8 pic x y c (bitmap-u8 src (+ cx0 x) (+ cy0 y) c))
+                            (set c (+ c 1))))
+                      (set x (+ x 1))))
+                (set y (+ y 1))))
+          (as-emit-row cand row cbytes pic maxpix (* (page-dpi pages pgi) 100) 0 rfrom (ao-cropped) ws z rows tmp rec)
+          (as-admit nodes attrs n cand row cbytes assets uses abytes maxbytes totbytes box 0)
+          (return 0))))))
+
+(defn ^:pub ^I32 as-run-figures [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells regions ^Cells pages
+                                 ^:mut ^Cells cand ^:mut ^Buf cbytes
+                                 ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
+                                 ^I32 maxbytes ^I32 totbytes ^I32 sigs ^I32 dpi ^I32 maxpix ^I32 input ^I32 nbytes ^I32 rfrom
+                                 ^Cells ans ^:mut ^Cells rq ^BitmapSet bms
+                                 ^:mut ^Cells ws ^:mut ^Buf z ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells rec ^:mut ^Cells box]
+  (comment "The asset stage at the level `figures`, in node-id order: SPEC 10.11's sources for every figure and seal (see above).")
+  (comment "`dpi` and `maxpix` are `asset-dpi` and `asset-pixels`; `input` and `nbytes` the input's index and length (a `decode`")
+  (comment "asks for the whole file); `rfrom` is 0 for a PDF and the `afm` of the format for a raster input (its frames are the")
+  (comment "images, so every region that is not rendered is `cropped`); `ans` `rq` `bms` are the unit's. It answers the number of")
+  (comment "assets; when it WROTE REQUESTS (`rq` is not empty) its results are meaningless and the host must run it again, from")
+  (comment "copies, on the answers. `ws z rows tmp rec` and `box` (at least 16 cells) are scratch.")
+  (let [^I32 nn (node-count nodes)
+        ^:mut ^I32 n 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 sub 0
+        ^:mut ^I32 c -1
+        ^:mut ^I32 rc 0
+        ^:mut ^I32 attr -1
+        ^:mut ^I32 src 0
+        ^:mut ^I32 cst 0
+        ^:mut ^I32 rpg 0
+        ^:mut ^I32 rx0 0
+        ^:mut ^I32 ry0 0
+        ^:mut ^I32 rx1 0
+        ^:mut ^I32 ry1 0
+        ^:mut ^I32 have 0
+        ^:mut ^I32 capo 0
+        ^:mut ^I32 m 0]
+    (while (< (cells-len box) 16)
+      (cells-push box 0))
+    (cells-set box 5 0)
+    (cells-set box 6 0)
+    (while (< n nn)
+      (do (set kind (node-kind nodes n))
+          (if (or (== kind (nk-figure)) (== kind (nk-seal)))
+            (do (set sub (node-sub nodes n))
+                (set c -1)
+                (set rc 0)
+                (set src 0)
+                (if (== kind (nk-seal))
+                  (do (if (== sub (sl-digital-signature)) (set rc -1))
+                      (if (and (or (== sub (sl-signature)) (== sub (sl-initials))) (== sigs 0))
+                        (do (as-set-noasset nodes attrs n (nz-withheld))
+                            (set rc -1)))))
+                (if (== rc 0)
+                  (do (set have (as-first-region nodes regions n box))
+                      (set rpg (cells-at box 0))
+                      (set rx0 (cells-at box 1))
+                      (set ry0 (cells-at box 2))
+                      (set rx1 (cells-at box 3))
+                      (set ry1 (cells-at box 4))
+                      (set attr (node-attr nodes attrs n (fk-image)))
+                      (set capo 0)
+                      (if (and (< attr 0) (== have 1))
+                        (set capo (as-caption-only nodes regions n)))
+                      (if (>= attr 0)
+                        (set c (attr-value attrs attr))
+                        (if (and (== have 1) (== capo 0))
+                          (do (set m (as-match cand rpg rx0 ry0 rx1 ry1 box))
+                              (if (== m 0) (set c (cells-at box 0)))
+                              (if (< m 0) (set rc (- 0 m))))
+                          (set rc (nz-vector))))
+                      (comment "the source: 1 the candidate's own image, 2 rendered, 3 cropped (a raster's), 0 none (`rc` says why)")
+                      (if (>= c 0)
+                        (do (set cst (as-get cand c AC_STATUS))
+                            (if (== (as-get cand c AC_KORI) AS_REGION)
+                              (set src 2)
+                              (if (== cst 0)
+                                (if (!= (bit-and (as-get cand c AC_FLAGS) (+ (afg-overlaid) (+ (afg-clip-bbox) (afg-transformed)))) 0)
+                                  (set src 2)
+                                  (set src 1))
+                                (if (or (== cst (nz-part)) (or (== cst (nz-colorspace)) (== cst (nz-codec))))
+                                  (set src 2)
+                                  (set rc cst)))))
+                        (if (and (> rc 0) (and (> have 0) (== capo 0))) (set src 2)))
+                      (if (and (== have 0) (> src 1))
+                        (do (set src 0)
+                            (set rc (nz-vector))))
+                      (if (and (== src 2) (> rfrom 0)) (set src 3))
+                      (if (and (== src 0) (> rc 0))
+                        (as-set-noasset nodes attrs n rc))
+                      (if (== src 1)
+                        (as-admit nodes attrs n cand c cbytes assets uses abytes maxbytes totbytes box 0))
+                      (if (== src 2)
+                        (as-do-render nodes attrs regions pages cand cbytes assets uses abytes maxbytes totbytes n rpg rx0 ry0 rx1 ry1
+                                      dpi maxpix input ans rq bms ws z rows tmp rec box))
+                      (if (== src 3)
+                        (as-do-crop nodes attrs pages cand cbytes assets uses abytes maxbytes totbytes n rpg rx0 ry0 rx1 ry1
+                                    maxpix input nbytes rfrom ans rq bms ws z rows tmp rec box))))))
           (set n (+ n 1))))
     (return (asset-count assets))))
 

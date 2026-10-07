@@ -398,7 +398,7 @@ func TestTheProvisionalFiguresAreFoundAndOrderedByTheirTop(emonT *testing.T) {
 	atCand(cand, 1, 0, 0, 61200, 79200, 2, 0, 0, 4)
 	atCand(cand, 1, 30000, 3000, 50000, 20000, 0, 0, 0, 5)
 	atCand(cand, 1, 5000, 3000, 25000, 20000, 0, 0, 0, 6)
-	port.AssertEq(emonT, asset.AsFigureRows(cand, pages, fg), 4, "four are figures")
+	port.AssertEq(emonT, asset.AsFigureRows(cand, pages, nodes, regions, 1, fg), 4, "four are figures")
 	port.AssertEq(emonT, port.CellsAt(fg, 0), 0, "the cursor is at the start")
 	port.AssertEq(emonT, port.CellsAt(fg, 1), 5, "page 1, top 3000, left first")
 	port.AssertEq(emonT, port.CellsAt(fg, 2), 4, "then the one to its right")
@@ -440,7 +440,7 @@ func TestAFigureGoesWhereItsTopEdgeFallsAmongTheBlocks(emonT *testing.T) {
 	atCand(cand, 1, 7200, 20000, 30000, 30000, 0, 0, 0, 1)
 	atCand(cand, 1, 7200, 50000, 30000, 60000, 0, 0, 0, 2)
 	atCand(cand, 1, 7200, 95000, 30000, 100000, 0, 0, 0, 3)
-	port.AssertEq(emonT, asset.AsFigureRows(cand, pages, fg), 3, "three figures")
+	port.AssertEq(emonT, asset.AsFigureRows(cand, pages, nodes, regions, 1, fg), 3, "three figures")
 	restruct.RsFigures(nodes, attrs, regions, nn, na, nr, nm, cand, fg)
 	port.AssertEq(emonT, model.NodeCount(nn), 9, "nine nodes: the six and three figures")
 	// preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE
@@ -584,11 +584,11 @@ func atRun(src *port.Src, cand *port.Cells, cbytes *port.Buf, pages *port.Cells,
 	if pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0 {
 		return 2
 	}
-	if asset.AsCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0 {
+	if asset.AsCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, 1, port.NewCells(), cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0 {
 		return 3
 	}
 	para.PaPages(pg, pages)
-	asset.AsFigureRows(cand, pages, fg)
+	asset.AsFigureRows(cand, pages, port.NewCells(), port.NewCells(), 1, fg)
 	return 0
 }
 

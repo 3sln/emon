@@ -374,7 +374,7 @@ public static class Assettest {
         AtCand(cand, 1, 0, 0, 61200, 79200, 2, 0, 0, 4);
         AtCand(cand, 1, 30000, 3000, 50000, 20000, 0, 0, 0, 5);
         AtCand(cand, 1, 5000, 3000, 25000, 20000, 0, 0, 0, 6);
-        emon.Testport.AssertEq(Asset.AsFigureRows(cand, pages, fg), 4, "four are figures");
+        emon.Testport.AssertEq(Asset.AsFigureRows(cand, pages, nodes, regions, 1, fg), 4, "four are figures");
         emon.Testport.AssertEq(emon.Port.CellsAt(fg, 0), 0, "the cursor is at the start");
         emon.Testport.AssertEq(emon.Port.CellsAt(fg, 1), 5, "page 1, top 3000, left first");
         emon.Testport.AssertEq(emon.Port.CellsAt(fg, 2), 4, "then the one to its right");
@@ -415,7 +415,7 @@ public static class Assettest {
         AtCand(cand, 1, 7200, 20000, 30000, 30000, 0, 0, 0, 1);
         AtCand(cand, 1, 7200, 50000, 30000, 60000, 0, 0, 0, 2);
         AtCand(cand, 1, 7200, 95000, 30000, 100000, 0, 0, 0, 3);
-        emon.Testport.AssertEq(Asset.AsFigureRows(cand, pages, fg), 3, "three figures");
+        emon.Testport.AssertEq(Asset.AsFigureRows(cand, pages, nodes, regions, 1, fg), 3, "three figures");
         Restruct.RsFigures(nodes, attrs, regions, nn, na, nr, nm, cand, fg);
         emon.Testport.AssertEq(Model.NodeCount(nn), 9, "nine nodes: the six and three figures");
         // preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE
@@ -552,11 +552,11 @@ public static class Assettest {
         if (Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0) {
             return 2;
         }
-        if (Asset.AsCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0) {
+        if (Asset.AsCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, 1, emon.Port.NewCells(), cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0) {
             return 3;
         }
         Para.PaPages(pg, pages);
-        Asset.AsFigureRows(cand, pages, fg);
+        Asset.AsFigureRows(cand, pages, emon.Port.NewCells(), emon.Port.NewCells(), 1, fg);
         return 0;
     }
     internal static int AtCandsRow(int emonT, byte[] rows, int pos, int e, int line) {

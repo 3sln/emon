@@ -385,7 +385,7 @@
     (at-cand cand 1 0 0 61200 79200 2 0 0 4)
     (at-cand cand 1 30000 3000 50000 20000 0 0 0 5)
     (at-cand cand 1 5000 3000 25000 20000 0 0 0 6)
-    (assert-eq (as-figure-rows cand pages fg) 4 "four are figures")
+    (assert-eq (as-figure-rows cand pages nodes regions 1 fg) 4 "four are figures")
     (assert-eq (cells-at fg 0) 0 "the cursor is at the start")
     (assert-eq (cells-at fg 1) 5 "page 1, top 3000, left first")
     (assert-eq (cells-at fg 2) 4 "then the one to its right")
@@ -425,7 +425,7 @@
     (at-cand cand 1 7200 20000 30000 30000 0 0 0 1)
     (at-cand cand 1 7200 50000 30000 60000 0 0 0 2)
     (at-cand cand 1 7200 95000 30000 100000 0 0 0 3)
-    (assert-eq (as-figure-rows cand pages fg) 3 "three figures")
+    (assert-eq (as-figure-rows cand pages nodes regions 1 fg) 3 "three figures")
     (rs-figures nodes attrs regions nn na nr nm cand fg)
     (assert-eq (node-count nn) 9 "nine nodes: the six and three figures")
     (comment "preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE")
@@ -555,9 +555,9 @@
         ^Buf z (new-buf)]
     (if (!= (pd-open src ar dc a b st) 0) (return 1))
     (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx) 0) (return 2))
-    (if (!= (as-collect src ar dc a b st im pa gl pg 4194304 33554432 cand cbytes o2 rec mrec smp msmp data rows tmp ws z) 0) (return 3))
+    (if (!= (as-collect src ar dc a b st im pa gl pg 4194304 33554432 1 (new-cells) cand cbytes o2 rec mrec smp msmp data rows tmp ws z) 0) (return 3))
     (pa-pages pg pages)
-    (as-figure-rows cand pages fg)
+    (as-figure-rows cand pages (new-cells) (new-cells) 1 fg)
     (return 0)))
 
 (defn ^I32 at-cands-row [^TestT emon-t ^Blob rows ^I32 pos ^I32 e ^I32 line]

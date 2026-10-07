@@ -123,6 +123,13 @@
 (defn ^:pub ^I32 pi-decode [] (return 4))
 (defn ^:pub ^I32 pi-ocr [] (return 16))
 
+;; THE ASSET UNIT (P8.5, D560; SPEC 10.11): at the level `figures` the Engine runs one more unit after the document unit, over
+;; the finished Model, whose requests are the `crop`s that render a figure's region (`rendered`) and the `decode`s of the frames a
+;; figure is cut from (`cropped`). Its ids are `au-id k`, above every page unit's and below `view-base`: `k` is the figure's node
+;; id for a crop, and `au-decode + frame` for the decode of a raster frame. Its answers are its own, like a page unit's.
+(defn ^:pub ^I32 au-id [^I32 k] (return (+ 8388608 k)))
+(defn ^:pub ^I32 au-decode [] (return 4194304))
+
 ;; `decode`'s filter: what the requested span is encoded as (PDF image filters).
 (defn ^:pub ^I32 flt-none [] (return 0))
 (defn ^:pub ^I32 flt-dct [] (return 1))

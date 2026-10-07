@@ -14,6 +14,14 @@ public static class Asset {
     internal const int AsMaxprod = 4096;
     internal const int AsStride = 32;
     internal const int AsOverlayWork = 100000000;
+    internal const int AsPad = 200;
+    internal const int AsMinDpi = 36;
+    internal const int AsVmin = 2;
+    internal const int AsVside = 1800;
+    internal const int AsVgap = 200;
+    internal const int AsVwork = 50000000;
+    internal const int AsVover = 500;
+    internal const int AsRegion = -2;
     internal const int AcPage = 0;
     internal const int AcBx0 = 1;
     internal const int AcVx0 = 5;
@@ -180,7 +188,7 @@ public static class Asset {
         }
         return s;
     }
-    internal static int AsPng(emon.Port.Cells ws, emon.Port.Buf cbytes, emon.Port.Buf z, emon.Port.Cells row, emon.Port.Cells hs, emon.Port.Cells rec, emon.Port.Bitmap pic, emon.Port.Bitmap al, int alpha, int bilevel) {
+    internal static int AsPng(emon.Port.Cells ws, emon.Port.Buf cbytes, emon.Port.Buf z, emon.Port.Cells row, emon.Port.Cells hs, emon.Port.Cells rec, emon.Port.Bitmap pic, emon.Port.Bitmap al, int alpha, int bilevel, int dpi100) {
         // The canonical PNG of the pixels (`emon.png`), appended to `cbytes`. Gray 8 bits (1 for a bilevel image), RGB, a
         // palette for an Indexed image with no alpha (PLTE the image's palette, the pixel's index the first entry of that
         // colour), gray + alpha, RGBA. `hs` (2,048 cells), `row` are scratch.
@@ -250,7 +258,7 @@ public static class Asset {
             emon.Port.CellsPush(row, 255);
             i += 1;
         }
-        Png.PngBegin(ws, cbytes, z, w, h, ct, depth, 0, row, npal, 0);
+        Png.PngBegin(ws, cbytes, z, w, h, ct, depth, dpi100, row, npal, 0);
         while (y < h) {
             emon.Port.CellsDrop(row, 0);
             x = 0;
@@ -539,7 +547,7 @@ public static class Asset {
             emon.Port.Bitmap al2 = emon.Port.BitmapNew((ow + (k - 1)) / k, (oh + (k - 1)) / k, 1);
             AsScaleInto(pic, pic2, k);
             AsScaleInto(al, al2, k);
-            AsPng(ws, cbytes, z, rows, tmp, rec, pic2, al2, alpha, 0);
+            AsPng(ws, cbytes, z, rows, tmp, rec, pic2, al2, alpha, 0, 0);
             w = emon.Port.BitmapW(pic2);
             h = emon.Port.BitmapH(pic2);
         } else {
@@ -547,7 +555,7 @@ public static class Asset {
             if ((Pdfimage.PiGet(rec, Pdfimage.PiFBpc()) == 1) && (Pdfimage.PiGet(rec, Pdfimage.PiFClass()) == 1)) {
                 bil = 1;
             }
-            AsPng(ws, cbytes, z, rows, tmp, rec, pic, al, alpha, bil);
+            AsPng(ws, cbytes, z, rows, tmp, rec, pic, al, alpha, bil, 0);
             w = ow;
             h = oh;
         }
@@ -601,7 +609,201 @@ public static class Asset {
         }
         return 0;
     }
-    public static int AsCollect(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells im, emon.Port.Cells pa, emon.Port.Cells gl, emon.Port.Cells pg, int maxpix, int totbytes, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells @out, emon.Port.Cells rec, emon.Port.Cells mrec, emon.Port.Cells smp, emon.Port.Cells msmp, emon.Port.Cells data, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells ws, emon.Port.Buf z) {
+    internal static int AsNewRow(emon.Port.Cells cand, int page, int x0, int y0, int x1, int y1) {
+        // Append a candidate row (all zero but what an asset needs) for a region of `page` and answer its index. The visible box
+        // is the region's.
+        int row = emon.Port.CellsLen(cand) / AsStride;
+        int f = 0;
+        while (f < AsStride) {
+            emon.Port.CellsPush(cand, 0);
+            f += 1;
+        }
+        AsSet(cand, row, AcPage, page);
+        AsSet(cand, row, AcBx0, x0);
+        AsSet(cand, row, AcBx0 + 1, y0);
+        AsSet(cand, row, AcBx0 + 2, x1);
+        AsSet(cand, row, AcBx0 + 3, y1);
+        AsSet(cand, row, AcVx0, x0);
+        AsSet(cand, row, AcVx0 + 1, y0);
+        AsSet(cand, row, AcVx0 + 2, x1);
+        AsSet(cand, row, AcVx0 + 3, y1);
+        AsSet(cand, row, AcObj, -1);
+        AsSet(cand, row, AcFrom, Model.AfmRaw());
+        AsSet(cand, row, AcOrigin, Model.AoDecoded());
+        AsSet(cand, row, AcType, Model.AmtPng());
+        AsSet(cand, row, AcKori, -1);
+        return row;
+    }
+    public static int AsRegionAdd(emon.Port.Cells cand, int page, int x0, int y0, int x1, int y1) {
+        // THE HOOK for a region another stage finds (P7.G's tracer-fed `figure` regions, P8.1): a candidate row that is a
+        // region, to be rendered. Answers its row.
+        int row = AsNewRow(cand, page, x0, y0, x1, y1);
+        AsSet(cand, row, AcKori, AsRegion);
+        AsSet(cand, row, AcStatus, Model.NzVector());
+        return row;
+    }
+    internal static int AsUnderImage(emon.Port.Cells cand, int page, int x0, int y0, int x1, int y1) {
+        // 1 when at least `AS_VOVER` per mille of the box lies under the visible box of one image's candidate row of the page.
+        int n = emon.Port.CellsLen(cand) / AsStride;
+        long area = AsArea(x0, y0, x1, y1);
+        int r = 0;
+        if (area <= ((long) 0)) {
+            return 0;
+        }
+        while (r < n) {
+            if ((AsGet(cand, r, AcPage) == page) && (AsGet(cand, r, AcKori) >= -1)) {
+                if (AsGe(AsIa(x0, y0, x1, y1, AsGet(cand, r, AcVx0), AsGet(cand, r, AcVx0 + 1), AsGet(cand, r, AcVx0 + 2), AsGet(cand, r, AcVx0 + 3)), area, AsVover) == 1) {
+                    return 1;
+                }
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    internal static int AsCluAdd(emon.Port.Cells cl, int x0, int y0, int x1, int y1) {
+        // Add the box of one path to the clusters `cl` (six cells each: box, paths, alive): every live cluster within `AS_VGAP` of
+        // the box, which grows as it takes them, joins it, into the first such cluster's slot. Answers how many it looked at.
+        int nc = emon.Port.CellsLen(cl) / 6;
+        int bx0 = x0;
+        int by0 = y0;
+        int bx1 = x1;
+        int by1 = y1;
+        int cnt = 1;
+        int slot = -1;
+        int changed = 1;
+        int seen = 0;
+        int i = 0;
+        int b = 0;
+        while (changed == 1) {
+            changed = 0;
+            i = 0;
+            while (i < nc) {
+                b = i * 6;
+                seen += 1;
+                if ((emon.Port.CellsAt(cl, b + 5) == 1) && ((emon.Port.CellsAt(cl, b) <= (bx1 + AsVgap)) && ((emon.Port.CellsAt(cl, b + 2) >= (bx0 - AsVgap)) && ((emon.Port.CellsAt(cl, b + 1) <= (by1 + AsVgap)) && (emon.Port.CellsAt(cl, b + 3) >= (by0 - AsVgap)))))) {
+                    if (emon.Port.CellsAt(cl, b) < bx0) {
+                        bx0 = emon.Port.CellsAt(cl, b);
+                    }
+                    if (emon.Port.CellsAt(cl, b + 1) < by0) {
+                        by0 = emon.Port.CellsAt(cl, b + 1);
+                    }
+                    if (emon.Port.CellsAt(cl, b + 2) > bx1) {
+                        bx1 = emon.Port.CellsAt(cl, b + 2);
+                    }
+                    if (emon.Port.CellsAt(cl, b + 3) > by1) {
+                        by1 = emon.Port.CellsAt(cl, b + 3);
+                    }
+                    cnt += emon.Port.CellsAt(cl, b + 4);
+                    emon.Port.CellsSet(cl, b + 5, 0);
+                    if (slot < 0) {
+                        slot = i;
+                    }
+                    changed = 1;
+                }
+                i += 1;
+            }
+        }
+        if (slot < 0) {
+            emon.Port.CellsPush(cl, bx0);
+            emon.Port.CellsPush(cl, by0);
+            emon.Port.CellsPush(cl, bx1);
+            emon.Port.CellsPush(cl, by1);
+            emon.Port.CellsPush(cl, cnt);
+            emon.Port.CellsPush(cl, 1);
+        } else {
+            b = slot * 6;
+            emon.Port.CellsSet(cl, b, bx0);
+            emon.Port.CellsSet(cl, b + 1, by0);
+            emon.Port.CellsSet(cl, b + 2, bx1);
+            emon.Port.CellsSet(cl, b + 3, by1);
+            emon.Port.CellsSet(cl, b + 4, cnt);
+            emon.Port.CellsSet(cl, b + 5, 1);
+        }
+        return seen;
+    }
+    internal static int AsFlush(emon.Port.Cells cand, emon.Port.Cells cl, int page, emon.Port.Cells pg) {
+        // The live clusters of `page` that are figures: at least `AS_VMIN` paths, both sides at least 18 pt, under 800 per mille of
+        // the page, and not mostly under an image (which is the figure then): each a region candidate.
+        int nc = emon.Port.CellsLen(cl) / 6;
+        int i = 0;
+        int b = 0;
+        int pw = 0;
+        int ph = 0;
+        if ((page < 1) || (page > Pdfdoc.PdPgCount(pg))) {
+            return 0;
+        }
+        pw = AsPageW(pg, page - 1);
+        ph = AsPageH(pg, page - 1);
+        while (i < nc) {
+            b = i * 6;
+            if ((emon.Port.CellsAt(cl, b + 5) == 1) && (emon.Port.CellsAt(cl, b + 4) >= AsVmin)) {
+                if (((emon.Port.CellsAt(cl, b + 2) - emon.Port.CellsAt(cl, b)) >= AsVside) && (((emon.Port.CellsAt(cl, b + 3) - emon.Port.CellsAt(cl, b + 1)) >= AsVside) && (AsGe(AsIa(emon.Port.CellsAt(cl, b), emon.Port.CellsAt(cl, b + 1), emon.Port.CellsAt(cl, b + 2), emon.Port.CellsAt(cl, b + 3), 0, 0, pw, ph), AsArea(0, 0, pw, ph), AsBig) == 0))) {
+                    if (AsUnderImage(cand, page, emon.Port.CellsAt(cl, b), emon.Port.CellsAt(cl, b + 1), emon.Port.CellsAt(cl, b + 2), emon.Port.CellsAt(cl, b + 3)) == 0) {
+                        AsRegionAdd(cand, page, emon.Port.CellsAt(cl, b), emon.Port.CellsAt(cl, b + 1), emon.Port.CellsAt(cl, b + 2), emon.Port.CellsAt(cl, b + 3));
+                    }
+                }
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int AsVectorRegions(emon.Port.Cells pa, emon.Port.Cells pg, emon.Port.Cells cand, emon.Port.Cells cl) {
+        // VECTOR ART (D562): the document's paths (`pa`, a page at a time), the visible ones that are not clips and not page-sized,
+        // joined into clusters of paths within `AS_VGAP` of each other; a cluster that is a figure (`as-flush`) is a region
+        // candidate. At most `AS_VWORK` cluster tests in all (past it no more paths are joined). `cl` is scratch.
+        int n = emon.Port.CellsLen(pa) / 24;
+        int i = 0;
+        int cur = -1;
+        int page = 0;
+        int x0 = 0;
+        int y0 = 0;
+        int x1 = 0;
+        int y1 = 0;
+        int pw = 0;
+        int ph = 0;
+        int work = 0;
+        emon.Port.CellsDrop(cl, 0);
+        while (i < n) {
+            page = Evidence.PaGet(pa, i, 0);
+            if (page != cur) {
+                AsFlush(cand, cl, cur, pg);
+                emon.Port.CellsDrop(cl, 0);
+                cur = page;
+            }
+            if ((Evidence.PaGet(pa, i, Evidence.PfVis()) == 0) && (((Evidence.PaGet(pa, i, Evidence.PfFlags()) & Evidence.PgClip()) == 0) && ((page >= 1) && ((page <= Pdfdoc.PdPgCount(pg)) && (work < AsVwork))))) {
+                x0 = Evidence.PaGet(pa, i, Evidence.PfX0());
+                y0 = Evidence.PaGet(pa, i, Evidence.PfY0());
+                x1 = Evidence.PaGet(pa, i, Evidence.PfX1());
+                y1 = Evidence.PaGet(pa, i, Evidence.PfY1());
+                pw = AsPageW(pg, page - 1);
+                ph = AsPageH(pg, page - 1);
+                if ((x1 >= x0) && ((y1 >= y0) && (AsGe(AsIa(x0, y0, x1, y1, 0, 0, pw, ph), AsArea(0, 0, pw, ph), AsBig) == 0))) {
+                    work += AsCluAdd(cl, x0, y0, x1, y1);
+                }
+            }
+            i += 1;
+        }
+        AsFlush(cand, cl, cur, pg);
+        return 0;
+    }
+    public static int AsGrgRegions(emon.Port.Cells grg, emon.Port.Cells cand, emon.Port.Cells pg) {
+        // THE HOOK for P7.G (SPEC 9.9, D228): every `figure` row of the graphics layer's regions `grg` (page, box in cells 0..4, the
+        // kind in 5) that is not mostly under an image is a region candidate. Empty until the page units fill `grg`.
+        int n = Glayer.GrgCount(grg);
+        int i = 0;
+        int page = 0;
+        while (i < n) {
+            if (Glayer.GrgGet(grg, i, 5) == Glayer.RkFigure()) {
+                page = Glayer.GrgGet(grg, i, 0);
+                if ((page >= 1) && ((page <= Pdfdoc.PdPgCount(pg)) && (AsUnderImage(cand, page, Glayer.GrgGet(grg, i, 1), Glayer.GrgGet(grg, i, 2), Glayer.GrgGet(grg, i, 3), Glayer.GrgGet(grg, i, 4)) == 0))) {
+                    AsRegionAdd(cand, page, Glayer.GrgGet(grg, i, 1), Glayer.GrgGet(grg, i, 2), Glayer.GrgGet(grg, i, 3), Glayer.GrgGet(grg, i, 4));
+                }
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int AsCollect(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells im, emon.Port.Cells pa, emon.Port.Cells gl, emon.Port.Cells pg, int maxpix, int totbytes, int level, emon.Port.Cells grg, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells @out, emon.Port.Cells rec, emon.Port.Cells mrec, emon.Port.Cells smp, emon.Port.Cells msmp, emon.Port.Cells data, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells ws, emon.Port.Buf z) {
         // The document pass: a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
         // its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice
         // `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.
@@ -725,12 +927,38 @@ public static class Asset {
             }
             r += 1;
         }
+        // at `figures` the regions that are not an image: vector art (D562), then the graphics layer's `figure` regions
+        if (level == 2) {
+            AsVectorRegions(pa, pg, cand, data);
+            AsGrgRegions(grg, cand, pg);
+        }
         return 0;
     }
-    public static int AsFigureRows(emon.Port.Cells cand, emon.Port.Cells pages, emon.Port.Cells fg) {
+    internal static int AsInTable(emon.Port.Cells nodes, emon.Port.Cells regions, int page, int x0, int y0, int x1, int y1) {
+        // 1 when at least half of the box lies inside a `table` node's region on the page (vector art that is a table's rules).
+        int nn = Model.NodeCount(nodes);
+        long area = AsArea(x0, y0, x1, y1);
+        int n = 0;
+        int r = -1;
+        while (n < nn) {
+            if (Model.NodeKind(nodes, n) == Model.NkTable()) {
+                r = Model.NodeRegionHead(nodes, n);
+                while (r >= 0) {
+                    if ((Model.RegionPage(regions, r) == page) && (AsGe(AsIa(x0, y0, x1, y1, Model.RegionX0(regions, r), Model.RegionY0(regions, r), Model.RegionX1(regions, r), Model.RegionY1(regions, r)), area, 500) == 1)) {
+                        return 1;
+                    }
+                    r = Model.RegionNext(regions, r);
+                }
+            }
+            n += 1;
+        }
+        return 0;
+    }
+    public static int AsFigureRows(emon.Port.Cells cand, emon.Port.Cells pages, emon.Port.Cells nodes, emon.Port.Cells regions, int level, emon.Port.Cells fg) {
         // The candidates that are provisional `figure`s (SPEC 10.6, until P8.1): not page-sized (under 800 per mille of its
-        // page) and both sides of the visible box at least 18 pt. `fg` = [cursor 0, then the candidate rows sorted by (page,
-        // top, left, row)]. Answers how many.
+        // page) and both sides of the visible box at least 18 pt. At `figures` (`level` 2) the region candidates (vector art, a
+        // P7.G `figure`) are figures too, unless half of one lies in a table. `fg` = [cursor 0, then the candidate rows sorted
+        // by (page, top, left, row)]. Answers how many.
         int n = emon.Port.CellsLen(cand) / AsStride;
         int r = 0;
         int j = 0;
@@ -754,7 +982,7 @@ public static class Asset {
             if ((pgi >= 0) && (pgi < Model.PageCount(pages))) {
                 pw = Model.PageW(pages, pgi);
                 ph = Model.PageH(pages, pgi);
-                if (((x1 - x0) >= AsFigureSide) && ((y1 - y0) >= AsFigureSide) && (AsGe(AsIa(x0, y0, x1, y1, 0, 0, pw, ph), AsArea(0, 0, pw, ph), AsBig) == 0)) {
+                if (((x1 - x0) >= AsFigureSide) && ((y1 - y0) >= AsFigureSide) && (AsGe(AsIa(x0, y0, x1, y1, 0, 0, pw, ph), AsArea(0, 0, pw, ph), AsBig) == 0) && ((AsGet(cand, r, AcKori) != AsRegion) || ((level == 2) && (AsInTable(nodes, regions, AsGet(cand, r, AcPage), x0, y0, x1, y1) == 0)))) {
                     // insert in order of (page, top, left, row)
                     ins = cnt + 1;
                     j = 1;
@@ -835,11 +1063,53 @@ public static class Asset {
         Model.NodeSetAttrInt(nodes, attrs, n, Model.FkNoasset(), reason);
         return 0;
     }
+    internal static int AsAdmit(emon.Port.Cells nodes, emon.Port.Cells attrs, int n, emon.Port.Cells cand, int c, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, emon.Port.Cells st, int dpi) {
+        // ADMISSION of candidate row `c` for node `n` (SPEC 10.11), in node-id order: its own reason when it has no pixels;
+        // else dedup by SHA-256 and length (one more use of the earlier asset), `asset-bytes`, and the first overflow of
+        // `assets-bytes`, which closes the budget. `st` holds the run's two cells at 5 and 6: [bytes admitted so far, budget
+        // closed] (cells 0..4 are the caller's); `dpi` is
+        // the asset's render resolution (0 for none). The node gets `fk-asset` or `fk-noasset`.
+        int id = -1;
+        int blen = AsGet(cand, c, AcBlen);
+        int bs = 0;
+        if (AsGet(cand, c, AcStatus) != 0) {
+            AsSetNoasset(nodes, attrs, n, AsGet(cand, c, AcStatus));
+            return 0;
+        }
+        id = Model.AssetFind(assets, blen, AsGet(cand, c, AcSha + 0), AsGet(cand, c, AcSha + 1), AsGet(cand, c, AcSha + 2), AsGet(cand, c, AcSha + 3), AsGet(cand, c, AcSha + 4), AsGet(cand, c, AcSha + 5), AsGet(cand, c, AcSha + 6), AsGet(cand, c, AcSha + 7));
+        if ((id < 0) && (blen > maxbytes)) {
+            AsSetNoasset(nodes, attrs, n, Model.NzTooLarge());
+            return 0;
+        }
+        if ((id < 0) && ((emon.Port.CellsAt(st, 6) == 1) || (blen > (totbytes - emon.Port.CellsAt(st, 5))))) {
+            emon.Port.CellsSet(st, 6, 1);
+            AsSetNoasset(nodes, attrs, n, Model.NzBudget());
+            return 0;
+        }
+        if (id < 0) {
+            bs = emon.Port.BufLen(abytes);
+            emon.Port.BufAppendBlob(abytes, emon.Port.BufBlob(cbytes), AsGet(cand, c, AcBstart), AsGet(cand, c, AcBstart) + blen);
+            emon.Port.CellsSet(st, 5, emon.Port.CellsAt(st, 5) + blen);
+            id = Model.AssetAdd(assets, AsGet(cand, c, AcType), AsGet(cand, c, AcOrigin), AsGet(cand, c, AcFrom), AsGet(cand, c, AcObj), bs, blen, AsGet(cand, c, AcW), AsGet(cand, c, AcH), dpi, AsGet(cand, c, AcFlags));
+            Model.AssetSetSha(assets, id, 0, AsGet(cand, c, AcSha + 0));
+            Model.AssetSetSha(assets, id, 1, AsGet(cand, c, AcSha + 1));
+            Model.AssetSetSha(assets, id, 2, AsGet(cand, c, AcSha + 2));
+            Model.AssetSetSha(assets, id, 3, AsGet(cand, c, AcSha + 3));
+            Model.AssetSetSha(assets, id, 4, AsGet(cand, c, AcSha + 4));
+            Model.AssetSetSha(assets, id, 5, AsGet(cand, c, AcSha + 5));
+            Model.AssetSetSha(assets, id, 6, AsGet(cand, c, AcSha + 6));
+            Model.AssetSetSha(assets, id, 7, AsGet(cand, c, AcSha + 7));
+        }
+        Model.UseAdd(assets, uses, id, n, AsGet(cand, c, AcPage), AsGet(cand, c, AcVx0 + 0), AsGet(cand, c, AcVx0 + 1), AsGet(cand, c, AcVx0 + 2), AsGet(cand, c, AcVx0 + 3));
+        Model.NodeSetAttrInt(nodes, attrs, n, Model.FkAsset(), id);
+        return 0;
+    }
     public static int AsRun(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, int sigs, emon.Port.Cells box) {
         // The document unit's asset stage, in node-id order, over the figures and seals of the final tree: SPEC 10.11's source
         // per node, then admission. A node with pixels gets `fk-asset` (an asset id), else `fk-noasset` (an `nz`). The Model's
-        // `assets`, `uses` and `abytes` are written. `box` is 5 scratch cells. A figure made from a placement (`fk-image`
-        // names its candidate row) is that image; any other is matched by where it is. Answers the number of assets.
+        // `assets`, `uses` and `abytes` are written. `box` is 5 scratch cells, and 2 more it grows to (`as-admit`'s). A figure
+        // made from a placement (`fk-image` names its candidate row) is that image; any other is matched by where it is.
+        // Answers the number of assets. This is the level `images`; `figures` is `as-run-figures`.
         int nn = Model.NodeCount(nodes);
         int n = 0;
         int kind = 0;
@@ -847,11 +1117,11 @@ public static class Asset {
         int c = -1;
         int rc = 0;
         int attr = -1;
-        int id = -1;
-        int total = 0;
-        int closed = 0;
-        int blen = 0;
-        int bs = 0;
+        while (emon.Port.CellsLen(box) < 7) {
+            emon.Port.CellsPush(box, 0);
+        }
+        emon.Port.CellsSet(box, 5, 0);
+        emon.Port.CellsSet(box, 6, 0);
         while (n < nn) {
             kind = Model.NodeKind(nodes, n);
             if ((kind == Model.NkFigure()) || (kind == Model.NkSeal())) {
@@ -886,37 +1156,407 @@ public static class Asset {
                         AsSetNoasset(nodes, attrs, n, rc);
                     }
                     if (c >= 0) {
-                        if (AsGet(cand, c, AcStatus) != 0) {
-                            AsSetNoasset(nodes, attrs, n, AsGet(cand, c, AcStatus));
-                        } else {
-                            blen = AsGet(cand, c, AcBlen);
-                            id = Model.AssetFind(assets, blen, AsGet(cand, c, AcSha + 0), AsGet(cand, c, AcSha + 1), AsGet(cand, c, AcSha + 2), AsGet(cand, c, AcSha + 3), AsGet(cand, c, AcSha + 4), AsGet(cand, c, AcSha + 5), AsGet(cand, c, AcSha + 6), AsGet(cand, c, AcSha + 7));
-                            if ((id < 0) && (blen > maxbytes)) {
-                                AsSetNoasset(nodes, attrs, n, Model.NzTooLarge());
-                            } else {
-                                if ((id < 0) && ((closed == 1) || (blen > (totbytes - total)))) {
-                                    closed = 1;
-                                    AsSetNoasset(nodes, attrs, n, Model.NzBudget());
-                                } else {
-                                    if (id < 0) {
-                                        bs = emon.Port.BufLen(abytes);
-                                        emon.Port.BufAppendBlob(abytes, emon.Port.BufBlob(cbytes), AsGet(cand, c, AcBstart), AsGet(cand, c, AcBstart) + blen);
-                                        total += blen;
-                                        id = Model.AssetAdd(assets, AsGet(cand, c, AcType), AsGet(cand, c, AcOrigin), AsGet(cand, c, AcFrom), AsGet(cand, c, AcObj), bs, blen, AsGet(cand, c, AcW), AsGet(cand, c, AcH), 0, AsGet(cand, c, AcFlags));
-                                        Model.AssetSetSha(assets, id, 0, AsGet(cand, c, AcSha + 0));
-                                        Model.AssetSetSha(assets, id, 1, AsGet(cand, c, AcSha + 1));
-                                        Model.AssetSetSha(assets, id, 2, AsGet(cand, c, AcSha + 2));
-                                        Model.AssetSetSha(assets, id, 3, AsGet(cand, c, AcSha + 3));
-                                        Model.AssetSetSha(assets, id, 4, AsGet(cand, c, AcSha + 4));
-                                        Model.AssetSetSha(assets, id, 5, AsGet(cand, c, AcSha + 5));
-                                        Model.AssetSetSha(assets, id, 6, AsGet(cand, c, AcSha + 6));
-                                        Model.AssetSetSha(assets, id, 7, AsGet(cand, c, AcSha + 7));
-                                    }
-                                    Model.UseAdd(assets, uses, id, n, AsGet(cand, c, AcPage), AsGet(cand, c, AcVx0 + 0), AsGet(cand, c, AcVx0 + 1), AsGet(cand, c, AcVx0 + 2), AsGet(cand, c, AcVx0 + 3));
-                                    Model.NodeSetAttrInt(nodes, attrs, n, Model.FkAsset(), id);
-                                }
-                            }
+                        AsAdmit(nodes, attrs, n, cand, c, cbytes, assets, uses, abytes, maxbytes, totbytes, box, 0);
+                    }
+                }
+            }
+            n += 1;
+        }
+        return Model.AssetCount(assets);
+    }
+    internal static int AsTextOver(emon.Port.Cells nodes, emon.Port.Cells regions, int n, int page, int x0, int y0, int x1, int y1) {
+        // 1 when a node with text that is not inside node `n` (the figure's own caption and labels are) has a region on the page
+        // that overlaps the box: body text drawn in the picture (SPEC 10.11's `text-overlap`).
+        int nn = Model.NodeCount(nodes);
+        int k = 0;
+        int a = -1;
+        int r = -1;
+        while (k < nn) {
+            if ((k != n) && (Model.NodeHasText(nodes, k) == 1)) {
+                a = Model.NodeParent(nodes, k);
+                while ((a >= 0) && (a != n)) {
+                    a = Model.NodeParent(nodes, a);
+                }
+                if (a < 0) {
+                    r = Model.NodeRegionHead(nodes, k);
+                    while (r >= 0) {
+                        if ((Model.RegionPage(regions, r) == page) && (AsIa(x0, y0, x1, y1, Model.RegionX0(regions, r), Model.RegionY0(regions, r), Model.RegionX1(regions, r), Model.RegionY1(regions, r)) > ((long) 0))) {
+                            return 1;
                         }
+                        r = Model.RegionNext(regions, r);
+                    }
+                }
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    internal static int AsCaptionOnly(emon.Port.Cells nodes, emon.Port.Cells regions, int n) {
+        // 1 when the figure's first region is its caption's: a figure the caption pairing made out of nothing, whose place is the
+        // caption's, not a picture's. There is nothing to render or cut (`noasset: vector`, D562).
+        int r = Model.NodeRegionHead(nodes, n);
+        int k = Model.NodeFirstChild(nodes, n);
+        int q = -1;
+        if (r < 0) {
+            return 0;
+        }
+        while (k >= 0) {
+            if (Model.NodeKind(nodes, k) == Model.NkCaption()) {
+                q = Model.NodeRegionHead(nodes, k);
+                if ((q >= 0) && ((Model.RegionPage(regions, q) == Model.RegionPage(regions, r)) && ((Model.RegionX0(regions, q) == Model.RegionX0(regions, r)) && ((Model.RegionY0(regions, q) == Model.RegionY0(regions, r)) && ((Model.RegionX1(regions, q) == Model.RegionX1(regions, r)) && (Model.RegionY1(regions, q) == Model.RegionY1(regions, r))))))) {
+                    return 1;
+                }
+            }
+            k = Model.NodeNext(nodes, k);
+        }
+        return 0;
+    }
+    public static int AsRenderRect(int x0, int y0, int x1, int y1, int pgw, int pgh, int dpi, int maxpix, emon.Port.Cells rc) {
+        // The pixel rectangle of a render crop (SPEC 10.11): the region padded by 2 pt and held to the page, at d = `dpi`:
+        // px = floor(x0 d / 7200), px1 = ceil(x1 d / 7200), likewise y, pw = px1 - px; while pw * ph is over `maxpix`, d = d * 3 / 4
+        // (integer). The whole page is floor(w d / 7200 + 1/2) pixels a side (D245), and the rectangle is held inside it. Writes
+        // rc[0..4) = px py pw ph and answers d; 0 when d falls under 36, -1 when the rectangle is empty.
+        int d = dpi;
+        int ax0 = x0 - AsPad;
+        int ay0 = y0 - AsPad;
+        int ax1 = x1 + AsPad;
+        int ay1 = y1 + AsPad;
+        int px = 0;
+        int py = 0;
+        int px1 = 0;
+        int py1 = 0;
+        int wpx = 0;
+        int hpx = 0;
+        int done = 0;
+        if (ax0 < 0) {
+            ax0 = 0;
+        }
+        if (ay0 < 0) {
+            ay0 = 0;
+        }
+        if (ax1 > pgw) {
+            ax1 = pgw;
+        }
+        if (ay1 > pgh) {
+            ay1 = pgh;
+        }
+        if ((ax1 <= ax0) || (ay1 <= ay0)) {
+            return -1;
+        }
+        while (done == 0) {
+            px = (int) (unchecked(((long) ax0) * ((long) d)) / ((long) 7200));
+            py = (int) (unchecked(((long) ay0) * ((long) d)) / ((long) 7200));
+            px1 = (int) (unchecked(unchecked(((long) ax1) * ((long) d)) + ((long) 7199)) / ((long) 7200));
+            py1 = (int) (unchecked(unchecked(((long) ay1) * ((long) d)) + ((long) 7199)) / ((long) 7200));
+            wpx = (int) (unchecked(unchecked(((long) pgw) * ((long) d)) + ((long) 3600)) / ((long) 7200));
+            hpx = (int) (unchecked(unchecked(((long) pgh) * ((long) d)) + ((long) 3600)) / ((long) 7200));
+            if (wpx < 1) {
+                wpx = 1;
+            }
+            if (hpx < 1) {
+                hpx = 1;
+            }
+            if (px1 > wpx) {
+                px1 = wpx;
+            }
+            if (py1 > hpx) {
+                py1 = hpx;
+            }
+            if (px >= px1) {
+                px = px1 - 1;
+            }
+            if (py >= py1) {
+                py = py1 - 1;
+            }
+            if (unchecked(((long) (px1 - px)) * ((long) (py1 - py))) > ((long) maxpix)) {
+                d = (d * 3) / 4;
+                if (d < AsMinDpi) {
+                    return 0;
+                }
+            } else {
+                done = 1;
+            }
+        }
+        emon.Port.CellsSet(rc, 0, px);
+        emon.Port.CellsSet(rc, 1, py);
+        emon.Port.CellsSet(rc, 2, px1 - px);
+        emon.Port.CellsSet(rc, 3, py1 - py);
+        return d;
+    }
+    internal static int AsEmitRow(emon.Port.Cells cand, int row, emon.Port.Buf cbytes, emon.Port.Bitmap pic, int maxpix, int dpi100, int flags, int afrom, int origin, emon.Port.Cells ws, emon.Port.Buf z, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells rec) {
+        // The canonical PNG of `pic` (gray or RGB; the box mean by the smallest k that fits `maxpix`, flag `scaled`) appended to
+        // `cbytes`, and candidate row `row` made its asset: status 0, type, bytes, hash, size, flags, `from`, origin. `rows`,
+        // `tmp`, `rec` are scratch; `dpi100` is the pHYs (0 none).
+        int w = emon.Port.BitmapW(pic);
+        int h = emon.Port.BitmapH(pic);
+        int ch = emon.Port.BitmapChannels(pic);
+        int start = emon.Port.BufLen(cbytes);
+        int fl = flags;
+        int ow = w;
+        int oh = h;
+        int k = 1;
+        int i = 0;
+        emon.Port.Bitmap al = emon.Port.BitmapNew(1, 1, 1);
+        emon.Port.CellsDrop(rec, 0);
+        while (i < 96) {
+            emon.Port.CellsPush(rec, 0);
+            i += 1;
+        }
+        if (unchecked(((long) w) * ((long) h)) > ((long) maxpix)) {
+            k = AsScaleK(w, h, maxpix);
+            fl |= Model.AfgScaled();
+            emon.Port.Bitmap pic2 = emon.Port.BitmapNew((w + (k - 1)) / k, (h + (k - 1)) / k, ch);
+            AsScaleInto(pic, pic2, k);
+            AsPng(ws, cbytes, z, rows, tmp, rec, pic2, al, 0, 0, dpi100);
+            ow = emon.Port.BitmapW(pic2);
+            oh = emon.Port.BitmapH(pic2);
+        } else {
+            AsPng(ws, cbytes, z, rows, tmp, rec, pic, al, 0, 0, dpi100);
+        }
+        AsSet(cand, row, AcStatus, 0);
+        AsSet(cand, row, AcType, Model.AmtPng());
+        AsSet(cand, row, AcBstart, start);
+        AsSet(cand, row, AcBlen, emon.Port.BufLen(cbytes) - start);
+        AsSha(cbytes, start, emon.Port.BufLen(cbytes) - start, tmp, cand, row);
+        AsSet(cand, row, AcW, ow);
+        AsSet(cand, row, AcH, oh);
+        AsSet(cand, row, AcFlags, fl);
+        AsSet(cand, row, AcFrom, afrom);
+        AsSet(cand, row, AcOrigin, origin);
+        return 0;
+    }
+    internal static int AsDoRender(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, int n, int pg, int x0, int y0, int x1, int y1, int dpi, int maxpix, int input, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Buf z, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells rec, emon.Port.Cells box) {
+        // Node `n`'s render: its `crop` request when no answer is in (answers 1), else the asset, or the node's reason (answers 0).
+        // `box` is the run's scratch: cells 0..3 are the rectangle's, 5 and 6 are `as-admit`'s.
+        int pgi = pg - 1;
+        int d = AsRenderRect(x0, y0, x1, y1, Model.PageW(pages, pgi), Model.PageH(pages, pgi), dpi, maxpix, box);
+        int id = Plan.AuId(n);
+        int a = Plan.AnFind(ans, id);
+        if (d == 0) {
+            AsSetNoasset(nodes, attrs, n, Model.NzTooLarge());
+            return 0;
+        }
+        if (d < 0) {
+            AsSetNoasset(nodes, attrs, n, Model.NzRender());
+            return 0;
+        }
+        if (a < 0) {
+            if (Plan.RecFind(rq, id) < 0) {
+                Plan.RqCrop(rq, id, input, pgi, d, 0, emon.Port.CellsAt(box, 0), emon.Port.CellsAt(box, 1), emon.Port.CellsAt(box, 2), emon.Port.CellsAt(box, 3));
+            }
+            return 1;
+        }
+        if (Plan.AnOk(ans, a) == 0) {
+            AsSetNoasset(nodes, attrs, n, Model.NzRender());
+            return 0;
+        }
+        emon.Port.Bitmap pic = emon.Port.BmsGet(bms, id);
+        if ((emon.Port.BitmapW(pic) < 1) || (emon.Port.BitmapH(pic) < 1)) {
+            AsSetNoasset(nodes, attrs, n, Model.NzRender());
+            return 0;
+        }
+        int row = AsNewRow(cand, pg, x0, y0, x1, y1);
+        int fl = 0;
+        int tx0 = x0 - AsPad;
+        int ty0 = y0 - AsPad;
+        int tx1 = x1 + AsPad;
+        int ty1 = y1 + AsPad;
+        if (tx0 < 0) {
+            tx0 = 0;
+        }
+        if (ty0 < 0) {
+            ty0 = 0;
+        }
+        if (tx1 > Model.PageW(pages, pgi)) {
+            tx1 = Model.PageW(pages, pgi);
+        }
+        if (ty1 > Model.PageH(pages, pgi)) {
+            ty1 = Model.PageH(pages, pgi);
+        }
+        if (AsTextOver(nodes, regions, n, pg, tx0, ty0, tx1, ty1) == 1) {
+            fl = Model.AfgTextOverlap();
+        }
+        AsEmitRow(cand, row, cbytes, pic, maxpix, d * 100, fl, Model.AfmRender(), Model.AoRendered(), ws, z, rows, tmp, rec);
+        AsAdmit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, box, d);
+        return 0;
+    }
+    internal static int AsDoCrop(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells pages, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, int n, int pg, int x0, int y0, int x1, int y1, int maxpix, int input, int nbytes, int rfrom, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Buf z, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells rec, emon.Port.Cells box) {
+        // Node `n` cut from its raster frame: the frame's `decode` request when no answer is in (answers 1), else the rectangle of
+        // the decoded pixels the region maps to (floor at the low edge, ceiling at the high, exact samples), or the reason.
+        int pgi = pg - 1;
+        int id = Plan.AuId(Plan.AuDecode() + pgi);
+        int a = Plan.AnFind(ans, id);
+        if (a < 0) {
+            if (Plan.RecFind(rq, id) < 0) {
+                Plan.RqDecode(rq, id, input, 0, nbytes, Plan.FltNone(), pgi);
+            }
+            return 1;
+        }
+        if (Plan.AnOk(ans, a) == 0) {
+            AsSetNoasset(nodes, attrs, n, Model.NzCodec());
+            return 0;
+        }
+        emon.Port.Bitmap src = emon.Port.BmsGet(bms, id);
+        int sw = emon.Port.BitmapW(src);
+        int sh = emon.Port.BitmapH(src);
+        int pw = Model.PageW(pages, pgi);
+        int ph = Model.PageH(pages, pgi);
+        if ((sw < 1) || ((sh < 1) || ((pw < 1) || (ph < 1)))) {
+            AsSetNoasset(nodes, attrs, n, Model.NzCodec());
+            return 0;
+        }
+        int cx0 = (int) (unchecked(((long) x0) * ((long) sw)) / ((long) pw));
+        int cy0 = (int) (unchecked(((long) y0) * ((long) sh)) / ((long) ph));
+        int cx1 = (int) (unchecked(unchecked(((long) x1) * ((long) sw)) + ((long) (pw - 1))) / ((long) pw));
+        int cy1 = (int) (unchecked(unchecked(((long) y1) * ((long) sh)) + ((long) (ph - 1))) / ((long) ph));
+        int ch = 1;
+        int x = 0;
+        int y = 0;
+        int c = 0;
+        if (cx0 < 0) {
+            cx0 = 0;
+        }
+        if (cy0 < 0) {
+            cy0 = 0;
+        }
+        if (cx1 > sw) {
+            cx1 = sw;
+        }
+        if (cy1 > sh) {
+            cy1 = sh;
+        }
+        if ((cx1 <= cx0) || (cy1 <= cy0)) {
+            AsSetNoasset(nodes, attrs, n, Model.NzPart());
+            return 0;
+        }
+        if (emon.Port.BitmapChannels(src) >= 3) {
+            ch = 3;
+        }
+        emon.Port.Bitmap pic = emon.Port.BitmapNew(cx1 - cx0, cy1 - cy0, ch);
+        int row = AsNewRow(cand, pg, x0, y0, x1, y1);
+        while (y < (cy1 - cy0)) {
+            x = 0;
+            while (x < (cx1 - cx0)) {
+                c = 0;
+                while (c < ch) {
+                    emon.Port.BitmapSetU8(pic, x, y, c, emon.Port.BitmapU8(src, cx0 + x, cy0 + y, c));
+                    c += 1;
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+        AsEmitRow(cand, row, cbytes, pic, maxpix, Model.PageDpi(pages, pgi) * 100, 0, rfrom, Model.AoCropped(), ws, z, rows, tmp, rec);
+        AsAdmit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, box, 0);
+        return 0;
+    }
+    public static int AsRunFigures(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, int sigs, int dpi, int maxpix, int input, int nbytes, int rfrom, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Buf z, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells rec, emon.Port.Cells box) {
+        // The asset stage at the level `figures`, in node-id order: SPEC 10.11's sources for every figure and seal (see above).
+        // `dpi` and `maxpix` are `asset-dpi` and `asset-pixels`; `input` and `nbytes` the input's index and length (a `decode`
+        // asks for the whole file); `rfrom` is 0 for a PDF and the `afm` of the format for a raster input (its frames are the
+        // images, so every region that is not rendered is `cropped`); `ans` `rq` `bms` are the unit's. It answers the number of
+        // assets; when it WROTE REQUESTS (`rq` is not empty) its results are meaningless and the host must run it again, from
+        // copies, on the answers. `ws z rows tmp rec` and `box` (at least 16 cells) are scratch.
+        int nn = Model.NodeCount(nodes);
+        int n = 0;
+        int kind = 0;
+        int sub = 0;
+        int c = -1;
+        int rc = 0;
+        int attr = -1;
+        int src = 0;
+        int cst = 0;
+        int rpg = 0;
+        int rx0 = 0;
+        int ry0 = 0;
+        int rx1 = 0;
+        int ry1 = 0;
+        int have = 0;
+        int capo = 0;
+        int m = 0;
+        while (emon.Port.CellsLen(box) < 16) {
+            emon.Port.CellsPush(box, 0);
+        }
+        emon.Port.CellsSet(box, 5, 0);
+        emon.Port.CellsSet(box, 6, 0);
+        while (n < nn) {
+            kind = Model.NodeKind(nodes, n);
+            if ((kind == Model.NkFigure()) || (kind == Model.NkSeal())) {
+                sub = Model.NodeSub(nodes, n);
+                c = -1;
+                rc = 0;
+                src = 0;
+                if (kind == Model.NkSeal()) {
+                    if (sub == Model.SlDigitalSignature()) {
+                        rc = -1;
+                    }
+                    if (((sub == Model.SlSignature()) || (sub == Model.SlInitials())) && (sigs == 0)) {
+                        AsSetNoasset(nodes, attrs, n, Model.NzWithheld());
+                        rc = -1;
+                    }
+                }
+                if (rc == 0) {
+                    have = AsFirstRegion(nodes, regions, n, box);
+                    rpg = emon.Port.CellsAt(box, 0);
+                    rx0 = emon.Port.CellsAt(box, 1);
+                    ry0 = emon.Port.CellsAt(box, 2);
+                    rx1 = emon.Port.CellsAt(box, 3);
+                    ry1 = emon.Port.CellsAt(box, 4);
+                    attr = Model.NodeAttr(nodes, attrs, n, Model.FkImage());
+                    capo = 0;
+                    if ((attr < 0) && (have == 1)) {
+                        capo = AsCaptionOnly(nodes, regions, n);
+                    }
+                    if (attr >= 0) {
+                        c = Model.AttrValue(attrs, attr);
+                    } else if ((have == 1) && (capo == 0)) {
+                        m = AsMatch(cand, rpg, rx0, ry0, rx1, ry1, box);
+                        if (m == 0) {
+                            c = emon.Port.CellsAt(box, 0);
+                        }
+                        if (m < 0) {
+                            rc = 0 - m;
+                        }
+                    } else {
+                        rc = Model.NzVector();
+                    }
+                    // the source: 1 the candidate's own image, 2 rendered, 3 cropped (a raster's), 0 none (`rc` says why)
+                    if (c >= 0) {
+                        cst = AsGet(cand, c, AcStatus);
+                        if (AsGet(cand, c, AcKori) == AsRegion) {
+                            src = 2;
+                        } else if (cst == 0) {
+                            if ((AsGet(cand, c, AcFlags) & (Model.AfgOverlaid() + (Model.AfgClipBbox() + Model.AfgTransformed()))) != 0) {
+                                src = 2;
+                            } else {
+                                src = 1;
+                            }
+                        } else if ((cst == Model.NzPart()) || ((cst == Model.NzColorspace()) || (cst == Model.NzCodec()))) {
+                            src = 2;
+                        } else {
+                            rc = cst;
+                        }
+                    } else if ((rc > 0) && ((have > 0) && (capo == 0))) {
+                        src = 2;
+                    }
+                    if ((have == 0) && (src > 1)) {
+                        src = 0;
+                        rc = Model.NzVector();
+                    }
+                    if ((src == 2) && (rfrom > 0)) {
+                        src = 3;
+                    }
+                    if ((src == 0) && (rc > 0)) {
+                        AsSetNoasset(nodes, attrs, n, rc);
+                    }
+                    if (src == 1) {
+                        AsAdmit(nodes, attrs, n, cand, c, cbytes, assets, uses, abytes, maxbytes, totbytes, box, 0);
+                    }
+                    if (src == 2) {
+                        AsDoRender(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, dpi, maxpix, input, ans, rq, bms, ws, z, rows, tmp, rec, box);
+                    }
+                    if (src == 3) {
+                        AsDoCrop(nodes, attrs, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, maxpix, input, nbytes, rfrom, ans, rq, bms, ws, z, rows, tmp, rec, box);
                     }
                 }
             }

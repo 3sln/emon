@@ -928,20 +928,40 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 		}
 		model.NodeSetAttrText(m.nodes, m.attrs, 0, model.FkLocale(), start, port.CellsLen(m.text)-start)
 	}
+	var pending *pendingAssets
 	if opts.Assets != AssetsNone {
 		// a raster input is one picture a page: its own image is the candidate, `part` of which no figure or seal can be at `images`
 		cand, cbytes := port.NewCells(), port.NewBuf()
 		asset.AsPageCands(m.pages, cand)
-		assetStage(m, cand, cbytes, opts)
+		if opts.Assets == AssetsFigures {
+			// the asset unit (D560) cuts a figure from its frame: it needs the format the pixels came from
+			rfrom := model.AfmTiff()
+			switch info.Format {
+			case "png":
+				rfrom = model.AfmPng()
+			case "jpeg":
+				rfrom = model.AfmJpeg()
+			}
+			pending = &pendingAssets{cand, cbytes, rfrom}
+		} else {
+			assetStage(m, cand, cbytes, opts)
+		}
 	}
+	if pending == nil {
+		if o := sealArenas(m, opts); o != nil {
+			return *o
+		}
+	}
+	return outcome{built: &built{arenas: m, evidence: evs, intake: info, pending: pending}}
+}
+
+// sealArenas is `model-check`, and `model-check-assets` when `assets` is on, over a finished Model.
+func sealArenas(m *arenas, opts Options) *outcome {
 	chk := port.NewCells()
 	if code := model.ModelCheck(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout, chk); code != 0 {
-		return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", code, port.CellsAt(chk, 0))}}
+		return &outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", code, port.CellsAt(chk, 0))}}
 	}
-	if o := checkAssets(m, chk, opts); o != nil {
-		return *o
-	}
-	return outcome{built: &built{arenas: m, evidence: evs, intake: info}}
+	return checkAssets(m, chk, opts)
 }
 
 
@@ -949,10 +969,10 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 
 // figuresStage is P3.13's provisional figures (SPEC 10.11, 10.6), before RsRun (a caption next to one finds it as its object). Only
 // when `assets` is on (D294): a default run's Model is what it was.
-func figuresStage(m *arenas, cand *port.Cells) {
+func figuresStage(m *arenas, cand *port.Cells, opts Options) {
 	f := newCellsN(5)
 	fg, fnodes, fattrs, fregions, fnm := f[0], f[1], f[2], f[3], f[4]
-	asset.AsFigureRows(cand, m.pages, fg)
+	asset.AsFigureRows(cand, m.pages, m.nodes, m.regions, opts.Assets.level(), fg)
 	restruct.RsFigures(m.nodes, m.attrs, m.regions, fnodes, fattrs, fregions, fnm, cand, fg)
 	m.nodes, fnodes = fnodes, m.nodes
 	m.attrs, fattrs = fattrs, m.attrs
@@ -970,6 +990,19 @@ func assetStage(m *arenas, cand *port.Cells, cbytes *port.Buf, opts Options) {
 		port.CellsPush(bx, 0)
 	}
 	asset.AsRun(m.nodes, m.attrs, m.regions, cand, cbytes, m.assets, m.uses, m.abytes, opts.AssetBytes, opts.AssetsBytes, sigs, bx)
+}
+
+// assetStageFigures is P8.5's asset stage at the level `figures` (SPEC 10.11, D560): one attempt of the asset unit, on copies the
+// caller made. It writes the Model's settings and every figure's and seal's asset or reason, and any `crop` or `decode` request it
+// has no answer to into rq (then its results are meaningless: the loop answers and runs it again).
+func assetStageFigures(m *arenas, p *pendingAssets, opts Options, input, nbytes int32, ans, rq *port.Cells, bms *port.BitmapSet) {
+	sigs := boolInt(opts.AssetSignatures)
+	asset.AsSettings(m.nodes, m.attrs, m.text, opts.Assets.level(), opts.AssetDPI, opts.AssetPixels, opts.AssetBytes, opts.AssetsBytes, sigs)
+	s := newCellsN(5)
+	z := port.NewBuf()
+	asset.AsRunFigures(m.nodes, m.attrs, m.regions, m.pages, p.cand, p.cbytes, m.assets, m.uses, m.abytes,
+		opts.AssetBytes, opts.AssetsBytes, sigs, opts.AssetDPI, opts.AssetPixels, input, nbytes, p.rfrom, ans, rq, bms,
+		s[0], z, s[1], s[2], s[3], s[4])
 }
 
 // checkAssets is `model-check-assets` after `model-check`, when `assets` is on.
@@ -1064,6 +1097,16 @@ type built struct {
 	arenas   *arenas
 	evidence *string
 	intake   Intake
+	// At `assets: figures` the document unit stops before the asset stage (D560): what the asset unit still needs. nil otherwise.
+	pending *pendingAssets
+}
+
+// pendingAssets is the asset unit's input at the level `figures` (SPEC 10.11, D560): the candidate rows and their bytes the
+// document pass made, and rfrom, 0 for a PDF or the `afm` of a raster input's format.
+type pendingAssets struct {
+	cand   *port.Cells
+	cbytes *port.Buf
+	rfrom  int32
 }
 
 type outcome struct {
@@ -1132,6 +1175,17 @@ type arenas struct {
 
 func newArenas() *arenas {
 	return &arenas{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewBuf()}
+}
+
+// clone is a copy of every arena: the asset unit (D560) runs on one until it has every answer.
+func (a *arenas) clone() *arenas {
+	return &arenas{cloneCells(a.nodes), cloneCells(a.attrs), cloneCells(a.regions), cloneCells(a.text), cloneCells(a.pages), cloneCells(a.ledger), cloneCells(a.layout),
+		cloneCells(a.assets), cloneCells(a.uses), cloneBuf(a.abytes)}
+}
+
+// cloneBuf is a copy of a Buf.
+func cloneBuf(b *port.Buf) *port.Buf {
+	return &port.Buf{B: append([]byte(nil), b.B...)}
 }
 
 func cellsVec(c *port.Cells) []int32 { return append([]int32(nil), c.V...) }
@@ -1227,7 +1281,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	if opts.Assets != AssetsNone {
 		w := newCellsN(10)
 		z := port.NewBuf()
-		rc := asset.AsCollect(view, ar, dc, ca, cb, st, im, pa, gl, pg, opts.AssetPixels, opts.AssetsBytes, cand, cbytes, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], z)
+		rc := asset.AsCollect(view, ar, dc, ca, cb, st, im, pa, gl, pg, opts.AssetPixels, opts.AssetsBytes, opts.Assets.level(), port.NewCells(), cand, cbytes, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], z)
 		if view.Missed() || rc == 12 {
 			return step{miss: true}
 		}
@@ -1427,7 +1481,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
 	// the provisional figures (P3.13): only with `assets`, and before the restructuring, which pairs a caption with the figure beside it
 	if opts.Assets != AssetsNone {
-		figuresStage(m, d.cand)
+		figuresStage(m, d.cand, opts)
 	}
 	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
 	// body is copied into new arenas, in document order, and they replace the old ones
@@ -1459,17 +1513,19 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 		}
 		model.NodeSetAttrText(m.nodes, m.attrs, 0, model.FkLocale(), start, port.CellsLen(m.text)-start)
 	}
-	if opts.Assets != AssetsNone {
+	// `figures` leaves the asset stage to the asset unit (D560), which asks the Renderer; so it does the checks after it too
+	var pending *pendingAssets
+	if opts.Assets == AssetsFigures {
+		pending = &pendingAssets{d.cand, d.cbytes, 0}
+	} else if opts.Assets != AssetsNone {
 		assetStage(m, d.cand, d.cbytes, opts)
 	}
-	chk := port.NewCells()
-	if c := model.ModelCheck(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout, chk); c != 0 {
-		return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", c, port.CellsAt(chk, 0))}}
+	if pending == nil {
+		if o := sealArenas(m, opts); o != nil {
+			return *o
+		}
 	}
-	if o := checkAssets(m, chk, opts); o != nil {
-		return *o
-	}
-	return outcome{built: &built{arenas: m, evidence: evs, intake: info}}
+	return outcome{built: &built{arenas: m, evidence: evs, intake: info, pending: pending}}
 }
 
 // Intake is stage 0 of each input: format, version, page count, whether it is encrypted. Any number of inputs.
@@ -1697,6 +1753,50 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 			res = finishPdf(docPdf, opts)
 		} else {
 			res = finishRaster(docRaster, opts)
+		}
+		// THE ASSET UNIT (P8.5, D560): at `figures` the Model is final but for its assets, whose renders and crops are requests,
+		// so one more plan/fulfil loop runs over it, with its own answers and BitmapSet, on copies until every answer is in.
+		if res.built != nil && res.built.pending != nil {
+			b := res.built
+			pend := b.pending
+			b.pending = nil
+			var done *arenas
+			var afailed *Error
+			unitA := func(answers, rq *port.Cells, bms *port.BitmapSet) (st int32) {
+				defer func() {
+					if p := recover(); p != nil {
+						afailed = panicError(panicMessage(p))
+						st = port.PlanUnitDone
+					}
+				}()
+				t := b.arenas.clone()
+				p := &pendingAssets{cloneCells(pend.cand), cloneBuf(pend.cbytes), pend.rfrom}
+				assetStageFigures(t, p, opts, int32(idx), int32(size), answers, rq, bms)
+				if port.CellsLen(rq) > 0 {
+					return port.PlanUnitRequests
+				}
+				done = t
+				return port.PlanUnitDone
+			}
+			ast, aerr := port.PlanRunBms(pcfg, unitA, ports, bytesF, port.PlanNoMisses{}, rec)
+			if aerr != nil {
+				var pe *port.PlanError
+				if errors.As(aerr, &pe) {
+					return outcome{}, RunStats{}, planError(pe)
+				}
+				return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: aerr.Error()}
+			}
+			if afailed != nil {
+				return outcome{}, RunStats{}, afailed
+			}
+			if done == nil {
+				return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: "the asset unit finished with no Model"}
+			}
+			stats.Requests += ast.Requests
+			b.arenas = done
+			if o := sealArenas(b.arenas, opts); o != nil {
+				return outcome{}, RunStats{}, o.err
+			}
 		}
 	}
 	if replayer != nil && replayer.Unused() != 0 {
