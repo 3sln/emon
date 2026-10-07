@@ -91,7 +91,7 @@
             "text": "And hard until over just seen those never ever she we friend know. That air measure has great enough think group policy ever house been.",
             "at": [[1, 72, 130.17, 525.43, 159.16]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 4,
@@ -5082,7 +5082,7 @@
             "text": "1",
             "at": [[1, 303.49, 752.07, 308.5, 761.07]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 584,
@@ -5098,7 +5098,7 @@
             "text": "2",
             "at": [[2, 303.49, 752.07, 308.5, 761.07]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 586,
@@ -5114,7 +5114,7 @@
             "text": "3",
             "at": [[3, 303.49, 752.07, 308.5, 761.07]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 588,
@@ -5129,7 +5129,7 @@
             "text": "She paper region through great out group if point white. Form own us us two as measure great as growth let saw only sun done without.",
             "at": [[4, 72, 171.42, 528.36, 199.66]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 590,
@@ -5137,7 +5137,7 @@
             "text": "4",
             "at": [[4, 303.49, 752.07, 308.5, 761.07]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           }
         ],
         "src": ["infer"],

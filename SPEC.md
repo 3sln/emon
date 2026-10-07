@@ -2411,11 +2411,24 @@ them; an embedder who does has the region and can crop, or turns on
 | `qr` / `barcode` | finder patterns / parallel bar runs (decoding parked) |
 | `unknown` | graphic of any other sort |
 
-**Provisional figures (P3.13, until P8.1 detects figures; D294).** With `assets` on, an image placement that passed P3.6's
-checks, covers less than 800 per mille of its page and has both sides of its visible box at least 18 pt is a `figure` of
-`subkind` `unknown`, placed among the document's and the sections' blocks by its top edge (a section ends where its next
-sibling begins), so that a caption beside it finds it as its object. With `assets` off no such figure is made: a default
-run's Model is what it was, and P8.1 owns the rule that makes every output have them.
+**As built (P8.1; D376-D380).** Every output has the placeholders, at every level of `assets` (which decides only whether they
+get pixels, §10.11). The candidate regions are the image placements that passed P3.6's checks, the vector clusters of
+P8.5 (paths within 2 pt of one another), lone shaded or patterned fills, and P7.G's `figure` regions, each under 800 per
+mille of its page and with both sides of its visible box at least 18 pt (a region that is mostly a `table`'s is not one).
+Each is measured and given a `kind` and a confidence (`conf`, per mille), or is no figure: a region with two or more lines
+of prose in it (a text box, a sidebar, a background), rings drawn one in another (a seal) and a lattice of rules with no axes
+are not. A region with no caption is a figure only when its confidence is at least 500; a captioned region is one always (kind
+`unknown` at 400 when nothing is clear). What decides a kind is language-independent: two long perpendicular rules that meet,
+with ticks, bars, a series or numbers by them (`chart`); boxes with words in them joined by connectors or arrow heads
+(`diagram`); a small coloured drawing in the header or footer band, or a small flat raster there (`logo`; recurrence across
+pages is P8.4's hook, `fc-recur`); a raster that needed many bits a pixel, or a shaded fill with no words in it (`photo`);
+a run of thin parallel bars, or a two-colour raster far wider than high (`barcode`); many tiny squares in a square, or a
+square two-colour raster (`qr`); a large, dense, curved drawing with many small words (`map`); curved line art (`illustration`);
+a framed panel with a few short words, or a large flat raster (`screenshot`). A raster's bits a pixel are the stream's length
+over its pixels, read from the image dictionary: no pixel is decoded. The figure is placed among the document's and the sections'
+blocks by its top edge, or just before its caption when it has one just below it (a column of text may stand between them), so
+that the caption finds it as its object. A short one-line paragraph on a figure or within 24 pt of it (an axis tick, a word in
+a box, a logo's name) is not body text: its text is the figure's `labels`, in reading order. `alt` is not yet read from the PDF.
 
 Captions are linked by label pattern (`Figure 3`, `Fig. 3`, `Chart`,
 `Exhibit`, locale forms) and proximity. Text inside a figure (axis labels,

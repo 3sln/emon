@@ -1,6 +1,6 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/artifacts/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
 ;; P10.1 (D370): re-derived by replaying the committed transcripts (`bb fusion-record --artifacts --digests`): every `conf` of the JSON is the calibrated one.
 {"wm-recur-image"
- "12c62bb9a3afb9f0ac766dbd396d46187fb814c21718b98f2394ffe7a1afe2ea",
+ "bd2240dc80f381e2690c0fae4563e72d4b3a9fc849be26d92c23a3aff55afb38",
  "wm-recur-partial"
- "aed5585be4a6e29a7ceb438124acc58915d6be12bdbe16872a7f4bf675d03010"}
+ "68aeea505358cd7dc8d9c6bcd11ef44d7a72ce50dbb89f10e44480d2f305f25a"}

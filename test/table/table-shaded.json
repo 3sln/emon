@@ -47,7 +47,7 @@
             "text": "Father revenue looked year himself then what white no found.",
             "at": [[1, 72, 130.17, 372.83, 142.66]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 4,
@@ -346,7 +346,7 @@
             "text": "Did many knew something is some people near often down take.",
             "at": [[1, 72, 257.67, 383.65, 270.16]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           }
         ],
         "src": ["infer"],

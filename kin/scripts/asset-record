@@ -50,10 +50,10 @@
         (for [[stem pdf] docs :when (or (empty? stems) (some #{stem} stems))]
           (let [t (str out-root "/" stem) d (str ".cache/asset-rec-" stem)]
             (fs/delete-tree t) (fs/delete-tree d)
-            (let [r (run exe "--pdfium" "--assets=figures" (str "--asset-dir=" d) (str "--record=" t) pdf)]
+            (let [r (run exe "--pdfium" "--ocr=never" "--assets=figures" (str "--asset-dir=" d) (str "--record=" t) pdf)]
               (when-not (zero? (:exit r)) (println "FAIL" stem (:err r)) (System/exit 1))
               (let [json (:out r)
-                    html (fn [mode] (:out (run exe "--pdfium" "--out=html" "--assets=figures" mode (str "--replay=" t) pdf)))
+                    html (fn [mode] (:out (run exe "--pdfium" "--ocr=never" "--out=html" "--assets=figures" mode (str "--replay=" t) pdf)))
                     files (if (fs/exists? d) (into (sorted-map) (for [f (fs/list-dir d)] [(fs/file-name f) (sha256 (fs/read-all-bytes f))])) {})
                     entry {:pdf pdf
                            :json (sha256 json)

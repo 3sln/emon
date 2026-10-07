@@ -613,9 +613,9 @@ fn an_engine_with_a_renderer_is_the_same_engine_and_a_born_digital_page_is_rende
 fn assets_are_opt_in_and_a_jpeg_passes_through_and_a_flate_image_becomes_a_png() {
     let e = Engine::new(Config::default());
     let figure = Kind::named("figure").unwrap();
-    // off: no assets, nothing in the JSON, and no figure is made
+    // off: no assets and nothing about them in the JSON; the figure is there all the same (P8.1: a placeholder at every level)
     let off = e.convert(Input::bytes(read("test/assets/dct-rgb.pdf")), &Options::default()).unwrap();
-    assert!(off.assets().is_empty() && off.find(figure).is_empty());
+    assert!(off.assets().is_empty() && off.find(figure).len() == 1);
     assert!(!json(&off).contains("\"assets\"") && !off.to_html(&HtmlOptions::default()).contains("<img"));
     // a DCT image: its own bytes, a JPEG
     let o = Options { assets: Assets::Images, ..Options::default() };

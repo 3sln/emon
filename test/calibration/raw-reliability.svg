@@ -36,10 +36,11 @@
 <g>
 <rect x="694" y="64" width="152" height="152" fill="none" stroke="#999"/>
 <line x1="694" y1="216.0" x2="846" y2="64.0" stroke="#bbb" stroke-dasharray="4 3"/>
-<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="770.0,64.0"/>
-<circle cx="770.0" cy="64.0" r="8.5" fill="#1f6feb" fill-opacity="0.55"/>
-<text x="694" y="52" font-weight="bold">figure  n=9</text>
-<text x="694" y="230">ECE 0.500  Brier 0.250</text>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="774.3,64.0 806.0,64.0"/>
+<circle cx="774.3" cy="64.0" r="6.5" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="806.0" cy="64.0" r="6.9" fill="#1f6feb" fill-opacity="0.55"/>
+<text x="694" y="52" font-weight="bold">figure  n=11</text>
+<text x="694" y="230">ECE 0.358  Brier 0.139</text>
 <text x="694" y="242" fill="#666">confidence (x) vs accuracy (y)</text>
 </g>
 <g>
@@ -102,19 +103,19 @@
 <g>
 <rect x="474" y="564" width="152" height="152" fill="none" stroke="#999"/>
 <line x1="474" y1="716.0" x2="626" y2="564.0" stroke="#bbb" stroke-dasharray="4 3"/>
-<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="550.0,653.6"/>
-<circle cx="550.0" cy="653.6" r="8.5" fill="#1f6feb" fill-opacity="0.55"/>
-<text x="474" y="552" font-weight="bold">note  n=39</text>
-<text x="474" y="730">ECE 0.090  Brier 0.250</text>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="550.0,650.3"/>
+<circle cx="550.0" cy="650.3" r="8.5" fill="#1f6feb" fill-opacity="0.55"/>
+<text x="474" y="552" font-weight="bold">note  n=37</text>
+<text x="474" y="730">ECE 0.068  Brier 0.250</text>
 <text x="474" y="742" fill="#666">confidence (x) vs accuracy (y)</text>
 </g>
 <g>
 <rect x="694" y="564" width="152" height="152" fill="none" stroke="#999"/>
 <line x1="694" y1="716.0" x2="846" y2="564.0" stroke="#bbb" stroke-dasharray="4 3"/>
-<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="770.0,607.2"/>
-<circle cx="770.0" cy="607.2" r="8.5" fill="#1f6feb" fill-opacity="0.55"/>
-<text x="694" y="552" font-weight="bold">paragraph  n=1086</text>
-<text x="694" y="730">ECE 0.215  Brier 0.250</text>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="770.0,602.4"/>
+<circle cx="770.0" cy="602.4" r="8.5" fill="#1f6feb" fill-opacity="0.55"/>
+<text x="694" y="552" font-weight="bold">paragraph  n=1040</text>
+<text x="694" y="730">ECE 0.247  Brier 0.250</text>
 <text x="694" y="742" fill="#666">confidence (x) vs accuracy (y)</text>
 </g>
 <g>
@@ -184,14 +185,14 @@
 <g>
 <rect x="694" y="1064" width="152" height="152" fill="none" stroke="#999"/>
 <line x1="694" y1="1216.0" x2="846" y2="1064.0" stroke="#bbb" stroke-dasharray="4 3"/>
-<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="770.0,1090.0 785.2,1066.6 800.4,1064.0 815.6,1064.0 842.9,1086.1"/>
-<circle cx="770.0" cy="1090.0" r="5.6" fill="#1f6feb" fill-opacity="0.55"/>
-<circle cx="785.2" cy="1066.6" r="7.5" fill="#1f6feb" fill-opacity="0.55"/>
-<circle cx="800.4" cy="1064.0" r="2.7" fill="#1f6feb" fill-opacity="0.55"/>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="770.0,1087.2 785.2,1066.6 803.0,1064.0 815.6,1064.0 842.9,1086.1"/>
+<circle cx="770.0" cy="1087.2" r="5.6" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="785.2" cy="1066.6" r="7.6" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="803.0" cy="1064.0" r="2.7" fill="#1f6feb" fill-opacity="0.55"/>
 <circle cx="815.6" cy="1064.0" r="2.9" fill="#1f6feb" fill-opacity="0.55"/>
 <circle cx="842.9" cy="1086.1" r="3.4" fill="#1f6feb" fill-opacity="0.55"/>
-<text x="694" y="1052" font-weight="bold">all  n=8419</text>
-<text x="694" y="1230">ECE 0.362  Brier 0.185</text>
+<text x="694" y="1052" font-weight="bold">all  n=8373</text>
+<text x="694" y="1230">ECE 0.367  Brier 0.185</text>
 <text x="694" y="1242" fill="#666">confidence (x) vs accuracy (y)</text>
 </g>
 </svg>

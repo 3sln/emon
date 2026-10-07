@@ -405,7 +405,7 @@ public final class Assettest {
         atCand(cand, 1, 7200, 50000, 30000, 60000, 0, 0, 0, 2);
         atCand(cand, 1, 7200, 95000, 30000, 100000, 0, 0, 0, 3);
         emon.Testport.assertEq(Asset.asFigureRows(cand, pages, nodes, regions, 1, fg), 3, "three figures");
-        Restruct.rsFigures(nodes, attrs, regions, nn, na, nr, nm, cand, fg);
+        Restruct.rsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, emon.Port.newCells(), emon.Port.newCells());
         emon.Testport.assertEq(Model.nodeCount(nn), 9, "nine nodes: the six and three figures");
         // preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE
         emon.Testport.assertEq(Model.nodeKind(nn, 0), Model.nkDocument(), "the document");

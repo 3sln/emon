@@ -786,7 +786,7 @@ func TestAssetsAreOptInAndAJPEGPassesThroughAndAFlateImageBecomesAPNG(t *testing
 	// off: no assets, nothing in the JSON, and no figure is made
 	m0, err := e.Convert(one(BytesInput(read(t, "test/assets/dct-rgb.pdf"))), DefaultOptions())
 	must(t, m0, err)
-	if len(m0.Assets()) != 0 || len(m0.Find(figure)) != 0 || strings.Contains(js(m0), "\"assets\"") || strings.Contains(m0.ToHTML(DefaultHTMLOptions()), "<img") {
+	if len(m0.Assets()) != 0 || len(m0.Find(figure)) != 1 || strings.Contains(js(m0), "\"assets\"") || strings.Contains(m0.ToHTML(DefaultHTMLOptions()), "<img") {
 		t.Error("assets off is not off")
 	}
 	// a DCT image: its own bytes, a JPEG

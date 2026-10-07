@@ -46,7 +46,7 @@
             "text": "Units are whole numbers, revenue is to the cent, and growth is shown to its own precision, with the point lined up.",
             "at": [[1, 72, 124.17, 533.17, 153.16]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 4,

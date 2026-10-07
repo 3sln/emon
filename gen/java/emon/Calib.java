@@ -29,7 +29,7 @@ public final class Calib {
         if (raw < 0) {
             return raw;
         }
-        int n = 19;
+        int n = 18;
         int i = 0;
         int hitC = -1;
         int firstC = -1;

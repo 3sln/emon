@@ -1,10 +1,10 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/seals/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
 ;; P10.1 (D370): re-derived by replaying the committed transcripts (`bb fusion-record --seals --digests`): every `conf` of the JSON is the calibrated one.
 {"seal-black-ring"
- "4f1e8f24f320bcb374fdccc43244f3205810721da05175b1af193ac73ad8ee50",
+ "d85c865b5bb895eef5ff6753bb8de9258bdf0074e730a3697ed2e63acb70e5f8",
  "seal-negatives"
- "3059d8ccf28378194ca7c8a52e8e8d1112cc12229f4933500f5889fc4aa898e1",
+ "ac2f86577f800f49433c98daccc8d4d3d79a2be52ad5ef410731e117977a20d0",
  "sig-by-line"
- "824bb50773cfc31470c8db857b57ee7a02c2fa527f6909088b711672b026d016",
+ "17922d71e073658a1c61abe8749fdec88e39e9f168e1c6603f18ab33865b25a1",
  "stamp-translucent"
- "06a4971f802bbeec97a2f3246bc06010623729e44ad70bdd9acf0117e3e53d5d"}
+ "5b15dd6486a11be901f5432ea19c435e83577ec0bbb8becc71272638650d1c5d"}

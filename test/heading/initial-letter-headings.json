@@ -61,7 +61,7 @@
                 "text": "Aardvark A burrowing animal that feeds at night on ants and termites. Leave something turned before about himself looked me against about children found region in.",
                 "at": [[1, 72, 185.67, 505.48, 213.91]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 6,
@@ -69,7 +69,7 @@
                 "text": "Abacus A frame of beads used for counting before printed tables were common. In at thought change story done near was your had same told which new.",
                 "at": [[1, 72, 224.67, 528.53, 253.66]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 7,
@@ -77,7 +77,7 @@
                 "text": "Anchorage A place where a vessel may lie safely on its cable. During about place why my play show many show want.",
                 "at": [[1, 72, 264.42, 529.94, 293.41]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               }
             ],
             "src": ["infer"],
@@ -104,7 +104,7 @@
                 "text": "Barometer An instrument for reading the weight of the air. Also however time toward look take other so new words all about do before.",
                 "at": [[1, 72, 365.67, 518.31, 393.91]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 11,
@@ -112,7 +112,7 @@
                 "text": "Basalt A dark volcanic rock that cools into close columns. Example at what not its name was the called best will.",
                 "at": [[1, 72, 405.42, 539.97, 433.66]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 12,
@@ -120,7 +120,7 @@
                 "text": "Beacon A fire or lamp set on a height to warn or to guide. Than today because first four me number people by had first five family.",
                 "at": [[1, 72, 444.42, 515.67, 473.41]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               }
             ],
             "src": ["infer"],
@@ -147,7 +147,7 @@
                 "text": "Cairn A heap of stones raised as a landmark or a grave. Same seen own air himself people once every next around animal because of under.",
                 "at": [[1, 72, 545.67, 534.21, 573.91]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 16,
@@ -155,7 +155,7 @@
                 "text": "Compass A needle that turns to the north and so tells a traveller where he is. Going boy was example called no five work earth new both paper.",
                 "at": [[1, 72, 585.42, 520.71, 613.66]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 17,
@@ -163,7 +163,7 @@
                 "text": "Contour A line on a map joining points of equal height. Man from away him last point great than now try then.",
                 "at": [[1, 72, 625.17, 520.94, 653.41]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               }
             ],
             "src": ["infer"],

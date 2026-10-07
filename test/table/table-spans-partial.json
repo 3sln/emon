@@ -47,7 +47,7 @@
             "text": "The own such head where often often would left.",
             "at": [[1, 72, 130.17, 306.77, 142.66]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 4,
@@ -409,7 +409,7 @@
             "text": "Three feet with its she five top much now.",
             "at": [[1, 72, 279.42, 273.78, 291.91]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           }
         ],
         "src": ["infer"],

@@ -1,0 +1,1041 @@
+;; FIGURES: which regions of a page are figures, what kind each is, and the placeholder that stands for it (P8.1; SPEC 10.6, D020). emon's own module (D039).
+;;
+;; An image placement, a cluster of vector paths, a patterned or shaded fill and a P7.G `figure` region (SPEC 9.9, D228) are CANDIDATE REGIONS. Each is
+;; measured and given a `kind` of SPEC 10.6's table and a confidence, or is no figure at all. The rest is the Model's: an empty `figure` with
+;; `subkind` and `conf`, its caption (`emon.restruct` pairs it), and the short paragraphs that were its axis ticks, its boxes' words and a logo's name,
+;; which are `labels` and not body text (`rs-figures`). Every feature is geometry, ink or the SHAPE of the text near the region (digits, short words,
+;; lines of prose); no word of any language is read.
+;;
+;;   (fc-images ...)   the document pass: what the PDF says about each image placement (its codec, colour class, bits, size and how many bytes the
+;;                     encoder needed per pixel, which tells a photograph from a flat drawing without decoding a pixel). It reads the input.
+;;   (fc-stage ...)    the document unit: regions, features, kinds, the placement and the labels (`rs-figures`), and the asset stage's rows.
+;;
+;; THE KINDS AND WHAT DECIDES THEM (the thresholds are named constants here, first values, as `emon.sealmark`'s are: P10.1 calibrates `conf`):
+;;   chart        two long perpendicular rules that meet (axes) with ticks, bars, a series or numbers by them; or three or more coloured wedges; or a
+;;                run of three or more filled bars on one baseline of different heights
+;;   diagram      two or more boxes with words inside, joined by connectors or arrow heads, and no axes
+;;   logo         small, near the top or the bottom of the page (or recurring: P8.4's hook `fc-recur`), few paths, coloured; or a small flat raster
+;;   photo        a raster image that needed more bits a pixel than a drawing does; a lone shaded or patterned fill with no words in it
+;;   barcode      a run of twelve or more thin parallel filled bars; a flat two-colour raster far wider than high
+;;   qr           forty or more tiny filled squares in a square; a flat two-colour raster that is square
+;;   map          large, many paths, mostly curves, many small words
+;;   illustration many paths, mostly curves, nothing the kinds above ask for
+;;   screenshot   a framed panel with a few short words; a large flat raster
+;;   unknown      any other graphic that has a caption
+;; A region that is covered with lines of prose (a text box, a sidebar, a background), that is a seal (rings drawn one in another), or a lattice of
+;; rules with no axes (a table) is NOT a figure. A region with no caption is a figure only when what it is is clear (confidence at least 500).
+(ns emon.figclass
+  (:require [emon.lang :refer [I32 I64 Src Cells i64 i32 mul64 add64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.model :refer [node-count node-kind node-aux node-region-head node-region-count region-page region-x0 region-y0 region-x1 region-y1
+                                region-next page-count page-w page-h nk-caption fg-chart fg-diagram fg-photo fg-logo fg-map fg-illustration
+                                fg-screenshot fg-qr fg-barcode fg-unknown sr-vector sr-trace sr-ocr]]
+            [emon.evidence :refer [im-count im-get mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj mf-vis mf-clip
+                                   pa-get pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-flags pf-vis
+                                   pg-clip pg-filled pg-stroked pg-shading pg-pattern pg-closed pa-rect pa-line pa-curve pa-other pa-rect
+                                   wd-get wd-count hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen
+                                   ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-count]]
+            [emon.glayer :refer [grg-count grg-get rk-figure grl-count grl-get go-h go-v]]
+            [emon.asset :refer [as-vector-regions as-figure-rows as-region-add as-count as-get]]
+            [emon.pdfdoc :refer [pd-get pd-pg-count]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.pdfimage :refer [pi-info pi-get pi-f-w pi-f-h pi-f-bpc pi-f-class pi-f-ncomp pi-f-codec pi-f-slen pi-f-hival pi-f-mkind]]
+            [emon.restruct :refer [rs-figures]]
+            [kin.lang :refer [defn defconst return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+;; ------------------------------------------------------------------------------------------------ the settings
+
+(defconst ^I32 FC_MAXIMG 4096)      ;; image placements whose dictionaries are read, a document
+(defconst ^I32 FC_MAXREG 128)       ;; candidate regions measured, a document
+(defconst ^I32 FC_WORK 40000000)    ;; rows (paths, words, lines) the measuring may read in all
+(defconst ^I32 FC_ZONE 1800)        ;; words this close to a region (18 pt) are near it
+(defconst ^I32 FC_PHOTO_BPP 130)    ;; bits per pixel (x100) from which a raster is photographic
+(defconst ^I32 FC_SMALL 15000)      ;; a logo's longest side at most (150 pt)
+(defconst ^I32 FC_BAND 200)         ;; the header or footer band, per mille of the page's height
+(defconst ^I32 FC_EMIT 500)         ;; the confidence from which a figure with no caption is one
+(defconst ^I32 FC_CAPGAP 4000)      ;; a caption this close above or below a region (40 pt) is its caption
+
+;; the stride of `fi` (the image placements' rows, made by `fc-images`)
+(defconst ^I32 FI_STRIDE 12)        ;; 0 valid  1 codec  2 class  3 ncomp  4 bpc  5 w  6 h  7 bits a pixel x100  8 hival  9 mask kind  10 11 spare
+
+;; the slots of `ft`, the features of the region being measured
+(defconst ^I32 FT_NP 0)             ;; paths
+(defconst ^I32 FT_NHL 1)            ;; long horizontal rules
+(defconst ^I32 FT_NVL 2)            ;; long vertical rules
+(defconst ^I32 FT_AXES 3)           ;; 1 when the longest of each meet
+(defconst ^I32 FT_TICKS 4)          ;; short rules across an axis
+(defconst ^I32 FT_BARS 5)           ;; the largest run of filled bars on one baseline (or one left edge)
+(defconst ^I32 FT_BARVAR 6)         ;; 1 when those bars are of different lengths
+(defconst ^I32 FT_SERIES 7)         ;; long stroked open curves or polylines, long slanted rules
+(defconst ^I32 FT_WEDGE 8)          ;; filled curves or polygons, each a few points wide, of distinct colours
+(defconst ^I32 FT_BOXW 9)           ;; boxes with at least one word inside
+(defconst ^I32 FT_CONN 10)          ;; connectors: rules of at least 8 pt that are not axes, and arrow heads
+(defconst ^I32 FT_ARROW 11)         ;; small filled polygons
+(defconst ^I32 FT_SWATCH 12)        ;; small filled squares with a word at their right
+(defconst ^I32 FT_CURVE 13)
+(defconst ^I32 FT_OTHER 14)
+(defconst ^I32 FT_RECT 15)
+(defconst ^I32 FT_COLOR 16)         ;; paths with a chromatic ink
+(defconst ^I32 FT_WORDS 17)         ;; words in or near the region
+(defconst ^I32 FT_NUM 18)           ;; of them, numbers
+(defconst ^I32 FT_PROSE 19)         ;; lines of five words or more inside it
+(defconst ^I32 FT_SHADE 20)         ;; patterned or shaded fills
+(defconst ^I32 FT_TINY 21)          ;; filled squares of at most 7 pt
+(defconst ^I32 FT_THIN 22)          ;; thin tall filled bars of one height
+(defconst ^I32 FT_FRAME 23)         ;; a path that frames the region
+(defconst ^I32 FT_RING 24)          ;; round paths drawn one in another
+(defconst ^I32 FT_INSIDE 25)        ;; words inside the region itself
+(defconst ^I32 FT_BOXES 26)         ;; boxes
+(defconst ^I32 FT_NSW 27)           ;; small squares seen
+(defconst ^I32 FT_NRG 28)           ;; round paths seen
+(defconst ^I32 FT_NCOL 29)          ;; distinct fills of wedges seen
+(defconst ^I32 FT_NBAR 30)          ;; bars seen
+(defconst ^I32 FT_HX0 31)           ;; the longest horizontal rule: its left, right and centre line
+(defconst ^I32 FT_HX1 32)
+(defconst ^I32 FT_HY 33)
+(defconst ^I32 FT_HLEN 34)
+(defconst ^I32 FT_VX 35)            ;; the longest vertical rule: its centre line, top and bottom
+(defconst ^I32 FT_VY0 36)
+(defconst ^I32 FT_VY1 37)
+(defconst ^I32 FT_VLEN 38)
+(defconst ^I32 FT_TOPY 39)          ;; the first thin bar's top and bottom
+(defconst ^I32 FT_BOTY 40)
+(defconst ^I32 FT_ALIGNED 41)       ;; thin bars with that top and bottom
+(defconst ^I32 FT_SLANT 42)
+(defconst ^I32 FT_RINGS 48)         ;; 16 round paths: centre x, centre y, diameter
+(defconst ^I32 FT_COLS 96)          ;; 8 distinct wedge fills
+(defconst ^I32 FT_WORK 127)         ;; the rows read so far in the document (never cleared between regions)
+(defconst ^I32 FT_SIZE 128)
+(defconst ^I32 RG_MAX 16)
+(defconst ^I32 BX_STRIDE 6)         ;; a box: x0 y0 x1 y1 words inside, 0
+(defconst ^I32 BX_MAX 48)
+(defconst ^I32 SW_STRIDE 5)         ;; a small square: x0 y0 x1 y1 1 when a word is at its right
+(defconst ^I32 SW_MAX 24)
+(defconst ^I32 BR_STRIDE 4)         ;; a bar: x0 y0 x1 y1
+(defconst ^I32 BR_MAX 48)
+(defconst ^I32 WS_BX 128)           ;; the scratch `ws`: the features, then the boxes, the small squares, the bars
+(defconst ^I32 WS_SW 416)           ;; 128 + 48 * 6 * 1
+(defconst ^I32 WS_BR 536)           ;; 416 + 24 * 5
+(defconst ^I32 WS_SIZE 728)         ;; 536 + 48 * 4
+
+;; the layout of `fd` (`emon.restruct`'s RF_FD): 0 kind, 1 confidence, 2 sources (`sr` bits), 3 the asset stage's candidate row (-1), 4 the
+;; caption `rs-figures` anchors it to (-1, made there)
+(defconst ^I32 FD_STRIDE 8)
+
+;; the rows of `fcand` (the asset stage's candidate row, stride 32: `emon.asset`): 27 -1 an image placement, -2 a region; 28 the evidence row it
+;; came from, 29 its sources (`sr` bits), 30 its origin
+(defconst ^I32 CR_STRIDE 32)
+(defconst ^I32 CR_PAGE 0)
+(defconst ^I32 CR_BX 1)
+(defconst ^I32 CR_VX 5)
+(defconst ^I32 CR_STATUS 9)
+(defconst ^I32 CR_OBJ 25)
+(defconst ^I32 CR_KORI 27)
+(defconst ^I32 CR_ROW 28)
+(defconst ^I32 CR_SRC 29)
+(defconst ^I32 CR_ORG 30)           ;; 0 as the asset stage made it, 2 a shaded or patterned fill, 3 a P7.G region
+
+;; ------------------------------------------------------------------------------------------------ small helpers
+
+(defn ^I32 fc-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 fc-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 fc-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 fc-chroma [^I32 c]
+  (comment "The spread of the largest and smallest channel of 0xRRGGBB; 0 for none (-1).")
+  (if (< c 0) (return 0))
+  (let [^I32 r (bit-and (quot c 65536) 255)
+        ^I32 g (bit-and (quot c 256) 255)
+        ^I32 b (bit-and c 255)]
+    (return (- (fc-max r (fc-max g b)) (fc-min r (fc-min g b))))))
+
+(defn ^I64 fc-area [^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (if (or (<= x1 x0) (<= y1 y0)) (return (i64 0)))
+  (return (mul64 (i64 (- x1 x0)) (i64 (- y1 y0)))))
+
+(defn ^I64 fc-ia [^I32 ax0 ^I32 ay0 ^I32 ax1 ^I32 ay1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "The area of the intersection of two boxes.")
+  (return (fc-area (fc-max ax0 bx0) (fc-max ay0 by0) (fc-min ax1 bx1) (fc-min ay1 by1))))
+
+(defn ^I32 fc-ge [^I64 a ^I64 b ^I32 per]
+  (comment "1 when a is at least per/1000 of b (b > 0).")
+  (if (>= (mul64 a (i64 1000)) (mul64 (i64 per) b)) (return 1))
+  (return 0))
+
+(defn ^I32 fc-sign [^I32 c]
+  (comment "1 for a sign a number carries in a figure: . , % - + $ : / and the currency signs.")
+  (if (or (== c 46) (== c 44)) (return 1))
+  (if (or (== c 37) (== c 45)) (return 1))
+  (if (or (== c 43) (== c 36)) (return 1))
+  (if (or (== c 58) (== c 47)) (return 1))
+  (if (or (== c 8364) (or (== c 163) (== c 165))) (return 1))
+  (return 0))
+
+(defn ^I32 fc-numeric [^Cells et ^I32 ts ^I32 tl]
+  (comment "1 when the word et[ts, ts+tl) is a number as a figure writes it: digits, at least one, and only the signs a number has.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 digits 0
+        ^:mut ^I32 c 0]
+    (if (or (< ts 0) (< tl 1)) (return 0))
+    (while (< k tl)
+      (do (set c (cells-at et (+ ts k)))
+          (if (and (>= c 48) (<= c 57))
+            (set digits (+ digits 1))
+            (if (== (fc-sign c) 0) (return 0)))
+          (set k (+ k 1))))
+    (if (> digits 0) (return 1))
+    (return 0)))
+
+;; ------------------------------------------------------------------------------------------------ the document pass
+
+(defn ^:pub ^I32 fc-images [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                            ^Cells im ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells fi]
+  (comment "What the dictionary of each image placement says, in `fi` (stride `FI_STRIDE`, one row to a row of `im`): its codec, colour class,")
+  (comment "components, bits, size, the colour count of an Indexed one, the kind of its mask, and the bytes its encoder needed for each pixel")
+  (comment "(x100 bits), which says photograph or drawing without a pixel read. A placement that fails a check of P3.6 or is not an")
+  (comment "image kin reads has a row of zeros. `out` and `rec` are scratch. Answers 0, or 12 when the source missed (stop, re-run).")
+  (let [^I32 n (im-count im)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 obj 0
+        ^:mut ^I32 sh 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 hit -1
+        ^:mut ^I32 work 0
+        ^:mut ^I64 bpp (i64 0)]
+    (cells-drop fi 0)
+    (while (< r n)
+      (do (set k 0)
+          (while (< k FI_STRIDE)
+            (do (cells-push fi 0)
+                (set k (+ k 1))))
+          (set obj (im-get im r (mf-obj)))
+          (if (and (== (im-get im r (mf-vis)) 0) (and (> obj 0) (< work FC_MAXIMG)))
+            (do (set work (+ work 1))
+                (set hit -1)
+                (set j (fc-max 0 (- r 64)))
+                (while (and (< j r) (< hit 0))
+                  (do (if (and (== (im-get im j (mf-obj)) obj) (== (cells-at fi (* j FI_STRIDE)) 1))
+                        (set hit j))
+                      (set j (+ j 1))))
+                (if (>= hit 0)
+                  (do (set k 0)
+                      (while (< k FI_STRIDE)
+                        (do (cells-set fi (+ (* r FI_STRIDE) k) (cells-at fi (+ (* hit FI_STRIDE) k)))
+                            (set k (+ k 1)))))
+                  (do (set sh (pd-get src ar dc a b st obj))
+                      (if (and (!= sh 0) (== (pi-info src ar dc a b st out rec sh obj) 0))
+                        (do (set w (pi-get rec (pi-f-w)))
+                            (set h (pi-get rec (pi-f-h)))
+                            (if (and (> w 0) (> h 0))
+                              (do (set bpp (quot (mul64 (i64 (pi-get rec (pi-f-slen))) (i64 800)) (mul64 (i64 w) (i64 h))))
+                                  (if (> bpp (i64 100000)) (set bpp (i64 100000)))
+                                  (set k (* r FI_STRIDE))
+                                  (cells-set fi k 1)
+                                  (cells-set fi (+ k 1) (pi-get rec (pi-f-codec)))
+                                  (cells-set fi (+ k 2) (pi-get rec (pi-f-class)))
+                                  (cells-set fi (+ k 3) (pi-get rec (pi-f-ncomp)))
+                                  (cells-set fi (+ k 4) (pi-get rec (pi-f-bpc)))
+                                  (cells-set fi (+ k 5) w)
+                                  (cells-set fi (+ k 6) h)
+                                  (cells-set fi (+ k 7) (i32 bpp))
+                                  (cells-set fi (+ k 8) (pi-get rec (pi-f-hival)))
+                                  (cells-set fi (+ k 9) (pi-get rec (pi-f-mkind)))))))))))
+          (set r (+ r 1))))
+    (if (ps-missed src) (return 12))
+    (return 0)))
+
+;; ------------------------------------------------------------------------------------------------ the candidate regions
+
+(defn ^I32 fc-new-row [^:mut ^Cells cand ^I32 page ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1 ^I32 vx0 ^I32 vy0 ^I32 vx1 ^I32 vy1
+                       ^I32 obj ^I32 kori ^I32 row ^I32 srcs ^I32 org]
+  (comment "A candidate row of `fcand` (stride 32, `emon.asset`'s layout): the box, the visible box, the object, the origin and what this module keeps.")
+  (let [^I32 r (quot (cells-len cand) CR_STRIDE)
+        ^:mut ^I32 f 0]
+    (while (< f CR_STRIDE)
+      (do (cells-push cand 0)
+          (set f (+ f 1))))
+    (cells-set cand (+ (* r CR_STRIDE) CR_PAGE) page)
+    (cells-set cand (+ (* r CR_STRIDE) CR_BX) bx0)
+    (cells-set cand (+ (* r CR_STRIDE) (+ CR_BX 1)) by0)
+    (cells-set cand (+ (* r CR_STRIDE) (+ CR_BX 2)) bx1)
+    (cells-set cand (+ (* r CR_STRIDE) (+ CR_BX 3)) by1)
+    (cells-set cand (+ (* r CR_STRIDE) CR_VX) vx0)
+    (cells-set cand (+ (* r CR_STRIDE) (+ CR_VX 1)) vy0)
+    (cells-set cand (+ (* r CR_STRIDE) (+ CR_VX 2)) vx1)
+    (cells-set cand (+ (* r CR_STRIDE) (+ CR_VX 3)) vy1)
+    (cells-set cand (+ (* r CR_STRIDE) CR_OBJ) obj)
+    (cells-set cand (+ (* r CR_STRIDE) CR_KORI) kori)
+    (cells-set cand (+ (* r CR_STRIDE) CR_ROW) row)
+    (cells-set cand (+ (* r CR_STRIDE) CR_SRC) srcs)
+    (cells-set cand (+ (* r CR_STRIDE) CR_ORG) org)
+    (return r)))
+
+(defn ^I32 fc-image-rows [^Cells im ^Cells pa ^Cells pg ^:mut ^Cells cand]
+  (comment "A candidate row for every image placement that passed P3.6's checks and has a visible box (`emon.asset`'s `as-collect` makes the")
+  (comment "same rows with their pixels; here only the boxes are wanted): the box, and the box cut to its clip's box. The row's")
+  (comment "origin is -1 and its evidence row the placement's.")
+  (let [^I32 n (im-count im)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 vx0 0
+        ^:mut ^I32 vy0 0
+        ^:mut ^I32 vx1 0
+        ^:mut ^I32 vy1 0
+        ^:mut ^I32 clip -1]
+    (while (< r n)
+      (do (if (== (im-get im r (mf-vis)) 0)
+            (do (set page (im-get im r (mf-page)))
+                (set vx0 (im-get im r (mf-x0)))
+                (set vy0 (im-get im r (mf-y0)))
+                (set vx1 (im-get im r (mf-x1)))
+                (set vy1 (im-get im r (mf-y1)))
+                (set clip (im-get im r (mf-clip)))
+                (if (and (>= clip 0) (< clip (quot (cells-len pa) 24)))
+                  (do (if (> (pa-get pa clip (pf-x0)) vx0) (set vx0 (pa-get pa clip (pf-x0))))
+                      (if (> (pa-get pa clip (pf-y0)) vy0) (set vy0 (pa-get pa clip (pf-y0))))
+                      (if (< (pa-get pa clip (pf-x1)) vx1) (set vx1 (pa-get pa clip (pf-x1))))
+                      (if (< (pa-get pa clip (pf-y1)) vy1) (set vy1 (pa-get pa clip (pf-y1))))))
+                (if (and (> vx1 vx0) (and (> vy1 vy0) (and (>= page 1) (<= page (pd-pg-count pg)))))
+                  (fc-new-row cand page (im-get im r (mf-x0)) (im-get im r (mf-y0)) (im-get im r (mf-x1)) (im-get im r (mf-y1))
+                              vx0 vy0 vx1 vy1 (im-get im r (mf-obj)) -1 r 0 0))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 fc-covered [^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 per]
+  (comment "1 when at least `per` per mille of the box lies inside the visible box of one candidate row of the page (any origin).")
+  (let [^I32 n (quot (cells-len cand) CR_STRIDE)
+        ^I64 area (fc-area x0 y0 x1 y1)
+        ^:mut ^I32 r 0]
+    (if (<= area (i64 0)) (return 0))
+    (while (< r n)
+      (do (if (== (cells-at cand (+ (* r CR_STRIDE) CR_PAGE)) page)
+            (if (== (fc-ge (fc-ia x0 y0 x1 y1 (cells-at cand (+ (* r CR_STRIDE) CR_VX)) (cells-at cand (+ (* r CR_STRIDE) (+ CR_VX 1)))
+                                  (cells-at cand (+ (* r CR_STRIDE) (+ CR_VX 2))) (cells-at cand (+ (* r CR_STRIDE) (+ CR_VX 3))))
+                            area per) 1)
+              (return 1)))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 fc-shading-regions [^Cells pa ^Cells pages ^:mut ^Cells cand]
+  (comment "A patterned or shaded fill is a continuous-tone picture when it is large and no page-sized background: a region of its own (the")
+  (comment "paths clusters need two paths; a gradient is one). Origin -3. Not when most of it lies in an image or a cluster already found.")
+  (let [^I32 n (quot (cells-len pa) 24)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0]
+    (while (< i n)
+      (do (if (and (== (pa-get pa i (pf-vis)) 0)
+                   (and (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0)
+                        (!= (bit-and (pa-get pa i (pf-flags)) (bit-or (pg-shading) (pg-pattern))) 0)))
+            (do (set page (pa-get pa i (pf-page)))
+                (set x0 (pa-get pa i (pf-x0)))
+                (set y0 (pa-get pa i (pf-y0)))
+                (set x1 (pa-get pa i (pf-x1)))
+                (set y1 (pa-get pa i (pf-y1)))
+                (if (and (>= page 1) (<= page (page-count pages)))
+                  (do (set pw (page-w pages (- page 1)))
+                      (set ph (page-h pages (- page 1)))
+                      (if (and (>= (- x1 x0) 6000) (and (>= (- y1 y0) 4000)
+                               (== (fc-ge (fc-area x0 y0 x1 y1) (fc-area 0 0 pw ph) 800) 0)))
+                        (if (== (fc-covered cand page x0 y0 x1 y1 500) 0)
+                          (fc-new-row cand page x0 y0 x1 y1 x0 y0 x1 y1 -1 -2 i (sr-vector) 2)))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fc-sr-of-gs [^I32 gs]
+  (comment "The provenance bits (`sr`) of the sources of a graphic (`gs`: vector 1, tracer 2, OCR 4, tagged tree 8, image 16).")
+  (let [^:mut ^I32 s 0]
+    (if (!= (bit-and gs 1) 0) (set s (bit-or s (sr-vector))))
+    (if (!= (bit-and gs 2) 0) (set s (bit-or s (sr-trace))))
+    (if (!= (bit-and gs 4) 0) (set s (bit-or s (sr-ocr))))
+    (return s)))
+
+(defn ^I32 fc-grg-regions [^Cells grg ^Cells pages ^:mut ^Cells cand]
+  (comment "P7.G's `figure` regions (SPEC 9.9, D228), fused with what is found already: a region that lies mostly in a candidate is that")
+  (comment "candidate; a cluster or a shaded fill that lies mostly in the region grows to the region (the region has the text blocks'")
+  (comment "and the tracer's share); any other is a candidate of its own, origin 3. Images are never grown.")
+  (let [^I32 n (grg-count grg)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 hit 0
+        ^:mut ^I32 b 0]
+    (while (< g n)
+      (do (if (== (grg-get grg g 5) (rk-figure))
+            (do (set page (grg-get grg g 0))
+                (set x0 (grg-get grg g 1))
+                (set y0 (grg-get grg g 2))
+                (set x1 (grg-get grg g 3))
+                (set y1 (grg-get grg g 4))
+                (if (and (>= page 1) (and (<= page (page-count pages)) (and (> x1 x0) (> y1 y0))))
+                  (do (set hit 0)
+                      (set nr (quot (cells-len cand) CR_STRIDE))
+                      (set r 0)
+                      (while (and (< r nr) (== hit 0))
+                        (do (set b (* r CR_STRIDE))
+                            (if (and (== (cells-at cand (+ b CR_PAGE)) page) (== (cells-at cand (+ b CR_KORI)) -2))
+                              (if (== (fc-ge (fc-ia x0 y0 x1 y1 (cells-at cand (+ b CR_VX)) (cells-at cand (+ b (+ CR_VX 1)))
+                                                    (cells-at cand (+ b (+ CR_VX 2))) (cells-at cand (+ b (+ CR_VX 3))))
+                                             (fc-area (cells-at cand (+ b CR_VX)) (cells-at cand (+ b (+ CR_VX 1)))
+                                                      (cells-at cand (+ b (+ CR_VX 2))) (cells-at cand (+ b (+ CR_VX 3))))
+                                             500) 1)
+                                (do (set hit 1)
+                                    (cells-set cand (+ b CR_VX) (fc-min x0 (cells-at cand (+ b CR_VX))))
+                                    (cells-set cand (+ b (+ CR_VX 1)) (fc-min y0 (cells-at cand (+ b (+ CR_VX 1)))))
+                                    (cells-set cand (+ b (+ CR_VX 2)) (fc-max x1 (cells-at cand (+ b (+ CR_VX 2)))))
+                                    (cells-set cand (+ b (+ CR_VX 3)) (fc-max y1 (cells-at cand (+ b (+ CR_VX 3)))))
+                                    (cells-set cand (+ b CR_BX) (cells-at cand (+ b CR_VX)))
+                                    (cells-set cand (+ b (+ CR_BX 1)) (cells-at cand (+ b (+ CR_VX 1))))
+                                    (cells-set cand (+ b (+ CR_BX 2)) (cells-at cand (+ b (+ CR_VX 2))))
+                                    (cells-set cand (+ b (+ CR_BX 3)) (cells-at cand (+ b (+ CR_VX 3))))
+                                    (cells-set cand (+ b CR_SRC) (bit-or (cells-at cand (+ b CR_SRC)) (fc-sr-of-gs (grg-get grg g 6)))))))
+                            (set r (+ r 1))))
+                      (if (and (== hit 0) (== (fc-covered cand page x0 y0 x1 y1 500) 0))
+                        (fc-new-row cand page x0 y0 x1 y1 x0 y0 x1 y1 -1 -2 g (fc-sr-of-gs (grg-get grg g 6)) 3))))))
+          (set g (+ g 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------------------------------------ measuring a region
+
+(defn ^I32 fc-inc [^:mut ^Cells ws ^I32 slot]
+  (cells-set ws slot (+ (cells-at ws slot) 1))
+  (return 0))
+
+(defn ^I32 fc-near-eq [^I32 a ^I32 b ^I32 tol]
+  (if (<= (fc-abs (- a b)) tol) (return 1))
+  (return 0))
+
+(defn ^I32 fc-store-box [^:mut ^Cells ws ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (let [^I32 at (cells-at ws FT_BOXES)
+        ^:mut ^I32 p 0]
+    (if (< at BX_MAX)
+      (do (set p (+ WS_BX (* at BX_STRIDE)))
+          (cells-set ws p x0)
+          (cells-set ws (+ p 1) y0)
+          (cells-set ws (+ p 2) x1)
+          (cells-set ws (+ p 3) y1)
+          (cells-set ws (+ p 4) 0)
+          (cells-set ws (+ p 5) 0)))
+    (fc-inc ws FT_BOXES)
+    (return 0)))
+
+(defn ^I32 fc-wedge [^:mut ^Cells ws ^I32 fill]
+  (comment "A filled curve or polygon of some size: a candidate wedge of a pie; its colour is counted once.")
+  (let [^I32 n (cells-at ws FT_NCOL)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 dup 0]
+    (fc-inc ws FT_WEDGE)
+    (while (and (< j n) (< j 8))
+      (do (if (== (cells-at ws (+ FT_COLS j)) fill) (set dup 1))
+          (set j (+ j 1))))
+    (if (and (== dup 0) (< n 8))
+      (do (cells-set ws (+ FT_COLS n) fill)
+          (fc-inc ws FT_NCOL)))
+    (return 0)))
+
+(defn ^I32 fc-one-path [^Cells pa ^I32 i ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
+  (comment "Path i of the region's page, visible and no clip, its centre in the region: its share of the features.")
+  (let [^I32 x0 (pa-get pa i (pf-x0))
+        ^I32 y0 (pa-get pa i (pf-y0))
+        ^I32 x1 (pa-get pa i (pf-x1))
+        ^I32 y1 (pa-get pa i (pf-y1))
+        ^I32 w (- x1 x0)
+        ^I32 h (- y1 y0)
+        ^I32 kind (pa-get pa i (pf-kind))
+        ^I32 fl (pa-get pa i (pf-flags))
+        ^I32 fill (pa-get pa i (pf-fill))
+        ^I32 stroke (pa-get pa i (pf-stroke))
+        ^I32 rw (- rx1 rx0)
+        ^I32 rh (- ry1 ry0)
+        ^I32 cx (quot (+ x0 x1) 2)
+        ^I32 cy (quot (+ y0 y1) 2)
+        ^:mut ^I32 filled 0
+        ^:mut ^I32 stroked 0
+        ^:mut ^I32 rule 0
+        ^:mut ^I32 span 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 p 0]
+    (if (!= (bit-and fl (pg-filled)) 0) (set filled 1))
+    (if (!= (bit-and fl (pg-stroked)) 0) (set stroked 1))
+    (fc-inc ws FT_NP)
+    (if (and (== filled 1) (>= (fc-chroma fill) 48))
+      (fc-inc ws FT_COLOR)
+      (if (and (== stroked 1) (>= (fc-chroma stroke) 48)) (fc-inc ws FT_COLOR)))
+    (if (!= (bit-and fl (bit-or (pg-shading) (pg-pattern))) 0) (fc-inc ws FT_SHADE))
+    (if (== kind (pa-line))
+      (if (and (<= h 300) (> w h))
+        (set rule 1)
+        (if (and (<= w 300) (> h w)) (set rule 2) (set rule 3))))
+    (if (== kind (pa-rect))
+      (if (and (<= (fc-min w h) 200) (>= (fc-max w h) 500))
+        (if (<= h w) (set rule 1) (set rule 2))))
+    (if (== rule 1)
+      (do (set span w)
+          (if (and (>= span 3000) (>= (* span 100) (* rw 45)))
+            (do (fc-inc ws FT_NHL)
+                (if (> span (cells-at ws FT_HLEN))
+                  (do (cells-set ws FT_HLEN span)
+                      (cells-set ws FT_HX0 x0)
+                      (cells-set ws FT_HX1 x1)
+                      (cells-set ws FT_HY cy)))))
+          (if (>= span 800) (fc-inc ws FT_CONN))))
+    (if (== rule 2)
+      (do (set span h)
+          (if (and (>= span 2500) (>= (* span 100) (* rh 40)))
+            (do (fc-inc ws FT_NVL)
+                (if (> span (cells-at ws FT_VLEN))
+                  (do (cells-set ws FT_VLEN span)
+                      (cells-set ws FT_VX cx)
+                      (cells-set ws FT_VY0 y0)
+                      (cells-set ws FT_VY1 y1)))))
+          (if (>= span 800) (fc-inc ws FT_CONN))))
+    (if (== rule 3) (fc-inc ws FT_SLANT))
+    (comment "a thin tall filled bar (a barcode's), which is also a vertical rule when it is under 2 pt wide")
+    (if (and (== kind (pa-rect)) (and (== filled 1) (and (<= w 400) (>= h 1500))))
+      (do (fc-inc ws FT_THIN)
+          (if (== (cells-at ws FT_THIN) 1)
+            (do (cells-set ws FT_TOPY y0)
+                (cells-set ws FT_BOTY y1)
+                (cells-set ws FT_ALIGNED 1))
+            (if (and (== (fc-near-eq y0 (cells-at ws FT_TOPY) 150) 1) (== (fc-near-eq y1 (cells-at ws FT_BOTY) 150) 1))
+              (fc-inc ws FT_ALIGNED)))))
+    (if (and (== rule 0) (== kind (pa-rect)))
+      (do (fc-inc ws FT_RECT)
+          (if (and (== filled 1) (and (>= fill 0) (and (!= fill 16777215) (and (>= w 300) (>= h 300)))))
+            (do (set at (cells-at ws FT_NBAR))
+                (if (< at BR_MAX)
+                  (do (set p (+ WS_BR (* at BR_STRIDE)))
+                      (cells-set ws p x0)
+                      (cells-set ws (+ p 1) y0)
+                      (cells-set ws (+ p 2) x1)
+                      (cells-set ws (+ p 3) y1)))
+                (fc-inc ws FT_NBAR)))
+          (if (and (== filled 1) (and (>= w 400) (and (<= w 1400) (and (>= h 400) (and (<= h 1400) (<= (fc-abs (- w h)) 300))))))
+            (do (set at (cells-at ws FT_NSW))
+                (if (< at SW_MAX)
+                  (do (set p (+ WS_SW (* at SW_STRIDE)))
+                      (cells-set ws p x0)
+                      (cells-set ws (+ p 1) y0)
+                      (cells-set ws (+ p 2) x1)
+                      (cells-set ws (+ p 3) y1)
+                      (cells-set ws (+ p 4) 0)))
+                (fc-inc ws FT_NSW)))
+          (if (and (== filled 1) (and (<= w 700) (<= h 700))) (fc-inc ws FT_TINY))
+          (if (and (or (== stroked 1) (and (== filled 1) (>= fill 0))) (and (>= w 1800) (>= h 1000)))
+            (fc-store-box ws x0 y0 x1 y1))
+          (if (and (or (== stroked 1) (and (== filled 1) (and (>= fill 0) (!= fill 16777215))))
+                   (== (fc-ge (fc-area x0 y0 x1 y1) (fc-area rx0 ry0 rx1 ry1) 850) 1))
+            (fc-inc ws FT_FRAME))))
+    (if (== kind (pa-curve))
+      (do (fc-inc ws FT_CURVE)
+          (if (and (== filled 1) (and (>= w 1500) (>= h 1500))) (fc-wedge ws fill))
+          (if (and (== stroked 1) (and (== filled 0) (and (!= (bit-and fl (pg-closed)) 0)
+                   (and (>= w 2000) (<= (* (fc-abs (- w h)) 8) w)))))
+            (do (set at (cells-at ws FT_NRG))
+                (set j 0)
+                (while (and (< j at) (< j RG_MAX))
+                  (do (set p (+ FT_RINGS (* j 3)))
+                      (if (and (<= (fc-abs (- cx (cells-at ws p))) 300)
+                               (and (<= (fc-abs (- cy (cells-at ws (+ p 1)))) 300)
+                                    (>= (fc-abs (- w (cells-at ws (+ p 2)))) 500)))
+                        (fc-inc ws FT_RING))
+                      (set j (+ j 1))))
+                (if (< at RG_MAX)
+                  (do (set p (+ FT_RINGS (* at 3)))
+                      (cells-set ws p cx)
+                      (cells-set ws (+ p 1) cy)
+                      (cells-set ws (+ p 2) w)))
+                (fc-inc ws FT_NRG)))
+          (if (and (== stroked 1) (and (== filled 0) (and (== (bit-and fl (pg-closed)) 0) (>= (* w 100) (* rw 30)))))
+            (fc-inc ws FT_SERIES))
+          (if (and (or (== stroked 1) (== filled 1)) (and (>= w 1800) (>= h 1000)))
+            (fc-store-box ws x0 y0 x1 y1))))
+    (if (== kind (pa-other))
+      (do (fc-inc ws FT_OTHER)
+          (if (and (== filled 1) (and (<= w 1600) (<= h 1600)))
+            (do (fc-inc ws FT_ARROW)
+                (fc-inc ws FT_CONN))
+            (if (and (== filled 1) (and (>= w 1500) (>= h 1500))) (fc-wedge ws fill)))
+          (if (and (== stroked 1) (and (== filled 0) (>= (* w 100) (* rw 30))))
+            (fc-inc ws FT_SERIES))))
+    (return 0)))
+
+(defn ^I32 fc-axes [^:mut ^Cells ws]
+  (comment "The longest horizontal and the longest vertical rule are AXES when they meet (each grown by 5 pt).")
+  (if (and (>= (cells-at ws FT_NHL) 1) (>= (cells-at ws FT_NVL) 1))
+    (if (and (>= (+ (cells-at ws FT_VX) 500) (cells-at ws FT_HX0))
+             (and (<= (- (cells-at ws FT_VX) 500) (cells-at ws FT_HX1))
+                  (and (>= (+ (cells-at ws FT_HY) 500) (cells-at ws FT_VY0))
+                       (<= (- (cells-at ws FT_HY) 500) (cells-at ws FT_VY1)))))
+      (cells-set ws FT_AXES 1)))
+  (return 0))
+
+(defn ^I32 fc-ticks [^Cells pa ^I32 page ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
+  (comment "Short rules (1.5 to 11 pt) that cross or touch an axis, along it: its ticks.")
+  (let [^I32 n (quot (cells-len pa) 24)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 kind 0]
+    (while (< i n)
+      (do (if (and (== (pa-get pa i (pf-page)) page) (and (== (pa-get pa i (pf-vis)) 0)
+                   (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0)))
+            (do (set kind (pa-get pa i (pf-kind)))
+                (set x0 (pa-get pa i (pf-x0)))
+                (set y0 (pa-get pa i (pf-y0)))
+                (set x1 (pa-get pa i (pf-x1)))
+                (set y1 (pa-get pa i (pf-y1)))
+                (if (and (or (== kind (pa-line)) (== kind (pa-rect)))
+                         (and (>= x0 (- rx0 100)) (and (<= x1 (+ rx1 100)) (and (>= y0 (- ry0 100)) (<= y1 (+ ry1 100))))))
+                  (do (if (and (<= (- y1 y0) 300) (and (>= (- x1 x0) 150) (<= (- x1 x0) 1100)))
+                        (if (and (<= x0 (+ (cells-at ws FT_VX) 300)) (and (>= x1 (- (cells-at ws FT_VX) 300))
+                                 (and (>= y0 (- (cells-at ws FT_VY0) 200)) (<= y1 (+ (cells-at ws FT_VY1) 200)))))
+                          (fc-inc ws FT_TICKS)))
+                      (if (and (<= (- x1 x0) 300) (and (>= (- y1 y0) 150) (<= (- y1 y0) 1100)))
+                        (if (and (<= y0 (+ (cells-at ws FT_HY) 300)) (and (>= y1 (- (cells-at ws FT_HY) 300))
+                                 (and (>= x0 (- (cells-at ws FT_HX0) 200)) (<= x1 (+ (cells-at ws FT_HX1) 200)))))
+                          (fc-inc ws FT_TICKS)))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fc-bar-run [^:mut ^Cells ws ^I32 dir]
+  (comment "The largest group of bars on one baseline (dir 0: the same bottom) or one left edge (dir 1), and whether they differ in length.")
+  (let [^I32 n (fc-min (cells-at ws FT_NBAR) BR_MAX)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 vr 0
+        ^:mut ^I32 pi 0
+        ^:mut ^I32 pj 0
+        ^:mut ^I32 ki 0
+        ^:mut ^I32 kj 0
+        ^:mut ^I32 li 0
+        ^:mut ^I32 lj 0]
+    (while (< i n)
+      (do (set pi (+ WS_BR (* i BR_STRIDE)))
+          (set c 0)
+          (set vr 0)
+          (if (== dir 0)
+            (do (set ki (cells-at ws (+ pi 3)))
+                (set li (- (cells-at ws (+ pi 3)) (cells-at ws (+ pi 1)))))
+            (do (set ki (cells-at ws pi))
+                (set li (- (cells-at ws (+ pi 2)) (cells-at ws pi)))))
+          (set j 0)
+          (while (< j n)
+            (do (set pj (+ WS_BR (* j BR_STRIDE)))
+                (if (== dir 0)
+                  (do (set kj (cells-at ws (+ pj 3)))
+                      (set lj (- (cells-at ws (+ pj 3)) (cells-at ws (+ pj 1)))))
+                  (do (set kj (cells-at ws pj))
+                      (set lj (- (cells-at ws (+ pj 2)) (cells-at ws pj)))))
+                (if (<= (fc-abs (- ki kj)) 150)
+                  (do (set c (+ c 1))
+                      (if (> (fc-abs (- li lj)) 150) (set vr 1))))
+                (set j (+ j 1))))
+          (if (> c (cells-at ws FT_BARS))
+            (do (cells-set ws FT_BARS c)
+                (cells-set ws FT_BARVAR vr)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 fc-words [^Cells fw ^Cells et ^I32 page ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
+  (comment "The words in the region and within `FC_ZONE` of it: how many, how many are numbers, how many lie in it; the words inside each")
+  (comment "box; the small squares with a word at their right.")
+  (let [^I32 n (wd-count fw)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 p 0
+        ^I32 nb (fc-min (cells-at ws FT_BOXES) BX_MAX)
+        ^I32 ns (fc-min (cells-at ws FT_NSW) SW_MAX)]
+    (while (< i n)
+      (do (if (== (wd-get fw i (hd-page)) page)
+            (do (set x0 (wd-get fw i (hd-x0)))
+                (set y0 (wd-get fw i (hd-y0)))
+                (set x1 (wd-get fw i (hd-x1)))
+                (set y1 (wd-get fw i (hd-y1)))
+                (set cx (quot (+ x0 x1) 2))
+                (set cy (quot (+ y0 y1) 2))
+                (if (and (>= cx (- rx0 FC_ZONE)) (and (<= cx (+ rx1 FC_ZONE)) (and (>= cy (- ry0 FC_ZONE)) (<= cy (+ ry1 FC_ZONE)))))
+                  (do (fc-inc ws FT_WORDS)
+                      (if (== (fc-numeric et (wd-get fw i (hd-tstart)) (wd-get fw i (hd-tlen))) 1) (fc-inc ws FT_NUM))
+                      (if (and (>= cx rx0) (and (<= cx rx1) (and (>= cy ry0) (<= cy ry1)))) (fc-inc ws FT_INSIDE))
+                      (set k 0)
+                      (while (< k nb)
+                        (do (set p (+ WS_BX (* k BX_STRIDE)))
+                            (if (and (>= x0 (- (cells-at ws p) 100)) (and (<= x1 (+ (cells-at ws (+ p 2)) 100))
+                                     (and (>= y0 (- (cells-at ws (+ p 1)) 100)) (<= y1 (+ (cells-at ws (+ p 3)) 100)))))
+                              (cells-set ws (+ p 4) (+ (cells-at ws (+ p 4)) 1)))
+                            (set k (+ k 1))))
+                      (set k 0)
+                      (while (< k ns)
+                        (do (set p (+ WS_SW (* k SW_STRIDE)))
+                            (if (and (>= x0 (- (cells-at ws (+ p 2)) 100)) (and (<= x0 (+ (cells-at ws (+ p 2)) 1500))
+                                     (<= (fc-abs (- cy (quot (+ (cells-at ws (+ p 1)) (cells-at ws (+ p 3))) 2))) 600)))
+                              (cells-set ws (+ p 4) 1))
+                            (set k (+ k 1))))))))
+          (set i (+ i 1))))
+    (set k 0)
+    (while (< k nb)
+      (do (set p (+ WS_BX (* k BX_STRIDE)))
+          (if (and (> (cells-at ws (+ p 4)) 0)
+                   (== (fc-ge (fc-area (cells-at ws p) (cells-at ws (+ p 1)) (cells-at ws (+ p 2)) (cells-at ws (+ p 3)))
+                              (fc-area rx0 ry0 rx1 ry1) 850) 0))
+            (fc-inc ws FT_BOXW))
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k ns)
+      (do (if (== (cells-at ws (+ (+ WS_SW (* k SW_STRIDE)) 4)) 1) (fc-inc ws FT_SWATCH))
+          (set k (+ k 1))))
+    (return n)))
+
+(defn ^I32 fc-lines [^Cells fl ^I32 page ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
+  (comment "Lines of five words or more whose centre is in the region: prose. A region with some is a text box, a sidebar or a background.")
+  (let [^I32 n (ln-count fl)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0]
+    (while (< i n)
+      (do (if (and (== (ln-get fl i (lh-page)) page) (>= (ln-get fl i (lh-count)) 5))
+            (do (set cx (quot (+ (ln-get fl i (lh-x0)) (ln-get fl i (lh-x1))) 2))
+                (set cy (quot (+ (ln-get fl i (lh-y0)) (ln-get fl i (lh-y1))) 2))
+                (if (and (>= cx rx0) (and (<= cx rx1) (and (>= cy ry0) (<= cy ry1))))
+                  (fc-inc ws FT_PROSE))))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^:pub ^I32 fc-measure [^Cells pa ^Cells grl ^Cells fw ^Cells fl ^Cells et ^I32 page ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^:mut ^Cells ws]
+  (comment "Measure the region: `ft`'s slots of `ws`, the boxes, the small squares and the bars. Answers 0, or 1 when the document's")
+  (comment "budget of rows (`FC_WORK`) is spent and the region was left unmeasured.")
+  (let [^I32 work (cells-at ws FT_WORK)
+        ^I32 n (quot (cells-len pa) 24)
+        ^I32 ng (grl-count grl)
+        ^I32 rw (- rx1 rx0)
+        ^I32 rh (- ry1 ry0)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 span 0]
+    (while (< i WS_SIZE)
+      (do (cells-set ws i 0)
+          (set i (+ i 1))))
+    (cells-set ws FT_WORK work)
+    (if (> work FC_WORK) (return 1))
+    (cells-set ws FT_WORK (+ work (+ n (+ ng (+ (wd-count fw) (ln-count fl))))))
+    (set i 0)
+    (while (< i n)
+      (do (if (and (== (pa-get pa i (pf-page)) page) (and (== (pa-get pa i (pf-vis)) 0)
+                   (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0)))
+            (do (set cx (quot (+ (pa-get pa i (pf-x0)) (pa-get pa i (pf-x1))) 2))
+                (set cy (quot (+ (pa-get pa i (pf-y0)) (pa-get pa i (pf-y1))) 2))
+                (if (and (>= cx (- rx0 100)) (and (<= cx (+ rx1 100)) (and (>= cy (- ry0 100)) (<= cy (+ ry1 100)))))
+                  (fc-one-path pa i rx0 ry0 rx1 ry1 ws))))
+          (set i (+ i 1))))
+    (if (== (cells-at ws FT_NP) 0)
+      (do (set i 0)
+          (while (< i ng)
+            (do (if (== (grl-get grl i 0) page)
+                  (do (set cx (quot (+ (grl-get grl i 1) (grl-get grl i 3)) 2))
+                      (set cy (quot (+ (grl-get grl i 2) (grl-get grl i 4)) 2))
+                      (if (and (>= cx rx0) (and (<= cx rx1) (and (>= cy ry0) (<= cy ry1))))
+                        (do (if (== (grl-get grl i 10) (go-h))
+                              (do (set span (- (grl-get grl i 3) (grl-get grl i 1)))
+                                  (if (and (>= span 3000) (>= (* span 100) (* rw 45)))
+                                    (do (fc-inc ws FT_NHL)
+                                        (if (> span (cells-at ws FT_HLEN))
+                                          (do (cells-set ws FT_HLEN span)
+                                              (cells-set ws FT_HX0 (grl-get grl i 1))
+                                              (cells-set ws FT_HX1 (grl-get grl i 3))
+                                              (cells-set ws FT_HY cy)))))))
+                            (if (== (grl-get grl i 10) (go-v))
+                              (do (set span (- (grl-get grl i 4) (grl-get grl i 2)))
+                                  (if (and (>= span 2500) (>= (* span 100) (* rh 40)))
+                                    (do (fc-inc ws FT_NVL)
+                                        (if (> span (cells-at ws FT_VLEN))
+                                          (do (cells-set ws FT_VLEN span)
+                                              (cells-set ws FT_VX cx)
+                                              (cells-set ws FT_VY0 (grl-get grl i 2))
+                                              (cells-set ws FT_VY1 (grl-get grl i 4))))))))))))
+                (set i (+ i 1))))))
+    (fc-axes ws)
+    (if (== (cells-at ws FT_AXES) 1) (fc-ticks pa page rx0 ry0 rx1 ry1 ws))
+    (fc-bar-run ws 0)
+    (fc-bar-run ws 1)
+    (fc-words fw et page rx0 ry0 rx1 ry1 ws)
+    (fc-lines fl page rx0 ry0 rx1 ry1 ws)
+    (return 0)))
+
+;; ------------------------------------------------------------------------------------------------ what a region is
+
+(defn ^I32 fc-pack [^I32 kind ^I32 conf]
+  (return (+ (* kind 1024) conf)))
+
+(defn ^:pub ^I32 fc-recur [^Cells cand ^I32 row]
+  (comment "THE HOOK of P8.4 (logos and their recurrence across pages): how much the same drawing at the same place on other pages should")
+  (comment "raise the confidence of a logo (per mille) for the region `row` of `cand`. P8.1 does not measure recurrence: 0.")
+  (return 0))
+
+(defn ^I32 fc-in-band [^I32 y0 ^I32 y1 ^I32 pageh]
+  (comment "1 when the region lies in the header band (the top fifth of the page) or the footer band.")
+  (if (and (> pageh 0) (<= (* (quot y1 10) 1000) (* (quot pageh 10) FC_BAND))) (return 1))
+  (if (and (> pageh 0) (>= (* (quot y0 10) 1000) (* (quot pageh 10) (- 1000 FC_BAND)))) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 fc-vector-kind [^Cells ws ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1 ^I32 pageh ^I32 recur]
+  (comment "The kind and confidence of a region from its measured features: `fc-pack`ed. 0 kind is none (see `fc-judge`).")
+  (let [^I32 rw (- rx1 rx0)
+        ^I32 rh (- ry1 ry0)
+        ^I32 np (cells-at ws FT_NP)
+        ^I32 axes (cells-at ws FT_AXES)
+        ^I32 bars (cells-at ws FT_BARS)
+        ^I32 ticks (cells-at ws FT_TICKS)
+        ^I32 series (cells-at ws FT_SERIES)
+        ^I32 slant (cells-at ws FT_SLANT)
+        ^I32 num (cells-at ws FT_NUM)
+        ^:mut ^I32 conf 0]
+    (if (and (== axes 1) (or (>= bars 2) (or (>= series 1) (or (>= slant 2) (or (>= ticks 2) (>= num 2))))))
+      (do (set conf 640)
+          (if (>= ticks 3) (set conf (+ conf 40)))
+          (if (or (>= bars 2) (or (>= series 1) (>= slant 2))) (set conf (+ conf 40)))
+          (if (>= num 2) (set conf (+ conf 40)))
+          (return (fc-pack (fg-chart) conf))))
+    (if (and (>= (cells-at ws FT_THIN) 12) (>= (* (cells-at ws FT_ALIGNED) 10) (* (cells-at ws FT_THIN) 8)))
+      (return (fc-pack (fg-barcode) 700)))
+    (if (and (>= (cells-at ws FT_TINY) 40) (and (<= (* rw 10) (* rh 14)) (<= (* rh 10) (* rw 14))))
+      (return (fc-pack (fg-qr) 700)))
+    (if (and (>= (cells-at ws FT_NCOL) 3) (and (>= (cells-at ws FT_WEDGE) 3) (and (<= (* rw 10) (* rh 17)) (<= (* rh 10) (* rw 17)))))
+      (do (set conf 560)
+          (if (>= (cells-at ws FT_SWATCH) 2) (set conf 620))
+          (return (fc-pack (fg-chart) conf))))
+    (if (and (>= bars 3) (== (cells-at ws FT_BARVAR) 1))
+      (return (fc-pack (fg-chart) 560)))
+    (if (and (== axes 1) (>= (+ (cells-at ws FT_NHL) (cells-at ws FT_NVL)) 2))
+      (return (fc-pack (fg-chart) 520)))
+    (if (and (== axes 0) (and (>= (cells-at ws FT_BOXW) 2) (>= (cells-at ws FT_CONN) 1)))
+      (do (set conf 600)
+          (if (>= (cells-at ws FT_BOXW) 3) (set conf (+ conf 50)))
+          (if (>= (cells-at ws FT_ARROW) 1) (set conf (+ conf 50)))
+          (return (fc-pack (fg-diagram) conf))))
+    (if (and (<= (fc-max rw rh) FC_SMALL) (and (<= np 24) (and (== (cells-at ws FT_PROSE) 0)
+             (or (== (fc-in-band ry0 ry1 pageh) 1) (> recur 0)))))
+      (do (set conf (+ 480 recur))
+          (if (>= (cells-at ws FT_COLOR) 1) (set conf (+ conf 60)))
+          (if (and (>= (cells-at ws FT_WORDS) 1) (<= (cells-at ws FT_WORDS) 3)) (set conf (+ conf 40)))
+          (return (fc-pack (fg-logo) (fc-min conf 1000)))))
+    (if (and (>= (cells-at ws FT_SHADE) 1) (and (<= np 3) (== (cells-at ws FT_INSIDE) 0)))
+      (return (fc-pack (fg-photo) 520)))
+    (if (and (>= (cells-at ws FT_FRAME) 1) (and (>= rw 15000) (and (>= rh 8000) (and (>= (cells-at ws FT_INSIDE) 1)
+             (<= (cells-at ws FT_INSIDE) 8)))))
+      (return (fc-pack (fg-screenshot) 520)))
+    (if (and (>= np 60) (and (>= (* (+ (cells-at ws FT_CURVE) (cells-at ws FT_OTHER)) 2) np)
+             (and (>= (cells-at ws FT_WORDS) 6) (and (>= rw 20000) (>= rh 15000)))))
+      (return (fc-pack (fg-map) 540)))
+    (if (and (>= np 8) (>= (* (+ (cells-at ws FT_CURVE) (cells-at ws FT_OTHER)) 2) np))
+      (return (fc-pack (fg-illustration) 520)))
+    (return (fc-pack (fg-unknown) 300))))
+
+(defn ^:pub ^I32 fc-image-kind [^Cells fi ^I32 imx ^I32 rw ^I32 rh ^I32 ry0 ^I32 ry1 ^I32 pageh ^I32 recur]
+  (comment "The kind and confidence of an image placement (row `imx` of `im`, its dictionary's row in `fi`), `fc-pack`ed: a raster that")
+  (comment "needed many bits a pixel is a photograph, a flat two-colour one a code, a small flat one at the head or foot of the page a logo.")
+  (let [^I32 b (* imx FI_STRIDE)
+        ^:mut ^I32 conf 0]
+    (if (or (< imx 0) (< (cells-len fi) (+ b FI_STRIDE))) (return (fc-pack (fg-unknown) 300)))
+    (if (== (cells-at fi b) 0) (return (fc-pack (fg-unknown) 300)))
+    (if (or (== (cells-at fi (+ b 4)) 1) (or (== (cells-at fi (+ b 2)) 0) (or (== (cells-at fi (+ b 1)) 9) (== (cells-at fi (+ b 1)) 10))))
+      (do (if (and (>= (* rw 10) (* rh 22)) (<= rh 9000)) (return (fc-pack (fg-barcode) 540)))
+          (if (and (>= (* rw 100) (* rh 80)) (and (<= (* rw 100) (* rh 125)) (<= (fc-max rw rh) 20000)))
+            (return (fc-pack (fg-qr) 540)))
+          (return (fc-pack (fg-illustration) 520))))
+    (if (>= (cells-at fi (+ b 7)) FC_PHOTO_BPP)
+      (do (set conf (+ 560 (fc-min 240 (quot (- (cells-at fi (+ b 7)) FC_PHOTO_BPP) 2))))
+          (return (fc-pack (fg-photo) conf))))
+    (if (and (<= (fc-max rw rh) FC_SMALL)
+             (or (== (fc-in-band ry0 ry1 pageh) 1) (or (>= (cells-at fi (+ b 9)) 1) (> recur 0))))
+      (return (fc-pack (fg-logo) (fc-min 1000 (+ 580 recur)))))
+    (if (and (>= rw 20000) (>= rh 12000)) (return (fc-pack (fg-screenshot) 450)))
+    (return (fc-pack (fg-unknown) 300))))
+
+(defn ^:pub ^I32 fc-reject [^Cells ws]
+  (comment "1 when the measured region is no figure: covered with prose, a seal (rings one in another) or a lattice of rules with no axes.")
+  (if (>= (cells-at ws FT_PROSE) 2) (return 1))
+  (if (>= (cells-at ws FT_RING) 1) (return 1))
+  (if (and (== (cells-at ws FT_AXES) 0) (and (>= (cells-at ws FT_NHL) 3) (>= (cells-at ws FT_NVL) 3))) (return 1))
+  (return 0))
+
+(defn ^I32 fc-taken [^Cells fcand ^I32 row ^I32 page ^I32 cx0 ^I32 cx1 ^I32 cy0]
+  (comment "1 when another candidate region of the page lies just above the caption (box cx0..cx1 x, top cy0): the caption is its, not the")
+  (comment "region's below it (a figure's caption is under it).")
+  (let [^I32 n (quot (cells-len fcand) CR_STRIDE)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 b 0]
+    (while (< r n)
+      (do (set b (* r CR_STRIDE))
+          (if (and (!= r row) (and (== (cells-at fcand (+ b CR_PAGE)) page)
+                   (and (> (fc-min cx1 (cells-at fcand (+ b (+ CR_VX 2)))) (fc-max cx0 (cells-at fcand (+ b CR_VX))))
+                        (and (>= (- cy0 (cells-at fcand (+ b (+ CR_VX 3)))) -200) (<= (- cy0 (cells-at fcand (+ b (+ CR_VX 3)))) FC_CAPGAP)))))
+            (return 1))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 fc-captioned [^Cells nodes ^Cells regions ^Cells fcand ^I32 row ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "1 when a figure's caption (a `caption` the notes stage made of a `Figure` label) lies within `FC_CAPGAP` below the box, or above it when")
+  (comment "no other region lies above that caption (`fc-taken`).")
+  (let [^I32 nn (node-count nodes)
+        ^:mut ^I32 n 0
+        ^:mut ^I32 r 0]
+    (while (< n nn)
+      (do (if (and (== (node-kind nodes n) (nk-caption)) (== (node-aux nodes n) 1))
+            (do (set r (node-region-head nodes n))
+                (if (and (>= r 0) (and (== (region-page regions r) page)
+                         (> (fc-min x1 (region-x1 regions r)) (fc-max x0 (region-x0 regions r)))))
+                  (do (if (and (>= (- (region-y0 regions r) y1) -200) (<= (- (region-y0 regions r) y1) FC_CAPGAP))
+                        (return 1))
+                      (if (and (>= (- y0 (region-y1 regions r)) -200) (<= (- y0 (region-y1 regions r)) FC_CAPGAP))
+                        (if (== (fc-taken fcand row page (region-x0 regions r) (region-x1 regions r) (region-y0 regions r)) 0)
+                          (return 1)))))))
+          (set n (+ n 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------------------------------------------ the stage
+
+(defn ^I32 fc-link [^Cells cand ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "The asset stage's candidate row (an image's) with this placement box on this page, or -1.")
+  (let [^I32 n (quot (cells-len cand) CR_STRIDE)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 b 0]
+    (while (< r n)
+      (do (set b (* r CR_STRIDE))
+          (if (and (== (cells-at cand (+ b CR_PAGE)) page) (and (>= (cells-at cand (+ b CR_KORI)) -1)
+                   (and (== (cells-at cand (+ b CR_BX)) x0) (and (== (cells-at cand (+ b (+ CR_BX 1))) y0)
+                        (and (== (cells-at cand (+ b (+ CR_BX 2))) x1) (== (cells-at cand (+ b (+ CR_BX 3))) y1))))))
+            (return r))
+          (set r (+ r 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 fc-stage [^Cells nodes ^Cells attrs ^Cells regions ^Cells text ^Cells pages
+                           ^:mut ^Cells fnodes ^:mut ^Cells fattrs ^:mut ^Cells fregions ^:mut ^Cells fnm
+                           ^Cells pa ^Cells im ^Cells fi ^Cells grg ^Cells grl ^Cells fw ^Cells fl ^Cells et ^Cells pg
+                           ^:mut ^Cells cand ^I32 level
+                           ^:mut ^Cells fcand ^:mut ^Cells cl ^:mut ^Cells fg ^:mut ^Cells fd ^:mut ^Cells ab ^:mut ^Cells ws]
+  (comment "THE FIGURES (SPEC 10.6): the candidate regions (the image placements, the vector clusters of `emon.asset`, the shaded fills, P7.G's")
+  (comment "`figure` regions), each measured and judged, the ones that are figures placed among the blocks with their kind, confidence")
+  (comment "and `labels` (`rs-figures`) into the empty arenas `fnodes fattrs fregions` (the caller swaps them in, then restructures). `cand`")
+  (comment "is the asset stage's own candidate rows (empty when `assets` is off; `level` is that setting): an image figure learns its row,")
+  (comment "and at `figures` a region of ours the asset stage did not find is added to it (`as-region-add`). Scratch: `fnm fcand cl fg fd ab ws`.")
+  (comment "Answers the number of figures.")
+  (let [^:mut ^I32 nr 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 page 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 pk 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 conf 0
+        ^:mut ^I32 capt 0
+        ^:mut ^I32 rej 0
+        ^:mut ^I32 out 1
+        ^:mut ^I32 measured 0
+        ^:mut ^I32 pageh 0
+        ^:mut ^I32 recur 0
+        ^:mut ^I32 srcs 0
+        ^:mut ^I32 link 0
+        ^:mut ^I32 k 0]
+    (cells-drop fcand 0)
+    (cells-drop fd 0)
+    (cells-drop ws 0)
+    (while (< i WS_SIZE)
+      (do (cells-push ws 0)
+          (set i (+ i 1))))
+    (fc-image-rows im pa pg fcand)
+    (as-vector-regions pa pg fcand cl)
+    (fc-shading-regions pa pages fcand)
+    (fc-grg-regions grg pages fcand)
+    (as-figure-rows fcand pages nodes regions 2 fg)
+    (set nr (as-count fcand))
+    (set i 0)
+    (while (< i (* nr FD_STRIDE))
+      (do (cells-push fd 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nr)
+      (do (cells-set fd (+ (* i FD_STRIDE) 3) -1)
+          (cells-set fd (+ (* i FD_STRIDE) 4) -1)
+          (set i (+ i 1))))
+    (set i 1)
+    (while (< i (cells-len fg))
+      (do (set row (cells-at fg i))
+          (set b (* row CR_STRIDE))
+          (set page (cells-at fcand (+ b CR_PAGE)))
+          (set x0 (cells-at fcand (+ b CR_VX)))
+          (set y0 (cells-at fcand (+ b (+ CR_VX 1))))
+          (set x1 (cells-at fcand (+ b (+ CR_VX 2))))
+          (set y1 (cells-at fcand (+ b (+ CR_VX 3))))
+          (set pageh (page-h pages (- page 1)))
+          (set recur (fc-recur fcand row))
+          (set rej 1)
+          (if (< measured FC_MAXREG)
+            (do (set measured (+ measured 1))
+                (set rej 0)
+                (if (== (fc-measure pa grl fw fl et page x0 y0 x1 y1 ws) 0)
+                  (set rej (fc-reject ws)))))
+          (if (== (cells-at fcand (+ b CR_KORI)) -1)
+            (set pk (fc-image-kind fi (cells-at fcand (+ b CR_ROW)) (- x1 x0) (- y1 y0) y0 y1 pageh recur))
+            (set pk (fc-vector-kind ws x0 y0 x1 y1 pageh recur)))
+          (set kind (quot pk 1024))
+          (set conf (rem pk 1024))
+          (set capt (fc-captioned nodes regions fcand row page x0 y0 x1 y1))
+          (if (and (== rej 0) (or (>= conf FC_EMIT) (== capt 1)))
+            (do (if (< conf FC_EMIT)
+                  (if (== kind (fg-unknown)) (set conf 400)))
+                (set srcs (cells-at fcand (+ b CR_SRC)))
+                (set link -1)
+                (if (== (cells-at fcand (+ b CR_KORI)) -1)
+                  (if (> level 0) (set link (fc-link cand page (cells-at fcand (+ b CR_BX)) (cells-at fcand (+ b (+ CR_BX 1)))
+                                                     (cells-at fcand (+ b (+ CR_BX 2))) (cells-at fcand (+ b (+ CR_BX 3)))))))
+                (if (and (== level 2) (!= (cells-at fcand (+ b CR_ORG)) 0))
+                  (as-region-add cand page x0 y0 x1 y1))
+                (set k (* row FD_STRIDE))
+                (cells-set fd k kind)
+                (cells-set fd (+ k 1) conf)
+                (cells-set fd (+ k 2) srcs)
+                (cells-set fd (+ k 3) link)
+                (cells-set fg out row)
+                (set out (+ out 1))))
+          (set i (+ i 1))))
+    (cells-drop fg out)
+    (rs-figures nodes attrs regions text fnodes fattrs fregions fnm fcand fg fd ab)
+    (return (- out 1))))

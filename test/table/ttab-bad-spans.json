@@ -57,7 +57,7 @@
             "text": "The table below was extracted from the supplies ledger.",
             "at": [[1, 72, 94.1, 344.06, 104.28]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 4,
@@ -66,7 +66,7 @@
             "text": "Figures are totals for the quarter.",
             "at": [[1, 72, 108.1, 232.18, 118.28]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 5,
@@ -79,7 +79,7 @@
                 "text": "Notes",
                 "at": [[1, 408, 199.32, 435.78, 208.57]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 7,
@@ -88,7 +88,7 @@
                 "text": "up",
                 "at": [[1, 408, 221.32, 419.12, 230.57]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 8,
@@ -97,7 +97,7 @@
                 "text": "flat",
                 "at": [[1, 408, 243.32, 421.34, 252.57]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               },
               {
                 "id": 9,
@@ -106,7 +106,7 @@
                 "text": "up",
                 "at": [[1, 408, 265.32, 419.12, 274.57]],
                 "src": ["text", "infer"],
-                "conf": 715
+                "conf": 747
               }
             ],
             "at": [[1, 408, 199.32, 435.78, 274.57]],
@@ -305,7 +305,7 @@
             "text": "Questions go to the purchasing office.",
             "at": [[1, 72, 300.1, 256.66, 310.28]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           }
         ],
         "src": ["infer"],

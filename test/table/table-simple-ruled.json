@@ -46,7 +46,7 @@
             "text": "Large does while saw toward do not words thought show being since is. White with want same who soon the paper its before boy want together.",
             "at": [[1, 72, 130.17, 527.31, 159.16]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 4,
@@ -453,7 +453,7 @@
             "text": "Don't after show after need one food several each place us new more left usually three. Leave your or said she called new point this review all.",
             "at": [[1, 72, 310.92, 519.84, 339.16]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           }
         ],
         "src": ["infer"],

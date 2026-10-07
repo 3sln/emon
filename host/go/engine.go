@@ -37,6 +37,7 @@ import (
 	"emon/asset"
 	"emon/columns"
 	"emon/evidence"
+	"emon/figclass"
 	"emon/furniture"
 	"emon/gfuse"
 	"emon/tagtable"
@@ -1085,13 +1086,13 @@ func sealArenas(m *arenas, opts Options) *outcome {
 
 
 
-// figuresStage is P3.13's provisional figures (SPEC 10.11, 10.6), before RsRun (a caption next to one finds it as its object). Only
-// when `assets` is on (D294): a default run's Model is what it was.
-func figuresStage(m *arenas, cand *port.Cells, opts Options) {
-	f := newCellsN(5)
-	fg, fnodes, fattrs, fregions, fnm := f[0], f[1], f[2], f[3], f[4]
-	asset.AsFigureRows(cand, m.pages, m.nodes, m.regions, opts.Assets.level(), fg)
-	restruct.RsFigures(m.nodes, m.attrs, m.regions, fnodes, fattrs, fregions, fnm, cand, fg)
+// figuresStage is P8.1's figures (SPEC 10.6), before RsRun (a caption next to one finds it as its object): every output has them, at
+// every level of `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows what P8.1 found).
+func figuresStage(m *arenas, cand, pa, im, fi, grg, grl, fw, fl, et, pg *port.Cells, opts Options) {
+	f := newCellsN(10)
+	fnodes, fattrs, fregions, fnm := f[0], f[1], f[2], f[3]
+	figclass.FcStage(m.nodes, m.attrs, m.regions, m.text, m.pages, fnodes, fattrs, fregions, fnm,
+		pa, im, fi, grg, grl, fw, fl, et, pg, cand, opts.Assets.level(), f[4], f[5], f[6], f[7], f[8], f[9])
 	m.nodes, fnodes = fnodes, m.nodes
 	m.attrs, fattrs = fattrs, m.attrs
 	m.regions, fregions = fregions, m.regions
@@ -1431,6 +1432,13 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	if opts.Assets != AssetsNone {
 		aim = im
 	}
+	// P8.1 (SPEC 10.6): what each image placement's dictionary says, which the figures' kinds are read from (one more read of the input)
+	fz3 := newCellsN(3)
+	fi := fz3[0]
+	figclass.FcImages(view, ar, dc, ca, cb, st, im, fz3[1], fz3[2], fi)
+	if view.Missed() {
+		return step{miss: true}
+	}
 	var snap []*port.Cells
 	if opts.KeepEvidence {
 		snap = []*port.Cells{cloneCells(gl), cloneCells(mk), cloneCells(fnt)}
@@ -1471,7 +1479,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 		ptsKept = pts
 	}
 	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), ys: newCellsN(19), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, im: im, grl: grl, gfl: gfl, pts: ptsKept, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, se: se, sc: sc,
-		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, cand: cand, cbytes: cbytes, aim: aim, info: info}}
+		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, cand: cand, cbytes: cbytes, aim: aim, fi: fi, info: info}}
 }
 
 // pdfDoc is what the PDF document pass leaves for its page units and the document unit (P7.U, D195).
@@ -1503,6 +1511,8 @@ type pdfDoc struct {
 	cbytes *port.Buf
 	// the image placements the asset unit makes candidates of (the evidence's `images` rows; empty unless `assets` is on)
 	aim  *port.Cells
+	// P8.1: what the dictionary of each image placement says (FcImages), for the figures' kinds
+	fi   *port.Cells
 	info Intake
 }
 
@@ -1664,10 +1674,8 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	inline.IlAnalyze(fw, c[0], et, gl, ift, h[0], van, qtxt, pg, m.pages, np, m.text, h[2], isw)
 	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
 		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
-	// the provisional figures (P3.13): only with `assets`, and before the restructuring, which pairs a caption with the figure beside it
-	if opts.Assets != AssetsNone {
-		figuresStage(m, d.cand, opts)
-	}
+	// the figures (P8.1, SPEC 10.6): at every level of `assets`, before the restructuring, which pairs a caption with the figure beside it
+	figuresStage(m, d.cand, pa, d.im, d.fi, grg, grl, fw, fl, et, pg, opts)
 	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
 	// body is copied into new arenas, in document order, and they replace the old ones
 	r := newCellsN(10)

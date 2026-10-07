@@ -84,7 +84,7 @@
             ],
             "at": [[1, 72, 116.02, 539.78, 240.91]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 7,
@@ -93,7 +93,7 @@
             "text": "If went some put across school morning leave was each time. Going play name said home can name much got upon quarter figure young play has used himself. Little such even school or through against knew began write day more true way form word go. Before from almost one use done another should since many thing paper let large head been at. Animal should soon second morning got number we did not an life new something leave said.",
             "at": [[1, 72, 252.42, 535.41, 328.66]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 8,
@@ -124,7 +124,7 @@
             ],
             "at": [[1, 72, 331.27, 539.85, 456.91]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 12,
@@ -155,7 +155,7 @@
             ],
             "at": [[1, 72, 459.52, 535.11, 585.16]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 16,
@@ -164,7 +164,7 @@
             "text": "Top friend need policy too would answer very air from sample white. Big well looked year told often all play room region back picture. Against did not own almost just below turn both side from him. Quarter we home end family head that must been several be revenue color as. Growth next better world usually write food measure end air be turn long.",
             "at": [[1, 72, 595.92, 537.64, 656.41]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           },
           {
             "id": 17,
@@ -209,7 +209,7 @@
             ],
             "at": [[1, 72, 659.02, 538.5, 704.41], [2, 72, 73.17, 533.58, 133.66]],
             "src": ["text", "infer"],
-            "conf": 715
+            "conf": 747
           }
         ],
         "src": ["infer"],

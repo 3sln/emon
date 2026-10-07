@@ -1,46 +1,46 @@
-;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
+;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307). P7.6 re-derived `hidden-older-ocr` and `tl-broken-unmapped` by replaying their committed transcripts under the new rules (no engine ran: D322). P8.1 re-derived `figures-logo-screenshot` the same way (its logo is a figure placeholder now: D376).
 ;; P10.1 (D370): re-derived by replaying the committed transcripts (`bb fusion-record --digests`): every `conf` of the JSON is the calibrated one.
 {"bank-statement"
- "bc3e275b25f17f320e019702c5ffd6f87d1ef39429dccc3295510467ac34a327",
+ "9f5570e0aacede6f8155a5df57a4907d1ab177a56e41489cc7eeef108a6320df",
  "bg-texture"
- "14b9f9c3edc1b23e0b2539175d02689bc6995e76278b7e30948af93d4658aaed",
+ "ee4afe7557a7285755ae8d1d5e2dbe1f24f056c4b95c3ccedeeb5532083d75f2",
  "columns-two"
- "a1bdba99d160ede36b8803559b11c2e4242c11e1decdd769a536f532f0ac7efc",
+ "2e9d33af922d1f62d2b734af6b8c57364005ecf13b434f5ee1e549a749990a8b",
  "figures-logo-screenshot"
- "14ea852edb5cdd1d1377b140eb0a0ffc97d82a04a5653db77224c9e294b8bf6f",
+ "a4d8dec3289313cfea10fbf0281a2e39e92dbd48747bd10bc5fd4331598c3b44",
  "h-numbered"
- "68d5c36c91f761880bc707043c86f1aa026a8780b1c5b78a5f9b7b52aeec3599",
+ "911ed49dc474813853822bbd564ff84160dc0ad918a6a816b99b961aa73c3f1a",
  "hidden-older-ocr"
- "6a9074103c0c5b479b8e0af973df843ebc4893b3b88f55110740117eb91a4a38",
+ "1f0e7245db59e1cbd4d3c9989567ac516e27657cdd46fabfda23cb2f15f24d3f",
  "invoice"
- "d082ad1563e07a19dbb8e40d9d73069826736bad10205af8a75cc744d8d64367",
+ "7523ae4160be93cf853effb212645a5cd843a16a3a7401cfefaf60f9f0063253",
  "lists-basic"
- "f27f227635edef1af3b31a28ade7f0395b69910c9ecd08b2a8e465f91e3762f1",
+ "a77c607a3fd568dc484dba12f2c47f96f7e689ef2e60551960b43836a9f165ef",
  "outlined-heading"
- "fe43409dc10ddc6539c3fde8cd2162bc16a60a158d8c45a543fd12ba03accf3d",
+ "59d0fdc1b82d6d068e914c8f80b22d042fa725977f161e55c96046758502edc0",
  "script-mixed"
- "0b9b89a632be18ee7e8b61a802997c9e9b6d007de33677c5f1914415367fb0ab",
+ "581098e617d0b26b2cb5ce43f93dddb32b85cea701696da87861a9390734bca2",
  "seal-over-text"
- "33eda0414c4a467ee164fdd5b76935c03cf90a456ae557d43939f3b04f0c5c65",
+ "b02e308b7c5c3677ceea0b5eacf5ceea48e530538d1efcf9dcd52ccd57c1f16d",
  "sig-over-name"
- "ca97ccbbde0a6539b6fab2fce5da11a4aafe180e3e7e0e5956238de4f79afa27",
+ "8b35ce3c056a637ede5f317f5ef07da908b83a037d8dafa69a5eca80dc41a8f3",
  "stamp-seal"
- "53ecb06ec8e4e51b99af7e4d7f56d1dd912e37dabae66f74cabb99058a8d4e79",
+ "c8e6574d9fb860599e4e9a51f8bc2e7071a2db69ebd920410b6cfaa15c093b8c",
  "table-simple-ruled"
- "6b38f0a6c5466934991cc12e070d57421b11f14726899be54152de635314f422",
+ "f90286f318b4ea29868ca7c71f3db800d39cd8b281777fece65ba0dd5bf81c7b",
  "tl-broken-shift"
- "a6f61278ff89053e87a9e05a3978f4e6945ffbe8ae0f983f4923bdce5ecdf4a7",
+ "ac73a488a61fef27ae7fd47d795e4d10aea9fee28e7b9927c163b4a2af5616b9",
  "tl-broken-unmapped"
- "0e3712ffd29c38c2b91a6bdf0225b63657994c5ce509bd93b653466f2106d7ec",
+ "0a833c2879d598dfc21e7742f647a92f6764912100f5a77e014ea0694c615eb6",
  "watermark-draft"
- "ad19fabe222b169118a8ea077e5943a4ea83ae3f61519c7556458e14cd7d3340",
+ "e3e4462ea67ab86d9268626739e81aa1878c119d340773955c72738d4c377cbd",
  "wm-annot"
- "13c45d6ec87e79143961349f941baccd5815028abf0a1af1e59dbd495d4f817c",
+ "2b33082fa5b1dab7249270b8227d77482d5f6d1e2dce856fe31a7f1b59079717",
  "wm-gray-behind"
- "a652963d3f14581ed6c024737e89e52a30edf2951b04ad9f5f929da00d5f2394",
+ "c5fcd69330fdccbfd6b40e22c3078b228026d15b20535315e6e39dbcc514b758",
  "wm-image-behind"
- "416067c90adcd38c7d7eb18f5db204e1dbab64b23e227cac68a8040b5be2ed79",
+ "aad6c9e9a1251870ff7db92f1bb068f72272d35739d10b94ffaa87224cbabc7e",
  "wm-marked"
- "5dfabb148fa11df86eb2ace5a44f55d02a6c9a2955db37695863a5079d06c413",
+ "f45d7034fef9c128c4ef68c8d0ff85374709bd3e507f48444515d0863abd8b9b",
  "wm-ocg"
- "954c56c5a43135ae3217928827dcaf8dc8424d5eae2f055e2a148c1f7f0ffe77"}
+ "51f4700cf89606202b6188d15e2b5b5a5b0d626a4d8c00f2610eec31599cd0a0"}

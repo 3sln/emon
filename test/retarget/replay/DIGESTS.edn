@@ -1,12 +1,12 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/retarget/replay/ID, as `bb retarget-record` made it (P7.4, D347).
 ;; P10.1 (D370): re-derived by replaying the committed transcripts (no live engine): every `conf` of the JSON is the calibrated one.
 {"born-wm-gray-behind"
- "a229f6764b4db49dfe20a4168f755b7042c783bd7e8b402fdce2abb452f37f50",
+ "229a4cc8e3276e9e4e1125be1ffdcd2b0b19881e83ae6365ac7087bf3629d94a",
  "ovl-h-numbered"
- "a18d4fcf4d4e46246186a29f49d618c78778661ce91ef78cab345e822ff6ce84",
+ "80b1ea00f1158870793c1fa32eaa76daf7e4a7fe3232f894fcc7a1426be911fb",
  "ovl-stamp-seal"
- "3d15bd0a82f5cd32db54e902db078fbe9277c1e11f6f21e0938515890806651b",
+ "326931f916f22b60b8413b569002af97ea4e98ac3e7ced9b6803a25ca3c22367",
  "ovl-table-simple-ruled"
- "82974642671c8eb9ecb7da3c5b976616049a8a3ffe4715738a910fa5df398bc3",
+ "16df7d55c507d20a72023d6ebdbd5dde3d9ec999d600b1baf8a9a651a630b042",
  "ovl-watermark-draft"
- "0f15366b301926837349168e753b82f1a42edf1cc8c249f7760a976cf8b2b8d2"}
+ "1c306e91e9ed86d0ed9c263d2cfc2ff61158ff322f2289563e67f221e67e84d9"}

@@ -149,7 +149,7 @@
                   (paragraph 72 230 body-3)
                   (txt "F1" 11 72 120 "Signed copies are kept in the archive."))
     :body (concat ["Process Overview"] body-1
-                  ["Note that every step is checked" "by two people before it is filed" "and again once it is closed" "Start" "Phase" "Q1" "Q2" "Q3"]
+                  ["Note that every step is checked" "by two people before it is filed" "and again once it is closed" "Start" "Phase"]
                   body-3 ["Signed copies are kept in the archive."])
     :nodes []
     :leak []}])

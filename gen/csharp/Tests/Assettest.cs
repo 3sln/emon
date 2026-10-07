@@ -416,7 +416,7 @@ public static class Assettest {
         AtCand(cand, 1, 7200, 50000, 30000, 60000, 0, 0, 0, 2);
         AtCand(cand, 1, 7200, 95000, 30000, 100000, 0, 0, 0, 3);
         emon.Testport.AssertEq(Asset.AsFigureRows(cand, pages, nodes, regions, 1, fg), 3, "three figures");
-        Restruct.RsFigures(nodes, attrs, regions, nn, na, nr, nm, cand, fg);
+        Restruct.RsFigures(nodes, attrs, regions, text, nn, na, nr, nm, cand, fg, emon.Port.NewCells(), emon.Port.NewCells());
         emon.Testport.AssertEq(Model.NodeCount(nn), 9, "nine nodes: the six and three figures");
         // preorder: document, section, heading, paragraph, FIGURE, paragraph, FIGURE, paragraph, FIGURE
         emon.Testport.AssertEq(Model.NodeKind(nn, 0), Model.NkDocument(), "the document");

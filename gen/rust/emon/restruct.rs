@@ -963,12 +963,171 @@ pub(crate) fn rf_next_region(on: &mut crate::port::Cells, c: i32) -> i32 {
     }
     return r;
 }
-pub(crate) fn rf_flush(cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, np: i32, lpage: i32, ly: i32) -> i32 {
+pub(crate) const RF_FD: i32 = 8;
+pub(crate) const RF_CAPGAP: i32 = 4000;
+pub(crate) fn rf_min(a: i32, b: i32) -> i32 {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn rf_max(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+pub(crate) const RF_ZONE: i32 = 2400;
+pub(crate) const RF_LABEL_H: i32 = 1800;
+pub(crate) const RF_LABEL_CP: i32 = 48;
+pub(crate) const RF_LABEL_WORDS: i32 = 6;
+pub(crate) fn rf_fdv(fd: &mut crate::port::Cells, row: i32, f: i32, dflt: i32) -> i32 {
+    if crate::port::cells_len(fd) < ((row + 1) * RF_FD) {
+        return dflt;
+    }
+    return crate::port::cells_at(fd, (row * RF_FD) + f);
+}
+pub(crate) fn rf_label_text(on: &mut crate::port::Cells, text: &mut crate::port::Cells, p: i32) -> bool {
+    // A paragraph's text that a label can be: few code points and words, not a sentence (no final full stop).
+    let s: i32 = node_text_start(on, p);
+    let l: i32 = node_text_len(on, p);
+    let mut i: i32 = 0;
+    let mut words: i32 = 1;
+    if (l < 1) || (l > RF_LABEL_CP) {
+        return 0 == 1;
+    }
+    if crate::port::cells_at(text, s + (l - 1)) == 46 {
+        return 0 == 1;
+    }
+    while i < l {
+        if crate::port::cells_at(text, s + i) == 32 {
+            words += 1;
+        }
+        i += 1;
+    }
+    return words <= RF_LABEL_WORDS;
+}
+pub(crate) fn rf_label_of(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, p: i32) -> i32 {
+    // The candidate row of the figure that paragraph p labels, or -1.
+    let r: i32 = node_region_head(on, p);
+    let mut i: i32 = 1;
+    let mut row: i32 = 0;
+    if r < 0 {
+        return -1;
+    }
+    if node_region_count(on, p) != 1 {
+        return -1;
+    }
+    if node_has_text(on, p) == 0 {
+        return -1;
+    }
+    if (region_y1(orr, r) - region_y0(orr, r)) > RF_LABEL_H {
+        return -1;
+    }
+    if !rf_label_text(on, text, p) {
+        return -1;
+    }
+    while i < crate::port::cells_len(fg) {
+        row = crate::port::cells_at(fg, i);
+        if (as_get(cand, row, 0) == region_page(orr, r)) && ((region_x1(orr, r) > (as_get(cand, row, 5) - RF_ZONE)) && ((region_x0(orr, r) < (as_get(cand, row, 7) + RF_ZONE)) && ((((region_y0(orr, r) + region_y1(orr, r)) / 2) >= (as_get(cand, row, 6) - RF_ZONE)) && ((((region_y0(orr, r) + region_y1(orr, r)) / 2) <= (as_get(cand, row, 8) + RF_ZONE)) && ((region_x1(orr, r) - region_x0(orr, r)) <= ((2 * (as_get(cand, row, 7) - as_get(cand, row, 5))) + 2000)))))) {
+            return row;
+        }
+        i += 1;
+    }
+    return -1;
+}
+pub(crate) fn rf_absorb_note(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, n: i32) -> i32 {
+    // A note (the column stage made a margin note of a column of tick labels) every child of which is a label of one figure is
+    // dropped with them: the note and its paragraphs are marked.
+    let mut c: i32 = node_first_child(on, n);
+    let mut f: i32 = -1;
+    let mut g: i32 = 0;
+    let mut ok: i32 = 1;
+    let mut cnt: i32 = 0;
+    while c >= 0 {
+        g = -1;
+        if node_kind(on, c) == nk_paragraph() {
+            g = rf_label_of(on, orr, text, cand, fg, fd, c);
+        }
+        if g < 0 {
+            ok = 0;
+        }
+        if (g >= 0) && ((f >= 0) && (g != f)) {
+            ok = 0;
+        }
+        if g >= 0 {
+            f = g;
+        }
+        cnt += 1;
+        c = node_next(on, c);
+    }
+    if (ok == 1) && (cnt > 0) {
+        crate::port::cells_set(ab, n, f);
+        c = node_first_child(on, n);
+        while c >= 0 {
+            crate::port::cells_set(ab, c, f);
+            c = node_next(on, c);
+        }
+    }
+    return 0;
+}
+pub(crate) fn rf_absorb(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, cand: &mut crate::port::Cells, fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, p: i32) -> i32 {
+    // Mark, among the blocks of p (the document or a section) and of the sections in it, the paragraphs that label a figure.
+    let mut c: i32 = node_first_child(on, p);
+    let mut f: i32 = -1;
+    while c >= 0 {
+        if node_kind(on, c) == nk_section() {
+            rf_absorb(on, orr, text, cand, fg, fd, ab, c);
+        }
+        if node_kind(on, c) == nk_note() {
+            rf_absorb_note(on, orr, text, cand, fg, fd, ab, c);
+        }
+        if node_kind(on, c) == nk_paragraph() {
+            f = rf_label_of(on, orr, text, cand, fg, fd, c);
+            if f >= 0 {
+                crate::port::cells_set(ab, c, f);
+            }
+        }
+        c = node_next(on, c);
+    }
+    return 0;
+}
+pub(crate) fn rf_labels(on: &mut crate::port::Cells, ab: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, nn: i32, row: i32) -> i32 {
+    // The texts of the paragraphs marked as labels of the figure `row`, in node order, as `labels` of the new figure nn.
+    let n: i32 = node_count(on);
+    let mut c: i32 = 0;
+    while c < n {
+        if (crate::port::cells_at(ab, c) == row) && (node_kind(on, c) == nk_paragraph()) {
+            node_add_attr_text(nodes, attrs, nn, fk_labels(), node_text_start(on, c), node_text_len(on, c));
+        }
+        c += 1;
+    }
+    return 0;
+}
+pub(crate) fn rf_make(on: &mut crate::port::Cells, ab: &mut crate::port::Cells, cand: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, np: i32, row: i32) -> i32 {
+    // The figure node of candidate row `row` as the last child of np: its kind, confidence, sources, region, asset row and labels.
+    let nn: i32 = node_new(nodes, nk_figure(), np);
+    let mut link: i32 = 0;
+    if nn >= 0 {
+        node_set_sub(nodes, nn, rf_fdv(fd, row, 0, fg_unknown()));
+        node_set_conf(nodes, nn, rf_fdv(fd, row, 1, 500));
+        node_add_src(nodes, nn, rf_fdv(fd, row, 2, 0) | sr_infer());
+        node_add_region(nodes, regions, nn, as_get(cand, row, 0), as_get(cand, row, 5), as_get(cand, row, 6), as_get(cand, row, 7), as_get(cand, row, 8));
+        link = rf_fdv(fd, row, 3, row);
+        if link >= 0 {
+            node_set_attr_int(nodes, attrs, nn, fk_image(), link);
+        }
+        if crate::port::cells_len(fd) > 0 {
+            rf_labels(on, ab, nodes, attrs, nn, row);
+        }
+    }
+    return nn;
+}
+pub(crate) fn rf_flush(on: &mut crate::port::Cells, ab: &mut crate::port::Cells, cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, np: i32, lpage: i32, ly: i32) -> i32 {
     // Make the pending figures whose top edge is before the position (lpage, ly) as children of np; lpage -1 is no
     // limit. `fg`[0] is the cursor.
     let mut cur: i32 = crate::port::cells_at(fg, 0);
     let mut row: i32 = 0;
-    let mut nn: i32 = 0;
     let mut more: i32 = 1;
     while (more == 1) && ((cur + 1) < crate::port::cells_len(fg)) {
         row = crate::port::cells_at(fg, cur + 1);
@@ -983,62 +1142,126 @@ pub(crate) fn rf_flush(cand: &mut crate::port::Cells, mut fg: &mut crate::port::
             more = 1;
         }
         if more == 1 {
-            nn = node_new(nodes, nk_figure(), np);
-            if nn >= 0 {
-                node_set_sub(nodes, nn, fg_unknown());
-                node_set_conf(nodes, nn, 500);
-                node_add_src(nodes, nn, sr_infer());
-                node_add_region(nodes, regions, nn, as_get(cand, row, 0), as_get(cand, row, 5), as_get(cand, row, 6), as_get(cand, row, 7), as_get(cand, row, 8));
-                node_set_attr_int(nodes, attrs, nn, fk_image(), row);
-            }
+            rf_make(on, ab, cand, fd, nodes, attrs, regions, np, row);
             cur += 1;
             crate::port::cells_set(fg, 0, cur);
         }
     }
     return 0;
 }
-pub(crate) fn rf_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, p: i32, np: i32, flush: i32, lpage: i32, ly: i32) -> i32 {
+pub(crate) fn rf_flush_anchor(on: &mut crate::port::Cells, ab: &mut crate::port::Cells, cand: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, np: i32, cpn: i32) -> i32 {
+    // Make the figures whose caption is the old node `cpn` (`fd` cell 4), just before it: a figure belongs with its caption, whatever
+    // column it stands in.
+    let rows: i32 = crate::port::cells_len(fd) / RF_FD;
+    let mut row: i32 = 0;
+    while row < rows {
+        if crate::port::cells_at(fd, (row * RF_FD) + 4) == cpn {
+            rf_make(on, ab, cand, fd, nodes, attrs, regions, np, row);
+        }
+        row += 1;
+    }
+    return 0;
+}
+pub(crate) fn rf_anchor(on: &mut crate::port::Cells, orr: &mut crate::port::Cells, cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut fd: &mut crate::port::Cells) -> i32 {
+    // Each figure that has a figure caption (`caption`, kind 1) among the blocks of the document or a section just below it, within
+    // `RF_CAPGAP`, and overlapping it in x, is anchored to the nearest one: `fd` cell 4 is that caption, and the figure leaves `fg`
+    // (it goes in before its caption, `rf-flush-anchor`).
+    let n: i32 = node_count(on);
+    let mut i: i32 = 1;
+    let mut out: i32 = 1;
+    let mut row: i32 = 0;
+    let mut c: i32 = 0;
+    let mut r: i32 = 0;
+    let mut p: i32 = 0;
+    let mut gap: i32 = 0;
+    let mut best: i32 = -1;
+    let mut bestgap: i32 = 1000000;
+    while i < crate::port::cells_len(fg) {
+        row = crate::port::cells_at(fg, i);
+        best = -1;
+        bestgap = 1000000;
+        c = 0;
+        while c < n {
+            if (node_kind(on, c) == nk_caption()) && (node_aux(on, c) == 1) {
+                p = node_parent(on, c);
+                r = node_region_head(on, c);
+                if (p >= 0) && (r >= 0) {
+                    if ((node_kind(on, p) == nk_document()) || (node_kind(on, p) == nk_section())) && ((region_page(orr, r) == as_get(cand, row, 0)) && ((rf_min(region_x1(orr, r), as_get(cand, row, 7)) > rf_max(region_x0(orr, r), as_get(cand, row, 5))) && (1 == 1))) {
+                        gap = region_y0(orr, r) - as_get(cand, row, 8);
+                        if (gap >= -200) && ((gap <= RF_CAPGAP) && (gap < bestgap)) {
+                            best = c;
+                            bestgap = gap;
+                        }
+                    }
+                }
+            }
+            c += 1;
+        }
+        if best >= 0 {
+            crate::port::cells_set(fd, (row * RF_FD) + 4, best);
+        } else {
+            crate::port::cells_set(fg, out, row);
+            out += 1;
+        }
+        i += 1;
+    }
+    crate::port::cells_drop(fg, out);
+    return 0;
+}
+pub(crate) fn rf_children(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, ab: &mut crate::port::Cells, p: i32, np: i32, flush: i32, lpage: i32, ly: i32) -> i32 {
     // Copy the children of old node p under new node np; when `flush` is 1 the pending figures above each child go in
-    // before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins).
+    // before it, and those above (lpage, ly) after the last (a section ends where its next sibling begins). A paragraph
+    // that labels a figure (`ab`) is not copied.
     let mut c: i32 = node_first_child(on, p);
     let mut r: i32 = 0;
     let mut r2: i32 = 0;
     let mut pg2: i32 = 0;
     let mut y2: i32 = 0;
+    let mut bp: i32 = 0;
     let mut nn: i32 = 0;
     while c >= 0 {
-        if flush == 1 {
-            r = rf_region(on, c);
-            if r >= 0 {
-                rf_flush(cand, fg, nodes, attrs, regions, np, region_page(orr, r), region_y0(orr, r));
+        if (crate::port::cells_len(ab) == 0) || (crate::port::cells_at(ab, c) < 0) {
+            if (flush == 1) && (node_kind(on, c) == nk_break()) {
+                bp = node_attr_int_or(on, oa, c, fk_page(), 0);
+                rf_flush(on, ab, cand, fg, fd, nodes, attrs, regions, np, bp, 0);
             }
-        }
-        nn = rf_node(on, oa, orr, nodes, attrs, regions, nm, c, np);
-        if nn >= 0 {
-            if (flush == 1) && (node_kind(on, c) == nk_section()) {
-                r2 = rf_next_region(on, c);
-                if r2 >= 0 {
-                    pg2 = region_page(orr, r2);
-                    y2 = region_y0(orr, r2);
-                    rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, pg2, y2);
-                } else {
-                    rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 1, lpage, ly);
+            if flush == 1 {
+                r = rf_region(on, c);
+                if r >= 0 {
+                    rf_flush(on, ab, cand, fg, fd, nodes, attrs, regions, np, region_page(orr, r), region_y0(orr, r));
                 }
-            } else {
-                rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, c, nn, 0, lpage, ly);
+            }
+            if (flush == 1) && ((crate::port::cells_len(fd) > 0) && (node_kind(on, c) == nk_caption())) {
+                rf_flush_anchor(on, ab, cand, fd, nodes, attrs, regions, np, c);
+            }
+            nn = rf_node(on, oa, orr, nodes, attrs, regions, nm, c, np);
+            if nn >= 0 {
+                if (flush == 1) && (node_kind(on, c) == nk_section()) {
+                    r2 = rf_next_region(on, c);
+                    if r2 >= 0 {
+                        pg2 = region_page(orr, r2);
+                        y2 = region_y0(orr, r2);
+                        rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 1, pg2, y2);
+                    } else {
+                        rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 1, lpage, ly);
+                    }
+                } else {
+                    rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, c, nn, 0, lpage, ly);
+                }
             }
         }
         c = node_next(on, c);
     }
     if flush == 1 {
-        rf_flush(cand, fg, nodes, attrs, regions, np, lpage, ly);
+        rf_flush(on, ab, cand, fg, fd, nodes, attrs, regions, np, lpage, ly);
     }
     return 0;
 }
-pub fn rs_figures(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells) -> i32 {
+pub fn rs_figures(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr: &mut crate::port::Cells, text: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut nm: &mut crate::port::Cells, cand: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells) -> i32 {
     // Copy the old Model's trees into the empty arenas `nodes`, `attrs`, `regions` (the text is shared), with the
-    // provisional figures `fg` (`as-figure-rows`) placed among the document's and the sections' blocks. `nm` is scratch
-    // (old node to new). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
+    // figures `fg` (rows of `cand`, sorted: `as-figure-rows`; what they are: `fd`) placed among the document's and the
+    // sections' blocks, and the paragraphs that label them left out. `nm` and `ab` are scratch (old node to new; old node to
+    // the figure it labels). The caller swaps the arenas, then runs `rs-run`. Answers the new node count.
     let n: i32 = node_count(on);
     let mut r: i32 = 0;
     let mut i: i32 = 0;
@@ -1047,18 +1270,33 @@ pub fn rs_figures(on: &mut crate::port::Cells, oa: &mut crate::port::Cells, orr:
     crate::port::cells_drop(attrs, 0);
     crate::port::cells_drop(regions, 0);
     crate::port::cells_drop(nm, 0);
+    crate::port::cells_drop(ab, 0);
     while i < n {
         crate::port::cells_push(nm, -1);
+        if crate::port::cells_len(fd) > 0 {
+            crate::port::cells_push(ab, -1);
+        }
         i += 1;
+    }
+    if crate::port::cells_len(fd) > 0 {
+        r = 0;
+        while r < n {
+            if (node_parent(on, r) < 0) && (node_kind(on, r) == nk_document()) {
+                rf_absorb(on, orr, text, cand, fg, fd, ab, r);
+            }
+            r += 1;
+        }
+        rf_anchor(on, orr, cand, fg, fd);
+        r = 0;
     }
     while r < n {
         if node_parent(on, r) < 0 {
             nr = rf_node(on, oa, orr, nodes, attrs, regions, nm, r, -1);
             if nr >= 0 {
                 if node_kind(on, r) == nk_document() {
-                    rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 1, -1, -1);
+                    rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 1, -1, -1);
                 } else {
-                    rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, r, nr, 0, -1, -1);
+                    rf_children(on, oa, orr, nodes, attrs, regions, nm, cand, fg, fd, ab, r, nr, 0, -1, -1);
                 }
             }
         }
