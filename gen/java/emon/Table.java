@@ -1286,11 +1286,43 @@ public final class Table {
         int r = Evidence.wdGet(wd, w, Evidence.hdRot());
         return (r < 100) || (r > 35900);
     }
-    public static boolean tbWless(emon.Port.Cells wd, int a, int b, int mode) {
+    public static int tbTilt(emon.Port.Cells wd, emon.Port.Cells wl, int n) {
+        // The tilt of the page's baselines, parts per million (the rise of a baseline over its run, summed over the words
+        // of wl[0, n) and divided by the runs: a word's own slope is a pixel or two over a few characters, noise, but the
+        // sum of hundreds of them is the page's). 0 under 2000 ppm (about a tenth of a degree: a text layer, a flat scan)
+        // and for a tilt past about 4.8 degrees, which is no tilt of a page (D660).
+        int sdy = 0;
+        int sdx = 0;
+        int i = 0;
+        while (i < n) {
+            int w = emon.Port.cellsAt(wl, i);
+            int dx = Evidence.wdGet(wd, w, Evidence.hdBx1()) - Evidence.wdGet(wd, w, Evidence.hdBx0());
+            int dy = Evidence.wdGet(wd, w, Evidence.hdBy1()) - Evidence.wdGet(wd, w, Evidence.hdBy0());
+            if ((dx > 0) && ((12 * tbAbs(dy)) <= dx)) {
+                sdy += dy;
+                sdx += dx;
+            }
+            i += 1;
+        }
+        if ((sdx / 1000) >= 1) {
+            int ppm = (sdy * 1000) / (sdx / 1000);
+            if ((tbAbs(ppm) >= 2000) && (tbAbs(ppm) <= 83000)) {
+                return ppm;
+            }
+        }
+        return 0;
+    }
+    public static int tbBkey(emon.Port.Cells wd, int w, int ppm) {
+        // The word's right baseline height carried back to the page's left edge along the page's tilt `ppm`: what a row's
+        // words share on a tilted scan, where a row's left and right words differ by several sizes of baseline over a table's
+        // width and the chain of rows below would cut a row where a column is empty. ppm 0 answers `by1`, as before.
+        return Evidence.wdGet(wd, w, Evidence.hdBy1()) - (((Evidence.wdGet(wd, w, Evidence.hdBx1()) / 100) * ppm) / 10000);
+    }
+    public static boolean tbWless(emon.Port.Cells wd, int a, int b, int mode, int ppm) {
         // Does word a come before word b: mode 0 by baseline then x, mode 1 by x; then by index.
         if (mode == 0) {
-            int ya = Evidence.wdGet(wd, a, Evidence.hdBy1());
-            int yb = Evidence.wdGet(wd, b, Evidence.hdBy1());
+            int ya = tbBkey(wd, a, ppm);
+            int yb = tbBkey(wd, b, ppm);
             if (ya != yb) {
                 return ya < yb;
             }
@@ -1302,7 +1334,7 @@ public final class Table {
         }
         return a < b;
     }
-    public static int tbSortWords(emon.Port.Cells wl, emon.Port.Cells wd, int from, int to, int mode) {
+    public static int tbSortWords(emon.Port.Cells wl, emon.Port.Cells wd, int from, int to, int mode, int ppm) {
         // Shell sort of wl[from, to) by `tb-wless`.
         int n = to - from;
         int h = 1;
@@ -1322,7 +1354,7 @@ public final class Table {
                 more = 1;
                 while ((j >= h) && (more == 1)) {
                     u = emon.Port.cellsAt(wl, from + (j - h));
-                    if (tbWless(wd, v, u, mode)) {
+                    if (tbWless(wd, v, u, mode, ppm)) {
                         emon.Port.cellsSet(wl, from + j, u);
                         j -= h;
                     } else {
@@ -1342,6 +1374,7 @@ public final class Table {
         int w = w0;
         int i = 0;
         int j = 0;
+        int ppm = 0;
         int n = 0;
         emon.Port.cellsDrop(wl, 0);
         emon.Port.cellsDrop(rw, 0);
@@ -1357,7 +1390,8 @@ public final class Table {
             w += 1;
         }
         n = emon.Port.cellsLen(wl);
-        tbSortWords(wl, wd, 0, n, 0);
+        ppm = tbTilt(wd, wl, n);
+        tbSortWords(wl, wd, 0, n, 0, ppm);
         i = 0;
         while (i < n) {
             int w0i = emon.Port.cellsAt(wl, i);
@@ -1365,10 +1399,10 @@ public final class Table {
             // A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
             // order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
             j = i + 1;
-            while ((j < n) && (tbAbs(Evidence.wdGet(wd, emon.Port.cellsAt(wl, j), Evidence.hdBy1()) - Evidence.wdGet(wd, emon.Port.cellsAt(wl, j - 1), Evidence.hdBy1())) <= tol)) {
+            while ((j < n) && (tbAbs(tbBkey(wd, emon.Port.cellsAt(wl, j), ppm) - tbBkey(wd, emon.Port.cellsAt(wl, j - 1), ppm)) <= tol)) {
                 j += 1;
             }
-            tbSortWords(wl, wd, i, j, 1);
+            tbSortWords(wl, wd, i, j, 1, ppm);
             int ri = tbRowsOf(rw, RWS);
             int sumy = 0;
             int sums = 0;
@@ -1379,7 +1413,7 @@ public final class Table {
             int k = i;
             while (k < j) {
                 int wk = emon.Port.cellsAt(wl, k);
-                sumy += Evidence.wdGet(wd, wk, Evidence.hdBy1());
+                sumy += tbBkey(wd, wk, ppm);
                 sums += tbMax(1, Evidence.wdGet(wd, wk, Evidence.wfSize()));
                 if (Evidence.wdGet(wd, wk, Evidence.hdX0()) < x0) {
                     x0 = Evidence.wdGet(wd, wk, Evidence.hdX0());
