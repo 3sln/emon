@@ -1,0 +1,26 @@
+# The pinned environment of `bb baselines` for pdfplumber and pymupdf4llm (P2.10, D339-D342): a full lock, `pip freeze` of
+# .cache/oracle-venv (python3.12, macOS arm64).  Rebuild: bb baselines --setup pdfplumber pymupdf4llm
+# pymupdf4llm 1.28 runs PyMuPDF-Layout (an ONNX layout model shipped in the pymupdf-layout wheel) and calls the system
+# Tesseract on pages it judges to need OCR; the Tesseract version is recorded in the reference's :pins.
+# PyMuPDF and PyMuPDF-Layout are AGPL/commercial: they run only as a measuring stick on a developer's machine and are
+# not linked into, shipped with or depended on by emon.
+cffi==2.1.1
+charset-normalizer==3.5.2
+cryptography==50.0.2
+flatbuffers==25.12.19
+networkx==3.7
+numpy==2.5.3
+onnxruntime==1.30.0
+packaging==26.3
+pdfminer.six==20260107
+pdfplumber==0.11.10
+pillow==12.3.0
+protobuf==7.36.2
+psutil==7.2.2
+pycparser==3.0
+pymupdf==1.28.2
+pymupdf-layout==1.28.2
+pymupdf4llm==1.28.2
+pypdfium2==5.14.0
+PyYAML==6.0.3
+tabulate==0.10.0

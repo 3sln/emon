@@ -1087,8 +1087,47 @@ analysis beyond "top-to-bottom lines on a single column".
   the predictor is the Rust Engine's driver, `emon` has a baseline and `accuracy` is a gate (D145).
   `tools/accuracy/`: `score`, `accuracy`, `predict-*`, `test_score` (babashka since
   D094; run by `bb unit`).
-- [ ] **P2.10 — Baselines against the field** (SPEC §14.4): pinned versions
-  of 2–3 extractors, scored offline, committed as reference lines.
+- [x] **P2.10 — Baselines against the field** (SPEC §14.4; D339-D342): pinned versions
+  of four extractors, scored offline by the same scorer, committed as reference lines
+  (`test/scoreboard.edn` `:references`; never a gate, never the ratchet). `bb baselines`
+  (`tools/accuracy/baselines.clj`; extractors and adapters `tools/oracle/baselines.py`, pins
+  `tools/oracle/requirements-*.txt`). Subset: the 102 born-digital inputs (99 `pdf` + 3 `pdf-tagged`)
+  for pdfplumber 0.11.10 (pdfminer.six 20260107), pymupdf4llm 1.28.2 (PyMuPDF-Layout 1.28.2) and
+  docling 2.134.0; the 71 `scan` inputs for Tesseract 5.5.3 (`--psm 3`, poppler 300 dpi). `scan-color` and
+  `scan-ovl` are not run. Emon's side is its committed ratchet entry (`emon` for `pdf`, `pdf-tagged`;
+  `emon-live`, the live-Tesseract Engine, for `scan`). Pooled over the subset (`all`; ratios, `cer`/`wer` lower is better):
+
+  | `pdf/all` | emon | docling | pymupdf4llm | pdfplumber |
+  |---|---|---|---|---|
+  | cer | 0.044 | 0.086 | 0.111 | 0.162 |
+  | wer | 0.060 | 0.109 | 0.116 | 0.215 |
+  | bow-f1 | 0.957 | 0.948 | 0.937 | 0.942 |
+  | block-heading-f1 | 0.962 | 0.868 | 0.896 | 0.729 |
+  | heading-level-acc | 0.984 | 0.459 | 0.835 | 0.769 |
+  | block-paragraph-f1 | 0.793 | 0.764 | 0.801 | 0.468 |
+  | para-boundary-f1 | 0.812 | 0.799 | 0.810 | 0.499 |
+  | block-list-f1 | 1.000 | 0.645 | 0.571 | 0.250 |
+  | block-table-f1 | 0.957 | 0.803 | 0.766 | 0.449 |
+  | table-teds-lite | 0.852 | 0.849 | 0.758 | 0.343 |
+  | table-teds-struct-lite | 0.907 | 0.863 | 0.773 | 0.369 |
+  | furniture-f1 | 0.970 | 0.000 | 0.000 | 0.000 |
+
+  Per category (`pdf/CAT`): `columns` cer emon 0.004, docling 0.201, pymupdf4llm 0.109, pdfplumber 0.600 (the three read
+  columns as lines or in the wrong order; emon's fragments join); `tables` table-teds-lite 0.929, 0.793, 0.757, 0.400 and
+  block-table-f1 1.000, 0.615, 0.615, 0.316; `headings` heading-level-acc 1.000, 0.194, 0.613, 0.652; `lists` block-list-f1 1.000, 0.824,
+  0.600, 0.294; `furniture` furniture-f1 1.000, 0.000, 0.000, 0.000 (none of the three drops running headers and page numbers, which
+  the Model's ledger scores; their cer there is 0.000, 0.023, 0.023 for the same reason); `scripts` (RTL, CJK, Indic) cer 0.090,
+  0.040, 0.205, 0.497 (docling is better than emon here: `bow-f1` 0.891 against 0.789, `table-teds-lite` 0.761 against 0.674).
+  `pdf-tagged/all` (3 documents): cer 0.012, 0.034, 0.018, 0.003 and wer 0.081, 0.051, 0.089, 0.004 (pdfplumber is better than emon on
+  text there; the headings document's `bow-f1` 0.931 against 1.000 is an emon gap to read), block-table-f1 1.000 everywhere.
+  `scan/all` (71 scans; emon-live against Tesseract 5.5.3's own text, which claims no structure): cer 0.088 / 0.123, wer 0.168 / 0.212,
+  bow-f1 0.871 / 0.858, block-heading-f1 0.700 / 0.000, para-boundary-f1 0.465 / 0.396, block-paragraph-f1 0.524 / 0.543 (Tesseract
+  slightly ahead: emon-live's paragraphs split more), tables and lists 0.000 for both. Full per-category tables: `bb baselines --report`.
+  Reading it: emon is ahead of all three on text, headings, lists, tables (except docling's teds-lite, a tie) and furniture on
+  born-digital input, behind docling on RTL/CJK/Indic text and on pdfplumber's tagged-document text, level with pymupdf4llm on
+  paragraphs; on scans it is ahead of a bare Tesseract on text and headings and about level on paragraphs. The corpus is
+  the synthetic one whose gold is emon's own Model, so conventions (heading levels, furniture as a ledger, lists as lists)
+  favour emon; the table says "better than X on Y", not "better than X".
 - [x] **P2.11 — Public datasets: licence review and importers** (D086-D088).
   Licences verified per source and recorded with what may be committed and what
   is (nothing, no LFS) in `test/corpus/DATASETS.md`; importers
@@ -9162,4 +9201,28 @@ table TEDS-lite on the graphics set, `twin-gap`, the ghost counts, ICDAR) cannot
 ### D338 — Not in P6.1a (P6.1a; D117, D301)
 **Decision**: left, each with its owner: **inline images** (`BI` ... `EI`) stay `noasset: "codec"`: the interpreter's `images` row does not record the data span, and a codec in an inline image (`/F /DCT`, `/CCF`) needs it (a follow-up that records the span and the dictionary; the host's request is ready for the payload route, which a span of the content stream needs); CCITT Group 3 two-dimensional, byte-aligned or EOL-less on **Go**, and JPX and JBIG2 on Go altogether (D335, D336); a JBIG2 fixture with symbols and a text region (no encoder), and a YCCK JPEG (none writes one); JPX alpha (`/SMaskInData`) and CMYK JPX; an Adobe CMYK file whose PDF `/Decode` and marker disagree (D334); JBIG2 and JPX stencil masks as `/Mask` streams are asked for like any other image (they are in the code and have no fixture); and `figures` (P8.5) as before.
 **Why**: each needs something P6.1a was not given (an encoder, a recorded span, a library).
+- [ ] **Signed off** (maintainer)
+
+### D339 — Reference lines: `:references` in the scoreboard, replaced by `--update`, read by no gate (P2.10; SPEC 14.4; D077, D079)
+**Decision**: `test/scoreboard.edn` gains a top-level `:references` beside `:predictors`: `"baseline-TOOL"` -> `{":tool" ":version" ":pins" ":variants" ":documents" ":scores"}`, where `:scores` has exactly the shape of a predictor's entry (`"VARIANT/CATEGORY"` -> metric -> value). `bb accuracy --predictor baseline-pdfplumber|-pymupdf4llm|-docling|-tesseract` scores a pinned extractor's adapted output (`predict-baseline.sh` reads `.cache/baselines/TOOL/VARIANT/ID.json`; no extractor runs inside a scoring) on that reference's fixed variants (`pdf,pdf-tagged`; `scan` for Tesseract) and `--update` REPLACES its record (it is the measurement of a pinned tool, not a value to ratchet). A reference compares with nothing, can fail no run, and `compare-boards`, `merge-up` and every gate read `:predictors` only; `--update` of any other predictor leaves `:references` as it is; a run with `--variants` or `--ids` is never recorded. The format is additive (`:format` stays 1; the committed `emon`, `emon-live`, `oracle`, `degraded` entries are byte-identical). `bb baselines [--setup|--extract|--score|--report] [--force] [TOOL...]` runs the extraction (one process, `nice`, resumable), the scoring and the emon-versus-field report; it is not in `bb gates`.
+**Why**: "a reference line, not a gate" (SPEC 14.4); a separate key cannot be confused with, or feed, the ratchet, and the same scorer makes the numbers comparable.
+**Alternatives**: baselines as `:predictors` entries with a flag (every reader of the board would have to learn to skip them); a second file (the reference and emon's lines belong side by side).
+- [ ] **Signed off** (maintainer)
+
+### D340 — The field: pdfplumber, pymupdf4llm, docling, and Tesseract for scans (P2.10; SPEC 14.4, D094, D227)
+**Decision**: pdfplumber 0.11.10 on pdfminer.six 20260107 (the plain extractor, with tables of its own; also the D227 rule-truth oracle), pymupdf4llm 1.28.2 with PyMuPDF-Layout 1.28.2 (a layout-aware converter to Markdown: headings, lists, tables; an ONNX layout model inside the wheel, offline), docling 2.134.0 (a structure-aware converter: labelled items, section levels, table cells, page headers and footers; models docling-project/docling-layout-heron and docling-models fetched once from the Hugging Face hub, revisions in `:pins`, OCR off, TableFormer on), and Tesseract 5.5.3 on poppler's 300 dpi render, `--psm 3`, for the scans (the three above read a text layer; a scan has none). Python lives in `tools/oracle/` (D094's exception): `baselines.py`, and full `pip freeze` locks `requirements-baselines.txt` (venv `.cache/oracle-venv`) and `requirements-docling.txt` (`.cache/oracle-venv-docling`, python3.12, CPU torch); `bb baselines --setup` rebuilds them. Not run: `pdftotext -layout` (text only: pdfplumber's text is the same claim with structure on top), marker (torch plus surya models, heavier than docling with the same claim), MinerU/unstructured (system dependencies). PyMuPDF and its layout add-on are AGPL/commercial: a developer-machine measuring stick, never linked, shipped or depended on.
+**Why**: two text-layer extractors of different generations (one geometric, one with a layout model), one structure-aware, and the OCR baseline the spec names; docling and pymupdf4llm both installed and ran offline on this machine (docling ~17 minutes for 102 inputs on a loaded machine, the first one 3.5 minutes for the model download).
+**Alternatives**: marker (not tried, see above); only the two light tools (no structure-aware reference).
+- [ ] **Signed off** (maintainer)
+
+### D341 — What an adapter claims: the tool's own structure where it has one, the smallest documented heuristic where it has none (P2.10; D340)
+**Decision**: `baselines.py` maps each tool's native output into an emon-1 Model; no gold, document id or corpus fact is read. docling: its labels (`section_header` -> heading with level+1 and `title` -> level 1, the way its own Markdown serializer numbers them; docling gives every heading of this corpus section level 1, so `heading-level-acc` 0.459 is the tool's, not the mapping's; `list_item` -> items grouped by `enumerated`; `table` -> rows and cells with spans from `table_cells`; `caption`, `footnote`, `code`, `picture`; `page_header`/`page_footer` -> furniture); pymupdf4llm: its Markdown (`#` levels, pipe tables, `-`/`1.` items, blank-line paragraphs, emphasis markup and picture placeholders stripped); pdfplumber: `find_tables` for tables (text inside a table box left to the table), text lines by `extract_text_lines`, a heading is a line whose font size is at least 1.12 times the document's most common size (level by size rank) or a short fully bold line after a gap, a new paragraph starts at a gap over 0.45 line heights, a leading bullet or `1.`/`a.` marker makes a list item; Tesseract: one paragraph per blank-line-separated block of its text. No tool drops running headers and page numbers except as docling labels them, and none writes `dropped`, so `furniture-f1` is 0 where the gold has furniture (docling's labelled furniture does not match the ledger's role and page text either). pymupdf4llm calls the system Tesseract on pages it judges to need OCR (the version is in `:pins`). A document an extractor fails on is scored as empty and the run exits non-zero (none did).
+**Why**: a baseline is what a user of the tool gets mapped into the same Model, and the mapping must be readable and fixed; the heuristics are the ones a user of a plain extractor would write first, not tuned.
+**Alternatives**: scoring raw text only (no structure metrics); tuning the pdfplumber heuristics on the corpus (would make the baseline a function of the corpus).
+- [ ] **Signed off** (maintainer)
+
+### D342 — The subset, the caveats, and what is recorded (P2.10; D339, D340)
+**Decision**: scored subset: every `pdf` (99) and `pdf-tagged` (3) input for the three text-layer tools (each `pdf/CAT` and `pdf-tagged/CAT` category of the board), every `scan` (71) input for Tesseract; `scan-color` and `scan-ovl` are not run (their gold and overlay metrics are about colour and overlay handling, not the field's). The three text-layer tools are not run on scans (no text layer, OCR off) and Tesseract is not run on `pdf`. Emon's comparison lines are its own committed ratchet entries (`emon`, and `emon-live` for `scan`); they are the best recorded values, so a current run can sit within the tolerance below them. The graphics metrics (`rule-*`, `fill-*`, `table-adj-*`) need an evidence dump and are absent for every reference. Rerun: `bb baselines --setup`, then `bb baselines` (about 25 minutes, `nice`, one process; machine load stretched it); outputs are cached in `.cache/baselines/` (gitignored), `--force` redoes them. Reproducibility: pinned packages and model revisions, CPU only; docling's torch kernels and the Tesseract build are the unpinned parts and could move a number in the third decimal. The corpus is synthetic with emon's own gold (SPEC 14.3.1): conventions favour emon, and the numbers say "better than X on Y" for these documents only.
+**Why**: the full corpus for every tool would score colour and overlay cases with no field claim; the subset is fixed and written down so a rerun is the same measurement.
+**Alternatives**: all five input forms for every tool (OCR through docling, hours on this machine, no new claim).
 - [ ] **Signed off** (maintainer)

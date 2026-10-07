@@ -3130,6 +3130,7 @@ The same corpora scored, offline and committed, for named baselines (e.g.
 `pdftotext -layout`, pdfminer.six/pdfplumber, Tesseract's own hOCR, and one
 or two open-source layout-aware converters), each version-pinned. Not a gate —
 a reference line in the scoreboard, so "accurate" means "better than X on Y".
+They live under the scoreboard's `:references`, which no gate reads (D339); `bb baselines` runs them (D340-D342).
 
 ### 14.5 The text-layer oracle
 

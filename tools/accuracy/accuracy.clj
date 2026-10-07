@@ -15,6 +15,9 @@
     bb accuracy --predictor emon-fusion  the Rust Engine converting BORN-DIGITAL documents with the hidden setting ocr-born-digital, REPLAYING the
                                        committed transcripts of test/fusion/replay/ID/ (a gate's: `bb fusion`; P7.3, D285-D290)
     bb accuracy --predictor emon-fusion-live  the same LIVE (pdfium and Tesseract). NOT a gate (needs both; takes minutes)
+    bb accuracy --predictor baseline-pdfplumber|-pymupdf4llm|-docling|-tesseract   a REFERENCE (P2.10, D339): a pinned third-party
+                                       extractor's adapted output (`bb baselines` makes it), scored by this scorer on a fixed subset of
+                                       the input forms and recorded under `:references` by --update; never a gate, never the ratchet
     bb accuracy --predictor emon-replay  the Rust Engine REPLAYING the committed OCR transcripts of test/ocr/scan/ID/ (a gate's:
                                        `bb ocr` scores the documents that have one; no engine runs)
 
@@ -64,7 +67,28 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "emon-live" ["sh" (str (fs/path HERE "predict-emon-live.sh"))]
    "emon-replay" ["sh" (str (fs/path HERE "predict-emon-replay.sh"))]
    "emon-fusion" ["sh" (str (fs/path HERE "predict-emon-fusion.sh"))]
-   "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]})
+   "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]
+   "baseline-pdfplumber" ["sh" (str (fs/path HERE "predict-baseline.sh")) "pdfplumber"]
+   "baseline-pymupdf4llm" ["sh" (str (fs/path HERE "predict-baseline.sh")) "pymupdf4llm"]
+   "baseline-docling" ["sh" (str (fs/path HERE "predict-baseline.sh")) "docling"]
+   "baseline-tesseract" ["sh" (str (fs/path HERE "predict-baseline.sh")) "tesseract"]})
+
+;; REFERENCE predictors (P2.10, D339): pinned third-party extractors, scored by this same scorer and recorded
+;; under the scoreboard's `:references`, never under `:predictors`. A reference is a measurement of a pinned
+;; tool, not a gate: nothing compares it with a committed value, it can fail no run, and it never feeds the
+;; ratchet. It is scored on a fixed subset of the corpus's input forms (the born-digital ones for a tool that
+;; reads a text layer, the scans for the OCR one); `--variants` overrides, and then it is not recorded.
+(def REFERENCES
+  {"baseline-pdfplumber" {:tool "pdfplumber" :variants #{"pdf" "pdf-tagged"}}
+   "baseline-pymupdf4llm" {:tool "pymupdf4llm" :variants #{"pdf" "pdf-tagged"}}
+   "baseline-docling" {:tool "docling" :variants #{"pdf" "pdf-tagged"}}
+   "baseline-tesseract" {:tool "tesseract" :variants #{"scan"}}})
+
+(defn baseline-meta
+  "What baselines.py recorded about the run that produced a reference's outputs, or {}."
+  [tool]
+  (let [f (str (fs/path ROOT ".cache" "baselines" tool "META.json"))]
+    (if (fs/exists? f) (pyjson/parse-file f) {})))
 (def FAMILY {"h" "headings" "table" "tables" "furn" "furniture" "figures" "figures"
              "lists" "lists" "script" "scripts" "columns" "columns" "footnotes" "footnotes"
              "stamp" "seals" "watermark" "watermarks" "invoice" "forms" "bank" "forms"
@@ -160,6 +184,9 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 ;; predictor -> \"VARIANT/CATEGORY\" -> metric -> value.  Edit by running, not by hand.
 ;; `oracle` and `degraded` are fixtures that prove the scorer; `emon` is the real pipeline (the Rust
 ;; Engine, P1.10): its first run is the baseline (D145) and `bb gates` runs the ratchet.
+;; `:references` (P2.10, D339) are the field's numbers: pinned third-party extractors scored by this same
+;; scorer (`bb baselines`). Reference lines, not gates: nothing compares them with a run, the ratchet never
+;; reads them, and `bb accuracy --update` of another predictor leaves them as they are.
 ")
 
 (defn load-board []
@@ -313,6 +340,31 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
               (println (format "    %-24s %s" m (fmt-f v 4)))))
           [0 board])
 
+      (contains? REFERENCES name)
+      ;; a reference line: reported, and with --update REPLACED (a measurement of a pinned tool, not a
+      ;; ratchet), under :references; it compares with nothing and fails nothing
+      (let [n (reduce + (map count (vals entry)))
+            ref (REFERENCES name)
+            meta (baseline-meta (:tool ref))
+            docs (frequencies (map second (corpus)))
+            variants (str/join "," (sort (keys docs)))]
+        (println (format "  ok   accuracy[%s]: REFERENCE, %d metrics in %d categories over %s (%s documents); not a gate%s"
+                         name n (count entry) variants
+                         (str/join "+" (map #(get docs %) (sort (keys docs))))
+                         (if update "" " (run --update to record)")))
+        (if (and update (= *variants* (:variants ref)) (nil? *ids*))
+          (let [rec (array-map ":tool" (:tool ref)
+                               ":version" (get meta "version" "unknown")
+                               ":pins" (get meta "pins" "")
+                               ":variants" variants
+                               ":documents" (apply array-map (mapcat (fn [[k v]] [k v]) (sort-by key docs)))
+                               ":scores" entry)
+                board (assoc-in board [":references" name] rec)]
+            (save-board board)
+            (println (format "  ok   reference recorded: %s :references %s" (str (fs/relativize ROOT BOARD)) name))
+            [0 board])
+          [0 board]))
+
       :else
       (let [tol (get board ":tolerance" TOLERANCE)
             old (get-in board [":predictors" name])
@@ -367,7 +419,10 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
           (do (println "usage: accuracy.clj [--predictor emon|emon-live|emon-replay|oracle|degraded|fixtures|CMD] [--update] [--only ID] [--variants V,V] [--ids ID,ID]")
               (System/exit 2))))
       (let [board (load-board)
-            runs (cond (= pred "fixtures") [["oracle" (PREDICTORS "oracle")] ["degraded" (PREDICTORS "degraded")]]
+            ;; a reference is scored on its fixed subset of the input forms unless --variants says otherwise
+            _ (when (and (contains? REFERENCES pred) (nil? *variants*))
+                (alter-var-root #'*variants* (constantly (:variants (REFERENCES pred)))))
+            runs(cond (= pred "fixtures") [["oracle" (PREDICTORS "oracle")] ["degraded" (PREDICTORS "degraded")]]
                        (contains? PREDICTORS pred) [[pred (PREDICTORS pred)]]
                        :else (let [cmd (str/split (str/trim pred) #"\s+")] [[(first cmd) cmd]]))
             [fails _] (reduce (fn [[fails board] [name cmd]]
