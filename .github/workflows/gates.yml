@@ -177,6 +177,7 @@ jobs:
           - {name: static, gates: "hosts drift lang-test", corpus: false}
           - {name: check, gates: "check", corpus: false}
           - {name: replay, gates: "plan ocr render embedders", corpus: false}
+          - {name: fusion, gates: "align fusion artifacts seals", corpus: false}
           - {name: slice, gates: "slice", corpus: false}
           - {name: fuzz, gates: "fuzz", corpus: false}
           - {name: identity, gates: "identity", corpus: false}
