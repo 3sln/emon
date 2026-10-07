@@ -1,0 +1,510 @@
+;; THE RASTER PLAN: what a born-digital page's first OCR pass asks, by policy and scope (P7.S; SPEC 8.3 "The first pass, page by kind", 9.8; D038, D199, D200,
+;; D210). emon's own module (D039).
+;;
+;; A pass is planned from the Source and the text layer only, never from pixels (SPEC 8.3): `rp-plan` runs in the document pass (`pu-plan` calls it
+;; once every page has its kind) and writes, into the page plan's rows (`pu-w` cells a page, the first ten are `emon.pageunit`'s), what the page's unit
+;; will ask, and the witness lines its unit reads; the unit reads nothing else to decide. Under `always`:
+;;
+;;   `full` (default)  the page's two renders (`with-text`, `no-text`, 300 dpi: round 1) and the OCR of the whole `with-text` render (round 2): `ask` 1
+;;   `witness`         the same two renders, the OCR of the whole `no-text` render (what the text layer lacks: images, outlines) and the WITNESS LINES: for
+;;                     every (font, page) pair at most `rp-witness-lines` (3) of its upright lines, chosen by a fixed rule (the first, the median and the last,
+;;                     in the text layer's order), each an OCR request of the `with-text` render's region around the line at `psm` 7 (round 2): `ask` 2.
+;;                     A font whose witnesses disagree with its text (`rp-weak`) escalates the page to the whole `with-text` render's OCR in round 3 (D200 (3):
+;;                     every line of the font, and the page's others with them, which costs what `full` costs and only on a page that has a reason)
+;;
+;; Under `auto` a page is asked only when the text layer's health without OCR is under `auto-health` (500, `emon.tlhealth`), images cover at least
+;; `rp-auto-image` (300 per mille) of it, or it has `hidden-text`: then as `full`. Under `never` nothing is asked (`pu-plan` plans nothing).
+;;
+;; THE LANGUAGES of a born-digital page's requests are the locale's, else the SCRIPTS of the page's text layer (`rp-script-of`: the Unicode blocks of its
+;; letters; a script that holds `rp-script-share` per mille of them), as ISO 15924 codes ("Latn") in the request's language cells, which the host's adapter
+;; maps to the installed models of that script (D215, D199 (3)); a page with no letters asks with no language, which is every installed model.
+;;
+;; THE PLAN'S ROWS. Cells 10-13 of a page's row (`rp-f-*`): `ask` (0 nothing, 1 `full`, 2 `witness`), the cell of `pl` where the page's witness rows start, how
+;; many there are, and the scripts' bit set. A witness row (`rp-ww` = 8 cells, after the page rows): page (0-based), the line's `fl` row, its box (4 cells,
+;; centipoints), its font, a spare.
+(ns emon.rasterplan
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.plan :refer [rq-ocr rq-ocr-lang rq-ocr-end]]
+            [emon.ocr :refer [ocf-symbols ocf-osd ocf-dpi-unit]]
+            [emon.evidence :refer [wd-count wd-get ln-count ln-get im-count im-get ow-get or-get
+                                   hd-page hd-tstart hd-tlen wf-font wf-src
+                                   lh-page lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 lh-rot
+                                   mf-page mf-x0 mf-y0 mf-x1 mf-y1 orf-wfirst orf-wcount orf-request]]
+            [emon.player :refer [hl-count hl-get hlf-kind hlf-page hlf-score plh-font-page]]
+            [emon.tlhealth :refer [th-auto-health]]
+            [emon.pdfdoc :refer [pd-pg-crop pd-pg-rotate]]
+            [emon.scan :refer [sc-lang]]
+            [emon.xalign :refer [xa-fold-cp xa-lev]]
+            [emon.health :refer [hh-agree-sim hh-agree-min]]
+            [emon.model :refer [node-set-attr-text text-append-cp fk-ocr-scope]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 9.4: named, first values, P10.1 calibrates)
+
+(defn ^:pub ^I32 rp-auto-image [] (comment "`auto-image`: the share of a page (per mille) that images cover for `ocr: auto` to ask for OCR.") (return 300))
+(defn ^:pub ^I32 rp-witness-lines [] (comment "`witness-lines`: the lines of a (font, page) that `ocr-scope: witness` reads alone (the first, the median, the last).") (return 3))
+(defn ^:pub ^I32 rp-witness-max [] (comment "The most witness lines a page asks, the fonts with the most lines first (the plan's own ceiling beside `emon.retarget`'s `rt-max`).") (return 12))
+(defn ^:pub ^I32 rp-witness-min-cps [] (comment "A line is a witness only when it holds this many letters and digits.") (return 4))
+(defn ^:pub ^I32 rp-weak-min [] (comment "A font's witness lines need this many compared lines before their disagreement escalates the page.") (return 2))
+(defn ^:pub ^I32 rp-script-share [] (comment "A script is asked for when it holds this share (per mille) of the page's letters...") (return 100))
+(defn ^:pub ^I32 rp-script-min [] (comment "...and at least this many of them.") (return 3))
+
+;; scope (`Options::ocr_scope`) and ask
+(defn ^:pub ^I32 rp-scope-full [] (return 0))
+(defn ^:pub ^I32 rp-scope-witness [] (return 1))
+(defn ^:pub ^I32 rp-ask-none [] (return 0))
+(defn ^:pub ^I32 rp-ask-full [] (return 1))
+(defn ^:pub ^I32 rp-ask-witness [] (return 2))
+
+;; the page plan's rows: `emon.pageunit` owns cells 0-9; these are the next four
+(defn ^:pub ^I32 rp-w [] (comment "The cells of a page's plan row.") (return 14))
+(defn ^:pub ^I32 rp-f-ask [] (return 10))
+(defn ^:pub ^I32 rp-f-wat [] (comment "the cell of `pl` where the page's witness rows start") (return 11))
+(defn ^:pub ^I32 rp-f-wn [] (comment "the page's witness rows") (return 12))
+(defn ^:pub ^I32 rp-f-scripts [] (comment "the scripts of its text layer, one bit each (`rp-script-*`)") (return 13))
+(defn ^:pub ^I32 rp-ww [] (comment "the cells of a witness row") (return 8))
+
+;; request ids of the page unit (page-local `k`, `pu-id`): 17-19 and 32-87 are `emon.retarget`'s
+(defn ^:pub ^I32 ri-escalate [] (comment "the whole `with-text` render, read in round 3 when the witness lines disagree") (return 20))
+(defn ^:pub ^I32 ri-witness [] (comment "witness line j is `ri-witness` + j (j < `rp-witness-max`)") (return 96))
+(defn ^:pub ^I32 ri-none [] (comment "an id no request is ever made under: its bitmap is the 0 x 0 stand-in (no engine binary)") (return 250))
+
+;; ------------------------------------------------------------- scripts
+
+(defn ^:pub ^I32 rp-script-of [^I32 cp]
+  (comment "The script of a letter, as an index 0-9 (Latn Cyrl Grek Arab Hebr Deva Hani Hang Jpan Thai); -1 for a code point that is not a letter of one.")
+  (if (< cp 65) (return -1))
+  (if (<= cp 90) (return 0))
+  (if (< cp 97) (return -1))
+  (if (<= cp 122) (return 0))
+  (if (< cp 170) (return -1))
+  (if (<= cp 591) (do (if (== cp 215) (return -1)) (if (== cp 247) (return -1)) (return 0)))
+  (if (and (>= cp 880) (<= cp 1023)) (return 2))
+  (if (and (>= cp 1024) (<= cp 1327)) (return 1))
+  (if (and (>= cp 1424) (<= cp 1535)) (return 4))
+  (if (and (>= cp 1536) (<= cp 1791)) (return 3))
+  (if (and (>= cp 1872) (<= cp 1919)) (return 3))
+  (if (and (>= cp 2304) (<= cp 2431)) (return 5))
+  (if (and (>= cp 3584) (<= cp 3711)) (return 9))
+  (if (and (>= cp 4352) (<= cp 4607)) (return 7))
+  (if (and (>= cp 12352) (<= cp 12543)) (return 8))
+  (if (and (>= cp 12593) (<= cp 12687)) (return 7))
+  (if (and (>= cp 12784) (<= cp 12799)) (return 8))
+  (if (and (>= cp 13312) (<= cp 19903)) (return 6))
+  (if (and (>= cp 19968) (<= cp 40959)) (return 6))
+  (if (and (>= cp 44032) (<= cp 55215)) (return 7))
+  (if (and (>= cp 63744) (<= cp 64255)) (return 6))
+  (if (and (>= cp 64336) (<= cp 65023)) (return 3))
+  (if (and (>= cp 65136) (<= cp 65279)) (return 3))
+  (return -1))
+
+(defn ^I32 rp-bit [^I32 k]
+  (comment "2 to the k, k < 10.")
+  (let [^:mut ^I32 v 1
+        ^:mut ^I32 j 0]
+    (while (< j k)
+      (do (set v (* v 2))
+          (set j (+ j 1))))
+    (return v)))
+
+(defn ^:pub ^I32 rp-script-code [^I32 k]
+  (comment "The ISO 15924 code of script `k` as four ASCII bytes packed big-endian (an uppercase first letter: a request's language cell that starts with one names a SCRIPT).")
+  (if (== k 0) (return (+ (+ (* 76 16777216) (* 97 65536)) (+ (* 116 256) 110))))
+  (if (== k 1) (return (+ (+ (* 67 16777216) (* 121 65536)) (+ (* 114 256) 108))))
+  (if (== k 2) (return (+ (+ (* 71 16777216) (* 114 65536)) (+ (* 101 256) 107))))
+  (if (== k 3) (return (+ (+ (* 65 16777216) (* 114 65536)) (+ (* 97 256) 98))))
+  (if (== k 4) (return (+ (+ (* 72 16777216) (* 101 65536)) (+ (* 98 256) 114))))
+  (if (== k 5) (return (+ (+ (* 68 16777216) (* 101 65536)) (+ (* 118 256) 97))))
+  (if (== k 6) (return (+ (+ (* 72 16777216) (* 97 65536)) (+ (* 110 256) 105))))
+  (if (== k 7) (return (+ (+ (* 72 16777216) (* 97 65536)) (+ (* 110 256) 103))))
+  (if (== k 8) (return (+ (+ (* 74 16777216) (* 112 65536)) (+ (* 97 256) 110))))
+  (return (+ (+ (* 84 16777216) (* 104 65536)) (+ (* 97 256) 105))))
+
+(defn ^I32 rp-scripts-mask [^:mut ^Cells scr]
+  (comment "The scripts that hold `rp-script-share` per mille of the letters tallied in scr[0..9] (and at least `rp-script-min`), one bit each.")
+  (let [^:mut ^I32 total 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 mask 0
+        ^:mut ^I32 c 0]
+    (while (< k 10)
+      (do (set total (+ total (cells-at scr k)))
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k 10)
+      (do (set c (cells-at scr k))
+          (if (and (>= c (rp-script-min)) (>= (* c 1000) (* total (rp-script-share))))
+            (set mask (+ mask (rp-bit k))))
+          (set k (+ k 1))))
+    (return mask)))
+
+;; ------------------------------------------------------------- the request
+
+(defn ^:pub ^I32 rp-request [^:mut ^Cells rq ^I32 id ^I32 bitmap ^I32 psm ^I32 dpi ^I32 x ^I32 y ^I32 w ^I32 h ^Cells loc ^I32 scripts]
+  (comment "The OCR request of a born-digital page's first pass: the bitmap (the whole of it at `psm` 3 with orientation and script detection wanted, or the pixel")
+  (comment "box x y w h, for a witness line at `psm` 7), symbols with their alternatives, the resolution hint, and the languages: the locale's, else the page's")
+  (comment "scripts (`scripts`, the bit set of `rp-f-scripts`), else none (every model the engine has, D038).")
+  (let [^I32 lg (sc-lang loc)
+        ^:mut ^I32 flags (+ (ocf-symbols) (* dpi (ocf-dpi-unit)))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 code 0]
+    (if (== psm 3) (set flags (+ flags (ocf-osd))))
+    (let [^I32 q (rq-ocr rq id bitmap psm flags x y w h)]
+      (if (> lg 0)
+        (rq-ocr-lang rq (quot lg 65536) (rem (quot lg 256) 256) (rem lg 256) 0)
+        (while (< k 10)
+          (do (if (== (bit-and scripts (rp-bit k)) (rp-bit k))
+                (do (set code (rp-script-code k))
+                    (rq-ocr-lang rq (quot code 16777216) (rem (quot code 65536) 256) (rem (quot code 256) 256) (rem code 256))))
+              (set k (+ k 1)))))
+      (rq-ocr-end rq q)
+      (return q))))
+
+;; ------------------------------------------------------------- the plan
+
+(defn ^I32 rp-line-eligible [^Cells fw ^Cells fl ^Cells et ^I32 l]
+  (comment "1 when line `l` of the flow may be a witness: upright, every word a visible text-layer word of one font, and it holds `rp-witness-min-cps` code points.")
+  (let [^I32 first (ln-get fl l (lh-first))
+        ^I32 n (ln-get fl l (lh-count))
+        ^I32 font (wd-get fw first (wf-font))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 cps 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 src 0]
+    (if (!= (ln-get fl l (lh-rot)) 0) (return 0))
+    (if (< n 1) (return 0))
+    (while (< k n)
+      (do (set src (wd-get fw (+ first k) (wf-src)))
+          (if (!= src 1) (return 0))
+          (if (!= (wd-get fw (+ first k) (wf-font)) font) (return 0))
+          (set tl (wd-get fw (+ first k) (hd-tlen)))
+          (comment "every code point counts, not only the letters: the lines of an unmapped font (no letter in the text layer) are the very ones a witness must read")
+          (set cps (+ cps tl))
+          (set k (+ k 1))))
+    (if (< cps (rp-witness-min-cps)) (return 0))
+    (return 1)))
+
+(defn ^I32 rp-witness [^I32 page0 ^I32 l0 ^I32 l1 ^Cells fw ^Cells fl ^Cells et ^:mut ^Cells pl ^:mut ^Cells scr]
+  (comment "The witness rows of page `page0` (0-based), whose lines are the flow's rows [l0, l1): for each font, the fonts with the most eligible lines first, at most")
+  (comment "`rp-witness-lines` lines (the first, the median, the last in the flow's order), up to `rp-witness-max` for the page. Appends them to `pl`; answers how many.")
+  (let [^:mut ^I32 l l0
+        ^:mut ^I32 np 0
+        ^:mut ^I32 nf 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 font 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bi 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 seen 0
+        ^:mut ^I32 want 0
+        ^:mut ^I32 slots 0
+        ^:mut ^I32 pick 0
+        ^:mut ^I32 fb 0
+        ^:mut ^I32 first 0]
+    (cells-drop scr 0)
+    (comment "eligible lines as (font, row) pairs from cell 1; scr[0] is their number")
+    (cells-push scr 0)
+    (while (< l l1)
+      (do (if (== (rp-line-eligible fw fl et l) 1)
+            (do (set first (ln-get fl l (lh-first)))
+                (cells-push scr (wd-get fw first (wf-font)))
+                (cells-push scr l)
+                (set np (+ np 1))))
+          (set l (+ l 1))))
+    (cells-set scr 0 np)
+    (comment "the distinct fonts after them: (font, lines, taken)")
+    (set fb (+ 1 (* np 2)))
+    (set i 0)
+    (while (< i np)
+      (do (set font (cells-at scr (+ 1 (* i 2))))
+          (set f 0)
+          (set seen 0)
+          (while (< f nf)
+            (do (if (== (cells-at scr (+ fb (* f 3))) font)
+                  (do (cells-set scr (+ (+ fb (* f 3)) 1) (+ (cells-at scr (+ (+ fb (* f 3)) 1)) 1))
+                      (set seen 1)))
+                (set f (+ f 1))))
+          (if (== seen 0)
+            (do (cells-push scr font)
+                (cells-push scr 1)
+                (cells-push scr 0)
+                (set nf (+ nf 1))))
+          (set i (+ i 1))))
+    (comment "fonts by line count, descending (ties: the first seen)")
+    (while (and (< made (rp-witness-max)) (> nf 0))
+      (do (set best 0)
+          (set bi -1)
+          (set f 0)
+          (while (< f nf)
+            (do (if (== (cells-at scr (+ (+ fb (* f 3)) 2)) 0)
+                  (if (> (cells-at scr (+ (+ fb (* f 3)) 1)) best)
+                    (do (set best (cells-at scr (+ (+ fb (* f 3)) 1)))
+                        (set bi f))))
+                (set f (+ f 1))))
+          (if (< bi 0) (return made))
+          (cells-set scr (+ (+ fb (* bi 3)) 2) 1)
+          (set font (cells-at scr (+ fb (* bi 3))))
+          (set want 0)
+          (set slots best)
+          (if (> slots (rp-witness-lines)) (set slots (rp-witness-lines)))
+          (while (and (< want slots) (< made (rp-witness-max)))
+            (do (set pick 0)
+                (if (== want 1)
+                  (do (set pick (quot best 2))
+                      (if (== best 2) (set pick 1))))
+                (if (== want 2) (set pick (- best 1)))
+                (set i 0)
+                (set seen 0)
+                (while (< i np)
+                  (do (if (== (cells-at scr (+ 1 (* i 2))) font)
+                        (do (if (== seen pick)
+                              (do (set l (cells-at scr (+ 2 (* i 2))))
+                                  (cells-push pl page0)
+                                  (cells-push pl l)
+                                  (cells-push pl (ln-get fl l (lh-x0)))
+                                  (cells-push pl (ln-get fl l (lh-y0)))
+                                  (cells-push pl (ln-get fl l (lh-x1)))
+                                  (cells-push pl (ln-get fl l (lh-y1)))
+                                  (cells-push pl font)
+                                  (cells-push pl 0)
+                                  (set made (+ made 1))))
+                            (set seen (+ seen 1))))
+                      (set i (+ i 1))))
+                (set want (+ want 1))))))
+    (return made)))
+
+(defn ^:pub ^I32 rp-plan [^I32 np ^I32 policy ^I32 scope ^Cells fw ^Cells fl ^Cells et ^Cells hl ^Cells im ^Cells pg
+                          ^:mut ^Cells pl ^:mut ^Cells scr ^:mut ^Cells scr2]
+  (comment "Fill `ask`, the witness rows and the scripts of every born-digital page's plan row (the page rows are in `pl` already, `pu-w` cells each, kind in")
+  (comment "cell 0; a born-digital page is kind 2). `policy` is the Engine's `ocr` (0 never, 1 auto, 2 always), `scope` `rp-scope-full` or `-witness`; `fw` `fl` `et` the")
+  (comment "text layer's flow and text (`th-run`'s), `hl` its health, `im` the image placements, `pg` the page table. Reads no pixel. Answers the witness rows made.")
+  (let [^I32 nw (wd-count fw)
+        ^I32 nl (ln-count fl)
+        ^I32 nh (hl-count hl)
+        ^I32 nim (im-count im)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 w1 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 lc 0
+        ^:mut ^I32 l1 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 src 0
+        ^:mut ^I32 hidden 0
+        ^:mut ^I32 minscore 1000
+        ^:mut ^I32 any 0
+        ^:mut ^I32 cover 0
+        ^:mut ^I32 ask 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 ix0 0
+        ^:mut ^I32 iy0 0
+        ^:mut ^I32 ix1 0
+        ^:mut ^I32 iy1 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I64 area (i64 0)]
+    (while (< i np)
+      (do (set at (* i (rp-w)))
+          (comment "the page's words, the lines and the health rows of its number")
+          (while (and (< w nw) (< (wd-get fw w (hd-page)) (+ i 1)))
+            (set w (+ w 1)))
+          (set w1 w)
+          (while (and (< w1 nw) (== (wd-get fw w1 (hd-page)) (+ i 1)))
+            (set w1 (+ w1 1)))
+          (while (and (< lc nl) (< (ln-get fl lc (lh-page)) (+ i 1)))
+            (set lc (+ lc 1)))
+          (set l1 lc)
+          (while (and (< l1 nl) (== (ln-get fl l1 (lh-page)) (+ i 1)))
+            (set l1 (+ l1 1)))
+          (while (and (< h nh) (< (hl-get hl h (hlf-page)) (+ i 1)))
+            (set h (+ h 1)))
+          (set j h)
+          (set minscore 1000)
+          (set any 0)
+          (while (and (< j nh) (== (hl-get hl j (hlf-page)) (+ i 1)))
+            (do (if (== (hl-get hl j (hlf-kind)) (plh-font-page))
+                  (do (set any 1)
+                      (if (< (hl-get hl j (hlf-score)) minscore) (set minscore (hl-get hl j (hlf-score))))))
+                (set j (+ j 1))))
+          (comment "a born-digital page (kind 2) decides; anything else asks nothing here")
+          (if (== (cells-at pl at) 2)
+            (do (cells-drop scr 0)
+                (set k 0)
+                (while (< k 10)
+                  (do (cells-push scr 0)
+                      (set k (+ k 1))))
+                (set hidden 0)
+                (set k w)
+                (while (< k w1)
+                  (do (set src (wd-get fw k (wf-src)))
+                      (if (== (bit-and src 2) 2) (set hidden 1))
+                      (set ts (wd-get fw k (hd-tstart)))
+                      (set tl (wd-get fw k (hd-tlen)))
+                      (set q 0)
+                      (while (< q tl)
+                        (do (set c (rp-script-of (cells-at et (+ ts q))))
+                            (if (>= c 0) (cells-set scr c (+ (cells-at scr c) 1)))
+                            (set q (+ q 1))))
+                      (set k (+ k 1))))
+                (cells-set pl (+ at (rp-f-scripts)) (rp-scripts-mask scr))
+                (comment "the images' share of the page: each placement clipped to the page, areas added")
+                (set pw (- (pd-pg-crop pg i 2) (pd-pg-crop pg i 0)))
+                (set ph (- (pd-pg-crop pg i 3) (pd-pg-crop pg i 1)))
+                (set area (i64 0))
+                (set k 0)
+                (while (and (< k nim) (< (im-get im k (mf-page)) (+ i 1)))
+                  (set k (+ k 1)))
+                (while (and (< k nim) (== (im-get im k (mf-page)) (+ i 1)))
+                  (do (set ix0 (im-get im k (mf-x0)))
+                      (set iy0 (im-get im k (mf-y0)))
+                      (set ix1 (im-get im k (mf-x1)))
+                      (set iy1 (im-get im k (mf-y1)))
+                      (if (< ix0 0) (set ix0 0))
+                      (if (< iy0 0) (set iy0 0))
+                      (if (> ix1 pw) (set ix1 pw))
+                      (if (> iy1 ph) (set iy1 ph))
+                      (if (and (> ix1 ix0) (> iy1 iy0))
+                        (set area (add64 area (mul64 (i64 (- ix1 ix0)) (i64 (- iy1 iy0))))))
+                      (set k (+ k 1))))
+                (set cover 0)
+                (if (and (> pw 0) (> ph 0))
+                  (set cover (i32 (quot (mul64 area (i64 1000)) (mul64 (i64 pw) (i64 ph))))))
+                (set ask 0)
+                (if (== policy 2) (set ask (rp-ask-full)))
+                (if (== policy 1)
+                  (if (or (or (and (== any 1) (< minscore (th-auto-health))) (>= cover (rp-auto-image))) (== hidden 1))
+                    (set ask (rp-ask-full))))
+                (if (and (== ask (rp-ask-full)) (and (== policy 2) (== scope (rp-scope-witness))))
+                  (set ask (rp-ask-witness)))
+                (cells-set pl (+ at (rp-f-ask)) ask)
+                (if (== ask (rp-ask-witness))
+                  (do (cells-set pl (+ at (rp-f-wat)) (cells-len pl))
+                      (set made (rp-witness i lc l1 fw fl et pl scr2))
+                      (cells-set pl (+ at (rp-f-wn)) made)
+                      (set total (+ total made))))))
+          (set i (+ i 1))))
+    (return total)))
+
+;; ------------------------------------------------------------- do the witnesses agree?
+
+(defn ^I32 rp-fold-line [^Cells fw ^Cells et ^I32 first ^I32 n ^:mut ^Cells out]
+  (comment "Append to `out` the case-folded letters and digits of the text layer's words [first, first + n).")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 f 0]
+    (while (< k n)
+      (do (set ts (wd-get fw (+ first k) (hd-tstart)))
+          (set tl (wd-get fw (+ first k) (hd-tlen)))
+          (set q 0)
+          (while (< q tl)
+            (do (set f (xa-fold-cp (cells-at et (+ ts q))))
+                (comment "what a font with no mapping gives (the private use area, U+FFFD) is no letter: a line of it reads as an empty text")
+                (if (and (>= f 57344) (<= f 63743)) (set f 0))
+                (if (== f 65533) (set f 0))
+                (if (!= f 0) (cells-push out f))
+                (set q (+ q 1))))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 rp-weak [^I32 n ^I32 at ^Cells pl ^Cells fw ^Cells fl ^Cells et ^I32 idbase ^I32 r0 ^I32 r1 ^Cells owords ^Cells oruns
+                          ^:mut ^Cells scr ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+  (comment "Do a font's witness lines disagree with what the text layer says? `n` witness rows from `pl`[`at`]; the runs [`r0`, `r1`) of `oruns` are those of the lines")
+  (comment "whose answers were in and ok (the request of witness row j is `idbase` + j). Each line's case-folded letters and digits against its reading's, by edit distance, in per mille; a line agrees at `agree-sim`.")
+  (comment "1 when some font has at least `rp-weak-min` compared lines and the share of them that agree is under `agree-min` (SPEC 9.3): its encoding is not to be")
+  (comment "trusted, or the engine cannot read it, and the page's other lines are read too. Lines with no Latin letter or digit are not compared (P7.2: the English")
+  (comment "model reads no other script). Answers 0 or 1.")
+  (let [^:mut ^I32 j 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 nwd 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 mx 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 latin 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 cmp 0
+        ^:mut ^I32 agr 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 x 0]
+    (cells-drop scr 0)
+    (while (< j n)
+      (do (cells-push scr 0)
+          (set j (+ j 1))))
+    (comment "scr[j]: 0 not compared, 1 compared and disagrees, 2 compared and agrees")
+    (set r r0)
+    (while (< r r1)
+      (do (set j (- (or-get oruns r (orf-request)) idbase))
+          (if (and (>= j 0) (< j n))
+            (do (set l (cells-at pl (+ (+ at (* j (rp-ww))) 1)))
+                (cells-drop ta 0)
+                (cells-drop tb 0)
+                (rp-fold-line fw et (ln-get fl l (lh-first)) (ln-get fl l (lh-count)) ta)
+                (set w0 (or-get oruns r (orf-wfirst)))
+                (set nwd (or-get oruns r (orf-wcount)))
+                (set q 0)
+                (while (< q nwd)
+                  (do (set ts (ow-get owords (+ w0 q) (hd-tstart)))
+                      (set tl (ow-get owords (+ w0 q) (hd-tlen)))
+                      (set x 0)
+                      (while (< x tl)
+                        (do (set d (xa-fold-cp (cells-at et (+ ts x))))
+                            (if (!= d 0) (cells-push tb d))
+                            (set x (+ x 1))))
+                      (set q (+ q 1))))
+                (set latin 0)
+                (set q 0)
+                (while (< q (cells-len ta))
+                  (do (if (< (cells-at ta q) 592) (set latin 1))
+                      (set q (+ q 1))))
+                (if (== latin 1)
+                  (do (set mx (cells-len ta))
+                      (if (> (cells-len tb) mx) (set mx (cells-len tb)))
+                      (set d (xa-lev ta tb tt))
+                      (if (>= (* (- mx d) 1000) (* mx (hh-agree-sim)))
+                        (cells-set scr j 2)
+                        (cells-set scr j 1))))
+                (comment "a text with no letter at all (an unmapped font) against a reading that has some: the text layer says nothing of what is there")
+                (if (and (== (cells-len ta) 0) (>= (cells-len tb) 3))
+                  (cells-set scr j 1))))
+          (set r (+ r 1))))
+    (comment "per font: the compared lines and the agreeing ones")
+    (set j 0)
+    (while (< j n)
+      (do (if (!= (cells-at scr j) 0)
+            (do (set f (cells-at pl (+ (+ at (* j (rp-ww))) 6)))
+                (set cmp 0)
+                (set agr 0)
+                (set q 0)
+                (while (< q n)
+                  (do (if (== (cells-at pl (+ (+ at (* q (rp-ww))) 6)) f)
+                        (do (if (!= (cells-at scr q) 0) (set cmp (+ cmp 1)))
+                            (if (== (cells-at scr q) 2) (set agr (+ agr 1)))))
+                      (set q (+ q 1))))
+                (if (and (>= cmp (rp-weak-min)) (< (* agr 1000) (* cmp (hh-agree-min))))
+                  (return 1))))
+          (set j (+ j 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the setting
+
+(defn ^:pub ^I32 rp-settings [^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 scope]
+  (comment "`settings.ocr-scope` on the root, written only when it is not the default `full` (SPEC 13, D055: a Model of a default run is what it was).")
+  (let [^I32 start (cells-len text)]
+    (if (== scope (rp-scope-witness))
+      (do (text-append-cp text 119) (text-append-cp text 105) (text-append-cp text 116) (text-append-cp text 110)
+          (text-append-cp text 101) (text-append-cp text 115) (text-append-cp text 115)
+          (node-set-attr-text nodes attrs 0 (fk-ocr-scope) start (- (cells-len text) start))))
+    (return 0)))

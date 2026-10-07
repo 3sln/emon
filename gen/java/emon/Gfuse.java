@@ -1196,11 +1196,12 @@ public final class Gfuse {
                 i += 1;
             }
         }
+        // the lengths are sums over the page's rules in centipoints: times 1000 they pass 2^31 on a page of many rules (bank-statement, live), so in 64 bits
         if (vl > 0) {
-            witness = (vw * 1000) / vl;
+            witness = (int) ((((long) vw) * ((long) 1000)) / ((long) vl));
         }
         if (tl > 0) {
-            precision = (te * 1000) / tl;
+            precision = (int) ((((long) te) * ((long) 1000)) / ((long) tl));
         }
         emon.Port.cellsSet(ctx, X_WIT, witness);
         emon.Port.cellsSet(ctx, X_PREC, precision);

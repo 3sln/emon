@@ -62,7 +62,7 @@
         _ (when-not pdf (println "unknown fixture" id) (System/exit 2))
         born? (= kind :born)
         bin (if born? @born-bin @scan-bin)
-        flags (if born? ["--pdfium" "--tesseract" "--ocr-born-digital"] ["--tesseract"])
+        flags (if born? ["--pdfium" "--tesseract"] ["--tesseract"])
         out (str (fs/absolutize (str "test/retarget/replay/" id)))
         t0 (System/currentTimeMillis)]
     (fs/delete-tree out)

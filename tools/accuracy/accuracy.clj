@@ -12,8 +12,8 @@
     bb accuracy --ids ID,ID            score only these documents
     bb accuracy --predictor emon-live  the Rust Engine WITH LIVE TESSERACT (P6.5, D211): the scan variants through real OCR.
                                        NOT a gate (it needs Tesseract and takes minutes); `bb ocr-live` runs it for the scans
-    bb accuracy --predictor emon-fusion  the Rust Engine converting BORN-DIGITAL documents with the hidden setting ocr-born-digital, REPLAYING the
-                                       committed transcripts of test/fusion/replay/ID/ (a gate's: `bb fusion`; P7.3, D285-D290)
+    bb accuracy --predictor emon-fusion  the Rust Engine converting BORN-DIGITAL documents with its default settings (the born-digital pages are OCR'd
+                                       under `always`, P7.S), REPLAYING the committed transcripts of test/fusion/replay/ID/ (a gate's: `bb fusion`)
     bb accuracy --predictor emon-fusion-live  the same LIVE (pdfium and Tesseract). NOT a gate (needs both; takes minutes)
     bb accuracy --predictor baseline-pdfplumber|-pymupdf4llm|-docling|-tesseract   a REFERENCE (P2.10, D339): a pinned third-party
                                        extractor's adapted output (`bb baselines` makes it), scored by this scorer on a fixed subset of

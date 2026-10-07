@@ -1027,6 +1027,7 @@ func jsSettings(t *strings.Builder, pr int32, nodes *port.Cells, attrs *port.Cel
 		JsStr(t, text, model.AttrValue(attrs, a), model.AttrLen(attrs, a))
 	}
 	s = jsFtext(t, pr, 1, nodes, attrs, text, 0, model.FkOcr(), s)
+	s = jsFtext(t, pr, 1, nodes, attrs, text, 0, model.FkOcrScope(), s)
 	s = jsFtext(t, pr, 1, nodes, attrs, text, 0, model.FkDetail(), s)
 	// the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was
 	s = jsFtext(t, pr, 1, nodes, attrs, text, 0, model.FkAssets(), s)

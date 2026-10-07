@@ -793,7 +793,7 @@ public static class Retarget {
         }
         return 0;
     }
-    internal static int RtRunMeta(emon.Port.Cells oruns, int run, int op, int round, int psm, int x, int y, int w, int h) {
+    public static int RtRunMeta(emon.Port.Cells oruns, int run, int op, int round, int psm, int x, int y, int w, int h) {
         // What a targeted run adds to `sc-answer`'s: the pass kind, the round it was asked in, its `psm` and the pixel region.
         Evidence.OrSet(oruns, run, Evidence.OrfPass(), op);
         Evidence.OrSet(oruns, run, Evidence.OrfRound(), round);

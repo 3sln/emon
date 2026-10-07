@@ -25,7 +25,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 use crate::emon;
-use crate::engine::{Assets, ChunkCache, Config, Engine, Error, Furniture, HtmlAssets, HtmlOptions, JsonOptions, Model, OcrPolicy, Ocr, OcrPort, Options, Run};
+use crate::engine::{Assets, ChunkCache, Config, Engine, Error, Furniture, HtmlAssets, HtmlOptions, JsonOptions, Model, OcrPolicy, OcrScope, Ocr, OcrPort, Options, Run};
 use crate::plan::{self, Answer, Bitmaps, PlanError, Range, Replayer, Request, Transcript};
 use crate::port::{Bitmap, Cells};
 use std::cell::RefCell;
@@ -248,7 +248,13 @@ fn parse_options(t: &str, chunk: usize) -> Result<Parsed, String> {
             "assets-bytes" => p.opts.assets_bytes = num(k, v)?,
             "asset-signatures" => p.opts.asset_signatures = v == "on",
             "keep-evidence" => p.opts.keep_evidence = v == "1",
-            "ocr-born-digital" => p.opts.ocr_born_digital = v == "1",
+            "ocr-scope" => {
+                p.opts.ocr_scope = match v {
+                    "full" => OcrScope::Full,
+                    "witness" => OcrScope::Witness,
+                    _ => return Err("ocr-scope is full or witness".to_string()),
+                }
+            }
             "max-rounds" => p.cfg.max_rounds = num(k, v)?,
             "fetch-rounds" => p.cfg.fetch_rounds = num(k, v)?,
             "record" => p.record = v == "1",

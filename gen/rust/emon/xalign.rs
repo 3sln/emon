@@ -199,7 +199,7 @@ pub(crate) fn xa_cost(scr: &mut crate::port::Cells, nn: i32, ka: i32, sa: i32, c
     let bhi: i32 = xa_hull(scr, nn, kb, sb, cb, 1);
     return 1000 - xa_iou1(alo, ahi, blo, bhi);
 }
-pub(crate) fn xa_fold_cp(cp: i32) -> i32 {
+pub fn xa_fold_cp(cp: i32) -> i32 {
     // A code point's folded form when it is a letter or a digit, 0 when it is not (a space, a punctuation, a symbol).
     // Case folding covers ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic; every other letter folds to itself.
     if cp < 48 {
@@ -346,7 +346,7 @@ pub(crate) fn xa_side(scr: &mut crate::port::Cells, nn: i32, k: i32, s: i32, c: 
     }
     return crate::port::cells_len(out);
 }
-pub(crate) fn xa_lev(a: &mut crate::port::Cells, b: &mut crate::port::Cells, mut tt: &mut crate::port::Cells) -> i32 {
+pub fn xa_lev(a: &mut crate::port::Cells, b: &mut crate::port::Cells, mut tt: &mut crate::port::Cells) -> i32 {
     // The Levenshtein distance of a and b (code points), its two rows in `tt`.
     let la: i32 = crate::port::cells_len(a);
     let lb: i32 = crate::port::cells_len(b);

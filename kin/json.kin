@@ -92,7 +92,7 @@
                                 fk-checked fk-subkind fk-conf
                                 fk-asset fk-noasset fk-assets fk-asset-dpi fk-asset-pixels fk-asset-bytes
                                 fk-assets-bytes fk-asset-signatures fk-origin fk-from fk-object fk-bytes
-                                fk-sha256 fk-uses fk-node
+                                fk-sha256 fk-uses fk-node fk-ocr-scope
                                 asset-count asset-type asset-origin asset-from asset-object asset-blen asset-sha
                                 asset-w asset-h asset-dpi asset-flags asset-use-head use-node use-page use-x0
                                 use-y0 use-x1 use-y1 use-next amt-emit-name ao-emit-name afm-emit-name
@@ -930,6 +930,7 @@
     (if (< a 0) (emit-ascii t "null"))
     (if (>= a 0) (js-str t text (attr-value attrs a) (attr-len attrs a)))
     (set s (js-ftext t pr 1 nodes attrs text 0 (fk-ocr) s))
+    (set s (js-ftext t pr 1 nodes attrs text 0 (fk-ocr-scope) s))
     (set s (js-ftext t pr 1 nodes attrs text 0 (fk-detail) s))
     (comment "the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was")
     (set s (js-ftext t pr 1 nodes attrs text 0 (fk-assets) s))

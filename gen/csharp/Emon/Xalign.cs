@@ -198,7 +198,7 @@ public static class Xalign {
         int bhi = XaHull(scr, nn, kb, sb, cb, 1);
         return 1000 - XaIou1(alo, ahi, blo, bhi);
     }
-    internal static int XaFoldCp(int cp) {
+    public static int XaFoldCp(int cp) {
         // A code point's folded form when it is a letter or a digit, 0 when it is not (a space, a punctuation, a symbol).
         // Case folding covers ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic; every other letter folds to itself.
         if (cp < 48) {
@@ -345,7 +345,7 @@ public static class Xalign {
         }
         return emon.Port.CellsLen(@out);
     }
-    internal static int XaLev(emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells tt) {
+    public static int XaLev(emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells tt) {
         // The Levenshtein distance of a and b (code points), its two rows in `tt`.
         int la = emon.Port.CellsLen(a);
         int lb = emon.Port.CellsLen(b);

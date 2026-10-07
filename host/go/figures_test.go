@@ -41,7 +41,9 @@ func TestAtFiguresAVectorFigureIsACropOfThePageAndReplaysWithoutARenderer(t *tes
 	cfg := DefaultConfig()
 	cfg.Renderer = fake
 	live := NewEngine(cfg)
+	// OcrNever: under `always` a born-digital page is itself rendered for OCR since P7.S, and this test counts the renders a figure asks
 	o := DefaultOptions()
+	o.Ocr = OcrNever
 	o.Assets = AssetsFigures
 	pdf := read(t, "test/assets/fig/fig-vector-chart.pdf")
 	m, tr, err := live.Record(one(BytesInput(pdf)), o)
@@ -117,9 +119,11 @@ func TestAtFiguresAVectorFigureIsACropOfThePageAndReplaysWithoutARenderer(t *tes
 		t.Error("with no renderer a figure says `render`")
 	}
 	// the default run is what it was, with a renderer or without: no assets, and nothing is rendered
-	off, err := live.Convert(one(BytesInput(pdf)), DefaultOptions())
+	dflt := DefaultOptions()
+	dflt.Ocr = OcrNever
+	off, err := live.Convert(one(BytesInput(pdf)), dflt)
 	must(t, off, err)
-	plain, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(pdf)), DefaultOptions())
+	plain, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(pdf)), dflt)
 	must(t, plain, err)
 	if js(off) != js(plain) || strings.Contains(js(off), "\"assets\"") || fake.calls.Load() != 1 {
 		t.Error("the default run is not what it was")

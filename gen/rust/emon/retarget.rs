@@ -795,7 +795,7 @@ pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i
     }
     return 0;
 }
-pub(crate) fn rt_run_meta(mut oruns: &mut crate::port::Cells, run: i32, op: i32, round: i32, psm: i32, x: i32, y: i32, w: i32, h: i32) -> i32 {
+pub fn rt_run_meta(mut oruns: &mut crate::port::Cells, run: i32, op: i32, round: i32, psm: i32, x: i32, y: i32, w: i32, h: i32) -> i32 {
     // What a targeted run adds to `sc-answer`'s: the pass kind, the round it was asked in, its `psm` and the pixel region.
     or_set(oruns, run, orf_pass(), op);
     or_set(oruns, run, orf_round(), round);

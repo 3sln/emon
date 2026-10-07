@@ -1,0 +1,278 @@
+;; Laws for `emon.rasterplan` (P7.S; SPEC 8.3 "The first pass, page by kind", 9.8; D200): the first-pass plan of a born-digital page by policy and scope,
+;; on the corpus's own documents run through the document pass (`pd-open`, `pc-document`, `th-run`) as the Engine runs them; the witness lines a font
+;; has; the text layer's scripts; and whether witnesses agree (`rp-weak`), on hand-made evidence.
+;;
+;;   * `always` + `full` asks every born-digital page whole (`ask` 1), and `witness` asks it as `ask` 2 with at most three upright, one-font, visible lines
+;;     a font, the first, the median and the last, at most `rp-witness-max` a page, on the page's own lines;
+;;   * `auto` asks a healthy page nothing, a page whose font is unmapped (health under `auto-health`) or that has hidden text in full;
+;;   * the scripts of the text layer's letters are the page's script bits;
+;;   * a font whose witness lines do not read as its text says is weak, and one whose lines read as it says is not.
+(ns emon.rasterplantest
+  (:require [emon.lang :refer [I32 Blob Src Cells]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at new-cells test-file TestT test-t]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop src-of-blob]]
+            [emon.pdfdoc :refer [pd-open pd-pg-count]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.evidence :refer [wd-new wd-set wd-get ln-new ln-get ow-new or-new or-set etx-append-cp wf-font lh-page lh-rot lh-first lh-count
+                                   orf-request orf-wfirst orf-wcount]]
+            [emon.player :refer [fl-count]]
+            [emon.tlhealth :refer [th-run]]
+            [emon.rasterplan :refer [rp-plan rp-weak rp-w rp-ww rp-f-ask rp-f-wat rp-f-wn rp-f-scripts rp-ask-none rp-ask-full rp-ask-witness
+                                     rp-scope-full rp-scope-witness rp-witness-lines rp-witness-max rp-script-of ri-witness]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+(defn ^I32 rpt-plan [^TestT emon-t ^Blob file ^I32 policy ^I32 scope ^:mut ^Cells pl ^:mut ^Cells fw ^:mut ^Cells fl ^:mut ^Cells et]
+  (comment "Run a document through the document pass up to the text layer's health and plan it: `pl` has the plan (its page rows, then the witness rows), `fw` `fl` `et` the flow.")
+  (comment "Every page is of kind born-digital here (the corpus documents are). Answers the number of pages.")
+  (let [^Cells ar (new-cells)
+        ^Cells dc (new-cells)
+        ^Cells a (new-cells)
+        ^Cells b (new-cells)
+        ^Cells st (new-cells)
+        ^Cells cx (new-cells)
+        ^Cells ox (new-cells)
+        ^Cells cs (new-cells)
+        ^Cells out (new-cells)
+        ^Cells f0 (new-cells)
+        ^Cells f1 (new-cells)
+        ^Cells f2 (new-cells)
+        ^Cells f3 (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells mk (new-cells)
+        ^Cells fnt (new-cells)
+        ^Cells pg (new-cells)
+        ^Cells wd (new-cells)
+        ^Cells ln (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells im (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gx (new-cells)
+        ^Cells epages (new-cells)
+        ^Cells feats (new-cells)
+        ^Cells fa (new-cells)
+        ^Cells hl (new-cells)
+        ^Cells sc (new-cells)
+        ^Cells s1 (new-cells)
+        ^Cells s2 (new-cells)
+        ^Src src (src-of-blob file)
+        ^I32 o (pd-open src ar dc a b st)
+        ^:mut ^I32 status 0
+        ^:mut ^I32 np 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0]
+    (assert-eq-at o 0 "the file opened" 0)
+    (set status (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx))
+    (assert-eq-at status 0 "the file ran" 0)
+    (th-run pg gl et mk fnt wd ln im epages feats fw fl fa hl sc)
+    (set np (pd-pg-count pg))
+    (while (< i np)
+      (do (cells-push pl 2)
+          (set k 1)
+          (while (< k (rp-w))
+            (do (cells-push pl 0)
+                (set k (+ k 1))))
+          (set i (+ i 1))))
+    (rp-plan np policy scope fw fl et hl im pg pl s1 s2)
+    (return np)))
+
+(defn ^I32 rpt-row [^Cells pl ^I32 page ^I32 f]
+  (return (cells-at pl (+ (* page (rp-w)) f))))
+
+(deftest test-always-and-full-asks-every-page-whole
+  (let [^Cells pl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)
+        ^I32 np (rpt-plan (test-t) (test-file "corpus/synth/pdf/h-plain.pdf") 2 (rp-scope-full) pl fw fl et)
+        ^:mut ^I32 i 0]
+    (assert-eq np 2 "two pages")
+    (while (< i np)
+      (do (assert-eq (rpt-row pl i (rp-f-ask)) (rp-ask-full) "the whole render with its text")
+          (assert-eq (rpt-row pl i (rp-f-wn)) 0 "no witness line")
+          (assert-eq (bit-and (rpt-row pl i (rp-f-scripts)) 1) 1 "the page's script is Latin")
+          (set i (+ i 1))))
+    (assert-eq (cells-len pl) (* np (rp-w)) "no witness row")))
+
+(deftest test-witness-reads-the-render-without-the-text-and-a-few-lines-of-every-font
+  (let [^Cells pl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)
+        ^I32 np (rpt-plan (test-t) (test-file "corpus/synth/pdf/h-plain.pdf") 2 (rp-scope-witness) pl fw fl et)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 same 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 base 0
+        ^:mut ^I32 other 0]
+    (assert-eq np 2 "two pages")
+    (while (< i np)
+      (do (set cnt (rpt-row pl i (rp-f-wn)))
+          (set base (rpt-row pl i (rp-f-wat)))
+          (assert-eq (rpt-row pl i (rp-f-ask)) (rp-ask-witness) "witness")
+          (assert-that (> cnt 0) "a page of text has witness lines")
+          (assert-that (<= cnt (rp-witness-max)) "within the page's ceiling")
+          (set j 0)
+          (while (< j cnt)
+            (do (set at (+ base (* j (rp-ww))))
+                (set l (cells-at pl (+ at 1)))
+                (assert-eq (cells-at pl at) i "the row's page")
+                (assert-eq (ln-get fl l (lh-page)) (+ i 1) "its line is on that page")
+                (assert-eq (ln-get fl l (lh-rot)) 0 "upright")
+                (assert-eq (wd-get fw (ln-get fl l (lh-first)) (wf-font)) (cells-at pl (+ at 6)) "of the row's font")
+                (comment "no line twice")
+                (set same 0)
+                (set q 0)
+                (while (< q cnt)
+                  (do (set other (cells-at pl (+ (+ base (* q (rp-ww))) 1)))
+                      (if (== other l) (set same (+ same 1)))
+                      (set q (+ q 1))))
+                (assert-eq same 1 "a line once")
+                (set j (+ j 1))))
+          (set i (+ i 1))))))
+
+(defn ^I32 rpt-field[^TestT emon-t ^Blob file ^I32 policy ^I32 scope ^I32 page ^I32 f]
+  (comment "Plan the document and answer one field of one page's row.")
+  (let [^Cells pl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)]
+    (rpt-plan emon-t file policy scope pl fw fl et)
+    (return (rpt-row pl page f))))
+
+(defn ^I32 rpt-asked [^TestT emon-t ^Blob file ^I32 policy ^I32 scope ^I32 pages ^I32 what]
+  (comment "The pages (of the first `pages`) whose `ask` is `what`.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 n 0]
+    (while (< i pages)
+      (do (if (== (rpt-field emon-t file policy scope i (rp-f-ask)) what) (set n (+ n 1)))
+          (set i (+ i 1))))
+    (return n)))
+
+(deftest test-auto-asks-only-where-the-text-layer-calls-for-it
+  (assert-eq (rpt-asked (test-t) (test-file "corpus/synth/pdf/h-plain.pdf") 1 (rp-scope-full) 2 (rp-ask-none)) 2 "a healthy document asks nothing under auto")
+  (assert-that (> (rpt-asked (test-t) (test-file "corpus/synth/pdf/tl-broken-unmapped.pdf") 1 (rp-scope-full) 2 (rp-ask-full)) 0) "a page with an unmapped font is asked, as full")
+  (assert-eq (rpt-field (test-t) (test-file "vis/ocrlayer.pdf") 1 (rp-scope-witness) 0 (rp-f-ask)) (rp-ask-full) "hidden text under auto is asked, as full, whatever the scope")
+  (assert-eq (rpt-field (test-t) (test-file "corpus/synth/pdf/h-plain.pdf") 0 (rp-scope-full) 0 (rp-f-ask)) (rp-ask-none) "never plans nothing"))
+
+(deftest test-the-scripts-of-the-text-layer
+  (assert-eq (rp-script-of 65) 0 "A is Latin")
+  (assert-eq (rp-script-of 233) 0 "e acute is Latin")
+  (assert-eq (rp-script-of 215) -1 "the multiplication sign is no letter")
+  (assert-eq (rp-script-of 1103) 1 "Cyrillic")
+  (assert-eq (rp-script-of 945) 2 "Greek")
+  (assert-eq (rp-script-of 1575) 3 "Arabic")
+  (assert-eq (rp-script-of 1488) 4 "Hebrew")
+  (assert-eq (rp-script-of 2325) 5 "Devanagari")
+  (assert-eq (rp-script-of 20013) 6 "Han")
+  (assert-eq (rp-script-of 54620) 7 "Hangul")
+  (assert-eq (rp-script-of 12354) 8 "Hiragana")
+  (assert-eq (rp-script-of 3585) 9 "Thai")
+  (assert-eq (rp-script-of 48) -1 "a digit belongs to no script")
+  (assert-eq (bit-and (rpt-field (test-t) (test-file "corpus/synth/pdf/script-hebrew.pdf") 2 (rp-scope-full) 0 (rp-f-scripts)) 16) 16 "a Hebrew page asks for the Hebrew script")
+  (assert-eq (bit-and (rpt-field (test-t) (test-file "corpus/synth/pdf/script-devanagari.pdf") 2 (rp-scope-full) 0 (rp-f-scripts)) 32) 32 "a Devanagari page asks for it")
+  (assert-eq (bit-and (rpt-field (test-t) (test-file "corpus/synth/pdf/h-plain.pdf") 2 (rp-scope-full) 0 (rp-f-scripts)) 1) 1 "a Latin page asks for Latin"))
+
+(defn ^I32 rpt-word[^:mut ^Cells et ^I32 a ^I32 b ^I32 c ^I32 d ^I32 e]
+  (comment "Five code points appended to the text arena; answers where they start.")
+  (let [^I32 at (cells-len et)]
+    (etx-append-cp et a)
+    (etx-append-cp et b)
+    (etx-append-cp et c)
+    (etx-append-cp et d)
+    (etx-append-cp et e)
+    (return at)))
+
+(defn ^I32 rpt-witness-row [^:mut ^Cells pl ^I32 line ^I32 font]
+  (cells-push pl 0)
+  (cells-push pl line)
+  (cells-push pl 100)
+  (cells-push pl 100)
+  (cells-push pl 1200)
+  (cells-push pl 200)
+  (cells-push pl font)
+  (cells-push pl 0)
+  (return 0))
+
+(defn ^I32 rpt-reading [^:mut ^Cells oruns ^:mut ^Cells owords ^I32 request ^I32 t0 ^I32 t1]
+  (comment "An OCR run of two five-letter words (their text at `t0`, `t1` in the text arena) answering `request`.")
+  (let [^I32 run (or-new oruns 1 0)
+        ^I32 w0 (cells-len owords)]
+    (ow-new owords 1 100 100 600 200 100 100 600 200 0 0 t0 5 0 900 -1)
+    (ow-new owords 1 700 100 1200 200 700 100 1200 200 0 0 t1 5 0 900 -1)
+    (or-set oruns run (orf-request) request)
+    (or-set oruns run (orf-wfirst) (quot w0 28))
+    (or-set oruns run (orf-wcount) 2)
+    (return run)))
+
+(deftest test-witnesses-that-disagree-with-the-text-escalate-the-page
+  (let [^Cells pl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells fl (new-cells)
+        ^Cells et (new-cells)
+        ^Cells oruns (new-cells)
+        ^Cells owords (new-cells)
+        ^Cells scr (new-cells)
+        ^Cells ta (new-cells)
+        ^Cells tb (new-cells)
+        ^Cells tt (new-cells)
+        ^I32 tw0 (rpt-word et 104 101 108 108 111)
+        ^I32 tw1 (rpt-word et 119 111 114 108 100)
+        ^I32 rw0 (rpt-word et 104 101 108 108 111)
+        ^I32 rw1 (rpt-word et 119 111 114 108 100)
+        ^I32 bw0 (rpt-word et 120 121 122 122 121)
+        ^I32 bw1 (rpt-word et 113 119 101 114 116)]
+    (comment "the text layer: one line of two words, \"hello world\", font 7; two witness rows read that same line")
+    (wd-new fw 1 100 100 600 200 100 100 600 200 0 0 tw0 5 0 900 -1)
+    (wd-new fw 1 700 100 1200 200 700 100 1200 200 0 0 tw1 5 0 900 -1)
+    (wd-set fw 0 (wf-font) 7)
+    (wd-set fw 1 (wf-font) 7)
+    (ln-new fl 1 100 100 1200 200 100 100 1200 200 0 0 0 2)
+    (rpt-witness-row pl 0 7)
+    (rpt-witness-row pl 0 7)
+    (comment "two readings that say \"hello world\": the font's witnesses agree")
+    (rpt-reading oruns owords (+ (ri-witness) 0) rw0 rw1)
+    (rpt-reading oruns owords (+ (ri-witness) 1) rw0 rw1)
+    (assert-eq (rp-weak 2 0 pl fw fl et (ri-witness) 0 2 owords oruns scr ta tb tt) 0 "agreeing witnesses: not weak")
+    (comment "two readings that do not: weak")
+    (cells-drop oruns 0)
+    (cells-drop owords 0)
+    (rpt-reading oruns owords (+ (ri-witness) 0) bw0 bw1)
+    (rpt-reading oruns owords (+ (ri-witness) 1) bw0 bw1)
+    (assert-eq (rp-weak 2 0 pl fw fl et (ri-witness) 0 2 owords oruns scr ta tb tt) 1 "disagreeing witnesses: weak")
+    (comment "one disagreeing line alone is too little to say")
+    (cells-drop oruns 0)
+    (cells-drop owords 0)
+    (rpt-reading oruns owords (+ (ri-witness) 0) bw0 bw1)
+    (assert-eq (rp-weak 2 0 pl fw fl et (ri-witness) 0 1 owords oruns scr ta tb tt) 0 "one compared line: not enough")))
+
+(deftest test-a-font-with-no-mapping-is-weak-where-the-engine-reads-letters
+  (comment "the text layer has code points of the private use area (what an unmapped font gives); two witness lines read letters over them")
+  (let [^Cells pl2 (new-cells)
+        ^Cells fw2 (new-cells)
+        ^Cells fl2 (new-cells)
+        ^Cells et2 (new-cells)
+        ^Cells oruns2 (new-cells)
+        ^Cells owords2 (new-cells)
+        ^Cells scr2 (new-cells)
+        ^Cells ta2 (new-cells)
+        ^Cells tb2 (new-cells)
+        ^Cells tt2 (new-cells)
+        ^I32 pw0 (rpt-word et2 57345 57346 57347 57348 57349)
+        ^I32 pw1 (rpt-word et2 57350 57351 57352 57353 57354)
+        ^I32 qw0 (rpt-word et2 104 101 108 108 111)
+        ^I32 qw1 (rpt-word et2 119 111 114 108 100)]
+    (wd-new fw2 1 100 100 600 200 100 100 600 200 0 0 pw0 5 0 900 -1)
+    (wd-new fw2 1 700 100 1200 200 700 100 1200 200 0 0 pw1 5 0 900 -1)
+    (wd-set fw2 0 (wf-font) 7)
+    (wd-set fw2 1 (wf-font) 7)
+    (ln-new fl2 1 100 100 1200 200 100 100 1200 200 0 0 0 2)
+    (rpt-witness-row pl2 0 7)
+    (rpt-witness-row pl2 0 7)
+    (rpt-reading oruns2 owords2 (+ (ri-witness) 0) qw0 qw1)
+    (rpt-reading oruns2 owords2 (+ (ri-witness) 1) qw0 qw1)
+    (assert-eq (rp-weak 2 0 pl2 fw2 fl2 et2 (ri-witness) 0 2 owords2 oruns2 scr2 ta2 tb2 tt2) 1 "a text with no letter against letters: weak")))

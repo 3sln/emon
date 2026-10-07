@@ -977,6 +977,7 @@ public final class Json {
             jsStr(t, text, Model.attrValue(attrs, a), Model.attrLen(attrs, a));
         }
         s = jsFtext(t, pr, 1, nodes, attrs, text, 0, Model.fkOcr(), s);
+        s = jsFtext(t, pr, 1, nodes, attrs, text, 0, Model.fkOcrScope(), s);
         s = jsFtext(t, pr, 1, nodes, attrs, text, 0, Model.fkDetail(), s);
         // the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was
         s = jsFtext(t, pr, 1, nodes, attrs, text, 0, Model.fkAssets(), s);

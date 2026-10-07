@@ -161,6 +161,27 @@ fn model_name(lang: &str) -> String {
     }
 }
 
+// The script an installed model reads (ISO 15924). The Latin scripts are every language not listed here, and Tesseract's own script models ("Latin"...).
+fn model_script(m: &str) -> &'static str {
+    match m {
+        "ara" | "fas" | "urd" | "pus" | "uig" | "snd" | "kur_ara" | "Arabic" => "Arab",
+        "heb" | "yid" | "Hebrew" => "Hebr",
+        "rus" | "ukr" | "bul" | "srp" | "bel" | "mkd" | "kaz" | "kir" | "mon" | "tgk" | "Cyrillic" => "Cyrl",
+        "ell" | "grc" | "Greek" => "Grek",
+        "hin" | "mar" | "nep" | "san" | "Devanagari" => "Deva",
+        "chi_sim" | "chi_tra" | "Han" => "Hani",
+        "jpn" | "Japanese" => "Jpan",
+        "kor" | "kor_vert" | "Hangul" => "Hang",
+        "tha" | "Thai" => "Thai",
+        _ => "Latn",
+    }
+}
+
+// Does a model of script `model` read a request's script `want`? The ideographs are shared: a `Hani` page may be Chinese or Japanese.
+fn script_reads(want: &str, model: &str) -> bool {
+    want == model || (want == "Hani" && model == "Jpan")
+}
+
 // The language Tesseract recognised a word in, back to what a request calls it: "eng" stays, "chi_sim" is "chs".
 fn request_name(model: &str) -> String {
     match model {
@@ -392,7 +413,17 @@ impl Tess {
         // the languages follow `h`, and the pixel hash of a kin-made view (D196: its id is from `KIN_VIEW_BASE`, 2^24)
         let first_lang = if req.arg(0) >= 16777216 { 9 } else { 7 };
         for k in first_lang..req.rec.len() - 3 {
-            let m = model_name(&unpack4(req.arg(k)));
+            let name = unpack4(req.arg(k));
+            // a language cell that starts with an uppercase letter names a SCRIPT (ISO 15924: `Latn`; P7.S, D215): the installed models that read it
+            if name.len() == 4 && name.as_bytes()[0].is_ascii_uppercase() {
+                for m in installed.iter().filter(|m| script_reads(&name, model_script(m))) {
+                    if !langs.contains(m) {
+                        langs.push(m.clone());
+                    }
+                }
+                continue;
+            }
+            let m = model_name(&name);
             if installed.contains(&m) {
                 langs.push(m);
             } else {

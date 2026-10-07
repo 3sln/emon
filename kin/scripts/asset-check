@@ -302,7 +302,9 @@
 ;; is: the crop's size is the computed one, the asset is the host's pixels, and a second rasteriser (pdftoppm) agrees within a sanity
 ;; bound (D127).
 (require '[clojure.edn :as edn])
-(defn fig-run [exe & args] (apply run exe args))
+;; `--ocr=never`: the transcripts hold the figures' crops and nothing else (they were recorded before the switch of P7.S), and under
+;; `always` a born-digital page also asks for its own render, to OCR and fuse (D363); the figures' own requests are the subject here.
+(defn fig-run [exe & args] (apply run exe "--ocr=never" args))
 (let [root "test/asset/figures"
       digests (edn/read-string (slurp (str root "/DIGESTS.edn")))
       pdftoppm? (have? "pdftoppm") magick? (have? "magick")

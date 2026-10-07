@@ -224,7 +224,7 @@ func xaCost(scr *port.Cells, nn int32, ka int32, sa int32, ca int32, kb int32, s
 	return 1000 - xaIou1(alo, ahi, blo, bhi)
 }
 
-func xaFoldCp(cp int32) int32 {
+func XaFoldCp(cp int32) int32 {
 	// A code point's folded form when it is a letter or a digit, 0 when it is not (a space, a punctuation, a symbol).
 	// Case folding covers ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic; every other letter folds to itself.
 	if cp < 48 {
@@ -341,7 +341,7 @@ func xaFoldInPlace(c *port.Cells) int32 {
 	var cp int32 = 0
 	for i < n {
 		cp = port.CellsAt(c, i)
-		f = xaFoldCp(cp)
+		f = XaFoldCp(cp)
 		if f != 0 {
 			port.CellsSet(c, j, f)
 			j += 1
@@ -374,7 +374,7 @@ func xaSide(scr *port.Cells, nn int32, k int32, s int32, c int32, etext *port.Ce
 	return port.CellsLen(out)
 }
 
-func xaLev(a *port.Cells, b *port.Cells, tt *port.Cells) int32 {
+func XaLev(a *port.Cells, b *port.Cells, tt *port.Cells) int32 {
 	// The Levenshtein distance of a and b (code points), its two rows in `tt`.
 	var la int32 = port.CellsLen(a)
 	var lb int32 = port.CellsLen(b)
@@ -453,7 +453,7 @@ func xaSim(scr *port.Cells, nn int32, ka int32, sa int32, ca int32, kb int32, sb
 	if mx == 0 {
 		return 1000
 	}
-	var d int32 = xaLev(ta, tb, tt)
+	var d int32 = XaLev(ta, tb, tt)
 	return ((mx - d) * 1000) / mx
 }
 

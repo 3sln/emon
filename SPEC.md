@@ -1167,6 +1167,19 @@ raster stages run once per round that has OCR answers (§7.3):
 
 Targeted passes (round 3, §9.4 / P7.4) follow fusion's flags.
 
+**As built (P7.S, D363-D369).** `emon.rasterplan`'s `rp-plan` is called by the document pass (`pu-plan`) and writes each born-digital page's `ask` (none, `full`,
+`witness`), its witness rows and its scripts into the page plan; the page unit reads nothing else to decide. The table above is exactly what it asks, with these
+choices: `auto-health` is `emon.tlhealth`'s (500) and a page's text-layer health is the lowest score of its fonts; `auto-image` is 300 per mille of the page,
+image placements clipped to the page and added; a witness line is an upright line of visible text-layer words of one font holding four letters or digits at least,
+at most 12 witness lines a page, the fonts with the most lines first; the `psm` 7 box is the line's box padded 3 px. **Escalation** (`rp-weak`): once the witness
+lines are in, a font with at least two compared lines of which fewer than `agree-min` (600 per mille) read as its text says (case-folded letters and digits, edit
+similarity 900 or more, Latin text only) escalates the page: the whole `with-text` render is read in round 3 (`ri-escalate`) and then the page goes on as `full`
+(targeted passes included). A page of the `witness` scope that does not escalate asks no targeted pass of P7.4: its first-pass lines are the `no-text` render's and
+there is no foreign ink under them to look for. **Languages**: the locale's, else the page's scripts, as ISO 15924 codes in the request's language cells
+(`Latn`, `Cyrl`, `Grek`, `Arab`, `Hebr`, `Deva`, `Hani`, `Hang`, `Jpan`, `Thai`: a cell that starts with an uppercase letter names a script), which the host
+adapter maps to the installed models that read it; a page with no letters, or none the adapter has a model for, asks with every model. `Options::ocr_scope` /
+`Options.OcrScope` and `--ocr-scope=` carry the scope; the Model records `settings.ocr-scope` when it is not `full`.
+
 **As built (P7.4, D343-D349).** `kin/pageink.kin` runs P6.3 and P6.4 in the page unit, on every raster whose pixels the unit was given (a scan's decode; a
 born-digital page's `with-text` render, and its `no-text` render for the tracer): the ink layers, the OCR words' ink columns (`xo` 10-14, 16), the rules and
 text lines. `kin/retarget.kin` then asks, in round 3 (round 4 for the text-only pass, which needs its render first), within `rt-max` (24, less the four kept for
@@ -1670,8 +1683,8 @@ witness (row 222), and arbitration never chooses between two readings of a group
 wherever the Engine was given pixels (P7.4, D343). **Arbitration runs in the document unit**, after every page unit has aligned and scored its page and
 `hl-doc` has judged the fonts (an encoding is a document fact); the page unit asks the two rasters (`pu-ask-rasters`), the OCR of the one
 with its text, and runs `xa-page` and `hl-page`. The fused flow keeps the text layer's geometry for a word OCR replaced; OCR-only words
-admitted are lines of their own after the page's others. Under the hidden test setting `ocr-born-digital` only: until P7.S a born-digital
-page is not OCR'd, and with no engine nothing here runs and every output is byte-identical.
+admitted are lines of their own after the page's others. Since P7.S (D200) a born-digital page is OCR'd under `ocr: always` (and under `auto` when
+§8.3 says); with no engine nothing here runs and every output is byte-identical.
 
 ### 9.5 Watermarks, backgrounds and ghosts (D015)
 
@@ -1819,9 +1832,10 @@ region of ink that the text layer does not explain is read by OCR, and every
 full` (the default) every page's whole render is read, which keeps the
 promise trivially; under `ocr-scope: witness` the no-text render plus
 witness lines keep it at a fraction of the cost (§8.3), and a font whose
-witnesses disagree escalates to its every line in the targeted round. The
-default stays `full` until `bb fusion-bench` shows `witness` equal on every
-accuracy metric of the fusion set (D200: the maintainer decides the flip).
+witnesses disagree escalates the page to the whole render (D364). The
+default stays `full` (D200: the maintainer decides the flip); `bb
+fusion-bench` shows `witness` equal on every accuracy metric of the fusion
+set at 0.48 of the OCR time (§12.3).
 
 Lossless savings, taken in every scope:
 
@@ -2945,6 +2959,27 @@ record):
 Kin raster work above budget is answered by a bulk form only under D092's
 rule (a pure whole-page map or reduce, measured over 2×).
 
+**Measured (P7.S, D200, D210; `bb fusion-bench --born --scopes`).** Live Rust
+host (pdfium, Tesseract 5.5.3) on the 22 documents (39 pages) of the fusion
+set, a machine shared with other jobs throughout, so these are loaded times;
+per A4 page at 300 dpi:
+
+| stage | `full` | `witness` |
+| --- | --- | --- |
+| render, `with-text` + `no-text` | 0.26 s | 0.19 s |
+| OCR, first pass | 9.3 s | 2.0 s |
+| OCR, later passes (targeted; the witness lines) | 1.7 s | 3.5 s |
+| **OCR, all** | **11.0 s** | **5.5 s** |
+| the page unit's own kin work (all raster stages, alignment, health) | 2.15 s | 1.2 s |
+| document unit (stage 3) | 0.003 s | 0.003 s |
+| peak memory of the process (the most; 308 MB with no pixel read) | 397 MB | 407 MB |
+
+The OCR time of `witness` on the median document is 0.48 of `full`'s (0.50
+pooled): the 30 % row is **not met** (its twelve `psm` 7 requests a page and
+the `no-text` page cost a half), at equal accuracy on every metric of the
+fusion set. The kin raster work is over the sum of the normalization and
+tracer rows; those two are measured alone by `bb ink` and `bb trace`.
+
 ---
 
 ## 13. Public API and settings
@@ -3082,6 +3117,7 @@ Settings (all named, all with defaults, all in the Model header):
 | --- | --- | --- |
 | `locale` | BCP 47 or none | none |
 | `ocr` | `always` / `auto` / `never` | **`always`** — every page, born-digital included (D038); `auto` OCRs only where text-layer health, image coverage or hidden text call for it |
+| `ocr-scope` | `full` / `witness`: what `ocr: always` reads of a born-digital page (§8.3, §9.8, D200); written to the Model's `settings` only when not `full` | `full` |
 | `sources` | subset of text/ocr/trace | all available |
 | `dpi` | OCR render resolution | 300 |
 | `detail` | `blocks` / `lines` / `words` | `blocks` |

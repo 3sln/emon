@@ -1,8 +1,8 @@
 (ns fusion.fusion-live
-  "bb fusion-live --stamps: the live metric `stamp-ghost` over mapo80 `val` (P6.6, D209; tools/fusion/live-sets.edn).
-  NOT a gate; nothing from the set is committed.
+  "bb fusion-live: the live fusion runs (NOT a gate; nothing from a live set is committed).
 
-    bb fusion-live --stamps [--dumps DIR]    for each val image with a dump DIR/STEM.json (evidence version 2)
+    bb fusion-live [--update] [--scope S]    P7.S: `emon-live` with the policy switched on over the pdf, pdf-tagged and scan sets, and D201's contract
+    bb fusion-live --stamps [--dumps DIR]    the live metric `stamp-ghost` over mapo80 `val` (P6.6, D209; tools/fusion/live-sets.edn), for each val image with a dump DIR/STEM.json (evidence version 2)
     bb fusion-live --self-test               the pure function on hand-made words and boxes
 
   stamp-ghost = (OCR words whose centre lies in a labelled stamp box AND reach the body) over (OCR words whose
@@ -70,15 +70,80 @@
       (println "  ok   fusion-live self-test: YOLO fractions to points; stamp-ghost = 2 of 3 on the hand-made words")
       (do (println (str "  FAIL fusion-live self-test " box " " [g n])) (System/exit 1)))))
 
+;; ---------------------------------------------------------------- the live run of P7.S
+
+(defn- a-var [s] (ns-resolve (find-ns 'accuracy.accuracy) s))
+
+(defn run-live
+  "`emon-live` with the policy switched on (every born-digital page OCR'd and fused: the Engine's defaults with pdfium and Tesseract) over every
+  `pdf/`, `pdf-tagged/`, `scan/`, `scan-color/` and `scan-ovl/` document: the scoreboard's `emon-live` entry (with `update?`, ratcheted as `bb accuracy` does), and the
+  born-digital contract of D201 against the committed `emon` entry: `pdf/all` CER no worse than emon's, every `pdf/` category and `pdf-tagged/all` within 0.001,
+  `tl-override` 0 on every document but `tl-broken-*`, `ghost-rate` at most 0.001 and `watermark-leak` 0 on `pdf/`. Prints, for every category, `emon` against
+  `emon-live`. `scope` (`full`/`witness`) passes `--ocr-scope` on; a `witness` run is never recorded."
+  [update? scope cached?]
+  (require 'accuracy.accuracy)
+  (let [PRED (var-get (a-var 'PREDICTORS))
+        cmd (if scope ["env" (str "EMON_RS_FLAGS=--ocr-scope=" scope) "sh" (last (PRED "emon-live"))] (PRED "emon-live"))
+        board ((var-get (a-var 'load-board)))
+        fails (atom 0)
+        ok (fn [& xs] (println (str "  ok   " (apply str xs))))
+        bad (fn [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))]
+    (with-bindings {(a-var '*variants*) #{"pdf" "pdf-tagged" "scan" "scan-color" "scan-ovl"}}
+      (let [cache-file (str ".cache/fusion-live-" (or scope "default") ".edn")
+            [entry per] (if (and cached? (fs/exists? cache-file))
+                          (clojure.edn/read-string (slurp cache-file))
+                          (let [r ((var-get (a-var 'evaluate)) cmd)]
+                            (when (first r) (spit cache-file (pr-str r)))
+                            r))]
+        (if (nil? entry)
+          (println (str "  SKIP fusion-live: the live predictor is not available (" per ")"))
+          (let [base (get-in board [":predictors" "emon"])
+                m (fn [e k mm] (get-in e [k mm]))
+                cats (sort (filter #(or (str/starts-with? % "pdf/") (str/starts-with? % "pdf-tagged/")) (keys entry)))]
+            (println "  category                         metric      emon -> emon-live (the switch on)")
+            (doseq [k cats mm [":cer" ":wer"]]
+              (println (format "  %-32s %-10s %s -> %s" k mm (m base k mm) (m entry k mm))))
+            (let [b (m base "pdf/all" ":cer") l (m entry "pdf/all" ":cer")]
+              (if (and b l (<= l b)) (ok (format "pdf/all CER %s <= emon's %s" l b)) (bad (format "pdf/all CER %s is above emon's %s" l b))))
+            (doseq [k cats :when (not= k "pdf/all")
+                    :let [b (m base k ":cer") l (m entry k ":cer")] :when b]
+              (if (and l (<= l (+ b 0.001))) (ok (format "%s CER %s within 0.001 of emon's %s" k l b)) (bad (format "%s CER %s is more than 0.001 above emon's %s" k l b))))
+            (doseq [[k per-doc] per
+                    :let [[v id] (str/split k #"/" 2)] :when (= v "pdf")
+                    :let [t (get per-doc "tl-override")] :when (and t (not (str/starts-with? id "tl-broken")))]
+              (if (zero? t) nil (bad (format "%s tl-override %s on a healthy document" id t))))
+            (ok "tl-override is zero on every checked document that is not tl-broken-*" (if (zero? @fails) "" " (see FAIL lines)"))
+            (let [g (m entry "pdf/all" ":ghost-rate") w (m entry "pdf/all" ":watermark-leak")]
+              (if (or (nil? g) (<= g 0.001)) (ok "ghost-rate " g " <= 0.001 on pdf/") (bad "ghost-rate " g " > 0.001 on pdf/"))
+              (if (or (nil? w) (zero? w)) (ok "watermark-leak " w " on pdf/") (bad "watermark-leak " w " on pdf/")))
+            (when (and update? (nil? scope) (zero? @fails))
+              (let [old (get-in board [":predictors" "emon-live"])
+                    [reg _ gone] (if old ((var-get (a-var 'compare-boards)) old entry (get board ":tolerance" 0.002)) [[] [] []])]
+                (comment "a regression in the scan categories is not the switch's: those pages are not born digital (and the committed entry predates P7.4's own measured moves); it is REPORTED, never recorded over (merge-up keeps the better value), and does not fail this run. A born-digital category's is a failure.")
+                (let [born? (fn [[k]] (or (str/starts-with? k "pdf/") (str/starts-with? k "pdf-tagged/")))
+                      reg-born (filter born? reg)
+                      reg-other (remove born? reg)]
+                  ((var-get (a-var 'show)) "scan regressions against the committed emon-live (held: not recorded, not the switch's)" reg-other 60)
+                  ((var-get (a-var 'show)) "vanished" gone 60)
+                  (if (or (seq reg-born) (seq gone))
+                    (bad "emon-live regressed or lost born-digital metrics: " (count reg-born) " / " (count gone))
+                    (do ((var-get (a-var 'save-board))
+                         (assoc-in board [":predictors" "emon-live"] ((var-get (a-var 'merge-up)) (or old (array-map)) entry)))
+                        (ok "scoreboard emon-live recorded (the ratchet moves toward better only; " (count reg-other) " scan metrics stay at their committed, better value)"))))))))))
+    (when (pos? @fails) (System/exit 1))))
+
 (defn -main [& args]
   (cond
+    (or (empty? args) (#{"--run" "--update" "--scope" "--cached"} (first args)))
+    (let [scope (second (drop-while #(not= % "--scope") args))]
+      (run-live (boolean (some #{"--update"} args)) scope (boolean (some #{"--cached"} args))))
     (= args ["--self-test"]) (self-test)
     (= (first args) "--stamps")
     (let [dumps (second (drop-while #(not= % "--dumps") args))
           root (str (fs/canonicalize "."))
           {:keys [dumps-dir]} (edn/read-string (slurp (str root "/tools/fusion/live-sets.edn")))]
       (run-stamps root (or dumps (str root "/" dumps-dir))))
-    :else (do (println "usage: bb fusion-live --stamps [--dumps DIR] | --self-test") (System/exit 2))))
+    :else (do (println "usage: bb fusion-live [--update] [--scope full|witness] | --stamps [--dumps DIR] | --self-test") (System/exit 2))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))

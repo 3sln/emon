@@ -1,4 +1,4 @@
-;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307). P7.6 re-derived `hidden-older-ocr` and `tl-broken-unmapped` by replaying their committed transcripts under the new rules (no engine ran: D322).
+;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
 {"bank-statement"
  "e55a30a7ad657f8222472a825f07a8fd22c6d25dfb2afe1b016a07f33ac2b841",
  "bg-texture"

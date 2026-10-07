@@ -144,6 +144,46 @@ func modelName(lang string) string {
 	return lang
 }
 
+// modelScript is the script an installed model reads (ISO 15924). The Latin scripts are every language not listed here, and Tesseract's own
+// script models ("Latin"...).
+func modelScript(m string) string {
+	switch m {
+	case "ara", "fas", "urd", "pus", "uig", "snd", "kur_ara", "Arabic":
+		return "Arab"
+	case "heb", "yid", "Hebrew":
+		return "Hebr"
+	case "rus", "ukr", "bul", "srp", "bel", "mkd", "kaz", "kir", "mon", "tgk", "Cyrillic":
+		return "Cyrl"
+	case "ell", "grc", "Greek":
+		return "Grek"
+	case "hin", "mar", "nep", "san", "Devanagari":
+		return "Deva"
+	case "chi_sim", "chi_tra", "Han":
+		return "Hani"
+	case "jpn", "Japanese":
+		return "Jpan"
+	case "kor", "kor_vert", "Hangul":
+		return "Hang"
+	case "tha", "Thai":
+		return "Thai"
+	}
+	return "Latn"
+}
+
+// scriptReads: does a model of script `model` read a request's script `want`? The ideographs are shared: a `Hani` page may be Chinese or Japanese.
+func scriptReads(want, model string) bool {
+	return want == model || (want == "Hani" && model == "Jpan")
+}
+
+func contains(xs []string, x string) bool {
+	for _, y := range xs {
+		if y == x {
+			return true
+		}
+	}
+	return false
+}
+
 // requestName is the language Tesseract recognised a word in, back to what a request calls it.
 func requestName(model string) string {
 	switch model {
@@ -402,7 +442,17 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 		firstLang = 9
 	}
 	for k := firstLang; k < len(req.Rec)-3; k++ {
-		m := modelName(unpack4(req.Arg(k)))
+		name := unpack4(req.Arg(k))
+		// a language cell that starts with an uppercase letter names a SCRIPT (ISO 15924: `Latn`; P7.S, D215): the installed models that read it
+		if len(name) == 4 && name[0] >= 'A' && name[0] <= 'Z' {
+			for _, l := range installed {
+				if scriptReads(name, modelScript(l)) && !contains(langs, l) {
+					langs = append(langs, l)
+				}
+			}
+			continue
+		}
+		m := modelName(name)
 		if have[m] {
 			langs = append(langs, m)
 		} else {

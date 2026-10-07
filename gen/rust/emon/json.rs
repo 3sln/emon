@@ -975,6 +975,7 @@ pub(crate) fn js_settings(mut t: &mut String, pr: i32, nodes: &mut crate::port::
         js_str(t, text, attr_value(attrs, a), attr_len(attrs, a));
     }
     s = js_ftext(t, pr, 1, nodes, attrs, text, 0, fk_ocr(), s);
+    s = js_ftext(t, pr, 1, nodes, attrs, text, 0, fk_ocr_scope(), s);
     s = js_ftext(t, pr, 1, nodes, attrs, text, 0, fk_detail(), s);
     // the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was
     s = js_ftext(t, pr, 1, nodes, attrs, text, 0, fk_assets(), s);

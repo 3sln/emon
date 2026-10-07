@@ -601,7 +601,7 @@
 
 ;; ------------------------------------------------------------- the answers as evidence
 
-(defn ^I32 rt-run-meta [^:mut ^Cells oruns ^I32 run ^I32 op ^I32 round ^I32 psm ^I32 x ^I32 y ^I32 w ^I32 h]
+(defn ^:pub ^I32 rt-run-meta [^:mut ^Cells oruns ^I32 run ^I32 op ^I32 round ^I32 psm ^I32 x ^I32 y ^I32 w ^I32 h]
   (comment "What a targeted run adds to `sc-answer`'s: the pass kind, the round it was asked in, its `psm` and the pixel region.")
   (or-set oruns run (orf-pass) op)
   (or-set oruns run (orf-round) round)

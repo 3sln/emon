@@ -1200,11 +1200,12 @@ pub(crate) fn gf_health(mut ctx: &mut crate::port::Cells, gc: &mut crate::port::
             i += 1;
         }
     }
+    // the lengths are sums over the page's rules in centipoints: times 1000 they pass 2^31 on a page of many rules (bank-statement, live), so in 64 bits
     if vl > 0 {
-        witness = (vw * 1000) / vl;
+        witness = ((vw as i64).wrapping_mul(1000 as i64) / (vl as i64)) as i32;
     }
     if tl > 0 {
-        precision = (te * 1000) / tl;
+        precision = ((te as i64).wrapping_mul(1000 as i64) / (tl as i64)) as i32;
     }
     crate::port::cells_set(ctx, X_WIT, witness);
     crate::port::cells_set(ctx, X_PREC, precision);

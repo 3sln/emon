@@ -3,7 +3,7 @@
 // itself and hands the Engine bytes, a seekable `File` or a spooled `Read` (D058).
 //
 //     emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--ocr-born-digital] [--assets=none|images|figures] [--password=TEXT] [--source=bytes|seek|spool]
+//             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--ocr-scope=full|witness] [--assets=none|images|figures] [--password=TEXT] [--source=bytes|seek|spool]
 //             [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //             [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE
 //
@@ -28,8 +28,8 @@
 //   --chunk=N        the source cache's chunk size; with --async the cache behaves like a browser Blob (it
 //                    misses, the loop fetches and re-runs): the output must equal the in-memory run's
 //   --dump=DIR       with --out=pixels, also write each frame's pixels to DIR/frame-N.raw (w*h*ch bytes)
-//   --ocr-born-digital  the hidden test setting (P7.3, D285-D290): OCR the born-digital pages too and fuse the readings (a replay arm, or
-//                    live with --tesseract and --pdfium)
+//   --ocr-scope=S    SPEC 13 (P7.S, D200): under `--ocr=always` a born-digital page is read whole with its text (`full`, the default) or as the render
+//                    without its text plus witness lines of its text layer (`witness`). (`--ocr-born-digital`, the hidden setting of P7.3, is gone: the policy is on.)
 //   --pdfium         give the Engine the pdfium `Renderer` (D127). LIVE: only a build with `--cfg pdfium` has it (`EMON_RS_PDFIUM=DIR
 //                    kin/scripts/emon-rs-build`); no gate uses it. Without it a `render` request is answered `unsupported`.
 //   --codecs         give the Engine the JPX and JBIG2 decoders of the `decode-img` request (OpenJPEG, jbig2dec: P6.1a, D336). LIVE: only a
@@ -46,12 +46,12 @@
 // `test/driver/go/main.go` is its twin: the same flags (it adds `--source=readerat`), stdout and exit codes (`bb identity`).
 //
 // Exit: 0 ok; 2 usage; 4 a named emon error (`error: NAME` on stderr, nothing on stdout); 1 anything else.
-use emon::{Assets, Config, Engine, Furniture, HtmlAssets, HtmlOptions, Input, JsonOptions, OcrPolicy, Options, Output};
+use emon::{Assets, Config, Engine, Furniture, HtmlAssets, HtmlOptions, Input, JsonOptions, OcrPolicy, OcrScope, Options, Output};
 use std::io::Read;
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--codecs] [--ocr-born-digital] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium] [--codecs] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
     std::process::exit(2);
 }
 
@@ -232,8 +232,12 @@ fn main() {
             cfg.chunk_size = v.parse().unwrap_or_else(|_| usage("--chunk=N wants a number"));
         } else if a == "--async" {
             cfg.simulate_async = true;
-        } else if a == "--ocr-born-digital" {
-            opts.ocr_born_digital = true;
+        } else if let Some(v) = a.strip_prefix("--ocr-scope=") {
+            opts.ocr_scope = match v {
+                "full" => OcrScope::Full,
+                "witness" => OcrScope::Witness,
+                _ => usage("--ocr-scope is full or witness"),
+            };
         } else if a == "--no-retarget" {
             opts.no_retarget = true;
         } else if a == "--pdfium" {
@@ -434,6 +438,11 @@ fn main() {
             rs.page_requests,
             emon::engine::OCR_US[0].load(std::sync::atomic::Ordering::Relaxed),
             emon::engine::OCR_US[1].load(std::sync::atomic::Ordering::Relaxed)
+        );
+        // P7.S (D210): wall time by stage, microseconds: the ports by request kind, the document pass, the page units (with the ports' time in them), the document unit
+        eprintln!(
+            "time-stats: render-us={} crop-us={} decode-us={} ocr-first-us={} ocr-later-us={} pass-us={} pages-us={} finish-us={}",
+            rs.fulfil_us[1], rs.fulfil_us[5], rs.fulfil_us[2], rs.fulfil_us[3], rs.fulfil_us[7], rs.pass_us, rs.pages_us, rs.finish_us
         );
     }
     print!("{}", text);

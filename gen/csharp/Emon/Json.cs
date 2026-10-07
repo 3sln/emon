@@ -977,6 +977,7 @@ public static class Json {
             JsStr(t, text, Model.AttrValue(attrs, a), Model.AttrLen(attrs, a));
         }
         s = JsFtext(t, pr, 1, nodes, attrs, text, 0, Model.FkOcr(), s);
+        s = JsFtext(t, pr, 1, nodes, attrs, text, 0, Model.FkOcrScope(), s);
         s = JsFtext(t, pr, 1, nodes, attrs, text, 0, Model.FkDetail(), s);
         // the asset settings, written only when `assets` is on (SPEC 10.11): without them the header is what it was
         s = JsFtext(t, pr, 1, nodes, attrs, text, 0, Model.FkAssets(), s);

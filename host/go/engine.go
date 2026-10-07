@@ -32,6 +32,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"emon/asset"
 	"emon/columns"
@@ -49,6 +50,7 @@ import (
 	"emon/html"
 	"emon/model"
 	"emon/pageunit"
+	"emon/rasterplan"
 	"emon/arbiter"
 	"emon/health"
 	"emon/player"
@@ -189,9 +191,23 @@ func planError(p *port.PlanError) *Error {
 
 // ----------------------------------------------------------------- options
 
-// OcrPolicy is SPEC 13's OCR setting (D038). WIRED (P6.5, D211-D215): OcrNever asks for no OCR; OcrAuto and OcrAlways OCR an
-// image and a scanned PDF page, and a born-digital page (a page with a text layer) keeps its text layer under both, because
-// fusion (P7) does not exist yet to weigh a second reading against it (D212).
+// OcrScope is SPEC 13's `ocr-scope` (D200): what `ocr: always` reads of a born-digital page. OcrScopeFull (the default) the whole render with its
+// text; OcrScopeWitness the render without its text and a few witness lines of every font (a font whose witnesses disagree with its text escalates
+// the page to full).
+type OcrScope int
+
+const (
+	OcrScopeFull OcrScope = iota
+	OcrScopeWitness
+)
+
+// code is the `scope` of kin's `rp-plan`: 0 full, 1 witness.
+func (s OcrScope) code() int32 { return int32(s) }
+
+// OcrPolicy is SPEC 13's OCR setting (D038). WIRED (P6.5, D211-D215; switched at P7.S, D200): OcrNever asks for no OCR; OcrAuto and OcrAlways OCR an
+// image and a scanned PDF page; a born-digital page (a page with a text layer) is OCR'd and FUSED with its text layer under OcrAlways, and under
+// OcrAuto when its health, the images on it or hidden text call for it (`emon.rasterplan`, SPEC 8.3). With no Renderer or no Ocr every request is
+// answered `unsupported` and the text layer stands alone.
 type OcrPolicy int
 
 const (
@@ -269,10 +285,10 @@ type Options struct {
 	Furniture Furniture
 	// KeepEvidence keeps the text layer's evidence dump (`Model.Evidence`): a test and debugging aid.
 	KeepEvidence bool
-	// OcrBornDigital is a HIDDEN TEST SETTING (P7.3, D285-D290): OCR the born-digital pages too, as P7.S will under `always`, and fuse the two
-	// readings (render, OCR, align, arbitrate). Off by default: until P7.S a born-digital page is not OCR'd (D201, D212 (3)). The replay
-	// gate and `bb fusion` set it; an embedder never needs to.
-	OcrBornDigital bool
+	// OcrScope is SPEC 13's `ocr-scope` (P7.S, D200): under `Ocr: OcrAlways` a born-digital page is read whole with its text (OcrScopeFull, the
+	// default) or as the render without its text plus witness lines of its text layer's fonts (OcrScopeWitness, a fraction of the OCR time).
+	// Written to the Model's `settings` when not full.
+	OcrScope OcrScope
 	// NoRetarget is a HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units, as the Engine was before the ink layers and the targeted
 	// passes (a measurement's baseline; an embedder never needs it).
 	NoRetarget bool
@@ -1022,6 +1038,7 @@ func finishRaster(d *rasterDoc, opts Options) outcome {
 	m.regions, r[2] = r[2], m.regions
 	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
+	rasterplan.RpSettings(m.nodes, m.attrs, m.text, opts.OcrScope.code())
 	if opts.Locale != "" {
 		start := port.CellsLen(m.text)
 		for _, ch := range opts.Locale {
@@ -1163,7 +1180,37 @@ type RunStats struct {
 	// per page unit (P7.U): the rounds it took and the requests it made, in page order
 	PageRounds   []int32
 	PageRequests []int32
+	// P7.S (D210, `bb fusion-bench`): wall time in microseconds. FulfilUs is what the host's ports took, summed over every request of the input, by
+	// request kind (index: 1 render, 2 decode, 3 `ocr` of a page's first pass, 4 bytes, 5 crop, 6 decode-img; 7 the `ocr` requests of every later
+	// pass). PassUs is the document pass (a loop of its own), PagesUs every page unit with the ports' time in it, FinishUs the document unit
+	// (stage 3). Counters: the Model never depends on them.
+	FulfilUs [8]uint64
+	PassUs   uint64
+	PagesUs  uint64
+	FinishUs uint64
 }
+
+// timedPorts is the ports' fulfiller, timed by request kind (RunStats.FulfilUs).
+type timedPorts struct {
+	inner port.PlanFulfiller
+	us    [8]uint64
+}
+
+func (t *timedPorts) Start(req port.PlanRequest, bm port.PlanBitmaps) error {
+	t0 := time.Now()
+	err := t.inner.Start(req, bm)
+	k := int(req.Kind())
+	if req.Kind() == port.PlanKindOcr && req.ID()%256 != 16 {
+		k = 7
+	}
+	if k < 0 || k > 7 {
+		k = 0
+	}
+	t.us[k] += uint64(time.Since(t0).Microseconds())
+	return err
+}
+
+func (t *timedPorts) Next() (port.PlanAnswer, error) { return t.inner.Next() }
 
 // ------------------------------------------------------------------- intake
 
@@ -1366,9 +1413,9 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	tlEpages, tlFeats, fw, fl, fa, hl, hsc := l7[0], l7[1], l7[2], l7[3], l7[4], l7[5], l7[6]
 	tlhealth.ThRun(pg, gl, et, mk, fnt, wd, ln, im, tlEpages, tlFeats, fw, fl, fa, hl, hsc)
 	nl0 := port.CellsLen(ln) / 16
-	sx := newCellsN(2)
-	plan0, sp := sx[0], sx[1]
-	pageunit.PuPlan(view, ar, dc, ca, cb, st, pg, im, wd, opts.Ocr.code(), sp, plan0)
+	sx := newCellsN(4)
+	plan0, sp, rs1, rs2 := sx[0], sx[1], sx[2], sx[3]
+	pageunit.PuPlan(view, ar, dc, ca, cb, st, pg, im, wd, opts.Ocr.code(), opts.OcrScope.code(), fw, fl, et, hl, sp, plan0, rs1, rs2)
 	if view.Missed() {
 		return step{miss: true}
 	}
@@ -1388,10 +1435,11 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	if opts.KeepEvidence {
 		snap = []*port.Cells{cloneCells(gl), cloneCells(mk), cloneCells(fnt)}
 	}
-	// With fusion on, the text layer's epages and feats are the evidence's own: the OCR of a born-digital page adds its feature rows to
-	// the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
+	// With fusion on (every policy but `never`), the text layer's epages and feats are the evidence's own: the OCR of a born-digital page adds
+	// its feature rows to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
+	fusion := opts.Ocr.code() != 0
 	ev0 := newEvArenas()
-	if opts.OcrBornDigital {
+	if fusion {
 		ev0.epages = tlEpages
 		ev0.feats = tlFeats
 	}
@@ -1419,7 +1467,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 		port.CellsPush(mask, 0)
 	}
 	ptsKept := port.NewCells()
-	if opts.OcrBornDigital {
+	if fusion {
 		ptsKept = pts
 	}
 	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), ys: newCellsN(19), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, im: im, grl: grl, gfl: gfl, pts: ptsKept, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, se: se, sc: sc,
@@ -1498,7 +1546,7 @@ func unitPdf(d *pdfDoc, i, idx int, opts Options, answers, rq *port.Cells, bms *
 	scr := port.NewCells()
 	return pageunit.PuRunPdf(int32(i), int32(idx), opts.Ocr.code(), d.plan, answers, rq, d.loc, bms, d.mask, scr,
 		d.ev.epages, d.ev.views, d.et, d.ev.feats, d.ev.images, d.ev.oruns, d.ev.oblocks, d.ev.olines, d.ev.owords, d.ev.osyms, d.ev.oalts, d.wd, d.ln,
-		boolInt(opts.OcrBornDigital)+2*boolInt(opts.NoRetarget), d.fw, d.hl, d.ev.refs, d.cg, d.ev.tlines, d.xs[0], d.xs[1], d.xs[2], d.xs[3], d.xs[4], d.xs[5],
+		2*boolInt(opts.NoRetarget), d.fw, d.fl, d.hl, d.ev.refs, d.cg, d.ev.tlines, d.xs[0], d.xs[1], d.xs[2], d.xs[3], d.xs[4], d.xs[5],
 		d.ev.inks, d.ev.comps, d.ev.rules, d.ev.prims, d.ev.pts,
 		d.ys[0], d.ys[1], d.ys[2], d.ys[3], d.ys[4], d.ys[5], d.ys[6], d.ys[7], d.ys[8], d.ys[9], d.ys[10], d.ys[11], d.ys[12], d.ys[13], d.ys[14], d.ys[15], d.ys[16], d.ys[17], d.ys[18])
 }
@@ -1518,7 +1566,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	// the arbiter picks each group's source and makes the fused flow stage 3 reads. With no group (no engine, or the engine answered
 	// nothing) none of this runs and nothing below is different.
 	fused := port.CellsLen(d.cg) > 0
-	if opts.OcrBornDigital && !fused && port.CellsLen(ev.owords) == 0 {
+	if opts.Ocr.code() != 0 && !fused && port.CellsLen(ev.owords) == 0 {
 		// nothing was read: the evidence is what a run without the setting dumps (the text layer's own features were borrowed for alignment)
 		ev.epages = port.NewCells()
 		ev.feats = port.NewCells()
@@ -1633,6 +1681,7 @@ func finishPdf(d *pdfDoc, opts Options) outcome {
 	// the vector rules graphics fusion dropped (P7.G, row 513): ledger rows, with no text
 	gfuse.GfWrite(gfa, m.ledger)
 	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
+	rasterplan.RpSettings(m.nodes, m.attrs, m.text, opts.OcrScope.code())
 	// fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
 	if fused {
 		arbiter.ArWrite(afa, ev.owords, et, m.ledger, m.text, t[2], port.NewCells())
@@ -1815,8 +1864,12 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		replayer = port.NewReplayer(replay)
 		ports = replayer
 	}
+	timed := &timedPorts{inner: ports}
+	ports = timed
 	// THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
+	tPass := time.Now()
 	ps, perr := port.PlanRun(pcfg, unit, ports, bytesF, misses, rec)
+	passUS := uint64(time.Since(tPass).Microseconds())
 	// a source that failed is the answer, whatever the loop made of the miss it caused
 	if cache != nil {
 		if failed, short, msg := cache.fail(); failed {
@@ -1833,7 +1886,8 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		}
 		return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: perr.Error()}
 	}
-	stats := RunStats{Attempts: ps.Attempts, FetchRounds: ps.FetchRounds, BytesRequests: ps.BytesRequests, Requests: ps.Requests, InputBytes: uint64(size)}
+	stats := RunStats{Attempts: ps.Attempts, FetchRounds: ps.FetchRounds, BytesRequests: ps.BytesRequests, Requests: ps.Requests, InputBytes: uint64(size), PassUs: passUS}
+	tPages := time.Now()
 	// THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and BitmapSet, dropped when
 	// the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never reads the input. Then
 	// the document unit, stage 3, on what the units left.
@@ -1940,11 +1994,14 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 			stats.PageRounds = append(stats.PageRounds, pst.Rounds)
 			stats.PageRequests = append(stats.PageRequests, pst.Requests)
 		}
+		stats.PagesUs = uint64(time.Since(tPages).Microseconds())
+		tFin := time.Now()
 		if docPdf != nil {
 			res = finishPdf(docPdf, opts)
 		} else {
 			res = finishRaster(docRaster, opts)
 		}
+		stats.FinishUs = uint64(time.Since(tFin).Microseconds())
 		// THE ASSET UNIT (P8.5, D351): at `figures` the Model is final but for its assets, whose renders and crops are requests,
 		// so one more plan/fulfil loop runs over it, with its own answers and BitmapSet, on copies until every answer is in.
 		if res.built != nil && res.built.pending != nil {
@@ -1990,6 +2047,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 			}
 		}
 	}
+	stats.FulfilUs = timed.us
 	if replayer != nil && replayer.Unused() != 0 {
 		return outcome{}, RunStats{}, &Error{Kind: ErrPlan, Plan: &port.PlanError{Name: "transcript-bad", Msg: fmt.Sprintf("%d recorded entries were never asked for", replayer.Unused())}}
 	}

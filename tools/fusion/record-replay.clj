@@ -1,11 +1,13 @@
 #!/usr/bin/env bb
-;; Record the FUSION REPLAY set LIVE: the whole Engine converting each document of the fusion set with the hidden setting
-;; `ocr-born-digital`, pdfium rendering every page and Tesseract reading it, on the Rust host (DEVLOG P7.3, D285-D290). NOT a gate: it needs the
+;; Record the FUSION REPLAY set LIVE: the whole Engine converting each document of the fusion set with its default settings (`ocr: always`, `ocr-scope: full`,
+;; P7.S), pdfium rendering every page and Tesseract reading it, on the Rust host (DEVLOG P7.3, D285-D290; P7.S, D363). The recording is made with `--no-retarget`:
+;; a committed transcript is slim (no bitmap: the pixel budget of D209), so a replay reads no pixel and asks no targeted pass, and the recording must ask
+;; what the replay will; the pixel stages are held by `bb retarget` (test/retarget/replay keeps its bitmaps) and measured live (`bb fusion-live`). NOT a gate: it needs the
 ;; pinned pdfium (`bb pdfium-fetch`) and Tesseract (brew: tesseract, leptonica).
 ;;
 ;;     bb tools/fusion/record-replay.clj [ID...]     default: test/corpus/synth/FUSION (the 22 documents of P6.6's fusion set)
 ;;
-;; Each document goes through `emon-rs --pdfium --tesseract --ocr-born-digital --record=DIR`, built with `EMON_RS_PDFIUM=DIR
+;; Each document goes through `emon-rs --pdfium --tesseract --no-retarget --record=DIR`, built with `EMON_RS_PDFIUM=DIR
 ;; kin/scripts/emon-rs-build` (a crate of its own, .cache/emon-rs-fusion). What the loop asked and what the engines answered is the
 ;; transcript; it is committed AS A REPLAY INPUT, slim like test/ocr/scan/ (the answers and the `:producer`, no bitmap: a replay reads no
 ;; pixel), as test/fusion/replay/ID/transcript.edn. Before it is kept the transcript is REPLAYED by the same build with no port, and the
@@ -58,11 +60,11 @@
         t0 (System/currentTimeMillis)]
     (fs/delete-tree out)
     (fs/create-dirs out)
-    (let [r (sh {:err :inherit} bin "--pdfium" "--tesseract" "--ocr-born-digital" "--out=bundle" (str "--record=" out) pdf)]
+    (let [r (sh {:err :inherit} bin "--pdfium" "--tesseract" "--no-retarget" "--out=bundle" (str "--record=" out) pdf)]
       (when-not (zero? (:exit r)) (println "FAIL" id "exited" (:exit r)) (System/exit (:exit r)))
       (spit (str out "/transcript.edn") (strip-bitmaps (slurp (str out "/transcript.edn"))))
       (doseq [f (fs/glob out "bitmap-*.png")] (fs/delete f))
-      (let [rp (sh {:err :inherit} bin "--ocr-born-digital" "--out=bundle" (str "--replay=" out) pdf)]
+      (let [rp (sh {:err :inherit} bin "--out=bundle" (str "--replay=" out) pdf)]
         (when-not (and (zero? (:exit rp)) (= (:out r) (:out rp)))
           (println "FAIL" id "the replay is not the recording")
           (System/exit 1))
@@ -71,7 +73,7 @@
 
 (doseq [id (if digests-only? ids [])]
   (let [pdf (str (fs/absolutize (str pdf-dir id ".pdf")))
-        rp (sh {:err :inherit} bin "--ocr-born-digital" "--out=bundle" (str "--replay=" (fs/absolutize (str replay-dir id))) pdf)]
+        rp (sh {:err :inherit} bin "--out=bundle" (str "--replay=" (fs/absolutize (str replay-dir id))) pdf)]
     (when-not (zero? (:exit rp)) (println "FAIL" id "does not replay") (System/exit 1))
     (swap! digests assoc id (sha256 (:out rp)))
     (println "digest" id)))

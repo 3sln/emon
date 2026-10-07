@@ -70,6 +70,12 @@
             "never"
           ]
         },
+        "ocr-scope": {
+          "enum": [
+            "full",
+            "witness"
+          ]
+        },
         "detail": {
           "enum": [
             "blocks",

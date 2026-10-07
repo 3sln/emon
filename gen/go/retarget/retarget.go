@@ -872,7 +872,7 @@ func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi 
 	return 0
 }
 
-func rtRunMeta(oruns *port.Cells, run int32, op int32, round int32, psm int32, x int32, y int32, w int32, h int32) int32 {
+func RtRunMeta(oruns *port.Cells, run int32, op int32, round int32, psm int32, x int32, y int32, w int32, h int32) int32 {
 	// What a targeted run adds to `sc-answer`'s: the pass kind, the round it was asked in, its `psm` and the pixel region.
 	evidence.OrSet(oruns, run, evidence.OrfPass(), op)
 	evidence.OrSet(oruns, run, evidence.OrfRound(), round)
@@ -904,7 +904,7 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 		if a >= 0 {
 			if plan.AnOk(ans, a) == 1 {
 				run = scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-				rtRunMeta(oruns, run, evidence.OpLine(), 3, 7, 0, 0, 0, 0)
+				RtRunMeta(oruns, run, evidence.OpLine(), 3, 7, 0, 0, 0, 0)
 				port.CellsSet(rtp, RtpLine0()+((j*2)+1), run)
 				made += 1
 			}
@@ -918,7 +918,7 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 		if a >= 0 {
 			if plan.AnOk(ans, a) == 1 {
 				run = scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-				rtRunMeta(oruns, run, evidence.OpCell(), 3, 7, port.CellsAt(rtp, RtpCell0()+(j*6)), port.CellsAt(rtp, RtpCell0()+((j*6)+1)), port.CellsAt(rtp, RtpCell0()+((j*6)+2)), port.CellsAt(rtp, RtpCell0()+((j*6)+3)))
+				RtRunMeta(oruns, run, evidence.OpCell(), 3, 7, port.CellsAt(rtp, RtpCell0()+(j*6)), port.CellsAt(rtp, RtpCell0()+((j*6)+1)), port.CellsAt(rtp, RtpCell0()+((j*6)+2)), port.CellsAt(rtp, RtpCell0()+((j*6)+3)))
 				port.CellsSet(rtp, RtpCell0()+((j*6)+5), run)
 				made += 1
 			}
@@ -933,7 +933,7 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 			if ra >= 0 {
 				var tv int32 = evidence.VwNew(views, pg, evidence.VkRender(), plan.PuId(page, plan.PiRenderTextOnly()), -1, plan.AnArg(ans, ra, 0), plan.AnArg(ans, ra, 1), plan.AnArg(ans, ra, 3)*100, plan.LayTextOnly(), -1, 0, 0, 0, 0, 0)
 				run = scan.ScAnswer(ans, a, pg, tv, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-				rtRunMeta(oruns, run, evidence.OpTextOnly(), 4, 3, 0, 0, 0, 0)
+				RtRunMeta(oruns, run, evidence.OpTextOnly(), 4, 3, 0, 0, 0, 0)
 				port.CellsSet(rtp, RtpTrun(), run)
 				made += 1
 			}
@@ -956,7 +956,7 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 	if a >= 0 {
 		if plan.AnOk(ans, a) == 1 {
 			run = scan.ScAnswer(ans, a, pg, srcview, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-			rtRunMeta(oruns, run, evidence.OpBodyInk(), 3, 3, 0, 0, 0, 0)
+			RtRunMeta(oruns, run, evidence.OpBodyInk(), 3, 3, 0, 0, 0, 0)
 			port.CellsSet(rtp, RtpBrun(), run)
 			made += 1
 		}
@@ -967,7 +967,7 @@ func RtRecord(page int32, srcview int32, dpi100 int32, loc *port.Cells, ans *por
 		if a >= 0 {
 			if plan.AnOk(ans, a) == 1 {
 				run = scan.ScAnswer(ans, a, pg, rviews, id, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-				rtRunMeta(oruns, run, evidence.OpReRotated(), 3, 3, 0, 0, 0, 0)
+				RtRunMeta(oruns, run, evidence.OpReRotated(), 3, 3, 0, 0, 0, 0)
 				port.CellsSet(rtp, RtpRrun(), run)
 				made += 1
 			}

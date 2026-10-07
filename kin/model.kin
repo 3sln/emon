@@ -187,7 +187,9 @@
    [fk-bytes 94 "bytes"]
    [fk-sha256 95 "sha256"]
    [fk-uses 96 "uses"]
-   [fk-node 97 "node"]])
+   [fk-node 97 "node"]
+   ;; the OCR scope setting (P7.S, D200, D363): written on the root only when it is not `full`
+   [fk-ocr-scope 98 "ocr-scope"]])
 
 ;; Provenance bits (SPEC 3.5). The code IS the bit.
 (defenum ^:pub sr

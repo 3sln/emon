@@ -42,7 +42,7 @@ const optionLines = (o, chunk, record) => {
   put('assets-bytes', o.assetsBytes);
   if (o.assetSignatures !== undefined) put('asset-signatures', o.assetSignatures === true || o.assetSignatures === 'on' ? 'on' : 'off');
   if (o.keepEvidence) put('keep-evidence', 1);
-  if (o.ocrBornDigital) put('ocr-born-digital', 1);
+  put('ocr-scope', o.ocrScope);
   put('max-rounds', o.maxRounds);
   put('fetch-rounds', o.fetchRounds);
   for (const [k, v] of Object.entries(o.limits || {})) put(`limit.${k}`, v);

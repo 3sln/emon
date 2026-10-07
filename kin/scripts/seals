@@ -2,7 +2,7 @@
 ;; SEALS, STAMPS AND SIGNATURES, replayed from transcripts (P7.7, SPEC 9.5 defence 5, 10.7, D016, D205, D314-D319).   kin/scripts/seals
 ;;
 ;; Born-digital pages with a seal, a stamp or a signature drawn as vector paths, their words in the text layer, read by a real OCR engine; recorded on
-;; Rust (pdfium and Tesseract) and only REPLAYED here, with the hidden setting `ocr-born-digital`, through the whole Engine on Rust and Go.
+;; Rust (pdfium and Tesseract) and only REPLAYED here, with the default settings (born-digital pages OCR'd under `always`, P7.S), through the whole Engine on Rust and Go.
 ;;
 ;;   test/corpus/synth   stamp-seal, seal-over-text, sig-over-name (Chrome's prints of the corpus: seals as SVG, a rotated CSS stamp, a pen signature)
 ;;                       test/fusion/replay/ID is their transcript; the gold is test/corpus/synth/gold/ID.gold.json
@@ -59,7 +59,7 @@
   (mapcat (fn [n] (when (and (not= "seal" (get n "kind")) (string? (get n "text")) (empty? (get n "children"))) (words (get n "text"))))
           (walk (get model "body"))))
 (defn replay [drv dir id pdf-dir out]
-  (drive drv "--ocr-born-digital" (str "--out=" out) (str "--replay=" (abs (str dir "/" id))) (abs (str pdf-dir "/" id ".pdf"))))
+  (drive drv (str "--out=" out) (str "--replay=" (abs (str dir "/" id))) (abs (str pdf-dir "/" id ".pdf"))))
 (defn model-of [drv dir id pdf-dir] (json/parse-string (:out (replay drv dir id pdf-dir "json"))))
 (defn dump-of [drv dir id pdf-dir]
   (let [e (replay drv dir id pdf-dir "evidence")
@@ -77,8 +77,8 @@
   ;; 1. the fixtures: identity, nodes, leaks, losses, the dump ---------------------------------------------------------------------------------
   (doseq [id (sort (keys fixture-gold))]
     (let [g (get fixture-gold id) pdf (abs (str "test/seals/pdf/" id ".pdf")) rep (abs (str "test/seals/replay/" id))
-          rr (drive rdrv "--ocr-born-digital" "--out=bundle" (str "--replay=" rep) pdf)
-          rg (drive gdrv "--ocr-born-digital" "--out=bundle" (str "--replay=" rep) pdf)
+          rr (drive rdrv "--out=bundle" (str "--replay=" rep) pdf)
+          rg (drive gdrv "--out=bundle" (str "--replay=" rep) pdf)
           want (get fixture-digests id)]
       (check (and (zero? (:exit rr)) (= (:out rr) (:out rg)) (= (:err rr) (:err rg)))
              id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
