@@ -1,0 +1,130 @@
+;; Laws for `defctx` and `fd` (D620): a context type the host constructs and kin
+;; borrows from, and the port forms that move arenas between its fields. One law
+;; set, four hosts: two fields lent to ONE call (a Rust borrow-checker question),
+;; swap, copy, clone independence, free, and a fresh context's fields.
+;; `new-ctx` and `clone-ctx` stand for what the host does; each host also
+;; constructs one from its own code (see the host tests named in DEVLOG D620).
+(ns emon.ctxtest
+  (:require [emon.lang :refer [I32 Cells fd emit-ascii]]
+            [emon.docprobe :refer [Doc]]
+            [emon.test :refer [deftest assert-eq assert-text new-ctx clone-ctx]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-swap
+                               cells-copy-into cells-free buf-len buf-at buf-push
+                               buf-set buf-copy-into]]
+            [kin.lang :refer [defn return let set +]]))
+
+;; Two fields of one context lent to one call: Rust must accept
+;; `weave(&mut d.a, &mut d.b)`.
+(defn ^:pub ^I32 weave [^Cells x ^Cells y]
+  (cells-push x 11)
+  (cells-push y 22)
+  (cells-push y 33)
+  (return (+ (cells-len x) (cells-len y))))
+
+;; The same from a function that TAKES the context, as engine code will.
+(defn ^:pub ^I32 bump [^Doc d]
+  (set (fd d n) (+ (fd d n) 1))
+  (cells-push (fd d a) (fd d n))
+  (return (weave (fd d a) (fd d b))))
+
+(deftest test-a-fresh-context-has-empty-fields
+  (let [^Doc d (new-ctx Doc)]
+    (assert-eq (cells-len (fd d a)) 0 "a is empty")
+    (assert-eq (cells-len (fd d b)) 0 "b is empty")
+    (assert-eq (buf-len (fd d png)) 0 "png is empty")
+    (assert-eq (buf-len (fd d spare)) 0 "spare is empty")
+    (assert-eq (fd d n) 0 "n is zero")
+    (assert-text (fd d out) "" "out is empty")))
+
+(deftest test-two-fields-are-lent-in-one-call
+  (let [^Doc d (new-ctx Doc)]
+    (assert-eq (weave (fd d a) (fd d b)) 3 "one cell in a, two in b")
+    (assert-eq (cells-at (fd d a) 0) 11 "a got its own push")
+    (assert-eq (cells-at (fd d b) 0) 22 "b got its pushes")
+    (assert-eq (cells-at (fd d b) 1) 33 "in order")
+    (assert-eq (cells-len (fd d a)) 1 "a was not written twice")))
+
+(deftest test-a-function-that-takes-the-context-lends-its-fields
+  (let [^Doc d (new-ctx Doc)]
+    (assert-eq (bump d) 4 "a holds 1 and 11, b holds 22 and 33")
+    (assert-eq (fd d n) 1 "n was counted")
+    (assert-eq (bump d) 8 "the second call sees the first")
+    (assert-eq (fd d n) 2 "n again")
+    (assert-eq (cells-at (fd d a) 0) 1 "the first push")
+    (assert-eq (cells-at (fd d a) 2) 2 "the second push, after weave's")))
+
+(deftest test-swap-exchanges-what-the-fields-hold
+  (let [^Doc d (new-ctx Doc)]
+    (cells-push (fd d a) 1)
+    (cells-push (fd d a) 2)
+    (cells-push (fd d a) 3)
+    (cells-push (fd d b) 9)
+    (cells-swap (fd d a) (fd d b))
+    (assert-eq (cells-len (fd d a)) 1 "a holds what b held")
+    (assert-eq (cells-at (fd d a) 0) 9 "9")
+    (assert-eq (cells-len (fd d b)) 3 "b holds what a held")
+    (assert-eq (cells-at (fd d b) 2) 3 "3")
+    (cells-push (fd d a) 10)
+    (assert-eq (cells-len (fd d a)) 2 "a still grows")
+    (assert-eq (cells-len (fd d b)) 3 "and b is untouched by it")))
+
+(deftest test-copy-into-replaces-and-does-not-alias
+  (let [^Doc d (new-ctx Doc)]
+    (cells-push (fd d a) 5)
+    (cells-push (fd d a) 6)
+    (cells-push (fd d b) 99)
+    (cells-push (fd d b) 98)
+    (cells-push (fd d b) 97)
+    (cells-copy-into (fd d b) (fd d a))
+    (assert-eq (cells-len (fd d b)) 2 "b is a, whatever it held")
+    (assert-eq (cells-at (fd d b) 0) 5 "5")
+    (assert-eq (cells-at (fd d b) 1) 6 "6")
+    (cells-push (fd d a) 7)
+    (cells-set (fd d b) 0 50)
+    (assert-eq (cells-len (fd d b)) 2 "a growing does not grow the copy")
+    (assert-eq (cells-at (fd d a) 0) 5 "and the copy writing does not reach a")
+    (buf-push (fd d png) 1)
+    (buf-push (fd d png) 255)
+    (buf-push (fd d spare) 9)
+    (buf-copy-into (fd d spare) (fd d png))
+    (assert-eq (buf-len (fd d spare)) 2 "spare is png, whatever it held")
+    (assert-eq (buf-at (fd d spare) 1) 255 "255 reads back unsigned")
+    (buf-set (fd d spare) 0 77)
+    (assert-eq (buf-at (fd d png) 0) 1 "writing the copy does not reach png")))
+
+(deftest test-a-clone-is-independent
+  (let [^Doc d (new-ctx Doc)]
+    (cells-push (fd d a) 4)
+    (buf-push (fd d png) 8)
+    (emit-ascii (fd d out) "ab")
+    (set (fd d n) 3)
+    (let [^Doc e (clone-ctx d)]
+      (assert-eq (cells-at (fd e a) 0) 4 "the clone has a's cell")
+      (assert-eq (buf-at (fd e png) 0) 8 "and png's byte")
+      (assert-text (fd e out) "ab" "and out's text")
+      (assert-eq (fd e n) 3 "and n")
+      (cells-push (fd e a) 5)
+      (buf-push (fd e png) 6)
+      (emit-ascii (fd e out) "c")
+      (set (fd e n) 4)
+      (cells-push (fd d a) 7)
+      (assert-eq (cells-len (fd d a)) 2 "the original grew by its own push only")
+      (assert-eq (cells-at (fd d a) 1) 7 "7")
+      (assert-eq (buf-len (fd d png)) 1 "png untouched by the clone's write")
+      (assert-text (fd d out) "ab" "out untouched")
+      (assert-eq (fd d n) 3 "n untouched")
+      (assert-eq (cells-len (fd e a)) 2 "the clone grew by its own")
+      (assert-eq (cells-at (fd e a) 1) 5 "5, not 7")
+      (assert-text (fd e out) "abc" "the clone's text")
+      (assert-eq (fd e n) 4 "the clone's n"))))
+
+(deftest test-free-empties-and-the-arena-is-usable-again
+  (let [^Doc d (new-ctx Doc)]
+    (cells-push (fd d a) 1)
+    (cells-push (fd d a) 2)
+    (cells-free (fd d a))
+    (assert-eq (cells-len (fd d a)) 0 "freed")
+    (assert-eq (cells-push (fd d a) 42) 0 "the next push lands at 0")
+    (assert-eq (cells-at (fd d a) 0) 42 "42")
+    (cells-free (fd d b))
+    (assert-eq (cells-len (fd d b)) 0 "freeing an empty one is allowed")))

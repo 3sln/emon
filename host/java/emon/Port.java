@@ -105,6 +105,36 @@ public final class Port {
         c.n = need;
     }
 
+    // @kin:link:form:cells-swap: {:template "emon.Port.cellsSwap({0}, {1})" :arity 2}
+    //
+    // Exchanges the CONTENTS of two arenas, O(1): each stays where its owner
+    // keeps it (a context field), only what it holds changes hands (D620).
+    public static void cellsSwap(Cells a, Cells b) {
+        int[] v = a.v;
+        int n = a.n;
+        a.v = b.v;
+        a.n = b.n;
+        b.v = v;
+        b.n = n;
+    }
+
+    // @kin:link:form:cells-copy-into: {:template "emon.Port.cellsCopyInto({0}, {1})" :arity 2}
+    //
+    // `(cells-copy-into dst src)`: dst becomes a copy of src, whatever it held
+    // before. The two are different arenas.
+    public static void cellsCopyInto(Cells dst, Cells src) {
+        dst.v = java.util.Arrays.copyOf(src.v, Math.max(src.v.length, 16));
+        dst.n = src.n;
+    }
+
+    // @kin:link:form:cells-free: {:template "emon.Port.cellsFree({0})" :arity 1}
+    //
+    // Empties the arena AND gives its storage back.
+    public static void cellsFree(Cells c) {
+        c.v = new int[16];
+        c.n = 0;
+    }
+
     // @kin:link:form:cells-bytes: {:template "emon.Port.cellsBytes({0})" :arity 1}
     //
     // A Blob VIEW of a Cells of bytes: a snapshot (see the Rust half).
@@ -178,6 +208,14 @@ public final class Port {
         }
         System.arraycopy(blob, start, b.v, b.n, k);
         b.n += k;
+    }
+
+    // @kin:link:form:buf-copy-into: {:template "emon.Port.bufCopyInto({0}, {1})" :arity 2}
+    //
+    // `(buf-copy-into dst src)`: dst becomes a copy of src (see `cells-copy-into`).
+    public static void bufCopyInto(Buf dst, Buf src) {
+        dst.v = java.util.Arrays.copyOf(src.v, Math.max(src.v.length, 64));
+        dst.n = src.n;
     }
 
     // @kin:link:form:buf-blob: {:template "emon.Port.bufBlob({0})" :arity 1}

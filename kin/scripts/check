@@ -18,6 +18,9 @@
 #   6. `emon.modelprobe` -- that Model's canonical JSON, byte for byte (P1.2)
 #   7. `emon.pngprobe` -- the SHA-256 of the twelve PNGs the canonical writer
 #      makes (P3.11, D117), equal to test/png/digests.txt on every target
+#   8. `emon.ctxprobe` -- a `defctx` context CONSTRUCTED BY THE HOST (`new`,
+#      `NewDoc`, `new Doc()`), driven through `fd`, swap and copy, its public
+#      fields read back by the host, and cloned (D620)
 #
 # THE MODULE LISTS ARE NOT WRITTEN OUT, unlike nome's: each arm copies the
 # whole of `gen/<target>/` and the host port beside it, so a new module is
@@ -61,12 +64,16 @@ want6=$(cat test/json/probe.json)
 # committed digests (test/png/digests.txt) joined by spaces. `bb unit` holds
 # every target to that file one image at a time; this holds all four to one line.
 want7=$(tr '\n' ' ' < test/png/digests.txt | sed 's/ *$//')
+# D620: `emon.ctxprobe` on a host-made `Doc`: the line kin wrote into its `out` field, the same line from its
+# clone, and the host's own read of the public `n` field. Worked by hand: a pushed 1 2 3, b pushed 9, swapped, so
+# a holds 1 cell and b three, b[2] is 3; the byte 7 copied png -> spare; n set to 5.
+want8='a=1 b=3 b2=3 png=7 n=5 | a=1 b=3 b2=3 png=7 n=5 | 5'
 
 fails=0
 report() {                      # report <target> <output>
   # THE LAST TWO LINES: a compiler that has something to say says it on
   # stdout in front of the program's own output.
-  four=$(printf '%s\n' "$2" | tail -7)
+  four=$(printf '%s\n' "$2" | tail -8)
   l1=$(printf '%s\n' "$four" | sed -n 1p)
   l2=$(printf '%s\n' "$four" | sed -n 2p)
   l3=$(printf '%s\n' "$four" | sed -n 3p)
@@ -74,7 +81,8 @@ report() {                      # report <target> <output>
   l5=$(printf '%s\n' "$four" | sed -n 5p)
   l6=$(printf '%s\n' "$four" | sed -n 6p)
   l7=$(printf '%s\n' "$four" | sed -n 7p)
-  printf '%s\n' "  $1 $l1 | $l2 | $l3 | $l4 | $l5 | $(printf '%s' "$l6" | cut -c1-60)... | png $(printf '%s' "$l7" | cut -c1-16)..."
+  l8=$(printf '%s\n' "$four" | sed -n 8p)
+  printf '%s\n' "  $1 $l1 | $l2 | $l3 | $l4 | $l5 | $(printf '%s' "$l6" | cut -c1-60)... | png $(printf '%s' "$l7" | cut -c1-16)... | ctx $l8"
   [ "$l1" = "$want1" ] || { printf '%s\n' "    FAIL hello: expected \`$want1\`"; fails=$((fails+1)); }
   [ "$l2" = "$want2" ] || { printf '%s\n' "    FAIL porttest: expected \`$want2\`"; fails=$((fails+1)); }
   [ "$l3" = "$want3" ] || { printf '%s\n' "    FAIL emit-ascii: expected \`$want3\`"; fails=$((fails+1)); }
@@ -82,6 +90,7 @@ report() {                      # report <target> <output>
   [ "$l5" = "$want5" ] || { printf '%s\n' "    FAIL model fingerprint: expected \`$want5\`"; fails=$((fails+1)); }
   [ "$l6" = "$want6" ] || { printf '%s\n' "    FAIL model JSON: expected \`$want6\` got \`$l6\`"; fails=$((fails+1)); }
   [ "$l7" = "$want7" ] || { printf '%s\n' "    FAIL PNG digests: expected \`$want7\` got \`$l7\`"; fails=$((fails+1)); }
+  [ "$l8" = "$want8" ] || { printf '%s\n' "    FAIL host-built context: expected \`$want8\` got \`$l8\`"; fails=$((fails+1)); }
 }
 refused() {                     # refused <target> <compiler output>
   echo "  FAIL $1 refused the generated code:"
@@ -136,6 +145,10 @@ fn main() {
     let mut qt = String::new();
     emon::pngprobe::pp_probe(&mut qws, &mut qo, &mut qz, &mut qr, &mut qrow, &mut qst, &mut qpal, &mut qdig, &mut qt);
     println!("{}", qt);
+    let mut cd = emon::docprobe::Doc::new();
+    emon::ctxprobe::probe(&mut cd);
+    let cc = cd.clone();
+    println!("{} | {} | {}", cd.out, cc.out, cd.n);
 }
 MAIN
   if build=$(cd "$work/rust" && rustc -O -o prog main.rs 2>&1); then
@@ -165,6 +178,8 @@ import (
 	"fmt"
 	"strings"
 
+	"emon/ctxprobe"
+	"emon/docprobe"
 	"emon/enumprobe"
 	"emon/hello"
 	"emon/modelprobe"
@@ -197,6 +212,10 @@ func main() {
 	var qt strings.Builder
 	pngprobe.PpProbe(qws, qo, qz, qr, qrow, qst, qpal, qdig, &qt)
 	fmt.Println(qt.String())
+	cd := docprobe.NewDoc()
+	ctxprobe.Probe(cd)
+	cc := cd.Clone()
+	fmt.Println(cd.Out.String() + " | " + cc.Out.String() + " | " + fmt.Sprint(cd.N))
 }
 MAIN
   # gofmt is the tightest check on the Go side and it is free.
@@ -250,6 +269,10 @@ public class Main {
         StringBuilder qt = new StringBuilder();
         emon.Pngprobe.ppProbe(qws, qo, qz, qr, qrow, qst, qpal, qdig, qt);
         out.println(qt.toString());
+        emon.Docprobe.Doc cd = new emon.Docprobe.Doc();
+        emon.Ctxprobe.probe(cd);
+        emon.Docprobe.Doc cc = cd.clone();
+        out.println(cd.out.toString() + " | " + cc.out.toString() + " | " + cd.n);
     }
 }
 MAIN
@@ -298,6 +321,10 @@ var qo = emon.Port.NewBuf(); var qz = emon.Port.NewBuf(); var qr = emon.Port.New
 var qt = new System.Text.StringBuilder();
 emon.Pngprobe.PpProbe(qws, qo, qz, qr, qrow, qst, qpal, qdig, qt);
 System.Console.WriteLine(qt.ToString());
+var cd = new emon.Docprobe.Doc();
+emon.Ctxprobe.Probe(cd);
+var cc = cd.Clone();
+System.Console.WriteLine(cd.Out.ToString() + " | " + cc.Out.ToString() + " | " + cd.N);
 MAIN
   cat > "$work/cs/cs.csproj" <<'PROJ'
 <Project Sdk="Microsoft.NET.Sdk">

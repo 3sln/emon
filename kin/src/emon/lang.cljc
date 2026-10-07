@@ -355,6 +355,244 @@
                (let [ctx (with-scope ctx)]
                  (doseq [f (enum-forms ctx form)] (kin/statement! ctx f))))})
 
+;; ----------------------------------------------------- defctx and fd (D620)
+;;
+;; A CONTEXT IS A RECORD THE HOST CONSTRUCTS AND KIN ONLY BORROWS FROM. The
+;; engine's stages share arenas, and today each of the four hand-written
+;; Engines names them, owns them and sequences the stage calls. A `defctx`
+;; declares that record ONCE, in kin, as a public type in every target:
+;;
+;;     (defctx ^:pub Doc [^Cells grl ^Buf png ^Text out ^I32 n])
+;;
+;;   Rust    #[derive(Clone)] pub struct Doc { pub grl: Cells, .. }  Doc::new()
+;;   Go      type Doc struct { Grl *port.Cells; .. }   NewDoc()   (d *Doc) Clone()
+;;   Java    public static final class Doc { public .. grl; .. }  new Doc()  clone()
+;;   C#      public sealed class Doc { public .. Grl; .. }        new Doc()  Clone()
+;;
+;; KIN STILL NEVER ALLOCATES. Production kin takes a `^Doc d` PARAMETER; the
+;; host calls the generated constructor. (`new-ctx` and `clone-ctx`, in
+;; `emon.test`, are the laws' way to make and copy one, as `new-cells` is.)
+;;
+;; IT IS PROJECT-LOCAL, LIKE `defenum` (D042): kin's own `defstruct` cannot do
+;; this -- no public fields in Go and C#, no constructor, no clone -- and a
+;; kin patch was the rejected alternative. THE FIELDS ARE OWNED, a `Cells`, a
+;; `Buf` or a `Text` (Rust `String`, the others a builder) or an `I32`; a
+;; field never holds a borrow, so a context has no lifetime and clones.
+;;
+;; `(fd d grl)` LENDS A FIELD TO A CALL: `&mut d.grl` in Rust, `d.Grl` in Go.
+;; Rust accepts two disjoint fields of one `&mut Doc` in one call
+;; (`f(&mut d.a, &mut d.b)`), which is why a field is lent and not fetched
+;; through a method. An `I32` field is a plain place: `(fd d n)` reads it and
+;; `(set (fd d n) v)` writes it.
+
+(def ^:private ctx-kinds
+  "What a field may be, and how each target builds an empty one. The type text
+  is the tag's own with Rust's `&mut ` taken off: a field OWNS."
+  {'Cells {:rust "crate::port::Cells::new()" :go "port.NewCells()"
+           :java "emon.Port.newCells()" :csharp "emon.Port.NewCells()"}
+   'Buf {:rust "crate::port::Buf::new()" :go "port.NewBuf()"
+         :java "emon.Port.newBuf()" :csharp "emon.Port.NewBuf()"}
+   'Text {:rust "String::new()" :go "&strings.Builder{}"
+          :java "new StringBuilder()" :csharp "new System.Text.StringBuilder()"}
+   'I32 {:rust "0" :go "0" :java "0" :csharp "0"}})
+
+(defn- ctx-pascal [nm]
+  (let [s (str nm)]
+    (if (Character/isUpperCase (first s))
+      s
+      (str/join (map str/capitalize (str/split s #"-"))))))
+
+(defn- ctx-field-name
+  "A field as the target spells it. Go and C# EXPORT, so capitalise what the
+  target's namer made (`ev-arenas` -> `evArenas` -> `EvArenas`); Rust and Java
+  keep it."
+  [ctx f]
+  (let [n (kin/local-name ctx f)]
+    (if (#{:go :csharp} (:target ctx))
+      ;; Capitalised, a word the language reserves (`out`, `type`) needs no
+      ;; escape: drop the namer's (C#'s `@out`).
+      (let [n (str/replace n #"^[@_]+" "")]
+        (str (str/upper-case (subs n 0 1)) (subs n 1)))
+      n)))
+
+(defn- ctx-problem
+  "Nil when `(defctx nm fields)` is sound, else a sentence."
+  [ctx nm fields]
+  (or (when-not (and (symbol? nm) (vector? fields) (seq fields) (every? symbol? fields))
+        "the shape is (defctx Name [^Tag field ...]) with at least one field")
+      (some (fn [f]
+              (let [tag (kin/tag ctx (:tag (meta f)))]
+                (cond
+                  (not (contains? ctx-kinds (:name tag)))
+                  (str "field " f " is tagged " (pr-str (:tag (meta f)))
+                       "; a field is an OWNED Cells, Buf, Text or I32")
+                  (#{"clone" "new"} (str f))
+                  (str "field " f " collides with the generated " f "()"))))
+            fields)
+      (some (fn [[k fs]] (when (< 1 (count fs)) (str "duplicate field " k)))
+            (group-by identity fields))))
+
+(defn- ctx-unit
+  "How `ctx`'s target names the namespace that declares the context: Go the
+  package name and its import path, the rest the qualified unit."
+  [c]
+  (let [ns (:kin/ns c)
+        segs (str/split (str ns) #"\.")
+        pascal (fn [s] (str/join (map str/capitalize (str/split s #"-"))))]
+    ;; THE TARGETS' OWN `:path` RULES, restated: Java and C# declare no
+    ;; `:unit`, so the package is the namespace's parents and the class is the
+    ;; last segment capitalised (`emon.docprobe` is `emon.Docprobe`).
+    (case (:target c)
+      :go {:name (last segs) :import (str/join "/" (cons "emon" (rest segs)))}
+      :rust {:qualified (str "crate::" (str/join "::" segs))}
+      {:qualified (str (str/join "." (butlast segs)) "." (pascal (last segs)))})))
+
+(defn- ctx-tags
+  "The tag a `defctx` defines, twice: LOCAL (what the declaring file says) and
+  PUBLIC (what a file that requires it says). They differ in Go alone, where
+  a type in another package is `ctxtest.Doc` and in its own is `Doc`. Both
+  carry `:ctx-fields` (field -> kind) for `fd`, and `:ctx-new` for `new-ctx`."
+  [c nm fields]
+  (let [p (ctx-pascal nm)
+        kinds (into {} (map (fn [f] [f (:name (kin/tag c (:tag (meta f))))])) fields)
+        per (fn [tgt]
+              (let [c (assoc c :target tgt)
+                    u (ctx-unit c)]
+                (case tgt
+                  :go {:local {:type (str "*" p) :new (str "New" p "()")}
+                       :public {:type (str "*" (:name u) "." p)
+                                :new (str (:name u) ".New" p "()")
+                                :needs (:import u)}}
+                  :rust (let [q (str (:qualified u) "::" p)]
+                          {:local {:type (str "&mut " q) :new (str "(&mut " q "::new())")}
+                           :public {:type (str "&mut " q) :new (str "(&mut " q "::new())")}})
+                  (let [q (str (:qualified u) "." p)]
+                    {:local {:type q :new (str "new " q "()")}
+                     :public {:type q :new (str "new " q "()")}}))))
+        tgts (keys (:targets c))
+        by (into {} (map (fn [t] [t (per t)])) tgts)
+        mk (fn [scope]
+             {:name nm
+              :types (into {} (map (fn [t] [t (get-in by [t scope :type])])) tgts)
+              :needs (into {} (keep (fn [t] (when-let [n (get-in by [t scope :needs])] [t n]))) tgts)
+              :ctx-fields kinds
+              :ctx-new (into {} (map (fn [t] [t (get-in by [t scope :new])])) tgts)})]
+    {:local (mk :local) :public (mk :public)}))
+
+(defn- ctx-field-lines
+  "The declaration, constructor and clone of the context, as lines at no
+  indent, for the target being emitted."
+  [c nm fields]
+  (let [p (ctx-pascal nm)
+        tgt (:target c)
+        kind (fn [f] (:name (kin/tag c (:tag (meta f)))))
+        fty (fn [f] (let [ty (kl/type-of c (kin/tag c (:tag (meta f))))]
+                      (str/replace ty #"^&mut " "")))
+        fname (fn [f] (ctx-field-name c f))
+        w (apply max (map #(count (fname %)) fields))
+        pad (fn [s n] (str s (apply str (repeat (- n (count s)) " "))))
+        init (fn [f] (get-in ctx-kinds [(kind f) tgt]))
+        ;; Go, Java and C# copy a field by kind; Rust derives Clone.
+        copy (fn [f]
+               (let [n (fname f)]
+                 (case [tgt (kind f)]
+                   [:go Cells] (str "port.CellsCopyInto(c." n ", d." n ")")
+                   [:go Buf] (str "port.BufCopyInto(c." n ", d." n ")")
+                   [:go Text] (str "c." n ".WriteString(d." n ".String())")
+                   [:go I32] (str "c." n " = d." n)
+                   [:java Cells] (str "emon.Port.cellsCopyInto(c." n ", this." n ");")
+                   [:java Buf] (str "emon.Port.bufCopyInto(c." n ", this." n ");")
+                   [:java Text] (str "c." n ".append(this." n ".toString());")
+                   [:java I32] (str "c." n " = this." n ";")
+                   [:csharp Cells] (str "emon.Port.CellsCopyInto(c." n ", this." n ");")
+                   [:csharp Buf] (str "emon.Port.BufCopyInto(c." n ", this." n ");")
+                   [:csharp Text] (str "c." n ".Append(this." n ".ToString());")
+                   [:csharp I32] (str "c." n " = this." n ";"))))]
+    (case tgt
+      :rust (concat
+             ["#[derive(Clone)]" (str "pub struct " p " {")]
+             (for [f fields] (str "    pub " (fname f) ": " (fty f) ","))
+             ["}"
+              (str "impl " p " {")
+              (str "    pub fn new() -> " p " {")
+              (str "        " p " {")]
+             (for [f fields] (str "            " (fname f) ": " (init f) ","))
+             ["        }" "    }" "}"
+              (str "impl Default for " p " {")
+              (str "    fn default() -> " p " {")
+              (str "        " p "::new()")
+              "    }" "}"])
+      :go (concat
+           [(str "type " p " struct {")]
+           ;; gofmt's alignment, because `bb check` runs gofmt -l: a field
+           ;; type and a keyed value start one space past the longest name.
+           (for [f fields] (str "\t" (pad (fname f) w) " " (fty f)))
+           ["}"
+            (str "func New" p "() *" p " {")
+            (str "\treturn &" p "{")]
+           (for [f fields] (str "\t\t" (pad (str (fname f) ":") (inc w)) " " (init f) ","))
+           ["\t}" "}"
+            (str "func (d *" p ") Clone() *" p " {")
+            (str "\tc := New" p "()")]
+           (for [f fields] (str "\t" (copy f)))
+           ["\treturn c" "}"])
+      (let [[pubc cl] (if (= tgt :java)
+                        [(str "public static final class " p " {") "clone"]
+                        [(str "public sealed class " p " {") "Clone"])]
+        (concat
+         [pubc]
+         (for [f fields] (str "    public " (fty f) " " (fname f) " = " (init f) ";"))
+         [(str "    public " p "() {")
+          "    }"]
+         (when (= tgt :java) ["    @Override"])
+         [(str "    public " p " " cl "() {")
+          (str "        " p " c = new " p "();")]
+         (for [f fields] (str "        " (copy f)))
+         ["        return c;" "    }" "}"])))))
+
+(defn- defctx-parts [ctx [_ nm fields :as form]]
+  (when-let [why (ctx-problem ctx nm fields)]
+    (refuse! ctx (str "(defctx " (pr-str nm) " ...)") why {:form form}))
+  (ctx-tags ctx nm fields))
+
+(def ^:private defctx-form
+  "TWO SLOTS, for `defenum`'s reason: `:declare` makes the tag (so a later
+  form, and every file that requires this one, can say `^Doc`) and `:generate`
+  writes the type. The public tag goes in first and the local one over it:
+  registration is cumulative, so the declaring file ends up with its own
+  spelling and the exports keep theirs."
+  {:declare (fn [ctx [_ nm _ :as form]]
+              (let [{:keys [local public]} (defctx-parts ctx form)]
+                (kin/define-tag! ctx {:scope (if (:pub (meta nm)) :public :private)} nm public)
+                (kin/define-tag! ctx {:scope :private} nm local)))
+   :generate (fn [ctx [_ nm fields :as form]]
+               (let [{:keys [local]} (defctx-parts ctx form)]
+                 (kin/define-tag! ctx {:scope :private} nm local)
+                 (doseq [line (ctx-field-lines ctx nm fields)]
+                   (kin/emit! ctx (kin/indent-of ctx) line "\n"))))})
+
+(defn- fd-form
+  "`(fd d field)`: see the section comment. The object must carry a context
+  tag (`^Doc d`); a handle field is lent as `&mut` in Rust, an `I32` is a place."
+  [ctx [_ obj f :as form]]
+  (when-not (and obj (symbol? f))
+    (refuse! ctx "(fd ...)" "takes a context and a field name" {:form form}))
+  (let [{:keys [text tag]} (kin/render-tagged ctx obj)
+        kind (get (:ctx-fields tag) f)
+        kind-tag (case kind Cells Cells Buf Buf Text Text I32 I32 nil)]
+    (when-not (:ctx-fields tag)
+      (refuse! ctx (str "(fd " obj " " f ")")
+               "the first argument is not a defctx context (tag it, `^Doc d`)" {:form form}))
+    (when-not kind
+      (refuse! ctx (str "(fd " obj " " f ")")
+               (str "the context has no field " f " (it has "
+                    (str/join ", " (keys (:ctx-fields tag))) ")")
+               {:form form}))
+    (kin/tagged! ctx kind-tag)
+    (kin/emit! ctx
+               (if (and (= :rust (:target ctx)) (not= kind 'I32)) "&mut " "")
+               text "." (ctx-field-name ctx f))))
+
 (def vocabulary
   {:namespace 'emon.lang
    :targets #{:rust :go :java :csharp}
@@ -389,6 +627,8 @@
    ;; about it, which is the only behaviour all four share.
    :forms {'emit-ascii emit-ascii-form
            'defenum defenum-form
+           'defctx defctx-form
+           'fd fd-form
            'i64 (kl/call {:rust "({0} as i64)"
                           :go "int64({0})"
                           :java "((long) {0})"

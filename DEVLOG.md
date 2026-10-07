@@ -3406,6 +3406,24 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
 - [ ] P10.4 — Limits: every bound wired, configurable, named alike in four
   hosts (nome's `bb limits`).
 - [ ] P10.5 — Fuzz at scale, cross-host error agreement.
+- [ ] P10.6 — Engine thinning (D620): stage sequencing and arena ownership move into kin; the host Engines
+  become a generic plan/fulfil loop. Each step is a pure move held byte-identical by `bb identity`, `bb slice`,
+  `bb asset`, `bb fusion`, `bb image`, `bb ocr` and the evidence goldens.
+  - [x] S0 — the vocabulary and the ports: `defctx`, `fd`, `new-ctx`/`clone-ctx` (laws), `cells-swap`,
+    `cells-copy-into`, `buf-copy-into`, `cells-free` in all four hosts; `kin/ctxtest.kin`, `bb check`'s host-built
+    context (D620). No Engine file changed.
+  - [ ] S1 — `Arenas` and `RasterDoc` into `kin/engine.kin` (one `doc` context, the union of today's PdfDoc,
+    RasterDoc, EvArenas and Arenas under the same field names); `finish_raster` becomes `en-finish-raster`. Does
+    not touch P7.S's path.
+  - [ ] S2 — after P7.S merges: `finish_pdf` / `en-stage3` (the document unit).
+  - [ ] S3 — the document pass and the asset unit.
+  - [ ] S4 — `en-next` replaces the host's `Phase` enum: the schedule is kin's.
+  - [ ] S5 — Java and C# as the driver plus the ports only (they adopt each moved step; they are not hand-ported
+    to the current Engines). `bb hosts` refuses stage calls outside the ports, native fulfilment, the plan loop
+    with its transcripts, and the public API.
+  - Later needs, noted not built: an OPEN `ev-emit`/`pl-emit` variant (the evidence `tb` append pops a `}` from
+    a String, which Go's `strings.Builder` cannot do); and, optionally, limit-breach panics turned into a latched
+    status, which would drop the nightly pin for wasm.
 
 ---
 
@@ -8636,6 +8654,12 @@ worse than the no-engine run's plus 0.0005; the broken documents' CER under half
   `render-open` (kin `project.cljc`) never sets `:kin/label`, though
   `kin.cljc` already reads it. Maintainer to decide on patching kin.
 - Recursive `disk-vfs` listing — **REAL**, deliberately minimal glob.
+- **A tag defined by a file is not in that file's own require scope** (found with D620's `defctx`; `defstruct`
+  has the same shape): `kin/tag` resolves only through `:scope-syms`, and `defn` drops a parameter whose tag does
+  not resolve, so `^Doc d` works in a namespace that REQUIRES the one defining `Doc` and not in the defining
+  file (the param is left untagged and `fd` refuses). emon's workaround: the context lives in a namespace of its
+  own (`emon.docprobe`; the engine's `doc` will too). A kin fix would add the file's own `:local-tags` to
+  `kin/tag`'s fallback. Not patched here.
 
 Things emon needs that might belong in `../kin` rather than here. Record
 them; offer them upstream when they have proved general.
@@ -9299,4 +9323,28 @@ and CER rose 0.0858 to 0.1046; that was a line made of cells of confidence well 
 `scan-color/tables` CER 0.0639 and `table-white-rules` 0.0858, both identical to without; `scan-color/all` 0.1520 to 0.1511; `scan-ovl/all` 0.2497 to 0.2161, `scan-ovl/tables` 0.6152 to 0.3340, `scan-ovl/seals`
 0.4130 to 0.2903 (unchanged by this); `scan/all` 0.0938 to 0.0941 (+0.0003, `scan/tables` better: 0.1030 to 0.1028). The five fixtures re-recorded give the same bundles (digests unchanged).
 **Why**: a reading is adopted over the first pass only when it is itself sure.
+- [ ] **Signed off** (maintainer)
+
+### D620 — Engine thinning: stage sequencing and arena ownership move into kin (P10.6)
+**Decision**: stage sequencing and arena ownership move into kin; host Engines become a generic plan/fulfil loop.
+(1) emon.lang `defctx` declares a public, host-constructible context per target with owned Cells/Buf/Text/I32 fields, generated `new()` and `clone()`; `fd` lends a field to a call; project-local like D042, no kin
+patch; kin still never allocates. Built as: `(defctx ^:pub Doc [^Cells a ^Buf png ^Text out ^I32 n])` emits a `#[derive(Clone)] pub struct` with pub fields, `new()` and `Default` in Rust; an exported struct,
+`NewDoc()` and `(d *Doc) Clone()` in Go (fields capitalised); a `public static final class` with public fields, a public constructor and `clone()` in Java; a `public sealed class` with PascalCase public fields, a
+public constructor and `Clone()` in C#. The tag (`^Doc d`) is `&mut crate::emon::<ns>::Doc` in Rust, `*<pkg>.Doc` in Go (`*Doc` inside its own package), the qualified class elsewhere. `(fd d grl)` is `&mut d.grl` in
+Rust and `d.grl` (`d.Grl`) elsewhere, so two disjoint fields lent to one Rust call compile; an `I32` field is a plain place (`(set (fd d n) 5)`). `emon.test`'s `new-ctx` and `clone-ctx` are the laws' way to make and copy
+one, as `new-cells` is: production kin takes a `^Doc` parameter and the host calls the generated constructor.
+(2) Port forms `cells-swap`, `cells-copy-into` (`dst src`, copy INTO an existing arena: the D560 figures-unit copies), `buf-copy-into` and `cells-free` join all four hosts.
+(3) kin/engine.kin will own one `doc` context (the union of today's PdfDoc, RasterDoc, EvArenas and Arenas, under the same field names) and every stage call in one order, behind `en-next`/`en-unit`.
+(4) Per-host code is limited to ports, native fulfilment, the plan loop with transcripts, and the public API; `bb hosts` will refuse stage calls outside those files. The host keeps `plan::Machine`/`PlanLoop` and ONE
+fixed `Run` driver (a fresh struct per document-pass attempt, `clone()` per copy-unit attempt, `catch_unwind`, the status-to-error mapping, stats); P9.3's step machine is that driver's shape, WASM shares Rust's, and Java
+and C# write it once. The schedule (`en-next`) replaces `Run`'s `Phase` enum in a later step.
+(5) Incremental migration, each step a pure move held byte-identical by bb identity/slice/asset/fusion/image/ocr and the evidence goldens: S0 infrastructure (this step: `kin/ctxtest.kin`, `bb check`'s host-built
+context, no Engine file touched), S1 `Arenas` and `RasterDoc` into kin with `finish_raster` to `en-finish-raster` (it does not touch P7.S's path), S2 after P7.S merges `finish_pdf`/`en-stage3`, S3 the document pass
+and the asset unit, S4 `en-next` replaces `Phase`, S5 Java and C# as driver plus ports only. Noted, not built: an open `ev-emit`/`pl-emit` variant (the evidence `tb` append pops a `}` from a String, which Go's
+`strings.Builder` cannot), and optionally limit-breach panics turned into a latched status, which would drop the nightly pin for wasm.
+(6) Java and C# are not hand-ported to the current Engines; they adopt each moved step.
+A tag defined by a file is not usable in that file (kin: `kin/tag` resolves through the require scope only), so a context lives in a namespace of its own (`emon.docprobe` here, probes by name so no library build
+includes them); recorded under "Found in kin".
+**Why**: every stage or arena edits four hand-written Engines; the last merge left ~240 Go/~220 Rust lines unported to Java, and Java's plCheck already disagrees with Rust. Alternatives rejected: generating Engine glue
+from a declaration (a second generator outside bb drift); a context type alone (first step, not the end); patching kin's defstruct upstream (later, once defctx is proven).
 - [ ] **Signed off** (maintainer)
