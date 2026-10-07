@@ -1,0 +1,45 @@
+;; THE ENGINE'S CONTEXTS (P10.6 engine thinning; D362, D720-D724): the arenas the hosts used to name, own and pass stage to stage, declared once in
+;; kin and constructed by each host (`defctx`: a public type with the fields' own names, `new()`, `clone()`). `emon.engine` borrows their fields
+;; with `fd`. A tag defined by a file is not in that file's own scope (found in kin), so the contexts live in a namespace of their own.
+;;
+;;   Arenas      the Model's seven arenas (SPEC 3.8) and the asset table, its uses and bytes (SPEC 10.11: empty unless `assets` is on)
+;;   EvArenas    the evidence arenas the OCR stages fill (SPEC 8.4.6)
+;;   Doc         what the document pass leaves for the page units and the document unit (P7.U, D195): the union of the PDF's and the raster
+;;               input's (an image has no text layer: its glyph arenas, tagged tree and the rest stay empty)
+;;   Scratch     the document unit's scratch, one field a scratch
+;;   Cfg         the Options the document unit reads, as integers (the asset level is 0 none, 1 images, 2 figures), and the locale's code points
+(ns emon.enctx
+  (:require [emon.lang :refer [I32 Cells Buf Text defctx]]))
+
+(defctx ^:pub Arenas [^Cells nodes ^Cells attrs ^Cells regions ^Cells text ^Cells pages ^Cells ledger ^Cells layout ^Cells assets ^Cells uses ^Buf abytes])
+
+(defctx ^:pub EvArenas [^Cells epages ^Cells views ^Cells pts ^Cells refs ^Cells feats ^Cells paths
+      ^Cells images ^Cells oruns ^Cells oblocks ^Cells olines ^Cells owords ^Cells osyms
+      ^Cells oalts ^Cells inks ^Cells comps ^Cells rules ^Cells prims ^Cells tlines])
+
+(defctx ^:pub Cfg [^I32 ocr ^I32 scope ^I32 furn ^I32 level ^I32 dpi ^I32 pixels ^I32 abyte ^I32 tbyte ^I32 sigs ^I32 keep ^I32 haveloc ^Cells lcl])
+
+;; the document pass's arenas, the page units' scratch (`xs`: the alignment's, `ys`: the ink stage's and the targeted passes') and the unit's answer
+(defctx ^:pub Doc [^Cells et ^Cells gl ^Cells mk ^Cells fnt ^Cells wd ^Cells ln ^Cells fw ^Cells fl
+      ^Cells fa ^Cells pa ^Cells im ^Cells grl ^Cells gfl ^Cells ift ^Cells an ^Cells pts
+      ^Cells pg ^Cells txt ^Cells md ^Cells lb ^Cells ol ^Cells ss ^Cells se ^Cells sc
+      ^Cells plan ^Cells mask ^Cells loc ^Cells hl ^Cells cg ^Cells xs0 ^Cells xs1 ^Cells xs2
+      ^Cells xs3 ^Cells xs4 ^Cells xs5 ^Cells ys0 ^Cells ys1 ^Cells ys2 ^Cells ys3 ^Cells ys4
+      ^Cells ys5 ^Cells ys6 ^Cells ys7 ^Cells ys8 ^Cells ys9 ^Cells ys10 ^Cells ys11 ^Cells ys12
+      ^Cells ys13 ^Cells ys14 ^Cells ys15 ^Cells ys16 ^Cells ys17 ^Cells ys18 ^Cells snapg ^Cells snapk
+      ^Cells snapf ^Cells cand ^Cells aim ^Buf cbytes ^Text evidence ^I32 nl0 ^I32 fused ^I32 hassnap
+      ^I32 fcode ^I32 fnode])
+
+(defctx ^:pub Scratch [^Cells cd ^Cells sl ^Cells gr ^Cells ford ^Cells tx ^Cells bh ^Cells fo ^Cells fp ^Cells ft ^Cells pl
+      ^Cells tb ^Cells tc ^Cells tw ^Cells tq ^Cells tbx ^Cells s0 ^Cells s1 ^Cells s2 ^Cells s3 ^Cells s4
+      ^Cells s5 ^Cells s6 ^Cells s7 ^Cells s8 ^Cells s9 ^Cells s10 ^Cells s11 ^Cells s12 ^Cells s13 ^Cells s14
+      ^Cells s15 ^Cells s16 ^Cells s17 ^Cells s18 ^Cells ta0 ^Cells g0 ^Cells g1 ^Cells g2 ^Cells g3 ^Cells g4
+      ^Cells g5 ^Cells tv ^Cells lt ^Cells iloc ^Cells ls ^Cells lo ^Cells tm ^Cells ii ^Cells hpr ^Cells hptxt
+      ^Cells sf ^Cells hsc ^Cells hc ^Cells ws ^Cells htmp ^Cells nrf ^Cells nnb ^Cells nmk ^Cells lcd ^Cells lpi
+      ^Cells lws ^Cells isw ^Cells ord ^Cells raw ^Cells tmp ^Cells fr ^Cells gp ^Cells sd ^Cells it ^Cells io
+      ^Cells rw ^Cells gu ^Cells ac ^Cells cf ^Cells pr ^Cells dbg ^Cells al ^Cells rn ^Cells ra ^Cells rr
+      ^Cells rnm ^Cells rstk ^Cells rused ^Cells rout ^Cells ttx ^Cells gfa ^Cells afa ^Cells fv ^Cells sm ^Cells sn
+      ^Cells sa ^Cells sr ^Cells snm ^Cells ggp ^Cells grg ^Cells fx ^Cells ga0 ^Cells ga1 ^Cells ga2 ^Cells ga3
+      ^Cells ga4 ^Cells ga5 ^Cells ga6 ^Cells sscr ^Cells stmp ^Cells rc ^Cells nfw ^Cells nfl ^Cells gd ^Cells gv
+      ^Cells w2g ^Cells o2g ^Cells pp ^Cells ftw ^Cells ftl ^Cells fad ^Cells fg ^Cells fnodes ^Cells fattrs ^Cells fregions
+      ^Cells fnm ^Cells bx ^Cells chk ^Cells sealout])

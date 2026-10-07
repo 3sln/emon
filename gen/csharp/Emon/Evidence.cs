@@ -6461,14 +6461,19 @@ public static class Evidence {
         s = EvArena(t, pretty, s, 24, tlines, etext);
         return s;
     }
-    public static int EvEmit(System.Text.StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
-        // Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
-        // in the order of the `ea` codes, each row in its fixed key order.
+    public static int EvEmitOpen(System.Text.StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // The evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+        // in the order of the `ea` codes, each row in its fixed key order. OPEN: the object is left unclosed and the state (1 when it has members) is returned, so a caller can add a member before `}` (D720: the Engine's `tb` member; Go's builder cannot take a `}` back).
         int s = 0;
         emon.Port.TextAscii(t, "{");
         s = EvBegin(t, pretty, 0, s, EkVersion());
         emon.Port.TextAscii(t, "\"1\"");
         s = EvEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        return s;
+    }
+    public static int EvEmit(System.Text.StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+        // The same, closed: `ev-emit-open`'s members and then the object's `}`.
+        int s = EvEmitOpen(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         Json.JsClose(t, pretty, 0, s);
         return 0;
     }

@@ -3008,6 +3008,26 @@
     (set s (ev-arena t pretty s 24 tlines etext))
     (return s)))
 
+(defn ^:pub ^I32 ev-emit-open [^:mut ^Text t ^I32 pretty
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
+                          ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
+                          ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                          ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+                          ^:mut ^Cells images
+                          ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+                          ^:mut ^Cells prims ^:mut ^Cells tlines]
+  (comment "The evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version \"1\": one array per arena,")
+  (comment "in the order of the `ea` codes, each row in its fixed key order. OPEN: the object is left unclosed and the state (1 when it has members) is returned, so a caller can add a member before `}` (D720: the Engine's `tb` member; Go's builder cannot take a `}` back).")
+  (let [^:mut ^I32 s 0]
+    (emit-ascii t "{")
+    (set s (ev-begin t pretty 0 s (ek-version)))
+    (emit-ascii t "\"1\"")
+    (set s (ev-emit-body t pretty s epages views pts refs etext feats glyphs words lines marks fonts paths images
+                         oruns oblocks olines owords osyms oalts inks components rules prims tlines))
+    (return s)))
+
 (defn ^:pub ^I32 ev-emit [^:mut ^Text t ^I32 pretty
                           ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
                           ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
@@ -3018,13 +3038,8 @@
                           ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
                           ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
                           ^:mut ^Cells prims ^:mut ^Cells tlines]
-  (comment "Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version \"1\": one array per arena,")
-  (comment "in the order of the `ea` codes, each row in its fixed key order.")
-  (let [^:mut ^I32 s 0]
-    (emit-ascii t "{")
-    (set s (ev-begin t pretty 0 s (ek-version)))
-    (emit-ascii t "\"1\"")
-    (set s (ev-emit-body t pretty s epages views pts refs etext feats glyphs words lines marks fonts paths images
-                         oruns oblocks olines owords osyms oalts inks components rules prims tlines))
+  (comment "The same, closed: `ev-emit-open`'s members and then the object's `}`.")
+  (let [^I32 s (ev-emit-open t pretty epages views pts refs etext feats glyphs words lines marks fonts paths images
+                             oruns oblocks olines owords osyms oalts inks components rules prims tlines)]
     (js-close t pretty 0 s)
     (return 0)))

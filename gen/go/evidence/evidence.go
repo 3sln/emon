@@ -7025,14 +7025,20 @@ func EvEmitBody(t *strings.Builder, pretty int32, s0 int32, epages *port.Cells, 
 	return s
 }
 
-func EvEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
-	// Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
-	// in the order of the `ea` codes, each row in its fixed key order.
+func EvEmitOpen(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// The evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+	// in the order of the `ea` codes, each row in its fixed key order. OPEN: the object is left unclosed and the state (1 when it has members) is returned, so a caller can add a member before `}` (D720: the Engine's `tb` member; Go's builder cannot take a `}` back).
 	var s int32 = 0
 	port.TextAscii(t, "{")
 	s = EvBegin(t, pretty, 0, s, EkVersion())
 	port.TextAscii(t, "\"1\"")
 	s = EvEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	return s
+}
+
+func EvEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+	// The same, closed: `ev-emit-open`'s members and then the object's `}`.
+	var s int32 = EvEmitOpen(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 	json.JsClose(t, pretty, 0, s)
 	return 0
 }

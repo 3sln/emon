@@ -1477,7 +1477,7 @@ func PlEmitLayer(t *strings.Builder, pretty int32, s0 int32, cg *port.Cells, fw 
 	return s
 }
 
-func PlEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, grl *port.Cells, sl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells) int32 {
+func PlEmitOpen(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, grl *port.Cells, sl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells) int32 {
 	// The evidence dump, VERSION "2" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's twelve.
 	var s int32 = 0
 	port.TextAscii(t, "{")
@@ -1485,11 +1485,17 @@ func PlEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Ce
 	port.TextAscii(t, "\"2\"")
 	s = evidence.EvEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 	s = PlEmitLayer(t, pretty, s, cg, fw, fl, fv, fa, fx, hl, grl, sl, gfl, ggp, grg, etext)
+	return s
+}
+
+func PlEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa *port.Cells, fx *port.Cells, hl *port.Cells, grl *port.Cells, sl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells) int32 {
+	// The same, closed (`pl-emit-open`, then `}`).
+	var s int32 = PlEmitOpen(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines, cg, fw, fl, fv, fa, fx, hl, grl, sl, gfl, ggp, grg)
 	json.JsClose(t, pretty, 0, s)
 	return 0
 }
 
-func PlEmitGfx(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells) int32 {
+func PlEmitGfxOpen(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells) int32 {
 	// The evidence dump as `pl-emit` writes it, version "2", with `grl gfl ggp grg` as the only layer arrays.
 	var s int32 = 0
 	port.TextAscii(t, "{")
@@ -1500,6 +1506,12 @@ func PlEmitGfx(t *strings.Builder, pretty int32, epages *port.Cells, views *port
 	s = glayer.GlArena(t, pretty, s, 2, gfl)
 	s = glayer.GlArena(t, pretty, s, 3, ggp)
 	s = glayer.GlArena(t, pretty, s, 4, grg)
+	return s
+}
+
+func PlEmitGfx(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells) int32 {
+	// The same, closed (`pl-emit-gfx-open`, then `}`).
+	var s int32 = PlEmitGfxOpen(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines, grl, gfl, ggp, grg)
 	json.JsClose(t, pretty, 0, s)
 	return 0
 }

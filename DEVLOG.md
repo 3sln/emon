@@ -3636,18 +3636,19 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   - [x] S0 — the vocabulary and the ports: `defctx`, `fd`, `new-ctx`/`clone-ctx` (laws), `cells-swap`,
     `cells-copy-into`, `buf-copy-into`, `cells-free` in all four hosts; `kin/ctxtest.kin`, `bb check`'s host-built
     context (D362). No Engine file changed.
-  - [ ] S1 — `Arenas` and `RasterDoc` into `kin/engine.kin` (one `doc` context, the union of today's PdfDoc,
-    RasterDoc, EvArenas and Arenas under the same field names); `finish_raster` becomes `en-finish-raster`. Does
-    not touch P7.S's path.
-  - [ ] S2 — after P7.S merges: `finish_pdf` / `en-stage3` (the document unit).
+  - [x] S1 — `Arenas`, `EvArenas`, `Doc` (the union of PdfDoc and RasterDoc), `Scratch` and `Cfg` as `defctx` types in `kin/enctx.kin`; the
+    raster document unit is `en-finish-raster` in `kin/engine.kin`; the Rust and Go hosts construct the generated types and make one call; the
+    Model's accessors keep their field names (D720).
+  - [x] S2 — `en-finish-pdf` and the stage-3 sequence both units share, `en-stage3` (D721); the evidence's `tb` tail moved into kin with an
+    OPEN `ev-emit`/`pl-emit`/`pl-emit-gfx` (D720); the scratch is `Scratch`, one field a scratch (D722). `engine.rs` 2899 to 2544 lines,
+    `engine.go` 2064 to 1798.
   - [ ] S3 — the document pass and the asset unit.
   - [ ] S4 — `en-next` replaces the host's `Phase` enum: the schedule is kin's.
   - [ ] S5 — Java and C# as the driver plus the ports only (they adopt each moved step; they are not hand-ported
     to the current Engines). `bb hosts` refuses stage calls outside the ports, native fulfilment, the plan loop
     with its transcripts, and the public API.
-  - Later needs, noted not built: an OPEN `ev-emit`/`pl-emit` variant (the evidence `tb` append pops a `}` from
-    a String, which Go's `strings.Builder` cannot do); and, optionally, limit-breach panics turned into a latched
-    status, which would drop the nightly pin for wasm.
+  - Later needs, noted not built: optionally, limit-breach panics turned into a latched status, which would drop the
+    nightly pin for wasm. (The OPEN `ev-emit`/`pl-emit` variant was built with S2, D720.)
 
 ---
 
@@ -8884,6 +8885,8 @@ worse than the no-engine run's plus 0.0005; the broken documents' CER under half
   file (the param is left untagged and `fd` refuses). emon's workaround: the context lives in a namespace of its
   own (`emon.docprobe`; the engine's `doc` will too). A kin fix would add the file's own `:local-tags` to
   `kin/tag`'s fallback. Not patched here.
+- **`set` of a `let` binding that is not `^:mut` is not refused at generation** (found writing `en-seal`, D720): every target emits the assignment and
+  Rust alone fails to compile it (E0384). A generation-time refusal would name the form and the file's namespace.
 
 Things emon needs that might belong in `../kin` rather than here. Record
 them; offer them upstream when they have proved general.
@@ -9711,4 +9714,20 @@ from a declaration (a second generator outside bb drift); a context type alone (
 **Decision**: `bb calibration` reports (reliability, ECE, Brier, held-out ECE, per kind); `--write` writes `reliability.csv`, `summary.csv`, `reliability.svg` (babashka, no Python) of what the Engine now writes; `--refit` is the whole recalibration (identity table, `bb emit`, collect raw confidences, fit, write `fit.edn`, `kin/calibdata.kin` and the `raw-*` files, `bb emit`), after which the goldens of D373 are re-derived by the same scripts. A report, not a gate. A refit is a reviewed change with the raw reliability diagram in its DEVLOG entry (this one's: `test/calibration/raw-reliability.svg`).
 **Why**: the fit needs raw confidences, and the Engine writes calibrated ones, so the identity table is how raw ones are obtained; no host flag is added.
 **Alternatives**: a hidden setting that turns the map off (a host option in the engines being re-sequenced).
+- [ ] **Signed off** (maintainer)
+
+### D720 — Engine thinning S1/S2: the contexts and `emon.engine`; an OPEN evidence emitter (P10.6; D362)
+**Decision**: (1) `kin/enctx.kin` declares `Arenas` (the Model's seven arenas, the asset table, its uses and bytes: the Model's accessors keep the field names, in Go capitalised, `a.nodes` is `a.Nodes`), `EvArenas` (the 18 evidence arenas), `Doc`, `Scratch` and `Cfg`, all `defctx`, in a namespace of their own (a tag defined by a file is not in that file's own scope). `Doc` is the UNION of today's `PdfDoc` and `RasterDoc` without their `ev`, `m` and `info`: a `defctx` field is an owned Cells/Buf/Text/I32 and cannot be another context, and `EvArenas.pts` and `Doc.pts` are two arenas of one name, so D362 (3)'s single `doc` cannot hold `ev`. The hosts keep `PdfDoc { ev, doc, info }` and `RasterDoc { m, ev, doc, info }` as three-field wrappers (their page units read `d.ev.*` and `d.doc.*`); the arrays `xs`/`ys` are fields `xs0..xs5`/`ys0..ys18`. The unit's answer (`fused`, `fcode`, `fnode`) and its evidence (`evidence`, a `Text`) are fields of `Doc`; `Cfg` is the Options the document unit reads as integers plus the locale's code points (`lcl`). (2) `kin/engine.kin` is the document unit: `en-finish-pdf`, `en-finish-raster`, `en-stage3`, `en-seal`, `en-dump`, `en-figures`, `en-asset-stage`. The host's `finish_pdf` / `finish_raster` (`finishPdf` / `finishRaster`) construct `Arenas` and `Scratch`, make one call and map the answer (0 built, 1 built with the asset unit pending, 2 `pl-check`, 3 `model-check`, 4 `model-check-assets`) to the `Outcome` they always returned; `catch_unwind`, the status-to-error mapping, `RunStats` timing, the step machine and the fulfilment stay in the host. The host's `seal_arenas` is `en-seal`, so the asset unit's checks are kin's too. (3) The evidence's `tb` member is appended in kin: `ev-emit`, `pl-emit` and `pl-emit-gfx` gain OPEN variants (`ev-emit-open`, `pl-emit-open`, `pl-emit-gfx-open`: the object is left unclosed, the state returned) and the closed ones are those plus `js-close`, so no byte of any dump moved and Go's `strings.Builder` never has to take a `}` back. The tail is `,"tb":[...]` then `}`, as before, when the document has tagged tables.
+**Why**: the stage sequence was four hand-written copies (two now) and every new stage edited them; this is the smallest move that makes one of them kin's, held byte-identical by the gates.
+**Alternatives**: one flat `doc` with `ev` renamed (breaks "the same field names", and `unit_pdf`'s call sites); a kin patch for nested contexts (not ours to patch).
+- [ ] **Signed off** (maintainer)
+
+### D721 — `en-stage3` runs both kinds; what a raster input skips, it skips by kind (P10.6 S2; D213, D362)
+**Decision**: the sequence both document units share (furniture, tables, initials, headings, notes, lists, paragraphs, restructuring, `fu-write`, `sc-tag`, `rp-settings`, fusion's `ar-write`/`ar-tag`/seals, the locale, the asset stage, the seal) is `en-stage3 c d ev m s np kind`, `kind` 0 for a PDF, 1 for a raster input. What the old `finish_raster` did not call (`il-analyze`, the provisional figures, `th-write`, `gf-write`) is skipped by `kind` and not run over the empty arenas, because an empty arena is not every stage's no-op (`il-analyze` writes style rows after the lists' rows); fusion needs no guard (`fused` is 0 for an image). A raster input's candidate is its own picture (`as-page-cands`, then the asset stage or the pending `figures` unit), as before. The raster document unit still runs `th-append` AFTER the evidence dump and the PDF's BEFORE it (the old order).
+**Why**: byte-identity first; a later step can ask whether the guards are needed and let the gates answer.
+- [ ] **Signed off** (maintainer)
+
+### D722 — Scratch is a context: one field per scratch, nothing shared between stages (P10.6 S2; D362)
+**Decision**: kin never allocates, so every scratch arena the stages were handed (`Cells::new()` in the hosts: about 120) is a field of `Scratch`, the host constructs it once per document unit, and no field is used by two stages (the old locals `tx`, `tw` and `sc` of the furniture, table and heading stages, which Rust shadowed, are `tx`/`tbx`, `tw`/`ftw`/`ftl` and `sc`/`hsc`): a field that two stages shared would hand the second what the first left behind. `Scratch` is built by a script from the stage calls (not committed: kin/engine.kin is the source).
+**Why**: the alternative, `cells-free` between uses, depends on every stage leaving its scratch empty-able; a separate field cannot be wrong that way, and the memory is what the Rust locals held to the end of the function anyway.
 - [ ] **Signed off** (maintainer)

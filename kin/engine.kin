@@ -1,0 +1,265 @@
+;; THE ENGINE, in kin (P10.6 engine thinning; D362, D720-D724). What the hosts' `finish_pdf` and `finish_raster` were: the document unit (stage 3)
+;; over the text layer and whatever the page units added to it, from the OCR groups' arbitration to the sealed Model. The hosts construct the
+;; contexts of `emon.enctx` (`Doc`, `EvArenas`, `Arenas`, `Scratch`, `Cfg`), call ONE function, and read the Model and the evidence out of them.
+;; KIN STILL NEVER ALLOCATES: every arena a stage writes is a field of a context, and the scratch each stage wants is `Scratch`'s, one field a
+;; scratch (a field shared by two stages would hand the second what the first left behind).
+;;
+;; A move, not a rewrite: the order of the stage calls, the arenas each is handed and what a failure answers are the Engines' they were.
+;; THE KINDS: `en-stage3` runs the raster document unit (kind 1) and the PDF's (kind 0) over the same sequence; what a raster input has no
+;; evidence for (the inline styles, the provisional figures, the triage's ledger rows, fusion) is skipped by kind and not run over empty arenas,
+;; because an empty arena is not every stage's no-op.
+;;
+;; THE ANSWER of `en-finish-pdf`, `en-finish-raster`, `en-stage3`: 0 the Model is built, 1 the Model is built and the asset unit still has to run
+;; (`assets: figures`, D351: the Model is not sealed yet), 2 `pl-check` failed (`fcode`), 3 `model-check` failed (`fcode`, `fnode`), 4
+;; `model-check-assets` failed (`fcode`, `fnode`).
+(ns emon.engine
+  (:require [emon.lang :refer [I32 Cells Buf Text fd emit-ascii]]
+            [emon.enctx :refer [Cfg Doc EvArenas Arenas Scratch]]
+            [emon.port :refer [cells-len cells-at cells-push cells-swap cells-copy-into cells-free]]
+            [emon.model :refer [model-init model-check model-check-assets page-count text-append-cp node-set-attr-text fk-locale]]
+            [emon.para :refer [pa-pages pa-build]]
+            [emon.pdfdoc :refer [pd-pg-count]]
+            [emon.tlhealth :refer [th-append th-write]]
+            [emon.gfuse :refer [gf-fuse gf-write]]
+            [emon.health :refer [hl-doc]]
+            [emon.sealmark :refer [sm-find sm-write]]
+            [emon.arbiter :refer [ar-doc ar-write ar-tag]]
+            [emon.player :refer [pl-check pl-emit-open pl-emit-gfx-open]]
+            [emon.evidence :refer [ev-emit-open]]
+            [emon.tagtable :refer [tt-emit]]
+            [emon.pdfstruct :refer [tg-trust]]
+            [emon.furniture :refer [fu-find fu-write]]
+            [emon.table :refer [tb-build]]
+            [emon.columns :refer [lc-copy]]
+            [emon.initial :refer [in-detect]]
+            [emon.heading :refer [hd-prior-outline hd-analyze]]
+            [emon.notes :refer [nt-analyze]]
+            [emon.lists :refer [ls-analyze]]
+            [emon.inline :refer [il-analyze]]
+            [emon.restruct :refer [rs-run rs-figures]]
+            [emon.scan :refer [sc-tag]]
+            [emon.rasterplan :refer [rp-settings]]
+            [emon.asset :refer [as-figure-rows as-settings as-run as-page-cands]]
+            [kin.lang :refer [defn return let set while if do comment + - < > == != and]]))
+
+;; ----------------------------------------------------------------------------------------------- the evidence's dump
+
+(defn ^:pub ^I32 en-dump [^Cells et ^Cells gl ^Cells wd ^Cells ln ^Cells mk ^Cells fnt ^Cells grl ^Cells gfl ^Cells ggp ^Cells grg
+                          ^EvArenas ev ^:mut ^Text t]
+  (comment "The evidence dump of a conversion, OPEN (`}` is the caller's, who may add a member first): `ev` is what the OCR stages made, the rest the text layer's.")
+  (comment "Version \"1\", or \"2\" with the four graphics arrays when the document has fused graphics (P5.5a, D270).")
+  (if (and (== (cells-len grl) 0) (== (cells-len gfl) 0))
+    (do
+      (ev-emit-open t 0 (fd ev epages) (fd ev views) (fd ev pts) (fd ev refs) et (fd ev feats) gl wd ln mk fnt (fd ev paths) (fd ev images)
+             (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms) (fd ev oalts) (fd ev inks) (fd ev comps) (fd ev rules)
+             (fd ev prims) (fd ev tlines)))
+    (do
+      (pl-emit-gfx-open t 0 (fd ev epages) (fd ev views) (fd ev pts) (fd ev refs) et (fd ev feats) gl wd ln mk fnt (fd ev paths) (fd ev images)
+             (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms) (fd ev oalts) (fd ev inks) (fd ev comps) (fd ev rules)
+             (fd ev prims) (fd ev tlines) grl gfl ggp grg)))
+  (return 0))
+
+;; ----------------------------------------------------------------------------------------------- the checks of a finished Model
+
+(defn ^:pub ^I32 en-seal [^Arenas m ^:mut ^Cells chk ^:mut ^Cells out ^I32 level]
+  (comment "`model-check`, and `model-check-assets` when `level` (the asset level) is on. Answers 0, 1 (`model-check` failed) or 2 (`model-check-assets` did); the code and the node go to `out`.")
+  (let [^:mut ^I32 code (model-check (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout) chk)]
+    (if (!= code 0)
+      (do (cells-push out code)
+          (cells-push out (cells-at chk 0))
+          (return 1)))
+    (if (!= level 0)
+      (do (set code (model-check-assets (fd m nodes) (fd m attrs) (fd m assets) (fd m uses) (fd m abytes) chk))
+          (if (!= code 0)
+            (do (cells-push out code)
+                (cells-push out (cells-at chk 0))
+                (return 2)))))
+    (return 0)))
+
+;; ----------------------------------------------------------------------------------------------- the asset stages of the document unit
+
+(defn ^I32 en-figures [^Arenas m ^Scratch s ^Cells cand ^I32 level]
+  (comment "P3.13 (SPEC 10.11): the provisional figures, before `rs-run` (a caption next to one finds it as its object). Only when `assets` is on (D294).")
+  (as-figure-rows cand (fd m pages) (fd m nodes) (fd m regions) level (fd s fg))
+  (rs-figures (fd m nodes) (fd m attrs) (fd m regions) (fd s fnodes) (fd s fattrs) (fd s fregions) (fd s fnm) cand (fd s fg))
+  (cells-swap (fd m nodes) (fd s fnodes))
+  (cells-swap (fd m attrs) (fd s fattrs))
+  (cells-swap (fd m regions) (fd s fregions))
+  (return 0))
+
+(defn ^I32 en-asset-stage [^Cfg c ^Arenas m ^Scratch s ^Cells cand ^:mut ^Buf cbytes]
+  (comment "P3.13: the settings on the root, then each figure's and seal's pixels or reason, in node-id order. `cand` and `cbytes` were made by the document pass.")
+  (as-settings (fd m nodes) (fd m attrs) (fd m text) (fd c level) (fd c dpi) (fd c pixels) (fd c abyte) (fd c tbyte) (fd c sigs))
+  (cells-push (fd s bx) 0)
+  (cells-push (fd s bx) 0)
+  (cells-push (fd s bx) 0)
+  (cells-push (fd s bx) 0)
+  (cells-push (fd s bx) 0)
+  (as-run (fd m nodes) (fd m attrs) (fd m regions) cand cbytes (fd m assets) (fd m uses) (fd m abytes) (fd c abyte) (fd c tbyte) (fd c sigs) (fd s bx))
+  (return 0))
+
+;; ----------------------------------------------------------------------------------------------- stage 3
+
+(defn ^I32 en-stage3 [^Cfg c ^Doc d ^EvArenas ev ^Arenas m ^Scratch s ^I32 np ^I32 kind]
+  (comment "The document unit from the furniture to the sealed Model, over the flow `fw`/`fl` (P7.0). `kind` 0 a PDF, 1 a raster input; the evidence (`evidence`, when `keep`)")
+  (comment "was opened by the caller and is closed here, after the tagged tables' verdicts have been added to it. Answers as the file's head says.")
+  (let [^I32 trust (tg-trust (fd d ss))
+        ^:mut ^I32 pending 0
+        ^:mut ^I32 w 0]
+    ;; Running furniture (P4.3): found BEFORE the paragraphs, which then never see it, and written after them.
+    (fu-find (fd d fw) (fd d fl) (fd d et) (fd d gl) (fd d mk) (fd m pages) np (fd d txt) (fd d md) (fd d lb) trust (fd c furn) (fd s cd) (fd s sl)
+         (fd s gr) (fd s ford) (fd s tx) (fd s bh) (fd s fo) (fd s fp) (fd s ft) (fd s pl))
+    ;; Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`). The tagged tables' scratch and verdicts (P5.5, `emon.tagtable`).
+    (tb-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s s0) (fd s s1) (fd s s2)
+         (fd s s3) (fd s s4) (fd s s5) (fd s s6) (fd s s7) (fd s s8) (fd s s9) (fd s s10) (fd s s11) (fd s s12) (fd s s13) (fd s s14) (fd s s15)
+         (fd s s16) (fd s s17) (fd s s18) (fd m pages) (fd d gl) (fd d mk) (fd d se) (fd d sc) (fd d ss) (fd s ta0) (fd s g0) (fd s g1) (fd s g2)
+         (fd s g3) (fd s g4) (fd s g5) (fd s tv))
+    ;; the tagged tables' verdicts join the evidence dump, as `tb` (P5.5), and the dump is closed
+    (if (!= (fd c keep) 0)
+      (do (if (and (== kind 0) (> (cells-len (fd s tv)) 0))
+            (do (emit-ascii (fd d evidence) ",\"tb\":")
+                (tt-emit (fd d evidence) (fd s tv))))
+          (emit-ascii (fd d evidence) "}")))
+    ;; the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points; found in the copy of the lines BEFORE the heading analysis reads it
+    (cells-copy-into (fd s iloc) (fd c lcl))
+    (lc-copy (fd d fl) (fd s lt))
+    (in-detect (fd d fw) (fd d gl) (fd d fnt) (fd d et) np (fd s iloc) (fd s lt) (fd s ls) (fd s lo) (fd s tm) (fd s ii))
+    ;; the heading analysis (kin/heading.kin, P4.4), its prior the outline (D172)
+    (hd-prior-outline (fd d ol) (fd d txt) (fd s hpr) (fd s hptxt))
+    (hd-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd s sf) (fd s hsc) (fd s hc) (fd s ws) (fd s htmp) (fd s hpr) (fd s hptxt))
+    ;; captions, note bodies and their references (kin/notes.kin, P4.6), then lists (kin/lists.kin, P4.5)
+    (nt-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd s sf) (fd s hsc) (fd m pages) (fd s hc) (fd s nrf) (fd s nnb) (fd s nmk) (fd s tw))
+    (ls-analyze (fd d fw) (fd s lt) (fd d et) (fd s sf) (fd d pa) (fd s hc) (fd s lcd) (fd s lpi) (fd s lws) (fd s tw))
+    ;; the style and the link of every character (kin/inline.kin, P4.7): a PDF's; an image has no font and no link annotation
+    (if (== kind 0)
+      (do
+        (il-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd d ift) (fd s sf) (fd d an) (fd d txt) (fd d pg) (fd m pages) np (fd m text) (fd s hc)
+ (fd s isw))))
+    (pa-build (fd d fw) (fd d et) np (fd m pages) (fd m layout) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s ord) (fd s raw) (fd s tmp)
+         (fd s fr) (fd s gp) (fd s lt) (fd s ls) (fd s sd) (fd s it) (fd s io) (fd s rw) (fd s gu) (fd s ac) (fd s tm) (fd s cf) (fd s lo) (fd s pr)
+         (fd s dbg) (fd s hc) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd m ledger) (fd s ii) (fd s al))
+    ;; the provisional figures (P3.13): only with `assets`, and before the restructuring, which pairs a caption with the figure beside it
+    (if (and (== kind 0) (!= (fd c level) 0))
+      (en-figures m s (fd d cand) (fd c level)))
+    ;; restructuring (kin/restruct.kin, P4.5, P4.6): the body is copied into new arenas, in document order, and they replace the old ones
+      (rs-run (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s rn) (fd s ra) (fd s rr) (fd s rnm) (fd s rstk) (fd s rused) (fd s rout)
+             (fd m layout))
+    (cells-swap (fd m nodes) (fd s rn))
+    (cells-swap (fd m attrs) (fd s ra))
+    (cells-swap (fd m regions) (fd s rr))
+    (fu-write (fd s fo) (fd s fp) (fd s ft) (fd s pl) np (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd s tmp))
+    (if (== kind 0)
+      (do
+        ;; the words the triage set aside (P7.0): ledger rows, after the furniture's
+        (th-write (fd d fa) (fd d wd) (fd d et) (fd m ledger) (fd m text) (fd s tmp) (fd s ttx))
+        ;; the vector rules graphics fusion dropped (P7.G, row 513): ledger rows, with no text
+        (gf-write (fd s gfa) (fd m ledger))))
+    (sc-tag (fd m nodes) (fd m attrs) (fd m text) (fd m regions) (fd m pages) (fd d mask) (fd c ocr))
+    (rp-settings (fd m nodes) (fd m attrs) (fd m text) (fd c scope))
+    ;; fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
+    (if (== (fd d fused) 1)
+      (do
+        (ar-write (fd s afa) (fd ev owords) (fd d et) (fd m ledger) (fd m text) (fd s tmp) (fd s ttx))
+        (ar-tag (fd m nodes) (fd m regions) (fd d fw) (fd s fv))
+        ;; the seals' nodes (P7.7): the body copied again with a `seal` node in reading order for every candidate
+        (set w (sm-write (fd s sm) (fd d et) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s sn) (fd s sa) (fd s sr) (fd s snm)))
+        (if (> w 0)
+          (do (cells-swap (fd m nodes) (fd s sn))
+              (cells-swap (fd m attrs) (fd s sa))
+              (cells-swap (fd m regions) (fd s sr))))))
+    (if (!= (fd c haveloc) 0)
+      (do (set w (cells-len (fd m text)))
+          (let [^:mut ^I32 i 0]
+            (while (< i (cells-len (fd c lcl)))
+              (do (text-append-cp (fd m text) (cells-at (fd c lcl) i))
+                  (set i (+ i 1)))))
+          (node-set-attr-text (fd m nodes) (fd m attrs) 0 (fk-locale) w (- (cells-len (fd m text)) w))))
+    ;; the asset stage. A PDF's candidates are the asset unit's; a raster input is one picture a page: its own image is the candidate
+    (if (== kind 0)
+      (do (if (== (fd c level) 2) (set pending 1))
+          (if (and (!= (fd c level) 0) (== pending 0))
+            (en-asset-stage c m s (fd d cand) (fd d cbytes))))
+      (if (!= (fd c level) 0)
+        (do (as-page-cands (fd m pages) (fd d cand))
+            (if (== (fd c level) 2)
+              (set pending 1)
+              (en-asset-stage c m s (fd d cand) (fd d cbytes))))))
+    ;; `figures` leaves the asset stage to the asset unit (D351), which asks the Renderer; so it does the checks after it too
+    (if (== pending 0)
+      (do (set w (en-seal m (fd s chk) (fd s sealout) (fd c level)))
+          (if (!= w 0)
+            (do (set (fd d fcode) (cells-at (fd s sealout) 0))
+                (set (fd d fnode) (cells-at (fd s sealout) 1))
+                (return (+ w 2))))))
+    (return pending)))
+
+;; ----------------------------------------------------------------------------------------------- the two document units
+
+(defn ^:pub ^I32 en-finish-raster [^Cfg c ^Doc d ^EvArenas ev ^Arenas m ^Scratch s]
+  (comment "The raster document unit: stage 3 over the frames' OCR lines. `m` is the Model the document pass began (its pages and nodes); an image has no text layer, so")
+  (comment "the glyph arenas are empty and nothing is set aside.")
+  (let [^I32 np (page-count (fd m pages))]
+    (if (!= (fd c keep) 0)
+      (en-dump (fd d et) (fd d gl) (fd d wd) (fd d ln) (fd d mk) (fd d fnt) (fd d grl) (fd d gfl) (fd s ggp) (fd s grg) ev (fd d evidence)))
+    ;; the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
+    (th-append (fd d wd) (fd d ln) (fd d fw) (fd d fl) 0)
+    (return (en-stage3 c d ev m s np 1))))
+
+(defn ^:pub ^I32 en-finish-pdf [^Cfg c ^Doc d ^EvArenas ev ^Arenas m ^Scratch s]
+  (comment "The PDF document unit (stage 3) over the text layer and whatever the page units added to it: fusion's arbitration, the evidence, then stage 3.")
+  (let [^I32 np (pd-pg-count (fd d pg))
+        ^:mut ^I32 pcode 0]
+    ;; the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
+    (th-append (fd d wd) (fd d ln) (fd d fw) (fd d fl) (fd d nl0))
+    ;; FUSION (P7.3, D285-D290): the page units aligned every OCR'd born-digital page (`cg`); with the document's verdict on every font (`hl-doc`)
+    ;; the arbiter picks each group's source and makes the fused flow stage 3 reads. With no group none of this runs and nothing below is different.
+    (if (> (cells-len (fd d cg)) 0) (set (fd d fused) 1))
+    (if (and (!= (fd c ocr) 0) (== (fd d fused) 0) (== (cells-len (fd ev owords)) 0))
+      (do (cells-free (fd ev epages))
+          (cells-free (fd ev feats))))
+    ;; GRAPHICS FUSION, the tracer's and OCR's share (P7.G, SPEC 9.9, D221-D224, D228)
+    (gf-fuse np (fd ev epages) (fd ev inks) (fd ev rules) (fd ev prims) (fd ev oblocks) (fd ev owords) (fd d wd) (fd d et) (fd d pa) (fd d im)
+         (fd ev feats) (fd d grl) (fd d gfl) (fd s ggp) (fd s grg) (fd ev refs) (fd d hl) (fd s fx) (fd s gfa) (fd s ga0) (fd s ga1) (fd s ga2)
+         (fd s ga3) (fd s ga4) (fd s ga5) (fd s ga6))
+    ;; seal, stamp and signature candidates (P7.7): the `sl` arena, found before arbitration, which keeps their words out of the body
+    (if (== (fd d fused) 1)
+      (do
+        (hl-doc (fd ev feats) (fd d fw) (fd d hl))
+        (let [^I32 trust0 (tg-trust (fd d ss))]
+        (sm-find (fd d pa) (fd d pts) (fd d gl) (fd d fw) (fd d et) (fd ev epages) (fd d cg) (fd ev refs) (fd ev owords) np (fd s sm) (fd s sscr)
+                 (fd s stmp))
+        (ar-doc (fd d cg) (fd ev refs) (fd d fw) (fd d fl) (fd d et) (fd ev feats) (fd ev owords) (fd ev olines) (fd ev oruns) (fd ev osyms)
+                 (fd ev images) (fd ev epages) (fd d gl) (fd d mk) (fd d an) (fd d txt) trust0 (fd s rc) (fd s nfw) (fd s nfl) (fd s fv) (fd s fx)
+                 (fd s afa) (fd s gd) (fd s gv) (fd s w2g) (fd s o2g) (fd s pp) (fd s ftw) (fd s ftl) (fd d xs0))
+          (cells-swap (fd d fw) (fd s nfw))
+          (cells-swap (fd d fl) (fd s nfl))
+          (set pcode
+        (pl-check (fd d cg) (fd d fw) (fd d fl) (fd s fv) (fd d fa) (fd s fx) (fd d hl) (fd d grl) (fd s sm) (fd d gfl) (fd s ggp) (fd s grg)
+                 (fd d et) (fd ev refs) (fd d gl)))
+          (if (!= pcode 0)
+            (do (set (fd d fcode) pcode)
+                (return 2))))))
+    ;; the evidence dump, OPEN (the tagged tables' verdicts join it in stage 3): version "2" with the layer's arrays when fused (SPEC 9.7)
+    (if (!= (fd c keep) 0)
+      (do
+        ;; the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the dump has always shown
+        (if (== (fd d hassnap) 0)
+          (do (cells-copy-into (fd d snapg) (fd d gl))
+              (cells-copy-into (fd d snapk) (fd d mk))
+              (cells-copy-into (fd d snapf) (fd d fnt))))
+        (if (== (fd d fused) 1)
+          (do
+            ;; the set-aside list is the text layer's and the dropped ghosts'
+            (cells-copy-into (fd s fad) (fd d fa))
+            (let [^:mut ^I32 i 0]
+              (while (< i (cells-len (fd s afa)))
+                (do (cells-push (fd s fad) (cells-at (fd s afa) i))
+                    (set i (+ i 1)))))
+      (pl-emit-open (fd d evidence) 0 (fd ev epages) (fd ev views) (fd ev pts) (fd ev refs) (fd d et) (fd ev feats) (fd d snapg) (fd d wd) (fd d ln)
+             (fd d snapk) (fd d snapf) (fd ev paths) (fd ev images) (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms)
+             (fd ev oalts) (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev tlines) (fd d cg) (fd d fw) (fd d fl) (fd s fv) (fd s fad)
+             (fd s fx) (fd d hl) (fd d grl) (fd s sm) (fd d gfl) (fd s ggp) (fd s grg)))
+          (en-dump (fd d et) (fd d snapg) (fd d wd) (fd d ln) (fd d snapk) (fd d snapf) (fd d grl) (fd d gfl) (fd s ggp) (fd s grg) ev (fd d evidence)))))
+    (model-init (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout))
+    (pa-pages (fd d pg) (fd m pages))
+    (return (en-stage3 c d ev m s np 0))))
