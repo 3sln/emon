@@ -7,6 +7,7 @@ import (
 	"emon/pageunit"
 	"emon/plan"
 	"emon/port"
+	"emon/rasterplan"
 	"testing"
 )
 
@@ -24,18 +25,53 @@ func planOf(pl *port.Cells, pages int32, kind int32) int32 {
 		port.CellsPush(pl, 79200)
 		port.CellsPush(pl, 61200)
 		port.CellsPush(pl, 79200)
+		// `emon.rasterplan`'s cells: what the page asks (nothing), its witness rows (none), its scripts (none)
+		port.CellsPush(pl, 0)
+		port.CellsPush(pl, 0)
+		port.CellsPush(pl, 0)
+		port.CellsPush(pl, 0)
+		i += 1
+	}
+	return 0
+}
+
+func bornPlan(pl *port.Cells, pages int32, ask int32, scripts int32) int32 {
+	// `pages` born-digital pages of the plan that ask `ask` (`rp-ask-*`), with the scripts bit set `scripts`.
+	var i int32 = 0
+	planOf(pl, pages, pageunit.PkBorn())
+	for i < pages {
+		port.CellsSet(pl, (i*pageunit.PuW())+rasterplan.RpFAsk(), ask)
+		port.CellsSet(pl, (i*pageunit.PuW())+rasterplan.RpFScripts(), scripts)
 		i += 1
 	}
 	return 0
 }
 
 func runPageFused(i int32, policy int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells) int32 {
-	// A page unit with the fusion arguments (P7.3): `fuse` the hidden setting.
-	return pageunit.PuRunPdf(i, 3, policy, pl, ans, rq, port.NewCells(), port.NewBitmapSet(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), fuse, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	// A page unit with the fusion arguments: `fuse` the hidden setting `no-retarget` (bit 2).
+	return pageunit.PuRunPdf(i, 3, policy, pl, ans, rq, port.NewCells(), port.NewBitmapSet(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), fuse, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
 }
 
 func runPage(i int32, policy int32, pl *port.Cells, ans *port.Cells, rq *port.Cells) int32 {
 	return runPageFused(i, policy, 0, pl, ans, rq)
+}
+
+func nthRec(rq *port.Cells, n int32) int32 {
+	// The cell where record `n` (0-based) of the requests starts.
+	var at int32 = 0
+	var k int32 = 0
+	for k < n {
+		at += port.CellsAt(rq, at)
+		k += 1
+	}
+	return at
+}
+
+func answerRenders(ans *port.Cells, page int32) int32 {
+	// Both renders of page `page` answered, 2550 x 3300 RGB at 300 dpi.
+	plan.AnRender(ans, plan.PuId(page, plan.PiRenderText()), 2550, 3300, 3, 300)
+	plan.AnRender(ans, plan.PuId(page, plan.PiRenderNoText()), 2550, 3300, 3, 300)
+	return 0
 }
 
 func TestIdsArePerPageUnit(emonT *testing.T) {
@@ -72,72 +108,116 @@ func TestAUnitWithNoAnswersAsksTheSameEveryTime(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(rq1, 4), port.CellsAt(rq2, 4), "the same arguments")
 }
 
-func TestABornDigitalPageAsksForNothingUntilAConsumerAsksForItsRasters(emonT *testing.T) {
-	var pl *port.Cells = port.NewCells()
-	var rq *port.Cells = port.NewCells()
-	planOf(pl, 2, pageunit.PkBorn())
-	port.AssertEq(emonT, runPage(1, 2, pl, port.NewCells(), rq), plan.UsDone(), "always: lazy, it asks nothing")
-	port.AssertEq(emonT, port.CellsLen(rq), 0, "no request, no OCR")
-	port.AssertEq(emonT, pageunit.PuAskRasters(1, 3, 2, port.NewCells(), rq), plan.UsRequests(), "a consumer asks")
-	port.AssertEq(emonT, port.CellsLen(rq), 14, "two renders of seven cells")
-	port.AssertEq(emonT, plan.RecKind(rq, 0), plan.PkRender(), "a render")
-	port.AssertEq(emonT, plan.RecId(rq, 0), 513, "page 1, with text: 2 * 256 + 1")
-	port.AssertEq(emonT, plan.RqArg(rq, 0, 0), 3, "of input 3")
-	port.AssertEq(emonT, plan.RqArg(rq, 0, 1), 1, "page 1, 0-based")
-	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 300, "at 300 dpi")
-	port.AssertEq(emonT, plan.RqArg(rq, 0, 3), plan.LayFull(), "with its text")
-	port.AssertEq(emonT, plan.RecId(rq, 7), 514, "and without it")
-	port.AssertEq(emonT, plan.RqArg(rq, 7, 3), plan.LayNoText(), "the layer")
-	var pla *port.Cells = port.NewCells()
-	var rqa *port.Cells = port.NewCells()
-	var ans1 *port.Cells = port.NewCells()
-	planOf(pla, 1, pageunit.PkBorn())
-	plan.AnFail(ans1, plan.PkRender(), 257, plan.PsUnsupported())
-	plan.AnFail(ans1, plan.PkRender(), 258, plan.PsUnsupported())
-	port.AssertEq(emonT, pageunit.PuAskRasters(0, 3, 2, ans1, rqa), plan.UsDone(), "answered, even `unsupported`: done")
-	port.AssertEq(emonT, port.CellsLen(rqa), 0, "asks nothing more, and no OCR")
-	var plb *port.Cells = port.NewCells()
-	var rqb *port.Cells = port.NewCells()
-	planOf(plb, 1, pageunit.PkBorn())
-	port.AssertEq(emonT, runPage(0, 1, plb, port.NewCells(), rqb), plan.UsDone(), "auto: a text layer is read as it is")
-	port.AssertEq(emonT, port.CellsLen(rqb), 0, "no request")
-	var plan2 *port.Cells = port.NewCells()
+func TestABornDigitalPageAsksWhatItsPlanSays(emonT *testing.T) {
+	// a plan that asks nothing (`ocr: auto` on a healthy page): nothing is asked, whatever the policy
+	var pl1 *port.Cells = port.NewCells()
+	var rq1 *port.Cells = port.NewCells()
+	bornPlan(pl1, 2, rasterplan.RpAskNone(), 0)
+	port.AssertEq(emonT, runPage(1, 2, pl1, port.NewCells(), rq1), plan.UsDone(), "always, but the plan asks nothing")
+	port.AssertEq(emonT, port.CellsLen(rq1), 0, "no request")
+	// `full`: the two renders in round 1, the same every time
+	var pl2 *port.Cells = port.NewCells()
 	var rq2 *port.Cells = port.NewCells()
-	planOf(plan2, 1, pageunit.PkScan())
-	port.AssertEq(emonT, runPage(0, 0, plan2, port.NewCells(), rq2), plan.UsDone(), "never: done")
-	port.AssertEq(emonT, port.CellsLen(rq2), 0, "no request")
-	var plan3 *port.Cells = port.NewCells()
 	var rq3 *port.Cells = port.NewCells()
-	planOf(plan3, 1, pageunit.PkNone())
-	port.AssertEq(emonT, runPage(0, 2, plan3, port.NewCells(), rq3), plan.UsDone(), "no image: done")
-	port.AssertEq(emonT, port.CellsLen(rq3), 0, "no request")
+	bornPlan(pl2, 2, rasterplan.RpAskFull(), 0)
+	port.AssertEq(emonT, runPage(1, 2, pl2, port.NewCells(), rq2), plan.UsRequests(), "it asks")
+	runPage(1, 2, pl2, port.NewCells(), rq3)
+	port.AssertEq(emonT, port.CellsLen(rq2), 14, "two renders of seven cells")
+	port.AssertEq(emonT, port.CellsLen(rq3), 14, "the same again")
+	port.AssertEq(emonT, plan.RecKind(rq2, 0), plan.PkRender(), "a render")
+	port.AssertEq(emonT, plan.RecId(rq2, 0), 513, "page 1, with text: 2 * 256 + 1")
+	port.AssertEq(emonT, plan.RqArg(rq2, 0, 0), 3, "of input 3")
+	port.AssertEq(emonT, plan.RqArg(rq2, 0, 1), 1, "page 1, 0-based")
+	port.AssertEq(emonT, plan.RqArg(rq2, 0, 2), 300, "at 300 dpi")
+	port.AssertEq(emonT, plan.RqArg(rq2, 0, 3), plan.LayFull(), "with its text")
+	port.AssertEq(emonT, plan.RecId(rq2, 7), 514, "and without it")
+	port.AssertEq(emonT, plan.RqArg(rq2, 7, 3), plan.LayNoText(), "the layer")
+	// the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's
+	var pl4 *port.Cells = port.NewCells()
+	var ans4 *port.Cells = port.NewCells()
+	var rq4 *port.Cells = port.NewCells()
+	bornPlan(pl4, 1, rasterplan.RpAskFull(), 0)
+	plan.AnFail(ans4, plan.PkRender(), 257, plan.PsUnsupported())
+	plan.AnFail(ans4, plan.PkRender(), 258, plan.PsUnsupported())
+	port.AssertEq(emonT, runPage(0, 2, pl4, ans4, rq4), plan.UsDone(), "no render, no OCR, done")
+	port.AssertEq(emonT, port.CellsLen(rq4), 0, "nothing asked")
+	// `never` plans nothing, and a page with no text layer nor a scan asks nothing
+	var pl5 *port.Cells = port.NewCells()
+	var rq5 *port.Cells = port.NewCells()
+	bornPlan(pl5, 1, rasterplan.RpAskFull(), 0)
+	port.AssertEq(emonT, runPage(0, 0, pl5, port.NewCells(), rq5), plan.UsDone(), "never: done")
+	port.AssertEq(emonT, port.CellsLen(rq5), 0, "no request")
+	var pl6 *port.Cells = port.NewCells()
+	var rq6 *port.Cells = port.NewCells()
+	planOf(pl6, 1, pageunit.PkNone())
+	port.AssertEq(emonT, runPage(0, 2, pl6, port.NewCells(), rq6), plan.UsDone(), "no image: done")
+	port.AssertEq(emonT, port.CellsLen(rq6), 0, "no request")
 }
 
-func TestABornDigitalPageAsksWhatFusionNeedsOnlyUnderTheHiddenSetting(emonT *testing.T) {
+func TestUnderFullTheWholeRenderWithItsTextIsReadInRoundTwoInTheTextLayersScripts(emonT *testing.T) {
 	var pl *port.Cells = port.NewCells()
-	var rq *port.Cells = port.NewCells()
 	var ans *port.Cells = port.NewCells()
-	planOf(pl, 2, pageunit.PkBorn())
-	port.AssertEq(emonT, runPageFused(1, 2, 1, pl, ans, rq), plan.UsRequests(), "fuse, always: it asks")
-	port.AssertEq(emonT, port.CellsLen(rq), 14, "the two renders, in one round")
-	port.AssertEq(emonT, plan.RecId(rq, 0), 513, "with its text")
-	port.AssertEq(emonT, plan.RecId(rq, 7), 514, "and without it")
-	// the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's
-	plan.AnFail(ans, plan.PkRender(), 513, plan.PsUnsupported())
-	plan.AnFail(ans, plan.PkRender(), 514, plan.PsUnsupported())
-	var rq2 *port.Cells = port.NewCells()
-	port.AssertEq(emonT, runPageFused(1, 2, 1, pl, ans, rq2), plan.UsDone(), "no render, no OCR, done")
-	port.AssertEq(emonT, port.CellsLen(rq2), 0, "nothing asked")
-	var pl3 *port.Cells = port.NewCells()
-	var rq3 *port.Cells = port.NewCells()
-	planOf(pl3, 1, pageunit.PkBorn())
-	port.AssertEq(emonT, runPageFused(0, 1, 1, pl3, port.NewCells(), rq3), plan.UsDone(), "fuse under `auto`: only `always` asks")
-	port.AssertEq(emonT, port.CellsLen(rq3), 0, "nothing asked")
-	var pl4 *port.Cells = port.NewCells()
-	var rq4 *port.Cells = port.NewCells()
-	planOf(pl4, 1, pageunit.PkBorn())
-	port.AssertEq(emonT, runPageFused(0, 2, 0, pl4, port.NewCells(), rq4), plan.UsDone(), "without the setting: lazy, nothing asked")
-	port.AssertEq(emonT, port.CellsLen(rq4), 0, "nothing asked")
+	var rq *port.Cells = port.NewCells()
+	var pl1 *port.Cells = port.NewCells()
+	var rq1 *port.Cells = port.NewCells()
+	bornPlan(pl, 1, rasterplan.RpAskFull(), 0)
+	answerRenders(ans, 0)
+	port.AssertEq(emonT, runPage(0, 2, pl, ans, rq), plan.UsRequests(), "the OCR is asked")
+	port.AssertEq(emonT, plan.RecCount(rq), 1, "one request")
+	port.AssertEq(emonT, plan.RecKind(rq, 0), plan.PkOcr(), "an OCR")
+	port.AssertEq(emonT, plan.RecId(rq, 0), 272, "the page's first pass: 256 + 16")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 0), 257, "of the render with its text")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 1), 3, "psm 3")
+	port.AssertEq(emonT, plan.RqArg(rq, 0, 5), 0, "the whole bitmap")
+	port.AssertEq(emonT, port.CellsLen(rq), 10, "no language: every model")
+	// a Latin text layer asks for the Latin script's models
+	bornPlan(pl1, 1, rasterplan.RpAskFull(), 1)
+	runPage(0, 2, pl1, ans, rq1)
+	port.AssertEq(emonT, port.CellsLen(rq1), 11, "one language cell")
+	port.AssertEq(emonT, port.CellsAt(rq1, 10), 1281455214, "`Latn`")
+}
+
+func TestUnderWitnessTheRenderWithoutItsTextAndTheWitnessLinesAreReadInRoundTwo(emonT *testing.T) {
+	var pl *port.Cells = port.NewCells()
+	var ans *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	bornPlan(pl, 1, rasterplan.RpAskWitness(), 0)
+	port.CellsSet(pl, rasterplan.RpFWat(), port.CellsLen(pl))
+	port.CellsSet(pl, rasterplan.RpFWn(), 2)
+	// two witness rows: page 0, line 4 then line 9, boxes in centipoints, font 7
+	port.CellsPush(pl, 0)
+	port.CellsPush(pl, 4)
+	port.CellsPush(pl, 7200)
+	port.CellsPush(pl, 14400)
+	port.CellsPush(pl, 36000)
+	port.CellsPush(pl, 15600)
+	port.CellsPush(pl, 7)
+	port.CellsPush(pl, 0)
+	port.CellsPush(pl, 0)
+	port.CellsPush(pl, 9)
+	port.CellsPush(pl, 7200)
+	port.CellsPush(pl, 16800)
+	port.CellsPush(pl, 36000)
+	port.CellsPush(pl, 18000)
+	port.CellsPush(pl, 7)
+	port.CellsPush(pl, 0)
+	answerRenders(ans, 0)
+	port.AssertEq(emonT, runPage(0, 2, pl, ans, rq), plan.UsRequests(), "the first pass is asked")
+	port.AssertEq(emonT, plan.RecCount(rq), 3, "the render without text, and two witness lines")
+	var r0 int32 = nthRec(rq, 0)
+	var r1 int32 = nthRec(rq, 1)
+	var r2 int32 = nthRec(rq, 2)
+	port.AssertEq(emonT, plan.RecId(rq, r0), 272, "the first pass")
+	port.AssertEq(emonT, plan.RqArg(rq, r0, 0), 258, "of the render WITHOUT its text")
+	port.AssertEq(emonT, plan.RqArg(rq, r0, 1), 3, "psm 3")
+	port.AssertEq(emonT, plan.RecId(rq, r1), 352, "witness line 0: 256 + 96")
+	port.AssertEq(emonT, plan.RqArg(rq, r1, 0), 257, "of the render WITH its text")
+	port.AssertEq(emonT, plan.RqArg(rq, r1, 1), 7, "psm 7")
+	port.AssertEq(emonT, plan.RqArg(rq, r1, 3), 297, "x: 72 pt at 300 dpi less the pad of 3")
+	port.AssertEq(emonT, plan.RqArg(rq, r1, 4), 597, "y")
+	port.AssertEq(emonT, plan.RqArg(rq, r1, 5), 1206, "width")
+	port.AssertEq(emonT, plan.RqArg(rq, r1, 6), 56, "height")
+	port.AssertEq(emonT, plan.RecId(rq, r2), 353, "witness line 1")
 }
 
 func TestTheBitmapSetKeepsWhatKinMakes(emonT *testing.T) {

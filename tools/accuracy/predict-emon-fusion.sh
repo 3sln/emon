@@ -1,9 +1,10 @@
 #!/bin/sh
-# The FUSION-REPLAYING emon predictor for `bb accuracy` (P7.3, D285-D290): the Rust Engine converting a born-digital document with the hidden
-# setting `ocr-born-digital`, from the committed transcript test/fusion/replay/ID/ (recorded live on Rust with pdfium and Tesseract by
-# tools/fusion/record-replay.clj, bitmaps dropped: a replay needs the answers only).   Protocol:
+# The FUSION-REPLAYING emon predictor for `bb accuracy` (P7.3, D285-D290; P7.S, D200): the Rust Engine converting a born-digital document with its default
+# settings (`ocr: always`, `ocr-scope: full`: the born-digital pages are OCR'd and fused), from the committed transcript test/fusion/replay/ID/ (recorded live on
+# Rust with pdfium and Tesseract by tools/fusion/record-replay.clj, bitmaps dropped: a replay needs the answers only).   Protocol:
 #   predict-emon-fusion.sh ID VARIANT INPUT GOLD   -> the Model's canonical JSON on stdout
 # A gate's: it calls no engine. A document with no committed transcript is `not available` (exit 3, the protocol's word).
+# EMON_RS_FLAGS: extra driver flags (`--ocr-scope=witness` replays a transcript recorded so).
 set -e
 if ! command -v cargo > /dev/null; then
   echo "emon-fusion: cargo is not on PATH, so the Rust Engine cannot be built (SKIP)" >&2
@@ -21,4 +22,4 @@ if [ ! -x "$bin" ] || [ "$(cat "$root/.cache/emon-rs/stamp" 2>/dev/null)" != "$s
   "$root/kin/scripts/emon-rs-build" > /dev/null || exit 1
   printf '%s' "$stamp" > "$root/.cache/emon-rs/stamp"
 fi
-exec "$bin" --ocr-born-digital --replay="$t" "$3"
+exec "$bin" $EMON_RS_FLAGS --replay="$t" "$3"

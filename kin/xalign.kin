@@ -206,7 +206,7 @@
 
 ;; ------------------------------------------------------------- text similarity
 
-(defn ^I32 xa-fold-cp [^I32 cp]
+(defn ^:pub ^I32 xa-fold-cp [^I32 cp]
   (comment "A code point's folded form when it is a letter or a digit, 0 when it is not (a space, a punctuation, a symbol).")
   (comment "Case folding covers ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic; every other letter folds to itself.")
   (if (< cp 48) (return 0))
@@ -283,7 +283,7 @@
     (if (> (cells-len out) (xa-tcap)) (cells-drop out (xa-tcap)))
     (return (cells-len out))))
 
-(defn ^I32 xa-lev [^Cells a ^Cells b ^:mut ^Cells tt]
+(defn ^:pub ^I32 xa-lev [^Cells a ^Cells b ^:mut ^Cells tt]
   (comment "The Levenshtein distance of a and b (code points), its two rows in `tt`.")
   (let [^I32 la (cells-len a)
         ^I32 lb (cells-len b)

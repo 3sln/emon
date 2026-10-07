@@ -15,7 +15,8 @@
 //	--out=bundle     one conversion, every output, for `bb identity` (see the Rust driver: the sections are the same)
 //	--out=pixels     one recording as one line per decode entry (see the Rust driver; `bb image` compares them)
 //	--dump=DIR       with --out=pixels, also write each frame's pixels to DIR/frame-N.raw
-//	--ocr-born-digital  the hidden test setting (P7.3, D285-D290): OCR the born-digital pages too and fuse the readings; a replay (or live) arm
+//	--ocr-scope=S    SPEC 13 (P7.S, D200): under `--ocr=always` a born-digital page is read whole with its text (`full`, the default) or as the render
+//	                 without its text plus witness lines of its text layer (`witness`). (`--ocr-born-digital`, the hidden setting of P7.3, is gone: the policy is on.)
 //	--tesseract[=D]  give the Engine the Tesseract `Ocr` port (D211), reading models from D (default: $TESSDATA_PREFIX and the usual
 //	                 places). LIVE: only a build with the `tesseract` tag has it (`EMON_GO_LIVE=1 kin/scripts/emon-go-build`, cgo); no gate
 //	                 uses it. Without the flag an `ocr` request is answered `unsupported` and a page that needed OCR has no text.
@@ -42,7 +43,7 @@ import (
 
 func usage(msg string) {
 	fmt.Fprintf(os.Stderr, "emon-go: %s\n", msg)
-	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
+	fmt.Fprintln(os.Stderr, "usage: emon-go [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE")
 	os.Exit(2)
 }
 
@@ -224,8 +225,15 @@ func main() {
 			cfg.ChunkSize = n
 		case a == "--async":
 			cfg.SimulateAsync = true
-		case a == "--ocr-born-digital":
-			opts.OcrBornDigital = true
+		case strings.HasPrefix(a, "--ocr-scope="):
+			switch strings.TrimPrefix(a, "--ocr-scope=") {
+			case "full":
+				opts.OcrScope = emon.OcrScopeFull
+			case "witness":
+				opts.OcrScope = emon.OcrScopeWitness
+			default:
+				usage("--ocr-scope is full or witness")
+			}
 		case a == "--no-retarget":
 			opts.NoRetarget = true
 		case a == "--tesseract":
@@ -446,6 +454,9 @@ func main() {
 		s := r.stats
 		fmt.Fprintf(os.Stderr, "stats: attempts=%d fetch-rounds=%d bytes-requests=%d source-reads=%d bytes-fetched=%d of %d requests=%d\n",
 			s.Attempts, s.FetchRounds, s.BytesRequests, s.SourceReads, s.BytesFetched, s.InputBytes, s.Requests)
+		// P7.S (D210): wall time by stage, microseconds (the Rust driver's `time-stats`, same words)
+		fmt.Fprintf(os.Stderr, "time-stats: render-us=%d crop-us=%d decode-us=%d ocr-first-us=%d ocr-later-us=%d pass-us=%d pages-us=%d finish-us=%d\n",
+			s.FulfilUs[1], s.FulfilUs[5], s.FulfilUs[2], s.FulfilUs[3], s.FulfilUs[7], s.PassUs, s.PagesUs, s.FinishUs)
 	}
 	fmt.Print(r.text)
 }

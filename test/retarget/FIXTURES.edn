@@ -1,5 +1,5 @@
 ;; The documents of the targeted-rounds gate (`kin/scripts/retarget`, P7.4, D347). Recorded LIVE by `bb retarget-record` (Tesseract, pdfium for :born), with pixels.
-;;   :pdf     the document;  :kind :scan (the scan variants, fed as images) or :born (born-digital text, OCR'd as a witness, `--ocr-born-digital`)
+;;   :pdf     the document;  :kind :scan (the scan variants, fed as images) or :born (born-digital text, OCR'd and fused: the Engine's defaults since P7.S)
 ;;   :gold    the gold file's name under test/corpus/synth/gold (default: the PDF's name)
 ;;   :passes  the passes the evidence dump's `oruns` must name (`pass`)
 ;;   :leak    words of what is not the body (a watermark, a seal): the body holds no more of them with the targeted passes than without

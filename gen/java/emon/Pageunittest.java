@@ -19,16 +19,48 @@ public final class Pageunittest {
             emon.Port.cellsPush(pl, 79200);
             emon.Port.cellsPush(pl, 61200);
             emon.Port.cellsPush(pl, 79200);
+            // `emon.rasterplan`'s cells: what the page asks (nothing), its witness rows (none), its scripts (none)
+            emon.Port.cellsPush(pl, 0);
+            emon.Port.cellsPush(pl, 0);
+            emon.Port.cellsPush(pl, 0);
+            emon.Port.cellsPush(pl, 0);
+            i += 1;
+        }
+        return 0;
+    }
+    public static int bornPlan(emon.Port.Cells pl, int pages, int ask, int scripts) {
+        // `pages` born-digital pages of the plan that ask `ask` (`rp-ask-*`), with the scripts bit set `scripts`.
+        int i = 0;
+        planOf(pl, pages, Pageunit.pkBorn());
+        while (i < pages) {
+            emon.Port.cellsSet(pl, (i * Pageunit.puW()) + Rasterplan.rpFAsk(), ask);
+            emon.Port.cellsSet(pl, (i * Pageunit.puW()) + Rasterplan.rpFScripts(), scripts);
             i += 1;
         }
         return 0;
     }
     public static int runPageFused(int i, int policy, int fuse, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq) {
-        // A page unit with the fusion arguments (P7.3): `fuse` the hidden setting.
-        return Pageunit.puRunPdf(i, 3, policy, pl, ans, rq, emon.Port.newCells(), emon.Port.newBitmapSet(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), fuse, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        // A page unit with the fusion arguments: `fuse` the hidden setting `no-retarget` (bit 2).
+        return Pageunit.puRunPdf(i, 3, policy, pl, ans, rq, emon.Port.newCells(), emon.Port.newBitmapSet(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), fuse, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
     }
     public static int runPage(int i, int policy, emon.Port.Cells pl, emon.Port.Cells ans, emon.Port.Cells rq) {
         return runPageFused(i, policy, 0, pl, ans, rq);
+    }
+    public static int nthRec(emon.Port.Cells rq, int n) {
+        // The cell where record `n` (0-based) of the requests starts.
+        int at = 0;
+        int k = 0;
+        while (k < n) {
+            at += emon.Port.cellsAt(rq, at);
+            k += 1;
+        }
+        return at;
+    }
+    public static int answerRenders(emon.Port.Cells ans, int page) {
+        // Both renders of page `page` answered, 2550 x 3300 RGB at 300 dpi.
+        Plan.anRender(ans, Plan.puId(page, Plan.piRenderText()), 2550, 3300, 3, 300);
+        Plan.anRender(ans, Plan.puId(page, Plan.piRenderNoText()), 2550, 3300, 3, 300);
+        return 0;
     }
     public static void testIdsArePerPageUnit() {
         emon.Testport.assertEq(Plan.puId(0, Plan.piDecode()), 260, "page 0 decode");
@@ -61,71 +93,114 @@ public final class Pageunittest {
         emon.Testport.assertEq(emon.Port.cellsAt(rq1, 2), emon.Port.cellsAt(rq2, 2), "the same id");
         emon.Testport.assertEq(emon.Port.cellsAt(rq1, 4), emon.Port.cellsAt(rq2, 4), "the same arguments");
     }
-    public static void testABornDigitalPageAsksForNothingUntilAConsumerAsksForItsRasters() {
-        emon.Port.Cells pl = emon.Port.newCells();
-        emon.Port.Cells rq = emon.Port.newCells();
-        planOf(pl, 2, Pageunit.pkBorn());
-        emon.Testport.assertEq(runPage(1, 2, pl, emon.Port.newCells(), rq), Plan.usDone(), "always: lazy, it asks nothing");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq), 0, "no request, no OCR");
-        emon.Testport.assertEq(Pageunit.puAskRasters(1, 3, 2, emon.Port.newCells(), rq), Plan.usRequests(), "a consumer asks");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq), 14, "two renders of seven cells");
-        emon.Testport.assertEq(Plan.recKind(rq, 0), Plan.pkRender(), "a render");
-        emon.Testport.assertEq(Plan.recId(rq, 0), 513, "page 1, with text: 2 * 256 + 1");
-        emon.Testport.assertEq(Plan.rqArg(rq, 0, 0), 3, "of input 3");
-        emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 1, "page 1, 0-based");
-        emon.Testport.assertEq(Plan.rqArg(rq, 0, 2), 300, "at 300 dpi");
-        emon.Testport.assertEq(Plan.rqArg(rq, 0, 3), Plan.layFull(), "with its text");
-        emon.Testport.assertEq(Plan.recId(rq, 7), 514, "and without it");
-        emon.Testport.assertEq(Plan.rqArg(rq, 7, 3), Plan.layNoText(), "the layer");
-        emon.Port.Cells pla = emon.Port.newCells();
-        emon.Port.Cells rqa = emon.Port.newCells();
-        emon.Port.Cells ans1 = emon.Port.newCells();
-        planOf(pla, 1, Pageunit.pkBorn());
-        Plan.anFail(ans1, Plan.pkRender(), 257, Plan.psUnsupported());
-        Plan.anFail(ans1, Plan.pkRender(), 258, Plan.psUnsupported());
-        emon.Testport.assertEq(Pageunit.puAskRasters(0, 3, 2, ans1, rqa), Plan.usDone(), "answered, even `unsupported`: done");
-        emon.Testport.assertEq(emon.Port.cellsLen(rqa), 0, "asks nothing more, and no OCR");
-        emon.Port.Cells plb = emon.Port.newCells();
-        emon.Port.Cells rqb = emon.Port.newCells();
-        planOf(plb, 1, Pageunit.pkBorn());
-        emon.Testport.assertEq(runPage(0, 1, plb, emon.Port.newCells(), rqb), Plan.usDone(), "auto: a text layer is read as it is");
-        emon.Testport.assertEq(emon.Port.cellsLen(rqb), 0, "no request");
-        emon.Port.Cells plan2 = emon.Port.newCells();
+    public static void testABornDigitalPageAsksWhatItsPlanSays() {
+        // a plan that asks nothing (`ocr: auto` on a healthy page): nothing is asked, whatever the policy
+        emon.Port.Cells pl1 = emon.Port.newCells();
+        emon.Port.Cells rq1 = emon.Port.newCells();
+        bornPlan(pl1, 2, Rasterplan.rpAskNone(), 0);
+        emon.Testport.assertEq(runPage(1, 2, pl1, emon.Port.newCells(), rq1), Plan.usDone(), "always, but the plan asks nothing");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq1), 0, "no request");
+        // `full`: the two renders in round 1, the same every time
+        emon.Port.Cells pl2 = emon.Port.newCells();
         emon.Port.Cells rq2 = emon.Port.newCells();
-        planOf(plan2, 1, Pageunit.pkScan());
-        emon.Testport.assertEq(runPage(0, 0, plan2, emon.Port.newCells(), rq2), Plan.usDone(), "never: done");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq2), 0, "no request");
-        emon.Port.Cells plan3 = emon.Port.newCells();
         emon.Port.Cells rq3 = emon.Port.newCells();
-        planOf(plan3, 1, Pageunit.pkNone());
-        emon.Testport.assertEq(runPage(0, 2, plan3, emon.Port.newCells(), rq3), Plan.usDone(), "no image: done");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq3), 0, "no request");
-    }
-    public static void testABornDigitalPageAsksWhatFusionNeedsOnlyUnderTheHiddenSetting() {
-        emon.Port.Cells pl = emon.Port.newCells();
-        emon.Port.Cells rq = emon.Port.newCells();
-        emon.Port.Cells ans = emon.Port.newCells();
-        planOf(pl, 2, Pageunit.pkBorn());
-        emon.Testport.assertEq(runPageFused(1, 2, 1, pl, ans, rq), Plan.usRequests(), "fuse, always: it asks");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq), 14, "the two renders, in one round");
-        emon.Testport.assertEq(Plan.recId(rq, 0), 513, "with its text");
-        emon.Testport.assertEq(Plan.recId(rq, 7), 514, "and without it");
+        bornPlan(pl2, 2, Rasterplan.rpAskFull(), 0);
+        emon.Testport.assertEq(runPage(1, 2, pl2, emon.Port.newCells(), rq2), Plan.usRequests(), "it asks");
+        runPage(1, 2, pl2, emon.Port.newCells(), rq3);
+        emon.Testport.assertEq(emon.Port.cellsLen(rq2), 14, "two renders of seven cells");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq3), 14, "the same again");
+        emon.Testport.assertEq(Plan.recKind(rq2, 0), Plan.pkRender(), "a render");
+        emon.Testport.assertEq(Plan.recId(rq2, 0), 513, "page 1, with text: 2 * 256 + 1");
+        emon.Testport.assertEq(Plan.rqArg(rq2, 0, 0), 3, "of input 3");
+        emon.Testport.assertEq(Plan.rqArg(rq2, 0, 1), 1, "page 1, 0-based");
+        emon.Testport.assertEq(Plan.rqArg(rq2, 0, 2), 300, "at 300 dpi");
+        emon.Testport.assertEq(Plan.rqArg(rq2, 0, 3), Plan.layFull(), "with its text");
+        emon.Testport.assertEq(Plan.recId(rq2, 7), 514, "and without it");
+        emon.Testport.assertEq(Plan.rqArg(rq2, 7, 3), Plan.layNoText(), "the layer");
         // the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's
-        Plan.anFail(ans, Plan.pkRender(), 513, Plan.psUnsupported());
-        Plan.anFail(ans, Plan.pkRender(), 514, Plan.psUnsupported());
-        emon.Port.Cells rq2 = emon.Port.newCells();
-        emon.Testport.assertEq(runPageFused(1, 2, 1, pl, ans, rq2), Plan.usDone(), "no render, no OCR, done");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq2), 0, "nothing asked");
-        emon.Port.Cells pl3 = emon.Port.newCells();
-        emon.Port.Cells rq3 = emon.Port.newCells();
-        planOf(pl3, 1, Pageunit.pkBorn());
-        emon.Testport.assertEq(runPageFused(0, 1, 1, pl3, emon.Port.newCells(), rq3), Plan.usDone(), "fuse under `auto`: only `always` asks");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq3), 0, "nothing asked");
         emon.Port.Cells pl4 = emon.Port.newCells();
+        emon.Port.Cells ans4 = emon.Port.newCells();
         emon.Port.Cells rq4 = emon.Port.newCells();
-        planOf(pl4, 1, Pageunit.pkBorn());
-        emon.Testport.assertEq(runPageFused(0, 2, 0, pl4, emon.Port.newCells(), rq4), Plan.usDone(), "without the setting: lazy, nothing asked");
+        bornPlan(pl4, 1, Rasterplan.rpAskFull(), 0);
+        Plan.anFail(ans4, Plan.pkRender(), 257, Plan.psUnsupported());
+        Plan.anFail(ans4, Plan.pkRender(), 258, Plan.psUnsupported());
+        emon.Testport.assertEq(runPage(0, 2, pl4, ans4, rq4), Plan.usDone(), "no render, no OCR, done");
         emon.Testport.assertEq(emon.Port.cellsLen(rq4), 0, "nothing asked");
+        // `never` plans nothing, and a page with no text layer nor a scan asks nothing
+        emon.Port.Cells pl5 = emon.Port.newCells();
+        emon.Port.Cells rq5 = emon.Port.newCells();
+        bornPlan(pl5, 1, Rasterplan.rpAskFull(), 0);
+        emon.Testport.assertEq(runPage(0, 0, pl5, emon.Port.newCells(), rq5), Plan.usDone(), "never: done");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq5), 0, "no request");
+        emon.Port.Cells pl6 = emon.Port.newCells();
+        emon.Port.Cells rq6 = emon.Port.newCells();
+        planOf(pl6, 1, Pageunit.pkNone());
+        emon.Testport.assertEq(runPage(0, 2, pl6, emon.Port.newCells(), rq6), Plan.usDone(), "no image: done");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq6), 0, "no request");
+    }
+    public static void testUnderFullTheWholeRenderWithItsTextIsReadInRoundTwoInTheTextLayersScripts() {
+        emon.Port.Cells pl = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Cells pl1 = emon.Port.newCells();
+        emon.Port.Cells rq1 = emon.Port.newCells();
+        bornPlan(pl, 1, Rasterplan.rpAskFull(), 0);
+        answerRenders(ans, 0);
+        emon.Testport.assertEq(runPage(0, 2, pl, ans, rq), Plan.usRequests(), "the OCR is asked");
+        emon.Testport.assertEq(Plan.recCount(rq), 1, "one request");
+        emon.Testport.assertEq(Plan.recKind(rq, 0), Plan.pkOcr(), "an OCR");
+        emon.Testport.assertEq(Plan.recId(rq, 0), 272, "the page's first pass: 256 + 16");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 0), 257, "of the render with its text");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 3, "psm 3");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, 5), 0, "the whole bitmap");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq), 10, "no language: every model");
+        // a Latin text layer asks for the Latin script's models
+        bornPlan(pl1, 1, Rasterplan.rpAskFull(), 1);
+        runPage(0, 2, pl1, ans, rq1);
+        emon.Testport.assertEq(emon.Port.cellsLen(rq1), 11, "one language cell");
+        emon.Testport.assertEq(emon.Port.cellsAt(rq1, 10), 1281455214, "`Latn`");
+    }
+    public static void testUnderWitnessTheRenderWithoutItsTextAndTheWitnessLinesAreReadInRoundTwo() {
+        emon.Port.Cells pl = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        bornPlan(pl, 1, Rasterplan.rpAskWitness(), 0);
+        emon.Port.cellsSet(pl, Rasterplan.rpFWat(), emon.Port.cellsLen(pl));
+        emon.Port.cellsSet(pl, Rasterplan.rpFWn(), 2);
+        // two witness rows: page 0, line 4 then line 9, boxes in centipoints, font 7
+        emon.Port.cellsPush(pl, 0);
+        emon.Port.cellsPush(pl, 4);
+        emon.Port.cellsPush(pl, 7200);
+        emon.Port.cellsPush(pl, 14400);
+        emon.Port.cellsPush(pl, 36000);
+        emon.Port.cellsPush(pl, 15600);
+        emon.Port.cellsPush(pl, 7);
+        emon.Port.cellsPush(pl, 0);
+        emon.Port.cellsPush(pl, 0);
+        emon.Port.cellsPush(pl, 9);
+        emon.Port.cellsPush(pl, 7200);
+        emon.Port.cellsPush(pl, 16800);
+        emon.Port.cellsPush(pl, 36000);
+        emon.Port.cellsPush(pl, 18000);
+        emon.Port.cellsPush(pl, 7);
+        emon.Port.cellsPush(pl, 0);
+        answerRenders(ans, 0);
+        emon.Testport.assertEq(runPage(0, 2, pl, ans, rq), Plan.usRequests(), "the first pass is asked");
+        emon.Testport.assertEq(Plan.recCount(rq), 3, "the render without text, and two witness lines");
+        int r0 = nthRec(rq, 0);
+        int r1 = nthRec(rq, 1);
+        int r2 = nthRec(rq, 2);
+        emon.Testport.assertEq(Plan.recId(rq, r0), 272, "the first pass");
+        emon.Testport.assertEq(Plan.rqArg(rq, r0, 0), 258, "of the render WITHOUT its text");
+        emon.Testport.assertEq(Plan.rqArg(rq, r0, 1), 3, "psm 3");
+        emon.Testport.assertEq(Plan.recId(rq, r1), 352, "witness line 0: 256 + 96");
+        emon.Testport.assertEq(Plan.rqArg(rq, r1, 0), 257, "of the render WITH its text");
+        emon.Testport.assertEq(Plan.rqArg(rq, r1, 1), 7, "psm 7");
+        emon.Testport.assertEq(Plan.rqArg(rq, r1, 3), 297, "x: 72 pt at 300 dpi less the pad of 3");
+        emon.Testport.assertEq(Plan.rqArg(rq, r1, 4), 597, "y");
+        emon.Testport.assertEq(Plan.rqArg(rq, r1, 5), 1206, "width");
+        emon.Testport.assertEq(Plan.rqArg(rq, r1, 6), 56, "height");
+        emon.Testport.assertEq(Plan.recId(rq, r2), 353, "witness line 1");
     }
     public static void testTheBitmapSetKeepsWhatKinMakes() {
         emon.Port.BitmapSet s = emon.Port.newBitmapSet();

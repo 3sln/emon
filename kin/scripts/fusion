@@ -1,23 +1,24 @@
 #!/usr/bin/env bb
 ;; FUSION on born-digital pages, replayed from transcripts: recorded on Rust (pdfium and Tesseract), replayed on Rust and Go through the
-;; whole Engine.   kin/scripts/fusion     (DEVLOG P7.3, D285-D290)
+;; whole Engine.   kin/scripts/fusion     (DEVLOG P7.3, D285-D290; P7.S, D200, D201, D222, D600-D606)
 ;;
-;; THE LIVE ENGINES ARE NOT HERE. `tools/fusion/record-replay.clj` converted each document of the fusion set with the hidden setting
-;; `ocr-born-digital` (the born-digital pages are OCR'd, as P7.S will under `always`), pdfium rendering every page and Tesseract reading
-;; it, and committed what they answered (test/fusion/replay/ID/transcript.edn, slim: no bitmap) with the SHA-256 of the replay's bundle
-;; (test/fusion/replay/DIGESTS.edn). This gate only REPLAYS, so it tests emon and never whose pdfium or Tesseract is installed (SPEC
-;; 7.3). It holds:
+;; THE LIVE ENGINES ARE NOT HERE. `tools/fusion/record-replay.clj` converted each document of the fusion set with the Engine's DEFAULT settings
+;; (`ocr: always`: since P7.S the born-digital pages are OCR'd), pdfium rendering every page and Tesseract reading it, and committed what they
+;; answered (test/fusion/replay/ID/transcript.edn, slim: no bitmap; recorded `--no-retarget`, so that a replay, which reads no pixel, asks what
+;; the recording asked) with the SHA-256 of the replay's bundle (test/fusion/replay/DIGESTS.edn). This gate only REPLAYS, so it tests emon and
+;; never whose pdfium or Tesseract is installed (SPEC 7.3). It holds:
 ;;
 ;;   1. IDENTITY: the Rust Engine and the Go Engine replay every transcript to the identical bundle (JSON, HTML, evidence dump version
 ;;      "2": the correspondence groups, the verdicts and the rules that made them), and it is the bundle the recording made;
 ;;   2. A REPLAY NEVER GUESSES: a changed OCR request is `transcript-miss` on both;
-;;   3. NO ENGINE, NO CHANGE: the same setting with no transcript and no port (every `render` and `ocr` answered `unsupported`) converts
-;;      to exactly the bundle of a run without it, on both Engines (the fusion stages do nothing when no answer came);
+;;   3. NO ENGINE, NO CHANGE: the default policy with no transcript and no port (every `render` and `ocr` answered `unsupported`) converts
+;;      to exactly the bundle of a `--ocr=never` run, on both Engines (the fusion stages do nothing when no answer came: G1, D201);
 ;;   4. THE BORN-DIGITAL CONTRACT (SPEC 9.4, D201): every verdict that gave a group to OCR is one of the rules that may (a bad glyph of
 ;;      the word's own, an unhealthy font, an admitted OCR-only word), and `tl-override` (the share of body characters under
 ;;      `text-layer-suspect`) is zero on every document that has no broken encoding;
-;;   5. ACCURACY: per document, the CER of the fused Model is no worse than the no-engine Model's plus 0.0005, the documents whose
-;;      encoding is broken (`tl-broken-shift`, `tl-broken-unmapped`) drop sharply, and the scoreboard's `emon-fusion` entry holds.
+;;   5. ACCURACY: per document, the CER of the fused Model is no worse than the no-engine Model's plus 0.0005 (D201 G2), the documents whose
+;;      encoding is broken (`tl-broken-shift`, `tl-broken-unmapped`) drop sharply, THE GRAPHICS CONTRACT (D222: the tables of an image-free
+;;      document are the no-engine run's, cell for cell, text, scope, spans and boxes), and the scoreboard's `emon-fusion` entry holds.
 ;;      The per-source win rates and per-rule counts of the dumps are printed (`bb fusion-report`'s analysis; they describe, they do not gate).
 (require '[babashka.fs :as fs]
          '[babashka.classpath :as cp]
@@ -67,7 +68,7 @@
 (when (and rdrv gdrv (seq ids))
   (let [pdf #(abs (str "test/corpus/synth/pdf/" % ".pdf"))
         dir #(abs (str replay-dir "/" %))
-        flag "--ocr-born-digital"]
+        flag "--ocr=always"]
     ;; 1-3: identity, no guessing, no engine --------------------------------------------------------------------------------------
     (doseq [id ids]
       (let [rr (drive rdrv flag "--out=bundle" (str "--replay=" (dir id)) (pdf id))
@@ -90,10 +91,10 @@
                    id ": a changed request (psm 3 -> 4) is transcript-miss on both Engines, nothing guessed")))
         (let [nr (drive rdrv flag "--out=bundle" (pdf id))
               ng (drive gdrv flag "--out=bundle" (pdf id))
-              pr (drive rdrv "--out=bundle" (pdf id))
-              pg (drive gdrv "--out=bundle" (pdf id))]
+              pr (drive rdrv "--ocr=never" "--out=bundle" (pdf id))
+              pg (drive gdrv "--ocr=never" "--out=bundle" (pdf id))]
           (check (and (zero? (:exit nr)) (same? nr ng) (same? nr pr) (same? ng pg))
-                 id ": with no engine the setting changes nothing: the bundle is the plain run's, the same on both"))))
+                 id ": with no engine the policy changes nothing: the default run's bundle is the `--ocr=never` run's (G1, D201), the same on both"))))
     ;; 4-5: the contract and the accuracy ------------------------------------------------------------------------------------------
     (let [idset (set ids)
           _ (alter-var-root #'A/*variants* (constantly #{"pdf"}))
@@ -141,6 +142,24 @@
           (let [w (FR/win-rates a)]
             (when (and w (get w "ocr"))
               (ok (format "%s: OCR won %.4f of %d decided groups with both candidates" id (double (get w "ocr")) (:decided a)))))))
+      ;; THE GRAPHICS CONTRACT (D222, P7.G): on a born-digital page without images every table is the one the vector source alone gives, i.e. the one the
+      ;; no-engine run makes: every table of the fused Model equals the plain run's, cell for cell (text, header scope, spans, box), with only the ids and
+      ;; the provenance and confidence left out.
+      (letfn [(strip [n] (cond (map? n) (into {} (for [[k v] n :when (not (#{"id" "src" "conf"} k))] [k (strip v)]))
+                               (sequential? n) (mapv strip n)
+                               :else n))
+              (tables [n] (cond (map? n) (concat (when (= "table" (get n "kind")) [(strip n)]) (mapcat tables (vals n)))
+                                (sequential? n) (mapcat tables n)))]
+        (doseq [id ids]
+          (let [plain (drive rdrv "--ocr=never" "--out=json" (pdf id))
+                fusedm (drive rdrv "--out=json" (str "--replay=" (dir id)) (pdf id))
+                ev (drive rdrv "--ocr=never" "--out=evidence" (pdf id))
+                nimg (count (get (json/parse-string (:out ev)) "images"))
+                tp (tables (json/parse-string (:out plain)))
+                tf (tables (json/parse-string (:out fusedm)))]
+            (when (and (zero? nimg) (seq tp))
+              (check (= tp tf)
+                     id ": graphics contract: the " (count tp) " table(s) of an image-free born-digital document are the vector source's, cell for cell, under fusion")))))
       ;; the ratchet
       (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-fusion" "--variants" "pdf"
                         "--ids" (str/join "," ids))]
@@ -177,7 +196,7 @@
   (when (and rdrv gdrv (seq hids))
     (doseq [id hids]
       (let [d (abs (str hdir "/" id)) pdf (str d "/doc.pdf")
-            flag "--ocr-born-digital"
+            flag "--ocr=always"
             gold (norm-text (slurp (str d "/gold.txt")))
             rr (drive rdrv flag "--out=bundle" (str "--replay=" d) pdf)
             rg (drive gdrv flag "--out=bundle" (str "--replay=" d) pdf)

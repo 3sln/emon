@@ -14,13 +14,15 @@
 ;; is handed the same arenas as before, so a run whose engines answer `unsupported` gives every gate the Model it always gave
 ;; (D195 (3)).
 ;;
-;; FUSION (P7.3). A BORN-DIGITAL page is not OCR'd (D201, D212 (3)): P7.S flips that policy. Until it does, the hidden test setting
-;; `fuse` (the Engines' `ocr_born_digital`, which the replay gate and `bb fusion` set) makes the unit ask what P7.S will ask under
-;; `always`: the page's two rasters (`pu-ask-rasters`, one round), then the OCR of the one with its text (a second round); and, when
-;; both answers are in and ok, it writes the OCR's evidence (`sc-answer`) and aligns the page (`xa-page`: its correspondence groups
-;; in `cg`/`refs`) and scores it (`hl-page`). WHICH SOURCE WINS is not decided here: arbitration needs the document's verdict on every
-;; font (`hl-doc`: an encoding is a document fact), so `emon.arbiter` runs in the document unit (D285). A page whose renders or OCR
-;; came back `unsupported` or failed is left as the text layer made it, which is what a run with no engine gives, byte for byte.
+;; FUSION (P7.3, switched on by P7.S). A BORN-DIGITAL page is OCR'd under `always` (D200: D212 (3) is superseded) and under `auto` when it calls for
+;; it, as `emon.rasterplan`'s `rp-plan` decided in the document pass (`ask` in the page's plan row: SPEC 8.3's table): the page's two rasters
+;; (`pu-ask-rasters`, one round), then, under `ocr-scope: full`, the OCR of the one with its text, or, under `witness`, the OCR of the one without it
+;; and the witness lines (a second round; a round 3 reads the whole page when the witnesses disagree, `rp-weak`); and, when the answers are in and ok, it
+;; writes the OCR's evidence (`sc-answer`) and aligns the page (`xa-page`: its correspondence groups in `cg`/`refs`) and scores it (`hl-page`). WHICH
+;; SOURCE WINS is not decided here: arbitration needs the document's verdict on every font (`hl-doc`: an encoding is a document fact), so `emon.arbiter`
+;; runs in the document unit (D285). A page whose renders or OCR came back `unsupported` or failed is left as the text layer made it, which is what a
+;; run with no engine gives, byte for byte. (`fuse`, the Engines' flags: bit 2 is the hidden test setting `no-retarget`; bit 1 was `ocr-born-digital`,
+;; removed when the policy was switched.)
 ;;
 ;; IDS are `emon.plan`'s `pu-id` (D207).
 (ns emon.pageunit
@@ -29,8 +31,11 @@
             [emon.pdfsrc :refer [ps-missed]]
             [emon.plan :refer [rq-decode rq-render an-find an-ok an-arg flt-dct us-requests us-done
                                pu-id pi-render-text pi-render-no-text pi-decode pi-ocr lay-full lay-no-text]]
-            [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj vw-new vk-render ol-count ow-count ev-rot-median or-get orf-lcount]]
-            [emon.retarget :refer [rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness]]
+            [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj vw-new vk-render ol-count ow-count ev-rot-median or-get orf-lcount
+                                   or-count op-region op-first]]
+            [emon.retarget :refer [rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad]]
+            [emon.rasterplan :refer [rp-w rp-f-ask rp-f-wat rp-f-wn rp-f-scripts rp-ww rp-ask-none rp-ask-full rp-ask-witness rp-plan rp-request rp-weak
+                                     ri-escalate ri-witness ri-none]]
             [emon.player :refer [cg-count]]
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
             [emon.scan :refer [sc-eligible sc-dct-span sc-request sc-page sc-page-view sc-page-evidence sc-emit-sel sc-prep sc-lang sc-answer]]
@@ -43,9 +48,10 @@
 ;; The resolution of a born-digital page's rasters (D199).
 (defn ^:pub ^I32 pu-dpi [] (return 300))
 
-;; The plan: PU-W cells a page. kind 0: no request of the page's own (born digital, or no image to read); 1: a scanned
+;; The plan: PU-W cells a page. kind 0: no request of the page's own (no text layer, no image to read); 1: a scanned
 ;; page, one DCT image covering it (D212); 2: born digital (any word, hidden or not).
-(defn ^:pub ^I32 pu-w [] (return 10))
+;; Cells 10-13 are `emon.rasterplan`'s (what a born-digital page asks, its witness lines, its scripts; the witness rows follow the page rows).
+(defn ^:pub ^I32 pu-w [] (return (rp-w)))
 (defn ^:pub ^I32 pu-kind [^Cells pl ^I32 i] (return (cells-at pl (* i (pu-w)))))
 (defn ^:pub ^I32 pu-field [^Cells pl ^I32 i ^I32 k] (return (cells-at pl (+ (* i (pu-w)) k))))
 ;; fields: 1 object, 2 span start, 3 span length, 4-7 the image's box, 8-9 the page's size (centipoints)
@@ -54,11 +60,14 @@
 (defn ^:pub ^I32 pk-born [] (return 2))
 
 (defn ^:pub ^I32 pu-plan [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
-                          ^Cells pg ^Cells im ^Cells words ^I32 policy ^:mut ^Cells sp ^:mut ^Cells pl]
+                          ^Cells pg ^Cells im ^Cells words ^I32 policy ^I32 scope ^Cells fw ^Cells fl ^Cells et ^Cells hl
+                          ^:mut ^Cells sp ^:mut ^Cells pl ^:mut ^Cells rs1 ^:mut ^Cells rs2]
   (comment "THE DOCUMENT PASS'S PLAN, one row of `pu-w` cells a page. A page with no `words` row at all and one image that")
   (comment "`sc-eligible` and `sc-dct-span` accept is a `pk-scan` page (its bytes are located here, the one place a page's work")
   (comment "reads the input); every other page is `pk-none` and is left as the text layer made it (D212). `policy` 0 plans")
-  (comment "nothing. Loads objects, so `a`, `b`, `st` are overwritten and the source may miss (then the plan is not to be used).")
+  (comment "nothing. Then `emon.rasterplan`'s `rp-plan` says what each born-digital page asks (HOOK P7.S): by `policy` and `scope`,")
+  (comment "from the text layer's flow `fw` `fl` `et` and health `hl` (`rs1` `rs2` are its scratch).")
+  (comment "Loads objects, so `a`, `b`, `st` are overwritten and the source may miss (then the plan is not to be used).")
   (let [^I32 np (pd-pg-count pg)
         ^I32 nw (wd-count words)
         ^I32 nim (im-count im)
@@ -124,17 +133,38 @@
                             (cells-set pl (+ k 9) (- py1 py0))))))
                 (if (ps-missed src) (return 0))))
           (set i (+ i 1))))
+    (comment ";; HOOK P7.S: the first-pass requests of the born-digital pages")
+    (rp-plan np policy scope fw fl et hl im pg pl rs1 rs2)
     (return 0)))
 
-;; The born-digital page's two rasters, asked by a consumer stage (D251): the page with its text and without it, at 300 dpi, in one
-;; round under `always` (policy 2). Answers `us-requests` when it asked, else `us-done`. Nothing calls it yet.
-(defn ^:pub ^I32 pu-ask-rasters [^I32 i ^I32 input ^I32 policy ^Cells ans ^:mut ^Cells rq]
-  (if (== policy 2)
+;; The born-digital page's two rasters, asked in round 1 whenever the plan has the page ask for OCR (`ask` is not `rp-ask-none`): the page with its text and
+;; without it, at 300 dpi, in one round. Answers `us-requests` when it asked, else `us-done`.
+(defn ^:pub ^I32 pu-ask-rasters [^I32 i ^I32 input ^I32 ask ^Cells ans ^:mut ^Cells rq]
+  (if (!= ask (rp-ask-none))
     (if (< (an-find ans (pu-id i (pi-render-text))) 0)
       (do (rq-render rq (pu-id i (pi-render-text)) input i (pu-dpi) (lay-full))
           (rq-render rq (pu-id i (pi-render-no-text)) input i (pu-dpi) (lay-no-text))
           (return (us-requests)))))
   (return (us-done)))
+
+(defn ^I32 pu-wbox [^Cells pl ^I32 at ^I32 w ^I32 h ^I32 k]
+  (comment "Witness row at cell `at`: the pixel box of its line on a render `w` x `h` at `pu-dpi`, padded by `rt-pad`, clamped to the render: k 0 x, 1 y, 2 width, 3 height.")
+  (let [^I32 x0 (- (quot (* (cells-at pl (+ at 2)) (pu-dpi)) 7200) (rt-pad))
+        ^I32 y0 (- (quot (* (cells-at pl (+ at 3)) (pu-dpi)) 7200) (rt-pad))
+        ^I32 x1 (+ (quot (+ (* (cells-at pl (+ at 4)) (pu-dpi)) 7199) 7200) (rt-pad))
+        ^I32 y1 (+ (quot (+ (* (cells-at pl (+ at 5)) (pu-dpi)) 7199) 7200) (rt-pad))
+        ^:mut ^I32 bx0 x0
+        ^:mut ^I32 by0 y0
+        ^:mut ^I32 bx1 x1
+        ^:mut ^I32 by1 y1]
+    (if (< bx0 0) (set bx0 0))
+    (if (< by0 0) (set by0 0))
+    (if (> bx1 w) (set bx1 w))
+    (if (> by1 h) (set by1 h))
+    (if (== k 0) (return bx0))
+    (if (== k 1) (return by0))
+    (if (== k 2) (return (- bx1 bx0)))
+    (return (- by1 by0))))
 
 (defn ^I32 pu-px [^BitmapSet bms ^I32 id ^I32 fuse]
   (comment "1 when the page unit may read the pixels of the bitmap under `id`: it has them, and the hidden setting `no-retarget` (`fuse` bit 2) does")
@@ -142,27 +172,35 @@
   (if (== (bit-and fuse 2) 2) (return 0))
   (return (pn-has bms id)))
 
-;; FUSION: a born-digital page's rasters, the OCR of the one with its text, the ink layers of the raster and the targeted passes the first pass
-;; calls for (`emon.retarget`), and the page's alignment and health. Answers `us-requests` when it asked, else `us-done`; writes only in the round in
-;; which everything it asked for is in (see the head of this file): an attempt that asks gives back the evidence it wrote to decide (`pn-undo`).
-(defn ^I32 pu-run-born [^I32 i ^I32 input ^I32 policy ^I32 fuse ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms
+;; FUSION: a born-digital page's rasters, the OCR the plan asks (`full`: the whole render with the text; `witness`: the one without it and the witness lines,
+;; and when they disagree the whole of the one with it), the ink layers of the rasters and the targeted passes the first pass calls for (`emon.retarget`), and
+;; the page's alignment and health. Answers `us-requests` when it asked, else `us-done`; writes only in the round in which everything it asked for is in (see
+;; the head of this file): an attempt that asks gives back the evidence it wrote to decide (`pn-undo`).
+(defn ^I32 pu-run-born [^I32 i ^I32 input ^I32 fuse ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms
                         ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
                         ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                         ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
-                        ^Cells fw ^:mut ^Cells hl ^:mut ^Cells refs ^:mut ^Cells cg ^:mut ^Cells tlines
+                        ^Cells fw ^Cells fl ^:mut ^Cells hl ^:mut ^Cells refs ^:mut ^Cells cg ^:mut ^Cells tlines
                         ^:mut ^Cells xscr ^:mut ^Cells xgp ^:mut ^Cells xdp ^:mut ^Cells xta ^:mut ^Cells xtb ^:mut ^Cells xtt
                         ^:mut ^Cells scr ^:mut ^Cells images ^:mut ^Cells words ^:mut ^Cells lines
                         ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts
                         ^:mut ^Cells ws ^:mut ^Cells ws2 ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
                         ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
                         ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6]
-  (if (== (pu-ask-rasters i input policy ans rq) (us-requests)) (return (us-requests)))
-  (if (!= policy 2) (return (us-done)))
-  (let [^I32 rid (pu-id i (pi-render-text))
+  (let [^I32 ask (pu-field pl i (rp-f-ask))
+        ^I32 scripts (pu-field pl i (rp-f-scripts))
+        ^I32 nwit (pu-field pl i (rp-f-wn))
+        ^I32 wat (pu-field pl i (rp-f-wat))
+        ^I32 rid (pu-id i (pi-render-text))
         ^I32 nid (pu-id i (pi-render-no-text))
         ^I32 oid (pu-id i (pi-ocr))
+        ^I32 eid (pu-id i (ri-escalate))
+        ^I32 wid (pu-id i (ri-witness))
         ^I32 ar (an-find ans rid)
+        ^I32 an2 (an-find ans nid)
         ^:mut ^I32 ao -1
+        ^:mut ^I32 ae -1
+        ^:mut ^I32 aw -1
         ^:mut ^I32 view 0
         ^:mut ^I32 nview 0
         ^:mut ^I32 w 0
@@ -170,44 +208,126 @@
         ^:mut ^I32 dpi 0
         ^:mut ^I32 w0 0
         ^:mut ^I32 nw 0
+        ^:mut ^I32 w1 0
+        ^:mut ^I32 w2 0
+        ^:mut ^I32 w3 0
+        ^:mut ^I32 ne 0
         ^:mut ^I32 run 0
+        ^:mut ^I32 esc -1
+        ^:mut ^I32 r0 0
+        ^:mut ^I32 r1 0
+        ^:mut ^I32 wrun 0
+        ^:mut ^I32 weak 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 before 0
         ^:mut ^I32 g0 0]
+    (if (== ask (rp-ask-none)) (return (us-done)))
+    (if (== (pu-ask-rasters i input ask ans rq) (us-requests)) (return (us-requests)))
     (if (< ar 0) (return (us-done)))
     (if (!= (an-ok ans ar) 1) (return (us-done)))
-    (set ao (an-find ans oid))
-    (if (< ao 0)
-      (do (sc-request rq oid rid (pu-dpi) loc)
-          (return (us-requests))))
-    (if (!= (an-ok ans ao) 1) (return (us-done)))
     (set w (an-arg ans ar 0))
     (set h (an-arg ans ar 1))
     (set dpi (an-arg ans ar 3))
+    (set ao (an-find ans oid))
+    (comment "round 2: `full` reads the render with the text, `witness` the one without it and the witness lines around the text layer's own")
+    (if (== ask (rp-ask-full))
+      (if (< ao 0)
+        (do (rp-request rq oid rid 3 (pu-dpi) 0 0 0 0 loc scripts)
+            (return (us-requests)))))
+    (if (== ask (rp-ask-witness))
+      (do (if (< an2 0) (return (us-done)))
+          (if (!= (an-ok ans an2) 1) (return (us-done)))
+          (set before (cells-len rq))
+          (if (< ao 0)
+            (rp-request rq oid nid 3 (pu-dpi) 0 0 0 0 loc scripts))
+          (set j 0)
+          (while (< j nwit)
+            (do (if (< (an-find ans (+ wid j)) 0)
+                  (do (set at (+ wat (* j (rp-ww))))
+                      (rp-request rq (+ wid j) rid 7 (pu-dpi) (pu-wbox pl at w h 0) (pu-wbox pl at w h 1) (pu-wbox pl at w h 2) (pu-wbox pl at w h 3) loc scripts)))
+                (set j (+ j 1))))
+          (if (> (cells-len rq) before) (return (us-requests)))))
+    (set ao (an-find ans oid))
+    (if (< ao 0) (return (us-done)))
+    (if (!= (an-ok ans ao) 1) (return (us-done)))
     (pn-mark snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
     (set view (vw-new views (+ i 1) (vk-render) rid -1 w h (* dpi 100) (lay-full) -1 0 0 0 0 0))
     (set w0 (ow-count owords))
-    (set run (sc-answer ans ao (+ i 1) view oid (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))
+    (if (== ask (rp-ask-full))
+      (set run (sc-answer ans ao (+ i 1) view oid (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))
+      (do (set nview (vw-new views (+ i 1) (vk-render) nid -1 w h (* dpi 100) (lay-no-text) -1 0 0 0 0 0))
+          (set run (sc-answer ans ao (+ i 1) nview oid (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))))
     (set nw (- (ow-count owords) w0))
+    (comment "the witness lines: each one's reading is a run of its own (pass `region`, round 2, `psm` 7, the pixel box asked)")
+    (set w1 (ow-count owords))
+    (set r0 (or-count oruns))
+    (if (== ask (rp-ask-witness))
+      (do (set j 0)
+          (while (< j nwit)
+            (do (set aw (an-find ans (+ wid j)))
+                (if (>= aw 0)
+                  (if (== (an-ok ans aw) 1)
+                    (do (set at (+ wat (* j (rp-ww))))
+                        (set wrun (sc-answer ans aw (+ i 1) view (+ wid j) (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))
+                        (rt-run-meta oruns wrun (op-region) 2 7 (pu-wbox pl at w h 0) (pu-wbox pl at w h 1) (pu-wbox pl at w h 2) (pu-wbox pl at w h 3)))))
+                (set j (+ j 1))))
+          (set r1 (or-count oruns))
+          (set weak (rp-weak nwit wat pl fw fl etext wid r0 r1 owords oruns s2 s3 s4 s5))
+          (if (== weak 1)
+            (do (set ae (an-find ans eid))
+                (if (< ae 0)
+                  (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
+                      (rp-request rq eid rid 3 (pu-dpi) 0 0 0 0 loc scripts)
+                      (return (us-requests))))
+                (comment "the page is read whole after all: the witness lines are given up (two readings of one line would be two candidates) and the page goes on as `full`")
+                (if (== (an-ok ans ae) 1)
+                  (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
+                      (set view (vw-new views (+ i 1) (vk-render) rid -1 w h (* dpi 100) (lay-full) -1 0 0 0 0 0))
+                      (set nview (vw-new views (+ i 1) (vk-render) nid -1 w h (* dpi 100) (lay-no-text) -1 0 0 0 0 0))
+                      (set w0 (ow-count owords))
+                      (set run (sc-answer ans ao (+ i 1) nview oid (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))
+                      (set nw (- (ow-count owords) w0))
+                      (set w1 (ow-count owords))
+                      (set w3 w1)
+                      (set esc (sc-answer ans ae (+ i 1) view eid (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))
+                      (rt-run-meta oruns esc (op-first) 3 3 0 0 0 0)
+                      (set ne (- (ow-count owords) w3))))))))
+    (set w2 w1)
+    (if (== ask (rp-ask-witness))
+      (do (set w2 (ow-count owords))
+          (if (>= esc 0) (set w2 w3))))
     (comment "the ink layers, where the transcript or the Renderer gave pixels: those of the raster the OCR read, then the tracer's on the text-free one")
     (if (== (pu-px bms rid fuse) 1)
       (do (pn-ink (+ i 1) view bms (pn-k-text) (bms-get bms rid) (* dpi 100) 0 views inks comps rules prims tpts tlines refs ws sv aux
                   rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)
           (if (== (pu-px bms nid fuse) 1)
-            (do (set nview (vw-new views (+ i 1) (vk-render) nid -1 w h (* dpi 100) (lay-no-text) -1 0 0 0 0 0))
+            (do (if (== ask (rp-ask-full))
+                  (set nview (vw-new views (+ i 1) (vk-render) nid -1 w h (* dpi 100) (lay-no-text) -1 0 0 0 0 0)))
                 (pn-ink (+ i 1) nview bms (pn-k-clean) (bms-get bms nid) (* dpi 100) 1 views inks comps rules prims tpts tlines refs ws2 sv aux
                         rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))
-          (pn-features (+ i 1) bms (pn-k-text) (bms-get bms rid) oid w0 nw ws comps owords feats scr)
+          (if (== ask (rp-ask-full))
+            (pn-features (+ i 1) bms (pn-k-text) (bms-get bms rid) oid w0 nw ws comps owords feats scr)
+            (do (if (== (pu-px bms nid fuse) 1)
+                  (pn-features (+ i 1) bms (pn-k-clean) (bms-get bms nid) oid w0 nw ws2 comps owords feats scr))
+                (comment "the witness lines' words and, when the page escalated, the whole render's: one span, one pass over the text raster (the engine's binary of the escalated run is not used)")
+                (if (>= esc 0) (set w2 (+ w3 ne)))
+                (pn-features (+ i 1) bms (pn-k-text) (bms-get bms rid) (pu-id i (ri-none)) w1 (- w2 w1) ws comps owords feats scr)))
           (sc-prep scr)
           (rt-prep rtp)
-          (if (== (rt-plan i input 1 0 rid (pu-dpi) loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr) 1)
-            (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
-                (return (us-requests))))))
+          (if (or (== ask (rp-ask-full)) (>= esc 0))
+            (do (if (>= esc 0) (set run esc))
+                (if (== (rt-plan i input 1 0 rid (pu-dpi) loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr) 1)
+                  (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
+                      (return (us-requests))))))))
     (set g0 (cg-count cg))
     (xa-page (+ i 1) epages fw owords tlines feats etext refs cg xscr xgp xdp xta xtb xtt)
     (hl-page-fw (+ i 1) cg refs fw etext feats oblocks olines owords hl)
     (comment "the targeted runs are written after the page is aligned and scored: evidence, and (the body-ink one) a witness for arbitration, no candidate")
     (if (== (pu-px bms rid fuse) 1)
-      (do (rt-record i view (* dpi 100) loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
-          (rt-witness g0 (cg-count cg) cg rtp oruns owords)))
+      (if (or (== ask (rp-ask-full)) (>= esc 0))
+        (do (rt-record i view (* dpi 100) loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
+            (rt-witness g0 (cg-count cg) cg rtp oruns owords))))
     (return (us-done))))
 
 (defn ^I32 pu-run-scan [^I32 i ^I32 input ^I32 fuse ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
@@ -289,7 +409,7 @@
                              ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                              ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
                              ^:mut ^Cells words ^:mut ^Cells lines
-                             ^I32 fuse ^Cells fw ^:mut ^Cells hl ^:mut ^Cells refs ^:mut ^Cells cg ^:mut ^Cells tlines
+                             ^I32 fuse ^Cells fw ^Cells fl ^:mut ^Cells hl ^:mut ^Cells refs ^:mut ^Cells cg ^:mut ^Cells tlines
                              ^:mut ^Cells xscr ^:mut ^Cells xgp ^:mut ^Cells xdp ^:mut ^Cells xta ^:mut ^Cells xtb ^:mut ^Cells xtt
                              ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts
                              ^:mut ^Cells ws ^:mut ^Cells ws2 ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
@@ -297,17 +417,14 @@
                              ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4 ^:mut ^Cells s5 ^:mut ^Cells s6]
   (comment "The unit of PDF page `i` (0-based). A `pk-scan` page asks `decode` of its stream's bytes (id `pi-decode`), then OCR")
   (comment "of the bitmap (id `pi-ocr`); where the answers are in its evidence and lines are appended to `words` and `lines`")
-  (comment "and `mask[i]` is 2 (D212). Any other page asks nothing and is left as the text layer made it. Answers `us-requests`")
-  (comment "when it asked, else `us-done`. `mask` has one cell a page, zero until a page is OCR'd (the caller sizes it).")
+  (comment "and `mask[i]` is 2 (D212). A `pk-born` page asks what its plan says (`rp-plan`: `pu-run-born`). Any other page asks nothing and is")
+  (comment "left as the text layer made it. Answers `us-requests` when it asked, else `us-done`. `mask` has one cell a page, zero until a")
+  (comment "page is OCR'd (the caller sizes it).")
   (if (== policy 0) (return (us-done)))
-  (comment "A BORN-DIGITAL page asks for NOTHING here unless `fuse` (D251, revised by the coordinator): its two rasters are lazy, asked")
-  (comment "by `pu-ask-rasters` when a stage that reads pixels runs, and nothing is OCR'd on it (D201, D212 (3)) until P7.S; `fuse` is the")
-  (comment "hidden test setting that asks what P7.S will (see the head of this file).")
   (if (== (pu-kind pl i) (pk-born))
-    (do (if (== (bit-and fuse 1) 0) (return (us-done)))
-        (return (pu-run-born i input policy fuse ans rq loc bms epages views etext feats oruns oblocks olines owords osyms oalts
-                             fw hl refs cg tlines xscr xgp xdp xta xtb xtt scr images words lines
-                             inks comps rules prims tpts ws ws2 sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6))))
+    (return (pu-run-born i input fuse pl ans rq loc bms epages views etext feats oruns oblocks olines owords osyms oalts
+                         fw fl hl refs cg tlines xscr xgp xdp xta xtb xtt scr images words lines
+                         inks comps rules prims tpts ws ws2 sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))
   (if (!= (pu-kind pl i) (pk-scan)) (return (us-done)))
   (return (pu-run-scan i input fuse pl ans rq loc bms mask scr epages views etext feats images oruns oblocks olines owords osyms oalts words lines refs tlines
                        inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))

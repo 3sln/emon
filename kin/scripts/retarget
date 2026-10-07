@@ -55,7 +55,7 @@
 (defn same? [a b] (and (= (:exit a) (:exit b)) (= (:out a) (:out b)) (= (:err a) (:err b))))
 
 (defn pdf-of [id] (abs (:pdf (get fixtures id))))
-(defn flags-of [id] (if (= :born (:kind (get fixtures id))) ["--ocr-born-digital"] []))
+(defn flags-of [id] [])
 
 (defn body-texts [model]
   (let [out (atom [])]

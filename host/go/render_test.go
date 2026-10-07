@@ -127,10 +127,10 @@ func TestARenderFulfillerAnswersRendersAndCropsAndFailuresAsRecords(t *testing.T
 	}
 }
 
-func TestAnEngineWithARendererIsTheSameEngineAndABornDigitalPageIsNotRendered(t *testing.T) {
-	// The Engine's port set (D127): `render` and `crop` go to Config.Renderer. A born-digital page's two rasters are lazy (D251):
-	// nothing reads them yet, so the Model is byte-for-byte the one of an Engine with no renderer, and the renderer is never
-	// called.
+func TestAnEngineWithARendererIsTheSameEngineAndABornDigitalPageIsRenderedTwice(t *testing.T) {
+	// The Engine's port set (D127): `render` and `crop` go to Config.Renderer. Under `always` (P7.S) a born-digital page asks for its two
+	// rasters, so the renderer is called twice a page; with no OCR engine there is nothing to fuse and the Model is byte-for-byte the one of
+	// an Engine with no renderer.
 	fake := &fakeRenderer{}
 	cfg := DefaultConfig()
 	cfg.Renderer = fake
@@ -145,7 +145,7 @@ func TestAnEngineWithARendererIsTheSameEngineAndABornDigitalPageIsNotRendered(t 
 			t.Fatalf("%s: a renderer changed the Model", name)
 		}
 	}
-	if n := fake.calls.Load(); n != 0 {
-		t.Fatalf("the renderer was called %d times: a born-digital page's rasters are lazy", n)
+	if n := fake.calls.Load(); n == 0 || n%2 != 0 {
+		t.Fatalf("the renderer was called %d times: two rasters a born-digital page", n)
 	}
 }

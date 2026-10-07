@@ -480,6 +480,9 @@ public final class Model {
     public static int fkNode() {
         return 97;
     }
+    public static int fkOcrScope() {
+        return 98;
+    }
     public static int fkEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "id");
@@ -867,6 +870,10 @@ public final class Model {
         }
         if (code == 97) {
             emon.Port.textAscii(t, "node");
+            return 1;
+        }
+        if (code == 98) {
+            emon.Port.textAscii(t, "ocr-scope");
             return 1;
         }
         return 0;

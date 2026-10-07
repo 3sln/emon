@@ -4,7 +4,7 @@
 ;; test/artifacts/pdf holds born-digital documents with a RASTER watermark under the text (tools/synth/artifact_pdf.clj): the text layer does not
 ;; have it, OCR reads it, and nothing in the page says it is not text but that it recurs. test/artifacts/replay/ID is what pdfium and Tesseract
 ;; answered for each, recorded on Rust by `bb fusion-record --artifacts` (slim: answers only, no bitmap). This gate only REPLAYS them, with the
-;; hidden setting `ocr-born-digital`, through the whole Engine on Rust and Go, and holds:
+;; default settings (born-digital pages OCR'd under `always`, P7.S), through the whole Engine on Rust and Go, and holds:
 ;;
 ;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump), and it is the bundle the recording made (SHA-256);
 ;;   2. THE BODY HAS NO WATERMARK: no word of the watermark is in the body (`watermark-leak` 0), the ledger holds it as `watermark` on every page
@@ -92,7 +92,7 @@
   (doseq [id ids]
     (let [pdf (abs (str adir "/pdf/" id ".pdf"))
           rep (abs (str adir "/replay/" id))
-          flag "--ocr-born-digital"
+          flag "--ocr=always"
           rr (drive rdrv flag "--out=bundle" (str "--replay=" rep) pdf)
           rg (drive gdrv flag "--out=bundle" (str "--replay=" rep) pdf)
           want (get digests id)]

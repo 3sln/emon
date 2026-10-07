@@ -54,6 +54,7 @@ use crate::emon::model::*;
 use crate::emon::para::*;
 use crate::emon::table::*;
 use crate::emon::pageunit::{pu_plan, pu_run_pdf};
+use crate::emon::rasterplan::rp_settings;
 use crate::emon::arbiter::{ar_doc, ar_tag, ar_write};
 use crate::emon::pdfannot::pa_run;
 use crate::emon::health::hl_doc;
@@ -162,9 +163,10 @@ impl From<PlanError> for Error {
 
 // ----------------------------------------------------------------- options
 
-// SPEC 13's OCR setting (D038). WIRED (P6.5, D211-D215): `Never` asks for no OCR; `Auto` and `Always` OCR an image and a
-// scanned PDF page, and a born-digital page (a page with a text layer) keeps its text layer under both, because
-// fusion (P7) does not exist yet to weigh a second reading against it (D212).
+// SPEC 13's OCR setting (D038). WIRED (P6.5, D211-D215; switched at P7.S, D200): `Never` asks for no OCR; `Auto` and `Always` OCR an image and a
+// scanned PDF page; a born-digital page (a page with a text layer) is OCR'd and FUSED with its text layer under `Always`, and under `Auto` when its
+// health, the images on it or hidden text call for it (`emon.rasterplan`, SPEC 8.3). With no `Renderer` or no `Ocr` every request is answered
+// `unsupported` and the text layer stands alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OcrPolicy {
     Always,
@@ -266,11 +268,9 @@ pub struct Options {
     pub furniture: Furniture,
     // Keep the text layer's evidence dump (`Model::evidence`): a test and debugging aid.
     pub keep_evidence: bool,
-    // HIDDEN TEST SETTING (P7.3, D285-D290): OCR the born-digital pages too, as P7.S will under `always`, and fuse the two readings
-    // (render, OCR, align, arbitrate). Off by default: until P7.S a born-digital page is not OCR'd (D201, D212 (3)). The replay gate
-    // and `bb fusion` set it; an embedder never needs to.
-    #[doc(hidden)]
-    pub ocr_born_digital: bool,
+    // SPEC 13's `ocr-scope` (P7.S, D200): under `ocr: always` a born-digital page is read whole with its text (`Full`, the default) or as the render
+    // without its text plus witness lines of its text layer's fonts (`Witness`, a fraction of the OCR time). Written to the Model's `settings` when not `Full`.
+    pub ocr_scope: OcrScope,
     // A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units, as the Engine was before the ink layers and the targeted passes (a measurement's
     // baseline; an embedder never needs it). The output of a run with no Renderer and no OCR engine is the same either way.
     pub no_retarget: bool,
@@ -278,7 +278,25 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Options {
-        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, asset_dpi: 150, asset_pixels: 4_194_304, asset_bytes: 4_194_304, assets_bytes: 33_554_432, asset_signatures: false, furniture: Furniture::Policy, keep_evidence: false, ocr_born_digital: false, no_retarget: false }
+        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, asset_dpi: 150, asset_pixels: 4_194_304, asset_bytes: 4_194_304, assets_bytes: 33_554_432, asset_signatures: false, furniture: Furniture::Policy, keep_evidence: false, ocr_scope: OcrScope::Full, no_retarget: false }
+    }
+}
+
+// SPEC 13's `ocr-scope` (D200): what `ocr: always` reads of a born-digital page. `Full` (the default) the whole render with its text; `Witness` the render
+// without its text and a few witness lines of every font (a font whose witnesses disagree with its text escalates the page to `Full`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OcrScope {
+    Full,
+    Witness,
+}
+
+impl OcrScope {
+    // The `scope` of kin's `rp-plan`: 0 full, 1 witness.
+    pub(crate) fn code(&self) -> i32 {
+        match self {
+            OcrScope::Full => 0,
+            OcrScope::Witness => 1,
+        }
     }
 }
 
@@ -985,6 +1003,7 @@ fn finish_raster(d: RasterDoc, opts: &Options) -> Outcome {
     }
     fu_write(&mut fo, &mut fp, &mut ft, &mut pl, np, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut tmp);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
+    rp_settings(&mut m.nodes, &mut m.attrs, &mut m.text, opts.ocr_scope.code());
     if let Some(loc) = &opts.locale {
         let start = cells_len(&m.text);
         for ch in loc.chars() {
@@ -1048,6 +1067,33 @@ pub struct RunStats {
     // per page unit (P7.U): the rounds it took and the requests it made, in page order
     pub page_rounds: Vec<i32>,
     pub page_requests: Vec<i32>,
+    // P7.S (D210, `bb fusion-bench`): wall time in microseconds. `fulfil_us` is what the host's ports took, summed over every request of the input, by request
+    // kind (index: 1 render, 2 decode, 3 `ocr` of a page's first pass, 4 bytes, 5 crop, 6 decode-img; 7 the `ocr` requests of every later pass). `pass_us` is the
+    // document pass (a loop of its own), `pages_us` every page unit with the ports' time in it, `finish_us` the document unit (stage 3), so the page units' kin
+    // time is `pages_us` less the ports' time in them. Counters: the Model never depends on them.
+    pub fulfil_us: [u64; 8],
+    pub pass_us: u64,
+    pub pages_us: u64,
+    pub finish_us: u64,
+}
+
+// The ports' fulfiller, timed by request kind (`RunStats::fulfil_us`).
+struct TimedPorts<'a> {
+    inner: &'a mut dyn Fulfiller,
+    us: [u64; 8],
+}
+
+impl<'a> Fulfiller for TimedPorts<'a> {
+    fn start(&mut self, req: &plan::Request, bitmaps: &plan::Bitmaps) -> Result<(), PlanError> {
+        let t0 = std::time::Instant::now();
+        let r = self.inner.start(req, bitmaps);
+        let k = if req.kind() == plan::KIND_OCR && req.id() % 256 != 16 { 7 } else { (req.kind().max(0) as usize).min(6) };
+        self.us[k] += t0.elapsed().as_micros() as u64;
+        r
+    }
+    fn next(&mut self) -> Result<plan::Answer, PlanError> {
+        self.inner.next()
+    }
 }
 
 // ------------------------------------------------------------------- intake
@@ -1312,7 +1358,8 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     th_run(&mut pg, &mut gl, &mut et, &mut mk, &mut fnt, &mut wd, &mut ln, &mut im, &mut tl_epages, &mut tl_feats, &mut fw, &mut fl, &mut fa, &mut hl, &mut hsc);
     let nl0 = cells_len(&ln) / 16;
     let (mut plan, mut sp) = (Cells::new(), Cells::new());
-    pu_plan(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut im, &mut wd, opts.ocr.code(), &mut sp, &mut plan);
+    let (mut rs1, mut rs2) = (Cells::new(), Cells::new());
+    pu_plan(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut pg, &mut im, &mut wd, opts.ocr.code(), opts.ocr_scope.code(), &mut fw, &mut fl, &mut et, &mut hl, &mut sp, &mut plan, &mut rs1, &mut rs2);
     if view.missed() {
         return Step::Miss;
     }
@@ -1325,10 +1372,11 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     let (cand, cbytes) = (Cells::new(), Buf::new());
     let aim = if opts.assets != Assets::None { im.clone() } else { Cells::new() };
     let snap = if opts.keep_evidence { Some((gl.clone(), mk.clone(), fnt.clone())) } else { None };
-    // With fusion on, the text layer's `epages` and `feats` are the evidence's own: the OCR of a born-digital page adds its feature rows
-    // to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
+    // With fusion on (every policy but `never`), the text layer's `epages` and `feats` are the evidence's own: the OCR of a born-digital page adds its
+    // feature rows to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
+    let fusion = opts.ocr.code() != 0;
     let mut ev0 = EvArenas::new();
-    if opts.ocr_born_digital {
+    if fusion {
         ev0.epages = tl_epages;
         ev0.feats = tl_feats;
     }
@@ -1353,7 +1401,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], ys: std::array::from_fn(|_| Cells::new()), et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, im, grl, gfl, ift, an, pts: if opts.ocr_born_digital { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, aim, info }))
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], ys: std::array::from_fn(|_| Cells::new()), et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, im, grl, gfl, ift, an, pts: if fusion { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, aim, info }))
 }
 
 // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil
@@ -1391,7 +1439,7 @@ fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut 
         i as i32, idx as i32, opts.ocr.code(), &mut d.plan, answers, rq, &mut d.loc, bms, &mut d.mask, &mut scr,
         &mut d.ev.epages, &mut d.ev.views, &mut d.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
         &mut d.wd, &mut d.ln,
-        opts.ocr_born_digital as i32 + 2 * opts.no_retarget as i32, &mut d.fw, &mut d.hl, &mut d.ev.refs, &mut d.cg, &mut d.ev.tlines,
+        2 * opts.no_retarget as i32, &mut d.fw, &mut d.fl, &mut d.hl, &mut d.ev.refs, &mut d.cg, &mut d.ev.tlines,
         xa, xb, xc, xd, xe, xf,
         &mut d.ev.inks, &mut d.ev.comps, &mut d.ev.rules, &mut d.ev.prims, &mut d.ev.pts,
         ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6,
@@ -1410,7 +1458,7 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
     // (`hl_doc`) the arbiter picks each group's source and makes the fused flow stage 3 reads. With no group (no engine, or the
     // engine answered nothing) none of this runs and nothing below is different.
     let fused = cells_len(&cg) > 0;
-    if opts.ocr_born_digital && !fused && cells_len(&ev.owords) == 0 {
+    if opts.ocr.code() != 0 && !fused && cells_len(&ev.owords) == 0 {
         // nothing was read: the evidence is what a run without the setting dumps (the text layer's own features were borrowed for alignment)
         ev.epages = Cells::new();
         ev.feats = Cells::new();
@@ -1548,6 +1596,7 @@ fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
     // the vector rules graphics fusion dropped (P7.G, row 513): ledger rows, with no text
     gf_write(&mut gfa, &mut m.ledger);
     sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
+    rp_settings(&mut m.nodes, &mut m.attrs, &mut m.text, opts.ocr_scope.code());
     // fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
     if fused {
         ar_write(&mut afa, &mut ev.owords, &mut et, &mut m.ledger, &mut m.text, &mut tmp, &mut ttx);
@@ -1755,12 +1804,15 @@ impl Engine {
                 replayer = Some(Replayer::new(t));
             }
         }
-        let ports: &mut dyn Fulfiller = match replayer.as_mut() {
+        let inner: &mut dyn Fulfiller = match replayer.as_mut() {
             Some(r) => r,
             None => &mut live,
         };
+        let mut ports = TimedPorts { inner, us: [0; 8] };
         // THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
-        let result = plan::run(&pcfg, &mut unit, ports, &mut bytes, &mut *misses, recording.as_deref_mut());
+        let t_pass = std::time::Instant::now();
+        let result = plan::run(&pcfg, &mut unit, &mut ports, &mut bytes, &mut *misses, recording.as_deref_mut());
+        let pass_us = t_pass.elapsed().as_micros() as u64;
         // a source that failed is the answer, whatever the loop made of the miss it caused
         if let Some(c) = &cache {
             if let Some((short, msg)) = c.failure() {
@@ -1778,7 +1830,10 @@ impl Engine {
             input_bytes: len,
             page_rounds: Vec::new(),
             page_requests: Vec::new(),
+            pass_us,
+            ..RunStats::default()
         };
+        let t_pages = std::time::Instant::now();
         // THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and `BitmapSet`, which
         // are dropped when the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never
         // reads the input. Then the document unit, stage 3, on what the units left.
@@ -1807,7 +1862,7 @@ impl Engine {
                         }
                     }
                 };
-                let ast = plan::run_bms(&pcfg, &mut unit_a, &mut *ports, &mut bytes, &mut *misses, recording.as_deref_mut());
+                let ast = plan::run_bms(&pcfg, &mut unit_a, &mut ports, &mut bytes, &mut *misses, recording.as_deref_mut());
                 if let Some(c) = &cache {
                     if let Some((short, msg)) = c.failure() {
                         return Err(if short { Error::SourceChanged { input: idx } } else { Error::Io { input: idx, message: msg } });
@@ -1857,7 +1912,7 @@ impl Engine {
                         }
                     }
                 };
-                let pst = plan::run_bms(&page_cfg, &mut unit_p, &mut *ports, &mut bytes, &mut no_misses, recording.as_deref_mut())?;
+                let pst = plan::run_bms(&page_cfg, &mut unit_p, &mut ports, &mut bytes, &mut no_misses, recording.as_deref_mut())?;
                 if let Some(e) = failed {
                     return Err(e);
                 }
@@ -1865,11 +1920,15 @@ impl Engine {
                 stats.page_rounds.push(pst.rounds);
                 stats.page_requests.push(pst.requests);
             }
+            stats.pages_us = t_pages.elapsed().as_micros() as u64;
+            let t_fin = std::time::Instant::now();
             outcome = match d {
                 DocKind::Pdf(doc) => finish_pdf(*doc, opts),
                 DocKind::Raster(doc) => finish_raster(*doc, opts),
             };
+            stats.finish_us = t_fin.elapsed().as_micros() as u64;
         }
+        stats.fulfil_us = ports.us;
         if let Some(r) = &replayer {
             if r.unused() != 0 {
                 return Err(Error::Plan(PlanError::TranscriptBad(format!("{} recorded entries were never asked for", r.unused()))));

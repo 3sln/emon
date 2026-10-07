@@ -4,11 +4,12 @@
 (ns emon.pageunittest
   (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
-            [emon.port :refer [cells-len cells-at cells-push bms-get bms-has bms-put bitmap-w bitmap-h bitmap-channels
+            [emon.port :refer [cells-len cells-at cells-set cells-push bms-get bms-has bms-put bitmap-w bitmap-h bitmap-channels
                                bitmap-u8 bitmap-set-u8]]
-            [emon.plan :refer [rec-id rec-kind rq-arg pk-decode pk-render an-fail ps-unsupported lay-full lay-no-text us-requests us-done pu-id pu-view-id view-base
-                               pi-render-text pi-decode pi-ocr flt-dct]]
+            [emon.plan :refer [rec-id rec-kind rec-count rq-arg pk-decode pk-render pk-ocr an-fail an-render ps-unsupported lay-full lay-no-text us-requests us-done pu-id pu-view-id view-base
+                               pi-render-text pi-render-no-text pi-decode pi-ocr flt-dct]]
             [emon.pageunit :refer [pu-w pu-kind pu-dpi pk-scan pk-born pk-none pu-run-pdf pu-ask-rasters]]
+            [emon.rasterplan :refer [rp-ask-none rp-ask-full rp-ask-witness rp-f-ask rp-f-wat rp-f-wn rp-f-scripts]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
@@ -26,15 +27,30 @@
           (cells-push pl 79200)
           (cells-push pl 61200)
           (cells-push pl 79200)
+          (comment "`emon.rasterplan`'s cells: what the page asks (nothing), its witness rows (none), its scripts (none)")
+          (cells-push pl 0)
+          (cells-push pl 0)
+          (cells-push pl 0)
+          (cells-push pl 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 born-plan [^Cells pl ^I32 pages ^I32 ask ^I32 scripts]
+  (comment "`pages` born-digital pages of the plan that ask `ask` (`rp-ask-*`), with the scripts bit set `scripts`.")
+  (let [^:mut ^I32 i 0]
+    (plan-of pl pages (pk-born))
+    (while (< i pages)
+      (do (cells-set pl (+ (* i (pu-w)) (rp-f-ask)) ask)
+          (cells-set pl (+ (* i (pu-w)) (rp-f-scripts)) scripts)
           (set i (+ i 1))))
     (return 0)))
 
 (defn ^I32 run-page-fused [^I32 i ^I32 policy ^I32 fuse ^Cells pl ^Cells ans ^Cells rq]
-  (comment "A page unit with the fusion arguments (P7.3): `fuse` the hidden setting.")
+  (comment "A page unit with the fusion arguments: `fuse` the hidden setting `no-retarget` (bit 2).")
   (return (pu-run-pdf i 3 policy pl ans rq (new-cells) (new-bitmap-set) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                      fuse (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                      fuse (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
@@ -42,6 +58,21 @@
 
 (defn ^I32 run-page [^I32 i ^I32 policy ^Cells pl ^Cells ans ^Cells rq]
   (return (run-page-fused i policy 0 pl ans rq)))
+
+(defn ^I32 nth-rec [^Cells rq ^I32 n]
+  (comment "The cell where record `n` (0-based) of the requests starts.")
+  (let [^:mut ^I32 at 0
+        ^:mut ^I32 k 0]
+    (while (< k n)
+      (do (set at (+ at (cells-at rq at)))
+          (set k (+ k 1))))
+    (return at)))
+
+(defn ^I32 answer-renders [^:mut ^Cells ans ^I32 page]
+  (comment "Both renders of page `page` answered, 2550 x 3300 RGB at 300 dpi.")
+  (an-render ans (pu-id page (pi-render-text)) 2550 3300 3 300)
+  (an-render ans (pu-id page (pi-render-no-text)) 2550 3300 3 300)
+  (return 0))
 
 (deftest test-ids-are-per-page-unit
   (assert-eq (pu-id 0 (pi-decode)) 260 "page 0 decode")
@@ -74,71 +105,100 @@
     (assert-eq (cells-at rq1 2) (cells-at rq2 2) "the same id")
     (assert-eq (cells-at rq1 4) (cells-at rq2 4) "the same arguments")))
 
-(deftest test-a-born-digital-page-asks-for-nothing-until-a-consumer-asks-for-its-rasters
-  (let [^Cells pl (new-cells)
-        ^Cells rq (new-cells)]
-    (plan-of pl 2 (pk-born))
-    (assert-eq (run-page 1 2 pl (new-cells) rq) (us-done) "always: lazy, it asks nothing")
-    (assert-eq (cells-len rq) 0 "no request, no OCR")
-    (assert-eq (pu-ask-rasters 1 3 2 (new-cells) rq) (us-requests) "a consumer asks")
-    (assert-eq (cells-len rq) 14 "two renders of seven cells")
-    (assert-eq (rec-kind rq 0) (pk-render) "a render")
-    (assert-eq (rec-id rq 0) 513 "page 1, with text: 2 * 256 + 1")
-    (assert-eq (rq-arg rq 0 0) 3 "of input 3")
-    (assert-eq (rq-arg rq 0 1) 1 "page 1, 0-based")
-    (assert-eq (rq-arg rq 0 2) 300 "at 300 dpi")
-    (assert-eq (rq-arg rq 0 3) (lay-full) "with its text")
-    (assert-eq (rec-id rq 7) 514 "and without it")
-    (assert-eq (rq-arg rq 7 3) (lay-no-text) "the layer"))
-  (let [^Cells pla (new-cells)
-        ^Cells rqa (new-cells)
-        ^Cells ans1 (new-cells)]
-    (plan-of pla 1 (pk-born))
-    (an-fail ans1 (pk-render) 257 (ps-unsupported))
-    (an-fail ans1 (pk-render) 258 (ps-unsupported))
-    (assert-eq (pu-ask-rasters 0 3 2 ans1 rqa) (us-done) "answered, even `unsupported`: done")
-    (assert-eq (cells-len rqa) 0 "asks nothing more, and no OCR"))
-  (let [^Cells plb (new-cells)
-        ^Cells rqb (new-cells)]
-    (plan-of plb 1 (pk-born))
-    (assert-eq (run-page 0 1 plb (new-cells) rqb) (us-done) "auto: a text layer is read as it is")
-    (assert-eq (cells-len rqb) 0 "no request"))
-  (let [^Cells plan2 (new-cells)
-        ^Cells rq2 (new-cells)]
-    (plan-of plan2 1 (pk-scan))
-    (assert-eq (run-page 0 0 plan2 (new-cells) rq2) (us-done) "never: done")
-    (assert-eq (cells-len rq2) 0 "no request"))
-  (let [^Cells plan3 (new-cells)
+(deftest test-a-born-digital-page-asks-what-its-plan-says
+  (comment "a plan that asks nothing (`ocr: auto` on a healthy page): nothing is asked, whatever the policy")
+  (let [^Cells pl1 (new-cells)
+        ^Cells rq1 (new-cells)]
+    (born-plan pl1 2 (rp-ask-none) 0)
+    (assert-eq (run-page 1 2 pl1 (new-cells) rq1) (us-done) "always, but the plan asks nothing")
+    (assert-eq (cells-len rq1) 0 "no request"))
+  (comment "`full`: the two renders in round 1, the same every time")
+  (let [^Cells pl2 (new-cells)
+        ^Cells rq2 (new-cells)
         ^Cells rq3 (new-cells)]
-    (plan-of plan3 1 (pk-none))
-    (assert-eq (run-page 0 2 plan3 (new-cells) rq3) (us-done) "no image: done")
-    (assert-eq (cells-len rq3) 0 "no request")))
-
-(deftest test-a-born-digital-page-asks-what-fusion-needs-only-under-the-hidden-setting
-  (let [^Cells pl (new-cells)
-        ^Cells rq (new-cells)
-        ^Cells ans (new-cells)]
-    (plan-of pl 2 (pk-born))
-    (assert-eq (run-page-fused 1 2 1 pl ans rq) (us-requests) "fuse, always: it asks")
-    (assert-eq (cells-len rq) 14 "the two renders, in one round")
-    (assert-eq (rec-id rq 0) 513 "with its text")
-    (assert-eq (rec-id rq 7) 514 "and without it")
-    (comment "the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's")
-    (an-fail ans (pk-render) 513 (ps-unsupported))
-    (an-fail ans (pk-render) 514 (ps-unsupported))
-    (let [^Cells rq2 (new-cells)]
-      (assert-eq (run-page-fused 1 2 1 pl ans rq2) (us-done) "no render, no OCR, done")
-      (assert-eq (cells-len rq2) 0 "nothing asked")))
-  (let [^Cells pl3 (new-cells)
-        ^Cells rq3 (new-cells)]
-    (plan-of pl3 1 (pk-born))
-    (assert-eq (run-page-fused 0 1 1 pl3 (new-cells) rq3) (us-done) "fuse under `auto`: only `always` asks")
-    (assert-eq (cells-len rq3) 0 "nothing asked"))
+    (born-plan pl2 2 (rp-ask-full) 0)
+    (assert-eq (run-page 1 2 pl2 (new-cells) rq2) (us-requests) "it asks")
+    (run-page 1 2 pl2 (new-cells) rq3)
+    (assert-eq (cells-len rq2) 14 "two renders of seven cells")
+    (assert-eq (cells-len rq3) 14 "the same again")
+    (assert-eq (rec-kind rq2 0) (pk-render) "a render")
+    (assert-eq (rec-id rq2 0) 513 "page 1, with text: 2 * 256 + 1")
+    (assert-eq (rq-arg rq2 0 0) 3 "of input 3")
+    (assert-eq (rq-arg rq2 0 1) 1 "page 1, 0-based")
+    (assert-eq (rq-arg rq2 0 2) 300 "at 300 dpi")
+    (assert-eq (rq-arg rq2 0 3) (lay-full) "with its text")
+    (assert-eq (rec-id rq2 7) 514 "and without it")
+    (assert-eq (rq-arg rq2 7 3) (lay-no-text) "the layer"))
+  (comment "the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's")
   (let [^Cells pl4 (new-cells)
+        ^Cells ans4 (new-cells)
         ^Cells rq4 (new-cells)]
-    (plan-of pl4 1 (pk-born))
-    (assert-eq (run-page-fused 0 2 0 pl4 (new-cells) rq4) (us-done) "without the setting: lazy, nothing asked")
-    (assert-eq (cells-len rq4) 0 "nothing asked")))
+    (born-plan pl4 1 (rp-ask-full) 0)
+    (an-fail ans4 (pk-render) 257 (ps-unsupported))
+    (an-fail ans4 (pk-render) 258 (ps-unsupported))
+    (assert-eq (run-page 0 2 pl4 ans4 rq4) (us-done) "no render, no OCR, done")
+    (assert-eq (cells-len rq4) 0 "nothing asked"))
+  (comment "`never` plans nothing, and a page with no text layer nor a scan asks nothing")
+  (let [^Cells pl5 (new-cells)
+        ^Cells rq5 (new-cells)]
+    (born-plan pl5 1 (rp-ask-full) 0)
+    (assert-eq (run-page 0 0 pl5 (new-cells) rq5) (us-done) "never: done")
+    (assert-eq (cells-len rq5) 0 "no request"))
+  (let [^Cells pl6 (new-cells)
+        ^Cells rq6 (new-cells)]
+    (plan-of pl6 1 (pk-none))
+    (assert-eq (run-page 0 2 pl6 (new-cells) rq6) (us-done) "no image: done")
+    (assert-eq (cells-len rq6) 0 "no request")))
+
+(deftest test-under-full-the-whole-render-with-its-text-is-read-in-round-two-in-the-text-layers-scripts
+  (let [^Cells pl (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells pl1 (new-cells)
+        ^Cells rq1 (new-cells)]
+    (born-plan pl 1 (rp-ask-full) 0)
+    (answer-renders ans 0)
+    (assert-eq (run-page 0 2 pl ans rq) (us-requests) "the OCR is asked")
+    (assert-eq (rec-count rq) 1 "one request")
+    (assert-eq (rec-kind rq 0) (pk-ocr) "an OCR")
+    (assert-eq (rec-id rq 0) 272 "the page's first pass: 256 + 16")
+    (assert-eq (rq-arg rq 0 0) 257 "of the render with its text")
+    (assert-eq (rq-arg rq 0 1) 3 "psm 3")
+    (assert-eq (rq-arg rq 0 5) 0 "the whole bitmap")
+    (assert-eq (cells-len rq) 10 "no language: every model")
+    (comment "a Latin text layer asks for the Latin script's models")
+    (born-plan pl1 1 (rp-ask-full) 1)
+    (run-page 0 2 pl1 ans rq1)
+    (assert-eq (cells-len rq1) 11 "one language cell")
+    (assert-eq (cells-at rq1 10) 1281455214 "`Latn`")))
+
+(deftest test-under-witness-the-render-without-its-text-and-the-witness-lines-are-read-in-round-two
+  (let [^Cells pl (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)]
+    (born-plan pl 1 (rp-ask-witness) 0)
+    (cells-set pl (rp-f-wat) (cells-len pl))
+    (cells-set pl (rp-f-wn) 2)
+    (comment "two witness rows: page 0, line 4 then line 9, boxes in centipoints, font 7")
+    (cells-push pl 0) (cells-push pl 4) (cells-push pl 7200) (cells-push pl 14400) (cells-push pl 36000) (cells-push pl 15600) (cells-push pl 7) (cells-push pl 0)
+    (cells-push pl 0) (cells-push pl 9) (cells-push pl 7200) (cells-push pl 16800) (cells-push pl 36000) (cells-push pl 18000) (cells-push pl 7) (cells-push pl 0)
+    (answer-renders ans 0)
+    (assert-eq (run-page 0 2 pl ans rq) (us-requests) "the first pass is asked")
+    (assert-eq (rec-count rq) 3 "the render without text, and two witness lines")
+    (let [^I32 r0 (nth-rec rq 0)
+          ^I32 r1 (nth-rec rq 1)
+          ^I32 r2 (nth-rec rq 2)]
+      (assert-eq (rec-id rq r0) 272 "the first pass")
+      (assert-eq (rq-arg rq r0 0) 258 "of the render WITHOUT its text")
+      (assert-eq (rq-arg rq r0 1) 3 "psm 3")
+      (assert-eq (rec-id rq r1) 352 "witness line 0: 256 + 96")
+      (assert-eq (rq-arg rq r1 0) 257 "of the render WITH its text")
+      (assert-eq (rq-arg rq r1 1) 7 "psm 7")
+      (assert-eq (rq-arg rq r1 3) 297 "x: 72 pt at 300 dpi less the pad of 3")
+      (assert-eq (rq-arg rq r1 4) 597 "y")
+      (assert-eq (rq-arg rq r1 5) 1206 "width")
+      (assert-eq (rq-arg rq r1 6) 56 "height")
+      (assert-eq (rec-id rq r2) 353 "witness line 1"))))
 
 (deftest test-the-bitmap-set-keeps-what-kin-makes
   (let [^BitmapSet s (new-bitmap-set)]

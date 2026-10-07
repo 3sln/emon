@@ -4871,8 +4871,8 @@
         :block-list-f1 1.0
         :block-list-p 1.0
         :block-list-r 1.0
-        :block-paragraph-f1 0.855072
-        :block-paragraph-p 0.800905
+        :block-paragraph-f1 0.913043
+        :block-paragraph-p 0.855204
         :block-paragraph-r 0.979275
         :block-seal-f1 1.0
         :block-seal-p 1.0
@@ -4880,10 +4880,10 @@
         :block-table-f1 0.9375
         :block-table-p 1.0
         :block-table-r 0.882353
-        :bow-f1 0.995732
-        :bow-p 0.993589
-        :bow-r 0.997884
-        :cer 0.004163
+        :bow-f1 0.998436
+        :bow-p 0.998345
+        :bow-r 0.998528
+        :cer 0.002213
         :figure-subkind-acc 0.0
         :furniture-f1 0.909091
         :furniture-p 1.0
@@ -4897,10 +4897,13 @@
         :heading-r 0.911504
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.910448
-        :para-boundary-p 0.851163
+        :para-boundary-f1 0.925373
+        :para-boundary-p 0.865116
         :para-boundary-r 0.994652
         :seal-leak 0.0
+        :span-bold-f1 0.5
+        :span-bold-p 0.5
+        :span-bold-r 0.5
         :src-ocr-share 0.105875
         :table-adj-f1 0.991045
         :table-adj-p 0.995638
@@ -4910,7 +4913,7 @@
         :table-teds-struct-lite 0.882353
         :tl-override 0.0
         :watermark-leak 0.0
-        :wer 0.008738}
+        :wer 0.002851}
       "pdf/columns" {
         :block-heading-f1 0.833333
         :block-heading-p 1.0
@@ -5011,6 +5014,9 @@
         :para-boundary-f1 0.434783
         :para-boundary-p 0.277778
         :para-boundary-r 1.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
         :src-ocr-share 0.0
         :table-adj-f1 0.991924
         :table-adj-p 1.0
@@ -5090,6 +5096,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0
@@ -5167,6 +5176,9 @@
         :para-boundary-p 1.0
         :para-boundary-r 1.0
         :seal-leak 0.0
+        :span-bold-f1 1.0
+        :span-bold-p 1.0
+        :span-bold-r 1.0
         :src-ocr-share 0.0
         :table-adj-f1 1.0
         :table-adj-p 1.0

@@ -349,15 +349,21 @@ func TestIntakeTakesAnyNumberOfInputs(t *testing.T) {
 	}
 }
 
-func TestRecordAndReplayWithABornDigitalPageAskingForNothing(t *testing.T) {
+func TestRecordAndReplayWithABornDigitalPageAskingForItsRasters(t *testing.T) {
 	e := NewEngine(DefaultConfig())
 	b := synth(t, "h-plain")
 	m, tr, err := e.Record(one(BytesInput(b)), DefaultOptions())
 	must(t, m, err)
-	// a born-digital page's two rasters are lazy (D251, revised by the coordinator): nothing asks for them until a stage reads
-	// pixels, so the transcript is empty; nothing is OCR'd
-	if len(tr.Entries) != 0 {
+	// under `always` (the default, P7.S, D200) a born-digital page asks for its two rasters, the page with its text and without it; with no
+	// Renderer each is answered `unsupported` and transcribed (two pages, four entries), and nothing is OCR'd
+	if len(tr.Entries) != 4 {
 		t.Fatalf("entries: %d", len(tr.Entries))
+	}
+	// under `never` it asks for nothing
+	never := DefaultOptions()
+	never.Ocr = OcrNever
+	if _, tn, err := e.Record(one(BytesInput(b)), never); err != nil || len(tn.Entries) != 0 {
+		t.Fatalf("under never: %d entries, %v", len(tn.Entries), err)
 	}
 	if len(tr.Inputs) != 1 || tr.Inputs[0] != [2]int32{0, int32(len(b))} {
 		t.Errorf("inputs %v", tr.Inputs)

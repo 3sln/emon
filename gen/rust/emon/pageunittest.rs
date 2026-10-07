@@ -3,6 +3,7 @@
 
 use crate::emon::pageunit::*;
 use crate::emon::plan::*;
+use crate::emon::rasterplan::*;
 
 pub(crate) fn plan_of(pl: &mut crate::port::Cells, pages: i32, kind: i32) -> i32 {
     // `pages` rows; every page of `kind`, with a stream at bytes 100 + 50 of the input, a box and a page size.
@@ -18,16 +19,48 @@ pub(crate) fn plan_of(pl: &mut crate::port::Cells, pages: i32, kind: i32) -> i32
         crate::port::cells_push(pl, 79200);
         crate::port::cells_push(pl, 61200);
         crate::port::cells_push(pl, 79200);
+        // `emon.rasterplan`'s cells: what the page asks (nothing), its witness rows (none), its scripts (none)
+        crate::port::cells_push(pl, 0);
+        crate::port::cells_push(pl, 0);
+        crate::port::cells_push(pl, 0);
+        crate::port::cells_push(pl, 0);
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn born_plan(pl: &mut crate::port::Cells, pages: i32, ask: i32, scripts: i32) -> i32 {
+    // `pages` born-digital pages of the plan that ask `ask` (`rp-ask-*`), with the scripts bit set `scripts`.
+    let mut i: i32 = 0;
+    plan_of(pl, pages, pk_born());
+    while i < pages {
+        crate::port::cells_set(pl, (i * pu_w()) + rp_f_ask(), ask);
+        crate::port::cells_set(pl, (i * pu_w()) + rp_f_scripts(), scripts);
         i += 1;
     }
     return 0;
 }
 pub(crate) fn run_page_fused(i: i32, policy: i32, fuse: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells) -> i32 {
-    // A page unit with the fusion arguments (P7.3): `fuse` the hidden setting.
-    return pu_run_pdf(i, 3, policy, pl, ans, rq, &mut crate::port::Cells::new(), &crate::port::BitmapSet::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), fuse, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    // A page unit with the fusion arguments: `fuse` the hidden setting `no-retarget` (bit 2).
+    return pu_run_pdf(i, 3, policy, pl, ans, rq, &mut crate::port::Cells::new(), &crate::port::BitmapSet::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), fuse, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
 }
 pub(crate) fn run_page(i: i32, policy: i32, pl: &mut crate::port::Cells, ans: &mut crate::port::Cells, rq: &mut crate::port::Cells) -> i32 {
     return run_page_fused(i, policy, 0, pl, ans, rq);
+}
+pub(crate) fn nth_rec(rq: &mut crate::port::Cells, n: i32) -> i32 {
+    // The cell where record `n` (0-based) of the requests starts.
+    let mut at: i32 = 0;
+    let mut k: i32 = 0;
+    while k < n {
+        at += crate::port::cells_at(rq, at);
+        k += 1;
+    }
+    return at;
+}
+pub(crate) fn answer_renders(mut ans: &mut crate::port::Cells, page: i32) -> i32 {
+    // Both renders of page `page` answered, 2550 x 3300 RGB at 300 dpi.
+    an_render(ans, pu_id(page, pi_render_text()), 2550, 3300, 3, 300);
+    an_render(ans, pu_id(page, pi_render_no_text()), 2550, 3300, 3, 300);
+    return 0;
 }
 #[test]
 fn test_ids_are_per_page_unit() {
@@ -64,72 +97,116 @@ fn test_a_unit_with_no_answers_asks_the_same_every_time() {
     crate::testport::assert_eq(crate::port::cells_at(rq1, 4), crate::port::cells_at(rq2, 4), "the same arguments");
 }
 #[test]
-fn test_a_born_digital_page_asks_for_nothing_until_a_consumer_asks_for_its_rasters() {
-    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(pl, 2, pk_born());
-    crate::testport::assert_eq(run_page(1, 2, pl, &mut crate::port::Cells::new(), rq), us_done(), "always: lazy, it asks nothing");
-    crate::testport::assert_eq(crate::port::cells_len(rq), 0, "no request, no OCR");
-    crate::testport::assert_eq(pu_ask_rasters(1, 3, 2, &mut crate::port::Cells::new(), rq), us_requests(), "a consumer asks");
-    crate::testport::assert_eq(crate::port::cells_len(rq), 14, "two renders of seven cells");
-    crate::testport::assert_eq(rec_kind(rq, 0), pk_render(), "a render");
-    crate::testport::assert_eq(rec_id(rq, 0), 513, "page 1, with text: 2 * 256 + 1");
-    crate::testport::assert_eq(rq_arg(rq, 0, 0), 3, "of input 3");
-    crate::testport::assert_eq(rq_arg(rq, 0, 1), 1, "page 1, 0-based");
-    crate::testport::assert_eq(rq_arg(rq, 0, 2), 300, "at 300 dpi");
-    crate::testport::assert_eq(rq_arg(rq, 0, 3), lay_full(), "with its text");
-    crate::testport::assert_eq(rec_id(rq, 7), 514, "and without it");
-    crate::testport::assert_eq(rq_arg(rq, 7, 3), lay_no_text(), "the layer");
-    let pla: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rqa: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ans1: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(pla, 1, pk_born());
-    an_fail(ans1, pk_render(), 257, ps_unsupported());
-    an_fail(ans1, pk_render(), 258, ps_unsupported());
-    crate::testport::assert_eq(pu_ask_rasters(0, 3, 2, ans1, rqa), us_done(), "answered, even `unsupported`: done");
-    crate::testport::assert_eq(crate::port::cells_len(rqa), 0, "asks nothing more, and no OCR");
-    let plb: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rqb: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(plb, 1, pk_born());
-    crate::testport::assert_eq(run_page(0, 1, plb, &mut crate::port::Cells::new(), rqb), us_done(), "auto: a text layer is read as it is");
-    crate::testport::assert_eq(crate::port::cells_len(rqb), 0, "no request");
-    let plan2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+fn test_a_born_digital_page_asks_what_its_plan_says() {
+    // a plan that asks nothing (`ocr: auto` on a healthy page): nothing is asked, whatever the policy
+    let pl1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    born_plan(pl1, 2, rp_ask_none(), 0);
+    crate::testport::assert_eq(run_page(1, 2, pl1, &mut crate::port::Cells::new(), rq1), us_done(), "always, but the plan asks nothing");
+    crate::testport::assert_eq(crate::port::cells_len(rq1), 0, "no request");
+    // `full`: the two renders in round 1, the same every time
+    let pl2: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(plan2, 1, pk_scan());
-    crate::testport::assert_eq(run_page(0, 0, plan2, &mut crate::port::Cells::new(), rq2), us_done(), "never: done");
-    crate::testport::assert_eq(crate::port::cells_len(rq2), 0, "no request");
-    let plan3: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let rq3: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(plan3, 1, pk_none());
-    crate::testport::assert_eq(run_page(0, 2, plan3, &mut crate::port::Cells::new(), rq3), us_done(), "no image: done");
-    crate::testport::assert_eq(crate::port::cells_len(rq3), 0, "no request");
+    born_plan(pl2, 2, rp_ask_full(), 0);
+    crate::testport::assert_eq(run_page(1, 2, pl2, &mut crate::port::Cells::new(), rq2), us_requests(), "it asks");
+    run_page(1, 2, pl2, &mut crate::port::Cells::new(), rq3);
+    crate::testport::assert_eq(crate::port::cells_len(rq2), 14, "two renders of seven cells");
+    crate::testport::assert_eq(crate::port::cells_len(rq3), 14, "the same again");
+    crate::testport::assert_eq(rec_kind(rq2, 0), pk_render(), "a render");
+    crate::testport::assert_eq(rec_id(rq2, 0), 513, "page 1, with text: 2 * 256 + 1");
+    crate::testport::assert_eq(rq_arg(rq2, 0, 0), 3, "of input 3");
+    crate::testport::assert_eq(rq_arg(rq2, 0, 1), 1, "page 1, 0-based");
+    crate::testport::assert_eq(rq_arg(rq2, 0, 2), 300, "at 300 dpi");
+    crate::testport::assert_eq(rq_arg(rq2, 0, 3), lay_full(), "with its text");
+    crate::testport::assert_eq(rec_id(rq2, 7), 514, "and without it");
+    crate::testport::assert_eq(rq_arg(rq2, 7, 3), lay_no_text(), "the layer");
+    // the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's
+    let pl4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    born_plan(pl4, 1, rp_ask_full(), 0);
+    an_fail(ans4, pk_render(), 257, ps_unsupported());
+    an_fail(ans4, pk_render(), 258, ps_unsupported());
+    crate::testport::assert_eq(run_page(0, 2, pl4, ans4, rq4), us_done(), "no render, no OCR, done");
+    crate::testport::assert_eq(crate::port::cells_len(rq4), 0, "nothing asked");
+    // `never` plans nothing, and a page with no text layer nor a scan asks nothing
+    let pl5: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq5: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    born_plan(pl5, 1, rp_ask_full(), 0);
+    crate::testport::assert_eq(run_page(0, 0, pl5, &mut crate::port::Cells::new(), rq5), us_done(), "never: done");
+    crate::testport::assert_eq(crate::port::cells_len(rq5), 0, "no request");
+    let pl6: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq6: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    plan_of(pl6, 1, pk_none());
+    crate::testport::assert_eq(run_page(0, 2, pl6, &mut crate::port::Cells::new(), rq6), us_done(), "no image: done");
+    crate::testport::assert_eq(crate::port::cells_len(rq6), 0, "no request");
 }
 #[test]
-fn test_a_born_digital_page_asks_what_fusion_needs_only_under_the_hidden_setting() {
+fn test_under_full_the_whole_render_with_its_text_is_read_in_round_two_in_the_text_layers_scripts() {
     let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(pl, 2, pk_born());
-    crate::testport::assert_eq(run_page_fused(1, 2, 1, pl, ans, rq), us_requests(), "fuse, always: it asks");
-    crate::testport::assert_eq(crate::port::cells_len(rq), 14, "the two renders, in one round");
-    crate::testport::assert_eq(rec_id(rq, 0), 513, "with its text");
-    crate::testport::assert_eq(rec_id(rq, 7), 514, "and without it");
-    // the renderer answers `unsupported`: nothing more is asked, nothing is written, the page is the text layer's
-    an_fail(ans, pk_render(), 513, ps_unsupported());
-    an_fail(ans, pk_render(), 514, ps_unsupported());
-    let rq2: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    crate::testport::assert_eq(run_page_fused(1, 2, 1, pl, ans, rq2), us_done(), "no render, no OCR, done");
-    crate::testport::assert_eq(crate::port::cells_len(rq2), 0, "nothing asked");
-    let pl3: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rq3: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(pl3, 1, pk_born());
-    crate::testport::assert_eq(run_page_fused(0, 1, 1, pl3, &mut crate::port::Cells::new(), rq3), us_done(), "fuse under `auto`: only `always` asks");
-    crate::testport::assert_eq(crate::port::cells_len(rq3), 0, "nothing asked");
-    let pl4: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let rq4: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    plan_of(pl4, 1, pk_born());
-    crate::testport::assert_eq(run_page_fused(0, 2, 0, pl4, &mut crate::port::Cells::new(), rq4), us_done(), "without the setting: lazy, nothing asked");
-    crate::testport::assert_eq(crate::port::cells_len(rq4), 0, "nothing asked");
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pl1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    born_plan(pl, 1, rp_ask_full(), 0);
+    answer_renders(ans, 0);
+    crate::testport::assert_eq(run_page(0, 2, pl, ans, rq), us_requests(), "the OCR is asked");
+    crate::testport::assert_eq(rec_count(rq), 1, "one request");
+    crate::testport::assert_eq(rec_kind(rq, 0), pk_ocr(), "an OCR");
+    crate::testport::assert_eq(rec_id(rq, 0), 272, "the page's first pass: 256 + 16");
+    crate::testport::assert_eq(rq_arg(rq, 0, 0), 257, "of the render with its text");
+    crate::testport::assert_eq(rq_arg(rq, 0, 1), 3, "psm 3");
+    crate::testport::assert_eq(rq_arg(rq, 0, 5), 0, "the whole bitmap");
+    crate::testport::assert_eq(crate::port::cells_len(rq), 10, "no language: every model");
+    // a Latin text layer asks for the Latin script's models
+    born_plan(pl1, 1, rp_ask_full(), 1);
+    run_page(0, 2, pl1, ans, rq1);
+    crate::testport::assert_eq(crate::port::cells_len(rq1), 11, "one language cell");
+    crate::testport::assert_eq(crate::port::cells_at(rq1, 10), 1281455214, "`Latn`");
+}
+#[test]
+fn test_under_witness_the_render_without_its_text_and_the_witness_lines_are_read_in_round_two() {
+    let pl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    born_plan(pl, 1, rp_ask_witness(), 0);
+    crate::port::cells_set(pl, rp_f_wat(), crate::port::cells_len(pl));
+    crate::port::cells_set(pl, rp_f_wn(), 2);
+    // two witness rows: page 0, line 4 then line 9, boxes in centipoints, font 7
+    crate::port::cells_push(pl, 0);
+    crate::port::cells_push(pl, 4);
+    crate::port::cells_push(pl, 7200);
+    crate::port::cells_push(pl, 14400);
+    crate::port::cells_push(pl, 36000);
+    crate::port::cells_push(pl, 15600);
+    crate::port::cells_push(pl, 7);
+    crate::port::cells_push(pl, 0);
+    crate::port::cells_push(pl, 0);
+    crate::port::cells_push(pl, 9);
+    crate::port::cells_push(pl, 7200);
+    crate::port::cells_push(pl, 16800);
+    crate::port::cells_push(pl, 36000);
+    crate::port::cells_push(pl, 18000);
+    crate::port::cells_push(pl, 7);
+    crate::port::cells_push(pl, 0);
+    answer_renders(ans, 0);
+    crate::testport::assert_eq(run_page(0, 2, pl, ans, rq), us_requests(), "the first pass is asked");
+    crate::testport::assert_eq(rec_count(rq), 3, "the render without text, and two witness lines");
+    let r0: i32 = nth_rec(rq, 0);
+    let r1: i32 = nth_rec(rq, 1);
+    let r2: i32 = nth_rec(rq, 2);
+    crate::testport::assert_eq(rec_id(rq, r0), 272, "the first pass");
+    crate::testport::assert_eq(rq_arg(rq, r0, 0), 258, "of the render WITHOUT its text");
+    crate::testport::assert_eq(rq_arg(rq, r0, 1), 3, "psm 3");
+    crate::testport::assert_eq(rec_id(rq, r1), 352, "witness line 0: 256 + 96");
+    crate::testport::assert_eq(rq_arg(rq, r1, 0), 257, "of the render WITH its text");
+    crate::testport::assert_eq(rq_arg(rq, r1, 1), 7, "psm 7");
+    crate::testport::assert_eq(rq_arg(rq, r1, 3), 297, "x: 72 pt at 300 dpi less the pad of 3");
+    crate::testport::assert_eq(rq_arg(rq, r1, 4), 597, "y");
+    crate::testport::assert_eq(rq_arg(rq, r1, 5), 1206, "width");
+    crate::testport::assert_eq(rq_arg(rq, r1, 6), 56, "height");
+    crate::testport::assert_eq(rec_id(rq, r2), 353, "witness line 1");
 }
 #[test]
 fn test_the_bitmap_set_keeps_what_kin_makes() {
