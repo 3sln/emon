@@ -264,13 +264,13 @@ public final class Arbitertest {
         emon.Port.Cells fx = emon.Port.newCells();
         emon.Port.Cells afa = emon.Port.newCells();
         emon.Port.Cells gls = emon.Port.newCells();
-        int gz = atGlyphs(gls);
         int w0 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
         int w1 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
         int w2 = atTword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121);
         int o0 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
         int o1 = atOword(ow, feats, et, 1000, 1900, 0, 88, 89, 0);
         int o2 = atOword(ow, feats, et, 2000, 2900, 0, 90, 90, 0);
+        atGlyphs(gls);
         atLine3(fl, 0, 3);
         // OCR agrees on the first, differs on the second, reads something else entirely (and plausibly) on the third
         atGroup(cg, refs, w0, 1, o0, 1, 1000);
@@ -317,6 +317,7 @@ public final class Arbitertest {
         int w0 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
         int w1 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
         int o0 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+        emon.Testport.assertThat(w1 >= 0, "the second word is made");
         atLine3(fl, 0, 2);
         atGroup(cg, refs, w0, 1, o0, 1, 1000);
         // the second word is in no group: the identity
@@ -343,13 +344,13 @@ public final class Arbitertest {
         emon.Port.Cells fx = emon.Port.newCells();
         emon.Port.Cells afa = emon.Port.newCells();
         emon.Port.Cells gls = emon.Port.newCells();
-        int gz = atGlyphs(gls);
         int w0 = atTword(fw, feats, et, 0, 0, 5, 60, 0, 105, 102);
         int w1 = atTword(fw, feats, et, 1000, 0, 5, 60, 0, 110, 112);
         int w2 = atTword(fw, feats, et, 2000, 0, 0, 1000, 0, 97, 97);
         int o0 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0);
         int o1 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
         int o2 = atOword(ow, feats, et, 2000, 2900, 0, 97, 97, 0);
+        atGlyphs(gls);
         atLine3(fl, 0, 3);
         atGroup(cg, refs, w0, 1, o0, 1, 0);
         atGroup(cg, refs, w1, 1, o1, 1, 0);
@@ -394,6 +395,7 @@ public final class Arbitertest {
         int o0 = atOword(ow, feats, et, 0, 250, 0, 97, 98, 0);
         int o1 = atOword(ow, feats, et, 300, 600, 0, 99, 100, 0);
         int o2 = atOword(ow, feats, et, 650, 900, 0, 101, 102, 0);
+        emon.Testport.assertThat((o1 >= 0) && (o2 >= 0), "the second and third OCR words are made");
         atLine3(fl, 0, 1);
         atGroup(cg, refs, w0, 1, o0, 3, 0);
         atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
@@ -664,7 +666,7 @@ public final class Arbitertest {
         atGroup(cg, refs, w1, 1, o1, 1, 1000);
         return 0;
     }
-    public static int atDropped(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells et, emon.Port.Cells feats, emon.Port.Cells ow, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells an, emon.Port.Cells txt, emon.Port.Cells nfw, emon.Port.Cells nfl, emon.Port.Cells fv, emon.Port.Cells fx, emon.Port.Cells afa, int reason) {
+    public static int atDropped(int emonT, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells et, emon.Port.Cells feats, emon.Port.Cells ow, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells an, emon.Port.Cells txt, emon.Port.Cells nfw, emon.Port.Cells nfl, emon.Port.Cells fv, emon.Port.Cells fx, emon.Port.Cells afa, int reason) {
         // What the second word's dropping must look like, whichever way the PDF said it: the flow has one word and one line, the first word
         // unchanged; `afa` has one row with the text as its subject and the defence (1), the group (1) and a rule of block 200 in it; the ledger
         // has one row of `reason`, a text-layer one, its text the word's.
@@ -711,7 +713,7 @@ public final class Arbitertest {
         atGl(gl);
         atTwoWords(fw, fl, feats, et, ow, cg, refs);
         atMarkWatermark(gl, mk, 5);
-        atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, emon.Port.newCells(), nfw, nfl, fv, fx, afa, Model.drWatermark());
+        atDropped(0, cg, refs, fw, fl, et, feats, ow, gl, mk, an, emon.Port.newCells(), nfw, nfl, fv, fx, afa, Model.drWatermark());
     }
     public static void testThePdfSaysWatermarkByAlpha() {
         emon.Port.Cells fw = emon.Port.newCells();
@@ -732,7 +734,7 @@ public final class Arbitertest {
         atGl(gl);
         atTwoWords(fw, fl, feats, et, ow, cg, refs);
         Evidence.feSet(feats, emon.Port.cellsAt(fw, 24 + 15), Evidence.xtAlpha(), 300);
-        atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, emon.Port.newCells(), nfw, nfl, fv, fx, afa, Model.drWatermark());
+        atDropped(0, cg, refs, fw, fl, et, feats, ow, gl, mk, an, emon.Port.newCells(), nfw, nfl, fv, fx, afa, Model.drWatermark());
     }
     public static int atAnnot(emon.Port.Cells an, emon.Port.Cells txt, int sub) {
         // An annotation of page 1 of `sub` over 900..2000 x -100..1100 (the second word's box and the gap before it) whose appearance text is `xy mo`.
@@ -777,7 +779,7 @@ public final class Arbitertest {
         atTwoWords(fw, fl, feats, et, ow, cg, refs);
         // a Watermark annotation (subtype 24) whose text is `xy mo`, over the second word (`mo`)
         atAnnot(an, txt, 24);
-        atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, Model.drWatermark());
+        atDropped(0, cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, Model.drWatermark());
     }
     public static void testAnAnnotationRectangleAloneSaysNothing() {
         emon.Port.Cells fw = emon.Port.newCells();

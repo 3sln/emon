@@ -270,13 +270,13 @@ fn test_a_healthy_font_is_untouchable() {
     let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let afa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gls: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let gz: i32 = at_glyphs(gls);
     let w0: i32 = at_tword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
     let w1: i32 = at_tword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
     let w2: i32 = at_tword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121);
     let o0: i32 = at_oword(ow, feats, et, 0, 900, 0, 104, 101, 0);
     let o1: i32 = at_oword(ow, feats, et, 1000, 1900, 0, 88, 89, 0);
     let o2: i32 = at_oword(ow, feats, et, 2000, 2900, 0, 90, 90, 0);
+    at_glyphs(gls);
     at_line3(fl, 0, 3);
     // OCR agrees on the first, differs on the second, reads something else entirely (and plausibly) on the third
     at_group(cg, refs, w0, 1, o0, 1, 1000);
@@ -324,6 +324,7 @@ fn test_a_page_no_group_saw_passes_through() {
     let w0: i32 = at_tword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101);
     let w1: i32 = at_tword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111);
     let o0: i32 = at_oword(ow, feats, et, 0, 900, 0, 104, 101, 0);
+    crate::testport::assert_that(w1 >= 0, "the second word is made");
     at_line3(fl, 0, 2);
     at_group(cg, refs, w0, 1, o0, 1, 1000);
     // the second word is in no group: the identity
@@ -351,13 +352,13 @@ fn test_an_unhealthy_font_gives_its_group_to_ocr() {
     let fx: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let afa: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let gls: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let gz: i32 = at_glyphs(gls);
     let w0: i32 = at_tword(fw, feats, et, 0, 0, 5, 60, 0, 105, 102);
     let w1: i32 = at_tword(fw, feats, et, 1000, 0, 5, 60, 0, 110, 112);
     let w2: i32 = at_tword(fw, feats, et, 2000, 0, 0, 1000, 0, 97, 97);
     let o0: i32 = at_oword(ow, feats, et, 0, 900, 0, 104, 101, 0);
     let o1: i32 = at_oword(ow, feats, et, 1000, 1900, 0, 109, 111, 0);
     let o2: i32 = at_oword(ow, feats, et, 2000, 2900, 0, 97, 97, 0);
+    at_glyphs(gls);
     at_line3(fl, 0, 3);
     at_group(cg, refs, w0, 1, o0, 1, 0);
     at_group(cg, refs, w1, 1, o1, 1, 0);
@@ -403,6 +404,7 @@ fn test_a_word_read_as_three_keeps_ocrs_extents_and_the_text_layers_band() {
     let o0: i32 = at_oword(ow, feats, et, 0, 250, 0, 97, 98, 0);
     let o1: i32 = at_oword(ow, feats, et, 300, 600, 0, 99, 100, 0);
     let o2: i32 = at_oword(ow, feats, et, 650, 900, 0, 101, 102, 0);
+    crate::testport::assert_that((o1 >= 0) && (o2 >= 0), "the second and third OCR words are made");
     at_line3(fl, 0, 1);
     at_group(cg, refs, w0, 1, o0, 3, 0);
     at_run(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
@@ -678,7 +680,7 @@ pub(crate) fn at_two_words(mut fw: &mut crate::port::Cells, mut fl: &mut crate::
     at_group(cg, refs, w1, 1, o1, 1, 1000);
     return 0;
 }
-pub(crate) fn at_dropped(cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, et: &mut crate::port::Cells, feats: &mut crate::port::Cells, ow: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, an: &mut crate::port::Cells, txt: &mut crate::port::Cells, mut nfw: &mut crate::port::Cells, mut nfl: &mut crate::port::Cells, mut fv: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut afa: &mut crate::port::Cells, reason: i32) -> i32 {
+pub(crate) fn at_dropped(emon_t: i32, cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, et: &mut crate::port::Cells, feats: &mut crate::port::Cells, ow: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, an: &mut crate::port::Cells, txt: &mut crate::port::Cells, mut nfw: &mut crate::port::Cells, mut nfl: &mut crate::port::Cells, mut fv: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut afa: &mut crate::port::Cells, reason: i32) -> i32 {
     // What the second word's dropping must look like, whichever way the PDF said it: the flow has one word and one line, the first word
     // unchanged; `afa` has one row with the text as its subject and the defence (1), the group (1) and a rule of block 200 in it; the ledger
     // has one row of `reason`, a text-layer one, its text the word's.
@@ -726,7 +728,7 @@ fn test_the_pdf_says_watermark_by_an_artifact_mark() {
     at_gl(gl);
     at_two_words(fw, fl, feats, et, ow, cg, refs);
     at_mark_watermark(gl, mk, 5);
-    at_dropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, &mut crate::port::Cells::new(), nfw, nfl, fv, fx, afa, dr_watermark());
+    at_dropped(0, cg, refs, fw, fl, et, feats, ow, gl, mk, an, &mut crate::port::Cells::new(), nfw, nfl, fv, fx, afa, dr_watermark());
 }
 #[test]
 fn test_the_pdf_says_watermark_by_alpha() {
@@ -748,7 +750,7 @@ fn test_the_pdf_says_watermark_by_alpha() {
     at_gl(gl);
     at_two_words(fw, fl, feats, et, ow, cg, refs);
     fe_set(feats, crate::port::cells_at(fw, 24 + 15), xt_alpha(), 300);
-    at_dropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, &mut crate::port::Cells::new(), nfw, nfl, fv, fx, afa, dr_watermark());
+    at_dropped(0, cg, refs, fw, fl, et, feats, ow, gl, mk, an, &mut crate::port::Cells::new(), nfw, nfl, fv, fx, afa, dr_watermark());
 }
 pub(crate) fn at_annot(mut an: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, sub: i32) -> i32 {
     // An annotation of page 1 of `sub` over 900..2000 x -100..1100 (the second word's box and the gap before it) whose appearance text is `xy mo`.
@@ -794,7 +796,7 @@ fn test_the_pdf_says_watermark_by_an_annotation() {
     at_two_words(fw, fl, feats, et, ow, cg, refs);
     // a Watermark annotation (subtype 24) whose text is `xy mo`, over the second word (`mo`)
     at_annot(an, txt, 24);
-    at_dropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, dr_watermark());
+    at_dropped(0, cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, dr_watermark());
 }
 #[test]
 fn test_an_annotation_rectangle_alone_says_nothing() {

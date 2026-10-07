@@ -8725,7 +8725,7 @@ at least `rt-ghost` 600 per mille of its ink is foreign, the body-ink run read n
 in reading order on single-column pages (`rt-monotone`). A drop is not a decision from layer shares.
 Tried and worse: line state from layer shares; cell re-reads of every line (polluted with `|`); a replacement that cuts the words another way (`Chapter1` for `Chapter 1`: hence the same-word-count requirement);
 a ghost drop with no confidence ceiling (`table-header-fill` header on a coloured fill, 0.0106 to 0.0396: the header was read surely, 850 did not help, 500 does).
-**Why**: each rule is the one that stopped a measured regression. Known remainder: `scan-color/tables` CER 0.0639 to 0.0686 (`table-white-rules` 0.0858 to 0.1046).
+**Why**: each rule is the one that stopped a measured regression. The remainder this left (`scan-color/tables` 0.0639 to 0.0686) is removed by D427.
 - [ ] **Signed off** (maintainer)
 
 ### D423 — Born-digital: the targeted runs are witnesses, written after alignment; rows 221 and 222 (P7.4, P7.5; SPEC 9.4, 9.5)
@@ -8757,8 +8757,17 @@ brief's measure is met on `scan-ovl` only.
 **Why**: the numbers are the binary's; none was taken from another.
 - [ ] **Signed off** (maintainer)
 
+### D427 — The cells' readings need the same trust as a line's re-reading; the two table regressions are gone (P7.4; D422)
+**Decision**: `rt-line-state` state 4 (the line's cells' readings replace it) now also needs the cells' mean confidence at least `rt-trust-conf` 600, as state 3 did. Found with a word diff of the new and the
+`--no-retarget` text of `scan-color/table-white-rules`: the header line `nn en` (confidence 358, a white-on-fill header) was replaced by a cell reading `pasion` (231) whose words the arbiter then placed elsewhere on the page,
+and CER rose 0.0858 to 0.1046; that was a line made of cells of confidence well below the line's neighbours, accepted only because it was above the line's own. Measured against `--no-retarget` (live, same binary):
+`scan-color/tables` CER 0.0639 and `table-white-rules` 0.0858, both identical to without; `scan-color/all` 0.1520 to 0.1511; `scan-ovl/all` 0.2497 to 0.2161, `scan-ovl/tables` 0.6152 to 0.3340, `scan-ovl/seals`
+0.4130 to 0.2903 (unchanged by this); `scan/all` 0.0938 to 0.0941 (+0.0003, `scan/tables` better: 0.1030 to 0.1028). The five fixtures re-recorded give the same bundles (digests unchanged).
+**Why**: a reading is adopted over the first pass only when it is itself sure.
+- [ ] **Signed off** (maintainer)
+
 ### D426 — What P7.4 did not build (P7.4)
 **Decision**: not built: raster-input TIFF page units, the text-only pass asked, row 160, `op-line` and `op-cell` for born-digital pages, the live Go driver for recording, SROIE and mapo80 measures, the `emon-live`
-scoreboard update. `scan-color/tables` regresses slightly (CER 0.0639 to 0.0686, D422). `bb unit go` does not build `arbitertest` (pre-existing: unused lets and `emonT` from P7.3 and P7.5).
+scoreboard update. `bb unit go` does not build `arbitertest` (pre-existing: unused lets and `emonT` from P7.3 and P7.5).
 **Why**: out of the item's measured reach; stated, not hidden.
 - [ ] **Signed off** (maintainer)

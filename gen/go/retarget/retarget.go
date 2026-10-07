@@ -1069,7 +1069,7 @@ func RtLineState(oruns *port.Cells, olines *port.Cells, owords *port.Cells, rtp 
 	// What becomes of the k-th first-pass line `l`: 0 it stays, 1 the line of the body-ink run over it replaces it (that line is written to `scr` at
 	// `sc-partner-base` + k), 2 it is dropped (foreign ink is `rt-ghost` of its ink and the body-ink run read nothing over it: a ghost), 3 its own
 	// re-reading replaces it, 4 its cells' readings do. The body-ink run's line must be the line's partner both ways (each is the other's best overlap)
-	// and lose no text (`rt-keep`); a re-reading or the cells' readings must lose none, be surer (`rt-better`, `rt-trust-conf`) and have the line's NUMBER OF WORDS
+	// and lose no text (`rt-keep`); a re-reading or the cells' readings must lose none, be surer (`rt-better`, `rt-trust-conf`, the cells' too) and have the line's NUMBER OF WORDS
 	// (a reading that cuts the words another way is not a better reading of them: `Chapter 1` is not `Chapter1`). A line `rt-touch` of whose ink is not foreign is
 	// the first pass's.
 	var c int32 = evidence.OlGet(olines, l, evidence.LhCount())
@@ -1113,7 +1113,7 @@ func RtLineState(oruns *port.Cells, olines *port.Cells, owords *port.Cells, rtp 
 		}
 		if (allcells == 1) && (cwords == c) {
 			if (cscore * 1000) >= (mine * RtKeep()) {
-				if (csum / cwords) >= (RtLineMean(olines, owords, l) + RtBetter()) {
+				if ((csum / cwords) >= RtTrustConf()) && ((csum / cwords) >= (RtLineMean(olines, owords, l) + RtBetter())) {
 					return 4
 				}
 			}

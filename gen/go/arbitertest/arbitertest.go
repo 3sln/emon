@@ -288,13 +288,13 @@ func TestAHealthyFontIsUntouchable(emonT *testing.T) {
 	var fx *port.Cells = port.NewCells()
 	var afa *port.Cells = port.NewCells()
 	var gls *port.Cells = port.NewCells()
-	var gz int32 = atGlyphs(gls)
 	var w0 int32 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101)
 	var w1 int32 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111)
 	var w2 int32 = atTword(fw, feats, et, 2000, 0, 0, 1000, 0, 120, 121)
 	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
 	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 88, 89, 0)
 	var o2 int32 = atOword(ow, feats, et, 2000, 2900, 0, 90, 90, 0)
+	atGlyphs(gls)
 	atLine3(fl, 0, 3)
 	// OCR agrees on the first, differs on the second, reads something else entirely (and plausibly) on the third
 	atGroup(cg, refs, w0, 1, o0, 1, 1000)
@@ -342,6 +342,7 @@ func TestAPageNoGroupSawPassesThrough(emonT *testing.T) {
 	var w0 int32 = atTword(fw, feats, et, 0, 0, 0, 1000, 0, 104, 101)
 	var w1 int32 = atTword(fw, feats, et, 1000, 0, 0, 1000, 0, 109, 111)
 	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
+	port.AssertThat(emonT, w1 >= 0, "the second word is made")
 	atLine3(fl, 0, 2)
 	atGroup(cg, refs, w0, 1, o0, 1, 1000)
 	// the second word is in no group: the identity
@@ -369,13 +370,13 @@ func TestAnUnhealthyFontGivesItsGroupToOcr(emonT *testing.T) {
 	var fx *port.Cells = port.NewCells()
 	var afa *port.Cells = port.NewCells()
 	var gls *port.Cells = port.NewCells()
-	var gz int32 = atGlyphs(gls)
 	var w0 int32 = atTword(fw, feats, et, 0, 0, 5, 60, 0, 105, 102)
 	var w1 int32 = atTword(fw, feats, et, 1000, 0, 5, 60, 0, 110, 112)
 	var w2 int32 = atTword(fw, feats, et, 2000, 0, 0, 1000, 0, 97, 97)
 	var o0 int32 = atOword(ow, feats, et, 0, 900, 0, 104, 101, 0)
 	var o1 int32 = atOword(ow, feats, et, 1000, 1900, 0, 109, 111, 0)
 	var o2 int32 = atOword(ow, feats, et, 2000, 2900, 0, 97, 97, 0)
+	atGlyphs(gls)
 	atLine3(fl, 0, 3)
 	atGroup(cg, refs, w0, 1, o0, 1, 0)
 	atGroup(cg, refs, w1, 1, o1, 1, 0)
@@ -421,6 +422,7 @@ func TestAWordReadAsThreeKeepsOcrsExtentsAndTheTextLayersBand(emonT *testing.T) 
 	var o0 int32 = atOword(ow, feats, et, 0, 250, 0, 97, 98, 0)
 	var o1 int32 = atOword(ow, feats, et, 300, 600, 0, 99, 100, 0)
 	var o2 int32 = atOword(ow, feats, et, 650, 900, 0, 101, 102, 0)
+	port.AssertThat(emonT, (o1 >= 0) && (o2 >= 0), "the second and third OCR words are made")
 	atLine3(fl, 0, 1)
 	atGroup(cg, refs, w0, 1, o0, 3, 0)
 	atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa)
@@ -700,7 +702,7 @@ func atTwoWords(fw *port.Cells, fl *port.Cells, feats *port.Cells, et *port.Cell
 	return 0
 }
 
-func atDropped(cg *port.Cells, refs *port.Cells, fw *port.Cells, fl *port.Cells, et *port.Cells, feats *port.Cells, ow *port.Cells, gl *port.Cells, mk *port.Cells, an *port.Cells, txt *port.Cells, nfw *port.Cells, nfl *port.Cells, fv *port.Cells, fx *port.Cells, afa *port.Cells, reason int32) int32 {
+func atDropped(emonT *testing.T, cg *port.Cells, refs *port.Cells, fw *port.Cells, fl *port.Cells, et *port.Cells, feats *port.Cells, ow *port.Cells, gl *port.Cells, mk *port.Cells, an *port.Cells, txt *port.Cells, nfw *port.Cells, nfl *port.Cells, fv *port.Cells, fx *port.Cells, afa *port.Cells, reason int32) int32 {
 	// What the second word's dropping must look like, whichever way the PDF said it: the flow has one word and one line, the first word
 	// unchanged; `afa` has one row with the text as its subject and the defence (1), the group (1) and a rule of block 200 in it; the ledger
 	// has one row of `reason`, a text-layer one, its text the word's.
@@ -748,7 +750,7 @@ func TestThePdfSaysWatermarkByAnArtifactMark(emonT *testing.T) {
 	atGl(gl)
 	atTwoWords(fw, fl, feats, et, ow, cg, refs)
 	atMarkWatermark(gl, mk, 5)
-	atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, port.NewCells(), nfw, nfl, fv, fx, afa, model.DrWatermark())
+	atDropped(emonT, cg, refs, fw, fl, et, feats, ow, gl, mk, an, port.NewCells(), nfw, nfl, fv, fx, afa, model.DrWatermark())
 }
 
 func TestThePdfSaysWatermarkByAlpha(emonT *testing.T) {
@@ -770,7 +772,7 @@ func TestThePdfSaysWatermarkByAlpha(emonT *testing.T) {
 	atGl(gl)
 	atTwoWords(fw, fl, feats, et, ow, cg, refs)
 	evidence.FeSet(feats, port.CellsAt(fw, 24+15), evidence.XtAlpha(), 300)
-	atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, port.NewCells(), nfw, nfl, fv, fx, afa, model.DrWatermark())
+	atDropped(emonT, cg, refs, fw, fl, et, feats, ow, gl, mk, an, port.NewCells(), nfw, nfl, fv, fx, afa, model.DrWatermark())
 }
 
 func atAnnot(an *port.Cells, txt *port.Cells, sub int32) int32 {
@@ -817,7 +819,7 @@ func TestThePdfSaysWatermarkByAnAnnotation(emonT *testing.T) {
 	atTwoWords(fw, fl, feats, et, ow, cg, refs)
 	// a Watermark annotation (subtype 24) whose text is `xy mo`, over the second word (`mo`)
 	atAnnot(an, txt, 24)
-	atDropped(cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, model.DrWatermark())
+	atDropped(emonT, cg, refs, fw, fl, et, feats, ow, gl, mk, an, txt, nfw, nfl, fv, fx, afa, model.DrWatermark())
 }
 
 func TestAnAnnotationRectangleAloneSaysNothing(emonT *testing.T) {
