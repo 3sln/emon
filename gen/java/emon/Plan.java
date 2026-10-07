@@ -82,6 +82,12 @@ public final class Plan {
     public static int piOcr() {
         return 16;
     }
+    public static int auId(int k) {
+        return 8388608 + k;
+    }
+    public static int auDecode() {
+        return 4194304;
+    }
     public static int fltNone() {
         return 0;
     }

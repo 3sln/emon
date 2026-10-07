@@ -79,6 +79,12 @@ pub fn pi_decode() -> i32 {
 pub fn pi_ocr() -> i32 {
     return 16;
 }
+pub fn au_id(k: i32) -> i32 {
+    return 8388608 + k;
+}
+pub fn au_decode() -> i32 {
+    return 4194304;
+}
 pub fn flt_none() -> i32 {
     return 0;
 }

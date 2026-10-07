@@ -975,8 +975,8 @@
 (spit (path "version.txt")
       (str "ImageMagick " (:imagemagick @tool-versions) "\npdfimages " (first (str/split-lines (str/trim (str (:err (sh "pdfimages" "-v")))))) "\nqpdf " (first (str/split-lines (:out (sh "qpdf" "--version")))) "\n"))
 (if check?
-  ;; (`transcripts/` is `bb asset-record`'s, made with the live codecs: not this generator's)
-  (let [rel (fn [d] (into (sorted-set) (remove #(str/starts-with? % "transcripts/") (map #(str (fs/relativize d %)) (filter fs/regular-file? (file-seq (fs/file d)))))))
+  ;; (`transcripts/` is `bb asset-record`'s, made with the live codecs, and `fig/` is `asset-fig-fixtures`': not this generator's)
+  (let [rel (fn [d] (into (sorted-set) (remove #(or (str/starts-with? % "transcripts/") (str/starts-with? % "fig/")) (map #(str (fs/relativize d %)) (filter fs/regular-file? (file-seq (fs/file d)))))))
         a (rel out-dir) b (rel committed)
         diff (vec (concat (map #(str "missing from the corpus: " %) (remove b a))
                      (map #(str "not written by the generator: " %) (remove a b))

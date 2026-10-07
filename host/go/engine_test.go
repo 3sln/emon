@@ -836,7 +836,7 @@ func TestAssetsAreOptInAndAJPEGPassesThroughAndAFlateImageBecomesAPNG(t *testing
 	if r, ok := c.Find(figure)[0].NoAsset(); len(c.Assets()) != 0 || !ok || r != "codec" {
 		t.Errorf("jpx: %q", r)
 	}
-	// `figures` runs as `images` until P8.5
+	// `figures` keeps an image that is whole and alone as it is (P8.5): the same asset as `images`, the header's level apart
 	of := o
 	of.Assets = AssetsFigures
 	f, err := e.Convert(one(BytesInput(read(t, "test/assets/dct-rgb.pdf"))), of)

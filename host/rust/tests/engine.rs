@@ -640,12 +640,89 @@ fn assets_are_opt_in_and_a_jpeg_passes_through_and_a_flate_image_becomes_a_png()
     let c = e.convert(Input::bytes(read("test/assets/jpx.pdf")), &o).unwrap();
     assert!(c.assets().is_empty());
     assert_eq!(c.find(figure)[0].noasset().as_deref(), Some("codec"));
-    // `figures` runs as `images` until P8.5
+    // `figures` keeps an image that is whole and alone as it is (P8.5): the same asset as `images`, the header's level apart
     let f = e.convert(Input::bytes(read("test/assets/dct-rgb.pdf")), &Options { assets: Assets::Figures, ..Options::default() }).unwrap();
     assert_eq!(json(&f), json(&m).replace("\"assets\": \"images\"", "\"assets\": \"figures\""));
     // a document with no image: the table is there and empty
     let n = e.convert(Input::bytes(synth("h-plain")), &o).unwrap();
     assert!(n.assets().is_empty() && json(&n).contains("\"assets\": []"));
+}
+
+// A Letter page's renderer for the level `figures` (P8.5, D351): the whole page is floor(612 d / 72 + 1/2) by floor(792 d / 72 + 1/2)
+// RGB pixels at d dpi, pixel (x, y) a function of x and y alone, so that a crop's pixels are known without a rasteriser.
+#[derive(Debug, Default)]
+struct LetterPage {
+    calls: AtomicUsize,
+}
+fn letter_px(x: u32, y: u32) -> [u8; 3] {
+    [(x * 7 + y * 13) as u8, (x ^ y) as u8, ((x + y) * 3) as u8]
+}
+impl Renderer for LetterPage {
+    fn render(&self, _input: &dyn ByteSource, _pw: Option<&[u8]>, req: &RenderRequest) -> Result<emon::port::Bitmap, RenderError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        assert_eq!(req.layer, 0, "a figure is rendered with its text");
+        let d = req.dpi as u32;
+        let (w, h) = ((1224 * d + 72) / 144, (1584 * d + 72) / 144);
+        let mut px = Vec::new();
+        for y in 0..h {
+            for x in 0..w {
+                px.extend_from_slice(&letter_px(x, y));
+            }
+        }
+        Ok(emon::port::Bitmap::from_bytes(w as i32, h as i32, 3, &px))
+    }
+}
+
+#[test]
+fn at_figures_a_vector_figure_is_a_crop_of_the_page_and_replays_without_a_renderer() {
+    // fig-vector-chart: a bar chart and a diagram, vector art with no image under either: both are rendered. The record, the replay
+    // and the run with no renderer agree where they can (D351): the replay is the live run to the byte, and without a renderer a
+    // figure says `render`.
+    let fake = Arc::new(LetterPage::default());
+    let live = Engine::new(Config { renderer: Some(fake.clone()), ..Config::default() });
+    let o = Options { assets: Assets::Figures, ..Options::default() };
+    let pdf = read("test/assets/fig/fig-vector-chart.pdf");
+    let (m, t) = live.record(Input::bytes(pdf.clone()), &o).unwrap();
+    let a = m.assets();
+    assert_eq!(a.len(), 2, "the chart and the diagram");
+    assert_eq!(fake.calls.load(Ordering::SeqCst), 1, "the page is rendered once for its two crops");
+    for x in &a {
+        assert_eq!((x.origin().as_str(), x.from().as_str(), x.dpi(), x.media_type().as_str()), ("rendered", "render", Some(150), "image/png"));
+    }
+    // every crop is the rectangle of the page its figure's region says: the region padded by 2 pt, floor and ceiling, held to the page
+    for x in &a {
+        let r = x.uses()[0].region;
+        let (px0, py0) = (((r.x0 - 200).max(0) as i64 * 150 / 7200) as u32, ((r.y0 - 200).max(0) as i64 * 150 / 7200) as u32);
+        let (px1, py1) = (((((r.x1 + 200).min(61200) as i64 * 150) + 7199) / 7200) as u32, ((((r.y1 + 200).min(79200) as i64 * 150) + 7199) / 7200) as u32);
+        let mut want = Vec::new();
+        for y in py0..py1 {
+            for xx in px0..px1 {
+                want.extend_from_slice(&letter_px(xx, y));
+            }
+        }
+        let got = emon::plan::png_decode(&x.bytes()).unwrap();
+        assert_eq!((x.width() as u32, x.height() as u32), (px1 - px0, py1 - py0));
+        assert_eq!(got.to_bytes(), want, "the crop is the pixels of its rectangle, cut from the page");
+    }
+    // the replay needs no renderer and gives the same JSON, HTML in three modes and asset files
+    let r = Engine::new(Config::default()).replay(Input::bytes(pdf.clone()), &o, &t).unwrap();
+    assert_eq!(json(&r), json(&m));
+    assert_eq!(r.asset_files(), m.asset_files());
+    for (as_, p) in [(emon::HtmlAssets::Inline, ""), (emon::HtmlAssets::External, "img/"), (emon::HtmlAssets::Omit, "")] {
+        let h = |x: &emon::Model| x.to_html(&HtmlOptions { assets: as_, asset_prefix: p.to_string(), ..HtmlOptions::default() });
+        assert_eq!(h(&r), h(&m));
+    }
+    // no renderer: the crops are answered `unsupported` and the figures say `render` (and no page is touched)
+    let none = Engine::new(Config::default()).convert(Input::bytes(pdf.clone()), &o).unwrap();
+    let figure = Kind::named("figure").unwrap();
+    assert!(none.assets().is_empty());
+    assert!(none.find(figure).iter().any(|f| f.noasset().as_deref() == Some("render")));
+    // and the default run is what it was: no assets, no provisional figures (the caption's own figure is the old behaviour), and the
+    // same JSON with a renderer as without
+    let off = live.convert(Input::bytes(pdf.clone()), &Options::default()).unwrap();
+    assert!(off.assets().is_empty() && !json(&off).contains("\"assets\""));
+    assert_eq!(json(&off), json(&Engine::new(Config::default()).convert(Input::bytes(pdf), &Options::default()).unwrap()));
+    assert_eq!(fake.calls.load(Ordering::SeqCst), 1, "nothing is rendered unless the level is `figures`");
 }
 
 #[test]

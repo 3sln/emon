@@ -2,6 +2,7 @@
 // source: emon.asset
 
 use crate::emon::evidence::*;
+use crate::emon::glayer::*;
 use crate::emon::model::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdfimage::*;
@@ -26,6 +27,14 @@ pub(crate) fn as_hcap(maxpix: i32) -> i32 {
 pub(crate) const AS_MAXPROD: i32 = 4096;
 pub(crate) const AS_STRIDE: i32 = 32;
 pub(crate) const AS_OVERLAY_WORK: i32 = 100000000;
+pub(crate) const AS_PAD: i32 = 200;
+pub(crate) const AS_MIN_DPI: i32 = 36;
+pub(crate) const AS_VMIN: i32 = 2;
+pub(crate) const AS_VSIDE: i32 = 1800;
+pub(crate) const AS_VGAP: i32 = 200;
+pub(crate) const AS_VWORK: i32 = 50000000;
+pub(crate) const AS_VOVER: i32 = 500;
+pub(crate) const AS_REGION: i32 = -2;
 pub(crate) const AC_PAGE: i32 = 0;
 pub(crate) const AC_BX0: i32 = 1;
 pub(crate) const AC_VX0: i32 = 5;
@@ -192,7 +201,7 @@ pub(crate) fn as_slot(hs: &mut crate::port::Cells, key: i32) -> i32 {
     }
     return s;
 }
-pub(crate) fn as_png(mut ws: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut z: &mut crate::port::Buf, mut row: &mut crate::port::Cells, mut hs: &mut crate::port::Cells, rec: &mut crate::port::Cells, pic: &crate::port::Bitmap, al: &crate::port::Bitmap, alpha: i32, bilevel: i32) -> i32 {
+pub(crate) fn as_png(mut ws: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut z: &mut crate::port::Buf, mut row: &mut crate::port::Cells, mut hs: &mut crate::port::Cells, rec: &mut crate::port::Cells, pic: &crate::port::Bitmap, al: &crate::port::Bitmap, alpha: i32, bilevel: i32, dpi100: i32) -> i32 {
     // The canonical PNG of the pixels (`emon.png`), appended to `cbytes`. Gray 8 bits (1 for a bilevel image), RGB, a
     // palette for an Indexed image with no alpha (PLTE the image's palette, the pixel's index the first entry of that
     // colour), gray + alpha, RGBA. `hs` (2,048 cells), `row` are scratch.
@@ -262,7 +271,7 @@ pub(crate) fn as_png(mut ws: &mut crate::port::Cells, mut cbytes: &mut crate::po
         crate::port::cells_push(row, 255);
         i += 1;
     }
-    png_begin(ws, cbytes, z, w, h, ct, depth, 0, row, npal, 0);
+    png_begin(ws, cbytes, z, w, h, ct, depth, dpi100, row, npal, 0);
     while y < h {
         crate::port::cells_drop(row, 0);
         x = 0;
@@ -687,7 +696,7 @@ pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
         let al2: &crate::port::Bitmap = &crate::port::bitmap_new((ow + (k - 1)) / k, (oh + (k - 1)) / k, 1);
         as_scale_into(pic, pic2, k);
         as_scale_into(al, al2, k);
-        as_png(ws, cbytes, z, rows, tmp, rec, pic2, al2, alpha, 0);
+        as_png(ws, cbytes, z, rows, tmp, rec, pic2, al2, alpha, 0, 0);
         w = crate::port::bitmap_w(pic2);
         h = crate::port::bitmap_h(pic2);
     } else {
@@ -695,7 +704,7 @@ pub(crate) fn as_make(src: &crate::port::Src, mut ar: &mut crate::port::Cells, m
         if (pi_get(rec, pi_f_bpc()) == 1) && (pi_get(rec, pi_f_class()) == 1) {
             bil = 1;
         }
-        as_png(ws, cbytes, z, rows, tmp, rec, pic, al, alpha, bil);
+        as_png(ws, cbytes, z, rows, tmp, rec, pic, al, alpha, bil, 0);
         w = ow;
         h = oh;
     }
@@ -751,7 +760,201 @@ pub(crate) fn as_overlaid(im: &mut crate::port::Cells, pa: &mut crate::port::Cel
     }
     return 0;
 }
-pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, im: &mut crate::port::Cells, pa: &mut crate::port::Cells, gl: &mut crate::port::Cells, pg: &mut crate::port::Cells, maxpix: i32, totbytes: i32, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut mrec: &mut crate::port::Cells, mut smp: &mut crate::port::Cells, mut msmp: &mut crate::port::Cells, mut data: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, input: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut payload: &mut crate::port::Buf, bms: &crate::port::BitmapSet, mut glob: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut hs: &mut crate::port::Cells) -> i32 {
+pub(crate) fn as_new_row(mut cand: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // Append a candidate row (all zero but what an asset needs) for a region of `page` and answer its index. The visible box
+    // is the region's.
+    let row: i32 = crate::port::cells_len(cand) / AS_STRIDE;
+    let mut f: i32 = 0;
+    while f < AS_STRIDE {
+        crate::port::cells_push(cand, 0);
+        f += 1;
+    }
+    as_set(cand, row, AC_PAGE, page);
+    as_set(cand, row, AC_BX0, x0);
+    as_set(cand, row, AC_BX0 + 1, y0);
+    as_set(cand, row, AC_BX0 + 2, x1);
+    as_set(cand, row, AC_BX0 + 3, y1);
+    as_set(cand, row, AC_VX0, x0);
+    as_set(cand, row, AC_VX0 + 1, y0);
+    as_set(cand, row, AC_VX0 + 2, x1);
+    as_set(cand, row, AC_VX0 + 3, y1);
+    as_set(cand, row, AC_OBJ, -1);
+    as_set(cand, row, AC_FROM, afm_raw());
+    as_set(cand, row, AC_ORIGIN, ao_decoded());
+    as_set(cand, row, AC_TYPE, amt_png());
+    as_set(cand, row, AC_KORI, -1);
+    return row;
+}
+pub fn as_region_add(mut cand: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // THE HOOK for a region another stage finds (P7.G's tracer-fed `figure` regions, P8.1): a candidate row that is a
+    // region, to be rendered. Answers its row.
+    let row: i32 = as_new_row(cand, page, x0, y0, x1, y1);
+    as_set(cand, row, AC_KORI, AS_REGION);
+    as_set(cand, row, AC_STATUS, nz_vector());
+    return row;
+}
+pub(crate) fn as_under_image(cand: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // 1 when at least `AS_VOVER` per mille of the box lies under the visible box of one image's candidate row of the page.
+    let n: i32 = crate::port::cells_len(cand) / AS_STRIDE;
+    let area: i64 = as_area(x0, y0, x1, y1);
+    let mut r: i32 = 0;
+    if area <= (0 as i64) {
+        return 0;
+    }
+    while r < n {
+        if (as_get(cand, r, AC_PAGE) == page) && (as_get(cand, r, AC_KORI) >= -1) {
+            if as_ge(as_ia(x0, y0, x1, y1, as_get(cand, r, AC_VX0), as_get(cand, r, AC_VX0 + 1), as_get(cand, r, AC_VX0 + 2), as_get(cand, r, AC_VX0 + 3)), area, AS_VOVER) == 1 {
+                return 1;
+            }
+        }
+        r += 1;
+    }
+    return 0;
+}
+pub(crate) fn as_clu_add(mut cl: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // Add the box of one path to the clusters `cl` (six cells each: box, paths, alive): every live cluster within `AS_VGAP` of
+    // the box, which grows as it takes them, joins it, into the first such cluster's slot. Answers how many it looked at.
+    let nc: i32 = crate::port::cells_len(cl) / 6;
+    let mut bx0: i32 = x0;
+    let mut by0: i32 = y0;
+    let mut bx1: i32 = x1;
+    let mut by1: i32 = y1;
+    let mut cnt: i32 = 1;
+    let mut slot: i32 = -1;
+    let mut changed: i32 = 1;
+    let mut seen: i32 = 0;
+    let mut i: i32 = 0;
+    let mut b: i32 = 0;
+    while changed == 1 {
+        changed = 0;
+        i = 0;
+        while i < nc {
+            b = i * 6;
+            seen += 1;
+            if (crate::port::cells_at(cl, b + 5) == 1) && ((crate::port::cells_at(cl, b) <= (bx1 + AS_VGAP)) && ((crate::port::cells_at(cl, b + 2) >= (bx0 - AS_VGAP)) && ((crate::port::cells_at(cl, b + 1) <= (by1 + AS_VGAP)) && (crate::port::cells_at(cl, b + 3) >= (by0 - AS_VGAP))))) {
+                if crate::port::cells_at(cl, b) < bx0 {
+                    bx0 = crate::port::cells_at(cl, b);
+                }
+                if crate::port::cells_at(cl, b + 1) < by0 {
+                    by0 = crate::port::cells_at(cl, b + 1);
+                }
+                if crate::port::cells_at(cl, b + 2) > bx1 {
+                    bx1 = crate::port::cells_at(cl, b + 2);
+                }
+                if crate::port::cells_at(cl, b + 3) > by1 {
+                    by1 = crate::port::cells_at(cl, b + 3);
+                }
+                cnt += crate::port::cells_at(cl, b + 4);
+                crate::port::cells_set(cl, b + 5, 0);
+                if slot < 0 {
+                    slot = i;
+                }
+                changed = 1;
+            }
+            i += 1;
+        }
+    }
+    if slot < 0 {
+        crate::port::cells_push(cl, bx0);
+        crate::port::cells_push(cl, by0);
+        crate::port::cells_push(cl, bx1);
+        crate::port::cells_push(cl, by1);
+        crate::port::cells_push(cl, cnt);
+        crate::port::cells_push(cl, 1);
+    } else {
+        b = slot * 6;
+        crate::port::cells_set(cl, b, bx0);
+        crate::port::cells_set(cl, b + 1, by0);
+        crate::port::cells_set(cl, b + 2, bx1);
+        crate::port::cells_set(cl, b + 3, by1);
+        crate::port::cells_set(cl, b + 4, cnt);
+        crate::port::cells_set(cl, b + 5, 1);
+    }
+    return seen;
+}
+pub(crate) fn as_flush(mut cand: &mut crate::port::Cells, cl: &mut crate::port::Cells, page: i32, pg: &mut crate::port::Cells) -> i32 {
+    // The live clusters of `page` that are figures: at least `AS_VMIN` paths, both sides at least 18 pt, under 800 per mille of
+    // the page, and not mostly under an image (which is the figure then): each a region candidate.
+    let nc: i32 = crate::port::cells_len(cl) / 6;
+    let mut i: i32 = 0;
+    let mut b: i32 = 0;
+    let mut pw: i32 = 0;
+    let mut ph: i32 = 0;
+    if (page < 1) || (page > pd_pg_count(pg)) {
+        return 0;
+    }
+    pw = as_page_w(pg, page - 1);
+    ph = as_page_h(pg, page - 1);
+    while i < nc {
+        b = i * 6;
+        if (crate::port::cells_at(cl, b + 5) == 1) && (crate::port::cells_at(cl, b + 4) >= AS_VMIN) {
+            if ((crate::port::cells_at(cl, b + 2) - crate::port::cells_at(cl, b)) >= AS_VSIDE) && (((crate::port::cells_at(cl, b + 3) - crate::port::cells_at(cl, b + 1)) >= AS_VSIDE) && (as_ge(as_ia(crate::port::cells_at(cl, b), crate::port::cells_at(cl, b + 1), crate::port::cells_at(cl, b + 2), crate::port::cells_at(cl, b + 3), 0, 0, pw, ph), as_area(0, 0, pw, ph), AS_BIG) == 0)) {
+                if as_under_image(cand, page, crate::port::cells_at(cl, b), crate::port::cells_at(cl, b + 1), crate::port::cells_at(cl, b + 2), crate::port::cells_at(cl, b + 3)) == 0 {
+                    as_region_add(cand, page, crate::port::cells_at(cl, b), crate::port::cells_at(cl, b + 1), crate::port::cells_at(cl, b + 2), crate::port::cells_at(cl, b + 3));
+                }
+            }
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub fn as_vector_regions(pa: &mut crate::port::Cells, pg: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cl: &mut crate::port::Cells) -> i32 {
+    // VECTOR ART (D353): the document's paths (`pa`, a page at a time), the visible ones that are not clips and not page-sized,
+    // joined into clusters of paths within `AS_VGAP` of each other; a cluster that is a figure (`as-flush`) is a region
+    // candidate. At most `AS_VWORK` cluster tests in all (past it no more paths are joined). `cl` is scratch.
+    let n: i32 = crate::port::cells_len(pa) / 24;
+    let mut i: i32 = 0;
+    let mut cur: i32 = -1;
+    let mut page: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut pw: i32 = 0;
+    let mut ph: i32 = 0;
+    let mut work: i32 = 0;
+    crate::port::cells_drop(cl, 0);
+    while i < n {
+        page = pa_get(pa, i, 0);
+        if page != cur {
+            as_flush(cand, cl, cur, pg);
+            crate::port::cells_drop(cl, 0);
+            cur = page;
+        }
+        if (pa_get(pa, i, pf_vis()) == 0) && (((pa_get(pa, i, pf_flags()) & pg_clip()) == 0) && ((page >= 1) && ((page <= pd_pg_count(pg)) && (work < AS_VWORK)))) {
+            x0 = pa_get(pa, i, pf_x0());
+            y0 = pa_get(pa, i, pf_y0());
+            x1 = pa_get(pa, i, pf_x1());
+            y1 = pa_get(pa, i, pf_y1());
+            pw = as_page_w(pg, page - 1);
+            ph = as_page_h(pg, page - 1);
+            if (x1 >= x0) && ((y1 >= y0) && (as_ge(as_ia(x0, y0, x1, y1, 0, 0, pw, ph), as_area(0, 0, pw, ph), AS_BIG) == 0)) {
+                work += as_clu_add(cl, x0, y0, x1, y1);
+            }
+        }
+        i += 1;
+    }
+    as_flush(cand, cl, cur, pg);
+    return 0;
+}
+pub fn as_grg_regions(grg: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, pg: &mut crate::port::Cells) -> i32 {
+    // THE HOOK for P7.G (SPEC 9.9, D228): every `figure` row of the graphics layer's regions `grg` (page, box in cells 0..4, the
+    // kind in 5) that is not mostly under an image is a region candidate. Empty until the page units fill `grg`.
+    let n: i32 = grg_count(grg);
+    let mut i: i32 = 0;
+    let mut page: i32 = 0;
+    while i < n {
+        if grg_get(grg, i, 5) == rk_figure() {
+            page = grg_get(grg, i, 0);
+            if (page >= 1) && ((page <= pd_pg_count(pg)) && (as_under_image(cand, page, grg_get(grg, i, 1), grg_get(grg, i, 2), grg_get(grg, i, 3), grg_get(grg, i, 4)) == 0)) {
+                as_region_add(cand, page, grg_get(grg, i, 1), grg_get(grg, i, 2), grg_get(grg, i, 3), grg_get(grg, i, 4));
+            }
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, im: &mut crate::port::Cells, pa: &mut crate::port::Cells, gl: &mut crate::port::Cells, pg: &mut crate::port::Cells, maxpix: i32, totbytes: i32, level: i32, grg: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut mrec: &mut crate::port::Cells, mut smp: &mut crate::port::Cells, mut msmp: &mut crate::port::Cells, mut data: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, input: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut payload: &mut crate::port::Buf, bms: &crate::port::BitmapSet, mut glob: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut hs: &mut crate::port::Cells) -> i32 {
     // The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
     // its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice
     // `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.
@@ -884,12 +1087,38 @@ pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut d
     if crate::port::cells_len(rq) > 0 {
         return 1;
     }
+    // at `figures` the regions that are not an image: vector art (D353), then the graphics layer's `figure` regions
+    if level == 2 {
+        as_vector_regions(pa, pg, cand, data);
+        as_grg_regions(grg, cand, pg);
+    }
     return 0;
 }
-pub fn as_figure_rows(cand: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut fg: &mut crate::port::Cells) -> i32 {
+pub(crate) fn as_in_table(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // 1 when at least half of the box lies inside a `table` node's region on the page (vector art that is a table's rules).
+    let nn: i32 = node_count(nodes);
+    let area: i64 = as_area(x0, y0, x1, y1);
+    let mut n: i32 = 0;
+    let mut r: i32 = -1;
+    while n < nn {
+        if node_kind(nodes, n) == nk_table() {
+            r = node_region_head(nodes, n);
+            while r >= 0 {
+                if (region_page(regions, r) == page) && (as_ge(as_ia(x0, y0, x1, y1, region_x0(regions, r), region_y0(regions, r), region_x1(regions, r), region_y1(regions, r)), area, 500) == 1) {
+                    return 1;
+                }
+                r = region_next(regions, r);
+            }
+        }
+        n += 1;
+    }
+    return 0;
+}
+pub fn as_figure_rows(cand: &mut crate::port::Cells, pages: &mut crate::port::Cells, nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, level: i32, mut fg: &mut crate::port::Cells) -> i32 {
     // The candidates that are provisional `figure`s (SPEC 10.6, until P8.1): not page-sized (under 800 per mille of its
-    // page) and both sides of the visible box at least 18 pt. `fg` = [cursor 0, then the candidate rows sorted by (page,
-    // top, left, row)]. Answers how many.
+    // page) and both sides of the visible box at least 18 pt. At `figures` (`level` 2) the region candidates (vector art, a
+    // P7.G `figure`) are figures too, unless half of one lies in a table. `fg` = [cursor 0, then the candidate rows sorted
+    // by (page, top, left, row)]. Answers how many.
     let n: i32 = crate::port::cells_len(cand) / AS_STRIDE;
     let mut r: i32 = 0;
     let mut j: i32 = 0;
@@ -913,7 +1142,7 @@ pub fn as_figure_rows(cand: &mut crate::port::Cells, pages: &mut crate::port::Ce
         if (pgi >= 0) && (pgi < page_count(pages)) {
             pw = page_w(pages, pgi);
             ph = page_h(pages, pgi);
-            if ((x1 - x0) >= AS_FIGURE_SIDE) && ((y1 - y0) >= AS_FIGURE_SIDE) && (as_ge(as_ia(x0, y0, x1, y1, 0, 0, pw, ph), as_area(0, 0, pw, ph), AS_BIG) == 0) {
+            if ((x1 - x0) >= AS_FIGURE_SIDE) && ((y1 - y0) >= AS_FIGURE_SIDE) && (as_ge(as_ia(x0, y0, x1, y1, 0, 0, pw, ph), as_area(0, 0, pw, ph), AS_BIG) == 0) && ((as_get(cand, r, AC_KORI) != AS_REGION) || ((level == 2) && (as_in_table(nodes, regions, as_get(cand, r, AC_PAGE), x0, y0, x1, y1) == 0))) {
                 // insert in order of (page, top, left, row)
                 ins = cnt + 1;
                 j = 1;
@@ -994,11 +1223,53 @@ pub(crate) fn as_set_noasset(mut nodes: &mut crate::port::Cells, mut attrs: &mut
     node_set_attr_int(nodes, attrs, n, fk_noasset(), reason);
     return 0;
 }
+pub(crate) fn as_admit(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, n: i32, cand: &mut crate::port::Cells, c: i32, cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, mut st: &mut crate::port::Cells, dpi: i32) -> i32 {
+    // ADMISSION of candidate row `c` for node `n` (SPEC 10.11), in node-id order: its own reason when it has no pixels;
+    // else dedup by SHA-256 and length (one more use of the earlier asset), `asset-bytes`, and the first overflow of
+    // `assets-bytes`, which closes the budget. `st` holds the run's two cells at 5 and 6: [bytes admitted so far, budget
+    // closed] (cells 0..4 are the caller's); `dpi` is
+    // the asset's render resolution (0 for none). The node gets `fk-asset` or `fk-noasset`.
+    let mut id: i32 = -1;
+    let blen: i32 = as_get(cand, c, AC_BLEN);
+    let mut bs: i32 = 0;
+    if as_get(cand, c, AC_STATUS) != 0 {
+        as_set_noasset(nodes, attrs, n, as_get(cand, c, AC_STATUS));
+        return 0;
+    }
+    id = asset_find(assets, blen, as_get(cand, c, AC_SHA + 0), as_get(cand, c, AC_SHA + 1), as_get(cand, c, AC_SHA + 2), as_get(cand, c, AC_SHA + 3), as_get(cand, c, AC_SHA + 4), as_get(cand, c, AC_SHA + 5), as_get(cand, c, AC_SHA + 6), as_get(cand, c, AC_SHA + 7));
+    if (id < 0) && (blen > maxbytes) {
+        as_set_noasset(nodes, attrs, n, nz_too_large());
+        return 0;
+    }
+    if (id < 0) && ((crate::port::cells_at(st, 6) == 1) || (blen > (totbytes - crate::port::cells_at(st, 5)))) {
+        crate::port::cells_set(st, 6, 1);
+        as_set_noasset(nodes, attrs, n, nz_budget());
+        return 0;
+    }
+    if id < 0 {
+        bs = crate::port::buf_len(abytes);
+        crate::port::buf_append_blob(abytes, crate::port::buf_blob(cbytes), as_get(cand, c, AC_BSTART), as_get(cand, c, AC_BSTART) + blen);
+        crate::port::cells_set(st, 5, crate::port::cells_at(st, 5) + blen);
+        id = asset_add(assets, as_get(cand, c, AC_TYPE), as_get(cand, c, AC_ORIGIN), as_get(cand, c, AC_FROM), as_get(cand, c, AC_OBJ), bs, blen, as_get(cand, c, AC_W), as_get(cand, c, AC_H), dpi, as_get(cand, c, AC_FLAGS));
+        asset_set_sha(assets, id, 0, as_get(cand, c, AC_SHA + 0));
+        asset_set_sha(assets, id, 1, as_get(cand, c, AC_SHA + 1));
+        asset_set_sha(assets, id, 2, as_get(cand, c, AC_SHA + 2));
+        asset_set_sha(assets, id, 3, as_get(cand, c, AC_SHA + 3));
+        asset_set_sha(assets, id, 4, as_get(cand, c, AC_SHA + 4));
+        asset_set_sha(assets, id, 5, as_get(cand, c, AC_SHA + 5));
+        asset_set_sha(assets, id, 6, as_get(cand, c, AC_SHA + 6));
+        asset_set_sha(assets, id, 7, as_get(cand, c, AC_SHA + 7));
+    }
+    use_add(assets, uses, id, n, as_get(cand, c, AC_PAGE), as_get(cand, c, AC_VX0 + 0), as_get(cand, c, AC_VX0 + 1), as_get(cand, c, AC_VX0 + 2), as_get(cand, c, AC_VX0 + 3));
+    node_set_attr_int(nodes, attrs, n, fk_asset(), id);
+    return 0;
+}
 pub fn as_run(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, cand: &mut crate::port::Cells, cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, sigs: i32, mut r#box: &mut crate::port::Cells) -> i32 {
     // The document unit's asset stage, in node-id order, over the figures and seals of the final tree: SPEC 10.11's source
     // per node, then admission. A node with pixels gets `fk-asset` (an asset id), else `fk-noasset` (an `nz`). The Model's
-    // `assets`, `uses` and `abytes` are written. `box` is 5 scratch cells. A figure made from a placement (`fk-image`
-    // names its candidate row) is that image; any other is matched by where it is. Answers the number of assets.
+    // `assets`, `uses` and `abytes` are written. `box` is 5 scratch cells, and 2 more it grows to (`as-admit`'s). A figure
+    // made from a placement (`fk-image` names its candidate row) is that image; any other is matched by where it is.
+    // Answers the number of assets. This is the level `images`; `figures` is `as-run-figures`.
     let nn: i32 = node_count(nodes);
     let mut n: i32 = 0;
     let mut kind: i32 = 0;
@@ -1006,11 +1277,11 @@ pub fn as_run(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::C
     let mut c: i32 = -1;
     let mut rc: i32 = 0;
     let mut attr: i32 = -1;
-    let mut id: i32 = -1;
-    let mut total: i32 = 0;
-    let mut closed: i32 = 0;
-    let mut blen: i32 = 0;
-    let mut bs: i32 = 0;
+    while crate::port::cells_len(r#box) < 7 {
+        crate::port::cells_push(r#box, 0);
+    }
+    crate::port::cells_set(r#box, 5, 0);
+    crate::port::cells_set(r#box, 6, 0);
     while n < nn {
         kind = node_kind(nodes, n);
         if (kind == nk_figure()) || (kind == nk_seal()) {
@@ -1045,37 +1316,407 @@ pub fn as_run(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::C
                     as_set_noasset(nodes, attrs, n, rc);
                 }
                 if c >= 0 {
-                    if as_get(cand, c, AC_STATUS) != 0 {
-                        as_set_noasset(nodes, attrs, n, as_get(cand, c, AC_STATUS));
-                    } else {
-                        blen = as_get(cand, c, AC_BLEN);
-                        id = asset_find(assets, blen, as_get(cand, c, AC_SHA + 0), as_get(cand, c, AC_SHA + 1), as_get(cand, c, AC_SHA + 2), as_get(cand, c, AC_SHA + 3), as_get(cand, c, AC_SHA + 4), as_get(cand, c, AC_SHA + 5), as_get(cand, c, AC_SHA + 6), as_get(cand, c, AC_SHA + 7));
-                        if (id < 0) && (blen > maxbytes) {
-                            as_set_noasset(nodes, attrs, n, nz_too_large());
-                        } else {
-                            if (id < 0) && ((closed == 1) || (blen > (totbytes - total))) {
-                                closed = 1;
-                                as_set_noasset(nodes, attrs, n, nz_budget());
-                            } else {
-                                if id < 0 {
-                                    bs = crate::port::buf_len(abytes);
-                                    crate::port::buf_append_blob(abytes, crate::port::buf_blob(cbytes), as_get(cand, c, AC_BSTART), as_get(cand, c, AC_BSTART) + blen);
-                                    total += blen;
-                                    id = asset_add(assets, as_get(cand, c, AC_TYPE), as_get(cand, c, AC_ORIGIN), as_get(cand, c, AC_FROM), as_get(cand, c, AC_OBJ), bs, blen, as_get(cand, c, AC_W), as_get(cand, c, AC_H), 0, as_get(cand, c, AC_FLAGS));
-                                    asset_set_sha(assets, id, 0, as_get(cand, c, AC_SHA + 0));
-                                    asset_set_sha(assets, id, 1, as_get(cand, c, AC_SHA + 1));
-                                    asset_set_sha(assets, id, 2, as_get(cand, c, AC_SHA + 2));
-                                    asset_set_sha(assets, id, 3, as_get(cand, c, AC_SHA + 3));
-                                    asset_set_sha(assets, id, 4, as_get(cand, c, AC_SHA + 4));
-                                    asset_set_sha(assets, id, 5, as_get(cand, c, AC_SHA + 5));
-                                    asset_set_sha(assets, id, 6, as_get(cand, c, AC_SHA + 6));
-                                    asset_set_sha(assets, id, 7, as_get(cand, c, AC_SHA + 7));
-                                }
-                                use_add(assets, uses, id, n, as_get(cand, c, AC_PAGE), as_get(cand, c, AC_VX0 + 0), as_get(cand, c, AC_VX0 + 1), as_get(cand, c, AC_VX0 + 2), as_get(cand, c, AC_VX0 + 3));
-                                node_set_attr_int(nodes, attrs, n, fk_asset(), id);
-                            }
-                        }
+                    as_admit(nodes, attrs, n, cand, c, cbytes, assets, uses, abytes, maxbytes, totbytes, r#box, 0);
+                }
+            }
+        }
+        n += 1;
+    }
+    return asset_count(assets);
+}
+pub(crate) fn as_text_over(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, n: i32, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // 1 when a node with text that is not inside node `n` (the figure's own caption and labels are) has a region on the page
+    // that overlaps the box: body text drawn in the picture (SPEC 10.11's `text-overlap`).
+    let nn: i32 = node_count(nodes);
+    let mut k: i32 = 0;
+    let mut a: i32 = -1;
+    let mut r: i32 = -1;
+    while k < nn {
+        if (k != n) && (node_has_text(nodes, k) == 1) {
+            a = node_parent(nodes, k);
+            while (a >= 0) && (a != n) {
+                a = node_parent(nodes, a);
+            }
+            if a < 0 {
+                r = node_region_head(nodes, k);
+                while r >= 0 {
+                    if (region_page(regions, r) == page) && (as_ia(x0, y0, x1, y1, region_x0(regions, r), region_y0(regions, r), region_x1(regions, r), region_y1(regions, r)) > (0 as i64)) {
+                        return 1;
                     }
+                    r = region_next(regions, r);
+                }
+            }
+        }
+        k += 1;
+    }
+    return 0;
+}
+pub(crate) fn as_caption_only(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, n: i32) -> i32 {
+    // 1 when the figure's first region is its caption's: a figure the caption pairing made out of nothing, whose place is the
+    // caption's, not a picture's. There is nothing to render or cut (`noasset: vector`, D353).
+    let r: i32 = node_region_head(nodes, n);
+    let mut k: i32 = node_first_child(nodes, n);
+    let mut q: i32 = -1;
+    if r < 0 {
+        return 0;
+    }
+    while k >= 0 {
+        if node_kind(nodes, k) == nk_caption() {
+            q = node_region_head(nodes, k);
+            if (q >= 0) && ((region_page(regions, q) == region_page(regions, r)) && ((region_x0(regions, q) == region_x0(regions, r)) && ((region_y0(regions, q) == region_y0(regions, r)) && ((region_x1(regions, q) == region_x1(regions, r)) && (region_y1(regions, q) == region_y1(regions, r)))))) {
+                return 1;
+            }
+        }
+        k = node_next(nodes, k);
+    }
+    return 0;
+}
+pub fn as_render_rect(x0: i32, y0: i32, x1: i32, y1: i32, pgw: i32, pgh: i32, dpi: i32, maxpix: i32, mut rc: &mut crate::port::Cells) -> i32 {
+    // The pixel rectangle of a render crop (SPEC 10.11): the region padded by 2 pt and held to the page, at d = `dpi`:
+    // px = floor(x0 d / 7200), px1 = ceil(x1 d / 7200), likewise y, pw = px1 - px; while pw * ph is over `maxpix`, d = d * 3 / 4
+    // (integer). The whole page is floor(w d / 7200 + 1/2) pixels a side (D245), and the rectangle is held inside it. Writes
+    // rc[0..4) = px py pw ph and answers d; 0 when d falls under 36, -1 when the rectangle is empty.
+    let mut d: i32 = dpi;
+    let mut ax0: i32 = x0 - AS_PAD;
+    let mut ay0: i32 = y0 - AS_PAD;
+    let mut ax1: i32 = x1 + AS_PAD;
+    let mut ay1: i32 = y1 + AS_PAD;
+    let mut px: i32 = 0;
+    let mut py: i32 = 0;
+    let mut px1: i32 = 0;
+    let mut py1: i32 = 0;
+    let mut wpx: i32 = 0;
+    let mut hpx: i32 = 0;
+    let mut done: i32 = 0;
+    if ax0 < 0 {
+        ax0 = 0;
+    }
+    if ay0 < 0 {
+        ay0 = 0;
+    }
+    if ax1 > pgw {
+        ax1 = pgw;
+    }
+    if ay1 > pgh {
+        ay1 = pgh;
+    }
+    if (ax1 <= ax0) || (ay1 <= ay0) {
+        return -1;
+    }
+    while done == 0 {
+        px = ((ax0 as i64).wrapping_mul(d as i64) / (7200 as i64)) as i32;
+        py = ((ay0 as i64).wrapping_mul(d as i64) / (7200 as i64)) as i32;
+        px1 = (((ax1 as i64).wrapping_mul(d as i64)).wrapping_add(7199 as i64) / (7200 as i64)) as i32;
+        py1 = (((ay1 as i64).wrapping_mul(d as i64)).wrapping_add(7199 as i64) / (7200 as i64)) as i32;
+        wpx = (((pgw as i64).wrapping_mul(d as i64)).wrapping_add(3600 as i64) / (7200 as i64)) as i32;
+        hpx = (((pgh as i64).wrapping_mul(d as i64)).wrapping_add(3600 as i64) / (7200 as i64)) as i32;
+        if wpx < 1 {
+            wpx = 1;
+        }
+        if hpx < 1 {
+            hpx = 1;
+        }
+        if px1 > wpx {
+            px1 = wpx;
+        }
+        if py1 > hpx {
+            py1 = hpx;
+        }
+        if px >= px1 {
+            px = px1 - 1;
+        }
+        if py >= py1 {
+            py = py1 - 1;
+        }
+        if ((px1 - px) as i64).wrapping_mul((py1 - py) as i64) > (maxpix as i64) {
+            d = (d * 3) / 4;
+            if d < AS_MIN_DPI {
+                return 0;
+            }
+        } else {
+            done = 1;
+        }
+    }
+    crate::port::cells_set(rc, 0, px);
+    crate::port::cells_set(rc, 1, py);
+    crate::port::cells_set(rc, 2, px1 - px);
+    crate::port::cells_set(rc, 3, py1 - py);
+    return d;
+}
+pub(crate) fn as_emit_row(mut cand: &mut crate::port::Cells, row: i32, mut cbytes: &mut crate::port::Buf, pic: &crate::port::Bitmap, maxpix: i32, dpi100: i32, flags: i32, afrom: i32, origin: i32, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut rec: &mut crate::port::Cells) -> i32 {
+    // The canonical PNG of `pic` (gray or RGB; the box mean by the smallest k that fits `maxpix`, flag `scaled`) appended to
+    // `cbytes`, and candidate row `row` made its asset: status 0, type, bytes, hash, size, flags, `from`, origin. `rows`,
+    // `tmp`, `rec` are scratch; `dpi100` is the pHYs (0 none).
+    let w: i32 = crate::port::bitmap_w(pic);
+    let h: i32 = crate::port::bitmap_h(pic);
+    let ch: i32 = crate::port::bitmap_channels(pic);
+    let start: i32 = crate::port::buf_len(cbytes);
+    let mut fl: i32 = flags;
+    let mut ow: i32 = w;
+    let mut oh: i32 = h;
+    let mut k: i32 = 1;
+    let mut i: i32 = 0;
+    let al: &crate::port::Bitmap = &crate::port::bitmap_new(1, 1, 1);
+    crate::port::cells_drop(rec, 0);
+    while i < 96 {
+        crate::port::cells_push(rec, 0);
+        i += 1;
+    }
+    if (w as i64).wrapping_mul(h as i64) > (maxpix as i64) {
+        k = as_scale_k(w, h, maxpix);
+        fl |= afg_scaled();
+        let pic2: &crate::port::Bitmap = &crate::port::bitmap_new((w + (k - 1)) / k, (h + (k - 1)) / k, ch);
+        as_scale_into(pic, pic2, k);
+        as_png(ws, cbytes, z, rows, tmp, rec, pic2, al, 0, 0, dpi100);
+        ow = crate::port::bitmap_w(pic2);
+        oh = crate::port::bitmap_h(pic2);
+    } else {
+        as_png(ws, cbytes, z, rows, tmp, rec, pic, al, 0, 0, dpi100);
+    }
+    as_set(cand, row, AC_STATUS, 0);
+    as_set(cand, row, AC_TYPE, amt_png());
+    as_set(cand, row, AC_BSTART, start);
+    as_set(cand, row, AC_BLEN, crate::port::buf_len(cbytes) - start);
+    as_sha(cbytes, start, crate::port::buf_len(cbytes) - start, tmp, cand, row);
+    as_set(cand, row, AC_W, ow);
+    as_set(cand, row, AC_H, oh);
+    as_set(cand, row, AC_FLAGS, fl);
+    as_set(cand, row, AC_FROM, afrom);
+    as_set(cand, row, AC_ORIGIN, origin);
+    return 0;
+}
+pub(crate) fn as_do_render(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, n: i32, pg: i32, x0: i32, y0: i32, x1: i32, y1: i32, dpi: i32, maxpix: i32, input: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut r#box: &mut crate::port::Cells) -> i32 {
+    // Node `n`'s render: its `crop` request when no answer is in (answers 1), else the asset, or the node's reason (answers 0).
+    // `box` is the run's scratch: cells 0..3 are the rectangle's, 5 and 6 are `as-admit`'s.
+    let pgi: i32 = pg - 1;
+    let d: i32 = as_render_rect(x0, y0, x1, y1, page_w(pages, pgi), page_h(pages, pgi), dpi, maxpix, r#box);
+    let id: i32 = au_id(n);
+    let a: i32 = an_find(ans, id);
+    if d == 0 {
+        as_set_noasset(nodes, attrs, n, nz_too_large());
+        return 0;
+    }
+    if d < 0 {
+        as_set_noasset(nodes, attrs, n, nz_render());
+        return 0;
+    }
+    if a < 0 {
+        if rec_find(rq, id) < 0 {
+            rq_crop(rq, id, input, pgi, d, 0, crate::port::cells_at(r#box, 0), crate::port::cells_at(r#box, 1), crate::port::cells_at(r#box, 2), crate::port::cells_at(r#box, 3));
+        }
+        return 1;
+    }
+    if an_ok(ans, a) == 0 {
+        as_set_noasset(nodes, attrs, n, nz_render());
+        return 0;
+    }
+    let pic: &crate::port::Bitmap = crate::port::bms_get(bms, id);
+    if (crate::port::bitmap_w(pic) < 1) || (crate::port::bitmap_h(pic) < 1) {
+        as_set_noasset(nodes, attrs, n, nz_render());
+        return 0;
+    }
+    let row: i32 = as_new_row(cand, pg, x0, y0, x1, y1);
+    let mut fl: i32 = 0;
+    let mut tx0: i32 = x0 - AS_PAD;
+    let mut ty0: i32 = y0 - AS_PAD;
+    let mut tx1: i32 = x1 + AS_PAD;
+    let mut ty1: i32 = y1 + AS_PAD;
+    if tx0 < 0 {
+        tx0 = 0;
+    }
+    if ty0 < 0 {
+        ty0 = 0;
+    }
+    if tx1 > page_w(pages, pgi) {
+        tx1 = page_w(pages, pgi);
+    }
+    if ty1 > page_h(pages, pgi) {
+        ty1 = page_h(pages, pgi);
+    }
+    if as_text_over(nodes, regions, n, pg, tx0, ty0, tx1, ty1) == 1 {
+        fl = afg_text_overlap();
+    }
+    as_emit_row(cand, row, cbytes, pic, maxpix, d * 100, fl, afm_render(), ao_rendered(), ws, z, rows, tmp, rec);
+    as_admit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, r#box, d);
+    return 0;
+}
+pub(crate) fn as_do_crop(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, n: i32, pg: i32, x0: i32, y0: i32, x1: i32, y1: i32, maxpix: i32, input: i32, nbytes: i32, rfrom: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut r#box: &mut crate::port::Cells) -> i32 {
+    // Node `n` cut from its raster frame: the frame's `decode` request when no answer is in (answers 1), else the rectangle of
+    // the decoded pixels the region maps to (floor at the low edge, ceiling at the high, exact samples), or the reason.
+    let pgi: i32 = pg - 1;
+    let id: i32 = au_id(au_decode() + pgi);
+    let a: i32 = an_find(ans, id);
+    if a < 0 {
+        if rec_find(rq, id) < 0 {
+            rq_decode(rq, id, input, 0, nbytes, flt_none(), pgi);
+        }
+        return 1;
+    }
+    if an_ok(ans, a) == 0 {
+        as_set_noasset(nodes, attrs, n, nz_codec());
+        return 0;
+    }
+    let src: &crate::port::Bitmap = crate::port::bms_get(bms, id);
+    let sw: i32 = crate::port::bitmap_w(src);
+    let sh: i32 = crate::port::bitmap_h(src);
+    let pw: i32 = page_w(pages, pgi);
+    let ph: i32 = page_h(pages, pgi);
+    if (sw < 1) || ((sh < 1) || ((pw < 1) || (ph < 1))) {
+        as_set_noasset(nodes, attrs, n, nz_codec());
+        return 0;
+    }
+    let mut cx0: i32 = ((x0 as i64).wrapping_mul(sw as i64) / (pw as i64)) as i32;
+    let mut cy0: i32 = ((y0 as i64).wrapping_mul(sh as i64) / (ph as i64)) as i32;
+    let mut cx1: i32 = (((x1 as i64).wrapping_mul(sw as i64)).wrapping_add((pw - 1) as i64) / (pw as i64)) as i32;
+    let mut cy1: i32 = (((y1 as i64).wrapping_mul(sh as i64)).wrapping_add((ph - 1) as i64) / (ph as i64)) as i32;
+    let mut ch: i32 = 1;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut c: i32 = 0;
+    if cx0 < 0 {
+        cx0 = 0;
+    }
+    if cy0 < 0 {
+        cy0 = 0;
+    }
+    if cx1 > sw {
+        cx1 = sw;
+    }
+    if cy1 > sh {
+        cy1 = sh;
+    }
+    if (cx1 <= cx0) || (cy1 <= cy0) {
+        as_set_noasset(nodes, attrs, n, nz_part());
+        return 0;
+    }
+    if crate::port::bitmap_channels(src) >= 3 {
+        ch = 3;
+    }
+    let pic: &crate::port::Bitmap = &crate::port::bitmap_new(cx1 - cx0, cy1 - cy0, ch);
+    let row: i32 = as_new_row(cand, pg, x0, y0, x1, y1);
+    while y < (cy1 - cy0) {
+        x = 0;
+        while x < (cx1 - cx0) {
+            c = 0;
+            while c < ch {
+                crate::port::bitmap_set_u8(pic, x, y, c, crate::port::bitmap_u8(src, cx0 + x, cy0 + y, c));
+                c += 1;
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+    as_emit_row(cand, row, cbytes, pic, maxpix, page_dpi(pages, pgi) * 100, 0, rfrom, ao_cropped(), ws, z, rows, tmp, rec);
+    as_admit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, r#box, 0);
+    return 0;
+}
+pub fn as_run_figures(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, sigs: i32, dpi: i32, maxpix: i32, input: i32, nbytes: i32, rfrom: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut r#box: &mut crate::port::Cells) -> i32 {
+    // The asset stage at the level `figures`, in node-id order: SPEC 10.11's sources for every figure and seal (see above).
+    // `dpi` and `maxpix` are `asset-dpi` and `asset-pixels`; `input` and `nbytes` the input's index and length (a `decode`
+    // asks for the whole file); `rfrom` is 0 for a PDF and the `afm` of the format for a raster input (its frames are the
+    // images, so every region that is not rendered is `cropped`); `ans` `rq` `bms` are the unit's. It answers the number of
+    // assets; when it WROTE REQUESTS (`rq` is not empty) its results are meaningless and the host must run it again, from
+    // copies, on the answers. `ws z rows tmp rec` and `box` (at least 16 cells) are scratch.
+    let nn: i32 = node_count(nodes);
+    let mut n: i32 = 0;
+    let mut kind: i32 = 0;
+    let mut sub: i32 = 0;
+    let mut c: i32 = -1;
+    let mut rc: i32 = 0;
+    let mut attr: i32 = -1;
+    let mut src: i32 = 0;
+    let mut cst: i32 = 0;
+    let mut rpg: i32 = 0;
+    let mut rx0: i32 = 0;
+    let mut ry0: i32 = 0;
+    let mut rx1: i32 = 0;
+    let mut ry1: i32 = 0;
+    let mut have: i32 = 0;
+    let mut capo: i32 = 0;
+    let mut m: i32 = 0;
+    while crate::port::cells_len(r#box) < 16 {
+        crate::port::cells_push(r#box, 0);
+    }
+    crate::port::cells_set(r#box, 5, 0);
+    crate::port::cells_set(r#box, 6, 0);
+    while n < nn {
+        kind = node_kind(nodes, n);
+        if (kind == nk_figure()) || (kind == nk_seal()) {
+            sub = node_sub(nodes, n);
+            c = -1;
+            rc = 0;
+            src = 0;
+            if kind == nk_seal() {
+                if sub == sl_digital_signature() {
+                    rc = -1;
+                }
+                if ((sub == sl_signature()) || (sub == sl_initials())) && (sigs == 0) {
+                    as_set_noasset(nodes, attrs, n, nz_withheld());
+                    rc = -1;
+                }
+            }
+            if rc == 0 {
+                have = as_first_region(nodes, regions, n, r#box);
+                rpg = crate::port::cells_at(r#box, 0);
+                rx0 = crate::port::cells_at(r#box, 1);
+                ry0 = crate::port::cells_at(r#box, 2);
+                rx1 = crate::port::cells_at(r#box, 3);
+                ry1 = crate::port::cells_at(r#box, 4);
+                attr = node_attr(nodes, attrs, n, fk_image());
+                capo = 0;
+                if (attr < 0) && (have == 1) {
+                    capo = as_caption_only(nodes, regions, n);
+                }
+                if attr >= 0 {
+                    c = attr_value(attrs, attr);
+                } else if (have == 1) && (capo == 0) {
+                    m = as_match(cand, rpg, rx0, ry0, rx1, ry1, r#box);
+                    if m == 0 {
+                        c = crate::port::cells_at(r#box, 0);
+                    }
+                    if m < 0 {
+                        rc = 0 - m;
+                    }
+                } else {
+                    rc = nz_vector();
+                }
+                // the source: 1 the candidate's own image, 2 rendered, 3 cropped (a raster's), 0 none (`rc` says why)
+                if c >= 0 {
+                    cst = as_get(cand, c, AC_STATUS);
+                    if as_get(cand, c, AC_KORI) == AS_REGION {
+                        src = 2;
+                    } else if cst == 0 {
+                        if (as_get(cand, c, AC_FLAGS) & (afg_overlaid() + (afg_clip_bbox() + afg_transformed()))) != 0 {
+                            src = 2;
+                        } else {
+                            src = 1;
+                        }
+                    } else if (cst == nz_part()) || ((cst == nz_colorspace()) || (cst == nz_codec())) {
+                        src = 2;
+                    } else {
+                        rc = cst;
+                    }
+                } else if (rc > 0) && ((have > 0) && (capo == 0)) {
+                    src = 2;
+                }
+                if (have == 0) && (src > 1) {
+                    src = 0;
+                    rc = nz_vector();
+                }
+                if (src == 2) && (rfrom > 0) {
+                    src = 3;
+                }
+                if (src == 0) && (rc > 0) {
+                    as_set_noasset(nodes, attrs, n, rc);
+                }
+                if src == 1 {
+                    as_admit(nodes, attrs, n, cand, c, cbytes, assets, uses, abytes, maxbytes, totbytes, r#box, 0);
+                }
+                if src == 2 {
+                    as_do_render(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, dpi, maxpix, input, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
+                }
+                if src == 3 {
+                    as_do_crop(nodes, attrs, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, maxpix, input, nbytes, rfrom, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
                 }
             }
         }

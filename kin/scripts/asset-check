@@ -26,6 +26,7 @@
 ;;        c. each host LIVE (no replay): the asset it made is the transcript's (CCITT, byte for byte; DCT within 2 per channel: two JPEG
 ;;           decoders), or the host's own answer for what it does not read (`noasset: codec`): the Go host reads no JPX or JBIG2, nor
 ;;           CCITT Group 3 two-dimensional, byte-aligned or without EOLs; the Rust host without `--codecs` reads no JPX or JBIG2.
+;;   7. THE LEVEL `figures` (P8.5): the committed pdfium transcripts of test/asset/figures/ replay on both hosts (below).
 ;;
 ;; Needs ImageMagick (`magick`), poppler (`pdfimages`) and the toolchains of the drivers. A missing tool is a SKIP of what it checks.
 (require '[babashka.fs :as fs] '[babashka.process :refer [shell process]] '[cheshire.core :as json] '[clojure.string :as str])
@@ -294,6 +295,115 @@
 ;; 5 ----------------------------------------------------------------------
 (let [r (run "bb" "kin/scripts/asset-golden" "--check")]
   (if (zero? (:exit r)) (println (str/trimr (:out r))) (bad (str/trim (str (:out r) (:err r))))))
+
+;; 7 THE LEVEL `figures` (P8.5, D117, D351-D354) ---------------------------------------------------------------------------------
+;; The committed transcripts of test/asset/figures/ (recorded LIVE with pdfium by `bb asset-fig-record`) replayed on both hosts with no
+;; renderer: the same JSON, HTML in three modes and asset files, the digests the recording wrote, and each render held to what it
+;; is: the crop's size is the computed one, the asset is the host's pixels, and a second rasteriser (pdftoppm) agrees within a sanity
+;; bound (D127).
+(require '[clojure.edn :as edn])
+(defn fig-run [exe & args] (apply run exe args))
+(let [root "test/asset/figures"
+      digests (edn/read-string (slurp (str root "/DIGESTS.edn")))
+      pdftoppm? (have? "pdftoppm") magick? (have? "magick")
+      mad (fn [a b] ;; mean absolute difference per channel, 0..255, of two same-sized PNGs
+            (let [r (run "magick" a b "-compose" "difference" "-composite" "-format" "%[fx:mean*255]" "info:")]
+              (parse-double (str/trim (:out r)))))
+      pad 200
+      rect (fn [[x0 y0 x1 y1] pgw pgh d maxpix]
+             ;; SPEC 10.11, restated: pad 2 pt, hold to the page, floor and ceil at d, step d down by 3/4 while over maxpix
+             (let [ax0 (max 0 (- x0 pad)) ay0 (max 0 (- y0 pad)) ax1 (min pgw (+ x1 pad)) ay1 (min pgh (+ y1 pad))]
+               (loop [d d]
+                 (let [px (quot (* ax0 d) 7200) py (quot (* ay0 d) 7200)
+                       wpx (max 1 (quot (+ (* pgw d) 3600) 7200)) hpx (max 1 (quot (+ (* pgh d) 3600) 7200))
+                       px1 (min wpx (quot (+ (* ax1 d) 7199) 7200)) py1 (min hpx (quot (+ (* ay1 d) 7199) 7200))]
+                   (if (> (* (- px1 px) (- py1 py)) maxpix) (recur (quot (* d 3) 4)) [d px py (- px1 px) (- py1 py)])))))
+      wrong (atom []) crops (atom 0) maxmad (atom 0.0) docs (atom 0)]
+  (doseq [[stem {:keys [pdf json html-inline html-external html-omit assets]}] (sort digests)
+          :let [t (str root "/" stem)
+                dr (str tmp "/f-rs-" stem) dg (str tmp "/f-go-" stem)
+                go1 (fn [exe d & more] (fs/delete-tree d) (let [r (apply fig-run exe (concat ["--assets=figures" (str "--replay=" t)] more [pdf]))] r))
+                jr (go1 rs dr (str "--asset-dir=" dr)) jg (go1 go dg (str "--asset-dir=" dg))
+                h (fn [exe mode] (:out (fig-run exe "--out=html" "--assets=figures" (str "--replay=" t) mode pdf)))
+                sha (fn [s] (sha256 (.getBytes ^String s "UTF-8")))
+                files (fn [d] (into (sorted-map) (for [f (fs/list-dir d)] [(fs/file-name f) (vec (fs/read-all-bytes f))])))
+                j (json/parse-string (:out jr))]]
+    (swap! docs inc)
+    (when-not (and (zero? (:exit jr)) (zero? (:exit jg))) (swap! wrong conj (str stem " replay failed: " (:err jr) (:err jg))))
+    (when-not (= (:out jr) (:out jg)) (swap! wrong conj (str stem " JSON differs between the hosts")))
+    (when-not (= (files dr) (files dg)) (swap! wrong conj (str stem " asset files differ between the hosts")))
+    (doseq [[label mode] [["inline" "--html=assets=inline"] ["external" "--html=assets=external,prefix=img/"] ["omit" "--html=assets=omit"]]]
+      (when-not (= (h rs mode) (h go mode)) (swap! wrong conj (str stem " HTML " label " differs between the hosts"))))
+    (when-not (= json (sha (:out jr))) (swap! wrong conj (str stem " JSON is not the recorded digest")))
+    (doseq [[label mode d] [["inline" "--html=assets=inline" html-inline] ["external" "--html=assets=external,prefix=img/" html-external] ["omit" "--html=assets=omit" html-omit]]]
+      (when-not (= d (sha (h rs mode))) (swap! wrong conj (str stem " HTML " label " is not the recorded digest"))))
+    (when-not (= assets (into (sorted-map) (for [[n bs] (files dr)] [n (sha256 (byte-array bs))])))
+      (swap! wrong conj (str stem " asset files are not the recorded digests")))
+    ;; the crops: size, rectangle, pixels, a second rasteriser
+    (let [tr (edn/read-string (slurp (str t "/transcript.edn")))
+          crop-entries (filter #(= :crop (:kind %)) (:entries tr))
+          page-of (fn [n] (nth (get j "pages") (dec n)))
+          rendered (filter #(= "rendered" (get % "origin")) (get j "assets"))]
+      (when-not (every? #(= :crop (:kind %)) (:entries tr)) (swap! wrong conj (str stem " the transcript has a request that is not a crop")))
+      (doseq [a rendered, u (take 1 (get a "uses"))
+              :let [[pg x0 y0 x1 y1] (get u "at")
+                    cpt (fn [v] (long (Math/round (* 100.0 v)))) ; the JSON's coordinates are points with two decimals
+                    [d px py pw ph] (rect (map cpt [x0 y0 x1 y1]) (cpt (get (page-of pg) "w")) (cpt (get (page-of pg) "h")) (get a "dpi") 4194304)]]
+        (swap! crops inc)
+        (let [entry (first (filter #(and (= (nth (:req %) 4) (dec pg)) (= (nth (:req %) 7) px) (= (nth (:req %) 8) py)) crop-entries))
+              f (str dr "/" (get a "name"))]
+          (if-not entry
+            (swap! wrong conj (str stem " " (get a "name") ": no crop of the computed rectangle " [d px py pw ph]))
+            (let [[_ _ _ _ _ rd _ _ _ qw qh] (:req entry)]
+              (when-not (and (= rd d) (= [qw qh] [pw ph]) (= [(get a "w") (get a "h")] [pw ph]))
+                (swap! wrong conj (str stem " " (get a "name") ": the request is " (:req entry) ", computed " [d px py pw ph] ", the asset " [(get a "w") (get a "h")])))
+              (when (and magick? (:bitmap entry))
+                (let [r (run "magick" "compare" "-metric" "AE" f (str t "/" (:bitmap entry)) "null:")]
+                  (when-not (str/starts-with? (str/trim (:err r)) "0") (swap! wrong conj (str stem " " (get a "name") " is not the host's pixels: " (:err r))))))
+              (when (and pdftoppm? magick?)
+                (let [ref (str tmp "/ref-" stem "-" (get a "id"))
+                      r (run "pdftoppm" "-r" (str d) "-f" (str pg) "-l" (str pg) "-x" (str px) "-y" (str py) "-W" (str pw) "-H" (str ph) "-png" "-singlefile" pdf ref)
+                      v (when (zero? (:exit r)) (mad f (str ref ".png")))]
+                  (if (nil? v)
+                    (swap! wrong conj (str stem " " (get a "name") ": pdftoppm failed"))
+                    (do (swap! maxmad max v)
+                        (when (> v 8.0) (swap! wrong conj (str stem " " (get a "name") ": mean absolute difference from pdftoppm is " v " (> 8)")))))))))))))
+  (check (empty? @wrong) "FIGURES: " @docs " committed transcripts replay on both hosts to identical JSON, HTML in three modes and asset files, equal to the recorded digests; "
+         @crops " render crops each have the computed rectangle and size, are the host's pixels, and are within 8 (worst " (format "%.2f" @maxmad)
+         ") of pdftoppm's" (when-not (and pdftoppm? magick?) " [pdftoppm or magick missing: those two checks SKIPPED]")
+         (when (seq @wrong) (str ":\n    " (str/join "\n    " (take 12 @wrong)))))
+  ;; THE SPECIFIC FIXTURES
+  (let [j (fn [stem] (json/parse-string (:out (fig-run rs "--assets=figures" (str "--replay=" root "/" stem) (:pdf (get digests stem))))))
+        orig (fn [stem] (frequencies (map #(get % "origin") (get (j stem) "assets"))))
+        logo (j "fig-logo-pages")]
+    (check (and (= 1 (count (get logo "assets"))) (= 3 (count (get (first (get logo "assets")) "uses"))))
+           "FIGURES: the logo on every page is ONE asset with three uses (fig-logo-pages)")
+    (check (= {"decoded" 1 "rendered" 4} (orig "fig-over-image"))
+           "FIGURES: of five pictures of one image, the one left alone is its own pixels (decoded), and the one with a rectangle over it, the one with text over it, the one rotated 10 degrees and the one clipped by a circle are rendered (fig-over-image): " (orig "fig-over-image"))
+    (check (= {"rendered" 2} (orig "fig-vector-chart")) "FIGURES: the chart and the diagram of fig-vector-chart are rendered: " (orig "fig-vector-chart"))
+    (check (some #(some #{"text-overlap"} (get % "flags")) (get (j "fig-over-image") "assets"))
+           "FIGURES: body text over a picture flags its render `text-overlap`")))
+;; A run with no renderer (what a gate without pdfium sees): the crops are answered unsupported and say `render`, the same on both hosts
+(let [bad? (atom [])]
+  (doseq [stem ["fig-vector-chart" "fig-over-image"]
+          :let [pdf (str "test/assets/fig/" stem ".pdf")
+                a (fig-run rs "--assets=figures" pdf) b (fig-run go "--assets=figures" pdf)
+                j (json/parse-string (:out a))
+                figs (filter #(= "figure" (get % "kind")) (tree-seq map? #(get % "children") (get j "body")))]]
+    (when-not (= (:out a) (:out b)) (swap! bad? conj (str stem " differs between the hosts")))
+    (when-not (some #(= "render" (get % "noasset")) figs) (swap! bad? conj (str stem " says no `render`")))
+    (when-not (= [] (get j "assets") ) (when (not= stem "fig-over-image") (swap! bad? conj (str stem " has assets with no renderer")))))
+  (check (empty? @bad?) "FIGURES: with no renderer the crops are answered `unsupported`, the figures say `render`, the same on both hosts"
+         (when (seq @bad?) (str ": " (str/join "; " @bad?)))))
+;; Vector art that is a TABLE's rules is no figure: a ruled table has no figure at `figures` that it has none of at `images`
+(let [bad? (atom [])]
+  (doseq [stem ["table-simple-ruled" "table-zebra" "table-header-fill" "bank-statement"]
+          :let [pdf (str "test/corpus/synth/pdf/" stem ".pdf")]
+          :when (fs/exists? pdf)
+          :let [n (fn [lvl] (count (filter #(= "figure" (get % "kind")) (tree-seq map? #(get % "children") (get (json/parse-string (:out (fig-run rs (str "--assets=" lvl) pdf))) "body")))))]]
+    (when (not= (n "images") (n "figures")) (swap! bad? conj (str stem " " (n "images") " figures at images, " (n "figures") " at figures"))))
+  (check (empty? @bad?) "FIGURES: the rules of a table are no figure (ruled, zebra, header-fill and bank statement have the figures at `figures` they have at `images`)"
+         (when (seq @bad?) (str ": " (str/join "; " @bad?)))))
 
 (fs/delete-tree tmp)
 (println (if (zero? @fails) "asset-check: all green" (str "asset-check: " @fails " FAILED")))

@@ -1,0 +1,132 @@
+#!/usr/bin/env bb
+;; Write P8.5's fixtures: small hand-made PDFs whose figures are vector art, a logo on every page, and images with something over them
+;; (SPEC 10.11 `rendered`), with no tool but this file.   bb kin/scripts/asset-fig-fixtures [--check]
+;;
+;; A DEVELOPMENT TOOL (babashka), run by a person; the fixtures are COMMITTED (test/assets/fig/*.pdf) so a test run needs none of it.
+;; `--check` regenerates in memory and compares with the committed files (they are a pure function of this file: no clock, no
+;; random numbers). The pages are Letter (612 x 792 pt), Helvetica from the standard 14 (no font file), images are raw 8-bit RGB
+;; samples (no filter), so every byte is here.
+;;
+;;   fig-vector-chart.pdf   a bar chart (axes and four bars) and a box-and-arrow diagram, each with its caption: two vector figures
+;;   fig-logo-pages.pdf     three pages, the same two-path logo in the same place on each: three uses of one rendered asset
+;;   fig-over-image.pdf     five pictures of one image: left alone (the control: its own pixels), a rectangle drawn over it, text
+;;                          drawn over it, rotated 10 degrees by its matrix, and clipped by a circle: the last four are rendered
+(require '[babashka.fs :as fs] '[clojure.string :as str])
+(import '(java.io ByteArrayOutputStream))
+
+(def root (-> *file* java.io.File. .getCanonicalFile .getParentFile .getParentFile .getParent))
+(def check? (boolean (some #{"--check"} *command-line-args*)))
+(def out (str root "/test/assets/fig"))
+
+(defn latin1 [^String s] (.getBytes s "ISO-8859-1"))
+(defn join-bytes [parts]
+  (let [o (ByteArrayOutputStream.)] (doseq [p parts] (.write o ^bytes p)) (.toByteArray o)))
+
+(defn pdf
+  "A PDF from `objs`, a vector of byte arrays (object n is objs[n-1], its body without `n 0 obj`/`endobj`); the catalogue is object 1."
+  [objs]
+  (let [header (latin1 "%PDF-1.4\n%âãÏÓ\n")
+        parts (atom [header]) offsets (atom []) pos (atom (alength header))]
+    (doseq [[i body] (map-indexed vector objs)]
+      (let [b (join-bytes [(latin1 (str (inc i) " 0 obj\n")) body (latin1 "\nendobj\n")])]
+        (swap! offsets conj @pos) (swap! pos + (alength b)) (swap! parts conj b)))
+    (let [xref-at @pos n (inc (count objs))
+          xref (str "xref\n0 " n "\n0000000000 65535 f \n"
+                    (apply str (for [o @offsets] (format "%010d 00000 n \n" o)))
+                    "trailer\n<< /Size " n " /Root 1 0 R >>\nstartxref\n" xref-at "\n%%EOF\n")]
+      (join-bytes (conj @parts (latin1 xref))))))
+
+(defn stream [dict ^bytes data]
+  (join-bytes [(latin1 (str "<< " dict " /Length " (alength data) " >>\nstream\n")) data (latin1 "\nendstream")]))
+
+(defn text-stream [s] (stream "" (latin1 s)))
+
+(defn t
+  "A line of text: font size, position, string."
+  [size x y s] (format "BT /F1 %d Tf %d %d Td (%s) Tj ET\n" size x y s))
+
+(defn page-objs
+  "Objects for pages: object 1 the catalogue, 2 the page tree, 3 the font, then per page its dict, its content and its resources'
+  extras in `extra` (a string of `/XObject << ... >>` or empty), with image objects `images` appended after."
+  [contents extras images]
+  (let [np (count contents) first-page 4
+        kids (str/join " " (for [i (range np)] (str (+ first-page (* 2 i)) " 0 R")))
+        img-base (+ first-page (* 2 np))]
+    (vec (concat
+          [(latin1 "<< /Type /Catalog /Pages 2 0 R >>")
+           (latin1 (str "<< /Type /Pages /Count " np " /Kids [" kids "] >>"))
+           (latin1 "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")]
+          (mapcat (fn [i c]
+                    [(latin1 (str "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents " (+ first-page (* 2 i) 1) " 0 R "
+                                  "/Resources << /Font << /F1 3 0 R >> " (str/replace (get extras i "") "IMG" (str img-base)) " >> >>"))
+                     (text-stream c)])
+                  (range) contents)
+          images))))
+
+;; ------------------------------------------------------------------------------------------------ the chart and the diagram
+
+(def chart-page
+  (str (t 14 72 740 "Quarterly units sold")
+       (t 11 72 718 "The chart below shows units per quarter and the diagram how a request travels.")
+       ;; the chart: two axes and four bars
+       "0.75 w 0 G 100 450 m 100 650 l S 100 450 m 300 450 l S\n"
+       "0.20 0.40 0.70 rg 110 451 30 90 re f 150 451 30 130 re f 190 451 30 110 re f 230 451 30 160 re f\n"
+       (t 10 72 432 "Figure 1. Units per quarter")
+       ;; the diagram: three boxes joined by arrows
+       "0.75 w 0 G 100 300 70 40 re S 230 300 70 40 re S 360 300 70 40 re S\n"
+       "170 320 m 230 320 l S 300 320 m 360 320 l S 222 316 m 230 320 l 222 324 l S 352 316 m 360 320 l 352 324 l S\n"
+       (t 9 112 316 "Client") (t 9 240 316 "Gateway") (t 9 376 316 "Service")
+       (t 10 72 282 "Figure 2. Request path")
+       (t 11 72 250 "Closing paragraph after the figures.")))
+
+(def chart-pdf (pdf (page-objs [chart-page] [""] [])))
+
+;; --------------------------------------------------------------------------------------------------- the logo, every page
+
+(defn logo-page [n]
+  (str "0.10 0.60 0.40 rg 72 720 m 72 735 80 750 96 750 c 112 750 120 735 120 720 c 120 705 112 690 96 690 c 80 690 72 705 72 720 c f\n"
+       "1 g 86 710 20 20 re f\n"
+       (t 12 128 714 "NorthWind")
+       (t 11 72 640 (str "Page " n " of the report. The logo above is the same drawing on every page."))
+       (t 11 72 620 "A second paragraph so that there is body text under it.")))
+
+(def logo-pdf (pdf (page-objs [(logo-page 1) (logo-page 2) (logo-page 3)] ["" "" ""] [])))
+
+;; ------------------------------------------------------------------------------------------------- pictures with things over them
+
+(def image-data
+  "An 8 x 8 RGB image: a horizontal blue ramp over a vertical red ramp."
+  (byte-array (for [y (range 8) x (range 8) c (range 3)]
+                (unchecked-byte (case c 0 (* y 32) 1 80 2 (* x 32))))))
+
+(defn image-obj [] (stream "/Type /XObject /Subtype /Image /Width 8 /Height 8 /ColorSpace /DeviceRGB /BitsPerComponent 8" image-data))
+
+(def over-page
+  (str (t 12 72 750 "Five pictures of one image")
+       ;; 1: the control, left alone
+       "q 120 0 0 90 72 620 cm /Im1 Do Q\n"
+       ;; 2: a white rectangle over its middle
+       "q 120 0 0 90 232 620 cm /Im1 Do Q\n"
+       "1 g 262 640 60 50 re f\n"
+       ;; 3: text over it
+       "q 120 0 0 90 392 620 cm /Im1 Do Q\n"
+       "1 g BT /F1 14 Tf 400 660 Td (Over the picture) Tj ET\n0 g\n"
+       ;; 4: rotated 10 degrees (cos 0.9848, sin 0.1736)
+       (str "q " (format "%.4f %.4f %.4f %.4f" (* 120 0.9848) (* 120 0.1736) (* -90 0.1736) (* 90 0.9848)) " 80 450 cm /Im1 Do Q\n")
+       ;; 5: clipped by a circle
+       "q 262 520 m 262 540 280 560 300 560 c 320 560 338 540 338 520 c 338 500 320 480 300 480 c 280 480 262 500 262 520 c W n 120 0 0 90 232 470 cm /Im1 Do Q\n"
+       (t 11 72 400 "Closing paragraph after the pictures.")))
+
+(def over-pdf (pdf (page-objs [over-page] ["/XObject << /Im1 IMG 0 R >>"] [(image-obj)])))
+
+;; ----------------------------------------------------------------------------------------------------------------- go
+
+(def files {"fig-vector-chart.pdf" chart-pdf "fig-logo-pages.pdf" logo-pdf "fig-over-image.pdf" over-pdf})
+
+(if check?
+  (let [bad (for [[n b] files :when (not (and (fs/exists? (str out "/" n)) (java.util.Arrays/equals ^bytes b ^bytes (fs/read-all-bytes (str out "/" n)))))] n)]
+    (if (seq bad)
+      (do (println "  FAIL asset-fig-fixtures --check: these differ from what this file writes:" (str/join " " bad)) (System/exit 1))
+      (println "  ok   asset-fig-fixtures --check: the three figures fixtures are what this file writes")))
+  (do (fs/create-dirs out)
+      (doseq [[n b] files] (fs/write-bytes (str out "/" n) b) (println "  wrote" (str "test/assets/fig/" n) (alength ^bytes b) "bytes"))))

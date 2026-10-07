@@ -2707,8 +2707,7 @@ admitted, they cost nothing). A decode or render that fails or is
 unsupported is `noasset: "codec"` or `"render"`. **An asset never fails a
 page**: every problem is a `noasset` reason.
 
-**What P3.13 builds (D294-D301).** The level `images`, on both hosts; `figures` is accepted and runs as `images`
-until P8.5 (cropping a scan and rendering a chart). Settings travel in `Options` (`asset_dpi`, `asset_pixels`,
+**What P3.13 builds (D294-D301).** The level `images`, on both hosts; `figures` is P8.5's, below (D351-D355). Settings travel in `Options` (`asset_dpi`, `asset_pixels`,
 `asset_bytes`, `assets_bytes`, `asset_signatures`), not `setting-of` (an environment poke), and are written to the header
 only when `assets` is on. The input is read by the asset unit (`as-collect`, D333): every placement that passed the P3.6
 checks is a candidate whose bytes (the JPEG's own, or the PNG) are made there, and the document unit admits them in node-id
@@ -2729,6 +2728,22 @@ no PNG has `pHYs` (the resolution is the page's, not the image's). Images are he
 samples is `too-large`; between one and two times it is scaled by the smallest integer factor (box mean, flag `scaled`).
 At most 4,096 placements make pixels and the candidates' bytes stop at twice `assets-bytes` (`budget`), so a hostile file
 cannot ask for unbounded work.
+
+**What P8.5 builds (D351-D355).** The level `figures`, on both hosts, with the sources above. It needs the host, so after the
+document unit the Engine runs **one more unit, the asset unit** (`as-run-figures`): its own plan/fulfil loop and `BitmapSet`,
+ids from `au-id` (above every page unit's), its requests the `crop` of a rendered figure's rectangle (layer 0, pad 2 pt,
+`asset-dpi`, `d·3/4` step-down, `too-large` under 36 dpi, PNG with `pHYs` at the render's resolution) and the `decode` of the
+frame a `cropped` figure is cut from; it runs on copies of the Model until every answer is in, so a transcript holds nothing a
+live run did not ask for and a replay needs no Renderer. With no Renderer the crops are answered `unsupported` and the figure
+says `render`. The sources, in code: a whole image with `overlaid`, `clip-bbox` or `transformed`, an image that was `colorspace`
+or `codec` at `images`, a page-sized image of a PDF, a part of an image of a PDF, several, none, and a region that is not an image
+are **rendered**; in a raster input every region that is not rendered is **cropped** from its frame's decode (floor and ceiling
+of the box in pixels, no resampling); a whole clean image is its own pixels as at `images`; `text-overlap` is set when a node
+with text that is not inside the figure has a region in the padded rectangle. The regions that are not an image are provisional
+figures made at this level only: **vector art** (clusters of the page's visible, non-clip paths within 2 pt of one another, at
+least two, both sides at least 18 pt, under 800 per mille of the page, not mostly under an image, not mostly in a table) and the
+graphics layer's `figure` regions (§9.9, a hook until P7.G fills them). A figure whose only region is its caption's is `noasset:
+vector`. Not here: cropping the pixels of an image of a PDF (`decode-img`, P6.1a) and a figure's kind beyond `unknown` (P8.1).
 
 **The Model and JSON.** Asset ids are 0.. in admission order; the file name
 is `a<id>.jpg` or `a<id>.png`. A `figure` or `seal` has `asset` (an id) or

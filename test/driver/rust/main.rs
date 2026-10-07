@@ -12,7 +12,7 @@
 //   --out=html       the HTML; OPTS is a comma list of ids,geometry,confidence=N,ledger,pretty,
 //                    drop-furniture,no-milestones,initials-plain,align-style,assets=inline|external|omit,prefix=TEXT
 //   --assets=        SPEC 10.11 (D117): `none` (the default), `images` (a figure or seal that is one embedded image gets its
-//                    bytes or its pixels as PNG), `figures` (runs as `images` until P8.5); the limits that go with it
+//                    bytes or its pixels as PNG), `figures` (also the others, rendered or cropped: P8.5); the limits that go with it
 //   --html-assets=M  the HTML's mode for the Model's assets: inline (the default), external or omit (the same as `--html=assets=M`);
 //   --asset-prefix=P its `asset-prefix` (the same as `--html=prefix=P`)
 //   --asset-dir=D    write `Model::asset_files()` (a0.png, a1.jpg, ...) into D: the driver writes them, the library never does
