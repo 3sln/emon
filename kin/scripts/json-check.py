@@ -87,6 +87,46 @@ class Cpt(int):
     """Centipoints; serialized as points with at most two decimals."""
 
 
+# ------------------------------------------------------ the confidence map (P10.1)
+# SPEC 9.6: a node's `conf` is written CALIBRATED, from the fitted table test/calibration/fit.edn (the rows
+# [kind class raw-lo calibrated n], the same fit that kin/calibdata.kin was generated from): the steps of
+# (kind, the class of its source) if there are any, else the kind's `any` steps, else the raw score as it is;
+# within the steps the last whose raw-lo is at most the raw score, below the first the first. Written from
+# the SPEC, not from kin/calib.kin.
+def _cal_table():
+    import re
+    rows = {}
+    text = open(os.path.join(ROOT, "test", "calibration", "fit.edn"), encoding="utf-8").read()
+    for m in re.finditer(r'\["([a-z-]+)" "([a-z]+)" (\d+) (\d+) \d+\]', text):
+        rows.setdefault((m.group(1), m.group(2)), []).append((int(m.group(3)), int(m.group(4))))
+    return rows
+
+
+CAL = _cal_table()
+
+
+def cal_class(src):
+    text, ocr = src & (1 | 2), src & 4
+    if text and ocr:
+        return "fused"
+    if ocr:
+        return "ocr"
+    return "text" if text else "infer"
+
+
+def calibrated(kind, src, raw):
+    if raw < 0:
+        return raw
+    steps = CAL.get((kind, cal_class(src))) or CAL.get((kind, "any"))
+    if not steps:
+        return raw
+    best = steps[0][1]
+    for lo, cal in steps:
+        if lo <= raw:
+            best = cal
+    return best
+
+
 def cpt_text(v):
     sign = "-" if v < 0 else ""
     a = abs(v)
@@ -350,7 +390,7 @@ def tail(d, node):
     if node.src:
         d["src"] = names(node.src, SRC)
     if node.conf >= 0:
-        d["conf"] = node.conf
+        d["conf"] = calibrated(KINDS[node.kind], node.src, node.conf)
     if node.flags:
         d["flags"] = names(node.flags, FLAGS)
 
@@ -422,7 +462,7 @@ def model_json(nodes, pages, ledger):
     put_attr(st, root, "ocr")
     put_attr(st, root, "detail")
     out["settings"] = st
-    out["conf"] = "uncalibrated"
+    out["conf"] = "calibrated"
     meta = {}
     for k in ("title", "author", "subject", "keywords", "creator", "producer",
               "created", "modified"):
@@ -473,7 +513,7 @@ def model_json(nodes, pages, ledger):
         if l["text"] is not None:
             d["text"] = l["text"]
         if l["conf"] >= 0:
-            d["conf"] = l["conf"]
+            d["conf"] = calibrated("dropped", l["src"], l["conf"])
         if l["src"]:
             d["src"] = names(l["src"], SRC)
         dl.append(d)

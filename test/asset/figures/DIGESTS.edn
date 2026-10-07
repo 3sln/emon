@@ -1,7 +1,7 @@
 {"columns-span-figure"
  {:pdf "test/corpus/synth/pdf/columns-span-figure.pdf",
   :json
-  "8d85b5686f5ee49b36094605b750022a72d266d8a2e9d6301f9a0f2ee091bfa6",
+  "7b9f105c303740145033b4259ab81c78a04c6487ccdcc15520b01d3446ad316e",
   :html-inline
   "f983511bc28dfc653be56cc0eb9504210a167228cf56fbc13949bde9251789f2",
   :html-external
@@ -16,7 +16,7 @@
  "fig-logo-pages"
  {:pdf "test/assets/fig/fig-logo-pages.pdf",
   :json
-  "1371070998c8dea3cc2823388defe7e77b5aed39912830ba17ec2acd43d96102",
+  "972397c8132c8a65088dda65c1f2efc7bb3a461eba72a76f1a974a3d7b3e4f7f",
   :html-inline
   "2807f89c4c344d423f464dfa721d3cd89e8e3e6c117739e382f49518b2a906f7",
   :html-external
@@ -29,7 +29,7 @@
  "fig-over-image"
  {:pdf "test/assets/fig/fig-over-image.pdf",
   :json
-  "50f8d1f383371a0f43049dc1931113a9fe95802ba0683ec6ff9832385f089409",
+  "76d502bdecafb7913d41a589c3dcfb230875b46c7d817d1e7a194dd2ec7629b5",
   :html-inline
   "4ef5e779a5a801c83ca6202a4e0d14c1c95fa1a2a585cd47e7828874cab0a0a4",
   :html-external
@@ -50,7 +50,7 @@
  "fig-vector-chart"
  {:pdf "test/assets/fig/fig-vector-chart.pdf",
   :json
-  "31c402d0167cbd7fbdd23471ebae21332b5fefabddd87cfa1774081b036196da",
+  "64369f23b189601426f8d4cb5cd21d3003222fefd32d208f91ffc98d83306003",
   :html-inline
   "879ef8a5a480a4e069249170ed8e13ea23661e9de032ff32bdc0f7e7c874e3e4",
   :html-external
@@ -65,7 +65,7 @@
  "figures-charts"
  {:pdf "test/corpus/synth/pdf/figures-charts.pdf",
   :json
-  "10669624b362b68e16371d6e4b3c2b5f45f20554f2495f3fd37910a3bc330ac6",
+  "1d0a578eeb13695f895bcd0b38fb1e9e41f0c1ba42dcfdc2a4c2b575c80b513e",
   :html-inline
   "532fc79e7391d5f8990db1c1485c19f1bfe4bed043696c05f2fc56409171dfd8",
   :html-external
@@ -84,7 +84,7 @@
  "figures-logo-screenshot"
  {:pdf "test/corpus/synth/pdf/figures-logo-screenshot.pdf",
   :json
-  "0e33e7f2dedbc640962a7f1af278599d4951bc03b1788d687d5ac27ed9988616",
+  "2698b4de369d4c6a52f8c6f3bc87c26b6a737436d125d3aebd0fbe52b5379463",
   :html-inline
   "f10ed85cc9e6f163cd19acc162b69dcefa27260f1aa0006ad6c74f545226579a",
   :html-external

@@ -122,16 +122,18 @@ public static class Htmltest {
         System.Text.StringBuilder edge = emon.Testport.NewText();
         int p = 0;
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
-        p = Model.NodeNew(nodes, Model.NkParagraph(), 0);
+        // A quote: the fit has no row for the kind yet (P10.1: the corpus has none), so its confidence is written as it is. A refit that gives
+        // quotes a row moves the number of this law, not what it holds: the threshold is on the confidence as written.
+        p = Model.NodeNew(nodes, Model.NkQuote(), 0);
         HtSet(nodes, text, p, emon.Testport.TextBlob("x"));
         Model.NodeAddRegion(nodes, regions, p, 1, 7250, -5, 54000, 100);
         Model.NodeSetConf(nodes, p, 500);
         Html.HtmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewBuf(), emon.Port.NewCells());
         Html.HtmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewBuf(), emon.Port.NewCells());
         Html.HtmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewBuf(), emon.Port.NewCells());
-        emon.Testport.AssertText(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options");
-        emon.Testport.AssertText(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default");
-        emon.Testport.AssertText(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold");
+        emon.Testport.AssertText(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</blockquote></main></body></html>", "all three options");
+        emon.Testport.AssertText(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>", "clean by default");
+        emon.Testport.AssertText(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>", "conf is only written strictly below the threshold");
     }
     [Xunit.Fact]
     public static void TestFurnitureDropsAndMilestonesSwitchOff() {

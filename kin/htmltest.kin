@@ -23,7 +23,7 @@
             [emon.model :refer [model-init node-new node-set-text node-set-sub
                                 node-set-conf node-add-region text-len
                                 text-append-utf8 model-check max-depth
-                                nk-section nk-heading nk-paragraph nk-break
+                                nk-section nk-heading nk-paragraph nk-quote nk-break
                                 nk-furniture]]
             [emon.html :refer [html-emit]]
             [kin.lang :refer [defn return let set while if do comment
@@ -144,16 +144,18 @@
         ^Text edge (new-text)
         ^:mut ^I32 p 0]
     (model-init nodes attrs regions text pages ledger layout)
-    (set p (node-new nodes (nk-paragraph) 0))
+    (comment "A quote: the fit has no row for the kind yet (P10.1: the corpus has none), so its confidence is written as it is. A refit that gives")
+    (comment "quotes a row moves the number of this law, not what it holds: the threshold is on the confidence as written.")
+    (set p (node-new nodes (nk-quote) 0))
     (ht-set nodes text p (text-blob "x"))
     (node-add-region nodes regions p 1 7250 -5 54000 100)
     (node-set-conf nodes p 500)
     (html-emit all 7 600 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells))
     (html-emit none 0 600 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells))
     (html-emit edge 4 500 nodes attrs regions text pages ledger layout (new-cells) (new-cells) (new-buf) (new-cells))
-    (assert-text all "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>" "all three options")
-    (assert-text none "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>" "clean by default")
-    (assert-text edge "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>" "conf is only written strictly below the threshold")))
+    (assert-text all "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</blockquote></main></body></html>" "all three options")
+    (assert-text none "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>" "clean by default")
+    (assert-text edge "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>" "conf is only written strictly below the threshold")))
 
 (deftest test-furniture-drops-and-milestones-switch-off
   (let [^Cells nodes (new-cells)

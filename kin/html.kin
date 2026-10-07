@@ -44,10 +44,11 @@
   (:require [emon.lang :refer [I32 Cells Text Buf emit-ascii shl32]]
             [emon.port :refer [cells-at cells-len text-cp text-i32 buf-at]]
             [emon.json :refer [js-cpt]]
+            [emon.calib :refer [cal-conf]]
             [emon.model :refer [node-count node-kind node-parent node-first-child
                                 node-next node-text-start node-text-len
                                 node-has-text node-region-head
-                                node-region-count node-conf node-sub node-aux
+                                node-region-count node-conf node-src node-sub node-aux
                                 page-count page-number page-layout-first
                                 page-layout-count layout-count layout-page
                                 layout-band layout-col layout-x0 layout-y0
@@ -237,7 +238,7 @@
   (let [^:mut ^I32 r 0
         ^:mut ^I32 i 0
         ^I32 kind (node-kind nodes n)
-        ^I32 cf (node-conf nodes n)]
+        ^I32 cf (cal-conf kind (node-src nodes n) (node-conf nodes n))]
     (if (and (== (h-on o 1) 1) (== (node-is-inline nodes n) 0) (!= kind (nk-note)))
       (do (emit-ascii t " id=\"emon-")
           (text-i32 t n)

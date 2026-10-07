@@ -4,6 +4,7 @@
 package json
 
 import (
+	"emon/calib"
 	"emon/model"
 	"emon/port"
 	"strings"
@@ -751,7 +752,7 @@ func jsTail(t *strings.Builder, pr int32, d int32, nodes *port.Cells, regions *p
 	// `at`, `src`, `conf`, `flags`: the provenance every node may carry.
 	var s int32 = started
 	var sr int32 = model.NodeSrc(nodes, n)
-	var cf int32 = model.NodeConf(nodes, n)
+	var cf int32 = calib.CalConf(model.NodeKind(nodes, n), model.NodeSrc(nodes, n), model.NodeConf(nodes, n))
 	var fg int32 = model.NodeFlags(nodes, n)
 	s = jsAt(t, pr, d, nodes, regions, n, s)
 	if sr != 0 {
@@ -981,7 +982,7 @@ func jsDropped(t *strings.Builder, pr int32, d int32, ledger *port.Cells, text *
 	}
 	if model.LedgerConf(ledger, l) >= 0 {
 		s = jsBegin(t, pr, d, s, model.FkConf())
-		port.TextI32(t, model.LedgerConf(ledger, l))
+		port.TextI32(t, calib.CalConf(calib.CalDropped(), model.LedgerSrc(ledger, l), model.LedgerConf(ledger, l)))
 	}
 	if model.LedgerSrc(ledger, l) != 0 {
 		s = jsBegin(t, pr, d, s, model.FkSrc())
@@ -1077,7 +1078,7 @@ func JsEmit(t *strings.Builder, pretty int32, nodes *port.Cells, attrs *port.Cel
 	s = jsBegin(t, pretty, 0, s, model.FkSettings())
 	jsSettings(t, pretty, nodes, attrs, text)
 	s = jsBegin(t, pretty, 0, s, model.FkConf())
-	port.TextAscii(t, "\"uncalibrated\"")
+	port.TextAscii(t, "\"calibrated\"")
 	if (jsHas(nodes, attrs, model.FkTitle()) == 1) || (jsHas(nodes, attrs, model.FkAuthor()) == 1) || (jsHas(nodes, attrs, model.FkSubject()) == 1) || (jsHas(nodes, attrs, model.FkKeywords()) == 1) || (jsHas(nodes, attrs, model.FkCreator()) == 1) || (jsHas(nodes, attrs, model.FkProducer()) == 1) || (jsHas(nodes, attrs, model.FkCreated()) == 1) || (jsHas(nodes, attrs, model.FkModified()) == 1) {
 		s = jsBegin(t, pretty, 0, s, model.FkMeta())
 		jsMeta(t, pretty, nodes, attrs, text)

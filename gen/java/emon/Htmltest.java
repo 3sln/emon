@@ -114,16 +114,18 @@ public final class Htmltest {
         StringBuilder edge = emon.Testport.newText();
         int p = 0;
         Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
-        p = Model.nodeNew(nodes, Model.nkParagraph(), 0);
+        // A quote: the fit has no row for the kind yet (P10.1: the corpus has none), so its confidence is written as it is. A refit that gives
+        // quotes a row moves the number of this law, not what it holds: the threshold is on the confidence as written.
+        p = Model.nodeNew(nodes, Model.nkQuote(), 0);
         htSet(nodes, text, p, emon.Testport.textBlob("x"));
         Model.nodeAddRegion(nodes, regions, p, 1, 7250, -5, 54000, 100);
         Model.nodeSetConf(nodes, p, 500);
         Html.htmlEmit(all, 7, 600, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
         Html.htmlEmit(none, 0, 600, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
         Html.htmlEmit(edge, 4, 500, nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newBuf(), emon.Port.newCells());
-        emon.Testport.assertText(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</p></main></body></html>", "all three options");
-        emon.Testport.assertText(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "clean by default");
-        emon.Testport.assertText(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><p>x</p></main></body></html>", "conf is only written strictly below the threshold");
+        emon.Testport.assertText(all, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote id=\"emon-1\" data-emon-at=\"1,72.5,-0.05,540,1\" data-emon-conf=\"500\">x</blockquote></main></body></html>", "all three options");
+        emon.Testport.assertText(none, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>", "clean by default");
+        emon.Testport.assertText(edge, "<!doctype html><html><head><meta charset=\"utf-8\"><title></title></head><body><main><blockquote>x</blockquote></main></body></html>", "conf is only written strictly below the threshold");
     }
     public static void testFurnitureDropsAndMilestonesSwitchOff() {
         emon.Port.Cells nodes = emon.Port.newCells();

@@ -38,7 +38,9 @@ A PREDICTOR is a command run as  CMD ID VARIANT INPUT GOLD  that prints an emon-
 Model as JSON on stdout (exit 3: not available yet). The built-in `oracle` and
 `degraded` are functions of the same shape, run in-process (their standalone
 forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
-  (:require [accuracy.graphics :as G]
+  (:require [accuracy.calib :as CAL]
+            [accuracy.confrows :as CR]
+            [accuracy.graphics :as G]
             [accuracy.predict-degraded :as degraded]
             [accuracy.predict-oracle :as oracle]
             [accuracy.score :as S]
@@ -267,24 +269,28 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
      (if (nil? (first preds))
        [nil (second preds)]
        (loop [rs (pmap (fn [[doc-id variant _ gp] pred]
-                         [doc-id variant (get (S/score (first pred) (pyjson/parse-file gp) (second pred)) "counts")])
+                         (let [gold (pyjson/parse-file gp)]
+                           [doc-id variant (merge (get (S/score (first pred) gold (second pred)) "counts")
+                                                  ;; the calibration counts (P10.1): a Model with no conf has none
+                                                  (CR/counts (first pred) gold))]))
                        docs (first preds))
               pools {}, per-doc (array-map)]
          (if-let [[[doc-id variant c] & more] (seq rs)]
            (recur more
                   (reduce (fn [p cat] (update p (str variant "/" cat) (fnil conj []) c))
                           pools ["all" (category doc-id)])
-                  (assoc per-doc (str variant "/" doc-id) (S/metrics c)))
+                  (assoc per-doc (str variant "/" doc-id) (merge (S/metrics c) (CAL/metrics c))))
        [(apply array-map
                (mapcat (fn [[k cs]]
                          [k (apply array-map
                                    (mapcat (fn [[m v]] [(str ":" m) (round6 v)])
-                                           (S/metrics (S/pool cs))))])
+                                           (let [pc (S/pool cs)] (merge (S/metrics pc) (CAL/metrics pc)))))])
                        (sort-by key pools)))
         per-doc]))))))
 
 (defn lower-better? [metric]
-  (contains? S/LOWER-IS-BETTER (str/replace metric #"^:+" "")))
+  (or (contains? S/LOWER-IS-BETTER (str/replace metric #"^:+" ""))
+      (CAL/lower-better? metric)))
 
 (defn compare-boards
   "-> [regressions improvements vanished] as vectors of [key metric old new]."

@@ -14,7 +14,7 @@
     "ocr": "never",
     "detail": "words"
   },
-  "conf": "uncalibrated",
+  "conf": "calibrated",
   "meta": {
     "title": "Täglicher Bericht",
     "author": "Ada Lovelace",
@@ -155,7 +155,7 @@
             ],
             "at": [[1, -0.05, 0, 72.5, 0.12], [2, 0.1, 1, 12.34, -1.5]],
             "src": ["text", "ocr"],
-            "conf": 0,
+            "conf": 789,
             "flags": ["low-conf", "rotated"]
           },
           {
@@ -222,7 +222,7 @@
         ],
         "at": [[1, 72, 90, 540, 750], [2, 72, 60, 540, 200]],
         "src": ["text"],
-        "conf": 900
+        "conf": 953
       },
       {
         "id": 22,
@@ -359,7 +359,7 @@
             "text": "extremes",
             "at": [[4, -21474836.48, 21474836.47, 1, -1]],
             "src": ["text", "hidden-text", "ocr", "trace", "vector", "struct", "annot", "outline", "infer"],
-            "conf": 1000,
+            "conf": 789,
             "flags": ["low-conf", "ocr-only", "text-layer-suspect", "reconstructed", "dpi-unknown", "rotated", "vertical"]
           },
           {
@@ -447,7 +447,7 @@
                   }
                 ],
                 "src": ["ocr", "infer"],
-                "conf": 400,
+                "conf": 955,
                 "flags": ["low-conf"]
               },
               {
@@ -548,7 +548,7 @@
       "page": 1,
       "at": [1, 10, 20, 990, 500],
       "text": "DRAFT",
-      "conf": 870,
+      "conf": 984,
       "src": ["ocr", "trace"]
     },
     {
@@ -561,7 +561,7 @@
       "page": 3,
       "at": [3, 1, 2, 3, 4],
       "text": "say \"x\"",
-      "conf": 1000,
+      "conf": 984,
       "src": ["text", "hidden-text", "ocr", "trace", "vector", "struct", "annot", "outline", "infer"]
     }
   ]

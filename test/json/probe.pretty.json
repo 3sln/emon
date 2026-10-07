@@ -3,7 +3,7 @@
   "settings": {
     "locale": null
   },
-  "conf": "uncalibrated",
+  "conf": "calibrated",
   "pages": [
     {
       "n": 1,
@@ -24,7 +24,7 @@
         "text": "Hi",
         "at": [[1, 72, 90, 540, 110]],
         "src": ["text", "infer"],
-        "conf": 950
+        "conf": 715
       }
     ]
   },
@@ -35,7 +35,7 @@
       "page": 1,
       "at": [1, 290, 760, 322, 772],
       "text": "1",
-      "conf": 998,
+      "conf": 984,
       "src": ["text"]
     }
   ]

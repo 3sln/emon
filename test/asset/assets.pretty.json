@@ -17,7 +17,7 @@
     "assets-bytes": 33554432,
     "asset-signatures": "off"
   },
-  "conf": "uncalibrated",
+  "conf": "calibrated",
   "pages": [
     {
       "n": 1,
@@ -47,12 +47,12 @@
             "text": "The harbour",
             "at": [[1, 72, 215, 300, 230]],
             "src": ["infer"],
-            "conf": 500
+            "conf": 938
           }
         ],
         "at": [[1, 72, 90, 300, 210]],
         "src": ["infer"],
-        "conf": 500
+        "conf": 909
       },
       {
         "id": 3,
@@ -61,7 +61,7 @@
         "asset": 0,
         "at": [[1, 72, 300, 300, 400]],
         "src": ["infer"],
-        "conf": 500
+        "conf": 909
       },
       {
         "id": 4,
@@ -71,7 +71,7 @@
         "noasset": "codec",
         "at": [[1, 72, 410, 300, 500]],
         "src": ["infer"],
-        "conf": 500
+        "conf": 909
       },
       {
         "id": 5,
@@ -101,7 +101,7 @@
         "noasset": "part",
         "at": [[1, 72, 650, 300, 700]],
         "src": ["infer"],
-        "conf": 500
+        "conf": 909
       }
     ]
   },
