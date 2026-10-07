@@ -3,7 +3,7 @@
 ;; (brew: tesseract, leptonica; EMON_TESS_LIB is the directory of the libraries, default /opt/homebrew/lib), and is what produced
 ;; test/ocr/scan/ID/.
 ;;
-;;     bb tools/ocr/record-scan.clj [--keep-bitmaps] ID...       each ID is test/corpus/synth/scan/ID.pdf
+;;     bb tools/ocr/record-scan.clj [--keep-bitmaps] [--px] ID...       each ID is test/corpus/synth/scan/ID.pdf
 ;;
 ;; Each document goes through the Engine with the Tesseract `Ocr` port (`emon-rs --tesseract --record`), and the transcript the
 ;; run wrote is committed AS A REPLAY INPUT: `transcript.edn` (the decode and the OCR request and answer of every page, and the
@@ -17,7 +17,10 @@
          '[clojure.string :as str])
 
 (def args (vec *command-line-args*))
-(def keep? (some #{"--keep-bitmaps"} args))
+;; --px: the transcripts of test/ocr/scan-px/ (D661): WHOLE, bitmaps kept. kin reads pixels since P6.3 and a table on a scan asks for per-cell
+;; OCR from them, so a slim transcript of such a page is not what the engine did (the replay "never asked for" 3 recorded entries).
+(def px? (some #{"--px"} args))
+(def keep? (or px? (some #{"--keep-bitmaps"} args)))
 (def ids (vec (remove #(str/starts-with? % "--") args)))
 (when (empty? ids)
   (println "usage: bb tools/ocr/record-scan.clj [--keep-bitmaps] ID...")
@@ -32,7 +35,7 @@
 
 (doseq [id ids]
   (let [pdf (str "test/corpus/synth/scan/" id ".pdf")
-        out (str "test/ocr/scan/" id)
+        out (str (if px? "test/ocr/scan-px/" "test/ocr/scan/") id)
         t0 (System/currentTimeMillis)]
     (fs/delete-tree out)
     (fs/create-dirs out)
