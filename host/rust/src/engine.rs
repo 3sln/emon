@@ -25,6 +25,10 @@
 //     (a `crop` through the Renderer; a raster input's frame cut); at `images` a figure or seal that is one embedded image gets its bytes or its pixels as PNG (P3.13),
 //   * document metadata in the header (`source`, `meta`) and every structure above the paragraph.
 //
+// THE LOOP IS A MACHINE (P9.3, D356): `Run` below is one input's conversion a step at a time (the document pass, the asset unit,
+// a unit per page, the document unit), over `plan::Machine`; `Engine::convert` drives it synchronously, the browser's WASM
+// binding (`host/wasm`) lets its JS side own the loop and awaits what `step` says it needs (bytes, answers).
+//
 // THE LOOP IS WIRED (D058 revised, D089-D091). `convert` runs `plan::run` over one unit (everything kin
 // does for one input: open, text layer, paragraphs, Model). The unit gets a fresh `Src` view and fresh
 // arenas per attempt; when it answers `need-bytes` the loop fetches what the cache missed (doubling
@@ -545,6 +549,132 @@ impl ChunkCache {
     pub fn hints(&self) -> u32 {
         self.st.lock().unwrap().hints
     }
+
+    // The input's length in bytes.
+    pub fn length(&self) -> usize {
+        self.len
+    }
+
+    // A PUSHED cache (P9.3, the browser): one nothing can read FROM. An embedder whose reads are promises cannot give the
+    // engine a `read_at` that blocks, so the engine only ever misses (`deferred`), says what (`plan_fetch`, `missing`) and the
+    // embedder pushes the bytes in (`provide`) before it runs the unit again: the host loop of D058, owned from outside.
+    pub fn pushed(len: usize, chunk: usize) -> Arc<ChunkCache> {
+        struct Nothing(u64);
+        impl ByteSource for Nothing {
+            fn len(&self) -> u64 {
+                self.0
+            }
+            fn read_at(&self, _off: u64, _buf: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "a pushed source is read only where it was provided"))
+            }
+        }
+        Arc::new(ChunkCache::new(Arc::new(Nothing(len as u64)), len, chunk.max(1), true))
+    }
+
+    // Make resident the chunks that `data` (the bytes at `offset`) covers whole. A range that starts or ends inside a chunk
+    // leaves that chunk to a later read: the ranges `plan_fetch` and `missing` give are chunk-aligned (the last ends at the
+    // length).
+    pub fn provide(&self, offset: usize, data: &[u8]) {
+        let mut st = self.st.lock().unwrap();
+        if self.len == 0 || offset >= self.len {
+            return;
+        }
+        st.reads += 1;
+        st.bytes += data.len() as u64;
+        let end = std::cmp::min(offset + data.len(), self.len);
+        let first = (offset + self.chunk - 1) / self.chunk;
+        for c in first..self.nchunks() {
+            let lo = c * self.chunk;
+            let hi = std::cmp::min(lo + self.chunk, self.len);
+            if hi > end {
+                break;
+            }
+            if st.chunks[c].is_none() {
+                st.chunks[c] = Some(data[lo - offset..hi - offset].to_vec().into_boxed_slice());
+            }
+        }
+    }
+
+    // The runs of chunks that are not resident among those [offset, offset + length) touches, as ranges (the browser's
+    // `decode` and `decode-img` requests name a span of the input the host must have before it can answer).
+    pub fn missing(&self, input: i32, offset: u64, length: u64) -> Vec<Range> {
+        let st = self.st.lock().unwrap();
+        if length == 0 || offset >= self.len as u64 {
+            return Vec::new();
+        }
+        let first = offset as usize / self.chunk;
+        let last = (std::cmp::min(offset + length, self.len as u64) as usize - 1) / self.chunk;
+        let mut out: Vec<Range> = Vec::new();
+        let mut c = first;
+        while c <= last {
+            if st.chunks[c].is_some() {
+                c += 1;
+                continue;
+            }
+            let mut e = c;
+            while e < last && st.chunks[e + 1].is_none() {
+                e += 1;
+            }
+            let off = c * self.chunk;
+            let end = std::cmp::min((e + 1) * self.chunk, self.len);
+            out.push(Range { input, offset: off as i32, length: (end - off) as i32 });
+            c = e + 1;
+        }
+        out
+    }
+
+    // SPEC 13.1: intake round 0 reads the first and the last chunk (the header, `startxref`, the trailer).
+    pub fn prefetch_ranges(&self, input: i32) -> Vec<Range> {
+        if self.len == 0 {
+            return Vec::new();
+        }
+        let n = self.nchunks();
+        let mut out = self.missing(input, 0, std::cmp::min(self.chunk, self.len) as u64);
+        out.extend(self.missing(input, ((n - 1) * self.chunk) as u64, (self.len - (n - 1) * self.chunk) as u64));
+        out.dedup();
+        out
+    }
+
+    // The embedder's read failed (`short`: it gave fewer bytes than its length said, the `source-changed` of D058): the run ends
+    // with that error, as it does when a native source fails.
+    pub fn fail(&self, short: bool, message: &str) {
+        let mut st = self.st.lock().unwrap();
+        st.short = short;
+        st.failure = Some(message.to_string());
+    }
+}
+
+// What is resident, read in place: the decode requests' codecs read the input through this (a pushed cache), never through a
+// source that could miss. A read that starts at a chunk that is not resident is `WouldBlock`.
+impl ByteSource for ChunkCache {
+    fn len(&self) -> u64 {
+        self.len as u64
+    }
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> std::io::Result<usize> {
+        if off >= self.len as u64 || buf.is_empty() {
+            return Ok(0);
+        }
+        let st = self.st.lock().unwrap();
+        let mut got = 0usize;
+        let mut at = off as usize;
+        while got < buf.len() && at < self.len {
+            let c = at / self.chunk;
+            match &st.chunks[c] {
+                Some(ch) => {
+                    let o = at - c * self.chunk;
+                    let n = std::cmp::min(buf.len() - got, ch.len() - o);
+                    buf[got..got + n].copy_from_slice(&ch[o..o + n]);
+                    got += n;
+                    at += n;
+                }
+                None => break,
+            }
+        }
+        if got == 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "that part of the source is not resident"));
+        }
+        Ok(got)
+    }
 }
 
 impl SrcBacking for ChunkCache {
@@ -668,7 +798,7 @@ pub static OCR_US: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
 // Renderer is configured (P6.2). `keep` holds the pixels in a decode answer (a recording wants them, as canonical
 // PNG, and so does a live OCR engine; a plain conversion needs only the numbers); `recording` also keeps the OCR
 // engine's thresholded image, which only a transcript wants (D211).
-fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording: bool, ocr: Option<OcrPort>, codecs: Option<Arc<dyn PdfCodecs>>) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
+pub fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording: bool, ocr: Option<OcrPort>, codecs: Option<Arc<dyn PdfCodecs>>) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
     move |req: &Request, bm: &plan::Bitmaps| -> Result<Answer, PlanError> {
         if req.kind() == plan::KIND_DECODE_IMG {
             return decode_img(req, &source, idx, codecs.as_deref());
@@ -1692,72 +1822,10 @@ impl Engine {
         port::with_limits(&self.cfg.limits, || self.run_input_bounded(idx, input, opts, intake_only, mode))
     }
 
+    // The synchronous driver of a `Run` (the native hosts' loop; the browser's is `host/wasm`).
     fn run_input_bounded(&self, idx: usize, input: &Input, opts: &Options, intake_only: bool, mode: Mode) -> Result<(Outcome, RunStats), Error> {
-        // the input-bytes bound is checked against the LENGTH, before any byte is read (SPEC 13.1)
-        let len = input.source.len();
-        let limit = std::cmp::min(port::limit_of(0) as i64, i32::MAX as i64);
-        if len as i64 > limit || len > i32::MAX as u64 {
-            return Err(Error::Limit { name: "input-bytes".to_string(), limit, actual: len as i64 });
-        }
-        let ulen = len as usize;
-        let simulate = self.cfg.simulate_async;
-        let (backing, cache): (Arc<dyn SrcBacking>, Option<Arc<ChunkCache>>) = if !simulate && input.source.as_slice().is_some() {
-            (Arc::new(SliceBacking(input.source.clone())), None)
-        } else {
-            let c = Arc::new(ChunkCache::new(input.source.clone(), ulen, self.cfg.chunk_size.max(1), simulate));
-            (c.clone(), Some(c))
-        };
-        if simulate {
-            if let Some(c) = &cache {
-                c.prefetch_ends();
-            }
-        }
-        let base = Src::new(backing);
-        let pw = Src::of_bytes(input.password.clone().unwrap_or_default());
-        let mut outcome = Outcome::None;
-        let mut docslot: Option<DocKind> = None;
-        let mut unit = |answers: &mut Cells, rq: &mut Cells| -> i32 {
-            let view = base.view();
-            match catch_unwind(AssertUnwindSafe(|| dispatch(&view, &pw, answers, rq, idx, opts, intake_only, len))) {
-                Ok(RStep::Miss) => plan::UNIT_NEED_BYTES,
-                Ok(RStep::Requests) => plan::UNIT_REQUESTS,
-                Ok(RStep::Done(o)) => {
-                    outcome = o;
-                    plan::UNIT_DONE
-                }
-                Ok(RStep::Pdf(d)) => {
-                    docslot = Some(DocKind::Pdf(d));
-                    plan::UNIT_DONE
-                }
-                Ok(RStep::Raster(d)) => {
-                    docslot = Some(DocKind::Raster(d));
-                    plan::UNIT_DONE
-                }
-                Err(p) => {
-                    if view.missed() {
-                        plan::UNIT_NEED_BYTES
-                    } else {
-                        outcome = Outcome::Failed(panic_error(panic_message(p)));
-                        plan::UNIT_DONE
-                    }
-                }
-            }
-        };
-        let fetch_cache = cache.clone();
-        let bytes_fn = move |req: &Request, _bm: &plan::Bitmaps| -> Result<Answer, PlanError> {
-            if let Some(c) = &fetch_cache {
-                c.fetch(req.arg(1), req.arg(2)).map_err(|_| PlanError::Fulfil("a read of the source failed".to_string()))?;
-            }
-            let mut c = Cells::new();
-            crate::emon::plan::an_bytes(&mut c, req.id(), req.arg(1), req.arg(2));
-            Ok(Answer { rec: to_vec(&c), bitmap: None })
-        };
-        let mut bytes = SyncFulfiller::new(bytes_fn);
-        let mut misses: Box<dyn Misses> = match &cache {
-            Some(c) => Box::new(CacheMisses { cache: c.clone(), input: idx as i32 }),
-            None => Box::new(NoMisses),
-        };
-        let pcfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
+        let mut run = self.make_run(idx, input, opts, intake_only)?;
+        let len = run.len;
         let this_input = vec![(idx as i32, len as i32)];
         let mut replayer: Option<Replayer> = None;
         // The live port set (D127, D211): `render` and `crop` go to the configured Renderer, reading the same input
@@ -1791,156 +1859,21 @@ impl Engine {
             Some(r) => r,
             None => &mut live,
         };
-        // THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
-        let result = plan::run(&pcfg, &mut unit, ports, &mut bytes, &mut *misses, recording.as_deref_mut());
-        // a source that failed is the answer, whatever the loop made of the miss it caused
-        if let Some(c) = &cache {
-            if let Some((short, msg)) = c.failure() {
-                return Err(if short { Error::SourceChanged { input: idx } } else { Error::Io { input: idx, message: msg } });
-            }
-        }
-        let ps = result?;
-        let mut stats = RunStats {
-            attempts: ps.attempts,
-            fetch_rounds: ps.fetch_rounds,
-            bytes_requests: ps.bytes_requests,
-            requests: ps.requests,
-            source_reads: 0,
-            bytes_fetched: 0,
-            input_bytes: len,
-            page_rounds: Vec::new(),
-            page_requests: Vec::new(),
-        };
-        // THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and `BitmapSet`, which
-        // are dropped when the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never
-        // reads the input. Then the document unit, stage 3, on what the units left.
-        if let Some(mut d) = docslot {
-            // THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are asked of the
-            // host (`decode-img`, one round for them all); it reads the input (and so may miss, like the document pass)
-            if let (DocKind::Pdf(doc), true) = (&mut d, opts.assets != Assets::None) {
-                let mut unit_a = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf| -> i32 {
-                    let view = base.view();
-                    match catch_unwind(AssertUnwindSafe(|| asset_unit(&view, &pw, idx, doc, opts, answers, rq, bms, payload))) {
-                        Ok(0) => plan::UNIT_DONE,
-                        Ok(1) => plan::UNIT_REQUESTS,
-                        Ok(_) if view.missed() => plan::UNIT_NEED_BYTES,
-                        Ok(7) => plan::UNIT_NEED_BYTES,
-                        Ok(s) => {
-                            outcome = Outcome::Failed(Error::Internal(format!("the asset unit answered status {}", s)));
-                            plan::UNIT_DONE
-                        }
-                        Err(p) => {
-                            if view.missed() {
-                                plan::UNIT_NEED_BYTES
-                            } else {
-                                outcome = Outcome::Failed(panic_error(panic_message(p)));
-                                plan::UNIT_DONE
-                            }
-                        }
-                    }
-                };
-                let ast = plan::run_bms(&pcfg, &mut unit_a, &mut *ports, &mut bytes, &mut *misses, recording.as_deref_mut());
-                if let Some(c) = &cache {
-                    if let Some((short, msg)) = c.failure() {
-                        return Err(if short { Error::SourceChanged { input: idx } } else { Error::Io { input: idx, message: msg } });
+        // THE LOOP: the document pass (everything that reads the input; its misses fetch and re-run it), the asset unit, one unit
+        // per page, then the document unit: `Run::step` walks them, and what it needs of this host is bytes and answers.
+        loop {
+            match run.step()? {
+                plan::Next::Done => break,
+                plan::Next::Fetch(reqs) => {
+                    for r in &reqs {
+                        run.fetch_from_source(r.arg(1), r.arg(2))?;
                     }
                 }
-                let ast = ast?;
-                stats.requests += ast.requests;
-                stats.attempts += ast.attempts;
-                stats.fetch_rounds += ast.fetch_rounds;
-                stats.bytes_requests += ast.bytes_requests;
-                if let Outcome::Failed(e) = std::mem::replace(&mut outcome, Outcome::None) {
-                    return Err(e);
-                }
-            }
-            let page_cfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
-            let mut no_misses = NoMisses;
-            let mut failed: Option<Error> = None;
-            let np = match &d {
-                DocKind::Pdf(doc) => doc.info.pages,
-                DocKind::Raster(doc) => doc.info.pages,
-            };
-            let mut d = d;
-            for i in 0..np {
-                let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
-                    let r = catch_unwind(AssertUnwindSafe(|| match &mut d {
-                        DocKind::Pdf(doc) => unit_pdf(doc, i, idx, opts, answers, rq, bms),
-                        DocKind::Raster(doc) => unit_raster(doc, i, idx, len, opts, answers, rq, bms),
-                    }));
-                    match r {
-                        Ok(0) => plan::UNIT_DONE,
-                        Ok(1) => plan::UNIT_REQUESTS,
-                        Ok(21) => {
-                            failed = Some(Error::Damaged { input: idx, status: "undecodable" });
-                            plan::UNIT_DONE
-                        }
-                        Ok(22) => {
-                            failed = Some(Error::Damaged { input: idx, status: "unsupported-image" });
-                            plan::UNIT_DONE
-                        }
-                        Ok(s) => {
-                            failed = Some(Error::Internal(format!("a page unit answered status {}", s)));
-                            plan::UNIT_DONE
-                        }
-                        Err(p) => {
-                            failed = Some(panic_error(panic_message(p)));
-                            plan::UNIT_DONE
-                        }
-                    }
-                };
-                let pst = plan::run_bms(&page_cfg, &mut unit_p, &mut *ports, &mut bytes, &mut no_misses, recording.as_deref_mut())?;
-                if let Some(e) = failed {
-                    return Err(e);
-                }
-                stats.requests += pst.requests;
-                stats.page_rounds.push(pst.rounds);
-                stats.page_requests.push(pst.requests);
-            }
-            outcome = match d {
-                DocKind::Pdf(doc) => finish_pdf(*doc, opts),
-                DocKind::Raster(doc) => finish_raster(*doc, opts),
-            };
-            // THE ASSET UNIT (P8.5, D351): at `figures` the Model is final but for its assets, whose renders and crops are requests,
-            // so one more plan/fulfil loop runs over it, with its own answers and `BitmapSet`, on copies until every answer is in.
-            if let Outcome::Built(b) = &mut outcome {
-                if let Some(pend) = b.pending.take() {
-                    let mut done: Option<Arenas> = None;
-                    let mut afailed: Option<Error> = None;
-                    {
-                        let base = &b.arenas;
-                        let mut unit_a = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
-                            let r = catch_unwind(AssertUnwindSafe(|| {
-                                let mut t = base.clone();
-                                let mut p = pend.clone();
-                                asset_stage_figures(&mut t, &mut p, opts, idx as i32, len as i32, answers, rq, bms);
-                                if cells_len(rq) > 0 {
-                                    plan::UNIT_REQUESTS
-                                } else {
-                                    done = Some(t);
-                                    plan::UNIT_DONE
-                                }
-                            }));
-                            match r {
-                                Ok(s) => s,
-                                Err(p) => {
-                                    afailed = Some(panic_error(panic_message(p)));
-                                    plan::UNIT_DONE
-                                }
-                            }
-                        };
-                        let ast = plan::run_bms(&page_cfg, &mut unit_a, &mut *ports, &mut bytes, &mut no_misses, recording.as_deref_mut())?;
-                        stats.requests += ast.requests;
-                    }
-                    if let Some(e) = afailed {
-                        return Err(e);
-                    }
-                    match done {
-                        Some(a) => b.arenas = a,
-                        None => return Err(Error::Internal("the asset unit finished with no Model".to_string())),
-                    }
-                    if let Some(e) = seal_arenas(&mut b.arenas, opts) {
-                        return Err(e);
+                plan::Next::Requests(reqs, all) => {
+                    let got = plan::fulfil(&mut *ports, &reqs, &all).map_err(|e| run.error_of(e))?;
+                    let entries = run.answered(got);
+                    if let Some(t) = recording.as_deref_mut() {
+                        t.entries.extend(entries);
                     }
                 }
             }
@@ -1950,12 +1883,413 @@ impl Engine {
                 return Err(Error::Plan(PlanError::TranscriptBad(format!("{} recorded entries were never asked for", r.unused()))));
             }
         }
-        stats.source_reads = cache.as_ref().map(|c| c.reads()).unwrap_or(0);
-        stats.bytes_fetched = cache.as_ref().map(|c| c.bytes_read()).unwrap_or(0);
-        match outcome {
+        run.finish()
+    }
+
+    // A `Run` over `input`: the input-bytes bound is checked against the LENGTH before any byte is read (SPEC 13.1), then a `Src`
+    // over the source (read in place when it is in memory, through the chunk cache otherwise).
+    fn make_run(&self, idx: usize, input: &Input, opts: &Options, intake_only: bool) -> Result<Run, Error> {
+        port::with_limits(&self.cfg.limits, || {
+            let len = input.source.len();
+            let limit = std::cmp::min(port::limit_of(0) as i64, i32::MAX as i64);
+            if len as i64 > limit || len > i32::MAX as u64 {
+                return Err(Error::Limit { name: "input-bytes".to_string(), limit, actual: len as i64 });
+            }
+            let ulen = len as usize;
+            let simulate = self.cfg.simulate_async;
+            let (backing, cache): (Arc<dyn SrcBacking>, Option<Arc<ChunkCache>>) = if !simulate && input.source.as_slice().is_some() {
+                (Arc::new(SliceBacking(input.source.clone())), None)
+            } else {
+                let c = Arc::new(ChunkCache::new(input.source.clone(), ulen, self.cfg.chunk_size.max(1), simulate));
+                (c.clone(), Some(c))
+            };
+            if simulate {
+                if let Some(c) = &cache {
+                    c.prefetch_ends();
+                }
+            }
+            Ok(self.run_over(idx, backing, cache, len, input.password.clone(), opts, intake_only))
+        })
+    }
+
+    // A `Run` over a PUSHED cache (P9.3, the browser): the embedder gives the bytes the cache missed (`ChunkCache::provide`)
+    // between `step`s, and owns the loop.
+    pub fn start_pushed(&self, idx: usize, cache: Arc<ChunkCache>, password: Option<Vec<u8>>, opts: &Options, intake_only: bool) -> Result<Run, Error> {
+        port::with_limits(&self.cfg.limits, || {
+            let len = cache.len as u64;
+            let limit = std::cmp::min(port::limit_of(0) as i64, i32::MAX as i64);
+            if len as i64 > limit || len > i32::MAX as u64 {
+                return Err(Error::Limit { name: "input-bytes".to_string(), limit, actual: len as i64 });
+            }
+            Ok(self.run_over(idx, cache.clone(), Some(cache), len, password, opts, intake_only))
+        })
+    }
+
+    fn run_over(&self, idx: usize, backing: Arc<dyn SrcBacking>, cache: Option<Arc<ChunkCache>>, len: u64, password: Option<Vec<u8>>, opts: &Options, intake_only: bool) -> Run {
+        let misses: Box<dyn Misses> = match &cache {
+            Some(c) => Box::new(CacheMisses { cache: c.clone(), input: idx as i32 }),
+            None => Box::new(NoMisses),
+        };
+        let pcfg = plan::Config { max_rounds: self.cfg.max_rounds, fetch_rounds: self.cfg.fetch_rounds };
+        Run {
+            idx,
+            opts: opts.clone(),
+            intake_only,
+            len,
+            limits: self.cfg.limits.clone(),
+            machine: plan::Machine::new(&pcfg),
+            pcfg,
+            base: Src::new(backing),
+            pw: Src::of_bytes(password.unwrap_or_default()),
+            cache,
+            misses,
+            phase: Phase::Doc,
+            outcome: Outcome::None,
+            docslot: None,
+            failed: None,
+            fig_pend: None,
+            fig_done: None,
+            stats: RunStats { input_bytes: len, ..RunStats::default() },
+        }
+    }
+}
+
+// ----------------------------------------------------------- the run, a step at a time (P9.3)
+//
+// One input's conversion as a MACHINE: `step` runs kin until it needs something of the host, and says what (bytes the `Src`
+// missed, or requests to fulfil); the host does it, however it likes (a native host inside the call, a browser after an
+// `await`), reports back (`ChunkCache::provide` / `fetch_from_source`, `answered`) and steps again. The phases are the ones the
+// loop always had: the document pass (everything that reads the input: it misses, is discarded and re-run), the asset unit
+// (it reads the input too), one unit per page (P7.U, D195: its own answers, requests and `BitmapSet`, dropped when the unit
+// ends, so a conversion holds one page's bitmaps; a page unit never reads the input), then the document unit, stage 3.
+
+enum Phase {
+    Doc,
+    Asset,
+    Pages(usize),
+    // P8.5 (D351/D560): at level `figures` the Model is final but for its assets, one more plan/fulfil unit over copies of it.
+    // NOTE: the last phase added by hand; the engine-thinning effort moves this schedule into kin.
+    Figures,
+    Finished,
+}
+
+pub struct Run {
+    idx: usize,
+    opts: Options,
+    intake_only: bool,
+    len: u64,
+    limits: Vec<(i32, i32)>,
+    pcfg: plan::Config,
+    machine: plan::Machine,
+    base: Src,
+    pw: Src,
+    cache: Option<Arc<ChunkCache>>,
+    misses: Box<dyn Misses>,
+    phase: Phase,
+    outcome: Outcome,
+    docslot: Option<DocKind>,
+    failed: Option<Error>,
+    fig_pend: Option<PendingAssets>,
+    fig_done: Option<Arenas>,
+    stats: RunStats,
+}
+
+impl Run {
+    // The input's length (what the source said, which a pushed cache was made with).
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
+    // A source that failed is the answer, whatever the loop made of the miss it caused.
+    fn source_failure(&self) -> Option<Error> {
+        let c = self.cache.as_ref()?;
+        let (short, msg) = c.failure()?;
+        Some(if short { Error::SourceChanged { input: self.idx } } else { Error::Io { input: self.idx, message: msg } })
+    }
+
+    // The source's failure, when it has failed (a pushed cache's host said its read failed or came up short).
+    pub fn source_error(&self) -> Option<Error> {
+        self.source_failure()
+    }
+
+    // An error of the loop, or the source's failure when it has one.
+    pub fn error_of(&self, e: PlanError) -> Error {
+        self.source_failure().unwrap_or_else(|| e.into())
+    }
+
+    // Read what the cache missed from the source it was made over (a native host's fetch, inside its loop).
+    pub fn fetch_from_source(&mut self, offset: i32, length: i32) -> Result<(), Error> {
+        if let Some(c) = &self.cache {
+            if c.fetch(offset, length).is_err() {
+                return Err(self.error_of(PlanError::Fulfil("a read of the source failed".to_string())));
+            }
+        }
+        Ok(())
+    }
+
+    // The answers to the requests of the last `step`, one each, sorted by id; the entries a transcript records.
+    pub fn answered(&mut self, got: Vec<Answer>) -> Vec<plan::Entry> {
+        self.machine.answered(got)
+    }
+
+    // Run kin until it needs something. `Done`: every unit has finished, `finish` is next.
+    pub fn step(&mut self) -> Result<plan::Next, Error> {
+        let limits = self.limits.clone();
+        port::with_limits(&limits, || self.step_inner())
+    }
+
+    fn step_inner(&mut self) -> Result<plan::Next, Error> {
+        loop {
+            match self.phase {
+                Phase::Doc => {
+                    let (idx, len, intake_only) = (self.idx, self.len, self.intake_only);
+                    let mut unit = |answers: &mut Cells, rq: &mut Cells, _bms: &BitmapSet, _payload: &mut Buf| -> i32 {
+                        let view = self.base.view();
+                        match catch_unwind(AssertUnwindSafe(|| dispatch(&view, &self.pw, answers, rq, idx, &self.opts, intake_only, len))) {
+                            Ok(RStep::Miss) => plan::UNIT_NEED_BYTES,
+                            Ok(RStep::Requests) => plan::UNIT_REQUESTS,
+                            Ok(RStep::Done(o)) => {
+                                self.outcome = o;
+                                plan::UNIT_DONE
+                            }
+                            Ok(RStep::Pdf(d)) => {
+                                self.docslot = Some(DocKind::Pdf(d));
+                                plan::UNIT_DONE
+                            }
+                            Ok(RStep::Raster(d)) => {
+                                self.docslot = Some(DocKind::Raster(d));
+                                plan::UNIT_DONE
+                            }
+                            Err(p) => {
+                                if view.missed() {
+                                    plan::UNIT_NEED_BYTES
+                                } else {
+                                    self.outcome = Outcome::Failed(panic_error(panic_message(p)));
+                                    plan::UNIT_DONE
+                                }
+                            }
+                        }
+                    };
+                    let r = self.machine.attempt(&mut unit, &mut *self.misses);
+                    let next = r.map_err(|e| self.error_of(e))?;
+                    if let Some(e) = self.source_failure() {
+                        return Err(e);
+                    }
+                    if !matches!(next, plan::Next::Done) {
+                        return Ok(next);
+                    }
+                    let ps = self.machine.stats().clone();
+                    self.stats.attempts = ps.attempts;
+                    self.stats.fetch_rounds = ps.fetch_rounds;
+                    self.stats.bytes_requests = ps.bytes_requests;
+                    self.stats.requests = ps.requests;
+                    self.machine = plan::Machine::new(&self.pcfg);
+                    // THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are
+                    // asked of the host (`decode-img`, one round for them all)
+                    self.phase = match &self.docslot {
+                        Some(DocKind::Pdf(_)) if self.opts.assets != Assets::None => Phase::Asset,
+                        Some(_) => Phase::Pages(0),
+                        None => Phase::Finished,
+                    };
+                }
+                Phase::Asset => {
+                    let idx = self.idx;
+                    let mut unit_a = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf| -> i32 {
+                        let view = self.base.view();
+                        let doc = match &mut self.docslot {
+                            Some(DocKind::Pdf(doc)) => doc,
+                            _ => {
+                                self.outcome = Outcome::Failed(Error::Internal("the asset unit has no document".to_string()));
+                                return plan::UNIT_DONE;
+                            }
+                        };
+                        match catch_unwind(AssertUnwindSafe(|| asset_unit(&view, &self.pw, idx, doc, &self.opts, answers, rq, bms, payload))) {
+                            Ok(0) => plan::UNIT_DONE,
+                            Ok(1) => plan::UNIT_REQUESTS,
+                            Ok(_) if view.missed() => plan::UNIT_NEED_BYTES,
+                            Ok(7) => plan::UNIT_NEED_BYTES,
+                            Ok(s) => {
+                                self.outcome = Outcome::Failed(Error::Internal(format!("the asset unit answered status {}", s)));
+                                plan::UNIT_DONE
+                            }
+                            Err(p) => {
+                                if view.missed() {
+                                    plan::UNIT_NEED_BYTES
+                                } else {
+                                    self.outcome = Outcome::Failed(panic_error(panic_message(p)));
+                                    plan::UNIT_DONE
+                                }
+                            }
+                        }
+                    };
+                    let r = self.machine.attempt(&mut unit_a, &mut *self.misses);
+                    let next = r.map_err(|e| self.error_of(e))?;
+                    if let Some(e) = self.source_failure() {
+                        return Err(e);
+                    }
+                    if !matches!(next, plan::Next::Done) {
+                        return Ok(next);
+                    }
+                    let ast = self.machine.stats().clone();
+                    self.stats.requests += ast.requests;
+                    self.stats.attempts += ast.attempts;
+                    self.stats.fetch_rounds += ast.fetch_rounds;
+                    self.stats.bytes_requests += ast.bytes_requests;
+                    self.machine = plan::Machine::new(&self.pcfg);
+                    if let Outcome::Failed(e) = std::mem::replace(&mut self.outcome, Outcome::None) {
+                        return Err(e);
+                    }
+                    self.phase = Phase::Pages(0);
+                }
+                Phase::Pages(i) => {
+                    let np = match &self.docslot {
+                        Some(DocKind::Pdf(doc)) => doc.info.pages,
+                        Some(DocKind::Raster(doc)) => doc.info.pages,
+                        None => 0,
+                    };
+                    if i >= np {
+                        self.outcome = match self.docslot.take() {
+                            Some(DocKind::Pdf(doc)) => finish_pdf(*doc, &self.opts),
+                            Some(DocKind::Raster(doc)) => finish_raster(*doc, &self.opts),
+                            None => Outcome::None,
+                        };
+                        self.phase = Phase::Finished;
+                        // THE FIGURES UNIT (P8.5, D351): a Built Model with assets still pending goes on to it.
+                        if let Outcome::Built(b) = &mut self.outcome {
+                            if let Some(pend) = b.pending.take() {
+                                self.fig_pend = Some(pend);
+                                self.phase = Phase::Figures;
+                            }
+                        }
+                        continue;
+                    }
+                    let (idx, len) = (self.idx, self.len);
+                    let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
+                        let r = catch_unwind(AssertUnwindSafe(|| match &mut self.docslot {
+                            Some(DocKind::Pdf(doc)) => unit_pdf(doc, i, idx, &self.opts, answers, rq, bms),
+                            Some(DocKind::Raster(doc)) => unit_raster(doc, i, idx, len, &self.opts, answers, rq, bms),
+                            None => 99,
+                        }));
+                        match r {
+                            Ok(0) => plan::UNIT_DONE,
+                            Ok(1) => plan::UNIT_REQUESTS,
+                            Ok(21) => {
+                                self.failed = Some(Error::Damaged { input: idx, status: "undecodable" });
+                                plan::UNIT_DONE
+                            }
+                            Ok(22) => {
+                                self.failed = Some(Error::Damaged { input: idx, status: "unsupported-image" });
+                                plan::UNIT_DONE
+                            }
+                            Ok(s) => {
+                                self.failed = Some(Error::Internal(format!("a page unit answered status {}", s)));
+                                plan::UNIT_DONE
+                            }
+                            Err(p) => {
+                                self.failed = Some(panic_error(panic_message(p)));
+                                plan::UNIT_DONE
+                            }
+                        }
+                    };
+                    let mut no_misses = NoMisses;
+                    let next = self.machine.attempt(&mut unit_p, &mut no_misses).map_err(Error::from)?;
+                    if !matches!(next, plan::Next::Done) {
+                        return Ok(next);
+                    }
+                    if let Some(e) = self.failed.take() {
+                        return Err(e);
+                    }
+                    let pst = self.machine.stats().clone();
+                    self.stats.requests += pst.requests;
+                    self.stats.page_rounds.push(pst.rounds);
+                    self.stats.page_requests.push(pst.requests);
+                    self.machine = plan::Machine::new(&self.pcfg);
+                    self.phase = Phase::Pages(i + 1);
+                }
+                Phase::Figures => {
+                    let (idx, len) = (self.idx, self.len);
+                    let mut unit_f = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
+                        let (base, pend) = match (&self.outcome, &self.fig_pend) {
+                            (Outcome::Built(b), Some(p)) => (&b.arenas, p),
+                            _ => {
+                                self.failed = Some(Error::Internal("the figures unit has no Model".to_string()));
+                                return plan::UNIT_DONE;
+                            }
+                        };
+                        let opts = &self.opts;
+                        let r = catch_unwind(AssertUnwindSafe(|| {
+                            let mut t = base.clone();
+                            let mut p = pend.clone();
+                            asset_stage_figures(&mut t, &mut p, opts, idx as i32, len as i32, answers, rq, bms);
+                            t
+                        }));
+                        match r {
+                            Ok(t) => {
+                                if cells_len(rq) > 0 {
+                                    plan::UNIT_REQUESTS
+                                } else {
+                                    self.fig_done = Some(t);
+                                    plan::UNIT_DONE
+                                }
+                            }
+                            Err(p) => {
+                                self.failed = Some(panic_error(panic_message(p)));
+                                plan::UNIT_DONE
+                            }
+                        }
+                    };
+                    let mut no_misses = NoMisses;
+                    let next = self.machine.attempt(&mut unit_f, &mut no_misses).map_err(Error::from)?;
+                    if !matches!(next, plan::Next::Done) {
+                        return Ok(next);
+                    }
+                    if let Some(e) = self.failed.take() {
+                        return Err(e);
+                    }
+                    let fst = self.machine.stats().clone();
+                    self.stats.requests += fst.requests;
+                    self.machine = plan::Machine::new(&self.pcfg);
+                    self.fig_pend = None;
+                    match (self.fig_done.take(), &mut self.outcome) {
+                        (Some(a), Outcome::Built(b)) => b.arenas = a,
+                        _ => return Err(Error::Internal("the figures unit finished with no Model".to_string())),
+                    }
+                    if let Outcome::Built(b) = &mut self.outcome {
+                        if let Some(e) = seal_arenas(&mut b.arenas, &self.opts) {
+                            return Err(e);
+                        }
+                    }
+                    self.phase = Phase::Finished;
+                }
+                Phase::Finished => return Ok(plan::Next::Done),
+            }
+        }
+    }
+
+    // The end: the Model (or the intake) the units built, and what the loop did.
+    fn finish(mut self) -> Result<(Outcome, RunStats), Error> {
+        self.stats.source_reads = self.cache.as_ref().map(|c| c.reads()).unwrap_or(0);
+        self.stats.bytes_fetched = self.cache.as_ref().map(|c| c.bytes_read()).unwrap_or(0);
+        match self.outcome {
             Outcome::Failed(e) => Err(e),
             Outcome::None => Err(Error::Internal("the unit finished with nothing".to_string())),
-            o => Ok((o, stats)),
+            o => Ok((o, self.stats)),
+        }
+    }
+
+    // The Model of a finished `step` loop of a conversion.
+    pub fn into_model(self) -> Result<(Model, RunStats), Error> {
+        match self.finish()? {
+            (Outcome::Built(b), stats) => Ok((Model { a: Mutex::new(b.arenas), evidence: b.evidence, intake: b.intake }, stats)),
+            _ => Err(Error::Internal("the unit finished with no Model".to_string())),
+        }
+    }
+
+    // The stage-0 answer of a finished `step` loop of an intake.
+    pub fn into_intake(self) -> Result<(Intake, RunStats), Error> {
+        match self.finish()? {
+            (Outcome::Intake(x), stats) => Ok((x, stats)),
+            _ => Err(Error::Internal("intake gave no intake".to_string())),
         }
     }
 }
@@ -2309,11 +2643,16 @@ impl<'a> Asset<'a> {
             out
         })
     }
+    // The encoded size in bytes (`bytes().len()` without the copy); the browser binding's (`host/wasm`), so unused natively.
+    #[allow(dead_code)]
+    pub(crate) fn len(&self) -> usize {
+        self.m.with(|a| asset_blen(&mut a.assets, self.id)) as usize
+    }
     // The encoded bytes (a copy: the Model's arenas sit behind a lock).
     pub fn bytes(&self) -> Vec<u8> {
         self.m.with(|a| {
             let (s, n) = (asset_bstart(&mut a.assets, self.id), asset_blen(&mut a.assets, self.id));
-            (s..s + n).map(|i| port::buf_at(&mut a.abytes, i) as u8).collect()
+            a.abytes.0[s as usize..(s + n) as usize].to_vec()
         })
     }
 }

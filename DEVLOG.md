@@ -3385,7 +3385,9 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
 
 - [ ] P9.1 — Java host (ports, Engine, Tesseract binding, pdfium binding).
 - [ ] P9.2 — C# host.
-- [ ] P9.3 — WASM binding, JS SDK, tesseract.js through plan/fulfil.
+- [x] P9.3 — WASM binding, JS SDK, tesseract.js through plan/fulfil. **Done**
+  (D356-D361; what was built, the toolchain, each "done when" point with its
+  numbers and the departures are after the brief).
   Inputs (D058, SPEC §13.1): JS byte sources `{size, read(off, len)}` with
   adapters for `ArrayBuffer`/`Uint8Array`, `Blob`/`File`, URL (`fetch` +
   `Range`, validator pinned, `source-changed` on a change) and
@@ -3401,6 +3403,109 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   headless browser, and the peak JS heap for a document at the 32 MiB
   `assets-bytes` default is measured in `inline` and `external` modes and written
   here.
+  **Built.** `host/wasm/src/wasm.rs`: the Rust host built for
+  `wasm32-unknown-unknown` with a C ABI and **no imports at all**
+  (`WebAssembly.Module.imports` is `[]`; no wasm-bindgen). `emon_step` runs kin
+  until it needs bytes or requests and says which; the JS side awaits and steps
+  again (D356). For that the engine's loop became a machine: `plan::Machine`
+  (one attempt: `Fetch`, `Requests` or `Done`) under `run_bms`, and
+  `engine::Run` (document pass, asset unit, one unit per page, finish; `step`)
+  under the native `run_input_bounded`, which is now the synchronous driver of
+  a `Run`; `ChunkCache::pushed` is the cache an embedder fills. Nothing native
+  moved: `bb identity` (566 inputs × 9 arms and the record/replay trip across
+  Rust and Go), `bb slice`, `bb ocr` and the Engine's native tests are
+  byte-identical across the change, and three native tests (27 in all) hold
+  the step-wise run to the in-memory one at 512 B, 4 KiB and 64 KiB chunks.
+  `host/js/` (`@3sln/emon`, no dependencies): `Emon.load`, `convert`, `intake`;
+  `Model` (`json`, `object`, `html`, `htmlWithBlobURLs`, `evidence`, `assets`,
+  `transcript`, `dispose`); `Asset` (`bytes()`, `blob()`, `size`); the sources
+  of D357; `ports.ocr`, and `@3sln/emon/tesseract` (D359). `test/driver/wasm/`:
+  the headless-Chrome harness (a server with `Range` and a byte counter, a
+  puppeteer-core page pool, `run.mjs` for jobs in and answers out,
+  `check.mjs` for `bb wasm`); `kin/scripts/emon-wasm-build` and `emon-wasm-run`
+  (exit 3, `SKIP wasm -- why`, when the toolchain is missing; `EMON_SKIP_WASM=1`
+  leaves the arm out), a browser arm in `bb identity`, `bb slice` and `bb ocr`,
+  and `bb wasm` (not a gate: D361).
+  **Toolchain** (pinned; nothing else was installed): rustup `nightly-2026-09-16`
+  (rustc 1.100.0-nightly 215a8af4b) with `rust-src` and the `wasm32-unknown-unknown`
+  target (`rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown`),
+  built with `-Zbuild-std=std,panic_unwind -Cpanic=unwind
+  -Ctarget-feature=+exception-handling` (WebAssembly exnref exceptions: Chrome
+  137, Firefox 131, Safari 18.4; Node v24.6.0 needs `--experimental-wasm-exnref`
+  to instantiate it) and, on macOS, `DYLD_FALLBACK_LIBRARY_PATH=<sysroot>/lib` because that
+  nightly's `rust-lld` finds `libLLVM` through a wrong rpath; the module is 5.0 MB.
+  Node v24.6.0; Google Chrome 154.0.8037.98 (headless, driven by puppeteer-core
+  25.12.0); tesseract.js 7.0.0 with tesseract.js-core 7.0.0 (its Tesseract
+  5.1.0-288-g2a9c1) and `@tesseract.js-data/eng` 1.0.0 (4.0.0_best_int); the
+  JS packages are `host/js/package.json` and its lock file (`npm ci --prefix host/js`).
+  **Done when, point by point.**
+  (1) *The slice fixtures give identical JSON from each adapter in a headless
+  browser*: `bb slice`'s browser arm gives the 7 fixtures' pretty JSON and both
+  HTMLs byte for byte through nine adapters (an `ArrayBuffer`, a `Uint8Array`
+  view with an offset, a `Blob`, a `File`, a URL read by `Range`, a spooled
+  `ReadableStream`, any `{size, read}`, an `ArrayBuffer` read by range at 512 B
+  and a `{size, read}` whose every read is a promise, 512 B chunks), the async
+  two missing and re-running (3 attempts, 2 fetch rounds, as Rust); and
+  `bb identity`'s browser arm gives all 566 corpus inputs through five
+  adapters (`ArrayBuffer`, `Blob`, URL, stream, the 512 B async source) the
+  reference bundle (JSON compact and pretty, HTML default and full, evidence,
+  intake), exit code and stderr, the browser's own recording the transcript
+  Rust writes (byte for byte) and its replay of Rust's the reference bundle
+  (3,886 browser conversions, 171 s on a machine under load).
+  (2) *A URL fixture fetches measurably less than its length*: a one-page PDF
+  of 3,146,670 bytes that is mostly a 3 MiB picture is converted from a URL: the
+  server sent **66,479 bytes (2.1 %) in 3 range requests** (the probe, the
+  first and the last chunk: the picture is never read; 0 fetch rounds); the
+  same document as a `Blob` read by range in 4 KiB chunks reads 5,038 bytes in 2
+  reads. The Model is the in-memory one. (3) *The wasm build links no filesystem
+  import*: the module has no imports at all (so no filesystem, clock or
+  network), checked in the browser by `bb wasm`, and `bb embedders` holds
+  `wasm.rs` and the JS SDK to the library's no-filesystem rule (D058).
+  (4) *Assets*: `asset.bytes()` and `asset.blob()` agree in bytes, size and
+  media type, `external` is the browser form (`htmlWithBlobURLs`: the HTML
+  names each asset by an object URL of its Blob, checked to serve the asset's
+  bytes); `bb identity`'s browser arm runs the 90 asset documents of P3.13
+  (from their committed transcripts where a codec image needs one) through
+  the five adapters, to identical JSON, HTML in the default, full, external
+  and omit modes and every asset file (hex), and the same record and replay
+  (576 conversions, 15 s). (5) *The heap*, measured by
+  `bb wasm` on a 36.0 MiB document of 12 pictures whose assets fill **30 MiB
+  of the 32 MiB `assets-bytes` default** (ten assets; the eleventh would not
+  fit): the module's linear memory is 213 MiB; above the page's 36.8 MiB
+  baseline the **JS heap peaks at 40.2 MiB in `inline`** (the HTML, 40 MiB of
+  one-byte string of `data:` URIs) **and at 0.2 MiB in `external`** (the HTML
+  is 2.4 KB; the ten assets are Blobs made from linear memory, outside the
+  heap), or 30.2 MiB in `external` if every asset is also copied out with
+  `bytes()`. *The figures are samples* of `performance.memory.usedJSHeapSize`
+  (precise memory info on) after a full collection and after the conversion and
+  each output: the wasm calls are synchronous, so nothing can sample inside
+  one, and the collector may run between samples: a lower bound of the true
+  peak, the order of magnitude and the inline/external difference being what
+  they say. SPEC 10.11's "about 150 MB of peak heap" was an estimate made before
+  anything was measured; it is replaced by these (D360).
+  (6) *tesseract.js through plan/fulfil* (not in the brief's list, the title's
+  half): `bb wasm` converts the scan `test/corpus/synth/scan/h-keyword.pdf` in
+  the browser with tesseract.js as the `ocr` port: 199 words, **CER 0.0180**
+  against the gold (the native Tesseract's 0.0205 on its own render; another
+  build and bitmap), the Model says scanned and OCR'd; the transcript the
+  browser recorded (naming `tesseract.js`) **replays natively on the Rust host to
+  the browser's own bundle byte for byte**, and the browser replays the native
+  Tesseract's committed transcript (`bb ocr` also holds the five committed
+  scans, a changed request's `transcript-miss` and the no-engine conversion in
+  the browser to the Rust Engine's bundles).
+  **Departures.** (a) The brief names "P3.13/P8.5 asset fixtures": P8.5
+  (`figures`: crop, render) does not exist yet, so the browser runs P3.13's.
+  (b) Rendering is not built in the browser (pdfium's WebAssembly build: SPEC
+  7.3, D248); `render` and `crop` are answered `unsupported` (D358), so what
+  only a render gives degrades, and nothing in the browser asks one of a
+  born-digital PDF for its text. (c) tesseract.js cannot report some of what
+  native Tesseract does (D359): a block's orientation, a word's language and
+  flags, a symbol's alternatives, OSD; they are answered as documented. (d)
+  Several inputs as one document are not wired in the engine, natively either:
+  `convert` takes one input, `intake` any number. (e) A page that converts in
+  the browser blocks its thread while a unit runs (the engine's attempts are
+  synchronous Rust): the SDK is worker-safe (no DOM), and a Worker is the
+  embedder's choice. (f) `bb wasm`, the extra checks, is not a gate (D361).
 - [ ] P9.4 — C binding; babashka pod.
 - [ ] P9.5 — `bb identity` over all four hosts and three bindings.
 - [x] ~~P9.6 — Ranged inputs, optional~~ — **promoted into the main design**
@@ -9341,4 +9446,40 @@ and CER rose 0.0858 to 0.1046; that was a line made of cells of confidence well 
 **Decision**: (1) `kin/scripts/asset-fig-fixtures` writes `test/assets/fig/fig-vector-chart.pdf` (a bar chart and a box-and-arrow diagram), `fig-logo-pages.pdf` (a two-path logo in one place on three pages) and `fig-over-image.pdf` (five pictures of one 8 x 8 image: alone, under a rectangle, under text, rotated 10 degrees, clipped by a circle), byte for byte (`--check`), with Helvetica from the standard 14 and raw RGB samples. (2) `kin/scripts/asset-record` (`bb asset-fig-record`, live, not a gate) records them and `figures-charts`, `figures-logo-screenshot`, `columns-span-figure` with the pinned pdfium (fetched: `bb pdfium-fetch`) into `test/asset/figures/<stem>/` (a transcript of `crop` entries and their PNGs, 120 KB in all) and writes `DIGESTS.edn` (the SHA-256 of the JSON, the HTML in three modes and every asset file of the live run). (3) `bb asset` section 7 replays them on both hosts with no renderer: identical JSON, HTML and asset files, equal to the digests; each rendered asset is a crop of the computed rectangle (restated in the script), the very pixels of the transcript's bitmap (`magick compare -metric AE` 0), and within a mean absolute difference of 8 of `pdftoppm -r d -x -y -W -H` (worst 6.90 over 15 crops: two rasterisers); the logo is one asset with three uses; of the five pictures one is its own pixels and four are rendered; with no renderer the figures say `render`, the same on both hosts; the rules of a table (ruled, zebra, header-fill, bank statement) make no figure. (4) `bb identity` has a third pass at `figures` (the same nine arms, async included, and the record/replay trip across hosts, over 18 documents). (5) `kin/assetfigtest.kin` (13 laws on four targets): the rectangle, its step-down and its limits; the protocol (the same requests every time, none once answered); a raster figure's request and its pixels byte for byte; a render's size, dpi, `text-overlap`; `render` and `too-large`; which source each candidate gets; the caption-only figure; one asset for equal pixels; vector clusters, the `grg` hook and the table rule. (6) Rust and Go engine tests (`at_figures_a_vector_figure_is_a_crop_of_the_page_and_replays_without_a_renderer`, `TestAtFiguresAVectorFigureIsACropOfThePageAndReplaysWithoutARenderer`): a Letter page's fake renderer whose pixels are a function of (x, y), the asset equal to the rectangle's pixels, the page rendered once for its two crops, the replay without a renderer identical, the default run unchanged. The pdfium of the pin was fetched into this worktree's `.cache`; nothing under `corpus/` was used.
 **Why**: the gate compares the committed transcript, not a re-render (D008, D127); the second rasteriser is a sanity bound, as D127 says.
 **Alternatives**: committing Chrome-made documents (no browser); a MAD bound tighter than 8 (worst was 6.9: text edges differ between rasterisers).
+- [ ] **Signed off** (maintainer)
+
+### D356 — The browser's host is the Rust host built for wasm32 with a C ABI and no imports; the JS SDK owns the loop; the engine's loop is a step machine (P9.3; SPEC 7.3, 13.1; D008, D058, D089)
+**Decision**: (1) *Which host*: the Rust host (`host/rust`) compiled for `wasm32-unknown-unknown`, with `host/wasm/src/wasm.rs` assembled in beside it by `kin/scripts/emon-wasm-build` (`#[cfg(target_arch = "wasm32")] pub mod wasm`), exporting plain `extern "C"` functions over integers and byte ranges of linear memory (`emon_open`, `emon_step`, `emon_provide`, `emon_answer*`, `emon_finish`, `emon_model_*`, ...). **The module has no imports**: it needs nothing of the page, and `WebAssembly.Module.imports` says `[]`. No wasm-bindgen or wasm-pack. (2) *Who owns the loop*: JavaScript cannot block on a promise, so the engine never calls out. `emon_step` runs kin until it needs something and returns what: `0` done, `1` need bytes (the ranges the `Src` missed: pairs of offset and length), `2` requests for the host (records), a negative status an error (`name\nDisplay`, the names of `Error::name`). The JS loop (`host/js/src/index.js`) awaits the reads, `emon_provide`s them and steps again; the engine re-runs the unit that missed from scratch inside the step (D058), so the bytes it ends with are the bytes it touched. (3) *The loop as a machine*: for that the loop that was one function became two pieces, with nothing native changed: `plan::Machine` (`attempt` runs one attempt of a unit and answers `Fetch(bytes requests)`, `Requests(requests, bitmaps)` or `Done`; `answered` takes the answers and gives the transcript entries) and `engine::Run` (the document pass, the asset unit, one unit per page, the document unit; `step`, `answered`, `into_model`, `into_intake`). `plan::run_bms` and the native `run_input_bounded` are now their synchronous drivers, so the rules (an attempt that missed is discarded whole, ids, rounds, `max-rounds`, `fetch-rounds`, a failed source winning over the miss it caused) are written once for the native hosts and the browser. `ChunkCache::pushed(len, chunk)` is a cache nothing can read from: it only misses, says what (`plan_fetch`, `missing`, `prefetch_ranges`), and takes the bytes pushed in (`provide`: whole chunks only); `fail` records a read that failed or came up short (`io`, `source-changed`). (4) *The toolchain*: a pinned nightly (`nightly-2026-09-16`) with `rust-src` and the wasm32 target, built with `-Zbuild-std=std,panic_unwind -Cpanic=unwind -Ctarget-feature=+exception-handling -Clink-arg=-zstack-size=16777216`: **the engine needs unwinding**, because kin's named limit breaches are panics (`limit_breach`) and an attempt that missed may panic on the zeros a missed read answered, which D058 says is a miss and never reported; both are `catch_unwind` in `Run`. Stable `wasm32-unknown-unknown` aborts on a panic (a trap that ends the module), so stable is not enough. The module then needs exnref exception handling (a recent browser; Node with `--experimental-wasm-exnref`). (5) *Identity*: `bb identity`'s browser arm, `bb slice`, `bb ocr` and `bb wasm` hold the browser to the native hosts' bytes (D361).
+**Why**: the browser had to run the same kin code, not a port, and `Src` plus plan/fulfil were designed for exactly this host (SPEC 7.3: "the host owns the loop"); a step machine puts the loop where a promise can be awaited without touching kin, and the native drivers keep their meaning by being the same machine driven synchronously. No imports because nothing in the engine needs the page: the bytes come in by `emon_provide`, the answers by `emon_answer`, and the output is read out of memory.
+**Alternatives considered**: wasm-bindgen with `async fn` and `wasm-bindgen-futures` (a second toolchain to pin and a loop inside Rust awaiting JS: the opposite of D058's "the JS side owns the loop"; every Rust async frame would also be a place `catch_unwind` must hold); stable Rust with `panic=abort` (a limit breach or a panic on a missed read ends the module; a trap would have to be survived by re-instantiating, losing the chunk cache and the Model); re-running the whole conversion from scratch after each await, with the cache kept (quadratic in pages for a document that asks for OCR, and the page units' answers would be recomputed); a Worker that blocks on `Atomics.wait` for each read (needs cross-origin isolation and makes the engine's reads synchronous, which D058 revised rejected); making the loop an `async` Rust function (the same cost as the first).
+- [ ] **Signed off** (maintainer)
+
+### D357 — The JS byte sources: `{size, read(offset, length)}`; a resident source is handed over whole; a URL pins its validator (P9.3; SPEC 13.1; D058)
+**Decision**: a source is `{ size, read(offset, length) -> Promise<Uint8Array> }` and the engine reads a chunk at a time (64 KiB; `chunk` option), the ranges that `plan_fetch` coalesces, several reads in flight at once (8). Adapters (`host/js/src/sources.js`): `bytesSource(ArrayBuffer | Uint8Array)` (a view's offset is honoured); `blobSource(Blob | File)` (`blob.slice(a, b).arrayBuffer()`); `urlSource(url)` (`fetch` with `Range`; the first request is `bytes=0-0`, which gives the size (`Content-Range`) and the **validator** (a strong `ETag`, else `Last-Modified`), every later one carries it as `If-Range`, and every answer is checked: a 200 (the document changed, or ranges stopped being honoured), a changed length, a different `ETag` or `Last-Modified` is `SourceChangedError` (`source-changed`); a server that answers the probe with a 200 has no ranges, so its body, read once, is a spooled source); `streamSource(ReadableStream, {max})` (spooled into memory, at most `max` bytes, which `convert` takes from `limits['input-bytes']` or 1 GiB like the native drivers' spool: a longer stream is `input-bytes`, refused while it is read); and any object with that shape. A `read` that rejects is `io` (its message), one with `code === 'source-changed'` or a `SourceChangedError` is `source-changed`, one that answers a different number of bytes than asked is `source-changed`. **A resident source** (`bytesSource` unless `{lazy: true}`) carries `bytes`, and the SDK hands the engine all of it with one `emon_provide` before the first step (in 4 MiB pieces, so a big buffer is never doubled in memory): the bytes are already in the page, so reading them is not a read, and the engine then never misses; `lazy` reads even a buffer by range, which the 512-byte and `lazy` adapters of the arms use to exercise the miss and re-run path from memory. There is **no whole-file read** of a `Blob`, a `File` or a URL.
+**Why**: SPEC 13.1's table, as written; the pinned validator is what makes a source that moves under a conversion an error and not a Model made of two documents; a resident buffer reading by range would re-run the document pass for nothing.
+**Alternatives**: always read by range (correct, but a 50 MB `ArrayBuffer` would be 800 round trips of re-run work); a `Blob` read whole (the maintainer's "no whole-file read"); `If-Match` instead of `If-Range` (a precondition failure is a 412 with no body, which says the same thing with one more status to handle).
+- [ ] **Signed off** (maintainer)
+
+### D358 — What the browser fulfils and what it answers `unsupported`: `ocr` is the host's, `decode` and `decode-img` the module's, `render` and `crop` degrade (P9.3; SPEC 7.3; D008, D038, D199, D211)
+**Decision**: of the requests kin makes, (1) `decode` (`ImageDecode`: PNG, JPEG, TIFF) and `decode-img` (a PDF image's DCT and CCITT) are answered **inside the module**, by the same Rust code the native hosts run, from the bytes the host provided: a request that names a span of the input first makes the session ask for the chunks it covers (`emon_step` answers `need bytes` for them and keeps the round pending), then answers; JPX and JBIG2 have no codec in the browser and are answered `unsupported` (the image is `noasset: "codec"`) unless the run replays a transcript that has them. (2) `ocr` goes to the host: `ports.ocr(request)` with the bitmap the request names as a lossless PNG (`request.bitmap()`), the page-segmentation mode, the flags, the region and the languages; its result (`host/js/src/ocr.js` documents it) is written as the `emon.ocr` record by the kin builders (`emon_answer_ocr`), so the layout exists once. `null`, or no port, is `unsupported`; a rejection is `failed`. (3) **`render` and `crop` are answered `unsupported`**, the way an Engine with no Renderer answers (D199), because pdfium's WebAssembly build (SPEC 7.3, D248) is not built here and a headless browser has nothing else that draws a PDF page the way the native hosts' renders are made. That is SPEC 7.3's degrade rule, not an error: a page that needed a render then has no text from it, the Model says so as it does natively, and nothing is guessed (D038). What this costs: a **scanned PDF page** is still read, because kin reads it through `decode` of the page's own image (D212), not a render; a **born-digital page** needs no render for its text; what only a render could give (the hidden `ocr-born-digital` fusion's page pixels, a seal's or a figure's crop at `assets=figures`, P8.5) is not available in the browser until the pdfium build is. (4) OSD (flag bit 2) is not run by tesseract.js here; the answer carries none, as for an engine that does not report it (D359). (5) **Transcripts cross hosts**: a session replays a transcript (`transcript` option: a Map of file names to bytes) or records one (`record: true`), by the same files the native hosts write and read, so a transcript recorded natively replays in the browser and the reverse; `bb identity`, `bb ocr` and `bb wasm` hold both directions, and a replay with entries it never asked for is `transcript-bad` as natively.
+**Why**: the SPEC's rule for a host with no engine is "an answer, and a page then has no text"; erroring would turn a missing optional capability into a failed conversion, and a placeholder render would put invented pixels into evidence. The browser's `render` is a port to build when pdfium's WebAssembly build is, and nothing in kin or in a transcript changes when it is.
+**Alternatives**: an error `render-unavailable` (a page-level failure for every OCR'd born-digital page of a fusion run); rendering through a `<canvas>` and PDF.js (a second PDF reader whose pixels no native host agrees with, and D008's identity would have no meaning for them); the module reading the whole input before any decode (a whole-file read).
+- [ ] **Signed off** (maintainer)
+
+### D359 — tesseract.js is the browser's `ocr` port, handed in by the embedder; what it reports and what it cannot (P9.3; SPEC 7.3; D211-D214)
+**Decision**: `@3sln/emon/tesseract` (`host/js/src/tesseract.js`) exports `tesseractPort({ createWorker, languages, oem, workerOptions, workers })`: the embedder imports tesseract.js and passes its `createWorker`, so the engine, its core WebAssembly and its language data (the embedder's to host or cache) stay out of the library and nothing is fetched from a CDN by emon. A worker per language set is made on first use (`lstm_choice_mode` 2, the native adapter's setting) and each request sets the page-segmentation mode, the dpi and the rectangle; `blocks` output is mapped to the `ocr.js` result: blocks, paragraphs (their index), lines (box, baseline, the block type through the native adapter's table), words (box, confidence times ten, trimmed text), symbols (box, confidence, text; dropped for a word whose symbols do not spell it, as the native adapter notes). **What tesseract.js's JSON does not carry** and is answered as documented: a block's orientation, writing direction and textline order (page up, left to right, top to bottom), the page's deskew (0), OSD (none), a word's language (the request's first), dictionary and numeric flags (off), font attributes (none), point size (-1), a symbol's alternatives (none: its JSON has no `choices` per symbol), a line's x-height, ascenders and descenders (-1: kin measures them from the symbols' boxes, as it does for the native engine, D213), and the engine's thresholded image (`has_binary` 0). **Measured** (`bb wasm`): the scan `h-keyword.pdf` reads as 199 words at CER 0.0180 against the gold, the native Tesseract's 0.0205 on its own bitmap; the transcript the browser records names `tesseract.js` in `:producer` and replays on the native Rust host to the browser's own bundle, byte for byte.
+**Why**: the port is the SPEC's (`Ocr` through plan/fulfil), and what a port cannot give is an absence kin already handles (the same fields are -1 or off natively when the C API does not export them); the embedder, not emon, decides where the engine and its data come from.
+**Alternatives**: bundling tesseract.js and its data in the SDK (tens of MB in the library, and a CDN default is a network client, which SPEC §1 refuses); guessing the missing fields (D038).
+- [ ] **Signed off** (maintainer)
+
+### D360 — Assets in JavaScript: `asset.bytes()` and `asset.blob()`, `external` as the browser form, and the memory measured (P9.3; SPEC 10.11; D117)
+**Decision**: `model.assets` lists `Asset { name, type, size, bytes(), blob() }` in admission order (`a0.jpg`, `a1.png`, ...); `bytes()` is a `Uint8Array` copy out of linear memory, `blob()` a `Blob` of the asset's media type made straight from the module's memory (the page's heap holds no copy); `model.html({ assets: 'inline' | 'external' | 'omit', assetPrefix })` is SPEC 5's; **`external` is documented as the browser form**, and `model.htmlWithBlobURLs()` does what a page then does by hand: the HTML names each asset by an object URL of its Blob (`revoke()` frees them). Outputs cross as the module's output buffer: a String's own buffer is the output (no copy), the JS side decodes it once and frees it. **Measured** at the 32 MiB `assets-bytes` default (D361's `bb wasm`; Chrome 154, headless): a 36.0 MiB document of 12 pictures whose ten admitted assets add up to 30 MiB (the eleventh would pass 32 MiB): module memory 213 MiB (it never shrinks); JS heap above its 36.8 MiB baseline: **inline 40.2 MiB** (one 40 MiB one-byte string), **external 0.2 MiB** with `blob()`, 30.2 MiB with `bytes()` copies too. SPEC 10.11's estimate (150 MB of peak heap, assuming a UTF-16 string) is replaced by these.
+**Why**: the Model's bytes are already in kin's `abytes`; a browser wants a file-like thing to hand to the DOM or a zip writer, and a `Blob` is one the page's heap does not hold.
+**Alternatives**: a `bytes()` that returns a view of linear memory (invalidated by the next call that grows it: a footgun); `inline` as the default form (the measurement above is why it is not recommended past a few assets).
+- [ ] **Signed off** (maintainer)
+
+### D361 — The browser arm of the gates and `bb wasm`: skip loudly, one browser, the module named once, `bb wasm` is not a gate (P9.3; D520-D525's shape)
+**Decision**: `kin/scripts/emon-wasm-build` builds the module and exits 3 with `SKIP wasm -- why` on stderr when the toolchain is missing (no `rustup`, the pinned nightly, its wasm32 target or its `rust-src`); `kin/scripts/emon-wasm-run` adds what running it needs (Node 22 or newer, a Chrome or Chromium by `EMON_CHROME` or the usual places, the JS devDependencies installed with `npm ci --prefix host/js`) and exits 3 the same way; `EMON_SKIP_WASM=1` leaves the arm out on purpose. `bb identity`, `bb slice` and `bb ocr` each run `emon-wasm-run --check` once, print the skip and leave the arm out, or run their jobs through `test/driver/wasm/run.mjs` (a list of jobs in, one answer file each out, pages of one headless Chrome in parallel, `EMON_WASM_MODULE` naming the module so a batch does not rebuild). The identity arm compares the browser's bundle, exit code and stderr with the Rust reference's over five adapters (`--full`: nine), in batches of 60 inputs whose answer files are deleted as they are compared; `bb slice` holds the goldens; `bb ocr` the committed scans. `bb wasm` (`kin/scripts/wasm`, `test/driver/wasm/check.mjs`) is the checks the arms cannot say (no imports, the URL fetch measurement, the source faults, assets as Blobs, tesseract.js, the heap): **not a gate**, because it needs a live engine's files and a browser and measures; it is in `kin/scripts/gates`' `not_gates`. The harness runs Chrome with `--disable-background-timer-throttling` and its siblings (a page that is not in front would otherwise have its timers throttled to one a second, which the 512-byte async source's reads would feel as minutes), opens pages one at a time, and ends the runner with `process.exit` (an open keep-alive connection made `bb`'s `process` wait three minutes for it). The JS packages are puppeteer-core 25.12.0, tesseract.js 7.0.0 and `@tesseract.js-data/eng` 1.0.0, exact, and `host/js/package-lock.json` is committed (`node_modules/` is ignored).
+**Why**: the Java and C# arms' rule (a missing toolchain is a loud skip, never a failure and never a silent pass), one module build per gate run, and answers on disk so a 4,000-conversion pass does not hold them in a process.
+**Alternatives**: a persistent driver process spoken to over a pipe (more moving parts than files); wasm in the gates list with an `ok` line printed on skip (a gate that checked nothing says it did).
 - [ ] **Signed off** (maintainer)

@@ -12,7 +12,9 @@
 //   * several inputs as one document are refused, not approximated; `assets` (P3.13) is opt-in, a JPEG passes through, a
 //     Flate image is a PNG, a codec image says why not, and a 512-byte async source gives the same files;
 //   * record and replay; the walkable Model; and that the library names no filesystem;
-//   * the Renderer port (P6.2, D127): a fake engine through `RenderFulfiller` and through the Engine's Config.
+//   * the Renderer port (P6.2, D127): a fake engine through `RenderFulfiller` and through the Engine's Config;
+//   * the step-wise `Run` over a pushed cache (P9.3, D356): what the browser build does, an embedder that owns the loop, gives the
+//     in-memory run's Model at every chunk size, and a failed read it reports ends the run with the source's error.
 use emon::{Assets, ByteSource, Config, Engine, Error, HtmlOptions, Input, JsonOptions, Kind, Ocr, OcrPolicy, OcrPort, Options, SeekSource};
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -801,4 +803,90 @@ fn a_transcript_of_decoded_images_replays_to_the_same_files_through_an_async_sou
         assert_eq!(json(&asy), json(&live), "{}", name);
         assert_eq!(asy.asset_files(), live.asset_files(), "{}", name);
     }
+}
+
+// THE STEP-WISE RUN (P9.3, D356): an embedder that owns the loop (the browser build: a JS `read` is a promise) steps the engine and
+// pushes in the bytes it missed. What `emon_step` does in the wasm module, here without the module.
+fn drive_pushed(bytes: &[u8], chunk: usize, o: &Options) -> Result<(emon::Model, emon::RunStats, i32), Error> {
+    use emon::engine::ChunkCache;
+    use emon::plan::Next;
+    let engine = Engine::new(Config::default());
+    let cache = ChunkCache::pushed(bytes.len(), chunk);
+    let mut run = engine.start_pushed(0, cache.clone(), None, o, false)?;
+    let give = |off: i32, len: i32| cache.provide(off as usize, &bytes[off as usize..(off + len) as usize]);
+    for r in cache.prefetch_ranges(0) {
+        give(r.offset, r.length);
+    }
+    let mut rounds = 0;
+    loop {
+        match run.step()? {
+            Next::Done => break,
+            Next::Fetch(reqs) => {
+                rounds += 1;
+                for r in reqs {
+                    give(r.arg(1), r.arg(2));
+                }
+            }
+            Next::Requests(..) => panic!("a born-digital PDF with no assets asks for nothing"),
+        }
+    }
+    let (m, st) = run.into_model()?;
+    Ok((m, st, rounds))
+}
+
+#[test]
+fn a_run_stepped_by_its_embedder_over_a_pushed_cache_is_the_in_memory_run() {
+    for name in SLICE {
+        let bytes = synth(name);
+        let o = Options::default();
+        let mem = Engine::new(Config::default()).convert(Input::bytes(bytes.clone()), &o).unwrap();
+        for chunk in [512usize, 4096, 65536] {
+            let (m, st, rounds) = drive_pushed(&bytes, chunk, &o).unwrap();
+            assert_eq!(json(&m), json(&mem), "{} at chunk {}: JSON", name, chunk);
+            assert_eq!(m.to_html(&HtmlOptions::default()), mem.to_html(&HtmlOptions::default()), "{} at chunk {}: HTML", name, chunk);
+            assert_eq!(st.fetch_rounds, rounds, "{}: the rounds the embedder served are the loop's", name);
+            assert!(st.bytes_fetched <= bytes.len() as u64, "{}: never more than the input", name);
+            if chunk == 512 {
+                assert!(rounds >= 1 && st.attempts == rounds + 1, "{}: at 512 bytes it missed and re-ran: {:?}", name, st);
+            }
+        }
+    }
+}
+
+#[test]
+fn a_pushed_cache_whose_embedder_reports_a_failed_read_ends_the_run_with_the_source_error() {
+    use emon::engine::ChunkCache;
+    use emon::plan::Next;
+    let bytes = synth("h-plain");
+    for (short, name) in [(true, "source-changed"), (false, "io")] {
+        let engine = Engine::new(Config::default());
+        let cache = ChunkCache::pushed(bytes.len(), 512);
+        let mut run = engine.start_pushed(0, cache.clone(), None, &Options::default(), false).unwrap();
+        // nothing was provided: the first attempt misses and asks
+        assert!(matches!(run.step().unwrap(), Next::Fetch(_)));
+        cache.fail(short, "the network went away");
+        let e = run.step().err().expect("the failure is the answer");
+        assert_eq!(e.name(), name);
+    }
+    // the input-bytes limit is checked against the length before a byte is provided
+    let engine = Engine::new(Config { limits: vec![(0, 100)], ..Config::default() });
+    let cache = ChunkCache::pushed(bytes.len(), 512);
+    assert_eq!(engine.start_pushed(0, cache, None, &Options::default(), false).err().map(|e| e.name()).as_deref(), Some("input-bytes"));
+}
+
+#[test]
+fn a_pushed_cache_says_what_it_misses_and_keeps_only_what_covers_a_whole_chunk() {
+    use emon::engine::ChunkCache;
+    let c = ChunkCache::pushed(1000, 256);
+    assert_eq!(c.prefetch_ranges(0).iter().map(|r| (r.offset, r.length)).collect::<Vec<_>>(), vec![(0, 256), (768, 232)]);
+    // bytes that do not cover a chunk whole leave it missing; whole chunks stay
+    c.provide(0, &[7u8; 100]);
+    assert_eq!(c.missing(0, 0, 1000).iter().map(|r| (r.offset, r.length)).collect::<Vec<_>>(), vec![(0, 1000)]);
+    c.provide(0, &[7u8; 512]);
+    assert_eq!(c.missing(0, 0, 1000).iter().map(|r| (r.offset, r.length)).collect::<Vec<_>>(), vec![(512, 488)]);
+    let mut b = [0u8; 600];
+    assert_eq!(c.read_at(0, &mut b).unwrap(), 512, "a read stops where the bytes stop");
+    assert!(c.read_at(600, &mut b).is_err(), "a read of a missing chunk is WouldBlock, never a guess");
+    c.provide(768, &[9u8; 232]);
+    assert_eq!(c.missing(0, 0, 1000).iter().map(|r| (r.offset, r.length)).collect::<Vec<_>>(), vec![(512, 256)]);
 }

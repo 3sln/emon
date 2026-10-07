@@ -21,6 +21,10 @@
 ;; same fixtures, goldens, async runs and errors, from the same driver flags; `bb identity` holds the two to
 ;; each other across the whole corpus.
 ;;
+;; AND IN THE BROWSER (P9.3, D356) when the WASM toolchain is there (section 6 below): the Rust host built for wasm32 and driven by the JS
+;; SDK in a headless Chrome, the fixtures through each of SPEC 13.1's byte-source adapters to the same goldens; without it the arm is left
+;; out, loudly.
+;;
 ;; Timings (ms, driver wall time per fixture, in memory) are printed: a baseline, not a target.
 ;; `--update` writes the HTML goldens from the driver (a development act; a person reviews the diff).
 (require '[babashka.fs :as fs]
@@ -177,6 +181,100 @@
     (check (and (zero? (:exit r)) (= (:out r) (:out p))) "--password=user-secret opens the locked file to the plain twin's Model"))
   (check (= 2 (:exit (drive "--nonsense" (pdf "h-plain")))) "an unknown flag is a usage error, exit 2")))
 
+;; --------------------------------------------------------------- 6. THE BROWSER (P9.3, D356)
+;;
+;; The Rust host built for wasm32 and driven by the JS SDK in a headless Chrome (`test/driver/wasm/`): the slice's fixtures through every
+;; byte-source adapter of SPEC 13.1 (an ArrayBuffer, a Uint8Array view, a Blob, a File, a URL read by `Range`, a spooled ReadableStream,
+;; any `{size, read}`, an ArrayBuffer read by range, and a `{size, read}` over 512-byte chunks that misses and re-runs) give the goldens'
+;; JSON and HTML, byte for byte; the named errors and the images through it. Without the toolchain
+;; (`kin/scripts/emon-wasm-run` exits 3: a nightly with rust-src, Node 22, Chrome, the JS devDependencies) the arm is left out, loudly.
+(def wasm
+  (let [r @(process {:out :string :err :string} "kin/scripts/emon-wasm-run" "--check")]
+    (case (:exit r)
+      0 (str/trim (:out r))
+      3 (do (println (str "  " (str/trim (:err r)) " (the wasm arm is left out)")) nil)
+      (do (println "  FAIL the wasm module did not build:\n" (:err r)) (System/exit 1)))))
+
+(defn sections
+  "A bundle's sections by name (`== json` ... `== intake`)."
+  [s]
+  (let [names ["json" "json-pretty" "html" "html-full" "evidence" "intake"]
+        marks (loop [ns names from 0 acc []]
+                (if (empty? ns)
+                  acc
+                  (let [m (str "== " (first ns) "\n")
+                        i (str/index-of s m from)]
+                    (recur (rest ns) (+ i (count m)) (conj acc [i (+ i (count m))])))))]
+    (into {} (map-indexed (fn [k [_ b]]
+                            [(nth names k) (subs s b (if-let [nxt (get marks (inc k))] (dec (first nxt)) (dec (count s))))])
+                          marks))))
+
+(when wasm
+  (binding [*label* "[wasm] "]
+    (let [adapters ["array" "u8" "blob" "file" "url" "stream" "custom" "lazy" "async512"]
+          pdf (fn [d] (str "test/corpus/synth/pdf/" d ".pdf"))
+          jobs (vec (concat
+                     (for [d docs a adapters] {:id (str d "-" a) :path (pdf d) :adapter a})
+                     [{:id "minimal" :path "test/pdf/minimal.pdf" :adapter "array"}
+                      {:id "locked" :path "test/pdf/p3/crypt-aes-128-user.pdf" :adapter "array"}
+                      {:id "wrongpw" :path "test/pdf/p3/crypt-aes-128-user.pdf" :adapter "array" :password "wrong"}
+                      {:id "rightpw" :path "test/pdf/p3/crypt-aes-128-user.pdf" :adapter "url" :password "user-secret"}
+                      {:id "plain" :path "test/pdf/p3/plain.pdf" :adapter "array"}
+                      {:id "pubsec" :path "test/pdf/p3/unsupported-pubsec.pdf" :adapter "array"}
+                      {:id "notpdf" :path "test/pdf/notpdf.pdf" :adapter "blob"}
+                      {:id "png" :path "test/image/png-rgb8.png" :adapter "blob"}
+                      {:id "tiff3" :path "test/image/tiff-multi3-g4.tif" :adapter "url"}
+                      {:id "tiffjpeg" :path "test/image/tiff-jpeg.tif" :adapter "array"}
+                      {:id "pngcut" :path "test/image/png-truncated.png" :adapter "array"}
+                      {:id "assets-none" :path (pdf "h-plain") :adapter "array"}
+                      {:id "assets-dct" :path "test/assets/dct-rgb.pdf" :adapter "array" :assets "images"}]))
+          base ".cache/slice-wasm"
+          outd (str base "/out")
+          jf (str base "/jobs.json")]
+      (fs/create-dirs base)
+      (fs/delete-tree outd)
+      (spit jf (json/generate-string jobs))
+      (let [r @(process {:out :string :err :string :extra-env {"EMON_WASM_MODULE" wasm}} "kin/scripts/emon-wasm-run" "--jobs" jf "--out" outd)]
+        (check (zero? (:exit r)) "the browser driver ran " (count jobs) " conversions (" (str/trim (:err r)) ")"))
+      (let [ans (fn [id] {:exit (parse-long (slurp (str outd "/" id ".exit")))
+                          :err (slurp (str outd "/" id ".err"))
+                          :out (slurp (str outd "/" id ".out"))
+                          :stats (when (fs/exists? (str outd "/" id ".stats")) (json/parse-string (slurp (str outd "/" id ".stats")) true))
+                          :sec (when (zero? (parse-long (slurp (str outd "/" id ".exit")))) (sections (slurp (str outd "/" id ".out"))))})
+            err (fn [id name code]
+                  (let [r (ans id)]
+                    (check (and (= code (:exit r)) (= "" (:out r)) (str/includes? (:err r) (str "error: " name)))
+                           id " -> error: " name ", exit " code)))]
+        (doseq [d docs]
+          (let [golden (slurp (str "test/para/" d ".json"))
+                hg (slurp (str "test/slice/" d ".html"))
+                hfg (slurp (str "test/slice/" d ".full.html"))]
+            (doseq [a adapters]
+              (let [r (ans (str d "-" a))]
+                (check (and (zero? (:exit r)) (= (str (get-in r [:sec "json-pretty"]) "\n") golden)
+                            (= (get-in r [:sec "html"]) hg) (= (get-in r [:sec "html-full"]) hfg))
+                       d ": " a " gives test/para/" d ".json and the HTML goldens, byte for byte"))
+              (when (#{"lazy" "async512"} a)
+                (let [s (:stats (ans (str d "-" a)))]
+                  (check (and s (> (:attempts s) 1) (> (:fetchRounds s) 0) (< (:bytesRead s) (+ (:inputBytes s) 1)))
+                         d ": " a " read by range, missed and re-ran: " (select-keys s [:attempts :fetchRounds :bytesRequests :reads :bytesRead :inputBytes])))))))
+        (check (= (str (get-in (ans "minimal") [:sec "evidence"]) "\n") (slurp "test/content/minimal.evidence.json"))
+               "the evidence dump of test/pdf/minimal.pdf is the P1.7 golden")
+        (err "locked" "password-required" 4)
+        (err "wrongpw" "password-incorrect" 4)
+        (err "pubsec" "encryption-unsupported" 4)
+        (err "notpdf" "unsupported-format" 4)
+        (err "tiffjpeg" "unsupported-image" 4)
+        (err "pngcut" "undecodable" 4)
+        (check (= (get-in (ans "rightpw") [:sec "json"]) (get-in (ans "plain") [:sec "json"]))
+               "the password opens the locked file, read by range from a URL, to the plain twin's Model")
+        (check (str/includes? (get-in (ans "png") [:sec "json"]) "\"kind\":\"image\"") "a PNG, from a Blob, is a Model of one image page")
+        (check (= 3 (count (re-seq #"\"kind\":\"image\"" (get-in (ans "tiff3") [:sec "json"])))) "a multi-page TIFF, read by range from a URL, is three image pages")
+        (check (and (str/includes? (get-in (ans "assets-dct") [:sec "json"]) "\"asset\":0") (str/includes? (get-in (ans "assets-dct") [:sec "json"]) "\"type\":\"image/jpeg\""))
+               "assets=images of test/assets/dct-rgb.pdf: asset 0, an embedded JPEG")
+        (check (not (str/includes? (get-in (ans "assets-none") [:sec "json"]) "\"assets\"")) "assets none: no `assets` anywhere"))
+      (fs/delete-tree outd))))
+
 (if (zero? @fails)
-  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host and on the Go host, in memory and async")
+  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host, the Go host" (if wasm " and in the browser (WASM + JS SDK, nine byte-source adapters)" "") ", in memory and async")
   (do (println "  FAIL" @fails "check(s) failed") (System/exit 1)))

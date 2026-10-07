@@ -1,0 +1,17 @@
+#!/bin/sh
+# The browser checks beyond the identity arm (DEVLOG P9.3, D356-D361).   kin/scripts/wasm   (`bb wasm`)
+#
+# `bb identity` and `bb slice` hold the browser (the Rust host built for wasm32, driven by the JS SDK in a headless Chrome) to the
+# native hosts' bytes; this says what they do not: the module imports nothing (`wasm32-unknown-unknown` links no filesystem import);
+# a URL fixture is read by `Range` and fetches measurably less than its length; the source's faults are named (`source-changed`,
+# `io`, `input-bytes`); `asset.bytes()` and `asset.blob()` agree, `external` in its browser form; tesseract.js through plan/fulfil
+# reads a scan, and what it recorded replays natively to the same bundle; and the peak JS heap at the 32 MiB `assets-bytes` default,
+# in `inline` and `external` modes, measured. NOT a gate (it needs a browser and tesseract.js's files; `bb slice` and `bb identity`
+# carry the browser arm and skip it loudly): without the toolchain it prints `SKIP wasm -- why` and exits 3.
+set -e
+cd "$(dirname "$0")/../.."
+rc=0
+wasm=$(kin/scripts/emon-wasm-run --check) || rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+kin/scripts/emon-rs-build > /dev/null
+exec node test/driver/wasm/check.mjs --wasm "$wasm"

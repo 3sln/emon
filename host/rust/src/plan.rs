@@ -20,6 +20,9 @@
 //                     order they arrive, sort them by id, append them to the
 //                     answers, record them; re-run
 //
+// `Machine` (below, P9.3) is the loop with the blocking taken out: one attempt at a time, and what the host must do before the
+// next handed back as a value. `run_bms` is its synchronous driver; the browser's (`host/wasm`, D356) is its JS SDK.
+//
 // `Fulfiller::start` / `next` is the async shape: a sync host completes inside
 // `start` (`SyncFulfiller`); a threaded one or a JS one completes whenever and
 // `next` blocks or awaits for the next completion. The loop never depends on
@@ -288,7 +291,7 @@ fn read_requests(rq: &Cells, answered: &HashSet<i32>) -> Result<Vec<Request>, Pl
 }
 
 // Start every request and take every completion; answers sorted by id.
-fn fulfil(f: &mut dyn Fulfiller, reqs: &[Request], bitmaps: &Bitmaps) -> Result<Vec<Answer>, PlanError> {
+pub fn fulfil(f: &mut dyn Fulfiller, reqs: &[Request], bitmaps: &Bitmaps) -> Result<Vec<Answer>, PlanError> {
     for r in reqs {
         f.start(r, bitmaps)?;
     }
@@ -337,90 +340,160 @@ pub fn run_bms(
     misses: &mut dyn Misses,
     mut rec: Option<&mut Transcript>,
 ) -> Result<Stats, PlanError> {
-    let mut answers = Cells::new();
-    let mut bitmaps = Bitmaps::new();
-    let mut answered: HashSet<i32> = HashSet::new();
-    let mut st = Stats::default();
-    let mut fetch_round = 0;
+    let mut m = Machine::new(cfg);
     let no_bitmaps = Bitmaps::new();
     loop {
+        match m.attempt(unit, misses)? {
+            Next::Done => return Ok(m.st),
+            Next::Fetch(reqs) => {
+                for a in fulfil(bytes, &reqs, &no_bitmaps)? {
+                    if a.status() != STATUS_OK {
+                        return Err(PlanError::Fulfil(format!("fetching bytes: status {}", a.status())));
+                    }
+                }
+            }
+            Next::Requests(reqs, all) => {
+                let got = fulfil(ports, &reqs, &all)?;
+                let entries = m.answered(got);
+                if let Some(t) = rec.as_deref_mut() {
+                    t.entries.extend(entries);
+                }
+            }
+        }
+    }
+}
+
+// THE LOOP AS A MACHINE (P9.3). `run_bms` above is a synchronous driver over it; a host whose fulfilments cannot block (the
+// browser: a JS `read` is a promise) drives it itself: `attempt` runs one attempt of the unit and says what the host must do
+// before the next (fetch these byte ranges, fulfil these requests, or nothing: the unit is done), and the host reports back
+// with `answered`. The loop's rules (an attempt that missed is discarded whole, ids and rounds, the named limits) are written
+// once, here, so a native host and a browser keep them alike.
+pub enum Next {
+    // the unit finished
+    Done,
+    // the attempt missed: fetch these `bytes` requests (kind 4, `[6 4 -n input offset length]`), then `attempt` again
+    Fetch(Vec<Request>),
+    // the unit asked for these (sorted by id; the bitmaps are every one answered so far and the unit's own views): fulfil them,
+    // `answered` with an answer for each, then `attempt` again
+    Requests(Vec<Request>, Bitmaps),
+}
+
+pub struct Machine {
+    cfg: Config,
+    answers: Cells,
+    bitmaps: Bitmaps,
+    answered: HashSet<i32>,
+    st: Stats,
+    fetch_round: i32,
+    pending: Vec<Request>,
+    pending_round: i32,
+}
+
+impl Machine {
+    pub fn new(cfg: &Config) -> Machine {
+        Machine {
+            cfg: Config { max_rounds: cfg.max_rounds, fetch_rounds: cfg.fetch_rounds },
+            answers: Cells::new(),
+            bitmaps: Bitmaps::new(),
+            answered: HashSet::new(),
+            st: Stats::default(),
+            fetch_round: 0,
+            pending: Vec::new(),
+            pending_round: 0,
+        }
+    }
+
+    pub fn stats(&self) -> &Stats {
+        &self.st
+    }
+
+    // One attempt of `unit` from scratch on the answers so far.
+    pub fn attempt(
+        &mut self,
+        unit: &mut dyn FnMut(&mut Cells, &mut Cells, &BitmapSet, &mut Buf) -> i32,
+        misses: &mut dyn Misses,
+    ) -> Result<Next, PlanError> {
         let mut rq = Cells::new();
-        st.attempts += 1;
-        let bms = BitmapSet::with_answers(&bitmaps);
+        self.st.attempts += 1;
+        let bms = BitmapSet::with_answers(&self.bitmaps);
         let mut payload = Buf::new();
-        let status = unit(&mut answers, &mut rq, &bms, &mut payload);
+        let status = unit(&mut self.answers, &mut rq, &bms, &mut payload);
         let made = bms.made();
         drop(bms);
         match status {
             UNIT_NEED_BYTES => {
                 // The attempt missed: discard it whole (its requests too), fetch,
                 // re-run. Not a round; counted against `fetch-rounds` alone.
-                fetch_round += 1;
-                st.fetch_rounds += 1;
-                if fetch_round > cfg.fetch_rounds {
-                    return Err(PlanError::Limit { name: "fetch-rounds", limit: cfg.fetch_rounds, actual: fetch_round });
+                self.fetch_round += 1;
+                self.st.fetch_rounds += 1;
+                if self.fetch_round > self.cfg.fetch_rounds {
+                    return Err(PlanError::Limit { name: "fetch-rounds", limit: self.cfg.fetch_rounds, actual: self.fetch_round });
                 }
-                let ranges = misses.take(fetch_round - 1);
+                let ranges = misses.take(self.fetch_round - 1);
                 if ranges.is_empty() {
                     return Err(PlanError::Stalled);
                 }
                 let mut reqs: Vec<Request> = Vec::new();
                 for r in &ranges {
-                    st.bytes_requests += 1;
-                    reqs.push(Request::new(vec![6, KIND_BYTES, -st.bytes_requests, r.input, r.offset, r.length]));
+                    self.st.bytes_requests += 1;
+                    reqs.push(Request::new(vec![6, KIND_BYTES, -self.st.bytes_requests, r.input, r.offset, r.length]));
                 }
-                for a in fulfil(bytes, &reqs, &no_bitmaps)? {
-                    if a.status() != STATUS_OK {
-                        return Err(PlanError::Fulfil(format!("fetching bytes: status {}", a.status())));
-                    }
-                }
-                continue;
+                Ok(Next::Fetch(reqs))
             }
             UNIT_DONE => {
                 if cells_len(&rq) != 0 {
                     return Err(PlanError::Bad("the unit is done and left requests".to_string()));
                 }
-                return Ok(st);
+                Ok(Next::Done)
             }
-            UNIT_REQUESTS => {}
-            other => return Err(PlanError::Unit(other)),
-        }
-        fetch_round = 0;
-        let mut reqs = read_requests(&rq, &answered)?;
-        if !payload.0.is_empty() {
-            let shared = Arc::new(std::mem::take(&mut payload.0));
-            for r in reqs.iter_mut() {
-                r.payload = shared.clone();
+            UNIT_REQUESTS => {
+                self.fetch_round = 0;
+                let mut reqs = read_requests(&rq, &self.answered)?;
+                if !payload.0.is_empty() {
+                    let shared = Arc::new(std::mem::take(&mut payload.0));
+                    for r in reqs.iter_mut() {
+                        r.payload = shared.clone();
+                    }
+                }
+                if reqs.is_empty() {
+                    return Err(PlanError::Bad("the unit asked for requests and wrote none".to_string()));
+                }
+                self.st.rounds += 1;
+                if self.st.rounds > self.cfg.max_rounds {
+                    return Err(PlanError::Limit { name: "max-rounds", limit: self.cfg.max_rounds, actual: self.st.rounds });
+                }
+                self.st.requests += reqs.len() as i32;
+                self.pending_round = self.st.rounds - 1;
+                self.pending = reqs.clone();
+                let all = if made.is_empty() {
+                    self.bitmaps.clone()
+                } else {
+                    let mut all = self.bitmaps.clone();
+                    all.extend(made);
+                    all
+                };
+                Ok(Next::Requests(reqs, all))
             }
+            other => Err(PlanError::Unit(other)),
         }
-        if reqs.is_empty() {
-            return Err(PlanError::Bad("the unit asked for requests and wrote none".to_string()));
-        }
-        st.rounds += 1;
-        if st.rounds > cfg.max_rounds {
-            return Err(PlanError::Limit { name: "max-rounds", limit: cfg.max_rounds, actual: st.rounds });
-        }
-        st.requests += reqs.len() as i32;
-        let round = st.rounds - 1;
-        let got = if made.is_empty() {
-            fulfil(ports, &reqs, &bitmaps)?
-        } else {
-            let mut all = bitmaps.clone();
-            all.extend(made);
-            fulfil(ports, &reqs, &all)?
-        };
+    }
+
+    // The answers to the last `Requests`, one for each, sorted by id: they join the answers the unit is re-run on. The entries
+    // are what a transcript records (round, request, answer, bitmap), in id order.
+    pub fn answered(&mut self, got: Vec<Answer>) -> Vec<Entry> {
+        let reqs = std::mem::take(&mut self.pending);
+        let mut out = Vec::new();
         for (r, a) in reqs.iter().zip(got.iter()) {
             for &v in &a.rec {
-                cells_push(&mut answers, v);
+                cells_push(&mut self.answers, v);
             }
-            answered.insert(a.id());
+            self.answered.insert(a.id());
             if let Some(b) = &a.bitmap {
-                bitmaps.insert(a.id(), b.clone());
+                self.bitmaps.insert(a.id(), b.clone());
             }
-            if let Some(t) = rec.as_deref_mut() {
-                t.entries.push(Entry { round, req: r.rec.clone(), ans: a.rec.clone(), bitmap: a.bitmap.clone() });
-            }
+            out.push(Entry { round: self.pending_round, req: r.rec.clone(), ans: a.rec.clone(), bitmap: a.bitmap.clone() });
         }
+        out
     }
 }
 
