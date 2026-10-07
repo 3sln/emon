@@ -104,6 +104,38 @@ public static class Port {
         c.N = need;
     }
 
+    // @kin:link:form:cells-swap: {:template "emon.Port.CellsSwap({0}, {1})" :arity 2}
+    //
+    // Exchanges the CONTENTS of two arenas, O(1): each stays where its owner
+    // keeps it (a context field), only what it holds changes hands (D362).
+    public static void CellsSwap(Cells a, Cells b) {
+        var v = a.V;
+        var n = a.N;
+        a.V = b.V;
+        a.N = b.N;
+        b.V = v;
+        b.N = n;
+    }
+
+    // @kin:link:form:cells-copy-into: {:template "emon.Port.CellsCopyInto({0}, {1})" :arity 2}
+    //
+    // `(cells-copy-into dst src)`: dst becomes a copy of src, whatever it held
+    // before. The two are different arenas.
+    public static void CellsCopyInto(Cells dst, Cells src) {
+        var w = new int[System.Math.Max(src.V.Length, 16)];
+        System.Array.Copy(src.V, w, src.N);
+        dst.V = w;
+        dst.N = src.N;
+    }
+
+    // @kin:link:form:cells-free: {:template "emon.Port.CellsFree({0})" :arity 1}
+    //
+    // Empties the arena AND gives its storage back.
+    public static void CellsFree(Cells c) {
+        c.V = new int[16];
+        c.N = 0;
+    }
+
     // @kin:link:form:cells-bytes: {:template "emon.Port.CellsBytes({0})" :arity 1}
     //
     // A Blob VIEW of a Cells of bytes: a snapshot (see the Rust half).
@@ -176,6 +208,16 @@ public static class Port {
         }
         System.Array.Copy(blob, start, b.V, b.N, k);
         b.N += k;
+    }
+
+    // @kin:link:form:buf-copy-into: {:template "emon.Port.BufCopyInto({0}, {1})" :arity 2}
+    //
+    // `(buf-copy-into dst src)`: dst becomes a copy of src (see `cells-copy-into`).
+    public static void BufCopyInto(Buf dst, Buf src) {
+        var w = new byte[System.Math.Max(src.V.Length, 64)];
+        System.Array.Copy(src.V, w, src.N);
+        dst.V = w;
+        dst.N = src.N;
     }
 
     // @kin:link:form:buf-blob: {:template "emon.Port.BufBlob({0})" :arity 1}

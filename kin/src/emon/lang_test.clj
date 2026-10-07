@@ -63,5 +63,28 @@
 (deftest defenum-accepts-a-sound-table
   (is (nil? (refusal (enum "[nk-a 1 \"a\"]" "[nk-b 5 \"b\"]")))))
 
+(defn- ctx-src [& body]
+  (str "(ns emon.negprobe (:require [emon.lang :refer [I32 I64 Text Cells defctx fd]]"
+       " [kin.lang :refer [defn return]]))\n"
+       (str/join "\n" body)))
+
+(deftest defctx-refuses-an-unsound-declaration
+  (is (every-target-says? (ctx-src "(defctx ^:pub Doc [])")
+                          "defctx" "emon.negprobe" "at least one field"))
+  (is (every-target-says? (ctx-src "(defctx ^:pub Doc [^I64 big])")
+                          "defctx" "field big" "OWNED Cells, Buf, Text or I32"))
+  (is (every-target-says? (ctx-src "(defctx ^:pub Doc [^Cells a ^Cells a])")
+                          "duplicate field a"))
+  (is (every-target-says? (ctx-src "(defctx ^:pub Doc [^Cells clone])")
+                          "collides with the generated clone")))
+
+(deftest defctx-accepts-a-sound-declaration
+  (is (nil? (refusal (ctx-src "(defctx ^:pub Doc [^Cells a ^Text t ^I32 n])")))))
+
+(deftest fd-refuses-a-non-context
+  (is (every-target-says?
+       (ctx-src "(defn ^:pub ^I32 f [^:mut ^Text t] (fd t grl) (return 0))")
+       "fd" "not a defctx context")))
+
 (let [{:keys [fail error]} (run-tests 'emon.lang-test)]
   (when (pos? (+ fail error)) (System/exit 1)))

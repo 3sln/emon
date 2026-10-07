@@ -1,0 +1,9 @@
+;; The probe context (D362): `defctx` in a namespace of its own. A tag defined in
+;; a file is not in that file's own require scope, so `^Doc` is usable from the
+;; namespaces that REQUIRE this one (`emon.ctxprobe`, `emon.ctxtest`), not from
+;; here. (Found in kin; the engine's `doc` will live the same way.)
+;; A probe by name, so no library build includes it.
+(ns emon.docprobe
+  (:require [emon.lang :refer [I32 Cells Buf Text defctx]]))
+
+(defctx ^:pub Doc [^Cells a ^Cells b ^Buf png ^Buf spare ^Text out ^I32 n])

@@ -1,0 +1,31 @@
+;; `defctx` driven the way a host drives it (D362): the host CONSTRUCTS a `Doc`
+;; (`Doc::new()`, `NewDoc()`, `new Doc()`), kin borrows its fields through `fd`
+;; and writes a line into its `out` field, and the host reads the public fields
+;; back. `bb check` compares the four lines. No kin here allocates.
+(ns emon.ctxprobe
+  (:require [emon.lang :refer [I32 emit-ascii fd]]
+            [emon.docprobe :refer [Doc]]
+            [emon.port :refer [text-i32 cells-len cells-at cells-push cells-swap
+                               buf-at buf-push buf-copy-into]]
+            [kin.lang :refer [defn return set]]))
+
+(defn ^:pub ^I32 probe [^Doc d]
+  (cells-push (fd d a) 1)
+  (cells-push (fd d a) 2)
+  (cells-push (fd d a) 3)
+  (cells-push (fd d b) 9)
+  (cells-swap (fd d a) (fd d b))
+  (buf-push (fd d png) 7)
+  (buf-copy-into (fd d spare) (fd d png))
+  (set (fd d n) 5)
+  (emit-ascii (fd d out) "a=")
+  (text-i32 (fd d out) (cells-len (fd d a)))
+  (emit-ascii (fd d out) " b=")
+  (text-i32 (fd d out) (cells-len (fd d b)))
+  (emit-ascii (fd d out) " b2=")
+  (text-i32 (fd d out) (cells-at (fd d b) 2))
+  (emit-ascii (fd d out) " png=")
+  (text-i32 (fd d out) (buf-at (fd d spare) 0))
+  (emit-ascii (fd d out) " n=")
+  (text-i32 (fd d out) (fd d n))
+  (return 0))

@@ -100,6 +100,29 @@ func CellsGrow(c *Cells, n int32, v int32) {
 	}
 }
 
+// @kin:link:form:cells-swap: {:template "port.CellsSwap({0}, {1})" :import "emon/port" :arity 2}
+//
+// Exchanges the CONTENTS of two arenas, O(1): each stays where its owner keeps
+// it (a context field), only what it holds changes hands (D362).
+func CellsSwap(a *Cells, b *Cells) {
+	a.V, b.V = b.V, a.V
+}
+
+// @kin:link:form:cells-copy-into: {:template "port.CellsCopyInto({0}, {1})" :import "emon/port" :arity 2}
+//
+// `(cells-copy-into dst src)`: dst becomes a copy of src, whatever it held
+// before. The two are different arenas.
+func CellsCopyInto(dst *Cells, src *Cells) {
+	dst.V = append(dst.V[:0], src.V...)
+}
+
+// @kin:link:form:cells-free: {:template "port.CellsFree({0})" :import "emon/port" :arity 1}
+//
+// Empties the arena AND gives its storage back (`cells-drop` to 0 keeps it).
+func CellsFree(c *Cells) {
+	c.V = nil
+}
+
 // @kin:link:form:cells-bytes: {:template "port.CellsBytes({0})" :import "emon/port" :arity 1}
 //
 // A Blob VIEW of a Cells of bytes: a snapshot (see the Rust half).
@@ -154,6 +177,13 @@ func BufTruncate(b *Buf, n int32) {
 // @kin:link:form:buf-append-blob: {:template "port.BufAppendBlob({0}, {1}, {2}, {3})" :import "emon/port" :arity 4}
 func BufAppendBlob(b *Buf, blob []byte, start int32, end int32) {
 	b.B = append(b.B, blob[start:end]...)
+}
+
+// @kin:link:form:buf-copy-into: {:template "port.BufCopyInto({0}, {1})" :import "emon/port" :arity 2}
+//
+// `(buf-copy-into dst src)`: dst becomes a copy of src (see `cells-copy-into`).
+func BufCopyInto(dst *Buf, src *Buf) {
+	dst.B = append(dst.B[:0], src.B...)
 }
 
 // @kin:link:form:buf-blob: {:template "port.BufBlob({0})" :import "emon/port" :arity 1}

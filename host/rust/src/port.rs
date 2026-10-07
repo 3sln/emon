@@ -112,6 +112,31 @@ pub fn cells_grow(c: &mut Cells, n: i32, v: i32) {
     c.v.resize(len, v);
 }
 
+// @kin:link:form:cells-swap: {:template "crate::port::cells_swap({0}, {1})" :arity 2}
+//
+// Exchanges the CONTENTS of two arenas, O(1): each stays where its owner
+// keeps it (a context field), only what it holds changes hands (D362).
+pub fn cells_swap(a: &mut Cells, b: &mut Cells) {
+    std::mem::swap(&mut a.v, &mut b.v);
+}
+
+// @kin:link:form:cells-copy-into: {:template "crate::port::cells_copy_into({0}, {1})" :arity 2}
+//
+// `(cells-copy-into dst src)`: `dst` becomes a copy of `src`, whatever it held
+// before. The two are different arenas (two fields of one context).
+pub fn cells_copy_into(dst: &mut Cells, src: &Cells) {
+    dst.v.clear();
+    dst.v.extend_from_slice(&src.v);
+}
+
+// @kin:link:form:cells-free: {:template "crate::port::cells_free({0})" :arity 1}
+//
+// Empties the arena AND gives its storage back (`cells-drop` to 0 keeps the
+// capacity): for a stage's scratch that is done for the document.
+pub fn cells_free(c: &mut Cells) {
+    c.v = Vec::new();
+}
+
 // @kin:link:form:cells-bytes: {:template "(&crate::port::cells_bytes({0})[..])" :arity 1}
 //
 // A `Blob` VIEW OF A `Cells` OF BYTES (each cell 0..255, the low eight bits
@@ -184,6 +209,14 @@ pub fn buf_truncate(b: &mut Buf, n: i32) {
 // Appends blob[start, end).
 pub fn buf_append_blob(b: &mut Buf, blob: &[u8], start: i32, end: i32) {
     b.0.extend_from_slice(&blob[start as usize..end as usize]);
+}
+
+// @kin:link:form:buf-copy-into: {:template "crate::port::buf_copy_into({0}, {1})" :arity 2}
+//
+// `(buf-copy-into dst src)`: `dst` becomes a copy of `src` (see `cells-copy-into`).
+pub fn buf_copy_into(dst: &mut Buf, src: &Buf) {
+    dst.0.clear();
+    dst.0.extend_from_slice(&src.0);
 }
 
 // @kin:link:form:buf-blob: {:template "crate::port::buf_blob({0})" :arity 1}

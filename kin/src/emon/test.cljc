@@ -222,6 +222,30 @@
                        :java "emon.Port.newBuf()"
                        :csharp "emon.Port.NewBuf()"}
                       {:tag el/Buf :arity 0})
+    ;; A `defctx` context, made and copied (D362). Production kin never
+    ;; allocates: it takes a `^Doc d` and the host calls the generated
+    ;; constructor. A law is the host here, as it is for `new-cells`.
+    ;; `(new-ctx Doc)` names the context by its tag; in Rust both are
+    ;; extended temporaries, so bind them with `let`.
+    'new-ctx (fn [ctx [_ nm :as form]]
+               (let [tag (kin/tag ctx nm)]
+                 (when-not (:ctx-new tag)
+                   (throw (ex-info (str "emon: (new-ctx " nm ") in " (:kin/ns ctx)
+                                        ": not a defctx context") {:form form})))
+                 (kl/type-of ctx tag)
+                 (kin/tagged! ctx tag)
+                 (kin/emit! ctx (get-in tag [:ctx-new (:target ctx)]))))
+    'clone-ctx (fn [ctx [_ obj :as form]]
+                 (let [{:keys [text tag]} (kin/render-tagged ctx obj)]
+                   (when-not (:ctx-new tag)
+                     (throw (ex-info (str "emon: (clone-ctx " obj ") in " (:kin/ns ctx)
+                                          ": not a defctx context") {:form form})))
+                   (kin/tagged! ctx tag)
+                   (kin/emit! ctx (case (:target ctx)
+                                    :rust (str "(&mut " text ".clone())")
+                                    :go (str text ".Clone()")
+                                    :java (str text ".clone()")
+                                    :csharp (str text ".Clone()")))))
     'new-text (kl/call {:go "port.NewText()"
                         :rust "(&mut crate::port::new_text())"
                         :java "emon.Testport.newText()"

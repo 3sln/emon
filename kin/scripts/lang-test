@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; The generation-time refusals of emon's own forms (emit-ascii, defenum).
+;; The generation-time refusals of emon's own forms (emit-ascii, defenum, defctx, fd).
 ;;     bb lang-test
 ;; The code they refuse to generate cannot be compiled to compare, so this is
 ;; a Clojure test beside the vocabulary; `bb check` runs it first.
@@ -8,4 +8,4 @@
 (load-file "kin/src/emon/lang_test.clj")
 ;; REACHED ONLY IF EVERY TEST PASSED (the file exits 1 otherwise): say so, so
 ;; `bb gates` can see a score. clojure.test's own summary is not one (P0.7).
-(println "  ok   lang-test: emit-ascii and defenum refusals hold")
+(println "  ok   lang-test: emit-ascii, defenum, defctx and fd refusals hold")
