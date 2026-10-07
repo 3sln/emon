@@ -1,0 +1,7 @@
+{:emon-transcript 1
+ :inputs [{:index 0 :length 1478}]
+ :entries [
+  {:round 0 :kind :crop :req [11 5 8388612 0 0 150 0 479 166 259 197] :ans [8 5 8388612 0 259 197 3 150] :bitmap "bitmap-0000.png"}
+  {:round 0 :kind :crop :req [11 5 8388613 0 0 150 0 812 166 259 197] :ans [8 5 8388613 0 259 197 3 150] :bitmap "bitmap-0001.png"}
+  {:round 0 :kind :crop :req [11 5 8388616 0 0 150 0 541 479 168 176] :ans [8 5 8388616 0 168 176 3 150] :bitmap "bitmap-0002.png"}
+  {:round 0 :kind :crop :req [11 5 8388617 0 0 150 0 129 480 289 237] :ans [8 5 8388617 0 289 237 3 150] :bitmap "bitmap-0003.png"}]}

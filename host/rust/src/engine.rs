@@ -21,8 +21,8 @@
 // canonical PNG and `replay` needs no codec. There is no OCR yet (P6.5): an image page has no text. What is
 // not an image or a PDF is still `unsupported-format`; an image the port cannot read is `undecodable` (damaged)
 // or `unsupported-image` (a coding it does not read: D187).
-//   * `assets` `figures` (D117): it is accepted and runs as `images` (the cropping and rendering of every other figure arrive
-//     with P8.5); at `images` a figure or seal that is one embedded image gets its bytes or its pixels as PNG (P3.13),
+//   * `assets` `figures` (D117, P8.5): the asset unit runs after the document unit (D560) and renders or crops every other figure
+//     (a `crop` through the Renderer; a raster input's frame cut); at `images` a figure or seal that is one embedded image gets its bytes or its pixels as PNG (P3.13),
 //   * document metadata in the header (`source`, `meta`) and every structure above the paragraph.
 //
 // THE LOOP IS WIRED (D058 revised, D089-D091). `convert` runs `plan::run` over one unit (everything kin
@@ -206,8 +206,8 @@ impl std::fmt::Debug for OcrPort {
 }
 
 // SPEC 13's `assets` (D117): `None` (the default: nothing runs, every output is what it was without the feature), `Images` (a
-// figure or seal that is one embedded image gets it), `Figures` (also the others, cropped or rendered: P8.5; it runs as
-// `Images` until then, D294).
+// figure or seal that is one embedded image gets it), `Figures` (also the others, cropped or rendered: P8.5, through the asset unit,
+// D560).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Assets {
     None,

@@ -213,6 +213,29 @@
             "default, full, external and omit modes and every asset file (hex), the record/replay trip across hosts the same ("
             (quot (- (System/currentTimeMillis) t1) 1000) " s)")))))
 
+;; ----------------------------------------------------------- the figures pass (P8.5, D560)
+;; AND AT `figures`: the asset unit asks for `crop`s and `decode`s, which a driver with no Renderer answers `unsupported` (D199): on every arm the
+;; same figures with the same reasons (`render`), the same vector regions found, and the same TRANSCRIPT written, entries for the requests and
+;; all (each host replays the other's). The live pixels of the crops are `bb asset`'s (the committed pdfium transcripts).
+(def figures-corpus
+  (vec (for [f (concat (globs "test/assets/fig" "*.pdf")
+                       (map #(str "test/assets/" % ".pdf") ["dct-rgb" "flate-rgb8" "place-twice" "place-skew" "place-clip-circle" "place-rot90" "smask" "dct-smask" "jpx"])
+                       (map #(str "test/corpus/synth/pdf/" % ".pdf")
+                            ["figures-charts" "figures-logo-screenshot" "columns-span-figure" "mixed-table-image" "table-simple-ruled" "bank-statement"]))
+             :when (and (fs/exists? f) (or (not only) (str/includes? f only)))]
+         {:file f :pw nil})))
+
+(when (and (not corpus?) (zero? @fails))
+  (reset! extra ["--assets=figures"])
+  (let [t2 (System/currentTimeMillis)
+        res (doall (pmap (fn [[i item]] [item (one (+ 200000 i) item)]) (map-indexed vector figures-corpus)))]
+    (doseq [[item {:keys [probs]}] res :when (seq probs)]
+      (bad "[assets=figures] " (:file item) ": " (str/join "; " probs)))
+    (when (zero? @fails)
+      (let [n (count (filter #(= :document (:outcome (second %))) res))]
+        (ok "IDENTITY (assets=figures): " (count res) " documents (" n " converted), " (count arms) " arms each: byte-identical JSON, HTML in four modes and asset files, "
+            "and the transcript of the asset unit's requests, the same on both hosts and replayed across them (" (quot (- (System/currentTimeMillis) t2) 1000) " s)")))))
+
 (if (zero? @fails)
   (System/exit 0)
   (do (println "  FAIL" @fails "input(s) differ") (System/exit 1)))

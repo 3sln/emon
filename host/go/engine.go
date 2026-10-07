@@ -225,7 +225,7 @@ type Ocr interface {
 
 // Assets is SPEC 13's `assets` (D117): AssetsNone (the default: nothing runs, every output is what it was without the
 // feature), AssetsImages (a figure or seal that is one embedded image gets it) and AssetsFigures (also the others, cropped or
-// rendered: P8.5; it runs as AssetsImages until then, D294).
+// rendered: P8.5, through the asset unit, D560).
 type Assets int
 
 const (
