@@ -244,6 +244,8 @@ pub(crate) fn ar_fill(g: i32, pageagree: i32, cg: &mut crate::port::Cells, refs:
     let mut margin: i32 = -1;
     let mut kink: i32 = -1;
     let mut body: i32 = -1;
+    let mut tim: i32 = -1;
+    let mut rlk: i32 = -1;
     while k < nt {
         row = ar_ref(refs, tf + k, 1);
         v = ax_word_class(gl, mk, an, txt, etext, trust, feats, ofw, row);
@@ -292,6 +294,9 @@ pub(crate) fn ar_fill(g: i32, pageagree: i32, cg: &mut crate::port::Cells, refs:
             margin = ar_min_pos(margin, fe_get(feats, f, xo_margin()));
             kink = ar_min_pos(kink, fe_get(feats, f, xo_kin_ink()));
             body = ar_min_pos(body, fe_get(feats, f, xo_body_share()));
+            // P7.G (D224): how far inside a table drawn in an image the word is, and how like a rule it is (graphics fusion wrote both)
+            tim = ar_max_pos(tim, fe_get(feats, f, xo_in_table_image()));
+            rlk = ar_max_pos(rlk, fe_get(feats, f, xo_rule_like()));
         }
         odiag = ar_min_pos(odiag, ar_offaxis(ow_get(owords, row, 9)));
         k += 1;
@@ -381,6 +386,8 @@ pub(crate) fn ar_fill(g: i32, pageagree: i32, cg: &mut crate::port::Cells, refs:
     crate::port::cells_set(gv, ag_margin(), margin);
     crate::port::cells_set(gv, ag_kink(), kink);
     crate::port::cells_set(gv, ag_body(), body);
+    crate::port::cells_set(gv, ag_tableimg(), tim);
+    crate::port::cells_set(gv, ag_rulelike(), rlk);
     crate::port::cells_set(gv, ag_imalpha(), ar_image_alpha(images, epages, cg_get(cg, g, cgf_page()), cg_get(cg, g, cgf_x0()), cg_get(cg, g, cgf_y0()), cg_get(cg, g, cgf_x1()), cg_get(cg, g, cgf_y1())));
     // P7.6: the columns of a group of hidden-text words (`emon.hidden`)
     hx_fill(g, cg, refs, ofw, etext, feats, owords, gv);

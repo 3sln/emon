@@ -2371,6 +2371,12 @@ public final class Evidence {
     public static int xoEdge() {
         return 29;
     }
+    public static int xoInTableImage() {
+        return 30;
+    }
+    public static int xoRuleLike() {
+        return 31;
+    }
     public static int xoEmitName(StringBuilder t, int code) {
         if (code == 2) {
             emon.Port.textAscii(t, "conf");
@@ -2482,6 +2488,14 @@ public final class Evidence {
         }
         if (code == 29) {
             emon.Port.textAscii(t, "edge");
+            return 1;
+        }
+        if (code == 30) {
+            emon.Port.textAscii(t, "in-table-image");
+            return 1;
+        }
+        if (code == 31) {
+            emon.Port.textAscii(t, "rule-like");
             return 1;
         }
         return 0;

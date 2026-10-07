@@ -2371,6 +2371,12 @@ pub fn xo_length() -> i32 {
 pub fn xo_edge() -> i32 {
     return 29;
 }
+pub fn xo_in_table_image() -> i32 {
+    return 30;
+}
+pub fn xo_rule_like() -> i32 {
+    return 31;
+}
 pub fn xo_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 2 {
         crate::port::text_ascii(t, "conf");
@@ -2482,6 +2488,14 @@ pub fn xo_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 29 {
         crate::port::text_ascii(t, "edge");
+        return 1;
+    }
+    if code == 30 {
+        crate::port::text_ascii(t, "in-table-image");
+        return 1;
+    }
+    if code == 31 {
+        crate::port::text_ascii(t, "rule-like");
         return 1;
     }
     return 0;

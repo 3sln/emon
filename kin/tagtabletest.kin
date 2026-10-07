@@ -8,7 +8,7 @@
   (:require [emon.lang :refer [I32 Cells Text]]
             [emon.test :refer [deftest assert-eq assert-text assert-that new-cells new-text]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.tagtable :refer [tt-grids tt-checks tt-score tt-iou tt-emit tt-record tt-get tt-set tt-cget tt-pm]]
+            [emon.tagtable :refer [tt-geo-map tt-grids tt-checks tt-score tt-iou tt-emit tt-record tt-get tt-set tt-cget tt-pm]]
             [emon.table :refer [tb-tag-span tb-tie-bonus tb-hint-iou]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
@@ -327,3 +327,59 @@
     (tt-emit t tv)
     (assert-text t "[{\"page\":1,\"se\":1,\"rows\":3,\"cols\":3,\"verdict\":\"confirmed\",\"score\":908,\"checks\":[1000,900,1000,-1,1000,928],\"trust\":500}]"
                  "one tagged table: the verdict, the score, the six checks and the tree's trust")))
+
+;; ------------------------------------------------------------------ several candidate rows for one tagged row (D324)
+
+(defn ^I32 ttt-zeros [^:mut ^Cells c ^I32 n]
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (cells-push c 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ttt-multi [^:mut ^Cells tg ^:mut ^Cells ta ^:mut ^Cells wo ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^I32 r0 ^I32 r1 ^I32 r2]
+  (comment "Two tagged rows of one column over a candidate of three rows of one column; three words, the tagged row of each given (0 or 1) as")
+  (comment "r0 r1 r2, the candidate row of word i being i.")
+  (ttt-zeros tg 24)
+  (cells-set tg 2 2)
+  (cells-set tg 3 1)
+  (cells-set tg 4 0)
+  (cells-set tg 5 2)
+  (ttt-zeros ta 32)
+  (cells-set ta 1 0)
+  (cells-set ta 17 1)
+  (cells-push wo (+ 0 r0))
+  (cells-push wo (+ 0 r1))
+  (cells-push wo (+ 0 r2))
+  (ttt-zeros tb 28)
+  (cells-set tb 7 3)
+  (cells-set tb 8 1)
+  (cells-set tb 9 0)
+  (cells-set tb 10 3)
+  (ttt-zeros tc 48)
+  (cells-set tc 0 0)
+  (cells-set tc 8 0)
+  (cells-set tc 9 1)
+  (cells-set tc 16 1)
+  (cells-set tc 24 1)
+  (cells-set tc 25 1)
+  (cells-set tc 32 2)
+  (cells-set tc 40 2)
+  (cells-set tc 41 1)
+  (cells-push tw 0)
+  (cells-push tw 1)
+  (cells-push tw 2)
+  (return 0))
+
+(deftest test-adjacent-candidate-rows-may-map-to-one-tagged-row
+  (let [^Cells tg (new-cells) ^Cells ta (new-cells) ^Cells wo (new-cells) ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells)
+        ^Cells ws (new-cells)]
+    ;; a cell of two lines: words 0 and 1 are tagged row 0 (rows 0 and 1 of the geometry), word 2 is tagged row 1
+    (ttt-multi tg ta wo tb tc tw 0 0 1)
+    (assert-eq (tt-geo-map tg 0 ta wo 0 tb 0 tc tw ws) 3 "all three words agree: two adjacent candidate rows are one tagged row")
+    (assert-eq (cells-at ws (- (cells-len ws) 1)) 1 "and the table says it needed that")
+    ;; the rows are not adjacent: a candidate row of another tagged row lies between them
+    (cells-drop tg 0) (cells-drop ta 0) (cells-drop wo 0) (cells-drop tb 0) (cells-drop tc 0) (cells-drop tw 0)
+    (ttt-multi tg ta wo tb tc tw 0 1 0)
+    (assert-eq (tt-geo-map tg 0 ta wo 0 tb 0 tc tw ws) 2 "a tagged row split around another's candidate row is not one: only the words the old mapping agreed on")
+    (assert-eq (cells-at ws (- (cells-len ws) 1)) 0 "and nothing was granted by the new one")))

@@ -961,6 +961,9 @@ pub fn fl_struct_disagree() -> i32 {
 pub fn fl_tag_span_conflict() -> i32 {
     return 256;
 }
+pub fn fl_in_table_image() -> i32 {
+    return 512;
+}
 pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "low-conf");
@@ -996,6 +999,10 @@ pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 256 {
         crate::port::text_ascii(t, "tag-span-conflict");
+        return 1;
+    }
+    if code == 512 {
+        crate::port::text_ascii(t, "in-table-image");
         return 1;
     }
     return 0;
@@ -1386,6 +1393,12 @@ pub fn dr_offpage() -> i32 {
 pub fn dr_invisible() -> i32 {
     return 10;
 }
+pub fn dr_rule_ghost() -> i32 {
+    return 11;
+}
+pub fn dr_unwitnessed_uncertain_paint() -> i32 {
+    return 12;
+}
 pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "watermark");
@@ -1425,6 +1438,14 @@ pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 10 {
         crate::port::text_ascii(t, "invisible");
+        return 1;
+    }
+    if code == 11 {
+        crate::port::text_ascii(t, "rule-ghost");
+        return 1;
+    }
+    if code == 12 {
+        crate::port::text_ascii(t, "unwitnessed-uncertain-paint");
         return 1;
     }
     return 0;

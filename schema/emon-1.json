@@ -239,7 +239,8 @@
           "rotated",
           "vertical",
           "struct-disagree",
-          "tag-span-conflict"
+          "tag-span-conflict",
+          "in-table-image"
         ]
       }
     },
@@ -480,7 +481,9 @@
             "ocr-ghost",
             "clipped",
             "offpage",
-            "invisible"
+            "invisible",
+            "rule-ghost",
+            "unwitnessed-uncertain-paint"
           ]
         },
         "page": {

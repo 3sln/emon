@@ -1076,6 +1076,7 @@ func PlCheck(cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa 
 	var nfa int32 = port.CellsLen(fa) / 12
 	var nfx int32 = port.CellsLen(fx) / 4
 	var nsl int32 = port.CellsLen(sl) / 16
+	var nggp int32 = port.CellsLen(ggp) / 12
 	var nrf int32 = port.CellsLen(refs) / 2
 	var net int32 = port.CellsLen(etext)
 	var ngl int32 = port.CellsLen(glyphs) / 32
@@ -1171,7 +1172,13 @@ func PlCheck(cg *port.Cells, fw *port.Cells, fl *port.Cells, fv *port.Cells, fa 
 	i = 0
 	for i < nfx {
 		v = port.CellsAt(fx, i*4)
-		if (v < 0) || (v >= ncg) {
+		w = port.CellsAt(fx, (i*4)+1)
+		// the rows of block 500 (graphics) name a `ggp` row, the others a `cg` row (SPEC 9.7)
+		if (w >= 500) && (w < 600) {
+			if (v < 0) || (v >= nggp) {
+				return 9
+			}
+		} else if (v < 0) || (v >= ncg) {
 			return 9
 		}
 		i += 1

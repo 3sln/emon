@@ -1,33 +1,146 @@
-;; Graphics fusion, in its VECTOR-ONLY form (P5.5a; SPEC 9.9; D218, D222, D270). emon's own module (D039); P7.G extends it with the
-;; tracer's and OCR's witnesses and moves the arbitration into `kin/fuserules.kin` as data.
+;; Graphics fusion (P5.5a, P7.G; SPEC 9.9; D218, D221-D224, D228, D270; D324-D331). emon's own module (D039).
 ;;
-;;   (gf-page cand pa im grl gfl)
-;;       one page's candidates (`gv-page`'s scratch, stride 16) into rows of the fused rules `grl` and fills `gfl`, through the rows of
-;;       SPEC 9.9's table that a page with no raster answer can reach, written as code with the `fr` number set in each row:
+;; TWO ENTRY POINTS, one per stage of the document:
 ;;
-;;           505  a candidate whose source's `vis` is not 0 contributes nothing (it is not recorded: there is no `fx` without a group)
-;;           501  an exactly known visible vector rule (the path's `vchk` has neither the blend nor the soft-mask bit): confidence 900
-;;           514  vector paint that is not exactly known (blend, soft mask, an image placement drawn as a rule): confidence 700
-;;           560  a vector fill with a colour: 900            562  a fill of colour -1 (a shading, a pattern): 600
+;;   (gf-doc pa pts mk im np mode grl gfl cand gv)          THE VECTOR SOURCE, in the document pass: `gv-page` then `gf-page` for every page. Over the vector
+;;       candidates alone it is the IDENTITY (D218 (6), P5.5a proved it byte for byte): the rows of SPEC 9.9's block 500 that a page with no raster
+;;       answer can reach (501, 505, 514, 560, 562) are read as DATA from `emon.fuserules` (`fr-decide-block` over the `gmz` measures below), and the
+;;       row's number and confidence are what it says; no group is made (a `ggp` row exists only where a second source was heard).
+;;   (gf-fuse np epages inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa og ofl ctx gc aux un gv)
+;;       THE OTHER SOURCES, after the page units (the Engines' `finish_pdf`): on every page that has a RASTER ANSWER (the tracer ran: the page has `inks`,
+;;       `rules` or `prims` rows) the vector rows are read again as candidates beside the tracer's rules and tints, and OCR's line, table and image
+;;       blocks, and the page's rows are made again: groups (`ggp`), health per region (`hl`, `emon.health`'s `hl-regions`), arbitration by the rows of
+;;       block 500, explanations (`fx`, naming the group), `grg` regions, and the OCR words' features 30 and 31. A page with no raster answer is
+;;       copied as it is. The tracer's rows come from the evidence arenas, so whoever wires P6.3/P6.4 into the page unit (P7.4) fills them and this
+;;       stage wakes up; until then it finds nothing to do and returns at once.
+;;   (gf-write gfa ledger)                                   the vector rules row 513 dropped, as ledger rows (`unwitnessed-uncertain-paint`).
 ;;
-;;       Collinear candidates that touch are NOT merged here: `tb-build` merges them (D179's 3 pt), so the table is the one the paths gave.
-;;       A row's group is -1 (no `ggp` row is made before P7.G), its sources and winner are `vector`, its `z` the path's.
-;;   (gf-doc pa pts mk im np mode grl gfl cand)
-;;       the document's pages in turn: `gv-page` then `gf-page` for each, into the document's `grl` and `gfl` (both emptied first).
-;;       `mode` is `gv-legacy` or `gv-segments`; `gfx-mode` is the one the Engines pass.
+;; THE CANDIDATE TABLE `gc` (stride 24, one page): 0 kind (1 rule, 2 fill) 1 source (`gs`: 1 vector, 2 trace, 4 ocr) 2 `ea` of the member 3 its row (a vector
+;; candidate: the row of `og`/`ofl`, the earlier fused row) 4 pts row 5-8 box 9-12 centre line 13 thickness 14 colour 15 style 16 flags (`gq`/`gqf`) 17 class (`go`:
+;; 1 h, 2 v, 3 slant; 0 a fill) 18 confidence 19 exact (vector: 1 exactly known and visible; trace: 1 when its group has a vector member) 20 union-find parent
+;; 21 witness (a vector rule: the per mille of its length the tracer covers; a vector fill: the candidate index of a tint over it, -1) 22 spare 23 angle (centi-degrees).
+;;
+;; THE MEASURES `gmz` (codes 100 and up; the predicate columns of block 500; `gf-gv-reset` makes the vector of 128 cells of them, -1 absent):
+;;   100 unit (1 a vector rule, 2 a tracer-only run of a rule, 3 a vector fill, 4 a tint with no vector fill, 5 a group of OCR line blocks alone)
+;;   101 vec-exact (visible, and neither a blend mode, a soft mask nor an image placement)   102 vec-uncertain   103 vec-hidden (never made here: a hidden
+;;   path is `gv-page`'s flag, dropped by row 505's reading in `gf-page`)   104 trace (the unit is the tracer's alone)   105 trace-conf (its confidence, raised by
+;;   `gf-ocr-bonus` when an OCR line covers half of it, so that one comparison with `gf-trace-min` is the bar)   106 ocr-line (the per mille an OCR line block
+;;   covers)   107 in-image   108 raster (0 no raster answer, 1 a born-digital page's, 2 a raster page)   109 region-score   110 vec-witness (the region's: R0)
+;;   111 tprec (the page's tracer precision)   112 in-glyph (the per mille of the unit's box in text-layer word boxes)   113 in-ocr-word   115 fill-colour-known
+;;   116 tint (a tint witnesses a vector fill)   117 witness (the share of a vector rule the tracer covers)   118 group-vec-exact (the group has an exactly known visible
+;;   vector rule).
 (ns emon.gfuse
-  (:require [emon.lang :refer [I32 Cells]]
+  (:require [emon.lang :refer [I32 I64 Cells i64 i32 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.evidence :refer [pa-get pa-count im-get im-count ev-angle
-                                   pf-page pf-z pf-vchk vc-blend vc-softmask mf-page mf-z]]
-            [emon.glayer :refer [grl-new grl-set gfl-new gfl-set go-h go-v go-slant gs-vector gq-from-image]]
+            [emon.evidence :refer [pa-get pa-count im-get im-count ev-angle ev-page-row ep-get epf-flags eg-raster
+                                   pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-z pf-vchk vc-blend vc-softmask pa-curve pa-other
+                                   mf-page mf-z mf-x0 mf-y0 mf-x1 mf-y1 mf-vis
+                                   rl-get rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-color rlf-style rlf-conf
+                                   pm-get pmf-x0 pmf-y0 pmf-x1 pmf-y1 pmf-kind pmf-stroke pmf-color pmf-conf pmf-flags pm-rect
+                                   ob-get obf-x0 obf-y0 obf-x1 obf-y1 obf-kind obf-btype ob-block
+                                   ow-get wd-get hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-feat
+                                   ea-paths ea-images ea-rules ea-prims ea-oblocks rf-add
+                                   fe-get fe-set xo-in-table-image xo-rule-like]]
+            [emon.glayer :refer [grl-new grl-set grl-get grl-count gfl-new gfl-set gfl-get gfl-count ggp-new ggp-set ggp-get ggp-count grg-new grg-set grg-get grg-count
+                                 go-h go-v go-slant gs-vector gs-trace gs-ocr gs-image
+                                 gq-from-image gq-box-edge gq-in-image gk-rule gk-fill rk-table-in-image rk-figure rk-table-hint gqf-in-image]]
             [emon.gvec :refer [gv-page gv-hidden gv-segments gv-legacy]]
+            [emon.player :refer [hl-get fx-new plh-region]]
+            [emon.health :refer [hl-regions]]
+            [emon.model :refer [ledger-add sr-vector]]
+            [emon.fuserules :refer [fr-decide-block fr-number fr-winner fr-reason fr-flags fr-conf fr-npred fr-pcol
+                                    fg-axis fg-angle fg-perp fg-gap fg-fill-iou fg-img-min fg-agree-min fg-ocr-bonus]]
             [kin.lang :refer [defn defconst return let set while if do comment
-                              + - * < > <= >= == != and or quot rem bit-and]]))
-
-(defconst ^I32 GF_AXIS 100)          ;; `gf-axis`: within 1 degree of an axis is that axis's orientation (centi-degrees)
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
 
 (defn ^:pub ^I32 gfx-mode [] (return 1))
+
+;; the measure codes (see the head)
+(defn ^:pub ^I32 gmz-unit [] (return 100))
+(defn ^:pub ^I32 gmz-vec-exact [] (return 101))
+(defn ^:pub ^I32 gmz-vec-uncertain [] (return 102))
+(defn ^:pub ^I32 gmz-vec-hidden [] (return 103))
+(defn ^:pub ^I32 gmz-trace [] (return 104))
+(defn ^:pub ^I32 gmz-trace-conf [] (return 105))
+(defn ^:pub ^I32 gmz-ocr-line [] (return 106))
+(defn ^:pub ^I32 gmz-in-image [] (return 107))
+(defn ^:pub ^I32 gmz-raster [] (return 108))
+(defn ^:pub ^I32 gmz-region-score [] (return 109))
+(defn ^:pub ^I32 gmz-vec-witness [] (return 110))
+(defn ^:pub ^I32 gmz-tprec [] (return 111))
+(defn ^:pub ^I32 gmz-in-glyph [] (return 112))
+(defn ^:pub ^I32 gmz-in-ocr-word [] (return 113))
+(defn ^:pub ^I32 gmz-fill-colour-known [] (return 115))
+(defn ^:pub ^I32 gmz-tint [] (return 116))
+(defn ^:pub ^I32 gmz-witness [] (return 117))
+(defn ^:pub ^I32 gmz-group-vec-exact [] (return 118))
+
+(defconst ^I32 GC 24)
+(defconst ^I32 C_KIND 0)
+(defconst ^I32 C_SRC 1)
+(defconst ^I32 C_EA 2)
+(defconst ^I32 C_ROW 3)
+(defconst ^I32 C_PT 4)
+(defconst ^I32 C_X0 5)
+(defconst ^I32 C_Y0 6)
+(defconst ^I32 C_X1 7)
+(defconst ^I32 C_Y1 8)
+(defconst ^I32 C_EX0 9)
+(defconst ^I32 C_EY0 10)
+(defconst ^I32 C_EX1 11)
+(defconst ^I32 C_EY1 12)
+(defconst ^I32 C_T 13)
+(defconst ^I32 C_COL 14)
+(defconst ^I32 C_STY 15)
+(defconst ^I32 C_FLG 16)
+(defconst ^I32 C_CLS 17)
+(defconst ^I32 C_CONF 18)
+(defconst ^I32 C_EXACT 19)
+(defconst ^I32 C_UF 20)
+(defconst ^I32 C_WIT 21)
+(defconst ^I32 C_ANG 23)
+
+;; the page context `ctx`: the page, its kind (0 no raster answer, 1 born digital, 2 raster page) and the row ranges of its arenas
+(defconst ^I32 X_PAGE 0)
+(defconst ^I32 X_KIND 1)
+(defconst ^I32 X_V0 2)
+(defconst ^I32 X_V1 3)
+(defconst ^I32 X_F0 4)
+(defconst ^I32 X_F1 5)
+(defconst ^I32 X_R0 6)
+(defconst ^I32 X_R1 7)
+(defconst ^I32 X_Q0 8)
+(defconst ^I32 X_Q1 9)
+(defconst ^I32 X_B0 10)
+(defconst ^I32 X_B1 11)
+(defconst ^I32 X_W0 12)
+(defconst ^I32 X_W1 13)
+(defconst ^I32 X_T0 14)
+(defconst ^I32 X_T1 15)
+(defconst ^I32 X_P0 16)
+(defconst ^I32 X_P1 17)
+(defconst ^I32 X_I0 18)
+(defconst ^I32 X_I1 19)
+(defconst ^I32 X_N 20)
+(defconst ^I32 X_WIT 21)
+(defconst ^I32 X_PREC 22)
+(defconst ^I32 X_NGRL 23)
+(defconst ^I32 X_NGFL 24)
+
+;; the aux arrays of one page, each of n cells but the sweeps' (2 n): counts, starts, order, group, endpoints, bits
+(defconst ^I32 A_CNT 0)
+(defconst ^I32 A_START 1)
+(defconst ^I32 A_ORD 2)
+(defconst ^I32 A_GID 3)
+(defconst ^I32 A_EP 4)
+(defconst ^I32 A_BITS 6)
+
+;; ------------------------------------------------------------- small things
+
+(defn ^I32 gf-abs [^I32 a] (if (< a 0) (return (- 0 a))) (return a))
+(defn ^I32 gf-min [^I32 a ^I32 b] (if (< a b) (return a)) (return b))
+(defn ^I32 gf-max [^I32 a ^I32 b] (if (> a b) (return a)) (return b))
+(defn ^I32 gf-eq [^I32 a ^I32 b] (if (== a b) (return 1)) (return 0))
 
 (defn ^I32 gf-lightness [^I32 rgb]
   (comment "0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.")
@@ -35,13 +148,63 @@
   (return (quot (+ (+ (* 299 (bit-and (quot rgb 65536) 255)) (* 587 (bit-and (quot rgb 256) 255))) (* 114 (bit-and rgb 255))) 255)))
 
 (defn ^I32 gf-orient-of [^I32 a]
-  (comment "`go` of an angle in [0, 18000): h within GF_AXIS of 0, v of 9000, else slant.")
-  (if (or (<= a GF_AXIS) (>= a (- 18000 GF_AXIS))) (return (go-h)))
-  (if (and (>= a (- 9000 GF_AXIS)) (<= a (+ 9000 GF_AXIS))) (return (go-v)))
+  (comment "`go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.")
+  (if (or (<= a (fg-axis)) (>= a (- 18000 (fg-axis)))) (return (go-h)))
+  (if (and (>= a (- 9000 (fg-axis))) (<= a (+ 9000 (fg-axis)))) (return (go-v)))
   (return (go-slant)))
 
-(defn ^I32 gf-rule-row [^Cells cand ^I32 c ^Cells pa ^Cells im ^:mut ^Cells grl]
-  (comment "Candidate c (a rule) as a `grl` row.")
+(defn ^I32 gf-angle-of [^I32 dx ^I32 dy]
+  (comment "The angle of a centre line in [0, 18000).")
+  (let [^:mut ^I32 a (ev-angle dx dy)]
+    (if (>= a 18000) (set a (- a 18000)))
+    (return a)))
+
+(defn ^I32 gf-iou [^I32 ax0 ^I32 ay0 ^I32 ax1 ^I32 ay1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "The intersection over union of two boxes (cp), per mille. Areas in tenths of a point so they fit.")
+  (let [^I32 iw (quot (gf-max 0 (- (gf-min ax1 bx1) (gf-max ax0 bx0))) 10)
+        ^I32 ih (quot (gf-max 0 (- (gf-min ay1 by1) (gf-max ay0 by0))) 10)
+        ^I32 inter (* iw ih)
+        ^I32 aa (* (quot (gf-max 0 (- ax1 ax0)) 10) (quot (gf-max 0 (- ay1 ay0)) 10))
+        ^I32 ab (* (quot (gf-max 0 (- bx1 bx0)) 10) (quot (gf-max 0 (- by1 by0)) 10))
+        ^I32 un (- (+ aa ab) inter)]
+    (if (<= un 0) (return 0))
+    (return (quot inter (gf-max 1 (quot un 1000))))))
+
+(defn ^I32 gf-inside-share [^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "The per mille of box (x0 y0 x1 y1) that lies inside box b; 0 for an empty one. Areas in tenths of a point so they fit.")
+  (let [^I32 iw (quot (gf-max 0 (- (gf-min x1 bx1) (gf-max x0 bx0))) 10)
+        ^I32 ih (quot (gf-max 0 (- (gf-min y1 by1) (gf-max y0 by0))) 10)
+        ^I32 inter (* iw ih)
+        ^I32 area (* (gf-max 1 (quot (gf-max 0 (- x1 x0)) 10)) (gf-max 1 (quot (gf-max 0 (- y1 y0)) 10)))]
+    (return (quot inter (gf-max 1 (quot area 1000))))))
+
+(defn ^I32 gcat [^Cells gc ^I32 i ^I32 f] (return (cells-at gc (+ (* i 24) f))))
+(defn ^I32 gcput [^:mut ^Cells gc ^I32 i ^I32 f ^I32 v] (cells-set gc (+ (* i 24) f) v) (return 0))
+
+(defn ^I32 gf-gv-reset [^:mut ^Cells gv]
+  (comment "The measure vector (128 cells), every measure absent (-1).")
+  (let [^:mut ^I32 i 0]
+    (while (< (cells-len gv) 128)
+      (cells-push gv -1))
+    (while (< i 128)
+      (do (cells-set gv i -1)
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 gf-explain [^:mut ^Cells fx ^I32 group ^I32 r ^Cells gv]
+  (comment "`fx` rows for the decision of row `r` of `fr-rows`: every column the rule read and the value it read (the group is a `ggp` row).")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 col 0]
+    (while (< k (fr-npred))
+      (do (set col (fr-pcol r k))
+          (if (>= col 0) (fx-new fx group (fr-number r) col (cells-at gv col)))
+          (set k (+ k 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- the vector source alone (the identity)
+
+(defn ^I32 gf-rule-row [^Cells cand ^I32 c ^Cells pa ^Cells im ^:mut ^Cells gv ^:mut ^Cells grl]
+  (comment "Candidate c (a rule) as a `grl` row, by the row of block 500 that holds (501 or 514 here: no raster answer).")
   (let [^I32 b (* c 16)
         ^I32 row (cells-at cand (+ b 1))
         ^I32 fl (cells-at cand (+ b 15))
@@ -52,7 +215,8 @@
         ^:mut ^I32 ang (ev-angle (- ex1 ex0) (- ey1 ey0))
         ^:mut ^I32 exact 1
         ^:mut ^I32 z -1
-        ^:mut ^I32 r 0]
+        ^:mut ^I32 r 0
+        ^:mut ^I32 fr 0]
     (if (!= (bit-and fl (gv-hidden)) 0) (return 0))
     (if (>= ang 18000) (set ang (- ang 18000)))
     (if (!= (bit-and fl (gq-from-image)) 0)
@@ -60,6 +224,14 @@
           (set z (im-get im row (mf-z))))
       (do (if (!= (bit-and (pa-get pa row (pf-vchk)) (+ (vc-blend) (vc-softmask))) 0) (set exact 0))
           (set z (pa-get pa row (pf-z)))))
+    (gf-gv-reset gv)
+    (cells-set gv 100 1)
+    (cells-set gv 101 exact)
+    (cells-set gv 102 (- 1 exact))
+    (cells-set gv 103 0)
+    (cells-set gv 108 0)
+    (set fr (fr-decide-block gv 500))
+    (if (== (fr-winner fr) 0) (return 0))
     (set r (grl-new grl (cells-at cand (+ b 3)) (cells-at cand (+ b 4)) (cells-at cand (+ b 5)) (cells-at cand (+ b 6)) (cells-at cand (+ b 7))
                     ex0 ey0 ex1 ey1 (cells-at cand (+ b 12)) (gf-orient-of ang)))
     (grl-set grl r 11 ang)
@@ -67,49 +239,55 @@
     (grl-set grl r 13 (cells-at cand (+ b 14)))
     (grl-set grl r 14 (gs-vector))
     (grl-set grl r 15 (gs-vector))
-    (if (== exact 1)
-      (do (grl-set grl r 16 501)
-          (grl-set grl r 17 900))
-      (do (grl-set grl r 16 514)
-          (grl-set grl r 17 700)))
-    (grl-set grl r 18 fl)
+    (grl-set grl r 16 (fr-number fr))
+    (grl-set grl r 17 (fr-conf fr))
+    (grl-set grl r 18 (bit-or fl (fr-flags fr)))
     (grl-set grl r 20 z)
+    (grl-set grl r 21 row)
+    (grl-set grl r 22 (cells-at cand (+ b 2)))
     (return 0)))
 
-(defn ^I32 gf-fill-row [^Cells cand ^I32 c ^Cells pa ^:mut ^Cells gfl]
-  (comment "Candidate c (a fill) as a `gfl` row.")
+(defn ^I32 gf-fill-row [^Cells cand ^I32 c ^Cells pa ^:mut ^Cells gv ^:mut ^Cells gfl]
+  (comment "Candidate c (a fill) as a `gfl` row, by the row of block 500 that holds (560 or 562 here).")
   (let [^I32 b (* c 16)
         ^I32 row (cells-at cand (+ b 1))
         ^I32 fl (cells-at cand (+ b 15))
         ^I32 colour (cells-at cand (+ b 13))
-        ^I32 r (gfl-new gfl (cells-at cand (+ b 3)) (cells-at cand (+ b 4)) (cells-at cand (+ b 5)) (cells-at cand (+ b 6)) (cells-at cand (+ b 7)) colour)]
+        ^:mut ^I32 fr 0
+        ^:mut ^I32 r 0]
+    (gf-gv-reset gv)
+    (cells-set gv 100 3)
+    (cells-set gv 108 0)
+    (if (< colour 0) (cells-set gv 115 0) (cells-set gv 115 1))
+    (set fr (fr-decide-block gv 500))
+    (if (== (fr-winner fr) 0) (return 0))
+    (set r (gfl-new gfl (cells-at cand (+ b 3)) (cells-at cand (+ b 4)) (cells-at cand (+ b 5)) (cells-at cand (+ b 6)) (cells-at cand (+ b 7)) colour))
     (gfl-set gfl r 6 (gf-lightness colour))
     (gfl-set gfl r 7 (gs-vector))
     (gfl-set gfl r 8 (gs-vector))
-    (if (< colour 0)
-      (do (gfl-set gfl r 9 562)
-          (gfl-set gfl r 10 600))
-      (do (gfl-set gfl r 9 560)
-          (gfl-set gfl r 10 900)))
-    (gfl-set gfl r 11 (bit-and fl 15))
+    (gfl-set gfl r 9 (fr-number fr))
+    (gfl-set gfl r 10 (fr-conf fr))
+    (gfl-set gfl r 11 (bit-or (bit-and fl 15) (fr-flags fr)))
     (gfl-set gfl r 13 (pa-get pa row (pf-z)))
+    (gfl-set gfl r 14 row)
     (return 0)))
 
-(defn ^:pub ^I32 gf-page [^Cells cand ^Cells pa ^Cells im ^:mut ^Cells grl ^:mut ^Cells gfl]
-  (comment "One page's candidates into `grl` and `gfl` (the head of this file); answers 0.")
+(defn ^:pub ^I32 gf-page [^Cells cand ^Cells pa ^Cells im ^:mut ^Cells grl ^:mut ^Cells gfl ^:mut ^Cells gv]
+  (comment "One page's candidates (`gv-page`'s scratch, stride 16) into rows of the fused rules and fills over the vector source alone: the rows of block 500")
+  (comment "that a page with no raster answer reaches. A hidden candidate (`vis` not 0) is row 505's: it contributes nothing. No group is made. Answers 0.")
   (let [^I32 n (quot (cells-len cand) 16)
         ^:mut ^I32 c 0]
     (while (< c n)
       (do (if (== (bit-and (cells-at cand (+ (* c 16) 15)) (gv-hidden)) 0)
             (if (== (cells-at cand (* c 16)) 1)
-              (gf-rule-row cand c pa im grl)
-              (gf-fill-row cand c pa gfl)))
+              (gf-rule-row cand c pa im gv grl)
+              (gf-fill-row cand c pa gv gfl)))
           (set c (+ c 1))))
     (return 0)))
 
 (defn ^:pub ^I32 gf-doc [^Cells pa ^Cells pts ^Cells mk ^Cells im ^I32 np ^I32 mode
-                         ^:mut ^Cells grl ^:mut ^Cells gfl ^:mut ^Cells cand]
-  (comment "The document's graphics: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the")
+                         ^:mut ^Cells grl ^:mut ^Cells gfl ^:mut ^Cells cand ^:mut ^Cells gv]
+  (comment "The document's graphics over the vector source: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the")
   (comment "number of fused rules.")
   (let [^I32 nq (pa-count pa)
         ^I32 ni (im-count im)
@@ -135,8 +313,1522 @@
           (if (or (> qj qi) (> ij ii))
             (do (cells-drop cand 0)
                 (gv-page pa pts mk im qi qj ii ij mode cand)
-                (gf-page cand pa im grl gfl)))
+                (gf-page cand pa im grl gfl gv)))
           (set qi qj)
           (set ii ij)
           (set p (+ p 1))))
     (return (quot (cells-len grl) 24))))
+
+;; ------------------------------------------------------------- the candidates of every source
+
+(defn ^I32 gf-cand-rule [^:mut ^Cells gc ^I32 src ^I32 ea ^I32 row ^I32 pt ^I32 ex0 ^I32 ey0 ^I32 ex1 ^I32 ey1
+                         ^I32 thick ^I32 colour ^I32 style ^I32 flags ^I32 conf ^I32 exact]
+  (comment "Append a rule candidate: the box is derived from the centre line and the thickness (a horizontal rule's extent along its axis is the centre")
+  (comment "line's); the class (`go`) and the angle (centi-degrees, [0, 18000)) too. Answers its index.")
+  (let [^I32 i (quot (cells-len gc) 24)
+        ^I32 ang (gf-angle-of (- ex1 ex0) (- ey1 ey0))
+        ^I32 cls (gf-orient-of ang)
+        ^I32 half (quot (+ (gf-max thick 1) 1) 2)
+        ^:mut ^I32 bx0 (gf-min ex0 ex1)
+        ^:mut ^I32 by0 (gf-min ey0 ey1)
+        ^:mut ^I32 bx1 (gf-max ex0 ex1)
+        ^:mut ^I32 by1 (gf-max ey0 ey1)]
+    (if (== cls (go-h))
+      (do (set by0 (- by0 half))
+          (set by1 (+ by1 half))))
+    (if (== cls (go-v))
+      (do (set bx0 (- bx0 half))
+          (set bx1 (+ bx1 half))))
+    (if (== cls (go-slant))
+      (do (set bx0 (- bx0 half))
+          (set by0 (- by0 half))
+          (set bx1 (+ bx1 half))
+          (set by1 (+ by1 half))))
+    (cells-push gc 1)
+    (cells-push gc src)
+    (cells-push gc ea)
+    (cells-push gc row)
+    (cells-push gc pt)
+    (cells-push gc bx0)
+    (cells-push gc by0)
+    (cells-push gc bx1)
+    (cells-push gc by1)
+    (cells-push gc ex0)
+    (cells-push gc ey0)
+    (cells-push gc ex1)
+    (cells-push gc ey1)
+    (cells-push gc (gf-max thick 1))
+    (cells-push gc colour)
+    (cells-push gc style)
+    (cells-push gc flags)
+    (cells-push gc cls)
+    (cells-push gc conf)
+    (cells-push gc exact)
+    (cells-push gc i)
+    (cells-push gc -1)
+    (cells-push gc -1)
+    (cells-push gc ang)
+    (return i)))
+
+(defn ^I32 gf-cand-fill [^:mut ^Cells gc ^I32 src ^I32 ea ^I32 row ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 colour ^I32 flags ^I32 conf]
+  (comment "Append a fill candidate. Answers its index.")
+  (let [^I32 i (quot (cells-len gc) 24)]
+    (cells-push gc 2)
+    (cells-push gc src)
+    (cells-push gc ea)
+    (cells-push gc row)
+    (cells-push gc -1)
+    (cells-push gc x0)
+    (cells-push gc y0)
+    (cells-push gc x1)
+    (cells-push gc y1)
+    (cells-push gc 0)
+    (cells-push gc 0)
+    (cells-push gc 0)
+    (cells-push gc 0)
+    (cells-push gc 0)
+    (cells-push gc colour)
+    (cells-push gc 1)
+    (cells-push gc flags)
+    (cells-push gc 0)
+    (cells-push gc conf)
+    (cells-push gc 0)
+    (cells-push gc i)
+    (cells-push gc -1)
+    (cells-push gc -1)
+    (cells-push gc 0)
+    (return i)))
+
+(defn ^I32 gf-build [^:mut ^Cells gc ^Cells ctx ^Cells og ^Cells ofl ^Cells rules ^Cells prims ^Cells oblocks]
+  (comment "The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its")
+  (comment "rectangles, then OCR's line blocks. Answers how many.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 sw 0
+        ^:mut ^I32 half 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 ea 0]
+    (cells-drop gc 0)
+    (set i (cells-at ctx X_V0))
+    (while (< i (cells-at ctx X_V1))
+      (do (set f (cells-at og (+ (* i 24) 18)))
+          (set ea (ea-paths))
+          (if (!= (bit-and f (gq-from-image)) 0) (set ea (ea-images)))
+          (gf-cand-rule gc 1 ea i (cells-at og (+ (* i 24) 22))
+                        (cells-at og (+ (* i 24) 5)) (cells-at og (+ (* i 24) 6)) (cells-at og (+ (* i 24) 7)) (cells-at og (+ (* i 24) 8))
+                        (cells-at og (+ (* i 24) 9)) (cells-at og (+ (* i 24) 12)) (cells-at og (+ (* i 24) 13)) f -1
+                        (gf-eq (cells-at og (+ (* i 24) 16)) 501))
+          (set i (+ i 1))))
+    (set i (cells-at ctx X_F0))
+    (while (< i (cells-at ctx X_F1))
+      (do (gf-cand-fill gc 1 (ea-paths) i (cells-at ofl (+ (* i 16) 1)) (cells-at ofl (+ (* i 16) 2)) (cells-at ofl (+ (* i 16) 3)) (cells-at ofl (+ (* i 16) 4))
+                        (cells-at ofl (+ (* i 16) 5)) (cells-at ofl (+ (* i 16) 11)) -1)
+          (set i (+ i 1))))
+    (set i (cells-at ctx X_R0))
+    (while (< i (cells-at ctx X_R1))
+      (do (gf-cand-rule gc 2 (ea-rules) i -1 (rl-get rules i (rlf-lx0)) (rl-get rules i (rlf-ly0)) (rl-get rules i (rlf-lx1)) (rl-get rules i (rlf-ly1))
+                        (rl-get rules i (rlf-thick)) (rl-get rules i (rlf-color)) (rl-get rules i (rlf-style)) 0 (rl-get rules i (rlf-conf)) 0)
+          (set i (+ i 1))))
+    (set i (cells-at ctx X_Q0))
+    (while (< i (cells-at ctx X_Q1))
+      (do (if (== (pm-get prims i (pmf-kind)) (pm-rect))
+            (do (set f (pm-get prims i (pmf-flags)))
+                (set x0 (pm-get prims i (pmf-x0)))
+                (set y0 (pm-get prims i (pmf-y0)))
+                (set x1 (pm-get prims i (pmf-x1)))
+                (set y1 (pm-get prims i (pmf-y1)))
+                (if (!= (bit-and f 8) 0)
+                  (gf-cand-fill gc 2 (ea-prims) i x0 y0 x1 y1 (pm-get prims i (pmf-color)) 0 (pm-get prims i (pmf-conf)))
+                  (if (== (bit-and f 2) 0)
+                    (do (set sw (pm-get prims i (pmf-stroke)))
+                        (if (<= sw 0) (set sw 100))
+                        (set half (quot sw 2))
+                        (gf-cand-rule gc 2 (ea-prims) i -1 x0 (+ y0 half) x1 (+ y0 half) sw (pm-get prims i (pmf-color)) 1 (gq-box-edge) (pm-get prims i (pmf-conf)) 0)
+                        (gf-cand-rule gc 2 (ea-prims) i -1 x0 (- y1 half) x1 (- y1 half) sw (pm-get prims i (pmf-color)) 1 (gq-box-edge) (pm-get prims i (pmf-conf)) 0)
+                        (gf-cand-rule gc 2 (ea-prims) i -1 (+ x0 half) y0 (+ x0 half) y1 sw (pm-get prims i (pmf-color)) 1 (gq-box-edge) (pm-get prims i (pmf-conf)) 0)
+                        (gf-cand-rule gc 2 (ea-prims) i -1 (- x1 half) y0 (- x1 half) y1 sw (pm-get prims i (pmf-color)) 1 (gq-box-edge) (pm-get prims i (pmf-conf)) 0))))))
+          (set i (+ i 1))))
+    (set i (cells-at ctx X_B0))
+    (while (< i (cells-at ctx X_B1))
+      (do (if (and (== (ob-get oblocks i (obf-kind)) (ob-block)) (== (ob-get oblocks i (obf-btype)) 3))
+            (do (set x0 (ob-get oblocks i (obf-x0)))
+                (set y0 (ob-get oblocks i (obf-y0)))
+                (set x1 (ob-get oblocks i (obf-x1)))
+                (set y1 (ob-get oblocks i (obf-y1)))
+                (if (>= (- x1 x0) (- y1 y0))
+                  (gf-cand-rule gc 4 (ea-oblocks) i -1 x0 (quot (+ y0 y1) 2) x1 (quot (+ y0 y1) 2) (- y1 y0) -1 1 0 -1 0)
+                  (gf-cand-rule gc 4 (ea-oblocks) i -1 (quot (+ x0 x1) 2) y0 (quot (+ x0 x1) 2) y1 (- x1 x0) -1 1 0 -1 0))))
+          (set i (+ i 1))))
+    (return (quot (cells-len gc) 24))))
+
+;; ------------------------------------------------------------- alignment (D221): near pairs, groups
+
+(defn ^I32 gf-a0 [^Cells gc ^I32 c]
+  (comment "A rule's extent along its axis, its least coordinate (x for a horizontal rule, y for a vertical one).")
+  (if (== (gcat gc c C_CLS) (go-h)) (return (gf-min (gcat gc c C_EX0) (gcat gc c C_EX1))))
+  (return (gf-min (gcat gc c C_EY0) (gcat gc c C_EY1))))
+
+(defn ^I32 gf-a1 [^Cells gc ^I32 c]
+  (comment "... its greatest.")
+  (if (== (gcat gc c C_CLS) (go-h)) (return (gf-max (gcat gc c C_EX0) (gcat gc c C_EX1))))
+  (return (gf-max (gcat gc c C_EY0) (gcat gc c C_EY1))))
+
+(defn ^I32 gf-perp-of [^Cells gc ^I32 c]
+  (comment "The position of a rule's centre line across its axis.")
+  (if (== (gcat gc c C_CLS) (go-h)) (return (quot (+ (gcat gc c C_EY0) (gcat gc c C_EY1)) 2)))
+  (return (quot (+ (gcat gc c C_EX0) (gcat gc c C_EX1)) 2)))
+
+(defn ^I32 gf-near-rule [^Cells gc ^I32 a ^I32 b]
+  (comment "SPEC 9.9: two rules are near when they have the same orientation, their angles differ by at most `gf-angle`, the distance between their")
+  (comment "centre lines is at most half the sum of their thicknesses plus `gf-perp`, and their extents along the axis overlap or come within `gf-gap`.")
+  (let [^I32 ca (gcat gc a C_CLS)
+        ^:mut ^I32 d (gf-abs (- (gcat gc a C_ANG) (gcat gc b C_ANG)))]
+    (if (!= ca (gcat gc b C_CLS)) (return 0))
+    (if (== ca (go-slant)) (return 0))
+    (if (> d 9000) (set d (- 18000 d)))
+    (if (> d (fg-angle)) (return 0))
+    (if (> (gf-abs (- (gf-perp-of gc a) (gf-perp-of gc b))) (+ (quot (+ (gcat gc a C_T) (gcat gc b C_T)) 2) (fg-perp))) (return 0))
+    (if (> (gf-a0 gc b) (+ (gf-a1 gc a) (fg-gap))) (return 0))
+    (if (> (gf-a0 gc a) (+ (gf-a1 gc b) (fg-gap))) (return 0))
+    (return 1)))
+
+(defn ^I32 gf-near [^Cells gc ^I32 a ^I32 b]
+  (comment "Two candidates of the same kind are near: rules by `gf-near-rule`, fills at box IoU at least `gf-fill-iou`.")
+  (if (== (gcat gc a C_KIND) 1) (return (gf-near-rule gc a b)))
+  (if (>= (gf-iou (gcat gc a C_X0) (gcat gc a C_Y0) (gcat gc a C_X1) (gcat gc a C_Y1) (gcat gc b C_X0) (gcat gc b C_Y0) (gcat gc b C_X1) (gcat gc b C_Y1))
+          (fg-fill-iou))
+    (return 1))
+  (return 0))
+
+(defn ^I32 gf-find [^:mut ^Cells gc ^I32 i]
+  (comment "The root of candidate i's group (path compression).")
+  (let [^:mut ^I32 r i
+        ^:mut ^I32 p i
+        ^:mut ^I32 nx 0]
+    (while (!= (gcat gc r C_UF) r)
+      (set r (gcat gc r C_UF)))
+    (while (!= (gcat gc p C_UF) r)
+      (do (set nx (gcat gc p C_UF))
+          (gcput gc p C_UF r)
+          (set p nx)))
+    (return r)))
+
+(defn ^I32 gf-union [^:mut ^Cells gc ^I32 a ^I32 b]
+  (comment "Join two candidates' groups; the smaller root wins.")
+  (let [^I32 ra (gf-find gc a)
+        ^I32 rb (gf-find gc b)]
+    (if (< ra rb) (gcput gc rb C_UF ra))
+    (if (< rb ra) (gcput gc ra C_UF rb))
+    (return 0)))
+
+(defn ^I32 gf-pairs [^:mut ^Cells gc ^I32 n]
+  (comment "Every near pair of candidates of different sources, into groups: each tracer or OCR candidate against every vector one and the later ones of")
+  (comment "the others (the grid of D221 only speeds this up on a page of thousands of rules and no tracer; the pairs are the same). Answers 0.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 j 0]
+    (while (< i n)
+      (do (if (!= (gcat gc i C_SRC) 1)
+            (do (set j 0)
+                (while (< j n)
+                  (do (if (!= (gcat gc j C_SRC) (gcat gc i C_SRC))
+                        (if (or (== (gcat gc j C_SRC) 1) (> j i))
+                          (if (== (gcat gc i C_KIND) (gcat gc j C_KIND))
+                            (if (== (gf-near gc i j) 1) (gf-union gc i j)))))
+                      (set j (+ j 1))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 gf-order [^:mut ^Cells gc ^:mut ^Cells aux ^I32 n]
+  (comment "Settle the groups and sort the candidates by root (ascending, then by index): `aux` has eight arrays of n cells, the counts of each root (A_CNT), where")
+  (comment "its members start (A_START), the members in order (A_ORD), its `ggp` row (A_GID, -1), and room for the sweeps (the other two, A_EP and A_BITS, 2 n each).")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 c 0]
+    (cells-drop aux 0)
+    (while (< i (* n 8))
+      (do (cells-push aux 0)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set r (gf-find gc i))
+          (gcput gc i C_UF r)
+          (cells-set aux (+ (* n A_CNT) r) (+ (cells-at aux (+ (* n A_CNT) r)) 1))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (cells-set aux (+ (* n A_START) i) s)
+          (set s (+ s (cells-at aux (+ (* n A_CNT) i))))
+          (cells-set aux (+ (* n A_GID) i) -1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i n)
+      (do (set r (gcat gc i C_UF))
+          (set c (cells-at aux (+ (* n A_BITS) r)))
+          (cells-set aux (+ (* n A_ORD) (+ (cells-at aux (+ (* n A_START) r)) c)) i)
+          (cells-set aux (+ (* n A_BITS) r) (+ c 1))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 gf-refs-run [^Cells gc ^Cells aux ^I32 n ^I32 s ^I32 e ^I32 src ^Cells og ^Cells ofl ^:mut ^Cells refs ^:mut ^Cells ggp ^I32 g ^I32 slot]
+  (comment "The members of source `src` of the group whose members are `aux`'s A_ORD[s, e), as a run of `refs` and the cells (2 + 2 slot, 3 + 2 slot) of its")
+  (comment "`ggp` row. A vector member is named by the `paths` (or `images`) row its fused row came from; the others by their own rows. Answers the count.")
+  (let [^:mut ^I32 k s
+        ^:mut ^I32 c 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 first -1
+        ^:mut ^I32 row 0]
+    (while (< k e)
+      (do (set c (cells-at aux (+ (* n A_ORD) k)))
+          (if (== (gcat gc c C_SRC) src)
+            (do (if (< first 0) (set first (quot (cells-len refs) 2)))
+                (set row (gcat gc c C_ROW))
+                (if (== src 1)
+                  (if (== (gcat gc c C_KIND) 1)
+                    (set row (cells-at og (+ (* row 24) 21)))
+                    (set row (cells-at ofl (+ (* row 16) 14)))))
+                (rf-add refs (gcat gc c C_EA) row)
+                (set cnt (+ cnt 1))))
+          (set k (+ k 1))))
+    (ggp-set ggp g (+ 2 (* 2 slot)) first)
+    (ggp-set ggp g (+ 3 (* 2 slot)) cnt)
+    (return cnt)))
+
+(defn ^I32 gf-groups [^:mut ^Cells gc ^:mut ^Cells aux ^I32 n ^Cells ctx ^Cells og ^Cells ofl ^:mut ^Cells ggp ^:mut ^Cells refs]
+  (comment "A `ggp` row for every group of the page, in the order of its first member, with its three member runs; the group's flags: 1 an exactly known visible vector")
+  (comment "rule, 2 a tracer member, 4 an OCR member. The row is each root's A_GID. Answers the groups made.")
+  (let [^:mut ^I32 r 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 nt 0
+        ^:mut ^I32 no 0
+        ^:mut ^I32 nx 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 kind 0]
+    (while (< r n)
+      (do (if (> (cells-at aux (+ (* n A_CNT) r)) 0)
+            (do (set s (cells-at aux (+ (* n A_START) r)))
+                (set e (+ s (cells-at aux (+ (* n A_CNT) r))))
+                (set kind (gk-rule))
+                (if (== (gcat gc r C_KIND) 2) (set kind (gk-fill)))
+                (set g (ggp-new ggp (cells-at ctx X_PAGE) kind))
+                (gf-refs-run gc aux n s e 1 og ofl refs ggp g 0)
+                (set nt (gf-refs-run gc aux n s e 2 og ofl refs ggp g 1))
+                (set no (gf-refs-run gc aux n s e 4 og ofl refs ggp g 2))
+                (set nx 0)
+                (set k s)
+                (while (< k e)
+                  (do (set c (cells-at aux (+ (* n A_ORD) k)))
+                      (if (and (== (gcat gc c C_SRC) 1) (and (== (gcat gc c C_KIND) 1) (== (gcat gc c C_EXACT) 1))) (set nx 1))
+                      (set k (+ k 1))))
+                (ggp-set ggp g 8 (+ (+ nx (* 2 (gf-min nt 1))) (* 4 (gf-min no 1))))
+                (cells-set aux (+ (* n A_GID) r) g)
+                (set made (+ made 1))))
+          (set r (+ r 1))))
+    (return made)))
+
+;; ------------------------------------------------------------- the sweep of a group along its axis (D221)
+;; THE UNITS `un` (stride 24): 0 `ggp` row, 1 kind (2 a run of a rule only the tracer drew, 4 a tint no vector fill has, 5 OCR line blocks alone), 2 class (`go`), 3 4 the
+;; run along the axis, 5 its position across it, 6 thickness, 7 colour, 8 style, 9 the tracer's confidence, 10 the share (per mille) an OCR line block covers, 11-14 the
+;; centre line (a rule) or the box (a tint), 15 the candidate it is a copy of (-1: none), 16 the group has an exactly known visible vector rule, 17-23 spare.
+
+(defn ^I32 gf-unit [^:mut ^Cells un ^I32 gid ^I32 ukind]
+  (comment "Append a unit; answers its row.")
+  (let [^I32 u (quot (cells-len un) 24)
+        ^:mut ^I32 i 0]
+    (while (< i 24)
+      (do (cells-push un 0)
+          (set i (+ i 1))))
+    (cells-set un (* u 24) gid)
+    (cells-set un (+ (* u 24) 1) ukind)
+    (cells-set un (+ (* u 24) 9) -1)
+    (cells-set un (+ (* u 24) 15) -1)
+    (return u)))
+
+(defn ^I32 unat [^Cells un ^I32 u ^I32 f] (return (cells-at un (+ (* u 24) f))))
+(defn ^I32 unput [^:mut ^Cells un ^I32 u ^I32 f ^I32 v] (cells-set un (+ (* u 24) f) v) (return 0))
+
+(defn ^I32 gf-trace-only [^I32 bits]
+  (comment "1 for an elementary interval only the tracer covers (not a vector rule, exactly known or not).")
+  (if (and (!= (bit-and bits 8) 0) (== (bit-and bits 3) 0)) (return 1))
+  (return 0))
+
+(defn ^I32 gf-run-unit [^:mut ^Cells gc ^:mut ^Cells aux ^:mut ^Cells un ^I32 n ^I32 s ^I32 e ^I32 gid ^I32 cls ^I32 vecexact ^I32 q0 ^I32 q1]
+  (comment "One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its")
+  (comment "thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.")
+  (let [^I32 epb (* n A_EP)
+        ^I32 bitb (* n A_BITS)
+        ^I32 ordb (* n A_ORD)
+        ^I32 lo (cells-at aux (+ epb q0))
+        ^I32 hi (cells-at aux (+ epb (+ q1 1)))
+        ^I32 u (gf-unit un gid 2)
+        ^:mut ^I32 j s
+        ^:mut ^I32 c 0
+        ^:mut ^I32 ov 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bestov 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 psum 0
+        ^:mut ^I32 thick 0
+        ^:mut ^I32 q q0
+        ^:mut ^I32 oc 0
+        ^:mut ^I32 perp 0]
+    (while (< j e)
+      (do (set c (cells-at aux (+ ordb j)))
+          (if (== (gcat gc c C_SRC) 2)
+            (do (set ov (- (gf-min hi (gf-a1 gc c)) (gf-max lo (gf-a0 gc c))))
+                (if (> ov 0)
+                  (do (set cnt (+ cnt 1))
+                      (set psum (+ psum (gf-perp-of gc c)))
+                      (set thick (gf-max thick (gcat gc c C_T)))
+                      (if (> ov bestov)
+                        (do (set bestov ov)
+                            (set best c)))))))
+          (set j (+ j 1))))
+    (while (<= q q1)
+      (do (if (!= (bit-and (cells-at aux (+ bitb q)) 16) 0)
+            (set oc (+ oc (- (cells-at aux (+ epb (+ q 1))) (cells-at aux (+ epb q))))))
+          (set q (+ q 1))))
+    (set perp (quot psum (gf-max cnt 1)))
+    (unput un u 2 cls)
+    (unput un u 3 lo)
+    (unput un u 4 hi)
+    (unput un u 5 perp)
+    (unput un u 6 thick)
+    (unput un u 10 (quot (* oc 1000) (gf-max (- hi lo) 1)))
+    (unput un u 16 vecexact)
+    (if (>= best 0)
+      (do (unput un u 7 (gcat gc best C_COL))
+          (unput un u 8 (gcat gc best C_STY))
+          (unput un u 9 (gcat gc best C_CONF))))
+    (if (and (== cnt 1) (and (== lo (gf-a0 gc best)) (== hi (gf-a1 gc best))))
+      (do (unput un u 11 (gcat gc best C_EX0))
+          (unput un u 12 (gcat gc best C_EY0))
+          (unput un u 13 (gcat gc best C_EX1))
+          (unput un u 14 (gcat gc best C_EY1))
+          (unput un u 15 best))
+      (if (== cls (go-h))
+        (do (unput un u 11 lo)
+            (unput un u 12 perp)
+            (unput un u 13 hi)
+            (unput un u 14 perp))
+        (do (unput un u 11 perp)
+            (unput un u 12 lo)
+            (unput un u 13 perp)
+            (unput un u 14 hi))))
+    (return u)))
+
+(defn ^I32 gf-sweep [^:mut ^Cells gc ^:mut ^Cells aux ^:mut ^Cells un ^I32 n ^I32 s ^I32 e ^I32 gid ^I32 nv ^I32 vecexact]
+  (comment "The group of rules whose members are `aux`'s A_ORD[s, e): the endpoints of every member along the axis cut it into ELEMENTARY INTERVALS, each with the")
+  (comment "kinds of member that cover it (bits: 1 an exactly known visible vector rule, 2 another vector rule, 8 the tracer, 16 an OCR line block). Every vector rule")
+  (comment "gets its WITNESS (`C_WIT`): the per mille of its length the tracer covers; every tracer member whether the group has a vector one (`C_EXACT`); and each")
+  (comment "run of intervals the tracer covers and no vector rule does becomes a unit. Gaps are never bridged: an interval nobody covers ends a run.")
+  (let [^I32 k (- e s)
+        ^I32 cls (gcat gc (cells-at aux (+ (* n A_ORD) s)) C_CLS)
+        ^I32 epb (* n A_EP)
+        ^I32 bitb (* n A_BITS)
+        ^I32 ordb (* n A_ORD)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 m 1
+        ^:mut ^I32 q 0
+        ^:mut ^I32 qe 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 a0 0
+        ^:mut ^I32 a1 0
+        ^:mut ^I32 cov 0]
+    (while (< j k)
+      (do (set c (cells-at aux (+ ordb (+ s j))))
+          (cells-set aux (+ epb (* j 2)) (gf-a0 gc c))
+          (cells-set aux (+ epb (+ (* j 2) 1)) (gf-a1 gc c))
+          (set j (+ j 1))))
+    (set j 1)
+    (while (< j (* k 2))
+      (do (set v (cells-at aux (+ epb j)))
+          (set w (- j 1))
+          (while (and (>= w 0) (> (cells-at aux (+ epb w)) v))
+            (do (cells-set aux (+ epb (+ w 1)) (cells-at aux (+ epb w)))
+                (set w (- w 1))))
+          (cells-set aux (+ epb (+ w 1)) v)
+          (set j (+ j 1))))
+    (set j 1)
+    (while (< j (* k 2))
+      (do (if (!= (cells-at aux (+ epb j)) (cells-at aux (+ epb (- m 1))))
+            (do (cells-set aux (+ epb m) (cells-at aux (+ epb j)))
+                (set m (+ m 1))))
+          (set j (+ j 1))))
+    (while (< q (- m 1))
+      (do (set lo (cells-at aux (+ epb q)))
+          (set hi (cells-at aux (+ epb (+ q 1))))
+          (set bits 0)
+          (set j 0)
+          (while (< j k)
+            (do (set c (cells-at aux (+ ordb (+ s j))))
+                (if (and (<= (gf-a0 gc c) lo) (>= (gf-a1 gc c) hi))
+                  (do (if (== (gcat gc c C_SRC) 1)
+                        (if (== (gcat gc c C_EXACT) 1)
+                          (set bits (bit-or bits 1))
+                          (set bits (bit-or bits 2))))
+                      (if (== (gcat gc c C_SRC) 2) (set bits (bit-or bits 8)))
+                      (if (== (gcat gc c C_SRC) 4) (set bits (bit-or bits 16)))))
+                (set j (+ j 1))))
+          (cells-set aux (+ bitb q) bits)
+          (set q (+ q 1))))
+    (set j 0)
+    (while (< j k)
+      (do (set c (cells-at aux (+ ordb (+ s j))))
+          (if (== (gcat gc c C_SRC) 1)
+            (do (set a0 (gf-a0 gc c))
+                (set a1 (gf-a1 gc c))
+                (set cov 0)
+                (set q 0)
+                (while (< q (- m 1))
+                  (do (if (and (>= (cells-at aux (+ epb q)) a0) (<= (cells-at aux (+ epb (+ q 1))) a1))
+                        (if (!= (bit-and (cells-at aux (+ bitb q)) 8) 0)
+                          (set cov (+ cov (- (cells-at aux (+ epb (+ q 1))) (cells-at aux (+ epb q)))))))
+                      (set q (+ q 1))))
+                (if (> a1 a0)
+                  (gcput gc c C_WIT (quot (* cov 1000) (- a1 a0)))
+                  (gcput gc c C_WIT 0))))
+          (if (== (gcat gc c C_SRC) 2) (gcput gc c C_EXACT (gf-min nv 1)))
+          (set j (+ j 1))))
+    (set q 0)
+    (while (< q (- m 1))
+      (do (if (== (gf-trace-only (cells-at aux (+ bitb q))) 1)
+            (do (set qe q)
+                (while (and (< (+ qe 1) (- m 1)) (== (gf-trace-only (cells-at aux (+ bitb (+ qe 1)))) 1))
+                  (set qe (+ qe 1)))
+                (gf-run-unit gc aux un n s e gid cls vecexact q qe)
+                (set q (+ qe 1)))
+            (set q (+ q 1)))))
+    (return 0)))
+
+(defn ^I32 gf-sweeps [^:mut ^Cells gc ^:mut ^Cells aux ^:mut ^Cells un ^I32 n]
+  (comment "Every group of the page in turn: a group of rules is swept (`gf-sweep`) when the tracer is in it; a vector rule with no tracer near it has witness 0; a")
+  (comment "slanted one is figure material and is not swept; OCR line blocks alone are a unit of kind 5. A group of fills: a vector fill's `C_WIT` is the candidate")
+  (comment "of a tint over it (-1: none), and a tint with no vector fill is a unit of kind 4. Answers the units.")
+  (let [^:mut ^I32 r 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 nv 0
+        ^:mut ^I32 nt 0
+        ^:mut ^I32 no 0
+        ^:mut ^I32 nx 0
+        ^:mut ^I32 tint -1
+        ^:mut ^I32 u 0]
+    (cells-drop un 0)
+    (while (< r n)
+      (do (if (> (cells-at aux (+ (* n A_CNT) r)) 0)
+            (do (set s (cells-at aux (+ (* n A_START) r)))
+                (set e (+ s (cells-at aux (+ (* n A_CNT) r))))
+                (set nv 0)
+                (set nt 0)
+                (set no 0)
+                (set nx 0)
+                (set tint -1)
+                (set k s)
+                (while (< k e)
+                  (do (set c (cells-at aux (+ (* n A_ORD) k)))
+                      (if (== (gcat gc c C_SRC) 1)
+                        (do (set nv (+ nv 1))
+                            (if (== (gcat gc c C_EXACT) 1) (set nx 1))))
+                      (if (== (gcat gc c C_SRC) 2)
+                        (do (set nt (+ nt 1))
+                            (if (< tint 0) (set tint c))))
+                      (if (== (gcat gc c C_SRC) 4) (set no (+ no 1)))
+                      (set k (+ k 1))))
+                (if (== (gcat gc r C_KIND) 1)
+                  (if (== (gcat gc r C_CLS) (go-slant))
+                    (do (set k s)
+                        (while (< k e)
+                          (do (set c (cells-at aux (+ (* n A_ORD) k)))
+                              (if (== (gcat gc c C_SRC) 1) (gcput gc c C_WIT 0))
+                              (set k (+ k 1)))))
+                    (if (and (== nt 0) (== nv 0))
+                      (do (set u (gf-unit un (cells-at aux (+ (* n A_GID) r)) 5))
+                          (unput un u 16 0))
+                      (if (== nt 0)
+                        (do (set k s)
+                            (while (< k e)
+                              (do (set c (cells-at aux (+ (* n A_ORD) k)))
+                                  (if (== (gcat gc c C_SRC) 1) (gcput gc c C_WIT 0))
+                                  (set k (+ k 1)))))
+                        (gf-sweep gc aux un n s e (cells-at aux (+ (* n A_GID) r)) nv nx))))
+                  (do (set k s)
+                      (while (< k e)
+                        (do (set c (cells-at aux (+ (* n A_ORD) k)))
+                            (if (== (gcat gc c C_SRC) 1) (gcput gc c C_WIT tint))
+                            (if (and (== (gcat gc c C_SRC) 2) (== nv 0))
+                              (do (set u (gf-unit un (cells-at aux (+ (* n A_GID) r)) 4))
+                                  (unput un u 11 (gcat gc c C_X0))
+                                  (unput un u 12 (gcat gc c C_Y0))
+                                  (unput un u 13 (gcat gc c C_X1))
+                                  (unput un u 14 (gcat gc c C_Y1))
+                                  (unput un u 7 (gcat gc c C_COL))
+                                  (unput un u 9 (gcat gc c C_CONF))
+                                  (unput un u 15 c)))
+                            (set k (+ k 1))))))))
+          (set r (+ r 1))))
+    (return (quot (cells-len un) 24))))
+
+;; ------------------------------------------------------------- regions, text under a rule, health (D223)
+
+(defn ^I32 gf-image-ok [^Cells im ^I32 m]
+  (comment "1 for a visible image placement at least `gf-img-min` each way (a region of its own: `emon.health`'s `hh-image-ok`).")
+  (if (!= (im-get im m (mf-vis)) 0) (return 0))
+  (if (< (- (im-get im m (mf-x1)) (im-get im m (mf-x0))) (fg-img-min)) (return 0))
+  (if (< (- (im-get im m (mf-y1)) (im-get im m (mf-y0))) (fg-img-min)) (return 0))
+  (return 1))
+
+(defn ^I32 gf-region-of [^Cells ctx ^Cells im ^I32 cx ^I32 cy]
+  (comment "The `images` row of the visible placement of the page that holds the point, else -1 (R0).")
+  (let [^:mut ^I32 m (cells-at ctx X_I0)]
+    (while (< m (cells-at ctx X_I1))
+      (do (if (== (gf-image-ok im m) 1)
+            (if (and (and (>= cx (im-get im m (mf-x0))) (< cx (im-get im m (mf-x1))))
+                     (and (>= cy (im-get im m (mf-y0))) (< cy (im-get im m (mf-y1)))))
+              (return m)))
+          (set m (+ m 1))))
+    (return -1)))
+
+(defn ^I32 gf-text-share [^Cells ctx ^Cells words ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "The per mille of the box that lies in the page's text-layer word boxes (their intersections added, at most 1000). Areas in tenths of a point.")
+  (let [^I32 area (* (gf-max 1 (quot (gf-max 0 (- x1 x0)) 10)) (gf-max 1 (quot (gf-max 0 (- y1 y0)) 10)))
+        ^:mut ^I32 w (cells-at ctx X_T0)
+        ^:mut ^I32 inter 0
+        ^:mut ^I32 iw 0
+        ^:mut ^I32 ih 0]
+    (while (< w (cells-at ctx X_T1))
+      (do (set iw (quot (gf-max 0 (- (gf-min x1 (wd-get words w (hd-x1))) (gf-max x0 (wd-get words w (hd-x0))))) 10))
+          (set ih (quot (gf-max 0 (- (gf-min y1 (wd-get words w (hd-y1))) (gf-max y0 (wd-get words w (hd-y0))))) 10))
+          (set inter (+ inter (* iw ih)))
+          (set w (+ w 1))))
+    (return (gf-min 1000 (quot inter (gf-max 1 (quot area 1000)))))))
+
+(defn ^I32 gf-rule-glyph [^I32 cp]
+  (comment "1 for a code point a scanned border is read as: | l I 1 ! [ ] _ - and U+2010-U+2015 (SPEC 8.4.5, column 31).")
+  (if (or (== cp 124) (or (== cp 108) (or (== cp 73) (or (== cp 49) (or (== cp 33) (or (== cp 91) (or (== cp 93) (or (== cp 95) (== cp 45))))))))) (return 1))
+  (if (and (>= cp 8208) (<= cp 8213)) (return 1))
+  (return 0))
+
+(defn ^I32 gf-word-rule-like [^Cells owords ^Cells etext ^I32 w]
+  (comment "1 for an OCR word of one or two code points, all rule glyphs.")
+  (let [^I32 wl (ow-get owords w (hd-tlen))
+        ^I32 st (ow-get owords w (hd-tstart))
+        ^:mut ^I32 k 0]
+    (if (or (< wl 1) (> wl 2)) (return 0))
+    (while (< k wl)
+      (do (if (== (gf-rule-glyph (cells-at etext (+ st k))) 0) (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 gf-word-plain [^Cells owords ^Cells etext ^I32 w]
+  (comment "1 for an OCR word of three or more code points that is not made of rule glyphs alone.")
+  (let [^I32 wl (ow-get owords w (hd-tlen))
+        ^I32 st (ow-get owords w (hd-tstart))
+        ^:mut ^I32 k 0]
+    (if (< wl 3) (return 0))
+    (while (< k wl)
+      (do (if (== (gf-rule-glyph (cells-at etext (+ st k))) 0) (return 1))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^I32 gf-in-oword [^Cells ctx ^Cells owords ^Cells etext ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "The most (per mille) of the box that lies inside ONE OCR word of three or more code points that is not made of rule glyphs (row 533); 0 for none.")
+  (let [^:mut ^I32 w (cells-at ctx X_W0)
+        ^:mut ^I32 best 0
+        ^:mut ^I32 v 0]
+    (while (< w (cells-at ctx X_W1))
+      (do (if (== (gf-word-plain owords etext w) 1)
+            (do (set v (gf-inside-share x0 y0 x1 y1 (ow-get owords w (hd-x0)) (ow-get owords w (hd-y0)) (ow-get owords w (hd-x1)) (ow-get owords w (hd-y1))))
+                (if (> v best) (set best v))))
+          (set w (+ w 1))))
+    (return best)))
+
+(defn ^I32 gf-region-score [^Cells hl ^I32 page ^I32 subject]
+  (comment "The score of the graphics region of `emon.health` (`plh-region`) for a page and a subject (-1 R0, else the `images` row); -1 when there is none.")
+  (let [^I32 n (quot (cells-len hl) 12)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (and (== (hl-get hl i 0) (plh-region)) (and (== (hl-get hl i 1) page) (== (hl-get hl i 2) subject)))
+            (return (hl-get hl i 9)))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 gf-health [^:mut ^Cells ctx ^Cells gc ^I32 n ^Cells im ^Cells rules ^Cells words ^:mut ^Cells hl]
+  (comment "The page's two figures that depend on how the sources meet (SPEC 9.9 `Health per region`), then `emon.health`'s rows. THE VECTOR WITNESS (R0 of a")
+  (comment "born-digital page): the length of the exactly known visible vector rules (horizontal and vertical) that the tracer witnesses, over their length; -1")
+  (comment "without any. THE TRACER'S PRECISION (R0 of a born-digital page): the length of the tracer's rules a vector rule explains (its group has one) or that lie")
+  (comment "in text-layer word boxes (half or more of their box), over all of theirs; -1 without any. A raster page has neither. Answers the rows of `hl` made.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 rlen 0
+        ^:mut ^I32 vl 0
+        ^:mut ^I32 vw 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 te 0
+        ^:mut ^I32 witness -1
+        ^:mut ^I32 precision -1
+        ^:mut ^I32 cls 0]
+    (if (== (cells-at ctx X_KIND) 1)
+      (while (< i n)
+        (do (set cls (gcat gc i C_CLS))
+            (if (and (== (gcat gc i C_KIND) 1) (or (== cls (go-h)) (== cls (go-v))))
+              (if (< (gf-region-of ctx im (quot (+ (gcat gc i C_EX0) (gcat gc i C_EX1)) 2) (quot (+ (gcat gc i C_EY0) (gcat gc i C_EY1)) 2)) 0)
+                (do (set rlen (- (gf-a1 gc i) (gf-a0 gc i)))
+                    (if (and (== (gcat gc i C_SRC) 1) (== (gcat gc i C_EXACT) 1))
+                      (do (set vl (+ vl rlen))
+                          (set vw (+ vw (quot (* rlen (gf-max 0 (gcat gc i C_WIT))) 1000)))))
+                    (if (== (gcat gc i C_SRC) 2)
+                      (do (set tl (+ tl rlen))
+                          (if (== (gcat gc i C_EXACT) 1)
+                            (set te (+ te rlen))
+                            (if (>= (gf-text-share ctx words (gcat gc i C_X0) (gcat gc i C_Y0) (gcat gc i C_X1) (gcat gc i C_Y1)) 500)
+                              (set te (+ te rlen)))))))))
+            (set i (+ i 1)))))
+    (if (> vl 0) (set witness (quot (* vw 1000) vl)))
+    (if (> tl 0) (set precision (quot (* te 1000) tl)))
+    (cells-set ctx X_WIT witness)
+    (cells-set ctx X_PREC precision)
+    (return (hl-regions (cells-at ctx X_PAGE) im rules witness precision hl))))
+
+;; ------------------------------------------------------------- arbitration: the rows of block 500 over every unit
+
+(defn ^I32 gf-copy-row [^Cells og ^I32 row ^:mut ^Cells grl]
+  (comment "Append a copy of row `row` of the vector-only rules to `grl`; answers its row.")
+  (let [^I32 r (quot (cells-len grl) 24)
+        ^:mut ^I32 k 0]
+    (while (< k 24)
+      (do (cells-push grl (cells-at og (+ (* row 24) k)))
+          (set k (+ k 1))))
+    (return r)))
+
+(defn ^I32 gf-first-trace [^Cells gc ^Cells aux ^I32 n ^I32 root]
+  (comment "The first tracer member of the group of `root` (candidate index), -1 when it has none.")
+  (let [^:mut ^I32 k (cells-at aux (+ (* n A_START) root))
+        ^I32 e (+ (cells-at aux (+ (* n A_START) root)) (cells-at aux (+ (* n A_CNT) root)))
+        ^:mut ^I32 c 0]
+    (while (< k e)
+      (do (set c (cells-at aux (+ (* n A_ORD) k)))
+          (if (== (gcat gc c C_SRC) 2) (return c))
+          (set k (+ k 1))))
+    (return -1)))
+
+(defn ^I32 gf-emit-vec-rules [^Cells ctx ^Cells gc ^I32 n ^Cells aux ^Cells og ^Cells im ^Cells hl ^Cells ggp
+                              ^:mut ^Cells grl ^:mut ^Cells fx ^:mut ^Cells gfa ^:mut ^Cells gv]
+  (comment "Every vector rule of the page, in order, through block 500: kept (with the row's number, confidence and flags, `trace` among its sources when the tracer")
+  (comment "witnessed it, the tracer's colour when its own is -1 and the row is 512) or dropped (513: a row of `gfa`, for the ledger). Answers the rows kept.")
+  (let [^I32 page (cells-at ctx X_PAGE)
+        ^I32 kind (cells-at ctx X_KIND)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 root 0
+        ^:mut ^I32 gid 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 fr 0
+        ^:mut ^I32 rg 0
+        ^:mut ^I32 t -1
+        ^:mut ^I32 kept 0
+        ^:mut ^I32 num 0
+        ^:mut ^I32 orow 0]
+    (while (< i n)
+      (do (if (and (== (gcat gc i C_KIND) 1) (== (gcat gc i C_SRC) 1))
+            (do (set root (gcat gc i C_UF))
+                (set gid (cells-at aux (+ (* n A_GID) root)))
+                (set rg (gf-region-of ctx im (quot (+ (gcat gc i C_EX0) (gcat gc i C_EX1)) 2) (quot (+ (gcat gc i C_EY0) (gcat gc i C_EY1)) 2)))
+                (gf-gv-reset gv)
+                (cells-set gv 100 1)
+                (cells-set gv 101 (gcat gc i C_EXACT))
+                (cells-set gv 102 (- 1 (gcat gc i C_EXACT)))
+                (cells-set gv 103 0)
+                (cells-set gv 108 kind)
+                (cells-set gv 117 (gcat gc i C_WIT))
+                (cells-set gv 118 (bit-and (ggp-get ggp gid 8) 1))
+                (if (< rg 0) (cells-set gv 110 (cells-at ctx X_WIT)))
+                (cells-set gv 111 (cells-at ctx X_PREC))
+                (set fr (fr-decide-block gv 500))
+                (gf-explain fx gid fr gv)
+                (set orow (gcat gc i C_ROW))
+                (if (== (fr-winner fr) 0)
+                  (if (== (fr-reason fr) 12)
+                    (do (cells-push gfa page)
+                        (cells-push gfa (cells-at og (+ (* orow 24) 1)))
+                        (cells-push gfa (cells-at og (+ (* orow 24) 2)))
+                        (cells-push gfa (cells-at og (+ (* orow 24) 3)))
+                        (cells-push gfa (cells-at og (+ (* orow 24) 4)))
+                        (cells-push gfa (fr-reason fr))))
+                  (do (set r (gf-copy-row og orow grl))
+                      (set num (fr-number fr))
+                      (grl-set grl r 16 num)
+                      (grl-set grl r 17 (fr-conf fr))
+                      (grl-set grl r 18 (bit-or (cells-at og (+ (* orow 24) 18)) (fr-flags fr)))
+                      (grl-set grl r 19 gid)
+                      (if (or (== num 510) (== num 512))
+                        (grl-set grl r 14 (bit-or (gs-vector) (gs-trace))))
+                      (if (and (== num 512) (< (cells-at og (+ (* orow 24) 12)) 0))
+                        (do (set t (gf-first-trace gc aux n root))
+                            (if (>= t 0) (grl-set grl r 12 (gcat gc t C_COL)))))
+                      (set kept (+ kept 1))))))
+          (set i (+ i 1))))
+    (return kept)))
+
+(defn ^I32 gf-unit-box [^Cells un ^I32 u ^:mut ^Cells gv]
+  (comment "A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.")
+  (let [^I32 half (quot (+ (gf-max (unat un u 6) 1) 1) 2)]
+    (if (== (unat un u 2) (go-h))
+      (do (cells-set gv 0 (unat un u 3))
+          (cells-set gv 1 (- (unat un u 5) half))
+          (cells-set gv 2 (unat un u 4))
+          (cells-set gv 3 (+ (unat un u 5) half)))
+      (do (cells-set gv 0 (- (unat un u 5) half))
+          (cells-set gv 1 (unat un u 3))
+          (cells-set gv 2 (+ (unat un u 5) half))
+          (cells-set gv 3 (unat un u 4))))
+    (return 0)))
+
+(defn ^I32 gf-emit-trace-units [^Cells ctx ^Cells un ^Cells im ^Cells hl ^Cells owords ^Cells etext ^Cells words ^Cells ggp
+                                ^:mut ^Cells grl ^:mut ^Cells fx ^:mut ^Cells gv]
+  (comment "Every rule unit the tracer alone draws (kind 2) and every OCR-only group (kind 5) through block 500. Answers the rules kept.")
+  (let [^I32 page (cells-at ctx X_PAGE)
+        ^I32 kind (cells-at ctx X_KIND)
+        ^I32 nu (quot (cells-len un) 24)
+        ^:mut ^I32 u 0
+        ^:mut ^I32 rg 0
+        ^:mut ^I32 fr 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 conf 0
+        ^:mut ^I32 tconf 0
+        ^:mut ^I32 score 0
+        ^:mut ^I32 ocr 0
+        ^:mut ^I32 kept 0
+        ^:mut ^I32 gid 0
+        ^:mut ^I32 src 0]
+    (while (< u nu)
+      (do (if (or (== (unat un u 1) 2) (== (unat un u 1) 5))
+            (do (set gid (unat un u 0))
+                (gf-gv-reset gv)
+                (if (== (unat un u 1) 5)
+                  (cells-set gv 100 5)
+                  (do (cells-set gv 100 2)
+                      (cells-set gv 104 1)
+                      (set rg (gf-region-of ctx im (quot (+ (unat un u 11) (unat un u 13)) 2) (quot (+ (unat un u 12) (unat un u 14)) 2)))
+                      (set tconf (unat un u 9))
+                      (set ocr (unat un u 10))
+                      (if (>= tconf 0)
+                        (if (>= ocr 500)
+                          (cells-set gv 105 (+ tconf (fg-ocr-bonus)))
+                          (cells-set gv 105 tconf)))
+                      (cells-set gv 106 ocr)
+                      (if (and (== kind 1) (>= rg 0)) (cells-set gv 107 1) (cells-set gv 107 0))
+                      (cells-set gv 108 kind)
+                      (set score (gf-region-score hl page rg))
+                      (cells-set gv 109 score)
+                      (cells-set gv 111 (cells-at ctx X_PREC))
+                      (cells-set gv 118 (unat un u 16))
+                      (gf-unit-box un u gv)
+                      (if (and (== kind 1) (< rg 0))
+                        (cells-set gv 112 (gf-text-share ctx words (cells-at gv 0) (cells-at gv 1) (cells-at gv 2) (cells-at gv 3))))
+                      (cells-set gv 113 (gf-in-oword ctx owords etext (cells-at gv 0) (cells-at gv 1) (cells-at gv 2) (cells-at gv 3)))))
+                (set fr (fr-decide-block gv 500))
+                (gf-explain fx gid fr gv)
+                (if (and (== (fr-winner fr) 2) (== (unat un u 1) 2))
+                  (do (gf-unit-box un u gv)
+                      (set r (grl-new grl page (cells-at gv 0) (cells-at gv 1) (cells-at gv 2) (cells-at gv 3)
+                                      (unat un u 11) (unat un u 12) (unat un u 13) (unat un u 14) (gf-max (unat un u 6) 1) (unat un u 2)))
+                      (grl-set grl r 11 (gf-angle-of (- (unat un u 13) (unat un u 11)) (- (unat un u 14) (unat un u 12))))
+                      (grl-set grl r 12 (unat un u 7))
+                      (grl-set grl r 13 (unat un u 8))
+                      (set src (gs-trace))
+                      (if (> (unat un u 10) 0) (set src (bit-or src (gs-ocr))))
+                      (grl-set grl r 14 src)
+                      (grl-set grl r 15 (gs-trace))
+                      (grl-set grl r 16 (fr-number fr))
+                      (set conf (fr-conf fr))
+                      (if (< conf 0)
+                        (do (set conf (unat un u 9))
+                            (if (< conf 0) (set conf 500))
+                            (set conf (quot (* conf (gf-max 0 score)) 1000))))
+                      (grl-set grl r 17 conf)
+                      (grl-set grl r 18 (fr-flags fr))
+                      (grl-set grl r 19 gid)
+                      (set kept (+ kept 1))))))
+          (set u (+ u 1))))
+    (return kept)))
+
+(defn ^I32 gf-emit-fills [^Cells ctx ^Cells gc ^I32 n ^Cells aux ^Cells ofl ^Cells un ^Cells im ^Cells hl ^Cells ggp
+                          ^:mut ^Cells gfl ^:mut ^Cells fx ^:mut ^Cells gv]
+  (comment "Every vector fill (a tint over it is its witness) and every tint no vector fill has, through block 500, into `gfl`. Answers the fills kept.")
+  (let [^I32 page (cells-at ctx X_PAGE)
+        ^I32 kind (cells-at ctx X_KIND)
+        ^I32 nu (quot (cells-len un) 24)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 u 0
+        ^:mut ^I32 gid 0
+        ^:mut ^I32 fr 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 rg 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 colour 0
+        ^:mut ^I32 kept 0
+        ^:mut ^I32 num 0
+        ^:mut ^I32 orow 0]
+    (while (< i n)
+      (do (if (and (== (gcat gc i C_KIND) 2) (== (gcat gc i C_SRC) 1))
+            (do (set gid (cells-at aux (+ (* n A_GID) (gcat gc i C_UF))))
+                (set orow (gcat gc i C_ROW))
+                (set t (gcat gc i C_WIT))
+                (gf-gv-reset gv)
+                (cells-set gv 100 3)
+                (cells-set gv 108 kind)
+                (if (< (gcat gc i C_COL) 0) (cells-set gv 115 0) (cells-set gv 115 1))
+                (if (>= t 0) (cells-set gv 116 1) (cells-set gv 116 0))
+                (set fr (fr-decide-block gv 500))
+                (gf-explain fx gid fr gv)
+                (if (!= (fr-winner fr) 0)
+                  (do (set r (quot (cells-len gfl) 16))
+                      (set u 0)
+                      (while (< u 16)
+                        (do (cells-push gfl (cells-at ofl (+ (* orow 16) u)))
+                            (set u (+ u 1))))
+                      (set num (fr-number fr))
+                      (gfl-set gfl r 9 num)
+                      (gfl-set gfl r 10 (fr-conf fr))
+                      (gfl-set gfl r 11 (bit-or (cells-at ofl (+ (* orow 16) 11)) (fr-flags fr)))
+                      (gfl-set gfl r 12 gid)
+                      (if (>= t 0)
+                        (do (gfl-set gfl r 7 (bit-or (gs-vector) (gs-trace)))
+                            (if (< (gcat gc i C_COL) 0)
+                              (do (set colour (gcat gc t C_COL))
+                                  (gfl-set gfl r 5 colour)
+                                  (gfl-set gfl r 6 (gf-lightness colour))))))
+                      (set kept (+ kept 1))))))
+          (set i (+ i 1))))
+    (set u 0)
+    (while (< u nu)
+      (do (if (== (unat un u 1) 4)
+            (do (set gid (unat un u 0))
+                (set rg (gf-region-of ctx im (quot (+ (unat un u 11) (unat un u 13)) 2) (quot (+ (unat un u 12) (unat un u 14)) 2)))
+                (gf-gv-reset gv)
+                (cells-set gv 100 4)
+                (cells-set gv 108 kind)
+                (if (and (== kind 1) (>= rg 0)) (cells-set gv 107 1) (cells-set gv 107 0))
+                (cells-set gv 109 (gf-region-score hl page rg))
+                (cells-set gv 111 (cells-at ctx X_PREC))
+                (set fr (fr-decide-block gv 500))
+                (gf-explain fx gid fr gv)
+                (if (== (fr-winner fr) 2)
+                  (do (set r (gfl-new gfl page (unat un u 11) (unat un u 12) (unat un u 13) (unat un u 14) (unat un u 7)))
+                      (gfl-set gfl r 6 (gf-lightness (unat un u 7)))
+                      (gfl-set gfl r 7 (gs-trace))
+                      (gfl-set gfl r 8 (gs-trace))
+                      (gfl-set gfl r 9 (fr-number fr))
+                      (gfl-set gfl r 10 (fr-conf fr))
+                      (gfl-set gfl r 11 (fr-flags fr))
+                      (gfl-set gfl r 12 gid)
+                      (set kept (+ kept 1))))))
+          (set u (+ u 1))))
+    (return kept)))
+
+;; ------------------------------------------------------------- regions (D228)
+
+(defn ^I32 gf-crosses [^Cells grl ^I32 h ^I32 v]
+  (comment "1 when horizontal rule row h and vertical rule row v touch within 3 pt (D179's lattice test).")
+  (let [^I32 hx0 (gf-min (grl-get grl h 5) (grl-get grl h 7))
+        ^I32 hx1 (gf-max (grl-get grl h 5) (grl-get grl h 7))
+        ^I32 hy (quot (+ (grl-get grl h 6) (grl-get grl h 8)) 2)
+        ^I32 vx (quot (+ (grl-get grl v 5) (grl-get grl v 7)) 2)
+        ^I32 vy0 (gf-min (grl-get grl v 6) (grl-get grl v 8))
+        ^I32 vy1 (gf-max (grl-get grl v 6) (grl-get grl v 8))]
+    (if (and (and (>= vx (- hx0 300)) (<= vx (+ hx1 300))) (and (>= hy (- vy0 300)) (<= hy (+ vy1 300)))) (return 1))
+    (return 0)))
+
+(defn ^I32 gf-in-region [^Cells grl ^I32 r ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1]
+  (comment "1 when the middle of rule row r is inside the box.")
+  (let [^I32 cx (quot (+ (grl-get grl r 5) (grl-get grl r 7)) 2)
+        ^I32 cy (quot (+ (grl-get grl r 6) (grl-get grl r 8)) 2)]
+    (if (and (and (>= cx rx0) (< cx rx1)) (and (>= cy ry0) (< cy ry1))) (return 1))
+    (return 0)))
+
+(defn ^I32 gf-lattice [^Cells grl ^I32 g0 ^I32 g1 ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1]
+  (comment "1 when the `in-image` rules of rows [g0, g1) inside the box make a lattice: two horizontal and two vertical rules, each pair at least 5 pt apart, every")
+  (comment "horizontal touching every vertical within 3 pt (D179's component test without its text test, over a region; at most 300 rules of each kind are tried).")
+  (let [^:mut ^I32 a g0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 tried 0
+        ^:mut ^I32 v1 -1]
+    (while (< a g1)
+      (do (if (and (== (grl-get grl a 10) (go-h)) (and (!= (bit-and (grl-get grl a 18) (gq-in-image)) 0) (== (gf-in-region grl a rx0 ry0 rx1 ry1) 1)))
+            (do (set b (+ a 1))
+                (while (< b g1)
+                  (do (if (and (== (grl-get grl b 10) (go-h)) (and (!= (bit-and (grl-get grl b 18) (gq-in-image)) 0) (== (gf-in-region grl b rx0 ry0 rx1 ry1) 1)))
+                        (if (>= (gf-abs (- (quot (+ (grl-get grl a 6) (grl-get grl a 8)) 2) (quot (+ (grl-get grl b 6) (grl-get grl b 8)) 2))) 500)
+                          (do (set tried (+ tried 1))
+                              (set v1 -1)
+                              (set c g0)
+                              (while (< c g1)
+                                (do (if (and (== (grl-get grl c 10) (go-v)) (and (!= (bit-and (grl-get grl c 18) (gq-in-image)) 0) (== (gf-in-region grl c rx0 ry0 rx1 ry1) 1)))
+                                      (if (and (== (gf-crosses grl a c) 1) (== (gf-crosses grl b c) 1))
+                                        (if (< v1 0)
+                                          (set v1 c)
+                                          (if (>= (gf-abs (- (quot (+ (grl-get grl c 5) (grl-get grl c 7)) 2) (quot (+ (grl-get grl v1 5) (grl-get grl v1 7)) 2))) 500)
+                                            (return 1)))))
+                                    (set c (+ c 1)))))))
+                      (if (> tried 300000) (return 0))
+                      (set b (+ b 1))))))
+          (set a (+ a 1))))
+    (return 0)))
+
+(defn ^I32 gf-bands [^Cells gfl ^I32 f0 ^I32 f1 ^I32 rx0 ^I32 ry0 ^I32 rx1 ^I32 ry1]
+  (comment "1 when the `in-image` fills of rows [f0, f1) inside the box include three bands of one extent (left and right edges within 3 pt) stacked one on the next (3 pt).")
+  (let [^:mut ^I32 a f0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0]
+    (while (< a f1)
+      (do (if (and (!= (bit-and (gfl-get gfl a 11) (gqf-in-image)) 0)
+                   (and (>= (gfl-get gfl a 1) rx0) (and (<= (gfl-get gfl a 3) rx1) (and (>= (gfl-get gfl a 2) ry0) (<= (gfl-get gfl a 4) ry1)))))
+            (do (set b f0)
+                (while (< b f1)
+                  (do (if (and (!= b a) (!= (bit-and (gfl-get gfl b 11) (gqf-in-image)) 0))
+                        (if (and (<= (gf-abs (- (gfl-get gfl b 1) (gfl-get gfl a 1))) 300) (and (<= (gf-abs (- (gfl-get gfl b 3) (gfl-get gfl a 3))) 300)
+                                 (<= (gf-abs (- (gfl-get gfl b 2) (gfl-get gfl a 4))) 300)))
+                          (do (set c f0)
+                              (while (< c f1)
+                                (do (if (and (!= c a) (and (!= c b) (!= (bit-and (gfl-get gfl c 11) (gqf-in-image)) 0)))
+                                      (if (and (<= (gf-abs (- (gfl-get gfl c 1) (gfl-get gfl a 1))) 300) (and (<= (gf-abs (- (gfl-get gfl c 3) (gfl-get gfl a 3))) 300)
+                                               (<= (gf-abs (- (gfl-get gfl c 2) (gfl-get gfl b 4))) 300)))
+                                        (return 1)))
+                                    (set c (+ c 1)))))))
+                      (set b (+ b 1))))))
+          (set a (+ a 1))))
+    (return 0)))
+
+(defn ^I32 gf-count-inside [^Cells grl ^Cells gfl ^I32 g0 ^I32 f0 ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^:mut ^Cells grg ^I32 region]
+  (comment "The fused rules (from row g0 on) and fills (from row f0 on) whose middle lies in the box, into the region's cells 9 and 10.")
+  (let [^:mut ^I32 i g0
+        ^:mut ^I32 nr 0
+        ^:mut ^I32 nf 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0]
+    (while (< i (grl-count grl))
+      (do (if (== (gf-in-region grl i x0 y0 x1 y1) 1) (set nr (+ nr 1)))
+          (set i (+ i 1))))
+    (set i f0)
+    (while (< i (gfl-count gfl))
+      (do (set cx (quot (+ (gfl-get gfl i 1) (gfl-get gfl i 3)) 2))
+          (set cy (quot (+ (gfl-get gfl i 2) (gfl-get gfl i 4)) 2))
+          (if (and (and (>= cx x0) (< cx x1)) (and (>= cy y0) (< cy y1))) (set nf (+ nf 1)))
+          (set i (+ i 1))))
+    (grg-set grg region 9 nr)
+    (grg-set grg region 10 nf)
+    (return 0)))
+
+(defn ^I32 gf-grow [^:mut ^Cells grg ^I32 r ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "Grow region r's box to take in the box.")
+  (let [^I32 a (gf-min (grg-get grg r 1) x0)
+        ^I32 b (gf-min (grg-get grg r 2) y0)
+        ^I32 c (gf-max (grg-get grg r 3) x1)
+        ^I32 d (gf-max (grg-get grg r 4) y1)]
+    (grg-set grg r 1 a)
+    (grg-set grg r 2 b)
+    (grg-set grg r 3 c)
+    (grg-set grg r 4 d)
+    (return 0)))
+
+(defn ^I32 gf-fig-add [^:mut ^Cells un ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 src ^I32 sea ^I32 sidx]
+  (comment "A figure candidate (stride 24 in `un`): 0-3 box, 4 sources, 5 6 its subject, 7 union-find parent.")
+  (let [^I32 i (quot (cells-len un) 24)
+        ^:mut ^I32 k 8]
+    (cells-push un x0)
+    (cells-push un y0)
+    (cells-push un x1)
+    (cells-push un y1)
+    (cells-push un src)
+    (cells-push un sea)
+    (cells-push un sidx)
+    (cells-push un i)
+    (while (< k 24)
+      (do (cells-push un 0)
+          (set k (+ k 1))))
+    (return i)))
+
+(defn ^I32 gf-fig-find [^:mut ^Cells un ^I32 i]
+  (let [^:mut ^I32 r i]
+    (while (!= (unat un r 7) r)
+      (set r (unat un r 7)))
+    (return r)))
+
+(defn ^I32 gf-fig-clusters [^Cells ctx ^Cells pa ^:mut ^Cells gc ^:mut ^Cells un]
+  (comment "Vector figure clusters (SPEC 9.9): the page's paths that are curves or polygons, on a grid of 32 x 32 cells over their extent (a cell is at least 12 pt, so paths")
+  (comment "within 6 pt of each other fall in one cell or neighbouring ones); a connected set of occupied cells holding at least 8 of them is one cluster, a candidate figure")
+  (comment "of the box of its paths. (`gc` is scratch here: the page's candidates are done with.) Answers the clusters added.")
+  (let [^:mut ^I32 p (cells-at ctx X_P0)
+        ^:mut ^I32 bx0 2000000000
+        ^:mut ^I32 by0 2000000000
+        ^:mut ^I32 bx1 -2000000000
+        ^:mut ^I32 by1 -2000000000
+        ^:mut ^I32 np 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 cs 1200
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 cell 0
+        ^:mut ^I32 changed 1
+        ^:mut ^I32 iter 0
+        ^:mut ^I32 nb 0
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 lab 0
+        ^:mut ^I32 added 0]
+    (while (< p (cells-at ctx X_P1))
+      (do (if (or (== (pa-get pa p (pf-kind)) (pa-curve)) (== (pa-get pa p (pf-kind)) (pa-other)))
+            (do (set np (+ np 1))
+                (set bx0 (gf-min bx0 (pa-get pa p (pf-x0))))
+                (set by0 (gf-min by0 (pa-get pa p (pf-y0))))
+                (set bx1 (gf-max bx1 (pa-get pa p (pf-x1))))
+                (set by1 (gf-max by1 (pa-get pa p (pf-y1))))))
+          (set p (+ p 1))))
+    (if (< np 8) (return 0))
+    (set cs (gf-max 1200 (quot (+ (gf-max (- bx1 bx0) (- by1 by0)) 31) 32)))
+    (cells-drop gc 0)
+    (while (< k (* 1024 6))
+      (do (cells-push gc 0)
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k 1024)
+      (do (cells-set gc (+ (* k 6) 1) 2000000000)
+          (cells-set gc (+ (* k 6) 2) 2000000000)
+          (cells-set gc (+ (* k 6) 3) -2000000000)
+          (cells-set gc (+ (* k 6) 4) -2000000000)
+          (cells-set gc (+ (* k 6) 5) k)
+          (set k (+ k 1))))
+    (set p (cells-at ctx X_P0))
+    (while (< p (cells-at ctx X_P1))
+      (do (if (or (== (pa-get pa p (pf-kind)) (pa-curve)) (== (pa-get pa p (pf-kind)) (pa-other)))
+            (do (set cx (gf-min 31 (quot (- (quot (+ (pa-get pa p (pf-x0)) (pa-get pa p (pf-x1))) 2) bx0) cs)))
+                (set cy (gf-min 31 (quot (- (quot (+ (pa-get pa p (pf-y0)) (pa-get pa p (pf-y1))) 2) by0) cs)))
+                (set cell (+ (* cy 32) cx))
+                (cells-set gc (* cell 6) (+ (cells-at gc (* cell 6)) 1))
+                (cells-set gc (+ (* cell 6) 1) (gf-min (cells-at gc (+ (* cell 6) 1)) (pa-get pa p (pf-x0))))
+                (cells-set gc (+ (* cell 6) 2) (gf-min (cells-at gc (+ (* cell 6) 2)) (pa-get pa p (pf-y0))))
+                (cells-set gc (+ (* cell 6) 3) (gf-max (cells-at gc (+ (* cell 6) 3)) (pa-get pa p (pf-x1))))
+                (cells-set gc (+ (* cell 6) 4) (gf-max (cells-at gc (+ (* cell 6) 4)) (pa-get pa p (pf-y1))))))
+          (set p (+ p 1))))
+    (while (and (== changed 1) (< iter 70))
+      (do (set changed 0)
+          (set cell 0)
+          (while (< cell 1024)
+            (do (if (> (cells-at gc (* cell 6)) 0)
+                  (do (set dy -1)
+                      (while (<= dy 1)
+                        (do (set dx -1)
+                            (while (<= dx 1)
+                              (do (set cx (+ (rem cell 32) dx))
+                                  (set cy (+ (quot cell 32) dy))
+                                  (if (and (and (>= cx 0) (< cx 32)) (and (>= cy 0) (< cy 32)))
+                                    (do (set nb (+ (* cy 32) cx))
+                                        (if (> (cells-at gc (* nb 6)) 0)
+                                          (if (< (cells-at gc (+ (* nb 6) 5)) (cells-at gc (+ (* cell 6) 5)))
+                                            (do (cells-set gc (+ (* cell 6) 5) (cells-at gc (+ (* nb 6) 5)))
+                                                (set changed 1))))))
+                                  (set dx (+ dx 1))))
+                            (set dy (+ dy 1))))))
+                (set cell (+ cell 1))))
+          (set iter (+ iter 1))))
+    (set lab 0)
+    (while (< lab 1024)
+      (do (set np 0)
+          (set bx0 2000000000)
+          (set by0 2000000000)
+          (set bx1 -2000000000)
+          (set by1 -2000000000)
+          (set cell 0)
+          (while (< cell 1024)
+            (do (if (and (> (cells-at gc (* cell 6)) 0) (== (cells-at gc (+ (* cell 6) 5)) lab))
+                  (do (set np (+ np (cells-at gc (* cell 6))))
+                      (set bx0 (gf-min bx0 (cells-at gc (+ (* cell 6) 1))))
+                      (set by0 (gf-min by0 (cells-at gc (+ (* cell 6) 2))))
+                      (set bx1 (gf-max bx1 (cells-at gc (+ (* cell 6) 3))))
+                      (set by1 (gf-max by1 (cells-at gc (+ (* cell 6) 4))))))
+                (set cell (+ cell 1))))
+          (if (>= np 8)
+            (do (gf-fig-add un bx0 by0 bx1 by1 (gs-vector) -1 -1)
+                (set added (+ added 1))))
+          (set lab (+ lab 1))))
+    (return added)))
+
+(defn ^I32 gf-regions [^Cells ctx ^Cells grl ^Cells gfl ^Cells im ^Cells pa ^Cells oblocks
+                       ^:mut ^Cells grg ^:mut ^Cells gc ^:mut ^Cells un]
+  (comment "The page's `grg` rows (D228): a TABLE-IN-IMAGE for each visible image placement (2 cm each way) whose `in-image` fused rules make a lattice or whose")
+  (comment "`in-image` fills make a stack of three bands, the box being what those rules and fills cover; a FIGURE for each merged (box IoU of 500) set of the visible image")
+  (comment "placements that are not tables, OCR image blocks and vector figure clusters; a TABLE-HINT for each OCR table block (confidence 300). The rows made by the page")
+  (comment "are those of `grl` from `X_NGRL` and `gfl` from `X_NGFL`. Answers the rows made.")
+  (let [^I32 page (cells-at ctx X_PAGE)
+        ^I32 g0 (cells-at ctx X_NGRL)
+        ^I32 f0 (cells-at ctx X_NGFL)
+        ^I32 g1 (grl-count grl)
+        ^I32 f1 (gfl-count gfl)
+        ^I32 first (grg-count grg)
+        ^:mut ^I32 m (cells-at ctx X_I0)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 ok 0
+        ^:mut ^I32 ra 0
+        ^:mut ^I32 rb 0
+        ^:mut ^I32 src 0
+        ^:mut ^I32 nsrc 0
+        ^:mut ^I32 sea -1
+        ^:mut ^I32 sidx -1
+        ^:mut ^I32 csum 0
+        ^:mut ^I32 cn 0]
+    (while (< m (cells-at ctx X_I1))
+      (do (if (== (gf-image-ok im m) 1)
+            (do (set x0 (im-get im m (mf-x0)))
+                (set y0 (im-get im m (mf-y0)))
+                (set x1 (im-get im m (mf-x1)))
+                (set y1 (im-get im m (mf-y1)))
+                (set ok (gf-lattice grl g0 g1 x0 y0 x1 y1))
+                (if (== ok 0) (set ok (gf-bands gfl f0 f1 x0 y0 x1 y1)))
+                (if (== ok 1)
+                  (do (set r (grg-new grg page x1 y1 x0 y0 (rk-table-in-image)))
+                      (set csum 0)
+                      (set cn 0)
+                      (set i g0)
+                      (while (< i g1)
+                        (do (if (and (!= (bit-and (grl-get grl i 18) (gq-in-image)) 0) (== (gf-in-region grl i x0 y0 x1 y1) 1))
+                              (do (gf-grow grg r (grl-get grl i 1) (grl-get grl i 2) (grl-get grl i 3) (grl-get grl i 4))
+                                  (set csum (+ csum (grl-get grl i 17)))
+                                  (set cn (+ cn 1))))
+                            (set i (+ i 1))))
+                      (set i f0)
+                      (while (< i f1)
+                        (do (if (and (!= (bit-and (gfl-get gfl i 11) (gqf-in-image)) 0)
+                                     (and (>= (gfl-get gfl i 1) x0) (and (<= (gfl-get gfl i 3) x1) (and (>= (gfl-get gfl i 2) y0) (<= (gfl-get gfl i 4) y1)))))
+                              (gf-grow grg r (gfl-get gfl i 1) (gfl-get gfl i 2) (gfl-get gfl i 3) (gfl-get gfl i 4)))
+                            (set i (+ i 1))))
+                      (grg-set grg r 6 (bit-or (gs-trace) (gs-image)))
+                      (grg-set grg r 7 (ea-images))
+                      (grg-set grg r 8 m)
+                      (if (> cn 0) (grg-set grg r 11 (quot csum cn)) (grg-set grg r 11 500))
+                      (gf-count-inside grl gfl g0 f0 (grg-get grg r 1) (grg-get grg r 2) (grg-get grg r 3) (grg-get grg r 4) grg r)))))
+          (set m (+ m 1))))
+    (comment "figures: candidates, merged")
+    (cells-drop un 0)
+    (set m (cells-at ctx X_I0))
+    (while (< m (cells-at ctx X_I1))
+      (do (if (and (== (im-get im m (mf-vis)) 0)
+                   (and (>= (- (im-get im m (mf-x1)) (im-get im m (mf-x0))) 500) (>= (- (im-get im m (mf-y1)) (im-get im m (mf-y0))) 500)))
+            (do (set ok 1)
+                (set j first)
+                (while (< j (grg-count grg))
+                  (do (if (== (grg-get grg j 5) (rk-table-in-image))
+                        (if (>= (gf-iou (grg-get grg j 1) (grg-get grg j 2) (grg-get grg j 3) (grg-get grg j 4)
+                                        (im-get im m (mf-x0)) (im-get im m (mf-y0)) (im-get im m (mf-x1)) (im-get im m (mf-y1))) 500)
+                          (set ok 0)))
+                      (set j (+ j 1))))
+                (if (== ok 1)
+                  (gf-fig-add un (im-get im m (mf-x0)) (im-get im m (mf-y0)) (im-get im m (mf-x1)) (im-get im m (mf-y1)) (gs-image) (ea-images) m))))
+          (set m (+ m 1))))
+    (set i (cells-at ctx X_B0))
+    (while (< i (cells-at ctx X_B1))
+      (do (if (and (== (ob-get oblocks i (obf-kind)) (ob-block)) (== (ob-get oblocks i (obf-btype)) 2))
+            (gf-fig-add un (ob-get oblocks i (obf-x0)) (ob-get oblocks i (obf-y0)) (ob-get oblocks i (obf-x1)) (ob-get oblocks i (obf-y1)) (gs-ocr) (ea-oblocks) i))
+          (set i (+ i 1))))
+    (gf-fig-clusters ctx pa gc un)
+    (set i 0)
+    (while (< i (quot (cells-len un) 24))
+      (do (set j (+ i 1))
+          (while (< j (quot (cells-len un) 24))
+            (do (if (>= (gf-iou (unat un i 0) (unat un i 1) (unat un i 2) (unat un i 3) (unat un j 0) (unat un j 1) (unat un j 2) (unat un j 3)) 500)
+                  (do (set ra (gf-fig-find un i))
+                      (set rb (gf-fig-find un j))
+                      (if (< ra rb) (unput un rb 7 ra))
+                      (if (< rb ra) (unput un ra 7 rb))))
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (quot (cells-len un) 24))
+      (do (if (== (gf-fig-find un i) i)
+            (do (set x0 (unat un i 0))
+                (set y0 (unat un i 1))
+                (set x1 (unat un i 2))
+                (set y1 (unat un i 3))
+                (set src (unat un i 4))
+                (set sea (unat un i 5))
+                (set sidx (unat un i 6))
+                (set j (+ i 1))
+                (while (< j (quot (cells-len un) 24))
+                  (do (if (== (gf-fig-find un j) i)
+                        (do (set x0 (gf-min x0 (unat un j 0)))
+                            (set y0 (gf-min y0 (unat un j 1)))
+                            (set x1 (gf-max x1 (unat un j 2)))
+                            (set y1 (gf-max y1 (unat un j 3)))
+                            (set src (bit-or src (unat un j 4)))
+                            (if (and (< sea 0) (>= (unat un j 5) 0))
+                              (do (set sea (unat un j 5))
+                                  (set sidx (unat un j 6))))))
+                      (set j (+ j 1))))
+                (set r (grg-new grg page x0 y0 x1 y1 (rk-figure)))
+                (grg-set grg r 6 src)
+                (grg-set grg r 7 sea)
+                (grg-set grg r 8 sidx)
+                (set nsrc 0)
+                (if (!= (bit-and src 1) 0) (set nsrc (+ nsrc 1)))
+                (if (!= (bit-and src 4) 0) (set nsrc (+ nsrc 1)))
+                (if (!= (bit-and src 16) 0) (set nsrc (+ nsrc 1)))
+                (grg-set grg r 11 (gf-min 1000 (+ 400 (* 150 nsrc))))
+                (gf-count-inside grl gfl g0 f0 x0 y0 x1 y1 grg r)))
+          (set i (+ i 1))))
+    (set i (cells-at ctx X_B0))
+    (while (< i (cells-at ctx X_B1))
+      (do (if (and (== (ob-get oblocks i (obf-kind)) (ob-block)) (== (ob-get oblocks i (obf-btype)) 1))
+            (do (set r (grg-new grg page (ob-get oblocks i (obf-x0)) (ob-get oblocks i (obf-y0)) (ob-get oblocks i (obf-x1)) (ob-get oblocks i (obf-y1)) (rk-table-hint)))
+                (grg-set grg r 6 (gs-ocr))
+                (grg-set grg r 7 (ea-oblocks))
+                (grg-set grg r 8 i)
+                (grg-set grg r 11 300)
+                (gf-count-inside grl gfl g0 f0 (grg-get grg r 1) (grg-get grg r 2) (grg-get grg r 3) (grg-get grg r 4) grg r)))
+          (set i (+ i 1))))
+    (return (- (grg-count grg) first))))
+
+;; ------------------------------------------------------------- where graphics meet words: features 30 and 31 (D224)
+
+(defn ^I32 gf-words [^Cells ctx ^Cells owords ^Cells etext ^:mut ^Cells feats ^Cells grl ^Cells grg ^I32 g0 ^I32 q0]
+  (comment "The page's OCR words' features: 30 the share (per mille, the regions' added, at most 1000) of the word's box that lies in a `table-in-image` region of the")
+  (comment "page (`grg` rows from `q0`), 31 the rule-likeness: for a word of at most two code points all of them rule glyphs, the share of its box the fused rules")
+  (comment "(`grl` rows from `g0`) cover; -1 for any other word. Words with no feature row are left alone. Answers the words written.")
+  (let [^:mut ^I32 w (cells-at ctx X_W0)
+        ^:mut ^I32 f 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 area 0
+        ^:mut ^I32 inter 0
+        ^:mut ^I32 iw 0
+        ^:mut ^I32 ih 0]
+    (while (< w (cells-at ctx X_W1))
+      (do (set f (ow-get owords w (hd-feat)))
+          (if (>= f 0)
+            (do (set x0 (ow-get owords w (hd-x0)))
+                (set y0 (ow-get owords w (hd-y0)))
+                (set x1 (ow-get owords w (hd-x1)))
+                (set y1 (ow-get owords w (hd-y1)))
+                (set s 0)
+                (set q q0)
+                (while (< q (grg-count grg))
+                  (do (if (and (== (grg-get grg q 0) (cells-at ctx X_PAGE)) (== (grg-get grg q 5) (rk-table-in-image)))
+                        (set s (+ s (gf-inside-share x0 y0 x1 y1 (grg-get grg q 1) (grg-get grg q 2) (grg-get grg q 3) (grg-get grg q 4)))))
+                      (set q (+ q 1))))
+                (fe-set feats f (xo-in-table-image) (gf-min s 1000))
+                (set v -1)
+                (if (== (gf-word-rule-like owords etext w) 1)
+                  (do (set area (* (gf-max 1 (quot (gf-max 0 (- x1 x0)) 10)) (gf-max 1 (quot (gf-max 0 (- y1 y0)) 10))))
+                      (set inter 0)
+                      (set g g0)
+                      (while (< g (grl-count grl))
+                        (do (set iw (quot (gf-max 0 (- (gf-min x1 (grl-get grl g 3)) (gf-max x0 (grl-get grl g 1)))) 10))
+                            (set ih (quot (gf-max 0 (- (gf-min y1 (grl-get grl g 4)) (gf-max y0 (grl-get grl g 2)))) 10))
+                            (set inter (+ inter (* iw ih)))
+                            (set g (+ g 1))))
+                      (set v (gf-min 1000 (quot inter (gf-max 1 (quot area 1000)))))))
+                (fe-set feats f (xo-rule-like) v)
+                (set n (+ n 1))))
+          (set w (+ w 1))))
+    (return n)))
+
+;; ------------------------------------------------------------- one page, the document, the ledger
+
+(defn ^I32 gf-fuse-page [^:mut ^Cells ctx ^Cells og ^Cells ofl ^Cells rules ^Cells prims ^Cells oblocks ^Cells owords ^Cells words ^Cells etext ^Cells pa ^Cells im
+                         ^:mut ^Cells feats ^:mut ^Cells grl ^:mut ^Cells gfl ^:mut ^Cells ggp ^:mut ^Cells grg ^:mut ^Cells refs ^:mut ^Cells hl ^:mut ^Cells fx ^:mut ^Cells gfa
+                         ^:mut ^Cells gc ^:mut ^Cells aux ^:mut ^Cells un ^:mut ^Cells gv]
+  (comment "One page that has a raster answer, from the head of this file: candidates, groups, sweeps, health, arbitration, regions, the words' features. Answers 0.")
+  (let [^I32 n (gf-build gc ctx og ofl rules prims oblocks)
+        ^:mut ^I32 q0 0]
+    (cells-set ctx X_N n)
+    (gf-pairs gc n)
+    (gf-order gc aux n)
+    (gf-groups gc aux n ctx og ofl ggp refs)
+    (gf-sweeps gc aux un n)
+    (gf-health ctx gc n im rules words hl)
+    (cells-set ctx X_NGRL (grl-count grl))
+    (cells-set ctx X_NGFL (gfl-count gfl))
+    (set q0 (grg-count grg))
+    (gf-emit-vec-rules ctx gc n aux og im hl ggp grl fx gfa gv)
+    (gf-emit-trace-units ctx un im hl owords etext words ggp grl fx gv)
+    (gf-emit-fills ctx gc n aux ofl un im hl ggp gfl fx gv)
+    (gf-regions ctx grl gfl im pa oblocks grg gc un)
+    (gf-words ctx owords etext feats grl grg (cells-at ctx X_NGRL) q0)
+    (return 0)))
+
+(defn ^I32 gf-advance [^Cells c ^I32 stride ^I32 field ^I32 i ^I32 page]
+  (comment "The first row at or after i whose page (cell `field`) is not before `page`.")
+  (let [^I32 n (quot (cells-len c) stride)
+        ^:mut ^I32 j i]
+    (while (and (< j n) (< (cells-at c (+ (* j stride) field)) page))
+      (set j (+ j 1)))
+    (return j)))
+
+(defn ^I32 gf-range-end [^Cells c ^I32 stride ^I32 field ^I32 i ^I32 page]
+  (comment "The first row from i on whose page is not `page`.")
+  (let [^I32 n (quot (cells-len c) stride)
+        ^:mut ^I32 j i]
+    (while (and (< j n) (== (cells-at c (+ (* j stride) field)) page))
+      (set j (+ j 1)))
+    (return j)))
+
+(defn ^I32 gf-has-rows [^Cells c ^I32 stride ^I32 field ^I32 page]
+  (comment "1 when some row of the arena is of `page` (rows are in page order).")
+  (let [^I32 n (quot (cells-len c) stride)
+        ^:mut ^I32 j 0]
+    (while (< j n)
+      (do (if (== (cells-at c (+ (* j stride) field)) page) (return 1))
+          (set j (+ j 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 gf-fuse [^I32 np ^Cells epages ^Cells inks ^Cells rules ^Cells prims ^Cells oblocks ^Cells owords ^Cells words ^Cells etext ^Cells pa ^Cells im
+                          ^:mut ^Cells feats ^:mut ^Cells grl ^:mut ^Cells gfl ^:mut ^Cells ggp ^:mut ^Cells grg ^:mut ^Cells refs ^:mut ^Cells hl ^:mut ^Cells fx ^:mut ^Cells gfa
+                          ^:mut ^Cells og ^:mut ^Cells ofl ^:mut ^Cells ctx ^:mut ^Cells gc ^:mut ^Cells aux ^:mut ^Cells un ^:mut ^Cells gv]
+  (comment "The document's other sources of graphics (SPEC 9.9, from the head of this file): every page that has a raster answer is made again from the vector rows already")
+  (comment "in `grl` and `gfl` and the tracer's and OCR's evidence; every other page is copied. Nothing to do (no `inks`, `rules` or `prims` row at all) answers 0 and touches")
+  (comment "nothing. `ggp`, `grg`, `hl`, `fx`, `refs` and `gfa` only grow. Answers the pages fused.")
+  (if (== (+ (+ (quot (cells-len inks) 12) (quot (cells-len rules) 20)) (quot (cells-len prims) 24)) 0) (return 0))
+  (let [^:mut ^I32 p 1
+        ^:mut ^I32 vi 0
+        ^:mut ^I32 vj 0
+        ^:mut ^I32 fi 0
+        ^:mut ^I32 fj 0
+        ^:mut ^I32 ri 0
+        ^:mut ^I32 rj 0
+        ^:mut ^I32 qi 0
+        ^:mut ^I32 qj 0
+        ^:mut ^I32 bi 0
+        ^:mut ^I32 bj 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 wj 0
+        ^:mut ^I32 ti 0
+        ^:mut ^I32 tj 0
+        ^:mut ^I32 pi 0
+        ^:mut ^I32 pj 0
+        ^:mut ^I32 ii 0
+        ^:mut ^I32 ij 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 ep 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 fused 0]
+    (cells-drop og 0)
+    (while (< k (cells-len grl))
+      (do (cells-push og (cells-at grl k))
+          (set k (+ k 1))))
+    (cells-drop ofl 0)
+    (set k 0)
+    (while (< k (cells-len gfl))
+      (do (cells-push ofl (cells-at gfl k))
+          (set k (+ k 1))))
+    (cells-drop grl 0)
+    (cells-drop gfl 0)
+    (cells-drop ctx 0)
+    (set k 0)
+    (while (< k 32)
+      (do (cells-push ctx 0)
+          (set k (+ k 1))))
+    (while (<= p np)
+      (do (set vi (gf-advance og 24 0 vi p))
+          (set vj (gf-range-end og 24 0 vi p))
+          (set fi (gf-advance ofl 16 0 fi p))
+          (set fj (gf-range-end ofl 16 0 fi p))
+          (set ri (gf-advance rules 20 0 ri p))
+          (set rj (gf-range-end rules 20 0 ri p))
+          (set qi (gf-advance prims 24 0 qi p))
+          (set qj (gf-range-end prims 24 0 qi p))
+          (set bi (gf-advance oblocks 16 0 bi p))
+          (set bj (gf-range-end oblocks 16 0 bi p))
+          (set wi (gf-advance owords 28 0 wi p))
+          (set wj (gf-range-end owords 28 0 wi p))
+          (set ti (gf-advance words 24 0 ti p))
+          (set tj (gf-range-end words 24 0 ti p))
+          (set pi (gf-advance pa 24 0 pi p))
+          (set pj (gf-range-end pa 24 0 pi p))
+          (set ii (gf-advance im 20 0 ii p))
+          (set ij (gf-range-end im 20 0 ii p))
+          (set kind 0)
+          (if (or (or (> rj ri) (> qj qi)) (== (gf-has-rows inks 12 0 p) 1))
+            (do (set kind 1)
+                (set ep (ev-page-row epages p))
+                (if (>= ep 0)
+                  (if (!= (bit-and (ep-get epages ep (epf-flags)) (eg-raster)) 0) (set kind 2)))))
+          (if (== kind 0)
+            (do (set k vi)
+                (while (< k vj)
+                  (do (gf-copy-row og k grl)
+                      (set k (+ k 1))))
+                (set k fi)
+                (while (< k fj)
+                  (do (set ep 0)
+                      (while (< ep 16)
+                        (do (cells-push gfl (cells-at ofl (+ (* k 16) ep)))
+                            (set ep (+ ep 1))))
+                      (set k (+ k 1)))))
+            (do (cells-set ctx X_PAGE p)
+                (cells-set ctx X_KIND kind)
+                (cells-set ctx X_V0 vi)
+                (cells-set ctx X_V1 vj)
+                (cells-set ctx X_F0 fi)
+                (cells-set ctx X_F1 fj)
+                (cells-set ctx X_R0 ri)
+                (cells-set ctx X_R1 rj)
+                (cells-set ctx X_Q0 qi)
+                (cells-set ctx X_Q1 qj)
+                (cells-set ctx X_B0 bi)
+                (cells-set ctx X_B1 bj)
+                (cells-set ctx X_W0 wi)
+                (cells-set ctx X_W1 wj)
+                (cells-set ctx X_T0 ti)
+                (cells-set ctx X_T1 tj)
+                (cells-set ctx X_P0 pi)
+                (cells-set ctx X_P1 pj)
+                (cells-set ctx X_I0 ii)
+                (cells-set ctx X_I1 ij)
+                (gf-fuse-page ctx og ofl rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa gc aux un gv)
+                (set fused (+ fused 1))))
+          (set vi vj)
+          (set fi fj)
+          (set ri rj)
+          (set qi qj)
+          (set bi bj)
+          (set wi wj)
+          (set ti tj)
+          (set pi pj)
+          (set ii ij)
+          (set p (+ p 1))))
+    (return fused)))
+
+(defn ^:pub ^I32 gf-write [^Cells gfa ^:mut ^Cells ledger]
+  (comment "The vector rules block 500 dropped (`gfa`, stride 6: page, box, ledger reason) as ledger rows, confidence 700, source `vector`. Answers the rows written.")
+  (let [^I32 n (quot (cells-len gfa) 6)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (ledger-add ledger (cells-at gfa (+ (* i 6) 5)) (cells-at gfa (* i 6)) (cells-at gfa (+ (* i 6) 1)) (cells-at gfa (+ (* i 6) 2))
+                      (cells-at gfa (+ (* i 6) 3)) (cells-at gfa (+ (* i 6) 4)) 700 (sr-vector))
+          (set i (+ i 1))))
+    (return n)))

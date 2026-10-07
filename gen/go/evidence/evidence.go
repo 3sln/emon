@@ -2405,6 +2405,12 @@ func XoLength() int32 {
 func XoEdge() int32 {
 	return 29
 }
+func XoInTableImage() int32 {
+	return 30
+}
+func XoRuleLike() int32 {
+	return 31
+}
 func XoEmitName(t *strings.Builder, code int32) int32 {
 	if code == 2 {
 		port.TextAscii(t, "conf")
@@ -2516,6 +2522,14 @@ func XoEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 29 {
 		port.TextAscii(t, "edge")
+		return 1
+	}
+	if code == 30 {
+		port.TextAscii(t, "in-table-image")
+		return 1
+	}
+	if code == 31 {
+		port.TextAscii(t, "rule-like")
 		return 1
 	}
 	return 0

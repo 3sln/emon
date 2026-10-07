@@ -5,9 +5,12 @@ package gfusetest
 
 import (
 	"emon/evidence"
+	"emon/fuserules"
 	"emon/gfuse"
 	"emon/glayer"
 	"emon/gvec"
+	"emon/model"
+	"emon/player"
 	"emon/port"
 	"testing"
 )
@@ -31,6 +34,7 @@ func TestTheRowsOfAVectorOnlyPage(emonT *testing.T) {
 	var refs *port.Cells = port.NewCells()
 	var ggp *port.Cells = port.NewCells()
 	var grg *port.Cells = port.NewCells()
+	var gv *port.Cells = port.NewCells()
 	var h int32 = guRect(pa, 1, evidence.PgFilled(), 0, 1000, 4950, 21000, 5050)
 	var v int32 = guRect(pa, 1, evidence.PgFilled(), 0, 1000, 5000, 1100, 9000)
 	var b int32 = guRect(pa, 1, evidence.PgFilled(), 0, 1000, 6950, 21000, 7050)
@@ -42,7 +46,7 @@ func TestTheRowsOfAVectorOnlyPage(emonT *testing.T) {
 	evidence.PaSet(pa, b, evidence.PfVchk(), evidence.VcBlend())
 	evidence.PaSet(pa, x, evidence.PfVis(), 3)
 	evidence.PaSet(pa, h, evidence.PfZ(), 4)
-	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 2, gvec.GvSegments(), grl, gfl, cand), 4, "four rules: the hidden one is nothing")
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 2, gvec.GvSegments(), grl, gfl, cand, gv), 4, "four rules: the hidden one is nothing")
 	port.AssertEq(emonT, glayer.GflCount(gfl), 2, "two fills")
 	port.AssertEq(emonT, glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound")
 	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 0), 1, "the first rule's page")
@@ -82,6 +86,7 @@ func TestASlantedLineIsASlantAndTheModesAgreeOnPlainBoxes(emonT *testing.T) {
 	var grl *port.Cells = port.NewCells()
 	var gfl *port.Cells = port.NewCells()
 	var cand *port.Cells = port.NewCells()
+	var gv *port.Cells = port.NewCells()
 	var r int32 = evidence.PaNew(pa, 1, evidence.PaOther(), 0, 0, 10000, 10000)
 	evidence.PaSet(pa, r, evidence.PfFlags(), evidence.PgStroked())
 	evidence.PaSet(pa, r, evidence.PfStroke(), 0)
@@ -90,18 +95,489 @@ func TestASlantedLineIsASlantAndTheModesAgreeOnPlainBoxes(emonT *testing.T) {
 	evidence.PaSet(pa, r, evidence.PfPcount(), 2)
 	evidence.PtAdd(pts, 0, 0, evidence.PoMove())
 	evidence.PtAdd(pts, 10000, 10000, evidence.PoLine())
-	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand), 1, "one rule")
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv), 1, "one rule")
 	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 10), glayer.GoSlant(), "slanted")
 	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 11), 13500, "at 135 degrees (page space has y down)")
 	// a plain thin box: the two modes give the same row
 	port.CellsDrop(pa, 0)
 	guRect(pa, 1, evidence.PgFilled(), 0, 1000, 4950, 21000, 5050)
-	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvLegacy(), grl, gfl, cand), 1, "legacy: one rule")
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvLegacy(), grl, gfl, cand, gv), 1, "legacy: one rule")
 	var a int32 = glayer.GrlGet(grl, 0, 5)
 	var b int32 = glayer.GrlGet(grl, 0, 7)
 	var c int32 = glayer.GrlGet(grl, 0, 6)
-	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand), 1, "segments: one rule")
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv), 1, "segments: one rule")
 	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 5), a, "the same left end")
 	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 7), b, "the same right end")
 	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 6), c, "the same centre")
+}
+
+func guHrule(pa *port.Cells, y int32, x0 int32, x1 int32) int32 {
+	// A vector rule, horizontal, 1 pt thick, a thin filled box.
+	return guRect(pa, 1, evidence.PgFilled(), 0, x0, y-50, x1, y+50)
+}
+
+func guVrule(pa *port.Cells, x int32, y0 int32, y1 int32) int32 {
+	return guRect(pa, 1, evidence.PgFilled(), 0, x-50, y0, x+50, y1)
+}
+
+func guLo(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func guHi(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func guTrace(rules *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, conf int32) int32 {
+	// A tracer rule on page 1 along the centre line (x0, y0)-(x1, y1), 1 pt thick, black.
+	var r int32 = evidence.RlNew(rules, 1, guLo(x0, x1)-50, guLo(y0, y1)-50, guHi(x0, x1)+50, guHi(y0, y1)+50, 0)
+	evidence.RlSet(rules, r, evidence.RlfLx0(), x0)
+	evidence.RlSet(rules, r, evidence.RlfLy0(), y0)
+	evidence.RlSet(rules, r, evidence.RlfLx1(), x1)
+	evidence.RlSet(rules, r, evidence.RlfLy1(), y1)
+	evidence.RlSet(rules, r, evidence.RlfThick(), 100)
+	evidence.RlSet(rules, r, evidence.RlfColor(), 0)
+	evidence.RlSet(rules, r, evidence.RlfStyle(), 1)
+	evidence.RlSet(rules, r, evidence.RlfConf(), conf)
+	return r
+}
+
+func guFuse(np int32, inks *port.Cells, rules *port.Cells, prims *port.Cells, oblocks *port.Cells, owords *port.Cells, words *port.Cells, etext *port.Cells, pa *port.Cells, im *port.Cells, feats *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells, refs *port.Cells, hl *port.Cells, fx *port.Cells, gfa *port.Cells) int32 {
+	// `gf-fuse` with the scratch it needs and no `epages` row (every page is a born-digital page).
+	return gfuse.GfFuse(np, port.NewCells(), inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+}
+
+func guCountRule(grl *port.Cells, rule int32) int32 {
+	// How many fused rules were decided by row `rule`.
+	var i int32 = 0
+	var n int32 = 0
+	for i < glayer.GrlCount(grl) {
+		if glayer.GrlGet(grl, i, 16) == rule {
+			n += 1
+		}
+		i += 1
+	}
+	return n
+}
+
+func guFirstRule(grl *port.Cells, rule int32) int32 {
+	// The first fused rule decided by row `rule`, -1 for none.
+	var i int32 = 0
+	for i < glayer.GrlCount(grl) {
+		if glayer.GrlGet(grl, i, 16) == rule {
+			return i
+		}
+		i += 1
+	}
+	return -1
+}
+
+func TestAVectorRuleTheTracerWitnessesIsKeptWholeAndSaysSo(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var gv *port.Cells = port.NewCells()
+	var ggp *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var gfa *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var h int32 = guHrule(pa, 5000, 1000, 21000)
+	port.AssertThat(emonT, h >= 0, "a rule is drawn")
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv), 1, "the vector source alone: one rule")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 16), 501, "by row 501")
+	port.AssertEq(emonT, guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 0, "no raster answer: nothing is done")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 16), 501, "the identity")
+	port.AssertEq(emonT, glayer.GgpCount(ggp), 0, "no group is made")
+	evidence.IkNew(inks, 1, 0)
+	guTrace(rules, 1000, 5000, 21000, 5000, 900)
+	port.AssertEq(emonT, guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "the page has a raster answer: it is made again")
+	port.AssertEq(emonT, glayer.GrlCount(grl), 1, "still one rule")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 16), 510, "witnessed by the tracer: row 510")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 17), 1000, "at 1000")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 14), 3, "its sources are the vector's and the tracer's")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 15), 1, "the vector wins")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 5), 1000, "its own geometry: the left end")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 7), 21000, "and the right end")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 19), 0, "in the group 0")
+	port.AssertEq(emonT, glayer.GgpCount(ggp), 1, "one group: the vector rule and the tracer's")
+	port.AssertEq(emonT, glayer.GgpGet(ggp, 0, 3), 1, "with one vector member")
+	port.AssertEq(emonT, glayer.GgpGet(ggp, 0, 5), 1, "and one tracer member")
+	port.AssertEq(emonT, glayer.GgpGet(ggp, 0, 8), 3, "flags: an exactly known vector rule, a tracer member")
+	port.AssertThat(emonT, port.CellsLen(fx) > 0, "the explanation names the columns row 510 read")
+	port.AssertEq(emonT, port.CellsAt(fx, 0), 0, "the group")
+	port.AssertEq(emonT, port.CellsAt(fx, 1), 510, "the rule")
+	port.AssertEq(emonT, glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound")
+	port.AssertThat(emonT, player.HlCount(hl) > 0, "R0's health row")
+}
+
+func TestAVectorRuleUnderASoftMaskIsDroppedOnlyWhenTheRegionWitnessIsHigh(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var gv *port.Cells = port.NewCells()
+	var ggp *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var gfa *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var a int32 = guHrule(pa, 5000, 1000, 21000)
+	var b int32 = guHrule(pa, 7000, 1000, 21000)
+	var c int32 = guHrule(pa, 9000, 1000, 21000)
+	port.AssertThat(emonT, (a+(b+c)) >= 0, "three rules")
+	evidence.PaSet(pa, c, evidence.PfVchk(), evidence.VcBlend())
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv), 3, "three rules")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 2, 16), 514, "the third is not exactly known: row 514")
+	guTrace(rules, 1000, 5000, 21000, 5000, 900)
+	guTrace(rules, 1000, 7000, 21000, 7000, 900)
+	guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa)
+	port.AssertEq(emonT, glayer.GrlCount(grl), 2, "the blended rule the render does not show is dropped, the two exact ones kept")
+	port.AssertEq(emonT, guCountRule(grl, 510), 2, "both witnessed")
+	port.AssertEq(emonT, port.CellsLen(gfa)/6, 1, "and the drop is recorded, never silent")
+	port.AssertEq(emonT, port.CellsAt(gfa, 5), 12, "as `unwitnessed-uncertain-paint`")
+	port.AssertEq(emonT, port.CellsAt(gfa, 1), 1000, "with the rule's box")
+	port.AssertEq(emonT, gfuse.GfWrite(gfa, ledger), 1, "one ledger row")
+	port.AssertEq(emonT, model.LedgerReason(ledger, 0), 12, "its reason")
+	// the same page, but the tracer saw nothing it should have: the render's silence means nothing, so the blended rule stays
+	port.CellsDrop(rules, 0)
+	port.CellsDrop(grl, 0)
+	port.CellsDrop(gfl, 0)
+	port.CellsDrop(ggp, 0)
+	port.CellsDrop(gfa, 0)
+	port.CellsDrop(refs, 0)
+	port.CellsDrop(hl, 0)
+	port.CellsDrop(fx, 0)
+	gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv)
+	evidence.IkNew(inks, 1, 0)
+	guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa)
+	port.AssertEq(emonT, glayer.GrlCount(grl), 3, "all three are kept")
+	port.AssertEq(emonT, guCountRule(grl, 511), 2, "the exact ones unwitnessed: row 511")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 17), 800, "at 800")
+	port.AssertEq(emonT, guCountRule(grl, 515), 1, "the blended one by row 515")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 2, 17), 700, "at 700")
+	port.AssertEq(emonT, glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound")
+}
+
+func TestABorderDrawnCellByCellAgainstOneTracerLineIsOneGroupAndNoGapIsBridged(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var gv *port.Cells = port.NewCells()
+	var ggp *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var gfa *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	guHrule(pa, 5000, 1000, 6000)
+	guHrule(pa, 5000, 6000, 11000)
+	guHrule(pa, 5000, 11000, 16000)
+	guHrule(pa, 5000, 16000, 21000)
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv), 4, "four vector pieces")
+	guTrace(rules, 1000, 5000, 21000, 5000, 900)
+	guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa)
+	port.AssertEq(emonT, glayer.GgpCount(ggp), 1, "one group")
+	port.AssertEq(emonT, glayer.GgpGet(ggp, 0, 3), 4, "four vector members")
+	port.AssertEq(emonT, glayer.GgpGet(ggp, 0, 5), 1, "one tracer member")
+	port.AssertEq(emonT, glayer.GrlCount(grl), 4, "the vector pieces are kept as they are")
+	port.AssertEq(emonT, guCountRule(grl, 510), 4, "each witnessed")
+	// an open edge stays open: the tracer saw ink across a gap of the vector rule, and the vector says where its rule ends (row 520)
+	port.CellsDrop(pa, 0)
+	port.CellsDrop(rules, 0)
+	port.CellsDrop(grl, 0)
+	port.CellsDrop(gfl, 0)
+	port.CellsDrop(ggp, 0)
+	port.CellsDrop(refs, 0)
+	port.CellsDrop(hl, 0)
+	port.CellsDrop(fx, 0)
+	guHrule(pa, 5000, 1000, 6000)
+	guHrule(pa, 5000, 9000, 14000)
+	gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv)
+	guTrace(rules, 1000, 5000, 14000, 5000, 900)
+	guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa)
+	port.AssertEq(emonT, glayer.GrlCount(grl), 2, "the stretch between them is NOT a rule: still two")
+	port.AssertEq(emonT, guCountRule(grl, 510), 2, "both pieces kept")
+	port.AssertEq(emonT, glayer.GgpCount(ggp), 1, "in one group")
+	port.AssertThat(emonT, port.CellsLen(fx) > 0, "the dropped stretch is explained")
+	port.AssertEq(emonT, glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound")
+}
+
+func TestATracerRuleInsideALetterIsDroppedAndOneOutsideTextIsARuleOnAPrecisePage(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var gv *port.Cells = port.NewCells()
+	var ggp *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var gfa *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	guHrule(pa, 5000, 1000, 41000)
+	gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv)
+	guTrace(rules, 1000, 5000, 41000, 5000, 900)
+	guTrace(rules, 1000, 9000, 2500, 9000, 800)
+	guTrace(rules, 1000, 2000, 2500, 2000, 800)
+	evidence.WdNew(words, 1, 800, 1800, 2700, 2200, 800, 1800, 2700, 2200, 0, 0, 0, 0, 0, 900, -1)
+	guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa)
+	port.AssertEq(emonT, guCountRule(grl, 510), 1, "the vector rule, witnessed")
+	port.AssertEq(emonT, guCountRule(grl, 535), 1, "the tracer's rule outside text is admitted: the page's tracer is precise (535)")
+	port.AssertEq(emonT, glayer.GrlCount(grl), 2, "the stroke inside the word's box is dropped (row 532)")
+	var t int32 = guFirstRule(grl, 535)
+	port.AssertEq(emonT, glayer.GrlGet(grl, t, 17), 600, "its confidence is 600")
+	port.AssertEq(emonT, glayer.GrlGet(grl, t, 18), 1, "flagged traced")
+	port.AssertEq(emonT, glayer.GrlGet(grl, t, 14), 2, "its source is the tracer's")
+	port.AssertEq(emonT, glayer.GrlGet(grl, t, 6), 9000, "its own geometry")
+	port.AssertEq(emonT, glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound")
+}
+
+func TestALatticeInAnImageIsATableInImageRegionAndItsWordsKnowIt(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var ggp *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var gfa *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var m int32 = evidence.ImNew(im, 1, 10000, 10000, 40000, 40000, 7, 600, 600)
+	port.AssertEq(emonT, m, 0, "the image placement")
+	guTrace(rules, 12000, 15000, 38000, 15000, 900)
+	guTrace(rules, 12000, 25000, 38000, 25000, 900)
+	guTrace(rules, 12000, 35000, 38000, 35000, 900)
+	guTrace(rules, 12000, 12000, 12000, 38000, 900)
+	guTrace(rules, 25000, 12000, 25000, 38000, 900)
+	guTrace(rules, 38000, 12000, 38000, 38000, 900)
+	// an OCR word in a cell, and a `|` on the left border (read by the engine as a letter)
+	port.CellsPush(etext, 78)
+	port.CellsPush(etext, 124)
+	evidence.FeNew(feats, evidence.EaOwords(), 0)
+	evidence.FeNew(feats, evidence.EaOwords(), 1)
+	evidence.OwNew(owords, 1, 14000, 16000, 20000, 18000, 14000, 16000, 20000, 18000, 0, 0, 0, 1, 0, 900, 0)
+	evidence.OwNew(owords, 1, 11950, 20000, 12050, 22000, 11950, 20000, 12050, 22000, 0, 0, 1, 1, 0, 900, 1)
+	port.AssertEq(emonT, guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "fused")
+	port.AssertEq(emonT, glayer.GrlCount(grl), 6, "six rules")
+	port.AssertEq(emonT, guCountRule(grl, 530), 6, "each from row 530: the tracer's, in an image whose region scores well")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 18), 5, "flagged traced and in-image")
+	port.AssertThat(emonT, glayer.GrlGet(grl, 0, 17) > 0, "with a confidence the region's score scaled")
+	port.AssertThat(emonT, glayer.GrlGet(grl, 0, 17) <= 900, "never above the tracer's")
+	port.AssertEq(emonT, glayer.GrgCount(grg), 1, "one region")
+	port.AssertEq(emonT, glayer.GrgGet(grg, 0, 5), glayer.RkTableInImage(), "a table in an image")
+	port.AssertEq(emonT, glayer.GrgGet(grg, 0, 8), 0, "of the image placement 0")
+	port.AssertEq(emonT, glayer.GrgGet(grg, 0, 1), 11950, "its box is what the rules cover: the left")
+	port.AssertEq(emonT, glayer.GrgGet(grg, 0, 9), 6, "six rules inside")
+	port.AssertEq(emonT, evidence.FeGet(feats, 0, evidence.XoInTableImage()), 1000, "the word in a cell is wholly in the table")
+	port.AssertEq(emonT, evidence.FeGet(feats, 0, evidence.XoRuleLike()), -1, "and is not rule-like")
+	port.AssertThat(emonT, evidence.FeGet(feats, 1, evidence.XoInTableImage()) >= 0, "the `|` has a share too")
+	port.AssertEq(emonT, evidence.FeGet(feats, 1, evidence.XoRuleLike()), 1000, "and it lies wholly on a rule: rule-likeness 1000")
+	port.AssertEq(emonT, glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound")
+}
+
+func TestATintOverAPatternGivesItsColourAndATintInAGoodImageRegionIsAFill(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var gv *port.Cells = port.NewCells()
+	var ggp *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var gfa *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var p int32 = guRect(pa, 1, evidence.PgFilled()+evidence.PgPattern(), -1, 3000, 12000, 8000, 15000)
+	var t int32 = evidence.PmNew(prims, 1, 3000, 12000, 8000, 15000, evidence.PmRect())
+	port.AssertThat(emonT, p >= 0, "a pattern fill")
+	evidence.PmSet(prims, t, evidence.PmfFlags(), 11)
+	evidence.PmSet(prims, t, evidence.PmfColor(), 14737632)
+	evidence.PmSet(prims, t, evidence.PmfConf(), 800)
+	gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv)
+	port.AssertEq(emonT, glayer.GflGet(gfl, 0, 9), 562, "the vector source alone: row 562")
+	guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa)
+	port.AssertEq(emonT, glayer.GflCount(gfl), 1, "one fill")
+	port.AssertEq(emonT, glayer.GflGet(gfl, 0, 9), 561, "the render witnesses it: row 561")
+	port.AssertEq(emonT, glayer.GflGet(gfl, 0, 10), 950, "at 950")
+	port.AssertEq(emonT, glayer.GflGet(gfl, 0, 5), 14737632, "the tint's colour")
+	port.AssertEq(emonT, glayer.GflGet(gfl, 0, 11)&8, 8, "flagged `tint-coloured`")
+	port.AssertEq(emonT, glayer.GflGet(gfl, 0, 7), 3, "from the vector and the tracer")
+	// a tint that only the tracer saw: dropped in R0 of a page whose tracer is not shown precise, a fill inside an image whose region scores well
+	var m int32 = evidence.ImNew(im, 1, 20000, 20000, 50000, 50000, 7, 600, 600)
+	var u int32 = evidence.PmNew(prims, 1, 22000, 22000, 30000, 26000, evidence.PmRect())
+	port.AssertThat(emonT, m >= 0, "an image")
+	evidence.PmSet(prims, u, evidence.PmfFlags(), 11)
+	evidence.PmSet(prims, u, evidence.PmfColor(), 15658734)
+	evidence.PmSet(prims, u, evidence.PmfConf(), 800)
+	guTrace(rules, 22000, 30000, 48000, 30000, 900)
+	guTrace(rules, 22000, 40000, 48000, 40000, 900)
+	guTrace(rules, 22000, 22000, 22000, 48000, 900)
+	port.CellsDrop(grl, 0)
+	port.CellsDrop(gfl, 0)
+	port.CellsDrop(ggp, 0)
+	port.CellsDrop(refs, 0)
+	port.CellsDrop(hl, 0)
+	port.CellsDrop(fx, 0)
+	gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv)
+	guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa)
+	port.AssertEq(emonT, glayer.GflCount(gfl), 2, "the vector fill and the tint in the image")
+	port.AssertEq(emonT, glayer.GflGet(gfl, 1, 9), 570, "the tint by row 570")
+	port.AssertEq(emonT, glayer.GflGet(gfl, 1, 10), 700, "at 700")
+	port.AssertEq(emonT, glayer.GflGet(gfl, 1, 11)&4, 4, "flagged in-image")
+	port.AssertEq(emonT, glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound")
+}
+
+func TestRows601And610OfBlock600ReadTheWordsFeaturesAndAHiddenVectorIsNothing(emonT *testing.T) {
+	var gv *port.Cells = port.NewCells()
+	var i int32 = 0
+	for i < fuserules.AgCount() {
+		port.CellsPush(gv, -1)
+		i += 1
+	}
+	port.CellsSet(gv, fuserules.AgNt(), 0)
+	port.CellsSet(gv, fuserules.AgNh(), 0)
+	port.CellsSet(gv, fuserules.AgNo(), 1)
+	port.CellsSet(gv, fuserules.AgRulelike(), 900)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 601, "an OCR-only word made of rule glyphs on a rule: 601")
+	port.AssertEq(emonT, fuserules.FrReason(fuserules.FrDecide(gv)), 11, "to the ledger as a rule ghost")
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), 0, "never body")
+	port.CellsSet(gv, fuserules.AgRulelike(), 300)
+	port.AssertThat(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)) != 601, "a word that only touches a rule is not one")
+	port.CellsSet(gv, fuserules.AgRulelike(), -1)
+	port.CellsSet(gv, fuserules.AgTableimg(), 1000)
+	port.CellsSet(gv, fuserules.AgKink(), 500)
+	port.CellsSet(gv, fuserules.AgPlaus(), 900)
+	port.CellsSet(gv, fuserules.AgScore(), 800)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)), 610, "an OCR-only word in a table drawn in an image, with ink and plausible: 610")
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecide(gv)), fuserules.FwOcr(), "it is body text")
+	port.AssertEq(emonT, fuserules.FrFlags(fuserules.FrDecide(gv))&512, 512, "flagged `in-table-image`")
+	port.CellsSet(gv, fuserules.AgKink(), -1)
+	port.AssertThat(emonT, fuserules.FrNumber(fuserules.FrDecide(gv)) != 610, "without ink of kin's own it is not")
+}
+
+func TestAPageWithNoRasterAnswerIsCopiedAndAHiddenVectorRuleIsRow505(emonT *testing.T) {
+	var gv *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var mk *port.Cells = port.NewCells()
+	var im *port.Cells = port.NewCells()
+	var grl *port.Cells = port.NewCells()
+	var gfl *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	var ggp *port.Cells = port.NewCells()
+	var grg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var hl *port.Cells = port.NewCells()
+	var fx *port.Cells = port.NewCells()
+	var gfa *port.Cells = port.NewCells()
+	var inks *port.Cells = port.NewCells()
+	var rules *port.Cells = port.NewCells()
+	var prims *port.Cells = port.NewCells()
+	var oblocks *port.Cells = port.NewCells()
+	var owords *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var etext *port.Cells = port.NewCells()
+	var feats *port.Cells = port.NewCells()
+	var i int32 = 0
+	for i < 128 {
+		port.CellsPush(gv, -1)
+		i += 1
+	}
+	port.CellsSet(gv, 103, 1)
+	port.AssertEq(emonT, fuserules.FrNumber(fuserules.FrDecideBlock(gv, 500)), 505, "a vector member whose vis is not 0: row 505")
+	port.AssertEq(emonT, fuserules.FrWinner(fuserules.FrDecideBlock(gv, 500)), 0, "contributes nothing")
+	guHrule(pa, 5000, 1000, 21000)
+	guHrule(pa, 7000, 1000, 21000)
+	guHrule(pa, 7000, 21000, 31000)
+	port.CellsDrop(gv, 0)
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 1, gvec.GvSegments(), grl, gfl, cand, gv), 3, "three rules")
+	// page 1 has the raster answer, page 2 has none: its rows are copied untouched
+	guRect(pa, 2, evidence.PgFilled(), 0, 1000, 4950, 21000, 5050)
+	port.CellsDrop(grl, 0)
+	port.CellsDrop(gfl, 0)
+	port.CellsDrop(gv, 0)
+	port.AssertEq(emonT, gfuse.GfDoc(pa, pts, mk, im, 2, gvec.GvSegments(), grl, gfl, cand, gv), 4, "four rules on two pages")
+	evidence.IkNew(inks, 1, 0)
+	port.AssertEq(emonT, guFuse(2, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "one page fused")
+	port.AssertEq(emonT, glayer.GrlCount(grl), 4, "four rules still")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 3, 0), 2, "the second page's is the last")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 3, 16), 501, "copied as it was")
+	port.AssertEq(emonT, glayer.GrlGet(grl, 0, 16), 511, "the first page's are made again: nothing the tracer saw")
+	port.AssertEq(emonT, glayer.GlCheck(grl, gfl, ggp, grg, refs), 0, "sound")
 }

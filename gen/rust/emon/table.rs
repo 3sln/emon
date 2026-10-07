@@ -3189,6 +3189,9 @@ pub(crate) fn tb_tags(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, 
             if agree >= 0 {
                 geo = tt_pm(agree, owned);
             }
+            if (agree >= 0) && (crate::port::cells_at(ws, crate::port::cells_len(ws) - 1) == 1) {
+                tt_or(tg, k, 15, 8);
+            }
         }
         tt_set(tg, k, 12, g);
         tt_set(tg, k, 21, geo);
@@ -3270,6 +3273,9 @@ pub(crate) fn tb_tag_head(mut tb: &mut crate::port::Cells, k: i32, tg: &mut crat
         return 0;
     }
     if v == 3 {
+        return 0;
+    }
+    if (fg & 8) != 0 {
         return 0;
     }
     if crate::port::cells_at(tb, b + 5) == PF_STRUCT {
@@ -3388,6 +3394,9 @@ pub(crate) fn tb_tag_rest(mut tb: &mut crate::port::Cells, k: i32, tg: &mut crat
         return 0;
     }
     if tt_get(tg, tgi, 10) == 3 {
+        return 0;
+    }
+    if (tt_get(tg, tgi, 15) & 8) != 0 {
         return 0;
     }
     if ((tt_get(tg, tgi, 15) & 4) == 0) && (crate::port::cells_at(tb, b + 5) != PF_STRUCT) {

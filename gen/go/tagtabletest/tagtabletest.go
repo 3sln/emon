@@ -372,3 +372,69 @@ func TestTheVerdictsAreTheDumpsTb(emonT *testing.T) {
 	tagtable.TtEmit(t, tv)
 	port.AssertText(emonT, t, "[{\"page\":1,\"se\":1,\"rows\":3,\"cols\":3,\"verdict\":\"confirmed\",\"score\":908,\"checks\":[1000,900,1000,-1,1000,928],\"trust\":500}]", "one tagged table: the verdict, the score, the six checks and the tree's trust")
 }
+
+func tttZeros(c *port.Cells, n int32) int32 {
+	var i int32 = 0
+	for i < n {
+		port.CellsPush(c, 0)
+		i += 1
+	}
+	return 0
+}
+
+func tttMulti(tg *port.Cells, ta *port.Cells, wo *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, r0 int32, r1 int32, r2 int32) int32 {
+	// Two tagged rows of one column over a candidate of three rows of one column; three words, the tagged row of each given (0 or 1) as
+	// r0 r1 r2, the candidate row of word i being i.
+	tttZeros(tg, 24)
+	port.CellsSet(tg, 2, 2)
+	port.CellsSet(tg, 3, 1)
+	port.CellsSet(tg, 4, 0)
+	port.CellsSet(tg, 5, 2)
+	tttZeros(ta, 32)
+	port.CellsSet(ta, 1, 0)
+	port.CellsSet(ta, 17, 1)
+	port.CellsPush(wo, 0+r0)
+	port.CellsPush(wo, 0+r1)
+	port.CellsPush(wo, 0+r2)
+	tttZeros(tb, 28)
+	port.CellsSet(tb, 7, 3)
+	port.CellsSet(tb, 8, 1)
+	port.CellsSet(tb, 9, 0)
+	port.CellsSet(tb, 10, 3)
+	tttZeros(tc, 48)
+	port.CellsSet(tc, 0, 0)
+	port.CellsSet(tc, 8, 0)
+	port.CellsSet(tc, 9, 1)
+	port.CellsSet(tc, 16, 1)
+	port.CellsSet(tc, 24, 1)
+	port.CellsSet(tc, 25, 1)
+	port.CellsSet(tc, 32, 2)
+	port.CellsSet(tc, 40, 2)
+	port.CellsSet(tc, 41, 1)
+	port.CellsPush(tw, 0)
+	port.CellsPush(tw, 1)
+	port.CellsPush(tw, 2)
+	return 0
+}
+
+func TestAdjacentCandidateRowsMayMapToOneTaggedRow(emonT *testing.T) {
+	var tg *port.Cells = port.NewCells()
+	var ta *port.Cells = port.NewCells()
+	var wo *port.Cells = port.NewCells()
+	var tb *port.Cells = port.NewCells()
+	var tc *port.Cells = port.NewCells()
+	var tw *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	tttMulti(tg, ta, wo, tb, tc, tw, 0, 0, 1)
+	port.AssertEq(emonT, tagtable.TtGeoMap(tg, 0, ta, wo, 0, tb, 0, tc, tw, ws), 3, "all three words agree: two adjacent candidate rows are one tagged row")
+	port.AssertEq(emonT, port.CellsAt(ws, port.CellsLen(ws)-1), 1, "and the table says it needed that")
+	port.CellsDrop(tg, 0)
+	port.CellsDrop(ta, 0)
+	port.CellsDrop(wo, 0)
+	port.CellsDrop(tb, 0)
+	port.CellsDrop(tc, 0)
+	port.CellsDrop(tw, 0)
+	tttMulti(tg, ta, wo, tb, tc, tw, 0, 1, 0)
+	port.AssertEq(emonT, tagtable.TtGeoMap(tg, 0, ta, wo, 0, tb, 0, tc, tw, ws), 2, "a tagged row split around another's candidate row is not one: only the words the old mapping agreed on")
+	port.AssertEq(emonT, port.CellsAt(ws, port.CellsLen(ws)-1), 0, "and nothing was granted by the new one")
+}

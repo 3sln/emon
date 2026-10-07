@@ -40,7 +40,7 @@
                                 node-set-src node-conf node-set-conf node-flags node-add-flag node-add-src node-region-head
                                 node-region-count node-kind region-page region-x0 region-y0 region-x1 region-y1 region-next
                                 fl-text-layer-suspect fl-low-conf]]
-            [emon.evidence :refer [xo-kin-ink xo-angle xo-rel-height xo-margin xo-body-share mf-alpha ea-etext hd-page hd-rot ev-overlap-small ev-page-row ev-rot-median ep-get epf-width epf-height fe-get
+            [emon.evidence :refer [xo-kin-ink xo-angle xo-rel-height xo-margin xo-body-share xo-in-table-image xo-rule-like mf-alpha ea-etext hd-page hd-rot ev-overlap-small ev-page-row ev-rot-median ep-get epf-width epf-height fe-get
                                    rf-get ow-get ow-count or-count or-get orf-page orf-lfirst orf-lcount ol-get lh-first lh-count
                                    im-count im-get mf-page mf-x0 mf-y0 mf-x1 mf-y1
                                    hd-feat hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-line
@@ -55,7 +55,7 @@
             [emon.hidden :refer [hx-fill]]
             [emon.fuserules :refer [ag-seal ag-art ag-recur ag-oangle ag-odiag ag-orel ag-margin ag-kink ag-body ag-imalpha fr-defence
                                     ag-nt ag-no ag-nh ag-font ag-simfold ag-sim ag-garbage ag-plaus ag-score ag-image ag-flags ag-latin
-                                    ag-olen ag-oconf ag-near ag-pageagree ag-count fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-npred fr-pcol fw-none fw-text fw-ocr]]
+                                    ag-olen ag-oconf ag-near ag-pageagree ag-tableimg ag-rulelike ag-count fr-decide fr-number fr-winner fr-reason fr-flags fr-conf fr-npred fr-pcol fw-none fw-text fw-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
 
@@ -235,7 +235,9 @@
         ^:mut ^I32 orel -1
         ^:mut ^I32 margin -1
         ^:mut ^I32 kink -1
-        ^:mut ^I32 body -1]
+        ^:mut ^I32 body -1
+        ^:mut ^I32 tim -1
+        ^:mut ^I32 rlk -1]
     (while (< k nt)
       (do (set row (ar-ref refs (+ tf k) 1))
           (set v (ax-word-class gl mk an txt etext trust feats ofw row))
@@ -266,7 +268,10 @@
                 (set orel (ar-max-pos orel (fe-get feats f (xo-rel-height))))
                 (set margin (ar-min-pos margin (fe-get feats f (xo-margin))))
                 (set kink (ar-min-pos kink (fe-get feats f (xo-kin-ink))))
-                (set body (ar-min-pos body (fe-get feats f (xo-body-share))))))
+                (set body (ar-min-pos body (fe-get feats f (xo-body-share))))
+                (comment "P7.G (D224): how far inside a table drawn in an image the word is, and how like a rule it is (graphics fusion wrote both)")
+                (set tim (ar-max-pos tim (fe-get feats f (xo-in-table-image))))
+                (set rlk (ar-max-pos rlk (fe-get feats f (xo-rule-like))))))
           (set odiag (ar-min-pos odiag (ar-offaxis (ow-get owords row 9))))
           (set k (+ k 1))))
     (cells-set gv (ag-nt) nt)
@@ -329,6 +334,8 @@
     (cells-set gv (ag-margin) margin)
     (cells-set gv (ag-kink) kink)
     (cells-set gv (ag-body) body)
+    (cells-set gv (ag-tableimg) tim)
+    (cells-set gv (ag-rulelike) rlk)
     (cells-set gv (ag-imalpha) (ar-image-alpha images epages (cg-get cg g (cgf-page)) (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0))
                                                (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1))))
     (comment "P7.6: the columns of a group of hidden-text words (`emon.hidden`)")

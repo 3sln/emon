@@ -259,6 +259,8 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 	var margin int32 = -1
 	var kink int32 = -1
 	var body int32 = -1
+	var tim int32 = -1
+	var rlk int32 = -1
 	for k < nt {
 		row = arRef(refs, tf+k, 1)
 		v = artifact.AxWordClass(gl, mk, an, txt, etext, trust, feats, ofw, row)
@@ -307,6 +309,9 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 			margin = arMinPos(margin, evidence.FeGet(feats, f, evidence.XoMargin()))
 			kink = arMinPos(kink, evidence.FeGet(feats, f, evidence.XoKinInk()))
 			body = arMinPos(body, evidence.FeGet(feats, f, evidence.XoBodyShare()))
+			// P7.G (D224): how far inside a table drawn in an image the word is, and how like a rule it is (graphics fusion wrote both)
+			tim = arMaxPos(tim, evidence.FeGet(feats, f, evidence.XoInTableImage()))
+			rlk = arMaxPos(rlk, evidence.FeGet(feats, f, evidence.XoRuleLike()))
 		}
 		odiag = arMinPos(odiag, arOffaxis(evidence.OwGet(owords, row, 9)))
 		k += 1
@@ -396,6 +401,8 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 	port.CellsSet(gv, fuserules.AgMargin(), margin)
 	port.CellsSet(gv, fuserules.AgKink(), kink)
 	port.CellsSet(gv, fuserules.AgBody(), body)
+	port.CellsSet(gv, fuserules.AgTableimg(), tim)
+	port.CellsSet(gv, fuserules.AgRulelike(), rlk)
 	port.CellsSet(gv, fuserules.AgImalpha(), arImageAlpha(images, epages, player.CgGet(cg, g, player.CgfPage()), player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1())))
 	// P7.6: the columns of a group of hidden-text words (`emon.hidden`)
 	hidden.HxFill(g, cg, refs, ofw, etext, feats, owords, gv)

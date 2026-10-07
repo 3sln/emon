@@ -50,7 +50,7 @@
           "description": "Ledger reasons whose entries are exhaustive (an absent entry of these reasons is a claim). Entries carry no `at`.",
           "type": "array",
           "uniqueItems": true,
-          "items": { "enum": ["watermark", "background", "page-number", "running-title", "bleed-through", "duplicate-header-row", "ocr-ghost", "clipped", "offpage", "invisible"] }
+          "items": { "enum": ["watermark", "background", "page-number", "running-title", "bleed-through", "duplicate-header-row", "ocr-ghost", "clipped", "offpage", "invisible", "rule-ghost", "unwitnessed-uncertain-paint"] }
         },
         "pages": {
           "description": "Page-table fields that are annotated.",

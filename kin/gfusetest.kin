@@ -1,19 +1,31 @@
-;; Laws for `emon.gfuse`, the vector-only form (P5.5a; SPEC 9.9; D218, D222, D270), on every target.
+;; Laws for `emon.gfuse` (P5.5a, P7.G; SPEC 9.9; D218, D221-D224, D228, D270), on every target.
 ;;
-;; Hand-built paths over two pages go through `gf-doc` (`gv-page` then `gf-page`) into `grl` and `gfl`, and the rows say what the arbitration
-;; table's rules 501, 505, 514, 560 and 562 say: an exactly known visible rule is 501 at 900, paint that is not exactly known (blend, soft mask,
+;; THE VECTOR SOURCE ALONE: hand-built paths over two pages go through `gf-doc` (`gv-page` then `gf-page`) into `grl` and `gfl`, and the rows say what the
+;; arbitration table's rules 501, 505, 514, 560 and 562 say: an exactly known visible rule is 501 at 900, paint that is not exactly known (blend, soft mask,
 ;; an image placement) 514 at 700, a hidden one is nothing (505), a fill 560 at 900 and a fill of colour -1 562 at 600; orientation and angle
 ;; are the centre line's; the layer `gl-check`s; and `legacy` and `segments` agree on the rows of the plain cases.
+;;
+;; THE OTHER SOURCES (P7.G), at the end: scenes drawn by hand on a page that has a raster answer, through `gf-fuse`: a vector rule the tracer witnesses; one
+;; under a soft mask dropped only when the region's witness is high; a Chrome border drawn cell by cell against one tracer line (one group, no gap bridged, an open
+;; edge open); a tracer rule inside a letter dropped and one outside text admitted on a precise page; a lattice in an image a `table-in-image` region whose words know
+;; it (features 30 and 31); a tint that gives a pattern its colour or is a fill in an image; rows 601 and 610 of block 600; and a page with no raster answer copied.
 (ns emon.gfusetest
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-that new-cells]]
-            [emon.port :refer [cells-len cells-at cells-set cells-drop]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [pa-new pa-set pf-flags pf-fill pf-stroke pf-width pf-vis pf-vchk pf-z pf-pfirst pf-pcount
                                    pg-filled pg-stroked pg-pattern pa-rect pa-other vc-blend
-                                   pt-add po-move po-line]]
-            [emon.glayer :refer [grl-count grl-get gfl-count gfl-get gl-check go-h go-v go-slant gqf-pattern]]
+                                   pt-add po-move po-line
+                                   rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick rlf-color rlf-style rlf-conf
+                                   pm-new pm-set pm-rect pmf-flags pmf-color pmf-conf ik-new im-new wd-new ow-new fe-new fe-get
+                                   xo-in-table-image xo-rule-like ea-owords]]
+            [emon.glayer :refer [grl-count grl-get gfl-count gfl-get gl-check go-h go-v go-slant gqf-pattern ggp-count ggp-get grg-count grg-get rk-table-in-image]]
             [emon.gvec :refer [gv-legacy gv-segments]]
-            [emon.gfuse :refer [gf-doc gfx-mode]]
+            [emon.gfuse :refer [gf-doc gfx-mode gf-fuse gf-write]]
+            [emon.player :refer [hl-count]]
+            [emon.model :refer [ledger-reason]]
+            [emon.fuserules :refer [fr-decide fr-decide-block fr-number fr-reason fr-winner fr-flags ag-count ag-nt ag-nh ag-no ag-rulelike ag-tableimg ag-kink ag-plaus
+                                    ag-score fw-ocr]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and]]))
 
@@ -27,6 +39,7 @@
 (deftest test-the-rows-of-a-vector-only-page
   (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
         ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells refs (new-cells) ^Cells ggp (new-cells) ^Cells grg (new-cells)
+        ^Cells gv (new-cells)
         ^I32 h (gu-rect pa 1 (pg-filled) 0 1000 4950 21000 5050)
         ^I32 v (gu-rect pa 1 (pg-filled) 0 1000 5000 1100 9000)
         ^I32 b (gu-rect pa 1 (pg-filled) 0 1000 6950 21000 7050)
@@ -38,7 +51,7 @@
     (pa-set pa b (pf-vchk) (vc-blend))
     (pa-set pa x (pf-vis) 3)
     (pa-set pa h (pf-z) 4)
-    (assert-eq (gf-doc pa pts mk im 2 (gv-segments) grl gfl cand) 4 "four rules: the hidden one is nothing")
+    (assert-eq (gf-doc pa pts mk im 2 (gv-segments) grl gfl cand gv) 4 "four rules: the hidden one is nothing")
     (assert-eq (gfl-count gfl) 2 "two fills")
     (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")
     (assert-eq (grl-get grl 0 0) 1 "the first rule's page")
@@ -71,7 +84,7 @@
 
 (deftest test-a-slanted-line-is-a-slant-and-the-modes-agree-on-plain-boxes
   (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
-        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gv (new-cells)
         ^I32 r (pa-new pa 1 (pa-other) 0 0 10000 10000)]
     (pa-set pa r (pf-flags) (pg-stroked))
     (pa-set pa r (pf-stroke) 0)
@@ -80,17 +93,344 @@
     (pa-set pa r (pf-pcount) 2)
     (pt-add pts 0 0 (po-move))
     (pt-add pts 10000 10000 (po-line))
-    (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand) 1 "one rule")
+    (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv) 1 "one rule")
     (assert-eq (grl-get grl 0 10) (go-slant) "slanted")
     (assert-eq (grl-get grl 0 11) 13500 "at 135 degrees (page space has y down)")
     (comment "a plain thin box: the two modes give the same row")
     (cells-drop pa 0)
     (gu-rect pa 1 (pg-filled) 0 1000 4950 21000 5050)
-    (assert-eq (gf-doc pa pts mk im 1 (gv-legacy) grl gfl cand) 1 "legacy: one rule")
+    (assert-eq (gf-doc pa pts mk im 1 (gv-legacy) grl gfl cand gv) 1 "legacy: one rule")
     (let [^I32 a (grl-get grl 0 5)
           ^I32 b (grl-get grl 0 7)
           ^I32 c (grl-get grl 0 6)]
-      (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand) 1 "segments: one rule")
+      (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv) 1 "segments: one rule")
       (assert-eq (grl-get grl 0 5) a "the same left end")
       (assert-eq (grl-get grl 0 7) b "the same right end")
       (assert-eq (grl-get grl 0 6) c "the same centre"))))
+
+;; ------------------------------------------------------------------ P7.G: the other sources (SPEC 9.9; D221-D224, D228, D324-D331)
+;;
+;; A page's vector rows come from `gf-doc` (the identity, above); `gf-fuse` then reads them again beside what the tracer, OCR and the text layer drew, on a page that has
+;; a raster answer (here: an `inks` row, or tracer rows). Scenes are drawn in centipoints on page 1, a born-digital page (no `epages` row says otherwise).
+
+(defn ^I32 gu-hrule [^:mut ^Cells pa ^I32 y ^I32 x0 ^I32 x1]
+  (comment "A vector rule, horizontal, 1 pt thick, a thin filled box.")
+  (return (gu-rect pa 1 (pg-filled) 0 x0 (- y 50) x1 (+ y 50))))
+
+(defn ^I32 gu-vrule [^:mut ^Cells pa ^I32 x ^I32 y0 ^I32 y1]
+  (return (gu-rect pa 1 (pg-filled) 0 (- x 50) y0 (+ x 50) y1)))
+
+(defn ^I32 gu-lo [^I32 a ^I32 b] (if (< a b) (return a)) (return b))
+(defn ^I32 gu-hi [^I32 a ^I32 b] (if (> a b) (return a)) (return b))
+
+(defn ^I32 gu-trace [^:mut ^Cells rules ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 conf]
+  (comment "A tracer rule on page 1 along the centre line (x0, y0)-(x1, y1), 1 pt thick, black.")
+  (let [^I32 r (rl-new rules 1 (- (gu-lo x0 x1) 50) (- (gu-lo y0 y1) 50) (+ (gu-hi x0 x1) 50) (+ (gu-hi y0 y1) 50) 0)]
+    (rl-set rules r (rlf-lx0) x0)
+    (rl-set rules r (rlf-ly0) y0)
+    (rl-set rules r (rlf-lx1) x1)
+    (rl-set rules r (rlf-ly1) y1)
+    (rl-set rules r (rlf-thick) 100)
+    (rl-set rules r (rlf-color) 0)
+    (rl-set rules r (rlf-style) 1)
+    (rl-set rules r (rlf-conf) conf)
+    (return r)))
+
+(defn ^I32 gu-fuse [^I32 np ^Cells inks ^Cells rules ^Cells prims ^Cells oblocks ^Cells owords ^Cells words ^Cells etext ^Cells pa ^Cells im ^Cells feats
+                    ^:mut ^Cells grl ^:mut ^Cells gfl ^:mut ^Cells ggp ^:mut ^Cells grg ^:mut ^Cells refs ^:mut ^Cells hl ^:mut ^Cells fx ^:mut ^Cells gfa]
+  (comment "`gf-fuse` with the scratch it needs and no `epages` row (every page is a born-digital page).")
+  (return (gf-fuse np (new-cells) inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+
+(defn ^I32 gu-count-rule [^Cells grl ^I32 rule]
+  (comment "How many fused rules were decided by row `rule`.")
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 n 0]
+    (while (< i (grl-count grl))
+      (do (if (== (grl-get grl i 16) rule) (set n (+ n 1)))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 gu-first-rule [^Cells grl ^I32 rule]
+  (comment "The first fused rule decided by row `rule`, -1 for none.")
+  (let [^:mut ^I32 i 0]
+    (while (< i (grl-count grl))
+      (do (if (== (grl-get grl i 16) rule) (return i))
+          (set i (+ i 1))))
+    (return -1)))
+
+(deftest test-a-vector-rule-the-tracer-witnesses-is-kept-whole-and-says-so
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gv (new-cells)
+        ^Cells ggp (new-cells) ^Cells grg (new-cells) ^Cells refs (new-cells) ^Cells hl (new-cells) ^Cells fx (new-cells) ^Cells gfa (new-cells)
+        ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells oblocks (new-cells) ^Cells owords (new-cells)
+        ^Cells words (new-cells) ^Cells etext (new-cells) ^Cells feats (new-cells)
+        ^I32 h (gu-hrule pa 5000 1000 21000)]
+    (assert-that (>= h 0) "a rule is drawn")
+    (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv) 1 "the vector source alone: one rule")
+    (assert-eq (grl-get grl 0 16) 501 "by row 501")
+    (assert-eq (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa) 0 "no raster answer: nothing is done")
+    (assert-eq (grl-get grl 0 16) 501 "the identity")
+    (assert-eq (ggp-count ggp) 0 "no group is made")
+    (ik-new inks 1 0)
+    (gu-trace rules 1000 5000 21000 5000 900)
+    (assert-eq (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa) 1 "the page has a raster answer: it is made again")
+    (assert-eq (grl-count grl) 1 "still one rule")
+    (assert-eq (grl-get grl 0 16) 510 "witnessed by the tracer: row 510")
+    (assert-eq (grl-get grl 0 17) 1000 "at 1000")
+    (assert-eq (grl-get grl 0 14) 3 "its sources are the vector's and the tracer's")
+    (assert-eq (grl-get grl 0 15) 1 "the vector wins")
+    (assert-eq (grl-get grl 0 5) 1000 "its own geometry: the left end")
+    (assert-eq (grl-get grl 0 7) 21000 "and the right end")
+    (assert-eq (grl-get grl 0 19) 0 "in the group 0")
+    (assert-eq (ggp-count ggp) 1 "one group: the vector rule and the tracer's")
+    (assert-eq (ggp-get ggp 0 3) 1 "with one vector member")
+    (assert-eq (ggp-get ggp 0 5) 1 "and one tracer member")
+    (assert-eq (ggp-get ggp 0 8) 3 "flags: an exactly known vector rule, a tracer member")
+    (assert-that (> (cells-len fx) 0) "the explanation names the columns row 510 read")
+    (assert-eq (cells-at fx 0) 0 "the group")
+    (assert-eq (cells-at fx 1) 510 "the rule")
+    (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")
+    (assert-that (> (hl-count hl) 0) "R0's health row")))
+
+(deftest test-a-vector-rule-under-a-soft-mask-is-dropped-only-when-the-region-witness-is-high
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gv (new-cells)
+        ^Cells ggp (new-cells) ^Cells grg (new-cells) ^Cells refs (new-cells) ^Cells hl (new-cells) ^Cells fx (new-cells) ^Cells gfa (new-cells)
+        ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells oblocks (new-cells) ^Cells owords (new-cells)
+        ^Cells words (new-cells) ^Cells etext (new-cells) ^Cells feats (new-cells) ^Cells ledger (new-cells)
+        ^I32 a (gu-hrule pa 5000 1000 21000)
+        ^I32 b (gu-hrule pa 7000 1000 21000)
+        ^I32 c (gu-hrule pa 9000 1000 21000)]
+    (assert-that (>= (+ a (+ b c)) 0) "three rules")
+    (pa-set pa c (pf-vchk) (vc-blend))
+    (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv) 3 "three rules")
+    (assert-eq (grl-get grl 2 16) 514 "the third is not exactly known: row 514")
+    (gu-trace rules 1000 5000 21000 5000 900)
+    (gu-trace rules 1000 7000 21000 7000 900)
+    (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa)
+    (assert-eq (grl-count grl) 2 "the blended rule the render does not show is dropped, the two exact ones kept")
+    (assert-eq (gu-count-rule grl 510) 2 "both witnessed")
+    (assert-eq (quot (cells-len gfa) 6) 1 "and the drop is recorded, never silent")
+    (assert-eq (cells-at gfa 5) 12 "as `unwitnessed-uncertain-paint`")
+    (assert-eq (cells-at gfa 1) 1000 "with the rule's box")
+    (assert-eq (gf-write gfa ledger) 1 "one ledger row")
+    (assert-eq (ledger-reason ledger 0) 12 "its reason")
+    (comment "the same page, but the tracer saw nothing it should have: the render's silence means nothing, so the blended rule stays")
+    (cells-drop rules 0)
+    (cells-drop grl 0)
+    (cells-drop gfl 0)
+    (cells-drop ggp 0)
+    (cells-drop gfa 0)
+    (cells-drop refs 0)
+    (cells-drop hl 0)
+    (cells-drop fx 0)
+    (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv)
+    (ik-new inks 1 0)
+    (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa)
+    (assert-eq (grl-count grl) 3 "all three are kept")
+    (assert-eq (gu-count-rule grl 511) 2 "the exact ones unwitnessed: row 511")
+    (assert-eq (grl-get grl 0 17) 800 "at 800")
+    (assert-eq (gu-count-rule grl 515) 1 "the blended one by row 515")
+    (assert-eq (grl-get grl 2 17) 700 "at 700")
+    (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")))
+
+(deftest test-a-border-drawn-cell-by-cell-against-one-tracer-line-is-one-group-and-no-gap-is-bridged
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gv (new-cells)
+        ^Cells ggp (new-cells) ^Cells grg (new-cells) ^Cells refs (new-cells) ^Cells hl (new-cells) ^Cells fx (new-cells) ^Cells gfa (new-cells)
+        ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells oblocks (new-cells) ^Cells owords (new-cells)
+        ^Cells words (new-cells) ^Cells etext (new-cells) ^Cells feats (new-cells)]
+    (gu-hrule pa 5000 1000 6000)
+    (gu-hrule pa 5000 6000 11000)
+    (gu-hrule pa 5000 11000 16000)
+    (gu-hrule pa 5000 16000 21000)
+    (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv) 4 "four vector pieces")
+    (gu-trace rules 1000 5000 21000 5000 900)
+    (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa)
+    (assert-eq (ggp-count ggp) 1 "one group")
+    (assert-eq (ggp-get ggp 0 3) 4 "four vector members")
+    (assert-eq (ggp-get ggp 0 5) 1 "one tracer member")
+    (assert-eq (grl-count grl) 4 "the vector pieces are kept as they are")
+    (assert-eq (gu-count-rule grl 510) 4 "each witnessed")
+    (comment "an open edge stays open: the tracer saw ink across a gap of the vector rule, and the vector says where its rule ends (row 520)")
+    (cells-drop pa 0)
+    (cells-drop rules 0)
+    (cells-drop grl 0)
+    (cells-drop gfl 0)
+    (cells-drop ggp 0)
+    (cells-drop refs 0)
+    (cells-drop hl 0)
+    (cells-drop fx 0)
+    (gu-hrule pa 5000 1000 6000)
+    (gu-hrule pa 5000 9000 14000)
+    (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv)
+    (gu-trace rules 1000 5000 14000 5000 900)
+    (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa)
+    (assert-eq (grl-count grl) 2 "the stretch between them is NOT a rule: still two")
+    (assert-eq (gu-count-rule grl 510) 2 "both pieces kept")
+    (assert-eq (ggp-count ggp) 1 "in one group")
+    (assert-that (> (cells-len fx) 0) "the dropped stretch is explained")
+    (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")))
+
+(deftest test-a-tracer-rule-inside-a-letter-is-dropped-and-one-outside-text-is-a-rule-on-a-precise-page
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gv (new-cells)
+        ^Cells ggp (new-cells) ^Cells grg (new-cells) ^Cells refs (new-cells) ^Cells hl (new-cells) ^Cells fx (new-cells) ^Cells gfa (new-cells)
+        ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells oblocks (new-cells) ^Cells owords (new-cells)
+        ^Cells words (new-cells) ^Cells etext (new-cells) ^Cells feats (new-cells)]
+    (gu-hrule pa 5000 1000 41000)
+    (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv)
+    (gu-trace rules 1000 5000 41000 5000 900)
+    (gu-trace rules 1000 9000 2500 9000 800)
+    (gu-trace rules 1000 2000 2500 2000 800)
+    (wd-new words 1 800 1800 2700 2200 800 1800 2700 2200 0 0 0 0 0 900 -1)
+    (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa)
+    (assert-eq (gu-count-rule grl 510) 1 "the vector rule, witnessed")
+    (assert-eq (gu-count-rule grl 535) 1 "the tracer's rule outside text is admitted: the page's tracer is precise (535)")
+    (assert-eq (grl-count grl) 2 "the stroke inside the word's box is dropped (row 532)")
+    (let [^I32 t (gu-first-rule grl 535)]
+      (assert-eq (grl-get grl t 17) 600 "its confidence is 600")
+      (assert-eq (grl-get grl t 18) 1 "flagged traced")
+      (assert-eq (grl-get grl t 14) 2 "its source is the tracer's")
+      (assert-eq (grl-get grl t 6) 9000 "its own geometry"))
+    (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")))
+
+(deftest test-a-lattice-in-an-image-is-a-table-in-image-region-and-its-words-know-it
+  (let [^Cells pa (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells ggp (new-cells) ^Cells grg (new-cells) ^Cells refs (new-cells)
+        ^Cells hl (new-cells) ^Cells fx (new-cells) ^Cells gfa (new-cells)
+        ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells oblocks (new-cells) ^Cells owords (new-cells)
+        ^Cells words (new-cells) ^Cells etext (new-cells) ^Cells feats (new-cells)
+        ^I32 m (im-new im 1 10000 10000 40000 40000 7 600 600)]
+    (assert-eq m 0 "the image placement")
+    (gu-trace rules 12000 15000 38000 15000 900)
+    (gu-trace rules 12000 25000 38000 25000 900)
+    (gu-trace rules 12000 35000 38000 35000 900)
+    (gu-trace rules 12000 12000 12000 38000 900)
+    (gu-trace rules 25000 12000 25000 38000 900)
+    (gu-trace rules 38000 12000 38000 38000 900)
+    (comment "an OCR word in a cell, and a `|` on the left border (read by the engine as a letter)")
+    (cells-push etext 78)
+    (cells-push etext 124)
+    (fe-new feats (ea-owords) 0)
+    (fe-new feats (ea-owords) 1)
+    (ow-new owords 1 14000 16000 20000 18000 14000 16000 20000 18000 0 0 0 1 0 900 0)
+    (ow-new owords 1 11950 20000 12050 22000 11950 20000 12050 22000 0 0 1 1 0 900 1)
+    (assert-eq (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa) 1 "fused")
+    (assert-eq (grl-count grl) 6 "six rules")
+    (assert-eq (gu-count-rule grl 530) 6 "each from row 530: the tracer's, in an image whose region scores well")
+    (assert-eq (grl-get grl 0 18) 5 "flagged traced and in-image")
+    (assert-that (> (grl-get grl 0 17) 0) "with a confidence the region's score scaled")
+    (assert-that (<= (grl-get grl 0 17) 900) "never above the tracer's")
+    (assert-eq (grg-count grg) 1 "one region")
+    (assert-eq (grg-get grg 0 5) (rk-table-in-image) "a table in an image")
+    (assert-eq (grg-get grg 0 8) 0 "of the image placement 0")
+    (assert-eq (grg-get grg 0 1) 11950 "its box is what the rules cover: the left")
+    (assert-eq (grg-get grg 0 9) 6 "six rules inside")
+    (assert-eq (fe-get feats 0 (xo-in-table-image)) 1000 "the word in a cell is wholly in the table")
+    (assert-eq (fe-get feats 0 (xo-rule-like)) -1 "and is not rule-like")
+    (assert-that (>= (fe-get feats 1 (xo-in-table-image)) 0) "the `|` has a share too")
+    (assert-eq (fe-get feats 1 (xo-rule-like)) 1000 "and it lies wholly on a rule: rule-likeness 1000")
+    (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")))
+
+(deftest test-a-tint-over-a-pattern-gives-its-colour-and-a-tint-in-a-good-image-region-is-a-fill
+  (let [^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gv (new-cells)
+        ^Cells ggp (new-cells) ^Cells grg (new-cells) ^Cells refs (new-cells) ^Cells hl (new-cells) ^Cells fx (new-cells) ^Cells gfa (new-cells)
+        ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells oblocks (new-cells) ^Cells owords (new-cells)
+        ^Cells words (new-cells) ^Cells etext (new-cells) ^Cells feats (new-cells)
+        ^I32 p (gu-rect pa 1 (+ (pg-filled) (pg-pattern)) -1 3000 12000 8000 15000)
+        ^I32 t (pm-new prims 1 3000 12000 8000 15000 (pm-rect))]
+    (assert-that (>= p 0) "a pattern fill")
+    (pm-set prims t (pmf-flags) 11)
+    (pm-set prims t (pmf-color) 14737632)
+    (pm-set prims t (pmf-conf) 800)
+    (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv)
+    (assert-eq (gfl-get gfl 0 9) 562 "the vector source alone: row 562")
+    (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa)
+    (assert-eq (gfl-count gfl) 1 "one fill")
+    (assert-eq (gfl-get gfl 0 9) 561 "the render witnesses it: row 561")
+    (assert-eq (gfl-get gfl 0 10) 950 "at 950")
+    (assert-eq (gfl-get gfl 0 5) 14737632 "the tint's colour")
+    (assert-eq (bit-and (gfl-get gfl 0 11) 8) 8 "flagged `tint-coloured`")
+    (assert-eq (gfl-get gfl 0 7) 3 "from the vector and the tracer")
+    (comment "a tint that only the tracer saw: dropped in R0 of a page whose tracer is not shown precise, a fill inside an image whose region scores well")
+    (let [^I32 m (im-new im 1 20000 20000 50000 50000 7 600 600)
+          ^I32 u (pm-new prims 1 22000 22000 30000 26000 (pm-rect))]
+      (assert-that (>= m 0) "an image")
+      (pm-set prims u (pmf-flags) 11)
+      (pm-set prims u (pmf-color) 15658734)
+      (pm-set prims u (pmf-conf) 800)
+      (gu-trace rules 22000 30000 48000 30000 900)
+      (gu-trace rules 22000 40000 48000 40000 900)
+      (gu-trace rules 22000 22000 22000 48000 900)
+      (cells-drop grl 0)
+      (cells-drop gfl 0)
+      (cells-drop ggp 0)
+      (cells-drop refs 0)
+      (cells-drop hl 0)
+      (cells-drop fx 0)
+      (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv)
+      (gu-fuse 1 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa)
+      (assert-eq (gfl-count gfl) 2 "the vector fill and the tint in the image")
+      (assert-eq (gfl-get gfl 1 9) 570 "the tint by row 570")
+      (assert-eq (gfl-get gfl 1 10) 700 "at 700")
+      (assert-eq (bit-and (gfl-get gfl 1 11) 4) 4 "flagged in-image")
+      (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound"))))
+
+(deftest test-rows-601-and-610-of-block-600-read-the-words-features-and-a-hidden-vector-is-nothing
+  (let [^Cells gv (new-cells) ^:mut ^I32 i 0]
+    (while (< i (ag-count))
+      (do (cells-push gv -1)
+          (set i (+ i 1))))
+    (cells-set gv (ag-nt) 0)
+    (cells-set gv (ag-nh) 0)
+    (cells-set gv (ag-no) 1)
+    (cells-set gv (ag-rulelike) 900)
+    (assert-eq (fr-number (fr-decide gv)) 601 "an OCR-only word made of rule glyphs on a rule: 601")
+    (assert-eq (fr-reason (fr-decide gv)) 11 "to the ledger as a rule ghost")
+    (assert-eq (fr-winner (fr-decide gv)) 0 "never body")
+    (cells-set gv (ag-rulelike) 300)
+    (assert-that (!= (fr-number (fr-decide gv)) 601) "a word that only touches a rule is not one")
+    (cells-set gv (ag-rulelike) -1)
+    (cells-set gv (ag-tableimg) 1000)
+    (cells-set gv (ag-kink) 500)
+    (cells-set gv (ag-plaus) 900)
+    (cells-set gv (ag-score) 800)
+    (assert-eq (fr-number (fr-decide gv)) 610 "an OCR-only word in a table drawn in an image, with ink and plausible: 610")
+    (assert-eq (fr-winner (fr-decide gv)) (fw-ocr) "it is body text")
+    (assert-eq (bit-and (fr-flags (fr-decide gv)) 512) 512 "flagged `in-table-image`")
+    (cells-set gv (ag-kink) -1)
+    (assert-that (!= (fr-number (fr-decide gv)) 610) "without ink of kin's own it is not")))
+
+(deftest test-a-page-with-no-raster-answer-is-copied-and-a-hidden-vector-rule-is-row-505
+  (let [^Cells gv (new-cells) ^Cells pa (new-cells) ^Cells pts (new-cells) ^Cells mk (new-cells) ^Cells im (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells)
+        ^Cells ggp (new-cells) ^Cells grg (new-cells) ^Cells refs (new-cells) ^Cells hl (new-cells) ^Cells fx (new-cells) ^Cells gfa (new-cells)
+        ^Cells inks (new-cells) ^Cells rules (new-cells) ^Cells prims (new-cells) ^Cells oblocks (new-cells) ^Cells owords (new-cells)
+        ^Cells words (new-cells) ^Cells etext (new-cells) ^Cells feats (new-cells) ^:mut ^I32 i 0]
+    (while (< i 128)
+      (do (cells-push gv -1)
+          (set i (+ i 1))))
+    (cells-set gv 103 1)
+    (assert-eq (fr-number (fr-decide-block gv 500)) 505 "a vector member whose vis is not 0: row 505")
+    (assert-eq (fr-winner (fr-decide-block gv 500)) 0 "contributes nothing")
+    (gu-hrule pa 5000 1000 21000)
+    (gu-hrule pa 7000 1000 21000)
+    (gu-hrule pa 7000 21000 31000)
+    (cells-drop gv 0)
+    (assert-eq (gf-doc pa pts mk im 1 (gv-segments) grl gfl cand gv) 3 "three rules")
+    (comment "page 1 has the raster answer, page 2 has none: its rows are copied untouched")
+    (gu-rect pa 2 (pg-filled) 0 1000 4950 21000 5050)
+    (cells-drop grl 0)
+    (cells-drop gfl 0)
+    (cells-drop gv 0)
+    (assert-eq (gf-doc pa pts mk im 2 (gv-segments) grl gfl cand gv) 4 "four rules on two pages")
+    (ik-new inks 1 0)
+    (assert-eq (gu-fuse 2 inks rules prims oblocks owords words etext pa im feats grl gfl ggp grg refs hl fx gfa) 1 "one page fused")
+    (assert-eq (grl-count grl) 4 "four rules still")
+    (assert-eq (grl-get grl 3 0) 2 "the second page's is the last")
+    (assert-eq (grl-get grl 3 16) 501 "copied as it was")
+    (assert-eq (grl-get grl 0 16) 511 "the first page's are made again: nothing the tracer saw")
+    (assert-eq (gl-check grl gfl ggp grg refs) 0 "sound")))

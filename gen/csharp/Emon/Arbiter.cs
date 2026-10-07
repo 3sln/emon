@@ -238,6 +238,8 @@ public static class Arbiter {
         int margin = -1;
         int kink = -1;
         int body = -1;
+        int tim = -1;
+        int rlk = -1;
         while (k < nt) {
             row = ArRef(refs, tf + k, 1);
             v = Artifact.AxWordClass(gl, mk, an, txt, etext, trust, feats, ofw, row);
@@ -286,6 +288,9 @@ public static class Arbiter {
                 margin = ArMinPos(margin, Evidence.FeGet(feats, f, Evidence.XoMargin()));
                 kink = ArMinPos(kink, Evidence.FeGet(feats, f, Evidence.XoKinInk()));
                 body = ArMinPos(body, Evidence.FeGet(feats, f, Evidence.XoBodyShare()));
+                // P7.G (D224): how far inside a table drawn in an image the word is, and how like a rule it is (graphics fusion wrote both)
+                tim = ArMaxPos(tim, Evidence.FeGet(feats, f, Evidence.XoInTableImage()));
+                rlk = ArMaxPos(rlk, Evidence.FeGet(feats, f, Evidence.XoRuleLike()));
             }
             odiag = ArMinPos(odiag, ArOffaxis(Evidence.OwGet(owords, row, 9)));
             k += 1;
@@ -375,6 +380,8 @@ public static class Arbiter {
         emon.Port.CellsSet(gv, Fuserules.AgMargin(), margin);
         emon.Port.CellsSet(gv, Fuserules.AgKink(), kink);
         emon.Port.CellsSet(gv, Fuserules.AgBody(), body);
+        emon.Port.CellsSet(gv, Fuserules.AgTableimg(), tim);
+        emon.Port.CellsSet(gv, Fuserules.AgRulelike(), rlk);
         emon.Port.CellsSet(gv, Fuserules.AgImalpha(), ArImageAlpha(images, epages, Player.CgGet(cg, g, Player.CgfPage()), Player.CgGet(cg, g, Player.CgfX0()), Player.CgGet(cg, g, Player.CgfY0()), Player.CgGet(cg, g, Player.CgfX1()), Player.CgGet(cg, g, Player.CgfY1())));
         // P7.6: the columns of a group of hidden-text words (`emon.hidden`)
         Hidden.HxFill(g, cg, refs, ofw, etext, feats, owords, gv);

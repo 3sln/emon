@@ -359,3 +359,67 @@ fn test_the_verdicts_are_the_dumps_tb() {
     tt_emit(t, tv);
     crate::testport::assert_text(t, "[{\"page\":1,\"se\":1,\"rows\":3,\"cols\":3,\"verdict\":\"confirmed\",\"score\":908,\"checks\":[1000,900,1000,-1,1000,928],\"trust\":500}]", "one tagged table: the verdict, the score, the six checks and the tree's trust");
 }
+pub(crate) fn ttt_zeros(mut c: &mut crate::port::Cells, n: i32) -> i32 {
+    let mut i: i32 = 0;
+    while i < n {
+        crate::port::cells_push(c, 0);
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn ttt_multi(mut tg: &mut crate::port::Cells, mut ta: &mut crate::port::Cells, mut wo: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, r0: i32, r1: i32, r2: i32) -> i32 {
+    // Two tagged rows of one column over a candidate of three rows of one column; three words, the tagged row of each given (0 or 1) as
+    // r0 r1 r2, the candidate row of word i being i.
+    ttt_zeros(tg, 24);
+    crate::port::cells_set(tg, 2, 2);
+    crate::port::cells_set(tg, 3, 1);
+    crate::port::cells_set(tg, 4, 0);
+    crate::port::cells_set(tg, 5, 2);
+    ttt_zeros(ta, 32);
+    crate::port::cells_set(ta, 1, 0);
+    crate::port::cells_set(ta, 17, 1);
+    crate::port::cells_push(wo, 0 + r0);
+    crate::port::cells_push(wo, 0 + r1);
+    crate::port::cells_push(wo, 0 + r2);
+    ttt_zeros(tb, 28);
+    crate::port::cells_set(tb, 7, 3);
+    crate::port::cells_set(tb, 8, 1);
+    crate::port::cells_set(tb, 9, 0);
+    crate::port::cells_set(tb, 10, 3);
+    ttt_zeros(tc, 48);
+    crate::port::cells_set(tc, 0, 0);
+    crate::port::cells_set(tc, 8, 0);
+    crate::port::cells_set(tc, 9, 1);
+    crate::port::cells_set(tc, 16, 1);
+    crate::port::cells_set(tc, 24, 1);
+    crate::port::cells_set(tc, 25, 1);
+    crate::port::cells_set(tc, 32, 2);
+    crate::port::cells_set(tc, 40, 2);
+    crate::port::cells_set(tc, 41, 1);
+    crate::port::cells_push(tw, 0);
+    crate::port::cells_push(tw, 1);
+    crate::port::cells_push(tw, 2);
+    return 0;
+}
+#[test]
+fn test_adjacent_candidate_rows_may_map_to_one_tagged_row() {
+    let tg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ta: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let wo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ttt_multi(tg, ta, wo, tb, tc, tw, 0, 0, 1);
+    crate::testport::assert_eq(tt_geo_map(tg, 0, ta, wo, 0, tb, 0, tc, tw, ws), 3, "all three words agree: two adjacent candidate rows are one tagged row");
+    crate::testport::assert_eq(crate::port::cells_at(ws, crate::port::cells_len(ws) - 1), 1, "and the table says it needed that");
+    crate::port::cells_drop(tg, 0);
+    crate::port::cells_drop(ta, 0);
+    crate::port::cells_drop(wo, 0);
+    crate::port::cells_drop(tb, 0);
+    crate::port::cells_drop(tc, 0);
+    crate::port::cells_drop(tw, 0);
+    ttt_multi(tg, ta, wo, tb, tc, tw, 0, 1, 0);
+    crate::testport::assert_eq(tt_geo_map(tg, 0, ta, wo, 0, tb, 0, tc, tw, ws), 2, "a tagged row split around another's candidate row is not one: only the words the old mapping agreed on");
+    crate::testport::assert_eq(crate::port::cells_at(ws, crate::port::cells_len(ws) - 1), 0, "and nothing was granted by the new one");
+}

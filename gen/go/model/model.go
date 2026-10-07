@@ -971,6 +971,9 @@ func FlStructDisagree() int32 {
 func FlTagSpanConflict() int32 {
 	return 256
 }
+func FlInTableImage() int32 {
+	return 512
+}
 func FlEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "low-conf")
@@ -1006,6 +1009,10 @@ func FlEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 256 {
 		port.TextAscii(t, "tag-span-conflict")
+		return 1
+	}
+	if code == 512 {
+		port.TextAscii(t, "in-table-image")
 		return 1
 	}
 	return 0
@@ -1406,6 +1413,12 @@ func DrOffpage() int32 {
 func DrInvisible() int32 {
 	return 10
 }
+func DrRuleGhost() int32 {
+	return 11
+}
+func DrUnwitnessedUncertainPaint() int32 {
+	return 12
+}
 func DrEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "watermark")
@@ -1445,6 +1458,14 @@ func DrEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 10 {
 		port.TextAscii(t, "invisible")
+		return 1
+	}
+	if code == 11 {
+		port.TextAscii(t, "rule-ghost")
+		return 1
+	}
+	if code == 12 {
+		port.TextAscii(t, "unwitnessed-uncertain-paint")
 		return 1
 	}
 	return 0

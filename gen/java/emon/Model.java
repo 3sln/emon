@@ -964,6 +964,9 @@ public final class Model {
     public static int flTagSpanConflict() {
         return 256;
     }
+    public static int flInTableImage() {
+        return 512;
+    }
     public static int flEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "low-conf");
@@ -999,6 +1002,10 @@ public final class Model {
         }
         if (code == 256) {
             emon.Port.textAscii(t, "tag-span-conflict");
+            return 1;
+        }
+        if (code == 512) {
+            emon.Port.textAscii(t, "in-table-image");
             return 1;
         }
         return 0;
@@ -1389,6 +1396,12 @@ public final class Model {
     public static int drInvisible() {
         return 10;
     }
+    public static int drRuleGhost() {
+        return 11;
+    }
+    public static int drUnwitnessedUncertainPaint() {
+        return 12;
+    }
     public static int drEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "watermark");
@@ -1428,6 +1441,14 @@ public final class Model {
         }
         if (code == 10) {
             emon.Port.textAscii(t, "invisible");
+            return 1;
+        }
+        if (code == 11) {
+            emon.Port.textAscii(t, "rule-ghost");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.textAscii(t, "unwitnessed-uncertain-paint");
             return 1;
         }
         return 0;

@@ -106,8 +106,8 @@ public final class Arbitertest {
         emon.Testport.assertEq(Fuserules.frOrder(4), 100, "then the core");
         emon.Testport.assertEq(Fuserules.frOrder(5), -1, "and no more");
         int i = 0;
-        while (i < 40) {
-            emon.Testport.assertThat(((Fuserules.frBlock(i) == 100) || (Fuserules.frBlock(i) == 200)) || ((Fuserules.frBlock(i) == 300) || (Fuserules.frBlock(i) == 400)), "every row of P7.3, P7.5, P7.6 and P7.7 is in block 100, 200, 300 or 400");
+        while (i < 65) {
+            emon.Testport.assertThat((((Fuserules.frBlock(i) == 100) || (Fuserules.frBlock(i) == 200)) || ((Fuserules.frBlock(i) == 300) || (Fuserules.frBlock(i) == 400))) || ((Fuserules.frBlock(i) == 500) || (Fuserules.frBlock(i) == 600)), "every row of P7.3, P7.5, P7.6, P7.7 and P7.G is in block 100, 200, 300, 400, 500 or 600");
             i += 1;
         }
     }

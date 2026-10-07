@@ -2371,6 +2371,12 @@ public static class Evidence {
     public static int XoEdge() {
         return 29;
     }
+    public static int XoInTableImage() {
+        return 30;
+    }
+    public static int XoRuleLike() {
+        return 31;
+    }
     public static int XoEmitName(System.Text.StringBuilder t, int code) {
         if (code == 2) {
             emon.Port.TextAscii(t, "conf");
@@ -2482,6 +2488,14 @@ public static class Evidence {
         }
         if (code == 29) {
             emon.Port.TextAscii(t, "edge");
+            return 1;
+        }
+        if (code == 30) {
+            emon.Port.TextAscii(t, "in-table-image");
+            return 1;
+        }
+        if (code == 31) {
+            emon.Port.TextAscii(t, "rule-like");
             return 1;
         }
         return 0;

@@ -531,7 +531,12 @@
         ^:mut ^I32 gc 0
         ^:mut ^I32 agree 0
         ^:mut ^I32 mv 0
-        ^:mut ^I32 dup 0]
+        ^:mut ^I32 dup 0
+        ^:mut ^I32 ob 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 rowok 0
+        ^:mut ^I32 multi 0]
     (cells-drop ws 0)
     (if (> (+ (* nr gnr) (* nc gnc)) 1000000) (return -2))
     ;; maps, then the word -> candidate cell (row, column) pairs, then the two count matrices
@@ -601,6 +606,43 @@
                 (set j (+ j 1))))
           (if (== dup 1) (cells-set ws (+ nr i) (- 0 2)))
           (set i (+ i 1))))
+    ;; SEVERAL ADJACENT CANDIDATE ROWS FOR ONE TAGGED ROW (D324): a cell of several lines is one tagged row and a row of the geometry for every
+    ;; line. The owner of a candidate row is the tagged row with the most words in it; a tagged row's rows are the candidate rows it owns, and
+    ;; are used only when no candidate row between its first and its last belongs to another tagged row. After the matrices: the owner of each
+    ;; candidate row (gnr cells), then the first and the last row of each tagged row (2 nr cells, -1 -1 when it has none or they are not adjacent).
+    (set ob (cells-len ws))
+    (set g 0)
+    (while (< g gnr)
+      (do (set mv -1)
+          (set dup 0)
+          (set i 0)
+          (while (< i nr)
+            (do (if (> (cells-at ws (+ (+ (+ nr nc) (* nw 2)) (+ (* i gnr) g))) dup)
+                  (do (set dup (cells-at ws (+ (+ (+ nr nc) (* nw 2)) (+ (* i gnr) g))))
+                      (set mv i)))
+                (set i (+ i 1))))
+          (cells-push ws mv)
+          (set g (+ g 1))))
+    (set i 0)
+    (while (< i nr)
+      (do (set lo -1)
+          (set hi -1)
+          (set g 0)
+          (while (< g gnr)
+            (do (if (== (cells-at ws (+ ob g)) i)
+                  (do (if (< lo 0) (set lo g))
+                      (set hi g)))
+                (set g (+ g 1))))
+          (set g lo)
+          (while (and (>= lo 0) (<= g hi))
+            (do (set mv (cells-at ws (+ ob g)))
+                (if (and (>= mv 0) (!= mv i))
+                  (do (set lo -1)
+                      (set hi -1)))
+                (set g (+ g 1))))
+          (cells-push ws lo)
+          (cells-push ws hi)
+          (set i (+ i 1))))
     (set wi 0)
     (while (< wi nw)
       (do (set cell (cells-at wo wi))
@@ -608,11 +650,19 @@
             (do (set tr (cells-at ta (+ (* cell TAS) 1)))
                 (set tcc (cells-at ta (+ (* cell TAS) 2)))
                 (if (and (< tr nr) (< tcc nc))
-                  (if (and (>= (cells-at ws tr) 0) (>= (cells-at ws (+ nr tcc)) 0))
-                    (if (and (== (cells-at ws tr) (cells-at ws (+ (+ nr nc) (* wi 2))))
-                             (== (cells-at ws (+ nr tcc)) (cells-at ws (+ (+ (+ nr nc) (* wi 2)) 1))))
-                      (set agree (+ agree 1)))))))
+                  (if (>= (cells-at ws (+ nr tcc)) 0)
+                    (if (== (cells-at ws (+ nr tcc)) (cells-at ws (+ (+ (+ nr nc) (* wi 2)) 1)))
+                      (do (set gr (cells-at ws (+ (+ nr nc) (* wi 2))))
+                          (set rowok 0)
+                          (if (and (>= (cells-at ws tr) 0) (== (cells-at ws tr) gr)) (set rowok 1))
+                          (if (and (== rowok 0) (and (>= gr 0) (and (>= (cells-at ws (+ (+ ob gnr) (* tr 2))) 0)
+                                  (and (>= gr (cells-at ws (+ (+ ob gnr) (* tr 2)))) (<= gr (cells-at ws (+ (+ (+ ob gnr) (* tr 2)) 1)))))))
+                            (if (== (cells-at ws (+ ob gr)) tr)
+                              (do (set rowok 1)
+                                  (set multi 1))))
+                          (if (== rowok 1) (set agree (+ agree 1)))))))))
           (set wi (+ wi 1))))
+    (cells-push ws multi)
     (return agree)))
 
 (defn ^:pub ^I32 tt-geo-tb [^Cells tg ^I32 k ^Cells tb ^I32 t0 ^I32 t1]

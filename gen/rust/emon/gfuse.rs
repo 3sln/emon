@@ -2,12 +2,148 @@
 // source: emon.gfuse
 
 use crate::emon::evidence::*;
+use crate::emon::fuserules::*;
 use crate::emon::glayer::*;
 use crate::emon::gvec::*;
+use crate::emon::health::*;
+use crate::emon::model::*;
+use crate::emon::player::*;
 
-pub(crate) const GF_AXIS: i32 = 100;
 pub fn gfx_mode() -> i32 {
     return 1;
+}
+pub fn gmz_unit() -> i32 {
+    return 100;
+}
+pub fn gmz_vec_exact() -> i32 {
+    return 101;
+}
+pub fn gmz_vec_uncertain() -> i32 {
+    return 102;
+}
+pub fn gmz_vec_hidden() -> i32 {
+    return 103;
+}
+pub fn gmz_trace() -> i32 {
+    return 104;
+}
+pub fn gmz_trace_conf() -> i32 {
+    return 105;
+}
+pub fn gmz_ocr_line() -> i32 {
+    return 106;
+}
+pub fn gmz_in_image() -> i32 {
+    return 107;
+}
+pub fn gmz_raster() -> i32 {
+    return 108;
+}
+pub fn gmz_region_score() -> i32 {
+    return 109;
+}
+pub fn gmz_vec_witness() -> i32 {
+    return 110;
+}
+pub fn gmz_tprec() -> i32 {
+    return 111;
+}
+pub fn gmz_in_glyph() -> i32 {
+    return 112;
+}
+pub fn gmz_in_ocr_word() -> i32 {
+    return 113;
+}
+pub fn gmz_fill_colour_known() -> i32 {
+    return 115;
+}
+pub fn gmz_tint() -> i32 {
+    return 116;
+}
+pub fn gmz_witness() -> i32 {
+    return 117;
+}
+pub fn gmz_group_vec_exact() -> i32 {
+    return 118;
+}
+pub(crate) const GC: i32 = 24;
+pub(crate) const C_KIND: i32 = 0;
+pub(crate) const C_SRC: i32 = 1;
+pub(crate) const C_EA: i32 = 2;
+pub(crate) const C_ROW: i32 = 3;
+pub(crate) const C_PT: i32 = 4;
+pub(crate) const C_X0: i32 = 5;
+pub(crate) const C_Y0: i32 = 6;
+pub(crate) const C_X1: i32 = 7;
+pub(crate) const C_Y1: i32 = 8;
+pub(crate) const C_EX0: i32 = 9;
+pub(crate) const C_EY0: i32 = 10;
+pub(crate) const C_EX1: i32 = 11;
+pub(crate) const C_EY1: i32 = 12;
+pub(crate) const C_T: i32 = 13;
+pub(crate) const C_COL: i32 = 14;
+pub(crate) const C_STY: i32 = 15;
+pub(crate) const C_FLG: i32 = 16;
+pub(crate) const C_CLS: i32 = 17;
+pub(crate) const C_CONF: i32 = 18;
+pub(crate) const C_EXACT: i32 = 19;
+pub(crate) const C_UF: i32 = 20;
+pub(crate) const C_WIT: i32 = 21;
+pub(crate) const C_ANG: i32 = 23;
+pub(crate) const X_PAGE: i32 = 0;
+pub(crate) const X_KIND: i32 = 1;
+pub(crate) const X_V0: i32 = 2;
+pub(crate) const X_V1: i32 = 3;
+pub(crate) const X_F0: i32 = 4;
+pub(crate) const X_F1: i32 = 5;
+pub(crate) const X_R0: i32 = 6;
+pub(crate) const X_R1: i32 = 7;
+pub(crate) const X_Q0: i32 = 8;
+pub(crate) const X_Q1: i32 = 9;
+pub(crate) const X_B0: i32 = 10;
+pub(crate) const X_B1: i32 = 11;
+pub(crate) const X_W0: i32 = 12;
+pub(crate) const X_W1: i32 = 13;
+pub(crate) const X_T0: i32 = 14;
+pub(crate) const X_T1: i32 = 15;
+pub(crate) const X_P0: i32 = 16;
+pub(crate) const X_P1: i32 = 17;
+pub(crate) const X_I0: i32 = 18;
+pub(crate) const X_I1: i32 = 19;
+pub(crate) const X_N: i32 = 20;
+pub(crate) const X_WIT: i32 = 21;
+pub(crate) const X_PREC: i32 = 22;
+pub(crate) const X_NGRL: i32 = 23;
+pub(crate) const X_NGFL: i32 = 24;
+pub(crate) const A_CNT: i32 = 0;
+pub(crate) const A_START: i32 = 1;
+pub(crate) const A_ORD: i32 = 2;
+pub(crate) const A_GID: i32 = 3;
+pub(crate) const A_EP: i32 = 4;
+pub(crate) const A_BITS: i32 = 6;
+pub(crate) fn gf_abs(a: i32) -> i32 {
+    if a < 0 {
+        return 0 - a;
+    }
+    return a;
+}
+pub(crate) fn gf_min(a: i32, b: i32) -> i32 {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn gf_max(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn gf_eq(a: i32, b: i32) -> i32 {
+    if a == b {
+        return 1;
+    }
+    return 0;
 }
 pub(crate) fn gf_lightness(rgb: i32) -> i32 {
     // 0..1000 from 0xRRGGBB (Rec. 601 luminance), -1 for a colour of -1.
@@ -17,17 +153,78 @@ pub(crate) fn gf_lightness(rgb: i32) -> i32 {
     return (((299 * ((rgb / 65536) & 255)) + (587 * ((rgb / 256) & 255))) + (114 * (rgb & 255))) / 255;
 }
 pub(crate) fn gf_orient_of(a: i32) -> i32 {
-    // `go` of an angle in [0, 18000): h within GF_AXIS of 0, v of 9000, else slant.
-    if (a <= GF_AXIS) || (a >= (18000 - GF_AXIS)) {
+    // `go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.
+    if (a <= fg_axis()) || (a >= (18000 - fg_axis())) {
         return go_h();
     }
-    if (a >= (9000 - GF_AXIS)) && (a <= (9000 + GF_AXIS)) {
+    if (a >= (9000 - fg_axis())) && (a <= (9000 + fg_axis())) {
         return go_v();
     }
     return go_slant();
 }
-pub(crate) fn gf_rule_row(cand: &mut crate::port::Cells, c: i32, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, mut grl: &mut crate::port::Cells) -> i32 {
-    // Candidate c (a rule) as a `grl` row.
+pub(crate) fn gf_angle_of(dx: i32, dy: i32) -> i32 {
+    // The angle of a centre line in [0, 18000).
+    let mut a: i32 = ev_angle(dx, dy);
+    if a >= 18000 {
+        a -= 18000;
+    }
+    return a;
+}
+pub(crate) fn gf_iou(ax0: i32, ay0: i32, ax1: i32, ay1: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
+    // The intersection over union of two boxes (cp), per mille. Areas in tenths of a point so they fit.
+    let iw: i32 = gf_max(0, gf_min(ax1, bx1) - gf_max(ax0, bx0)) / 10;
+    let ih: i32 = gf_max(0, gf_min(ay1, by1) - gf_max(ay0, by0)) / 10;
+    let inter: i32 = iw * ih;
+    let aa: i32 = (gf_max(0, ax1 - ax0) / 10) * (gf_max(0, ay1 - ay0) / 10);
+    let ab: i32 = (gf_max(0, bx1 - bx0) / 10) * (gf_max(0, by1 - by0) / 10);
+    let un: i32 = (aa + ab) - inter;
+    if un <= 0 {
+        return 0;
+    }
+    return inter / gf_max(1, un / 1000);
+}
+pub(crate) fn gf_inside_share(x0: i32, y0: i32, x1: i32, y1: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
+    // The per mille of box (x0 y0 x1 y1) that lies inside box b; 0 for an empty one. Areas in tenths of a point so they fit.
+    let iw: i32 = gf_max(0, gf_min(x1, bx1) - gf_max(x0, bx0)) / 10;
+    let ih: i32 = gf_max(0, gf_min(y1, by1) - gf_max(y0, by0)) / 10;
+    let inter: i32 = iw * ih;
+    let area: i32 = gf_max(1, gf_max(0, x1 - x0) / 10) * gf_max(1, gf_max(0, y1 - y0) / 10);
+    return inter / gf_max(1, area / 1000);
+}
+pub(crate) fn gcat(gc: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
+    return crate::port::cells_at(gc, (i * 24) + f);
+}
+pub(crate) fn gcput(mut gc: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
+    crate::port::cells_set(gc, (i * 24) + f, v);
+    return 0;
+}
+pub(crate) fn gf_gv_reset(mut gv: &mut crate::port::Cells) -> i32 {
+    // The measure vector (128 cells), every measure absent (-1).
+    let mut i: i32 = 0;
+    while crate::port::cells_len(gv) < 128 {
+        crate::port::cells_push(gv, -1);
+    }
+    while i < 128 {
+        crate::port::cells_set(gv, i, -1);
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_explain(mut fx: &mut crate::port::Cells, group: i32, r: i32, gv: &mut crate::port::Cells) -> i32 {
+    // `fx` rows for the decision of row `r` of `fr-rows`: every column the rule read and the value it read (the group is a `ggp` row).
+    let mut k: i32 = 0;
+    let mut col: i32 = 0;
+    while k < fr_npred() {
+        col = fr_pcol(r, k);
+        if col >= 0 {
+            fx_new(fx, group, fr_number(r), col, crate::port::cells_at(gv, col));
+        }
+        k += 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_rule_row(cand: &mut crate::port::Cells, c: i32, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, mut gv: &mut crate::port::Cells, mut grl: &mut crate::port::Cells) -> i32 {
+    // Candidate c (a rule) as a `grl` row, by the row of block 500 that holds (501 or 514 here: no raster answer).
     let b: i32 = c * 16;
     let row: i32 = crate::port::cells_at(cand, b + 1);
     let fl: i32 = crate::port::cells_at(cand, b + 15);
@@ -39,6 +236,7 @@ pub(crate) fn gf_rule_row(cand: &mut crate::port::Cells, c: i32, pa: &mut crate:
     let mut exact: i32 = 1;
     let mut z: i32 = -1;
     let mut r: i32 = 0;
+    let mut fr: i32 = 0;
     if (fl & gv_hidden()) != 0 {
         return 0;
     }
@@ -54,62 +252,80 @@ pub(crate) fn gf_rule_row(cand: &mut crate::port::Cells, c: i32, pa: &mut crate:
         }
         z = pa_get(pa, row, pf_z());
     }
+    gf_gv_reset(gv);
+    crate::port::cells_set(gv, 100, 1);
+    crate::port::cells_set(gv, 101, exact);
+    crate::port::cells_set(gv, 102, 1 - exact);
+    crate::port::cells_set(gv, 103, 0);
+    crate::port::cells_set(gv, 108, 0);
+    fr = fr_decide_block(gv, 500);
+    if fr_winner(fr) == 0 {
+        return 0;
+    }
     r = grl_new(grl, crate::port::cells_at(cand, b + 3), crate::port::cells_at(cand, b + 4), crate::port::cells_at(cand, b + 5), crate::port::cells_at(cand, b + 6), crate::port::cells_at(cand, b + 7), ex0, ey0, ex1, ey1, crate::port::cells_at(cand, b + 12), gf_orient_of(ang));
     grl_set(grl, r, 11, ang);
     grl_set(grl, r, 12, crate::port::cells_at(cand, b + 13));
     grl_set(grl, r, 13, crate::port::cells_at(cand, b + 14));
     grl_set(grl, r, 14, gs_vector());
     grl_set(grl, r, 15, gs_vector());
-    if exact == 1 {
-        grl_set(grl, r, 16, 501);
-        grl_set(grl, r, 17, 900);
-    } else {
-        grl_set(grl, r, 16, 514);
-        grl_set(grl, r, 17, 700);
-    }
-    grl_set(grl, r, 18, fl);
+    grl_set(grl, r, 16, fr_number(fr));
+    grl_set(grl, r, 17, fr_conf(fr));
+    grl_set(grl, r, 18, fl | fr_flags(fr));
     grl_set(grl, r, 20, z);
+    grl_set(grl, r, 21, row);
+    grl_set(grl, r, 22, crate::port::cells_at(cand, b + 2));
     return 0;
 }
-pub(crate) fn gf_fill_row(cand: &mut crate::port::Cells, c: i32, pa: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells) -> i32 {
-    // Candidate c (a fill) as a `gfl` row.
+pub(crate) fn gf_fill_row(cand: &mut crate::port::Cells, c: i32, pa: &mut crate::port::Cells, mut gv: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells) -> i32 {
+    // Candidate c (a fill) as a `gfl` row, by the row of block 500 that holds (560 or 562 here).
     let b: i32 = c * 16;
     let row: i32 = crate::port::cells_at(cand, b + 1);
     let fl: i32 = crate::port::cells_at(cand, b + 15);
     let colour: i32 = crate::port::cells_at(cand, b + 13);
-    let r: i32 = gfl_new(gfl, crate::port::cells_at(cand, b + 3), crate::port::cells_at(cand, b + 4), crate::port::cells_at(cand, b + 5), crate::port::cells_at(cand, b + 6), crate::port::cells_at(cand, b + 7), colour);
+    let mut fr: i32 = 0;
+    let mut r: i32 = 0;
+    gf_gv_reset(gv);
+    crate::port::cells_set(gv, 100, 3);
+    crate::port::cells_set(gv, 108, 0);
+    if colour < 0 {
+        crate::port::cells_set(gv, 115, 0);
+    } else {
+        crate::port::cells_set(gv, 115, 1);
+    }
+    fr = fr_decide_block(gv, 500);
+    if fr_winner(fr) == 0 {
+        return 0;
+    }
+    r = gfl_new(gfl, crate::port::cells_at(cand, b + 3), crate::port::cells_at(cand, b + 4), crate::port::cells_at(cand, b + 5), crate::port::cells_at(cand, b + 6), crate::port::cells_at(cand, b + 7), colour);
     gfl_set(gfl, r, 6, gf_lightness(colour));
     gfl_set(gfl, r, 7, gs_vector());
     gfl_set(gfl, r, 8, gs_vector());
-    if colour < 0 {
-        gfl_set(gfl, r, 9, 562);
-        gfl_set(gfl, r, 10, 600);
-    } else {
-        gfl_set(gfl, r, 9, 560);
-        gfl_set(gfl, r, 10, 900);
-    }
-    gfl_set(gfl, r, 11, fl & 15);
+    gfl_set(gfl, r, 9, fr_number(fr));
+    gfl_set(gfl, r, 10, fr_conf(fr));
+    gfl_set(gfl, r, 11, (fl & 15) | fr_flags(fr));
     gfl_set(gfl, r, 13, pa_get(pa, row, pf_z()));
+    gfl_set(gfl, r, 14, row);
     return 0;
 }
-pub fn gf_page(cand: &mut crate::port::Cells, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, mut grl: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells) -> i32 {
-    // One page's candidates into `grl` and `gfl` (the head of this file); answers 0.
+pub fn gf_page(cand: &mut crate::port::Cells, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, mut grl: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells, mut gv: &mut crate::port::Cells) -> i32 {
+    // One page's candidates (`gv-page`'s scratch, stride 16) into rows of the fused rules and fills over the vector source alone: the rows of block 500
+    // that a page with no raster answer reaches. A hidden candidate (`vis` not 0) is row 505's: it contributes nothing. No group is made. Answers 0.
     let n: i32 = crate::port::cells_len(cand) / 16;
     let mut c: i32 = 0;
     while c < n {
         if (crate::port::cells_at(cand, (c * 16) + 15) & gv_hidden()) == 0 {
             if crate::port::cells_at(cand, c * 16) == 1 {
-                gf_rule_row(cand, c, pa, im, grl);
+                gf_rule_row(cand, c, pa, im, gv, grl);
             } else {
-                gf_fill_row(cand, c, pa, gfl);
+                gf_fill_row(cand, c, pa, gv, gfl);
             }
         }
         c += 1;
     }
     return 0;
 }
-pub fn gf_doc(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, mk: &mut crate::port::Cells, im: &mut crate::port::Cells, np: i32, mode: i32, mut grl: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells, mut cand: &mut crate::port::Cells) -> i32 {
-    // The document's graphics: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the
+pub fn gf_doc(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, mk: &mut crate::port::Cells, im: &mut crate::port::Cells, np: i32, mode: i32, mut grl: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut gv: &mut crate::port::Cells) -> i32 {
+    // The document's graphics over the vector source: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the
     // number of fused rules.
     let nq: i32 = pa_count(pa);
     let ni: i32 = im_count(im);
@@ -139,11 +355,1839 @@ pub fn gf_doc(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, mk: &mu
         if (qj > qi) || (ij > ii) {
             crate::port::cells_drop(cand, 0);
             gv_page(pa, pts, mk, im, qi, qj, ii, ij, mode, cand);
-            gf_page(cand, pa, im, grl, gfl);
+            gf_page(cand, pa, im, grl, gfl, gv);
         }
         qi = qj;
         ii = ij;
         p += 1;
     }
     return crate::port::cells_len(grl) / 24;
+}
+pub(crate) fn gf_cand_rule(mut gc: &mut crate::port::Cells, src: i32, ea: i32, row: i32, pt: i32, ex0: i32, ey0: i32, ex1: i32, ey1: i32, thick: i32, colour: i32, style: i32, flags: i32, conf: i32, exact: i32) -> i32 {
+    // Append a rule candidate: the box is derived from the centre line and the thickness (a horizontal rule's extent along its axis is the centre
+    // line's); the class (`go`) and the angle (centi-degrees, [0, 18000)) too. Answers its index.
+    let i: i32 = crate::port::cells_len(gc) / 24;
+    let ang: i32 = gf_angle_of(ex1 - ex0, ey1 - ey0);
+    let cls: i32 = gf_orient_of(ang);
+    let half: i32 = (gf_max(thick, 1) + 1) / 2;
+    let mut bx0: i32 = gf_min(ex0, ex1);
+    let mut by0: i32 = gf_min(ey0, ey1);
+    let mut bx1: i32 = gf_max(ex0, ex1);
+    let mut by1: i32 = gf_max(ey0, ey1);
+    if cls == go_h() {
+        by0 -= half;
+        by1 += half;
+    }
+    if cls == go_v() {
+        bx0 -= half;
+        bx1 += half;
+    }
+    if cls == go_slant() {
+        bx0 -= half;
+        by0 -= half;
+        bx1 += half;
+        by1 += half;
+    }
+    crate::port::cells_push(gc, 1);
+    crate::port::cells_push(gc, src);
+    crate::port::cells_push(gc, ea);
+    crate::port::cells_push(gc, row);
+    crate::port::cells_push(gc, pt);
+    crate::port::cells_push(gc, bx0);
+    crate::port::cells_push(gc, by0);
+    crate::port::cells_push(gc, bx1);
+    crate::port::cells_push(gc, by1);
+    crate::port::cells_push(gc, ex0);
+    crate::port::cells_push(gc, ey0);
+    crate::port::cells_push(gc, ex1);
+    crate::port::cells_push(gc, ey1);
+    crate::port::cells_push(gc, gf_max(thick, 1));
+    crate::port::cells_push(gc, colour);
+    crate::port::cells_push(gc, style);
+    crate::port::cells_push(gc, flags);
+    crate::port::cells_push(gc, cls);
+    crate::port::cells_push(gc, conf);
+    crate::port::cells_push(gc, exact);
+    crate::port::cells_push(gc, i);
+    crate::port::cells_push(gc, -1);
+    crate::port::cells_push(gc, -1);
+    crate::port::cells_push(gc, ang);
+    return i;
+}
+pub(crate) fn gf_cand_fill(mut gc: &mut crate::port::Cells, src: i32, ea: i32, row: i32, x0: i32, y0: i32, x1: i32, y1: i32, colour: i32, flags: i32, conf: i32) -> i32 {
+    // Append a fill candidate. Answers its index.
+    let i: i32 = crate::port::cells_len(gc) / 24;
+    crate::port::cells_push(gc, 2);
+    crate::port::cells_push(gc, src);
+    crate::port::cells_push(gc, ea);
+    crate::port::cells_push(gc, row);
+    crate::port::cells_push(gc, -1);
+    crate::port::cells_push(gc, x0);
+    crate::port::cells_push(gc, y0);
+    crate::port::cells_push(gc, x1);
+    crate::port::cells_push(gc, y1);
+    crate::port::cells_push(gc, 0);
+    crate::port::cells_push(gc, 0);
+    crate::port::cells_push(gc, 0);
+    crate::port::cells_push(gc, 0);
+    crate::port::cells_push(gc, 0);
+    crate::port::cells_push(gc, colour);
+    crate::port::cells_push(gc, 1);
+    crate::port::cells_push(gc, flags);
+    crate::port::cells_push(gc, 0);
+    crate::port::cells_push(gc, conf);
+    crate::port::cells_push(gc, 0);
+    crate::port::cells_push(gc, i);
+    crate::port::cells_push(gc, -1);
+    crate::port::cells_push(gc, -1);
+    crate::port::cells_push(gc, 0);
+    return i;
+}
+pub(crate) fn gf_build(mut gc: &mut crate::port::Cells, ctx: &mut crate::port::Cells, og: &mut crate::port::Cells, ofl: &mut crate::port::Cells, rules: &mut crate::port::Cells, prims: &mut crate::port::Cells, oblocks: &mut crate::port::Cells) -> i32 {
+    // The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its
+    // rectangles, then OCR's line blocks. Answers how many.
+    let mut i: i32 = 0;
+    let mut f: i32 = 0;
+    let mut sw: i32 = 0;
+    let mut half: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut ea: i32 = 0;
+    crate::port::cells_drop(gc, 0);
+    i = crate::port::cells_at(ctx, X_V0);
+    while i < crate::port::cells_at(ctx, X_V1) {
+        f = crate::port::cells_at(og, (i * 24) + 18);
+        ea = ea_paths();
+        if (f & gq_from_image()) != 0 {
+            ea = ea_images();
+        }
+        gf_cand_rule(gc, 1, ea, i, crate::port::cells_at(og, (i * 24) + 22), crate::port::cells_at(og, (i * 24) + 5), crate::port::cells_at(og, (i * 24) + 6), crate::port::cells_at(og, (i * 24) + 7), crate::port::cells_at(og, (i * 24) + 8), crate::port::cells_at(og, (i * 24) + 9), crate::port::cells_at(og, (i * 24) + 12), crate::port::cells_at(og, (i * 24) + 13), f, -1, gf_eq(crate::port::cells_at(og, (i * 24) + 16), 501));
+        i += 1;
+    }
+    i = crate::port::cells_at(ctx, X_F0);
+    while i < crate::port::cells_at(ctx, X_F1) {
+        gf_cand_fill(gc, 1, ea_paths(), i, crate::port::cells_at(ofl, (i * 16) + 1), crate::port::cells_at(ofl, (i * 16) + 2), crate::port::cells_at(ofl, (i * 16) + 3), crate::port::cells_at(ofl, (i * 16) + 4), crate::port::cells_at(ofl, (i * 16) + 5), crate::port::cells_at(ofl, (i * 16) + 11), -1);
+        i += 1;
+    }
+    i = crate::port::cells_at(ctx, X_R0);
+    while i < crate::port::cells_at(ctx, X_R1) {
+        gf_cand_rule(gc, 2, ea_rules(), i, -1, rl_get(rules, i, rlf_lx0()), rl_get(rules, i, rlf_ly0()), rl_get(rules, i, rlf_lx1()), rl_get(rules, i, rlf_ly1()), rl_get(rules, i, rlf_thick()), rl_get(rules, i, rlf_color()), rl_get(rules, i, rlf_style()), 0, rl_get(rules, i, rlf_conf()), 0);
+        i += 1;
+    }
+    i = crate::port::cells_at(ctx, X_Q0);
+    while i < crate::port::cells_at(ctx, X_Q1) {
+        if pm_get(prims, i, pmf_kind()) == pm_rect() {
+            f = pm_get(prims, i, pmf_flags());
+            x0 = pm_get(prims, i, pmf_x0());
+            y0 = pm_get(prims, i, pmf_y0());
+            x1 = pm_get(prims, i, pmf_x1());
+            y1 = pm_get(prims, i, pmf_y1());
+            if (f & 8) != 0 {
+                gf_cand_fill(gc, 2, ea_prims(), i, x0, y0, x1, y1, pm_get(prims, i, pmf_color()), 0, pm_get(prims, i, pmf_conf()));
+            } else if (f & 2) == 0 {
+                sw = pm_get(prims, i, pmf_stroke());
+                if sw <= 0 {
+                    sw = 100;
+                }
+                half = sw / 2;
+                gf_cand_rule(gc, 2, ea_prims(), i, -1, x0, y0 + half, x1, y0 + half, sw, pm_get(prims, i, pmf_color()), 1, gq_box_edge(), pm_get(prims, i, pmf_conf()), 0);
+                gf_cand_rule(gc, 2, ea_prims(), i, -1, x0, y1 - half, x1, y1 - half, sw, pm_get(prims, i, pmf_color()), 1, gq_box_edge(), pm_get(prims, i, pmf_conf()), 0);
+                gf_cand_rule(gc, 2, ea_prims(), i, -1, x0 + half, y0, x0 + half, y1, sw, pm_get(prims, i, pmf_color()), 1, gq_box_edge(), pm_get(prims, i, pmf_conf()), 0);
+                gf_cand_rule(gc, 2, ea_prims(), i, -1, x1 - half, y0, x1 - half, y1, sw, pm_get(prims, i, pmf_color()), 1, gq_box_edge(), pm_get(prims, i, pmf_conf()), 0);
+            }
+        }
+        i += 1;
+    }
+    i = crate::port::cells_at(ctx, X_B0);
+    while i < crate::port::cells_at(ctx, X_B1) {
+        if (ob_get(oblocks, i, obf_kind()) == ob_block()) && (ob_get(oblocks, i, obf_btype()) == 3) {
+            x0 = ob_get(oblocks, i, obf_x0());
+            y0 = ob_get(oblocks, i, obf_y0());
+            x1 = ob_get(oblocks, i, obf_x1());
+            y1 = ob_get(oblocks, i, obf_y1());
+            if (x1 - x0) >= (y1 - y0) {
+                gf_cand_rule(gc, 4, ea_oblocks(), i, -1, x0, (y0 + y1) / 2, x1, (y0 + y1) / 2, y1 - y0, -1, 1, 0, -1, 0);
+            } else {
+                gf_cand_rule(gc, 4, ea_oblocks(), i, -1, (x0 + x1) / 2, y0, (x0 + x1) / 2, y1, x1 - x0, -1, 1, 0, -1, 0);
+            }
+        }
+        i += 1;
+    }
+    return crate::port::cells_len(gc) / 24;
+}
+pub(crate) fn gf_a0(gc: &mut crate::port::Cells, c: i32) -> i32 {
+    // A rule's extent along its axis, its least coordinate (x for a horizontal rule, y for a vertical one).
+    if gcat(gc, c, C_CLS) == go_h() {
+        return gf_min(gcat(gc, c, C_EX0), gcat(gc, c, C_EX1));
+    }
+    return gf_min(gcat(gc, c, C_EY0), gcat(gc, c, C_EY1));
+}
+pub(crate) fn gf_a1(gc: &mut crate::port::Cells, c: i32) -> i32 {
+    // ... its greatest.
+    if gcat(gc, c, C_CLS) == go_h() {
+        return gf_max(gcat(gc, c, C_EX0), gcat(gc, c, C_EX1));
+    }
+    return gf_max(gcat(gc, c, C_EY0), gcat(gc, c, C_EY1));
+}
+pub(crate) fn gf_perp_of(gc: &mut crate::port::Cells, c: i32) -> i32 {
+    // The position of a rule's centre line across its axis.
+    if gcat(gc, c, C_CLS) == go_h() {
+        return (gcat(gc, c, C_EY0) + gcat(gc, c, C_EY1)) / 2;
+    }
+    return (gcat(gc, c, C_EX0) + gcat(gc, c, C_EX1)) / 2;
+}
+pub(crate) fn gf_near_rule(gc: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // SPEC 9.9: two rules are near when they have the same orientation, their angles differ by at most `gf-angle`, the distance between their
+    // centre lines is at most half the sum of their thicknesses plus `gf-perp`, and their extents along the axis overlap or come within `gf-gap`.
+    let ca: i32 = gcat(gc, a, C_CLS);
+    let mut d: i32 = gf_abs(gcat(gc, a, C_ANG) - gcat(gc, b, C_ANG));
+    if ca != gcat(gc, b, C_CLS) {
+        return 0;
+    }
+    if ca == go_slant() {
+        return 0;
+    }
+    if d > 9000 {
+        d = 18000 - d;
+    }
+    if d > fg_angle() {
+        return 0;
+    }
+    if gf_abs(gf_perp_of(gc, a) - gf_perp_of(gc, b)) > (((gcat(gc, a, C_T) + gcat(gc, b, C_T)) / 2) + fg_perp()) {
+        return 0;
+    }
+    if gf_a0(gc, b) > (gf_a1(gc, a) + fg_gap()) {
+        return 0;
+    }
+    if gf_a0(gc, a) > (gf_a1(gc, b) + fg_gap()) {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn gf_near(gc: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // Two candidates of the same kind are near: rules by `gf-near-rule`, fills at box IoU at least `gf-fill-iou`.
+    if gcat(gc, a, C_KIND) == 1 {
+        return gf_near_rule(gc, a, b);
+    }
+    if gf_iou(gcat(gc, a, C_X0), gcat(gc, a, C_Y0), gcat(gc, a, C_X1), gcat(gc, a, C_Y1), gcat(gc, b, C_X0), gcat(gc, b, C_Y0), gcat(gc, b, C_X1), gcat(gc, b, C_Y1)) >= fg_fill_iou() {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_find(mut gc: &mut crate::port::Cells, i: i32) -> i32 {
+    // The root of candidate i's group (path compression).
+    let mut r: i32 = i;
+    let mut p: i32 = i;
+    let mut nx: i32 = 0;
+    while gcat(gc, r, C_UF) != r {
+        r = gcat(gc, r, C_UF);
+    }
+    while gcat(gc, p, C_UF) != r {
+        nx = gcat(gc, p, C_UF);
+        gcput(gc, p, C_UF, r);
+        p = nx;
+    }
+    return r;
+}
+pub(crate) fn gf_union(mut gc: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // Join two candidates' groups; the smaller root wins.
+    let ra: i32 = gf_find(gc, a);
+    let rb: i32 = gf_find(gc, b);
+    if ra < rb {
+        gcput(gc, rb, C_UF, ra);
+    }
+    if rb < ra {
+        gcput(gc, ra, C_UF, rb);
+    }
+    return 0;
+}
+pub(crate) fn gf_pairs(mut gc: &mut crate::port::Cells, n: i32) -> i32 {
+    // Every near pair of candidates of different sources, into groups: each tracer or OCR candidate against every vector one and the later ones of
+    // the others (the grid of D221 only speeds this up on a page of thousands of rules and no tracer; the pairs are the same). Answers 0.
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    while i < n {
+        if gcat(gc, i, C_SRC) != 1 {
+            j = 0;
+            while j < n {
+                if gcat(gc, j, C_SRC) != gcat(gc, i, C_SRC) {
+                    if (gcat(gc, j, C_SRC) == 1) || (j > i) {
+                        if gcat(gc, i, C_KIND) == gcat(gc, j, C_KIND) {
+                            if gf_near(gc, i, j) == 1 {
+                                gf_union(gc, i, j);
+                            }
+                        }
+                    }
+                }
+                j += 1;
+            }
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_order(mut gc: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, n: i32) -> i32 {
+    // Settle the groups and sort the candidates by root (ascending, then by index): `aux` has eight arrays of n cells, the counts of each root (A_CNT), where
+    // its members start (A_START), the members in order (A_ORD), its `ggp` row (A_GID, -1), and room for the sweeps (the other two, A_EP and A_BITS, 2 n each).
+    let mut i: i32 = 0;
+    let mut r: i32 = 0;
+    let mut s: i32 = 0;
+    let mut c: i32 = 0;
+    crate::port::cells_drop(aux, 0);
+    while i < (n * 8) {
+        crate::port::cells_push(aux, 0);
+        i += 1;
+    }
+    i = 0;
+    while i < n {
+        r = gf_find(gc, i);
+        gcput(gc, i, C_UF, r);
+        crate::port::cells_set(aux, (n * A_CNT) + r, crate::port::cells_at(aux, (n * A_CNT) + r) + 1);
+        i += 1;
+    }
+    i = 0;
+    while i < n {
+        crate::port::cells_set(aux, (n * A_START) + i, s);
+        s += crate::port::cells_at(aux, (n * A_CNT) + i);
+        crate::port::cells_set(aux, (n * A_GID) + i, -1);
+        i += 1;
+    }
+    i = 0;
+    while i < n {
+        r = gcat(gc, i, C_UF);
+        c = crate::port::cells_at(aux, (n * A_BITS) + r);
+        crate::port::cells_set(aux, (n * A_ORD) + (crate::port::cells_at(aux, (n * A_START) + r) + c), i);
+        crate::port::cells_set(aux, (n * A_BITS) + r, c + 1);
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_refs_run(gc: &mut crate::port::Cells, aux: &mut crate::port::Cells, n: i32, s: i32, e: i32, src: i32, og: &mut crate::port::Cells, ofl: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut ggp: &mut crate::port::Cells, g: i32, slot: i32) -> i32 {
+    // The members of source `src` of the group whose members are `aux`'s A_ORD[s, e), as a run of `refs` and the cells (2 + 2 slot, 3 + 2 slot) of its
+    // `ggp` row. A vector member is named by the `paths` (or `images`) row its fused row came from; the others by their own rows. Answers the count.
+    let mut k: i32 = s;
+    let mut c: i32 = 0;
+    let mut cnt: i32 = 0;
+    let mut first: i32 = -1;
+    let mut row: i32 = 0;
+    while k < e {
+        c = crate::port::cells_at(aux, (n * A_ORD) + k);
+        if gcat(gc, c, C_SRC) == src {
+            if first < 0 {
+                first = crate::port::cells_len(refs) / 2;
+            }
+            row = gcat(gc, c, C_ROW);
+            if src == 1 {
+                if gcat(gc, c, C_KIND) == 1 {
+                    row = crate::port::cells_at(og, (row * 24) + 21);
+                } else {
+                    row = crate::port::cells_at(ofl, (row * 16) + 14);
+                }
+            }
+            rf_add(refs, gcat(gc, c, C_EA), row);
+            cnt += 1;
+        }
+        k += 1;
+    }
+    ggp_set(ggp, g, 2 + (2 * slot), first);
+    ggp_set(ggp, g, 3 + (2 * slot), cnt);
+    return cnt;
+}
+pub(crate) fn gf_groups(mut gc: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, n: i32, ctx: &mut crate::port::Cells, og: &mut crate::port::Cells, ofl: &mut crate::port::Cells, mut ggp: &mut crate::port::Cells, mut refs: &mut crate::port::Cells) -> i32 {
+    // A `ggp` row for every group of the page, in the order of its first member, with its three member runs; the group's flags: 1 an exactly known visible vector
+    // rule, 2 a tracer member, 4 an OCR member. The row is each root's A_GID. Answers the groups made.
+    let mut r: i32 = 0;
+    let mut s: i32 = 0;
+    let mut e: i32 = 0;
+    let mut g: i32 = 0;
+    let mut k: i32 = 0;
+    let mut c: i32 = 0;
+    let mut nt: i32 = 0;
+    let mut no: i32 = 0;
+    let mut nx: i32 = 0;
+    let mut made: i32 = 0;
+    let mut kind: i32 = 0;
+    while r < n {
+        if crate::port::cells_at(aux, (n * A_CNT) + r) > 0 {
+            s = crate::port::cells_at(aux, (n * A_START) + r);
+            e = s + crate::port::cells_at(aux, (n * A_CNT) + r);
+            kind = gk_rule();
+            if gcat(gc, r, C_KIND) == 2 {
+                kind = gk_fill();
+            }
+            g = ggp_new(ggp, crate::port::cells_at(ctx, X_PAGE), kind);
+            gf_refs_run(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0);
+            nt = gf_refs_run(gc, aux, n, s, e, 2, og, ofl, refs, ggp, g, 1);
+            no = gf_refs_run(gc, aux, n, s, e, 4, og, ofl, refs, ggp, g, 2);
+            nx = 0;
+            k = s;
+            while k < e {
+                c = crate::port::cells_at(aux, (n * A_ORD) + k);
+                if (gcat(gc, c, C_SRC) == 1) && ((gcat(gc, c, C_KIND) == 1) && (gcat(gc, c, C_EXACT) == 1)) {
+                    nx = 1;
+                }
+                k += 1;
+            }
+            ggp_set(ggp, g, 8, (nx + (2 * gf_min(nt, 1))) + (4 * gf_min(no, 1)));
+            crate::port::cells_set(aux, (n * A_GID) + r, g);
+            made += 1;
+        }
+        r += 1;
+    }
+    return made;
+}
+pub(crate) fn gf_unit(mut un: &mut crate::port::Cells, gid: i32, ukind: i32) -> i32 {
+    // Append a unit; answers its row.
+    let u: i32 = crate::port::cells_len(un) / 24;
+    let mut i: i32 = 0;
+    while i < 24 {
+        crate::port::cells_push(un, 0);
+        i += 1;
+    }
+    crate::port::cells_set(un, u * 24, gid);
+    crate::port::cells_set(un, (u * 24) + 1, ukind);
+    crate::port::cells_set(un, (u * 24) + 9, -1);
+    crate::port::cells_set(un, (u * 24) + 15, -1);
+    return u;
+}
+pub(crate) fn unat(un: &mut crate::port::Cells, u: i32, f: i32) -> i32 {
+    return crate::port::cells_at(un, (u * 24) + f);
+}
+pub(crate) fn unput(mut un: &mut crate::port::Cells, u: i32, f: i32, v: i32) -> i32 {
+    crate::port::cells_set(un, (u * 24) + f, v);
+    return 0;
+}
+pub(crate) fn gf_trace_only(bits: i32) -> i32 {
+    // 1 for an elementary interval only the tracer covers (not a vector rule, exactly known or not).
+    if ((bits & 8) != 0) && ((bits & 3) == 0) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_run_unit(mut gc: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut un: &mut crate::port::Cells, n: i32, s: i32, e: i32, gid: i32, cls: i32, vecexact: i32, q0: i32, q1: i32) -> i32 {
+    // One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its
+    // thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.
+    let epb: i32 = n * A_EP;
+    let bitb: i32 = n * A_BITS;
+    let ordb: i32 = n * A_ORD;
+    let lo: i32 = crate::port::cells_at(aux, epb + q0);
+    let hi: i32 = crate::port::cells_at(aux, epb + (q1 + 1));
+    let u: i32 = gf_unit(un, gid, 2);
+    let mut j: i32 = s;
+    let mut c: i32 = 0;
+    let mut ov: i32 = 0;
+    let mut best: i32 = -1;
+    let mut bestov: i32 = 0;
+    let mut cnt: i32 = 0;
+    let mut psum: i32 = 0;
+    let mut thick: i32 = 0;
+    let mut q: i32 = q0;
+    let mut oc: i32 = 0;
+    let mut perp: i32 = 0;
+    while j < e {
+        c = crate::port::cells_at(aux, ordb + j);
+        if gcat(gc, c, C_SRC) == 2 {
+            ov = gf_min(hi, gf_a1(gc, c)) - gf_max(lo, gf_a0(gc, c));
+            if ov > 0 {
+                cnt += 1;
+                psum += gf_perp_of(gc, c);
+                thick = gf_max(thick, gcat(gc, c, C_T));
+                if ov > bestov {
+                    bestov = ov;
+                    best = c;
+                }
+            }
+        }
+        j += 1;
+    }
+    while q <= q1 {
+        if (crate::port::cells_at(aux, bitb + q) & 16) != 0 {
+            oc += crate::port::cells_at(aux, epb + (q + 1)) - crate::port::cells_at(aux, epb + q);
+        }
+        q += 1;
+    }
+    perp = psum / gf_max(cnt, 1);
+    unput(un, u, 2, cls);
+    unput(un, u, 3, lo);
+    unput(un, u, 4, hi);
+    unput(un, u, 5, perp);
+    unput(un, u, 6, thick);
+    unput(un, u, 10, (oc * 1000) / gf_max(hi - lo, 1));
+    unput(un, u, 16, vecexact);
+    if best >= 0 {
+        unput(un, u, 7, gcat(gc, best, C_COL));
+        unput(un, u, 8, gcat(gc, best, C_STY));
+        unput(un, u, 9, gcat(gc, best, C_CONF));
+    }
+    if (cnt == 1) && ((lo == gf_a0(gc, best)) && (hi == gf_a1(gc, best))) {
+        unput(un, u, 11, gcat(gc, best, C_EX0));
+        unput(un, u, 12, gcat(gc, best, C_EY0));
+        unput(un, u, 13, gcat(gc, best, C_EX1));
+        unput(un, u, 14, gcat(gc, best, C_EY1));
+        unput(un, u, 15, best);
+    } else if cls == go_h() {
+        unput(un, u, 11, lo);
+        unput(un, u, 12, perp);
+        unput(un, u, 13, hi);
+        unput(un, u, 14, perp);
+    } else {
+        unput(un, u, 11, perp);
+        unput(un, u, 12, lo);
+        unput(un, u, 13, perp);
+        unput(un, u, 14, hi);
+    }
+    return u;
+}
+pub(crate) fn gf_sweep(mut gc: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut un: &mut crate::port::Cells, n: i32, s: i32, e: i32, gid: i32, nv: i32, vecexact: i32) -> i32 {
+    // The group of rules whose members are `aux`'s A_ORD[s, e): the endpoints of every member along the axis cut it into ELEMENTARY INTERVALS, each with the
+    // kinds of member that cover it (bits: 1 an exactly known visible vector rule, 2 another vector rule, 8 the tracer, 16 an OCR line block). Every vector rule
+    // gets its WITNESS (`C_WIT`): the per mille of its length the tracer covers; every tracer member whether the group has a vector one (`C_EXACT`); and each
+    // run of intervals the tracer covers and no vector rule does becomes a unit. Gaps are never bridged: an interval nobody covers ends a run.
+    let k: i32 = e - s;
+    let cls: i32 = gcat(gc, crate::port::cells_at(aux, (n * A_ORD) + s), C_CLS);
+    let epb: i32 = n * A_EP;
+    let bitb: i32 = n * A_BITS;
+    let ordb: i32 = n * A_ORD;
+    let mut j: i32 = 0;
+    let mut m: i32 = 1;
+    let mut q: i32 = 0;
+    let mut qe: i32 = 0;
+    let mut c: i32 = 0;
+    let mut v: i32 = 0;
+    let mut w: i32 = 0;
+    let mut bits: i32 = 0;
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 0;
+    let mut a0: i32 = 0;
+    let mut a1: i32 = 0;
+    let mut cov: i32 = 0;
+    while j < k {
+        c = crate::port::cells_at(aux, ordb + (s + j));
+        crate::port::cells_set(aux, epb + (j * 2), gf_a0(gc, c));
+        crate::port::cells_set(aux, epb + ((j * 2) + 1), gf_a1(gc, c));
+        j += 1;
+    }
+    j = 1;
+    while j < (k * 2) {
+        v = crate::port::cells_at(aux, epb + j);
+        w = j - 1;
+        while (w >= 0) && (crate::port::cells_at(aux, epb + w) > v) {
+            crate::port::cells_set(aux, epb + (w + 1), crate::port::cells_at(aux, epb + w));
+            w -= 1;
+        }
+        crate::port::cells_set(aux, epb + (w + 1), v);
+        j += 1;
+    }
+    j = 1;
+    while j < (k * 2) {
+        if crate::port::cells_at(aux, epb + j) != crate::port::cells_at(aux, epb + (m - 1)) {
+            crate::port::cells_set(aux, epb + m, crate::port::cells_at(aux, epb + j));
+            m += 1;
+        }
+        j += 1;
+    }
+    while q < (m - 1) {
+        lo = crate::port::cells_at(aux, epb + q);
+        hi = crate::port::cells_at(aux, epb + (q + 1));
+        bits = 0;
+        j = 0;
+        while j < k {
+            c = crate::port::cells_at(aux, ordb + (s + j));
+            if (gf_a0(gc, c) <= lo) && (gf_a1(gc, c) >= hi) {
+                if gcat(gc, c, C_SRC) == 1 {
+                    if gcat(gc, c, C_EXACT) == 1 {
+                        bits |= 1;
+                    } else {
+                        bits |= 2;
+                    }
+                }
+                if gcat(gc, c, C_SRC) == 2 {
+                    bits |= 8;
+                }
+                if gcat(gc, c, C_SRC) == 4 {
+                    bits |= 16;
+                }
+            }
+            j += 1;
+        }
+        crate::port::cells_set(aux, bitb + q, bits);
+        q += 1;
+    }
+    j = 0;
+    while j < k {
+        c = crate::port::cells_at(aux, ordb + (s + j));
+        if gcat(gc, c, C_SRC) == 1 {
+            a0 = gf_a0(gc, c);
+            a1 = gf_a1(gc, c);
+            cov = 0;
+            q = 0;
+            while q < (m - 1) {
+                if (crate::port::cells_at(aux, epb + q) >= a0) && (crate::port::cells_at(aux, epb + (q + 1)) <= a1) {
+                    if (crate::port::cells_at(aux, bitb + q) & 8) != 0 {
+                        cov += crate::port::cells_at(aux, epb + (q + 1)) - crate::port::cells_at(aux, epb + q);
+                    }
+                }
+                q += 1;
+            }
+            if a1 > a0 {
+                gcput(gc, c, C_WIT, (cov * 1000) / (a1 - a0));
+            } else {
+                gcput(gc, c, C_WIT, 0);
+            }
+        }
+        if gcat(gc, c, C_SRC) == 2 {
+            gcput(gc, c, C_EXACT, gf_min(nv, 1));
+        }
+        j += 1;
+    }
+    q = 0;
+    while q < (m - 1) {
+        if gf_trace_only(crate::port::cells_at(aux, bitb + q)) == 1 {
+            qe = q;
+            while ((qe + 1) < (m - 1)) && (gf_trace_only(crate::port::cells_at(aux, bitb + (qe + 1))) == 1) {
+                qe += 1;
+            }
+            gf_run_unit(gc, aux, un, n, s, e, gid, cls, vecexact, q, qe);
+            q = qe + 1;
+        } else {
+            q += 1;
+        }
+    }
+    return 0;
+}
+pub(crate) fn gf_sweeps(mut gc: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut un: &mut crate::port::Cells, n: i32) -> i32 {
+    // Every group of the page in turn: a group of rules is swept (`gf-sweep`) when the tracer is in it; a vector rule with no tracer near it has witness 0; a
+    // slanted one is figure material and is not swept; OCR line blocks alone are a unit of kind 5. A group of fills: a vector fill's `C_WIT` is the candidate
+    // of a tint over it (-1: none), and a tint with no vector fill is a unit of kind 4. Answers the units.
+    let mut r: i32 = 0;
+    let mut s: i32 = 0;
+    let mut e: i32 = 0;
+    let mut k: i32 = 0;
+    let mut c: i32 = 0;
+    let mut nv: i32 = 0;
+    let mut nt: i32 = 0;
+    let mut no: i32 = 0;
+    let mut nx: i32 = 0;
+    let mut tint: i32 = -1;
+    let mut u: i32 = 0;
+    crate::port::cells_drop(un, 0);
+    while r < n {
+        if crate::port::cells_at(aux, (n * A_CNT) + r) > 0 {
+            s = crate::port::cells_at(aux, (n * A_START) + r);
+            e = s + crate::port::cells_at(aux, (n * A_CNT) + r);
+            nv = 0;
+            nt = 0;
+            no = 0;
+            nx = 0;
+            tint = -1;
+            k = s;
+            while k < e {
+                c = crate::port::cells_at(aux, (n * A_ORD) + k);
+                if gcat(gc, c, C_SRC) == 1 {
+                    nv += 1;
+                    if gcat(gc, c, C_EXACT) == 1 {
+                        nx = 1;
+                    }
+                }
+                if gcat(gc, c, C_SRC) == 2 {
+                    nt += 1;
+                    if tint < 0 {
+                        tint = c;
+                    }
+                }
+                if gcat(gc, c, C_SRC) == 4 {
+                    no += 1;
+                }
+                k += 1;
+            }
+            if gcat(gc, r, C_KIND) == 1 {
+                if gcat(gc, r, C_CLS) == go_slant() {
+                    k = s;
+                    while k < e {
+                        c = crate::port::cells_at(aux, (n * A_ORD) + k);
+                        if gcat(gc, c, C_SRC) == 1 {
+                            gcput(gc, c, C_WIT, 0);
+                        }
+                        k += 1;
+                    }
+                } else if (nt == 0) && (nv == 0) {
+                    u = gf_unit(un, crate::port::cells_at(aux, (n * A_GID) + r), 5);
+                    unput(un, u, 16, 0);
+                } else if nt == 0 {
+                    k = s;
+                    while k < e {
+                        c = crate::port::cells_at(aux, (n * A_ORD) + k);
+                        if gcat(gc, c, C_SRC) == 1 {
+                            gcput(gc, c, C_WIT, 0);
+                        }
+                        k += 1;
+                    }
+                } else {
+                    gf_sweep(gc, aux, un, n, s, e, crate::port::cells_at(aux, (n * A_GID) + r), nv, nx);
+                }
+            } else {
+                k = s;
+                while k < e {
+                    c = crate::port::cells_at(aux, (n * A_ORD) + k);
+                    if gcat(gc, c, C_SRC) == 1 {
+                        gcput(gc, c, C_WIT, tint);
+                    }
+                    if (gcat(gc, c, C_SRC) == 2) && (nv == 0) {
+                        u = gf_unit(un, crate::port::cells_at(aux, (n * A_GID) + r), 4);
+                        unput(un, u, 11, gcat(gc, c, C_X0));
+                        unput(un, u, 12, gcat(gc, c, C_Y0));
+                        unput(un, u, 13, gcat(gc, c, C_X1));
+                        unput(un, u, 14, gcat(gc, c, C_Y1));
+                        unput(un, u, 7, gcat(gc, c, C_COL));
+                        unput(un, u, 9, gcat(gc, c, C_CONF));
+                        unput(un, u, 15, c);
+                    }
+                    k += 1;
+                }
+            }
+        }
+        r += 1;
+    }
+    return crate::port::cells_len(un) / 24;
+}
+pub(crate) fn gf_image_ok(im: &mut crate::port::Cells, m: i32) -> i32 {
+    // 1 for a visible image placement at least `gf-img-min` each way (a region of its own: `emon.health`'s `hh-image-ok`).
+    if im_get(im, m, mf_vis()) != 0 {
+        return 0;
+    }
+    if (im_get(im, m, mf_x1()) - im_get(im, m, mf_x0())) < fg_img_min() {
+        return 0;
+    }
+    if (im_get(im, m, mf_y1()) - im_get(im, m, mf_y0())) < fg_img_min() {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn gf_region_of(ctx: &mut crate::port::Cells, im: &mut crate::port::Cells, cx: i32, cy: i32) -> i32 {
+    // The `images` row of the visible placement of the page that holds the point, else -1 (R0).
+    let mut m: i32 = crate::port::cells_at(ctx, X_I0);
+    while m < crate::port::cells_at(ctx, X_I1) {
+        if gf_image_ok(im, m) == 1 {
+            if ((cx >= im_get(im, m, mf_x0())) && (cx < im_get(im, m, mf_x1()))) && ((cy >= im_get(im, m, mf_y0())) && (cy < im_get(im, m, mf_y1()))) {
+                return m;
+            }
+        }
+        m += 1;
+    }
+    return -1;
+}
+pub(crate) fn gf_text_share(ctx: &mut crate::port::Cells, words: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // The per mille of the box that lies in the page's text-layer word boxes (their intersections added, at most 1000). Areas in tenths of a point.
+    let area: i32 = gf_max(1, gf_max(0, x1 - x0) / 10) * gf_max(1, gf_max(0, y1 - y0) / 10);
+    let mut w: i32 = crate::port::cells_at(ctx, X_T0);
+    let mut inter: i32 = 0;
+    let mut iw: i32 = 0;
+    let mut ih: i32 = 0;
+    while w < crate::port::cells_at(ctx, X_T1) {
+        iw = gf_max(0, gf_min(x1, wd_get(words, w, hd_x1())) - gf_max(x0, wd_get(words, w, hd_x0()))) / 10;
+        ih = gf_max(0, gf_min(y1, wd_get(words, w, hd_y1())) - gf_max(y0, wd_get(words, w, hd_y0()))) / 10;
+        inter += iw * ih;
+        w += 1;
+    }
+    return gf_min(1000, inter / gf_max(1, area / 1000));
+}
+pub(crate) fn gf_rule_glyph(cp: i32) -> i32 {
+    // 1 for a code point a scanned border is read as: | l I 1 ! [ ] _ - and U+2010-U+2015 (SPEC 8.4.5, column 31).
+    if (cp == 124) || ((cp == 108) || ((cp == 73) || ((cp == 49) || ((cp == 33) || ((cp == 91) || ((cp == 93) || ((cp == 95) || (cp == 45)))))))) {
+        return 1;
+    }
+    if (cp >= 8208) && (cp <= 8213) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_word_rule_like(owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, w: i32) -> i32 {
+    // 1 for an OCR word of one or two code points, all rule glyphs.
+    let wl: i32 = ow_get(owords, w, hd_tlen());
+    let st: i32 = ow_get(owords, w, hd_tstart());
+    let mut k: i32 = 0;
+    if (wl < 1) || (wl > 2) {
+        return 0;
+    }
+    while k < wl {
+        if gf_rule_glyph(crate::port::cells_at(etext, st + k)) == 0 {
+            return 0;
+        }
+        k += 1;
+    }
+    return 1;
+}
+pub(crate) fn gf_word_plain(owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, w: i32) -> i32 {
+    // 1 for an OCR word of three or more code points that is not made of rule glyphs alone.
+    let wl: i32 = ow_get(owords, w, hd_tlen());
+    let st: i32 = ow_get(owords, w, hd_tstart());
+    let mut k: i32 = 0;
+    if wl < 3 {
+        return 0;
+    }
+    while k < wl {
+        if gf_rule_glyph(crate::port::cells_at(etext, st + k)) == 0 {
+            return 1;
+        }
+        k += 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_in_oword(ctx: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // The most (per mille) of the box that lies inside ONE OCR word of three or more code points that is not made of rule glyphs (row 533); 0 for none.
+    let mut w: i32 = crate::port::cells_at(ctx, X_W0);
+    let mut best: i32 = 0;
+    let mut v: i32 = 0;
+    while w < crate::port::cells_at(ctx, X_W1) {
+        if gf_word_plain(owords, etext, w) == 1 {
+            v = gf_inside_share(x0, y0, x1, y1, ow_get(owords, w, hd_x0()), ow_get(owords, w, hd_y0()), ow_get(owords, w, hd_x1()), ow_get(owords, w, hd_y1()));
+            if v > best {
+                best = v;
+            }
+        }
+        w += 1;
+    }
+    return best;
+}
+pub(crate) fn gf_region_score(hl: &mut crate::port::Cells, page: i32, subject: i32) -> i32 {
+    // The score of the graphics region of `emon.health` (`plh-region`) for a page and a subject (-1 R0, else the `images` row); -1 when there is none.
+    let n: i32 = crate::port::cells_len(hl) / 12;
+    let mut i: i32 = 0;
+    while i < n {
+        if (hl_get(hl, i, 0) == plh_region()) && ((hl_get(hl, i, 1) == page) && (hl_get(hl, i, 2) == subject)) {
+            return hl_get(hl, i, 9);
+        }
+        i += 1;
+    }
+    return -1;
+}
+pub(crate) fn gf_health(mut ctx: &mut crate::port::Cells, gc: &mut crate::port::Cells, n: i32, im: &mut crate::port::Cells, rules: &mut crate::port::Cells, words: &mut crate::port::Cells, mut hl: &mut crate::port::Cells) -> i32 {
+    // The page's two figures that depend on how the sources meet (SPEC 9.9 `Health per region`), then `emon.health`'s rows. THE VECTOR WITNESS (R0 of a
+    // born-digital page): the length of the exactly known visible vector rules (horizontal and vertical) that the tracer witnesses, over their length; -1
+    // without any. THE TRACER'S PRECISION (R0 of a born-digital page): the length of the tracer's rules a vector rule explains (its group has one) or that lie
+    // in text-layer word boxes (half or more of their box), over all of theirs; -1 without any. A raster page has neither. Answers the rows of `hl` made.
+    let mut i: i32 = 0;
+    let mut rlen: i32 = 0;
+    let mut vl: i32 = 0;
+    let mut vw: i32 = 0;
+    let mut tl: i32 = 0;
+    let mut te: i32 = 0;
+    let mut witness: i32 = -1;
+    let mut precision: i32 = -1;
+    let mut cls: i32 = 0;
+    if crate::port::cells_at(ctx, X_KIND) == 1 {
+        while i < n {
+            cls = gcat(gc, i, C_CLS);
+            if (gcat(gc, i, C_KIND) == 1) && ((cls == go_h()) || (cls == go_v())) {
+                if gf_region_of(ctx, im, (gcat(gc, i, C_EX0) + gcat(gc, i, C_EX1)) / 2, (gcat(gc, i, C_EY0) + gcat(gc, i, C_EY1)) / 2) < 0 {
+                    rlen = gf_a1(gc, i) - gf_a0(gc, i);
+                    if (gcat(gc, i, C_SRC) == 1) && (gcat(gc, i, C_EXACT) == 1) {
+                        vl += rlen;
+                        vw += (rlen * gf_max(0, gcat(gc, i, C_WIT))) / 1000;
+                    }
+                    if gcat(gc, i, C_SRC) == 2 {
+                        tl += rlen;
+                        if gcat(gc, i, C_EXACT) == 1 {
+                            te += rlen;
+                        } else if gf_text_share(ctx, words, gcat(gc, i, C_X0), gcat(gc, i, C_Y0), gcat(gc, i, C_X1), gcat(gc, i, C_Y1)) >= 500 {
+                            te += rlen;
+                        }
+                    }
+                }
+            }
+            i += 1;
+        }
+    }
+    if vl > 0 {
+        witness = (vw * 1000) / vl;
+    }
+    if tl > 0 {
+        precision = (te * 1000) / tl;
+    }
+    crate::port::cells_set(ctx, X_WIT, witness);
+    crate::port::cells_set(ctx, X_PREC, precision);
+    return hl_regions(crate::port::cells_at(ctx, X_PAGE), im, rules, witness, precision, hl);
+}
+pub(crate) fn gf_copy_row(og: &mut crate::port::Cells, row: i32, mut grl: &mut crate::port::Cells) -> i32 {
+    // Append a copy of row `row` of the vector-only rules to `grl`; answers its row.
+    let r: i32 = crate::port::cells_len(grl) / 24;
+    let mut k: i32 = 0;
+    while k < 24 {
+        crate::port::cells_push(grl, crate::port::cells_at(og, (row * 24) + k));
+        k += 1;
+    }
+    return r;
+}
+pub(crate) fn gf_first_trace(gc: &mut crate::port::Cells, aux: &mut crate::port::Cells, n: i32, root: i32) -> i32 {
+    // The first tracer member of the group of `root` (candidate index), -1 when it has none.
+    let mut k: i32 = crate::port::cells_at(aux, (n * A_START) + root);
+    let e: i32 = crate::port::cells_at(aux, (n * A_START) + root) + crate::port::cells_at(aux, (n * A_CNT) + root);
+    let mut c: i32 = 0;
+    while k < e {
+        c = crate::port::cells_at(aux, (n * A_ORD) + k);
+        if gcat(gc, c, C_SRC) == 2 {
+            return c;
+        }
+        k += 1;
+    }
+    return -1;
+}
+pub(crate) fn gf_emit_vec_rules(ctx: &mut crate::port::Cells, gc: &mut crate::port::Cells, n: i32, aux: &mut crate::port::Cells, og: &mut crate::port::Cells, im: &mut crate::port::Cells, hl: &mut crate::port::Cells, ggp: &mut crate::port::Cells, mut grl: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut gfa: &mut crate::port::Cells, mut gv: &mut crate::port::Cells) -> i32 {
+    // Every vector rule of the page, in order, through block 500: kept (with the row's number, confidence and flags, `trace` among its sources when the tracer
+    // witnessed it, the tracer's colour when its own is -1 and the row is 512) or dropped (513: a row of `gfa`, for the ledger). Answers the rows kept.
+    let page: i32 = crate::port::cells_at(ctx, X_PAGE);
+    let kind: i32 = crate::port::cells_at(ctx, X_KIND);
+    let mut i: i32 = 0;
+    let mut root: i32 = 0;
+    let mut gid: i32 = 0;
+    let mut r: i32 = 0;
+    let mut fr: i32 = 0;
+    let mut rg: i32 = 0;
+    let mut t: i32 = -1;
+    let mut kept: i32 = 0;
+    let mut num: i32 = 0;
+    let mut orow: i32 = 0;
+    while i < n {
+        if (gcat(gc, i, C_KIND) == 1) && (gcat(gc, i, C_SRC) == 1) {
+            root = gcat(gc, i, C_UF);
+            gid = crate::port::cells_at(aux, (n * A_GID) + root);
+            rg = gf_region_of(ctx, im, (gcat(gc, i, C_EX0) + gcat(gc, i, C_EX1)) / 2, (gcat(gc, i, C_EY0) + gcat(gc, i, C_EY1)) / 2);
+            gf_gv_reset(gv);
+            crate::port::cells_set(gv, 100, 1);
+            crate::port::cells_set(gv, 101, gcat(gc, i, C_EXACT));
+            crate::port::cells_set(gv, 102, 1 - gcat(gc, i, C_EXACT));
+            crate::port::cells_set(gv, 103, 0);
+            crate::port::cells_set(gv, 108, kind);
+            crate::port::cells_set(gv, 117, gcat(gc, i, C_WIT));
+            crate::port::cells_set(gv, 118, ggp_get(ggp, gid, 8) & 1);
+            if rg < 0 {
+                crate::port::cells_set(gv, 110, crate::port::cells_at(ctx, X_WIT));
+            }
+            crate::port::cells_set(gv, 111, crate::port::cells_at(ctx, X_PREC));
+            fr = fr_decide_block(gv, 500);
+            gf_explain(fx, gid, fr, gv);
+            orow = gcat(gc, i, C_ROW);
+            if fr_winner(fr) == 0 {
+                if fr_reason(fr) == 12 {
+                    crate::port::cells_push(gfa, page);
+                    crate::port::cells_push(gfa, crate::port::cells_at(og, (orow * 24) + 1));
+                    crate::port::cells_push(gfa, crate::port::cells_at(og, (orow * 24) + 2));
+                    crate::port::cells_push(gfa, crate::port::cells_at(og, (orow * 24) + 3));
+                    crate::port::cells_push(gfa, crate::port::cells_at(og, (orow * 24) + 4));
+                    crate::port::cells_push(gfa, fr_reason(fr));
+                }
+            } else {
+                r = gf_copy_row(og, orow, grl);
+                num = fr_number(fr);
+                grl_set(grl, r, 16, num);
+                grl_set(grl, r, 17, fr_conf(fr));
+                grl_set(grl, r, 18, crate::port::cells_at(og, (orow * 24) + 18) | fr_flags(fr));
+                grl_set(grl, r, 19, gid);
+                if (num == 510) || (num == 512) {
+                    grl_set(grl, r, 14, gs_vector() | gs_trace());
+                }
+                if (num == 512) && (crate::port::cells_at(og, (orow * 24) + 12) < 0) {
+                    t = gf_first_trace(gc, aux, n, root);
+                    if t >= 0 {
+                        grl_set(grl, r, 12, gcat(gc, t, C_COL));
+                    }
+                }
+                kept += 1;
+            }
+        }
+        i += 1;
+    }
+    return kept;
+}
+pub(crate) fn gf_unit_box(un: &mut crate::port::Cells, u: i32, mut gv: &mut crate::port::Cells) -> i32 {
+    // A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.
+    let half: i32 = (gf_max(unat(un, u, 6), 1) + 1) / 2;
+    if unat(un, u, 2) == go_h() {
+        crate::port::cells_set(gv, 0, unat(un, u, 3));
+        crate::port::cells_set(gv, 1, unat(un, u, 5) - half);
+        crate::port::cells_set(gv, 2, unat(un, u, 4));
+        crate::port::cells_set(gv, 3, unat(un, u, 5) + half);
+    } else {
+        crate::port::cells_set(gv, 0, unat(un, u, 5) - half);
+        crate::port::cells_set(gv, 1, unat(un, u, 3));
+        crate::port::cells_set(gv, 2, unat(un, u, 5) + half);
+        crate::port::cells_set(gv, 3, unat(un, u, 4));
+    }
+    return 0;
+}
+pub(crate) fn gf_emit_trace_units(ctx: &mut crate::port::Cells, un: &mut crate::port::Cells, im: &mut crate::port::Cells, hl: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, words: &mut crate::port::Cells, ggp: &mut crate::port::Cells, mut grl: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut gv: &mut crate::port::Cells) -> i32 {
+    // Every rule unit the tracer alone draws (kind 2) and every OCR-only group (kind 5) through block 500. Answers the rules kept.
+    let page: i32 = crate::port::cells_at(ctx, X_PAGE);
+    let kind: i32 = crate::port::cells_at(ctx, X_KIND);
+    let nu: i32 = crate::port::cells_len(un) / 24;
+    let mut u: i32 = 0;
+    let mut rg: i32 = 0;
+    let mut fr: i32 = 0;
+    let mut r: i32 = 0;
+    let mut conf: i32 = 0;
+    let mut tconf: i32 = 0;
+    let mut score: i32 = 0;
+    let mut ocr: i32 = 0;
+    let mut kept: i32 = 0;
+    let mut gid: i32 = 0;
+    let mut src: i32 = 0;
+    while u < nu {
+        if (unat(un, u, 1) == 2) || (unat(un, u, 1) == 5) {
+            gid = unat(un, u, 0);
+            gf_gv_reset(gv);
+            if unat(un, u, 1) == 5 {
+                crate::port::cells_set(gv, 100, 5);
+            } else {
+                crate::port::cells_set(gv, 100, 2);
+                crate::port::cells_set(gv, 104, 1);
+                rg = gf_region_of(ctx, im, (unat(un, u, 11) + unat(un, u, 13)) / 2, (unat(un, u, 12) + unat(un, u, 14)) / 2);
+                tconf = unat(un, u, 9);
+                ocr = unat(un, u, 10);
+                if tconf >= 0 {
+                    if ocr >= 500 {
+                        crate::port::cells_set(gv, 105, tconf + fg_ocr_bonus());
+                    } else {
+                        crate::port::cells_set(gv, 105, tconf);
+                    }
+                }
+                crate::port::cells_set(gv, 106, ocr);
+                if (kind == 1) && (rg >= 0) {
+                    crate::port::cells_set(gv, 107, 1);
+                } else {
+                    crate::port::cells_set(gv, 107, 0);
+                }
+                crate::port::cells_set(gv, 108, kind);
+                score = gf_region_score(hl, page, rg);
+                crate::port::cells_set(gv, 109, score);
+                crate::port::cells_set(gv, 111, crate::port::cells_at(ctx, X_PREC));
+                crate::port::cells_set(gv, 118, unat(un, u, 16));
+                gf_unit_box(un, u, gv);
+                if (kind == 1) && (rg < 0) {
+                    crate::port::cells_set(gv, 112, gf_text_share(ctx, words, crate::port::cells_at(gv, 0), crate::port::cells_at(gv, 1), crate::port::cells_at(gv, 2), crate::port::cells_at(gv, 3)));
+                }
+                crate::port::cells_set(gv, 113, gf_in_oword(ctx, owords, etext, crate::port::cells_at(gv, 0), crate::port::cells_at(gv, 1), crate::port::cells_at(gv, 2), crate::port::cells_at(gv, 3)));
+            }
+            fr = fr_decide_block(gv, 500);
+            gf_explain(fx, gid, fr, gv);
+            if (fr_winner(fr) == 2) && (unat(un, u, 1) == 2) {
+                gf_unit_box(un, u, gv);
+                r = grl_new(grl, page, crate::port::cells_at(gv, 0), crate::port::cells_at(gv, 1), crate::port::cells_at(gv, 2), crate::port::cells_at(gv, 3), unat(un, u, 11), unat(un, u, 12), unat(un, u, 13), unat(un, u, 14), gf_max(unat(un, u, 6), 1), unat(un, u, 2));
+                grl_set(grl, r, 11, gf_angle_of(unat(un, u, 13) - unat(un, u, 11), unat(un, u, 14) - unat(un, u, 12)));
+                grl_set(grl, r, 12, unat(un, u, 7));
+                grl_set(grl, r, 13, unat(un, u, 8));
+                src = gs_trace();
+                if unat(un, u, 10) > 0 {
+                    src |= gs_ocr();
+                }
+                grl_set(grl, r, 14, src);
+                grl_set(grl, r, 15, gs_trace());
+                grl_set(grl, r, 16, fr_number(fr));
+                conf = fr_conf(fr);
+                if conf < 0 {
+                    conf = unat(un, u, 9);
+                    if conf < 0 {
+                        conf = 500;
+                    }
+                    conf = (conf * gf_max(0, score)) / 1000;
+                }
+                grl_set(grl, r, 17, conf);
+                grl_set(grl, r, 18, fr_flags(fr));
+                grl_set(grl, r, 19, gid);
+                kept += 1;
+            }
+        }
+        u += 1;
+    }
+    return kept;
+}
+pub(crate) fn gf_emit_fills(ctx: &mut crate::port::Cells, gc: &mut crate::port::Cells, n: i32, aux: &mut crate::port::Cells, ofl: &mut crate::port::Cells, un: &mut crate::port::Cells, im: &mut crate::port::Cells, hl: &mut crate::port::Cells, ggp: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut gv: &mut crate::port::Cells) -> i32 {
+    // Every vector fill (a tint over it is its witness) and every tint no vector fill has, through block 500, into `gfl`. Answers the fills kept.
+    let page: i32 = crate::port::cells_at(ctx, X_PAGE);
+    let kind: i32 = crate::port::cells_at(ctx, X_KIND);
+    let nu: i32 = crate::port::cells_len(un) / 24;
+    let mut i: i32 = 0;
+    let mut u: i32 = 0;
+    let mut gid: i32 = 0;
+    let mut fr: i32 = 0;
+    let mut r: i32 = 0;
+    let mut rg: i32 = 0;
+    let mut t: i32 = 0;
+    let mut colour: i32 = 0;
+    let mut kept: i32 = 0;
+    let mut num: i32 = 0;
+    let mut orow: i32 = 0;
+    while i < n {
+        if (gcat(gc, i, C_KIND) == 2) && (gcat(gc, i, C_SRC) == 1) {
+            gid = crate::port::cells_at(aux, (n * A_GID) + gcat(gc, i, C_UF));
+            orow = gcat(gc, i, C_ROW);
+            t = gcat(gc, i, C_WIT);
+            gf_gv_reset(gv);
+            crate::port::cells_set(gv, 100, 3);
+            crate::port::cells_set(gv, 108, kind);
+            if gcat(gc, i, C_COL) < 0 {
+                crate::port::cells_set(gv, 115, 0);
+            } else {
+                crate::port::cells_set(gv, 115, 1);
+            }
+            if t >= 0 {
+                crate::port::cells_set(gv, 116, 1);
+            } else {
+                crate::port::cells_set(gv, 116, 0);
+            }
+            fr = fr_decide_block(gv, 500);
+            gf_explain(fx, gid, fr, gv);
+            if fr_winner(fr) != 0 {
+                r = crate::port::cells_len(gfl) / 16;
+                u = 0;
+                while u < 16 {
+                    crate::port::cells_push(gfl, crate::port::cells_at(ofl, (orow * 16) + u));
+                    u += 1;
+                }
+                num = fr_number(fr);
+                gfl_set(gfl, r, 9, num);
+                gfl_set(gfl, r, 10, fr_conf(fr));
+                gfl_set(gfl, r, 11, crate::port::cells_at(ofl, (orow * 16) + 11) | fr_flags(fr));
+                gfl_set(gfl, r, 12, gid);
+                if t >= 0 {
+                    gfl_set(gfl, r, 7, gs_vector() | gs_trace());
+                    if gcat(gc, i, C_COL) < 0 {
+                        colour = gcat(gc, t, C_COL);
+                        gfl_set(gfl, r, 5, colour);
+                        gfl_set(gfl, r, 6, gf_lightness(colour));
+                    }
+                }
+                kept += 1;
+            }
+        }
+        i += 1;
+    }
+    u = 0;
+    while u < nu {
+        if unat(un, u, 1) == 4 {
+            gid = unat(un, u, 0);
+            rg = gf_region_of(ctx, im, (unat(un, u, 11) + unat(un, u, 13)) / 2, (unat(un, u, 12) + unat(un, u, 14)) / 2);
+            gf_gv_reset(gv);
+            crate::port::cells_set(gv, 100, 4);
+            crate::port::cells_set(gv, 108, kind);
+            if (kind == 1) && (rg >= 0) {
+                crate::port::cells_set(gv, 107, 1);
+            } else {
+                crate::port::cells_set(gv, 107, 0);
+            }
+            crate::port::cells_set(gv, 109, gf_region_score(hl, page, rg));
+            crate::port::cells_set(gv, 111, crate::port::cells_at(ctx, X_PREC));
+            fr = fr_decide_block(gv, 500);
+            gf_explain(fx, gid, fr, gv);
+            if fr_winner(fr) == 2 {
+                r = gfl_new(gfl, page, unat(un, u, 11), unat(un, u, 12), unat(un, u, 13), unat(un, u, 14), unat(un, u, 7));
+                gfl_set(gfl, r, 6, gf_lightness(unat(un, u, 7)));
+                gfl_set(gfl, r, 7, gs_trace());
+                gfl_set(gfl, r, 8, gs_trace());
+                gfl_set(gfl, r, 9, fr_number(fr));
+                gfl_set(gfl, r, 10, fr_conf(fr));
+                gfl_set(gfl, r, 11, fr_flags(fr));
+                gfl_set(gfl, r, 12, gid);
+                kept += 1;
+            }
+        }
+        u += 1;
+    }
+    return kept;
+}
+pub(crate) fn gf_crosses(grl: &mut crate::port::Cells, h: i32, v: i32) -> i32 {
+    // 1 when horizontal rule row h and vertical rule row v touch within 3 pt (D179's lattice test).
+    let hx0: i32 = gf_min(grl_get(grl, h, 5), grl_get(grl, h, 7));
+    let hx1: i32 = gf_max(grl_get(grl, h, 5), grl_get(grl, h, 7));
+    let hy: i32 = (grl_get(grl, h, 6) + grl_get(grl, h, 8)) / 2;
+    let vx: i32 = (grl_get(grl, v, 5) + grl_get(grl, v, 7)) / 2;
+    let vy0: i32 = gf_min(grl_get(grl, v, 6), grl_get(grl, v, 8));
+    let vy1: i32 = gf_max(grl_get(grl, v, 6), grl_get(grl, v, 8));
+    if ((vx >= (hx0 - 300)) && (vx <= (hx1 + 300))) && ((hy >= (vy0 - 300)) && (hy <= (vy1 + 300))) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_in_region(grl: &mut crate::port::Cells, r: i32, rx0: i32, ry0: i32, rx1: i32, ry1: i32) -> i32 {
+    // 1 when the middle of rule row r is inside the box.
+    let cx: i32 = (grl_get(grl, r, 5) + grl_get(grl, r, 7)) / 2;
+    let cy: i32 = (grl_get(grl, r, 6) + grl_get(grl, r, 8)) / 2;
+    if ((cx >= rx0) && (cx < rx1)) && ((cy >= ry0) && (cy < ry1)) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_lattice(grl: &mut crate::port::Cells, g0: i32, g1: i32, rx0: i32, ry0: i32, rx1: i32, ry1: i32) -> i32 {
+    // 1 when the `in-image` rules of rows [g0, g1) inside the box make a lattice: two horizontal and two vertical rules, each pair at least 5 pt apart, every
+    // horizontal touching every vertical within 3 pt (D179's component test without its text test, over a region; at most 300 rules of each kind are tried).
+    let mut a: i32 = g0;
+    let mut b: i32 = 0;
+    let mut c: i32 = 0;
+    let mut tried: i32 = 0;
+    let mut v1: i32 = -1;
+    while a < g1 {
+        if (grl_get(grl, a, 10) == go_h()) && (((grl_get(grl, a, 18) & gq_in_image()) != 0) && (gf_in_region(grl, a, rx0, ry0, rx1, ry1) == 1)) {
+            b = a + 1;
+            while b < g1 {
+                if (grl_get(grl, b, 10) == go_h()) && (((grl_get(grl, b, 18) & gq_in_image()) != 0) && (gf_in_region(grl, b, rx0, ry0, rx1, ry1) == 1)) {
+                    if gf_abs(((grl_get(grl, a, 6) + grl_get(grl, a, 8)) / 2) - ((grl_get(grl, b, 6) + grl_get(grl, b, 8)) / 2)) >= 500 {
+                        tried += 1;
+                        v1 = -1;
+                        c = g0;
+                        while c < g1 {
+                            if (grl_get(grl, c, 10) == go_v()) && (((grl_get(grl, c, 18) & gq_in_image()) != 0) && (gf_in_region(grl, c, rx0, ry0, rx1, ry1) == 1)) {
+                                if (gf_crosses(grl, a, c) == 1) && (gf_crosses(grl, b, c) == 1) {
+                                    if v1 < 0 {
+                                        v1 = c;
+                                    } else if gf_abs(((grl_get(grl, c, 5) + grl_get(grl, c, 7)) / 2) - ((grl_get(grl, v1, 5) + grl_get(grl, v1, 7)) / 2)) >= 500 {
+                                        return 1;
+                                    }
+                                }
+                            }
+                            c += 1;
+                        }
+                    }
+                }
+                if tried > 300000 {
+                    return 0;
+                }
+                b += 1;
+            }
+        }
+        a += 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_bands(gfl: &mut crate::port::Cells, f0: i32, f1: i32, rx0: i32, ry0: i32, rx1: i32, ry1: i32) -> i32 {
+    // 1 when the `in-image` fills of rows [f0, f1) inside the box include three bands of one extent (left and right edges within 3 pt) stacked one on the next (3 pt).
+    let mut a: i32 = f0;
+    let mut b: i32 = 0;
+    let mut c: i32 = 0;
+    while a < f1 {
+        if ((gfl_get(gfl, a, 11) & gqf_in_image()) != 0) && ((gfl_get(gfl, a, 1) >= rx0) && ((gfl_get(gfl, a, 3) <= rx1) && ((gfl_get(gfl, a, 2) >= ry0) && (gfl_get(gfl, a, 4) <= ry1)))) {
+            b = f0;
+            while b < f1 {
+                if (b != a) && ((gfl_get(gfl, b, 11) & gqf_in_image()) != 0) {
+                    if (gf_abs(gfl_get(gfl, b, 1) - gfl_get(gfl, a, 1)) <= 300) && ((gf_abs(gfl_get(gfl, b, 3) - gfl_get(gfl, a, 3)) <= 300) && (gf_abs(gfl_get(gfl, b, 2) - gfl_get(gfl, a, 4)) <= 300)) {
+                        c = f0;
+                        while c < f1 {
+                            if (c != a) && ((c != b) && ((gfl_get(gfl, c, 11) & gqf_in_image()) != 0)) {
+                                if (gf_abs(gfl_get(gfl, c, 1) - gfl_get(gfl, a, 1)) <= 300) && ((gf_abs(gfl_get(gfl, c, 3) - gfl_get(gfl, a, 3)) <= 300) && (gf_abs(gfl_get(gfl, c, 2) - gfl_get(gfl, b, 4)) <= 300)) {
+                                    return 1;
+                                }
+                            }
+                            c += 1;
+                        }
+                    }
+                }
+                b += 1;
+            }
+        }
+        a += 1;
+    }
+    return 0;
+}
+pub(crate) fn gf_count_inside(grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, g0: i32, f0: i32, x0: i32, y0: i32, x1: i32, y1: i32, mut grg: &mut crate::port::Cells, region: i32) -> i32 {
+    // The fused rules (from row g0 on) and fills (from row f0 on) whose middle lies in the box, into the region's cells 9 and 10.
+    let mut i: i32 = g0;
+    let mut nr: i32 = 0;
+    let mut nf: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    while i < grl_count(grl) {
+        if gf_in_region(grl, i, x0, y0, x1, y1) == 1 {
+            nr += 1;
+        }
+        i += 1;
+    }
+    i = f0;
+    while i < gfl_count(gfl) {
+        cx = (gfl_get(gfl, i, 1) + gfl_get(gfl, i, 3)) / 2;
+        cy = (gfl_get(gfl, i, 2) + gfl_get(gfl, i, 4)) / 2;
+        if ((cx >= x0) && (cx < x1)) && ((cy >= y0) && (cy < y1)) {
+            nf += 1;
+        }
+        i += 1;
+    }
+    grg_set(grg, region, 9, nr);
+    grg_set(grg, region, 10, nf);
+    return 0;
+}
+pub(crate) fn gf_grow(mut grg: &mut crate::port::Cells, r: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // Grow region r's box to take in the box.
+    let a: i32 = gf_min(grg_get(grg, r, 1), x0);
+    let b: i32 = gf_min(grg_get(grg, r, 2), y0);
+    let c: i32 = gf_max(grg_get(grg, r, 3), x1);
+    let d: i32 = gf_max(grg_get(grg, r, 4), y1);
+    grg_set(grg, r, 1, a);
+    grg_set(grg, r, 2, b);
+    grg_set(grg, r, 3, c);
+    grg_set(grg, r, 4, d);
+    return 0;
+}
+pub(crate) fn gf_fig_add(mut un: &mut crate::port::Cells, x0: i32, y0: i32, x1: i32, y1: i32, src: i32, sea: i32, sidx: i32) -> i32 {
+    // A figure candidate (stride 24 in `un`): 0-3 box, 4 sources, 5 6 its subject, 7 union-find parent.
+    let i: i32 = crate::port::cells_len(un) / 24;
+    let mut k: i32 = 8;
+    crate::port::cells_push(un, x0);
+    crate::port::cells_push(un, y0);
+    crate::port::cells_push(un, x1);
+    crate::port::cells_push(un, y1);
+    crate::port::cells_push(un, src);
+    crate::port::cells_push(un, sea);
+    crate::port::cells_push(un, sidx);
+    crate::port::cells_push(un, i);
+    while k < 24 {
+        crate::port::cells_push(un, 0);
+        k += 1;
+    }
+    return i;
+}
+pub(crate) fn gf_fig_find(mut un: &mut crate::port::Cells, i: i32) -> i32 {
+    let mut r: i32 = i;
+    while unat(un, r, 7) != r {
+        r = unat(un, r, 7);
+    }
+    return r;
+}
+pub(crate) fn gf_fig_clusters(ctx: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut gc: &mut crate::port::Cells, mut un: &mut crate::port::Cells) -> i32 {
+    // Vector figure clusters (SPEC 9.9): the page's paths that are curves or polygons, on a grid of 32 x 32 cells over their extent (a cell is at least 12 pt, so paths
+    // within 6 pt of each other fall in one cell or neighbouring ones); a connected set of occupied cells holding at least 8 of them is one cluster, a candidate figure
+    // of the box of its paths. (`gc` is scratch here: the page's candidates are done with.) Answers the clusters added.
+    let mut p: i32 = crate::port::cells_at(ctx, X_P0);
+    let mut bx0: i32 = 2000000000;
+    let mut by0: i32 = 2000000000;
+    let mut bx1: i32 = -2000000000;
+    let mut by1: i32 = -2000000000;
+    let mut np: i32 = 0;
+    let mut k: i32 = 0;
+    let mut cs: i32 = 1200;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    let mut cell: i32 = 0;
+    let mut changed: i32 = 1;
+    let mut iter: i32 = 0;
+    let mut nb: i32 = 0;
+    let mut dx: i32 = 0;
+    let mut dy: i32 = 0;
+    let mut lab: i32 = 0;
+    let mut added: i32 = 0;
+    while p < crate::port::cells_at(ctx, X_P1) {
+        if (pa_get(pa, p, pf_kind()) == pa_curve()) || (pa_get(pa, p, pf_kind()) == pa_other()) {
+            np += 1;
+            bx0 = gf_min(bx0, pa_get(pa, p, pf_x0()));
+            by0 = gf_min(by0, pa_get(pa, p, pf_y0()));
+            bx1 = gf_max(bx1, pa_get(pa, p, pf_x1()));
+            by1 = gf_max(by1, pa_get(pa, p, pf_y1()));
+        }
+        p += 1;
+    }
+    if np < 8 {
+        return 0;
+    }
+    cs = gf_max(1200, (gf_max(bx1 - bx0, by1 - by0) + 31) / 32);
+    crate::port::cells_drop(gc, 0);
+    while k < (1024 * 6) {
+        crate::port::cells_push(gc, 0);
+        k += 1;
+    }
+    k = 0;
+    while k < 1024 {
+        crate::port::cells_set(gc, (k * 6) + 1, 2000000000);
+        crate::port::cells_set(gc, (k * 6) + 2, 2000000000);
+        crate::port::cells_set(gc, (k * 6) + 3, -2000000000);
+        crate::port::cells_set(gc, (k * 6) + 4, -2000000000);
+        crate::port::cells_set(gc, (k * 6) + 5, k);
+        k += 1;
+    }
+    p = crate::port::cells_at(ctx, X_P0);
+    while p < crate::port::cells_at(ctx, X_P1) {
+        if (pa_get(pa, p, pf_kind()) == pa_curve()) || (pa_get(pa, p, pf_kind()) == pa_other()) {
+            cx = gf_min(31, (((pa_get(pa, p, pf_x0()) + pa_get(pa, p, pf_x1())) / 2) - bx0) / cs);
+            cy = gf_min(31, (((pa_get(pa, p, pf_y0()) + pa_get(pa, p, pf_y1())) / 2) - by0) / cs);
+            cell = (cy * 32) + cx;
+            crate::port::cells_set(gc, cell * 6, crate::port::cells_at(gc, cell * 6) + 1);
+            crate::port::cells_set(gc, (cell * 6) + 1, gf_min(crate::port::cells_at(gc, (cell * 6) + 1), pa_get(pa, p, pf_x0())));
+            crate::port::cells_set(gc, (cell * 6) + 2, gf_min(crate::port::cells_at(gc, (cell * 6) + 2), pa_get(pa, p, pf_y0())));
+            crate::port::cells_set(gc, (cell * 6) + 3, gf_max(crate::port::cells_at(gc, (cell * 6) + 3), pa_get(pa, p, pf_x1())));
+            crate::port::cells_set(gc, (cell * 6) + 4, gf_max(crate::port::cells_at(gc, (cell * 6) + 4), pa_get(pa, p, pf_y1())));
+        }
+        p += 1;
+    }
+    while (changed == 1) && (iter < 70) {
+        changed = 0;
+        cell = 0;
+        while cell < 1024 {
+            if crate::port::cells_at(gc, cell * 6) > 0 {
+                dy = -1;
+                while dy <= 1 {
+                    dx = -1;
+                    while dx <= 1 {
+                        cx = (cell % 32) + dx;
+                        cy = (cell / 32) + dy;
+                        if ((cx >= 0) && (cx < 32)) && ((cy >= 0) && (cy < 32)) {
+                            nb = (cy * 32) + cx;
+                            if crate::port::cells_at(gc, nb * 6) > 0 {
+                                if crate::port::cells_at(gc, (nb * 6) + 5) < crate::port::cells_at(gc, (cell * 6) + 5) {
+                                    crate::port::cells_set(gc, (cell * 6) + 5, crate::port::cells_at(gc, (nb * 6) + 5));
+                                    changed = 1;
+                                }
+                            }
+                        }
+                        dx += 1;
+                    }
+                    dy += 1;
+                }
+            }
+            cell += 1;
+        }
+        iter += 1;
+    }
+    lab = 0;
+    while lab < 1024 {
+        np = 0;
+        bx0 = 2000000000;
+        by0 = 2000000000;
+        bx1 = -2000000000;
+        by1 = -2000000000;
+        cell = 0;
+        while cell < 1024 {
+            if (crate::port::cells_at(gc, cell * 6) > 0) && (crate::port::cells_at(gc, (cell * 6) + 5) == lab) {
+                np += crate::port::cells_at(gc, cell * 6);
+                bx0 = gf_min(bx0, crate::port::cells_at(gc, (cell * 6) + 1));
+                by0 = gf_min(by0, crate::port::cells_at(gc, (cell * 6) + 2));
+                bx1 = gf_max(bx1, crate::port::cells_at(gc, (cell * 6) + 3));
+                by1 = gf_max(by1, crate::port::cells_at(gc, (cell * 6) + 4));
+            }
+            cell += 1;
+        }
+        if np >= 8 {
+            gf_fig_add(un, bx0, by0, bx1, by1, gs_vector(), -1, -1);
+            added += 1;
+        }
+        lab += 1;
+    }
+    return added;
+}
+pub(crate) fn gf_regions(ctx: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, im: &mut crate::port::Cells, pa: &mut crate::port::Cells, oblocks: &mut crate::port::Cells, mut grg: &mut crate::port::Cells, mut gc: &mut crate::port::Cells, mut un: &mut crate::port::Cells) -> i32 {
+    // The page's `grg` rows (D228): a TABLE-IN-IMAGE for each visible image placement (2 cm each way) whose `in-image` fused rules make a lattice or whose
+    // `in-image` fills make a stack of three bands, the box being what those rules and fills cover; a FIGURE for each merged (box IoU of 500) set of the visible image
+    // placements that are not tables, OCR image blocks and vector figure clusters; a TABLE-HINT for each OCR table block (confidence 300). The rows made by the page
+    // are those of `grl` from `X_NGRL` and `gfl` from `X_NGFL`. Answers the rows made.
+    let page: i32 = crate::port::cells_at(ctx, X_PAGE);
+    let g0: i32 = crate::port::cells_at(ctx, X_NGRL);
+    let f0: i32 = crate::port::cells_at(ctx, X_NGFL);
+    let g1: i32 = grl_count(grl);
+    let f1: i32 = gfl_count(gfl);
+    let first: i32 = grg_count(grg);
+    let mut m: i32 = crate::port::cells_at(ctx, X_I0);
+    let mut r: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut ok: i32 = 0;
+    let mut ra: i32 = 0;
+    let mut rb: i32 = 0;
+    let mut src: i32 = 0;
+    let mut nsrc: i32 = 0;
+    let mut sea: i32 = -1;
+    let mut sidx: i32 = -1;
+    let mut csum: i32 = 0;
+    let mut cn: i32 = 0;
+    while m < crate::port::cells_at(ctx, X_I1) {
+        if gf_image_ok(im, m) == 1 {
+            x0 = im_get(im, m, mf_x0());
+            y0 = im_get(im, m, mf_y0());
+            x1 = im_get(im, m, mf_x1());
+            y1 = im_get(im, m, mf_y1());
+            ok = gf_lattice(grl, g0, g1, x0, y0, x1, y1);
+            if ok == 0 {
+                ok = gf_bands(gfl, f0, f1, x0, y0, x1, y1);
+            }
+            if ok == 1 {
+                r = grg_new(grg, page, x1, y1, x0, y0, rk_table_in_image());
+                csum = 0;
+                cn = 0;
+                i = g0;
+                while i < g1 {
+                    if ((grl_get(grl, i, 18) & gq_in_image()) != 0) && (gf_in_region(grl, i, x0, y0, x1, y1) == 1) {
+                        gf_grow(grg, r, grl_get(grl, i, 1), grl_get(grl, i, 2), grl_get(grl, i, 3), grl_get(grl, i, 4));
+                        csum += grl_get(grl, i, 17);
+                        cn += 1;
+                    }
+                    i += 1;
+                }
+                i = f0;
+                while i < f1 {
+                    if ((gfl_get(gfl, i, 11) & gqf_in_image()) != 0) && ((gfl_get(gfl, i, 1) >= x0) && ((gfl_get(gfl, i, 3) <= x1) && ((gfl_get(gfl, i, 2) >= y0) && (gfl_get(gfl, i, 4) <= y1)))) {
+                        gf_grow(grg, r, gfl_get(gfl, i, 1), gfl_get(gfl, i, 2), gfl_get(gfl, i, 3), gfl_get(gfl, i, 4));
+                    }
+                    i += 1;
+                }
+                grg_set(grg, r, 6, gs_trace() | gs_image());
+                grg_set(grg, r, 7, ea_images());
+                grg_set(grg, r, 8, m);
+                if cn > 0 {
+                    grg_set(grg, r, 11, csum / cn);
+                } else {
+                    grg_set(grg, r, 11, 500);
+                }
+                gf_count_inside(grl, gfl, g0, f0, grg_get(grg, r, 1), grg_get(grg, r, 2), grg_get(grg, r, 3), grg_get(grg, r, 4), grg, r);
+            }
+        }
+        m += 1;
+    }
+    // figures: candidates, merged
+    crate::port::cells_drop(un, 0);
+    m = crate::port::cells_at(ctx, X_I0);
+    while m < crate::port::cells_at(ctx, X_I1) {
+        if (im_get(im, m, mf_vis()) == 0) && (((im_get(im, m, mf_x1()) - im_get(im, m, mf_x0())) >= 500) && ((im_get(im, m, mf_y1()) - im_get(im, m, mf_y0())) >= 500)) {
+            ok = 1;
+            j = first;
+            while j < grg_count(grg) {
+                if grg_get(grg, j, 5) == rk_table_in_image() {
+                    if gf_iou(grg_get(grg, j, 1), grg_get(grg, j, 2), grg_get(grg, j, 3), grg_get(grg, j, 4), im_get(im, m, mf_x0()), im_get(im, m, mf_y0()), im_get(im, m, mf_x1()), im_get(im, m, mf_y1())) >= 500 {
+                        ok = 0;
+                    }
+                }
+                j += 1;
+            }
+            if ok == 1 {
+                gf_fig_add(un, im_get(im, m, mf_x0()), im_get(im, m, mf_y0()), im_get(im, m, mf_x1()), im_get(im, m, mf_y1()), gs_image(), ea_images(), m);
+            }
+        }
+        m += 1;
+    }
+    i = crate::port::cells_at(ctx, X_B0);
+    while i < crate::port::cells_at(ctx, X_B1) {
+        if (ob_get(oblocks, i, obf_kind()) == ob_block()) && (ob_get(oblocks, i, obf_btype()) == 2) {
+            gf_fig_add(un, ob_get(oblocks, i, obf_x0()), ob_get(oblocks, i, obf_y0()), ob_get(oblocks, i, obf_x1()), ob_get(oblocks, i, obf_y1()), gs_ocr(), ea_oblocks(), i);
+        }
+        i += 1;
+    }
+    gf_fig_clusters(ctx, pa, gc, un);
+    i = 0;
+    while i < (crate::port::cells_len(un) / 24) {
+        j = i + 1;
+        while j < (crate::port::cells_len(un) / 24) {
+            if gf_iou(unat(un, i, 0), unat(un, i, 1), unat(un, i, 2), unat(un, i, 3), unat(un, j, 0), unat(un, j, 1), unat(un, j, 2), unat(un, j, 3)) >= 500 {
+                ra = gf_fig_find(un, i);
+                rb = gf_fig_find(un, j);
+                if ra < rb {
+                    unput(un, rb, 7, ra);
+                }
+                if rb < ra {
+                    unput(un, ra, 7, rb);
+                }
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    i = 0;
+    while i < (crate::port::cells_len(un) / 24) {
+        if gf_fig_find(un, i) == i {
+            x0 = unat(un, i, 0);
+            y0 = unat(un, i, 1);
+            x1 = unat(un, i, 2);
+            y1 = unat(un, i, 3);
+            src = unat(un, i, 4);
+            sea = unat(un, i, 5);
+            sidx = unat(un, i, 6);
+            j = i + 1;
+            while j < (crate::port::cells_len(un) / 24) {
+                if gf_fig_find(un, j) == i {
+                    x0 = gf_min(x0, unat(un, j, 0));
+                    y0 = gf_min(y0, unat(un, j, 1));
+                    x1 = gf_max(x1, unat(un, j, 2));
+                    y1 = gf_max(y1, unat(un, j, 3));
+                    src |= unat(un, j, 4);
+                    if (sea < 0) && (unat(un, j, 5) >= 0) {
+                        sea = unat(un, j, 5);
+                        sidx = unat(un, j, 6);
+                    }
+                }
+                j += 1;
+            }
+            r = grg_new(grg, page, x0, y0, x1, y1, rk_figure());
+            grg_set(grg, r, 6, src);
+            grg_set(grg, r, 7, sea);
+            grg_set(grg, r, 8, sidx);
+            nsrc = 0;
+            if (src & 1) != 0 {
+                nsrc += 1;
+            }
+            if (src & 4) != 0 {
+                nsrc += 1;
+            }
+            if (src & 16) != 0 {
+                nsrc += 1;
+            }
+            grg_set(grg, r, 11, gf_min(1000, 400 + (150 * nsrc)));
+            gf_count_inside(grl, gfl, g0, f0, x0, y0, x1, y1, grg, r);
+        }
+        i += 1;
+    }
+    i = crate::port::cells_at(ctx, X_B0);
+    while i < crate::port::cells_at(ctx, X_B1) {
+        if (ob_get(oblocks, i, obf_kind()) == ob_block()) && (ob_get(oblocks, i, obf_btype()) == 1) {
+            r = grg_new(grg, page, ob_get(oblocks, i, obf_x0()), ob_get(oblocks, i, obf_y0()), ob_get(oblocks, i, obf_x1()), ob_get(oblocks, i, obf_y1()), rk_table_hint());
+            grg_set(grg, r, 6, gs_ocr());
+            grg_set(grg, r, 7, ea_oblocks());
+            grg_set(grg, r, 8, i);
+            grg_set(grg, r, 11, 300);
+            gf_count_inside(grl, gfl, g0, f0, grg_get(grg, r, 1), grg_get(grg, r, 2), grg_get(grg, r, 3), grg_get(grg, r, 4), grg, r);
+        }
+        i += 1;
+    }
+    return grg_count(grg) - first;
+}
+pub(crate) fn gf_words(ctx: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, grl: &mut crate::port::Cells, grg: &mut crate::port::Cells, g0: i32, q0: i32) -> i32 {
+    // The page's OCR words' features: 30 the share (per mille, the regions' added, at most 1000) of the word's box that lies in a `table-in-image` region of the
+    // page (`grg` rows from `q0`), 31 the rule-likeness: for a word of at most two code points all of them rule glyphs, the share of its box the fused rules
+    // (`grl` rows from `g0`) cover; -1 for any other word. Words with no feature row are left alone. Answers the words written.
+    let mut w: i32 = crate::port::cells_at(ctx, X_W0);
+    let mut f: i32 = 0;
+    let mut q: i32 = 0;
+    let mut g: i32 = 0;
+    let mut s: i32 = 0;
+    let mut v: i32 = 0;
+    let mut n: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut y0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y1: i32 = 0;
+    let mut area: i32 = 0;
+    let mut inter: i32 = 0;
+    let mut iw: i32 = 0;
+    let mut ih: i32 = 0;
+    while w < crate::port::cells_at(ctx, X_W1) {
+        f = ow_get(owords, w, hd_feat());
+        if f >= 0 {
+            x0 = ow_get(owords, w, hd_x0());
+            y0 = ow_get(owords, w, hd_y0());
+            x1 = ow_get(owords, w, hd_x1());
+            y1 = ow_get(owords, w, hd_y1());
+            s = 0;
+            q = q0;
+            while q < grg_count(grg) {
+                if (grg_get(grg, q, 0) == crate::port::cells_at(ctx, X_PAGE)) && (grg_get(grg, q, 5) == rk_table_in_image()) {
+                    s += gf_inside_share(x0, y0, x1, y1, grg_get(grg, q, 1), grg_get(grg, q, 2), grg_get(grg, q, 3), grg_get(grg, q, 4));
+                }
+                q += 1;
+            }
+            fe_set(feats, f, xo_in_table_image(), gf_min(s, 1000));
+            v = -1;
+            if gf_word_rule_like(owords, etext, w) == 1 {
+                area = gf_max(1, gf_max(0, x1 - x0) / 10) * gf_max(1, gf_max(0, y1 - y0) / 10);
+                inter = 0;
+                g = g0;
+                while g < grl_count(grl) {
+                    iw = gf_max(0, gf_min(x1, grl_get(grl, g, 3)) - gf_max(x0, grl_get(grl, g, 1))) / 10;
+                    ih = gf_max(0, gf_min(y1, grl_get(grl, g, 4)) - gf_max(y0, grl_get(grl, g, 2))) / 10;
+                    inter += iw * ih;
+                    g += 1;
+                }
+                v = gf_min(1000, inter / gf_max(1, area / 1000));
+            }
+            fe_set(feats, f, xo_rule_like(), v);
+            n += 1;
+        }
+        w += 1;
+    }
+    return n;
+}
+pub(crate) fn gf_fuse_page(mut ctx: &mut crate::port::Cells, og: &mut crate::port::Cells, ofl: &mut crate::port::Cells, rules: &mut crate::port::Cells, prims: &mut crate::port::Cells, oblocks: &mut crate::port::Cells, owords: &mut crate::port::Cells, words: &mut crate::port::Cells, etext: &mut crate::port::Cells, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut grl: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells, mut ggp: &mut crate::port::Cells, mut grg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut hl: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut gfa: &mut crate::port::Cells, mut gc: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut un: &mut crate::port::Cells, mut gv: &mut crate::port::Cells) -> i32 {
+    // One page that has a raster answer, from the head of this file: candidates, groups, sweeps, health, arbitration, regions, the words' features. Answers 0.
+    let n: i32 = gf_build(gc, ctx, og, ofl, rules, prims, oblocks);
+    let mut q0: i32 = 0;
+    crate::port::cells_set(ctx, X_N, n);
+    gf_pairs(gc, n);
+    gf_order(gc, aux, n);
+    gf_groups(gc, aux, n, ctx, og, ofl, ggp, refs);
+    gf_sweeps(gc, aux, un, n);
+    gf_health(ctx, gc, n, im, rules, words, hl);
+    crate::port::cells_set(ctx, X_NGRL, grl_count(grl));
+    crate::port::cells_set(ctx, X_NGFL, gfl_count(gfl));
+    q0 = grg_count(grg);
+    gf_emit_vec_rules(ctx, gc, n, aux, og, im, hl, ggp, grl, fx, gfa, gv);
+    gf_emit_trace_units(ctx, un, im, hl, owords, etext, words, ggp, grl, fx, gv);
+    gf_emit_fills(ctx, gc, n, aux, ofl, un, im, hl, ggp, gfl, fx, gv);
+    gf_regions(ctx, grl, gfl, im, pa, oblocks, grg, gc, un);
+    gf_words(ctx, owords, etext, feats, grl, grg, crate::port::cells_at(ctx, X_NGRL), q0);
+    return 0;
+}
+pub(crate) fn gf_advance(c: &mut crate::port::Cells, stride: i32, field: i32, i: i32, page: i32) -> i32 {
+    // The first row at or after i whose page (cell `field`) is not before `page`.
+    let n: i32 = crate::port::cells_len(c) / stride;
+    let mut j: i32 = i;
+    while (j < n) && (crate::port::cells_at(c, (j * stride) + field) < page) {
+        j += 1;
+    }
+    return j;
+}
+pub(crate) fn gf_range_end(c: &mut crate::port::Cells, stride: i32, field: i32, i: i32, page: i32) -> i32 {
+    // The first row from i on whose page is not `page`.
+    let n: i32 = crate::port::cells_len(c) / stride;
+    let mut j: i32 = i;
+    while (j < n) && (crate::port::cells_at(c, (j * stride) + field) == page) {
+        j += 1;
+    }
+    return j;
+}
+pub(crate) fn gf_has_rows(c: &mut crate::port::Cells, stride: i32, field: i32, page: i32) -> i32 {
+    // 1 when some row of the arena is of `page` (rows are in page order).
+    let n: i32 = crate::port::cells_len(c) / stride;
+    let mut j: i32 = 0;
+    while j < n {
+        if crate::port::cells_at(c, (j * stride) + field) == page {
+            return 1;
+        }
+        j += 1;
+    }
+    return 0;
+}
+pub fn gf_fuse(np: i32, epages: &mut crate::port::Cells, inks: &mut crate::port::Cells, rules: &mut crate::port::Cells, prims: &mut crate::port::Cells, oblocks: &mut crate::port::Cells, owords: &mut crate::port::Cells, words: &mut crate::port::Cells, etext: &mut crate::port::Cells, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut grl: &mut crate::port::Cells, mut gfl: &mut crate::port::Cells, mut ggp: &mut crate::port::Cells, mut grg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut hl: &mut crate::port::Cells, mut fx: &mut crate::port::Cells, mut gfa: &mut crate::port::Cells, mut og: &mut crate::port::Cells, mut ofl: &mut crate::port::Cells, mut ctx: &mut crate::port::Cells, mut gc: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut un: &mut crate::port::Cells, mut gv: &mut crate::port::Cells) -> i32 {
+    // The document's other sources of graphics (SPEC 9.9, from the head of this file): every page that has a raster answer is made again from the vector rows already
+    // in `grl` and `gfl` and the tracer's and OCR's evidence; every other page is copied. Nothing to do (no `inks`, `rules` or `prims` row at all) answers 0 and touches
+    // nothing. `ggp`, `grg`, `hl`, `fx`, `refs` and `gfa` only grow. Answers the pages fused.
+    if (((crate::port::cells_len(inks) / 12) + (crate::port::cells_len(rules) / 20)) + (crate::port::cells_len(prims) / 24)) == 0 {
+        return 0;
+    }
+    let mut p: i32 = 1;
+    let mut vi: i32 = 0;
+    let mut vj: i32 = 0;
+    let mut fi: i32 = 0;
+    let mut fj: i32 = 0;
+    let mut ri: i32 = 0;
+    let mut rj: i32 = 0;
+    let mut qi: i32 = 0;
+    let mut qj: i32 = 0;
+    let mut bi: i32 = 0;
+    let mut bj: i32 = 0;
+    let mut wi: i32 = 0;
+    let mut wj: i32 = 0;
+    let mut ti: i32 = 0;
+    let mut tj: i32 = 0;
+    let mut pi: i32 = 0;
+    let mut pj: i32 = 0;
+    let mut ii: i32 = 0;
+    let mut ij: i32 = 0;
+    let mut k: i32 = 0;
+    let mut ep: i32 = 0;
+    let mut kind: i32 = 0;
+    let mut fused: i32 = 0;
+    crate::port::cells_drop(og, 0);
+    while k < crate::port::cells_len(grl) {
+        crate::port::cells_push(og, crate::port::cells_at(grl, k));
+        k += 1;
+    }
+    crate::port::cells_drop(ofl, 0);
+    k = 0;
+    while k < crate::port::cells_len(gfl) {
+        crate::port::cells_push(ofl, crate::port::cells_at(gfl, k));
+        k += 1;
+    }
+    crate::port::cells_drop(grl, 0);
+    crate::port::cells_drop(gfl, 0);
+    crate::port::cells_drop(ctx, 0);
+    k = 0;
+    while k < 32 {
+        crate::port::cells_push(ctx, 0);
+        k += 1;
+    }
+    while p <= np {
+        vi = gf_advance(og, 24, 0, vi, p);
+        vj = gf_range_end(og, 24, 0, vi, p);
+        fi = gf_advance(ofl, 16, 0, fi, p);
+        fj = gf_range_end(ofl, 16, 0, fi, p);
+        ri = gf_advance(rules, 20, 0, ri, p);
+        rj = gf_range_end(rules, 20, 0, ri, p);
+        qi = gf_advance(prims, 24, 0, qi, p);
+        qj = gf_range_end(prims, 24, 0, qi, p);
+        bi = gf_advance(oblocks, 16, 0, bi, p);
+        bj = gf_range_end(oblocks, 16, 0, bi, p);
+        wi = gf_advance(owords, 28, 0, wi, p);
+        wj = gf_range_end(owords, 28, 0, wi, p);
+        ti = gf_advance(words, 24, 0, ti, p);
+        tj = gf_range_end(words, 24, 0, ti, p);
+        pi = gf_advance(pa, 24, 0, pi, p);
+        pj = gf_range_end(pa, 24, 0, pi, p);
+        ii = gf_advance(im, 20, 0, ii, p);
+        ij = gf_range_end(im, 20, 0, ii, p);
+        kind = 0;
+        if ((rj > ri) || (qj > qi)) || (gf_has_rows(inks, 12, 0, p) == 1) {
+            kind = 1;
+            ep = ev_page_row(epages, p);
+            if ep >= 0 {
+                if (ep_get(epages, ep, epf_flags()) & eg_raster()) != 0 {
+                    kind = 2;
+                }
+            }
+        }
+        if kind == 0 {
+            k = vi;
+            while k < vj {
+                gf_copy_row(og, k, grl);
+                k += 1;
+            }
+            k = fi;
+            while k < fj {
+                ep = 0;
+                while ep < 16 {
+                    crate::port::cells_push(gfl, crate::port::cells_at(ofl, (k * 16) + ep));
+                    ep += 1;
+                }
+                k += 1;
+            }
+        } else {
+            crate::port::cells_set(ctx, X_PAGE, p);
+            crate::port::cells_set(ctx, X_KIND, kind);
+            crate::port::cells_set(ctx, X_V0, vi);
+            crate::port::cells_set(ctx, X_V1, vj);
+            crate::port::cells_set(ctx, X_F0, fi);
+            crate::port::cells_set(ctx, X_F1, fj);
+            crate::port::cells_set(ctx, X_R0, ri);
+            crate::port::cells_set(ctx, X_R1, rj);
+            crate::port::cells_set(ctx, X_Q0, qi);
+            crate::port::cells_set(ctx, X_Q1, qj);
+            crate::port::cells_set(ctx, X_B0, bi);
+            crate::port::cells_set(ctx, X_B1, bj);
+            crate::port::cells_set(ctx, X_W0, wi);
+            crate::port::cells_set(ctx, X_W1, wj);
+            crate::port::cells_set(ctx, X_T0, ti);
+            crate::port::cells_set(ctx, X_T1, tj);
+            crate::port::cells_set(ctx, X_P0, pi);
+            crate::port::cells_set(ctx, X_P1, pj);
+            crate::port::cells_set(ctx, X_I0, ii);
+            crate::port::cells_set(ctx, X_I1, ij);
+            gf_fuse_page(ctx, og, ofl, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa, gc, aux, un, gv);
+            fused += 1;
+        }
+        vi = vj;
+        fi = fj;
+        ri = rj;
+        qi = qj;
+        bi = bj;
+        wi = wj;
+        ti = tj;
+        pi = pj;
+        ii = ij;
+        p += 1;
+    }
+    return fused;
+}
+pub fn gf_write(gfa: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells) -> i32 {
+    // The vector rules block 500 dropped (`gfa`, stride 6: page, box, ledger reason) as ledger rows, confidence 700, source `vector`. Answers the rows written.
+    let n: i32 = crate::port::cells_len(gfa) / 6;
+    let mut i: i32 = 0;
+    while i < n {
+        ledger_add(ledger, crate::port::cells_at(gfa, (i * 6) + 5), crate::port::cells_at(gfa, i * 6), crate::port::cells_at(gfa, (i * 6) + 1), crate::port::cells_at(gfa, (i * 6) + 2), crate::port::cells_at(gfa, (i * 6) + 3), crate::port::cells_at(gfa, (i * 6) + 4), 700, sr_vector());
+        i += 1;
+    }
+    return n;
 }

@@ -960,6 +960,7 @@ public final class Player {
         int nfa = emon.Port.cellsLen(fa) / 12;
         int nfx = emon.Port.cellsLen(fx) / 4;
         int nsl = emon.Port.cellsLen(sl) / 16;
+        int nggp = emon.Port.cellsLen(ggp) / 12;
         int nrf = emon.Port.cellsLen(refs) / 2;
         int net = emon.Port.cellsLen(etext);
         int ngl = emon.Port.cellsLen(glyphs) / 32;
@@ -1055,7 +1056,13 @@ public final class Player {
         i = 0;
         while (i < nfx) {
             v = emon.Port.cellsAt(fx, i * 4);
-            if ((v < 0) || (v >= ncg)) {
+            w = emon.Port.cellsAt(fx, (i * 4) + 1);
+            // the rows of block 500 (graphics) name a `ggp` row, the others a `cg` row (SPEC 9.7)
+            if ((w >= 500) && (w < 600)) {
+                if ((v < 0) || (v >= nggp)) {
+                    return 9;
+                }
+            } else if ((v < 0) || (v >= ncg)) {
                 return 9;
             }
             i += 1;

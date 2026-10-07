@@ -2649,7 +2649,8 @@
           (set geo -1)
           (if (and (>= g 0) (> owned 0))
             (do (set agree (tt-geo-map tg k ta wo w0 tb g tc tw ws))
-                (if (>= agree 0) (set geo (tt-pm agree owned)))))
+                (if (>= agree 0) (set geo (tt-pm agree owned)))
+                (if (and (>= agree 0) (== (cells-at ws (- (cells-len ws) 1)) 1)) (tt-or tg k 15 8))))
           (tt-set tg k 12 g)
           (tt-set tg k 21 geo)
           (tt-score tg k acc)
@@ -2711,6 +2712,7 @@
           ^I32 v (tt-get tg tgi 10)]
       (if (or (<= nh 0) (>= nh nrows)) (return 0))
       (if (== v 3) (return 0))
+      (if (!= (bit-and fg 8) 0) (return 0))
       (if (== (cells-at tb (+ b 5)) PF_STRUCT) (return nh))
       (if (!= (bit-and fg 4) 0)
         (do (if (== (tb-tag-map tb k tg ta wo w0 tc tw ws) 0) (return 0))
@@ -2798,6 +2800,7 @@
         ^:mut ^I32 ce 0]
     (if (< tgi 0) (return 0))
     (if (== (tt-get tg tgi 10) 3) (return 0))
+    (if (!= (bit-and (tt-get tg tgi 15) 8) 0) (return 0))
     (if (and (== (bit-and (tt-get tg tgi 15) 4) 0) (!= (cells-at tb (+ b 5)) PF_STRUCT)) (return 0))
     (if (== (tb-tag-map tb k tg ta wo w0 tc tw ws) 0) (return 0))
     (set nr (tt-get tg tgi 2))

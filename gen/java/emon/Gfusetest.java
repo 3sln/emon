@@ -23,6 +23,7 @@ public final class Gfusetest {
         emon.Port.Cells refs = emon.Port.newCells();
         emon.Port.Cells ggp = emon.Port.newCells();
         emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells gv = emon.Port.newCells();
         int h = guRect(pa, 1, Evidence.pgFilled(), 0, 1000, 4950, 21000, 5050);
         int v = guRect(pa, 1, Evidence.pgFilled(), 0, 1000, 5000, 1100, 9000);
         int b = guRect(pa, 1, Evidence.pgFilled(), 0, 1000, 6950, 21000, 7050);
@@ -34,7 +35,7 @@ public final class Gfusetest {
         Evidence.paSet(pa, b, Evidence.pfVchk(), Evidence.vcBlend());
         Evidence.paSet(pa, x, Evidence.pfVis(), 3);
         Evidence.paSet(pa, h, Evidence.pfZ(), 4);
-        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 2, Gvec.gvSegments(), grl, gfl, cand), 4, "four rules: the hidden one is nothing");
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 2, Gvec.gvSegments(), grl, gfl, cand, gv), 4, "four rules: the hidden one is nothing");
         emon.Testport.assertEq(Glayer.gflCount(gfl), 2, "two fills");
         emon.Testport.assertEq(Glayer.glCheck(grl, gfl, ggp, grg, refs), 0, "sound");
         emon.Testport.assertEq(Glayer.grlGet(grl, 0, 0), 1, "the first rule's page");
@@ -73,6 +74,7 @@ public final class Gfusetest {
         emon.Port.Cells grl = emon.Port.newCells();
         emon.Port.Cells gfl = emon.Port.newCells();
         emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells gv = emon.Port.newCells();
         int r = Evidence.paNew(pa, 1, Evidence.paOther(), 0, 0, 10000, 10000);
         Evidence.paSet(pa, r, Evidence.pfFlags(), Evidence.pgStroked());
         Evidence.paSet(pa, r, Evidence.pfStroke(), 0);
@@ -81,19 +83,474 @@ public final class Gfusetest {
         Evidence.paSet(pa, r, Evidence.pfPcount(), 2);
         Evidence.ptAdd(pts, 0, 0, Evidence.poMove());
         Evidence.ptAdd(pts, 10000, 10000, Evidence.poLine());
-        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand), 1, "one rule");
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv), 1, "one rule");
         emon.Testport.assertEq(Glayer.grlGet(grl, 0, 10), Glayer.goSlant(), "slanted");
         emon.Testport.assertEq(Glayer.grlGet(grl, 0, 11), 13500, "at 135 degrees (page space has y down)");
         // a plain thin box: the two modes give the same row
         emon.Port.cellsDrop(pa, 0);
         guRect(pa, 1, Evidence.pgFilled(), 0, 1000, 4950, 21000, 5050);
-        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvLegacy(), grl, gfl, cand), 1, "legacy: one rule");
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvLegacy(), grl, gfl, cand, gv), 1, "legacy: one rule");
         int a = Glayer.grlGet(grl, 0, 5);
         int b = Glayer.grlGet(grl, 0, 7);
         int c = Glayer.grlGet(grl, 0, 6);
-        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand), 1, "segments: one rule");
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv), 1, "segments: one rule");
         emon.Testport.assertEq(Glayer.grlGet(grl, 0, 5), a, "the same left end");
         emon.Testport.assertEq(Glayer.grlGet(grl, 0, 7), b, "the same right end");
         emon.Testport.assertEq(Glayer.grlGet(grl, 0, 6), c, "the same centre");
+    }
+    public static int guHrule(emon.Port.Cells pa, int y, int x0, int x1) {
+        // A vector rule, horizontal, 1 pt thick, a thin filled box.
+        return guRect(pa, 1, Evidence.pgFilled(), 0, x0, y - 50, x1, y + 50);
+    }
+    public static int guVrule(emon.Port.Cells pa, int x, int y0, int y1) {
+        return guRect(pa, 1, Evidence.pgFilled(), 0, x - 50, y0, x + 50, y1);
+    }
+    public static int guLo(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    public static int guHi(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    public static int guTrace(emon.Port.Cells rules, int x0, int y0, int x1, int y1, int conf) {
+        // A tracer rule on page 1 along the centre line (x0, y0)-(x1, y1), 1 pt thick, black.
+        int r = Evidence.rlNew(rules, 1, guLo(x0, x1) - 50, guLo(y0, y1) - 50, guHi(x0, x1) + 50, guHi(y0, y1) + 50, 0);
+        Evidence.rlSet(rules, r, Evidence.rlfLx0(), x0);
+        Evidence.rlSet(rules, r, Evidence.rlfLy0(), y0);
+        Evidence.rlSet(rules, r, Evidence.rlfLx1(), x1);
+        Evidence.rlSet(rules, r, Evidence.rlfLy1(), y1);
+        Evidence.rlSet(rules, r, Evidence.rlfThick(), 100);
+        Evidence.rlSet(rules, r, Evidence.rlfColor(), 0);
+        Evidence.rlSet(rules, r, Evidence.rlfStyle(), 1);
+        Evidence.rlSet(rules, r, Evidence.rlfConf(), conf);
+        return r;
+    }
+    public static int guFuse(int np, emon.Port.Cells inks, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells oblocks, emon.Port.Cells owords, emon.Port.Cells words, emon.Port.Cells etext, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells feats, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Port.Cells refs, emon.Port.Cells hl, emon.Port.Cells fx, emon.Port.Cells gfa) {
+        // `gf-fuse` with the scratch it needs and no `epages` row (every page is a born-digital page).
+        return Gfuse.gfFuse(np, emon.Port.newCells(), inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+    }
+    public static int guCountRule(emon.Port.Cells grl, int rule) {
+        // How many fused rules were decided by row `rule`.
+        int i = 0;
+        int n = 0;
+        while (i < Glayer.grlCount(grl)) {
+            if (Glayer.grlGet(grl, i, 16) == rule) {
+                n += 1;
+            }
+            i += 1;
+        }
+        return n;
+    }
+    public static int guFirstRule(emon.Port.Cells grl, int rule) {
+        // The first fused rule decided by row `rule`, -1 for none.
+        int i = 0;
+        while (i < Glayer.grlCount(grl)) {
+            if (Glayer.grlGet(grl, i, 16) == rule) {
+                return i;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+    public static void testAVectorRuleTheTracerWitnessesIsKeptWholeAndSaysSo() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells gv = emon.Port.newCells();
+        emon.Port.Cells ggp = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells gfa = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        int h = guHrule(pa, 5000, 1000, 21000);
+        emon.Testport.assertThat(h >= 0, "a rule is drawn");
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv), 1, "the vector source alone: one rule");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 16), 501, "by row 501");
+        emon.Testport.assertEq(guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 0, "no raster answer: nothing is done");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 16), 501, "the identity");
+        emon.Testport.assertEq(Glayer.ggpCount(ggp), 0, "no group is made");
+        Evidence.ikNew(inks, 1, 0);
+        guTrace(rules, 1000, 5000, 21000, 5000, 900);
+        emon.Testport.assertEq(guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "the page has a raster answer: it is made again");
+        emon.Testport.assertEq(Glayer.grlCount(grl), 1, "still one rule");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 16), 510, "witnessed by the tracer: row 510");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 17), 1000, "at 1000");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 14), 3, "its sources are the vector's and the tracer's");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 15), 1, "the vector wins");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 5), 1000, "its own geometry: the left end");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 7), 21000, "and the right end");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 19), 0, "in the group 0");
+        emon.Testport.assertEq(Glayer.ggpCount(ggp), 1, "one group: the vector rule and the tracer's");
+        emon.Testport.assertEq(Glayer.ggpGet(ggp, 0, 3), 1, "with one vector member");
+        emon.Testport.assertEq(Glayer.ggpGet(ggp, 0, 5), 1, "and one tracer member");
+        emon.Testport.assertEq(Glayer.ggpGet(ggp, 0, 8), 3, "flags: an exactly known vector rule, a tracer member");
+        emon.Testport.assertThat(emon.Port.cellsLen(fx) > 0, "the explanation names the columns row 510 read");
+        emon.Testport.assertEq(emon.Port.cellsAt(fx, 0), 0, "the group");
+        emon.Testport.assertEq(emon.Port.cellsAt(fx, 1), 510, "the rule");
+        emon.Testport.assertEq(Glayer.glCheck(grl, gfl, ggp, grg, refs), 0, "sound");
+        emon.Testport.assertThat(Player.hlCount(hl) > 0, "R0's health row");
+    }
+    public static void testAVectorRuleUnderASoftMaskIsDroppedOnlyWhenTheRegionWitnessIsHigh() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells gv = emon.Port.newCells();
+        emon.Port.Cells ggp = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells gfa = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        int a = guHrule(pa, 5000, 1000, 21000);
+        int b = guHrule(pa, 7000, 1000, 21000);
+        int c = guHrule(pa, 9000, 1000, 21000);
+        emon.Testport.assertThat((a + (b + c)) >= 0, "three rules");
+        Evidence.paSet(pa, c, Evidence.pfVchk(), Evidence.vcBlend());
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv), 3, "three rules");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 2, 16), 514, "the third is not exactly known: row 514");
+        guTrace(rules, 1000, 5000, 21000, 5000, 900);
+        guTrace(rules, 1000, 7000, 21000, 7000, 900);
+        guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+        emon.Testport.assertEq(Glayer.grlCount(grl), 2, "the blended rule the render does not show is dropped, the two exact ones kept");
+        emon.Testport.assertEq(guCountRule(grl, 510), 2, "both witnessed");
+        emon.Testport.assertEq(emon.Port.cellsLen(gfa) / 6, 1, "and the drop is recorded, never silent");
+        emon.Testport.assertEq(emon.Port.cellsAt(gfa, 5), 12, "as `unwitnessed-uncertain-paint`");
+        emon.Testport.assertEq(emon.Port.cellsAt(gfa, 1), 1000, "with the rule's box");
+        emon.Testport.assertEq(Gfuse.gfWrite(gfa, ledger), 1, "one ledger row");
+        emon.Testport.assertEq(Model.ledgerReason(ledger, 0), 12, "its reason");
+        // the same page, but the tracer saw nothing it should have: the render's silence means nothing, so the blended rule stays
+        emon.Port.cellsDrop(rules, 0);
+        emon.Port.cellsDrop(grl, 0);
+        emon.Port.cellsDrop(gfl, 0);
+        emon.Port.cellsDrop(ggp, 0);
+        emon.Port.cellsDrop(gfa, 0);
+        emon.Port.cellsDrop(refs, 0);
+        emon.Port.cellsDrop(hl, 0);
+        emon.Port.cellsDrop(fx, 0);
+        Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv);
+        Evidence.ikNew(inks, 1, 0);
+        guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+        emon.Testport.assertEq(Glayer.grlCount(grl), 3, "all three are kept");
+        emon.Testport.assertEq(guCountRule(grl, 511), 2, "the exact ones unwitnessed: row 511");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 17), 800, "at 800");
+        emon.Testport.assertEq(guCountRule(grl, 515), 1, "the blended one by row 515");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 2, 17), 700, "at 700");
+        emon.Testport.assertEq(Glayer.glCheck(grl, gfl, ggp, grg, refs), 0, "sound");
+    }
+    public static void testABorderDrawnCellByCellAgainstOneTracerLineIsOneGroupAndNoGapIsBridged() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells gv = emon.Port.newCells();
+        emon.Port.Cells ggp = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells gfa = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        guHrule(pa, 5000, 1000, 6000);
+        guHrule(pa, 5000, 6000, 11000);
+        guHrule(pa, 5000, 11000, 16000);
+        guHrule(pa, 5000, 16000, 21000);
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv), 4, "four vector pieces");
+        guTrace(rules, 1000, 5000, 21000, 5000, 900);
+        guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+        emon.Testport.assertEq(Glayer.ggpCount(ggp), 1, "one group");
+        emon.Testport.assertEq(Glayer.ggpGet(ggp, 0, 3), 4, "four vector members");
+        emon.Testport.assertEq(Glayer.ggpGet(ggp, 0, 5), 1, "one tracer member");
+        emon.Testport.assertEq(Glayer.grlCount(grl), 4, "the vector pieces are kept as they are");
+        emon.Testport.assertEq(guCountRule(grl, 510), 4, "each witnessed");
+        // an open edge stays open: the tracer saw ink across a gap of the vector rule, and the vector says where its rule ends (row 520)
+        emon.Port.cellsDrop(pa, 0);
+        emon.Port.cellsDrop(rules, 0);
+        emon.Port.cellsDrop(grl, 0);
+        emon.Port.cellsDrop(gfl, 0);
+        emon.Port.cellsDrop(ggp, 0);
+        emon.Port.cellsDrop(refs, 0);
+        emon.Port.cellsDrop(hl, 0);
+        emon.Port.cellsDrop(fx, 0);
+        guHrule(pa, 5000, 1000, 6000);
+        guHrule(pa, 5000, 9000, 14000);
+        Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv);
+        guTrace(rules, 1000, 5000, 14000, 5000, 900);
+        guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+        emon.Testport.assertEq(Glayer.grlCount(grl), 2, "the stretch between them is NOT a rule: still two");
+        emon.Testport.assertEq(guCountRule(grl, 510), 2, "both pieces kept");
+        emon.Testport.assertEq(Glayer.ggpCount(ggp), 1, "in one group");
+        emon.Testport.assertThat(emon.Port.cellsLen(fx) > 0, "the dropped stretch is explained");
+        emon.Testport.assertEq(Glayer.glCheck(grl, gfl, ggp, grg, refs), 0, "sound");
+    }
+    public static void testATracerRuleInsideALetterIsDroppedAndOneOutsideTextIsARuleOnAPrecisePage() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells gv = emon.Port.newCells();
+        emon.Port.Cells ggp = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells gfa = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        guHrule(pa, 5000, 1000, 41000);
+        Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv);
+        guTrace(rules, 1000, 5000, 41000, 5000, 900);
+        guTrace(rules, 1000, 9000, 2500, 9000, 800);
+        guTrace(rules, 1000, 2000, 2500, 2000, 800);
+        Evidence.wdNew(words, 1, 800, 1800, 2700, 2200, 800, 1800, 2700, 2200, 0, 0, 0, 0, 0, 900, -1);
+        guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+        emon.Testport.assertEq(guCountRule(grl, 510), 1, "the vector rule, witnessed");
+        emon.Testport.assertEq(guCountRule(grl, 535), 1, "the tracer's rule outside text is admitted: the page's tracer is precise (535)");
+        emon.Testport.assertEq(Glayer.grlCount(grl), 2, "the stroke inside the word's box is dropped (row 532)");
+        int t = guFirstRule(grl, 535);
+        emon.Testport.assertEq(Glayer.grlGet(grl, t, 17), 600, "its confidence is 600");
+        emon.Testport.assertEq(Glayer.grlGet(grl, t, 18), 1, "flagged traced");
+        emon.Testport.assertEq(Glayer.grlGet(grl, t, 14), 2, "its source is the tracer's");
+        emon.Testport.assertEq(Glayer.grlGet(grl, t, 6), 9000, "its own geometry");
+        emon.Testport.assertEq(Glayer.glCheck(grl, gfl, ggp, grg, refs), 0, "sound");
+    }
+    public static void testALatticeInAnImageIsATableInImageRegionAndItsWordsKnowIt() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells ggp = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells gfa = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        int m = Evidence.imNew(im, 1, 10000, 10000, 40000, 40000, 7, 600, 600);
+        emon.Testport.assertEq(m, 0, "the image placement");
+        guTrace(rules, 12000, 15000, 38000, 15000, 900);
+        guTrace(rules, 12000, 25000, 38000, 25000, 900);
+        guTrace(rules, 12000, 35000, 38000, 35000, 900);
+        guTrace(rules, 12000, 12000, 12000, 38000, 900);
+        guTrace(rules, 25000, 12000, 25000, 38000, 900);
+        guTrace(rules, 38000, 12000, 38000, 38000, 900);
+        // an OCR word in a cell, and a `|` on the left border (read by the engine as a letter)
+        emon.Port.cellsPush(etext, 78);
+        emon.Port.cellsPush(etext, 124);
+        Evidence.feNew(feats, Evidence.eaOwords(), 0);
+        Evidence.feNew(feats, Evidence.eaOwords(), 1);
+        Evidence.owNew(owords, 1, 14000, 16000, 20000, 18000, 14000, 16000, 20000, 18000, 0, 0, 0, 1, 0, 900, 0);
+        Evidence.owNew(owords, 1, 11950, 20000, 12050, 22000, 11950, 20000, 12050, 22000, 0, 0, 1, 1, 0, 900, 1);
+        emon.Testport.assertEq(guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "fused");
+        emon.Testport.assertEq(Glayer.grlCount(grl), 6, "six rules");
+        emon.Testport.assertEq(guCountRule(grl, 530), 6, "each from row 530: the tracer's, in an image whose region scores well");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 18), 5, "flagged traced and in-image");
+        emon.Testport.assertThat(Glayer.grlGet(grl, 0, 17) > 0, "with a confidence the region's score scaled");
+        emon.Testport.assertThat(Glayer.grlGet(grl, 0, 17) <= 900, "never above the tracer's");
+        emon.Testport.assertEq(Glayer.grgCount(grg), 1, "one region");
+        emon.Testport.assertEq(Glayer.grgGet(grg, 0, 5), Glayer.rkTableInImage(), "a table in an image");
+        emon.Testport.assertEq(Glayer.grgGet(grg, 0, 8), 0, "of the image placement 0");
+        emon.Testport.assertEq(Glayer.grgGet(grg, 0, 1), 11950, "its box is what the rules cover: the left");
+        emon.Testport.assertEq(Glayer.grgGet(grg, 0, 9), 6, "six rules inside");
+        emon.Testport.assertEq(Evidence.feGet(feats, 0, Evidence.xoInTableImage()), 1000, "the word in a cell is wholly in the table");
+        emon.Testport.assertEq(Evidence.feGet(feats, 0, Evidence.xoRuleLike()), -1, "and is not rule-like");
+        emon.Testport.assertThat(Evidence.feGet(feats, 1, Evidence.xoInTableImage()) >= 0, "the `|` has a share too");
+        emon.Testport.assertEq(Evidence.feGet(feats, 1, Evidence.xoRuleLike()), 1000, "and it lies wholly on a rule: rule-likeness 1000");
+        emon.Testport.assertEq(Glayer.glCheck(grl, gfl, ggp, grg, refs), 0, "sound");
+    }
+    public static void testATintOverAPatternGivesItsColourAndATintInAGoodImageRegionIsAFill() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells gv = emon.Port.newCells();
+        emon.Port.Cells ggp = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells gfa = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        int p = guRect(pa, 1, Evidence.pgFilled() + Evidence.pgPattern(), -1, 3000, 12000, 8000, 15000);
+        int t = Evidence.pmNew(prims, 1, 3000, 12000, 8000, 15000, Evidence.pmRect());
+        emon.Testport.assertThat(p >= 0, "a pattern fill");
+        Evidence.pmSet(prims, t, Evidence.pmfFlags(), 11);
+        Evidence.pmSet(prims, t, Evidence.pmfColor(), 14737632);
+        Evidence.pmSet(prims, t, Evidence.pmfConf(), 800);
+        Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv);
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 0, 9), 562, "the vector source alone: row 562");
+        guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+        emon.Testport.assertEq(Glayer.gflCount(gfl), 1, "one fill");
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 0, 9), 561, "the render witnesses it: row 561");
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 0, 10), 950, "at 950");
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 0, 5), 14737632, "the tint's colour");
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 0, 11) & 8, 8, "flagged `tint-coloured`");
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 0, 7), 3, "from the vector and the tracer");
+        // a tint that only the tracer saw: dropped in R0 of a page whose tracer is not shown precise, a fill inside an image whose region scores well
+        int m = Evidence.imNew(im, 1, 20000, 20000, 50000, 50000, 7, 600, 600);
+        int u = Evidence.pmNew(prims, 1, 22000, 22000, 30000, 26000, Evidence.pmRect());
+        emon.Testport.assertThat(m >= 0, "an image");
+        Evidence.pmSet(prims, u, Evidence.pmfFlags(), 11);
+        Evidence.pmSet(prims, u, Evidence.pmfColor(), 15658734);
+        Evidence.pmSet(prims, u, Evidence.pmfConf(), 800);
+        guTrace(rules, 22000, 30000, 48000, 30000, 900);
+        guTrace(rules, 22000, 40000, 48000, 40000, 900);
+        guTrace(rules, 22000, 22000, 22000, 48000, 900);
+        emon.Port.cellsDrop(grl, 0);
+        emon.Port.cellsDrop(gfl, 0);
+        emon.Port.cellsDrop(ggp, 0);
+        emon.Port.cellsDrop(refs, 0);
+        emon.Port.cellsDrop(hl, 0);
+        emon.Port.cellsDrop(fx, 0);
+        Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv);
+        guFuse(1, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa);
+        emon.Testport.assertEq(Glayer.gflCount(gfl), 2, "the vector fill and the tint in the image");
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 1, 9), 570, "the tint by row 570");
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 1, 10), 700, "at 700");
+        emon.Testport.assertEq(Glayer.gflGet(gfl, 1, 11) & 4, 4, "flagged in-image");
+        emon.Testport.assertEq(Glayer.glCheck(grl, gfl, ggp, grg, refs), 0, "sound");
+    }
+    public static void testRows601And610OfBlock600ReadTheWordsFeaturesAndAHiddenVectorIsNothing() {
+        emon.Port.Cells gv = emon.Port.newCells();
+        int i = 0;
+        while (i < Fuserules.agCount()) {
+            emon.Port.cellsPush(gv, -1);
+            i += 1;
+        }
+        emon.Port.cellsSet(gv, Fuserules.agNt(), 0);
+        emon.Port.cellsSet(gv, Fuserules.agNh(), 0);
+        emon.Port.cellsSet(gv, Fuserules.agNo(), 1);
+        emon.Port.cellsSet(gv, Fuserules.agRulelike(), 900);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 601, "an OCR-only word made of rule glyphs on a rule: 601");
+        emon.Testport.assertEq(Fuserules.frReason(Fuserules.frDecide(gv)), 11, "to the ledger as a rule ghost");
+        emon.Testport.assertEq(Fuserules.frWinner(Fuserules.frDecide(gv)), 0, "never body");
+        emon.Port.cellsSet(gv, Fuserules.agRulelike(), 300);
+        emon.Testport.assertThat(Fuserules.frNumber(Fuserules.frDecide(gv)) != 601, "a word that only touches a rule is not one");
+        emon.Port.cellsSet(gv, Fuserules.agRulelike(), -1);
+        emon.Port.cellsSet(gv, Fuserules.agTableimg(), 1000);
+        emon.Port.cellsSet(gv, Fuserules.agKink(), 500);
+        emon.Port.cellsSet(gv, Fuserules.agPlaus(), 900);
+        emon.Port.cellsSet(gv, Fuserules.agScore(), 800);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecide(gv)), 610, "an OCR-only word in a table drawn in an image, with ink and plausible: 610");
+        emon.Testport.assertEq(Fuserules.frWinner(Fuserules.frDecide(gv)), Fuserules.fwOcr(), "it is body text");
+        emon.Testport.assertEq(Fuserules.frFlags(Fuserules.frDecide(gv)) & 512, 512, "flagged `in-table-image`");
+        emon.Port.cellsSet(gv, Fuserules.agKink(), -1);
+        emon.Testport.assertThat(Fuserules.frNumber(Fuserules.frDecide(gv)) != 610, "without ink of kin's own it is not");
+    }
+    public static void testAPageWithNoRasterAnswerIsCopiedAndAHiddenVectorRuleIsRow505() {
+        emon.Port.Cells gv = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells mk = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells ggp = emon.Port.newCells();
+        emon.Port.Cells grg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells hl = emon.Port.newCells();
+        emon.Port.Cells fx = emon.Port.newCells();
+        emon.Port.Cells gfa = emon.Port.newCells();
+        emon.Port.Cells inks = emon.Port.newCells();
+        emon.Port.Cells rules = emon.Port.newCells();
+        emon.Port.Cells prims = emon.Port.newCells();
+        emon.Port.Cells oblocks = emon.Port.newCells();
+        emon.Port.Cells owords = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells etext = emon.Port.newCells();
+        emon.Port.Cells feats = emon.Port.newCells();
+        int i = 0;
+        while (i < 128) {
+            emon.Port.cellsPush(gv, -1);
+            i += 1;
+        }
+        emon.Port.cellsSet(gv, 103, 1);
+        emon.Testport.assertEq(Fuserules.frNumber(Fuserules.frDecideBlock(gv, 500)), 505, "a vector member whose vis is not 0: row 505");
+        emon.Testport.assertEq(Fuserules.frWinner(Fuserules.frDecideBlock(gv, 500)), 0, "contributes nothing");
+        guHrule(pa, 5000, 1000, 21000);
+        guHrule(pa, 7000, 1000, 21000);
+        guHrule(pa, 7000, 21000, 31000);
+        emon.Port.cellsDrop(gv, 0);
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 1, Gvec.gvSegments(), grl, gfl, cand, gv), 3, "three rules");
+        // page 1 has the raster answer, page 2 has none: its rows are copied untouched
+        guRect(pa, 2, Evidence.pgFilled(), 0, 1000, 4950, 21000, 5050);
+        emon.Port.cellsDrop(grl, 0);
+        emon.Port.cellsDrop(gfl, 0);
+        emon.Port.cellsDrop(gv, 0);
+        emon.Testport.assertEq(Gfuse.gfDoc(pa, pts, mk, im, 2, Gvec.gvSegments(), grl, gfl, cand, gv), 4, "four rules on two pages");
+        Evidence.ikNew(inks, 1, 0);
+        emon.Testport.assertEq(guFuse(2, inks, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa), 1, "one page fused");
+        emon.Testport.assertEq(Glayer.grlCount(grl), 4, "four rules still");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 3, 0), 2, "the second page's is the last");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 3, 16), 501, "copied as it was");
+        emon.Testport.assertEq(Glayer.grlGet(grl, 0, 16), 511, "the first page's are made again: nothing the tracer saw");
+        emon.Testport.assertEq(Glayer.glCheck(grl, gfl, ggp, grg, refs), 0, "sound");
     }
 }

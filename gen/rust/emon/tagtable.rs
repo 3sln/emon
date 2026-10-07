@@ -627,6 +627,11 @@ pub fn tt_geo_map(tg: &mut crate::port::Cells, k: i32, ta: &mut crate::port::Cel
     let mut agree: i32 = 0;
     let mut mv: i32 = 0;
     let mut dup: i32 = 0;
+    let mut ob: i32 = 0;
+    let mut lo: i32 = 0;
+    let mut hi: i32 = 0;
+    let mut rowok: i32 = 0;
+    let mut multi: i32 = 0;
     crate::port::cells_drop(ws, 0);
     if ((nr * gnr) + (nc * gnc)) > 1000000 {
         return -2;
@@ -717,6 +722,49 @@ pub fn tt_geo_map(tg: &mut crate::port::Cells, k: i32, ta: &mut crate::port::Cel
         }
         i += 1;
     }
+    ob = crate::port::cells_len(ws);
+    g = 0;
+    while g < gnr {
+        mv = -1;
+        dup = 0;
+        i = 0;
+        while i < nr {
+            if crate::port::cells_at(ws, ((nr + nc) + (nw * 2)) + ((i * gnr) + g)) > dup {
+                dup = crate::port::cells_at(ws, ((nr + nc) + (nw * 2)) + ((i * gnr) + g));
+                mv = i;
+            }
+            i += 1;
+        }
+        crate::port::cells_push(ws, mv);
+        g += 1;
+    }
+    i = 0;
+    while i < nr {
+        lo = -1;
+        hi = -1;
+        g = 0;
+        while g < gnr {
+            if crate::port::cells_at(ws, ob + g) == i {
+                if lo < 0 {
+                    lo = g;
+                }
+                hi = g;
+            }
+            g += 1;
+        }
+        g = lo;
+        while (lo >= 0) && (g <= hi) {
+            mv = crate::port::cells_at(ws, ob + g);
+            if (mv >= 0) && (mv != i) {
+                lo = -1;
+                hi = -1;
+            }
+            g += 1;
+        }
+        crate::port::cells_push(ws, lo);
+        crate::port::cells_push(ws, hi);
+        i += 1;
+    }
     wi = 0;
     while wi < nw {
         cell = crate::port::cells_at(wo, wi);
@@ -724,15 +772,29 @@ pub fn tt_geo_map(tg: &mut crate::port::Cells, k: i32, ta: &mut crate::port::Cel
             tr = crate::port::cells_at(ta, (cell * TAS) + 1);
             tcc = crate::port::cells_at(ta, (cell * TAS) + 2);
             if (tr < nr) && (tcc < nc) {
-                if (crate::port::cells_at(ws, tr) >= 0) && (crate::port::cells_at(ws, nr + tcc) >= 0) {
-                    if (crate::port::cells_at(ws, tr) == crate::port::cells_at(ws, (nr + nc) + (wi * 2))) && (crate::port::cells_at(ws, nr + tcc) == crate::port::cells_at(ws, ((nr + nc) + (wi * 2)) + 1)) {
-                        agree += 1;
+                if crate::port::cells_at(ws, nr + tcc) >= 0 {
+                    if crate::port::cells_at(ws, nr + tcc) == crate::port::cells_at(ws, ((nr + nc) + (wi * 2)) + 1) {
+                        gr = crate::port::cells_at(ws, (nr + nc) + (wi * 2));
+                        rowok = 0;
+                        if (crate::port::cells_at(ws, tr) >= 0) && (crate::port::cells_at(ws, tr) == gr) {
+                            rowok = 1;
+                        }
+                        if (rowok == 0) && ((gr >= 0) && ((crate::port::cells_at(ws, (ob + gnr) + (tr * 2)) >= 0) && ((gr >= crate::port::cells_at(ws, (ob + gnr) + (tr * 2))) && (gr <= crate::port::cells_at(ws, ((ob + gnr) + (tr * 2)) + 1))))) {
+                            if crate::port::cells_at(ws, ob + gr) == tr {
+                                rowok = 1;
+                                multi = 1;
+                            }
+                        }
+                        if rowok == 1 {
+                            agree += 1;
+                        }
                     }
                 }
             }
         }
         wi += 1;
     }
+    crate::port::cells_push(ws, multi);
     return agree;
 }
 pub fn tt_geo_tb(tg: &mut crate::port::Cells, k: i32, tb: &mut crate::port::Cells, t0: i32, t1: i32) -> i32 {

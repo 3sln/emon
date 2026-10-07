@@ -118,8 +118,8 @@ func TestTheRowsSayWhatTheySet(emonT *testing.T) {
 	port.AssertEq(emonT, fuserules.FrOrder(4), 100, "then the core")
 	port.AssertEq(emonT, fuserules.FrOrder(5), -1, "and no more")
 	var i int32 = 0
-	for i < 40 {
-		port.AssertThat(emonT, ((fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 200)) || ((fuserules.FrBlock(i) == 300) || (fuserules.FrBlock(i) == 400)), "every row of P7.3, P7.5, P7.6 and P7.7 is in block 100, 200, 300 or 400")
+	for i < 65 {
+		port.AssertThat(emonT, (((fuserules.FrBlock(i) == 100) || (fuserules.FrBlock(i) == 200)) || ((fuserules.FrBlock(i) == 300) || (fuserules.FrBlock(i) == 400))) || ((fuserules.FrBlock(i) == 500) || (fuserules.FrBlock(i) == 600)), "every row of P7.3, P7.5, P7.6, P7.7 and P7.G is in block 100, 200, 300, 400, 500 or 600")
 		i += 1
 	}
 }

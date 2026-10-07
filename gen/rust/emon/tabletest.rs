@@ -263,7 +263,7 @@ pub(crate) fn tt_run(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, e
     let t12e: &mut crate::port::Cells = &mut crate::port::Cells::new();
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
-    gf_doc(pa, gpts, gmk, gim, 1, gfx_mode(), grl, gfl, cand);
+    gf_doc(pa, gpts, gmk, gim, 1, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
     tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
     lc_copy(ln, lt);
     pa_build(wd, et, 1, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al);
@@ -541,7 +541,7 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) ->
     model_init(nodes, attrs, regions, text, pages, ledger, layout);
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
-    gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand);
+    gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
     tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e);
     tt_emit(tvt, t12e);
     lc_copy(ln, lt);
@@ -592,7 +592,7 @@ fn test_tagged_tables_are_verified_against_the_page() {
     crate::testport::assert_eq(tt_tagged(0, &crate::testport::test_file("corpus/synth/pdf/ttab-bad-spans.pdf")[..], &crate::testport::test_file("table/ttab-bad-spans.json")[..], t3, v3), 0, "ttab-bad-spans runs");
     crate::testport::assert_text(v3, "[{\"page\":1,\"se\":4,\"rows\":4,\"cols\":5,\"verdict\":\"partial\",\"score\":821,\"checks\":[900,1000,1000,1000,1000,785],\"trust\":937}]", "ttab-bad-spans: ColSpan 3 where the rules close at 2: the geometry agrees with 785 of the words, so the verdict is partial, flagged struct-disagree and tag-span-conflict");
     crate::testport::assert_eq(tt_tagged(0, &crate::testport::test_file("corpus/synth/pdf/ttab-bad-rows.pdf")[..], &crate::testport::test_file("table/ttab-bad-rows.json")[..], t4, v4), 0, "ttab-bad-rows runs");
-    crate::testport::assert_text(v4, "[{\"page\":1,\"se\":4,\"rows\":3,\"cols\":8,\"verdict\":\"contradicted\",\"score\":86,\"checks\":[923,1000,846,1000,1000,0],\"trust\":937}]", "ttab-bad-rows: two visual rows in one TR: contradicted, and the Model is the geometry's alone");
+    crate::testport::assert_text(v4, "[{\"page\":1,\"se\":4,\"rows\":3,\"cols\":8,\"verdict\":\"contradicted\",\"score\":351,\"checks\":[923,1000,846,1000,1000,250],\"trust\":937}]", "ttab-bad-rows: two visual rows in one TR: still contradicted, and the Model is the geometry's alone (D324: the two visual rows read as one row of two lines, so a quarter of the words agree)");
     crate::testport::assert_eq(tt_tagged(0, &crate::testport::test_file("corpus/synth/pdf/ttab-layout.pdf")[..], &crate::testport::test_file("table/ttab-layout.json")[..], t5, v5), 0, "ttab-layout runs");
     crate::testport::assert_text(v5, "[{\"page\":1,\"se\":4,\"rows\":1,\"cols\":2,\"verdict\":\"contradicted\",\"score\":1000,\"checks\":[1000,-1,1000,1000,1000,-1],\"trust\":923}]", "ttab-layout: prose in two columns tagged Table is a layout table: refused (D180), so contradicted, and there is no table in the Model");
     crate::testport::assert_eq(tt_tagged(0, &crate::testport::test_file("corpus/synth/pdf/ttab-missing-row.pdf")[..], &crate::testport::test_file("table/ttab-missing-row.json")[..], t6, v6), 0, "ttab-missing-row runs");

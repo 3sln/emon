@@ -5,15 +5,227 @@ package gfuse
 
 import (
 	"emon/evidence"
+	"emon/fuserules"
 	"emon/glayer"
 	"emon/gvec"
+	"emon/health"
+	"emon/model"
+	"emon/player"
 	"emon/port"
 )
 
-const gfAxis int32 = 100
-
 func GfxMode() int32 {
 	return 1
+}
+
+func GmzUnit() int32 {
+	return 100
+}
+
+func GmzVecExact() int32 {
+	return 101
+}
+
+func GmzVecUncertain() int32 {
+	return 102
+}
+
+func GmzVecHidden() int32 {
+	return 103
+}
+
+func GmzTrace() int32 {
+	return 104
+}
+
+func GmzTraceConf() int32 {
+	return 105
+}
+
+func GmzOcrLine() int32 {
+	return 106
+}
+
+func GmzInImage() int32 {
+	return 107
+}
+
+func GmzRaster() int32 {
+	return 108
+}
+
+func GmzRegionScore() int32 {
+	return 109
+}
+
+func GmzVecWitness() int32 {
+	return 110
+}
+
+func GmzTprec() int32 {
+	return 111
+}
+
+func GmzInGlyph() int32 {
+	return 112
+}
+
+func GmzInOcrWord() int32 {
+	return 113
+}
+
+func GmzFillColourKnown() int32 {
+	return 115
+}
+
+func GmzTint() int32 {
+	return 116
+}
+
+func GmzWitness() int32 {
+	return 117
+}
+
+func GmzGroupVecExact() int32 {
+	return 118
+}
+
+const gc int32 = 24
+
+const cKind int32 = 0
+
+const cSrc int32 = 1
+
+const cEa int32 = 2
+
+const cRow int32 = 3
+
+const cPt int32 = 4
+
+const cX0 int32 = 5
+
+const cY0 int32 = 6
+
+const cX1 int32 = 7
+
+const cY1 int32 = 8
+
+const cEx0 int32 = 9
+
+const cEy0 int32 = 10
+
+const cEx1 int32 = 11
+
+const cEy1 int32 = 12
+
+const cT int32 = 13
+
+const cCol int32 = 14
+
+const cSty int32 = 15
+
+const cFlg int32 = 16
+
+const cCls int32 = 17
+
+const cConf int32 = 18
+
+const cExact int32 = 19
+
+const cUf int32 = 20
+
+const cWit int32 = 21
+
+const cAng int32 = 23
+
+const xPage int32 = 0
+
+const xKind int32 = 1
+
+const xV0 int32 = 2
+
+const xV1 int32 = 3
+
+const xF0 int32 = 4
+
+const xF1 int32 = 5
+
+const xR0 int32 = 6
+
+const xR1 int32 = 7
+
+const xQ0 int32 = 8
+
+const xQ1 int32 = 9
+
+const xB0 int32 = 10
+
+const xB1 int32 = 11
+
+const xW0 int32 = 12
+
+const xW1 int32 = 13
+
+const xT0 int32 = 14
+
+const xT1 int32 = 15
+
+const xP0 int32 = 16
+
+const xP1 int32 = 17
+
+const xI0 int32 = 18
+
+const xI1 int32 = 19
+
+const xN int32 = 20
+
+const xWit int32 = 21
+
+const xPrec int32 = 22
+
+const xNgrl int32 = 23
+
+const xNgfl int32 = 24
+
+const aCnt int32 = 0
+
+const aStart int32 = 1
+
+const aOrd int32 = 2
+
+const aGid int32 = 3
+
+const aEp int32 = 4
+
+const aBits int32 = 6
+
+func gfAbs(a int32) int32 {
+	if a < 0 {
+		return 0 - a
+	}
+	return a
+}
+
+func gfMin(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func gfMax(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func gfEq(a int32, b int32) int32 {
+	if a == b {
+		return 1
+	}
+	return 0
 }
 
 func gfLightness(rgb int32) int32 {
@@ -25,18 +237,86 @@ func gfLightness(rgb int32) int32 {
 }
 
 func gfOrientOf(a int32) int32 {
-	// `go` of an angle in [0, 18000): h within GF_AXIS of 0, v of 9000, else slant.
-	if (a <= gfAxis) || (a >= (18000 - gfAxis)) {
+	// `go` of an angle in [0, 18000): h within `gf-axis` of 0, v of 9000, else slant.
+	if (a <= fuserules.FgAxis()) || (a >= (18000 - fuserules.FgAxis())) {
 		return glayer.GoH()
 	}
-	if (a >= (9000 - gfAxis)) && (a <= (9000 + gfAxis)) {
+	if (a >= (9000 - fuserules.FgAxis())) && (a <= (9000 + fuserules.FgAxis())) {
 		return glayer.GoV()
 	}
 	return glayer.GoSlant()
 }
 
-func gfRuleRow(cand *port.Cells, c int32, pa *port.Cells, im *port.Cells, grl *port.Cells) int32 {
-	// Candidate c (a rule) as a `grl` row.
+func gfAngleOf(dx int32, dy int32) int32 {
+	// The angle of a centre line in [0, 18000).
+	var a int32 = evidence.EvAngle(dx, dy)
+	if a >= 18000 {
+		a -= 18000
+	}
+	return a
+}
+
+func gfIou(ax0 int32, ay0 int32, ax1 int32, ay1 int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
+	// The intersection over union of two boxes (cp), per mille. Areas in tenths of a point so they fit.
+	var iw int32 = gfMax(0, gfMin(ax1, bx1)-gfMax(ax0, bx0)) / 10
+	var ih int32 = gfMax(0, gfMin(ay1, by1)-gfMax(ay0, by0)) / 10
+	var inter int32 = iw * ih
+	var aa int32 = (gfMax(0, ax1-ax0) / 10) * (gfMax(0, ay1-ay0) / 10)
+	var ab int32 = (gfMax(0, bx1-bx0) / 10) * (gfMax(0, by1-by0) / 10)
+	var un int32 = (aa + ab) - inter
+	if un <= 0 {
+		return 0
+	}
+	return inter / gfMax(1, un/1000)
+}
+
+func gfInsideShare(x0 int32, y0 int32, x1 int32, y1 int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
+	// The per mille of box (x0 y0 x1 y1) that lies inside box b; 0 for an empty one. Areas in tenths of a point so they fit.
+	var iw int32 = gfMax(0, gfMin(x1, bx1)-gfMax(x0, bx0)) / 10
+	var ih int32 = gfMax(0, gfMin(y1, by1)-gfMax(y0, by0)) / 10
+	var inter int32 = iw * ih
+	var area int32 = gfMax(1, gfMax(0, x1-x0)/10) * gfMax(1, gfMax(0, y1-y0)/10)
+	return inter / gfMax(1, area/1000)
+}
+
+func gcat(gc *port.Cells, i int32, f int32) int32 {
+	return port.CellsAt(gc, (i*24)+f)
+}
+
+func gcput(gc *port.Cells, i int32, f int32, v int32) int32 {
+	port.CellsSet(gc, (i*24)+f, v)
+	return 0
+}
+
+func gfGvReset(gv *port.Cells) int32 {
+	// The measure vector (128 cells), every measure absent (-1).
+	var i int32 = 0
+	for port.CellsLen(gv) < 128 {
+		port.CellsPush(gv, -1)
+	}
+	for i < 128 {
+		port.CellsSet(gv, i, -1)
+		i += 1
+	}
+	return 0
+}
+
+func gfExplain(fx *port.Cells, group int32, r int32, gv *port.Cells) int32 {
+	// `fx` rows for the decision of row `r` of `fr-rows`: every column the rule read and the value it read (the group is a `ggp` row).
+	var k int32 = 0
+	var col int32 = 0
+	for k < fuserules.FrNpred() {
+		col = fuserules.FrPcol(r, k)
+		if col >= 0 {
+			player.FxNew(fx, group, fuserules.FrNumber(r), col, port.CellsAt(gv, col))
+		}
+		k += 1
+	}
+	return 0
+}
+
+func gfRuleRow(cand *port.Cells, c int32, pa *port.Cells, im *port.Cells, gv *port.Cells, grl *port.Cells) int32 {
+	// Candidate c (a rule) as a `grl` row, by the row of block 500 that holds (501 or 514 here: no raster answer).
 	var b int32 = c * 16
 	var row int32 = port.CellsAt(cand, b+1)
 	var fl int32 = port.CellsAt(cand, b+15)
@@ -48,6 +328,7 @@ func gfRuleRow(cand *port.Cells, c int32, pa *port.Cells, im *port.Cells, grl *p
 	var exact int32 = 1
 	var z int32 = -1
 	var r int32 = 0
+	var fr int32 = 0
 	if (fl & gvec.GvHidden()) != 0 {
 		return 0
 	}
@@ -63,56 +344,74 @@ func gfRuleRow(cand *port.Cells, c int32, pa *port.Cells, im *port.Cells, grl *p
 		}
 		z = evidence.PaGet(pa, row, evidence.PfZ())
 	}
+	gfGvReset(gv)
+	port.CellsSet(gv, 100, 1)
+	port.CellsSet(gv, 101, exact)
+	port.CellsSet(gv, 102, 1-exact)
+	port.CellsSet(gv, 103, 0)
+	port.CellsSet(gv, 108, 0)
+	fr = fuserules.FrDecideBlock(gv, 500)
+	if fuserules.FrWinner(fr) == 0 {
+		return 0
+	}
 	r = glayer.GrlNew(grl, port.CellsAt(cand, b+3), port.CellsAt(cand, b+4), port.CellsAt(cand, b+5), port.CellsAt(cand, b+6), port.CellsAt(cand, b+7), ex0, ey0, ex1, ey1, port.CellsAt(cand, b+12), gfOrientOf(ang))
 	glayer.GrlSet(grl, r, 11, ang)
 	glayer.GrlSet(grl, r, 12, port.CellsAt(cand, b+13))
 	glayer.GrlSet(grl, r, 13, port.CellsAt(cand, b+14))
 	glayer.GrlSet(grl, r, 14, glayer.GsVector())
 	glayer.GrlSet(grl, r, 15, glayer.GsVector())
-	if exact == 1 {
-		glayer.GrlSet(grl, r, 16, 501)
-		glayer.GrlSet(grl, r, 17, 900)
-	} else {
-		glayer.GrlSet(grl, r, 16, 514)
-		glayer.GrlSet(grl, r, 17, 700)
-	}
-	glayer.GrlSet(grl, r, 18, fl)
+	glayer.GrlSet(grl, r, 16, fuserules.FrNumber(fr))
+	glayer.GrlSet(grl, r, 17, fuserules.FrConf(fr))
+	glayer.GrlSet(grl, r, 18, fl|fuserules.FrFlags(fr))
 	glayer.GrlSet(grl, r, 20, z)
+	glayer.GrlSet(grl, r, 21, row)
+	glayer.GrlSet(grl, r, 22, port.CellsAt(cand, b+2))
 	return 0
 }
 
-func gfFillRow(cand *port.Cells, c int32, pa *port.Cells, gfl *port.Cells) int32 {
-	// Candidate c (a fill) as a `gfl` row.
+func gfFillRow(cand *port.Cells, c int32, pa *port.Cells, gv *port.Cells, gfl *port.Cells) int32 {
+	// Candidate c (a fill) as a `gfl` row, by the row of block 500 that holds (560 or 562 here).
 	var b int32 = c * 16
 	var row int32 = port.CellsAt(cand, b+1)
 	var fl int32 = port.CellsAt(cand, b+15)
 	var colour int32 = port.CellsAt(cand, b+13)
-	var r int32 = glayer.GflNew(gfl, port.CellsAt(cand, b+3), port.CellsAt(cand, b+4), port.CellsAt(cand, b+5), port.CellsAt(cand, b+6), port.CellsAt(cand, b+7), colour)
+	var fr int32 = 0
+	var r int32 = 0
+	gfGvReset(gv)
+	port.CellsSet(gv, 100, 3)
+	port.CellsSet(gv, 108, 0)
+	if colour < 0 {
+		port.CellsSet(gv, 115, 0)
+	} else {
+		port.CellsSet(gv, 115, 1)
+	}
+	fr = fuserules.FrDecideBlock(gv, 500)
+	if fuserules.FrWinner(fr) == 0 {
+		return 0
+	}
+	r = glayer.GflNew(gfl, port.CellsAt(cand, b+3), port.CellsAt(cand, b+4), port.CellsAt(cand, b+5), port.CellsAt(cand, b+6), port.CellsAt(cand, b+7), colour)
 	glayer.GflSet(gfl, r, 6, gfLightness(colour))
 	glayer.GflSet(gfl, r, 7, glayer.GsVector())
 	glayer.GflSet(gfl, r, 8, glayer.GsVector())
-	if colour < 0 {
-		glayer.GflSet(gfl, r, 9, 562)
-		glayer.GflSet(gfl, r, 10, 600)
-	} else {
-		glayer.GflSet(gfl, r, 9, 560)
-		glayer.GflSet(gfl, r, 10, 900)
-	}
-	glayer.GflSet(gfl, r, 11, fl&15)
+	glayer.GflSet(gfl, r, 9, fuserules.FrNumber(fr))
+	glayer.GflSet(gfl, r, 10, fuserules.FrConf(fr))
+	glayer.GflSet(gfl, r, 11, (fl&15)|fuserules.FrFlags(fr))
 	glayer.GflSet(gfl, r, 13, evidence.PaGet(pa, row, evidence.PfZ()))
+	glayer.GflSet(gfl, r, 14, row)
 	return 0
 }
 
-func GfPage(cand *port.Cells, pa *port.Cells, im *port.Cells, grl *port.Cells, gfl *port.Cells) int32 {
-	// One page's candidates into `grl` and `gfl` (the head of this file); answers 0.
+func GfPage(cand *port.Cells, pa *port.Cells, im *port.Cells, grl *port.Cells, gfl *port.Cells, gv *port.Cells) int32 {
+	// One page's candidates (`gv-page`'s scratch, stride 16) into rows of the fused rules and fills over the vector source alone: the rows of block 500
+	// that a page with no raster answer reaches. A hidden candidate (`vis` not 0) is row 505's: it contributes nothing. No group is made. Answers 0.
 	var n int32 = port.CellsLen(cand) / 16
 	var c int32 = 0
 	for c < n {
 		if (port.CellsAt(cand, (c*16)+15) & gvec.GvHidden()) == 0 {
 			if port.CellsAt(cand, c*16) == 1 {
-				gfRuleRow(cand, c, pa, im, grl)
+				gfRuleRow(cand, c, pa, im, gv, grl)
 			} else {
-				gfFillRow(cand, c, pa, gfl)
+				gfFillRow(cand, c, pa, gv, gfl)
 			}
 		}
 		c += 1
@@ -120,8 +419,8 @@ func GfPage(cand *port.Cells, pa *port.Cells, im *port.Cells, grl *port.Cells, g
 	return 0
 }
 
-func GfDoc(pa *port.Cells, pts *port.Cells, mk *port.Cells, im *port.Cells, np int32, mode int32, grl *port.Cells, gfl *port.Cells, cand *port.Cells) int32 {
-	// The document's graphics: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the
+func GfDoc(pa *port.Cells, pts *port.Cells, mk *port.Cells, im *port.Cells, np int32, mode int32, grl *port.Cells, gfl *port.Cells, cand *port.Cells, gv *port.Cells) int32 {
+	// The document's graphics over the vector source: for every page in turn its candidates, then its rows (both arenas emptied first). Answers the
 	// number of fused rules.
 	var nq int32 = evidence.PaCount(pa)
 	var ni int32 = evidence.ImCount(im)
@@ -151,11 +450,1892 @@ func GfDoc(pa *port.Cells, pts *port.Cells, mk *port.Cells, im *port.Cells, np i
 		if (qj > qi) || (ij > ii) {
 			port.CellsDrop(cand, 0)
 			gvec.GvPage(pa, pts, mk, im, qi, qj, ii, ij, mode, cand)
-			GfPage(cand, pa, im, grl, gfl)
+			GfPage(cand, pa, im, grl, gfl, gv)
 		}
 		qi = qj
 		ii = ij
 		p += 1
 	}
 	return port.CellsLen(grl) / 24
+}
+
+func gfCandRule(gc *port.Cells, src int32, ea int32, row int32, pt int32, ex0 int32, ey0 int32, ex1 int32, ey1 int32, thick int32, colour int32, style int32, flags int32, conf int32, exact int32) int32 {
+	// Append a rule candidate: the box is derived from the centre line and the thickness (a horizontal rule's extent along its axis is the centre
+	// line's); the class (`go`) and the angle (centi-degrees, [0, 18000)) too. Answers its index.
+	var i int32 = port.CellsLen(gc) / 24
+	var ang int32 = gfAngleOf(ex1-ex0, ey1-ey0)
+	var cls int32 = gfOrientOf(ang)
+	var half int32 = (gfMax(thick, 1) + 1) / 2
+	var bx0 int32 = gfMin(ex0, ex1)
+	var by0 int32 = gfMin(ey0, ey1)
+	var bx1 int32 = gfMax(ex0, ex1)
+	var by1 int32 = gfMax(ey0, ey1)
+	if cls == glayer.GoH() {
+		by0 -= half
+		by1 += half
+	}
+	if cls == glayer.GoV() {
+		bx0 -= half
+		bx1 += half
+	}
+	if cls == glayer.GoSlant() {
+		bx0 -= half
+		by0 -= half
+		bx1 += half
+		by1 += half
+	}
+	port.CellsPush(gc, 1)
+	port.CellsPush(gc, src)
+	port.CellsPush(gc, ea)
+	port.CellsPush(gc, row)
+	port.CellsPush(gc, pt)
+	port.CellsPush(gc, bx0)
+	port.CellsPush(gc, by0)
+	port.CellsPush(gc, bx1)
+	port.CellsPush(gc, by1)
+	port.CellsPush(gc, ex0)
+	port.CellsPush(gc, ey0)
+	port.CellsPush(gc, ex1)
+	port.CellsPush(gc, ey1)
+	port.CellsPush(gc, gfMax(thick, 1))
+	port.CellsPush(gc, colour)
+	port.CellsPush(gc, style)
+	port.CellsPush(gc, flags)
+	port.CellsPush(gc, cls)
+	port.CellsPush(gc, conf)
+	port.CellsPush(gc, exact)
+	port.CellsPush(gc, i)
+	port.CellsPush(gc, -1)
+	port.CellsPush(gc, -1)
+	port.CellsPush(gc, ang)
+	return i
+}
+
+func gfCandFill(gc *port.Cells, src int32, ea int32, row int32, x0 int32, y0 int32, x1 int32, y1 int32, colour int32, flags int32, conf int32) int32 {
+	// Append a fill candidate. Answers its index.
+	var i int32 = port.CellsLen(gc) / 24
+	port.CellsPush(gc, 2)
+	port.CellsPush(gc, src)
+	port.CellsPush(gc, ea)
+	port.CellsPush(gc, row)
+	port.CellsPush(gc, -1)
+	port.CellsPush(gc, x0)
+	port.CellsPush(gc, y0)
+	port.CellsPush(gc, x1)
+	port.CellsPush(gc, y1)
+	port.CellsPush(gc, 0)
+	port.CellsPush(gc, 0)
+	port.CellsPush(gc, 0)
+	port.CellsPush(gc, 0)
+	port.CellsPush(gc, 0)
+	port.CellsPush(gc, colour)
+	port.CellsPush(gc, 1)
+	port.CellsPush(gc, flags)
+	port.CellsPush(gc, 0)
+	port.CellsPush(gc, conf)
+	port.CellsPush(gc, 0)
+	port.CellsPush(gc, i)
+	port.CellsPush(gc, -1)
+	port.CellsPush(gc, -1)
+	port.CellsPush(gc, 0)
+	return i
+}
+
+func gfBuild(gc *port.Cells, ctx *port.Cells, og *port.Cells, ofl *port.Cells, rules *port.Cells, prims *port.Cells, oblocks *port.Cells) int32 {
+	// The page's candidates, vector first (the fused rows of the vector-only pass, in their order), then the tracer's rules, its tints and the edges of its
+	// rectangles, then OCR's line blocks. Answers how many.
+	var i int32 = 0
+	var f int32 = 0
+	var sw int32 = 0
+	var half int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var ea int32 = 0
+	port.CellsDrop(gc, 0)
+	i = port.CellsAt(ctx, xV0)
+	for i < port.CellsAt(ctx, xV1) {
+		f = port.CellsAt(og, (i*24)+18)
+		ea = evidence.EaPaths()
+		if (f & glayer.GqFromImage()) != 0 {
+			ea = evidence.EaImages()
+		}
+		gfCandRule(gc, 1, ea, i, port.CellsAt(og, (i*24)+22), port.CellsAt(og, (i*24)+5), port.CellsAt(og, (i*24)+6), port.CellsAt(og, (i*24)+7), port.CellsAt(og, (i*24)+8), port.CellsAt(og, (i*24)+9), port.CellsAt(og, (i*24)+12), port.CellsAt(og, (i*24)+13), f, -1, gfEq(port.CellsAt(og, (i*24)+16), 501))
+		i += 1
+	}
+	i = port.CellsAt(ctx, xF0)
+	for i < port.CellsAt(ctx, xF1) {
+		gfCandFill(gc, 1, evidence.EaPaths(), i, port.CellsAt(ofl, (i*16)+1), port.CellsAt(ofl, (i*16)+2), port.CellsAt(ofl, (i*16)+3), port.CellsAt(ofl, (i*16)+4), port.CellsAt(ofl, (i*16)+5), port.CellsAt(ofl, (i*16)+11), -1)
+		i += 1
+	}
+	i = port.CellsAt(ctx, xR0)
+	for i < port.CellsAt(ctx, xR1) {
+		gfCandRule(gc, 2, evidence.EaRules(), i, -1, evidence.RlGet(rules, i, evidence.RlfLx0()), evidence.RlGet(rules, i, evidence.RlfLy0()), evidence.RlGet(rules, i, evidence.RlfLx1()), evidence.RlGet(rules, i, evidence.RlfLy1()), evidence.RlGet(rules, i, evidence.RlfThick()), evidence.RlGet(rules, i, evidence.RlfColor()), evidence.RlGet(rules, i, evidence.RlfStyle()), 0, evidence.RlGet(rules, i, evidence.RlfConf()), 0)
+		i += 1
+	}
+	i = port.CellsAt(ctx, xQ0)
+	for i < port.CellsAt(ctx, xQ1) {
+		if evidence.PmGet(prims, i, evidence.PmfKind()) == evidence.PmRect() {
+			f = evidence.PmGet(prims, i, evidence.PmfFlags())
+			x0 = evidence.PmGet(prims, i, evidence.PmfX0())
+			y0 = evidence.PmGet(prims, i, evidence.PmfY0())
+			x1 = evidence.PmGet(prims, i, evidence.PmfX1())
+			y1 = evidence.PmGet(prims, i, evidence.PmfY1())
+			if (f & 8) != 0 {
+				gfCandFill(gc, 2, evidence.EaPrims(), i, x0, y0, x1, y1, evidence.PmGet(prims, i, evidence.PmfColor()), 0, evidence.PmGet(prims, i, evidence.PmfConf()))
+			} else if (f & 2) == 0 {
+				sw = evidence.PmGet(prims, i, evidence.PmfStroke())
+				if sw <= 0 {
+					sw = 100
+				}
+				half = sw / 2
+				gfCandRule(gc, 2, evidence.EaPrims(), i, -1, x0, y0+half, x1, y0+half, sw, evidence.PmGet(prims, i, evidence.PmfColor()), 1, glayer.GqBoxEdge(), evidence.PmGet(prims, i, evidence.PmfConf()), 0)
+				gfCandRule(gc, 2, evidence.EaPrims(), i, -1, x0, y1-half, x1, y1-half, sw, evidence.PmGet(prims, i, evidence.PmfColor()), 1, glayer.GqBoxEdge(), evidence.PmGet(prims, i, evidence.PmfConf()), 0)
+				gfCandRule(gc, 2, evidence.EaPrims(), i, -1, x0+half, y0, x0+half, y1, sw, evidence.PmGet(prims, i, evidence.PmfColor()), 1, glayer.GqBoxEdge(), evidence.PmGet(prims, i, evidence.PmfConf()), 0)
+				gfCandRule(gc, 2, evidence.EaPrims(), i, -1, x1-half, y0, x1-half, y1, sw, evidence.PmGet(prims, i, evidence.PmfColor()), 1, glayer.GqBoxEdge(), evidence.PmGet(prims, i, evidence.PmfConf()), 0)
+			}
+		}
+		i += 1
+	}
+	i = port.CellsAt(ctx, xB0)
+	for i < port.CellsAt(ctx, xB1) {
+		if (evidence.ObGet(oblocks, i, evidence.ObfKind()) == evidence.ObBlock()) && (evidence.ObGet(oblocks, i, evidence.ObfBtype()) == 3) {
+			x0 = evidence.ObGet(oblocks, i, evidence.ObfX0())
+			y0 = evidence.ObGet(oblocks, i, evidence.ObfY0())
+			x1 = evidence.ObGet(oblocks, i, evidence.ObfX1())
+			y1 = evidence.ObGet(oblocks, i, evidence.ObfY1())
+			if (x1 - x0) >= (y1 - y0) {
+				gfCandRule(gc, 4, evidence.EaOblocks(), i, -1, x0, (y0+y1)/2, x1, (y0+y1)/2, y1-y0, -1, 1, 0, -1, 0)
+			} else {
+				gfCandRule(gc, 4, evidence.EaOblocks(), i, -1, (x0+x1)/2, y0, (x0+x1)/2, y1, x1-x0, -1, 1, 0, -1, 0)
+			}
+		}
+		i += 1
+	}
+	return port.CellsLen(gc) / 24
+}
+
+func gfA0(gc *port.Cells, c int32) int32 {
+	// A rule's extent along its axis, its least coordinate (x for a horizontal rule, y for a vertical one).
+	if gcat(gc, c, cCls) == glayer.GoH() {
+		return gfMin(gcat(gc, c, cEx0), gcat(gc, c, cEx1))
+	}
+	return gfMin(gcat(gc, c, cEy0), gcat(gc, c, cEy1))
+}
+
+func gfA1(gc *port.Cells, c int32) int32 {
+	// ... its greatest.
+	if gcat(gc, c, cCls) == glayer.GoH() {
+		return gfMax(gcat(gc, c, cEx0), gcat(gc, c, cEx1))
+	}
+	return gfMax(gcat(gc, c, cEy0), gcat(gc, c, cEy1))
+}
+
+func gfPerpOf(gc *port.Cells, c int32) int32 {
+	// The position of a rule's centre line across its axis.
+	if gcat(gc, c, cCls) == glayer.GoH() {
+		return (gcat(gc, c, cEy0) + gcat(gc, c, cEy1)) / 2
+	}
+	return (gcat(gc, c, cEx0) + gcat(gc, c, cEx1)) / 2
+}
+
+func gfNearRule(gc *port.Cells, a int32, b int32) int32 {
+	// SPEC 9.9: two rules are near when they have the same orientation, their angles differ by at most `gf-angle`, the distance between their
+	// centre lines is at most half the sum of their thicknesses plus `gf-perp`, and their extents along the axis overlap or come within `gf-gap`.
+	var ca int32 = gcat(gc, a, cCls)
+	var d int32 = gfAbs(gcat(gc, a, cAng) - gcat(gc, b, cAng))
+	if ca != gcat(gc, b, cCls) {
+		return 0
+	}
+	if ca == glayer.GoSlant() {
+		return 0
+	}
+	if d > 9000 {
+		d = 18000 - d
+	}
+	if d > fuserules.FgAngle() {
+		return 0
+	}
+	if gfAbs(gfPerpOf(gc, a)-gfPerpOf(gc, b)) > (((gcat(gc, a, cT) + gcat(gc, b, cT)) / 2) + fuserules.FgPerp()) {
+		return 0
+	}
+	if gfA0(gc, b) > (gfA1(gc, a) + fuserules.FgGap()) {
+		return 0
+	}
+	if gfA0(gc, a) > (gfA1(gc, b) + fuserules.FgGap()) {
+		return 0
+	}
+	return 1
+}
+
+func gfNear(gc *port.Cells, a int32, b int32) int32 {
+	// Two candidates of the same kind are near: rules by `gf-near-rule`, fills at box IoU at least `gf-fill-iou`.
+	if gcat(gc, a, cKind) == 1 {
+		return gfNearRule(gc, a, b)
+	}
+	if gfIou(gcat(gc, a, cX0), gcat(gc, a, cY0), gcat(gc, a, cX1), gcat(gc, a, cY1), gcat(gc, b, cX0), gcat(gc, b, cY0), gcat(gc, b, cX1), gcat(gc, b, cY1)) >= fuserules.FgFillIou() {
+		return 1
+	}
+	return 0
+}
+
+func gfFind(gc *port.Cells, i int32) int32 {
+	// The root of candidate i's group (path compression).
+	var r int32 = i
+	var p int32 = i
+	var nx int32 = 0
+	for gcat(gc, r, cUf) != r {
+		r = gcat(gc, r, cUf)
+	}
+	for gcat(gc, p, cUf) != r {
+		nx = gcat(gc, p, cUf)
+		gcput(gc, p, cUf, r)
+		p = nx
+	}
+	return r
+}
+
+func gfUnion(gc *port.Cells, a int32, b int32) int32 {
+	// Join two candidates' groups; the smaller root wins.
+	var ra int32 = gfFind(gc, a)
+	var rb int32 = gfFind(gc, b)
+	if ra < rb {
+		gcput(gc, rb, cUf, ra)
+	}
+	if rb < ra {
+		gcput(gc, ra, cUf, rb)
+	}
+	return 0
+}
+
+func gfPairs(gc *port.Cells, n int32) int32 {
+	// Every near pair of candidates of different sources, into groups: each tracer or OCR candidate against every vector one and the later ones of
+	// the others (the grid of D221 only speeds this up on a page of thousands of rules and no tracer; the pairs are the same). Answers 0.
+	var i int32 = 0
+	var j int32 = 0
+	for i < n {
+		if gcat(gc, i, cSrc) != 1 {
+			j = 0
+			for j < n {
+				if gcat(gc, j, cSrc) != gcat(gc, i, cSrc) {
+					if (gcat(gc, j, cSrc) == 1) || (j > i) {
+						if gcat(gc, i, cKind) == gcat(gc, j, cKind) {
+							if gfNear(gc, i, j) == 1 {
+								gfUnion(gc, i, j)
+							}
+						}
+					}
+				}
+				j += 1
+			}
+		}
+		i += 1
+	}
+	return 0
+}
+
+func gfOrder(gc *port.Cells, aux *port.Cells, n int32) int32 {
+	// Settle the groups and sort the candidates by root (ascending, then by index): `aux` has eight arrays of n cells, the counts of each root (A_CNT), where
+	// its members start (A_START), the members in order (A_ORD), its `ggp` row (A_GID, -1), and room for the sweeps (the other two, A_EP and A_BITS, 2 n each).
+	var i int32 = 0
+	var r int32 = 0
+	var s int32 = 0
+	var c int32 = 0
+	port.CellsDrop(aux, 0)
+	for i < (n * 8) {
+		port.CellsPush(aux, 0)
+		i += 1
+	}
+	i = 0
+	for i < n {
+		r = gfFind(gc, i)
+		gcput(gc, i, cUf, r)
+		port.CellsSet(aux, (n*aCnt)+r, port.CellsAt(aux, (n*aCnt)+r)+1)
+		i += 1
+	}
+	i = 0
+	for i < n {
+		port.CellsSet(aux, (n*aStart)+i, s)
+		s += port.CellsAt(aux, (n*aCnt)+i)
+		port.CellsSet(aux, (n*aGid)+i, -1)
+		i += 1
+	}
+	i = 0
+	for i < n {
+		r = gcat(gc, i, cUf)
+		c = port.CellsAt(aux, (n*aBits)+r)
+		port.CellsSet(aux, (n*aOrd)+(port.CellsAt(aux, (n*aStart)+r)+c), i)
+		port.CellsSet(aux, (n*aBits)+r, c+1)
+		i += 1
+	}
+	return 0
+}
+
+func gfRefsRun(gc *port.Cells, aux *port.Cells, n int32, s int32, e int32, src int32, og *port.Cells, ofl *port.Cells, refs *port.Cells, ggp *port.Cells, g int32, slot int32) int32 {
+	// The members of source `src` of the group whose members are `aux`'s A_ORD[s, e), as a run of `refs` and the cells (2 + 2 slot, 3 + 2 slot) of its
+	// `ggp` row. A vector member is named by the `paths` (or `images`) row its fused row came from; the others by their own rows. Answers the count.
+	var k int32 = s
+	var c int32 = 0
+	var cnt int32 = 0
+	var first int32 = -1
+	var row int32 = 0
+	for k < e {
+		c = port.CellsAt(aux, (n*aOrd)+k)
+		if gcat(gc, c, cSrc) == src {
+			if first < 0 {
+				first = port.CellsLen(refs) / 2
+			}
+			row = gcat(gc, c, cRow)
+			if src == 1 {
+				if gcat(gc, c, cKind) == 1 {
+					row = port.CellsAt(og, (row*24)+21)
+				} else {
+					row = port.CellsAt(ofl, (row*16)+14)
+				}
+			}
+			evidence.RfAdd(refs, gcat(gc, c, cEa), row)
+			cnt += 1
+		}
+		k += 1
+	}
+	glayer.GgpSet(ggp, g, 2+(2*slot), first)
+	glayer.GgpSet(ggp, g, 3+(2*slot), cnt)
+	return cnt
+}
+
+func gfGroups(gc *port.Cells, aux *port.Cells, n int32, ctx *port.Cells, og *port.Cells, ofl *port.Cells, ggp *port.Cells, refs *port.Cells) int32 {
+	// A `ggp` row for every group of the page, in the order of its first member, with its three member runs; the group's flags: 1 an exactly known visible vector
+	// rule, 2 a tracer member, 4 an OCR member. The row is each root's A_GID. Answers the groups made.
+	var r int32 = 0
+	var s int32 = 0
+	var e int32 = 0
+	var g int32 = 0
+	var k int32 = 0
+	var c int32 = 0
+	var nt int32 = 0
+	var no int32 = 0
+	var nx int32 = 0
+	var made int32 = 0
+	var kind int32 = 0
+	for r < n {
+		if port.CellsAt(aux, (n*aCnt)+r) > 0 {
+			s = port.CellsAt(aux, (n*aStart)+r)
+			e = s + port.CellsAt(aux, (n*aCnt)+r)
+			kind = glayer.GkRule()
+			if gcat(gc, r, cKind) == 2 {
+				kind = glayer.GkFill()
+			}
+			g = glayer.GgpNew(ggp, port.CellsAt(ctx, xPage), kind)
+			gfRefsRun(gc, aux, n, s, e, 1, og, ofl, refs, ggp, g, 0)
+			nt = gfRefsRun(gc, aux, n, s, e, 2, og, ofl, refs, ggp, g, 1)
+			no = gfRefsRun(gc, aux, n, s, e, 4, og, ofl, refs, ggp, g, 2)
+			nx = 0
+			k = s
+			for k < e {
+				c = port.CellsAt(aux, (n*aOrd)+k)
+				if (gcat(gc, c, cSrc) == 1) && ((gcat(gc, c, cKind) == 1) && (gcat(gc, c, cExact) == 1)) {
+					nx = 1
+				}
+				k += 1
+			}
+			glayer.GgpSet(ggp, g, 8, (nx+(2*gfMin(nt, 1)))+(4*gfMin(no, 1)))
+			port.CellsSet(aux, (n*aGid)+r, g)
+			made += 1
+		}
+		r += 1
+	}
+	return made
+}
+
+func gfUnit(un *port.Cells, gid int32, ukind int32) int32 {
+	// Append a unit; answers its row.
+	var u int32 = port.CellsLen(un) / 24
+	var i int32 = 0
+	for i < 24 {
+		port.CellsPush(un, 0)
+		i += 1
+	}
+	port.CellsSet(un, u*24, gid)
+	port.CellsSet(un, (u*24)+1, ukind)
+	port.CellsSet(un, (u*24)+9, -1)
+	port.CellsSet(un, (u*24)+15, -1)
+	return u
+}
+
+func unat(un *port.Cells, u int32, f int32) int32 {
+	return port.CellsAt(un, (u*24)+f)
+}
+
+func unput(un *port.Cells, u int32, f int32, v int32) int32 {
+	port.CellsSet(un, (u*24)+f, v)
+	return 0
+}
+
+func gfTraceOnly(bits int32) int32 {
+	// 1 for an elementary interval only the tracer covers (not a vector rule, exactly known or not).
+	if ((bits & 8) != 0) && ((bits & 3) == 0) {
+		return 1
+	}
+	return 0
+}
+
+func gfRunUnit(gc *port.Cells, aux *port.Cells, un *port.Cells, n int32, s int32, e int32, gid int32, cls int32, vecexact int32, q0 int32, q1 int32) int32 {
+	// One run of elementary intervals `q0..q1` that only the tracer covers, as a unit: the tracer members it overlaps give its position (their mean), its
+	// thickness (the greatest), and the colour, style and confidence of the longest overlap; when ONE member is the whole run its centre line is copied.
+	var epb int32 = n * aEp
+	var bitb int32 = n * aBits
+	var ordb int32 = n * aOrd
+	var lo int32 = port.CellsAt(aux, epb+q0)
+	var hi int32 = port.CellsAt(aux, epb+(q1+1))
+	var u int32 = gfUnit(un, gid, 2)
+	var j int32 = s
+	var c int32 = 0
+	var ov int32 = 0
+	var best int32 = -1
+	var bestov int32 = 0
+	var cnt int32 = 0
+	var psum int32 = 0
+	var thick int32 = 0
+	var q int32 = q0
+	var oc int32 = 0
+	var perp int32 = 0
+	for j < e {
+		c = port.CellsAt(aux, ordb+j)
+		if gcat(gc, c, cSrc) == 2 {
+			ov = gfMin(hi, gfA1(gc, c)) - gfMax(lo, gfA0(gc, c))
+			if ov > 0 {
+				cnt += 1
+				psum += gfPerpOf(gc, c)
+				thick = gfMax(thick, gcat(gc, c, cT))
+				if ov > bestov {
+					bestov = ov
+					best = c
+				}
+			}
+		}
+		j += 1
+	}
+	for q <= q1 {
+		if (port.CellsAt(aux, bitb+q) & 16) != 0 {
+			oc += port.CellsAt(aux, epb+(q+1)) - port.CellsAt(aux, epb+q)
+		}
+		q += 1
+	}
+	perp = psum / gfMax(cnt, 1)
+	unput(un, u, 2, cls)
+	unput(un, u, 3, lo)
+	unput(un, u, 4, hi)
+	unput(un, u, 5, perp)
+	unput(un, u, 6, thick)
+	unput(un, u, 10, (oc*1000)/gfMax(hi-lo, 1))
+	unput(un, u, 16, vecexact)
+	if best >= 0 {
+		unput(un, u, 7, gcat(gc, best, cCol))
+		unput(un, u, 8, gcat(gc, best, cSty))
+		unput(un, u, 9, gcat(gc, best, cConf))
+	}
+	if (cnt == 1) && ((lo == gfA0(gc, best)) && (hi == gfA1(gc, best))) {
+		unput(un, u, 11, gcat(gc, best, cEx0))
+		unput(un, u, 12, gcat(gc, best, cEy0))
+		unput(un, u, 13, gcat(gc, best, cEx1))
+		unput(un, u, 14, gcat(gc, best, cEy1))
+		unput(un, u, 15, best)
+	} else if cls == glayer.GoH() {
+		unput(un, u, 11, lo)
+		unput(un, u, 12, perp)
+		unput(un, u, 13, hi)
+		unput(un, u, 14, perp)
+	} else {
+		unput(un, u, 11, perp)
+		unput(un, u, 12, lo)
+		unput(un, u, 13, perp)
+		unput(un, u, 14, hi)
+	}
+	return u
+}
+
+func gfSweep(gc *port.Cells, aux *port.Cells, un *port.Cells, n int32, s int32, e int32, gid int32, nv int32, vecexact int32) int32 {
+	// The group of rules whose members are `aux`'s A_ORD[s, e): the endpoints of every member along the axis cut it into ELEMENTARY INTERVALS, each with the
+	// kinds of member that cover it (bits: 1 an exactly known visible vector rule, 2 another vector rule, 8 the tracer, 16 an OCR line block). Every vector rule
+	// gets its WITNESS (`C_WIT`): the per mille of its length the tracer covers; every tracer member whether the group has a vector one (`C_EXACT`); and each
+	// run of intervals the tracer covers and no vector rule does becomes a unit. Gaps are never bridged: an interval nobody covers ends a run.
+	var k int32 = e - s
+	var cls int32 = gcat(gc, port.CellsAt(aux, (n*aOrd)+s), cCls)
+	var epb int32 = n * aEp
+	var bitb int32 = n * aBits
+	var ordb int32 = n * aOrd
+	var j int32 = 0
+	var m int32 = 1
+	var q int32 = 0
+	var qe int32 = 0
+	var c int32 = 0
+	var v int32 = 0
+	var w int32 = 0
+	var bits int32 = 0
+	var lo int32 = 0
+	var hi int32 = 0
+	var a0 int32 = 0
+	var a1 int32 = 0
+	var cov int32 = 0
+	for j < k {
+		c = port.CellsAt(aux, ordb+(s+j))
+		port.CellsSet(aux, epb+(j*2), gfA0(gc, c))
+		port.CellsSet(aux, epb+((j*2)+1), gfA1(gc, c))
+		j += 1
+	}
+	j = 1
+	for j < (k * 2) {
+		v = port.CellsAt(aux, epb+j)
+		w = j - 1
+		for (w >= 0) && (port.CellsAt(aux, epb+w) > v) {
+			port.CellsSet(aux, epb+(w+1), port.CellsAt(aux, epb+w))
+			w -= 1
+		}
+		port.CellsSet(aux, epb+(w+1), v)
+		j += 1
+	}
+	j = 1
+	for j < (k * 2) {
+		if port.CellsAt(aux, epb+j) != port.CellsAt(aux, epb+(m-1)) {
+			port.CellsSet(aux, epb+m, port.CellsAt(aux, epb+j))
+			m += 1
+		}
+		j += 1
+	}
+	for q < (m - 1) {
+		lo = port.CellsAt(aux, epb+q)
+		hi = port.CellsAt(aux, epb+(q+1))
+		bits = 0
+		j = 0
+		for j < k {
+			c = port.CellsAt(aux, ordb+(s+j))
+			if (gfA0(gc, c) <= lo) && (gfA1(gc, c) >= hi) {
+				if gcat(gc, c, cSrc) == 1 {
+					if gcat(gc, c, cExact) == 1 {
+						bits |= 1
+					} else {
+						bits |= 2
+					}
+				}
+				if gcat(gc, c, cSrc) == 2 {
+					bits |= 8
+				}
+				if gcat(gc, c, cSrc) == 4 {
+					bits |= 16
+				}
+			}
+			j += 1
+		}
+		port.CellsSet(aux, bitb+q, bits)
+		q += 1
+	}
+	j = 0
+	for j < k {
+		c = port.CellsAt(aux, ordb+(s+j))
+		if gcat(gc, c, cSrc) == 1 {
+			a0 = gfA0(gc, c)
+			a1 = gfA1(gc, c)
+			cov = 0
+			q = 0
+			for q < (m - 1) {
+				if (port.CellsAt(aux, epb+q) >= a0) && (port.CellsAt(aux, epb+(q+1)) <= a1) {
+					if (port.CellsAt(aux, bitb+q) & 8) != 0 {
+						cov += port.CellsAt(aux, epb+(q+1)) - port.CellsAt(aux, epb+q)
+					}
+				}
+				q += 1
+			}
+			if a1 > a0 {
+				gcput(gc, c, cWit, (cov*1000)/(a1-a0))
+			} else {
+				gcput(gc, c, cWit, 0)
+			}
+		}
+		if gcat(gc, c, cSrc) == 2 {
+			gcput(gc, c, cExact, gfMin(nv, 1))
+		}
+		j += 1
+	}
+	q = 0
+	for q < (m - 1) {
+		if gfTraceOnly(port.CellsAt(aux, bitb+q)) == 1 {
+			qe = q
+			for ((qe + 1) < (m - 1)) && (gfTraceOnly(port.CellsAt(aux, bitb+(qe+1))) == 1) {
+				qe += 1
+			}
+			gfRunUnit(gc, aux, un, n, s, e, gid, cls, vecexact, q, qe)
+			q = qe + 1
+		} else {
+			q += 1
+		}
+	}
+	return 0
+}
+
+func gfSweeps(gc *port.Cells, aux *port.Cells, un *port.Cells, n int32) int32 {
+	// Every group of the page in turn: a group of rules is swept (`gf-sweep`) when the tracer is in it; a vector rule with no tracer near it has witness 0; a
+	// slanted one is figure material and is not swept; OCR line blocks alone are a unit of kind 5. A group of fills: a vector fill's `C_WIT` is the candidate
+	// of a tint over it (-1: none), and a tint with no vector fill is a unit of kind 4. Answers the units.
+	var r int32 = 0
+	var s int32 = 0
+	var e int32 = 0
+	var k int32 = 0
+	var c int32 = 0
+	var nv int32 = 0
+	var nt int32 = 0
+	var no int32 = 0
+	var nx int32 = 0
+	var tint int32 = -1
+	var u int32 = 0
+	port.CellsDrop(un, 0)
+	for r < n {
+		if port.CellsAt(aux, (n*aCnt)+r) > 0 {
+			s = port.CellsAt(aux, (n*aStart)+r)
+			e = s + port.CellsAt(aux, (n*aCnt)+r)
+			nv = 0
+			nt = 0
+			no = 0
+			nx = 0
+			tint = -1
+			k = s
+			for k < e {
+				c = port.CellsAt(aux, (n*aOrd)+k)
+				if gcat(gc, c, cSrc) == 1 {
+					nv += 1
+					if gcat(gc, c, cExact) == 1 {
+						nx = 1
+					}
+				}
+				if gcat(gc, c, cSrc) == 2 {
+					nt += 1
+					if tint < 0 {
+						tint = c
+					}
+				}
+				if gcat(gc, c, cSrc) == 4 {
+					no += 1
+				}
+				k += 1
+			}
+			if gcat(gc, r, cKind) == 1 {
+				if gcat(gc, r, cCls) == glayer.GoSlant() {
+					k = s
+					for k < e {
+						c = port.CellsAt(aux, (n*aOrd)+k)
+						if gcat(gc, c, cSrc) == 1 {
+							gcput(gc, c, cWit, 0)
+						}
+						k += 1
+					}
+				} else if (nt == 0) && (nv == 0) {
+					u = gfUnit(un, port.CellsAt(aux, (n*aGid)+r), 5)
+					unput(un, u, 16, 0)
+				} else if nt == 0 {
+					k = s
+					for k < e {
+						c = port.CellsAt(aux, (n*aOrd)+k)
+						if gcat(gc, c, cSrc) == 1 {
+							gcput(gc, c, cWit, 0)
+						}
+						k += 1
+					}
+				} else {
+					gfSweep(gc, aux, un, n, s, e, port.CellsAt(aux, (n*aGid)+r), nv, nx)
+				}
+			} else {
+				k = s
+				for k < e {
+					c = port.CellsAt(aux, (n*aOrd)+k)
+					if gcat(gc, c, cSrc) == 1 {
+						gcput(gc, c, cWit, tint)
+					}
+					if (gcat(gc, c, cSrc) == 2) && (nv == 0) {
+						u = gfUnit(un, port.CellsAt(aux, (n*aGid)+r), 4)
+						unput(un, u, 11, gcat(gc, c, cX0))
+						unput(un, u, 12, gcat(gc, c, cY0))
+						unput(un, u, 13, gcat(gc, c, cX1))
+						unput(un, u, 14, gcat(gc, c, cY1))
+						unput(un, u, 7, gcat(gc, c, cCol))
+						unput(un, u, 9, gcat(gc, c, cConf))
+						unput(un, u, 15, c)
+					}
+					k += 1
+				}
+			}
+		}
+		r += 1
+	}
+	return port.CellsLen(un) / 24
+}
+
+func gfImageOk(im *port.Cells, m int32) int32 {
+	// 1 for a visible image placement at least `gf-img-min` each way (a region of its own: `emon.health`'s `hh-image-ok`).
+	if evidence.ImGet(im, m, evidence.MfVis()) != 0 {
+		return 0
+	}
+	if (evidence.ImGet(im, m, evidence.MfX1()) - evidence.ImGet(im, m, evidence.MfX0())) < fuserules.FgImgMin() {
+		return 0
+	}
+	if (evidence.ImGet(im, m, evidence.MfY1()) - evidence.ImGet(im, m, evidence.MfY0())) < fuserules.FgImgMin() {
+		return 0
+	}
+	return 1
+}
+
+func gfRegionOf(ctx *port.Cells, im *port.Cells, cx int32, cy int32) int32 {
+	// The `images` row of the visible placement of the page that holds the point, else -1 (R0).
+	var m int32 = port.CellsAt(ctx, xI0)
+	for m < port.CellsAt(ctx, xI1) {
+		if gfImageOk(im, m) == 1 {
+			if ((cx >= evidence.ImGet(im, m, evidence.MfX0())) && (cx < evidence.ImGet(im, m, evidence.MfX1()))) && ((cy >= evidence.ImGet(im, m, evidence.MfY0())) && (cy < evidence.ImGet(im, m, evidence.MfY1()))) {
+				return m
+			}
+		}
+		m += 1
+	}
+	return -1
+}
+
+func gfTextShare(ctx *port.Cells, words *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// The per mille of the box that lies in the page's text-layer word boxes (their intersections added, at most 1000). Areas in tenths of a point.
+	var area int32 = gfMax(1, gfMax(0, x1-x0)/10) * gfMax(1, gfMax(0, y1-y0)/10)
+	var w int32 = port.CellsAt(ctx, xT0)
+	var inter int32 = 0
+	var iw int32 = 0
+	var ih int32 = 0
+	for w < port.CellsAt(ctx, xT1) {
+		iw = gfMax(0, gfMin(x1, evidence.WdGet(words, w, evidence.HdX1()))-gfMax(x0, evidence.WdGet(words, w, evidence.HdX0()))) / 10
+		ih = gfMax(0, gfMin(y1, evidence.WdGet(words, w, evidence.HdY1()))-gfMax(y0, evidence.WdGet(words, w, evidence.HdY0()))) / 10
+		inter += iw * ih
+		w += 1
+	}
+	return gfMin(1000, inter/gfMax(1, area/1000))
+}
+
+func gfRuleGlyph(cp int32) int32 {
+	// 1 for a code point a scanned border is read as: | l I 1 ! [ ] _ - and U+2010-U+2015 (SPEC 8.4.5, column 31).
+	if (cp == 124) || ((cp == 108) || ((cp == 73) || ((cp == 49) || ((cp == 33) || ((cp == 91) || ((cp == 93) || ((cp == 95) || (cp == 45)))))))) {
+		return 1
+	}
+	if (cp >= 8208) && (cp <= 8213) {
+		return 1
+	}
+	return 0
+}
+
+func gfWordRuleLike(owords *port.Cells, etext *port.Cells, w int32) int32 {
+	// 1 for an OCR word of one or two code points, all rule glyphs.
+	var wl int32 = evidence.OwGet(owords, w, evidence.HdTlen())
+	var st int32 = evidence.OwGet(owords, w, evidence.HdTstart())
+	var k int32 = 0
+	if (wl < 1) || (wl > 2) {
+		return 0
+	}
+	for k < wl {
+		if gfRuleGlyph(port.CellsAt(etext, st+k)) == 0 {
+			return 0
+		}
+		k += 1
+	}
+	return 1
+}
+
+func gfWordPlain(owords *port.Cells, etext *port.Cells, w int32) int32 {
+	// 1 for an OCR word of three or more code points that is not made of rule glyphs alone.
+	var wl int32 = evidence.OwGet(owords, w, evidence.HdTlen())
+	var st int32 = evidence.OwGet(owords, w, evidence.HdTstart())
+	var k int32 = 0
+	if wl < 3 {
+		return 0
+	}
+	for k < wl {
+		if gfRuleGlyph(port.CellsAt(etext, st+k)) == 0 {
+			return 1
+		}
+		k += 1
+	}
+	return 0
+}
+
+func gfInOword(ctx *port.Cells, owords *port.Cells, etext *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// The most (per mille) of the box that lies inside ONE OCR word of three or more code points that is not made of rule glyphs (row 533); 0 for none.
+	var w int32 = port.CellsAt(ctx, xW0)
+	var best int32 = 0
+	var v int32 = 0
+	for w < port.CellsAt(ctx, xW1) {
+		if gfWordPlain(owords, etext, w) == 1 {
+			v = gfInsideShare(x0, y0, x1, y1, evidence.OwGet(owords, w, evidence.HdX0()), evidence.OwGet(owords, w, evidence.HdY0()), evidence.OwGet(owords, w, evidence.HdX1()), evidence.OwGet(owords, w, evidence.HdY1()))
+			if v > best {
+				best = v
+			}
+		}
+		w += 1
+	}
+	return best
+}
+
+func gfRegionScore(hl *port.Cells, page int32, subject int32) int32 {
+	// The score of the graphics region of `emon.health` (`plh-region`) for a page and a subject (-1 R0, else the `images` row); -1 when there is none.
+	var n int32 = port.CellsLen(hl) / 12
+	var i int32 = 0
+	for i < n {
+		if (player.HlGet(hl, i, 0) == player.PlhRegion()) && ((player.HlGet(hl, i, 1) == page) && (player.HlGet(hl, i, 2) == subject)) {
+			return player.HlGet(hl, i, 9)
+		}
+		i += 1
+	}
+	return -1
+}
+
+func gfHealth(ctx *port.Cells, gc *port.Cells, n int32, im *port.Cells, rules *port.Cells, words *port.Cells, hl *port.Cells) int32 {
+	// The page's two figures that depend on how the sources meet (SPEC 9.9 `Health per region`), then `emon.health`'s rows. THE VECTOR WITNESS (R0 of a
+	// born-digital page): the length of the exactly known visible vector rules (horizontal and vertical) that the tracer witnesses, over their length; -1
+	// without any. THE TRACER'S PRECISION (R0 of a born-digital page): the length of the tracer's rules a vector rule explains (its group has one) or that lie
+	// in text-layer word boxes (half or more of their box), over all of theirs; -1 without any. A raster page has neither. Answers the rows of `hl` made.
+	var i int32 = 0
+	var rlen int32 = 0
+	var vl int32 = 0
+	var vw int32 = 0
+	var tl int32 = 0
+	var te int32 = 0
+	var witness int32 = -1
+	var precision int32 = -1
+	var cls int32 = 0
+	if port.CellsAt(ctx, xKind) == 1 {
+		for i < n {
+			cls = gcat(gc, i, cCls)
+			if (gcat(gc, i, cKind) == 1) && ((cls == glayer.GoH()) || (cls == glayer.GoV())) {
+				if gfRegionOf(ctx, im, (gcat(gc, i, cEx0)+gcat(gc, i, cEx1))/2, (gcat(gc, i, cEy0)+gcat(gc, i, cEy1))/2) < 0 {
+					rlen = gfA1(gc, i) - gfA0(gc, i)
+					if (gcat(gc, i, cSrc) == 1) && (gcat(gc, i, cExact) == 1) {
+						vl += rlen
+						vw += (rlen * gfMax(0, gcat(gc, i, cWit))) / 1000
+					}
+					if gcat(gc, i, cSrc) == 2 {
+						tl += rlen
+						if gcat(gc, i, cExact) == 1 {
+							te += rlen
+						} else if gfTextShare(ctx, words, gcat(gc, i, cX0), gcat(gc, i, cY0), gcat(gc, i, cX1), gcat(gc, i, cY1)) >= 500 {
+							te += rlen
+						}
+					}
+				}
+			}
+			i += 1
+		}
+	}
+	if vl > 0 {
+		witness = (vw * 1000) / vl
+	}
+	if tl > 0 {
+		precision = (te * 1000) / tl
+	}
+	port.CellsSet(ctx, xWit, witness)
+	port.CellsSet(ctx, xPrec, precision)
+	return health.HlRegions(port.CellsAt(ctx, xPage), im, rules, witness, precision, hl)
+}
+
+func gfCopyRow(og *port.Cells, row int32, grl *port.Cells) int32 {
+	// Append a copy of row `row` of the vector-only rules to `grl`; answers its row.
+	var r int32 = port.CellsLen(grl) / 24
+	var k int32 = 0
+	for k < 24 {
+		port.CellsPush(grl, port.CellsAt(og, (row*24)+k))
+		k += 1
+	}
+	return r
+}
+
+func gfFirstTrace(gc *port.Cells, aux *port.Cells, n int32, root int32) int32 {
+	// The first tracer member of the group of `root` (candidate index), -1 when it has none.
+	var k int32 = port.CellsAt(aux, (n*aStart)+root)
+	var e int32 = port.CellsAt(aux, (n*aStart)+root) + port.CellsAt(aux, (n*aCnt)+root)
+	var c int32 = 0
+	for k < e {
+		c = port.CellsAt(aux, (n*aOrd)+k)
+		if gcat(gc, c, cSrc) == 2 {
+			return c
+		}
+		k += 1
+	}
+	return -1
+}
+
+func gfEmitVecRules(ctx *port.Cells, gc *port.Cells, n int32, aux *port.Cells, og *port.Cells, im *port.Cells, hl *port.Cells, ggp *port.Cells, grl *port.Cells, fx *port.Cells, gfa *port.Cells, gv *port.Cells) int32 {
+	// Every vector rule of the page, in order, through block 500: kept (with the row's number, confidence and flags, `trace` among its sources when the tracer
+	// witnessed it, the tracer's colour when its own is -1 and the row is 512) or dropped (513: a row of `gfa`, for the ledger). Answers the rows kept.
+	var page int32 = port.CellsAt(ctx, xPage)
+	var kind int32 = port.CellsAt(ctx, xKind)
+	var i int32 = 0
+	var root int32 = 0
+	var gid int32 = 0
+	var r int32 = 0
+	var fr int32 = 0
+	var rg int32 = 0
+	var t int32 = -1
+	var kept int32 = 0
+	var num int32 = 0
+	var orow int32 = 0
+	for i < n {
+		if (gcat(gc, i, cKind) == 1) && (gcat(gc, i, cSrc) == 1) {
+			root = gcat(gc, i, cUf)
+			gid = port.CellsAt(aux, (n*aGid)+root)
+			rg = gfRegionOf(ctx, im, (gcat(gc, i, cEx0)+gcat(gc, i, cEx1))/2, (gcat(gc, i, cEy0)+gcat(gc, i, cEy1))/2)
+			gfGvReset(gv)
+			port.CellsSet(gv, 100, 1)
+			port.CellsSet(gv, 101, gcat(gc, i, cExact))
+			port.CellsSet(gv, 102, 1-gcat(gc, i, cExact))
+			port.CellsSet(gv, 103, 0)
+			port.CellsSet(gv, 108, kind)
+			port.CellsSet(gv, 117, gcat(gc, i, cWit))
+			port.CellsSet(gv, 118, glayer.GgpGet(ggp, gid, 8)&1)
+			if rg < 0 {
+				port.CellsSet(gv, 110, port.CellsAt(ctx, xWit))
+			}
+			port.CellsSet(gv, 111, port.CellsAt(ctx, xPrec))
+			fr = fuserules.FrDecideBlock(gv, 500)
+			gfExplain(fx, gid, fr, gv)
+			orow = gcat(gc, i, cRow)
+			if fuserules.FrWinner(fr) == 0 {
+				if fuserules.FrReason(fr) == 12 {
+					port.CellsPush(gfa, page)
+					port.CellsPush(gfa, port.CellsAt(og, (orow*24)+1))
+					port.CellsPush(gfa, port.CellsAt(og, (orow*24)+2))
+					port.CellsPush(gfa, port.CellsAt(og, (orow*24)+3))
+					port.CellsPush(gfa, port.CellsAt(og, (orow*24)+4))
+					port.CellsPush(gfa, fuserules.FrReason(fr))
+				}
+			} else {
+				r = gfCopyRow(og, orow, grl)
+				num = fuserules.FrNumber(fr)
+				glayer.GrlSet(grl, r, 16, num)
+				glayer.GrlSet(grl, r, 17, fuserules.FrConf(fr))
+				glayer.GrlSet(grl, r, 18, port.CellsAt(og, (orow*24)+18)|fuserules.FrFlags(fr))
+				glayer.GrlSet(grl, r, 19, gid)
+				if (num == 510) || (num == 512) {
+					glayer.GrlSet(grl, r, 14, glayer.GsVector()|glayer.GsTrace())
+				}
+				if (num == 512) && (port.CellsAt(og, (orow*24)+12) < 0) {
+					t = gfFirstTrace(gc, aux, n, root)
+					if t >= 0 {
+						glayer.GrlSet(grl, r, 12, gcat(gc, t, cCol))
+					}
+				}
+				kept += 1
+			}
+		}
+		i += 1
+	}
+	return kept
+}
+
+func gfUnitBox(un *port.Cells, u int32, gv *port.Cells) int32 {
+	// A rule unit's box into gv[0..3]: its run along the axis, its thickness across it.
+	var half int32 = (gfMax(unat(un, u, 6), 1) + 1) / 2
+	if unat(un, u, 2) == glayer.GoH() {
+		port.CellsSet(gv, 0, unat(un, u, 3))
+		port.CellsSet(gv, 1, unat(un, u, 5)-half)
+		port.CellsSet(gv, 2, unat(un, u, 4))
+		port.CellsSet(gv, 3, unat(un, u, 5)+half)
+	} else {
+		port.CellsSet(gv, 0, unat(un, u, 5)-half)
+		port.CellsSet(gv, 1, unat(un, u, 3))
+		port.CellsSet(gv, 2, unat(un, u, 5)+half)
+		port.CellsSet(gv, 3, unat(un, u, 4))
+	}
+	return 0
+}
+
+func gfEmitTraceUnits(ctx *port.Cells, un *port.Cells, im *port.Cells, hl *port.Cells, owords *port.Cells, etext *port.Cells, words *port.Cells, ggp *port.Cells, grl *port.Cells, fx *port.Cells, gv *port.Cells) int32 {
+	// Every rule unit the tracer alone draws (kind 2) and every OCR-only group (kind 5) through block 500. Answers the rules kept.
+	var page int32 = port.CellsAt(ctx, xPage)
+	var kind int32 = port.CellsAt(ctx, xKind)
+	var nu int32 = port.CellsLen(un) / 24
+	var u int32 = 0
+	var rg int32 = 0
+	var fr int32 = 0
+	var r int32 = 0
+	var conf int32 = 0
+	var tconf int32 = 0
+	var score int32 = 0
+	var ocr int32 = 0
+	var kept int32 = 0
+	var gid int32 = 0
+	var src int32 = 0
+	for u < nu {
+		if (unat(un, u, 1) == 2) || (unat(un, u, 1) == 5) {
+			gid = unat(un, u, 0)
+			gfGvReset(gv)
+			if unat(un, u, 1) == 5 {
+				port.CellsSet(gv, 100, 5)
+			} else {
+				port.CellsSet(gv, 100, 2)
+				port.CellsSet(gv, 104, 1)
+				rg = gfRegionOf(ctx, im, (unat(un, u, 11)+unat(un, u, 13))/2, (unat(un, u, 12)+unat(un, u, 14))/2)
+				tconf = unat(un, u, 9)
+				ocr = unat(un, u, 10)
+				if tconf >= 0 {
+					if ocr >= 500 {
+						port.CellsSet(gv, 105, tconf+fuserules.FgOcrBonus())
+					} else {
+						port.CellsSet(gv, 105, tconf)
+					}
+				}
+				port.CellsSet(gv, 106, ocr)
+				if (kind == 1) && (rg >= 0) {
+					port.CellsSet(gv, 107, 1)
+				} else {
+					port.CellsSet(gv, 107, 0)
+				}
+				port.CellsSet(gv, 108, kind)
+				score = gfRegionScore(hl, page, rg)
+				port.CellsSet(gv, 109, score)
+				port.CellsSet(gv, 111, port.CellsAt(ctx, xPrec))
+				port.CellsSet(gv, 118, unat(un, u, 16))
+				gfUnitBox(un, u, gv)
+				if (kind == 1) && (rg < 0) {
+					port.CellsSet(gv, 112, gfTextShare(ctx, words, port.CellsAt(gv, 0), port.CellsAt(gv, 1), port.CellsAt(gv, 2), port.CellsAt(gv, 3)))
+				}
+				port.CellsSet(gv, 113, gfInOword(ctx, owords, etext, port.CellsAt(gv, 0), port.CellsAt(gv, 1), port.CellsAt(gv, 2), port.CellsAt(gv, 3)))
+			}
+			fr = fuserules.FrDecideBlock(gv, 500)
+			gfExplain(fx, gid, fr, gv)
+			if (fuserules.FrWinner(fr) == 2) && (unat(un, u, 1) == 2) {
+				gfUnitBox(un, u, gv)
+				r = glayer.GrlNew(grl, page, port.CellsAt(gv, 0), port.CellsAt(gv, 1), port.CellsAt(gv, 2), port.CellsAt(gv, 3), unat(un, u, 11), unat(un, u, 12), unat(un, u, 13), unat(un, u, 14), gfMax(unat(un, u, 6), 1), unat(un, u, 2))
+				glayer.GrlSet(grl, r, 11, gfAngleOf(unat(un, u, 13)-unat(un, u, 11), unat(un, u, 14)-unat(un, u, 12)))
+				glayer.GrlSet(grl, r, 12, unat(un, u, 7))
+				glayer.GrlSet(grl, r, 13, unat(un, u, 8))
+				src = glayer.GsTrace()
+				if unat(un, u, 10) > 0 {
+					src |= glayer.GsOcr()
+				}
+				glayer.GrlSet(grl, r, 14, src)
+				glayer.GrlSet(grl, r, 15, glayer.GsTrace())
+				glayer.GrlSet(grl, r, 16, fuserules.FrNumber(fr))
+				conf = fuserules.FrConf(fr)
+				if conf < 0 {
+					conf = unat(un, u, 9)
+					if conf < 0 {
+						conf = 500
+					}
+					conf = (conf * gfMax(0, score)) / 1000
+				}
+				glayer.GrlSet(grl, r, 17, conf)
+				glayer.GrlSet(grl, r, 18, fuserules.FrFlags(fr))
+				glayer.GrlSet(grl, r, 19, gid)
+				kept += 1
+			}
+		}
+		u += 1
+	}
+	return kept
+}
+
+func gfEmitFills(ctx *port.Cells, gc *port.Cells, n int32, aux *port.Cells, ofl *port.Cells, un *port.Cells, im *port.Cells, hl *port.Cells, ggp *port.Cells, gfl *port.Cells, fx *port.Cells, gv *port.Cells) int32 {
+	// Every vector fill (a tint over it is its witness) and every tint no vector fill has, through block 500, into `gfl`. Answers the fills kept.
+	var page int32 = port.CellsAt(ctx, xPage)
+	var kind int32 = port.CellsAt(ctx, xKind)
+	var nu int32 = port.CellsLen(un) / 24
+	var i int32 = 0
+	var u int32 = 0
+	var gid int32 = 0
+	var fr int32 = 0
+	var r int32 = 0
+	var rg int32 = 0
+	var t int32 = 0
+	var colour int32 = 0
+	var kept int32 = 0
+	var num int32 = 0
+	var orow int32 = 0
+	for i < n {
+		if (gcat(gc, i, cKind) == 2) && (gcat(gc, i, cSrc) == 1) {
+			gid = port.CellsAt(aux, (n*aGid)+gcat(gc, i, cUf))
+			orow = gcat(gc, i, cRow)
+			t = gcat(gc, i, cWit)
+			gfGvReset(gv)
+			port.CellsSet(gv, 100, 3)
+			port.CellsSet(gv, 108, kind)
+			if gcat(gc, i, cCol) < 0 {
+				port.CellsSet(gv, 115, 0)
+			} else {
+				port.CellsSet(gv, 115, 1)
+			}
+			if t >= 0 {
+				port.CellsSet(gv, 116, 1)
+			} else {
+				port.CellsSet(gv, 116, 0)
+			}
+			fr = fuserules.FrDecideBlock(gv, 500)
+			gfExplain(fx, gid, fr, gv)
+			if fuserules.FrWinner(fr) != 0 {
+				r = port.CellsLen(gfl) / 16
+				u = 0
+				for u < 16 {
+					port.CellsPush(gfl, port.CellsAt(ofl, (orow*16)+u))
+					u += 1
+				}
+				num = fuserules.FrNumber(fr)
+				glayer.GflSet(gfl, r, 9, num)
+				glayer.GflSet(gfl, r, 10, fuserules.FrConf(fr))
+				glayer.GflSet(gfl, r, 11, port.CellsAt(ofl, (orow*16)+11)|fuserules.FrFlags(fr))
+				glayer.GflSet(gfl, r, 12, gid)
+				if t >= 0 {
+					glayer.GflSet(gfl, r, 7, glayer.GsVector()|glayer.GsTrace())
+					if gcat(gc, i, cCol) < 0 {
+						colour = gcat(gc, t, cCol)
+						glayer.GflSet(gfl, r, 5, colour)
+						glayer.GflSet(gfl, r, 6, gfLightness(colour))
+					}
+				}
+				kept += 1
+			}
+		}
+		i += 1
+	}
+	u = 0
+	for u < nu {
+		if unat(un, u, 1) == 4 {
+			gid = unat(un, u, 0)
+			rg = gfRegionOf(ctx, im, (unat(un, u, 11)+unat(un, u, 13))/2, (unat(un, u, 12)+unat(un, u, 14))/2)
+			gfGvReset(gv)
+			port.CellsSet(gv, 100, 4)
+			port.CellsSet(gv, 108, kind)
+			if (kind == 1) && (rg >= 0) {
+				port.CellsSet(gv, 107, 1)
+			} else {
+				port.CellsSet(gv, 107, 0)
+			}
+			port.CellsSet(gv, 109, gfRegionScore(hl, page, rg))
+			port.CellsSet(gv, 111, port.CellsAt(ctx, xPrec))
+			fr = fuserules.FrDecideBlock(gv, 500)
+			gfExplain(fx, gid, fr, gv)
+			if fuserules.FrWinner(fr) == 2 {
+				r = glayer.GflNew(gfl, page, unat(un, u, 11), unat(un, u, 12), unat(un, u, 13), unat(un, u, 14), unat(un, u, 7))
+				glayer.GflSet(gfl, r, 6, gfLightness(unat(un, u, 7)))
+				glayer.GflSet(gfl, r, 7, glayer.GsTrace())
+				glayer.GflSet(gfl, r, 8, glayer.GsTrace())
+				glayer.GflSet(gfl, r, 9, fuserules.FrNumber(fr))
+				glayer.GflSet(gfl, r, 10, fuserules.FrConf(fr))
+				glayer.GflSet(gfl, r, 11, fuserules.FrFlags(fr))
+				glayer.GflSet(gfl, r, 12, gid)
+				kept += 1
+			}
+		}
+		u += 1
+	}
+	return kept
+}
+
+func gfCrosses(grl *port.Cells, h int32, v int32) int32 {
+	// 1 when horizontal rule row h and vertical rule row v touch within 3 pt (D179's lattice test).
+	var hx0 int32 = gfMin(glayer.GrlGet(grl, h, 5), glayer.GrlGet(grl, h, 7))
+	var hx1 int32 = gfMax(glayer.GrlGet(grl, h, 5), glayer.GrlGet(grl, h, 7))
+	var hy int32 = (glayer.GrlGet(grl, h, 6) + glayer.GrlGet(grl, h, 8)) / 2
+	var vx int32 = (glayer.GrlGet(grl, v, 5) + glayer.GrlGet(grl, v, 7)) / 2
+	var vy0 int32 = gfMin(glayer.GrlGet(grl, v, 6), glayer.GrlGet(grl, v, 8))
+	var vy1 int32 = gfMax(glayer.GrlGet(grl, v, 6), glayer.GrlGet(grl, v, 8))
+	if ((vx >= (hx0 - 300)) && (vx <= (hx1 + 300))) && ((hy >= (vy0 - 300)) && (hy <= (vy1 + 300))) {
+		return 1
+	}
+	return 0
+}
+
+func gfInRegion(grl *port.Cells, r int32, rx0 int32, ry0 int32, rx1 int32, ry1 int32) int32 {
+	// 1 when the middle of rule row r is inside the box.
+	var cx int32 = (glayer.GrlGet(grl, r, 5) + glayer.GrlGet(grl, r, 7)) / 2
+	var cy int32 = (glayer.GrlGet(grl, r, 6) + glayer.GrlGet(grl, r, 8)) / 2
+	if ((cx >= rx0) && (cx < rx1)) && ((cy >= ry0) && (cy < ry1)) {
+		return 1
+	}
+	return 0
+}
+
+func gfLattice(grl *port.Cells, g0 int32, g1 int32, rx0 int32, ry0 int32, rx1 int32, ry1 int32) int32 {
+	// 1 when the `in-image` rules of rows [g0, g1) inside the box make a lattice: two horizontal and two vertical rules, each pair at least 5 pt apart, every
+	// horizontal touching every vertical within 3 pt (D179's component test without its text test, over a region; at most 300 rules of each kind are tried).
+	var a int32 = g0
+	var b int32 = 0
+	var c int32 = 0
+	var tried int32 = 0
+	var v1 int32 = -1
+	for a < g1 {
+		if (glayer.GrlGet(grl, a, 10) == glayer.GoH()) && (((glayer.GrlGet(grl, a, 18) & glayer.GqInImage()) != 0) && (gfInRegion(grl, a, rx0, ry0, rx1, ry1) == 1)) {
+			b = a + 1
+			for b < g1 {
+				if (glayer.GrlGet(grl, b, 10) == glayer.GoH()) && (((glayer.GrlGet(grl, b, 18) & glayer.GqInImage()) != 0) && (gfInRegion(grl, b, rx0, ry0, rx1, ry1) == 1)) {
+					if gfAbs(((glayer.GrlGet(grl, a, 6)+glayer.GrlGet(grl, a, 8))/2)-((glayer.GrlGet(grl, b, 6)+glayer.GrlGet(grl, b, 8))/2)) >= 500 {
+						tried += 1
+						v1 = -1
+						c = g0
+						for c < g1 {
+							if (glayer.GrlGet(grl, c, 10) == glayer.GoV()) && (((glayer.GrlGet(grl, c, 18) & glayer.GqInImage()) != 0) && (gfInRegion(grl, c, rx0, ry0, rx1, ry1) == 1)) {
+								if (gfCrosses(grl, a, c) == 1) && (gfCrosses(grl, b, c) == 1) {
+									if v1 < 0 {
+										v1 = c
+									} else if gfAbs(((glayer.GrlGet(grl, c, 5)+glayer.GrlGet(grl, c, 7))/2)-((glayer.GrlGet(grl, v1, 5)+glayer.GrlGet(grl, v1, 7))/2)) >= 500 {
+										return 1
+									}
+								}
+							}
+							c += 1
+						}
+					}
+				}
+				if tried > 300000 {
+					return 0
+				}
+				b += 1
+			}
+		}
+		a += 1
+	}
+	return 0
+}
+
+func gfBands(gfl *port.Cells, f0 int32, f1 int32, rx0 int32, ry0 int32, rx1 int32, ry1 int32) int32 {
+	// 1 when the `in-image` fills of rows [f0, f1) inside the box include three bands of one extent (left and right edges within 3 pt) stacked one on the next (3 pt).
+	var a int32 = f0
+	var b int32 = 0
+	var c int32 = 0
+	for a < f1 {
+		if ((glayer.GflGet(gfl, a, 11) & glayer.GqfInImage()) != 0) && ((glayer.GflGet(gfl, a, 1) >= rx0) && ((glayer.GflGet(gfl, a, 3) <= rx1) && ((glayer.GflGet(gfl, a, 2) >= ry0) && (glayer.GflGet(gfl, a, 4) <= ry1)))) {
+			b = f0
+			for b < f1 {
+				if (b != a) && ((glayer.GflGet(gfl, b, 11) & glayer.GqfInImage()) != 0) {
+					if (gfAbs(glayer.GflGet(gfl, b, 1)-glayer.GflGet(gfl, a, 1)) <= 300) && ((gfAbs(glayer.GflGet(gfl, b, 3)-glayer.GflGet(gfl, a, 3)) <= 300) && (gfAbs(glayer.GflGet(gfl, b, 2)-glayer.GflGet(gfl, a, 4)) <= 300)) {
+						c = f0
+						for c < f1 {
+							if (c != a) && ((c != b) && ((glayer.GflGet(gfl, c, 11) & glayer.GqfInImage()) != 0)) {
+								if (gfAbs(glayer.GflGet(gfl, c, 1)-glayer.GflGet(gfl, a, 1)) <= 300) && ((gfAbs(glayer.GflGet(gfl, c, 3)-glayer.GflGet(gfl, a, 3)) <= 300) && (gfAbs(glayer.GflGet(gfl, c, 2)-glayer.GflGet(gfl, b, 4)) <= 300)) {
+									return 1
+								}
+							}
+							c += 1
+						}
+					}
+				}
+				b += 1
+			}
+		}
+		a += 1
+	}
+	return 0
+}
+
+func gfCountInside(grl *port.Cells, gfl *port.Cells, g0 int32, f0 int32, x0 int32, y0 int32, x1 int32, y1 int32, grg *port.Cells, region int32) int32 {
+	// The fused rules (from row g0 on) and fills (from row f0 on) whose middle lies in the box, into the region's cells 9 and 10.
+	var i int32 = g0
+	var nr int32 = 0
+	var nf int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	for i < glayer.GrlCount(grl) {
+		if gfInRegion(grl, i, x0, y0, x1, y1) == 1 {
+			nr += 1
+		}
+		i += 1
+	}
+	i = f0
+	for i < glayer.GflCount(gfl) {
+		cx = (glayer.GflGet(gfl, i, 1) + glayer.GflGet(gfl, i, 3)) / 2
+		cy = (glayer.GflGet(gfl, i, 2) + glayer.GflGet(gfl, i, 4)) / 2
+		if ((cx >= x0) && (cx < x1)) && ((cy >= y0) && (cy < y1)) {
+			nf += 1
+		}
+		i += 1
+	}
+	glayer.GrgSet(grg, region, 9, nr)
+	glayer.GrgSet(grg, region, 10, nf)
+	return 0
+}
+
+func gfGrow(grg *port.Cells, r int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// Grow region r's box to take in the box.
+	var a int32 = gfMin(glayer.GrgGet(grg, r, 1), x0)
+	var b int32 = gfMin(glayer.GrgGet(grg, r, 2), y0)
+	var c int32 = gfMax(glayer.GrgGet(grg, r, 3), x1)
+	var d int32 = gfMax(glayer.GrgGet(grg, r, 4), y1)
+	glayer.GrgSet(grg, r, 1, a)
+	glayer.GrgSet(grg, r, 2, b)
+	glayer.GrgSet(grg, r, 3, c)
+	glayer.GrgSet(grg, r, 4, d)
+	return 0
+}
+
+func gfFigAdd(un *port.Cells, x0 int32, y0 int32, x1 int32, y1 int32, src int32, sea int32, sidx int32) int32 {
+	// A figure candidate (stride 24 in `un`): 0-3 box, 4 sources, 5 6 its subject, 7 union-find parent.
+	var i int32 = port.CellsLen(un) / 24
+	var k int32 = 8
+	port.CellsPush(un, x0)
+	port.CellsPush(un, y0)
+	port.CellsPush(un, x1)
+	port.CellsPush(un, y1)
+	port.CellsPush(un, src)
+	port.CellsPush(un, sea)
+	port.CellsPush(un, sidx)
+	port.CellsPush(un, i)
+	for k < 24 {
+		port.CellsPush(un, 0)
+		k += 1
+	}
+	return i
+}
+
+func gfFigFind(un *port.Cells, i int32) int32 {
+	var r int32 = i
+	for unat(un, r, 7) != r {
+		r = unat(un, r, 7)
+	}
+	return r
+}
+
+func gfFigClusters(ctx *port.Cells, pa *port.Cells, gc *port.Cells, un *port.Cells) int32 {
+	// Vector figure clusters (SPEC 9.9): the page's paths that are curves or polygons, on a grid of 32 x 32 cells over their extent (a cell is at least 12 pt, so paths
+	// within 6 pt of each other fall in one cell or neighbouring ones); a connected set of occupied cells holding at least 8 of them is one cluster, a candidate figure
+	// of the box of its paths. (`gc` is scratch here: the page's candidates are done with.) Answers the clusters added.
+	var p int32 = port.CellsAt(ctx, xP0)
+	var bx0 int32 = 2000000000
+	var by0 int32 = 2000000000
+	var bx1 int32 = -2000000000
+	var by1 int32 = -2000000000
+	var np int32 = 0
+	var k int32 = 0
+	var cs int32 = 1200
+	var cx int32 = 0
+	var cy int32 = 0
+	var cell int32 = 0
+	var changed int32 = 1
+	var iter int32 = 0
+	var nb int32 = 0
+	var dx int32 = 0
+	var dy int32 = 0
+	var lab int32 = 0
+	var added int32 = 0
+	for p < port.CellsAt(ctx, xP1) {
+		if (evidence.PaGet(pa, p, evidence.PfKind()) == evidence.PaCurve()) || (evidence.PaGet(pa, p, evidence.PfKind()) == evidence.PaOther()) {
+			np += 1
+			bx0 = gfMin(bx0, evidence.PaGet(pa, p, evidence.PfX0()))
+			by0 = gfMin(by0, evidence.PaGet(pa, p, evidence.PfY0()))
+			bx1 = gfMax(bx1, evidence.PaGet(pa, p, evidence.PfX1()))
+			by1 = gfMax(by1, evidence.PaGet(pa, p, evidence.PfY1()))
+		}
+		p += 1
+	}
+	if np < 8 {
+		return 0
+	}
+	cs = gfMax(1200, (gfMax(bx1-bx0, by1-by0)+31)/32)
+	port.CellsDrop(gc, 0)
+	for k < (1024 * 6) {
+		port.CellsPush(gc, 0)
+		k += 1
+	}
+	k = 0
+	for k < 1024 {
+		port.CellsSet(gc, (k*6)+1, 2000000000)
+		port.CellsSet(gc, (k*6)+2, 2000000000)
+		port.CellsSet(gc, (k*6)+3, -2000000000)
+		port.CellsSet(gc, (k*6)+4, -2000000000)
+		port.CellsSet(gc, (k*6)+5, k)
+		k += 1
+	}
+	p = port.CellsAt(ctx, xP0)
+	for p < port.CellsAt(ctx, xP1) {
+		if (evidence.PaGet(pa, p, evidence.PfKind()) == evidence.PaCurve()) || (evidence.PaGet(pa, p, evidence.PfKind()) == evidence.PaOther()) {
+			cx = gfMin(31, (((evidence.PaGet(pa, p, evidence.PfX0())+evidence.PaGet(pa, p, evidence.PfX1()))/2)-bx0)/cs)
+			cy = gfMin(31, (((evidence.PaGet(pa, p, evidence.PfY0())+evidence.PaGet(pa, p, evidence.PfY1()))/2)-by0)/cs)
+			cell = (cy * 32) + cx
+			port.CellsSet(gc, cell*6, port.CellsAt(gc, cell*6)+1)
+			port.CellsSet(gc, (cell*6)+1, gfMin(port.CellsAt(gc, (cell*6)+1), evidence.PaGet(pa, p, evidence.PfX0())))
+			port.CellsSet(gc, (cell*6)+2, gfMin(port.CellsAt(gc, (cell*6)+2), evidence.PaGet(pa, p, evidence.PfY0())))
+			port.CellsSet(gc, (cell*6)+3, gfMax(port.CellsAt(gc, (cell*6)+3), evidence.PaGet(pa, p, evidence.PfX1())))
+			port.CellsSet(gc, (cell*6)+4, gfMax(port.CellsAt(gc, (cell*6)+4), evidence.PaGet(pa, p, evidence.PfY1())))
+		}
+		p += 1
+	}
+	for (changed == 1) && (iter < 70) {
+		changed = 0
+		cell = 0
+		for cell < 1024 {
+			if port.CellsAt(gc, cell*6) > 0 {
+				dy = -1
+				for dy <= 1 {
+					dx = -1
+					for dx <= 1 {
+						cx = (cell % 32) + dx
+						cy = (cell / 32) + dy
+						if ((cx >= 0) && (cx < 32)) && ((cy >= 0) && (cy < 32)) {
+							nb = (cy * 32) + cx
+							if port.CellsAt(gc, nb*6) > 0 {
+								if port.CellsAt(gc, (nb*6)+5) < port.CellsAt(gc, (cell*6)+5) {
+									port.CellsSet(gc, (cell*6)+5, port.CellsAt(gc, (nb*6)+5))
+									changed = 1
+								}
+							}
+						}
+						dx += 1
+					}
+					dy += 1
+				}
+			}
+			cell += 1
+		}
+		iter += 1
+	}
+	lab = 0
+	for lab < 1024 {
+		np = 0
+		bx0 = 2000000000
+		by0 = 2000000000
+		bx1 = -2000000000
+		by1 = -2000000000
+		cell = 0
+		for cell < 1024 {
+			if (port.CellsAt(gc, cell*6) > 0) && (port.CellsAt(gc, (cell*6)+5) == lab) {
+				np += port.CellsAt(gc, cell*6)
+				bx0 = gfMin(bx0, port.CellsAt(gc, (cell*6)+1))
+				by0 = gfMin(by0, port.CellsAt(gc, (cell*6)+2))
+				bx1 = gfMax(bx1, port.CellsAt(gc, (cell*6)+3))
+				by1 = gfMax(by1, port.CellsAt(gc, (cell*6)+4))
+			}
+			cell += 1
+		}
+		if np >= 8 {
+			gfFigAdd(un, bx0, by0, bx1, by1, glayer.GsVector(), -1, -1)
+			added += 1
+		}
+		lab += 1
+	}
+	return added
+}
+
+func gfRegions(ctx *port.Cells, grl *port.Cells, gfl *port.Cells, im *port.Cells, pa *port.Cells, oblocks *port.Cells, grg *port.Cells, gc *port.Cells, un *port.Cells) int32 {
+	// The page's `grg` rows (D228): a TABLE-IN-IMAGE for each visible image placement (2 cm each way) whose `in-image` fused rules make a lattice or whose
+	// `in-image` fills make a stack of three bands, the box being what those rules and fills cover; a FIGURE for each merged (box IoU of 500) set of the visible image
+	// placements that are not tables, OCR image blocks and vector figure clusters; a TABLE-HINT for each OCR table block (confidence 300). The rows made by the page
+	// are those of `grl` from `X_NGRL` and `gfl` from `X_NGFL`. Answers the rows made.
+	var page int32 = port.CellsAt(ctx, xPage)
+	var g0 int32 = port.CellsAt(ctx, xNgrl)
+	var f0 int32 = port.CellsAt(ctx, xNgfl)
+	var g1 int32 = glayer.GrlCount(grl)
+	var f1 int32 = glayer.GflCount(gfl)
+	var first int32 = glayer.GrgCount(grg)
+	var m int32 = port.CellsAt(ctx, xI0)
+	var r int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var ok int32 = 0
+	var ra int32 = 0
+	var rb int32 = 0
+	var src int32 = 0
+	var nsrc int32 = 0
+	var sea int32 = -1
+	var sidx int32 = -1
+	var csum int32 = 0
+	var cn int32 = 0
+	for m < port.CellsAt(ctx, xI1) {
+		if gfImageOk(im, m) == 1 {
+			x0 = evidence.ImGet(im, m, evidence.MfX0())
+			y0 = evidence.ImGet(im, m, evidence.MfY0())
+			x1 = evidence.ImGet(im, m, evidence.MfX1())
+			y1 = evidence.ImGet(im, m, evidence.MfY1())
+			ok = gfLattice(grl, g0, g1, x0, y0, x1, y1)
+			if ok == 0 {
+				ok = gfBands(gfl, f0, f1, x0, y0, x1, y1)
+			}
+			if ok == 1 {
+				r = glayer.GrgNew(grg, page, x1, y1, x0, y0, glayer.RkTableInImage())
+				csum = 0
+				cn = 0
+				i = g0
+				for i < g1 {
+					if ((glayer.GrlGet(grl, i, 18) & glayer.GqInImage()) != 0) && (gfInRegion(grl, i, x0, y0, x1, y1) == 1) {
+						gfGrow(grg, r, glayer.GrlGet(grl, i, 1), glayer.GrlGet(grl, i, 2), glayer.GrlGet(grl, i, 3), glayer.GrlGet(grl, i, 4))
+						csum += glayer.GrlGet(grl, i, 17)
+						cn += 1
+					}
+					i += 1
+				}
+				i = f0
+				for i < f1 {
+					if ((glayer.GflGet(gfl, i, 11) & glayer.GqfInImage()) != 0) && ((glayer.GflGet(gfl, i, 1) >= x0) && ((glayer.GflGet(gfl, i, 3) <= x1) && ((glayer.GflGet(gfl, i, 2) >= y0) && (glayer.GflGet(gfl, i, 4) <= y1)))) {
+						gfGrow(grg, r, glayer.GflGet(gfl, i, 1), glayer.GflGet(gfl, i, 2), glayer.GflGet(gfl, i, 3), glayer.GflGet(gfl, i, 4))
+					}
+					i += 1
+				}
+				glayer.GrgSet(grg, r, 6, glayer.GsTrace()|glayer.GsImage())
+				glayer.GrgSet(grg, r, 7, evidence.EaImages())
+				glayer.GrgSet(grg, r, 8, m)
+				if cn > 0 {
+					glayer.GrgSet(grg, r, 11, csum/cn)
+				} else {
+					glayer.GrgSet(grg, r, 11, 500)
+				}
+				gfCountInside(grl, gfl, g0, f0, glayer.GrgGet(grg, r, 1), glayer.GrgGet(grg, r, 2), glayer.GrgGet(grg, r, 3), glayer.GrgGet(grg, r, 4), grg, r)
+			}
+		}
+		m += 1
+	}
+	// figures: candidates, merged
+	port.CellsDrop(un, 0)
+	m = port.CellsAt(ctx, xI0)
+	for m < port.CellsAt(ctx, xI1) {
+		if (evidence.ImGet(im, m, evidence.MfVis()) == 0) && (((evidence.ImGet(im, m, evidence.MfX1()) - evidence.ImGet(im, m, evidence.MfX0())) >= 500) && ((evidence.ImGet(im, m, evidence.MfY1()) - evidence.ImGet(im, m, evidence.MfY0())) >= 500)) {
+			ok = 1
+			j = first
+			for j < glayer.GrgCount(grg) {
+				if glayer.GrgGet(grg, j, 5) == glayer.RkTableInImage() {
+					if gfIou(glayer.GrgGet(grg, j, 1), glayer.GrgGet(grg, j, 2), glayer.GrgGet(grg, j, 3), glayer.GrgGet(grg, j, 4), evidence.ImGet(im, m, evidence.MfX0()), evidence.ImGet(im, m, evidence.MfY0()), evidence.ImGet(im, m, evidence.MfX1()), evidence.ImGet(im, m, evidence.MfY1())) >= 500 {
+						ok = 0
+					}
+				}
+				j += 1
+			}
+			if ok == 1 {
+				gfFigAdd(un, evidence.ImGet(im, m, evidence.MfX0()), evidence.ImGet(im, m, evidence.MfY0()), evidence.ImGet(im, m, evidence.MfX1()), evidence.ImGet(im, m, evidence.MfY1()), glayer.GsImage(), evidence.EaImages(), m)
+			}
+		}
+		m += 1
+	}
+	i = port.CellsAt(ctx, xB0)
+	for i < port.CellsAt(ctx, xB1) {
+		if (evidence.ObGet(oblocks, i, evidence.ObfKind()) == evidence.ObBlock()) && (evidence.ObGet(oblocks, i, evidence.ObfBtype()) == 2) {
+			gfFigAdd(un, evidence.ObGet(oblocks, i, evidence.ObfX0()), evidence.ObGet(oblocks, i, evidence.ObfY0()), evidence.ObGet(oblocks, i, evidence.ObfX1()), evidence.ObGet(oblocks, i, evidence.ObfY1()), glayer.GsOcr(), evidence.EaOblocks(), i)
+		}
+		i += 1
+	}
+	gfFigClusters(ctx, pa, gc, un)
+	i = 0
+	for i < (port.CellsLen(un) / 24) {
+		j = i + 1
+		for j < (port.CellsLen(un) / 24) {
+			if gfIou(unat(un, i, 0), unat(un, i, 1), unat(un, i, 2), unat(un, i, 3), unat(un, j, 0), unat(un, j, 1), unat(un, j, 2), unat(un, j, 3)) >= 500 {
+				ra = gfFigFind(un, i)
+				rb = gfFigFind(un, j)
+				if ra < rb {
+					unput(un, rb, 7, ra)
+				}
+				if rb < ra {
+					unput(un, ra, 7, rb)
+				}
+			}
+			j += 1
+		}
+		i += 1
+	}
+	i = 0
+	for i < (port.CellsLen(un) / 24) {
+		if gfFigFind(un, i) == i {
+			x0 = unat(un, i, 0)
+			y0 = unat(un, i, 1)
+			x1 = unat(un, i, 2)
+			y1 = unat(un, i, 3)
+			src = unat(un, i, 4)
+			sea = unat(un, i, 5)
+			sidx = unat(un, i, 6)
+			j = i + 1
+			for j < (port.CellsLen(un) / 24) {
+				if gfFigFind(un, j) == i {
+					x0 = gfMin(x0, unat(un, j, 0))
+					y0 = gfMin(y0, unat(un, j, 1))
+					x1 = gfMax(x1, unat(un, j, 2))
+					y1 = gfMax(y1, unat(un, j, 3))
+					src |= unat(un, j, 4)
+					if (sea < 0) && (unat(un, j, 5) >= 0) {
+						sea = unat(un, j, 5)
+						sidx = unat(un, j, 6)
+					}
+				}
+				j += 1
+			}
+			r = glayer.GrgNew(grg, page, x0, y0, x1, y1, glayer.RkFigure())
+			glayer.GrgSet(grg, r, 6, src)
+			glayer.GrgSet(grg, r, 7, sea)
+			glayer.GrgSet(grg, r, 8, sidx)
+			nsrc = 0
+			if (src & 1) != 0 {
+				nsrc += 1
+			}
+			if (src & 4) != 0 {
+				nsrc += 1
+			}
+			if (src & 16) != 0 {
+				nsrc += 1
+			}
+			glayer.GrgSet(grg, r, 11, gfMin(1000, 400+(150*nsrc)))
+			gfCountInside(grl, gfl, g0, f0, x0, y0, x1, y1, grg, r)
+		}
+		i += 1
+	}
+	i = port.CellsAt(ctx, xB0)
+	for i < port.CellsAt(ctx, xB1) {
+		if (evidence.ObGet(oblocks, i, evidence.ObfKind()) == evidence.ObBlock()) && (evidence.ObGet(oblocks, i, evidence.ObfBtype()) == 1) {
+			r = glayer.GrgNew(grg, page, evidence.ObGet(oblocks, i, evidence.ObfX0()), evidence.ObGet(oblocks, i, evidence.ObfY0()), evidence.ObGet(oblocks, i, evidence.ObfX1()), evidence.ObGet(oblocks, i, evidence.ObfY1()), glayer.RkTableHint())
+			glayer.GrgSet(grg, r, 6, glayer.GsOcr())
+			glayer.GrgSet(grg, r, 7, evidence.EaOblocks())
+			glayer.GrgSet(grg, r, 8, i)
+			glayer.GrgSet(grg, r, 11, 300)
+			gfCountInside(grl, gfl, g0, f0, glayer.GrgGet(grg, r, 1), glayer.GrgGet(grg, r, 2), glayer.GrgGet(grg, r, 3), glayer.GrgGet(grg, r, 4), grg, r)
+		}
+		i += 1
+	}
+	return glayer.GrgCount(grg) - first
+}
+
+func gfWords(ctx *port.Cells, owords *port.Cells, etext *port.Cells, feats *port.Cells, grl *port.Cells, grg *port.Cells, g0 int32, q0 int32) int32 {
+	// The page's OCR words' features: 30 the share (per mille, the regions' added, at most 1000) of the word's box that lies in a `table-in-image` region of the
+	// page (`grg` rows from `q0`), 31 the rule-likeness: for a word of at most two code points all of them rule glyphs, the share of its box the fused rules
+	// (`grl` rows from `g0`) cover; -1 for any other word. Words with no feature row are left alone. Answers the words written.
+	var w int32 = port.CellsAt(ctx, xW0)
+	var f int32 = 0
+	var q int32 = 0
+	var g int32 = 0
+	var s int32 = 0
+	var v int32 = 0
+	var n int32 = 0
+	var x0 int32 = 0
+	var y0 int32 = 0
+	var x1 int32 = 0
+	var y1 int32 = 0
+	var area int32 = 0
+	var inter int32 = 0
+	var iw int32 = 0
+	var ih int32 = 0
+	for w < port.CellsAt(ctx, xW1) {
+		f = evidence.OwGet(owords, w, evidence.HdFeat())
+		if f >= 0 {
+			x0 = evidence.OwGet(owords, w, evidence.HdX0())
+			y0 = evidence.OwGet(owords, w, evidence.HdY0())
+			x1 = evidence.OwGet(owords, w, evidence.HdX1())
+			y1 = evidence.OwGet(owords, w, evidence.HdY1())
+			s = 0
+			q = q0
+			for q < glayer.GrgCount(grg) {
+				if (glayer.GrgGet(grg, q, 0) == port.CellsAt(ctx, xPage)) && (glayer.GrgGet(grg, q, 5) == glayer.RkTableInImage()) {
+					s += gfInsideShare(x0, y0, x1, y1, glayer.GrgGet(grg, q, 1), glayer.GrgGet(grg, q, 2), glayer.GrgGet(grg, q, 3), glayer.GrgGet(grg, q, 4))
+				}
+				q += 1
+			}
+			evidence.FeSet(feats, f, evidence.XoInTableImage(), gfMin(s, 1000))
+			v = -1
+			if gfWordRuleLike(owords, etext, w) == 1 {
+				area = gfMax(1, gfMax(0, x1-x0)/10) * gfMax(1, gfMax(0, y1-y0)/10)
+				inter = 0
+				g = g0
+				for g < glayer.GrlCount(grl) {
+					iw = gfMax(0, gfMin(x1, glayer.GrlGet(grl, g, 3))-gfMax(x0, glayer.GrlGet(grl, g, 1))) / 10
+					ih = gfMax(0, gfMin(y1, glayer.GrlGet(grl, g, 4))-gfMax(y0, glayer.GrlGet(grl, g, 2))) / 10
+					inter += iw * ih
+					g += 1
+				}
+				v = gfMin(1000, inter/gfMax(1, area/1000))
+			}
+			evidence.FeSet(feats, f, evidence.XoRuleLike(), v)
+			n += 1
+		}
+		w += 1
+	}
+	return n
+}
+
+func gfFusePage(ctx *port.Cells, og *port.Cells, ofl *port.Cells, rules *port.Cells, prims *port.Cells, oblocks *port.Cells, owords *port.Cells, words *port.Cells, etext *port.Cells, pa *port.Cells, im *port.Cells, feats *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells, refs *port.Cells, hl *port.Cells, fx *port.Cells, gfa *port.Cells, gc *port.Cells, aux *port.Cells, un *port.Cells, gv *port.Cells) int32 {
+	// One page that has a raster answer, from the head of this file: candidates, groups, sweeps, health, arbitration, regions, the words' features. Answers 0.
+	var n int32 = gfBuild(gc, ctx, og, ofl, rules, prims, oblocks)
+	var q0 int32 = 0
+	port.CellsSet(ctx, xN, n)
+	gfPairs(gc, n)
+	gfOrder(gc, aux, n)
+	gfGroups(gc, aux, n, ctx, og, ofl, ggp, refs)
+	gfSweeps(gc, aux, un, n)
+	gfHealth(ctx, gc, n, im, rules, words, hl)
+	port.CellsSet(ctx, xNgrl, glayer.GrlCount(grl))
+	port.CellsSet(ctx, xNgfl, glayer.GflCount(gfl))
+	q0 = glayer.GrgCount(grg)
+	gfEmitVecRules(ctx, gc, n, aux, og, im, hl, ggp, grl, fx, gfa, gv)
+	gfEmitTraceUnits(ctx, un, im, hl, owords, etext, words, ggp, grl, fx, gv)
+	gfEmitFills(ctx, gc, n, aux, ofl, un, im, hl, ggp, gfl, fx, gv)
+	gfRegions(ctx, grl, gfl, im, pa, oblocks, grg, gc, un)
+	gfWords(ctx, owords, etext, feats, grl, grg, port.CellsAt(ctx, xNgrl), q0)
+	return 0
+}
+
+func gfAdvance(c *port.Cells, stride int32, field int32, i int32, page int32) int32 {
+	// The first row at or after i whose page (cell `field`) is not before `page`.
+	var n int32 = port.CellsLen(c) / stride
+	var j int32 = i
+	for (j < n) && (port.CellsAt(c, (j*stride)+field) < page) {
+		j += 1
+	}
+	return j
+}
+
+func gfRangeEnd(c *port.Cells, stride int32, field int32, i int32, page int32) int32 {
+	// The first row from i on whose page is not `page`.
+	var n int32 = port.CellsLen(c) / stride
+	var j int32 = i
+	for (j < n) && (port.CellsAt(c, (j*stride)+field) == page) {
+		j += 1
+	}
+	return j
+}
+
+func gfHasRows(c *port.Cells, stride int32, field int32, page int32) int32 {
+	// 1 when some row of the arena is of `page` (rows are in page order).
+	var n int32 = port.CellsLen(c) / stride
+	var j int32 = 0
+	for j < n {
+		if port.CellsAt(c, (j*stride)+field) == page {
+			return 1
+		}
+		j += 1
+	}
+	return 0
+}
+
+func GfFuse(np int32, epages *port.Cells, inks *port.Cells, rules *port.Cells, prims *port.Cells, oblocks *port.Cells, owords *port.Cells, words *port.Cells, etext *port.Cells, pa *port.Cells, im *port.Cells, feats *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells, refs *port.Cells, hl *port.Cells, fx *port.Cells, gfa *port.Cells, og *port.Cells, ofl *port.Cells, ctx *port.Cells, gc *port.Cells, aux *port.Cells, un *port.Cells, gv *port.Cells) int32 {
+	// The document's other sources of graphics (SPEC 9.9, from the head of this file): every page that has a raster answer is made again from the vector rows already
+	// in `grl` and `gfl` and the tracer's and OCR's evidence; every other page is copied. Nothing to do (no `inks`, `rules` or `prims` row at all) answers 0 and touches
+	// nothing. `ggp`, `grg`, `hl`, `fx`, `refs` and `gfa` only grow. Answers the pages fused.
+	if (((port.CellsLen(inks) / 12) + (port.CellsLen(rules) / 20)) + (port.CellsLen(prims) / 24)) == 0 {
+		return 0
+	}
+	var p int32 = 1
+	var vi int32 = 0
+	var vj int32 = 0
+	var fi int32 = 0
+	var fj int32 = 0
+	var ri int32 = 0
+	var rj int32 = 0
+	var qi int32 = 0
+	var qj int32 = 0
+	var bi int32 = 0
+	var bj int32 = 0
+	var wi int32 = 0
+	var wj int32 = 0
+	var ti int32 = 0
+	var tj int32 = 0
+	var pi int32 = 0
+	var pj int32 = 0
+	var ii int32 = 0
+	var ij int32 = 0
+	var k int32 = 0
+	var ep int32 = 0
+	var kind int32 = 0
+	var fused int32 = 0
+	port.CellsDrop(og, 0)
+	for k < port.CellsLen(grl) {
+		port.CellsPush(og, port.CellsAt(grl, k))
+		k += 1
+	}
+	port.CellsDrop(ofl, 0)
+	k = 0
+	for k < port.CellsLen(gfl) {
+		port.CellsPush(ofl, port.CellsAt(gfl, k))
+		k += 1
+	}
+	port.CellsDrop(grl, 0)
+	port.CellsDrop(gfl, 0)
+	port.CellsDrop(ctx, 0)
+	k = 0
+	for k < 32 {
+		port.CellsPush(ctx, 0)
+		k += 1
+	}
+	for p <= np {
+		vi = gfAdvance(og, 24, 0, vi, p)
+		vj = gfRangeEnd(og, 24, 0, vi, p)
+		fi = gfAdvance(ofl, 16, 0, fi, p)
+		fj = gfRangeEnd(ofl, 16, 0, fi, p)
+		ri = gfAdvance(rules, 20, 0, ri, p)
+		rj = gfRangeEnd(rules, 20, 0, ri, p)
+		qi = gfAdvance(prims, 24, 0, qi, p)
+		qj = gfRangeEnd(prims, 24, 0, qi, p)
+		bi = gfAdvance(oblocks, 16, 0, bi, p)
+		bj = gfRangeEnd(oblocks, 16, 0, bi, p)
+		wi = gfAdvance(owords, 28, 0, wi, p)
+		wj = gfRangeEnd(owords, 28, 0, wi, p)
+		ti = gfAdvance(words, 24, 0, ti, p)
+		tj = gfRangeEnd(words, 24, 0, ti, p)
+		pi = gfAdvance(pa, 24, 0, pi, p)
+		pj = gfRangeEnd(pa, 24, 0, pi, p)
+		ii = gfAdvance(im, 20, 0, ii, p)
+		ij = gfRangeEnd(im, 20, 0, ii, p)
+		kind = 0
+		if ((rj > ri) || (qj > qi)) || (gfHasRows(inks, 12, 0, p) == 1) {
+			kind = 1
+			ep = evidence.EvPageRow(epages, p)
+			if ep >= 0 {
+				if (evidence.EpGet(epages, ep, evidence.EpfFlags()) & evidence.EgRaster()) != 0 {
+					kind = 2
+				}
+			}
+		}
+		if kind == 0 {
+			k = vi
+			for k < vj {
+				gfCopyRow(og, k, grl)
+				k += 1
+			}
+			k = fi
+			for k < fj {
+				ep = 0
+				for ep < 16 {
+					port.CellsPush(gfl, port.CellsAt(ofl, (k*16)+ep))
+					ep += 1
+				}
+				k += 1
+			}
+		} else {
+			port.CellsSet(ctx, xPage, p)
+			port.CellsSet(ctx, xKind, kind)
+			port.CellsSet(ctx, xV0, vi)
+			port.CellsSet(ctx, xV1, vj)
+			port.CellsSet(ctx, xF0, fi)
+			port.CellsSet(ctx, xF1, fj)
+			port.CellsSet(ctx, xR0, ri)
+			port.CellsSet(ctx, xR1, rj)
+			port.CellsSet(ctx, xQ0, qi)
+			port.CellsSet(ctx, xQ1, qj)
+			port.CellsSet(ctx, xB0, bi)
+			port.CellsSet(ctx, xB1, bj)
+			port.CellsSet(ctx, xW0, wi)
+			port.CellsSet(ctx, xW1, wj)
+			port.CellsSet(ctx, xT0, ti)
+			port.CellsSet(ctx, xT1, tj)
+			port.CellsSet(ctx, xP0, pi)
+			port.CellsSet(ctx, xP1, pj)
+			port.CellsSet(ctx, xI0, ii)
+			port.CellsSet(ctx, xI1, ij)
+			gfFusePage(ctx, og, ofl, rules, prims, oblocks, owords, words, etext, pa, im, feats, grl, gfl, ggp, grg, refs, hl, fx, gfa, gc, aux, un, gv)
+			fused += 1
+		}
+		vi = vj
+		fi = fj
+		ri = rj
+		qi = qj
+		bi = bj
+		wi = wj
+		ti = tj
+		pi = pj
+		ii = ij
+		p += 1
+	}
+	return fused
+}
+
+func GfWrite(gfa *port.Cells, ledger *port.Cells) int32 {
+	// The vector rules block 500 dropped (`gfa`, stride 6: page, box, ledger reason) as ledger rows, confidence 700, source `vector`. Answers the rows written.
+	var n int32 = port.CellsLen(gfa) / 6
+	var i int32 = 0
+	for i < n {
+		model.LedgerAdd(ledger, port.CellsAt(gfa, (i*6)+5), port.CellsAt(gfa, i*6), port.CellsAt(gfa, (i*6)+1), port.CellsAt(gfa, (i*6)+2), port.CellsAt(gfa, (i*6)+3), port.CellsAt(gfa, (i*6)+4), 700, model.SrVector())
+		i += 1
+	}
+	return n
 }
