@@ -1818,9 +1818,10 @@ region of ink that the text layer does not explain is read by OCR, and every
 full` (the default) every page's whole render is read, which keeps the
 promise trivially; under `ocr-scope: witness` the no-text render plus
 witness lines keep it at a fraction of the cost (§8.3), and a font whose
-witnesses disagree escalates to its every line in the targeted round. The
-default stays `full` until `bb fusion-bench` shows `witness` equal on every
-accuracy metric of the fusion set (D200: the maintainer decides the flip).
+witnesses disagree escalates the page to the whole render (D601). The
+default stays `full` (D200: the maintainer decides the flip); `bb
+fusion-bench` shows `witness` equal on every accuracy metric of the fusion
+set at 0.48 of the OCR time (§12.3).
 
 Lossless savings, taken in every scope:
 
@@ -2921,6 +2922,27 @@ record):
 
 Kin raster work above budget is answered by a bulk form only under D092's
 rule (a pure whole-page map or reduce, measured over 2×).
+
+**Measured (P7.S, D200, D210; `bb fusion-bench --born --scopes`).** Live Rust
+host (pdfium, Tesseract 5.5.3) on the 22 documents (39 pages) of the fusion
+set, a machine shared with other jobs throughout, so these are loaded times;
+per A4 page at 300 dpi:
+
+| stage | `full` | `witness` |
+| --- | --- | --- |
+| render, `with-text` + `no-text` | 0.26 s | 0.19 s |
+| OCR, first pass | 9.3 s | 2.0 s |
+| OCR, later passes (targeted; the witness lines) | 1.7 s | 3.5 s |
+| **OCR, all** | **11.0 s** | **5.5 s** |
+| the page unit's own kin work (all raster stages, alignment, health) | 2.15 s | 1.2 s |
+| document unit (stage 3) | 0.003 s | 0.003 s |
+| peak memory of the process (the most; 308 MB with no pixel read) | 397 MB | 407 MB |
+
+The OCR time of `witness` on the median document is 0.48 of `full`'s (0.50
+pooled): the 30 % row is **not met** (its twelve `psm` 7 requests a page and
+the `no-text` page cost a half), at equal accuracy on every metric of the
+fusion set. The kin raster work is over the sum of the normalization and
+tracer rows; those two are measured alone by `bb ink` and `bb trace`.
 
 ---
 

@@ -3331,6 +3331,80 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   budget table filled in; `witness` ≤ 30 % of `full`'s OCR time on the median born-digital page.
   *Done when*: `bb fusion` green in `bb gates`; the contract above holds; D200's comparison table is in this entry.
 
+  **Done (D600-D606; the entry stays open for the sign-offs and the items under "Not done").** *Built*: (1) `kin/rasterplan.kin` + `kin/rasterplantest.kin` (6 laws on 4 targets), `rp-plan` at the `;; HOOK P7.S` of
+  `pu-plan` (which takes the policy, the scope and the text layer's flow now); `pu-run-born` reads the plan (`full`, `witness`, the escalation round); the hidden `ocr_born_digital` / `OcrBornDigital`
+  and `--ocr-born-digital` are gone; `Options::ocr_scope` / `Options.OcrScope`, `--ocr-scope=full|witness` on both drivers, `settings.ocr-scope` (`fk-ocr-scope` 98, `schema/emon-1.json` additive) when not
+  `full`; the Tesseract adapters of both hosts map a script code in a request's language cells to the installed models; `RunStats` times the ports and the stages (D604). (2) `bb fusion` as in D605; the
+  replay set (22 documents), `test/artifacts`, `test/seals`, `test/retarget` (its born-digital fixture) and the derived `test/fusion/hidden` transcripts re-recorded; `emon-fusion` recorded
+  (`bb accuracy --update`: nine improvements, none a regression). (3) `bb fusion-live [--update] [--scope S]` (`tools/fusion/fusion_live.clj`, beside the stamp-ghost mode it already had). (4) `bb fusion-bench
+  --born --scopes [--no-cost]` (`tools/fusion/bench.clj`). *Also*: `gfuse.kin`'s witness and precision ratios multiplied two sums of centipoints in 32 bits and overflowed on `bank-statement` once the live Engine
+  gave the tracer pixels (`attempt to multiply with overflow`, release builds check): now in 64 bits (found by the first bench run; nothing a gate replays moved); `kin/scripts/gates` names `asset-record` and
+  `baselines` as non-gates (main's `bb gates` listed them as neither).
+
+  **The born-digital contract, per document (`bb fusion`, replayed, both Engines)**: all 22 documents of the fusion set: CER at most `emon`'s + 0.0005 (equal on 16; `hidden-older-ocr` 0.0801 to 0.0062,
+  `outlined-heading` 0.0099 to 0, `seal-over-text` 0.0300 to 0.0006, `stamp-seal` 0.3185 to 0.0208, `tl-broken-shift` 0.7116 to 0, `tl-broken-unmapped` 0.8853 to 0), `tl-override` 0.0000 on every document
+  that has the feature (the three that do not have it are the broken ones and `hidden-older-ocr`); the graphics contract holds on all 15 image-free documents that have a table (the table nodes, less ids,
+  provenance and confidence, equal to `emon`'s); win rates ocr 0.1129, text 0.8871 over 10,034 groups with both candidates; every verdict a rule of the table. No failure.
+
+  **D200's table, `full` against `witness`** (`bb fusion-bench --born --scopes`, the live Rust Engine with pdfium and Tesseract 5.5.3, Apple M1 Pro **shared with other jobs throughout, so the times are
+  loaded times**; 22 documents, 39 pages; per page of A4 at 300 dpi):
+
+  | | no pixel read (`--no-retarget`) | `full` | `witness` |
+  | --- | --- | --- | --- |
+  | render (pdfium, both layers) | 0.22 s | 0.26 s | 0.19 s |
+  | OCR, first pass | 6.35 s | 9.30 s | 1.95 s |
+  | OCR, targeted and later | 0 | 1.71 s | 3.54 s |
+  | **OCR, all** | 6.35 s | **11.01 s** | **5.49 s** |
+  | page units' own kin time (normalization, tracer, features, alignment, health) | 0.005 s | 2.15 s | 1.22 s |
+  | document unit (stage 3) | 0.0025 s | 0.0032 s | 0.0026 s |
+  | document pass | 0.009 s | 0.011 s | 0.011 s |
+  | requests a page, median / rounds, median | 3 / 2 | 3 / 2 | 11 / 2 |
+  | peak resident set of the process, the most | 308 MB | 397 MB | 407 MB |
+
+  OCR time a page, the median document's: `full` 9.89 s, `witness` 4.77 s: **`witness` is 0.48 of `full` (0.50 pooled), and SPEC 12.3 asked 0.30 or less: NOT MET.** `witness` costs its fonts' witness lines
+  (up to 12 `psm` 7 requests a page, a third of a second each here) and the `no-text` page (2 s: Tesseract spends the time on a page that is nearly blank), and the two broken-encoding documents
+  escalate to `full` and pay both. Accuracy of the two (the same live Engine, the same scorer): **identical on every one of the 22 documents (CER, `tl-override`) and on every pooled metric of every
+  category: none of the 439 pooled metrics differs.** (Before the escalation read the page whole and dropped the `no-text` run, `witness` measured CER 0.0273 against 0.0022 on `pdf/all`: `tl-broken-unmapped`
+  0.4072 and `outlined-heading` 0.0099: D601.) What is over the budget of SPEC 12.3 besides: the page units' kin time, 2.1 s a page against 0.3 s for normalization and the tracer (SPEC's rows,
+  `bb ink` and `bb trace` measure them alone: the figure here is every stage of the page unit on a loaded machine and includes the alignment, the health, the retarget planning and the second raster's
+  tracer, so it is a bound and not a row); the process's peak is 90-100 MB over the pixel-free run's, inside the 120 MB budget of a page unit. **The default stays `full`: the maintainer decides the flip**; the
+  evidence for `witness` is equal accuracy on this set at half the OCR time; against it the set has two fonts' worth of broken encodings, a dozen fonts of healthy ones, and nothing where a healthy font
+  lies (a plausible mapping that is wrong on only some lines).
+
+  **`emon` (no engine) against the switched-on default, live (`bb fusion-live`: the 99 `pdf/` documents and the 3 `pdf-tagged/` ones (and the three scan sets) through pdfium and Tesseract, default settings)**, CER / WER by category
+  (`pdf-tagged/*` and the `pdf/` categories not listed are identical to the fourth digit: `align`, `columns`, `figures` 0.1471 / 0.1667, `footnotes`, `forms`, `furniture`, `initials`, `lists`, `scripts` 0.0898 / 0.2624, `tables`,
+  `watermarks`; `pdf-tagged/all` 0.0122 / 0.0809 both):
+
+  | category | `emon` CER / WER | switched on CER / WER |
+  | --- | --- | --- |
+  | `pdf/all` | 0.0443 / 0.0604 | **0.0066 / 0.0113** |
+  | `pdf/textlayer` (`tl-broken-*`, `hidden-older-ocr`) | 0.6686 / 0.8533 | **0.0011 / 0.0050** |
+  | `pdf/seals` | 0.0273 / 0.0491 | **0.0011 / 0.0036** |
+  | `pdf/graphics` | 0.1249 / 0.1426 | **0.0743 / 0.0878** |
+  | `pdf/headings` (`outlined-heading`) | 0.0055 / 0.0199 | **0.0026 / 0.0176** |
+
+  The contract of D201 holds live: `pdf/all` CER at most `emon`'s; every `pdf/` category and `pdf-tagged/all` within 0.001 of `emon`'s (none worse); `tl-override` 0 on every document but `tl-broken-*`;
+  `ghost-rate` 0.00016 (at most 0.001) and `watermark-leak` 0 on `pdf/`. The brief's expected gains: `tl-broken-*` and `outlined-heading` held (P7.3's numbers), `pdf/seals` as above; `pdf/figures` did NOT move
+  (0.1471 both: the text in the figures is the figure's, held for P8.1, D201 (2)). `emon-live` in the scoreboard: recorded by `bb fusion-live --update` (the `pdf/` and `pdf-tagged/` categories are new entries). **The `emon-live` entry the scoreboard committed at P6.5 is
+  stale on the scans, and not because of this item**: 20 `scan/` metrics (`scan/all` CER 0.0878 committed, 0.0938 now; `scan/forms` 0.0558 to 0.1098; `scan/headings` block-heading-f1 0.803 to 0.775) are over the
+  tolerance, the same numbers P7.4 measured and judged (its entry says `scan/all` 0.0938 to 0.0941 against its own `--no-retarget`), and a `--no-retarget` run gives `scan/forms` CER 0.1089: no scan page asks anything
+  of this item (a scan has no text layer, so no `rp-plan` row). They are held, not recorded over, not re-baselined (D079): a value is only ever raised, and `bb fusion-live --update` raises 154 of the entry's
+  metrics (the `pdf/` and `pdf-tagged/` categories are new) and leaves those 20 at their committed values. They want an item of their own (which of P6.5a, P6.7, P7.4 moved them).
+
+  *Not done*: **`bb ink` and `bb trace` do not read the transcripts' bitmaps and are not gates** (D605: the gates' transcripts are slim; the two read the corpus and poppler, ghostscript, qpdf, ImageMagick), so their
+  targets are not ratcheted; **pages with no text layer and no DCT scan** (a Flate or CCITT page image, outlined text on its own page) are still not read: they need the render-as-scan unit (the page unit
+  of D212 reading a render instead of a decode), the first thing a `pk-none` page asks under `always`; `witness` runs no targeted pass of P7.4 on a page that does not escalate; the Java and C# Engines'
+  wiring (below).
+
+  **What the Java and C# Engines need (not on this branch: `host/java` and `host/csharp` hold the ports only)**, in the Rust and Go pattern: (1) `Options`: `ocrScope` (`Full`, `Witness`; code 0, 1), no `ocrBornDigital`;
+  the embedder surface of `bb embedders` (`OcrScope` and its two variants) when they join it. (2) The PDF document pass: after `th-run` call `pu-plan` with its new signature `(src ar dc a b st pg im words policy scope fw fl et hl sp pl rs1 rs2)`
+  (`fw fl hl` are `th-run`'s, `et` the text layer's text, `rs1 rs2` two scratch `Cells`); a plan row is 14 cells (`pu-w`), witness rows follow the page rows. (3) The page unit: `pu-run-pdf` takes `fl` after `fw`;
+  its `fuse` argument is `2 * no_retarget` (bit 1 no longer means anything). (4) Fusion's evidence borrowing (`epages`, `feats`, `pts`) and the "nothing was read" cleanup are keyed on the policy not being `never`, not on a
+  flag. (5) After `sc-tag` in both finish paths (PDF and raster) call `rp-settings(nodes, attrs, text, scope)`. (6) The Tesseract adapter: a language cell whose first byte is an uppercase letter names an ISO 15924
+  script and is mapped to the installed models that read it (the tables in `host/rust/src/tess.rs` and `host/go/tess.go`: `model_script`, `script_reads`), falling back to every model; the cell is four ASCII bytes
+  packed big-endian, as before. (7) `RunStats`' timing (D604: a timing wrapper round the ports' fulfiller and three clocks) is optional for identity. (8) The host tests that said "a born-digital page asks nothing" now
+  say it asks two renders (`record_and_replay_with_a_born_digital_page_asking_for_its_rasters`).
+
 ## Phase 8 — Figures, seals, signatures
 
 - [ ] P8.1 — Figure classification and placeholders (SPEC §10.6, D020). Its candidate regions are P7.G's `grg` `figure`
@@ -9332,4 +9406,9 @@ and CER rose 0.0858 to 0.1046; that was a line made of cells of confidence well 
 ### D605 — The gate `bb fusion`: G1 against `--ocr=never`, the graphics contract per document, and what did not move into it (P7.S; D201, D222)
 **Decision**: `bb fusion` replays the re-recorded set on Rust and Go (identical bundle, the recording's digest, `transcript-miss` for a changed request) and holds, per document, CER at most the no-engine run's + 0.0005 and `tl-override` 0 (D201's G2, as it did), the default no-engine run equal to the `--ocr=never` run (G1), the graphics contract of D222 (the tables of an image-free document, text, scope, spans and boxes cell for cell, are the no-engine run's), and the `emon-fusion` ratchet. `bb ink` and `bb trace` do NOT join the gates: the transcripts of a gate are slim (D602), the two read corpora and tools (poppler, ghostscript, qpdf, ImageMagick) that a gate does not assume, and their targets are measured on scans of known truth, not on the fusion set; they stay measurements (see the entry's departures).
 **Why**: a gate holds what it can hold on what it carries. **Alternatives**: committing bitmaps for `bb ink` (the pixel budget).
+- [ ] **Signed off** (maintainer)
+
+### D606 — `bb fusion-live` records `emon-live` toward better only, and reports (does not record over) the scan metrics that were already behind the committed entry (P7.S; D079, D216)
+**Decision**: `bb fusion-live --update` runs `emon-live` with the policy on (pdfium and Tesseract in the driver, `predict-emon-live.sh` uses the fusion build when the pdfium is fetched) over the five variants and merges the entry with `merge-up` (a value only ever rises; new categories are new keys); a regression of a `pdf/` or `pdf-tagged/` category against the committed entry fails the run, one of a scan category is printed and held. Twenty `scan/` metrics are behind the P6.5 entry (D216) by more than the tolerance (the first five of them: `scan/all` CER 0.0878 to 0.0938, `scan/forms` CER 0.0558 to 0.1098, `scan/headings` block-heading-f1 0.803 to 0.775, `align-wrong` 0 to 0.054): not this item's (a scan page asks nothing of `rp-plan`, a `--no-retarget` run gives the same `scan/forms` figure, and P7.4 measured the same `scan/all` 0.0938), so they are neither fixed nor re-baselined here. The `emon` and `emon-replay` entries did not move; `emon-fusion` rose on nine metrics.
+**Why**: D079 never lowers a value; a ratchet that blocks a recording of the new born-digital categories because of another item's scans would leave the switch unmeasured. **Alternatives**: `ocr-live --update` to re-baseline (lowers nothing but hides the regression); failing the run (blocks the born-digital record).
 - [ ] **Signed off** (maintainer)
