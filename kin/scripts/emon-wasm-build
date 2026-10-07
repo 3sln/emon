@@ -1,0 +1,114 @@
+#!/bin/sh
+# Build the WASM binding (the Rust host for wasm32-unknown-unknown); print the module's path.   kin/scripts/emon-wasm-build
+#
+# The browser's host (DEVLOG P9.3, SPEC 13.1, D580-D587): the SAME crate `emon-rs-build` assembles (the generated modules and
+# `host/rust/src/`), plus `host/wasm/src/wasm.rs`, the C ABI the JS SDK (`host/js/`) drives, built as a `cdylib`:
+#
+#     .cache/emon-wasm/src/            what `.cache/emon-rs/src/` has, and `wasm.rs` (host/wasm/src/wasm.rs)
+#     .cache/emon-wasm/Cargo.toml      the same dependencies (host/rust/Cargo.lock), `crate-type = ["cdylib"]`
+#     .cache/emon-wasm/target/wasm32-unknown-unknown/release/emon.wasm      the module
+#
+# THE TOOLCHAIN is a pinned nightly (EMON_WASM_TOOLCHAIN, default nightly-2026-09-16), with the `wasm32-unknown-unknown` target and
+# `rust-src`, because the engine NEEDS UNWINDING: kin's named limit breaches are panics, and an attempt that missed may panic on
+# the zeros a missed read answered (D058: such a panic is a miss, never reported). The stable wasm32 target aborts on a panic,
+# which would end the module; a nightly `-Zbuild-std` with `-Cpanic=unwind` and the WebAssembly exception-handling feature
+# unwinds, so `catch_unwind` works as on every other target and the answers are the native hosts'. The module then needs a
+# browser (or Node with `--experimental-wasm-exnref`, as v24.6 needs) that runs the standardised exception handling (`try_table`:
+# Chrome 137, Firefox 131, Safari 18.4). No wasm-bindgen: the module has no imports at all (the test checks), its ABI is plain
+# integers and byte ranges of its memory.
+#
+#   one-time:  rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown
+#
+# WITHOUT THE TOOLCHAIN THIS SKIPS LOUDLY: it prints `SKIP wasm -- why` on stderr and exits 3 (callers with a wasm arm leave it
+# out and say so; nothing fails). `bb emit` is NOT run here: callers that must be current run it first.
+#
+#   EMON_WASM_WARN=1   build with warnings on (for the host files and wasm.rs)
+set -e
+cd "$(dirname "$0")/../.."
+tc="${EMON_WASM_TOOLCHAIN:-nightly-2026-09-16}"
+if ! command -v rustup > /dev/null 2>&1; then
+  echo "SKIP wasm -- rustup is not installed (the pinned nightly $tc and its wasm32 target come from it)" >&2
+  exit 3
+fi
+cargo=$(rustup which --toolchain "$tc" cargo 2>/dev/null || true)
+rustc=$(rustup which --toolchain "$tc" rustc 2>/dev/null || true)
+if [ -z "$cargo" ] || [ -z "$rustc" ]; then
+  echo "SKIP wasm -- the toolchain $tc is not installed (rustup toolchain install $tc -c rust-src -t wasm32-unknown-unknown)" >&2
+  exit 3
+fi
+sysroot=$("$rustc" --print sysroot)
+if [ ! -d "$sysroot/lib/rustlib/wasm32-unknown-unknown/lib" ]; then
+  echo "SKIP wasm -- $tc has no wasm32-unknown-unknown target (rustup target add wasm32-unknown-unknown --toolchain $tc)" >&2
+  exit 3
+fi
+if [ ! -d "$sysroot/lib/rustlib/src/rust/library" ]; then
+  echo "SKIP wasm -- $tc has no rust-src (rustup component add rust-src --toolchain $tc): the unwinding std is built from it" >&2
+  exit 3
+fi
+
+crate=.cache/emon-wasm
+mkdir -p "$crate/src/emon"
+
+put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
+
+keep=""
+for f in gen/rust/emon/*.rs; do
+  m=$(basename "$f" .rs)
+  case "$m" in *test|*probe) continue ;; esac
+  keep="$keep $m"
+  put "$f" "$crate/src/emon/$m.rs"
+done
+for f in "$crate"/src/emon/*.rs; do
+  [ -e "$f" ] || continue
+  m=$(basename "$f" .rs)
+  case " $keep " in *" $m "*) ;; *) rm -f "$f" ;; esac
+done
+for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
+put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
+rm -f "$crate/src/emon.rs.new"
+
+for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+put host/wasm/src/wasm.rs "$crate/src/wasm.rs"
+cat > "$crate/Cargo.toml.new" <<'TOML'
+[package]
+name = "emon"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[features]
+tesseract = []
+
+[dependencies]
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
+fax = "=0.2.7"
+miniz_oxide = "=0.8.9"
+zune-jpeg = "=0.5.15"
+zune-core = "=0.5.3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)"] }
+
+# the same arithmetic as the native hosts: overflow checks stay on (a breach is a named limit)
+[profile.release]
+opt-level = 3
+overflow-checks = true
+debug = false
+TOML
+put "$crate/Cargo.toml.new" "$crate/Cargo.toml"
+rm -f "$crate/Cargo.toml.new"
+
+# unwinding (exception handling), a 16 MiB stack (kin recurses; the native hosts' main thread has 8 MiB, this one is not
+# bounded by a guard page, so the build gives it room), and no wasm-opt (none is required)
+flags="-Ctarget-feature=+exception-handling -Cpanic=unwind -Clink-arg=-zstack-size=16777216"
+[ "${EMON_WASM_WARN:-}" = 1 ] || flags="$flags -A warnings"
+put host/rust/Cargo.lock "$crate/Cargo.lock"
+# rust-lld of the nightly links libLLVM through an rpath that is wrong on macOS; the toolchain's own lib/ is where it is
+out=$(cd "$crate" && env RUSTC="$rustc" DYLD_FALLBACK_LIBRARY_PATH="$sysroot/lib" RUSTFLAGS="$flags" "$cargo" build --release -q --target wasm32-unknown-unknown -Zbuild-std=std,panic_unwind 2>&1) || { echo "$out" | head -80 >&2; echo "emon-wasm: build failed" >&2; exit 1; }
+[ -z "$out" ] || echo "$out" | grep -v 'exception-handling\|issue #162235\|phased out\|not stably supported\|^$\|^warning: unstable feature' >&2 || true
+wasm="$crate/target/wasm32-unknown-unknown/release/emon.wasm"
+[ -f "$wasm" ] || { echo "emon-wasm: no $wasm" >&2; exit 1; }
+echo "$wasm"

@@ -33,9 +33,20 @@
 ;; the HTML in `external` and `omit` mode and every asset file, byte for byte (hex), so the asset files and the three HTML
 ;; modes are identical on every arm, in memory and through the 512-byte async source (a gate of its own below).
 ;;
+;; THE BROWSER (P9.3, D580) is a host too, when the WASM toolchain is there: the Rust host built for wasm32 and driven by the JS SDK in
+;; a headless Chrome (`test/driver/wasm/`). Every input goes through five byte-source adapters (an ArrayBuffer, a Blob, a URL read by
+;; `Range` from a local server, a spooled ReadableStream, and a `{size, read}` over 512-byte chunks whose every read is a promise: the
+;; engine misses, the JS loop awaits and runs it again), each to the reference bundle, exit code and stderr (`--full`: also a
+;; Uint8Array view, a File, a custom source and an ArrayBuffer read by range); then the browser RECORDS a transcript (the same
+;; directory as Rust's, byte for byte) and REPLAYS Rust's to the reference bundle. With `assets` on, the asset documents run
+;; through it as well (from their committed transcripts where a codec image needs one): the HTML in three modes and every asset
+;; file. Without the toolchain (`kin/scripts/emon-wasm-run` exits 3: no nightly with rust-src, Node 22, Chrome, or the JS
+;; devDependencies) the arm is left out, loudly; EMON_SKIP_WASM=1 leaves it out on purpose.
+;;
 ;; A difference prints the first differing section and byte offset, and the arms.
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [process shell destroy-tree]]
+         '[cheshire.core :as json]
          '[clojure.string :as str])
 
 (def fails (atom 0))
@@ -59,6 +70,14 @@
       (do (println "  FAIL the" what "driver did not build:\n" (:err r)) (System/exit 1)))))
 (def rust (build "kin/scripts/emon-rs-build" "Rust"))
 (def go (build "kin/scripts/emon-go-build" "Go"))
+;; THE BROWSER ARM (P9.3, D580) is optional: `emon-wasm-run --check` exits 3 with `SKIP wasm -- why` on stderr when the toolchain is
+;; missing, and the arm is then left out, LOUDLY, and nothing fails.
+(def wasm
+  (let [r @(process {:out :string :err :string} "kin/scripts/emon-wasm-run" "--check")]
+    (case (:exit r)
+      0 (str/trim (:out r))
+      3 (do (println (str "  " (str/trim (:err r)) " (the wasm arm is left out)")) nil)
+      (do (println "  FAIL the wasm module did not build:\n" (:err r)) (System/exit 1)))))
 
 ;; ---------------------------------------------------------------- the corpus
 
@@ -175,6 +194,82 @@
     {:probs @probs
      :outcome (if (zero? (:exit ref)) :document (or (second (re-find #"error: (\S+)" (:err ref))) :other))}))
 
+;; ------------------------------------------------------------ the browser arm (P9.3, D580)
+
+(def wasm-adapters
+  (if full?
+    ["array" "u8" "blob" "file" "url" "stream" "custom" "lazy" "async512"]
+    ["array" "blob" "url" "stream" "async512"]))
+
+(defn- wasm-batch
+  "One batch of [i item ref rd] through the browser: every adapter, the browser's own recording and its replay of Rust's. Answers the problems, as
+  [file text] pairs, and how many jobs ran."
+  [label base batch]
+  (let [assets? (seq @extra)
+        base-job (fn [i item id adapter]
+                   (cond-> {:id id :path (:file item) :adapter adapter}
+                     (:pw item) (assoc :password (:pw item))
+                     assets? (assoc :assets "images")))
+        jobs (vec (concat
+                   (for [[i item _ _] batch a wasm-adapters]
+                     (cond-> (base-job i item (str i "-" a) a)
+                       (:replay item) (assoc :replayDir (:replay item) :replay (mapv fs/file-name (fs/list-dir (:replay item))))))
+                   (for [[i item _ rd] batch :when rd kind [:rec :rep]]
+                     (cond-> (base-job i item (str i "-" (name kind)) "array")
+                       (= kind :rec) (assoc :record true)
+                       (= kind :rep) (assoc :replayDir rd :replay (mapv fs/file-name (fs/list-dir rd)))))))
+        jf (str base "/jobs.json")
+        outd (str base "/out")]
+    (fs/delete-tree outd)
+    (spit jf (json/generate-string jobs))
+    (let [r @(process {:out :string :err :string :extra-env {"EMON_WASM_MODULE" wasm}} "kin/scripts/emon-wasm-run" "--jobs" jf "--out" outd)]
+      (when-not (zero? (:exit r))
+        (println "  FAIL the browser driver failed:\n" (:err r))
+        (System/exit 1)))
+    (let [answer (fn [id] {:exit (parse-long (slurp (str outd "/" id ".exit")))
+                           :err (slurp (str outd "/" id ".err"))
+                           :out (.getBytes ^String (slurp (str outd "/" id ".out")) "UTF-8")})
+          probs (atom [])]
+      (doseq [[i item ref rd] batch]
+        (let [note (fn [& xs] (swap! probs conj [(:file item) (apply str xs)]))]
+          (doseq [a wasm-adapters]
+            (let [r (answer (str i "-" a))]
+              (when-not (same? ref r) (note "wasm/" a " differs from rust/bytes: " (first-diff ref r)))))
+          (when rd
+            (let [rec (answer (str i "-rec"))
+                  rep (answer (str i "-rep"))
+                  rf (dir-files rd)
+                  wf (dir-files (str outd "/" i "-rec.transcript"))
+                  lossy? (re-find #"(?i)\.jpe?g$" (:file item))
+                  strip-png (fn [m] (into {} (remove (fn [[k _]] (str/ends-with? k ".png")) m)))]
+              (when-not (same? ref rec) (note "wasm record changes the answer: " (first-diff ref rec)))
+              (when-not (if lossy? (= (strip-png rf) (strip-png wf)) (= rf wf))
+                (note "the transcripts differ: rust " (some-> rf keys vec) " wasm " (some-> wf keys vec)))
+              (when-not (same? ref rep) (note "wasm replaying rust's transcript differs: " (first-diff ref rep)))))))
+      (fs/delete-tree outd)
+      {:probs @probs :jobs (count jobs)})))
+
+(defn wasm-pass
+  "The browser over `items` (the same inputs and flags the other arms had): byte-identical to the reference on every adapter, its recording the
+  one Rust makes, its replay of Rust's. Prints the score, or the differences."
+  [label items]
+  (let [t1 (System/currentTimeMillis)
+        base (str work "/wasm-" label)
+        _ (fs/create-dirs base)
+        prep (vec (pmap (fn [[i item]]
+                          (let [ref (drive :rust [] item)
+                                rd (when (and (zero? (:exit ref)) (not (:replay item)))
+                                     (let [d (str base "/" i "-rust")] (drive :rust [(str "--record=" d)] item) d))]
+                            [i item ref rd]))
+                        (map-indexed vector items)))
+        res (doall (for [batch (partition-all 60 prep)] (wasm-batch label base batch)))
+        probs (mapcat :probs res)]
+    (doseq [[f t] probs] (bad "[wasm" (when (seq label) (str " " label)) "] " f ": " t))
+    (when (empty? probs)
+      (ok "IDENTITY (wasm" (when (seq label) (str ", " label)) "): " (count items) " inputs through the browser, " (str/join ", " wasm-adapters)
+          ": byte-identical to the reference bundle, exit and stderr; its recorded transcript is Rust's, and it replays Rust's ("
+          (reduce + (map :jobs res)) " conversions, " (quot (- (System/currentTimeMillis) t1) 1000) " s)"))))
+
 ;; ----------------------------------------------------------------- the run
 
 (println (str "  identity: " (count corpus*) " inputs x " (count arms) " arms + the transcript trip"
@@ -191,6 +286,10 @@
         (str/join ", " (for [[k v] (sort-by (comp str key) (dissoc outcomes :document))] (str k " " v)))
         "), " (count arms) " arms each, byte-identical bundles (JSON compact and pretty, HTML default and full, evidence, intake) and exit and stderr; "
         "the record/replay trip across hosts is the same (" (quot (- (System/currentTimeMillis) t0) 1000) " s)")))
+
+;; the browser, over the same corpus (P9.3)
+(when (and wasm (not corpus?) (zero? @fails))
+  (wasm-pass "" (vec corpus*)))
 
 ;; ---------------------------------------------------------------- the assets pass (P3.13)
 
@@ -215,7 +314,9 @@
       (let [n (count (filter #(= :document (:outcome (second %))) res))]
         (ok "IDENTITY (assets=images): " (count res) " documents (" n " converted), " (count arms) " arms each: byte-identical JSON with its `assets`, HTML in the "
             "default, full, external and omit modes and every asset file (hex), the record/replay trip across hosts the same ("
-            (quot (- (System/currentTimeMillis) t1) 1000) " s)")))))
+            (quot (- (System/currentTimeMillis) t1) 1000) " s)"))))
+  (when (and wasm (zero? @fails))
+    (wasm-pass "assets" asset-corpus)))
 
 (if (zero? @fails)
   (System/exit 0)

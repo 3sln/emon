@@ -2,6 +2,7 @@
 # SPEC 3.1): a runtime build must not need babashka. What is ignored here is
 # what a compiler produces, not what kin does.
 target/
+node_modules/
 *.class
 bin/
 obj/

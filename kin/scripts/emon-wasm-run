@@ -1,0 +1,46 @@
+#!/bin/sh
+# The browser arm's driver: build the WASM module, check what running it needs, then run jobs in headless Chrome.
+#   kin/scripts/emon-wasm-run --check                           build; print the module's path (exit 3 `SKIP wasm -- why` if anything is missing)
+#   kin/scripts/emon-wasm-run --jobs FILE --out DIR [--pages N] the same, then `test/driver/wasm/run.mjs` (jobs in, answers out)
+#
+# The browser harness (DEVLOG P9.3; `test/driver/wasm/`) needs, besides the module (`emon-wasm-build`): Node 22 or newer, a
+# Chrome or Chromium (EMON_CHROME, then the usual places) and the repository's own JavaScript devDependencies, installed once
+# with `npm ci --prefix host/js` (puppeteer-core and tesseract.js, pinned by host/js/package-lock.json). WITHOUT ANY OF THEM THIS
+# SKIPS LOUDLY: `SKIP wasm -- why` on stderr and exit 3, and the caller leaves the arm out and says so. EMON_SKIP_WASM=1 leaves it
+# out on purpose.
+set -e
+cd "$(dirname "$0")/../.."
+if [ -n "${EMON_SKIP_WASM:-}" ]; then
+  echo "SKIP wasm -- EMON_SKIP_WASM is set" >&2
+  exit 3
+fi
+# a caller that has already run `--check` names the module it printed: nothing is rebuilt or re-checked (a no-op cargo build of the
+# unwinding std is seconds, and a gate runs this once per batch of jobs)
+if [ -n "${EMON_WASM_MODULE:-}" ] && [ "${1:-}" != "--check" ]; then
+  exec node test/driver/wasm/run.mjs --wasm "$EMON_WASM_MODULE" "$@"
+fi
+rc=0
+wasm=$(kin/scripts/emon-wasm-build) || rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+if ! command -v node > /dev/null 2>&1; then
+  echo "SKIP wasm -- no node on the PATH (the browser harness is JavaScript)" >&2
+  exit 3
+fi
+major=$(node -p 'process.versions.node.split(".")[0]')
+if [ "${major:-0}" -lt 22 ] 2>/dev/null; then
+  echo "SKIP wasm -- the browser harness needs Node 22 or newer; this is $major" >&2
+  exit 3
+fi
+if [ ! -d host/js/node_modules/puppeteer-core ]; then
+  echo "SKIP wasm -- host/js has no node_modules (npm ci --prefix host/js)" >&2
+  exit 3
+fi
+if ! node -e "import('./test/driver/wasm/browser.mjs').then((m) => process.exit(m.findChrome() ? 0 : 1))" > /dev/null 2>&1; then
+  echo "SKIP wasm -- no Chrome or Chromium (set EMON_CHROME)" >&2
+  exit 3
+fi
+if [ "${1:-}" = "--check" ]; then
+  echo "$wasm"
+  exit 0
+fi
+exec node test/driver/wasm/run.mjs --wasm "$wasm" "$@"

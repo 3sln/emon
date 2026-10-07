@@ -884,19 +884,33 @@ filter), named by its SHA-256 so the record, and so the transcript key,
 never holds the bytes; a second such span for `JBIG2Globals`). A payload is
 input-derived, like a `bytes` answer, so it is never written to a transcript.
 
-**WASM.** pdfium has a WebAssembly build (bblanchon/pdfium-binaries ships
+**WASM.** The browser's host is the Rust host built for
+`wasm32-unknown-unknown` (`host/wasm`, D580) and the JS SDK over it
+(`host/js`): the module has no imports at all, and the JS side owns the loop
+(§7.3, 2). `emon_step` runs kin until it needs something and says what: bytes
+of the document its `Src` missed (the JS loop awaits `read(offset, length)` of
+the byte source, hands the bytes in and steps again; the unit that missed is
+re-run from scratch inside the step), or requests for the host. `decode` and
+`decode-img` are the module's own (PNG, JPEG, TIFF, CCITT and DCT in Rust),
+read from the bytes the host provided; `ocr` is the JS host's, fulfilled by
+`ports.ocr` (tesseract.js: `host/js/src/tesseract.js`, D583). A request no
+port is configured for (`render` and `crop`; `ocr` from a host with no
+engine) is answered `unsupported`, which is an answer (D199, D582). A
+transcript recorded natively replays in the browser and the reverse, to the
+same Model (`bb identity`'s browser arm holds it).
+pdfium has a WebAssembly build (bblanchon/pdfium-binaries ships
 `pdfium-wasm.tgz`, pinned beside the native ones in `tools/pdfium/pdfium.edn`;
-PDFium's own `FPDF_*` C API, exported through Emscripten). The JS host
-fulfils `render` and `crop` as it fulfils OCR: it owns the loop (§7.3, 2),
-loads the module once, serves pdfium's custom file-access callback from the
-async byte source (`FPDF_LoadCustomDocument` with `m_GetBlock` reading a
-resident span, or the request awaited first as a `bytes` round, D058), builds
-the same page edits for the layers and answers with RGB pixels in a
-`Uint8Array` that the Rust/WASM core writes into a `Bitmap`. Nothing in kin
-or in the transcript changes: what the browser's pdfium draws is recorded
-like any engine's, and a transcript recorded natively replays in the
-browser (and the reverse) to the same Model. This is an item of P9.3; it is
-not built.
+PDFium's own `FPDF_*` C API, exported through Emscripten): the JS host would
+fulfil `render` and `crop` as it fulfils OCR, serving pdfium's custom
+file-access callback from the async byte source (`FPDF_LoadCustomDocument`
+with `m_GetBlock` reading a resident span, or the request awaited first as a
+`bytes` round, D058), building the same page edits for the layers and
+answering with RGB pixels that the core writes into a `Bitmap`. Nothing in
+kin or in the transcript would change. **That part is not built** (D582): a
+born-digital PDF needs no render for its text, and a scanned page is read
+through `decode`; what only a render could give (a page's pixels for
+fusion, a seal's or figure's crop) degrades to the engine's no-Renderer
+answer.
 
 Cheap, deterministic ports (`Blob`, `Cells`, `Text`, `Bitmap` pixel access,
 `Crypto`, limits) are called synchronously as in nome.
@@ -2770,12 +2784,19 @@ itself).
 
 **The browser (WASM).** Everything above is kin, so the WASM build does the
 same; the costs are memory. The `abytes` `Buf` lives in linear memory, up to
-`assets-bytes`; `to_html` with `inline` adds 4/3 of that again as UTF-8, and
-the JS string another 2× (UTF-16), so 32 MiB of assets is about 150 MB of
-peak heap. The JS SDK therefore documents `external` as the browser form:
+`assets-bytes`; `to_html` with `inline` adds 4/3 of that again as UTF-8 (an
+all-ASCII `data:` HTML decodes to a one-byte-a-character JS string, not
+UTF-16). The JS SDK therefore documents `external` as the browser form:
 `asset.blob()` returns a `Blob` of the right `type` (one copy out of linear
-memory), for `URL.createObjectURL` or a zip writer, and `asset-prefix` plus
-a name map does the rest. Crop bitmaps are freed with their unit; decoding
+memory, which the page's heap never holds), `asset.bytes()` a `Uint8Array`
+copy (in the heap's accounting), for `URL.createObjectURL` or a zip writer,
+and `model.htmlWithBlobURLs()` does the naming (`asset-prefix` plus a name
+map by hand otherwise). **Measured** (D584): a 36 MiB document whose assets
+fill 30 MiB of the 32 MiB default (ten of them: the next would not fit) takes
+213 MiB of the module's linear memory, and above the page's 36.8 MiB heap
+baseline the JS heap peaks at 40.2 MiB in `inline` (the one string of the
+HTML) and at 0.2 MiB in `external` with `blob()` (30.2 MiB if each asset is
+also copied out with `bytes()`). Crop bitmaps are freed with their unit; decoding
 a Flate image still inflates it whole into `Cells` (four bytes a sample),
 which `asset-pixels` bounds (about 50 MB at the default for RGB) until
 `inflate` can write a `Buf`.
@@ -2953,6 +2974,19 @@ dependence on a concrete filesystem**. So:
   an attempt that has missed is treated as a miss, never reported. Units
   must therefore be pure and must not mutate `Cells` they did not create or
   copy for the attempt (D008, D022).
+* **In the browser** (D580, D581) the loop is the JS SDK's: the WASM module
+  answers `need-bytes` with the ranges its `Src` missed, the SDK awaits
+  `read(offset, length)` of the source for them (several at once), hands the
+  bytes in and steps again; there is no whole-file read. An in-memory source
+  (`ArrayBuffer`, `Uint8Array`) is *resident* and the SDK gives the engine its
+  bytes at once (reading what the page already holds is not a read; `lazy`
+  reads it by range like the rest); a `Blob` or `File`, a URL and any
+  `{size, read}` are read by range. A URL source pins its validator at open
+  (a strong `ETag`, else `Last-Modified`), sends it as `If-Range` and checks
+  every answer against it and against the length: a change is `source-changed`.
+  A read that rejects is `io`, a read that comes back short is
+  `source-changed`, a stream longer than `input-bytes` is refused while it is
+  spooled.
 * **Bounds.** Read-ahead doubles per round of a unit: round *r* fetches
   at least 64 KiB · 2^r around each miss, coalesced with adjacent and
   already-requested ranges into one request per run of chunks. Once the

@@ -1,0 +1,19 @@
+{
+  "name": "@3sln/emon",
+  "version": "0.0.0",
+  "private": true,
+  "description": "emon's JavaScript SDK: PDFs and images to semantic HTML in the browser, over the WASM binding (DEVLOG P9.3). The library has no dependencies; the devDependencies are the browser test harness and the tesseract.js engine the OCR adapter drives.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./tesseract": "./src/tesseract.js"
+  },
+  "files": ["src"],
+  "engines": { "node": ">=22" },
+  "devDependencies": {
+    "puppeteer-core": "25.12.0",
+    "tesseract.js": "7.0.0",
+    "@tesseract.js-data/eng": "1.0.0"
+  }
+}

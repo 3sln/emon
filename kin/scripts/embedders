@@ -220,7 +220,9 @@
 
 (def rust-only
   "[kind Type member] on the Rust side with no Go twin, and why."
-  {[:type "Inputs" nil]
+  {[:method "Engine" "start_pushed"]
+   "the step-wise run for an embedder that owns the loop (the browser build, P9.3, D580: a JS read is a promise, so the engine is stepped and the bytes it misses are pushed in): an extra way in over `emon::engine::{Run, ChunkCache}`, not part of SPEC 13's Engine; Go's loop is `plan.Run` over a blocking `io.ReaderAt` and needs none"
+   [:type "Inputs" nil]
    "a conversion wrapper for Rust's `impl Into<Inputs>` (a bare buffer, one Input or a Vec): Go has no overloading, takes `[]Input`, and `BytesInput(b)` is the bare-buffer shorthand (SPEC 13)"
    [:type "OcrPort" nil]
    "a newtype over `Arc<dyn Ocr>` so that `Config` stays `Debug` and `Clone` (D211): Go's `Config.Ocr` is the `Ocr` interface value itself"})
@@ -402,10 +404,14 @@
 (def cs-tokens [#"\bFile\.(Open|Read|Write|Exists|Create|Append)" #"\bDirectory\." #"\bFileStream\b" #"System\.IO\.Path" #"\bFileInfo\b" #"\bDirectoryInfo\b"
                 #"\bStreamReader\(\s*[a-z]*[Pp]ath"])
 
+;; the JS SDK (P9.3, host/js/src): no Node module, no `fs`, no path; it reads what a byte source gives it
+(def js-tokens [#"\bnode:" #"\brequire\(" #"\bfs\." #"\bFileSystem" #"\breadFile(Sync)?\b" #"\bcreateReadStream\b" #"\bprocess\.cwd\b" #"\bimport\s+[^;]*from\s+['\"](fs|path|os)['\"]"])
+
 (def library-files
   (let [g (fn [d pat] (map str (fs/glob d pat)))
         not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/tess\.go|_test\.go|/tests/" %) fs))]
-    {:rust (not-test (g "host/rust/src" "*.rs"))
+    {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs")))
+     :js (g "host/js/src" "*.js")
      :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go")))
      :java (not-test (g "host/java/emon" "*.java"))
      :csharp (not-test (g "host/csharp/Emon" "*.cs"))}))
@@ -417,7 +423,7 @@
      :java (filter lib? (map str (fs/glob "gen/java" "**/*.java")))
      :csharp (filter lib? (map str (fs/glob "gen/csharp" "**/*.cs")))}))
 
-(let [toks {:rust rust-tokens :go go-tokens :java java-tokens :csharp cs-tokens}
+(let [toks {:rust rust-tokens :go go-tokens :java java-tokens :csharp cs-tokens :js js-tokens}
       hits (for [[host files] (merge-with concat library-files generated-files)
                  f files
                  h (banned-in f (toks host))]
@@ -426,7 +432,7 @@
       gens (reduce + (map count (vals generated-files)))]
   (doseq [[f line tok] hits] (bad f ":" line " names a filesystem (" tok "): D058, the library never opens a file or names a path"))
   (when (and (empty? hits) (pos? libs) (pos? gens))
-    (ok "NO FILESYSTEM (D058): " libs " host library files and " gens " generated non-test modules, in Rust, Go, Java and C#, name no file, path or directory function or type (`os.LookupEnv`/`std::env` for the EMON_LIMIT_* bounds are the only operating-system reads)")))
+    (ok "NO FILESYSTEM (D058): " libs " host library files (the browser's too: the WASM binding and the JS SDK, P9.3) and " gens " generated non-test modules, in Rust, Go, Java and C#, name no file, path or directory function or type (`os.LookupEnv`/`std::env` for the EMON_LIMIT_* bounds are the only operating-system reads)")))
 
 (if (zero? @fails)
   (System/exit 0)

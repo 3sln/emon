@@ -17,7 +17,10 @@
 ;;   3. a first CER of that evidence against the page's gold, under a ceiling;
 ;;   4. a replay never guesses: a changed request is `transcript-miss` on both;
 ;;   5. (P6.5) the committed SCAN transcripts of test/ocr/scan/, through the WHOLE Engine on Rust and on Go to one Model, the Model's
-;;      provenance, `transcript-miss` for a changed request, the no-engine conversion, and the `emon-replay` accuracy ratchet.
+;;      provenance, `transcript-miss` for a changed request, the no-engine conversion, and the `emon-replay` accuracy ratchet;
+;;   6. (P9.3) the same scans through the BROWSER (the WASM host and the JS SDK in a headless Chrome, when the toolchain is there):
+;;      the committed transcripts replayed to the Rust Engine's identical bundle, `transcript-miss` for a changed request, and the
+;;      no-engine conversion (`unsupported` is an answer). tesseract.js itself, live, is `bb wasm`.
 (require '[babashka.fs :as fs]
          '[babashka.classpath :as cp]
          '[babashka.process :refer [shell process]]
@@ -44,6 +47,15 @@
     {:exit (:exit r) :out (:out r) :err (:err r)}))
 
 (shell {:out :string :err :string} "kin/scripts/emit")
+
+;; THE BROWSER ARM (P9.3, D580) is optional: `emon-wasm-run --check` exits 3 with `SKIP wasm -- why` on stderr when the toolchain is
+;; missing, and the arm is then left out, LOUDLY, and nothing fails.
+(def wasm
+  (let [r @(process {:out :string :err :string} "kin/scripts/emon-wasm-run" "--check")]
+    (case (:exit r)
+      0 (str/trim (:out r))
+      3 (do (println (str "  " (str/trim (:err r)) " (the wasm arm is left out)")) nil)
+      (do (println "  FAIL the wasm module did not build:\n" (:err r)) (System/exit 1)))))
 
 (defn build-rust []
   (let [d (str work "/rust")]
@@ -195,6 +207,43 @@
               (check (and (zero? (:exit nr)) (same? nr ng) (not (str/includes? (:out nr) "\"ocr\":\"always\""))
                           (not (str/includes? (:out nr) "\"kind\":\"scanned\"")))
                      id ": with no engine the same scan converts to pages with no text, the same on both (`unsupported` is an answer)"))))
+        ;; THE BROWSER (P9.3, D580, D582): the Rust host built for wasm32, driven by the JS SDK in a headless Chrome, replays the same
+        ;; committed transcripts to the Rust Engine's bundle; a changed request is `transcript-miss` there too; and with no OCR port and no
+        ;; transcript the scan converts to pages with no text, as on Rust (`unsupported` is an answer: the SPEC 7.3 rule for a browser with no engine).
+        ;; tesseract.js itself is `bb wasm`'s (live, not a gate). Without the toolchain the arm is left out, loudly.
+        (when wasm
+          (let [base ".cache/ocr-wasm"
+                outd (str base "/out")
+                scan-pdf (fn [id] (str "test/corpus/synth/scan/" id ".pdf"))
+                tamper (fn [id]
+                         (let [d (str base "/tamper-" id)
+                               edn (slurp (str scan-dir "/" id "/transcript.edn"))]
+                           (fs/create-dirs d)
+                           (spit (str d "/transcript.edn") (str/replace edn #"(:kind :ocr :req \[\d+ 3 \d+ \d+ )3 " (fn [[_ p]] (str p "4 "))))
+                           d))]
+            (fs/create-dirs base)
+            (fs/delete-tree outd)
+            (spit (str base "/jobs.json")
+                  (json/generate-string
+                   (vec (mapcat (fn [id]
+                                  [{:id (str id "-replay") :path (scan-pdf id) :adapter "blob" :replayDir (str scan-dir "/" id) :replay ["transcript.edn"]}
+                                   {:id (str id "-tamper") :path (scan-pdf id) :adapter "array" :replayDir (tamper id) :replay ["transcript.edn"]}
+                                   {:id (str id "-noport") :path (scan-pdf id) :adapter "url"}])
+                                scan-ids))))
+            (let [r @(process {:out :string :err :string :extra-env {"EMON_WASM_MODULE" wasm}} "kin/scripts/emon-wasm-run" "--jobs" (str base "/jobs.json") "--out" outd)]
+              (check (zero? (:exit r)) "the browser driver ran " (* 3 (count scan-ids)) " conversions"))
+            (doseq [id scan-ids]
+              (let [rr (drive rdrv "--out=bundle" (str "--replay=" (abs (str scan-dir "/" id))) (abs (scan-pdf id)))
+                    nr (drive rdrv "--out=bundle" (abs (scan-pdf id)))
+                    ans (fn [k] {:exit (parse-long (slurp (str outd "/" id "-" k ".exit"))) :out (slurp (str outd "/" id "-" k ".out")) :err (slurp (str outd "/" id "-" k ".err"))})
+                    w (ans "replay") t (ans "tamper") n (ans "noport")]
+                (check (and (zero? (:exit w)) (= (:out w) (:out rr)))
+                       "[wasm] " id ": the browser replays the committed Tesseract transcript to the Rust Engine's IDENTICAL bundle (" (count (:out w)) " bytes)")
+                (check (and (= 4 (:exit t)) (str/includes? (:err t) "error: transcript-miss"))
+                       "[wasm] " id ": a changed request (psm 3 -> 4) is transcript-miss in the browser, nothing guessed")
+                (check (and (zero? (:exit n)) (= (:out n) (:out nr)) (not (str/includes? (:out n) "\"kind\":\"scanned\"")))
+                       "[wasm] " id ": with no engine the browser converts the same scan to pages with no text, as Rust does"))))
+          (fs/delete-tree ".cache/ocr-wasm"))
         ;; the ratchet
         (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-replay" "--variants" "scan"
                           "--ids" (str/join "," scan-ids))]
