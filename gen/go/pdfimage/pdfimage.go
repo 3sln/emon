@@ -525,6 +525,7 @@ func piCsRead(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *p
 	if c == 0 {
 		port.CellsSet(im, piClass, 9)
 		port.CellsSet(im, piNcomp, 1)
+		port.CellsSet(im, piFlags, port.CellsAt(im, piFlags)|8)
 		return 0
 	}
 	if c != 8 {
@@ -1383,6 +1384,9 @@ func PiAdopt(im *port.Cells, w int32, h int32, channels int32) int32 {
 		return 0
 	}
 	if (cls == 1) && (channels == 1) {
+		port.CellsSet(im, piNcomp, 1)
+	} else if (cls == 4) && (channels == 1) {
+		// an Indexed image the host decoded to its indices (a bilevel codec's): the palette stays
 		port.CellsSet(im, piNcomp, 1)
 	} else if (cls == 2) && (channels == 3) {
 		port.CellsSet(im, piNcomp, 3)

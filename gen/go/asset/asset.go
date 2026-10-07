@@ -8,6 +8,8 @@ import (
 	"emon/model"
 	"emon/pdfdoc"
 	"emon/pdfimage"
+	"emon/pdfsrc"
+	"emon/plan"
 	"emon/png"
 	"emon/port"
 )
@@ -23,6 +25,16 @@ const asBig int32 = 800
 const asFigureSide int32 = 1800
 
 const asPixfactor int32 = 2
+
+const asHostfactor int32 = 8
+
+func asHcap(maxpix int32) int32 {
+	// The most host pixels asked for in one document: `AS_HOSTFACTOR` times `asset-pixels`, saturated.
+	if maxpix > 268435455 {
+		return 2147483647
+	}
+	return maxpix * asHostfactor
+}
 
 const asMaxprod int32 = 4096
 
@@ -381,6 +393,20 @@ func asFromChain(rec *port.Cells) int32 {
 	return model.AfmRaw()
 }
 
+func asFromCodec(codec int32) int32 {
+	// `from` of an image whose last filter is an image codec (`pi-f-codec` 7 DCT, 8 JPX, 9 CCITT, 10 JBIG2).
+	if codec == 7 {
+		return model.AfmDct()
+	}
+	if codec == 8 {
+		return model.AfmJpx()
+	}
+	if codec == 9 {
+		return model.AfmCcitt()
+	}
+	return model.AfmJbig2()
+}
+
 func asSameKey(cand *port.Cells, r int32, obj int32, ori int32, vx0 int32, vy0 int32, vx1 int32, vy1 int32) int32 {
 	var b int32 = r * asStride
 	if port.CellsAt(cand, b+acObj) != obj {
@@ -418,7 +444,58 @@ func asCopyResult(cand *port.Cells, from int32, to int32) int32 {
 	return 0
 }
 
-func asMake(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, maxpix int32, cand *port.Cells, row int32, obj int32, ori int32, wholeOk int32, cbytes *port.Buf, out *port.Cells, rec *port.Cells, mrec *port.Cells, smp *port.Cells, msmp *port.Cells, data *port.Cells, rows *port.Cells, tmp *port.Cells, ws *port.Cells, z *port.Buf) int32 {
+func asId(row int32, k int32) int32 {
+	// The id of the `decode-img` request of candidate `row`: k 0 its image, 1 its mask.
+	return ((row * 2) + k) + 1
+}
+
+func asHost(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, input int32, rec *port.Cells, data *port.Cells, id int32, ans *port.Cells, rq *port.Cells, payload *port.Buf, bms *port.BitmapSet, glob *port.Cells, tmp *port.Cells, words *port.Cells, hs *port.Cells, hcap int32) int32 {
+	// The host's pixels of the codec image `rec` (its codestream is `data`, `pi-samples`' answer 1), request `id` (P6.1a,
+	// D117, D291). Answers 0: the answer is in and its pixels are `bms-get bms id` (the record has adopted them); 1: the host
+	// cannot (unsupported, failed, or not the image's size); 2: over its pixel limit; 3: the request is written (the
+	// caller answers codec for now, the host's loop asks again with the answers); 4: the host's pixels in all would pass `hcap`
+	// (a bound on what the answers hold at once); 12: the source missed. `hs` cell 0 counts the pixels asked for.
+	var at int32 = plan.AnFind(ans, id)
+	var gsh int32 = 0
+	var px int32 = pdfimage.PiGet(rec, pdfimage.PiFW()) * pdfimage.PiGet(rec, pdfimage.PiFH())
+	if at >= 0 {
+		if plan.AnOk(ans, at) == 1 {
+			if port.BmsHas(bms, id) == 0 {
+				return 1
+			}
+			if (plan.AnArg(ans, at, 0) != pdfimage.PiGet(rec, pdfimage.PiFW())) || (plan.AnArg(ans, at, 1) != pdfimage.PiGet(rec, pdfimage.PiFH())) {
+				return 1
+			}
+			if (plan.AnArg(ans, at, 2) != 1) && (plan.AnArg(ans, at, 2) != 3) {
+				return 1
+			}
+			pdfimage.PiAdopt(rec, plan.AnArg(ans, at, 0), plan.AnArg(ans, at, 1), plan.AnArg(ans, at, 2))
+			return 0
+		}
+		if plan.AnStatus(ans, at) == plan.PsLimit() {
+			return 2
+		}
+		return 1
+	}
+	if (port.CellsAt(hs, 0) + px) > hcap {
+		return 4
+	}
+	port.CellsSet(hs, 0, port.CellsAt(hs, 0)+px)
+	port.CellsDrop(glob, 0)
+	if pdfimage.PiGet(rec, pdfimage.PiFGobj()) != 0 {
+		gsh = pdfdoc.PdGet(src, ar, dc, a, b, st, pdfimage.PiGet(rec, pdfimage.PiFGobj()))
+		if gsh != 0 {
+			pdfdoc.PdStreamData(src, ar, dc, a, b, st, gsh, glob)
+		}
+		if pdfsrc.PsMissed(src) {
+			return 12
+		}
+	}
+	pdfimage.PiRequest(rq, id, input, rec, data, glob, payload, tmp, words)
+	return 3
+}
+
+func asMake(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, maxpix int32, cand *port.Cells, row int32, obj int32, ori int32, wholeOk int32, cbytes *port.Buf, out *port.Cells, rec *port.Cells, mrec *port.Cells, smp *port.Cells, msmp *port.Cells, data *port.Cells, rows *port.Cells, tmp *port.Cells, ws *port.Cells, z *port.Buf, input int32, ans *port.Cells, rq *port.Cells, payload *port.Buf, bms *port.BitmapSet, glob *port.Cells, words *port.Cells, hs *port.Cells) int32 {
 	// Make the pixels of the image object `obj` as placed by candidate `row` (whose box, visible box and flags are set):
 	// the row's status, type, bytes, hash, size and `from`. Answers 0, or 12 when the source missed (stop, re-run).
 	var sh int32 = pdfdoc.PdGet(src, ar, dc, a, b, st, obj)
@@ -448,6 +525,9 @@ func asMake(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	var k int32 = 1
 	var bil int32 = 0
 	var kf int32 = 0
+	var hrc int32 = 0
+	var pend int32 = 0
+	var codec int32 = 0
 	var flags int32 = AsGet(cand, row, acFlags)
 	if sh == 0 {
 		asSet(cand, row, acStatus, model.NzCodec())
@@ -495,8 +575,14 @@ func asMake(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 		}
 		i += 1
 	}
-	if pdfimage.PiGet(rec, pdfimage.PiFClass()) == 9 {
+	// a colour space kin does not read is `colorspace`; a JPX with none (the codestream says) is the host's, and Indexed over a codec whose
+	// samples are not the indices (DCT, JPX: the host scales them) is not asked for
+	if (pdfimage.PiGet(rec, pdfimage.PiFClass()) == 9) && ((pdfimage.PiGet(rec, pdfimage.PiFCodec()) != 8) || ((pdfimage.PiGet(rec, pdfimage.PiFFlags()) & 8) != 8)) {
 		asSet(cand, row, acStatus, model.NzColorspace())
+		return 0
+	}
+	if (pdfimage.PiGet(rec, pdfimage.PiFClass()) == 4) && ((pdfimage.PiGet(rec, pdfimage.PiFCodec()) == 7) || (pdfimage.PiGet(rec, pdfimage.PiFCodec()) == 8)) {
+		asSet(cand, row, acStatus, model.NzCodec())
 		return 0
 	}
 	// A browser shows this JPEG as the PDF painted it: the original bytes, passed through
@@ -525,26 +611,59 @@ func asMake(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 			asSet(cand, row, acOrigin, model.AoEmbedded())
 			return 0
 		}
-		// DCT that cannot pass through is the host's (decode-img, P6.1a)
-		asSet(cand, row, acStatus, model.NzCodec())
-		return 0
-	}
-	if pdfimage.PiGet(rec, pdfimage.PiFCodec()) != 0 {
-		asSet(cand, row, acStatus, model.NzCodec())
-		return 0
+		// DCT that cannot pass through is the host's (`decode-img`, P6.1a): below
+		if rc != 1 {
+			asSet(cand, row, acStatus, model.NzCodec())
+			return 0
+		}
 	}
 	if (int64(w) * int64(h)) > (int64(maxpix) * int64(asPixfactor)) {
 		asSet(cand, row, acStatus, model.NzTooLarge())
 		return 0
 	}
-	// kin's own samples
-	rc = pdfimage.PiSamples(src, ar, dc, a, b, st, rec, sh, smp)
-	if rc == 12 {
-		return 12
-	}
-	if rc == 1 {
-		asSet(cand, row, acStatus, model.NzCodec())
-		return 0
+	codec = pdfimage.PiGet(rec, pdfimage.PiFCodec())
+	if codec != 0 {
+		// a codec's pixels are the host's: its bytes are asked for in one round, and the answers are adopted in the next
+		asSet(cand, row, acFrom, asFromCodec(codec))
+		if codec != 7 {
+			rc = pdfimage.PiSamples(src, ar, dc, a, b, st, rec, sh, data)
+			if rc == 12 {
+				return 12
+			}
+			if rc != 1 {
+				asSet(cand, row, acStatus, model.NzCodec())
+				return 0
+			}
+		}
+		hrc = asHost(src, ar, dc, a, b, st, input, rec, data, asId(row, 0), ans, rq, payload, bms, glob, tmp, words, hs, asHcap(maxpix))
+		if hrc == 12 {
+			return 12
+		}
+		if hrc == 1 {
+			asSet(cand, row, acStatus, model.NzCodec())
+			return 0
+		}
+		if hrc == 2 {
+			asSet(cand, row, acStatus, model.NzTooLarge())
+			return 0
+		}
+		if hrc == 4 {
+			asSet(cand, row, acStatus, model.NzBudget())
+			return 0
+		}
+		if hrc == 3 {
+			pend = 1
+		}
+	} else {
+		// kin's own samples
+		rc = pdfimage.PiSamples(src, ar, dc, a, b, st, rec, sh, smp)
+		if rc == 12 {
+			return 12
+		}
+		if rc == 1 {
+			asSet(cand, row, acStatus, model.NzCodec())
+			return 0
+		}
 	}
 	mk = pdfimage.PiGet(rec, pdfimage.PiFMkind())
 	if (mk == 2) || (mk == 3) {
@@ -558,18 +677,49 @@ func asMake(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 			return 0
 		}
 		if pdfimage.PiGet(mrec, pdfimage.PiFCodec()) != 0 {
-			asSet(cand, row, acStatus, model.NzCodec())
-			return 0
-		}
-		rc = pdfimage.PiSamples(src, ar, dc, a, b, st, mrec, msh, msmp)
-		if rc == 12 {
-			return 12
-		}
-		if rc == 1 {
-			asSet(cand, row, acStatus, model.NzCodec())
-			return 0
+			rc = pdfimage.PiSamples(src, ar, dc, a, b, st, mrec, msh, data)
+			if rc == 12 {
+				return 12
+			}
+			if rc != 1 {
+				asSet(cand, row, acStatus, model.NzCodec())
+				return 0
+			}
+			hrc = asHost(src, ar, dc, a, b, st, input, mrec, data, asId(row, 1), ans, rq, payload, bms, glob, tmp, words, hs, asHcap(maxpix))
+			if hrc == 12 {
+				return 12
+			}
+			if hrc == 1 {
+				asSet(cand, row, acStatus, model.NzCodec())
+				return 0
+			}
+			if hrc == 2 {
+				asSet(cand, row, acStatus, model.NzTooLarge())
+				return 0
+			}
+			if hrc == 4 {
+				asSet(cand, row, acStatus, model.NzBudget())
+				return 0
+			}
+			if hrc == 3 {
+				pend = 1
+			}
+		} else {
+			rc = pdfimage.PiSamples(src, ar, dc, a, b, st, mrec, msh, msmp)
+			if rc == 12 {
+				return 12
+			}
+			if rc == 1 {
+				asSet(cand, row, acStatus, model.NzCodec())
+				return 0
+			}
 		}
 		have = 1
+	}
+	// asked: this attempt is only the request (the host's loop runs the unit again with the answers)
+	if pend == 1 {
+		asSet(cand, row, acStatus, model.NzCodec())
+		return 0
 	}
 	ow = pdfimage.PiOutW(rec)
 	oh = pdfimage.PiOutH(rec)
@@ -577,8 +727,9 @@ func asMake(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	alpha = pdfimage.PiHasAlpha(rec)
 	var pic *port.Bitmap = port.BitmapNew(ow, oh, ch)
 	var al *port.Bitmap = port.BitmapNew(ow, oh, 1)
-	var dummy *port.Bitmap = port.BitmapNew(1, 1, 1)
-	if pdfimage.PiPixels(rec, smp, dummy, mrec, msmp, dummy, have, 0, pic, al) != 0 {
+	var hbm *port.Bitmap = port.BmsGet(bms, asId(row, 0))
+	var hmbm *port.Bitmap = port.BmsGet(bms, asId(row, 1))
+	if pdfimage.PiPixels(rec, smp, hbm, mrec, msmp, hmbm, have, 0, pic, al) != 0 {
 		asSet(cand, row, acStatus, model.NzColorspace())
 		return 0
 	}
@@ -610,7 +761,9 @@ func asMake(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *por
 	asSet(cand, row, acW, w)
 	asSet(cand, row, acH, h)
 	asSet(cand, row, acFlags, flags)
-	asSet(cand, row, acFrom, asFromChain(rec))
+	if codec == 0 {
+		asSet(cand, row, acFrom, asFromChain(rec))
+	}
 	asSet(cand, row, acOrigin, model.AoDecoded())
 	return 0
 }
@@ -654,11 +807,15 @@ func asOverlaid(im *port.Cells, pa *port.Cells, gl *port.Cells, r int32, page in
 	return 0
 }
 
-func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, im *port.Cells, pa *port.Cells, gl *port.Cells, pg *port.Cells, maxpix int32, totbytes int32, cand *port.Cells, cbytes *port.Buf, out *port.Cells, rec *port.Cells, mrec *port.Cells, smp *port.Cells, msmp *port.Cells, data *port.Cells, rows *port.Cells, tmp *port.Cells, ws *port.Cells, z *port.Buf) int32 {
-	// The document pass: a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
+func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, im *port.Cells, pa *port.Cells, gl *port.Cells, pg *port.Cells, maxpix int32, totbytes int32, cand *port.Cells, cbytes *port.Buf, out *port.Cells, rec *port.Cells, mrec *port.Cells, smp *port.Cells, msmp *port.Cells, data *port.Cells, rows *port.Cells, tmp *port.Cells, ws *port.Cells, z *port.Buf, input int32, ans *port.Cells, rq *port.Cells, payload *port.Buf, bms *port.BitmapSet, glob *port.Cells, words *port.Cells, hs *port.Cells) int32 {
+	// The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
 	// its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice
 	// `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.
-	// `out rec mrec smp msmp data rows tmp ws z` are scratch. Answers 0, or 12 when the source missed (stop, re-run).
+	// `out rec mrec smp msmp data rows tmp ws z glob words hs` are scratch. A codec image's pixels are the HOST's: the
+	// first attempt writes a `decode-img` request for each (`rq`, with its bytes in `payload` when they are not the input's
+	// own; `input` is the input's index) and answers 1; the host fulfils them and runs the unit again with `ans` and the
+	// bitmaps `bms`, and the same call makes the candidates. Answers 0 (done), 1 (requests written: fulfil and run again) or
+	// 12 when the source missed (stop, re-run).
 	var n int32 = evidence.ImCount(im)
 	var r int32 = 0
 	var row int32 = 0
@@ -685,6 +842,8 @@ func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	var ovl int32 = asOverlayWork
 	var whole int32 = 0
 	port.CellsDrop(cand, 0)
+	port.CellsDrop(hs, 0)
+	port.CellsPush(hs, 0)
 	for r < n {
 		if evidence.ImGet(im, r, evidence.MfVis()) == 0 {
 			page = evidence.ImGet(im, r, evidence.MfPage())
@@ -757,7 +916,7 @@ func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 					asSet(cand, row, acStatus, model.NzBudget())
 				} else {
 					prod += 1
-					rc = asMake(src, ar, dc, a, b, st, maxpix, cand, row, obj, ori, 1, cbytes, out, rec, mrec, smp, msmp, data, rows, tmp, ws, z)
+					rc = asMake(src, ar, dc, a, b, st, maxpix, cand, row, obj, ori, 1, cbytes, out, rec, mrec, smp, msmp, data, rows, tmp, ws, z, input, ans, rq, payload, bms, glob, words, hs)
 					if rc == 12 {
 						return 12
 					}
@@ -777,6 +936,9 @@ func AsCollect(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 			}
 		}
 		r += 1
+	}
+	if port.CellsLen(rq) > 0 {
+		return 1
 	}
 	return 0
 }

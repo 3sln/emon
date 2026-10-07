@@ -432,6 +432,20 @@ public final class Plan {
         recEnd(c, at);
         return at;
     }
+    public static int anDecodeImg(emon.Port.Cells c, int id, int w, int h, int channels, int bilevel) {
+        // The answer to a `decode-img` request (kind 6, D117, D291): a `decode` answer's fields (no resolution, one frame) under
+        // the request's own kind. The pixels are the answer's `Bitmap`.
+        int at = recBegin(c, pkDecodeImg(), id);
+        emon.Port.cellsPush(c, psOk());
+        emon.Port.cellsPush(c, w);
+        emon.Port.cellsPush(c, h);
+        emon.Port.cellsPush(c, channels);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, bilevel);
+        emon.Port.cellsPush(c, 1);
+        recEnd(c, at);
+        return at;
+    }
     public static int anOcr(emon.Port.Cells c, int id) {
         // Start an OCR answer (ok, no words yet); add words with `an-ocr-word`
         // and `an-ocr-cp`, close with `an-ocr-end`. Answers its start.

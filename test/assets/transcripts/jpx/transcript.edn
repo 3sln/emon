@@ -1,0 +1,4 @@
+{:emon-transcript 1
+ :inputs [{:index 0 :length 1571}]
+ :entries [
+  {:round 0 :kind :decode-img :req [34 6 1 2 16 12 0 8 0 0 0 0 0 439 933 0 0 0 0 0 0 0 0 -1 0 0 0 0 0 0 0 0 0 0] :ans [10 6 1 0 16 12 3 0 0 1] :bitmap "bitmap-0000.png"}]}

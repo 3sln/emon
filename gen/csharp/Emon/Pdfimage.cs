@@ -425,6 +425,7 @@ public static class Pdfimage {
         if (c == 0) {
             emon.Port.CellsSet(im, PiClass, 9);
             emon.Port.CellsSet(im, PiNcomp, 1);
+            emon.Port.CellsSet(im, PiFlags, emon.Port.CellsAt(im, PiFlags) | 8);
             return 0;
         }
         if (c != 8) {
@@ -1257,6 +1258,9 @@ public static class Pdfimage {
             return 0;
         }
         if ((cls == 1) && (channels == 1)) {
+            emon.Port.CellsSet(im, PiNcomp, 1);
+        } else if ((cls == 4) && (channels == 1)) {
+            // an Indexed image the host decoded to its indices (a bilevel codec's): the palette stays
             emon.Port.CellsSet(im, PiNcomp, 1);
         } else if ((cls == 2) && (channels == 3)) {
             emon.Port.CellsSet(im, PiNcomp, 3);

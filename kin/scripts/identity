@@ -111,10 +111,10 @@
 
 (defn drive
   "Run a driver: {:exit :out (bytes) :err}. A run that takes over two minutes is killed (our own process)."
-  [host args {:keys [file pw]}]
+  [host args {:keys [file pw replay]}]
   (let [exe (if (= host :rust) rust go)
         p (apply process {:out :bytes :err :string}
-                 exe "--out=bundle" (concat args @extra (when pw [(str "--password=" pw)]) [file]))
+                 exe "--out=bundle" (concat args @extra (when pw [(str "--password=" pw)]) (when replay [(str "--replay=" replay)]) [file]))
         r (deref p 120000 ::timeout)]
     (if (= r ::timeout)
       (do (destroy-tree p) {:exit -1 :out (byte-array 0) :err "TIMEOUT"})
@@ -154,8 +154,9 @@
       (let [r (drive host a item)]
         (when-not (same? ref r)
           (note (clojure.core/name host) "/" name " differs from rust/bytes: " (first-diff ref r)))))
-    ;; the transcript: record on each, compare the directories, replay each on the other
-    (when (zero? (:exit ref))
+    ;; the transcript: record on each, compare the directories, replay each on the other (a document whose images the host decodes IS
+    ;; given its committed transcript above, on every arm: its pixels are the recording's, so the arms are about everything else)
+    (when (and (zero? (:exit ref)) (not (:replay item)))
       (let [rd (str work "/" i "-rust") gd (str work "/" i "-go")
             rr (drive :rust [(str "--record=" rd)] item)
             gr (drive :go [(str "--record=" gd)] item)]
@@ -198,8 +199,11 @@
                        (map #(str "test/corpus/synth/pdf/" % ".pdf")
                             ["figures-charts" "figures-logo-screenshot" "initial-image" "gfx-image-rules"
                              "mixed-table-image-shaded" "mixed-table-image" "columns-span-figure"]))
-             :when (and (fs/exists? f) (or (not only) (str/includes? f only)))]
-         {:file f :pw nil})))
+             :when (and (fs/exists? f) (or (not only) (str/includes? f only)))
+             ;; P6.1a: a lossy codec is not the same pixel for pixel on two hosts (D190), so a document whose images the host decodes is
+             ;; run from the transcript `bb asset-record` made (its pixels are the recording's), by every arm
+             :let [tr (str "test/assets/transcripts/" (fs/strip-ext (fs/file-name f)))]]
+         {:file f :pw nil :replay (when (fs/exists? (str tr "/transcript.edn")) tr)})))
 
 (when (and (not corpus?) (zero? @fails))
   (reset! extra ["--assets=images"])

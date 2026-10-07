@@ -5,12 +5,14 @@
 ;; region detection decides pixels, only which image. Nothing in this module runs, and no arena it writes is touched, when
 ;; the `assets` setting is `none`: every output is then byte for byte what it was.
 ;;
-;; TWO PHASES, because the bytes of the input are read in the DOCUMENT PASS (the one place that reads it, P7.U) and the
-;; Model is only known at the end:
+;; TWO PHASES, because the bytes of the input are read before the page units (P7.U) and the Model is only known at the end:
 ;;
-;;   (as-collect ...)   the document pass: every image placement that passed P3.6's checks becomes a CANDIDATE ROW (stride
-;;                      32, below) and, when a browser or a PNG can show it, its encoded bytes are appended to `cbytes`
-;;                      (`cand` and `cbytes` ride in the document's state to the document unit). No node is known yet.
+;;   (as-collect ...)   THE ASSET UNIT (P6.1a, D333), a plan/fulfil unit of its own that reads the input: every image placement
+;;                      that passed P3.6's checks becomes a CANDIDATE ROW (stride 32, below) and, when a browser or a PNG can show
+;;                      it, its encoded bytes are appended to `cbytes` (`cand` and `cbytes` ride in the document's state to the
+;;                      document unit). An image whose codec kin does not read (DCT that cannot pass through, JPX, JBIG2, CCITT)
+;;                      is a `decode-img` REQUEST on the unit's first attempt (the codestream named by input span, or in the
+;;                      payload when kin made it), and its pixels are the host's answer on the second. No node is known yet.
 ;;   (as-figure-rows ...) the provisional figures (SPEC 10.6, P8.1 replaces the rule): the candidates that become `figure`
 ;;                      nodes, sorted by their top edge, for `emon.restruct`'s `rs-figures` to place.
 ;;   (as-run ...)       the document unit: per `figure`/`seal` in node-id order, SPEC 10.11's source rules, admission
@@ -29,8 +31,8 @@
 ;; placement (a scan, a background: 800 per mille of its page and more) is a candidate whose pixels are not made, status
 ;; `part`: no node of an `images` run can be that image, and a scan's page image would take the budget for nothing.
 (ns emon.asset
-  (:require [emon.lang :refer [I32 I64 Src Cells Bitmap Buf i64 i32 add64 mul64]]
-            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop
+  (:require [emon.lang :refer [I32 I64 Src Cells Bitmap BitmapSet Buf i64 i32 add64 mul64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop bms-get bms-has
                                buf-len buf-push buf-blob buf-append-blob
                                bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
                                crypto-sha256]]
@@ -44,14 +46,16 @@
                                 fk-asset fk-noasset fk-image fk-assets fk-asset-dpi fk-asset-pixels
                                 fk-asset-bytes fk-assets-bytes fk-asset-signatures
                                 nz-withheld nz-part nz-vector nz-composite nz-colorspace nz-codec nz-too-large nz-budget
-                                ao-embedded ao-decoded amt-jpeg amt-png afm-dct afm-flate afm-lzw afm-runlength afm-raw
+                                ao-embedded ao-decoded amt-jpeg amt-png afm-dct afm-jpx afm-jbig2 afm-ccitt afm-flate afm-lzw afm-runlength afm-raw
                                 afg-clip-bbox afg-transformed afg-icc afg-scaled afg-overlaid]]
             [emon.evidence :refer [im-count im-get mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj mf-z mf-clip mf-vis
                                    mf-placement pa-get pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-z pf-flags pf-vis
                                    pg-clip pa-rect gl-count gl-get gf-z gf-vis]]
-            [emon.pdfdoc :refer [pd-get pd-pg-count pd-pg-crop pd-pg-rotate]]
+            [emon.pdfdoc :refer [pd-get pd-pg-count pd-pg-crop pd-pg-rotate pd-stream-data]]
+            [emon.pdfsrc :refer [ps-missed]]
+            [emon.plan :refer [an-find an-ok an-arg an-status ps-limit]]
             [emon.pdfimage :refer [pi-info pi-samples pi-passthrough pi-view pi-crop pi-pixels pi-get pi-out-w pi-out-h
-                                   pi-out-channels pi-has-alpha pi-palette-rgb pi-f-class pi-f-w pi-f-h pi-f-bpc
+                                   pi-out-channels pi-has-alpha pi-palette-rgb pi-adopt pi-request pi-f-gobj pi-f-class pi-f-w pi-f-h pi-f-bpc
                                    pi-f-codec pi-f-imask pi-f-mkind pi-f-mobj pi-f-flags pi-f-nf pi-f-hival pi-f-ncomp
                                    pv-ok]]
             [emon.png :refer [png-begin png-row png-end]]
@@ -64,6 +68,12 @@
 (defconst ^I32 AS_BIG 800)          ;; per mille of the page: a scan or a background, not a figure
 (defconst ^I32 AS_FIGURE_SIDE 1800) ;; a provisional figure's sides, centipoints (18 pt)
 (defconst ^I32 AS_PIXFACTOR 2)      ;; samples of an image are held whole: at most this many times `asset-pixels`
+(defconst ^I32 AS_HOSTFACTOR 8)    ;; the host's pixels asked for in one document: at most this many times `asset-pixels`
+
+(defn ^I32 as-hcap [^I32 maxpix]
+  (comment "The most host pixels asked for in one document: `AS_HOSTFACTOR` times `asset-pixels`, saturated.")
+  (if (> maxpix 268435455) (return 2147483647))
+  (return (* maxpix AS_HOSTFACTOR)))
 (defconst ^I32 AS_MAXPROD 4096)     ;; placements that make pixels, a document (the rest are `budget`)
 (defconst ^I32 AS_STRIDE 32)
 (defconst ^I32 AS_OVERLAY_WORK 100000000) ;; rows the `overlaid` flag may read in all; past it the flag is not set
@@ -327,6 +337,13 @@
           (set i (- i 1))))
     (return (afm-raw))))
 
+(defn ^I32 as-from-codec [^I32 codec]
+  (comment "`from` of an image whose last filter is an image codec (`pi-f-codec` 7 DCT, 8 JPX, 9 CCITT, 10 JBIG2).")
+  (if (== codec 7) (return (afm-dct)))
+  (if (== codec 8) (return (afm-jpx)))
+  (if (== codec 9) (return (afm-ccitt)))
+  (return (afm-jbig2)))
+
 (defn ^I32 as-same-key [^Cells cand ^I32 r ^I32 obj ^I32 ori ^I32 vx0 ^I32 vy0 ^I32 vx1 ^I32 vy1]
   (let [^I32 b (* r AS_STRIDE)]
     (if (!= (cells-at cand (+ b AC_OBJ)) obj) (return 0))
@@ -348,11 +365,49 @@
           (set f (+ f 1))))
     (return 0)))
 
+;; ----------------------------------------------------------------------- the host's pixels
+
+(defn ^I32 as-id [^I32 row ^I32 k]
+  (comment "The id of the `decode-img` request of candidate `row`: k 0 its image, 1 its mask.")
+  (return (+ (+ (* row 2) k) 1)))
+
+(defn ^I32 as-host [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                    ^I32 input ^:mut ^Cells rec ^Cells data ^I32 id ^Cells ans ^:mut ^Cells rq ^:mut ^Buf payload
+                    ^BitmapSet bms ^:mut ^Cells glob ^:mut ^Cells tmp ^:mut ^Cells words ^:mut ^Cells hs ^I32 hcap]
+  (comment "The host's pixels of the codec image `rec` (its codestream is `data`, `pi-samples`' answer 1), request `id` (P6.1a,")
+  (comment "D117, D291). Answers 0: the answer is in and its pixels are `bms-get bms id` (the record has adopted them); 1: the host")
+  (comment "cannot (unsupported, failed, or not the image's size); 2: over its pixel limit; 3: the request is written (the")
+  (comment "caller answers codec for now, the host's loop asks again with the answers); 4: the host's pixels in all would pass `hcap`")
+  (comment "(a bound on what the answers hold at once); 12: the source missed. `hs` cell 0 counts the pixels asked for.")
+  (let [^I32 at (an-find ans id)
+        ^:mut ^I32 gsh 0
+        ^I32 px (* (pi-get rec (pi-f-w)) (pi-get rec (pi-f-h)))]
+    (if (>= at 0)
+      (do (if (== (an-ok ans at) 1)
+            (do (if (== (bms-has bms id) 0) (return 1))
+                (if (or (!= (an-arg ans at 0) (pi-get rec (pi-f-w))) (!= (an-arg ans at 1) (pi-get rec (pi-f-h)))) (return 1))
+                (if (and (!= (an-arg ans at 2) 1) (!= (an-arg ans at 2) 3)) (return 1))
+                (pi-adopt rec (an-arg ans at 0) (an-arg ans at 1) (an-arg ans at 2))
+                (return 0)))
+          (if (== (an-status ans at) (ps-limit)) (return 2))
+          (return 1)))
+    (if (> (+ (cells-at hs 0) px) hcap) (return 4))
+    (cells-set hs 0 (+ (cells-at hs 0) px))
+    (cells-drop glob 0)
+    (if (!= (pi-get rec (pi-f-gobj)) 0)
+      (do (set gsh (pd-get src ar dc a b st (pi-get rec (pi-f-gobj))))
+          (if (!= gsh 0) (pd-stream-data src ar dc a b st gsh glob))
+          (if (ps-missed src) (return 12))))
+    (pi-request rq id input rec data glob payload tmp words)
+    (return 3)))
+
 (defn ^I32 as-make [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                     ^I32 maxpix ^:mut ^Cells cand ^I32 row ^I32 obj ^I32 ori ^I32 whole-ok
                     ^:mut ^Buf cbytes ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells mrec ^:mut ^Cells smp
                     ^:mut ^Cells msmp ^:mut ^Cells data ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells ws
-                    ^:mut ^Buf z]
+                    ^:mut ^Buf z
+                    ^I32 input ^Cells ans ^:mut ^Cells rq ^:mut ^Buf payload ^BitmapSet bms ^:mut ^Cells glob
+                    ^:mut ^Cells words ^:mut ^Cells hs]
   (comment "Make the pixels of the image object `obj` as placed by candidate `row` (whose box, visible box and flags are set):")
   (comment "the row's status, type, bytes, hash, size and `from`. Answers 0, or 12 when the source missed (stop, re-run).")
   (let [^I32 sh (pd-get src ar dc a b st obj)
@@ -382,6 +437,9 @@
         ^:mut ^I32 k 1
         ^:mut ^I32 bil 0
         ^:mut ^I32 kf 0
+        ^:mut ^I32 hrc 0
+        ^:mut ^I32 pend 0
+        ^:mut ^I32 codec 0
         ^:mut ^I32 flags (as-get cand row AC_FLAGS)]
     (if (== sh 0) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
     (if (!= (pi-info src ar dc a b st out rec sh obj) 0)
@@ -412,7 +470,13 @@
                 (as-set cand row AC_FLAGS kf)
                 (return 0)))
           (set i (+ i 1))))
-    (if (== (pi-get rec (pi-f-class)) 9) (do (as-set cand row AC_STATUS (nz-colorspace)) (return 0)))
+    (comment "a colour space kin does not read is `colorspace`; a JPX with none (the codestream says) is the host's, and Indexed over a codec whose")
+    (comment "samples are not the indices (DCT, JPX: the host scales them) is not asked for")
+    (if (and (== (pi-get rec (pi-f-class)) 9)
+             (or (!= (pi-get rec (pi-f-codec)) 8) (!= (bit-and (pi-get rec (pi-f-flags)) 8) 8)))
+      (do (as-set cand row AC_STATUS (nz-colorspace)) (return 0)))
+    (if (and (== (pi-get rec (pi-f-class)) 4) (or (== (pi-get rec (pi-f-codec)) 7) (== (pi-get rec (pi-f-codec)) 8)))
+      (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
     (comment "A browser shows this JPEG as the PDF painted it: the original bytes, passed through")
     (if (== (pi-get rec (pi-f-codec)) 7)
       (do (set rc (pi-samples src ar dc a b st rec sh data))
@@ -435,35 +499,59 @@
                 (as-set cand row AC_FROM (afm-dct))
                 (as-set cand row AC_ORIGIN (ao-embedded))
                 (return 0)))
-          (comment "DCT that cannot pass through is the host's (decode-img, P6.1a)")
-          (as-set cand row AC_STATUS (nz-codec))
-          (return 0)))
-    (if (!= (pi-get rec (pi-f-codec)) 0) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+          (comment "DCT that cannot pass through is the host's (`decode-img`, P6.1a): below")
+          (if (!= rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))))
     (if (> (mul64 (i64 w) (i64 h)) (mul64 (i64 maxpix) (i64 AS_PIXFACTOR)))
       (do (as-set cand row AC_STATUS (nz-too-large)) (return 0)))
-    (comment "kin's own samples")
-    (set rc (pi-samples src ar dc a b st rec sh smp))
-    (if (== rc 12) (return 12))
-    (if (== rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+    (set codec (pi-get rec (pi-f-codec)))
+    (if (!= codec 0)
+      (do (comment "a codec's pixels are the host's: its bytes are asked for in one round, and the answers are adopted in the next")
+          (as-set cand row AC_FROM (as-from-codec codec))
+          (if (!= codec 7)
+            (do (set rc (pi-samples src ar dc a b st rec sh data))
+                (if (== rc 12) (return 12))
+                (if (!= rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))))
+          (set hrc (as-host src ar dc a b st input rec data (as-id row 0) ans rq payload bms glob tmp words hs (as-hcap maxpix)))
+          (if (== hrc 12) (return 12))
+          (if (== hrc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+          (if (== hrc 2) (do (as-set cand row AC_STATUS (nz-too-large)) (return 0)))
+          (if (== hrc 4) (do (as-set cand row AC_STATUS (nz-budget)) (return 0)))
+          (if (== hrc 3) (set pend 1)))
+      (do (comment "kin's own samples")
+          (set rc (pi-samples src ar dc a b st rec sh smp))
+          (if (== rc 12) (return 12))
+          (if (== rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))))
     (set mk (pi-get rec (pi-f-mkind)))
     (if (or (== mk 2) (== mk 3))
       (do (set msh (pd-get src ar dc a b st (pi-get rec (pi-f-mobj))))
           (if (== msh 0) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
           (if (!= (pi-info src ar dc a b st out mrec msh (pi-get rec (pi-f-mobj))) 0)
             (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
-          (if (!= (pi-get mrec (pi-f-codec)) 0) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
-          (set rc (pi-samples src ar dc a b st mrec msh msmp))
-          (if (== rc 12) (return 12))
-          (if (== rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+          (if (!= (pi-get mrec (pi-f-codec)) 0)
+            (do (set rc (pi-samples src ar dc a b st mrec msh data))
+                (if (== rc 12) (return 12))
+                (if (!= rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+                (set hrc (as-host src ar dc a b st input mrec data (as-id row 1) ans rq payload bms glob tmp words hs (as-hcap maxpix)))
+                (if (== hrc 12) (return 12))
+                (if (== hrc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
+                (if (== hrc 2) (do (as-set cand row AC_STATUS (nz-too-large)) (return 0)))
+                (if (== hrc 4) (do (as-set cand row AC_STATUS (nz-budget)) (return 0)))
+                (if (== hrc 3) (set pend 1)))
+            (do (set rc (pi-samples src ar dc a b st mrec msh msmp))
+                (if (== rc 12) (return 12))
+                (if (== rc 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))))
           (set have 1)))
+    (comment "asked: this attempt is only the request (the host's loop runs the unit again with the answers)")
+    (if (== pend 1) (do (as-set cand row AC_STATUS (nz-codec)) (return 0)))
     (set ow (pi-out-w rec))
     (set oh (pi-out-h rec))
     (set ch (pi-out-channels rec))
     (set alpha (pi-has-alpha rec))
     (let [^Bitmap pic (bitmap-new ow oh ch)
           ^Bitmap al (bitmap-new ow oh 1)
-          ^Bitmap dummy (bitmap-new 1 1 1)]
-      (if (!= (pi-pixels rec smp dummy mrec msmp dummy have 0 pic al) 0)
+          ^Bitmap hbm (bms-get bms (as-id row 0))
+          ^Bitmap hmbm (bms-get bms (as-id row 1))]
+      (if (!= (pi-pixels rec smp hbm mrec msmp hmbm have 0 pic al) 0)
         (do (as-set cand row AC_STATUS (nz-colorspace)) (return 0)))
       (set start (buf-len cbytes))
       (if (> (* ow oh) maxpix)
@@ -489,7 +577,7 @@
     (as-set cand row AC_W w)
     (as-set cand row AC_H h)
     (as-set cand row AC_FLAGS flags)
-    (as-set cand row AC_FROM (as-from-chain rec))
+    (if (== codec 0) (as-set cand row AC_FROM (as-from-chain rec)))
     (as-set cand row AC_ORIGIN (ao-decoded))
     (return 0)))
 
@@ -533,11 +621,17 @@
                              ^I32 maxpix ^I32 totbytes
                              ^:mut ^Cells cand ^:mut ^Buf cbytes
                              ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells mrec ^:mut ^Cells smp ^:mut ^Cells msmp
-                             ^:mut ^Cells data ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells ws ^:mut ^Buf z]
-  (comment "The document pass: a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with")
+                             ^:mut ^Cells data ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells ws ^:mut ^Buf z
+                             ^I32 input ^Cells ans ^:mut ^Cells rq ^:mut ^Buf payload ^BitmapSet bms ^:mut ^Cells glob
+                             ^:mut ^Cells words ^:mut ^Cells hs]
+  (comment "The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with")
   (comment "its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice")
   (comment "`totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.")
-  (comment "`out rec mrec smp msmp data rows tmp ws z` are scratch. Answers 0, or 12 when the source missed (stop, re-run).")
+  (comment "`out rec mrec smp msmp data rows tmp ws z glob words hs` are scratch. A codec image's pixels are the HOST's: the")
+  (comment "first attempt writes a `decode-img` request for each (`rq`, with its bytes in `payload` when they are not the input's")
+  (comment "own; `input` is the input's index) and answers 1; the host fulfils them and runs the unit again with `ans` and the")
+  (comment "bitmaps `bms`, and the same call makes the candidates. Answers 0 (done), 1 (requests written: fulfil and run again) or")
+  (comment "12 when the source missed (stop, re-run).")
   (let [^I32 n (im-count im)
         ^:mut ^I32 r 0
         ^:mut ^I32 row 0
@@ -564,6 +658,8 @@
         ^:mut ^I32 ovl AS_OVERLAY_WORK
         ^:mut ^I32 whole 0]
     (cells-drop cand 0)
+    (cells-drop hs 0)
+    (cells-push hs 0)
     (while (< r n)
       (do (if (== (im-get im r (mf-vis)) 0)
             (do (set page (im-get im r (mf-page)))
@@ -619,7 +715,8 @@
                           (if (or (>= prod AS_MAXPROD) (> (quot (buf-len cbytes) 2) totbytes))
                             (as-set cand row AC_STATUS (nz-budget))
                             (do (set prod (+ prod 1))
-                                (set rc (as-make src ar dc a b st maxpix cand row obj ori 1 cbytes out rec mrec smp msmp data rows tmp ws z))
+                                (set rc (as-make src ar dc a b st maxpix cand row obj ori 1 cbytes out rec mrec smp msmp data rows tmp ws z
+                                                 input ans rq payload bms glob words hs))
                                 (if (== rc 12) (return 12))
                                 (if (== (as-get cand row AC_STATUS) 0)
                                   (do (comment "the overlay check reads every later paint of the page: at most AS_OVERLAY_WORK rows in all")
@@ -631,6 +728,7 @@
                                               (do (set zz (as-get cand row AC_FLAGS))
                                                   (as-set cand row AC_FLAGS (bit-or zz (afg-overlaid)))))))))))))))))
           (set r (+ r 1))))
+    (if (> (cells-len rq) 0) (return 1))
     (return 0)))
 
 ;; --------------------------------------------------------- the provisional figures

@@ -425,6 +425,7 @@ public final class Pdfimage {
         if (c == 0) {
             emon.Port.cellsSet(im, PI_CLASS, 9);
             emon.Port.cellsSet(im, PI_NCOMP, 1);
+            emon.Port.cellsSet(im, PI_FLAGS, emon.Port.cellsAt(im, PI_FLAGS) | 8);
             return 0;
         }
         if (c != 8) {
@@ -1257,6 +1258,9 @@ public final class Pdfimage {
             return 0;
         }
         if ((cls == 1) && (channels == 1)) {
+            emon.Port.cellsSet(im, PI_NCOMP, 1);
+        } else if ((cls == 4) && (channels == 1)) {
+            // an Indexed image the host decoded to its indices (a bilevel codec's): the palette stays
             emon.Port.cellsSet(im, PI_NCOMP, 1);
         } else if ((cls == 2) && (channels == 3)) {
             emon.Port.cellsSet(im, PI_NCOMP, 3);

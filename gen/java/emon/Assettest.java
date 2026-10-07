@@ -498,9 +498,10 @@ public final class Assettest {
     public static int atWord(emon.Port.Cells tmp, int i) {
         return (int) ((((long) emon.Port.cellsAt(tmp, i * 4)) * ((long) 16777216)) + ((long) ((emon.Port.cellsAt(tmp, (i * 4) + 1) * 65536) + ((emon.Port.cellsAt(tmp, (i * 4) + 2) * 256) + emon.Port.cellsAt(tmp, (i * 4) + 3)))));
     }
-    public static int atRun(emon.Port.Src src, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells pages, emon.Port.Cells fg, emon.Port.Cells im) {
+    public static int atRunAsk(emon.Port.Src src, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells pages, emon.Port.Cells fg, emon.Port.Cells im, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Buf payload, emon.Port.BitmapSet bms) {
         // Open the document, run its pages, collect its asset candidates into `cand` and `cbytes`, and find the provisional
-        // figures into `fg` (pages are the Model's). Answers 0, or the failing step.
+        // figures into `fg` (pages are the Model's). `ans` and `bms` are the host's answers (none: a codec image is asked for
+        // in `rq` and `payload`, status 1 at step 3). Answers 0, or the failing step.
         emon.Port.Cells ar = emon.Port.newCells();
         emon.Port.Cells dc = emon.Port.newCells();
         emon.Port.Cells a = emon.Port.newCells();
@@ -533,6 +534,10 @@ public final class Assettest {
         emon.Port.Cells rows = emon.Port.newCells();
         emon.Port.Cells tmp = emon.Port.newCells();
         emon.Port.Cells ws = emon.Port.newCells();
+        int rc = 0;
+        emon.Port.Cells glob = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells hs = emon.Port.newCells();
         emon.Port.Buf z = emon.Port.newBuf();
         if (Pdfdoc.pdOpen(src, ar, dc, a, b, st) != 0) {
             return 1;
@@ -540,12 +545,28 @@ public final class Assettest {
         if (Pdfcontent.pcDocument(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0) {
             return 2;
         }
-        if (Asset.asCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0) {
+        rc = Asset.asCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z, 0, ans, rq, payload, bms, glob, words, hs);
+        if (rc > 1) {
             return 3;
         }
         Para.paPages(pg, pages);
         Asset.asFigureRows(cand, pages, fg);
+        if (rc == 1) {
+            return 4;
+        }
         return 0;
+    }
+    public static int atRun(emon.Port.Src src, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells pages, emon.Port.Cells fg, emon.Port.Cells im) {
+        // `at-run-ask` with no host answers: 0, or the failing step. A codec image is `codec` here (its request is written and
+        // not answered), which is what the host's loop would have seen on its first attempt.
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Buf payload = emon.Port.newBuf();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        int r = atRunAsk(src, cand, cbytes, pages, fg, im, emon.Port.newCells(), rq, payload, bms);
+        if (r == 4) {
+            return 0;
+        }
+        return r;
     }
     public static int atCandsRow(int emonT, byte[] rows, int pos, int e, int line) {
         // file n cand...: each candidate status:type:origin:from:w:h:flags, in the order of the provisional figures
@@ -620,6 +641,109 @@ public final class Assettest {
             pos = e + 1;
         }
         emon.Testport.assertThat(checked > 60, "every file of test/asset/cands.txt is checked");
+    }
+    public static int atFill(emon.Port.Bitmap b, int w, int h, int ch) {
+        int x = 0;
+        int y = 0;
+        int c = 0;
+        while (y < h) {
+            x = 0;
+            while (x < w) {
+                c = 0;
+                while (c < ch) {
+                    emon.Port.bitmapSetU8(b, x, y, c, ((x * 7) + ((y * 13) + (c * 50))) % 256);
+                    c += 1;
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    public static int atCodecRun(byte[] file, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Cells cand, emon.Port.Cells rq, emon.Port.Buf cbytes, emon.Port.Buf payload) {
+        // `at-run-ask` over a document with the host's answers (and, written to `rq` and `payload`, its requests): its answer.
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells fg = emon.Port.newCells();
+        emon.Port.Cells im = emon.Port.newCells();
+        return atRunAsk(emon.Port.srcOfBlob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms);
+    }
+    public static void testACodecImageIsAskedOfTheHost() {
+        // P6.1a: a DCT image that cannot pass through (a /Decode) is a `decode-img` request on the first attempt (the input's own bytes,
+        // no payload), and until it is answered the image is `codec`.
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Buf cbytes = emon.Port.newBuf();
+        emon.Port.Buf payload = emon.Port.newBuf();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        emon.Testport.assertEq(atCodecRun(emon.Testport.testFile("assets/dct-decode.pdf"), ans, bms, cand, rq, cbytes, payload), 4, "the request is written");
+        emon.Testport.assertEq(Plan.recCount(rq), 1, "one request");
+        emon.Testport.assertEq(Plan.recKind(rq, 0), Plan.pkDecodeImg(), "kind 6");
+        emon.Testport.assertEq(Plan.recId(rq, 0), 1, "request 1: the first candidate's image");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, Plan.dqFilter()), Plan.fltDct(), "DCT");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, Plan.dqW()), 24, "its width");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, Plan.dqH()), 16, "its height");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, Plan.dqWhere()), 0, "the input's own bytes");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, Plan.dqGwhere()), -1, "no globals");
+        emon.Testport.assertEq(emon.Port.bufLen(payload), 0, "nothing in the payload");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 9), 6, "until it is answered the image is `codec`");
+    }
+    public static void testACodecImageIsAdoptedFromTheHostsAnswer() {
+        // With the host's pixels (a bitmap and its record in the answers) the same call makes the asset: a PNG, decoded, from DCT.
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Buf cbytes = emon.Port.newBuf();
+        emon.Port.Buf payload = emon.Port.newBuf();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        Plan.anDecodeImg(ans, 1, 24, 16, 3, 0);
+        atFill(emon.Port.bmsPut(bms, 1, 24, 16, 3), 24, 16, 3);
+        emon.Testport.assertEq(atCodecRun(emon.Testport.testFile("assets/dct-decode.pdf"), ans, bms, cand, rq, cbytes, payload), 0, "with the answer nothing is asked");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq), 0, "no request");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 9), 0, "pixels were made");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 10), 2, "a PNG");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 26), 2, "decoded");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 24), 1, "from DCT");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 21), 24, "width");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 22), 16, "height");
+        emon.Testport.assertEq(emon.Port.bufAt(cbytes, Asset.asGet(cand, 0, 11)), 137, "PNG signature");
+    }
+    public static void testAHostThatCannotLeavesTheImageCodec() {
+        // The host cannot (unsupported): the image stays `codec` and nothing is asked again.
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Buf cbytes = emon.Port.newBuf();
+        emon.Port.Buf payload = emon.Port.newBuf();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        Plan.anFail(ans, Plan.pkDecodeImg(), 1, Plan.psUnsupported());
+        emon.Testport.assertEq(atCodecRun(emon.Testport.testFile("assets/dct-decode.pdf"), ans, bms, cand, rq, cbytes, payload), 0, "answered: nothing is asked");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 9), 6, "unsupported is `codec`");
+    }
+    public static void testPixelsThatAreNotTheDictionarysSizeAreNotAdopted() {
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Buf cbytes = emon.Port.newBuf();
+        emon.Port.Buf payload = emon.Port.newBuf();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        Plan.anDecodeImg(ans, 1, 20, 16, 3, 0);
+        atFill(emon.Port.bmsPut(bms, 1, 20, 16, 3), 20, 16, 3);
+        emon.Testport.assertEq(atCodecRun(emon.Testport.testFile("assets/dct-decode.pdf"), ans, bms, cand, rq, cbytes, payload), 0, "answered");
+        emon.Testport.assertEq(Asset.asGet(cand, 0, 9), 6, "pixels that are not the dictionary's size are `codec`");
+    }
+    public static void testTheGlobalsOfAJbig2ImageRideInThePayload() {
+        // The image is the input's own bytes; the globals (a stream's decoded bytes, kin's own) are in the payload.
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells rq = emon.Port.newCells();
+        emon.Port.Buf cbytes = emon.Port.newBuf();
+        emon.Port.Buf payload = emon.Port.newBuf();
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        emon.Testport.assertEq(atCodecRun(emon.Testport.testFile("assets/jbig2-globals.pdf"), ans, bms, cand, rq, cbytes, payload), 4, "asked");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, Plan.dqWhere()), 0, "the image is the input's own bytes");
+        emon.Testport.assertEq(Plan.rqArg(rq, 0, Plan.dqGwhere()), -2, "the globals are in the payload");
+        emon.Testport.assertEq(emon.Port.bufLen(payload), Plan.rqArg(rq, 0, Plan.dqGwhere() + 2), "the payload is the globals");
     }
     public static int atOri(int emonT, byte[] file, int want, int line) {
         emon.Port.Cells cand = emon.Port.newCells();

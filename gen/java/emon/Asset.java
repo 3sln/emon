@@ -11,6 +11,14 @@ public final class Asset {
     public static final int AS_BIG = 800;
     public static final int AS_FIGURE_SIDE = 1800;
     public static final int AS_PIXFACTOR = 2;
+    public static final int AS_HOSTFACTOR = 8;
+    public static int asHcap(int maxpix) {
+        // The most host pixels asked for in one document: `AS_HOSTFACTOR` times `asset-pixels`, saturated.
+        if (maxpix > 268435455) {
+            return 2147483647;
+        }
+        return maxpix * AS_HOSTFACTOR;
+    }
     public static final int AS_MAXPROD = 4096;
     public static final int AS_STRIDE = 32;
     public static final int AS_OVERLAY_WORK = 100000000;
@@ -332,6 +340,19 @@ public final class Asset {
         }
         return Model.afmRaw();
     }
+    public static int asFromCodec(int codec) {
+        // `from` of an image whose last filter is an image codec (`pi-f-codec` 7 DCT, 8 JPX, 9 CCITT, 10 JBIG2).
+        if (codec == 7) {
+            return Model.afmDct();
+        }
+        if (codec == 8) {
+            return Model.afmJpx();
+        }
+        if (codec == 9) {
+            return Model.afmCcitt();
+        }
+        return Model.afmJbig2();
+    }
     public static int asSameKey(emon.Port.Cells cand, int r, int obj, int ori, int vx0, int vy0, int vx1, int vy1) {
         int b = r * AS_STRIDE;
         if (emon.Port.cellsAt(cand, b + AC_OBJ) != obj) {
@@ -367,7 +388,56 @@ public final class Asset {
         }
         return 0;
     }
-    public static int asMake(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int maxpix, emon.Port.Cells cand, int row, int obj, int ori, int wholeOk, emon.Port.Buf cbytes, emon.Port.Cells out, emon.Port.Cells rec, emon.Port.Cells mrec, emon.Port.Cells smp, emon.Port.Cells msmp, emon.Port.Cells data, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells ws, emon.Port.Buf z) {
+    public static int asId(int row, int k) {
+        // The id of the `decode-img` request of candidate `row`: k 0 its image, 1 its mask.
+        return ((row * 2) + k) + 1;
+    }
+    public static int asHost(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int input, emon.Port.Cells rec, emon.Port.Cells data, int id, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Buf payload, emon.Port.BitmapSet bms, emon.Port.Cells glob, emon.Port.Cells tmp, emon.Port.Cells words, emon.Port.Cells hs, int hcap) {
+        // The host's pixels of the codec image `rec` (its codestream is `data`, `pi-samples`' answer 1), request `id` (P6.1a,
+        // D117, D291). Answers 0: the answer is in and its pixels are `bms-get bms id` (the record has adopted them); 1: the host
+        // cannot (unsupported, failed, or not the image's size); 2: over its pixel limit; 3: the request is written (the
+        // caller answers codec for now, the host's loop asks again with the answers); 4: the host's pixels in all would pass `hcap`
+        // (a bound on what the answers hold at once); 12: the source missed. `hs` cell 0 counts the pixels asked for.
+        int at = Plan.anFind(ans, id);
+        int gsh = 0;
+        int px = Pdfimage.piGet(rec, Pdfimage.piFW()) * Pdfimage.piGet(rec, Pdfimage.piFH());
+        if (at >= 0) {
+            if (Plan.anOk(ans, at) == 1) {
+                if (emon.Port.bmsHas(bms, id) == 0) {
+                    return 1;
+                }
+                if ((Plan.anArg(ans, at, 0) != Pdfimage.piGet(rec, Pdfimage.piFW())) || (Plan.anArg(ans, at, 1) != Pdfimage.piGet(rec, Pdfimage.piFH()))) {
+                    return 1;
+                }
+                if ((Plan.anArg(ans, at, 2) != 1) && (Plan.anArg(ans, at, 2) != 3)) {
+                    return 1;
+                }
+                Pdfimage.piAdopt(rec, Plan.anArg(ans, at, 0), Plan.anArg(ans, at, 1), Plan.anArg(ans, at, 2));
+                return 0;
+            }
+            if (Plan.anStatus(ans, at) == Plan.psLimit()) {
+                return 2;
+            }
+            return 1;
+        }
+        if ((emon.Port.cellsAt(hs, 0) + px) > hcap) {
+            return 4;
+        }
+        emon.Port.cellsSet(hs, 0, emon.Port.cellsAt(hs, 0) + px);
+        emon.Port.cellsDrop(glob, 0);
+        if (Pdfimage.piGet(rec, Pdfimage.piFGobj()) != 0) {
+            gsh = Pdfdoc.pdGet(src, ar, dc, a, b, st, Pdfimage.piGet(rec, Pdfimage.piFGobj()));
+            if (gsh != 0) {
+                Pdfdoc.pdStreamData(src, ar, dc, a, b, st, gsh, glob);
+            }
+            if (Pdfsrc.psMissed(src)) {
+                return 12;
+            }
+        }
+        Pdfimage.piRequest(rq, id, input, rec, data, glob, payload, tmp, words);
+        return 3;
+    }
+    public static int asMake(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, int maxpix, emon.Port.Cells cand, int row, int obj, int ori, int wholeOk, emon.Port.Buf cbytes, emon.Port.Cells out, emon.Port.Cells rec, emon.Port.Cells mrec, emon.Port.Cells smp, emon.Port.Cells msmp, emon.Port.Cells data, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells ws, emon.Port.Buf z, int input, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Buf payload, emon.Port.BitmapSet bms, emon.Port.Cells glob, emon.Port.Cells words, emon.Port.Cells hs) {
         // Make the pixels of the image object `obj` as placed by candidate `row` (whose box, visible box and flags are set):
         // the row's status, type, bytes, hash, size and `from`. Answers 0, or 12 when the source missed (stop, re-run).
         int sh = Pdfdoc.pdGet(src, ar, dc, a, b, st, obj);
@@ -397,6 +467,9 @@ public final class Asset {
         int k = 1;
         int bil = 0;
         int kf = 0;
+        int hrc = 0;
+        int pend = 0;
+        int codec = 0;
         int flags = asGet(cand, row, AC_FLAGS);
         if (sh == 0) {
             asSet(cand, row, AC_STATUS, Model.nzCodec());
@@ -444,8 +517,14 @@ public final class Asset {
             }
             i += 1;
         }
-        if (Pdfimage.piGet(rec, Pdfimage.piFClass()) == 9) {
+        // a colour space kin does not read is `colorspace`; a JPX with none (the codestream says) is the host's, and Indexed over a codec whose
+        // samples are not the indices (DCT, JPX: the host scales them) is not asked for
+        if ((Pdfimage.piGet(rec, Pdfimage.piFClass()) == 9) && ((Pdfimage.piGet(rec, Pdfimage.piFCodec()) != 8) || ((Pdfimage.piGet(rec, Pdfimage.piFFlags()) & 8) != 8))) {
             asSet(cand, row, AC_STATUS, Model.nzColorspace());
+            return 0;
+        }
+        if ((Pdfimage.piGet(rec, Pdfimage.piFClass()) == 4) && ((Pdfimage.piGet(rec, Pdfimage.piFCodec()) == 7) || (Pdfimage.piGet(rec, Pdfimage.piFCodec()) == 8))) {
+            asSet(cand, row, AC_STATUS, Model.nzCodec());
             return 0;
         }
         // A browser shows this JPEG as the PDF painted it: the original bytes, passed through
@@ -474,26 +553,59 @@ public final class Asset {
                 asSet(cand, row, AC_ORIGIN, Model.aoEmbedded());
                 return 0;
             }
-            // DCT that cannot pass through is the host's (decode-img, P6.1a)
-            asSet(cand, row, AC_STATUS, Model.nzCodec());
-            return 0;
-        }
-        if (Pdfimage.piGet(rec, Pdfimage.piFCodec()) != 0) {
-            asSet(cand, row, AC_STATUS, Model.nzCodec());
-            return 0;
+            // DCT that cannot pass through is the host's (`decode-img`, P6.1a): below
+            if (rc != 1) {
+                asSet(cand, row, AC_STATUS, Model.nzCodec());
+                return 0;
+            }
         }
         if ((((long) w) * ((long) h)) > (((long) maxpix) * ((long) AS_PIXFACTOR))) {
             asSet(cand, row, AC_STATUS, Model.nzTooLarge());
             return 0;
         }
-        // kin's own samples
-        rc = Pdfimage.piSamples(src, ar, dc, a, b, st, rec, sh, smp);
-        if (rc == 12) {
-            return 12;
-        }
-        if (rc == 1) {
-            asSet(cand, row, AC_STATUS, Model.nzCodec());
-            return 0;
+        codec = Pdfimage.piGet(rec, Pdfimage.piFCodec());
+        if (codec != 0) {
+            // a codec's pixels are the host's: its bytes are asked for in one round, and the answers are adopted in the next
+            asSet(cand, row, AC_FROM, asFromCodec(codec));
+            if (codec != 7) {
+                rc = Pdfimage.piSamples(src, ar, dc, a, b, st, rec, sh, data);
+                if (rc == 12) {
+                    return 12;
+                }
+                if (rc != 1) {
+                    asSet(cand, row, AC_STATUS, Model.nzCodec());
+                    return 0;
+                }
+            }
+            hrc = asHost(src, ar, dc, a, b, st, input, rec, data, asId(row, 0), ans, rq, payload, bms, glob, tmp, words, hs, asHcap(maxpix));
+            if (hrc == 12) {
+                return 12;
+            }
+            if (hrc == 1) {
+                asSet(cand, row, AC_STATUS, Model.nzCodec());
+                return 0;
+            }
+            if (hrc == 2) {
+                asSet(cand, row, AC_STATUS, Model.nzTooLarge());
+                return 0;
+            }
+            if (hrc == 4) {
+                asSet(cand, row, AC_STATUS, Model.nzBudget());
+                return 0;
+            }
+            if (hrc == 3) {
+                pend = 1;
+            }
+        } else {
+            // kin's own samples
+            rc = Pdfimage.piSamples(src, ar, dc, a, b, st, rec, sh, smp);
+            if (rc == 12) {
+                return 12;
+            }
+            if (rc == 1) {
+                asSet(cand, row, AC_STATUS, Model.nzCodec());
+                return 0;
+            }
         }
         mk = Pdfimage.piGet(rec, Pdfimage.piFMkind());
         if ((mk == 2) || (mk == 3)) {
@@ -507,18 +619,49 @@ public final class Asset {
                 return 0;
             }
             if (Pdfimage.piGet(mrec, Pdfimage.piFCodec()) != 0) {
-                asSet(cand, row, AC_STATUS, Model.nzCodec());
-                return 0;
-            }
-            rc = Pdfimage.piSamples(src, ar, dc, a, b, st, mrec, msh, msmp);
-            if (rc == 12) {
-                return 12;
-            }
-            if (rc == 1) {
-                asSet(cand, row, AC_STATUS, Model.nzCodec());
-                return 0;
+                rc = Pdfimage.piSamples(src, ar, dc, a, b, st, mrec, msh, data);
+                if (rc == 12) {
+                    return 12;
+                }
+                if (rc != 1) {
+                    asSet(cand, row, AC_STATUS, Model.nzCodec());
+                    return 0;
+                }
+                hrc = asHost(src, ar, dc, a, b, st, input, mrec, data, asId(row, 1), ans, rq, payload, bms, glob, tmp, words, hs, asHcap(maxpix));
+                if (hrc == 12) {
+                    return 12;
+                }
+                if (hrc == 1) {
+                    asSet(cand, row, AC_STATUS, Model.nzCodec());
+                    return 0;
+                }
+                if (hrc == 2) {
+                    asSet(cand, row, AC_STATUS, Model.nzTooLarge());
+                    return 0;
+                }
+                if (hrc == 4) {
+                    asSet(cand, row, AC_STATUS, Model.nzBudget());
+                    return 0;
+                }
+                if (hrc == 3) {
+                    pend = 1;
+                }
+            } else {
+                rc = Pdfimage.piSamples(src, ar, dc, a, b, st, mrec, msh, msmp);
+                if (rc == 12) {
+                    return 12;
+                }
+                if (rc == 1) {
+                    asSet(cand, row, AC_STATUS, Model.nzCodec());
+                    return 0;
+                }
             }
             have = 1;
+        }
+        // asked: this attempt is only the request (the host's loop runs the unit again with the answers)
+        if (pend == 1) {
+            asSet(cand, row, AC_STATUS, Model.nzCodec());
+            return 0;
         }
         ow = Pdfimage.piOutW(rec);
         oh = Pdfimage.piOutH(rec);
@@ -526,8 +669,9 @@ public final class Asset {
         alpha = Pdfimage.piHasAlpha(rec);
         emon.Port.Bitmap pic = emon.Port.bitmapNew(ow, oh, ch);
         emon.Port.Bitmap al = emon.Port.bitmapNew(ow, oh, 1);
-        emon.Port.Bitmap dummy = emon.Port.bitmapNew(1, 1, 1);
-        if (Pdfimage.piPixels(rec, smp, dummy, mrec, msmp, dummy, have, 0, pic, al) != 0) {
+        emon.Port.Bitmap hbm = emon.Port.bmsGet(bms, asId(row, 0));
+        emon.Port.Bitmap hmbm = emon.Port.bmsGet(bms, asId(row, 1));
+        if (Pdfimage.piPixels(rec, smp, hbm, mrec, msmp, hmbm, have, 0, pic, al) != 0) {
             asSet(cand, row, AC_STATUS, Model.nzColorspace());
             return 0;
         }
@@ -559,7 +703,9 @@ public final class Asset {
         asSet(cand, row, AC_W, w);
         asSet(cand, row, AC_H, h);
         asSet(cand, row, AC_FLAGS, flags);
-        asSet(cand, row, AC_FROM, asFromChain(rec));
+        if (codec == 0) {
+            asSet(cand, row, AC_FROM, asFromChain(rec));
+        }
         asSet(cand, row, AC_ORIGIN, Model.aoDecoded());
         return 0;
     }
@@ -601,11 +747,15 @@ public final class Asset {
         }
         return 0;
     }
-    public static int asCollect(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells im, emon.Port.Cells pa, emon.Port.Cells gl, emon.Port.Cells pg, int maxpix, int totbytes, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells out, emon.Port.Cells rec, emon.Port.Cells mrec, emon.Port.Cells smp, emon.Port.Cells msmp, emon.Port.Cells data, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells ws, emon.Port.Buf z) {
-        // The document pass: a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
+    public static int asCollect(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells im, emon.Port.Cells pa, emon.Port.Cells gl, emon.Port.Cells pg, int maxpix, int totbytes, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells out, emon.Port.Cells rec, emon.Port.Cells mrec, emon.Port.Cells smp, emon.Port.Cells msmp, emon.Port.Cells data, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells ws, emon.Port.Buf z, int input, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Buf payload, emon.Port.BitmapSet bms, emon.Port.Cells glob, emon.Port.Cells words, emon.Port.Cells hs) {
+        // The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
         // its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice
         // `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.
-        // `out rec mrec smp msmp data rows tmp ws z` are scratch. Answers 0, or 12 when the source missed (stop, re-run).
+        // `out rec mrec smp msmp data rows tmp ws z glob words hs` are scratch. A codec image's pixels are the HOST's: the
+        // first attempt writes a `decode-img` request for each (`rq`, with its bytes in `payload` when they are not the input's
+        // own; `input` is the input's index) and answers 1; the host fulfils them and runs the unit again with `ans` and the
+        // bitmaps `bms`, and the same call makes the candidates. Answers 0 (done), 1 (requests written: fulfil and run again) or
+        // 12 when the source missed (stop, re-run).
         int n = Evidence.imCount(im);
         int r = 0;
         int row = 0;
@@ -632,6 +782,8 @@ public final class Asset {
         int ovl = AS_OVERLAY_WORK;
         int whole = 0;
         emon.Port.cellsDrop(cand, 0);
+        emon.Port.cellsDrop(hs, 0);
+        emon.Port.cellsPush(hs, 0);
         while (r < n) {
             if (Evidence.imGet(im, r, Evidence.mfVis()) == 0) {
                 page = Evidence.imGet(im, r, Evidence.mfPage());
@@ -704,7 +856,7 @@ public final class Asset {
                         asSet(cand, row, AC_STATUS, Model.nzBudget());
                     } else {
                         prod += 1;
-                        rc = asMake(src, ar, dc, a, b, st, maxpix, cand, row, obj, ori, 1, cbytes, out, rec, mrec, smp, msmp, data, rows, tmp, ws, z);
+                        rc = asMake(src, ar, dc, a, b, st, maxpix, cand, row, obj, ori, 1, cbytes, out, rec, mrec, smp, msmp, data, rows, tmp, ws, z, input, ans, rq, payload, bms, glob, words, hs);
                         if (rc == 12) {
                             return 12;
                         }
@@ -724,6 +876,9 @@ public final class Asset {
                 }
             }
             r += 1;
+        }
+        if (emon.Port.cellsLen(rq) > 0) {
+            return 1;
         }
         return 0;
     }

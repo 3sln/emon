@@ -12,6 +12,11 @@
 pub mod emon;
 pub mod engine;
 mod imgdec;
+// the PDF image codecs of the `decode-img` request (P6.1a): DCT and CCITT here, JPX and JBIG2 through the embedder's `PdfCodecs`;
+// `pdfcodecs` is OpenJPEG and jbig2dec behind it, live only (`--cfg codecs`)
+#[cfg(codecs)]
+pub mod pdfcodecs;
+pub mod pdfimg;
 #[cfg(pdfium)]
 pub mod pdfium;
 pub mod plan;
@@ -23,5 +28,6 @@ pub mod source;
 pub mod tess;
 
 pub use engine::{Asset, AssetFile, AssetUse, Assets, Attr, Config, Dropped, Engine, Error, Furniture, HtmlAssets, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, Ocr, OcrPolicy, OcrPort, Options, Output, Page, Region, RunStats, Transcript};
+pub use pdfimg::{CodecFail, PdfCodecs, Pix};
 pub use render::{Clip, KindMux, RenderError, RenderFulfiller, RenderInput, RenderRequest, Renderer};
 pub use source::{ByteSource, BytesSource, Input, Inputs, SeekSource, SpoolSource};

@@ -88,7 +88,7 @@
 (defconst ^I32 PI_DSTART 24)   ;; inline: the data's span in the content stream
 (defconst ^I32 PI_DEND 25)
 (defconst ^I32 PI_DNEXT 26)    ;; inline: where the lexer goes on (after `EI`)
-(defconst ^I32 PI_FLAGS 27)    ;; 1 icc, 2 an inline colour space named from the resources, 4 chain too long
+(defconst ^I32 PI_FLAGS 27)    ;; 1 icc, 2 an inline colour space named from the resources, 4 chain too long, 8 no /ColorSpace
 (defconst ^I32 PI_ORI 28)
 (defconst ^I32 PI_VX0 29)      ;; the view: a rectangle of the ORIENTED image, in its pixels
 (defconst ^I32 PI_VY0 30)
@@ -277,6 +277,7 @@
     (if (== c 0)
       (do (cells-set im PI_CLASS 9)
           (cells-set im PI_NCOMP 1)
+          (cells-set im PI_FLAGS (bit-or (cells-at im PI_FLAGS) 8))
           (return 0)))
     (if (!= c 8)
       (do (cells-set im PI_CLASS c)
@@ -900,11 +901,14 @@
           (return 0)))
     (if (and (== cls 1) (== channels 1))
       (do (cells-set im PI_NCOMP 1))
+      (if (and (== cls 4) (== channels 1))
+        (do (comment "an Indexed image the host decoded to its indices (a bilevel codec's): the palette stays")
+            (cells-set im PI_NCOMP 1))
       (if (and (== cls 2) (== channels 3))
         (do (cells-set im PI_NCOMP 3))
         (do (cells-set im PI_DECODE 0)
             (if (== channels 1) (cells-set im PI_CLASS 1) (cells-set im PI_CLASS 2))
-            (cells-set im PI_NCOMP channels))))
+            (cells-set im PI_NCOMP channels)))))
     (pi-build-lut im)
     (return 0)))
 

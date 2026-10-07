@@ -9,11 +9,13 @@
 ;;   figure or seal by where it is, `withheld` signatures, the provisional figures' order and place, a raster page's `part`,
 ;;   and a Model whose arenas are wrong is refused by `model-check-assets`.
 (ns emon.assettest
-  (:require [emon.lang :refer [I32 I64 Blob Src Cells Buf Text i64 i32 add64 mul64]]
-            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at new-cells new-buf new-text
+  (:require [emon.lang :refer [I32 I64 Blob Src Cells Buf Text BitmapSet Bitmap i64 i32 add64 mul64]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at new-cells new-buf new-text new-bitmap-set
                                test-file test-file-span test-t Str TestT assert-text-span]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop buf-len buf-at buf-push
-                               buf-blob src-of-blob crypto-sha256 text-cp]]
+                               buf-blob src-of-blob crypto-sha256 text-cp bms-put bitmap-set-u8]]
+            [emon.plan :refer [rec-count rec-kind rec-id rq-arg pk-decode-img dq-filter dq-w dq-h dq-where
+                               dq-gwhere an-decode-img an-fail ps-unsupported flt-dct]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.para :refer [pa-pages]]
@@ -517,9 +519,11 @@
   (return (i32 (add64 (mul64 (i64 (cells-at tmp (* i 4))) (i64 16777216))
                       (i64 (+ (* (cells-at tmp (+ (* i 4) 1)) 65536) (+ (* (cells-at tmp (+ (* i 4) 2)) 256) (cells-at tmp (+ (* i 4) 3)))))))))
 
-(defn ^I32 at-run [^Src src ^:mut ^Cells cand ^:mut ^Buf cbytes ^:mut ^Cells pages ^:mut ^Cells fg ^:mut ^Cells im]
+(defn ^I32 at-run-ask [^Src src ^:mut ^Cells cand ^:mut ^Buf cbytes ^:mut ^Cells pages ^:mut ^Cells fg ^:mut ^Cells im
+                       ^Cells ans ^:mut ^Cells rq ^:mut ^Buf payload ^BitmapSet bms]
   (comment "Open the document, run its pages, collect its asset candidates into `cand` and `cbytes`, and find the provisional")
-  (comment "figures into `fg` (pages are the Model's). Answers 0, or the failing step.")
+  (comment "figures into `fg` (pages are the Model's). `ans` and `bms` are the host's answers (none: a codec image is asked for")
+  (comment "in `rq` and `payload`, status 1 at step 3). Answers 0, or the failing step.")
   (let [^Cells ar (new-cells)
         ^Cells dc (new-cells)
         ^Cells a (new-cells)
@@ -552,13 +556,30 @@
         ^Cells rows (new-cells)
         ^Cells tmp (new-cells)
         ^Cells ws (new-cells)
+        ^:mut ^I32 rc 0
+        ^Cells glob (new-cells)
+        ^Cells words (new-cells)
+        ^Cells hs (new-cells)
         ^Buf z (new-buf)]
     (if (!= (pd-open src ar dc a b st) 0) (return 1))
     (if (!= (pc-document src ar dc a b st cx ox cs out f0 f1 f2 f3 gl et mk fnt pg wd ln pa im pts gx) 0) (return 2))
-    (if (!= (as-collect src ar dc a b st im pa gl pg 4194304 33554432 cand cbytes o2 rec mrec smp msmp data rows tmp ws z) 0) (return 3))
+    (set rc (as-collect src ar dc a b st im pa gl pg 4194304 33554432 cand cbytes o2 rec mrec smp msmp data rows tmp ws z
+                        0 ans rq payload bms glob words hs))
+    (if (> rc 1) (return 3))
     (pa-pages pg pages)
     (as-figure-rows cand pages fg)
+    (if (== rc 1) (return 4))
     (return 0)))
+
+(defn ^I32 at-run [^Src src ^:mut ^Cells cand ^:mut ^Buf cbytes ^:mut ^Cells pages ^:mut ^Cells fg ^:mut ^Cells im]
+  (comment "`at-run-ask` with no host answers: 0, or the failing step. A codec image is `codec` here (its request is written and")
+  (comment "not answered), which is what the host's loop would have seen on its first attempt.")
+  (let [^Cells rq (new-cells)
+        ^Buf payload (new-buf)
+        ^BitmapSet bms (new-bitmap-set)
+        ^I32 r (at-run-ask src cand cbytes pages fg im (new-cells) rq payload bms)]
+    (if (== r 4) (return 0))
+    (return r)))
 
 (defn ^I32 at-cands-row [^TestT emon-t ^Blob rows ^I32 pos ^I32 e ^I32 line]
   (comment "file n cand...: each candidate status:type:origin:from:w:h:flags, in the order of the provisional figures")
@@ -625,6 +646,106 @@
                 (set checked (+ checked 1))))
           (set pos (+ e 1))))
     (assert-that (> checked 60) "every file of test/asset/cands.txt is checked")))
+
+(defn ^I32 at-fill [^Bitmap b ^I32 w ^I32 h ^I32 ch]
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 c 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (set c 0)
+                (while (< c ch)
+                  (do (bitmap-set-u8 b x y c (rem (+ (* x 7) (+ (* y 13) (* c 50))) 256))
+                      (set c (+ c 1))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 at-codec-run [^Blob file ^Cells ans ^BitmapSet bms ^:mut ^Cells cand ^:mut ^Cells rq ^:mut ^Buf cbytes ^:mut ^Buf payload]
+  (comment "`at-run-ask` over a document with the host's answers (and, written to `rq` and `payload`, its requests): its answer.")
+  (let [^Cells pages (new-cells)
+        ^Cells fg (new-cells)
+        ^Cells im (new-cells)]
+    (return (at-run-ask (src-of-blob file) cand cbytes pages fg im ans rq payload bms))))
+
+(deftest test-a-codec-image-is-asked-of-the-host
+  (comment "P6.1a: a DCT image that cannot pass through (a /Decode) is a `decode-img` request on the first attempt (the input's own bytes,")
+  (comment "no payload), and until it is answered the image is `codec`.")
+  (let [^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf payload (new-buf)
+        ^BitmapSet bms (new-bitmap-set)]
+    (assert-eq (at-codec-run (test-file "assets/dct-decode.pdf") ans bms cand rq cbytes payload) 4 "the request is written")
+    (assert-eq (rec-count rq) 1 "one request")
+    (assert-eq (rec-kind rq 0) (pk-decode-img) "kind 6")
+    (assert-eq (rec-id rq 0) 1 "request 1: the first candidate's image")
+    (assert-eq (rq-arg rq 0 (dq-filter)) (flt-dct) "DCT")
+    (assert-eq (rq-arg rq 0 (dq-w)) 24 "its width")
+    (assert-eq (rq-arg rq 0 (dq-h)) 16 "its height")
+    (assert-eq (rq-arg rq 0 (dq-where)) 0 "the input's own bytes")
+    (assert-eq (rq-arg rq 0 (dq-gwhere)) -1 "no globals")
+    (assert-eq (buf-len payload) 0 "nothing in the payload")
+    (assert-eq (as-get cand 0 9) 6 "until it is answered the image is `codec`")))
+
+(deftest test-a-codec-image-is-adopted-from-the-hosts-answer
+  (comment "With the host's pixels (a bitmap and its record in the answers) the same call makes the asset: a PNG, decoded, from DCT.")
+  (let [^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf payload (new-buf)
+        ^BitmapSet bms (new-bitmap-set)]
+    (an-decode-img ans 1 24 16 3 0)
+    (at-fill (bms-put bms 1 24 16 3) 24 16 3)
+    (assert-eq (at-codec-run (test-file "assets/dct-decode.pdf") ans bms cand rq cbytes payload) 0 "with the answer nothing is asked")
+    (assert-eq (cells-len rq) 0 "no request")
+    (assert-eq (as-get cand 0 9) 0 "pixels were made")
+    (assert-eq (as-get cand 0 10) 2 "a PNG")
+    (assert-eq (as-get cand 0 26) 2 "decoded")
+    (assert-eq (as-get cand 0 24) 1 "from DCT")
+    (assert-eq (as-get cand 0 21) 24 "width")
+    (assert-eq (as-get cand 0 22) 16 "height")
+    (assert-eq (buf-at cbytes (as-get cand 0 11)) 137 "PNG signature")))
+
+(deftest test-a-host-that-cannot-leaves-the-image-codec
+  (comment "The host cannot (unsupported): the image stays `codec` and nothing is asked again.")
+  (let [^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf payload (new-buf)
+        ^BitmapSet bms (new-bitmap-set)]
+    (an-fail ans (pk-decode-img) 1 (ps-unsupported))
+    (assert-eq (at-codec-run (test-file "assets/dct-decode.pdf") ans bms cand rq cbytes payload) 0 "answered: nothing is asked")
+    (assert-eq (as-get cand 0 9) 6 "unsupported is `codec`")))
+
+(deftest test-pixels-that-are-not-the-dictionarys-size-are-not-adopted
+  (let [^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf payload (new-buf)
+        ^BitmapSet bms (new-bitmap-set)]
+    (an-decode-img ans 1 20 16 3 0)
+    (at-fill (bms-put bms 1 20 16 3) 20 16 3)
+    (assert-eq (at-codec-run (test-file "assets/dct-decode.pdf") ans bms cand rq cbytes payload) 0 "answered")
+    (assert-eq (as-get cand 0 9) 6 "pixels that are not the dictionary's size are `codec`")))
+
+(deftest test-the-globals-of-a-jbig2-image-ride-in-the-payload
+  (comment "The image is the input's own bytes; the globals (a stream's decoded bytes, kin's own) are in the payload.")
+  (let [^Cells cand (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells rq (new-cells)
+        ^Buf cbytes (new-buf)
+        ^Buf payload (new-buf)
+        ^BitmapSet bms (new-bitmap-set)]
+    (assert-eq (at-codec-run (test-file "assets/jbig2-globals.pdf") ans bms cand rq cbytes payload) 4 "asked")
+    (assert-eq (rq-arg rq 0 (dq-where)) 0 "the image is the input's own bytes")
+    (assert-eq (rq-arg rq 0 (dq-gwhere)) -2 "the globals are in the payload")
+    (assert-eq (buf-len payload) (rq-arg rq 0 (+ (dq-gwhere) 2)) "the payload is the globals")))
 
 (defn ^I32 at-ori [^TestT emon-t ^Blob file ^I32 want ^I32 line]
   (let [^Cells cand (new-cells)

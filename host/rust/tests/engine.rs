@@ -538,7 +538,7 @@ impl Renderer for Fake {
 }
 
 fn ask(f: &mut RenderFulfiller, rec: Vec<i32>) -> emon::plan::Answer {
-    let r = Request { rec };
+    let r = Request::new(rec);
     f.start(&r, &Default::default()).unwrap();
     f.next().unwrap()
 }
@@ -576,10 +576,10 @@ fn a_render_fulfiller_answers_renders_and_crops_and_failures_as_records() {
     let unsupported_crop = ask(&mut f, vec![11, 5, 7, 0, 0, 72, 3, 0, 0, 1, 1]);
     assert_eq!(unsupported_crop.rec, vec![4, 5, 7, 2]);
     // a request for an input the run does not have, or a malformed one, is the loop's error and not an answer
-    let bad_input = Request { rec: vec![7, 1, 8, 4, 0, 72, 0] };
+    let bad_input = Request::new(vec![7, 1, 8, 4, 0, 72, 0]);
     f.start(&bad_input, &Default::default()).unwrap();
     assert!(matches!(f.next(), Err(emon::plan::PlanError::Fulfil(_))));
-    let short = Request { rec: vec![6, 1, 9, 0, 0, 72] };
+    let short = Request::new(vec![6, 1, 9, 0, 0, 72]);
     f.start(&short, &Default::default()).unwrap();
     assert!(matches!(f.next(), Err(emon::plan::PlanError::Fulfil(_))));
 }
@@ -658,5 +658,70 @@ fn assets_through_a_512_byte_async_source_are_the_in_memory_ones() {
         assert_eq!(json(&asy), json(&mem), "{}", name);
         assert_eq!(asy.asset_files(), mem.asset_files(), "{}", name);
         assert_eq!(asy.to_html(&HtmlOptions::default()), mem.to_html(&HtmlOptions::default()), "{}", name);
+    }
+}
+
+// ---------------------------------------------------------------------------- decode-img (P6.1a, D117, D291)
+
+// A JBIG2 and JPX decoder that records what it was handed and answers a fixed bitmap: the request names the image's bytes (the
+// input's own) and the globals (kin's, in the unit's payload), and the fulfiller must be given both.
+#[derive(Debug, Default)]
+struct SeenCodecs(std::sync::Mutex<Vec<(usize, usize)>>);
+impl emon::PdfCodecs for SeenCodecs {
+    fn jpx(&self, _data: &[u8], _max: u64) -> Result<emon::Pix, emon::CodecFail> {
+        Err(emon::CodecFail::Unsupported("no".to_string()))
+    }
+    fn jbig2(&self, data: &[u8], globals: &[u8], _max: u64) -> Result<emon::Pix, emon::CodecFail> {
+        self.0.lock().unwrap().push((data.len(), globals.len()));
+        Ok(emon::Pix { w: 64, h: 32, ch: 1, px: (0..64 * 32).map(|i| if i % 3 == 0 { 0 } else { 255 }).collect(), bilevel: true })
+    }
+}
+
+#[test]
+fn a_codec_image_is_decoded_by_the_host_and_the_payload_reaches_the_fulfiller() {
+    let o = Options { assets: Assets::Images, ..Options::default() };
+    let figure = Kind::named("figure").unwrap();
+    // DCT that cannot pass through (a /Decode) and CCITT: the host's own codecs, no port configured
+    for (name, from, w, h) in [("dct-decode", "dct", 24, 16), ("dct-a85-decode", "dct", 24, 16), ("ccitt-g4", "ccitt", 70, 24), ("ccitt-g4-align", "ccitt", 70, 24)] {
+        let m = Engine::new(Config::default()).convert(Input::bytes(read(&format!("test/assets/{}.pdf", name))), &o).unwrap();
+        let a = m.assets();
+        assert_eq!(a.len(), 1, "{}", name);
+        assert_eq!((a[0].media_type().as_str(), a[0].origin().as_str(), a[0].from().as_str(), a[0].width(), a[0].height()), ("image/png", "decoded", from, w, h), "{}", name);
+        assert_eq!(&a[0].bytes()[..4], &[0x89, 0x50, 0x4E, 0x47], "{}", name);
+    }
+    // JBIG2 with its globals: with no codecs the answer is `unsupported` and the image `codec`; with them the fulfiller sees the image's
+    // bytes (the input's own) and the globals (the unit's payload), and the asset is a PNG
+    let none = Engine::new(Config::default()).convert(Input::bytes(read("test/assets/jbig2-globals.pdf")), &o).unwrap();
+    assert!(none.assets().is_empty());
+    assert_eq!(none.find(figure)[0].noasset().as_deref(), Some("codec"));
+    let seen = std::sync::Arc::new(SeenCodecs::default());
+    let e = Engine::new(Config { pdf_codecs: Some(seen.clone()), ..Config::default() });
+    let m = e.convert(Input::bytes(read("test/assets/jbig2-globals.pdf")), &o).unwrap();
+    let a = m.assets();
+    assert_eq!(a.len(), 1);
+    assert_eq!((a[0].from().as_str(), a[0].width(), a[0].height(), a[0].origin().as_str()), ("jbig2", 64, 32, "decoded"));
+    let s = seen.0.lock().unwrap().clone();
+    assert_eq!(s.len(), 1);
+    assert!(s[0].0 > 20, "the image's bytes: {:?}", s);
+    assert_eq!(s[0].1, 21, "the globals: a global symbol dictionary (11 + 10 bytes)");
+    // a transcript of that run holds the request and the pixels, never the codestream, and replays without the codecs
+    let (m2, t) = e.record(Input::bytes(read("test/assets/jbig2-globals.pdf")), &o).unwrap();
+    assert_eq!(json(&m2), json(&m));
+    let files = t.to_files();
+    assert!(files.iter().any(|(n, b)| n == "transcript.edn" && String::from_utf8_lossy(b).contains(":kind :decode-img")));
+    let r = Engine::new(Config::default()).replay(Input::bytes(read("test/assets/jbig2-globals.pdf")), &o, &t).unwrap();
+    assert_eq!(json(&r), json(&m));
+    assert_eq!(r.asset_files(), m.asset_files());
+}
+
+#[test]
+fn a_transcript_of_decoded_images_replays_to_the_same_files_through_an_async_source() {
+    let o = Options { assets: Assets::Images, ..Options::default() };
+    for name in ["dct-decode", "ccitt-g4", "ccitt-g4-mask", "dct-smask"] {
+        let b = read(&format!("test/assets/{}.pdf", name));
+        let (live, t) = Engine::new(Config::default()).record(Input::bytes(b.clone()), &o).unwrap();
+        let asy = async_engine(512).replay(Input::bytes(b), &o, &t).unwrap();
+        assert_eq!(json(&asy), json(&live), "{}", name);
+        assert_eq!(asy.asset_files(), live.asset_files(), "{}", name);
     }
 }

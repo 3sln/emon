@@ -1,0 +1,4 @@
+OpenJPEG 2.5.4
+jbig2dec 0.20
+zune-jpeg 0.5.15 (DCT)
+fax 0.2.7 (CCITT code tables)

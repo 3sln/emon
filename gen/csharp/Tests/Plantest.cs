@@ -149,9 +149,21 @@ public static class Plantest {
         int at4 = Plan.RecFind(c, 4);
         emon.Testport.AssertEq(Plan.RecId(c, second), 4, "the second is request 4");
         emon.Testport.AssertEq(Plan.RqArg(c, at4, Plan.DqFilter()), 3, "request 4 is JBIG2");
-        emon.Testport.AssertEq(Plan.AnDecode(ans, 3, 16, 12, 3, 0, 0, 1), 0, "its answer is a decode answer");
+        emon.Testport.AssertEq(Plan.AnDecodeImg(ans, 3, 16, 12, 3, 0), 0, "its answer is a decode answer");
         int at3 = Plan.AnFind(ans, 3);
         emon.Testport.AssertEq(Plan.AnStatus(ans, at3), 0, "ok");
+        emon.Testport.AssertEq(Plan.RecKind(ans, at3), Plan.PkDecodeImg(), "under the request's own kind (6)");
+        emon.Testport.AssertEq(Plan.AnArg(ans, at3, 0), 16, "w");
+        emon.Testport.AssertEq(Plan.AnArg(ans, at3, 1), 12, "h");
+        emon.Testport.AssertEq(Plan.AnArg(ans, at3, 2), 3, "channels");
+        emon.Testport.AssertEq(Plan.AnArg(ans, at3, 3), 0, "no resolution");
+        emon.Testport.AssertEq(Plan.AnArg(ans, at3, 4), 0, "not bilevel");
+        emon.Testport.AssertEq(Plan.AnArg(ans, at3, 5), 1, "one frame");
+        emon.Port.Cells ans2 = emon.Port.NewCells();
+        Plan.AnDecodeImg(ans2, 4, 32, 16, 1, 1);
+        int at4a = Plan.AnFind(ans2, 4);
+        emon.Testport.AssertEq(Plan.AnArg(ans2, at4a, 4), 1, "bilevel");
+        emon.Testport.AssertEq(Plan.RecLen(ans2, 0), 10, "the header and seven fields");
     }
     [Xunit.Fact]
     public static void TestAnswersCarryTheIdAndAStatus() {

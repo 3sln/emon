@@ -10,6 +10,7 @@ use crate::emon::mscript::*;
 use crate::emon::para::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
+use crate::emon::plan::*;
 use crate::emon::restruct::*;
 
 pub(crate) fn at_build(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, mut st: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells) -> i32 {
@@ -517,9 +518,10 @@ pub(crate) fn at_cint(b: &[u8], from: i32, to: i32, n: i32) -> i32 {
 pub(crate) fn at_word(tmp: &mut crate::port::Cells, i: i32) -> i32 {
     return ((crate::port::cells_at(tmp, i * 4) as i64).wrapping_mul(16777216 as i64)).wrapping_add(((crate::port::cells_at(tmp, (i * 4) + 1) * 65536) + ((crate::port::cells_at(tmp, (i * 4) + 2) * 256) + crate::port::cells_at(tmp, (i * 4) + 3))) as i64) as i32;
 }
-pub(crate) fn at_run(src: &crate::port::Src, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut pages: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut im: &mut crate::port::Cells) -> i32 {
+pub(crate) fn at_run_ask(src: &crate::port::Src, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut pages: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut im: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut payload: &mut crate::port::Buf, bms: &crate::port::BitmapSet) -> i32 {
     // Open the document, run its pages, collect its asset candidates into `cand` and `cbytes`, and find the provisional
-    // figures into `fg` (pages are the Model's). Answers 0, or the failing step.
+    // figures into `fg` (pages are the Model's). `ans` and `bms` are the host's answers (none: a codec image is asked for
+    // in `rq` and `payload`, status 1 at step 3). Answers 0, or the failing step.
     let ar: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let dc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let a: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -552,6 +554,10 @@ pub(crate) fn at_run(src: &crate::port::Src, mut cand: &mut crate::port::Cells, 
     let rows: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut rc: i32 = 0;
+    let glob: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let z: &mut crate::port::Buf = &mut crate::port::Buf::new();
     if pd_open(src, ar, dc, a, b, st) != 0 {
         return 1;
@@ -559,12 +565,28 @@ pub(crate) fn at_run(src: &crate::port::Src, mut cand: &mut crate::port::Cells, 
     if pc_document(src, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0 {
         return 2;
     }
-    if as_collect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0 {
+    rc = as_collect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z, 0, ans, rq, payload, bms, glob, words, hs);
+    if rc > 1 {
         return 3;
     }
     pa_pages(pg, pages);
     as_figure_rows(cand, pages, fg);
+    if rc == 1 {
+        return 4;
+    }
     return 0;
+}
+pub(crate) fn at_run(src: &crate::port::Src, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut pages: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut im: &mut crate::port::Cells) -> i32 {
+    // `at-run-ask` with no host answers: 0, or the failing step. A codec image is `codec` here (its request is written and
+    // not answered), which is what the host's loop would have seen on its first attempt.
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    let r: i32 = at_run_ask(src, cand, cbytes, pages, fg, im, &mut crate::port::Cells::new(), rq, payload, bms);
+    if r == 4 {
+        return 0;
+    }
+    return r;
 }
 pub(crate) fn at_cands_row(emon_t: i32, rows: &[u8], pos: i32, e: i32, line: i32) -> i32 {
     // file n cand...: each candidate status:type:origin:from:w:h:flags, in the order of the provisional figures
@@ -640,6 +662,114 @@ fn test_the_fixtures_make_their_candidates() {
         pos = e + 1;
     }
     crate::testport::assert_that(checked > 60, "every file of test/asset/cands.txt is checked");
+}
+pub(crate) fn at_fill(b: &crate::port::Bitmap, w: i32, h: i32, ch: i32) -> i32 {
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut c: i32 = 0;
+    while y < h {
+        x = 0;
+        while x < w {
+            c = 0;
+            while c < ch {
+                crate::port::bitmap_set_u8(b, x, y, c, ((x * 7) + ((y * 13) + (c * 50))) % 256);
+                c += 1;
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+    return 0;
+}
+pub(crate) fn at_codec_run(file: &[u8], ans: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut cand: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut payload: &mut crate::port::Buf) -> i32 {
+    // `at-run-ask` over a document with the host's answers (and, written to `rq` and `payload`, its requests): its answer.
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let im: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    return at_run_ask(&crate::port::src_of_blob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms);
+}
+#[test]
+fn test_a_codec_image_is_asked_of_the_host() {
+    // P6.1a: a DCT image that cannot pass through (a /Decode) is a `decode-img` request on the first attempt (the input's own bytes,
+    // no payload), and until it is answered the image is `codec`.
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/dct-decode.pdf")[..], ans, bms, cand, rq, cbytes, payload), 4, "the request is written");
+    crate::testport::assert_eq(rec_count(rq), 1, "one request");
+    crate::testport::assert_eq(rec_kind(rq, 0), pk_decode_img(), "kind 6");
+    crate::testport::assert_eq(rec_id(rq, 0), 1, "request 1: the first candidate's image");
+    crate::testport::assert_eq(rq_arg(rq, 0, dq_filter()), flt_dct(), "DCT");
+    crate::testport::assert_eq(rq_arg(rq, 0, dq_w()), 24, "its width");
+    crate::testport::assert_eq(rq_arg(rq, 0, dq_h()), 16, "its height");
+    crate::testport::assert_eq(rq_arg(rq, 0, dq_where()), 0, "the input's own bytes");
+    crate::testport::assert_eq(rq_arg(rq, 0, dq_gwhere()), -1, "no globals");
+    crate::testport::assert_eq(crate::port::buf_len(payload), 0, "nothing in the payload");
+    crate::testport::assert_eq(as_get(cand, 0, 9), 6, "until it is answered the image is `codec`");
+}
+#[test]
+fn test_a_codec_image_is_adopted_from_the_hosts_answer() {
+    // With the host's pixels (a bitmap and its record in the answers) the same call makes the asset: a PNG, decoded, from DCT.
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    an_decode_img(ans, 1, 24, 16, 3, 0);
+    at_fill(crate::port::bms_put(bms, 1, 24, 16, 3), 24, 16, 3);
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/dct-decode.pdf")[..], ans, bms, cand, rq, cbytes, payload), 0, "with the answer nothing is asked");
+    crate::testport::assert_eq(crate::port::cells_len(rq), 0, "no request");
+    crate::testport::assert_eq(as_get(cand, 0, 9), 0, "pixels were made");
+    crate::testport::assert_eq(as_get(cand, 0, 10), 2, "a PNG");
+    crate::testport::assert_eq(as_get(cand, 0, 26), 2, "decoded");
+    crate::testport::assert_eq(as_get(cand, 0, 24), 1, "from DCT");
+    crate::testport::assert_eq(as_get(cand, 0, 21), 24, "width");
+    crate::testport::assert_eq(as_get(cand, 0, 22), 16, "height");
+    crate::testport::assert_eq(crate::port::buf_at(cbytes, as_get(cand, 0, 11)), 137, "PNG signature");
+}
+#[test]
+fn test_a_host_that_cannot_leaves_the_image_codec() {
+    // The host cannot (unsupported): the image stays `codec` and nothing is asked again.
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    an_fail(ans, pk_decode_img(), 1, ps_unsupported());
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/dct-decode.pdf")[..], ans, bms, cand, rq, cbytes, payload), 0, "answered: nothing is asked");
+    crate::testport::assert_eq(as_get(cand, 0, 9), 6, "unsupported is `codec`");
+}
+#[test]
+fn test_pixels_that_are_not_the_dictionarys_size_are_not_adopted() {
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    an_decode_img(ans, 1, 20, 16, 3, 0);
+    at_fill(crate::port::bms_put(bms, 1, 20, 16, 3), 20, 16, 3);
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/dct-decode.pdf")[..], ans, bms, cand, rq, cbytes, payload), 0, "answered");
+    crate::testport::assert_eq(as_get(cand, 0, 9), 6, "pixels that are not the dictionary's size are `codec`");
+}
+#[test]
+fn test_the_globals_of_a_jbig2_image_ride_in_the_payload() {
+    // The image is the input's own bytes; the globals (a stream's decoded bytes, kin's own) are in the payload.
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cbytes: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let payload: &mut crate::port::Buf = &mut crate::port::Buf::new();
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    crate::testport::assert_eq(at_codec_run(&crate::testport::test_file("assets/jbig2-globals.pdf")[..], ans, bms, cand, rq, cbytes, payload), 4, "asked");
+    crate::testport::assert_eq(rq_arg(rq, 0, dq_where()), 0, "the image is the input's own bytes");
+    crate::testport::assert_eq(rq_arg(rq, 0, dq_gwhere()), -2, "the globals are in the payload");
+    crate::testport::assert_eq(crate::port::buf_len(payload), rq_arg(rq, 0, dq_gwhere() + 2), "the payload is the globals");
 }
 pub(crate) fn at_ori(emon_t: i32, file: &[u8], want: i32, line: i32) -> i32 {
     let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();

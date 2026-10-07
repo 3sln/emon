@@ -15,6 +15,17 @@
 ;;   4. THE HTML. `inline`'s `data:` URI decodes (Java) to the very asset file; `external` writes `prefix` + the file's name; `omit`
 ;;      has no <img> at all; and with `assets` off (`--assets=none`) the JSON and the HTML are what a run without the flag writes.
 ;;   5. THE GOLDENS: `kin/scripts/asset-golden --check`.
+;;   6. THE CODECS (P6.1a, D117, D332-D470). A document whose images the HOST decodes (a DCT image that cannot pass through, CCITT,
+;;      JPX, JBIG2) has a transcript in test/assets/transcripts/ (`bb asset-record`: DCT and CCITT by the Rust host's libraries, JPX by
+;;      OpenJPEG, JBIG2 by jbig2dec). 1 and 2 and 3 and 4 then run BOTH hosts over that transcript (`--replay`), because a lossy codec
+;;      is not the same pixel for pixel on two hosts: what is held is that the hosts agree on what they are given. Beside it:
+;;        a. JPX, JBIG2 and CCITT decode, in the PNG, to exactly the generator's pixels (the D rows of rows.txt: the SHA-256 of the RGBA8),
+;;           which poppler's own decoders were held to when the fixtures were written;
+;;        b. every DCT image the host decoded is within 2 per channel of poppler's `pdfimages -png` (ImageMagick's CMYK conversion for the
+;;           CMYK one: poppler's is not the naive one);
+;;        c. each host LIVE (no replay): the asset it made is the transcript's (CCITT, byte for byte; DCT within 2 per channel: two JPEG
+;;           decoders), or the host's own answer for what it does not read (`noasset: codec`): the Go host reads no JPX or JBIG2, nor
+;;           CCITT Group 3 two-dimensional, byte-aligned or without EOLs; the Rust host without `--codecs` reads no JPX or JBIG2.
 ;;
 ;; Needs ImageMagick (`magick`), poppler (`pdfimages`) and the toolchains of the drivers. A missing tool is a SKIP of what it checks.
 (require '[babashka.fs :as fs] '[babashka.process :refer [shell process]] '[cheshire.core :as json] '[clojure.string :as str])
@@ -44,7 +55,7 @@
 ;; ---------------------------------------------------------------- the generator's rows
 (def rows (->> (str/split-lines (slurp "test/assets/rows.txt")) (remove #(or (str/blank? %) (str/starts-with? % "#"))) (map #(str/split % #"\t"))))
 (def d-rows (into {} (for [[k name file obj orient crop fill w h ch alpha sha] rows
-                           :when (= k "D")] [name {:file file :obj obj :orient (parse-long orient) :crop crop :fill (parse-long fill)
+                           :when (#{"D" "H"} k)] [name {:file file :obj obj :orient (parse-long orient) :crop crop :fill (parse-long fill)
                                                    :w (parse-long w) :h (parse-long h) :sha sha}])))
 
 ;; ------------------------------------------------------------------ one document, one host
@@ -53,6 +64,10 @@
   (let [r (apply run exe "--assets=images" (str "--asset-dir=" dir) (concat flags [pdf]))]
     (when-not (zero? (:exit r)) (println "  FAIL" exe pdf (:err r)))
     (:out r)))
+
+;; the transcript of a document the host decodes images of (P6.1a): both hosts REPLAY it where there is one
+(def transcripts "test/assets/transcripts")
+(defn replay-flags [stem] (let [d (str transcripts "/" stem)] (when (fs/exists? (str d "/transcript.edn")) [(str "--replay=" d)])))
 
 (def pdfs (concat (sort (map str (fs/glob "test/assets" "*.pdf")))
                   (map #(str "test/corpus/synth/pdf/" % ".pdf")
@@ -65,9 +80,10 @@
    (for [pdf pdfs :when (fs/exists? pdf)]
      (let [stem (fs/strip-ext (fs/file-name pdf))
            dr (str tmp "/rs/" stem) dg (str tmp "/go/" stem)
-           jr (convert rs pdf dr "--pretty") jg (convert go pdf dg "--pretty")
-           hr (map (fn [m] (:out (apply run rs "--out=html" "--assets=images" (concat m [pdf])))) [["--html=assets=inline"] ["--html=assets=external,prefix=img/"] ["--html=assets=omit"]])
-           hg (map (fn [m] (:out (apply run go "--out=html" "--assets=images" (concat m [pdf])))) [["--html=assets=inline"] ["--html=assets=external,prefix=img/"] ["--html=assets=omit"]])
+           rf (replay-flags stem)
+           jr (apply convert rs pdf dr "--pretty" rf) jg (apply convert go pdf dg "--pretty" rf)
+           hr (map (fn [m] (:out (apply run rs "--out=html" "--assets=images" (concat m rf [pdf])))) [["--html=assets=inline"] ["--html=assets=external,prefix=img/"] ["--html=assets=omit"]])
+           hg (map (fn [m] (:out (apply run go "--out=html" "--assets=images" (concat m rf [pdf])))) [["--html=assets=inline"] ["--html=assets=external,prefix=img/"] ["--html=assets=omit"]])
            files (fn [d] (into (sorted-map) (for [f (fs/list-dir d)] [(fs/file-name f) (vec (fs/read-all-bytes f))])))
            fr (when (fs/exists? dr) (files dr)) fg (when (fs/exists? dg) (files dg))]
        {:pdf pdf :stem stem :json jr :jg jg :hr hr :hg hg :dir dr :fr (or fr {}) :fg (or fg {})}))))
@@ -75,7 +91,8 @@
 (let [diffs (for [{:keys [pdf json jg hr hg fr fg]} per-doc
                   :when (or (not= json jg) (not= hr hg) (not= fr fg))] pdf)]
   (check (empty? diffs) "HOSTS: the JSON, the HTML in the three modes and every asset file are identical on Rust and Go over "
-         (count per-doc) " documents" (when (seq diffs) (str ": " (str/join " " diffs)))))
+         (count per-doc) " documents (" (count (filter #(seq (replay-flags (:stem %))) per-doc)) " of them replaying the transcript of the host's decoding)"
+         (when (seq diffs) (str ": " (str/join " " diffs)))))
 
 (let [total (atom 0)
       wrong (atom [])]
@@ -190,6 +207,65 @@
       (when (str/includes? omit "<img") (swap! wrong conj (str stem " omit has an <img>")))))
   (check (and (pos? @n) (empty? @wrong)) "THE HTML: in " @n " documents `inline` decodes to the asset files, `external` names them and `omit` has no <img>"
          (when (seq @wrong) (str ": " (str/join "; " (take 5 @wrong))))))
+
+;; 6 ----------------------------------------------------------------------
+(defn max-diff
+  "The largest per-channel difference of two images of one size (alpha ignored), or nil when ImageMagick cannot say (another size)."
+  [a b]
+  (let [r (run "magick" a "-alpha" "off" b "-alpha" "off" "-compose" "difference" "-composite" "-format" "%[fx:maxima*255]" "info:")]
+    (when (zero? (:exit r)) (Math/round (Double/parseDouble (str/trim (:out r)))))))
+
+(defn the-asset
+  "The first asset of a document's JSON (its file in `dir`), and the first figure's `noasset`."
+  [json dir]
+  (let [j (json/parse-string json) a (first (get j "assets"))
+        fig (first (filter #(contains? % "noasset") (tree-seq map? #(get % "children") (get j "body"))))]
+    {:file (when a (str dir "/" (get a "name"))) :type (get a "type") :from (get a "from") :noasset (get fig "noasset")}))
+
+(let [coded (filter #(seq (replay-flags (:stem %))) per-doc)
+      ;; what each host decodes LIVE with no codec library: :decoded, or :codec (its own `unsupported` or `failed` answer)
+      expect (fn [stem host]
+               (cond (or (str/starts-with? stem "jpx") (str/starts-with? stem "jbig2")) :codec
+                     (#{"dct-arith" "dct-size"} stem) :codec
+                     (and (= host :go) (#{"ccitt-g3-1d-align" "ccitt-g3-1d-noeol" "ccitt-g3-1d-align-noeol" "ccitt-g3-2d"} stem)) :codec
+                     :else :decoded))
+      wrong (atom []) n (atom 0) lossy (atom 0)]
+  (when (and (have? "magick") (have? "pdfimages"))
+    ;; b. DCT within 2 of poppler (ImageMagick for CMYK)
+    (doseq [{:keys [pdf stem json dir]} coded :when (str/starts-with? stem "dct-")
+            :let [a (the-asset json dir)] :when (= "image/png" (:type a))]
+      (swap! lossy inc)
+      (let [ref (if (= stem "dct-cmyk")
+                  (let [o (str tmp "/ref-" stem ".png")] (run "magick" "test/assets/src/cmyk.jpg" "-colorspace" "sRGB" o) o)
+                  (let [d (str tmp "/ref-" stem)] (fs/create-dirs d) (run "pdfimages" "-png" pdf (str d "/p")) (first (sort (map str (fs/glob d "*.png"))))))
+            d (max-diff (:file a) ref)]
+        ;; 2 on 4:4:4 and gray; 4 where the chroma is sub-sampled (the two libraries' filters differ, D190) and for the CMYK file
+        (when-not (and d (<= d (if (#{"dct-cmyk" "dct-420-decode"} stem) 4 2))) (swap! wrong conj (str stem " differs from the reference by " d)))))
+    (check (and (pos? @lossy) (empty? @wrong)) "CODECS: " @lossy " DCT images the host decoded are within 2 of poppler's `pdfimages -png` per channel (4 for the sub-sampled one, and for the CMYK one against ImageMagick's sRGB)"
+           (when (seq @wrong) (str ": " (str/join "; " @wrong))))
+    ;; c. each host live
+    (reset! wrong [])
+    (doseq [{:keys [pdf stem json dir]} coded [host exe] [[:rust rs] [:go go]]]
+      (swap! n inc)
+      (let [d (str tmp "/live-" (name host) "-" stem)
+            _ (fs/delete-tree d)
+            r (run exe "--assets=images" "--out=json" (str "--asset-dir=" d) pdf)
+            live (the-asset (:out r) d) want (the-asset json dir) ex (expect stem host)]
+        (cond
+          (not (zero? (:exit r))) (swap! wrong conj (str stem " on " (name host) " exited " (:exit r)))
+          (= ex :codec) (when-not (and (nil? (:file live)) (= "codec" (:noasset live)))
+                          (swap! wrong conj (str stem " on " (name host) " was expected to say `codec`: " (pr-str live))))
+          (nil? (:file live)) (swap! wrong conj (str stem " on " (name host) " made no asset: " (pr-str live)))
+          (nil? (:file want)) (swap! wrong conj (str stem " has no asset in the transcript"))
+          (not= (:from live) (:from want)) (swap! wrong conj (str stem " on " (name host) " `from` " (:from live) " vs " (:from want)))
+          (and (or (not (str/starts-with? stem "dct-")) (= host :rust))
+               (not= (vec (fs/read-all-bytes (:file live))) (vec (fs/read-all-bytes (:file want)))))
+          (swap! wrong conj (str stem " on " (name host) " is not the transcript's asset, byte for byte"))
+          (and (str/starts-with? stem "dct-") (= host :go) (= "image/png" (:type live))
+               (not (some-> (max-diff (:file live) (:file want)) (<= (if (= stem "dct-420-decode") 6 2)))))
+          (swap! wrong conj (str stem " on go is not within " (if (= stem "dct-420-decode") 6 2) " per channel of the transcript's pixels")))))
+    (check (empty? @wrong) "CODECS: each host, live, makes the transcript's asset where it reads the codec (CCITT byte for byte, DCT byte for byte on Rust and within 2 per channel on Go, 6 for the sub-sampled one: D190) and says `codec` where it does not ("
+           @n " runs over " (count coded) " documents)" (when (seq @wrong) (str ": " (str/join "; " @wrong))))))
 
 (let [wrong (atom [])]
   (doseq [exe [rs go] pdf (take 12 pdfs)]

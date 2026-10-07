@@ -155,9 +155,21 @@ func TestADecodeImgRequestIsFoundByItsIdAndAnsweredAsADecode(emonT *testing.T) {
 	var at4 int32 = plan.RecFind(c, 4)
 	port.AssertEq(emonT, plan.RecId(c, second), 4, "the second is request 4")
 	port.AssertEq(emonT, plan.RqArg(c, at4, plan.DqFilter()), 3, "request 4 is JBIG2")
-	port.AssertEq(emonT, plan.AnDecode(ans, 3, 16, 12, 3, 0, 0, 1), 0, "its answer is a decode answer")
+	port.AssertEq(emonT, plan.AnDecodeImg(ans, 3, 16, 12, 3, 0), 0, "its answer is a decode answer")
 	var at3 int32 = plan.AnFind(ans, 3)
 	port.AssertEq(emonT, plan.AnStatus(ans, at3), 0, "ok")
+	port.AssertEq(emonT, plan.RecKind(ans, at3), plan.PkDecodeImg(), "under the request's own kind (6)")
+	port.AssertEq(emonT, plan.AnArg(ans, at3, 0), 16, "w")
+	port.AssertEq(emonT, plan.AnArg(ans, at3, 1), 12, "h")
+	port.AssertEq(emonT, plan.AnArg(ans, at3, 2), 3, "channels")
+	port.AssertEq(emonT, plan.AnArg(ans, at3, 3), 0, "no resolution")
+	port.AssertEq(emonT, plan.AnArg(ans, at3, 4), 0, "not bilevel")
+	port.AssertEq(emonT, plan.AnArg(ans, at3, 5), 1, "one frame")
+	var ans2 *port.Cells = port.NewCells()
+	plan.AnDecodeImg(ans2, 4, 32, 16, 1, 1)
+	var at4a int32 = plan.AnFind(ans2, 4)
+	port.AssertEq(emonT, plan.AnArg(ans2, at4a, 4), 1, "bilevel")
+	port.AssertEq(emonT, plan.RecLen(ans2, 0), 10, "the header and seven fields")
 }
 
 func TestAnswersCarryTheIdAndAStatus(emonT *testing.T) {

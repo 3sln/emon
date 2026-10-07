@@ -18,7 +18,7 @@
                                rq-arg rq-nargs rq-render rq-decode rq-ocr rq-ocr-lang
                                rq-ocr-end rq-bytes
                                an-status an-arg an-find an-ok an-fail an-render
-                               an-decode an-ocr an-ocr-word an-ocr-cp an-ocr-end
+                               an-decode an-decode-img an-ocr an-ocr-word an-ocr-cp an-ocr-end
                                an-bytes an-ocr-count an-ocr-first aw-get aw-cp aw-next
                                aw-x aw-conf aw-len]]
             [emon.planprobe :refer [pp-unit]]
@@ -160,9 +160,21 @@
           ^I32 at4 (rec-find c 4)]
       (assert-eq (rec-id c second) 4 "the second is request 4")
       (assert-eq (rq-arg c at4 (dq-filter)) 3 "request 4 is JBIG2"))
-    (assert-eq (an-decode ans 3 16 12 3 0 0 1) 0 "its answer is a decode answer")
+    (assert-eq (an-decode-img ans 3 16 12 3 0) 0 "its answer is a decode answer")
     (let [^I32 at3 (an-find ans 3)]
-      (assert-eq (an-status ans at3) 0 "ok"))))
+      (assert-eq (an-status ans at3) 0 "ok")
+      (assert-eq (rec-kind ans at3) (pk-decode-img) "under the request's own kind (6)")
+      (assert-eq (an-arg ans at3 0) 16 "w")
+      (assert-eq (an-arg ans at3 1) 12 "h")
+      (assert-eq (an-arg ans at3 2) 3 "channels")
+      (assert-eq (an-arg ans at3 3) 0 "no resolution")
+      (assert-eq (an-arg ans at3 4) 0 "not bilevel")
+      (assert-eq (an-arg ans at3 5) 1 "one frame"))
+    (let [^Cells ans2 (new-cells)]
+      (an-decode-img ans2 4 32 16 1 1)
+      (let [^I32 at4a (an-find ans2 4)]
+        (assert-eq (an-arg ans2 at4a 4) 1 "bilevel"))
+      (assert-eq (rec-len ans2 0) 10 "the header and seven fields"))))
 
 (deftest test-answers-carry-the-id-and-a-status
   (let [^Cells c (new-cells)

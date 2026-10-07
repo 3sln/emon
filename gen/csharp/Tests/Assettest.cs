@@ -510,9 +510,10 @@ public static class Assettest {
     internal static int AtWord(emon.Port.Cells tmp, int i) {
         return (int) unchecked(unchecked(((long) emon.Port.CellsAt(tmp, i * 4)) * ((long) 16777216)) + ((long) ((emon.Port.CellsAt(tmp, (i * 4) + 1) * 65536) + ((emon.Port.CellsAt(tmp, (i * 4) + 2) * 256) + emon.Port.CellsAt(tmp, (i * 4) + 3)))));
     }
-    internal static int AtRun(emon.Port.Src src, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells pages, emon.Port.Cells fg, emon.Port.Cells im) {
+    internal static int AtRunAsk(emon.Port.Src src, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells pages, emon.Port.Cells fg, emon.Port.Cells im, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Buf payload, emon.Port.BitmapSet bms) {
         // Open the document, run its pages, collect its asset candidates into `cand` and `cbytes`, and find the provisional
-        // figures into `fg` (pages are the Model's). Answers 0, or the failing step.
+        // figures into `fg` (pages are the Model's). `ans` and `bms` are the host's answers (none: a codec image is asked for
+        // in `rq` and `payload`, status 1 at step 3). Answers 0, or the failing step.
         emon.Port.Cells ar = emon.Port.NewCells();
         emon.Port.Cells dc = emon.Port.NewCells();
         emon.Port.Cells a = emon.Port.NewCells();
@@ -545,6 +546,10 @@ public static class Assettest {
         emon.Port.Cells rows = emon.Port.NewCells();
         emon.Port.Cells tmp = emon.Port.NewCells();
         emon.Port.Cells ws = emon.Port.NewCells();
+        int rc = 0;
+        emon.Port.Cells glob = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells hs = emon.Port.NewCells();
         emon.Port.Buf z = emon.Port.NewBuf();
         if (Pdfdoc.PdOpen(src, ar, dc, a, b, st) != 0) {
             return 1;
@@ -552,12 +557,28 @@ public static class Assettest {
         if (Pdfcontent.PcDocument(src, ar, dc, a, b, st, cx, ox, cs, @out, f0, f1, f2, f3, gl, et, mk, fnt, pg, wd, ln, pa, im, pts, gx) != 0) {
             return 2;
         }
-        if (Asset.AsCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z) != 0) {
+        rc = Asset.AsCollect(src, ar, dc, a, b, st, im, pa, gl, pg, 4194304, 33554432, cand, cbytes, o2, rec, mrec, smp, msmp, data, rows, tmp, ws, z, 0, ans, rq, payload, bms, glob, words, hs);
+        if (rc > 1) {
             return 3;
         }
         Para.PaPages(pg, pages);
         Asset.AsFigureRows(cand, pages, fg);
+        if (rc == 1) {
+            return 4;
+        }
         return 0;
+    }
+    internal static int AtRun(emon.Port.Src src, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells pages, emon.Port.Cells fg, emon.Port.Cells im) {
+        // `at-run-ask` with no host answers: 0, or the failing step. A codec image is `codec` here (its request is written and
+        // not answered), which is what the host's loop would have seen on its first attempt.
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Buf payload = emon.Port.NewBuf();
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        int r = AtRunAsk(src, cand, cbytes, pages, fg, im, emon.Port.NewCells(), rq, payload, bms);
+        if (r == 4) {
+            return 0;
+        }
+        return r;
     }
     internal static int AtCandsRow(int emonT, byte[] rows, int pos, int e, int line) {
         // file n cand...: each candidate status:type:origin:from:w:h:flags, in the order of the provisional figures
@@ -633,6 +654,114 @@ public static class Assettest {
             pos = e + 1;
         }
         emon.Testport.AssertThat(@checked > 60, "every file of test/asset/cands.txt is checked");
+    }
+    internal static int AtFill(emon.Port.Bitmap b, int w, int h, int ch) {
+        int x = 0;
+        int y = 0;
+        int c = 0;
+        while (y < h) {
+            x = 0;
+            while (x < w) {
+                c = 0;
+                while (c < ch) {
+                    emon.Port.BitmapSetU8(b, x, y, c, ((x * 7) + ((y * 13) + (c * 50))) % 256);
+                    c += 1;
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+        return 0;
+    }
+    internal static int AtCodecRun(byte[] file, emon.Port.Cells ans, emon.Port.BitmapSet bms, emon.Port.Cells cand, emon.Port.Cells rq, emon.Port.Buf cbytes, emon.Port.Buf payload) {
+        // `at-run-ask` over a document with the host's answers (and, written to `rq` and `payload`, its requests): its answer.
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells fg = emon.Port.NewCells();
+        emon.Port.Cells im = emon.Port.NewCells();
+        return AtRunAsk(emon.Port.SrcOfBlob(file), cand, cbytes, pages, fg, im, ans, rq, payload, bms);
+    }
+    [Xunit.Fact]
+    public static void TestACodecImageIsAskedOfTheHost() {
+        // P6.1a: a DCT image that cannot pass through (a /Decode) is a `decode-img` request on the first attempt (the input's own bytes,
+        // no payload), and until it is answered the image is `codec`.
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Buf cbytes = emon.Port.NewBuf();
+        emon.Port.Buf payload = emon.Port.NewBuf();
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        emon.Testport.AssertEq(AtCodecRun(emon.Testport.TestFile("assets/dct-decode.pdf"), ans, bms, cand, rq, cbytes, payload), 4, "the request is written");
+        emon.Testport.AssertEq(Plan.RecCount(rq), 1, "one request");
+        emon.Testport.AssertEq(Plan.RecKind(rq, 0), Plan.PkDecodeImg(), "kind 6");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), 1, "request 1: the first candidate's image");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, Plan.DqFilter()), Plan.FltDct(), "DCT");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, Plan.DqW()), 24, "its width");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, Plan.DqH()), 16, "its height");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, Plan.DqWhere()), 0, "the input's own bytes");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, Plan.DqGwhere()), -1, "no globals");
+        emon.Testport.AssertEq(emon.Port.BufLen(payload), 0, "nothing in the payload");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 9), 6, "until it is answered the image is `codec`");
+    }
+    [Xunit.Fact]
+    public static void TestACodecImageIsAdoptedFromTheHostsAnswer() {
+        // With the host's pixels (a bitmap and its record in the answers) the same call makes the asset: a PNG, decoded, from DCT.
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Buf cbytes = emon.Port.NewBuf();
+        emon.Port.Buf payload = emon.Port.NewBuf();
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        Plan.AnDecodeImg(ans, 1, 24, 16, 3, 0);
+        AtFill(emon.Port.BmsPut(bms, 1, 24, 16, 3), 24, 16, 3);
+        emon.Testport.AssertEq(AtCodecRun(emon.Testport.TestFile("assets/dct-decode.pdf"), ans, bms, cand, rq, cbytes, payload), 0, "with the answer nothing is asked");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq), 0, "no request");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 9), 0, "pixels were made");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 10), 2, "a PNG");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 26), 2, "decoded");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 24), 1, "from DCT");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 21), 24, "width");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 22), 16, "height");
+        emon.Testport.AssertEq(emon.Port.BufAt(cbytes, Asset.AsGet(cand, 0, 11)), 137, "PNG signature");
+    }
+    [Xunit.Fact]
+    public static void TestAHostThatCannotLeavesTheImageCodec() {
+        // The host cannot (unsupported): the image stays `codec` and nothing is asked again.
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Buf cbytes = emon.Port.NewBuf();
+        emon.Port.Buf payload = emon.Port.NewBuf();
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        Plan.AnFail(ans, Plan.PkDecodeImg(), 1, Plan.PsUnsupported());
+        emon.Testport.AssertEq(AtCodecRun(emon.Testport.TestFile("assets/dct-decode.pdf"), ans, bms, cand, rq, cbytes, payload), 0, "answered: nothing is asked");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 9), 6, "unsupported is `codec`");
+    }
+    [Xunit.Fact]
+    public static void TestPixelsThatAreNotTheDictionarysSizeAreNotAdopted() {
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Buf cbytes = emon.Port.NewBuf();
+        emon.Port.Buf payload = emon.Port.NewBuf();
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        Plan.AnDecodeImg(ans, 1, 20, 16, 3, 0);
+        AtFill(emon.Port.BmsPut(bms, 1, 20, 16, 3), 20, 16, 3);
+        emon.Testport.AssertEq(AtCodecRun(emon.Testport.TestFile("assets/dct-decode.pdf"), ans, bms, cand, rq, cbytes, payload), 0, "answered");
+        emon.Testport.AssertEq(Asset.AsGet(cand, 0, 9), 6, "pixels that are not the dictionary's size are `codec`");
+    }
+    [Xunit.Fact]
+    public static void TestTheGlobalsOfAJbig2ImageRideInThePayload() {
+        // The image is the input's own bytes; the globals (a stream's decoded bytes, kin's own) are in the payload.
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Buf cbytes = emon.Port.NewBuf();
+        emon.Port.Buf payload = emon.Port.NewBuf();
+        emon.Port.BitmapSet bms = emon.Port.NewBitmapSet();
+        emon.Testport.AssertEq(AtCodecRun(emon.Testport.TestFile("assets/jbig2-globals.pdf"), ans, bms, cand, rq, cbytes, payload), 4, "asked");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, Plan.DqWhere()), 0, "the image is the input's own bytes");
+        emon.Testport.AssertEq(Plan.RqArg(rq, 0, Plan.DqGwhere()), -2, "the globals are in the payload");
+        emon.Testport.AssertEq(emon.Port.BufLen(payload), Plan.RqArg(rq, 0, Plan.DqGwhere() + 2), "the payload is the globals");
     }
     internal static int AtOri(int emonT, byte[] file, int want, int line) {
         emon.Port.Cells cand = emon.Port.NewCells();
