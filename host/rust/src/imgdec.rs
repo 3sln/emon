@@ -404,6 +404,7 @@ struct PngMeta {
     h: u32,
     depth: u8,
     ctype: u8,
+    interlace: u8,
     dpi: (i32, i32),
     exif: Option<Vec<u8>>,
 }
@@ -438,6 +439,8 @@ fn crc32(d: &[u8]) -> u32 {
 // two must answer alike (D190): neither is asked about a file that fails this.
 fn png_sound(p: &[u8]) -> bool {
     let mut i = 8usize;
+    let mut ctype = 0u8;
+    let (mut seen_idat, mut idat_done, mut plte, mut plte_n) = (false, false, false, 0usize);
     loop {
         if i + 12 > p.len() {
             return false;
@@ -450,15 +453,147 @@ fn png_sound(p: &[u8]) -> bool {
         if crc32(&p[i + 4..i + 8 + n]) != crc {
             return false;
         }
-        if &p[i + 4..i + 8] == b"IEND" {
-            return true;
+        // The structure is held to one rule set (P10.5, D705; Go's twin is `imgPngSound`): IHDR first and once, then in order PLTE (once,
+        // 1..256 entries) and tRNS (of the length its colour type wants; none with an alpha channel) before the first IDAT, the IDATs
+        // contiguous, at least one, no unknown critical chunk (a capital first letter), IEND last.
+        let kind = &p[i + 4..i + 8];
+        if i == 8 {
+            if kind != b"IHDR" || n != 13 {
+                return false;
+            }
+            ctype = p[i + 8 + 9];
+        } else if kind == b"IHDR" {
+            return false;
+        }
+        if kind == b"IDAT" {
+            if idat_done {
+                return false;
+            }
+            seen_idat = true;
+        } else if seen_idat {
+            idat_done = true;
+        }
+        match kind {
+            b"PLTE" => {
+                if seen_idat || plte || n == 0 || n % 3 != 0 || n / 3 > 256 {
+                    return false;
+                }
+                plte = true;
+                plte_n = n / 3;
+            }
+            b"tRNS" => {
+                if seen_idat {
+                    return false;
+                }
+                let ok = match ctype {
+                    0 => n == 2,
+                    2 => n == 6,
+                    3 => plte && n <= plte_n,
+                    _ => false,
+                };
+                if !ok {
+                    return false;
+                }
+            }
+            b"IEND" => return seen_idat,
+            b"IHDR" | b"IDAT" => {}
+            _ => {
+                if kind[0].is_ascii_uppercase() {
+                    return false;
+                }
+            }
         }
         i += 12 + n;
     }
 }
 
+// The byte count of a PNG's decompressed image data, filter bytes included (RFC 2083 8.2): what its header says it holds. 0 when the
+// header names a depth or colour type the format does not have (the decoders then refuse it alike).
+fn png_raw_size(m: &PngMeta) -> u64 {
+    let ch: u64 = match m.ctype {
+        0 | 3 => 1,
+        2 => 3,
+        4 => 2,
+        6 => 4,
+        _ => 0,
+    };
+    if ch == 0 || m.depth == 0 || m.depth > 16 {
+        return 0;
+    }
+    let bits = ch * m.depth as u64;
+    let (w, h) = (m.w as u64, m.h as u64);
+    if m.interlace == 0 {
+        return h * (1 + (w * bits + 7) / 8);
+    }
+    let mut total = 0u64;
+    for p in [[0u64, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4], [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2]] {
+        if w <= p[0] || h <= p[1] {
+            continue;
+        }
+        let (pw, ph) = ((w - p[0] + p[2] - 1) / p[2], (h - p[1] + p[3] - 1) / p[3]);
+        total += ph * (1 + (pw * bits + 7) / 8);
+    }
+    total
+}
+
+// The IDAT chunks, joined, are one zlib stream whose checksum is right and which holds exactly the bytes the header says. The two
+// hosts' PNG libraries differ here too (Go refuses a bad Adler-32 and surplus data, this crate forgives both), and the two must answer
+// alike (D190, P10.5 D705). The caller has seen the chunks are whole (`png_sound`) and the size is in bounds.
+fn png_data_sound(p: &[u8], m: &PngMeta) -> bool {
+    let want = png_raw_size(m);
+    if want == 0 {
+        return true;
+    }
+    let mut idat: Vec<u8> = Vec::new();
+    let mut i = 8usize;
+    while i + 12 <= p.len() {
+        let n = u32::from_be_bytes([p[i], p[i + 1], p[i + 2], p[i + 3]]) as usize;
+        if i + 12 + n > p.len() {
+            break;
+        }
+        match &p[i + 4..i + 8] {
+            b"IDAT" => idat.extend_from_slice(&p[i + 8..i + 8 + n]),
+            b"IEND" => break,
+            _ => {}
+        }
+        i += 12 + n;
+    }
+    match miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(&idat, want as usize + 1) {
+        Ok(v) => v.len() as u64 == want,
+        Err(_) => false,
+    }
+}
+
+// The animation chunks (acTL, fcTL, fdAT) are not read: a PNG's frame is its default image (`frames` is 1). The two hosts' decoders
+// judge a damaged animation chunk differently (this crate refuses an fcTL it finds odd, Go's decoder skips all three), so neither is
+// shown them (D705). The other chunks, and their checksums, are kept as they are.
+fn png_strip_apng(p: Vec<u8>) -> Vec<u8> {
+    let mut out = Vec::with_capacity(p.len());
+    out.extend_from_slice(&p[..8]);
+    let mut i = 8usize;
+    let mut cut = false;
+    while i + 12 <= p.len() {
+        let n = u32::from_be_bytes([p[i], p[i + 1], p[i + 2], p[i + 3]]) as usize;
+        if i + 12 + n > p.len() {
+            break;
+        }
+        let kind = &p[i + 4..i + 8];
+        if kind == b"acTL" || kind == b"fcTL" || kind == b"fdAT" {
+            cut = true;
+        } else {
+            out.extend_from_slice(&p[i..i + 12 + n]);
+        }
+        i += 12 + n;
+    }
+    if !cut {
+        return p;
+    }
+    out.extend_from_slice(&p[i..]);
+    out
+}
+
 fn png_meta(p: &[u8]) -> Result<PngMeta, Fail> {
-    let mut m = PngMeta { w: 0, h: 0, depth: 0, ctype: 255, dpi: (0, 0), exif: None };
+    let mut m = PngMeta { w: 0, h: 0, depth: 0, ctype: 255, interlace: 0, dpi: (0, 0), exif: None };
     let mut have = false;
     let mut i = 8usize;
     while i + 8 <= p.len() {
@@ -474,6 +609,7 @@ fn png_meta(p: &[u8]) -> Result<PngMeta, Fail> {
                 m.h = u32::from_be_bytes([body[4], body[5], body[6], body[7]]);
                 m.depth = body[8];
                 m.ctype = body[9];
+                m.interlace = body[12];
                 have = true;
             }
             b"pHYs" if n >= 9 && body[8] == 1 => {
@@ -516,7 +652,11 @@ fn png(src: &dyn Source, want: bool, max_pixels: u64) -> Result<Decoded, Fail> {
     if !want {
         return Ok(out);
     }
+    if !png_data_sound(&bytes, &m) {
+        return failed("a PNG whose image data is not one whole zlib stream of the bytes its header says");
+    }
     use image::DynamicImage as D;
+    let bytes = png_strip_apng(bytes);
     let mut dec = image::codecs::png::PngDecoder::new(Cursor::new(&bytes[..])).map_err(|e| Fail::Failed(e.to_string()))?;
     let _ = image::ImageDecoder::set_limits(&mut dec, image::Limits::no_limits());
     let img = D::from_decoder(dec).map_err(|e| Fail::Failed(e.to_string()))?;

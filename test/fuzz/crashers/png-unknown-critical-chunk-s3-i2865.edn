@@ -1,0 +1,4 @@
+;; Found by `bb fuzz-long` (P10.5, D700): seed 3, case 2865, a PNG with an unknown CRITICAL chunk (`ZZZZ`). Rust refused it (`undecodable`), Go's decoder skipped it.
+;; Fixed in host/rust/src/imgdec.rs and host/go/imgdec.go (`png_sound`: one rule set for the chunk structure, D705); replayed on every `bb fuzz` and must pass.
+{:seed 3 :index 2865 :fixture "test/image/png-exif-orient6.png" :ops ["png insert ZZZZ@2"] :signature ["engine-status-mismatch"] :bytes 2118 :status :fixed
+ :detail ["engine-status-mismatch rust: [:err undecodable] | go: [:ok]"]}

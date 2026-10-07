@@ -1063,6 +1063,9 @@ public final class Furniture {
                         l2 += 1;
                     }
                     best = fuMin(best, 1000000);
+                    if (best < -1000000) {
+                        best = -1000000;
+                    }
                     cdSet(cd, r, 10, (best * 1000) / fuMax(1, y1 - y0));
                 }
                 r += 1;
@@ -2067,7 +2070,7 @@ public final class Furniture {
                 if ((capt * 2) >= m) {
                     ok = 0;
                 }
-                if ((bsz > 0) && ((cdGet(cd, emon.Port.cellsAt(ord, f), 14) * 100) > (bsz * 103))) {
+                if ((bsz > 0) && ((((long) cdGet(cd, emon.Port.cellsAt(ord, f), 14)) * ((long) 100)) > (((long) bsz) * ((long) 103)))) {
                     ok = 0;
                 }
                 if ((trust >= 500) && ((con * 1000) >= (m * 800))) {

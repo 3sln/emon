@@ -1,0 +1,4 @@
+;; Found by `bb fuzz` (P10.5, D700), the generated seed `words-flate-40000` (tools/fuzz/seeds.clj), minimised; Rust exited 101 (an unguarded panic) and Go wrapped silently.
+;; Fixed in kin/table.kin (`tb-text-grid`'s row sums are I64, D703) and the Engines' `finish_guarded` (D702); replayed on every `bb fuzz` and must pass.
+{:seed 2 :index nil :fixture "seed:words-flate-40000.pdf" :ops ["unmutated"] :signature ["engine-crash:rust"] :bytes 1124 :status :fixed
+ :detail ["engine-crash rust: exit 101, attempt to add with overflow at table.rs:1385 (a row's baselines summed past 2^31-1: 27463 words at y=10 pt)"]}

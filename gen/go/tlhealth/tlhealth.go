@@ -59,6 +59,17 @@ func thAbs(v int32) int32 {
 	return v
 }
 
+func thClampI32(v int64) int32 {
+	// A 64-bit product or quotient held to +-2e9: hostile sizes, widths and coordinates multiply past 2^31 (P10.5, D703).
+	if v > int64(2000000000) {
+		return 2000000000
+	}
+	if v < int64(-2000000000) {
+		return -2000000000
+	}
+	return int32(v)
+}
+
 func thProj(dx int32, dy int32, cs int32, sn int32) int32 {
 	// The vector (dx, dy) of page space (y down) along the direction of an angle whose cos and sin are `cs` and `sn` (16.16),
 	// centipoints: floor((dx cs - dy sn + 2^15) / 2^16).
@@ -303,12 +314,12 @@ func EvFeatText(feats *port.Cells, epages *port.Cells, et *port.Cells, gl *port.
 				if sw <= 0 {
 					sw = 250
 				}
-				sw = (sw * evidence.GlGet(gl, g, evidence.GfSize())) / 1000
+				sw = thClampI32((int64(sw) * int64(evidence.GlGet(gl, g, evidence.GfSize()))) / int64(1000))
 				gp = thProj(evidence.GlGet(gl, g+1, evidence.GfBx0())-evidence.GlGet(gl, g, evidence.GfBx1()), evidence.GlGet(gl, g+1, evidence.GfBy0())-evidence.GlGet(gl, g, evidence.GfBy1()), cs, sn)
 				gaps += gp
 				widths += thProj(evidence.GlGet(gl, g, evidence.GfBx1())-evidence.GlGet(gl, g, evidence.GfBx0()), evidence.GlGet(gl, g, evidence.GfBy1())-evidence.GlGet(gl, g, evidence.GfBy0()), cs, sn)
 				if (gp > 0) && (sw > 0) {
-					d = (gp * 1000) / sw
+					d = thClampI32((int64(gp) * int64(1000)) / int64(sw))
 					if d > ThGapCap() {
 						d = ThGapCap()
 					}

@@ -1,0 +1,4 @@
+;; Found by `bb fuzz` (P10.5, D700): seed 2, case 2698 (an old fixture mutated), minimised. Rust `internal` (a panic: attempt to multiply with overflow at tlhealth.rs:284); Go ok.
+;; Fixed in kin/tlhealth.kin (`th-clamp-i32`: the space width times the size, and the gap times 1000, are 64-bit, D703); replayed on every `bb fuzz` and must pass.
+{:seed 2 :index 2698 :fixture "test/corpus/synth/pdf/bank-statement.pdf" :ops ["stream@10943 EOL removed" "flip x5" "dup[6274,6278)"] :signature ["engine-panic:rust"] :original-bytes 58424 :bytes 3534 :status :fixed
+ :detail ["engine-panic rust/bytes: internal (attempt to multiply with overflow)"]}

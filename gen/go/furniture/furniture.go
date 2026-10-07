@@ -1136,6 +1136,9 @@ func fuIso(ln *port.Cells, cd *port.Cells, gr *port.Cells, ncd int32) int32 {
 					l2 += 1
 				}
 				best = fuMin(best, 1000000)
+				if best < -1000000 {
+					best = -1000000
+				}
 				cdSet(cd, r, 10, (best*1000)/fuMax(1, y1-y0))
 			}
 			r += 1
@@ -2169,7 +2172,7 @@ func fuStylePass(wd *port.Cells, ln *port.Cells, et *port.Cells, txt *port.Cells
 			if (capt * 2) >= m {
 				ok = 0
 			}
-			if (bsz > 0) && ((cdGet(cd, port.CellsAt(ord, f), 14) * 100) > (bsz * 103)) {
+			if (bsz > 0) && ((int64(cdGet(cd, port.CellsAt(ord, f), 14)) * int64(100)) > (int64(bsz) * int64(103))) {
 				ok = 0
 			}
 			if (trust >= 500) && ((con * 1000) >= (m * 800)) {

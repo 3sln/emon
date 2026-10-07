@@ -63,6 +63,12 @@
   (if (< v 0) (return (- 0 v)))
   (return v))
 
+(defn ^I32 th-clamp-i32 [^I64 v]
+  (comment "A 64-bit product or quotient held to +-2e9: hostile sizes, widths and coordinates multiply past 2^31 (P10.5, D703).")
+  (if (> v (i64 2000000000)) (return 2000000000))
+  (if (< v (i64 -2000000000)) (return -2000000000))
+  (return (i32 v)))
+
 (defn ^I32 th-proj [^I32 dx ^I32 dy ^I32 cs ^I32 sn]
   (comment "The vector (dx, dy) of page space (y down) along the direction of an angle whose cos and sin are `cs` and `sn` (16.16),")
   (comment "centipoints: floor((dx cs - dy sn + 2^15) / 2^16).")
@@ -235,14 +241,14 @@
                       (set sw 0)
                       (if (>= fnrow 0) (set sw (fo-get fnt fnrow (fnf-space))))
                       (if (<= sw 0) (set sw 250))
-                      (set sw (quot (* sw (gl-get gl g (gf-size))) 1000))
+                      (set sw (th-clamp-i32 (quot (mul64 (i64 sw) (i64 (gl-get gl g (gf-size)))) (i64 1000))))
                       (set gp (th-proj (- (gl-get gl (+ g 1) (gf-bx0)) (gl-get gl g (gf-bx1)))
                                        (- (gl-get gl (+ g 1) (gf-by0)) (gl-get gl g (gf-by1))) cs sn))
                       (set gaps (+ gaps gp))
                       (set widths (+ widths (th-proj (- (gl-get gl g (gf-bx1)) (gl-get gl g (gf-bx0)))
                                                      (- (gl-get gl g (gf-by1)) (gl-get gl g (gf-by0))) cs sn)))
                       (if (and (> gp 0) (> sw 0))
-                        (do (set d (quot (* gp 1000) sw))
+                        (do (set d (th-clamp-i32 (quot (mul64 (i64 gp) (i64 1000)) (i64 sw))))
                             (if (> d (th-gap-cap)) (set d (th-gap-cap)))
                             (if (> d anomaly) (set anomaly d))))
                       (if (and (== (th-combining cp0) 0) (== (th-combining cp1) 0))

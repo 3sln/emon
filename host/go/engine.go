@@ -1241,6 +1241,16 @@ func statusError(input int, status int32) *Error {
 	return d("unreadable")
 }
 
+// finishGuarded runs the document unit with a panic in it made the Engine's named error (`panicError`), as in a page unit.
+func finishGuarded(f func() outcome) (res outcome) {
+	defer func() {
+		if p := recover(); p != nil {
+			res = outcome{err: panicError(panicMessage(p))}
+		}
+	}()
+	return f()
+}
+
 // panicError: a kin limit breach is a panic whose message is `port.LimitBreach`'s ("the {name} limit is
 // {limit} and this input reached {actual}. ..."): name it.
 func panicError(msg string) *Error {
@@ -1940,10 +1950,11 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 			stats.PageRounds = append(stats.PageRounds, pst.Rounds)
 			stats.PageRequests = append(stats.PageRequests, pst.Requests)
 		}
+		// the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D702)
 		if docPdf != nil {
-			res = finishPdf(docPdf, opts)
+			res = finishGuarded(func() outcome { return finishPdf(docPdf, opts) })
 		} else {
-			res = finishRaster(docRaster, opts)
+			res = finishGuarded(func() outcome { return finishRaster(docRaster, opts) })
 		}
 		// THE ASSET UNIT (P8.5, D351): at `figures` the Model is final but for its assets, whose renders and crops are requests,
 		// so one more plan/fulfil loop runs over it, with its own answers and BitmapSet, on copies until every answer is in.

@@ -45,6 +45,16 @@ pub(crate) fn th_abs(v: i32) -> i32 {
     }
     return v;
 }
+pub(crate) fn th_clamp_i32(v: i64) -> i32 {
+    // A 64-bit product or quotient held to +-2e9: hostile sizes, widths and coordinates multiply past 2^31 (P10.5, D703).
+    if v > (2000000000 as i64) {
+        return 2000000000;
+    }
+    if v < (-2000000000 as i64) {
+        return -2000000000;
+    }
+    return v as i32;
+}
 pub(crate) fn th_proj(dx: i32, dy: i32, cs: i32, sn: i32) -> i32 {
     // The vector (dx, dy) of page space (y down) along the direction of an angle whose cos and sin are `cs` and `sn` (16.16),
     // centipoints: floor((dx cs - dy sn + 2^15) / 2^16).
@@ -281,12 +291,12 @@ pub fn ev_feat_text(mut feats: &mut crate::port::Cells, epages: &mut crate::port
                 if sw <= 0 {
                     sw = 250;
                 }
-                sw = (sw * gl_get(gl, g, gf_size())) / 1000;
+                sw = th_clamp_i32((sw as i64).wrapping_mul(gl_get(gl, g, gf_size()) as i64) / (1000 as i64));
                 gp = th_proj(gl_get(gl, g + 1, gf_bx0()) - gl_get(gl, g, gf_bx1()), gl_get(gl, g + 1, gf_by0()) - gl_get(gl, g, gf_by1()), cs, sn);
                 gaps += gp;
                 widths += th_proj(gl_get(gl, g, gf_bx1()) - gl_get(gl, g, gf_bx0()), gl_get(gl, g, gf_by1()) - gl_get(gl, g, gf_by0()), cs, sn);
                 if (gp > 0) && (sw > 0) {
-                    d = (gp * 1000) / sw;
+                    d = th_clamp_i32((gp as i64).wrapping_mul(1000 as i64) / (sw as i64));
                     if d > th_gap_cap() {
                         d = th_gap_cap();
                     }

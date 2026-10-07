@@ -1,0 +1,5 @@
+;; Found by `bb fuzz` (P10.5, D700): seed 2, case 319 (not minimised: the minimiser could not shrink it). A CID font's /W array started at 2147483647; `c1 + j` overflowed
+;; (probe panic at pdffont.rs:2247, engine `internal` on Rust; Go wrapped).
+;; Fixed in kin/pdffont.kin (`pfn-sat`, D703); replayed on every `bb fuzz` and must pass.
+{:seed 2 :index 319 :fixture "test/corpus/synth/pdf/columns-uneven.pdf" :ops ["content@9 tokens" "font@14 /W" "root retargeted"] :signature ["panic:rust:async" "panic:rust:mem" "engine-panic:rust"] :bytes 41753 :status :fixed
+ :detail ["panic rust: PANIC attempt to add with overflow at emon/pdffont.rs:2247"]}

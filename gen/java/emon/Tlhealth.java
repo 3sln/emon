@@ -43,6 +43,16 @@ public final class Tlhealth {
         }
         return v;
     }
+    public static int thClampI32(long v) {
+        // A 64-bit product or quotient held to +-2e9: hostile sizes, widths and coordinates multiply past 2^31 (P10.5, D703).
+        if (v > ((long) 2000000000)) {
+            return 2000000000;
+        }
+        if (v < ((long) -2000000000)) {
+            return -2000000000;
+        }
+        return (int) v;
+    }
     public static int thProj(int dx, int dy, int cs, int sn) {
         // The vector (dx, dy) of page space (y down) along the direction of an angle whose cos and sin are `cs` and `sn` (16.16),
         // centipoints: floor((dx cs - dy sn + 2^15) / 2^16).
@@ -279,12 +289,12 @@ public final class Tlhealth {
                     if (sw <= 0) {
                         sw = 250;
                     }
-                    sw = (sw * Evidence.glGet(gl, g, Evidence.gfSize())) / 1000;
+                    sw = thClampI32((((long) sw) * ((long) Evidence.glGet(gl, g, Evidence.gfSize()))) / ((long) 1000));
                     gp = thProj(Evidence.glGet(gl, g + 1, Evidence.gfBx0()) - Evidence.glGet(gl, g, Evidence.gfBx1()), Evidence.glGet(gl, g + 1, Evidence.gfBy0()) - Evidence.glGet(gl, g, Evidence.gfBy1()), cs, sn);
                     gaps += gp;
                     widths += thProj(Evidence.glGet(gl, g, Evidence.gfBx1()) - Evidence.glGet(gl, g, Evidence.gfBx0()), Evidence.glGet(gl, g, Evidence.gfBy1()) - Evidence.glGet(gl, g, Evidence.gfBy0()), cs, sn);
                     if ((gp > 0) && (sw > 0)) {
-                        d = (gp * 1000) / sw;
+                        d = thClampI32((((long) gp) * ((long) 1000)) / ((long) sw));
                         if (d > thGapCap()) {
                             d = thGapCap();
                         }

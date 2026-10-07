@@ -454,14 +454,20 @@ func imgExif(blob []byte) (o uint32, dx, dy int32) {
 type pngMeta struct {
 	w, h         uint32
 	depth, ctype uint8
+	interlace    uint8
 	dx, dy       int32
 	exif         []byte
 }
 
 // imgPngSound: a PNG is sound when every chunk up to IEND is whole and its checksum is right. The two hosts'
-// PNG libraries differ in how much damage they forgive, and the two must answer alike (D190).
+// PNG libraries differ in how much damage they forgive, and the two must answer alike (D190). So the structure is held to one rule set
+// here, before either decoder is asked (P10.5, D705): IHDR first and once, then in order PLTE (once, 1..256 entries) and tRNS (of the
+// length its colour type wants; none with an alpha channel) before the first IDAT, the IDATs contiguous, at least one, no unknown
+// critical chunk (a capital first letter), IEND last.
 func imgPngSound(p []byte) bool {
 	i := 8
+	var ctype byte
+	seenIDAT, idatDone, plte, plteN := false, false, false, 0
 	for {
 		if i+12 > len(p) {
 			return false
@@ -473,11 +479,139 @@ func imgPngSound(p []byte) bool {
 		if crc32.ChecksumIEEE(p[i+4:i+8+n]) != binary.BigEndian.Uint32(p[i+8+n:]) {
 			return false
 		}
-		if string(p[i+4:i+8]) == "IEND" {
-			return true
+		kind := string(p[i+4 : i+8])
+		if i == 8 {
+			if kind != "IHDR" || n != 13 {
+				return false
+			}
+			ctype = p[i+8+9]
+		} else if kind == "IHDR" {
+			return false
+		}
+		if kind == "IDAT" {
+			if idatDone {
+				return false
+			}
+			seenIDAT = true
+		} else if seenIDAT {
+			idatDone = true
+		}
+		switch kind {
+		case "PLTE":
+			if seenIDAT || plte || n == 0 || n%3 != 0 || n/3 > 256 {
+				return false
+			}
+			plte, plteN = true, n/3
+		case "tRNS":
+			if seenIDAT {
+				return false
+			}
+			switch ctype {
+			case 0:
+				if n != 2 {
+					return false
+				}
+			case 2:
+				if n != 6 {
+					return false
+				}
+			case 3:
+				if !plte || n > plteN {
+					return false
+				}
+			default:
+				return false
+			}
+		case "IEND":
+			return seenIDAT
+		case "IHDR", "IDAT":
+		default:
+			if kind[0] >= 'A' && kind[0] <= 'Z' {
+				return false
+			}
 		}
 		i += 12 + n
 	}
+}
+
+// imgPngRawSize is the byte count of a PNG's decompressed image data, filter bytes included (RFC 2083 8.2): what its header says
+// it holds. 0 when the header names a depth or colour type the format does not have (the decoders then refuse it alike).
+func imgPngRawSize(m *pngMeta) uint64 {
+	ch := map[uint8]uint64{0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[m.ctype]
+	if ch == 0 || m.depth == 0 || m.depth > 16 {
+		return 0
+	}
+	bits := ch * uint64(m.depth)
+	w, h := uint64(m.w), uint64(m.h)
+	if m.interlace == 0 {
+		return h * (1 + (w*bits+7)/8)
+	}
+	var total uint64
+	for _, p := range [7][4]uint64{{0, 0, 8, 8}, {4, 0, 8, 8}, {0, 4, 4, 8}, {2, 0, 4, 4}, {0, 2, 2, 4}, {1, 0, 2, 2}, {0, 1, 1, 2}} {
+		if w <= p[0] || h <= p[1] {
+			continue
+		}
+		pw, ph := (w-p[0]+p[2]-1)/p[2], (h-p[1]+p[3]-1)/p[3]
+		total += ph * (1 + (pw*bits+7)/8)
+	}
+	return total
+}
+
+// imgPngDataSound: the IDAT chunks, joined, are one zlib stream whose checksum is right and which holds exactly the bytes the header
+// says. The two hosts' PNG libraries differ here too (Go refuses a bad Adler-32 and surplus data, the Rust crate forgives both), and
+// the two must answer alike (D190, P10.5 D705). The caller has seen the chunks are whole (`imgPngSound`) and the size is in bounds.
+func imgPngDataSound(p []byte, m *pngMeta) bool {
+	want := imgPngRawSize(m)
+	if want == 0 {
+		return true
+	}
+	var idat []byte
+	for i := 8; i+12 <= len(p); {
+		n := int(binary.BigEndian.Uint32(p[i:]))
+		if n < 0 || i+12+n > len(p) {
+			break
+		}
+		kind := string(p[i+4 : i+8])
+		if kind == "IDAT" {
+			idat = append(idat, p[i+8:i+8+n]...)
+		}
+		if kind == "IEND" {
+			break
+		}
+		i += 12 + n
+	}
+	zr, err := zlib.NewReader(bytes.NewReader(idat))
+	if err != nil {
+		return false
+	}
+	n, err := io.Copy(io.Discard, io.LimitReader(zr, int64(want)+1))
+	return err == nil && uint64(n) == want
+}
+
+// imgPngStripApng: the animation chunks (acTL, fcTL, fdAT) are not read: a PNG's frame is its default image (`frames` is 1). The Rust
+// crate refuses an fcTL it finds odd and Go's decoder skips all three, so neither decoder is shown them (D705). The other chunks and
+// their checksums are kept as they are.
+func imgPngStripApng(p []byte) []byte {
+	out := make([]byte, 0, len(p))
+	out = append(out, p[:8]...)
+	i, cut := 8, false
+	for i+12 <= len(p) {
+		n := int(binary.BigEndian.Uint32(p[i:]))
+		if n < 0 || i+12+n > len(p) {
+			break
+		}
+		switch string(p[i+4 : i+8]) {
+		case "acTL", "fcTL", "fdAT":
+			cut = true
+		default:
+			out = append(out, p[i:i+12+n]...)
+		}
+		i += 12 + n
+	}
+	if !cut {
+		return p
+	}
+	return append(out, p[i:]...)
 }
 
 func imgPngMeta(p []byte) (*pngMeta, error) {
@@ -497,6 +631,7 @@ func imgPngMeta(p []byte) (*pngMeta, error) {
 			m.h = binary.BigEndian.Uint32(body[4:])
 			m.depth = body[8]
 			m.ctype = body[9]
+			m.interlace = body[12]
 			have = true
 		case kind == "pHYs" && n >= 9 && body[8] == 1:
 			f := func(v uint64) int32 {
@@ -566,7 +701,10 @@ func imgPng(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 	if !want {
 		return out, nil
 	}
-	img, err := png.Decode(bytes.NewReader(b))
+	if !imgPngDataSound(b, m) {
+		return nil, imgFailedf("a PNG whose image data is not one whole zlib stream of the bytes its header says")
+	}
+	img, err := png.Decode(bytes.NewReader(imgPngStripApng(b)))
 	if err != nil {
 		return nil, imgFailedf(err.Error())
 	}

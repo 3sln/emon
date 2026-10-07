@@ -1286,6 +1286,14 @@ fn panic_error(msg: String) -> Error {
     Error::Internal(msg)
 }
 
+// The document unit under `catch_unwind`: what a panic in it becomes is what a panic in a page unit becomes (`panic_error`).
+fn finish_guarded(f: impl FnOnce() -> Outcome) -> Outcome {
+    match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(o) => o,
+        Err(p) => Outcome::Failed(panic_error(panic_message(p))),
+    }
+}
+
 fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
     if let Some(s) = p.downcast_ref::<String>() {
         s.clone()
@@ -2148,9 +2156,11 @@ impl Run {
                         None => 0,
                     };
                     if i >= np {
+                        // the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D702)
+                        let opts = &self.opts;
                         self.outcome = match self.docslot.take() {
-                            Some(DocKind::Pdf(doc)) => finish_pdf(*doc, &self.opts),
-                            Some(DocKind::Raster(doc)) => finish_raster(*doc, &self.opts),
+                            Some(DocKind::Pdf(doc)) => finish_guarded(|| finish_pdf(*doc, opts)),
+                            Some(DocKind::Raster(doc)) => finish_guarded(|| finish_raster(*doc, opts)),
                             None => Outcome::None,
                         };
                         self.phase = Phase::Finished;
@@ -2810,5 +2820,26 @@ impl<'a> Node<'a> {
             }
             None
         })
+    }
+}
+
+// The document unit is kin too, and a panic in it is the Engine's named error, as in a page unit (P10.5, D702): a bug is `internal`, a kin limit
+// breach is a `limit` error with its name, and neither is the embedder's panic. (`cargo test --lib`: the integration tests cannot reach it.)
+#[cfg(test)]
+mod finish_guard_tests {
+    use super::*;
+
+    #[test]
+    fn a_panic_in_the_document_unit_is_the_engines_named_error() {
+        std::panic::set_hook(Box::new(|_| {}));
+        match finish_guarded(|| panic!("attempt to add with overflow")) {
+            Outcome::Failed(Error::Internal(m)) => assert!(m.contains("overflow")),
+            _ => panic!("a panic in the document unit is not an internal error"),
+        }
+        match finish_guarded(|| panic!("the objects limit is 10 and this input reached 11. Raise it with EMON_LIMIT_OBJECTS")) {
+            Outcome::Failed(Error::Limit { name, limit, actual }) => assert_eq!((name.as_str(), limit, actual), ("objects", 10, 11)),
+            _ => panic!("a limit breach in the document unit is not a named limit error"),
+        }
+        assert!(matches!(finish_guarded(|| Outcome::None), Outcome::None));
     }
 }

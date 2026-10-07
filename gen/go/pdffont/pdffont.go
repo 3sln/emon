@@ -899,6 +899,14 @@ func pfnAddTu(f *port.Cells, d []byte, lo int32, hi int32, ds int32, de int32) i
 	return 1
 }
 
+func pfnSat(a int32, j int32) int32 {
+	// a + j for j >= 0, held at 2^31-1: a /W start of 2147483647 plus an index (P10.5, D703).
+	if a > (2147483647 - j) {
+		return 2147483647
+	}
+	return a + j
+}
+
 func pfnAddVal(f *port.Cells, lo int32, hi int32, v int32) int32 {
 	// A [lo hi value] record (a CID range or a width range).
 	if lo < 0 {
@@ -2336,7 +2344,10 @@ func pfnLoadSimple(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells,
 						pfnEntryPut(f, code, 5)
 					}
 				}
-				code += 1
+				// a code past 255 names nothing, and 2^31-1 + 1 must not wrap (P10.5, D701)
+				if code < 2147483647 {
+					code += 1
+				}
 			}
 			k = pdflex.PlNext(ar, k)
 		}
@@ -2403,7 +2414,7 @@ func pfnParseW(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 				for el != 0 {
 					ev = pdfdoc.PdResolve(src, ar, dc, a, b, st, el)
 					if pfnIsnum(ar, ev) == 1 {
-						pfnAddVal(f, c1+j, c1+j, pdflex.PlNumCp(ar, ev))
+						pfnAddVal(f, pfnSat(c1, j), pfnSat(c1, j), pdflex.PlNumCp(ar, ev))
 					}
 					j += 1
 					el = pdflex.PlNext(ar, el)
@@ -2654,7 +2665,7 @@ func pfnParseW2(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b 
 					if e2 == 0 {
 						el = 0
 					} else {
-						pfnAddW2(f, c1+j, c1+j, pfnNumOrZero(src, ar, dc, a, b, st, el), pfnNumOrZero(src, ar, dc, a, b, st, e1), pfnNumOrZero(src, ar, dc, a, b, st, e2))
+						pfnAddW2(f, pfnSat(c1, j), pfnSat(c1, j), pfnNumOrZero(src, ar, dc, a, b, st, el), pfnNumOrZero(src, ar, dc, a, b, st, e1), pfnNumOrZero(src, ar, dc, a, b, st, e2))
 						j += 1
 						el = pdflex.PlNext(ar, e2)
 					}

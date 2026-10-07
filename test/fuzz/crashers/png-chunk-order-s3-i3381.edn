@@ -1,0 +1,4 @@
+;; Found by `bb fuzz-long` (P10.5, D700): seed 3, case 3381, an RGBA PNG with a tRNS chunk after IDAT (and in an alpha colour type). Rust decoded it, Go said `undecodable` ("chunk out of order").
+;; Fixed in host/rust/src/imgdec.rs and host/go/imgdec.go (`png_sound`: PLTE and tRNS before the first IDAT and of the length the colour type wants, D705); replayed on every `bb fuzz` and must pass.
+{:seed 3 :index 3381 :fixture "test/image/png-rgba8.png" :ops ["png insert tRNS@7" "png trailing bytes"] :signature ["engine-status-mismatch"] :bytes 0 :status :fixed
+ :detail ["engine-status-mismatch rust: [:ok] | go: [:err undecodable]"]}

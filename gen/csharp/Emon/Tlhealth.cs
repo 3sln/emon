@@ -43,6 +43,16 @@ public static class Tlhealth {
         }
         return v;
     }
+    internal static int ThClampI32(long v) {
+        // A 64-bit product or quotient held to +-2e9: hostile sizes, widths and coordinates multiply past 2^31 (P10.5, D703).
+        if (v > ((long) 2000000000)) {
+            return 2000000000;
+        }
+        if (v < ((long) -2000000000)) {
+            return -2000000000;
+        }
+        return (int) v;
+    }
     internal static int ThProj(int dx, int dy, int cs, int sn) {
         // The vector (dx, dy) of page space (y down) along the direction of an angle whose cos and sin are `cs` and `sn` (16.16),
         // centipoints: floor((dx cs - dy sn + 2^15) / 2^16).
@@ -279,12 +289,12 @@ public static class Tlhealth {
                     if (sw <= 0) {
                         sw = 250;
                     }
-                    sw = (sw * Evidence.GlGet(gl, g, Evidence.GfSize())) / 1000;
+                    sw = ThClampI32(unchecked(((long) sw) * ((long) Evidence.GlGet(gl, g, Evidence.GfSize()))) / ((long) 1000));
                     gp = ThProj(Evidence.GlGet(gl, g + 1, Evidence.GfBx0()) - Evidence.GlGet(gl, g, Evidence.GfBx1()), Evidence.GlGet(gl, g + 1, Evidence.GfBy0()) - Evidence.GlGet(gl, g, Evidence.GfBy1()), cs, sn);
                     gaps += gp;
                     widths += ThProj(Evidence.GlGet(gl, g, Evidence.GfBx1()) - Evidence.GlGet(gl, g, Evidence.GfBx0()), Evidence.GlGet(gl, g, Evidence.GfBy1()) - Evidence.GlGet(gl, g, Evidence.GfBy0()), cs, sn);
                     if ((gp > 0) && (sw > 0)) {
-                        d = (gp * 1000) / sw;
+                        d = ThClampI32(unchecked(((long) gp) * ((long) 1000)) / ((long) sw));
                         if (d > ThGapCap()) {
                             d = ThGapCap();
                         }

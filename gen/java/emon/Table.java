@@ -1370,8 +1370,8 @@ public final class Table {
             }
             tbSortWords(wl, wd, i, j, 1);
             int ri = tbRowsOf(rw, RWS);
-            int sumy = 0;
-            int sums = 0;
+            long sumy = (long) 0;
+            long sums = (long) 0;
             int x0 = 2000000000;
             int x1 = -2000000000;
             int y0 = 2000000000;
@@ -1379,8 +1379,8 @@ public final class Table {
             int k = i;
             while (k < j) {
                 int wk = emon.Port.cellsAt(wl, k);
-                sumy += Evidence.wdGet(wd, wk, Evidence.hdBy1());
-                sums += tbMax(1, Evidence.wdGet(wd, wk, Evidence.wfSize()));
+                sumy = sumy + ((long) Evidence.wdGet(wd, wk, Evidence.hdBy1()));
+                sums = sums + ((long) tbMax(1, Evidence.wdGet(wd, wk, Evidence.wfSize())));
                 if (Evidence.wdGet(wd, wk, Evidence.hdX0()) < x0) {
                     x0 = Evidence.wdGet(wd, wk, Evidence.hdX0());
                 }
@@ -1396,14 +1396,14 @@ public final class Table {
                 k += 1;
             }
             int cnt = j - i;
-            int size = sums / cnt;
+            int size = (int) (sums / ((long) cnt));
             int thr = (size * SEG_NUM) / SEG_DEN;
             int sf = tbRowsOf(sg, SGS);
             int cstart = i;
             int cmax = Evidence.wdGet(wd, emon.Port.cellsAt(wl, i), Evidence.hdX1());
             emon.Port.cellsPush(rw, i);
             emon.Port.cellsPush(rw, cnt);
-            emon.Port.cellsPush(rw, sumy / cnt);
+            emon.Port.cellsPush(rw, (int) (sumy / ((long) cnt)));
             emon.Port.cellsPush(rw, size);
             emon.Port.cellsPush(rw, x0);
             emon.Port.cellsPush(rw, x1);
@@ -1633,7 +1633,7 @@ public final class Table {
         // for none. Answers the
         // table's index, -1 when there are not two columns and two rows.
         int ntab = 0;
-        int sumsz = 0;
+        long sumsz = (long) 0;
         int r = ra;
         int nch = 0;
         int ncols = 0;
@@ -1652,7 +1652,7 @@ public final class Table {
             if (emon.Port.cellsAt(rw, (r * RWS) + 9) >= 2) {
                 ntab += 1;
             }
-            sumsz += emon.Port.cellsAt(rw, (r * RWS) + 3);
+            sumsz = sumsz + ((long) emon.Port.cellsAt(rw, (r * RWS) + 3));
             if (emon.Port.cellsAt(rw, (r * RWS) + 4) < minx) {
                 minx = emon.Port.cellsAt(rw, (r * RWS) + 4);
             }
@@ -1670,7 +1670,7 @@ public final class Table {
         if ((ntab < 2) || ((rb - ra) <= 1)) {
             return -1;
         }
-        nch = tbChannels(wd, wl, rw, sg, ra, rb, ntab / 6, ((sumsz / (rb - ra)) * SEG_NUM) / SEG_DEN, ch, st, en);
+        nch = tbChannels(wd, wl, rw, sg, ra, rb, ntab / 6, (int) (((sumsz / ((long) (rb - ra))) * ((long) SEG_NUM)) / ((long) SEG_DEN)), ch, st, en);
         if (nch < 1) {
             return -1;
         }

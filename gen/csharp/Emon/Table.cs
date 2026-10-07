@@ -1370,8 +1370,8 @@ public static class Table {
             }
             TbSortWords(wl, wd, i, j, 1);
             int ri = TbRowsOf(rw, Rws);
-            int sumy = 0;
-            int sums = 0;
+            long sumy = (long) 0;
+            long sums = (long) 0;
             int x0 = 2000000000;
             int x1 = -2000000000;
             int y0 = 2000000000;
@@ -1379,8 +1379,8 @@ public static class Table {
             int k = i;
             while (k < j) {
                 int wk = emon.Port.CellsAt(wl, k);
-                sumy += Evidence.WdGet(wd, wk, Evidence.HdBy1());
-                sums += TbMax(1, Evidence.WdGet(wd, wk, Evidence.WfSize()));
+                sumy = unchecked(sumy + ((long) Evidence.WdGet(wd, wk, Evidence.HdBy1())));
+                sums = unchecked(sums + ((long) TbMax(1, Evidence.WdGet(wd, wk, Evidence.WfSize()))));
                 if (Evidence.WdGet(wd, wk, Evidence.HdX0()) < x0) {
                     x0 = Evidence.WdGet(wd, wk, Evidence.HdX0());
                 }
@@ -1396,14 +1396,14 @@ public static class Table {
                 k += 1;
             }
             int cnt = j - i;
-            int size = sums / cnt;
+            int size = (int) (sums / ((long) cnt));
             int thr = (size * SegNum) / SegDen;
             int sf = TbRowsOf(sg, Sgs);
             int cstart = i;
             int cmax = Evidence.WdGet(wd, emon.Port.CellsAt(wl, i), Evidence.HdX1());
             emon.Port.CellsPush(rw, i);
             emon.Port.CellsPush(rw, cnt);
-            emon.Port.CellsPush(rw, sumy / cnt);
+            emon.Port.CellsPush(rw, (int) (sumy / ((long) cnt)));
             emon.Port.CellsPush(rw, size);
             emon.Port.CellsPush(rw, x0);
             emon.Port.CellsPush(rw, x1);
@@ -1633,7 +1633,7 @@ public static class Table {
         // for none. Answers the
         // table's index, -1 when there are not two columns and two rows.
         int ntab = 0;
-        int sumsz = 0;
+        long sumsz = (long) 0;
         int r = ra;
         int nch = 0;
         int ncols = 0;
@@ -1652,7 +1652,7 @@ public static class Table {
             if (emon.Port.CellsAt(rw, (r * Rws) + 9) >= 2) {
                 ntab += 1;
             }
-            sumsz += emon.Port.CellsAt(rw, (r * Rws) + 3);
+            sumsz = unchecked(sumsz + ((long) emon.Port.CellsAt(rw, (r * Rws) + 3)));
             if (emon.Port.CellsAt(rw, (r * Rws) + 4) < minx) {
                 minx = emon.Port.CellsAt(rw, (r * Rws) + 4);
             }
@@ -1670,7 +1670,7 @@ public static class Table {
         if ((ntab < 2) || ((rb - ra) <= 1)) {
             return -1;
         }
-        nch = TbChannels(wd, wl, rw, sg, ra, rb, ntab / 6, ((sumsz / (rb - ra)) * SegNum) / SegDen, ch, st, en);
+        nch = TbChannels(wd, wl, rw, sg, ra, rb, ntab / 6, (int) (unchecked((sumsz / ((long) (rb - ra))) * ((long) SegNum)) / ((long) SegDen)), ch, st, en);
         if (nch < 1) {
             return -1;
         }
