@@ -154,18 +154,27 @@ public static class Planlooptest {
         emon.Port.CellsPush(p.Rq, 1);
         emon.Testport.AssertEq(Planloop.PlAfter(p, Plan.UsRequests()), Planloop.ActError(), "a short record");
         TErr(0, p, Planloop.PeBadRecord(), "bad-record", "a request at 0 has length 2");
+    }
+    [Xunit.Fact]
+    public static void TestARequestMustBeWellFormed2() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);
         Plan.RqBytes(p.Rq, 2, 0, 0, 10);
         emon.Testport.AssertEq(Planloop.PlAfter(p, Plan.UsRequests()), Planloop.ActError(), "bytes is the host's");
         TErr(0, p, Planloop.PeBadRecord(), "bad-record", "request 2 has kind 4, which kin may not ask for");
+    }
+    [Xunit.Fact]
+    public static void TestARequestMustBeWellFormed3() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);
         TRender(p, 0);
         emon.Testport.AssertEq(Planloop.PlAfter(p, Plan.UsRequests()), Planloop.ActError(), "id 0");
         TErr(0, p, Planloop.PeBadRecord(), "bad-record", "a request has id 0");
+    }
+    [Xunit.Fact]
+    public static void TestARequestMustBeWellFormed4() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);
@@ -292,6 +301,9 @@ public static class Planlooptest {
         emon.Testport.AssertEq(emon.Port.CellsLen(p.Ans), 0, "a bytes answer is not an answer of the unit");
         emon.Testport.AssertEq(emon.Port.CellsLen(p.Tx), 0, "and is not transcribed");
         emon.Testport.AssertEq(p.Outk, 0, "the round is over");
+    }
+    [Xunit.Fact]
+    public static void TestABytesRoundKeepsNothingAndAFailedOneIsAnError2() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);
@@ -379,6 +391,9 @@ public static class Planlooptest {
         Planloop.PlAfter(p, Plan.UsRequests());
         emon.Testport.AssertEq(TAnswer(p, 4), Planloop.ActError(), "nothing asked");
         TErr(0, p, Planloop.PeBadRecord(), "bad-record", "an answer for request 4 (kind 1) answers nothing asked");
+    }
+    [Xunit.Fact]
+    public static void TestAnAnswerMustAnswerWhatWasAsked2() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);
@@ -388,6 +403,9 @@ public static class Planlooptest {
         Plan.AnFail(p.Cur, Plan.PkOcr(), 3, Plan.PsFailed());
         emon.Testport.AssertEq(Planloop.PlOffer(p), Planloop.ActError(), "the kind differs");
         TErr(0, p, Planloop.PeBadRecord(), "bad-record", "an answer for request 3 (kind 3) answers nothing asked");
+    }
+    [Xunit.Fact]
+    public static void TestAnAnswerMustAnswerWhatWasAsked3() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);
@@ -396,6 +414,9 @@ public static class Planlooptest {
         emon.Testport.AssertEq(TAnswer(p, 3), 0, "once");
         emon.Testport.AssertEq(TAnswer(p, 3), Planloop.ActError(), "twice");
         TErr(0, p, Planloop.PeBadRecord(), "bad-record", "an answer for request 3 (kind 1) answers nothing asked");
+    }
+    [Xunit.Fact]
+    public static void TestAnAnswerMustAnswerWhatWasAsked4() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);
@@ -408,6 +429,9 @@ public static class Planlooptest {
         emon.Port.CellsPush(p.Cur, 0);
         emon.Testport.AssertEq(Planloop.PlOffer(p), Planloop.ActError(), "a record whose length is not its cells");
         TErr(0, p, Planloop.PeBadRecord(), "bad-record", "an answer has length 9 in a record of 4");
+    }
+    [Xunit.Fact]
+    public static void TestAnAnswerMustAnswerWhatWasAsked5() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         Planloop.PlAttempt(p);
@@ -456,13 +480,22 @@ public static class Planlooptest {
         emon.Testport.AssertEq(Planloop.EnNext(p, 1, 0, 0, 2), Planloop.PhPages(), "page 1");
         emon.Testport.AssertEq(Planloop.EnNext(p, 1, 0, 0, 2), Planloop.PhFinish(), "the document unit");
         emon.Testport.AssertEq(Planloop.EnNext(p, 1, 0, 0, 2), Planloop.PhDone(), "nothing pending");
+    }
+    [Xunit.Fact]
+    public static void TestTheScheduleWithoutAssetsAndForAnImage2() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         emon.Testport.AssertEq(Planloop.EnNext(p, 2, 1, 0, 1), Planloop.PhPages(), "an image has no asset unit");
         emon.Testport.AssertEq(Planloop.EnNext(p, 2, 1, 0, 1), Planloop.PhFinish(), "the document unit");
+    }
+    [Xunit.Fact]
+    public static void TestTheScheduleWithoutAssetsAndForAnImage3() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         emon.Testport.AssertEq(Planloop.EnNext(p, 1, 0, 0, 0), Planloop.PhFinish(), "a document of no pages goes to its document unit");
+    }
+    [Xunit.Fact]
+    public static void TestTheScheduleWithoutAssetsAndForAnImage4() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         TInit(p, 5, 24);
         emon.Testport.AssertEq(Planloop.EnNext(p, 0, 0, 0, 0), Planloop.PhDone(), "an intake builds no document");
@@ -566,6 +599,9 @@ public static class Planlooptest {
         emon.Testport.AssertEq(emon.Port.CellsAt(o, 1), 40, "its length");
         emon.Testport.AssertEq(emon.Port.CellsAt(o, 2), 500, "the globals' offset");
         emon.Testport.AssertEq(emon.Port.CellsAt(o, 3), 20, "its length");
+    }
+    [Xunit.Fact]
+    public static void TestADecodeImgsCodestreamAndGlobalsAreSpansWhenTheyAreTheInputs2() {
         emon.Port.Cells c = emon.Port.NewCells();
         emon.Port.Cells o = emon.Port.NewCells();
         emon.Port.Cells sha = emon.Port.NewCells();
@@ -633,6 +669,9 @@ public static class Planlooptest {
         emon.Port.CellsPush(pend, 5);
         emon.Testport.AssertEq(TPlanFetch(pend, hint, res, 1000, 10000, 1, @out), 1, "2 to 4 and 4 to 6 are 2 to 6");
         TRange(0, @out, 0, 2000, 5000, "chunks 2 to 6");
+    }
+    [Xunit.Fact]
+    public static void TestWindowsThatMeetAreOneRangeAndTheLastChunkEndsAtTheLength2() {
         emon.Port.Cells pend = emon.Port.NewCells();
         emon.Port.Cells hint = emon.Port.NewCells();
         emon.Port.Cells @out = emon.Port.NewCells();
@@ -765,18 +804,18 @@ public static class Planlooptest {
         TName(0, "no-pages", Planloop.DsEmitName(d, Planloop.DsNoPages()), d);
         TName(0, "encrypted", Planloop.DsEmitName(e, Planloop.DsEncrypted()), e);
         TName(0, "unreadable", Planloop.DsEmitName(f, Planloop.DsUnreadable()), f);
-        System.Text.StringBuilder a = emon.Testport.NewText();
-        System.Text.StringBuilder b = emon.Testport.NewText();
-        System.Text.StringBuilder c = emon.Testport.NewText();
-        System.Text.StringBuilder d = emon.Testport.NewText();
-        System.Text.StringBuilder e = emon.Testport.NewText();
-        System.Text.StringBuilder f = emon.Testport.NewText();
-        TName(0, "undecodable", Planloop.DsEmitName(a, Planloop.DsUndecodable()), a);
-        TName(0, "unsupported-image", Planloop.DsEmitName(b, Planloop.DsUnsupportedImage()), b);
-        TName(0, "content-failed", Planloop.DsEmitName(c, Planloop.DsContentFailed()), c);
-        TName(0, "unsupported-format", Planloop.DsEmitName(d, Planloop.DsUnsupportedFormat()), d);
-        TName(0, "password-required", Planloop.DsEmitName(e, Planloop.DsPasswordRequired()), e);
-        TName(0, "password-incorrect", Planloop.DsEmitName(f, Planloop.DsPasswordIncorrect()), f);
+        System.Text.StringBuilder g = emon.Testport.NewText();
+        System.Text.StringBuilder h = emon.Testport.NewText();
+        System.Text.StringBuilder i = emon.Testport.NewText();
+        System.Text.StringBuilder j = emon.Testport.NewText();
+        System.Text.StringBuilder k = emon.Testport.NewText();
+        System.Text.StringBuilder l = emon.Testport.NewText();
+        TName(0, "undecodable", Planloop.DsEmitName(g, Planloop.DsUndecodable()), g);
+        TName(0, "unsupported-image", Planloop.DsEmitName(h, Planloop.DsUnsupportedImage()), h);
+        TName(0, "content-failed", Planloop.DsEmitName(i, Planloop.DsContentFailed()), i);
+        TName(0, "unsupported-format", Planloop.DsEmitName(j, Planloop.DsUnsupportedFormat()), j);
+        TName(0, "password-required", Planloop.DsEmitName(k, Planloop.DsPasswordRequired()), k);
+        TName(0, "password-incorrect", Planloop.DsEmitName(l, Planloop.DsPasswordIncorrect()), l);
         emon.Testport.AssertEq(Planloop.DsClass(Planloop.DsUnsupportedFormat()), 1, "not a PDF or an image");
         emon.Testport.AssertEq(Planloop.DsClass(Planloop.DsPasswordRequired()), 2, "needs a password");
         emon.Testport.AssertEq(Planloop.DsClass(Planloop.DsPasswordIncorrect()), 3, "wrong password");

@@ -171,18 +171,27 @@ func TestARequestMustBeWellFormed(emonT *testing.T) {
 	port.CellsPush(p.Rq, 1)
 	port.AssertEq(emonT, planloop.PlAfter(p, plan.UsRequests()), planloop.ActError(), "a short record")
 	tErr(emonT, p, planloop.PeBadRecord(), "bad-record", "a request at 0 has length 2")
+}
+
+func TestARequestMustBeWellFormed2(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)
 	plan.RqBytes(p.Rq, 2, 0, 0, 10)
 	port.AssertEq(emonT, planloop.PlAfter(p, plan.UsRequests()), planloop.ActError(), "bytes is the host's")
 	tErr(emonT, p, planloop.PeBadRecord(), "bad-record", "request 2 has kind 4, which kin may not ask for")
+}
+
+func TestARequestMustBeWellFormed3(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)
 	tRender(p, 0)
 	port.AssertEq(emonT, planloop.PlAfter(p, plan.UsRequests()), planloop.ActError(), "id 0")
 	tErr(emonT, p, planloop.PeBadRecord(), "bad-record", "a request has id 0")
+}
+
+func TestARequestMustBeWellFormed4(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)
@@ -309,6 +318,9 @@ func TestABytesRoundKeepsNothingAndAFailedOneIsAnError(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsLen(p.Ans), 0, "a bytes answer is not an answer of the unit")
 	port.AssertEq(emonT, port.CellsLen(p.Tx), 0, "and is not transcribed")
 	port.AssertEq(emonT, p.Outk, 0, "the round is over")
+}
+
+func TestABytesRoundKeepsNothingAndAFailedOneIsAnError2(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)
@@ -396,6 +408,9 @@ func TestAnAnswerMustAnswerWhatWasAsked(emonT *testing.T) {
 	planloop.PlAfter(p, plan.UsRequests())
 	port.AssertEq(emonT, tAnswer(p, 4), planloop.ActError(), "nothing asked")
 	tErr(emonT, p, planloop.PeBadRecord(), "bad-record", "an answer for request 4 (kind 1) answers nothing asked")
+}
+
+func TestAnAnswerMustAnswerWhatWasAsked2(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)
@@ -405,6 +420,9 @@ func TestAnAnswerMustAnswerWhatWasAsked(emonT *testing.T) {
 	plan.AnFail(p.Cur, plan.PkOcr(), 3, plan.PsFailed())
 	port.AssertEq(emonT, planloop.PlOffer(p), planloop.ActError(), "the kind differs")
 	tErr(emonT, p, planloop.PeBadRecord(), "bad-record", "an answer for request 3 (kind 3) answers nothing asked")
+}
+
+func TestAnAnswerMustAnswerWhatWasAsked3(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)
@@ -413,6 +431,9 @@ func TestAnAnswerMustAnswerWhatWasAsked(emonT *testing.T) {
 	port.AssertEq(emonT, tAnswer(p, 3), 0, "once")
 	port.AssertEq(emonT, tAnswer(p, 3), planloop.ActError(), "twice")
 	tErr(emonT, p, planloop.PeBadRecord(), "bad-record", "an answer for request 3 (kind 1) answers nothing asked")
+}
+
+func TestAnAnswerMustAnswerWhatWasAsked4(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)
@@ -425,6 +446,9 @@ func TestAnAnswerMustAnswerWhatWasAsked(emonT *testing.T) {
 	port.CellsPush(p.Cur, 0)
 	port.AssertEq(emonT, planloop.PlOffer(p), planloop.ActError(), "a record whose length is not its cells")
 	tErr(emonT, p, planloop.PeBadRecord(), "bad-record", "an answer has length 9 in a record of 4")
+}
+
+func TestAnAnswerMustAnswerWhatWasAsked5(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	planloop.PlAttempt(p)
@@ -473,13 +497,22 @@ func TestTheScheduleWithoutAssetsAndForAnImage(emonT *testing.T) {
 	port.AssertEq(emonT, planloop.EnNext(p, 1, 0, 0, 2), planloop.PhPages(), "page 1")
 	port.AssertEq(emonT, planloop.EnNext(p, 1, 0, 0, 2), planloop.PhFinish(), "the document unit")
 	port.AssertEq(emonT, planloop.EnNext(p, 1, 0, 0, 2), planloop.PhDone(), "nothing pending")
+}
+
+func TestTheScheduleWithoutAssetsAndForAnImage2(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	port.AssertEq(emonT, planloop.EnNext(p, 2, 1, 0, 1), planloop.PhPages(), "an image has no asset unit")
 	port.AssertEq(emonT, planloop.EnNext(p, 2, 1, 0, 1), planloop.PhFinish(), "the document unit")
+}
+
+func TestTheScheduleWithoutAssetsAndForAnImage3(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	port.AssertEq(emonT, planloop.EnNext(p, 1, 0, 0, 0), planloop.PhFinish(), "a document of no pages goes to its document unit")
+}
+
+func TestTheScheduleWithoutAssetsAndForAnImage4(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 24)
 	port.AssertEq(emonT, planloop.EnNext(p, 0, 0, 0, 0), planloop.PhDone(), "an intake builds no document")
@@ -584,6 +617,9 @@ func TestADecodeImgsCodestreamAndGlobalsAreSpansWhenTheyAreTheInputs(emonT *test
 	port.AssertEq(emonT, port.CellsAt(o, 1), 40, "its length")
 	port.AssertEq(emonT, port.CellsAt(o, 2), 500, "the globals' offset")
 	port.AssertEq(emonT, port.CellsAt(o, 3), 20, "its length")
+}
+
+func TestADecodeImgsCodestreamAndGlobalsAreSpansWhenTheyAreTheInputs2(emonT *testing.T) {
 	var c *port.Cells = port.NewCells()
 	var o *port.Cells = port.NewCells()
 	var sha *port.Cells = port.NewCells()
@@ -653,6 +689,9 @@ func TestWindowsThatMeetAreOneRangeAndTheLastChunkEndsAtTheLength(emonT *testing
 	port.CellsPush(pend, 5)
 	port.AssertEq(emonT, tPlanFetch(pend, hint, res, 1000, 10000, 1, out), 1, "2 to 4 and 4 to 6 are 2 to 6")
 	tRange(emonT, out, 0, 2000, 5000, "chunks 2 to 6")
+}
+
+func TestWindowsThatMeetAreOneRangeAndTheLastChunkEndsAtTheLength2(emonT *testing.T) {
 	var pend *port.Cells = port.NewCells()
 	var hint *port.Cells = port.NewCells()
 	var out *port.Cells = port.NewCells()
@@ -786,18 +825,18 @@ func TestADocumentsStatusIsNamedAndHasAClass(emonT *testing.T) {
 	tName(emonT, "no-pages", planloop.DsEmitName(d, planloop.DsNoPages()), d)
 	tName(emonT, "encrypted", planloop.DsEmitName(e, planloop.DsEncrypted()), e)
 	tName(emonT, "unreadable", planloop.DsEmitName(f, planloop.DsUnreadable()), f)
-	var a *strings.Builder = port.NewText()
-	var b *strings.Builder = port.NewText()
-	var c *strings.Builder = port.NewText()
-	var d *strings.Builder = port.NewText()
-	var e *strings.Builder = port.NewText()
-	var f *strings.Builder = port.NewText()
-	tName(emonT, "undecodable", planloop.DsEmitName(a, planloop.DsUndecodable()), a)
-	tName(emonT, "unsupported-image", planloop.DsEmitName(b, planloop.DsUnsupportedImage()), b)
-	tName(emonT, "content-failed", planloop.DsEmitName(c, planloop.DsContentFailed()), c)
-	tName(emonT, "unsupported-format", planloop.DsEmitName(d, planloop.DsUnsupportedFormat()), d)
-	tName(emonT, "password-required", planloop.DsEmitName(e, planloop.DsPasswordRequired()), e)
-	tName(emonT, "password-incorrect", planloop.DsEmitName(f, planloop.DsPasswordIncorrect()), f)
+	var g *strings.Builder = port.NewText()
+	var h *strings.Builder = port.NewText()
+	var i *strings.Builder = port.NewText()
+	var j *strings.Builder = port.NewText()
+	var k *strings.Builder = port.NewText()
+	var l *strings.Builder = port.NewText()
+	tName(emonT, "undecodable", planloop.DsEmitName(g, planloop.DsUndecodable()), g)
+	tName(emonT, "unsupported-image", planloop.DsEmitName(h, planloop.DsUnsupportedImage()), h)
+	tName(emonT, "content-failed", planloop.DsEmitName(i, planloop.DsContentFailed()), i)
+	tName(emonT, "unsupported-format", planloop.DsEmitName(j, planloop.DsUnsupportedFormat()), j)
+	tName(emonT, "password-required", planloop.DsEmitName(k, planloop.DsPasswordRequired()), k)
+	tName(emonT, "password-incorrect", planloop.DsEmitName(l, planloop.DsPasswordIncorrect()), l)
 	port.AssertEq(emonT, planloop.DsClass(planloop.DsUnsupportedFormat()), 1, "not a PDF or an image")
 	port.AssertEq(emonT, planloop.DsClass(planloop.DsPasswordRequired()), 2, "needs a password")
 	port.AssertEq(emonT, planloop.DsClass(planloop.DsPasswordIncorrect()), 3, "wrong password")

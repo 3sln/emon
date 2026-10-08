@@ -164,19 +164,25 @@
     (cells-push (fd p rq) 2)
     (cells-push (fd p rq) 1)
     (assert-eq (pl-after p (us-requests)) (act-error) "a short record")
-    (t-err (test-t) p (pe-bad-record) "bad-record" "a request at 0 has length 2"))
+    (t-err (test-t) p (pe-bad-record) "bad-record" "a request at 0 has length 2")))
+
+(deftest test-a-request-must-be-well-formed-2
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)
     (rq-bytes (fd p rq) 2 0 0 10)
     (assert-eq (pl-after p (us-requests)) (act-error) "bytes is the host's")
-    (t-err (test-t) p (pe-bad-record) "bad-record" "request 2 has kind 4, which kin may not ask for"))
+    (t-err (test-t) p (pe-bad-record) "bad-record" "request 2 has kind 4, which kin may not ask for")))
+
+(deftest test-a-request-must-be-well-formed-3
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)
     (t-render p 0)
     (assert-eq (pl-after p (us-requests)) (act-error) "id 0")
-    (t-err (test-t) p (pe-bad-record) "bad-record" "a request has id 0"))
+    (t-err (test-t) p (pe-bad-record) "bad-record" "a request has id 0")))
+
+(deftest test-a-request-must-be-well-formed-4
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)
@@ -297,7 +303,9 @@
     (assert-eq (pl-commit p) 0 "committed")
     (assert-eq (cells-len (fd p ans)) 0 "a bytes answer is not an answer of the unit")
     (assert-eq (cells-len (fd p tx)) 0 "and is not transcribed")
-    (assert-eq (fd p outk) 0 "the round is over"))
+    (assert-eq (fd p outk) 0 "the round is over")))
+
+(deftest test-a-bytes-round-keeps-nothing-and-a-failed-one-is-an-error-2
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)
@@ -382,7 +390,9 @@
     (t-render p 3)
     (pl-after p (us-requests))
     (assert-eq (t-answer p 4) (act-error) "nothing asked")
-    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 4 (kind 1) answers nothing asked"))
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 4 (kind 1) answers nothing asked")))
+
+(deftest test-an-answer-must-answer-what-was-asked-2
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)
@@ -391,7 +401,9 @@
     (cells-drop (fd p cur) 0)
     (an-fail (fd p cur) (pk-ocr) 3 (ps-failed))
     (assert-eq (pl-offer p) (act-error) "the kind differs")
-    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 3 (kind 3) answers nothing asked"))
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 3 (kind 3) answers nothing asked")))
+
+(deftest test-an-answer-must-answer-what-was-asked-3
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)
@@ -399,7 +411,9 @@
     (pl-after p (us-requests))
     (assert-eq (t-answer p 3) 0 "once")
     (assert-eq (t-answer p 3) (act-error) "twice")
-    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 3 (kind 1) answers nothing asked"))
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 3 (kind 1) answers nothing asked")))
+
+(deftest test-an-answer-must-answer-what-was-asked-4
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)
@@ -411,7 +425,9 @@
     (cells-push (fd p cur) 3)
     (cells-push (fd p cur) 0)
     (assert-eq (pl-offer p) (act-error) "a record whose length is not its cells")
-    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer has length 9 in a record of 4"))
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer has length 9 in a record of 4")))
+
+(deftest test-an-answer-must-answer-what-was-asked-5
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (pl-attempt p)
@@ -458,14 +474,20 @@
     (assert-eq (en-next p 1 0 0 2) (ph-pages) "a PDF with no assets: the pages")
     (assert-eq (en-next p 1 0 0 2) (ph-pages) "page 1")
     (assert-eq (en-next p 1 0 0 2) (ph-finish) "the document unit")
-    (assert-eq (en-next p 1 0 0 2) (ph-done) "nothing pending"))
+    (assert-eq (en-next p 1 0 0 2) (ph-done) "nothing pending")))
+
+(deftest test-the-schedule-without-assets-and-for-an-image-2
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (assert-eq (en-next p 2 1 0 1) (ph-pages) "an image has no asset unit")
-    (assert-eq (en-next p 2 1 0 1) (ph-finish) "the document unit"))
+    (assert-eq (en-next p 2 1 0 1) (ph-finish) "the document unit")))
+
+(deftest test-the-schedule-without-assets-and-for-an-image-3
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
-    (assert-eq (en-next p 1 0 0 0) (ph-finish) "a document of no pages goes to its document unit"))
+    (assert-eq (en-next p 1 0 0 0) (ph-finish) "a document of no pages goes to its document unit")))
+
+(deftest test-the-schedule-without-assets-and-for-an-image-4
   (let [^Plan p (new-ctx Plan)]
     (t-init p 5 24)
     (assert-eq (en-next p 0 0 0 0) (ph-done) "an intake builds no document")))
@@ -563,7 +585,9 @@
     (assert-eq (cells-at o 0) 300 "the data's offset")
     (assert-eq (cells-at o 1) 40 "its length")
     (assert-eq (cells-at o 2) 500 "the globals' offset")
-    (assert-eq (cells-at o 3) 20 "its length"))
+    (assert-eq (cells-at o 3) 20 "its length")))
+
+(deftest test-a-decode-imgs-codestream-and-globals-are-spans-when-they-are-the-inputs-2
   (let [^Cells c (new-cells)
         ^Cells o (new-cells)
         ^Cells sha (new-cells)]
@@ -628,7 +652,9 @@
     (cells-push pend 3)
     (cells-push pend 5)
     (assert-eq (t-plan-fetch pend hint res 1000 10000 1 out) 1 "2 to 4 and 4 to 6 are 2 to 6")
-    (t-range (test-t) out 0 2000 5000 "chunks 2 to 6"))
+    (t-range (test-t) out 0 2000 5000 "chunks 2 to 6")))
+
+(deftest test-windows-that-meet-are-one-range-and-the-last-chunk-ends-at-the-length-2
   (let [^Cells pend (new-cells)
         ^Cells hint (new-cells)
         ^Cells out (new-cells)
@@ -737,13 +763,13 @@
     (t-name (test-t) "no-pages" (ds-emit-name d (ds-no-pages)) d)
     (t-name (test-t) "encrypted" (ds-emit-name e (ds-encrypted)) e)
     (t-name (test-t) "unreadable" (ds-emit-name f (ds-unreadable)) f))
-  (let [^Text a (new-text) ^Text b (new-text) ^Text c (new-text) ^Text d (new-text) ^Text e (new-text) ^Text f (new-text)]
-    (t-name (test-t) "undecodable" (ds-emit-name a (ds-undecodable)) a)
-    (t-name (test-t) "unsupported-image" (ds-emit-name b (ds-unsupported-image)) b)
-    (t-name (test-t) "content-failed" (ds-emit-name c (ds-content-failed)) c)
-    (t-name (test-t) "unsupported-format" (ds-emit-name d (ds-unsupported-format)) d)
-    (t-name (test-t) "password-required" (ds-emit-name e (ds-password-required)) e)
-    (t-name (test-t) "password-incorrect" (ds-emit-name f (ds-password-incorrect)) f))
+  (let [^Text g (new-text) ^Text h (new-text) ^Text i (new-text) ^Text j (new-text) ^Text k (new-text) ^Text l (new-text)]
+    (t-name (test-t) "undecodable" (ds-emit-name g (ds-undecodable)) g)
+    (t-name (test-t) "unsupported-image" (ds-emit-name h (ds-unsupported-image)) h)
+    (t-name (test-t) "content-failed" (ds-emit-name i (ds-content-failed)) i)
+    (t-name (test-t) "unsupported-format" (ds-emit-name j (ds-unsupported-format)) j)
+    (t-name (test-t) "password-required" (ds-emit-name k (ds-password-required)) k)
+    (t-name (test-t) "password-incorrect" (ds-emit-name l (ds-password-incorrect)) l))
   (assert-eq (ds-class (ds-unsupported-format)) 1 "not a PDF or an image")
   (assert-eq (ds-class (ds-password-required)) 2 "needs a password")
   (assert-eq (ds-class (ds-password-incorrect)) 3 "wrong password")

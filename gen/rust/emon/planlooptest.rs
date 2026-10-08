@@ -153,18 +153,27 @@ fn test_a_request_must_be_well_formed() {
     crate::port::cells_push(&mut p.rq, 1);
     crate::testport::assert_eq(pl_after(p, us_requests()), act_error(), "a short record");
     t_err(0, p, pe_bad_record(), "bad-record", "a request at 0 has length 2");
+}
+#[test]
+fn test_a_request_must_be_well_formed_2() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);
     rq_bytes(&mut p.rq, 2, 0, 0, 10);
     crate::testport::assert_eq(pl_after(p, us_requests()), act_error(), "bytes is the host's");
     t_err(0, p, pe_bad_record(), "bad-record", "request 2 has kind 4, which kin may not ask for");
+}
+#[test]
+fn test_a_request_must_be_well_formed_3() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);
     t_render(p, 0);
     crate::testport::assert_eq(pl_after(p, us_requests()), act_error(), "id 0");
     t_err(0, p, pe_bad_record(), "bad-record", "a request has id 0");
+}
+#[test]
+fn test_a_request_must_be_well_formed_4() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);
@@ -291,6 +300,9 @@ fn test_a_bytes_round_keeps_nothing_and_a_failed_one_is_an_error() {
     crate::testport::assert_eq(crate::port::cells_len(&mut p.ans), 0, "a bytes answer is not an answer of the unit");
     crate::testport::assert_eq(crate::port::cells_len(&mut p.tx), 0, "and is not transcribed");
     crate::testport::assert_eq(p.outk, 0, "the round is over");
+}
+#[test]
+fn test_a_bytes_round_keeps_nothing_and_a_failed_one_is_an_error_2() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);
@@ -378,6 +390,9 @@ fn test_an_answer_must_answer_what_was_asked() {
     pl_after(p, us_requests());
     crate::testport::assert_eq(t_answer(p, 4), act_error(), "nothing asked");
     t_err(0, p, pe_bad_record(), "bad-record", "an answer for request 4 (kind 1) answers nothing asked");
+}
+#[test]
+fn test_an_answer_must_answer_what_was_asked_2() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);
@@ -387,6 +402,9 @@ fn test_an_answer_must_answer_what_was_asked() {
     an_fail(&mut p.cur, pk_ocr(), 3, ps_failed());
     crate::testport::assert_eq(pl_offer(p), act_error(), "the kind differs");
     t_err(0, p, pe_bad_record(), "bad-record", "an answer for request 3 (kind 3) answers nothing asked");
+}
+#[test]
+fn test_an_answer_must_answer_what_was_asked_3() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);
@@ -395,6 +413,9 @@ fn test_an_answer_must_answer_what_was_asked() {
     crate::testport::assert_eq(t_answer(p, 3), 0, "once");
     crate::testport::assert_eq(t_answer(p, 3), act_error(), "twice");
     t_err(0, p, pe_bad_record(), "bad-record", "an answer for request 3 (kind 1) answers nothing asked");
+}
+#[test]
+fn test_an_answer_must_answer_what_was_asked_4() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);
@@ -407,6 +428,9 @@ fn test_an_answer_must_answer_what_was_asked() {
     crate::port::cells_push(&mut p.cur, 0);
     crate::testport::assert_eq(pl_offer(p), act_error(), "a record whose length is not its cells");
     t_err(0, p, pe_bad_record(), "bad-record", "an answer has length 9 in a record of 4");
+}
+#[test]
+fn test_an_answer_must_answer_what_was_asked_5() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     pl_attempt(p);
@@ -455,13 +479,22 @@ fn test_the_schedule_without_assets_and_for_an_image() {
     crate::testport::assert_eq(en_next(p, 1, 0, 0, 2), ph_pages(), "page 1");
     crate::testport::assert_eq(en_next(p, 1, 0, 0, 2), ph_finish(), "the document unit");
     crate::testport::assert_eq(en_next(p, 1, 0, 0, 2), ph_done(), "nothing pending");
+}
+#[test]
+fn test_the_schedule_without_assets_and_for_an_image_2() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     crate::testport::assert_eq(en_next(p, 2, 1, 0, 1), ph_pages(), "an image has no asset unit");
     crate::testport::assert_eq(en_next(p, 2, 1, 0, 1), ph_finish(), "the document unit");
+}
+#[test]
+fn test_the_schedule_without_assets_and_for_an_image_3() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     crate::testport::assert_eq(en_next(p, 1, 0, 0, 0), ph_finish(), "a document of no pages goes to its document unit");
+}
+#[test]
+fn test_the_schedule_without_assets_and_for_an_image_4() {
     let p: &mut crate::emon::planctx::Plan = &mut crate::emon::planctx::Plan::new();
     t_init(p, 5, 24);
     crate::testport::assert_eq(en_next(p, 0, 0, 0, 0), ph_done(), "an intake builds no document");
@@ -565,6 +598,9 @@ fn test_a_decode_imgs_codestream_and_globals_are_spans_when_they_are_the_inputs(
     crate::testport::assert_eq(crate::port::cells_at(o, 1), 40, "its length");
     crate::testport::assert_eq(crate::port::cells_at(o, 2), 500, "the globals' offset");
     crate::testport::assert_eq(crate::port::cells_at(o, 3), 20, "its length");
+}
+#[test]
+fn test_a_decode_imgs_codestream_and_globals_are_spans_when_they_are_the_inputs_2() {
     let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let o: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let sha: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -632,6 +668,9 @@ fn test_windows_that_meet_are_one_range_and_the_last_chunk_ends_at_the_length() 
     crate::port::cells_push(pend, 5);
     crate::testport::assert_eq(t_plan_fetch(pend, hint, res, 1000, 10000, 1, out), 1, "2 to 4 and 4 to 6 are 2 to 6");
     t_range(0, out, 0, 2000, 5000, "chunks 2 to 6");
+}
+#[test]
+fn test_windows_that_meet_are_one_range_and_the_last_chunk_ends_at_the_length_2() {
     let pend: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let hint: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -764,18 +803,18 @@ fn test_a_documents_status_is_named_and_has_a_class() {
     t_name(0, "no-pages", ds_emit_name(d, ds_no_pages()), d);
     t_name(0, "encrypted", ds_emit_name(e, ds_encrypted()), e);
     t_name(0, "unreadable", ds_emit_name(f, ds_unreadable()), f);
-    let a: &mut String = &mut crate::port::new_text();
-    let b: &mut String = &mut crate::port::new_text();
-    let c: &mut String = &mut crate::port::new_text();
-    let d: &mut String = &mut crate::port::new_text();
-    let e: &mut String = &mut crate::port::new_text();
-    let f: &mut String = &mut crate::port::new_text();
-    t_name(0, "undecodable", ds_emit_name(a, ds_undecodable()), a);
-    t_name(0, "unsupported-image", ds_emit_name(b, ds_unsupported_image()), b);
-    t_name(0, "content-failed", ds_emit_name(c, ds_content_failed()), c);
-    t_name(0, "unsupported-format", ds_emit_name(d, ds_unsupported_format()), d);
-    t_name(0, "password-required", ds_emit_name(e, ds_password_required()), e);
-    t_name(0, "password-incorrect", ds_emit_name(f, ds_password_incorrect()), f);
+    let g: &mut String = &mut crate::port::new_text();
+    let h: &mut String = &mut crate::port::new_text();
+    let i: &mut String = &mut crate::port::new_text();
+    let j: &mut String = &mut crate::port::new_text();
+    let k: &mut String = &mut crate::port::new_text();
+    let l: &mut String = &mut crate::port::new_text();
+    t_name(0, "undecodable", ds_emit_name(g, ds_undecodable()), g);
+    t_name(0, "unsupported-image", ds_emit_name(h, ds_unsupported_image()), h);
+    t_name(0, "content-failed", ds_emit_name(i, ds_content_failed()), i);
+    t_name(0, "unsupported-format", ds_emit_name(j, ds_unsupported_format()), j);
+    t_name(0, "password-required", ds_emit_name(k, ds_password_required()), k);
+    t_name(0, "password-incorrect", ds_emit_name(l, ds_password_incorrect()), l);
     crate::testport::assert_eq(ds_class(ds_unsupported_format()), 1, "not a PDF or an image");
     crate::testport::assert_eq(ds_class(ds_password_required()), 2, "needs a password");
     crate::testport::assert_eq(ds_class(ds_password_incorrect()), 3, "wrong password");

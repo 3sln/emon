@@ -147,18 +147,24 @@ public final class Planlooptest {
         emon.Port.cellsPush(p.rq, 1);
         emon.Testport.assertEq(Planloop.plAfter(p, Plan.usRequests()), Planloop.actError(), "a short record");
         tErr(0, p, Planloop.peBadRecord(), "bad-record", "a request at 0 has length 2");
+    }
+    public static void testARequestMustBeWellFormed2() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
         Plan.rqBytes(p.rq, 2, 0, 0, 10);
         emon.Testport.assertEq(Planloop.plAfter(p, Plan.usRequests()), Planloop.actError(), "bytes is the host's");
         tErr(0, p, Planloop.peBadRecord(), "bad-record", "request 2 has kind 4, which kin may not ask for");
+    }
+    public static void testARequestMustBeWellFormed3() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
         tRender(p, 0);
         emon.Testport.assertEq(Planloop.plAfter(p, Plan.usRequests()), Planloop.actError(), "id 0");
         tErr(0, p, Planloop.peBadRecord(), "bad-record", "a request has id 0");
+    }
+    public static void testARequestMustBeWellFormed4() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
@@ -278,6 +284,8 @@ public final class Planlooptest {
         emon.Testport.assertEq(emon.Port.cellsLen(p.ans), 0, "a bytes answer is not an answer of the unit");
         emon.Testport.assertEq(emon.Port.cellsLen(p.tx), 0, "and is not transcribed");
         emon.Testport.assertEq(p.outk, 0, "the round is over");
+    }
+    public static void testABytesRoundKeepsNothingAndAFailedOneIsAnError2() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
@@ -361,6 +369,8 @@ public final class Planlooptest {
         Planloop.plAfter(p, Plan.usRequests());
         emon.Testport.assertEq(tAnswer(p, 4), Planloop.actError(), "nothing asked");
         tErr(0, p, Planloop.peBadRecord(), "bad-record", "an answer for request 4 (kind 1) answers nothing asked");
+    }
+    public static void testAnAnswerMustAnswerWhatWasAsked2() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
@@ -370,6 +380,8 @@ public final class Planlooptest {
         Plan.anFail(p.cur, Plan.pkOcr(), 3, Plan.psFailed());
         emon.Testport.assertEq(Planloop.plOffer(p), Planloop.actError(), "the kind differs");
         tErr(0, p, Planloop.peBadRecord(), "bad-record", "an answer for request 3 (kind 3) answers nothing asked");
+    }
+    public static void testAnAnswerMustAnswerWhatWasAsked3() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
@@ -378,6 +390,8 @@ public final class Planlooptest {
         emon.Testport.assertEq(tAnswer(p, 3), 0, "once");
         emon.Testport.assertEq(tAnswer(p, 3), Planloop.actError(), "twice");
         tErr(0, p, Planloop.peBadRecord(), "bad-record", "an answer for request 3 (kind 1) answers nothing asked");
+    }
+    public static void testAnAnswerMustAnswerWhatWasAsked4() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
@@ -390,6 +404,8 @@ public final class Planlooptest {
         emon.Port.cellsPush(p.cur, 0);
         emon.Testport.assertEq(Planloop.plOffer(p), Planloop.actError(), "a record whose length is not its cells");
         tErr(0, p, Planloop.peBadRecord(), "bad-record", "an answer has length 9 in a record of 4");
+    }
+    public static void testAnAnswerMustAnswerWhatWasAsked5() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         Planloop.plAttempt(p);
@@ -435,13 +451,19 @@ public final class Planlooptest {
         emon.Testport.assertEq(Planloop.enNext(p, 1, 0, 0, 2), Planloop.phPages(), "page 1");
         emon.Testport.assertEq(Planloop.enNext(p, 1, 0, 0, 2), Planloop.phFinish(), "the document unit");
         emon.Testport.assertEq(Planloop.enNext(p, 1, 0, 0, 2), Planloop.phDone(), "nothing pending");
+    }
+    public static void testTheScheduleWithoutAssetsAndForAnImage2() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         emon.Testport.assertEq(Planloop.enNext(p, 2, 1, 0, 1), Planloop.phPages(), "an image has no asset unit");
         emon.Testport.assertEq(Planloop.enNext(p, 2, 1, 0, 1), Planloop.phFinish(), "the document unit");
+    }
+    public static void testTheScheduleWithoutAssetsAndForAnImage3() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         emon.Testport.assertEq(Planloop.enNext(p, 1, 0, 0, 0), Planloop.phFinish(), "a document of no pages goes to its document unit");
+    }
+    public static void testTheScheduleWithoutAssetsAndForAnImage4() {
         emon.Planctx.Plan p = new emon.Planctx.Plan();
         tInit(p, 5, 24);
         emon.Testport.assertEq(Planloop.enNext(p, 0, 0, 0, 0), Planloop.phDone(), "an intake builds no document");
@@ -540,6 +562,8 @@ public final class Planlooptest {
         emon.Testport.assertEq(emon.Port.cellsAt(o, 1), 40, "its length");
         emon.Testport.assertEq(emon.Port.cellsAt(o, 2), 500, "the globals' offset");
         emon.Testport.assertEq(emon.Port.cellsAt(o, 3), 20, "its length");
+    }
+    public static void testADecodeImgsCodestreamAndGlobalsAreSpansWhenTheyAreTheInputs2() {
         emon.Port.Cells c = emon.Port.newCells();
         emon.Port.Cells o = emon.Port.newCells();
         emon.Port.Cells sha = emon.Port.newCells();
@@ -603,6 +627,8 @@ public final class Planlooptest {
         emon.Port.cellsPush(pend, 5);
         emon.Testport.assertEq(tPlanFetch(pend, hint, res, 1000, 10000, 1, out), 1, "2 to 4 and 4 to 6 are 2 to 6");
         tRange(0, out, 0, 2000, 5000, "chunks 2 to 6");
+    }
+    public static void testWindowsThatMeetAreOneRangeAndTheLastChunkEndsAtTheLength2() {
         emon.Port.Cells pend = emon.Port.newCells();
         emon.Port.Cells hint = emon.Port.newCells();
         emon.Port.Cells out = emon.Port.newCells();
@@ -727,18 +753,18 @@ public final class Planlooptest {
         tName(0, "no-pages", Planloop.dsEmitName(d, Planloop.dsNoPages()), d);
         tName(0, "encrypted", Planloop.dsEmitName(e, Planloop.dsEncrypted()), e);
         tName(0, "unreadable", Planloop.dsEmitName(f, Planloop.dsUnreadable()), f);
-        StringBuilder a = emon.Testport.newText();
-        StringBuilder b = emon.Testport.newText();
-        StringBuilder c = emon.Testport.newText();
-        StringBuilder d = emon.Testport.newText();
-        StringBuilder e = emon.Testport.newText();
-        StringBuilder f = emon.Testport.newText();
-        tName(0, "undecodable", Planloop.dsEmitName(a, Planloop.dsUndecodable()), a);
-        tName(0, "unsupported-image", Planloop.dsEmitName(b, Planloop.dsUnsupportedImage()), b);
-        tName(0, "content-failed", Planloop.dsEmitName(c, Planloop.dsContentFailed()), c);
-        tName(0, "unsupported-format", Planloop.dsEmitName(d, Planloop.dsUnsupportedFormat()), d);
-        tName(0, "password-required", Planloop.dsEmitName(e, Planloop.dsPasswordRequired()), e);
-        tName(0, "password-incorrect", Planloop.dsEmitName(f, Planloop.dsPasswordIncorrect()), f);
+        StringBuilder g = emon.Testport.newText();
+        StringBuilder h = emon.Testport.newText();
+        StringBuilder i = emon.Testport.newText();
+        StringBuilder j = emon.Testport.newText();
+        StringBuilder k = emon.Testport.newText();
+        StringBuilder l = emon.Testport.newText();
+        tName(0, "undecodable", Planloop.dsEmitName(g, Planloop.dsUndecodable()), g);
+        tName(0, "unsupported-image", Planloop.dsEmitName(h, Planloop.dsUnsupportedImage()), h);
+        tName(0, "content-failed", Planloop.dsEmitName(i, Planloop.dsContentFailed()), i);
+        tName(0, "unsupported-format", Planloop.dsEmitName(j, Planloop.dsUnsupportedFormat()), j);
+        tName(0, "password-required", Planloop.dsEmitName(k, Planloop.dsPasswordRequired()), k);
+        tName(0, "password-incorrect", Planloop.dsEmitName(l, Planloop.dsPasswordIncorrect()), l);
         emon.Testport.assertEq(Planloop.dsClass(Planloop.dsUnsupportedFormat()), 1, "not a PDF or an image");
         emon.Testport.assertEq(Planloop.dsClass(Planloop.dsPasswordRequired()), 2, "needs a password");
         emon.Testport.assertEq(Planloop.dsClass(Planloop.dsPasswordIncorrect()), 3, "wrong password");
