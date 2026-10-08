@@ -253,20 +253,20 @@ fn test_a_ring_or_a_stamp_on_the_right_layer_is_a_candidate() {
     crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a double ring on the body layer is a seal");
     crate::testport::assert_eq(crate::port::cells_at(cand, 13), 10, "(the colour one first)");
     crate::testport::assert_eq(crate::port::cells_at(cand, 29), 0, "the body one is black");
-    // a ring on a light layer (a watermark), a small ring, an oblong
+    // a ring on a light layer (a watermark), a small ring: neither; an oblong curve of the colour layer (a rotated stamp's outline) is a stamp
     spt_prim(prims, pm_ring(), 20000, 60000, 3000, 3000, 1, 13487565, 4, 200);
     spt_prim(prims, pm_ring(), 20000, 60000, 1000, 1000, 2, 2047903, 4, 200);
     spt_prim(prims, pm_curve(), 40000, 60000, 3000, 4500, 2, 2047903, 0, 200);
-    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 2, "none of the three is a candidate");
+    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 3, "the oblong curve is a stamp, the other two are no candidate");
     // a ring inside another, concentric: one candidate, the larger
     spt_prim(prims, pm_ring(), 20000, 20000, 2600, 2600, 2, 2047903, 0, 200);
-    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 2, "an inner ring is the seal's, not another");
+    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 3, "an inner ring is the seal's, not another");
     // a stamp: an outlined rectangle on the colour layer
     spt_prim(prims, pm_rect(), 30000, 70000, 5000, 2000, 2, 12591135, 1, 200);
-    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 3, "an outlined rectangle on the colour layer: a stamp");
-    crate::testport::assert_eq(crate::port::cells_at(cand, 32), 2, "a stamp");
-    crate::testport::assert_eq(crate::port::cells_at(cand, 36), 50, "half its width in pixels");
-    crate::testport::assert_eq(crate::port::cells_at(cand, 37), 20, "half its height");
+    crate::testport::assert_eq(sx_find(1, views, 0, prims, inks, 61200, 79200, cand), 4, "an outlined rectangle on the colour layer: a stamp");
+    crate::testport::assert_eq(crate::port::cells_at(cand, 48), 2, "a stamp");
+    crate::testport::assert_eq(crate::port::cells_at(cand, 52), 50, "half its width in pixels");
+    crate::testport::assert_eq(crate::port::cells_at(cand, 53), 20, "half its height");
 }
 pub(crate) fn spt_oword(mut ow: &mut crate::port::Cells, x: i32, y: i32) -> i32 {
     return ow_new(ow, 1, x - 300, y - 200, x + 300, y + 200, x - 300, y + 200, x + 300, y + 200, 0, 0, 0, 1, 0, 800, -1);

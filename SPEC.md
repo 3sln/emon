@@ -2486,7 +2486,9 @@ the answers are OCR runs of pass `seal-strip` (region: the seal's box in the ras
 group a seal, flagged `in-seal`, `ocr-only` and `seal-px` (and `seal-stamp`), its `rot` cell the colour code, holds the words: `sm-find` makes its `sl` row (flag 128: the
 cell 15 is the colour code), its words never reach the body (rules 401, 402), and a candidate found in the vector paths of the same box is not written twice. A seal on a
 SCANNED page makes the document a fused one (evidence version 2) so that `sm-write` writes its node; the page's chosen lines that lie wholly inside a kept seal are not
-body text (`sx-drop-lines`). Not built: raster inputs (PNG, JPEG, TIFF files: their page unit has no ink arenas), a seal the layer clustering did not separate from the
+body text (`sx-drop-lines`; also a line with 60 per cent of its characters inside whose mean confidence is under 600 per mille). A pixel-read seal's text keeps the words the engine was sure of (`sm-px-keep`: not
+a noisy mixed-case or punctuation-ridden misread), and leaves the ring's lone separators out of the node's `text` (the name field is cut by them first). A stamp is also a curve or ellipse of a colour layer
+whose sides differ by more than 15 per cent (a rotated outline). Not built: raster inputs (PNG, JPEG, TIFF files: their page unit has no ink arenas), a seal the layer clustering did not separate from the
 body (a faint stamp on a tinted ground), the second strip for text written with its tops inward, the locale hint at `sm-write`.
 
 ### 10.8 Footnotes, captions, links

@@ -244,20 +244,20 @@ public final class Sealpxtest {
         emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a double ring on the body layer is a seal");
         emon.Testport.assertEq(emon.Port.cellsAt(cand, 13), 10, "(the colour one first)");
         emon.Testport.assertEq(emon.Port.cellsAt(cand, 29), 0, "the body one is black");
-        // a ring on a light layer (a watermark), a small ring, an oblong
+        // a ring on a light layer (a watermark), a small ring: neither; an oblong curve of the colour layer (a rotated stamp's outline) is a stamp
         sptPrim(prims, Evidence.pmRing(), 20000, 60000, 3000, 3000, 1, 13487565, 4, 200);
         sptPrim(prims, Evidence.pmRing(), 20000, 60000, 1000, 1000, 2, 2047903, 4, 200);
         sptPrim(prims, Evidence.pmCurve(), 40000, 60000, 3000, 4500, 2, 2047903, 0, 200);
-        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "none of the three is a candidate");
+        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "the oblong curve is a stamp, the other two are no candidate");
         // a ring inside another, concentric: one candidate, the larger
         sptPrim(prims, Evidence.pmRing(), 20000, 20000, 2600, 2600, 2, 2047903, 0, 200);
-        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "an inner ring is the seal's, not another");
+        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "an inner ring is the seal's, not another");
         // a stamp: an outlined rectangle on the colour layer
         sptPrim(prims, Evidence.pmRect(), 30000, 70000, 5000, 2000, 2, 12591135, 1, 200);
-        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "an outlined rectangle on the colour layer: a stamp");
-        emon.Testport.assertEq(emon.Port.cellsAt(cand, 32), 2, "a stamp");
-        emon.Testport.assertEq(emon.Port.cellsAt(cand, 36), 50, "half its width in pixels");
-        emon.Testport.assertEq(emon.Port.cellsAt(cand, 37), 20, "half its height");
+        emon.Testport.assertEq(Sealpx.sxFind(1, views, 0, prims, inks, 61200, 79200, cand), 4, "an outlined rectangle on the colour layer: a stamp");
+        emon.Testport.assertEq(emon.Port.cellsAt(cand, 48), 2, "a stamp");
+        emon.Testport.assertEq(emon.Port.cellsAt(cand, 52), 50, "half its width in pixels");
+        emon.Testport.assertEq(emon.Port.cellsAt(cand, 53), 20, "half its height");
     }
     public static int sptOword(emon.Port.Cells ow, int x, int y) {
         return Evidence.owNew(ow, 1, x - 300, y - 200, x + 300, y + 200, x - 300, y + 200, x + 300, y + 200, 0, 0, 0, 1, 0, 800, -1);

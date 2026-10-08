@@ -617,5 +617,5 @@ func TestTheNodeOfASealHasItsNameAndItsDate(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(text, model.AttrValue(na, d)), 50, "2026-03-14, as year-month-day")
 	port.AssertEq(emonT, port.CellsAt(text, model.AttrValue(na, d)+5), 48, "the month's tens digit")
 	port.AssertEq(emonT, model.AttrLen(na, c), 4, "and the colour, blue")
-	port.AssertEq(emonT, model.NodeTextLen(nn, 2), 28, "the text is all of the reading")
+	port.AssertEq(emonT, model.NodeTextLen(nn, 2), 26, "the text is the words of the reading: the ring's lone dash is out of it (it cut the name)")
 }

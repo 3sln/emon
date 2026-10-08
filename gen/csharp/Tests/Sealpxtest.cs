@@ -253,20 +253,20 @@ public static class Sealpxtest {
         emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a double ring on the body layer is a seal");
         emon.Testport.AssertEq(emon.Port.CellsAt(cand, 13), 10, "(the colour one first)");
         emon.Testport.AssertEq(emon.Port.CellsAt(cand, 29), 0, "the body one is black");
-        // a ring on a light layer (a watermark), a small ring, an oblong
+        // a ring on a light layer (a watermark), a small ring: neither; an oblong curve of the colour layer (a rotated stamp's outline) is a stamp
         SptPrim(prims, Evidence.PmRing(), 20000, 60000, 3000, 3000, 1, 13487565, 4, 200);
         SptPrim(prims, Evidence.PmRing(), 20000, 60000, 1000, 1000, 2, 2047903, 4, 200);
         SptPrim(prims, Evidence.PmCurve(), 40000, 60000, 3000, 4500, 2, 2047903, 0, 200);
-        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "none of the three is a candidate");
+        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "the oblong curve is a stamp, the other two are no candidate");
         // a ring inside another, concentric: one candidate, the larger
         SptPrim(prims, Evidence.PmRing(), 20000, 20000, 2600, 2600, 2, 2047903, 0, 200);
-        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "an inner ring is the seal's, not another");
+        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "an inner ring is the seal's, not another");
         // a stamp: an outlined rectangle on the colour layer
         SptPrim(prims, Evidence.PmRect(), 30000, 70000, 5000, 2000, 2, 12591135, 1, 200);
-        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "an outlined rectangle on the colour layer: a stamp");
-        emon.Testport.AssertEq(emon.Port.CellsAt(cand, 32), 2, "a stamp");
-        emon.Testport.AssertEq(emon.Port.CellsAt(cand, 36), 50, "half its width in pixels");
-        emon.Testport.AssertEq(emon.Port.CellsAt(cand, 37), 20, "half its height");
+        emon.Testport.AssertEq(Sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 4, "an outlined rectangle on the colour layer: a stamp");
+        emon.Testport.AssertEq(emon.Port.CellsAt(cand, 48), 2, "a stamp");
+        emon.Testport.AssertEq(emon.Port.CellsAt(cand, 52), 50, "half its width in pixels");
+        emon.Testport.AssertEq(emon.Port.CellsAt(cand, 53), 20, "half its height");
     }
     internal static int SptOword(emon.Port.Cells ow, int x, int y) {
         return Evidence.OwNew(ow, 1, x - 300, y - 200, x + 300, y + 200, x - 300, y + 200, x + 300, y + 200, 0, 0, 0, 1, 0, 800, -1);

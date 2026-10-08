@@ -1108,7 +1108,59 @@ public static class Sealmark {
         }
         return 0;
     }
-    internal static int SmPxKeep(emon.Port.Cells et, emon.Port.Cells owords, int row) {
+    internal static int SmPxDash(int c) {
+        // 1 for the marks a ring puts between its phrases that the engine can read: a hyphen, a middle dot, a bullet, a star, a bar.
+        if (c == 45) {
+            return 1;
+        }
+        if (c == 183) {
+            return 1;
+        }
+        if (c == 8226) {
+            return 1;
+        }
+        if (c == 9733) {
+            return 1;
+        }
+        if (c == 9679) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int SmPxCased(int c) {
+        // 1 for a lower case Latin letter, 2 for an upper case one, 0 for any other character.
+        if ((c >= 97) && (c <= 122)) {
+            return 1;
+        }
+        if ((c >= 223) && (c <= 255)) {
+            return 1;
+        }
+        if ((c >= 65) && (c <= 90)) {
+            return 2;
+        }
+        if ((c >= 192) && (c <= 222)) {
+            return 2;
+        }
+        return 0;
+    }
+    internal static int SmPxNoisy(emon.Port.Cells et, int ts, int tl) {
+        // 1 when a word has, inside it, a mark that is no part of a word (anything but a letter, a digit, a hyphen, a point, a comma, a colon or an apostrophe: `C!TY`) or a lone lower case
+        // letter between upper case ones (`RiVERTON`): what the engine makes of a ring's letters when it is not sure, and what a seal's own text is not.
+        int k = 1;
+        int c = 0;
+        while (k < (tl - 1)) {
+            c = emon.Port.CellsAt(et, ts + k);
+            if ((Sealfield.SfScript(c) == 0) && ((Sealfield.SfDigit(c) < 0) && ((c != 45) && ((c != 46) && ((c != 44) && ((c != 58) && (c != 39))))))) {
+                return 1;
+            }
+            if ((SmPxCased(c) == 1) && ((SmPxCased(emon.Port.CellsAt(et, (ts + k) + 1)) == 2) && (SmPxCased(emon.Port.CellsAt(et, (ts + k) - 1)) == 2))) {
+                return 1;
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    public static int SmPxKeep(emon.Port.Cells et, emon.Port.Cells owords, int row) {
         // 1 when the OCR word `row` of a seal's reading is kept in its text: it has three letters or digits and the engine was at least 250 per mille sure of it, or one and 600, or six
         // and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
         int ts = Evidence.OwGet(owords, row, Evidence.HdTstart());
@@ -1122,32 +1174,63 @@ public static class Sealmark {
             }
             k += 1;
         }
-        if ((n >= 3) && (conf >= 250)) {
+        if ((n > 0) && (SmPxNoisy(et, ts, tl) == 1)) {
+            return 0;
+        }
+        if ((n == 3) && (conf >= 450)) {
+            return 1;
+        }
+        if ((n >= 4) && (conf >= 350)) {
             return 1;
         }
         if ((n >= 1) && (conf >= 600)) {
             return 1;
         }
-        if ((n >= 6) && (conf >= 150)) {
+        if ((n >= 6) && (conf >= 300)) {
             return 1;
         }
-        if ((n == 0) && ((tl == 1) && (conf >= 500))) {
+        if ((n == 0) && ((tl == 1) && ((conf >= 800) && (SmPxDash(emon.Port.CellsAt(et, ts)) == 1)))) {
             return 1;
         }
         return 0;
     }
     internal static int SmPxText(emon.Port.Cells et, emon.Port.Cells refs, emon.Port.Cells owords, int from, int cnt) {
-        // Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two. Answers the code points appended.
+        // Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two, each trimmed of what is not a letter or a
+        // digit at its ends (`“PAID`); a lone separator is put between two words and never at an end of the text. Answers the code points appended.
         int start = emon.Port.CellsLen(et);
         int i = 0;
         int row = 0;
+        int ts = 0;
+        int tl = 0;
+        int a = 0;
+        int b = 0;
+        int pend = 0;
         while (i < cnt) {
             row = emon.Port.CellsAt(refs, ((from + i) * 2) + 1);
             if (SmPxKeep(et, owords, row) == 1) {
-                if (emon.Port.CellsLen(et) > start) {
-                    emon.Port.CellsPush(et, 32);
+                ts = Evidence.OwGet(owords, row, Evidence.HdTstart());
+                tl = Evidence.OwGet(owords, row, Evidence.HdTlen());
+                a = 0;
+                while ((a < tl) && ((Sealfield.SfScript(emon.Port.CellsAt(et, ts + a)) == 0) && (Sealfield.SfDigit(emon.Port.CellsAt(et, ts + a)) < 0))) {
+                    a += 1;
                 }
-                SmPushRun(et, Evidence.OwGet(owords, row, Evidence.HdTstart()), Evidence.OwGet(owords, row, Evidence.HdTlen()));
+                if (a == tl) {
+                    pend = emon.Port.CellsAt(et, ts);
+                } else {
+                    b = tl;
+                    while ((b > a) && ((Sealfield.SfScript(emon.Port.CellsAt(et, ts + (b - 1))) == 0) && (Sealfield.SfDigit(emon.Port.CellsAt(et, ts + (b - 1))) < 0))) {
+                        b -= 1;
+                    }
+                    if (emon.Port.CellsLen(et) > start) {
+                        emon.Port.CellsPush(et, 32);
+                    }
+                    if ((pend > 0) && (emon.Port.CellsLen(et) > start)) {
+                        emon.Port.CellsPush(et, pend);
+                        emon.Port.CellsPush(et, 32);
+                    }
+                    pend = 0;
+                    SmPushRun(et, ts + a, b - a);
+                }
             }
             i += 1;
         }
@@ -1498,11 +1581,16 @@ public static class Sealmark {
         Model.NodeAddRegion(nodes, regions, nn, Player.SlGet(sm, o, 0), Player.SlGet(sm, o, 1), Player.SlGet(sm, o, 2), Player.SlGet(sm, o, 3), Player.SlGet(sm, o, 4));
         if (tl > 0) {
             start = emon.Port.CellsLen(text);
+            // the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them
             while (j < tl) {
-                Model.TextAppendCp(text, emon.Port.CellsAt(et, ts + j));
-                j += 1;
+                if (((fl & 128) != 0) && ((j > 0) && (((j + 1) < tl) && ((emon.Port.CellsAt(et, ts + (j - 1)) == 32) && ((emon.Port.CellsAt(et, ts + (j + 1)) == 32) && (SmPxDash(emon.Port.CellsAt(et, ts + j)) == 1)))))) {
+                    j += 2;
+                } else {
+                    Model.TextAppendCp(text, emon.Port.CellsAt(et, ts + j));
+                    j += 1;
+                }
             }
-            Model.NodeSetText(nodes, nn, start, tl);
+            Model.NodeSetText(nodes, nn, start, emon.Port.CellsLen(text) - start);
             Model.NodeAddFlag(nodes, nn, Model.FlLowConf());
             if ((fl & 32) != 0) {
                 Model.NodeAddSrc(nodes, nn, Model.SrText());

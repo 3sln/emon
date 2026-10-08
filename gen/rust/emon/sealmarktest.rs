@@ -597,5 +597,5 @@ fn test_the_node_of_a_seal_has_its_name_and_its_date() {
     crate::testport::assert_eq(crate::port::cells_at(text, attr_value(na, d)), 50, "2026-03-14, as year-month-day");
     crate::testport::assert_eq(crate::port::cells_at(text, attr_value(na, d) + 5), 48, "the month's tens digit");
     crate::testport::assert_eq(attr_len(na, c), 4, "and the colour, blue");
-    crate::testport::assert_eq(node_text_len(nn, 2), 28, "the text is all of the reading");
+    crate::testport::assert_eq(node_text_len(nn, 2), 26, "the text is the words of the reading: the ring's lone dash is out of it (it cut the name)");
 }

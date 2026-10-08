@@ -33,7 +33,7 @@
             [emon.scan :refer [sc-request-view-psm sc-answer sc-lang sc-sel-base]]
             [emon.retarget :refer [rt-run-meta]]
             [emon.sealfield :refer [sf-script sf-digit]]
-            [emon.sealmark :refer [sm-hue sm-seal-min sm-spread]]
+            [emon.sealmark :refer [sm-hue sm-seal-min sm-spread sm-px-keep]]
             [emon.player :refer [cg-new cg-set cgf-ofirst cgf-ocount cgf-flags plg-ocr-only plg-in-seal plg-seal-px plg-seal-stamp]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
@@ -53,7 +53,7 @@
 (defn ^:pub ^I32 sx-max [] (comment "`seal-max`: the most seals and stamps a page reads this way.") (return 4))
 (defn ^:pub ^I32 sx-tol [] (comment "How far from the paper-to-ink line (per cent of its length, squared: 8 is 28 per cent of it) a pixel may be and still be the ink's.") (return 8))
 (defn ^:pub ^I32 sx-conf [] (comment "`seal-conf`: the engine's confidence (per mille) from which a word of a strip counts toward what the reading is worth.") (return 450))
-(defn ^:pub ^I32 sx-min-chars [] (comment "`seal-chars`: the letters and digits of confident words a seal's reading needs for the seal to be taken (else the strip read noise).") (return 6))
+(defn ^:pub ^I32 sx-min-chars [] (comment "`seal-chars`: the letters and digits of confident words a seal's reading needs for the seal to be taken (else the strip read noise).") (return 10))
 (defn ^:pub ^I32 sx-min-ink [] (comment "The colour distance (0-255 scale, sum of squares /3) between the paper and an ink below which the ink is not told from the paper.") (return 400))
 
 ;; ------------------------------------------------------------- the ink key
@@ -550,7 +550,15 @@
           (set mx (sx-max2 rx ry))
           (set mn (sx-min rx ry))
           (if (< rad (sm-seal-min)) (return 0))
-          (if (> (* (- mx mn) 100) (* 15 mx)) (return 0))
+          (if (> (* (- mx mn) 100) (* 15 mx))
+            (do (comment "an oblong curve on a colour layer (a stamp's border the tracer found as a curve, not a rectangle) is a stamp: an `ellipse` or a `curve`, at least 10 pt a side,")
+                (comment "at most 8 times as long as wide; what it reads decides whether it is one")
+                (if (!= role (ir-color)) (return 0))
+                (if (and (!= kind (pm-curve)) (!= kind (pm-ellipse))) (return 0))
+                (if (or (< (* 2 mn) 1000) (> mx (* 8 mn))) (return 0))
+                (if (> (* (quot (* 4 rx) 100) (quot ry 100)) (quot (* (quot pw 100) (quot ph 100)) 3)) (return 0))
+                (return (sx-add cand 2 r cxp cyp (sx-abs rxp) (sx-abs ryp) (pm-get prims r (pmf-rot)) rgb
+                                (pm-get prims r (pmf-x0)) (pm-get prims r (pmf-y0)) (pm-get prims r (pmf-x1)) (pm-get prims r (pmf-y1)) (pm-get prims r (pmf-conf))))))
           (if (> (* rad 25) (* 10 (sx-min pw ph))) (return 0))
           (if (== role (ir-body))
             (if (or (!= kind (pm-ring)) (== (bit-and fl 4) 0)) (return 0))
@@ -783,7 +791,7 @@
         ^:mut ^I32 ts 0
         ^:mut ^I32 tl 0]
     (while (< i nw)
-      (do (if (>= (ow-get owords (+ w0 i) (hd-conf)) (sx-conf))
+      (do (if (== (sm-px-keep etext owords (+ w0 i)) 1)
             (do (set ts (ow-get owords (+ w0 i) (hd-tstart)))
                 (set tl (ow-get owords (+ w0 i) (hd-tlen)))
                 (set k 0)
@@ -948,6 +956,8 @@
         ^:mut ^I32 j 0
         ^:mut ^I32 q 0
         ^:mut ^I32 allin 0
+        ^:mut ^I32 nin 0
+        ^:mut ^I32 csum 0
         ^:mut ^I32 inone 0
         ^:mut ^I32 wi 0]
     (while (< k nsel)
@@ -955,10 +965,11 @@
           (set f (ol-get olines l (lh-first)))
           (set cnt (ol-get olines l (lh-count)))
           (set allin 0)
+          (set nin 0)
+          (set csum 0)
           (if (> cnt 0)
-            (do (set allin 1)
-                (set j 0)
-                (while (and (< j cnt) (== allin 1))
+            (do (set j 0)
+                (while (< j cnt)
                   (do (set wi (+ f j))
                       (set inone 0)
                       (set q 0)
@@ -968,8 +979,12 @@
                                                  (quot (+ (ow-get owords wi (hd-y0)) (ow-get owords wi (hd-y1))) 2)) 1)
                                 (set inone 1)))
                             (set q (+ q 1))))
-                      (if (== inone 0) (set allin 0))
-                      (set j (+ j 1))))))
+                      (if (== inone 1) (set nin (+ nin 1)))
+                      (set csum (+ csum (ow-get owords wi (hd-conf))))
+                      (set j (+ j 1))))
+                (if (== nin cnt) (set allin 1))
+                (comment "or most of it, and the engine unsure of it: a line of the ring's letters that the first pass cut across the ring's edge")
+                (if (and (>= (* nin 100) (* cnt 60)) (< csum (* cnt 600))) (set allin 1))))
           (if (== allin 0)
             (do (cells-set scr (+ (sc-sel-base) out) l)
                 (set out (+ out 1))))

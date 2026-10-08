@@ -81,7 +81,7 @@ func SxConf() int32 {
 
 func SxMinChars() int32 {
 	// `seal-chars`: the letters and digits of confident words a seal's reading needs for the seal to be taken (else the strip read noise).
-	return 6
+	return 10
 }
 
 func SxMinInk() int32 {
@@ -745,7 +745,21 @@ func sxConsider(r int32, views *port.Cells, srcview int32, prims *port.Cells, in
 			return 0
 		}
 		if ((mx - mn) * 100) > (15 * mx) {
-			return 0
+			// an oblong curve on a colour layer (a stamp's border the tracer found as a curve, not a rectangle) is a stamp: an `ellipse` or a `curve`, at least 10 pt a side,
+			// at most 8 times as long as wide; what it reads decides whether it is one
+			if role != evidence.IrColor() {
+				return 0
+			}
+			if (kind != evidence.PmCurve()) && (kind != evidence.PmEllipse()) {
+				return 0
+			}
+			if ((2 * mn) < 1000) || (mx > (8 * mn)) {
+				return 0
+			}
+			if (((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3) {
+				return 0
+			}
+			return sxAdd(cand, 2, r, cxp, cyp, sxAbs(rxp), sxAbs(ryp), evidence.PmGet(prims, r, evidence.PmfRot()), rgb, evidence.PmGet(prims, r, evidence.PmfX0()), evidence.PmGet(prims, r, evidence.PmfY0()), evidence.PmGet(prims, r, evidence.PmfX1()), evidence.PmGet(prims, r, evidence.PmfY1()), evidence.PmGet(prims, r, evidence.PmfConf()))
 		}
 		if (rad * 25) > (10 * sxMin(pw, ph)) {
 			return 0
@@ -1036,7 +1050,7 @@ func SxUseful(etext *port.Cells, oruns *port.Cells, owords *port.Cells, run int3
 	var ts int32 = 0
 	var tl int32 = 0
 	for i < nw {
-		if evidence.OwGet(owords, w0+i, evidence.HdConf()) >= SxConf() {
+		if sealmark.SmPxKeep(etext, owords, w0+i) == 1 {
 			ts = evidence.OwGet(owords, w0+i, evidence.HdTstart())
 			tl = evidence.OwGet(owords, w0+i, evidence.HdTlen())
 			k = 0
@@ -1230,6 +1244,8 @@ func SxDropLines(scr *port.Cells, nsel int32, olines *port.Cells, owords *port.C
 	var j int32 = 0
 	var q int32 = 0
 	var allin int32 = 0
+	var nin int32 = 0
+	var csum int32 = 0
 	var inone int32 = 0
 	var wi int32 = 0
 	for k < nsel {
@@ -1237,10 +1253,11 @@ func SxDropLines(scr *port.Cells, nsel int32, olines *port.Cells, owords *port.C
 		f = evidence.OlGet(olines, l, evidence.LhFirst())
 		cnt = evidence.OlGet(olines, l, evidence.LhCount())
 		allin = 0
+		nin = 0
+		csum = 0
 		if cnt > 0 {
-			allin = 1
 			j = 0
-			for (j < cnt) && (allin == 1) {
+			for j < cnt {
 				wi = f + j
 				inone = 0
 				q = 0
@@ -1252,10 +1269,18 @@ func SxDropLines(scr *port.Cells, nsel int32, olines *port.Cells, owords *port.C
 					}
 					q += 1
 				}
-				if inone == 0 {
-					allin = 0
+				if inone == 1 {
+					nin += 1
 				}
+				csum += evidence.OwGet(owords, wi, evidence.HdConf())
 				j += 1
+			}
+			if nin == cnt {
+				allin = 1
+			}
+			// or most of it, and the engine unsure of it: a line of the ring's letters that the first pass cut across the ring's edge
+			if ((nin * 100) >= (cnt * 60)) && (csum < (cnt * 600)) {
+				allin = 1
 			}
 		}
 		if allin == 0 {

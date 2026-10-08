@@ -63,7 +63,7 @@ pub fn sx_conf() -> i32 {
 }
 pub fn sx_min_chars() -> i32 {
     // `seal-chars`: the letters and digits of confident words a seal's reading needs for the seal to be taken (else the strip read noise).
-    return 6;
+    return 10;
 }
 pub fn sx_min_ink() -> i32 {
     // The colour distance (0-255 scale, sum of squares /3) between the paper and an ink below which the ink is not told from the paper.
@@ -693,7 +693,21 @@ pub(crate) fn sx_consider(r: i32, views: &mut crate::port::Cells, srcview: i32, 
             return 0;
         }
         if ((mx - mn) * 100) > (15 * mx) {
-            return 0;
+            // an oblong curve on a colour layer (a stamp's border the tracer found as a curve, not a rectangle) is a stamp: an `ellipse` or a `curve`, at least 10 pt a side,
+            // at most 8 times as long as wide; what it reads decides whether it is one
+            if role != ir_color() {
+                return 0;
+            }
+            if (kind != pm_curve()) && (kind != pm_ellipse()) {
+                return 0;
+            }
+            if ((2 * mn) < 1000) || (mx > (8 * mn)) {
+                return 0;
+            }
+            if (((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3) {
+                return 0;
+            }
+            return sx_add(cand, 2, r, cxp, cyp, sx_abs(rxp), sx_abs(ryp), pm_get(prims, r, pmf_rot()), rgb, pm_get(prims, r, pmf_x0()), pm_get(prims, r, pmf_y0()), pm_get(prims, r, pmf_x1()), pm_get(prims, r, pmf_y1()), pm_get(prims, r, pmf_conf()));
         }
         if (rad * 25) > (10 * sx_min(pw, ph)) {
             return 0;
@@ -974,7 +988,7 @@ pub fn sx_useful(etext: &mut crate::port::Cells, oruns: &mut crate::port::Cells,
     let mut ts: i32 = 0;
     let mut tl: i32 = 0;
     while i < nw {
-        if ow_get(owords, w0 + i, hd_conf()) >= sx_conf() {
+        if sm_px_keep(etext, owords, w0 + i) == 1 {
             ts = ow_get(owords, w0 + i, hd_tstart());
             tl = ow_get(owords, w0 + i, hd_tlen());
             k = 0;
@@ -1162,6 +1176,8 @@ pub fn sx_drop_lines(mut scr: &mut crate::port::Cells, nsel: i32, olines: &mut c
     let mut j: i32 = 0;
     let mut q: i32 = 0;
     let mut allin: i32 = 0;
+    let mut nin: i32 = 0;
+    let mut csum: i32 = 0;
     let mut inone: i32 = 0;
     let mut wi: i32 = 0;
     while k < nsel {
@@ -1169,10 +1185,11 @@ pub fn sx_drop_lines(mut scr: &mut crate::port::Cells, nsel: i32, olines: &mut c
         f = ol_get(olines, l, lh_first());
         cnt = ol_get(olines, l, lh_count());
         allin = 0;
+        nin = 0;
+        csum = 0;
         if cnt > 0 {
-            allin = 1;
             j = 0;
-            while (j < cnt) && (allin == 1) {
+            while j < cnt {
                 wi = f + j;
                 inone = 0;
                 q = 0;
@@ -1184,10 +1201,18 @@ pub fn sx_drop_lines(mut scr: &mut crate::port::Cells, nsel: i32, olines: &mut c
                     }
                     q += 1;
                 }
-                if inone == 0 {
-                    allin = 0;
+                if inone == 1 {
+                    nin += 1;
                 }
+                csum += ow_get(owords, wi, hd_conf());
                 j += 1;
+            }
+            if nin == cnt {
+                allin = 1;
+            }
+            // or most of it, and the engine unsure of it: a line of the ring's letters that the first pass cut across the ring's edge
+            if ((nin * 100) >= (cnt * 60)) && (csum < (cnt * 600)) {
+                allin = 1;
             }
         }
         if allin == 0 {

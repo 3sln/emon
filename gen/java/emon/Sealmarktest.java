@@ -583,6 +583,6 @@ public final class Sealmarktest {
         emon.Testport.assertEq(emon.Port.cellsAt(text, Model.attrValue(na, d)), 50, "2026-03-14, as year-month-day");
         emon.Testport.assertEq(emon.Port.cellsAt(text, Model.attrValue(na, d) + 5), 48, "the month's tens digit");
         emon.Testport.assertEq(Model.attrLen(na, c), 4, "and the colour, blue");
-        emon.Testport.assertEq(Model.nodeTextLen(nn, 2), 28, "the text is all of the reading");
+        emon.Testport.assertEq(Model.nodeTextLen(nn, 2), 26, "the text is the words of the reading: the ring's lone dash is out of it (it cut the name)");
     }
 }

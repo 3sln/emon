@@ -1110,7 +1110,59 @@ pub(crate) fn sm_page(scr: &mut crate::port::Cells, n: i32, page: i32, fw: &mut 
     }
     return 0;
 }
-pub(crate) fn sm_px_keep(et: &mut crate::port::Cells, owords: &mut crate::port::Cells, row: i32) -> i32 {
+pub(crate) fn sm_px_dash(c: i32) -> i32 {
+    // 1 for the marks a ring puts between its phrases that the engine can read: a hyphen, a middle dot, a bullet, a star, a bar.
+    if c == 45 {
+        return 1;
+    }
+    if c == 183 {
+        return 1;
+    }
+    if c == 8226 {
+        return 1;
+    }
+    if c == 9733 {
+        return 1;
+    }
+    if c == 9679 {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn sm_px_cased(c: i32) -> i32 {
+    // 1 for a lower case Latin letter, 2 for an upper case one, 0 for any other character.
+    if (c >= 97) && (c <= 122) {
+        return 1;
+    }
+    if (c >= 223) && (c <= 255) {
+        return 1;
+    }
+    if (c >= 65) && (c <= 90) {
+        return 2;
+    }
+    if (c >= 192) && (c <= 222) {
+        return 2;
+    }
+    return 0;
+}
+pub(crate) fn sm_px_noisy(et: &mut crate::port::Cells, ts: i32, tl: i32) -> i32 {
+    // 1 when a word has, inside it, a mark that is no part of a word (anything but a letter, a digit, a hyphen, a point, a comma, a colon or an apostrophe: `C!TY`) or a lone lower case
+    // letter between upper case ones (`RiVERTON`): what the engine makes of a ring's letters when it is not sure, and what a seal's own text is not.
+    let mut k: i32 = 1;
+    let mut c: i32 = 0;
+    while k < (tl - 1) {
+        c = crate::port::cells_at(et, ts + k);
+        if (sf_script(c) == 0) && ((sf_digit(c) < 0) && ((c != 45) && ((c != 46) && ((c != 44) && ((c != 58) && (c != 39)))))) {
+            return 1;
+        }
+        if (sm_px_cased(c) == 1) && ((sm_px_cased(crate::port::cells_at(et, (ts + k) + 1)) == 2) && (sm_px_cased(crate::port::cells_at(et, (ts + k) - 1)) == 2)) {
+            return 1;
+        }
+        k += 1;
+    }
+    return 0;
+}
+pub fn sm_px_keep(et: &mut crate::port::Cells, owords: &mut crate::port::Cells, row: i32) -> i32 {
     // 1 when the OCR word `row` of a seal's reading is kept in its text: it has three letters or digits and the engine was at least 250 per mille sure of it, or one and 600, or six
     // and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
     let ts: i32 = ow_get(owords, row, hd_tstart());
@@ -1124,32 +1176,63 @@ pub(crate) fn sm_px_keep(et: &mut crate::port::Cells, owords: &mut crate::port::
         }
         k += 1;
     }
-    if (n >= 3) && (conf >= 250) {
+    if (n > 0) && (sm_px_noisy(et, ts, tl) == 1) {
+        return 0;
+    }
+    if (n == 3) && (conf >= 450) {
+        return 1;
+    }
+    if (n >= 4) && (conf >= 350) {
         return 1;
     }
     if (n >= 1) && (conf >= 600) {
         return 1;
     }
-    if (n >= 6) && (conf >= 150) {
+    if (n >= 6) && (conf >= 300) {
         return 1;
     }
-    if (n == 0) && ((tl == 1) && (conf >= 500)) {
+    if (n == 0) && ((tl == 1) && ((conf >= 800) && (sm_px_dash(crate::port::cells_at(et, ts)) == 1))) {
         return 1;
     }
     return 0;
 }
 pub(crate) fn sm_px_text(mut et: &mut crate::port::Cells, refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, from: i32, cnt: i32) -> i32 {
-    // Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two. Answers the code points appended.
+    // Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two, each trimmed of what is not a letter or a
+    // digit at its ends (`“PAID`); a lone separator is put between two words and never at an end of the text. Answers the code points appended.
     let start: i32 = crate::port::cells_len(et);
     let mut i: i32 = 0;
     let mut row: i32 = 0;
+    let mut ts: i32 = 0;
+    let mut tl: i32 = 0;
+    let mut a: i32 = 0;
+    let mut b: i32 = 0;
+    let mut pend: i32 = 0;
     while i < cnt {
         row = crate::port::cells_at(refs, ((from + i) * 2) + 1);
         if sm_px_keep(et, owords, row) == 1 {
-            if crate::port::cells_len(et) > start {
-                crate::port::cells_push(et, 32);
+            ts = ow_get(owords, row, hd_tstart());
+            tl = ow_get(owords, row, hd_tlen());
+            a = 0;
+            while (a < tl) && ((sf_script(crate::port::cells_at(et, ts + a)) == 0) && (sf_digit(crate::port::cells_at(et, ts + a)) < 0)) {
+                a += 1;
             }
-            sm_push_run(et, ow_get(owords, row, hd_tstart()), ow_get(owords, row, hd_tlen()));
+            if a == tl {
+                pend = crate::port::cells_at(et, ts);
+            } else {
+                b = tl;
+                while (b > a) && ((sf_script(crate::port::cells_at(et, ts + (b - 1))) == 0) && (sf_digit(crate::port::cells_at(et, ts + (b - 1))) < 0)) {
+                    b -= 1;
+                }
+                if crate::port::cells_len(et) > start {
+                    crate::port::cells_push(et, 32);
+                }
+                if (pend > 0) && (crate::port::cells_len(et) > start) {
+                    crate::port::cells_push(et, pend);
+                    crate::port::cells_push(et, 32);
+                }
+                pend = 0;
+                sm_push_run(et, ts + a, b - a);
+            }
         }
         i += 1;
     }
@@ -1500,11 +1583,16 @@ pub(crate) fn sm_emit(mut sm: &mut crate::port::Cells, o: i32, et: &mut crate::p
     node_add_region(nodes, regions, nn, sl_get(sm, o, 0), sl_get(sm, o, 1), sl_get(sm, o, 2), sl_get(sm, o, 3), sl_get(sm, o, 4));
     if tl > 0 {
         start = crate::port::cells_len(text);
+        // the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them
         while j < tl {
-            text_append_cp(text, crate::port::cells_at(et, ts + j));
-            j += 1;
+            if ((fl & 128) != 0) && ((j > 0) && (((j + 1) < tl) && ((crate::port::cells_at(et, ts + (j - 1)) == 32) && ((crate::port::cells_at(et, ts + (j + 1)) == 32) && (sm_px_dash(crate::port::cells_at(et, ts + j)) == 1))))) {
+                j += 2;
+            } else {
+                text_append_cp(text, crate::port::cells_at(et, ts + j));
+                j += 1;
+            }
         }
-        node_set_text(nodes, nn, start, tl);
+        node_set_text(nodes, nn, start, crate::port::cells_len(text) - start);
         node_add_flag(nodes, nn, fl_low_conf());
         if (fl & 32) != 0 {
             node_add_src(nodes, nn, sr_text());

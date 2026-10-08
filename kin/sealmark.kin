@@ -787,7 +787,38 @@
 
 ;; ------------------------------------------------------------- seals read from pixels (P8.2)
 
-(defn ^I32 sm-px-keep [^Cells et ^Cells owords ^I32 row]
+(defn ^I32 sm-px-dash [^I32 c]
+  (comment "1 for the marks a ring puts between its phrases that the engine can read: a hyphen, a middle dot, a bullet, a star, a bar.")
+  (if (== c 45) (return 1))
+  (if (== c 183) (return 1))
+  (if (== c 8226) (return 1))
+  (if (== c 9733) (return 1))
+  (if (== c 9679) (return 1))
+  (return 0))
+
+(defn ^I32 sm-px-cased [^I32 c]
+  (comment "1 for a lower case Latin letter, 2 for an upper case one, 0 for any other character.")
+  (if (and (>= c 97) (<= c 122)) (return 1))
+  (if (and (>= c 223) (<= c 255)) (return 1))
+  (if (and (>= c 65) (<= c 90)) (return 2))
+  (if (and (>= c 192) (<= c 222)) (return 2))
+  (return 0))
+
+(defn ^I32 sm-px-noisy [^Cells et ^I32 ts ^I32 tl]
+  (comment "1 when a word has, inside it, a mark that is no part of a word (anything but a letter, a digit, a hyphen, a point, a comma, a colon or an apostrophe: `C!TY`) or a lone lower case")
+  (comment "letter between upper case ones (`RiVERTON`): what the engine makes of a ring's letters when it is not sure, and what a seal's own text is not.")
+  (let [^:mut ^I32 k 1
+        ^:mut ^I32 c 0]
+    (while (< k (- tl 1))
+      (do (set c (cells-at et (+ ts k)))
+          (if (and (== (sf-script c) 0) (and (< (sf-digit c) 0) (and (!= c 45) (and (!= c 46) (and (!= c 44) (and (!= c 58) (!= c 39)))))))
+            (return 1))
+          (if (and (== (sm-px-cased c) 1) (and (== (sm-px-cased (cells-at et (+ (+ ts k) 1))) 2) (== (sm-px-cased (cells-at et (- (+ ts k) 1))) 2)))
+            (return 1))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sm-px-keep [^Cells et ^Cells owords ^I32 row]
   (comment "1 when the OCR word `row` of a seal's reading is kept in its text: it has three letters or digits and the engine was at least 250 per mille sure of it, or one and 600, or six")
   (comment "and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).")
   (let [^I32 ts (ow-get owords row (hd-tstart))
@@ -798,22 +829,44 @@
     (while (< k tl)
       (do (if (or (> (sf-script (cells-at et (+ ts k))) 0) (>= (sf-digit (cells-at et (+ ts k))) 0)) (set n (+ n 1)))
           (set k (+ k 1))))
-    (if (and (>= n 3) (>= conf 250)) (return 1))
+    (if (and (> n 0) (== (sm-px-noisy et ts tl) 1)) (return 0))
+    (if (and (== n 3) (>= conf 450)) (return 1))
+    (if (and (>= n 4) (>= conf 350)) (return 1))
     (if (and (>= n 1) (>= conf 600)) (return 1))
-    (if (and (>= n 6) (>= conf 150)) (return 1))
-    (if (and (== n 0) (and (== tl 1) (>= conf 500))) (return 1))
+    (if (and (>= n 6) (>= conf 300)) (return 1))
+    (if (and (== n 0) (and (== tl 1) (and (>= conf 800) (== (sm-px-dash (cells-at et ts)) 1)))) (return 1))
     (return 0)))
 
 (defn ^I32 sm-px-text [^:mut ^Cells et ^Cells refs ^Cells owords ^I32 from ^I32 cnt]
-  (comment "Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two. Answers the code points appended.")
+  (comment "Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two, each trimmed of what is not a letter or a")
+  (comment "digit at its ends (`“PAID`); a lone separator is put between two words and never at an end of the text. Answers the code points appended.")
   (let [^I32 start (cells-len et)
         ^:mut ^I32 i 0
-        ^:mut ^I32 row 0]
+        ^:mut ^I32 row 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 pend 0]
     (while (< i cnt)
       (do (set row (cells-at refs (+ (* (+ from i) 2) 1)))
           (if (== (sm-px-keep et owords row) 1)
-            (do (if (> (cells-len et) start) (cells-push et 32))
-                (sm-push-run et (ow-get owords row (hd-tstart)) (ow-get owords row (hd-tlen)))))
+            (do (set ts (ow-get owords row (hd-tstart)))
+                (set tl (ow-get owords row (hd-tlen)))
+                (set a 0)
+                (while (and (< a tl) (and (== (sf-script (cells-at et (+ ts a))) 0) (< (sf-digit (cells-at et (+ ts a))) 0)))
+                  (set a (+ a 1)))
+                (if (== a tl)
+                  (set pend (cells-at et ts))
+                  (do (set b tl)
+                      (while (and (> b a) (and (== (sf-script (cells-at et (+ ts (- b 1)))) 0) (< (sf-digit (cells-at et (+ ts (- b 1)))) 0)))
+                        (set b (- b 1)))
+                      (if (> (cells-len et) start) (cells-push et 32))
+                      (if (and (> pend 0) (> (cells-len et) start))
+                        (do (cells-push et pend)
+                            (cells-push et 32)))
+                      (set pend 0)
+                      (sm-push-run et (+ ts a) (- b a))))))
           (set i (+ i 1))))
     (return (- (cells-len et) start))))
 
@@ -1072,10 +1125,17 @@
     (node-add-region nodes regions nn (sl-get sm o 0) (sl-get sm o 1) (sl-get sm o 2) (sl-get sm o 3) (sl-get sm o 4))
     (if (> tl 0)
       (do (set start (cells-len text))
+          (comment "the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them")
           (while (< j tl)
-            (do (text-append-cp text (cells-at et (+ ts j)))
-                (set j (+ j 1))))
-          (node-set-text nodes nn start tl)
+            (do (if (and (!= (bit-and fl 128) 0)
+                         (and (> j 0) (and (< (+ j 1) tl)
+                                           (and (== (cells-at et (+ ts (- j 1))) 32)
+                                                (and (== (cells-at et (+ ts (+ j 1))) 32)
+                                                     (== (sm-px-dash (cells-at et (+ ts j))) 1))))))
+                  (set j (+ j 2))
+                  (do (text-append-cp text (cells-at et (+ ts j)))
+                      (set j (+ j 1))))))
+          (node-set-text nodes nn start (- (cells-len text) start))
           (node-add-flag nodes nn (fl-low-conf))
           (if (!= (bit-and fl 32) 0) (node-add-src nodes nn (sr-text)) (node-add-src nodes nn (sr-ocr)))
           (sm-emit-fields et ts tl (sl-get sm o 5) nodes attrs text nn nm fb)))

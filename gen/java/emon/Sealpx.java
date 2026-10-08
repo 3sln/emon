@@ -59,7 +59,7 @@ public final class Sealpx {
     }
     public static int sxMinChars() {
         // `seal-chars`: the letters and digits of confident words a seal's reading needs for the seal to be taken (else the strip read noise).
-        return 6;
+        return 10;
     }
     public static int sxMinInk() {
         // The colour distance (0-255 scale, sum of squares /3) between the paper and an ink below which the ink is not told from the paper.
@@ -689,7 +689,21 @@ public final class Sealpx {
                 return 0;
             }
             if (((mx - mn) * 100) > (15 * mx)) {
-                return 0;
+                // an oblong curve on a colour layer (a stamp's border the tracer found as a curve, not a rectangle) is a stamp: an `ellipse` or a `curve`, at least 10 pt a side,
+                // at most 8 times as long as wide; what it reads decides whether it is one
+                if (role != Evidence.irColor()) {
+                    return 0;
+                }
+                if ((kind != Evidence.pmCurve()) && (kind != Evidence.pmEllipse())) {
+                    return 0;
+                }
+                if (((2 * mn) < 1000) || (mx > (8 * mn))) {
+                    return 0;
+                }
+                if ((((4 * rx) / 100) * (ry / 100)) > (((pw / 100) * (ph / 100)) / 3)) {
+                    return 0;
+                }
+                return sxAdd(cand, 2, r, cxp, cyp, sxAbs(rxp), sxAbs(ryp), Evidence.pmGet(prims, r, Evidence.pmfRot()), rgb, Evidence.pmGet(prims, r, Evidence.pmfX0()), Evidence.pmGet(prims, r, Evidence.pmfY0()), Evidence.pmGet(prims, r, Evidence.pmfX1()), Evidence.pmGet(prims, r, Evidence.pmfY1()), Evidence.pmGet(prims, r, Evidence.pmfConf()));
             }
             if ((rad * 25) > (10 * sxMin(pw, ph))) {
                 return 0;
@@ -970,7 +984,7 @@ public final class Sealpx {
         int ts = 0;
         int tl = 0;
         while (i < nw) {
-            if (Evidence.owGet(owords, w0 + i, Evidence.hdConf()) >= sxConf()) {
+            if (Sealmark.smPxKeep(etext, owords, w0 + i) == 1) {
                 ts = Evidence.owGet(owords, w0 + i, Evidence.hdTstart());
                 tl = Evidence.owGet(owords, w0 + i, Evidence.hdTlen());
                 k = 0;
@@ -1158,6 +1172,8 @@ public final class Sealpx {
         int j = 0;
         int q = 0;
         int allin = 0;
+        int nin = 0;
+        int csum = 0;
         int inone = 0;
         int wi = 0;
         while (k < nsel) {
@@ -1165,10 +1181,11 @@ public final class Sealpx {
             f = Evidence.olGet(olines, l, Evidence.lhFirst());
             cnt = Evidence.olGet(olines, l, Evidence.lhCount());
             allin = 0;
+            nin = 0;
+            csum = 0;
             if (cnt > 0) {
-                allin = 1;
                 j = 0;
-                while ((j < cnt) && (allin == 1)) {
+                while (j < cnt) {
                     wi = f + j;
                     inone = 0;
                     q = 0;
@@ -1180,10 +1197,18 @@ public final class Sealpx {
                         }
                         q += 1;
                     }
-                    if (inone == 0) {
-                        allin = 0;
+                    if (inone == 1) {
+                        nin += 1;
                     }
+                    csum += Evidence.owGet(owords, wi, Evidence.hdConf());
                     j += 1;
+                }
+                if (nin == cnt) {
+                    allin = 1;
+                }
+                // or most of it, and the engine unsure of it: a line of the ring's letters that the first pass cut across the ring's edge
+                if (((nin * 100) >= (cnt * 60)) && (csum < (cnt * 600))) {
+                    allin = 1;
                 }
             }
             if (allin == 0) {

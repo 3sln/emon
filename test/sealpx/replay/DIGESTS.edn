@@ -1,15 +1,15 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/sealpx/replay/ID, as `bb sealpx-record` made it (P8.2, D802).
 {"ovl-seal-over-text"
- "ba30e4fd1bafd19e4be34be95ad52dcd96b065a93e1f8725982954b154bf0cef",
+ "e9cb8a76cc9b234d318ea5b3f49a792790c933c48b9a3312625afaf16f94b419",
  "ovl-sig-over-name"
- "07a23accca1d4176d51537e85b4d2dca06ee0c6db12b49efbe59b3b6089f5a97",
+ "50c14282b98452541d35efb1d20305a77f2123a82cd153c48e1c68fd265b553f",
  "ovl-stamp-seal"
- "b8e0fd457f97d431421709776987caaf78716360ff1ef1a7e202e8c883fe3547",
+ "8e1412d8e8e315484a09e348271330269be3bb666c605b020588bb60a68f4251",
  "px-negatives"
  "7d6b3cf7c235bd3554a299ec2a6579029a86fc4a4d933b80bff30d95e22cded8",
  "px-seal-black"
- "cf93958f83f9690fe08a0e7d5be877c84a7cec233d21552146c19abffa13cd2a",
+ "b94756c2f85a4dc1abe3bb58cfb9808b731bd50d958bfa04dd12c72d507b8eb1",
  "px-seal-notary"
- "0555e73cc5a90999b63ac59123a1ceda90b237ee74a857e45ced494b77404742",
+ "c6f90fb6851f34b8707f30ef60b2b7b58acddc08544a9848a12e4f5342eeb037",
  "px-stamp-paid"
  "6984f44ffa0d01073b8d2271c1728ef63c2e8632c2b67b0fcedd069cbba10168"}

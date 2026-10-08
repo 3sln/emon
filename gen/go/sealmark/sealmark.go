@@ -1166,7 +1166,62 @@ func smPage(scr *port.Cells, n int32, page int32, fw *port.Cells, gl *port.Cells
 	return 0
 }
 
-func smPxKeep(et *port.Cells, owords *port.Cells, row int32) int32 {
+func smPxDash(c int32) int32 {
+	// 1 for the marks a ring puts between its phrases that the engine can read: a hyphen, a middle dot, a bullet, a star, a bar.
+	if c == 45 {
+		return 1
+	}
+	if c == 183 {
+		return 1
+	}
+	if c == 8226 {
+		return 1
+	}
+	if c == 9733 {
+		return 1
+	}
+	if c == 9679 {
+		return 1
+	}
+	return 0
+}
+
+func smPxCased(c int32) int32 {
+	// 1 for a lower case Latin letter, 2 for an upper case one, 0 for any other character.
+	if (c >= 97) && (c <= 122) {
+		return 1
+	}
+	if (c >= 223) && (c <= 255) {
+		return 1
+	}
+	if (c >= 65) && (c <= 90) {
+		return 2
+	}
+	if (c >= 192) && (c <= 222) {
+		return 2
+	}
+	return 0
+}
+
+func smPxNoisy(et *port.Cells, ts int32, tl int32) int32 {
+	// 1 when a word has, inside it, a mark that is no part of a word (anything but a letter, a digit, a hyphen, a point, a comma, a colon or an apostrophe: `C!TY`) or a lone lower case
+	// letter between upper case ones (`RiVERTON`): what the engine makes of a ring's letters when it is not sure, and what a seal's own text is not.
+	var k int32 = 1
+	var c int32 = 0
+	for k < (tl - 1) {
+		c = port.CellsAt(et, ts+k)
+		if (sealfield.SfScript(c) == 0) && ((sealfield.SfDigit(c) < 0) && ((c != 45) && ((c != 46) && ((c != 44) && ((c != 58) && (c != 39)))))) {
+			return 1
+		}
+		if (smPxCased(c) == 1) && ((smPxCased(port.CellsAt(et, (ts+k)+1)) == 2) && (smPxCased(port.CellsAt(et, (ts+k)-1)) == 2)) {
+			return 1
+		}
+		k += 1
+	}
+	return 0
+}
+
+func SmPxKeep(et *port.Cells, owords *port.Cells, row int32) int32 {
 	// 1 when the OCR word `row` of a seal's reading is kept in its text: it has three letters or digits and the engine was at least 250 per mille sure of it, or one and 600, or six
 	// and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
 	var ts int32 = evidence.OwGet(owords, row, evidence.HdTstart())
@@ -1180,33 +1235,64 @@ func smPxKeep(et *port.Cells, owords *port.Cells, row int32) int32 {
 		}
 		k += 1
 	}
-	if (n >= 3) && (conf >= 250) {
+	if (n > 0) && (smPxNoisy(et, ts, tl) == 1) {
+		return 0
+	}
+	if (n == 3) && (conf >= 450) {
+		return 1
+	}
+	if (n >= 4) && (conf >= 350) {
 		return 1
 	}
 	if (n >= 1) && (conf >= 600) {
 		return 1
 	}
-	if (n >= 6) && (conf >= 150) {
+	if (n >= 6) && (conf >= 300) {
 		return 1
 	}
-	if (n == 0) && ((tl == 1) && (conf >= 500)) {
+	if (n == 0) && ((tl == 1) && ((conf >= 800) && (smPxDash(port.CellsAt(et, ts)) == 1))) {
 		return 1
 	}
 	return 0
 }
 
 func smPxText(et *port.Cells, refs *port.Cells, owords *port.Cells, from int32, cnt int32) int32 {
-	// Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two. Answers the code points appended.
+	// Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two, each trimmed of what is not a letter or a
+	// digit at its ends (`“PAID`); a lone separator is put between two words and never at an end of the text. Answers the code points appended.
 	var start int32 = port.CellsLen(et)
 	var i int32 = 0
 	var row int32 = 0
+	var ts int32 = 0
+	var tl int32 = 0
+	var a int32 = 0
+	var b int32 = 0
+	var pend int32 = 0
 	for i < cnt {
 		row = port.CellsAt(refs, ((from+i)*2)+1)
-		if smPxKeep(et, owords, row) == 1 {
-			if port.CellsLen(et) > start {
-				port.CellsPush(et, 32)
+		if SmPxKeep(et, owords, row) == 1 {
+			ts = evidence.OwGet(owords, row, evidence.HdTstart())
+			tl = evidence.OwGet(owords, row, evidence.HdTlen())
+			a = 0
+			for (a < tl) && ((sealfield.SfScript(port.CellsAt(et, ts+a)) == 0) && (sealfield.SfDigit(port.CellsAt(et, ts+a)) < 0)) {
+				a += 1
 			}
-			smPushRun(et, evidence.OwGet(owords, row, evidence.HdTstart()), evidence.OwGet(owords, row, evidence.HdTlen()))
+			if a == tl {
+				pend = port.CellsAt(et, ts)
+			} else {
+				b = tl
+				for (b > a) && ((sealfield.SfScript(port.CellsAt(et, ts+(b-1))) == 0) && (sealfield.SfDigit(port.CellsAt(et, ts+(b-1))) < 0)) {
+					b -= 1
+				}
+				if port.CellsLen(et) > start {
+					port.CellsPush(et, 32)
+				}
+				if (pend > 0) && (port.CellsLen(et) > start) {
+					port.CellsPush(et, pend)
+					port.CellsPush(et, 32)
+				}
+				pend = 0
+				smPushRun(et, ts+a, b-a)
+			}
 		}
 		i += 1
 	}
@@ -1573,11 +1659,16 @@ func smEmit(sm *port.Cells, o int32, et *port.Cells, nodes *port.Cells, attrs *p
 	model.NodeAddRegion(nodes, regions, nn, player.SlGet(sm, o, 0), player.SlGet(sm, o, 1), player.SlGet(sm, o, 2), player.SlGet(sm, o, 3), player.SlGet(sm, o, 4))
 	if tl > 0 {
 		start = port.CellsLen(text)
+		// the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them
 		for j < tl {
-			model.TextAppendCp(text, port.CellsAt(et, ts+j))
-			j += 1
+			if ((fl & 128) != 0) && ((j > 0) && (((j + 1) < tl) && ((port.CellsAt(et, ts+(j-1)) == 32) && ((port.CellsAt(et, ts+(j+1)) == 32) && (smPxDash(port.CellsAt(et, ts+j)) == 1))))) {
+				j += 2
+			} else {
+				model.TextAppendCp(text, port.CellsAt(et, ts+j))
+				j += 1
+			}
 		}
-		model.NodeSetText(nodes, nn, start, tl)
+		model.NodeSetText(nodes, nn, start, port.CellsLen(text)-start)
 		model.NodeAddFlag(nodes, nn, model.FlLowConf())
 		if (fl & 32) != 0 {
 			model.NodeAddSrc(nodes, nn, model.SrText())

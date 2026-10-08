@@ -265,20 +265,20 @@ func TestARingOrAStampOnTheRightLayerIsACandidate(emonT *testing.T) {
 	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "a double ring on the body layer is a seal")
 	port.AssertEq(emonT, port.CellsAt(cand, 13), 10, "(the colour one first)")
 	port.AssertEq(emonT, port.CellsAt(cand, 29), 0, "the body one is black")
-	// a ring on a light layer (a watermark), a small ring, an oblong
+	// a ring on a light layer (a watermark), a small ring: neither; an oblong curve of the colour layer (a rotated stamp's outline) is a stamp
 	sptPrim(prims, evidence.PmRing(), 20000, 60000, 3000, 3000, 1, 13487565, 4, 200)
 	sptPrim(prims, evidence.PmRing(), 20000, 60000, 1000, 1000, 2, 2047903, 4, 200)
 	sptPrim(prims, evidence.PmCurve(), 40000, 60000, 3000, 4500, 2, 2047903, 0, 200)
-	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "none of the three is a candidate")
+	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "the oblong curve is a stamp, the other two are no candidate")
 	// a ring inside another, concentric: one candidate, the larger
 	sptPrim(prims, evidence.PmRing(), 20000, 20000, 2600, 2600, 2, 2047903, 0, 200)
-	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 2, "an inner ring is the seal's, not another")
+	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "an inner ring is the seal's, not another")
 	// a stamp: an outlined rectangle on the colour layer
 	sptPrim(prims, evidence.PmRect(), 30000, 70000, 5000, 2000, 2, 12591135, 1, 200)
-	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 3, "an outlined rectangle on the colour layer: a stamp")
-	port.AssertEq(emonT, port.CellsAt(cand, 32), 2, "a stamp")
-	port.AssertEq(emonT, port.CellsAt(cand, 36), 50, "half its width in pixels")
-	port.AssertEq(emonT, port.CellsAt(cand, 37), 20, "half its height")
+	port.AssertEq(emonT, sealpx.SxFind(1, views, 0, prims, inks, 61200, 79200, cand), 4, "an outlined rectangle on the colour layer: a stamp")
+	port.AssertEq(emonT, port.CellsAt(cand, 48), 2, "a stamp")
+	port.AssertEq(emonT, port.CellsAt(cand, 52), 50, "half its width in pixels")
+	port.AssertEq(emonT, port.CellsAt(cand, 53), 20, "half its height")
 }
 
 func sptOword(ow *port.Cells, x int32, y int32) int32 {
