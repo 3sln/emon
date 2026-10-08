@@ -1,0 +1,4 @@
+;; Saved by `bb fuzz` (D106, D384). Reproduce the unminimised mutant with
+;;   the generated seed seed:image-huge-dims.pdf (tools/fuzz/seeds.clj), unmutated
+;; `:status :fixed` = a known failure (reported, not gating); once fixed, change it to `:fixed` (must pass).
+{:index nil, :signature ["engine-panic:rust"], :ops ["unmutated"], :seed 1, :status :fixed, :original-bytes 854, :bytes 363, :fixture "seed:image-huge-dims.pdf", :detail ["engine-panic rust/bytes: internal"]}

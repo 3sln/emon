@@ -188,7 +188,7 @@ pub(crate) fn fc_digest(src: &crate::port::Src, mut fi: &mut crate::port::Cells,
     let total: i32 = ps_len(src);
     let step: i32 = fc_max(1, slen / FC_DIGEST_N);
     let mut h1: i32 = slen % 2000003;
-    let mut h2: i32 = ((w * 7919) + h) % 1999993;
+    let mut h2: i32 = (((w % 270000) * 7919) + (h % 1999993)) % 1999993;
     let mut i: i32 = 0;
     let mut b: i32 = 0;
     if (sstart < 0) || ((slen < 1) || ((sstart + slen) > total)) {

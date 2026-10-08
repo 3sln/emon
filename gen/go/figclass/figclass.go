@@ -287,7 +287,7 @@ func fcDigest(src *port.Src, fi *port.Cells, k int32, sstart int32, slen int32, 
 	var total int32 = pdfsrc.PsLen(src)
 	var step int32 = fcMax(1, slen/fcDigestN)
 	var h1 int32 = slen % 2000003
-	var h2 int32 = ((w * 7919) + h) % 1999993
+	var h2 int32 = (((w % 270000) * 7919) + (h % 1999993)) % 1999993
 	var i int32 = 0
 	var b int32 = 0
 	if (sstart < 0) || ((slen < 1) || ((sstart + slen) > total)) {

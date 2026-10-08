@@ -183,7 +183,7 @@ public static class Figclass {
         int total = Pdfsrc.PsLen(src);
         int step = FcMax(1, slen / FcDigestN);
         int h1 = slen % 2000003;
-        int h2 = ((w * 7919) + h) % 1999993;
+        int h2 = (((w % 270000) * 7919) + (h % 1999993)) % 1999993;
         int i = 0;
         int b = 0;
         if ((sstart < 0) || ((slen < 1) || ((sstart + slen) > total))) {

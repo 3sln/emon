@@ -214,7 +214,7 @@
   (let [^I32 total (ps-len src)
         ^I32 step (fc-max 1 (quot slen FC_DIGEST_N))
         ^:mut ^I32 h1 (rem slen 2000003)
-        ^:mut ^I32 h2 (rem (+ (* w 7919) h) 1999993)
+        ^:mut ^I32 h2 (rem (+ (* (rem w 270000) 7919) (rem h 1999993)) 1999993)
         ^:mut ^I32 i 0
         ^:mut ^I32 b 0]
     (if (or (< sstart 0) (or (< slen 1) (> (+ sstart slen) total))) (return 0))
