@@ -3669,10 +3669,46 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   - [ ] S3 — the document pass and the asset unit.
   - [ ] S4 — `en-next` replaces the host's `Phase` enum: the schedule is kin's.
   - [ ] S5 — Java and C# as the driver plus the ports only (they adopt each moved step; they are not hand-ported
-    to the current Engines). `bb hosts` refuses stage calls outside the ports, native fulfilment, the plan loop
-    with its transcripts, and the public API.
+    to the current Engines). `bb hosts` refuses stage calls outside the ports, native fulfilment, the await driver
+    and the public API (amended by D396: the plan loop and its transcripts are kin's, P10.8-P10.9, no longer permanent host territory).
   - Later needs, noted not built: optionally, limit-breach panics turned into a latched status, which would drop the
     nightly pin for wasm. (The OPEN `ev-emit`/`pl-emit` variant was built with S2, D381.)
+- [ ] P10.7 — OCR adapter policy into kin (D396). A spike found the request and answer policy copied into every OCR host
+  (`tess.rs`, `tess.go`, `ocr.js`, `tesseract.js`, the wasm `build_ocr`, and Java and C# on unmerged branches), and the copies
+  had drifted: Rust and Go read a request's languages from cell 9 for a kin-made view (bitmap id from `view-base`, D196) and
+  cell 7 otherwise, the others always from cell 7; Rust and Go map an ISO 15924 script in a language cell to the installed models
+  that read it (P7.S, D363-D369), the others do not (`Cyrl` with eng and rus installed gave rus on Rust, eng+rus elsewhere).
+  Done: `kin/ocrport.kin` (`op-lang-first`, `op-models`, `op-dropped`, `op-word-lang`, `op-osd-script`, `op-block-type`,
+  `ox-flat`; the script, ISO 15924 and block-type tables as `defenum`); each host's copy is one call; laws on four targets
+  (`kin/ocrporttest.kin`). **Java and C# are not on main: they adopt it on merge** (each calls the generated `Ocrport` where
+  its OCR adapter now reads cells or maps names; there is nothing else to port). Decisions: D397.
+  `ox-flat` is the one OCR interchange (so `build_ocr` leaves wasm.rs). A string abstraction for model names is not planned
+  for now (code-point Cells and the `op-find` name table stay).
+- [ ] P10.8 — The plan machine in kin (D396; D356, D362). `emon.planloop` owns one attempt's accounting, max-rounds and
+  fetch-rounds, the answered set, sorting answers by id, transcript entries, the fetch planner (one copy of plan_fetch),
+  routing a request kind to a port or an `unsupported` answer, and every status and limit name as a defenum. The host keeps the
+  unit call under its panic catch, awaiting and fulfilment. Rust's Machine/Run and wasm.rs's step call it first; Go replaces
+  PlanRunBms; Java and C# adopt it instead of PlanLoop.run. It absorbs S4. Done when `bb identity` (browser arm included),
+  `bb slice`/`ocr`/`fusion`/`asset` and the 512 B, 4 KiB and 64 KiB step tests are byte-identical, and no host reads a request
+  cell by literal offset.
+- [ ] P10.9 — The transcript in kin. `emon.transcript` writes and reads transcript.edn (version 1, byte for byte), escapes the
+  producer, holds the replay map keyed by the whole request record, and counts unused entries for transcript-bad. The host does
+  file I/O and decodes bitmaps with its own png_decode until P10.11. Done when every committed transcript round-trips byte for
+  byte on four targets, `bb identity`/`ocr`/`fusion`/`asset` are unchanged, and Edn leaves plan.rs, plan.go and both PlanLoops.
+- [ ] P10.10 — Options, limits and breach. One key=value grammar, parsed by kin into Cfg, for wasm, the C binding, the pod and
+  the drivers. Limit and setting names and defaults live in kin tables that limit-of consults. limit-breach raises a typed
+  payload (kind, limit, actual) on every host. The four English-panic-message parsers are deleted. Override scoping stays per
+  platform and is documented. Done when bb identity's error rows are unchanged, a fuzz breach names the same limit on four
+  hosts, and panic_error and its twins are gone.
+- [ ] P10.11 — Image input: kin validators in front of platform decoders (D396(4); D188-D190, D337, D705). For each lossless
+  format, kin parses the container and decides accept/refuse, dimensions, colour type, limits (pixel/byte bombs) and the D188
+  reduction; the platform library (Rust `png`/`image`, Go `image/png`/`x/image`, Java ImageIO, browser) only produces pixels for
+  input kin has accepted, so two libraries' leniency is never a cross-host difference. Decode in kin only where a platform falls
+  short: CCITT G3/G4 (Go lacks Group 3 2-D), any format with no library on a target (C#), and the transcript PNG reader (our own
+  canonical PNGs; replaces plan.rs's third inflater, needed by P10.9). JPEG and other lossy codecs stay native (D190). New
+  formats follow the same shape: a kin validator + a library behind a port. Done when: `bb image` exact on the 89 fixtures;
+  `bb fuzz` has zero PNG/TIFF/CCITT `known` rows; Go reads D337's three Group 3 files; the D705 twin patches are replaced by
+  the one kin validator; Java's and C#'s ImgDec keep only what their platform lacks.
 
 ---
 
@@ -9652,7 +9688,7 @@ Rust and `d.grl` (`d.Grl`) elsewhere, so two disjoint fields lent to one Rust ca
 one, as `new-cells` is: production kin takes a `^Doc` parameter and the host calls the generated constructor.
 (2) Port forms `cells-swap`, `cells-copy-into` (`dst src`, copy INTO an existing arena: the D560 figures-unit copies), `buf-copy-into` and `cells-free` join all four hosts.
 (3) kin/engine.kin will own one `doc` context (the union of today's PdfDoc, RasterDoc, EvArenas and Arenas, under the same field names) and every stage call in one order, behind `en-next`/`en-unit`.
-(4) Per-host code is limited to ports, native fulfilment, the plan loop with transcripts, and the public API; `bb hosts` will refuse stage calls outside those files. The host keeps `plan::Machine`/`PlanLoop` and ONE
+(4) Per-host code is limited to ports, native fulfilment, the await driver, and the public API (AMENDED by D396: "the plan loop with transcripts" is no longer permanent host territory, it moves into kin as P10.8-P10.9; the future `bb hosts` allowlist is the await driver, ports/FFI, the public API); `bb hosts` will refuse stage calls outside those files. The host keeps `plan::Machine`/`PlanLoop` and ONE
 fixed `Run` driver (a fresh struct per document-pass attempt, `clone()` per copy-unit attempt, `catch_unwind`, the status-to-error mapping, stats); P9.3's step machine is that driver's shape, WASM shares Rust's, and Java
 and C# write it once. The schedule (`en-next`) replaces `Run`'s `Phase` enum in a later step.
 (5) Incremental migration, each step a pure move held byte-identical by bb identity/slice/asset/fusion/image/ocr and the evidence goldens: S0 infrastructure (this step: `kin/ctxtest.kin`, `bb check`'s host-built
@@ -9873,4 +9909,20 @@ no new stage in the unit, a field `fi` of `PdfDoc`. (2) A raster input (`finish_
 **Measured**: with the committed OCR of the 71 scans replayed before and after, only `h-inverted-numbered` changes (heading texts 4 of 17 found, 7 items, to 14 of 17, 0 items, 12 of 14 levels right). Live (local Tesseract, committed synthetic corpus): `scan/headings` block-heading-r 0.670588 (0.647059 before the fix) to 0.788235, block-heading-f1 0.802817 (0.774648) to 0.881579, block-paragraph-f1 0.948571 (0.857143) to 0.959538, block-paragraph-r 0.976471 (0.847059) back above its committed value, heading-level-acc stays at or above 0.563636; every other `emon-live` regression in the run (`align-wrong`, `cer`, `wer`, `bow` of `scan/all` and `scan/forms`) is identical with and without this change. The scoreboard was NOT updated by the branch; at the merge (after D391-D394) the `emon-live` scan entries were re-measured on main and the 154 improved values recorded (improvements only, none lowered; `--update` refuses on the entry's vanished non-scan categories, so the scan categories were merged up as D391-D394 did). Left failing on main: `scan/scripts` `table-adj-p` (D394) and 8 calibration rows moved by this change, not lowered: `scan/headings` `conf-ece-paragraph`(-ocr) 0.02406 -> 0.059818, `scan/watermarks` `conf-brier-all`, `conf-brier-paragraph`(-ocr), `conf-ece-all`, `conf-ece-paragraph`(-ocr) (a refit moves them). The born-digital `emon` entry is byte-identical (0 improved, 0 regressed).
 **Why**: the evidence a heading has on a scan is position, text and spacing; "short, numbered, between two paragraphs, nothing hanging" is that evidence and a list item has the opposite.
 **Alternatives**: stopping P4.5 from taking such a line (leaves a paragraph, not a heading); a bonus for numbering consistency with sibling headings (needs the whole unit table before scoring, and `hd-lone` already carries the sequence evidence for letters).
+- [ ] **Signed off** (maintainer)
+
+### D396 — kin by default: anything observable is kin, over @kin abstractions where needed (P10.7-P10.11; D362)
+**Decision**:
+(1) Any rule whose effect is observable is kin's: ordering, accounting, naming, accepting or refusing, and every output byte or pixel. If kin's types cannot say it, the first move is a small @kin-annotated abstraction implemented in every target, not N host copies.
+(2) "kin never allocates" is withdrawn as a rule. kin allocates locals through constructor forms and holds longer-lived values in a host-built defctx or a host-owned container. The one Rust limit is that a fresh handle cannot be returned from a function.
+(3) Drivers are inverted: kin is the step function, and the host awaits, catches panics and calls FFI.
+(4) The host owns I/O, awaiting, FFI to C engines, lossy codecs (JPEG, JPX/JBIG2), clocks, idiomatic public types, and hot primitives shown over 2x (D092). Lossless formats use a kin validator in front of the platform library; kin decodes only where a platform has no adequate library.
+(5) A gap in emon's own vocabulary (defctx field kinds, result tags on port forms) is fixed in emon. Only true kin gaps go to "Found in kin": a tag answer that loses :needs/:zero, a file's own tags not in its scope, no way for kin to implement a host interface.
+**Why**: only Rust has the step machine; limit overrides differ across hosts; four hosts parse English panic text; request cells are read by literal offset; Java and C# were about to add about 1,000 host lines each.
+**Alternatives**: keep the plan loop and transcripts in the host (D362(4)); generate host code from a schema (rejected in D362).
+- [ ] **Signed off** (maintainer)
+
+### D397 — The OCR adapters' policy is `emon.ocrport`; what changed for a host (P10.7; D396, D196, D215, D038)
+**Decision**: `kin/ocrport.kin` owns where a request's languages are (`op-lang-first`: cell 9 for a kin-made view, else 7), which installed models read them (`op-models`: a language is its model, `chs`/`cht` the Chinese models, an ISO 15924 script the models that read it, `Hani` also Japanese, a language with no model dropped, none left every model), a model's request name (`op-word-lang`), the OSD script as ISO 15924 (`op-osd-script`), a block's type (`op-block-type`), and the flat answer form of the browser's adapter (`ox-flat`). Rust, Go, the wasm binding and the JS SDK call it; Rust and Go answers are unchanged (their rules were moved as written, a duplicate language is still repeated, a duplicate script is not). Two intended behaviour changes: (1) `ox-flat` refuses a negative text, symbol or alternative count (the old wasm parser took it as 0); (2) the tesseract.js port answers `unsupported` when no model of its list is left (before: it created a worker for an empty language string). The JS adapter now also reads cell 9 for views and treats a script as a script, as Rust and Go did. Java and C# adopt `Ocrport` on merge.
+**Why**: D396. **Alternatives**: none beyond D396's.
 - [ ] **Signed off** (maintainer)

@@ -20,7 +20,7 @@
 // `capi.h`, so a line's row attributes are answered as -1 and kin measures them from the symbols' boxes.
 use crate::emon;
 use crate::plan::*;
-use crate::port::{cells_at, cells_len, Bitmap, Cells};
+use crate::port::{cells_at, cells_len, cells_push, Bitmap, Cells};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_float, c_int, c_void, CStr, CString};
 use std::ptr;
@@ -137,106 +137,23 @@ fn borrowed(p: *const c_char) -> String {
     }
 }
 
-// "Latn" / "eng" packed big-endian into one cell (a request's languages, kin's `rq-ocr-lang`).
-fn pack4(s: &str) -> i32 {
-    let mut v: u32 = 0;
-    let b = s.as_bytes();
-    for i in 0..4 {
-        v = v * 256 + if i < b.len() { b[i] as u32 } else { 0 };
-    }
-    v as i32
-}
-
-fn unpack4(v: i32) -> String {
-    let u = v as u32;
-    (0..4).map(|i| ((u >> (24 - 8 * i)) & 255) as u8).filter(|&b| b != 0).map(|b| b as char).collect()
-}
-
-// A request's language (ISO 639-3, `chs` and `cht` for Chinese by script) as Tesseract names its model.
-fn model_name(lang: &str) -> String {
-    match lang {
-        "chs" => "chi_sim".to_string(),
-        "cht" => "chi_tra".to_string(),
-        other => other.to_string(),
-    }
-}
-
-// The script an installed model reads (ISO 15924). The Latin scripts are every language not listed here, and Tesseract's own script models ("Latin"...).
-fn model_script(m: &str) -> &'static str {
-    match m {
-        "ara" | "fas" | "urd" | "pus" | "uig" | "snd" | "kur_ara" | "Arabic" => "Arab",
-        "heb" | "yid" | "Hebrew" => "Hebr",
-        "rus" | "ukr" | "bul" | "srp" | "bel" | "mkd" | "kaz" | "kir" | "mon" | "tgk" | "Cyrillic" => "Cyrl",
-        "ell" | "grc" | "Greek" => "Grek",
-        "hin" | "mar" | "nep" | "san" | "Devanagari" => "Deva",
-        "chi_sim" | "chi_tra" | "Han" => "Hani",
-        "jpn" | "Japanese" => "Jpan",
-        "kor" | "kor_vert" | "Hangul" => "Hang",
-        "tha" | "Thai" => "Thai",
-        _ => "Latn",
-    }
-}
-
-// Does a model of script `model` read a request's script `want`? The ideographs are shared: a `Hani` page may be Chinese or Japanese.
-fn script_reads(want: &str, model: &str) -> bool {
-    want == model || (want == "Hani" && model == "Jpan")
-}
-
-// The language Tesseract recognised a word in, back to what a request calls it: "eng" stays, "chi_sim" is "chs".
-fn request_name(model: &str) -> String {
-    match model {
-        "chi_sim" => "chs".to_string(),
-        "chi_tra" => "cht".to_string(),
-        other => other.chars().take(4).collect(),
-    }
-}
-
-// Tesseract's OSD names a script in words ("Latin", "Canadian_Aboriginal"); a cell
-// holds four ASCII chars, so the host answers the ISO 15924 code ("Latn"). The
-// table is the OSD's own list (`osd.traineddata`); anything else is cut to four.
-fn iso15924(name: &str) -> &str {
-    match name {
-        "Latin" | "Vietnamese" => "Latn",
-        "Fraktur" => "Latf",
-        "Cyrillic" => "Cyrl",
-        "Greek" => "Grek",
-        "Arabic" => "Arab",
-        "Hebrew" => "Hebr",
-        "Devanagari" => "Deva",
-        "Han" => "Hani",
-        "Hangul" => "Hang",
-        "Japanese" => "Jpan",
-        "Thai" => "Thai",
-        "Bengali" => "Beng",
-        "Tamil" => "Taml",
-        "Telugu" => "Telu",
-        "Kannada" => "Knda",
-        "Malayalam" => "Mlym",
-        "Gujarati" => "Gujr",
-        "Gurmukhi" => "Guru",
-        "Oriya" => "Orya",
-        "Sinhala" => "Sinh",
-        "Khmer" => "Khmr",
-        "Lao" => "Laoo",
-        "Myanmar" => "Mymr",
-        "Tibetan" => "Tibt",
-        "Georgian" => "Geor",
-        "Armenian" => "Armn",
-        "Ethiopic" => "Ethi",
-        "Syriac" => "Syrc",
-        "Thaana" => "Thaa",
-        "Cherokee" => "Cher",
-        "Canadian_Aboriginal" => "Cans",
-        other => other,
-    }
-}
-
+// WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrport`, P10.7, D396): which installed models read
+// the request's languages and scripts, a model's name as a request spells it, the OSD's script as ISO 15924, a block's type. This
+// file passes it cells and takes cells.
 fn x10(f: f32) -> i32 {
     (f * 10.0).round() as i32
 }
 
 fn cps(s: &str) -> Vec<i32> {
     s.chars().map(|c| c as i32).collect()
+}
+
+fn cells_of(v: impl IntoIterator<Item = i32>) -> Cells {
+    let mut c = Cells::new();
+    for x in v {
+        cells_push(&mut c, x);
+    }
+    c
 }
 
 struct Alt {
@@ -409,28 +326,30 @@ impl Tess {
         let want_syms = flags & 1 != 0;
         let (rx, ry, rw, rh) = (req.arg(3), req.arg(4), req.arg(5), req.arg(6));
         let installed = self.installed();
-        let mut langs: Vec<String> = Vec::new();
-        // the languages follow `h`, and the pixel hash of a kin-made view (D196: its id is from `KIN_VIEW_BASE`, 2^24)
-        let first_lang = if req.arg(0) >= 16777216 { 9 } else { 7 };
-        for k in first_lang..req.rec.len() - 3 {
-            let name = unpack4(req.arg(k));
-            // a language cell that starts with an uppercase letter names a SCRIPT (ISO 15924: `Latn`; P7.S, D215): the installed models that read it
-            if name.len() == 4 && name.as_bytes()[0].is_ascii_uppercase() {
-                for m in installed.iter().filter(|m| script_reads(&name, model_script(m))) {
-                    if !langs.contains(m) {
-                        langs.push(m.clone());
-                    }
-                }
-                continue;
+        // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, none left
+        // is every model); the models go in as code points separated by 0
+        let mut reqc = cells_of(req.rec.iter().copied());
+        let mut inst = Cells::new();
+        for (i, m) in installed.iter().enumerate() {
+            if i > 0 {
+                cells_push(&mut inst, 0);
             }
-            let m = model_name(&name);
-            if installed.contains(&m) {
-                langs.push(m);
-            } else {
-                self.notes.push(format!("no model for {}: dropped", m));
+            for ch in m.chars() {
+                cells_push(&mut inst, ch as i32);
             }
         }
-        let lang = if langs.is_empty() { installed.join("+") } else { langs.join("+") };
+        let mut picked = Cells::new();
+        emon::ocrport::op_models(&mut reqc, &mut inst, &mut picked);
+        let mut gone = Cells::new();
+        emon::ocrport::op_dropped(&mut reqc, &mut inst, &mut gone);
+        let mut name = String::new();
+        for i in 0..cells_len(&gone) {
+            match cells_at(&gone, i) {
+                0 => self.notes.push(format!("no model for {}: dropped", std::mem::take(&mut name))),
+                cp => name.push(char::from_u32(cp as u32).unwrap_or('\u{FFFD}')),
+            }
+        }
+        let lang = (0..cells_len(&picked)).map(|i| installed[cells_at(&picked, i) as usize].as_str()).collect::<Vec<_>>().join("+");
         if lang.is_empty() {
             return failed(2);
         }
@@ -466,7 +385,7 @@ impl Tess {
                     osd = deg;
                     oconf = x10(oc);
                     sconf = x10(sc);
-                    script = pack4(iso15924(&borrowed(sn)));
+                    script = emon::ocrport::op_osd_script(&mut cells_of(cps(&borrowed(sn))));
                 } else {
                     self.notes.push("osd failed".into());
                 }
@@ -507,13 +426,7 @@ impl Tess {
                         TessPageIteratorBoundingBox(pi, RIL_TEXTLINE, &mut l, &mut t, &mut r, &mut bt);
                         let (mut x1, mut y1, mut x2, mut y2) = (0, 0, 0, 0);
                         TessPageIteratorBaseline(pi, RIL_TEXTLINE, &mut x1, &mut y1, &mut x2, &mut y2);
-                        let btype = match TessPageIteratorBlockType(pi) {
-                            1 | 2 | 3 | 7 | 8 => 0,
-                            6 => 1,
-                            9 | 10 | 11 => 2,
-                            12 | 13 => 3,
-                            _ => 4,
-                        };
+                        let btype = emon::ocrport::op_block_type(TessPageIteratorBlockType(pi));
                         lines.push(Line { bx: [l, t, r - l, bt - t], base: [x1, y1, x2, y2], block, par, btype });
                     }
                     let text = take(TessResultIteratorGetUTF8Text(it, RIL_WORD));
@@ -538,7 +451,7 @@ impl Tess {
                             block,
                             text: cps(&text),
                             flags: fl,
-                            lang: pack4(&request_name(&borrowed(TessResultIteratorWordRecognitionLanguage(it)))),
+                            lang: emon::ocrport::op_word_lang(&mut cells_of(cps(&borrowed(TessResultIteratorWordRecognitionLanguage(it))))),
                             psize: if sz > 0 { sz } else { -1 },
                             dflags: dfl,
                             syms: Vec::new(),

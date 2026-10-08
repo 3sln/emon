@@ -1,0 +1,392 @@
+;; Laws for `emon.ocrport` (P10.7, D396): the OCR adapters' policy, which every host used to carry its own copy of.
+;;
+;;   THE REQUEST. Where its languages are (cells 7.., or 9.. for a kin-made view, D196: the cells between are a pixel hash, which a
+;;   host that reads cell 7 takes for languages); a script (`Cyrl`) is the installed models that read it; `Hani` reads Japanese too;
+;;   a language with no model is dropped and none left means every model.
+;;   THE ANSWER. A model's request name, the OSD's script in ISO 15924, a block's type, and the flat form of the browser's adapter
+;;   turned into the very record the builders write (and refused when its counts run past it).
+(ns emon.ocrporttest
+  (:require [emon.lang :refer [I32 Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells new-text test-t TestT Str]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.plan :refer [view-base rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.ocr :refer [bt-text bt-table bt-image bt-line bt-other
+                              ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ox-alt ox-alt-cp]]
+            [emon.ocrport :refer [sc-latn sc-latf sc-cyrl sc-hani sc-jpan sc-cans sc-emit-name zh-chs zh-cht zh-emit-name
+                                  pb-table pb-noise pb-flowing-text pb-heading-image pb-horz-line pb-equation
+                                  op-lang-first op-lang-count op-lang-at op-models op-dropped op-find op-names-count op-names-at
+                                  op-word-lang op-osd-script op-block-type op-is-script op-pack-cells ox-flat]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------------ fixtures
+
+(defn ^I32 t-sep [^:mut ^Cells c] (cells-push c 0) (return 0))
+
+;; the model names, as code points
+(defn ^I32 t-eng [^:mut ^Cells c] (cells-push c 101) (cells-push c 110) (cells-push c 103) (return 0))
+(defn ^I32 t-rus [^:mut ^Cells c] (cells-push c 114) (cells-push c 117) (cells-push c 115) (return 0))
+(defn ^I32 t-jpn [^:mut ^Cells c] (cells-push c 106) (cells-push c 112) (cells-push c 110) (return 0))
+(defn ^I32 t-deu [^:mut ^Cells c] (cells-push c 100) (cells-push c 101) (cells-push c 117) (return 0))
+(defn ^I32 t-fra [^:mut ^Cells c] (cells-push c 102) (cells-push c 114) (cells-push c 97) (return 0))
+(defn ^I32 t-chi-sim [^:mut ^Cells c]
+  (cells-push c 99) (cells-push c 104) (cells-push c 105) (cells-push c 95) (cells-push c 115) (cells-push c 105) (cells-push c 109)
+  (return 0))
+(defn ^I32 t-chi-tra [^:mut ^Cells c]
+  (cells-push c 99) (cells-push c 104) (cells-push c 105) (cells-push c 95) (cells-push c 116) (cells-push c 114) (cells-push c 97)
+  (return 0))
+
+;; installed: eng rus
+(defn ^I32 t-inst-eng-rus [^:mut ^Cells c] (t-eng c) (t-sep c) (t-rus c) (return 0))
+;; installed: eng jpn
+(defn ^I32 t-inst-eng-jpn [^:mut ^Cells c] (t-eng c) (t-sep c) (t-jpn c) (return 0))
+;; installed (in the order Tesseract lists): chi_sim chi_tra deu eng jpn rus
+(defn ^I32 t-inst-all [^:mut ^Cells c]
+  (t-chi-sim c) (t-sep c) (t-chi-tra c) (t-sep c) (t-deu c) (t-sep c) (t-eng c) (t-sep c) (t-jpn c) (t-sep c) (t-rus c)
+  (return 0))
+
+;; a request for bitmap 5 reading in the languages given (0 for none), the way a host receives it
+(defn ^I32 t-req1 [^:mut ^Cells c ^I32 a ^I32 b ^I32 d ^I32 e]
+  (let [^I32 at (rq-ocr c 9 5 6 0 0 0 0 0)]
+    (rq-ocr-lang c a b d e)
+    (rq-ocr-end c at)
+    (return at)))
+
+(defn ^I32 t-req2 [^:mut ^Cells c ^I32 a ^I32 b ^I32 d ^I32 e ^I32 a2 ^I32 b2 ^I32 d2 ^I32 e2]
+  (let [^I32 at (rq-ocr c 9 5 6 0 0 0 0 0)]
+    (rq-ocr-lang c a b d e)
+    (rq-ocr-lang c a2 b2 d2 e2)
+    (rq-ocr-end c at)
+    (return at)))
+
+;; the models answered for request `req` over `inst` are `n` of them, the first two `i0` and `i1` (-1: not asked)
+(defn ^I32 t-models [^TestT emon-t ^Cells req ^Cells inst ^I32 n ^I32 i0 ^I32 i1 ^Str msg]
+  (let [^Cells out (new-cells)
+        ^I32 got (op-models req inst out)]
+    (assert-eq got n msg)
+    (assert-eq (cells-len out) n msg)
+    (if (>= i0 0) (assert-eq (cells-at out 0) i0 msg))
+    (if (>= i1 0) (assert-eq (cells-at out 1) i1 msg))
+    (return 0)))
+
+;; ------------------------------------------------------------------ the request
+
+(defn ^I32 t-inst [^:mut ^Cells c ^I32 kind]
+  (comment "The installed list: 0 eng rus, 1 eng jpn, 2 chi_sim chi_tra deu eng jpn rus, 3 nothing.")
+  (if (== kind 0) (t-inst-eng-rus c))
+  (if (== kind 1) (t-inst-eng-jpn c))
+  (if (== kind 2) (t-inst-all c))
+  (return 0))
+
+(defn ^I32 t-case1 [^TestT emon-t ^I32 kind ^I32 a ^I32 b ^I32 d ^I32 e ^I32 n ^I32 i0 ^I32 i1 ^Str msg]
+  (comment "One language asked over installed list `kind`: `n` models, the first two `i0` `i1`.")
+  (let [^Cells r (new-cells)
+        ^Cells inst (new-cells)]
+    (t-inst inst kind)
+    (t-req1 r a b d e)
+    (t-models emon-t r inst n i0 i1 msg)
+    (return 0)))
+
+(defn ^I32 t-case2 [^TestT emon-t ^I32 kind ^I32 a ^I32 b ^I32 d ^I32 e ^I32 a2 ^I32 b2 ^I32 d2 ^I32 e2 ^I32 n ^I32 i0 ^I32 i1 ^Str msg]
+  (comment "Two languages asked over installed list `kind`.")
+  (let [^Cells r (new-cells)
+        ^Cells inst (new-cells)]
+    (t-inst inst kind)
+    (t-req2 r a b d e a2 b2 d2 e2)
+    (t-models emon-t r inst n i0 i1 msg)
+    (return 0)))
+
+(defn ^I32 t-gone1 [^TestT emon-t ^I32 kind ^I32 a ^I32 b ^I32 d ^I32 e ^I32 cells ^I32 at ^I32 want ^Str msg]
+  (comment "One language asked over list `kind` is dropped: the name `op-dropped` writes is `cells` long and has `want` at `at`.")
+  (let [^Cells r (new-cells)
+        ^Cells inst (new-cells)
+        ^Cells gone (new-cells)]
+    (t-inst inst kind)
+    (t-req1 r a b d e)
+    (assert-eq (op-dropped r inst gone) 1 msg)
+    (assert-eq (cells-len gone) cells msg)
+    (assert-eq (cells-at gone at) want msg)
+    (return 0)))
+
+(deftest test-a-plain-request-names-its-languages-from-cell-7
+  (let [^Cells r (new-cells)]
+    (t-req2 r 101 110 103 0 114 117 115 0)
+    (assert-eq (op-lang-first r) 7 "a plain request")
+    (assert-eq (op-lang-count r) 2 "two languages")
+    (assert-eq (op-lang-at r 1) 1920299776 "rus, packed")))
+
+(deftest test-a-kin-made-views-languages-follow-its-pixel-hash
+  (comment "The hash cells look like a script and a language here: a host that reads cell 7 asks for Cyrillic.")
+  (let [^Cells r (new-cells)
+        ^Cells inst (new-cells)
+        ^I32 at (rq-ocr-view r 9 (+ (view-base) 1) 1132032620 1281455214 6 0 0 0 0 0)]
+    (rq-ocr-lang r 101 110 103 0)
+    (rq-ocr-end r at)
+    (t-inst-eng-rus inst)
+    (assert-eq (op-lang-first r) 9 "after the hash")
+    (assert-eq (op-lang-count r) 1 "one language")
+    (t-models (test-t) r inst 1 0 -1 "eng, not the hash's Cyrl")))
+
+(deftest test-a-kin-made-view-with-no-language-has-none
+  (let [^Cells r (new-cells)
+        ^I32 at (rq-ocr-view r 9 (view-base) 0 0 6 0 0 0 0 0)]
+    (rq-ocr-end r at)
+    (assert-eq (op-lang-count r) 0 "a view with no language")
+    (assert-eq (op-lang-first r) 9 "still after the hash")))
+
+(deftest test-a-script-is-the-installed-models-that-read-it
+  (t-case1 (test-t) 0 67 121 114 108 1 1 -1 "Cyrl with eng and rus installed reads rus only"))
+
+(deftest test-han-is-read-by-the-chinese-models-and-japanese
+  (t-case1 (test-t) 1 72 97 110 105 1 1 -1 "Hani with eng and jpn installed reads jpn")
+  (t-case1 (test-t) 2 72 97 110 105 3 0 1 "Hani is chi_sim, chi_tra, then jpn, in installed order")
+  (t-case1 (test-t) 2 74 112 97 110 1 4 -1 "Jpan is jpn only"))
+
+(deftest test-latin-is-every-model-with-no-other-script-and-scripts-are-not-repeated
+  (t-case1 (test-t) 2 76 97 116 110 2 2 3 "Latn is deu and eng")
+  (t-case2 (test-t) 2 67 121 114 108 67 121 114 108 1 5 -1 "Cyrl twice is rus once"))
+
+(deftest test-a-language-is-its-model-and-the-chinese-scripts-name-theirs
+  (t-case2 (test-t) 2 100 101 117 0 106 112 110 0 2 2 4 "deu then jpn, in the order asked")
+  (t-case1 (test-t) 2 99 104 115 0 1 0 -1 "chs is chi_sim")
+  (t-case1 (test-t) 2 99 104 116 0 1 1 -1 "cht is chi_tra"))
+
+(deftest test-a-model-that-is-not-installed-is-dropped-and-none-left-is-all
+  (t-case1 (test-t) 0 102 114 97 0 2 0 1 "fra alone: every installed model (D038)")
+  (t-gone1 (test-t) 0 102 114 97 0 4 0 102 "fra is dropped, its name and a 0")
+  (t-case2 (test-t) 0 101 110 103 0 102 114 97 0 1 0 -1 "eng and fra: eng")
+  (t-gone1 (test-t) 0 99 104 115 0 8 4 115 "chs with no chi_sim installed is named chi_sim")
+  (t-case1 (test-t) 3 101 110 103 0 0 -1 -1 "nothing installed: nothing to read with"))
+
+;; ------------------------------------------------------------------ the tables
+
+(defn ^I32 t-code-ok [^TestT emon-t ^I32 code]
+  (comment "A script code is four letters, the first uppercase and the others lowercase, and the enum spells it.")
+  (let [^Text t (new-text)]
+    (assert-eq (sc-emit-name t code) 1 "an ISO 15924 code of `sc`")
+    (assert-that (>= (quot code 16777216) 65) "the first letter is from A")
+    (assert-that (<= (quot code 16777216) 90) "to Z")
+    (assert-that (>= (rem (quot code 65536) 256) 97) "the second is lowercase")
+    (assert-that (>= (rem (quot code 256) 256) 97) "and the third")
+    (assert-that (>= (rem code 256) 97) "and the fourth")
+    (return 0)))
+
+(defn ^I32 t-pushp [^:mut ^Cells c ^I32 p]
+  (comment "Push the non-zero bytes of the packed cell `p` as code points: a name of up to four chars.")
+  (let [^:mut ^I32 d 16777216
+        ^:mut ^I32 b 0]
+    (while (> d 0)
+      (do (set b (rem (quot p d) 256))
+          (if (!= b 0) (cells-push c b))
+          (set d (quot d 256))))
+    (return 0)))
+
+(defn ^I32 t-pack [^I32 a ^I32 b ^I32 d ^I32 e]
+  (let [^Cells c (new-cells)]
+    (cells-push c a)
+    (cells-push c b)
+    (cells-push c d)
+    (if (!= e 0) (cells-push c e))
+    (return (op-pack-cells c))))
+
+(deftest test-the-script-codes-are-their-letters-packed
+  (assert-eq (sc-latn) (t-pack 76 97 116 110) "Latn")
+  (assert-eq (sc-latf) (t-pack 76 97 116 102) "Latf")
+  (assert-eq (sc-cyrl) (t-pack 67 121 114 108) "Cyrl")
+  (assert-eq (sc-hani) (t-pack 72 97 110 105) "Hani")
+  (assert-eq (sc-jpan) (t-pack 74 112 97 110) "Jpan")
+  (assert-eq (sc-cans) (t-pack 67 97 110 115) "Cans")
+  (assert-eq (zh-chs) (t-pack 99 104 115 0) "chs")
+  (assert-eq (zh-cht) (t-pack 99 104 116 0) "cht"))
+
+(defn ^I32 t-rows [^TestT emon-t]
+  (comment "Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).")
+  (let [^I32 n (op-names-count 0)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 rows 0
+        ^Text t (new-text)]
+    (while (< i n)
+      (do (set j (+ i 1))
+          (while (!= (op-names-at 0 j) 0)
+            (set j (+ j 1)))
+          (assert-that (>= (op-names-at 0 i) 1) "kind from 1")
+          (assert-that (<= (op-names-at 0 i) 3) "to 3")
+          (if (== (op-names-at 0 i) 3)
+            (assert-that (or (== (op-names-at 0 (+ j 1)) (zh-chs)) (== (op-names-at 0 (+ j 1)) (zh-cht))) "a request name"))
+          (if (!= (op-names-at 0 i) 3)
+            (assert-eq (sc-emit-name t (op-names-at 0 (+ j 1))) 1 "an ISO 15924 code"))
+          (assert-that (> j (+ i 1)) "a name")
+          (set rows (+ rows 1))
+          (set i (+ j 2))))
+    (assert-eq rows 74 "the rows of the three kinds")
+    (return 0)))
+
+(deftest test-every-row-of-the-name-table-is-sound
+  (t-rows (test-t))
+  (t-code-ok (test-t) (sc-latn))
+  (t-code-ok (test-t) (sc-cyrl))
+  (t-code-ok (test-t) (sc-cans)))
+
+(defn ^I32 t-wl [^TestT emon-t ^I32 p1 ^I32 p2 ^I32 want ^Str msg]
+  (comment "The language a word is read in, for the model named by the packed chunks `p1` `p2` (0 for none).")
+  (let [^Cells m (new-cells)]
+    (t-pushp m p1)
+    (t-pushp m p2)
+    (assert-eq (op-word-lang m) want msg)
+    (return 0)))
+
+(defn ^I32 t-osd [^TestT emon-t ^I32 p1 ^I32 p2 ^I32 p3 ^I32 p4 ^I32 p5 ^I32 want ^Str msg]
+  (comment "The ISO 15924 code of the OSD script named by the packed chunks (0 for none).")
+  (let [^Cells m (new-cells)]
+    (t-pushp m p1)
+    (t-pushp m p2)
+    (t-pushp m p3)
+    (t-pushp m p4)
+    (t-pushp m p5)
+    (assert-eq (op-osd-script m) want msg)
+    (return 0)))
+
+(deftest test-a-word-is-read-in-the-language-a-request-calls-it
+  (t-wl (test-t) 1701734144 0 1701734144 "eng stays eng")
+  (t-wl (test-t) 1667787103 1936289024 (zh-chs) "chi_sim is chs")
+  (t-wl (test-t) 1667787103 1953652992 (zh-cht) "chi_tra is cht")
+  (t-wl (test-t) 1802859103 1634885888 1802859103 "kur_ara is cut to four")
+  (t-wl (test-t) 0 0 0 "no language"))
+
+(deftest test-the-osd-script-is-its-iso-15924-code
+  (t-osd (test-t) 1281455209 1845493760 0 0 0 (sc-latn) "Latin")
+  (t-osd (test-t) 1181901163 1953853952 0 0 0 (sc-latf) "Fraktur")
+  (t-osd (test-t) 1214344704 0 0 0 0 (sc-hani) "Han")
+  (t-osd (test-t) 1132032617 1819044195 0 0 0 (sc-cyrl) "Cyrillic")
+  (t-osd (test-t) 1130458721 1684627822 1598120559 1919510377 1851878400 (sc-cans) "Canadian_Aboriginal")
+  (t-osd (test-t) 1265396078 1735355904 0 0 0 1265396078 "a name the table lacks is cut to four")
+  (t-osd (test-t) 0 0 0 0 0 0 "none"))
+
+
+(deftest test-a-script-cell-is-four-letters-the-first-uppercase
+  (assert-eq (op-is-script (sc-cyrl)) 1 "Cyrl")
+  (assert-eq (op-is-script (zh-chs)) 0 "chs: a language")
+  (assert-eq (op-is-script 1701734144) 0 "eng: a language")
+  (assert-eq (op-is-script 0) 0 "none")
+  (assert-eq (op-is-script 1128942413) 1 "CJKM, four capitals")
+  (assert-eq (op-is-script 1131968768) 0 "Cxy and a 0: three chars"))
+
+(deftest test-a-blocks-type-is-text-table-image-line-or-other
+  (assert-eq (op-block-type (pb-flowing-text)) (bt-text) "flowing text")
+  (assert-eq (op-block-type 2) (bt-text) "heading text")
+  (assert-eq (op-block-type 7) (bt-text) "vertical text")
+  (assert-eq (op-block-type (pb-table)) (bt-table) "a table")
+  (assert-eq (op-block-type (pb-heading-image)) (bt-image) "a heading image")
+  (assert-eq (op-block-type (pb-horz-line)) (bt-line) "a rule")
+  (assert-eq (op-block-type 13) (bt-line) "a vertical rule")
+  (assert-eq (op-block-type (pb-equation)) (bt-other) "an equation")
+  (assert-eq (op-block-type 0) (bt-other) "unknown")
+  (assert-eq (op-block-type (pb-noise)) (bt-other) "noise")
+  (assert-eq (op-block-type 99) (bt-other) "anything else"))
+
+;; ------------------------------------------------------------------ the flat form
+
+(defn ^I32 t-p2 [^:mut ^Cells c ^I32 a ^I32 b] (cells-push c a) (cells-push c b) (return 0))
+(defn ^I32 t-p4 [^:mut ^Cells c ^I32 a ^I32 b ^I32 d ^I32 e]
+  (cells-push c a) (cells-push c b) (cells-push c d) (cells-push c e) (return 0))
+
+;; the flat form of a page of two words, a line, a block and one word's symbols with alternatives
+(defn ^I32 t-flat [^:mut ^Cells v]
+  (t-p4 v 0 0 2 -85)
+  (t-p4 v 90 (sc-latn) 17 187)
+  (t-p4 v 1 1 2 1)
+  (t-p2 v 640 480)
+  (t-p4 v 10 18 70 44)
+  (t-p4 v 10 60 80 62)
+  (t-p4 v 0 0 0 -1)
+  (t-p2 v -1 -1)
+  (t-p4 v 5 15 80 50)
+  (t-p4 v 0 0 2 10)
+  (t-p4 v 20 30 40 900)
+  (t-p4 v 0 0 65 1701734144)
+  (t-p4 v 11 3 2 72)
+  (t-p4 v 105 2 10 20)
+  (t-p4 v 15 40 950 1)
+  (t-p4 v 72 2 120 1)
+  (t-p4 v 75 80 2 78)
+  (t-p4 v 77 25 20 15)
+  (t-p4 v 40 900 1 105)
+  (t-p4 v 0 50 20 30)
+  (t-p4 v 40 800 0 0)
+  (t-p4 v 0 0 -1 0)
+  (t-p2 v 1 33)
+  (cells-push v 0)
+  (return 0))
+
+;; ... and the same page written by the builders
+(defn ^I32 t-built [^:mut ^Cells c]
+  (let [^I32 at (an-ocr c 9)
+        ^I32 w0 (an-ocr-word c at 10 20 30 40 900 0 0)]
+    (an-ocr-cp c w0 72)
+    (an-ocr-cp c w0 105)
+    (let [^I32 w1 (an-ocr-word c at 50 20 30 40 800 0 0)]
+      (an-ocr-cp c w1 33))
+    (ox-begin c 0 0 2 -85 90 (sc-latn) 17 187 1 1 1 640 480)
+    (ox-line c 10 18 70 44 10 60 80 62 0 0 0 -1 -1 -1)
+    (ox-block c 5 15 80 50 0 0 2)
+    (let [^I32 x0 (ox-word c 65 1701734144 11 3)
+          ^I32 s0 (ox-sym c x0 10 20 15 40 950)]
+      (ox-sym-cp c s0 72)
+      (let [^I32 a0 (ox-alt c s0 120)]
+        (ox-alt-cp c a0 75))
+      (let [^I32 a1 (ox-alt c s0 80)]
+        (ox-alt-cp c a1 78)
+        (ox-alt-cp c a1 77))
+      (let [^I32 s1 (ox-sym c x0 25 20 15 40 900)]
+        (ox-sym-cp c s1 105)))
+    (ox-word c 0 0 -1 0)
+    (an-ocr-end c at)
+    (return 0)))
+
+(defn ^I32 t-same [^TestT emon-t ^Cells a ^Cells b]
+  (let [^I32 n (cells-len a)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 bad -1]
+    (assert-eq n (cells-len b) "the same length")
+    (while (< i n)
+      (do (if (< bad 0)
+            (if (< i (cells-len b))
+              (if (!= (cells-at a i) (cells-at b i)) (set bad i))))
+          (set i (+ i 1))))
+    (assert-eq bad -1 "the first cell that differs (-1: none)")
+    (return 0)))
+
+(deftest test-the-flat-form-is-the-record-the-builders-write
+  (let [^Cells v (new-cells)
+        ^Cells got (new-cells)
+        ^Cells want (new-cells)]
+    (t-flat v)
+    (t-built want)
+    (assert-eq (ox-flat v 9 got) 0 "accepted")
+    (t-same (test-t) got want)))
+
+(defn ^I32 t-refuse [^TestT emon-t ^I32 drop ^I32 at ^I32 val ^Str msg]
+  (comment "The page's flat form, with `drop` cells cut off its end and cell `at` (when not -1) set to `val`, is refused and writes nothing.")
+  (let [^Cells v (new-cells)
+        ^Cells got (new-cells)]
+    (t-flat v)
+    (if (> drop 0) (cells-drop v drop))
+    (if (>= at 0) (cells-set v at val))
+    (assert-eq (ox-flat v 9 got) -1 msg)
+    (assert-eq (cells-len got) 0 msg)
+    (return 0)))
+
+(deftest test-a-flat-form-whose-counts-run-past-it-is-refused-and-writes-nothing
+  (t-refuse (test-t) 1 -1 0 "the last word's symbol count is gone")
+  (t-refuse (test-t) 0 10 -1 "a negative count of words")
+  (t-refuse (test-t) 0 8 100000 "more lines than cells")
+  (t-refuse (test-t) 0 46 2000000000 "a text longer than the form, without overflowing"))
+
+(deftest test-a-flat-form-with-a-header-cut-short-is-refused
+  (let [^Cells v (new-cells)
+        ^Cells got (new-cells)]
+    (t-p4 v 0 0 2 0)
+    (assert-eq (ox-flat v 9 got) -1 "a header cut short")
+    (assert-eq (cells-len got) 0 "and nothing is written")))
+

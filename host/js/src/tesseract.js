@@ -19,27 +19,11 @@
 // the engine's thresholded image (the answer says it has none). A line's x-height, ascenders and descenders are answered as -1:
 // kin then measures them from the symbols' boxes, as it does for the native engine (D213). None of that is guessed.
 
-const MODEL = { chs: 'chi_sim', cht: 'chi_tra' };
-const REQUEST = { chi_sim: 'chs', chi_tra: 'cht' };
-const model = (code) => MODEL[code] || code;
-const requestName = (m) => REQUEST[m] || m.slice(0, 4);
-
-// The PolyBlockType of a block as emon's line `type` has it (`tess.rs`): 0 text, 1 table, 2 image, 3 rule, 4 anything else.
-const blockType = (t) => {
-  switch (t) {
-    case 1: case 2: case 3: case 7: case 8: return 0;
-    case 6: return 1;
-    case 9: case 10: case 11: return 2;
-    case 12: case 13: return 3;
-    default: return 4;
-  }
-};
-
 const box = (b) => [b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0];
 const x10 = (c) => Math.round((c ?? 0) * 10);
 
 /** tesseract.js's `blocks` of one recognition as the `ocr.js` result (exported for its test). */
-export function resultOf(blocks, { wantSymbols, lang }) {
+export function resultOf(blocks, { wantSymbols, lang, blockType }) {
   const out = { orientation: { orient: 0, writingDirection: 0, textlineOrder: 2, deskew: 0 }, blocks: [], lines: [], words: [] };
   let par = -1;
   (blocks || []).forEach((b, bi) => {
@@ -105,8 +89,10 @@ export function tesseractPort({ createWorker, languages = ['eng'], oem = 1, work
     return s || pool.reduce((a, b) => (a.busy <= b.busy ? a : b));
   };
   const port = async (req) => {
-    const want = req.langs.map(model).filter((m) => languages.includes(m));
-    const langs = want.length ? want : languages;
+    // which of the engine's models read the request is kin's (`emon.ocrport`): a language is its model, a script (`Cyrl`) the models that
+    // read it, one with no model is dropped, none left is every model (D038, P10.7)
+    const langs = req.models(languages).map((i) => languages[i]);
+    if (!langs.length) return null;
     const s = slot(langs.join('+'));
     s.busy += 1;
     try {
@@ -114,7 +100,7 @@ export function tesseractPort({ createWorker, languages = ['eng'], oem = 1, work
       await w.setParameters({ tessedit_pageseg_mode: String(req.psm), user_defined_dpi: req.dpi > 0 ? String(req.dpi) : '' });
       const opts = req.rect ? { rectangle: { left: req.rect.x, top: req.rect.y, width: req.rect.w, height: req.rect.h } } : {};
       const { data } = await w.recognize(req.bitmap(), opts, { text: false, blocks: true });
-      return resultOf(data.blocks, { wantSymbols: req.symbols, lang: requestName(langs[0]) });
+      return resultOf(data.blocks, { wantSymbols: req.symbols, lang: req.wordLang(langs[0]), blockType: req.blockType });
     } finally {
       s.busy -= 1;
     }
