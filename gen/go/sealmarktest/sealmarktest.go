@@ -490,3 +490,132 @@ func TestASealNodeIsWrittenAfterTheBlockItOverlaps(emonT *testing.T) {
 	port.AssertEq(emonT, model.NodeParent(nn, 7), 1, "a child of the section")
 	port.AssertEq(emonT, model.ModelCheck(nn, na, nr, text, pages, ledger, layout, chk), 0, "and the Model still checks")
 }
+
+func stOwtext(ow *port.Cells, et *port.Cells, b []byte, conf int32) int32 {
+	// An OCR word of page 1 whose text is the bytes of `b`, the engine's confidence `conf`; answers its row.
+	var ts int32 = port.CellsLen(et)
+	var n int32 = port.BlobLen(b)
+	var k int32 = 0
+	for k < n {
+		port.CellsPush(et, port.BlobU8(b, k))
+		k += 1
+	}
+	return evidence.OwNew(ow, 1, 1000, 1000, 2000, 1600, 1000, 1600, 2000, 1600, 0, 0, ts, n, 0, conf, -1)
+}
+
+func stPxgroup(cg *port.Cells, refs *port.Cells, first int32, count int32, flags int32, hue int32) int32 {
+	// A raster seal's group (`emon.sealpx`): its words are the OCR words first.. first + count - 1, in its box on page 1, its colour code in `rot`.
+	var g int32 = player.CgNew(cg, 1, 1000, 1000, 7000, 7000, hue)
+	var f int32 = 0
+	var i int32 = 0
+	for i < count {
+		if i == 0 {
+			f = evidence.RfAdd(refs, evidence.EaOwords(), first+i)
+		} else {
+			evidence.RfAdd(refs, evidence.EaOwords(), first+i)
+		}
+		i += 1
+	}
+	player.CgSet(cg, g, player.CgfOfirst(), f)
+	player.CgSet(cg, g, player.CgfOcount(), count)
+	player.CgSet(cg, g, player.CgfFlags(), flags)
+	return g
+}
+
+func TestASealReadFromPixelsIsACandidateWithItsReadingAsText(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var sm *port.Cells = port.NewCells()
+	stOwtext(ow, et, port.TextBlob("ACME"), 900)
+	stOwtext(ow, et, port.TextBlob("LTD"), 900)
+	stOwtext(ow, et, port.TextBlob("-"), 900)
+	stOwtext(ow, et, port.TextBlob("ee"), 100)
+	stOwtext(ow, et, port.TextBlob("2026-03-14"), 600)
+	stPxgroup(cg, refs, 0, 5, (player.PlgOcrOnly()+player.PlgInSeal())+player.PlgSealPx(), 10)
+	port.AssertEq(emonT, stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "a group flagged `seal-px` is a candidate though the page has no path")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 5), player.PlsSeal(), "a seal")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 12), 128, "read from pixels (flag 128)")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 15), 10, "its colour is the group's code, blue")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 1), 1000, "its box is the group's")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 14), 21, "the text is the kept words: ACME LTD - 2026-03-14, the noise of confidence 100 left out")
+	port.AssertEq(emonT, port.CellsAt(et, player.SlGet(sm, 0, 13)), 65, "it starts with A")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 11), 5, "and its words are the group's five")
+}
+
+func TestAStampGroupIsAStampAndAVectorCandidateIsNotWrittenTwice(emonT *testing.T) {
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var sm *port.Cells = port.NewCells()
+	stOwtext(ow, et, port.TextBlob("PAID"), 900)
+	stPxgroup(cg, refs, 0, 1, ((player.PlgOcrOnly()+player.PlgInSeal())+player.PlgSealPx())+player.PlgSealStamp(), 3)
+	port.AssertEq(emonT, stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "a stamp group")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 5), player.PlsStamp(), "is a stamp")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 15), 3, "red")
+	// a vector ring over the same box: its candidate is written, the pixel one is not
+	port.CellsDrop(sm, 0)
+	stCircle(pa, pts, 1, 4000, 4000, 2047903, 300, 0)
+	var ow2 int32 = stOword(ow, et, 4000, 4000, 83, 69)
+	var gv int32 = stOgroup(cg, refs, ow2)
+	port.AssertEq(emonT, player.CgGet(cg, gv, player.CgfFlags()), 0, "(an OCR group inside the ring)")
+	port.AssertEq(emonT, stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "the ring found in the paths and the group of the pixels, one box: one candidate")
+	port.AssertEq(emonT, player.SlGet(sm, 0, 12)&128, 0, "the vector one")
+}
+
+func TestTheNodeOfASealHasItsNameAndItsDate(emonT *testing.T) {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sm *port.Cells = port.NewCells()
+	var nn *port.Cells = port.NewCells()
+	var na *port.Cells = port.NewCells()
+	var nr *port.Cells = port.NewCells()
+	var nm *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var cg *port.Cells = port.NewCells()
+	var refs *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var pts *port.Cells = port.NewCells()
+	var gl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	var sec int32 = model.NodeNew(nodes, model.NkSection(), 0)
+	stBlock(nodes, regions, sec, 1, 10000, 20000)
+	stOwtext(ow, et, port.TextBlob("ACME"), 900)
+	stOwtext(ow, et, port.TextBlob("LTD"), 900)
+	stOwtext(ow, et, port.TextBlob("-"), 900)
+	stOwtext(ow, et, port.TextBlob("NOTARY"), 900)
+	stOwtext(ow, et, port.TextBlob("2026-03-14"), 600)
+	stPxgroup(cg, refs, 0, 5, (player.PlgOcrOnly()+player.PlgInSeal())+player.PlgSealPx(), 10)
+	port.AssertEq(emonT, stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "the candidate")
+	port.AssertEq(emonT, sealmark.SmWrite(sm, et, nodes, attrs, regions, text, nn, na, nr, nm), 1, "written")
+	var a int32 = model.NodeAttr(nn, na, 2, model.FkName())
+	var d int32 = model.NodeAttr(nn, na, 2, model.FkDate())
+	var c int32 = model.NodeAttr(nn, na, 2, model.FkColor())
+	port.AssertEq(emonT, model.NodeKind(nn, 2), model.NkSeal(), "the seal is node 2: it overlaps no block and the paragraph starts below its top")
+	port.AssertThat(emonT, a >= 0, "it has a name")
+	port.AssertEq(emonT, model.AttrLen(na, a), 8, "ACME LTD, the first phrase of letters, cut at the dash")
+	port.AssertEq(emonT, port.CellsAt(text, model.AttrValue(na, a)), 65, "which starts with A")
+	port.AssertThat(emonT, d >= 0, "and a date")
+	port.AssertEq(emonT, model.AttrLen(na, d), 10, "of ten characters")
+	port.AssertEq(emonT, port.CellsAt(text, model.AttrValue(na, d)), 50, "2026-03-14, as year-month-day")
+	port.AssertEq(emonT, port.CellsAt(text, model.AttrValue(na, d)+5), 48, "the month's tens digit")
+	port.AssertEq(emonT, model.AttrLen(na, c), 4, "and the colour, blue")
+	port.AssertEq(emonT, model.NodeTextLen(nn, 2), 28, "the text is all of the reading")
+}

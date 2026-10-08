@@ -1,0 +1,457 @@
+;; THE FIELDS OF A SEAL OR STAMP: its name and its date, from the text read off it (P8.2; SPEC 10.7; D016, D800, D801). emon's own module (D039).
+;;
+;;   (sf-fields et ts tl kind order out ob)   the name and the date inside the code points `et[ts, ts + tl)`, written to `out` from cell `ob` (`sf-prep`'s 32 cells)
+;;   (sf-order loc)                           the day-month order a locale hint implies: 0 none, 1 day first, 2 month first
+;;
+;; LANGUAGE INDEPENDENT, BY CONSTRUCTION: nothing here knows a word. What it knows is a SCRIPT (which block of Unicode a letter is from: a
+;; text of Han letters has no spaces and a word of it is a letter or two; a text of Latin, Cyrillic or Greek letters has them) and SHAPES: a date
+;; is digits, a separator and digits (any decimal digit of any script counts: `sf-digit`), the CJK year-month-day marks, or a day, a word of
+;; letters and a year; a separator is a bullet, a star or a dash a ring puts between the phrases it is written round; a name is the first
+;; phrase that holds letters and no digit, long enough for its script. The one optional input is a locale hint, which only settles a numeric
+;; date that either order would read (`03/04/2026`): with none, it is written as it stands.
+;;
+;; THE DATE comes out as `form` 1 (a year, a month and a day that no reading disputes: written `YYYY-MM-DD`) or 2 (the text as it stands, for a
+;; date that is only a shape: a month's name, an ambiguous order, a two-digit year). THE NAME is a range of the text (case as read).
+;; A signature has neither (its typed name is P8.3's).
+(ns emon.sealfield
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; the answer, from cell `ob` of `out`: 0 name start, 1 name length (0 none), 2 date form (0 none, 1 year-month-day, 2 as written), 3 date start, 4 date length, 5 year,
+;; 6 month, 7 day, 8 the dominant script of the letters (`sf-script`; 0 no letter), 9 the letters, 16-31 scratch
+(defn ^:pub ^I32 sf-size [] (return 32))
+
+(defn ^I32 sf-g [^Cells out ^I32 ob ^I32 k] (return (cells-at out (+ ob k))))
+(defn ^I32 sf-s [^:mut ^Cells out ^I32 ob ^I32 k ^I32 v] (cells-set out (+ ob k) v) (return 0))
+
+(defn ^:pub ^I32 sf-prep [^:mut ^Cells out ^I32 ob]
+  (comment "Make the answer and its scratch (`sf-size` cells from `ob`) and clear them.")
+  (let [^:mut ^I32 i 0]
+    (while (< (cells-len out) (+ ob (sf-size)))
+      (cells-push out 0))
+    (while (< i (sf-size))
+      (do (cells-set out (+ ob i) 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- characters
+
+(defn ^:pub ^I32 sf-digit [^I32 cp]
+  (comment "The value 0-9 of a decimal digit (ASCII, Arabic-Indic, Extended Arabic-Indic, Devanagari, Thai, fullwidth), else -1.")
+  (if (and (>= cp 48) (<= cp 57)) (return (- cp 48)))
+  (if (< cp 1632) (return -1))
+  (if (and (>= cp 1632) (<= cp 1641)) (return (- cp 1632)))
+  (if (and (>= cp 1776) (<= cp 1785)) (return (- cp 1776)))
+  (if (and (>= cp 2406) (<= cp 2415)) (return (- cp 2406)))
+  (if (and (>= cp 3664) (<= cp 3673)) (return (- cp 3664)))
+  (if (and (>= cp 65296) (<= cp 65305)) (return (- cp 65296)))
+  (return -1))
+
+(defn ^:pub ^I32 sf-script [^I32 cp]
+  (comment "The script class of a letter: 1 Latin, 2 Greek, 3 Cyrillic, 4 Hebrew, 5 Arabic, 6 an Indic script, 7 Thai, 8 Kana, 9 Hangul, 10 Han, 11 any other letter;")
+  (comment "0 for what is no letter (a digit, a space, a mark, a dash, a bullet).")
+  (if (< cp 65) (return 0))
+  (if (and (>= cp 65) (<= cp 90)) (return 1))
+  (if (and (>= cp 97) (<= cp 122)) (return 1))
+  (if (< cp 192) (return 0))
+  (if (== cp 215) (return 0))
+  (if (== cp 247) (return 0))
+  (if (<= cp 591) (return 1))
+  (if (and (>= cp 880) (<= cp 1023)) (return 2))
+  (if (and (>= cp 1024) (<= cp 1327)) (return 3))
+  (if (and (>= cp 1424) (<= cp 1535)) (return 4))
+  (if (and (>= cp 1536) (<= cp 1791)) (return 5))
+  (if (and (>= cp 1872) (<= cp 1919)) (return 5))
+  (if (and (>= cp 2304) (<= cp 3583)) (return 6))
+  (if (and (>= cp 3584) (<= cp 3711)) (return 7))
+  (if (and (>= cp 7680) (<= cp 7935)) (return 1))
+  (if (and (>= cp 12352) (<= cp 12543)) (return 8))
+  (if (and (>= cp 4352) (<= cp 4607)) (return 9))
+  (if (and (>= cp 44032) (<= cp 55215)) (return 9))
+  (if (and (>= cp 13312) (<= cp 19903)) (return 10))
+  (if (and (>= cp 19968) (<= cp 40959)) (return 10))
+  (if (and (>= cp 65313) (<= cp 65338)) (return 1))
+  (if (and (>= cp 65345) (<= cp 65370)) (return 1))
+  (if (and (>= cp 12288) (<= cp 12351)) (return 0))
+  (if (and (>= cp 8192) (<= cp 12287)) (return 0))
+  (if (and (>= cp 65280) (<= cp 65519)) (return 0))
+  (if (>= cp 1536) (return 11))
+  (return 0))
+
+(defn ^I32 sf-space [^I32 cp]
+  (if (== cp 32) (return 1))
+  (if (== cp 9) (return 1))
+  (if (== cp 10) (return 1))
+  (if (== cp 13) (return 1))
+  (if (== cp 160) (return 1))
+  (if (== cp 8201) (return 1))
+  (if (== cp 12288) (return 1))
+  (return 0))
+
+(defn ^I32 sf-dsep [^I32 cp]
+  (comment "1 for the three separators of a numeric date: - / .")
+  (if (== cp 45) (return 1))
+  (if (== cp 47) (return 1))
+  (if (== cp 46) (return 1))
+  (return 0))
+
+(defn ^I32 sf-cjk [^I32 s]
+  (comment "1 for the scripts whose words have no spaces: Kana, Hangul, Han.")
+  (if (and (>= s 8) (<= s 10)) (return 1))
+  (return 0))
+
+;; ------------------------------------------------------------- the locale hint
+
+(defn ^:pub ^I32 sf-order [^Cells loc]
+  (comment "The order a locale hint (the code points of a tag: `en-US`, `de_DE`, `ja`) implies for a numeric date: 2 month first for a tag whose region is US,")
+  (comment "1 day first for any other tag that has a region or a language of two or three letters, 0 for none.")
+  (let [^I32 n (cells-len loc)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at -1]
+    (if (< n 2) (return 0))
+    (while (< i n)
+      (do (if (and (< at 0) (or (== (cells-at loc i) 45) (== (cells-at loc i) 95))) (set at i))
+          (set i (+ i 1))))
+    (if (and (>= at 0) (== (+ at 3) n))
+      (if (and (or (== (cells-at loc (+ at 1)) 85) (== (cells-at loc (+ at 1)) 117))
+               (or (== (cells-at loc (+ at 2)) 83) (== (cells-at loc (+ at 2)) 115)))
+        (return 2)))
+    (return 1)))
+
+;; ------------------------------------------------------------- digits
+
+(defn ^I32 sf-run [^Cells et ^I32 i ^I32 end ^:mut ^Cells out ^I32 ob]
+  (comment "The digits that run from `i` (at most `end`): how many; their value (the first nine) is left in cell 16 of the answer.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 d 0]
+    (while (< (+ i k) end)
+      (do (set d (sf-digit (cells-at et (+ i k))))
+          (if (< d 0)
+            (do (sf-s out ob 16 v)
+                (return k)))
+          (if (< k 9) (set v (+ (* v 10) d)))
+          (set k (+ k 1))))
+    (sf-s out ob 16 v)
+    (return k)))
+
+(defn ^I32 sf-letters [^Cells et ^I32 i ^I32 end]
+  (comment "How many letters run from `i` (at most `end`).")
+  (let [^:mut ^I32 k 0]
+    (while (and (< (+ i k) end) (> (sf-script (cells-at et (+ i k))) 0))
+      (set k (+ k 1)))
+    (return k)))
+
+;; ------------------------------------------------------------- dates
+
+(defn ^I32 sf-set-date [^:mut ^Cells out ^I32 ob ^I32 form ^I32 s ^I32 e ^I32 y ^I32 m ^I32 d]
+  (sf-s out ob 2 form)
+  (sf-s out ob 3 s)
+  (sf-s out ob 4 (- e s))
+  (sf-s out ob 5 y)
+  (sf-s out ob 6 m)
+  (sf-s out ob 7 d)
+  (return 1))
+
+(defn ^I32 sf-ymd [^Cells et ^I32 i ^I32 end ^I32 v1 ^:mut ^Cells out ^I32 ob]
+  (comment "The shapes that start with a four-digit year at `i` (already read: `v1`): year-month-day with one separator, or the CJK marks. 1 when one is found.")
+  (let [^I32 p (+ i 4)
+        ^:mut ^I32 n2 0
+        ^:mut ^I32 v2 0
+        ^:mut ^I32 n3 0
+        ^:mut ^I32 v3 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 r 0]
+    (if (>= p end) (return 0))
+    (if (== (sf-dsep (cells-at et p)) 1)
+      (do (set n2 (sf-run et (+ p 1) end out ob))
+          (set v2 (sf-g out ob 16))
+          (set q (+ (+ p 1) n2))
+          (if (and (>= n2 1) (<= n2 2) (< q end))
+            (if (and (>= v2 1) (<= v2 12) (== (cells-at et q) (cells-at et p)))
+              (do (set n3 (sf-run et (+ q 1) end out ob))
+                  (set v3 (sf-g out ob 16))
+                  (set r (+ (+ q 1) n3))
+                  (if (and (>= n3 1) (<= n3 2) (>= v3 1) (<= v3 31))
+                    (return (sf-set-date out ob 1 i r v1 v2 v3))))))))
+    (if (or (== (cells-at et p) 24180) (== (cells-at et p) 45380))
+      (do (set n2 (sf-run et (+ p 1) end out ob))
+          (set v2 (sf-g out ob 16))
+          (set q (+ (+ p 1) n2))
+          (if (and (>= n2 1) (<= n2 2) (< q end) (>= v2 1) (<= v2 12))
+            (if (or (== (cells-at et q) 26376) (== (cells-at et q) 50900))
+              (do (set n3 (sf-run et (+ q 1) end out ob))
+                  (set v3 (sf-g out ob 16))
+                  (set r (+ (+ q 1) n3))
+                  (if (and (>= n3 1) (<= n3 2) (< r end) (>= v3 1) (<= v3 31))
+                    (if (or (== (cells-at et r) 26085) (== (cells-at et r) 51068))
+                      (return (sf-set-date out ob 1 i (+ r 1) v1 v2 v3)))))))))
+    (return 0)))
+
+(defn ^I32 sf-dmy [^Cells et ^I32 i ^I32 end ^I32 n1 ^I32 v1 ^I32 order ^:mut ^Cells out ^I32 ob]
+  (comment "A day or a month first, with one separator: 1-2 digits, 1-2 digits, then a year of four digits (read in the order that the numbers settle or the locale")
+  (comment "hint gives, else as written) or of two (as written). 1 when found.")
+  (let [^I32 p (+ i n1)
+        ^:mut ^I32 n2 0
+        ^:mut ^I32 v2 0
+        ^:mut ^I32 n3 0
+        ^:mut ^I32 v3 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 ok 0]
+    (if (>= p end) (return 0))
+    (if (== (sf-dsep (cells-at et p)) 0) (return 0))
+    (set n2 (sf-run et (+ p 1) end out ob))
+    (set v2 (sf-g out ob 16))
+    (set q (+ (+ p 1) n2))
+    (if (or (< n2 1) (> n2 2)) (return 0))
+    (if (>= q end) (return 0))
+    (if (!= (cells-at et q) (cells-at et p)) (return 0))
+    (set n3 (sf-run et (+ q 1) end out ob))
+    (set v3 (sf-g out ob 16))
+    (set r (+ (+ q 1) n3))
+    (if (and (== n3 2) (or (== (cells-at et p) 47) (== (cells-at et p) 46)))
+      (if (and (>= v1 1) (<= v1 31) (>= v2 1) (<= v2 31))
+        (return (sf-set-date out ob 2 i r 0 0 0))))
+    (if (!= n3 4) (return 0))
+    (if (or (< v3 1900) (> v3 2199)) (return 0))
+    (comment "which number is the month: the one that is over 12 is the day; with both at most 12 and different, the hint, else the text as it stands")
+    (if (and (> v1 12) (<= v2 12)) (do (set d v1) (set m v2) (set ok 1)))
+    (if (and (> v2 12) (<= v1 12)) (do (set d v2) (set m v1) (set ok 1)))
+    (if (and (<= v1 12) (<= v2 12))
+      (do (if (== v1 v2) (do (set d v1) (set m v2) (set ok 1)))
+          (if (and (== ok 0) (== order 1)) (do (set d v1) (set m v2) (set ok 1)))
+          (if (and (== ok 0) (== order 2)) (do (set m v1) (set d v2) (set ok 1)))))
+    (if (== ok 1)
+      (if (and (>= m 1) (<= m 12) (>= d 1) (<= d 31))
+        (return (sf-set-date out ob 1 i r v3 m d))))
+    (if (and (>= v1 1) (<= v1 31) (>= v2 1) (<= v2 31))
+      (return (sf-set-date out ob 2 i r 0 0 0)))
+    (return 0)))
+
+(defn ^I32 sf-year-at [^Cells et ^I32 i ^I32 end ^:mut ^Cells out ^I32 ob]
+  (comment "The length of a year of four digits (1900-2199) at `i`: 4, else 0.")
+  (let [^I32 n (sf-run et i end out ob)
+        ^I32 v (sf-g out ob 16)]
+    (if (and (== n 4) (>= v 1900) (<= v 2199)) (return 4))
+    (return 0)))
+
+(defn ^I32 sf-month-day-year [^Cells et ^I32 i ^I32 end ^I32 n1 ^I32 v1 ^:mut ^Cells out ^I32 ob]
+  (comment "A day, a word of letters, a year (`14 March 2026`, `14-Mar-2026`, `14. mars 2026`), as written. 1 when found.")
+  (let [^:mut ^I32 p (+ i n1)
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 q 0]
+    (if (or (< v1 1) (> v1 31)) (return 0))
+    (if (>= p end) (return 0))
+    (if (or (== (sf-space (cells-at et p)) 1) (or (== (cells-at et p) 45) (or (== (cells-at et p) 47) (== (cells-at et p) 46))))
+      (set p (+ p 1))
+      (return 0))
+    (while (and (< p end) (== (sf-space (cells-at et p)) 1))
+      (set p (+ p 1)))
+    (set nl (sf-letters et p end))
+    (if (or (< nl 3) (> nl 12)) (return 0))
+    (set q (+ p nl))
+    (if (and (< q end) (== (cells-at et q) 46)) (set q (+ q 1)))
+    (if (>= q end) (return 0))
+    (if (or (== (sf-space (cells-at et q)) 1) (or (== (cells-at et q) 45) (or (== (cells-at et q) 47) (== (cells-at et q) 44))))
+      (set q (+ q 1))
+      (return 0))
+    (while (and (< q end) (== (sf-space (cells-at et q)) 1))
+      (set q (+ q 1)))
+    (if (== (sf-year-at et q end out ob) 4) (return (sf-set-date out ob 2 i (+ q 4) 0 0 0)))
+    (return 0)))
+
+(defn ^I32 sf-word-day-year [^Cells et ^I32 ts ^I32 i ^I32 end ^I32 n1 ^I32 v1 ^:mut ^Cells out ^I32 ob]
+  (comment "A word of letters, a day, a year (`March 14, 2026`): the day is at `i`; the word is behind it. As written; 1 when found.")
+  (let [^:mut ^I32 b (- i 1)
+        ^:mut ^I32 p (+ i n1)
+        ^:mut ^I32 nl 0
+        ^:mut ^I32 ws 0]
+    (if (or (< v1 1) (> v1 31)) (return 0))
+    (if (or (< b ts) (== (sf-space (cells-at et b)) 0)) (return 0))
+    (while (and (>= b ts) (== (sf-space (cells-at et b)) 1))
+      (set b (- b 1)))
+    (if (and (>= b ts) (== (cells-at et b) 46)) (set b (- b 1)))
+    (if (< b ts) (return 0))
+    (set nl 0)
+    (while (and (>= (- b nl) ts) (> (sf-script (cells-at et (- b nl))) 0))
+      (set nl (+ nl 1)))
+    (if (or (< nl 3) (> nl 12)) (return 0))
+    (set ws (+ (- b nl) 1))
+    (if (and (< p end) (== (cells-at et p) 44)) (set p (+ p 1)))
+    (if (>= p end) (return 0))
+    (if (== (sf-space (cells-at et p)) 0) (return 0))
+    (while (and (< p end) (== (sf-space (cells-at et p)) 1))
+      (set p (+ p 1)))
+    (if (== (sf-year-at et p end out ob) 4) (return (sf-set-date out ob 2 ws (+ p 4) 0 0 0)))
+    (return 0)))
+
+(defn ^I32 sf-date [^Cells et ^I32 ts ^I32 end ^I32 order ^:mut ^Cells out ^I32 ob]
+  (comment "The first date in the text, written into the answer's cells 2-7 (see the head). 1 when there is one.")
+  (let [^:mut ^I32 i ts
+        ^:mut ^I32 n 0
+        ^:mut ^I32 v 0]
+    (while (< i end)
+      (do (if (>= (sf-digit (cells-at et i)) 0)
+            (if (or (== i ts) (< (sf-digit (cells-at et (- i 1))) 0))
+              (do (set n (sf-run et i end out ob))
+                  (set v (sf-g out ob 16))
+                  (if (and (== n 4) (>= v 1900) (<= v 2199))
+                    (if (== (sf-ymd et i end v out ob) 1) (return 1)))
+                  (if (and (>= n 1) (<= n 2))
+                    (do (if (== (sf-dmy et i end n v order out ob) 1) (return 1))
+                        (if (== (sf-month-day-year et i end n v out ob) 1) (return 1))
+                        (if (== (sf-word-day-year et ts i end n v out ob) 1) (return 1))))
+                  (set i (+ i (- n 1))))))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- names
+
+(defn ^I32 sf-is-sep [^Cells et ^I32 i ^I32 ts ^I32 end]
+  (comment "1 when the character at `i` separates the phrases of a ring: a bullet, a star, a bar, a long dash, a line end, or a hyphen that has a space (or the text's end) beside it.")
+  (let [^I32 c (cells-at et i)]
+    (if (== c 183) (return 1))
+    (if (== c 8226) (return 1))
+    (if (== c 8231) (return 1))
+    (if (== c 8729) (return 1))
+    (if (== c 8901) (return 1))
+    (if (== c 9679) (return 1))
+    (if (== c 9675) (return 1))
+    (if (== c 9670) (return 1))
+    (if (== c 9671) (return 1))
+    (if (== c 9733) (return 1))
+    (if (== c 9734) (return 1))
+    (if (and (>= c 10022) (<= c 10025)) (return 1))
+    (if (== c 10038) (return 1))
+    (if (== c 12539) (return 1))
+    (if (== c 42) (return 1))
+    (if (== c 124) (return 1))
+    (if (== c 126) (return 1))
+    (if (== c 95) (return 1))
+    (if (== c 61) (return 1))
+    (if (== c 8211) (return 1))
+    (if (== c 8212) (return 1))
+    (if (== c 10) (return 1))
+    (if (== c 45)
+      (do (if (== i ts) (return 1))
+          (if (== (+ i 1) end) (return 1))
+          (if (== (sf-space (cells-at et (- i 1))) 1) (return 1))
+          (if (== (sf-space (cells-at et (+ i 1))) 1) (return 1))))
+    (return 0)))
+
+(defn ^I32 sf-segment [^Cells et ^I32 a ^I32 b ^I32 kind]
+  (comment "1 when the phrase et[a, b) can be a name: letters and no digit, and for a seal one word of four letters (two Han, Kana or Hangul letters), for anything else")
+  (comment "two words of five letters (six such letters). The script is the phrase's own.")
+  (let [^:mut ^I32 i a
+        ^:mut ^I32 letters 0
+        ^:mut ^I32 digits 0
+        ^:mut ^I32 words 0
+        ^:mut ^I32 cjk 0
+        ^:mut ^I32 inword 0
+        ^:mut ^I32 s 0]
+    (while (< i b)
+      (do (set s (sf-script (cells-at et i)))
+          (if (>= (sf-digit (cells-at et i)) 0) (set digits (+ digits 1)))
+          (if (> s 0)
+            (do (set letters (+ letters 1))
+                (if (== (sf-cjk s) 1) (set cjk (+ cjk 1)))))
+          (if (== (sf-space (cells-at et i)) 1)
+            (set inword 0)
+            (if (== inword 0)
+              (do (set inword 1)
+                  (set words (+ words 1)))))
+          (set i (+ i 1))))
+    (if (> digits 0) (return 0))
+    (if (== letters 0) (return 0))
+    (if (>= (* cjk 2) letters)
+      (do (if (and (== kind 1) (>= cjk 2)) (return 1))
+          (if (>= cjk 6) (return 1))
+          (return 0)))
+    (if (and (== kind 1) (>= words 1) (>= letters 4)) (return 1))
+    (if (and (>= words 2) (>= letters 5)) (return 1))
+    (return 0)))
+
+(defn ^I32 sf-trim-start [^Cells et ^I32 a ^I32 b]
+  (let [^:mut ^I32 i a]
+    (while (and (< i b) (== (sf-space (cells-at et i)) 1))
+      (set i (+ i 1)))
+    (return i)))
+
+(defn ^I32 sf-trim-end [^Cells et ^I32 a ^I32 b]
+  (let [^:mut ^I32 i b]
+    (while (and (> i a) (== (sf-space (cells-at et (- i 1))) 1))
+      (set i (- i 1)))
+    (return i)))
+
+(defn ^I32 sf-name [^Cells et ^I32 ts ^I32 end ^I32 kind ^:mut ^Cells out ^I32 ob]
+  (comment "The first phrase that can be a name (`sf-segment`): the text is cut at its separators (`sf-is-sep`) and at the date, if it has one. 1 when found.")
+  (let [^I32 form (sf-g out ob 2)
+        ^I32 ds (sf-g out ob 3)
+        ^I32 de (+ (sf-g out ob 3) (sf-g out ob 4))
+        ^:mut ^I32 a ts
+        ^:mut ^I32 i ts
+        ^:mut ^I32 cut 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 e 0]
+    (while (<= i end)
+      (do (set cut 0)
+          (if (== i end) (set cut 1))
+          (if (< i end)
+            (do (if (== (sf-is-sep et i ts end) 1) (set cut 1))
+                (if (and (> form 0) (== i ds)) (set cut 1))))
+          (if (== cut 1)
+            (do (set s (sf-trim-start et a i))
+                (set e (sf-trim-end et s i))
+                (if (> e s)
+                  (if (== (sf-segment et s e kind) 1)
+                    (do (sf-s out ob 0 s)
+                        (sf-s out ob 1 (- e s))
+                        (return 1))))
+                (comment "the next phrase starts after the separator, or after the date")
+                (set a (+ i 1))
+                (if (and (> form 0) (== i ds)) (set a de))
+                (if (and (> form 0) (== i ds)) (set i (- de 1)))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 sf-scripts [^Cells et ^I32 ts ^I32 end ^:mut ^Cells out ^I32 ob]
+  (comment "The dominant script of the letters (the one with most; the first on a tie) in cell 8 of the answer and their number in cell 9.")
+  (let [^:mut ^I32 i ts
+        ^:mut ^I32 s 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bestn 0
+        ^:mut ^I32 total 0]
+    (while (< i end)
+      (do (set s (sf-script (cells-at et i)))
+          (if (> s 0)
+            (do (set c (+ (sf-g out ob (+ 16 s)) 1))
+                (sf-s out ob (+ 16 s) c)
+                (set total (+ total 1))))
+          (set i (+ i 1))))
+    (set c 1)
+    (while (<= c 11)
+      (do (if (> (sf-g out ob (+ 16 c)) bestn)
+            (do (set best c)
+                (set bestn (sf-g out ob (+ 16 c)))))
+          (set c (+ c 1))))
+    (sf-s out ob 8 best)
+    (sf-s out ob 9 total)
+    (return best)))
+
+(defn ^:pub ^I32 sf-fields [^Cells et ^I32 ts ^I32 tl ^I32 kind ^I32 order ^:mut ^Cells out ^I32 ob]
+  (comment "The name and the date of a seal (`kind` 1) or a stamp (2) read as the code points `et[ts, ts + tl)`, into `out` from cell `ob` (see the head; made and cleared here). A signature (3)")
+  (comment "has neither. `order` is `sf-order`'s. Answers 1 when it found a name or a date.")
+  (let [^I32 end (+ ts tl)
+        ^:mut ^I32 found 0]
+    (sf-prep out ob)
+    (if (or (== kind 3) (<= tl 0)) (return 0))
+    (sf-scripts et ts end out ob)
+    (if (== (sf-date et ts end order out ob) 1) (set found 1))
+    (if (== (sf-name et ts end kind out ob) 1) (set found 1))
+    (return found)))

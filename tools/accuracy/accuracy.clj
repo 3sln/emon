@@ -68,6 +68,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "emon" ["sh" (str (fs/path HERE "predict-emon.sh"))]
    "emon-live" ["sh" (str (fs/path HERE "predict-emon-live.sh"))]
    "emon-replay" ["sh" (str (fs/path HERE "predict-emon-replay.sh"))]
+   "emon-sealpx" ["sh" (str (fs/path HERE "predict-emon-sealpx.sh"))]
    "emon-fusion" ["sh" (str (fs/path HERE "predict-emon-fusion.sh"))]
    "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]
    "baseline-pdfplumber" ["sh" (str (fs/path HERE "predict-baseline.sh")) "pdfplumber"]

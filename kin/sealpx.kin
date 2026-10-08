@@ -1,0 +1,999 @@
+;; SEALS AND STAMPS FROM PIXELS: candidates from the tracer, the polar unwarp of a ring's text, the targeted reading of the strip and of the centre (P8.2;
+;; SPEC 10.7, 8.3, 7.3; D016, D196, D800-D806). emon's own module (D039).
+;;
+;; WHAT THIS ADDS TO P7.7. `emon.sealmark` finds a seal or a stamp where the page draws one as VECTOR paths. A scan, a photographed page or a seal that is a
+;; picture on a born-digital page has no path, and its text is ink. This module reads such a seal from the raster the page unit already has: the tracer's
+;; `ring`, `circle`, `ellipse` and `curve` primitives (a seal's rings, one a double ring), its coloured `rect` primitives (a stamp), and the ink of the layer they are
+;; on (`emon.pageink`'s `inks` rows; P6.4). Then
+;;
+;;   1. THE UNWARP. The annulus between 0.55 and 1.02 of the ring's radius is laid flat as a STRIP `sx-strip-w` x `sx-strip-h` pixels (`sx-polar`): a column is a
+;;      direction (clockwise from 12 o'clock, from where the ring has its widest gap: `sx-gap`), a row a radius (the outside at the top, so the text of a ring that is
+;;      written clockwise stands upright), the ring's own lines painted out. The disc inside 0.62 of the radius is the CENTRE view (`sx-disc`), a rectangular stamp
+;;      is cut out of the page along its own axis (`sx-crop`, turned by the tracer's `rot`). Each is a kin-made view (`bitmap-*` forms; no new host form): the
+;;      pixel is the page's, keyed to the seal's ink by its colour (`sx-key`: how much of the paper-to-ink colour line the pixel is, and not at all when it is far from
+;;      the line, so black body text under a red stamp is paper).
+;;   2. THE READING. Each view is OCR'd as a targeted request (`rq-ocr-view`, D196: the transcript is keyed by the view's pixel hash) of pass `op-seal-strip`.
+;;   3. THE EVIDENCE. The answers are OCR runs of the page (pass `seal-strip`, region the seal's box in the raster's pixels). The strip's words are put where they are on
+;;      the page (`sx-arc-box`), not where they are in the strip. One correspondence group (`cg`) a seal holds its words, flagged `in-seal` and `seal-px`: it is
+;;      what `emon.sealmark` reads (`sm-find`) to make the seal's `sl` row, and what keeps the words out of the body (rules 401, 402).
+;;
+;; THE NAME AND THE DATE are not found here: they are read off the seal's text when the node is written (`emon.sealfield`), whatever wrote the text.
+(ns emon.sealpx
+  (:require [emon.lang :refer [I32 I64 Cells Bitmap BitmapSet i64 i32 mul64 add64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop bms-put bms-get bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8 bitmap-hash]]
+            [emon.plan :refer [an-find an-ok pu-id pu-view-id]]
+            [emon.evidence :refer [ev-sin ev-cos vw-px-to-cpt vw-cpt-to-px vw-new vw-get vw-set vk-polar vk-cropped vwf-flags vwf-layer vwf-a vwf-b vwf-c vwf-d vwf-e vwf-f
+                                   pm-count pm-get pmf-page pmf-x0 pmf-y0 pmf-x1 pmf-y1 pmf-kind pmf-cx pmf-cy pmf-rx pmf-ry pmf-rot pmf-stroke pmf-color pmf-ink
+                                   pmf-conf pmf-flags pm-rect pm-ellipse pm-circle pm-curve pm-ring
+                                   ik-get ikf-role ir-body ir-color
+                                   ow-get ow-set hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-line hd-tstart hd-tlen hd-conf owf-px owf-py owf-pw owf-ph
+                                   ol-get ol-set lh-x0 lh-y0 lh-x1 lh-y1 lh-first lh-count
+                                   or-get orf-wfirst orf-wcount orf-lfirst orf-lcount
+                                   op-seal-strip rf-add ea-owords]]
+            [emon.scan :refer [sc-request-view-psm sc-answer sc-lang sc-sel-base]]
+            [emon.retarget :refer [rt-run-meta]]
+            [emon.sealfield :refer [sf-script sf-digit]]
+            [emon.sealmark :refer [sm-hue sm-seal-min sm-spread]]
+            [emon.player :refer [cg-new cg-set cgf-ofirst cgf-ocount cgf-flags plg-ocr-only plg-in-seal plg-seal-px plg-seal-stamp]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 13: named, first values; P10.1 calibrates)
+
+(defn ^:pub ^I32 sx-strip-w [] (comment "The strip's width in pixels: the whole ring.") (return 1280))
+(defn ^:pub ^I32 sx-strip-h [] (comment "The strip's height in pixels: the annulus from `sx-r-out` to `sx-r-in` of the radius.") (return 112))
+(defn ^:pub ^I32 sx-r-out [] (comment "`seal-band-out`: the annulus' outer edge, per mille of the radius (the ring's own line is a little inside it).") (return 1020))
+(defn ^:pub ^I32 sx-r-in [] (comment "`seal-band-in`: the annulus' inner edge, per mille of the radius.") (return 550))
+(defn ^:pub ^I32 sx-disc-n [] (comment "The centre view's side in pixels.") (return 336))
+(defn ^:pub ^I32 sx-disc-r [] (comment "`seal-disc`: the centre view's radius, per mille of the ring's.") (return 620))
+(defn ^:pub ^I32 sx-dark [] (comment "A strip pixel darker than this (0-255) is ink for the line and gap tests.") (return 140))
+(defn ^:pub ^I32 sx-line-share [] (comment "`seal-line`: a row or a column of a view that is this per cent ink is a ring's line and is painted out.") (return 60))
+(defn ^:pub ^I32 sx-line-dark [] (comment "A pixel darker than this counts toward a line (a ring's line is thin and light after the paper's texture is taken out).") (return 200))
+(defn ^:pub ^I32 sx-gap-min [] (comment "The narrowest gap (strip columns) that starts the strip: 2 per cent of the ring.") (return 24))
+(defn ^:pub ^I32 sx-max [] (comment "`seal-max`: the most seals and stamps a page reads this way.") (return 4))
+(defn ^:pub ^I32 sx-tol [] (comment "How far from the paper-to-ink line (per cent of its length, squared: 8 is 28 per cent of it) a pixel may be and still be the ink's.") (return 8))
+(defn ^:pub ^I32 sx-conf [] (comment "`seal-conf`: the engine's confidence (per mille) from which a word of a strip counts toward what the reading is worth.") (return 450))
+(defn ^:pub ^I32 sx-min-chars [] (comment "`seal-chars`: the letters and digits of confident words a seal's reading needs for the seal to be taken (else the strip read noise).") (return 6))
+(defn ^:pub ^I32 sx-min-ink [] (comment "The colour distance (0-255 scale, sum of squares /3) between the paper and an ink below which the ink is not told from the paper.") (return 400))
+
+;; ------------------------------------------------------------- the ink key
+
+;; the key's parameters `kp` (9 cells): 0-2 the ink's colour, 3-5 the paper-to-ink vector, 6 its squared length, 7 the squared perpendicular tolerance, 8 the source's channels
+(defn ^:pub ^I32 sx-kp-size [] (return 16))
+(defn ^:pub ^I32 sx-chroma-min [] (comment "The spread (0-255) of an ink's channels from which it is told by its chroma.") (return 40))
+(defn ^:pub ^I32 sx-ctol [] (comment "The chroma key's tolerance across the ink's hue, squared, per cent of the ink's chroma squared.") (return 35))
+
+(defn ^I32 sx-chan [^I32 rgb ^I32 k]
+  (if (== k 0) (return (rem (quot rgb 65536) 256)))
+  (if (== k 1) (return (rem (quot rgb 256) 256)))
+  (return (rem rgb 256)))
+
+(defn ^:pub ^I32 sx-key-setup [^:mut ^Cells kp ^I32 rgb ^I32 channels]
+  (comment "Make the key for the ink `rgb` (0xRRGGBB) on white paper, over a source of `channels` (1 or 3).")
+  (let [^:mut ^I32 d2 0]
+    (while (< (cells-len kp) (sx-kp-size))
+      (cells-push kp 0))
+    (cells-set kp 0 (sx-chan rgb 0))
+    (cells-set kp 1 (sx-chan rgb 1))
+    (cells-set kp 2 (sx-chan rgb 2))
+    (cells-set kp 3 (- 255 (sx-chan rgb 0)))
+    (cells-set kp 4 (- 255 (sx-chan rgb 1)))
+    (cells-set kp 5 (- 255 (sx-chan rgb 2)))
+    (set d2 (+ (+ (* (cells-at kp 3) (cells-at kp 3)) (* (cells-at kp 4) (cells-at kp 4))) (* (cells-at kp 5) (cells-at kp 5))))
+    (if (< d2 (* 3 (sx-min-ink)))
+      (do (comment "an ink as light as the paper is told from it only by being the darkest thing: take it as a dark gray")
+          (cells-set kp 3 160)
+          (cells-set kp 4 160)
+          (cells-set kp 5 160)
+          (set d2 (* 3 (* 160 160)))))
+    (cells-set kp 6 d2)
+    (cells-set kp 7 (quot (* d2 (sx-tol)) 100))
+    (cells-set kp 8 channels)
+    (cells-set kp 9 0)
+    (comment "a COLOURED ink has also its chroma (the ink less its own mean: cells 12-14, its square in 15): a pixel on the paper-to-ink line is the ink's only when it has a")
+    (comment "tenth of the chroma that its place on the line asks. Black text and its gray edges, a gray watermark: none.")
+    (if (and (== channels 3) (>= (sm-spread rgb) (sx-chroma-min)))
+      (let [^I32 m (quot (+ (+ (sx-chan rgb 0) (sx-chan rgb 1)) (sx-chan rgb 2)) 3)]
+        (cells-set kp 12 (- (sx-chan rgb 0) m))
+        (cells-set kp 13 (- (sx-chan rgb 1) m))
+        (cells-set kp 14 (- (sx-chan rgb 2) m))
+        (cells-set kp 15 (+ (+ (* (cells-at kp 12) (cells-at kp 12)) (* (cells-at kp 13) (cells-at kp 13))) (* (cells-at kp 14) (cells-at kp 14))))
+        (cells-set kp 9 1)))
+    (return d2)))
+
+(defn ^:pub ^I32 sx-key [^Cells kp ^I32 r ^I32 g ^I32 b]
+  (comment "How much of the ink a pixel is, 0-255: its place on the line from the paper (white) to the ink, clamped, and 0 when its distance from the line is more")
+  (comment "than the key's tolerance (it is another ink's: black body text, a gray watermark).")
+  (let [^I32 m (quot (+ (+ r g) b) 3)
+        ^I32 ur (- 255 r)
+        ^I32 ug (- 255 g)
+        ^I32 ub (- 255 b)
+        ^I32 dot (+ (+ (* ur (cells-at kp 3)) (* ug (cells-at kp 4))) (* ub (cells-at kp 5)))
+        ^I32 d2 (cells-at kp 6)
+        ^:mut ^I32 a 0
+        ^:mut ^I32 ac 0
+        ^:mut ^I32 rr 0
+        ^:mut ^I32 rg 0
+        ^:mut ^I32 rb 0]
+    (if (<= dot 0) (return 0))
+    (set a (quot (* dot 1024) d2))
+    (set rr (- ur (quot (* a (cells-at kp 3)) 1024)))
+    (set rg (- ug (quot (* a (cells-at kp 4)) 1024)))
+    (set rb (- ub (quot (* a (cells-at kp 5)) 1024)))
+    (if (> (+ (+ (* rr rr) (* rg rg)) (* rb rb)) (cells-at kp 7)) (return 0))
+    (set ac a)
+    (if (> ac 1024) (set ac 1024))
+    (if (== (cells-at kp 9) 1)
+      (if (< (* (+ (+ (* (- r m) (cells-at kp 12)) (* (- g m) (cells-at kp 13))) (* (- b m) (cells-at kp 14))) 10240)
+             (* ac (cells-at kp 15)))
+        (return 0)))
+    (if (>= a 1024) (return 255))
+    (comment "the paper's own texture is a little of the ink everywhere: under a fifth of it is none, and what is above is stretched to the whole range")
+    (if (< a 205) (return 0))
+    (return (quot (* (- a 205) 255) 819))))
+
+(defn ^I32 sx-tap [^Bitmap src ^Cells kp ^I32 x ^I32 y]
+  (comment "The ink coverage (0-255) of source pixel (x, y); 0 outside the bitmap.")
+  (if (< x 0) (return 0))
+  (if (< y 0) (return 0))
+  (if (>= x (bitmap-w src)) (return 0))
+  (if (>= y (bitmap-h src)) (return 0))
+  (if (== (cells-at kp 8) 1)
+    (return (sx-key kp (bitmap-u8 src x y 0) (bitmap-u8 src x y 0) (bitmap-u8 src x y 0))))
+  (return (sx-key kp (bitmap-u8 src x y 0) (bitmap-u8 src x y 1) (bitmap-u8 src x y 2))))
+
+(defn ^:pub ^I32 sx-sample [^Bitmap src ^Cells kp ^I32 x256 ^I32 y256]
+  (comment "The ink coverage at the position (x256, y256) in 1/256 pixels, bilinear over the four pixels round it (pixel (0, 0)'s centre is at 128, 128).")
+  (comment "The positions are offset by 2^24 (65536 pixels) so that the division is of a positive number: a position beyond the bitmap is simply outside it.")
+  (let [^I32 tx (+ (- x256 128) 16777216)
+        ^I32 ty (+ (- y256 128) 16777216)
+        ^I32 x0 (- (quot tx 256) 65536)
+        ^I32 y0 (- (quot ty 256) 65536)
+        ^I32 fx (rem tx 256)
+        ^I32 fy (rem ty 256)
+        ^I32 top (+ (* (sx-tap src kp x0 y0) (- 256 fx)) (* (sx-tap src kp (+ x0 1) y0) fx))
+        ^I32 bot (+ (* (sx-tap src kp x0 (+ y0 1)) (- 256 fx)) (* (sx-tap src kp (+ x0 1) (+ y0 1)) fx))]
+    (return (quot (+ (* top (- 256 fy)) (* bot fy)) 65536))))
+
+;; ------------------------------------------------------------- the strip
+
+(defn ^:pub ^I32 sx-polar [^Bitmap src ^Cells kp ^Bitmap dst ^I32 cx ^I32 cy ^I32 r ^I32 theta0 ^:mut ^Cells tab]
+  (comment "Lay the annulus of the ring centred on pixel (cx, cy) of radius r pixels flat into `dst` (1 channel, `sx-strip-w` x `sx-strip-h`): column x looks")
+  (comment "along the direction `theta0` + 360 x / width degrees clockwise from 12 o'clock (`theta0` in centi-degrees), row y at the radius `sx-r-out` - y (`sx-r-out` -")
+  (comment "`sx-r-in`) / height of the ring's. Each pixel is 255 less the ink coverage of the place it is made from, so ink is dark. `tab` is scratch (cleared).")
+  (let [^I32 w (bitmap-w dst)
+        ^I32 h (bitmap-h dst)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 r16 0
+        ^:mut ^I32 sx 0
+        ^:mut ^I32 cx256 (* cx 256)
+        ^:mut ^I32 cy256 (* cy 256)]
+    (cells-drop tab 0)
+    (while (< x w)
+      (do (set a (+ theta0 (quot (* 36000 x) w)))
+          (cells-push tab (quot (ev-sin a) 16))
+          (set x (+ x 1))))
+    (set x 0)
+    (while (< x w)
+      (do (set a (+ theta0 (quot (* 36000 x) w)))
+          (cells-push tab (quot (ev-cos a) 16))
+          (set x (+ x 1))))
+    (while (< y h)
+      (do (set r16 (quot (* (quot (- (* (sx-r-out) h) (* y (- (sx-r-out) (sx-r-in)))) h) (* r 16)) 1000))
+          (set x 0)
+          (while (< x w)
+            (do (set sx (+ cx256 (quot (* r16 (cells-at tab x)) 256)))
+                (bitmap-set-u8 dst x y 0 (- 255 (sx-sample src kp sx (- cy256 (quot (* r16 (cells-at tab (+ w x))) 256)))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sx-disc [^Bitmap src ^Cells kp ^Bitmap dst ^I32 cx ^I32 cy ^I32 r]
+  (comment "The centre of the ring (`sx-disc-r` per mille of its radius `r`) into the square `dst`, ink dark; outside the disc is paper.")
+  (let [^I32 n (bitmap-w dst)
+        ^I32 half (quot n 2)
+        ^I32 step (quot (* (* r (sx-disc-r)) 256) (* 1000 half))
+        ^:mut ^I32 u 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 du 0
+        ^:mut ^I32 dv 0]
+    (while (< v n)
+      (do (set u 0)
+          (while (< u n)
+            (do (set du (- u half))
+                (set dv (- v half))
+                (if (> (+ (* du du) (* dv dv)) (* half half))
+                  (bitmap-set-u8 dst u v 0 255)
+                  (bitmap-set-u8 dst u v 0 (- 255 (sx-sample src kp (+ (* cx 256) (* du step)) (+ (* cy 256) (* dv step))))))
+                (set u (+ u 1))))
+          (set v (+ v 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sx-crop [^Bitmap src ^Cells kp ^Bitmap dst ^I32 cx ^I32 cy ^I32 rot ^I32 scale]
+  (comment "The part of the page centred on pixel (cx, cy) whose x axis is turned `rot` centi-degrees counter-clockwise, into `dst` at `scale` per mille")
+  (comment "(output pixels a source pixel): a stamp cut out along its own axes, ink dark.")
+  (let [^I32 w (bitmap-w dst)
+        ^I32 h (bitmap-h dst)
+        ^I32 co (ev-cos rot)
+        ^I32 si (ev-sin rot)
+        ^:mut ^I32 u 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 du 0
+        ^:mut ^I32 dv 0
+        ^:mut ^I32 tx 0
+        ^:mut ^I32 ty 0]
+    (while (< v h)
+      (do (set u 0)
+          (while (< u w)
+            (do (set du (- u (quot w 2)))
+                (set dv (- v (quot h 2)))
+                (set tx (quot (+ (* du co) (* dv si)) 256))
+                (set ty (quot (- (* dv co) (* du si)) 256))
+                (bitmap-set-u8 dst u v 0
+                               (- 255 (sx-sample src kp (+ (* cx 256) (quot (* tx 1000) scale)) (+ (* cy 256) (quot (* ty 1000) scale)))))
+                (set u (+ u 1))))
+          (set v (+ v 1))))
+    (return 0)))
+
+(defn ^I32 sx-row-inky [^Bitmap b ^I32 y]
+  (comment "1 when row y has a run of at least `sx-line-share` per cent of its width that is darker than `sx-line-dark` (gaps of up to two pixels do not break it): a line, not the")
+  (comment "dark of a row through a line of text, which stops at every letter.")
+  (let [^I32 w (bitmap-w b)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 run 0
+        ^:mut ^I32 gap 0
+        ^:mut ^I32 best 0]
+    (while (< x w)
+      (do (if (< (bitmap-u8 b x y 0) (sx-line-dark))
+            (do (set run (+ run 1))
+                (set gap 0)
+                (if (> run best) (set best run)))
+            (if (and (> run 0) (< gap 2))
+              (do (set gap (+ gap 1))
+                  (set run (+ run 1)))
+              (do (set run 0)
+                  (set gap 0))))
+          (set x (+ x 1))))
+    (if (>= (* best 100) (* w (sx-line-share))) (return 1))
+    (return 0)))
+
+(defn ^I32 sx-col-inky [^Bitmap b ^I32 x]
+  (let [^I32 h (bitmap-h b)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 run 0
+        ^:mut ^I32 gap 0
+        ^:mut ^I32 best 0]
+    (while (< y h)
+      (do (if (< (bitmap-u8 b x y 0) (sx-line-dark))
+            (do (set run (+ run 1))
+                (set gap 0)
+                (if (> run best) (set best run)))
+            (if (and (> run 0) (< gap 2))
+              (do (set gap (+ gap 1))
+                  (set run (+ run 1)))
+              (do (set run 0)
+                  (set gap 0))))
+          (set y (+ y 1))))
+    (if (>= (* best 100) (* h (sx-line-share))) (return 1))
+    (return 0)))
+
+(defn ^I32 sx-paint-row [^Bitmap b ^I32 y]
+  (let [^I32 w (bitmap-w b)
+        ^:mut ^I32 x 0]
+    (while (< x w)
+      (do (bitmap-set-u8 b x y 0 255)
+          (set x (+ x 1))))
+    (return 0)))
+
+(defn ^I32 sx-paint-col [^Bitmap b ^I32 x]
+  (let [^I32 h (bitmap-h b)
+        ^:mut ^I32 y 0]
+    (while (< y h)
+      (do (bitmap-set-u8 b x y 0 255)
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sx-erase-rows [^Bitmap b ^I32 y0 ^I32 y1]
+  (comment "Paint paper over every row y0 <= y < y1 of `b` that is at least `sx-line-share` per cent ink (the ring's lines). Answers the rows painted.")
+  (comment "A run of such rows is a line only when it is thin (at most a sixteenth of the bitmap's height, and at least 3 rows): a row of text is as inky and many times thicker.")
+  (let [^I32 h (bitmap-h b)
+        ^I32 lim (+ 3 (quot h 16))
+        ^:mut ^I32 y y0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 painted 0]
+    (while (< y y1)
+      (do (if (== (sx-row-inky b y) 1)
+            (do (set e y)
+                (while (and (< e y1) (== (sx-row-inky b e) 1))
+                  (set e (+ e 1)))
+                (if (<= (- e y) lim)
+                  (do (set k y)
+                      (while (< k e)
+                        (do (sx-paint-row b k)
+                            (set painted (+ painted 1))
+                            (set k (+ k 1))))))
+                (set y e))
+            (set y (+ y 1)))))
+    (return painted)))
+
+
+(defn ^:pub ^I32 sx-erase-cols [^Bitmap b]
+  (comment "The same for columns (a stamp's border): every column at least `sx-line-share` per cent ink is painted paper. Answers the columns painted.")
+  (let [^I32 w (bitmap-w b)
+        ^I32 lim (+ 3 (quot w 16))
+        ^:mut ^I32 x 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 painted 0]
+    (while (< x w)
+      (do (if (== (sx-col-inky b x) 1)
+            (do (set e x)
+                (while (and (< e w) (== (sx-col-inky b e) 1))
+                  (set e (+ e 1)))
+                (if (<= (- e x) lim)
+                  (do (set k x)
+                      (while (< k e)
+                        (do (sx-paint-col b k)
+                            (set painted (+ painted 1))
+                            (set k (+ k 1))))))
+                (set x e))
+            (set x (+ x 1)))))
+    (return painted)))
+
+(defn ^:pub ^I32 sx-gap [^Bitmap b ^:mut ^Cells cnt]
+  (comment "Where the text of a strip starts: the middle column of the widest run of columns (circular) that hold almost no ink (at most a twenty-fifth of the busiest")
+  (comment "column's) when it is at least `sx-gap-min` wide, else three quarters of the width (9 o'clock, the left of a ring's text). `cnt` is scratch, one cell a column.")
+  (let [^I32 w (bitmap-w b)
+        ^I32 h (bitmap-h b)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 top 0
+        ^:mut ^I32 run 0
+        ^:mut ^I32 best 0
+        ^:mut ^I32 bestat 0
+        ^:mut ^I32 lim 0
+        ^:mut ^I32 i 0]
+    (cells-drop cnt 0)
+    (while (< x w)
+      (do (set y 0)
+          (set n 0)
+          (while (< y h)
+            (do (if (< (bitmap-u8 b x y 0) (sx-dark)) (set n (+ n 1)))
+                (set y (+ y 1))))
+          (cells-push cnt n)
+          (if (> n top) (set top n))
+          (set x (+ x 1))))
+    (if (== top 0) (return (quot (* w 3) 4)))
+    (set lim (quot top 25))
+    (comment "the runs of quiet columns, round the end: start at the first busy column so that none is cut by the seam")
+    (set x 0)
+    (while (and (< x w) (<= (cells-at cnt x) lim))
+      (set x (+ x 1)))
+    (if (== x w) (return (quot (* w 3) 4)))
+    (set i 0)
+    (set run 0)
+    (while (< i w)
+      (do (if (<= (cells-at cnt (rem (+ x i) w)) lim)
+            (set run (+ run 1))
+            (do (if (> run best)
+                  (do (set best run)
+                      (set bestat (- (+ x i) run))))
+                (set run 0)))
+          (set i (+ i 1))))
+    (if (> run best)
+      (do (set best run)
+          (set bestat (- (+ x w) run))))
+    (if (< best (sx-gap-min)) (return (quot (* w 3) 4)))
+    (return (rem (+ bestat (quot best 2)) w))))
+
+(defn ^:pub ^I32 sx-rotate [^Bitmap src ^Bitmap dst ^I32 shift]
+  (comment "`dst`(x, y) = `src`((x + shift) mod width, y): the strip begun `shift` columns later.")
+  (let [^I32 w (bitmap-w src)
+        ^I32 h (bitmap-h src)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (bitmap-set-u8 dst x y 0 (bitmap-u8 src (rem (+ x shift) w) y 0))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+;; ------------------------------------------------------------- back to the page
+
+(defn ^:pub ^I32 sx-arc-point [^I32 cx ^I32 cy ^I32 r ^I32 theta ^I32 k]
+  (comment "The page position (centipoints) of the point at radius r (centipoints) and `theta` centi-degrees clockwise from 12 o'clock about (cx, cy): k 0 its x, 1 its y.")
+  (if (== k 0) (return (+ cx (quot (* r (quot (ev-sin theta) 16)) 4096))))
+  (return (- cy (quot (* r (quot (ev-cos theta) 16)) 4096))))
+
+(defn ^:pub ^I32 sx-col-theta [^I32 col ^I32 w ^I32 theta0]
+  (comment "The direction (centi-degrees, clockwise from 12 o'clock) strip column `col` looks along.")
+  (return (rem (+ theta0 (quot (* 36000 col) w)) 36000)))
+
+(defn ^:pub ^I32 sx-row-radius [^I32 row ^I32 h ^I32 rad]
+  (comment "The radius (the ring's own units, `rad` being the ring's) strip row `row` looks at.")
+  (return (quot (* (quot (- (* (sx-r-out) h) (* row (- (sx-r-out) (sx-r-in)))) h) rad) 1000)))
+
+(defn ^:pub ^I32 sx-arc-box [^I32 cx ^I32 cy ^I32 rad ^I32 theta0 ^I32 w ^I32 h ^I32 px ^I32 py ^I32 pw ^I32 ph ^I32 k]
+  (comment "The page box (centipoints; k 0 x0, 1 y0, 2 x1, 3 y1) of a pixel box of the strip: the corners and the middle of each of its edges, laid back on the ring")
+  (comment "(centre cx, cy and radius `rad`, centipoints; the strip begun at `theta0`).")
+  (let [^I32 ta (sx-col-theta px w theta0)
+        ^I32 tm (sx-col-theta (+ px (quot pw 2)) w theta0)
+        ^I32 tb (sx-col-theta (+ px pw) w theta0)
+        ^I32 rt (sx-row-radius py h rad)
+        ^I32 rb (sx-row-radius (+ py ph) h rad)
+        ^:mut ^I32 lo 2000000000
+        ^:mut ^I32 hi -2000000000
+        ^:mut ^I32 v 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 q 0]
+    (while (< j 6)
+      (do (if (== (rem j 3) 0) (set t ta))
+          (if (== (rem j 3) 1) (set t tm))
+          (if (== (rem j 3) 2) (set t tb))
+          (if (< j 3) (set q rt) (set q rb))
+          (set v (sx-arc-point cx cy q t (rem k 2)))
+          (if (< v lo) (set lo v))
+          (if (> v hi) (set hi v))
+          (set j (+ j 1))))
+    (if (< k 2) (return lo))
+    (return hi)))
+
+;; ------------------------------------------------------------- the candidates
+
+;; a candidate is SX-W cells in `cand`: 0 kind (1 seal, 2 stamp), 1 prim row, 2 cx, 3 cy (source pixels), 4 rx, 5 ry (source pixels: a ring's radius twice, a stamp's half
+;; width and half height), 6 rot (centi-degrees, a stamp's), 7 ink 0xRRGGBB, 8-11 box (centipoints), 12 where the strip starts (columns), 13 `sm-hue`'s code, 14 a stamp's
+;; scale (per mille), 15 the primitive's confidence
+(defn ^:pub ^I32 sx-w [] (return 16))
+(defn ^:pub ^I32 ri-seal [] (comment "The request id (page-local) of candidate j's strip or crop: 128 + 2j; its centre is 129 + 2j.") (return 128))
+(defn ^:pub ^I32 rv-seal [] (comment "The kin-made view id (page-local) of candidate j's strip or crop: 48 + 2j; its centre is 49 + 2j.") (return 48))
+(defn ^:pub ^I32 rv-seal-tmp [] (comment "The strip as laid out before it was begun at its gap: 64 + j.") (return 64))
+
+(defn ^I32 sx-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 sx-max2 [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 sx-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 sx-put [^:mut ^Cells cand ^I32 at ^I32 kind ^I32 row ^I32 cx ^I32 cy ^I32 rx ^I32 ry ^I32 rot ^I32 rgb ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 conf]
+  (cells-set cand at kind)
+  (cells-set cand (+ at 1) row)
+  (cells-set cand (+ at 2) cx)
+  (cells-set cand (+ at 3) cy)
+  (cells-set cand (+ at 4) rx)
+  (cells-set cand (+ at 5) ry)
+  (cells-set cand (+ at 6) rot)
+  (cells-set cand (+ at 7) rgb)
+  (cells-set cand (+ at 8) x0)
+  (cells-set cand (+ at 9) y0)
+  (cells-set cand (+ at 10) x1)
+  (cells-set cand (+ at 11) y1)
+  (cells-set cand (+ at 12) 0)
+  (cells-set cand (+ at 13) 0)
+  (cells-set cand (+ at 14) 0)
+  (cells-set cand (+ at 15) conf)
+  (return 0))
+
+(defn ^I32 sx-add [^:mut ^Cells cand ^I32 kind ^I32 row ^I32 cx ^I32 cy ^I32 rx ^I32 ry ^I32 rot ^I32 rgb ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 conf]
+  (comment "Add a candidate: a ring concentric (within 15 per cent of the larger radius) with one that is there replaces it when it is the larger and is dropped when not; else it")
+  (comment "is appended while there are fewer than `sx-max`, or takes the place of the weakest by the primitive's confidence when it is stronger.")
+  (let [^I32 n (quot (cells-len cand) 16)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 weak -1
+        ^:mut ^I32 lim 0]
+    (while (< j n)
+        (do (set at (* j 16))
+            (if (== (cells-at cand at) kind)
+              (do (set lim (quot (* 15 (sx-max2 rx (cells-at cand (+ at 4)))) 100))
+                  (if (and (<= (sx-abs (- cx (cells-at cand (+ at 2)))) lim) (<= (sx-abs (- cy (cells-at cand (+ at 3)))) lim))
+                    (do (if (> rx (cells-at cand (+ at 4)))
+                          (sx-put cand at kind row cx cy rx ry rot rgb x0 y0 x1 y1 conf))
+                        (return 0)))))
+            (set j (+ j 1))))
+    (if (< n (sx-max))
+      (do (set at (cells-len cand))
+          (while (< (cells-len cand) (+ at 16))
+            (cells-push cand 0))
+          (sx-put cand at kind row cx cy rx ry rot rgb x0 y0 x1 y1 conf)
+          (return 1)))
+    (set j 0)
+    (while (< j n)
+      (do (if (or (< weak 0) (< (cells-at cand (+ (* j 16) 15)) (cells-at cand (+ (* weak 16) 15)))) (set weak j))
+          (set j (+ j 1))))
+    (if (and (>= weak 0) (> conf (cells-at cand (+ (* weak 16) 15))))
+      (do (sx-put cand (* weak 16) kind row cx cy rx ry rot rgb x0 y0 x1 y1 conf)
+          (return 1)))
+    (return 0)))
+
+(defn ^I32 sx-consider [^I32 r ^Cells views ^I32 srcview ^Cells prims ^Cells inks ^I32 pw ^I32 ph ^:mut ^Cells cand]
+  (comment "Does primitive row `r` make a candidate: a round one (ring, circle, ellipse or curve: radius at least `sm-seal-min`, the axes within 15 per cent, under four fifths of")
+  (comment "the page's smaller side) on a colour layer, or on the body layer when it is a double ring; a stamp (an outlined rectangle at least 10 pt a side and under")
+  (comment "a third of the page) on a colour layer. A primitive on a light or background layer (a watermark, a tint) is neither.")
+  (let [^I32 kind (pm-get prims r (pmf-kind))
+        ^I32 rx (pm-get prims r (pmf-rx))
+        ^I32 ry (pm-get prims r (pmf-ry))
+        ^I32 ink (pm-get prims r (pmf-ink))
+        ^I32 cx (pm-get prims r (pmf-cx))
+        ^I32 cy (pm-get prims r (pmf-cy))
+        ^I32 fl (pm-get prims r (pmf-flags))
+        ^:mut ^I32 role 0
+        ^:mut ^I32 rad 0
+        ^:mut ^I32 mx 0
+        ^:mut ^I32 mn 0
+        ^:mut ^I32 rgb 0
+        ^:mut ^I32 cxp 0
+        ^:mut ^I32 cyp 0
+        ^:mut ^I32 rxp 0
+        ^:mut ^I32 ryp 0]
+    (if (>= ink 0) (set role (ik-get inks ink (ikf-role))))
+    (set rgb (pm-get prims r (pmf-color)))
+    (if (< rgb 0) (return 0))
+    (set cxp (vw-cpt-to-px views srcview 0 cx cy))
+    (set cyp (vw-cpt-to-px views srcview 1 cx cy))
+    (set rxp (- (vw-cpt-to-px views srcview 0 (+ cx rx) cy) cxp))
+    (set ryp (- (vw-cpt-to-px views srcview 1 cx (+ cy ry)) cyp))
+    (if (or (== kind (pm-ring)) (or (== kind (pm-circle)) (or (== kind (pm-ellipse)) (== kind (pm-curve)))))
+      (do (set rad (quot (+ rx ry) 2))
+          (set mx (sx-max2 rx ry))
+          (set mn (sx-min rx ry))
+          (if (< rad (sm-seal-min)) (return 0))
+          (if (> (* (- mx mn) 100) (* 15 mx)) (return 0))
+          (if (> (* rad 25) (* 10 (sx-min pw ph))) (return 0))
+          (if (== role (ir-body))
+            (if (or (!= kind (pm-ring)) (== (bit-and fl 4) 0)) (return 0))
+            (if (!= role (ir-color)) (return 0)))
+          (return (sx-add cand 1 r cxp cyp (quot (+ rxp ryp) 2) (quot (+ rxp ryp) 2) 0 rgb
+                          (pm-get prims r (pmf-x0)) (pm-get prims r (pmf-y0)) (pm-get prims r (pmf-x1)) (pm-get prims r (pmf-y1)) (pm-get prims r (pmf-conf))))))
+    (if (== kind (pm-rect))
+      (do (if (!= role (ir-color)) (return 0))
+          (if (<= (pm-get prims r (pmf-stroke)) 0) (return 0))
+          (if (or (< (* 2 rx) 1000) (< (* 2 ry) 1000)) (return 0))
+          (if (> (* (quot (* 4 rx) 100) (quot ry 100)) (quot (* (quot pw 100) (quot ph 100)) 3)) (return 0))
+          (return (sx-add cand 2 r cxp cyp (sx-abs rxp) (sx-abs ryp) (pm-get prims r (pmf-rot)) rgb
+                          (pm-get prims r (pmf-x0)) (pm-get prims r (pmf-y0)) (pm-get prims r (pmf-x1)) (pm-get prims r (pmf-y1)) (pm-get prims r (pmf-conf))))))
+    (return 0)))
+
+(defn ^:pub ^I32 sx-find [^I32 page1 ^Cells views ^I32 srcview ^Cells prims ^Cells inks ^I32 pw ^I32 ph ^:mut ^Cells cand]
+  (comment "The candidates of page `page1` (1-based) from the tracer's primitives of the raster `srcview` (a `views` row): see `sx-consider`; written to `cand` (cleared first),")
+  (comment "the hue code of each in cell 13. Answers how many.")
+  (let [^:mut ^I32 n (pm-count prims)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 role 0
+        ^:mut ^I32 ink 0]
+    (cells-drop cand 0)
+    (while (< r n)
+      (do (if (== (pm-get prims r (pmf-page)) page1)
+            (sx-consider r views srcview prims inks pw ph cand))
+          (set r (+ r 1))))
+    (set n (quot (cells-len cand) 16))
+    (while (< j n)
+      (do (set ink (pm-get prims (cells-at cand (+ (* j 16) 1)) (pmf-ink)))
+          (set role 0)
+          (if (>= ink 0) (set role (ik-get inks ink (ikf-role))))
+          (if (== role (ir-body))
+            (cells-set cand (+ (* j 16) 13) 0)
+            (cells-set cand (+ (* j 16) 13) (sm-hue (cells-at cand (+ (* j 16) 7)))))
+          (set j (+ j 1))))
+    (return n)))
+
+;; ------------------------------------------------------------- asking
+
+(defn ^I32 sx-ask [^I32 page ^I32 k ^I32 vk ^Cells loc ^Cells ans ^BitmapSet bms ^:mut ^Cells kp ^:mut ^Cells rq]
+  (comment "Ask for the OCR of the kin-made view `vk` (page-local id) as request `k`, `psm` 6, naming its pixel hash, unless it is answered. Answers 1 when it asked.")
+  (let [^I32 id (pu-id page k)]
+    (if (< (an-find ans id) 0)
+      (do (bitmap-hash (bms-get bms (pu-view-id page vk)) kp 10)
+          (sc-request-view-psm rq id (pu-view-id page vk) (cells-at kp 10) (cells-at kp 11) 6 300 loc)
+          (return 1)))
+    (return 0)))
+
+(defn ^:pub ^I32 sx-stamp-dim [^Cells cand ^I32 c ^I32 k]
+  (comment "A stamp's crop: k 0 its scale (per mille: at least 1.5, and enough for 150 pixels of height), 1 its width, 2 its height (pixels; the width at most 2000).")
+  (let [^I32 a (sx-max2 1 (cells-at cand (+ c 4)))
+        ^I32 b (sx-max2 1 (cells-at cand (+ c 5)))
+        ^:mut ^I32 sc (quot 150000 (* 2 b))
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0]
+    (if (< sc 1500) (set sc 1500))
+    (if (> (quot (* (* 2 a) sc) 1000) 1980) (set sc (quot 1980000 (* 2 a))))
+    (set w (+ (quot (* (* 2 a) sc) 1000) 16))
+    (set h (+ (quot (* (* 2 b) sc) 1000) 16))
+    (if (== k 0) (return sc))
+    (if (== k 1) (return w))
+    (return h)))
+
+(defn ^:pub ^I32 sx-rowscore [^Bitmap b]
+  (comment "How straight the lines of a strip are: the sum over its rows of the square of the dark pixels in the row. A ring seen from its centre is a set of straight rows.")
+  (let [^I32 w (bitmap-w b)
+        ^I32 h (bitmap-h b)
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 sum 0]
+    (while (< y h)
+      (do (set x 0)
+          (set n 0)
+          (while (< x w)
+            (do (if (< (bitmap-u8 b x y 0) (sx-dark)) (set n (+ n 1)))
+                (set x (+ x 1))))
+          (set sum (+ sum (quot (* n n) 16)))
+          (set y (+ y 1))))
+    (return sum)))
+
+(defn ^:pub ^I32 sx-refine [^Bitmap src ^Cells kp ^Bitmap coarse ^I32 c ^:mut ^Cells cand ^:mut ^Cells tab]
+  (comment "Move the candidate's centre (cells 2, 3) to the point within 3 steps (a step is a fiftieth of the radius, at least a pixel) that makes the lines of the coarse strip")
+  (comment "straightest (`sx-rowscore`): the tracer's centre is a pixel or two off, which bends every line of the strip. Answers the score.")
+  (let [^I32 r (quot (+ (cells-at cand (+ c 4)) (cells-at cand (+ c 5))) 2)
+        ^I32 step (sx-max2 1 (quot r 50))
+        ^I32 cx (cells-at cand (+ c 2))
+        ^I32 cy (cells-at cand (+ c 3))
+        ^:mut ^I32 dx -3
+        ^:mut ^I32 dy -3
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bx cx
+        ^:mut ^I32 by cy
+        ^:mut ^I32 s 0]
+    (while (<= dy 3)
+      (do (set dx -3)
+          (while (<= dx 3)
+            (do (sx-polar src kp coarse (+ cx (* dx step)) (+ cy (* dy step)) r 0 tab)
+                (set s (sx-rowscore coarse))
+                (if (> s best)
+                  (do (set best s)
+                      (set bx (+ cx (* dx step)))
+                      (set by (+ cy (* dy step)))))
+                (set dx (+ dx 1))))
+          (set dy (+ dy 1))))
+    (cells-set cand (+ c 2) bx)
+    (cells-set cand (+ c 3) by)
+    (return best)))
+
+(defn ^I32 sx-ring-views [^I32 page ^I32 c ^I32 j ^Cells loc ^Cells ans ^BitmapSet bms ^Bitmap src ^:mut ^Cells cand ^:mut ^Cells kp ^:mut ^Cells tab ^:mut ^Cells rq]
+  (comment "A ring's views: the strip (laid out, its lines painted out, begun at its gap) and the centre; asks the two. Answers the requests asked.")
+  (let [^I32 w (sx-strip-w)
+        ^I32 h (sx-strip-h)
+        ^Bitmap tmp (bms-put bms (pu-view-id page (+ (rv-seal-tmp) j)) w h 1)
+        ^Bitmap strip (bms-put bms (pu-view-id page (+ (rv-seal) (* 2 j))) w h 1)
+        ^Bitmap disc (bms-put bms (pu-view-id page (+ (+ (rv-seal) (* 2 j)) 1)) (sx-disc-n) (sx-disc-n) 1)
+        ^I32 r (quot (+ (cells-at cand (+ c 4)) (cells-at cand (+ c 5))) 2)
+        ^Bitmap coarse (bms-put bms (pu-view-id page (+ (+ (rv-seal-tmp) 8) j)) 320 h 1)
+        ^:mut ^I32 asked 0]
+    (sx-refine src kp coarse c cand tab)
+    (sx-polar src kp tmp (cells-at cand (+ c 2)) (cells-at cand (+ c 3)) r 0 tab)
+    (sx-erase-rows tmp 0 h)
+    (cells-set cand (+ c 12) (sx-gap tmp tab))
+    (sx-rotate tmp strip (cells-at cand (+ c 12)))
+    (sx-disc src kp disc (cells-at cand (+ c 2)) (cells-at cand (+ c 3)) r)
+    (set asked (+ asked (sx-ask page (+ (ri-seal) (* 2 j)) (+ (rv-seal) (* 2 j)) loc ans bms kp rq)))
+    (set asked (+ asked (sx-ask page (+ (+ (ri-seal) (* 2 j)) 1) (+ (+ (rv-seal) (* 2 j)) 1) loc ans bms kp rq)))
+    (return asked)))
+
+(defn ^I32 sx-stamp-views [^I32 page ^I32 c ^I32 j ^Cells loc ^Cells ans ^BitmapSet bms ^Bitmap src ^:mut ^Cells cand ^:mut ^Cells kp ^:mut ^Cells rq]
+  (comment "A stamp's view: the crop along its own axes with its border painted out. Asks it. Answers the requests asked.")
+  (let [^I32 sc (sx-stamp-dim cand c 0)
+        ^I32 w (sx-stamp-dim cand c 1)
+        ^I32 h (sx-stamp-dim cand c 2)
+        ^Bitmap crop (bms-put bms (pu-view-id page (+ (rv-seal) (* 2 j))) w h 1)]
+    (sx-crop src kp crop (cells-at cand (+ c 2)) (cells-at cand (+ c 3)) (cells-at cand (+ c 6)) sc)
+    (sx-erase-rows crop 0 h)
+    (sx-erase-cols crop)
+    (cells-set cand (+ c 14) sc)
+    (return (sx-ask page (+ (ri-seal) (* 2 j)) (+ (rv-seal) (* 2 j)) loc ans bms kp rq))))
+
+(defn ^:pub ^I32 sx-plan [^I32 page ^Cells loc ^Cells ans ^BitmapSet bms ^Bitmap src ^:mut ^Cells cand ^:mut ^Cells kp ^:mut ^Cells tab ^:mut ^Cells rq]
+  (comment "Make the views of every candidate in `cand` (`sx-find`'s; `page` is 0-based) from the raster `src` and ask for the ones not answered. A re-run that finds every")
+  (comment "answer in makes the views again (their start is what the words are put back by) and asks nothing. Answers the requests asked.")
+  (let [^I32 n (quot (cells-len cand) 16)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 asked 0]
+    (while (< j n)
+      (do (set c (* j 16))
+          (sx-key-setup kp (cells-at cand (+ c 7)) (bitmap-channels src))
+          (if (== (cells-at cand c) 1)
+            (set asked (+ asked (sx-ring-views page c j loc ans bms src cand kp tab rq)))
+            (set asked (+ asked (sx-stamp-views page c j loc ans bms src cand kp rq))))
+          (set j (+ j 1))))
+    (return asked)))
+
+;; ------------------------------------------------------------- the answers as evidence
+
+(defn ^I32 sx-fix-strip [^:mut ^Cells owords ^:mut ^Cells olines ^Cells oruns ^I32 run ^I32 cx ^I32 cy ^I32 rad ^I32 theta0 ^I32 w ^I32 h]
+  (comment "Put the words of the strip's run where they are on the page: the box of each is its pixels' box laid back on the ring (`sx-arc-box`), its baseline the arc along its")
+  (comment "bottom edge, its rotation the direction the text runs there; a line's box is its words'. (`sc-answer` mapped them through the strip's stand-in view, which only put them")
+  (comment "inside the disc.) Answers the words moved.")
+  (let [^I32 w0 (or-get oruns run (orf-wfirst))
+        ^I32 nw (or-get oruns run (orf-wcount))
+        ^I32 l0 (or-get oruns run (orf-lfirst))
+        ^I32 nl (or-get oruns run (orf-lcount))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 px 0
+        ^:mut ^I32 py 0
+        ^:mut ^I32 pw 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 by0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 by1 0
+        ^:mut ^I32 rb 0
+        ^:mut ^I32 tm 0
+        ^:mut ^I32 ln 0]
+    (while (< i nl)
+      (do (ol-set olines (+ l0 i) (lh-x0) 2000000000)
+          (ol-set olines (+ l0 i) (lh-y0) 2000000000)
+          (ol-set olines (+ l0 i) (lh-x1) -2000000000)
+          (ol-set olines (+ l0 i) (lh-y1) -2000000000)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nw)
+      (do (set wi (+ w0 i))
+          (set px (ow-get owords wi (owf-px)))
+          (set py (ow-get owords wi (owf-py)))
+          (set pw (ow-get owords wi (owf-pw)))
+          (set ph (ow-get owords wi (owf-ph)))
+          (set bx0 (sx-arc-box cx cy rad theta0 w h px py pw ph 0))
+          (set by0 (sx-arc-box cx cy rad theta0 w h px py pw ph 1))
+          (set bx1 (sx-arc-box cx cy rad theta0 w h px py pw ph 2))
+          (set by1 (sx-arc-box cx cy rad theta0 w h px py pw ph 3))
+          (ow-set owords wi (hd-x0) bx0)
+          (ow-set owords wi (hd-y0) by0)
+          (ow-set owords wi (hd-x1) bx1)
+          (ow-set owords wi (hd-y1) by1)
+          (set rb (sx-row-radius (+ py ph) h rad))
+          (ow-set owords wi (hd-bx0) (sx-arc-point cx cy rb (sx-col-theta px w theta0) 0))
+          (ow-set owords wi (hd-by0) (sx-arc-point cx cy rb (sx-col-theta px w theta0) 1))
+          (ow-set owords wi (hd-bx1) (sx-arc-point cx cy rb (sx-col-theta (+ px pw) w theta0) 0))
+          (ow-set owords wi (hd-by1) (sx-arc-point cx cy rb (sx-col-theta (+ px pw) w theta0) 1))
+          (set tm (sx-col-theta (+ px (quot pw 2)) w theta0))
+          (ow-set owords wi (hd-rot) (rem (- 36000 tm) 36000))
+          (set ln (ow-get owords wi (hd-line)))
+          (if (and (>= ln l0) (< ln (+ l0 nl)))
+            (do (if (< bx0 (ol-get olines ln (lh-x0))) (ol-set olines ln (lh-x0) bx0))
+                (if (< by0 (ol-get olines ln (lh-y0))) (ol-set olines ln (lh-y0) by0))
+                (if (> bx1 (ol-get olines ln (lh-x1))) (ol-set olines ln (lh-x1) bx1))
+                (if (> by1 (ol-get olines ln (lh-y1))) (ol-set olines ln (lh-y1) by1))))
+          (set i (+ i 1))))
+    (return nw)))
+
+(defn ^:pub ^I32 sx-useful [^Cells etext ^Cells oruns ^Cells owords ^I32 run]
+  (comment "How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth.")
+  (let [^I32 w0 (or-get oruns run (orf-wfirst))
+        ^I32 nw (or-get oruns run (orf-wcount))
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0]
+    (while (< i nw)
+      (do (if (>= (ow-get owords (+ w0 i) (hd-conf)) (sx-conf))
+            (do (set ts (ow-get owords (+ w0 i) (hd-tstart)))
+                (set tl (ow-get owords (+ w0 i) (hd-tlen)))
+                (set k 0)
+                (while (< k tl)
+                  (do (if (or (> (sf-script (cells-at etext (+ ts k))) 0) (>= (sf-digit (cells-at etext (+ ts k))) 0)) (set n (+ n 1)))
+                      (set k (+ k 1))))))
+          (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 sx-cview [^:mut ^Cells views ^I32 kind ^I32 pg ^I32 srcview ^I32 w ^I32 h ^I32 dpi100 ^I32 rot ^I32 x ^I32 y]
+  (comment "The view of a crop of the source raster (pixels w x h at `dpi100`, its x axis turned `rot` centi-degrees counter-clockwise) whose top left corner is the page position (x, y).")
+  (let [^I32 layer (vw-get views srcview (vwf-layer))]
+    (return (vw-new views pg kind -1 srcview w h dpi100 layer -1 0 rot x y 0))))
+
+(defn ^I32 sx-record-ring [^I32 page ^I32 c ^I32 j ^I32 srcview ^I32 dpi100 ^Cells loc ^Cells ans ^Cells cand
+                           ^:mut ^Cells views ^Cells epages ^:mut ^Cells etext ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                           ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts ^:mut ^Cells feats ^:mut ^Cells runs]
+  (comment "A ring's two answers as runs, the strip's (`runs[0]`) and the centre's (`runs[1]`), -1 for one that is not in or is not ok.")
+  (let [^I32 pg (+ page 1)
+        ^I32 w (sx-strip-w)
+        ^I32 h (sx-strip-h)
+        ^I32 cx (cells-at cand (+ c 2))
+        ^I32 cy (cells-at cand (+ c 3))
+        ^I32 r (quot (+ (cells-at cand (+ c 4)) (cells-at cand (+ c 5))) 2)
+        ^I32 cxc (quot (+ (cells-at cand (+ c 8)) (cells-at cand (+ c 10))) 2)
+        ^I32 cyc (quot (+ (cells-at cand (+ c 9)) (cells-at cand (+ c 11))) 2)
+        ^I32 rc (quot (- (cells-at cand (+ c 10)) (cells-at cand (+ c 8))) 2)
+        ^I32 theta0 (quot (* 36000 (cells-at cand (+ c 12))) w)
+        ^I32 ids (pu-id page (+ (ri-seal) (* 2 j)))
+        ^I32 idc (pu-id page (+ (+ (ri-seal) (* 2 j)) 1))
+        ^I32 as (an-find ans ids)
+        ^I32 ac (an-find ans idc)
+        ^I32 lang (sc-lang loc)
+        ^:mut ^I32 dpiv 0
+        ^:mut ^I32 sv 0
+        ^:mut ^I32 run 0
+        ^:mut ^I32 dpic 0
+        ^:mut ^I32 half 0
+        ^:mut ^I32 vx 0
+        ^:mut ^I32 vy 0]
+    (cells-set runs 0 -1)
+    (cells-set runs 1 -1)
+    (if (>= as 0)
+      (if (== (an-ok ans as) 1)
+        (do (comment "the strip's stand-in view maps it onto a thin band across the disc (7/10 of the radius each way), so that every word is inside the ring until `sx-fix-strip` puts it back")
+            (set dpiv (quot (* 514286 (quot w 16)) (sx-max2 1 (quot rc 16))))
+            (set sv (sx-cview views (vk-polar) pg srcview w h dpiv 0 (- cxc (quot (* 7 rc) 10)) (- cyc (quot (* h 360000) (sx-max2 1 dpiv)))))
+            (set run (sc-answer ans as pg sv ids lang views epages etext oruns oblocks olines owords osyms oalts feats))
+            (rt-run-meta oruns run (op-seal-strip) 3 6 (- cx r) (- cy r) (* 2 r) (* 2 r))
+            (sx-fix-strip owords olines oruns run cxc cyc rc theta0 w h)
+            (vw-set views sv (vwf-flags) 2)
+            (vw-set views sv (vwf-a) cxc)
+            (vw-set views sv (vwf-b) cyc)
+            (vw-set views sv (vwf-c) rc)
+            (vw-set views sv (vwf-d) theta0)
+            (vw-set views sv (vwf-e) (sx-r-out))
+            (vw-set views sv (vwf-f) (sx-r-in))
+            (cells-set runs 0 run))))
+    (if (>= ac 0)
+      (if (== (an-ok ans ac) 1)
+        (do (set half (quot (* 62 r) 100))
+            (set dpic (i32 (quot (mul64 (i64 dpi100) (i64 (* (sx-disc-n) 1000))) (i64 (* (sx-max2 1 r) 1240)))))
+            (set vx (vw-px-to-cpt views srcview 0 (- cx half) (- cy half)))
+            (set vy (vw-px-to-cpt views srcview 1 (- cx half) (- cy half)))
+            (set sv (sx-cview views (vk-cropped) pg srcview (sx-disc-n) (sx-disc-n) dpic 0 vx vy))
+            (set run (sc-answer ans ac pg sv idc lang views epages etext oruns oblocks olines owords osyms oalts feats))
+            (rt-run-meta oruns run (op-seal-strip) 3 6 (- cx half) (- cy half) (* 2 half) (* 2 half))
+            (cells-set runs 1 run))))
+    (return 0)))
+
+(defn ^I32 sx-record-stamp [^I32 page ^I32 c ^I32 j ^I32 srcview ^I32 dpi100 ^Cells loc ^Cells ans ^Cells cand
+                            ^:mut ^Cells views ^Cells epages ^:mut ^Cells etext ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                            ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts ^:mut ^Cells feats ^:mut ^Cells runs]
+  (comment "A stamp's answer as a run, `runs[0]` (`runs[1]` is -1).")
+  (let [^I32 pg (+ page 1)
+        ^I32 cx (cells-at cand (+ c 2))
+        ^I32 cy (cells-at cand (+ c 3))
+        ^I32 sc (sx-stamp-dim cand c 0)
+        ^I32 w (sx-stamp-dim cand c 1)
+        ^I32 h (sx-stamp-dim cand c 2)
+        ^I32 rot (cells-at cand (+ c 6))
+        ^I32 co (ev-cos rot)
+        ^I32 si (ev-sin rot)
+        ^I32 ids (pu-id page (+ (ri-seal) (* 2 j)))
+        ^I32 as (an-find ans ids)
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 vx 0
+        ^:mut ^I32 vy 0
+        ^:mut ^I32 sv 0
+        ^:mut ^I32 run 0]
+    (cells-set runs 0 -1)
+    (cells-set runs 1 -1)
+    (if (>= as 0)
+      (if (== (an-ok ans as) 1)
+        (do (comment "the crop's top left corner: the centre less half its width along its x axis and half its height along its y axis, in source pixels")
+            (set dx (quot (* (quot (- (- 0 (* w co)) (* h si)) 131072) 1000) sc))
+            (set dy (quot (* (quot (- (* w si) (* h co)) 131072) 1000) sc))
+            (set vx (vw-px-to-cpt views srcview 0 (+ cx dx) (+ cy dy)))
+            (set vy (vw-px-to-cpt views srcview 1 (+ cx dx) (+ cy dy)))
+            (set sv (sx-cview views (vk-cropped) pg srcview w h (quot (* dpi100 sc) 1000) rot vx vy))
+            (set run (sc-answer ans as pg sv ids (sc-lang loc) views epages etext oruns oblocks olines owords osyms oalts feats))
+            (rt-run-meta oruns run (op-seal-strip) 3 6 (- cx (cells-at cand (+ c 4))) (- cy (cells-at cand (+ c 5))) (* 2 (cells-at cand (+ c 4))) (* 2 (cells-at cand (+ c 5))))
+            (cells-set runs 0 run))))
+    (return 0)))
+
+(defn ^I32 sx-group [^:mut ^Cells cg ^:mut ^Cells refs ^Cells oruns ^I32 pg ^Cells cand ^I32 c ^I32 r1 ^I32 r2]
+  (comment "The group of one seal: its OCR words (the strip's, then the centre's: refs of `owords`), its box, its colour code in `rot`, flagged `ocr-only`, `in-seal`, `seal-px`")
+  (comment "and for a stamp `seal-stamp`. Answers its row.")
+  (let [^I32 first (quot (cells-len refs) 2)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 fl 0]
+    (while (< k 2)
+      (do (set q r1)
+          (if (== k 1) (set q r2))
+          (if (>= q 0)
+            (do (set g 0)
+                (while (< g (or-get oruns q (orf-wcount)))
+                  (do (rf-add refs (ea-owords) (+ (or-get oruns q (orf-wfirst)) g))
+                      (set g (+ g 1))))))
+          (set k (+ k 1))))
+    (set g (cg-new cg pg (cells-at cand (+ c 8)) (cells-at cand (+ c 9)) (cells-at cand (+ c 10)) (cells-at cand (+ c 11)) (cells-at cand (+ c 13))))
+    (cg-set cg g (cgf-ofirst) first)
+    (cg-set cg g (cgf-ocount) (- (quot (cells-len refs) 2) first))
+    (set fl (+ (+ (plg-ocr-only) (plg-in-seal)) (plg-seal-px)))
+    (if (== (cells-at cand c) 2) (set fl (+ fl (plg-seal-stamp))))
+    (cg-set cg g (cgf-flags) fl)
+    (return g)))
+
+(defn ^I32 sx-inside [^Cells cand ^I32 c ^I32 x ^I32 y]
+  (comment "1 when the page position (x, y) (centipoints) lies in candidate `c`: a seal's disc (6 per cent beyond its radius), a stamp's box.")
+  (let [^I32 x0 (cells-at cand (+ c 8))
+        ^I32 y0 (cells-at cand (+ c 9))
+        ^I32 x1 (cells-at cand (+ c 10))
+        ^I32 y1 (cells-at cand (+ c 11))
+        ^I32 rad (quot (- x1 x0) 2)
+        ^I32 dx (- x (quot (+ x0 x1) 2))
+        ^I32 dy (- y (quot (+ y0 y1) 2))
+        ^I64 d2 (mul64 (add64 (mul64 (i64 dx) (i64 dx)) (mul64 (i64 dy) (i64 dy))) (i64 10000))
+        ^I64 lim (mul64 (mul64 (i64 rad) (i64 rad)) (i64 11236))]
+    (if (== (cells-at cand c) 1)
+      (do (if (<= d2 lim) (return 1))
+          (return 0)))
+    (if (and (>= x x0) (and (<= x x1) (and (>= y y0) (<= y y1)))) (return 1))
+    (return 0)))
+
+(defn ^:pub ^I32 sx-drop-lines [^:mut ^Cells scr ^I32 nsel ^Cells olines ^Cells owords ^Cells cand]
+  (comment "A scanned page's chosen lines (the selection of `scr`, `rt-adopt`'s) without the lines that lie wholly inside a seal or a stamp whose reading was kept (`sx-record`):")
+  (comment "the ring's letters and the stamp's words, read by the first pass as the page's text. A line only partly inside one (a body line the stamp is over) stays. Answers the lines left.")
+  (let [^I32 n (quot (cells-len cand) 16)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 out 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 allin 0
+        ^:mut ^I32 inone 0
+        ^:mut ^I32 wi 0]
+    (while (< k nsel)
+      (do (set l (cells-at scr (+ (sc-sel-base) k)))
+          (set f (ol-get olines l (lh-first)))
+          (set cnt (ol-get olines l (lh-count)))
+          (set allin 0)
+          (if (> cnt 0)
+            (do (set allin 1)
+                (set j 0)
+                (while (and (< j cnt) (== allin 1))
+                  (do (set wi (+ f j))
+                      (set inone 0)
+                      (set q 0)
+                      (while (< q n)
+                        (do (if (== (cells-at cand (+ (* q 16) 15)) -2)
+                              (if (== (sx-inside cand (* q 16) (quot (+ (ow-get owords wi (hd-x0)) (ow-get owords wi (hd-x1))) 2)
+                                                 (quot (+ (ow-get owords wi (hd-y0)) (ow-get owords wi (hd-y1))) 2)) 1)
+                                (set inone 1)))
+                            (set q (+ q 1))))
+                      (if (== inone 0) (set allin 0))
+                      (set j (+ j 1))))))
+          (if (== allin 0)
+            (do (cells-set scr (+ (sc-sel-base) out) l)
+                (set out (+ out 1))))
+          (set k (+ k 1))))
+    (return out)))
+
+(defn ^:pub ^I32 sx-record [^I32 page ^I32 srcview ^I32 dpi100 ^Cells loc ^Cells ans ^:mut ^Cells cand
+                            ^:mut ^Cells views ^Cells epages ^:mut ^Cells etext ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                            ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts ^:mut ^Cells feats ^:mut ^Cells refs ^:mut ^Cells cg ^:mut ^Cells runs]
+  (comment "Write the answers of every candidate as evidence: its runs (pass `seal-strip`), and when what they read is worth anything (`sx-useful`: `sx-min-chars` letters and digits of")
+  (comment "words the engine was sure of) one group of its words. `runs` is scratch (two cells). Answers the groups written. Run after the page is aligned: these runs are")
+  (comment "evidence for the seal and never a candidate for the body.")
+  (let [^I32 n (quot (cells-len cand) 16)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 worth 0]
+    (while (< (cells-len runs) 2)
+      (cells-push runs -1))
+    (while (< j n)
+      (do (set c (* j 16))
+          (if (== (cells-at cand c) 1)
+            (sx-record-ring page c j srcview dpi100 loc ans cand views epages etext oruns oblocks olines owords osyms oalts feats runs)
+            (sx-record-stamp page c j srcview dpi100 loc ans cand views epages etext oruns oblocks olines owords osyms oalts feats runs))
+          (set worth 0)
+          (if (>= (cells-at runs 0) 0) (set worth (+ worth (sx-useful etext oruns owords (cells-at runs 0)))))
+          (if (>= (cells-at runs 1) 0) (set worth (+ worth (sx-useful etext oruns owords (cells-at runs 1)))))
+          (cells-set cand (+ c 15) -1)
+          (if (>= worth (sx-min-chars))
+            (do (sx-group cg refs oruns (+ page 1) cand c (cells-at runs 0) (cells-at runs 1))
+                (cells-set cand (+ c 15) -2)
+                (set made (+ made 1))))
+          (set j (+ j 1))))
+    (return made)))

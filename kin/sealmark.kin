@@ -39,17 +39,19 @@
 (ns emon.sealmark
   (:require [emon.lang :refer [I32 I64 Cells i64 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.evidence :refer [pa-get pa-count pt-get gl-get ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-page hd-tstart hd-tlen rf-add
+            [emon.sealfield :refer [sf-fields sf-prep sf-script sf-digit]]
+            [emon.evidence :refer [pa-get pa-count pt-get gl-get ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-page hd-tstart hd-tlen hd-conf rf-add
                                    pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-width pf-flags pf-pfirst pf-pcount
                                    ptf-x ptf-y ptf-op gf-fill ea-paths ea-owords ev-page-row ep-get epf-width epf-height
                                    pg-closed pg-filled pg-stroked pg-clip pa-curve pa-rect pa-other po-move po-line po-curve po-close]]
-            [emon.player :refer [cg-count cg-get cg-set cgf-page cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hcount cgf-flags plg-in-seal
+            [emon.player :refer [cg-count cg-get cg-set cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-rot plg-seal-px plg-seal-stamp
+                                 cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hcount cgf-flags plg-in-seal
                                  sl-new sl-count sl-get pls-seal pls-stamp pls-signature]]
             [emon.model :refer [node-count node-kind node-parent node-region-head node-region-count node-next region-next
                                 region-page region-x0 region-y0 region-x1 region-y1
                                 node-new node-set-text node-set-sub node-set-conf node-add-flag node-add-src node-add-region node-add-attr-text
                                 text-append-cp nk-document nk-section nk-heading nk-paragraph nk-list nk-table nk-figure nk-quote nk-code nk-note
-                                nk-formula nk-caption nk-seal nk-furniture fk-color fl-low-conf sr-text sr-ocr sr-infer]]
+                                nk-formula nk-caption nk-seal nk-furniture fk-color fk-name fk-date fl-low-conf sr-text sr-ocr sr-infer]]
             [emon.restruct :refer [rs-node rs-remap]]
             [kin.lang :refer [defn defdata return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
@@ -783,6 +785,104 @@
           (set g (+ g 1))))
     (return 0)))
 
+;; ------------------------------------------------------------- seals read from pixels (P8.2)
+
+(defn ^I32 sm-px-keep [^Cells et ^Cells owords ^I32 row]
+  (comment "1 when the OCR word `row` of a seal's reading is kept in its text: it has three letters or digits and the engine was at least 250 per mille sure of it, or one and 600, or six")
+  (comment "and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).")
+  (let [^I32 ts (ow-get owords row (hd-tstart))
+        ^I32 tl (ow-get owords row (hd-tlen))
+        ^I32 conf (ow-get owords row (hd-conf))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 n 0]
+    (while (< k tl)
+      (do (if (or (> (sf-script (cells-at et (+ ts k))) 0) (>= (sf-digit (cells-at et (+ ts k))) 0)) (set n (+ n 1)))
+          (set k (+ k 1))))
+    (if (and (>= n 3) (>= conf 250)) (return 1))
+    (if (and (>= n 1) (>= conf 600)) (return 1))
+    (if (and (>= n 6) (>= conf 150)) (return 1))
+    (if (and (== n 0) (and (== tl 1) (>= conf 500))) (return 1))
+    (return 0)))
+
+(defn ^I32 sm-px-text [^:mut ^Cells et ^Cells refs ^Cells owords ^I32 from ^I32 cnt]
+  (comment "Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two. Answers the code points appended.")
+  (let [^I32 start (cells-len et)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 row 0]
+    (while (< i cnt)
+      (do (set row (cells-at refs (+ (* (+ from i) 2) 1)))
+          (if (== (sm-px-keep et owords row) 1)
+            (do (if (> (cells-len et) start) (cells-push et 32))
+                (sm-push-run et (ow-get owords row (hd-tstart)) (ow-get owords row (hd-tlen)))))
+          (set i (+ i 1))))
+    (return (- (cells-len et) start))))
+
+(defn ^I32 sm-lo [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 sm-hi [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 sm-overlap-share [^I32 ax0 ^I32 ay0 ^I32 ax1 ^I32 ay1 ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1]
+  (comment "The part of the smaller of two boxes that the other covers, per cent.")
+  (let [^I32 w (quot (- (sm-lo ax1 bx1) (sm-hi ax0 bx0)) 100)
+        ^I32 h (quot (- (sm-lo ay1 by1) (sm-hi ay0 by0)) 100)
+        ^I32 sa (* (quot (- ax1 ax0) 100) (quot (- ay1 ay0) 100))
+        ^I32 sb (* (quot (- bx1 bx0) 100) (quot (- by1 by0) 100))
+        ^:mut ^I32 small sa]
+    (if (or (<= w 0) (<= h 0)) (return 0))
+    (if (< sb small) (set small sb))
+    (if (<= small 0) (return 0))
+    (return (quot (* (* w h) 100) small))))
+
+(defn ^I32 sm-raster [^I32 page ^:mut ^Cells et ^Cells cg ^Cells refs ^Cells owords ^:mut ^Cells sm]
+  (comment "The `sl` rows of the seals and stamps that page units found in pixels (`emon.sealpx`): one for every group of `page` flagged `seal-px`, unless a candidate that is")
+  (comment "already there (found in the vector paths) has its box (half of the smaller). Its text is `sm-px-text`'s, its colour the group's code, its words the group's. Answers the rows written.")
+  (let [^I32 ng (cg-count cg)
+        ^:mut ^I32 g 0
+        ^:mut ^I32 o 0
+        ^:mut ^I32 dup 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 conf 0]
+    (while (< g ng)
+      (do (if (and (== (cg-get cg g (cgf-page)) page) (!= (bit-and (cg-get cg g (cgf-flags)) (plg-seal-px)) 0))
+            (do (set dup 0)
+                (set o 0)
+                (while (< o (sl-count sm))
+                  (do (if (== (sl-get sm o 0) page)
+                        (if (>= (sm-overlap-share (sl-get sm o 1) (sl-get sm o 2) (sl-get sm o 3) (sl-get sm o 4)
+                                                  (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0)) (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1))) 50)
+                          (set dup 1)))
+                      (set o (+ o 1))))
+                (if (== dup 0)
+                  (do (set fl (cg-get cg g (cgf-flags)))
+                      (set kind (pls-seal))
+                      (if (!= (bit-and fl (plg-seal-stamp)) 0) (set kind (pls-stamp)))
+                      (set ts (cells-len et))
+                      (sm-px-text et refs owords (cg-get cg g (cgf-ofirst)) (cg-get cg g (cgf-ocount)))
+                      (comment "a reading with no word kept is no text: the seal has none")
+                      (set conf 600)
+                      (if (== kind (pls-stamp)) (set conf 700))
+                      (if (> (cg-get cg g (cgf-rot)) 2) (set conf (+ conf 100)))
+                      (if (> (cells-len et) ts) (set conf (+ conf 100)))
+                      (if (> conf 900) (set conf 900))
+                      (set o (sl-new sm page (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0)) (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1)) kind))
+                      (cells-set sm (+ (* o 16) 9) conf)
+                      (cells-set sm (+ (* o 16) 10) (cg-get cg g (cgf-ofirst)))
+                      (cells-set sm (+ (* o 16) 11) (cg-get cg g (cgf-ocount)))
+                      (cells-set sm (+ (* o 16) 12) 128)
+                      (cells-set sm (+ (* o 16) 13) ts)
+                      (cells-set sm (+ (* o 16) 14) (- (cells-len et) ts))
+                      (cells-set sm (+ (* o 16) 15) (cg-get cg g (cgf-rot)))
+                      (set made (+ made 1))))))
+          (set g (+ g 1))))
+    (return made)))
+
 (defn ^:pub ^I32 sm-find [^Cells pa ^Cells pts ^Cells gl ^Cells fw ^:mut ^Cells et ^Cells epages
                           ^:mut ^Cells cg ^:mut ^Cells refs ^Cells owords ^I32 np
                           ^:mut ^Cells sm ^:mut ^Cells scr ^:mut ^Cells tmp]
@@ -824,6 +924,7 @@
                 (set n (sm-stamps pa pts p0 p1 pw ph scr n))
                 (set n (sm-signatures pa pts fw et p p0 p1 pw ph scr n tmp))
                 (if (> n 0) (sm-page scr n p fw gl et cg refs owords sm))))
+          (sm-raster p et cg refs owords sm)
           (set p (+ p 1))))
     (return (sl-count sm))))
 
@@ -911,14 +1012,56 @@
           (set o (+ o 1))))
     (return best)))
 
-(defn ^I32 sm-emit [^:mut ^Cells sm ^I32 o ^Cells et ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^I32 parent]
+(defn ^I32 sm-sl-hue [^Cells sm ^I32 o]
+  (comment "The colour code of candidate `o`: the ink's `sm-hue`, or, for one read from pixels (flag 128), the code its group carried.")
+  (if (!= (bit-and (sl-get sm o 12) 128) 0) (return (sl-get sm o 15)))
+  (return (sm-hue (sl-get sm o 15))))
+
+(defn ^I32 sm-emit-fields [^Cells et ^I32 ts ^I32 tl ^I32 kind ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 nn ^:mut ^Cells nm ^I32 fb]
+  (comment "The name and the date of the seal node `nn` whose text is `et[ts, ts + tl)` (`emon.sealfield`; the scratch is `nm` from cell `fb`): the name as read, the date as")
+  (comment "`YYYY-MM-DD` when the text says year, month and day plainly, else as it stands.")
+  (let [^:mut ^I32 start 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 form 0
+        ^:mut ^I32 v 0]
+    (sf-fields et ts tl kind 0 nm fb)
+    (if (> (cells-at nm (+ fb 1)) 0)
+      (do (set start (cells-len text))
+          (while (< j (cells-at nm (+ fb 1)))
+            (do (text-append-cp text (cells-at et (+ (cells-at nm fb) j)))
+                (set j (+ j 1))))
+          (node-add-attr-text nodes attrs nn (fk-name) start (cells-at nm (+ fb 1)))))
+    (set form (cells-at nm (+ fb 2)))
+    (if (> form 0)
+      (do (set start (cells-len text))
+          (if (== form 1)
+            (do (set v (cells-at nm (+ fb 5)))
+                (text-append-cp text (+ 48 (rem (quot v 1000) 10)))
+                (text-append-cp text (+ 48 (rem (quot v 100) 10)))
+                (text-append-cp text (+ 48 (rem (quot v 10) 10)))
+                (text-append-cp text (+ 48 (rem v 10)))
+                (text-append-cp text 45)
+                (text-append-cp text (+ 48 (quot (cells-at nm (+ fb 6)) 10)))
+                (text-append-cp text (+ 48 (rem (cells-at nm (+ fb 6)) 10)))
+                (text-append-cp text 45)
+                (text-append-cp text (+ 48 (quot (cells-at nm (+ fb 7)) 10)))
+                (text-append-cp text (+ 48 (rem (cells-at nm (+ fb 7)) 10)))
+                (node-add-attr-text nodes attrs nn (fk-date) start 10))
+            (do (set j 0)
+                (while (< j (cells-at nm (+ fb 4)))
+                  (do (text-append-cp text (cells-at et (+ (cells-at nm (+ fb 3)) j)))
+                      (set j (+ j 1))))
+                (node-add-attr-text nodes attrs nn (fk-date) start (cells-at nm (+ fb 4)))))))
+    (return 0)))
+
+(defn ^I32 sm-emit [^:mut ^Cells sm ^I32 o ^Cells et ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^I32 parent ^:mut ^Cells nm ^I32 fb]
   (comment "Write candidate `o` as a `seal` node, the last child of `parent`: its subkind, confidence, source, region, the words as `text` (flagged `low-conf`),")
-  (comment "and its colour name.")
+  (comment "its name and date (`sm-emit-fields`) and its colour name. `nm` from cell `fb` is the fields' scratch.")
   (let [^I32 nn (node-new nodes (nk-seal) parent)
         ^I32 tl (sl-get sm o 14)
         ^I32 ts (sl-get sm o 13)
         ^I32 fl (sl-get sm o 12)
-        ^I32 hue (sm-hue (sl-get sm o 15))
+        ^I32 hue (sm-sl-hue sm o)
         ^:mut ^I32 start 0
         ^:mut ^I32 j 0]
     (cells-set sm (+ (* o 16) 12) (bit-or fl 64))
@@ -934,7 +1077,8 @@
                 (set j (+ j 1))))
           (node-set-text nodes nn start tl)
           (node-add-flag nodes nn (fl-low-conf))
-          (if (!= (bit-and fl 32) 0) (node-add-src nodes nn (sr-text)) (node-add-src nodes nn (sr-ocr)))))
+          (if (!= (bit-and fl 32) 0) (node-add-src nodes nn (sr-text)) (node-add-src nodes nn (sr-ocr)))
+          (sm-emit-fields et ts tl (sl-get sm o 5) nodes attrs text nn nm fb)))
     (if (>= hue 0)
       (do (set start (cells-len text))
           (set j 0)
@@ -1007,6 +1151,7 @@
                       (set i (+ i 1))))))
           (cells-push nm pick)
           (set o (+ o 1))))
+    (sf-prep nm (+ n ns))
     (set i 0)
     (while (< i n)
       (do (set p (node-parent on i))
@@ -1014,7 +1159,7 @@
           (set o (sm-pending sm nm n on i 0 0 0))
           (while (>= o 0)
             (do (set np (cells-at nm (node-parent on (cells-at nm (+ n o)))))
-                (sm-emit sm o et nodes attrs regions text np)
+                (sm-emit sm o et nodes attrs regions text np nm (+ n ns))
                 (set placed (+ placed 1))
                 (set o (sm-pending sm nm n on i 0 0 0))))
           (comment "the first second root: whatever is left goes before it")
@@ -1022,7 +1167,7 @@
             (do (set np (sm-tail-parent on nm (- i 1)))
                 (set o (sm-pending sm nm n on i 0 0 2))
                 (while (>= o 0)
-                  (do (sm-emit sm o et nodes attrs regions text np)
+                  (do (sm-emit sm o et nodes attrs regions text np nm (+ n ns))
                       (set placed (+ placed 1))
                       (set o (sm-pending sm nm n on i 0 0 2))))))
           (comment "candidates that overlap no block: before the first top-level block that starts below their top")
@@ -1031,7 +1176,7 @@
                 (if (>= r 0)
                   (do (set o (sm-pending sm nm n on i (region-page orr r) (region-y0 orr r) 1))
                       (while (>= o 0)
-                        (do (sm-emit sm o et nodes attrs regions text (cells-at nm p))
+                        (do (sm-emit sm o et nodes attrs regions text (cells-at nm p) nm (+ n ns))
                             (set placed (+ placed 1))
                             (set o (sm-pending sm nm n on i (region-page orr r) (region-y0 orr r) 1))))))))
           (if (< p 0)
@@ -1042,7 +1187,7 @@
     (set np (sm-tail-parent on nm (- n 1)))
     (set o (sm-pending sm nm n on n 0 0 2))
     (while (>= o 0)
-      (do (sm-emit sm o et nodes attrs regions text np)
+      (do (sm-emit sm o et nodes attrs regions text np nm (+ n ns))
           (set placed (+ placed 1))
           (set o (sm-pending sm nm n on n 0 0 2))))
     (cells-drop nm n)

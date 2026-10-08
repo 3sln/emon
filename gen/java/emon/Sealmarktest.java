@@ -461,4 +461,128 @@ public final class Sealmarktest {
         emon.Testport.assertEq(Model.nodeParent(nn, 7), 1, "a child of the section");
         emon.Testport.assertEq(Model.modelCheck(nn, na, nr, text, pages, ledger, layout, chk), 0, "and the Model still checks");
     }
+    public static int stOwtext(emon.Port.Cells ow, emon.Port.Cells et, byte[] b, int conf) {
+        // An OCR word of page 1 whose text is the bytes of `b`, the engine's confidence `conf`; answers its row.
+        int ts = emon.Port.cellsLen(et);
+        int n = emon.Port.blobLen(b);
+        int k = 0;
+        while (k < n) {
+            emon.Port.cellsPush(et, emon.Port.blobU8(b, k));
+            k += 1;
+        }
+        return Evidence.owNew(ow, 1, 1000, 1000, 2000, 1600, 1000, 1600, 2000, 1600, 0, 0, ts, n, 0, conf, -1);
+    }
+    public static int stPxgroup(emon.Port.Cells cg, emon.Port.Cells refs, int first, int count, int flags, int hue) {
+        // A raster seal's group (`emon.sealpx`): its words are the OCR words first.. first + count - 1, in its box on page 1, its colour code in `rot`.
+        int g = Player.cgNew(cg, 1, 1000, 1000, 7000, 7000, hue);
+        int f = 0;
+        int i = 0;
+        while (i < count) {
+            if (i == 0) {
+                f = Evidence.rfAdd(refs, Evidence.eaOwords(), first + i);
+            } else {
+                Evidence.rfAdd(refs, Evidence.eaOwords(), first + i);
+            }
+            i += 1;
+        }
+        Player.cgSet(cg, g, Player.cgfOfirst(), f);
+        Player.cgSet(cg, g, Player.cgfOcount(), count);
+        Player.cgSet(cg, g, Player.cgfFlags(), flags);
+        return g;
+    }
+    public static void testASealReadFromPixelsIsACandidateWithItsReadingAsText() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells sm = emon.Port.newCells();
+        stOwtext(ow, et, emon.Testport.textBlob("ACME"), 900);
+        stOwtext(ow, et, emon.Testport.textBlob("LTD"), 900);
+        stOwtext(ow, et, emon.Testport.textBlob("-"), 900);
+        stOwtext(ow, et, emon.Testport.textBlob("ee"), 100);
+        stOwtext(ow, et, emon.Testport.textBlob("2026-03-14"), 600);
+        stPxgroup(cg, refs, 0, 5, (Player.plgOcrOnly() + Player.plgInSeal()) + Player.plgSealPx(), 10);
+        emon.Testport.assertEq(stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "a group flagged `seal-px` is a candidate though the page has no path");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 5), Player.plsSeal(), "a seal");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 12), 128, "read from pixels (flag 128)");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 15), 10, "its colour is the group's code, blue");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 1), 1000, "its box is the group's");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 14), 21, "the text is the kept words: ACME LTD - 2026-03-14, the noise of confidence 100 left out");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Player.slGet(sm, 0, 13)), 65, "it starts with A");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 11), 5, "and its words are the group's five");
+    }
+    public static void testAStampGroupIsAStampAndAVectorCandidateIsNotWrittenTwice() {
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells sm = emon.Port.newCells();
+        stOwtext(ow, et, emon.Testport.textBlob("PAID"), 900);
+        stPxgroup(cg, refs, 0, 1, ((Player.plgOcrOnly() + Player.plgInSeal()) + Player.plgSealPx()) + Player.plgSealStamp(), 3);
+        emon.Testport.assertEq(stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "a stamp group");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 5), Player.plsStamp(), "is a stamp");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 15), 3, "red");
+        // a vector ring over the same box: its candidate is written, the pixel one is not
+        emon.Port.cellsDrop(sm, 0);
+        stCircle(pa, pts, 1, 4000, 4000, 2047903, 300, 0);
+        int ow2 = stOword(ow, et, 4000, 4000, 83, 69);
+        int gv = stOgroup(cg, refs, ow2);
+        emon.Testport.assertEq(Player.cgGet(cg, gv, Player.cgfFlags()), 0, "(an OCR group inside the ring)");
+        emon.Testport.assertEq(stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "the ring found in the paths and the group of the pixels, one box: one candidate");
+        emon.Testport.assertEq(Player.slGet(sm, 0, 12) & 128, 0, "the vector one");
+    }
+    public static void testTheNodeOfASealHasItsNameAndItsDate() {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sm = emon.Port.newCells();
+        emon.Port.Cells nn = emon.Port.newCells();
+        emon.Port.Cells na = emon.Port.newCells();
+        emon.Port.Cells nr = emon.Port.newCells();
+        emon.Port.Cells nm = emon.Port.newCells();
+        emon.Port.Cells ow = emon.Port.newCells();
+        emon.Port.Cells cg = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pts = emon.Port.newCells();
+        emon.Port.Cells gl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        int sec = Model.nodeNew(nodes, Model.nkSection(), 0);
+        stBlock(nodes, regions, sec, 1, 10000, 20000);
+        stOwtext(ow, et, emon.Testport.textBlob("ACME"), 900);
+        stOwtext(ow, et, emon.Testport.textBlob("LTD"), 900);
+        stOwtext(ow, et, emon.Testport.textBlob("-"), 900);
+        stOwtext(ow, et, emon.Testport.textBlob("NOTARY"), 900);
+        stOwtext(ow, et, emon.Testport.textBlob("2026-03-14"), 600);
+        stPxgroup(cg, refs, 0, 5, (Player.plgOcrOnly() + Player.plgInSeal()) + Player.plgSealPx(), 10);
+        emon.Testport.assertEq(stFind(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "the candidate");
+        emon.Testport.assertEq(Sealmark.smWrite(sm, et, nodes, attrs, regions, text, nn, na, nr, nm), 1, "written");
+        int a = Model.nodeAttr(nn, na, 2, Model.fkName());
+        int d = Model.nodeAttr(nn, na, 2, Model.fkDate());
+        int c = Model.nodeAttr(nn, na, 2, Model.fkColor());
+        emon.Testport.assertEq(Model.nodeKind(nn, 2), Model.nkSeal(), "the seal is node 2: it overlaps no block and the paragraph starts below its top");
+        emon.Testport.assertThat(a >= 0, "it has a name");
+        emon.Testport.assertEq(Model.attrLen(na, a), 8, "ACME LTD, the first phrase of letters, cut at the dash");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, Model.attrValue(na, a)), 65, "which starts with A");
+        emon.Testport.assertThat(d >= 0, "and a date");
+        emon.Testport.assertEq(Model.attrLen(na, d), 10, "of ten characters");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, Model.attrValue(na, d)), 50, "2026-03-14, as year-month-day");
+        emon.Testport.assertEq(emon.Port.cellsAt(text, Model.attrValue(na, d) + 5), 48, "the month's tens digit");
+        emon.Testport.assertEq(Model.attrLen(na, c), 4, "and the colour, blue");
+        emon.Testport.assertEq(Model.nodeTextLen(nn, 2), 28, "the text is all of the reading");
+    }
 }

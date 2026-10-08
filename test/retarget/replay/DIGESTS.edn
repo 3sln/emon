@@ -1,12 +1,13 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/retarget/replay/ID, as `bb retarget-record` made it (P7.4, D347).
 ;; P10.1 (D370): re-derived by replaying the committed transcripts (no live engine): every `conf` of the JSON is the calibrated one.
+;; P8.2 (D802): ovl-stamp-seal, ovl-h-numbered, ovl-table-simple-ruled and ovl-watermark-draft re-recorded live (a seal's strip, centre or crop is a request of a page that has a ring or a stamp).
 {"born-wm-gray-behind"
  "229a4cc8e3276e9e4e1125be1ffdcd2b0b19881e83ae6365ac7087bf3629d94a",
  "ovl-h-numbered"
- "80b1ea00f1158870793c1fa32eaa76daf7e4a7fe3232f894fcc7a1426be911fb",
+ "09a5798acf9a6129e6eeaae3d43507d4a9dca49d36844d91d0327679dce1e0d0",
  "ovl-stamp-seal"
- "326931f916f22b60b8413b569002af97ea4e98ac3e7ced9b6803a25ca3c22367",
+ "b8e0fd457f97d431421709776987caaf78716360ff1ef1a7e202e8c883fe3547",
  "ovl-table-simple-ruled"
- "16df7d55c507d20a72023d6ebdbd5dde3d9ec999d600b1baf8a9a651a630b042",
+ "8b242f436db5320d82c5a87d9d0bb3c3b148d24d2bfcfbc88b02c789ba711f4d",
  "ovl-watermark-draft"
- "1c306e91e9ed86d0ed9c263d2cfc2ff61158ff322f2289563e67f221e67e84d9"}
+ "61f2987d229baab58aec8ba54332216c0d397d407acc9dbd54d1470c06ed245f"}

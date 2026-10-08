@@ -9,6 +9,7 @@ import (
 	"emon/player"
 	"emon/port"
 	"emon/restruct"
+	"emon/sealfield"
 )
 
 func SmSealMin() int32 {
@@ -1165,6 +1166,148 @@ func smPage(scr *port.Cells, n int32, page int32, fw *port.Cells, gl *port.Cells
 	return 0
 }
 
+func smPxKeep(et *port.Cells, owords *port.Cells, row int32) int32 {
+	// 1 when the OCR word `row` of a seal's reading is kept in its text: it has three letters or digits and the engine was at least 250 per mille sure of it, or one and 600, or six
+	// and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
+	var ts int32 = evidence.OwGet(owords, row, evidence.HdTstart())
+	var tl int32 = evidence.OwGet(owords, row, evidence.HdTlen())
+	var conf int32 = evidence.OwGet(owords, row, evidence.HdConf())
+	var k int32 = 0
+	var n int32 = 0
+	for k < tl {
+		if (sealfield.SfScript(port.CellsAt(et, ts+k)) > 0) || (sealfield.SfDigit(port.CellsAt(et, ts+k)) >= 0) {
+			n += 1
+		}
+		k += 1
+	}
+	if (n >= 3) && (conf >= 250) {
+		return 1
+	}
+	if (n >= 1) && (conf >= 600) {
+		return 1
+	}
+	if (n >= 6) && (conf >= 150) {
+		return 1
+	}
+	if (n == 0) && ((tl == 1) && (conf >= 500)) {
+		return 1
+	}
+	return 0
+}
+
+func smPxText(et *port.Cells, refs *port.Cells, owords *port.Cells, from int32, cnt int32) int32 {
+	// Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two. Answers the code points appended.
+	var start int32 = port.CellsLen(et)
+	var i int32 = 0
+	var row int32 = 0
+	for i < cnt {
+		row = port.CellsAt(refs, ((from+i)*2)+1)
+		if smPxKeep(et, owords, row) == 1 {
+			if port.CellsLen(et) > start {
+				port.CellsPush(et, 32)
+			}
+			smPushRun(et, evidence.OwGet(owords, row, evidence.HdTstart()), evidence.OwGet(owords, row, evidence.HdTlen()))
+		}
+		i += 1
+	}
+	return port.CellsLen(et) - start
+}
+
+func smLo(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func smHi(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func smOverlapShare(ax0 int32, ay0 int32, ax1 int32, ay1 int32, bx0 int32, by0 int32, bx1 int32, by1 int32) int32 {
+	// The part of the smaller of two boxes that the other covers, per cent.
+	var w int32 = (smLo(ax1, bx1) - smHi(ax0, bx0)) / 100
+	var h int32 = (smLo(ay1, by1) - smHi(ay0, by0)) / 100
+	var sa int32 = ((ax1 - ax0) / 100) * ((ay1 - ay0) / 100)
+	var sb int32 = ((bx1 - bx0) / 100) * ((by1 - by0) / 100)
+	var small int32 = sa
+	if (w <= 0) || (h <= 0) {
+		return 0
+	}
+	if sb < small {
+		small = sb
+	}
+	if small <= 0 {
+		return 0
+	}
+	return ((w * h) * 100) / small
+}
+
+func smRaster(page int32, et *port.Cells, cg *port.Cells, refs *port.Cells, owords *port.Cells, sm *port.Cells) int32 {
+	// The `sl` rows of the seals and stamps that page units found in pixels (`emon.sealpx`): one for every group of `page` flagged `seal-px`, unless a candidate that is
+	// already there (found in the vector paths) has its box (half of the smaller). Its text is `sm-px-text`'s, its colour the group's code, its words the group's. Answers the rows written.
+	var ng int32 = player.CgCount(cg)
+	var g int32 = 0
+	var o int32 = 0
+	var dup int32 = 0
+	var made int32 = 0
+	var ts int32 = 0
+	var fl int32 = 0
+	var kind int32 = 0
+	var conf int32 = 0
+	for g < ng {
+		if (player.CgGet(cg, g, player.CgfPage()) == page) && ((player.CgGet(cg, g, player.CgfFlags()) & player.PlgSealPx()) != 0) {
+			dup = 0
+			o = 0
+			for o < player.SlCount(sm) {
+				if player.SlGet(sm, o, 0) == page {
+					if smOverlapShare(player.SlGet(sm, o, 1), player.SlGet(sm, o, 2), player.SlGet(sm, o, 3), player.SlGet(sm, o, 4), player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1())) >= 50 {
+						dup = 1
+					}
+				}
+				o += 1
+			}
+			if dup == 0 {
+				fl = player.CgGet(cg, g, player.CgfFlags())
+				kind = player.PlsSeal()
+				if (fl & player.PlgSealStamp()) != 0 {
+					kind = player.PlsStamp()
+				}
+				ts = port.CellsLen(et)
+				smPxText(et, refs, owords, player.CgGet(cg, g, player.CgfOfirst()), player.CgGet(cg, g, player.CgfOcount()))
+				// a reading with no word kept is no text: the seal has none
+				conf = 600
+				if kind == player.PlsStamp() {
+					conf = 700
+				}
+				if player.CgGet(cg, g, player.CgfRot()) > 2 {
+					conf += 100
+				}
+				if port.CellsLen(et) > ts {
+					conf += 100
+				}
+				if conf > 900 {
+					conf = 900
+				}
+				o = player.SlNew(sm, page, player.CgGet(cg, g, player.CgfX0()), player.CgGet(cg, g, player.CgfY0()), player.CgGet(cg, g, player.CgfX1()), player.CgGet(cg, g, player.CgfY1()), kind)
+				port.CellsSet(sm, (o*16)+9, conf)
+				port.CellsSet(sm, (o*16)+10, player.CgGet(cg, g, player.CgfOfirst()))
+				port.CellsSet(sm, (o*16)+11, player.CgGet(cg, g, player.CgfOcount()))
+				port.CellsSet(sm, (o*16)+12, 128)
+				port.CellsSet(sm, (o*16)+13, ts)
+				port.CellsSet(sm, (o*16)+14, port.CellsLen(et)-ts)
+				port.CellsSet(sm, (o*16)+15, player.CgGet(cg, g, player.CgfRot()))
+				made += 1
+			}
+		}
+		g += 1
+	}
+	return made
+}
+
 func SmFind(pa *port.Cells, pts *port.Cells, gl *port.Cells, fw *port.Cells, et *port.Cells, epages *port.Cells, cg *port.Cells, refs *port.Cells, owords *port.Cells, np int32, sm *port.Cells, scr *port.Cells, tmp *port.Cells) int32 {
 	// The candidates of every page (see the head of this file) into `sm` (the `sl` arena), the text of their words appended to `et` (`sl` cells 13-14), and
 	// the flag `plg-in-seal` on the groups of `cg` that are theirs. `scr` and `tmp` are scratch. Answers the candidates written.
@@ -1210,6 +1353,7 @@ func SmFind(pa *port.Cells, pts *port.Cells, gl *port.Cells, fw *port.Cells, et 
 				smPage(scr, n, p, fw, gl, et, cg, refs, owords, sm)
 			}
 		}
+		smRaster(p, et, cg, refs, owords, sm)
 		p += 1
 	}
 	return player.SlCount(sm)
@@ -1357,14 +1501,66 @@ func smPending(sm *port.Cells, nm *port.Cells, n0 int32, on *port.Cells, i int32
 	return best
 }
 
-func smEmit(sm *port.Cells, o int32, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, parent int32) int32 {
+func smSlHue(sm *port.Cells, o int32) int32 {
+	// The colour code of candidate `o`: the ink's `sm-hue`, or, for one read from pixels (flag 128), the code its group carried.
+	if (player.SlGet(sm, o, 12) & 128) != 0 {
+		return player.SlGet(sm, o, 15)
+	}
+	return SmHue(player.SlGet(sm, o, 15))
+}
+
+func smEmitFields(et *port.Cells, ts int32, tl int32, kind int32, nodes *port.Cells, attrs *port.Cells, text *port.Cells, nn int32, nm *port.Cells, fb int32) int32 {
+	// The name and the date of the seal node `nn` whose text is `et[ts, ts + tl)` (`emon.sealfield`; the scratch is `nm` from cell `fb`): the name as read, the date as
+	// `YYYY-MM-DD` when the text says year, month and day plainly, else as it stands.
+	var start int32 = 0
+	var j int32 = 0
+	var form int32 = 0
+	var v int32 = 0
+	sealfield.SfFields(et, ts, tl, kind, 0, nm, fb)
+	if port.CellsAt(nm, fb+1) > 0 {
+		start = port.CellsLen(text)
+		for j < port.CellsAt(nm, fb+1) {
+			model.TextAppendCp(text, port.CellsAt(et, port.CellsAt(nm, fb)+j))
+			j += 1
+		}
+		model.NodeAddAttrText(nodes, attrs, nn, model.FkName(), start, port.CellsAt(nm, fb+1))
+	}
+	form = port.CellsAt(nm, fb+2)
+	if form > 0 {
+		start = port.CellsLen(text)
+		if form == 1 {
+			v = port.CellsAt(nm, fb+5)
+			model.TextAppendCp(text, 48+((v/1000)%10))
+			model.TextAppendCp(text, 48+((v/100)%10))
+			model.TextAppendCp(text, 48+((v/10)%10))
+			model.TextAppendCp(text, 48+(v%10))
+			model.TextAppendCp(text, 45)
+			model.TextAppendCp(text, 48+(port.CellsAt(nm, fb+6)/10))
+			model.TextAppendCp(text, 48+(port.CellsAt(nm, fb+6)%10))
+			model.TextAppendCp(text, 45)
+			model.TextAppendCp(text, 48+(port.CellsAt(nm, fb+7)/10))
+			model.TextAppendCp(text, 48+(port.CellsAt(nm, fb+7)%10))
+			model.NodeAddAttrText(nodes, attrs, nn, model.FkDate(), start, 10)
+		} else {
+			j = 0
+			for j < port.CellsAt(nm, fb+4) {
+				model.TextAppendCp(text, port.CellsAt(et, port.CellsAt(nm, fb+3)+j))
+				j += 1
+			}
+			model.NodeAddAttrText(nodes, attrs, nn, model.FkDate(), start, port.CellsAt(nm, fb+4))
+		}
+	}
+	return 0
+}
+
+func smEmit(sm *port.Cells, o int32, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, parent int32, nm *port.Cells, fb int32) int32 {
 	// Write candidate `o` as a `seal` node, the last child of `parent`: its subkind, confidence, source, region, the words as `text` (flagged `low-conf`),
-	// and its colour name.
+	// its name and date (`sm-emit-fields`) and its colour name. `nm` from cell `fb` is the fields' scratch.
 	var nn int32 = model.NodeNew(nodes, model.NkSeal(), parent)
 	var tl int32 = player.SlGet(sm, o, 14)
 	var ts int32 = player.SlGet(sm, o, 13)
 	var fl int32 = player.SlGet(sm, o, 12)
-	var hue int32 = SmHue(player.SlGet(sm, o, 15))
+	var hue int32 = smSlHue(sm, o)
 	var start int32 = 0
 	var j int32 = 0
 	port.CellsSet(sm, (o*16)+12, fl|64)
@@ -1388,6 +1584,7 @@ func smEmit(sm *port.Cells, o int32, et *port.Cells, nodes *port.Cells, attrs *p
 		} else {
 			model.NodeAddSrc(nodes, nn, model.SrOcr())
 		}
+		smEmitFields(et, ts, tl, player.SlGet(sm, o, 5), nodes, attrs, text, nn, nm, fb)
 	}
 	if hue >= 0 {
 		start = port.CellsLen(text)
@@ -1483,6 +1680,7 @@ func SmWrite(sm *port.Cells, et *port.Cells, on *port.Cells, oa *port.Cells, orr
 		port.CellsPush(nm, pick)
 		o += 1
 	}
+	sealfield.SfPrep(nm, n+ns)
 	i = 0
 	for i < n {
 		p = model.NodeParent(on, i)
@@ -1490,7 +1688,7 @@ func SmWrite(sm *port.Cells, et *port.Cells, on *port.Cells, oa *port.Cells, orr
 		o = smPending(sm, nm, n, on, i, 0, 0, 0)
 		for o >= 0 {
 			np = port.CellsAt(nm, model.NodeParent(on, port.CellsAt(nm, n+o)))
-			smEmit(sm, o, et, nodes, attrs, regions, text, np)
+			smEmit(sm, o, et, nodes, attrs, regions, text, np, nm, n+ns)
 			placed += 1
 			o = smPending(sm, nm, n, on, i, 0, 0, 0)
 		}
@@ -1499,7 +1697,7 @@ func SmWrite(sm *port.Cells, et *port.Cells, on *port.Cells, oa *port.Cells, orr
 			np = smTailParent(on, nm, i-1)
 			o = smPending(sm, nm, n, on, i, 0, 0, 2)
 			for o >= 0 {
-				smEmit(sm, o, et, nodes, attrs, regions, text, np)
+				smEmit(sm, o, et, nodes, attrs, regions, text, np, nm, n+ns)
 				placed += 1
 				o = smPending(sm, nm, n, on, i, 0, 0, 2)
 			}
@@ -1510,7 +1708,7 @@ func SmWrite(sm *port.Cells, et *port.Cells, on *port.Cells, oa *port.Cells, orr
 			if r >= 0 {
 				o = smPending(sm, nm, n, on, i, model.RegionPage(orr, r), model.RegionY0(orr, r), 1)
 				for o >= 0 {
-					smEmit(sm, o, et, nodes, attrs, regions, text, port.CellsAt(nm, p))
+					smEmit(sm, o, et, nodes, attrs, regions, text, port.CellsAt(nm, p), nm, n+ns)
 					placed += 1
 					o = smPending(sm, nm, n, on, i, model.RegionPage(orr, r), model.RegionY0(orr, r), 1)
 				}
@@ -1527,7 +1725,7 @@ func SmWrite(sm *port.Cells, et *port.Cells, on *port.Cells, oa *port.Cells, orr
 	np = smTailParent(on, nm, n-1)
 	o = smPending(sm, nm, n, on, n, 0, 0, 2)
 	for o >= 0 {
-		smEmit(sm, o, et, nodes, attrs, regions, text, np)
+		smEmit(sm, o, et, nodes, attrs, regions, text, np, nm, n+ns)
 		placed += 1
 		o = smPending(sm, nm, n, on, n, 0, 0, 2)
 	}

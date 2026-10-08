@@ -88,6 +88,9 @@
 
 ;; `cg` flags (`gf`): the bits of a group's flags. `bink` (P7.4): the page has a body-ink OCR run (the raster with every foreign ink layer painted the paper's) and
 ;; this group was looked for in it; `bink-absent`: no word of that run lies over the group. Both are written after alignment, by `emon.retarget`.
+;; `seal-px` (P8.2): the group is the reading of a seal or stamp found in PIXELS (`emon.sealpx`): its OCR words are those of the targeted `seal-strip` runs, its box is
+;; the seal's, its `rot` cell holds the seal's colour as `sm-hue`'s code, and `emon.sealmark`'s `sm-find` makes its `sl` row; `seal-stamp` says it is a stamp (a
+;; rectangle), else a seal (a ring). A group that has the flag is also `in-seal` and `ocr-only`.
 (defenum ^:pub plg
   [[plg-text-only 1 "text-only"]
    [plg-ocr-only 2 "ocr-only"]
@@ -96,7 +99,9 @@
    [plg-in-figure 16 "in-figure"]
    [plg-in-seal 32 "in-seal"]
    [plg-bink 64 "bink"]
-   [plg-bink-absent 128 "bink-absent"]])
+   [plg-bink-absent 128 "bink-absent"]
+   [plg-seal-px 256 "seal-px"]
+   [plg-seal-stamp 512 "seal-stamp"]])
 
 ;; The layer's `ea` codes and strides. An arena's index here is 0 for `cg` ... 8 for `sl`.
 (defn ^:pub ^I32 pl-ea-cg [] (return 34))
