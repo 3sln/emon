@@ -80,7 +80,7 @@
     (fs/create-dirs (str d "/pngenc"))
     (fs/copy "host/go/pngenc/pngenc.go" (str d "/pngenc/pngenc.go"))
     (fs/create-dirs (str d "/planrun"))
-    (fs/copy "host/go/planrun/planrun.go" (str d "/planrun/planrun.go"))
+    (doseq [f (fs/glob "host/go/planrun" "*.go")] (fs/copy f (str d "/planrun/" (fs/file-name f))))
     (spit (str d "/go.mod") "module emon\n\ngo 1.21\n")
     (fs/copy "test/ocr/go/main.go" (str d "/main.go"))
     (let [r (exec d "go" "build" "-o" "prog" ".")]

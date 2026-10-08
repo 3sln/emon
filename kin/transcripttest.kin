@@ -1,0 +1,736 @@
+;; Laws for `emon.transcript` (P10.9, D396, D438): the transcript the hosts' EDN writers and readers were. The names (kinds, keys, reasons) and their finder; the
+;; file as version 1 writes it, byte for byte; the producer's escaping; what a reader refuses and the sentence it says; the replay map keyed by the whole
+;; request record; the entries nobody asked for; and EVERY transcript committed under test/ read and written again to the same bytes (the manifest
+;; `test/transcript/manifest.txt` lists them; `kin/scripts/transcript-manifest` holds the list to the tree).
+(ns emon.transcripttest
+  (:require [emon.lang :refer [I32 Cells Text Blob fd]]
+            [emon.transcriptctx :refer [Tr]]
+            [emon.test :refer [deftest assert-eq assert-eq-at assert-that assert-that-at assert-text assert-text-span new-cells new-text new-ctx test-t TestT Str text-blob hex-blob
+                               test-file test-file-span]]
+            [emon.port :refer [cells-len cells-at cells-push cells-drop blob-len blob-u8 text-cp]]
+            [emon.plan :refer [pk-render pk-decode pk-ocr pk-bytes pk-crop pk-decode-img]]
+            [emon.planloop :refer [pe-emit-name pe-transcript-bad]]
+            [emon.transcript :refer [tk-render tk-decode tk-ocr tk-crop tk-decode-img tk-emit-name tk-find
+                                     tf-version tf-producer tf-inputs tf-entries tf-index tf-length tf-round tf-kind tf-req tf-ans tf-bitmap
+                                     tf-emit-name tf-find
+                                     tb-none tb-no-file tb-not-utf8 tb-end tb-trailing tb-unterminated-map tb-unterminated-vec tb-unterminated-str
+                                     tb-key tb-integer tb-unexpected tb-nesting tb-not-map tb-version tb-no-inputs tb-input-map tb-input-index
+                                     tb-input-length tb-no-entries tb-entry-map tb-entry-round tb-entry-kind tb-entry-req tb-entry-ans tb-req-record
+                                     tb-ans-record tb-bitmap-missing tb-inputs tb-unused tb-emit-name
+                                     tr-read tr-write tr-add-input tr-add-producer tr-add-entry tr-bitmap-name tr-index tr-find tr-take tr-unused
+                                     tr-unused-msg tr-miss-msg tr-check-inputs tr-n-inputs tr-in-index tr-in-length tr-p-more tr-p-next tr-p-key
+                                     tr-p-val tr-e-more tr-e-next tr-e-round tr-e-n tr-e-req tr-e-req-len tr-e-ans tr-e-ans-len tr-e-has-bitmap
+                                     tr-e-bitmap-name tr-e-cell]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------------ fixtures
+
+(defn ^I32 tt-push [^:mut ^Cells c ^Blob b]
+  (comment "The bytes of an ASCII text blob, as code points.")
+  (let [^I32 n (blob-len b)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (let [^I32 v (blob-u8 b i)]
+        (cells-push c v)
+        (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 tt-prod [^Tr t ^Blob k ^Blob v]
+  (comment "An ASCII name and value of the producer.")
+  (let [^Cells kc (new-cells)
+        ^Cells vc (new-cells)]
+    (tt-push kc k)
+    (tt-push vc v)
+    (return (tr-add-producer t kc vc))))
+
+(defn ^I32 tt-entry [^Tr t ^I32 round ^I32 kind ^I32 id ^I32 x ^I32 bitmap]
+  (comment "An entry: the request `[4 kind id x]` and the answer `[5 kind id 0 x]`.")
+  (let [^Cells c (new-cells)]
+    (cells-push c 4)
+    (cells-push c kind)
+    (cells-push c id)
+    (cells-push c x)
+    (cells-push c 5)
+    (cells-push c kind)
+    (cells-push c id)
+    (cells-push c 0)
+    (cells-push c x)
+    (return (tr-add-entry t round c 0 4 4 5 bitmap))))
+
+(defn ^I32 tt-key [^:mut ^Cells c ^I32 kind ^I32 id ^I32 x]
+  (comment "The request record `[4 kind id x]` in `c`, from 0.")
+  (cells-drop c 0)
+  (cells-push c 4)
+  (cells-push c kind)
+  (cells-push c id)
+  (cells-push c x)
+  (return 0))
+
+(defn ^I32 tt-written [^TestT emon-t ^Tr t ^Str want ^Str law]
+  (let [^Text out (new-text)]
+    (tr-write t out)
+    (assert-text out want law)
+    (return 0)))
+
+;; ------------------------------------------------------------------ the names
+
+(deftest test-the-kinds-are-the-plans
+  (assert-eq (tk-render) (pk-render) "render")
+  (assert-eq (tk-decode) (pk-decode) "decode")
+  (assert-eq (tk-ocr) (pk-ocr) "ocr")
+  (assert-eq (tk-crop) (pk-crop) "crop")
+  (assert-eq (tk-decode-img) (pk-decode-img) "decode-img")
+  (assert-eq (tk-emit-name (new-text) (pk-bytes)) 0 "bytes is the loop's own and is not a kind a transcript records"))
+
+(defn ^I32 tt-name [^TestT emon-t ^I32 code ^Str want]
+  (let [^Text t (new-text)]
+    (assert-eq (tk-emit-name t code) 1 want)
+    (assert-text t want want)
+    (assert-eq (tk-find (text-blob want) 0 (blob-len (text-blob want))) code want)
+    (return 0)))
+
+(deftest test-a-kind-is-spelled-once-for-the-writer-and-the-reader
+  (tt-name (test-t) (tk-render) "render")
+  (tt-name (test-t) (tk-decode) "decode")
+  (tt-name (test-t) (tk-ocr) "ocr")
+  (tt-name (test-t) (tk-crop) "crop")
+  (tt-name (test-t) (tk-decode-img) "decode-img"))
+
+(deftest test-the-kind-finder-reads-a-span-of-a-blob-and-nothing-else
+  (assert-eq (tk-find (text-blob "xxocrxx") 2 5) (tk-ocr) "a span in the middle")
+  (assert-eq (tk-find (text-blob "decode-img") 0 6) (tk-decode) "a prefix is its own name")
+  (assert-eq (tk-find (text-blob "decode-img") 0 10) (tk-decode-img) "the whole")
+  (assert-eq (tk-find (text-blob "bytes") 0 5) -1 "bytes is no kind")
+  (assert-eq (tk-find (text-blob "rende") 0 5) -1 "a prefix is no name")
+  (assert-eq (tk-find (text-blob "renderx") 0 7) -1 "a name and more is none")
+  (assert-eq (tk-find (text-blob "Render") 0 6) -1 "case counts")
+  (assert-eq (tk-find (text-blob "render") 3 3) -1 "an empty span"))
+
+(defn ^I32 tt-key-name [^TestT emon-t ^I32 code ^Str want]
+  (let [^Text t (new-text)]
+    (assert-eq (tf-emit-name t code) 1 want)
+    (assert-text t want want)
+    (assert-eq (tf-find (text-blob want) 0 (blob-len (text-blob want))) code want)
+    (return 0)))
+
+(deftest test-a-key-is-spelled-once-for-the-writer-and-the-reader
+  (tt-key-name (test-t) (tf-version) "emon-transcript")
+  (tt-key-name (test-t) (tf-producer) "producer")
+  (tt-key-name (test-t) (tf-inputs) "inputs")
+  (tt-key-name (test-t) (tf-entries) "entries")
+  (tt-key-name (test-t) (tf-index) "index")
+  (tt-key-name (test-t) (tf-length) "length")
+  (tt-key-name (test-t) (tf-round) "round")
+  (tt-key-name (test-t) (tf-kind) "kind")
+  (tt-key-name (test-t) (tf-req) "req")
+  (tt-key-name (test-t) (tf-ans) "ans")
+  (tt-key-name (test-t) (tf-bitmap) "bitmap")
+  (assert-eq (tf-find (text-blob "other") 0 5) -1 "an unknown key"))
+
+(defn ^I32 tt-reason [^TestT emon-t ^I32 code ^Str want]
+  (let [^Text t (new-text)]
+    (assert-eq (tb-emit-name t code) 1 want)
+    (assert-text t want want)
+    (return 0)))
+
+(deftest test-the-reasons-of-transcript-bad-are-the-sentences
+  (tt-reason (test-t) (tb-no-file) "no transcript.edn")
+  (tt-reason (test-t) (tb-not-utf8) "transcript.edn is not UTF-8")
+  (tt-reason (test-t) (tb-end) "unexpected end")
+  (tt-reason (test-t) (tb-trailing) "trailing text at")
+  (tt-reason (test-t) (tb-unterminated-map) "unterminated map")
+  (tt-reason (test-t) (tb-unterminated-vec) "unterminated vector")
+  (tt-reason (test-t) (tb-unterminated-str) "unterminated string")
+  (tt-reason (test-t) (tb-key) "a map key is not a keyword")
+  (tt-reason (test-t) (tb-integer) "bad integer at")
+  (tt-reason (test-t) (tb-unexpected) "unexpected character at")
+  (tt-reason (test-t) (tb-nesting) "nested too deeply")
+  (tt-reason (test-t) (tb-not-map) "the transcript is not a map")
+  (tt-reason (test-t) (tb-version) "not an emon-transcript of version 1")
+  (tt-reason (test-t) (tb-no-inputs) "no :inputs")
+  (tt-reason (test-t) (tb-input-map) "an input is not a map")
+  (tt-reason (test-t) (tb-input-index) "an input has no :index")
+  (tt-reason (test-t) (tb-input-length) "an input has no :length")
+  (tt-reason (test-t) (tb-no-entries) "no :entries")
+  (tt-reason (test-t) (tb-entry-map) "an entry is not a map")
+  (tt-reason (test-t) (tb-entry-round) "an entry has no :round")
+  (tt-reason (test-t) (tb-entry-kind) "an entry has no known :kind")
+  (tt-reason (test-t) (tb-entry-req) "an entry has no :req")
+  (tt-reason (test-t) (tb-entry-ans) "an entry has no :ans")
+  (tt-reason (test-t) (tb-req-record) "an entry's :req is not a record of its :kind")
+  (tt-reason (test-t) (tb-ans-record) "an entry's :ans is not the answer to its :req")
+  (tt-reason (test-t) (tb-bitmap-missing) "is missing")
+  (tt-reason (test-t) (tb-inputs) "the transcript is of other inputs than this run's")
+  (tt-reason (test-t) (tb-unused) "recorded entries were never asked for")
+  (assert-eq (tb-emit-name (new-text) 99) 0 "a code that is none"))
+
+(deftest test-transcript-bad-is-the-plan-loops-name
+  (let [^Text t (new-text)]
+    (assert-eq (pe-emit-name t (pe-transcript-bad)) 1 "named")
+    (assert-text t "transcript-bad" "the error the hosts report")))
+
+;; ------------------------------------------------------------------ writing
+
+(deftest test-a-transcript-is-written-as-version-1
+  (let [^Tr t (new-ctx Tr)]
+    (tr-add-input t 0 94562)
+    (tt-entry t 0 (tk-render) 1 7 1)
+    (tt-entry t 1 (tk-ocr) 2 8 0)
+    (tt-written (test-t) t
+                "{:emon-transcript 1\n :inputs [{:index 0 :length 94562}]\n :entries [\n  {:round 0 :kind :render :req [4 1 1 7] :ans [5 1 1 0 7] :bitmap \"bitmap-0000.png\"}\n  {:round 1 :kind :ocr :req [4 3 2 8] :ans [5 3 2 0 8]}]}\n"
+                "version 1, byte for byte")))
+
+(deftest test-a-transcript-of-nothing-is-written
+  (let [^Tr t (new-ctx Tr)]
+    (tt-written (test-t) t "{:emon-transcript 1\n :inputs []\n :entries []}\n" "no inputs, no entries")))
+
+(deftest test-inputs-are-written-in-order-with-a-space-between
+  (let [^Tr t (new-ctx Tr)]
+    (tr-add-input t 0 10)
+    (tr-add-input t 1 -5)
+    (tr-add-input t 2 2147483647)
+    (tt-written (test-t) t
+                "{:emon-transcript 1\n :inputs [{:index 0 :length 10} {:index 1 :length -5} {:index 2 :length 2147483647}]\n :entries []}\n"
+                "three inputs")))
+
+(deftest test-a-bitmap-is-named-by-its-entrys-place
+  (let [^Tr t (new-ctx Tr)
+        ^Text n (new-text)]
+    (tt-entry t 0 (tk-decode) 1 1 0)
+    (tt-entry t 0 (tk-decode) 2 1 1)
+    (tt-entry t 0 (tk-decode) 3 1 0)
+    (tt-entry t 0 (tk-decode) 4 1 1)
+    (tt-written (test-t) t
+                "{:emon-transcript 1\n :inputs []\n :entries [\n  {:round 0 :kind :decode :req [4 2 1 1] :ans [5 2 1 0 1]}\n  {:round 0 :kind :decode :req [4 2 2 1] :ans [5 2 2 0 1] :bitmap \"bitmap-0001.png\"}\n  {:round 0 :kind :decode :req [4 2 3 1] :ans [5 2 3 0 1]}\n  {:round 0 :kind :decode :req [4 2 4 1] :ans [5 2 4 0 1] :bitmap \"bitmap-0003.png\"}]}\n"
+                "places 1 and 3")
+    (tr-bitmap-name 12345 n)
+    (assert-text n "bitmap-12345.png" "more than four digits")))
+
+(deftest test-a-bitmap-name-is-padded-to-four-digits
+  (let [^Text a (new-text)
+        ^Text b (new-text)
+        ^Text c (new-text)
+        ^Text d (new-text)]
+    (tr-bitmap-name 0 a)
+    (tr-bitmap-name 9 b)
+    (tr-bitmap-name 10 c)
+    (tr-bitmap-name 999 d)
+    (assert-text a "bitmap-0000.png" "0")
+    (assert-text b "bitmap-0009.png" "9")
+    (assert-text c "bitmap-0010.png" "10")
+    (assert-text d "bitmap-0999.png" "999")))
+
+(deftest test-a-kind-the-format-does-not-have-is-written-unknown
+  (let [^Tr t (new-ctx Tr)]
+    (tt-entry t 0 (pk-bytes) 1 1 0)
+    (tt-entry t 0 99 2 1 0)
+    (tt-written (test-t) t
+                "{:emon-transcript 1\n :inputs []\n :entries [\n  {:round 0 :kind :unknown :req [4 4 1 1] :ans [5 4 1 0 1]}\n  {:round 0 :kind :unknown :req [4 99 2 1] :ans [5 99 2 0 1]}]}\n"
+                "unknown")))
+
+;; ------------------------------------------------------------------ the producer
+
+(deftest test-the-producer-is-written-after-the-version-in-the-order-it-was-given
+  (let [^Tr t (new-ctx Tr)]
+    (tt-prod t (text-blob "engine") (text-blob "tesseract"))
+    (tt-prod t (text-blob "version") (text-blob "5.5.3"))
+    (tt-prod t (text-blob "host") (text-blob "host/rust/src/tess.rs"))
+    (tr-add-input t 0 1)
+    (tt-written (test-t) t
+                "{:emon-transcript 1\n :producer {:engine \"tesseract\" :version \"5.5.3\" :host \"host/rust/src/tess.rs\"}\n :inputs [{:index 0 :length 1}]\n :entries []}\n"
+                "the order given")))
+
+(deftest test-the-producer-is-escaped
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)
+        ^Cells v (new-cells)]
+    ;; a\b"c : a backslash is written `/` and a double quote `'`
+    (tt-push k (text-blob "path"))
+    (cells-push v 97)
+    (cells-push v 92)
+    (cells-push v 98)
+    (cells-push v 34)
+    (cells-push v 99)
+    (tr-add-producer t k v)
+    (tt-prod t (text-blob "empty") (text-blob ""))
+    (tt-prod t (text-blob "quotes") (text-blob "'single' stays"))
+    (tt-written (test-t) t
+                "{:emon-transcript 1\n :producer {:path \"a/b'c\" :empty \"\" :quotes \"'single' stays\"}\n :inputs []\n :entries []}\n"
+                "escaped")))
+
+(deftest test-a-producer-with-only-escapes-is-still-written
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)
+        ^Cells v (new-cells)]
+    (cells-push k 107)
+    (cells-push v 92)
+    (cells-push v 92)
+    (cells-push v 34)
+    (cells-push v 34)
+    (tr-add-producer t k v)
+    (tt-written (test-t) t "{:emon-transcript 1\n :producer {:k \"//''\"}\n :inputs []\n :entries []}\n" "only escapes")))
+
+(deftest test-a-code-point-past-ascii-is-written-as-utf-8
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)
+        ^Cells v (new-cells)
+        ^Text out (new-text)]
+    (cells-push k 107)
+    (cells-push v 233)
+    (cells-push v 8364)
+    (cells-push v 128512)
+    (tr-add-producer t k v)
+    (tr-write t out)
+    ;; {:emon-transcript 1\n :producer {:k "é€😀"}\n :inputs []\n :entries []}\n
+    (let [^Blob want (hex-blob "7b3a656d6f6e2d7472616e73637269707420310a203a70726f6475636572207b3a6b2022c3a9e282acf09f9880227d0a203a696e70757473205b5d0a203a656e7472696573205b5d7d0a")]
+      (assert-text-span out want 0 (blob-len want) "UTF-8" 0))))
+
+(defn ^I32 tt-roundtrip [^TestT emon-t ^Blob b ^I32 row]
+  (comment "Read a transcript and write it again: the same bytes.")
+  (let [^Tr t (new-ctx Tr)
+        ^Text out (new-text)]
+    (assert-eq-at (tr-read t b) 0 "the transcript reads" row)
+    (tr-write t out)
+    (assert-text-span out b 0 (blob-len b) "a transcript read and written again is the same bytes" row)
+    (return 0)))
+
+(deftest test-non-ascii-in-a-producer-is-read-and-written-again
+  (tt-roundtrip (test-t)
+                (hex-blob "7b3a656d6f6e2d7472616e73637269707420310a203a70726f6475636572207b3a6b2022c3a9e282acf09f9880227d0a203a696e70757473205b5d0a203a656e7472696573205b5d7d0a")
+                0))
+
+(defn ^I32 tt-p-text [^Tr t ^I32 p ^:mut ^Text out]
+  (comment "The producer pair at `p` as `key=value`.")
+  (tr-p-key t p out)
+  (text-cp out 61)
+  (tr-p-val t p out)
+  (return 0))
+
+(deftest test-the-producer-is-read-in-the-order-the-file-has-it
+  (let [^Tr t (new-ctx Tr)
+        ^Text a (new-text)
+        ^Text b (new-text)
+        ^Text c (new-text)]
+    (assert-eq (tr-read t (text-blob "{:emon-transcript 1 :producer {:engine \"tesseract\" :n 5 :version \"5.5.3\" :host \"a/b\"} :inputs [{:index 3 :length 99}] :entries []}")) 0 "reads")
+    (assert-eq (tr-n-inputs t) 1 "one input")
+    (assert-eq (tr-in-index t 0) 3 "its index")
+    (assert-eq (tr-in-length t 0) 99 "its length")
+    (assert-eq (tr-p-more t 0) 1 "a producer")
+    (tt-p-text t 0 a)
+    (assert-text a "engine=tesseract" "the first")
+    ;; a value that is no string is passed
+    (let [^I32 p1 (tr-p-next t 0)]
+      (tt-p-text t p1 b)
+      (assert-text b "version=5.5.3" "the second string")
+      (let [^I32 p2 (tr-p-next t p1)]
+        (tt-p-text t p2 c)
+        (assert-text c "host=a/b" "the third")
+        (let [^I32 p3 (tr-p-next t p2)]
+          (assert-eq (tr-p-more t p3) 0 "and no more"))))))
+
+(deftest test-a-producer-that-is-no-map-is-passed
+  (let [^Tr t (new-ctx Tr)]
+    (assert-eq (tr-read t (text-blob "{:emon-transcript 1 :producer 5 :inputs [] :entries []}")) 0 "reads")
+    (assert-eq (tr-p-more t 0) 0 "none")))
+
+(deftest test-an-escape-in-a-string-takes-the-next-character-as-it-is
+  (let [^Tr t (new-ctx Tr)
+        ^Text a (new-text)
+        ^Text out (new-text)]
+    (assert-eq (tr-read t (text-blob "{:emon-transcript 1 :producer {:k \"a\\\"b\\\\c\\nd\"} :inputs [] :entries []}")) 0 "reads")
+    (tr-p-val t 0 a)
+    (assert-text a "a\"b\\cnd" "the character after a backslash")
+    (tr-write t out)
+    (assert-text out "{:emon-transcript 1\n :producer {:k \"a'b/cnd\"}\n :inputs []\n :entries []}\n" "and the file says it escaped")))
+
+(deftest test-whitespace-and-commas-are-the-same-and-an-unknown-key-is-read-past
+  (let [^Tr t (new-ctx Tr)
+        ^Text out (new-text)]
+    (assert-eq (tr-read t (text-blob "  {:note \"x\" :emon-transcript,1,:extra {:a [1 2 {:b -3}] :c :d}\n\n :inputs\t[ {:index 0, :length 4 :more []} ]\r\n :entries [{:round 2 :unknown 5 :kind :ocr :ans [5 3 9 0 1] :req [4 3 9 1]}]}  \n")) 0 "reads")
+    (tr-write t out)
+    (assert-text out "{:emon-transcript 1\n :inputs [{:index 0 :length 4}]\n :entries [\n  {:round 2 :kind :ocr :req [4 3 9 1] :ans [5 3 9 0 1]}]}\n" "written in the format's order")))
+
+(deftest test-the-first-of-a-repeated-key-wins
+  (let [^Tr t (new-ctx Tr)
+        ^Text out (new-text)]
+    (assert-eq (tr-read t (text-blob "{:emon-transcript 1 :inputs [{:index 1 :index 2 :length 3 :length 4}] :inputs [] :entries [] :entries [{}]}")) 0 "reads")
+    (tr-write t out)
+    (assert-text out "{:emon-transcript 1\n :inputs [{:index 1 :length 3}]\n :entries []}\n" "the first of each")))
+
+(deftest test-an-integer-is-an-i32
+  (let [^Tr t (new-ctx Tr)
+        ^Text out (new-text)]
+    (assert-eq (tr-read t (text-blob "{:emon-transcript 1 :inputs [{:index -2147483648 :length 2147483647}] :entries []}")) 0 "both ends")
+    (tr-write t out)
+    (assert-text out "{:emon-transcript 1\n :inputs [{:index -2147483648 :length 2147483647}]\n :entries []}\n" "the ends")))
+
+(deftest test-a-bitmap-keeps-the-name-a-file-gave-it
+  (let [^Tr t (new-ctx Tr)
+        ^Text a (new-text)
+        ^Text b (new-text)
+        ^Text out (new-text)]
+    (assert-eq (tr-read t (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :decode :req [4 2 1 1] :ans [5 2 1 0 1] :bitmap \"odd-name.png\"} {:round 0 :kind :decode :req [4 2 2 1] :ans [5 2 2 0 1]} {:round 0 :kind :decode :req [4 2 3 1] :ans [5 2 3 0 1] :bitmap 5}]}")) 0 "reads")
+    (assert-eq (tr-e-has-bitmap t 0) 1 "the first has one")
+    (assert-eq (tr-e-bitmap-name t 0 a) 1 "named")
+    (assert-text a "odd-name.png" "as the file has it")
+    (let [^I32 e1 (tr-e-next t 0)]
+      (assert-eq (tr-e-has-bitmap t e1) 0 "the second none")
+      (assert-eq (tr-e-bitmap-name t e1 b) 0 "no name")
+      (let [^I32 e2 (tr-e-next t e1)]
+        (assert-eq (tr-e-has-bitmap t e2) 0 "a bitmap that is no string is none")))
+    (tr-write t out)
+    (assert-text out "{:emon-transcript 1\n :inputs []\n :entries [\n  {:round 0 :kind :decode :req [4 2 1 1] :ans [5 2 1 0 1] :bitmap \"bitmap-0000.png\"}\n  {:round 0 :kind :decode :req [4 2 2 1] :ans [5 2 2 0 1]}\n  {:round 0 :kind :decode :req [4 2 3 1] :ans [5 2 3 0 1]}]}\n" "written by place")))
+
+(deftest test-the-entries-are-read-with-their-records
+  (let [^Tr t (new-ctx Tr)]
+    (assert-eq (tr-read t (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 4 :kind :ocr :req [4 3 9 1] :ans [6 3 9 0 1 2]} {:round 5 :kind :crop :req [3 5 2] :ans [4 5 2 1]}]}")) 0 "reads")
+    (assert-eq (tr-e-round t 0) 4 "round")
+    (assert-eq (tr-e-n t 0) 0 "place")
+    (assert-eq (tr-e-req-len t 0) 4 "request length")
+    (assert-eq (tr-e-ans-len t 0) 6 "answer length")
+    (let [^I32 e1 (tr-e-next t 0)]
+      (assert-eq (tr-e-more t e1) 1 "a second")
+      (assert-eq (tr-e-round t e1) 5 "its round")
+      (assert-eq (tr-e-n t e1) 1 "its place")
+      (assert-eq (tr-e-req-len t e1) 3 "its request length")
+      (assert-eq (tr-e-ans-len t e1) 4 "its answer length")
+      (let [^I32 e2 (tr-e-next t e1)]
+        (assert-eq (tr-e-more t e2) 0 "and no third")))))
+
+;; ------------------------------------------------------------------ what a reader refuses
+
+(defn ^I32 tt-bad [^TestT emon-t ^Blob b ^I32 want ^Str sentence]
+  (comment "The reason a text is no transcript, and the sentence it says.")
+  (let [^Tr t (new-ctx Tr)]
+    (assert-eq (tr-read t b) want sentence)
+    (assert-eq (fd t why) want sentence)
+    (assert-text (fd t msg) sentence sentence)
+    (return 0)))
+
+(deftest test-text-that-is-not-edn-is-refused-by-name
+  (tt-bad (test-t) (text-blob "") (tb-end) "unexpected end")
+  (tt-bad (test-t) (text-blob "   ") (tb-end) "unexpected end")
+  (tt-bad (test-t) (text-blob "{") (tb-unterminated-map) "unterminated map")
+  (tt-bad (test-t) (text-blob "{:a 1") (tb-unterminated-map) "unterminated map")
+  (tt-bad (test-t) (text-blob "{:a") (tb-end) "unexpected end")
+  (tt-bad (test-t) (text-blob "{:a [1 2") (tb-unterminated-vec) "unterminated vector")
+  (tt-bad (test-t) (text-blob "{:a [1 2}") (tb-unexpected) "unexpected character at 8")
+  (tt-bad (test-t) (text-blob "{:a \"x") (tb-unterminated-str) "unterminated string")
+  (tt-bad (test-t) (text-blob "{:a \"x\\\"") (tb-unterminated-str) "unterminated string")
+  (tt-bad (test-t) (text-blob "{:a 1} x") (tb-trailing) "trailing text at 7")
+  (tt-bad (test-t) (text-blob "{:a 1}}") (tb-trailing) "trailing text at 6")
+  (tt-bad (test-t) (text-blob "{\"a\" 1}") (tb-key) "a map key is not a keyword")
+  (tt-bad (test-t) (text-blob "{1 1}") (tb-key) "a map key is not a keyword")
+  (tt-bad (test-t) (text-blob "{:a -}") (tb-integer) "bad integer at 4")
+  (tt-bad (test-t) (text-blob "{:a 2147483648}") (tb-integer) "bad integer at 4")
+  (tt-bad (test-t) (text-blob "{:a -2147483649}") (tb-integer) "bad integer at 4")
+  (tt-bad (test-t) (text-blob "{:a 99999999999999999999}") (tb-integer) "bad integer at 4")
+  (tt-bad (test-t) (text-blob "{:a #x}") (tb-unexpected) "unexpected character at 4")
+  (tt-bad (test-t) (text-blob "{:a nil}") (tb-unexpected) "unexpected character at 4")
+  (tt-bad (test-t) (text-blob "{:a )}") (tb-unexpected) "unexpected character at 4")
+  (tt-bad (test-t) (text-blob "]") (tb-unexpected) "unexpected character at 0")
+  (tt-bad (test-t) (hex-blob "7b3a6122ff227d") (tb-not-utf8) "transcript.edn is not UTF-8")
+  (tt-bad (test-t) (hex-blob "c0af") (tb-not-utf8) "transcript.edn is not UTF-8")
+  (tt-bad (test-t) (hex-blob "eda080") (tb-not-utf8) "transcript.edn is not UTF-8")
+  (tt-bad (test-t) (hex-blob "f4908080") (tb-not-utf8) "transcript.edn is not UTF-8")
+  (tt-bad (test-t) (hex-blob "e282") (tb-not-utf8) "transcript.edn is not UTF-8"))
+
+(deftest test-a-document-nested-past-the-limit-is-refused
+  (tt-bad (test-t)
+          (text-blob "{:a [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}")
+          (tb-nesting) "nested too deeply"))
+
+(deftest test-a-text-that-is-edn-and-no-transcript-is-refused-by-name
+  (tt-bad (test-t) (text-blob "[]") (tb-not-map) "the transcript is not a map")
+  (tt-bad (test-t) (text-blob "5") (tb-not-map) "the transcript is not a map")
+  (tt-bad (test-t) (text-blob "\"x\"") (tb-not-map) "the transcript is not a map")
+  (tt-bad (test-t) (text-blob "{}") (tb-version) "not an emon-transcript of version 1")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 2 :inputs [] :entries []}") (tb-version) "not an emon-transcript of version 1")
+  (tt-bad (test-t) (text-blob "{:emon-transcript :1 :inputs [] :entries []}") (tb-version) "not an emon-transcript of version 1")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 2 :emon-transcript 1 :inputs [] :entries []}") (tb-version) "not an emon-transcript of version 1")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1}") (tb-no-inputs) "no :inputs")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs 5 :entries []}") (tb-no-inputs) "no :inputs")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs {} :entries []}") (tb-no-inputs) "no :inputs")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [3] :entries []}") (tb-input-map) "an input is not a map")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [{:length 1}] :entries []}") (tb-input-index) "an input has no :index")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [{:index \"0\" :length 1}] :entries []}") (tb-input-index) "an input has no :index")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [{:index 0}] :entries []}") (tb-input-length) "an input has no :length")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs []}") (tb-no-entries) "no :entries")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries 7}") (tb-no-entries) "no :entries")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :entries [] :inputs 5}") (tb-no-inputs) "no :inputs"))
+
+(deftest test-an-entry-that-is-no-entry-of-this-format-is-refused-by-name
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [1]}") (tb-entry-map) "an entry is not a map")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{}]}") (tb-entry-round) "an entry has no :round")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round :x :kind :ocr :req [4 3 1 1] :ans [5 3 1 0 1]}]}") (tb-entry-round) "an entry has no :round")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0}]}") (tb-entry-kind) "an entry has no known :kind")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :bytes}]}") (tb-entry-kind) "an entry has no known :kind")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :unknown}]}") (tb-entry-kind) "an entry has no known :kind")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind \"ocr\"}]}") (tb-entry-kind) "an entry has no known :kind")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr}]}") (tb-entry-req) "an entry has no :req")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [4 3 1 \"a\"]}]}") (tb-entry-req) "an entry has no :req")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req 5}]}") (tb-entry-req) "an entry has no :req")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [4 3 1 1]}]}") (tb-entry-ans) "an entry has no :ans")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [4 3 1 1] :ans [5 3 1 0 :x]}]}") (tb-entry-ans) "an entry has no :ans"))
+
+(deftest test-a-request-and-an-answer-must-be-records-of-the-entrys-kind
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [2 3] :ans [5 3 1 0 1]}]}") (tb-req-record) "an entry's :req is not a record of its :kind")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [5 3 1 1] :ans [5 3 1 0 1]}]}") (tb-req-record) "an entry's :req is not a record of its :kind")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [4 2 1 1] :ans [5 3 1 0 1]}]}") (tb-req-record) "an entry's :req is not a record of its :kind")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [4 3 1 1] :ans [3 3 1]}]}") (tb-ans-record) "an entry's :ans is not the answer to its :req")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [4 3 1 1] :ans [6 3 1 0 1]}]}") (tb-ans-record) "an entry's :ans is not the answer to its :req")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [4 3 1 1] :ans [5 2 1 0 1]}]}") (tb-ans-record) "an entry's :ans is not the answer to its :req")
+  (tt-bad (test-t) (text-blob "{:emon-transcript 1 :inputs [] :entries [{:round 0 :kind :ocr :req [4 3 1 1] :ans [5 3 2 0 1]}]}") (tb-ans-record) "an entry's :ans is not the answer to its :req"))
+
+;; ------------------------------------------------------------------ a replay is given the inputs the recording saw
+
+(defn ^I32 tt-found-at [^Tr t ^Cells k ^I32 at ^I32 cnt]
+  (comment "The place of the entry a request finds, or -1.")
+  (let [^I32 e (tr-find t k at cnt)]
+    (if (< e 0) (return -1))
+    (return (tr-e-n t e))))
+
+(defn ^I32 tt-found [^Tr t ^Cells k]
+  (return (tt-found-at t k 0 4)))
+
+(defn ^I32 tt-taken [^Tr t ^Cells k]
+  (comment "The place of the entry a request takes (and marks used), or -1.")
+  (let [^I32 e (tr-take t k 0 4)]
+    (if (< e 0) (return -1))
+    (return (tr-e-n t e))))
+
+(defn ^I32 tt-pair [^:mut ^Cells c ^I32 index ^I32 length]
+  (cells-push c index)
+  (cells-push c length)
+  (return 0))
+
+(deftest test-a-replay-is-given-the-inputs-the-recording-saw
+  (let [^Tr t (new-ctx Tr)
+        ^Cells want (new-cells)
+        ^Text out (new-text)]
+    (tr-add-input t 0 5)
+    (tt-pair want 0 5)
+    (assert-eq (tr-check-inputs t want out) 0 "the same")
+    (assert-text out "" "nothing said")))
+
+(deftest test-another-length-is-another-run
+  (let [^Tr t (new-ctx Tr)
+        ^Cells want (new-cells)
+        ^Text out (new-text)]
+    (tr-add-input t 0 5)
+    (tr-add-input t 1 7)
+    (tt-pair want 0 5)
+    (tt-pair want 1 8)
+    (assert-eq (tr-check-inputs t want out) (tb-inputs) "refused")
+    (assert-text out "the transcript is of other inputs than this run's: [0:5 1:7], not [0:5 1:8]" "and says both")))
+
+(deftest test-another-count-is-another-run
+  (let [^Tr t (new-ctx Tr)
+        ^Cells want (new-cells)
+        ^Text out (new-text)]
+    (tr-add-input t 0 5)
+    (assert-eq (tr-check-inputs t want out) (tb-inputs) "none given")
+    (assert-text out "the transcript is of other inputs than this run's: [0:5], not []" "says so")))
+
+;; ------------------------------------------------------------------ the replay map
+
+(deftest test-a-request-is-found-by-the-whole-record
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)]
+    (tt-entry t 0 (tk-render) 1 10 0)
+    (tt-entry t 0 (tk-ocr) 2 20 0)
+    (tt-entry t 1 (tk-render) 3 30 0)
+    (assert-eq (tr-index t) 0 "indexed")
+    (tt-key k (tk-ocr) 2 20)
+    (assert-eq (tt-found t k) 1 "the second entry is found by its place")
+    (tt-key k (tk-render) 3 30)
+    (assert-eq (tt-found t k) 2 "the third")
+    (tt-key k (tk-render) 3 31)
+    (assert-eq (tr-find t k 0 4) -1 "one cell different is a miss")
+    (tt-key k (tk-decode) 3 30)
+    (assert-eq (tr-find t k 0 4) -1 "another kind is a miss")
+    (tt-key k (tk-render) 4 30)
+    (assert-eq (tr-find t k 0 4) -1 "another id is a miss")
+    (tt-key k (tk-render) 3 30)
+    (assert-eq (tr-find t k 0 3) -1 "a shorter record is a miss")
+    (cells-push k 9)
+    (assert-eq (tr-find t k 0 5) -1 "a longer record is a miss")))
+
+(deftest test-a-request-found-in-the-middle-of-cells
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)]
+    (tt-entry t 0 (tk-ocr) 5 50 0)
+    (tr-index t)
+    (cells-push k 77)
+    (cells-push k 77)
+    (cells-push k 4)
+    (cells-push k (tk-ocr))
+    (cells-push k 5)
+    (cells-push k 50)
+    (cells-push k 88)
+    (assert-eq (tt-found-at t k 2 4) 0 "found at an offset")
+    (assert-eq (tt-found-at t k 1 4) -1 "not at the wrong offset")))
+
+(deftest test-nothing-is-found-before-the-map-is-built
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)]
+    (tt-entry t 0 (tk-ocr) 5 50 0)
+    (tt-key k (tk-ocr) 5 50)
+    (assert-eq (tr-find t k 0 4) -1 "no map yet")
+    (tr-index t)
+    (assert-that (>= (tr-find t k 0 4) 0) "and then there is")))
+
+(deftest test-an-empty-transcript-finds-nothing
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)]
+    (tr-index t)
+    (tt-key k (tk-ocr) 5 50)
+    (assert-eq (tr-find t k 0 4) -1 "a miss")
+    (assert-eq (tr-unused t) 0 "nothing unused")))
+
+(deftest test-of-two-entries-of-one-request-the-later-answers
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)]
+    (tt-entry t 0 (tk-ocr) 5 50 0)
+    (tt-entry t 0 (tk-ocr) 6 60 0)
+    (tt-entry t 3 (tk-ocr) 5 50 0)
+    (tr-index t)
+    (tt-key k (tk-ocr) 5 50)
+    (let [^I32 e (tr-take t k 0 4)]
+      (assert-eq (tr-e-n t e) 2 "the later")
+      (assert-eq (tr-e-round t e) 3 "its round"))
+    (tt-key k (tk-ocr) 6 60)
+    (assert-eq (tt-taken t k) 1 "the other request")
+    (assert-eq (tr-unused t) 1 "the earlier of the two was never asked for")))
+
+(deftest test-the-entries-nobody-asked-for-are-counted
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)
+        ^Text out (new-text)]
+    (tt-entry t 0 (tk-render) 1 10 0)
+    (tt-entry t 0 (tk-render) 2 20 0)
+    (tt-entry t 0 (tk-render) 3 30 0)
+    (tr-index t)
+    (assert-eq (tr-unused t) 3 "all three")
+    (tt-key k (tk-render) 2 20)
+    (assert-that (>= (tr-take t k 0 4) 0) "one asked")
+    (assert-eq (tr-unused t) 2 "two left")
+    (tr-take t k 0 4)
+    (assert-eq (tr-unused t) 2 "asking twice counts once")
+    (tt-key k (tk-render) 2 21)
+    (assert-eq (tr-take t k 0 4) -1 "a miss marks nothing")
+    (assert-eq (tr-unused t) 2 "still two")
+    (tr-unused-msg t out)
+    (assert-text out "2 recorded entries were never asked for" "the sentence of transcript-bad")))
+
+(deftest test-find-does-not-mark-and-take-does
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)]
+    (tt-entry t 0 (tk-render) 1 10 0)
+    (tr-index t)
+    (tt-key k (tk-render) 1 10)
+    (assert-that (>= (tr-find t k 0 4) 0) "found")
+    (assert-eq (tr-unused t) 1 "find leaves it")
+    (assert-that (>= (tr-take t k 0 4) 0) "taken")
+    (assert-eq (tr-unused t) 0 "take marks it")))
+
+(deftest test-a-miss-says-the-record
+  (let [^Cells k (new-cells)
+        ^Text out (new-text)]
+    (tt-key k (tk-ocr) 5 50)
+    (tr-miss-msg k 0 4 out)
+    (assert-text out "no answer recorded for request [4 3 5 50]" "the record")))
+
+(defn ^I32 tt-many [^TestT emon-t ^I32 n]
+  (comment "n entries of distinct requests, every one found by its own record and no other.")
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (tt-entry t (quot i 7) (tk-ocr) (+ i 1) (* i 3) 0)
+          (set i (+ i 1))))
+    (tr-index t)
+    (set i 0)
+    (while (< i n)
+      (do (tt-key k (tk-ocr) (+ i 1) (* i 3))
+          (assert-eq-at (tt-taken t k) i "found at its own place" i)
+          (tt-key k (tk-ocr) (+ i 1) (+ (* i 3) 1))
+          (assert-eq-at (tt-found t k) -1 "a neighbour is a miss" i)
+          (set i (+ i 1))))
+    (assert-eq (tr-unused t) 0 "all asked for")
+    (return 0)))
+
+(deftest test-a-large-transcript-is-found-entry-by-entry
+  (tt-many (test-t) 1)
+  (tt-many (test-t) 15)
+  (tt-many (test-t) 16)
+  (tt-many (test-t) 17)
+  (tt-many (test-t) 1000))
+
+(deftest test-a-record-that-is-the-same-but-for-a-high-cell-is-a-miss
+  (let [^Tr t (new-ctx Tr)
+        ^Cells k (new-cells)]
+    (tt-entry t 0 (tk-ocr) 1 1048576 0)
+    (tt-entry t 0 (tk-ocr) 2 -1048576 0)
+    (tt-entry t 0 (tk-ocr) 3 2147483647 0)
+    (tt-entry t 0 (tk-ocr) 4 -2147483648 0)
+    (tr-index t)
+    (tt-key k (tk-ocr) 1 0)
+    (assert-eq (tr-find t k 0 4) -1 "2^20 is not 0")
+    (tt-key k (tk-ocr) 1 1048576)
+    (assert-eq (tt-found t k) 0 "2^20")
+    (tt-key k (tk-ocr) 2 -1048576)
+    (assert-eq (tt-found t k) 1 "-2^20")
+    (tt-key k (tk-ocr) 3 2147483647)
+    (assert-eq (tt-found t k) 2 "max")
+    (tt-key k (tk-ocr) 4 -2147483648)
+    (assert-eq (tt-found t k) 3 "min")))
+
+;; ------------------------------------------------------------------ every committed transcript
+
+(defn ^I32 tt-corpus-row [^TestT emon-t ^Blob b ^I32 row]
+  (comment "A transcript of the repository: it reads, it writes the same bytes, and every entry is found by its own request.")
+  (let [^Tr t (new-ctx Tr)
+        ^Text out (new-text)
+        ^Cells k (new-cells)
+        ^:mut ^I32 e 0
+        ^:mut ^I32 n 0]
+    (assert-eq-at (tr-read t b) 0 "the transcript reads" row)
+    (tr-write t out)
+    (assert-text-span out b 0 (blob-len b) "read and written again, the same bytes" row)
+    (tr-index t)
+    (while (== (tr-e-more t e) 1)
+      (do (cells-drop k 0)
+          (let [^I32 q (tr-e-req t e)
+                ^I32 ql (tr-e-req-len t e)
+                ^:mut ^I32 i 0]
+            (while (< i ql)
+              (do (cells-push k (tr-e-cell t (+ q i)))
+                  (set i (+ i 1))))
+            (assert-that-at (>= (tr-take t k 0 ql) 0) "an entry is found by its own request" row))
+          (set n (+ n 1))
+          (set e (tr-e-next t e))))
+    (assert-that-at (<= (tr-unused t) n) "no more unused than entries" row)
+    (return n)))
+
+(defn ^I32 tt-line-end [^Blob b ^I32 from]
+  (comment "The byte offset of the end of the line starting at `from`.")
+  (let [^I32 n (blob-len b)
+        ^:mut ^I32 i from]
+    (while (and (< i n) (!= (blob-u8 b i) 10))
+      (set i (+ i 1)))
+    (return i)))
+
+(deftest test-every-committed-transcript-is-read-and-written-again-byte-for-byte
+  (let [^Blob names (test-file "transcript/manifest.txt")
+        ^I32 n (blob-len names)
+        ^:mut ^I32 at 0
+        ^:mut ^I32 row 0]
+    (while (< at n)
+      (let [^I32 e (tt-line-end names at)]
+        (if (> e at)
+          (do (tt-corpus-row (test-t) (test-file-span names at e) row)
+              (set row (+ row 1))))
+        (set at (+ e 1))))
+    (assert-eq row 86 "the transcripts under test/")))

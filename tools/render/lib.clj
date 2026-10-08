@@ -49,7 +49,7 @@
     (fs/create-dirs (str d "/pngenc"))
     (fs/copy "host/go/pngenc/pngenc.go" (str d "/pngenc/pngenc.go") {:replace-existing true})
     (fs/create-dirs (str d "/planrun"))
-    (fs/copy "host/go/planrun/planrun.go" (str d "/planrun/planrun.go") {:replace-existing true})
+    (doseq [f (fs/glob "host/go/planrun" "*.go")] (fs/copy f (str d "/planrun/" (fs/file-name f)) {:replace-existing true}))
     (fs/create-dirs (str d "/pdfium"))
     (doseq [f (fs/glob "host/go/pdfium" "*.go")] (fs/copy f (str d "/pdfium/" (fs/file-name f)) {:replace-existing true}))
     (spit (str d "/go.mod") "module emon\n\ngo 1.21\n")

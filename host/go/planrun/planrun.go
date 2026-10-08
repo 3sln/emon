@@ -217,13 +217,13 @@ func (m *Machine) Fulfil(f port.PlanFulfiller) ([]port.PlanEntry, error) {
 	}
 	for _, r := range m.reqs {
 		if err := f.Start(r, all); err != nil {
-			return nil, err
+			return nil, named(err)
 		}
 	}
 	for range m.reqs {
 		a, err := f.Next()
 		if err != nil {
-			return nil, err
+			return nil, named(err)
 		}
 		if err := m.Offer(a); err != nil {
 			return nil, err
@@ -262,7 +262,7 @@ func b2i(b bool) int32 {
 
 // Drive runs the unit to completion with the synchronous driver: a miss is fetched with bytesF and the unit re-run; a round of requests is
 // fulfilled with ports (and recorded, when rec is not nil) and the unit re-run on the answers.
-func Drive(m *Machine, unit Unit, ports, bytesF port.PlanFulfiller, misses port.PlanMisses, rec *port.Transcript) error {
+func Drive(m *Machine, unit Unit, ports, bytesF port.PlanFulfiller, misses port.PlanMisses, rec *Transcript) error {
 	for {
 		next, err := m.Attempt(unit, misses)
 		if err != nil {
@@ -290,7 +290,7 @@ func Drive(m *Machine, unit Unit, ports, bytesF port.PlanFulfiller, misses port.
 // Run runs one unit to completion in a machine of its own (a PAGE UNIT's loop, P7.U, D196: the unit is also handed the BitmapSet of the
 // attempt, made from the bitmaps its answers carried; what kin made in it is added to the bitmaps a fulfiller sees). `ports` fulfils
 // render/decode/ocr; `bytesF` fulfils the loop's own `bytes` requests; `rec`, when not nil, records every render/decode/ocr pair.
-func Run(cfg port.PlanConfig, unit Unit, ports, bytesF port.PlanFulfiller, misses port.PlanMisses, rec *port.Transcript) (port.PlanStats, error) {
+func Run(cfg port.PlanConfig, unit Unit, ports, bytesF port.PlanFulfiller, misses port.PlanMisses, rec *Transcript) (port.PlanStats, error) {
 	m := New(cfg)
 	err := Drive(m, unit, ports, bytesF, misses, rec)
 	return m.Stats(), err

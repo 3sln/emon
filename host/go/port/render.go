@@ -190,11 +190,11 @@ func NewRenderFulfillerFor(r Renderer, idx int, in RenderInput) *RenderFulfiller
 func (f *RenderFulfiller) Fulfil(req PlanRequest) (PlanAnswer, error) {
 	idx, rr, err := ParseRender(req)
 	if err != nil {
-		return PlanAnswer{}, &PlanError{Name: "fulfil-failed", Msg: err.Error()}
+		return PlanAnswer{}, &FulfilError{Msg: err.Error()}
 	}
 	in, ok := f.Inputs[idx]
 	if !ok {
-		return PlanAnswer{}, &PlanError{Name: "fulfil-failed", Msg: fmt.Sprintf("a render names input %d, which the run does not have", idx)}
+		return PlanAnswer{}, &FulfilError{Msg: fmt.Sprintf("a render names input %d, which the run does not have", idx)}
 	}
 	var bm *Bitmap
 	switch {
@@ -261,12 +261,12 @@ func (m *KindMux) Start(req PlanRequest, bm PlanBitmaps) error {
 			}
 		}
 	}
-	return &PlanError{Name: "fulfil-failed", Msg: fmt.Sprintf("no port is configured for request kind %d", req.Kind())}
+	return &FulfilError{Msg: fmt.Sprintf("no port is configured for request kind %d", req.Kind())}
 }
 
 func (m *KindMux) Next() (PlanAnswer, error) {
 	if len(m.order) == 0 {
-		return PlanAnswer{}, &PlanError{Name: "fulfil-failed", Msg: "next without a started request"}
+		return PlanAnswer{}, &FulfilError{Msg: "next without a started request"}
 	}
 	i := m.order[0]
 	m.order = m.order[1:]

@@ -3,11 +3,10 @@
 // that for the reasoning. The record layouts are KIN's (`kin/plan.kin`); this
 // file knows only a record's header [len kind id (status)] and the four kinds.
 //
-// Nothing here touches a filesystem (D058): a transcript is named files in
-// memory (`Files`, `TranscriptFromFiles`) and the driver moves them to a
-// directory. No `@kin:link` annotation is declared: this is a host engine for
-// the ports, not a port kin calls. Every exported name is prefixed `Plan` (or is
-// `Transcript`, `Replayer`) so it cannot collide with the port forms beside it.
+// THE TRANSCRIPT HAS LEFT THIS PACKAGE (P10.9, D396, D438): it is kin's (`kin/transcript.kin`) and `emon/planrun` drives it, for the reason the loop
+// is there (D405): the generated packages import this one. What stays is the entry (`PlanEntry`), the PNG reader and the fulfillers.
+// Nothing here touches a filesystem (D058). No `@kin:link` annotation is declared: this is a host engine for the ports, not a port kin calls.
+// Every exported name is prefixed `Plan` so it cannot collide with the port forms beside it.
 //
 // The loop's shape is the JavaScript host's too: the host owns the await loop (`emon/planrun`, over kin's `planloop`).
 // `Start` begins a request (a sync host finishes it there), `Next` returns the
@@ -19,11 +18,8 @@ import (
 	"bytes"
 	"compress/zlib"
 	"errors"
-	"fmt"
 	"hash/crc32"
 	"io"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -78,9 +74,8 @@ type PlanStats struct {
 	Attempts, Rounds, Requests, FetchRounds, BytesRequests int32
 }
 
-// PlanError is a named failure: `max-rounds`, `fetch-rounds` (limits),
-// `transcript-miss`, `transcript-bad`, `fulfil-failed`, `unit-failed`,
-// `bad-record`, `need-bytes-stalled`.
+// PlanError is a named failure of the loop: the name is kin's (`planloop.Pe*`: `max-rounds` and `fetch-rounds` (limits), `transcript-miss`,
+// `transcript-bad`, `fulfil-failed`, `unit-failed`, `bad-record`, `need-bytes-stalled`), made by `planrun`. This package names none.
 type PlanError struct {
 	Name string
 	Msg  string
@@ -90,10 +85,6 @@ type PlanError struct {
 }
 
 func (e *PlanError) Error() string { return e.Name + ": " + e.Msg }
-
-func planErr(name string, format string, a ...any) *PlanError {
-	return &PlanError{Name: name, Msg: fmt.Sprintf(format, a...)}
-}
 
 // PlanBitmaps maps an answer's id to its (port) Bitmap.
 type PlanBitmaps map[int32]*Bitmap
@@ -209,11 +200,10 @@ type PlanNoMisses struct{}
 func (PlanNoMisses) Take(int32) []PlanRange { return nil }
 
 // THE LOOP is `emon/planrun` (kin's `planloop` drives it; P10.8). It is not in this package because the generated `planloop` imports
-// `port`: this file keeps the fulfillers, the requests and answers, and the transcript.
+// `port`: this file keeps the fulfillers and the requests and answers. THE TRANSCRIPT is kin's too (`kin/transcript.kin`, P10.9), driven by
+// `planrun/transcript.go` for the same reason.
 
-// ---------------------------------------------------------------- transcript
-
-// PlanEntry is one recorded request/answer pair.
+// PlanEntry is one recorded request/answer pair (the transcript that holds them is in `emon/planrun`, with the rest of the loop).
 type PlanEntry struct {
 	Round  int32
 	Req    []int32
@@ -221,414 +211,11 @@ type PlanEntry struct {
 	Bitmap *Bitmap
 }
 
-// Transcript is the complete set of answers of one run. Inputs are (index,
-// length) only: never bytes, origin, fetch count or password (SPEC 13.1).
-type Transcript struct {
-	Inputs  [][2]int32
-	Entries []PlanEntry
-	// Producer is WHO ANSWERED (D214): the live ports' identities as name/value pairs (an OCR engine and its version, the
-	// models it read with), written as `:producer {...}` when there are any and never read back for a replay: a replay
-	// depends on the answers, not on whose engine gave them. Empty leaves the file as it always was.
-	Producer [][2]string
-}
+// FulfilError is a port that could not run (distinct from an answer that says `failed`): a missing renderer, an input the run does not have.
+// The loop reports it as kin's `fulfil-failed` (`planrun` does; this package cannot import kin's names).
+type FulfilError struct{ Msg string }
 
-// TranscriptFile is the name of the records file.
-const TranscriptFile = "transcript.edn"
-
-// PlanFile is one named file of a transcript.
-type PlanFile struct {
-	Name  string
-	Bytes []byte
-}
-
-func planKindName(k int32) string {
-	switch k {
-	case PlanKindRender:
-		return "render"
-	case PlanKindDecode:
-		return "decode"
-	case PlanKindOcr:
-		return "ocr"
-	case PlanKindCrop:
-		return "crop"
-	case PlanKindDecodeImg:
-		return "decode-img"
-	}
-	return "unknown"
-}
-
-func planKindCode(s string) (int32, bool) {
-	switch s {
-	case "render":
-		return PlanKindRender, true
-	case "decode":
-		return PlanKindDecode, true
-	case "ocr":
-		return PlanKindOcr, true
-	case "crop":
-		return PlanKindCrop, true
-	case "decode-img":
-		return PlanKindDecodeImg, true
-	}
-	return 0, false
-}
-
-func planInts(v []int32) string {
-	s := make([]string, len(v))
-	for i, x := range v {
-		s[i] = strconv.Itoa(int(x))
-	}
-	return "[" + strings.Join(s, " ") + "]"
-}
-
-// ToFiles writes the transcript as files in a fixed order: transcript.edn, then
-// one lossless PNG per bitmap named by its entry's index. DETERMINISTIC: the
-// same entries always give the same bytes (and the same bytes as the Rust host).
-func (t *Transcript) ToFiles() []PlanFile {
-	var sb strings.Builder
-	sb.WriteString("{:emon-transcript 1\n")
-	if len(t.Producer) > 0 {
-		sb.WriteString(" :producer {")
-		for i, kv := range t.Producer {
-			if i > 0 {
-				sb.WriteString(" ")
-			}
-			fmt.Fprintf(&sb, ":%s \"%s\"", kv[0], strings.NewReplacer("\\", "/", "\"", "'").Replace(kv[1]))
-		}
-		sb.WriteString("}\n")
-	}
-	sb.WriteString(" :inputs [")
-	for i, in := range t.Inputs {
-		if i > 0 {
-			sb.WriteString(" ")
-		}
-		fmt.Fprintf(&sb, "{:index %d :length %d}", in[0], in[1])
-	}
-	sb.WriteString("]\n :entries [")
-	var pngs []PlanFile
-	for n, e := range t.Entries {
-		kind := int32(0)
-		if len(e.Req) > 1 {
-			kind = e.Req[1]
-		}
-		fmt.Fprintf(&sb, "\n  {:round %d :kind :%s :req %s :ans %s", e.Round, planKindName(kind), planInts(e.Req), planInts(e.Ans))
-		if e.Bitmap != nil {
-			name := fmt.Sprintf("bitmap-%04d.png", n)
-			fmt.Fprintf(&sb, " :bitmap \"%s\"", name)
-			pngs = append(pngs, PlanFile{name, PngEncode(e.Bitmap)})
-		}
-		sb.WriteString("}")
-	}
-	sb.WriteString("]}\n")
-	return append([]PlanFile{{TranscriptFile, []byte(sb.String())}}, pngs...)
-}
-
-// TranscriptFromFiles reads what ToFiles wrote.
-func TranscriptFromFiles(files map[string][]byte) (*Transcript, error) {
-	bad := func(m string) error { return planErr("transcript-bad", "%s", m) }
-	raw, ok := files[TranscriptFile]
-	if !ok {
-		return nil, bad("no transcript.edn")
-	}
-	p := &ednParser{b: []rune(string(raw))}
-	top, err := p.parse()
-	if err != nil {
-		return nil, bad(err.Error())
-	}
-	m, ok := top.(map[string]any)
-	if !ok {
-		return nil, bad("the transcript is not a map")
-	}
-	if v, _ := m["emon-transcript"].(int64); v != 1 {
-		return nil, bad("not an emon-transcript of version 1")
-	}
-	t := &Transcript{}
-	if _, ok := m["producer"].(map[string]any); ok {
-		t.Producer = planProducerInOrder(string(raw))
-	}
-	ins, ok := m["inputs"].([]any)
-	if !ok {
-		return nil, bad("no :inputs")
-	}
-	for _, i := range ins {
-		im, ok := i.(map[string]any)
-		idx, ok1 := im["index"].(int64)
-		ln, ok2 := im["length"].(int64)
-		if !ok || !ok1 || !ok2 {
-			return nil, bad("an input needs :index and :length")
-		}
-		t.Inputs = append(t.Inputs, [2]int32{int32(idx), int32(ln)})
-	}
-	ents, ok := m["entries"].([]any)
-	if !ok {
-		return nil, bad("no :entries")
-	}
-	for _, e := range ents {
-		em, ok := e.(map[string]any)
-		if !ok {
-			return nil, bad("an entry is not a map")
-		}
-		round, ok := em["round"].(int64)
-		if !ok {
-			return nil, bad("an entry has no :round")
-		}
-		kw, _ := em["kind"].(ednKw)
-		kind, ok := planKindCode(string(kw))
-		if !ok {
-			return nil, bad("an entry has no known :kind")
-		}
-		req, ok1 := planIntVec(em["req"])
-		ans, ok2 := planIntVec(em["ans"])
-		if !ok1 || !ok2 {
-			return nil, bad("an entry needs :req and :ans")
-		}
-		if len(req) < 3 || int(req[0]) != len(req) || req[1] != kind {
-			return nil, bad("an entry's :req is not a record of its :kind")
-		}
-		if len(ans) < 4 || int(ans[0]) != len(ans) || ans[1] != kind || ans[2] != req[2] {
-			return nil, bad("an entry's :ans is not the answer to its :req")
-		}
-		ent := PlanEntry{Round: int32(round), Req: req, Ans: ans}
-		if name, ok := em["bitmap"].(string); ok {
-			png, ok := files[name]
-			if !ok {
-				return nil, planErr("transcript-bad", "%s is missing", name)
-			}
-			b, err := PngDecode(png)
-			if err != nil {
-				return nil, planErr("transcript-bad", "%s", err.Error())
-			}
-			ent.Bitmap = b
-		}
-		t.Entries = append(t.Entries, ent)
-	}
-	return t, nil
-}
-
-// planProducerInOrder reads the `:producer {:name "value" ...}` map in the order the file has it (the EDN reader's maps are
-// unordered, and a transcript read and written again must be the same bytes).
-func planProducerInOrder(s string) [][2]string {
-	i := strings.Index(s, ":producer {")
-	if i < 0 {
-		return nil
-	}
-	s = s[i+len(":producer {"):]
-	var out [][2]string
-	for {
-		s = strings.TrimLeft(s, " \n\t,")
-		if s == "" || s[0] == '}' || s[0] != ':' {
-			return out
-		}
-		j := strings.IndexAny(s, " \n\t")
-		if j < 0 {
-			return out
-		}
-		key := s[1:j]
-		s = strings.TrimLeft(s[j:], " \n\t")
-		if s == "" || s[0] != '"' {
-			return out
-		}
-		k := strings.Index(s[1:], "\"")
-		if k < 0 {
-			return out
-		}
-		out = append(out, [2]string{key, s[1 : 1+k]})
-		s = s[1+k+1:]
-	}
-}
-
-func planIntVec(v any) ([]int32, bool) {
-	a, ok := v.([]any)
-	if !ok {
-		return nil, false
-	}
-	out := make([]int32, len(a))
-	for i, x := range a {
-		n, ok := x.(int64)
-		if !ok {
-			return nil, false
-		}
-		out[i] = int32(n)
-	}
-	return out, true
-}
-
-// CheckInputs: replay must be given the inputs the recording saw.
-func (t *Transcript) CheckInputs(inputs [][2]int32) error {
-	if len(t.Inputs) != len(inputs) {
-		return planErr("transcript-bad", "the transcript is of inputs %v, not %v", t.Inputs, inputs)
-	}
-	for i := range inputs {
-		if t.Inputs[i] != inputs[i] {
-			return planErr("transcript-bad", "the transcript is of inputs %v, not %v", t.Inputs, inputs)
-		}
-	}
-	return nil
-}
-
-// Replayer answers from a transcript: a request it has no entry for is
-// `transcript-miss`, never a guess. `bytes` is not here and cannot be.
-type Replayer struct {
-	entries []PlanEntry
-	index   map[string]int
-	used    []bool
-	done    []planDone
-}
-
-func planKey(rec []int32) string { return planInts(rec) }
-
-// NewReplayer indexes a transcript.
-func NewReplayer(t *Transcript) *Replayer {
-	r := &Replayer{entries: t.Entries, index: map[string]int{}, used: make([]bool, len(t.Entries))}
-	for i, e := range t.Entries {
-		r.index[planKey(e.Req)] = i
-	}
-	return r
-}
-
-// Unused is how many recorded entries the run never asked for.
-func (r *Replayer) Unused() int {
-	n := 0
-	for _, u := range r.used {
-		if !u {
-			n++
-		}
-	}
-	return n
-}
-
-func (r *Replayer) Start(req PlanRequest, _ PlanBitmaps) error {
-	if i, ok := r.index[planKey(req.Rec)]; ok {
-		r.used[i] = true
-		e := r.entries[i]
-		r.done = append(r.done, planDone{PlanAnswer{Rec: e.Ans, Bitmap: e.Bitmap}, nil})
-	} else {
-		r.done = append(r.done, planDone{err: planErr("transcript-miss", "no answer recorded for request %s", planKey(req.Rec))})
-	}
-	return nil
-}
-
-func (r *Replayer) Next() (PlanAnswer, error) {
-	d := r.done[0]
-	r.done = r.done[1:]
-	return d.a, d.err
-}
-
-// ------------------------------------------------------------ EDN (a subset)
-// Maps, vectors, keywords, integers and strings: all a transcript holds.
-
-type ednKw string
-
-type ednParser struct {
-	b []rune
-	i int
-}
-
-func (p *ednParser) skip() {
-	for p.i < len(p.b) && (p.b[p.i] == ',' || p.b[p.i] == ' ' || p.b[p.i] == '\n' || p.b[p.i] == '\t' || p.b[p.i] == '\r') {
-		p.i++
-	}
-}
-
-func (p *ednParser) parse() (any, error) {
-	v, err := p.value()
-	if err != nil {
-		return nil, err
-	}
-	p.skip()
-	if p.i != len(p.b) {
-		return nil, fmt.Errorf("trailing text at %d", p.i)
-	}
-	return v, nil
-}
-
-func (p *ednParser) value() (any, error) {
-	p.skip()
-	if p.i >= len(p.b) {
-		return nil, errors.New("unexpected end")
-	}
-	switch c := p.b[p.i]; {
-	case c == '{':
-		p.i++
-		m := map[string]any{}
-		for {
-			p.skip()
-			if p.i >= len(p.b) {
-				return nil, errors.New("unterminated map")
-			}
-			if p.b[p.i] == '}' {
-				p.i++
-				return m, nil
-			}
-			k, err := p.value()
-			if err != nil {
-				return nil, err
-			}
-			kw, ok := k.(ednKw)
-			if !ok {
-				return nil, errors.New("a map key is not a keyword")
-			}
-			v, err := p.value()
-			if err != nil {
-				return nil, err
-			}
-			m[string(kw)] = v
-		}
-	case c == '[':
-		p.i++
-		v := []any{}
-		for {
-			p.skip()
-			if p.i >= len(p.b) {
-				return nil, errors.New("unterminated vector")
-			}
-			if p.b[p.i] == ']' {
-				p.i++
-				return v, nil
-			}
-			e, err := p.value()
-			if err != nil {
-				return nil, err
-			}
-			v = append(v, e)
-		}
-	case c == '"':
-		p.i++
-		var sb strings.Builder
-		for p.i < len(p.b) && p.b[p.i] != '"' {
-			if p.b[p.i] == '\\' && p.i+1 < len(p.b) {
-				p.i++
-			}
-			sb.WriteRune(p.b[p.i])
-			p.i++
-		}
-		if p.i >= len(p.b) {
-			return nil, errors.New("unterminated string")
-		}
-		p.i++
-		return sb.String(), nil
-	case c == ':':
-		p.i++
-		st := p.i
-		for p.i < len(p.b) && !strings.ContainsRune(" \n\t\r,[]{}\"", p.b[p.i]) {
-			p.i++
-		}
-		return ednKw(string(p.b[st:p.i])), nil
-	case c == '-' || (c >= '0' && c <= '9'):
-		st := p.i
-		p.i++
-		for p.i < len(p.b) && p.b[p.i] >= '0' && p.b[p.i] <= '9' {
-			p.i++
-		}
-		n, err := strconv.ParseInt(string(p.b[st:p.i]), 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("bad integer %s", string(p.b[st:p.i]))
-		}
-		return n, nil
-	default:
-		return nil, fmt.Errorf("unexpected `%c` at %d", c, p.i)
-	}
-}
+func (e *FulfilError) Error() string { return e.Msg }
 
 // ------------------------------------------------------------------- PNG
 // Writing: emon's own canonical PNG encoder (`emon.png`, D124, SPEC 10.11),

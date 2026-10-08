@@ -60,7 +60,7 @@ import (
 
 // Transcript is the plan/fulfil transcript (SPEC 13): per input its index and length, and every request
 // the kin side made and its answer. The slice issues no requests, so it has no entries.
-type Transcript = port.Transcript
+type Transcript = planrun.Transcript
 
 // ------------------------------------------------------------------ errors
 
@@ -806,11 +806,11 @@ func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr, co
 			return ocrSafe(ocr, req, bm, recording, failed)
 		case planloop.RtDecode():
 		default:
-			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "no port is configured for this request kind"}
+			return port.PlanAnswer{}, planrun.FulfilFailed("no port is configured for this request kind")
 		}
 		input, off, n, filter, frame := req.Field(plan.DcInput()), req.Field(plan.DcOffset()), req.Field(plan.DcLength()), req.Field(plan.DcFilter()), req.Field(plan.DcFrame())
 		if int(input) != idx || off < 0 || n < 0 || int64(off)+int64(n) > source.Size() {
-			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "a decode request names bytes the input does not have"}
+			return port.PlanAnswer{}, planrun.FulfilFailed("a decode request names bytes the input does not have")
 		}
 		fail := func(status int32) (port.PlanAnswer, error) {
 			c := port.NewCells()
@@ -857,7 +857,7 @@ func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr, co
 // readSpan is a span of the input, whole or an error (the `decode-img` request names bytes of the input by offset and length).
 func readSpan(source ByteSource, off, n int64) ([]byte, error) {
 	if off < 0 || n < 0 || off+n > source.Size() {
-		return nil, &port.PlanError{Name: "fulfil-failed", Msg: "a decode-img request names bytes the input does not have"}
+		return nil, planrun.FulfilFailed("a decode-img request names bytes the input does not have")
 	}
 	b := make([]byte, n)
 	got := 0
@@ -868,7 +868,7 @@ func readSpan(source ByteSource, off, n int64) ([]byte, error) {
 			break
 		}
 		if err != nil || k == 0 {
-			return nil, &port.PlanError{Name: "fulfil-failed", Msg: "a read of the source failed"}
+			return nil, planrun.FulfilFailed("a read of the source failed")
 		}
 	}
 	return b, nil
@@ -883,13 +883,13 @@ func namedBytes(req port.PlanRequest, source ByteSource, idx int, where, offset,
 		return nil, nil
 	case wh == -2:
 		if off < 0 || n < 0 || off+n > int64(len(req.Payload)) {
-			return nil, &port.PlanError{Name: "fulfil-failed", Msg: "a decode-img request names payload bytes the unit did not make"}
+			return nil, planrun.FulfilFailed("a decode-img request names payload bytes the unit did not make")
 		}
 		return req.Payload[off : off+n], nil
 	case int(wh) == idx:
 		return readSpan(source, off, n)
 	}
-	return nil, &port.PlanError{Name: "fulfil-failed", Msg: "a decode-img request names an input this run does not have"}
+	return nil, planrun.FulfilFailed("a decode-img request names an input this run does not have")
 }
 
 // decodeImg is the `decode-img` request (kind 6; P6.1a, D117, D291): one PDF image's codestream to its 8-bit pixels (`pdfimg.go`). The
@@ -1665,7 +1665,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	bytesF := &port.PlanSync{F: func(req port.PlanRequest, _ port.PlanBitmaps) (port.PlanAnswer, error) {
 		off, n := req.Field(plan.BqOffset()), req.Field(plan.BqLength())
 		if cache != nil && !cache.fetch(off, n) {
-			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "a read of the source failed"}
+			return port.PlanAnswer{}, planrun.FulfilFailed("a read of the source failed")
 		}
 		c := port.NewCells()
 		plan.AnBytes(c, req.ID(), off, n)
@@ -1686,7 +1686,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		live.render = port.NewRenderFulfillerFor(e.cfg.Renderer, idx, port.RenderInput{Source: in.Source, Password: in.Password})
 	}
 	var ports port.PlanFulfiller = live
-	var replayer *port.Replayer
+	var replayer *planrun.Replayer
 	if rec != nil {
 		rec.Inputs = thisInput
 		if e.cfg.Ocr != nil {
@@ -1697,7 +1697,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		if err := replay.CheckInputs(thisInput); err != nil {
 			return outcome{}, RunStats{}, planError(err.(*port.PlanError))
 		}
-		replayer = port.NewReplayer(replay)
+		replayer = planrun.NewReplayer(replay)
 		ports = replayer
 	}
 	timed := &timedPorts{inner: ports}
@@ -1879,8 +1879,10 @@ phases:
 	stats.Attempts, stats.FetchRounds, stats.BytesRequests, stats.Requests = t.Attempts, t.FetchRounds, t.BytesRequests, t.Requests
 	stats.PageRounds, stats.PageRequests = t.PageRounds, t.PageRequests
 	stats.FulfilUs = timed.us
-	if replayer != nil && replayer.Unused() != 0 {
-		return outcome{}, RunStats{}, &Error{Kind: ErrPlan, Plan: &port.PlanError{Name: "transcript-bad", Msg: fmt.Sprintf("%d recorded entries were never asked for", replayer.Unused())}}
+	if replayer != nil {
+		if err := replayer.Done(); err != nil {
+			return outcome{}, RunStats{}, &Error{Kind: ErrPlan, Plan: err.(*port.PlanError)}
+		}
 	}
 	if cache != nil {
 		stats.SourceReads, stats.BytesFetched = cache.stats()
@@ -1924,7 +1926,7 @@ func (l *livePorts) Start(req port.PlanRequest, bm port.PlanBitmaps) error {
 
 func (l *livePorts) Next() (port.PlanAnswer, error) {
 	if len(l.order) == 0 {
-		return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "next without a started request"}
+		return port.PlanAnswer{}, planrun.FulfilFailed("next without a started request")
 	}
 	toRender := l.order[0]
 	l.order = l.order[1:]

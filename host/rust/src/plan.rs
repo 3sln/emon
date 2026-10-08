@@ -10,6 +10,10 @@
 // directory. No kin forms are declared in this file: it is a host-side engine
 // for the ports, not a port kin calls (kin never calls an expensive port).
 //
+// THE TRANSCRIPT FILE IS KIN'S TOO (P10.9, D396, D438: `kin/transcript.kin`): the EDN, the kind names, the escaping of the producer, the replay map,
+// the count of entries a replay never asked for and the sentence of every refusal. This file keeps the in-memory `Transcript` the embedder holds, the
+// bitmaps (a PNG each, read by `png_decode` until P10.11) and the `Replayer` that answers the loop from kin's map.
+//
 // THE LOOP IS KIN'S (P10.8, D396, D399: `kin/planloop.kin`) AND THE DRIVER IS INVERTED. This file keeps what is not observable:
 // the unit call (the caller's closure, under the caller's panic catch), awaiting, and the fulfilment of the ports. One attempt's
 // accounting, the two named limits, the requests a unit wrote (checked, and sorted by id), the answered set, the order the answers
@@ -37,6 +41,8 @@
 use crate::emon::plan as kp;
 use crate::emon::planctx::Plan;
 use crate::emon::planloop as lp;
+use crate::emon::transcript as kt;
+use crate::emon::transcriptctx::Tr;
 use crate::port::{cells_at, cells_drop, cells_len, cells_push, Bitmap, BitmapSet, Buf, Cells};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
@@ -126,7 +132,11 @@ impl std::fmt::Display for PlanError {
             PlanError::Limit { name, limit, actual } => {
                 write!(f, "{}: the limit is {} and this run reached {}", name, limit, actual)
             }
-            PlanError::TranscriptMiss(r) => write!(f, "{}: no answer recorded for request {:?}", self.name(), r),
+            PlanError::TranscriptMiss(r) => {
+                let mut s = String::new();
+                kt::tr_miss_msg(&mut cells_of(r), 0, r.len() as i32, &mut s);
+                write!(f, "{}: {}", self.name(), s)
+            }
             PlanError::TranscriptBad(s) => write!(f, "{}: {}", self.name(), s),
             PlanError::Fulfil(s) => write!(f, "{}: {}", self.name(), s),
             PlanError::Unit(s) => write!(f, "{}: status {}", self.name(), s),
@@ -665,302 +675,180 @@ pub struct Transcript {
 
 pub const TRANSCRIPT_FILE: &str = "transcript.edn";
 
-fn kind_name(k: i32) -> &'static str {
-    match k {
-        KIND_RENDER => "render",
-        KIND_DECODE => "decode",
-        KIND_OCR => "ocr",
-        KIND_CROP => "crop",
-        KIND_DECODE_IMG => "decode-img",
-        _ => "unknown",
+// THE FILE IS KIN'S (P10.9, `kin/transcript.kin`, D438): the format (version 1, byte for byte), the kind names, the escaping of the producer, the reader
+// and its refusals, the map a replay is answered from and the count of entries it never asked for. This file keeps what is not observable: the
+// bitmaps (a PNG for each, decoded by `png_decode` until P10.11's transcript PNG reader), the in-memory `Transcript` the embedder holds, and the
+// `Fulfiller` that hands an answer back to the loop. `kin()` is the transcript as kin holds it.
+
+// A string as code points: the form kin's names and values are in.
+fn cps(s: &str) -> Cells {
+    let mut c = Cells::new();
+    for ch in s.chars() {
+        cells_push(&mut c, ch as i32);
     }
+    c
 }
 
-fn kind_code(s: &str) -> Option<i32> {
-    match s {
-        "render" => Some(KIND_RENDER),
-        "decode" => Some(KIND_DECODE),
-        "ocr" => Some(KIND_OCR),
-        "crop" => Some(KIND_CROP),
-        "decode-img" => Some(KIND_DECODE_IMG),
-        _ => None,
+// A record, as kin frames it.
+fn cells_of(v: &[i32]) -> Cells {
+    let mut c = Cells::new();
+    for &x in v {
+        cells_push(&mut c, x);
     }
+    c
 }
 
-fn ints(v: &[i32]) -> String {
-    let s: Vec<String> = v.iter().map(|x| x.to_string()).collect();
-    format!("[{}]", s.join(" "))
+// A name of kin's `tb`: the sentence of a reason.
+fn tb_name(code: i32) -> String {
+    let mut s = String::new();
+    kt::tb_emit_name(&mut s, code);
+    s
 }
 
 impl Transcript {
+    // The transcript as kin holds it (`Tr`), the bitmaps left behind: the entry at a place has one when its flag says.
+    fn kin(&self) -> Tr {
+        let mut tr = Tr::new();
+        for (i, l) in &self.inputs {
+            kt::tr_add_input(&mut tr, *i, *l);
+        }
+        for (k, v) in &self.producer {
+            kt::tr_add_producer(&mut tr, &mut cps(k), &mut cps(v));
+        }
+        for e in &self.entries {
+            let mut c = cells_of(&e.req);
+            for &x in &e.ans {
+                cells_push(&mut c, x);
+            }
+            kt::tr_add_entry(&mut tr, e.round, &mut c, 0, e.req.len() as i32, e.req.len() as i32, e.ans.len() as i32, e.bitmap.is_some() as i32);
+        }
+        tr
+    }
+
     // The files of a transcript, in a fixed order: `transcript.edn`, then one
     // lossless PNG per bitmap named by its entry's index. DETERMINISTIC: the
     // same entries always give the same bytes.
     pub fn to_files(&self) -> Vec<(String, Vec<u8>)> {
-        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut tr = self.kin();
         let mut s = String::new();
-        s.push_str("{:emon-transcript 1\n");
-        if !self.producer.is_empty() {
-            let ps: Vec<String> = self.producer.iter().map(|(k, v)| format!(":{} \"{}\"", k, v.replace('\\', "/").replace('"', "'"))).collect();
-            s.push_str(&format!(" :producer {{{}}}\n", ps.join(" ")));
-        }
-        s.push_str(" :inputs [");
-        let ins: Vec<String> = self.inputs.iter().map(|(i, l)| format!("{{:index {} :length {}}}", i, l)).collect();
-        s.push_str(&ins.join(" "));
-        s.push_str("]\n :entries [");
-        let mut pngs: Vec<(String, Vec<u8>)> = Vec::new();
+        kt::tr_write(&mut tr, &mut s);
+        let mut files: Vec<(String, Vec<u8>)> = vec![(TRANSCRIPT_FILE.to_string(), s.into_bytes())];
         for (n, e) in self.entries.iter().enumerate() {
-            s.push_str("\n  ");
-            s.push_str(&format!(
-                "{{:round {} :kind :{} :req {} :ans {}",
-                e.round,
-                kind_name(e.req.get(1).copied().unwrap_or(0)),
-                ints(&e.req),
-                ints(&e.ans)
-            ));
             if let Some(b) = &e.bitmap {
-                let name = format!("bitmap-{:04}.png", n);
-                s.push_str(&format!(" :bitmap \"{}\"", name));
-                pngs.push((name, png_encode(b)));
+                let mut name = String::new();
+                kt::tr_bitmap_name(n as i32, &mut name);
+                files.push((name, png_encode(b)));
             }
-            s.push('}');
         }
-        s.push_str("]}\n");
-        files.push((TRANSCRIPT_FILE.to_string(), s.into_bytes()));
-        files.extend(pngs);
         files
     }
 
     pub fn from_files(files: &BTreeMap<String, Vec<u8>>) -> Result<Transcript, PlanError> {
-        let bad = |m: &str| PlanError::TranscriptBad(m.to_string());
-        let raw = files.get(TRANSCRIPT_FILE).ok_or_else(|| bad("no transcript.edn"))?;
-        let text = String::from_utf8(raw.clone()).map_err(|_| bad("transcript.edn is not UTF-8"))?;
-        let top = Edn::parse(&text).map_err(|e| PlanError::TranscriptBad(e))?;
-        let m = top.map().ok_or_else(|| bad("the transcript is not a map"))?;
-        if m.get("emon-transcript").and_then(|v| v.int()) != Some(1) {
-            return Err(bad("not an emon-transcript of version 1"));
+        let raw = files.get(TRANSCRIPT_FILE).ok_or_else(|| PlanError::TranscriptBad(tb_name(kt::tb_no_file())))?;
+        let mut tr = Tr::new();
+        if kt::tr_read(&mut tr, raw) != 0 {
+            return Err(PlanError::TranscriptBad(tr.msg));
         }
         let mut t = Transcript::default();
-        if let Some(p) = m.get("producer").and_then(|v| v.map()) {
-            for (k, v) in p.0.iter() {
-                if let Some(sv) = v.str() {
-                    t.producer.push((k.clone(), sv.to_string()));
-                }
-            }
+        for i in 0..kt::tr_n_inputs(&mut tr) {
+            t.inputs.push((kt::tr_in_index(&mut tr, i), kt::tr_in_length(&mut tr, i)));
         }
-        for i in m.get("inputs").and_then(|v| v.vec()).ok_or_else(|| bad("no :inputs"))? {
-            let im = i.map().ok_or_else(|| bad("an input is not a map"))?;
-            let idx = im.get("index").and_then(|v| v.int()).ok_or_else(|| bad("an input has no :index"))?;
-            let len = im.get("length").and_then(|v| v.int()).ok_or_else(|| bad("an input has no :length"))?;
-            t.inputs.push((idx as i32, len as i32));
+        let mut p = 0;
+        while kt::tr_p_more(&mut tr, p) == 1 {
+            let (mut k, mut v) = (String::new(), String::new());
+            kt::tr_p_key(&mut tr, p, &mut k);
+            kt::tr_p_val(&mut tr, p, &mut v);
+            t.producer.push((k, v));
+            p = kt::tr_p_next(&mut tr, p);
         }
-        for e in m.get("entries").and_then(|v| v.vec()).ok_or_else(|| bad("no :entries"))? {
-            let em = e.map().ok_or_else(|| bad("an entry is not a map"))?;
-            let round = em.get("round").and_then(|v| v.int()).ok_or_else(|| bad("an entry has no :round"))? as i32;
-            let kind = em.get("kind").and_then(|v| v.kw()).and_then(kind_code).ok_or_else(|| bad("an entry has no known :kind"))?;
-            let req = em.get("req").and_then(|v| v.ints()).ok_or_else(|| bad("an entry has no :req"))?;
-            let ans = em.get("ans").and_then(|v| v.ints()).ok_or_else(|| bad("an entry has no :ans"))?;
-            if req.len() < 3 || req[0] as usize != req.len() || req[1] != kind {
-                return Err(bad("an entry's :req is not a record of its :kind"));
-            }
-            if ans.len() < 4 || ans[0] as usize != ans.len() || ans[1] != kind || ans[2] != req[2] {
-                return Err(bad("an entry's :ans is not the answer to its :req"));
-            }
-            let bitmap = match em.get("bitmap").and_then(|v| v.str()) {
-                Some(name) => {
-                    let png = files.get(name).ok_or_else(|| PlanError::TranscriptBad(format!("{} is missing", name)))?;
-                    Some(Arc::new(png_decode(png).map_err(PlanError::TranscriptBad)?))
-                }
-                None => None,
+        let mut e = 0;
+        while kt::tr_e_more(&mut tr, e) == 1 {
+            let (rq, rl) = (kt::tr_e_req(&mut tr, e), kt::tr_e_req_len(&mut tr, e));
+            let (an, al) = (kt::tr_e_ans(&mut tr, e), kt::tr_e_ans_len(&mut tr, e));
+            let req: Vec<i32> = (rq..rq + rl).map(|i| cells_at(&tr.ents, i)).collect();
+            let ans: Vec<i32> = (an..an + al).map(|i| cells_at(&tr.ents, i)).collect();
+            let mut name = String::new();
+            let bitmap = if kt::tr_e_bitmap_name(&mut tr, e, &mut name) == 1 {
+                let png = files.get(&name).ok_or_else(|| PlanError::TranscriptBad(format!("{} {}", name, tb_name(kt::tb_bitmap_missing()))))?;
+                Some(Arc::new(png_decode(png).map_err(PlanError::TranscriptBad)?))
+            } else {
+                None
             };
-            t.entries.push(Entry { round, req, ans, bitmap });
+            t.entries.push(Entry { round: kt::tr_e_round(&mut tr, e), req, ans, bitmap });
+            e = kt::tr_e_next(&mut tr, e);
         }
         Ok(t)
     }
 
     // Replay must be given the inputs the recording saw: same count, same lengths.
     pub fn check_inputs(&self, inputs: &[(i32, i32)]) -> Result<(), PlanError> {
-        if self.inputs.as_slice() != inputs {
-            return Err(PlanError::TranscriptBad(format!("the transcript is of inputs {:?}, not {:?}", self.inputs, inputs)));
+        let mut tr = Tr::new();
+        for (i, l) in &self.inputs {
+            kt::tr_add_input(&mut tr, *i, *l);
+        }
+        let mut want = Cells::new();
+        for (i, l) in inputs {
+            cells_push(&mut want, *i);
+            cells_push(&mut want, *l);
+        }
+        let mut s = String::new();
+        if kt::tr_check_inputs(&mut tr, &mut want, &mut s) != 0 {
+            return Err(PlanError::TranscriptBad(s));
         }
         Ok(())
     }
 }
 
 // A fulfiller that answers from a transcript: a request it has no entry for is
-// `transcript-miss`, never a guess. `bytes` is not here and cannot be.
+// `transcript-miss`, never a guess. `bytes` is not here and cannot be. The map it
+// answers from is kin's (`tr-index`, `tr-take`): keyed by the whole request record.
 pub struct Replayer {
-    index: HashMap<Vec<i32>, usize>,
-    entries: Vec<Entry>,
-    used: Vec<bool>,
+    tr: Tr,
+    bitmaps: Vec<Option<Arc<Bitmap>>>,
+    key: Cells,
     done: VecDeque<Result<Answer, PlanError>>,
 }
 
 impl Replayer {
     pub fn new(t: &Transcript) -> Replayer {
-        let mut index = HashMap::new();
-        for (i, e) in t.entries.iter().enumerate() {
-            index.insert(e.req.clone(), i);
-        }
-        Replayer { index, entries: t.entries.clone(), used: vec![false; t.entries.len()], done: VecDeque::new() }
+        let mut tr = t.kin();
+        kt::tr_index(&mut tr);
+        Replayer { tr, bitmaps: t.entries.iter().map(|e| e.bitmap.clone()).collect(), key: Cells::new(), done: VecDeque::new() }
     }
     // How many recorded entries the run never asked for.
-    pub fn unused(&self) -> usize {
-        self.used.iter().filter(|u| !**u).count()
+    pub fn unused(&mut self) -> usize {
+        kt::tr_unused(&mut self.tr) as usize
+    }
+    // The run is over: an error (`transcript-bad`, with kin's sentence) when it left recorded entries unasked, which is a transcript of another run.
+    pub fn check_done(&mut self) -> Result<(), PlanError> {
+        if kt::tr_unused(&mut self.tr) == 0 {
+            return Ok(());
+        }
+        let mut s = String::new();
+        kt::tr_unused_msg(&mut self.tr, &mut s);
+        Err(PlanError::TranscriptBad(s))
     }
 }
 
 impl Fulfiller for Replayer {
     fn start(&mut self, req: &Request, _bitmaps: &Bitmaps) -> Result<(), PlanError> {
-        let r = match self.index.get(&req.rec) {
-            Some(&i) => {
-                self.used[i] = true;
-                let e = &self.entries[i];
-                Ok(Answer { rec: e.ans.clone(), bitmap: e.bitmap.clone() })
-            }
-            None => Err(PlanError::TranscriptMiss(req.rec.clone())),
+        cells_drop(&mut self.key, 0);
+        for &v in &req.rec {
+            cells_push(&mut self.key, v);
+        }
+        let e = kt::tr_take(&mut self.tr, &mut self.key, 0, req.rec.len() as i32);
+        let r = if e >= 0 {
+            let (an, al) = (kt::tr_e_ans(&mut self.tr, e), kt::tr_e_ans_len(&mut self.tr, e));
+            let n = kt::tr_e_n(&mut self.tr, e) as usize;
+            Ok(Answer { rec: (an..an + al).map(|i| cells_at(&self.tr.ents, i)).collect(), bitmap: self.bitmaps[n].clone() })
+        } else {
+            Err(PlanError::TranscriptMiss(req.rec.clone()))
         };
         self.done.push_back(r);
         Ok(())
     }
     fn next(&mut self) -> Result<Answer, PlanError> {
         self.done.pop_front().expect("next without a started request")
-    }
-}
-
-// ---------------------------------------------------------------- EDN (a subset)
-// Maps, vectors, keywords, integers and strings: all a transcript holds.
-
-#[derive(Debug, Clone)]
-enum Edn {
-    Int(i64),
-    Str(String),
-    Kw(String),
-    Vec(Vec<Edn>),
-    Map(Vec<(String, Edn)>),
-}
-
-struct EdnMap<'a>(&'a Vec<(String, Edn)>);
-
-impl<'a> EdnMap<'a> {
-    fn get(&self, k: &str) -> Option<&'a Edn> {
-        self.0.iter().find(|(n, _)| n == k).map(|(_, v)| v)
-    }
-}
-
-impl Edn {
-    fn map(&self) -> Option<EdnMap> {
-        if let Edn::Map(m) = self { Some(EdnMap(m)) } else { None }
-    }
-    fn vec(&self) -> Option<&Vec<Edn>> {
-        if let Edn::Vec(v) = self { Some(v) } else { None }
-    }
-    fn int(&self) -> Option<i64> {
-        if let Edn::Int(n) = self { Some(*n) } else { None }
-    }
-    fn kw(&self) -> Option<&str> {
-        if let Edn::Kw(s) = self { Some(s) } else { None }
-    }
-    fn str(&self) -> Option<&str> {
-        if let Edn::Str(s) = self { Some(s) } else { None }
-    }
-    fn ints(&self) -> Option<Vec<i32>> {
-        self.vec()?.iter().map(|e| e.int().map(|n| n as i32)).collect()
-    }
-
-    fn parse(s: &str) -> Result<Edn, String> {
-        let b: Vec<char> = s.chars().collect();
-        let mut i = 0;
-        let v = Edn::value(&b, &mut i)?;
-        Edn::skip(&b, &mut i);
-        if i != b.len() {
-            return Err(format!("trailing text at {}", i));
-        }
-        Ok(v)
-    }
-
-    fn skip(b: &[char], i: &mut usize) {
-        while *i < b.len() && (b[*i].is_whitespace() || b[*i] == ',') {
-            *i += 1;
-        }
-    }
-
-    fn value(b: &[char], i: &mut usize) -> Result<Edn, String> {
-        Edn::skip(b, i);
-        if *i >= b.len() {
-            return Err("unexpected end".to_string());
-        }
-        match b[*i] {
-            '{' => {
-                *i += 1;
-                let mut m = Vec::new();
-                loop {
-                    Edn::skip(b, i);
-                    if *i >= b.len() {
-                        return Err("unterminated map".to_string());
-                    }
-                    if b[*i] == '}' {
-                        *i += 1;
-                        return Ok(Edn::Map(m));
-                    }
-                    let k = match Edn::value(b, i)? {
-                        Edn::Kw(k) => k,
-                        _ => return Err("a map key is not a keyword".to_string()),
-                    };
-                    let v = Edn::value(b, i)?;
-                    m.push((k, v));
-                }
-            }
-            '[' => {
-                *i += 1;
-                let mut v = Vec::new();
-                loop {
-                    Edn::skip(b, i);
-                    if *i >= b.len() {
-                        return Err("unterminated vector".to_string());
-                    }
-                    if b[*i] == ']' {
-                        *i += 1;
-                        return Ok(Edn::Vec(v));
-                    }
-                    v.push(Edn::value(b, i)?);
-                }
-            }
-            '"' => {
-                *i += 1;
-                let mut s = String::new();
-                while *i < b.len() && b[*i] != '"' {
-                    if b[*i] == '\\' && *i + 1 < b.len() {
-                        *i += 1;
-                    }
-                    s.push(b[*i]);
-                    *i += 1;
-                }
-                if *i >= b.len() {
-                    return Err("unterminated string".to_string());
-                }
-                *i += 1;
-                Ok(Edn::Str(s))
-            }
-            ':' => {
-                *i += 1;
-                let st = *i;
-                while *i < b.len() && !b[*i].is_whitespace() && !"[]{},\"".contains(b[*i]) {
-                    *i += 1;
-                }
-                Ok(Edn::Kw(b[st..*i].iter().collect()))
-            }
-            c if c == '-' || c.is_ascii_digit() => {
-                let st = *i;
-                *i += 1;
-                while *i < b.len() && b[*i].is_ascii_digit() {
-                    *i += 1;
-                }
-                let t: String = b[st..*i].iter().collect();
-                t.parse::<i64>().map(Edn::Int).map_err(|_| format!("bad integer {}", t))
-            }
-            c => Err(format!("unexpected `{}` at {}", c, *i)),
-        }
     }
 }
 
