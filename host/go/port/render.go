@@ -107,14 +107,14 @@ func ParseRender(req PlanRequest) (int, RenderRequest, error) {
 	if len(req.Rec) != 3+n {
 		return 0, RenderRequest{}, fmt.Errorf("a render request has %d args, not %d", len(req.Rec)-3, n)
 	}
-	if req.Arg(0) < 0 {
-		return 0, RenderRequest{}, fmt.Errorf("input %d", req.Arg(0))
+	if req.Field(PlanRdInput) < 0 {
+		return 0, RenderRequest{}, fmt.Errorf("input %d", req.Field(PlanRdInput))
 	}
-	rr := RenderRequest{Page: req.Arg(1), Dpi: req.Arg(2), Layer: req.Arg(3)}
+	rr := RenderRequest{Page: req.Field(PlanRdPage), Dpi: req.Field(PlanRdDpi), Layer: req.Field(PlanRdLayer)}
 	if crop {
-		rr.Clip = &RenderClip{req.Arg(4), req.Arg(5), req.Arg(6), req.Arg(7)}
+		rr.Clip = &RenderClip{req.Field(PlanRdX), req.Field(PlanRdY), req.Field(PlanRdW), req.Field(PlanRdH)}
 	}
-	return int(req.Arg(0)), rr, nil
+	return int(req.Field(PlanRdInput)), rr, nil
 }
 
 // RenderCut is the pixels of rectangle c of b, as a Bitmap of its own: the crop law (D117), which a test

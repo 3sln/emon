@@ -46,16 +46,11 @@ struct Session {
     replayer: Option<Replayer>,
     recording: Option<Transcript>,
     local: Box<dyn FnMut(&Request, &Bitmaps) -> Result<Answer, PlanError>>,
-    pending: Option<Pending>,
-    done: bool,
-}
-
-// One round of requests the unit asked for: the answers made so far (by id) and the ones still owed by the host.
-struct Pending {
-    reqs: Vec<Request>,
-    all: Bitmaps,
-    answers: BTreeMap<i32, Answer>,
+    // a round of requests is in progress (the Run holds it: its requests, the answers offered so far, the bitmaps), and the ids of
+    // those that are the host's to answer
+    in_round: bool,
     external: BTreeSet<i32>,
+    done: bool,
 }
 
 #[derive(Default)]
@@ -346,7 +341,7 @@ pub unsafe extern "C" fn emon_open(len: f64, chunk: u32, mode: u32, password_ptr
             t.producer = p.producer.clone();
             recording = Some(t);
         }
-        let s = Session { cache, run: Some(run), idx, js_ocr: p.js_ocr, files: BTreeMap::new(), replay: false, replayer: None, recording, local, pending: None, done: false };
+        let s = Session { cache, run: Some(run), idx, js_ocr: p.js_ocr, files: BTreeMap::new(), replay: false, replayer: None, recording, local, in_round: false, external: BTreeSet::new(), done: false };
         world(|w| {
             w.sessions.push(Some(Box::new(s)));
             w.sessions.len() as i32
@@ -435,58 +430,45 @@ pub extern "C" fn emon_replay_end(h: i32) -> i32 {
     })
 }
 
-// The spans of the input a request names: `decode` (input offset length ...) and `decode-img`'s codestream and JBIG2 globals,
-// when they are the input's own (`where` is the input's index).
-fn spans(req: &Request, idx: usize) -> Vec<(usize, u64, u64)> {
-    let mut v = Vec::new();
-    let me = idx as i32;
-    if req.kind() == plan::KIND_DECODE {
-        if req.arg(0) == me && req.arg(1) >= 0 && req.arg(2) > 0 {
-            v.push((0, req.arg(1) as u64, req.arg(2) as u64));
-        }
-    } else if req.kind() == plan::KIND_DECODE_IMG {
-        for at in [9usize, 20] {
-            if req.arg(at) == me && req.arg(at + 1) >= 0 && req.arg(at + 2) > 0 {
-                v.push((0, req.arg(at + 1) as u64, req.arg(at + 2) as u64));
-            }
-        }
-    }
-    v
-}
-
-// The requests the host fulfils: `ocr`, when it has an engine. (`render` and `crop` would be pdfium's WebAssembly build, SPEC 7.3:
-// not built, so they are answered `unsupported` here like any request no port is configured for.)
+// The requests the host fulfils: `ocr`, when it has an engine (kin's `pl-route`). (`render` and `crop` would be pdfium's WebAssembly
+// build, SPEC 7.3: not built, so they are answered `unsupported` here like any request no port is configured for.)
 fn is_external(s: &Session, kind: i32) -> bool {
-    kind == plan::KIND_OCR && s.js_ocr
+    plan::route(kind, s.js_ocr, false) == plan::Route::Ocr
 }
 
 // Walk the session on: 0 done, 1 bytes needed (OUT: pairs), 2 requests for the host (OUT: count, then n and n cells each), -1 error.
 fn step(s: &mut Session) -> Result<(i32, Vec<u8>), Error> {
     loop {
-        if let Some(mut p) = s.pending.take() {
-            let run = s.run.as_mut().expect("a pending round has a run");
+        if s.in_round {
+            let run = s.run.as_mut().expect("a round in progress has a run");
             if let Some(e) = run.source_error() {
                 return Err(e);
             }
             if s.replay {
                 // the whole round from the transcript: a request it has no answer for is `transcript-miss`
                 let r = s.replayer.as_mut().expect("a replay has a replayer");
-                let got = plan::fulfil(r, &p.reqs, &p.all).map_err(|e| run.error_of(e))?;
-                let entries = run.answered(got);
+                let entries = run.fulfil(r)?;
                 if let Some(t) = s.recording.as_mut() {
                     t.entries.extend(entries);
                 }
+                s.in_round = false;
                 continue;
             }
-            // 1. the input bytes the local requests read
-            let local: Vec<&Request> = p.reqs.iter().filter(|r| !p.answers.contains_key(&r.id()) && !p.external.contains(&r.id())).collect();
-            let mut want: Vec<(usize, u64, u64)> = Vec::new();
+            // 1. the input bytes the local requests read (which requests those are is kin's, `pl-route`; the spans they name too)
+            let reqs: Vec<Request> = run.requests().to_vec();
+            let mut local: Vec<&Request> = Vec::new();
+            for r in &reqs {
+                if !run.has_answer(r.id()) && !s.external.contains(&r.id()) {
+                    local.push(r);
+                }
+            }
+            let mut want: Vec<(u64, u64)> = Vec::new();
             for r in &local {
-                want.extend(spans(r, s.idx));
+                want.extend(plan::spans(r, s.idx as i32));
             }
             let missing = {
                 let mut out: Vec<Range> = Vec::new();
-                for &(_, off, len) in &want {
+                for &(off, len) in &want {
                     for r in s.cache.missing(s.idx as i32, off, len) {
                         if !out.contains(&r) {
                             out.push(r);
@@ -502,18 +484,20 @@ fn step(s: &mut Session) -> Result<(i32, Vec<u8>), Error> {
                     v.push(x.offset);
                     v.push(x.length);
                 }
-                s.pending = Some(p);
                 return Ok((1, v.iter().flat_map(|x| x.to_le_bytes()).collect()));
             }
             // 2. the local requests, answered here
-            let ids: Vec<i32> = local.iter().map(|r| r.id()).collect();
-            for id in ids {
-                let req = p.reqs.iter().find(|r| r.id() == id).unwrap().clone();
-                let a = (s.local)(&req, &p.all).map_err(|e| run.error_of(e))?;
-                p.answers.insert(id, a);
+            for req in &local {
+                let a = (s.local)(req, run.bitmaps()).map_err(|e| run.error_of(e))?;
+                run.offer(a)?;
             }
             // 3. what the host still owes
-            let owed: Vec<&Request> = p.reqs.iter().filter(|r| p.external.contains(&r.id()) && !p.answers.contains_key(&r.id())).collect();
+            let mut owed: Vec<&Request> = Vec::new();
+            for r in &reqs {
+                if s.external.contains(&r.id()) && !run.has_answer(r.id()) {
+                    owed.push(r);
+                }
+            }
             if !owed.is_empty() {
                 let mut v: Vec<u8> = Vec::new();
                 v.extend_from_slice(&(owed.len() as i32).to_le_bytes());
@@ -523,15 +507,15 @@ fn step(s: &mut Session) -> Result<(i32, Vec<u8>), Error> {
                         v.extend_from_slice(&c.to_le_bytes());
                     }
                 }
-                s.pending = Some(p);
                 return Ok((2, v));
             }
             // 4. the round is answered: the unit is re-run on the answers
-            let got: Vec<Answer> = p.reqs.iter().map(|r| p.answers.remove(&r.id()).unwrap()).collect();
-            let entries = run.answered(got);
+            let entries = run.commit()?;
             if let Some(t) = s.recording.as_mut() {
                 t.entries.extend(entries);
             }
+            s.in_round = false;
+            s.external.clear();
             continue;
         }
         let run = s.run.as_mut().expect("a session that is not done has a run");
@@ -548,19 +532,19 @@ fn step(s: &mut Session) -> Result<(i32, Vec<u8>), Error> {
             plan::Next::Fetch(reqs) => {
                 let mut v = Vec::new();
                 for r in &reqs {
-                    v.push(r.arg(1));
-                    v.push(r.arg(2));
+                    v.push(r.field(emon::plan::bq_offset()));
+                    v.push(r.field(emon::plan::bq_length()));
                 }
                 return Ok((1, v.iter().flat_map(|x| x.to_le_bytes()).collect()));
             }
-            plan::Next::Requests(reqs, all) => {
-                let mut external = BTreeSet::new();
+            plan::Next::Requests(reqs, _) => {
+                s.external.clear();
                 for r in &reqs {
                     if !s.replay && is_external(s, r.kind()) {
-                        external.insert(r.id());
+                        s.external.insert(r.id());
                     }
                 }
-                s.pending = Some(Pending { reqs, all, answers: BTreeMap::new(), external });
+                s.in_round = true;
             }
         }
     }
@@ -605,13 +589,15 @@ fn answer(h: i32, rec: Vec<i32>, bitmap: Option<Arc<Bitmap>>) -> i32 {
         if rec.len() < 4 || rec[0] as usize != rec.len() {
             return Err("an answer is a record [len kind id status ...]".to_string());
         }
-        let p = s.pending.as_mut().ok_or("no requests are owed")?;
+        if !s.in_round {
+            return Err("no requests are owed".to_string());
+        }
+        let run = s.run.as_mut().ok_or("no requests are owed")?;
         let id = rec[2];
-        if !p.external.contains(&id) || p.answers.contains_key(&id) {
+        if !s.external.contains(&id) || run.has_answer(id) {
             return Err(format!("request {} is not owed an answer", id));
         }
-        p.answers.insert(id, Answer { rec, bitmap });
-        Ok(())
+        run.offer(Answer { rec, bitmap }).map_err(|e| e.to_string())
     });
     match r {
         Some(Ok(())) => 0,
@@ -689,7 +675,7 @@ pub unsafe extern "C" fn emon_ocr_word_lang(ptr: u32, ncells: u32) -> i32 {
 #[no_mangle]
 pub extern "C" fn emon_bitmap_png(h: i32, id: i32) -> i32 {
     guard(|| {
-        let png = session(h, |s| s.pending.as_ref().and_then(|p| p.all.get(&id).map(|b| plan::png_encode(b))));
+        let png = session(h, |s| if s.in_round { s.run.as_ref().and_then(|r| r.bitmap(id)).map(|b| plan::png_encode(&b)) } else { None });
         match png {
             Some(Some(b)) => {
                 let n = b.len() as i32;

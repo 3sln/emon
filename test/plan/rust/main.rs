@@ -118,7 +118,7 @@ fn fake(req: &Request, bm: &Bitmaps) -> Result<Answer, PlanError> {
                     px.push(((x * 3 + y * 5 + id * 7) & 255) as u8);
                 }
             }
-            emon::plan::an_render(&mut c, id, w, h, 1, req.arg(2));
+            emon::plan::an_render(&mut c, id, w, h, 1, req.field(emon::plan::rd_dpi()));
             ok_answer(c, Some(Bitmap::from_bytes(w, h, 1, &px)))
         }
         KIND_DECODE => {
@@ -135,7 +135,7 @@ fn fake(req: &Request, bm: &Bitmaps) -> Result<Answer, PlanError> {
             ok_answer(c, Some(Bitmap::from_bytes(w, h, 3, &px)))
         }
         KIND_OCR => {
-            let b = match bm.get(&req.arg(0)) {
+            let b = match bm.get(&req.field(emon::plan::oc_bitmap())) {
                 Some(b) => b.clone(),
                 None => {
                     emon::plan::an_fail(&mut c, KIND_OCR, id, STATUS_FAILED);
@@ -257,7 +257,7 @@ fn main() {
             testport::src_ctl(&fetch_base, 0, fetch_round.get());
         }
         let mut c = Cells::new();
-        emon::plan::an_bytes(&mut c, req.id(), req.arg(1), req.arg(2));
+        emon::plan::an_bytes(&mut c, req.id(), req.field(emon::plan::bq_offset()), req.field(emon::plan::bq_length()));
         ok_answer(c, None)
     };
     let mut bytes = SyncFulfiller::new(bytes_fn);

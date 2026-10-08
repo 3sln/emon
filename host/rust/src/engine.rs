@@ -62,10 +62,10 @@ use crate::emon::tlhealth::th_run;
 use crate::imgdec;
 use crate::pdfimg::{self, PdfCodecs};
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
-use crate::port::{self, cells_at, cells_len, cells_push, BitmapSet, Buf, Cells, Src, SrcBacking};
-use crate::render::{KindMux, RenderFulfiller, RenderInput, Renderer};
+use crate::port::{self, cells_at, cells_len, cells_push, cells_set, BitmapSet, Buf, Cells, Src, SrcBacking};
+use crate::render::{RenderFulfiller, RenderInput, Renderer};
 use crate::source::{ByteSource, Input, Inputs};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -88,7 +88,7 @@ pub enum Error {
     UnsupportedFormat { input: usize },
     // A PDF kin could not open (its named status: `no-startxref`, `bad-xref`, `no-root`, `no-pages`, ...), or an image the
     // host could not read (`undecodable`) or reads no coding of (`unsupported-image`).
-    Damaged { input: usize, status: &'static str },
+    Damaged { input: usize, status: String },
     // A source that answered fewer bytes than its length said, or an error from its read.
     SourceChanged { input: usize },
     Io { input: usize, message: String },
@@ -110,7 +110,7 @@ impl Error {
             Error::PasswordIncorrect { .. } => "password-incorrect".to_string(),
             Error::EncryptionUnsupported { .. } => "encryption-unsupported".to_string(),
             Error::UnsupportedFormat { .. } => "unsupported-format".to_string(),
-            Error::Damaged { status, .. } => status.to_string(),
+            Error::Damaged { status, .. } => status.clone(),
             Error::SourceChanged { .. } => "source-changed".to_string(),
             Error::Io { .. } => "io".to_string(),
             Error::Unsupported(_) => "unsupported".to_string(),
@@ -144,7 +144,7 @@ impl std::error::Error for Error {}
 impl From<PlanError> for Error {
     fn from(p: PlanError) -> Error {
         match p {
-            PlanError::Limit { name, limit, actual } => Error::Limit { name: name.to_string(), limit: limit as i64, actual: actual as i64 },
+            PlanError::Limit { name, limit, actual } => Error::Limit { name, limit: limit as i64, actual: actual as i64 },
             other => Error::Plan(other),
         }
     }
@@ -399,6 +399,8 @@ pub enum Output {
 
 struct CacheState {
     chunks: Vec<Option<Box<[u8]>>>,
+    // 1 for each resident chunk, for kin's planner of the fetches (`fp-plan`)
+    res: Cells,
     pending: BTreeSet<usize>,
     wanted: BTreeSet<usize>,
     failure: Option<String>,
@@ -424,7 +426,7 @@ impl ChunkCache {
             len,
             chunk,
             deferred,
-            st: Mutex::new(CacheState { chunks: vec![None; n], pending: BTreeSet::new(), wanted: BTreeSet::new(), failure: None, short: false, bytes: 0, reads: 0, hints: 0 }),
+            st: Mutex::new(CacheState { chunks: vec![None; n], res: zeros(n), pending: BTreeSet::new(), wanted: BTreeSet::new(), failure: None, short: false, bytes: 0, reads: 0, hints: 0 }),
         }
     }
 
@@ -459,6 +461,7 @@ impl ChunkCache {
             let a = c * self.chunk - lo;
             let b = std::cmp::min(a + self.chunk, buf.len());
             st.chunks[c] = Some(buf[a..b].to_vec().into_boxed_slice());
+            cells_set(&mut st.res, c as i32, 1);
         }
         true
     }
@@ -479,36 +482,23 @@ impl ChunkCache {
     }
 
     // The ranges to fetch for fetch round `round`: every pending (or hinted) chunk and 2^round - 1 chunks
-    // each side of it, the resident ones left out, a run of chunks one range.
+    // each side of it, the resident ones left out, a run of chunks one range. THE PLAN IS KIN'S (`fp-plan`): the host says what
+    // was missed and what is resident, and takes the ranges.
     pub fn plan_fetch(&self, input: i32, round: i32) -> Vec<Range> {
         let mut st = self.st.lock().unwrap();
-        let n = self.nchunks();
-        let r = (1usize << std::cmp::min(round, 20)) - 1;
-        let mut want: BTreeSet<usize> = BTreeSet::new();
-        let seeds: Vec<usize> = st.pending.iter().chain(st.wanted.iter()).cloned().collect();
-        for c in seeds {
-            let lo = c.saturating_sub(r);
-            let hi = std::cmp::min(n.saturating_sub(1), c + r);
-            for k in lo..=hi {
-                if st.chunks[k].is_none() {
-                    want.insert(k);
-                }
-            }
+        let mut pend = Cells::new();
+        for &c in st.pending.iter() {
+            cells_push(&mut pend, c as i32);
+        }
+        let mut hint = Cells::new();
+        for &c in st.wanted.iter() {
+            cells_push(&mut hint, c as i32);
         }
         st.pending.clear();
         st.wanted.clear();
-        let mut out: Vec<Range> = Vec::new();
-        let mut it = want.into_iter().peekable();
-        while let Some(first) = it.next() {
-            let mut last = first;
-            while it.peek() == Some(&(last + 1)) {
-                last = it.next().unwrap();
-            }
-            let off = first * self.chunk;
-            let end = std::cmp::min((last + 1) * self.chunk, self.len);
-            out.push(Range { input, offset: off as i32, length: (end - off) as i32 });
-        }
-        out
+        let mut out = Cells::new();
+        crate::emon::planloop::fp_plan(&mut pend, &mut hint, &mut st.res, self.chunk as i32, self.len as i32, input, round, &mut out);
+        (0..cells_len(&out) / 3).map(|i| Range { input: cells_at(&out, 3 * i), offset: cells_at(&out, 3 * i + 1), length: cells_at(&out, 3 * i + 2) }).collect()
     }
 
     // Make [offset, offset + length) resident: what a `bytes` request does. Err is the source's failure.
@@ -594,6 +584,7 @@ impl ChunkCache {
             }
             if st.chunks[c].is_none() {
                 st.chunks[c] = Some(data[lo - offset..hi - offset].to_vec().into_boxed_slice());
+                cells_set(&mut st.res, c as i32, 1);
             }
         }
     }
@@ -802,40 +793,37 @@ pub static OCR_US: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
 // PNG, and so does a live OCR engine; a plain conversion needs only the numbers); `recording` also keeps the OCR
 // engine's thresholded image, which only a transcript wants (D211).
 pub fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recording: bool, ocr: Option<OcrPort>, codecs: Option<Arc<dyn PdfCodecs>>) -> impl FnMut(&Request, &plan::Bitmaps) -> Result<Answer, PlanError> {
+    use crate::emon::plan as kp;
     move |req: &Request, bm: &plan::Bitmaps| -> Result<Answer, PlanError> {
-        if req.kind() == plan::KIND_DECODE_IMG {
-            return decode_img(req, &source, idx, codecs.as_deref());
+        // WHICH PORT a request goes to, or that none is configured, is kin's (`pl-route`); this host has no renderer
+        // (D199: the Engine's own `Ports` sends a render to one when it has one)
+        match plan::route(req.kind(), ocr.is_some(), false) {
+            plan::Route::DecodeImg => return decode_img(req, &source, idx, codecs.as_deref()),
+            plan::Route::Unsupported => return Ok(plan::unsupported_answer(req)),
+            plan::Route::Ocr => {
+                return match &ocr {
+                    // an engine that panics on a page is a failed OCR of it, not a crashed process
+                    Some(p) => match std::panic::catch_unwind(AssertUnwindSafe(|| {
+                        let t0 = std::time::Instant::now();
+                        let r = p.0.fulfil(req, bm, recording);
+                        OCR_US[if req.id() % 256 == 16 { 0 } else { 1 }].fetch_add(t0.elapsed().as_micros() as u64, Ordering::Relaxed);
+                        r
+                    })) {
+                        Ok(r) => r,
+                        Err(_) => {
+                            let mut c = Cells::new();
+                            kp::an_fail(&mut c, plan::KIND_OCR, req.id(), plan::STATUS_FAILED);
+                            Ok(Answer { rec: to_vec(&c), bitmap: None })
+                        }
+                    },
+                    None => Ok(plan::unsupported_answer(req)),
+                };
+            }
+            plan::Route::Decode => {}
+            plan::Route::Render | plan::Route::None => return Err(PlanError::Fulfil("no port is configured for this request kind".to_string())),
         }
-        if req.kind() == plan::KIND_OCR {
-            let failed = |status: i32| {
-                let mut c = Cells::new();
-                crate::emon::plan::an_fail(&mut c, plan::KIND_OCR, req.id(), status);
-                Ok(Answer { rec: to_vec(&c), bitmap: None })
-            };
-            return match &ocr {
-                // an engine that panics on a page is a failed OCR of it, not a crashed process
-                Some(p) => match std::panic::catch_unwind(AssertUnwindSafe(|| {
-                    let t0 = std::time::Instant::now();
-                    let r = p.0.fulfil(req, bm, recording);
-                    OCR_US[if req.id() % 256 == 16 { 0 } else { 1 }].fetch_add(t0.elapsed().as_micros() as u64, Ordering::Relaxed);
-                    r
-                })) {
-                    Ok(r) => r,
-                    Err(_) => failed(plan::STATUS_FAILED),
-                },
-                None => failed(crate::emon::plan::ps_unsupported()),
-            };
-        }
-        if req.kind() == plan::KIND_RENDER || req.kind() == plan::KIND_CROP {
-            // no Renderer is configured (D199): an answer, as an Engine with no Ocr answers `ocr`
-            let mut c = Cells::new();
-            crate::emon::plan::an_fail(&mut c, req.kind(), req.id(), crate::emon::plan::ps_unsupported());
-            return Ok(Answer { rec: to_vec(&c), bitmap: None });
-        }
-        if req.kind() != plan::KIND_DECODE {
-            return Err(PlanError::Fulfil("no port is configured for this request kind".to_string()));
-        }
-        let (input, off, len, filter, frame) = (req.arg(0), req.arg(1), req.arg(2), req.arg(3), req.arg(4));
+        let (input, off, len, filter, frame) =
+            (req.field(kp::dc_input()), req.field(kp::dc_offset()), req.field(kp::dc_length()), req.field(kp::dc_filter()), req.field(kp::dc_frame()));
         if input != idx as i32 || off < 0 || len < 0 || off as u64 + len as u64 > source.len() {
             return Err(PlanError::Fulfil("a decode request names bytes the input does not have".to_string()));
         }
@@ -888,8 +876,8 @@ fn read_span(source: &Arc<dyn ByteSource>, off: i64, len: i64) -> Result<Vec<u8>
 
 // The bytes a `decode-img` request names (kin's `dq-where` / `dq-offset` / `dq-length`): a span of this input (where is its
 // index), or of the unit's PAYLOAD (where -2); -1 names none (P6.1a, D291).
-fn named_bytes(req: &Request, source: &Arc<dyn ByteSource>, idx: usize, at: usize) -> Result<Vec<u8>, PlanError> {
-    let (wh, off, len) = (req.arg(at), req.arg(at + 1), req.arg(at + 2));
+fn named_bytes(req: &Request, source: &Arc<dyn ByteSource>, idx: usize, at: (i32, i32, i32)) -> Result<Vec<u8>, PlanError> {
+    let (wh, off, len) = (req.field(at.0), req.field(at.1), req.field(at.2));
     match wh {
         -1 => Ok(Vec::new()),
         -2 => {
@@ -906,9 +894,11 @@ fn named_bytes(req: &Request, source: &Arc<dyn ByteSource>, idx: usize, at: usiz
 // The `decode-img` request (kind 6; P6.1a, D117, D291): one PDF image's codestream to its 8-bit pixels (`pdfimg`). The answer
 // always carries the pixels (kin adopts them); a transcript stores them, never the codestream.
 fn decode_img(req: &Request, source: &Arc<dyn ByteSource>, idx: usize, codecs: Option<&dyn PdfCodecs>) -> Result<Answer, PlanError> {
-    let a = pdfimg::Args { filter: req.arg(0), w: req.arg(1), h: req.arg(2), comps: req.arg(3), bpc: req.arg(4), k: req.arg(5), columns: req.arg(6), rows: req.arg(7), flags: req.arg(8) };
-    let data = named_bytes(req, source, idx, 9)?;
-    let globals = named_bytes(req, source, idx, 20)?;
+    use crate::emon::plan as kp;
+    let f = |k: i32| req.field(k);
+    let a = pdfimg::Args { filter: f(kp::dq_filter()), w: f(kp::dq_w()), h: f(kp::dq_h()), comps: f(kp::dq_comps()), bpc: f(kp::dq_bpc()), k: f(kp::dq_k()), columns: f(kp::dq_columns()), rows: f(kp::dq_rows()), flags: f(kp::dq_ccitt()) };
+    let data = named_bytes(req, source, idx, (kp::dq_where(), kp::dq_offset(), kp::dq_length()))?;
+    let globals = named_bytes(req, source, idx, (kp::dq_gwhere(), kp::dq_goffset(), kp::dq_glength()))?;
     let mut c = Cells::new();
     let fail = |c: &mut Cells, status: i32| {
         crate::emon::plan::an_fail(c, plan::KIND_DECODE_IMG, req.id(), status);
@@ -971,8 +961,7 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     match status {
         0 => {}
         1 => return RStep::Requests,
-        21 => return RStep::Done(Outcome::Failed(Error::Damaged { input: idx, status: "undecodable" })),
-        22 => return RStep::Done(Outcome::Failed(Error::Damaged { input: idx, status: "unsupported-image" })),
+        s if s == crate::emon::planloop::ds_undecodable() || s == crate::emon::planloop::ds_unsupported_image() => return RStep::Done(Outcome::Failed(damaged(idx, s))),
         s => return RStep::Done(Outcome::Failed(Error::Internal(format!("the raster unit answered status {}", s)))),
     }
     let format = if fmt == rs_png() {
@@ -1105,6 +1094,39 @@ pub struct RunStats {
     pub finish_us: u64,
 }
 
+// The LIVE port set: a request goes where kin says (`pl-route`, P10.8): a `render` or `crop` to the configured Renderer, everything
+// else to the host's own fulfiller (`port_fulfiller`), which also answers `unsupported` where no port is configured (D199).
+struct Ports {
+    render: Option<RenderFulfiller>,
+    local: Box<dyn Fulfiller>,
+    ocr: bool,
+    // true when the request in that place went to the renderer
+    order: VecDeque<bool>,
+}
+
+impl Fulfiller for Ports {
+    fn start(&mut self, req: &plan::Request, bitmaps: &plan::Bitmaps) -> Result<(), PlanError> {
+        match self.render.as_mut() {
+            Some(r) if plan::route(req.kind(), self.ocr, true) == plan::Route::Render => {
+                r.start(req, bitmaps)?;
+                self.order.push_back(true);
+            }
+            _ => {
+                self.local.start(req, bitmaps)?;
+                self.order.push_back(false);
+            }
+        }
+        Ok(())
+    }
+    fn next(&mut self) -> Result<plan::Answer, PlanError> {
+        match (self.order.pop_front(), self.render.as_mut()) {
+            (Some(true), Some(r)) => r.next(),
+            (Some(_), _) => self.local.next(),
+            (None, _) => Err(PlanError::Fulfil("next without a started request".to_string())),
+        }
+    }
+}
+
 // The ports' fulfiller, timed by request kind (`RunStats::fulfil_us`).
 struct TimedPorts<'a> {
     inner: &'a mut dyn Fulfiller,
@@ -1175,36 +1197,32 @@ enum Outcome {
     Failed(Error),
 }
 
+// A document's status as the Engine names it (kin's `ds`): which of its errors it is, and for a damaged input its name.
+fn damaged(input: usize, code: i32) -> Error {
+    let mut status = String::new();
+    crate::emon::planloop::ds_emit_name(&mut status, crate::emon::planloop::ds_known(code));
+    Error::Damaged { input, status }
+}
+
 fn status_name(input: usize, status: i32) -> Error {
-    match status {
+    match crate::emon::planloop::ds_class(status) {
         1 => Error::UnsupportedFormat { input },
-        8 => Error::PasswordRequired { input },
-        9 => Error::PasswordIncorrect { input },
-        10 => Error::EncryptionUnsupported { input },
-        2 => Error::Damaged { input, status: "no-startxref" },
-        3 => Error::Damaged { input, status: "bad-xref" },
-        4 => Error::Damaged { input, status: "no-root" },
-        5 => Error::Damaged { input, status: "no-pages" },
-        6 => Error::Damaged { input, status: "encrypted" },
-        _ => Error::Damaged { input, status: "unreadable" },
+        2 => Error::PasswordRequired { input },
+        3 => Error::PasswordIncorrect { input },
+        4 => Error::EncryptionUnsupported { input },
+        _ => damaged(input, status),
     }
 }
 
-// A kin limit breach is a panic whose message is `port::limit_breach`'s: name it.
+// A kin limit breach is a panic whose message is `port::limit_breach`'s: kin names it (`lb-parse`, interim until P10.10's typed payload).
 fn panic_error(msg: String) -> Error {
-    // "the {name} limit is {limit} and this input reached {actual}. ..."
-    if let Some(rest) = msg.strip_prefix("the ") {
-        if let Some(i) = rest.find(" limit is ") {
-            let name = rest[..i].replace(' ', "-");
-            let tail = &rest[i + " limit is ".len()..];
-            let mut it = tail.split(" and this input reached ");
-            if let (Some(l), Some(a)) = (it.next(), it.next()) {
-                let digits = |s: &str| s.chars().take_while(|c| c.is_ascii_digit()).collect::<String>();
-                if let (Ok(limit), Ok(actual)) = (digits(l).parse::<i64>(), digits(a).parse::<i64>()) {
-                    return Error::Limit { name, limit, actual };
-                }
-            }
-        }
+    let mut cells = Cells::new();
+    for ch in msg.chars() {
+        cells_push(&mut cells, ch as i32);
+    }
+    let mut p = crate::emon::planctx::Plan::new();
+    if crate::emon::planloop::lb_parse(&mut cells, &mut p) == 1 {
+        return Error::Limit { name: p.msg, limit: p.err_limit as i64, actual: p.err_actual as i64 };
     }
     Error::Internal(msg)
 }
@@ -1242,6 +1260,15 @@ enum Step {
     Done(Outcome),
     // the document pass is done; the page units are next (P7.U)
     Pdf(Box<PdfDoc>),
+}
+
+// A residency map of `n` chunks, none resident.
+fn zeros(n: usize) -> Cells {
+    let mut c = Cells::new();
+    for _ in 0..n {
+        cells_push(&mut c, 0);
+    }
+    c
 }
 
 fn to_vec(c: &Cells) -> Vec<i32> {
@@ -1296,7 +1323,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
             return Step::Miss;
         }
         if np < 0 {
-            return Step::Done(Outcome::Failed(Error::Damaged { input: idx, status: "no-pages" }));
+            return Step::Done(Outcome::Failed(damaged(idx, crate::emon::planloop::ds_no_pages())));
         }
         return Step::Done(Outcome::Intake(intake(np, &mut dc)));
     }
@@ -1323,7 +1350,7 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
         return Step::Miss;
     }
     if status != 0 {
-        return Step::Done(Outcome::Failed(Error::Damaged { input: idx, status: "content-failed" }));
+        return Step::Done(Outcome::Failed(damaged(idx, crate::emon::planloop::ds_content_failed())));
     }
     let np = pd_pg_count(&mut pg);
     let info = intake(np, &mut dc);
@@ -1568,12 +1595,8 @@ impl Engine {
         // OCR engine will read them.
         let is_recording = matches!(mode, Mode::Record(_));
         let nop = SyncFulfiller::new(port_fulfiller(input.source.clone(), idx, is_recording || self.cfg.ocr.is_some(), is_recording, self.cfg.ocr.clone(), self.cfg.pdf_codecs.clone()));
-        let mut mux = KindMux::new();
-        if let Some(r) = &self.cfg.renderer {
-            let f = RenderFulfiller::for_input(r.clone(), idx, RenderInput { source: input.source.clone(), password: input.password.clone() });
-            mux = mux.with(&[plan::KIND_RENDER, plan::KIND_CROP], Box::new(f));
-        }
-        let mut live = mux.with(&[plan::KIND_RENDER, plan::KIND_CROP, plan::KIND_DECODE, plan::KIND_OCR, plan::KIND_DECODE_IMG], Box::new(nop));
+        let render = self.cfg.renderer.as_ref().map(|r| RenderFulfiller::for_input(r.clone(), idx, RenderInput { source: input.source.clone(), password: input.password.clone() }));
+        let mut live = Ports { render, local: Box::new(nop), ocr: self.cfg.ocr.is_some(), order: VecDeque::new() };
         let mut recording: Option<&mut Transcript> = None;
         match mode {
             Mode::Live => {}
@@ -1607,12 +1630,11 @@ impl Engine {
                 plan::Next::Done => done = true,
                 plan::Next::Fetch(reqs) => {
                     for r in &reqs {
-                        run.fetch_from_source(r.arg(1), r.arg(2))?;
+                        run.fetch_from_source(r.field(crate::emon::plan::bq_offset()), r.field(crate::emon::plan::bq_length()))?;
                     }
                 }
-                plan::Next::Requests(reqs, all) => {
-                    let got = plan::fulfil(&mut ports, &reqs, &all).map_err(|e| run.error_of(e))?;
-                    let entries = run.answered(got);
+                plan::Next::Requests(..) => {
+                    let entries = run.fulfil(&mut ports)?;
                     if let Some(t) = recording.as_deref_mut() {
                         t.entries.extend(entries);
                     }
@@ -1689,12 +1711,10 @@ impl Engine {
             len,
             limits: self.cfg.limits.clone(),
             machine: plan::Machine::new(&pcfg),
-            pcfg,
             base: Src::new(backing),
             pw: Src::of_bytes(password.unwrap_or_default()),
             cache,
             misses,
-            phase: Phase::Doc,
             outcome: Outcome::None,
             docslot: None,
             failed: None,
@@ -1714,15 +1734,8 @@ impl Engine {
 // (it reads the input too), one unit per page (P7.U, D195: its own answers, requests and `BitmapSet`, dropped when the unit
 // ends, so a conversion holds one page's bitmaps; a page unit never reads the input), then the document unit, stage 3.
 
-enum Phase {
-    Doc,
-    Asset,
-    Pages(usize),
-    // P8.5 (D351/D560): at level `figures` the Model is final but for its assets, one more plan/fulfil unit over copies of it.
-    // NOTE: the last phase added by hand; the engine-thinning effort moves this schedule into kin.
-    Figures,
-    Finished,
-}
+// THE SCHEDULE IS KIN'S (`en-next`, P10.6 S4, P10.8): which unit runs next is `Plan::phase` (`ph-doc`, `ph-asset`, `ph-pages` and the page,
+// `ph-finish`, `ph-figures`, `ph-done`), advanced by the Machine, and this Run is the driver of each unit.
 
 pub struct Run {
     idx: usize,
@@ -1730,13 +1743,11 @@ pub struct Run {
     intake_only: bool,
     len: u64,
     limits: Vec<(i32, i32)>,
-    pcfg: plan::Config,
     machine: plan::Machine,
     base: Src,
     pw: Src,
     cache: Option<Arc<ChunkCache>>,
     misses: Box<dyn Misses>,
-    phase: Phase,
     outcome: Outcome,
     docslot: Option<DocKind>,
     failed: Option<Error>,
@@ -1748,7 +1759,7 @@ pub struct Run {
 impl Run {
     // Whether the next `step` is still the document pass (P7.S's timing; a host that keeps a clock asks).
     pub fn in_document_pass(&self) -> bool {
-        matches!(self.phase, Phase::Doc)
+        self.machine.phase() == crate::emon::planloop::ph_doc()
     }
 
     // The wall time a host measured (`RunStats`): the document pass, every later stretch (the document unit's own time, which
@@ -1791,9 +1802,64 @@ impl Run {
         Ok(())
     }
 
-    // The answers to the requests of the last `step`, one each, sorted by id; the entries a transcript records.
-    pub fn answered(&mut self, got: Vec<Answer>) -> Vec<plan::Entry> {
-        self.machine.answered(got)
+    // The requests of the round in progress (what the last `step` handed back), sorted by id.
+    pub fn requests(&self) -> &[plan::Request] {
+        self.machine.requests()
+    }
+
+    // A bitmap any request of the round may name: answered so far, or one kin made.
+    pub fn bitmap(&self, id: i32) -> Option<Arc<crate::port::Bitmap>> {
+        self.machine.bitmap(id)
+    }
+
+    // Every bitmap the round's fulfillers may name.
+    pub fn bitmaps(&self) -> &plan::Bitmaps {
+        self.machine.bitmaps()
+    }
+
+    // The answers to the requests of the last `step`, one each, in any order; the entries a transcript records, in id order.
+    pub fn answered(&mut self, got: Vec<Answer>) -> Result<Vec<plan::Entry>, Error> {
+        let r = self.machine.answered(got);
+        r.map_err(|e| self.error_of(e))
+    }
+
+    // Start every request of the round with `f` and take every completion: the round is answered.
+    pub fn fulfil(&mut self, f: &mut dyn Fulfiller) -> Result<Vec<plan::Entry>, Error> {
+        let r = self.machine.fulfil(f);
+        r.map_err(|e| self.error_of(e))
+    }
+
+    // One answer to the round, whenever it arrives (a host that awaits offers each as it comes), and `commit` when every request has one.
+    pub fn offer(&mut self, a: Answer) -> Result<(), Error> {
+        let r = self.machine.offer(a);
+        r.map_err(|e| self.error_of(e))
+    }
+
+    pub fn commit(&mut self) -> Result<Vec<plan::Entry>, Error> {
+        let r = self.machine.commit();
+        r.map_err(|e| self.error_of(e))
+    }
+
+    // Whether the round has an answer to request `id`.
+    pub fn has_answer(&mut self, id: i32) -> bool {
+        self.machine.has(id)
+    }
+
+    // What the document pass built, for the schedule: 0 nothing, 1 a PDF, 2 a raster input; and its page count.
+    fn doc_kind(&self) -> (i32, usize) {
+        match &self.docslot {
+            Some(DocKind::Pdf(d)) => (1, d.info.pages),
+            Some(DocKind::Raster(d)) => (2, d.info.pages),
+            None => (0, 0),
+        }
+    }
+
+    // The unit that just finished is folded into the totals, and the schedule moves on.
+    fn advance(&mut self) {
+        let (kind, np) = self.doc_kind();
+        let assets = self.opts.assets != Assets::None;
+        self.machine.end_unit();
+        self.machine.next_phase(kind, assets, false, np);
     }
 
     // Run kin until it needs something. `Done`: every unit has finished, `finish` is next.
@@ -1803,243 +1869,215 @@ impl Run {
     }
 
     fn step_inner(&mut self) -> Result<plan::Next, Error> {
+        use crate::emon::planloop as lp;
         loop {
-            match self.phase {
-                Phase::Doc => {
-                    let (idx, len, intake_only) = (self.idx, self.len, self.intake_only);
-                    let mut unit = |answers: &mut Cells, rq: &mut Cells, _bms: &BitmapSet, _payload: &mut Buf| -> i32 {
-                        let view = self.base.view();
-                        match catch_unwind(AssertUnwindSafe(|| dispatch(&view, &self.pw, answers, rq, idx, &self.opts, intake_only, len))) {
-                            Ok(RStep::Miss) => plan::UNIT_NEED_BYTES,
-                            Ok(RStep::Requests) => plan::UNIT_REQUESTS,
-                            Ok(RStep::Done(o)) => {
-                                self.outcome = o;
+            let phase = self.machine.phase();
+            if phase == lp::ph_doc() {
+                let (idx, len, intake_only) = (self.idx, self.len, self.intake_only);
+                let mut unit = |answers: &mut Cells, rq: &mut Cells, _bms: &BitmapSet, _payload: &mut Buf| -> i32 {
+                    let view = self.base.view();
+                    match catch_unwind(AssertUnwindSafe(|| dispatch(&view, &self.pw, answers, rq, idx, &self.opts, intake_only, len))) {
+                        Ok(RStep::Miss) => plan::UNIT_NEED_BYTES,
+                        Ok(RStep::Requests) => plan::UNIT_REQUESTS,
+                        Ok(RStep::Done(o)) => {
+                            self.outcome = o;
+                            plan::UNIT_DONE
+                        }
+                        Ok(RStep::Pdf(d)) => {
+                            self.docslot = Some(DocKind::Pdf(d));
+                            plan::UNIT_DONE
+                        }
+                        Ok(RStep::Raster(d)) => {
+                            self.docslot = Some(DocKind::Raster(d));
+                            plan::UNIT_DONE
+                        }
+                        Err(p) => {
+                            if view.missed() {
+                                plan::UNIT_NEED_BYTES
+                            } else {
+                                self.outcome = Outcome::Failed(panic_error(panic_message(p)));
                                 plan::UNIT_DONE
-                            }
-                            Ok(RStep::Pdf(d)) => {
-                                self.docslot = Some(DocKind::Pdf(d));
-                                plan::UNIT_DONE
-                            }
-                            Ok(RStep::Raster(d)) => {
-                                self.docslot = Some(DocKind::Raster(d));
-                                plan::UNIT_DONE
-                            }
-                            Err(p) => {
-                                if view.missed() {
-                                    plan::UNIT_NEED_BYTES
-                                } else {
-                                    self.outcome = Outcome::Failed(panic_error(panic_message(p)));
-                                    plan::UNIT_DONE
-                                }
                             }
                         }
-                    };
-                    let r = self.machine.attempt(&mut unit, &mut *self.misses);
-                    let next = r.map_err(|e| self.error_of(e))?;
-                    if let Some(e) = self.source_failure() {
-                        return Err(e);
                     }
-                    if !matches!(next, plan::Next::Done) {
-                        return Ok(next);
-                    }
-                    let ps = self.machine.stats().clone();
-                    self.stats.attempts = ps.attempts;
-                    self.stats.fetch_rounds = ps.fetch_rounds;
-                    self.stats.bytes_requests = ps.bytes_requests;
-                    self.stats.requests = ps.requests;
-                    self.machine = plan::Machine::new(&self.pcfg);
-                    // THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are
-                    // asked of the host (`decode-img`, one round for them all)
-                    self.phase = match &self.docslot {
-                        Some(DocKind::Pdf(_)) if self.opts.assets != Assets::None => Phase::Asset,
-                        Some(_) => Phase::Pages(0),
-                        None => Phase::Finished,
-                    };
+                };
+                let r = self.machine.attempt(&mut unit, &mut *self.misses);
+                let next = r.map_err(|e| self.error_of(e))?;
+                if let Some(e) = self.source_failure() {
+                    return Err(e);
                 }
-                Phase::Asset => {
-                    let idx = self.idx;
-                    let mut unit_a = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf| -> i32 {
-                        let view = self.base.view();
-                        let doc = match &mut self.docslot {
-                            Some(DocKind::Pdf(doc)) => doc,
-                            _ => {
-                                self.outcome = Outcome::Failed(Error::Internal("the asset unit has no document".to_string()));
-                                return plan::UNIT_DONE;
-                            }
-                        };
-                        match catch_unwind(AssertUnwindSafe(|| asset_unit(&view, &self.pw, idx, doc, &self.opts, answers, rq, bms, payload))) {
-                            Ok(0) => plan::UNIT_DONE,
-                            Ok(1) => plan::UNIT_REQUESTS,
-                            Ok(_) if view.missed() => plan::UNIT_NEED_BYTES,
-                            Ok(7) => plan::UNIT_NEED_BYTES,
-                            Ok(s) => {
-                                self.outcome = Outcome::Failed(Error::Internal(format!("the asset unit answered status {}", s)));
-                                plan::UNIT_DONE
-                            }
-                            Err(p) => {
-                                if view.missed() {
-                                    plan::UNIT_NEED_BYTES
-                                } else {
-                                    self.outcome = Outcome::Failed(panic_error(panic_message(p)));
-                                    plan::UNIT_DONE
-                                }
-                            }
-                        }
-                    };
-                    let r = self.machine.attempt(&mut unit_a, &mut *self.misses);
-                    let next = r.map_err(|e| self.error_of(e))?;
-                    if let Some(e) = self.source_failure() {
-                        return Err(e);
-                    }
-                    if !matches!(next, plan::Next::Done) {
-                        return Ok(next);
-                    }
-                    let ast = self.machine.stats().clone();
-                    self.stats.requests += ast.requests;
-                    self.stats.attempts += ast.attempts;
-                    self.stats.fetch_rounds += ast.fetch_rounds;
-                    self.stats.bytes_requests += ast.bytes_requests;
-                    self.machine = plan::Machine::new(&self.pcfg);
-                    if let Outcome::Failed(e) = std::mem::replace(&mut self.outcome, Outcome::None) {
-                        return Err(e);
-                    }
-                    self.phase = Phase::Pages(0);
+                if !matches!(next, plan::Next::Done) {
+                    return Ok(next);
                 }
-                Phase::Pages(i) => {
-                    let np = match &self.docslot {
-                        Some(DocKind::Pdf(doc)) => doc.info.pages,
-                        Some(DocKind::Raster(doc)) => doc.info.pages,
-                        None => 0,
-                    };
-                    if i >= np {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        let t_fin = std::time::Instant::now();
-                        // the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D386)
-                        let opts = &self.opts;
-                        self.outcome = match self.docslot.take() {
-                            Some(DocKind::Pdf(doc)) => finish_guarded(|| finish_pdf(*doc, opts)),
-                            Some(DocKind::Raster(doc)) => finish_guarded(|| finish_raster(*doc, opts)),
-                            None => Outcome::None,
-                        };
-                        #[cfg(not(target_arch = "wasm32"))]
-                        {
-                            self.stats.finish_us = t_fin.elapsed().as_micros() as u64;
-                        }
-                        self.phase = Phase::Finished;
-                        // THE FIGURES UNIT (P8.5, D351): a Built Model with assets still pending goes on to it.
-                        if let Outcome::Built(b) = &mut self.outcome {
-                            if let Some(pend) = b.pending.take() {
-                                self.fig_pend = Some(pend);
-                                self.phase = Phase::Figures;
-                            }
-                        }
-                        continue;
-                    }
-                    let (idx, len) = (self.idx, self.len);
-                    let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
-                        let r = catch_unwind(AssertUnwindSafe(|| match &mut self.docslot {
-                            Some(DocKind::Pdf(doc)) => unit_pdf(doc, i, idx, &self.opts, answers, rq, bms),
-                            Some(DocKind::Raster(doc)) => unit_raster(doc, i, idx, len, &self.opts, answers, rq, bms),
-                            None => 99,
-                        }));
-                        match r {
-                            Ok(0) => plan::UNIT_DONE,
-                            Ok(1) => plan::UNIT_REQUESTS,
-                            Ok(21) => {
-                                self.failed = Some(Error::Damaged { input: idx, status: "undecodable" });
-                                plan::UNIT_DONE
-                            }
-                            Ok(22) => {
-                                self.failed = Some(Error::Damaged { input: idx, status: "unsupported-image" });
-                                plan::UNIT_DONE
-                            }
-                            Ok(s) => {
-                                self.failed = Some(Error::Internal(format!("a page unit answered status {}", s)));
-                                plan::UNIT_DONE
-                            }
-                            Err(p) => {
-                                self.failed = Some(panic_error(panic_message(p)));
-                                plan::UNIT_DONE
-                            }
+                // THE ASSET UNIT follows a PDF with `assets` on (P6.1a, D117): its image placements become asset candidates, and a codec
+                // image's pixels are asked of the host (`decode-img`, one round for them all)
+                self.advance();
+            } else if phase == lp::ph_asset() {
+                let idx = self.idx;
+                let mut unit_a = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, payload: &mut Buf| -> i32 {
+                    let view = self.base.view();
+                    let doc = match &mut self.docslot {
+                        Some(DocKind::Pdf(doc)) => doc,
+                        _ => {
+                            self.outcome = Outcome::Failed(Error::Internal("the asset unit has no document".to_string()));
+                            return plan::UNIT_DONE;
                         }
                     };
-                    let mut no_misses = NoMisses;
-                    let next = self.machine.attempt(&mut unit_p, &mut no_misses).map_err(Error::from)?;
-                    if !matches!(next, plan::Next::Done) {
-                        return Ok(next);
+                    match catch_unwind(AssertUnwindSafe(|| asset_unit(&view, &self.pw, idx, doc, &self.opts, answers, rq, bms, payload))) {
+                        Ok(0) => plan::UNIT_DONE,
+                        Ok(1) => plan::UNIT_REQUESTS,
+                        Ok(_) if view.missed() => plan::UNIT_NEED_BYTES,
+                        Ok(7) => plan::UNIT_NEED_BYTES,
+                        Ok(s) => {
+                            self.outcome = Outcome::Failed(Error::Internal(format!("the asset unit answered status {}", s)));
+                            plan::UNIT_DONE
+                        }
+                        Err(p) => {
+                            if view.missed() {
+                                plan::UNIT_NEED_BYTES
+                            } else {
+                                self.outcome = Outcome::Failed(panic_error(panic_message(p)));
+                                plan::UNIT_DONE
+                            }
+                        }
                     }
-                    if let Some(e) = self.failed.take() {
+                };
+                let r = self.machine.attempt(&mut unit_a, &mut *self.misses);
+                let next = r.map_err(|e| self.error_of(e))?;
+                if let Some(e) = self.source_failure() {
+                    return Err(e);
+                }
+                if !matches!(next, plan::Next::Done) {
+                    return Ok(next);
+                }
+                self.advance();
+                if let Outcome::Failed(e) = std::mem::replace(&mut self.outcome, Outcome::None) {
+                    return Err(e);
+                }
+            } else if phase == lp::ph_pages() {
+                let i = self.machine.page();
+                let (idx, len) = (self.idx, self.len);
+                let mut unit_p = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
+                    let r = catch_unwind(AssertUnwindSafe(|| match &mut self.docslot {
+                        Some(DocKind::Pdf(doc)) => unit_pdf(doc, i, idx, &self.opts, answers, rq, bms),
+                        Some(DocKind::Raster(doc)) => unit_raster(doc, i, idx, len, &self.opts, answers, rq, bms),
+                        None => 99,
+                    }));
+                    match r {
+                        Ok(0) => plan::UNIT_DONE,
+                        Ok(1) => plan::UNIT_REQUESTS,
+                        Ok(s) if s == lp::ds_undecodable() || s == lp::ds_unsupported_image() => {
+                            self.failed = Some(damaged(idx, s));
+                            plan::UNIT_DONE
+                        }
+                        Ok(s) => {
+                            self.failed = Some(Error::Internal(format!("a page unit answered status {}", s)));
+                            plan::UNIT_DONE
+                        }
+                        Err(p) => {
+                            self.failed = Some(panic_error(panic_message(p)));
+                            plan::UNIT_DONE
+                        }
+                    }
+                };
+                let mut no_misses = NoMisses;
+                let next = self.machine.attempt(&mut unit_p, &mut no_misses).map_err(Error::from)?;
+                if !matches!(next, plan::Next::Done) {
+                    return Ok(next);
+                }
+                if let Some(e) = self.failed.take() {
+                    return Err(e);
+                }
+                self.advance();
+            } else if phase == lp::ph_finish() {
+                #[cfg(not(target_arch = "wasm32"))]
+                let t_fin = std::time::Instant::now();
+                // the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D386)
+                let opts = &self.opts;
+                self.outcome = match self.docslot.take() {
+                    Some(DocKind::Pdf(doc)) => finish_guarded(|| finish_pdf(*doc, opts)),
+                    Some(DocKind::Raster(doc)) => finish_guarded(|| finish_raster(*doc, opts)),
+                    None => Outcome::None,
+                };
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    self.stats.finish_us = t_fin.elapsed().as_micros() as u64;
+                }
+                // THE FIGURES UNIT (P8.5, D351): a Built Model with assets still pending goes on to it.
+                let mut pending = false;
+                if let Outcome::Built(b) = &mut self.outcome {
+                    if let Some(pend) = b.pending.take() {
+                        self.fig_pend = Some(pend);
+                        pending = true;
+                    }
+                }
+                self.machine.next_phase(0, false, pending, 0);
+            } else if phase == lp::ph_figures() {
+                let (idx, len) = (self.idx, self.len);
+                let mut unit_f = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
+                    let (base, pend) = match (&self.outcome, &self.fig_pend) {
+                        (Outcome::Built(b), Some(p)) => (&b.arenas, p),
+                        _ => {
+                            self.failed = Some(Error::Internal("the figures unit has no Model".to_string()));
+                            return plan::UNIT_DONE;
+                        }
+                    };
+                    let opts = &self.opts;
+                    let r = catch_unwind(AssertUnwindSafe(|| {
+                        let mut t = base.clone();
+                        let mut p = pend.clone();
+                        asset_stage_figures(&mut t, &mut p, opts, idx as i32, len as i32, answers, rq, bms);
+                        t
+                    }));
+                    match r {
+                        Ok(t) => {
+                            if cells_len(rq) > 0 {
+                                plan::UNIT_REQUESTS
+                            } else {
+                                self.fig_done = Some(t);
+                                plan::UNIT_DONE
+                            }
+                        }
+                        Err(p) => {
+                            self.failed = Some(panic_error(panic_message(p)));
+                            plan::UNIT_DONE
+                        }
+                    }
+                };
+                let mut no_misses = NoMisses;
+                let next = self.machine.attempt(&mut unit_f, &mut no_misses).map_err(Error::from)?;
+                if !matches!(next, plan::Next::Done) {
+                    return Ok(next);
+                }
+                if let Some(e) = self.failed.take() {
+                    return Err(e);
+                }
+                self.advance();
+                self.fig_pend = None;
+                match (self.fig_done.take(), &mut self.outcome) {
+                    (Some(a), Outcome::Built(b)) => b.arenas = a,
+                    _ => return Err(Error::Internal("the figures unit finished with no Model".to_string())),
+                }
+                if let Outcome::Built(b) = &mut self.outcome {
+                    if let Some(e) = seal_arenas(&mut b.arenas, &self.opts) {
                         return Err(e);
                     }
-                    let pst = self.machine.stats().clone();
-                    self.stats.requests += pst.requests;
-                    self.stats.page_rounds.push(pst.rounds);
-                    self.stats.page_requests.push(pst.requests);
-                    self.machine = plan::Machine::new(&self.pcfg);
-                    self.phase = Phase::Pages(i + 1);
                 }
-                Phase::Figures => {
-                    let (idx, len) = (self.idx, self.len);
-                    let mut unit_f = |answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet, _payload: &mut Buf| -> i32 {
-                        let (base, pend) = match (&self.outcome, &self.fig_pend) {
-                            (Outcome::Built(b), Some(p)) => (&b.arenas, p),
-                            _ => {
-                                self.failed = Some(Error::Internal("the figures unit has no Model".to_string()));
-                                return plan::UNIT_DONE;
-                            }
-                        };
-                        let opts = &self.opts;
-                        let r = catch_unwind(AssertUnwindSafe(|| {
-                            let mut t = base.clone();
-                            let mut p = pend.clone();
-                            asset_stage_figures(&mut t, &mut p, opts, idx as i32, len as i32, answers, rq, bms);
-                            t
-                        }));
-                        match r {
-                            Ok(t) => {
-                                if cells_len(rq) > 0 {
-                                    plan::UNIT_REQUESTS
-                                } else {
-                                    self.fig_done = Some(t);
-                                    plan::UNIT_DONE
-                                }
-                            }
-                            Err(p) => {
-                                self.failed = Some(panic_error(panic_message(p)));
-                                plan::UNIT_DONE
-                            }
-                        }
-                    };
-                    let mut no_misses = NoMisses;
-                    let next = self.machine.attempt(&mut unit_f, &mut no_misses).map_err(Error::from)?;
-                    if !matches!(next, plan::Next::Done) {
-                        return Ok(next);
-                    }
-                    if let Some(e) = self.failed.take() {
-                        return Err(e);
-                    }
-                    let fst = self.machine.stats().clone();
-                    self.stats.requests += fst.requests;
-                    self.machine = plan::Machine::new(&self.pcfg);
-                    self.fig_pend = None;
-                    match (self.fig_done.take(), &mut self.outcome) {
-                        (Some(a), Outcome::Built(b)) => b.arenas = a,
-                        _ => return Err(Error::Internal("the figures unit finished with no Model".to_string())),
-                    }
-                    if let Outcome::Built(b) = &mut self.outcome {
-                        if let Some(e) = seal_arenas(&mut b.arenas, &self.opts) {
-                            return Err(e);
-                        }
-                    }
-                    self.phase = Phase::Finished;
-                }
-                Phase::Finished => return Ok(plan::Next::Done),
+            } else {
+                return Ok(plan::Next::Done);
             }
         }
     }
 
     // The end: the Model (or the intake) the units built, and what the loop did.
     fn finish(mut self) -> Result<(Outcome, RunStats), Error> {
+        let t = self.machine.totals();
+        self.stats.attempts = t.attempts;
+        self.stats.fetch_rounds = t.fetch_rounds;
+        self.stats.bytes_requests = t.bytes_requests;
+        self.stats.requests = t.requests;
+        self.stats.page_rounds = t.page_rounds;
+        self.stats.page_requests = t.page_requests;
         self.stats.source_reads = self.cache.as_ref().map(|c| c.reads()).unwrap_or(0);
         self.stats.bytes_fetched = self.cache.as_ref().map(|c| c.bytes_read()).unwrap_or(0);
         match self.outcome {

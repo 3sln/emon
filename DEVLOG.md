@@ -3667,7 +3667,9 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
     OPEN `ev-emit`/`pl-emit`/`pl-emit-gfx` (D381); the scratch is `Scratch`, one field a scratch (D383). `engine.rs` 2899 to 2544 lines,
     `engine.go` 2064 to 1798.
   - [ ] S3 — the document pass and the asset unit.
-  - [ ] S4 — `en-next` replaces the host's `Phase` enum: the schedule is kin's.
+  - [x] S4 — `en-next` replaces the host's `Phase` enum: the schedule is kin's (done with P10.8, D840-D841: the document pass, the asset unit, one
+    unit per page, the document unit and the figures unit are `ph-doc` .. `ph-done` of `emon.planloop`, advanced by `en-next`; Rust's `Run` and Go's
+    `runInputBounded` are the driver of each unit).
   - [ ] S5 — Java and C# as the driver plus the ports only (they adopt each moved step; they are not hand-ported
     to the current Engines). `bb hosts` refuses stage calls outside the ports, native fulfilment, the await driver
     and the public API (amended by D396: the plan loop and its transcripts are kin's, P10.8-P10.9, no longer permanent host territory).

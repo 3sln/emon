@@ -404,6 +404,75 @@ pub fn dq_gsha() -> i32 {
 pub fn dq_nargs() -> i32 {
     return 31;
 }
+pub fn rd_input() -> i32 {
+    return 0;
+}
+pub fn rd_page() -> i32 {
+    return 1;
+}
+pub fn rd_dpi() -> i32 {
+    return 2;
+}
+pub fn rd_layer() -> i32 {
+    return 3;
+}
+pub fn rd_x() -> i32 {
+    return 4;
+}
+pub fn rd_y() -> i32 {
+    return 5;
+}
+pub fn rd_w() -> i32 {
+    return 6;
+}
+pub fn rd_h() -> i32 {
+    return 7;
+}
+pub fn dc_input() -> i32 {
+    return 0;
+}
+pub fn dc_offset() -> i32 {
+    return 1;
+}
+pub fn dc_length() -> i32 {
+    return 2;
+}
+pub fn dc_filter() -> i32 {
+    return 3;
+}
+pub fn dc_frame() -> i32 {
+    return 4;
+}
+pub fn oc_bitmap() -> i32 {
+    return 0;
+}
+pub fn oc_psm() -> i32 {
+    return 1;
+}
+pub fn oc_flags() -> i32 {
+    return 2;
+}
+pub fn oc_x() -> i32 {
+    return 3;
+}
+pub fn oc_y() -> i32 {
+    return 4;
+}
+pub fn oc_w() -> i32 {
+    return 5;
+}
+pub fn oc_h() -> i32 {
+    return 6;
+}
+pub fn bq_input() -> i32 {
+    return 0;
+}
+pub fn bq_offset() -> i32 {
+    return 1;
+}
+pub fn bq_length() -> i32 {
+    return 2;
+}
 pub fn an_status(c: &mut crate::port::Cells, at: i32) -> i32 {
     return crate::port::cells_at(c, at + 3);
 }

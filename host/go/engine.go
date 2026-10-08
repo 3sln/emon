@@ -50,6 +50,9 @@ import (
 	"emon/pdfstruct"
 	"emon/pdfx"
 	"emon/plan"
+	"emon/planctx"
+	"emon/planloop"
+	"emon/planrun"
 	"emon/port"
 	"emon/rasterin"
 	"emon/tlhealth"
@@ -421,8 +424,10 @@ type chunkCache struct {
 	chunk    int
 	deferred bool
 
-	mu      sync.Mutex
-	chunks  [][]byte
+	mu     sync.Mutex
+	chunks [][]byte
+	// 1 for each resident chunk, for kin's planner of the fetches (`fp-plan`)
+	res     *port.Cells
 	pending map[int]bool
 	wanted  map[int]bool
 	failure string
@@ -435,7 +440,11 @@ type chunkCache struct {
 
 func newChunkCache(src ByteSource, n, chunk int, deferred bool) *chunkCache {
 	nc := (n + chunk - 1) / chunk
-	return &chunkCache{src: src, n: n, chunk: chunk, deferred: deferred, chunks: make([][]byte, nc),
+	res := port.NewCells()
+	for i := 0; i < nc; i++ {
+		port.CellsPush(res, 0)
+	}
+	return &chunkCache{src: src, n: n, chunk: chunk, deferred: deferred, chunks: make([][]byte, nc), res: res,
 		pending: map[int]bool{}, wanted: map[int]bool{}}
 }
 
@@ -472,6 +481,7 @@ func (c *chunkCache) load(first, last int) bool {
 		a := k*c.chunk - lo
 		b := min(a+c.chunk, len(buf))
 		c.chunks[k] = append([]byte(nil), buf[a:b]...)
+		port.CellsSet(c.res, int32(k), 1)
 	}
 	return true
 }
@@ -492,47 +502,33 @@ func (c *chunkCache) touch(k int) bool {
 }
 
 // planFetch is the ranges to fetch for fetch round `round`: every pending (or hinted) chunk and 2^round - 1
-// chunks each side of it, the resident ones left out, a run of chunks one range.
+// chunks each side of it, the resident ones left out, a run of chunks one range. THE PLAN IS KIN'S (`fp-plan`): the host says what
+// was missed (in ascending order) and what is resident, and takes the ranges.
 func (c *chunkCache) planFetch(input int32, round int32) []port.PlanRange {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	n := c.nchunks()
-	r := (1 << min(int(round), 20)) - 1
-	want := map[int]bool{}
-	seeds := make([]int, 0, len(c.pending)+len(c.wanted))
-	for k := range c.pending {
-		seeds = append(seeds, k)
-	}
-	for k := range c.wanted {
-		seeds = append(seeds, k)
-	}
-	for _, k := range seeds {
-		for j := max(0, k-r); j <= min(n-1, k+r); j++ {
-			if c.chunks[j] == nil {
-				want[j] = true
-			}
+	seeds := func(set map[int]bool) *port.Cells {
+		ks := make([]int, 0, len(set))
+		for k := range set {
+			ks = append(ks, k)
 		}
+		sort.Ints(ks)
+		out := port.NewCells()
+		for _, k := range ks {
+			port.CellsPush(out, int32(k))
+		}
+		return out
 	}
+	pend, hint := seeds(c.pending), seeds(c.wanted)
 	c.pending = map[int]bool{}
 	c.wanted = map[int]bool{}
-	ks := make([]int, 0, len(want))
-	for k := range want {
-		ks = append(ks, k)
+	out := port.NewCells()
+	planloop.FpPlan(pend, hint, c.res, int32(c.chunk), int32(c.n), input, round, out)
+	var ranges []port.PlanRange
+	for i := int32(0); i < port.CellsLen(out)/3; i++ {
+		ranges = append(ranges, port.PlanRange{Input: port.CellsAt(out, 3*i), Offset: port.CellsAt(out, 3*i+1), Length: port.CellsAt(out, 3*i+2)})
 	}
-	sort.Ints(ks)
-	var out []port.PlanRange
-	for i := 0; i < len(ks); {
-		first, last := ks[i], ks[i]
-		i++
-		for i < len(ks) && ks[i] == last+1 {
-			last = ks[i]
-			i++
-		}
-		off := first * c.chunk
-		end := min((last+1)*c.chunk, c.n)
-		out = append(out, port.PlanRange{Input: input, Offset: int32(off), Length: int32(end - off)})
-	}
-	return out
+	return ranges
 }
 
 // fetch makes [offset, offset + length) resident: what a `bytes` request does. False is the source's failure.
@@ -689,30 +685,25 @@ func (s spanSource) ReadAt(p []byte, off int64) (int, error) {
 // thresholded image, which only a transcript wants (D211).
 func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr, codecs PdfCodecs) *port.PlanSync {
 	return &port.PlanSync{F: func(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
-		if req.Kind() == port.PlanKindDecodeImg {
+		// WHICH PORT a request goes to, or that none is configured, is kin's (`pl-route`); this host has no renderer (D199: `livePorts`
+		// sends a render to one when it has one)
+		switch planrun.Route(req.Kind(), ocr != nil, false) {
+		case planloop.RtDecodeImg():
 			return decodeImg(req, source, idx, codecs)
-		}
-		if req.Kind() == port.PlanKindOcr {
+		case planloop.RtUnsupported():
+			return planrun.UnsupportedAnswer(req), nil
+		case planloop.RtOcr():
 			failed := func(status int32) (port.PlanAnswer, error) {
 				c := port.NewCells()
 				plan.AnFail(c, port.PlanKindOcr, req.ID(), status)
 				return port.PlanAnswer{Rec: cellsVec(c)}, nil
 			}
-			if ocr == nil {
-				return failed(plan.PsUnsupported())
-			}
 			return ocrSafe(ocr, req, bm, recording, failed)
-		}
-		if req.Kind() == port.PlanKindRender || req.Kind() == port.PlanKindCrop {
-			// no Renderer is configured (D199): an answer, as an Engine with no Ocr answers `ocr`
-			c := port.NewCells()
-			plan.AnFail(c, req.Kind(), req.ID(), plan.PsUnsupported())
-			return port.PlanAnswer{Rec: cellsVec(c)}, nil
-		}
-		if req.Kind() != port.PlanKindDecode {
+		case planloop.RtDecode():
+		default:
 			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "no port is configured for this request kind"}
 		}
-		input, off, n, filter, frame := req.Arg(0), req.Arg(1), req.Arg(2), req.Arg(3), req.Arg(4)
+		input, off, n, filter, frame := req.Field(plan.DcInput()), req.Field(plan.DcOffset()), req.Field(plan.DcLength()), req.Field(plan.DcFilter()), req.Field(plan.DcFrame())
 		if int(input) != idx || off < 0 || n < 0 || int64(off)+int64(n) > source.Size() {
 			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "a decode request names bytes the input does not have"}
 		}
@@ -780,8 +771,8 @@ func readSpan(source ByteSource, off, n int64) ([]byte, error) {
 
 // namedBytes is the bytes a `decode-img` request names (kin's `dq-where` / `dq-offset` / `dq-length`): a span of this input (where is
 // its index), or of the unit's PAYLOAD (where -2); -1 names none (P6.1a, D291).
-func namedBytes(req port.PlanRequest, source ByteSource, idx, at int) ([]byte, error) {
-	wh, off, n := req.Arg(at), int64(req.Arg(at+1)), int64(req.Arg(at+2))
+func namedBytes(req port.PlanRequest, source ByteSource, idx int, where, offset, length int32) ([]byte, error) {
+	wh, off, n := req.Field(where), int64(req.Field(offset)), int64(req.Field(length))
 	switch {
 	case wh == -1:
 		return nil, nil
@@ -799,12 +790,12 @@ func namedBytes(req port.PlanRequest, source ByteSource, idx, at int) ([]byte, e
 // decodeImg is the `decode-img` request (kind 6; P6.1a, D117, D291): one PDF image's codestream to its 8-bit pixels (`pdfimg.go`). The
 // answer always carries the pixels (kin adopts them); a transcript stores them, never the codestream.
 func decodeImg(req port.PlanRequest, source ByteSource, idx int, codecs PdfCodecs) (port.PlanAnswer, error) {
-	a := pdfArgs{filter: req.Arg(0), w: req.Arg(1), h: req.Arg(2), comps: req.Arg(3), bpc: req.Arg(4), k: req.Arg(5), columns: req.Arg(6), rows: req.Arg(7), flags: req.Arg(8)}
-	data, err := namedBytes(req, source, idx, 9)
+	a := pdfArgs{filter: req.Field(plan.DqFilter()), w: req.Field(plan.DqW()), h: req.Field(plan.DqH()), comps: req.Field(plan.DqComps()), bpc: req.Field(plan.DqBpc()), k: req.Field(plan.DqK()), columns: req.Field(plan.DqColumns()), rows: req.Field(plan.DqRows()), flags: req.Field(plan.DqCcitt())}
+	data, err := namedBytes(req, source, idx, plan.DqWhere(), plan.DqOffset(), plan.DqLength())
 	if err != nil {
 		return port.PlanAnswer{}, err
 	}
-	globals, err := namedBytes(req, source, idx, 20)
+	globals, err := namedBytes(req, source, idx, plan.DqGwhere(), plan.DqGoffset(), plan.DqGlength())
 	if err != nil {
 		return port.PlanAnswer{}, err
 	}
@@ -898,17 +889,12 @@ func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int3
 	if view.Missed() {
 		return rstep{miss: true}
 	}
-	fail := func(s string) rstep {
-		return rstep{out: outcome{err: &Error{Kind: ErrDamaged, Input: idx, Status: s}}}
-	}
 	switch status {
 	case 0:
 	case 1:
 		return rstep{requests: true}
-	case 21:
-		return fail("undecodable")
-	case 22:
-		return fail("unsupported-image")
+	case planloop.DsUndecodable(), planloop.DsUnsupportedImage():
+		return rstep{out: outcome{err: damaged(idx, status)}}
 	default:
 		return rstep{out: outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("the raster unit answered status %d", status)}}}
 	}
@@ -1155,29 +1141,26 @@ type outcome struct {
 	err    *Error
 }
 
+// damaged is a damaged input, named by kin's `ds` (the status itself when the table names it, `unreadable` otherwise).
+func damaged(input int, code int32) *Error {
+	var name strings.Builder
+	planloop.DsEmitName(&name, planloop.DsKnown(code))
+	return &Error{Kind: ErrDamaged, Input: input, Status: name.String()}
+}
+
+// statusError is what a document status is as the Engine reports it: which error it is is kin's (`ds-class`).
 func statusError(input int, status int32) *Error {
-	d := func(s string) *Error { return &Error{Kind: ErrDamaged, Input: input, Status: s} }
-	switch status {
+	switch planloop.DsClass(status) {
 	case 1:
 		return &Error{Kind: ErrUnsupportedFormat, Input: input}
-	case 8:
-		return &Error{Kind: ErrPasswordRequired, Input: input}
-	case 9:
-		return &Error{Kind: ErrPasswordIncorrect, Input: input}
-	case 10:
-		return &Error{Kind: ErrEncryptionUnsupported, Input: input}
 	case 2:
-		return d("no-startxref")
+		return &Error{Kind: ErrPasswordRequired, Input: input}
 	case 3:
-		return d("bad-xref")
+		return &Error{Kind: ErrPasswordIncorrect, Input: input}
 	case 4:
-		return d("no-root")
-	case 5:
-		return d("no-pages")
-	case 6:
-		return d("encrypted")
+		return &Error{Kind: ErrEncryptionUnsupported, Input: input}
 	}
-	return d("unreadable")
+	return damaged(input, status)
 }
 
 // finishGuarded runs the document unit with a panic in it made the Engine's named error (`panicError`), as in a page unit.
@@ -1190,17 +1173,16 @@ func finishGuarded(f func() outcome) (res outcome) {
 	return f()
 }
 
-// panicError: a kin limit breach is a panic whose message is `port.LimitBreach`'s ("the {name} limit is
-// {limit} and this input reached {actual}. ..."): name it.
+// panicError: a kin limit breach is a panic whose message is `port.LimitBreach`'s ("the {name} limit is {limit} and this input reached
+// {actual}. ..."): kin names it (`lb-parse`, interim until P10.10's typed payload).
 func panicError(msg string) *Error {
-	if rest, ok := strings.CutPrefix(msg, "the "); ok {
-		if i := strings.Index(rest, " limit is "); i >= 0 {
-			name := strings.ReplaceAll(rest[:i], " ", "-")
-			var limit, actual int64
-			if _, err := fmt.Sscanf(rest[i+len(" limit is "):], "%d and this input reached %d", &limit, &actual); err == nil {
-				return &Error{Kind: ErrLimit, Status: name, Limit: limit, Actual: actual}
-			}
-		}
+	cells := port.NewCells()
+	for _, ch := range msg {
+		port.CellsPush(cells, int32(ch))
+	}
+	p := planctx.NewPlan()
+	if planloop.LbParse(cells, p) == 1 {
+		return &Error{Kind: ErrLimit, Status: p.Msg.String(), Limit: int64(p.ErrLimit), Actual: int64(p.ErrActual)}
 	}
 	return &Error{Kind: ErrInternal, Message: msg}
 }
@@ -1276,7 +1258,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 			return step{miss: true}
 		}
 		if np < 0 {
-			return step{out: outcome{err: &Error{Kind: ErrDamaged, Input: idx, Status: "no-pages"}}}
+			return step{out: outcome{err: damaged(idx, planloop.DsNoPages())}}
 		}
 		i := intake(np)
 		return step{out: outcome{intake: &i}}
@@ -1289,7 +1271,7 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 		return step{miss: true}
 	}
 	if status != 0 {
-		return step{out: outcome{err: &Error{Kind: ErrDamaged, Input: idx, Status: "content-failed"}}}
+		return step{out: outcome{err: damaged(idx, planloop.DsContentFailed())}}
 	}
 	np := pdfdoc.PdPgCount(pg)
 	info := intake(np)
@@ -1567,7 +1549,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	var res outcome
 	var docPdf *pdfDoc
 	var docRaster *rasterDoc
-	unit := func(answers, rq *port.Cells) int32 {
+	unit := func(answers, rq *port.Cells, _ *port.BitmapSet, _ *port.Buf) int32 {
 		view := base.View()
 		s := dispatch(view, pw, answers, rq, idx, opts, intakeOnly, uint64(size))
 		if s.miss {
@@ -1581,11 +1563,12 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		return port.PlanUnitDone
 	}
 	bytesF := &port.PlanSync{F: func(req port.PlanRequest, _ port.PlanBitmaps) (port.PlanAnswer, error) {
-		if cache != nil && !cache.fetch(req.Arg(1), req.Arg(2)) {
+		off, n := req.Field(plan.BqOffset()), req.Field(plan.BqLength())
+		if cache != nil && !cache.fetch(off, n) {
 			return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "a read of the source failed"}
 		}
 		c := port.NewCells()
-		plan.AnBytes(c, req.ID(), req.Arg(1), req.Arg(2))
+		plan.AnBytes(c, req.ID(), off, n)
 		return port.PlanAnswer{Rec: cellsVec(c)}, nil
 	}}
 	var misses port.PlanMisses = port.PlanNoMisses{}
@@ -1596,13 +1579,13 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	thisInput := [][2]int32{{int32(idx), int32(size)}}
 	// the live port set (D127, D211): `render` and `crop` go to the configured Renderer, reading the same input through the
 	// same byte source; with none they, like the other kinds, fall to the host's own fulfiller, which answers them
-	// `unsupported` (D199). Pixels are kept in the answers when a transcript is being recorded or an OCR engine will read them.
-	mux := &port.KindMux{}
+	// `unsupported` (D199). Which port a request goes to is kin's (`pl-route`). Pixels are kept in the answers when a transcript is
+	// being recorded or an OCR engine will read them.
+	live := &livePorts{local: portFulfiller(in.Source, idx, rec != nil || e.cfg.Ocr != nil, rec != nil, e.cfg.Ocr, e.cfg.PdfCodecs), ocr: e.cfg.Ocr != nil}
 	if e.cfg.Renderer != nil {
-		rf := port.NewRenderFulfillerFor(e.cfg.Renderer, idx, port.RenderInput{Source: in.Source, Password: in.Password})
-		mux.With([]int32{port.PlanKindRender, port.PlanKindCrop}, rf)
+		live.render = port.NewRenderFulfillerFor(e.cfg.Renderer, idx, port.RenderInput{Source: in.Source, Password: in.Password})
 	}
-	var ports port.PlanFulfiller = mux.With([]int32{port.PlanKindRender, port.PlanKindCrop, port.PlanKindDecode, port.PlanKindOcr, port.PlanKindDecodeImg}, portFulfiller(in.Source, idx, rec != nil || e.cfg.Ocr != nil, rec != nil, e.cfg.Ocr, e.cfg.PdfCodecs))
+	var ports port.PlanFulfiller = live
 	var replayer *port.Replayer
 	if rec != nil {
 		rec.Inputs = thisInput
@@ -1619,35 +1602,53 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 	}
 	timed := &timedPorts{inner: ports}
 	ports = timed
-	// THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
-	tPass := time.Now()
-	ps, perr := port.PlanRun(pcfg, unit, ports, bytesF, misses, rec)
-	passUS := uint64(time.Since(tPass).Microseconds())
 	// a source that failed is the answer, whatever the loop made of the miss it caused
-	if cache != nil {
-		if failed, short, msg := cache.fail(); failed {
-			if short {
-				return outcome{}, RunStats{}, &Error{Kind: ErrSourceChanged, Input: idx}
+	sourceFailed := func() *Error {
+		if cache != nil {
+			if failed, short, msg := cache.fail(); failed {
+				if short {
+					return &Error{Kind: ErrSourceChanged, Input: idx}
+				}
+				return &Error{Kind: ErrIO, Input: idx, Message: msg}
 			}
-			return outcome{}, RunStats{}, &Error{Kind: ErrIO, Input: idx, Message: msg}
 		}
+		return nil
 	}
-	if perr != nil {
-		var pe *port.PlanError
-		if errors.As(perr, &pe) {
-			return outcome{}, RunStats{}, planError(pe)
+	// THE SCHEDULE IS KIN'S (`en-next`): which unit runs next is the machine's phase, and this function is the driver of each unit. The
+	// unit that just finished is folded into the totals, and the schedule moves on.
+	m := planrun.New(pcfg)
+	advance := func() {
+		kind, np := int32(0), 0
+		switch {
+		case docPdf != nil:
+			kind, np = 1, docPdf.info.Pages
+		case docRaster != nil:
+			kind, np = 2, docRaster.info.Pages
 		}
-		return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: perr.Error()}
+		m.EndUnit()
+		m.NextPhase(kind, opts.Assets != AssetsNone, false, np)
 	}
-	stats := RunStats{Attempts: ps.Attempts, FetchRounds: ps.FetchRounds, BytesRequests: ps.BytesRequests, Requests: ps.Requests, InputBytes: uint64(size), PassUs: passUS}
-	tPages := time.Now()
-	// THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and BitmapSet, dropped when
-	// the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never reads the input. Then
-	// the document unit, stage 3, on what the units left.
-	if docPdf != nil || docRaster != nil {
-		// THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are asked of the
-		// host (`decode-img`, one round for them all); it reads the input (and so may miss, like the document pass)
-		if docPdf != nil && opts.Assets != AssetsNone {
+	stats := RunStats{InputBytes: uint64(size)}
+	var tPages time.Time
+phases:
+	for {
+		switch m.Phase() {
+		case planloop.PhDoc():
+			// THE DOCUMENT PASS: everything that reads the input, in its own loop (misses fetch and re-run it).
+			tPass := time.Now()
+			perr := planrun.Drive(m, unit, ports, bytesF, misses, rec)
+			stats.PassUs = uint64(time.Since(tPass).Microseconds())
+			if err := sourceFailed(); err != nil {
+				return outcome{}, RunStats{}, err
+			}
+			if perr != nil {
+				return outcome{}, RunStats{}, loopError(perr)
+			}
+			tPages = time.Now()
+			advance()
+		case planloop.PhAsset():
+			// THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are asked of the
+			// host (`decode-img`, one round for them all); it reads the input (and so may miss, like the document pass)
 			var afailed *Error
 			unitA := func(answers, rq *port.Cells, bms *port.BitmapSet, payload *port.Buf) (st int32) {
 				view := base.View()
@@ -1673,37 +1674,21 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 				}
 				return port.PlanUnitDone
 			}
-			ast, aerr := port.PlanRunBms(pcfg, unitA, ports, bytesF, misses, rec)
-			if cache != nil {
-				if failed, short, msg := cache.fail(); failed {
-					if short {
-						return outcome{}, RunStats{}, &Error{Kind: ErrSourceChanged, Input: idx}
-					}
-					return outcome{}, RunStats{}, &Error{Kind: ErrIO, Input: idx, Message: msg}
-				}
+			aerr := planrun.Drive(m, unitA, ports, bytesF, misses, rec)
+			if err := sourceFailed(); err != nil {
+				return outcome{}, RunStats{}, err
 			}
 			if aerr != nil {
-				var pe *port.PlanError
-				if errors.As(aerr, &pe) {
-					return outcome{}, RunStats{}, planError(pe)
-				}
-				return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: aerr.Error()}
+				return outcome{}, RunStats{}, loopError(aerr)
 			}
 			if afailed != nil {
 				return outcome{}, RunStats{}, afailed
 			}
-			stats.Requests += ast.Requests
-			stats.Attempts += ast.Attempts
-			stats.FetchRounds += ast.FetchRounds
-			stats.BytesRequests += ast.BytesRequests
-		}
-		np := 0
-		if docPdf != nil {
-			np = docPdf.info.Pages
-		} else {
-			np = docRaster.info.Pages
-		}
-		for i := 0; i < np; i++ {
+			advance()
+		case planloop.PhPages():
+			// THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and BitmapSet, dropped when
+			// the unit ends, so a conversion holds one page's bitmaps and not the document's. A page unit never reads the input.
+			i := m.Page()
 			var failed *Error
 			unitP := func(answers, rq *port.Cells, bms *port.BitmapSet, _ *port.Buf) (st int32) {
 				defer func() {
@@ -1723,48 +1708,40 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 					return port.PlanUnitDone
 				case 1:
 					return port.PlanUnitRequests
-				case 21:
-					failed = &Error{Kind: ErrDamaged, Input: idx, Status: "undecodable"}
-				case 22:
-					failed = &Error{Kind: ErrDamaged, Input: idx, Status: "unsupported-image"}
+				case planloop.DsUndecodable(), planloop.DsUnsupportedImage():
+					failed = damaged(idx, s)
 				default:
 					failed = &Error{Kind: ErrInternal, Message: fmt.Sprintf("a page unit answered status %d", s)}
 				}
 				return port.PlanUnitDone
 			}
-			pst, perr := port.PlanRunBms(pcfg, unitP, ports, bytesF, port.PlanNoMisses{}, rec)
-			if perr != nil {
-				var pe *port.PlanError
-				if errors.As(perr, &pe) {
-					return outcome{}, RunStats{}, planError(pe)
-				}
-				return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: perr.Error()}
+			if perr := planrun.Drive(m, unitP, ports, bytesF, port.PlanNoMisses{}, rec); perr != nil {
+				return outcome{}, RunStats{}, loopError(perr)
 			}
 			if failed != nil {
 				return outcome{}, RunStats{}, failed
 			}
-			stats.Requests += pst.Requests
-			stats.PageRounds = append(stats.PageRounds, pst.Rounds)
-			stats.PageRequests = append(stats.PageRequests, pst.Requests)
-		}
-		stats.PagesUs = uint64(time.Since(tPages).Microseconds())
-		tFin := time.Now()
-		// the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D386)
-		if docPdf != nil {
-			res = finishGuarded(func() outcome { return finishPdf(docPdf, opts) })
-		} else {
-			res = finishGuarded(func() outcome { return finishRaster(docRaster, opts) })
-		}
-		stats.FinishUs = uint64(time.Since(tFin).Microseconds())
-		// THE ASSET UNIT (P8.5, D351): at `figures` the Model is final but for its assets, whose renders and crops are requests,
-		// so one more plan/fulfil loop runs over it, with its own answers and BitmapSet, on copies until every answer is in.
-		if res.built != nil && res.built.pending != nil {
+			advance()
+		case planloop.PhFinish():
+			stats.PagesUs = uint64(time.Since(tPages).Microseconds())
+			tFin := time.Now()
+			// the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D386)
+			if docPdf != nil {
+				res = finishGuarded(func() outcome { return finishPdf(docPdf, opts) })
+			} else {
+				res = finishGuarded(func() outcome { return finishRaster(docRaster, opts) })
+			}
+			stats.FinishUs = uint64(time.Since(tFin).Microseconds())
+			m.NextPhase(0, false, res.built != nil && res.built.pending != nil, 0)
+		case planloop.PhFigures():
+			// THE ASSET UNIT (P8.5, D351): at `figures` the Model is final but for its assets, whose renders and crops are requests,
+			// so one more plan/fulfil loop runs over it, with its own answers and BitmapSet, on copies until every answer is in.
 			b := res.built
 			pend := b.pending
 			b.pending = nil
 			var done *arenas
 			var afailed *Error
-			unitA := func(answers, rq *port.Cells, bms *port.BitmapSet, _ *port.Buf) (st int32) {
+			unitF := func(answers, rq *port.Cells, bms *port.BitmapSet, _ *port.Buf) (st int32) {
 				defer func() {
 					if p := recover(); p != nil {
 						afailed = panicError(panicMessage(p))
@@ -1780,13 +1757,8 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 				done = t
 				return port.PlanUnitDone
 			}
-			ast, aerr := port.PlanRunBms(pcfg, unitA, ports, bytesF, port.PlanNoMisses{}, rec)
-			if aerr != nil {
-				var pe *port.PlanError
-				if errors.As(aerr, &pe) {
-					return outcome{}, RunStats{}, planError(pe)
-				}
-				return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: aerr.Error()}
+			if aerr := planrun.Drive(m, unitF, ports, bytesF, port.PlanNoMisses{}, rec); aerr != nil {
+				return outcome{}, RunStats{}, loopError(aerr)
 			}
 			if afailed != nil {
 				return outcome{}, RunStats{}, afailed
@@ -1794,13 +1766,18 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 			if done == nil {
 				return outcome{}, RunStats{}, &Error{Kind: ErrInternal, Message: "the asset unit finished with no Model"}
 			}
-			stats.Requests += ast.Requests
+			advance()
 			b.arenas = done
 			if o := sealArenas(b.arenas, opts); o != nil {
 				return outcome{}, RunStats{}, o.err
 			}
+		default:
+			break phases
 		}
 	}
+	t := m.Totals()
+	stats.Attempts, stats.FetchRounds, stats.BytesRequests, stats.Requests = t.Attempts, t.FetchRounds, t.BytesRequests, t.Requests
+	stats.PageRounds, stats.PageRequests = t.PageRounds, t.PageRequests
 	stats.FulfilUs = timed.us
 	if replayer != nil && replayer.Unused() != 0 {
 		return outcome{}, RunStats{}, &Error{Kind: ErrPlan, Plan: &port.PlanError{Name: "transcript-bad", Msg: fmt.Sprintf("%d recorded entries were never asked for", replayer.Unused())}}
@@ -1815,4 +1792,44 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		return outcome{}, stats, &Error{Kind: ErrInternal, Message: "the unit finished with nothing"}
 	}
 	return res, stats, nil
+}
+
+// loopError is an error of the plan loop as the Engine reports it: a named failure of the loop, or an internal error.
+func loopError(err error) *Error {
+	var pe *port.PlanError
+	if errors.As(err, &pe) {
+		return planError(pe)
+	}
+	return &Error{Kind: ErrInternal, Message: err.Error()}
+}
+
+// livePorts is the LIVE port set: a request goes where kin says (`pl-route`, P10.8): a `render` or `crop` to the configured Renderer,
+// everything else to the host's own fulfiller (`portFulfiller`), which also answers `unsupported` where no port is configured (D199).
+type livePorts struct {
+	render port.PlanFulfiller
+	local  port.PlanFulfiller
+	ocr    bool
+	// true when the request in that place went to the renderer
+	order []bool
+}
+
+func (l *livePorts) Start(req port.PlanRequest, bm port.PlanBitmaps) error {
+	if l.render != nil && planrun.Route(req.Kind(), l.ocr, true) == planloop.RtRender() {
+		l.order = append(l.order, true)
+		return l.render.Start(req, bm)
+	}
+	l.order = append(l.order, false)
+	return l.local.Start(req, bm)
+}
+
+func (l *livePorts) Next() (port.PlanAnswer, error) {
+	if len(l.order) == 0 {
+		return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "next without a started request"}
+	}
+	toRender := l.order[0]
+	l.order = l.order[1:]
+	if toRender {
+		return l.render.Next()
+	}
+	return l.local.Next()
 }

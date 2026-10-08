@@ -315,16 +315,16 @@ impl Tess {
             emon::plan::an_fail(&mut c, KIND_OCR, id, status);
             Ok(Answer { rec: to_vec(&c), bitmap: None })
         };
-        let b: std::sync::Arc<Bitmap> = match bm.get(&req.arg(0)) {
+        let b: std::sync::Arc<Bitmap> = match bm.get(&req.field(emon::plan::oc_bitmap())) {
             Some(b) => b.clone(),
             None => return failed(STATUS_FAILED),
         };
         if b.channels() != 1 && b.channels() != 3 {
             return failed(2);
         }
-        let (psm, flags) = (req.arg(1), req.arg(2));
+        let (psm, flags) = (req.field(emon::plan::oc_psm()), req.field(emon::plan::oc_flags()));
         let want_syms = flags & 1 != 0;
-        let (rx, ry, rw, rh) = (req.arg(3), req.arg(4), req.arg(5), req.arg(6));
+        let (rx, ry, rw, rh) = (req.field(emon::plan::oc_x()), req.field(emon::plan::oc_y()), req.field(emon::plan::oc_w()), req.field(emon::plan::oc_h()));
         let installed = self.installed();
         // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, none left
         // is every model); the models go in as code points separated by 0

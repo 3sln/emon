@@ -490,6 +490,98 @@ func DqNargs() int32 {
 	return 31
 }
 
+func RdInput() int32 {
+	return 0
+}
+
+func RdPage() int32 {
+	return 1
+}
+
+func RdDpi() int32 {
+	return 2
+}
+
+func RdLayer() int32 {
+	return 3
+}
+
+func RdX() int32 {
+	return 4
+}
+
+func RdY() int32 {
+	return 5
+}
+
+func RdW() int32 {
+	return 6
+}
+
+func RdH() int32 {
+	return 7
+}
+
+func DcInput() int32 {
+	return 0
+}
+
+func DcOffset() int32 {
+	return 1
+}
+
+func DcLength() int32 {
+	return 2
+}
+
+func DcFilter() int32 {
+	return 3
+}
+
+func DcFrame() int32 {
+	return 4
+}
+
+func OcBitmap() int32 {
+	return 0
+}
+
+func OcPsm() int32 {
+	return 1
+}
+
+func OcFlags() int32 {
+	return 2
+}
+
+func OcX() int32 {
+	return 3
+}
+
+func OcY() int32 {
+	return 4
+}
+
+func OcW() int32 {
+	return 5
+}
+
+func OcH() int32 {
+	return 6
+}
+
+func BqInput() int32 {
+	return 0
+}
+
+func BqOffset() int32 {
+	return 1
+}
+
+func BqLength() int32 {
+	return 2
+}
+
 func AnStatus(c *port.Cells, at int32) int32 {
 	return port.CellsAt(c, at+3)
 }

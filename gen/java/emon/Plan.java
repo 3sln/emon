@@ -407,6 +407,75 @@ public final class Plan {
     public static int dqNargs() {
         return 31;
     }
+    public static int rdInput() {
+        return 0;
+    }
+    public static int rdPage() {
+        return 1;
+    }
+    public static int rdDpi() {
+        return 2;
+    }
+    public static int rdLayer() {
+        return 3;
+    }
+    public static int rdX() {
+        return 4;
+    }
+    public static int rdY() {
+        return 5;
+    }
+    public static int rdW() {
+        return 6;
+    }
+    public static int rdH() {
+        return 7;
+    }
+    public static int dcInput() {
+        return 0;
+    }
+    public static int dcOffset() {
+        return 1;
+    }
+    public static int dcLength() {
+        return 2;
+    }
+    public static int dcFilter() {
+        return 3;
+    }
+    public static int dcFrame() {
+        return 4;
+    }
+    public static int ocBitmap() {
+        return 0;
+    }
+    public static int ocPsm() {
+        return 1;
+    }
+    public static int ocFlags() {
+        return 2;
+    }
+    public static int ocX() {
+        return 3;
+    }
+    public static int ocY() {
+        return 4;
+    }
+    public static int ocW() {
+        return 5;
+    }
+    public static int ocH() {
+        return 6;
+    }
+    public static int bqInput() {
+        return 0;
+    }
+    public static int bqOffset() {
+        return 1;
+    }
+    public static int bqLength() {
+        return 2;
+    }
     public static int anStatus(emon.Port.Cells c, int at) {
         return emon.Port.cellsAt(c, at + 3);
     }

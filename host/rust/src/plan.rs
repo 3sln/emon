@@ -10,6 +10,11 @@
 // directory. No kin forms are declared in this file: it is a host-side engine
 // for the ports, not a port kin calls (kin never calls an expensive port).
 //
+// THE LOOP IS KIN'S (P10.8, D396, D399: `kin/planloop.kin`) AND THE DRIVER IS INVERTED. This file keeps what is not observable:
+// the unit call (the caller's closure, under the caller's panic catch), awaiting, and the fulfilment of the ports. One attempt's
+// accounting, the two named limits, the requests a unit wrote (checked, and sorted by id), the answered set, the order the answers
+// are appended in, the transcript's entries, the planner of the source's misses and every name are kin's.
+//
 // THE SHAPE IS THE JAVASCRIPT HOST'S TOO: the host owns the loop and the await.
 //
 //     loop:
@@ -17,11 +22,11 @@
 //       need-bytes -> fetch what the Src missed (`bytes` requests), re-run
 //       done       -> return
 //       requests   -> START every request, then take completions in WHATEVER
-//                     order they arrive, sort them by id, append them to the
-//                     answers, record them; re-run
+//                     order they arrive, OFFER each to kin; kin appends them to
+//                     the answers in id order, and writes the transcript entries; re-run
 //
-// `Machine` (below, P9.3) is the loop with the blocking taken out: one attempt at a time, and what the host must do before the
-// next handed back as a value. `run_bms` is its synchronous driver; the browser's (`host/wasm`, D356) is its JS SDK.
+// `Machine` is the loop with the blocking taken out: one attempt at a time, and what the host must do before the next handed back
+// as a value. `run_bms` is its synchronous driver; the browser's (`host/wasm`, D356) is its JS SDK.
 //
 // `Fulfiller::start` / `next` is the async shape: a sync host completes inside
 // `start` (`SyncFulfiller`); a threaded one or a JS one completes whenever and
@@ -29,8 +34,11 @@
 // the order, which is what makes a transcript the same however the answers
 // arrived.
 
-use crate::port::{cells_at, cells_len, cells_push, Bitmap, BitmapSet, Buf, Cells};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use crate::emon::plan as kp;
+use crate::emon::planctx::Plan;
+use crate::emon::planloop as lp;
+use crate::port::{cells_at, cells_drop, cells_len, cells_push, Bitmap, BitmapSet, Buf, Cells};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 
 // ------------------------------------------------------------ the constants
@@ -76,8 +84,8 @@ pub struct Stats {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlanError {
-    // A named limit: `max-rounds` or `fetch-rounds`.
-    Limit { name: &'static str, limit: i32, actual: i32 },
+    // A named limit: `max-rounds` or `fetch-rounds` (the name is kin's, `pe`).
+    Limit { name: String, limit: i32, actual: i32 },
     // Replaying: the transcript has no answer for this request.
     TranscriptMiss(Vec<i32>),
     TranscriptBad(String),
@@ -91,16 +99,23 @@ pub enum PlanError {
     Stalled,
 }
 
+// A name of kin's `pe`.
+fn pe_name(code: i32) -> String {
+    let mut s = String::new();
+    lp::pe_emit_name(&mut s, code);
+    s
+}
+
 impl PlanError {
-    pub fn name(&self) -> &'static str {
+    pub fn name(&self) -> String {
         match self {
-            PlanError::Limit { name, .. } => name,
-            PlanError::TranscriptMiss(_) => "transcript-miss",
-            PlanError::TranscriptBad(_) => "transcript-bad",
-            PlanError::Fulfil(_) => "fulfil-failed",
-            PlanError::Unit(_) => "unit-failed",
-            PlanError::Bad(_) => "bad-record",
-            PlanError::Stalled => "need-bytes-stalled",
+            PlanError::Limit { name, .. } => name.clone(),
+            PlanError::TranscriptMiss(_) => pe_name(lp::pe_transcript_miss()),
+            PlanError::TranscriptBad(_) => pe_name(lp::pe_transcript_bad()),
+            PlanError::Fulfil(_) => pe_name(lp::pe_fulfil_failed()),
+            PlanError::Unit(_) => pe_name(lp::pe_unit_failed()),
+            PlanError::Bad(_) => pe_name(lp::pe_bad_record()),
+            PlanError::Stalled => pe_name(lp::pe_stalled()),
         }
     }
 }
@@ -111,12 +126,12 @@ impl std::fmt::Display for PlanError {
             PlanError::Limit { name, limit, actual } => {
                 write!(f, "{}: the limit is {} and this run reached {}", name, limit, actual)
             }
-            PlanError::TranscriptMiss(r) => write!(f, "transcript-miss: no answer recorded for request {:?}", r),
-            PlanError::TranscriptBad(s) => write!(f, "transcript-bad: {}", s),
-            PlanError::Fulfil(s) => write!(f, "fulfil-failed: {}", s),
-            PlanError::Unit(s) => write!(f, "unit-failed: status {}", s),
-            PlanError::Bad(s) => write!(f, "bad-record: {}", s),
-            PlanError::Stalled => write!(f, "need-bytes-stalled: the unit missed and the source reports nothing missed"),
+            PlanError::TranscriptMiss(r) => write!(f, "{}: no answer recorded for request {:?}", self.name(), r),
+            PlanError::TranscriptBad(s) => write!(f, "{}: {}", self.name(), s),
+            PlanError::Fulfil(s) => write!(f, "{}: {}", self.name(), s),
+            PlanError::Unit(s) => write!(f, "{}: status {}", self.name(), s),
+            PlanError::Bad(s) => write!(f, "{}: {}", self.name(), s),
+            PlanError::Stalled => write!(f, "{}: the unit missed and the source reports nothing missed", self.name()),
         }
     }
 }
@@ -150,6 +165,11 @@ impl Request {
     // Argument k (kin's `rq-arg`).
     pub fn arg(&self, k: usize) -> i32 {
         self.rec[3 + k]
+    }
+    // The argument a kin field names (`kp::dq_where()`, `kp::bq_offset()`, ...): a host reads a request by these and never by a
+    // literal offset (D396 item 5).
+    pub fn field(&self, f: i32) -> i32 {
+        self.arg(f as usize)
     }
 }
 
@@ -234,7 +254,7 @@ impl<F: FnMut(&Request, &Bitmaps) -> Result<Answer, PlanError>> Fulfiller for De
 }
 
 // What a `Src` missed, as ranges to fetch. The ENGINE implements it over its
-// `SrcBacking`s (doubling read-ahead, coalescing; D058); the loop only asks.
+// `SrcBacking`s (doubling read-ahead, coalescing; D058) with kin's planner (`fp-plan`); the loop only asks.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Range {
     pub input: i32,
@@ -257,59 +277,66 @@ impl Misses for NoMisses {
 
 // ------------------------------------------------------------- the loop
 
-fn record_at(c: &Cells, at: i32, len: i32) -> Vec<i32> {
-    (at..at + len).map(|i| cells_at(c, i)).collect()
-}
-
-// Take the requests a unit wrote: well formed, kinds render/decode/ocr only
-// (`bytes` is the host's), ids positive, unique, and not already answered.
-fn read_requests(rq: &Cells, answered: &HashSet<i32>) -> Result<Vec<Request>, PlanError> {
-    let n = cells_len(rq);
+// The records of a `Cells` of them, back to back (kin's framing: `rec-len`, `rec-next`).
+fn records(c: &mut Cells) -> Vec<Vec<i32>> {
+    let n = cells_len(c);
     let mut at = 0;
-    let mut out: Vec<Request> = Vec::new();
-    let mut seen: HashSet<i32> = HashSet::new();
+    let mut out = Vec::new();
     while at < n {
-        let len = cells_at(rq, at);
-        if len < 3 || at + len > n {
-            return Err(PlanError::Bad(format!("a request at {} has length {}", at, len)));
-        }
-        let rec = record_at(rq, at, len);
-        if rec[1] < KIND_RENDER || (rec[1] > KIND_OCR && rec[1] != KIND_CROP && rec[1] != KIND_DECODE_IMG) {
-            return Err(PlanError::Bad(format!("request {} has kind {}, which kin may not ask for", rec[2], rec[1])));
-        }
-        if rec[2] < 1 {
-            return Err(PlanError::Bad(format!("a request has id {}", rec[2])));
-        }
-        if !seen.insert(rec[2]) || answered.contains(&rec[2]) {
-            return Err(PlanError::Bad(format!("request id {} is used twice", rec[2])));
-        }
-        out.push(Request::new(rec));
-        at += len;
+        let ln = kp::rec_len(c, at);
+        out.push((at..at + ln).map(|i| cells_at(c, i)).collect());
+        at = kp::rec_next(c, at);
     }
-    out.sort_by_key(|r| r.id());
-    Ok(out)
+    out
 }
 
-// Start every request and take every completion; answers sorted by id.
-pub fn fulfil(f: &mut dyn Fulfiller, reqs: &[Request], bitmaps: &Bitmaps) -> Result<Vec<Answer>, PlanError> {
-    for r in reqs {
-        f.start(r, bitmaps)?;
+// The spans of input `me` that a request names (kin's `pl-spans`): a `decode`'s, and a `decode-img`'s codestream and globals when they
+// are the input's own, as (offset, length).
+pub fn spans(req: &Request, me: i32) -> Vec<(u64, u64)> {
+    let mut c = Cells::new();
+    for &v in &req.rec {
+        cells_push(&mut c, v);
     }
-    let mut pending: HashMap<i32, i32> = reqs.iter().map(|r| (r.id(), r.kind())).collect();
-    let mut out: Vec<Answer> = Vec::new();
-    for _ in 0..reqs.len() {
-        let a = f.next()?;
-        if a.rec.len() < 4 || a.rec[0] as usize != a.rec.len() {
-            return Err(PlanError::Bad(format!("an answer has length {} in a record of {}", a.rec[0], a.rec.len())));
-        }
-        match pending.remove(&a.id()) {
-            Some(kind) if kind == a.kind() => {}
-            _ => return Err(PlanError::Bad(format!("an answer for request {} (kind {}) answers nothing asked", a.id(), a.kind()))),
-        }
-        out.push(a);
+    let mut out = Cells::new();
+    lp::pl_spans(&mut c, 0, me, &mut out);
+    (0..cells_len(&out) / 2).map(|i| (cells_at(&out, 2 * i) as u64, cells_at(&out, 2 * i + 1) as u64)).collect()
+}
+
+// Which port fulfils a request of this kind (kin's `pl-route`): `ocr` says whether the host has an engine, `render` a renderer.
+// `Route::Unsupported` is an answer, not an error (D199): `unsupported_answer` makes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+    Decode,
+    DecodeImg,
+    Ocr,
+    Render,
+    Unsupported,
+    None,
+}
+
+pub fn route(kind: i32, ocr: bool, render: bool) -> Route {
+    let ports = (if ocr { lp::pp_ocr() } else { 0 }) + (if render { lp::pp_render() } else { 0 });
+    let r = lp::pl_route(kind, ports);
+    if r == lp::rt_decode() {
+        Route::Decode
+    } else if r == lp::rt_decode_img() {
+        Route::DecodeImg
+    } else if r == lp::rt_ocr() {
+        Route::Ocr
+    } else if r == lp::rt_render() {
+        Route::Render
+    } else if r == lp::rt_unsupported() {
+        Route::Unsupported
+    } else {
+        Route::None
     }
-    out.sort_by_key(|a| a.id());
-    Ok(out)
+}
+
+// The answer of a request no port is configured for.
+pub fn unsupported_answer(req: &Request) -> Answer {
+    let mut c = Cells::new();
+    lp::pl_unsupported(&mut c, req.kind(), req.id());
+    Answer { rec: records(&mut c).remove(0), bitmap: None }
 }
 
 // Run one unit to completion. `unit` is kin's function, closed over what it
@@ -341,20 +368,14 @@ pub fn run_bms(
     mut rec: Option<&mut Transcript>,
 ) -> Result<Stats, PlanError> {
     let mut m = Machine::new(cfg);
-    let no_bitmaps = Bitmaps::new();
     loop {
         match m.attempt(unit, misses)? {
-            Next::Done => return Ok(m.st),
-            Next::Fetch(reqs) => {
-                for a in fulfil(bytes, &reqs, &no_bitmaps)? {
-                    if a.status() != STATUS_OK {
-                        return Err(PlanError::Fulfil(format!("fetching bytes: status {}", a.status())));
-                    }
-                }
+            Next::Done => return Ok(m.stats()),
+            Next::Fetch(_) => {
+                m.fulfil(bytes)?;
             }
-            Next::Requests(reqs, all) => {
-                let got = fulfil(ports, &reqs, &all)?;
-                let entries = m.answered(got);
+            Next::Requests(..) => {
+                let entries = m.fulfil(ports)?;
                 if let Some(t) = rec.as_deref_mut() {
                     t.entries.extend(entries);
                 }
@@ -366,45 +387,77 @@ pub fn run_bms(
 // THE LOOP AS A MACHINE (P9.3). `run_bms` above is a synchronous driver over it; a host whose fulfilments cannot block (the
 // browser: a JS `read` is a promise) drives it itself: `attempt` runs one attempt of the unit and says what the host must do
 // before the next (fetch these byte ranges, fulfil these requests, or nothing: the unit is done), and the host reports back
-// with `answered`. The loop's rules (an attempt that missed is discarded whole, ids and rounds, the named limits) are written
-// once, here, so a native host and a browser keep them alike.
+// with `fulfil`, or with `offer` for each answer and `commit`. The loop's rules (an attempt that missed is discarded whole, ids
+// and rounds, the named limits, the order of the answers) are kin's (`emon.planloop`), so a native host and a browser keep them
+// alike. The machine lasts a whole conversation: `end_unit` folds a finished unit's accounting into the totals and starts the
+// next (`next_phase` says which, kin's `en-next`).
 pub enum Next {
     // the unit finished
     Done,
-    // the attempt missed: fetch these `bytes` requests (kind 4, `[6 4 -n input offset length]`), then `attempt` again
+    // the attempt missed: fetch these `bytes` requests (kind 4, `[6 4 -n input offset length]`, read by `kp::bq_*`), then `attempt` again
     Fetch(Vec<Request>),
     // the unit asked for these (sorted by id; the bitmaps are every one answered so far and the unit's own views): fulfil them,
     // `answered` with an answer for each, then `attempt` again
     Requests(Vec<Request>, Bitmaps),
 }
 
+// What the finished units counted (kin's `t-*` and the page units' rounds and requests).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Totals {
+    pub attempts: i32,
+    pub fetch_rounds: i32,
+    pub bytes_requests: i32,
+    pub requests: i32,
+    pub page_rounds: Vec<i32>,
+    pub page_requests: Vec<i32>,
+}
+
 pub struct Machine {
-    cfg: Config,
-    answers: Cells,
+    p: Plan,
     bitmaps: Bitmaps,
-    answered: HashSet<i32>,
-    st: Stats,
-    fetch_round: i32,
-    pending: Vec<Request>,
-    pending_round: i32,
+    all: Bitmaps,
+    reqs: Vec<Request>,
+    staged: HashMap<i32, Option<Arc<Bitmap>>>,
 }
 
 impl Machine {
     pub fn new(cfg: &Config) -> Machine {
-        Machine {
-            cfg: Config { max_rounds: cfg.max_rounds, fetch_rounds: cfg.fetch_rounds },
-            answers: Cells::new(),
-            bitmaps: Bitmaps::new(),
-            answered: HashSet::new(),
-            st: Stats::default(),
-            fetch_round: 0,
-            pending: Vec::new(),
-            pending_round: 0,
+        let mut p = Plan::new();
+        p.max_rounds = cfg.max_rounds;
+        p.fetch_limit = cfg.fetch_rounds;
+        Machine { p, bitmaps: Bitmaps::new(), all: Bitmaps::new(), reqs: Vec::new(), staged: HashMap::new() }
+    }
+
+    // What the current unit has counted.
+    pub fn stats(&self) -> Stats {
+        Stats { attempts: self.p.attempts, rounds: self.p.rounds, requests: self.p.requests, fetch_rounds: self.p.fetch_rounds, bytes_requests: self.p.bytes_requests }
+    }
+
+    // The error kin holds, as the loop reports it.
+    fn error(&self) -> PlanError {
+        let code = self.p.err;
+        if code == lp::pe_max_rounds() || code == lp::pe_fetch_rounds() {
+            PlanError::Limit { name: pe_name(code), limit: self.p.err_limit, actual: self.p.err_actual }
+        } else if code == lp::pe_unit_failed() {
+            PlanError::Unit(self.p.err_actual)
+        } else if code == lp::pe_stalled() {
+            PlanError::Stalled
+        } else if code == lp::pe_fulfil_failed() {
+            PlanError::Fulfil(self.p.msg.clone())
+        } else {
+            PlanError::Bad(self.p.msg.clone())
         }
     }
 
-    pub fn stats(&self) -> &Stats {
-        &self.st
+    // The round kin holds, as requests.
+    fn round(&mut self, payload: Option<Arc<Vec<u8>>>) -> Vec<Request> {
+        let mut v: Vec<Request> = records(&mut self.p.reqs).into_iter().map(Request::new).collect();
+        if let Some(pl) = payload {
+            for r in v.iter_mut() {
+                r.payload = pl.clone();
+            }
+        }
+        v
     }
 
     // One attempt of `unit` from scratch on the answers so far.
@@ -413,88 +466,178 @@ impl Machine {
         unit: &mut dyn FnMut(&mut Cells, &mut Cells, &BitmapSet, &mut Buf) -> i32,
         misses: &mut dyn Misses,
     ) -> Result<Next, PlanError> {
-        let mut rq = Cells::new();
-        self.st.attempts += 1;
+        lp::pl_attempt(&mut self.p);
+        self.reqs.clear();
+        self.staged.clear();
+        self.all.clear();
         let bms = BitmapSet::with_answers(&self.bitmaps);
         let mut payload = Buf::new();
-        let status = unit(&mut self.answers, &mut rq, &bms, &mut payload);
+        let status = unit(&mut self.p.ans, &mut self.p.rq, &bms, &mut payload);
         let made = bms.made();
         drop(bms);
-        match status {
-            UNIT_NEED_BYTES => {
-                // The attempt missed: discard it whole (its requests too), fetch,
-                // re-run. Not a round; counted against `fetch-rounds` alone.
-                self.fetch_round += 1;
-                self.st.fetch_rounds += 1;
-                if self.fetch_round > self.cfg.fetch_rounds {
-                    return Err(PlanError::Limit { name: "fetch-rounds", limit: self.cfg.fetch_rounds, actual: self.fetch_round });
-                }
-                let ranges = misses.take(self.fetch_round - 1);
-                if ranges.is_empty() {
-                    return Err(PlanError::Stalled);
-                }
-                let mut reqs: Vec<Request> = Vec::new();
-                for r in &ranges {
-                    self.st.bytes_requests += 1;
-                    reqs.push(Request::new(vec![6, KIND_BYTES, -self.st.bytes_requests, r.input, r.offset, r.length]));
-                }
-                Ok(Next::Fetch(reqs))
+        let act = lp::pl_after(&mut self.p, status);
+        if act == lp::act_done() {
+            Ok(Next::Done)
+        } else if act == lp::act_miss() {
+            // The attempt missed: it is discarded whole, requests too. The ranges the source missed are the host's to say; what they
+            // become, and what none means, is kin's.
+            let round = lp::pl_miss_round(&mut self.p);
+            for r in misses.take(round) {
+                cells_push(&mut self.p.cand, r.input);
+                cells_push(&mut self.p.cand, r.offset);
+                cells_push(&mut self.p.cand, r.length);
             }
-            UNIT_DONE => {
-                if cells_len(&rq) != 0 {
-                    return Err(PlanError::Bad("the unit is done and left requests".to_string()));
-                }
-                Ok(Next::Done)
+            if lp::pl_fetch(&mut self.p) != lp::act_fetch() {
+                return Err(self.error());
             }
-            UNIT_REQUESTS => {
-                self.fetch_round = 0;
-                let mut reqs = read_requests(&rq, &self.answered)?;
-                if !payload.0.is_empty() {
-                    let shared = Arc::new(std::mem::take(&mut payload.0));
-                    for r in reqs.iter_mut() {
-                        r.payload = shared.clone();
-                    }
-                }
-                if reqs.is_empty() {
-                    return Err(PlanError::Bad("the unit asked for requests and wrote none".to_string()));
-                }
-                self.st.rounds += 1;
-                if self.st.rounds > self.cfg.max_rounds {
-                    return Err(PlanError::Limit { name: "max-rounds", limit: self.cfg.max_rounds, actual: self.st.rounds });
-                }
-                self.st.requests += reqs.len() as i32;
-                self.pending_round = self.st.rounds - 1;
-                self.pending = reqs.clone();
-                let all = if made.is_empty() {
-                    self.bitmaps.clone()
-                } else {
-                    let mut all = self.bitmaps.clone();
-                    all.extend(made);
-                    all
-                };
-                Ok(Next::Requests(reqs, all))
-            }
-            other => Err(PlanError::Unit(other)),
+            self.reqs = self.round(None);
+            Ok(Next::Fetch(self.reqs.clone()))
+        } else if act == lp::act_requests() {
+            let shared = if payload.0.is_empty() { None } else { Some(Arc::new(std::mem::take(&mut payload.0))) };
+            self.reqs = self.round(shared);
+            self.all = if made.is_empty() {
+                self.bitmaps.clone()
+            } else {
+                let mut all = self.bitmaps.clone();
+                all.extend(made);
+                all
+            };
+            Ok(Next::Requests(self.reqs.clone(), self.all.clone()))
+        } else {
+            Err(self.error())
         }
     }
 
-    // The answers to the last `Requests`, one for each, sorted by id: they join the answers the unit is re-run on. The entries
-    // are what a transcript records (round, request, answer, bitmap), in id order.
-    pub fn answered(&mut self, got: Vec<Answer>) -> Vec<Entry> {
-        let reqs = std::mem::take(&mut self.pending);
-        let mut out = Vec::new();
-        for (r, a) in reqs.iter().zip(got.iter()) {
-            for &v in &a.rec {
-                cells_push(&mut self.answers, v);
-            }
-            self.answered.insert(a.id());
-            if let Some(b) = &a.bitmap {
-                self.bitmaps.insert(a.id(), b.clone());
-            }
-            out.push(Entry { round: self.pending_round, req: r.rec.clone(), ans: a.rec.clone(), bitmap: a.bitmap.clone() });
-        }
-        out
+    // The requests of the round in progress, sorted by id.
+    pub fn requests(&self) -> &[Request] {
+        &self.reqs
     }
+
+    // Every bitmap the current round's fulfillers see: answered so far, and the unit's own views.
+    pub fn bitmap(&self, id: i32) -> Option<Arc<Bitmap>> {
+        self.all.get(&id).cloned()
+    }
+
+    pub fn bitmaps(&self) -> &Bitmaps {
+        &self.all
+    }
+
+    // An answer to the round, in whatever order it arrives: refused (`bad-record`) when it answers nothing the round asked.
+    pub fn offer(&mut self, a: Answer) -> Result<(), PlanError> {
+        cells_drop(&mut self.p.cur, 0);
+        for &v in &a.rec {
+            cells_push(&mut self.p.cur, v);
+        }
+        if lp::pl_offer(&mut self.p) != 0 {
+            return Err(self.error());
+        }
+        self.staged.insert(a.rec[2], a.bitmap);
+        Ok(())
+    }
+
+    // Whether the round has an answer to request `id`.
+    pub fn has(&mut self, id: i32) -> bool {
+        lp::pl_has(&mut self.p, id) == 1
+    }
+
+    // How many requests of the round have no answer yet.
+    pub fn owed(&mut self) -> i32 {
+        lp::pl_owed(&mut self.p)
+    }
+
+    // Every request of the round is answered: the answers join the unit's, in id order. The entries are what a transcript records
+    // (round, request, answer, bitmap), in id order; a `bytes` round has none.
+    pub fn commit(&mut self) -> Result<Vec<Entry>, PlanError> {
+        let requests_round = self.p.outk == 2;
+        if lp::pl_commit(&mut self.p) != 0 {
+            return Err(self.error());
+        }
+        let mut out = Vec::new();
+        let n = cells_len(&self.p.tx);
+        let mut at = 0;
+        while at < n {
+            let round = lp::tx_round(&mut self.p.tx, at);
+            let (rq, an) = (lp::tx_req(&mut self.p.tx, at), lp::tx_ans(&mut self.p.tx, at));
+            let next = lp::tx_next(&mut self.p.tx, at);
+            let req: Vec<i32> = (rq..an).map(|i| cells_at(&self.p.tx, i)).collect();
+            let ans: Vec<i32> = (an..next).map(|i| cells_at(&self.p.tx, i)).collect();
+            let bitmap = self.staged.remove(&ans[2]).flatten();
+            if let Some(b) = &bitmap {
+                self.bitmaps.insert(ans[2], b.clone());
+            }
+            out.push(Entry { round, req, ans, bitmap });
+            at = next;
+        }
+        cells_drop(&mut self.p.tx, 0);
+        self.staged.clear();
+        if requests_round {
+            self.reqs.clear();
+            self.all.clear();
+        }
+        Ok(out)
+    }
+
+    // The answers to the last round, one for each, in any order: offered, then committed.
+    pub fn answered(&mut self, got: Vec<Answer>) -> Result<Vec<Entry>, PlanError> {
+        for a in got {
+            self.offer(a)?;
+        }
+        self.commit()
+    }
+
+    // Start every request of the round with `f` and take every completion; the round is committed.
+    pub fn fulfil(&mut self, f: &mut dyn Fulfiller) -> Result<Vec<Entry>, PlanError> {
+        let none = Bitmaps::new();
+        let all = if self.p.outk == 2 { &self.all } else { &none };
+        for r in &self.reqs {
+            f.start(r, all)?;
+        }
+        for _ in 0..self.reqs.len() {
+            let a = f.next()?;
+            self.offer(a)?;
+        }
+        self.commit()
+    }
+
+    // The unit is finished: its accounting joins the totals, and the next unit starts with no answers and no bitmaps.
+    pub fn end_unit(&mut self) {
+        lp::pl_fold(&mut self.p);
+        self.bitmaps.clear();
+        self.all.clear();
+        self.reqs.clear();
+        self.staged.clear();
+    }
+
+    // THE SCHEDULE (kin's `en-next`): the unit that follows, as a `ph-*` code. `kind` is what the document pass built (0 nothing,
+    // 1 a PDF, 2 a raster input), `assets` whether the asset level is on, `pending` whether the figures unit is still to run.
+    pub fn next_phase(&mut self, kind: i32, assets: bool, pending: bool, np: usize) -> i32 {
+        lp::en_next(&mut self.p, kind, assets as i32, pending as i32, np as i32)
+    }
+
+    pub fn phase(&self) -> i32 {
+        self.p.phase
+    }
+
+    // The page unit the schedule is on.
+    pub fn page(&self) -> usize {
+        self.p.page as usize
+    }
+
+    pub fn totals(&self) -> Totals {
+        let (pr, pq) = (records_plain(&self.p.pgr), records_plain(&self.p.pgq));
+        Totals {
+            attempts: self.p.t_attempts,
+            fetch_rounds: self.p.t_fetch_rounds,
+            bytes_requests: self.p.t_bytes_requests,
+            requests: self.p.t_requests,
+            page_rounds: pr,
+            page_requests: pq,
+        }
+    }
+}
+
+fn records_plain(c: &Cells) -> Vec<i32> {
+    (0..cells_len(c)).map(|i| cells_at(c, i)).collect()
 }
 
 // --------------------------------------------------------------- transcript
