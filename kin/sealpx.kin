@@ -771,12 +771,15 @@
     (return nw)))
 
 (defn ^:pub ^I32 sx-useful [^Cells etext ^Cells oruns ^Cells owords ^I32 run]
-  (comment "How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth.")
+  (comment "How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth. A reading with no one")
+  (comment "such word of four of them (a word) is worth nothing: noise is a few short fragments the engine was sure of.")
   (let [^I32 w0 (or-get oruns run (orf-wfirst))
         ^I32 nw (or-get oruns run (orf-wcount))
         ^:mut ^I32 i 0
         ^:mut ^I32 k 0
         ^:mut ^I32 n 0
+        ^:mut ^I32 wn 0
+        ^:mut ^I32 big 0
         ^:mut ^I32 ts 0
         ^:mut ^I32 tl 0]
     (while (< i nw)
@@ -784,10 +787,14 @@
             (do (set ts (ow-get owords (+ w0 i) (hd-tstart)))
                 (set tl (ow-get owords (+ w0 i) (hd-tlen)))
                 (set k 0)
+                (set wn 0)
                 (while (< k tl)
-                  (do (if (or (> (sf-script (cells-at etext (+ ts k))) 0) (>= (sf-digit (cells-at etext (+ ts k))) 0)) (set n (+ n 1)))
-                      (set k (+ k 1))))))
+                  (do (if (or (> (sf-script (cells-at etext (+ ts k))) 0) (>= (sf-digit (cells-at etext (+ ts k))) 0)) (set wn (+ wn 1)))
+                      (set k (+ k 1))))
+                (set n (+ n wn))
+                (if (>= wn 4) (set big 1))))
           (set i (+ i 1))))
+    (if (== big 0) (return 0))
     (return n)))
 
 (defn ^I32 sx-cview [^:mut ^Cells views ^I32 kind ^I32 pg ^I32 srcview ^I32 w ^I32 h ^I32 dpi100 ^I32 rot ^I32 x ^I32 y]

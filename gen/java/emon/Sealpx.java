@@ -958,12 +958,15 @@ public final class Sealpx {
         return nw;
     }
     public static int sxUseful(emon.Port.Cells etext, emon.Port.Cells oruns, emon.Port.Cells owords, int run) {
-        // How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth.
+        // How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth. A reading with no one
+        // such word of four of them (a word) is worth nothing: noise is a few short fragments the engine was sure of.
         int w0 = Evidence.orGet(oruns, run, Evidence.orfWfirst());
         int nw = Evidence.orGet(oruns, run, Evidence.orfWcount());
         int i = 0;
         int k = 0;
         int n = 0;
+        int wn = 0;
+        int big = 0;
         int ts = 0;
         int tl = 0;
         while (i < nw) {
@@ -971,14 +974,22 @@ public final class Sealpx {
                 ts = Evidence.owGet(owords, w0 + i, Evidence.hdTstart());
                 tl = Evidence.owGet(owords, w0 + i, Evidence.hdTlen());
                 k = 0;
+                wn = 0;
                 while (k < tl) {
                     if ((Sealfield.sfScript(emon.Port.cellsAt(etext, ts + k)) > 0) || (Sealfield.sfDigit(emon.Port.cellsAt(etext, ts + k)) >= 0)) {
-                        n += 1;
+                        wn += 1;
                     }
                     k += 1;
                 }
+                n += wn;
+                if (wn >= 4) {
+                    big = 1;
+                }
             }
             i += 1;
+        }
+        if (big == 0) {
+            return 0;
         }
         return n;
     }

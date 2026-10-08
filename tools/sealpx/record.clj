@@ -16,7 +16,9 @@
          '[clojure.string :as str])
 
 (def fixtures (edn/read-string (slurp "test/sealpx/FIXTURES.edn")))
-(def args (vec *command-line-args*))
+(def flags (set (filter #(str/starts-with? % "--") *command-line-args*)))
+(def args (vec (remove #(str/starts-with? % "--") *command-line-args*)))
+(def digests-only? (contains? flags "--digests"))
 (def ids (if (seq args) args (vec (sort (keys fixtures)))))
 (def digests-file "test/sealpx/replay/DIGESTS.edn")
 (def digests (atom (if (fs/exists? digests-file) (read-string (slurp digests-file)) {})))
@@ -55,6 +57,19 @@
     (spit f t2)
     (doseq [b @dropped] (fs/delete-if-exists (str dir "/" b)))
     (count @dropped)))
+
+;; --digests: no live engine; replay the committed transcripts with the plain driver and rewrite DIGESTS.edn (what a change of kin makes of the bundles)
+(when digests-only?
+  (let [bin (str (fs/absolutize (str/trim (:out (sh {:err :inherit} "kin/scripts/emon-rs-build")))))]
+    (doseq [id ids]
+      (let [{:keys [pdf]} (get fixtures id)
+            rp (sh {:err :inherit} bin "--out=bundle" (str "--replay=" (fs/absolutize (str "test/sealpx/replay/" id))) (str (fs/absolutize pdf)))]
+        (when-not (zero? (:exit rp)) (println "FAIL" id "does not replay") (System/exit 1))
+        (swap! digests assoc id (sha256 (:out rp)))
+        (println "digest" id)))
+    (spit digests-file (str ";; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/sealpx/replay/ID, as `bb sealpx-record` made it (P8.2, D802).\n"
+                            (with-out-str (clojure.pprint/pprint (into (sorted-map) @digests)))))
+    (System/exit 0)))
 
 (doseq [id ids]
   (let [{:keys [pdf kind]} (get fixtures id)

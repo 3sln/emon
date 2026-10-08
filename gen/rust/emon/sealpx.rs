@@ -962,12 +962,15 @@ pub(crate) fn sx_fix_strip(mut owords: &mut crate::port::Cells, mut olines: &mut
     return nw;
 }
 pub fn sx_useful(etext: &mut crate::port::Cells, oruns: &mut crate::port::Cells, owords: &mut crate::port::Cells, run: i32) -> i32 {
-    // How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth.
+    // How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth. A reading with no one
+    // such word of four of them (a word) is worth nothing: noise is a few short fragments the engine was sure of.
     let w0: i32 = or_get(oruns, run, orf_wfirst());
     let nw: i32 = or_get(oruns, run, orf_wcount());
     let mut i: i32 = 0;
     let mut k: i32 = 0;
     let mut n: i32 = 0;
+    let mut wn: i32 = 0;
+    let mut big: i32 = 0;
     let mut ts: i32 = 0;
     let mut tl: i32 = 0;
     while i < nw {
@@ -975,14 +978,22 @@ pub fn sx_useful(etext: &mut crate::port::Cells, oruns: &mut crate::port::Cells,
             ts = ow_get(owords, w0 + i, hd_tstart());
             tl = ow_get(owords, w0 + i, hd_tlen());
             k = 0;
+            wn = 0;
             while k < tl {
                 if (sf_script(crate::port::cells_at(etext, ts + k)) > 0) || (sf_digit(crate::port::cells_at(etext, ts + k)) >= 0) {
-                    n += 1;
+                    wn += 1;
                 }
                 k += 1;
             }
+            n += wn;
+            if wn >= 4 {
+                big = 1;
+            }
         }
         i += 1;
+    }
+    if big == 0 {
+        return 0;
     }
     return n;
 }

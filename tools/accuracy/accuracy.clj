@@ -12,6 +12,8 @@
     bb accuracy --ids ID,ID            score only these documents
     bb accuracy --predictor emon-live  the Rust Engine WITH LIVE TESSERACT (P6.5, D211): the scan variants through real OCR.
                                        NOT a gate (it needs Tesseract and takes minutes); `bb ocr-live` runs it for the scans
+    bb accuracy --predictor emon-sealpx  the Rust Engine REPLAYING the committed transcripts of test/sealpx/replay/ovl-ID (scanned pages with seals, recorded WITH the bitmaps
+                                       the page units read; P8.2, D805): `bb sealpx` runs it with `--variants scan-ovl --ids stamp-seal,seal-over-text,sig-over-name`
     bb accuracy --predictor emon-fusion  the Rust Engine converting BORN-DIGITAL documents with its default settings (the born-digital pages are OCR'd
                                        under `always`, P7.S), REPLAYING the committed transcripts of test/fusion/replay/ID/ (a gate's: `bb fusion`)
     bb accuracy --predictor emon-fusion-live  the same LIVE (pdfium and Tesseract). NOT a gate (needs both; takes minutes)

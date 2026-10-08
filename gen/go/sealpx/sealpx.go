@@ -1024,12 +1024,15 @@ func sxFixStrip(owords *port.Cells, olines *port.Cells, oruns *port.Cells, run i
 }
 
 func SxUseful(etext *port.Cells, oruns *port.Cells, owords *port.Cells, run int32) int32 {
-	// How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth.
+	// How many letters and digits of the words of `run` that the engine was at least `sx-conf` per mille sure of: what a reading of a seal is worth. A reading with no one
+	// such word of four of them (a word) is worth nothing: noise is a few short fragments the engine was sure of.
 	var w0 int32 = evidence.OrGet(oruns, run, evidence.OrfWfirst())
 	var nw int32 = evidence.OrGet(oruns, run, evidence.OrfWcount())
 	var i int32 = 0
 	var k int32 = 0
 	var n int32 = 0
+	var wn int32 = 0
+	var big int32 = 0
 	var ts int32 = 0
 	var tl int32 = 0
 	for i < nw {
@@ -1037,14 +1040,22 @@ func SxUseful(etext *port.Cells, oruns *port.Cells, owords *port.Cells, run int3
 			ts = evidence.OwGet(owords, w0+i, evidence.HdTstart())
 			tl = evidence.OwGet(owords, w0+i, evidence.HdTlen())
 			k = 0
+			wn = 0
 			for k < tl {
 				if (sealfield.SfScript(port.CellsAt(etext, ts+k)) > 0) || (sealfield.SfDigit(port.CellsAt(etext, ts+k)) >= 0) {
-					n += 1
+					wn += 1
 				}
 				k += 1
 			}
+			n += wn
+			if wn >= 4 {
+				big = 1
+			}
 		}
 		i += 1
+	}
+	if big == 0 {
+		return 0
 	}
 	return n
 }

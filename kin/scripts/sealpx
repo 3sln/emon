@@ -170,6 +170,13 @@
     (when (pos? gold)
       (ok (format "scanned pages: seal precision %.2f, recall %.2f (%d of %d gold, %d nodes); name accuracy %d of %d, date accuracy %d of %d"
                   (if (pos? pred) (/ (double tp) pred) 0.0) (/ (double tp) gold) tp gold pred name-ok name-n date-ok date-n))))
+  ;; the ratchet of the scoreboard's `emon-sealpx`: the scanned seal documents, replayed (CER, block-seal P/R, seal-leak, seal-name-acc, seal-date-acc)
+  (let [scan-ids (for [[k v] (sort fixtures) :when (and (= :scan (:kind v)) (contains? (set ids) k))] (:gold-id v))
+        r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-sealpx" "--variants" "scan-ovl" "--ids" (str/join "," scan-ids))]
+    (check (and (zero? (:exit r)) (str/includes? (:out r) "ok   accuracy[emon-sealpx]") (not (str/includes? (:out r) "FAIL")))
+           "accuracy[emon-sealpx]: the scanned seal documents, replayed, hold their scoreboard entry"
+           (when-let [l (some #(when (str/includes? % "accuracy[emon-sealpx]") (str/trim %)) (str/split-lines (:out r)))]
+             (str " (" (str/replace l #"^ok +accuracy\[emon-sealpx\]: " "") ")"))))
   (when (zero? @fails)
     (ok "seals from pixels: the strips, the centres and the crops read, the nodes, names and dates the gold's, on Rust and Go")))
 
