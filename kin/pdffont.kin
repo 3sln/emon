@@ -609,6 +609,11 @@
     (cells-push f 0)
     (return 1)))
 
+(defn ^I32 pfn-sat [^I32 a ^I32 j]
+  (comment "a + j for j >= 0, held at 2^31-1: a /W start of 2147483647 plus an index (P10.5, D387).")
+  (if (> a (- 2147483647 j)) (return 2147483647))
+  (return (+ a j)))
+
 (defn ^I32 pfn-add-val [^:mut ^Cells f ^I32 lo ^I32 hi ^I32 v]
   (comment "A [lo hi value] record (a CID range or a width range).")
   (if (< lo 0) (return 0))
@@ -1656,7 +1661,8 @@
                             (if (> ncp 0)
                               (pfn-entry-put f code 3)
                               (pfn-entry-put f code 5))))
-                      (set code (+ code 1))))
+                      (comment "a code past 255 names nothing, and 2^31-1 + 1 must not wrap (P10.5, D385)")
+                      (if (< code 2147483647) (set code (+ code 1)))))
                 (set k (pl-next ar k))))))
     (comment "ToUnicode wins where it says something")
     (if (== (pfn-load-tounicode src ar dc a b st f out fh) 1)
@@ -1712,7 +1718,7 @@
                       (while (!= el 0)
                         (do (set ev (pd-resolve src ar dc a b st el))
                             (if (== (pfn-isnum ar ev) 1)
-                              (pfn-add-val f (+ c1 j) (+ c1 j) (pl-num-cp ar ev)))
+                              (pfn-add-val f (pfn-sat c1 j) (pfn-sat c1 j) (pl-num-cp ar ev)))
                             (set j (+ j 1))
                             (set el (pl-next ar el))))
                       (set k (pl-next ar k2)))
@@ -1913,7 +1919,7 @@
                             (if (!= e1 0) (set e2 (pl-next ar e1)))
                             (if (== e2 0)
                               (set el 0)
-                              (do (pfn-add-w2 f (+ c1 j) (+ c1 j)
+                              (do (pfn-add-w2 f (pfn-sat c1 j) (pfn-sat c1 j)
                                               (pfn-num-or-zero src ar dc a b st el)
                                               (pfn-num-or-zero src ar dc a b st e1)
                                               (pfn-num-or-zero src ar dc a b st e2))

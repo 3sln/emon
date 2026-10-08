@@ -279,13 +279,17 @@ export class Emon {
         const failed = (status) => w.withBytes(new Uint8Array(Int32Array.of(4, kind, rec[2], status).buffer), (p) => w.x.emon_answer(h, p, 4));
         if (kind === k.ocr && ports && ports.ocr) {
           const bitmapId = rec[3];
-          const req = ocrRequest(rec, () => {
-            const n = w.x.emon_bitmap_png(h, bitmapId);
-            if (n < 0) throw new EmonError('internal', 'the ocr request names no bitmap');
-            const b = w.outBytes();
-            w.outFree();
-            return b;
-          });
+          const req = ocrRequest(
+            rec,
+            () => {
+              const n = w.x.emon_bitmap_png(h, bitmapId);
+              if (n < 0) throw new EmonError('internal', 'the ocr request names no bitmap');
+              const b = w.outBytes();
+              w.outFree();
+              return b;
+            },
+            w,
+          );
           let result;
           try {
             result = await ports.ocr(req);

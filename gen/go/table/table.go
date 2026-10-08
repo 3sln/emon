@@ -1370,11 +1370,62 @@ func tbUpright(wd *port.Cells, w int32) bool {
 	return (r < 100) || (r > 35900)
 }
 
-func tbWless(wd *port.Cells, a int32, b int32, mode int32) bool {
+func tbClamp64(v int64) int32 {
+	// A 64-bit value held to +-2e9 (hostile coordinates multiply past 2^31, P10.5 D387; the tilt's arithmetic is 64-bit for the same reason).
+	if v > int64(2000000000) {
+		return 2000000000
+	}
+	if v < int64(-2000000000) {
+		return -2000000000
+	}
+	return int32(v)
+}
+
+func tbTilt(wd *port.Cells, wl *port.Cells, n int32) int32 {
+	// The tilt of the page's baselines, parts per million (the rise of a baseline over its run, summed over the words
+	// of wl[0, n) and divided by the runs: a word's own slope is a pixel or two over a few characters, noise, but the
+	// sum of hundreds of them is the page's). 0 under 2000 ppm (about a tenth of a degree: a text layer, a flat scan)
+	// and for a tilt past about 4.8 degrees, which is no tilt of a page (D391). 64-bit sums: a hostile layer's words
+	// do not overflow it (D387's kind; D391 wrote it in 32 bits).
+	var sdy int64 = int64(0)
+	var sdx int64 = int64(0)
+	var i int32 = 0
+	for i < n {
+		var w int32 = port.CellsAt(wl, i)
+		var dx int64 = int64(evidence.WdGet(wd, w, evidence.HdBx1())) + (int64(evidence.WdGet(wd, w, evidence.HdBx0())) * int64(-1))
+		var dy int64 = int64(evidence.WdGet(wd, w, evidence.HdBy1())) + (int64(evidence.WdGet(wd, w, evidence.HdBy0())) * int64(-1))
+		if (dx > int64(0)) && (((int64(12) * dy) <= dx) && ((int64(-12) * dy) <= dx)) {
+			sdy = sdy + dy
+			sdx = sdx + dx
+		}
+		i += 1
+	}
+	if (sdx / int64(1000)) >= int64(1) {
+		var ppm int64 = (sdy * int64(1000)) / (sdx / int64(1000))
+		if (ppm >= int64(2000)) && (ppm <= int64(83000)) {
+			return int32(ppm)
+		}
+		if (ppm <= int64(-2000)) && (ppm >= int64(-83000)) {
+			return int32(ppm)
+		}
+	}
+	return 0
+}
+
+func tbBkey(wd *port.Cells, w int32, ppm int32) int32 {
+	// The word's right baseline height carried back to the page's left edge along the page's tilt `ppm`: what a row's
+	// words share on a tilted scan, where a row's left and right words differ by several sizes of baseline over a table's
+	// width and the chain of rows below would cut a row where a column is empty. ppm 0 answers `by1`, as before.
+	// 64-bit and clamped: a hostile coordinate times the tilt does not overflow (D387's kind).
+	var sh int64 = (int64(evidence.WdGet(wd, w, evidence.HdBx1())/100) * int64(ppm)) / int64(10000)
+	return tbClamp64(int64(evidence.WdGet(wd, w, evidence.HdBy1())) + (sh * int64(-1)))
+}
+
+func tbWless(wd *port.Cells, a int32, b int32, mode int32, ppm int32) bool {
 	// Does word a come before word b: mode 0 by baseline then x, mode 1 by x; then by index.
 	if mode == 0 {
-		var ya int32 = evidence.WdGet(wd, a, evidence.HdBy1())
-		var yb int32 = evidence.WdGet(wd, b, evidence.HdBy1())
+		var ya int32 = tbBkey(wd, a, ppm)
+		var yb int32 = tbBkey(wd, b, ppm)
 		if ya != yb {
 			return ya < yb
 		}
@@ -1387,7 +1438,7 @@ func tbWless(wd *port.Cells, a int32, b int32, mode int32) bool {
 	return a < b
 }
 
-func tbSortWords(wl *port.Cells, wd *port.Cells, from int32, to int32, mode int32) int32 {
+func tbSortWords(wl *port.Cells, wd *port.Cells, from int32, to int32, mode int32, ppm int32) int32 {
 	// Shell sort of wl[from, to) by `tb-wless`.
 	var n int32 = to - from
 	var h int32 = 1
@@ -1407,7 +1458,7 @@ func tbSortWords(wl *port.Cells, wd *port.Cells, from int32, to int32, mode int3
 			more = 1
 			for (j >= h) && (more == 1) {
 				u = port.CellsAt(wl, from+(j-h))
-				if tbWless(wd, v, u, mode) {
+				if tbWless(wd, v, u, mode, ppm) {
 					port.CellsSet(wl, from+j, u)
 					j -= h
 				} else {
@@ -1428,6 +1479,7 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 	var w int32 = w0
 	var i int32 = 0
 	var j int32 = 0
+	var ppm int32 = 0
 	var n int32 = 0
 	port.CellsDrop(wl, 0)
 	port.CellsDrop(rw, 0)
@@ -1443,7 +1495,8 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 		w += 1
 	}
 	n = port.CellsLen(wl)
-	tbSortWords(wl, wd, 0, n, 0)
+	ppm = tbTilt(wd, wl, n)
+	tbSortWords(wl, wd, 0, n, 0, ppm)
 	i = 0
 	for i < n {
 		var w0i int32 = port.CellsAt(wl, i)
@@ -1451,13 +1504,13 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 		// A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
 		// order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
 		j = i + 1
-		for (j < n) && (tbAbs(evidence.WdGet(wd, port.CellsAt(wl, j), evidence.HdBy1())-evidence.WdGet(wd, port.CellsAt(wl, j-1), evidence.HdBy1())) <= tol) {
+		for (j < n) && (tbAbs(tbBkey(wd, port.CellsAt(wl, j), ppm)-tbBkey(wd, port.CellsAt(wl, j-1), ppm)) <= tol) {
 			j += 1
 		}
-		tbSortWords(wl, wd, i, j, 1)
+		tbSortWords(wl, wd, i, j, 1, ppm)
 		var ri int32 = tbRowsOf(rw, rws)
-		var sumy int32 = 0
-		var sums int32 = 0
+		var sumy int64 = int64(0)
+		var sums int64 = int64(0)
 		var x0 int32 = 2000000000
 		var x1 int32 = -2000000000
 		var y0 int32 = 2000000000
@@ -1465,8 +1518,8 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 		var k int32 = i
 		for k < j {
 			var wk int32 = port.CellsAt(wl, k)
-			sumy += evidence.WdGet(wd, wk, evidence.HdBy1())
-			sums += tbMax(1, evidence.WdGet(wd, wk, evidence.WfSize()))
+			sumy = sumy + int64(tbBkey(wd, wk, ppm))
+			sums = sums + int64(tbMax(1, evidence.WdGet(wd, wk, evidence.WfSize())))
 			if evidence.WdGet(wd, wk, evidence.HdX0()) < x0 {
 				x0 = evidence.WdGet(wd, wk, evidence.HdX0())
 			}
@@ -1482,14 +1535,14 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 			k += 1
 		}
 		var cnt int32 = j - i
-		var size int32 = sums / cnt
+		var size int32 = int32(sums / int64(cnt))
 		var thr int32 = (size * segNum) / segDen
 		var sf int32 = tbRowsOf(sg, sgs)
 		var cstart int32 = i
 		var cmax int32 = evidence.WdGet(wd, port.CellsAt(wl, i), evidence.HdX1())
 		port.CellsPush(rw, i)
 		port.CellsPush(rw, cnt)
-		port.CellsPush(rw, sumy/cnt)
+		port.CellsPush(rw, int32(sumy/int64(cnt)))
 		port.CellsPush(rw, size)
 		port.CellsPush(rw, x0)
 		port.CellsPush(rw, x1)
@@ -1727,7 +1780,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 	// for none. Answers the
 	// table's index, -1 when there are not two columns and two rows.
 	var ntab int32 = 0
-	var sumsz int32 = 0
+	var sumsz int64 = int64(0)
 	var r int32 = ra
 	var nch int32 = 0
 	var ncols int32 = 0
@@ -1746,7 +1799,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 		if port.CellsAt(rw, (r*rws)+9) >= 2 {
 			ntab += 1
 		}
-		sumsz += port.CellsAt(rw, (r*rws)+3)
+		sumsz = sumsz + int64(port.CellsAt(rw, (r*rws)+3))
 		if port.CellsAt(rw, (r*rws)+4) < minx {
 			minx = port.CellsAt(rw, (r*rws)+4)
 		}
@@ -1764,7 +1817,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 	if (ntab < 2) || ((rb - ra) <= 1) {
 		return -1
 	}
-	nch = tbChannels(wd, wl, rw, sg, ra, rb, ntab/6, ((sumsz/(rb-ra))*segNum)/segDen, ch, st, en)
+	nch = tbChannels(wd, wl, rw, sg, ra, rb, ntab/6, int32(((sumsz/int64(rb-ra))*int64(segNum))/int64(segDen)), ch, st, en)
 	if nch < 1 {
 		return -1
 	}

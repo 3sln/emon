@@ -965,3 +965,21 @@ func TestATranscriptOfDecodedImagesReplaysToTheSameFilesThroughAnAsyncSource(t *
 		}
 	}
 }
+
+// The document unit (stage 3) is kin too, and a panic in it is the Engine's named error, as in a page unit (P10.5, D386): a bug is `internal`,
+// a kin limit breach is a `limit` error with its name, and neither is the embedder's panic.
+func TestAPanicInTheDocumentUnitIsTheEnginesNamedError(t *testing.T) {
+	r := finishGuarded(func() outcome { panic("attempt to add with overflow") })
+	if r.err == nil || r.err.Kind != ErrInternal || !strings.Contains(r.err.Message, "overflow") {
+		t.Errorf("a panic in the document unit is %+v, wanted an internal error", r.err)
+	}
+	r = finishGuarded(func() outcome {
+		panic("the objects limit is 10 and this input reached 11. Raise it with EMON_LIMIT_OBJECTS")
+	})
+	if r.err == nil || r.err.Kind != ErrLimit || r.err.Status != "objects" || r.err.Limit != 10 || r.err.Actual != 11 {
+		t.Errorf("a limit breach in the document unit is %+v, wanted the named objects limit", r.err)
+	}
+	if ok := finishGuarded(func() outcome { return outcome{} }); ok.err != nil {
+		t.Errorf("a document unit that does not panic gave %+v", ok.err)
+	}
+}

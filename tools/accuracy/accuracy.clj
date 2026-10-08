@@ -22,6 +22,8 @@
                                        the input forms and recorded under `:references` by --update; never a gate, never the ratchet
     bb accuracy --predictor emon-replay  the Rust Engine REPLAYING the committed OCR transcripts of test/ocr/scan/ID/ (a gate's:
                                        `bb ocr` scores the documents that have one; no engine runs)
+    bb accuracy --predictor emon-replay-px  the same over the WHOLE transcripts (bitmaps kept) of test/ocr/scan-px/ID/: the scans whose
+                                       tables the engine reads from pixels (invoice, bank-statement: the `scan/forms` gate, D392)
 
 RATCHET (SPEC 14.2): for every predictor that has a committed entry in
 test/scoreboard.edn, every tracked metric of every category must not be worse
@@ -71,6 +73,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "emon-live" ["sh" (str (fs/path HERE "predict-emon-live.sh"))]
    "emon-replay" ["sh" (str (fs/path HERE "predict-emon-replay.sh"))]
    "emon-sealpx" ["sh" (str (fs/path HERE "predict-emon-sealpx.sh"))]
+   "emon-replay-px" ["sh" (str (fs/path HERE "predict-emon-replay.sh")) "px"]
    "emon-fusion" ["sh" (str (fs/path HERE "predict-emon-fusion.sh"))]
    "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]
    "baseline-pdfplumber" ["sh" (str (fs/path HERE "predict-baseline.sh")) "pdfplumber"]

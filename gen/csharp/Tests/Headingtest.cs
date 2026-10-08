@@ -342,6 +342,63 @@ public static class Headingtest {
         emon.Testport.AssertEq(Heading.HdLevel(hc, 8), 0, "the third");
     }
     [Xunit.Fact]
+    public static void TestANumberedTitleBetweenParagraphsIsAHeading() {
+        // D395: no weight, no size, no italic (a scan): a short numbered line with a paragraph above and below, the
+        // paragraph flush with it, is a heading; the same numbers closing a list are not.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        y = HtBody(wd, ln, et, 1, y, 5);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("a) Charter"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        y = HtBody(wd, ln, et, 1, y, 3);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("b) Membership"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        y = HtBody(wd, ln, et, 1, y, 3);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 2, "two headings");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 5), 1, "`a) Charter`");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 9), 1, "`b) Membership`");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 4), 0, "the paragraph above");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 6), 0, "the paragraph below");
+    }
+    [Xunit.Fact]
+    public static void TestTheLastItemOfANumberedListIsNotAHeading() {
+        // D395: the list's items stand next to one another; the last one has a numbered line above it.
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells sf = emon.Port.NewCells();
+        emon.Port.Cells sc = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells ws = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells ptxt = emon.Port.NewCells();
+        int y = 5000;
+        y = HtBody(wd, ln, et, 1, y, 5);
+        y += 900;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("a) Apples"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("b) Pears"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        HtLine(wd, ln, et, emon.Testport.TextBlob("c) Plums"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 2300;
+        y = HtBody(wd, ln, et, 1, y, 4);
+        emon.Testport.AssertEq(HtRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 5), 0, "the first item");
+        emon.Testport.AssertEq(Heading.HdLevel(hc, 7), 0, "the last item");
+    }
+    [Xunit.Fact]
     public static void TestAnInitialIsNeverAHeadingButADividerIs() {
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();

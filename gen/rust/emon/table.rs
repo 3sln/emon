@@ -1289,11 +1289,59 @@ pub(crate) fn tb_upright(wd: &mut crate::port::Cells, w: i32) -> bool {
     let r: i32 = wd_get(wd, w, hd_rot());
     return (r < 100) || (r > 35900);
 }
-pub(crate) fn tb_wless(wd: &mut crate::port::Cells, a: i32, b: i32, mode: i32) -> bool {
+pub(crate) fn tb_clamp64(v: i64) -> i32 {
+    // A 64-bit value held to +-2e9 (hostile coordinates multiply past 2^31, P10.5 D387; the tilt's arithmetic is 64-bit for the same reason).
+    if v > (2000000000 as i64) {
+        return 2000000000;
+    }
+    if v < (-2000000000 as i64) {
+        return -2000000000;
+    }
+    return v as i32;
+}
+pub(crate) fn tb_tilt(wd: &mut crate::port::Cells, wl: &mut crate::port::Cells, n: i32) -> i32 {
+    // The tilt of the page's baselines, parts per million (the rise of a baseline over its run, summed over the words
+    // of wl[0, n) and divided by the runs: a word's own slope is a pixel or two over a few characters, noise, but the
+    // sum of hundreds of them is the page's). 0 under 2000 ppm (about a tenth of a degree: a text layer, a flat scan)
+    // and for a tilt past about 4.8 degrees, which is no tilt of a page (D391). 64-bit sums: a hostile layer's words
+    // do not overflow it (D387's kind; D391 wrote it in 32 bits).
+    let mut sdy: i64 = 0 as i64;
+    let mut sdx: i64 = 0 as i64;
+    let mut i: i32 = 0;
+    while i < n {
+        let w: i32 = crate::port::cells_at(wl, i);
+        let dx: i64 = (wd_get(wd, w, hd_bx1()) as i64).wrapping_add((wd_get(wd, w, hd_bx0()) as i64).wrapping_mul(-1 as i64));
+        let dy: i64 = (wd_get(wd, w, hd_by1()) as i64).wrapping_add((wd_get(wd, w, hd_by0()) as i64).wrapping_mul(-1 as i64));
+        if (dx > (0 as i64)) && (((12 as i64).wrapping_mul(dy) <= dx) && ((-12 as i64).wrapping_mul(dy) <= dx)) {
+            sdy = (sdy).wrapping_add(dy);
+            sdx = (sdx).wrapping_add(dx);
+        }
+        i += 1;
+    }
+    if (sdx / (1000 as i64)) >= (1 as i64) {
+        let ppm: i64 = (sdy).wrapping_mul(1000 as i64) / (sdx / (1000 as i64));
+        if (ppm >= (2000 as i64)) && (ppm <= (83000 as i64)) {
+            return ppm as i32;
+        }
+        if (ppm <= (-2000 as i64)) && (ppm >= (-83000 as i64)) {
+            return ppm as i32;
+        }
+    }
+    return 0;
+}
+pub(crate) fn tb_bkey(wd: &mut crate::port::Cells, w: i32, ppm: i32) -> i32 {
+    // The word's right baseline height carried back to the page's left edge along the page's tilt `ppm`: what a row's
+    // words share on a tilted scan, where a row's left and right words differ by several sizes of baseline over a table's
+    // width and the chain of rows below would cut a row where a column is empty. ppm 0 answers `by1`, as before.
+    // 64-bit and clamped: a hostile coordinate times the tilt does not overflow (D387's kind).
+    let sh: i64 = ((wd_get(wd, w, hd_bx1()) / 100) as i64).wrapping_mul(ppm as i64) / (10000 as i64);
+    return tb_clamp64((wd_get(wd, w, hd_by1()) as i64).wrapping_add((sh).wrapping_mul(-1 as i64)));
+}
+pub(crate) fn tb_wless(wd: &mut crate::port::Cells, a: i32, b: i32, mode: i32, ppm: i32) -> bool {
     // Does word a come before word b: mode 0 by baseline then x, mode 1 by x; then by index.
     if mode == 0 {
-        let ya: i32 = wd_get(wd, a, hd_by1());
-        let yb: i32 = wd_get(wd, b, hd_by1());
+        let ya: i32 = tb_bkey(wd, a, ppm);
+        let yb: i32 = tb_bkey(wd, b, ppm);
         if ya != yb {
             return ya < yb;
         }
@@ -1305,7 +1353,7 @@ pub(crate) fn tb_wless(wd: &mut crate::port::Cells, a: i32, b: i32, mode: i32) -
     }
     return a < b;
 }
-pub(crate) fn tb_sort_words(mut wl: &mut crate::port::Cells, wd: &mut crate::port::Cells, from: i32, to: i32, mode: i32) -> i32 {
+pub(crate) fn tb_sort_words(mut wl: &mut crate::port::Cells, wd: &mut crate::port::Cells, from: i32, to: i32, mode: i32, ppm: i32) -> i32 {
     // Shell sort of wl[from, to) by `tb-wless`.
     let n: i32 = to - from;
     let mut h: i32 = 1;
@@ -1325,7 +1373,7 @@ pub(crate) fn tb_sort_words(mut wl: &mut crate::port::Cells, wd: &mut crate::por
             more = 1;
             while (j >= h) && (more == 1) {
                 u = crate::port::cells_at(wl, from + (j - h));
-                if tb_wless(wd, v, u, mode) {
+                if tb_wless(wd, v, u, mode, ppm) {
                     crate::port::cells_set(wl, from + j, u);
                     j -= h;
                 } else {
@@ -1345,6 +1393,7 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
     let mut w: i32 = w0;
     let mut i: i32 = 0;
     let mut j: i32 = 0;
+    let mut ppm: i32 = 0;
     let mut n: i32 = 0;
     crate::port::cells_drop(wl, 0);
     crate::port::cells_drop(rw, 0);
@@ -1360,7 +1409,8 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
         w += 1;
     }
     n = crate::port::cells_len(wl);
-    tb_sort_words(wl, wd, 0, n, 0);
+    ppm = tb_tilt(wd, wl, n);
+    tb_sort_words(wl, wd, 0, n, 0, ppm);
     i = 0;
     while i < n {
         let w0i: i32 = crate::port::cells_at(wl, i);
@@ -1368,13 +1418,13 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
         // A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
         // order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
         j = i + 1;
-        while (j < n) && (tb_abs(wd_get(wd, crate::port::cells_at(wl, j), hd_by1()) - wd_get(wd, crate::port::cells_at(wl, j - 1), hd_by1())) <= tol) {
+        while (j < n) && (tb_abs(tb_bkey(wd, crate::port::cells_at(wl, j), ppm) - tb_bkey(wd, crate::port::cells_at(wl, j - 1), ppm)) <= tol) {
             j += 1;
         }
-        tb_sort_words(wl, wd, i, j, 1);
+        tb_sort_words(wl, wd, i, j, 1, ppm);
         let ri: i32 = tb_rows_of(rw, RWS);
-        let mut sumy: i32 = 0;
-        let mut sums: i32 = 0;
+        let mut sumy: i64 = 0 as i64;
+        let mut sums: i64 = 0 as i64;
         let mut x0: i32 = 2000000000;
         let mut x1: i32 = -2000000000;
         let mut y0: i32 = 2000000000;
@@ -1382,8 +1432,8 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
         let mut k: i32 = i;
         while k < j {
             let wk: i32 = crate::port::cells_at(wl, k);
-            sumy += wd_get(wd, wk, hd_by1());
-            sums += tb_max(1, wd_get(wd, wk, wf_size()));
+            sumy = (sumy).wrapping_add(tb_bkey(wd, wk, ppm) as i64);
+            sums = (sums).wrapping_add(tb_max(1, wd_get(wd, wk, wf_size())) as i64);
             if wd_get(wd, wk, hd_x0()) < x0 {
                 x0 = wd_get(wd, wk, hd_x0());
             }
@@ -1399,14 +1449,14 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
             k += 1;
         }
         let cnt: i32 = j - i;
-        let size: i32 = sums / cnt;
+        let size: i32 = (sums / (cnt as i64)) as i32;
         let thr: i32 = (size * SEG_NUM) / SEG_DEN;
         let sf: i32 = tb_rows_of(sg, SGS);
         let mut cstart: i32 = i;
         let mut cmax: i32 = wd_get(wd, crate::port::cells_at(wl, i), hd_x1());
         crate::port::cells_push(rw, i);
         crate::port::cells_push(rw, cnt);
-        crate::port::cells_push(rw, sumy / cnt);
+        crate::port::cells_push(rw, (sumy / (cnt as i64)) as i32);
         crate::port::cells_push(rw, size);
         crate::port::cells_push(rw, x0);
         crate::port::cells_push(rw, x1);
@@ -1636,7 +1686,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
     // for none. Answers the
     // table's index, -1 when there are not two columns and two rows.
     let mut ntab: i32 = 0;
-    let mut sumsz: i32 = 0;
+    let mut sumsz: i64 = 0 as i64;
     let mut r: i32 = ra;
     let mut nch: i32 = 0;
     let mut ncols: i32 = 0;
@@ -1655,7 +1705,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
         if crate::port::cells_at(rw, (r * RWS) + 9) >= 2 {
             ntab += 1;
         }
-        sumsz += crate::port::cells_at(rw, (r * RWS) + 3);
+        sumsz = (sumsz).wrapping_add(crate::port::cells_at(rw, (r * RWS) + 3) as i64);
         if crate::port::cells_at(rw, (r * RWS) + 4) < minx {
             minx = crate::port::cells_at(rw, (r * RWS) + 4);
         }
@@ -1673,7 +1723,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
     if (ntab < 2) || ((rb - ra) <= 1) {
         return -1;
     }
-    nch = tb_channels(wd, wl, rw, sg, ra, rb, ntab / 6, ((sumsz / (rb - ra)) * SEG_NUM) / SEG_DEN, ch, st, en);
+    nch = tb_channels(wd, wl, rw, sg, ra, rb, ntab / 6, ((sumsz / ((rb - ra) as i64)).wrapping_mul(SEG_NUM as i64) / (SEG_DEN as i64)) as i32, ch, st, en);
     if nch < 1 {
         return -1;
     }

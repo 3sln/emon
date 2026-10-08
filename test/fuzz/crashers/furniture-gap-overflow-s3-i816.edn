@@ -1,0 +1,4 @@
+;; Found by `bb fuzz-long` (P10.5, D384): seed 3, case 816 (a fixture mutated), minimised to 3773 bytes. Rust `internal` (attempt to multiply with overflow at furniture.rs:1067); Go ok.
+;; Fixed in kin/furniture.kin (the gap to a neighbouring line is held to +-1000000 before it is multiplied by 1000, D387); replayed on every `bb fuzz` and must pass.
+{:seed 3 :index 816 :fixture "test/corpus/synth/pdf/columns-three-news.pdf" :ops ["flip x2" "stream@14981 shifted"] :signature ["engine-panic:rust"] :original-bytes 41186 :bytes 3773 :status :fixed
+ :detail ["engine-panic rust/bytes: internal (attempt to multiply with overflow)"]}

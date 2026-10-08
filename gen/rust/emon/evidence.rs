@@ -6461,14 +6461,19 @@ pub fn ev_emit_body(mut t: &mut String, pretty: i32, s0: i32, mut epages: &mut c
     s = ev_arena(t, pretty, s, 24, tlines, etext);
     return s;
 }
-pub fn ev_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
-    // Write the evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
-    // in the order of the `ea` codes, each row in its fixed key order.
+pub fn ev_emit_open(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // The evidence as `emon-evidence` JSON (SPEC 4.5, 8.4.6), version "1": one array per arena,
+    // in the order of the `ea` codes, each row in its fixed key order. OPEN: the object is left unclosed and the state (1 when it has members) is returned, so a caller can add a member before `}` (D381: the Engine's `tb` member; Go's builder cannot take a `}` back).
     let mut s: i32 = 0;
     crate::port::text_ascii(t, "{");
     s = ev_begin(t, pretty, 0, s, ek_version());
     crate::port::text_ascii(t, "\"1\"");
     s = ev_emit_body(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    return s;
+}
+pub fn ev_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+    // The same, closed: `ev-emit-open`'s members and then the object's `}`.
+    let s: i32 = ev_emit_open(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
     js_close(t, pretty, 0, s);
     return 0;
 }

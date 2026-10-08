@@ -779,6 +779,13 @@ public static class Pdffont {
         emon.Port.CellsPush(f, 0);
         return 1;
     }
+    internal static int PfnSat(int a, int j) {
+        // a + j for j >= 0, held at 2^31-1: a /W start of 2147483647 plus an index (P10.5, D387).
+        if (a > (2147483647 - j)) {
+            return 2147483647;
+        }
+        return a + j;
+    }
     internal static int PfnAddVal(emon.Port.Cells f, int lo, int hi, int v) {
         // A [lo hi value] record (a CID range or a width range).
         if (lo < 0) {
@@ -2170,7 +2177,10 @@ public static class Pdffont {
                             PfnEntryPut(f, code, 5);
                         }
                     }
-                    code += 1;
+                    // a code past 255 names nothing, and 2^31-1 + 1 must not wrap (P10.5, D385)
+                    if (code < 2147483647) {
+                        code += 1;
+                    }
                 }
                 k = Pdflex.PlNext(ar, k);
             }
@@ -2236,7 +2246,7 @@ public static class Pdffont {
                     while (el != 0) {
                         ev = Pdfdoc.PdResolve(src, ar, dc, a, b, st, el);
                         if (PfnIsnum(ar, ev) == 1) {
-                            PfnAddVal(f, c1 + j, c1 + j, Pdflex.PlNumCp(ar, ev));
+                            PfnAddVal(f, PfnSat(c1, j), PfnSat(c1, j), Pdflex.PlNumCp(ar, ev));
                         }
                         j += 1;
                         el = Pdflex.PlNext(ar, el);
@@ -2479,7 +2489,7 @@ public static class Pdffont {
                         if (e2 == 0) {
                             el = 0;
                         } else {
-                            PfnAddW2(f, c1 + j, c1 + j, PfnNumOrZero(src, ar, dc, a, b, st, el), PfnNumOrZero(src, ar, dc, a, b, st, e1), PfnNumOrZero(src, ar, dc, a, b, st, e2));
+                            PfnAddW2(f, PfnSat(c1, j), PfnSat(c1, j), PfnNumOrZero(src, ar, dc, a, b, st, el), PfnNumOrZero(src, ar, dc, a, b, st, e1), PfnNumOrZero(src, ar, dc, a, b, st, e2));
                             j += 1;
                             el = Pdflex.PlNext(ar, e2);
                         }

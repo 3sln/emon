@@ -105,7 +105,7 @@ func (m *Model) Source() Intake { return m.intake }
 // NodeCount is the number of nodes.
 func (m *Model) NodeCount() int {
 	var n int32
-	m.with(func(a *arenas) { n = model.NodeCount(a.nodes) })
+	m.with(func(a *arenas) { n = model.NodeCount(a.Nodes) })
 	return int(n)
 }
 
@@ -113,14 +113,14 @@ func (m *Model) NodeCount() int {
 func (m *Model) Pages() []Page {
 	var out []Page
 	m.with(func(a *arenas) {
-		for p := int32(0); p < model.PageCount(a.pages); p++ {
-			ls, ll := model.PageLabelStart(a.pages, p), model.PageLabelLen(a.pages, p)
+		for p := int32(0); p < model.PageCount(a.Pages); p++ {
+			ls, ll := model.PageLabelStart(a.Pages, p), model.PageLabelLen(a.Pages, p)
 			var kind strings.Builder
-			model.PkEmitName(&kind, model.PageKind(a.pages, p))
-			pg := Page{Number: model.PageNumber(a.pages, p), Width: model.PageW(a.pages, p), Height: model.PageH(a.pages, p),
-				Rotation: model.PageRot(a.pages, p), Kind: kind.String()}
+			model.PkEmitName(&kind, model.PageKind(a.Pages, p))
+			pg := Page{Number: model.PageNumber(a.Pages, p), Width: model.PageW(a.Pages, p), Height: model.PageH(a.Pages, p),
+				Rotation: model.PageRot(a.Pages, p), Kind: kind.String()}
 			if ls >= 0 {
-				pg.Label, pg.HasLabel = textOf(a.text, ls, ll), true
+				pg.Label, pg.HasLabel = textOf(a.Text, ls, ll), true
 			}
 			out = append(out, pg)
 		}
@@ -132,8 +132,8 @@ func (m *Model) Pages() []Page {
 func (m *Model) Furniture() []Node {
 	var ids []int32
 	m.with(func(a *arenas) {
-		for n := int32(0); n < model.NodeCount(a.nodes); n++ {
-			if model.NodeKind(a.nodes, n) == model.NkFurniture() && model.NodeParent(a.nodes, n) == -1 {
+		for n := int32(0); n < model.NodeCount(a.Nodes); n++ {
+			if model.NodeKind(a.Nodes, n) == model.NkFurniture() && model.NodeParent(a.Nodes, n) == -1 {
 				ids = append(ids, n)
 			}
 		}
@@ -153,7 +153,7 @@ func (m *Model) nodes(ids []int32) []Node {
 func (m *Model) Dropped() []Dropped {
 	var out []Dropped
 	m.with(func(a *arenas) {
-		l := a.ledger
+		l := a.Ledger
 		for i := int32(0); i < model.LedgerCount(l); i++ {
 			var reason strings.Builder
 			model.DrEmitName(&reason, model.LedgerReason(l, i))
@@ -161,7 +161,7 @@ func (m *Model) Dropped() []Dropped {
 			d := Dropped{Reason: reason.String(), Page: model.LedgerPage(l, i),
 				Region: Region{model.LedgerPage(l, i), model.LedgerX0(l, i), model.LedgerY0(l, i), model.LedgerX1(l, i), model.LedgerY1(l, i)}}
 			if ts >= 0 {
-				d.Text = textOf(a.text, ts, tl)
+				d.Text = textOf(a.Text, ts, tl)
 			}
 			out = append(out, d)
 		}
@@ -173,8 +173,8 @@ func (m *Model) Dropped() []Dropped {
 func (m *Model) Find(kind Kind) []Node {
 	var ids []int32
 	m.with(func(a *arenas) {
-		for n := int32(0); n < model.NodeCount(a.nodes); n++ {
-			if model.NodeKind(a.nodes, n) == int32(kind) {
+		for n := int32(0); n < model.NodeCount(a.Nodes); n++ {
+			if model.NodeKind(a.Nodes, n) == int32(kind) {
 				ids = append(ids, n)
 			}
 		}
@@ -198,7 +198,7 @@ func (m *Model) ToJSON(o JSONOptions) string {
 		if o.Pretty {
 			pretty = 1
 		}
-		json.JsEmit(&sb, pretty, a.nodes, a.attrs, a.regions, a.text, a.pages, a.ledger, a.layout, a.assets, a.uses)
+		json.JsEmit(&sb, pretty, a.Nodes, a.Attrs, a.Regions, a.Text, a.Pages, a.Ledger, a.Layout, a.Assets, a.Uses)
 	})
 	return sb.String()
 }
@@ -212,7 +212,7 @@ func (m *Model) ToHTML(o HTMLOptions) string {
 		port.CellsPush(prefix, int32(ch))
 	}
 	m.with(func(a *arenas) {
-		html.HtmlEmit(&sb, bits, below, a.nodes, a.attrs, a.regions, a.text, a.pages, a.ledger, a.layout, a.assets, a.uses, a.abytes, prefix)
+		html.HtmlEmit(&sb, bits, below, a.Nodes, a.Attrs, a.Regions, a.Text, a.Pages, a.Ledger, a.Layout, a.Assets, a.Uses, a.Abytes, prefix)
 	})
 	return sb.String()
 }
@@ -258,7 +258,7 @@ func (a Asset) String() string { return "Asset(" + itoa(a.id) + " " + a.Name() +
 
 func (a Asset) num(f func(c *port.Cells, i int32) int32) int32 {
 	var v int32
-	a.m.with(func(x *arenas) { v = f(x.assets, a.id) })
+	a.m.with(func(x *arenas) { v = f(x.Assets, a.id) })
 	return v
 }
 
@@ -306,7 +306,7 @@ func (a Asset) SHA256() string {
 	var sb strings.Builder
 	a.m.with(func(x *arenas) {
 		for i := int32(0); i < 8; i++ {
-			w := uint32(model.AssetSha(x.assets, a.id, i))
+			w := uint32(model.AssetSha(x.Assets, a.id, i))
 			for k := 28; k >= 0; k -= 4 {
 				sb.WriteByte(digits[(w>>uint(k))&15])
 			}
@@ -346,9 +346,9 @@ func (a Asset) Flags() []string {
 func (a Asset) Uses() []AssetUse {
 	var out []AssetUse
 	a.m.with(func(x *arenas) {
-		for u := model.AssetUseHead(x.assets, a.id); u >= 0; u = model.UseNext(x.uses, u) {
-			out = append(out, AssetUse{Node: model.UseNode(x.uses, u),
-				Region: Region{model.UsePage(x.uses, u), model.UseX0(x.uses, u), model.UseY0(x.uses, u), model.UseX1(x.uses, u), model.UseY1(x.uses, u)}})
+		for u := model.AssetUseHead(x.Assets, a.id); u >= 0; u = model.UseNext(x.Uses, u) {
+			out = append(out, AssetUse{Node: model.UseNode(x.Uses, u),
+				Region: Region{model.UsePage(x.Uses, u), model.UseX0(x.Uses, u), model.UseY0(x.Uses, u), model.UseX1(x.Uses, u), model.UseY1(x.Uses, u)}})
 		}
 	})
 	return out
@@ -358,10 +358,10 @@ func (a Asset) Uses() []AssetUse {
 func (a Asset) Bytes() []byte {
 	var out []byte
 	a.m.with(func(x *arenas) {
-		s, n := model.AssetBstart(x.assets, a.id), model.AssetBlen(x.assets, a.id)
+		s, n := model.AssetBstart(x.Assets, a.id), model.AssetBlen(x.Assets, a.id)
 		out = make([]byte, 0, n)
 		for i := s; i < s+n; i++ {
-			out = append(out, byte(port.BufAt(x.abytes, i)))
+			out = append(out, byte(port.BufAt(x.Abytes, i)))
 		}
 	})
 	return out
@@ -370,7 +370,7 @@ func (a Asset) Bytes() []byte {
 // Assets is the asset table, in admission order; empty unless `Options.Assets` was on.
 func (m *Model) Assets() []Asset {
 	var n int32
-	m.with(func(a *arenas) { n = model.AssetCount(a.assets) })
+	m.with(func(a *arenas) { n = model.AssetCount(a.Assets) })
 	out := make([]Asset, 0, n)
 	for id := int32(0); id < n; id++ {
 		out = append(out, Asset{m: m, id: id})
@@ -381,7 +381,7 @@ func (m *Model) Assets() []Asset {
 // Asset is the asset with this id, if there is one.
 func (m *Model) Asset(id int32) (Asset, bool) {
 	var n int32
-	m.with(func(a *arenas) { n = model.AssetCount(a.assets) })
+	m.with(func(a *arenas) { n = model.AssetCount(a.Assets) })
 	if id < 0 || id >= n {
 		return Asset{}, false
 	}
@@ -412,12 +412,12 @@ func (n Node) NoAsset() (string, bool) {
 	var s string
 	var found bool
 	n.m.with(func(a *arenas) {
-		at := model.AttrFind(a.attrs, model.NodeAttrHead(a.nodes, n.n), model.FkNoasset())
+		at := model.AttrFind(a.Attrs, model.NodeAttrHead(a.Nodes, n.n), model.FkNoasset())
 		if at < 0 {
 			return
 		}
 		var sb strings.Builder
-		model.NzEmitName(&sb, model.AttrValue(a.attrs, at))
+		model.NzEmitName(&sb, model.AttrValue(a.Attrs, at))
 		s, found = sb.String(), true
 	})
 	return s, found
@@ -439,7 +439,7 @@ func itoa(v int32) string {
 
 func (n Node) num(f func(c *port.Cells, i int32) int32) int32 {
 	var v int32
-	n.m.with(func(a *arenas) { v = f(a.nodes, n.n) })
+	n.m.with(func(a *arenas) { v = f(a.Nodes, n.n) })
 	return v
 }
 
@@ -489,7 +489,7 @@ func (n Node) Children() []Node {
 	for c >= 0 {
 		out = append(out, Node{m: n.m, n: c})
 		var next int32
-		n.m.with(func(a *arenas) { next = model.NodeNext(a.nodes, c) })
+		n.m.with(func(a *arenas) { next = model.NodeNext(a.Nodes, c) })
 		c = next
 	}
 	return out
@@ -526,7 +526,7 @@ func (n Node) own() (string, bool) {
 	}
 	st, ln := n.num(model.NodeTextStart), n.num(model.NodeTextLen)
 	var s string
-	n.m.with(func(a *arenas) { s = textOf(a.text, st, ln) })
+	n.m.with(func(a *arenas) { s = textOf(a.Text, st, ln) })
 	return s, true
 }
 
@@ -560,11 +560,11 @@ func (n Node) derive(sb *strings.Builder) {
 func (n Node) Regions() []Region {
 	var out []Region
 	n.m.with(func(a *arenas) {
-		r := model.NodeRegionHead(a.nodes, n.n)
-		for i := int32(0); i < model.NodeRegionCount(a.nodes, n.n); i++ {
-			out = append(out, Region{model.RegionPage(a.regions, r), model.RegionX0(a.regions, r), model.RegionY0(a.regions, r),
-				model.RegionX1(a.regions, r), model.RegionY1(a.regions, r)})
-			r = model.RegionNext(a.regions, r)
+		r := model.NodeRegionHead(a.Nodes, n.n)
+		for i := int32(0); i < model.NodeRegionCount(a.Nodes, n.n); i++ {
+			out = append(out, Region{model.RegionPage(a.Regions, r), model.RegionX0(a.Regions, r), model.RegionY0(a.Regions, r),
+				model.RegionX1(a.Regions, r), model.RegionY1(a.Regions, r)})
+			r = model.RegionNext(a.Regions, r)
 		}
 	})
 	return out
@@ -575,15 +575,15 @@ func (n Node) Attr(name string) (Attr, bool) {
 	var out Attr
 	var found bool
 	n.m.with(func(a *arenas) {
-		at := model.NodeAttrHead(a.nodes, n.n)
+		at := model.NodeAttrHead(a.Nodes, n.n)
 		for at >= 0 {
 			var key strings.Builder
-			model.FkEmitName(&key, model.AttrKey(a.attrs, at))
+			model.FkEmitName(&key, model.AttrKey(a.Attrs, at))
 			if key.String() == name {
-				v, l := model.AttrValue(a.attrs, at), model.AttrLen(a.attrs, at)
-				switch model.AttrVkind(a.attrs, at) {
+				v, l := model.AttrValue(a.Attrs, at), model.AttrLen(a.Attrs, at)
+				switch model.AttrVkind(a.Attrs, at) {
 				case model.AvText():
-					out = Attr{Kind: AttrText, Text: textOf(a.text, v, l)}
+					out = Attr{Kind: AttrText, Text: textOf(a.Text, v, l)}
 				case model.AvNode():
 					out = Attr{Kind: AttrNode, Node: v}
 				case model.AvBool():
@@ -594,7 +594,7 @@ func (n Node) Attr(name string) (Attr, bool) {
 				found = true
 				return
 			}
-			at = model.AttrNext(a.attrs, at)
+			at = model.AttrNext(a.Attrs, at)
 		}
 	})
 	return out, found

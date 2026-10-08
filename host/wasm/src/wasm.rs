@@ -623,130 +623,65 @@ fn answer(h: i32, rec: Vec<i32>, bitmap: Option<Arc<Bitmap>>) -> i32 {
     }
 }
 
-// An `ocr` answer from the flat integer form the JS adapter makes of its engine's reading; the record is written by the kin
-// builders (`emon.plan`, `emon.ocr`), so its layout is written once. The form, all cells:
-//   header  orient wdir tlo deskew osd script sconf oconf nlines nblocks nwords has_binary bw bh
-//   lines   x y w h  bx1 by1 bx2 by2  block par btype  rowa rowb rowc                     (nlines times)
-//   blocks  x y w h  orient wdir tlo                                                      (nblocks times)
-//   words   x y w h conf line block flags lang psize dflags  ntext cp...  nsyms  syms...  (nwords times)
-//   sym     x y w h conf  ncp cp...  nalts  (conf ncp cp...)...
+// An `ocr` answer from the flat integer form the JS adapter makes of its engine's reading; the form and the record are kin's
+// (`ox-flat`, `emon.ocrport`, P10.7), so the layout is written once and a malformed form is refused by kin.
 #[no_mangle]
 pub unsafe extern "C" fn emon_answer_ocr(h: i32, id: i32, ptr: u32, ncells: u32) -> i32 {
     guard(|| {
-        let b = bytes(ptr, ncells * 4);
-        let v: Vec<i32> = b.chunks_exact(4).map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
-        match build_ocr(id, &v) {
-            Some(rec) => answer(h, rec, None),
-            None => {
-                put_str("usage\nthe ocr form is malformed");
-                -1
-            }
+        let mut flat = cells_from(ptr, ncells);
+        let mut out = Cells::new();
+        if emon::ocrport::ox_flat(&mut flat, id, &mut out) != 0 {
+            put_str("usage\nthe ocr form is malformed");
+            return -1;
         }
+        answer(h, to_vec(&out), None)
     })
 }
 
-struct Cur<'a> {
-    v: &'a [i32],
-    at: usize,
+fn to_vec(c: &Cells) -> Vec<i32> {
+    (0..crate::port::cells_len(c)).map(|i| crate::port::cells_at(c, i)).collect()
 }
 
-impl<'a> Cur<'a> {
-    fn n(&mut self) -> Option<i32> {
-        let x = *self.v.get(self.at)?;
-        self.at += 1;
-        Some(x)
+// The cells of `ncells` little-endian i32s at `ptr` in the module's memory.
+unsafe fn cells_from(ptr: u32, ncells: u32) -> Cells {
+    let mut c = Cells::new();
+    for x in bytes(ptr, ncells * 4).chunks_exact(4) {
+        crate::port::cells_push(&mut c, i32::from_le_bytes([x[0], x[1], x[2], x[3]]));
     }
-    fn take(&mut self, k: usize) -> Option<&'a [i32]> {
-        let s = self.v.get(self.at..self.at + k)?;
-        self.at += k;
-        Some(s)
-    }
+    c
 }
 
-fn build_ocr(id: i32, v: &[i32]) -> Option<Vec<i32>> {
-    let mut c = Cur { v, at: 0 };
-    let hd = c.take(14)?;
-    let (orient, wdir, tlo, deskew, osd, script, sconf, oconf, nlines, nblocks, nwords, has_binary, bw, bh) = (hd[0], hd[1], hd[2], hd[3], hd[4], hd[5], hd[6], hd[7], hd[8], hd[9], hd[10], hd[11], hd[12], hd[13]);
-    if nlines < 0 || nblocks < 0 || nwords < 0 {
-        return None;
-    }
-    let mut lines: Vec<&[i32]> = Vec::new();
-    for _ in 0..nlines {
-        lines.push(c.take(14)?);
-    }
-    let mut blocks: Vec<&[i32]> = Vec::new();
-    for _ in 0..nblocks {
-        blocks.push(c.take(7)?);
-    }
-    struct Alt<'a> {
-        conf: i32,
-        cps: &'a [i32],
-    }
-    struct Sym<'a> {
-        bx: &'a [i32],
-        cps: &'a [i32],
-        alts: Vec<Alt<'a>>,
-    }
-    struct W<'a> {
-        h: &'a [i32],
-        text: &'a [i32],
-        syms: Vec<Sym<'a>>,
-    }
-    let mut words: Vec<W> = Vec::new();
-    for _ in 0..nwords {
-        let h = c.take(11)?;
-        let nt = c.n()?;
-        let text = c.take(nt.max(0) as usize)?;
-        let ns = c.n()?;
-        let mut syms = Vec::new();
-        for _ in 0..ns.max(0) {
-            let bx = c.take(5)?;
-            let ncp = c.n()?;
-            let cps = c.take(ncp.max(0) as usize)?;
-            let na = c.n()?;
-            let mut alts = Vec::new();
-            for _ in 0..na.max(0) {
-                let conf = c.n()?;
-                let nac = c.n()?;
-                let cps = c.take(nac.max(0) as usize)?;
-                alts.push(Alt { conf, cps });
-            }
-            syms.push(Sym { bx, cps, alts });
-        }
-        words.push(W { h, text, syms });
-    }
-    let mut cells = Cells::new();
-    let at = emon::plan::an_ocr(&mut cells, id);
-    for w in &words {
-        let wd = emon::plan::an_ocr_word(&mut cells, at, w.h[0], w.h[1], w.h[2], w.h[3], w.h[4], w.h[5], w.h[6]);
-        for cp in w.text {
-            emon::plan::an_ocr_cp(&mut cells, wd, *cp);
-        }
-    }
-    emon::ocr::ox_begin(&mut cells, orient, wdir, tlo, deskew, osd, script, sconf, oconf, nlines, nblocks, has_binary, bw, bh);
-    for l in &lines {
-        emon::ocr::ox_line(&mut cells, l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7], l[8], l[9], l[10], l[11], l[12], l[13]);
-    }
-    for b in &blocks {
-        emon::ocr::ox_block(&mut cells, b[0], b[1], b[2], b[3], b[4], b[5], b[6]);
-    }
-    for w in &words {
-        let wx = emon::ocr::ox_word(&mut cells, w.h[7], w.h[8], w.h[9], w.h[10]);
-        for s in &w.syms {
-            let sx = emon::ocr::ox_sym(&mut cells, wx, s.bx[0], s.bx[1], s.bx[2], s.bx[3], s.bx[4]);
-            for cp in s.cps {
-                emon::ocr::ox_sym_cp(&mut cells, sx, *cp);
-            }
-            for a in &s.alts {
-                let ax = emon::ocr::ox_alt(&mut cells, sx, a.conf);
-                for cp in a.cps {
-                    emon::ocr::ox_alt_cp(&mut cells, ax, *cp);
-                }
-            }
-        }
-    }
-    emon::plan::an_ocr_end(&mut cells, at);
-    Some((0..crate::port::cells_len(&cells)).map(|i| crate::port::cells_at(&cells, i)).collect())
+// An `ocr` request's policy is kin's (`emon.ocrport`), and the JS adapters ask it here. `ptr`/`ncells`: the request record
+// `[len kind id arg...]`. The index of the argument its first language is at (after a kin-made view's pixel hash).
+#[no_mangle]
+pub unsafe extern "C" fn emon_ocr_lang_first(ptr: u32, ncells: u32) -> i32 {
+    guard(|| emon::ocrport::op_lang_first(&mut cells_from(ptr, ncells)))
+}
+
+// The installed models that read the request: `inst` holds their names as code points separated by 0; OUT is the i32 indices into
+// that list (see `op-models`). Answers how many.
+#[no_mangle]
+pub unsafe extern "C" fn emon_ocr_models(ptr: u32, ncells: u32, iptr: u32, icells: u32) -> i32 {
+    guard(|| {
+        let mut req = cells_from(ptr, ncells);
+        let mut inst = cells_from(iptr, icells);
+        let mut out = Cells::new();
+        let n = emon::ocrport::op_models(&mut req, &mut inst, &mut out);
+        put_i32s(&to_vec(&out));
+        n
+    })
+}
+
+// A line's type from the engine's block type (Tesseract's PolyBlockType).
+#[no_mangle]
+pub extern "C" fn emon_ocr_block_type(poly: i32) -> i32 {
+    guard(|| emon::ocrport::op_block_type(poly))
+}
+
+// The language the engine read a word in (the model's name as code points), as a request spells it: one packed cell.
+#[no_mangle]
+pub unsafe extern "C" fn emon_ocr_word_lang(ptr: u32, ncells: u32) -> i32 {
+    guard(|| emon::ocrport::op_word_lang(&mut cells_from(ptr, ncells)))
 }
 
 // The bitmap a request names (an `ocr` request's `bitmap` argument, or the answer of any request already answered), as a

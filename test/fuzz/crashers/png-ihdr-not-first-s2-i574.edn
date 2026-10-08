@@ -1,0 +1,4 @@
+;; Found by `bb fuzz` (P10.5, D384): seed 2, case 574, a PNG with an iCCP chunk before IHDR. Rust `undecodable`, Go decoded it (its decoder skips what comes before IHDR).
+;; Fixed in host/rust/src/imgdec.rs and host/go/imgdec.go (`png_sound`: the first chunk is a 13-byte IHDR in both, D389); replayed on every `bb fuzz` and must pass.
+{:seed 2 :index 574 :fixture "test/image/png-gray2.png" :ops ["png insert iCCP@0"] :signature ["engine-status-mismatch"] :bytes 561 :status :fixed
+ :detail ["engine-status-mismatch rust: [:err undecodable] | go: [:ok]"]}

@@ -771,6 +771,53 @@ public final class Heading {
         }
         return 0;
     }
+    public static int hdSandwich(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, int top, int last, int cnt) {
+        // Is a body-styled numbered line a title standing BETWEEN paragraphs (D395): one short line, no marker on
+        // the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging
+        // continuation of a list item). A list's items are next to one another or carry their text on their own line;
+        // a numbered line that alternates with full paragraphs is a heading whose style the scan could not read.
+        if (cnt != 1) {
+            return 0;
+        }
+        int a = Style.stGet(sf, top, Style.sfkAbove());
+        int b = Style.stGet(sf, last, Style.sfkBelow());
+        int sz = Style.stGet(sf, top, Style.sfkSize());
+        if (b < 0) {
+            return 0;
+        }
+        // an enumerator proper: a letter or a roman numeral with its delimiter, or a number with one (`12 Harbour
+        // Road` is an address and `Table 2` a caption)
+        int s = hdMarker(wd, ln, et, ws, top);
+        int w0 = hdNthWord(wd, ln, top, 0);
+        if ((s == 0) || ((s == 6) || (s == 7))) {
+            return 0;
+        }
+        if (s == 1) {
+            if (hdDec(wd, et, w0) < 64) {
+                return 0;
+            }
+        }
+        if (Style.stGet(sf, b, Style.sfkPage()) != Style.stGet(sf, top, Style.sfkPage())) {
+            return 0;
+        }
+        if (Style.stGet(sf, top, Style.sfkCps()) > 60) {
+            return 0;
+        }
+        if ((hdAbs(Style.stGet(sf, b, Style.sfkX0()) - Style.stGet(sf, top, Style.sfkX0())) * 2) > sz) {
+            return 0;
+        }
+        if (Style.stGet(sf, b, Style.sfkCps()) > 0) {
+            if (hdMarker(wd, ln, et, ws, b) != 0) {
+                return 0;
+            }
+        }
+        if (a >= 0) {
+            if (hdMarker(wd, ln, et, ws, a) != 0) {
+                return 0;
+            }
+        }
+        return 1;
+    }
     public static int hdUnitScore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, emon.Port.Cells sc, int cnt) {
         // The score of the unit whose lines are ws[WS_LINES..]: -1 when it cannot be a heading. Leaves the
         // numbering of its first line in ws[0..4].
@@ -781,6 +828,7 @@ public final class Heading {
         int total = 0;
         int i = 0;
         int s = 0;
+        int sand = 0;
         int pts = 0;
         while (i < cnt) {
             total += Style.stGet(sf, emon.Port.cellsAt(ws, WS_LINES + i), Style.sfkCps());
@@ -796,6 +844,9 @@ public final class Heading {
             if (hdListRun(wd, ln, et, ws, sf, top, last) == 1) {
                 return -1;
             }
+        }
+        if (ps == 0) {
+            sand = hdSandwich(wd, ln, et, ws, sf, top, last, cnt);
         }
         s = hdMarker(wd, ln, et, ws, top);
         pts = ps;
@@ -815,7 +866,7 @@ public final class Heading {
             return -1;
         }
         // a body-styled numbered line followed at the body's own line gap is a paragraph or a list item
-        if ((ps == 0) && ((b >= 0) && ((gb * 2) < (lg * 3)))) {
+        if ((ps == 0) && ((sand == 0) && ((b >= 0) && ((gb * 2) < (lg * 3))))) {
             return -1;
         }
         // smaller than the body, so it is the weight or the capitals alone that says heading: it must at least
@@ -982,7 +1033,8 @@ public final class Heading {
         int sclass = Style.stGet(sf, hdUn(ws, u, 0), Style.sfkClass());
         int v = 0;
         int same = 0;
-        if ((s >= 2) && (s <= 5)) {
+        // a line set in capitals after its letter or numeral (`I. GOVERNANCE`) is a title, not a name (D395)
+        if ((s >= 2) && ((s <= 5) && (Style.stGet(sf, hdUn(ws, u, 0), Style.sfkCaps()) == 0))) {
             while (v < nu) {
                 if ((hdUn(ws, v, 5) == s) && (Style.stGet(sf, hdUn(ws, v, 0), Style.sfkClass()) == sclass)) {
                     same += 1;

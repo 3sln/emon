@@ -10,7 +10,9 @@
 //       flags    bit 1 symbols and their alternatives wanted, bit 2 orientation and script detection; above the low byte, the
 //                bitmap's resolution in dpi (`dpi` is that, 0 when it says none)
 //       rect     { x, y, w, h } to read inside the bitmap, or null for all of it
-//       langs    ISO 639-3 codes (`chs` and `cht` for the two Chinese scripts); none means every model the engine has (D038)
+//       langs    ISO 639-3 codes (`chs` and `cht` for the two Chinese scripts), or an ISO 15924 script (`Cyrl`) for the models that
+//                read it; none means every model the engine has (D038). An engine with a list of models asks `models(installed)`
+//                which of them read the request (indices into the list) and `wordLang(model)` what the answer calls a model's language
 //       bitmap() the pixels the request names, as a lossless PNG (`Uint8Array`)
 //
 // and the result (every box is `[x, y, w, h]` in the bitmap's pixels, every confidence 0..1000):
@@ -41,13 +43,21 @@ export const unpack4 = (v) => {
 
 const cps = (s) => Array.from(s || '', (c) => c.codePointAt(0));
 
-/** The request's fields from kin's record `[len kind id bitmap psm flags x y w h lang... status?]`. */
-export function ocrRequest(rec, bitmap) {
+/**
+ * The request's fields from kin's record `[len kind id bitmap psm flags x y w h lang... status?]`. WHERE the languages are, which
+ * installed models read them and what a model's language is called in an answer are kin's (`emon.ocrport`, P10.7, D396), asked of
+ * the module `w`: `models(installed)` answers the indices into the `installed` model names, `wordLang(model)` the request's name
+ * for the language a model read a word in, `blockType(polyBlockType)` a line's `type` from Tesseract's block type.
+ */
+export function ocrRequest(rec, bitmap, w) {
   const args = rec.slice(3);
   const flags = args[2];
   const langs = [];
-  for (let k = 7; k < args.length; k++) langs.push(unpack4(args[k]));
+  for (let k = w.ocrLangFirst(rec); k < args.length; k++) langs.push(unpack4(args[k]));
   return {
+    models: (installed) => w.ocrModels(rec, installed),
+    wordLang: (model) => unpack4(w.ocrWordLang(model)),
+    blockType: (polyBlockType) => w.ocrBlockType(polyBlockType),
     id: rec[2],
     psm: args[1],
     flags,
@@ -60,7 +70,7 @@ export function ocrRequest(rec, bitmap) {
   };
 }
 
-/** The integer form `emon_answer_ocr` reads (see `host/wasm/src/wasm.rs`); `c` is the module's `ocrWord` constants. */
+/** The integer form `emon_answer_ocr` reads (its layout is `ox-flat` in `kin/ocrport.kin`); `c` is the module's `ocrWord` constants. */
 export function encodeOcr(r, c) {
   const o = r.orientation || {};
   const osd = r.osd;

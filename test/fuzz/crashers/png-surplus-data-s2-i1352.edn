@@ -1,0 +1,4 @@
+;; Found by `bb fuzz` (P10.5, D384): seed 2, case 1352, a PNG whose IDAT inflates to more bytes than its header says. Rust decoded it, Go said `undecodable` ("too much pixel data").
+;; Fixed in host/rust/src/imgdec.rs and host/go/imgdec.go (`png_data_sound`: exactly the bytes the header says, D389); replayed on every `bb fuzz` and must pass.
+{:seed 2 :index 1352 :fixture "test/image/png-phys-cm.png" :ops ["png trailing bytes" "png IDAT inflated, changed, deflated"] :signature ["engine-status-mismatch"] :bytes 2248 :status :fixed
+ :detail ["engine-status-mismatch rust: [:ok] | go: [:err undecodable]"]}

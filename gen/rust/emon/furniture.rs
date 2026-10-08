@@ -1064,6 +1064,9 @@ pub(crate) fn fu_iso(ln: &mut crate::port::Cells, mut cd: &mut crate::port::Cell
                     l2 += 1;
                 }
                 best = fu_min(best, 1000000);
+                if best < -1000000 {
+                    best = -1000000;
+                }
                 cd_set(cd, r, 10, (best * 1000) / fu_max(1, y1 - y0));
             }
             r += 1;
@@ -2068,7 +2071,7 @@ pub(crate) fn fu_style_pass(wd: &mut crate::port::Cells, ln: &mut crate::port::C
             if (capt * 2) >= m {
                 ok = 0;
             }
-            if (bsz > 0) && ((cd_get(cd, crate::port::cells_at(ord, f), 14) * 100) > (bsz * 103)) {
+            if (bsz > 0) && ((cd_get(cd, crate::port::cells_at(ord, f), 14) as i64).wrapping_mul(100 as i64) > (bsz as i64).wrapping_mul(103 as i64)) {
                 ok = 0;
             }
             if (trust >= 500) && ((con * 1000) >= (m * 800)) {
