@@ -1,0 +1,407 @@
+;; CCITT GROUP 3 AND GROUP 4 DECODING, ONE DECODER FOR TIFF AND PDF (P10.11, D396(4), D337, D189). emon's own module (D039),
+;; written from ITU-T T.4 and T.6 (the code tables are T.4's; the row loop is the standard's and the one `host/rust/src/pdfimg.rs`
+;; used for a PDF's `CCITTFaxDecode`, moved here so that Rust and Go, TIFF and PDF, read alike).
+;;
+;;   (cc-decode data start end k cols rows flags out ws)   -> 0 ok, 1 a bad or short stream, 2 over the size bound, 3 `out` too small
+;;
+;; WHY KIN DECODES THIS. Neither platform library reads the whole family: Rust's `fax` reads neither `EncodedByteAlign`, nor
+;; Group 3 without EOLs, nor Group 3 two-dimensional, nor (in the form we used it) the last line of a stream with no EOL after it;
+;; Go's `x/image/ccitt` reads no two-dimensional Group 3 and no fill bits. D337's three PDF files were `codec` on Go for it. A format
+;; no platform reads whole is the case D396(4) leaves to kin.
+;;
+;; THE INPUT is the stream data[start, end). `k` is the PDF's /K: negative Group 4 (T.6), 0 Group 3 one-dimensional, positive
+;; Group 3 mixed one- and two-dimensional (T.4: after each EOL a tag bit, 1 for a one-dimensional row, 0 for a two-dimensional
+;; one). `flags`: 2 EncodedByteAlign (each row starts on a byte), 4 EndOfLine (an EOL is required before each Group 3 row; it
+;; is PERMITTED always, and fill zeros before it are read). TIFF's Group 3 is `k` 0 and no flags; its Group 4 is `k` -1.
+;; `cols` is the width of a row, `rows` how many are wanted.
+;;
+;; THE OUTPUT is `out[0, rows * stride)`, `stride` being `(cols + 7) / 8`: rows of bytes, bits packed high first, 1 for a BLACK
+;; pixel, as T.4 draws them (the caller applies BlackIs1 or the photometric). THE CALLER MAKES THE BYTES, ALL ZERO: the decoder
+;; only sets the black runs (`out` shorter than `rows * stride` is the status 3, `cc-nospace`), so the cost of a page is its
+;; transitions and not its area, and a blank page is as cheap as a few EOFB bits (a host makes them with the platform's `vec![0; n]` or
+;; `make([]byte, n)` pays for the memory, not for a call a byte). `ws` is the decoder's own scratch: tables built on first use
+;; (about 16 K cells; hand the same `ws` to every strip of an image), then the reference line and the line being decoded, sized
+;; by `cols` on every call.
+;;
+;; WHAT IS A BAD STREAM. A code that is in no table; a run that does not fit the row; a two-dimensional change element that does
+;; not move right; the data ending inside a code or before the rows are all in; the end-of-block marker (EOFB, two EOLs, RTC)
+;; while rows are owed; a two-dimensional or EndOfLine row with no EOL; extension codes (uncompressed mode is not read). The
+;; end of the data itself is not a fault of a code that is whole: a peek past the end reads zeros, a consume past it fails.
+(ns emon.ccitt
+  (:require [emon.lang :refer [I32 Blob Cells Buf defenum shl32 sar32]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-grow cells-drop buf-len buf-at buf-set]]
+            [kin.lang :refer [defn defconst defdata return let set while if comment do
+                              + - * < > <= >= == != and or bit-and bit-or quot rem]]))
+
+(defenum ^:pub cc-status
+  [[cc-ok 0 "ok"]
+   [cc-bad 1 "bad"]
+   [cc-limit 2 "limit"]
+   [cc-nospace 3 "nospace"]])
+
+;; The code tables, as [length code run] rows (T.4 tables 2 and 3: the terminating codes 0..63, the make-up codes 64..1728 and
+;; the extended make-up codes 1792..2560 both colours share). Read off the `fax` crate's `maps.rs`, which is T.4's; the laws
+;; check a sample by hand and the fixtures check the rest.
+(defdata cc-white
+  :emitter kin.lang/flat-array
+  :data [8 53 0  6 7 1  4 7 2  4 8 3
+         4 11 4  4 12 5  4 14 6  4 15 7
+         5 19 8  5 20 9  5 7 10  5 8 11
+         6 8 12  6 3 13  6 52 14  6 53 15
+         6 42 16  6 43 17  7 39 18  7 12 19
+         7 8 20  7 23 21  7 3 22  7 4 23
+         7 40 24  7 43 25  7 19 26  7 36 27
+         7 24 28  8 2 29  8 3 30  8 26 31
+         8 27 32  8 18 33  8 19 34  8 20 35
+         8 21 36  8 22 37  8 23 38  8 40 39
+         8 41 40  8 42 41  8 43 42  8 44 43
+         8 45 44  8 4 45  8 5 46  8 10 47
+         8 11 48  8 82 49  8 83 50  8 84 51
+         8 85 52  8 36 53  8 37 54  8 88 55
+         8 89 56  8 90 57  8 91 58  8 74 59
+         8 75 60  8 50 61  8 51 62  8 52 63
+         5 27 64  5 18 128  6 23 192  7 55 256
+         8 54 320  8 55 384  8 100 448  8 101 512
+         8 104 576  8 103 640  9 204 704  9 205 768
+         9 210 832  9 211 896  9 212 960  9 213 1024
+         9 214 1088  9 215 1152  9 216 1216  9 217 1280
+         9 218 1344  9 219 1408  9 152 1472  9 153 1536
+         9 154 1600  6 24 1664  9 155 1728  11 8 1792
+         11 12 1856  11 13 1920  12 18 1984  12 19 2048
+         12 20 2112  12 21 2176  12 22 2240  12 23 2304
+         12 28 2368  12 29 2432  12 30 2496  12 31 2560]
+  :accessors {^I32 cc-white-at [^I32 ignored ^I32 i]})
+
+(defdata cc-black
+  :emitter kin.lang/flat-array
+  :data [10 55 0  3 2 1  2 3 2  2 2 3
+         3 3 4  4 3 5  4 2 6  5 3 7
+         6 5 8  6 4 9  7 4 10  7 5 11
+         7 7 12  8 4 13  8 7 14  9 24 15
+         10 23 16  10 24 17  10 8 18  11 103 19
+         11 104 20  11 108 21  11 55 22  11 40 23
+         11 23 24  11 24 25  12 202 26  12 203 27
+         12 204 28  12 205 29  12 104 30  12 105 31
+         12 106 32  12 107 33  12 210 34  12 211 35
+         12 212 36  12 213 37  12 214 38  12 215 39
+         12 108 40  12 109 41  12 218 42  12 219 43
+         12 84 44  12 85 45  12 86 46  12 87 47
+         12 100 48  12 101 49  12 82 50  12 83 51
+         12 36 52  12 55 53  12 56 54  12 39 55
+         12 40 56  12 88 57  12 89 58  12 43 59
+         12 44 60  12 90 61  12 102 62  12 103 63
+         10 15 64  12 200 128  12 201 192  12 91 256
+         12 51 320  12 52 384  12 53 448  13 108 512
+         13 109 576  13 74 640  13 75 704  13 76 768
+         13 77 832  13 114 896  13 115 960  13 116 1024
+         13 117 1088  13 118 1152  13 119 1216  13 82 1280
+         13 83 1344  13 84 1408  13 85 1472  13 90 1536
+         13 91 1600  13 100 1664  13 101 1728  11 8 1792
+         11 12 1856  11 13 1920  12 18 1984  12 19 2048
+         12 20 2112  12 21 2176  12 22 2240  12 23 2304
+         12 28 2368  12 29 2432  12 30 2496  12 31 2560]
+  :accessors {^I32 cc-black-at [^I32 ignored ^I32 i]})
+
+;; The two-dimensional mode codes [length code mode]: 1 pass, 2 horizontal, 3..9 vertical with a delta of -3..3 (`mode - 6`).
+;; The extension code (0000001) and the end-of-facsimile-block code (000000000001) are in no row: both are faults here.
+(defdata cc-modes
+  :emitter kin.lang/flat-array
+  :data [4 1 1  3 1 2  1 1 6  3 3 7  6 3 8  7 3 9  3 2 5  6 2 4  7 2 3]
+  :accessors {^I32 cc-mode-at [^I32 ignored ^I32 i]})
+
+(defconst ^I32 CC_POS 0)       ;; the bit position, from the start of the blob
+(defconst ^I32 CC_END 1)       ;; end of the data, in bits, and its end in bytes
+(defconst ^I32 CC_ENDB 2)
+(defconst ^I32 CC_NREF 3)      ;; change elements in the reference line
+(defconst ^I32 CC_NCUR 4)      ;; ... in the line being decoded
+(defconst ^I32 CC_REF 5)       ;; where each of them is in `ws`
+(defconst ^I32 CC_CUR 6)
+(defconst ^I32 CC_SPARE 7)
+(defconst ^I32 CC_CAP 8)       ;; room for change elements in each line
+(defconst ^I32 CC_WT 16)       ;; the 13-bit lookup tables: [len * 4096 + value], 0 for no code
+(defconst ^I32 CC_BT 8208)
+(defconst ^I32 CC_MT 16400)    ;; the 7-bit mode table
+(defconst ^I32 CC_TBL 16528)   ;; the end of the tables
+
+;; ----------------------------------------------------------------- tables
+
+(defn ^I32 cc-put [^:mut ^Cells ws ^I32 tbl ^I32 bits ^I32 ln ^I32 code ^I32 val]
+  (comment "Every table slot whose first `ln` bits are `code` answers (ln, val).")
+  (let [^I32 n (shl32 1 (- bits ln))
+        ^I32 base (shl32 code (- bits ln))
+        ^:mut ^I32 t 0]
+    (while (< t n)
+      (do (cells-set ws (+ tbl (+ base t)) (+ (* ln 4096) val))
+          (set t (+ t 1))))
+    (return 0)))
+
+(defn ^I32 cc-prep [^:mut ^Cells ws]
+  (comment "Build the lookup tables if this `ws` has none.")
+  (let [^:mut ^I32 i 0]
+    (if (>= (cells-len ws) CC_TBL) (return 0))
+    (cells-drop ws 0)
+    (cells-grow ws CC_TBL 0)
+    (while (< i 104)
+      (do (cc-put ws CC_WT 13 (cc-white-at 0 (* i 3)) (cc-white-at 0 (+ (* i 3) 1)) (cc-white-at 0 (+ (* i 3) 2)))
+          (cc-put ws CC_BT 13 (cc-black-at 0 (* i 3)) (cc-black-at 0 (+ (* i 3) 1)) (cc-black-at 0 (+ (* i 3) 2)))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 9)
+      (do (cc-put ws CC_MT 7 (cc-mode-at 0 (* i 3)) (cc-mode-at 0 (+ (* i 3) 1)) (cc-mode-at 0 (+ (* i 3) 2)))
+          (set i (+ i 1))))
+    (return 0)))
+
+;; -------------------------------------------------------------- the bits
+
+(defn ^I32 cc-byte [^Blob d ^I32 i ^I32 end]
+  (if (>= i end) (return 0))
+  (return (blob-u8 d i)))
+
+(defn ^I32 cc-peek [^Blob d ^Cells ws ^I32 n]
+  (comment "The next `n` (at most 16) bits, high first; zeros past the end of the data; -1 when no bit is left.")
+  (let [^I32 pos (cells-at ws CC_POS)
+        ^I32 endbit (cells-at ws CC_END)
+        ^I32 endb (cells-at ws CC_ENDB)
+        ^I32 bi (quot pos 8)
+        ^I32 sh (rem pos 8)]
+    (if (>= pos endbit) (return -1))
+    (let [^I32 w (+ (shl32 (cc-byte d bi endb) 16) (+ (shl32 (cc-byte d (+ bi 1) endb) 8) (cc-byte d (+ bi 2) endb)))]
+      (return (bit-and (sar32 w (- (- 24 sh) n)) (- (shl32 1 n) 1))))))
+
+(defn ^I32 cc-bit [^Blob d ^I32 pos ^I32 endb]
+  (return (bit-and (sar32 (cc-byte d (quot pos 8) endb) (- 7 (rem pos 8))) 1)))
+
+(defn ^I32 cc-code [^Blob d ^:mut ^Cells ws ^I32 tbl ^I32 bits]
+  (comment "One code of the table: its value, or -1 (no code there, or not all of it in the data).")
+  (let [^I32 v (cc-peek d ws bits)]
+    (if (< v 0) (return -1))
+    (let [^I32 e (cells-at ws (+ tbl v))
+          ^I32 ln (quot e 4096)
+          ^I32 pos (cells-at ws CC_POS)]
+      (if (== e 0) (return -1))
+      (if (> (+ pos ln) (cells-at ws CC_END))
+        (do (cells-set ws CC_POS (cells-at ws CC_END))
+            (return -1)))
+      (cells-set ws CC_POS (+ pos ln))
+      (return (rem e 4096)))))
+
+(defn ^I32 cc-run [^Blob d ^:mut ^Cells ws ^I32 black]
+  (comment "A run length: make-up codes add up until a terminating code. -1 for a fault.")
+  (let [^:mut ^I32 sum 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 live 1]
+    (while (== live 1)
+      (do (if (== black 1)
+            (set n (cc-code d ws CC_BT 13))
+            (set n (cc-code d ws CC_WT 13)))
+          (if (< n 0) (return -1))
+          (set sum (+ sum n))
+          (if (< n 64) (return sum))
+          (if (> sum 16777216) (return -1))))
+    (return -1)))
+
+(defn ^I32 cc-eol-len [^Blob d ^Cells ws]
+  (comment "An EOL next (T.4): any number of fill zeros, eleven zeros in all or more, and a one. How many bits it takes, fill")
+  (comment "included; 0 when there is none. No code starts with eight zeros, so a run of eleven is an EOL and never the")
+  (comment "padding before a byte-aligned row.")
+  (let [^I32 pos (cells-at ws CC_POS)
+        ^I32 total (cells-at ws CC_END)
+        ^I32 endb (cells-at ws CC_ENDB)
+        ^:mut ^I32 p pos]
+    (while (and (< p total) (== (cc-bit d p endb) 0))
+      (set p (+ p 1)))
+    (if (and (< p total) (>= (- p pos) 11))
+      (return (- (+ p 1) pos)))
+    (return 0)))
+
+;; ------------------------------------------------------------------ rows
+
+(defn ^I32 cc-push [^:mut ^Cells ws ^I32 at ^I32 nc ^I32 x]
+  (comment "Add a change element to the line being decoded; -1 when the line has no room (a stream of empty runs).")
+  (if (>= nc (cells-at ws CC_CAP)) (return -1))
+  (cells-set ws (+ at nc) x)
+  (return 0))
+
+(defn ^I32 cc-row [^Blob d ^:mut ^Cells ws ^I32 cols ^I32 two-d]
+  (comment "One row's change elements into the current line (the positions where the colour flips, the first from white to")
+  (comment "black; each below `cols`), and their count into CC_NCUR. Two-dimensional rows read the reference line. 0, or -1.")
+  (let [^I32 refl (cells-at ws CC_REF)
+        ^I32 cur (cells-at ws CC_CUR)
+        ^I32 n (cells-at ws CC_NREF)
+        ^:mut ^I32 nc 0
+        ^:mut ^I32 black 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 a0 -1
+        ^:mut ^I32 bi 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 b1 0
+        ^:mut ^I32 b2 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 r2 0
+        ^:mut ^I32 s 0
+        ^:mut ^I32 a1 0
+        ^:mut ^I32 a2 0]
+    (if (== two-d 0)
+      (do (while (< x cols)
+            (do (set r (cc-run d ws black))
+                (if (< r 0) (return -1))
+                (set x (+ x r))
+                (if (> x cols) (return -1))
+                (if (< x cols)
+                  (do (if (< (cc-push ws cur nc x) 0) (return -1))
+                      (set nc (+ nc 1))))
+                (set black (- 1 black))))
+          (cells-set ws CC_NCUR nc)
+          (return 0)))
+    (while (< a0 cols)
+      (do (if (> bi n) (set bi n))
+          (while (and (> bi 0) (> (cells-at ws (+ refl (- bi 1))) a0))
+            (set bi (- bi 1)))
+          (while (and (< bi n) (<= (cells-at ws (+ refl bi)) a0))
+            (set bi (+ bi 1)))
+          (set j bi)
+          (if (!= (rem bi 2) black) (set j (+ bi 1)))
+          (set b1 cols)
+          (set b2 cols)
+          (if (< j n) (set b1 (cells-at ws (+ refl j))))
+          (if (< (+ j 1) n) (set b2 (cells-at ws (+ refl (+ j 1)))))
+          (set m (cc-code d ws CC_MT 7))
+          (if (< m 0) (return -1))
+          (if (== m 1) (set a0 b2))
+          (if (== m 2)
+            (do (set r (cc-run d ws black))
+                (if (< r 0) (return -1))
+                (set r2 (cc-run d ws (- 1 black)))
+                (if (< r2 0) (return -1))
+                (set s a0)
+                (if (< a0 0) (set s 0))
+                (set a1 (+ s r))
+                (set a2 (+ a1 r2))
+                (if (> a2 cols) (return -1))
+                (if (< a1 cols)
+                  (do (if (< (cc-push ws cur nc a1) 0) (return -1))
+                      (set nc (+ nc 1))))
+                (if (< a2 cols)
+                  (do (if (< (cc-push ws cur nc a2) 0) (return -1))
+                      (set nc (+ nc 1))))
+                (set a0 a2)))
+          (if (>= m 3)
+            (do (set a1 (+ b1 (- m 6)))
+                (if (or (< a1 0) (or (> a1 cols) (<= a1 a0))) (return -1))
+                (if (< a1 cols)
+                  (do (if (< (cc-push ws cur nc a1) 0) (return -1))
+                      (set nc (+ nc 1))))
+                (set black (- 1 black))
+                (set a0 a1)))))
+    (cells-set ws CC_NCUR nc)
+    (return 0)))
+
+(defn ^I32 cc-set-run [^:mut ^Buf out ^I32 row ^I32 x ^I32 e]
+  (comment "Set the bits [x, e) of the row that starts at byte `row` of `out` (e > x); the bytes were zero.")
+  (let [^I32 fb (quot x 8)
+        ^I32 lb (quot (- e 1) 8)
+        ^I32 fm (bit-and (sar32 255 (rem x 8)) 255)
+        ^I32 lm (bit-and (shl32 255 (- 7 (rem (- e 1) 8))) 255)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0]
+    (if (== fb lb)
+      (do (set v (buf-at out (+ row fb)))
+          (buf-set out (+ row fb) (bit-or v (bit-and fm lm)))
+          (return 0)))
+    (set v (buf-at out (+ row fb)))
+    (buf-set out (+ row fb) (bit-or v fm))
+    (set i (+ fb 1))
+    (while (< i lb)
+      (do (buf-set out (+ row i) 255)
+          (set i (+ i 1))))
+    (set v (buf-at out (+ row lb)))
+    (buf-set out (+ row lb) (bit-or v lm))
+    (return 0)))
+
+(defn ^I32 cc-paint [^Cells ws ^I32 cols ^I32 row ^:mut ^Buf out]
+  (comment "The current line's changes, painted as black bits into the row that starts at byte `row` of `out`.")
+  (let [^I32 cur (cells-at ws CC_CUR)
+        ^I32 nc (cells-at ws CC_NCUR)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 black 0]
+    (while (< i nc)
+      (do (set e (cells-at ws (+ cur i)))
+          (if (> e cols) (set e cols))
+          (if (and (== black 1) (> e x))
+            (cc-set-run out row x e))
+          (if (> e x) (set x e))
+          (set black (- 1 black))
+          (set i (+ i 1))))
+    (if (and (== black 1) (> cols x))
+      (cc-set-run out row x cols))
+    (return 0)))
+
+;; ---------------------------------------------------------------- decode
+
+(defn ^:pub ^I32 cc-decode [^Blob d ^I32 start ^I32 end ^I32 k ^I32 cols ^I32 rows ^I32 flags
+                            ^:mut ^Buf out ^:mut ^Cells ws]
+  (comment "See the head of the file.")
+  (if (or (< cols 1) (< rows 1)) (return (cc-bad)))
+  (if (or (< start 0) (or (< end start) (> end (blob-len d)))) (return (cc-bad)))
+  (let [^I32 stride (quot (+ cols 7) 8)
+        ^I32 room (+ cols 16)]
+    (if (> rows (quot 2147483647 stride)) (return (cc-limit)))
+    (if (< (buf-len out) (* rows stride)) (return (cc-nospace)))
+    (cc-prep ws)
+    (cells-drop ws CC_TBL)
+    (cells-grow ws (* 2 room) 0)
+    (cells-set ws CC_POS (* start 8))
+    (cells-set ws CC_END (* end 8))
+    (cells-set ws CC_ENDB end)
+    (cells-set ws CC_NREF 0)
+    (cells-set ws CC_NCUR 0)
+    (cells-set ws CC_REF CC_TBL)
+    (cells-set ws CC_CUR (+ CC_TBL room))
+    (cells-set ws CC_CAP room)
+    (let [^:mut ^I32 y 0
+          ^:mut ^I32 two-d 0
+          ^:mut ^I32 seen 0
+          ^:mut ^I32 n 0
+          ^:mut ^I32 t 0
+          ^:mut ^I32 pos 0
+          ^:mut ^I32 tmp 0]
+      (while (< y rows)
+        (do (set two-d 0)
+            (if (< k 0) (set two-d 1))
+            (if (>= k 0)
+              (do (set seen 0)
+                  (set n (cc-eol-len d ws))
+                  (while (> n 0)
+                    (do (cells-set ws CC_POS (+ (cells-at ws CC_POS) n))
+                        (set seen (+ seen 1))
+                        (if (> k 0)
+                          (do (set t (cc-peek d ws 1))
+                              (if (>= t 0)
+                                (do (set two-d 0)
+                                    (if (== t 0) (set two-d 1))
+                                    (cells-set ws CC_POS (+ (cells-at ws CC_POS) 1))))))
+                        (set n (cc-eol-len d ws))))
+                  (if (>= seen 2) (return (cc-bad)))
+                  (if (== seen 0)
+                    (do (if (or (> k 0) (!= (bit-and flags 4) 0)) (return (cc-bad)))
+                        (if (!= (bit-and flags 2) 0)
+                          (do (set pos (cells-at ws CC_POS))
+                              (cells-set ws CC_POS (* (quot (+ pos 7) 8) 8))))))))
+            (if (< k 0)
+              (do (if (!= (bit-and flags 2) 0)
+                    (do (set pos (cells-at ws CC_POS))
+                        (cells-set ws CC_POS (* (quot (+ pos 7) 8) 8))))
+                  (if (== (cc-peek d ws 12) 1) (return (cc-bad)))))
+            (if (>= (cells-at ws CC_POS) (cells-at ws CC_END)) (return (cc-bad)))
+            (if (< (cc-row d ws cols two-d) 0) (return (cc-bad)))
+            (cc-paint ws cols (* y stride) out)
+            ;; the line just decoded is the next one's reference
+            (set tmp (cells-at ws CC_REF))
+            (cells-set ws CC_REF (cells-at ws CC_CUR))
+            (cells-set ws CC_CUR tmp)
+            (cells-set ws CC_NREF (cells-at ws CC_NCUR))
+            (set y (+ y 1))))
+      (return (cc-ok)))))

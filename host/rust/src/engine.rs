@@ -839,7 +839,7 @@ pub fn port_fulfiller(source: Arc<dyn ByteSource>, idx: usize, keep: bool, recor
         }
         let span = Span { src: source.clone(), off: off as u64, len: len as u64 };
         // a codec that panics on damage is a damaged image, not a crashed process
-        let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| imgdec::decode(&span, frame, port::limit_of(9) as u64)))
+        let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| imgdec::decode(&span, frame)))
             .unwrap_or_else(|_| Err(imgdec::Fail::Failed("the decoder panicked".to_string())));
         match decoded {
             Ok(d) => {

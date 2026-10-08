@@ -718,7 +718,7 @@ func portFulfiller(source ByteSource, idx int, keep, recording bool, ocr Ocr, co
 			return fail(plan.PsUnsupported())
 		}
 		span := spanSource{src: source, off: int64(off), len: int64(n)}
-		d, err := imgDecodeSafe(span, frame, uint64(port.LimitOf(9)))
+		d, err := imgDecodeSafe(span, frame)
 		if err != nil {
 			var f *imgFail
 			if errors.As(err, &f) {
@@ -851,13 +851,13 @@ func ocrSafe(ocr Ocr, req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 }
 
 // imgDecodeSafe is imgDecode, a panic of a codec on damage being a damaged image and not a crashed process.
-func imgDecodeSafe(src ByteSource, frame int32, maxPixels uint64) (d *imgDecoded, err error) {
+func imgDecodeSafe(src ByteSource, frame int32) (d *imgDecoded, err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			d, err = nil, imgFailedf("the decoder panicked")
 		}
 	}()
-	return imgDecode(src, frame, maxPixels)
+	return imgDecode(src, frame)
 }
 
 // rstep is one attempt's end for either kind of input: it missed, it asked for something, or it finished.

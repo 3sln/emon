@@ -77,7 +77,6 @@ tesseract = []
 # the ImageDecode port's codecs (D189): PNG and JPEG pixels, CCITT, and the TIFF Deflate stream. Pinned; the
 # lock file is host/rust/Cargo.lock.
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
-fax = "=0.2.7"
 miniz_oxide = "=0.8.9"
 # the `decode-img` request's DCT decoder (P6.1a, D334): the very library `image` already uses for JPEG, used directly for the Adobe
 # CMYK and YCCK samples `image` does not give; both are already in the lock file

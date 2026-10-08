@@ -1,0 +1,322 @@
+;; THE PNG VALIDATOR (P10.11, D396(4); D188, D189, D190, D389). emon's own module (D039), written from the PNG specification (ISO/IEC 15948).
+;;
+;;   (pc-check p deep rep st out idat clean)
+;;
+;; `p` is the whole file as a `Blob`. It decides, by name, whether a PNG may be read, BEFORE a platform library is asked for a pixel:
+;; the library (Rust's `png` through the `image` crate, Go's `image/png`) then only turns input kin has accepted into samples, so
+;; two libraries' leniency is never a difference between hosts (D389 patched it, twice, by hand: `png_sound` and `imgPngSound`; this
+;; is the one copy). `deep` is 1 when pixels are wanted; with 0 the chunk structure, the checksums and the header's answer (size,
+;; resolution, orientation, the colour model) are given and the image data is not looked at, as before.
+;;
+;; WHAT IT ACCEPTS (a refusal is `ic-failed`, damaged, unless it says otherwise):
+;;   the signature; every chunk whole, with its CRC-32 right; IHDR first, 13 bytes, and once, with a colour type and bit depth
+;;   that go together (0: 1 2 4 8 16, 2: 8 16, 3: 1 2 4 8, 4 and 6: 8 16), compression and filter method 0, interlace 0 or 1,
+;;   a width and a height; PLTE before IDAT, once, of 1..256 entries (a palette image: no more than 2^depth, and it is needed);
+;;   tRNS before IDAT, once, of the length its colour type wants (gray 2, RGB 6, palette up to the PLTE's; none beside an alpha
+;;   channel); the IDATs in one run and at least one; no unknown critical chunk (a capital first letter); IEND (what follows it is
+;;   not read). With `deep`, the IDATs joined are ONE zlib stream (the header, the Adler-32 checked, by `emon.inflate`) that
+;;   holds exactly the bytes the header says (the filter byte and the packed samples of every row, interlaced passes included)
+;;   and ends at the end of the data (a byte after it is a fault). The pixels bound (`limit-of` 9) is checked from the header,
+;;   and the bytes of the image data against the stream bound (`limit-of` 1): the validator keeps the inflated bytes, a cell each.
+;;
+;; WHAT THE LIBRARY IS SHOWN: `clean`, a PNG made of the chunks that matter and nothing else, each copied as it was: IHDR, PLTE
+;; (a palette image's), tRNS, IDAT, IEND. The animation chunks (acTL, fcTL, fdAT: a PNG's frame is its default image), the
+;; PLTE of a true-colour or gray image, and the ancillary chunks the libraries read and we do not (gamma, ICC, sBIT, text,
+;; time) are not passed on. D188: they are ignored.
+;;
+;; THE REPORT (the shared fields are `emon.tiffcheck`'s `tr-*`; the PNG's own below): the size, the displayed size, the channels
+;; (1 gray, 3 RGB), the resolution (pHYs in metres, else the EXIF blob's: D188) and orientation, `bilevel`, and the D188
+;; REDUCTION the host applies to what the library gives: whether it carries alpha (`pr-alpha`: alpha channel, or tRNS) to be put
+;; over white, whether the samples are 16-bit (`pr-wide`), from `pr-ctype` and `pr-depth`. `st`, `out`, `idat` and `clean` are the
+;; caller's scratch and result: unused unless `deep`.
+(ns emon.pngcheck
+  (:require [emon.lang :refer [I32 I64 Blob Cells Buf i64 i32 add64 mul64 shl32 sar32]]
+            [emon.port :refer [blob-len blob-u8 blob-u32 cells-len cells-at cells-set cells-grow cells-drop cells-free limit-of
+                               buf-len buf-append-blob buf-blob buf-truncate]]
+            [emon.imgcheck :refer [ic-ok ic-failed ic-unsupported ic-limit ic-u32 ic-clamp]]
+            [emon.tiffcheck :refer [tc-exif]]
+            [emon.png :refer [pn-crc-table]]
+            [emon.inflate :refer [iz-zlib iz-consumed]]
+            [kin.lang :refer [defn defconst defdata return let set while if comment do
+                              + - * < > <= >= == != and or bit-and bit-xor quot rem]]))
+
+;; ------------------------------------------------------------ the report
+
+(defn ^:pub ^I32 pr-status [] (return 0))
+(defn ^:pub ^I32 pr-frames [] (return 1))
+(defn ^:pub ^I32 pr-w [] (return 2))
+(defn ^:pub ^I32 pr-h [] (return 3))
+(defn ^:pub ^I32 pr-ow [] (return 4))
+(defn ^:pub ^I32 pr-oh [] (return 5))
+(defn ^:pub ^I32 pr-ch [] (return 6))
+(defn ^:pub ^I32 pr-dpi [] (return 7))
+(defn ^:pub ^I32 pr-bilevel [] (return 8))
+(defn ^:pub ^I32 pr-orient [] (return 9))
+(defn ^:pub ^I32 pr-limit [] (return 10))
+(defn ^:pub ^I32 pr-ctype [] (return 16))
+(defn ^:pub ^I32 pr-depth [] (return 17))
+(defn ^:pub ^I32 pr-interlace [] (return 18))
+(defn ^:pub ^I32 pr-alpha [] (return 19))
+(defn ^:pub ^I32 pr-wide [] (return 20))
+(defn ^:pub ^I32 pr-raw [] (return 21))         ;; the image data's bytes the header implies, as large as an I32 says
+
+(defconst ^I32 R_STATUS 0)
+(defconst ^I32 R_FRAMES 1)
+(defconst ^I32 R_W 2)
+(defconst ^I32 R_H 3)
+(defconst ^I32 R_OW 4)
+(defconst ^I32 R_OH 5)
+(defconst ^I32 R_CH 6)
+(defconst ^I32 R_DPI 7)
+(defconst ^I32 R_BILEVEL 8)
+(defconst ^I32 R_ORIENT 9)
+(defconst ^I32 R_LIMIT 10)
+(defconst ^I32 R_EO 11)
+(defconst ^I32 R_EX 12)
+(defconst ^I32 R_EY 13)
+(defconst ^I32 R_CTYPE 16)
+(defconst ^I32 R_DEPTH 17)
+(defconst ^I32 R_INTERLACE 18)
+(defconst ^I32 R_ALPHA 19)
+(defconst ^I32 R_WIDE 20)
+(defconst ^I32 R_RAW 21)
+(defconst ^I32 R_CRC 128)        ;; the CRC-32 table
+(defconst ^I32 R_END 384)
+
+(defconst ^I32 T_IHDR 1229472850)
+(defconst ^I32 T_PLTE 1347179589)
+(defconst ^I32 T_TRNS 1951551059)
+(defconst ^I32 T_PHYS 1883789683)
+(defconst ^I32 T_IDAT 1229209940)
+(defconst ^I32 T_IEND 1229278788)
+(defconst ^I32 T_EXIF 1700284774)
+
+;; The seven Adam7 passes: x start, y start, x step, y step
+(defdata pc-adam
+  :emitter kin.lang/flat-array
+  :data [0 0 8 8  4 0 8 8  0 4 4 8  2 0 4 4  0 2 2 4  1 0 2 2  0 1 1 2]
+  :accessors {^I32 pc-adam-at [^I32 ignored ^I32 i]})
+
+;; ---------------------------------------------------------------- pieces
+
+(defn ^I32 pc-crc [^Blob p ^Cells r ^I32 from ^I32 to]
+  (comment "CRC-32 of p[from, to) by the table in the report.")
+  (let [^:mut ^I32 crc -1
+        ^:mut ^I32 i from
+        ^:mut ^I32 x 0]
+    (while (< i to)
+      (do (set x (bit-and (bit-xor crc (blob-u8 p i)) 255))
+          (set crc (bit-xor (cells-at r (+ R_CRC x)) (bit-and (sar32 crc 8) 16777215)))
+          (set i (+ i 1))))
+    (return (bit-xor crc -1))))
+
+(defn ^I32 pc-channels [^I32 ctype]
+  (if (== ctype 2) (return 3))
+  (if (== ctype 4) (return 2))
+  (if (== ctype 6) (return 4))
+  (return 1))
+
+(defn ^I32 pc-combo [^I32 ctype ^I32 depth]
+  (comment "1 when this colour type and bit depth go together.")
+  (if (and (== ctype 0) (or (== depth 1) (or (== depth 2) (or (== depth 4) (or (== depth 8) (== depth 16))))))
+    (return 1))
+  (if (and (== ctype 3) (or (== depth 1) (or (== depth 2) (or (== depth 4) (== depth 8)))))
+    (return 1))
+  (if (and (or (== ctype 2) (or (== ctype 4) (== ctype 6))) (or (== depth 8) (== depth 16)))
+    (return 1))
+  (return 0))
+
+(defn ^I64 pc-raw [^I32 w ^I32 h ^I32 bits ^I32 interlace]
+  (comment "The bytes of a PNG's image data once inflated, filter bytes included (RFC 2083 8.2): what its header says it holds.")
+  (comment "Interlaced, the seven Adam7 passes' rows, those that have any. The caller has held w * h to the pixel bound.")
+  (let [^I64 wl (i64 w)
+        ^I64 hl (i64 h)
+        ^I64 b (i64 bits)
+        ^:mut ^I64 total (i64 0)
+        ^:mut ^I32 k 0
+        ^:mut ^I64 x0 (i64 0)
+        ^:mut ^I64 y0 (i64 0)
+        ^:mut ^I64 dx (i64 1)
+        ^:mut ^I64 dy (i64 1)
+        ^:mut ^I64 pw (i64 0)
+        ^:mut ^I64 ph (i64 0)]
+    (if (== interlace 0)
+      (return (mul64 hl (add64 (i64 1) (quot (add64 (mul64 wl b) (i64 7)) (i64 8))))))
+    (while (< k 7)
+      (do (set x0 (i64 (pc-adam-at 0 (* k 4))))
+          (set y0 (i64 (pc-adam-at 0 (+ (* k 4) 1))))
+          (set dx (i64 (pc-adam-at 0 (+ (* k 4) 2))))
+          (set dy (i64 (pc-adam-at 0 (+ (* k 4) 3))))
+          (if (and (> wl x0) (> hl y0))
+            (do (set pw (quot (add64 (- wl x0) (- dx (i64 1))) dx))
+                (set ph (quot (add64 (- hl y0) (- dy (i64 1))) dy))
+                (set total (add64 total (mul64 ph (add64 (i64 1) (quot (add64 (mul64 pw b) (i64 7)) (i64 8))))))))
+          (set k (+ k 1))))
+    (return total)))
+
+;; ------------------------------------------------------------------ the run
+
+(defn ^I32 pc-run [^Blob p ^I32 deep ^:mut ^Cells r ^:mut ^Cells st ^:mut ^Cells out ^:mut ^Buf idat ^:mut ^Buf clean]
+  (comment "Scan the chunks, then judge the header, then (with `deep`) the image data. See the head of the file.")
+  (let [^I32 n (blob-len p)
+        ^:mut ^I32 i 8
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 first-byte 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 depth 0
+        ^:mut ^I32 ctype 0
+        ^:mut ^I32 interlace 0
+        ^:mut ^I32 seen-idat 0
+        ^:mut ^I32 idat-done 0
+        ^:mut ^I32 have-plte 0
+        ^:mut ^I32 plte-n 0
+        ^:mut ^I32 have-trns 0
+        ^:mut ^I32 phys-x 0
+        ^:mut ^I32 phys-y 0
+        ^:mut ^I32 exif-at -1
+        ^:mut ^I32 exif-n 0
+        ^:mut ^I32 done 0
+        ^:mut ^I32 keep 0
+        ^:mut ^I32 o 1
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 ow 0
+        ^:mut ^I32 oh 0
+        ^:mut ^I32 s 0
+        ^:mut ^I64 area (i64 0)
+        ^:mut ^I64 rawl (i64 0)]
+    (if (< n 8) (return (ic-failed)))
+    (if (or (!= (blob-u32 p 0) -1991225785) (!= (blob-u32 p 4) 218765834)) (return (ic-failed)))
+    (if (== deep 1)
+      (do (buf-truncate clean 0)
+          (buf-append-blob clean p 0 8)))
+    (while (== done 0)
+      (do (if (> i (- n 12)) (return (ic-failed)))
+          (set ln (blob-u32 p i))
+          (if (or (< ln 0) (> ln (- n (+ i 12)))) (return (ic-failed)))
+          (set kind (blob-u32 p (+ i 4)))
+          (if (!= (pc-crc p r (+ i 4) (+ i (+ 8 ln))) (blob-u32 p (+ i (+ 8 ln)))) (return (ic-failed)))
+          (if (== i 8)
+            (do (if (or (!= kind T_IHDR) (!= ln 13)) (return (ic-failed)))
+                (set w (blob-u32 p (+ i 8)))
+                (set h (blob-u32 p (+ i 12)))
+                (set depth (blob-u8 p (+ i 16)))
+                (set ctype (blob-u8 p (+ i 17)))
+                (if (or (!= (blob-u8 p (+ i 18)) 0) (!= (blob-u8 p (+ i 19)) 0)) (return (ic-failed)))
+                (set interlace (blob-u8 p (+ i 20))))
+            (if (== kind T_IHDR) (return (ic-failed))))
+          (set keep 0)
+          (if (== kind T_IHDR) (set keep 1))
+          (if (== kind T_IDAT)
+            (do (if (== idat-done 1) (return (ic-failed)))
+                (set seen-idat 1)
+                (set keep 1))
+            (if (== seen-idat 1) (set idat-done 1)))
+          (if (== kind T_PLTE)
+            (do (if (or (== seen-idat 1) (or (== have-plte 1) (or (== ln 0) (or (!= (rem ln 3) 0) (> (quot ln 3) 256)))))
+                  (return (ic-failed)))
+                (set have-plte 1)
+                (set plte-n (quot ln 3))
+                (if (== ctype 3) (set keep 1))))
+          (if (== kind T_TRNS)
+            (do (if (or (== seen-idat 1) (== have-trns 1)) (return (ic-failed)))
+                (set have-trns 1)
+                (set keep 1)
+                (set s 0)
+                (if (and (== ctype 0) (== ln 2)) (set s 1))
+                (if (and (== ctype 2) (== ln 6)) (set s 1))
+                (if (and (== ctype 3) (and (== have-plte 1) (<= ln plte-n))) (set s 1))
+                (if (== s 0) (return (ic-failed)))))
+          (set first-byte (bit-and (sar32 kind 24) 255))
+          (if (and (!= kind T_IHDR) (and (!= kind T_IDAT) (and (!= kind T_PLTE) (and (!= kind T_TRNS) (!= kind T_IEND)))))
+            (if (and (>= first-byte 65) (<= first-byte 90)) (return (ic-failed))))
+          (if (and (== kind T_PHYS) (and (>= ln 9) (== (blob-u8 p (+ i 16)) 1)))
+            (do (set phys-x (ic-clamp (quot (add64 (mul64 (ic-u32 (blob-u32 p (+ i 8))) (i64 254)) (i64 50)) (i64 100))))
+                (set phys-y (ic-clamp (quot (add64 (mul64 (ic-u32 (blob-u32 p (+ i 12))) (i64 254)) (i64 50)) (i64 100))))))
+          (if (== kind T_EXIF)
+            (do (set exif-at (+ i 8))
+                (set exif-n ln)))
+          (if (== kind T_IEND)
+            (do (if (== seen-idat 0) (return (ic-failed)))
+                (set keep 1)
+                (set done 1)))
+          (if (and (== deep 1) (== keep 1))
+            (do (buf-append-blob clean p i (+ i (+ 12 ln)))
+                (if (== kind T_IDAT) (buf-append-blob idat p (+ i 8) (+ i (+ 8 ln))))))
+          (set i (+ i (+ 12 ln)))))
+    ;; the header
+    (if (or (== w 0) (== h 0)) (return (ic-failed)))
+    (if (== (pc-combo ctype depth) 0) (return (ic-failed)))
+    (if (and (!= interlace 0) (!= interlace 1)) (return (ic-failed)))
+    (if (and (== ctype 3) (or (== have-plte 0) (> plte-n (shl32 1 depth)))) (return (ic-failed)))
+    (cells-set r R_CTYPE ctype)
+    (cells-set r R_DEPTH depth)
+    (cells-set r R_INTERLACE interlace)
+    (cells-set r R_WIDE 0)
+    (if (== depth 16) (cells-set r R_WIDE 1))
+    (cells-set r R_ALPHA 0)
+    (if (or (== ctype 4) (or (== ctype 6) (== have-trns 1))) (cells-set r R_ALPHA 1))
+    (cells-set r R_CH 3)
+    (if (or (== ctype 0) (== ctype 4)) (cells-set r R_CH 1))
+    (cells-set r R_BILEVEL 0)
+    (if (and (== ctype 0) (== depth 1)) (cells-set r R_BILEVEL 1))
+    ;; the orientation and the resolution: a pHYs in metres, else the EXIF blob's
+    (set dx 0)
+    (set dy 0)
+    (if (>= exif-at 0)
+      (do (tc-exif p exif-at exif-n r)
+          (set o (cells-at r R_EO))
+          (set dx (cells-at r R_EX))
+          (set dy (cells-at r R_EY))))
+    (if (> phys-x 0)
+      (do (set dx phys-x)
+          (set dy phys-y)))
+    (set ow w)
+    (set oh h)
+    (if (>= o 5)
+      (do (set ow h) (set oh w)))
+    (cells-set r R_ORIENT o)
+    (cells-set r R_DPI dx)
+    (if (>= o 5) (cells-set r R_DPI dy))
+    ;; the pixels bound: refused from the header, before a byte of the image data is looked at
+    (if (or (< w 0) (< h 0))
+      (do (cells-set r R_LIMIT 2147483647)
+          (return (ic-limit))))
+    (set area (mul64 (i64 w) (i64 h)))
+    (if (> area (i64 (limit-of 9)))
+      (do (cells-set r R_LIMIT (ic-clamp area))
+          (return (ic-limit))))
+    (cells-set r R_W w)
+    (cells-set r R_H h)
+    (cells-set r R_OW ow)
+    (cells-set r R_OH oh)
+    (if (== deep 0) (return (ic-ok)))
+    ;; the image data: one zlib stream of exactly the bytes the header says
+    (set rawl (pc-raw w h (* (pc-channels ctype) depth) interlace))
+    (cells-set r R_RAW (ic-clamp rawl))
+    (if (> rawl (i64 (limit-of 1)))
+      (do (cells-set r R_LIMIT (ic-clamp rawl))
+          (return (ic-limit))))
+    (cells-drop out 0)
+    (set s (iz-zlib (buf-blob idat) 0 (buf-len idat) out st))
+    (if (!= s 0) (return (ic-failed)))
+    (if (!= (i64 (cells-len out)) rawl) (return (ic-failed)))
+    (if (!= (iz-consumed st) (buf-len idat)) (return (ic-failed)))
+    (cells-free out)
+    (cells-free st)
+    (return (ic-ok))))
+
+(defn ^:pub ^I32 pc-check [^Blob p ^I32 deep ^:mut ^Cells r ^:mut ^Cells st ^:mut ^Cells out ^:mut ^Buf idat ^:mut ^Buf clean]
+  (comment "See the head of the file. The answer is also in the report's `(pr-status)`.")
+  (cells-drop r 0)
+  (cells-grow r R_END 0)
+  (pn-crc-table r R_CRC)
+  (cells-set r R_FRAMES 1)
+  (cells-set r R_ORIENT 1)
+  (cells-set r R_EO 1)
+  (buf-truncate idat 0)
+  (let [^I32 s (pc-run p deep r st out idat clean)]
+    (cells-set r R_STATUS s)
+    (return s)))

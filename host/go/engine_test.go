@@ -909,7 +909,7 @@ func TestACodecImageIsDecodedByTheHostAndThePayloadReachesTheFulfiller(t *testin
 	for _, c := range []struct {
 		name, from string
 		w, h       int
-	}{{"dct-decode", "dct", 24, 16}, {"dct-a85-decode", "dct", 24, 16}, {"ccitt-g4", "ccitt", 70, 24}, {"ccitt-g4-align", "ccitt", 70, 24}, {"ccitt-g3-1d", "ccitt", 70, 24}} {
+	}{{"dct-decode", "dct", 24, 16}, {"dct-a85-decode", "dct", 24, 16}, {"ccitt-g4", "ccitt", 70, 24}, {"ccitt-g4-align", "ccitt", 70, 24}, {"ccitt-g3-1d", "ccitt", 70, 24}, {"ccitt-g3-1d-noeol", "ccitt", 70, 24}, {"ccitt-g3-1d-align", "ccitt", 70, 24}, {"ccitt-g3-1d-align-noeol", "ccitt", 70, 24}, {"ccitt-g3-2d", "ccitt", 70, 24}} {
 		m, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(read(t, "test/assets/"+c.name+".pdf"))), o)
 		must(t, m, err)
 		a := m.Assets()
@@ -917,8 +917,8 @@ func TestACodecImageIsDecodedByTheHostAndThePayloadReachesTheFulfiller(t *testin
 			t.Errorf("%s: not a decoded PNG of %s", c.name, c.from)
 		}
 	}
-	// what this host does not read says `codec`: Group 3 two-dimensional, Group 3 without EOLs, JPX, JBIG2
-	for _, name := range []string{"ccitt-g3-2d", "ccitt-g3-1d-noeol", "jpx", "jbig2-globals"} {
+	// what this host does not read says `codec`: JPX, JBIG2 (CCITT Group 3, two-dimensional, byte-aligned or EOL-less, is kin's: P10.11)
+	for _, name := range []string{"jpx", "jbig2-globals"} {
 		m, err := NewEngine(DefaultConfig()).Convert(one(BytesInput(read(t, "test/assets/"+name+".pdf"))), o)
 		must(t, m, err)
 		if r, ok := m.Find(figure)[0].NoAsset(); len(m.Assets()) != 0 || !ok || r != "codec" {

@@ -9,9 +9,10 @@ package emon
 //
 //	DCT    `image/jpeg`. 1 and 3 components as the ImageDecode port reads them (libjpeg's chroma filter, `imgUpsample`); 4
 //	       components ONLY with an Adobe APP14 marker of transform 0 or 2, converted to RGB honouring it (`pdfDCT`).
-//	CCITT  `golang.org/x/image/ccitt`: Group 4 (with `EncodedByteAlign`) and Group 3 one-dimensional with EOLs. Group 3
-//	       two-dimensional (K > 0) is `unsupported`, a Group 3 stream without EOLs fails: THE TWO HOSTS AGREE WHERE BOTH DECODE (the
-//	       Rust host reads those two as well, through `fax`'s code tables under its own row loop).
+//	CCITT  kin's `emon.ccitt` (P10.11, D396(4)): no platform library reads the whole family (Go's `x/image/ccitt` reads no
+//	       two-dimensional Group 3 and no fill bits; D337's three files were `codec` here for it), so one decoder written from T.4 and
+//	       T.6 serves TIFF and PDF on every host. The host only paints its packed rows with `BlackIs1` and the image's size. THE TWO
+//	       HOSTS READ THE SAME SET.
 //	JPX    the embedder's `PdfCodecs`, else `unsupported`. NO Go library is adopted: no pure-Go JPEG 2000 decoder is in the standard
 //	       library or `x/image`, and a cgo OpenJPEG would make the Go host non-pure for one codec (D336).
 //	JBIG2  the same: `unsupported` (jbig2dec is C; no pure-Go decoder is adopted).
@@ -23,9 +24,9 @@ import (
 	"encoding/binary"
 	"image"
 	"image/jpeg"
-	"io"
 
-	"golang.org/x/image/ccitt"
+	kccitt "emon/ccitt"
+	"emon/port"
 )
 
 // PdfPix is what a PDF image codec made: W * H * Ch bytes.
@@ -231,25 +232,23 @@ func pdfCCITT(a pdfArgs, data []byte, maxPixels uint64) (*PdfPix, error) {
 	if a.columns > 1<<20 {
 		return nil, imgUnsupportedf("CCITT Columns over 1,048,576")
 	}
-	if a.k > 0 {
-		return nil, imgUnsupportedf("CCITT Group 3 two-dimensional (K > 0)")
-	}
 	w, h, cols := int(a.w), int(a.h), int(a.columns)
 	rows := h
 	if a.rows > 0 {
 		rows = int(min(a.rows, a.h))
 	}
-	sub := ccitt.Group3
-	if a.k < 0 {
-		sub = ccitt.Group4
+	// the stream's own area (`Columns` need not be the image's width) is held to the pixel bound too
+	if uint64(cols)*uint64(rows) > maxPixels {
+		return nil, &imgFail{Kind: imgLimit, Msg: "pixels", Pixels: uint64(cols) * uint64(rows)}
 	}
-	rd := ccitt.NewReader(bytes.NewReader(data), ccitt.MSB, sub, cols, rows, &ccitt.Options{Align: a.flags&2 != 0})
-	stride := (cols + 7) / 8
-	bits := make([]byte, stride*rows)
-	if _, err := io.ReadFull(rd, bits); err != nil {
+	// the one CCITT decoder (kin's `emon.ccitt`, TIFF's too): T.4 and T.6 over `K`, `Columns`, `Rows`, `EncodedByteAlign` and
+	// `EndOfLine`; the rows come packed, high bit first, 1 for black
+	ws, packed := port.NewCells(), &port.Buf{B: make([]byte, ((cols+7)/8)*rows)}
+	if kccitt.CcDecode(data, 0, int32(len(data)), a.k, int32(cols), int32(rows), a.flags&6, packed, ws) != kccitt.CcOk() {
 		return nil, imgFailedf("a bad or short CCITT stream")
 	}
-	// white is 1 and black is 0 in the reader's bits
+	bits, stride := packed.B, (cols+7)/8
+	// the image's size: rows below the stream's and columns past `Columns` are white
 	blk, wht := byte(0), byte(255)
 	if a.flags&1 != 0 {
 		blk, wht = 255, 0
@@ -260,7 +259,7 @@ func pdfCCITT(a pdfArgs, data []byte, maxPixels uint64) (*PdfPix, error) {
 	}
 	for y := 0; y < rows; y++ {
 		for x := 0; x < min(w, cols); x++ {
-			if bits[y*stride+x/8]>>(7-uint(x%8))&1 == 0 {
+			if bits[y*stride+x/8]>>(7-uint(x%8))&1 == 1 {
 				px[y*w+x] = blk
 			}
 		}

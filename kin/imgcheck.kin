@@ -1,0 +1,46 @@
+;; WHAT THE IMAGE VALIDATORS ANSWER, AND THE ARITHMETIC THEY SHARE (P10.11, D396(4); D188-D190, D389). emon's own module (D039).
+;;
+;; `emon.pngcheck` and `emon.tiffcheck` read an image container and DECIDE (accept or refuse, by name) before any platform library
+;; is asked for a pixel: the library then only turns input kin has accepted into samples, so two libraries' leniency is never a
+;; difference between hosts. Both answer with the statuses below and write what the host needs into a report `Cells` (their own
+;; `pr-*` and `tr-*` fields).
+;;
+;;   ic-ok            accepted
+;;   ic-failed        damaged: a chunk, a checksum, a directory, a size, a stream (the host's `undecodable`)
+;;   ic-unsupported   valid, and a thing the port does not read (the host's `unsupported-image`)
+;;   ic-limit         over a bound (`limit-of`): the report's limit field says by how much (pixels, or the bytes of a stream)
+(ns emon.imgcheck
+  (:require [emon.lang :refer [I32 I64 defenum i64 i32 add64 mul64 shl64]]
+            [kin.lang :refer [defn return let set while if comment do
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defenum ^:pub ic-status
+  [[ic-ok 0 "ok"]
+   [ic-failed 1 "failed"]
+   [ic-unsupported 2 "unsupported"]
+   [ic-limit 3 "limit"]])
+
+(defn ^:pub ^I64 ic-u32 [^I32 v]
+  (comment "An I32 holding a 32-bit pattern, as the unsigned number it is.")
+  (if (< v 0) (return (add64 (i64 v) (shl64 (i64 1) 32))))
+  (return (i64 v)))
+
+(defn ^:pub ^I32 ic-clamp [^I64 v]
+  (comment "A count for the host's `Limit(n)`: the number itself, or the largest I32 when it does not fit.")
+  (if (> v (i64 2147483647)) (return 2147483647))
+  (if (< v (i64 0)) (return 2147483647))
+  (return (i32 v)))
+
+(defn ^:pub ^I32 ic-dpi [^I32 num ^I32 den ^I32 unit]
+  (comment "Dots per inch x 100 from a rational (two unsigned 32-bit numbers) and a TIFF resolution unit, 2 inch and 3")
+  (comment "centimetre, anything else unknown (0). Rounded half up (D188); 0 where it does not fit an I32.")
+  (let [^I64 n (ic-u32 num)
+        ^I64 d (ic-u32 den)
+        ^:mut ^I64 v (i64 0)]
+    (if (or (== d (i64 0)) (== n (i64 0))) (return 0))
+    (if (== unit 2)
+      (set v (quot (add64 (mul64 n (i64 200)) d) (mul64 d (i64 2)))))
+    (if (== unit 3)
+      (set v (quot (add64 (mul64 n (i64 508)) d) (mul64 d (i64 2)))))
+    (if (> v (i64 2147483647)) (return 0))
+    (return (i32 v))))

@@ -84,7 +84,6 @@ tesseract = []
 
 [dependencies]
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
-fax = "=0.2.7"
 miniz_oxide = "=0.8.9"
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
