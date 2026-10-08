@@ -423,8 +423,13 @@
         ;; a panic or limit breach in an async round that missed is a miss (D058, D388): the probe's async line alone is not judged for it
         (when (seq (failures {"A" {:mem "ok 1" :async "LIMIT-stream-bytes"}}))
           (swap! bad inc) (println "  FAIL selftest: a limit breach in a missed async round is reported"))
-        (when (empty? (failures {"A" {:mem "ok 1" :async "PANIC attempt to add with overflow at emon/x.rs:1"}}))
-          (swap! bad inc) (println "  FAIL selftest: a panic in a missed async round is not reported")))
+        (when (seq (failures {"A" {:mem "ok 1" :async "PANIC attempt to add with overflow at emon/x.rs:1"}}))
+          (swap! bad inc) (println "  FAIL selftest: a panic in a missed async round is reported"))
+        ;; the same panic in the memory run is a panic, and a limit breach there is not
+        (when (empty? (failures {"A" {:mem "PANIC attempt to add with overflow at emon/x.rs:1"}}))
+          (swap! bad inc) (println "  FAIL selftest: a panic is not reported"))
+        (when (seq (failures {"A" {:mem "LIMIT-stream-bytes"}}))
+          (swap! bad inc) (println "  FAIL selftest: a limit breach is reported as a panic")))
       (let [ctx {:hosts hosts :chunk 512 :timeout-ms 1500 :env nil}
             mn (minimize ctx (.getBytes "aaaaaaaaXbbbbbbbbbbbbbbbbbbbbbbbbcccc" "UTF-8")
                          (sorted-set "panic:A:mem" "panic:B:mem" "panic:A:async" "panic:B:async") 60000)]
