@@ -8,6 +8,9 @@ static string Run(byte[] b, int chunk) {
         var t = new StringBuilder();
         emon.Fuzzprobe.FzCase(b, chunk, t);
         return t.ToString();
+    } catch (emon.Port.Breach br) {
+        // a limit breach is a typed payload and a NAMED outcome (SPEC 7.4, P10.10), the same line on every host: nothing reads a message
+        return "LIMIT-" + br.Name;
     } catch (Exception e) {
         return ("PANIC " + e.GetType().Name + ": " + e.Message).Replace('\n', ' ').Replace('\t', ' ');
     }

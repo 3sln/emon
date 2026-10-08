@@ -1,0 +1,339 @@
+;; Laws for `emon.limits` and `emon.config` (P10.10, D396, D434-D437): the tables of limits and settings with their names, defaults and ranges; the options
+;; grammar's keys and words; a text parsed into a `Cfg` (the defaults, every key, the last line wins, the lists); and each refusal's sentence.
+(ns emon.configtest
+  (:require [emon.lang :refer [I32 Cells Text Blob fd]]
+            [emon.enctx :refer [Cfg]]
+            [emon.limits :refer [lm-count lm-default lm-lo lm-hi lm-name-len lm-name-ch sg-count sg-default sg-lo sg-hi sg-name-len sg-name-ch]]
+            [emon.config :refer [cf-parse cf-is-key cf-key-find cf-limit-find ck-row-count ck-row-at ck-char-at cv-row-count cv-row-at cv-char-at]]
+            [emon.test :refer [deftest assert-eq assert-text new-cells new-text new-ctx test-t TestT Str text-blob]]
+            [emon.port :refer [cells-len cells-at cells-push text-cp blob-len blob-u8]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or]]))
+
+;; ------------------------------------------------------------------ fixtures
+
+(defn ^I32 t-cps [^Cells c ^Blob b]
+  (comment "The bytes of `b` as code points.")
+  (let [^:mut ^I32 i 0]
+    (while (< i (blob-len b))
+      (do (cells-push c (blob-u8 b i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 t-parse [^Cfg c ^Blob b]
+  (comment "`cf-parse` over the bytes of `b`.")
+  (let [^Cells t (new-cells)]
+    (t-cps t b)
+    (return (cf-parse t c))))
+
+(defn ^I32 t-refused [^TestT emon-t ^Blob b ^Str want]
+  (comment "The text `b` is refused, with the sentence `want`.")
+  (let [^Cfg c (new-ctx Cfg)]
+    (assert-eq (t-parse c b) 1 want)
+    (assert-text (fd c msg) want want)
+    (return 0)))
+
+(defn ^I32 t-limit-name [^TestT emon-t ^I32 kind ^Str want]
+  (let [^Text t (new-text)
+        ^:mut ^I32 i 0]
+    (while (< i (lm-name-len kind))
+      (do (text-cp t (lm-name-ch kind i))
+          (set i (+ i 1))))
+    (assert-text t want want)
+    (return 0)))
+
+(defn ^I32 t-setting-name [^TestT emon-t ^I32 kind ^Str want]
+  (let [^Text t (new-text)
+        ^:mut ^I32 i 0]
+    (while (< i (sg-name-len kind))
+      (do (text-cp t (sg-name-ch kind i))
+          (set i (+ i 1))))
+    (assert-text t want want)
+    (return 0)))
+
+(defn ^I32 t-key-name [^TestT emon-t ^I32 k ^Str want]
+  (let [^Text t (new-text)
+        ^I32 off (ck-row-at 0 k 3)
+        ^:mut ^I32 i 0]
+    (while (< i (ck-row-at 0 k 4))
+      (do (text-cp t (ck-char-at 0 (+ off i)))
+          (set i (+ i 1))))
+    (assert-text t want want)
+    (return 0)))
+
+(defn ^I32 t-word-name [^TestT emon-t ^I32 r ^I32 key ^I32 code ^Str want]
+  (comment "Row r of the words is `want`, for enum key `key` and code `code`.")
+  (let [^Text t (new-text)
+        ^I32 off (cv-row-at 0 r 2)
+        ^:mut ^I32 i 0]
+    (while (< i (cv-row-at 0 r 3))
+      (do (text-cp t (cv-char-at 0 (+ off i)))
+          (set i (+ i 1))))
+    (assert-text t want want)
+    (assert-eq (cv-row-at 0 r 0) key want)
+    (assert-eq (cv-row-at 0 r 1) code want)
+    (return 0)))
+
+(defn ^I32 t-is-key [^TestT emon-t ^Blob b ^I32 want ^Str name]
+  (let [^Cells t (new-cells)]
+    (t-cps t b)
+    (assert-eq (cf-is-key t 0 (cells-len t)) want name)
+    (return 0)))
+
+;; ------------------------------------------------------------------ the tables of limits and settings
+
+(deftest test-the-limits-have-their-names-in-kin
+  (assert-eq (lm-count) 11 "eleven limits")
+  (t-limit-name (test-t) 0 "input-bytes")
+  (t-limit-name (test-t) 1 "stream-bytes")
+  (t-limit-name (test-t) 2 "total-bytes")
+  (t-limit-name (test-t) 3 "objects")
+  (t-limit-name (test-t) 4 "ref-depth")
+  (t-limit-name (test-t) 5 "operators")
+  (t-limit-name (test-t) 6 "form-depth")
+  (t-limit-name (test-t) 7 "pattern-depth")
+  (t-limit-name (test-t) 8 "pages")
+  (t-limit-name (test-t) 9 "pixels")
+  (t-limit-name (test-t) 10 "ocr-requests"))
+
+(deftest test-the-limits-have-their-defaults-and-ranges-in-kin
+  (assert-eq (lm-default 0) 1073741824 "input-bytes")
+  (assert-eq (lm-default 1) 268435456 "stream-bytes")
+  (assert-eq (lm-default 2) 1073741824 "total-bytes")
+  (assert-eq (lm-default 3) 10000000 "objects")
+  (assert-eq (lm-default 4) 64 "ref-depth")
+  (assert-eq (lm-default 5) 50000000 "operators")
+  (assert-eq (lm-default 6) 32 "form-depth")
+  (assert-eq (lm-default 7) 8 "pattern-depth")
+  (assert-eq (lm-default 8) 100000 "pages")
+  (assert-eq (lm-default 9) 268435456 "pixels")
+  (assert-eq (lm-default 10) 100000 "ocr-requests")
+  (assert-eq (lm-lo 3) 0 "a limit is not negative")
+  (assert-eq (lm-hi 3) 2147483647 "a limit fits 31 bits"))
+
+(deftest test-a-kind-outside-the-table-has-no-name-and-a-default-of-nothing
+  (assert-eq (lm-default 11) 0 "past the table")
+  (assert-eq (lm-default -1) 0 "before the table")
+  (assert-eq (lm-name-len 11) 0 "no name")
+  (assert-eq (lm-name-ch 11 0) -1 "no character")
+  (assert-eq (lm-name-ch 0 11) -1 "past the name's end")
+  (assert-eq (lm-name-ch 0 -1) -1 "before the name")
+  (assert-eq (sg-default 2) 0 "no setting")
+  (assert-eq (sg-name-len 2) 0 "no setting name")
+  (assert-eq (sg-name-ch 2 0) -1 "no setting character"))
+
+(deftest test-the-settings-have-their-names-defaults-and-ranges-in-kin
+  (assert-eq (sg-count) 2 "two settings")
+  (t-setting-name (test-t) 0 "ocr-mode")
+  (t-setting-name (test-t) 1 "tasks")
+  (assert-eq (sg-default 0) 0 "ocr-mode is auto")
+  (assert-eq (sg-default 1) 0 "tasks are serial")
+  (assert-eq (sg-lo 0) 0 "ocr-mode from")
+  (assert-eq (sg-hi 0) 2 "ocr-mode to")
+  (assert-eq (sg-lo 1) 0 "tasks from")
+  (assert-eq (sg-hi 1) 1 "tasks to"))
+
+;; ------------------------------------------------------------------ the grammar's tables
+
+(deftest test-the-keys-have-their-names-in-kin
+  (assert-eq (ck-row-count 0) 18 "eighteen keys")
+  (t-key-name (test-t) 0 "locale")
+  (t-key-name (test-t) 1 "ocr")
+  (t-key-name (test-t) 2 "furniture")
+  (t-key-name (test-t) 3 "assets")
+  (t-key-name (test-t) 4 "asset-dpi")
+  (t-key-name (test-t) 5 "asset-pixels")
+  (t-key-name (test-t) 6 "asset-bytes")
+  (t-key-name (test-t) 7 "assets-bytes")
+  (t-key-name (test-t) 8 "asset-signatures")
+  (t-key-name (test-t) 9 "keep-evidence")
+  (t-key-name (test-t) 10 "ocr-scope")
+  (t-key-name (test-t) 11 "max-rounds")
+  (t-key-name (test-t) 12 "fetch-rounds")
+  (t-key-name (test-t) 13 "record")
+  (t-key-name (test-t) 14 "js-ocr")
+  (t-key-name (test-t) 15 "chunk")
+  (t-key-name (test-t) 16 "limit.")
+  (t-key-name (test-t) 17 "producer."))
+
+(deftest test-the-words-have-their-names-and-codes-in-kin
+  (assert-eq (cv-row-count 0) 13 "thirteen words")
+  (t-word-name (test-t) 0 1 2 "always")
+  (t-word-name (test-t) 1 1 1 "auto")
+  (t-word-name (test-t) 2 1 0 "never")
+  (t-word-name (test-t) 3 2 0 "policy")
+  (t-word-name (test-t) 4 2 1 "keep")
+  (t-word-name (test-t) 5 2 2 "drop")
+  (t-word-name (test-t) 6 3 0 "none")
+  (t-word-name (test-t) 7 3 1 "images")
+  (t-word-name (test-t) 8 3 2 "figures")
+  (t-word-name (test-t) 9 8 1 "on")
+  (t-word-name (test-t) 10 8 0 "off")
+  (t-word-name (test-t) 11 10 0 "full")
+  (t-word-name (test-t) 12 10 1 "witness"))
+
+(deftest test-a-key-is-found-by-its-whole-name-or-its-prefix
+  (t-is-key (test-t) (text-blob "ocr") 1 "ocr")
+  (t-is-key (test-t) (text-blob "ocr-scope") 1 "ocr-scope")
+  (t-is-key (test-t) (text-blob "limit.pages") 1 "a limit")
+  (t-is-key (test-t) (text-blob "producer.name") 1 "a producer")
+  (t-is-key (test-t) (text-blob "record") 1 "record")
+  (t-is-key (test-t) (text-blob "oc") 0 "a prefix of a plain key")
+  (t-is-key (test-t) (text-blob "ocrx") 0 "a plain key and more")
+  (t-is-key (test-t) (text-blob "out") 0 "a driver's own flag")
+  (t-is-key (test-t) (text-blob "limit") 0 "the prefix without its dot")
+  (t-is-key (test-t) (text-blob "") 0 "nothing"))
+
+;; ------------------------------------------------------------------ a text parsed into a Cfg
+
+(deftest test-the-empty-text-is-the-defaults
+  (let [^Cfg c (new-ctx Cfg)]
+    (assert-eq (t-parse c (text-blob "")) 0 "parses")
+    (assert-eq (fd c ocr) 2 "ocr always")
+    (assert-eq (fd c scope) 0 "scope full")
+    (assert-eq (fd c furn) 0 "furniture policy")
+    (assert-eq (fd c level) 0 "no assets")
+    (assert-eq (fd c dpi) 150 "dpi")
+    (assert-eq (fd c pixels) 4194304 "pixels")
+    (assert-eq (fd c abyte) 4194304 "bytes an asset")
+    (assert-eq (fd c tbyte) 33554432 "bytes in all")
+    (assert-eq (fd c sigs) 0 "no signatures")
+    (assert-eq (fd c keep) 0 "no evidence")
+    (assert-eq (fd c haveloc) 0 "no locale")
+    (assert-eq (cells-len (fd c lcl)) 0 "no locale text")
+    (assert-eq (fd c chunk) 65536 "chunk")
+    (assert-eq (fd c maxr) 5 "rounds")
+    (assert-eq (fd c fetchr) 24 "fetch rounds")
+    (assert-eq (fd c rec) 0 "not recording")
+    (assert-eq (fd c jsocr) 0 "no js ocr")
+    (assert-eq (cells-len (fd c lims)) 0 "no limits")
+    (assert-eq (cells-len (fd c prod)) 0 "no producer")))
+
+(deftest test-every-key-sets-its-field
+  (let [^Cfg c (new-ctx Cfg)]
+    (assert-eq (t-parse c (text-blob "locale=de-AT\nocr=never\nfurniture=drop\nassets=figures\nasset-dpi=300\nasset-pixels=1000\nasset-bytes=2000\nassets-bytes=3000\nasset-signatures=on\nkeep-evidence=1\nocr-scope=witness\nmax-rounds=7\nfetch-rounds=9\nrecord=1\njs-ocr=1\nchunk=512\n")) 0 "parses")
+    (assert-eq (fd c haveloc) 1 "a locale")
+    (assert-eq (cells-len (fd c lcl)) 5 "its length")
+    (assert-eq (cells-at (fd c lcl) 0) 100 "d")
+    (assert-eq (cells-at (fd c lcl) 4) 84 "T")
+    (assert-eq (fd c ocr) 0 "never")
+    (assert-eq (fd c furn) 2 "drop")
+    (assert-eq (fd c level) 2 "figures")
+    (assert-eq (fd c dpi) 300 "dpi")
+    (assert-eq (fd c pixels) 1000 "pixels")
+    (assert-eq (fd c abyte) 2000 "bytes an asset")
+    (assert-eq (fd c tbyte) 3000 "bytes in all")
+    (assert-eq (fd c sigs) 1 "signatures on")
+    (assert-eq (fd c keep) 1 "evidence")
+    (assert-eq (fd c scope) 1 "witness")
+    (assert-eq (fd c maxr) 7 "rounds")
+    (assert-eq (fd c fetchr) 9 "fetch rounds")
+    (assert-eq (fd c rec) 1 "recording")
+    (assert-eq (fd c jsocr) 1 "js ocr")
+    (assert-eq (fd c chunk) 512 "chunk")))
+
+(deftest test-the-words-of-every-enum-key-are-read
+  (let [^Cfg a (new-ctx Cfg)
+        ^Cfg b (new-ctx Cfg)
+        ^Cfg d (new-ctx Cfg)
+        ^Cfg e (new-ctx Cfg)]
+    (t-parse a (text-blob "ocr=always\nfurniture=policy\nassets=none\nasset-signatures=off\nocr-scope=full"))
+    (assert-eq (fd a ocr) 2 "always")
+    (assert-eq (fd a furn) 0 "policy")
+    (assert-eq (fd a level) 0 "none")
+    (assert-eq (fd a sigs) 0 "off")
+    (assert-eq (fd a scope) 0 "full")
+    (t-parse b (text-blob "ocr=auto\nfurniture=keep\nassets=images"))
+    (assert-eq (fd b ocr) 1 "auto")
+    (assert-eq (fd b furn) 1 "keep")
+    (assert-eq (fd b level) 1 "images")
+    (t-parse d (text-blob "keep-evidence=0\nrecord=yes\njs-ocr=11"))
+    (assert-eq (fd d keep) 0 "a flag is 1 or nothing")
+    (assert-eq (fd d rec) 0 "yes is not 1")
+    (assert-eq (fd d jsocr) 0 "11 is not 1")
+    (t-parse e (text-blob "keep-evidence=1"))
+    (assert-eq (fd e keep) 1 "one")))
+
+(deftest test-the-limits-and-the-producer-are-lists-in-the-order-given
+  (let [^Cfg c (new-ctx Cfg)]
+    (assert-eq (t-parse c (text-blob "limit.pages=5\nlimit.input-bytes=100\nlimit.pages=6\nproducer.name=tess\nproducer.v=5\n")) 0 "parses")
+    (assert-eq (cells-len (fd c lims)) 6 "three pairs")
+    (assert-eq (cells-at (fd c lims) 0) 8 "pages")
+    (assert-eq (cells-at (fd c lims) 1) 5 "five")
+    (assert-eq (cells-at (fd c lims) 2) 0 "input bytes")
+    (assert-eq (cells-at (fd c lims) 3) 100 "a hundred")
+    (assert-eq (cells-at (fd c lims) 4) 8 "pages again")
+    (assert-eq (cells-at (fd c lims) 5) 6 "six")
+    (assert-eq (cells-len (fd c prod)) 14 "two records")
+    (assert-eq (cells-at (fd c prod) 0) 4 "name's length")
+    (assert-eq (cells-at (fd c prod) 1) 4 "value's length")
+    (assert-eq (cells-at (fd c prod) 2) 110 "n")
+    (assert-eq (cells-at (fd c prod) 6) 116 "t")
+    (assert-eq (cells-at (fd c prod) 10) 1 "second name's length")
+    (assert-eq (cells-at (fd c prod) 11) 1 "second value's length")
+    (assert-eq (cells-at (fd c prod) 12) 118 "v")
+    (assert-eq (cells-at (fd c prod) 13) 53 "5")))
+
+(deftest test-the-last-line-that-sets-a-key-wins-and-the-text-is-lines
+  (let [^Cfg a (new-ctx Cfg)
+        ^Cfg b (new-ctx Cfg)
+        ^Cfg d (new-ctx Cfg)
+        ^Cfg e (new-ctx Cfg)]
+    (assert-eq (t-parse a (text-blob "ocr=never\nocr=auto\n")) 0 "parses")
+    (assert-eq (fd a ocr) 1 "the later")
+    (assert-eq (t-parse b (text-blob "\n\nocr=auto\r\n\r\nchunk=8\r\n\n")) 0 "empty lines and CRLF")
+    (assert-eq (fd b ocr) 1 "auto")
+    (assert-eq (fd b chunk) 8 "eight")
+    (assert-eq (t-parse d (text-blob "locale=en\nlocale=de")) 0 "two locales")
+    (assert-eq (cells-len (fd d lcl)) 2 "the later")
+    (assert-eq (cells-at (fd d lcl) 0) 100 "d")
+    (assert-eq (t-parse e (text-blob "locale=")) 0 "an empty locale")
+    (assert-eq (fd e haveloc) 1 "is a locale")
+    (assert-eq (cells-len (fd e lcl)) 0 "of nothing")))
+
+(deftest test-a-number-is-a-decimal-with-an-optional-sign
+  (let [^Cfg a (new-ctx Cfg)
+        ^Cfg b (new-ctx Cfg)
+        ^Cfg d (new-ctx Cfg)]
+    (assert-eq (t-parse a (text-blob "asset-dpi=+36")) 0 "plus")
+    (assert-eq (fd a dpi) 36 "36")
+    (assert-eq (t-parse b (text-blob "asset-dpi=-5")) 0 "minus")
+    (assert-eq (fd b dpi) -5 "-5")
+    (assert-eq (t-parse d (text-blob "asset-pixels=2147483647")) 0 "the largest")
+    (assert-eq (fd d pixels) 2147483647 "2147483647")))
+
+;; ------------------------------------------------------------------ what a refusal says
+
+(deftest test-a-wrong-word-lists-the-words-from-the-table
+  (t-refused (test-t) (text-blob "ocr=sometimes") "ocr is always, auto or never")
+  (t-refused (test-t) (text-blob "furniture=x") "furniture is policy, keep or drop")
+  (t-refused (test-t) (text-blob "assets=x") "assets is none, images or figures")
+  (t-refused (test-t) (text-blob "ocr-scope=x") "ocr-scope is full or witness")
+  (t-refused (test-t) (text-blob "asset-signatures=maybe") "asset-signatures is on or off")
+  (t-refused (test-t) (text-blob "ocr=") "ocr is always, auto or never"))
+
+(deftest test-a-wrong-number-is-refused-by-name
+  (t-refused (test-t) (text-blob "asset-dpi=abc") "asset-dpi wants a number, not \"abc\"")
+  (t-refused (test-t) (text-blob "asset-dpi=") "asset-dpi wants a number, not \"\"")
+  (t-refused (test-t) (text-blob "asset-dpi=-") "asset-dpi wants a number, not \"-\"")
+  (t-refused (test-t) (text-blob "asset-dpi=12x") "asset-dpi wants a number, not \"12x\"")
+  (t-refused (test-t) (text-blob "max-rounds=99999999999") "max-rounds wants a number, not \"99999999999\"")
+  (t-refused (test-t) (text-blob "limit.pages=lots") "limit.pages wants a number, not \"lots\"")
+  (t-refused (test-t) (text-blob "chunk=0") "chunk is out of range 1..2147483647")
+  (t-refused (test-t) (text-blob "limit.pages=-1") "limit.pages is out of range 0..2147483647"))
+
+(deftest test-an-unknown-key-or-a-line-without-a-value-is-refused-by-name
+  (t-refused (test-t) (text-blob "bogus=1") "unknown option bogus")
+  (t-refused (test-t) (text-blob "ocr=auto\nbogus=1") "unknown option bogus")
+  (t-refused (test-t) (text-blob "limit.nope=5") "no limit named nope")
+  (t-refused (test-t) (text-blob "limit.=5") "no limit named ")
+  (t-refused (test-t) (text-blob "novalue") "option \"novalue\" has no value")
+  (t-refused (test-t) (text-blob "ocr=auto\nnovalue") "option \"novalue\" has no value"))
+
+(deftest test-a-limit-is-found-by-its-name
+  (let [^Cells t (new-cells)]
+    (t-cps t (text-blob "ref-depth"))
+    (assert-eq (cf-limit-find t 0 9) 4 "ref-depth")
+    (assert-eq (cf-limit-find t 0 8) -1 "a prefix of it")
+    (assert-eq (cf-limit-find t 4 9) -1 "its tail")
+    (assert-eq (cf-key-find t 0 9) -1 "not a key")))

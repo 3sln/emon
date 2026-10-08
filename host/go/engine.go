@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"emon/asset"
+	"emon/config"
 	"emon/enctx"
 	"emon/engine"
 	"emon/figclass"
@@ -50,7 +51,6 @@ import (
 	"emon/pdfstruct"
 	"emon/pdfx"
 	"emon/plan"
-	"emon/planctx"
 	"emon/planloop"
 	"emon/planrun"
 	"emon/port"
@@ -169,11 +169,8 @@ func (e *Error) Unwrap() error {
 }
 
 func planError(p *port.PlanError) *Error {
-	if p.Name == "max-rounds" || p.Name == "fetch-rounds" {
-		var limit, actual int64
-		if _, err := fmt.Sscanf(p.Msg, "the limit is %d and this run reached %d", &limit, &actual); err == nil {
-			return &Error{Kind: ErrLimit, Status: p.Name, Limit: limit, Actual: actual}
-		}
+	if p.Limited {
+		return &Error{Kind: ErrLimit, Status: p.Name, Limit: int64(p.Limit), Actual: int64(p.Actual)}
 	}
 	return &Error{Kind: ErrPlan, Plan: p}
 }
@@ -283,9 +280,9 @@ type Options struct {
 	NoRetarget bool
 }
 
-// DefaultOptions is SPEC 13's defaults.
+// DefaultOptions is SPEC 13's defaults: kin's (`emon.config`'s `cf-defaults`), the parse of the empty text.
 func DefaultOptions() Options {
-	return Options{Ocr: OcrAlways, Assets: AssetsNone, AssetDPI: 150, AssetPixels: 4194304, AssetBytes: 4194304, AssetsBytes: 33554432, Furniture: FurniturePolicy}
+	return optionsOf(mustParseCfg(""))
 }
 
 // Config is the ports and bounds an Engine is made with. Limits are SPEC 7.4's `port.LimitOf` kinds
@@ -314,9 +311,117 @@ type Config struct {
 	PdfCodecs PdfCodecs
 }
 
-// DefaultConfig is SPEC 13.1's defaults.
+// DefaultConfig is SPEC 13.1's defaults: kin's too.
 func DefaultConfig() Config {
-	return Config{ChunkSize: 65536, MaxRounds: port.PlanMaxRounds, FetchRounds: port.PlanFetchRounds}
+	return configOf(mustParseCfg(""))
+}
+
+// ----------------------------------------------------------------- options from text (P10.10)
+//
+// ONE `key=value` GRAMMAR, PARSED BY KIN (`emon.config`) INTO A `Cfg`: the browser binding, the drivers, and later the C binding and the pod say what a
+// conversion is asked to do in the same text. `Options` and `Config` stay the idiomatic typed structs; these functions are the thin wrapper that reads one
+// back out of the `Cfg` kin filled. A key's name, a word's spelling, a default and a range are not known here.
+
+// Parsed is what a text asks for: the Options and the Config (limits, chunk size, the loop's bounds), and the browser binding's own switches.
+type Parsed struct {
+	Options Options
+	Config  Config
+	// Record is `record=1`: keep a transcript of the conversion. JsOcr is `js-ocr=1`: the host owes the `ocr` requests.
+	Record, JsOcr bool
+	// Producer is `producer.NAME=VALUE`, in order: what the transcript says produced it.
+	Producer [][2]string
+}
+
+func cellsOfString(s string) *port.Cells {
+	c := port.NewCells()
+	for _, ch := range s {
+		port.CellsPush(c, int32(ch))
+	}
+	return c
+}
+
+func stringOfCells(c *port.Cells, from, n int32) string {
+	var sb strings.Builder
+	for i := from; i < from+n; i++ {
+		sb.WriteRune(rune(port.CellsAt(c, i)))
+	}
+	return sb.String()
+}
+
+func parseCfg(text string) (*enctx.Cfg, error) {
+	c := enctx.NewCfg()
+	if config.CfParse(cellsOfString(text), c) != 0 {
+		return nil, errors.New(c.Msg.String())
+	}
+	return c, nil
+}
+
+func mustParseCfg(text string) *enctx.Cfg {
+	c, err := parseCfg(text)
+	if err != nil {
+		panic(err)
+	}
+	return c
+}
+
+// ocrPolicyOf: kin's code is 0 never, 1 auto, 2 always.
+func ocrPolicyOf(code int32) OcrPolicy {
+	switch code {
+	case 0:
+		return OcrNever
+	case 1:
+		return OcrAuto
+	}
+	return OcrAlways
+}
+
+func optionsOf(c *enctx.Cfg) Options {
+	o := Options{
+		Ocr:             ocrPolicyOf(c.Ocr),
+		Assets:          Assets(c.Level),
+		AssetDPI:        c.Dpi,
+		AssetPixels:     c.Pixels,
+		AssetBytes:      c.Abyte,
+		AssetsBytes:     c.Tbyte,
+		AssetSignatures: c.Sigs != 0,
+		Furniture:       Furniture(c.Furn),
+		KeepEvidence:    c.Keep != 0,
+		OcrScope:        OcrScope(c.Scope),
+	}
+	if c.Haveloc == 1 {
+		o.Locale = stringOfCells(c.Lcl, 0, port.CellsLen(c.Lcl))
+	}
+	return o
+}
+
+func configOf(c *enctx.Cfg) Config {
+	cfg := Config{ChunkSize: int(c.Chunk), MaxRounds: c.Maxr, FetchRounds: c.Fetchr}
+	for i := int32(0); i < port.CellsLen(c.Lims)/2; i++ {
+		cfg.Limits = append(cfg.Limits, [2]int32{port.CellsAt(c.Lims, 2*i), port.CellsAt(c.Lims, 2*i+1)})
+	}
+	return cfg
+}
+
+// ParseOptions reads `key=value` lines, parsed by kin: the settings of SPEC 13 by their names, `limit.NAME=N` for the limits, the loop's bounds, and
+// the ports the host has. An error is the sentence a driver prints after `usage`.
+func ParseOptions(text string) (*Parsed, error) {
+	c, err := parseCfg(text)
+	if err != nil {
+		return nil, err
+	}
+	p := &Parsed{Options: optionsOf(c), Config: configOf(c), Record: c.Rec != 0, JsOcr: c.Jsocr != 0}
+	for at := int32(0); at < port.CellsLen(c.Prod); {
+		kl, vl := port.CellsAt(c.Prod, at), port.CellsAt(c.Prod, at+1)
+		p.Producer = append(p.Producer, [2]string{stringOfCells(c.Prod, at+2, kl), stringOfCells(c.Prod, at+2+kl, vl)})
+		at += 2 + kl + vl
+	}
+	return p, nil
+}
+
+// IsOptionKey reports whether name (a driver's `--name=`) is a key of the grammar, which kin owns.
+func IsOptionKey(name string) bool {
+	t := cellsOfString(name)
+	return config.CfIsKey(t, 0, port.CellsLen(t)) == 1
 }
 
 // JSONOptions are SPEC 4's: the indented form or the compact one.
@@ -1028,7 +1133,7 @@ func dispatch(view, pw *port.Src, answers, rq *port.Cells, idx int, opts Options
 			if view.Missed() {
 				s = rstep{miss: true}
 			} else {
-				s = rstep{out: outcome{err: panicError(panicMessage(p))}}
+				s = rstep{out: outcome{err: panicError(p)}}
 			}
 		}
 	}()
@@ -1167,24 +1272,19 @@ func statusError(input int, status int32) *Error {
 func finishGuarded(f func() outcome) (res outcome) {
 	defer func() {
 		if p := recover(); p != nil {
-			res = outcome{err: panicError(panicMessage(p))}
+			res = outcome{err: panicError(p)}
 		}
 	}()
 	return f()
 }
 
-// panicError: a kin limit breach is a panic whose message is `port.LimitBreach`'s ("the {name} limit is {limit} and this input reached
-// {actual}. ..."): kin names it (`lb-parse`, interim until P10.10's typed payload).
-func panicError(msg string) *Error {
-	cells := port.NewCells()
-	for _, ch := range msg {
-		port.CellsPush(cells, int32(ch))
+// panicError: a kin limit breach unwinds with a `*port.Breach` (kind, limit, actual), recovered by its type; its name is the table's in kin
+// (`emon.limits`). Any other panic is `internal`, with its message.
+func panicError(p any) *Error {
+	if b, ok := p.(*port.Breach); ok {
+		return &Error{Kind: ErrLimit, Status: b.Name(), Limit: int64(b.Limit), Actual: int64(b.Actual)}
 	}
-	p := planctx.NewPlan()
-	if planloop.LbParse(cells, p) == 1 {
-		return &Error{Kind: ErrLimit, Status: p.Msg.String(), Limit: int64(p.ErrLimit), Actual: int64(p.ErrActual)}
-	}
-	return &Error{Kind: ErrInternal, Message: msg}
+	return &Error{Kind: ErrInternal, Message: panicMessage(p)}
 }
 
 func panicMessage(p any) string {
@@ -1657,7 +1757,7 @@ phases:
 						if view.Missed() {
 							st = port.PlanUnitNeedBytes
 						} else {
-							afailed = panicError(panicMessage(p))
+							afailed = panicError(p)
 							st = port.PlanUnitDone
 						}
 					}
@@ -1693,7 +1793,7 @@ phases:
 			unitP := func(answers, rq *port.Cells, bms *port.BitmapSet, _ *port.Buf) (st int32) {
 				defer func() {
 					if p := recover(); p != nil {
-						failed = panicError(panicMessage(p))
+						failed = panicError(p)
 						st = port.PlanUnitDone
 					}
 				}()
@@ -1744,7 +1844,7 @@ phases:
 			unitF := func(answers, rq *port.Cells, bms *port.BitmapSet, _ *port.Buf) (st int32) {
 				defer func() {
 					if p := recover(); p != nil {
-						afailed = panicError(panicMessage(p))
+						afailed = panicError(p)
 						st = port.PlanUnitDone
 					}
 				}()

@@ -590,10 +590,11 @@ pub fn new_text() -> String {
 // ---------------------------------------------------------------- limits
 //
 // EVERY BOUND IS CONFIGURABLE AND EVERY BREACH IS NAMED (SPEC 7.4). The
-// KINDS are numbered here, in each host, and `bb hosts` cannot compare a
-// table -- so the numbering is asserted by `kin/porttest.kin` on all four.
+// KINDS, their names, defaults and ranges are kin's table (`emon.limits`,
+// P10.10); `kin/porttest.kin` still asserts the numbering on all four hosts.
 // Environment `EMON_LIMIT_<NAME>` is the low-level poke; an embedder's API
-// installs bounds through its own layer.
+// installs bounds through its own layer. WHERE AN OVERRIDE IS SCOPED is the
+// platform's (D436): a thread here, the process in Go, Java and C#.
 
 // THE ENGINE'S LIMITS (P1.10, SPEC 13: `Config` carries the limits): a per-thread table of
 // overrides that `limit_of` consults before the environment, installed for the duration of one
@@ -625,73 +626,91 @@ pub fn with_limits<T>(overrides: &[(i32, i32)], f: impl FnOnce() -> T) -> T {
     f()
 }
 
+// THE TABLE OF LIMITS IS KIN'S (`emon.limits`, P10.10): a limit's name and default are read from it, and the host keeps only where an override or the
+// environment can say otherwise.
+fn kin_name(count: impl Fn(i32) -> i32, ch: impl Fn(i32, i32) -> i32, kind: i32) -> String {
+    let mut s = String::new();
+    for i in 0..count(kind) {
+        s.push(char::from_u32(ch(kind, i) as u32).unwrap_or('?'));
+    }
+    s
+}
+
+// The name of limit `kind` as kin's table spells it (`input-bytes`); `unknown` for a kind it has no row for.
+pub fn limit_name(kind: i32) -> String {
+    let s = kin_name(crate::emon::limits::lm_name_len, crate::emon::limits::lm_name_ch, kind);
+    if s.is_empty() {
+        "unknown".to_string()
+    } else {
+        s
+    }
+}
+
+// The environment variable of a name: `input-bytes` is `EMON_LIMIT_INPUT_BYTES`.
+fn env_name(prefix: &str, name: &str) -> String {
+    format!("{}{}", prefix, name.to_uppercase().replace('-', "_"))
+}
+
 // @kin:link:form:limit-of: {:template "crate::port::limit_of({0})" :arity 1}
 pub fn limit_of(kind: i32) -> i32 {
     if let Some(v) = limit_override(kind) {
         return v;
     }
-    let (name, default) = limit_spec(kind);
-    match std::env::var(format!("EMON_LIMIT_{}", name)) {
+    let default = crate::emon::limits::lm_default(kind);
+    match std::env::var(env_name("EMON_LIMIT_", &limit_name(kind))) {
         Ok(v) => v.parse().unwrap_or(default),
         Err(_) => default,
+    }
+}
+
+// THE PAYLOAD OF A BREACH (P10.10, D435): which limit, the bound that was in force and the number the input reached. A host catches it by its TYPE
+// (`downcast_ref::<LimitBreach>()`) and names the error from `limit_name`; nothing reads the words of a message. Its `Display` is for a person.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LimitBreach {
+    pub kind: i32,
+    pub limit: i32,
+    pub actual: i32,
+}
+
+impl LimitBreach {
+    pub fn name(&self) -> String {
+        limit_name(self.kind)
+    }
+}
+
+impl std::fmt::Display for LimitBreach {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = self.name();
+        write!(
+            f,
+            "the {} limit is {} and this input reached {}. Raise it with {}, or find out why the input needs that much -- a limit is a bound on emon, not a statement about the document.",
+            name.replace('-', " "),
+            self.limit,
+            self.actual,
+            env_name("EMON_LIMIT_", &name)
+        )
     }
 }
 
 // @kin:link:form:limit-breach: {:template "crate::port::limit_breach({0}, {1})" :arity 2}
 //
 // A BREACH NEVER RETURNS, which is what lets kin write
-// `(if (> n (limit-of K)) (limit-breach K n))` and carry on afterwards.
+// `(if (> n (limit-of K)) (limit-breach K n))` and carry on afterwards. It unwinds with a `LimitBreach`, not a string.
 pub fn limit_breach(kind: i32, actual: i32) -> i32 {
-    let (name, _) = limit_spec(kind);
-    panic!(
-        "the {} limit is {} and this input reached {}. Raise it with \
-         EMON_LIMIT_{}, or find out why the input needs that much -- a limit \
-         is a bound on emon, not a statement about the document.",
-        name.to_lowercase().replace('_', " "),
-        limit_of(kind), actual, name
-    )
+    std::panic::panic_any(LimitBreach { kind, limit: limit_of(kind), actual })
 }
 
 // A SETTING IS A CHOICE AND NOT A BOUND: a second pair of forms, not a
-// further limit. `EMON_SETTING_<NAME>` is the poke.
+// further limit. `EMON_SETTING_<NAME>` is the poke. Its table is kin's too.
 
 // @kin:link:form:setting-of: {:template "crate::port::setting_of({0})" :arity 1}
 pub fn setting_of(kind: i32) -> i32 {
-    let (name, default) = setting_spec(kind);
-    match std::env::var(format!("EMON_SETTING_{}", name)) {
+    let default = crate::emon::limits::sg_default(kind);
+    let name = kin_name(crate::emon::limits::sg_name_len, crate::emon::limits::sg_name_ch, kind);
+    let name = if name.is_empty() { "unknown".to_string() } else { name };
+    match std::env::var(env_name("EMON_SETTING_", &name)) {
         Ok(v) => v.parse().unwrap_or(default),
         Err(_) => default,
-    }
-}
-
-// The kinds. Ten limits from SPEC 7.4's list (the wall clock is enforced by
-// the host, not read by kin); the table grows with the phases that need a
-// bound. Values are i32-representable.
-fn limit_spec(kind: i32) -> (&'static str, i32) {
-    match kind {
-        0 => ("INPUT_BYTES", 1073741824),
-        1 => ("STREAM_BYTES", 268435456),
-        2 => ("TOTAL_BYTES", 1073741824),
-        3 => ("OBJECTS", 10000000),
-        4 => ("REF_DEPTH", 64),
-        5 => ("OPERATORS", 50000000),
-        6 => ("FORM_DEPTH", 32),
-        7 => ("PATTERN_DEPTH", 8),
-        8 => ("PAGES", 100000),
-        9 => ("PIXELS", 268435456),
-        10 => ("OCR_REQUESTS", 100000),
-        _ => ("UNKNOWN", 0),
-    }
-}
-
-// Settings are a placeholder table (kinds 0 and 1) until a phase needs more:
-// OCR_MODE 0 auto / 1 always / 2 never (SPEC 17.1 is still open, so `auto`),
-// and TASKS 0 serial / 1 parallel (D022: serial is the default).
-fn setting_spec(kind: i32) -> (&'static str, i32) {
-    match kind {
-        0 => ("OCR_MODE", 0),
-        1 => ("TASKS", 0),
-        _ => ("UNKNOWN", 0),
     }
 }
 

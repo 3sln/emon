@@ -9,6 +9,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/sha512"
+	"emon/limits"
 	"fmt"
 	"os"
 	"strconv"
@@ -471,13 +472,54 @@ func LimitOf(kind int32) int32 {
 			return v
 		}
 	}
-	name, def := limitSpec(kind)
-	if v, ok := os.LookupEnv("EMON_LIMIT_" + name); ok {
+	def := limits.LmDefault(kind)
+	if v, ok := os.LookupEnv(envName("EMON_LIMIT_", LimitName(kind))); ok {
 		if n, err := strconv.Atoi(v); err == nil {
 			return int32(n)
 		}
 	}
 	return def
+}
+
+// THE TABLE OF LIMITS IS KIN'S (`emon.limits`, P10.10): a limit's name and default are read from it. `emon.limits` is a pure module (it refers no port form)
+// so this package can import it.
+func kinName(n int32, ch func(int32) int32) string {
+	var sb strings.Builder
+	for i := int32(0); i < n; i++ {
+		sb.WriteRune(rune(ch(i)))
+	}
+	return sb.String()
+}
+
+// LimitName is the name of limit `kind` as kin's table spells it (`input-bytes`); `unknown` for a kind it has no row for.
+func LimitName(kind int32) string {
+	s := kinName(limits.LmNameLen(kind), func(i int32) int32 { return limits.LmNameCh(kind, i) })
+	if s == "" {
+		return "unknown"
+	}
+	return s
+}
+
+// envName: `input-bytes` is `EMON_LIMIT_INPUT_BYTES`.
+func envName(prefix, name string) string {
+	return prefix + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+}
+
+// Breach is the PAYLOAD OF A LIMIT BREACH (P10.10, D435): which limit, the bound that was in force and the number the input reached. `LimitBreach` panics
+// with a `*Breach`; a host recovers it by its TYPE and names the error from `Name`. Nothing reads the words of a message; `Error` is for a person.
+type Breach struct {
+	Kind, Limit, Actual int32
+}
+
+// Name is the limit's name in kin's table.
+func (b *Breach) Name() string { return LimitName(b.Kind) }
+
+func (b *Breach) Error() string {
+	name := b.Name()
+	return fmt.Sprintf(
+		"the %s limit is %d and this input reached %d. Raise it with %s, or find out why the input needs that much -- a limit is a bound on emon, "+
+			"not a statement about the document.",
+		strings.ReplaceAll(name, "-", " "), b.Limit, b.Actual, envName("EMON_LIMIT_", name))
 }
 
 // THE ENGINE'S LIMITS (P2.1, SPEC 13: `Config` carries the limits): the Rust half installs a per-thread
@@ -511,18 +553,17 @@ func WithLimits(overrides [][2]int32, f func()) {
 
 // @kin:link:form:limit-breach: {:template "port.LimitBreach({0}, {1})" :import "emon/port" :arity 2}
 func LimitBreach(kind int32, actual int32) int32 {
-	name, _ := limitSpec(kind)
-	panic(fmt.Sprintf(
-		"the %s limit is %d and this input reached %d. Raise it with "+
-			"EMON_LIMIT_%s, or find out why the input needs that much -- a limit "+
-			"is a bound on emon, not a statement about the document.",
-		strings.ToLower(strings.ReplaceAll(name, "_", " ")), LimitOf(kind), actual, name))
+	panic(&Breach{Kind: kind, Limit: LimitOf(kind), Actual: actual})
 }
 
 // @kin:link:form:setting-of: {:template "port.SettingOf({0})" :import "emon/port" :arity 1}
 func SettingOf(kind int32) int32 {
-	name, def := settingSpec(kind)
-	if v, ok := os.LookupEnv("EMON_SETTING_" + name); ok {
+	def := limits.SgDefault(kind)
+	name := kinName(limits.SgNameLen(kind), func(i int32) int32 { return limits.SgNameCh(kind, i) })
+	if name == "" {
+		name = "unknown"
+	}
+	if v, ok := os.LookupEnv(envName("EMON_SETTING_", name)); ok {
 		if n, err := strconv.Atoi(v); err == nil {
 			return int32(n)
 		}
@@ -530,43 +571,6 @@ func SettingOf(kind int32) int32 {
 	return def
 }
 
-func limitSpec(kind int32) (string, int32) {
-	switch kind {
-	case 0:
-		return "INPUT_BYTES", 1073741824
-	case 1:
-		return "STREAM_BYTES", 268435456
-	case 2:
-		return "TOTAL_BYTES", 1073741824
-	case 3:
-		return "OBJECTS", 10000000
-	case 4:
-		return "REF_DEPTH", 64
-	case 5:
-		return "OPERATORS", 50000000
-	case 6:
-		return "FORM_DEPTH", 32
-	case 7:
-		return "PATTERN_DEPTH", 8
-	case 8:
-		return "PAGES", 100000
-	case 9:
-		return "PIXELS", 268435456
-	case 10:
-		return "OCR_REQUESTS", 100000
-	}
-	return "UNKNOWN", 0
-}
-
-func settingSpec(kind int32) (string, int32) {
-	switch kind {
-	case 0:
-		return "OCR_MODE", 0
-	case 1:
-		return "TASKS", 0
-	}
-	return "UNKNOWN", 0
-}
 
 // ------------------------------------------------------------------- Crypto
 //

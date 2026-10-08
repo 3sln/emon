@@ -91,12 +91,17 @@ func htmlOptions(list string) emon.HTMLOptions {
 }
 
 // intFlag is the number of a `--name=N` flag.
-func intFlag(a, prefix string) int32 {
-	n, err := strconv.ParseInt(strings.TrimPrefix(a, prefix), 10, 32)
-	if err != nil {
-		usage(prefix + "N wants a number")
+// kinFlag is the `NAME=VALUE` line of `--NAME=VALUE` when NAME is a key of kin's options grammar (`emon.config`), else "".
+func kinFlag(a string) string {
+	flag, ok := strings.CutPrefix(a, "--")
+	if !ok {
+		return ""
 	}
-	return int32(n)
+	name, _, ok := strings.Cut(flag, "=")
+	if !ok || !emon.IsOptionKey(name) {
+		return ""
+	}
+	return flag
 }
 
 func readDir(dir string) (map[string][]byte, error) {
@@ -129,8 +134,8 @@ func main() {
 	html := emon.DefaultHTMLOptions()
 	htmlAssets, assetPrefix := -1, ""
 	prefixSet := false
-	opts := emon.DefaultOptions()
-	cfg := emon.DefaultConfig()
+	var kinText strings.Builder
+	simulateAsync, noRetarget := false, false
 	var password *string
 	source := "bytes"
 	stats := false
@@ -145,41 +150,6 @@ func main() {
 			pretty = true
 		case strings.HasPrefix(a, "--html="):
 			html = htmlOptions(strings.TrimPrefix(a, "--html="))
-		case strings.HasPrefix(a, "--locale="):
-			opts.Locale = strings.TrimPrefix(a, "--locale=")
-		case strings.HasPrefix(a, "--ocr="):
-			switch strings.TrimPrefix(a, "--ocr=") {
-			case "always":
-				opts.Ocr = emon.OcrAlways
-			case "auto":
-				opts.Ocr = emon.OcrAuto
-			case "never":
-				opts.Ocr = emon.OcrNever
-			default:
-				usage("--ocr is always, auto or never")
-			}
-		case strings.HasPrefix(a, "--furniture="):
-			switch strings.TrimPrefix(a, "--furniture=") {
-			case "policy":
-				opts.Furniture = emon.FurniturePolicy
-			case "keep":
-				opts.Furniture = emon.FurnitureKeep
-			case "drop":
-				opts.Furniture = emon.FurnitureDrop
-			default:
-				usage("--furniture is policy, keep or drop")
-			}
-		case strings.HasPrefix(a, "--assets="):
-			switch strings.TrimPrefix(a, "--assets=") {
-			case "none":
-				opts.Assets = emon.AssetsNone
-			case "images":
-				opts.Assets = emon.AssetsImages
-			case "figures":
-				opts.Assets = emon.AssetsFigures
-			default:
-				usage("--assets is none, images or figures")
-			}
 		case strings.HasPrefix(a, "--html-assets="):
 			switch strings.TrimPrefix(a, "--html-assets=") {
 			case "inline":
@@ -193,23 +163,6 @@ func main() {
 			}
 		case strings.HasPrefix(a, "--asset-prefix="):
 			assetPrefix, prefixSet = strings.TrimPrefix(a, "--asset-prefix="), true
-		case strings.HasPrefix(a, "--asset-dpi="):
-			opts.AssetDPI = intFlag(a, "--asset-dpi=")
-		case strings.HasPrefix(a, "--asset-pixels="):
-			opts.AssetPixels = intFlag(a, "--asset-pixels=")
-		case strings.HasPrefix(a, "--asset-bytes="):
-			opts.AssetBytes = intFlag(a, "--asset-bytes=")
-		case strings.HasPrefix(a, "--assets-bytes="):
-			opts.AssetsBytes = intFlag(a, "--assets-bytes=")
-		case strings.HasPrefix(a, "--asset-signatures="):
-			switch strings.TrimPrefix(a, "--asset-signatures=") {
-			case "on":
-				opts.AssetSignatures = true
-			case "off":
-				opts.AssetSignatures = false
-			default:
-				usage("--asset-signatures is on or off")
-			}
 		case strings.HasPrefix(a, "--asset-dir="):
 			assetDir = strings.TrimPrefix(a, "--asset-dir=")
 		case strings.HasPrefix(a, "--password="):
@@ -217,25 +170,10 @@ func main() {
 			password = &p
 		case strings.HasPrefix(a, "--source="):
 			source = strings.TrimPrefix(a, "--source=")
-		case strings.HasPrefix(a, "--chunk="):
-			n, err := strconv.Atoi(strings.TrimPrefix(a, "--chunk="))
-			if err != nil {
-				usage("--chunk=N wants a number")
-			}
-			cfg.ChunkSize = n
 		case a == "--async":
-			cfg.SimulateAsync = true
-		case strings.HasPrefix(a, "--ocr-scope="):
-			switch strings.TrimPrefix(a, "--ocr-scope=") {
-			case "full":
-				opts.OcrScope = emon.OcrScopeFull
-			case "witness":
-				opts.OcrScope = emon.OcrScopeWitness
-			default:
-				usage("--ocr-scope is full or witness")
-			}
+			simulateAsync = true
 		case a == "--no-retarget":
-			opts.NoRetarget = true
+			noRetarget = true
 		case a == "--tesseract":
 			tess = true
 		case strings.HasPrefix(a, "--tesseract="):
@@ -254,6 +192,9 @@ func main() {
 				usage("--parallel=N wants a positive number")
 			}
 			parallel = n
+		case kinFlag(a) != "":
+			// a key of kin's options grammar (`emon.config`): --ocr=never, --asset-dpi=300, --limit.pages=5, --chunk=512, ...
+			kinText.WriteString(kinFlag(a) + "\n")
 		case strings.HasPrefix(a, "--"):
 			usage("unknown flag " + a)
 		case file == "":
@@ -268,6 +209,14 @@ func main() {
 	if record != "" && replay != "" {
 		usage("--record and --replay are two ways")
 	}
+	// THE OPTIONS AND THE ENGINE'S BOUNDS ARE KIN'S GRAMMAR: the flags it knows were collected as `key=value` lines and are parsed once.
+	parsed, err := emon.ParseOptions(kinText.String())
+	if err != nil {
+		usage(err.Error())
+	}
+	opts, cfg := parsed.Options, parsed.Config
+	cfg.SimulateAsync = simulateAsync
+	opts.NoRetarget = noRetarget
 	opts.KeepEvidence = out == "evidence" || out == "bundle"
 	if htmlAssets >= 0 {
 		html.Assets = emon.HTMLAssets(htmlAssets)

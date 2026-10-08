@@ -1,0 +1,417 @@
+;; THE OPTIONS GRAMMAR, in kin (P10.10; D396, D434-D437; SPEC 13). ONE `key=value` TEXT IS HOW AN EMBEDDER, A DRIVER, THE BROWSER BINDING (and later the C binding
+;; and the pod) SAY WHAT A CONVERSION IS ASKED TO DO, AND KIN PARSES IT INTO A `Cfg`. A host's idiomatic `Options` is a thin wrapper: it fills `Cfg` from
+;; the typed fields (`cfg_of`), or reads one back from a parsed `Cfg`; it does not know a key's name, a value's spelling, a default or a range.
+;;
+;;   THE TEXT.   Lines separated by LF (a CR before it is dropped); an empty line is nothing; a line is `KEY=VALUE`, split at the first `=`. The last line that
+;;               sets a key wins, except `limit.NAME` and `producer.NAME`, which are lists.
+;;   THE KEYS.   `ck-rows` is the table: a key's SHAPE (a string, a number in a range, one of a list of words, a flag, or a prefix that takes a name), its
+;;               range, and its name. `cv-rows` is every word an enum key takes, with its code (the codes `Cfg` holds, which `cfg_of` and the document unit read).
+;;                 locale  ocr  furniture  assets  asset-dpi  asset-pixels  asset-bytes  assets-bytes  asset-signatures  keep-evidence  ocr-scope
+;;                 max-rounds  fetch-rounds  record  js-ocr  chunk  limit.NAME  producer.NAME
+;;   THE DEFAULTS are `cf-defaults`: SPEC 13's, and the hosts' `Options::default()` is a parse of the empty text. A flag is 1 when its value is `1`, else 0.
+;;   THE ANSWER.  `cf-parse` answers 0 and the `Cfg` is filled, or 1 and `(fd c msg)` holds the sentence a driver prints after `usage`. `limit.NAME=N` is
+;;               kept in `lims` as (kind, value) pairs in the order given, and `producer.NAME=V` in `prod` as `klen vlen key... value...` records.
+;;   THE LIMITS' NAMES are `emon.limits`'s table (the same `NAME` a breach is reported under, `input-bytes`): `limit.input-bytes=1000`.
+;;
+;; THE TABLES' NAMES ARE CODE POINTS, written by a script; `kin/configtest.kin` holds each to its literal and every key to its meaning.
+(ns emon.config
+  (:require [emon.lang :refer [I32 Cells Text fd emit-ascii]]
+            [emon.enctx :refer [Cfg]]
+            [emon.limits :refer [lm-row-count lm-row-at lm-char-at]]
+            [emon.port :refer [cells-len cells-at cells-push cells-drop text-cp text-i32]]
+            [kin.lang :refer [defn defconst defdata return let set while if do comment
+                              + - * < > <= >= == != and or]]))
+
+;; ----------------------------------------------------------------------------------------------- the tables
+
+(defdata ^:pub ck-chars
+  :emitter kin.lang/flat-array
+  :data [108 111 99 97 108 101 111 99 114 102 117 114 110 105 116 117
+         114 101 97 115 115 101 116 115 97 115 115 101 116 45 100 112
+         105 97 115 115 101 116 45 112 105 120 101 108 115 97 115 115
+         101 116 45 98 121 116 101 115 97 115 115 101 116 115 45 98
+         121 116 101 115 97 115 115 101 116 45 115 105 103 110 97 116
+         117 114 101 115 107 101 101 112 45 101 118 105 100 101 110 99
+         101 111 99 114 45 115 99 111 112 101 109 97 120 45 114 111
+         117 110 100 115 102 101 116 99 104 45 114 111 117 110 100 115
+         114 101 99 111 114 100 106 115 45 111 99 114 99 104 117 110
+         107 108 105 109 105 116 46 112 114 111 100 117 99 101 114 46]
+  :accessors {^I32 ck-char-at [^I32 ignored ^I32 i]})
+
+;; a key is a row's index: [shape lo hi name-offset name-length]. Shapes: 0 a string, 1 a number in lo..hi, 2 a word of `cv-rows`, 3 a flag,
+;; 4 the prefix `limit.`, 5 the prefix `producer.`.
+(defdata ^:pub ck-rows
+  :emitter kin.lang/flat-array
+  :stride 5
+  :data [0 0 0 0 6                                  ;; 0  locale
+         2 0 0 6 3                                  ;; 1  ocr
+         2 0 0 9 9                                  ;; 2  furniture
+         2 0 0 18 6                                 ;; 3  assets
+         1 -2147483647 2147483647 24 9              ;; 4  asset-dpi
+         1 -2147483647 2147483647 33 12             ;; 5  asset-pixels
+         1 -2147483647 2147483647 45 11             ;; 6  asset-bytes
+         1 -2147483647 2147483647 56 12             ;; 7  assets-bytes
+         2 0 0 68 16                                ;; 8  asset-signatures
+         3 0 0 84 13                                ;; 9  keep-evidence
+         2 0 0 97 9                                 ;; 10 ocr-scope
+         1 -2147483647 2147483647 106 10            ;; 11 max-rounds
+         1 -2147483647 2147483647 116 12            ;; 12 fetch-rounds
+         3 0 0 128 6                                ;; 13 record
+         3 0 0 134 6                                ;; 14 js-ocr
+         1 1 2147483647 140 5                       ;; 15 chunk
+         4 0 0 145 6                                ;; 16 limit.
+         5 0 0 151 9]                               ;; 17 producer.
+  :accessors {^I32 ck-row-count [^I32 ignored]
+              ^I32 ck-row-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defdata ^:pub cv-chars
+  :emitter kin.lang/flat-array
+  :data [97 108 119 97 121 115 97 117 116 111 110 101 118 101 114 112
+         111 108 105 99 121 107 101 101 112 100 114 111 112 110 111 110
+         101 105 109 97 103 101 115 102 105 103 117 114 101 115 111 110
+         111 102 102 102 117 108 108 119 105 116 110 101 115 115]
+  :accessors {^I32 cv-char-at [^I32 ignored ^I32 i]})
+
+;; a word of an enum key: [key code name-offset name-length], in the order the sentence lists them.
+(defdata ^:pub cv-rows
+  :emitter kin.lang/flat-array
+  :stride 4
+  :data [1 2 0 6                                    ;; ocr           always
+         1 1 6 4                                    ;;               auto
+         1 0 10 5                                   ;;               never
+         2 0 15 6                                   ;; furniture     policy
+         2 1 21 4                                   ;;               keep
+         2 2 25 4                                   ;;               drop
+         3 0 29 4                                   ;; assets        none
+         3 1 33 6                                   ;;               images
+         3 2 39 7                                   ;;               figures
+         8 1 46 2                                   ;; asset-signatures on
+         8 0 48 3                                   ;;               off
+         10 0 51 4                                  ;; ocr-scope     full
+         10 1 55 7]                                 ;;               witness
+  :accessors {^I32 cv-row-count [^I32 ignored]
+              ^I32 cv-row-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defconst ^I32 K_LOCALE 0)
+(defconst ^I32 K_OCR 1)
+(defconst ^I32 K_FURN 2)
+(defconst ^I32 K_ASSETS 3)
+(defconst ^I32 K_DPI 4)
+(defconst ^I32 K_PIXELS 5)
+(defconst ^I32 K_ABYTE 6)
+(defconst ^I32 K_TBYTE 7)
+(defconst ^I32 K_SIGS 8)
+(defconst ^I32 K_KEEP 9)
+(defconst ^I32 K_SCOPE 10)
+(defconst ^I32 K_MAXR 11)
+(defconst ^I32 K_FETCHR 12)
+(defconst ^I32 K_REC 13)
+(defconst ^I32 K_JSOCR 14)
+(defconst ^I32 K_CHUNK 15)
+
+(defconst ^I32 SH_STR 0)
+(defconst ^I32 SH_NUM 1)
+(defconst ^I32 SH_ENUM 2)
+(defconst ^I32 SH_FLAG 3)
+(defconst ^I32 SH_LIMIT 4)
+(defconst ^I32 SH_PROD 5)
+
+;; ----------------------------------------------------------------------------------------------- the defaults
+
+(defn ^:pub ^I32 cf-defaults [^Cfg c]
+  (comment "SPEC 13's defaults, as the codes a `Cfg` holds: ocr always (2), scope full, furniture policy, no assets, 150 dpi, 2048 x 2048 pixels and 4 MiB an")
+  (comment "asset, 32 MiB in all, signatures dropped, a 64 KiB chunk, the loop's 5 rounds and 24 fetch rounds.")
+  (set (fd c ocr) 2)
+  (set (fd c scope) 0)
+  (set (fd c furn) 0)
+  (set (fd c level) 0)
+  (set (fd c dpi) 150)
+  (set (fd c pixels) 4194304)
+  (set (fd c abyte) 4194304)
+  (set (fd c tbyte) 33554432)
+  (set (fd c sigs) 0)
+  (set (fd c keep) 0)
+  (set (fd c haveloc) 0)
+  (set (fd c chunk) 65536)
+  (set (fd c maxr) 5)
+  (set (fd c fetchr) 24)
+  (set (fd c rec) 0)
+  (set (fd c jsocr) 0)
+  (return 0))
+
+;; ----------------------------------------------------------------------------------------------- finding a name
+
+(defn ^I32 cf-key-is [^Cells t ^I32 from ^I32 to ^I32 k]
+  (comment "1 when t[from, to) is key k: the whole of its name for a plain key, the start of the text for a prefix.")
+  (let [^I32 nl (ck-row-at 0 k 4)
+        ^I32 off (ck-row-at 0 k 3)
+        ^I32 shape (ck-row-at 0 k 0)
+        ^:mut ^I32 i 0]
+    (if (< (- to from) nl) (return 0))
+    (if (and (< shape SH_LIMIT) (!= (- to from) nl)) (return 0))
+    (while (< i nl)
+      (do (if (!= (cells-at t (+ from i)) (ck-char-at 0 (+ off i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 cf-key-find [^Cells t ^I32 from ^I32 to]
+  (comment "The key t[from, to) names, or -1.")
+  (let [^:mut ^I32 k 0]
+    (while (< k (ck-row-count 0))
+      (do (if (== (cf-key-is t from to k) 1) (return k))
+          (set k (+ k 1))))
+    (return -1)))
+
+(defn ^I32 cf-limit-is [^Cells t ^I32 from ^I32 to ^I32 kind]
+  (comment "1 when t[from, to) is the name of limit `kind`.")
+  (let [^I32 nl (lm-row-at 0 kind 4)
+        ^I32 off (lm-row-at 0 kind 3)
+        ^:mut ^I32 i 0]
+    (if (!= (- to from) nl) (return 0))
+    (while (< i nl)
+      (do (if (!= (cells-at t (+ from i)) (lm-char-at 0 (+ off i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 cf-limit-find [^Cells t ^I32 from ^I32 to]
+  (comment "The kind of the limit t[from, to) names, or -1.")
+  (let [^:mut ^I32 k 0]
+    (while (< k (lm-row-count 0))
+      (do (if (== (cf-limit-is t from to k) 1) (return k))
+          (set k (+ k 1))))
+    (return -1)))
+
+(defn ^I32 cf-word [^Cells t ^I32 from ^I32 to ^I32 key]
+  (comment "The code of the word t[from, to) is for enum key `key`, or -1.")
+  (let [^:mut ^I32 r 0]
+    (while (< r (cv-row-count 0))
+      (do (if (== (cv-row-at 0 r 0) key)
+            (let [^I32 nl (cv-row-at 0 r 3)
+                  ^I32 off (cv-row-at 0 r 2)
+                  ^:mut ^I32 i 0
+                  ^:mut ^I32 same 1]
+              (if (!= (- to from) nl) (set same 0))
+              (while (and (== same 1) (< i nl))
+                (do (if (!= (cells-at t (+ from i)) (cv-char-at 0 (+ off i))) (set same 0))
+                    (set i (+ i 1))))
+              (if (== same 1) (return (cv-row-at 0 r 1)))))
+          (set r (+ r 1))))
+    (return -1)))
+
+;; ----------------------------------------------------------------------------------------------- a number
+
+(defn ^I32 cf-num [^Cells t ^I32 from ^I32 to ^Cfg c]
+  (comment "A decimal with an optional sign, as Rust's i32 parse reads one, but -2147483648 is out of range here. 1 with the value in `num`, else 0.")
+  (let [^:mut ^I32 i from
+        ^:mut ^I32 neg 0
+        ^:mut ^I32 v 0]
+    (if (< i to)
+      (do (if (== (cells-at t i) 45) (do (set neg 1) (set i (+ i 1)))
+            (if (== (cells-at t i) 43) (set i (+ i 1))))))
+    (if (>= i to) (return 0))
+    (while (< i to)
+      (let [^I32 ch (cells-at t i)]
+        (if (or (< ch 48) (> ch 57)) (return 0))
+        (if (or (> v 214748364) (and (== v 214748364) (> (- ch 48) 7))) (return 0))
+        (set v (+ (* v 10) (- ch 48)))
+        (set i (+ i 1))))
+    (if (== neg 1) (set v (- 0 v)))
+    (set (fd c num) v)
+    (return 1)))
+
+;; ----------------------------------------------------------------------------------------------- the sentences a refusal is
+
+(defn ^I32 cf-put-span [^Cells t ^I32 from ^I32 to ^Cfg c]
+  (let [^:mut ^I32 i from]
+    (while (< i to)
+      (do (text-cp (fd c msg) (cells-at t i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 cf-put-key [^I32 k ^Cfg c]
+  (comment "Key k's name.")
+  (let [^I32 off (ck-row-at 0 k 3)
+        ^I32 nl (ck-row-at 0 k 4)
+        ^:mut ^I32 i 0]
+    (while (< i nl)
+      (do (text-cp (fd c msg) (ck-char-at 0 (+ off i)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 cf-put-word [^I32 r ^Cfg c]
+  (comment "The word of row r.")
+  (let [^I32 off (cv-row-at 0 r 2)
+        ^I32 nl (cv-row-at 0 r 3)
+        ^:mut ^I32 i 0]
+    (while (< i nl)
+      (do (text-cp (fd c msg) (cv-char-at 0 (+ off i)))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 cf-fail-enum [^I32 k ^Cfg c]
+  (comment "`ocr is always, auto or never`: the words come from the table, in its order.")
+  (cf-put-key k c)
+  (emit-ascii (fd c msg) " is ")
+  (let [^:mut ^I32 m 0
+        ^:mut ^I32 seen 0
+        ^:mut ^I32 r 0]
+    (while (< r (cv-row-count 0))
+      (do (if (== (cv-row-at 0 r 0) k) (set m (+ m 1)))
+          (set r (+ r 1))))
+    (set r 0)
+    (while (< r (cv-row-count 0))
+      (do (if (== (cv-row-at 0 r 0) k)
+            (do (if (> seen 0)
+                  (if (== seen (- m 1))
+                    (emit-ascii (fd c msg) " or ")
+                    (emit-ascii (fd c msg) ", ")))
+                (cf-put-word r c)
+                (set seen (+ seen 1))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 cf-fail-num [^Cells t ^I32 kf ^I32 ke ^I32 vf ^I32 vt ^Cfg c]
+  (comment "`asset-dpi wants a number, not \"x\"`.")
+  (cf-put-span t kf ke c)
+  (emit-ascii (fd c msg) " wants a number, not \"")
+  (cf-put-span t vf vt c)
+  (emit-ascii (fd c msg) "\"")
+  (return 0))
+
+(defn ^I32 cf-fail-range [^Cells t ^I32 kf ^I32 ke ^I32 lo ^I32 hi ^Cfg c]
+  (comment "`chunk is out of range 1..2147483647`.")
+  (cf-put-span t kf ke c)
+  (emit-ascii (fd c msg) " is out of range ")
+  (text-i32 (fd c msg) lo)
+  (emit-ascii (fd c msg) "..")
+  (text-i32 (fd c msg) hi)
+  (return 0))
+
+;; ----------------------------------------------------------------------------------------------- setting a field
+
+(defn ^I32 cf-set-num [^Cfg c ^I32 k ^I32 v]
+  (if (== k K_DPI) (set (fd c dpi) v))
+  (if (== k K_PIXELS) (set (fd c pixels) v))
+  (if (== k K_ABYTE) (set (fd c abyte) v))
+  (if (== k K_TBYTE) (set (fd c tbyte) v))
+  (if (== k K_MAXR) (set (fd c maxr) v))
+  (if (== k K_FETCHR) (set (fd c fetchr) v))
+  (if (== k K_CHUNK) (set (fd c chunk) v))
+  (return 0))
+
+(defn ^I32 cf-set-word [^Cfg c ^I32 k ^I32 v]
+  (if (== k K_OCR) (set (fd c ocr) v))
+  (if (== k K_FURN) (set (fd c furn) v))
+  (if (== k K_ASSETS) (set (fd c level) v))
+  (if (== k K_SIGS) (set (fd c sigs) v))
+  (if (== k K_SCOPE) (set (fd c scope) v))
+  (return 0))
+
+(defn ^I32 cf-set-flag [^Cfg c ^I32 k ^I32 v]
+  (if (== k K_KEEP) (set (fd c keep) v))
+  (if (== k K_REC) (set (fd c rec) v))
+  (if (== k K_JSOCR) (set (fd c jsocr) v))
+  (return 0))
+
+(defn ^I32 cf-one [^Cells t ^I32 vf ^I32 vt]
+  (comment "1 when the value is exactly `1`.")
+  (if (!= (- vt vf) 1) (return 0))
+  (if (== (cells-at t vf) 49) (return 1))
+  (return 0))
+
+;; ----------------------------------------------------------------------------------------------- one line
+
+(defn ^I32 cf-apply [^Cells t ^I32 k ^I32 kf ^I32 ke ^I32 vf ^I32 vt ^Cfg c]
+  (comment "The line t[kf, ke) = t[vf, vt) for key k: 1, or 0 with the sentence in `msg`.")
+  (let [^I32 shape (ck-row-at 0 k 0)]
+    (if (== shape SH_STR)
+      (do (cells-drop (fd c lcl) 0)
+          (set (fd c haveloc) 1)
+          (let [^:mut ^I32 i vf]
+            (while (< i vt)
+              (do (cells-push (fd c lcl) (cells-at t i))
+                  (set i (+ i 1)))))
+          (return 1)))
+    (if (== shape SH_NUM)
+      (do (if (== (cf-num t vf vt c) 0)
+            (do (cf-fail-num t kf ke vf vt c) (return 0)))
+          (if (or (< (fd c num) (ck-row-at 0 k 1)) (> (fd c num) (ck-row-at 0 k 2)))
+            (do (cf-fail-range t kf ke (ck-row-at 0 k 1) (ck-row-at 0 k 2) c) (return 0)))
+          (cf-set-num c k (fd c num))
+          (return 1)))
+    (if (== shape SH_ENUM)
+      (let [^I32 code (cf-word t vf vt k)]
+        (if (< code 0)
+          (do (cf-fail-enum k c) (return 0)))
+        (cf-set-word c k code)
+        (return 1)))
+    (if (== shape SH_FLAG)
+      (do (cf-set-flag c k (cf-one t vf vt))
+          (return 1)))
+    (if (== shape SH_LIMIT)
+      (let [^I32 kind (cf-limit-find t (+ kf (ck-row-at 0 k 4)) ke)]
+        (if (< kind 0)
+          (do (emit-ascii (fd c msg) "no limit named ")
+              (cf-put-span t (+ kf (ck-row-at 0 k 4)) ke c)
+              (return 0)))
+        (if (== (cf-num t vf vt c) 0)
+          (do (cf-fail-num t kf ke vf vt c) (return 0)))
+        (if (or (< (fd c num) (lm-row-at 0 kind 1)) (> (fd c num) (lm-row-at 0 kind 2)))
+          (do (cf-fail-range t kf ke (lm-row-at 0 kind 1) (lm-row-at 0 kind 2) c) (return 0)))
+        (cells-push (fd c lims) kind)
+        (cells-push (fd c lims) (fd c num))
+        (return 1)))
+    (let [^I32 nf (+ kf (ck-row-at 0 k 4))
+          ^:mut ^I32 q 0]
+      (cells-push (fd c prod) (- ke nf))
+      (cells-push (fd c prod) (- vt vf))
+      (set q nf)
+      (while (< q ke)
+        (do (cells-push (fd c prod) (cells-at t q))
+            (set q (+ q 1))))
+      (set q vf)
+      (while (< q vt)
+        (do (cells-push (fd c prod) (cells-at t q))
+            (set q (+ q 1))))
+      (return 1))))
+
+(defn ^I32 cf-line [^Cells t ^I32 from ^I32 to ^Cfg c]
+  (comment "One non-empty line: 1, or 0 with the sentence in `msg`.")
+  (let [^:mut ^I32 eq from]
+    (while (and (< eq to) (!= (cells-at t eq) 61))
+      (set eq (+ eq 1)))
+    (if (== eq to)
+      (do (emit-ascii (fd c msg) "option \"")
+          (cf-put-span t from to c)
+          (emit-ascii (fd c msg) "\" has no value")
+          (return 0)))
+    (let [^I32 k (cf-key-find t from eq)]
+      (if (< k 0)
+        (do (emit-ascii (fd c msg) "unknown option ")
+            (cf-put-span t from eq c)
+            (return 0)))
+      (return (cf-apply t k from eq (+ eq 1) to c)))))
+
+;; ----------------------------------------------------------------------------------------------- the text
+
+(defn ^:pub ^I32 cf-parse [^Cells t ^Cfg c]
+  (comment "Fill `c` from the options text `t` (code points): the defaults, then each line. Answers 0, or 1 with the sentence in `(fd c msg)`.")
+  (cf-defaults c)
+  (let [^I32 n (cells-len t)
+        ^:mut ^I32 at 0]
+    (while (< at n)
+      (let [^:mut ^I32 le at
+            ^:mut ^I32 hi at]
+        (while (and (< le n) (!= (cells-at t le) 10))
+          (set le (+ le 1)))
+        (set hi le)
+        (if (and (> hi at) (== (cells-at t (- hi 1)) 13)) (set hi (- hi 1)))
+        (if (> hi at)
+          (if (== (cf-line t at hi c) 0) (return 1)))
+        (set at (+ le 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 cf-is-key [^Cells t ^I32 from ^I32 to]
+  (comment "1 when t[from, to) names a key of the grammar (a driver asks it of `--NAME=`).")
+  (if (< (cf-key-find t from to) 0) (return 0))
+  (return 1))

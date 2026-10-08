@@ -21,6 +21,10 @@ fn run(bytes: &[u8], chunk: i32) -> String {
     match res {
         Ok(t) => t,
         Err(p) => {
+            // a limit breach is a typed payload and a NAMED outcome (SPEC 7.4, P10.10), the same line on every host: nothing reads a message
+            if let Some(b) = p.downcast_ref::<port::LimitBreach>() {
+                return format!("LIMIT-{}", b.name());
+            }
             let m = if let Some(s) = p.downcast_ref::<String>() { s.clone() }
                     else if let Some(s) = p.downcast_ref::<&str>() { s.to_string() }
                     else { "?".to_string() };

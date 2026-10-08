@@ -46,8 +46,19 @@
 // `test/driver/go/main.go` is its twin: the same flags (it adds `--source=readerat`), stdout and exit codes (`bb identity`).
 //
 // Exit: 0 ok; 2 usage; 4 a named emon error (`error: NAME` on stderr, nothing on stdout); 1 anything else.
-use emon::{Assets, Config, Engine, Furniture, HtmlAssets, HtmlOptions, Input, JsonOptions, OcrPolicy, OcrScope, Options, Output};
+use emon::{Config, Engine, HtmlAssets, HtmlOptions, Input, JsonOptions, Options, Output};
 use std::io::Read;
+
+// `--NAME=VALUE` when NAME is a key of kin's options grammar (`emon.config`): the `NAME=VALUE` line it stands for.
+fn kin_flag(a: &str) -> Option<String> {
+    let flag = a.strip_prefix("--")?;
+    let (k, _) = flag.split_once('=')?;
+    if emon::is_option_key(k) {
+        Some(flag.to_string())
+    } else {
+        None
+    }
+}
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
@@ -155,8 +166,9 @@ fn main() {
     let mut html = HtmlOptions::default();
     let mut html_assets: Option<HtmlAssets> = None;
     let mut asset_prefix: Option<String> = None;
-    let mut opts = Options::default();
-    let mut cfg = Config::default();
+    let mut kin_text = String::new();
+    let mut simulate_async = false;
+    let mut no_retarget = false;
     let mut password: Option<String> = None;
     let mut source = "bytes".to_string();
     let mut stats = false;
@@ -176,29 +188,6 @@ fn main() {
             pretty = true;
         } else if let Some(v) = a.strip_prefix("--html=") {
             html = html_options(v);
-        } else if let Some(v) = a.strip_prefix("--locale=") {
-            opts.locale = Some(v.to_string());
-        } else if let Some(v) = a.strip_prefix("--ocr=") {
-            opts.ocr = match v {
-                "always" => OcrPolicy::Always,
-                "auto" => OcrPolicy::Auto,
-                "never" => OcrPolicy::Never,
-                _ => usage("--ocr is always, auto or never"),
-            };
-        } else if let Some(v) = a.strip_prefix("--furniture=") {
-            opts.furniture = match v {
-                "policy" => Furniture::Policy,
-                "keep" => Furniture::Keep,
-                "drop" => Furniture::Drop,
-                _ => usage("--furniture is policy, keep or drop"),
-            };
-        } else if let Some(v) = a.strip_prefix("--assets=") {
-            opts.assets = match v {
-                "none" => Assets::None,
-                "images" => Assets::Images,
-                "figures" => Assets::Figures,
-                _ => usage("--assets is none, images or figures"),
-            };
         } else if let Some(v) = a.strip_prefix("--html-assets=") {
             html_assets = Some(match v {
                 "inline" => HtmlAssets::Inline,
@@ -208,38 +197,16 @@ fn main() {
             });
         } else if let Some(v) = a.strip_prefix("--asset-prefix=") {
             asset_prefix = Some(v.to_string());
-        } else if let Some(v) = a.strip_prefix("--asset-dpi=") {
-            opts.asset_dpi = v.parse().unwrap_or_else(|_| usage("--asset-dpi=N wants a number"));
-        } else if let Some(v) = a.strip_prefix("--asset-pixels=") {
-            opts.asset_pixels = v.parse().unwrap_or_else(|_| usage("--asset-pixels=N wants a number"));
-        } else if let Some(v) = a.strip_prefix("--asset-bytes=") {
-            opts.asset_bytes = v.parse().unwrap_or_else(|_| usage("--asset-bytes=N wants a number"));
-        } else if let Some(v) = a.strip_prefix("--assets-bytes=") {
-            opts.assets_bytes = v.parse().unwrap_or_else(|_| usage("--assets-bytes=N wants a number"));
-        } else if let Some(v) = a.strip_prefix("--asset-signatures=") {
-            opts.asset_signatures = match v {
-                "on" => true,
-                "off" => false,
-                _ => usage("--asset-signatures is on or off"),
-            };
         } else if let Some(v) = a.strip_prefix("--asset-dir=") {
             asset_dir = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--password=") {
             password = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--source=") {
             source = v.to_string();
-        } else if let Some(v) = a.strip_prefix("--chunk=") {
-            cfg.chunk_size = v.parse().unwrap_or_else(|_| usage("--chunk=N wants a number"));
         } else if a == "--async" {
-            cfg.simulate_async = true;
-        } else if let Some(v) = a.strip_prefix("--ocr-scope=") {
-            opts.ocr_scope = match v {
-                "full" => OcrScope::Full,
-                "witness" => OcrScope::Witness,
-                _ => usage("--ocr-scope is full or witness"),
-            };
+            simulate_async = true;
         } else if a == "--no-retarget" {
-            opts.no_retarget = true;
+            no_retarget = true;
         } else if a == "--pdfium" {
             use_pdfium = true;
         } else if a == "--codecs" {
@@ -258,6 +225,10 @@ fn main() {
             dump = Some(v.to_string());
         } else if let Some(v) = a.strip_prefix("--parallel=") {
             parallel = v.parse().ok().filter(|n| *n >= 1).unwrap_or_else(|| usage("--parallel=N wants a positive number"));
+        } else if let Some(line) = kin_flag(&a) {
+            // a key of kin's options grammar (`emon.config`): --ocr=never, --asset-dpi=300, --limit.pages=5, --chunk=512, ...
+            kin_text.push_str(&line);
+            kin_text.push('\n');
         } else if a.starts_with("--") {
             usage(&format!("unknown flag {}", a));
         } else if file.is_none() {
@@ -273,6 +244,12 @@ fn main() {
     if (record.is_some() || replay.is_some()) && parallel > 1 {
         usage("--record and --replay are one conversion");
     }
+    // THE OPTIONS AND THE ENGINE'S BOUNDS ARE KIN'S GRAMMAR: the flags it knows were collected as `key=value` lines and are parsed once.
+    let parsed = emon::parse_options(&kin_text).unwrap_or_else(|m| usage(&m));
+    let mut opts: Options = parsed.options;
+    let mut cfg: Config = parsed.config;
+    cfg.simulate_async = simulate_async;
+    opts.no_retarget = no_retarget;
     opts.keep_evidence = out == "evidence" || out == "bundle";
     if let Some(a) = html_assets {
         html.assets = a;
