@@ -1,0 +1,23 @@
+# P10.3 (D860): the per-bet comparators of `bb perf`. NOT part of any gate, and not a host crate: it
+# compiles the committed kin-generated Rust (gen/rust/emon/*.rs) and the Rust port (host/rust/src/port.rs)
+# by path, next to the native reference implementations below. Dependencies are PINNED (=) and minimal;
+# the lockfile is committed. Build offline: `cargo build --release --offline` (the registry cache has them).
+[package]
+name = "emon-perf"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+# DEFLATE/zlib reference (miniz_oxide backend, flate2's default) -- the "flate2/miniz_oxide" comparator.
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+# The fast pure-Rust zlib decoder the png crate itself uses -- the stricter inflate comparator.
+fdeflate = "=0.3.7"
+# PNG encoder/decoder reference (filters, adaptive filtering, unfilter).
+png = "=0.18.1"
+
+[profile.release]
+opt-level = 3
+debug = false
