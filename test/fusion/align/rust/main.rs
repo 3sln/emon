@@ -127,7 +127,7 @@ fn main() {
     };
     let mut bytes = SyncFulfiller::new(|req: &Request, _bm: &Bitmaps| -> Result<Answer, PlanError> {
         let mut c = Cells::new();
-        emon::plan::an_bytes(&mut c, req.id(), req.arg(1), req.arg(2));
+        emon::plan::an_bytes(&mut c, req.id(), req.field(emon::plan::bq_offset()), req.field(emon::plan::bq_length()));
         Ok(Answer { rec: to_vec(&c), bitmap: None })
     });
 
