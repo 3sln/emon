@@ -853,6 +853,54 @@ func hdListRun(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, s
 	return 0
 }
 
+func hdSandwich(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, sf *port.Cells, top int32, last int32, cnt int32) int32 {
+	// Is a body-styled numbered line a title standing BETWEEN paragraphs (D780): one short line, no marker on
+	// the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging
+	// continuation of a list item). A list's items are next to one another or carry their text on their own line;
+	// a numbered line that alternates with full paragraphs is a heading whose style the scan could not read.
+	if cnt != 1 {
+		return 0
+	}
+	var a int32 = style.StGet(sf, top, style.SfkAbove())
+	var b int32 = style.StGet(sf, last, style.SfkBelow())
+	var sz int32 = style.StGet(sf, top, style.SfkSize())
+	if b < 0 {
+		return 0
+	}
+	// an enumerator proper: a letter or a roman numeral with its delimiter, or a number with one (`12 Harbour
+	// Road` is an address and `Table 2` a caption)
+	var s int32 = HdMarker(wd, ln, et, ws, top)
+	var w0 int32 = hdNthWord(wd, ln, top, 0)
+	if (s == 0) || ((s == 6) || (s == 7)) {
+		return 0
+	}
+	if s == 1 {
+		if hdDec(wd, et, w0) < 64 {
+			return 0
+		}
+	}
+	if style.StGet(sf, b, style.SfkPage()) != style.StGet(sf, top, style.SfkPage()) {
+		return 0
+	}
+	if style.StGet(sf, top, style.SfkCps()) > 60 {
+		return 0
+	}
+	if (hdAbs(style.StGet(sf, b, style.SfkX0())-style.StGet(sf, top, style.SfkX0())) * 2) > sz {
+		return 0
+	}
+	if style.StGet(sf, b, style.SfkCps()) > 0 {
+		if HdMarker(wd, ln, et, ws, b) != 0 {
+			return 0
+		}
+	}
+	if a >= 0 {
+		if HdMarker(wd, ln, et, ws, a) != 0 {
+			return 0
+		}
+	}
+	return 1
+}
+
 func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells, sf *port.Cells, sc *port.Cells, cnt int32) int32 {
 	// The score of the unit whose lines are ws[WS_LINES..]: -1 when it cannot be a heading. Leaves the
 	// numbering of its first line in ws[0..4].
@@ -863,6 +911,7 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 	var total int32 = 0
 	var i int32 = 0
 	var s int32 = 0
+	var sand int32 = 0
 	var pts int32 = 0
 	for i < cnt {
 		total += style.StGet(sf, port.CellsAt(ws, wsLines+i), style.SfkCps())
@@ -878,6 +927,9 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 		if hdListRun(wd, ln, et, ws, sf, top, last) == 1 {
 			return -1
 		}
+	}
+	if ps == 0 {
+		sand = hdSandwich(wd, ln, et, ws, sf, top, last, cnt)
 	}
 	s = HdMarker(wd, ln, et, ws, top)
 	pts = ps
@@ -897,7 +949,7 @@ func hdUnitScore(wd *port.Cells, ln *port.Cells, et *port.Cells, ws *port.Cells,
 		return -1
 	}
 	// a body-styled numbered line followed at the body's own line gap is a paragraph or a list item
-	if (ps == 0) && ((b >= 0) && ((gb * 2) < (lg * 3))) {
+	if (ps == 0) && ((sand == 0) && ((b >= 0) && ((gb * 2) < (lg * 3)))) {
 		return -1
 	}
 	// smaller than the body, so it is the weight or the capitals alone that says heading: it must at least
@@ -1067,7 +1119,8 @@ func hdLone(ws *port.Cells, sf *port.Cells, u int32, nu int32) int32 {
 	var sclass int32 = style.StGet(sf, hdUn(ws, u, 0), style.SfkClass())
 	var v int32 = 0
 	var same int32 = 0
-	if (s >= 2) && (s <= 5) {
+	// a line set in capitals after its letter or numeral (`I. GOVERNANCE`) is a title, not a name (D780)
+	if (s >= 2) && ((s <= 5) && (style.StGet(sf, hdUn(ws, u, 0), style.SfkCaps()) == 0)) {
 		for v < nu {
 			if (hdUn(ws, v, 5) == s) && (style.StGet(sf, hdUn(ws, v, 0), style.SfkClass()) == sclass) {
 				same += 1

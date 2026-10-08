@@ -365,6 +365,63 @@ func TestANumberedListIsNotARunOfHeadings(emonT *testing.T) {
 	port.AssertEq(emonT, heading.HdLevel(hc, 8), 0, "the third")
 }
 
+func TestANumberedTitleBetweenParagraphsIsAHeading(emonT *testing.T) {
+	// D780: no weight, no size, no italic (a scan): a short numbered line with a paragraph above and below, the
+	// paragraph flush with it, is a heading; the same numbers closing a list are not.
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var y int32 = 5000
+	y = htBody(wd, ln, et, 1, y, 5)
+	y += 900
+	htLine(wd, ln, et, port.TextBlob("a) Charter"), 1, 7200, y, 40000, y+1200, 1100, 0)
+	y += 1400
+	y = htBody(wd, ln, et, 1, y, 3)
+	y += 900
+	htLine(wd, ln, et, port.TextBlob("b) Membership"), 1, 7200, y, 40000, y+1200, 1100, 0)
+	y += 1400
+	y = htBody(wd, ln, et, 1, y, 3)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 2, "two headings")
+	port.AssertEq(emonT, heading.HdLevel(hc, 5), 1, "`a) Charter`")
+	port.AssertEq(emonT, heading.HdLevel(hc, 9), 1, "`b) Membership`")
+	port.AssertEq(emonT, heading.HdLevel(hc, 4), 0, "the paragraph above")
+	port.AssertEq(emonT, heading.HdLevel(hc, 6), 0, "the paragraph below")
+}
+
+func TestTheLastItemOfANumberedListIsNotAHeading(emonT *testing.T) {
+	// D780: the list's items stand next to one another; the last one has a numbered line above it.
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var sf *port.Cells = port.NewCells()
+	var sc *port.Cells = port.NewCells()
+	var hc *port.Cells = port.NewCells()
+	var ws *port.Cells = port.NewCells()
+	var tmp *port.Cells = port.NewCells()
+	var pr *port.Cells = port.NewCells()
+	var ptxt *port.Cells = port.NewCells()
+	var y int32 = 5000
+	y = htBody(wd, ln, et, 1, y, 5)
+	y += 900
+	htLine(wd, ln, et, port.TextBlob("a) Apples"), 1, 7200, y, 40000, y+1200, 1100, 0)
+	y += 1400
+	htLine(wd, ln, et, port.TextBlob("b) Pears"), 1, 7200, y, 40000, y+1200, 1100, 0)
+	y += 1400
+	htLine(wd, ln, et, port.TextBlob("c) Plums"), 1, 7200, y, 40000, y+1200, 1100, 0)
+	y += 2300
+	y = htBody(wd, ln, et, 1, y, 4)
+	port.AssertEq(emonT, htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading")
+	port.AssertEq(emonT, heading.HdLevel(hc, 5), 0, "the first item")
+	port.AssertEq(emonT, heading.HdLevel(hc, 7), 0, "the last item")
+}
+
 func TestAnInitialIsNeverAHeadingButADividerIs(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
