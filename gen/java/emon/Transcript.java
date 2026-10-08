@@ -714,7 +714,7 @@ public final class Transcript {
         int c = emon.Port.blobU8(b, i);
         if (c == 123) {
             i += 1;
-            while (0 < 1) {
+            while (emon.Port.blobLen(b) >= 0) {
                 i = edWs(b, i);
                 if (i >= n) {
                     return 0 - edFail(t, tbUnterminatedMap(), i);
@@ -740,7 +740,7 @@ public final class Transcript {
         }
         if (c == 91) {
             i += 1;
-            while (0 < 1) {
+            while (emon.Port.blobLen(b) >= 0) {
                 i = edWs(b, i);
                 if (i >= n) {
                     return 0 - edFail(t, tbUnterminatedVec(), i);
@@ -790,7 +790,7 @@ public final class Transcript {
     public static int edField(emon.Transcriptctx.Tr t, byte[] b, int mapAt, int code) {
         // Where the value of the first key `code` (`tf`) of the map at `map-at` starts, or -1: the first of a repeated key wins, a key not in `tf` is passed.
         int i = edWs(b, mapAt) + 1;
-        while (0 < 1) {
+        while (emon.Port.blobLen(b) >= 0) {
             i = edWs(b, i);
             if ((i >= emon.Port.blobLen(b)) || (emon.Port.blobU8(b, i) == 125)) {
                 return -1;
@@ -892,7 +892,7 @@ public final class Transcript {
         }
         int i = edWs(b, pos) + 1;
         int k = 0;
-        while (0 < 1) {
+        while (emon.Port.blobLen(b) >= 0) {
             i = edWs(b, i);
             if (emon.Port.blobU8(b, i) == 93) {
                 return k;
@@ -930,7 +930,7 @@ public final class Transcript {
             return 0;
         }
         int i = edWs(b, pos) + 1;
-        while (0 < 1) {
+        while (emon.Port.blobLen(b) >= 0) {
             i = edWs(b, i);
             if (emon.Port.blobU8(b, i) == 125) {
                 return 0;
@@ -958,7 +958,7 @@ public final class Transcript {
             return edFail(t, tbNoInputs(), edWs(b, pos));
         }
         int i = edWs(b, pos) + 1;
-        while (0 < 1) {
+        while (emon.Port.blobLen(b) >= 0) {
             i = edWs(b, i);
             if (emon.Port.blobU8(b, i) == 93) {
                 return 0;
@@ -1036,7 +1036,7 @@ public final class Transcript {
             return edFail(t, tbNoEntries(), edWs(b, pos));
         }
         int i = edWs(b, pos) + 1;
-        while (0 < 1) {
+        while (emon.Port.blobLen(b) >= 0) {
             i = edWs(b, i);
             if (emon.Port.blobU8(b, i) == 93) {
                 return 0;
@@ -1197,21 +1197,21 @@ public final class Transcript {
             emon.Port.textAscii(out, " :");
             tfEmitName(out, tfProducer());
             emon.Port.textAscii(out, " {");
-            int n = emon.Port.cellsLen(t.prod);
-            int at = 0;
-            while (at < n) {
-                int kn = emon.Port.cellsAt(t.prod, at);
-                int vn = emon.Port.cellsAt(t.prod, at + (kn + 1));
-                if (at > 0) {
+            int pn = emon.Port.cellsLen(t.prod);
+            int pat = 0;
+            while (pat < pn) {
+                int kn = emon.Port.cellsAt(t.prod, pat);
+                int vn = emon.Port.cellsAt(t.prod, pat + (kn + 1));
+                if (pat > 0) {
                     emon.Port.textAscii(out, " ");
                 }
                 emon.Port.textAscii(out, ":");
-                twCps(out, t.prod, at + 1, kn, 0);
+                twCps(out, t.prod, pat + 1, kn, 0);
                 emon.Port.textAscii(out, " ");
                 emon.Port.textCp(out, 34);
-                twCps(out, t.prod, at + (kn + 2), vn, 1);
+                twCps(out, t.prod, pat + (kn + 2), vn, 1);
                 emon.Port.textCp(out, 34);
-                at += kn + (vn + 2);
+                pat += kn + (vn + 2);
             }
             emon.Port.textAscii(out, "}");
             emon.Port.textCp(out, 10);
@@ -1317,20 +1317,20 @@ public final class Transcript {
             size *= 2;
         }
         emon.Port.cellsDrop(t.idx, 0);
-        int i = 0;
-        while (i < size) {
+        int zi = 0;
+        while (zi < size) {
             emon.Port.cellsPush(t.idx, 0);
-            i += 1;
+            zi += 1;
         }
         t.mask = size - 1;
         while (e < emon.Port.cellsLen(t.ents)) {
             int rl = emon.Port.cellsAt(t.ents, e + 5);
             emon.Port.cellsDrop(t.tmp, 0);
-            int i = 0;
-            while (i < rl) {
-                int v = emon.Port.cellsAt(t.ents, e + (6 + i));
+            int ki = 0;
+            while (ki < rl) {
+                int v = emon.Port.cellsAt(t.ents, e + (6 + ki));
                 emon.Port.cellsPush(t.tmp, v);
-                i += 1;
+                ki += 1;
             }
             int h = trHash(t.tmp, 0, rl);
             int s = h & t.mask;
@@ -1357,7 +1357,7 @@ public final class Transcript {
             return -1;
         }
         int s = trHash(c, at, cnt) & t.mask;
-        while (0 < 1) {
+        while (t.mask >= 0) {
             int cur = emon.Port.cellsAt(t.idx, s);
             if (cur == 0) {
                 return -1;

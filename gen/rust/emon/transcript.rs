@@ -711,7 +711,7 @@ pub(crate) fn ed_end(t: &mut crate::emon::transcriptctx::Tr, b: &[u8], pos: i32,
     let c: i32 = crate::port::blob_u8(b, i);
     if c == 123 {
         i += 1;
-        while 0 < 1 {
+        while crate::port::blob_len(b) >= 0 {
             i = ed_ws(b, i);
             if i >= n {
                 return 0 - ed_fail(t, tb_unterminated_map(), i);
@@ -737,7 +737,7 @@ pub(crate) fn ed_end(t: &mut crate::emon::transcriptctx::Tr, b: &[u8], pos: i32,
     }
     if c == 91 {
         i += 1;
-        while 0 < 1 {
+        while crate::port::blob_len(b) >= 0 {
             i = ed_ws(b, i);
             if i >= n {
                 return 0 - ed_fail(t, tb_unterminated_vec(), i);
@@ -787,7 +787,7 @@ pub(crate) fn ed_end(t: &mut crate::emon::transcriptctx::Tr, b: &[u8], pos: i32,
 pub(crate) fn ed_field(t: &mut crate::emon::transcriptctx::Tr, b: &[u8], map_at: i32, code: i32) -> i32 {
     // Where the value of the first key `code` (`tf`) of the map at `map-at` starts, or -1: the first of a repeated key wins, a key not in `tf` is passed.
     let mut i: i32 = ed_ws(b, map_at) + 1;
-    while 0 < 1 {
+    while crate::port::blob_len(b) >= 0 {
         i = ed_ws(b, i);
         if (i >= crate::port::blob_len(b)) || (crate::port::blob_u8(b, i) == 125) {
             return -1;
@@ -889,7 +889,7 @@ pub(crate) fn ed_ints(t: &mut crate::emon::transcriptctx::Tr, b: &[u8], pos: i32
     }
     let mut i: i32 = ed_ws(b, pos) + 1;
     let mut k: i32 = 0;
-    while 0 < 1 {
+    while crate::port::blob_len(b) >= 0 {
         i = ed_ws(b, i);
         if crate::port::blob_u8(b, i) == 93 {
             return k;
@@ -927,7 +927,7 @@ pub(crate) fn ed_producer(t: &mut crate::emon::transcriptctx::Tr, b: &[u8], pos:
         return 0;
     }
     let mut i: i32 = ed_ws(b, pos) + 1;
-    while 0 < 1 {
+    while crate::port::blob_len(b) >= 0 {
         i = ed_ws(b, i);
         if crate::port::blob_u8(b, i) == 125 {
             return 0;
@@ -955,7 +955,7 @@ pub(crate) fn ed_inputs(t: &mut crate::emon::transcriptctx::Tr, b: &[u8], pos: i
         return ed_fail(t, tb_no_inputs(), ed_ws(b, pos));
     }
     let mut i: i32 = ed_ws(b, pos) + 1;
-    while 0 < 1 {
+    while crate::port::blob_len(b) >= 0 {
         i = ed_ws(b, i);
         if crate::port::blob_u8(b, i) == 93 {
             return 0;
@@ -1033,7 +1033,7 @@ pub(crate) fn ed_entries(t: &mut crate::emon::transcriptctx::Tr, b: &[u8], pos: 
         return ed_fail(t, tb_no_entries(), ed_ws(b, pos));
     }
     let mut i: i32 = ed_ws(b, pos) + 1;
-    while 0 < 1 {
+    while crate::port::blob_len(b) >= 0 {
         i = ed_ws(b, i);
         if crate::port::blob_u8(b, i) == 93 {
             return 0;
@@ -1194,21 +1194,21 @@ pub fn tr_write(t: &mut crate::emon::transcriptctx::Tr, mut out: &mut String) ->
         crate::port::text_ascii(out, " :");
         tf_emit_name(out, tf_producer());
         crate::port::text_ascii(out, " {");
-        let n: i32 = crate::port::cells_len(&mut t.prod);
-        let mut at: i32 = 0;
-        while at < n {
-            let kn: i32 = crate::port::cells_at(&mut t.prod, at);
-            let vn: i32 = crate::port::cells_at(&mut t.prod, at + (kn + 1));
-            if at > 0 {
+        let pn: i32 = crate::port::cells_len(&mut t.prod);
+        let mut pat: i32 = 0;
+        while pat < pn {
+            let kn: i32 = crate::port::cells_at(&mut t.prod, pat);
+            let vn: i32 = crate::port::cells_at(&mut t.prod, pat + (kn + 1));
+            if pat > 0 {
                 crate::port::text_ascii(out, " ");
             }
             crate::port::text_ascii(out, ":");
-            tw_cps(out, &mut t.prod, at + 1, kn, 0);
+            tw_cps(out, &mut t.prod, pat + 1, kn, 0);
             crate::port::text_ascii(out, " ");
             crate::port::text_cp(out, 34);
-            tw_cps(out, &mut t.prod, at + (kn + 2), vn, 1);
+            tw_cps(out, &mut t.prod, pat + (kn + 2), vn, 1);
             crate::port::text_cp(out, 34);
-            at += kn + (vn + 2);
+            pat += kn + (vn + 2);
         }
         crate::port::text_ascii(out, "}");
         crate::port::text_cp(out, 10);
@@ -1314,20 +1314,20 @@ pub fn tr_index(t: &mut crate::emon::transcriptctx::Tr) -> i32 {
         size *= 2;
     }
     crate::port::cells_drop(&mut t.idx, 0);
-    let mut i: i32 = 0;
-    while i < size {
+    let mut zi: i32 = 0;
+    while zi < size {
         crate::port::cells_push(&mut t.idx, 0);
-        i += 1;
+        zi += 1;
     }
     t.mask = size - 1;
     while e < crate::port::cells_len(&mut t.ents) {
         let rl: i32 = crate::port::cells_at(&mut t.ents, e + 5);
         crate::port::cells_drop(&mut t.tmp, 0);
-        let mut i: i32 = 0;
-        while i < rl {
-            let v: i32 = crate::port::cells_at(&mut t.ents, e + (6 + i));
+        let mut ki: i32 = 0;
+        while ki < rl {
+            let v: i32 = crate::port::cells_at(&mut t.ents, e + (6 + ki));
             crate::port::cells_push(&mut t.tmp, v);
-            i += 1;
+            ki += 1;
         }
         let h: i32 = tr_hash(&mut t.tmp, 0, rl);
         let mut s: i32 = h & t.mask;
@@ -1354,7 +1354,7 @@ pub fn tr_find(t: &mut crate::emon::transcriptctx::Tr, c: &mut crate::port::Cell
         return -1;
     }
     let mut s: i32 = tr_hash(c, at, cnt) & t.mask;
-    while 0 < 1 {
+    while t.mask >= 0 {
         let cur: i32 = crate::port::cells_at(&mut t.idx, s);
         if cur == 0 {
             return -1;

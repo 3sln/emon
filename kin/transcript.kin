@@ -178,7 +178,7 @@
       ;; a map: keywords for keys
       (if (== c 123)
         (do (set i (+ i 1))
-            (while (< 0 1)
+            (while (>= (blob-len b) 0)
               (do (set i (ed-ws b i))
                   (if (>= i n) (return (- 0 (ed-fail t (tb-unterminated-map) i))))
                   (if (== (blob-u8 b i) 125) (return (+ i 1)))
@@ -193,7 +193,7 @@
       ;; a vector
       (if (== c 91)
         (do (set i (+ i 1))
-            (while (< 0 1)
+            (while (>= (blob-len b) 0)
               (do (set i (ed-ws b i))
                   (if (>= i n) (return (- 0 (ed-fail t (tb-unterminated-vec) i))))
                   (if (== (blob-u8 b i) 93) (return (+ i 1)))
@@ -234,7 +234,7 @@
 (defn ^I32 ed-field [^Tr t ^Blob b ^I32 map-at ^I32 code]
   (comment "Where the value of the first key `code` (`tf`) of the map at `map-at` starts, or -1: the first of a repeated key wins, a key not in `tf` is passed.")
   (let [^:mut ^I32 i (+ (ed-ws b map-at) 1)]
-    (while (< 0 1)
+    (while (>= (blob-len b) 0)
       (do (set i (ed-ws b i))
           (if (or (>= i (blob-len b)) (== (blob-u8 b i) 125)) (return -1))
           (let [^I32 ke (ed-end t b i 0)
@@ -312,7 +312,7 @@
   (if (!= (ed-first b pos) 91) (return -1))
   (let [^:mut ^I32 i (+ (ed-ws b pos) 1)
         ^:mut ^I32 k 0]
-    (while (< 0 1)
+    (while (>= (blob-len b) 0)
       (do (set i (ed-ws b i))
           (if (== (blob-u8 b i) 93) (return k))
           (if (== (ed-int-at t b i) 0) (return -1))
@@ -342,7 +342,7 @@
   (comment "The `:producer` map at `pos`: the pairs whose value is a string, in the order the file has them. A producer that is no map is passed.")
   (if (!= (ed-first b pos) 123) (return 0))
   (let [^:mut ^I32 i (+ (ed-ws b pos) 1)]
-    (while (< 0 1)
+    (while (>= (blob-len b) 0)
       (do (set i (ed-ws b i))
           (if (== (blob-u8 b i) 125) (return 0))
           (let [^I32 ke (ed-end t b i 0)
@@ -364,7 +364,7 @@
   (comment "The `:inputs` vector at `pos`: each a map with an `:index` and a `:length`. 0, or the reason (`tb`).")
   (if (!= (ed-first b pos) 91) (return (ed-fail t (tb-no-inputs) (ed-ws b pos))))
   (let [^:mut ^I32 i (+ (ed-ws b pos) 1)]
-    (while (< 0 1)
+    (while (>= (blob-len b) 0)
       (do (set i (ed-ws b i))
           (if (== (blob-u8 b i) 93) (return 0))
           (if (!= (blob-u8 b i) 123) (return (ed-fail t (tb-input-map) i)))
@@ -417,7 +417,7 @@
   (comment "The `:entries` vector at `pos`. 0, or the reason (`tb`).")
   (if (!= (ed-first b pos) 91) (return (ed-fail t (tb-no-entries) (ed-ws b pos))))
   (let [^:mut ^I32 i (+ (ed-ws b pos) 1)]
-    (while (< 0 1)
+    (while (>= (blob-len b) 0)
       (do (set i (ed-ws b i))
           (if (== (blob-u8 b i) 93) (return 0))
           (if (!= (blob-u8 b i) 123) (return (ed-fail t (tb-entry-map) i)))
@@ -537,19 +537,19 @@
     (do (emit-ascii out " :")
         (tf-emit-name out (tf-producer))
         (emit-ascii out " {")
-        (let [^I32 n (cells-len (fd t prod))
-              ^:mut ^I32 at 0]
-          (while (< at n)
-            (let [^I32 kn (cells-at (fd t prod) at)
-                  ^I32 vn (cells-at (fd t prod) (+ at (+ kn 1)))]
-              (if (> at 0) (emit-ascii out " "))
+        (let [^I32 pn (cells-len (fd t prod))
+              ^:mut ^I32 pat 0]
+          (while (< pat pn)
+            (let [^I32 kn (cells-at (fd t prod) pat)
+                  ^I32 vn (cells-at (fd t prod) (+ pat (+ kn 1)))]
+              (if (> pat 0) (emit-ascii out " "))
               (emit-ascii out ":")
-              (tw-cps out (fd t prod) (+ at 1) kn 0)
+              (tw-cps out (fd t prod) (+ pat 1) kn 0)
               (emit-ascii out " ")
               (text-cp out 34)
-              (tw-cps out (fd t prod) (+ at (+ kn 2)) vn 1)
+              (tw-cps out (fd t prod) (+ pat (+ kn 2)) vn 1)
               (text-cp out 34)
-              (set at (+ at (+ kn (+ vn 2)))))))
+              (set pat (+ pat (+ kn (+ vn 2)))))))
         (emit-ascii out "}")
         (text-cp out 10)))
   (emit-ascii out " :")
@@ -639,19 +639,19 @@
     (while (< size (* 2 (fd t nents)))
       (set size (* size 2)))
     (cells-drop (fd t idx) 0)
-    (let [^:mut ^I32 i 0]
-      (while (< i size)
+    (let [^:mut ^I32 zi 0]
+      (while (< zi size)
         (do (cells-push (fd t idx) 0)
-            (set i (+ i 1)))))
+            (set zi (+ zi 1)))))
     (set (fd t mask) (- size 1))
     (while (< e (cells-len (fd t ents)))
       (let [^I32 rl (cells-at (fd t ents) (+ e 5))]
         (cells-drop (fd t tmp) 0)
-        (let [^:mut ^I32 i 0]
-          (while (< i rl)
-            (let [^I32 v (cells-at (fd t ents) (+ e (+ 6 i)))]
+        (let [^:mut ^I32 ki 0]
+          (while (< ki rl)
+            (let [^I32 v (cells-at (fd t ents) (+ e (+ 6 ki)))]
               (cells-push (fd t tmp) v)
-              (set i (+ i 1)))))
+              (set ki (+ ki 1)))))
         (let [^I32 h (tr-hash (fd t tmp) 0 rl)
               ^:mut ^I32 s (bit-and h (fd t mask))
               ^:mut ^I32 placed 0]
@@ -671,7 +671,7 @@
   (comment "The entry whose request is the `cnt` cells at `at` of `c`, whole: where it starts in `ents`, or -1 (a miss; also when `tr-index` has not run).")
   (if (== (fd t mask) 0) (return -1))
   (let [^:mut ^I32 s (bit-and (tr-hash c at cnt) (fd t mask))]
-    (while (< 0 1)
+    (while (>= (fd t mask) 0)
       (let [^I32 cur (cells-at (fd t idx) s)]
         (if (== cur 0) (return -1))
         (if (== (tr-key-eq (fd t ents) (- cur 1) c at cnt) 1) (return (- cur 1)))

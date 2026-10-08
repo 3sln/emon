@@ -728,7 +728,7 @@ func edEnd(t *transcriptctx.Tr, b []byte, pos int32, depth int32) int32 {
 	var c int32 = port.BlobU8(b, i)
 	if c == 123 {
 		i += 1
-		for 0 < 1 {
+		for port.BlobLen(b) >= 0 {
 			i = edWs(b, i)
 			if i >= n {
 				return 0 - edFail(t, TbUnterminatedMap(), i)
@@ -754,7 +754,7 @@ func edEnd(t *transcriptctx.Tr, b []byte, pos int32, depth int32) int32 {
 	}
 	if c == 91 {
 		i += 1
-		for 0 < 1 {
+		for port.BlobLen(b) >= 0 {
 			i = edWs(b, i)
 			if i >= n {
 				return 0 - edFail(t, TbUnterminatedVec(), i)
@@ -805,7 +805,7 @@ func edEnd(t *transcriptctx.Tr, b []byte, pos int32, depth int32) int32 {
 func edField(t *transcriptctx.Tr, b []byte, mapAt int32, code int32) int32 {
 	// Where the value of the first key `code` (`tf`) of the map at `map-at` starts, or -1: the first of a repeated key wins, a key not in `tf` is passed.
 	var i int32 = edWs(b, mapAt) + 1
-	for 0 < 1 {
+	for port.BlobLen(b) >= 0 {
 		i = edWs(b, i)
 		if (i >= port.BlobLen(b)) || (port.BlobU8(b, i) == 125) {
 			return -1
@@ -915,7 +915,7 @@ func edInts(t *transcriptctx.Tr, b []byte, pos int32) int32 {
 	}
 	var i int32 = edWs(b, pos) + 1
 	var k int32 = 0
-	for 0 < 1 {
+	for port.BlobLen(b) >= 0 {
 		i = edWs(b, i)
 		if port.BlobU8(b, i) == 93 {
 			return k
@@ -955,7 +955,7 @@ func edProducer(t *transcriptctx.Tr, b []byte, pos int32) int32 {
 		return 0
 	}
 	var i int32 = edWs(b, pos) + 1
-	for 0 < 1 {
+	for port.BlobLen(b) >= 0 {
 		i = edWs(b, i)
 		if port.BlobU8(b, i) == 125 {
 			return 0
@@ -984,7 +984,7 @@ func edInputs(t *transcriptctx.Tr, b []byte, pos int32) int32 {
 		return edFail(t, TbNoInputs(), edWs(b, pos))
 	}
 	var i int32 = edWs(b, pos) + 1
-	for 0 < 1 {
+	for port.BlobLen(b) >= 0 {
 		i = edWs(b, i)
 		if port.BlobU8(b, i) == 93 {
 			return 0
@@ -1064,7 +1064,7 @@ func edEntries(t *transcriptctx.Tr, b []byte, pos int32) int32 {
 		return edFail(t, TbNoEntries(), edWs(b, pos))
 	}
 	var i int32 = edWs(b, pos) + 1
-	for 0 < 1 {
+	for port.BlobLen(b) >= 0 {
 		i = edWs(b, i)
 		if port.BlobU8(b, i) == 93 {
 			return 0
@@ -1233,21 +1233,21 @@ func TrWrite(t *transcriptctx.Tr, out *strings.Builder) int32 {
 		port.TextAscii(out, " :")
 		TfEmitName(out, TfProducer())
 		port.TextAscii(out, " {")
-		var n int32 = port.CellsLen(t.Prod)
-		var at int32 = 0
-		for at < n {
-			var kn int32 = port.CellsAt(t.Prod, at)
-			var vn int32 = port.CellsAt(t.Prod, at+(kn+1))
-			if at > 0 {
+		var pn int32 = port.CellsLen(t.Prod)
+		var pat int32 = 0
+		for pat < pn {
+			var kn int32 = port.CellsAt(t.Prod, pat)
+			var vn int32 = port.CellsAt(t.Prod, pat+(kn+1))
+			if pat > 0 {
 				port.TextAscii(out, " ")
 			}
 			port.TextAscii(out, ":")
-			twCps(out, t.Prod, at+1, kn, 0)
+			twCps(out, t.Prod, pat+1, kn, 0)
 			port.TextAscii(out, " ")
 			port.TextCp(out, 34)
-			twCps(out, t.Prod, at+(kn+2), vn, 1)
+			twCps(out, t.Prod, pat+(kn+2), vn, 1)
 			port.TextCp(out, 34)
-			at += kn + (vn + 2)
+			pat += kn + (vn + 2)
 		}
 		port.TextAscii(out, "}")
 		port.TextCp(out, 10)
@@ -1356,20 +1356,20 @@ func TrIndex(t *transcriptctx.Tr) int32 {
 		size *= 2
 	}
 	port.CellsDrop(t.Idx, 0)
-	var i int32 = 0
-	for i < size {
+	var zi int32 = 0
+	for zi < size {
 		port.CellsPush(t.Idx, 0)
-		i += 1
+		zi += 1
 	}
 	t.Mask = size - 1
 	for e < port.CellsLen(t.Ents) {
 		var rl int32 = port.CellsAt(t.Ents, e+5)
 		port.CellsDrop(t.Tmp, 0)
-		var i int32 = 0
-		for i < rl {
-			var v int32 = port.CellsAt(t.Ents, e+(6+i))
+		var ki int32 = 0
+		for ki < rl {
+			var v int32 = port.CellsAt(t.Ents, e+(6+ki))
 			port.CellsPush(t.Tmp, v)
-			i += 1
+			ki += 1
 		}
 		var h int32 = trHash(t.Tmp, 0, rl)
 		var s int32 = h & t.Mask
@@ -1397,7 +1397,7 @@ func TrFind(t *transcriptctx.Tr, c *port.Cells, at int32, cnt int32) int32 {
 		return -1
 	}
 	var s int32 = trHash(c, at, cnt) & t.Mask
-	for 0 < 1 {
+	for t.Mask >= 0 {
 		var cur int32 = port.CellsAt(t.Idx, s)
 		if cur == 0 {
 			return -1
