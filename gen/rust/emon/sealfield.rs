@@ -224,6 +224,14 @@ pub(crate) fn sf_letters(et: &mut crate::port::Cells, i: i32, end: i32) -> i32 {
     }
     return k;
 }
+pub(crate) fn sf_letters_back(et: &mut crate::port::Cells, ts: i32, i: i32) -> i32 {
+    // How many letters run back from `i` (exclusive) to `ts`.
+    let mut k: i32 = 0;
+    while (((i - 1) - k) >= ts) && (sf_script(crate::port::cells_at(et, (i - 1) - k)) > 0) {
+        k += 1;
+    }
+    return k;
+}
 pub(crate) fn sf_set_date(mut out: &mut crate::port::Cells, ob: i32, form: i32, s: i32, e: i32, y: i32, m: i32, d: i32) -> i32 {
     sf_s(out, ob, 2, form);
     sf_s(out, ob, 3, s);
@@ -573,6 +581,10 @@ pub(crate) fn sf_is_sep(et: &mut crate::port::Cells, i: i32, ts: i32, end: i32) 
             return 1;
         }
         if sf_space(crate::port::cells_at(et, i + 1)) == 1 {
+            return 1;
+        }
+        // a hyphen between two long words (five letters or more each side) is a ring's dash that the text layer set without spaces: `CLERK-OFFICIAL`
+        if (sf_letters_back(et, ts, i) >= 5) && (sf_letters(et, i + 1, end) >= 5) {
             return 1;
         }
     }

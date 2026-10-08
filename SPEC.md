@@ -2468,7 +2468,7 @@ fused rules and fills inside them (a chart's axes are two perpendicular
 candidates are the layer's `sl` arena (§9.7). The signature's typed name is P8.3's; the handwriting of raster strokes waits for the tracer's candidates (D316).
 
 **As built (P8.2, D800-D806): seals and stamps from pixels, `name` and `date`.** *Fields* (`emon.sealfield`, language independent): a seal's `name` is the first
-phrase of its text between the separators a ring puts between its phrases (a bullet, a star, a bar, a long dash, a line end, a hyphen with a space beside it) that has
+phrase of its text between the separators a ring puts between its phrases (a bullet, a star, a bar, a long dash, a line end, a hyphen with a space beside it or between two words of five letters or more) that has
 letters and no digit and is long enough for its script (a seal: one word of four letters or two Han, Kana or Hangul letters; a stamp: two words of five letters), as read;
 its `date` is the first digits-separator-digits shape (any decimal digit of any script; year first; day and month in the order the numbers settle or the locale hint says,
 else as it stands), the CJK year-month-day marks, or a day, a word of letters and a year; written `YYYY-MM-DD` when no reading disputes it, else as it stands. Both are read

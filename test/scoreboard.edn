@@ -3172,7 +3172,9 @@
         :para-boundary-r 0.946667
         :rule-p 0.973599
         :rule-r 0.996656
+        :seal-date-acc 0.0
         :seal-leak 0.00449
+        :seal-name-acc 0.0
         :span-bold-f1 0.857143
         :span-bold-p 0.857143
         :span-bold-r 0.857143
@@ -4061,7 +4063,9 @@
         :para-boundary-f1 0.433962
         :para-boundary-p 0.277108
         :para-boundary-r 1.0
+        :seal-date-acc 0.0
         :seal-leak 0.00449
+        :seal-name-acc 0.0
         :span-bold-f1 1.0
         :span-bold-p 1.0
         :span-bold-r 1.0
@@ -4346,7 +4350,9 @@
         :para-boundary-r 0.0
         :rule-p 0.0
         :rule-r 0.0
+        :seal-date-acc 0.0
         :seal-leak 0.0
+        :seal-name-acc 0.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -4634,7 +4640,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :seal-date-acc 0.0
         :seal-leak 0.0
+        :seal-name-acc 0.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -4800,7 +4808,9 @@
         :para-boundary-r 0.0
         :rule-p 0.0
         :rule-r 0.0
+        :seal-date-acc 0.0
         :seal-leak 0.0
+        :seal-name-acc 0.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -5080,7 +5090,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :seal-date-acc 0.0
         :seal-leak 0.0
+        :seal-name-acc 0.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -5345,7 +5357,9 @@
         :para-boundary-r 0.0
         :rule-p 0.0
         :rule-r 0.0
+        :seal-date-acc 0.0
         :seal-leak 0.0
+        :seal-name-acc 0.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -5767,7 +5781,9 @@
         :para-boundary-f1 0.0
         :para-boundary-p 0.0
         :para-boundary-r 0.0
+        :seal-date-acc 0.0
         :seal-leak 0.0
+        :seal-name-acc 0.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -5971,7 +5987,9 @@
         :para-boundary-f1 0.93
         :para-boundary-p 0.873239
         :para-boundary-r 0.994652
+        :seal-date-acc 0.0
         :seal-leak 0.0
+        :seal-name-acc 1.0
         :span-bold-f1 0.5
         :span-bold-p 0.5
         :span-bold-r 0.5
@@ -6470,7 +6488,9 @@
         :para-boundary-f1 1.0
         :para-boundary-p 1.0
         :para-boundary-r 1.0
+        :seal-date-acc 0.0
         :seal-leak 0.0
+        :seal-name-acc 1.0
         :span-bold-f1 1.0
         :span-bold-p 1.0
         :span-bold-r 1.0

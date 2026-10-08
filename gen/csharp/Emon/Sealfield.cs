@@ -227,6 +227,14 @@ public static class Sealfield {
         }
         return k;
     }
+    internal static int SfLettersBack(emon.Port.Cells et, int ts, int i) {
+        // How many letters run back from `i` (exclusive) to `ts`.
+        int k = 0;
+        while ((((i - 1) - k) >= ts) && (SfScript(emon.Port.CellsAt(et, (i - 1) - k)) > 0)) {
+            k += 1;
+        }
+        return k;
+    }
     internal static int SfSetDate(emon.Port.Cells @out, int ob, int form, int s, int e, int y, int m, int d) {
         SfS(@out, ob, 2, form);
         SfS(@out, ob, 3, s);
@@ -576,6 +584,10 @@ public static class Sealfield {
                 return 1;
             }
             if (SfSpace(emon.Port.CellsAt(et, i + 1)) == 1) {
+                return 1;
+            }
+            // a hyphen between two long words (five letters or more each side) is a ring's dash that the text layer set without spaces: `CLERK-OFFICIAL`
+            if ((SfLettersBack(et, ts, i) >= 5) && (SfLetters(et, i + 1, end) >= 5)) {
                 return 1;
             }
         }

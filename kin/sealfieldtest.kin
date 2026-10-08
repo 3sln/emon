@@ -161,7 +161,11 @@
     (assert-eq (cells-at out 1) 0 "a signature has no name here")
     (assert-eq (cells-at out 2) 0 "and no date")
     (sft-run (text-blob "CO-OP SOCIETY") et out 1 0)
-    (assert-eq (cells-at out 1) 13 "a hyphen inside a word is not a separator")))
+    (assert-eq (cells-at out 1) 13 "a hyphen inside a word is not a separator")
+    (sft-run (text-blob "HARBOR COUNTY CLERK-OFFICIAL- SEAL") et out 1 0)
+    (assert-eq (cells-at out 1) 19 "but a dash between two long words, set with no spaces, is: the name is HARBOR COUNTY CLERK")
+    (sft-run (text-blob "WELL-KNOWN LTD") et out 2 0)
+    (assert-eq (cells-at out 1) 14 "a hyphen of five letters and four is a word's")))
 
 (deftest test-the-locale-hint-orders-a-numeric-date
   (let [^Cells loc (new-cells)]

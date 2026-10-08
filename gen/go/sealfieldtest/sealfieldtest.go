@@ -169,6 +169,10 @@ func TestANameIsTheFirstPhraseOfLetters(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(out, 2), 0, "and no date")
 	sftRun(port.TextBlob("CO-OP SOCIETY"), et, out, 1, 0)
 	port.AssertEq(emonT, port.CellsAt(out, 1), 13, "a hyphen inside a word is not a separator")
+	sftRun(port.TextBlob("HARBOR COUNTY CLERK-OFFICIAL- SEAL"), et, out, 1, 0)
+	port.AssertEq(emonT, port.CellsAt(out, 1), 19, "but a dash between two long words, set with no spaces, is: the name is HARBOR COUNTY CLERK")
+	sftRun(port.TextBlob("WELL-KNOWN LTD"), et, out, 2, 0)
+	port.AssertEq(emonT, port.CellsAt(out, 1), 14, "a hyphen of five letters and four is a word's")
 }
 
 func TestTheLocaleHintOrdersANumericDate(emonT *testing.T) {

@@ -242,6 +242,15 @@ func sfLetters(et *port.Cells, i int32, end int32) int32 {
 	return k
 }
 
+func sfLettersBack(et *port.Cells, ts int32, i int32) int32 {
+	// How many letters run back from `i` (exclusive) to `ts`.
+	var k int32 = 0
+	for (((i - 1) - k) >= ts) && (SfScript(port.CellsAt(et, (i-1)-k)) > 0) {
+		k += 1
+	}
+	return k
+}
+
 func sfSetDate(out *port.Cells, ob int32, form int32, s int32, e int32, y int32, m int32, d int32) int32 {
 	sfS(out, ob, 2, form)
 	sfS(out, ob, 3, s)
@@ -598,6 +607,10 @@ func sfIsSep(et *port.Cells, i int32, ts int32, end int32) int32 {
 			return 1
 		}
 		if sfSpace(port.CellsAt(et, i+1)) == 1 {
+			return 1
+		}
+		// a hyphen between two long words (five letters or more each side) is a ring's dash that the text layer set without spaces: `CLERK-OFFICIAL`
+		if (sfLettersBack(et, ts, i) >= 5) && (sfLetters(et, i+1, end) >= 5) {
 			return 1
 		}
 	}

@@ -160,6 +160,10 @@ public final class Sealfieldtest {
         emon.Testport.assertEq(emon.Port.cellsAt(out, 2), 0, "and no date");
         sftRun(emon.Testport.textBlob("CO-OP SOCIETY"), et, out, 1, 0);
         emon.Testport.assertEq(emon.Port.cellsAt(out, 1), 13, "a hyphen inside a word is not a separator");
+        sftRun(emon.Testport.textBlob("HARBOR COUNTY CLERK-OFFICIAL- SEAL"), et, out, 1, 0);
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 1), 19, "but a dash between two long words, set with no spaces, is: the name is HARBOR COUNTY CLERK");
+        sftRun(emon.Testport.textBlob("WELL-KNOWN LTD"), et, out, 2, 0);
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 1), 14, "a hyphen of five letters and four is a word's");
     }
     public static void testTheLocaleHintOrdersANumericDate() {
         emon.Port.Cells loc = emon.Port.newCells();

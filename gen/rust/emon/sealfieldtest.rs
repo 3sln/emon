@@ -162,6 +162,10 @@ fn test_a_name_is_the_first_phrase_of_letters() {
     crate::testport::assert_eq(crate::port::cells_at(out, 2), 0, "and no date");
     sft_run(&crate::testport::text_blob("CO-OP SOCIETY")[..], et, out, 1, 0);
     crate::testport::assert_eq(crate::port::cells_at(out, 1), 13, "a hyphen inside a word is not a separator");
+    sft_run(&crate::testport::text_blob("HARBOR COUNTY CLERK-OFFICIAL- SEAL")[..], et, out, 1, 0);
+    crate::testport::assert_eq(crate::port::cells_at(out, 1), 19, "but a dash between two long words, set with no spaces, is: the name is HARBOR COUNTY CLERK");
+    sft_run(&crate::testport::text_blob("WELL-KNOWN LTD")[..], et, out, 2, 0);
+    crate::testport::assert_eq(crate::port::cells_at(out, 1), 14, "a hyphen of five letters and four is a word's");
 }
 #[test]
 fn test_the_locale_hint_orders_a_numeric_date() {
