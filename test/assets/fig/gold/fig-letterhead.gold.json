@@ -1,0 +1,290 @@
+{
+ "annotated": {
+  "attributes": {
+   "caption": [
+    "label"
+   ],
+   "cell": [
+    "rowspan",
+    "colspan",
+    "header",
+    "empty"
+   ],
+   "figure": [
+    "subkind",
+    "label",
+    "alt",
+    "labels"
+   ],
+   "heading": [
+    "level",
+    "number",
+    "numbering"
+   ],
+   "item": [
+    "marker",
+    "value"
+   ],
+   "list": [
+    "ordered",
+    "scheme",
+    "start"
+   ],
+   "note": [
+    "role",
+    "marker"
+   ],
+   "row": [
+    "repeated"
+   ],
+   "rowgroup": [
+    "role"
+   ],
+   "seal": [
+    "subkind",
+    "name",
+    "date",
+    "color"
+   ],
+   "section": [
+    "level"
+   ],
+   "table": [
+    "profile",
+    "columns",
+    "continued"
+   ]
+  },
+  "dropped": [
+   "page-number",
+   "running-title",
+   "watermark",
+   "duplicate-header-row"
+  ],
+  "furniture": true,
+  "inlines": true,
+  "pages": [
+   "n",
+   "w",
+   "h",
+   "label"
+  ],
+  "structure": [
+   "section",
+   "heading",
+   "paragraph",
+   "list",
+   "item",
+   "table",
+   "rowgroup",
+   "row",
+   "cell",
+   "caption",
+   "figure",
+   "seal",
+   "quote",
+   "code",
+   "note"
+  ],
+  "text": true
+ },
+ "emon-gold": "1.0",
+ "id": "fig-letterhead",
+ "model": {
+  "body": {
+   "children": [
+    {
+     "id": 1,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 2,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 3,
+     "kind": "paragraph",
+     "text": "Re: the Harbor lease, part 1"
+    },
+    {
+     "id": 4,
+     "kind": "paragraph",
+     "text": "We write further to our earlier letter about the terms of the lease for the harbour office and the questions that your client has put to us since then. We set out below where we agree with those terms, where we do not, and what we would ask you to do before the end of the month."
+    },
+    {
+     "id": 5,
+     "kind": "paragraph",
+     "text": "A second paragraph of this letter sets out our view of the notice period, in terms that we hope will be clear enough for your client to answer in the time that we have given."
+    },
+    {
+     "id": 7,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 8,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 9,
+     "kind": "paragraph",
+     "text": "Re: the Harbor lease, part 2"
+    },
+    {
+     "id": 10,
+     "kind": "paragraph",
+     "text": "We write further to our earlier letter about the terms of the lease for the harbour office and the questions that your client has put to us since then. We set out below where we agree with those terms, where we do not, and what we would ask you to do before the end of the month."
+    },
+    {
+     "id": 11,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 12,
+     "kind": "paragraph",
+     "text": "The partner who handled the first negotiation has since left the firm, and so the matter has passed to the colleague named below, who has the whole of the file with her."
+    },
+    {
+     "id": 14,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 15,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 16,
+     "kind": "paragraph",
+     "text": "Re: the Harbor lease, part 3"
+    },
+    {
+     "id": 17,
+     "kind": "paragraph",
+     "text": "We write further to our earlier letter about the terms of the lease for the harbour office and the questions that your client has put to us since then. We set out below where we agree with those terms, where we do not, and what we would ask you to do before the end of the month."
+    },
+    {
+     "id": 18,
+     "kind": "paragraph",
+     "text": "A second paragraph of this letter sets out our view of the notice period, in terms that we hope will be clear enough for your client to answer in the time that we have given."
+    },
+    {
+     "id": 20,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 21,
+     "kind": "figure",
+     "subkind": "logo"
+    },
+    {
+     "id": 22,
+     "kind": "paragraph",
+     "text": "Re: the Harbor lease, part 4"
+    },
+    {
+     "id": 23,
+     "kind": "paragraph",
+     "text": "We write further to our earlier letter about the terms of the lease for the harbour office and the questions that your client has put to us since then. We set out below where we agree with those terms, where we do not, and what we would ask you to do before the end of the month."
+    },
+    {
+     "id": 24,
+     "kind": "paragraph",
+     "text": "We remain at your disposal for any questions about this letter and will gladly meet your client at the harbour office on a day that suits both of them."
+    },
+    {
+     "id": 25,
+     "kind": "figure",
+     "subkind": "logo"
+    }
+   ],
+   "id": 0,
+   "kind": "document"
+  },
+  "dropped": [
+   {
+    "page": 1,
+    "reason": "page-number",
+    "text": "Page 1 of 4"
+   },
+   {
+    "page": 2,
+    "reason": "page-number",
+    "text": "Page 2 of 4"
+   },
+   {
+    "page": 3,
+    "reason": "page-number",
+    "text": "Page 3 of 4"
+   },
+   {
+    "page": 4,
+    "reason": "page-number",
+    "text": "Page 4 of 4"
+   }
+  ],
+  "emon": "1.0",
+  "furniture": [
+   {
+    "id": 26,
+    "pages": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "role": "footer",
+    "template": "Harbor and Pine LLP, 14 Quay Street - Confidential"
+   }
+  ],
+  "meta": {},
+  "pages": [
+   {
+    "h": 792,
+    "label": "1",
+    "n": 1,
+    "rot": 0,
+    "w": 612
+   },
+   {
+    "h": 792,
+    "label": "2",
+    "n": 2,
+    "rot": 0,
+    "w": 612
+   },
+   {
+    "h": 792,
+    "label": "3",
+    "n": 3,
+    "rot": 0,
+    "w": 612
+   },
+   {
+    "h": 792,
+    "label": "4",
+    "n": 4,
+    "rot": 0,
+    "w": 612
+   }
+  ],
+  "settings": {
+   "locale": "en"
+  },
+  "source": {
+   "format": "pdf",
+   "lang": "en",
+   "pages": 4
+  }
+ },
+ "provenance": {
+  "pdf": "fig-letterhead.pdf",
+  "producer": "kin/scripts/asset-fig-fixtures (P8.4)"
+ }
+}

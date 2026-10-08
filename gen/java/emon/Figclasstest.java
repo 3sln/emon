@@ -320,4 +320,113 @@ public final class Figclasstest {
         emon.Testport.assertEq(Model.nodeKind(nn, 3), Model.nkFigure(), "the figure is just before its caption, after the paragraph that is lower on the page");
         emon.Testport.assertEq(Model.nodeKind(nn, 4), Model.nkCaption(), "and the caption follows it");
     }
+    public static int ftFiAdd(emon.Port.Cells fi, int w, int h, int d1, int d2) {
+        // A row of `fi` for a flat raster of w x h pixels whose stream has the digest d1 d2 (stride 12).
+        emon.Port.cellsPush(fi, 1);
+        emon.Port.cellsPush(fi, 0);
+        emon.Port.cellsPush(fi, 2);
+        emon.Port.cellsPush(fi, 3);
+        emon.Port.cellsPush(fi, 8);
+        emon.Port.cellsPush(fi, w);
+        emon.Port.cellsPush(fi, h);
+        emon.Port.cellsPush(fi, 60);
+        emon.Port.cellsPush(fi, 0);
+        emon.Port.cellsPush(fi, 0);
+        emon.Port.cellsPush(fi, d1);
+        emon.Port.cellsPush(fi, d2);
+        return 0;
+    }
+    public static int ftImgCand(emon.Port.Cells cand, int page, int x0, int y0, int x1, int y1, int obj, int fir) {
+        // A candidate row that is an image placement: its object, and its row of `fi` (cells 25, 27 and 28).
+        int r = emon.Port.cellsLen(cand) / 32;
+        ftCand(cand, page, x0, y0, x1, y1);
+        emon.Port.cellsSet(cand, (r * 32) + 25, obj);
+        emon.Port.cellsSet(cand, (r * 32) + 27, -1);
+        emon.Port.cellsSet(cand, (r * 32) + 28, fir);
+        return r;
+    }
+    public static int ftVecCand(emon.Port.Cells cand, int page, int x0, int y0, int x1, int y1) {
+        // A candidate row that is a vector region (cell 27 is -2).
+        int r = emon.Port.cellsLen(cand) / 32;
+        ftCand(cand, page, x0, y0, x1, y1);
+        emon.Port.cellsSet(cand, (r * 32) + 27, -2);
+        return r;
+    }
+    public static int ftPages(emon.Port.Cells pages, int n) {
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        int i = 1;
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        while (i <= n) {
+            Model.pageNew(pages, i, 61200, 79200, 0, Model.pkVector());
+            i += 1;
+        }
+        return 0;
+    }
+    public static void testARasterOnOtherPagesIsARecurringLogoByItsObjectOrItsDigest() {
+        emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        ftPages(pages, 4);
+        // fi rows: 0 and 1 are one raster (digest 5 6, 40 x 20), 2 is another size with the same digest, 3 another digest
+        ftFiAdd(fi, 40, 20, 5, 6);
+        ftFiAdd(fi, 40, 20, 5, 6);
+        ftFiAdd(fi, 40, 21, 5, 6);
+        ftFiAdd(fi, 40, 20, 9, 9);
+        // page 1 object 7, page 2 object 8 (the same bytes), page 3 object 7 again, page 4 a different raster, page 1 object 7 a second time
+        ftImgCand(cand, 1, 5000, 5000, 9000, 7000, 7, 0);
+        ftImgCand(cand, 2, 30000, 40000, 34000, 42000, 8, 1);
+        ftImgCand(cand, 3, 5000, 5000, 9000, 7000, 7, 0);
+        ftImgCand(cand, 4, 5000, 5000, 9000, 7000, 11, 3);
+        ftImgCand(cand, 1, 20000, 5000, 24000, 7000, 7, 0);
+        Figclass.fcSignRows(fi, pa, cand);
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 1), 160, "the raster of page 2 is on two other pages (its digest equals the others', wherever it stands)");
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 0), 160, "the one of page 1: pages 2 (digest) and 3 (object); its second use on page 1 does not count");
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 3), 0, "a raster with another digest and object recurs nowhere");
+        // the same digest with another pixel size is another raster
+        ftImgCand(cand, 3, 5000, 5000, 9000, 7000, 12, 2);
+        Figclass.fcSignRows(fi, pa, cand);
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 5), 0, "the same digest of another size is no recurrence");
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 3), 0, "and it is not on the others' count");
+    }
+    public static void testVectorArtRecursAtTheSamePlaceWhateverItsScale() {
+        emon.Port.Cells fi = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        ftPages(pages, 4);
+        // page 1: a round mark and a square in it, at the head of the page
+        ftPath(pa, 1, 3, 7300, 7300, 10300, 10300, 43639, -1, 9);
+        ftPath(pa, 1, 2, 8500, 8500, 9100, 9100, 16777215, -1, 8);
+        ftVecCand(cand, 1, 7300, 7300, 10300, 10300);
+        // page 2: the same drawing at nine tenths of the size about the same centre
+        ftPath(pa, 2, 3, 7450, 7450, 10150, 10150, 43639, -1, 9);
+        ftPath(pa, 2, 2, 8590, 8590, 9010, 9010, 16777215, -1, 8);
+        ftVecCand(cand, 2, 7450, 7450, 10150, 10150);
+        // page 3: the same drawing, same size, in the middle of the page
+        ftPath(pa, 3, 3, 7300, 40000, 10300, 43000, 43639, -1, 9);
+        ftPath(pa, 3, 2, 8500, 41200, 9100, 41800, 16777215, -1, 8);
+        ftVecCand(cand, 3, 7300, 40000, 10300, 43000);
+        // page 4: twice the size, at the same place
+        ftPath(pa, 4, 3, 7300, 7300, 13300, 13300, 43639, -1, 9);
+        ftPath(pa, 4, 2, 9700, 9700, 10900, 10900, 16777215, -1, 8);
+        ftVecCand(cand, 4, 7300, 7300, 13300, 13300);
+        Figclass.fcSignRows(fi, pa, cand);
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 0), 100, "page 1's mark recurs on page 2 only: page 3 is another place and page 4 another scale");
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 1), 100, "and page 2's on page 1");
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 2), 0, "the same drawing mid-page recurs nowhere");
+        emon.Testport.assertEq(Figclass.fcRecur(cand, pages, 3), 0, "nor does one of twice the size");
+    }
+    public static void testARecurringRasterIsALogoWhereverItStandsAndALoneOneIsNot() {
+        emon.Port.Cells fi = emon.Port.newCells();
+        ftFi(fi, 1, 0, 2, 3, 8, 60, 0);
+        emon.Testport.assertEq(Figclass.fcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 0) / 1024, Model.fgUnknown(), "a small flat raster mid-page, seen once");
+        emon.Testport.assertEq(Figclass.fcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 100) / 1024, Model.fgLogo(), "the same on another page too: a logo");
+        emon.Testport.assertEq(Figclass.fcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 220) % 1024, 800, "and surer for each page it is on");
+    }
 }

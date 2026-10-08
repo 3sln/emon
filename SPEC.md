@@ -2420,8 +2420,8 @@ of prose in it (a text box, a sidebar, a background), rings drawn one in another
 are not. A region with no caption is a figure only when its confidence is at least 500; a captioned region is one always (kind
 `unknown` at 400 when nothing is clear). What decides a kind is language-independent: two long perpendicular rules that meet,
 with ticks, bars, a series or numbers by them (`chart`); boxes with words in them joined by connectors or arrow heads
-(`diagram`); a small coloured drawing in the header or footer band, or a small flat raster there (`logo`; recurrence across
-pages is P8.4's hook, `fc-recur`); a raster that needed many bits a pixel, or a shaded fill with no words in it (`photo`);
+(`diagram`); a small coloured drawing in the header or footer band, or a small flat raster there, or a small drawing that recurs on
+other pages (`logo`; **recurrence**, P8.4 below); a raster that needed many bits a pixel, or a shaded fill with no words in it (`photo`);
 a run of thin parallel bars, or a two-colour raster far wider than high (`barcode`); many tiny squares in a square, or a
 square two-colour raster (`qr`); a large, dense, curved drawing with many small words (`map`); curved line art (`illustration`);
 a framed panel with a few short words, or a large flat raster (`screenshot`). A raster's bits a pixel are the stream's length
@@ -2429,6 +2429,20 @@ over its pixels, read from the image dictionary: no pixel is decoded. The figure
 blocks by its top edge, or just before its caption when it has one just below it (a column of text may stand between them), so
 that the caption finds it as its object. A short one-line paragraph on a figure or within 24 pt of it (an axis tick, a word in
 a box, a logo's name) is not body text: its text is the figure's `labels`, in reading order. `alt` is not yet read from the PDF.
+
+**Logos that recur (P8.4; D820-D824).** A logo is often the one thing a letterhead or a report's running head repeats, so what
+the same drawing does on other pages is evidence (a small region that has no band to stand in is a logo when it recurs, and a logo
+that recurs is surer: +100 per mille for one other page, +160 for two, +220 for three or more; pages, not placements, so a
+drawing used twice on a page is no recurrence). Two placements are one drawing when they are the same image object, or images of
+the same pixel size whose streams have the same digest (the stream's bytes as the file holds them; all of a stream of 4 KiB or
+less, a stride through a longer one) — wherever they stand — or vector art with the same number of paths, the same 4 x 4 occupancy
+of their centres (within one cell), a size within 75 to 133 per mille of the other's (so a scale within that tolerance is
+ignored), and its centre at the same place of the page (within 4 percent of the page and an eighth of its size). **Every
+occurrence is a `figure` of its own**: one placeholder for each page it is on, in its place in that page's reading order (a
+reader of page 3 alone still finds the logo that is there); what is one to a document is the *asset* (§10.11: one file, many
+uses). A logo in a header or footer band stays a `figure`: running **furniture is text** (§10.2) and its decisions do not read
+a figure, so a band that is a logo and a page number or a title is dropped (or kept as a `furniture` aside) as if the logo were
+not there, and the logo's placeholder is not dropped with it. No pixel of a language is read.
 
 Captions are linked by label pattern (`Figure 3`, `Fig. 3`, `Chart`,
 `Exhibit`, locale forms) and proximity. Text inside a figure (axis labels,

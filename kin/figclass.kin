@@ -14,7 +14,8 @@
 ;;   chart        two long perpendicular rules that meet (axes) with ticks, bars, a series or numbers by them; or three or more coloured wedges; or a
 ;;                run of three or more filled bars on one baseline of different heights
 ;;   diagram      two or more boxes with words inside, joined by connectors or arrow heads, and no axes
-;;   logo         small, near the top or the bottom of the page (or recurring: P8.4's hook `fc-recur`), few paths, coloured; or a small flat raster
+;;   logo         small, near the top or the bottom of the page (or recurring on other pages, P8.4: `fc-recur`, by image object, stream digest or
+;;                vector shape and place), few paths, coloured; or a small flat raster
 ;;   photo        a raster image that needed more bits a pixel than a drawing does; a lone shaded or patterned fill with no words in it
 ;;   barcode      a run of twelve or more thin parallel filled bars; a flat two-colour raster far wider than high
 ;;   qr           forty or more tiny filled squares in a square; a flat two-colour raster that is square
@@ -38,8 +39,8 @@
             [emon.glayer :refer [grg-count grg-get rk-figure grl-count grl-get go-h go-v]]
             [emon.asset :refer [as-vector-regions as-figure-rows as-region-add as-count as-get]]
             [emon.pdfdoc :refer [pd-get pd-pg-count]]
-            [emon.pdfsrc :refer [ps-missed]]
-            [emon.pdfimage :refer [pi-info pi-get pi-f-w pi-f-h pi-f-bpc pi-f-class pi-f-ncomp pi-f-codec pi-f-slen pi-f-hival pi-f-mkind]]
+            [emon.pdfsrc :refer [ps-missed ps-len ps-u8]]
+            [emon.pdfimage :refer [pi-info pi-get pi-f-w pi-f-h pi-f-bpc pi-f-class pi-f-ncomp pi-f-codec pi-f-slen pi-f-sstart pi-f-hival pi-f-mkind]]
             [emon.restruct :refer [rs-figures]]
             [kin.lang :refer [defn defconst return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
@@ -57,7 +58,12 @@
 (defconst ^I32 FC_CAPGAP 4000)      ;; a caption this close above or below a region (40 pt) is its caption
 
 ;; the stride of `fi` (the image placements' rows, made by `fc-images`)
-(defconst ^I32 FI_STRIDE 12)        ;; 0 valid  1 codec  2 class  3 ncomp  4 bpc  5 w  6 h  7 bits a pixel x100  8 hival  9 mask kind  10 11 spare
+(defconst ^I32 FI_STRIDE 12)        ;; 0 valid  1 codec  2 class  3 ncomp  4 bpc  5 w  6 h  7 bits a pixel x100  8 hival  9 mask kind  10 11 the stream's digest (P8.4)
+(defconst ^I32 FC_DIGEST_N 4096)    ;; bytes of a stream the digest reads (all of a short one, a stride through a long one, and the last 64)
+(defconst ^I32 FC_RWORK 20000000)   ;; paths the vector signatures (P8.4) may read in all
+(defconst ^I32 FC_RPOS 40)          ;; a vector logo's centre may move this much (per mille of the page) between pages, and an eighth of its own size
+(defconst ^I32 FC_RSCALE_LO 750)    ;; a vector logo's size, per mille of its size on the other page: from this ...
+(defconst ^I32 FC_RSCALE_HI 1330)   ;; ... to this
 
 ;; the slots of `ft`, the features of the region being measured
 (defconst ^I32 FT_NP 0)             ;; paths
@@ -135,6 +141,10 @@
 (defconst ^I32 CR_ROW 28)
 (defconst ^I32 CR_SRC 29)
 (defconst ^I32 CR_ORG 30)           ;; 0 as the asset stage made it, 2 a shaded or patterned fill, 3 a P7.G region
+;; the recurrence signature (P8.4), in the cells 13..20 of a row of `fcand` (the asset stage's own use of them, a hash and a size, is not ours):
+;; +0 the kind (0 none, 1 a raster, 2 vector art); a raster: +1 +2 the digest of its stream, +3 +4 its pixel size; vector art: +1 the paths,
+;; +2 the 4 x 4 occupancy of their centres (16 bits)
+(defconst ^I32 CR_SIG 13)
 
 ;; ------------------------------------------------------------------------------------------------ small helpers
 
@@ -197,6 +207,33 @@
 
 ;; ------------------------------------------------------------------------------------------------ the document pass
 
+(defn ^I32 fc-digest [^Src src ^:mut ^Cells fi ^I32 k ^I32 sstart ^I32 slen ^I32 w ^I32 h]
+  (comment "P8.4: the digest of an image stream's bytes as the file holds them, in the cells `k + 10` and `k + 11` of `fi` (two rolling hashes,")
+  (comment "each under 2^21, from the stream's length and the image's pixel size too). A stream of `FC_DIGEST_N` bytes or fewer is read whole; a longer")
+  (comment "one by a stride through it, and its last 64 bytes. Equal digests of images of one size are one raster. 0 for none (the stream is not in the file).")
+  (let [^I32 total (ps-len src)
+        ^I32 step (fc-max 1 (quot slen FC_DIGEST_N))
+        ^:mut ^I32 h1 (rem slen 2000003)
+        ^:mut ^I32 h2 (rem (+ (* w 7919) h) 1999993)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 b 0]
+    (if (or (< sstart 0) (or (< slen 1) (> (+ sstart slen) total))) (return 0))
+    (while (< i slen)
+      (do (set b (ps-u8 src (+ sstart i)))
+          (set h1 (rem (+ (* h1 31) (+ b 1)) 2000003))
+          (set h2 (rem (+ (* h2 257) (+ b 7)) 1999993))
+          (set i (+ i step))))
+    (set i (fc-max 0 (- slen 64)))
+    (if (> step 1)
+      (while (< i slen)
+        (do (set b (ps-u8 src (+ sstart i)))
+            (set h1 (rem (+ (* h1 31) (+ b 1)) 2000003))
+            (set h2 (rem (+ (* h2 257) (+ b 7)) 1999993))
+            (set i (+ i 1)))))
+    (cells-set fi (+ k 10) (+ h1 1))
+    (cells-set fi (+ k 11) (+ h2 1))
+    (return 1)))
+
 (defn ^:pub ^I32 fc-images [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                             ^Cells im ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells fi]
   (comment "What the dictionary of each image placement says, in `fi` (stride `FI_STRIDE`, one row to a row of `im`): its codec, colour class,")
@@ -251,7 +288,8 @@
                                   (cells-set fi (+ k 6) h)
                                   (cells-set fi (+ k 7) (i32 bpp))
                                   (cells-set fi (+ k 8) (pi-get rec (pi-f-hival)))
-                                  (cells-set fi (+ k 9) (pi-get rec (pi-f-mkind)))))))))))
+                                  (cells-set fi (+ k 9) (pi-get rec (pi-f-mkind)))
+                                  (fc-digest src fi k (pi-get rec (pi-f-sstart)) (pi-get rec (pi-f-slen)) w h)))))))))
           (set r (+ r 1))))
     (if (ps-missed src) (return 12))
     (return 0)))
@@ -800,10 +838,150 @@
 (defn ^I32 fc-pack [^I32 kind ^I32 conf]
   (return (+ (* kind 1024) conf)))
 
-(defn ^:pub ^I32 fc-recur [^Cells cand ^I32 row]
-  (comment "THE HOOK of P8.4 (logos and their recurrence across pages): how much the same drawing at the same place on other pages should")
-  (comment "raise the confidence of a logo (per mille) for the region `row` of `cand`. P8.1 does not measure recurrence: 0.")
-  (return 0))
+(defn ^I32 fc-pow2 [^I32 k]
+  (let [^:mut ^I32 v 1
+        ^:mut ^I32 i 0]
+    (while (< i k)
+      (do (set v (* v 2))
+          (set i (+ i 1))))
+    (return v)))
+
+(defn ^I32 fc-hamming16 [^I32 a ^I32 b]
+  (comment "The number of the 16 low bits in which a and b differ.")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 d 0]
+    (while (< k 16)
+      (do (if (!= (rem (quot a (fc-pow2 k)) 2) (rem (quot b (fc-pow2 k)) 2)) (set d (+ d 1)))
+          (set k (+ k 1))))
+    (return d)))
+
+(defn ^I32 fc-sign-vector [^Cells pa ^:mut ^Cells fcand ^I32 row]
+  (comment "P8.4: the signature of a small vector region (`CR_SIG`): the paths of its page whose centres lie in its visible box, and the 4 x 4 grid")
+  (comment "of the box that those centres fall in (a 16 bit mask). It does not depend on the scale. Answers the paths read.")
+  (let [^I32 b (* row CR_STRIDE)
+        ^I32 page (cells-at fcand (+ b CR_PAGE))
+        ^I32 x0 (cells-at fcand (+ b CR_VX))
+        ^I32 y0 (cells-at fcand (+ b (+ CR_VX 1)))
+        ^I32 w (- (cells-at fcand (+ b (+ CR_VX 2))) x0)
+        ^I32 h (- (cells-at fcand (+ b (+ CR_VX 3))) y0)
+        ^I32 n (quot (cells-len pa) 24)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 np 0
+        ^:mut ^I32 mask 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 gx 0
+        ^:mut ^I32 gy 0
+        ^:mut ^I32 bit 0]
+    (if (or (<= w 0) (<= h 0)) (return 0))
+    (while (< i n)
+      (do (if (and (== (pa-get pa i (pf-page)) page) (and (== (pa-get pa i (pf-vis)) 0)
+                   (== (bit-and (pa-get pa i (pf-flags)) (pg-clip)) 0)))
+            (do (set cx (quot (+ (pa-get pa i (pf-x0)) (pa-get pa i (pf-x1))) 2))
+                (set cy (quot (+ (pa-get pa i (pf-y0)) (pa-get pa i (pf-y1))) 2))
+                (if (and (>= cx x0) (and (<= cx (+ x0 w)) (and (>= cy y0) (<= cy (+ y0 h)))))
+                  (do (set np (+ np 1))
+                      (set gx (fc-min 3 (quot (* (- cx x0) 4) w)))
+                      (set gy (fc-min 3 (quot (* (- cy y0) 4) h)))
+                      (set bit (fc-pow2 (+ (* gy 4) gx)))
+                      (if (== (rem (quot mask bit) 2) 0) (set mask (+ mask bit)))))))
+          (set i (+ i 1))))
+    (if (>= np 2)
+      (do (cells-set fcand (+ b CR_SIG) 2)
+          (cells-set fcand (+ b (+ CR_SIG 1)) np)
+          (cells-set fcand (+ b (+ CR_SIG 2)) mask)))
+    (return n)))
+
+(defn ^:pub ^I32 fc-sign-rows [^Cells fi ^Cells pa ^:mut ^Cells fcand]
+  (comment "P8.4: the recurrence signature (`CR_SIG`) of every candidate row that could be a logo: an image placement (its object and its stream's")
+  (comment "digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows of regions beyond the document's budget (`FC_RWORK`) have none.")
+  (let [^I32 n (quot (cells-len fcand) CR_STRIDE)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 fb 0
+        ^:mut ^I32 work 0]
+    (while (< r n)
+      (do (set b (* r CR_STRIDE))
+          (if (== (cells-at fcand (+ b CR_KORI)) -1)
+            (do (set fb (* (cells-at fcand (+ b CR_ROW)) FI_STRIDE))
+                (if (and (>= fb 0) (and (<= (+ fb FI_STRIDE) (cells-len fi)) (== (cells-at fi fb) 1)))
+                  (do (cells-set fcand (+ b CR_SIG) 1)
+                      (cells-set fcand (+ b (+ CR_SIG 1)) (cells-at fi (+ fb 10)))
+                      (cells-set fcand (+ b (+ CR_SIG 2)) (cells-at fi (+ fb 11)))
+                      (cells-set fcand (+ b (+ CR_SIG 3)) (cells-at fi (+ fb 5)))
+                      (cells-set fcand (+ b (+ CR_SIG 4)) (cells-at fi (+ fb 6))))))
+            (if (and (== (cells-at fcand (+ b CR_KORI)) -2) (< work FC_RWORK))
+              (if (and (<= (- (cells-at fcand (+ b (+ CR_VX 2))) (cells-at fcand (+ b CR_VX))) FC_SMALL)
+                       (<= (- (cells-at fcand (+ b (+ CR_VX 3))) (cells-at fcand (+ b (+ CR_VX 1)))) FC_SMALL))
+                (set work (+ work (fc-sign-vector pa fcand r))))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 fc-same-drawing [^Cells cand ^Cells pages ^I32 a ^I32 b]
+  (comment "1 when the candidate rows a and b (on two pages) are one logo: the same image object, or an image of the same size whose stream has")
+  (comment "the same digest; or vector art with as many paths, the same 4 x 4 occupancy (within one cell), a size within `FC_RSCALE_LO`..`FC_RSCALE_HI`")
+  (comment "per mille of the other's, and its centre at the same place of the page (within `FC_RPOS` per mille and an eighth of its size).")
+  (let [^I32 ba (* a CR_STRIDE)
+        ^I32 bb (* b CR_STRIDE)
+        ^I32 ka (cells-at cand (+ ba CR_SIG))]
+    (if (or (== ka 0) (!= ka (cells-at cand (+ bb CR_SIG)))) (return 0))
+    (if (== ka 1)
+      (do (if (and (> (cells-at cand (+ ba CR_OBJ)) 0) (== (cells-at cand (+ ba CR_OBJ)) (cells-at cand (+ bb CR_OBJ)))) (return 1))
+          (if (and (> (cells-at cand (+ ba (+ CR_SIG 1))) 0)
+                   (and (== (cells-at cand (+ ba (+ CR_SIG 1))) (cells-at cand (+ bb (+ CR_SIG 1))))
+                        (and (== (cells-at cand (+ ba (+ CR_SIG 2))) (cells-at cand (+ bb (+ CR_SIG 2))))
+                             (and (== (cells-at cand (+ ba (+ CR_SIG 3))) (cells-at cand (+ bb (+ CR_SIG 3))))
+                                  (== (cells-at cand (+ ba (+ CR_SIG 4))) (cells-at cand (+ bb (+ CR_SIG 4))))))))
+            (return 1))
+          (return 0)))
+    (let [^I32 pwa (page-w pages (- (cells-at cand (+ ba CR_PAGE)) 1))
+          ^I32 pha (page-h pages (- (cells-at cand (+ ba CR_PAGE)) 1))
+          ^I32 pwb (page-w pages (- (cells-at cand (+ bb CR_PAGE)) 1))
+          ^I32 phb (page-h pages (- (cells-at cand (+ bb CR_PAGE)) 1))
+          ^I32 wa (- (cells-at cand (+ ba (+ CR_VX 2))) (cells-at cand (+ ba CR_VX)))
+          ^I32 ha (- (cells-at cand (+ ba (+ CR_VX 3))) (cells-at cand (+ ba (+ CR_VX 1))))
+          ^I32 wb (- (cells-at cand (+ bb (+ CR_VX 2))) (cells-at cand (+ bb CR_VX)))
+          ^I32 hb (- (cells-at cand (+ bb (+ CR_VX 3))) (cells-at cand (+ bb (+ CR_VX 1))))]
+      (if (or (<= pwa 0) (or (<= pha 0) (or (<= pwb 0) (or (<= phb 0) (or (<= wb 0) (<= hb 0)))))) (return 0))
+      (if (!= (cells-at cand (+ ba (+ CR_SIG 1))) (cells-at cand (+ bb (+ CR_SIG 1)))) (return 0))
+      (if (> (fc-hamming16 (cells-at cand (+ ba (+ CR_SIG 2))) (cells-at cand (+ bb (+ CR_SIG 2)))) 1) (return 0))
+      (if (or (< (quot (* wa 1000) wb) FC_RSCALE_LO) (> (quot (* wa 1000) wb) FC_RSCALE_HI)) (return 0))
+      (if (or (< (quot (* ha 1000) hb) FC_RSCALE_LO) (> (quot (* ha 1000) hb) FC_RSCALE_HI)) (return 0))
+      (let [^I32 dx (fc-abs (- (quot (* (+ (cells-at cand (+ ba CR_VX)) (cells-at cand (+ ba (+ CR_VX 2)))) 500) pwa)
+                               (quot (* (+ (cells-at cand (+ bb CR_VX)) (cells-at cand (+ bb (+ CR_VX 2)))) 500) pwb)))
+            ^I32 dy (fc-abs (- (quot (* (+ (cells-at cand (+ ba (+ CR_VX 1))) (cells-at cand (+ ba (+ CR_VX 3)))) 500) pha)
+                               (quot (* (+ (cells-at cand (+ bb (+ CR_VX 1))) (cells-at cand (+ bb (+ CR_VX 3)))) 500) phb)))]
+        (if (> dx (+ FC_RPOS (quot (quot (* wb 1000) pwb) 8))) (return 0))
+        (if (> dy (+ FC_RPOS (quot (quot (* hb 1000) phb) 8))) (return 0))
+        (return 1)))))
+
+(defn ^:pub ^I32 fc-recur [^Cells cand ^Cells pages ^I32 row]
+  (comment "P8.4 (logos and their recurrence across pages): how much the same drawing on other pages should raise the confidence of a logo (per")
+  (comment "mille) for the region `row` of `cand`, whose signatures `fc-sign-rows` made: 0 for none, 100 when it is on one other page, 160 on two,")
+  (comment "220 on three or more. Pages, not placements: a drawing used twice on one page is no recurrence. A raster is the same by its object or")
+  (comment "its stream's digest wherever it stands; vector art by `fc-same-drawing`'s place and shape, whatever the scale within the tolerance.")
+  (let [^I32 n (quot (cells-len cand) CR_STRIDE)
+        ^I32 mine (cells-at cand (+ (* row CR_STRIDE) CR_PAGE))
+        ^:mut ^I32 r 0
+        ^:mut ^I32 pg 0
+        ^:mut ^I32 p1 0
+        ^:mut ^I32 p2 0
+        ^:mut ^I32 p3 0
+        ^:mut ^I32 seen 0]
+    (if (== (cells-at cand (+ (* row CR_STRIDE) CR_SIG)) 0) (return 0))
+    (while (and (< r n) (< seen 3))
+      (do (set pg (cells-at cand (+ (* r CR_STRIDE) CR_PAGE)))
+          (if (and (!= pg mine) (and (!= pg p1) (and (!= pg p2) (!= pg p3))))
+            (if (== (fc-same-drawing cand pages row r) 1)
+              (do (if (== seen 0) (set p1 pg))
+                  (if (== seen 1) (set p2 pg))
+                  (if (== seen 2) (set p3 pg))
+                  (set seen (+ seen 1)))))
+          (set r (+ r 1))))
+    (if (== seen 0) (return 0))
+    (if (== seen 1) (return 100))
+    (if (== seen 2) (return 160))
+    (return 220)))
 
 (defn ^I32 fc-in-band [^I32 y0 ^I32 y1 ^I32 pageh]
   (comment "1 when the region lies in the header band (the top fifth of the page) or the footer band.")
@@ -985,6 +1163,7 @@
     (fc-shading-regions pa pages fcand)
     (fc-grg-regions grg pages fcand)
     (as-figure-rows fcand pages nodes regions 2 fg)
+    (fc-sign-rows fi pa fcand)
     (set nr (as-count fcand))
     (set i 0)
     (while (< i (* nr FD_STRIDE))
@@ -1005,7 +1184,7 @@
           (set x1 (cells-at fcand (+ b (+ CR_VX 2))))
           (set y1 (cells-at fcand (+ b (+ CR_VX 3))))
           (set pageh (page-h pages (- page 1)))
-          (set recur (fc-recur fcand row))
+          (set recur (fc-recur fcand pages row))
           (set rej 1)
           (if (< measured FC_MAXREG)
             (do (set measured (+ measured 1))
