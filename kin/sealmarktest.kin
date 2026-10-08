@@ -11,18 +11,20 @@
 ;;   * `sm-write` copies the Model and writes a seal node after the last block it overlaps (a stamp over a table is after the table), before the first block that
 ;;     starts below it when it overlaps none, and the left ones at the end, and the Model still checks.
 (ns emon.sealmarktest
-  (:require [emon.lang :refer [I32 Cells]]
-            [emon.test :refer [deftest assert-eq assert-that new-cells]]
-            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+  (:require [emon.lang :refer [I32 Cells Blob]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells text-blob]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop blob-len blob-u8]]
             [emon.evidence :refer [pa-new pa-set pt-add gl-new gl-set gf-fill wd-new wd-set wf-gfirst wf-gcount ep-new ow-new ow-set rf-add
                                    pf-stroke pf-width pf-flags pf-pfirst pf-pcount pf-kind pg-stroked pg-filled pa-curve pa-rect pa-other
                                    po-move po-line po-curve po-close ea-words ea-owords]]
-            [emon.player :refer [cg-new cg-set cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-flags plg-in-seal sl-new sl-count sl-get pls-seal pls-stamp pls-signature]]
+            [emon.player :refer [cg-new cg-set cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-flags cgf-rot plg-in-seal plg-ocr-only plg-seal-px plg-seal-stamp
+                                 sl-new sl-count sl-get pls-seal pls-stamp pls-signature]]
             [emon.model :refer [model-init model-check node-new node-count node-kind node-sub node-parent node-add-region node-region-head region-page
+                                node-attr attr-value attr-len node-text-start node-text-len fk-name fk-date fk-color
                                 nk-document nk-section nk-paragraph nk-seal sl-seal sl-stamp]]
             [emon.sealmark :refer [sm-hue sm-name-len sm-name-off sm-name-at sm-spread sm-ink-near sm-turned sm-ring-test sm-find sm-write sm-seal-min]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot]]))
+                              + - * < > <= >= == != and or quot bit-and]]))
 
 ;; ------------------------------------------------------------- inks
 
@@ -454,3 +456,123 @@
       (assert-eq (node-kind nn 7) (nk-seal) "the third, on a later page, is the last of the section")
       (assert-eq (node-parent nn 7) 1 "a child of the section")
       (assert-eq (model-check nn na nr text pages ledger layout chk) 0 "and the Model still checks"))))
+
+;; ------------------------------------------------------------- seals read from pixels (P8.2)
+
+(defn ^I32 st-owtext [^:mut ^Cells ow ^:mut ^Cells et ^Blob b ^I32 conf]
+  (comment "An OCR word of page 1 whose text is the bytes of `b`, the engine's confidence `conf`; answers its row.")
+  (let [^I32 ts (cells-len et)
+        ^I32 n (blob-len b)
+        ^:mut ^I32 k 0]
+    (while (< k n)
+      (do (cells-push et (blob-u8 b k))
+          (set k (+ k 1))))
+    (return (ow-new ow 1 1000 1000 2000 1600 1000 1600 2000 1600 0 0 ts n 0 conf -1))))
+
+(defn ^I32 st-pxgroup [^:mut ^Cells cg ^:mut ^Cells refs ^I32 first ^I32 count ^I32 flags ^I32 hue]
+  (comment "A raster seal's group (`emon.sealpx`): its words are the OCR words first.. first + count - 1, in its box on page 1, its colour code in `rot`.")
+  (let [^I32 g (cg-new cg 1 1000 1000 7000 7000 hue)
+        ^:mut ^I32 f 0
+        ^:mut ^I32 i 0]
+    (while (< i count)
+      (do (if (== i 0) (set f (rf-add refs (ea-owords) (+ first i))) (rf-add refs (ea-owords) (+ first i)))
+          (set i (+ i 1))))
+    (cg-set cg g (cgf-ofirst) f)
+    (cg-set cg g (cgf-ocount) count)
+    (cg-set cg g (cgf-flags) flags)
+    (return g)))
+
+(deftest test-a-seal-read-from-pixels-is-a-candidate-with-its-reading-as-text
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells sm (new-cells)]
+    (st-owtext ow et (text-blob "ACME") 900)
+    (st-owtext ow et (text-blob "LTD") 900)
+    (st-owtext ow et (text-blob "-") 900)
+    (st-owtext ow et (text-blob "ee") 100)
+    (st-owtext ow et (text-blob "2026-03-14") 600)
+    (st-pxgroup cg refs 0 5 (+ (+ (plg-ocr-only) (plg-in-seal)) (plg-seal-px)) 10)
+    (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "a group flagged `seal-px` is a candidate though the page has no path")
+    (assert-eq (sl-get sm 0 5) (pls-seal) "a seal")
+    (assert-eq (sl-get sm 0 12) 128 "read from pixels (flag 128)")
+    (assert-eq (sl-get sm 0 15) 10 "its colour is the group's code, blue")
+    (assert-eq (sl-get sm 0 1) 1000 "its box is the group's")
+    (assert-eq (sl-get sm 0 14) 21 "the text is the kept words: ACME LTD - 2026-03-14, the noise of confidence 100 left out")
+    (assert-eq (cells-at et (sl-get sm 0 13)) 65 "it starts with A")
+    (assert-eq (sl-get sm 0 11) 5 "and its words are the group's five")))
+
+(deftest test-a-stamp-group-is-a-stamp-and-a-vector-candidate-is-not-written-twice
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells sm (new-cells)]
+    (st-owtext ow et (text-blob "PAID") 900)
+    (st-pxgroup cg refs 0 1 (+ (+ (+ (plg-ocr-only) (plg-in-seal)) (plg-seal-px)) (plg-seal-stamp)) 3)
+    (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "a stamp group")
+    (assert-eq (sl-get sm 0 5) (pls-stamp) "is a stamp")
+    (assert-eq (sl-get sm 0 15) 3 "red")
+    (comment "a vector ring over the same box: its candidate is written, the pixel one is not")
+    (cells-drop sm 0)
+    (st-circle pa pts 1 4000 4000 2047903 300 0)
+    (let [^I32 ow2 (st-oword ow et 4000 4000 83 69)
+          ^I32 gv (st-ogroup cg refs ow2)]
+      (assert-eq (cg-get cg gv (cgf-flags)) 0 "(an OCR group inside the ring)")
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "the ring found in the paths and the group of the pixels, one box: one candidate")
+      (assert-eq (bit-and (sl-get sm 0 12) 128) 0 "the vector one"))))
+
+(deftest test-the-node-of-a-seal-has-its-name-and-its-date
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells et (new-cells)
+        ^Cells sm (new-cells)
+        ^Cells nn (new-cells)
+        ^Cells na (new-cells)
+        ^Cells nr (new-cells)
+        ^Cells nm (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells fw (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 sec (node-new nodes (nk-section) 0)]
+      (st-block nodes regions sec 1 10000 20000)
+      (st-owtext ow et (text-blob "ACME") 900)
+      (st-owtext ow et (text-blob "LTD") 900)
+      (st-owtext ow et (text-blob "-") 900)
+      (st-owtext ow et (text-blob "NOTARY") 900)
+      (st-owtext ow et (text-blob "2026-03-14") 600)
+      (st-pxgroup cg refs 0 5 (+ (+ (plg-ocr-only) (plg-in-seal)) (plg-seal-px)) 10)
+      (assert-eq (st-find pa pts gl fw et cg refs ow sm) 1 "the candidate")
+      (assert-eq (sm-write sm et nodes attrs regions text nn na nr nm) 1 "written")
+      (let [^I32 a (node-attr nn na 2 (fk-name))
+            ^I32 d (node-attr nn na 2 (fk-date))
+            ^I32 c (node-attr nn na 2 (fk-color))]
+        (assert-eq (node-kind nn 2) (nk-seal) "the seal is node 2: it overlaps no block and the paragraph starts below its top")
+        (assert-that (>= a 0) "it has a name")
+        (assert-eq (attr-len na a) 8 "ACME LTD, the first phrase of letters, cut at the dash")
+        (assert-eq (cells-at text (attr-value na a)) 65 "which starts with A")
+        (assert-that (>= d 0) "and a date")
+        (assert-eq (attr-len na d) 10 "of ten characters")
+        (assert-eq (cells-at text (attr-value na d)) 50 "2026-03-14, as year-month-day")
+        (assert-eq (cells-at text (+ (attr-value na d) 5)) 48 "the month's tens digit")
+        (assert-eq (attr-len na c) 4 "and the colour, blue")
+        (assert-eq (node-text-len nn 2) 26 "the text is the words of the reading: the ring's lone dash is out of it (it cut the name)")))))

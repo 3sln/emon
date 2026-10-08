@@ -393,6 +393,16 @@ pub fn sc_request_view(mut rq: &mut crate::port::Cells, id: i32, view: i32, hhi:
     rq_ocr_end(rq, q);
     return q;
 }
+pub fn sc_request_view_psm(mut rq: &mut crate::port::Cells, id: i32, view: i32, hhi: i32, hlo: i32, psm: i32, dpi: i32, loc: &mut crate::port::Cells) -> i32 {
+    // `sc-request-view` at the page segmentation mode `psm` (P8.2: a seal's strip and a stamp's crop are read as one block, `psm` 6).
+    let q: i32 = rq_ocr_view(rq, id, view, hhi, hlo, psm, ocf_symbols() + (dpi * ocf_dpi_unit()), 0, 0, 0, 0);
+    let lg: i32 = sc_lang(loc);
+    if lg > 0 {
+        rq_ocr_lang(rq, lg / 65536, (lg / 256) % 256, lg % 256, 0);
+    }
+    rq_ocr_end(rq, q);
+    return q;
+}
 pub(crate) fn sc_cpt_len(views: &mut crate::port::Cells, view: i32, v: i32) -> i32 {
     // A length of `v` pixels down the view's y axis, in centipoints; -1 stays -1.
     if v < 0 {

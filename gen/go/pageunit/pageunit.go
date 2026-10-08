@@ -15,6 +15,7 @@ import (
 	"emon/rasterplan"
 	"emon/retarget"
 	"emon/scan"
+	"emon/sealpx"
 	"emon/xalign"
 )
 
@@ -227,6 +228,10 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 	var j int32 = 0
 	var at int32 = 0
 	var before int32 = 0
+	var asked int32 = 0
+	var pgrow int32 = 0
+	var pgw int32 = 0
+	var pgh int32 = 0
 	var g0 int32 = 0
 	if ask == rasterplan.RpAskNone() {
 		return plan.UsDone()
@@ -365,7 +370,16 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 			if esc >= 0 {
 				run = esc
 			}
-			if retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr) == 1 {
+			asked = retarget.RtPlan(i, input, 1, 0, rid, PuDpi(), loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr)
+			// the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes
+			if puPx(bms, nid, fuse) == 1 {
+				pgrow = evidence.EvPageRow(epages, i+1)
+				pgw = evidence.EpGet(epages, pgrow, evidence.EpfWidth())
+				pgh = evidence.EpGet(epages, pgrow, evidence.EpfHeight())
+				sealpx.SxFind(i+1, views, nview, prims, inks, pgw, pgh, s1)
+				asked += sealpx.SxPlan(i, loc, ans, bms, port.BmsGet(bms, nid), s1, s2, s3, rq)
+			}
+			if asked > 0 {
 				pageink.PnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
 				return plan.UsRequests()
 			}
@@ -379,12 +393,15 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 		if (ask == rasterplan.RpAskFull()) || (esc >= 0) {
 			retarget.RtRecord(i, view, dpi*100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 			retarget.RtWitness(g0, player.CgCount(cg), cg, rtp, oruns, owords)
+			if puPx(bms, nid, fuse) == 1 {
+				sealpx.SxRecord(i, nview, dpi*100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4)
+			}
 		}
 	}
 	return plan.UsDone()
 }
 
-func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
+func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells) int32 {
 	// A SCANNED page: `decode` of its stream, the OCR of the bitmap, the ink layers of the bitmap and the targeted passes they and the
 	// first pass call for, then the lines the pipeline reads (`rt-adopt`). With no pixel in the decode answer (a transcript recorded slim) the
 	// page is what it always was: the first pass's lines.
@@ -403,6 +420,7 @@ func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 	var run int32 = 0
 	var nl int32 = 0
 	var rotmed int32 = 0
+	var asked int32 = 0
 	var nsel int32 = 0
 	if ad < 0 {
 		plan.RqDecode(rq, did, input, PuField(pl, i, 2), PuField(pl, i, 3), plan.FltDct(), 0)
@@ -438,12 +456,18 @@ func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 	nw = evidence.OwCount(owords) - w0
 	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, did), oid, w0, nw, ws, comps, owords, feats, scr)
 	retarget.RtPrep(rtp)
-	if retarget.RtPlan(i, input, 0, 0, did, (dpi100+50)/100, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, did), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr) == 1 {
+	asked = retarget.RtPlan(i, input, 0, 0, did, (dpi100+50)/100, loc, ans, bms, pageink.PnKText(), port.BmsGet(bms, did), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr)
+	// the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes
+	sealpx.SxFind(i+1, views, vdec, prims, inks, PuField(pl, i, 8), PuField(pl, i, 9), s1)
+	asked += sealpx.SxPlan(i, loc, ans, bms, port.BmsGet(bms, did), s1, s2, s3, rq)
+	if asked > 0 {
 		pageink.PnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
 		return plan.UsRequests()
 	}
 	retarget.RtRecord(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+	sealpx.SxRecord(i, vdec, dpi100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4)
 	nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, scr)
+	nsel = sealpx.SxDropLines(scr, nsel, olines, owords, s1)
 	retarget.RtUpright(rtp, run, epages, i+1)
 	nl = evidence.OrGet(oruns, run, evidence.OrfLcount())
 	rotmed = evidence.EvRotMedian(olines, l0, nl)
@@ -467,5 +491,5 @@ func PuRunPdf(i int32, input int32, policy int32, pl *port.Cells, ans *port.Cell
 	if PuKind(pl, i) != PkScan() {
 		return plan.UsDone()
 	}
-	return puRunScan(i, input, fuse, pl, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
+	return puRunScan(i, input, fuse, pl, ans, rq, loc, bms, mask, scr, epages, views, etext, feats, images, oruns, oblocks, olines, owords, osyms, oalts, words, lines, refs, tlines, cg, inks, comps, rules, prims, tpts, ws, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6)
 }

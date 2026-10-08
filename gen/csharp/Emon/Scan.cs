@@ -389,6 +389,16 @@ public static class Scan {
         Plan.RqOcrEnd(rq, q);
         return q;
     }
+    public static int ScRequestViewPsm(emon.Port.Cells rq, int id, int view, int hhi, int hlo, int psm, int dpi, emon.Port.Cells loc) {
+        // `sc-request-view` at the page segmentation mode `psm` (P8.2: a seal's strip and a stamp's crop are read as one block, `psm` 6).
+        int q = Plan.RqOcrView(rq, id, view, hhi, hlo, psm, Ocr.OcfSymbols() + (dpi * Ocr.OcfDpiUnit()), 0, 0, 0, 0);
+        int lg = ScLang(loc);
+        if (lg > 0) {
+            Plan.RqOcrLang(rq, lg / 65536, (lg / 256) % 256, lg % 256, 0);
+        }
+        Plan.RqOcrEnd(rq, q);
+        return q;
+    }
     internal static int ScCptLen(emon.Port.Cells views, int view, int v) {
         // A length of `v` pixels down the view's y axis, in centipoints; -1 stays -1.
         if (v < 0) {

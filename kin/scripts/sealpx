@@ -1,0 +1,184 @@
+#!/usr/bin/env bb
+;; SEALS AND STAMPS READ FROM PIXELS, replayed from transcripts WITH THEIR PIXELS (P8.2, SPEC 10.7, 8.3, 7.3, D016, D196, D800-D806).   kin/scripts/sealpx
+;;
+;; test/sealpx/FIXTURES.edn names born-digital pages whose seals and stamps are RASTER IMAGES (tools/synth/seal_px_pdf.clj: a blue ring seal, a red stamp, a black double ring,
+;; and a page of pictures that are NOT seals) and two of the corpus's scanned pages with seals over their text. test/sealpx/replay/ID is what the live ports answered, recorded by
+;; `bb sealpx-record` on Rust (Tesseract, and pdfium for the born-digital ones) WITH the bitmaps the page units read: the tracer finds the ring or the rectangle, kin lays the ring out
+;; as a strip (the polar unwarp) and cuts the centre and the stamp out of the page's pixels, and each is read as a targeted `seal-strip` request named by its pixel hash. This gate only
+;; REPLAYS them, through the whole Engine on Rust and Go, and holds:
+;;
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256);
+;;   2. THE ROUNDS: at most 5 rounds a page unit, at most 24 targeted requests, every kin-made view named with its hash, and a page with a seal has its `seal-strip` runs in the dump;
+;;   3. THE NODES (born-digital fixtures): the seal nodes of the body are the gold's: subkind, colour, text, the NAME and the DATE (read off the text by `emon.sealfield`); no word of a seal
+;;      is in the body outside its node (seal-leak 0) and every word of the page's own text is (none lost); the page of pictures has no seal node;
+;;   4. THE SCANS: of the gold's seals and stamps the page units found, precision and recall, and name and date accuracy, are reported and held to what they were when this was recorded;
+;;      the seal's words are out of the body (the words of the gold's seal text found in the body are no more than the same transcript gives with `no-retarget`... which is no seal at all);
+;;   5. NOTHING IS GUESSED: a replay whose page bitmap has one other pixel is `transcript-miss` on both Engines.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process]]
+         '[cheshire.core :as json]
+         '[clojure.edn :as edn]
+         '[clojure.set :as set]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def abs #(str (fs/absolutize %)))
+(def fixtures (edn/read-string (slurp "test/sealpx/FIXTURES.edn")))
+(def seal-gold (edn/read-string (slurp "test/sealpx/gold.edn")))
+(def ids (vec (sort (filter #(fs/exists? (str "test/sealpx/replay/" % "/transcript.edn")) (keys fixtures)))))
+(def digests (let [f "test/sealpx/replay/DIGESTS.edn"] (if (fs/exists? f) (read-string (slurp f)) {})))
+(def work (str (fs/create-temp-dir {:prefix "emon-sealpx."})))
+(.addShutdownHook (Runtime/getRuntime) (Thread. #(fs/delete-tree work)))
+
+(defn sha256 [s]
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest md (.getBytes ^String s "UTF-8"))))))
+
+(defn build-driver [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r)) (str/trim (:out r)) (do (bad "the " what " Engine driver did not build:\n" (:err r)) nil))))
+
+(def rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" "Rust")))
+(def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
+(when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
+(when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+
+(defn drive [drv & a]
+  (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+(defn same? [a b] (and (= (:exit a) (:exit b)) (= (:out a) (:out b)) (= (:err a) (:err b))))
+
+(defn pdf-of [id] (abs (:pdf (get fixtures id))))
+(defn walk [n] (when (map? n) (cons n (mapcat walk (get n "children")))))
+(defn words [s] (re-seq #"[\p{L}\p{N}]+" (str/lower-case (str s))))
+(defn key* [s] (str/join (words s)))
+(defn seals [model] (filter #(= "seal" (get % "kind")) (walk (get model "body"))))
+(defn body-words
+  "The words of every text of the body outside the seal nodes."
+  [model]
+  (mapcat (fn [n] (when (and (not= "seal" (get n "kind")) (string? (get n "text")) (empty? (get n "children"))) (words (get n "text"))))
+          (walk (get model "body"))))
+(defn overlap [a b]
+  (let [wa (set (words a)) wb (set (words b))
+        u (count (set/union wa wb))]
+    (cond (and (empty? wa) (empty? wb)) 1.0
+          (= (apply str (words a)) (apply str (words b))) 1.0
+          :else (/ (double (count (set/intersection wa wb))) (max 1 u)))))
+
+(defn model-of [drv rep pdf] (json/parse-string (:out (drive drv "--out=json" (str "--replay=" rep) pdf))))
+(defn dump-of [drv rep pdf]
+  (let [e (drive drv "--out=evidence" (str "--replay=" rep) pdf)
+        l (first (filter #(str/starts-with? % "evidence: ") (str/split-lines (:out e))))]
+    (json/parse-string (if l (subs l (count "evidence: ")) (:out e)))))
+
+(defn entries [dir]
+  (for [[_ round kind req] (re-seq #"\{:round (\d+) :kind :(\w+) :req \[([^\]]*)\]" (slurp (str dir "/transcript.edn")))]
+    [(parse-long round) (keyword kind) (mapv parse-long (str/split req #" "))]))
+(def VIEW-BASE 16777216)
+
+(defn match-nodes
+  "Pair the gold's seals and stamps with the predicted ones of the same subkind that share the most words with them (at least a quarter), each used once:
+   a vector of [gold predicted-or-nil]."
+  [gs ps]
+  (loop [gs gs taken #{} out []]
+    (if-let [g (first gs)]
+      (let [c (->> (map-indexed vector ps)
+                   (filter (fn [[j p]] (and (not (taken j)) (= (get g "subkind") (get p "subkind")) (>= (overlap (get g "text" "") (get p "text" "")) 0.25))))
+                   (sort-by (fn [[_ p]] (- (overlap (get g "text" "") (get p "text" ""))))))
+            [j p] (first c)]
+        (recur (rest gs) (if j (conj taken j) taken) (conj out [g p])))
+      out)))
+
+(def scan-totals (atom {:gold 0 :pred 0 :tp 0 :name-n 0 :name-ok 0 :date-n 0 :date-ok 0}))
+
+(when (and rdrv gdrv (seq ids))
+  (doseq [id ids]
+    (let [{:keys [gold gold-id kind]} (get fixtures id)
+          pdf (pdf-of id)
+          rep (abs (str "test/sealpx/replay/" id))
+          rr (drive rdrv "--out=bundle" (str "--replay=" rep) pdf)
+          rg (drive gdrv "--out=bundle" (str "--replay=" rep) pdf)
+          want (get digests id)]
+      ;; 1 ---------------------------------------------------------------------------------------------------------------------------
+      (check (and (zero? (:exit rr)) (same? rr rg))
+             id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
+      ;; 2 ---------------------------------------------------------------------------------------------------------------------------
+      (let [es (entries rep)
+            ocr (filter #(= :ocr (second %)) es)
+            per-page (group-by (fn [[_ _ req]] (dec (quot (nth req 2) 256))) es)
+            views (filter (fn [[_ _ req]] (>= (nth req 3) VIEW-BASE)) ocr)
+            dump (dump-of rdrv rep pdf)
+            got (frequencies (map #(get % "pass") (get dump "oruns")))
+            m (model-of rdrv rep pdf)
+            ns (seals m)]
+        (check (every? (fn [[_ rs]] (<= (inc (apply max (map first rs))) 5)) per-page)
+               id ": no page unit took more than 5 rounds")
+        (check (every? (fn [[_ rs]] (<= (count (filter (fn [[_ _ req]] (> (mod (nth req 2) 256) 16)) rs)) 24)) per-page)
+               id ": no page unit asked more than 24 targeted requests")
+        (check (every? (fn [[_ _ req]] (and (>= (nth req 3) VIEW-BASE) (>= (count req) 12))) views)
+               id ": the " (count views) " requests that name a kin-made view carry its pixel hash")
+        (when (seq ns)
+          (check (contains? got "seal-strip") id ": the dump names the pass of the seals' runs: " (pr-str got)))
+        ;; 3 -------------------------------------------------------------------------------------------------------------------------
+        (if (= :seals gold)
+          (let [g (get seal-gold id)
+                exp (:nodes g)
+                bw (frequencies (body-words m))
+                gw (frequencies (words (str/join " " (:body g))))
+                missing (reduce + (for [[w n] gw] (max 0 (- n (get bw w 0)))))
+                leaked (reduce + (for [w (set (words (str/join " " (:leak g))))] (max 0 (- (get bw w 0) (get gw w 0)))))
+                pairs (match-nodes (mapv (fn [e] {"subkind" (:subkind e) "text" (:text e) "name" (:name e) "date" (:date e) "color" (:color e)}) exp) (vec ns))]
+            (check (and (= (count ns) (count exp)) (every? (fn [[_ p]] (some? p)) pairs))
+                   id ": the seal nodes are the gold's: " (count ns) " found, " (count exp) " expected " (pr-str (mapv #(select-keys % ["subkind" "color" "name" "date"]) ns)))
+            (doseq [[g p] pairs :when p]
+              (check (= (get g "color") (get p "color")) id ": the " (get g "subkind") "'s colour is " (get g "color") " (" (get p "color") ")")
+              (check (>= (overlap (get g "text") (get p "text")) 0.8) id ": its text is the gold's (" (pr-str (get p "text")) ")")
+              (when (get g "name") (check (= (key* (get g "name")) (key* (get p "name"))) id ": its NAME is " (pr-str (get g "name")) " (" (pr-str (get p "name")) ")"))
+              (when (get g "date") (check (= (key* (get g "date")) (key* (get p "date"))) id ": its DATE is " (pr-str (get g "date")) " (" (pr-str (get p "date")) ")")))
+            (check (zero? leaked) id ": no word of a seal or a stamp is in the body outside its node (" leaked " leaked)")
+            (check (zero? missing) id ": every word of the page's own text is in the body (" missing " missing)"))
+          ;; 4 -----------------------------------------------------------------------------------------------------------------------
+          (let [gm (json/parse-string (slurp (str "test/corpus/synth/gold-ovl/" gold-id ".ovl.gold.json")))
+                gs (filter #(#{"seal" "stamp"} (get % "subkind")) (seals (get gm "model")))
+                ps (filter #(#{"seal" "stamp"} (get % "subkind")) ns)
+                pairs (match-nodes (vec gs) (vec ps))
+                tp (count (filter second pairs))]
+            (swap! scan-totals #(merge-with + % {:gold (count gs) :pred (count ps) :tp tp
+                                                 :name-n (count (filter (fn [[g _]] (get g "name")) pairs))
+                                                 :name-ok (count (filter (fn [[g p]] (and p (get g "name") (= (key* (get g "name")) (key* (get p "name"))))) pairs))
+                                                 :date-n (count (filter (fn [[g _]] (get g "date")) pairs))
+                                                 :date-ok (count (filter (fn [[g p]] (and p (get g "date") (= (key* (get g "date")) (key* (get p "date"))))) pairs))}))
+            (ok id ": " tp " of the gold's " (count gs) " seals and stamps found among " (count ps) " nodes: " (pr-str (mapv #(select-keys % ["subkind" "color" "name" "date"]) ps))))))
+      ;; 5 ---------------------------------------------------------------------------------------------------------------------------
+      (when-let [[x y] (:miss (get fixtures id))]
+        (let [tam (str work "/tamper-" id)
+              png (str tam "/" (get (get fixtures id) :miss-file "bitmap-0000.png"))]
+          (fs/create-dirs tam)
+          (doseq [f (fs/list-dir rep)] (fs/copy f (str tam "/" (fs/file-name f)) {:replace-existing true}))
+          (let [m @(process {:out :string :err :string} "magick" png "-fill" (get (get fixtures id) :miss-color "black") "-draw" (str "point " x "," y) png)
+                tr (drive rdrv "--out=bundle" (str "--replay=" tam) pdf)
+                tg (drive gdrv "--out=bundle" (str "--replay=" tam) pdf)]
+            (check (and (zero? (:exit m)) (= 4 (:exit tr)) (= 4 (:exit tg))
+                        (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss"))
+                   id ": a replay whose page bitmap has one other pixel is transcript-miss on both Engines, nothing guessed"))))))
+  (let [{:keys [gold pred tp name-n name-ok date-n date-ok]} @scan-totals]
+    (when (pos? gold)
+      (ok (format "scanned pages: seal precision %.2f, recall %.2f (%d of %d gold, %d nodes); name accuracy %d of %d, date accuracy %d of %d"
+                  (if (pos? pred) (/ (double tp) pred) 0.0) (/ (double tp) gold) tp gold pred name-ok name-n date-ok date-n))))
+  ;; the ratchet of the scoreboard's `emon-sealpx`: the scanned seal documents, replayed (CER, block-seal P/R, seal-leak, seal-name-acc, seal-date-acc)
+  (let [scan-ids (for [[k v] (sort fixtures) :when (and (= :scan (:kind v)) (contains? (set ids) k))] (:gold-id v))
+        r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-sealpx" "--variants" "scan-ovl" "--ids" (str/join "," scan-ids))]
+    (check (and (zero? (:exit r)) (str/includes? (:out r) "ok   accuracy[emon-sealpx]") (not (str/includes? (:out r) "FAIL")))
+           "accuracy[emon-sealpx]: the scanned seal documents, replayed, hold their scoreboard entry"
+           (when-let [l (some #(when (str/includes? % "accuracy[emon-sealpx]") (str/trim %)) (str/split-lines (:out r)))]
+             (str " (" (str/replace l #"^ok +accuracy\[emon-sealpx\]: " "") ")"))))
+  (when (zero? @fails)
+    (ok "seals from pixels: the strips, the centres and the crops read, the nodes, names and dates the gold's, on Rust and Go")))
+
+(when (empty? ids) (println "  SKIP no sealpx transcripts committed (bb sealpx-record)"))
+(when (pos? @fails) (System/exit 1))

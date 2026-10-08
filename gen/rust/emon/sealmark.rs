@@ -5,6 +5,7 @@ use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::player::*;
 use crate::emon::restruct::*;
+use crate::emon::sealfield::*;
 
 pub fn sm_seal_min() -> i32 {
     // `seal-min`: the radius (centipoints) a ring needs to be a seal: 8 mm.
@@ -1109,6 +1110,225 @@ pub(crate) fn sm_page(scr: &mut crate::port::Cells, n: i32, page: i32, fw: &mut 
     }
     return 0;
 }
+pub(crate) fn sm_px_dash(c: i32) -> i32 {
+    // 1 for the marks a ring puts between its phrases that the engine can read: a hyphen, a middle dot, a bullet, a star, a bar.
+    if c == 45 {
+        return 1;
+    }
+    if c == 183 {
+        return 1;
+    }
+    if c == 8226 {
+        return 1;
+    }
+    if c == 9733 {
+        return 1;
+    }
+    if c == 9679 {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn sm_px_cased(c: i32) -> i32 {
+    // 1 for a lower case Latin letter, 2 for an upper case one, 0 for any other character.
+    if (c >= 97) && (c <= 122) {
+        return 1;
+    }
+    if (c >= 223) && (c <= 255) {
+        return 1;
+    }
+    if (c >= 65) && (c <= 90) {
+        return 2;
+    }
+    if (c >= 192) && (c <= 222) {
+        return 2;
+    }
+    return 0;
+}
+pub(crate) fn sm_px_noisy(et: &mut crate::port::Cells, ts: i32, tl: i32) -> i32 {
+    // 1 when a word has, inside it, a mark that is no part of a word (anything but a letter, a digit, a hyphen, a point, a comma, a colon or an apostrophe: `C!TY`) or a lone lower case
+    // letter between upper case ones (`RiVERTON`): what the engine makes of a ring's letters when it is not sure, and what a seal's own text is not.
+    let mut k: i32 = 1;
+    let mut c: i32 = 0;
+    while k < (tl - 1) {
+        c = crate::port::cells_at(et, ts + k);
+        if (sf_script(c) == 0) && ((sf_digit(c) < 0) && ((c != 45) && ((c != 46) && ((c != 44) && ((c != 58) && (c != 39)))))) {
+            return 1;
+        }
+        if (sm_px_cased(c) == 1) && ((sm_px_cased(crate::port::cells_at(et, (ts + k) + 1)) == 2) && (sm_px_cased(crate::port::cells_at(et, (ts + k) - 1)) == 2)) {
+            return 1;
+        }
+        k += 1;
+    }
+    return 0;
+}
+pub fn sm_px_keep(et: &mut crate::port::Cells, owords: &mut crate::port::Cells, row: i32) -> i32 {
+    // 1 when the OCR word `row` of a seal's reading is kept in its text: it has three letters or digits and the engine was at least 250 per mille sure of it, or one and 600, or six
+    // and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
+    let ts: i32 = ow_get(owords, row, hd_tstart());
+    let tl: i32 = ow_get(owords, row, hd_tlen());
+    let conf: i32 = ow_get(owords, row, hd_conf());
+    let mut k: i32 = 0;
+    let mut n: i32 = 0;
+    while k < tl {
+        if (sf_script(crate::port::cells_at(et, ts + k)) > 0) || (sf_digit(crate::port::cells_at(et, ts + k)) >= 0) {
+            n += 1;
+        }
+        k += 1;
+    }
+    if (n > 0) && (sm_px_noisy(et, ts, tl) == 1) {
+        return 0;
+    }
+    if (n == 3) && (conf >= 450) {
+        return 1;
+    }
+    if (n >= 4) && (conf >= 350) {
+        return 1;
+    }
+    if (n >= 1) && (conf >= 600) {
+        return 1;
+    }
+    if (n >= 6) && (conf >= 300) {
+        return 1;
+    }
+    if (n == 0) && ((tl == 1) && ((conf >= 800) && (sm_px_dash(crate::port::cells_at(et, ts)) == 1))) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn sm_px_text(mut et: &mut crate::port::Cells, refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, from: i32, cnt: i32) -> i32 {
+    // Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two, each trimmed of what is not a letter or a
+    // digit at its ends (`“PAID`); a lone separator is put between two words and never at an end of the text. Answers the code points appended.
+    let start: i32 = crate::port::cells_len(et);
+    let mut i: i32 = 0;
+    let mut row: i32 = 0;
+    let mut ts: i32 = 0;
+    let mut tl: i32 = 0;
+    let mut a: i32 = 0;
+    let mut b: i32 = 0;
+    let mut pend: i32 = 0;
+    while i < cnt {
+        row = crate::port::cells_at(refs, ((from + i) * 2) + 1);
+        if sm_px_keep(et, owords, row) == 1 {
+            ts = ow_get(owords, row, hd_tstart());
+            tl = ow_get(owords, row, hd_tlen());
+            a = 0;
+            while (a < tl) && ((sf_script(crate::port::cells_at(et, ts + a)) == 0) && (sf_digit(crate::port::cells_at(et, ts + a)) < 0)) {
+                a += 1;
+            }
+            if a == tl {
+                pend = crate::port::cells_at(et, ts);
+            } else {
+                b = tl;
+                while (b > a) && ((sf_script(crate::port::cells_at(et, ts + (b - 1))) == 0) && (sf_digit(crate::port::cells_at(et, ts + (b - 1))) < 0)) {
+                    b -= 1;
+                }
+                if crate::port::cells_len(et) > start {
+                    crate::port::cells_push(et, 32);
+                }
+                if (pend > 0) && (crate::port::cells_len(et) > start) {
+                    crate::port::cells_push(et, pend);
+                    crate::port::cells_push(et, 32);
+                }
+                pend = 0;
+                sm_push_run(et, ts + a, b - a);
+            }
+        }
+        i += 1;
+    }
+    return crate::port::cells_len(et) - start;
+}
+pub(crate) fn sm_lo(a: i32, b: i32) -> i32 {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn sm_hi(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn sm_overlap_share(ax0: i32, ay0: i32, ax1: i32, ay1: i32, bx0: i32, by0: i32, bx1: i32, by1: i32) -> i32 {
+    // The part of the smaller of two boxes that the other covers, per cent.
+    let w: i32 = (sm_lo(ax1, bx1) - sm_hi(ax0, bx0)) / 100;
+    let h: i32 = (sm_lo(ay1, by1) - sm_hi(ay0, by0)) / 100;
+    let sa: i32 = ((ax1 - ax0) / 100) * ((ay1 - ay0) / 100);
+    let sb: i32 = ((bx1 - bx0) / 100) * ((by1 - by0) / 100);
+    let mut small: i32 = sa;
+    if (w <= 0) || (h <= 0) {
+        return 0;
+    }
+    if sb < small {
+        small = sb;
+    }
+    if small <= 0 {
+        return 0;
+    }
+    return ((w * h) * 100) / small;
+}
+pub(crate) fn sm_raster(page: i32, mut et: &mut crate::port::Cells, cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, mut sm: &mut crate::port::Cells) -> i32 {
+    // The `sl` rows of the seals and stamps that page units found in pixels (`emon.sealpx`): one for every group of `page` flagged `seal-px`, unless a candidate that is
+    // already there (found in the vector paths) has its box (half of the smaller). Its text is `sm-px-text`'s, its colour the group's code, its words the group's. Answers the rows written.
+    let ng: i32 = cg_count(cg);
+    let mut g: i32 = 0;
+    let mut o: i32 = 0;
+    let mut dup: i32 = 0;
+    let mut made: i32 = 0;
+    let mut ts: i32 = 0;
+    let mut fl: i32 = 0;
+    let mut kind: i32 = 0;
+    let mut conf: i32 = 0;
+    while g < ng {
+        if (cg_get(cg, g, cgf_page()) == page) && ((cg_get(cg, g, cgf_flags()) & plg_seal_px()) != 0) {
+            dup = 0;
+            o = 0;
+            while o < sl_count(sm) {
+                if sl_get(sm, o, 0) == page {
+                    if sm_overlap_share(sl_get(sm, o, 1), sl_get(sm, o, 2), sl_get(sm, o, 3), sl_get(sm, o, 4), cg_get(cg, g, cgf_x0()), cg_get(cg, g, cgf_y0()), cg_get(cg, g, cgf_x1()), cg_get(cg, g, cgf_y1())) >= 50 {
+                        dup = 1;
+                    }
+                }
+                o += 1;
+            }
+            if dup == 0 {
+                fl = cg_get(cg, g, cgf_flags());
+                kind = pls_seal();
+                if (fl & plg_seal_stamp()) != 0 {
+                    kind = pls_stamp();
+                }
+                ts = crate::port::cells_len(et);
+                sm_px_text(et, refs, owords, cg_get(cg, g, cgf_ofirst()), cg_get(cg, g, cgf_ocount()));
+                // a reading with no word kept is no text: the seal has none
+                conf = 600;
+                if kind == pls_stamp() {
+                    conf = 700;
+                }
+                if cg_get(cg, g, cgf_rot()) > 2 {
+                    conf += 100;
+                }
+                if crate::port::cells_len(et) > ts {
+                    conf += 100;
+                }
+                if conf > 900 {
+                    conf = 900;
+                }
+                o = sl_new(sm, page, cg_get(cg, g, cgf_x0()), cg_get(cg, g, cgf_y0()), cg_get(cg, g, cgf_x1()), cg_get(cg, g, cgf_y1()), kind);
+                crate::port::cells_set(sm, (o * 16) + 9, conf);
+                crate::port::cells_set(sm, (o * 16) + 10, cg_get(cg, g, cgf_ofirst()));
+                crate::port::cells_set(sm, (o * 16) + 11, cg_get(cg, g, cgf_ocount()));
+                crate::port::cells_set(sm, (o * 16) + 12, 128);
+                crate::port::cells_set(sm, (o * 16) + 13, ts);
+                crate::port::cells_set(sm, (o * 16) + 14, crate::port::cells_len(et) - ts);
+                crate::port::cells_set(sm, (o * 16) + 15, cg_get(cg, g, cgf_rot()));
+                made += 1;
+            }
+        }
+        g += 1;
+    }
+    return made;
+}
 pub fn sm_find(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, gl: &mut crate::port::Cells, fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, epages: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, np: i32, mut sm: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells) -> i32 {
     // The candidates of every page (see the head of this file) into `sm` (the `sl` arena), the text of their words appended to `et` (`sl` cells 13-14), and
     // the flag `plg-in-seal` on the groups of `cg` that are theirs. `scr` and `tmp` are scratch. Answers the candidates written.
@@ -1154,6 +1374,7 @@ pub fn sm_find(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, gl: &m
                 sm_page(scr, n, p, fw, gl, et, cg, refs, owords, sm);
             }
         }
+        sm_raster(p, et, cg, refs, owords, sm);
         p += 1;
     }
     return sl_count(sm);
@@ -1292,14 +1513,64 @@ pub(crate) fn sm_pending(sm: &mut crate::port::Cells, nm: &mut crate::port::Cell
     }
     return best;
 }
-pub(crate) fn sm_emit(mut sm: &mut crate::port::Cells, o: i32, et: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, parent: i32) -> i32 {
+pub(crate) fn sm_sl_hue(sm: &mut crate::port::Cells, o: i32) -> i32 {
+    // The colour code of candidate `o`: the ink's `sm-hue`, or, for one read from pixels (flag 128), the code its group carried.
+    if (sl_get(sm, o, 12) & 128) != 0 {
+        return sl_get(sm, o, 15);
+    }
+    return sm_hue(sl_get(sm, o, 15));
+}
+pub(crate) fn sm_emit_fields(et: &mut crate::port::Cells, ts: i32, tl: i32, kind: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, nn: i32, mut nm: &mut crate::port::Cells, fb: i32) -> i32 {
+    // The name and the date of the seal node `nn` whose text is `et[ts, ts + tl)` (`emon.sealfield`; the scratch is `nm` from cell `fb`): the name as read, the date as
+    // `YYYY-MM-DD` when the text says year, month and day plainly, else as it stands.
+    let mut start: i32 = 0;
+    let mut j: i32 = 0;
+    let mut form: i32 = 0;
+    let mut v: i32 = 0;
+    sf_fields(et, ts, tl, kind, 0, nm, fb);
+    if crate::port::cells_at(nm, fb + 1) > 0 {
+        start = crate::port::cells_len(text);
+        while j < crate::port::cells_at(nm, fb + 1) {
+            text_append_cp(text, crate::port::cells_at(et, crate::port::cells_at(nm, fb) + j));
+            j += 1;
+        }
+        node_add_attr_text(nodes, attrs, nn, fk_name(), start, crate::port::cells_at(nm, fb + 1));
+    }
+    form = crate::port::cells_at(nm, fb + 2);
+    if form > 0 {
+        start = crate::port::cells_len(text);
+        if form == 1 {
+            v = crate::port::cells_at(nm, fb + 5);
+            text_append_cp(text, 48 + ((v / 1000) % 10));
+            text_append_cp(text, 48 + ((v / 100) % 10));
+            text_append_cp(text, 48 + ((v / 10) % 10));
+            text_append_cp(text, 48 + (v % 10));
+            text_append_cp(text, 45);
+            text_append_cp(text, 48 + (crate::port::cells_at(nm, fb + 6) / 10));
+            text_append_cp(text, 48 + (crate::port::cells_at(nm, fb + 6) % 10));
+            text_append_cp(text, 45);
+            text_append_cp(text, 48 + (crate::port::cells_at(nm, fb + 7) / 10));
+            text_append_cp(text, 48 + (crate::port::cells_at(nm, fb + 7) % 10));
+            node_add_attr_text(nodes, attrs, nn, fk_date(), start, 10);
+        } else {
+            j = 0;
+            while j < crate::port::cells_at(nm, fb + 4) {
+                text_append_cp(text, crate::port::cells_at(et, crate::port::cells_at(nm, fb + 3) + j));
+                j += 1;
+            }
+            node_add_attr_text(nodes, attrs, nn, fk_date(), start, crate::port::cells_at(nm, fb + 4));
+        }
+    }
+    return 0;
+}
+pub(crate) fn sm_emit(mut sm: &mut crate::port::Cells, o: i32, et: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, parent: i32, mut nm: &mut crate::port::Cells, fb: i32) -> i32 {
     // Write candidate `o` as a `seal` node, the last child of `parent`: its subkind, confidence, source, region, the words as `text` (flagged `low-conf`),
-    // and its colour name.
+    // its name and date (`sm-emit-fields`) and its colour name. `nm` from cell `fb` is the fields' scratch.
     let nn: i32 = node_new(nodes, nk_seal(), parent);
     let tl: i32 = sl_get(sm, o, 14);
     let ts: i32 = sl_get(sm, o, 13);
     let fl: i32 = sl_get(sm, o, 12);
-    let hue: i32 = sm_hue(sl_get(sm, o, 15));
+    let hue: i32 = sm_sl_hue(sm, o);
     let mut start: i32 = 0;
     let mut j: i32 = 0;
     crate::port::cells_set(sm, (o * 16) + 12, fl | 64);
@@ -1312,17 +1583,23 @@ pub(crate) fn sm_emit(mut sm: &mut crate::port::Cells, o: i32, et: &mut crate::p
     node_add_region(nodes, regions, nn, sl_get(sm, o, 0), sl_get(sm, o, 1), sl_get(sm, o, 2), sl_get(sm, o, 3), sl_get(sm, o, 4));
     if tl > 0 {
         start = crate::port::cells_len(text);
+        // the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them
         while j < tl {
-            text_append_cp(text, crate::port::cells_at(et, ts + j));
-            j += 1;
+            if ((fl & 128) != 0) && ((j > 0) && (((j + 1) < tl) && ((crate::port::cells_at(et, ts + (j - 1)) == 32) && ((crate::port::cells_at(et, ts + (j + 1)) == 32) && (sm_px_dash(crate::port::cells_at(et, ts + j)) == 1))))) {
+                j += 2;
+            } else {
+                text_append_cp(text, crate::port::cells_at(et, ts + j));
+                j += 1;
+            }
         }
-        node_set_text(nodes, nn, start, tl);
+        node_set_text(nodes, nn, start, crate::port::cells_len(text) - start);
         node_add_flag(nodes, nn, fl_low_conf());
         if (fl & 32) != 0 {
             node_add_src(nodes, nn, sr_text());
         } else {
             node_add_src(nodes, nn, sr_ocr());
         }
+        sm_emit_fields(et, ts, tl, sl_get(sm, o, 5), nodes, attrs, text, nn, nm, fb);
     }
     if hue >= 0 {
         start = crate::port::cells_len(text);
@@ -1416,6 +1693,7 @@ pub fn sm_write(mut sm: &mut crate::port::Cells, et: &mut crate::port::Cells, on
         crate::port::cells_push(nm, pick);
         o += 1;
     }
+    sf_prep(nm, n + ns);
     i = 0;
     while i < n {
         p = node_parent(on, i);
@@ -1423,7 +1701,7 @@ pub fn sm_write(mut sm: &mut crate::port::Cells, et: &mut crate::port::Cells, on
         o = sm_pending(sm, nm, n, on, i, 0, 0, 0);
         while o >= 0 {
             np = crate::port::cells_at(nm, node_parent(on, crate::port::cells_at(nm, n + o)));
-            sm_emit(sm, o, et, nodes, attrs, regions, text, np);
+            sm_emit(sm, o, et, nodes, attrs, regions, text, np, nm, n + ns);
             placed += 1;
             o = sm_pending(sm, nm, n, on, i, 0, 0, 0);
         }
@@ -1432,7 +1710,7 @@ pub fn sm_write(mut sm: &mut crate::port::Cells, et: &mut crate::port::Cells, on
             np = sm_tail_parent(on, nm, i - 1);
             o = sm_pending(sm, nm, n, on, i, 0, 0, 2);
             while o >= 0 {
-                sm_emit(sm, o, et, nodes, attrs, regions, text, np);
+                sm_emit(sm, o, et, nodes, attrs, regions, text, np, nm, n + ns);
                 placed += 1;
                 o = sm_pending(sm, nm, n, on, i, 0, 0, 2);
             }
@@ -1443,7 +1721,7 @@ pub fn sm_write(mut sm: &mut crate::port::Cells, et: &mut crate::port::Cells, on
             if r >= 0 {
                 o = sm_pending(sm, nm, n, on, i, region_page(orr, r), region_y0(orr, r), 1);
                 while o >= 0 {
-                    sm_emit(sm, o, et, nodes, attrs, regions, text, crate::port::cells_at(nm, p));
+                    sm_emit(sm, o, et, nodes, attrs, regions, text, crate::port::cells_at(nm, p), nm, n + ns);
                     placed += 1;
                     o = sm_pending(sm, nm, n, on, i, region_page(orr, r), region_y0(orr, r), 1);
                 }
@@ -1460,7 +1738,7 @@ pub fn sm_write(mut sm: &mut crate::port::Cells, et: &mut crate::port::Cells, on
     np = sm_tail_parent(on, nm, n - 1);
     o = sm_pending(sm, nm, n, on, n, 0, 0, 2);
     while o >= 0 {
-        sm_emit(sm, o, et, nodes, attrs, regions, text, np);
+        sm_emit(sm, o, et, nodes, attrs, regions, text, np, nm, n + ns);
         placed += 1;
         o = sm_pending(sm, nm, n, on, n, 0, 0, 2);
     }

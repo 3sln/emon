@@ -1108,6 +1108,225 @@ public final class Sealmark {
         }
         return 0;
     }
+    public static int smPxDash(int c) {
+        // 1 for the marks a ring puts between its phrases that the engine can read: a hyphen, a middle dot, a bullet, a star, a bar.
+        if (c == 45) {
+            return 1;
+        }
+        if (c == 183) {
+            return 1;
+        }
+        if (c == 8226) {
+            return 1;
+        }
+        if (c == 9733) {
+            return 1;
+        }
+        if (c == 9679) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int smPxCased(int c) {
+        // 1 for a lower case Latin letter, 2 for an upper case one, 0 for any other character.
+        if ((c >= 97) && (c <= 122)) {
+            return 1;
+        }
+        if ((c >= 223) && (c <= 255)) {
+            return 1;
+        }
+        if ((c >= 65) && (c <= 90)) {
+            return 2;
+        }
+        if ((c >= 192) && (c <= 222)) {
+            return 2;
+        }
+        return 0;
+    }
+    public static int smPxNoisy(emon.Port.Cells et, int ts, int tl) {
+        // 1 when a word has, inside it, a mark that is no part of a word (anything but a letter, a digit, a hyphen, a point, a comma, a colon or an apostrophe: `C!TY`) or a lone lower case
+        // letter between upper case ones (`RiVERTON`): what the engine makes of a ring's letters when it is not sure, and what a seal's own text is not.
+        int k = 1;
+        int c = 0;
+        while (k < (tl - 1)) {
+            c = emon.Port.cellsAt(et, ts + k);
+            if ((Sealfield.sfScript(c) == 0) && ((Sealfield.sfDigit(c) < 0) && ((c != 45) && ((c != 46) && ((c != 44) && ((c != 58) && (c != 39))))))) {
+                return 1;
+            }
+            if ((smPxCased(c) == 1) && ((smPxCased(emon.Port.cellsAt(et, (ts + k) + 1)) == 2) && (smPxCased(emon.Port.cellsAt(et, (ts + k) - 1)) == 2))) {
+                return 1;
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    public static int smPxKeep(emon.Port.Cells et, emon.Port.Cells owords, int row) {
+        // 1 when the OCR word `row` of a seal's reading is kept in its text: it has three letters or digits and the engine was at least 250 per mille sure of it, or one and 600, or six
+        // and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
+        int ts = Evidence.owGet(owords, row, Evidence.hdTstart());
+        int tl = Evidence.owGet(owords, row, Evidence.hdTlen());
+        int conf = Evidence.owGet(owords, row, Evidence.hdConf());
+        int k = 0;
+        int n = 0;
+        while (k < tl) {
+            if ((Sealfield.sfScript(emon.Port.cellsAt(et, ts + k)) > 0) || (Sealfield.sfDigit(emon.Port.cellsAt(et, ts + k)) >= 0)) {
+                n += 1;
+            }
+            k += 1;
+        }
+        if ((n > 0) && (smPxNoisy(et, ts, tl) == 1)) {
+            return 0;
+        }
+        if ((n == 3) && (conf >= 450)) {
+            return 1;
+        }
+        if ((n >= 4) && (conf >= 350)) {
+            return 1;
+        }
+        if ((n >= 1) && (conf >= 600)) {
+            return 1;
+        }
+        if ((n >= 6) && (conf >= 300)) {
+            return 1;
+        }
+        if ((n == 0) && ((tl == 1) && ((conf >= 800) && (smPxDash(emon.Port.cellsAt(et, ts)) == 1)))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int smPxText(emon.Port.Cells et, emon.Port.Cells refs, emon.Port.Cells owords, int from, int cnt) {
+        // Append to `et` the text of a pixel-read seal: the kept words (`sm-px-keep`) of the refs run [from, from + cnt), a space between two, each trimmed of what is not a letter or a
+        // digit at its ends (`“PAID`); a lone separator is put between two words and never at an end of the text. Answers the code points appended.
+        int start = emon.Port.cellsLen(et);
+        int i = 0;
+        int row = 0;
+        int ts = 0;
+        int tl = 0;
+        int a = 0;
+        int b = 0;
+        int pend = 0;
+        while (i < cnt) {
+            row = emon.Port.cellsAt(refs, ((from + i) * 2) + 1);
+            if (smPxKeep(et, owords, row) == 1) {
+                ts = Evidence.owGet(owords, row, Evidence.hdTstart());
+                tl = Evidence.owGet(owords, row, Evidence.hdTlen());
+                a = 0;
+                while ((a < tl) && ((Sealfield.sfScript(emon.Port.cellsAt(et, ts + a)) == 0) && (Sealfield.sfDigit(emon.Port.cellsAt(et, ts + a)) < 0))) {
+                    a += 1;
+                }
+                if (a == tl) {
+                    pend = emon.Port.cellsAt(et, ts);
+                } else {
+                    b = tl;
+                    while ((b > a) && ((Sealfield.sfScript(emon.Port.cellsAt(et, ts + (b - 1))) == 0) && (Sealfield.sfDigit(emon.Port.cellsAt(et, ts + (b - 1))) < 0))) {
+                        b -= 1;
+                    }
+                    if (emon.Port.cellsLen(et) > start) {
+                        emon.Port.cellsPush(et, 32);
+                    }
+                    if ((pend > 0) && (emon.Port.cellsLen(et) > start)) {
+                        emon.Port.cellsPush(et, pend);
+                        emon.Port.cellsPush(et, 32);
+                    }
+                    pend = 0;
+                    smPushRun(et, ts + a, b - a);
+                }
+            }
+            i += 1;
+        }
+        return emon.Port.cellsLen(et) - start;
+    }
+    public static int smLo(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    public static int smHi(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+    public static int smOverlapShare(int ax0, int ay0, int ax1, int ay1, int bx0, int by0, int bx1, int by1) {
+        // The part of the smaller of two boxes that the other covers, per cent.
+        int w = (smLo(ax1, bx1) - smHi(ax0, bx0)) / 100;
+        int h = (smLo(ay1, by1) - smHi(ay0, by0)) / 100;
+        int sa = ((ax1 - ax0) / 100) * ((ay1 - ay0) / 100);
+        int sb = ((bx1 - bx0) / 100) * ((by1 - by0) / 100);
+        int small = sa;
+        if ((w <= 0) || (h <= 0)) {
+            return 0;
+        }
+        if (sb < small) {
+            small = sb;
+        }
+        if (small <= 0) {
+            return 0;
+        }
+        return ((w * h) * 100) / small;
+    }
+    public static int smRaster(int page, emon.Port.Cells et, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells owords, emon.Port.Cells sm) {
+        // The `sl` rows of the seals and stamps that page units found in pixels (`emon.sealpx`): one for every group of `page` flagged `seal-px`, unless a candidate that is
+        // already there (found in the vector paths) has its box (half of the smaller). Its text is `sm-px-text`'s, its colour the group's code, its words the group's. Answers the rows written.
+        int ng = Player.cgCount(cg);
+        int g = 0;
+        int o = 0;
+        int dup = 0;
+        int made = 0;
+        int ts = 0;
+        int fl = 0;
+        int kind = 0;
+        int conf = 0;
+        while (g < ng) {
+            if ((Player.cgGet(cg, g, Player.cgfPage()) == page) && ((Player.cgGet(cg, g, Player.cgfFlags()) & Player.plgSealPx()) != 0)) {
+                dup = 0;
+                o = 0;
+                while (o < Player.slCount(sm)) {
+                    if (Player.slGet(sm, o, 0) == page) {
+                        if (smOverlapShare(Player.slGet(sm, o, 1), Player.slGet(sm, o, 2), Player.slGet(sm, o, 3), Player.slGet(sm, o, 4), Player.cgGet(cg, g, Player.cgfX0()), Player.cgGet(cg, g, Player.cgfY0()), Player.cgGet(cg, g, Player.cgfX1()), Player.cgGet(cg, g, Player.cgfY1())) >= 50) {
+                            dup = 1;
+                        }
+                    }
+                    o += 1;
+                }
+                if (dup == 0) {
+                    fl = Player.cgGet(cg, g, Player.cgfFlags());
+                    kind = Player.plsSeal();
+                    if ((fl & Player.plgSealStamp()) != 0) {
+                        kind = Player.plsStamp();
+                    }
+                    ts = emon.Port.cellsLen(et);
+                    smPxText(et, refs, owords, Player.cgGet(cg, g, Player.cgfOfirst()), Player.cgGet(cg, g, Player.cgfOcount()));
+                    // a reading with no word kept is no text: the seal has none
+                    conf = 600;
+                    if (kind == Player.plsStamp()) {
+                        conf = 700;
+                    }
+                    if (Player.cgGet(cg, g, Player.cgfRot()) > 2) {
+                        conf += 100;
+                    }
+                    if (emon.Port.cellsLen(et) > ts) {
+                        conf += 100;
+                    }
+                    if (conf > 900) {
+                        conf = 900;
+                    }
+                    o = Player.slNew(sm, page, Player.cgGet(cg, g, Player.cgfX0()), Player.cgGet(cg, g, Player.cgfY0()), Player.cgGet(cg, g, Player.cgfX1()), Player.cgGet(cg, g, Player.cgfY1()), kind);
+                    emon.Port.cellsSet(sm, (o * 16) + 9, conf);
+                    emon.Port.cellsSet(sm, (o * 16) + 10, Player.cgGet(cg, g, Player.cgfOfirst()));
+                    emon.Port.cellsSet(sm, (o * 16) + 11, Player.cgGet(cg, g, Player.cgfOcount()));
+                    emon.Port.cellsSet(sm, (o * 16) + 12, 128);
+                    emon.Port.cellsSet(sm, (o * 16) + 13, ts);
+                    emon.Port.cellsSet(sm, (o * 16) + 14, emon.Port.cellsLen(et) - ts);
+                    emon.Port.cellsSet(sm, (o * 16) + 15, Player.cgGet(cg, g, Player.cgfRot()));
+                    made += 1;
+                }
+            }
+            g += 1;
+        }
+        return made;
+    }
     public static int smFind(emon.Port.Cells pa, emon.Port.Cells pts, emon.Port.Cells gl, emon.Port.Cells fw, emon.Port.Cells et, emon.Port.Cells epages, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells owords, int np, emon.Port.Cells sm, emon.Port.Cells scr, emon.Port.Cells tmp) {
         // The candidates of every page (see the head of this file) into `sm` (the `sl` arena), the text of their words appended to `et` (`sl` cells 13-14), and
         // the flag `plg-in-seal` on the groups of `cg` that are theirs. `scr` and `tmp` are scratch. Answers the candidates written.
@@ -1153,6 +1372,7 @@ public final class Sealmark {
                     smPage(scr, n, p, fw, gl, et, cg, refs, owords, sm);
                 }
             }
+            smRaster(p, et, cg, refs, owords, sm);
             p += 1;
         }
         return Player.slCount(sm);
@@ -1291,14 +1511,64 @@ public final class Sealmark {
         }
         return best;
     }
-    public static int smEmit(emon.Port.Cells sm, int o, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int parent) {
+    public static int smSlHue(emon.Port.Cells sm, int o) {
+        // The colour code of candidate `o`: the ink's `sm-hue`, or, for one read from pixels (flag 128), the code its group carried.
+        if ((Player.slGet(sm, o, 12) & 128) != 0) {
+            return Player.slGet(sm, o, 15);
+        }
+        return smHue(Player.slGet(sm, o, 15));
+    }
+    public static int smEmitFields(emon.Port.Cells et, int ts, int tl, int kind, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int nn, emon.Port.Cells nm, int fb) {
+        // The name and the date of the seal node `nn` whose text is `et[ts, ts + tl)` (`emon.sealfield`; the scratch is `nm` from cell `fb`): the name as read, the date as
+        // `YYYY-MM-DD` when the text says year, month and day plainly, else as it stands.
+        int start = 0;
+        int j = 0;
+        int form = 0;
+        int v = 0;
+        Sealfield.sfFields(et, ts, tl, kind, 0, nm, fb);
+        if (emon.Port.cellsAt(nm, fb + 1) > 0) {
+            start = emon.Port.cellsLen(text);
+            while (j < emon.Port.cellsAt(nm, fb + 1)) {
+                Model.textAppendCp(text, emon.Port.cellsAt(et, emon.Port.cellsAt(nm, fb) + j));
+                j += 1;
+            }
+            Model.nodeAddAttrText(nodes, attrs, nn, Model.fkName(), start, emon.Port.cellsAt(nm, fb + 1));
+        }
+        form = emon.Port.cellsAt(nm, fb + 2);
+        if (form > 0) {
+            start = emon.Port.cellsLen(text);
+            if (form == 1) {
+                v = emon.Port.cellsAt(nm, fb + 5);
+                Model.textAppendCp(text, 48 + ((v / 1000) % 10));
+                Model.textAppendCp(text, 48 + ((v / 100) % 10));
+                Model.textAppendCp(text, 48 + ((v / 10) % 10));
+                Model.textAppendCp(text, 48 + (v % 10));
+                Model.textAppendCp(text, 45);
+                Model.textAppendCp(text, 48 + (emon.Port.cellsAt(nm, fb + 6) / 10));
+                Model.textAppendCp(text, 48 + (emon.Port.cellsAt(nm, fb + 6) % 10));
+                Model.textAppendCp(text, 45);
+                Model.textAppendCp(text, 48 + (emon.Port.cellsAt(nm, fb + 7) / 10));
+                Model.textAppendCp(text, 48 + (emon.Port.cellsAt(nm, fb + 7) % 10));
+                Model.nodeAddAttrText(nodes, attrs, nn, Model.fkDate(), start, 10);
+            } else {
+                j = 0;
+                while (j < emon.Port.cellsAt(nm, fb + 4)) {
+                    Model.textAppendCp(text, emon.Port.cellsAt(et, emon.Port.cellsAt(nm, fb + 3) + j));
+                    j += 1;
+                }
+                Model.nodeAddAttrText(nodes, attrs, nn, Model.fkDate(), start, emon.Port.cellsAt(nm, fb + 4));
+            }
+        }
+        return 0;
+    }
+    public static int smEmit(emon.Port.Cells sm, int o, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int parent, emon.Port.Cells nm, int fb) {
         // Write candidate `o` as a `seal` node, the last child of `parent`: its subkind, confidence, source, region, the words as `text` (flagged `low-conf`),
-        // and its colour name.
+        // its name and date (`sm-emit-fields`) and its colour name. `nm` from cell `fb` is the fields' scratch.
         int nn = Model.nodeNew(nodes, Model.nkSeal(), parent);
         int tl = Player.slGet(sm, o, 14);
         int ts = Player.slGet(sm, o, 13);
         int fl = Player.slGet(sm, o, 12);
-        int hue = smHue(Player.slGet(sm, o, 15));
+        int hue = smSlHue(sm, o);
         int start = 0;
         int j = 0;
         emon.Port.cellsSet(sm, (o * 16) + 12, fl | 64);
@@ -1311,17 +1581,23 @@ public final class Sealmark {
         Model.nodeAddRegion(nodes, regions, nn, Player.slGet(sm, o, 0), Player.slGet(sm, o, 1), Player.slGet(sm, o, 2), Player.slGet(sm, o, 3), Player.slGet(sm, o, 4));
         if (tl > 0) {
             start = emon.Port.cellsLen(text);
+            // the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them
             while (j < tl) {
-                Model.textAppendCp(text, emon.Port.cellsAt(et, ts + j));
-                j += 1;
+                if (((fl & 128) != 0) && ((j > 0) && (((j + 1) < tl) && ((emon.Port.cellsAt(et, ts + (j - 1)) == 32) && ((emon.Port.cellsAt(et, ts + (j + 1)) == 32) && (smPxDash(emon.Port.cellsAt(et, ts + j)) == 1)))))) {
+                    j += 2;
+                } else {
+                    Model.textAppendCp(text, emon.Port.cellsAt(et, ts + j));
+                    j += 1;
+                }
             }
-            Model.nodeSetText(nodes, nn, start, tl);
+            Model.nodeSetText(nodes, nn, start, emon.Port.cellsLen(text) - start);
             Model.nodeAddFlag(nodes, nn, Model.flLowConf());
             if ((fl & 32) != 0) {
                 Model.nodeAddSrc(nodes, nn, Model.srText());
             } else {
                 Model.nodeAddSrc(nodes, nn, Model.srOcr());
             }
+            smEmitFields(et, ts, tl, Player.slGet(sm, o, 5), nodes, attrs, text, nn, nm, fb);
         }
         if (hue >= 0) {
             start = emon.Port.cellsLen(text);
@@ -1415,6 +1691,7 @@ public final class Sealmark {
             emon.Port.cellsPush(nm, pick);
             o += 1;
         }
+        Sealfield.sfPrep(nm, n + ns);
         i = 0;
         while (i < n) {
             p = Model.nodeParent(on, i);
@@ -1422,7 +1699,7 @@ public final class Sealmark {
             o = smPending(sm, nm, n, on, i, 0, 0, 0);
             while (o >= 0) {
                 np = emon.Port.cellsAt(nm, Model.nodeParent(on, emon.Port.cellsAt(nm, n + o)));
-                smEmit(sm, o, et, nodes, attrs, regions, text, np);
+                smEmit(sm, o, et, nodes, attrs, regions, text, np, nm, n + ns);
                 placed += 1;
                 o = smPending(sm, nm, n, on, i, 0, 0, 0);
             }
@@ -1431,7 +1708,7 @@ public final class Sealmark {
                 np = smTailParent(on, nm, i - 1);
                 o = smPending(sm, nm, n, on, i, 0, 0, 2);
                 while (o >= 0) {
-                    smEmit(sm, o, et, nodes, attrs, regions, text, np);
+                    smEmit(sm, o, et, nodes, attrs, regions, text, np, nm, n + ns);
                     placed += 1;
                     o = smPending(sm, nm, n, on, i, 0, 0, 2);
                 }
@@ -1442,7 +1719,7 @@ public final class Sealmark {
                 if (r >= 0) {
                     o = smPending(sm, nm, n, on, i, Model.regionPage(orr, r), Model.regionY0(orr, r), 1);
                     while (o >= 0) {
-                        smEmit(sm, o, et, nodes, attrs, regions, text, emon.Port.cellsAt(nm, p));
+                        smEmit(sm, o, et, nodes, attrs, regions, text, emon.Port.cellsAt(nm, p), nm, n + ns);
                         placed += 1;
                         o = smPending(sm, nm, n, on, i, Model.regionPage(orr, r), Model.regionY0(orr, r), 1);
                     }
@@ -1459,7 +1736,7 @@ public final class Sealmark {
         np = smTailParent(on, nm, n - 1);
         o = smPending(sm, nm, n, on, n, 0, 0, 2);
         while (o >= 0) {
-            smEmit(sm, o, et, nodes, attrs, regions, text, np);
+            smEmit(sm, o, et, nodes, attrs, regions, text, np, nm, n + ns);
             placed += 1;
             o = smPending(sm, nm, n, on, n, 0, 0, 2);
         }

@@ -32,6 +32,7 @@
             [emon.plan :refer [rq-decode rq-render an-find an-ok an-arg flt-dct us-requests us-done
                                pu-id pi-render-text pi-render-no-text pi-decode pi-ocr lay-full lay-no-text]]
             [emon.evidence :refer [im-get im-count wd-get wd-count hd-page mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-obj vw-new vk-render ol-count ow-count ev-rot-median or-get orf-lcount
+                                   ev-page-row ep-get epf-width epf-height
                                    or-count op-region op-first]]
             [emon.retarget :refer [rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad]]
             [emon.rasterplan :refer [rp-w rp-f-ask rp-f-wat rp-f-wn rp-f-scripts rp-ww rp-ask-none rp-ask-full rp-ask-witness rp-plan rp-request rp-weak
@@ -40,6 +41,7 @@
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
             [emon.scan :refer [sc-eligible sc-dct-span sc-request sc-page sc-page-view sc-page-evidence sc-emit-sel sc-prep sc-lang sc-answer]]
             [emon.pageink :refer [pn-has pn-mark pn-undo pn-ink pn-features pn-k-text pn-k-clean]]
+            [emon.sealpx :refer [sx-find sx-plan sx-record sx-drop-lines]]
             [emon.xalign :refer [xa-page]]
             [emon.health :refer [hl-page-fw]]
             [kin.lang :refer [defn return let set while if do comment
@@ -221,6 +223,10 @@
         ^:mut ^I32 j 0
         ^:mut ^I32 at 0
         ^:mut ^I32 before 0
+        ^:mut ^I32 asked 0
+        ^:mut ^I32 pgrow 0
+        ^:mut ^I32 pgw 0
+        ^:mut ^I32 pgh 0
         ^:mut ^I32 g0 0]
     (if (== ask (rp-ask-none)) (return (us-done)))
     (if (== (pu-ask-rasters i input ask ans rq) (us-requests)) (return (us-requests)))
@@ -316,7 +322,15 @@
           (rt-prep rtp)
           (if (or (== ask (rp-ask-full)) (>= esc 0))
             (do (if (>= esc 0) (set run esc))
-                (if (== (rt-plan i input 1 0 rid (pu-dpi) loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr) 1)
+                (set asked (rt-plan i input 1 0 rid (pu-dpi) loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr))
+                (comment "the seals and stamps in the text-free render's pixels (P8.2): the strips and crops that are read, asked in the same round as the targeted passes")
+                (if (== (pu-px bms nid fuse) 1)
+                  (do (set pgrow (ev-page-row epages (+ i 1)))
+                      (set pgw (ep-get epages pgrow (epf-width)))
+                      (set pgh (ep-get epages pgrow (epf-height)))
+                      (sx-find (+ i 1) views nview prims inks pgw pgh s1)
+                      (set asked (+ asked (sx-plan i loc ans bms (bms-get bms nid) s1 s2 s3 rq)))))
+                (if (> asked 0)
                   (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
                       (return (us-requests))))))))
     (set g0 (cg-count cg))
@@ -326,14 +340,16 @@
     (if (== (pu-px bms rid fuse) 1)
       (if (or (== ask (rp-ask-full)) (>= esc 0))
         (do (rt-record i view (* dpi 100) loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
-            (rt-witness g0 (cg-count cg) cg rtp oruns owords))))
+            (rt-witness g0 (cg-count cg) cg rtp oruns owords)
+            (if (== (pu-px bms nid fuse) 1)
+              (sx-record i nview (* dpi 100) loc ans s1 views epages etext oruns oblocks olines owords osyms oalts feats refs cg s4)))))
     (return (us-done))))
 
 (defn ^I32 pu-run-scan [^I32 i ^I32 input ^I32 fuse ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
                         ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
                         ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                         ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
-                        ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells refs ^:mut ^Cells tlines
+                        ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells refs ^:mut ^Cells tlines ^:mut ^Cells cg
                         ^:mut ^Cells inks ^:mut ^Cells comps ^:mut ^Cells rules ^:mut ^Cells prims ^:mut ^Cells tpts
                         ^:mut ^Cells ws ^:mut ^Cells sv ^:mut ^Cells aux ^:mut ^Cells snap ^:mut ^Cells rtp
                         ^:mut ^Cells rn ^:mut ^Cells ri ^:mut ^Cells cs ^:mut ^Cells vr ^:mut ^Cells pc ^:mut ^Cells sg ^:mut ^Cells mem
@@ -356,6 +372,7 @@
         ^:mut ^I32 run 0
         ^:mut ^I32 nl 0
         ^:mut ^I32 rotmed 0
+        ^:mut ^I32 asked 0
         ^:mut ^I32 nsel 0]
     (if (< ad 0)
       (do (rq-decode rq did input (pu-field pl i 2) (pu-field pl i 3) (flt-dct) 0)
@@ -390,11 +407,17 @@
     (set nw (- (ow-count owords) w0))
     (pn-features (+ i 1) bms (pn-k-text) (bms-get bms did) oid w0 nw ws comps owords feats scr)
     (rt-prep rtp)
-    (if (== (rt-plan i input 0 0 did (quot (+ dpi100 50) 100) loc ans bms (pn-k-text) (bms-get bms did) ws oruns run olines owords rules tlines rtp rq scr) 1)
+    (set asked (rt-plan i input 0 0 did (quot (+ dpi100 50) 100) loc ans bms (pn-k-text) (bms-get bms did) ws oruns run olines owords rules tlines rtp rq scr))
+    (comment "the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes")
+    (sx-find (+ i 1) views vdec prims inks (pu-field pl i 8) (pu-field pl i 9) s1)
+    (set asked (+ asked (sx-plan i loc ans bms (bms-get bms did) s1 s2 s3 rq)))
+    (if (> asked 0)
       (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
           (return (us-requests))))
     (rt-record i vdec dpi100 loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
+    (sx-record i vdec dpi100 loc ans s1 views epages etext oruns oblocks olines owords osyms oalts feats refs cg s4)
     (set nsel (rt-adopt rtp oruns run olines owords scr))
+    (set nsel (sx-drop-lines scr nsel olines owords s1))
     (rt-upright rtp run epages (+ i 1))
     (set nl (or-get oruns run (orf-lcount)))
     (set rotmed (ev-rot-median olines l0 nl))
@@ -425,5 +448,5 @@
                          fw fl hl refs cg tlines xscr xgp xdp xta xtb xtt scr images words lines
                          inks comps rules prims tpts ws ws2 sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))
   (if (!= (pu-kind pl i) (pk-scan)) (return (us-done)))
-  (return (pu-run-scan i input fuse pl ans rq loc bms mask scr epages views etext feats images oruns oblocks olines owords osyms oalts words lines refs tlines
+  (return (pu-run-scan i input fuse pl ans rq loc bms mask scr epages views etext feats images oruns oblocks olines owords osyms oalts words lines refs tlines cg
                        inks comps rules prims tpts ws sv aux snap rtp rn ri cs vr pc sg mem s1 s2 s3 s4 s5 s6)))

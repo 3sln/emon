@@ -264,6 +264,15 @@
     (rq-ocr-end rq q)
     (return q)))
 
+(defn ^:pub ^I32 sc-request-view-psm [^:mut ^Cells rq ^I32 id ^I32 view ^I32 hhi ^I32 hlo ^I32 psm ^I32 dpi ^Cells loc]
+  (comment "`sc-request-view` at the page segmentation mode `psm` (P8.2: a seal's strip and a stamp's crop are read as one block, `psm` 6).")
+  (let [^I32 q (rq-ocr-view rq id view hhi hlo psm (+ (ocf-symbols) (* dpi (ocf-dpi-unit))) 0 0 0 0)
+        ^I32 lg (sc-lang loc)]
+    (if (> lg 0)
+      (rq-ocr-lang rq (quot lg 65536) (rem (quot lg 256) 256) (rem lg 256) 0))
+    (rq-ocr-end rq q)
+    (return q)))
+
 ;; ===================================================== the answer as evidence
 
 (defn ^I32 sc-cpt-len [^Cells views ^I32 view ^I32 v]
