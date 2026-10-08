@@ -191,3 +191,110 @@ fn test_status_names_are_the_table() {
     iz_status_emit_name(t, 9);
     crate::testport::assert_text(t, "ok truncated bad-distance bad-checksum", "names");
 }
+pub(crate) fn it_check_raw(emon_t: i32, z: &[u8], status: i32, consumed: i32, hex: &str) -> i32 {
+    // A bare deflate stream: its status, how much it consumed and its output.
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(iz_raw(z, 0, crate::port::blob_len(z), out, st), status, "status");
+    crate::testport::assert_eq(iz_consumed(st), consumed, "consumed");
+    crate::testport::assert_cells_hex(out, hex, "output");
+    return 0;
+}
+#[test]
+fn test_a_dynamic_block_from_zlib() {
+    // 729 bytes of words and numbers, level 9: one dynamic block. The Adler-32
+    // in the trailer checks every byte of the output.
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let z: &[u8] = &crate::testport::hex_blob("78da5d525b72c33008bc0a47b01e08711ca5959d74ec26e3eaa3c72f11d076f2a5112ccbee4af7cb477f1b81e1fbec6b4dd0f6c7b531ecfd731bd710e13efb94b55132bcf77db40c973e1aa24e692d049b4203539ca85861dddbe87581f5b68f7e929f798e171d47df49f035cede0e4cb0b5e36885270d25ab5350be98b49e8dae06d3465a5fe0d1b65e5f96c602e36cb75df0f4a7575d221b08ab559279935d4f3266b3ea56a4af1c25d90427e74fc540aabf68583118502237205aea1527905d173967d6edd99dcab25f9dcf09495ea329e65989482f6ccd1a3d28fa277112b3269aede124075d2c627524641f214d80abb106a54861bac3c57112d17c3da4d990d730fccb9d9779cf6812fc336968312a4b348572ea3f742fd17f8558999d50f553d51fe9ccf11e")[..];
+    crate::testport::assert_eq(crate::port::blob_len(z), 297, "the stream is this long");
+    crate::testport::assert_eq(iz_zlib(z, 0, 297, out, st), iz_ok(), "status");
+    crate::testport::assert_eq(iz_consumed(st), 297, "consumed");
+    crate::testport::assert_eq(crate::port::cells_len(out), 729, "length");
+    crate::testport::assert_eq(crate::port::cells_at(out, 0), 111, "o");
+    crate::testport::assert_eq(crate::port::cells_at(out, 7), 57, "9");
+    crate::testport::assert_eq(crate::port::cells_at(out, 728), 56, "the last byte, 8");
+}
+#[test]
+fn test_a_code_of_fifteen_bits() {
+    // A dynamic block whose literal/length code has lengths 1, 2, ... 14 for
+    // the bytes 0 to 13 and 15 for end-of-block (and a lone distance code of
+    // length 1): bytes 10 to 13 and the end of the block are codes of 11 to 15
+    // bits, beyond the 10-bit table.
+    it_check_raw(0, &crate::testport::hex_blob("0de00182244992244902128b9a4756cffeffbb77a0fd7fdffff7fff9fb7ff7ff03")[..], iz_ok(), 33, "0001020d050d0d00070c03");
+}
+#[test]
+fn test_stored_fixed_and_dynamic_blocks_in_one_stream() {
+    // A stored block, a fixed one (both flushed to a byte boundary) and the
+    // dynamic one of the law above, the last.
+    it_check_raw(0, &crate::testport::hex_blob("001600e9ff73746f72656420626c6f636b206279746573000102ff000000ffff4acbac484d5148c3209372f293b375a012c9f929a9c58a00000000ffff0de00182244992244902128b9a4756cffeffbb77a0fd7fdffff7fff9fb7ff7ff03")[..], iz_ok(), 94, "73746f72656420626c6f636b206279746573000102ff666978656420666978656420666978656420666978656420626c6f636b2c20666978656420636f646573210001020d050d0d00070c03");
+}
+#[test]
+fn test_the_longest_match() {
+    // A literal x and then a match of length 258 (symbol 285, no extra bits)
+    // at distance 1: 259 of them.
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    crate::testport::assert_eq(iz_raw(&crate::testport::hex_blob("ab180500")[..], 0, 4, out, st), iz_ok(), "status");
+    crate::testport::assert_eq(crate::port::cells_len(out), 259, "length");
+    while i < 259 {
+        crate::testport::assert_eq_at(crate::port::cells_at(out, i), 120, "x", i);
+        i += 1;
+    }
+}
+pub(crate) fn it_stored_block(mut z: &mut crate::port::Cells, n: i32) -> i32 {
+    // A non-final stored block of n bytes, the byte at i being i * 7 + i / 256.
+    let mut i: i32 = 0;
+    crate::port::cells_push(z, 0);
+    crate::port::cells_push(z, n & 255);
+    crate::port::cells_push(z, n / 256);
+    crate::port::cells_push(z, (65535 - n) & 255);
+    crate::port::cells_push(z, (65535 - n) / 256);
+    while i < n {
+        crate::port::cells_push(z, ((i * 7) + (i / 256)) & 255);
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn it_push_blob(mut z: &mut crate::port::Cells, b: &[u8]) -> i32 {
+    let mut i: i32 = 0;
+    while i < crate::port::blob_len(b) {
+        crate::port::cells_push(z, crate::port::blob_u8(b, i));
+        i += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_the_maximum_distance() {
+    // 32768 stored bytes, then a fixed block that copies three bytes from
+    // distance 32768 (symbol 29, all 13 extra bits set): the very first three.
+    // With one byte less of history the same copy reaches too far back.
+    let z: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    it_stored_block(z, 32768);
+    it_push_blob(z, &crate::testport::hex_blob("03deff0f00")[..]);
+    crate::testport::assert_eq(iz_raw(&crate::testport::cells_blob(z)[..], 0, crate::port::cells_len(z), out, st), iz_ok(), "status");
+    crate::testport::assert_eq(iz_consumed(st), crate::port::cells_len(z), "consumed");
+    crate::testport::assert_eq(crate::port::cells_len(out), 32771, "length");
+    crate::testport::assert_eq(crate::port::cells_at(out, 32768), crate::port::cells_at(out, 0), "first copied byte");
+    crate::testport::assert_eq(crate::port::cells_at(out, 32769), crate::port::cells_at(out, 1), "second");
+    crate::testport::assert_eq(crate::port::cells_at(out, 32770), crate::port::cells_at(out, 2), "third");
+    crate::testport::assert_eq(crate::port::cells_at(out, 32767), ((32767 * 7) + 127) & 255, "the last stored byte");
+    crate::port::cells_drop(z, 0);
+    crate::port::cells_drop(out, 0);
+    it_stored_block(z, 32767);
+    it_push_blob(z, &crate::testport::hex_blob("03deff0f00")[..]);
+    crate::testport::assert_eq(iz_raw(&crate::testport::cells_blob(z)[..], 0, crate::port::cells_len(z), out, st), iz_bad_distance(), "too far back");
+    crate::testport::assert_eq(crate::port::cells_len(out), 32767, "the stored bytes are kept");
+}
+#[test]
+fn test_a_code_that_is_not_in_the_table_keeps_its_error() {
+    // The block of the 15-bit law, with a match symbol and then the distance
+    // code '1', which the lone distance code of length 1 does not have. The walk
+    // reads 15 bits before it says bad-code: with them it does, and with the
+    // stream ending sooner it is truncated, as it always was.
+    it_check_raw(0, &crate::testport::hex_blob("0de00182244992244902128b9a4756cffeffbb77a0fdff030000")[..], iz_bad_code(), 25, "000102");
+    it_check_raw(0, &crate::testport::hex_blob("0de00182244992244902128b9a4756cffeffbb77a0fdff03")[..], iz_truncated(), 24, "000102");
+}

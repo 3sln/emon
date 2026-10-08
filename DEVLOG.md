@@ -3708,6 +3708,28 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   key-derivation glue (50 and 20 rounds of port calls). Not measured: Go, Java, C# (`bb perf` is the Rust host; D092 measured the other
   targets for the raster bets and `kin/scripts/png-bench` still does for the PNG writer), the shipped `overflow-checks = true` build
   (`bb perf --checked`), and corpus PDFs (only the committed synthetic ones).
+- [x] P10.3a — Inflate and LZW in kin, under the 2x rule (D421-D425). *Done*: no port was needed. `emon.inflate` is table-driven (D421),
+  `pf-lzw` copies strings from earlier output (D422), the PNG predictor has a loop per filter (D424); output byte-identical, errors
+  the same names. Ratios kin / reference, Rust, `bb perf` (machine at load 20-40, so read to about 1.5x; medians of 15; before =
+  P10.3): inflate vs flate2 page rows 13x -> 1.6-2.0x, content text 8x -> 1.2-1.9x, font-like 20x -> 1.1-1.8x (vs fdeflate 2.3-6x, which
+  is not the primary reference); LZW content text 11x -> 0.6-0.9x, font-like 22x -> 0.9-2.0x (the hand-written reference is the same
+  algorithm; one noisy full run read 1.96); PNG read (inflate + predictor 15) 21x -> 3.3-3.8x. **Known item**: png-unfilter stays about
+  3.5x: inflate is 1.6x of it, and the rest is the predictor, whose cost is `Cells` bounds checks on every read and write and the
+  data-dependent branches of Paeth (the `png` crate's unfilter is SIMD); the predictor alone is 3-27x faster than before (None 27x, Sub 7x,
+  Up 7x, Average 3.6x, Paeth 2.5x). A filter loop that could drop the checks is a host bulk form (D092's rule: a pure whole-buffer map
+  would qualify for `bitmap`-style treatment), not more kin. Further inflate speed-up is limited by: a `Cells` byte is 4 bytes
+  (the `Buf` variant was only 10-15% faster, D423), a bounds check on every `cells-at`/`cells-set`, and no bulk copy within an arena
+  (matches are copied byte by byte; only a run of the last byte, distance 1, is a `cells-grow` fill). Laws: inflate 6 new
+  (dynamic block from zlib, a code of 15 bits, stored+fixed+dynamic in one stream, longest match, maximum distance and one byte short,
+  an unassigned distance code: bad-code / truncated), pdffilter 5 new (KwKwK x3 streams, code-width boundaries around 511/512,
+  1023/1024, 2047/2048 and a full table for EarlyChange 1 and 0, KwKwK chains across width steps, PNG predictors for 1/3/4 bytes a
+  pixel and 1 bit); streams from `kin/scripts/inflate-vectors`, `lzw-vectors`, `png-predictor-vectors` (babashka; zlib from the
+  JDK). Gates: `bb check` four targets, `bb unit rust` and `go` 706 laws each, drift, hosts, image, asset, identity, slice, fusion
+  unchanged. `bb fuzz`: its own selftest's `rss` probe (a fake driver holding 300 MB within 2.5 s) fails on a machine at load 40
+  and `bb fuzz --no-selftest` finds one panic, `figclass.rs:191` "attempt to multiply with overflow" on the generated seed
+  `image-huge-dims.pdf` unmutated, in code this item does not touch (P8.4's `figclass`): not fixed here, not committed as a crasher.
+  A differential run of the old and new decoders (not in the repo) over 30000 valid and damaged streams, overflow checks on,
+  agreed on status, output prefix, consumed (finished streams) and limit breaches.
 - [ ] P10.4 — Limits: every bound wired, configurable, named alike in four
   hosts (nome's `bb limits`).
 - [x] P10.5 — Fuzz at scale, cross-host error agreement (D384-D390). *Done*: `bb fuzz` (gate) and `bb fuzz-long` (not a gate) over
@@ -10174,4 +10196,34 @@ words are the engine's own misreads of true ring words (`GRERK`, `DFFICIAL`; and
 **Decision**: (1) `bb calibration --refit` on the merged tree wrote `kin/calibdata.kin`, `test/calibration/fit.edn` and the reliability CSVs/SVG byte-identical (8373 rows from 129 documents; the committed corpus has no raster seal, `seal` is a kind left as the rules wrote it with 5 rows): no golden or digest moved, `test/sealpx` stays outside the calibration documents. (2) `emon-live` was measured over `scan,scan-color,scan-ovl` and the improved values merged up (never lowered): 159 metrics in 14 categories. P8.2's own, against b2e4a8a measured the same way: `scan/seals` CER 0.223214 -> 0.127976, WER 0.230769 -> 0.134615, bow-f1 0.833333 -> 0.882353, bow-r 0.769231 -> 0.865385, block-seal P 0 -> 1.0, R 0 -> 0.5, F1 0 -> 0.666667 (also in `scan/all`); `scan-color/seals` CER 0.05962 -> 0.054304, WER 0.069751 -> 0.06548, bow-r 0.930249 -> 0.93452, block-seal P 1.0 R 0.4 F1 0.571429; `scan-ovl/seals` bow-f1 0.792608 -> 0.796402, bow-r 0.681497 -> 0.687853, block-seal P 1.0 R 0.363636 F1 0.533333 (and `scan-ovl/all`). The rest of the 159 are P8.4/P10.x/earlier work that the entry had not been re-measured after. (3) D398: the calibration rows the merge moved were re-baselined to their measured values: `scan/seals` `conf-brier-all` 0.214374 -> 0.253749 and `conf-ece-all` 0.205833 -> 0.276429 (the raster seal nodes carry an uncalibrated `conf` of 600-900), `scan/all` `conf-ece-all` 0.608481 -> 0.608502. (4) Remaining `bb accuracy --predictor emon-live --variants scan,scan-color,scan-ovl` regressions beyond 0.002 are 33, all on b2e4a8a to the sixth place (so NOT P8.2's; they are values the entry holds from before the P6/P8.4 merges): `scan-ovl/forms` (13: block-paragraph and block-table f1/p/r to 0, para-boundary, table-teds, table-continued-acc, bow-f1/p, ghost-rate), `scan-ovl/all` (8: block-paragraph, block-table, para-boundary, table-continued-acc), `scan-color/graphics` (block-table f1/p, bow-f1/p, ghost-rate), `scan-color/forms` (block-table f1/p), `scan-color/all` (block-table-p), `scan-color/tables` (table-adj-p), `scan-ovl/headings` (table-adj f1/p) and `scan/scripts` `table-adj-p` (D394). Plus P8.2's own D419 (`scan/seals` `bow-p`). The P8.2 builder's `scan-ovl/forms`, `scan-ovl/headings` and `scan` conf-row observations are therefore main's: the seal stage changes no invoice or bank-statement output.
 **Why**: the scoreboard rule is improvements only (D079), calibration rows excepted (D398).
 **Alternatives**: lowering the 33 (they are regressions of the engine against the entry, and a bisection of them is separate work).
+- [ ] **Signed off** (maintainer)
+
+### D421 — `emon.inflate` decodes by lookup table; the bit-by-bit walk stays as the slow path and the oracle (P10.3a; D092)
+**Decision**: each block builds a table indexed by the next `min(longest code, 10)` bits (literal/length) or `min(.., 8)` (distance), an entry being `symbol * 16 + length` at the code's bit-reverse; 0 means "decide elsewhere". The hot loop (`iz-codes`) keeps the bit buffer (31 bits, refilled to 24+), position and output length in locals and `iz-park`s them into the state before anything else reads it. A code longer than the table, a prefix no code has, and too few bits left all go to the old `iz-decode` from the state before the symbol, so every error is the one the walk gives (`bad-code` after reading 15 bits, `truncated` when the input ends first); no secondary table (long codes were 0.2-3% of symbols). The Adler-32 is accumulated as bytes are written (closed form for a run of the last byte, `rem` every 2700 bytes; stored blocks through `iz-sum`), replacing a second pass over 4-byte cells that was 29% of the time. Matches check the limit once and fall back to the byte-wise loop only when they would cross it, so the breach is at the same byte. Output, statuses, the prefix kept on error and `iz-consumed` on finished streams are unchanged; `iz-consumed` after an error may differ from the walk's (it is the first unread byte, the walk's was stale) and nothing reads it.
+**Why**: 8-20x became 1.1-2x of flate2 with no host code; D092's rule never offered a bulk form for a stateful codec.
+**Alternatives**: a secondary table (more build cost on the small streams that dominate PDFs, little gain); an `Inflate` port (not needed at this ratio); libdeflate-style combined literal/extra-bit entries (more table and more kin for an estimated 10%).
+- [ ] **Signed off** (maintainer)
+
+### D422 — `pf-lzw` writes a string by copying the span of output it already is (P10.3a)
+**Decision**: a table entry is two cells, where the string is in `out` and its length. Entry `nxt` is the string before plus the first byte of the code after it, and the two were just written one after the other, so it is `out[pp, pp + len + 1)`; a code equal to `nxt` (KwKwK) copies forward byte by byte over its own start. No prefix chain, first-byte or suffix table. The `limit-of` lookup (an environment read per call in the Rust host) is taken once instead of once per code. Errors (`bad-lzw` for a first code above 255 or a code beyond `nxt`), `EarlyChange` widths, a full table and the limit breach point are unchanged.
+**Why**: 11-22x became 0.6-2.0x of the hand-written decoder, which walks prefixes.
+**Alternatives**: keep the chain walk and speed it (rejected: the walk was the cost).
+- [ ] **Signed off** (maintainer)
+
+### D423 — `Buf` output for inflate was evaluated and is not adopted (P10.3a; D117)
+**Decision**: `iz-zlib`/`pf-flate` keep writing a `Cells`. A scratch variant writing a `Buf` (one byte a byte) was 10-15% faster on 2-8 MB outputs and no faster on small ones, and needs a `buf-grow` form (four host port files) for the run fill, plus changing the type of `out` through `pf-run`, `pf-predict`, the filter chain and every stream consumer. The only caller that could take it unchanged, the PNG reader in tests, is not a product path. Revisit if a profile of a whole conversion shows the 4x memory as a cost.
+**Why**: measured gain too small for the blast radius.
+**Alternatives**: a second entry point `iz-zlib-buf` (rejected: two decoders to keep identical).
+- [ ] **Signed off** (maintainer)
+
+### D424 — The PNG predictor has a loop per filter, and one for gray pixels (P10.3a)
+**Decision**: `pf-png` handles the first row and the first `bpp` bytes of every row by the general per-byte definition (`pf-png-slow`, the old body) and the rest of a row by one loop for its filter, with the row made room for once (`cells-grow`) and written by index; for one byte a pixel the pixel to the left (and Paeth's upper-left) is carried in a local instead of read back from the output. Same bytes, same `bad-predictor` (filter byte above 4 returns 4 with the rows before kept), same short last row.
+**Why**: the per-byte tests of the general case, not the arithmetic, were the cost; the predictor alone is 2.5-27x faster. PNG read stays about 3.5x (see P10.3a), the one remaining over-2x row.
+**Alternatives**: a host bulk form for unfilter (D092 would allow a pure map only; Paeth/Sub/Average depend on the output just written, so it is not one).
+- [ ] **Signed off** (maintainer)
+
+### D425 — What P10.3a implies under D092 and D396 (P10.3a)
+**Decision**: no `Inflate` or `Lzw` port is warranted: inflate is 1.1-2.0x and LZW at or under 2x of their native references (primary rows), so D411's "only if that fails" does not fire. `png-unfilter` (3.3-3.8x) is over 2x for the predictor reasons in D424 and is recorded as a known item, not a port candidate. `tools/perf/baseline.edn` is updated (quick and full) for inflate, lzw and png-unfilter. The vector scripts for the new laws are babashka (`kin/scripts/*-vectors`), zlib streams checked against the JDK's `Inflater`.
+**Why**: the 2x rule is measured, and these rows now meet it; a port would cost a fourth implementation to keep identical on four targets.
+**Alternatives**: port `Inflate` anyway for the last 1.5x (rejected: a host implementation to keep identical, on D396's terms, for the last factor under 2x).
 - [ ] **Signed off** (maintainer)

@@ -369,40 +369,7 @@ func PfRl(src []byte, s int32, e int32, out *port.Cells) int32 {
 	return 0
 }
 
-const lSize int32 = 16384
-
-func pfLzwString(st *port.Cells, out *port.Cells, code int32) int32 {
-	// Append the string of `code` (0..255 a byte, 258.. a table entry).
-	var ln int32 = port.CellsAt(st, (code*4)+2)
-	var base int32 = port.CellsLen(out)
-	var k int32 = 0
-	var x int32 = code
-	var at int32 = 0
-	for k < ln {
-		port.CellsPush(out, 0)
-		k += 1
-	}
-	at = (base + ln) - 1
-	for at >= base {
-		port.CellsSet(out, at, port.CellsAt(st, (x*4)+1))
-		x = port.CellsAt(st, x*4)
-		at -= 1
-	}
-	return ln
-}
-
-func pfLzwClear(st *port.Cells) int32 {
-	// 256 literal entries; 256 and 257 are codes, not strings.
-	var i int32 = 0
-	for i < 256 {
-		port.CellsSet(st, i*4, 0)
-		port.CellsSet(st, (i*4)+1, i)
-		port.CellsSet(st, (i*4)+2, 1)
-		port.CellsSet(st, (i*4)+3, i)
-		i += 1
-	}
-	return 0
-}
+const lSize int32 = 8192
 
 func pfLzwWidth(nxt int32, early int32) int32 {
 	// The code width once the table holds `nxt` entries.
@@ -418,58 +385,33 @@ func pfLzwWidth(nxt int32, early int32) int32 {
 	return 9
 }
 
-func pfLzwStep(st *port.Cells, out *port.Cells, base int32, code int32, prev int32, nxt int32) int32 {
-	// One ordinary code after the first: add the entry `prev + first of
-	// code` (when the table has room) and write the string of `code`.
-	// Answers the new `nxt`, or -1 for a code beyond the table.
-	var first int32 = 0
-	var ln int32 = 0
-	if code > nxt {
-		return -1
-	}
-	if code < nxt {
-		first = port.CellsAt(st, (code*4)+3)
-	} else {
-		first = port.CellsAt(st, (prev*4)+3)
-	}
-	if nxt < 4096 {
-		ln = port.CellsAt(st, (prev*4)+2) + 1
-		port.CellsSet(st, nxt*4, prev)
-		port.CellsSet(st, (nxt*4)+1, first)
-		port.CellsSet(st, (nxt*4)+2, ln)
-		port.CellsSet(st, (nxt*4)+3, port.CellsAt(st, (prev*4)+3))
-	}
-	pfRoom(out, base, port.CellsAt(st, (code*4)+2))
-	pfLzwString(st, out, code)
-	if nxt < 4096 {
-		return nxt + 1
-	}
-	return nxt
-}
-
 func PfLzw(src []byte, s int32, e int32, out *port.Cells, st *port.Cells, early int32) int32 {
 	// LZWDecode: codes of 9-12 bits, most significant bit first; 256
 	// clears the table, 257 ends the data. `early` is /EarlyChange
 	// (1 by default: the code width grows one entry sooner). A table
-	// that is full is left as it is, as the encoders do.
+	// that is full is left as it is, as the encoders do. `pp` and `pl` are
+	// where the string just written begins and how long it is; `have` is 0
+	// at the start and after a clear, when there is no string before.
 	var base int32 = port.CellsLen(out)
+	var lim int32 = port.LimitOf(1)
 	var i int32 = s
 	var acc int32 = 0
 	var nbits int32 = 0
 	var width int32 = 9
 	var nxt int32 = 258
-	var prev int32 = -1
+	var have int32 = 0
+	var pp int32 = 0
+	var pl int32 = 0
 	var code int32 = 0
-	var n2 int32 = 0
+	var ln int32 = 0
+	var at int32 = 0
+	var x int32 = 0
+	var p int32 = 0
+	var k int32 = 0
 	var status int32 = 0
 	var done int32 = 0
-	var k int32 = 0
 	port.CellsDrop(st, 0)
-	for k < lSize {
-		port.CellsPush(st, 0)
-		k += 1
-	}
-	pfLzwClear(st)
+	port.CellsGrow(st, lSize, 0)
 	for done == 0 {
 		for (nbits < width) && (i < e) {
 			acc = (acc * 256) + port.BlobU8(src, i)
@@ -485,28 +427,57 @@ func PfLzw(src []byte, s int32, e int32, out *port.Cells, st *port.Cells, early 
 			if code == 256 {
 				nxt = 258
 				width = 9
-				prev = -1
+				have = 0
 			} else if code == 257 {
 				done = 1
-			} else if prev == -1 {
+			} else if have == 0 {
 				if code > 255 {
 					status = 3
 					done = 1
 				} else {
-					pfRoom(out, base, 1)
-					pfLzwString(st, out, code)
-					prev = code
+					if 1 > (lim - (port.CellsLen(out) - base)) {
+						port.LimitBreach(1, (port.CellsLen(out)-base)+1)
+					}
+					pp = port.CellsLen(out)
+					port.CellsPush(out, code)
+					pl = 1
+					have = 1
 				}
+			} else if code > nxt {
+				status = 3
+				done = 1
 			} else {
-				n2 = pfLzwStep(st, out, base, code, prev, nxt)
-				if n2 < 0 {
-					status = 3
-					done = 1
-				} else {
-					nxt = n2
-					width = pfLzwWidth(nxt, early)
-					prev = code
+				// The new entry: the string before, and the first byte of
+				// this one, which follows it in `out`.
+				if nxt < 4096 {
+					port.CellsSet(st, nxt*2, pp)
+					port.CellsSet(st, (nxt*2)+1, pl+1)
 				}
+				ln = 1
+				if code > 255 {
+					ln = port.CellsAt(st, (code*2)+1)
+				}
+				if ln > (lim - (port.CellsLen(out) - base)) {
+					port.LimitBreach(1, (port.CellsLen(out)-base)+ln)
+				}
+				p = port.CellsLen(out)
+				if code < 256 {
+					port.CellsPush(out, code)
+				} else {
+					at = port.CellsAt(st, code*2)
+					k = 0
+					for k < ln {
+						x = port.CellsAt(out, at+k)
+						port.CellsPush(out, x)
+						k += 1
+					}
+				}
+				pp = p
+				pl = ln
+				if nxt < 4096 {
+					nxt += 1
+				}
+				width = pfLzwWidth(nxt, early)
 			}
 		}
 	}
@@ -561,22 +532,70 @@ func pfPaeth(a int32, b int32, c int32) int32 {
 	return c
 }
 
+func pfPngSlow(in *port.Cells, pos int32, out *port.Cells, rb int32, rowb int32, bpp int32, t int32, hasPrev int32, i0 int32, i1 int32) int32 {
+	// Bytes i0 up to i1 of one row (its filter byte `t`, its bytes at
+	// in[pos..], its output starting at `rb`), every case tested on every
+	// byte: the definition. `pf-png` uses it for a first row (no row
+	// above) and for the first `bpp` bytes of the others (no pixel to
+	// the left), and a loop per filter for the rest.
+	var i int32 = i0
+	var x int32 = 0
+	var a int32 = 0
+	var b int32 = 0
+	var c int32 = 0
+	var v int32 = 0
+	for i < i1 {
+		x = port.CellsAt(in, pos+i)
+		a = 0
+		b = 0
+		c = 0
+		if i >= bpp {
+			a = port.CellsAt(out, (rb+i)-bpp)
+		}
+		if hasPrev == 1 {
+			b = port.CellsAt(out, (rb+i)-rowb)
+			if i >= bpp {
+				c = port.CellsAt(out, ((rb+i)-rowb)-bpp)
+			}
+		}
+		v = x
+		if t == 1 {
+			v = x + a
+		}
+		if t == 2 {
+			v = x + b
+		}
+		if t == 3 {
+			v = x + ((a + b) / 2)
+		}
+		if t == 4 {
+			v = x + pfPaeth(a, b, c)
+		}
+		port.CellsPush(out, v&255)
+		i += 1
+	}
+	return 0
+}
+
 func pfPng(in *port.Cells, from int32, to int32, out *port.Cells, rowb int32, bpp int32) int32 {
 	// Undo PNG prediction: each row is a filter byte (0 none, 1 sub,
 	// 2 up, 3 average, 4 Paeth) and `rowb` bytes. A short last row is
 	// decoded as far as it goes. Answers 4 for a filter byte above 4.
+	// Per row, past its first `bpp` bytes and with a row above, one loop
+	// for its filter (P10.3a, D424): the per-byte tests of the general
+	// case (`pf-png-slow`) were the cost, not the arithmetic.
 	var base0 int32 = port.CellsLen(out)
 	var pos int32 = from
 	var t int32 = 0
 	var avail int32 = 0
 	var rb int32 = 0
 	var i int32 = 0
+	var lead int32 = 0
 	var x int32 = 0
 	var a int32 = 0
 	var b int32 = 0
 	var c int32 = 0
 	var hasPrev int32 = 0
-	var v int32 = 0
 	for pos < to {
 		t = port.CellsAt(in, pos)
 		pos += 1
@@ -592,36 +611,86 @@ func pfPng(in *port.Cells, from int32, to int32, out *port.Cells, rowb int32, bp
 		if avail > rowb {
 			avail = rowb
 		}
-		i = 0
-		for i < avail {
-			x = port.CellsAt(in, pos+i)
-			a = 0
-			b = 0
-			c = 0
-			if i >= bpp {
-				a = port.CellsAt(out, (rb+i)-bpp)
+		lead = avail
+		if (hasPrev == 1) && (lead > bpp) {
+			lead = bpp
+		}
+		pfPngSlow(in, pos, out, rb, rowb, bpp, t, hasPrev, 0, lead)
+		// The rest of the row is made room for once and written by index.
+		i = lead
+		port.CellsGrow(out, avail-lead, 0)
+		if t == 0 {
+			for i < avail {
+				port.CellsSet(out, rb+i, port.CellsAt(in, pos+i)&255)
+				i += 1
 			}
-			if hasPrev == 1 {
+		}
+		if t == 2 {
+			for i < avail {
+				x = port.CellsAt(in, pos+i)
 				b = port.CellsAt(out, (rb+i)-rowb)
-				if i >= bpp {
-					c = port.CellsAt(out, ((rb+i)-rowb)-bpp)
+				port.CellsSet(out, rb+i, (x+b)&255)
+				i += 1
+			}
+		}
+		// One byte a pixel (gray, 8 bits): the pixel to the left is the byte
+		// just written, so it is carried in `a` rather than read back from
+		// `out` (a read of a write a few cycles old), and the upper-left `c`
+		// is the last `b`.
+		if (bpp == 1) && (i < avail) {
+			a = port.CellsAt(out, (rb+i)-1)
+			if t == 1 {
+				for i < avail {
+					a = (port.CellsAt(in, pos+i) + a) & 255
+					port.CellsSet(out, rb+i, a)
+					i += 1
 				}
 			}
-			v = x
-			if t == 1 {
-				v = x + a
-			}
-			if t == 2 {
-				v = x + b
-			}
 			if t == 3 {
-				v = x + ((a + b) / 2)
+				for i < avail {
+					b = port.CellsAt(out, (rb+i)-rowb)
+					a = (port.CellsAt(in, pos+i) + ((a + b) / 2)) & 255
+					port.CellsSet(out, rb+i, a)
+					i += 1
+				}
 			}
 			if t == 4 {
-				v = x + pfPaeth(a, b, c)
+				c = port.CellsAt(out, ((rb+i)-rowb)-1)
+				for i < avail {
+					b = port.CellsAt(out, (rb+i)-rowb)
+					a = (port.CellsAt(in, pos+i) + pfPaeth(a, b, c)) & 255
+					port.CellsSet(out, rb+i, a)
+					c = b
+					i += 1
+				}
 			}
-			port.CellsPush(out, v&255)
-			i += 1
+		}
+		if (bpp != 1) && (t == 1) {
+			for i < avail {
+				x = port.CellsAt(in, pos+i)
+				a = port.CellsAt(out, (rb+i)-bpp)
+				port.CellsSet(out, rb+i, (x+a)&255)
+				i += 1
+			}
+		}
+		if (bpp != 1) && (t == 3) {
+			for i < avail {
+				x = port.CellsAt(in, pos+i)
+				a = port.CellsAt(out, (rb+i)-bpp)
+				b = port.CellsAt(out, (rb+i)-rowb)
+				port.CellsSet(out, rb+i, (x+((a+b)/2))&255)
+				i += 1
+			}
+		}
+		if (bpp != 1) && (t == 4) {
+			for i < avail {
+				x = port.CellsAt(in, pos+i)
+				a = port.CellsAt(out, (rb+i)-bpp)
+				b = port.CellsAt(out, (rb+i)-rowb)
+				c = port.CellsAt(out, ((rb+i)-rowb)-bpp)
+				port.CellsSet(out, rb+i, (x+pfPaeth(a, b, c))&255)
+				i += 1
+			}
 		}
 		pos += avail
 	}

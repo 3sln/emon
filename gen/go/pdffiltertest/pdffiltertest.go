@@ -221,3 +221,171 @@ func TestCryptIsTheIdentityAndImageFiltersAreDeclined(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsLen(out), 2, "out untouched by an image filter")
 	port.AssertEq(emonT, pdffilter.PfRun(99, port.HexBlob("00"), 0, 1, out, st, 1), pdffilter.PfUnsupported(), "unknown")
 }
+
+func lzWidth(j int32, early int32) int32 {
+	// The width of code number j (from 0) after a clear code: the table
+	// then has 258 + max(0, j - 1) entries, 4096 at most, and codes are 10
+	// bits from 512 entries, 11 from 1024 and 12 from 2048 (less `early`).
+	var n int32 = 258 + (j - 1)
+	var w int32 = 9
+	if j < 1 {
+		n = 258
+	}
+	if n > 4096 {
+		n = 4096
+	}
+	if (n + early) >= 512 {
+		w = 10
+	}
+	if (n + early) >= 1024 {
+		w = 11
+	}
+	if (n + early) >= 2048 {
+		w = 12
+	}
+	return w
+}
+
+func lzPut(z *port.Cells, s *port.Cells, code int32, width int32) int32 {
+	// Append `code` in `width` bits, most significant first, to z; s holds
+	// the bits not yet a byte (their value, then how many).
+	var acc int32 = (port.CellsAt(s, 0) * ((1) << uint(width))) + code
+	var nb int32 = port.CellsAt(s, 1) + width
+	for nb >= 8 {
+		port.CellsPush(z, ((acc)>>uint(nb-8))&255)
+		nb -= 8
+		acc &= ((1) << uint(nb)) - 1
+	}
+	port.CellsSet(s, 0, acc)
+	port.CellsSet(s, 1, nb)
+	return 0
+}
+
+func lzEnd(z *port.Cells, s *port.Cells) int32 {
+	// Pad the last byte with zero bits.
+	if port.CellsAt(s, 1) > 0 {
+		port.CellsPush(z, port.CellsAt(s, 0)*((1)<<uint(8-port.CellsAt(s, 1))))
+	}
+	return 0
+}
+
+func lzCheckHex(emonT *testing.T, z []byte, early int32, want string) int32 {
+	var out *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	port.AssertEq(emonT, pdffilter.PfLzw(z, 0, port.BlobLen(z), out, st, early), 0, "status")
+	port.AssertCellsHex(emonT, out, want, "output")
+	return 0
+}
+
+func TestLzwACodeThatIsTheEntryBeingAdded(emonT *testing.T) {
+	// KwKwK: a code equal to the next free one, whose string is the string
+	// before it and that string's first byte. After a single byte (97, 258:
+	// aaa), repeatedly (the chain 258..261 gives 2, 3, 4, 5 bytes), and after
+	// a pair, with a copy from the middle of the output (A B, AB, ABA).
+	lzCheckHex(emonT, port.HexBlob("8018605010"), 1, "616161")
+	lzCheckHex(emonT, port.HexBlob("8018605038241602"), 1, "616161616161616161616161616161")
+	lzCheckHex(emonT, port.HexBlob("80104850282404"), 1, "41424142414241")
+}
+
+func lzCheckLiterals(emonT *testing.T, early int32, n int32) int32 {
+	// n codes, every one the byte 97: the table grows by one entry for each
+	// (until it is full), the width steps up when the rule says, and every
+	// code must still be read as itself.
+	var z *port.Cells = port.NewCells()
+	var s *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var i int32 = 0
+	port.CellsPush(s, 0)
+	port.CellsPush(s, 0)
+	lzPut(z, s, 256, 9)
+	for i < n {
+		lzPut(z, s, 97, lzWidth(i, early))
+		i += 1
+	}
+	lzPut(z, s, 257, lzWidth(n, early))
+	lzEnd(z, s)
+	port.AssertEq(emonT, pdffilter.PfLzw(port.CellsBlob(z), 0, port.CellsLen(z), out, st, early), 0, "status")
+	port.AssertEq(emonT, port.CellsLen(out), n, "length")
+	i = 0
+	for i < n {
+		port.AssertEqAt(emonT, port.CellsAt(out, i), 97, "a", i)
+		i += 1
+	}
+	return 0
+}
+
+func TestLzwCodeWidthBoundaries(emonT *testing.T) {
+	// Around 511 / 512 entries (9 to 10 bits), 1023 / 1024, 2047 / 2048 and
+	// with the table full (4096 entries is 3838 codes after the first), for
+	// EarlyChange 1 and 0.
+	lzCheckLiterals(emonT, 1, 253)
+	lzCheckLiterals(emonT, 1, 254)
+	lzCheckLiterals(emonT, 0, 254)
+	lzCheckLiterals(emonT, 0, 255)
+	lzCheckLiterals(emonT, 1, 766)
+	lzCheckLiterals(emonT, 0, 767)
+	lzCheckLiterals(emonT, 1, 1790)
+	lzCheckLiterals(emonT, 0, 1791)
+	lzCheckLiterals(emonT, 1, 3900)
+	lzCheckLiterals(emonT, 0, 4300)
+}
+
+func lzCheckChain(emonT *testing.T, early int32, m int32) int32 {
+	// The byte 97 and then m codes that are each the entry being added: the
+	// strings are 2, 3, ... m + 1 bytes of 97, copied from the output just
+	// written, across the width steps at 511 and 1023 entries.
+	var z *port.Cells = port.NewCells()
+	var s *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var st *port.Cells = port.NewCells()
+	var i int32 = 0
+	port.CellsPush(s, 0)
+	port.CellsPush(s, 0)
+	lzPut(z, s, 256, 9)
+	lzPut(z, s, 97, 9)
+	for i < m {
+		lzPut(z, s, 258+i, lzWidth(i+1, early))
+		i += 1
+	}
+	lzPut(z, s, 257, lzWidth(m+1, early))
+	lzEnd(z, s)
+	port.AssertEq(emonT, pdffilter.PfLzw(port.CellsBlob(z), 0, port.CellsLen(z), out, st, early), 0, "status")
+	port.AssertEq(emonT, port.CellsLen(out), (1+m)+((m*(m+1))/2), "length")
+	i = 0
+	for i < port.CellsLen(out) {
+		port.AssertEqAt(emonT, port.CellsAt(out, i), 97, "a", i)
+		i += 1
+	}
+	return 0
+}
+
+func TestLzwStringsGrowAcrossWidthSteps(emonT *testing.T) {
+	lzCheckChain(emonT, 1, 1100)
+	lzCheckChain(emonT, 0, 1100)
+}
+
+func pfCheckPng(emonT *testing.T, in []byte, colors int32, bpc int32, columns int32, want string) int32 {
+	// Predictor 15 over the bytes of `in`, against the pixels they encode.
+	var src *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var i int32 = 0
+	for i < port.BlobLen(in) {
+		port.CellsPush(src, port.BlobU8(in, i))
+		i += 1
+	}
+	port.AssertEq(emonT, pdffilter.PfPredict(src, 0, port.CellsLen(src), out, 15, colors, bpc, columns), 0, "status")
+	port.AssertCellsHex(emonT, out, want, "pixels")
+	return 0
+}
+
+func TestPngPredictorsForEachPixelSize(emonT *testing.T) {
+	// Rows of every filter type (0 none, 1 sub, 2 up, 3 average, 4 Paeth) in
+	// turn, for 1, 3 and 4 bytes a pixel and for sub-byte pixels (a pixel is
+	// a byte when it is under 8 bits); made by a babashka filter from known
+	// pixels, so the pixels are the answer.
+	pfCheckPng(emonT, port.HexBlob("00b6806683818281fb80015a286699ff38fc13bb0227ff1d5294cacfacfe0341008ab1b1a80c0a610402097a3a851bef10af04fde83bfe02ff57a6020342d4f5130201deed4a02a8472346fafdc8dfc40183ff56aa906fffb84800818083bc6f818983d0"), 1, 8, 9, "b6806683818281fb805a82e88180b8b4c782818105d314828373808181cd81fb668083e2838c47818081708091807482808281c76d82824f5d8183838365bd2a9680c77d804b44818382d8821281803880818083bc6f818983d0")
+	pfCheckPng(emonT, port.HexBlob("0482838113ff00ebff0203b8fd03424240932d030c53001ff10c0203fd03622200bdc6fe4b0bf90181d78234aa00cc69ffc9dd020034ad758a5f8380804e475883018082cc8801cb4d9b5058ff9a0428feb5790342026299ee01f5032f40e0ff02576e976baed6c802fe67610091b9626a720d8a79"), 3, 8, 4, "8283819582818081838339808383801faf835beb838e838d86808381d18318b181d98e8681d782b5818281ea814ac78334ad758a5f8380804e4758838082cc088397551ee7ad1d81a880818183c38380809b81758380208183c8f0180f73220a81e78181148152828180ac83")
+	pfCheckPng(emonT, port.HexBlob("013982ed6a5b009316020b01932d64210101035e4198c775f18338045c01aa700261bacd0080d281818d83320b"), 4, 8, 2, "3982ed6a9482808044838097f8a381818082d81231832f81dc83828282e4e94f80d281818d83320b")
+	pfCheckPng(emonT, port.HexBlob("0313a9046fd10200b2017c3004bf0500e1c3"), 1, 1, 12, "13b2828382357cac3b81e1c3")
+}

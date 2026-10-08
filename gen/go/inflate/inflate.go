@@ -128,6 +128,14 @@ const wLimit int32 = 5
 
 const wBase int32 = 6
 
+const wLb int32 = 7
+
+const wDb int32 = 8
+
+const wA int32 = 9
+
+const wB int32 = 10
+
 const wOff int32 = 16
 
 const wLc int32 = 32
@@ -140,19 +148,24 @@ const wDs int32 = 352
 
 const wLen int32 = 384
 
-const wSize int32 = 704
+const wLt int32 = 704
+
+const wDt int32 = 1728
+
+const wSize int32 = 1984
+
+const litBits int32 = 10
+
+const distBits int32 = 8
 
 func izInit(st *port.Cells, start int32, end int32, out *port.Cells) int32 {
-	var i int32 = 0
 	port.CellsDrop(st, 0)
-	for i < wSize {
-		port.CellsPush(st, 0)
-		i += 1
-	}
+	port.CellsGrow(st, wSize, 0)
 	port.CellsSet(st, wPos, start)
 	port.CellsSet(st, wEnd, end)
 	port.CellsSet(st, wLimit, port.LimitOf(1))
 	port.CellsSet(st, wBase, port.CellsLen(out))
+	port.CellsSet(st, wA, 1)
 	return 0
 }
 
@@ -270,6 +283,86 @@ func izDecode(st *port.Cells, src []byte, cbase int32, sbase int32) int32 {
 	return -1
 }
 
+func izFast(st *port.Cells, cbase int32, sbase int32, tbase int32, maxbits int32, bslot int32) int32 {
+	// Fill the lookup table at st[tbase..] for the code whose counts are
+	// at cbase and symbols at sbase: `min(longest length, maxbits)` index
+	// bits (kept at st[bslot]), each entry `symbol * 16 + length` for a
+	// code that fits, 0 for the rest. The code is the canonical one of
+	// RFC 1951 3.2.2 (the first code of a length is the previous first
+	// plus its count, doubled); the input arrives low bit first and a
+	// code high bit first, so a code is stored at its bit-REVERSE, and at
+	// every index that has it as its low bits. The code is not
+	// over-subscribed (the caller has checked), so no index is hit twice.
+	var ln int32 = 1
+	var bits int32 = 0
+	var size int32 = 0
+	var i int32 = 0
+	var code int32 = 0
+	var idx int32 = 0
+	var j int32 = 0
+	var cn int32 = 0
+	var c int32 = 0
+	var rev int32 = 0
+	var t int32 = 0
+	var step int32 = 0
+	var entry int32 = 0
+	for ln <= 15 {
+		if port.CellsAt(st, cbase+ln) > 0 {
+			bits = ln
+		}
+		ln += 1
+	}
+	if bits > maxbits {
+		bits = maxbits
+	}
+	port.CellsSet(st, bslot, bits)
+	size = (1) << uint(bits)
+	for i < size {
+		port.CellsSet(st, tbase+i, 0)
+		i += 1
+	}
+	ln = 1
+	for ln <= bits {
+		cn = port.CellsAt(st, cbase+ln)
+		j = 0
+		for j < cn {
+			c = code + j
+			rev = 0
+			t = 0
+			for t < ln {
+				rev = (rev * 2) + (c & 1)
+				c = (c) >> uint(1)
+				t += 1
+			}
+			entry = (port.CellsAt(st, sbase+(idx+j)) * 16) + ln
+			step = (1) << uint(ln)
+			t = rev
+			for t < size {
+				port.CellsSet(st, tbase+t, entry)
+				t += step
+			}
+			j += 1
+		}
+		idx += cn
+		code = (code + cn) * 2
+		ln += 1
+	}
+	return 0
+}
+
+func izPark(st *port.Cells, buf int32, cnt int32, pos int32) int32 {
+	// Write the hot loop's reader back into the state, in the form
+	// `iz-bits` and `iz-stored` expect: under 8 bits buffered, so whole
+	// bytes it loaded ahead are given back to the position (they are the
+	// highest bits of the buffer, the latest loaded).
+	var k int32 = cnt / 8
+	var c int32 = cnt - (k * 8)
+	port.CellsSet(st, wBuf, buf&(((1)<<uint(c))-1))
+	port.CellsSet(st, wCnt, c)
+	port.CellsSet(st, wPos, pos-k)
+	return 0
+}
+
 func izPut(st *port.Cells, out *port.Cells, b int32) int32 {
 	// Append one output byte, under the limit.
 	if (port.CellsLen(out) - port.CellsAt(st, wBase)) >= port.CellsAt(st, wLimit) {
@@ -280,55 +373,204 @@ func izPut(st *port.Cells, out *port.Cells, b int32) int32 {
 }
 
 func izCodes(st *port.Cells, src []byte, out *port.Cells) int32 {
-	// The symbols of one compressed block, up to its end-of-block.
+	// The symbols of one compressed block, up to its end-of-block, by the
+	// lookup tables (`iz-fast`) with the bit-by-bit walk as the fallback.
+	// The reader lives in locals: `buf` (bits, low first, under 2^31),
+	// `cnt` of them, `pos` the next byte to load, `n` the length of `out`.
+	// A refill tops the buffer up to 24 bits or more unless the input has
+	// ended, so a table lookup (10 bits) plus extra bits (5) fit after one;
+	// short of bits means the input ended, and `truncated` is what the old
+	// walk would have said. The Adler-32 of what is written is kept as it
+	// goes (`sa`, `sb`, in the state at the end of the block): `ss` counts
+	// the bytes since the last `rem`, which is taken before it passes
+	// 2700 + 258, so `sb` stays under 1.4e9 (the bound `iz-sum` has). The
+	// loop's condition (`base` is a length, never negative) is always true:
+	// it leaves by `return`; a constant condition would make the `return`
+	// after it unreachable, which Java refuses to compile.
+	var buf int32 = port.CellsAt(st, wBuf)
+	var cnt int32 = port.CellsAt(st, wCnt)
+	var pos int32 = port.CellsAt(st, wPos)
+	var end int32 = port.CellsAt(st, wEnd)
+	var base int32 = port.CellsAt(st, wBase)
+	var limit int32 = port.CellsAt(st, wLimit)
+	var lmask int32 = ((1) << uint(port.CellsAt(st, wLb))) - 1
+	var dmask int32 = ((1) << uint(port.CellsAt(st, wDb))) - 1
+	var n int32 = port.CellsLen(out)
+	var sa int32 = port.CellsAt(st, wA)
+	var sb int32 = port.CellsAt(st, wB)
+	var ss int32 = 0
+	var e int32 = 0
+	var l int32 = 0
 	var sym int32 = 0
+	var x int32 = 0
 	var ln int32 = 0
 	var dsym int32 = 0
 	var dist int32 = 0
 	var k int32 = 0
-	var at int32 = 0
-	for port.CellsAt(st, wErr) == 0 {
-		sym = izDecode(st, src, wLc, wLs)
-		if port.CellsAt(st, wErr) != 0 {
-			return 0
+	for base >= 0 {
+		if ss >= 2700 {
+			sa = sa % 65521
+			sb = sb % 65521
+			ss = 0
+		}
+		for (cnt < 24) && (pos < end) {
+			buf |= (port.BlobU8(src, pos)) << uint(cnt)
+			pos += 1
+			cnt += 8
+		}
+		e = port.CellsAt(st, wLt+(buf&lmask))
+		l = e & 15
+		if (e != 0) && (l <= cnt) {
+			buf = (buf) >> uint(l)
+			cnt -= l
+			sym = (e) >> uint(4)
+		} else {
+			izPark(st, buf, cnt, pos)
+			sym = izDecode(st, src, wLc, wLs)
+			if port.CellsAt(st, wErr) != 0 {
+				return 0
+			}
+			buf = port.CellsAt(st, wBuf)
+			cnt = port.CellsAt(st, wCnt)
+			pos = port.CellsAt(st, wPos)
 		}
 		if sym < 256 {
-			izPut(st, out, sym)
+			if (n - base) >= limit {
+				port.LimitBreach(1, (n-base)+1)
+			}
+			port.CellsPush(out, sym)
+			n += 1
+			sa += sym
+			sb += sa
+			ss += 1
 		}
 		if sym == 256 {
+			izPark(st, buf, cnt, pos)
+			port.CellsSet(st, wA, sa%65521)
+			port.CellsSet(st, wB, sb%65521)
 			return 0
 		}
 		if sym > 256 {
 			sym -= 257
 			if sym >= 29 {
+				izPark(st, buf, cnt, pos)
 				izFail(st, IzBadCode())
 				return 0
 			}
-			ln = izLbase[sym] + izBits(st, src, izLext[sym])
-			dsym = izDecode(st, src, wDc, wDs)
-			if port.CellsAt(st, wErr) != 0 {
+			x = izLext[sym]
+			for (cnt < x) && (pos < end) {
+				buf |= (port.BlobU8(src, pos)) << uint(cnt)
+				pos += 1
+				cnt += 8
+			}
+			if cnt < x {
+				izPark(st, buf, cnt, pos)
+				izFail(st, IzTruncated())
 				return 0
+			}
+			ln = izLbase[sym] + (buf & (((1) << uint(x)) - 1))
+			buf = (buf) >> uint(x)
+			cnt -= x
+			for (cnt < 24) && (pos < end) {
+				buf |= (port.BlobU8(src, pos)) << uint(cnt)
+				pos += 1
+				cnt += 8
+			}
+			e = port.CellsAt(st, wDt+(buf&dmask))
+			l = e & 15
+			if (e != 0) && (l <= cnt) {
+				buf = (buf) >> uint(l)
+				cnt -= l
+				dsym = (e) >> uint(4)
+			} else {
+				izPark(st, buf, cnt, pos)
+				dsym = izDecode(st, src, wDc, wDs)
+				if port.CellsAt(st, wErr) != 0 {
+					return 0
+				}
+				buf = port.CellsAt(st, wBuf)
+				cnt = port.CellsAt(st, wCnt)
+				pos = port.CellsAt(st, wPos)
 			}
 			if dsym >= 30 {
+				izPark(st, buf, cnt, pos)
 				izFail(st, IzBadCode())
 				return 0
 			}
-			dist = izDbase[dsym] + izBits(st, src, izDext[dsym])
-			if port.CellsAt(st, wErr) != 0 {
+			x = izDext[dsym]
+			for (cnt < x) && (pos < end) {
+				buf |= (port.BlobU8(src, pos)) << uint(cnt)
+				pos += 1
+				cnt += 8
+			}
+			if cnt < x {
+				izPark(st, buf, cnt, pos)
+				izFail(st, IzTruncated())
 				return 0
 			}
-			if dist > (port.CellsLen(out) - port.CellsAt(st, wBase)) {
+			dist = izDbase[dsym] + (buf & (((1) << uint(x)) - 1))
+			buf = (buf) >> uint(x)
+			cnt -= x
+			if dist > (n - base) {
+				izPark(st, buf, cnt, pos)
 				izFail(st, IzBadDistance())
 				return 0
 			}
-			k = 0
-			for k < ln {
-				at = port.CellsAt(out, port.CellsLen(out)-dist)
-				izPut(st, out, at)
-				k += 1
+			if ((n - base) + ln) > limit {
+				// Over the limit part-way: byte by byte to the breach.
+				k = 0
+				for k < ln {
+					x = port.CellsAt(out, port.CellsLen(out)-dist)
+					izPut(st, out, x)
+					k += 1
+				}
+			}
+			ss += ln
+			if dist == 1 {
+				// A run of the last byte: one fill, and the sums in closed form
+				// (s2 gains ln * s1 + x * (1 + 2 + .. + ln)).
+				x = port.CellsAt(out, n-1)
+				port.CellsGrow(out, ln, x)
+				n += ln
+				sb += (ln * sa) + (x * ((ln * (ln + 1)) / 2))
+				sa += ln * x
+			} else {
+				k = 0
+				for k < ln {
+					x = port.CellsAt(out, n-dist)
+					port.CellsPush(out, x)
+					n += 1
+					sa += x
+					sb += sa
+					k += 1
+				}
 			}
 		}
 	}
+	return 0
+}
+
+func izSum(st *port.Cells, out *port.Cells, from int32, to int32) int32 {
+	// Fold out[from, to) into the Adler-32 in the state, byte by byte
+	// with the modulus every 3000 (the stored blocks' share; the hot loop
+	// of `iz-codes` keeps its own).
+	var a int32 = port.CellsAt(st, wA)
+	var b int32 = port.CellsAt(st, wB)
+	var i int32 = from
+	var ss int32 = 0
+	for i < to {
+		a += port.CellsAt(out, i)
+		b += a
+		i += 1
+		ss += 1
+		if ss >= 3000 {
+			a = a % 65521
+			b = b % 65521
+			ss = 0
+		}
+	}
+	port.CellsSet(st, wA, a%65521)
+	port.CellsSet(st, wB, b%65521)
 	return 0
 }
 
@@ -339,6 +581,8 @@ func izStored(st *port.Cells, src []byte, out *port.Cells) int32 {
 	var pos int32 = port.CellsAt(st, wPos)
 	var end int32 = port.CellsAt(st, wEnd)
 	var n int32 = 0
+	var avail int32 = 0
+	var from int32 = 0
 	var k int32 = 0
 	port.CellsSet(st, wBuf, 0)
 	port.CellsSet(st, wCnt, 0)
@@ -354,10 +598,24 @@ func izStored(st *port.Cells, src []byte, out *port.Cells) int32 {
 		return 0
 	}
 	pos += 4
-	for (k < n) && ((pos + k) < end) {
-		izPut(st, out, port.BlobU8(src, pos+k))
+	// How many bytes are there to take; if they would pass the limit,
+	// `iz-put` finds the breach at the same byte it always did.
+	avail = end - pos
+	if n < avail {
+		avail = n
+	}
+	if ((port.CellsLen(out) - port.CellsAt(st, wBase)) + avail) > port.CellsAt(st, wLimit) {
+		for k < avail {
+			izPut(st, out, port.BlobU8(src, pos+k))
+			k += 1
+		}
+	}
+	from = port.CellsLen(out)
+	for k < avail {
+		port.CellsPush(out, port.BlobU8(src, pos+k))
 		k += 1
 	}
+	izSum(st, out, from, port.CellsLen(out))
 	port.CellsSet(st, wPos, pos+k)
 	if k < n {
 		izFail(st, IzTruncated())
@@ -392,6 +650,8 @@ func izFixed(st *port.Cells, src []byte, out *port.Cells) int32 {
 		s += 1
 	}
 	izBuild(st, wDc, wDs, wLen, 30)
+	izFast(st, wLc, wLs, wLt, litBits, wLb)
+	izFast(st, wDc, wDs, wDt, distBits, wDb)
 	return izCodes(st, src, out)
 }
 
@@ -507,6 +767,8 @@ func izDynamic(st *port.Cells, src []byte, out *port.Cells) int32 {
 		izFail(st, IzBadCodeLengths())
 		return 0
 	}
+	izFast(st, wLc, wLs, wLt, litBits, wLb)
+	izFast(st, wDc, wDs, wDt, distBits, wDb)
 	return izCodes(st, src, out)
 }
 
@@ -547,31 +809,6 @@ func IzRaw(src []byte, start int32, end int32, out *port.Cells, st *port.Cells) 
 	return izBlocks(st, src, out)
 }
 
-func izAdler(out *port.Cells, from int32) int32 {
-	// Adler-32 of out[from..]: answers the two 16-bit halves as
-	// b * 65536 + a would overflow, so `iz-zlib` compares them apart.
-	// This answers `a`; `iz-adler-b` answers `b`.
-	var a int32 = 1
-	var i int32 = from
-	for i < port.CellsLen(out) {
-		a = (a + port.CellsAt(out, i)) % 65521
-		i += 1
-	}
-	return a
-}
-
-func izAdlerB(out *port.Cells, from int32) int32 {
-	var a int32 = 1
-	var b int32 = 0
-	var i int32 = from
-	for i < port.CellsLen(out) {
-		a = (a + port.CellsAt(out, i)) % 65521
-		b = (b + a) % 65521
-		i += 1
-	}
-	return b
-}
-
 func IzZlib(src []byte, start int32, end int32, out *port.Cells, st *port.Cells) int32 {
 	// Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the
 	// big-endian Adler-32 of the output. §2.2: CM must be 8, CINFO at most
@@ -609,7 +846,9 @@ func IzZlib(src []byte, start int32, end int32, out *port.Cells, st *port.Cells)
 		return IzTruncated()
 	}
 	port.CellsSet(st, wPos, pos+4)
-	if (port.BlobU16(src, pos) != izAdlerB(out, port.CellsAt(st, wBase))) || (port.BlobU16(src, pos+2) != izAdler(out, port.CellsAt(st, wBase))) {
+	// The Adler-32 the blocks kept as they wrote: s2 * 65536 + s1, as the
+	// 32-bit pattern `blob-u32` answers for the four bytes.
+	if port.BlobU32(src, pos) != (((port.CellsAt(st, wB)) << uint(16)) | port.CellsAt(st, wA)) {
 		izFail(st, IzBadChecksum())
 		return IzBadChecksum()
 	}

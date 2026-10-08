@@ -186,4 +186,105 @@ public final class Inflatetest {
         Inflate.izStatusEmitName(t, 9);
         emon.Testport.assertText(t, "ok truncated bad-distance bad-checksum", "names");
     }
+    public static int itCheckRaw(int emonT, byte[] z, int status, int consumed, String hex) {
+        // A bare deflate stream: its status, how much it consumed and its output.
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Testport.assertEq(Inflate.izRaw(z, 0, emon.Port.blobLen(z), out, st), status, "status");
+        emon.Testport.assertEq(Inflate.izConsumed(st), consumed, "consumed");
+        emon.Testport.assertCellsHex(out, hex, "output");
+        return 0;
+    }
+    public static void testADynamicBlockFromZlib() {
+        // 729 bytes of words and numbers, level 9: one dynamic block. The Adler-32
+        // in the trailer checks every byte of the output.
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        byte[] z = emon.Testport.hexBlob("78da5d525b72c33008bc0a47b01e08711ca5959d74ec26e3eaa3c72f11d076f2a5112ccbee4af7cb477f1b81e1fbec6b4dd0f6c7b531ecfd731bd710e13efb94b55132bcf77db40c973e1aa24e692d049b4203539ca85861dddbe87581f5b68f7e929f798e171d47df49f035cede0e4cb0b5e36885270d25ab5350be98b49e8dae06d3465a5fe0d1b65e5f96c602e36cb75df0f4a7575d221b08ab559279935d4f3266b3ea56a4af1c25d90427e74fc540aabf68583118502237205aea1527905d173967d6edd99dcab25f9dcf09495ea329e65989482f6ccd1a3d28fa277112b3269aede124075d2c627524641f214d80abb106a54861bac3c57112d17c3da4d990d730fccb9d9779cf6812fc336968312a4b348572ea3f742fd17f8558999d50f553d51fe9ccf11e");
+        emon.Testport.assertEq(emon.Port.blobLen(z), 297, "the stream is this long");
+        emon.Testport.assertEq(Inflate.izZlib(z, 0, 297, out, st), Inflate.izOk(), "status");
+        emon.Testport.assertEq(Inflate.izConsumed(st), 297, "consumed");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), 729, "length");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 111, "o");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 7), 57, "9");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 728), 56, "the last byte, 8");
+    }
+    public static void testACodeOfFifteenBits() {
+        // A dynamic block whose literal/length code has lengths 1, 2, ... 14 for
+        // the bytes 0 to 13 and 15 for end-of-block (and a lone distance code of
+        // length 1): bytes 10 to 13 and the end of the block are codes of 11 to 15
+        // bits, beyond the 10-bit table.
+        itCheckRaw(0, emon.Testport.hexBlob("0de00182244992244902128b9a4756cffeffbb77a0fd7fdffff7fff9fb7ff7ff03"), Inflate.izOk(), 33, "0001020d050d0d00070c03");
+    }
+    public static void testStoredFixedAndDynamicBlocksInOneStream() {
+        // A stored block, a fixed one (both flushed to a byte boundary) and the
+        // dynamic one of the law above, the last.
+        itCheckRaw(0, emon.Testport.hexBlob("001600e9ff73746f72656420626c6f636b206279746573000102ff000000ffff4acbac484d5148c3209372f293b375a012c9f929a9c58a00000000ffff0de00182244992244902128b9a4756cffeffbb77a0fd7fdffff7fff9fb7ff7ff03"), Inflate.izOk(), 94, "73746f72656420626c6f636b206279746573000102ff666978656420666978656420666978656420666978656420626c6f636b2c20666978656420636f646573210001020d050d0d00070c03");
+    }
+    public static void testTheLongestMatch() {
+        // A literal x and then a match of length 258 (symbol 285, no extra bits)
+        // at distance 1: 259 of them.
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        int i = 0;
+        emon.Testport.assertEq(Inflate.izRaw(emon.Testport.hexBlob("ab180500"), 0, 4, out, st), Inflate.izOk(), "status");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), 259, "length");
+        while (i < 259) {
+            emon.Testport.assertEqAt(emon.Port.cellsAt(out, i), 120, "x", i);
+            i += 1;
+        }
+    }
+    public static int itStoredBlock(emon.Port.Cells z, int n) {
+        // A non-final stored block of n bytes, the byte at i being i * 7 + i / 256.
+        int i = 0;
+        emon.Port.cellsPush(z, 0);
+        emon.Port.cellsPush(z, n & 255);
+        emon.Port.cellsPush(z, n / 256);
+        emon.Port.cellsPush(z, (65535 - n) & 255);
+        emon.Port.cellsPush(z, (65535 - n) / 256);
+        while (i < n) {
+            emon.Port.cellsPush(z, ((i * 7) + (i / 256)) & 255);
+            i += 1;
+        }
+        return 0;
+    }
+    public static int itPushBlob(emon.Port.Cells z, byte[] b) {
+        int i = 0;
+        while (i < emon.Port.blobLen(b)) {
+            emon.Port.cellsPush(z, emon.Port.blobU8(b, i));
+            i += 1;
+        }
+        return 0;
+    }
+    public static void testTheMaximumDistance() {
+        // 32768 stored bytes, then a fixed block that copies three bytes from
+        // distance 32768 (symbol 29, all 13 extra bits set): the very first three.
+        // With one byte less of history the same copy reaches too far back.
+        emon.Port.Cells z = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        itStoredBlock(z, 32768);
+        itPushBlob(z, emon.Testport.hexBlob("03deff0f00"));
+        emon.Testport.assertEq(Inflate.izRaw(emon.Testport.cellsBlob(z), 0, emon.Port.cellsLen(z), out, st), Inflate.izOk(), "status");
+        emon.Testport.assertEq(Inflate.izConsumed(st), emon.Port.cellsLen(z), "consumed");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), 32771, "length");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 32768), emon.Port.cellsAt(out, 0), "first copied byte");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 32769), emon.Port.cellsAt(out, 1), "second");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 32770), emon.Port.cellsAt(out, 2), "third");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 32767), ((32767 * 7) + 127) & 255, "the last stored byte");
+        emon.Port.cellsDrop(z, 0);
+        emon.Port.cellsDrop(out, 0);
+        itStoredBlock(z, 32767);
+        itPushBlob(z, emon.Testport.hexBlob("03deff0f00"));
+        emon.Testport.assertEq(Inflate.izRaw(emon.Testport.cellsBlob(z), 0, emon.Port.cellsLen(z), out, st), Inflate.izBadDistance(), "too far back");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), 32767, "the stored bytes are kept");
+    }
+    public static void testACodeThatIsNotInTheTableKeepsItsError() {
+        // The block of the 15-bit law, with a match symbol and then the distance
+        // code '1', which the lone distance code of length 1 does not have. The walk
+        // reads 15 bits before it says bad-code: with them it does, and with the
+        // stream ending sooner it is truncated, as it always was.
+        itCheckRaw(0, emon.Testport.hexBlob("0de00182244992244902128b9a4756cffeffbb77a0fdff030000"), Inflate.izBadCode(), 25, "000102");
+        itCheckRaw(0, emon.Testport.hexBlob("0de00182244992244902128b9a4756cffeffbb77a0fdff03"), Inflate.izTruncated(), 24, "000102");
+    }
 }
