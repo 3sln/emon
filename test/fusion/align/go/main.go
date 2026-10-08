@@ -14,6 +14,7 @@ import (
 	"emon/alignprobe"
 	"emon/plan"
 	_ "emon/pngenc"
+	"emon/planrun"
 	"emon/port"
 )
 
@@ -95,7 +96,7 @@ func main() {
 	replayer := port.NewReplayer(t)
 
 	var dump string
-	unit := func(an, rq *port.Cells) int32 {
+	unit := func(an, rq *port.Cells, _ *port.BitmapSet, _ *port.Buf) int32 {
 		view := base.View()
 		c := cells(51)
 		loc := port.NewCells()
@@ -110,10 +111,10 @@ func main() {
 	}
 	bytesF := &port.PlanSync{F: func(req port.PlanRequest, _ port.PlanBitmaps) (port.PlanAnswer, error) {
 		c := port.NewCells()
-		plan.AnBytes(c, req.ID(), req.Arg(1), req.Arg(2))
+		plan.AnBytes(c, req.ID(), req.Field(plan.BqOffset()), req.Field(plan.BqLength()))
 		return port.PlanAnswer{Rec: toVec(c)}, nil
 	}}
-	stats, err := port.PlanRun(port.DefaultPlanConfig(), unit, replayer, bytesF, port.PlanNoMisses{}, nil)
+	stats, err := planrun.Run(port.DefaultPlanConfig(), unit, replayer, bytesF, port.PlanNoMisses{}, nil)
 	if err != nil {
 		fail(err)
 	}

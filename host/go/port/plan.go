@@ -9,7 +9,7 @@
 // the ports, not a port kin calls. Every exported name is prefixed `Plan` (or is
 // `Transcript`, `Replayer`) so it cannot collide with the port forms beside it.
 //
-// The loop's shape is the JavaScript host's too: the host owns the await loop.
+// The loop's shape is the JavaScript host's too: the host owns the await loop (`emon/planrun`, over kin's `planloop`).
 // `Start` begins a request (a sync host finishes it there), `Next` returns the
 // next completion in whatever order completions arrive.
 
@@ -22,10 +22,22 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
+)
+
+// The arguments of a render and a crop request, as kin names them (`rd-*` in `kin/plan.kin`). THEY ARE KIN'S: this package cannot import the
+// generated `plan` (which imports this one), so the offsets are held here and a Go test holds them to kin's.
+const (
+	PlanRdInput int32 = 0
+	PlanRdPage  int32 = 1
+	PlanRdDpi   int32 = 2
+	PlanRdLayer int32 = 3
+	PlanRdX     int32 = 4
+	PlanRdY     int32 = 5
+	PlanRdW     int32 = 6
+	PlanRdH     int32 = 7
 )
 
 // The numbers are `emon.plan`'s (a kin law holds them; the driver asserts them).
@@ -80,10 +92,6 @@ func planErr(name string, format string, a ...any) *PlanError {
 	return &PlanError{Name: name, Msg: fmt.Sprintf(format, a...)}
 }
 
-func planLimit(name string, limit, actual int32) *PlanError {
-	return planErr(name, "the limit is %d and this run reached %d", limit, actual)
-}
-
 // PlanBitmaps maps an answer's id to its (port) Bitmap.
 type PlanBitmaps map[int32]*Bitmap
 
@@ -100,6 +108,10 @@ func (r PlanRequest) ID() int32   { return r.Rec[2] }
 
 // Arg is argument k (kin's `rq-arg`).
 func (r PlanRequest) Arg(k int) int32 { return r.Rec[3+k] }
+
+// Field is the argument a kin field names (`plan.DqWhere()`, `plan.BqOffset()`, ...): a host reads a request by these and never by a
+// literal offset (D396 item 5).
+func (r PlanRequest) Field(f int32) int32 { return r.Rec[3+int(f)] }
 
 // PlanAnswer is an answer record and, for render/decode, its pixels.
 type PlanAnswer struct {
@@ -193,185 +205,8 @@ type PlanNoMisses struct{}
 
 func (PlanNoMisses) Take(int32) []PlanRange { return nil }
 
-// PlanUnit is kin's unit closed over what it needs: handed the answers so far
-// and an empty requests Cells, it answers a unit status.
-type PlanUnit func(answers, requests *Cells) int32
-
-func planRecordAt(c *Cells, at, n int32) []int32 {
-	out := make([]int32, n)
-	for i := int32(0); i < n; i++ {
-		out[i] = CellsAt(c, at+i)
-	}
-	return out
-}
-
-func planReadRequests(rq *Cells, answered map[int32]bool) ([]PlanRequest, error) {
-	n := CellsLen(rq)
-	var at int32
-	var out []PlanRequest
-	seen := map[int32]bool{}
-	for at < n {
-		ln := CellsAt(rq, at)
-		if ln < 3 || at+ln > n {
-			return nil, planErr("bad-record", "a request at %d has length %d", at, ln)
-		}
-		rec := planRecordAt(rq, at, ln)
-		if rec[1] < PlanKindRender || (rec[1] > PlanKindOcr && rec[1] != PlanKindCrop && rec[1] != PlanKindDecodeImg) {
-			return nil, planErr("bad-record", "request %d has kind %d, which kin may not ask for", rec[2], rec[1])
-		}
-		if rec[2] < 1 {
-			return nil, planErr("bad-record", "a request has id %d", rec[2])
-		}
-		if seen[rec[2]] || answered[rec[2]] {
-			return nil, planErr("bad-record", "request id %d is used twice", rec[2])
-		}
-		seen[rec[2]] = true
-		out = append(out, PlanRequest{Rec: rec})
-		at += ln
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].ID() < out[j].ID() })
-	return out, nil
-}
-
-func planFulfil(f PlanFulfiller, reqs []PlanRequest, bm PlanBitmaps) ([]PlanAnswer, error) {
-	for _, r := range reqs {
-		if err := f.Start(r, bm); err != nil {
-			return nil, err
-		}
-	}
-	pending := map[int32]int32{}
-	for _, r := range reqs {
-		pending[r.ID()] = r.Kind()
-	}
-	var out []PlanAnswer
-	for range reqs {
-		a, err := f.Next()
-		if err != nil {
-			return nil, err
-		}
-		if len(a.Rec) < 4 || int(a.Rec[0]) != len(a.Rec) {
-			return nil, planErr("bad-record", "an answer has length %d in a record of %d", a.Rec[0], len(a.Rec))
-		}
-		if k, ok := pending[a.ID()]; !ok || k != a.Kind() {
-			return nil, planErr("bad-record", "an answer for request %d (kind %d) answers nothing asked", a.ID(), a.Kind())
-		}
-		delete(pending, a.ID())
-		out = append(out, a)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].ID() < out[j].ID() })
-	return out, nil
-}
-
-// PlanRun runs one unit to completion. `ports` fulfils render/decode/ocr;
-// `bytesF` fulfils the loop's own `bytes` requests; `rec`, when not nil, records
-// every render/decode/ocr pair (never `bytes`) in a deterministic order.
-func PlanRun(cfg PlanConfig, unit PlanUnit, ports, bytesF PlanFulfiller, misses PlanMisses, rec *Transcript) (PlanStats, error) {
-	return PlanRunBms(cfg, func(a, r *Cells, _ *BitmapSet, _ *Buf) int32 { return unit(a, r) }, ports, bytesF, misses, rec)
-}
-
-// PlanRunBms is PlanRun for a PAGE UNIT (P7.U, D196): the unit is also handed the BitmapSet of this attempt, made from the
-// bitmaps its answers carried so far; what kin made in it (`bms-put`) is added to the bitmaps a fulfiller sees, so an `ocr`
-// request may name a kin-made view. The bitmaps are this run's alone and are dropped when the unit ends.
-func PlanRunBms(cfg PlanConfig, unit func(answers, rq *Cells, bms *BitmapSet, payload *Buf) int32, ports, bytesF PlanFulfiller, misses PlanMisses, rec *Transcript) (PlanStats, error) {
-	answers := NewCells()
-	bitmaps := PlanBitmaps{}
-	answered := map[int32]bool{}
-	var st PlanStats
-	var fetchRound int32
-	for {
-		rq := NewCells()
-		st.Attempts++
-		bms := NewBitmapSet()
-		for id, b := range bitmaps {
-			bms.Answered[id] = b
-		}
-		payload := NewBuf()
-		status := unit(answers, rq, bms, payload)
-		made := bms.Made
-		switch status {
-		case PlanUnitNeedBytes:
-			// The attempt missed: discard it whole (its requests too), fetch,
-			// re-run. Not a round; counted against `fetch-rounds` alone.
-			fetchRound++
-			st.FetchRounds++
-			if fetchRound > cfg.FetchRounds {
-				return st, planLimit("fetch-rounds", cfg.FetchRounds, fetchRound)
-			}
-			ranges := misses.Take(fetchRound - 1)
-			if len(ranges) == 0 {
-				return st, planErr("need-bytes-stalled", "the unit missed and the source reports nothing missed")
-			}
-			var reqs []PlanRequest
-			for _, r := range ranges {
-				st.BytesRequests++
-				reqs = append(reqs, PlanRequest{Rec: []int32{6, PlanKindBytes, -st.BytesRequests, r.Input, r.Offset, r.Length}})
-			}
-			got, err := planFulfil(bytesF, reqs, PlanBitmaps{})
-			if err != nil {
-				return st, err
-			}
-			for _, a := range got {
-				if a.Status() != PlanStatusOk {
-					return st, planErr("fulfil-failed", "fetching bytes: status %d", a.Status())
-				}
-			}
-			continue
-		case PlanUnitDone:
-			if CellsLen(rq) != 0 {
-				return st, planErr("bad-record", "the unit is done and left requests")
-			}
-			return st, nil
-		case PlanUnitRequests:
-		default:
-			return st, planErr("unit-failed", "status %d", status)
-		}
-		fetchRound = 0
-		reqs, err := planReadRequests(rq, answered)
-		if err != nil {
-			return st, err
-		}
-		if len(payload.B) > 0 {
-			for i := range reqs {
-				reqs[i].Payload = payload.B
-			}
-		}
-		if len(reqs) == 0 {
-			return st, planErr("bad-record", "the unit asked for requests and wrote none")
-		}
-		st.Rounds++
-		if st.Rounds > cfg.MaxRounds {
-			return st, planLimit("max-rounds", cfg.MaxRounds, st.Rounds)
-		}
-		st.Requests += int32(len(reqs))
-		round := st.Rounds - 1
-		fbm := bitmaps
-		if len(made) > 0 {
-			fbm = PlanBitmaps{}
-			for id, b := range bitmaps {
-				fbm[id] = b
-			}
-			for id, b := range made {
-				fbm[id] = b
-			}
-		}
-		got, err := planFulfil(ports, reqs, fbm)
-		if err != nil {
-			return st, err
-		}
-		for i, a := range got {
-			for _, v := range a.Rec {
-				CellsPush(answers, v)
-			}
-			answered[a.ID()] = true
-			if a.Bitmap != nil {
-				bitmaps[a.ID()] = a.Bitmap
-			}
-			if rec != nil {
-				rec.Entries = append(rec.Entries, PlanEntry{Round: round, Req: reqs[i].Rec, Ans: a.Rec, Bitmap: a.Bitmap})
-			}
-		}
-	}
-}
+// THE LOOP is `emon/planrun` (kin's `planloop` drives it; P10.8). It is not in this package because the generated `planloop` imports
+// `port`: this file keeps the fulfillers, the requests and answers, and the transcript.
 
 // ---------------------------------------------------------------- transcript
 

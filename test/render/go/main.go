@@ -16,6 +16,7 @@ import (
 
 	"emon/plan"
 	_ "emon/pngenc"
+	"emon/planrun"
 	"emon/port"
 )
 
@@ -112,7 +113,7 @@ func main() {
 		inputs = append(inputs, [2]int32{int32(i), int32(st.Size())})
 	}
 
-	unit := func(an, rq *port.Cells) int32 {
+	unit := func(an, rq *port.Cells, _ *port.BitmapSet, _ *port.Buf) int32 {
 		missing := false
 		for _, s := range specs {
 			if plan.RecFind(an, s.id) < 0 {
@@ -171,7 +172,7 @@ func main() {
 		}
 		defer report()
 	}
-	stats, err := port.PlanRun(port.DefaultPlanConfig(), unit, ports, bytesF, port.PlanNoMisses{}, rec)
+	stats, err := planrun.Run(port.DefaultPlanConfig(), unit, ports, bytesF, port.PlanNoMisses{}, rec)
 	if err != nil {
 		fail(err)
 	}

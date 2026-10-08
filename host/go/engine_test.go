@@ -983,3 +983,20 @@ func TestAPanicInTheDocumentUnitIsTheEnginesNamedError(t *testing.T) {
 		t.Errorf("a document unit that does not panic gave %+v", ok.err)
 	}
 }
+
+// The Go render port cannot import kin's `plan` (it is imported by it), so it holds the offsets of a render request that kin names (`rd-*`):
+// kin's are the truth, and this holds the port's to them (P10.8).
+func TestTheRenderPortReadsRequestsByKinsOffsets(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		host, kin int32
+	}{
+		{"input", port.PlanRdInput, plan.RdInput()}, {"page", port.PlanRdPage, plan.RdPage()}, {"dpi", port.PlanRdDpi, plan.RdDpi()},
+		{"layer", port.PlanRdLayer, plan.RdLayer()}, {"x", port.PlanRdX, plan.RdX()}, {"y", port.PlanRdY, plan.RdY()},
+		{"w", port.PlanRdW, plan.RdW()}, {"h", port.PlanRdH, plan.RdH()},
+	} {
+		if c.host != c.kin {
+			t.Errorf("the render request's %s is at %d in the port and %d in kin", c.name, c.host, c.kin)
+		}
+	}
+}

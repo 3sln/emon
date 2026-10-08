@@ -1,0 +1,615 @@
+;; THE PLAN MACHINE, in kin (P10.8; D396, D399; D008, D058, D362). What the hosts' plan/fulfil loops were: `plan::Machine` and its Go and Java copies, the
+;; step machine of `Run`, the fetch planner (three copies), the routing of a request to a port, and every name the loop reports. THE LOOP IS KIN'S
+;; AND THE DRIVER IS INVERTED (D396 item 3): the host calls the unit under its own panic catch, tells kin the status it answered (`pl-after`), and
+;; does what kin says next. The host keeps the unit call, awaiting, and fulfilment (the FFI to the engines and the source).
+;;
+;;   ONE ATTEMPT.   `pl-attempt` opens it (the attempts count, an empty `rq`). The host runs the unit on `(fd p ans)` and `(fd p rq)`. `pl-after` takes
+;;                  the unit's status (`us-*`) and answers what the host does next: `act-done` (the unit finished), `act-requests` (`reqs` holds the round,
+;;                  sorted by id), `act-miss` (the source missed: the host puts the ranges it must fetch into `cand`, as `input offset length`
+;;                  triples, and calls `pl-fetch`), or `act-error` (`err`, `msg`, and for a limit `err-limit` and `err-actual`). A miss is not a
+;;                  round: it counts against `fetch-limit` alone, and a round of requests starts the count over.
+;;   THE ROUND.     The host starts every request of `reqs`, takes completions in whatever order they arrive and offers each to kin (`pl-offer`, the
+;;                  record in `cur`): an answer that is malformed, answers nothing asked, or answers twice is refused. `pl-commit` then appends the
+;;                  answers to `ans` in id order, which is what makes a transcript the same however the answers arrived, and writes the transcript's
+;;                  entries (`tx`). THE ANSWERED SET is the ids in `ans`: a unit that asks again for an id it was answered is refused.
+;;   THE FETCH.     `fp-plan` is the planner of the byte source's misses (one copy, for every host and the browser): every missed chunk and 2^round - 1
+;;                  chunks each side of it, the resident ones left out, a run of chunks one range. A `bytes` round is `reqs` too (`outk` 1) and its
+;;                  answers are not appended or transcribed.
+;;   THE SCHEDULE.  `en-next` replaces the host's phase enum (P10.6 S4): the document pass, the asset unit, one unit per page, the document unit, the
+;;                  figures unit. `pl-fold` adds a finished unit's accounting into the totals by what the unit was.
+;;   THE ROUTING.   `pl-route` says which port fulfils a request, or that no port is configured and the answer is `unsupported` (`pl-unsupported`).
+;;   THE NAMES.     `pe` (the loop's errors, two of them named limits), `ph` (the phases), `ds` (a document's status as the Engine reports it), `rt`.
+;;
+;; A move, not a rewrite: the order of the checks, what each error says and what the accounting counts are what the hosts' loops did.
+(ns emon.planloop
+  (:require [emon.lang :refer [I32 Cells Text defenum fd emit-ascii shl32]]
+            [emon.planctx :refer [Plan]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
+            [emon.plan :refer [us-done us-requests us-need-bytes pk-render pk-decode pk-ocr pk-bytes pk-crop pk-decode-img ps-ok ps-unsupported
+                               rec-find rec-count rec-kind rec-id rq-arg rq-bytes an-fail an-status dq-where dq-offset dq-length dq-gwhere
+                               dq-goffset dq-glength]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot bit-and]]))
+
+;; ----------------------------------------------------------------------------------------------- the names
+
+;; The loop's errors, as the Engine reports them (`Error::name()`). 0 is no error. `max-rounds` and `fetch-rounds` are the two NAMED LIMITS of SPEC 13.1.
+(defenum ^:pub pe
+  [[pe-none 0 "none"]
+   [pe-max-rounds 1 "max-rounds"]
+   [pe-fetch-rounds 2 "fetch-rounds"]
+   [pe-transcript-miss 3 "transcript-miss"]
+   [pe-transcript-bad 4 "transcript-bad"]
+   [pe-fulfil-failed 5 "fulfil-failed"]
+   [pe-unit-failed 6 "unit-failed"]
+   [pe-bad-record 7 "bad-record"]
+   [pe-stalled 8 "need-bytes-stalled"]])
+
+;; The units of a conversion, in the order the schedule runs them.
+(defenum ^:pub ph
+  [[ph-doc 0 "doc"]
+   [ph-asset 1 "asset"]
+   [ph-pages 2 "pages"]
+   [ph-finish 3 "finish"]
+   [ph-figures 4 "figures"]
+   [ph-done 5 "finished"]])
+
+;; What a document's unit answered, as the Engine names it: 1..6, 8..10 are `pd-status`'s (`emon.pdfdoc`), 21 and 22 a page unit's for an image the host could
+;; not read, 30 the content interpreter's. A code not in this table is `unreadable` (`ds-class` 0).
+(defenum ^:pub ds
+  [[ds-unsupported-format 1 "unsupported-format"]
+   [ds-no-startxref 2 "no-startxref"]
+   [ds-bad-xref 3 "bad-xref"]
+   [ds-no-root 4 "no-root"]
+   [ds-no-pages 5 "no-pages"]
+   [ds-encrypted 6 "encrypted"]
+   [ds-password-required 8 "password-required"]
+   [ds-password-incorrect 9 "password-incorrect"]
+   [ds-encryption-unsupported 10 "encryption-unsupported"]
+   [ds-undecodable 21 "undecodable"]
+   [ds-unsupported-image 22 "unsupported-image"]
+   [ds-content-failed 30 "content-failed"]
+   [ds-unreadable 99 "unreadable"]])
+
+;; Which of the Engine's errors a status is: 0 the input is damaged (its status is its name), 1 not a PDF or an image, 2 a password is needed, 3 the
+;; password does not open it, 4 the security handler is not read.
+(defn ^:pub ^I32 ds-class [^I32 code]
+  (if (== code (ds-unsupported-format)) (return 1))
+  (if (== code (ds-password-required)) (return 2))
+  (if (== code (ds-password-incorrect)) (return 3))
+  (if (== code (ds-encryption-unsupported)) (return 4))
+  (return 0))
+
+(defn ^:pub ^I32 ds-known [^I32 code]
+  (comment "The code a status is reported under: the status itself when the table names it, `ds-unreadable` otherwise.")
+  (if (== code (ds-unsupported-format)) (return code))
+  (if (== code (ds-no-startxref)) (return code))
+  (if (== code (ds-bad-xref)) (return code))
+  (if (== code (ds-no-root)) (return code))
+  (if (== code (ds-no-pages)) (return code))
+  (if (== code (ds-encrypted)) (return code))
+  (if (== code (ds-password-required)) (return code))
+  (if (== code (ds-password-incorrect)) (return code))
+  (if (== code (ds-encryption-unsupported)) (return code))
+  (if (== code (ds-undecodable)) (return code))
+  (if (== code (ds-unsupported-image)) (return code))
+  (if (== code (ds-content-failed)) (return code))
+  (return (ds-unreadable)))
+
+;; What a step of the machine tells the host to do next.
+(defn ^:pub ^I32 act-done [] (return 0))
+(defn ^:pub ^I32 act-requests [] (return 1))
+(defn ^:pub ^I32 act-fetch [] (return 2))
+(defn ^:pub ^I32 act-miss [] (return 3))
+(defn ^:pub ^I32 act-error [] (return 4))
+
+;; The ports a host has configured (`pl-route`'s second argument, a bit set).
+(defn ^:pub ^I32 pp-ocr [] (return 1))
+(defn ^:pub ^I32 pp-render [] (return 2))
+
+;; Which port fulfils a request.
+(defenum ^:pub rt
+  [[rt-none 0 "none"]
+   [rt-decode 1 "decode"]
+   [rt-decode-img 2 "decode-img"]
+   [rt-ocr 3 "ocr"]
+   [rt-render 4 "render"]
+   [rt-unsupported 5 "unsupported"]])
+
+;; ----------------------------------------------------------------------------------------------- small helpers
+
+(defn ^I32 pl-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 pl-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 pl-copy [^:mut ^Cells dst ^Cells src ^I32 at ^I32 n]
+  (comment "Append the n cells of `src` from `at`.")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (let [^I32 v (cells-at src (+ at i))]
+        (cells-push dst v)
+        (set i (+ i 1))))
+    (return n)))
+
+(defn ^I32 pl-limit [^Plan p ^I32 code ^I32 limit ^I32 actual]
+  (comment "A named limit was breached: `max-rounds` or `fetch-rounds`.")
+  (set (fd p err) code)
+  (set (fd p err-limit) limit)
+  (set (fd p err-actual) actual)
+  (emit-ascii (fd p msg) "the limit is ")
+  (text-i32 (fd p msg) limit)
+  (emit-ascii (fd p msg) " and this run reached ")
+  (text-i32 (fd p msg) actual)
+  (return (act-error)))
+
+;; ----------------------------------------------------------------------------------------------- a unit, and an attempt of it
+
+(defn ^:pub ^I32 pl-reset [^Plan p]
+  (comment "Start a unit over: its answers, requests, round, counters and error are gone. The totals, the phase and the page stay.")
+  (cells-drop (fd p ans) 0)
+  (cells-drop (fd p rq) 0)
+  (cells-drop (fd p reqs) 0)
+  (cells-drop (fd p got) 0)
+  (cells-drop (fd p cur) 0)
+  (cells-drop (fd p tx) 0)
+  (cells-drop (fd p cand) 0)
+  (cells-drop (fd p srt) 0)
+  (set (fd p attempts) 0)
+  (set (fd p rounds) 0)
+  (set (fd p requests) 0)
+  (set (fd p fetch-rounds) 0)
+  (set (fd p bytes-requests) 0)
+  (set (fd p fetch-round) 0)
+  (set (fd p round) 0)
+  (set (fd p outk) 0)
+  (set (fd p err) 0)
+  (set (fd p err-limit) 0)
+  (set (fd p err-actual) 0)
+  (return 0))
+
+(defn ^:pub ^I32 pl-attempt [^Plan p]
+  (comment "Open an attempt: the unit is run from scratch on the answers so far, with an empty `rq`; a round left outstanding is gone.")
+  (set (fd p attempts) (+ (fd p attempts) 1))
+  (cells-drop (fd p rq) 0)
+  (cells-drop (fd p reqs) 0)
+  (cells-drop (fd p got) 0)
+  (set (fd p outk) 0)
+  (return 0))
+
+(defn ^I32 pl-read [^Plan p]
+  (comment "The requests the unit wrote, checked and sorted by id into `reqs`: well formed, a kind kin may ask for (`bytes` is the host's), an id that is")
+  (comment "positive, unique in the round and not already answered. Answers 0, or `act-error`.")
+  (let [^I32 n (cells-len (fd p rq))
+        ^:mut ^I32 at 0]
+    (cells-drop (fd p reqs) 0)
+    (cells-drop (fd p srt) 0)
+    (while (< at n)
+      (let [^I32 ln (cells-at (fd p rq) at)]
+        (if (or (< ln 3) (> (+ at ln) n))
+          (do (set (fd p err) (pe-bad-record))
+              (emit-ascii (fd p msg) "a request at ")
+              (text-i32 (fd p msg) at)
+              (emit-ascii (fd p msg) " has length ")
+              (text-i32 (fd p msg) ln)
+              (return (act-error))))
+        (let [^I32 kind (cells-at (fd p rq) (+ at 1))
+              ^I32 id (cells-at (fd p rq) (+ at 2))]
+          (if (or (< kind (pk-render)) (and (> kind (pk-ocr)) (and (!= kind (pk-crop)) (!= kind (pk-decode-img)))))
+            (do (set (fd p err) (pe-bad-record))
+                (emit-ascii (fd p msg) "request ")
+                (text-i32 (fd p msg) id)
+                (emit-ascii (fd p msg) " has kind ")
+                (text-i32 (fd p msg) kind)
+                (emit-ascii (fd p msg) ", which kin may not ask for")
+                (return (act-error))))
+          (if (< id 1)
+            (do (set (fd p err) (pe-bad-record))
+                (emit-ascii (fd p msg) "a request has id ")
+                (text-i32 (fd p msg) id)
+                (return (act-error))))
+          (if (or (< (rec-find (fd p rq) id) at) (>= (rec-find (fd p ans) id) 0))
+            (do (set (fd p err) (pe-bad-record))
+                (emit-ascii (fd p msg) "request id ")
+                (text-i32 (fd p msg) id)
+                (emit-ascii (fd p msg) " is used twice")
+                (return (act-error))))
+          ;; insert the start into `srt`, kept in id order (a unit mostly asks in id order, which costs one comparison)
+          (cells-push (fd p srt) at)
+          (let [^:mut ^I32 j (- (cells-len (fd p srt)) 1)]
+            (while (and (> j 0) (> (cells-at (fd p rq) (+ (cells-at (fd p srt) (- j 1)) 2)) id))
+              (let [^I32 prev (cells-at (fd p srt) (- j 1))]
+                (cells-set (fd p srt) j prev)
+                (set j (- j 1))))
+            (cells-set (fd p srt) j at)))
+        (set at (+ at ln))))
+    (set at 0)
+    (while (< at (cells-len (fd p srt)))
+      (let [^I32 s (cells-at (fd p srt) at)
+            ^I32 rl (cells-at (fd p rq) s)]
+        (pl-copy (fd p reqs) (fd p rq) s rl)
+        (set at (+ at 1))))
+    (return 0)))
+
+(defn ^I32 pl-requests [^Plan p]
+  (comment "The unit asked for requests: a round (counted against `max-rounds`), or an error.")
+  (set (fd p fetch-round) 0)
+  (if (!= (pl-read p) 0) (return (act-error)))
+  (let [^I32 n (cells-len (fd p srt))]
+    (if (== n 0)
+      (do (set (fd p err) (pe-bad-record))
+          (emit-ascii (fd p msg) "the unit asked for requests and wrote none")
+          (return (act-error))))
+    (set (fd p rounds) (+ (fd p rounds) 1))
+    (if (> (fd p rounds) (fd p max-rounds))
+      (return (pl-limit p (pe-max-rounds) (fd p max-rounds) (fd p rounds))))
+    (set (fd p requests) (+ (fd p requests) n))
+    (set (fd p round) (- (fd p rounds) 1))
+    (set (fd p outk) 2)
+    (return (act-requests))))
+
+(defn ^:pub ^I32 pl-after [^Plan p ^I32 status]
+  (comment "The unit answered `status` (`us-*`): what the host does next (`act-*`).")
+  (if (== status (us-need-bytes))
+    (do
+      ;; The attempt missed: it is discarded whole, requests too. Not a round: counted against `fetch-rounds` alone.
+      (set (fd p fetch-round) (+ (fd p fetch-round) 1))
+      (set (fd p fetch-rounds) (+ (fd p fetch-rounds) 1))
+      (if (> (fd p fetch-round) (fd p fetch-limit))
+        (return (pl-limit p (pe-fetch-rounds) (fd p fetch-limit) (fd p fetch-round))))
+      (return (act-miss))))
+  (if (== status (us-done))
+    (do (if (!= (cells-len (fd p rq)) 0)
+          (do (set (fd p err) (pe-bad-record))
+              (emit-ascii (fd p msg) "the unit is done and left requests")
+              (return (act-error))))
+        (return (act-done))))
+  (if (== status (us-requests))
+    (return (pl-requests p)))
+  (set (fd p err) (pe-unit-failed))
+  (set (fd p err-actual) status)
+  (emit-ascii (fd p msg) "status ")
+  (text-i32 (fd p msg) status)
+  (return (act-error)))
+
+(defn ^:pub ^I32 pl-miss-round [^Plan p]
+  (comment "The fetch round a miss is (0, 1, ...): what `fp-plan` and the host's `Misses` are given.")
+  (return (- (fd p fetch-round) 1)))
+
+(defn ^:pub ^I32 pl-fetch [^Plan p]
+  (comment "The ranges the host put in `cand` (`input offset length` triples) become the round's `bytes` requests `[6 4 -n input offset length]`, ids")
+  (comment "-1, -2, ... for the whole unit. None is `need-bytes-stalled`: the unit missed and the source reports nothing missed.")
+  (let [^I32 n (cells-len (fd p cand))
+        ^:mut ^I32 i 0]
+    (cells-drop (fd p reqs) 0)
+    (cells-drop (fd p got) 0)
+    (if (== n 0)
+      (do (set (fd p err) (pe-stalled))
+          (emit-ascii (fd p msg) "the unit missed and the source reports nothing missed")
+          (return (act-error))))
+    (while (< i n)
+      (do (set (fd p bytes-requests) (+ (fd p bytes-requests) 1))
+          (let [^I32 input (cells-at (fd p cand) i)
+                ^I32 off (cells-at (fd p cand) (+ i 1))
+                ^I32 ln (cells-at (fd p cand) (+ i 2))]
+            (rq-bytes (fd p reqs) (- 0 (fd p bytes-requests)) input off ln))
+          (set i (+ i 3))))
+    (cells-drop (fd p cand) 0)
+    (set (fd p outk) 1)
+    (return (act-fetch))))
+
+;; ----------------------------------------------------------------------------------------------- the round's answers
+
+(defn ^:pub ^I32 pl-offer [^Plan p]
+  (comment "The answer in `cur` (a whole record) joins the round: refused (`act-error`, `bad-record`) when it is malformed, answers a request the round did")
+  (comment "not make or whose kind it does not have, or answers one already answered. Answers 0 when taken.")
+  (let [^I32 n (cells-len (fd p cur))
+        ^:mut ^I32 declared 0]
+    (if (> n 0) (set declared (cells-at (fd p cur) 0)))
+    (if (or (< n 4) (!= declared n))
+      (do (set (fd p err) (pe-bad-record))
+          (emit-ascii (fd p msg) "an answer has length ")
+          (text-i32 (fd p msg) declared)
+          (emit-ascii (fd p msg) " in a record of ")
+          (text-i32 (fd p msg) n)
+          (return (act-error))))
+    (let [^I32 kind (cells-at (fd p cur) 1)
+          ^I32 id (cells-at (fd p cur) 2)
+          ^I32 at (rec-find (fd p reqs) id)]
+      (if (or (< at 0) (or (!= (cells-at (fd p reqs) (+ at 1)) kind) (>= (rec-find (fd p got) id) 0)))
+        (do (set (fd p err) (pe-bad-record))
+            (emit-ascii (fd p msg) "an answer for request ")
+            (text-i32 (fd p msg) id)
+            (emit-ascii (fd p msg) " (kind ")
+            (text-i32 (fd p msg) kind)
+            (emit-ascii (fd p msg) ") answers nothing asked")
+            (return (act-error))))
+      (pl-copy (fd p got) (fd p cur) 0 n)
+      (return 0))))
+
+(defn ^:pub ^I32 pl-has [^Plan p ^I32 id]
+  (comment "1 when the round has been offered an answer to request `id`.")
+  (if (>= (rec-find (fd p got) id) 0) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 pl-owed [^Plan p]
+  (comment "How many requests of the round have no answer yet.")
+  (let [^I32 n (cells-len (fd p reqs))
+        ^:mut ^I32 at 0
+        ^:mut ^I32 k 0]
+    (while (< at n)
+      (do (if (< (rec-find (fd p got) (cells-at (fd p reqs) (+ at 2))) 0)
+            (set k (+ k 1)))
+          (set at (+ at (cells-at (fd p reqs) at)))))
+    (return k)))
+
+(defn ^:pub ^I32 pl-commit [^Plan p]
+  (comment "Every request of the round is answered. A `bytes` round: each answer must say ok (`fulfil-failed` otherwise), nothing is kept. A round of")
+  (comment "requests: the answers join `ans` IN ID ORDER and the transcript's entries `[round request answer]` are written to `tx` in the same order.")
+  (if (!= (pl-owed p) 0)
+    (do (set (fd p err) (pe-bad-record))
+        (emit-ascii (fd p msg) "the round is not fully answered")
+        (return (act-error))))
+  (let [^I32 n (cells-len (fd p reqs))
+        ^:mut ^I32 at 0]
+    (while (< at n)
+      (let [^I32 rl (cells-at (fd p reqs) at)
+            ^I32 id (cells-at (fd p reqs) (+ at 2))
+            ^I32 ga (rec-find (fd p got) id)
+            ^I32 al (cells-at (fd p got) ga)]
+        (if (== (fd p outk) 1)
+          (if (!= (cells-at (fd p got) (+ ga 3)) (ps-ok))
+            (do (set (fd p err) (pe-fulfil-failed))
+                (set (fd p err-actual) (cells-at (fd p got) (+ ga 3)))
+                (emit-ascii (fd p msg) "fetching bytes: status ")
+                (text-i32 (fd p msg) (cells-at (fd p got) (+ ga 3)))
+                (return (act-error))))
+          (do (pl-copy (fd p ans) (fd p got) ga al)
+              (cells-push (fd p tx) (fd p round))
+              (pl-copy (fd p tx) (fd p reqs) at rl)
+              (pl-copy (fd p tx) (fd p got) ga al)))
+        (set at (+ at rl))))
+    (cells-drop (fd p reqs) 0)
+    (cells-drop (fd p got) 0)
+    (set (fd p outk) 0)
+    (return 0)))
+
+;; The transcript's entries in `tx`: `[round request answer]`, the request and the answer each a whole record.
+(defn ^:pub ^I32 tx-round [^Cells c ^I32 at] (return (cells-at c at)))
+(defn ^:pub ^I32 tx-req [^Cells c ^I32 at] (return (+ at 1)))
+(defn ^:pub ^I32 tx-ans [^Cells c ^I32 at] (return (+ (+ at 1) (cells-at c (+ at 1)))))
+(defn ^:pub ^I32 tx-next [^Cells c ^I32 at]
+  (let [^I32 a (+ (+ at 1) (cells-at c (+ at 1)))]
+    (return (+ a (cells-at c a)))))
+
+;; ----------------------------------------------------------------------------------------------- routing
+
+(defn ^:pub ^I32 pl-route [^I32 kind ^I32 ports]
+  (comment "Which port fulfils a request of `kind` (`rt-*`), given the ports configured (`pp-*`): a `decode` and a `decode-img` the host's own codecs; an `ocr`")
+  (comment "the engine when there is one; a `render` or `crop` the renderer when there is one. With no port the answer is `unsupported` (D199), and a kind")
+  (comment "no port may be asked for (`bytes` is the loop's own) is `rt-none`: the host's error.")
+  (if (== kind (pk-decode)) (return (rt-decode)))
+  (if (== kind (pk-decode-img)) (return (rt-decode-img)))
+  (if (== kind (pk-ocr))
+    (do (if (== (bit-and ports (pp-ocr)) (pp-ocr)) (return (rt-ocr)))
+        (return (rt-unsupported))))
+  (if (or (== kind (pk-render)) (== kind (pk-crop)))
+    (do (if (== (bit-and ports (pp-render)) (pp-render)) (return (rt-render)))
+        (return (rt-unsupported))))
+  (return (rt-none)))
+
+(defn ^:pub ^I32 pl-unsupported [^:mut ^Cells out ^I32 kind ^I32 id]
+  (comment "The answer of a request no port is configured for.")
+  (return (an-fail out kind id (ps-unsupported))))
+
+(defn ^:pub ^I32 pl-spans [^Cells c ^I32 at ^I32 me ^:mut ^Cells out]
+  (comment "The spans of input `me` that the request at `at` names, as `offset length` pairs pushed to `out`: a `decode`'s, and a `decode-img`'s codestream and")
+  (comment "globals when they are the input's own. A host that cannot block makes these resident before it answers. Answers how many.")
+  (let [^I32 kind (rec-kind c at)
+        ^:mut ^I32 k 0]
+    (if (== kind (pk-decode))
+      (if (and (== (rq-arg c at 0) me) (and (>= (rq-arg c at 1) 0) (> (rq-arg c at 2) 0)))
+        (do (cells-push out (rq-arg c at 1))
+            (cells-push out (rq-arg c at 2))
+            (set k (+ k 1)))))
+    (if (== kind (pk-decode-img))
+      (do
+        (if (and (== (rq-arg c at (dq-where)) me) (and (>= (rq-arg c at (dq-offset)) 0) (> (rq-arg c at (dq-length)) 0)))
+          (do (cells-push out (rq-arg c at (dq-offset)))
+              (cells-push out (rq-arg c at (dq-length)))
+              (set k (+ k 1))))
+        (if (and (== (rq-arg c at (dq-gwhere)) me) (and (>= (rq-arg c at (dq-goffset)) 0) (> (rq-arg c at (dq-glength)) 0)))
+          (do (cells-push out (rq-arg c at (dq-goffset)))
+              (cells-push out (rq-arg c at (dq-glength)))
+              (set k (+ k 1))))))
+    (return k)))
+
+;; ----------------------------------------------------------------------------------------------- the schedule
+
+(defn ^:pub ^I32 pl-fold [^Plan p]
+  (comment "The unit that just finished (`phase`) adds its accounting to the totals, and the unit is reset. The document pass and the asset unit count")
+  (comment "attempts, fetch rounds, bytes requests and requests; a page unit counts its requests and keeps its rounds and requests; the figures unit")
+  (comment "its requests.")
+  (let [^I32 ph (fd p phase)]
+    (if (or (== ph (ph-doc)) (== ph (ph-asset)))
+      (do (set (fd p t-attempts) (+ (fd p t-attempts) (fd p attempts)))
+          (set (fd p t-fetch-rounds) (+ (fd p t-fetch-rounds) (fd p fetch-rounds)))
+          (set (fd p t-bytes-requests) (+ (fd p t-bytes-requests) (fd p bytes-requests)))))
+    (if (== ph (ph-pages))
+      (do (cells-push (fd p pgr) (fd p rounds))
+          (cells-push (fd p pgq) (fd p requests))))
+    (if (!= ph (ph-finish))
+      (set (fd p t-requests) (+ (fd p t-requests) (fd p requests))))
+    (pl-reset p)
+    (return 0)))
+
+(defn ^:pub ^I32 en-next [^Plan p ^I32 kind ^I32 assets ^I32 pending ^I32 np]
+  (comment "THE SCHEDULE (P10.6 S4): the unit that follows the one `phase` names, which is set and answered (`ph-*`). `kind` is what the document pass built:")
+  (comment "0 nothing (an intake), 1 a PDF, 2 a raster input. `assets` is whether the level is on, `pending` whether the document unit left the figures unit")
+  (comment "to run (D351), `np` the page count. The document pass is followed by the asset unit (a PDF with assets on) or the page units; a document of no")
+  (comment "pages goes straight to its document unit.")
+  (let [^I32 ph (fd p phase)]
+    (if (== ph (ph-doc))
+      (do (if (== kind 0)
+            (do (set (fd p phase) (ph-done))
+                (return (ph-done))))
+          (if (and (== kind 1) (!= assets 0))
+            (do (set (fd p phase) (ph-asset))
+                (return (ph-asset))))
+          (set (fd p phase) (ph-pages))
+          (set (fd p page) 0)
+          (if (<= np 0) (set (fd p phase) (ph-finish)))
+          (return (fd p phase))))
+    (if (== ph (ph-asset))
+      (do (set (fd p phase) (ph-pages))
+          (set (fd p page) 0)
+          (if (<= np 0) (set (fd p phase) (ph-finish)))
+          (return (fd p phase))))
+    (if (== ph (ph-pages))
+      (do (set (fd p page) (+ (fd p page) 1))
+          (if (>= (fd p page) np) (set (fd p phase) (ph-finish)))
+          (return (fd p phase))))
+    (if (== ph (ph-finish))
+      (do (if (!= pending 0)
+            (set (fd p phase) (ph-figures))
+            (set (fd p phase) (ph-done)))
+          (return (fd p phase))))
+    (set (fd p phase) (ph-done))
+    (return (ph-done))))
+
+;; ----------------------------------------------------------------------------------------------- the fetch planner
+
+(defn ^I32 fp-hi [^I32 n ^I32 c ^I32 r]
+  (comment "The last chunk of the window around chunk `c`: c + r, or the last chunk of the input (c + r would leave 32 bits for a one-byte chunk of a 2 GiB input).")
+  (if (> c (- (- n 1) r)) (return (- n 1)))
+  (return (+ c r)))
+
+(defn ^I32 fp-end [^I32 n ^I32 last ^I32 chunk ^I32 ln]
+  (comment "Where the run ending at chunk `last` ends: the next chunk's start, or the input's length for the last chunk.")
+  (if (== last (- n 1)) (return ln))
+  (return (* (+ last 1) chunk)))
+
+(defn ^:pub ^I32 fp-plan [^Cells pend ^Cells hint ^Cells res ^I32 chunk ^I32 ln ^I32 input ^I32 round ^:mut ^Cells out]
+  (comment "The ranges to fetch for fetch round `round` (0, 1, ...), as `input offset length` triples pushed to `out`; answers how many. `pend` and `hint` are")
+  (comment "the chunks the source missed and the chunks it was asked to expect, each in ascending order; `res` holds 1 for each resident chunk. Every seed")
+  (comment "chunk and 2^round - 1 chunks each side of it (at most 2^20 - 1), the resident ones left out; a run of consecutive chunks is one range, the")
+  (comment "last ending at `ln`. The input is `chunk` bytes to a chunk, `ln` bytes long.")
+  (if (or (<= chunk 0) (<= ln 0)) (return 0))
+  (let [^I32 n (+ (quot (- ln 1) chunk) 1)
+        ^I32 r (- (shl32 1 (pl-min round 20)) 1)
+        ^I32 na (cells-len pend)
+        ^I32 nb (cells-len hint)
+        ^:mut ^I32 ia 0
+        ^:mut ^I32 ib 0
+        ^:mut ^I32 cursor 0
+        ^:mut ^I32 open 0
+        ^:mut ^I32 first 0
+        ^:mut ^I32 last 0
+        ^:mut ^I32 k 0]
+    (while (or (< ia na) (< ib nb))
+      (let [^:mut ^I32 c 0]
+        (if (and (< ia na) (or (>= ib nb) (<= (cells-at pend ia) (cells-at hint ib))))
+          (do (set c (cells-at pend ia)) (set ia (+ ia 1)))
+          (do (set c (cells-at hint ib)) (set ib (+ ib 1))))
+        (if (and (>= c 0) (< c n))
+          (let [^I32 hi (fp-hi n c r)]
+            (set k (pl-max (pl-max 0 (- c r)) cursor))
+            (while (<= k hi)
+              (do (if (== (cells-at res k) 0)
+                    (if (and (== open 1) (== k (+ last 1)))
+                      (set last k)
+                      (do (if (== open 1)
+                            (do (cells-push out input)
+                                (cells-push out (* first chunk))
+                                (cells-push out (- (fp-end n last chunk ln) (* first chunk)))))
+                          (set open 1)
+                          (set first k)
+                          (set last k))))
+                  (set k (+ k 1))))
+            (set cursor (pl-max cursor (+ hi 1)))))))
+    (if (== open 1)
+      (do (cells-push out input)
+          (cells-push out (* first chunk))
+          (cells-push out (- (fp-end n last chunk ln) (* first chunk)))))
+    (return (quot (cells-len out) 3))))
+
+;; ----------------------------------------------------------------------------------------------- a limit breach a host caught as a panic
+
+;; `limit-breach` never returns: it panics with an English message, "the {name} limit is {limit} and this input reached {actual}. Raise it with ...", and
+;; the host that caught the panic named the error from it. That parse was one copy a host; it is here ONCE, and the NAME is the message's words joined
+;; by hyphens (`input bytes` is `input-bytes`). THIS IS INTERIM: P10.10 raises a typed payload (kind, limit, actual), which the table of limits in kin
+;; names, and this function goes with the last host that catches a message.
+(defn ^I32 lb-at [^Cells m ^I32 n ^I32 at ^I32 k ^I32 a ^I32 b ^I32 d ^I32 e]
+  (comment "1 when the first `k` of the four code points a b d e are at `at`.")
+  (if (> (+ at k) n) (return 0))
+  (if (!= (cells-at m at) a) (return 0))
+  (if (> k 1) (if (!= (cells-at m (+ at 1)) b) (return 0)))
+  (if (> k 2) (if (!= (cells-at m (+ at 2)) d) (return 0)))
+  (if (> k 3) (if (!= (cells-at m (+ at 3)) e) (return 0)))
+  (return 1))
+
+(defn ^I32 lb-limit-is [^Cells m ^I32 n ^I32 at]
+  (comment "1 when \" limit is \" starts at `at`.")
+  (if (== (lb-at m n at 4 32 108 105 109) 0) (return 0))
+  (if (== (lb-at m n (+ at 4) 4 105 116 32 105) 0) (return 0))
+  (return (lb-at m n (+ at 8) 2 115 32 0 0)))
+
+(defn ^I32 lb-reached [^Cells m ^I32 n ^I32 at]
+  (comment "1 when \" and this input reached \" starts at `at`.")
+  (if (== (lb-at m n at 4 32 97 110 100) 0) (return 0))
+  (if (== (lb-at m n (+ at 4) 4 32 116 104 105) 0) (return 0))
+  (if (== (lb-at m n (+ at 8) 4 115 32 105 110) 0) (return 0))
+  (if (== (lb-at m n (+ at 12) 4 112 117 116 32) 0) (return 0))
+  (if (== (lb-at m n (+ at 16) 4 114 101 97 99) 0) (return 0))
+  (return (lb-at m n (+ at 20) 4 104 101 100 32)))
+
+(defn ^I32 lb-num [^Cells m ^I32 n ^I32 at]
+  (comment "The number written in digits at `at`, or -1 when there is none or it does not fit 31 bits.")
+  (let [^:mut ^I32 i at
+        ^:mut ^I32 v 0]
+    (while (and (< i n) (and (>= (cells-at m i) 48) (<= (cells-at m i) 57)))
+      (let [^I32 dg (- (cells-at m i) 48)]
+        (if (or (> v 214748364) (and (== v 214748364) (> dg 7))) (return -1))
+        (set v (+ (* v 10) dg))
+        (set i (+ i 1))))
+    (if (== i at) (return -1))
+    (return v)))
+
+(defn ^I32 lb-num-end [^Cells m ^I32 n ^I32 at]
+  (comment "Where the digits at `at` end.")
+  (let [^:mut ^I32 i at]
+    (while (and (< i n) (and (>= (cells-at m i) 48) (<= (cells-at m i) 57)))
+      (set i (+ i 1)))
+    (return i)))
+
+(defn ^:pub ^I32 lb-parse [^Cells m ^Plan p]
+  (comment "`m` is a panic message as code points. When it is a limit breach: answers 1, with the limit's name in `p`'s `msg`, the limit in `err-limit` and")
+  (comment "the number reached in `err-actual`; else 0, and nothing is written.")
+  (let [^I32 n (cells-len m)
+        ^:mut ^I32 j 5
+        ^:mut ^I32 found -1]
+    (if (== (lb-at m n 0 4 116 104 101 32) 0) (return 0))
+    (while (and (< found 0) (<= (+ j 10) n))
+      (do (if (== (lb-limit-is m n j) 1) (set found j))
+          (set j (+ j 1))))
+    (if (< found 0) (return 0))
+    (let [^I32 ls (+ found 10)
+          ^I32 limit (lb-num m n ls)
+          ^I32 le (lb-num-end m n ls)]
+      (if (< limit 0) (return 0))
+      (if (== (lb-reached m n le) 0) (return 0))
+      (let [^I32 actual (lb-num m n (+ le 24))
+            ^:mut ^I32 i 4]
+        (if (< actual 0) (return 0))
+        (while (< i found)
+          (let [^I32 c (cells-at m i)]
+            (if (== c 32)
+              (text-cp (fd p msg) 45)
+              (text-cp (fd p msg) c))
+            (set i (+ i 1))))
+        (set (fd p err-limit) limit)
+        (set (fd p err-actual) actual)
+        (return 1)))))

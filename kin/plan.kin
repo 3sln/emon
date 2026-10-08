@@ -370,6 +370,37 @@
 (defn ^:pub ^I32 dq-gsha [] (return 23))
 (defn ^:pub ^I32 dq-nargs [] (return 31))
 
+;; The fields of the other requests a port fulfils, as offsets into `rq-arg` like `dq-*` (P10.8, D399): a host reads a request's cells by
+;; these names and never by a literal offset (D396 item 5).
+;; render and crop: input page dpi layer, and a crop's pixel rectangle
+(defn ^:pub ^I32 rd-input [] (return 0))
+(defn ^:pub ^I32 rd-page [] (return 1))
+(defn ^:pub ^I32 rd-dpi [] (return 2))
+(defn ^:pub ^I32 rd-layer [] (return 3))
+(defn ^:pub ^I32 rd-x [] (return 4))
+(defn ^:pub ^I32 rd-y [] (return 5))
+(defn ^:pub ^I32 rd-w [] (return 6))
+(defn ^:pub ^I32 rd-h [] (return 7))
+;; decode: the input and the span of it that holds the image, how it is encoded, and which frame
+(defn ^:pub ^I32 dc-input [] (return 0))
+(defn ^:pub ^I32 dc-offset [] (return 1))
+(defn ^:pub ^I32 dc-length [] (return 2))
+(defn ^:pub ^I32 dc-filter [] (return 3))
+(defn ^:pub ^I32 dc-frame [] (return 4))
+;; ocr: the bitmap (a request id, or a kin-made view), the page segmentation mode, the flags and the rectangle; the languages follow
+;; (`emon.ocrport` says where: `op-lang-first`)
+(defn ^:pub ^I32 oc-bitmap [] (return 0))
+(defn ^:pub ^I32 oc-psm [] (return 1))
+(defn ^:pub ^I32 oc-flags [] (return 2))
+(defn ^:pub ^I32 oc-x [] (return 3))
+(defn ^:pub ^I32 oc-y [] (return 4))
+(defn ^:pub ^I32 oc-w [] (return 5))
+(defn ^:pub ^I32 oc-h [] (return 6))
+;; bytes: the range of an input the source missed
+(defn ^:pub ^I32 bq-input [] (return 0))
+(defn ^:pub ^I32 bq-offset [] (return 1))
+(defn ^:pub ^I32 bq-length [] (return 2))
+
 ;; --------------------------------------------------------------- answers
 
 (defn ^:pub ^I32 an-status [^Cells c ^I32 at] (return (cells-at c (+ at 3))))

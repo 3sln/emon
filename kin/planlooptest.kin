@@ -1,0 +1,836 @@
+;; Laws for `emon.planloop` (P10.8, D396, D399): the plan machine the hosts' loops were. One attempt's accounting; the two named limits; the requests
+;; a unit wrote, checked and sorted by id; the answered set; the answers of a round, in any order of arrival and appended in id order; the transcript's
+;; entries; the `bytes` round; the fetch planner; the schedule; the routing; every name the loop reports.
+(ns emon.planlooptest
+  (:require [emon.lang :refer [I32 Cells Text Blob fd]]
+            [emon.planctx :refer [Plan]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text new-ctx test-t TestT Str text-blob]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop blob-len blob-u8]]
+            [emon.plan :refer [us-done us-requests us-need-bytes pk-render pk-decode pk-ocr pk-bytes pk-crop pk-decode-img ps-ok ps-failed ps-unsupported
+                               rq-render rq-crop rq-decode rq-ocr rq-ocr-end rq-bytes rq-arg rq-decode-img an-render an-decode an-fail an-bytes an-status
+                               rec-count rec-find]]
+            [emon.planloop :refer [pe-none pe-max-rounds pe-fetch-rounds pe-transcript-miss pe-transcript-bad pe-fulfil-failed pe-unit-failed
+                                   pe-bad-record pe-stalled pe-emit-name
+                                   ph-doc ph-asset ph-pages ph-finish ph-figures ph-done ph-emit-name
+                                   ds-class ds-known ds-emit-name ds-unsupported-format ds-no-startxref ds-bad-xref ds-no-root ds-no-pages ds-encrypted
+                                   ds-password-required ds-password-incorrect ds-encryption-unsupported ds-undecodable ds-unsupported-image
+                                   ds-content-failed ds-unreadable
+                                   act-done act-requests act-fetch act-miss act-error pp-ocr pp-render
+                                   rt-none rt-decode rt-decode-img rt-ocr rt-render rt-unsupported rt-emit-name
+                                   pl-reset pl-attempt pl-after pl-miss-round pl-fetch pl-offer pl-has pl-owed pl-commit pl-fold en-next pl-route
+                                   pl-unsupported pl-spans tx-round tx-req tx-ans tx-next fp-plan lb-parse]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------------ fixtures
+
+(defn ^I32 t-init [^Plan p ^I32 max-rounds ^I32 fetch-limit]
+  (comment "A fresh plan with the two limits set, as a host sets them from its Config.")
+  (set (fd p max-rounds) max-rounds)
+  (set (fd p fetch-limit) fetch-limit)
+  (return 0))
+
+(defn ^I32 t-nth-id [^Cells c ^I32 k]
+  (comment "The id of the k-th record of `c`.")
+  (let [^:mut ^I32 at 0
+        ^:mut ^I32 i 0]
+    (while (< i k)
+      (do (set at (+ at (cells-at c at)))
+          (set i (+ i 1))))
+    (return (cells-at c (+ at 2)))))
+
+(defn ^I32 t-nth-kind [^Cells c ^I32 k]
+  (let [^:mut ^I32 at 0
+        ^:mut ^I32 i 0]
+    (while (< i k)
+      (do (set at (+ at (cells-at c at)))
+          (set i (+ i 1))))
+    (return (cells-at c (+ at 1)))))
+
+(defn ^I32 t-nth-status [^Cells c ^I32 k]
+  (let [^:mut ^I32 at 0
+        ^:mut ^I32 i 0]
+    (while (< i k)
+      (do (set at (+ at (cells-at c at)))
+          (set i (+ i 1))))
+    (return (an-status c at))))
+
+(defn ^I32 t-tx-req-id [^Cells tx ^I32 at]
+  (let [^I32 r (tx-req tx at)]
+    (return (cells-at tx (+ r 2)))))
+
+(defn ^I32 t-tx-ans-id [^Cells tx ^I32 at]
+  (let [^I32 a (tx-ans tx at)]
+    (return (cells-at tx (+ a 2)))))
+
+(defn ^I32 t-tx-ans-status [^Cells tx ^I32 at]
+  (let [^I32 a (tx-ans tx at)]
+    (return (an-status tx a))))
+
+(defn ^I32 t-render [^Plan p ^I32 id]
+  (rq-render (fd p rq) id 0 id 144 0)
+  (return 0))
+
+(defn ^I32 t-ocr [^Plan p ^I32 id]
+  (let [^I32 at (rq-ocr (fd p rq) id 1 6 0 0 0 0 0)]
+    (rq-ocr-end (fd p rq) at)
+    (return 0)))
+
+(defn ^I32 t-answer [^Plan p ^I32 id]
+  (comment "Offer a render answer to request `id`.")
+  (cells-drop (fd p cur) 0)
+  (an-render (fd p cur) id 10 20 3 144)
+  (return (pl-offer p)))
+
+(defn ^I32 t-err [^TestT emon-t ^Plan p ^I32 code ^Str name ^Str msg]
+  (comment "The error the machine holds: its name by `pe`, and its sentence.")
+  (let [^Text t (new-text)]
+    (assert-eq (fd p err) code name)
+    (assert-eq (pe-emit-name t (fd p err)) 1 name)
+    (assert-text (fd p msg) msg name)
+    (return 0)))
+
+;; ------------------------------------------------------------------ one attempt
+
+(deftest test-a-unit-that-is-done-asks-for-nothing
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (assert-eq (pl-after p (us-done)) (act-done) "done")
+    (assert-eq (fd p attempts) 1 "one attempt")
+    (assert-eq (fd p rounds) 0 "no round")))
+
+(deftest test-a-unit-that-is-done-and-left-requests-is-refused
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 1)
+    (assert-eq (pl-after p (us-done)) (act-error) "an error")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "the unit is done and left requests")))
+
+(deftest test-a-status-that-is-none-of-the-three-is-the-units-failure
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (assert-eq (pl-after p 9) (act-error) "an error")
+    (assert-eq (fd p err-actual) 9 "the status")
+    (t-err (test-t) p (pe-unit-failed) "unit-failed" "status 9")))
+
+(deftest test-requests-are-a-round-and-come-back-sorted-by-id
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 7)
+    (t-ocr p 3)
+    (t-render p 5)
+    (assert-eq (pl-after p (us-requests)) (act-requests) "a round")
+    (assert-eq (rec-count (fd p reqs)) 3 "three requests")
+    (assert-eq (cells-at (fd p reqs) 2) 3 "the OCR of id 3 first")
+    (assert-eq (cells-at (fd p reqs) 1) (pk-ocr) "its kind")
+    (assert-eq (t-nth-id (fd p reqs) 1) 5 "then 5")
+    (assert-eq (t-nth-id (fd p reqs) 2) 7 "then 7")
+    (assert-eq (t-nth-kind (fd p reqs) 1) (pk-render) "5 is a render")
+    (assert-eq (fd p rounds) 1 "one round")
+    (assert-eq (fd p requests) 3 "three requests counted")
+    (assert-eq (fd p round) 0 "round 0")
+    (assert-eq (fd p outk) 2 "a round of requests is outstanding")))
+
+(deftest test-a-request-the-unit-wrote-twice-is-refused
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 4)
+    (t-render p 4)
+    (assert-eq (pl-after p (us-requests)) (act-error) "an error")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "request id 4 is used twice")))
+
+(deftest test-a-request-that-was-answered-is-not-asked-again
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 4)
+    (assert-eq (pl-after p (us-requests)) (act-requests) "a round")
+    (assert-eq (t-answer p 4) 0 "answered")
+    (assert-eq (pl-commit p) 0 "committed")
+    (pl-attempt p)
+    (t-render p 4)
+    (assert-eq (pl-after p (us-requests)) (act-error) "an error")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "request id 4 is used twice")))
+
+(deftest test-a-request-must-be-well-formed
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (cells-push (fd p rq) 2)
+    (cells-push (fd p rq) 1)
+    (assert-eq (pl-after p (us-requests)) (act-error) "a short record")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "a request at 0 has length 2")))
+
+(deftest test-a-request-must-be-well-formed-2
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (rq-bytes (fd p rq) 2 0 0 10)
+    (assert-eq (pl-after p (us-requests)) (act-error) "bytes is the host's")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "request 2 has kind 4, which kin may not ask for")))
+
+(deftest test-a-request-must-be-well-formed-3
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 0)
+    (assert-eq (pl-after p (us-requests)) (act-error) "id 0")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "a request has id 0")))
+
+(deftest test-a-request-must-be-well-formed-4
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (assert-eq (pl-after p (us-requests)) (act-error) "no request")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "the unit asked for requests and wrote none")))
+
+(deftest test-every-kind-kin-may-ask-for-is-accepted
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (rq-render (fd p rq) 1 0 0 144 0)
+    (rq-crop (fd p rq) 2 0 0 144 0 1 2 3 4)
+    (rq-decode (fd p rq) 3 0 10 20 0 0)
+    (t-ocr p 4)
+    (assert-eq (pl-after p (us-requests)) (act-requests) "render crop decode ocr")
+    (assert-eq (rec-count (fd p reqs)) 4 "four")))
+
+(deftest test-max-rounds-is-a-named-limit
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 1 24)
+    (pl-attempt p)
+    (t-render p 1)
+    (assert-eq (pl-after p (us-requests)) (act-requests) "the first round")
+    (t-answer p 1)
+    (pl-commit p)
+    (pl-attempt p)
+    (t-render p 2)
+    (assert-eq (pl-after p (us-requests)) (act-error) "the second is over the limit")
+    (assert-eq (fd p err-limit) 1 "the limit")
+    (assert-eq (fd p err-actual) 2 "what it reached")
+    (t-err (test-t) p (pe-max-rounds) "max-rounds" "the limit is 1 and this run reached 2")))
+
+(deftest test-a-miss-is-not-a-round-and-fetch-rounds-is-a-named-limit
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 2)
+    (pl-attempt p)
+    (assert-eq (pl-after p (us-need-bytes)) (act-miss) "the first miss")
+    (assert-eq (pl-miss-round p) 0 "fetch round 0")
+    (pl-attempt p)
+    (assert-eq (pl-after p (us-need-bytes)) (act-miss) "the second")
+    (assert-eq (pl-miss-round p) 1 "fetch round 1")
+    (pl-attempt p)
+    (assert-eq (pl-after p (us-need-bytes)) (act-error) "the third is over the limit")
+    (assert-eq (fd p rounds) 0 "no round was counted")
+    (assert-eq (fd p fetch-rounds) 3 "three fetch rounds")
+    (assert-eq (fd p err-limit) 2 "the limit")
+    (assert-eq (fd p err-actual) 3 "what it reached")
+    (t-err (test-t) p (pe-fetch-rounds) "fetch-rounds" "the limit is 2 and this run reached 3")))
+
+(deftest test-a-round-of-requests-starts-the-misses-over
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 2)
+    (pl-attempt p)
+    (pl-after p (us-need-bytes))
+    (pl-attempt p)
+    (pl-after p (us-need-bytes))
+    (pl-attempt p)
+    (t-render p 1)
+    (assert-eq (pl-after p (us-requests)) (act-requests) "a round")
+    (t-answer p 1)
+    (pl-commit p)
+    (pl-attempt p)
+    (assert-eq (pl-after p (us-need-bytes)) (act-miss) "the count started over")
+    (assert-eq (pl-miss-round p) 0 "fetch round 0")
+    (assert-eq (fd p fetch-rounds) 3 "though all are counted")))
+
+;; ------------------------------------------------------------------ the bytes round
+
+(deftest test-the-ranges-become-bytes-requests-with-negative-ids
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (pl-after p (us-need-bytes))
+    (cells-push (fd p cand) 0)
+    (cells-push (fd p cand) 1000)
+    (cells-push (fd p cand) 500)
+    (cells-push (fd p cand) 0)
+    (cells-push (fd p cand) 4000)
+    (cells-push (fd p cand) 64)
+    (assert-eq (pl-fetch p) (act-fetch) "a fetch round")
+    (assert-eq (rec-count (fd p reqs)) 2 "two requests")
+    (assert-eq (cells-at (fd p reqs) 0) 6 "six cells")
+    (assert-eq (cells-at (fd p reqs) 1) (pk-bytes) "bytes")
+    (assert-eq (cells-at (fd p reqs) 2) -1 "id -1")
+    (assert-eq (rq-arg (fd p reqs) 0 1) 1000 "offset")
+    (assert-eq (rq-arg (fd p reqs) 0 2) 500 "length")
+    (assert-eq (cells-at (fd p reqs) 8) -2 "id -2")
+    (assert-eq (fd p bytes-requests) 2 "two counted")
+    (assert-eq (cells-len (fd p cand)) 0 "the ranges are taken")
+    (pl-attempt p)
+    (pl-after p (us-need-bytes))
+    (cells-push (fd p cand) 0)
+    (cells-push (fd p cand) 0)
+    (cells-push (fd p cand) 8)
+    (pl-fetch p)
+    (assert-eq (cells-at (fd p reqs) 2) -3 "ids go on across rounds")))
+
+(deftest test-a-miss-with-nothing-missed-is-stalled
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (pl-after p (us-need-bytes))
+    (assert-eq (pl-fetch p) (act-error) "stalled")
+    (t-err (test-t) p (pe-stalled) "need-bytes-stalled" "the unit missed and the source reports nothing missed")))
+
+(deftest test-a-bytes-round-keeps-nothing-and-a-failed-one-is-an-error
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (pl-after p (us-need-bytes))
+    (cells-push (fd p cand) 0)
+    (cells-push (fd p cand) 0)
+    (cells-push (fd p cand) 8)
+    (pl-fetch p)
+    (cells-drop (fd p cur) 0)
+    (an-bytes (fd p cur) -1 0 8)
+    (assert-eq (pl-offer p) 0 "taken")
+    (assert-eq (pl-commit p) 0 "committed")
+    (assert-eq (cells-len (fd p ans)) 0 "a bytes answer is not an answer of the unit")
+    (assert-eq (cells-len (fd p tx)) 0 "and is not transcribed")
+    (assert-eq (fd p outk) 0 "the round is over")))
+
+(deftest test-a-bytes-round-keeps-nothing-and-a-failed-one-is-an-error-2
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (pl-after p (us-need-bytes))
+    (cells-push (fd p cand) 0)
+    (cells-push (fd p cand) 0)
+    (cells-push (fd p cand) 8)
+    (pl-fetch p)
+    (cells-drop (fd p cur) 0)
+    (an-fail (fd p cur) (pk-bytes) -1 (ps-failed))
+    (pl-offer p)
+    (assert-eq (pl-commit p) (act-error) "a failed fetch")
+    (t-err (test-t) p (pe-fulfil-failed) "fulfil-failed" "fetching bytes: status 1")))
+
+;; ------------------------------------------------------------------ the answers of a round
+
+(deftest test-answers-in-any-order-are-appended-in-id-order
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 9)
+    (t-render p 2)
+    (t-render p 6)
+    (pl-after p (us-requests))
+    (assert-eq (pl-owed p) 3 "three owed")
+    (assert-eq (t-answer p 6) 0 "6 first")
+    (assert-eq (pl-has p 6) 1 "6 is in")
+    (assert-eq (pl-has p 2) 0 "2 is not")
+    (assert-eq (pl-owed p) 2 "two owed")
+    (assert-eq (t-answer p 9) 0 "then 9")
+    (assert-eq (t-answer p 2) 0 "then 2")
+    (assert-eq (pl-owed p) 0 "none owed")
+    (assert-eq (pl-commit p) 0 "committed")
+    (assert-eq (rec-count (fd p ans)) 3 "three answers")
+    (assert-eq (cells-at (fd p ans) 2) 2 "id 2 first")
+    (assert-eq (t-nth-id (fd p ans) 1) 6 "then 6")
+    (assert-eq (t-nth-id (fd p ans) 2) 9 "then 9")
+    (assert-eq (cells-len (fd p reqs)) 0 "the round is over")))
+
+(deftest test-the-transcript-has-an-entry-per-answer-in-id-order
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 5)
+    (t-ocr p 1)
+    (pl-after p (us-requests))
+    (t-answer p 5)
+    (cells-drop (fd p cur) 0)
+    (an-fail (fd p cur) (pk-ocr) 1 (ps-unsupported))
+    (pl-offer p)
+    (pl-commit p)
+    (assert-eq (tx-round (fd p tx) 0) 0 "round 0")
+    (assert-eq (t-tx-req-id (fd p tx) 0) 1 "the OCR of id 1 first")
+    (assert-eq (t-tx-ans-id (fd p tx) 0) 1 "and its answer")
+    (assert-eq (t-tx-ans-status (fd p tx) 0) (ps-unsupported) "unsupported")
+    (let [^I32 nxt (tx-next (fd p tx) 0)]
+      (assert-eq (tx-round (fd p tx) nxt) 0 "round 0 again")
+      (assert-eq (t-tx-req-id (fd p tx) nxt) 5 "then the render of 5")
+      (assert-eq (t-tx-ans-status (fd p tx) nxt) (ps-ok) "ok")
+      (assert-eq (tx-next (fd p tx) nxt) (cells-len (fd p tx)) "and that is all"))))
+
+(deftest test-a-later-round-is-numbered-in-the-transcript
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 1)
+    (pl-after p (us-requests))
+    (t-answer p 1)
+    (pl-commit p)
+    (cells-drop (fd p tx) 0)
+    (pl-attempt p)
+    (t-render p 2)
+    (pl-after p (us-requests))
+    (t-answer p 2)
+    (pl-commit p)
+    (assert-eq (tx-round (fd p tx) 0) 1 "the second round")))
+
+(deftest test-an-answer-must-answer-what-was-asked
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 3)
+    (pl-after p (us-requests))
+    (assert-eq (t-answer p 4) (act-error) "nothing asked")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 4 (kind 1) answers nothing asked")))
+
+(deftest test-an-answer-must-answer-what-was-asked-2
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 3)
+    (pl-after p (us-requests))
+    (cells-drop (fd p cur) 0)
+    (an-fail (fd p cur) (pk-ocr) 3 (ps-failed))
+    (assert-eq (pl-offer p) (act-error) "the kind differs")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 3 (kind 3) answers nothing asked")))
+
+(deftest test-an-answer-must-answer-what-was-asked-3
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 3)
+    (pl-after p (us-requests))
+    (assert-eq (t-answer p 3) 0 "once")
+    (assert-eq (t-answer p 3) (act-error) "twice")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer for request 3 (kind 1) answers nothing asked")))
+
+(deftest test-an-answer-must-answer-what-was-asked-4
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 3)
+    (pl-after p (us-requests))
+    (cells-drop (fd p cur) 0)
+    (cells-push (fd p cur) 9)
+    (cells-push (fd p cur) 1)
+    (cells-push (fd p cur) 3)
+    (cells-push (fd p cur) 0)
+    (assert-eq (pl-offer p) (act-error) "a record whose length is not its cells")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer has length 9 in a record of 4")))
+
+(deftest test-an-answer-must-answer-what-was-asked-5
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 3)
+    (pl-after p (us-requests))
+    (cells-drop (fd p cur) 0)
+    (cells-push (fd p cur) 3)
+    (cells-push (fd p cur) 1)
+    (cells-push (fd p cur) 3)
+    (assert-eq (pl-offer p) (act-error) "a record too short to have a status")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "an answer has length 3 in a record of 3")))
+
+(deftest test-a-round-that-is-not-fully-answered-is-not-committed
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (t-render p 1)
+    (t-render p 2)
+    (pl-after p (us-requests))
+    (t-answer p 1)
+    (assert-eq (pl-commit p) (act-error) "one is owed")
+    (t-err (test-t) p (pe-bad-record) "bad-record" "the round is not fully answered")))
+
+;; ------------------------------------------------------------------ the schedule and the totals
+
+(deftest test-the-schedule-for-a-pdf-with-assets-and-figures
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (assert-eq (fd p phase) (ph-doc) "it starts at the document pass")
+    (assert-eq (en-next p 1 1 0 0) (ph-asset) "a PDF with assets: the asset unit")
+    (assert-eq (en-next p 1 1 0 3) (ph-pages) "then the pages")
+    (assert-eq (fd p page) 0 "page 0")
+    (assert-eq (en-next p 1 1 0 3) (ph-pages) "page 1 of 3")
+    (assert-eq (fd p page) 1 "page 1")
+    (assert-eq (en-next p 1 1 0 3) (ph-pages) "page 2 of 3")
+    (assert-eq (en-next p 1 1 0 3) (ph-finish) "the document unit")
+    (assert-eq (en-next p 1 1 1 3) (ph-figures) "figures are pending")
+    (assert-eq (en-next p 1 1 1 3) (ph-done) "and then it is done")
+    (assert-eq (en-next p 1 1 1 3) (ph-done) "it stays done")))
+
+(deftest test-the-schedule-without-assets-and-for-an-image
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (assert-eq (en-next p 1 0 0 2) (ph-pages) "a PDF with no assets: the pages")
+    (assert-eq (en-next p 1 0 0 2) (ph-pages) "page 1")
+    (assert-eq (en-next p 1 0 0 2) (ph-finish) "the document unit")
+    (assert-eq (en-next p 1 0 0 2) (ph-done) "nothing pending")))
+
+(deftest test-the-schedule-without-assets-and-for-an-image-2
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (assert-eq (en-next p 2 1 0 1) (ph-pages) "an image has no asset unit")
+    (assert-eq (en-next p 2 1 0 1) (ph-finish) "the document unit")))
+
+(deftest test-the-schedule-without-assets-and-for-an-image-3
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (assert-eq (en-next p 1 0 0 0) (ph-finish) "a document of no pages goes to its document unit")))
+
+(deftest test-the-schedule-without-assets-and-for-an-image-4
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (assert-eq (en-next p 0 0 0 0) (ph-done) "an intake builds no document")))
+
+(deftest test-a-finished-unit-is-folded-into-the-totals
+  (let [^Plan p (new-ctx Plan)]
+    (t-init p 5 24)
+    (pl-attempt p)
+    (pl-after p (us-need-bytes))
+    (pl-attempt p)
+    (t-render p 1)
+    (t-render p 2)
+    (pl-after p (us-requests))
+    (set (fd p bytes-requests) 4)
+    (pl-fold p)
+    (assert-eq (fd p t-attempts) 2 "attempts")
+    (assert-eq (fd p t-fetch-rounds) 1 "fetch rounds")
+    (assert-eq (fd p t-bytes-requests) 4 "bytes requests")
+    (assert-eq (fd p t-requests) 2 "requests")
+    (assert-eq (fd p attempts) 0 "the unit is reset")
+    (assert-eq (cells-len (fd p ans)) 0 "its answers are gone")
+    (en-next p 1 1 0 2)
+    (pl-attempt p)
+    (t-render p 3)
+    (pl-after p (us-requests))
+    (pl-fold p)
+    (assert-eq (fd p t-attempts) 3 "the asset unit counts its attempts too")
+    (assert-eq (fd p t-requests) 3 "and its requests")
+    (en-next p 1 1 0 2)
+    (pl-attempt p)
+    (t-render p 4)
+    (t-render p 5)
+    (pl-after p (us-requests))
+    (pl-fold p)
+    (assert-eq (fd p t-attempts) 3 "a page unit does not count its attempts")
+    (assert-eq (fd p t-requests) 5 "but its requests")
+    (assert-eq (cells-len (fd p pgq)) 1 "it keeps the requests it made")
+    (assert-eq (cells-at (fd p pgq) 0) 2 "two")
+    (assert-eq (cells-at (fd p pgr) 0) 1 "in one round")))
+
+;; ------------------------------------------------------------------ routing
+
+(deftest test-the-ports-a-request-goes-to
+  (assert-eq (pl-route (pk-decode) 0) (rt-decode) "decode: the host's codecs")
+  (assert-eq (pl-route (pk-decode-img) 0) (rt-decode-img) "decode-img: the host's codecs")
+  (assert-eq (pl-route (pk-ocr) 0) (rt-unsupported) "ocr with no engine")
+  (assert-eq (pl-route (pk-ocr) (pp-ocr)) (rt-ocr) "ocr with one")
+  (assert-eq (pl-route (pk-ocr) (pp-render)) (rt-unsupported) "a renderer is not an engine")
+  (assert-eq (pl-route (pk-render) 0) (rt-unsupported) "render with no renderer")
+  (assert-eq (pl-route (pk-crop) 0) (rt-unsupported) "crop with no renderer")
+  (assert-eq (pl-route (pk-render) (pp-render)) (rt-render) "render with one")
+  (assert-eq (pl-route (pk-crop) (+ (pp-render) (pp-ocr))) (rt-render) "crop with both")
+  (assert-eq (pl-route (pk-bytes) 3) (rt-none) "bytes is the loop's own")
+  (assert-eq (pl-route 77 3) (rt-none) "no such kind"))
+
+(deftest test-an-unsupported-answer-is-a-failure-of-that-kind
+  (let [^Cells c (new-cells)]
+    (pl-unsupported c (pk-ocr) 17)
+    (assert-eq (cells-at c 0) 4 "four cells")
+    (assert-eq (cells-at c 1) (pk-ocr) "the kind")
+    (assert-eq (cells-at c 2) 17 "the id")
+    (assert-eq (an-status c 0) (ps-unsupported) "unsupported")))
+
+(deftest test-the-spans-of-an-input-a-request-names
+  (let [^Cells c (new-cells)
+        ^Cells o (new-cells)]
+    (rq-decode c 1 0 100 50 0 0)
+    (rq-decode c 2 3 100 50 0 0)
+    (rq-decode c 3 0 -1 50 0 0)
+    (rq-decode c 4 0 100 0 0 0)
+    (rq-render c 5 0 0 144 0)
+    (assert-eq (pl-spans c 0 0 o) 1 "a decode of this input")
+    (assert-eq (cells-at o 0) 100 "its offset")
+    (assert-eq (cells-at o 1) 50 "its length")
+    (assert-eq (pl-spans c 8 0 o) 0 "a decode of another input")
+    (assert-eq (pl-spans c 16 0 o) 0 "a decode at a negative offset")
+    (assert-eq (pl-spans c 24 0 o) 0 "a decode of no bytes")
+    (assert-eq (pl-spans c 32 0 o) 0 "a render names no bytes")
+    (assert-eq (cells-len o) 2 "nothing else was written")))
+
+(defn ^I32 t-zeros [^Cells c ^I32 n]
+  (comment "Append n zeros: the words of two SHA-256s, or a residency map with nothing resident.")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (cells-push c 0) (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-a-decode-imgs-codestream-and-globals-are-spans-when-they-are-the-inputs
+  (let [^Cells c (new-cells)
+        ^Cells o (new-cells)
+        ^Cells sha (new-cells)]
+    (t-zeros sha 16)
+    (rq-decode-img c 1 2 8 8 3 8 0 0 0 0 0 300 40 sha 0 0 500 20 8)
+    (assert-eq (pl-spans c 0 0 o) 2 "the data and the globals")
+    (assert-eq (cells-at o 0) 300 "the data's offset")
+    (assert-eq (cells-at o 1) 40 "its length")
+    (assert-eq (cells-at o 2) 500 "the globals' offset")
+    (assert-eq (cells-at o 3) 20 "its length")))
+
+(deftest test-a-decode-imgs-codestream-and-globals-are-spans-when-they-are-the-inputs-2
+  (let [^Cells c (new-cells)
+        ^Cells o (new-cells)
+        ^Cells sha (new-cells)]
+    (t-zeros sha 16)
+    (rq-decode-img c 1 2 8 8 3 8 0 0 0 0 -2 0 40 sha 0 -1 0 0 8)
+    (assert-eq (pl-spans c 0 0 o) 0 "a payload and no globals name no bytes of the input")))
+
+;; ------------------------------------------------------------------ the fetch planner
+
+(defn ^I32 t-plan-fetch [^Cells pend ^Cells hint ^Cells res ^I32 chunk ^I32 total ^I32 round ^Cells out]
+  (return (fp-plan pend hint res chunk total 7 round out)))
+
+(defn ^I32 t-range [^TestT emon-t ^Cells out ^I32 k ^I32 off ^I32 ln ^Str msg]
+  (comment "Range k of the plan is `off` and `ln` long, of input 7.")
+  (assert-eq (cells-at out (* k 3)) 7 msg)
+  (assert-eq (cells-at out (+ (* k 3) 1)) off msg)
+  (assert-eq (cells-at out (+ (* k 3) 2)) ln msg)
+  (return 0))
+
+(deftest test-round-0-fetches-the-missed-chunk-and-only-it
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (cells-push pend 3)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 0 out) 1 "one range")
+    (t-range (test-t) out 0 3000 1000 "chunk 3")))
+
+(deftest test-round-1-takes-a-chunk-each-side
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (cells-push pend 3)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 1 out) 1 "one range")
+    (t-range (test-t) out 0 2000 3000 "chunks 2 to 4")))
+
+(deftest test-resident-chunks-are-left-out-and-split-a-run
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (cells-push pend 5)
+    (cells-set res 5 1)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 1 out) 2 "two ranges around the resident chunk")
+    (t-range (test-t) out 0 4000 1000 "chunk 4")
+    (t-range (test-t) out 1 6000 1000 "chunk 6")
+    (cells-drop out 0)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 2 out) 2 "round 2 reaches three chunks each side")
+    (t-range (test-t) out 0 2000 3000 "chunks 2 to 4")
+    (t-range (test-t) out 1 6000 3000 "chunks 6 to 8")))
+
+(deftest test-windows-that-meet-are-one-range-and-the-last-chunk-ends-at-the-length
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (cells-push pend 3)
+    (cells-push pend 5)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 1 out) 1 "2 to 4 and 4 to 6 are 2 to 6")
+    (t-range (test-t) out 0 2000 5000 "chunks 2 to 6")))
+
+(deftest test-windows-that-meet-are-one-range-and-the-last-chunk-ends-at-the-length-2
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (cells-push pend 1)
+    (cells-push pend 8)
+    (assert-eq (t-plan-fetch pend hint res 1000 9500 1 out) 2 "two windows")
+    (t-range (test-t) out 0 0 3000 "chunks 0 to 2")
+    (t-range (test-t) out 1 7000 2500 "chunks 7 to 9, the last cut at the length")))
+
+(deftest test-hinted-chunks-are-seeds-too-and-the-two-lists-merge
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (cells-push pend 1)
+    (cells-push pend 6)
+    (cells-push hint 4)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 0 out) 3 "1, 4 and 6")
+    (t-range (test-t) out 0 1000 1000 "chunk 1")
+    (t-range (test-t) out 1 4000 1000 "chunk 4")
+    (t-range (test-t) out 2 6000 1000 "chunk 6")
+    (cells-drop out 0)
+    (assert-eq (t-plan-fetch hint pend res 1000 10000 0 out) 3 "the lists are interchangeable")
+    (t-range (test-t) out 1 4000 1000 "chunk 4 still second")))
+
+(deftest test-a-seed-twice-is-planned-once
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (cells-push pend 4)
+    (cells-push hint 4)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 0 out) 1 "once")
+    (t-range (test-t) out 0 4000 1000 "chunk 4")))
+
+(deftest test-the-window-is-at-most-2-to-the-20-minus-1-chunks-and-stays-inside-the-input
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (cells-push pend 3)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 30 out) 1 "one range")
+    (t-range (test-t) out 0 0 10000 "the whole input")))
+
+(deftest test-no-seed-or-a-seed-out-of-range-plans-nothing
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (t-zeros res 10)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 0 out) 0 "no seed")
+    (cells-push pend 10)
+    (cells-push pend 99)
+    (assert-eq (t-plan-fetch pend hint res 1000 10000 0 out) 0 "chunks the input does not have")
+    (assert-eq (t-plan-fetch pend hint res 1000 0 0 out) 0 "an empty input")
+    (assert-eq (cells-len out) 0 "nothing written")))
+
+(deftest test-a-window-near-the-top-of-a-huge-input-does-not-overflow
+  (comment "A one-byte chunk of a 2 GiB input: the chunk index plus the window would leave 32 bits.")
+  (let [^Cells pend (new-cells)
+        ^Cells hint (new-cells)
+        ^Cells out (new-cells)
+        ^Cells res (new-cells)]
+    (assert-eq (fp-plan pend hint res 1 2147483647 7 0 out) 0 "no seed, and no map is read")))
+
+;; ------------------------------------------------------------------ the names
+
+(defn ^I32 t-name [^TestT emon-t ^Str want ^I32 ok ^Text t]
+  (assert-eq ok 1 want)
+  (assert-text t want want)
+  (return 0))
+
+(deftest test-the-loops-errors-are-named-by-pe
+  (let [^Text a (new-text) ^Text b (new-text) ^Text c (new-text) ^Text d (new-text)
+        ^Text e (new-text) ^Text f (new-text) ^Text g (new-text) ^Text h (new-text) ^Text z (new-text)]
+    (t-name (test-t) "none" (pe-emit-name a (pe-none)) a)
+    (t-name (test-t) "max-rounds" (pe-emit-name b (pe-max-rounds)) b)
+    (t-name (test-t) "fetch-rounds" (pe-emit-name c (pe-fetch-rounds)) c)
+    (t-name (test-t) "transcript-miss" (pe-emit-name d (pe-transcript-miss)) d)
+    (t-name (test-t) "transcript-bad" (pe-emit-name e (pe-transcript-bad)) e)
+    (t-name (test-t) "fulfil-failed" (pe-emit-name f (pe-fulfil-failed)) f)
+    (t-name (test-t) "unit-failed" (pe-emit-name g (pe-unit-failed)) g)
+    (t-name (test-t) "bad-record" (pe-emit-name h (pe-bad-record)) h)
+    (assert-eq (pe-emit-name z 99) 0 "an unknown code writes nothing")))
+
+(deftest test-the-stalled-error-and-the-phases-are-named
+  (let [^Text a (new-text) ^Text b (new-text) ^Text c (new-text) ^Text d (new-text) ^Text e (new-text) ^Text f (new-text) ^Text g (new-text)]
+    (t-name (test-t) "need-bytes-stalled" (pe-emit-name a (pe-stalled)) a)
+    (t-name (test-t) "doc" (ph-emit-name b (ph-doc)) b)
+    (t-name (test-t) "asset" (ph-emit-name c (ph-asset)) c)
+    (t-name (test-t) "pages" (ph-emit-name d (ph-pages)) d)
+    (t-name (test-t) "finish" (ph-emit-name e (ph-finish)) e)
+    (t-name (test-t) "figures" (ph-emit-name f (ph-figures)) f)
+    (t-name (test-t) "finished" (ph-emit-name g (ph-done)) g)))
+
+(deftest test-a-documents-status-is-named-and-has-a-class
+  (let [^Text a (new-text) ^Text b (new-text) ^Text c (new-text) ^Text d (new-text) ^Text e (new-text) ^Text f (new-text)]
+    (t-name (test-t) "no-startxref" (ds-emit-name a (ds-no-startxref)) a)
+    (t-name (test-t) "bad-xref" (ds-emit-name b (ds-bad-xref)) b)
+    (t-name (test-t) "no-root" (ds-emit-name c (ds-no-root)) c)
+    (t-name (test-t) "no-pages" (ds-emit-name d (ds-no-pages)) d)
+    (t-name (test-t) "encrypted" (ds-emit-name e (ds-encrypted)) e)
+    (t-name (test-t) "unreadable" (ds-emit-name f (ds-unreadable)) f))
+  (let [^Text g (new-text) ^Text h (new-text) ^Text i (new-text) ^Text j (new-text) ^Text k (new-text) ^Text l (new-text)]
+    (t-name (test-t) "undecodable" (ds-emit-name g (ds-undecodable)) g)
+    (t-name (test-t) "unsupported-image" (ds-emit-name h (ds-unsupported-image)) h)
+    (t-name (test-t) "content-failed" (ds-emit-name i (ds-content-failed)) i)
+    (t-name (test-t) "unsupported-format" (ds-emit-name j (ds-unsupported-format)) j)
+    (t-name (test-t) "password-required" (ds-emit-name k (ds-password-required)) k)
+    (t-name (test-t) "password-incorrect" (ds-emit-name l (ds-password-incorrect)) l))
+  (assert-eq (ds-class (ds-unsupported-format)) 1 "not a PDF or an image")
+  (assert-eq (ds-class (ds-password-required)) 2 "needs a password")
+  (assert-eq (ds-class (ds-password-incorrect)) 3 "wrong password")
+  (assert-eq (ds-class (ds-encryption-unsupported)) 4 "a handler emon does not read")
+  (assert-eq (ds-class (ds-no-root)) 0 "damaged")
+  (assert-eq (ds-class (ds-unreadable)) 0 "damaged")
+  (assert-eq (ds-known (ds-no-pages)) (ds-no-pages) "a named status is itself")
+  (assert-eq (ds-known 7) (ds-unreadable) "a code the table does not name is unreadable")
+  (assert-eq (ds-known 0) (ds-unreadable) "so is 0")
+  (assert-eq (ds-known 31) (ds-unreadable) "and 31"))
+
+(deftest test-the-ports-are-named-by-rt
+  (let [^Text a (new-text) ^Text b (new-text) ^Text c (new-text) ^Text d (new-text) ^Text e (new-text) ^Text f (new-text)]
+    (t-name (test-t) "none" (rt-emit-name a (rt-none)) a)
+    (t-name (test-t) "decode" (rt-emit-name b (rt-decode)) b)
+    (t-name (test-t) "decode-img" (rt-emit-name c (rt-decode-img)) c)
+    (t-name (test-t) "ocr" (rt-emit-name d (rt-ocr)) d)
+    (t-name (test-t) "render" (rt-emit-name e (rt-render)) e)
+    (t-name (test-t) "unsupported" (rt-emit-name f (rt-unsupported)) f)))
+
+;; ------------------------------------------------------------------ a limit breach caught as a panic
+
+(defn ^I32 t-cps [^Cells c ^Blob b]
+  (comment "The bytes of `b` as code points.")
+  (let [^:mut ^I32 i 0]
+    (while (< i (blob-len b))
+      (do (cells-push c (blob-u8 b i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 t-breach [^TestT emon-t ^Blob b ^Str name ^I32 limit ^I32 actual]
+  (comment "The message `b` is a limit breach: named `name`, the limit `limit`, the number reached `actual`.")
+  (let [^Cells m (new-cells)
+        ^Plan p (new-ctx Plan)]
+    (t-cps m b)
+    (assert-eq (lb-parse m p) 1 name)
+    (assert-text (fd p msg) name name)
+    (assert-eq (fd p err-limit) limit name)
+    (assert-eq (fd p err-actual) actual name)
+    (return 0)))
+
+(defn ^I32 t-not-a-breach [^TestT emon-t ^Blob b ^Str msg]
+  (let [^Cells m (new-cells)
+        ^Plan p (new-ctx Plan)]
+    (t-cps m b)
+    (assert-eq (lb-parse m p) 0 msg)
+    (assert-text (fd p msg) "" msg)
+    (return 0)))
+
+(deftest test-a-limit-breachs-message-is-named-by-its-words
+  (t-breach (test-t) (text-blob "the pixels limit is 268435456 and this input reached 300000000. Raise it with EMON_LIMIT_PIXELS, or find out why") "pixels" 268435456 300000000)
+  (t-breach (test-t) (text-blob "the input bytes limit is 100 and this input reached 2000. Raise it") "input-bytes" 100 2000)
+  (t-breach (test-t) (text-blob "the ocr requests limit is 7 and this input reached 8.") "ocr-requests" 7 8)
+  (t-breach (test-t) (text-blob "the form depth limit is 32 and this input reached 33") "form-depth" 32 33))
+
+(deftest test-anything-else-is-not-a-breach
+  (t-not-a-breach (test-t) (text-blob "index out of bounds") "a panic of the host's")
+  (t-not-a-breach (test-t) (text-blob "") "nothing")
+  (t-not-a-breach (test-t) (text-blob "the limit is 3") "the name is missing")
+  (t-not-a-breach (test-t) (text-blob "the pixels limit is x and this input reached 9") "a limit that is not a number")
+  (t-not-a-breach (test-t) (text-blob "the pixels limit is 5 and this input reached") "no number reached")
+  (t-not-a-breach (test-t) (text-blob "the pixels limit is 5 and then it reached 9") "another sentence")
+  (t-not-a-breach (test-t) (text-blob "the pixels limit is 99999999999 and this input reached 9") "a number over 31 bits")
+  (t-not-a-breach (test-t) (text-blob "pixels limit is 5 and this input reached 9") "no 'the'"))

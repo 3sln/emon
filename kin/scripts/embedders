@@ -412,7 +412,7 @@
         not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/tess\.go|_test\.go|/tests/" %) fs))]
     {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs")))
      :js (g "host/js/src" "*.js")
-     :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go")))
+     :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go") (g "host/go/planrun" "*.go")))
      :java (not-test (g "host/java/emon" "*.java"))
      :csharp (not-test (g "host/csharp/Emon" "*.cs"))}))
 

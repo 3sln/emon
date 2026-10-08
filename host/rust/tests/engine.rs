@@ -829,7 +829,7 @@ fn drive_pushed(bytes: &[u8], chunk: usize, o: &Options) -> Result<(emon::Model,
             Next::Fetch(reqs) => {
                 rounds += 1;
                 for r in reqs {
-                    give(r.arg(1), r.arg(2));
+                    give(r.field(emon::emon::plan::bq_offset()), r.field(emon::emon::plan::bq_length()));
                 }
             }
             Next::Requests(..) => panic!("a born-digital PDF with no assets asks for nothing"),

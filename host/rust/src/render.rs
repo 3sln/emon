@@ -122,11 +122,12 @@ pub fn parse_request(req: &Request) -> Result<(usize, RenderRequest), String> {
     if req.rec.len() != 3 + n {
         return Err(format!("a {} request has {} args, not {}", if crop { "crop" } else { "render" }, req.rec.len() - 3, n));
     }
-    let clip = if crop { Some(Clip { x: req.arg(4), y: req.arg(5), w: req.arg(6), h: req.arg(7) }) } else { None };
-    if req.arg(0) < 0 {
-        return Err(format!("input {}", req.arg(0)));
+    let f = |k: i32| req.field(k);
+    let clip = if crop { Some(Clip { x: f(emon::plan::rd_x()), y: f(emon::plan::rd_y()), w: f(emon::plan::rd_w()), h: f(emon::plan::rd_h()) }) } else { None };
+    if f(emon::plan::rd_input()) < 0 {
+        return Err(format!("input {}", f(emon::plan::rd_input())));
     }
-    Ok((req.arg(0) as usize, RenderRequest { page: req.arg(1), dpi: req.arg(2), layer: req.arg(3), clip }))
+    Ok((f(emon::plan::rd_input()) as usize, RenderRequest { page: f(emon::plan::rd_page()), dpi: f(emon::plan::rd_dpi()), layer: f(emon::plan::rd_layer()), clip }))
 }
 
 // The pixels of rectangle `c` of `b`, as a Bitmap of its own. Public: it is the crop law (D117), and a test

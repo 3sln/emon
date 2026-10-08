@@ -8,6 +8,8 @@
 #     .cache/emon-go/port/            host/go/port/ without `testport.go` (test support is not the library)
 #     .cache/emon-go/pngenc/          host/go/pngenc/ (links the canonical PNG encoder in; the driver's
 #                                     transcript writer needs it, the Engine does not)
+#     .cache/emon-go/planrun/         host/go/planrun/ (the driver of kin's plan machine: not in `port`, whose package the generated
+#                                     `planloop` imports)
 #     .cache/emon-go/*.go             host/go/*.go: the root package `emon` (source, model, engine, imgdec)
 #     .cache/emon-go/go.sum           host/go/go.sum: the checksums of golang.org/x/image (the ImageDecode port, D189)
 #     .cache/emon-go/cmd/emon-go/     test/driver/go/main.go, the `emon-go` binary
@@ -22,7 +24,7 @@ cd "$(dirname "$0")/../.."
 mod=.cache/emon-go
 tags=""
 if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract"; fi
-mkdir -p "$mod/port" "$mod/pngenc" "$mod/cmd/emon-go"
+mkdir -p "$mod/port" "$mod/pngenc" "$mod/planrun" "$mod/cmd/emon-go"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 
@@ -36,7 +38,7 @@ for d in gen/go/*/; do
 done
 for d in "$mod"/*/; do
   m=$(basename "$d")
-  case "$m" in port|pngenc|cmd) continue ;; esac
+  case "$m" in port|pngenc|planrun|cmd) continue ;; esac
   case " $keep " in *" $m "*) ;; *) rm -rf "$d" ;; esac
 done
 for f in host/go/port/*.go; do
@@ -44,6 +46,7 @@ for f in host/go/port/*.go; do
   put "$f" "$mod/port/$(basename "$f")"
 done
 put host/go/pngenc/pngenc.go "$mod/pngenc/pngenc.go"
+put host/go/planrun/planrun.go "$mod/planrun/planrun.go"
 for f in host/go/*.go; do put "$f" "$mod/$(basename "$f")"; done
 put test/driver/go/main.go "$mod/cmd/emon-go/main.go"
 printf 'module emon\n\ngo 1.21\n\nrequire golang.org/x/image v0.18.0\n' > "$mod/go.mod.new"

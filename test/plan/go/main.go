@@ -18,6 +18,7 @@ import (
 	"emon/evidence"
 	"emon/plan"
 	"emon/planprobe"
+	"emon/planrun"
 	_ "emon/pngenc"
 	"emon/port"
 )
@@ -92,7 +93,7 @@ func fake(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
 				px = append(px, byte(x*3+y*5+id*7))
 			}
 		}
-		plan.AnRender(c, id, w, h, 1, req.Arg(2))
+		plan.AnRender(c, id, w, h, 1, req.Field(plan.RdDpi()))
 		return answer(c, port.BitmapFromBytes(w, h, 1, px))
 	case port.PlanKindDecode:
 		w, h := int32(32), int32(16)
@@ -107,7 +108,7 @@ func fake(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
 		plan.AnDecode(c, id, w, h, 3, 7200, 0, 1)
 		return answer(c, port.BitmapFromBytes(w, h, 3, px))
 	case port.PlanKindOcr:
-		b, ok := bm[req.Arg(0)]
+		b, ok := bm[req.Field(plan.OcBitmap())]
 		if !ok {
 			plan.AnFail(c, port.PlanKindOcr, id, port.PlanStatusFailed)
 			return answer(c, nil)
@@ -234,7 +235,7 @@ func main() {
 	}
 
 	var evBuf strings.Builder
-	unit := func(an, rq *port.Cells) int32 {
+	unit := func(an, rq *port.Cells, _ *port.BitmapSet, _ *port.Buf) int32 {
 		view := base.View()
 		sh, tx, oc, tr := NewEvShared(), NewEvText(), NewEvOcr(), NewEvTrace()
 		st := planprobe.PpUnit(view, an, rq, sh.Epages, sh.Views, sh.Pts, sh.Refs, sh.Etext, sh.Feats, tx.Glyphs, tx.Words, tx.Lines, tx.Marks, tx.Fonts, tx.Paths, tx.Images, oc.Oruns, oc.Oblocks, oc.Olines, oc.Owords, oc.Osyms, oc.Oalts, tr.Inks, tr.Components, tr.Rules, tr.Prims, tr.Tlines)
@@ -255,7 +256,7 @@ func main() {
 			port.SrcCtl(base, 0, round)
 		}
 		c := port.NewCells()
-		plan.AnBytes(c, req.ID(), req.Arg(1), req.Arg(2))
+		plan.AnBytes(c, req.ID(), req.Field(plan.BqOffset()), req.Field(plan.BqLength()))
 		return answer(c, nil)
 	}}
 
@@ -264,12 +265,12 @@ func main() {
 	var err error
 	switch {
 	case recording && !useAsync:
-		stats, err = port.PlanRun(cfg, unit, &port.PlanSync{F: fake}, bytesF, misses, transcript)
+		stats, err = planrun.Run(cfg, unit, &port.PlanSync{F: fake}, bytesF, misses, transcript)
 	case recording:
 		f := &port.PlanGoroutines{F: fake, Delay: func(r port.PlanRequest) int { return int((r.ID()*7919)%13) * 300 }}
-		stats, err = port.PlanRun(cfg, unit, f, bytesF, misses, transcript)
+		stats, err = planrun.Run(cfg, unit, f, bytesF, misses, transcript)
 	default:
-		stats, err = port.PlanRun(cfg, unit, replayer, bytesF, misses, nil)
+		stats, err = planrun.Run(cfg, unit, replayer, bytesF, misses, nil)
 	}
 	if err != nil {
 		fail(err)

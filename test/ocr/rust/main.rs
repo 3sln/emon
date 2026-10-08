@@ -175,7 +175,7 @@ fn main() {
     };
     let mut bytes = SyncFulfiller::new(|req: &Request, _bm: &Bitmaps| -> Result<Answer, PlanError> {
         let mut c = Cells::new();
-        emon::plan::an_bytes(&mut c, req.id(), req.arg(1), req.arg(2));
+        emon::plan::an_bytes(&mut c, req.id(), req.field(emon::plan::bq_offset()), req.field(emon::plan::bq_length()));
         Ok(Answer { rec: to_vec(&c), bitmap: None })
     });
 
@@ -193,7 +193,7 @@ fn main() {
                 match req.kind() {
                     KIND_RENDER => {
                         let mut c = Cells::new();
-                        if req.arg(2) != dpi {
+                        if req.field(emon::plan::rd_dpi()) != dpi {
                             emon::plan::an_fail(&mut c, KIND_RENDER, req.id(), 2);
                             return Ok(Answer { rec: to_vec(&c), bitmap: None });
                         }

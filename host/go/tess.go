@@ -272,16 +272,16 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 		plan.AnFail(c, port.PlanKindOcr, id, status)
 		return port.PlanAnswer{Rec: cellsVec(c)}, nil
 	}
-	b, ok := bm[req.Arg(0)]
+	b, ok := bm[req.Field(plan.OcBitmap())]
 	if !ok {
 		return failed(port.PlanStatusFailed)
 	}
 	if b.Ch != 1 && b.Ch != 3 {
 		return failed(2)
 	}
-	psm, flags := req.Arg(1), req.Arg(2)
+	psm, flags := req.Field(plan.OcPsm()), req.Field(plan.OcFlags())
 	wantSyms := flags&1 != 0
-	rx, ry, rw, rh := req.Arg(3), req.Arg(4), req.Arg(5), req.Arg(6)
+	rx, ry, rw, rh := req.Field(plan.OcX()), req.Field(plan.OcY()), req.Field(plan.OcW()), req.Field(plan.OcH())
 	installed := t.installed()
 	// which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, none left is
 	// every model); the models go in as code points separated by 0

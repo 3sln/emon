@@ -55,6 +55,8 @@
     (doseq [f (fs/glob "host/go/port" "*.go")] (fs/copy f (str d "/port/" (fs/file-name f)) {:replace-existing true}))
     (fs/create-dirs (str d "/pngenc"))
     (fs/copy "host/go/pngenc/pngenc.go" (str d "/pngenc/pngenc.go") {:replace-existing true})
+    (fs/create-dirs (str d "/planrun"))
+    (fs/copy "host/go/planrun/planrun.go" (str d "/planrun/planrun.go") {:replace-existing true})
     (spit (str d "/go.mod") "module emon\n\ngo 1.21\n")
     (fs/copy "test/fusion/align/go/main.go" (str d "/main.go") {:replace-existing true})
     (let [r (exec d "go" "build" "-o" "prog" ".")]
