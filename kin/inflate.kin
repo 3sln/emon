@@ -31,25 +31,38 @@
 ;; decoding needs no tree -- walk the bits keeping the code so far, the first
 ;; code of this length and where this length's symbols begin. That is the
 ;; technique of Mark Adler's `puff.c`, which RFC 1951's authors point at;
-;; this is a from-scratch rewrite in kin. It reads one bit at a time: the
-;; simplest form that is provably right on four targets, and the place to
-;; optimise (a lookup table) once a measurement says so (DEVLOG P0.4).
+;; this is a from-scratch rewrite in kin. That walk reads one bit at a time
+;; and is kept as the SLOW PATH (`iz-decode`): it is the reference for what a
+;; code means and for every error.
+;;
+;; THE FAST PATH (P10.3a, D880) is a lookup table per block: the first
+;; `min(longest code, 10)` bits of the input, taken as they arrive (low bit
+;; first, so the table is indexed by the BIT-REVERSED code), give the symbol
+;; and the code's length in one read. A table entry is `symbol * 16 + length`,
+;; and 0 means "not decided here": a code longer than the table, a prefix no
+;; code has (an incomplete code), or fewer bits left in the input than the
+;; code needs. Every such case goes to the slow path, from the state as it was
+;; before the symbol, so a damaged stream is refused with the very error the
+;; bit-by-bit walk gives. The hot loop (`iz-codes`) keeps the bit buffer, the
+;; position and the output length in locals and writes them back to the
+;; state (`iz-park`) before anything else reads them.
 ;;
 ;; THE OUTPUT LIMIT is `limit-of` STREAM_BYTES (SPEC 7.4): a deflate stream
 ;; can expand ~1000:1, so a bound on the OUTPUT is the only protection against
 ;; a bomb. Breaching it is `limit-breach` (never returns), not a status: a
 ;; limit is a bound on emon and is named as one.
 ;;
-;; ARITHMETIC NEVER LEAVES 32-BIT RANGE: the bit buffer holds at most 23 bits,
-;; and Rust's debug build traps overflow, so the tests exercise that too.
+;; ARITHMETIC NEVER LEAVES 32-BIT RANGE: the bit buffer holds at most 31 bits
+;; (never negative), and Rust's debug build traps overflow, so the tests
+;; exercise that too.
 (ns emon.inflate
   (:require [emon.lang :refer [I32 Blob Cells defenum shl32 sar32]]
-            [emon.port :refer [blob-len blob-u8 blob-u16 blob-u16le
+            [emon.port :refer [blob-len blob-u8 blob-u16le blob-u32
                                cells-len cells-at cells-set cells-push
-                               cells-drop limit-of limit-breach]]
+                               cells-drop cells-grow limit-of limit-breach]]
             [kin.lang :refer [defn defconst defdata return let set while if
                               comment do + - * < > <= >= == != and or
-                              bit-and quot rem]]))
+                              bit-and bit-or quot rem]]))
 
 (defenum ^:pub iz-status
   [[iz-ok 0 "ok"]
@@ -107,25 +120,31 @@
 (defconst ^I32 W_ERR 4)      ;; the first error, 0 for none
 (defconst ^I32 W_LIMIT 5)    ;; output bound, from `limit-of`
 (defconst ^I32 W_BASE 6)     ;; length of `out` at entry
+(defconst ^I32 W_LB 7)       ;; index bits of the literal/length lookup table
+(defconst ^I32 W_DB 8)       ;; ... and of the distance one
+(defconst ^I32 W_A 9)        ;; Adler-32 of the output so far: s1 (below 65521)
+(defconst ^I32 W_B 10)       ;; ... and s2
 (defconst ^I32 W_OFF 16)     ;; 16 running offsets while a table is built
 (defconst ^I32 W_LC 32)      ;; literal/length code: counts for lengths 0..15
 (defconst ^I32 W_LS 48)      ;; ... and its symbols (288)
 (defconst ^I32 W_DC 336)     ;; distance code: counts 0..15
 (defconst ^I32 W_DS 352)     ;; ... and its symbols (30)
 (defconst ^I32 W_LEN 384)    ;; code lengths being read: up to 286 + 30
-(defconst ^I32 W_SIZE 704)
+(defconst ^I32 W_LT 704)     ;; lookup table, literal/length: 2^LIT_BITS entries
+(defconst ^I32 W_DT 1728)    ;; ... distance: 2^DIST_BITS entries
+(defconst ^I32 W_SIZE 1984)
+(defconst ^I32 LIT_BITS 10)
+(defconst ^I32 DIST_BITS 8)
 
 (defn ^I32 iz-init [^:mut ^Cells st ^I32 start ^I32 end ^Cells out]
-  (let [^:mut ^I32 i 0]
-    (cells-drop st 0)
-    (while (< i W_SIZE)
-      (do (cells-push st 0)
-          (set i (+ i 1))))
-    (cells-set st W_POS start)
-    (cells-set st W_END end)
-    (cells-set st W_LIMIT (limit-of 1))
-    (cells-set st W_BASE (cells-len out))
-    (return 0)))
+  (cells-drop st 0)
+  (cells-grow st W_SIZE 0)
+  (cells-set st W_POS start)
+  (cells-set st W_END end)
+  (cells-set st W_LIMIT (limit-of 1))
+  (cells-set st W_BASE (cells-len out))
+  (cells-set st W_A 1)
+  (return 0))
 
 (defn ^I32 iz-fail [^:mut ^Cells st ^I32 code]
   (comment "Latch the FIRST error only.")
@@ -226,9 +245,77 @@
     (iz-fail st (iz-bad-code))
     (return -1)))
 
+(defn ^I32 iz-fast [^:mut ^Cells st ^I32 cbase ^I32 sbase ^I32 tbase ^I32 maxbits ^I32 bslot]
+  (comment "Fill the lookup table at st[tbase..] for the code whose counts are")
+  (comment "at cbase and symbols at sbase: `min(longest length, maxbits)` index")
+  (comment "bits (kept at st[bslot]), each entry `symbol * 16 + length` for a")
+  (comment "code that fits, 0 for the rest. The code is the canonical one of")
+  (comment "RFC 1951 3.2.2 (the first code of a length is the previous first")
+  (comment "plus its count, doubled); the input arrives low bit first and a")
+  (comment "code high bit first, so a code is stored at its bit-REVERSE, and at")
+  (comment "every index that has it as its low bits. The code is not")
+  (comment "over-subscribed (the caller has checked), so no index is hit twice.")
+  (let [^:mut ^I32 ln 1
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 size 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 code 0
+        ^:mut ^I32 idx 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 cn 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 rev 0
+        ^:mut ^I32 t 0
+        ^:mut ^I32 step 0
+        ^:mut ^I32 entry 0]
+    (while (<= ln 15)
+      (do (if (> (cells-at st (+ cbase ln)) 0) (set bits ln))
+          (set ln (+ ln 1))))
+    (if (> bits maxbits) (set bits maxbits))
+    (cells-set st bslot bits)
+    (set size (shl32 1 bits))
+    (while (< i size)
+      (do (cells-set st (+ tbase i) 0)
+          (set i (+ i 1))))
+    (set ln 1)
+    (while (<= ln bits)
+      (do (set cn (cells-at st (+ cbase ln)))
+          (set j 0)
+          (while (< j cn)
+            (do (set c (+ code j))
+                (set rev 0)
+                (set t 0)
+                (while (< t ln)
+                  (do (set rev (+ (* rev 2) (bit-and c 1)))
+                      (set c (sar32 c 1))
+                      (set t (+ t 1))))
+                (set entry (+ (* (cells-at st (+ sbase (+ idx j))) 16) ln))
+                (set step (shl32 1 ln))
+                (set t rev)
+                (while (< t size)
+                  (do (cells-set st (+ tbase t) entry)
+                      (set t (+ t step))))
+                (set j (+ j 1))))
+          (set idx (+ idx cn))
+          (set code (* (+ code cn) 2))
+          (set ln (+ ln 1))))
+    (return 0)))
+
+(defn ^I32 iz-park [^:mut ^Cells st ^I32 buf ^I32 cnt ^I32 pos]
+  (comment "Write the hot loop's reader back into the state, in the form")
+  (comment "`iz-bits` and `iz-stored` expect: under 8 bits buffered, so whole")
+  (comment "bytes it loaded ahead are given back to the position (they are the")
+  (comment "highest bits of the buffer, the latest loaded).")
+  (let [^I32 k (quot cnt 8)
+        ^I32 c (- cnt (* k 8))]
+    (cells-set st W_BUF (bit-and buf (- (shl32 1 c) 1)))
+    (cells-set st W_CNT c)
+    (cells-set st W_POS (- pos k))
+    (return 0)))
+
 ;; --------------------------------------------------------------- blocks
 
-(defn ^I32 iz-put [^:mut ^Cells st ^:mut ^Cells out ^I32 b]
+(defn ^I32 iz-put[^:mut ^Cells st ^:mut ^Cells out ^I32 b]
   (comment "Append one output byte, under the limit.")
   (if (>= (- (cells-len out) (cells-at st W_BASE)) (cells-at st W_LIMIT))
     (limit-breach 1 (+ (- (cells-len out) (cells-at st W_BASE)) 1)))
@@ -236,39 +323,175 @@
   (return 0))
 
 (defn ^I32 iz-codes [^:mut ^Cells st ^Blob src ^:mut ^Cells out]
-  (comment "The symbols of one compressed block, up to its end-of-block.")
-  (let [^:mut ^I32 sym 0
+  (comment "The symbols of one compressed block, up to its end-of-block, by the")
+  (comment "lookup tables (`iz-fast`) with the bit-by-bit walk as the fallback.")
+  (comment "The reader lives in locals: `buf` (bits, low first, under 2^31),")
+  (comment "`cnt` of them, `pos` the next byte to load, `n` the length of `out`.")
+  (comment "A refill tops the buffer up to 24 bits or more unless the input has")
+  (comment "ended, so a table lookup (10 bits) plus extra bits (5) fit after one;")
+  (comment "short of bits means the input ended, and `truncated` is what the old")
+  (comment "walk would have said. The Adler-32 of what is written is kept as it")
+  (comment "goes (`sa`, `sb`, in the state at the end of the block): `ss` counts")
+  (comment "the bytes since the last `rem`, which is taken before it passes")
+  (comment "2700 + 258, so `sb` stays under 1.4e9 (the bound `iz-sum` has). The")
+  (comment "loop's condition (`base` is a length, never negative) is always true:")
+  (comment "it leaves by `return`; a constant condition would make the `return`")
+  (comment "after it unreachable, which Java refuses to compile.")
+  (let [^:mut ^I32 buf (cells-at st W_BUF)
+        ^:mut ^I32 cnt (cells-at st W_CNT)
+        ^:mut ^I32 pos (cells-at st W_POS)
+        ^I32 end (cells-at st W_END)
+        ^I32 base (cells-at st W_BASE)
+        ^I32 limit (cells-at st W_LIMIT)
+        ^I32 lmask (- (shl32 1 (cells-at st W_LB)) 1)
+        ^I32 dmask (- (shl32 1 (cells-at st W_DB)) 1)
+        ^:mut ^I32 n (cells-len out)
+        ^:mut ^I32 sa (cells-at st W_A)
+        ^:mut ^I32 sb (cells-at st W_B)
+        ^:mut ^I32 ss 0
+        ^:mut ^I32 e 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 sym 0
+        ^:mut ^I32 x 0
         ^:mut ^I32 ln 0
         ^:mut ^I32 dsym 0
         ^:mut ^I32 dist 0
-        ^:mut ^I32 k 0
-        ^:mut ^I32 at 0]
-    (while (== (cells-at st W_ERR) 0)
-      (do (set sym (iz-decode st src W_LC W_LS))
-          (if (!= (cells-at st W_ERR) 0) (return 0))
+        ^:mut ^I32 k 0]
+    (while (>= base 0)
+      (do (if (>= ss 2700)
+            (do (set sa (rem sa 65521))
+                (set sb (rem sb 65521))
+                (set ss 0)))
+          (while (and (< cnt 24) (< pos end))
+            (do (set buf (bit-or buf (shl32 (blob-u8 src pos) cnt)))
+                (set pos (+ pos 1))
+                (set cnt (+ cnt 8))))
+          (set e (cells-at st (+ W_LT (bit-and buf lmask))))
+          (set l (bit-and e 15))
+          (if (and (!= e 0) (<= l cnt))
+            (do (set buf (sar32 buf l))
+                (set cnt (- cnt l))
+                (set sym (sar32 e 4)))
+            (do (iz-park st buf cnt pos)
+                (set sym (iz-decode st src W_LC W_LS))
+                (if (!= (cells-at st W_ERR) 0) (return 0))
+                (set buf (cells-at st W_BUF))
+                (set cnt (cells-at st W_CNT))
+                (set pos (cells-at st W_POS))))
           (if (< sym 256)
-            (iz-put st out sym))
-          (if (== sym 256) (return 0))
+            (do (if (>= (- n base) limit)
+                  (limit-breach 1 (+ (- n base) 1)))
+                (cells-push out sym)
+                (set n (+ n 1))
+                (set sa (+ sa sym))
+                (set sb (+ sb sa))
+                (set ss (+ ss 1))))
+          (if (== sym 256)
+            (do (iz-park st buf cnt pos)
+                (cells-set st W_A (rem sa 65521))
+                (cells-set st W_B (rem sb 65521))
+                (return 0)))
           (if (> sym 256)
             (do (set sym (- sym 257))
                 (if (>= sym 29)
-                  (do (iz-fail st (iz-bad-code)) (return 0)))
+                  (do (iz-park st buf cnt pos)
+                      (iz-fail st (iz-bad-code))
+                      (return 0)))
+                (set x (iz-lext-at 0 sym))
+                (while (and (< cnt x) (< pos end))
+                  (do (set buf (bit-or buf (shl32 (blob-u8 src pos) cnt)))
+                      (set pos (+ pos 1))
+                      (set cnt (+ cnt 8))))
+                (if (< cnt x)
+                  (do (iz-park st buf cnt pos)
+                      (iz-fail st (iz-truncated))
+                      (return 0)))
                 (set ln (+ (iz-lbase-at 0 sym)
-                            (iz-bits st src (iz-lext-at 0 sym))))
-                (set dsym (iz-decode st src W_DC W_DS))
-                (if (!= (cells-at st W_ERR) 0) (return 0))
+                           (bit-and buf (- (shl32 1 x) 1))))
+                (set buf (sar32 buf x))
+                (set cnt (- cnt x))
+                (while (and (< cnt 24) (< pos end))
+                  (do (set buf (bit-or buf (shl32 (blob-u8 src pos) cnt)))
+                      (set pos (+ pos 1))
+                      (set cnt (+ cnt 8))))
+                (set e (cells-at st (+ W_DT (bit-and buf dmask))))
+                (set l (bit-and e 15))
+                (if (and (!= e 0) (<= l cnt))
+                  (do (set buf (sar32 buf l))
+                      (set cnt (- cnt l))
+                      (set dsym (sar32 e 4)))
+                  (do (iz-park st buf cnt pos)
+                      (set dsym (iz-decode st src W_DC W_DS))
+                      (if (!= (cells-at st W_ERR) 0) (return 0))
+                      (set buf (cells-at st W_BUF))
+                      (set cnt (cells-at st W_CNT))
+                      (set pos (cells-at st W_POS))))
                 (if (>= dsym 30)
-                  (do (iz-fail st (iz-bad-code)) (return 0)))
+                  (do (iz-park st buf cnt pos)
+                      (iz-fail st (iz-bad-code))
+                      (return 0)))
+                (set x (iz-dext-at 0 dsym))
+                (while (and (< cnt x) (< pos end))
+                  (do (set buf (bit-or buf (shl32 (blob-u8 src pos) cnt)))
+                      (set pos (+ pos 1))
+                      (set cnt (+ cnt 8))))
+                (if (< cnt x)
+                  (do (iz-park st buf cnt pos)
+                      (iz-fail st (iz-truncated))
+                      (return 0)))
                 (set dist (+ (iz-dbase-at 0 dsym)
-                             (iz-bits st src (iz-dext-at 0 dsym))))
-                (if (!= (cells-at st W_ERR) 0) (return 0))
-                (if (> dist (- (cells-len out) (cells-at st W_BASE)))
-                  (do (iz-fail st (iz-bad-distance)) (return 0)))
-                (set k 0)
-                (while (< k ln)
-                  (do (set at (cells-at out (- (cells-len out) dist)))
-                      (iz-put st out at)
-                      (set k (+ k 1))))))))
+                             (bit-and buf (- (shl32 1 x) 1))))
+                (set buf (sar32 buf x))
+                (set cnt (- cnt x))
+                (if (> dist (- n base))
+                  (do (iz-park st buf cnt pos)
+                      (iz-fail st (iz-bad-distance))
+                      (return 0)))
+                (if (> (+ (- n base) ln) limit)
+                  (do (comment "Over the limit part-way: byte by byte to the breach.")
+                      (set k 0)
+                      (while (< k ln)
+                        (do (set x (cells-at out (- (cells-len out) dist)))
+                            (iz-put st out x)
+                            (set k (+ k 1))))))
+                (set ss (+ ss ln))
+                (if (== dist 1)
+                  (do (comment "A run of the last byte: one fill, and the sums in closed form")
+                      (comment "(s2 gains ln * s1 + x * (1 + 2 + .. + ln)).")
+                      (set x (cells-at out (- n 1)))
+                      (cells-grow out ln x)
+                      (set n (+ n ln))
+                      (set sb (+ sb (+ (* ln sa) (* x (quot (* ln (+ ln 1)) 2)))))
+                      (set sa (+ sa (* ln x))))
+                  (do (set k 0)
+                      (while (< k ln)
+                        (do (set x (cells-at out (- n dist)))
+                            (cells-push out x)
+                            (set n (+ n 1))
+                            (set sa (+ sa x))
+                            (set sb (+ sb sa))
+                            (set k (+ k 1))))))))))
+    (return 0)))
+
+(defn ^I32 iz-sum [^:mut ^Cells st ^Cells out ^I32 from ^I32 to]
+  (comment "Fold out[from, to) into the Adler-32 in the state, byte by byte")
+  (comment "with the modulus every 3000 (the stored blocks' share; the hot loop")
+  (comment "of `iz-codes` keeps its own).")
+  (let [^:mut ^I32 a (cells-at st W_A)
+        ^:mut ^I32 b (cells-at st W_B)
+        ^:mut ^I32 i from
+        ^:mut ^I32 ss 0]
+    (while (< i to)
+      (do (set a (+ a (cells-at out i)))
+          (set b (+ b a))
+          (set i (+ i 1))
+          (set ss (+ ss 1))
+          (if (>= ss 3000)
+            (do (set a (rem a 65521))
+                (set b (rem b 65521))
+                (set ss 0)))))
+    (cells-set st W_A (rem a 65521))
+    (cells-set st W_B (rem b 65521))
     (return 0)))
 
 (defn ^I32 iz-stored [^:mut ^Cells st ^Blob src ^:mut ^Cells out]
@@ -278,6 +501,8 @@
   (let [^:mut ^I32 pos (cells-at st W_POS)
         ^I32 end (cells-at st W_END)
         ^:mut ^I32 n 0
+        ^:mut ^I32 avail 0
+        ^:mut ^I32 from 0
         ^:mut ^I32 k 0]
     (cells-set st W_BUF 0)
     (cells-set st W_CNT 0)
@@ -291,9 +516,19 @@
           (iz-fail st (iz-bad-stored-length))
           (return 0)))
     (set pos (+ pos 4))
-    (while (and (< k n) (< (+ pos k) end))
-      (do (iz-put st out (blob-u8 src (+ pos k)))
+    (comment "How many bytes are there to take; if they would pass the limit,")
+    (comment "`iz-put` finds the breach at the same byte it always did.")
+    (set avail (- end pos))
+    (if (< n avail) (set avail n))
+    (if (> (+ (- (cells-len out) (cells-at st W_BASE)) avail) (cells-at st W_LIMIT))
+      (do (while (< k avail)
+            (do (iz-put st out (blob-u8 src (+ pos k)))
+                (set k (+ k 1))))))
+    (set from (cells-len out))
+    (while (< k avail)
+      (do (cells-push out (blob-u8 src (+ pos k)))
           (set k (+ k 1))))
+    (iz-sum st out from (cells-len out))
     (cells-set st W_POS (+ pos k))
     (if (< k n) (iz-fail st (iz-truncated)))
     (return 0)))
@@ -317,6 +552,8 @@
       (do (cells-set st (+ W_LEN s) 5)
           (set s (+ s 1))))
     (iz-build st W_DC W_DS W_LEN 30)
+    (iz-fast st W_LC W_LS W_LT LIT_BITS W_LB)
+    (iz-fast st W_DC W_DS W_DT DIST_BITS W_DB)
     (return (iz-codes st src out))))
 
 (defn ^I32 iz-dynamic [^:mut ^Cells st ^Blob src ^:mut ^Cells out]
@@ -395,6 +632,8 @@
     (if (and (> left 0)
              (!= ndist (+ (cells-at st W_DC) (cells-at st (+ W_DC 1)))))
       (do (iz-fail st (iz-bad-code-lengths)) (return 0)))
+    (iz-fast st W_LC W_LS W_LT LIT_BITS W_LB)
+    (iz-fast st W_DC W_DS W_DT DIST_BITS W_DB)
     (return (iz-codes st src out))))
 
 ;; ------------------------------------------------------------- the stream
@@ -420,27 +659,6 @@
   (comment "of the file for what `out`, `st` and the answer mean.")
   (iz-init st start end out)
   (return (iz-blocks st src out)))
-
-(defn ^I32 iz-adler [^Cells out ^I32 from]
-  (comment "Adler-32 of out[from..]: answers the two 16-bit halves as")
-  (comment "b * 65536 + a would overflow, so `iz-zlib` compares them apart.")
-  (comment "This answers `a`; `iz-adler-b` answers `b`.")
-  (let [^:mut ^I32 a 1
-        ^:mut ^I32 i from]
-    (while (< i (cells-len out))
-      (do (set a (rem (+ a (cells-at out i)) 65521))
-          (set i (+ i 1))))
-    (return a)))
-
-(defn ^I32 iz-adler-b [^Cells out ^I32 from]
-  (let [^:mut ^I32 a 1
-        ^:mut ^I32 b 0
-        ^:mut ^I32 i from]
-    (while (< i (cells-len out))
-      (do (set a (rem (+ a (cells-at out i)) 65521))
-          (set b (rem (+ b a) 65521))
-          (set i (+ i 1))))
-    (return b)))
 
 (defn ^:pub ^I32 iz-zlib [^Blob src ^I32 start ^I32 end ^:mut ^Cells out ^:mut ^Cells st]
   (comment "Inflate an RFC 1950 stream: CMF and FLG, the deflate data, and the")
@@ -473,7 +691,9 @@
           (iz-fail st (iz-truncated))
           (return (iz-truncated))))
     (cells-set st W_POS (+ pos 4))
-    (if (or (!= (blob-u16 src pos) (iz-adler-b out (cells-at st W_BASE)))
-            (!= (blob-u16 src (+ pos 2)) (iz-adler out (cells-at st W_BASE))))
+    (comment "The Adler-32 the blocks kept as they wrote: s2 * 65536 + s1, as the")
+    (comment "32-bit pattern `blob-u32` answers for the four bytes.")
+    (if (!= (blob-u32 src pos)
+            (bit-or (shl32 (cells-at st W_B) 16) (cells-at st W_A)))
       (do (iz-fail st (iz-bad-checksum)) (return (iz-bad-checksum))))
     (return 0)))

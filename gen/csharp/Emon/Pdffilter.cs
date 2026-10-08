@@ -357,38 +357,7 @@ public static class Pdffilter {
         }
         return 0;
     }
-    internal const int LSize = 16384;
-    internal static int PfLzwString(emon.Port.Cells st, emon.Port.Cells @out, int code) {
-        // Append the string of `code` (0..255 a byte, 258.. a table entry).
-        int ln = emon.Port.CellsAt(st, (code * 4) + 2);
-        int @base = emon.Port.CellsLen(@out);
-        int k = 0;
-        int x = code;
-        int at = 0;
-        while (k < ln) {
-            emon.Port.CellsPush(@out, 0);
-            k += 1;
-        }
-        at = (@base + ln) - 1;
-        while (at >= @base) {
-            emon.Port.CellsSet(@out, at, emon.Port.CellsAt(st, (x * 4) + 1));
-            x = emon.Port.CellsAt(st, x * 4);
-            at -= 1;
-        }
-        return ln;
-    }
-    internal static int PfLzwClear(emon.Port.Cells st) {
-        // 256 literal entries; 256 and 257 are codes, not strings.
-        int i = 0;
-        while (i < 256) {
-            emon.Port.CellsSet(st, i * 4, 0);
-            emon.Port.CellsSet(st, (i * 4) + 1, i);
-            emon.Port.CellsSet(st, (i * 4) + 2, 1);
-            emon.Port.CellsSet(st, (i * 4) + 3, i);
-            i += 1;
-        }
-        return 0;
-    }
+    internal const int LSize = 8192;
     internal static int PfLzwWidth(int nxt, int early) {
         // The code width once the table holds `nxt` entries.
         if ((nxt + early) >= 2048) {
@@ -402,57 +371,33 @@ public static class Pdffilter {
         }
         return 9;
     }
-    internal static int PfLzwStep(emon.Port.Cells st, emon.Port.Cells @out, int @base, int code, int prev, int nxt) {
-        // One ordinary code after the first: add the entry `prev + first of
-        // code` (when the table has room) and write the string of `code`.
-        // Answers the new `nxt`, or -1 for a code beyond the table.
-        int first = 0;
-        int ln = 0;
-        if (code > nxt) {
-            return -1;
-        }
-        if (code < nxt) {
-            first = emon.Port.CellsAt(st, (code * 4) + 3);
-        } else {
-            first = emon.Port.CellsAt(st, (prev * 4) + 3);
-        }
-        if (nxt < 4096) {
-            ln = emon.Port.CellsAt(st, (prev * 4) + 2) + 1;
-            emon.Port.CellsSet(st, nxt * 4, prev);
-            emon.Port.CellsSet(st, (nxt * 4) + 1, first);
-            emon.Port.CellsSet(st, (nxt * 4) + 2, ln);
-            emon.Port.CellsSet(st, (nxt * 4) + 3, emon.Port.CellsAt(st, (prev * 4) + 3));
-        }
-        PfRoom(@out, @base, emon.Port.CellsAt(st, (code * 4) + 2));
-        PfLzwString(st, @out, code);
-        if (nxt < 4096) {
-            return nxt + 1;
-        }
-        return nxt;
-    }
     public static int PfLzw(byte[] src, int s, int e, emon.Port.Cells @out, emon.Port.Cells st, int early) {
         // LZWDecode: codes of 9-12 bits, most significant bit first; 256
         // clears the table, 257 ends the data. `early` is /EarlyChange
         // (1 by default: the code width grows one entry sooner). A table
-        // that is full is left as it is, as the encoders do.
+        // that is full is left as it is, as the encoders do. `pp` and `pl` are
+        // where the string just written begins and how long it is; `have` is 0
+        // at the start and after a clear, when there is no string before.
         int @base = emon.Port.CellsLen(@out);
+        int lim = emon.Port.LimitOf(1);
         int i = s;
         int acc = 0;
         int nbits = 0;
         int width = 9;
         int nxt = 258;
-        int prev = -1;
+        int have = 0;
+        int pp = 0;
+        int pl = 0;
         int code = 0;
-        int n2 = 0;
+        int ln = 0;
+        int at = 0;
+        int x = 0;
+        int p = 0;
+        int k = 0;
         int status = 0;
         int done = 0;
-        int k = 0;
         emon.Port.CellsDrop(st, 0);
-        while (k < LSize) {
-            emon.Port.CellsPush(st, 0);
-            k += 1;
-        }
-        PfLzwClear(st);
+        emon.Port.CellsGrow(st, LSize, 0);
         while (done == 0) {
             while ((nbits < width) && (i < e)) {
                 acc = (acc * 256) + emon.Port.BlobU8(src, i);
@@ -468,28 +413,57 @@ public static class Pdffilter {
                 if (code == 256) {
                     nxt = 258;
                     width = 9;
-                    prev = -1;
+                    have = 0;
                 } else if (code == 257) {
                     done = 1;
-                } else if (prev == -1) {
+                } else if (have == 0) {
                     if (code > 255) {
                         status = 3;
                         done = 1;
                     } else {
-                        PfRoom(@out, @base, 1);
-                        PfLzwString(st, @out, code);
-                        prev = code;
+                        if (1 > (lim - (emon.Port.CellsLen(@out) - @base))) {
+                            emon.Port.LimitBreach(1, (emon.Port.CellsLen(@out) - @base) + 1);
+                        }
+                        pp = emon.Port.CellsLen(@out);
+                        emon.Port.CellsPush(@out, code);
+                        pl = 1;
+                        have = 1;
                     }
+                } else if (code > nxt) {
+                    status = 3;
+                    done = 1;
                 } else {
-                    n2 = PfLzwStep(st, @out, @base, code, prev, nxt);
-                    if (n2 < 0) {
-                        status = 3;
-                        done = 1;
-                    } else {
-                        nxt = n2;
-                        width = PfLzwWidth(nxt, early);
-                        prev = code;
+                    // The new entry: the string before, and the first byte of
+                    // this one, which follows it in `out`.
+                    if (nxt < 4096) {
+                        emon.Port.CellsSet(st, nxt * 2, pp);
+                        emon.Port.CellsSet(st, (nxt * 2) + 1, pl + 1);
                     }
+                    ln = 1;
+                    if (code > 255) {
+                        ln = emon.Port.CellsAt(st, (code * 2) + 1);
+                    }
+                    if (ln > (lim - (emon.Port.CellsLen(@out) - @base))) {
+                        emon.Port.LimitBreach(1, (emon.Port.CellsLen(@out) - @base) + ln);
+                    }
+                    p = emon.Port.CellsLen(@out);
+                    if (code < 256) {
+                        emon.Port.CellsPush(@out, code);
+                    } else {
+                        at = emon.Port.CellsAt(st, code * 2);
+                        k = 0;
+                        while (k < ln) {
+                            x = emon.Port.CellsAt(@out, at + k);
+                            emon.Port.CellsPush(@out, x);
+                            k += 1;
+                        }
+                    }
+                    pp = p;
+                    pl = ln;
+                    if (nxt < 4096) {
+                        nxt += 1;
+                    }
+                    width = PfLzwWidth(nxt, early);
                 }
             }
         }
@@ -541,22 +515,69 @@ public static class Pdffilter {
         }
         return c;
     }
+    internal static int PfPngSlow(emon.Port.Cells @in, int pos, emon.Port.Cells @out, int rb, int rowb, int bpp, int t, int hasPrev, int i0, int i1) {
+        // Bytes i0 up to i1 of one row (its filter byte `t`, its bytes at
+        // in[pos..], its output starting at `rb`), every case tested on every
+        // byte: the definition. `pf-png` uses it for a first row (no row
+        // above) and for the first `bpp` bytes of the others (no pixel to
+        // the left), and a loop per filter for the rest.
+        int i = i0;
+        int x = 0;
+        int a = 0;
+        int b = 0;
+        int c = 0;
+        int v = 0;
+        while (i < i1) {
+            x = emon.Port.CellsAt(@in, pos + i);
+            a = 0;
+            b = 0;
+            c = 0;
+            if (i >= bpp) {
+                a = emon.Port.CellsAt(@out, (rb + i) - bpp);
+            }
+            if (hasPrev == 1) {
+                b = emon.Port.CellsAt(@out, (rb + i) - rowb);
+                if (i >= bpp) {
+                    c = emon.Port.CellsAt(@out, ((rb + i) - rowb) - bpp);
+                }
+            }
+            v = x;
+            if (t == 1) {
+                v = x + a;
+            }
+            if (t == 2) {
+                v = x + b;
+            }
+            if (t == 3) {
+                v = x + ((a + b) / 2);
+            }
+            if (t == 4) {
+                v = x + PfPaeth(a, b, c);
+            }
+            emon.Port.CellsPush(@out, v & 255);
+            i += 1;
+        }
+        return 0;
+    }
     internal static int PfPng(emon.Port.Cells @in, int from, int to, emon.Port.Cells @out, int rowb, int bpp) {
         // Undo PNG prediction: each row is a filter byte (0 none, 1 sub,
         // 2 up, 3 average, 4 Paeth) and `rowb` bytes. A short last row is
         // decoded as far as it goes. Answers 4 for a filter byte above 4.
+        // Per row, past its first `bpp` bytes and with a row above, one loop
+        // for its filter (P10.3a, D883): the per-byte tests of the general
+        // case (`pf-png-slow`) were the cost, not the arithmetic.
         int base0 = emon.Port.CellsLen(@out);
         int pos = from;
         int t = 0;
         int avail = 0;
         int rb = 0;
         int i = 0;
+        int lead = 0;
         int x = 0;
         int a = 0;
         int b = 0;
         int c = 0;
         int hasPrev = 0;
-        int v = 0;
         while (pos < to) {
             t = emon.Port.CellsAt(@in, pos);
             pos += 1;
@@ -572,36 +593,86 @@ public static class Pdffilter {
             if (avail > rowb) {
                 avail = rowb;
             }
-            i = 0;
-            while (i < avail) {
-                x = emon.Port.CellsAt(@in, pos + i);
-                a = 0;
-                b = 0;
-                c = 0;
-                if (i >= bpp) {
-                    a = emon.Port.CellsAt(@out, (rb + i) - bpp);
+            lead = avail;
+            if ((hasPrev == 1) && (lead > bpp)) {
+                lead = bpp;
+            }
+            PfPngSlow(@in, pos, @out, rb, rowb, bpp, t, hasPrev, 0, lead);
+            // The rest of the row is made room for once and written by index.
+            i = lead;
+            emon.Port.CellsGrow(@out, avail - lead, 0);
+            if (t == 0) {
+                while (i < avail) {
+                    emon.Port.CellsSet(@out, rb + i, emon.Port.CellsAt(@in, pos + i) & 255);
+                    i += 1;
                 }
-                if (hasPrev == 1) {
+            }
+            if (t == 2) {
+                while (i < avail) {
+                    x = emon.Port.CellsAt(@in, pos + i);
                     b = emon.Port.CellsAt(@out, (rb + i) - rowb);
-                    if (i >= bpp) {
-                        c = emon.Port.CellsAt(@out, ((rb + i) - rowb) - bpp);
+                    emon.Port.CellsSet(@out, rb + i, (x + b) & 255);
+                    i += 1;
+                }
+            }
+            // One byte a pixel (gray, 8 bits): the pixel to the left is the byte
+            // just written, so it is carried in `a` rather than read back from
+            // `out` (a read of a write a few cycles old), and the upper-left `c`
+            // is the last `b`.
+            if ((bpp == 1) && (i < avail)) {
+                a = emon.Port.CellsAt(@out, (rb + i) - 1);
+                if (t == 1) {
+                    while (i < avail) {
+                        a = (emon.Port.CellsAt(@in, pos + i) + a) & 255;
+                        emon.Port.CellsSet(@out, rb + i, a);
+                        i += 1;
                     }
                 }
-                v = x;
-                if (t == 1) {
-                    v = x + a;
-                }
-                if (t == 2) {
-                    v = x + b;
-                }
                 if (t == 3) {
-                    v = x + ((a + b) / 2);
+                    while (i < avail) {
+                        b = emon.Port.CellsAt(@out, (rb + i) - rowb);
+                        a = (emon.Port.CellsAt(@in, pos + i) + ((a + b) / 2)) & 255;
+                        emon.Port.CellsSet(@out, rb + i, a);
+                        i += 1;
+                    }
                 }
                 if (t == 4) {
-                    v = x + PfPaeth(a, b, c);
+                    c = emon.Port.CellsAt(@out, ((rb + i) - rowb) - 1);
+                    while (i < avail) {
+                        b = emon.Port.CellsAt(@out, (rb + i) - rowb);
+                        a = (emon.Port.CellsAt(@in, pos + i) + PfPaeth(a, b, c)) & 255;
+                        emon.Port.CellsSet(@out, rb + i, a);
+                        c = b;
+                        i += 1;
+                    }
                 }
-                emon.Port.CellsPush(@out, v & 255);
-                i += 1;
+            }
+            if ((bpp != 1) && (t == 1)) {
+                while (i < avail) {
+                    x = emon.Port.CellsAt(@in, pos + i);
+                    a = emon.Port.CellsAt(@out, (rb + i) - bpp);
+                    emon.Port.CellsSet(@out, rb + i, (x + a) & 255);
+                    i += 1;
+                }
+            }
+            if ((bpp != 1) && (t == 3)) {
+                while (i < avail) {
+                    x = emon.Port.CellsAt(@in, pos + i);
+                    a = emon.Port.CellsAt(@out, (rb + i) - bpp);
+                    b = emon.Port.CellsAt(@out, (rb + i) - rowb);
+                    emon.Port.CellsSet(@out, rb + i, (x + ((a + b) / 2)) & 255);
+                    i += 1;
+                }
+            }
+            if ((bpp != 1) && (t == 4)) {
+                while (i < avail) {
+                    x = emon.Port.CellsAt(@in, pos + i);
+                    a = emon.Port.CellsAt(@out, (rb + i) - bpp);
+                    b = emon.Port.CellsAt(@out, (rb + i) - rowb);
+                    c = emon.Port.CellsAt(@out, ((rb + i) - rowb) - bpp);
+                    emon.Port.CellsSet(@out, rb + i, (x + PfPaeth(a, b, c)) & 255);
+                    i += 1;
+                }
             }
             pos += avail;
         }

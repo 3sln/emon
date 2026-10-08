@@ -30,7 +30,8 @@
 (ns emon.pdffilter
   (:require [emon.lang :refer [I32 Blob Cells defenum shl32 sar32]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set
-                               cells-push cells-drop limit-of limit-breach]]
+                               cells-push cells-drop cells-grow limit-of
+                               limit-breach]]
             [emon.inflate :refer [iz-zlib iz-ok iz-truncated iz-bad-header
                                   iz-bad-checksum]]
             [kin.lang :refer [defn defconst return let set while if comment do
@@ -209,40 +210,17 @@
 
 ;; -------------------------------------------------------------- LZW
 ;;
-;; THE TABLE lives in the caller's scratch `Cells` `st`, four cells an entry:
-;; prefix code, suffix byte, length of the string, and its first byte. A
-;; string is written by walking the prefix chain from the END, into cells
-;; reserved for it, so no stack is needed.
+;; THE TABLE is two cells an entry, in the caller's scratch `Cells` `st`: where
+;; in `out` the entry's string ALREADY IS, and its length (P10.3a, D881). Every
+;; table entry is the string of the code before plus the first byte of the
+;; code that follows it, and the decoder has just written those two strings
+;; one after the other, so the entry is a span of `out` and a string is
+;; written by copying a span from earlier output: no prefix chain is walked, no
+;; suffix, first-byte or length table kept. (The entry `nxt` for a code that is
+;; `nxt` itself, the KwKwK case, ends in the byte the copy is about to write;
+;; copying forward, one byte at a time, makes that byte first.)
 
-(defconst ^I32 L_SIZE 16384)
-
-(defn ^I32 pf-lzw-string [^:mut ^Cells st ^:mut ^Cells out ^I32 code]
-  (comment "Append the string of `code` (0..255 a byte, 258.. a table entry).")
-  (let [^I32 ln (cells-at st (+ (* code 4) 2))
-        ^I32 base (cells-len out)
-        ^:mut ^I32 k 0
-        ^:mut ^I32 x code
-        ^:mut ^I32 at 0]
-    (while (< k ln)
-      (do (cells-push out 0)
-          (set k (+ k 1))))
-    (set at (- (+ base ln) 1))
-    (while (>= at base)
-      (do (cells-set out at (cells-at st (+ (* x 4) 1)))
-          (set x (cells-at st (* x 4)))
-          (set at (- at 1))))
-    (return ln)))
-
-(defn ^I32 pf-lzw-clear [^:mut ^Cells st]
-  (comment "256 literal entries; 256 and 257 are codes, not strings.")
-  (let [^:mut ^I32 i 0]
-    (while (< i 256)
-      (do (cells-set st (* i 4) 0)
-          (cells-set st (+ (* i 4) 1) i)
-          (cells-set st (+ (* i 4) 2) 1)
-          (cells-set st (+ (* i 4) 3) i)
-          (set i (+ i 1))))
-    (return 0)))
+(defconst ^I32 L_SIZE 8192)
 
 (defn ^I32 pf-lzw-width [^I32 nxt ^I32 early]
   (comment "The code width once the table holds `nxt` entries.")
@@ -251,49 +229,33 @@
   (if (>= (+ nxt early) 512) (return 10))
   (return 9))
 
-(defn ^I32 pf-lzw-step [^:mut ^Cells st ^:mut ^Cells out ^I32 base ^I32 code ^I32 prev ^I32 nxt]
-  (comment "One ordinary code after the first: add the entry `prev + first of")
-  (comment "code` (when the table has room) and write the string of `code`.")
-  (comment "Answers the new `nxt`, or -1 for a code beyond the table.")
-  (let [^:mut ^I32 first 0
-        ^:mut ^I32 ln 0]
-    (if (> code nxt) (return -1))
-    (if (< code nxt)
-      (set first (cells-at st (+ (* code 4) 3)))
-      (set first (cells-at st (+ (* prev 4) 3))))
-    (if (< nxt 4096)
-      (do (set ln (+ (cells-at st (+ (* prev 4) 2)) 1))
-          (cells-set st (* nxt 4) prev)
-          (cells-set st (+ (* nxt 4) 1) first)
-          (cells-set st (+ (* nxt 4) 2) ln)
-          (cells-set st (+ (* nxt 4) 3) (cells-at st (+ (* prev 4) 3)))))
-    (pf-room out base (cells-at st (+ (* code 4) 2)))
-    (pf-lzw-string st out code)
-    (if (< nxt 4096) (return (+ nxt 1)))
-    (return nxt)))
-
 (defn ^:pub ^I32 pf-lzw [^Blob src ^I32 s ^I32 e ^:mut ^Cells out ^:mut ^Cells st ^I32 early]
   (comment "LZWDecode: codes of 9-12 bits, most significant bit first; 256")
   (comment "clears the table, 257 ends the data. `early` is /EarlyChange")
   (comment "(1 by default: the code width grows one entry sooner). A table")
-  (comment "that is full is left as it is, as the encoders do.")
+  (comment "that is full is left as it is, as the encoders do. `pp` and `pl` are")
+  (comment "where the string just written begins and how long it is; `have` is 0")
+  (comment "at the start and after a clear, when there is no string before.")
   (let [^I32 base (cells-len out)
+        ^I32 lim (limit-of 1)
         ^:mut ^I32 i s
         ^:mut ^I32 acc 0
         ^:mut ^I32 nbits 0
         ^:mut ^I32 width 9
         ^:mut ^I32 nxt 258
-        ^:mut ^I32 prev -1
+        ^:mut ^I32 have 0
+        ^:mut ^I32 pp 0
+        ^:mut ^I32 pl 0
         ^:mut ^I32 code 0
-        ^:mut ^I32 n2 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 at 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 k 0
         ^:mut ^I32 status 0
-        ^:mut ^I32 done 0
-        ^:mut ^I32 k 0]
+        ^:mut ^I32 done 0]
     (cells-drop st 0)
-    (while (< k L_SIZE)
-      (do (cells-push st 0)
-          (set k (+ k 1))))
-    (pf-lzw-clear st)
+    (cells-grow st L_SIZE 0)
     (while (== done 0)
       (do (while (and (< nbits width) (< i e))
             (do (set acc (+ (* acc 256) (blob-u8 src i)))
@@ -307,26 +269,47 @@
                 (if (== code 256)
                   (do (set nxt 258)
                       (set width 9)
-                      (set prev -1))
+                      (set have 0))
                   (if (== code 257)
                     (set done 1)
-                    (if (== prev -1)
+                    (if (== have 0)
                       (if (> code 255)
                         (do (set status 3) (set done 1))
-                        (do (pf-room out base 1)
-                            (pf-lzw-string st out code)
-                            (set prev code)))
-                      (do (set n2 (pf-lzw-step st out base code prev nxt))
-                          (if (< n2 0)
-                            (do (set status 3) (set done 1))
-                            (do (set nxt n2)
-                                (set width (pf-lzw-width nxt early))
-                                (set prev code)))))))))))
+                        (do (if (> 1 (- lim (- (cells-len out) base)))
+                              (limit-breach 1 (+ (- (cells-len out) base) 1)))
+                            (set pp (cells-len out))
+                            (cells-push out code)
+                            (set pl 1)
+                            (set have 1)))
+                      (if (> code nxt)
+                        (do (set status 3) (set done 1))
+                        (do (comment "The new entry: the string before, and the first byte of")
+                            (comment "this one, which follows it in `out`.")
+                            (if (< nxt 4096)
+                              (do (cells-set st (* nxt 2) pp)
+                                  (cells-set st (+ (* nxt 2) 1) (+ pl 1))))
+                            (set ln 1)
+                            (if (> code 255) (set ln (cells-at st (+ (* code 2) 1))))
+                            (if (> ln (- lim (- (cells-len out) base)))
+                              (limit-breach 1 (+ (- (cells-len out) base) ln)))
+                            (set p (cells-len out))
+                            (if (< code 256)
+                              (cells-push out code)
+                              (do (set at (cells-at st (* code 2)))
+                                  (set k 0)
+                                  (while (< k ln)
+                                    (do (set x (cells-at out (+ at k)))
+                                        (cells-push out x)
+                                        (set k (+ k 1))))))
+                            (set pp p)
+                            (set pl ln)
+                            (if (< nxt 4096) (set nxt (+ nxt 1)))
+                            (set width (pf-lzw-width nxt early)))))))))))
     (return status)))
 
 ;; -------------------------------------------------------------- Flate
 
-(defn ^:pub ^I32 pf-flate [^Blob src ^I32 s ^I32 e ^:mut ^Cells out ^:mut ^Cells st]
+(defn ^:pub ^I32 pf-flate[^Blob src ^I32 s ^I32 e ^:mut ^Cells out ^:mut ^Cells st]
   (comment "FlateDecode: a zlib stream (inflate's status, renamed). No input at")
   (comment "all is an empty stream, not a truncated one (a form XObject written with")
   (comment "/Length 0 and a /Filter is common).")
@@ -354,22 +337,57 @@
     (if (<= pb pc) (return b))
     (return c)))
 
+(defn ^I32 pf-png-slow [^Cells in ^I32 pos ^:mut ^Cells out ^I32 rb ^I32 rowb ^I32 bpp
+                        ^I32 t ^I32 has-prev ^I32 i0 ^I32 i1]
+  (comment "Bytes i0 up to i1 of one row (its filter byte `t`, its bytes at")
+  (comment "in[pos..], its output starting at `rb`), every case tested on every")
+  (comment "byte: the definition. `pf-png` uses it for a first row (no row")
+  (comment "above) and for the first `bpp` bytes of the others (no pixel to")
+  (comment "the left), and a loop per filter for the rest.")
+  (let [^:mut ^I32 i i0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 v 0]
+    (while (< i i1)
+      (do (set x (cells-at in (+ pos i)))
+          (set a 0)
+          (set b 0)
+          (set c 0)
+          (if (>= i bpp) (set a (cells-at out (- (+ rb i) bpp))))
+          (if (== has-prev 1)
+            (do (set b (cells-at out (- (+ rb i) rowb)))
+                (if (>= i bpp)
+                  (set c (cells-at out (- (- (+ rb i) rowb) bpp))))))
+          (set v x)
+          (if (== t 1) (set v (+ x a)))
+          (if (== t 2) (set v (+ x b)))
+          (if (== t 3) (set v (+ x (quot (+ a b) 2))))
+          (if (== t 4) (set v (+ x (pf-paeth a b c))))
+          (cells-push out (bit-and v 255))
+          (set i (+ i 1))))
+    (return 0)))
+
 (defn ^I32 pf-png [^Cells in ^I32 from ^I32 to ^:mut ^Cells out ^I32 rowb ^I32 bpp]
   (comment "Undo PNG prediction: each row is a filter byte (0 none, 1 sub,")
   (comment "2 up, 3 average, 4 Paeth) and `rowb` bytes. A short last row is")
   (comment "decoded as far as it goes. Answers 4 for a filter byte above 4.")
+  (comment "Per row, past its first `bpp` bytes and with a row above, one loop")
+  (comment "for its filter (P10.3a, D883): the per-byte tests of the general")
+  (comment "case (`pf-png-slow`) were the cost, not the arithmetic.")
   (let [^I32 base0 (cells-len out)
         ^:mut ^I32 pos from
         ^:mut ^I32 t 0
         ^:mut ^I32 avail 0
         ^:mut ^I32 rb 0
         ^:mut ^I32 i 0
+        ^:mut ^I32 lead 0
         ^:mut ^I32 x 0
         ^:mut ^I32 a 0
         ^:mut ^I32 b 0
         ^:mut ^I32 c 0
-        ^:mut ^I32 has-prev 0
-        ^:mut ^I32 v 0]
+        ^:mut ^I32 has-prev 0]
     (while (< pos to)
       (do (set t (cells-at in pos))
           (set pos (+ pos 1))
@@ -379,24 +397,68 @@
           (if (>= (- rb base0) rowb) (set has-prev 1))
           (set avail (- to pos))
           (if (> avail rowb) (set avail rowb))
-          (set i 0)
-          (while (< i avail)
-            (do (set x (cells-at in (+ pos i)))
-                (set a 0)
-                (set b 0)
-                (set c 0)
-                (if (>= i bpp) (set a (cells-at out (- (+ rb i) bpp))))
-                (if (== has-prev 1)
-                  (do (set b (cells-at out (- (+ rb i) rowb)))
-                      (if (>= i bpp)
-                        (set c (cells-at out (- (- (+ rb i) rowb) bpp))))))
-                (set v x)
-                (if (== t 1) (set v (+ x a)))
-                (if (== t 2) (set v (+ x b)))
-                (if (== t 3) (set v (+ x (quot (+ a b) 2))))
-                (if (== t 4) (set v (+ x (pf-paeth a b c))))
-                (cells-push out (bit-and v 255))
-                (set i (+ i 1))))
+          (set lead avail)
+          (if (and (== has-prev 1) (> lead bpp)) (set lead bpp))
+          (pf-png-slow in pos out rb rowb bpp t has-prev 0 lead)
+          (comment "The rest of the row is made room for once and written by index.")
+          (set i lead)
+          (cells-grow out (- avail lead) 0)
+          (if (== t 0)
+            (while (< i avail)
+              (do (cells-set out (+ rb i) (bit-and (cells-at in (+ pos i)) 255))
+                  (set i (+ i 1)))))
+          (if (== t 2)
+            (while (< i avail)
+              (do (set x (cells-at in (+ pos i)))
+                  (set b (cells-at out (- (+ rb i) rowb)))
+                  (cells-set out (+ rb i) (bit-and (+ x b) 255))
+                  (set i (+ i 1)))))
+          (comment "One byte a pixel (gray, 8 bits): the pixel to the left is the byte")
+          (comment "just written, so it is carried in `a` rather than read back from")
+          (comment "`out` (a read of a write a few cycles old), and the upper-left `c`")
+          (comment "is the last `b`.")
+          (if (and (== bpp 1) (< i avail))
+            (do (set a (cells-at out (- (+ rb i) 1)))
+                (if (== t 1)
+                  (while (< i avail)
+                    (do (set a (bit-and (+ (cells-at in (+ pos i)) a) 255))
+                        (cells-set out (+ rb i) a)
+                        (set i (+ i 1)))))
+                (if (== t 3)
+                  (while (< i avail)
+                    (do (set b (cells-at out (- (+ rb i) rowb)))
+                        (set a (bit-and (+ (cells-at in (+ pos i)) (quot (+ a b) 2)) 255))
+                        (cells-set out (+ rb i) a)
+                        (set i (+ i 1)))))
+                (if (== t 4)
+                  (do (set c (cells-at out (- (- (+ rb i) rowb) 1)))
+                      (while (< i avail)
+                        (do (set b (cells-at out (- (+ rb i) rowb)))
+                            (set a (bit-and (+ (cells-at in (+ pos i)) (pf-paeth a b c)) 255))
+                            (cells-set out (+ rb i) a)
+                            (set c b)
+                            (set i (+ i 1))))))))
+          (if (and (!= bpp 1) (== t 1))
+            (while (< i avail)
+              (do (set x (cells-at in (+ pos i)))
+                  (set a (cells-at out (- (+ rb i) bpp)))
+                  (cells-set out (+ rb i) (bit-and (+ x a) 255))
+                  (set i (+ i 1)))))
+          (if (and (!= bpp 1) (== t 3))
+            (while (< i avail)
+              (do (set x (cells-at in (+ pos i)))
+                  (set a (cells-at out (- (+ rb i) bpp)))
+                  (set b (cells-at out (- (+ rb i) rowb)))
+                  (cells-set out (+ rb i) (bit-and (+ x (quot (+ a b) 2)) 255))
+                  (set i (+ i 1)))))
+          (if (and (!= bpp 1) (== t 4))
+            (while (< i avail)
+              (do (set x (cells-at in (+ pos i)))
+                  (set a (cells-at out (- (+ rb i) bpp)))
+                  (set b (cells-at out (- (+ rb i) rowb)))
+                  (set c (cells-at out (- (- (+ rb i) rowb) bpp)))
+                  (cells-set out (+ rb i) (bit-and (+ x (pf-paeth a b c)) 255))
+                  (set i (+ i 1)))))
           (set pos (+ pos avail))))
     (return 0)))
 

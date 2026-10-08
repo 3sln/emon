@@ -15,14 +15,14 @@
   (:require [emon.lang :refer [I32 Blob Cells Text emit-ascii]]
             [emon.test :refer [deftest assert-eq assert-eq-at assert-that
                                assert-cells-hex assert-text hex-blob new-cells
-                               new-text test-file cells-blob]]
+                               new-text test-file cells-blob Str TestT test-t]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-push
                                cells-drop text-i32]]
             [emon.inflate :refer [iz-zlib iz-raw iz-consumed iz-status-emit-name
                                   iz-ok iz-truncated iz-bad-header iz-bad-checksum
-                                  iz-bad-distance iz-bad-block-type]]
+                                  iz-bad-distance iz-bad-block-type iz-bad-code]]
             [kin.lang :refer [defn return let set while if comment do
-                              + - * < > <= >= == != and or quot]]))
+                              + - * < > <= >= == != and or quot bit-and]]))
 
 ;; ---------------------------------------------------------- row parsing
 
@@ -195,3 +195,121 @@
     (emit-ascii t " ")
     (iz-status-emit-name t 9)
     (assert-text t "ok truncated bad-distance bad-checksum" "names")))
+
+;; ----------------------------------------------- the table-driven decoder
+;;
+;; (P10.3a, D880) Each block kind and each edge of the lookup table has a law
+;; with a stream from outside emon: CPython's zlib for the first, hand-built
+;; with a bit writer checked by the JDK's zlib for the rest (that script is
+;; kin/scripts/inflate-vectors).
+;; The table is 10 bits for literal/length codes and 8 for distance codes, so
+;; codes of 11 to 15 bits, a code that is not in the table, and a distance code
+;; that does not exist all go through the slow bit-by-bit path and must say
+;; what it always said.
+
+(defn ^I32 it-check-raw [^TestT emon-t ^Blob z ^I32 status ^I32 consumed ^Str hex]
+  (comment "A bare deflate stream: its status, how much it consumed and its output.")
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)]
+    (assert-eq (iz-raw z 0 (blob-len z) out st) status "status")
+    (assert-eq (iz-consumed st) consumed "consumed")
+    (assert-cells-hex out hex "output")
+    (return 0)))
+
+(deftest test-a-dynamic-block-from-zlib
+  (comment "729 bytes of words and numbers, level 9: one dynamic block. The Adler-32")
+  (comment "in the trailer checks every byte of the output.")
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)
+        ^Blob z (hex-blob "78da5d525b72c33008bc0a47b01e08711ca5959d74ec26e3eaa3c72f11d076f2a5112ccbee4af7cb477f1b81e1fbec6b4dd0f6c7b531ecfd731bd710e13efb94b55132bcf77db40c973e1aa24e692d049b4203539ca85861dddbe87581f5b68f7e929f798e171d47df49f035cede0e4cb0b5e36885270d25ab5350be98b49e8dae06d3465a5fe0d1b65e5f96c602e36cb75df0f4a7575d221b08ab559279935d4f3266b3ea56a4af1c25d90427e74fc540aabf68583118502237205aea1527905d173967d6edd99dcab25f9dcf09495ea329e65989482f6ccd1a3d28fa277112b3269aede124075d2c627524641f214d80abb106a54861bac3c57112d17c3da4d990d730fccb9d9779cf6812fc336968312a4b348572ea3f742fd17f8558999d50f553d51fe9ccf11e")]
+    (assert-eq (blob-len z) 297 "the stream is this long")
+    (assert-eq (iz-zlib z 0 297 out st) (iz-ok) "status")
+    (assert-eq (iz-consumed st) 297 "consumed")
+    (assert-eq (cells-len out) 729 "length")
+    (assert-eq (cells-at out 0) 111 "o")
+    (assert-eq (cells-at out 7) 57 "9")
+    (assert-eq (cells-at out 728) 56 "the last byte, 8")))
+
+(deftest test-a-code-of-fifteen-bits
+  (comment "A dynamic block whose literal/length code has lengths 1, 2, ... 14 for")
+  (comment "the bytes 0 to 13 and 15 for end-of-block (and a lone distance code of")
+  (comment "length 1): bytes 10 to 13 and the end of the block are codes of 11 to 15")
+  (comment "bits, beyond the 10-bit table.")
+  (it-check-raw (test-t)
+                (hex-blob "0de00182244992244902128b9a4756cffeffbb77a0fd7fdffff7fff9fb7ff7ff03")
+                (iz-ok) 33 "0001020d050d0d00070c03"))
+
+(deftest test-stored-fixed-and-dynamic-blocks-in-one-stream
+  (comment "A stored block, a fixed one (both flushed to a byte boundary) and the")
+  (comment "dynamic one of the law above, the last.")
+  (it-check-raw (test-t)
+                (hex-blob "001600e9ff73746f72656420626c6f636b206279746573000102ff000000ffff4acbac484d5148c3209372f293b375a012c9f929a9c58a00000000ffff0de00182244992244902128b9a4756cffeffbb77a0fd7fdffff7fff9fb7ff7ff03")
+                (iz-ok) 94
+                "73746f72656420626c6f636b206279746573000102ff666978656420666978656420666978656420666978656420626c6f636b2c20666978656420636f646573210001020d050d0d00070c03"))
+
+(deftest test-the-longest-match
+  (comment "A literal x and then a match of length 258 (symbol 285, no extra bits)")
+  (comment "at distance 1: 259 of them.")
+  (let [^Cells out (new-cells)
+        ^Cells st (new-cells)
+        ^:mut ^I32 i 0]
+    (assert-eq (iz-raw (hex-blob "ab180500") 0 4 out st) (iz-ok) "status")
+    (assert-eq (cells-len out) 259 "length")
+    (while (< i 259)
+      (do (assert-eq-at (cells-at out i) 120 "x" i)
+          (set i (+ i 1))))))
+
+(defn ^I32 it-stored-block [^:mut ^Cells z ^I32 n]
+  (comment "A non-final stored block of n bytes, the byte at i being i * 7 + i / 256.")
+  (let [^:mut ^I32 i 0]
+    (cells-push z 0)
+    (cells-push z (bit-and n 255))
+    (cells-push z (quot n 256))
+    (cells-push z (bit-and (- 65535 n) 255))
+    (cells-push z (quot (- 65535 n) 256))
+    (while (< i n)
+      (do (cells-push z (bit-and (+ (* i 7) (quot i 256)) 255))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 it-push-blob [^:mut ^Cells z ^Blob b]
+  (let [^:mut ^I32 i 0]
+    (while (< i (blob-len b))
+      (do (cells-push z (blob-u8 b i))
+          (set i (+ i 1))))
+    (return 0)))
+
+(deftest test-the-maximum-distance
+  (comment "32768 stored bytes, then a fixed block that copies three bytes from")
+  (comment "distance 32768 (symbol 29, all 13 extra bits set): the very first three.")
+  (comment "With one byte less of history the same copy reaches too far back.")
+  (let [^Cells z (new-cells)
+        ^Cells out (new-cells)
+        ^Cells st (new-cells)]
+    (it-stored-block z 32768)
+    (it-push-blob z (hex-blob "03deff0f00"))
+    (assert-eq (iz-raw (cells-blob z) 0 (cells-len z) out st) (iz-ok) "status")
+    (assert-eq (iz-consumed st) (cells-len z) "consumed")
+    (assert-eq (cells-len out) 32771 "length")
+    (assert-eq (cells-at out 32768) (cells-at out 0) "first copied byte")
+    (assert-eq (cells-at out 32769) (cells-at out 1) "second")
+    (assert-eq (cells-at out 32770) (cells-at out 2) "third")
+    (assert-eq (cells-at out 32767) (bit-and (+ (* 32767 7) 127) 255) "the last stored byte")
+    (cells-drop z 0)
+    (cells-drop out 0)
+    (it-stored-block z 32767)
+    (it-push-blob z (hex-blob "03deff0f00"))
+    (assert-eq (iz-raw (cells-blob z) 0 (cells-len z) out st) (iz-bad-distance) "too far back")
+    (assert-eq (cells-len out) 32767 "the stored bytes are kept")))
+
+(deftest test-a-code-that-is-not-in-the-table-keeps-its-error
+  (comment "The block of the 15-bit law, with a match symbol and then the distance")
+  (comment "code '1', which the lone distance code of length 1 does not have. The walk")
+  (comment "reads 15 bits before it says bad-code: with them it does, and with the")
+  (comment "stream ending sooner it is truncated, as it always was.")
+  (it-check-raw (test-t)
+                (hex-blob "0de00182244992244902128b9a4756cffeffbb77a0fdff030000")
+                (iz-bad-code) 25 "000102")
+  (it-check-raw (test-t)
+                (hex-blob "0de00182244992244902128b9a4756cffeffbb77a0fdff03")
+                (iz-truncated) 24 "000102"))

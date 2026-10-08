@@ -206,3 +206,164 @@ fn test_crypt_is_the_identity_and_image_filters_are_declined() {
     crate::testport::assert_eq(crate::port::cells_len(out), 2, "out untouched by an image filter");
     crate::testport::assert_eq(pf_run(99, &crate::testport::hex_blob("00")[..], 0, 1, out, st, 1), pf_unsupported(), "unknown");
 }
+pub(crate) fn lz_width(j: i32, early: i32) -> i32 {
+    // The width of code number j (from 0) after a clear code: the table
+    // then has 258 + max(0, j - 1) entries, 4096 at most, and codes are 10
+    // bits from 512 entries, 11 from 1024 and 12 from 2048 (less `early`).
+    let mut n: i32 = 258 + (j - 1);
+    let mut w: i32 = 9;
+    if j < 1 {
+        n = 258;
+    }
+    if n > 4096 {
+        n = 4096;
+    }
+    if (n + early) >= 512 {
+        w = 10;
+    }
+    if (n + early) >= 1024 {
+        w = 11;
+    }
+    if (n + early) >= 2048 {
+        w = 12;
+    }
+    return w;
+}
+pub(crate) fn lz_put(mut z: &mut crate::port::Cells, mut s: &mut crate::port::Cells, code: i32, width: i32) -> i32 {
+    // Append `code` in `width` bits, most significant first, to z; s holds
+    // the bits not yet a byte (their value, then how many).
+    let mut acc: i32 = (crate::port::cells_at(s, 0) * ((1) << (width))) + code;
+    let mut nb: i32 = crate::port::cells_at(s, 1) + width;
+    while nb >= 8 {
+        crate::port::cells_push(z, ((acc) >> (nb - 8)) & 255);
+        nb -= 8;
+        acc &= ((1) << (nb)) - 1;
+    }
+    crate::port::cells_set(s, 0, acc);
+    crate::port::cells_set(s, 1, nb);
+    return 0;
+}
+pub(crate) fn lz_end(mut z: &mut crate::port::Cells, mut s: &mut crate::port::Cells) -> i32 {
+    // Pad the last byte with zero bits.
+    if crate::port::cells_at(s, 1) > 0 {
+        crate::port::cells_push(z, crate::port::cells_at(s, 0) * ((1) << (8 - crate::port::cells_at(s, 1))));
+    }
+    return 0;
+}
+pub(crate) fn lz_check_hex(emon_t: i32, z: &[u8], early: i32, want: &str) -> i32 {
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(pf_lzw(z, 0, crate::port::blob_len(z), out, st, early), 0, "status");
+    crate::testport::assert_cells_hex(out, want, "output");
+    return 0;
+}
+#[test]
+fn test_lzw_a_code_that_is_the_entry_being_added() {
+    // KwKwK: a code equal to the next free one, whose string is the string
+    // before it and that string's first byte. After a single byte (97, 258:
+    // aaa), repeatedly (the chain 258..261 gives 2, 3, 4, 5 bytes), and after
+    // a pair, with a copy from the middle of the output (A B, AB, ABA).
+    lz_check_hex(0, &crate::testport::hex_blob("8018605010")[..], 1, "616161");
+    lz_check_hex(0, &crate::testport::hex_blob("8018605038241602")[..], 1, "616161616161616161616161616161");
+    lz_check_hex(0, &crate::testport::hex_blob("80104850282404")[..], 1, "41424142414241");
+}
+pub(crate) fn lz_check_literals(emon_t: i32, early: i32, n: i32) -> i32 {
+    // n codes, every one the byte 97: the table grows by one entry for each
+    // (until it is full), the width steps up when the rule says, and every
+    // code must still be read as itself.
+    let z: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    crate::port::cells_push(s, 0);
+    crate::port::cells_push(s, 0);
+    lz_put(z, s, 256, 9);
+    while i < n {
+        lz_put(z, s, 97, lz_width(i, early));
+        i += 1;
+    }
+    lz_put(z, s, 257, lz_width(n, early));
+    lz_end(z, s);
+    crate::testport::assert_eq(pf_lzw(&crate::testport::cells_blob(z)[..], 0, crate::port::cells_len(z), out, st, early), 0, "status");
+    crate::testport::assert_eq(crate::port::cells_len(out), n, "length");
+    i = 0;
+    while i < n {
+        crate::testport::assert_eq_at(crate::port::cells_at(out, i), 97, "a", i);
+        i += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_lzw_code_width_boundaries() {
+    // Around 511 / 512 entries (9 to 10 bits), 1023 / 1024, 2047 / 2048 and
+    // with the table full (4096 entries is 3838 codes after the first), for
+    // EarlyChange 1 and 0.
+    lz_check_literals(0, 1, 253);
+    lz_check_literals(0, 1, 254);
+    lz_check_literals(0, 0, 254);
+    lz_check_literals(0, 0, 255);
+    lz_check_literals(0, 1, 766);
+    lz_check_literals(0, 0, 767);
+    lz_check_literals(0, 1, 1790);
+    lz_check_literals(0, 0, 1791);
+    lz_check_literals(0, 1, 3900);
+    lz_check_literals(0, 0, 4300);
+}
+pub(crate) fn lz_check_chain(emon_t: i32, early: i32, m: i32) -> i32 {
+    // The byte 97 and then m codes that are each the entry being added: the
+    // strings are 2, 3, ... m + 1 bytes of 97, copied from the output just
+    // written, across the width steps at 511 and 1023 entries.
+    let z: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    crate::port::cells_push(s, 0);
+    crate::port::cells_push(s, 0);
+    lz_put(z, s, 256, 9);
+    lz_put(z, s, 97, 9);
+    while i < m {
+        lz_put(z, s, 258 + i, lz_width(i + 1, early));
+        i += 1;
+    }
+    lz_put(z, s, 257, lz_width(m + 1, early));
+    lz_end(z, s);
+    crate::testport::assert_eq(pf_lzw(&crate::testport::cells_blob(z)[..], 0, crate::port::cells_len(z), out, st, early), 0, "status");
+    crate::testport::assert_eq(crate::port::cells_len(out), (1 + m) + ((m * (m + 1)) / 2), "length");
+    i = 0;
+    while i < crate::port::cells_len(out) {
+        crate::testport::assert_eq_at(crate::port::cells_at(out, i), 97, "a", i);
+        i += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_lzw_strings_grow_across_width_steps() {
+    lz_check_chain(0, 1, 1100);
+    lz_check_chain(0, 0, 1100);
+}
+pub(crate) fn pf_check_png(emon_t: i32, r#in: &[u8], colors: i32, bpc: i32, columns: i32, want: &str) -> i32 {
+    // Predictor 15 over the bytes of `in`, against the pixels they encode.
+    let src: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    while i < crate::port::blob_len(r#in) {
+        crate::port::cells_push(src, crate::port::blob_u8(r#in, i));
+        i += 1;
+    }
+    crate::testport::assert_eq(pf_predict(src, 0, crate::port::cells_len(src), out, 15, colors, bpc, columns), 0, "status");
+    crate::testport::assert_cells_hex(out, want, "pixels");
+    return 0;
+}
+#[test]
+fn test_png_predictors_for_each_pixel_size() {
+    // Rows of every filter type (0 none, 1 sub, 2 up, 3 average, 4 Paeth) in
+    // turn, for 1, 3 and 4 bytes a pixel and for sub-byte pixels (a pixel is
+    // a byte when it is under 8 bits); made by a babashka filter from known
+    // pixels, so the pixels are the answer.
+    pf_check_png(0, &crate::testport::hex_blob("00b6806683818281fb80015a286699ff38fc13bb0227ff1d5294cacfacfe0341008ab1b1a80c0a610402097a3a851bef10af04fde83bfe02ff57a6020342d4f5130201deed4a02a8472346fafdc8dfc40183ff56aa906fffb84800818083bc6f818983d0")[..], 1, 8, 9, "b6806683818281fb805a82e88180b8b4c782818105d314828373808181cd81fb668083e2838c47818081708091807482808281c76d82824f5d8183838365bd2a9680c77d804b44818382d8821281803880818083bc6f818983d0");
+    pf_check_png(0, &crate::testport::hex_blob("0482838113ff00ebff0203b8fd03424240932d030c53001ff10c0203fd03622200bdc6fe4b0bf90181d78234aa00cc69ffc9dd020034ad758a5f8380804e475883018082cc8801cb4d9b5058ff9a0428feb5790342026299ee01f5032f40e0ff02576e976baed6c802fe67610091b9626a720d8a79")[..], 3, 8, 4, "8283819582818081838339808383801faf835beb838e838d86808381d18318b181d98e8681d782b5818281ea814ac78334ad758a5f8380804e4758838082cc088397551ee7ad1d81a880818183c38380809b81758380208183c8f0180f73220a81e78181148152828180ac83");
+    pf_check_png(0, &crate::testport::hex_blob("013982ed6a5b009316020b01932d64210101035e4198c775f18338045c01aa700261bacd0080d281818d83320b")[..], 4, 8, 2, "3982ed6a9482808044838097f8a381818082d81231832f81dc83828282e4e94f80d281818d83320b");
+    pf_check_png(0, &crate::testport::hex_blob("0313a9046fd10200b2017c3004bf0500e1c3")[..], 1, 1, 12, "13b2828382357cac3b81e1c3");
+}

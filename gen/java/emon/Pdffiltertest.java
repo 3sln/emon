@@ -204,4 +204,161 @@ public final class Pdffiltertest {
         emon.Testport.assertEq(emon.Port.cellsLen(out), 2, "out untouched by an image filter");
         emon.Testport.assertEq(Pdffilter.pfRun(99, emon.Testport.hexBlob("00"), 0, 1, out, st, 1), Pdffilter.pfUnsupported(), "unknown");
     }
+    public static int lzWidth(int j, int early) {
+        // The width of code number j (from 0) after a clear code: the table
+        // then has 258 + max(0, j - 1) entries, 4096 at most, and codes are 10
+        // bits from 512 entries, 11 from 1024 and 12 from 2048 (less `early`).
+        int n = 258 + (j - 1);
+        int w = 9;
+        if (j < 1) {
+            n = 258;
+        }
+        if (n > 4096) {
+            n = 4096;
+        }
+        if ((n + early) >= 512) {
+            w = 10;
+        }
+        if ((n + early) >= 1024) {
+            w = 11;
+        }
+        if ((n + early) >= 2048) {
+            w = 12;
+        }
+        return w;
+    }
+    public static int lzPut(emon.Port.Cells z, emon.Port.Cells s, int code, int width) {
+        // Append `code` in `width` bits, most significant first, to z; s holds
+        // the bits not yet a byte (their value, then how many).
+        int acc = (emon.Port.cellsAt(s, 0) * ((1) << (width))) + code;
+        int nb = emon.Port.cellsAt(s, 1) + width;
+        while (nb >= 8) {
+            emon.Port.cellsPush(z, ((acc) >> (nb - 8)) & 255);
+            nb -= 8;
+            acc &= ((1) << (nb)) - 1;
+        }
+        emon.Port.cellsSet(s, 0, acc);
+        emon.Port.cellsSet(s, 1, nb);
+        return 0;
+    }
+    public static int lzEnd(emon.Port.Cells z, emon.Port.Cells s) {
+        // Pad the last byte with zero bits.
+        if (emon.Port.cellsAt(s, 1) > 0) {
+            emon.Port.cellsPush(z, emon.Port.cellsAt(s, 0) * ((1) << (8 - emon.Port.cellsAt(s, 1))));
+        }
+        return 0;
+    }
+    public static int lzCheckHex(int emonT, byte[] z, int early, String want) {
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Testport.assertEq(Pdffilter.pfLzw(z, 0, emon.Port.blobLen(z), out, st, early), 0, "status");
+        emon.Testport.assertCellsHex(out, want, "output");
+        return 0;
+    }
+    public static void testLzwACodeThatIsTheEntryBeingAdded() {
+        // KwKwK: a code equal to the next free one, whose string is the string
+        // before it and that string's first byte. After a single byte (97, 258:
+        // aaa), repeatedly (the chain 258..261 gives 2, 3, 4, 5 bytes), and after
+        // a pair, with a copy from the middle of the output (A B, AB, ABA).
+        lzCheckHex(0, emon.Testport.hexBlob("8018605010"), 1, "616161");
+        lzCheckHex(0, emon.Testport.hexBlob("8018605038241602"), 1, "616161616161616161616161616161");
+        lzCheckHex(0, emon.Testport.hexBlob("80104850282404"), 1, "41424142414241");
+    }
+    public static int lzCheckLiterals(int emonT, int early, int n) {
+        // n codes, every one the byte 97: the table grows by one entry for each
+        // (until it is full), the width steps up when the rule says, and every
+        // code must still be read as itself.
+        emon.Port.Cells z = emon.Port.newCells();
+        emon.Port.Cells s = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        int i = 0;
+        emon.Port.cellsPush(s, 0);
+        emon.Port.cellsPush(s, 0);
+        lzPut(z, s, 256, 9);
+        while (i < n) {
+            lzPut(z, s, 97, lzWidth(i, early));
+            i += 1;
+        }
+        lzPut(z, s, 257, lzWidth(n, early));
+        lzEnd(z, s);
+        emon.Testport.assertEq(Pdffilter.pfLzw(emon.Testport.cellsBlob(z), 0, emon.Port.cellsLen(z), out, st, early), 0, "status");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), n, "length");
+        i = 0;
+        while (i < n) {
+            emon.Testport.assertEqAt(emon.Port.cellsAt(out, i), 97, "a", i);
+            i += 1;
+        }
+        return 0;
+    }
+    public static void testLzwCodeWidthBoundaries() {
+        // Around 511 / 512 entries (9 to 10 bits), 1023 / 1024, 2047 / 2048 and
+        // with the table full (4096 entries is 3838 codes after the first), for
+        // EarlyChange 1 and 0.
+        lzCheckLiterals(0, 1, 253);
+        lzCheckLiterals(0, 1, 254);
+        lzCheckLiterals(0, 0, 254);
+        lzCheckLiterals(0, 0, 255);
+        lzCheckLiterals(0, 1, 766);
+        lzCheckLiterals(0, 0, 767);
+        lzCheckLiterals(0, 1, 1790);
+        lzCheckLiterals(0, 0, 1791);
+        lzCheckLiterals(0, 1, 3900);
+        lzCheckLiterals(0, 0, 4300);
+    }
+    public static int lzCheckChain(int emonT, int early, int m) {
+        // The byte 97 and then m codes that are each the entry being added: the
+        // strings are 2, 3, ... m + 1 bytes of 97, copied from the output just
+        // written, across the width steps at 511 and 1023 entries.
+        emon.Port.Cells z = emon.Port.newCells();
+        emon.Port.Cells s = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        int i = 0;
+        emon.Port.cellsPush(s, 0);
+        emon.Port.cellsPush(s, 0);
+        lzPut(z, s, 256, 9);
+        lzPut(z, s, 97, 9);
+        while (i < m) {
+            lzPut(z, s, 258 + i, lzWidth(i + 1, early));
+            i += 1;
+        }
+        lzPut(z, s, 257, lzWidth(m + 1, early));
+        lzEnd(z, s);
+        emon.Testport.assertEq(Pdffilter.pfLzw(emon.Testport.cellsBlob(z), 0, emon.Port.cellsLen(z), out, st, early), 0, "status");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), (1 + m) + ((m * (m + 1)) / 2), "length");
+        i = 0;
+        while (i < emon.Port.cellsLen(out)) {
+            emon.Testport.assertEqAt(emon.Port.cellsAt(out, i), 97, "a", i);
+            i += 1;
+        }
+        return 0;
+    }
+    public static void testLzwStringsGrowAcrossWidthSteps() {
+        lzCheckChain(0, 1, 1100);
+        lzCheckChain(0, 0, 1100);
+    }
+    public static int pfCheckPng(int emonT, byte[] in, int colors, int bpc, int columns, String want) {
+        // Predictor 15 over the bytes of `in`, against the pixels they encode.
+        emon.Port.Cells src = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        int i = 0;
+        while (i < emon.Port.blobLen(in)) {
+            emon.Port.cellsPush(src, emon.Port.blobU8(in, i));
+            i += 1;
+        }
+        emon.Testport.assertEq(Pdffilter.pfPredict(src, 0, emon.Port.cellsLen(src), out, 15, colors, bpc, columns), 0, "status");
+        emon.Testport.assertCellsHex(out, want, "pixels");
+        return 0;
+    }
+    public static void testPngPredictorsForEachPixelSize() {
+        // Rows of every filter type (0 none, 1 sub, 2 up, 3 average, 4 Paeth) in
+        // turn, for 1, 3 and 4 bytes a pixel and for sub-byte pixels (a pixel is
+        // a byte when it is under 8 bits); made by a babashka filter from known
+        // pixels, so the pixels are the answer.
+        pfCheckPng(0, emon.Testport.hexBlob("00b6806683818281fb80015a286699ff38fc13bb0227ff1d5294cacfacfe0341008ab1b1a80c0a610402097a3a851bef10af04fde83bfe02ff57a6020342d4f5130201deed4a02a8472346fafdc8dfc40183ff56aa906fffb84800818083bc6f818983d0"), 1, 8, 9, "b6806683818281fb805a82e88180b8b4c782818105d314828373808181cd81fb668083e2838c47818081708091807482808281c76d82824f5d8183838365bd2a9680c77d804b44818382d8821281803880818083bc6f818983d0");
+        pfCheckPng(0, emon.Testport.hexBlob("0482838113ff00ebff0203b8fd03424240932d030c53001ff10c0203fd03622200bdc6fe4b0bf90181d78234aa00cc69ffc9dd020034ad758a5f8380804e475883018082cc8801cb4d9b5058ff9a0428feb5790342026299ee01f5032f40e0ff02576e976baed6c802fe67610091b9626a720d8a79"), 3, 8, 4, "8283819582818081838339808383801faf835beb838e838d86808381d18318b181d98e8681d782b5818281ea814ac78334ad758a5f8380804e4758838082cc088397551ee7ad1d81a880818183c38380809b81758380208183c8f0180f73220a81e78181148152828180ac83");
+        pfCheckPng(0, emon.Testport.hexBlob("013982ed6a5b009316020b01932d64210101035e4198c775f18338045c01aa700261bacd0080d281818d83320b"), 4, 8, 2, "3982ed6a9482808044838097f8a381818082d81231832f81dc83828282e4e94f80d281818d83320b");
+        pfCheckPng(0, emon.Testport.hexBlob("0313a9046fd10200b2017c3004bf0500e1c3"), 1, 1, 12, "13b2828382357cac3b81e1c3");
+    }
 }

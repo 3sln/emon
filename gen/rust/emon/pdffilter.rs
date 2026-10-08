@@ -355,38 +355,7 @@ pub fn pf_rl(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells) -> i3
     }
     return 0;
 }
-pub(crate) const L_SIZE: i32 = 16384;
-pub(crate) fn pf_lzw_string(mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells, code: i32) -> i32 {
-    // Append the string of `code` (0..255 a byte, 258.. a table entry).
-    let ln: i32 = crate::port::cells_at(st, (code * 4) + 2);
-    let base: i32 = crate::port::cells_len(out);
-    let mut k: i32 = 0;
-    let mut x: i32 = code;
-    let mut at: i32 = 0;
-    while k < ln {
-        crate::port::cells_push(out, 0);
-        k += 1;
-    }
-    at = (base + ln) - 1;
-    while at >= base {
-        crate::port::cells_set(out, at, crate::port::cells_at(st, (x * 4) + 1));
-        x = crate::port::cells_at(st, x * 4);
-        at -= 1;
-    }
-    return ln;
-}
-pub(crate) fn pf_lzw_clear(mut st: &mut crate::port::Cells) -> i32 {
-    // 256 literal entries; 256 and 257 are codes, not strings.
-    let mut i: i32 = 0;
-    while i < 256 {
-        crate::port::cells_set(st, i * 4, 0);
-        crate::port::cells_set(st, (i * 4) + 1, i);
-        crate::port::cells_set(st, (i * 4) + 2, 1);
-        crate::port::cells_set(st, (i * 4) + 3, i);
-        i += 1;
-    }
-    return 0;
-}
+pub(crate) const L_SIZE: i32 = 8192;
 pub(crate) fn pf_lzw_width(nxt: i32, early: i32) -> i32 {
     // The code width once the table holds `nxt` entries.
     if (nxt + early) >= 2048 {
@@ -400,57 +369,33 @@ pub(crate) fn pf_lzw_width(nxt: i32, early: i32) -> i32 {
     }
     return 9;
 }
-pub(crate) fn pf_lzw_step(mut st: &mut crate::port::Cells, mut out: &mut crate::port::Cells, base: i32, code: i32, prev: i32, nxt: i32) -> i32 {
-    // One ordinary code after the first: add the entry `prev + first of
-    // code` (when the table has room) and write the string of `code`.
-    // Answers the new `nxt`, or -1 for a code beyond the table.
-    let mut first: i32 = 0;
-    let mut ln: i32 = 0;
-    if code > nxt {
-        return -1;
-    }
-    if code < nxt {
-        first = crate::port::cells_at(st, (code * 4) + 3);
-    } else {
-        first = crate::port::cells_at(st, (prev * 4) + 3);
-    }
-    if nxt < 4096 {
-        ln = crate::port::cells_at(st, (prev * 4) + 2) + 1;
-        crate::port::cells_set(st, nxt * 4, prev);
-        crate::port::cells_set(st, (nxt * 4) + 1, first);
-        crate::port::cells_set(st, (nxt * 4) + 2, ln);
-        crate::port::cells_set(st, (nxt * 4) + 3, crate::port::cells_at(st, (prev * 4) + 3));
-    }
-    pf_room(out, base, crate::port::cells_at(st, (code * 4) + 2));
-    pf_lzw_string(st, out, code);
-    if nxt < 4096 {
-        return nxt + 1;
-    }
-    return nxt;
-}
 pub fn pf_lzw(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells, mut st: &mut crate::port::Cells, early: i32) -> i32 {
     // LZWDecode: codes of 9-12 bits, most significant bit first; 256
     // clears the table, 257 ends the data. `early` is /EarlyChange
     // (1 by default: the code width grows one entry sooner). A table
-    // that is full is left as it is, as the encoders do.
+    // that is full is left as it is, as the encoders do. `pp` and `pl` are
+    // where the string just written begins and how long it is; `have` is 0
+    // at the start and after a clear, when there is no string before.
     let base: i32 = crate::port::cells_len(out);
+    let lim: i32 = crate::port::limit_of(1);
     let mut i: i32 = s;
     let mut acc: i32 = 0;
     let mut nbits: i32 = 0;
     let mut width: i32 = 9;
     let mut nxt: i32 = 258;
-    let mut prev: i32 = -1;
+    let mut have: i32 = 0;
+    let mut pp: i32 = 0;
+    let mut pl: i32 = 0;
     let mut code: i32 = 0;
-    let mut n2: i32 = 0;
+    let mut ln: i32 = 0;
+    let mut at: i32 = 0;
+    let mut x: i32 = 0;
+    let mut p: i32 = 0;
+    let mut k: i32 = 0;
     let mut status: i32 = 0;
     let mut done: i32 = 0;
-    let mut k: i32 = 0;
     crate::port::cells_drop(st, 0);
-    while k < L_SIZE {
-        crate::port::cells_push(st, 0);
-        k += 1;
-    }
-    pf_lzw_clear(st);
+    crate::port::cells_grow(st, L_SIZE, 0);
     while done == 0 {
         while (nbits < width) && (i < e) {
             acc = (acc * 256) + crate::port::blob_u8(src, i);
@@ -466,28 +411,57 @@ pub fn pf_lzw(src: &[u8], s: i32, e: i32, mut out: &mut crate::port::Cells, mut 
             if code == 256 {
                 nxt = 258;
                 width = 9;
-                prev = -1;
+                have = 0;
             } else if code == 257 {
                 done = 1;
-            } else if prev == -1 {
+            } else if have == 0 {
                 if code > 255 {
                     status = 3;
                     done = 1;
                 } else {
-                    pf_room(out, base, 1);
-                    pf_lzw_string(st, out, code);
-                    prev = code;
+                    if 1 > (lim - (crate::port::cells_len(out) - base)) {
+                        crate::port::limit_breach(1, (crate::port::cells_len(out) - base) + 1);
+                    }
+                    pp = crate::port::cells_len(out);
+                    crate::port::cells_push(out, code);
+                    pl = 1;
+                    have = 1;
                 }
+            } else if code > nxt {
+                status = 3;
+                done = 1;
             } else {
-                n2 = pf_lzw_step(st, out, base, code, prev, nxt);
-                if n2 < 0 {
-                    status = 3;
-                    done = 1;
-                } else {
-                    nxt = n2;
-                    width = pf_lzw_width(nxt, early);
-                    prev = code;
+                // The new entry: the string before, and the first byte of
+                // this one, which follows it in `out`.
+                if nxt < 4096 {
+                    crate::port::cells_set(st, nxt * 2, pp);
+                    crate::port::cells_set(st, (nxt * 2) + 1, pl + 1);
                 }
+                ln = 1;
+                if code > 255 {
+                    ln = crate::port::cells_at(st, (code * 2) + 1);
+                }
+                if ln > (lim - (crate::port::cells_len(out) - base)) {
+                    crate::port::limit_breach(1, (crate::port::cells_len(out) - base) + ln);
+                }
+                p = crate::port::cells_len(out);
+                if code < 256 {
+                    crate::port::cells_push(out, code);
+                } else {
+                    at = crate::port::cells_at(st, code * 2);
+                    k = 0;
+                    while k < ln {
+                        x = crate::port::cells_at(out, at + k);
+                        crate::port::cells_push(out, x);
+                        k += 1;
+                    }
+                }
+                pp = p;
+                pl = ln;
+                if nxt < 4096 {
+                    nxt += 1;
+                }
+                width = pf_lzw_width(nxt, early);
             }
         }
     }
@@ -539,22 +513,69 @@ pub(crate) fn pf_paeth(a: i32, b: i32, c: i32) -> i32 {
     }
     return c;
 }
+pub(crate) fn pf_png_slow(r#in: &mut crate::port::Cells, pos: i32, mut out: &mut crate::port::Cells, rb: i32, rowb: i32, bpp: i32, t: i32, has_prev: i32, i0: i32, i1: i32) -> i32 {
+    // Bytes i0 up to i1 of one row (its filter byte `t`, its bytes at
+    // in[pos..], its output starting at `rb`), every case tested on every
+    // byte: the definition. `pf-png` uses it for a first row (no row
+    // above) and for the first `bpp` bytes of the others (no pixel to
+    // the left), and a loop per filter for the rest.
+    let mut i: i32 = i0;
+    let mut x: i32 = 0;
+    let mut a: i32 = 0;
+    let mut b: i32 = 0;
+    let mut c: i32 = 0;
+    let mut v: i32 = 0;
+    while i < i1 {
+        x = crate::port::cells_at(r#in, pos + i);
+        a = 0;
+        b = 0;
+        c = 0;
+        if i >= bpp {
+            a = crate::port::cells_at(out, (rb + i) - bpp);
+        }
+        if has_prev == 1 {
+            b = crate::port::cells_at(out, (rb + i) - rowb);
+            if i >= bpp {
+                c = crate::port::cells_at(out, ((rb + i) - rowb) - bpp);
+            }
+        }
+        v = x;
+        if t == 1 {
+            v = x + a;
+        }
+        if t == 2 {
+            v = x + b;
+        }
+        if t == 3 {
+            v = x + ((a + b) / 2);
+        }
+        if t == 4 {
+            v = x + pf_paeth(a, b, c);
+        }
+        crate::port::cells_push(out, v & 255);
+        i += 1;
+    }
+    return 0;
+}
 pub(crate) fn pf_png(r#in: &mut crate::port::Cells, from: i32, to: i32, mut out: &mut crate::port::Cells, rowb: i32, bpp: i32) -> i32 {
     // Undo PNG prediction: each row is a filter byte (0 none, 1 sub,
     // 2 up, 3 average, 4 Paeth) and `rowb` bytes. A short last row is
     // decoded as far as it goes. Answers 4 for a filter byte above 4.
+    // Per row, past its first `bpp` bytes and with a row above, one loop
+    // for its filter (P10.3a, D883): the per-byte tests of the general
+    // case (`pf-png-slow`) were the cost, not the arithmetic.
     let base0: i32 = crate::port::cells_len(out);
     let mut pos: i32 = from;
     let mut t: i32 = 0;
     let mut avail: i32 = 0;
     let mut rb: i32 = 0;
     let mut i: i32 = 0;
+    let mut lead: i32 = 0;
     let mut x: i32 = 0;
     let mut a: i32 = 0;
     let mut b: i32 = 0;
     let mut c: i32 = 0;
     let mut has_prev: i32 = 0;
-    let mut v: i32 = 0;
     while pos < to {
         t = crate::port::cells_at(r#in, pos);
         pos += 1;
@@ -570,36 +591,86 @@ pub(crate) fn pf_png(r#in: &mut crate::port::Cells, from: i32, to: i32, mut out:
         if avail > rowb {
             avail = rowb;
         }
-        i = 0;
-        while i < avail {
-            x = crate::port::cells_at(r#in, pos + i);
-            a = 0;
-            b = 0;
-            c = 0;
-            if i >= bpp {
-                a = crate::port::cells_at(out, (rb + i) - bpp);
+        lead = avail;
+        if (has_prev == 1) && (lead > bpp) {
+            lead = bpp;
+        }
+        pf_png_slow(r#in, pos, out, rb, rowb, bpp, t, has_prev, 0, lead);
+        // The rest of the row is made room for once and written by index.
+        i = lead;
+        crate::port::cells_grow(out, avail - lead, 0);
+        if t == 0 {
+            while i < avail {
+                crate::port::cells_set(out, rb + i, crate::port::cells_at(r#in, pos + i) & 255);
+                i += 1;
             }
-            if has_prev == 1 {
+        }
+        if t == 2 {
+            while i < avail {
+                x = crate::port::cells_at(r#in, pos + i);
                 b = crate::port::cells_at(out, (rb + i) - rowb);
-                if i >= bpp {
-                    c = crate::port::cells_at(out, ((rb + i) - rowb) - bpp);
+                crate::port::cells_set(out, rb + i, (x + b) & 255);
+                i += 1;
+            }
+        }
+        // One byte a pixel (gray, 8 bits): the pixel to the left is the byte
+        // just written, so it is carried in `a` rather than read back from
+        // `out` (a read of a write a few cycles old), and the upper-left `c`
+        // is the last `b`.
+        if (bpp == 1) && (i < avail) {
+            a = crate::port::cells_at(out, (rb + i) - 1);
+            if t == 1 {
+                while i < avail {
+                    a = (crate::port::cells_at(r#in, pos + i) + a) & 255;
+                    crate::port::cells_set(out, rb + i, a);
+                    i += 1;
                 }
             }
-            v = x;
-            if t == 1 {
-                v = x + a;
-            }
-            if t == 2 {
-                v = x + b;
-            }
             if t == 3 {
-                v = x + ((a + b) / 2);
+                while i < avail {
+                    b = crate::port::cells_at(out, (rb + i) - rowb);
+                    a = (crate::port::cells_at(r#in, pos + i) + ((a + b) / 2)) & 255;
+                    crate::port::cells_set(out, rb + i, a);
+                    i += 1;
+                }
             }
             if t == 4 {
-                v = x + pf_paeth(a, b, c);
+                c = crate::port::cells_at(out, ((rb + i) - rowb) - 1);
+                while i < avail {
+                    b = crate::port::cells_at(out, (rb + i) - rowb);
+                    a = (crate::port::cells_at(r#in, pos + i) + pf_paeth(a, b, c)) & 255;
+                    crate::port::cells_set(out, rb + i, a);
+                    c = b;
+                    i += 1;
+                }
             }
-            crate::port::cells_push(out, v & 255);
-            i += 1;
+        }
+        if (bpp != 1) && (t == 1) {
+            while i < avail {
+                x = crate::port::cells_at(r#in, pos + i);
+                a = crate::port::cells_at(out, (rb + i) - bpp);
+                crate::port::cells_set(out, rb + i, (x + a) & 255);
+                i += 1;
+            }
+        }
+        if (bpp != 1) && (t == 3) {
+            while i < avail {
+                x = crate::port::cells_at(r#in, pos + i);
+                a = crate::port::cells_at(out, (rb + i) - bpp);
+                b = crate::port::cells_at(out, (rb + i) - rowb);
+                crate::port::cells_set(out, rb + i, (x + ((a + b) / 2)) & 255);
+                i += 1;
+            }
+        }
+        if (bpp != 1) && (t == 4) {
+            while i < avail {
+                x = crate::port::cells_at(r#in, pos + i);
+                a = crate::port::cells_at(out, (rb + i) - bpp);
+                b = crate::port::cells_at(out, (rb + i) - rowb);
+                c = crate::port::cells_at(out, ((rb + i) - rowb) - bpp);
+                crate::port::cells_set(out, rb + i, (x + pf_paeth(a, b, c)) & 255);
+                i += 1;
+            }
         }
         pos += avail;
     }
