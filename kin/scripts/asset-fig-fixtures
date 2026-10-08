@@ -11,6 +11,7 @@
 ;;   fig-logo-pages.pdf     three pages, the same two-path logo in the same place on each: three uses of one rendered asset
 ;;   fig-over-image.pdf     five pictures of one image: left alone (the control: its own pixels), a rectangle drawn over it, text
 ;;                          drawn over it, rotated 10 degrees by its matrix, and clipped by a circle: the last four are rendered
+;;   fig-letterhead.pdf     four pages of a letter: a raster logo and a vector logo in the head of each, a badge in the body of two (P8.4)
 (require '[babashka.fs :as fs] '[clojure.string :as str])
 (import '(java.io ByteArrayOutputStream))
 
@@ -256,8 +257,73 @@
          (t 11 72 260 "Closing paragraph after a rule."))))
 (def notfig-pdf (pdf (page-objs [notfig-page] [""] [])))
 
+;; ------------------------------------------------------------------------------------------------ the letterhead (P8.4, SPEC 10.6)
+;; Four pages of one letter: a raster logo (one image object, Flate) at the head of every page, a vector logo (a round mark, a square and a
+;; triangle) at the head's right hand end (a tenth smaller on page 3), "Page n of 4" in the head and a firm's line in the foot, which are
+;; furniture; and a small raster badge in the BODY of pages 2 and 4, at two places (one image object): a logo by recurrence, not furniture.
+
+(defn deflate [^bytes data]
+  (let [d (java.util.zip.Deflater.) o (ByteArrayOutputStream.) buf (byte-array 4096)]
+    (.setInput d data) (.finish d)
+    (while (not (.finished d)) (let [n (.deflate d buf)] (.write o buf 0 n)))
+    (.toByteArray o)))
+
+(def letter-logo-data
+  "48 x 24 RGB, flat: a teal field, a white bar and an orange block."
+  (deflate (byte-array (for [y (range 24) x (range 48) c (range 3)]
+                         (unchecked-byte (cond (< x 6) (nth [10 150 110] c)
+                                               (< y 4) 255
+                                               (>= x 36) (nth [217 115 38] c)
+                                               :else (nth [10 150 110] c)))))))
+(def letter-badge-data
+  "24 x 24 RGB, flat: two blue halves."
+  (deflate (byte-array (for [y (range 24) x (range 24) c (range 3)]
+                         (unchecked-byte (if (< x 12) (nth [30 60 160] c) (nth [200 210 240] c)))))))
+
+(defn flate-obj [w h data]
+  (stream (str "/Type /XObject /Subtype /Image /Width " w " /Height " h " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode") data))
+
+(defn vector-logo
+  "The round mark, the square in it and a triangle beside it, about the centre (cx, cy) at scale s."
+  [cx cy s]
+  (let [r (* 20 s) k (* 0.5523 r) q (* 8 s)]
+    (str "0.85 0.45 0.15 rg "
+         (f2 (+ cx r)) " " (f2 cy) " m "
+         (f2 (+ cx r)) " " (f2 (+ cy k)) " " (f2 (+ cx k)) " " (f2 (+ cy r)) " " (f2 cx) " " (f2 (+ cy r)) " c "
+         (f2 (- cx k)) " " (f2 (+ cy r)) " " (f2 (- cx r)) " " (f2 (+ cy k)) " " (f2 (- cx r)) " " (f2 cy) " c "
+         (f2 (- cx r)) " " (f2 (- cy k)) " " (f2 (- cx k)) " " (f2 (- cy r)) " " (f2 cx) " " (f2 (- cy r)) " c "
+         (f2 (+ cx k)) " " (f2 (- cy r)) " " (f2 (+ cx r)) " " (f2 (- cy k)) " " (f2 (+ cx r)) " " (f2 cy) " c f\n"
+         "1 g " (f2 (- cx q)) " " (f2 (- cy q)) " " (f2 (* 2 q)) " " (f2 (* 2 q)) " re f\n"
+         "0.20 0.20 0.50 rg " (f2 (- cx (* 3 q))) " " (f2 (- cy q)) " m " (f2 (- cx (* 2 q))) " " (f2 (+ cy q)) " l " (f2 (- cx q)) " " (f2 (- cy q)) " l f\n")))
+
+(defn letter-page [n]
+  (str "q 96 0 0 48 56 722 cm /Im1 Do Q\n"
+       (vector-logo 520 746 (if (= n 3) 0.9 1.0))
+       "0 g\n"
+       (t 10 280 745 (str "Page " n " of 4"))
+       (t 14 72 660 (str "Re: the Harbor lease, part " n))
+       (t 11 72 636 "We write further to our earlier letter about the terms of the lease for the harbour office and the")
+       (t 11 72 620 "questions that your client has put to us since then. We set out below where we agree with")
+       (t 11 72 604 "those terms, where we do not, and what we would ask you to do before the end of the month.")
+       (case n
+         2 (str "q 60 0 0 60 72 470 cm /Im2 Do Q\n"
+                (t 11 72 400 "The partner who handled the first negotiation has since left the firm, and so the matter")
+                (t 11 72 384 "has passed to the colleague named below, who has the whole of the file with her."))
+         4 (str "q 60 0 0 60 420 330 cm /Im2 Do Q\n"
+                (t 11 72 400 "We remain at your disposal for any questions about this letter and will gladly meet")
+                (t 11 72 384 "your client at the harbour office on a day that suits both of them."))
+         (str (t 11 72 400 "A second paragraph of this letter sets out our view of the notice period, in terms that")
+              (t 11 72 384 "we hope will be clear enough for your client to answer in the time that we have given.")))
+       (t 9 72 40 "Harbor and Pine LLP, 14 Quay Street - Confidential")))
+
+(def letter-pdf
+  (pdf (page-objs (mapv letter-page [1 2 3 4])
+                  (vec (repeat 4 "/XObject << /Im1 IMG0 0 R /Im2 IMG1 0 R >>"))
+                  [(flate-obj 48 24 letter-logo-data) (flate-obj 24 24 letter-badge-data)])))
+
 (def files {"fig-vector-chart.pdf" chart-pdf "fig-logo-pages.pdf" logo-pdf "fig-over-image.pdf" over-pdf
-            "fig-kinds.pdf" kinds-pdf "fig-notfigures.pdf" notfig-pdf})
+            "fig-kinds.pdf" kinds-pdf "fig-notfigures.pdf" notfig-pdf
+            "fig-letterhead.pdf" letter-pdf})
 
 (if check?
   (let [bad (for [[n b] files :when (not (and (fs/exists? (str out "/" n)) (java.util.Arrays/equals ^bytes b ^bytes (fs/read-all-bytes (str out "/" n)))))] n)]

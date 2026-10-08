@@ -342,3 +342,119 @@ func TestAFigureGoesInBeforeItsCaptionWhateverItsTopEdgeSays(emonT *testing.T) {
 	port.AssertEq(emonT, model.NodeKind(nn, 3), model.NkFigure(), "the figure is just before its caption, after the paragraph that is lower on the page")
 	port.AssertEq(emonT, model.NodeKind(nn, 4), model.NkCaption(), "and the caption follows it")
 }
+
+func ftFiAdd(fi *port.Cells, w int32, h int32, d1 int32, d2 int32) int32 {
+	// A row of `fi` for a flat raster of w x h pixels whose stream has the digest d1 d2 (stride 12).
+	port.CellsPush(fi, 1)
+	port.CellsPush(fi, 0)
+	port.CellsPush(fi, 2)
+	port.CellsPush(fi, 3)
+	port.CellsPush(fi, 8)
+	port.CellsPush(fi, w)
+	port.CellsPush(fi, h)
+	port.CellsPush(fi, 60)
+	port.CellsPush(fi, 0)
+	port.CellsPush(fi, 0)
+	port.CellsPush(fi, d1)
+	port.CellsPush(fi, d2)
+	return 0
+}
+
+func ftImgCand(cand *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32, obj int32, fir int32) int32 {
+	// A candidate row that is an image placement: its object, and its row of `fi` (cells 25, 27 and 28).
+	var r int32 = port.CellsLen(cand) / 32
+	ftCand(cand, page, x0, y0, x1, y1)
+	port.CellsSet(cand, (r*32)+25, obj)
+	port.CellsSet(cand, (r*32)+27, -1)
+	port.CellsSet(cand, (r*32)+28, fir)
+	return r
+}
+
+func ftVecCand(cand *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// A candidate row that is a vector region (cell 27 is -2).
+	var r int32 = port.CellsLen(cand) / 32
+	ftCand(cand, page, x0, y0, x1, y1)
+	port.CellsSet(cand, (r*32)+27, -2)
+	return r
+}
+
+func ftPages(pages *port.Cells, n int32) int32 {
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var i int32 = 1
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	for i <= n {
+		model.PageNew(pages, i, 61200, 79200, 0, model.PkVector())
+		i += 1
+	}
+	return 0
+}
+
+func TestARasterOnOtherPagesIsARecurringLogoByItsObjectOrItsDigest(emonT *testing.T) {
+	var fi *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	ftPages(pages, 4)
+	// fi rows: 0 and 1 are one raster (digest 5 6, 40 x 20), 2 is another size with the same digest, 3 another digest
+	ftFiAdd(fi, 40, 20, 5, 6)
+	ftFiAdd(fi, 40, 20, 5, 6)
+	ftFiAdd(fi, 40, 21, 5, 6)
+	ftFiAdd(fi, 40, 20, 9, 9)
+	// page 1 object 7, page 2 object 8 (the same bytes), page 3 object 7 again, page 4 a different raster, page 1 object 7 a second time
+	ftImgCand(cand, 1, 5000, 5000, 9000, 7000, 7, 0)
+	ftImgCand(cand, 2, 30000, 40000, 34000, 42000, 8, 1)
+	ftImgCand(cand, 3, 5000, 5000, 9000, 7000, 7, 0)
+	ftImgCand(cand, 4, 5000, 5000, 9000, 7000, 11, 3)
+	ftImgCand(cand, 1, 20000, 5000, 24000, 7000, 7, 0)
+	figclass.FcSignRows(fi, pa, cand)
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 1), 160, "the raster of page 2 is on two other pages (its digest equals the others', wherever it stands)")
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 0), 160, "the one of page 1: pages 2 (digest) and 3 (object); its second use on page 1 does not count")
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 3), 0, "a raster with another digest and object recurs nowhere")
+	// the same digest with another pixel size is another raster
+	ftImgCand(cand, 3, 5000, 5000, 9000, 7000, 12, 2)
+	figclass.FcSignRows(fi, pa, cand)
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 5), 0, "the same digest of another size is no recurrence")
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 3), 0, "and it is not on the others' count")
+}
+
+func TestVectorArtRecursAtTheSamePlaceWhateverItsScale(emonT *testing.T) {
+	var fi *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var cand *port.Cells = port.NewCells()
+	ftPages(pages, 4)
+	// page 1: a round mark and a square in it, at the head of the page
+	ftPath(pa, 1, 3, 7300, 7300, 10300, 10300, 43639, -1, 9)
+	ftPath(pa, 1, 2, 8500, 8500, 9100, 9100, 16777215, -1, 8)
+	ftVecCand(cand, 1, 7300, 7300, 10300, 10300)
+	// page 2: the same drawing at nine tenths of the size about the same centre
+	ftPath(pa, 2, 3, 7450, 7450, 10150, 10150, 43639, -1, 9)
+	ftPath(pa, 2, 2, 8590, 8590, 9010, 9010, 16777215, -1, 8)
+	ftVecCand(cand, 2, 7450, 7450, 10150, 10150)
+	// page 3: the same drawing, same size, in the middle of the page
+	ftPath(pa, 3, 3, 7300, 40000, 10300, 43000, 43639, -1, 9)
+	ftPath(pa, 3, 2, 8500, 41200, 9100, 41800, 16777215, -1, 8)
+	ftVecCand(cand, 3, 7300, 40000, 10300, 43000)
+	// page 4: twice the size, at the same place
+	ftPath(pa, 4, 3, 7300, 7300, 13300, 13300, 43639, -1, 9)
+	ftPath(pa, 4, 2, 9700, 9700, 10900, 10900, 16777215, -1, 8)
+	ftVecCand(cand, 4, 7300, 7300, 13300, 13300)
+	figclass.FcSignRows(fi, pa, cand)
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 0), 100, "page 1's mark recurs on page 2 only: page 3 is another place and page 4 another scale")
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 1), 100, "and page 2's on page 1")
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 2), 0, "the same drawing mid-page recurs nowhere")
+	port.AssertEq(emonT, figclass.FcRecur(cand, pages, 3), 0, "nor does one of twice the size")
+}
+
+func TestARecurringRasterIsALogoWhereverItStandsAndALoneOneIsNot(emonT *testing.T) {
+	var fi *port.Cells = port.NewCells()
+	ftFi(fi, 1, 0, 2, 3, 8, 60, 0)
+	port.AssertEq(emonT, figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 0)/1024, model.FgUnknown(), "a small flat raster mid-page, seen once")
+	port.AssertEq(emonT, figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 100)/1024, model.FgLogo(), "the same on another page too: a logo")
+	port.AssertEq(emonT, figclass.FcImageKind(fi, 0, 4000, 4000, 30000, 34000, 79200, 220)%1024, 800, "and surer for each page it is on")
+}

@@ -15,6 +15,11 @@ public static class Figclass {
     internal const int FcEmit = 500;
     internal const int FcCapgap = 4000;
     internal const int FiStride = 12;
+    internal const int FcDigestN = 4096;
+    internal const int FcRwork = 20000000;
+    internal const int FcRpos = 40;
+    internal const int FcRscaleLo = 750;
+    internal const int FcRscaleHi = 1330;
     internal const int FtNp = 0;
     internal const int FtNhl = 1;
     internal const int FtNvl = 2;
@@ -84,6 +89,7 @@ public static class Figclass {
     internal const int CrRow = 28;
     internal const int CrSrc = 29;
     internal const int CrOrg = 30;
+    internal const int CrSig = 13;
     internal static int FcAbs(int v) {
         if (v < 0) {
             return 0 - v;
@@ -170,6 +176,38 @@ public static class Figclass {
         }
         return 0;
     }
+    internal static int FcDigest(emon.Port.Src src, emon.Port.Cells fi, int k, int sstart, int slen, int w, int h) {
+        // P8.4: the digest of an image stream's bytes as the file holds them, in the cells `k + 10` and `k + 11` of `fi` (two rolling hashes,
+        // each under 2^21, from the stream's length and the image's pixel size too). A stream of `FC_DIGEST_N` bytes or fewer is read whole; a longer
+        // one by a stride through it, and its last 64 bytes. Equal digests of images of one size are one raster. 0 for none (the stream is not in the file).
+        int total = Pdfsrc.PsLen(src);
+        int step = FcMax(1, slen / FcDigestN);
+        int h1 = slen % 2000003;
+        int h2 = ((w * 7919) + h) % 1999993;
+        int i = 0;
+        int b = 0;
+        if ((sstart < 0) || ((slen < 1) || ((sstart + slen) > total))) {
+            return 0;
+        }
+        while (i < slen) {
+            b = Pdfsrc.PsU8(src, sstart + i);
+            h1 = ((h1 * 31) + (b + 1)) % 2000003;
+            h2 = ((h2 * 257) + (b + 7)) % 1999993;
+            i += step;
+        }
+        i = FcMax(0, slen - 64);
+        if (step > 1) {
+            while (i < slen) {
+                b = Pdfsrc.PsU8(src, sstart + i);
+                h1 = ((h1 * 31) + (b + 1)) % 2000003;
+                h2 = ((h2 * 257) + (b + 7)) % 1999993;
+                i += 1;
+            }
+        }
+        emon.Port.CellsSet(fi, k + 10, h1 + 1);
+        emon.Port.CellsSet(fi, k + 11, h2 + 1);
+        return 1;
+    }
     public static int FcImages(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells im, emon.Port.Cells @out, emon.Port.Cells rec, emon.Port.Cells fi) {
         // What the dictionary of each image placement says, in `fi` (stride `FI_STRIDE`, one row to a row of `im`): its codec, colour class,
         // components, bits, size, the colour count of an Indexed one, the kind of its mask, and the bytes its encoder needed for each pixel
@@ -231,6 +269,7 @@ public static class Figclass {
                             emon.Port.CellsSet(fi, k + 7, (int) bpp);
                             emon.Port.CellsSet(fi, k + 8, Pdfimage.PiGet(rec, Pdfimage.PiFHival()));
                             emon.Port.CellsSet(fi, k + 9, Pdfimage.PiGet(rec, Pdfimage.PiFMkind()));
+                            FcDigest(src, fi, k, Pdfimage.PiGet(rec, Pdfimage.PiFSstart()), Pdfimage.PiGet(rec, Pdfimage.PiFSlen()), w, h);
                         }
                     }
                 }
@@ -907,10 +946,195 @@ public static class Figclass {
     internal static int FcPack(int kind, int conf) {
         return (kind * 1024) + conf;
     }
-    public static int FcRecur(emon.Port.Cells cand, int row) {
-        // THE HOOK of P8.4 (logos and their recurrence across pages): how much the same drawing at the same place on other pages should
-        // raise the confidence of a logo (per mille) for the region `row` of `cand`. P8.1 does not measure recurrence: 0.
+    internal static int FcPow2(int k) {
+        int v = 1;
+        int i = 0;
+        while (i < k) {
+            v *= 2;
+            i += 1;
+        }
+        return v;
+    }
+    internal static int FcHamming16(int a, int b) {
+        // The number of the 16 low bits in which a and b differ.
+        int k = 0;
+        int d = 0;
+        while (k < 16) {
+            if (((a / FcPow2(k)) % 2) != ((b / FcPow2(k)) % 2)) {
+                d += 1;
+            }
+            k += 1;
+        }
+        return d;
+    }
+    internal static int FcSignVector(emon.Port.Cells pa, emon.Port.Cells fcand, int row) {
+        // P8.4: the signature of a small vector region (`CR_SIG`): the paths of its page whose centres lie in its visible box, and the 4 x 4 grid
+        // of the box that those centres fall in (a 16 bit mask). It does not depend on the scale. Answers the paths read.
+        int b = row * CrStride;
+        int page = emon.Port.CellsAt(fcand, b + CrPage);
+        int x0 = emon.Port.CellsAt(fcand, b + CrVx);
+        int y0 = emon.Port.CellsAt(fcand, b + (CrVx + 1));
+        int w = emon.Port.CellsAt(fcand, b + (CrVx + 2)) - x0;
+        int h = emon.Port.CellsAt(fcand, b + (CrVx + 3)) - y0;
+        int n = emon.Port.CellsLen(pa) / 24;
+        int i = 0;
+        int np = 0;
+        int mask = 0;
+        int cx = 0;
+        int cy = 0;
+        int gx = 0;
+        int gy = 0;
+        int bit = 0;
+        if ((w <= 0) || (h <= 0)) {
+            return 0;
+        }
+        while (i < n) {
+            if ((Evidence.PaGet(pa, i, Evidence.PfPage()) == page) && ((Evidence.PaGet(pa, i, Evidence.PfVis()) == 0) && ((Evidence.PaGet(pa, i, Evidence.PfFlags()) & Evidence.PgClip()) == 0))) {
+                cx = (Evidence.PaGet(pa, i, Evidence.PfX0()) + Evidence.PaGet(pa, i, Evidence.PfX1())) / 2;
+                cy = (Evidence.PaGet(pa, i, Evidence.PfY0()) + Evidence.PaGet(pa, i, Evidence.PfY1())) / 2;
+                if ((cx >= x0) && ((cx <= (x0 + w)) && ((cy >= y0) && (cy <= (y0 + h))))) {
+                    np += 1;
+                    gx = FcMin(3, ((cx - x0) * 4) / w);
+                    gy = FcMin(3, ((cy - y0) * 4) / h);
+                    bit = FcPow2((gy * 4) + gx);
+                    if (((mask / bit) % 2) == 0) {
+                        mask += bit;
+                    }
+                }
+            }
+            i += 1;
+        }
+        if (np >= 2) {
+            emon.Port.CellsSet(fcand, b + CrSig, 2);
+            emon.Port.CellsSet(fcand, b + (CrSig + 1), np);
+            emon.Port.CellsSet(fcand, b + (CrSig + 2), mask);
+        }
+        return n;
+    }
+    public static int FcSignRows(emon.Port.Cells fi, emon.Port.Cells pa, emon.Port.Cells fcand) {
+        // P8.4: the recurrence signature (`CR_SIG`) of every candidate row that could be a logo: an image placement (its object and its stream's
+        // digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows of regions beyond the document's budget (`FC_RWORK`) have none.
+        int n = emon.Port.CellsLen(fcand) / CrStride;
+        int r = 0;
+        int b = 0;
+        int fb = 0;
+        int work = 0;
+        while (r < n) {
+            b = r * CrStride;
+            if (emon.Port.CellsAt(fcand, b + CrKori) == -1) {
+                fb = emon.Port.CellsAt(fcand, b + CrRow) * FiStride;
+                if ((fb >= 0) && (((fb + FiStride) <= emon.Port.CellsLen(fi)) && (emon.Port.CellsAt(fi, fb) == 1))) {
+                    emon.Port.CellsSet(fcand, b + CrSig, 1);
+                    emon.Port.CellsSet(fcand, b + (CrSig + 1), emon.Port.CellsAt(fi, fb + 10));
+                    emon.Port.CellsSet(fcand, b + (CrSig + 2), emon.Port.CellsAt(fi, fb + 11));
+                    emon.Port.CellsSet(fcand, b + (CrSig + 3), emon.Port.CellsAt(fi, fb + 5));
+                    emon.Port.CellsSet(fcand, b + (CrSig + 4), emon.Port.CellsAt(fi, fb + 6));
+                }
+            } else if ((emon.Port.CellsAt(fcand, b + CrKori) == -2) && (work < FcRwork)) {
+                if (((emon.Port.CellsAt(fcand, b + (CrVx + 2)) - emon.Port.CellsAt(fcand, b + CrVx)) <= FcSmall) && ((emon.Port.CellsAt(fcand, b + (CrVx + 3)) - emon.Port.CellsAt(fcand, b + (CrVx + 1))) <= FcSmall)) {
+                    work += FcSignVector(pa, fcand, r);
+                }
+            }
+            r += 1;
+        }
         return 0;
+    }
+    internal static int FcSameDrawing(emon.Port.Cells cand, emon.Port.Cells pages, int a, int b) {
+        // 1 when the candidate rows a and b (on two pages) are one logo: the same image object, or an image of the same size whose stream has
+        // the same digest; or vector art with as many paths, the same 4 x 4 occupancy (within one cell), a size within `FC_RSCALE_LO`..`FC_RSCALE_HI`
+        // per mille of the other's, and its centre at the same place of the page (within `FC_RPOS` per mille and an eighth of its size).
+        int ba = a * CrStride;
+        int bb = b * CrStride;
+        int ka = emon.Port.CellsAt(cand, ba + CrSig);
+        if ((ka == 0) || (ka != emon.Port.CellsAt(cand, bb + CrSig))) {
+            return 0;
+        }
+        if (ka == 1) {
+            if ((emon.Port.CellsAt(cand, ba + CrObj) > 0) && (emon.Port.CellsAt(cand, ba + CrObj) == emon.Port.CellsAt(cand, bb + CrObj))) {
+                return 1;
+            }
+            if ((emon.Port.CellsAt(cand, ba + (CrSig + 1)) > 0) && ((emon.Port.CellsAt(cand, ba + (CrSig + 1)) == emon.Port.CellsAt(cand, bb + (CrSig + 1))) && ((emon.Port.CellsAt(cand, ba + (CrSig + 2)) == emon.Port.CellsAt(cand, bb + (CrSig + 2))) && ((emon.Port.CellsAt(cand, ba + (CrSig + 3)) == emon.Port.CellsAt(cand, bb + (CrSig + 3))) && (emon.Port.CellsAt(cand, ba + (CrSig + 4)) == emon.Port.CellsAt(cand, bb + (CrSig + 4))))))) {
+                return 1;
+            }
+            return 0;
+        }
+        int pwa = Model.PageW(pages, emon.Port.CellsAt(cand, ba + CrPage) - 1);
+        int pha = Model.PageH(pages, emon.Port.CellsAt(cand, ba + CrPage) - 1);
+        int pwb = Model.PageW(pages, emon.Port.CellsAt(cand, bb + CrPage) - 1);
+        int phb = Model.PageH(pages, emon.Port.CellsAt(cand, bb + CrPage) - 1);
+        int wa = emon.Port.CellsAt(cand, ba + (CrVx + 2)) - emon.Port.CellsAt(cand, ba + CrVx);
+        int ha = emon.Port.CellsAt(cand, ba + (CrVx + 3)) - emon.Port.CellsAt(cand, ba + (CrVx + 1));
+        int wb = emon.Port.CellsAt(cand, bb + (CrVx + 2)) - emon.Port.CellsAt(cand, bb + CrVx);
+        int hb = emon.Port.CellsAt(cand, bb + (CrVx + 3)) - emon.Port.CellsAt(cand, bb + (CrVx + 1));
+        if ((pwa <= 0) || ((pha <= 0) || ((pwb <= 0) || ((phb <= 0) || ((wb <= 0) || (hb <= 0)))))) {
+            return 0;
+        }
+        if (emon.Port.CellsAt(cand, ba + (CrSig + 1)) != emon.Port.CellsAt(cand, bb + (CrSig + 1))) {
+            return 0;
+        }
+        if (FcHamming16(emon.Port.CellsAt(cand, ba + (CrSig + 2)), emon.Port.CellsAt(cand, bb + (CrSig + 2))) > 1) {
+            return 0;
+        }
+        if ((((wa * 1000) / wb) < FcRscaleLo) || (((wa * 1000) / wb) > FcRscaleHi)) {
+            return 0;
+        }
+        if ((((ha * 1000) / hb) < FcRscaleLo) || (((ha * 1000) / hb) > FcRscaleHi)) {
+            return 0;
+        }
+        int dx = FcAbs((((emon.Port.CellsAt(cand, ba + CrVx) + emon.Port.CellsAt(cand, ba + (CrVx + 2))) * 500) / pwa) - (((emon.Port.CellsAt(cand, bb + CrVx) + emon.Port.CellsAt(cand, bb + (CrVx + 2))) * 500) / pwb));
+        int dy = FcAbs((((emon.Port.CellsAt(cand, ba + (CrVx + 1)) + emon.Port.CellsAt(cand, ba + (CrVx + 3))) * 500) / pha) - (((emon.Port.CellsAt(cand, bb + (CrVx + 1)) + emon.Port.CellsAt(cand, bb + (CrVx + 3))) * 500) / phb));
+        if (dx > (FcRpos + (((wb * 1000) / pwb) / 8))) {
+            return 0;
+        }
+        if (dy > (FcRpos + (((hb * 1000) / phb) / 8))) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int FcRecur(emon.Port.Cells cand, emon.Port.Cells pages, int row) {
+        // P8.4 (logos and their recurrence across pages): how much the same drawing on other pages should raise the confidence of a logo (per
+        // mille) for the region `row` of `cand`, whose signatures `fc-sign-rows` made: 0 for none, 100 when it is on one other page, 160 on two,
+        // 220 on three or more. Pages, not placements: a drawing used twice on one page is no recurrence. A raster is the same by its object or
+        // its stream's digest wherever it stands; vector art by `fc-same-drawing`'s place and shape, whatever the scale within the tolerance.
+        int n = emon.Port.CellsLen(cand) / CrStride;
+        int mine = emon.Port.CellsAt(cand, (row * CrStride) + CrPage);
+        int r = 0;
+        int pg = 0;
+        int p1 = 0;
+        int p2 = 0;
+        int p3 = 0;
+        int seen = 0;
+        if (emon.Port.CellsAt(cand, (row * CrStride) + CrSig) == 0) {
+            return 0;
+        }
+        while ((r < n) && (seen < 3)) {
+            pg = emon.Port.CellsAt(cand, (r * CrStride) + CrPage);
+            if ((pg != mine) && ((pg != p1) && ((pg != p2) && (pg != p3)))) {
+                if (FcSameDrawing(cand, pages, row, r) == 1) {
+                    if (seen == 0) {
+                        p1 = pg;
+                    }
+                    if (seen == 1) {
+                        p2 = pg;
+                    }
+                    if (seen == 2) {
+                        p3 = pg;
+                    }
+                    seen += 1;
+                }
+            }
+            r += 1;
+        }
+        if (seen == 0) {
+            return 0;
+        }
+        if (seen == 1) {
+            return 100;
+        }
+        if (seen == 2) {
+            return 160;
+        }
+        return 220;
     }
     internal static int FcInBand(int y0, int y1, int pageh) {
         // 1 when the region lies in the header band (the top fifth of the page) or the footer band.
@@ -1138,6 +1362,7 @@ public static class Figclass {
         FcShadingRegions(pa, pages, fcand);
         FcGrgRegions(grg, pages, fcand);
         Asset.AsFigureRows(fcand, pages, nodes, regions, 2, fg);
+        FcSignRows(fi, pa, fcand);
         nr = Asset.AsCount(fcand);
         i = 0;
         while (i < (nr * FdStride)) {
@@ -1160,7 +1385,7 @@ public static class Figclass {
             x1 = emon.Port.CellsAt(fcand, b + (CrVx + 2));
             y1 = emon.Port.CellsAt(fcand, b + (CrVx + 3));
             pageh = Model.PageH(pages, page - 1);
-            recur = FcRecur(fcand, row);
+            recur = FcRecur(fcand, pages, row);
             rej = 1;
             if (measured < FcMaxreg) {
                 measured += 1;

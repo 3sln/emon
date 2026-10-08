@@ -1,9 +1,10 @@
 ;; The gold of P8.1's figure kinds (SPEC 10.6): per fixture of test/assets/fig/, the `subkind` of every figure of its Model, in reading order.
 ;; `kin/scripts/asset-check` (section 8) holds both hosts to it, at every level of `assets`. fig-kinds.pdf has one figure a page, made by
 ;; kin/scripts/asset-fig-fixtures: a pie, a line chart, a barcode and a code drawn as vector art, a map, a rosette of rings, a framed
-;; dialog, a photograph, a scanned code and a scanned label. fig-notfigures.pdf has a sidebar of prose, a seal and a rule: none is a figure.
+;; dialog, a photograph, a scanned code and a scanned label. fig-notfigures.pdf has a sidebar of prose, a seal and a rule: none is a figure. fig-letterhead.pdf (P8.4) has four pages: on each a raster logo (one image object) and a vector logo (a tenth smaller on page 3) in the head, and on pages 2 and 4 a badge (one image object, two places) in the body: ten logos, the badges by recurrence alone.
 {"fig-kinds" ["chart" "chart" "barcode" "qr" "map" "illustration" "screenshot" "photo" "qr" "barcode"]
  "fig-notfigures" []
  "fig-vector-chart" ["chart" "diagram"]
  "fig-logo-pages" ["logo" "logo" "logo"]
- "fig-over-image" ["photo" "photo" "photo" "photo" "photo"]}
+ "fig-over-image" ["photo" "photo" "photo" "photo" "photo"]
+ "fig-letterhead" ["logo" "logo" "logo" "logo" "logo" "logo" "logo" "logo" "logo" "logo"]}

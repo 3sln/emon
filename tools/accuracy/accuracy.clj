@@ -73,6 +73,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "emon-replay-px" ["sh" (str (fs/path HERE "predict-emon-replay.sh")) "px"]
    "emon-fusion" ["sh" (str (fs/path HERE "predict-emon-fusion.sh"))]
    "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]
+   "emon-figures" ["sh" (str (fs/path HERE "predict-emon.sh"))]
    "baseline-pdfplumber" ["sh" (str (fs/path HERE "predict-baseline.sh")) "pdfplumber"]
    "baseline-pymupdf4llm" ["sh" (str (fs/path HERE "predict-baseline.sh")) "pymupdf4llm"]
    "baseline-docling" ["sh" (str (fs/path HERE "predict-baseline.sh")) "docling"]
@@ -83,6 +84,11 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 ;; tool, not a gate: nothing compares it with a committed value, it can fail no run, and it never feeds the
 ;; ratchet. It is scored on a fixed subset of the corpus's input forms (the born-digital ones for a tool that
 ;; reads a text layer, the scans for the OCR one); `--variants` overrides, and then it is not recorded.
+;; A FIXTURE SET (P8.4): a predictor scored over hand-made fixtures that are not the synthetic corpus, in `DIR/gold/ID.gold.json`
+;; beside `DIR/ID.pdf` (one input form, `pdf`), with an entry of its own: no pool of the corpus moves for it. The Rust driver is
+;; the predictor, as for `emon`.
+(def FIXTURE-SETS {"emon-figures" "test/assets/fig"})
+
 (def REFERENCES
   {"baseline-pdfplumber" {:tool "pdfplumber" :variants #{"pdf" "pdf-tagged"}}
    "baseline-pymupdf4llm" {:tool "pymupdf4llm" :variants #{"pdf" "pdf-tagged"}}
@@ -102,7 +108,9 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
              "wm" "watermarks" "bg" "watermarks" "seal" "seals" "sig" "seals"
              "outlined" "headings" "tl" "textlayer" "hidden" "textlayer"
              ;; the graphics corpus (P6.8, D227)
-             "gfx" "graphics" "mixed" "graphics" "ttab" "graphics"})
+             "gfx" "graphics" "mixed" "graphics" "ttab" "graphics"
+             ;; the figures fixtures (P8.4)
+             "fig" "figures"})
 
 (defn category [doc-id]
   (get FAMILY (first (str/split doc-id #"-" 2)) "other"))
@@ -218,9 +226,10 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 
 (def ^:dynamic *variants* nil)   ; a set of variant names, or nil for every one
 (def ^:dynamic *ids* nil)        ; a set of document ids, or nil for every one
+(def ^:dynamic *fixture-set* nil) ; a directory of FIXTURE-SETS, or nil for the synthetic corpus
 (def VARIANTS ["pdf" "scan" "pdf-tagged" "scan-color" "scan-ovl"])
 
-(defn corpus []
+(defn corpus-synth []
   (let [man (pyjson/parse-file (str (fs/path CORPUS "MANIFEST.json")))]
     (for [doc-id (sort (keys (get man "docs")))
           :when (or (nil? *ids*) (contains? *ids* doc-id))
@@ -232,6 +241,15 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
        ;; the overlay scans have their own gold: the document's, plus the overlays' ledger and seal nodes (D209)
        (str (fs/path CORPUS (if (= variant "scan-ovl") "gold-ovl" "gold")
                      (str doc-id (if (= variant "scan-ovl") ".ovl" "") ".gold.json")))])))
+
+(defn corpus []
+  (if *fixture-set*
+    (for [g (sort (map str (fs/glob (str (fs/path ROOT *fixture-set* "gold")) "*.gold.json")))
+          :let [doc-id (str/replace (str (fs/file-name g)) #"\.gold\.json$" "")]
+          :when (or (nil? *ids*) (contains? *ids* doc-id))
+          :when (or (nil? *variants*) (contains? *variants* "pdf"))]
+      [doc-id "pdf" (str (fs/path ROOT *fixture-set* (str doc-id ".pdf"))) g])
+    (corpus-synth)))
 
 (def MANIFEST (delay (pyjson/parse-file (str (fs/path CORPUS "MANIFEST.json")))))
 
@@ -429,6 +447,8 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
               (System/exit 2))))
       (let [board (load-board)
             ;; a reference is scored on its fixed subset of the input forms unless --variants says otherwise
+            _ (when (contains? FIXTURE-SETS pred)
+                (alter-var-root #'*fixture-set* (constantly (FIXTURE-SETS pred))))
             _ (when (and (contains? REFERENCES pred) (nil? *variants*))
                 (alter-var-root #'*variants* (constantly (:variants (REFERENCES pred)))))
             runs(cond (= pred "fixtures") [["oracle" (PREDICTORS "oracle")] ["degraded" (PREDICTORS "degraded")]]

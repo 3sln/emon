@@ -328,3 +328,115 @@ fn test_a_figure_goes_in_before_its_caption_whatever_its_top_edge_says() {
     crate::testport::assert_eq(node_kind(nn, 3), nk_figure(), "the figure is just before its caption, after the paragraph that is lower on the page");
     crate::testport::assert_eq(node_kind(nn, 4), nk_caption(), "and the caption follows it");
 }
+pub(crate) fn ft_fi_add(mut fi: &mut crate::port::Cells, w: i32, h: i32, d1: i32, d2: i32) -> i32 {
+    // A row of `fi` for a flat raster of w x h pixels whose stream has the digest d1 d2 (stride 12).
+    crate::port::cells_push(fi, 1);
+    crate::port::cells_push(fi, 0);
+    crate::port::cells_push(fi, 2);
+    crate::port::cells_push(fi, 3);
+    crate::port::cells_push(fi, 8);
+    crate::port::cells_push(fi, w);
+    crate::port::cells_push(fi, h);
+    crate::port::cells_push(fi, 60);
+    crate::port::cells_push(fi, 0);
+    crate::port::cells_push(fi, 0);
+    crate::port::cells_push(fi, d1);
+    crate::port::cells_push(fi, d2);
+    return 0;
+}
+pub(crate) fn ft_img_cand(mut cand: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32, obj: i32, fir: i32) -> i32 {
+    // A candidate row that is an image placement: its object, and its row of `fi` (cells 25, 27 and 28).
+    let r: i32 = crate::port::cells_len(cand) / 32;
+    ft_cand(cand, page, x0, y0, x1, y1);
+    crate::port::cells_set(cand, (r * 32) + 25, obj);
+    crate::port::cells_set(cand, (r * 32) + 27, -1);
+    crate::port::cells_set(cand, (r * 32) + 28, fir);
+    return r;
+}
+pub(crate) fn ft_vec_cand(mut cand: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // A candidate row that is a vector region (cell 27 is -2).
+    let r: i32 = crate::port::cells_len(cand) / 32;
+    ft_cand(cand, page, x0, y0, x1, y1);
+    crate::port::cells_set(cand, (r * 32) + 27, -2);
+    return r;
+}
+pub(crate) fn ft_pages(mut pages: &mut crate::port::Cells, n: i32) -> i32 {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 1;
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    while i <= n {
+        page_new(pages, i, 61200, 79200, 0, pk_vector());
+        i += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_a_raster_on_other_pages_is_a_recurring_logo_by_its_object_or_its_digest() {
+    let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ft_pages(pages, 4);
+    // fi rows: 0 and 1 are one raster (digest 5 6, 40 x 20), 2 is another size with the same digest, 3 another digest
+    ft_fi_add(fi, 40, 20, 5, 6);
+    ft_fi_add(fi, 40, 20, 5, 6);
+    ft_fi_add(fi, 40, 21, 5, 6);
+    ft_fi_add(fi, 40, 20, 9, 9);
+    // page 1 object 7, page 2 object 8 (the same bytes), page 3 object 7 again, page 4 a different raster, page 1 object 7 a second time
+    ft_img_cand(cand, 1, 5000, 5000, 9000, 7000, 7, 0);
+    ft_img_cand(cand, 2, 30000, 40000, 34000, 42000, 8, 1);
+    ft_img_cand(cand, 3, 5000, 5000, 9000, 7000, 7, 0);
+    ft_img_cand(cand, 4, 5000, 5000, 9000, 7000, 11, 3);
+    ft_img_cand(cand, 1, 20000, 5000, 24000, 7000, 7, 0);
+    fc_sign_rows(fi, pa, cand);
+    crate::testport::assert_eq(fc_recur(cand, pages, 1), 160, "the raster of page 2 is on two other pages (its digest equals the others', wherever it stands)");
+    crate::testport::assert_eq(fc_recur(cand, pages, 0), 160, "the one of page 1: pages 2 (digest) and 3 (object); its second use on page 1 does not count");
+    crate::testport::assert_eq(fc_recur(cand, pages, 3), 0, "a raster with another digest and object recurs nowhere");
+    // the same digest with another pixel size is another raster
+    ft_img_cand(cand, 3, 5000, 5000, 9000, 7000, 12, 2);
+    fc_sign_rows(fi, pa, cand);
+    crate::testport::assert_eq(fc_recur(cand, pages, 5), 0, "the same digest of another size is no recurrence");
+    crate::testport::assert_eq(fc_recur(cand, pages, 3), 0, "and it is not on the others' count");
+}
+#[test]
+fn test_vector_art_recurs_at_the_same_place_whatever_its_scale() {
+    let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ft_pages(pages, 4);
+    // page 1: a round mark and a square in it, at the head of the page
+    ft_path(pa, 1, 3, 7300, 7300, 10300, 10300, 43639, -1, 9);
+    ft_path(pa, 1, 2, 8500, 8500, 9100, 9100, 16777215, -1, 8);
+    ft_vec_cand(cand, 1, 7300, 7300, 10300, 10300);
+    // page 2: the same drawing at nine tenths of the size about the same centre
+    ft_path(pa, 2, 3, 7450, 7450, 10150, 10150, 43639, -1, 9);
+    ft_path(pa, 2, 2, 8590, 8590, 9010, 9010, 16777215, -1, 8);
+    ft_vec_cand(cand, 2, 7450, 7450, 10150, 10150);
+    // page 3: the same drawing, same size, in the middle of the page
+    ft_path(pa, 3, 3, 7300, 40000, 10300, 43000, 43639, -1, 9);
+    ft_path(pa, 3, 2, 8500, 41200, 9100, 41800, 16777215, -1, 8);
+    ft_vec_cand(cand, 3, 7300, 40000, 10300, 43000);
+    // page 4: twice the size, at the same place
+    ft_path(pa, 4, 3, 7300, 7300, 13300, 13300, 43639, -1, 9);
+    ft_path(pa, 4, 2, 9700, 9700, 10900, 10900, 16777215, -1, 8);
+    ft_vec_cand(cand, 4, 7300, 7300, 13300, 13300);
+    fc_sign_rows(fi, pa, cand);
+    crate::testport::assert_eq(fc_recur(cand, pages, 0), 100, "page 1's mark recurs on page 2 only: page 3 is another place and page 4 another scale");
+    crate::testport::assert_eq(fc_recur(cand, pages, 1), 100, "and page 2's on page 1");
+    crate::testport::assert_eq(fc_recur(cand, pages, 2), 0, "the same drawing mid-page recurs nowhere");
+    crate::testport::assert_eq(fc_recur(cand, pages, 3), 0, "nor does one of twice the size");
+}
+#[test]
+fn test_a_recurring_raster_is_a_logo_wherever_it_stands_and_a_lone_one_is_not() {
+    let fi: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ft_fi(fi, 1, 0, 2, 3, 8, 60, 0);
+    crate::testport::assert_eq(fc_image_kind(fi, 0, 4000, 4000, 30000, 34000, 79200, 0) / 1024, fg_unknown(), "a small flat raster mid-page, seen once");
+    crate::testport::assert_eq(fc_image_kind(fi, 0, 4000, 4000, 30000, 34000, 79200, 100) / 1024, fg_logo(), "the same on another page too: a logo");
+    crate::testport::assert_eq(fc_image_kind(fi, 0, 4000, 4000, 30000, 34000, 79200, 220) % 1024, 800, "and surer for each page it is on");
+}

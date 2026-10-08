@@ -20,6 +20,11 @@ pub(crate) const FC_BAND: i32 = 200;
 pub(crate) const FC_EMIT: i32 = 500;
 pub(crate) const FC_CAPGAP: i32 = 4000;
 pub(crate) const FI_STRIDE: i32 = 12;
+pub(crate) const FC_DIGEST_N: i32 = 4096;
+pub(crate) const FC_RWORK: i32 = 20000000;
+pub(crate) const FC_RPOS: i32 = 40;
+pub(crate) const FC_RSCALE_LO: i32 = 750;
+pub(crate) const FC_RSCALE_HI: i32 = 1330;
 pub(crate) const FT_NP: i32 = 0;
 pub(crate) const FT_NHL: i32 = 1;
 pub(crate) const FT_NVL: i32 = 2;
@@ -89,6 +94,7 @@ pub(crate) const CR_KORI: i32 = 27;
 pub(crate) const CR_ROW: i32 = 28;
 pub(crate) const CR_SRC: i32 = 29;
 pub(crate) const CR_ORG: i32 = 30;
+pub(crate) const CR_SIG: i32 = 13;
 pub(crate) fn fc_abs(v: i32) -> i32 {
     if v < 0 {
         return 0 - v;
@@ -175,6 +181,38 @@ pub(crate) fn fc_numeric(et: &mut crate::port::Cells, ts: i32, tl: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn fc_digest(src: &crate::port::Src, mut fi: &mut crate::port::Cells, k: i32, sstart: i32, slen: i32, w: i32, h: i32) -> i32 {
+    // P8.4: the digest of an image stream's bytes as the file holds them, in the cells `k + 10` and `k + 11` of `fi` (two rolling hashes,
+    // each under 2^21, from the stream's length and the image's pixel size too). A stream of `FC_DIGEST_N` bytes or fewer is read whole; a longer
+    // one by a stride through it, and its last 64 bytes. Equal digests of images of one size are one raster. 0 for none (the stream is not in the file).
+    let total: i32 = ps_len(src);
+    let step: i32 = fc_max(1, slen / FC_DIGEST_N);
+    let mut h1: i32 = slen % 2000003;
+    let mut h2: i32 = ((w * 7919) + h) % 1999993;
+    let mut i: i32 = 0;
+    let mut b: i32 = 0;
+    if (sstart < 0) || ((slen < 1) || ((sstart + slen) > total)) {
+        return 0;
+    }
+    while i < slen {
+        b = ps_u8(src, sstart + i);
+        h1 = ((h1 * 31) + (b + 1)) % 2000003;
+        h2 = ((h2 * 257) + (b + 7)) % 1999993;
+        i += step;
+    }
+    i = fc_max(0, slen - 64);
+    if step > 1 {
+        while i < slen {
+            b = ps_u8(src, sstart + i);
+            h1 = ((h1 * 31) + (b + 1)) % 2000003;
+            h2 = ((h2 * 257) + (b + 7)) % 1999993;
+            i += 1;
+        }
+    }
+    crate::port::cells_set(fi, k + 10, h1 + 1);
+    crate::port::cells_set(fi, k + 11, h2 + 1);
+    return 1;
+}
 pub fn fc_images(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, im: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut fi: &mut crate::port::Cells) -> i32 {
     // What the dictionary of each image placement says, in `fi` (stride `FI_STRIDE`, one row to a row of `im`): its codec, colour class,
     // components, bits, size, the colour count of an Indexed one, the kind of its mask, and the bytes its encoder needed for each pixel
@@ -236,6 +274,7 @@ pub fn fc_images(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc
                         crate::port::cells_set(fi, k + 7, bpp as i32);
                         crate::port::cells_set(fi, k + 8, pi_get(rec, pi_f_hival()));
                         crate::port::cells_set(fi, k + 9, pi_get(rec, pi_f_mkind()));
+                        fc_digest(src, fi, k, pi_get(rec, pi_f_sstart()), pi_get(rec, pi_f_slen()), w, h);
                     }
                 }
             }
@@ -912,10 +951,195 @@ pub fn fc_measure(pa: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw:
 pub(crate) fn fc_pack(kind: i32, conf: i32) -> i32 {
     return (kind * 1024) + conf;
 }
-pub fn fc_recur(cand: &mut crate::port::Cells, row: i32) -> i32 {
-    // THE HOOK of P8.4 (logos and their recurrence across pages): how much the same drawing at the same place on other pages should
-    // raise the confidence of a logo (per mille) for the region `row` of `cand`. P8.1 does not measure recurrence: 0.
+pub(crate) fn fc_pow2(k: i32) -> i32 {
+    let mut v: i32 = 1;
+    let mut i: i32 = 0;
+    while i < k {
+        v *= 2;
+        i += 1;
+    }
+    return v;
+}
+pub(crate) fn fc_hamming16(a: i32, b: i32) -> i32 {
+    // The number of the 16 low bits in which a and b differ.
+    let mut k: i32 = 0;
+    let mut d: i32 = 0;
+    while k < 16 {
+        if ((a / fc_pow2(k)) % 2) != ((b / fc_pow2(k)) % 2) {
+            d += 1;
+        }
+        k += 1;
+    }
+    return d;
+}
+pub(crate) fn fc_sign_vector(pa: &mut crate::port::Cells, mut fcand: &mut crate::port::Cells, row: i32) -> i32 {
+    // P8.4: the signature of a small vector region (`CR_SIG`): the paths of its page whose centres lie in its visible box, and the 4 x 4 grid
+    // of the box that those centres fall in (a 16 bit mask). It does not depend on the scale. Answers the paths read.
+    let b: i32 = row * CR_STRIDE;
+    let page: i32 = crate::port::cells_at(fcand, b + CR_PAGE);
+    let x0: i32 = crate::port::cells_at(fcand, b + CR_VX);
+    let y0: i32 = crate::port::cells_at(fcand, b + (CR_VX + 1));
+    let w: i32 = crate::port::cells_at(fcand, b + (CR_VX + 2)) - x0;
+    let h: i32 = crate::port::cells_at(fcand, b + (CR_VX + 3)) - y0;
+    let n: i32 = crate::port::cells_len(pa) / 24;
+    let mut i: i32 = 0;
+    let mut np: i32 = 0;
+    let mut mask: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    let mut gx: i32 = 0;
+    let mut gy: i32 = 0;
+    let mut bit: i32 = 0;
+    if (w <= 0) || (h <= 0) {
+        return 0;
+    }
+    while i < n {
+        if (pa_get(pa, i, pf_page()) == page) && ((pa_get(pa, i, pf_vis()) == 0) && ((pa_get(pa, i, pf_flags()) & pg_clip()) == 0)) {
+            cx = (pa_get(pa, i, pf_x0()) + pa_get(pa, i, pf_x1())) / 2;
+            cy = (pa_get(pa, i, pf_y0()) + pa_get(pa, i, pf_y1())) / 2;
+            if (cx >= x0) && ((cx <= (x0 + w)) && ((cy >= y0) && (cy <= (y0 + h)))) {
+                np += 1;
+                gx = fc_min(3, ((cx - x0) * 4) / w);
+                gy = fc_min(3, ((cy - y0) * 4) / h);
+                bit = fc_pow2((gy * 4) + gx);
+                if ((mask / bit) % 2) == 0 {
+                    mask += bit;
+                }
+            }
+        }
+        i += 1;
+    }
+    if np >= 2 {
+        crate::port::cells_set(fcand, b + CR_SIG, 2);
+        crate::port::cells_set(fcand, b + (CR_SIG + 1), np);
+        crate::port::cells_set(fcand, b + (CR_SIG + 2), mask);
+    }
+    return n;
+}
+pub fn fc_sign_rows(fi: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut fcand: &mut crate::port::Cells) -> i32 {
+    // P8.4: the recurrence signature (`CR_SIG`) of every candidate row that could be a logo: an image placement (its object and its stream's
+    // digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows of regions beyond the document's budget (`FC_RWORK`) have none.
+    let n: i32 = crate::port::cells_len(fcand) / CR_STRIDE;
+    let mut r: i32 = 0;
+    let mut b: i32 = 0;
+    let mut fb: i32 = 0;
+    let mut work: i32 = 0;
+    while r < n {
+        b = r * CR_STRIDE;
+        if crate::port::cells_at(fcand, b + CR_KORI) == -1 {
+            fb = crate::port::cells_at(fcand, b + CR_ROW) * FI_STRIDE;
+            if (fb >= 0) && (((fb + FI_STRIDE) <= crate::port::cells_len(fi)) && (crate::port::cells_at(fi, fb) == 1)) {
+                crate::port::cells_set(fcand, b + CR_SIG, 1);
+                crate::port::cells_set(fcand, b + (CR_SIG + 1), crate::port::cells_at(fi, fb + 10));
+                crate::port::cells_set(fcand, b + (CR_SIG + 2), crate::port::cells_at(fi, fb + 11));
+                crate::port::cells_set(fcand, b + (CR_SIG + 3), crate::port::cells_at(fi, fb + 5));
+                crate::port::cells_set(fcand, b + (CR_SIG + 4), crate::port::cells_at(fi, fb + 6));
+            }
+        } else if (crate::port::cells_at(fcand, b + CR_KORI) == -2) && (work < FC_RWORK) {
+            if ((crate::port::cells_at(fcand, b + (CR_VX + 2)) - crate::port::cells_at(fcand, b + CR_VX)) <= FC_SMALL) && ((crate::port::cells_at(fcand, b + (CR_VX + 3)) - crate::port::cells_at(fcand, b + (CR_VX + 1))) <= FC_SMALL) {
+                work += fc_sign_vector(pa, fcand, r);
+            }
+        }
+        r += 1;
+    }
     return 0;
+}
+pub(crate) fn fc_same_drawing(cand: &mut crate::port::Cells, pages: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // 1 when the candidate rows a and b (on two pages) are one logo: the same image object, or an image of the same size whose stream has
+    // the same digest; or vector art with as many paths, the same 4 x 4 occupancy (within one cell), a size within `FC_RSCALE_LO`..`FC_RSCALE_HI`
+    // per mille of the other's, and its centre at the same place of the page (within `FC_RPOS` per mille and an eighth of its size).
+    let ba: i32 = a * CR_STRIDE;
+    let bb: i32 = b * CR_STRIDE;
+    let ka: i32 = crate::port::cells_at(cand, ba + CR_SIG);
+    if (ka == 0) || (ka != crate::port::cells_at(cand, bb + CR_SIG)) {
+        return 0;
+    }
+    if ka == 1 {
+        if (crate::port::cells_at(cand, ba + CR_OBJ) > 0) && (crate::port::cells_at(cand, ba + CR_OBJ) == crate::port::cells_at(cand, bb + CR_OBJ)) {
+            return 1;
+        }
+        if (crate::port::cells_at(cand, ba + (CR_SIG + 1)) > 0) && ((crate::port::cells_at(cand, ba + (CR_SIG + 1)) == crate::port::cells_at(cand, bb + (CR_SIG + 1))) && ((crate::port::cells_at(cand, ba + (CR_SIG + 2)) == crate::port::cells_at(cand, bb + (CR_SIG + 2))) && ((crate::port::cells_at(cand, ba + (CR_SIG + 3)) == crate::port::cells_at(cand, bb + (CR_SIG + 3))) && (crate::port::cells_at(cand, ba + (CR_SIG + 4)) == crate::port::cells_at(cand, bb + (CR_SIG + 4)))))) {
+            return 1;
+        }
+        return 0;
+    }
+    let pwa: i32 = page_w(pages, crate::port::cells_at(cand, ba + CR_PAGE) - 1);
+    let pha: i32 = page_h(pages, crate::port::cells_at(cand, ba + CR_PAGE) - 1);
+    let pwb: i32 = page_w(pages, crate::port::cells_at(cand, bb + CR_PAGE) - 1);
+    let phb: i32 = page_h(pages, crate::port::cells_at(cand, bb + CR_PAGE) - 1);
+    let wa: i32 = crate::port::cells_at(cand, ba + (CR_VX + 2)) - crate::port::cells_at(cand, ba + CR_VX);
+    let ha: i32 = crate::port::cells_at(cand, ba + (CR_VX + 3)) - crate::port::cells_at(cand, ba + (CR_VX + 1));
+    let wb: i32 = crate::port::cells_at(cand, bb + (CR_VX + 2)) - crate::port::cells_at(cand, bb + CR_VX);
+    let hb: i32 = crate::port::cells_at(cand, bb + (CR_VX + 3)) - crate::port::cells_at(cand, bb + (CR_VX + 1));
+    if (pwa <= 0) || ((pha <= 0) || ((pwb <= 0) || ((phb <= 0) || ((wb <= 0) || (hb <= 0))))) {
+        return 0;
+    }
+    if crate::port::cells_at(cand, ba + (CR_SIG + 1)) != crate::port::cells_at(cand, bb + (CR_SIG + 1)) {
+        return 0;
+    }
+    if fc_hamming16(crate::port::cells_at(cand, ba + (CR_SIG + 2)), crate::port::cells_at(cand, bb + (CR_SIG + 2))) > 1 {
+        return 0;
+    }
+    if (((wa * 1000) / wb) < FC_RSCALE_LO) || (((wa * 1000) / wb) > FC_RSCALE_HI) {
+        return 0;
+    }
+    if (((ha * 1000) / hb) < FC_RSCALE_LO) || (((ha * 1000) / hb) > FC_RSCALE_HI) {
+        return 0;
+    }
+    let dx: i32 = fc_abs((((crate::port::cells_at(cand, ba + CR_VX) + crate::port::cells_at(cand, ba + (CR_VX + 2))) * 500) / pwa) - (((crate::port::cells_at(cand, bb + CR_VX) + crate::port::cells_at(cand, bb + (CR_VX + 2))) * 500) / pwb));
+    let dy: i32 = fc_abs((((crate::port::cells_at(cand, ba + (CR_VX + 1)) + crate::port::cells_at(cand, ba + (CR_VX + 3))) * 500) / pha) - (((crate::port::cells_at(cand, bb + (CR_VX + 1)) + crate::port::cells_at(cand, bb + (CR_VX + 3))) * 500) / phb));
+    if dx > (FC_RPOS + (((wb * 1000) / pwb) / 8)) {
+        return 0;
+    }
+    if dy > (FC_RPOS + (((hb * 1000) / phb) / 8)) {
+        return 0;
+    }
+    return 1;
+}
+pub fn fc_recur(cand: &mut crate::port::Cells, pages: &mut crate::port::Cells, row: i32) -> i32 {
+    // P8.4 (logos and their recurrence across pages): how much the same drawing on other pages should raise the confidence of a logo (per
+    // mille) for the region `row` of `cand`, whose signatures `fc-sign-rows` made: 0 for none, 100 when it is on one other page, 160 on two,
+    // 220 on three or more. Pages, not placements: a drawing used twice on one page is no recurrence. A raster is the same by its object or
+    // its stream's digest wherever it stands; vector art by `fc-same-drawing`'s place and shape, whatever the scale within the tolerance.
+    let n: i32 = crate::port::cells_len(cand) / CR_STRIDE;
+    let mine: i32 = crate::port::cells_at(cand, (row * CR_STRIDE) + CR_PAGE);
+    let mut r: i32 = 0;
+    let mut pg: i32 = 0;
+    let mut p1: i32 = 0;
+    let mut p2: i32 = 0;
+    let mut p3: i32 = 0;
+    let mut seen: i32 = 0;
+    if crate::port::cells_at(cand, (row * CR_STRIDE) + CR_SIG) == 0 {
+        return 0;
+    }
+    while (r < n) && (seen < 3) {
+        pg = crate::port::cells_at(cand, (r * CR_STRIDE) + CR_PAGE);
+        if (pg != mine) && ((pg != p1) && ((pg != p2) && (pg != p3))) {
+            if fc_same_drawing(cand, pages, row, r) == 1 {
+                if seen == 0 {
+                    p1 = pg;
+                }
+                if seen == 1 {
+                    p2 = pg;
+                }
+                if seen == 2 {
+                    p3 = pg;
+                }
+                seen += 1;
+            }
+        }
+        r += 1;
+    }
+    if seen == 0 {
+        return 0;
+    }
+    if seen == 1 {
+        return 100;
+    }
+    if seen == 2 {
+        return 160;
+    }
+    return 220;
 }
 pub(crate) fn fc_in_band(y0: i32, y1: i32, pageh: i32) -> i32 {
     // 1 when the region lies in the header band (the top fifth of the page) or the footer band.
@@ -1143,6 +1367,7 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
     fc_shading_regions(pa, pages, fcand);
     fc_grg_regions(grg, pages, fcand);
     as_figure_rows(fcand, pages, nodes, regions, 2, fg);
+    fc_sign_rows(fi, pa, fcand);
     nr = as_count(fcand);
     i = 0;
     while i < (nr * FD_STRIDE) {
@@ -1165,7 +1390,7 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
         x1 = crate::port::cells_at(fcand, b + (CR_VX + 2));
         y1 = crate::port::cells_at(fcand, b + (CR_VX + 3));
         pageh = page_h(pages, page - 1);
-        recur = fc_recur(fcand, row);
+        recur = fc_recur(fcand, pages, row);
         rej = 1;
         if measured < FC_MAXREG {
             measured += 1;

@@ -35,6 +35,16 @@ const fcCapgap int32 = 4000
 
 const fiStride int32 = 12
 
+const fcDigestN int32 = 4096
+
+const fcRwork int32 = 20000000
+
+const fcRpos int32 = 40
+
+const fcRscaleLo int32 = 750
+
+const fcRscaleHi int32 = 1330
+
 const ftNp int32 = 0
 
 const ftNhl int32 = 1
@@ -173,6 +183,8 @@ const crSrc int32 = 29
 
 const crOrg int32 = 30
 
+const crSig int32 = 13
+
 func fcAbs(v int32) int32 {
 	if v < 0 {
 		return 0 - v
@@ -268,6 +280,39 @@ func fcNumeric(et *port.Cells, ts int32, tl int32) int32 {
 	return 0
 }
 
+func fcDigest(src *port.Src, fi *port.Cells, k int32, sstart int32, slen int32, w int32, h int32) int32 {
+	// P8.4: the digest of an image stream's bytes as the file holds them, in the cells `k + 10` and `k + 11` of `fi` (two rolling hashes,
+	// each under 2^21, from the stream's length and the image's pixel size too). A stream of `FC_DIGEST_N` bytes or fewer is read whole; a longer
+	// one by a stride through it, and its last 64 bytes. Equal digests of images of one size are one raster. 0 for none (the stream is not in the file).
+	var total int32 = pdfsrc.PsLen(src)
+	var step int32 = fcMax(1, slen/fcDigestN)
+	var h1 int32 = slen % 2000003
+	var h2 int32 = ((w * 7919) + h) % 1999993
+	var i int32 = 0
+	var b int32 = 0
+	if (sstart < 0) || ((slen < 1) || ((sstart + slen) > total)) {
+		return 0
+	}
+	for i < slen {
+		b = pdfsrc.PsU8(src, sstart+i)
+		h1 = ((h1 * 31) + (b + 1)) % 2000003
+		h2 = ((h2 * 257) + (b + 7)) % 1999993
+		i += step
+	}
+	i = fcMax(0, slen-64)
+	if step > 1 {
+		for i < slen {
+			b = pdfsrc.PsU8(src, sstart+i)
+			h1 = ((h1 * 31) + (b + 1)) % 2000003
+			h2 = ((h2 * 257) + (b + 7)) % 1999993
+			i += 1
+		}
+	}
+	port.CellsSet(fi, k+10, h1+1)
+	port.CellsSet(fi, k+11, h2+1)
+	return 1
+}
+
 func FcImages(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, im *port.Cells, out *port.Cells, rec *port.Cells, fi *port.Cells) int32 {
 	// What the dictionary of each image placement says, in `fi` (stride `FI_STRIDE`, one row to a row of `im`): its codec, colour class,
 	// components, bits, size, the colour count of an Indexed one, the kind of its mask, and the bytes its encoder needed for each pixel
@@ -329,6 +374,7 @@ func FcImages(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *p
 						port.CellsSet(fi, k+7, int32(bpp))
 						port.CellsSet(fi, k+8, pdfimage.PiGet(rec, pdfimage.PiFHival()))
 						port.CellsSet(fi, k+9, pdfimage.PiGet(rec, pdfimage.PiFMkind()))
+						fcDigest(src, fi, k, pdfimage.PiGet(rec, pdfimage.PiFSstart()), pdfimage.PiGet(rec, pdfimage.PiFSlen()), w, h)
 					}
 				}
 			}
@@ -1024,10 +1070,200 @@ func fcPack(kind int32, conf int32) int32 {
 	return (kind * 1024) + conf
 }
 
-func FcRecur(cand *port.Cells, row int32) int32 {
-	// THE HOOK of P8.4 (logos and their recurrence across pages): how much the same drawing at the same place on other pages should
-	// raise the confidence of a logo (per mille) for the region `row` of `cand`. P8.1 does not measure recurrence: 0.
+func fcPow2(k int32) int32 {
+	var v int32 = 1
+	var i int32 = 0
+	for i < k {
+		v *= 2
+		i += 1
+	}
+	return v
+}
+
+func fcHamming16(a int32, b int32) int32 {
+	// The number of the 16 low bits in which a and b differ.
+	var k int32 = 0
+	var d int32 = 0
+	for k < 16 {
+		if ((a / fcPow2(k)) % 2) != ((b / fcPow2(k)) % 2) {
+			d += 1
+		}
+		k += 1
+	}
+	return d
+}
+
+func fcSignVector(pa *port.Cells, fcand *port.Cells, row int32) int32 {
+	// P8.4: the signature of a small vector region (`CR_SIG`): the paths of its page whose centres lie in its visible box, and the 4 x 4 grid
+	// of the box that those centres fall in (a 16 bit mask). It does not depend on the scale. Answers the paths read.
+	var b int32 = row * crStride
+	var page int32 = port.CellsAt(fcand, b+crPage)
+	var x0 int32 = port.CellsAt(fcand, b+crVx)
+	var y0 int32 = port.CellsAt(fcand, b+(crVx+1))
+	var w int32 = port.CellsAt(fcand, b+(crVx+2)) - x0
+	var h int32 = port.CellsAt(fcand, b+(crVx+3)) - y0
+	var n int32 = port.CellsLen(pa) / 24
+	var i int32 = 0
+	var np int32 = 0
+	var mask int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	var gx int32 = 0
+	var gy int32 = 0
+	var bit int32 = 0
+	if (w <= 0) || (h <= 0) {
+		return 0
+	}
+	for i < n {
+		if (evidence.PaGet(pa, i, evidence.PfPage()) == page) && ((evidence.PaGet(pa, i, evidence.PfVis()) == 0) && ((evidence.PaGet(pa, i, evidence.PfFlags()) & evidence.PgClip()) == 0)) {
+			cx = (evidence.PaGet(pa, i, evidence.PfX0()) + evidence.PaGet(pa, i, evidence.PfX1())) / 2
+			cy = (evidence.PaGet(pa, i, evidence.PfY0()) + evidence.PaGet(pa, i, evidence.PfY1())) / 2
+			if (cx >= x0) && ((cx <= (x0 + w)) && ((cy >= y0) && (cy <= (y0 + h)))) {
+				np += 1
+				gx = fcMin(3, ((cx-x0)*4)/w)
+				gy = fcMin(3, ((cy-y0)*4)/h)
+				bit = fcPow2((gy * 4) + gx)
+				if ((mask / bit) % 2) == 0 {
+					mask += bit
+				}
+			}
+		}
+		i += 1
+	}
+	if np >= 2 {
+		port.CellsSet(fcand, b+crSig, 2)
+		port.CellsSet(fcand, b+(crSig+1), np)
+		port.CellsSet(fcand, b+(crSig+2), mask)
+	}
+	return n
+}
+
+func FcSignRows(fi *port.Cells, pa *port.Cells, fcand *port.Cells) int32 {
+	// P8.4: the recurrence signature (`CR_SIG`) of every candidate row that could be a logo: an image placement (its object and its stream's
+	// digest, `fc-digest`) and a small vector region (`fc-sign-vector`). Rows of regions beyond the document's budget (`FC_RWORK`) have none.
+	var n int32 = port.CellsLen(fcand) / crStride
+	var r int32 = 0
+	var b int32 = 0
+	var fb int32 = 0
+	var work int32 = 0
+	for r < n {
+		b = r * crStride
+		if port.CellsAt(fcand, b+crKori) == -1 {
+			fb = port.CellsAt(fcand, b+crRow) * fiStride
+			if (fb >= 0) && (((fb + fiStride) <= port.CellsLen(fi)) && (port.CellsAt(fi, fb) == 1)) {
+				port.CellsSet(fcand, b+crSig, 1)
+				port.CellsSet(fcand, b+(crSig+1), port.CellsAt(fi, fb+10))
+				port.CellsSet(fcand, b+(crSig+2), port.CellsAt(fi, fb+11))
+				port.CellsSet(fcand, b+(crSig+3), port.CellsAt(fi, fb+5))
+				port.CellsSet(fcand, b+(crSig+4), port.CellsAt(fi, fb+6))
+			}
+		} else if (port.CellsAt(fcand, b+crKori) == -2) && (work < fcRwork) {
+			if ((port.CellsAt(fcand, b+(crVx+2)) - port.CellsAt(fcand, b+crVx)) <= fcSmall) && ((port.CellsAt(fcand, b+(crVx+3)) - port.CellsAt(fcand, b+(crVx+1))) <= fcSmall) {
+				work += fcSignVector(pa, fcand, r)
+			}
+		}
+		r += 1
+	}
 	return 0
+}
+
+func fcSameDrawing(cand *port.Cells, pages *port.Cells, a int32, b int32) int32 {
+	// 1 when the candidate rows a and b (on two pages) are one logo: the same image object, or an image of the same size whose stream has
+	// the same digest; or vector art with as many paths, the same 4 x 4 occupancy (within one cell), a size within `FC_RSCALE_LO`..`FC_RSCALE_HI`
+	// per mille of the other's, and its centre at the same place of the page (within `FC_RPOS` per mille and an eighth of its size).
+	var ba int32 = a * crStride
+	var bb int32 = b * crStride
+	var ka int32 = port.CellsAt(cand, ba+crSig)
+	if (ka == 0) || (ka != port.CellsAt(cand, bb+crSig)) {
+		return 0
+	}
+	if ka == 1 {
+		if (port.CellsAt(cand, ba+crObj) > 0) && (port.CellsAt(cand, ba+crObj) == port.CellsAt(cand, bb+crObj)) {
+			return 1
+		}
+		if (port.CellsAt(cand, ba+(crSig+1)) > 0) && ((port.CellsAt(cand, ba+(crSig+1)) == port.CellsAt(cand, bb+(crSig+1))) && ((port.CellsAt(cand, ba+(crSig+2)) == port.CellsAt(cand, bb+(crSig+2))) && ((port.CellsAt(cand, ba+(crSig+3)) == port.CellsAt(cand, bb+(crSig+3))) && (port.CellsAt(cand, ba+(crSig+4)) == port.CellsAt(cand, bb+(crSig+4)))))) {
+			return 1
+		}
+		return 0
+	}
+	var pwa int32 = model.PageW(pages, port.CellsAt(cand, ba+crPage)-1)
+	var pha int32 = model.PageH(pages, port.CellsAt(cand, ba+crPage)-1)
+	var pwb int32 = model.PageW(pages, port.CellsAt(cand, bb+crPage)-1)
+	var phb int32 = model.PageH(pages, port.CellsAt(cand, bb+crPage)-1)
+	var wa int32 = port.CellsAt(cand, ba+(crVx+2)) - port.CellsAt(cand, ba+crVx)
+	var ha int32 = port.CellsAt(cand, ba+(crVx+3)) - port.CellsAt(cand, ba+(crVx+1))
+	var wb int32 = port.CellsAt(cand, bb+(crVx+2)) - port.CellsAt(cand, bb+crVx)
+	var hb int32 = port.CellsAt(cand, bb+(crVx+3)) - port.CellsAt(cand, bb+(crVx+1))
+	if (pwa <= 0) || ((pha <= 0) || ((pwb <= 0) || ((phb <= 0) || ((wb <= 0) || (hb <= 0))))) {
+		return 0
+	}
+	if port.CellsAt(cand, ba+(crSig+1)) != port.CellsAt(cand, bb+(crSig+1)) {
+		return 0
+	}
+	if fcHamming16(port.CellsAt(cand, ba+(crSig+2)), port.CellsAt(cand, bb+(crSig+2))) > 1 {
+		return 0
+	}
+	if (((wa * 1000) / wb) < fcRscaleLo) || (((wa * 1000) / wb) > fcRscaleHi) {
+		return 0
+	}
+	if (((ha * 1000) / hb) < fcRscaleLo) || (((ha * 1000) / hb) > fcRscaleHi) {
+		return 0
+	}
+	var dx int32 = fcAbs((((port.CellsAt(cand, ba+crVx) + port.CellsAt(cand, ba+(crVx+2))) * 500) / pwa) - (((port.CellsAt(cand, bb+crVx) + port.CellsAt(cand, bb+(crVx+2))) * 500) / pwb))
+	var dy int32 = fcAbs((((port.CellsAt(cand, ba+(crVx+1)) + port.CellsAt(cand, ba+(crVx+3))) * 500) / pha) - (((port.CellsAt(cand, bb+(crVx+1)) + port.CellsAt(cand, bb+(crVx+3))) * 500) / phb))
+	if dx > (fcRpos + (((wb * 1000) / pwb) / 8)) {
+		return 0
+	}
+	if dy > (fcRpos + (((hb * 1000) / phb) / 8)) {
+		return 0
+	}
+	return 1
+}
+
+func FcRecur(cand *port.Cells, pages *port.Cells, row int32) int32 {
+	// P8.4 (logos and their recurrence across pages): how much the same drawing on other pages should raise the confidence of a logo (per
+	// mille) for the region `row` of `cand`, whose signatures `fc-sign-rows` made: 0 for none, 100 when it is on one other page, 160 on two,
+	// 220 on three or more. Pages, not placements: a drawing used twice on one page is no recurrence. A raster is the same by its object or
+	// its stream's digest wherever it stands; vector art by `fc-same-drawing`'s place and shape, whatever the scale within the tolerance.
+	var n int32 = port.CellsLen(cand) / crStride
+	var mine int32 = port.CellsAt(cand, (row*crStride)+crPage)
+	var r int32 = 0
+	var pg int32 = 0
+	var p1 int32 = 0
+	var p2 int32 = 0
+	var p3 int32 = 0
+	var seen int32 = 0
+	if port.CellsAt(cand, (row*crStride)+crSig) == 0 {
+		return 0
+	}
+	for (r < n) && (seen < 3) {
+		pg = port.CellsAt(cand, (r*crStride)+crPage)
+		if (pg != mine) && ((pg != p1) && ((pg != p2) && (pg != p3))) {
+			if fcSameDrawing(cand, pages, row, r) == 1 {
+				if seen == 0 {
+					p1 = pg
+				}
+				if seen == 1 {
+					p2 = pg
+				}
+				if seen == 2 {
+					p3 = pg
+				}
+				seen += 1
+			}
+		}
+		r += 1
+	}
+	if seen == 0 {
+		return 0
+	}
+	if seen == 1 {
+		return 100
+	}
+	if seen == 2 {
+		return 160
+	}
+	return 220
 }
 
 func fcInBand(y0 int32, y1 int32, pageh int32) int32 {
@@ -1263,6 +1499,7 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 	fcShadingRegions(pa, pages, fcand)
 	fcGrgRegions(grg, pages, fcand)
 	asset.AsFigureRows(fcand, pages, nodes, regions, 2, fg)
+	FcSignRows(fi, pa, fcand)
 	nr = asset.AsCount(fcand)
 	i = 0
 	for i < (nr * fdStride) {
@@ -1285,7 +1522,7 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 		x1 = port.CellsAt(fcand, b+(crVx+2))
 		y1 = port.CellsAt(fcand, b+(crVx+3))
 		pageh = model.PageH(pages, page-1)
-		recur = FcRecur(fcand, row)
+		recur = FcRecur(fcand, pages, row)
 		rej = 1
 		if measured < fcMaxreg {
 			measured += 1

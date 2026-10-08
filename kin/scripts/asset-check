@@ -29,6 +29,8 @@
 ;;   7. THE LEVEL `figures` (P8.5): the committed pdfium transcripts of test/asset/figures/ replay on both hosts (below).
 ;;   8. THE FIGURES' KINDS (P8.1): the hand-made fixtures of test/assets/fig/ have the figures test/assets/fig/kinds.edn says, of the kinds
 ;;      it says, on both hosts and at every level of `assets`; the kinds' accuracy and the placeholders' precision and recall are printed.
+;;   9. LOGOS AND THEIR RECURRENCE (P8.4): a four-page letterhead (a raster and a vector logo in the head, a badge in the body of two pages):
+;;      a logo placeholder for every occurrence, the body badges by recurrence, the head and foot as the furniture rules say, one asset a raster.
 ;;
 ;; Needs ImageMagick (`magick`), poppler (`pdfimages`) and the toolchains of the drivers. A missing tool is a SKIP of what it checks.
 (require '[babashka.fs :as fs] '[babashka.process :refer [shell process]] '[cheshire.core :as json] '[clojure.string :as str])
@@ -441,6 +443,43 @@
            (format "%.3f" (if (pos? @kn) (/ (double @kok) @kn) 1.0)) ", placeholder P " (format "%.3f" pr) " R " (format "%.3f" rc) "; "
            (str/join " " (for [[k {:keys [gold pred tp]}] (sort @per-kind)] (str k " " tp "/" pred "/" gold)))
            (when (seq @wrong) (str ":\n    " (str/join "\n    " (take 12 @wrong)))))))
+
+;; 9 LOGOS AND THEIR RECURRENCE (P8.4, SPEC 10.6, D399-D403) ---------------------------------------------------------------------------
+;; fig-letterhead: four pages, a raster logo and a vector logo in the head of each (the vector one a tenth smaller on page 3), a badge in the
+;; BODY of pages 2 and 4. Both hosts give the same Model; every occurrence is a `logo` figure of its own (2, 3, 2 and 3 on the pages: not one
+;; for the document); the badges are logos by recurrence alone (they are in no band); the running head and foot are what the furniture rules
+;; say whatever stands beside them (the page numbers are dropped and the page labels are theirs, the firm's line is one `furniture` aside, no
+;; head text is in the body); and at `images` the raster logo is ONE asset with four uses and the badge one with two.
+(let [pdf "test/assets/fig/fig-letterhead.pdf"
+      figs (fn [m] (filter #(= "figure" (get % "kind")) (tree-seq map? #(get % "children") (get m "body"))))
+      wrong (atom [])
+      out-rs (:out (fig-run rs pdf)) out-go (:out (fig-run go pdf))
+      m (json/parse-string out-rs)
+      fs* (figs m)
+      page-of (fn [f] (ffirst (get f "at")))
+      img-rs (json/parse-string (:out (fig-run rs "--assets=images" pdf)))
+      img-go (:out (fig-run go "--assets=images" pdf))]
+  (when-not (= out-rs out-go) (swap! wrong conj "the hosts differ"))
+  (when-not (= img-go (:out (fig-run rs "--assets=images" pdf))) (swap! wrong conj "the hosts differ at --assets=images"))
+  (when-not (= (frequencies (map page-of fs*)) {1 2, 2 3, 3 2, 4 3}) (swap! wrong conj (str "figures per page: " (frequencies (map page-of fs*)))))
+  (when-not (every? #(= "logo" (get % "subkind")) fs*) (swap! wrong conj "a figure is not a logo"))
+  (when-not (some #(and (= 2 (page-of %)) (> (second (first (get % "at"))) 50) (> (nth (first (get % "at")) 2) 200)) fs*)
+    (swap! wrong conj "the badge of page 2 (in the body, in no band) is not a logo"))
+  (when-not (= [1 2 3 4] (map #(get % "page") (get m "dropped"))) (swap! wrong conj (str "dropped: " (mapv #(get % "page") (get m "dropped")))))
+  (when-not (every? #(= "page-number" (get % "reason")) (get m "dropped")) (swap! wrong conj "the head is not just a page number"))
+  (when-not (= ["1" "2" "3" "4"] (map #(get % "label") (get m "pages"))) (swap! wrong conj "the page labels are not the printed numbers"))
+  (when-not (= [["footer" [1 2 3 4]]] (map (juxt #(get % "role") #(get % "pages")) (get m "furniture"))) (swap! wrong conj "the furniture is not the one footer"))
+  (when (some #(re-find #"Page \d of 4" (str (get % "text"))) (tree-seq map? #(get % "children") (get m "body"))) (swap! wrong conj "a page number is in the body"))
+  (when-not (= [2 4] (sort (map #(count (get % "uses")) (get img-rs "assets")))) (swap! wrong conj (str "assets at images: " (mapv #(count (get % "uses")) (get img-rs "assets")))))
+  (check (empty? @wrong) "LOGOS: fig-letterhead gives one logo placeholder per occurrence (" (count fs*) " on four pages), the body badges by recurrence, "
+         "the running head and foot as furniture says (page numbers dropped, one footer), and at `images` one asset with four uses and one with two"
+         (when (seq @wrong) (str ":\n    " (str/join "\n    " @wrong))))
+  ;; the scoreboard's entry `emon-figures` (bb accuracy --predictor emon-figures, gold in test/assets/fig/gold/): logo P/R/F1 and furniture F1
+  ;; over the letterhead, ratcheted (SPEC 14.2, D079)
+  (let [r (run "bb" "accuracy" "--predictor" "emon-figures")]
+    (check (and (zero? (:exit r)) (str/includes? (:out r) "none regressed"))
+           "LOGOS: the scoreboard's `emon-figures` entry (logo precision/recall/F1, furniture F1 over the letterhead) holds"
+           (when-not (zero? (:exit r)) (str ": " (:out r) (:err r))))))
 
 (fs/delete-tree tmp)
 (println (if (zero? @fails) "asset-check: all green" (str "asset-check: " @fails " FAILED")))

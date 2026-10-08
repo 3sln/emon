@@ -5843,6 +5843,103 @@
         :table-adj-r 1.0
         :watermark-leak 0.0
         :wer 1.0}}
+    "emon-figures" {
+      "pdf/all" {
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :conf-brier-all 0.030869
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-figure 0.005929
+        :conf-brier-figure-infer 0.005929
+        :conf-brier-furniture 0.005041
+        :conf-brier-furniture-text 0.005041
+        :conf-brier-paragraph 0.064009
+        :conf-brier-paragraph-text 0.064009
+        :conf-ece-all 0.145963
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-figure 0.077
+        :conf-ece-figure-infer 0.077
+        :conf-ece-furniture 0.071
+        :conf-ece-furniture-text 0.071
+        :conf-ece-paragraph 0.253
+        :conf-ece-paragraph-text 0.253
+        :figure-kind-logo-f1 1.0
+        :figure-kind-logo-p 1.0
+        :figure-kind-logo-r 1.0
+        :figure-subkind-acc 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :src-ocr-share 0.0
+        :table-adj-f1 1.0
+        :table-adj-p 1.0
+        :table-adj-r 1.0
+        :tl-override 0.0
+        :wer 0.0}
+      "pdf/figures" {
+        :block-figure-f1 1.0
+        :block-figure-p 1.0
+        :block-figure-r 1.0
+        :block-paragraph-f1 1.0
+        :block-paragraph-p 1.0
+        :block-paragraph-r 1.0
+        :bow-f1 1.0
+        :bow-p 1.0
+        :bow-r 1.0
+        :cer 0.0
+        :conf-brier-all 0.030869
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-figure 0.005929
+        :conf-brier-figure-infer 0.005929
+        :conf-brier-furniture 0.005041
+        :conf-brier-furniture-text 0.005041
+        :conf-brier-paragraph 0.064009
+        :conf-brier-paragraph-text 0.064009
+        :conf-ece-all 0.145963
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-figure 0.077
+        :conf-ece-figure-infer 0.077
+        :conf-ece-furniture 0.071
+        :conf-ece-furniture-text 0.071
+        :conf-ece-paragraph 0.253
+        :conf-ece-paragraph-text 0.253
+        :figure-kind-logo-f1 1.0
+        :figure-kind-logo-p 1.0
+        :figure-kind-logo-r 1.0
+        :figure-subkind-acc 1.0
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 1.0
+        :para-boundary-p 1.0
+        :para-boundary-r 1.0
+        :src-ocr-share 0.0
+        :table-adj-f1 1.0
+        :table-adj-p 1.0
+        :table-adj-r 1.0
+        :tl-override 0.0
+        :wer 0.0}}
     "emon-fusion" {
       "pdf/all" {
         :block-caption-f1 1.0
@@ -9290,8 +9387,8 @@
         :conf-ece-item-ocr 0.969
         :conf-ece-list 0.923
         :conf-ece-list-infer 0.923
-        :conf-ece-paragraph 0.02406
-        :conf-ece-paragraph-ocr 0.02406
+        :conf-ece-paragraph 0.059818
+        :conf-ece-paragraph-ocr 0.059818
         :conf-ece-section 0.326134
         :conf-ece-section-infer 0.326134
         :furniture-f1 1.0
@@ -9671,18 +9768,18 @@
         :bow-p 0.932092
         :bow-r 0.932092
         :cer 0.015918
-        :conf-brier-all 0.179628
+        :conf-brier-all 0.182353
         :conf-brier-heading 0.28
         :conf-brier-heading-ocr 0.28
-        :conf-brier-paragraph 0.090456
-        :conf-brier-paragraph-ocr 0.090456
+        :conf-brier-paragraph 0.094884
+        :conf-brier-paragraph-ocr 0.094884
         :conf-brier-section 0.364609
         :conf-brier-section-infer 0.364609
-        :conf-ece-all 0.216192
+        :conf-ece-all 0.223577
         :conf-ece-heading 0.2
         :conf-ece-heading-ocr 0.2
-        :conf-ece-paragraph 0.1785
-        :conf-ece-paragraph-ocr 0.1785
+        :conf-ece-paragraph 0.1905
+        :conf-ece-paragraph-ocr 0.1905
         :conf-ece-section 0.353
         :conf-ece-section-infer 0.353
         :furniture-f1 0.0
