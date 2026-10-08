@@ -405,6 +405,17 @@ func ScRequestView(rq *port.Cells, id int32, view int32, hhi int32, hlo int32, d
 	return q
 }
 
+func ScRequestViewPsm(rq *port.Cells, id int32, view int32, hhi int32, hlo int32, psm int32, dpi int32, loc *port.Cells) int32 {
+	// `sc-request-view` at the page segmentation mode `psm` (P8.2: a seal's strip and a stamp's crop are read as one block, `psm` 6).
+	var q int32 = plan.RqOcrView(rq, id, view, hhi, hlo, psm, ocr.OcfSymbols()+(dpi*ocr.OcfDpiUnit()), 0, 0, 0, 0)
+	var lg int32 = ScLang(loc)
+	if lg > 0 {
+		plan.RqOcrLang(rq, lg/65536, (lg/256)%256, lg%256, 0)
+	}
+	plan.RqOcrEnd(rq, q)
+	return q
+}
+
 func scCptLen(views *port.Cells, view int32, v int32) int32 {
 	// A length of `v` pixels down the view's y axis, in centipoints; -1 stays -1.
 	if v < 0 {

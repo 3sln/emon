@@ -1,5 +1,4 @@
-;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307). P7.6 re-derived `hidden-older-ocr` and `tl-broken-unmapped` by replaying their committed transcripts under the new rules (no engine ran: D322). P8.1 re-derived `figures-logo-screenshot` the same way (its logo is a figure placeholder now: D376).
-;; P10.1 (D370): re-derived by replaying the committed transcripts (`bb fusion-record --digests`): every `conf` of the JSON is the calibrated one.
+;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/fusion/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
 {"bank-statement"
  "9f5570e0aacede6f8155a5df57a4907d1ab177a56e41489cc7eeef108a6320df",
  "bg-texture"
@@ -21,11 +20,11 @@
  "script-mixed"
  "581098e617d0b26b2cb5ce43f93dddb32b85cea701696da87861a9390734bca2",
  "seal-over-text"
- "b02e308b7c5c3677ceea0b5eacf5ceea48e530538d1efcf9dcd52ccd57c1f16d",
+ "5747c938dec027546e78c902ec792bd9aef5e3b57ac95842ceae76f267b41332",
  "sig-over-name"
  "8b35ce3c056a637ede5f317f5ef07da908b83a037d8dafa69a5eca80dc41a8f3",
  "stamp-seal"
- "c8e6574d9fb860599e4e9a51f8bc2e7071a2db69ebd920410b6cfaa15c093b8c",
+ "86b37eca7d5aa08b963dcedd35d16e01629b53263bb8ffecd6bad8ed3f341509",
  "table-simple-ruled"
  "f90286f318b4ea29868ca7c71f3db800d39cd8b281777fece65ba0dd5bf81c7b",
  "tl-broken-shift"

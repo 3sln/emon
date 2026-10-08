@@ -33,6 +33,7 @@ This is a port of the Python scorer and is written to give identical numbers:
 strings are code-point sequences, the sequence matcher is difflib's algorithm
 (autojunk off), and float sums are CPython's compensated `sum`."
   (:require [accuracy.graphics :as G]
+            [clojure.set]
             [clojure.string :as str]
             [nfc]
             [pyjson])
@@ -681,6 +682,37 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
 
 (defn- has-prov? [segs] (boolean (some #(or (seq (:src %)) (seq (:flags %))) segs)))
 
+(defn- seal-key
+  "A name or a date compared as the fields are read: case folded, letters and digits only (an OCR'd ring is upper case and has the spacing of its separators)."
+  [s]
+  (str/join (re-seq #"[\p{L}\p{N}]" (str/lower-case (or s "")))))
+
+(defn- seal-tokens [s] (set (re-seq #"[\p{L}\p{N}]+" (str/lower-case (or s "")))))
+
+(defn seal-field-counts!
+  "P8.2's counts: for every seal or stamp of the gold that has a `name` or a `date` (a signature's name is P8.3's), the predicted seal node of the same subkind whose text
+  shares the most words with the gold's (at least a quarter of the union, and not taken by another) is its match; the name is right when its letters and digits are the
+  gold's, the date when it is. A gold node with no match counts as wrong. `seal-name.n`/`.ok` and `seal-date.n`/`.ok`."
+  [add gold pred]
+  (let [gs (vec (for [n (walk (get-in gold ["model" "body"])) :when (and (= "seal" (get n "kind")) (#{"seal" "stamp"} (get n "subkind"))
+                                                                         (or (get n "name") (get n "date")))] n))
+        ps (vec (for [n (walk (or (get pred "body") {"id" 0 "kind" "document"})) :when (and (= "seal" (get n "kind")) (#{"seal" "stamp"} (get n "subkind")))] n))
+        sim (fn [g p] (let [a (seal-tokens (get g "text")) b (seal-tokens (get p "text"))
+                            u (count (clojure.set/union a b))]
+                        (if (zero? u) 0.0 (/ (double (count (clojure.set/intersection a b))) u))))]
+    (loop [gs gs, taken #{}]
+      (when-let [g (first gs)]
+        (let [cands (for [[j p] (map-indexed vector ps) :when (and (not (taken j)) (= (get g "subkind") (get p "subkind")) (>= (sim g p) 0.25))]
+                      [(sim g p) j p])
+              [_ j p] (first (sort-by (comp - first) cands))]
+          (when (get g "name")
+            (add "seal-name.n")
+            (when (and p (= (seal-key (get g "name")) (seal-key (get p "name")))) (add "seal-name.ok")))
+          (when (get g "date")
+            (add "seal-date.n")
+            (when (and p (= (seal-key (get g "date")) (seal-key (get p "date")))) (add "seal-date.ok")))
+          (recur (rest gs) (if j (conj taken j) taken)))))))
+
 (defn fusion-counts!
   "Adds the fusion counts of one document. `opts` {:variant \"pdf\"|\"scan\"|...}: `tl-override` is a
   born-digital measure, so scans do not count it, and a gold whose `facts.tl-untrusted` is true (a text layer
@@ -839,6 +871,7 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
                 (add "table.continued.ok"
                      (count (filter (fn [[i j]] (pyeq (get-in g [i "continued"] 1) (get-in p [j "continued"] 1))) tp_)))))))))
     (when (get ann "text") (fusion-counts! add gold pred opts))
+    (when (get ann "text") (seal-field-counts! add gold pred))
     ;; inline styles and links
     (when (get ann "inlines") (inline-counts! add gb pb))
     ;; paragraph boundaries
@@ -967,6 +1000,12 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
             m)
         m (if (contains? c "fusion.seal-leak-chars")
             (set* m "seal-leak" (or (ratio (c "fusion.seal-leak-chars") (c "fusion.seal-body-chars")) 0.0))
+            m)
+        m (if (contains? c "seal-name.n")
+            (set* m "seal-name-acc" (ratio (get c "seal-name.ok" 0) (c "seal-name.n")))
+            m)
+        m (if (contains? c "seal-date.n")
+            (set* m "seal-date-acc" (ratio (get c "seal-date.ok" 0) (c "seal-date.n")))
             m)
         m (if (contains? c "fusion.src-chars")
             (set* m "src-ocr-share" (or (ratio (c "fusion.src-ocr-chars") (c "fusion.src-chars")) 0.0))

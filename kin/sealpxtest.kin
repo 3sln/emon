@@ -1,0 +1,354 @@
+;; Laws for `emon.sealpx` (P8.2; SPEC 10.7, 8.3, 7.3; D016, D196, D412-D418), on every target. Every bitmap is drawn by hand.
+;;
+;;   * the ink KEY: the ink's own colour is all ink, paper none, black text and another ink none, a colour between the two part;
+;;   * the UNWARP: a mark at a known direction and radius of a ring appears at the column and row the strip says; the strip begun at another direction moves it; the
+;;     centre view and a stamp's crop (turned by its angle) put a mark where they should; the ring's lines are painted out; the strip begins at the widest gap
+;;     (three quarters of the way, at 9 o'clock, when there is none); a column shift is a shift;
+;;   * BACK TO THE PAGE: the arc point and the box of a strip's word are where the ring puts them;
+;;   * the CANDIDATES: a ring on a colour layer, a double ring on the body layer, a stamp's outlined rectangle; not a ring on a light layer (a watermark), a single body
+;;     circle, a small ring, an oblong; a ring inside another is one candidate; the views are asked for by the pixel's hash, the same on a re-run.
+(ns emon.sealpxtest
+  (:require [emon.lang :refer [I32 Bitmap BitmapSet Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
+            [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 bms-get cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.scan :refer [sc-sel-base]]
+            [emon.evidence :refer [ow-new ol-new vw-new vk-render pm-new pm-set pm-ring pm-circle pm-rect pm-curve pmf-cx pmf-cy pmf-rx pmf-ry pmf-ink pmf-color pmf-conf pmf-flags pmf-stroke pmf-rot
+                                   ik-new ik-set ikf-role ir-body ir-light ir-color]]
+            [emon.sealpx :refer [sx-key sx-key-setup sx-sample sx-polar sx-disc sx-crop sx-erase-rows sx-erase-cols sx-gap sx-rotate sx-arc-point sx-arc-box sx-col-theta
+                                 sx-find sx-plan sx-drop-lines sx-strip-w sx-strip-h sx-disc-n sx-stamp-dim sx-w ri-seal rv-seal]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ------------------------------------------------------------- the key
+
+(defn ^I32 spt-fill [^Bitmap b ^I32 r ^I32 g ^I32 bl]
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y (bitmap-h b))
+      (do (set x 0)
+          (while (< x (bitmap-w b))
+            (do (bitmap-set-u8 b x y 0 r)
+                (bitmap-set-u8 b x y 1 g)
+                (bitmap-set-u8 b x y 2 bl)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 spt-block [^Bitmap b ^I32 x0 ^I32 y0 ^I32 w ^I32 h ^I32 r ^I32 g ^I32 bl]
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (bitmap-set-u8 b (+ x0 x) (+ y0 y) 0 r)
+                (bitmap-set-u8 b (+ x0 x) (+ y0 y) 1 g)
+                (bitmap-set-u8 b (+ x0 x) (+ y0 y) 2 bl)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(deftest test-a-pixel-is-the-inks-by-its-place-on-the-paper-to-ink-line
+  (let [^Cells kp (new-cells)]
+    (sx-key-setup kp 2047903 3)
+    (assert-eq (sx-key kp 31 63 159) 255 "the ink itself (#1f3f9f) is all ink")
+    (assert-eq (sx-key kp 255 255 255) 0 "paper is none")
+    (assert-eq (sx-key kp 0 0 0) 0 "black body text is none: it is far from the line")
+    (assert-eq (sx-key kp 200 30 30) 0 "a red is none")
+    (assert-that (and (> (sx-key kp 143 159 207) 80) (< (sx-key kp 143 159 207) 112)) "half way to the ink is under half: the least fifth is the paper's texture and is none")
+    (assert-eq (sx-key kp 235 240 245) 0 "a paper's texture (a twelfth of the way) is none")
+    (assert-that (> (sx-key kp 0 0 100) 180) "a darker blue than the ink is nearly all ink")
+    (assert-eq (sx-key kp 90 90 90) 0 "a gray, dark as the ink, is none: a coloured ink is told by its chroma")
+    (sx-key-setup kp 12591135 3)
+    (assert-eq (sx-key kp 192 32 31) 255 "a red ink (#c0201f) is all ink to a red key")
+    (assert-eq (sx-key kp 31 63 159) 0 "and a blue is none")
+    (sx-key-setup kp 16119285 3)
+    (assert-eq (sx-key kp 0 0 0) 255 "an ink as light as the paper is taken for a dark gray: black is all of it")))
+
+(deftest test-the-sample-is-bilinear-over-the-keyed-ink
+  (let [^Cells kp (new-cells)
+        ^Bitmap b (bitmap-new 4 4 3)]
+    (spt-fill b 255 255 255)
+    (spt-block b 1 1 1 1 31 63 159)
+    (sx-key-setup kp 2047903 3)
+    (assert-eq (sx-sample b kp 384 384) 255 "at a pixel's centre (1.5 pixels is 384): the pixel")
+    (assert-eq (sx-sample b kp 640 384) 0 "at the next centre: paper")
+    (assert-that (and (> (sx-sample b kp 512 384) 120) (< (sx-sample b kp 512 384) 136)) "between the two: half")
+    (assert-eq (sx-sample b kp -5000 384) 0 "outside the bitmap: paper")
+    (assert-eq (sx-sample b kp 384 90000) 0 "below it too")))
+
+;; ------------------------------------------------------------- the strip
+
+(deftest test-a-mark-on-the-ring-is-where-the-strip-says
+  (let [^Cells kp (new-cells)
+        ^Cells tab (new-cells)
+        ^Bitmap src (bitmap-new 240 240 3)
+        ^Bitmap strip (bitmap-new 1280 112 1)]
+    (spt-fill src 255 255 255)
+    (comment "a 5 x 5 mark at 3 o'clock, 0.85 of the radius (100) from the centre (120, 120)")
+    (spt-block src 203 118 5 5 31 63 159)
+    (sx-key-setup kp 2047903 3)
+    (sx-polar src kp strip 120 120 100 0 tab)
+    (assert-that (< (bitmap-u8 strip 320 40 0) 80) "3 o'clock is a quarter of the way round and 0.85 of the radius is a third of the way down: dark there")
+    (assert-eq (bitmap-u8 strip 960 40 0) 255 "9 o'clock is paper")
+    (assert-eq (bitmap-u8 strip 320 100 0) 255 "the radius 0.6 is paper")
+    (assert-eq (bitmap-u8 strip 0 40 0) 255 "12 o'clock is paper")
+    (sx-polar src kp strip 120 120 100 9000 tab)
+    (assert-that (< (bitmap-u8 strip 2 40 0) 80) "begun at 3 o'clock the mark is at the first columns")
+    (assert-eq (bitmap-u8 strip 320 40 0) 255 "and no longer a quarter of the way")
+    (sx-polar src kp strip 120 120 100 27000 tab)
+    (assert-that (< (bitmap-u8 strip 640 40 0) 80) "begun at 9 o'clock it is half way round")))
+
+(deftest test-the-centre-and-a-stamps-crop-put-a-mark-where-it-is
+  (let [^Cells kp (new-cells)
+        ^Bitmap src (bitmap-new 240 240 3)
+        ^Bitmap disc (bitmap-new 336 336 1)
+        ^Bitmap crop (bitmap-new 200 100 1)]
+    (spt-fill src 255 255 255)
+    (spt-block src 148 119 4 4 31 63 159)
+    (sx-key-setup kp 2047903 3)
+    (sx-disc src kp disc 120 120 100)
+    (assert-eq (bitmap-u8 disc 0 0 0) 255 "outside the disc (its corner) is paper")
+    (assert-that (< (bitmap-u8 disc 252 168 0) 120) "a mark 30 pixels right of the centre is at 168 + 30 * 336 / 124 = 250 pixels")
+    (assert-eq (bitmap-u8 disc 100 168 0) 255 "and the other side is paper")
+    (sx-crop src kp crop 120 120 0 1000)
+    (assert-that (< (bitmap-u8 crop 130 50 0) 120) "an unturned crop at scale 1: the mark 30 pixels right of the centre is 30 right of the crop's")
+    (spt-fill src 255 255 255)
+    (spt-block src 118 98 4 4 31 63 159)
+    (sx-crop src kp crop 120 120 9000 1000)
+    (assert-that (< (bitmap-u8 crop 120 50 0) 120) "turned a quarter counter-clockwise the crop's x axis points up: a mark 20 above the centre is 20 along it")
+    (sx-crop src kp crop 120 120 0 2000)
+    (assert-eq (bitmap-u8 crop 120 50 0) 255 "and the crop at twice the scale has it elsewhere")))
+
+(defn ^I32 spt-gray-fill [^Bitmap b ^I32 v]
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y (bitmap-h b))
+      (do (set x 0)
+          (while (< x (bitmap-w b))
+            (do (bitmap-set-u8 b x y 0 v)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 spt-gblock [^Bitmap b ^I32 x0 ^I32 y0 ^I32 w ^I32 h]
+  (comment "A block of ink (0) in a one-channel bitmap.")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y h)
+      (do (set x 0)
+          (while (< x w)
+            (do (bitmap-set-u8 b (+ x0 x) (+ y0 y) 0 0)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 spt-cols [^Bitmap b ^I32 x0 ^I32 x1]
+  (let [^:mut ^I32 x x0
+        ^:mut ^I32 y 20]
+    (while (< x x1)
+      (do (set y 20)
+          (while (< y 60)
+            (do (bitmap-set-u8 b x y 0 0)
+                (set y (+ y 1))))
+          (set x (+ x 1))))
+    (return 0)))
+
+(deftest test-a-rings-lines-are-painted-out
+  (let [^Bitmap b (bitmap-new 100 20 1)]
+    (spt-gray-fill b 255)
+    (spt-gblock b 0 4 100 2)
+    (spt-gblock b 10 12 30 3)
+    (spt-gblock b 0 16 40 1)
+    (assert-eq (sx-erase-rows b 0 20) 2 "the two rows that are all ink are painted: two rows (the one of 30 and the one of 40 per cent stay)")
+    (assert-eq (bitmap-u8 b 50 4 0) 255 "the line is gone")
+    (assert-eq (bitmap-u8 b 20 13 0) 0 "the text row stays")
+    (assert-eq (bitmap-u8 b 20 16 0) 0 "so does the row of 40 per cent")
+    (spt-gblock b 30 0 1 20)
+    (assert-eq (sx-erase-cols b) 1 "a column that is all ink is painted: one")
+    (assert-eq (bitmap-u8 b 30 13 0) 255 "the column is gone")))
+
+(deftest test-the-strip-begins-at-its-widest-gap
+  (let [^Bitmap b (bitmap-new 1280 112 1)
+        ^Cells cnt (new-cells)]
+    (spt-gray-fill b 255)
+    (spt-cols b 100 400)
+    (spt-cols b 500 1000)
+    (assert-eq (sx-gap b cnt) 1190 "the gaps are 400-500 and 1000-1380 (round the end): the middle of the second")
+    (spt-gray-fill b 255)
+    (spt-cols b 0 1280)
+    (assert-eq (sx-gap b cnt) 960 "no gap: three quarters of the way, 9 o'clock")
+    (spt-gray-fill b 255)
+    (assert-eq (sx-gap b cnt) 960 "no ink at all: the same")
+    (spt-gray-fill b 255)
+    (spt-cols b 10 1270)
+    (assert-eq (sx-gap b cnt) 960 "a gap of twenty columns (round the end) is under the least that begins the strip (24)")
+    (spt-gray-fill b 255)
+    (spt-cols b 300 1000)
+    (assert-eq (sx-gap b cnt) 10 "a gap of 580 round the end, from 1000: its middle is 1290, which is column 10")))
+
+(deftest test-a-shift-moves-the-columns
+  (let [^Bitmap a (bitmap-new 10 2 1)
+        ^Bitmap b (bitmap-new 10 2 1)]
+    (spt-gray-fill a 255)
+    (bitmap-set-u8 a 3 1 0 7)
+    (sx-rotate a b 2)
+    (assert-eq (bitmap-u8 b 1 1 0) 7 "the column that was 3 is 1")
+    (assert-eq (bitmap-u8 b 3 1 0) 255 "and the old place is paper")
+    (sx-rotate a b 5)
+    (assert-eq (bitmap-u8 b 8 1 0) 7 "a shift past the column wraps round: 3 - 5 is 8")))
+
+;; ------------------------------------------------------------- back to the page
+
+(deftest test-the-strip-goes-back-on-the-ring
+  (assert-eq (sx-arc-point 10000 20000 5000 0 0) 10000 "12 o'clock: the centre's x")
+  (assert-eq (sx-arc-point 10000 20000 5000 0 1) 15000 "and a radius above it")
+  (assert-eq (sx-arc-point 10000 20000 5000 9000 0) 15000 "3 o'clock: a radius to the right")
+  (assert-eq (sx-arc-point 10000 20000 5000 9000 1) 20000 "on the centre's level")
+  (assert-eq (sx-arc-point 10000 20000 5000 18000 1) 25000 "6 o'clock: below")
+  (assert-eq (sx-col-theta 320 1280 0) 9000 "a quarter of the columns is a quarter of the way round")
+  (assert-eq (sx-col-theta 320 1280 27000) 0 "begun at 9 o'clock it is round at 12")
+  (assert-that (< (sx-arc-box 10000 20000 5000 0 1280 112 316 36 8 10 0) 15000) "a word box at 3 o'clock and 0.85 of the radius: its left is at 0.85 of the radius or less")
+  (assert-that (> (sx-arc-box 10000 20000 5000 0 1280 112 316 36 8 10 0) 14000) "and not too far in")
+  (assert-that (> (sx-arc-box 10000 20000 5000 0 1280 112 316 36 8 10 2) 14000) "its right is further round")
+  (assert-that (< (sx-arc-box 10000 20000 5000 0 1280 112 316 36 8 10 1) 20500) "its top is about the centre's level")
+  (assert-that (> (sx-arc-box 10000 20000 5000 0 1280 112 316 36 8 10 3) 19500) "its bottom too"))
+
+;; ------------------------------------------------------------- the candidates
+
+(defn ^I32 spt-prim [^:mut ^Cells prims ^I32 kind ^I32 cx ^I32 cy ^I32 rx ^I32 ry ^I32 ink ^I32 rgb ^I32 flags ^I32 stroke]
+  (let [^I32 r (pm-new prims 1 (- cx rx) (- cy ry) (+ cx rx) (+ cy ry) kind)]
+    (pm-set prims r (pmf-cx) cx)
+    (pm-set prims r (pmf-cy) cy)
+    (pm-set prims r (pmf-rx) rx)
+    (pm-set prims r (pmf-ry) ry)
+    (pm-set prims r (pmf-ink) ink)
+    (pm-set prims r (pmf-color) rgb)
+    (pm-set prims r (pmf-conf) 900)
+    (pm-set prims r (pmf-flags) flags)
+    (pm-set prims r (pmf-stroke) stroke)
+    (return r)))
+
+(defn ^I32 spt-ink [^:mut ^Cells inks ^I32 role]
+  (let [^I32 r (ik-new inks 1 0)]
+    (ik-set inks r (ikf-role) role)
+    (return r)))
+
+(deftest test-a-ring-or-a-stamp-on-the-right-layer-is-a-candidate
+  (let [^Cells views (new-cells)
+        ^Cells prims (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells cand (new-cells)]
+    (vw-new views 1 (vk-render) -1 -1 3000 3000 7200 0 -1 0 0 0 0 0)
+    (spt-ink inks (ir-body))
+    (spt-ink inks (ir-light))
+    (spt-ink inks (ir-color))
+    (comment "a blue ring of radius 30 pt at (20 pt, 20 pt)... on the colour layer")
+    (spt-prim prims (pm-ring) 20000 20000 3000 3000 2 2047903 4 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 1 "a ring on a colour layer: a candidate")
+    (assert-eq (cells-at cand 0) 1 "a seal")
+    (assert-eq (cells-at cand 2) 200 "its centre x in pixels (72 dpi: one a point)")
+    (assert-eq (cells-at cand 4) 30 "its radius")
+    (assert-eq (cells-at cand 13) 10 "its colour code: blue")
+    (comment "the ring of the page's body layer is one only as a double ring")
+    (spt-prim prims (pm-circle) 40000 20000 3000 3000 0 1118481 0 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 1 "a single circle on the body layer is a diagram's: still the one candidate")
+    (spt-prim prims (pm-ring) 40000 40000 3000 3000 0 1118481 4 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 2 "a double ring on the body layer is a seal")
+    (assert-eq (cells-at cand 13) 10 "(the colour one first)")
+    (assert-eq (cells-at cand 29) 0 "the body one is black")
+    (comment "a ring on a light layer (a watermark), a small ring: neither; an oblong curve of the colour layer (a rotated stamp's outline) is a stamp")
+    (spt-prim prims (pm-ring) 20000 60000 3000 3000 1 13487565 4 200)
+    (spt-prim prims (pm-ring) 20000 60000 1000 1000 2 2047903 4 200)
+    (spt-prim prims (pm-curve) 40000 60000 3000 4500 2 2047903 0 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 3 "the oblong curve is a stamp, the other two are no candidate")
+    (comment "a ring inside another, concentric: one candidate, the larger")
+    (spt-prim prims (pm-ring) 20000 20000 2600 2600 2 2047903 0 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 3 "an inner ring is the seal's, not another")
+    (comment "a stamp: an outlined rectangle on the colour layer")
+    (spt-prim prims (pm-rect) 30000 70000 5000 2000 2 12591135 1 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 4 "an outlined rectangle on the colour layer: a stamp")
+    (assert-eq (cells-at cand 48) 2 "a stamp")
+    (assert-eq (cells-at cand 52) 50 "half its width in pixels")
+    (assert-eq (cells-at cand 53) 20 "half its height")))
+
+(defn ^I32 spt-oword [^:mut ^Cells ow ^I32 x ^I32 y]
+  (return (ow-new ow 1 (- x 300) (- y 200) (+ x 300) (+ y 200) (- x 300) (+ y 200) (+ x 300) (+ y 200) 0 0 0 1 0 800 -1)))
+
+(deftest test-a-line-wholly-inside-a-kept-seal-is-not-body-text
+  (let [^Cells cand (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells scr (new-cells)]
+    (while (< (cells-len cand) 16)
+      (cells-push cand 0))
+    (cells-set cand 0 1)
+    (cells-set cand 8 1000)
+    (cells-set cand 9 1000)
+    (cells-set cand 10 7000)
+    (cells-set cand 11 7000)
+    (cells-set cand 15 -2)
+    (spt-oword ow 4000 4000)
+    (spt-oword ow 4000 4500)
+    (spt-oword ow 30000 4000)
+    (spt-oword ow 30000 30000)
+    (ol-new ol 1 3700 3800 4300 4200 3700 4200 4300 4200 0 0 0 1)
+    (ol-new ol 1 3700 4300 30300 4700 3700 4700 30300 4700 0 0 1 2)
+    (ol-new ol 1 29700 29800 30300 30200 29700 30200 30300 30200 0 0 3 1)
+    (while (< (cells-len scr) (+ (sc-sel-base) 8))
+      (cells-push scr 0))
+    (cells-set scr (sc-sel-base) 0)
+    (cells-set scr (+ (sc-sel-base) 1) 1)
+    (cells-set scr (+ (sc-sel-base) 2) 2)
+    (assert-eq (sx-drop-lines scr 3 ol ow cand) 2 "the line in the ring is out; the line that runs from the ring across the page and the line elsewhere stay")
+    (assert-eq (cells-at scr (sc-sel-base)) 1 "the first left is the second line")
+    (assert-eq (cells-at scr (+ (sc-sel-base) 1)) 2 "then the third")
+    (cells-set cand 15 -1)
+    (cells-set scr (sc-sel-base) 0)
+    (cells-set scr (+ (sc-sel-base) 1) 1)
+    (cells-set scr (+ (sc-sel-base) 2) 2)
+    (assert-eq (sx-drop-lines scr 3 ol ow cand) 3 "a candidate whose reading was not kept takes nothing out of the body")))
+
+(deftest test-a-stamps-crop-is-sized-for-reading
+  (let [^Cells cand (new-cells)]
+    (while (< (cells-len cand) 16)
+      (cells-push cand 0))
+    (cells-set cand 4 100)
+    (cells-set cand 5 50)
+    (assert-eq (sx-stamp-dim cand 0 0) 1500 "a stamp of 100 pixels high: the least scale, 1.5")
+    (assert-eq (sx-stamp-dim cand 0 1) 316 "its width is 200 pixels at that scale and the margin")
+    (assert-eq (sx-stamp-dim cand 0 2) 166 "its height 100")
+    (cells-set cand 5 20)
+    (assert-eq (sx-stamp-dim cand 0 0) 3750 "a small one is enlarged until its height is 150: 3.75")
+    (cells-set cand 4 800)
+    (assert-that (<= (sx-stamp-dim cand 0 1) 2000) "a wide one is kept under 2000 pixels")))
+
+(deftest test-the-views-are-asked-for-by-hash-and-asked-again-the-same
+  (let [^Cells views (new-cells)
+        ^Cells prims (new-cells)
+        ^Cells inks (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells kp (new-cells)
+        ^Cells tab (new-cells)
+        ^Cells rq (new-cells)
+        ^Cells rq2 (new-cells)
+        ^Cells ans (new-cells)
+        ^Cells loc (new-cells)
+        ^BitmapSet bms (new-bitmap-set)
+        ^BitmapSet bms2 (new-bitmap-set)
+        ^Bitmap src (bitmap-new 240 240 3)]
+    (spt-fill src 255 255 255)
+    (spt-block src 203 118 5 5 31 63 159)
+    (vw-new views 1 (vk-render) -1 -1 240 240 7200 0 -1 0 0 0 0 0)
+    (spt-ink inks (ir-color))
+    (spt-prim prims (pm-ring) 12000 12000 10000 10000 0 2047903 4 200)
+    (assert-eq (sx-find 1 views 0 prims inks 61200 79200 cand) 1 "the ring is a candidate")
+    (assert-eq (sx-plan 0 loc ans bms src cand kp tab rq) 2 "its strip and its centre are asked")
+    (assert-that (> (cells-len rq) 0) "as requests")
+    (assert-eq (bitmap-w (bms-get bms (+ 16777216 48))) (sx-strip-w) "the strip is a view of the page's own set, at its id (2^24 + page * 256 + 48)")
+    (assert-eq (bitmap-h (bms-get bms (+ 16777216 48))) (sx-strip-h) "and `sx-strip-h` high")
+    (assert-eq (bitmap-w (bms-get bms (+ 16777216 49))) (sx-disc-n) "the centre view is square")
+    (assert-eq (sx-plan 0 loc ans bms2 src cand kp tab rq2) 2 "a re-run asks for the same two")
+    (assert-eq (cells-len rq) (cells-len rq2) "of the same length")
+    (assert-that (>= (ri-seal) 128) "the request ids are in the crops' range")
+    (assert-that (>= (sx-w) 16) "and a record is at least 16 cells")
+    (assert-that (>= (rv-seal) 48) "the views' ids come after the targeted passes'")))

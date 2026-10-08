@@ -472,3 +472,130 @@ fn test_a_seal_node_is_written_after_the_block_it_overlaps() {
     crate::testport::assert_eq(node_parent(nn, 7), 1, "a child of the section");
     crate::testport::assert_eq(model_check(nn, na, nr, text, pages, ledger, layout, chk), 0, "and the Model still checks");
 }
+pub(crate) fn st_owtext(mut ow: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], conf: i32) -> i32 {
+    // An OCR word of page 1 whose text is the bytes of `b`, the engine's confidence `conf`; answers its row.
+    let ts: i32 = crate::port::cells_len(et);
+    let n: i32 = crate::port::blob_len(b);
+    let mut k: i32 = 0;
+    while k < n {
+        crate::port::cells_push(et, crate::port::blob_u8(b, k));
+        k += 1;
+    }
+    return ow_new(ow, 1, 1000, 1000, 2000, 1600, 1000, 1600, 2000, 1600, 0, 0, ts, n, 0, conf, -1);
+}
+pub(crate) fn st_pxgroup(mut cg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, first: i32, count: i32, flags: i32, hue: i32) -> i32 {
+    // A raster seal's group (`emon.sealpx`): its words are the OCR words first.. first + count - 1, in its box on page 1, its colour code in `rot`.
+    let g: i32 = cg_new(cg, 1, 1000, 1000, 7000, 7000, hue);
+    let mut f: i32 = 0;
+    let mut i: i32 = 0;
+    while i < count {
+        if i == 0 {
+            f = rf_add(refs, ea_owords(), first + i);
+        } else {
+            rf_add(refs, ea_owords(), first + i);
+        }
+        i += 1;
+    }
+    cg_set(cg, g, cgf_ofirst(), f);
+    cg_set(cg, g, cgf_ocount(), count);
+    cg_set(cg, g, cgf_flags(), flags);
+    return g;
+}
+#[test]
+fn test_a_seal_read_from_pixels_is_a_candidate_with_its_reading_as_text() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_owtext(ow, et, &crate::testport::text_blob("ACME")[..], 900);
+    st_owtext(ow, et, &crate::testport::text_blob("LTD")[..], 900);
+    st_owtext(ow, et, &crate::testport::text_blob("-")[..], 900);
+    st_owtext(ow, et, &crate::testport::text_blob("ee")[..], 100);
+    st_owtext(ow, et, &crate::testport::text_blob("2026-03-14")[..], 600);
+    st_pxgroup(cg, refs, 0, 5, (plg_ocr_only() + plg_in_seal()) + plg_seal_px(), 10);
+    crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "a group flagged `seal-px` is a candidate though the page has no path");
+    crate::testport::assert_eq(sl_get(sm, 0, 5), pls_seal(), "a seal");
+    crate::testport::assert_eq(sl_get(sm, 0, 12), 128, "read from pixels (flag 128)");
+    crate::testport::assert_eq(sl_get(sm, 0, 15), 10, "its colour is the group's code, blue");
+    crate::testport::assert_eq(sl_get(sm, 0, 1), 1000, "its box is the group's");
+    crate::testport::assert_eq(sl_get(sm, 0, 14), 21, "the text is the kept words: ACME LTD - 2026-03-14, the noise of confidence 100 left out");
+    crate::testport::assert_eq(crate::port::cells_at(et, sl_get(sm, 0, 13)), 65, "it starts with A");
+    crate::testport::assert_eq(sl_get(sm, 0, 11), 5, "and its words are the group's five");
+}
+#[test]
+fn test_a_stamp_group_is_a_stamp_and_a_vector_candidate_is_not_written_twice() {
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    st_owtext(ow, et, &crate::testport::text_blob("PAID")[..], 900);
+    st_pxgroup(cg, refs, 0, 1, ((plg_ocr_only() + plg_in_seal()) + plg_seal_px()) + plg_seal_stamp(), 3);
+    crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "a stamp group");
+    crate::testport::assert_eq(sl_get(sm, 0, 5), pls_stamp(), "is a stamp");
+    crate::testport::assert_eq(sl_get(sm, 0, 15), 3, "red");
+    // a vector ring over the same box: its candidate is written, the pixel one is not
+    crate::port::cells_drop(sm, 0);
+    st_circle(pa, pts, 1, 4000, 4000, 2047903, 300, 0);
+    let ow2: i32 = st_oword(ow, et, 4000, 4000, 83, 69);
+    let gv: i32 = st_ogroup(cg, refs, ow2);
+    crate::testport::assert_eq(cg_get(cg, gv, cgf_flags()), 0, "(an OCR group inside the ring)");
+    crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "the ring found in the paths and the group of the pixels, one box: one candidate");
+    crate::testport::assert_eq(sl_get(sm, 0, 12) & 128, 0, "the vector one");
+}
+#[test]
+fn test_the_node_of_a_seal_has_its_name_and_its_date() {
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nn: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let na: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let nm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    let sec: i32 = node_new(nodes, nk_section(), 0);
+    st_block(nodes, regions, sec, 1, 10000, 20000);
+    st_owtext(ow, et, &crate::testport::text_blob("ACME")[..], 900);
+    st_owtext(ow, et, &crate::testport::text_blob("LTD")[..], 900);
+    st_owtext(ow, et, &crate::testport::text_blob("-")[..], 900);
+    st_owtext(ow, et, &crate::testport::text_blob("NOTARY")[..], 900);
+    st_owtext(ow, et, &crate::testport::text_blob("2026-03-14")[..], 600);
+    st_pxgroup(cg, refs, 0, 5, (plg_ocr_only() + plg_in_seal()) + plg_seal_px(), 10);
+    crate::testport::assert_eq(st_find(pa, pts, gl, fw, et, cg, refs, ow, sm), 1, "the candidate");
+    crate::testport::assert_eq(sm_write(sm, et, nodes, attrs, regions, text, nn, na, nr, nm), 1, "written");
+    let a: i32 = node_attr(nn, na, 2, fk_name());
+    let d: i32 = node_attr(nn, na, 2, fk_date());
+    let c: i32 = node_attr(nn, na, 2, fk_color());
+    crate::testport::assert_eq(node_kind(nn, 2), nk_seal(), "the seal is node 2: it overlaps no block and the paragraph starts below its top");
+    crate::testport::assert_that(a >= 0, "it has a name");
+    crate::testport::assert_eq(attr_len(na, a), 8, "ACME LTD, the first phrase of letters, cut at the dash");
+    crate::testport::assert_eq(crate::port::cells_at(text, attr_value(na, a)), 65, "which starts with A");
+    crate::testport::assert_that(d >= 0, "and a date");
+    crate::testport::assert_eq(attr_len(na, d), 10, "of ten characters");
+    crate::testport::assert_eq(crate::port::cells_at(text, attr_value(na, d)), 50, "2026-03-14, as year-month-day");
+    crate::testport::assert_eq(crate::port::cells_at(text, attr_value(na, d) + 5), 48, "the month's tens digit");
+    crate::testport::assert_eq(attr_len(na, c), 4, "and the colour, blue");
+    crate::testport::assert_eq(node_text_len(nn, 2), 26, "the text is the words of the reading: the ring's lone dash is out of it (it cut the name)");
+}

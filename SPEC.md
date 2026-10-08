@@ -1779,7 +1779,8 @@ circle, ellipse and `colour`-layer components are the raster half, which comes w
 the candidate's) or by its turn along the ring (the arc text: rotation varying along it); black upright text under a stamp or inside a ring is body
 text (D315). A correspondence group whose every text-layer word is a candidate's, or an OCR-only group inside one, is flagged `in-seal` before
 arbitration (`emon.sealmark`'s `sm-find`) and rows 401 and 402 hold it with no winner and no ledger row: its words are the `seal` node's `text`
-(`low-conf`), written in reading order after the block the candidate overlaps (`sm-write`, D318).
+(`low-conf`), written in reading order after the block the candidate overlaps (`sm-write`, D318). **P8.2 (D412-D418)** adds the raster half: a seal found in
+the tracer's primitives is a correspondence group flagged `seal-px`, which `sm-find` turns into the same `sl` row (§10.7).
 
 ### 9.6 Confidence calibration
 
@@ -1818,7 +1819,7 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (ONE cell, its arena being known: D240), similarity (case kept), similarity (case-folded letters), flags (`plg`: text-only, OCR-only, split, merged, in-figure, in-seal, **bink** and **bink-absent**: the page has a body-ink OCR run and no word of it lies over the group, P7.4) |
+| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (ONE cell, its arena being known: D240), similarity (case kept), similarity (case-folded letters), flags (`plg`: text-only, OCR-only, split, merged, in-figure, in-seal, **bink** and **bink-absent**: the page has a body-ink OCR run and no word of it lies over the group, P7.4; **seal-px** and **seal-stamp**: the group is a seal's (a stamp's) reading found in pixels, its `rot` the colour code, P8.2) |
 | `fw` | 24 | **the layout of `words`** (word head 16, style, glyph run, font, size, gap, `wbreak`, `src`): `src` is the sources bitset (`sr`: text, hidden-text, ocr, trace), the glyph run is the text-layer word's when it won, empty otherwise |
 | `fl` | 16 | **the layout of `lines`**; a line of OCR-won words is measured as D213 measures an OCR line |
 | `fv` | 8 | per `fw` row: group, winning source (`sr` code), rule (`fr` number), confidence (per-mille, uncalibrated until P10.1), flags (`fl`: low-conf, ocr-only, text-layer-suspect), spare (3) |
@@ -1829,7 +1830,7 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 | `gfl` | 16 | **the fused fills**: page, box, colour, lightness (0..1000), sources, winning source, rule, confidence, flags (`gq`: shading, pattern, in-image, tint-coloured: the colour came from the tracer), group, `z`, spare (2) |
 | `ggp` | 12 | **graphics groups** (the `cg` of graphics): page, kind (`gk`: rule, fill, region), vector members (`refs` run of `(paths, i)` and `(pts, k)` pairs: the path and the first point of the segment), tracer members (`refs` run of `rules` or `prims` rows), OCR members (`refs` run of `oblocks` rows), flags, spare (3) |
 | `grg` | 16 | **graphic regions**: page, box, kind (`rk`: table-in-image, figure, table-hint), sources (`gs`: vector, trace, ocr, struct, image), subject (`(ea, index)`: the image placement, the `oblocks` block, the `se` element, -1), fused rules inside (count), fills inside (count), confidence, flags, spare (3) |
-| `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference (as built: `(paths, row)` of the vector path), confidence, OCR words inside (a `refs` run), flags (as built: 1 chromatic, 2 double ring, 4 inner ring of another, 16 roundness unverified, 32 text from the text layer, 64 written), and in the three spare cells the node's `etext` run and ink (D317) |
+| `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference (as built: `(paths, row)` of the vector path), confidence, OCR words inside (a `refs` run), flags (as built: 1 chromatic, 2 double ring, 4 inner ring of another, 16 roundness unverified, 32 text from the text layer, 64 written, 128 read from pixels (P8.2: the ink cell is then the colour code)), and in the three spare cells the node's `etext` run and ink (D317) |
 
 **The tagged tables' verdicts, `tb` (D302, P5.5).** A document whose tagged tree has a `Table` adds one key after the arenas, `tb`, an
 array with a row for every tagged table the table stage read (§10.5), in document order: `page`, `se` (the `Table` element's row), `rows`,
@@ -2478,8 +2479,31 @@ fused rules and fills inside them (a chart's axes are two perpendicular
 
 **As built (P7.7).** Candidates, their words and the node are `emon.sealmark`'s (§9.5, D314-D318): seal, stamp and signature nodes with `subkind`, `color`
 (12 hue buckets, black, gray, white) and `text` (the words in the text layer's order, flagged `low-conf`; none for a signature), in reading order; the
-candidates are the layer's `sl` arena (§9.7). A seal's `name`, `date` and the signature's typed name are P8.2's and P8.3's; the polar unwarp of a raster
-seal (P8.2) and the handwriting of raster strokes wait for the tracer's candidates (D316).
+candidates are the layer's `sl` arena (§9.7). The signature's typed name is P8.3's; the handwriting of raster strokes waits for the tracer's candidates (D316).
+
+**As built (P8.2, D412-D418): seals and stamps from pixels, `name` and `date`.** *Fields* (`emon.sealfield`, language independent): a seal's `name` is the first
+phrase of its text between the separators a ring puts between its phrases (a bullet, a star, a bar, a long dash, a line end, a hyphen with a space beside it or between two words of five letters or more) that has
+letters and no digit and is long enough for its script (a seal: one word of four letters or two Han, Kana or Hangul letters; a stamp: two words of five letters), as read;
+its `date` is the first digits-separator-digits shape (any decimal digit of any script; year first; day and month in the order the numbers settle or the locale hint says,
+else as it stands), the CJK year-month-day marks, or a day, a word of letters and a year; written `YYYY-MM-DD` when no reading disputes it, else as it stands. Both are read
+off the node's `text` when it is written (`sm-write`), whoever made the text, so vector seals have them too (a signature has neither). `sm-write` is called without the
+document's locale, so a numeric date that either order would read stays as written there (`sf-order` is the hint's reading, used where a unit has the locale).
+*Candidates* (`emon.sealpx`): the tracer's `ring`, `circle`, `ellipse` and `curve` primitives of at least 8 mm radius and axes within 15 per cent on a `colour` layer
+(on the body layer only a double ring), and its outlined `rect` primitives of the `colour` layers (a stamp), at most four a page, a ring concentric with another one candidate.
+*The ink key*: a pixel is the seal's ink by its place on the paper-to-ink colour line and, for a coloured ink, by having a tenth of the chroma that place asks (black text,
+the gray of a watermark and the gray edge of a letter are paper). *The polar unwarp*: the annulus between 0.55 and 1.02 of the ring's radius is laid out as a strip of
+1280 x 112 pixels (centre refined within three steps by the straightness of the strip's rows), begun at the widest gap of the ring's ink, its rows that are thin
+lines painted out, the outside at the top (a ring written clockwise stands upright); the disc inside 0.62 of the radius is a 336-pixel square; a stamp is cut out along
+its own axes (the tracer's `rot`) at least 1.5 times and at least 150 pixels high with its border painted out. Each is a kin-made view (`vk-polar` with the `nonaffine` flag
+and its parameters in the linear-part cells, or `vk-cropped`), read as a targeted `op-seal-strip` request at `psm` 6 (the request names the view's pixel hash). *Evidence*:
+the answers are OCR runs of pass `seal-strip` (region: the seal's box in the raster's pixels) whose words are laid back on the ring (box, baseline and `rot`), and one `cg`
+group a seal, flagged `in-seal`, `ocr-only` and `seal-px` (and `seal-stamp`), its `rot` cell the colour code, holds the words: `sm-find` makes its `sl` row (flag 128: the
+cell 15 is the colour code), its words never reach the body (rules 401, 402), and a candidate found in the vector paths of the same box is not written twice. A seal on a
+SCANNED page makes the document a fused one (evidence version 2) so that `sm-write` writes its node; the page's chosen lines that lie wholly inside a kept seal are not
+body text (`sx-drop-lines`; also a line with 60 per cent of its characters inside whose mean confidence is under 600 per mille). A pixel-read seal's text keeps the words the engine was sure of (`sm-px-keep`: not
+a noisy mixed-case or punctuation-ridden misread), and leaves the ring's lone separators out of the node's `text` (the name field is cut by them first). A stamp is also a curve or ellipse of a colour layer
+whose sides differ by more than 15 per cent (a rotated outline). Not built: raster inputs (PNG, JPEG, TIFF files: their page unit has no ink arenas), a seal the layer clustering did not separate from the
+body (a faint stamp on a tinted ground), the second strip for text written with its tops inward, the locale hint at `sm-write`.
 
 ### 10.8 Footnotes, captions, links
 
@@ -3239,6 +3263,7 @@ commit (the ratchet). Metrics:
 | Alignment | accuracy and coverage per kind (paragraph, heading, cell) (D115) |
 | Columns | fragment column accuracy; continuation join P/R; hyphen resolution at breaks (D115) |
 | Confidence | expected calibration error per kind |
+| Seal fields (D418) | `seal-name-acc` and `seal-date-acc`: of the gold's seals and stamps that have a `name` (a `date`), the share whose matched predicted node (same subkind, most words in common, at least a quarter of the union) has the same letters and digits in it; `stamp-ghost` on mapo80, live only (`bb stamp-ghost`: OCR words inside a labelled stamp that reach the body, never ratcheted) |
 | Fusion (D206) | `ghost-rate` (body words with OCR and no text-layer source that the gold body does not have, over predicted body words); `seal-leak` (characters of the gold's seal and stamp text found in the body, over body characters, as `watermark-leak` is for watermarks); `src-ocr-share` (body characters whose source has `ocr` and not `text`) and `tl-override` (on born-digital variants: body characters under the `text-layer-suspect` flag, which §9.4 sets exactly where OCR replaced a text-layer candidate, over body characters); per-source win rates and per-rule counts from the evidence dump's `fv` and `fx` (`bb fusion-report`: recorded, never ratcheted, as they have no better direction) |
 
 ### 14.3 Ground truth

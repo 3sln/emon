@@ -1,0 +1,12 @@
+;; The documents of the seals-from-pixels gate (`kin/scripts/sealpx`, P8.2, D414). Recorded LIVE by `bb sealpx-record` (Tesseract, pdfium for :born), with pixels.
+;;   :pdf    the document;  :kind :scan (a scanned page: the page unit decodes the image) or :born (born-digital text with RASTER seals: rendered, traced, fused)
+;;   :gold   :seals (test/sealpx/gold.edn, the key is the id) or :ovl (the seal nodes of test/corpus/synth/gold-ovl/GOLD-ID.ovl.gold.json)
+;;   :miss   [x y]: a pixel of the transcript's bitmap :miss-file (default bitmap-0000.png, the first decode or render) to set to :miss-color (default black) on the ink of the
+;;           seal: the replay must then be `transcript-miss` (the ink key is blind to black: a seal's pixel is its own colour)
+{"px-seal-notary"  {:pdf "test/sealpx/pdf/px-seal-notary.pdf" :kind :born :gold :seals :miss [1779 821] :miss-file "bitmap-0001.png" :miss-color "#1f3f9f"}
+ "px-stamp-paid"   {:pdf "test/sealpx/pdf/px-stamp-paid.pdf" :kind :born :gold :seals :miss [1117 660] :miss-file "bitmap-0001.png" :miss-color "white"}
+ "px-seal-black"   {:pdf "test/sealpx/pdf/px-seal-black.pdf" :kind :born :gold :seals}
+ "px-negatives"    {:pdf "test/sealpx/pdf/px-negatives.pdf" :kind :born :gold :seals}
+ "ovl-stamp-seal"  {:pdf "test/corpus/synth/scan-ovl/stamp-seal.pdf" :kind :scan :gold :ovl :gold-id "stamp-seal" :miss [329 431]}
+ "ovl-seal-over-text" {:pdf "test/corpus/synth/scan-ovl/seal-over-text.pdf" :kind :scan :gold :ovl :gold-id "seal-over-text"}
+ "ovl-sig-over-name" {:pdf "test/corpus/synth/scan-ovl/sig-over-name.pdf" :kind :scan :gold :ovl :gold-id "sig-over-name"}}
