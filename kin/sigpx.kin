@@ -80,9 +80,17 @@
   (if (< v 0) (return (- 0 v)))
   (return v))
 
+(defn ^I32 sp-lo [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 sp-hi [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
 (defn ^I32 sp-overlap [^I32 a0 ^I32 a1 ^I32 b0 ^I32 b1]
   (comment "The length the intervals [a0, a1] and [b0, b1] share, 0 when they do not.")
-  (let [^I32 v (- (if (< a1 b1) a1 b1) (if (> a0 b0) a0 b0))]
+  (let [^I32 v (- (sp-lo a1 b1) (sp-hi a0 b0))]
     (if (< v 0) (return 0))
     (return v)))
 
@@ -173,14 +181,6 @@
           (set i (+ i 1))))
     (return made)))
 
-
-(defn ^I32 sp-lo [^I32 a ^I32 b]
-  (if (< a b) (return a))
-  (return b))
-
-(defn ^I32 sp-hi [^I32 a ^I32 b]
-  (if (> a b) (return a))
-  (return b))
 
 (defn ^I32 sp-map [^Bitmap src ^I32 zx0 ^I32 zy0 ^I32 zw ^I32 zh ^I32 rpy ^I32 band ^:mut ^Cells mask]
   (comment "Fill the zone's ink map (cell y * zw + x, 1 for ink, not on the rule's band of rows). Answers the ink pixels.")

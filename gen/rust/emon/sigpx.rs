@@ -100,15 +100,21 @@ pub(crate) fn sp_abs(v: i32) -> i32 {
     }
     return v;
 }
+pub(crate) fn sp_lo(a: i32, b: i32) -> i32 {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+pub(crate) fn sp_hi(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
+    }
+    return b;
+}
 pub(crate) fn sp_overlap(a0: i32, a1: i32, b0: i32, b1: i32) -> i32 {
     // The length the intervals [a0, a1] and [b0, b1] share, 0 when they do not.
-    let v: i32 =     if a1 < b1 {
-a1    } else {
-b1    }
- -     if a0 > b0 {
-a0    } else {
-b0    }
-;
+    let v: i32 = sp_lo(a1, b1) - sp_hi(a0, b0);
     if v < 0 {
         return 0;
     }
@@ -233,18 +239,6 @@ pub(crate) fn sp_mask_words(page1: i32, owords: &mut crate::port::Cells, etext: 
         i += 1;
     }
     return made;
-}
-pub(crate) fn sp_lo(a: i32, b: i32) -> i32 {
-    if a < b {
-        return a;
-    }
-    return b;
-}
-pub(crate) fn sp_hi(a: i32, b: i32) -> i32 {
-    if a > b {
-        return a;
-    }
-    return b;
 }
 pub(crate) fn sp_map(src: &crate::port::Bitmap, zx0: i32, zy0: i32, zw: i32, zh: i32, rpy: i32, band: i32, mut mask: &mut crate::port::Cells) -> i32 {
     // Fill the zone's ink map (cell y * zw + x, 1 for ink, not on the rule's band of rows). Answers the ink pixels.

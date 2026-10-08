@@ -97,15 +97,21 @@ public final class Sigpx {
         }
         return v;
     }
+    public static int spLo(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+    public static int spHi(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
     public static int spOverlap(int a0, int a1, int b0, int b1) {
         // The length the intervals [a0, a1] and [b0, b1] share, 0 when they do not.
-        int v =         if (a1 < b1) {
-a1        } else {
-b1        }
- -         if (a0 > b0) {
-a0        } else {
-b0        }
-;
+        int v = spLo(a1, b1) - spHi(a0, b0);
         if (v < 0) {
             return 0;
         }
@@ -230,18 +236,6 @@ b0        }
             i += 1;
         }
         return made;
-    }
-    public static int spLo(int a, int b) {
-        if (a < b) {
-            return a;
-        }
-        return b;
-    }
-    public static int spHi(int a, int b) {
-        if (a > b) {
-            return a;
-        }
-        return b;
     }
     public static int spMap(emon.Port.Bitmap src, int zx0, int zy0, int zw, int zh, int rpy, int band, emon.Port.Cells mask) {
         // Fill the zone's ink map (cell y * zw + x, 1 for ink, not on the rule's band of rows). Answers the ink pixels.

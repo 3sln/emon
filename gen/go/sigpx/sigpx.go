@@ -120,15 +120,23 @@ func spAbs(v int32) int32 {
 	return v
 }
 
+func spLo(a int32, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func spHi(a int32, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func spOverlap(a0 int32, a1 int32, b0 int32, b1 int32) int32 {
 	// The length the intervals [a0, a1] and [b0, b1] share, 0 when they do not.
-	var v int32 = 	if a1 < b1 {
-a1	} else {
-b1	}
- - 	if a0 > b0 {
-a0	} else {
-b0	}
-
+	var v int32 = spLo(a1, b1) - spHi(a0, b0)
 	if v < 0 {
 		return 0
 	}
@@ -173,14 +181,14 @@ func spFramed(page1 int32, rules *port.Cells, r int32, pw int32) int32 {
 			sy1 = evidence.RlGet(rules, s, evidence.RlfY1())
 			if ((sy1 - sy0) >= 2000) && ((sx1 - sx0) <= 600) {
 				if (sy0 <= (ry + 300)) && (sy1 >= (ry - 300)) {
-					if (spAbs(sx0 - rx0) <= 300) || (spAbs(sx0 - rx1) <= 300) {
+					if (spAbs(sx0-rx0) <= 300) || (spAbs(sx0-rx1) <= 300) {
 						return 1
 					}
 				}
 			}
 			if spIsRule(rules, s, pw) == 1 {
 				ymid = (sy0 + sy1) / 2
-				if (spAbs(ymid - ry) > 200) && (spAbs(ymid - ry) <= 4000) {
+				if (spAbs(ymid-ry) > 200) && (spAbs(ymid-ry) <= 4000) {
 					if (2 * spOverlap(rx0, rx1, sx0, sx1)) >= (rx1 - rx0) {
 						others += 1
 					}
@@ -218,7 +226,7 @@ func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port
 				letters = 0
 				k = 0
 				for k < tl {
-					if sealfield.SfScript(port.CellsAt(etext, ts + k)) > 0 {
+					if sealfield.SfScript(port.CellsAt(etext, ts+k)) > 0 {
 						letters += 1
 					}
 					k += 1
@@ -244,7 +252,7 @@ func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port
 					for y < y1 {
 						x = x0
 						for x < x1 {
-							port.CellsSet(mask, ((y - zy0) * zw) + (x - zx0), 0);
+							port.CellsSet(mask, ((y-zy0)*zw)+(x-zx0), 0)
 							x += 1
 						}
 						y += 1
@@ -258,20 +266,6 @@ func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port
 	return made
 }
 
-func spLo(a int32, b int32) int32 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func spHi(a int32, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func spMap(src *port.Bitmap, zx0 int32, zy0 int32, zw int32, zh int32, rpy int32, band int32, mask *port.Cells) int32 {
 	// Fill the zone's ink map (cell y * zw + x, 1 for ink, not on the rule's band of rows). Answers the ink pixels.
 	var x int32 = 0
@@ -280,10 +274,10 @@ func spMap(src *port.Bitmap, zx0 int32, zy0 int32, zw int32, zh int32, rpy int32
 	for y < zh {
 		x = 0
 		for x < zw {
-			port.CellsSet(mask, (y * zw) + x, 0);
-			if spAbs((zy0 + y) - rpy) > band {
-				if spIsInk(src, zx0 + x, zy0 + y) == 1 {
-					port.CellsSet(mask, (y * zw) + x, 1);
+			port.CellsSet(mask, (y*zw)+x, 0)
+			if spAbs((zy0+y)-rpy) > band {
+				if spIsInk(src, zx0+x, zy0+y) == 1 {
+					port.CellsSet(mask, (y*zw)+x, 1)
 					ink += 1
 				}
 			}
@@ -303,41 +297,41 @@ func spStats(src *port.Bitmap, zx0 int32, zy0 int32, zw int32, zh int32, mask *p
 	var g int32 = 0
 	var b int32 = 0
 	for port.CellsLen(mask) < (n + 138) {
-		port.CellsPush(mask, 0);
+		port.CellsPush(mask, 0)
 	}
 	for k < 138 {
-		port.CellsSet(mask, n + k, 0);
+		port.CellsSet(mask, n+k, 0)
 		k += 1
 	}
-	port.CellsSet(mask, n + 128, zw);
-	port.CellsSet(mask, n + 129, zh);
-	port.CellsSet(mask, n + 130, -1);
-	port.CellsSet(mask, n + 131, -1);
+	port.CellsSet(mask, n+128, zw)
+	port.CellsSet(mask, n+129, zh)
+	port.CellsSet(mask, n+130, -1)
+	port.CellsSet(mask, n+131, -1)
 	for y < zh {
 		run = 0
 		x = 0
 		for x <= zw {
-			if (x < zw) && (port.CellsAt(mask, (y * zw) + x) == 1) {
+			if (x < zw) && (port.CellsAt(mask, (y*zw)+x) == 1) {
 				run += 1
-				if x < port.CellsAt(mask, n + 128) {
-					port.CellsSet(mask, n + 128, x);
+				if x < port.CellsAt(mask, n+128) {
+					port.CellsSet(mask, n+128, x)
 				}
-				if x > port.CellsAt(mask, n + 130) {
-					port.CellsSet(mask, n + 130, x);
+				if x > port.CellsAt(mask, n+130) {
+					port.CellsSet(mask, n+130, x)
 				}
-				if y < port.CellsAt(mask, n + 129) {
-					port.CellsSet(mask, n + 129, y);
+				if y < port.CellsAt(mask, n+129) {
+					port.CellsSet(mask, n+129, y)
 				}
-				if y > port.CellsAt(mask, n + 131) {
-					port.CellsSet(mask, n + 131, y);
+				if y > port.CellsAt(mask, n+131) {
+					port.CellsSet(mask, n+131, y)
 				}
-				port.CellsSet(mask, n + 132, port.CellsAt(mask, n + 132) + 1);
-				port.CellsSet(mask, n + 133, port.CellsAt(mask, n + 133) + port.BitmapU8(src, zx0 + x, zy0 + y, 0));
+				port.CellsSet(mask, n+132, port.CellsAt(mask, n+132)+1)
+				port.CellsSet(mask, n+133, port.CellsAt(mask, n+133)+port.BitmapU8(src, zx0+x, zy0+y, 0))
 				if port.BitmapChannels(src) >= 3 {
-					g = port.BitmapU8(src, zx0 + x, zy0 + y, 1)
-					b = port.BitmapU8(src, zx0 + x, zy0 + y, 2)
-					port.CellsSet(mask, n + 134, port.CellsAt(mask, n + 134) + g);
-					port.CellsSet(mask, n + 135, port.CellsAt(mask, n + 135) + b);
+					g = port.BitmapU8(src, zx0+x, zy0+y, 1)
+					b = port.BitmapU8(src, zx0+x, zy0+y, 2)
+					port.CellsSet(mask, n+134, port.CellsAt(mask, n+134)+g)
+					port.CellsSet(mask, n+135, port.CellsAt(mask, n+135)+b)
 				}
 			} else {
 				if run > 0 {
@@ -345,8 +339,8 @@ func spStats(src *port.Bitmap, zx0 int32, zy0 int32, zw int32, zh int32, mask *p
 					if k > 63 {
 						k = 63
 					}
-					port.CellsSet(mask, n + k, port.CellsAt(mask, n + k) + 1);
-					port.CellsSet(mask, n + 136, port.CellsAt(mask, n + 136) + 1);
+					port.CellsSet(mask, n+k, port.CellsAt(mask, n+k)+1)
+					port.CellsSet(mask, n+136, port.CellsAt(mask, n+136)+1)
 				}
 				run = 0
 			}
@@ -359,7 +353,7 @@ func spStats(src *port.Bitmap, zx0 int32, zy0 int32, zw int32, zh int32, mask *p
 		run = 0
 		y = 0
 		for y <= zh {
-			if (y < zh) && (port.CellsAt(mask, (y * zw) + x) == 1) {
+			if (y < zh) && (port.CellsAt(mask, (y*zw)+x) == 1) {
 				run += 1
 			} else {
 				if run > 0 {
@@ -367,8 +361,8 @@ func spStats(src *port.Bitmap, zx0 int32, zy0 int32, zw int32, zh int32, mask *p
 					if k > 63 {
 						k = 63
 					}
-					port.CellsSet(mask, (n + 64) + k, port.CellsAt(mask, (n + 64) + k) + 1);
-					port.CellsSet(mask, n + 137, port.CellsAt(mask, n + 137) + 1);
+					port.CellsSet(mask, (n+64)+k, port.CellsAt(mask, (n+64)+k)+1)
+					port.CellsSet(mask, n+137, port.CellsAt(mask, n+137)+1)
 				}
 				run = 0
 			}
@@ -376,7 +370,7 @@ func spStats(src *port.Bitmap, zx0 int32, zy0 int32, zw int32, zh int32, mask *p
 		}
 		x += 1
 	}
-	return port.CellsAt(mask, n + 132)
+	return port.CellsAt(mask, n+132)
 }
 
 func spMedian(mask *port.Cells, at int32, total int32) int32 {
@@ -387,7 +381,7 @@ func spMedian(mask *port.Cells, at int32, total int32) int32 {
 		return 0
 	}
 	for k < 64 {
-		acc += port.CellsAt(mask, at + k)
+		acc += port.CellsAt(mask, at+k)
 		if (2 * acc) >= total {
 			return k
 		}
@@ -406,51 +400,51 @@ func spAdd(cand *port.Cells, kind int32, row int32, x0 int32, y0 int32, x1 int32
 	var small int32 = 0
 	for j < n {
 		q = j * SpW()
-		ow = spLo(x1, port.CellsAt(cand, q + 4)) - spHi(x0, port.CellsAt(cand, q + 2))
-		oh = spLo(y1, port.CellsAt(cand, q + 5)) - spHi(y0, port.CellsAt(cand, q + 3))
+		ow = spLo(x1, port.CellsAt(cand, q+4)) - spHi(x0, port.CellsAt(cand, q+2))
+		oh = spLo(y1, port.CellsAt(cand, q+5)) - spHi(y0, port.CellsAt(cand, q+3))
 		if (ow > 0) && (oh > 0) {
-			small = spLo((((x1 - x0) / 10) * ((y1 - y0) / 10)) / 10, (((port.CellsAt(cand, q + 4) - port.CellsAt(cand, q + 2)) / 10) * ((port.CellsAt(cand, q + 5) - port.CellsAt(cand, q + 3)) / 10)) / 10)
+			small = spLo((((x1-x0)/10)*((y1-y0)/10))/10, (((port.CellsAt(cand, q+4)-port.CellsAt(cand, q+2))/10)*((port.CellsAt(cand, q+5)-port.CellsAt(cand, q+3))/10))/10)
 			if ((((ow / 10) * (oh / 10)) / 10) * 2) >= small {
 				return 0
 			}
 		}
 		j += 1
 	}
-	port.CellsPush(cand, kind);
-	port.CellsPush(cand, row);
-	port.CellsPush(cand, x0);
-	port.CellsPush(cand, y0);
-	port.CellsPush(cand, x1);
-	port.CellsPush(cand, y1);
-	port.CellsPush(cand, ink);
-	port.CellsPush(cand, rgb);
-	port.CellsPush(cand, sw);
-	port.CellsPush(cand, conf);
-	port.CellsPush(cand, 0);
-	port.CellsPush(cand, 0);
+	port.CellsPush(cand, kind)
+	port.CellsPush(cand, row)
+	port.CellsPush(cand, x0)
+	port.CellsPush(cand, y0)
+	port.CellsPush(cand, x1)
+	port.CellsPush(cand, y1)
+	port.CellsPush(cand, ink)
+	port.CellsPush(cand, rgb)
+	port.CellsPush(cand, sw)
+	port.CellsPush(cand, conf)
+	port.CellsPush(cand, 0)
+	port.CellsPush(cand, 0)
 	return 1
 }
 
 func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, etext *port.Cells, src *port.Bitmap, row int32, zx0 int32, zy0 int32, mask *port.Cells, n int32, cand *port.Cells) int32 {
 	// Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
 	// signature or initials. Answers 1 when added.
-	var ink int32 = port.CellsAt(mask, n + 132)
-	var bx0 int32 = port.CellsAt(mask, n + 128)
-	var by0 int32 = port.CellsAt(mask, n + 129)
-	var bx1 int32 = port.CellsAt(mask, n + 130)
-	var by1 int32 = port.CellsAt(mask, n + 131)
+	var ink int32 = port.CellsAt(mask, n+132)
+	var bx0 int32 = port.CellsAt(mask, n+128)
+	var by0 int32 = port.CellsAt(mask, n+129)
+	var bx1 int32 = port.CellsAt(mask, n+130)
+	var by1 int32 = port.CellsAt(mask, n+131)
 	var wpx int32 = (bx1 - bx0) + 1
 	var hpx int32 = (by1 - by0) + 1
-	var x0 int32 = evidence.VwPxToCpt(views, srcview, 0, zx0 + bx0, zy0 + by0)
-	var y0 int32 = evidence.VwPxToCpt(views, srcview, 1, zx0 + bx0, zy0 + by0)
-	var x1 int32 = evidence.VwPxToCpt(views, srcview, 0, (zx0 + bx1) + 1, (zy0 + by1) + 1)
-	var y1 int32 = evidence.VwPxToCpt(views, srcview, 1, (zx0 + bx1) + 1, (zy0 + by1) + 1)
+	var x0 int32 = evidence.VwPxToCpt(views, srcview, 0, zx0+bx0, zy0+by0)
+	var y0 int32 = evidence.VwPxToCpt(views, srcview, 1, zx0+bx0, zy0+by0)
+	var x1 int32 = evidence.VwPxToCpt(views, srcview, 0, (zx0+bx1)+1, (zy0+by1)+1)
+	var y1 int32 = evidence.VwPxToCpt(views, srcview, 1, (zx0+bx1)+1, (zy0+by1)+1)
 	var w int32 = x1 - x0
 	var h int32 = y1 - y0
-	var nh int32 = port.CellsAt(mask, n + 136)
-	var nv int32 = port.CellsAt(mask, n + 137)
+	var nh int32 = port.CellsAt(mask, n+136)
+	var nv int32 = port.CellsAt(mask, n+137)
 	var mh int32 = spMedian(mask, n, nh)
-	var mv int32 = spMedian(mask, n + 64, nv)
+	var mv int32 = spMedian(mask, n+64, nv)
 	var sw int32 = 1
 	var swc int32 = 0
 	var kind int32 = 0
@@ -500,12 +494,12 @@ func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, 
 	if kind == 4 {
 		conf = 550
 	}
-	r = port.CellsAt(mask, n + 133) / ink
+	r = port.CellsAt(mask, n+133) / ink
 	g = r
 	b = r
 	if port.BitmapChannels(src) >= 3 {
-		g = port.CellsAt(mask, n + 134) / ink
-		b = port.CellsAt(mask, n + 135) / ink
+		g = port.CellsAt(mask, n+134) / ink
+		b = port.CellsAt(mask, n+135) / ink
 	}
 	rgb = ((r * 65536) + (g * 256)) + b
 	return spAdd(cand, kind, row, x0, y0, x1, y1, ink, rgb, swc, conf)
@@ -519,10 +513,10 @@ func spZone(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, e
 	var ry int32 = (evidence.RlGet(rules, r, evidence.RlfY0()) + evidence.RlGet(rules, r, evidence.RlfY1())) / 2
 	var th int32 = evidence.RlGet(rules, r, evidence.RlfY1()) - evidence.RlGet(rules, r, evidence.RlfY0())
 	var rpy int32 = evidence.VwCptToPx(views, srcview, 1, rx0, ry)
-	var zx0 int32 = evidence.VwCptToPx(views, srcview, 0, rx0, ry - SpUp())
-	var zy0 int32 = evidence.VwCptToPx(views, srcview, 1, rx0, ry - SpUp())
-	var zx1 int32 = evidence.VwCptToPx(views, srcview, 0, rx1, ry + SpDown())
-	var zy1 int32 = evidence.VwCptToPx(views, srcview, 1, rx1, ry + SpDown())
+	var zx0 int32 = evidence.VwCptToPx(views, srcview, 0, rx0, ry-SpUp())
+	var zy0 int32 = evidence.VwCptToPx(views, srcview, 1, rx0, ry-SpUp())
+	var zx1 int32 = evidence.VwCptToPx(views, srcview, 0, rx1, ry+SpDown())
+	var zy1 int32 = evidence.VwCptToPx(views, srcview, 1, rx1, ry+SpDown())
 	var zw int32 = 0
 	var zh int32 = 0
 	var band int32 = 2
@@ -549,21 +543,21 @@ func spZone(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, e
 		return 0
 	}
 	band = 2 + (((th + 100) * zh) / (2 * (SpUp() + SpDown())))
-	port.CellsDrop(mask, 0);
+	port.CellsDrop(mask, 0)
 	for k < (zw * zh) {
-		port.CellsPush(mask, 0);
+		port.CellsPush(mask, 0)
 		k += 1
 	}
 	ink = spMap(src, zx0, zy0, zw, zh, rpy, band, mask)
 	if ink < SpMinInk() {
 		return 0
 	}
-	spMaskWords(page1, owords, etext, views, srcview, zx0, zy0, zw, zh, mask);
-	ink = spStats(src, zx0, zy0, zw, zh, mask, zw * zh)
+	spMaskWords(page1, owords, etext, views, srcview, zx0, zy0, zw, zh, mask)
+	ink = spStats(src, zx0, zy0, zw, zh, mask, zw*zh)
 	if ink < SpMinInk() {
 		return 0
 	}
-	return spJudge(page1, views, srcview, owords, etext, src, r, zx0, zy0, mask, zw * zh, cand)
+	return spJudge(page1, views, srcview, owords, etext, src, r, zx0, zy0, mask, zw*zh, cand)
 }
 
 func SpFind(page1 int32, views *port.Cells, srcview int32, rules *port.Cells, owords *port.Cells, etext *port.Cells, src *port.Bitmap, pw int32, cand *port.Cells, mask *port.Cells) int32 {
@@ -572,12 +566,12 @@ func SpFind(page1 int32, views *port.Cells, srcview int32, rules *port.Cells, ow
 	var n int32 = evidence.RlCount(rules)
 	var r int32 = 0
 	var looked int32 = 0
-	port.CellsDrop(cand, 0);
+	port.CellsDrop(cand, 0)
 	for r < n {
 		if evidence.RlGet(rules, r, evidence.RlfPage()) == page1 {
 			if (looked < SpMax()) && ((spIsRule(rules, r, pw) == 1) && (spFramed(page1, rules, r, pw) == 0)) {
 				looked += 1
-				spZone(page1, views, srcview, owords, etext, src, rules, r, cand, mask);
+				spZone(page1, views, srcview, owords, etext, src, rules, r, cand, mask)
 			}
 		}
 		r += 1
@@ -594,14 +588,14 @@ func SpRecord(page0 int32, cand *port.Cells, cg *port.Cells) int32 {
 	var fl int32 = 0
 	for j < n {
 		c = j * SpW()
-		g = player.CgNew(cg, page0 + 1, port.CellsAt(cand, c + 2), port.CellsAt(cand, c + 3), port.CellsAt(cand, c + 4), port.CellsAt(cand, c + 5), sealmark.SmHue(port.CellsAt(cand, c + 7)))
+		g = player.CgNew(cg, page0+1, port.CellsAt(cand, c+2), port.CellsAt(cand, c+3), port.CellsAt(cand, c+4), port.CellsAt(cand, c+5), sealmark.SmHue(port.CellsAt(cand, c+7)))
 		fl = player.PlgInSeal() + player.PlgSealPx()
 		if port.CellsAt(cand, c) == 3 {
 			fl += player.PlgSealSig()
 		} else {
 			fl += player.PlgSealInit()
 		}
-		player.CgSet(cg, g, player.CgfFlags(), fl);
+		player.CgSet(cg, g, player.CgfFlags(), fl)
 		j += 1
 	}
 	return n
@@ -627,7 +621,7 @@ func SpDropLines(scr *port.Cells, nsel int32, olines *port.Cells, owords *port.C
 	var cx int32 = 0
 	var cy int32 = 0
 	for k < nsel {
-		l = port.CellsAt(scr, scan.ScSelBase() + k)
+		l = port.CellsAt(scr, scan.ScSelBase()+k)
 		f = evidence.OlGet(olines, l, evidence.LhFirst())
 		cnt = evidence.OlGet(olines, l, evidence.LhCount())
 		nin = 0
@@ -642,7 +636,7 @@ func SpDropLines(scr *port.Cells, nsel int32, olines *port.Cells, owords *port.C
 				inone = 0
 				q = 0
 				for q < n {
-					if (cx >= port.CellsAt(cand, (q * SpW()) + 2)) && ((cx <= port.CellsAt(cand, (q * SpW()) + 4)) && ((cy >= port.CellsAt(cand, (q * SpW()) + 3)) && (cy <= port.CellsAt(cand, (q * SpW()) + 5)))) {
+					if (cx >= port.CellsAt(cand, (q*SpW())+2)) && ((cx <= port.CellsAt(cand, (q*SpW())+4)) && ((cy >= port.CellsAt(cand, (q*SpW())+3)) && (cy <= port.CellsAt(cand, (q*SpW())+5)))) {
 						inone = 1
 					}
 					q += 1
@@ -661,7 +655,7 @@ func SpDropLines(scr *port.Cells, nsel int32, olines *port.Cells, owords *port.C
 			}
 		}
 		if gone == 0 {
-			port.CellsSet(scr, scan.ScSelBase() + out, l);
+			port.CellsSet(scr, scan.ScSelBase()+out, l)
 			out += 1
 		}
 		k += 1
