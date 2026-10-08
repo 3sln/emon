@@ -9926,3 +9926,9 @@ no new stage in the unit, a field `fi` of `PdfDoc`. (2) A raster input (`finish_
 **Decision**: `kin/ocrport.kin` owns where a request's languages are (`op-lang-first`: cell 9 for a kin-made view, else 7), which installed models read them (`op-models`: a language is its model, `chs`/`cht` the Chinese models, an ISO 15924 script the models that read it, `Hani` also Japanese, a language with no model dropped, none left every model), a model's request name (`op-word-lang`), the OSD script as ISO 15924 (`op-osd-script`), a block's type (`op-block-type`), and the flat answer form of the browser's adapter (`ox-flat`). Rust, Go, the wasm binding and the JS SDK call it; Rust and Go answers are unchanged (their rules were moved as written, a duplicate language is still repeated, a duplicate script is not). Two intended behaviour changes: (1) `ox-flat` refuses a negative text, symbol or alternative count (the old wasm parser took it as 0); (2) the tesseract.js port answers `unsupported` when no model of its list is left (before: it created a worker for an empty language string). The JS adapter now also reads cell 9 for views and treats a script as a script, as Rust and Go did. Java and C# adopt `Ocrport` on merge.
 **Why**: D396. **Alternatives**: none beyond D396's.
 - [ ] **Signed off** (maintainer)
+
+### D398 — Scoreboard rule: calibration rows are re-baselined by a refit, not ratcheted (D079; D370-D374, D376-D380)
+**Decision**: Calibration rows (`conf-ece-*`, `conf-brier-*`) are re-baselined to the new values when `bb calibration --refit` runs in a documented merge or item, rather than ratcheted; a refit legitimately moves them. Every other metric stays under D079. The P8.1 merge (D376-D380) applied this to 48 conf rows.
+**Why**: a refit changes what a confidence means, so a row that moves with it is not a regression of the engine.
+**Alternatives**: none recorded.
+- [ ] **Signed off** (maintainer)
