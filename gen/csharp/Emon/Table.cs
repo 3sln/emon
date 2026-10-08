@@ -1286,11 +1286,59 @@ public static class Table {
         int r = Evidence.WdGet(wd, w, Evidence.HdRot());
         return (r < 100) || (r > 35900);
     }
-    internal static bool TbWless(emon.Port.Cells wd, int a, int b, int mode) {
+    internal static int TbClamp64(long v) {
+        // A 64-bit value held to +-2e9 (hostile coordinates multiply past 2^31, P10.5 D387; the tilt's arithmetic is 64-bit for the same reason).
+        if (v > ((long) 2000000000)) {
+            return 2000000000;
+        }
+        if (v < ((long) -2000000000)) {
+            return -2000000000;
+        }
+        return (int) v;
+    }
+    internal static int TbTilt(emon.Port.Cells wd, emon.Port.Cells wl, int n) {
+        // The tilt of the page's baselines, parts per million (the rise of a baseline over its run, summed over the words
+        // of wl[0, n) and divided by the runs: a word's own slope is a pixel or two over a few characters, noise, but the
+        // sum of hundreds of them is the page's). 0 under 2000 ppm (about a tenth of a degree: a text layer, a flat scan)
+        // and for a tilt past about 4.8 degrees, which is no tilt of a page (D391). 64-bit sums: a hostile layer's words
+        // do not overflow it (D387's kind; D391 wrote it in 32 bits).
+        long sdy = (long) 0;
+        long sdx = (long) 0;
+        int i = 0;
+        while (i < n) {
+            int w = emon.Port.CellsAt(wl, i);
+            long dx = unchecked(((long) Evidence.WdGet(wd, w, Evidence.HdBx1())) + unchecked(((long) Evidence.WdGet(wd, w, Evidence.HdBx0())) * ((long) -1)));
+            long dy = unchecked(((long) Evidence.WdGet(wd, w, Evidence.HdBy1())) + unchecked(((long) Evidence.WdGet(wd, w, Evidence.HdBy0())) * ((long) -1)));
+            if ((dx > ((long) 0)) && ((unchecked(((long) 12) * dy) <= dx) && (unchecked(((long) -12) * dy) <= dx))) {
+                sdy = unchecked(sdy + dy);
+                sdx = unchecked(sdx + dx);
+            }
+            i += 1;
+        }
+        if ((sdx / ((long) 1000)) >= ((long) 1)) {
+            long ppm = unchecked(sdy * ((long) 1000)) / (sdx / ((long) 1000));
+            if ((ppm >= ((long) 2000)) && (ppm <= ((long) 83000))) {
+                return (int) ppm;
+            }
+            if ((ppm <= ((long) -2000)) && (ppm >= ((long) -83000))) {
+                return (int) ppm;
+            }
+        }
+        return 0;
+    }
+    internal static int TbBkey(emon.Port.Cells wd, int w, int ppm) {
+        // The word's right baseline height carried back to the page's left edge along the page's tilt `ppm`: what a row's
+        // words share on a tilted scan, where a row's left and right words differ by several sizes of baseline over a table's
+        // width and the chain of rows below would cut a row where a column is empty. ppm 0 answers `by1`, as before.
+        // 64-bit and clamped: a hostile coordinate times the tilt does not overflow (D387's kind).
+        long sh = unchecked(((long) (Evidence.WdGet(wd, w, Evidence.HdBx1()) / 100)) * ((long) ppm)) / ((long) 10000);
+        return TbClamp64(unchecked(((long) Evidence.WdGet(wd, w, Evidence.HdBy1())) + unchecked(sh * ((long) -1))));
+    }
+    internal static bool TbWless(emon.Port.Cells wd, int a, int b, int mode, int ppm) {
         // Does word a come before word b: mode 0 by baseline then x, mode 1 by x; then by index.
         if (mode == 0) {
-            int ya = Evidence.WdGet(wd, a, Evidence.HdBy1());
-            int yb = Evidence.WdGet(wd, b, Evidence.HdBy1());
+            int ya = TbBkey(wd, a, ppm);
+            int yb = TbBkey(wd, b, ppm);
             if (ya != yb) {
                 return ya < yb;
             }
@@ -1302,7 +1350,7 @@ public static class Table {
         }
         return a < b;
     }
-    internal static int TbSortWords(emon.Port.Cells wl, emon.Port.Cells wd, int from, int to, int mode) {
+    internal static int TbSortWords(emon.Port.Cells wl, emon.Port.Cells wd, int from, int to, int mode, int ppm) {
         // Shell sort of wl[from, to) by `tb-wless`.
         int n = to - from;
         int h = 1;
@@ -1322,7 +1370,7 @@ public static class Table {
                 more = 1;
                 while ((j >= h) && (more == 1)) {
                     u = emon.Port.CellsAt(wl, from + (j - h));
-                    if (TbWless(wd, v, u, mode)) {
+                    if (TbWless(wd, v, u, mode, ppm)) {
                         emon.Port.CellsSet(wl, from + j, u);
                         j -= h;
                     } else {
@@ -1342,6 +1390,7 @@ public static class Table {
         int w = w0;
         int i = 0;
         int j = 0;
+        int ppm = 0;
         int n = 0;
         emon.Port.CellsDrop(wl, 0);
         emon.Port.CellsDrop(rw, 0);
@@ -1357,7 +1406,8 @@ public static class Table {
             w += 1;
         }
         n = emon.Port.CellsLen(wl);
-        TbSortWords(wl, wd, 0, n, 0);
+        ppm = TbTilt(wd, wl, n);
+        TbSortWords(wl, wd, 0, n, 0, ppm);
         i = 0;
         while (i < n) {
             int w0i = emon.Port.CellsAt(wl, i);
@@ -1365,10 +1415,10 @@ public static class Table {
             // A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
             // order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
             j = i + 1;
-            while ((j < n) && (TbAbs(Evidence.WdGet(wd, emon.Port.CellsAt(wl, j), Evidence.HdBy1()) - Evidence.WdGet(wd, emon.Port.CellsAt(wl, j - 1), Evidence.HdBy1())) <= tol)) {
+            while ((j < n) && (TbAbs(TbBkey(wd, emon.Port.CellsAt(wl, j), ppm) - TbBkey(wd, emon.Port.CellsAt(wl, j - 1), ppm)) <= tol)) {
                 j += 1;
             }
-            TbSortWords(wl, wd, i, j, 1);
+            TbSortWords(wl, wd, i, j, 1, ppm);
             int ri = TbRowsOf(rw, Rws);
             long sumy = (long) 0;
             long sums = (long) 0;
@@ -1379,7 +1429,7 @@ public static class Table {
             int k = i;
             while (k < j) {
                 int wk = emon.Port.CellsAt(wl, k);
-                sumy = unchecked(sumy + ((long) Evidence.WdGet(wd, wk, Evidence.HdBy1())));
+                sumy = unchecked(sumy + ((long) TbBkey(wd, wk, ppm)));
                 sums = unchecked(sums + ((long) TbMax(1, Evidence.WdGet(wd, wk, Evidence.WfSize()))));
                 if (Evidence.WdGet(wd, wk, Evidence.HdX0()) < x0) {
                     x0 = Evidence.WdGet(wd, wk, Evidence.HdX0());

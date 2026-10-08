@@ -8612,7 +8612,7 @@
         :align-cov-cell 0.888889
         :align-cov-heading 0.294118
         :align-cov-paragraph 0.3
-        :align-wrong 0.0
+        :align-wrong 0.053571
         :block-caption-f1 0.0
         :block-caption-p 0.0
         :block-caption-r 0.0
@@ -8632,6 +8632,40 @@
         :bow-p 0.70394
         :bow-r 0.71692
         :cer 0.209853
+        :conf-brier-all 0.22815
+        :conf-brier-cell 0.037034
+        :conf-brier-cell-ocr 0.037034
+        :conf-brier-heading 0.316923
+        :conf-brier-heading-ocr 0.316923
+        :conf-brier-paragraph 0.40743
+        :conf-brier-paragraph-ocr 0.40743
+        :conf-brier-row 0.172114
+        :conf-brier-row-infer 0.172114
+        :conf-brier-rowgroup 0.441844
+        :conf-brier-rowgroup-infer 0.441844
+        :conf-brier-section 0.420363
+        :conf-brier-section-infer 0.420363
+        :conf-brier-table 0.008649
+        :conf-brier-table-ocr 0.008649
+        :conf-brier-text 0.007156
+        :conf-brier-text-ocr 0.007156
+        :conf-ece-all 0.194764
+        :conf-ece-cell 0.044636
+        :conf-ece-cell-ocr 0.044636
+        :conf-ece-heading 0.261538
+        :conf-ece-heading-ocr 0.261538
+        :conf-ece-paragraph 0.433419
+        :conf-ece-paragraph-ocr 0.433419
+        :conf-ece-row 0.152818
+        :conf-ece-row-infer 0.152818
+        :conf-ece-rowgroup 0.438
+        :conf-ece-rowgroup-infer 0.438
+        :conf-ece-section 0.414538
+        :conf-ece-section-infer 0.414538
+        :conf-ece-table 0.093
+        :conf-ece-table-ocr 0.093
+        :conf-ece-text 0.084
+        :conf-ece-text-ocr 0.084
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -8667,15 +8701,15 @@
         :align-cov-cell 0.888889
         :align-cov-heading 0.294118
         :align-cov-paragraph 0.3
-        :align-wrong 0.0
+        :align-wrong 0.053571
         :block-caption-f1 0.4
         :block-caption-p 1.0
         :block-caption-r 0.25
         :block-figure-f1 0.181818
         :block-figure-p 1.0
         :block-figure-r 0.1
-        :block-heading-f1 0.739606
-        :block-heading-p 0.771689
+        :block-heading-f1 0.741228
+        :block-heading-p 0.775229
         :block-heading-r 0.710084
         :block-item-f1 0.575
         :block-item-p 0.754098
@@ -8686,31 +8720,93 @@
         :block-note-f1 0.0
         :block-note-p 0.0
         :block-note-r 0.0
-        :block-paragraph-f1 0.537909
-        :block-paragraph-p 0.407005
-        :block-paragraph-r 0.815104
+        :block-paragraph-f1 0.5392
+        :block-paragraph-p 0.408485
+        :block-paragraph-r 0.792941
         :block-seal-f1 0.0
         :block-seal-p 0.0
         :block-seal-r 0.0
-        :block-table-f1 0.537313
-        :block-table-p 0.580645
-        :block-table-r 0.5
-        :bow-f1 0.871245
+        :block-table-f1 0.567164
+        :block-table-p 0.612903
+        :block-table-r 0.527778
+        :bow-f1 0.866248
         :bow-p 0.859321
-        :bow-r 0.883505
-        :cer 0.087783
+        :bow-r 0.874565
+        :cer 0.090768
+        :conf-brier-all 0.59298
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-ocr 0.003844
+        :conf-brier-cell 0.662875
+        :conf-brier-cell-ocr 0.662875
+        :conf-brier-dropped 0.290656
+        :conf-brier-dropped-text 0.290656
+        :conf-brier-figure 0.008281
+        :conf-brier-figure-infer 0.008281
+        :conf-brier-furniture 0.434041
+        :conf-brier-furniture-ocr 0.434041
+        :conf-brier-heading 0.290459
+        :conf-brier-heading-ocr 0.290459
+        :conf-brier-item 0.277748
+        :conf-brier-item-ocr 0.277748
+        :conf-brier-list 0.741581
+        :conf-brier-list-infer 0.741581
+        :conf-brier-note 0.25
+        :conf-brier-note-infer 0.25
+        :conf-brier-paragraph 0.403414
+        :conf-brier-paragraph-ocr 0.403414
+        :conf-brier-row 0.854921
+        :conf-brier-row-infer 0.854921
+        :conf-brier-rowgroup 0.788594
+        :conf-brier-rowgroup-infer 0.788594
+        :conf-brier-section 0.384558
+        :conf-brier-section-infer 0.384558
+        :conf-brier-table 0.612584
+        :conf-brier-table-ocr 0.612584
+        :conf-brier-text 0.068306
+        :conf-brier-text-ocr 0.068306
+        :conf-ece-all 0.618059
+        :conf-ece-caption 0.062
+        :conf-ece-caption-ocr 0.062
+        :conf-ece-cell 0.702191
+        :conf-ece-cell-ocr 0.702191
+        :conf-ece-dropped 0.284
+        :conf-ece-dropped-text 0.284
+        :conf-ece-figure 0.091
+        :conf-ece-figure-infer 0.091
+        :conf-ece-furniture 0.429
+        :conf-ece-furniture-ocr 0.429
+        :conf-ece-heading 0.217431
+        :conf-ece-heading-ocr 0.217431
+        :conf-ece-item 0.264082
+        :conf-ece-item-ocr 0.264082
+        :conf-ece-list 0.792565
+        :conf-ece-list-infer 0.792565
+        :conf-ece-note 0.5
+        :conf-ece-note-infer 0.5
+        :conf-ece-paragraph 0.425667
+        :conf-ece-paragraph-ocr 0.425667
+        :conf-ece-row 0.877667
+        :conf-ece-row-infer 0.877667
+        :conf-ece-rowgroup 0.833833
+        :conf-ece-rowgroup-infer 0.833833
+        :conf-ece-section 0.375018
+        :conf-ece-section-infer 0.375018
+        :conf-ece-table 0.648935
+        :conf-ece-table-ocr 0.648935
+        :conf-ece-text 0.006167
+        :conf-ece-text-ocr 0.006167
         :figure-subkind-acc 0.0
         :first-word-acc 0.0
         :frag-col-acc 0.425532
-        :furniture-f1 0.380952
-        :furniture-p 0.615385
-        :furniture-r 0.275862
-        :ghost-rate 0.1421
-        :heading-f1 0.739606
+        :furniture-f1 0.4
+        :furniture-p 0.62963
+        :furniture-r 0.293103
+        :ghost-rate 0.141912
+        :heading-f1 0.741228
         :heading-level-acc 0.757396
         :heading-level-e2e 0.537815
         :heading-level-near 0.923077
-        :heading-p 0.771689
+        :heading-p 0.775229
         :heading-r 0.710084
         :hyphen-acc 0.740741
         :initial-f1 0.0
@@ -8726,8 +8822,8 @@
         :link-r 0.0
         :order-tau 1.0
         :page-label-acc 0.808696
-        :para-boundary-f1 0.543478
-        :para-boundary-p 0.425791
+        :para-boundary-f1 0.544747
+        :para-boundary-p 0.42735
         :para-boundary-r 0.751073
         :seal-leak 0.0
         :span-bold-f1 0.0
@@ -8740,14 +8836,14 @@
         :span-mono-p 0.0
         :span-mono-r 0.0
         :src-ocr-share 1.0
-        :table-adj-f1 0.516053
-        :table-adj-p 0.648794
-        :table-adj-r 0.428403
+        :table-adj-f1 0.563999
+        :table-adj-p 0.659384
+        :table-adj-r 0.492722
         :table-continued-acc 0.5
-        :table-teds-lite 0.302075
-        :table-teds-struct-lite 0.466254
+        :table-teds-lite 0.318589
+        :table-teds-struct-lite 0.492964
         :watermark-leak 0.0
-        :wer 0.167575}
+        :wer 0.173037}
       "scan/columns" {
         :block-caption-f1 0.5
         :block-caption-p 1.0
@@ -8771,6 +8867,28 @@
         :bow-p 0.923883
         :bow-r 0.931062
         :cer 0.081032
+        :conf-brier-all 0.406632
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-ocr 0.003844
+        :conf-brier-heading 0.261053
+        :conf-brier-heading-ocr 0.261053
+        :conf-brier-paragraph 0.461267
+        :conf-brier-paragraph-ocr 0.461267
+        :conf-brier-section 0.335998
+        :conf-brier-section-infer 0.335998
+        :conf-brier-text 0.076572
+        :conf-brier-text-ocr 0.076572
+        :conf-ece-all 0.443957
+        :conf-ece-caption 0.062
+        :conf-ece-caption-ocr 0.062
+        :conf-ece-heading 0.168421
+        :conf-ece-heading-ocr 0.168421
+        :conf-ece-paragraph 0.537351
+        :conf-ece-paragraph-ocr 0.537351
+        :conf-ece-section 0.321421
+        :conf-ece-section-infer 0.321421
+        :conf-ece-text 0.029667
+        :conf-ece-text-ocr 0.029667
         :frag-col-acc 0.386364
         :furniture-f1 1.0
         :furniture-p 1.0
@@ -8816,6 +8934,28 @@
         :bow-p 0.819277
         :bow-r 0.944444
         :cer 0.169118
+        :conf-brier-all 0.373607
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-ocr 0.003844
+        :conf-brier-figure 0.008281
+        :conf-brier-figure-infer 0.008281
+        :conf-brier-heading 0.34
+        :conf-brier-heading-ocr 0.34
+        :conf-brier-paragraph 0.403414
+        :conf-brier-paragraph-ocr 0.403414
+        :conf-brier-section 0.455209
+        :conf-brier-section-infer 0.455209
+        :conf-ece-all 0.37069
+        :conf-ece-caption 0.062
+        :conf-ece-caption-ocr 0.062
+        :conf-ece-figure 0.091
+        :conf-ece-figure-infer 0.091
+        :conf-ece-heading 0.3
+        :conf-ece-heading-ocr 0.3
+        :conf-ece-paragraph 0.425667
+        :conf-ece-paragraph-ocr 0.425667
+        :conf-ece-section 0.453
+        :conf-ece-section-infer 0.453
         :figure-subkind-acc 0.0
         :furniture-f1 1.0
         :furniture-p 1.0
@@ -8851,6 +8991,20 @@
         :bow-p 0.859848
         :bow-r 0.873077
         :cer 0.030719
+        :conf-brier-all 0.387089
+        :conf-brier-heading 0.34
+        :conf-brier-heading-ocr 0.34
+        :conf-brier-paragraph 0.381831
+        :conf-brier-paragraph-ocr 0.381831
+        :conf-brier-section 0.455209
+        :conf-brier-section-infer 0.455209
+        :conf-ece-all 0.3815
+        :conf-ece-heading 0.3
+        :conf-ece-heading-ocr 0.3
+        :conf-ece-paragraph 0.384
+        :conf-ece-paragraph-ocr 0.384
+        :conf-ece-section 0.453
+        :conf-ece-section-infer 0.453
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
@@ -8875,45 +9029,83 @@
         :table-adj-r 1.0
         :wer 0.142308}
       "scan/forms" {
-        :block-heading-f1 0.4
-        :block-heading-p 0.4
+        :block-heading-f1 0.444444
+        :block-heading-p 0.5
         :block-heading-r 0.4
-        :block-paragraph-f1 0.434783
-        :block-paragraph-p 0.3125
+        :block-paragraph-f1 0.47619
+        :block-paragraph-p 0.357143
         :block-paragraph-r 0.714286
-        :block-table-f1 0.285714
-        :block-table-p 0.333333
-        :block-table-r 0.25
-        :bow-f1 0.85213
-        :bow-p 0.845771
+        :block-table-f1 0.571429
+        :block-table-p 0.666667
+        :block-table-r 0.5
+        :bow-f1 0.853414
+        :bow-p 0.848303
         :bow-r 0.858586
-        :cer 0.055785
-        :furniture-f1 0.363636
-        :furniture-p 0.4
-        :furniture-r 0.333333
-        :ghost-rate 0.156746
-        :heading-f1 0.4
+        :cer 0.050223
+        :conf-brier-all 0.741529
+        :conf-brier-cell 0.719468
+        :conf-brier-cell-ocr 0.719468
+        :conf-brier-dropped 0.726256
+        :conf-brier-dropped-text 0.726256
+        :conf-brier-furniture 0.291041
+        :conf-brier-furniture-ocr 0.291041
+        :conf-brier-heading 0.49
+        :conf-brier-heading-ocr 0.49
+        :conf-brier-paragraph 0.428081
+        :conf-brier-paragraph-ocr 0.428081
+        :conf-brier-row 0.93465
+        :conf-brier-row-infer 0.93465
+        :conf-brier-rowgroup 0.704644
+        :conf-brier-rowgroup-infer 0.704644
+        :conf-brier-section 0.681709
+        :conf-brier-section-infer 0.681709
+        :conf-brier-table 0.822649
+        :conf-brier-table-ocr 0.822649
+        :conf-ece-all 0.788061
+        :conf-ece-cell 0.769725
+        :conf-ece-cell-ocr 0.769725
+        :conf-ece-dropped 0.734
+        :conf-ece-dropped-text 0.734
+        :conf-ece-furniture 0.262333
+        :conf-ece-furniture-ocr 0.262333
+        :conf-ece-heading 0.55
+        :conf-ece-heading-ocr 0.55
+        :conf-ece-paragraph 0.473286
+        :conf-ece-paragraph-ocr 0.473286
+        :conf-ece-row 0.962304
+        :conf-ece-row-infer 0.962304
+        :conf-ece-rowgroup 0.738
+        :conf-ece-rowgroup-infer 0.738
+        :conf-ece-section 0.703
+        :conf-ece-section-infer 0.703
+        :conf-ece-table 0.907
+        :conf-ece-table-ocr 0.907
+        :furniture-f1 0.434783
+        :furniture-p 0.454545
+        :furniture-r 0.416667
+        :ghost-rate 0.151697
+        :heading-f1 0.444444
         :heading-level-acc 0.5
         :heading-level-e2e 0.2
         :heading-level-near 1.0
-        :heading-p 0.4
+        :heading-p 0.5
         :heading-r 0.4
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.315789
-        :para-boundary-p 0.214286
+        :para-boundary-f1 0.352941
+        :para-boundary-p 0.25
         :para-boundary-r 0.6
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
         :src-ocr-share 1.0
-        :table-adj-f1 0.506406
-        :table-adj-p 0.717993
-        :table-adj-r 0.39114
+        :table-adj-f1 0.713597
+        :table-adj-p 0.730503
+        :table-adj-r 0.697455
         :table-continued-acc 0.25
-        :table-teds-lite 0.131944
-        :table-teds-struct-lite 0.208333
-        :wer 0.172727}
+        :table-teds-lite 0.153341
+        :table-teds-struct-lite 0.381757
+        :wer 0.169697}
       "scan/furniture" {
         :block-heading-f1 0.956522
         :block-heading-p 1.0
@@ -8925,6 +9117,32 @@
         :bow-p 0.920938
         :bow-r 0.920715
         :cer 0.023157
+        :conf-brier-all 0.228283
+        :conf-brier-dropped 0.000256
+        :conf-brier-dropped-text 0.000256
+        :conf-brier-furniture 0.519841
+        :conf-brier-furniture-ocr 0.519841
+        :conf-brier-heading 0.176364
+        :conf-brier-heading-ocr 0.176364
+        :conf-brier-paragraph 0.250328
+        :conf-brier-paragraph-ocr 0.250328
+        :conf-brier-section 0.208118
+        :conf-brier-section-infer 0.208118
+        :conf-brier-text 0.12126
+        :conf-brier-text-ocr 0.12126
+        :conf-ece-all 0.126601
+        :conf-ece-dropped 0.016
+        :conf-ece-dropped-text 0.016
+        :conf-ece-furniture 0.529
+        :conf-ece-furniture-ocr 0.529
+        :conf-ece-heading 0.027273
+        :conf-ece-heading-ocr 0.027273
+        :conf-ece-paragraph 0.130134
+        :conf-ece-paragraph-ocr 0.130134
+        :conf-ece-section 0.180273
+        :conf-ece-section-infer 0.180273
+        :conf-ece-text 0.044167
+        :conf-ece-text-ocr 0.044167
         :furniture-f1 0.6
         :furniture-p 0.75
         :furniture-r 0.5
@@ -8968,6 +9186,40 @@
         :bow-p 0.630915
         :bow-r 0.589102
         :cer 0.2548
+        :conf-brier-all 0.419253
+        :conf-brier-cell 0.310863
+        :conf-brier-cell-ocr 0.310863
+        :conf-brier-heading 0.094545
+        :conf-brier-heading-ocr 0.094545
+        :conf-brier-note 0.25
+        :conf-brier-note-infer 0.25
+        :conf-brier-paragraph 0.530642
+        :conf-brier-paragraph-ocr 0.530642
+        :conf-brier-row 0.942841
+        :conf-brier-row-infer 0.942841
+        :conf-brier-rowgroup 0.879844
+        :conf-brier-rowgroup-infer 0.879844
+        :conf-brier-section 0.084573
+        :conf-brier-section-infer 0.084573
+        :conf-brier-table 0.686982
+        :conf-brier-table-ocr 0.686982
+        :conf-ece-all 0.433947
+        :conf-ece-cell 0.282128
+        :conf-ece-cell-ocr 0.282128
+        :conf-ece-heading 0.109091
+        :conf-ece-heading-ocr 0.109091
+        :conf-ece-note 0.5
+        :conf-ece-note-infer 0.5
+        :conf-ece-paragraph 0.671281
+        :conf-ece-paragraph-ocr 0.671281
+        :conf-ece-row 0.971
+        :conf-ece-row-infer 0.971
+        :conf-ece-rowgroup 0.938
+        :conf-ece-rowgroup-infer 0.938
+        :conf-ece-section 0.043909
+        :conf-ece-section-infer 0.043909
+        :conf-ece-table 0.740333
+        :conf-ece-table-ocr 0.740333
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -9008,6 +9260,28 @@
         :bow-p 0.933509
         :bow-r 0.942193
         :cer 0.021492
+        :conf-brier-all 0.335488
+        :conf-brier-heading 0.324211
+        :conf-brier-heading-ocr 0.324211
+        :conf-brier-item 0.938961
+        :conf-brier-item-ocr 0.938961
+        :conf-brier-list 0.851929
+        :conf-brier-list-infer 0.851929
+        :conf-brier-paragraph 0.195382
+        :conf-brier-paragraph-ocr 0.195382
+        :conf-brier-section 0.431367
+        :conf-brier-section-infer 0.431367
+        :conf-ece-all 0.2551
+        :conf-ece-heading 0.273684
+        :conf-ece-heading-ocr 0.273684
+        :conf-ece-item 0.969
+        :conf-ece-item-ocr 0.969
+        :conf-ece-list 0.923
+        :conf-ece-list-infer 0.923
+        :conf-ece-paragraph 0.02406
+        :conf-ece-paragraph-ocr 0.02406
+        :conf-ece-section 0.426684
+        :conf-ece-section-infer 0.426684
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -9039,6 +9313,24 @@
         :bow-p 0.819472
         :bow-r 0.855028
         :cer 0.126436
+        :conf-brier-all 0.332509
+        :conf-brier-heading 0.34
+        :conf-brier-heading-ocr 0.34
+        :conf-brier-paragraph 0.303912
+        :conf-brier-paragraph-ocr 0.303912
+        :conf-brier-section 0.511834
+        :conf-brier-section-infer 0.511834
+        :conf-brier-text 0.007049
+        :conf-brier-text-ocr 0.007049
+        :conf-ece-all 0.280684
+        :conf-ece-heading 0.3
+        :conf-ece-heading-ocr 0.3
+        :conf-ece-paragraph 0.233576
+        :conf-ece-paragraph-ocr 0.233576
+        :conf-ece-section 0.5155
+        :conf-ece-section-infer 0.5155
+        :conf-ece-text 0.041
+        :conf-ece-text-ocr 0.041
         :first-word-acc 0.0
         :frag-col-acc 1.0
         :furniture-f1 1.0
@@ -9089,6 +9381,28 @@
         :bow-p 0.887057
         :bow-r 0.917306
         :cer 0.041001
+        :conf-brier-all 0.403271
+        :conf-brier-heading 0.34
+        :conf-brier-heading-ocr 0.34
+        :conf-brier-item 0.163307
+        :conf-brier-item-ocr 0.163307
+        :conf-brier-list 0.693304
+        :conf-brier-list-infer 0.693304
+        :conf-brier-paragraph 0.540357
+        :conf-brier-paragraph-ocr 0.540357
+        :conf-brier-section 0.455209
+        :conf-brier-section-infer 0.455209
+        :conf-ece-all 0.456904
+        :conf-ece-heading 0.3
+        :conf-ece-heading-ocr 0.3
+        :conf-ece-item 0.142077
+        :conf-ece-item-ocr 0.142077
+        :conf-ece-list 0.7355
+        :conf-ece-list-infer 0.7355
+        :conf-ece-paragraph 0.690034
+        :conf-ece-paragraph-ocr 0.690034
+        :conf-ece-section 0.453
+        :conf-ece-section-infer 0.453
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
@@ -9141,6 +9455,36 @@
         :bow-p 0.094771
         :bow-r 0.110266
         :cer 0.80473
+        :conf-brier-all 0.728686
+        :conf-brier-cell 0.844561
+        :conf-brier-cell-ocr 0.844561
+        :conf-brier-heading 0.6
+        :conf-brier-heading-ocr 0.6
+        :conf-brier-paragraph 0.560384
+        :conf-brier-paragraph-ocr 0.560384
+        :conf-brier-row 0.942841
+        :conf-brier-row-infer 0.942841
+        :conf-brier-rowgroup 0.879844
+        :conf-brier-rowgroup-infer 0.879844
+        :conf-brier-section 0.847809
+        :conf-brier-section-infer 0.847809
+        :conf-brier-table 0.822649
+        :conf-brier-table-ocr 0.822649
+        :conf-ece-all 0.831942
+        :conf-ece-cell 0.919
+        :conf-ece-cell-ocr 0.919
+        :conf-ece-heading 0.733333
+        :conf-ece-heading-ocr 0.733333
+        :conf-ece-paragraph 0.728697
+        :conf-ece-paragraph-ocr 0.728697
+        :conf-ece-row 0.971
+        :conf-ece-row-infer 0.971
+        :conf-ece-rowgroup 0.938
+        :conf-ece-rowgroup-infer 0.938
+        :conf-ece-section 0.886333
+        :conf-ece-section-infer 0.886333
+        :conf-ece-table 0.907
+        :conf-ece-table-ocr 0.907
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -9178,6 +9522,20 @@
         :bow-p 0.909091
         :bow-r 0.769231
         :cer 0.223214
+        :conf-brier-all 0.218422
+        :conf-brier-heading 0.04
+        :conf-brier-heading-ocr 0.04
+        :conf-brier-paragraph 0.317081
+        :conf-brier-paragraph-ocr 0.317081
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-ece-all 0.213833
+        :conf-ece-heading 0.2
+        :conf-ece-heading-ocr 0.2
+        :conf-ece-paragraph 0.259
+        :conf-ece-paragraph-ocr 0.259
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
         :furniture-f1 1.0
         :furniture-p 1.0
         :furniture-r 1.0
@@ -9215,8 +9573,8 @@
         :block-list-f1 0.0
         :block-list-p 0.0
         :block-list-r 0.0
-        :block-paragraph-f1 0.331361
-        :block-paragraph-p 0.20438
+        :block-paragraph-f1 0.333333
+        :block-paragraph-p 0.205882
         :block-paragraph-r 0.875
         :block-table-f1 0.588235
         :block-table-p 0.526316
@@ -9224,7 +9582,49 @@
         :bow-f1 0.833902
         :bow-p 0.814671
         :bow-r 0.854064
-        :cer 0.101529
+        :cer 0.101279
+        :conf-brier-all 0.694043
+        :conf-brier-caption 0.003844
+        :conf-brier-caption-ocr 0.003844
+        :conf-brier-cell 0.698244
+        :conf-brier-cell-ocr 0.698244
+        :conf-brier-heading 0.0775
+        :conf-brier-heading-ocr 0.0775
+        :conf-brier-item 0.938961
+        :conf-brier-item-ocr 0.938961
+        :conf-brier-list 0.851929
+        :conf-brier-list-infer 0.851929
+        :conf-brier-paragraph 0.488478
+        :conf-brier-paragraph-ocr 0.488478
+        :conf-brier-row 0.837442
+        :conf-brier-row-infer 0.837442
+        :conf-brier-rowgroup 0.792244
+        :conf-brier-rowgroup-infer 0.792244
+        :conf-brier-section 0.058834
+        :conf-brier-section-infer 0.058834
+        :conf-brier-table 0.565596
+        :conf-brier-table-ocr 0.565596
+        :conf-ece-all 0.739604
+        :conf-ece-caption 0.062
+        :conf-ece-caption-ocr 0.062
+        :conf-ece-cell 0.744397
+        :conf-ece-cell-ocr 0.744397
+        :conf-ece-heading 0.1375
+        :conf-ece-heading-ocr 0.1375
+        :conf-ece-item 0.969
+        :conf-ece-item-ocr 0.969
+        :conf-ece-list 0.923
+        :conf-ece-list-infer 0.923
+        :conf-ece-paragraph 0.589882
+        :conf-ece-paragraph-ocr 0.589882
+        :conf-ece-row 0.859112
+        :conf-ece-row-infer 0.859112
+        :conf-ece-rowgroup 0.838
+        :conf-ece-rowgroup-infer 0.838
+        :conf-ece-section 0.0155
+        :conf-ece-section-infer 0.0155
+        :conf-ece-table 0.591211
+        :conf-ece-table-ocr 0.591211
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
@@ -9237,16 +9637,16 @@
         :heading-r 0.9375
         :order-tau 1.0
         :page-label-acc 0.6
-        :para-boundary-f1 0.258503
-        :para-boundary-p 0.149606
+        :para-boundary-f1 0.260274
+        :para-boundary-p 0.150794
         :para-boundary-r 0.95
         :src-ocr-share 1.0
-        :table-adj-f1 0.534863
+        :table-adj-f1 0.535003
         :table-adj-p 0.643039
-        :table-adj-r 0.457842
+        :table-adj-r 0.458447
         :table-continued-acc 0.666667
-        :table-teds-lite 0.449625
-        :table-teds-struct-lite 0.612344
+        :table-teds-lite 0.483554
+        :table-teds-struct-lite 0.630201
         :wer 0.239732}
       "scan/watermarks" {
         :block-heading-f1 0.909091
@@ -9259,6 +9659,20 @@
         :bow-p 0.932092
         :bow-r 0.932092
         :cer 0.015918
+        :conf-brier-all 0.179628
+        :conf-brier-heading 0.28
+        :conf-brier-heading-ocr 0.28
+        :conf-brier-paragraph 0.090456
+        :conf-brier-paragraph-ocr 0.090456
+        :conf-brier-section 0.364609
+        :conf-brier-section-infer 0.364609
+        :conf-ece-all 0.216192
+        :conf-ece-heading 0.2
+        :conf-ece-heading-ocr 0.2
+        :conf-ece-paragraph 0.1785
+        :conf-ece-paragraph-ocr 0.1785
+        :conf-ece-section 0.353
+        :conf-ece-section-infer 0.353
         :furniture-f1 0.0
         :furniture-p 0.0
         :furniture-r 0.0
@@ -9572,6 +9986,163 @@
         :table-teds-lite 0.942857
         :table-teds-struct-lite 1.0
         :wer 0.09375}}
+    "emon-replay-px" {
+      "scan/all" {
+        :block-heading-f1 0.444444
+        :block-heading-p 0.5
+        :block-heading-r 0.4
+        :block-paragraph-f1 0.47619
+        :block-paragraph-p 0.357143
+        :block-paragraph-r 0.714286
+        :block-table-f1 0.571429
+        :block-table-p 0.666667
+        :block-table-r 0.5
+        :bow-f1 0.853414
+        :bow-p 0.848303
+        :bow-r 0.858586
+        :cer 0.050223
+        :conf-brier-all 0.741529
+        :conf-brier-cell 0.719468
+        :conf-brier-cell-ocr 0.719468
+        :conf-brier-dropped 0.726256
+        :conf-brier-dropped-text 0.726256
+        :conf-brier-furniture 0.291041
+        :conf-brier-furniture-ocr 0.291041
+        :conf-brier-heading 0.49
+        :conf-brier-heading-ocr 0.49
+        :conf-brier-paragraph 0.428081
+        :conf-brier-paragraph-ocr 0.428081
+        :conf-brier-row 0.93465
+        :conf-brier-row-infer 0.93465
+        :conf-brier-rowgroup 0.704644
+        :conf-brier-rowgroup-infer 0.704644
+        :conf-brier-section 0.681709
+        :conf-brier-section-infer 0.681709
+        :conf-brier-table 0.822649
+        :conf-brier-table-ocr 0.822649
+        :conf-ece-all 0.788061
+        :conf-ece-cell 0.769725
+        :conf-ece-cell-ocr 0.769725
+        :conf-ece-dropped 0.734
+        :conf-ece-dropped-text 0.734
+        :conf-ece-furniture 0.262333
+        :conf-ece-furniture-ocr 0.262333
+        :conf-ece-heading 0.55
+        :conf-ece-heading-ocr 0.55
+        :conf-ece-paragraph 0.473286
+        :conf-ece-paragraph-ocr 0.473286
+        :conf-ece-row 0.962304
+        :conf-ece-row-infer 0.962304
+        :conf-ece-rowgroup 0.738
+        :conf-ece-rowgroup-infer 0.738
+        :conf-ece-section 0.703
+        :conf-ece-section-infer 0.703
+        :conf-ece-table 0.907
+        :conf-ece-table-ocr 0.907
+        :furniture-f1 0.434783
+        :furniture-p 0.454545
+        :furniture-r 0.416667
+        :ghost-rate 0.151697
+        :heading-f1 0.444444
+        :heading-level-acc 0.5
+        :heading-level-e2e 0.2
+        :heading-level-near 1.0
+        :heading-p 0.5
+        :heading-r 0.4
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.352941
+        :para-boundary-p 0.25
+        :para-boundary-r 0.6
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
+        :src-ocr-share 1.0
+        :table-adj-f1 0.713597
+        :table-adj-p 0.730503
+        :table-adj-r 0.697455
+        :table-continued-acc 0.25
+        :table-teds-lite 0.153341
+        :table-teds-struct-lite 0.381757
+        :wer 0.169697}
+      "scan/forms" {
+        :block-heading-f1 0.444444
+        :block-heading-p 0.5
+        :block-heading-r 0.4
+        :block-paragraph-f1 0.47619
+        :block-paragraph-p 0.357143
+        :block-paragraph-r 0.714286
+        :block-table-f1 0.571429
+        :block-table-p 0.666667
+        :block-table-r 0.5
+        :bow-f1 0.853414
+        :bow-p 0.848303
+        :bow-r 0.858586
+        :cer 0.050223
+        :conf-brier-all 0.741529
+        :conf-brier-cell 0.719468
+        :conf-brier-cell-ocr 0.719468
+        :conf-brier-dropped 0.726256
+        :conf-brier-dropped-text 0.726256
+        :conf-brier-furniture 0.291041
+        :conf-brier-furniture-ocr 0.291041
+        :conf-brier-heading 0.49
+        :conf-brier-heading-ocr 0.49
+        :conf-brier-paragraph 0.428081
+        :conf-brier-paragraph-ocr 0.428081
+        :conf-brier-row 0.93465
+        :conf-brier-row-infer 0.93465
+        :conf-brier-rowgroup 0.704644
+        :conf-brier-rowgroup-infer 0.704644
+        :conf-brier-section 0.681709
+        :conf-brier-section-infer 0.681709
+        :conf-brier-table 0.822649
+        :conf-brier-table-ocr 0.822649
+        :conf-ece-all 0.788061
+        :conf-ece-cell 0.769725
+        :conf-ece-cell-ocr 0.769725
+        :conf-ece-dropped 0.734
+        :conf-ece-dropped-text 0.734
+        :conf-ece-furniture 0.262333
+        :conf-ece-furniture-ocr 0.262333
+        :conf-ece-heading 0.55
+        :conf-ece-heading-ocr 0.55
+        :conf-ece-paragraph 0.473286
+        :conf-ece-paragraph-ocr 0.473286
+        :conf-ece-row 0.962304
+        :conf-ece-row-infer 0.962304
+        :conf-ece-rowgroup 0.738
+        :conf-ece-rowgroup-infer 0.738
+        :conf-ece-section 0.703
+        :conf-ece-section-infer 0.703
+        :conf-ece-table 0.907
+        :conf-ece-table-ocr 0.907
+        :furniture-f1 0.434783
+        :furniture-p 0.454545
+        :furniture-r 0.416667
+        :ghost-rate 0.151697
+        :heading-f1 0.444444
+        :heading-level-acc 0.5
+        :heading-level-e2e 0.2
+        :heading-level-near 1.0
+        :heading-p 0.5
+        :heading-r 0.4
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.352941
+        :para-boundary-p 0.25
+        :para-boundary-r 0.6
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
+        :src-ocr-share 1.0
+        :table-adj-f1 0.713597
+        :table-adj-p 0.730503
+        :table-adj-r 0.697455
+        :table-continued-acc 0.25
+        :table-teds-lite 0.153341
+        :table-teds-struct-lite 0.381757
+        :wer 0.169697}}
     "oracle" {
       "pdf-tagged/all" {
         :block-caption-f1 1.0

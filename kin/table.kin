@@ -33,7 +33,7 @@
   (:require [emon.lang :refer [I32 I64 Bool Cells i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count wf-gfirst
-                                   hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-by0 hd-by1 hd-rot hd-tstart hd-tlen
+                                   hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-bx1 hd-by0 hd-by1 hd-rot hd-tstart hd-tlen
                                    wf-style wf-size
                                    lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-first lh-count
                                    ]]
@@ -1121,18 +1121,58 @@
   (let [^I32 r (wd-get wd w (hd-rot))]
     (return (or (< r 100) (> r 35900)))))
 
-(defn ^Bool tb-wless [^Cells wd ^I32 a ^I32 b ^I32 mode]
+(defn ^I32 tb-clamp64 [^I64 v]
+  (comment "A 64-bit value held to +-2e9 (hostile coordinates multiply past 2^31, P10.5 D387; the tilt's arithmetic is 64-bit for the same reason).")
+  (if (> v (i64 2000000000)) (return 2000000000))
+  (if (< v (i64 -2000000000)) (return -2000000000))
+  (return (i32 v)))
+
+(defn ^I32 tb-tilt [^Cells wd ^Cells wl ^I32 n]
+  (comment "The tilt of the page's baselines, parts per million (the rise of a baseline over its run, summed over the words")
+  (comment "of wl[0, n) and divided by the runs: a word's own slope is a pixel or two over a few characters, noise, but the")
+  (comment "sum of hundreds of them is the page's). 0 under 2000 ppm (about a tenth of a degree: a text layer, a flat scan)")
+  (comment "and for a tilt past about 4.8 degrees, which is no tilt of a page (D391). 64-bit sums: a hostile layer's words")
+  (comment "do not overflow it (D387's kind; D391 wrote it in 32 bits).")
+  (let [^:mut ^I64 sdy (i64 0)
+        ^:mut ^I64 sdx (i64 0)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (let [^I32 w (cells-at wl i)
+                ^I64 dx (add64 (i64 (wd-get wd w (hd-bx1))) (mul64 (i64 (wd-get wd w (hd-bx0))) (i64 -1)))
+                ^I64 dy (add64 (i64 (wd-get wd w (hd-by1))) (mul64 (i64 (wd-get wd w (hd-by0))) (i64 -1)))]
+            (if (and (> dx (i64 0))
+                     (and (<= (mul64 (i64 12) dy) dx) (<= (mul64 (i64 -12) dy) dx)))
+              (do (set sdy (add64 sdy dy))
+                  (set sdx (add64 sdx dx)))))
+          (set i (+ i 1))))
+    (if (>= (quot sdx (i64 1000)) (i64 1))
+      (do (let [^I64 ppm (quot (mul64 sdy (i64 1000)) (quot sdx (i64 1000)))]
+            (if (and (>= ppm (i64 2000)) (<= ppm (i64 83000)))
+              (return (i32 ppm)))
+            (if (and (<= ppm (i64 -2000)) (>= ppm (i64 -83000)))
+              (return (i32 ppm))))))
+    (return 0)))
+
+(defn ^I32 tb-bkey [^Cells wd ^I32 w ^I32 ppm]
+  (comment "The word's right baseline height carried back to the page's left edge along the page's tilt `ppm`: what a row's")
+  (comment "words share on a tilted scan, where a row's left and right words differ by several sizes of baseline over a table's")
+  (comment "width and the chain of rows below would cut a row where a column is empty. ppm 0 answers `by1`, as before.")
+  (comment "64-bit and clamped: a hostile coordinate times the tilt does not overflow (D387's kind).")
+  (let [^I64 sh (quot (mul64 (i64 (quot (wd-get wd w (hd-bx1)) 100)) (i64 ppm)) (i64 10000))]
+    (return (tb-clamp64 (add64 (i64 (wd-get wd w (hd-by1))) (mul64 sh (i64 -1)))))))
+
+(defn ^Bool tb-wless [^Cells wd ^I32 a ^I32 b ^I32 mode ^I32 ppm]
   (comment "Does word a come before word b: mode 0 by baseline then x, mode 1 by x; then by index.")
   (if (== mode 0)
-    (do (let [^I32 ya (wd-get wd a (hd-by1))
-              ^I32 yb (wd-get wd b (hd-by1))]
+    (do (let [^I32 ya (tb-bkey wd a ppm)
+              ^I32 yb (tb-bkey wd b ppm)]
           (if (!= ya yb) (return (< ya yb))))))
   (let [^I32 xa (wd-get wd a (hd-x0))
         ^I32 xb (wd-get wd b (hd-x0))]
     (if (!= xa xb) (return (< xa xb)))
     (return (< a b))))
 
-(defn ^I32 tb-sort-words [^:mut ^Cells wl ^Cells wd ^I32 from ^I32 to ^I32 mode]
+(defn ^I32 tb-sort-words [^:mut ^Cells wl ^Cells wd ^I32 from ^I32 to ^I32 mode ^I32 ppm]
   (comment "Shell sort of wl[from, to) by `tb-wless`.")
   (let [^I32 n (- to from)
         ^:mut ^I32 h 1
@@ -1151,7 +1191,7 @@
                 (set more 1)
                 (while (and (>= j h) (== more 1))
                   (do (set u (cells-at wl (+ from (- j h))))
-                      (if (tb-wless wd v u mode)
+                      (if (tb-wless wd v u mode ppm)
                         (do (cells-set wl (+ from j) u)
                             (set j (- j h)))
                         (set more 0))))
@@ -1167,6 +1207,7 @@
   (let [^:mut ^I32 w w0
         ^:mut ^I32 i 0
         ^:mut ^I32 j 0
+        ^:mut ^I32 ppm 0
         ^:mut ^I32 n 0]
     (cells-drop wl 0)
     (cells-drop rw 0)
@@ -1179,7 +1220,8 @@
                 (cells-push wl w))))
           (set w (+ w 1))))
     (set n (cells-len wl))
-    (tb-sort-words wl wd 0 n 0)
+    (set ppm (tb-tilt wd wl n))
+    (tb-sort-words wl wd 0 n 0 ppm)
     (set i 0)
     (while (< i n)
       (do (let [^I32 w0i (cells-at wl i)
@@ -1187,9 +1229,9 @@
             (comment "A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline")
             (comment "order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).")
             (set j (+ i 1))
-            (while (and (< j n) (<= (tb-abs (- (wd-get wd (cells-at wl j) (hd-by1)) (wd-get wd (cells-at wl (- j 1)) (hd-by1)))) tol))
+            (while (and (< j n) (<= (tb-abs (- (tb-bkey wd (cells-at wl j) ppm) (tb-bkey wd (cells-at wl (- j 1)) ppm))) tol))
               (set j (+ j 1)))
-            (tb-sort-words wl wd i j 1)
+            (tb-sort-words wl wd i j 1 ppm)
             ;; the row
             (let [^I32 ri (tb-rows-of rw RWS)
                   ^:mut ^I64 sumy (i64 0)
@@ -1201,7 +1243,7 @@
                   ^:mut ^I32 k i]
               (while (< k j)
                 (do (let [^I32 wk (cells-at wl k)]
-                      (set sumy (add64 sumy (i64 (wd-get wd wk (hd-by1)))))
+                      (set sumy (add64 sumy (i64 (tb-bkey wd wk ppm))))
                       (set sums (add64 sums (i64 (tb-max 1 (wd-get wd wk (wf-size))))))
                       (if (< (wd-get wd wk (hd-x0)) x0) (set x0 (wd-get wd wk (hd-x0))))
                       (if (> (wd-get wd wk (hd-x1)) x1) (set x1 (wd-get wd wk (hd-x1))))

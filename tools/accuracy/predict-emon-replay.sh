@@ -4,13 +4,16 @@
 #   predict-emon-replay.sh ID VARIANT INPUT GOLD   -> the Model's canonical JSON on stdout
 # A gate's: it calls no engine, so it scores emon and never whose Tesseract is installed (D008, D095). A document with no committed
 # transcript is `not available` (exit 3, the protocol's word); `bb ocr` runs it over the ones that have one (`--ids`).
+# `px` first (the predictor `emon-replay-px`, D392): the WHOLE transcripts of test/ocr/scan-px/ (bitmaps kept: the engine reads pixels).
 set -e
+dir=scan
+if [ "$1" = "px" ]; then dir=scan-px; shift; fi
 if ! command -v cargo > /dev/null; then
   echo "emon-replay: cargo is not on PATH, so the Rust Engine cannot be built (SKIP)" >&2
   exit 3
 fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
-t="$root/test/ocr/scan/$1"
+t="$root/test/ocr/$dir/$1"
 if [ ! -f "$t/transcript.edn" ]; then
   echo "emon-replay: no committed transcript for $1" >&2
   exit 3
