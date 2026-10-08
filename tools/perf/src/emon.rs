@@ -1,0 +1,30 @@
+// The kin-generated modules the bets use, by path: the committed gen/rust/emon/*.rs, not copies (so the
+// numbers are always of what the repository holds). `bb perf` runs `bb emit` first only when asked.
+#[path = "../../../gen/rust/emon/inflate.rs"]
+pub mod inflate;
+#[path = "../../../gen/rust/emon/deflate.rs"]
+pub mod deflate;
+#[path = "../../../gen/rust/emon/png.rs"]
+pub mod png;
+#[path = "../../../gen/rust/emon/splitmix.rs"]
+pub mod splitmix;
+#[path = "../../../gen/rust/emon/pngprobe.rs"]
+pub mod pngprobe;
+#[path = "../../../gen/rust/emon/pdffilter.rs"]
+pub mod pdffilter;
+#[path = "../../../gen/rust/emon/raster.rs"]
+pub mod raster;
+#[path = "../../../gen/rust/emon/evidence.rs"]
+pub mod evidence;
+#[path = "../../../gen/rust/emon/trace.rs"]
+pub mod trace;
+#[path = "../../../gen/rust/emon/json.rs"]
+pub mod json;
+#[path = "../../../gen/rust/emon/model.rs"]
+pub mod model;
+#[path = "../../../gen/rust/emon/trig.rs"]
+pub mod trig;
+#[path = "../../../gen/rust/emon/calib.rs"]
+pub mod calib;
+#[path = "../../../gen/rust/emon/calibdata.rs"]
+pub mod calibdata;

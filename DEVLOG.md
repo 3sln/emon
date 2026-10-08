@@ -3649,7 +3649,56 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
 - [ ] P10.2 — Parallel runners in the hosts; `bb repeat` serial vs parallel;
   default stays serial until a benchmark on a real document says otherwise
   (nome §6).
-- [ ] P10.3 — Performance: comparators per bet, the 2× rule.
+- [x] P10.3 — Performance: comparators per bet, the 2× rule (D409-D411). *Done (measurement only; no production path changed)*:
+  `bb perf` (`tools/perf/`: a pinned Rust crate that compiles the committed `gen/rust/emon/*.rs` over the host's `port.rs` next to the
+  references, and `perf.clj`). Each bet runs kin and its reference on the SAME fixed input in ONE process, single thread, under `nice`,
+  one bench process at a time, interleaved (kin, ref, kin, ref), the MEDIAN of 7; it prints the ratio (kin / reference), the ratio of
+  minimums, whether the two answers agreed (every row below did: a comparator that measures another computation measures nothing) and
+  the machine load before each bet. `bb perf --check` is an OPTIONAL regression check (quick inputs, fails only when a primary row's
+  ratio AND its min-ratio both exceed 2.5x the committed `tools/perf/baseline.edn`), wired into nothing. Not a gate.
+  **Measured** 2026-10-08, Apple M1 Pro, rustc 1.92.0, overflow-checks off (as D092; `bb perf --checked` turns them on as the shipped
+  host crate has), **a machine at load average 26-39 throughout** (10 cpus), so absolute ms are loaded; read the ratios, and read
+  them to a factor of about 1.5 (the same row moved 24x -> 10x between two runs). Input: the P2.7 bench page (2481x3508 gray, from
+  `corpus/`), and splitmix-seeded synthetic content-stream text (2 MB), font-like binary (1 MB), a 1200x800 RGB photo (hashes printed
+  by `bb perf`). Primary reference per bet in bold:
+
+  | bet | input | reference | kin ms | ref ms | ratio |
+  | --- | --- | --- | --- | --- | --- |
+  | inflate (`iz-zlib`) | page rows 8.7 MB | **flate2 (miniz_oxide)** / fdeflate | 790 | 60 / 15 | **13.1x** / 54x |
+  | | content text 2 MB | **flate2** / fdeflate | 205 | 25 / 12 | **8.1x** / 17x |
+  | | font-like 1 MB | **flate2** / fdeflate | 138 | 7 / 5.5 | **19.6x** / 25x |
+  | deflate writer (`df-*`) | page rows 8.7 MB | **flate2 level 6** | 2927 | 752 | **3.9x** (size 1.00x) |
+  | | content text / font-like | **flate2 level 6** | 823 / 470 | 456 / 532 | 1.8x / 0.9x |
+  | PNG write (filter choice + deflate) | page gray | **png crate, Balanced + Adaptive** / Fast | 4743 | 2055 / 164 | **2.3x** / 29x (size 1.00x) |
+  | | photo RGB 1200x800 | **png Balanced** / Fast | 1832 | 932 / 42 | 2.0x / 43x |
+  | PNG read (inflate + predictor 15) | page gray | **png crate decode** | 424 | 20 | **21x** |
+  | LZW (`pf-lzw`) | content text / font-like | **hand-written Rust, same algorithm** | 292 / 225 | 26 / 10 | **11x / 22x** |
+  | Otsu + threshold, bulk (ships) / port | page | **hand-written Rust** | 15.5 / 164 | 53 / 90 | 0.3x / 1.8x |
+  | union-find labelling, bulk / port | page | **hand-written Rust** | 47.5 / 132 | 43 / 132 | 1.1x / 1.0x |
+  | integral + Sauvola, bulk / port | page | **hand-written Rust** | 385 / 509 | 455 / 544 | 0.85x / 0.94x |
+  | tracer core (runs + union-find over runs + component table) | Otsu mask | **hand-written Rust** | 105 | 110 | 0.95x |
+  | content interpreter + text layer + the rest of the Engine | 8 synthetic PDFs, 26 pages | pdftotext -bbox-layout (process, startup subtracted) | 450 | 40 | 11x, **not like for like** |
+
+  **Over 2x, and what D092 implies** (the raster and tracer bets D092 made all hold: 0.3-1.9x, as it found; a bulk form stays only
+  where it is a pure whole-page map or reduce and measured over 2x, and none newly is):
+  1. **inflate 8-20x** (the hot path of every PDF: content streams, object streams, fonts). A bit-stream decoder carrying state is not a
+     pure map/reduce, so D092 gives no port form. **Optimise in kin first**: the decoder resolves a code bit by bit against per-length
+     counts and writes through `Cells` (an `i32` a byte); the references use table lookups of 9-12 bits at a time. A kin table decoder
+     (and a bulk copy for matches) is the named follow-up (P10.3a). If it stays over 2x, a decision (not this measurement) would have to
+     admit an `Inflate` port, which is D006's shape for crypto and D190's for image decoders.
+  2. **PNG read 21x** is inflate plus the predictor; follows 1.
+  3. **LZW 11-22x**: `pf-lzw-string` pushes and walks one cell at a time per code; a string copy from the previous output (the string is
+     a prefix of earlier output plus one byte) removes the walk. Optimise in kin (P10.3a). LZW is rare in modern PDFs, so it is low priority.
+  4. **deflate writer 3.9x on the page, 0.9-1.8x elsewhere; PNG write 2.0-2.3x**, at equal output size: this one buys the byte-identical
+     files across four targets (D117), which no library gives, and is on the asset/transcript path, not a page-conversion path. **Keep**;
+     the 32-candidate chain walk is the place to look if a profile ever asks.
+  5. **content interpreter / text layer: 11x vs poppler, an upper bound**, because the Engine does the whole conversion (structure, tables,
+     furniture, JSON) and `pdftotext` only the text. Not a finding until the text layer is timed alone (P10.3b: a `--stats` stage inside the
+     document pass). Absolute: about 17 ms a page for the whole Engine on these Chrome-printed pages.
+  Crypto is not a bet: MD5, SHA-2, RC4 and AES are the host's `Crypto` port (D006, D097), native by construction; kin owns only the PDF
+  key-derivation glue (50 and 20 rounds of port calls). Not measured: Go, Java, C# (`bb perf` is the Rust host; D092 measured the other
+  targets for the raster bets and `kin/scripts/png-bench` still does for the PNG writer), the shipped `overflow-checks = true` build
+  (`bb perf --checked`), and corpus PDFs (only the committed synthetic ones).
 - [ ] P10.4 — Limits: every bound wired, configurable, named alike in four
   hosts (nome's `bb limits`).
 - [x] P10.5 — Fuzz at scale, cross-host error agreement (D384-D390). *Done*: `bb fuzz` (gate) and `bb fuzz-long` (not a gate) over
@@ -10006,4 +10055,22 @@ no new stage in the unit, a field `fi` of `PdfDoc`. (2) A raster input (`finish_
 ### D408 — The Go render port reads a render request by offsets it holds, and a Go test holds them to kin's (P10.8; D405, D396 item 5)
 **Decision**: `host/go/port/render.go` cannot import kin's `plan` (the generated package imports `port`), so `port` holds the offsets of a render or crop request (`PlanRd*`) and `engine_test.go` asserts them equal to `rd-*`. Every other host reads by kin's names. This is the one place a Go host reads a request by an offset it holds; it goes away when the render port leaves `port` or P10.9 moves the request records.
 **Why**: the alternative was moving the render port out of `port`, which `host/go/render_test.go` and the embedders surface name.
+- [ ] **Signed off** (maintainer)
+
+### D409 — Comparators live in `tools/perf/`: the kin-generated Rust against pinned natives, interleaved, median of N, ratio reported (P10.3; SPEC 12.3, D092)
+**Decision**: `bb perf` builds `tools/perf` (a standalone crate; `[workspace]` empty, lockfile committed, built `--offline --locked`) which includes the committed `gen/rust/emon/*.rs` and `host/rust/src/port.rs` by path and `bench/native/native.rs` (P2.7's comparator) by `include!`, so it measures what the repository holds. References, pinned with `=`: `flate2 1.1.10` (miniz_oxide backend), `fdeflate 0.3.7`, `png 0.18.1`; the rest hand-written safe Rust (LZW decoder, the tracer's runs and union-find). The content interpreter and text layer are timed through the Rust driver's `time-stats` against `pdftotext -bbox-layout` (poppler, startup subtracted), flagged indicative. Each repetition times kin then each reference in the same process, single-threaded, under `nice`; the report is the median of N (default 7), the median kin / median ref, the ratio of minimums, the answer check, and the load average around each bet. A row whose answers differ fails the run. Not a gate.
+**Why**: nome §10 asks for one hand-written comparator per bet, judged by measurement; a shared, busy machine makes absolute times meaningless and interleaving makes the ratio survive it. Hand-written natives are the honest comparator where no library does the same job.
+**Alternatives**: criterion (a dependency tree we do not need); per-target harnesses as `bench/` has (kept for D092's raster numbers); pinning to a core (macOS has no affinity API).
+- [ ] **Signed off** (maintainer)
+
+### D410 — `bb perf --check` is an optional regression check against committed ratios, with a generous margin (P10.3)
+**Decision**: `bb perf --check` runs the quick (small, synthetic, deterministic) inputs and fails only when a primary row's median ratio AND its ratio of minimums are both more than 2.5x the committed value in `tools/perf/baseline.edn` (written by `bb perf --update`, quick and full ratios kept apart), or when an answer disagrees with its reference. It is wired into no gate and no `bb gates` list.
+**Why**: on a machine at load 30+ one row moved 2.3x between runs, so only a margin of that size is not noise; the aim is to catch an order-of-magnitude regression (a quadratic loop, a lost bulk form), not a 20% one (SPEC 12.3's 25% on fusion stages is `bb fusion-bench`'s).
+**Alternatives**: a gate (rejected: flaky on shared hardware); absolute times (meaningless across machines).
+- [ ] **Signed off** (maintainer)
+
+### D411 — What the first measurement implies under D092 (P10.3)
+**Decision**: no production path changes here. Findings against the 2x rule: raster and tracer bets hold (0.3-1.9x); the deflate writer and PNG writer are 2.0-3.9x at equal output and are KEPT (byte-identical output on four targets is what they buy, D117); inflate (8-20x), the PNG predictor path (21x) and LZW (11-22x) are over 2x and are bit-stream codecs with state, so D092 offers no bulk form: they are to be OPTIMISED IN KIN (table-driven code lookup in `emon.inflate`; string copy in `pf-lzw`) as follow-ups P10.3a, and only if that fails does a decision need to weigh an `Inflate` port (D006's shape). The content interpreter / text layer number (11x vs poppler) is an upper bound; time the text layer alone (P10.3b) before acting. Not measured here: Go/Java/C#, the shipped overflow-checked build (`bb perf --checked`), corpus PDFs.
+**Why**: D092's rule (a hot loop leaves kin only as a pure map/reduce form measured over 2x, the kin version kept as oracle) does not cover codecs; saying so keeps a later port from being a quiet exception.
+**Alternatives**: move inflate to a host port now (rejected: one measurement on a loaded machine, and the kin decoder has an obvious algorithmic gap to close first).
 - [ ] **Signed off** (maintainer)

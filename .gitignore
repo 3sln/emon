@@ -21,3 +21,6 @@ __pycache__/
 
 # The downloaded public-dataset corpus and importer output (DEVLOG D086): never committed.
 /corpus
+
+# bb perf --checked builds a second copy of the comparators (P10.3).
+tools/perf/target-checked/

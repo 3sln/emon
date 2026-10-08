@@ -1,0 +1,137 @@
+{"content|8 synthetic PDFs, 26 pages|pdftotext -bbox-layout (poppler; process wall less startup)"
+ {:full
+  {:ratio 11.382714765232864,
+   :min_ratio 11.382714765232864,
+   :kin_ms 449.9720000000001,
+   :ref_ms 39.53116714954376}},
+ "deflate|binary-font|flate2(miniz_oxide,6)"
+ {:quick
+  {:ratio 1.09, :min_ratio 1.889, :kin_ms 23.928, :ref_ms 21.943},
+  :full
+  {:ratio 0.883, :min_ratio 0.725, :kin_ms 469.716, :ref_ms 531.929}},
+ "deflate|content-text|flate2(miniz_oxide,6)"
+ {:quick
+  {:ratio 1.663, :min_ratio 0.594, :kin_ms 100.709, :ref_ms 60.558},
+  :full
+  {:ratio 1.803, :min_ratio 1.402, :kin_ms 822.453, :ref_ms 456.115}},
+ "deflate|page-rows-sub|flate2(miniz_oxide,6)"
+ {:quick
+  {:ratio 2.057, :min_ratio 2.205, :kin_ms 795.919, :ref_ms 387.01},
+  :full
+  {:ratio 3.894, :min_ratio 2.786, :kin_ms 2927.197, :ref_ms 751.781}},
+ "inflate|binary-font|fdeflate"
+ {:quick
+  {:ratio 8.538, :min_ratio 11.681, :kin_ms 5.279, :ref_ms 0.618},
+  :full
+  {:ratio 25.078, :min_ratio 22.627, :kin_ms 137.975, :ref_ms 5.502}},
+ "inflate|binary-font|flate2(miniz_oxide)"
+ {:quick
+  {:ratio 6.815, :min_ratio 7.566, :kin_ms 5.279, :ref_ms 0.775},
+  :full
+  {:ratio 19.56, :min_ratio 18.695, :kin_ms 137.975, :ref_ms 7.054}},
+ "inflate|content-text|fdeflate"
+ {:quick
+  {:ratio 23.786, :min_ratio 13.325, :kin_ms 10.322, :ref_ms 0.434},
+  :full
+  {:ratio 17.504, :min_ratio 42.128, :kin_ms 204.976, :ref_ms 11.71}},
+ "inflate|content-text|flate2(miniz_oxide)"
+ {:quick
+  {:ratio 9.122, :min_ratio 5.287, :kin_ms 10.322, :ref_ms 1.132},
+  :full
+  {:ratio 8.121, :min_ratio 16.643, :kin_ms 204.976, :ref_ms 25.241}},
+ "inflate|page-rows-sub|fdeflate"
+ {:quick
+  {:ratio 17.989, :min_ratio 21.017, :kin_ms 291.312, :ref_ms 16.194},
+  :full
+  {:ratio 54.087, :min_ratio 65.682, :kin_ms 790.158, :ref_ms 14.609}},
+ "inflate|page-rows-sub|flate2(miniz_oxide)"
+ {:quick
+  {:ratio 5.733, :min_ratio 12.024, :kin_ms 291.312, :ref_ms 50.811},
+  :full
+  {:ratio 13.125, :min_ratio 13.331, :kin_ms 790.158, :ref_ms 60.204}},
+ "lzw|binary-font|hand-written Rust (prefix/suffix table)"
+ {:quick
+  {:ratio 27.329, :min_ratio 22.878, :kin_ms 28.61, :ref_ms 1.047},
+  :full
+  {:ratio 21.908, :min_ratio 20.645, :kin_ms 224.716, :ref_ms 10.257}},
+ "lzw|content-text|hand-written Rust (prefix/suffix table)"
+ {:quick
+  {:ratio 23.78, :min_ratio 15.647, :kin_ms 59.395, :ref_ms 2.498},
+  :full
+  {:ratio 11.29, :min_ratio 11.226, :kin_ms 291.813, :ref_ms 25.846}},
+ "png-unfilter|page-gray|png(decode)"
+ {:quick
+  {:ratio 7.793, :min_ratio 17.725, :kin_ms 327.069, :ref_ms 41.97},
+  :full
+  {:ratio 21.458, :min_ratio 27.127, :kin_ms 424.375, :ref_ms 19.777}},
+ "png-write|page-gray|png(balanced,adaptive)"
+ {:quick
+  {:ratio 2.359, :min_ratio 2.377, :kin_ms 1199.823, :ref_ms 508.522},
+  :full
+  {:ratio 2.308,
+   :min_ratio 3.488,
+   :kin_ms 4743.103,
+   :ref_ms 2054.898}},
+ "png-write|page-gray|png(fast,adaptive)"
+ {:quick
+  {:ratio 54.938, :min_ratio 139.687, :kin_ms 1199.823, :ref_ms 21.84},
+  :full
+  {:ratio 28.922,
+   :min_ratio 27.32,
+   :kin_ms 4743.103,
+   :ref_ms 163.994}},
+ "png-write|photo-rgb-1200x800|png(balanced,adaptive)"
+ {:quick
+  {:ratio 2.538, :min_ratio 2.097, :kin_ms 2452.21, :ref_ms 966.193},
+  :full
+  {:ratio 1.966, :min_ratio 2.53, :kin_ms 1832.058, :ref_ms 931.807}},
+ "png-write|photo-rgb-1200x800|png(fast,adaptive)"
+ {:quick
+  {:ratio 43.789, :min_ratio 100.893, :kin_ms 2452.21, :ref_ms 56.001},
+  :full
+  {:ratio 43.227,
+   :min_ratio 60.096,
+   :kin_ms 1832.058,
+   :ref_ms 42.382}},
+ "raster-binarise|page-1000x1400/bulk|hand-written Rust (safe, autovectorised)"
+ {:quick
+  {:ratio 0.509, :min_ratio 0.664, :kin_ms 1.818, :ref_ms 3.573}},
+ "raster-binarise|page-1000x1400/port|hand-written Rust (safe, autovectorised)"
+ {:quick
+  {:ratio 6.424, :min_ratio 4.879, :kin_ms 26.991, :ref_ms 4.202}},
+ "raster-binarise|page-2481x3508/bulk|hand-written Rust (safe, autovectorised)"
+ {:full
+  {:ratio 0.294, :min_ratio 0.293, :kin_ms 15.49, :ref_ms 52.75}},
+ "raster-binarise|page-2481x3508/port|hand-written Rust (safe, autovectorised)"
+ {:full
+  {:ratio 1.823, :min_ratio 1.268, :kin_ms 163.657, :ref_ms 89.786}},
+ "raster-label|page-1000x1400/bulk|hand-written Rust (safe, autovectorised)"
+ {:quick
+  {:ratio 0.543, :min_ratio 0.909, :kin_ms 7.209, :ref_ms 13.279}},
+ "raster-label|page-1000x1400/port|hand-written Rust (safe, autovectorised)"
+ {:quick
+  {:ratio 2.235, :min_ratio 1.077, :kin_ms 22.517, :ref_ms 10.076}},
+ "raster-label|page-2481x3508/bulk|hand-written Rust (safe, autovectorised)"
+ {:full
+  {:ratio 1.114, :min_ratio 1.073, :kin_ms 47.461, :ref_ms 42.618}},
+ "raster-label|page-2481x3508/port|hand-written Rust (safe, autovectorised)"
+ {:full
+  {:ratio 1.0, :min_ratio 1.251, :kin_ms 131.988, :ref_ms 131.943}},
+ "raster-sauvola|page-1000x1400/bulk|hand-written Rust (safe, autovectorised)"
+ {:quick
+  {:ratio 0.803, :min_ratio 0.47, :kin_ms 66.047, :ref_ms 82.263}},
+ "raster-sauvola|page-1000x1400/port|hand-written Rust (safe, autovectorised)"
+ {:quick
+  {:ratio 0.687, :min_ratio 0.478, :kin_ms 93.22, :ref_ms 135.737}},
+ "raster-sauvola|page-2481x3508/bulk|hand-written Rust (safe, autovectorised)"
+ {:full
+  {:ratio 0.846, :min_ratio 0.795, :kin_ms 384.483, :ref_ms 454.461}},
+ "raster-sauvola|page-2481x3508/port|hand-written Rust (safe, autovectorised)"
+ {:full
+  {:ratio 0.935, :min_ratio 0.968, :kin_ms 508.783, :ref_ms 544.047}},
+ "tracer-core|page-1000x1400/otsu-mask|hand-written Rust (row runs + union-find)"
+ {:quick
+  {:ratio 0.92, :min_ratio 1.047, :kin_ms 3.346, :ref_ms 3.637}},
+ "tracer-core|page-2481x3508/otsu-mask|hand-written Rust (row runs + union-find)"
+ {:full
+  {:ratio 0.949, :min_ratio 1.34, :kin_ms 104.706, :ref_ms 110.284}}}

@@ -56,6 +56,8 @@
                 :task (apply shell "kin/scripts/asset-record" *command-line-args*)}
   png-bench {:doc "ms per target to write a real scanned page and a photo as PNG, and whether the four write the same file (NOT a gate; needs corpus/).  bb png-bench [N]"
              :task (apply shell "kin/scripts/png-bench" *command-line-args*)}
+  perf {:doc "One comparator per bet (P10.3, D409, SPEC 12.3, D092's 2x rule): kin-generated Rust against flate2/fdeflate/png and hand-written natives (inflate, deflate, PNG filters, LZW, Otsu/Sauvola/union-find, the tracer's runs, the content interpreter against pdftotext) on fixed inputs, median of N interleaved runs, the ratio, answers checked, machine load recorded. A REPORT, not a gate, wired into nothing. --check is an OPTIONAL regression check against tools/perf/baseline.edn (quick inputs, generous margin).  bb perf [--quick] [--reps N] [--only BET,..] [--no-pdf] [--checked] [--update] | bb perf --check [--margin M]"
+        :task (apply shell "bb" "tools/perf/perf.clj" *command-line-args*)}
   drift {:doc "Is the committed generated code what the sources say?"
          :task (shell "kin/scripts/drift")}
   hosts {:doc "Do the four host trees agree, and do the call sites match?"
