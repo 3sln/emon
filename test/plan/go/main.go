@@ -132,7 +132,7 @@ func fake(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
 		plan.AnOcrEnd(c, at)
 		return answer(c, nil)
 	}
-	return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: fmt.Sprintf("the fake has no kind %d", req.Kind())}
+	return port.PlanAnswer{}, planrun.FulfilFailed(fmt.Sprintf("the fake has no kind %d", req.Kind()))
 }
 
 type chunked struct {
@@ -206,8 +206,8 @@ func main() {
 		base = port.SrcOfBlob(in0)
 	}
 
-	transcript := &port.Transcript{Inputs: inputs}
-	var replayer *port.Replayer
+	transcript := &planrun.Transcript{Inputs: inputs}
+	var replayer *planrun.Replayer
 	if mode == "replay" {
 		files := map[string][]byte{}
 		ents, err := os.ReadDir(dir)
@@ -223,7 +223,7 @@ func main() {
 			}
 			files[e.Name()] = b
 		}
-		t, err := port.TranscriptFromFiles(files)
+		t, err := planrun.TranscriptFromFiles(files)
 		if err == nil {
 			err = t.CheckInputs(inputs)
 		}
@@ -231,7 +231,7 @@ func main() {
 			fail(err)
 		}
 		transcript = t
-		replayer = port.NewReplayer(t)
+		replayer = planrun.NewReplayer(t)
 	}
 
 	var evBuf strings.Builder
@@ -276,7 +276,7 @@ func main() {
 		fail(err)
 	}
 	if replayer != nil && replayer.Unused() != 0 {
-		fail(&port.PlanError{Name: "transcript-bad", Msg: fmt.Sprintf("%d recorded entries were never asked for", replayer.Unused())})
+		fail(replayer.Done())
 	}
 	fmt.Fprintf(os.Stderr, "stats: attempts=%d rounds=%d requests=%d fetch-rounds=%d bytes-requests=%d\n",
 		stats.Attempts, stats.Rounds, stats.Requests, stats.FetchRounds, stats.BytesRequests)

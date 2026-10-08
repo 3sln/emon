@@ -1,0 +1,782 @@
+;; THE TRANSCRIPT, in kin (P10.9; D396, D920; SPEC 13, D008, D089, D214). What `transcript.edn` was in every host: the EDN writer and reader, the kind
+;; names, the escaping of the producer, the map that answers a replay, the count of entries a replay never asked for, and the sentence of everything
+;; that can be wrong with the file. The hosts keep file I/O, the bitmaps (a transcript names each one by file; the host reads and writes the PNGs, and
+;; decodes them with its own `png_decode` until P10.11's transcript PNG reader) and the `Fulfiller` that hands an answer back to the loop.
+;;
+;;   THE FORMAT is FORMAT VERSION 1, byte for byte what the hosts wrote (a law reads every committed transcript and writes it again):
+;;
+;;       {:emon-transcript 1
+;;        :producer {:engine "tesseract" :version "5.5.3"}          only when there is one
+;;        :inputs [{:index 0 :length 94562}]
+;;        :entries [
+;;         {:round 0 :kind :render :req [7 1 1 0 0 150 0] :ans [8 1 1 0 1275 1650 1 150] :bitmap "bitmap-0000.png"}
+;;         ...]}
+;;
+;;   WRITING. The host builds a `Tr` (`tr-add-input`, `tr-add-producer`, `tr-add-entry`) and `tr-write` writes the file to a `Text`. A bitmap is a flag
+;;   on its entry; its file is named by the entry's place (`tr-bitmap-name`), and the host writes the PNG.
+;;   READING.  `tr-read` reads the file from a Blob and answers 0 or the reason it is no transcript (`tb`); `msg` holds its sentence. It is the reader the
+;;   hosts had, a subset of EDN (maps, vectors, keywords, integers, strings): the whole file is checked to be well formed first, then read for what a
+;;   transcript is. A map's first `:key` wins; a key the format does not know is read past. An integer is an I32.
+;;   THE REPLAY MAP is `idx`, keyed by the WHOLE request record: `tr-index` builds it, `tr-find` looks a request up and `tr-take` also marks the entry
+;;   used. Two entries of one request: the later one is the map's, and the earlier one is never asked for. `tr-unused` counts the entries nobody asked for.
+;;   THE NAMES. `tk` is the kinds a transcript records, `tf` the keys it writes, `tb` what can be wrong with one. `tk` and `tf` have a finder (`^:parse`):
+;;   a name is spelled once, by the writer and for the reader.
+(ns emon.transcript
+  (:require [emon.lang :refer [I32 Cells Text Blob defenum fd emit-ascii shl32 sar32]]
+            [emon.transcriptctx :refer [Tr]]
+            [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot bit-and bit-or]]))
+
+;; ----------------------------------------------------------------------------------------------- the names
+
+;; The kinds a transcript records: the numbers are `emon.plan`'s `pk-*` (a law holds them). `bytes` (4) is the loop's own and is never recorded; an
+;; entry of a kind not in this table is written `:unknown` and refused by a reader.
+(defenum ^:pub ^:parse tk
+  [[tk-render 1 "render"]
+   [tk-decode 2 "decode"]
+   [tk-ocr 3 "ocr"]
+   [tk-crop 5 "crop"]
+   [tk-decode-img 6 "decode-img"]])
+
+;; The keys of the file.
+(defenum ^:pub ^:parse tf
+  [[tf-version 1 "emon-transcript"]
+   [tf-producer 2 "producer"]
+   [tf-inputs 3 "inputs"]
+   [tf-entries 4 "entries"]
+   [tf-index 5 "index"]
+   [tf-length 6 "length"]
+   [tf-round 7 "round"]
+   [tf-kind 8 "kind"]
+   [tf-req 9 "req"]
+   [tf-ans 10 "ans"]
+   [tf-bitmap 11 "bitmap"]])
+
+;; What can be wrong with a transcript: the reasons of `transcript-bad` (the spelling is the sentence). `tb-trailing`, `tb-integer` and `tb-unexpected` are
+;; followed by the byte offset; `tb-bitmap-missing` follows the file's name and `tb-unused` the count (the host and `tr-unused-msg` say them).
+(defenum ^:pub tb
+  [[tb-none 0 "none"]
+   [tb-no-file 1 "no transcript.edn"]
+   [tb-not-utf8 2 "transcript.edn is not UTF-8"]
+   [tb-end 3 "unexpected end"]
+   [tb-trailing 4 "trailing text at"]
+   [tb-unterminated-map 5 "unterminated map"]
+   [tb-unterminated-vec 6 "unterminated vector"]
+   [tb-unterminated-str 7 "unterminated string"]
+   [tb-key 8 "a map key is not a keyword"]
+   [tb-integer 9 "bad integer at"]
+   [tb-unexpected 10 "unexpected character at"]
+   [tb-nesting 11 "nested too deeply"]
+   [tb-not-map 12 "the transcript is not a map"]
+   [tb-version 13 "not an emon-transcript of version 1"]
+   [tb-no-inputs 14 "no :inputs"]
+   [tb-input-map 15 "an input is not a map"]
+   [tb-input-index 16 "an input has no :index"]
+   [tb-input-length 17 "an input has no :length"]
+   [tb-no-entries 18 "no :entries"]
+   [tb-entry-map 19 "an entry is not a map"]
+   [tb-entry-round 20 "an entry has no :round"]
+   [tb-entry-kind 21 "an entry has no known :kind"]
+   [tb-entry-req 22 "an entry has no :req"]
+   [tb-entry-ans 23 "an entry has no :ans"]
+   [tb-req-record 24 "an entry's :req is not a record of its :kind"]
+   [tb-ans-record 25 "an entry's :ans is not the answer to its :req"]
+   [tb-bitmap-missing 26 "is missing"]
+   [tb-inputs 27 "the transcript is of other inputs than this run's"]
+   [tb-unused 28 "recorded entries were never asked for"]])
+
+;; ----------------------------------------------------------------------------------------------- reading: bytes
+
+(defn ^I32 ed-is-ws [^I32 c]
+  (comment "Whitespace of EDN: a comma is one.")
+  (if (or (== c 32) (or (== c 10) (or (== c 9) (or (== c 13) (== c 44))))) (return 1))
+  (return 0))
+
+(defn ^I32 ed-ws [^Blob b ^I32 pos]
+  (comment "The first byte at or after `pos` that is not whitespace.")
+  (let [^I32 n (blob-len b)
+        ^:mut ^I32 i pos]
+    (while (and (< i n) (== (ed-is-ws (blob-u8 b i)) 1))
+      (set i (+ i 1)))
+    (return i)))
+
+(defn ^I32 ed-cont [^Blob b ^I32 i ^I32 lo ^I32 hi]
+  (comment "1 when byte `i` exists and is within lo..hi.")
+  (if (>= i (blob-len b)) (return 0))
+  (let [^I32 c (blob-u8 b i)]
+    (if (and (>= c lo) (<= c hi)) (return 1))
+    (return 0)))
+
+(defn ^I32 ed-utf8 [^Blob b]
+  (comment "1 when the blob is well-formed UTF-8 (no overlong form, no surrogate, nothing past U+10FFFF), else 0.")
+  (let [^I32 n (blob-len b)
+        ^:mut ^I32 i 0]
+    (while (< i n)
+      (let [^I32 c (blob-u8 b i)
+            ^:mut ^I32 k -1
+            ^:mut ^I32 lo 128
+            ^:mut ^I32 hi 191
+            ^:mut ^I32 j 2]
+        (if (< c 128) (set k 0))
+        (if (and (>= c 194) (<= c 223)) (set k 1))
+        (if (and (>= c 224) (<= c 239)) (set k 2))
+        (if (and (>= c 240) (<= c 244)) (set k 3))
+        (if (< k 0) (return 0))
+        (if (> k 0)
+          (do (if (== c 224) (set lo 160))
+              (if (== c 237) (set hi 159))
+              (if (== c 240) (set lo 144))
+              (if (== c 244) (set hi 143))
+              (if (== (ed-cont b (+ i 1) lo hi) 0) (return 0))
+              (while (<= j k)
+                (do (if (== (ed-cont b (+ i j) 128 191) 0) (return 0))
+                    (set j (+ j 1))))))
+        (set i (+ i (+ k 1)))))
+    (return 1)))
+
+(defn ^I32 ed-fail [^Tr t ^I32 code ^I32 pos]
+  (comment "Stop on reason `code` (`tb`) at byte `pos`: the reason, the place and the sentence.")
+  (set (fd t why) code)
+  (set (fd t at) pos)
+  (tb-emit-name (fd t msg) code)
+  (if (or (== code (tb-trailing)) (or (== code (tb-integer)) (== code (tb-unexpected))))
+    (do (emit-ascii (fd t msg) " ")
+        (text-i32 (fd t msg) pos)))
+  (return code))
+
+(defn ^I32 ed-int [^Tr t ^Blob b ^I32 from ^I32 to]
+  (comment "Read the integer in from..to ('-' and digits) into `ival`: 1, or 0 when it is no I32 ('-' alone, or past -2147483648..2147483647).")
+  (let [^:mut ^I32 i from
+        ^:mut ^I32 neg 0
+        ^:mut ^I32 acc 0]
+    (if (== (blob-u8 b from) 45)
+      (do (set neg 1)
+          (set i (+ i 1))))
+    (if (>= i to) (return 0))
+    (while (< i to)
+      (let [^I32 d (- (blob-u8 b i) 48)]
+        (if (< acc -214748364) (return 0))
+        (if (and (== acc -214748364) (> d 8)) (return 0))
+        (set acc (- (* acc 10) d))
+        (set i (+ i 1))))
+    (if (== neg 1)
+      (set (fd t ival) acc)
+      (do (if (== acc -2147483648) (return 0))
+          (set (fd t ival) (- 0 acc))))
+    (return 1)))
+
+(defn ^I32 ed-end [^Tr t ^Blob b ^I32 pos ^I32 depth]
+  (comment "Read one value from `pos`, whitespace first: the byte after it, or a negative number with the reason in `why`. Maps, vectors, keywords,")
+  (comment "integers and strings.")
+  (let [^I32 n (blob-len b)
+        ^I32 st (ed-ws b pos)
+        ^:mut ^I32 i st]
+    (if (>= i n) (return (- 0 (ed-fail t (tb-end) i))))
+    (if (> depth 64) (return (- 0 (ed-fail t (tb-nesting) i))))
+    (let [^I32 c (blob-u8 b i)]
+      ;; a map: keywords for keys
+      (if (== c 123)
+        (do (set i (+ i 1))
+            (while (< 0 1)
+              (do (set i (ed-ws b i))
+                  (if (>= i n) (return (- 0 (ed-fail t (tb-unterminated-map) i))))
+                  (if (== (blob-u8 b i) 125) (return (+ i 1)))
+                  (let [^I32 kc (blob-u8 b i)
+                        ^I32 e (ed-end t b i (+ depth 1))]
+                    (if (< e 0) (return e))
+                    (if (!= kc 58) (return (- 0 (ed-fail t (tb-key) i))))
+                    (set i e))
+                  (let [^I32 ve (ed-end t b i (+ depth 1))]
+                    (if (< ve 0) (return ve))
+                    (set i ve))))))
+      ;; a vector
+      (if (== c 91)
+        (do (set i (+ i 1))
+            (while (< 0 1)
+              (do (set i (ed-ws b i))
+                  (if (>= i n) (return (- 0 (ed-fail t (tb-unterminated-vec) i))))
+                  (if (== (blob-u8 b i) 93) (return (+ i 1)))
+                  (let [^I32 e (ed-end t b i (+ depth 1))]
+                    (if (< e 0) (return e))
+                    (set i e))))))
+      ;; a string: a backslash takes the next character as it is
+      (if (== c 34)
+        (do (set i (+ i 1))
+            (while (and (< i n) (!= (blob-u8 b i) 34))
+              (do (if (and (== (blob-u8 b i) 92) (< (+ i 1) n)) (set i (+ i 1)))
+                  (set i (+ i 1))))
+            (if (>= i n) (return (- 0 (ed-fail t (tb-unterminated-str) i))))
+            (return (+ i 1))))
+      ;; a keyword: up to whitespace or a delimiter
+      (if (== c 58)
+        (do (set i (+ i 1))
+            (while (and (< i n)
+                        (and (== (ed-is-ws (blob-u8 b i)) 0)
+                             (and (!= (blob-u8 b i) 91)
+                                  (and (!= (blob-u8 b i) 93)
+                                       (and (!= (blob-u8 b i) 123)
+                                            (and (!= (blob-u8 b i) 125) (!= (blob-u8 b i) 34)))))))
+              (set i (+ i 1)))
+            (return i)))
+      ;; an integer
+      (if (or (== c 45) (and (>= c 48) (<= c 57)))
+        (do (set i (+ i 1))
+            (while (and (< i n) (and (>= (blob-u8 b i) 48) (<= (blob-u8 b i) 57)))
+              (set i (+ i 1)))
+            (if (== (ed-int t b st i) 0) (return (- 0 (ed-fail t (tb-integer) st))))
+            (return i)))
+      (return (- 0 (ed-fail t (tb-unexpected) i))))))
+
+;; ----------------------------------------------------------------------------------------------- reading: the structure
+;; The file is well formed from here on (`ed-end` said so), so these find what a transcript holds without failing on syntax.
+
+(defn ^I32 ed-field [^Tr t ^Blob b ^I32 map-at ^I32 code]
+  (comment "Where the value of the first key `code` (`tf`) of the map at `map-at` starts, or -1: the first of a repeated key wins, a key not in `tf` is passed.")
+  (let [^:mut ^I32 i (+ (ed-ws b map-at) 1)]
+    (while (< 0 1)
+      (do (set i (ed-ws b i))
+          (if (or (>= i (blob-len b)) (== (blob-u8 b i) 125)) (return -1))
+          (let [^I32 ke (ed-end t b i 0)
+                ^I32 ks (tf-find b (+ i 1) ke)
+                ^I32 vs (ed-ws b ke)
+                ^I32 ve (ed-end t b vs 0)]
+            (if (== ks code) (return vs))
+            (set i ve))))
+    (return -1)))
+
+(defn ^I32 ed-first [^Blob b ^I32 pos]
+  (comment "The first byte of the value at `pos` (whitespace first), or -1 at the end.")
+  (let [^I32 i (ed-ws b pos)]
+    (if (>= i (blob-len b)) (return -1))
+    (return (blob-u8 b i))))
+
+(defn ^I32 ed-is-int [^Blob b ^I32 pos]
+  (comment "1 when the value at `pos` is an integer.")
+  (let [^I32 c (ed-first b pos)]
+    (if (or (== c 45) (and (>= c 48) (<= c 57))) (return 1))
+    (return 0)))
+
+(defn ^I32 ed-int-at [^Tr t ^Blob b ^I32 pos]
+  (comment "The integer at `pos` into `ival`: 1, or 0 when the value is no integer.")
+  (if (== (ed-is-int b pos) 0) (return 0))
+  (let [^I32 st (ed-ws b pos)
+        ^I32 e (ed-end t b st 0)]
+    (return (ed-int t b st e))))
+
+(defn ^I32 ed-cp [^Blob b ^I32 i]
+  (comment "The code point whose UTF-8 starts at byte `i` (the blob is valid UTF-8).")
+  (let [^I32 c (blob-u8 b i)]
+    (if (< c 128) (return c))
+    (if (< c 224)
+      (return (bit-or (shl32 (bit-and c 31) 6) (bit-and (blob-u8 b (+ i 1)) 63))))
+    (if (< c 240)
+      (return (bit-or (shl32 (bit-and c 15) 12)
+                      (bit-or (shl32 (bit-and (blob-u8 b (+ i 1)) 63) 6) (bit-and (blob-u8 b (+ i 2)) 63)))))
+    (return (bit-or (shl32 (bit-and c 7) 18)
+                    (bit-or (shl32 (bit-and (blob-u8 b (+ i 1)) 63) 12)
+                            (bit-or (shl32 (bit-and (blob-u8 b (+ i 2)) 63) 6) (bit-and (blob-u8 b (+ i 3)) 63)))))))
+
+(defn ^I32 ed-cp-len [^Blob b ^I32 i]
+  (comment "How many bytes the UTF-8 sequence at `i` takes.")
+  (let [^I32 c (blob-u8 b i)]
+    (if (< c 128) (return 1))
+    (if (< c 224) (return 2))
+    (if (< c 240) (return 3))
+    (return 4)))
+
+(defn ^I32 ed-span-push [^Blob b ^I32 from ^I32 to ^:mut ^Cells dst]
+  (comment "Push the code points of the bytes from..to to `dst`. Answers how many.")
+  (let [^:mut ^I32 i from
+        ^:mut ^I32 k 0]
+    (while (< i to)
+      (do (cells-push dst (ed-cp b i))
+          (set k (+ k 1))
+          (set i (+ i (ed-cp-len b i)))))
+    (return k)))
+
+(defn ^I32 ed-str-push [^Blob b ^I32 pos ^:mut ^Cells dst]
+  (comment "Push the code points of the string at `pos` to `dst`, a backslash taking the next character as it is. Answers how many.")
+  (let [^I32 st (ed-ws b pos)
+        ^:mut ^I32 i (+ st 1)
+        ^:mut ^I32 k 0]
+    (while (!= (blob-u8 b i) 34)
+      (do (if (== (blob-u8 b i) 92) (set i (+ i 1)))
+          (cells-push dst (ed-cp b i))
+          (set k (+ k 1))
+          (set i (+ i (ed-cp-len b i)))))
+    (return k)))
+
+(defn ^I32 ed-ints [^Tr t ^Blob b ^I32 pos]
+  (comment "Push the integers of the vector at `pos` to `tmp`; answers how many, or -1 when the value is no vector of integers.")
+  (if (!= (ed-first b pos) 91) (return -1))
+  (let [^:mut ^I32 i (+ (ed-ws b pos) 1)
+        ^:mut ^I32 k 0]
+    (while (< 0 1)
+      (do (set i (ed-ws b i))
+          (if (== (blob-u8 b i) 93) (return k))
+          (if (== (ed-int-at t b i) 0) (return -1))
+          (cells-push (fd t tmp) (fd t ival))
+          (set k (+ k 1))
+          (set i (ed-end t b i 0))))
+    (return k)))
+
+(defn ^I32 ed-add-entry [^Tr t ^I32 round ^I32 bm ^I32 rlen ^I32 alen]
+  (comment "Append the entry whose request and answer are in `tmp` (the request first) to `ents`.")
+  (let [^I32 n (fd t nents)]
+    (cells-push (fd t ents) (+ 6 (+ rlen alen)))
+    (cells-push (fd t ents) round)
+    (cells-push (fd t ents) bm)
+    (cells-push (fd t ents) 0)
+    (cells-push (fd t ents) n)
+    (cells-push (fd t ents) rlen)
+    (let [^:mut ^I32 i 0]
+      (while (< i (+ rlen alen))
+        (let [^I32 v (cells-at (fd t tmp) i)]
+          (cells-push (fd t ents) v)
+          (set i (+ i 1)))))
+    (set (fd t nents) (+ n 1))
+    (return 0)))
+
+(defn ^I32 ed-producer [^Tr t ^Blob b ^I32 pos]
+  (comment "The `:producer` map at `pos`: the pairs whose value is a string, in the order the file has them. A producer that is no map is passed.")
+  (if (!= (ed-first b pos) 123) (return 0))
+  (let [^:mut ^I32 i (+ (ed-ws b pos) 1)]
+    (while (< 0 1)
+      (do (set i (ed-ws b i))
+          (if (== (blob-u8 b i) 125) (return 0))
+          (let [^I32 ke (ed-end t b i 0)
+                ^I32 vs (ed-ws b ke)
+                ^I32 ve (ed-end t b vs 0)]
+            (if (== (blob-u8 b vs) 34)
+              (let [^I32 p0 (cells-len (fd t prod))]
+                (cells-push (fd t prod) 0)
+                (let [^I32 kn (ed-span-push b (+ i 1) ke (fd t prod))]
+                  (cells-set (fd t prod) p0 kn))
+                (let [^I32 p1 (cells-len (fd t prod))]
+                  (cells-push (fd t prod) 0)
+                  (let [^I32 vn (ed-str-push b vs (fd t prod))]
+                    (cells-set (fd t prod) p1 vn)))))
+            (set i ve))))
+    (return 0)))
+
+(defn ^I32 ed-inputs [^Tr t ^Blob b ^I32 pos]
+  (comment "The `:inputs` vector at `pos`: each a map with an `:index` and a `:length`. 0, or the reason (`tb`).")
+  (if (!= (ed-first b pos) 91) (return (ed-fail t (tb-no-inputs) (ed-ws b pos))))
+  (let [^:mut ^I32 i (+ (ed-ws b pos) 1)]
+    (while (< 0 1)
+      (do (set i (ed-ws b i))
+          (if (== (blob-u8 b i) 93) (return 0))
+          (if (!= (blob-u8 b i) 123) (return (ed-fail t (tb-input-map) i)))
+          (let [^I32 ip (ed-field t b i (tf-index))]
+            (if (or (< ip 0) (== (ed-int-at t b ip) 0)) (return (ed-fail t (tb-input-index) i)))
+            (let [^I32 index (fd t ival)
+                  ^I32 lp (ed-field t b i (tf-length))]
+              (if (or (< lp 0) (== (ed-int-at t b lp) 0)) (return (ed-fail t (tb-input-length) i)))
+              (cells-push (fd t inputs) index)
+              (cells-push (fd t inputs) (fd t ival))))
+          (set i (ed-end t b i 0))))
+    (return 0)))
+
+(defn ^I32 ed-entry [^Tr t ^Blob b ^I32 at]
+  (comment "The entry map at `at`: checked as the hosts always checked it (the order of the checks is theirs), and appended. 0, or the reason (`tb`).")
+  (let [^I32 rp (ed-field t b at (tf-round))]
+    (if (or (< rp 0) (== (ed-int-at t b rp) 0)) (return (ed-fail t (tb-entry-round) at)))
+    (let [^I32 round (fd t ival)
+          ^I32 kp (ed-field t b at (tf-kind))]
+      (if (or (< kp 0) (!= (ed-first b kp) 58)) (return (ed-fail t (tb-entry-kind) at)))
+      (let [^I32 ks (ed-ws b kp)
+            ^I32 kind (tk-find b (+ ks 1) (ed-end t b ks 0))]
+        (if (< kind 0) (return (ed-fail t (tb-entry-kind) at)))
+        (cells-drop (fd t tmp) 0)
+        (let [^I32 qp (ed-field t b at (tf-req))]
+          (if (< qp 0) (return (ed-fail t (tb-entry-req) at)))
+          (let [^I32 rlen (ed-ints t b qp)]
+            (if (< rlen 0) (return (ed-fail t (tb-entry-req) at)))
+            (let [^I32 ap (ed-field t b at (tf-ans))]
+              (if (< ap 0) (return (ed-fail t (tb-entry-ans) at)))
+              (let [^I32 alen (ed-ints t b ap)]
+                (if (< alen 0) (return (ed-fail t (tb-entry-ans) at)))
+                (if (or (< rlen 3) (or (!= (cells-at (fd t tmp) 0) rlen) (!= (cells-at (fd t tmp) 1) kind)))
+                  (return (ed-fail t (tb-req-record) at)))
+                (if (or (< alen 4)
+                        (or (!= (cells-at (fd t tmp) rlen) alen)
+                            (or (!= (cells-at (fd t tmp) (+ rlen 1)) kind)
+                                (!= (cells-at (fd t tmp) (+ rlen 2)) (cells-at (fd t tmp) 2)))))
+                  (return (ed-fail t (tb-ans-record) at)))
+                (let [^I32 bp (ed-field t b at (tf-bitmap))
+                      ^:mut ^I32 bm 0]
+                  (if (and (>= bp 0) (== (ed-first b bp) 34))
+                    (do (set bm (+ (cells-len (fd t names)) 1))
+                        (cells-push (fd t names) 0)
+                        (let [^I32 nn (ed-str-push b bp (fd t names))]
+                          (cells-set (fd t names) (- bm 1) nn))))
+                  (return (ed-add-entry t round bm rlen alen)))))))))))
+
+(defn ^I32 ed-entries [^Tr t ^Blob b ^I32 pos]
+  (comment "The `:entries` vector at `pos`. 0, or the reason (`tb`).")
+  (if (!= (ed-first b pos) 91) (return (ed-fail t (tb-no-entries) (ed-ws b pos))))
+  (let [^:mut ^I32 i (+ (ed-ws b pos) 1)]
+    (while (< 0 1)
+      (do (set i (ed-ws b i))
+          (if (== (blob-u8 b i) 93) (return 0))
+          (if (!= (blob-u8 b i) 123) (return (ed-fail t (tb-entry-map) i)))
+          (let [^I32 r (ed-entry t b i)]
+            (if (!= r 0) (return r)))
+          (set i (ed-end t b i 0))))
+    (return 0)))
+
+(defn ^:pub ^I32 tr-read [^Tr t ^Blob b]
+  (comment "Read `transcript.edn` from `b` into `t` (a new one): 0, or the reason it is no transcript (`tb`), its sentence in `msg`.")
+  (if (== (ed-utf8 b) 0) (return (ed-fail t (tb-not-utf8) 0)))
+  (let [^I32 e (ed-end t b 0 0)]
+    (if (< e 0) (return (fd t why)))
+    (let [^I32 f (ed-ws b e)]
+      (if (!= f (blob-len b)) (return (ed-fail t (tb-trailing) f)))))
+  (let [^I32 top (ed-ws b 0)]
+    (if (!= (blob-u8 b top) 123) (return (ed-fail t (tb-not-map) top)))
+    ;; the first of each key the format has, then read in the order the hosts did: version, producer, inputs, entries
+    (let [^I32 vp (ed-field t b top (tf-version))
+          ^I32 pp (ed-field t b top (tf-producer))
+          ^I32 ip (ed-field t b top (tf-inputs))
+          ^I32 ep (ed-field t b top (tf-entries))]
+      (if (or (< vp 0) (== (ed-int-at t b vp) 0)) (return (ed-fail t (tb-version) top)))
+      (if (!= (fd t ival) 1) (return (ed-fail t (tb-version) top)))
+      (if (>= pp 0) (ed-producer t b pp))
+      (if (< ip 0) (return (ed-fail t (tb-no-inputs) top)))
+      (let [^I32 r (ed-inputs t b ip)]
+        (if (!= r 0) (return r)))
+      (if (< ep 0) (return (ed-fail t (tb-no-entries) top)))
+      (return (ed-entries t b ep)))))
+
+;; ----------------------------------------------------------------------------------------------- building
+
+(defn ^:pub ^I32 tr-add-input [^Tr t ^I32 index ^I32 length]
+  (comment "An input of the run: its index and its length, never its bytes.")
+  (cells-push (fd t inputs) index)
+  (cells-push (fd t inputs) length)
+  (return 0))
+
+(defn ^:pub ^I32 tr-add-producer [^Tr t ^Cells key ^Cells val]
+  (comment "One name/value of WHO ANSWERED (D214), each a run of code points. The file writes them escaped (`tr-write`); a name is written as it is.")
+  (let [^I32 kn (cells-len key)
+        ^I32 vn (cells-len val)
+        ^:mut ^I32 i 0]
+    (cells-push (fd t prod) kn)
+    (while (< i kn)
+      (let [^I32 v (cells-at key i)]
+        (cells-push (fd t prod) v)
+        (set i (+ i 1))))
+    (cells-push (fd t prod) vn)
+    (set i 0)
+    (while (< i vn)
+      (let [^I32 v (cells-at val i)]
+        (cells-push (fd t prod) v)
+        (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 tr-add-entry [^Tr t ^I32 round ^Cells src ^I32 req-at ^I32 req-len ^I32 ans-at ^I32 ans-len ^I32 bitmap]
+  (comment "An entry: the round, the request record at `req-at` of `src`, the answer record at `ans-at`, and whether it has a bitmap (the host keeps the pixels).")
+  (cells-drop (fd t tmp) 0)
+  (let [^:mut ^I32 i 0]
+    (while (< i req-len)
+      (let [^I32 v (cells-at src (+ req-at i))]
+        (cells-push (fd t tmp) v)
+        (set i (+ i 1))))
+    (set i 0)
+    (while (< i ans-len)
+      (let [^I32 v (cells-at src (+ ans-at i))]
+        (cells-push (fd t tmp) v)
+        (set i (+ i 1)))))
+  (if (== bitmap 0)
+    (return (ed-add-entry t round 0 req-len ans-len)))
+  (return (ed-add-entry t round -1 req-len ans-len)))
+
+;; ----------------------------------------------------------------------------------------------- writing
+
+(defn ^I32 tw-ints [^:mut ^Text out ^Cells c ^I32 from ^I32 n]
+  (comment "`[a b c]`.")
+  (let [^:mut ^I32 i 0]
+    (emit-ascii out "[")
+    (while (< i n)
+      (do (if (> i 0) (emit-ascii out " "))
+          (text-i32 out (cells-at c (+ from i)))
+          (set i (+ i 1))))
+    (emit-ascii out "]")
+    (return n)))
+
+(defn ^I32 tw-cps [^:mut ^Text out ^Cells c ^I32 from ^I32 n ^I32 escape]
+  (comment "The code points of a name or a value. ESCAPED (a value in the file): a backslash is written `/` and a double quote `'`, so the file's string")
+  (comment "needs no escape of its own and a reader never sees one (D214).")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (let [^:mut ^I32 v (cells-at c (+ from i))]
+        (if (and (== escape 1) (== v 92)) (set v 47))
+        (if (and (== escape 1) (== v 34)) (set v 39))
+        (text-cp out v)
+        (set i (+ i 1))))
+    (return n)))
+
+(defn ^:pub ^I32 tr-bitmap-name [^I32 n ^:mut ^Text out]
+  (comment "The name of the file a bitmap is written to, from its entry's place: `bitmap-0000.png`.")
+  (emit-ascii out "bitmap-")
+  (if (< n 1000) (emit-ascii out "0"))
+  (if (< n 100) (emit-ascii out "0"))
+  (if (< n 10) (emit-ascii out "0"))
+  (text-i32 out n)
+  (emit-ascii out ".png")
+  (return n))
+
+(defn ^:pub ^I32 tr-write [^Tr t ^:mut ^Text out]
+  (comment "Write `transcript.edn` (FORMAT VERSION 1) to `out`: the same bytes on every host for the same entries.")
+  (emit-ascii out "{:")
+  (tf-emit-name out (tf-version))
+  (emit-ascii out " 1")
+  (text-cp out 10)
+  (if (> (cells-len (fd t prod)) 0)
+    (do (emit-ascii out " :")
+        (tf-emit-name out (tf-producer))
+        (emit-ascii out " {")
+        (let [^I32 n (cells-len (fd t prod))
+              ^:mut ^I32 at 0]
+          (while (< at n)
+            (let [^I32 kn (cells-at (fd t prod) at)
+                  ^I32 vn (cells-at (fd t prod) (+ at (+ kn 1)))]
+              (if (> at 0) (emit-ascii out " "))
+              (emit-ascii out ":")
+              (tw-cps out (fd t prod) (+ at 1) kn 0)
+              (emit-ascii out " ")
+              (text-cp out 34)
+              (tw-cps out (fd t prod) (+ at (+ kn 2)) vn 1)
+              (text-cp out 34)
+              (set at (+ at (+ kn (+ vn 2)))))))
+        (emit-ascii out "}")
+        (text-cp out 10)))
+  (emit-ascii out " :")
+  (tf-emit-name out (tf-inputs))
+  (emit-ascii out " [")
+  (let [^I32 n (cells-len (fd t inputs))
+        ^:mut ^I32 at 0]
+    (while (< at n)
+      (do (if (> at 0) (emit-ascii out " "))
+          (emit-ascii out "{:")
+          (tf-emit-name out (tf-index))
+          (emit-ascii out " ")
+          (text-i32 out (cells-at (fd t inputs) at))
+          (emit-ascii out " :")
+          (tf-emit-name out (tf-length))
+          (emit-ascii out " ")
+          (text-i32 out (cells-at (fd t inputs) (+ at 1)))
+          (emit-ascii out "}")
+          (set at (+ at 2)))))
+  (emit-ascii out "]")
+  (text-cp out 10)
+  (emit-ascii out " :")
+  (tf-emit-name out (tf-entries))
+  (emit-ascii out " [")
+  (let [^I32 en (cells-len (fd t ents))
+        ^:mut ^I32 e 0]
+    (while (< e en)
+      (let [^I32 rl (cells-at (fd t ents) (+ e 5))
+            ^I32 al (- (cells-at (fd t ents) e) (+ 6 rl))]
+        (text-cp out 10)
+        (emit-ascii out "  {:")
+        (tf-emit-name out (tf-round))
+        (emit-ascii out " ")
+        (text-i32 out (cells-at (fd t ents) (+ e 1)))
+        (emit-ascii out " :")
+        (tf-emit-name out (tf-kind))
+        (emit-ascii out " :")
+        (let [^:mut ^I32 known 0]
+          (if (> rl 1) (set known (tk-emit-name out (cells-at (fd t ents) (+ e 7)))))
+          (if (== known 0) (emit-ascii out "unknown")))
+        (emit-ascii out " :")
+        (tf-emit-name out (tf-req))
+        (emit-ascii out " ")
+        (tw-ints out (fd t ents) (+ e 6) rl)
+        (emit-ascii out " :")
+        (tf-emit-name out (tf-ans))
+        (emit-ascii out " ")
+        (tw-ints out (fd t ents) (+ e (+ 6 rl)) al)
+        (if (!= (cells-at (fd t ents) (+ e 2)) 0)
+          (do (emit-ascii out " :")
+              (tf-emit-name out (tf-bitmap))
+              (emit-ascii out " ")
+              (text-cp out 34)
+              (tr-bitmap-name (cells-at (fd t ents) (+ e 4)) out)
+              (text-cp out 34)))
+        (emit-ascii out "}")
+        (set e (+ e (cells-at (fd t ents) e))))))
+  (emit-ascii out "]}")
+  (text-cp out 10)
+  (return 0))
+
+;; ----------------------------------------------------------------------------------------------- the replay map
+
+(defn ^I32 tr-hash [^Cells c ^I32 at ^I32 cnt]
+  (comment "A hash of the `cnt` cells at `at`, below 2^25 (no step overflows an I32).")
+  (let [^:mut ^I32 h 17
+        ^:mut ^I32 i 0]
+    (while (< i cnt)
+      (let [^I32 v (cells-at c (+ at i))]
+        (set h (bit-and (+ (* h 31) (+ (bit-and v 1048575) (bit-and (sar32 v 20) 4095))) 33554431))
+        (set i (+ i 1))))
+    (return h)))
+
+(defn ^I32 tr-key-eq [^Cells ents ^I32 e ^Cells c ^I32 at ^I32 cnt]
+  (comment "1 when entry `e`'s request is the `cnt` cells at `at` of `c`, whole.")
+  (if (!= (cells-at ents (+ e 5)) cnt) (return 0))
+  (let [^:mut ^I32 i 0]
+    (while (< i cnt)
+      (do (if (!= (cells-at ents (+ e (+ 6 i))) (cells-at c (+ at i))) (return 0))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^:pub ^I32 tr-index [^Tr t]
+  (comment "Build the replay map over the entries: keyed by the WHOLE request record. Of two entries of one request the later is the map's.")
+  (let [^:mut ^I32 size 16
+        ^:mut ^I32 e 0]
+    (while (< size (* 2 (fd t nents)))
+      (set size (* size 2)))
+    (cells-drop (fd t idx) 0)
+    (let [^:mut ^I32 i 0]
+      (while (< i size)
+        (do (cells-push (fd t idx) 0)
+            (set i (+ i 1)))))
+    (set (fd t mask) (- size 1))
+    (while (< e (cells-len (fd t ents)))
+      (let [^I32 rl (cells-at (fd t ents) (+ e 5))]
+        (cells-drop (fd t tmp) 0)
+        (let [^:mut ^I32 i 0]
+          (while (< i rl)
+            (let [^I32 v (cells-at (fd t ents) (+ e (+ 6 i)))]
+              (cells-push (fd t tmp) v)
+              (set i (+ i 1)))))
+        (let [^I32 h (tr-hash (fd t tmp) 0 rl)
+              ^:mut ^I32 s (bit-and h (fd t mask))
+              ^:mut ^I32 placed 0]
+          (while (== placed 0)
+            (let [^I32 cur (cells-at (fd t idx) s)]
+              (if (== cur 0)
+                (do (cells-set (fd t idx) s (+ e 1))
+                    (set placed 1))
+                (if (== (tr-key-eq (fd t ents) (- cur 1) (fd t tmp) 0 rl) 1)
+                  (do (cells-set (fd t idx) s (+ e 1))
+                      (set placed 1))
+                  (set s (bit-and (+ s 1) (fd t mask))))))))
+        (set e (+ e (cells-at (fd t ents) e)))))
+    (return 0)))
+
+(defn ^:pub ^I32 tr-find [^Tr t ^Cells c ^I32 at ^I32 cnt]
+  (comment "The entry whose request is the `cnt` cells at `at` of `c`, whole: where it starts in `ents`, or -1 (a miss; also when `tr-index` has not run).")
+  (if (== (fd t mask) 0) (return -1))
+  (let [^:mut ^I32 s (bit-and (tr-hash c at cnt) (fd t mask))]
+    (while (< 0 1)
+      (let [^I32 cur (cells-at (fd t idx) s)]
+        (if (== cur 0) (return -1))
+        (if (== (tr-key-eq (fd t ents) (- cur 1) c at cnt) 1) (return (- cur 1)))
+        (set s (bit-and (+ s 1) (fd t mask)))))
+    (return -1)))
+
+(defn ^:pub ^I32 tr-take [^Tr t ^Cells c ^I32 at ^I32 cnt]
+  (comment "`tr-find`, and the entry is marked used: a replay asked for it.")
+  (let [^I32 e (tr-find t c at cnt)]
+    (if (>= e 0) (cells-set (fd t ents) (+ e 3) 1))
+    (return e)))
+
+(defn ^:pub ^I32 tr-unused [^Tr t]
+  (comment "How many entries no replay asked for.")
+  (let [^I32 n (cells-len (fd t ents))
+        ^:mut ^I32 e 0
+        ^:mut ^I32 k 0]
+    (while (< e n)
+      (do (if (== (cells-at (fd t ents) (+ e 3)) 0) (set k (+ k 1)))
+          (set e (+ e (cells-at (fd t ents) e)))))
+    (return k)))
+
+(defn ^:pub ^I32 tr-unused-msg [^Tr t ^:mut ^Text out]
+  (comment "`transcript-bad`'s sentence for a replay that left entries unasked: `3 recorded entries were never asked for`.")
+  (text-i32 out (tr-unused t))
+  (emit-ascii out " ")
+  (return (tb-emit-name out (tb-unused))))
+
+(defn ^:pub ^I32 tr-miss-msg [^Cells c ^I32 at ^I32 cnt ^:mut ^Text out]
+  (comment "`transcript-miss`'s sentence: `no answer recorded for request [6 1 2 ...]`.")
+  (emit-ascii out "no answer recorded for request ")
+  (return (tw-ints out c at cnt)))
+
+(defn ^I32 tw-pairs [^:mut ^Text out ^Cells c]
+  (comment "`[index:length ...]`.")
+  (let [^I32 n (cells-len c)
+        ^:mut ^I32 i 0]
+    (emit-ascii out "[")
+    (while (< i n)
+      (do (if (> i 0) (emit-ascii out " "))
+          (text-i32 out (cells-at c i))
+          (emit-ascii out ":")
+          (text-i32 out (cells-at c (+ i 1)))
+          (set i (+ i 2))))
+    (emit-ascii out "]")
+    (return n)))
+
+(defn ^:pub ^I32 tr-check-inputs [^Tr t ^Cells want ^:mut ^Text out]
+  (comment "A replay is given the inputs the recording saw: the same count, the same lengths. 0, or `tb-inputs` with its sentence in `out`.")
+  (let [^I32 n (cells-len (fd t inputs))
+        ^:mut ^I32 same 1
+        ^:mut ^I32 i 0]
+    (if (!= n (cells-len want)) (set same 0))
+    (while (and (== same 1) (< i n))
+      (do (if (!= (cells-at (fd t inputs) i) (cells-at want i)) (set same 0))
+          (set i (+ i 1))))
+    (if (== same 1) (return 0))
+    (tb-emit-name out (tb-inputs))
+    (emit-ascii out ": ")
+    (tw-pairs out (fd t inputs))
+    (emit-ascii out ", not ")
+    (tw-pairs out want)
+    (return (tb-inputs))))
+
+;; ----------------------------------------------------------------------------------------------- what the host reads
+
+(defn ^:pub ^I32 tr-n-inputs [^Tr t] (return (quot (cells-len (fd t inputs)) 2)))
+(defn ^:pub ^I32 tr-in-index [^Tr t ^I32 i] (return (cells-at (fd t inputs) (* 2 i))))
+(defn ^:pub ^I32 tr-in-length [^Tr t ^I32 i] (return (cells-at (fd t inputs) (+ (* 2 i) 1))))
+
+(defn ^:pub ^I32 tr-p-more [^Tr t ^I32 p] (if (< p (cells-len (fd t prod))) (return 1)) (return 0))
+(defn ^:pub ^I32 tr-p-next [^Tr t ^I32 p]
+  (comment "The producer pair after the one at `p` (the first is at 0).")
+  (let [^I32 kn (cells-at (fd t prod) p)
+        ^I32 vn (cells-at (fd t prod) (+ p (+ kn 1)))]
+    (return (+ p (+ kn (+ vn 2))))))
+(defn ^:pub ^I32 tr-p-key [^Tr t ^I32 p ^:mut ^Text out]
+  (let [^I32 kn (cells-at (fd t prod) p)]
+    (return (tw-cps out (fd t prod) (+ p 1) kn 0))))
+(defn ^:pub ^I32 tr-p-val [^Tr t ^I32 p ^:mut ^Text out]
+  (let [^I32 kn (cells-at (fd t prod) p)
+        ^I32 vn (cells-at (fd t prod) (+ p (+ kn 1)))]
+    (return (tw-cps out (fd t prod) (+ p (+ kn 2)) vn 0))))
+
+;; The entries, back to back from 0: `tr-e-more`, `tr-e-next`. An entry's request and answer are runs of `ents` at `tr-e-req` and `tr-e-ans`.
+(defn ^:pub ^I32 tr-e-more [^Tr t ^I32 e] (if (< e (cells-len (fd t ents))) (return 1)) (return 0))
+(defn ^:pub ^I32 tr-e-next [^Tr t ^I32 e] (return (+ e (cells-at (fd t ents) e))))
+(defn ^:pub ^I32 tr-e-round [^Tr t ^I32 e] (return (cells-at (fd t ents) (+ e 1))))
+(defn ^:pub ^I32 tr-e-n [^Tr t ^I32 e] (return (cells-at (fd t ents) (+ e 4))))
+(defn ^:pub ^I32 tr-e-req [^Tr t ^I32 e] (return (+ e 6)))
+(defn ^:pub ^I32 tr-e-req-len [^Tr t ^I32 e] (return (cells-at (fd t ents) (+ e 5))))
+(defn ^:pub ^I32 tr-e-ans [^Tr t ^I32 e] (return (+ e (+ 6 (cells-at (fd t ents) (+ e 5))))))
+(defn ^:pub ^I32 tr-e-ans-len [^Tr t ^I32 e] (return (- (cells-at (fd t ents) e) (+ 6 (cells-at (fd t ents) (+ e 5))))))
+(defn ^:pub ^I32 tr-e-cell [^Tr t ^I32 at] (return (cells-at (fd t ents) at)))
+(defn ^:pub ^I32 tr-e-has-bitmap [^Tr t ^I32 e]
+  (if (!= (cells-at (fd t ents) (+ e 2)) 0) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 tr-e-bitmap-name [^Tr t ^I32 e ^:mut ^Text out]
+  (comment "The file name of the entry's bitmap: as a file read named it, or as `tr-write` names it for an entry the host added. 0 when there is none.")
+  (let [^I32 bm (cells-at (fd t ents) (+ e 2))]
+    (if (== bm 0) (return 0))
+    (if (< bm 0)
+      (do (tr-bitmap-name (cells-at (fd t ents) (+ e 4)) out)
+          (return 1)))
+    (let [^I32 n (cells-at (fd t names) (- bm 1))]
+      (tw-cps out (fd t names) bm n 0))
+    (return 1)))

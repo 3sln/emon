@@ -121,7 +121,8 @@ func TestARenderFulfillerAnswersRendersAndCropsAndFailuresAsRecords(t *testing.T
 	// a request for an input the run does not have, or a malformed one, is the loop's error and not an answer
 	for _, rec := range [][]int32{{7, 1, 8, 4, 0, 72, 0}, {6, 1, 9, 0, 0, 72}} {
 		f.Start(port.PlanRequest{Rec: rec}, nil)
-		if _, err := f.Next(); err == nil || err.(*port.PlanError).Name != "fulfil-failed" {
+		_, err := f.Next()
+		if _, ok := err.(*port.FulfilError); !ok {
 			t.Fatalf("request %v: %v", rec, err)
 		}
 	}

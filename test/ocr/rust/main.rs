@@ -229,9 +229,9 @@ fn main() {
         Ok(s) => s,
         Err(e) => fail(&e),
     };
-    if let Some(r) = &replayer {
-        if r.unused() != 0 {
-            fail(&PlanError::TranscriptBad(format!("{} recorded entries were never asked for", r.unused())));
+    if let Some(r) = replayer.as_mut() {
+        if let Err(e) = r.check_done() {
+            fail(&e);
         }
     }
     eprintln!("stats: attempts={} rounds={} requests={}", stats.attempts, stats.rounds, stats.requests);

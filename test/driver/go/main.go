@@ -37,6 +37,7 @@ import (
 	"sync"
 
 	"emon"
+	"emon/planrun"
 	_ "emon/pngenc"
 	"emon/port"
 )
@@ -371,7 +372,7 @@ func main() {
 		if err != nil {
 			fail(replay, err)
 		}
-		if tin, err = port.TranscriptFromFiles(files); err != nil {
+		if tin, err = planrun.TranscriptFromFiles(files); err != nil {
 			errExit(&emon.Error{Kind: emon.ErrPlan, Plan: err.(*port.PlanError)})
 		}
 	}

@@ -28,6 +28,7 @@ import (
 	_ "emon/pngenc" // the canonical PNG writer: a transcript's files need it
 	"emon/ocr"
 	"emon/plan"
+	"emon/planrun"
 	"emon/port"
 )
 
@@ -594,7 +595,7 @@ func TestAnImageRecordsItsPixelsAndReplaysWithoutACodec(t *testing.T) {
 	for _, f := range tr.ToFiles() {
 		files[f.Name] = f.Bytes
 	}
-	t2, err := port.TranscriptFromFiles(files)
+	t2, err := planrun.TranscriptFromFiles(files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -677,7 +678,7 @@ func TestAnImageIsReadByTheOcrPortAndItsTranscriptReplaysWithoutIt(t *testing.T)
 	if !strings.Contains(string(files["transcript.edn"]), `:producer {:engine "fake"}`) {
 		t.Errorf("the producer is not in the file: %s", files["transcript.edn"])
 	}
-	t2, err := port.TranscriptFromFiles(files)
+	t2, err := planrun.TranscriptFromFiles(files)
 	if err != nil || len(t2.Producer) != 1 {
 		t.Fatalf("%v %v", err, t2)
 	}
@@ -720,7 +721,7 @@ func TestAScannedPDFPageIsOcredAndABornDigitalOneKeepsItsTextLayer(t *testing.T)
 	for _, f := range tr.ToFiles() {
 		files[f.Name] = f.Bytes
 	}
-	t2, err := port.TranscriptFromFiles(files)
+	t2, err := planrun.TranscriptFromFiles(files)
 	if err != nil {
 		t.Fatal(err)
 	}

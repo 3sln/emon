@@ -70,6 +70,9 @@ bb tools/pdfxnames.clj --check
 # tagged document and mis-tagged twins, written byte for byte by babashka, D150).
 bb tools/pdfsnames.clj --check
 bb tools/synth/tagged_pair.clj --check
+# THE TRANSCRIPTS UNDER test/ (P10.9, D920): `kin/transcripttest.kin` reads every one the list names and writes it again through
+# `emon.transcript`, to the same bytes, on all four targets. kin lists no directory, so the list is a file, held here to the tree.
+bb tools/transcript_manifest.clj --check
 # THE FONT TABLES (P1.6): the Adobe Glyph List, the encodings and the
 # standard-14 metrics are generated from test/fonts/; the glyph-name and CMap
 # row corpora are written by scripts (each cross-checked against pdfminer.six

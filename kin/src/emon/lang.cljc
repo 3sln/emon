@@ -240,13 +240,14 @@
 (def ^:private scope-additions
   (into {}
         (concat
-         (for [s '[defn return if do ==]]
+         (for [s '[defn return if do == + -]]
            [(symbol "kin.lang" (str s)) ['kin.lang s]])
          (for [s '[emit-ascii]]
            [(symbol "emon.lang" (str s)) ['emon.lang s]])
-         (for [s '[I32 Text]]
+         (for [s '[I32 Text Blob]]
            [(symbol "emon.lang" (str s)) ['emon.lang s]])
-         [['emon.port/text-ascii ['emon.port 'text-ascii]]])))
+         [['emon.port/text-ascii ['emon.port 'text-ascii]]
+          ['emon.port/blob-u8 ['emon.port 'blob-u8]]])))
 
 (defn- with-scope [ctx]
   (update ctx :scope-syms #(merge % scope-additions)))
@@ -327,11 +328,27 @@
   (when-let [why (enum-problem nm rows)]
     (refuse! ctx (str "(defenum " (pr-str nm) " ...)") why {:form form}))
   (let [pub? (boolean (:pub (meta nm)))
+        parse? (boolean (:parse (meta nm)))
         i32 'emon.lang/I32
         fn-name (fn [s] (with-meta s {:tag i32 :pub pub?}))
         emit-fn (fn-name (symbol (str nm "-emit-name")))
+        find-fn (fn-name (symbol (str nm "-find")))
         t (with-meta 't {:mut true :tag 'emon.lang/Text})
-        code (with-meta 'code {:tag i32})]
+        code (with-meta 'code {:tag i32})
+        ;; `^:parse` adds the REVERSE: `nm-find` reads a spelling out of a span of a Blob (bytes `from` up to `to`) and answers its
+        ;; code, or -1 for a span that is none of the rows. So a name is spelled once, and what a parser reads is what a writer writes.
+        b (with-meta 'b {:tag 'emon.lang/Blob})
+        from (with-meta 'from {:tag i32})
+        to (with-meta 'to {:tag i32})
+        chars-then (fn chars-then [sp i c]
+                     (if (= i (count sp))
+                       (list 'kin.lang/return c)
+                       (list 'kin.lang/if
+                             (list 'kin.lang/== (list 'emon.port/blob-u8 'b (list 'kin.lang/+ 'from i)) (int (nth sp i)))
+                             (chars-then sp (inc i) c))))]
+    (when (and parse? (some #(= find-fn (first %)) rows))
+      (refuse! ctx (str "(defenum " (pr-str nm) " ...)")
+               (str "row symbol " find-fn " collides with the generated finder") {:form form}))
     (concat
      (for [[s c _] rows]
        (list 'kin.lang/defn (fn-name s) [] (list 'kin.lang/return c)))
@@ -342,7 +359,14 @@
                (list 'kin.lang/do
                      (list 'emon.lang/emit-ascii 't sp)
                      (list 'kin.lang/return 1))))
-       [(list 'kin.lang/return 0)])])))
+       [(list 'kin.lang/return 0)])]
+     (when parse?
+       [(concat
+         (list 'kin.lang/defn find-fn [b from to])
+         (for [[_ c sp] rows]
+           (list 'kin.lang/if (list 'kin.lang/== (list 'kin.lang/- 'to 'from) (count sp))
+                 (chars-then sp 0 c)))
+         [(list 'kin.lang/return -1)])]))))
 
 (def ^:private defenum-form
   "TWO SLOTS, for `defn`'s reason: `:declare` walks the rewritten forms so

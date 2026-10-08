@@ -131,12 +131,12 @@ func main() {
 		return port.PlanUnitDone
 	}
 	bytesF := &port.PlanSync{F: func(req port.PlanRequest, _ port.PlanBitmaps) (port.PlanAnswer, error) {
-		return port.PlanAnswer{}, &port.PlanError{Name: "fulfil-failed", Msg: "this driver reads no bytes through the loop"}
+		return port.PlanAnswer{}, planrun.FulfilFailed("this driver reads no bytes through the loop")
 	}}
 
-	t := &port.Transcript{Inputs: inputs}
-	var replayer *port.Replayer
-	var rec *port.Transcript
+	t := &planrun.Transcript{Inputs: inputs}
+	var replayer *planrun.Replayer
+	var rec *planrun.Transcript
 	var ports port.PlanFulfiller
 	if mode == "replay" {
 		files := map[string][]byte{}
@@ -153,14 +153,14 @@ func main() {
 			}
 			files[e.Name()] = b
 		}
-		t, err = port.TranscriptFromFiles(files)
+		t, err = planrun.TranscriptFromFiles(files)
 		if err == nil {
 			err = t.CheckInputs(inputs)
 		}
 		if err != nil {
 			fail(err)
 		}
-		replayer = port.NewReplayer(t)
+		replayer = planrun.NewReplayer(t)
 		ports = replayer
 	} else {
 		rec = t
@@ -177,7 +177,7 @@ func main() {
 		fail(err)
 	}
 	if replayer != nil && replayer.Unused() != 0 {
-		fail(&port.PlanError{Name: "transcript-bad", Msg: fmt.Sprintf("%d recorded entries were never asked for", replayer.Unused())})
+		fail(replayer.Done())
 	}
 	fmt.Fprintf(os.Stderr, "stats: attempts=%d rounds=%d requests=%d\n", stats.Attempts, stats.Rounds, stats.Requests)
 

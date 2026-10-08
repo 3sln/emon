@@ -63,6 +63,16 @@
 (deftest defenum-accepts-a-sound-table
   (is (nil? (refusal (enum "[nk-a 1 \"a\"]" "[nk-b 5 \"b\"]")))))
 
+;; `^:parse` (P10.9, D921) adds `nk-find`, the reverse of `nk-emit-name`; a row may not take its name.
+(defn- parse-enum [& rows]
+  (src (str "(defenum ^:pub ^:parse nk [" (str/join " " rows) "])")))
+
+(deftest defenum-parse-accepts-a-sound-table
+  (is (nil? (refusal (parse-enum "[nk-a 1 \"a\"]" "[nk-b 5 \"bc\"]")))))
+
+(deftest defenum-parse-refuses-a-row-that-takes-the-finders-name
+  (is (every-target-says? (parse-enum "[nk-find 1 \"a\"]") "defenum" "emon.negprobe" "nk-find" "collides")))
+
 (defn- ctx-src [& body]
   (str "(ns emon.negprobe (:require [emon.lang :refer [I32 I64 Text Cells defctx fd]]"
        " [kin.lang :refer [defn return]]))\n"

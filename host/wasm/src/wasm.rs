@@ -522,10 +522,8 @@ fn step(s: &mut Session) -> Result<(i32, Vec<u8>), Error> {
         match run.step()? {
             plan::Next::Done => {
                 // a replay that left recorded entries unasked is a transcript of another run, as it is natively
-                if let Some(r) = &s.replayer {
-                    if r.unused() != 0 {
-                        return Err(Error::Plan(PlanError::TranscriptBad(format!("{} recorded entries were never asked for", r.unused()))));
-                    }
+                if let Some(r) = s.replayer.as_mut() {
+                    r.check_done().map_err(Error::Plan)?;
                 }
                 return Ok((0, Vec::new()));
             }

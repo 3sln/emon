@@ -1651,10 +1651,8 @@ impl Engine {
             }
         }
         run.set_timing(pass_us, pages_us, ports.us);
-        if let Some(r) = &replayer {
-            if r.unused() != 0 {
-                return Err(Error::Plan(PlanError::TranscriptBad(format!("{} recorded entries were never asked for", r.unused()))));
-            }
+        if let Some(r) = replayer.as_mut() {
+            r.check_done().map_err(Error::Plan)?;
         }
         run.finish()
     }

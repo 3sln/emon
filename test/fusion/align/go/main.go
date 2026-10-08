@@ -86,14 +86,14 @@ func main() {
 		}
 		files[e.Name()] = b
 	}
-	t, err := port.TranscriptFromFiles(files)
+	t, err := planrun.TranscriptFromFiles(files)
 	if err == nil {
 		err = t.CheckInputs(inputs)
 	}
 	if err != nil {
 		fail(err)
 	}
-	replayer := port.NewReplayer(t)
+	replayer := planrun.NewReplayer(t)
 
 	var dump string
 	unit := func(an, rq *port.Cells, _ *port.BitmapSet, _ *port.Buf) int32 {
@@ -119,7 +119,7 @@ func main() {
 		fail(err)
 	}
 	if replayer.Unused() != 0 {
-		fail(&port.PlanError{Name: "transcript-bad", Msg: fmt.Sprintf("%d recorded entries were never asked for", replayer.Unused())})
+		fail(replayer.Done())
 	}
 	fmt.Fprintf(os.Stderr, "stats: attempts=%d rounds=%d requests=%d\n", stats.Attempts, stats.Rounds, stats.Requests)
 

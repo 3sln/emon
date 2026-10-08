@@ -259,9 +259,9 @@
 (def rust-facts (vec (mapcat rust-items rust-files)))
 (def go-facts
   (vec (concat (mapcat go-items go-files)
-               ;; Go's Transcript is an alias for port.Transcript: its members are the loop's
-               (filter (fn [[k a]] (and (#{:field :method} k) (= a "Transcript"))) (go-items "host/go/port/plan.go"))
-               (filter (fn [[k a]] (and (= k :func) (= a "TranscriptFromFiles"))) (go-items "host/go/port/plan.go")))))
+               ;; Go's Transcript is an alias for planrun.Transcript (P10.9: the transcript left package port): its members are the loop's
+               (filter (fn [[k a]] (and (#{:field :method} k) (= a "Transcript"))) (go-items "host/go/planrun/transcript.go"))
+               (filter (fn [[k a]] (and (= k :func) (= a "TranscriptFromFiles"))) (go-items "host/go/planrun/transcript.go")))))
 
 (def rs-types (set (for [[k n] rust-facts :when (and (= k :type) (exports n))] n)))
 

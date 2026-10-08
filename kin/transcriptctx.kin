@@ -1,0 +1,21 @@
+;; THE TRANSCRIPT'S CONTEXT (P10.9; D396, D920): what one transcript holds, declared once in kin and constructed by each host (`defctx`: a public
+;; type with the fields' own names, `new()`, `clone()`). `emon.transcript` borrows its fields with `fd`. A tag defined by a file is not in that
+;; file's own scope (found in kin), so the context lives in a namespace of its own, like `emon.planctx`'s.
+;;
+;;   inputs   per input, `index length` (never its bytes, origin or fetch count: SPEC 13.1)
+;;   prod     WHO ANSWERED (D214), the `:producer` map in the order the file has it: `[key-length key... value-length value...]`, each a run of code points
+;;   ents     the entries, back to back: `[length round bm used n request-length request... answer...]`. `bm` is 0 for an entry with no bitmap, else
+;;            1 + where its file name is in `names` (a file read) or 1 (an entry the host added: the name is made from `n`); `used` is 1 once a
+;;            replay has been answered from it; `n` is the entry's place in the file
+;;   names    the bitmap file names a file read gave: `[length code-point...]`
+;;   idx      the replay map: an open-addressing table, 0 for a free slot and else 1 + the entry's place in `ents`, keyed by the WHOLE request record
+;;   tmp      scratch: the integers of a request and an answer being read
+;;   msg      the sentence of the error `tr-read` stopped on (the host's `Display` is `name: msg`)
+;;   nents    how many entries; mask the replay map's size less one (0 when it has not been built)
+;;   why, at  the reason a read stopped (`tb`), and where in the file (a byte offset)
+;;   ival     the integer `ed-int` last read
+(ns emon.transcriptctx
+  (:require [emon.lang :refer [I32 Cells Text defctx]]))
+
+(defctx ^:pub Tr [^Cells inputs ^Cells prod ^Cells ents ^Cells names ^Cells idx ^Cells tmp ^Text msg
+                  ^I32 nents ^I32 mask ^I32 why ^I32 at ^I32 ival])
