@@ -1,0 +1,583 @@
+;; The OCR adapters' POLICY, written once (P10.7; D740, D005, D006, D092, D362).
+;;
+;; Every host that fulfils an `ocr` request (Rust and Go over libtesseract, the browser's tesseract.js, Java and C#) used to carry its
+;; own copy of what the request asks for and how the engine's answer is named, and the copies drifted: Rust and Go read the languages
+;; from cell 9 for a kin-made view (D196) and cell 7 otherwise, the others always from cell 7; Rust and Go read an ISO 15924 script
+;; code in a language cell as "the installed models that read it" (P7.S, D215), the others as a model name. THE RULE IS KIN'S: what
+;; is accepted, what is dropped and what an answer's cells say are observable, and a host's part is the engine call between.
+;;
+;;   REQUEST.   `op-lang-first`, `op-lang-count`: where the request's languages are (cells 7.., or 9.. for a view whose id is from
+;;              `view-base`). `op-models` answers which of the engine's INSTALLED models read the request: a language cell is an
+;;              ISO 639-3 code (`chs` and `cht` name the Chinese models `chi_sim` and `chi_tra`) or, when it starts with an
+;;              uppercase letter, an ISO 15924 script (`Cyrl` is every installed model that reads Cyrillic; `Hani` is the Han models
+;;              and Japanese). A language with no model installed is dropped (`op-dropped` names it); none left means EVERY
+;;              installed model (D038). Installed models arrive as code-point Cells separated by 0 (tessdata names exceed
+;;              pack4's four chars) and are answered as indices into that list.
+;;   ANSWER.    `op-word-lang` (the language the engine read a word in, as a request names it), `op-osd-script` (the OSD's script
+;;              name as ISO 15924), `op-block-type` (the engine's block type as the line's `bt`), and `ox-flat`, the flat integer
+;;              form a host that cannot call the builders (the browser's JS) writes, turned into the answer record.
+;;
+;; A host reads a request's cells through `op-lang-first` and the like, never by literal offset (D740 item 5).
+;;
+;; THE NAME TABLES are one flat stream of rows `kind name... 0 value`, because kin has no string compare: `kind` 1 a model's script
+;; (a model with no row reads Latin), 2 an OSD script name's ISO 15924 code, 3 a model's request name (`chi_sim` is `chs`). Every
+;; value is a four-letter code packed big-endian into one cell, the way a request's languages and an answer's `lang` and `script`
+;; are (`sc`, whose codes ARE the packed letters). A law checks the table against the enum.
+(ns emon.ocrport
+  (:require [emon.lang :refer [I32 Cells Text defenum]]
+            [emon.port :refer [cells-len cells-at cells-push]]
+            [emon.plan :refer [view-base rq-arg an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.ocr :refer [bt-text bt-table bt-image bt-line bt-other
+                              ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ox-alt ox-alt-cp]]
+            [kin.lang :refer [defn defdata return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+;; ISO 15924: the code of a row IS the four letters packed big-endian ("Latn" = 'L' 'a' 't' 'n'), as a cell carries them.
+(defenum ^:pub sc
+  [[sc-latn 1281455214 "Latn"]
+   [sc-latf 1281455206 "Latf"]
+   [sc-cyrl 1132032620 "Cyrl"]
+   [sc-grek 1198679403 "Grek"]
+   [sc-arab 1098015074 "Arab"]
+   [sc-hebr 1214603890 "Hebr"]
+   [sc-deva 1147500129 "Deva"]
+   [sc-hani 1214344809 "Hani"]
+   [sc-hang 1214344807 "Hang"]
+   [sc-jpan 1248878958 "Jpan"]
+   [sc-thai 1416126825 "Thai"]
+   [sc-beng 1113943655 "Beng"]
+   [sc-taml 1415671148 "Taml"]
+   [sc-telu 1415933045 "Telu"]
+   [sc-knda 1265525857 "Knda"]
+   [sc-mlym 1298954605 "Mlym"]
+   [sc-gujr 1198877298 "Gujr"]
+   [sc-guru 1198879349 "Guru"]
+   [sc-orya 1332902241 "Orya"]
+   [sc-sinh 1399418472 "Sinh"]
+   [sc-khmr 1265134962 "Khmr"]
+   [sc-laoo 1281453935 "Laoo"]
+   [sc-mymr 1299803506 "Mymr"]
+   [sc-tibt 1416192628 "Tibt"]
+   [sc-geor 1197830002 "Geor"]
+   [sc-armn 1098018158 "Armn"]
+   [sc-ethi 1165256809 "Ethi"]
+   [sc-syrc 1400468067 "Syrc"]
+   [sc-thaa 1416126817 "Thaa"]
+   [sc-cher 1130915186 "Cher"]
+   [sc-cans 1130458739 "Cans"]])
+
+;; The request names of the two Chinese models, packed (their languages are `chs` and `cht`).
+(defenum ^:pub zh
+  [[zh-chs 1667789568 "chs"]
+   [zh-cht 1667789824 "cht"]])
+
+;; Tesseract's PolyBlockType, as the C API numbers it (`TessPageIteratorBlockType`).
+(defenum ^:pub pb
+  [[pb-unknown 0 "unknown"]
+   [pb-flowing-text 1 "flowing-text"]
+   [pb-heading-text 2 "heading-text"]
+   [pb-pullout-text 3 "pullout-text"]
+   [pb-equation 4 "equation"]
+   [pb-inline-equation 5 "inline-equation"]
+   [pb-table 6 "table"]
+   [pb-vertical-text 7 "vertical-text"]
+   [pb-caption-text 8 "caption-text"]
+   [pb-flowing-image 9 "flowing-image"]
+   [pb-heading-image 10 "heading-image"]
+   [pb-pullout-image 11 "pullout-image"]
+   [pb-horz-line 12 "horz-line"]
+   [pb-vert-line 13 "vert-line"]
+   [pb-noise 14 "noise"]])
+
+;; Rows `kind name... 0 value`; see the head of this file. The names are ASCII code points, the comment says which.
+(defdata ^:pub op-names
+  :emitter kin.lang/flat-array
+  :data [1 97 114 97 0 1098015074                         ;; ara reads Arab
+         1 102 97 115 0 1098015074                        ;; fas
+         1 117 114 100 0 1098015074                       ;; urd
+         1 112 117 115 0 1098015074                       ;; pus
+         1 117 105 103 0 1098015074                       ;; uig
+         1 115 110 100 0 1098015074                       ;; snd
+         1 107 117 114 95 97 114 97 0 1098015074          ;; kur_ara
+         1 65 114 97 98 105 99 0 1098015074               ;; Arabic (Tesseract's script model)
+         1 104 101 98 0 1214603890                        ;; heb reads Hebr
+         1 121 105 100 0 1214603890                       ;; yid
+         1 72 101 98 114 101 119 0 1214603890             ;; Hebrew
+         1 114 117 115 0 1132032620                       ;; rus reads Cyrl
+         1 117 107 114 0 1132032620                       ;; ukr
+         1 98 117 108 0 1132032620                        ;; bul
+         1 115 114 112 0 1132032620                       ;; srp
+         1 98 101 108 0 1132032620                        ;; bel
+         1 109 107 100 0 1132032620                       ;; mkd
+         1 107 97 122 0 1132032620                        ;; kaz
+         1 107 105 114 0 1132032620                       ;; kir
+         1 109 111 110 0 1132032620                       ;; mon
+         1 116 103 107 0 1132032620                       ;; tgk
+         1 67 121 114 105 108 108 105 99 0 1132032620     ;; Cyrillic
+         1 101 108 108 0 1198679403                       ;; ell reads Grek
+         1 103 114 99 0 1198679403                        ;; grc
+         1 71 114 101 101 107 0 1198679403                ;; Greek
+         1 104 105 110 0 1147500129                       ;; hin reads Deva
+         1 109 97 114 0 1147500129                        ;; mar
+         1 110 101 112 0 1147500129                       ;; nep
+         1 115 97 110 0 1147500129                        ;; san
+         1 68 101 118 97 110 97 103 97 114 105 0 1147500129 ;; Devanagari
+         1 99 104 105 95 115 105 109 0 1214344809         ;; chi_sim reads Hani
+         1 99 104 105 95 116 114 97 0 1214344809          ;; chi_tra
+         1 72 97 110 0 1214344809                         ;; Han
+         1 106 112 110 0 1248878958                       ;; jpn reads Jpan
+         1 74 97 112 97 110 101 115 101 0 1248878958      ;; Japanese
+         1 107 111 114 0 1214344807                       ;; kor reads Hang
+         1 107 111 114 95 118 101 114 116 0 1214344807    ;; kor_vert
+         1 72 97 110 103 117 108 0 1214344807             ;; Hangul
+         1 116 104 97 0 1416126825                        ;; tha reads Thai
+         1 84 104 97 105 0 1416126825                     ;; Thai
+         2 76 97 116 105 110 0 1281455214                 ;; OSD Latin is Latn
+         2 86 105 101 116 110 97 109 101 115 101 0 1281455214 ;; Vietnamese
+         2 70 114 97 107 116 117 114 0 1281455206         ;; Fraktur is Latf
+         2 67 121 114 105 108 108 105 99 0 1132032620     ;; Cyrillic is Cyrl
+         2 71 114 101 101 107 0 1198679403                ;; Greek is Grek
+         2 65 114 97 98 105 99 0 1098015074               ;; Arabic is Arab
+         2 72 101 98 114 101 119 0 1214603890             ;; Hebrew is Hebr
+         2 68 101 118 97 110 97 103 97 114 105 0 1147500129 ;; Devanagari is Deva
+         2 72 97 110 0 1214344809                         ;; Han is Hani
+         2 72 97 110 103 117 108 0 1214344807             ;; Hangul is Hang
+         2 74 97 112 97 110 101 115 101 0 1248878958      ;; Japanese is Jpan
+         2 84 104 97 105 0 1416126825                     ;; Thai is Thai
+         2 66 101 110 103 97 108 105 0 1113943655         ;; Bengali is Beng
+         2 84 97 109 105 108 0 1415671148                 ;; Tamil is Taml
+         2 84 101 108 117 103 117 0 1415933045            ;; Telugu is Telu
+         2 75 97 110 110 97 100 97 0 1265525857           ;; Kannada is Knda
+         2 77 97 108 97 121 97 108 97 109 0 1298954605    ;; Malayalam is Mlym
+         2 71 117 106 97 114 97 116 105 0 1198877298      ;; Gujarati is Gujr
+         2 71 117 114 109 117 107 104 105 0 1198879349    ;; Gurmukhi is Guru
+         2 79 114 105 121 97 0 1332902241                 ;; Oriya is Orya
+         2 83 105 110 104 97 108 97 0 1399418472          ;; Sinhala is Sinh
+         2 75 104 109 101 114 0 1265134962                ;; Khmer is Khmr
+         2 76 97 111 0 1281453935                         ;; Lao is Laoo
+         2 77 121 97 110 109 97 114 0 1299803506          ;; Myanmar is Mymr
+         2 84 105 98 101 116 97 110 0 1416192628          ;; Tibetan is Tibt
+         2 71 101 111 114 103 105 97 110 0 1197830002     ;; Georgian is Geor
+         2 65 114 109 101 110 105 97 110 0 1098018158     ;; Armenian is Armn
+         2 69 116 104 105 111 112 105 99 0 1165256809     ;; Ethiopic is Ethi
+         2 83 121 114 105 97 99 0 1400468067              ;; Syriac is Syrc
+         2 84 104 97 97 110 97 0 1416126817               ;; Thaana is Thaa
+         2 67 104 101 114 111 107 101 101 0 1130915186    ;; Cherokee is Cher
+         2 67 97 110 97 100 105 97 110 95 65 98 111 114 105 103 105 110 97 108 0 1130458739 ;; Canadian_Aboriginal is Cans
+         3 99 104 105 95 115 105 109 0 1667789568         ;; chi_sim is the request's chs
+         3 99 104 105 95 116 114 97 0 1667789824]         ;; chi_tra is cht
+  :accessors {^I32 op-names-count [^I32 ignored]
+              ^I32 op-names-at [^I32 ignored ^I32 i]})
+
+;; ------------------------------------------------------------------ the request
+
+(defn ^:pub ^I32 op-lang-first [^Cells req]
+  (comment "The argument index of a request's first language: after the pixel hash of a kin-made view (its bitmap id is from")
+  (comment "`view-base`, D196), else straight after the region.")
+  (if (>= (rq-arg req 0 0) (view-base)) (return 9))
+  (return 7))
+
+(defn ^:pub ^I32 op-lang-count [^Cells req]
+  (comment "How many languages the request names (record `req`: `[len kind id arg...]`).")
+  (let [^I32 n (- (- (cells-len req) 3) (op-lang-first req))]
+    (if (< n 0) (return 0))
+    (return n)))
+
+(defn ^:pub ^I32 op-lang-at [^Cells req ^I32 i]
+  (comment "Language `i` of the request: up to four ASCII chars packed big-endian.")
+  (let [^I32 k (+ (op-lang-first req) i)]
+    (return (rq-arg req 0 k))))
+
+(defn ^:pub ^I32 op-pack-cells [^Cells s]
+  (comment "The first four code points of `s` packed big-endian into one cell (ASCII; anything else is cut to 7 bits).")
+  (let [^I32 n (cells-len s)
+        ^:mut ^I32 v 0
+        ^:mut ^I32 i 0]
+    (while (< i 4)
+      (do (set v (* v 256))
+          (if (< i n) (set v (+ v (rem (cells-at s i) 128))))
+          (set i (+ i 1))))
+    (return v)))
+
+(defn ^:pub ^I32 op-find [^I32 kind ^Cells s ^I32 from ^I32 to]
+  (comment "The value of the row of `kind` in the name table whose name is the code points `s[from, to)`, or 0 for none.")
+  (let [^I32 n (op-names-count 0)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 same 0]
+    (while (< i n)
+      (do (set j (+ i 1))
+          (set q from)
+          (set same 0)
+          (if (== (op-names-at 0 i) kind) (set same 1))
+          (while (!= (op-names-at 0 j) 0)
+            (do (if (>= q to) (set same 0))
+                (if (< q to)
+                  (if (!= (op-names-at 0 j) (cells-at s q)) (set same 0)))
+                (set q (+ q 1))
+                (set j (+ j 1))))
+          (if (!= q to) (set same 0))
+          (if (== same 1) (return (op-names-at 0 (+ j 1))))
+          (set i (+ j 2))))
+    (return 0)))
+
+(defn ^:pub ^I32 op-is-script [^I32 p]
+  (comment "Does the language cell `p` name a SCRIPT (ISO 15924: four letters, the first uppercase) and not a language (P7.S, D215)?")
+  (if (<= p 0) (return 0))
+  (let [^I32 b0 (quot p 16777216)
+        ^I32 b1 (rem (quot p 65536) 256)
+        ^I32 b2 (rem (quot p 256) 256)
+        ^I32 b3 (rem p 256)]
+    (if (< b0 65) (return 0))
+    (if (> b0 90) (return 0))
+    (if (== b1 0) (return 0))
+    (if (== b2 0) (return 0))
+    (if (== b3 0) (return 0))
+    (return 1)))
+
+(defn ^:pub ^I32 op-script-reads [^I32 want ^I32 model]
+  (comment "Does a model of script `model` read a request's script `want`? The ideographs are shared: a `Hani` page may be Chinese")
+  (comment "or Japanese.")
+  (if (== want model) (return 1))
+  (if (and (== want (sc-hani)) (== model (sc-jpan))) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 op-model-script [^Cells s ^I32 from ^I32 to]
+  (comment "The script the model named by `s[from, to)` reads. The Latin scripts are every model with no row.")
+  (let [^I32 v (op-find 1 s from to)]
+    (if (== v 0) (return (sc-latn)))
+    (return v)))
+
+(defn ^:pub ^I32 op-lang-eq [^Cells s ^I32 from ^I32 to ^I32 p]
+  (comment "Is `s[from, to)` exactly the language `p` spells (its non-zero bytes, in order)?")
+  (if (<= p 0) (return 0))
+  (let [^:mut ^I32 d 16777216
+        ^:mut ^I32 k 0
+        ^:mut ^I32 j from
+        ^:mut ^I32 b 0
+        ^:mut ^I32 ok 1]
+    (while (< k 4)
+      (do (set b (rem (quot p d) 256))
+          (if (!= b 0)
+            (do (if (>= j to) (set ok 0))
+                (if (< j to)
+                  (if (!= (cells-at s j) b) (set ok 0)))
+                (set j (+ j 1))))
+          (set d (quot d 256))
+          (set k (+ k 1))))
+    (if (!= j to) (return 0))
+    (return ok)))
+
+(defn ^:pub ^I32 op-lang-matches [^Cells s ^I32 from ^I32 to ^I32 p]
+  (comment "Is the installed model `s[from, to)` the one request language `p` names? `chs` and `cht` are `chi_sim` and `chi_tra`;")
+  (comment "every other language is the model of that name.")
+  (if (or (== p (zh-chs)) (== p (zh-cht)))
+    (do (if (== (op-find 3 s from to) p) (return 1))
+        (return 0)))
+  (return (op-lang-eq s from to p)))
+
+(defn ^:pub ^I32 op-entry-end [^Cells inst ^I32 from]
+  (comment "The end (the 0 separator, or the end of the cells) of the installed model starting at `from`.")
+  (let [^I32 n (cells-len inst)
+        ^:mut ^I32 at from]
+    (while (< at n)
+      (do (if (== (cells-at inst at) 0) (return at))
+          (set at (+ at 1))))
+    (return n)))
+
+(defn ^:pub ^I32 op-entry-count [^Cells inst]
+  (comment "How many installed models the list holds.")
+  (let [^I32 n (cells-len inst)
+        ^:mut ^I32 from 0
+        ^:mut ^I32 cnt 0]
+    (while (< from n)
+      (do (set from (+ (op-entry-end inst from) 1))
+          (set cnt (+ cnt 1))))
+    (return cnt)))
+
+(defn ^:pub ^I32 op-model-index [^Cells inst ^I32 p]
+  (comment "The index of the installed model that request language `p` names, or -1 when none is installed.")
+  (let [^I32 n (op-entry-count inst)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 from 0
+        ^:mut ^I32 to 0]
+    (while (< i n)
+      (do (set to (op-entry-end inst from))
+          (if (== (op-lang-matches inst from to p) 1) (return i))
+          (set from (+ to 1))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 op-has [^Cells out ^I32 base ^I32 v]
+  (let [^I32 n (cells-len out)
+        ^:mut ^I32 i base]
+    (while (< i n)
+      (do (if (== (cells-at out i) v) (return 1))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 op-models [^Cells req ^Cells inst ^:mut ^Cells out]
+  (comment "Which installed models read the request, as indices into `inst` (code-point Cells separated by 0), appended to `out`;")
+  (comment "answers how many. A script (`Cyrl`) is every installed model that reads it, once; a language is its model; a language")
+  (comment "with no model is dropped; none left is EVERY installed model (D038). 0 only when nothing is installed.")
+  (let [^I32 base (cells-len out)
+        ^I32 end (- (cells-len req) 3)
+        ^I32 n (op-entry-count inst)
+        ^:mut ^I32 k (op-lang-first req)
+        ^:mut ^I32 p 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 from 0
+        ^:mut ^I32 to 0]
+    (while (< k end)
+      (do (set p (rq-arg req 0 k))
+          (if (== (op-is-script p) 1)
+            (do (set i 0)
+                (set from 0)
+                (while (< i n)
+                  (do (set to (op-entry-end inst from))
+                      (if (== (op-script-reads p (op-model-script inst from to)) 1)
+                        (if (== (op-has out base i) 0) (cells-push out i)))
+                      (set from (+ to 1))
+                      (set i (+ i 1)))))
+            (do (set i (op-model-index inst p))
+                (if (>= i 0) (cells-push out i))))
+          (set k (+ k 1))))
+    (if (== (cells-len out) base)
+      (do (set i 0)
+          (while (< i n)
+            (do (cells-push out i)
+                (set i (+ i 1))))))
+    (return (- (cells-len out) base))))
+
+(defn ^I32 op-push-model-name [^I32 p ^:mut ^Cells out]
+  (comment "The name of the model request language `p` names, as code points: `chi_sim` for `chs`, else the language itself.")
+  (let [^I32 n (op-names-count 0)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 d 16777216
+        ^:mut ^I32 b 0]
+    (if (or (== p (zh-chs)) (== p (zh-cht)))
+      (do (while (< i n)
+            (do (set j (+ i 1))
+                (while (!= (op-names-at 0 j) 0)
+                  (set j (+ j 1)))
+                (if (== (op-names-at 0 i) 3)
+                  (if (== (op-names-at 0 (+ j 1)) p)
+                    (do (set i (+ i 1))
+                        (while (< i j)
+                          (do (cells-push out (op-names-at 0 i))
+                              (set i (+ i 1))))
+                        (return 0))))
+                (set i (+ j 2))))
+          (return 0)))
+    (if (> p 0)
+      (while (> d 0)
+        (do (set b (rem (quot p d) 256))
+            (if (!= b 0) (cells-push out b))
+            (set d (quot d 256)))))
+    (return 0)))
+
+(defn ^:pub ^I32 op-dropped [^Cells req ^Cells inst ^:mut ^Cells out]
+  (comment "The languages `op-models` dropped for want of an installed model, appended to `out` as the model's name: code points then")
+  (comment "a 0, each. Answers how many. (A host's note, nothing more.)")
+  (let [^I32 end (- (cells-len req) 3)
+        ^:mut ^I32 k (op-lang-first req)
+        ^:mut ^I32 p 0
+        ^:mut ^I32 cnt 0]
+    (while (< k end)
+      (do (set p (rq-arg req 0 k))
+          (if (== (op-is-script p) 0)
+            (if (< (op-model-index inst p) 0)
+              (do (op-push-model-name p out)
+                  (cells-push out 0)
+                  (set cnt (+ cnt 1)))))
+          (set k (+ k 1))))
+    (return cnt)))
+
+;; ------------------------------------------------------------------ the answer
+
+(defn ^:pub ^I32 op-word-lang [^Cells model]
+  (comment "The language the engine read a word in (its model's name), as a request names it: `chi_sim` is `chs`, `chi_tra` `cht`,")
+  (comment "anything else cut to four chars, packed. 0 for none.")
+  (let [^I32 v (op-find 3 model 0 (cells-len model))]
+    (if (!= v 0) (return v))
+    (return (op-pack-cells model))))
+
+(defn ^:pub ^I32 op-osd-script [^Cells name]
+  (comment "The OSD's script name (\"Latin\", \"Canadian_Aboriginal\") as its ISO 15924 code, packed; a name the table lacks is cut to")
+  (comment "four chars. 0 for none.")
+  (let [^I32 v (op-find 2 name 0 (cells-len name))]
+    (if (!= v 0) (return v))
+    (return (op-pack-cells name))))
+
+(defn ^:pub ^I32 op-block-type [^I32 poly]
+  (comment "A line's `bt` (SPEC 7.2) from Tesseract's PolyBlockType.")
+  (if (== poly (pb-flowing-text)) (return (bt-text)))
+  (if (== poly (pb-heading-text)) (return (bt-text)))
+  (if (== poly (pb-pullout-text)) (return (bt-text)))
+  (if (== poly (pb-vertical-text)) (return (bt-text)))
+  (if (== poly (pb-caption-text)) (return (bt-text)))
+  (if (== poly (pb-table)) (return (bt-table)))
+  (if (== poly (pb-flowing-image)) (return (bt-image)))
+  (if (== poly (pb-heading-image)) (return (bt-image)))
+  (if (== poly (pb-pullout-image)) (return (bt-image)))
+  (if (== poly (pb-horz-line)) (return (bt-line)))
+  (if (== poly (pb-vert-line)) (return (bt-line)))
+  (return (bt-other)))
+
+;; ---------------------------------------------------------------- the flat form
+;;
+;; What a host with no access to the builders writes (the browser's JS adapter, through `emon_answer_ocr`): all cells.
+;;   header  orient wdir tlo deskew osd script sconf oconf nlines nblocks nwords has_binary bw bh      (14)
+;;   lines   x y w h  bx1 by1 bx2 by2  block par btype  rowa rowb rowc                                 (14, nlines times)
+;;   blocks  x y w h  orient wdir tlo                                                                   (7, nblocks times)
+;;   words   x y w h conf line block flags lang psize dflags  ntext cp...  nsyms  syms...               (nwords times)
+;;   sym     x y w h conf  ncp cp...  nalts  (conf ncp cp...)...
+;; `ox-flat` answers 0 and the record in `c`, or -1 for a form whose counts run past its cells or are negative.
+
+(defn ^:pub ^I32 ox-flat-word-end [^Cells v ^I32 at]
+  (comment "The start of the word after the flat-form word at `at`, or -1 when its counts run past the form.")
+  (let [^I32 total (cells-len v)
+        ^:mut ^I32 p at
+        ^:mut ^I32 n 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0]
+    (if (> (+ p 12) total) (return -1))
+    (set n (cells-at v (+ p 11)))
+    (if (< n 0) (return -1))
+    (if (> n (- total (+ p 12))) (return -1))
+    (set p (+ (+ p 12) n))
+    (if (>= p total) (return -1))
+    (set n (cells-at v p))
+    (set p (+ p 1))
+    (if (< n 0) (return -1))
+    (while (< i n)
+      (do (if (> (+ p 6) total) (return -1))
+          (set m (cells-at v (+ p 5)))
+          (if (< m 0) (return -1))
+          (if (> m (- total (+ p 6))) (return -1))
+          (set p (+ (+ p 6) m))
+          (if (>= p total) (return -1))
+          (set m (cells-at v p))
+          (set p (+ p 1))
+          (if (< m 0) (return -1))
+          (set j 0)
+          (while (< j m)
+            (do (if (> (+ p 2) total) (return -1))
+                (if (< (cells-at v (+ p 1)) 0) (return -1))
+                (if (> (cells-at v (+ p 1)) (- total (+ p 2))) (return -1))
+                (set p (+ (+ p 2) (cells-at v (+ p 1))))
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (return p)))
+
+(defn ^I32 ox-flat-put-sym [^:mut ^Cells c ^I32 wx ^Cells v ^I32 q]
+  (comment "One validated flat-form symbol at `q` into the word `wx`; answers where the next one starts.")
+  (let [^I32 sx (ox-sym c wx (cells-at v q) (cells-at v (+ q 1)) (cells-at v (+ q 2)) (cells-at v (+ q 3)) (cells-at v (+ q 4)))
+        ^I32 ncp (cells-at v (+ q 5))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 r (+ (+ q 6) ncp)
+        ^:mut ^I32 na 0
+        ^:mut ^I32 a 0
+        ^:mut ^I32 ax 0
+        ^:mut ^I32 nac 0]
+    (while (< k ncp)
+      (do (ox-sym-cp c sx (cells-at v (+ (+ q 6) k)))
+          (set k (+ k 1))))
+    (set na (cells-at v r))
+    (set r (+ r 1))
+    (while (< a na)
+      (do (set ax (ox-alt c sx (cells-at v r)))
+          (set nac (cells-at v (+ r 1)))
+          (set k 0)
+          (while (< k nac)
+            (do (ox-alt-cp c ax (cells-at v (+ (+ r 2) k)))
+                (set k (+ k 1))))
+          (set r (+ (+ r 2) nac))
+          (set a (+ a 1))))
+    (return r)))
+
+(defn ^I32 ox-flat-put-ext [^:mut ^Cells c ^Cells v ^I32 p]
+  (comment "The extension of one validated flat-form word at `p`: its flags, language, size, and its symbols.")
+  (let [^I32 wx (ox-word c (cells-at v (+ p 7)) (cells-at v (+ p 8)) (cells-at v (+ p 9)) (cells-at v (+ p 10)))
+        ^:mut ^I32 q (+ (+ p 12) (cells-at v (+ p 11)))
+        ^I32 ns (cells-at v q)
+        ^:mut ^I32 i 0]
+    (set q (+ q 1))
+    (while (< i ns)
+      (do (set q (ox-flat-put-sym c wx v q))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ox-flat-put-word [^:mut ^Cells c ^I32 at ^Cells v ^I32 p]
+  (comment "One validated flat-form word at `p`: its box, confidence and text, into the answer begun at `at`.")
+  (let [^I32 wd (an-ocr-word c at (cells-at v p) (cells-at v (+ p 1)) (cells-at v (+ p 2)) (cells-at v (+ p 3))
+                             (cells-at v (+ p 4)) (cells-at v (+ p 5)) (cells-at v (+ p 6)))
+        ^I32 nt (cells-at v (+ p 11))
+        ^:mut ^I32 k 0]
+    (while (< k nt)
+      (do (an-ocr-cp c wd (cells-at v (+ (+ p 12) k)))
+          (set k (+ k 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 ox-flat [^Cells v ^I32 id ^:mut ^Cells c]
+  (comment "The OCR answer record for request `id`, written into `c`, from the flat form `v`: the words, then the extension through")
+  (comment "the builders, so the layout is written once. 0 for success, -1 for a malformed form (nothing is written then).")
+  (let [^I32 total (cells-len v)
+        ^:mut ^I32 nlines 0
+        ^:mut ^I32 nblocks 0
+        ^:mut ^I32 nwords 0
+        ^:mut ^I32 w0 0
+        ^:mut ^I32 p 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 at 0]
+    (if (< total 14) (return -1))
+    (set nlines (cells-at v 8))
+    (set nblocks (cells-at v 9))
+    (set nwords (cells-at v 10))
+    (if (< nlines 0) (return -1))
+    (if (< nblocks 0) (return -1))
+    (if (< nwords 0) (return -1))
+    (if (> nlines (quot total 14)) (return -1))
+    (if (> nblocks (quot total 7)) (return -1))
+    (if (> nwords total) (return -1))
+    (set w0 (+ (+ 14 (* nlines 14)) (* nblocks 7)))
+    (if (> w0 total) (return -1))
+    (set p w0)
+    (while (< i nwords)
+      (do (set p (ox-flat-word-end v p))
+          (if (< p 0) (return -1))
+          (set i (+ i 1))))
+    (set at (an-ocr c id))
+    (set p w0)
+    (set i 0)
+    (while (< i nwords)
+      (do (ox-flat-put-word c at v p)
+          (set p (ox-flat-word-end v p))
+          (set i (+ i 1))))
+    (ox-begin c (cells-at v 0) (cells-at v 1) (cells-at v 2) (cells-at v 3) (cells-at v 4) (cells-at v 5) (cells-at v 6) (cells-at v 7)
+              nlines nblocks (cells-at v 11) (cells-at v 12) (cells-at v 13))
+    (set p 14)
+    (set i 0)
+    (while (< i nlines)
+      (do (ox-line c (cells-at v p) (cells-at v (+ p 1)) (cells-at v (+ p 2)) (cells-at v (+ p 3))
+                   (cells-at v (+ p 4)) (cells-at v (+ p 5)) (cells-at v (+ p 6)) (cells-at v (+ p 7))
+                   (cells-at v (+ p 8)) (cells-at v (+ p 9)) (cells-at v (+ p 10)) (cells-at v (+ p 11))
+                   (cells-at v (+ p 12)) (cells-at v (+ p 13)))
+          (set p (+ p 14))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nblocks)
+      (do (ox-block c (cells-at v p) (cells-at v (+ p 1)) (cells-at v (+ p 2)) (cells-at v (+ p 3))
+                    (cells-at v (+ p 4)) (cells-at v (+ p 5)) (cells-at v (+ p 6)))
+          (set p (+ p 7))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nwords)
+      (do (ox-flat-put-ext c v p)
+          (set p (ox-flat-word-end v p))
+          (set i (+ i 1))))
+    (an-ocr-end c at)
+    (return 0)))

@@ -28,6 +28,38 @@ export class Wasm {
     return new Wasm((await WebAssembly.instantiate(src, {})).instance);
   }
 
+  // THE OCR POLICY IS KIN'S (`emon.ocrport`, P10.7, D740): these ask the module what an `ocr` request means.
+  /** The argument index of the request record's first language. */
+  ocrLangFirst(rec) {
+    return this.withBytes(new Uint8Array(Int32Array.from(rec).buffer), (p) => this.x.emon_ocr_lang_first(p, rec.length));
+  }
+
+  /** Which of the `installed` model names read the request record: indices into `installed` (all of them when it names none). */
+  ocrModels(rec, installed) {
+    const names = [];
+    installed.forEach((s, i) => {
+      if (i) names.push(0);
+      for (const ch of s) names.push(ch.codePointAt(0));
+    });
+    const n = this.withBytes(new Uint8Array(Int32Array.from(rec).buffer), (p) =>
+      this.withBytes(new Uint8Array(Int32Array.from(names).buffer), (ip) => this.x.emon_ocr_models(p, rec.length, ip, names.length)),
+    );
+    const out = this.outI32();
+    this.outFree();
+    return n < 0 ? [] : Array.from(out);
+  }
+
+  /** The language a model read a word in, as a request packs it. */
+  ocrWordLang(model) {
+    const cps = Int32Array.from(Array.from(model, (c) => c.codePointAt(0)));
+    return this.withBytes(new Uint8Array(cps.buffer), (p) => this.x.emon_ocr_word_lang(p, cps.length));
+  }
+
+  /** A line's type (0 text, 1 table, 2 image, 3 rule, 4 other) from Tesseract's PolyBlockType. */
+  ocrBlockType(poly) {
+    return this.x.emon_ocr_block_type(poly | 0);
+  }
+
   get mem() {
     return new Uint8Array(this.x.memory.buffer);
   }

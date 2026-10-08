@@ -77,6 +77,7 @@ import (
 	"unsafe"
 
 	"emon/ocr"
+	"emon/ocrport"
 	"emon/plan"
 	"emon/port"
 )
@@ -110,167 +111,18 @@ func takeText(p *C.char) string {
 	return s
 }
 
-// pack4 packs up to four ASCII chars big-endian into one cell (a request's languages, kin's `rq-ocr-lang`).
-func pack4(s string) int32 {
-	var v uint32
-	for i := 0; i < 4; i++ {
-		v *= 256
-		if i < len(s) {
-			v += uint32(s[i])
-		}
-	}
-	return int32(v)
-}
-
-func unpack4(v int32) string {
-	u := uint32(v)
-	var b []byte
-	for i := 0; i < 4; i++ {
-		if c := byte(u >> (24 - 8*uint(i))); c != 0 {
-			b = append(b, c)
-		}
-	}
-	return string(b)
-}
-
-// modelName is a request's language (ISO 639-3, `chs` and `cht` for Chinese by script) as Tesseract names its model.
-func modelName(lang string) string {
-	switch lang {
-	case "chs":
-		return "chi_sim"
-	case "cht":
-		return "chi_tra"
-	}
-	return lang
-}
-
-// modelScript is the script an installed model reads (ISO 15924). The Latin scripts are every language not listed here, and Tesseract's own
-// script models ("Latin"...).
-func modelScript(m string) string {
-	switch m {
-	case "ara", "fas", "urd", "pus", "uig", "snd", "kur_ara", "Arabic":
-		return "Arab"
-	case "heb", "yid", "Hebrew":
-		return "Hebr"
-	case "rus", "ukr", "bul", "srp", "bel", "mkd", "kaz", "kir", "mon", "tgk", "Cyrillic":
-		return "Cyrl"
-	case "ell", "grc", "Greek":
-		return "Grek"
-	case "hin", "mar", "nep", "san", "Devanagari":
-		return "Deva"
-	case "chi_sim", "chi_tra", "Han":
-		return "Hani"
-	case "jpn", "Japanese":
-		return "Jpan"
-	case "kor", "kor_vert", "Hangul":
-		return "Hang"
-	case "tha", "Thai":
-		return "Thai"
-	}
-	return "Latn"
-}
-
-// scriptReads: does a model of script `model` read a request's script `want`? The ideographs are shared: a `Hani` page may be Chinese or Japanese.
-func scriptReads(want, model string) bool {
-	return want == model || (want == "Hani" && model == "Jpan")
-}
-
-func contains(xs []string, x string) bool {
-	for _, y := range xs {
-		if y == x {
-			return true
-		}
-	}
-	return false
-}
-
-// requestName is the language Tesseract recognised a word in, back to what a request calls it.
-func requestName(model string) string {
-	switch model {
-	case "chi_sim":
-		return "chs"
-	case "chi_tra":
-		return "cht"
-	}
-	if len(model) > 4 {
-		return model[:4]
-	}
-	return model
-}
-
-// iso15924 names a script as its four letter code: OSD names them in words ("Latin", "Canadian_Aboriginal").
-func iso15924(name string) string {
-	switch name {
-	case "Latin", "Vietnamese":
-		return "Latn"
-	case "Fraktur":
-		return "Latf"
-	case "Cyrillic":
-		return "Cyrl"
-	case "Greek":
-		return "Grek"
-	case "Arabic":
-		return "Arab"
-	case "Hebrew":
-		return "Hebr"
-	case "Devanagari":
-		return "Deva"
-	case "Han":
-		return "Hani"
-	case "Hangul":
-		return "Hang"
-	case "Japanese":
-		return "Jpan"
-	case "Thai":
-		return "Thai"
-	case "Bengali":
-		return "Beng"
-	case "Tamil":
-		return "Taml"
-	case "Telugu":
-		return "Telu"
-	case "Kannada":
-		return "Knda"
-	case "Malayalam":
-		return "Mlym"
-	case "Gujarati":
-		return "Gujr"
-	case "Gurmukhi":
-		return "Guru"
-	case "Oriya":
-		return "Orya"
-	case "Sinhala":
-		return "Sinh"
-	case "Khmer":
-		return "Khmr"
-	case "Lao":
-		return "Laoo"
-	case "Myanmar":
-		return "Mymr"
-	case "Tibetan":
-		return "Tibt"
-	case "Georgian":
-		return "Geor"
-	case "Armenian":
-		return "Armn"
-	case "Ethiopic":
-		return "Ethi"
-	case "Syriac":
-		return "Syrc"
-	case "Thaana":
-		return "Thaa"
-	case "Cherokee":
-		return "Cher"
-	case "Canadian_Aboriginal":
-		return "Cans"
-	}
-	if len(name) > 4 {
-		return name[:4]
-	}
-	return name
-}
-
+// WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrport`, P10.7, D740): which installed models read
+// the request's languages and scripts, a model's name as a request spells it, the OSD's script as ISO 15924, a block's type. This
+// file passes it cells and takes cells.
 func x10(f float32) int32 { return int32(math.Round(float64(f) * 10)) }
+
+func cellsOf(v []int32) *port.Cells {
+	c := port.NewCells()
+	for _, x := range v {
+		port.CellsPush(c, x)
+	}
+	return c
+}
 
 func cps(s string) []int32 {
 	var out []int32
@@ -431,38 +283,36 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 	wantSyms := flags&1 != 0
 	rx, ry, rw, rh := req.Arg(3), req.Arg(4), req.Arg(5), req.Arg(6)
 	installed := t.installed()
-	have := map[string]bool{}
-	for _, l := range installed {
-		have[l] = true
+	// which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, none left is
+	// every model); the models go in as code points separated by 0
+	reqc := cellsOf(req.Rec)
+	inst := port.NewCells()
+	for i, m := range installed {
+		if i > 0 {
+			port.CellsPush(inst, 0)
+		}
+		for _, r := range m {
+			port.CellsPush(inst, int32(r))
+		}
+	}
+	picked := port.NewCells()
+	ocrport.OpModels(reqc, inst, picked)
+	gone := port.NewCells()
+	ocrport.OpDropped(reqc, inst, gone)
+	var dropped []rune
+	for i := int32(0); i < port.CellsLen(gone); i++ {
+		if cp := port.CellsAt(gone, i); cp == 0 {
+			t.notes = append(t.notes, "no model for "+string(dropped)+": dropped")
+			dropped = nil
+		} else {
+			dropped = append(dropped, rune(cp))
+		}
 	}
 	var langs []string
-	// the languages follow `h`, and the pixel hash of a kin-made view (D196: its id is from KIN_VIEW_BASE, 2^24)
-	firstLang := 7
-	if req.Arg(0) >= 16777216 {
-		firstLang = 9
+	for i := int32(0); i < port.CellsLen(picked); i++ {
+		langs = append(langs, installed[port.CellsAt(picked, i)])
 	}
-	for k := firstLang; k < len(req.Rec)-3; k++ {
-		name := unpack4(req.Arg(k))
-		// a language cell that starts with an uppercase letter names a SCRIPT (ISO 15924: `Latn`; P7.S, D215): the installed models that read it
-		if len(name) == 4 && name[0] >= 'A' && name[0] <= 'Z' {
-			for _, l := range installed {
-				if scriptReads(name, modelScript(l)) && !contains(langs, l) {
-					langs = append(langs, l)
-				}
-			}
-			continue
-		}
-		m := modelName(name)
-		if have[m] {
-			langs = append(langs, m)
-		} else {
-			t.notes = append(t.notes, "no model for "+m+": dropped")
-		}
-	}
-	lang := strings.Join(installed, "+")
-	if len(langs) > 0 {
-		lang = strings.Join(langs, "+")
-	}
+	lang := strings.Join(langs, "+")
 	if lang == "" {
 		return failed(2)
 	}
@@ -514,7 +364,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 			osd = int32(deg)
 			oconf = x10(float32(oc))
 			sconf = x10(float32(sc))
-			script = pack4(iso15924(C.GoString(sn)))
+			script = ocrport.OpOsdScript(cellsOf(cps(C.GoString(sn))))
 		} else {
 			t.notes = append(t.notes, "osd failed")
 		}
@@ -556,19 +406,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 				C.TessPageIteratorBoundingBox(pi, rilTextline, &l, &tp, &r, &bt)
 				var x1, y1, x2, y2 C.int
 				C.TessPageIteratorBaseline(pi, rilTextline, &x1, &y1, &x2, &y2)
-				var btype int32
-				switch C.TessPageIteratorBlockType(pi) {
-				case 1, 2, 3, 7, 8:
-					btype = 0
-				case 6:
-					btype = 1
-				case 9, 10, 11:
-					btype = 2
-				case 12, 13:
-					btype = 3
-				default:
-					btype = 4
-				}
+				btype := ocrport.OpBlockType(int32(C.TessPageIteratorBlockType(pi)))
 				lines = append(lines, tessLine{bx: [4]int32{int32(l), int32(tp), int32(r - l), int32(bt - tp)}, base: [4]int32{int32(x1), int32(y1), int32(x2), int32(y2)},
 					block: block, par: par, btype: btype})
 			}
@@ -597,7 +435,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 					block:  block,
 					text:   cps(text),
 					flags:  fl,
-					lang:   pack4(requestName(C.GoString(C.TessResultIteratorWordRecognitionLanguage(it)))),
+					lang:   ocrport.OpWordLang(cellsOf(cps(C.GoString(C.TessResultIteratorWordRecognitionLanguage(it))))),
 					psize:  psize,
 					dflags: dfl,
 				}
