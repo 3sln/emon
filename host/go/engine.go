@@ -35,28 +35,14 @@ import (
 	"time"
 
 	"emon/asset"
-	"emon/columns"
-	"emon/evidence"
+	"emon/enctx"
+	"emon/engine"
 	"emon/figclass"
-	"emon/furniture"
 	"emon/gfuse"
-	"emon/tagtable"
-	"emon/initial"
-	"emon/inline"
-	"emon/lists"
-	"emon/notes"
-	"emon/restruct"
-	"emon/sealmark"
-	"emon/heading"
 	"emon/html"
+	"emon/inline"
 	"emon/model"
 	"emon/pageunit"
-	"emon/rasterplan"
-	"emon/arbiter"
-	"emon/health"
-	"emon/player"
-	"emon/para"
-	"emon/table"
 	"emon/pdfannot"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
@@ -66,7 +52,6 @@ import (
 	"emon/plan"
 	"emon/port"
 	"emon/rasterin"
-	"emon/scan"
 	"emon/tlhealth"
 )
 
@@ -893,18 +878,6 @@ type rstep struct {
 	raster *rasterDoc
 }
 
-// evArenas are the evidence arenas the OCR stages fill (SPEC 8.4.6: the arenas `emon.scan` writes and `EvEmit` dumps). A PDF's
-// text layer fills `gl`, `mk`, `fnt` and the word and line arenas; an image's OCR fills the `o*` ones and the same word and
-// line arenas (D213), so the rest are empty and only dumped.
-type evArenas struct {
-	epages, views, pts, refs, feats, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tlines *port.Cells
-}
-
-func newEvArenas() *evArenas {
-	e := newCellsN(18)
-	return &evArenas{e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8], e[9], e[10], e[11], e[12], e[13], e[14], e[15], e[16], e[17]}
-}
-
 // localeCells is the locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
 func localeCells(opts Options) *port.Cells {
 	c := port.NewCells()
@@ -914,26 +887,14 @@ func localeCells(opts Options) *port.Cells {
 	return c
 }
 
-// evidenceDump is the evidence dump of a conversion: `ev` is what the OCR stages made, the rest the text layer's.
-func evidenceDump(ev *evArenas, et, gl, wd, ln, mk, fnt, grl, gfl, ggp, grg *port.Cells) string {
-	var sb strings.Builder
-	if port.CellsLen(grl) == 0 && port.CellsLen(gfl) == 0 {
-		evidence.EvEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines)
-	} else {
-		// P5.5a (D270): a document with fused graphics dumps version "2", the evidence's arrays then grl gfl ggp grg (the rest of the layer joins with P7.3)
-		player.PlEmitGfx(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines, grl, gfl, ggp, grg)
-	}
-	return sb.String()
-}
-
 // attemptRaster is ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF. An image's pages
 // are made by kin's `RsUnit` (decode, then OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213):
 // the stages below are `attempt`'s, in its order, with the glyph-fed ones given empty arenas.
 func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int32, opts Options, intakeOnly bool, n uint64) rstep {
 	m := newArenas()
-	model.ModelInit(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout)
+	model.ModelInit(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, m.Ledger, m.Layout)
 	mask := port.NewCells()
-	status := rasterin.RsDoc(view, int32(idx), format, answers, rq, m.nodes, m.attrs, m.text, m.pages, mask)
+	status := rasterin.RsDoc(view, int32(idx), format, answers, rq, m.Nodes, m.Attrs, m.Text, m.Pages, mask)
 	if view.Missed() {
 		return rstep{miss: true}
 	}
@@ -958,181 +919,98 @@ func attemptRaster(view *port.Src, answers, rq *port.Cells, idx int, format int3
 	case rasterin.RsJpeg():
 		name = "jpeg"
 	}
-	info := Intake{Format: name, Pages: int(max(model.PageCount(m.pages), 0)), Bytes: n}
+	info := Intake{Format: name, Pages: int(max(model.PageCount(m.Pages), 0)), Bytes: n}
 	if intakeOnly {
 		return rstep{out: outcome{intake: &info}}
 	}
-	x := newCellsN(3)
-	return rstep{raster: &rasterDoc{m: m, ev: newEvArenas(), et: x[0], wd: x[1], ln: x[2], mask: mask, loc: localeCells(opts), info: info}}
+	doc := enctx.NewDoc()
+	doc.Mask = mask
+	doc.Loc = localeCells(opts)
+	return rstep{raster: &rasterDoc{m: m, ev: enctx.NewEvArenas(), doc: doc, info: info}}
 }
 
-// rasterDoc is what the raster document pass leaves for its page units and the document unit (P7.U).
+// rasterDoc is what the raster document pass leaves for its page units and the document unit (P7.U): kin's contexts (`emon.enctx`).
 type rasterDoc struct {
-	m              *arenas
-	ev             *evArenas
-	et, wd, ln     *port.Cells
-	mask, loc      *port.Cells
-	info           Intake
+	m    *arenas
+	ev   *enctx.EvArenas
+	doc  *enctx.Doc
+	info Intake
 }
 
 // unitRaster is one frame's page unit (P7.U): its own requests and answers; it writes nothing until its answers are in.
 func unitRaster(d *rasterDoc, f, idx int, n uint64, opts Options, answers, rq *port.Cells, bms *port.BitmapSet) int32 {
 	scr := port.NewCells()
-	return rasterin.RsPage(int32(f), int32(idx), int32(n), opts.Ocr.code(), answers, rq, d.loc, bms, d.mask,
-		d.ev.epages, d.ev.views, d.et, d.ev.feats, d.ev.images, d.ev.oruns, d.ev.oblocks, d.ev.olines, d.ev.owords, d.ev.osyms, d.ev.oalts, d.wd, d.ln, scr)
+	return rasterin.RsPage(int32(f), int32(idx), int32(n), opts.Ocr.code(), answers, rq, d.doc.Loc, bms, d.doc.Mask,
+		d.ev.Epages, d.ev.Views, d.doc.Et, d.ev.Feats, d.ev.Images, d.ev.Oruns, d.ev.Oblocks, d.ev.Olines, d.ev.Owords, d.ev.Osyms, d.ev.Oalts, d.doc.Wd, d.doc.Ln, scr)
 }
 
-// finishRaster is the raster document unit: stage 3 over the frames' OCR lines.
+// finishRaster is the raster document unit: stage 3 over the frames' OCR lines, in kin (`emon.engine`).
 func finishRaster(d *rasterDoc, opts Options) outcome {
-	m, ev, et, wd, ln, mask, info := d.m, d.ev, d.et, d.wd, d.ln, d.mask, d.info
-	g := newCellsN(3)
-	gl, mk, fnt := g[0], g[1], g[2]
-	var evs *string
-	grl, gfl := port.NewCells(), port.NewCells()
-	if opts.KeepEvidence {
-		s := evidenceDump(ev, et, gl, wd, ln, mk, fnt, grl, gfl, port.NewCells(), port.NewCells())
-		evs = &s
+	rfrom := model.AfmTiff()
+	switch d.info.Format {
+	case "png":
+		rfrom = model.AfmPng()
+	case "jpeg":
+		rfrom = model.AfmJpeg()
 	}
-	// the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
-	fwc := newCellsN(2)
-	fw, fl := fwc[0], fwc[1]
-	tlhealth.ThAppend(wd, ln, fw, fl, 0)
-	np := model.PageCount(m.pages)
-	// Running furniture (P4.3), as `attempt` runs it: an image has no catalogue (no Info, no page labels, no tagged tree), so those
-	// arenas are empty and the stage reads the lines and the pages alone.
-	q := newCellsN(5)
-	qtxt, md, lb, ol, ss := q[0], q[1], q[2], q[3], q[4]
-	trust := pdfstruct.TgTrust(ss)
-	fc := newCellsN(10)
-	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
-	furniture.FuFind(fw, fl, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
-	// Tables (P5), as `attempt` finds them: before the paragraphs, from the OCR lines like any others; an image has no vector
-	// paths, so its grl/gfl are empty (the tracer's witnesses are P7.G's) and only the text-based profiles can find one.
-	// (pa stays: the lists stage takes an empty paths arena.)
-	pa := port.NewCells()
-	tb := newCellsN(24)
-	tg := newCellsN(7) // the tagged tables' scratch and verdicts (P5.5, emon.tagtable)
-	table.TbBuild(fw, fl, et, grl, gfl, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages, gl, mk, port.NewCells(), port.NewCells(), ss, port.NewCells(), tg[0], tg[1], tg[2], tg[3], tg[4], tg[5], tg[6])
-	t := newCellsN(5)
-	c := newCellsN(13)
-	// initials (P4.10) on the lines' copy, before the headings read it, exactly as `attempt` does; OCR words have no glyph or
-	// font evidence (`gl`, `fnt` are empty), which the detector reads as no initial
-	ia := newCellsN(3)
-	for _, ch := range opts.Locale {
-		port.CellsPush(ia[0], int32(ch))
+	r := engine.EnFinishRaster(cfgOf(opts), d.doc, d.ev, d.m, enctx.NewScratch())
+	return finished(r, d.doc, d.m, d.info, opts, rfrom)
+}
+
+// finished is what kin's document unit answered (`emon.engine`: 0 built, 1 built with the asset unit still to run, 2 `pl-check`, 3
+// `model-check`, 4 `model-check-assets`).
+func finished(r int32, doc *enctx.Doc, m *arenas, info Intake, opts Options, rfrom int32) outcome {
+	switch r {
+	case 0, 1:
+		var evs *string
+		if opts.KeepEvidence {
+			s := doc.Evidence.String()
+			evs = &s
+		}
+		// `figures` leaves the asset stage to the asset unit (D351): what it needs
+		var pending *pendingAssets
+		if r == 1 {
+			pending = &pendingAssets{doc.Cand, doc.Cbytes, rfrom}
+		}
+		return outcome{built: &built{arenas: m, evidence: evs, intake: info, pending: pending}}
+	case 2:
+		return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("pl-check %d", doc.Fcode)}}
+	case 3:
+		return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", doc.Fcode, doc.Fnode)}}
 	}
-	columns.LcCopy(fl, c[0])
-	initial.InDetect(fw, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
-	h := newCellsN(7)
-	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
-	heading.HdAnalyze(fw, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
-	// notes and lists, then restructuring, exactly as `attempt` runs them: the OCR lines are the text layer's lines
-	l := newCellsN(6)
-	notes.NtAnalyze(fw, c[0], et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
-	lists.LsAnalyze(fw, c[0], et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
-	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
-		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
-	r := newCellsN(10)
-	restruct.RsRun(m.nodes, m.attrs, m.regions, m.text, r[0], r[1], r[2], r[3], r[4], r[5], r[6], m.layout)
-	m.nodes, r[0] = r[0], m.nodes
-	m.attrs, r[1] = r[1], m.attrs
-	m.regions, r[2] = r[2], m.regions
-	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
-	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
-	rasterplan.RpSettings(m.nodes, m.attrs, m.text, opts.OcrScope.code())
+	return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check-assets %d at %d", doc.Fcode, doc.Fnode)}}
+}
+
+// cfgOf is the Options the document unit reads (`emon.enctx`'s `Cfg`).
+func cfgOf(opts Options) *enctx.Cfg {
+	c := enctx.NewCfg()
+	c.Ocr = opts.Ocr.code()
+	c.Scope = opts.OcrScope.code()
+	c.Furn = opts.Furniture.mode()
+	c.Level = opts.Assets.level()
+	c.Dpi = opts.AssetDPI
+	c.Pixels = opts.AssetPixels
+	c.Abyte = opts.AssetBytes
+	c.Tbyte = opts.AssetsBytes
+	c.Sigs = boolInt(opts.AssetSignatures)
+	c.Keep = boolInt(opts.KeepEvidence)
 	if opts.Locale != "" {
-		start := port.CellsLen(m.text)
-		for _, ch := range opts.Locale {
-			model.TextAppendCp(m.text, int32(ch))
-		}
-		model.NodeSetAttrText(m.nodes, m.attrs, 0, model.FkLocale(), start, port.CellsLen(m.text)-start)
+		c.Haveloc = 1
+		c.Lcl = localeCells(opts)
 	}
-	var pending *pendingAssets
-	if opts.Assets != AssetsNone {
-		// a raster input is one picture a page: its own image is the candidate, `part` of which no figure or seal can be at `images`
-		cand, cbytes := port.NewCells(), port.NewBuf()
-		asset.AsPageCands(m.pages, cand)
-		if opts.Assets == AssetsFigures {
-			// the asset unit (D351) cuts a figure from its frame: it needs the format the pixels came from
-			rfrom := model.AfmTiff()
-			switch info.Format {
-			case "png":
-				rfrom = model.AfmPng()
-			case "jpeg":
-				rfrom = model.AfmJpeg()
-			}
-			pending = &pendingAssets{cand, cbytes, rfrom}
-		} else {
-			assetStage(m, cand, cbytes, opts)
-		}
-	}
-	if pending == nil {
-		if o := sealArenas(m, opts); o != nil {
-			return *o
-		}
-	}
-	return outcome{built: &built{arenas: m, evidence: evs, intake: info, pending: pending}}
+	return c
 }
 
-// sealArenas is `model-check`, and `model-check-assets` when `assets` is on, over a finished Model.
+// sealArenas is `model-check`, and `model-check-assets` when `assets` is on, over a finished Model (kin's `EnSeal`).
 func sealArenas(m *arenas, opts Options) *outcome {
-	chk := port.NewCells()
-	if code := model.ModelCheck(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout, chk); code != 0 {
-		return &outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", code, port.CellsAt(chk, 0))}}
-	}
-	return checkAssets(m, chk, opts)
-}
-
-
-
-
-// figuresStage is P8.1's figures (SPEC 10.6), before RsRun (a caption next to one finds it as its object): every output has them, at
-// every level of `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows what P8.1 found).
-func figuresStage(m *arenas, cand, pa, im, fi, grg, grl, fw, fl, et, pg *port.Cells, opts Options) {
-	f := newCellsN(10)
-	fnodes, fattrs, fregions, fnm := f[0], f[1], f[2], f[3]
-	figclass.FcStage(m.nodes, m.attrs, m.regions, m.text, m.pages, fnodes, fattrs, fregions, fnm,
-		pa, im, fi, grg, grl, fw, fl, et, pg, cand, opts.Assets.level(), f[4], f[5], f[6], f[7], f[8], f[9])
-	m.nodes, fnodes = fnodes, m.nodes
-	m.attrs, fattrs = fattrs, m.attrs
-	m.regions, fregions = fregions, m.regions
-}
-
-// assetStage is P3.13's asset stage (SPEC 10.11): the settings on the root, then each figure's and seal's pixels or reason, in
-// node-id order. The candidates `cand` and their bytes `cbytes` were made by the document pass (asset.AsCollect), which is where
-// the input is read.
-func assetStage(m *arenas, cand *port.Cells, cbytes *port.Buf, opts Options) {
-	sigs := boolInt(opts.AssetSignatures)
-	asset.AsSettings(m.nodes, m.attrs, m.text, opts.Assets.level(), opts.AssetDPI, opts.AssetPixels, opts.AssetBytes, opts.AssetsBytes, sigs)
-	bx := newCellsN(1)[0]
-	for i := 0; i < 5; i++ {
-		port.CellsPush(bx, 0)
-	}
-	asset.AsRun(m.nodes, m.attrs, m.regions, cand, cbytes, m.assets, m.uses, m.abytes, opts.AssetBytes, opts.AssetsBytes, sigs, bx)
-}
-
-// assetStageFigures is P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the
-// caller made. It writes the Model's settings and every figure's and seal's asset or reason, and any `crop` or `decode` request it
-// has no answer to into rq (then its results are meaningless: the loop answers and runs it again).
-func assetStageFigures(m *arenas, p *pendingAssets, opts Options, input, nbytes int32, ans, rq *port.Cells, bms *port.BitmapSet) {
-	sigs := boolInt(opts.AssetSignatures)
-	asset.AsSettings(m.nodes, m.attrs, m.text, opts.Assets.level(), opts.AssetDPI, opts.AssetPixels, opts.AssetBytes, opts.AssetsBytes, sigs)
-	s := newCellsN(5)
-	z := port.NewBuf()
-	asset.AsRunFigures(m.nodes, m.attrs, m.regions, m.pages, p.cand, p.cbytes, m.assets, m.uses, m.abytes,
-		opts.AssetBytes, opts.AssetsBytes, sigs, opts.AssetDPI, opts.AssetPixels, input, nbytes, p.rfrom, ans, rq, bms,
-		s[0], z, s[1], s[2], s[3], s[4])
-}
-
-// checkAssets is `model-check-assets` after `model-check`, when `assets` is on.
-func checkAssets(m *arenas, chk *port.Cells, opts Options) *outcome {
-	if opts.Assets == AssetsNone {
+	out := port.NewCells()
+	switch engine.EnSeal(m, port.NewCells(), out, opts.Assets.level()) {
+	case 0:
 		return nil
+	case 1:
+		return &outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check %d at node %d", port.CellsAt(out, 0), port.CellsAt(out, 1))}}
 	}
-	if code := model.ModelCheckAssets(m.nodes, m.attrs, m.assets, m.uses, m.abytes, chk); code != 0 {
-		return &outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check-assets %d at %d", code, port.CellsAt(chk, 0))}}
-	}
-	return nil
+	return &outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("model-check-assets %d at %d", port.CellsAt(out, 0), port.CellsAt(out, 1))}}
 }
 
 func boolInt(b bool) int32 {
@@ -1140,6 +1018,19 @@ func boolInt(b bool) int32 {
 		return 1
 	}
 	return 0
+}
+
+// assetStageFigures is P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the
+// caller made. It writes the Model's settings and every figure's and seal's asset or reason, and any `crop` or `decode` request it
+// has no answer to into rq (then its results are meaningless: the loop answers and runs it again).
+func assetStageFigures(m *arenas, p *pendingAssets, opts Options, input, nbytes int32, ans, rq *port.Cells, bms *port.BitmapSet) {
+	sigs := boolInt(opts.AssetSignatures)
+	asset.AsSettings(m.Nodes, m.Attrs, m.Text, opts.Assets.level(), opts.AssetDPI, opts.AssetPixels, opts.AssetBytes, opts.AssetsBytes, sigs)
+	s := newCellsN(5)
+	z := port.NewBuf()
+	asset.AsRunFigures(m.Nodes, m.Attrs, m.Regions, m.Pages, p.cand, p.cbytes, m.Assets, m.Uses, m.Abytes,
+		opts.AssetBytes, opts.AssetsBytes, sigs, opts.AssetDPI, opts.AssetPixels, input, nbytes, p.rfrom, ans, rq, bms,
+		s[0], z, s[1], s[2], s[3], s[4])
 }
 
 // dispatch is the unit of one input: a PNG, JPEG or TIFF (by kin's sniff) is read by the raster unit, anything
@@ -1314,23 +1205,11 @@ func panicMessage(p any) string {
 	return fmt.Sprint(p)
 }
 
-// arenas are the seven arenas of the Model (SPEC 3.8).
-type arenas struct {
-	nodes, attrs, regions, text, pages, ledger, layout *port.Cells
-	// the asset table, its uses and the encoded bytes (SPEC 10.11): empty unless `assets` is on
-	assets, uses *port.Cells
-	abytes       *port.Buf
-}
+// arenas are the Model's seven arenas (SPEC 3.8) and the asset table, its uses and bytes (SPEC 10.11): kin's `emon.enctx` `Arenas`
+// (`Clone` is the copy the asset unit (D351) runs on until it has every answer).
+type arenas = enctx.Arenas
 
-func newArenas() *arenas {
-	return &arenas{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewBuf()}
-}
-
-// clone is a copy of every arena: the asset unit (D351) runs on one until it has every answer.
-func (a *arenas) clone() *arenas {
-	return &arenas{cloneCells(a.nodes), cloneCells(a.attrs), cloneCells(a.regions), cloneCells(a.text), cloneCells(a.pages), cloneCells(a.ledger), cloneCells(a.layout),
-		cloneCells(a.assets), cloneCells(a.uses), cloneBuf(a.abytes)}
-}
+func newArenas() *arenas { return enctx.NewArenas() }
 
 // cloneBuf is a copy of a Buf.
 func cloneBuf(b *port.Buf) *port.Buf {
@@ -1446,10 +1325,10 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	// With fusion on (every policy but `never`), the text layer's epages and feats are the evidence's own: the OCR of a born-digital page adds
 	// its feature rows to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
 	fusion := opts.Ocr.code() != 0
-	ev0 := newEvArenas()
+	ev0 := enctx.NewEvArenas()
 	if fusion {
-		ev0.epages = tlEpages
-		ev0.feats = tlFeats
+		ev0.Epages = tlEpages
+		ev0.Feats = tlFeats
 	}
 	// The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust
 	// (D076), which the furniture stage weighs the tree's /Artifact marks by.
@@ -1478,41 +1357,51 @@ func attempt(view, pw *port.Src, idx int, opts Options, intakeOnly bool, n uint6
 	if fusion {
 		ptsKept = pts
 	}
-	return step{pdf: &pdfDoc{ev: ev0, hl: hl, cg: port.NewCells(), xs: newCellsN(6), ys: newCellsN(19), et: et, gl: gl, mk: mk, fnt: fnt, wd: wd, ln: ln, fw: fw, fl: fl, fa: fa, nl0: nl0, pa: pa, im: im, grl: grl, gfl: gfl, pts: ptsKept, ift: ift, van: van, isw: v[7], pg: pg, txt: qtxt, md: md, lb: lb, ol: ol, ss: ss, se: se, sc: sc,
-		plan: plan0, mask: mask, loc: localeCells(opts), snap: snap, cand: cand, cbytes: cbytes, aim: aim, fi: fi, info: info}}
+	doc := enctx.NewDoc()
+	doc.Hl = hl
+	doc.Et = et
+	doc.Gl = gl
+	doc.Mk = mk
+	doc.Fnt = fnt
+	doc.Wd = wd
+	doc.Ln = ln
+	doc.Fw = fw
+	doc.Fl = fl
+	doc.Fa = fa
+	doc.Nl0 = nl0
+	doc.Pa = pa
+	doc.Im = im
+	doc.Grl = grl
+	doc.Gfl = gfl
+	doc.Ift = ift
+	doc.An = van
+	doc.Pts = ptsKept
+	doc.Pg = pg
+	doc.Txt = qtxt
+	doc.Md = md
+	doc.Lb = lb
+	doc.Ol = ol
+	doc.Ss = ss
+	doc.Se = se
+	doc.Sc = sc
+	doc.Plan = plan0
+	doc.Mask = mask
+	doc.Loc = localeCells(opts)
+	if snap != nil {
+		doc.Snapg, doc.Snapk, doc.Snapf = snap[0], snap[1], snap[2]
+		doc.Hassnap = 1
+	}
+	doc.Cand = cand
+	doc.Cbytes = cbytes
+	doc.Aim = aim
+	doc.Fi = fi
+	return step{pdf: &pdfDoc{ev: ev0, doc: doc, info: info}}
 }
 
-// pdfDoc is what the PDF document pass leaves for its page units and the document unit (P7.U, D195).
+// pdfDoc is what the PDF document pass leaves for its page units and the document unit (P7.U, D195): kin's contexts (`emon.enctx`).
 type pdfDoc struct {
-	ev                                   *evArenas
-	et, gl, mk, fnt, wd, ln, pa, grl, gfl, pg *port.Cells
-	// the image placements (P7.G: a region of graphics fusion is a visible placement)
-	im *port.Cells
-	// the paths' geometry (P7.7: seals are round and stamps are quadrilaterals), kept only when fusion is on
-	pts *port.Cells
-	// inline styles and links (P4.7): the fonts' own style facts, the link annotations, and the stage's scratch
-	ift, van, isw *port.Cells
-	txt, md, lb, ol, ss, plan, mask, loc *port.Cells
-	// the tagged tree's elements and marked-content references (P5.5: the table stage verifies the tags against the page)
-	se, sc *port.Cells
-	// the flow stage 3 reads (P7.0), the words set aside, and how many lines the text layer had before any page unit
-	fw, fl, fa *port.Cells
-	nl0        int32
-	// fusion (P7.3): the fonts' health, the correspondence groups the page units made, and the alignment's scratch
-	hl, cg *port.Cells
-	xs     []*port.Cells
-	// the ink stage's and the targeted passes' scratch (P7.4: layer workspaces, the unit's arena snapshot, the plan, the tracer's)
-	ys []*port.Cells
-	// the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence dump has
-	// always shown (kept only when the evidence is asked for)
-	snap []*port.Cells
-	// P3.13: the image placements as asset candidates and their encoded bytes (empty unless `assets` is on)
-	cand   *port.Cells
-	cbytes *port.Buf
-	// the image placements the asset unit makes candidates of (the evidence's `images` rows; empty unless `assets` is on)
-	aim  *port.Cells
-	// P8.1: what the dictionary of each image placement says (FcImages), for the figures' kinds
-	fi   *port.Cells
+	ev   *enctx.EvArenas
+	doc  *enctx.Doc
 	info Intake
 }
 
@@ -1533,8 +1422,8 @@ func assetUnit(view, pw *port.Src, d *pdfDoc, opts Options, idx int, answers, rq
 	w := newCellsN(10)
 	z := port.NewBuf()
 	glob, words, hs := port.NewCells(), port.NewCells(), port.NewCells()
-	d.cbytes = port.NewBuf()
-	rc := asset.AsCollect(view, ar, dc, ca, cb, st, d.aim, d.pa, d.gl, d.pg, opts.AssetPixels, opts.AssetsBytes, opts.Assets.level(), port.NewCells(), d.cand, d.cbytes, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], z, int32(idx), answers, rq, payload, bms, glob, words, hs)
+	d.doc.Cbytes = port.NewBuf()
+	rc := asset.AsCollect(view, ar, dc, ca, cb, st, d.doc.Aim, d.doc.Pa, d.doc.Gl, d.doc.Pg, opts.AssetPixels, opts.AssetsBytes, opts.Assets.level(), port.NewCells(), d.doc.Cand, d.doc.Cbytes, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], z, int32(idx), answers, rq, payload, bms, glob, words, hs)
 	if view.Missed() || rc == 12 {
 		return 7
 	}
@@ -1554,174 +1443,20 @@ func cloneCells(c *port.Cells) *port.Cells {
 // the text layer made it. It writes nothing until its answers are in, and never reads the input.
 func unitPdf(d *pdfDoc, i, idx int, opts Options, answers, rq *port.Cells, bms *port.BitmapSet) int32 {
 	scr := port.NewCells()
-	return pageunit.PuRunPdf(int32(i), int32(idx), opts.Ocr.code(), d.plan, answers, rq, d.loc, bms, d.mask, scr,
-		d.ev.epages, d.ev.views, d.et, d.ev.feats, d.ev.images, d.ev.oruns, d.ev.oblocks, d.ev.olines, d.ev.owords, d.ev.osyms, d.ev.oalts, d.wd, d.ln,
-		2*boolInt(opts.NoRetarget), d.fw, d.fl, d.hl, d.ev.refs, d.cg, d.ev.tlines, d.xs[0], d.xs[1], d.xs[2], d.xs[3], d.xs[4], d.xs[5],
-		d.ev.inks, d.ev.comps, d.ev.rules, d.ev.prims, d.ev.pts,
-		d.ys[0], d.ys[1], d.ys[2], d.ys[3], d.ys[4], d.ys[5], d.ys[6], d.ys[7], d.ys[8], d.ys[9], d.ys[10], d.ys[11], d.ys[12], d.ys[13], d.ys[14], d.ys[15], d.ys[16], d.ys[17], d.ys[18])
+	x := d.doc
+	return pageunit.PuRunPdf(int32(i), int32(idx), opts.Ocr.code(), x.Plan, answers, rq, x.Loc, bms, x.Mask, scr,
+		d.ev.Epages, d.ev.Views, x.Et, d.ev.Feats, d.ev.Images, d.ev.Oruns, d.ev.Oblocks, d.ev.Olines, d.ev.Owords, d.ev.Osyms, d.ev.Oalts, x.Wd, x.Ln,
+		2*boolInt(opts.NoRetarget), x.Fw, x.Fl, x.Hl, d.ev.Refs, x.Cg, d.ev.Tlines, x.Xs0, x.Xs1, x.Xs2, x.Xs3, x.Xs4, x.Xs5,
+		d.ev.Inks, d.ev.Comps, d.ev.Rules, d.ev.Prims, d.ev.Pts,
+		x.Ys0, x.Ys1, x.Ys2, x.Ys3, x.Ys4, x.Ys5, x.Ys6, x.Ys7, x.Ys8, x.Ys9, x.Ys10, x.Ys11, x.Ys12, x.Ys13, x.Ys14, x.Ys15, x.Ys16, x.Ys17, x.Ys18)
 }
 
-// finishPdf is the document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
-// paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
+// finishPdf is the document unit (stage 3) over the text layer and whatever the page units added to it: fusion, the evidence, furniture,
+// tables, headings, paragraphs and columns, the Model. All of it is kin's (`emon.engine`).
 func finishPdf(d *pdfDoc, opts Options) outcome {
-	ev, et, gl, mk, fnt, wd, ln, pa, grl, gfl, pg := d.ev, d.et, d.gl, d.mk, d.fnt, d.wd, d.ln, d.pa, d.grl, d.gfl, d.pg
-	fw, fl, fa := d.fw, d.fl, d.fa
-	ift, van, isw := d.ift, d.van, d.isw
-	qtxt, md, lb, ol, ss, mask, info := d.txt, d.md, d.lb, d.ol, d.ss, d.mask, d.info
-	se, sc := d.se, d.sc
-	np := pdfdoc.PdPgCount(pg)
-	// the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
-	tlhealth.ThAppend(wd, ln, fw, fl, d.nl0)
-	// FUSION (P7.3, D285-D290): the page units aligned every OCR'd born-digital page (cg); with the document's verdict on every font (HlDoc)
-	// the arbiter picks each group's source and makes the fused flow stage 3 reads. With no group (no engine, or the engine answered
-	// nothing) none of this runs and nothing below is different.
-	fused := port.CellsLen(d.cg) > 0
-	if opts.Ocr.code() != 0 && !fused && port.CellsLen(ev.owords) == 0 {
-		// nothing was read: the evidence is what a run without the setting dumps (the text layer's own features were borrowed for alignment)
-		ev.epages = port.NewCells()
-		ev.feats = port.NewCells()
-	}
-	fz := newCellsN(6)
-	fv, fx, afa, ggp, grg, gfa := fz[0], fz[1], fz[2], fz[3], fz[4], fz[5]
-	// GRAPHICS FUSION, the tracer's and OCR's share (P7.G, SPEC 9.9, D221-D224, D228): every page that has a raster answer (the tracer ran: inks, rules or prims
-	// rows) has its vector rules and fills made again beside theirs, with the groups, the regions and the OCR words' features 30 and 31 that fusion reads below.
-	// With no tracer in the evidence (a conversion whose page units did not run it) it returns at once and nothing is different.
-	gs := newCellsN(7)
-	gfuse.GfFuse(np, ev.epages, ev.inks, ev.rules, ev.prims, ev.oblocks, ev.owords, wd, et, pa, d.im, ev.feats, grl, gfl, ggp, grg, ev.refs, d.hl, fx, gfa,
-		gs[0], gs[1], gs[2], gs[3], gs[4], gs[5], gs[6])
-	// seal, stamp and signature candidates (P7.7): the sl arena, found before arbitration, which keeps their words out of the body
-	sm := port.NewCells()
-	if fused {
-		fb := newCellsN(9)
-		nfw, nfl, gd, gv, w2g, o2g, pp, tw, tl := fb[0], fb[1], fb[2], fb[3], fb[4], fb[5], fb[6], fb[7], fb[8]
-		health.HlDoc(ev.feats, fw, d.hl)
-		sealmark.SmFind(pa, d.pts, gl, fw, et, ev.epages, d.cg, ev.refs, ev.owords, np, sm, port.NewCells(), port.NewCells())
-		arbiter.ArDoc(d.cg, ev.refs, fw, fl, et, ev.feats, ev.owords, ev.olines, ev.oruns, ev.osyms, ev.images, ev.epages,
-			gl, mk, van, qtxt, pdfstruct.TgTrust(ss), port.NewCells(), nfw, nfl, fv, fx, afa, gd, gv, w2g, o2g, pp, tw, tl, d.xs[0])
-		fw, nfw = nfw, fw
-		fl, nfl = nfl, fl
-		if c := player.PlCheck(d.cg, fw, fl, fv, fa, fx, d.hl, grl, sm, gfl, ggp, grg, et, ev.refs, gl); c != 0 {
-			return outcome{err: &Error{Kind: ErrInternal, Message: fmt.Sprintf("pl-check %d", c)}}
-		}
-	}
-	var evs *string
-	if opts.KeepEvidence {
-		g, k, f := gl, mk, fnt
-		if d.snap != nil {
-			g, k, f = d.snap[0], d.snap[1], d.snap[2]
-		}
-		var s string
-		if fused {
-			// the dump, VERSION "2" (SPEC 9.7): the evidence's arrays, then the layer's; the set-aside list is the text layer's and the dropped ghosts'
-			fad := cloneCells(fa)
-			for i := int32(0); i < port.CellsLen(afa); i++ {
-				port.CellsPush(fad, port.CellsAt(afa, i))
-			}
-			var sb strings.Builder
-			player.PlEmit(&sb, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, g, wd, ln, k, f, ev.paths, ev.images,
-				ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines,
-				d.cg, fw, fl, fv, fad, fx, d.hl, grl, sm, gfl, ggp, grg)
-			s = sb.String()
-		} else {
-			s = evidenceDump(ev, et, g, wd, ln, k, f, grl, gfl, ggp, grg)
-		}
-		evs = &s
-	}
 	m := newArenas()
-	model.ModelInit(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout)
-	para.PaPages(pg, m.pages)
-	trust := pdfstruct.TgTrust(ss)
-	// Running furniture (P4.3): found BEFORE the headings and paragraphs, which then never see it, and written after them.
-	fc := newCellsN(10)
-	fo, fp, ft, fpl := fc[6], fc[7], fc[8], fc[9]
-	furniture.FuFind(fw, fl, et, gl, mk, m.pages, np, qtxt, md, lb, trust, opts.Furniture.mode(), fc[0], fc[1], fc[2], fc[3], fc[4], fc[5], fo, fp, ft, fpl)
-	// Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
-	tb := newCellsN(24)
-	tg := newCellsN(7) // the tagged tables' scratch and verdicts (P5.5, emon.tagtable)
-	table.TbBuild(fw, fl, et, grl, gfl, np, tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7], tb[8], tb[9], tb[10], tb[11], tb[12], tb[13], tb[14], tb[15], tb[16], tb[17], tb[18], tb[19], tb[20], tb[21], tb[22], tb[23], m.pages, gl, mk, se, sc, ss, port.NewCells(), tg[0], tg[1], tg[2], tg[3], tg[4], tg[5], tg[6])
-	// P5.5: a document with tagged tables adds their verdicts to its evidence dump, as tb
-	if evs != nil && port.CellsLen(tg[6]) > 0 && strings.HasSuffix(*evs, "}") {
-		var sb strings.Builder
-		tagtable.TtEmit(&sb, tg[6])
-		e := (*evs)[:len(*evs)-1] + ",\"tb\":" + sb.String() + "}"
-		evs = &e
-	}
-	t := newCellsN(5)
-	// the column stage's scratch (kin/columns.kin), and its debug log (dbg: one row of eight per join decision)
-	c := newCellsN(13)
-	// the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points (it decides how an
-	// initial joins its first word); ia is their table and the open paragraph's alignment rows (kin/align.kin, P4.11). They are
-	// found in the copy of the lines BEFORE the heading analysis reads it: a big first letter must never be a heading
-	ia := newCellsN(3)
-	for _, ch := range opts.Locale {
-		port.CellsPush(ia[0], int32(ch))
-	}
-	columns.LcCopy(fl, c[0])
-	initial.InDetect(fw, gl, fnt, et, np, ia[0], c[0], c[1], c[10], c[8], ia[1])
-	// the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
-	// paragraph stage builds; its priors: the outline (D172); the tagged roles are a follow-up
-	h := newCellsN(7)
-	// the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
-	heading.HdPriorOutline(ol, qtxt, h[5], h[6])
-	heading.HdAnalyze(fw, c[0], et, gl, h[0], h[1], h[2], h[3], h[4], h[5], h[6])
-	// captions, note bodies and their references (kin/notes.kin, P4.6), then lists (kin/lists.kin, P4.5): which lines begin them, written
-	// into et and the rows after hc's, which the paragraph stage reads; the notes first, the lists never take a line they took. They
-	// read the same copy of the lines the headings do (initials already out of it), and leave a table's lines to the table (tb[2])
-	l := newCellsN(6)
-	notes.NtAnalyze(fw, c[0], et, gl, h[0], h[1], m.pages, h[2], l[0], l[1], l[2], tb[2])
-	lists.LsAnalyze(fw, c[0], et, h[0], pa, h[2], l[3], l[4], l[5], tb[2])
-	// the style and the link of every character (kin/inline.kin, P4.7): written after the lists' rows in hc, which the paragraph stage reads
-	inline.IlAnalyze(fw, c[0], et, gl, ift, h[0], van, qtxt, pg, m.pages, np, m.text, h[2], isw)
-	para.PaBuild(fw, et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, t[0], t[1], t[2], t[3], t[4],
-		c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], h[2], tb[0], tb[1], tb[2], tb[3], m.ledger, ia[1], ia[2])
-	// the figures (P8.1, SPEC 10.6): at every level of `assets`, before the restructuring, which pairs a caption with the figure beside it
-	figuresStage(m, d.cand, pa, d.im, d.fi, grg, grl, fw, fl, et, pg, opts)
-	// restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
-	// body is copied into new arenas, in document order, and they replace the old ones
-	r := newCellsN(10)
-	restruct.RsRun(m.nodes, m.attrs, m.regions, m.text, r[0], r[1], r[2], r[3], r[4], r[5], r[6], m.layout)
-	m.nodes, r[0] = r[0], m.nodes
-	m.attrs, r[1] = r[1], m.attrs
-	m.regions, r[2] = r[2], m.regions
-	furniture.FuWrite(fo, fp, ft, fpl, np, m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, t[2])
-	// the words the triage set aside (P7.0): ledger rows, after the furniture's
-	tlhealth.ThWrite(fa, wd, et, m.ledger, m.text, t[2], port.NewCells())
-	// the vector rules graphics fusion dropped (P7.G, row 513): ledger rows, with no text
-	gfuse.GfWrite(gfa, m.ledger)
-	scan.ScTag(m.nodes, m.attrs, m.text, m.regions, m.pages, mask, opts.Ocr.code())
-	rasterplan.RpSettings(m.nodes, m.attrs, m.text, opts.OcrScope.code())
-	// fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
-	if fused {
-		arbiter.ArWrite(afa, ev.owords, et, m.ledger, m.text, t[2], port.NewCells())
-		arbiter.ArTag(m.nodes, m.regions, fw, fv)
-		// the seals' nodes (P7.7): the body copied again with a seal node in reading order for every candidate
-		sw := newCellsN(4)
-		if sealmark.SmWrite(sm, et, m.nodes, m.attrs, m.regions, m.text, sw[0], sw[1], sw[2], sw[3]) > 0 {
-			m.nodes, sw[0] = sw[0], m.nodes
-			m.attrs, sw[1] = sw[1], m.attrs
-			m.regions, sw[2] = sw[2], m.regions
-		}
-	}
-	if opts.Locale != "" {
-		start := port.CellsLen(m.text)
-		for _, ch := range opts.Locale {
-			model.TextAppendCp(m.text, int32(ch))
-		}
-		model.NodeSetAttrText(m.nodes, m.attrs, 0, model.FkLocale(), start, port.CellsLen(m.text)-start)
-	}
-	// `figures` leaves the asset stage to the asset unit (D351), which asks the Renderer; so it does the checks after it too
-	var pending *pendingAssets
-	if opts.Assets == AssetsFigures {
-		pending = &pendingAssets{d.cand, d.cbytes, 0}
-	} else if opts.Assets != AssetsNone {
-		assetStage(m, d.cand, d.cbytes, opts)
-	}
-	if pending == nil {
-		if o := sealArenas(m, opts); o != nil {
-			return *o
-		}
-	}
-	return outcome{built: &built{arenas: m, evidence: evs, intake: info, pending: pending}}
+	r := engine.EnFinishPdf(cfgOf(opts), d.doc, d.ev, m, enctx.NewScratch())
+	return finished(r, d.doc, m, d.info, opts, 0)
 }
 
 // Intake is stage 0 of each input: format, version, page count, whether it is encrypted. Any number of inputs.
@@ -2025,7 +1760,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 						st = port.PlanUnitDone
 					}
 				}()
-				t := b.arenas.clone()
+				t := b.arenas.Clone()
 				p := &pendingAssets{cloneCells(pend.cand), cloneBuf(pend.cbytes), pend.rfrom}
 				assetStageFigures(t, p, opts, int32(idx), int32(size), answers, rq, bms)
 				if port.CellsLen(rq) > 0 {

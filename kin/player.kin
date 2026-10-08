@@ -753,7 +753,7 @@
     (set s (gl-arena t pretty s 4 grg))
     (return s)))
 
-(defn ^:pub ^I32 pl-emit [^:mut ^Text t ^I32 pretty
+(defn ^:pub ^I32 pl-emit-open [^:mut ^Text t ^I32 pretty
                           ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
                           ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
                           ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
@@ -773,13 +773,29 @@
     (set s (ev-emit-body t pretty s epages views pts refs etext feats glyphs words lines marks fonts paths images
                          oruns oblocks olines owords osyms oalts inks components rules prims tlines))
     (set s (pl-emit-layer t pretty s cg fw fl fv fa fx hl grl sl gfl ggp grg etext))
+    (return s)))
+
+(defn ^:pub ^I32 pl-emit [^:mut ^Text t ^I32 pretty
+                          ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
+                          ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
+                          ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                          ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+                          ^:mut ^Cells images
+                          ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                          ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                          ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+                          ^:mut ^Cells prims ^:mut ^Cells tlines
+                          ^Cells cg ^Cells fw ^Cells fl ^Cells fv ^Cells fa ^Cells fx ^Cells hl ^Cells grl ^Cells sl
+                          ^Cells gfl ^Cells ggp ^Cells grg]
+  (comment "The same, closed (`pl-emit-open`, then `}`).")
+  (let [^I32 s (pl-emit-open t pretty epages views pts refs etext feats glyphs words lines marks fonts paths images oruns oblocks olines owords osyms oalts inks components rules prims tlines cg fw fl fv fa fx hl grl sl gfl ggp grg)]
     (js-close t pretty 0 s)
     (return 0)))
 
 ;; P5.5a graphics arenas (D270). The Engines' `keep_evidence` dump stays version "1", the interpreter's own (D242), unless the document has
 ;; fused graphics: then it is version "2" with the four graphics arrays after the evidence's, and nothing else of the layer (the other
 ;; arenas join it with P7.3, when the goldens move). `bb accuracy` reads `grl` and `gfl` from it (tools/accuracy/graphics.clj).
-(defn ^:pub ^I32 pl-emit-gfx [^:mut ^Text t ^I32 pretty
+(defn ^:pub ^I32 pl-emit-gfx-open [^:mut ^Text t ^I32 pretty
                               ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
                               ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
                               ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
@@ -801,5 +817,20 @@
     (set s (gl-arena t pretty s 2 gfl))
     (set s (gl-arena t pretty s 3 ggp))
     (set s (gl-arena t pretty s 4 grg))
+    (return s)))
+
+(defn ^:pub ^I32 pl-emit-gfx [^:mut ^Text t ^I32 pretty
+                              ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts
+                              ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
+                              ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines
+                              ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+                              ^:mut ^Cells images
+                              ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
+                              ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
+                              ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+                              ^:mut ^Cells prims ^:mut ^Cells tlines
+                              ^Cells grl ^Cells gfl ^Cells ggp ^Cells grg]
+  (comment "The same, closed (`pl-emit-gfx-open`, then `}`).")
+  (let [^I32 s (pl-emit-gfx-open t pretty epages views pts refs etext feats glyphs words lines marks fonts paths images oruns oblocks olines owords osyms oalts inks components rules prims tlines grl gfl ggp grg)]
     (js-close t pretty 0 s)
     (return 0)))

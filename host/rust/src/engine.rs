@@ -41,40 +41,24 @@
 //
 // NOTHING IN THIS FILE NAMES A FILESYSTEM (D058): inputs are `source::ByteSource`s.
 
-use crate::emon::columns::lc_copy;
-use crate::emon::initial::in_detect;
-use crate::emon::evidence::*;
-use crate::emon::heading::*;
+use crate::emon::enctx::{Arenas, Cfg, Doc, EvArenas, Scratch};
+use crate::emon::engine::{en_finish_pdf, en_finish_raster, en_seal};
 use crate::emon::html::*;
 use crate::emon::json::*;
-use crate::emon::furniture::{fu_find, fu_write};
-use crate::emon::inline::{il_analyze, il_fonts};
-use crate::emon::lists::ls_analyze;
-use crate::emon::notes::nt_analyze;
-use crate::emon::restruct::rs_run;
-use crate::emon::figclass::{fc_images, fc_stage};
+use crate::emon::inline::il_fonts;
 use crate::emon::asset::*;
-use crate::emon::sealmark::{sm_find, sm_write};
+use crate::emon::figclass::fc_images;
 use crate::emon::model::*;
-use crate::emon::para::*;
-use crate::emon::table::*;
 use crate::emon::pageunit::{pu_plan, pu_run_pdf};
-use crate::emon::rasterplan::rp_settings;
-use crate::emon::arbiter::{ar_doc, ar_tag, ar_write};
 use crate::emon::pdfannot::pa_run;
-use crate::emon::health::hl_doc;
-use crate::emon::player::{pl_check, pl_emit};
 use crate::emon::rasterin::*;
-use crate::emon::scan::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdfmeta::pm_run;
-use crate::emon::pdfstruct::{tg_join, tg_read, tg_trust};
-use crate::emon::tagtable::tt_emit;
+use crate::emon::pdfstruct::{tg_join, tg_read};
 use crate::emon::pdfx::px_index_build;
-use crate::emon::gfuse::{gf_doc, gf_fuse, gf_write, gfx_mode};
-use crate::emon::player::pl_emit_gfx;
-use crate::emon::tlhealth::{th_append, th_run, th_write};
+use crate::emon::gfuse::{gf_doc, gfx_mode};
+use crate::emon::tlhealth::th_run;
 use crate::imgdec;
 use crate::pdfimg::{self, PdfCodecs};
 use crate::plan::{self, Answer, Fulfiller, Misses, NoMisses, PlanError, Range, Replayer, Request, SyncFulfiller};
@@ -954,55 +938,6 @@ enum RStep {
     Raster(Box<RasterDoc>),
 }
 
-// The evidence arenas the OCR stages fill (SPEC 8.4.6: the arenas `emon.scan` writes and `ev_emit` dumps). A PDF's
-// text layer fills `gl`, `mk`, `fnt` and the word and line arenas; an image's OCR fills the `o*` ones and the same word
-// and line arenas (D213), so the rest are empty and only dumped.
-struct EvArenas {
-    epages: Cells,
-    views: Cells,
-    pts: Cells,
-    refs: Cells,
-    feats: Cells,
-    paths: Cells,
-    images: Cells,
-    oruns: Cells,
-    oblocks: Cells,
-    olines: Cells,
-    owords: Cells,
-    osyms: Cells,
-    oalts: Cells,
-    inks: Cells,
-    comps: Cells,
-    rules: Cells,
-    prims: Cells,
-    tlines: Cells,
-}
-
-impl EvArenas {
-    fn new() -> EvArenas {
-        EvArenas {
-            epages: Cells::new(),
-            views: Cells::new(),
-            pts: Cells::new(),
-            refs: Cells::new(),
-            feats: Cells::new(),
-            paths: Cells::new(),
-            images: Cells::new(),
-            oruns: Cells::new(),
-            oblocks: Cells::new(),
-            olines: Cells::new(),
-            owords: Cells::new(),
-            osyms: Cells::new(),
-            oalts: Cells::new(),
-            inks: Cells::new(),
-            comps: Cells::new(),
-            rules: Cells::new(),
-            prims: Cells::new(),
-            tlines: Cells::new(),
-        }
-    }
-}
-
 // The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
 fn locale_cells(opts: &Options) -> Cells {
     let mut c = Cells::new();
@@ -1014,18 +949,6 @@ fn locale_cells(opts: &Options) -> Cells {
     c
 }
 
-// The evidence dump of a conversion: `ev` is what the OCR stages made, the rest the text layer's.
-fn evidence_dump(ev: &mut EvArenas, et: &mut Cells, gl: &mut Cells, wd: &mut Cells, ln: &mut Cells, mk: &mut Cells, fnt: &mut Cells, grl: &mut Cells, gfl: &mut Cells, ggp: &mut Cells, grg: &mut Cells) -> String {
-    let mut t = String::new();
-    if cells_len(grl) == 0 && cells_len(gfl) == 0 {
-        ev_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines);
-    } else {
-        // P5.5a (D270): a document with fused graphics dumps version "2", the evidence's arrays then `grl gfl ggp grg` (the rest of the layer joins with P7.3)
-        pl_emit_gfx(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines, grl, gfl, ggp, grg);
-    }
-    t
-}
-
 // ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `attempt` is for a PDF. An image's pages are made
 // by kin's `rs_unit` (decode, then OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213):
 // the stages below are `attempt`'s, in its order, with the glyph-fed ones given empty arenas.
@@ -1033,11 +956,7 @@ fn evidence_dump(ev: &mut EvArenas, et: &mut Cells, gl: &mut Cells, wd: &mut Cel
 struct RasterDoc {
     m: Arenas,
     ev: EvArenas,
-    et: Cells,
-    wd: Cells,
-    ln: Cells,
-    mask: Cells,
-    loc: Cells,
+    doc: Doc,
     info: Intake,
 }
 
@@ -1067,121 +986,78 @@ fn attempt_raster(view: &Src, answers: &mut Cells, rq: &mut Cells, idx: usize, f
     if intake_only {
         return RStep::Done(Outcome::Intake(info));
     }
-    RStep::Raster(Box::new(RasterDoc { m, ev: EvArenas::new(), et: Cells::new(), wd: Cells::new(), ln: Cells::new(), mask, loc: locale_cells(opts), info }))
+    let mut doc = Doc::new();
+    doc.mask = mask;
+    doc.loc = locale_cells(opts);
+    RStep::Raster(Box::new(RasterDoc { m, ev: EvArenas::new(), doc, info }))
 }
 
 // One frame's page unit (P7.U): its own requests and answers; it writes nothing until its answers are in.
 fn unit_raster(d: &mut RasterDoc, f: usize, idx: usize, len: u64, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
     let mut scr = Cells::new();
     rs_page(
-        f as i32, idx as i32, len as i32, opts.ocr.code(), answers, rq, &mut d.loc, bms, &mut d.mask,
-        &mut d.ev.epages, &mut d.ev.views, &mut d.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
-        &mut d.wd, &mut d.ln, &mut scr,
+        f as i32, idx as i32, len as i32, opts.ocr.code(), answers, rq, &mut d.doc.loc, bms, &mut d.doc.mask,
+        &mut d.ev.epages, &mut d.ev.views, &mut d.doc.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
+        &mut d.doc.wd, &mut d.doc.ln, &mut scr,
     )
 }
 
-// The raster document unit: stage 3 over the frames' OCR lines.
+// The raster document unit: stage 3 over the frames' OCR lines, in kin (`emon.engine`).
 fn finish_raster(d: RasterDoc, opts: &Options) -> Outcome {
-    let RasterDoc { mut m, mut ev, mut et, mut wd, mut ln, mut mask, mut loc, info } = d;
-    let (mut gl, mut mk, mut fnt) = (Cells::new(), Cells::new(), Cells::new());
-    let (mut grl, mut gfl) = (Cells::new(), Cells::new());
-    let evidence = if opts.keep_evidence { Some(evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut grl, &mut gfl, &mut Cells::new(), &mut Cells::new())) } else { None };
-    // the triage's flow (P7.0, D241): an image has no text layer, so nothing is set aside and the flow is the OCR lines as they are
-    let (mut fw, mut fl) = (Cells::new(), Cells::new());
-    th_append(&mut wd, &mut ln, &mut fw, &mut fl, 0);
-    let np = page_count(&mut m.pages);
-    // Running furniture (P4.3), as `attempt` runs it: an image has no catalogue (no Info, no page labels, no tagged tree), so those
-    // arenas are empty and the stage reads the lines and the pages alone.
-    let (mut txt, mut md, mut lb, mut ol, mut ss) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let trust = tg_trust(&mut ss);
-    let (mut cd, mut sl, mut gr, mut ford, mut tx, mut bh) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut fo, mut fp, mut ft, mut pl) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    fu_find(&mut fw, &mut fl, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
-    // Tables (P5), as `attempt` finds them: before the paragraphs, from the OCR lines like any others; an image has no vector
-    // paths, so its `grl`/`gfl` are empty (the tracer's witnesses are P7.G's) and only the text-based profiles can find one.
-    // (`pa` stays: the lists stage takes an empty paths arena.)
-    let mut pa = Cells::new();
-    let (mut tb, mut tc, mut tw, mut tq, mut tx) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut s0, mut s1, mut s2, mut s3, mut s4) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut s5, mut s6, mut s7, mut s8, mut s9) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut s10, mut s11, mut s12, mut s13, mut s14) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut s15, mut s16, mut s17, mut s18) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    tb_build(&mut fw, &mut fl, &mut et, &mut grl, &mut gfl, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages, &mut gl, &mut mk, &mut Cells::new(), &mut Cells::new(), &mut ss, &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new());
-    let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    // initials (P4.10) on the lines' copy, before the headings read it, exactly as `attempt` does; OCR words have no glyph or
-    // font evidence (`gl`, `fnt` are empty), which the detector reads as no initial. `loc` is the locale's code points.
-    let (mut ii, mut al) = (Cells::new(), Cells::new());
-    lc_copy(&mut fl, &mut lt);
-    in_detect(&mut fw, &mut gl, &mut fnt, &mut et, np, &mut loc, &mut lt, &mut ls, &mut lo, &mut tm, &mut ii);
-    let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    hd_prior_outline(&mut ol, &mut txt, &mut hpr, &mut hptxt);
-    hd_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
-    // notes and lists, then restructuring, exactly as `attempt` runs them: the OCR lines are the text layer's lines
-    let (mut nrf, mut nnb, mut nmk) = (Cells::new(), Cells::new(), Cells::new());
-    nt_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut m.pages, &mut hc, &mut nrf, &mut nnb, &mut nmk, &mut tw);
-    let (mut lcd, mut lpi, mut lws) = (Cells::new(), Cells::new(), Cells::new());
-    ls_analyze(&mut fw, &mut lt, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
-    pa_build(&mut fw, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
-             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
-    {
-        let (mut rn, mut ra, mut rr, mut rnm, mut rstk, mut rused, mut rout) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-        rs_run(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut rn, &mut ra, &mut rr, &mut rnm, &mut rstk, &mut rused, &mut rout, &mut m.layout);
-        std::mem::swap(&mut m.nodes, &mut rn);
-        std::mem::swap(&mut m.attrs, &mut ra);
-        std::mem::swap(&mut m.regions, &mut rr);
-    }
-    fu_write(&mut fo, &mut fp, &mut ft, &mut pl, np, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut tmp);
-    sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
-    rp_settings(&mut m.nodes, &mut m.attrs, &mut m.text, opts.ocr_scope.code());
-    if let Some(loc) = &opts.locale {
-        let start = cells_len(&m.text);
-        for ch in loc.chars() {
-            text_append_cp(&mut m.text, ch as i32);
-        }
-        let n = cells_len(&m.text) - start;
-        node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), start, n);
-    }
-    let mut pending: Option<PendingAssets> = None;
-    if opts.assets != Assets::None {
-        // a raster input is one picture a page: its own image is the candidate, `part` of which no figure or seal can be at `images`
-        let (mut cand, mut cbytes) = (Cells::new(), Buf::new());
-        as_page_cands(&mut m.pages, &mut cand);
-        if opts.assets == Assets::Figures {
-            // the asset unit (D351) cuts a figure from its frame: it needs the format the pixels came from
-            let rfrom = match info.format {
-                "png" => afm_png(),
-                "jpeg" => afm_jpeg(),
-                _ => afm_tiff(),
-            };
-            pending = Some(PendingAssets { cand, cbytes, rfrom });
-        } else {
-            asset_stage(&mut m, &mut cand, &mut cbytes, opts);
-        }
-    }
-    if pending.is_none() {
-        if let Some(e) = seal_arenas(&mut m, opts) {
-            return Outcome::Failed(e);
-        }
-    }
-    Outcome::Built(Built { arenas: m, evidence, intake: info, pending })
+    let RasterDoc { mut m, mut ev, mut doc, info } = d;
+    let rfrom = match info.format {
+        "png" => afm_png(),
+        "jpeg" => afm_jpeg(),
+        _ => afm_tiff(),
+    };
+    let mut s = Scratch::new();
+    let r = en_finish_raster(&mut cfg_of(opts), &mut doc, &mut ev, &mut m, &mut s);
+    finished(r, doc, m, info, opts, rfrom)
 }
 
-// The checks of a finished Model: `model-check`, and `model-check-assets` when `assets` is on.
-fn seal_arenas(m: &mut Arenas, opts: &Options) -> Option<Error> {
-    let mut chk = Cells::new();
-    let c = model_check(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout, &mut chk);
-    if c != 0 {
-        return Some(Error::Internal(format!("model-check {} at node {}", c, cells_at(&chk, 0))));
-    }
-    if opts.assets != Assets::None {
-        let c = model_check_assets(&mut m.nodes, &mut m.attrs, &mut m.assets, &mut m.uses, &mut m.abytes, &mut chk);
-        if c != 0 {
-            return Some(Error::Internal(format!("model-check-assets {} at {}", c, cells_at(&chk, 0))));
+// What kin's document unit answered (`emon.engine`: 0 built, 1 built with the asset unit still to run, 2 `pl-check`, 3 `model-check`, 4 `model-check-assets`).
+fn finished(r: i32, mut doc: Doc, m: Arenas, info: Intake, opts: &Options, rfrom: i32) -> Outcome {
+    match r {
+        0 | 1 => {
+            let evidence = if opts.keep_evidence { Some(std::mem::take(&mut doc.evidence)) } else { None };
+            // `figures` leaves the asset stage to the asset unit (D351): what it needs
+            let pending = if r == 1 { Some(PendingAssets { cand: std::mem::take(&mut doc.cand), cbytes: std::mem::take(&mut doc.cbytes), rfrom }) } else { None };
+            Outcome::Built(Built { arenas: m, evidence, intake: info, pending })
         }
+        2 => Outcome::Failed(Error::Internal(format!("pl-check {}", doc.fcode))),
+        3 => Outcome::Failed(Error::Internal(format!("model-check {} at node {}", doc.fcode, doc.fnode))),
+        _ => Outcome::Failed(Error::Internal(format!("model-check-assets {} at {}", doc.fcode, doc.fnode))),
     }
-    None
+}
+
+// The Options the document unit reads (`emon.enctx`'s `Cfg`).
+fn cfg_of(opts: &Options) -> Cfg {
+    let mut c = Cfg::new();
+    c.ocr = opts.ocr.code();
+    c.scope = opts.ocr_scope.code();
+    c.furn = opts.furniture.mode();
+    c.level = opts.assets.level();
+    c.dpi = opts.asset_dpi;
+    c.pixels = opts.asset_pixels;
+    c.abyte = opts.asset_bytes;
+    c.tbyte = opts.assets_bytes;
+    c.sigs = if opts.asset_signatures { 1 } else { 0 };
+    c.keep = opts.keep_evidence as i32;
+    if opts.locale.is_some() {
+        c.haveloc = 1;
+        c.lcl = locale_cells(opts);
+    }
+    c
+}
+
+// The checks of a finished Model: `model-check`, and `model-check-assets` when `assets` is on (kin's `en-seal`).
+fn seal_arenas(m: &mut Arenas, opts: &Options) -> Option<Error> {
+    let (mut chk, mut out) = (Cells::new(), Cells::new());
+    match en_seal(m, &mut chk, &mut out, opts.assets.level()) {
+        0 => None,
+        1 => Some(Error::Internal(format!("model-check {} at node {}", cells_at(&out, 0), cells_at(&out, 1)))),
+        _ => Some(Error::Internal(format!("model-check-assets {} at {}", cells_at(&out, 0), cells_at(&out, 1)))),
+    }
 }
 
 // The unit of one input: a PNG, JPEG or TIFF (by kin's sniff) is read by the raster unit, anything else by the
@@ -1343,29 +1219,6 @@ fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
-// The seven arenas of the Model (SPEC 3.8), and the asset table, its uses and its bytes (SPEC 10.11: empty unless `assets` is on).
-// `Clone` for the asset unit (D351), which runs on a copy until it has every answer.
-#[derive(Clone)]
-struct Arenas {
-    nodes: Cells,
-    attrs: Cells,
-    regions: Cells,
-    text: Cells,
-    pages: Cells,
-    ledger: Cells,
-    layout: Cells,
-    assets: Cells,
-    uses: Cells,
-    abytes: Buf,
-}
-
-impl Arenas {
-    fn new() -> Arenas {
-        Arenas { nodes: Cells::new(), attrs: Cells::new(), regions: Cells::new(), text: Cells::new(), pages: Cells::new(), ledger: Cells::new(), layout: Cells::new(), assets: Cells::new(), uses: Cells::new(), abytes: Buf::new() }
-    }
-}
-
-
 // How the loop runs: live (no transcript), recording one, or replaying one.
 enum Mode<'a> {
     Live,
@@ -1399,55 +1252,7 @@ fn text_of(cells: &mut Cells, start: i32, len: i32) -> String {
 // catalogue's extras, the plan of what each page's unit will ask, and the evidence arenas the units fill.
 struct PdfDoc {
     ev: EvArenas,
-    et: Cells,
-    gl: Cells,
-    mk: Cells,
-    fnt: Cells,
-    wd: Cells,
-    ln: Cells,
-    // the flow stage 3 reads (P7.0), the words set aside, and how many lines the text layer had before any page unit
-    fw: Cells,
-    fl: Cells,
-    fa: Cells,
-    nl0: i32,
-    pa: Cells,
-    // the image placements (P7.G: a region of graphics fusion is a visible placement, and the page units added their rows to the evidence's own arena, not this)
-    im: Cells,
-    grl: Cells,
-    gfl: Cells,
-    // inline styles and links (P4.7): the fonts' own style facts and the link annotations
-    ift: Cells,
-    an: Cells,
-    // the paths' geometry (P7.7: seals are round and stamps are quadrilaterals), kept only when fusion is on
-    pts: Cells,
-    pg: Cells,
-    txt: Cells,
-    md: Cells,
-    lb: Cells,
-    ol: Cells,
-    ss: Cells,
-    // the tagged tree's elements and marked-content references (P5.5: the table stage verifies the tags against the page)
-    se: Cells,
-    sc: Cells,
-    plan: Cells,
-    mask: Cells,
-    loc: Cells,
-    // fusion (P7.3): the fonts' health, the correspondence groups the page units made, and the alignment's scratch
-    hl: Cells,
-    cg: Cells,
-    xs: [Cells; 6],
-    // the ink stage's and the targeted passes' scratch (P7.4: layer workspaces, the unit's arena snapshot, the plan, the tracer's)
-    ys: [Cells; 19],
-    // the text layer's glyphs, marks and fonts as they were BEFORE the tagged tree was joined to them: what the evidence
-    // dump has always shown (kept only when the evidence is asked for)
-    snap: Option<(Cells, Cells, Cells)>,
-    // P3.13: the image placements as asset candidates and their encoded bytes (empty unless `assets` is on)
-    cand: Cells,
-    cbytes: Buf,
-    // the image placements the asset unit makes candidates of (the evidence's `images` rows; empty unless `assets` is on)
-    aim: Cells,
-    // P8.1: what the dictionary of each image placement says (`fc_images`), for the figures' kinds
-    fi: Cells,
+    doc: Doc,
     info: Intake,
 }
 
@@ -1574,7 +1379,47 @@ fn attempt(view: &Src, pw: &Src, idx: usize, opts: &Options, intake_only: bool, 
     for _ in 0..np.max(0) {
         cells_push(&mut mask, 0);
     }
-    Step::Pdf(Box::new(PdfDoc { ev: ev0, hl, cg: Cells::new(), xs: [Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new()], ys: std::array::from_fn(|_| Cells::new()), et, gl, mk, fnt, wd, ln, fw, fl, fa, nl0, pa, im, grl, gfl, ift, an, pts: if fusion { pts } else { Cells::new() }, pg, txt, md, lb, ol, ss, se, sc, plan, mask, loc: locale_cells(opts), snap, cand, cbytes, aim, fi, info }))
+    let mut doc = Doc::new();
+    doc.hl = hl;
+    doc.et = et;
+    doc.gl = gl;
+    doc.mk = mk;
+    doc.fnt = fnt;
+    doc.wd = wd;
+    doc.ln = ln;
+    doc.fw = fw;
+    doc.fl = fl;
+    doc.fa = fa;
+    doc.nl0 = nl0;
+    doc.pa = pa;
+    doc.im = im;
+    doc.grl = grl;
+    doc.gfl = gfl;
+    doc.ift = ift;
+    doc.an = an;
+    doc.pts = if fusion { pts } else { Cells::new() };
+    doc.pg = pg;
+    doc.txt = txt;
+    doc.md = md;
+    doc.lb = lb;
+    doc.ol = ol;
+    doc.ss = ss;
+    doc.se = se;
+    doc.sc = sc;
+    doc.plan = plan;
+    doc.mask = mask;
+    doc.loc = locale_cells(opts);
+    if let Some((g, k, f)) = snap {
+        doc.snapg = g;
+        doc.snapk = k;
+        doc.snapf = f;
+        doc.hassnap = 1;
+    }
+    doc.cand = cand;
+    doc.cbytes = cbytes;
+    doc.aim = aim;
+    doc.fi = fi;
+    Step::Pdf(Box::new(PdfDoc { ev: ev0, doc, info }))
 }
 
 // THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil
@@ -1594,8 +1439,8 @@ fn asset_unit(view: &Src, pw: &Src, idx: usize, d: &mut PdfDoc, opts: &Options, 
     let (mut aout, mut arec, mut amrec, mut asmp, mut amsmp, mut adata, mut arows, mut atmp, mut aws) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
     let (mut glob, mut words, mut hs) = (Cells::new(), Cells::new(), Cells::new());
     let mut az = Buf::new();
-    d.cbytes = Buf::new();
-    let rc = as_collect(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut d.aim, &mut d.pa, &mut d.gl, &mut d.pg, opts.asset_pixels, opts.assets_bytes, opts.assets.level(), &mut Cells::new(), &mut d.cand, &mut d.cbytes, &mut aout, &mut arec, &mut amrec, &mut asmp, &mut amsmp, &mut adata, &mut arows, &mut atmp, &mut aws, &mut az, idx as i32, answers, rq, payload, bms, &mut glob, &mut words, &mut hs);
+    d.doc.cbytes = Buf::new();
+    let rc = as_collect(view, &mut ar, &mut dc, &mut a, &mut b, &mut st, &mut d.doc.aim, &mut d.doc.pa, &mut d.doc.gl, &mut d.doc.pg, opts.asset_pixels, opts.assets_bytes, opts.assets.level(), &mut Cells::new(), &mut d.doc.cand, &mut d.doc.cbytes, &mut aout, &mut arec, &mut amrec, &mut asmp, &mut amsmp, &mut adata, &mut arows, &mut atmp, &mut aws, &mut az, idx as i32, answers, rq, payload, bms, &mut glob, &mut words, &mut hs);
     if view.missed() || rc == 12 {
         return 7;
     }
@@ -1606,201 +1451,26 @@ fn asset_unit(view: &Src, pw: &Src, idx: usize, d: &mut PdfDoc, opts: &Options, 
 // left as the text layer made it. It writes nothing until its answers are in, and never reads the input.
 fn unit_pdf(d: &mut PdfDoc, i: usize, idx: usize, opts: &Options, answers: &mut Cells, rq: &mut Cells, bms: &BitmapSet) -> i32 {
     let mut scr = Cells::new();
-    let [xa, xb, xc, xd, xe, xf] = &mut d.xs;
-    let [ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6] = &mut d.ys;
+    let x = &mut d.doc;
     pu_run_pdf(
-        i as i32, idx as i32, opts.ocr.code(), &mut d.plan, answers, rq, &mut d.loc, bms, &mut d.mask, &mut scr,
-        &mut d.ev.epages, &mut d.ev.views, &mut d.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
-        &mut d.wd, &mut d.ln,
-        2 * opts.no_retarget as i32, &mut d.fw, &mut d.fl, &mut d.hl, &mut d.ev.refs, &mut d.cg, &mut d.ev.tlines,
-        xa, xb, xc, xd, xe, xf,
+        i as i32, idx as i32, opts.ocr.code(), &mut x.plan, answers, rq, &mut x.loc, bms, &mut x.mask, &mut scr,
+        &mut d.ev.epages, &mut d.ev.views, &mut x.et, &mut d.ev.feats, &mut d.ev.images, &mut d.ev.oruns, &mut d.ev.oblocks, &mut d.ev.olines, &mut d.ev.owords, &mut d.ev.osyms, &mut d.ev.oalts,
+        &mut x.wd, &mut x.ln,
+        2 * opts.no_retarget as i32, &mut x.fw, &mut x.fl, &mut x.hl, &mut d.ev.refs, &mut x.cg, &mut d.ev.tlines,
+        &mut x.xs0, &mut x.xs1, &mut x.xs2, &mut x.xs3, &mut x.xs4, &mut x.xs5,
         &mut d.ev.inks, &mut d.ev.comps, &mut d.ev.rules, &mut d.ev.prims, &mut d.ev.pts,
-        ws, ws2, sv, aux, snap, rtp, rn, ri, cs, vr, pc, sg, mem, s1, s2, s3, s4, s5, s6,
+        &mut x.ys0, &mut x.ys1, &mut x.ys2, &mut x.ys3, &mut x.ys4, &mut x.ys5, &mut x.ys6, &mut x.ys7, &mut x.ys8, &mut x.ys9, &mut x.ys10, &mut x.ys11, &mut x.ys12, &mut x.ys13, &mut x.ys14, &mut x.ys15, &mut x.ys16, &mut x.ys17, &mut x.ys18,
     )
 }
 
-// The document unit (stage 3) over the text layer and whatever the page units added to it: furniture, tables, headings,
-// paragraphs and columns, the Model. THIS IS THE ONE PLACE the Engine calls those stages.
+// The document unit (stage 3) over the text layer and whatever the page units added to it: fusion, the evidence, furniture, tables, headings,
+// paragraphs and columns, the Model. All of it is kin's (`emon.engine`).
 fn finish_pdf(d: PdfDoc, opts: &Options) -> Outcome {
-    let PdfDoc { mut ev, mut et, mut gl, mut mk, mut fnt, mut wd, mut ln, mut fw, mut fl, mut fa, nl0, mut pa, mut im, mut grl, mut gfl, mut ift, mut an, mut pts, mut pg, mut txt, mut md, mut lb, mut ol, mut ss, mut se, mut sc, plan: _, mask, loc: _, mut hl, mut cg, xs, ys: _, snap, mut cand, mut cbytes, aim: _, mut fi, info } = d;
-    let mut mask = mask;
-    let np = pd_pg_count(&mut pg);
-    // the OCR lines of the scanned pages join the flow the text layer's words are in (P7.0's copy)
-    th_append(&mut wd, &mut ln, &mut fw, &mut fl, nl0);
-    // FUSION (P7.3, D285-D290): the page units aligned every OCR'd born-digital page (`cg`); with the document's verdict on every font
-    // (`hl_doc`) the arbiter picks each group's source and makes the fused flow stage 3 reads. With no group (no engine, or the
-    // engine answered nothing) none of this runs and nothing below is different.
-    let fused = cells_len(&cg) > 0;
-    if opts.ocr.code() != 0 && !fused && cells_len(&ev.owords) == 0 {
-        // nothing was read: the evidence is what a run without the setting dumps (the text layer's own features were borrowed for alignment)
-        ev.epages = Cells::new();
-        ev.feats = Cells::new();
-    }
-    let (mut fv, mut fx, mut afa) = (Cells::new(), Cells::new(), Cells::new());
-    // GRAPHICS FUSION, the tracer's and OCR's share (P7.G, SPEC 9.9, D221-D224, D228): every page that has a raster answer (the tracer ran: `inks`, `rules` or `prims`
-    // rows) has its vector rules and fills made again beside theirs, with the groups, the regions and the OCR words' features 30 and 31 that fusion reads below.
-    // With no tracer in the evidence (a conversion whose page units did not run it) it returns at once and nothing is different.
-    let (mut ggp, mut grg, mut gfa) = (Cells::new(), Cells::new(), Cells::new());
-    gf_fuse(np, &mut ev.epages, &mut ev.inks, &mut ev.rules, &mut ev.prims, &mut ev.oblocks, &mut ev.owords, &mut wd, &mut et, &mut pa, &mut im, &mut ev.feats, &mut grl, &mut gfl, &mut ggp, &mut grg, &mut ev.refs, &mut hl, &mut fx, &mut gfa,
-            &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new(), &mut Cells::new());
-    // seal, stamp and signature candidates (P7.7): the `sl` arena, found before arbitration, which keeps their words out of the body
-    let mut sm = Cells::new();
-    if fused {
-        let [mut xscr, mut xgp, mut xdp, mut xta, mut xtb, mut xtt] = xs;
-        let (mut nfw, mut nfl, mut gd, mut gv, mut w2g, mut o2g, mut pp, mut tw, mut tl) =
-            (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-        hl_doc(&mut ev.feats, &mut fw, &mut hl);
-        let (trust0, mut rc) = (tg_trust(&mut ss), Cells::new());
-        {
-            let (mut sscr, mut stmp) = (Cells::new(), Cells::new());
-            sm_find(&mut pa, &mut pts, &mut gl, &mut fw, &mut et, &mut ev.epages, &mut cg, &mut ev.refs, &mut ev.owords, np, &mut sm, &mut sscr, &mut stmp);
-        }
-        ar_doc(&mut cg, &mut ev.refs, &mut fw, &mut fl, &mut et, &mut ev.feats, &mut ev.owords, &mut ev.olines, &mut ev.oruns, &mut ev.osyms, &mut ev.images, &mut ev.epages,
-               &mut gl, &mut mk, &mut an, &mut txt, trust0, &mut rc, &mut nfw, &mut nfl, &mut fv, &mut fx, &mut afa, &mut gd, &mut gv, &mut w2g, &mut o2g, &mut pp, &mut tw, &mut tl, &mut xscr);
-        std::mem::swap(&mut fw, &mut nfw);
-        std::mem::swap(&mut fl, &mut nfl);
-        let c = pl_check(&mut cg, &mut fw, &mut fl, &mut fv, &mut fa, &mut fx, &mut hl, &mut grl, &mut sm, &mut gfl, &mut ggp, &mut grg, &mut et, &mut ev.refs, &mut gl);
-        if c != 0 {
-            return Outcome::Failed(Error::Internal(format!("pl-check {}", c)));
-        }
-    }
-    let mut evidence = if opts.keep_evidence {
-        if fused {
-            // the dump, VERSION "2" (SPEC 9.7): the evidence's arrays, then the layer's; the set-aside list is the text layer's and the dropped ghosts'
-            let mut fad = fa.clone();
-            for i in 0..cells_len(&afa) {
-                cells_push(&mut fad, cells_at(&afa, i));
-            }
-            let (mut g, mut k, mut f) = match snap {
-                Some((g, k, f)) => (g, k, f),
-                None => (gl.clone(), mk.clone(), fnt.clone()),
-            };
-            let mut t = String::new();
-            pl_emit(&mut t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, &mut et, &mut ev.feats, &mut g, &mut wd, &mut ln, &mut k, &mut f, &mut ev.paths, &mut ev.images,
-                    &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines,
-                    &mut cg, &mut fw, &mut fl, &mut fv, &mut fad, &mut fx, &mut hl, &mut grl, &mut sm, &mut gfl, &mut ggp, &mut grg);
-            Some(t)
-        } else {
-            Some(match snap {
-                Some((mut g, mut k, mut f)) => evidence_dump(&mut ev, &mut et, &mut g, &mut wd, &mut ln, &mut k, &mut f, &mut grl, &mut gfl, &mut ggp, &mut grg),
-                None => evidence_dump(&mut ev, &mut et, &mut gl, &mut wd, &mut ln, &mut mk, &mut fnt, &mut grl, &mut gfl, &mut ggp, &mut grg),
-            })
-        }
-    } else {
-        None
-    };
-    let trust = tg_trust(&mut ss);
+    let PdfDoc { mut ev, mut doc, info } = d;
     let mut m = Arenas::new();
-    model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
-    pa_pages(&mut pg, &mut m.pages);
-    // Running furniture (P4.3): found BEFORE the paragraphs, which then never see it, and written after them.
-    let (mut cd, mut sl, mut gr, mut ford, mut tx, mut bh) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut fo, mut fp, mut ft, mut pl) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    fu_find(&mut fw, &mut fl, &mut et, &mut gl, &mut mk, &mut m.pages, np, &mut txt, &mut md, &mut lb, trust, opts.furniture.mode(), &mut cd, &mut sl, &mut gr, &mut ford, &mut tx, &mut bh, &mut fo, &mut fp, &mut ft, &mut pl);
-    // Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`).
-    let (mut tb, mut tc, mut tw, mut tq, mut tx) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut s0, mut s1, mut s2, mut s3, mut s4) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut s5, mut s6, mut s7, mut s8, mut s9) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut s10, mut s11, mut s12, mut s13, mut s14) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut s15, mut s16, mut s17, mut s18) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    // the tagged tables' scratch and verdicts (P5.5, `emon.tagtable`)
-    let (mut g0, mut g1, mut g2, mut g3, mut g4, mut g5, mut tv) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    tb_build(&mut fw, &mut fl, &mut et, &mut grl, &mut gfl, np, &mut tb, &mut tc, &mut tw, &mut tq, &mut tx, &mut s0, &mut s1, &mut s2, &mut s3, &mut s4, &mut s5, &mut s6, &mut s7, &mut s8, &mut s9, &mut s10, &mut s11, &mut s12, &mut s13, &mut s14, &mut s15, &mut s16, &mut s17, &mut s18, &mut m.pages, &mut gl, &mut mk, &mut se, &mut sc, &mut ss, &mut Cells::new(), &mut g0, &mut g1, &mut g2, &mut g3, &mut g4, &mut g5, &mut tv);
-    if let Some(e) = evidence.as_mut() {
-        // P5.5: a document with tagged tables adds their verdicts to its evidence dump, as `tb`
-        if cells_len(&tv) > 0 && e.ends_with('}') {
-            e.pop();
-            e.push_str(",\"tb\":");
-            tt_emit(e, &mut tv);
-            e.push('}');
-        }
-    }
-    let (mut ord, mut raw, mut tmp, mut fr, mut gp) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    // the column stage's scratch (kin/columns.kin), and its debug log (`dbg`: one row of eight per join decision)
-    let (mut lt, mut ls, mut sd, mut it, mut io, mut rw) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut gu, mut ac, mut tm, mut cf, mut lo, mut pr, mut dbg) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    // the initials (kin/initial.kin, P4.10) read the glyphs and fonts, and the locale tag as code points (it decides how an initial
-    // joins its first word); `ii` is their table and `al` the alignment rows of the open paragraph (kin/align.kin, P4.11). They are
-    // found in the copy of the lines BEFORE the heading analysis reads it: a big first letter must never be a heading
-    let (mut loc, mut ii, mut al) = (Cells::new(), Cells::new(), Cells::new());
-    if let Some(l) = &opts.locale {
-        for ch in l.chars() {
-            cells_push(&mut loc, ch as i32);
-        }
-    }
-    lc_copy(&mut fl, &mut lt);
-    in_detect(&mut fw, &mut gl, &mut fnt, &mut et, np, &mut loc, &mut lt, &mut ls, &mut lo, &mut tm, &mut ii);
-    // the heading analysis (kin/heading.kin, P4.4) decides which lines are headings, at what level, before the
-    // paragraph stage builds; its priors: the outline (D172); the tagged roles are a follow-up
-    let (mut sf, mut sc, mut hc, mut ws, mut htmp, mut hpr, mut hptxt) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    // the outline (P3.9) is a prior on the headings' levels (D172); the tagged tree's roles are not read here yet
-    hd_prior_outline(&mut ol, &mut txt, &mut hpr, &mut hptxt);
-    hd_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut hc, &mut ws, &mut htmp, &mut hpr, &mut hptxt);
-    // captions, note bodies and their references (kin/notes.kin, P4.6): the lines that begin them, written into `et` and the rows after
-    // `hc`'s; before the lists, which never take a line these did. They read the same copy of the lines the headings do (initials
-    // already out of it), and leave a table's lines to the table (`tw`)
-    let (mut nrf, mut nnb, mut nmk) = (Cells::new(), Cells::new(), Cells::new());
-    nt_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut sf, &mut sc, &mut m.pages, &mut hc, &mut nrf, &mut nnb, &mut nmk, &mut tw);
-    // lists (kin/lists.kin, P4.5): which lines begin an item, written into `et` and the rows after `hc`'s, which the paragraph stage reads
-    let (mut lcd, mut lpi, mut lws) = (Cells::new(), Cells::new(), Cells::new());
-    ls_analyze(&mut fw, &mut lt, &mut et, &mut sf, &mut pa, &mut hc, &mut lcd, &mut lpi, &mut lws, &mut tw);
-    // the style and the link of every character (kin/inline.kin, P4.7): written after the lists' rows in `hc`, which the paragraph stage reads
-    let mut isw = Cells::new();
-    il_analyze(&mut fw, &mut lt, &mut et, &mut gl, &mut ift, &mut sf, &mut an, &mut txt, &mut pg, &mut m.pages, np, &mut m.text, &mut hc, &mut isw);
-    pa_build(&mut fw, &mut et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut ord, &mut raw, &mut tmp, &mut fr, &mut gp,
-             &mut lt, &mut ls, &mut sd, &mut it, &mut io, &mut rw, &mut gu, &mut ac, &mut tm, &mut cf, &mut lo, &mut pr, &mut dbg, &mut hc, &mut tb, &mut tc, &mut tw, &mut tq, &mut m.ledger, &mut ii, &mut al);
-    // the figures (P8.1, SPEC 10.6): at every level of `assets`, before the restructuring, which pairs a caption with the figure beside it
-    figures_stage(&mut m, &mut cand, &mut pa, &mut im, &mut fi, &mut grg, &mut grl, &mut fw, &mut fl, &mut et, &mut pg, opts);
-    // restructuring (kin/restruct.kin, P4.5, P4.6): items into lists, captions to their objects, bare links, note references; the
-    // body is copied into new arenas, in document order, and they replace the old ones
-    {
-        let (mut rn, mut ra, mut rr, mut rnm, mut rstk, mut rused, mut rout) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-        rs_run(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut rn, &mut ra, &mut rr, &mut rnm, &mut rstk, &mut rused, &mut rout, &mut m.layout);
-        std::mem::swap(&mut m.nodes, &mut rn);
-        std::mem::swap(&mut m.attrs, &mut ra);
-        std::mem::swap(&mut m.regions, &mut rr);
-    }
-    fu_write(&mut fo, &mut fp, &mut ft, &mut pl, np, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut tmp);
-    // the words the triage set aside (P7.0): ledger rows, after the furniture's
-    let mut ttx = Cells::new();
-    th_write(&mut fa, &mut wd, &mut et, &mut m.ledger, &mut m.text, &mut tmp, &mut ttx);
-    // the vector rules graphics fusion dropped (P7.G, row 513): ledger rows, with no text
-    gf_write(&mut gfa, &mut m.ledger);
-    sc_tag(&mut m.nodes, &mut m.attrs, &mut m.text, &mut m.regions, &mut m.pages, &mut mask, opts.ocr.code());
-    rp_settings(&mut m.nodes, &mut m.attrs, &mut m.text, opts.ocr_scope.code());
-    // fusion's own: the OCR groups dropped as ghosts become ledger rows, and the Model says where each block's words came from (P7.3)
-    if fused {
-        ar_write(&mut afa, &mut ev.owords, &mut et, &mut m.ledger, &mut m.text, &mut tmp, &mut ttx);
-        ar_tag(&mut m.nodes, &mut m.regions, &mut fw, &mut fv);
-        // the seals' nodes (P7.7): the body copied again with a `seal` node in reading order for every candidate
-        let (mut sn, mut sa, mut sr, mut snm) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-        if sm_write(&mut sm, &mut et, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut sn, &mut sa, &mut sr, &mut snm) > 0 {
-            std::mem::swap(&mut m.nodes, &mut sn);
-            std::mem::swap(&mut m.attrs, &mut sa);
-            std::mem::swap(&mut m.regions, &mut sr);
-        }
-    }
-    if let Some(loc) = &opts.locale {
-        let start = cells_len(&m.text);
-        for ch in loc.chars() {
-            text_append_cp(&mut m.text, ch as i32);
-        }
-        let n = cells_len(&m.text) - start;
-        node_set_attr_text(&mut m.nodes, &mut m.attrs, 0, fk_locale(), start, n);
-    }
-    // `figures` leaves the asset stage to the asset unit (D351), which asks the Renderer; so it does the checks after it too
-    let mut pending: Option<PendingAssets> = None;
-    if opts.assets == Assets::Figures {
-        pending = Some(PendingAssets { cand, cbytes, rfrom: 0 });
-    } else if opts.assets != Assets::None {
-        asset_stage(&mut m, &mut cand, &mut cbytes, opts);
-    }
-    if pending.is_none() {
-        if let Some(e) = seal_arenas(&mut m, opts) {
-            return Outcome::Failed(e);
-        }
-    }
-    Outcome::Built(Built { arenas: m, evidence, intake: info, pending })
+    let mut s = Scratch::new();
+    let r = en_finish_pdf(&mut cfg_of(opts), &mut doc, &mut ev, &mut m, &mut s);
+    finished(r, doc, m, info, opts, 0)
 }
 
 impl ChunkCache {
@@ -2415,30 +2085,6 @@ impl Kind {
     }
 }
 
-
-// P8.1 (SPEC 10.6): the figures, before `rs_run` (a caption next to one finds it as its object): every output has them, at every level of
-// `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
-fn figures_stage(m: &mut Arenas, cand: &mut Cells, pa: &mut Cells, im: &mut Cells, fi: &mut Cells, grg: &mut Cells, grl: &mut Cells, fw: &mut Cells, fl: &mut Cells, et: &mut Cells, pg: &mut Cells, opts: &Options) {
-    let (mut fnodes, mut fattrs, mut fregions, mut fnm) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    let (mut fcand, mut cl, mut fg, mut fd, mut ab, mut ws) = (Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new(), Cells::new());
-    fc_stage(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut fnodes, &mut fattrs, &mut fregions, &mut fnm,
-             pa, im, fi, grg, grl, fw, fl, et, pg, cand, opts.assets.level(), &mut fcand, &mut cl, &mut fg, &mut fd, &mut ab, &mut ws);
-    std::mem::swap(&mut m.nodes, &mut fnodes);
-    std::mem::swap(&mut m.attrs, &mut fattrs);
-    std::mem::swap(&mut m.regions, &mut fregions);
-}
-
-// P3.13: the settings on the root, then each figure's and seal's pixels or reason, in node-id order. The candidates `cand` and
-// their bytes `cbytes` were made by the document pass (`as_collect`), which is where the input is read.
-fn asset_stage(m: &mut Arenas, cand: &mut Cells, cbytes: &mut Buf, opts: &Options) {
-    let sigs = if opts.asset_signatures { 1 } else { 0 };
-    as_settings(&mut m.nodes, &mut m.attrs, &mut m.text, opts.assets.level(), opts.asset_dpi, opts.asset_pixels, opts.asset_bytes, opts.assets_bytes, sigs);
-    let mut bx = Cells::new();
-    for _ in 0..5 {
-        cells_push(&mut bx, 0);
-    }
-    as_run(&mut m.nodes, &mut m.attrs, &mut m.regions, cand, cbytes, &mut m.assets, &mut m.uses, &mut m.abytes, opts.asset_bytes, opts.assets_bytes, sigs, &mut bx);
-}
 
 // P8.5 (SPEC 10.11, D351): the asset stage at the level `figures`, one attempt of the asset unit, on copies the caller made. It writes
 // the Model's settings and every figure's and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq`

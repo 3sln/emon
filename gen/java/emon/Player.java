@@ -1352,7 +1352,7 @@ public final class Player {
         s = Glayer.glArena(t, pretty, s, 4, grg);
         return s;
     }
-    public static int plEmit(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells grl, emon.Port.Cells sl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg) {
+    public static int plEmitOpen(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells grl, emon.Port.Cells sl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg) {
         // The evidence dump, VERSION "2" (D203): the evidence's 24 arrays as `ev-emit` writes them, then the layer's twelve.
         int s = 0;
         emon.Port.textAscii(t, "{");
@@ -1360,10 +1360,15 @@ public final class Player {
         emon.Port.textAscii(t, "\"2\"");
         s = Evidence.evEmitBody(t, pretty, s, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         s = plEmitLayer(t, pretty, s, cg, fw, fl, fv, fa, fx, hl, grl, sl, gfl, ggp, grg, etext);
+        return s;
+    }
+    public static int plEmit(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fv, emon.Port.Cells fa, emon.Port.Cells fx, emon.Port.Cells hl, emon.Port.Cells grl, emon.Port.Cells sl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg) {
+        // The same, closed (`pl-emit-open`, then `}`).
+        int s = plEmitOpen(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines, cg, fw, fl, fv, fa, fx, hl, grl, sl, gfl, ggp, grg);
         Json.jsClose(t, pretty, 0, s);
         return 0;
     }
-    public static int plEmitGfx(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg) {
+    public static int plEmitGfxOpen(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg) {
         // The evidence dump as `pl-emit` writes it, version "2", with `grl gfl ggp grg` as the only layer arrays.
         int s = 0;
         emon.Port.textAscii(t, "{");
@@ -1374,6 +1379,11 @@ public final class Player {
         s = Glayer.glArena(t, pretty, s, 2, gfl);
         s = Glayer.glArena(t, pretty, s, 3, ggp);
         s = Glayer.glArena(t, pretty, s, 4, grg);
+        return s;
+    }
+    public static int plEmitGfx(StringBuilder t, int pretty, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg) {
+        // The same, closed (`pl-emit-gfx-open`, then `}`).
+        int s = plEmitGfxOpen(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines, grl, gfl, ggp, grg);
         Json.jsClose(t, pretty, 0, s);
         return 0;
     }
