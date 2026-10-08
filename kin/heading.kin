@@ -594,6 +594,32 @@
       (return 1))
     (return 0)))
 
+(defn ^I32 hd-sandwich [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^Cells sf ^I32 top ^I32 last ^I32 cnt]
+  (comment "Is a body-styled numbered line a title standing BETWEEN paragraphs (D395): one short line, no marker on")
+  (comment "the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging")
+  (comment "continuation of a list item). A list's items are next to one another or carry their text on their own line;")
+  (comment "a numbered line that alternates with full paragraphs is a heading whose style the scan could not read.")
+  (if (!= cnt 1) (return 0))
+  (let [^I32 a (st-get sf top (sfk-above))
+        ^I32 b (st-get sf last (sfk-below))
+        ^I32 sz (st-get sf top (sfk-size))]
+    (if (< b 0) (return 0))
+    (comment "an enumerator proper: a letter or a roman numeral with its delimiter, or a number with one (`12 Harbour")
+    (comment "Road` is an address and `Table 2` a caption)")
+    (let [^I32 s (hd-marker wd ln et ws top)
+          ^I32 w0 (hd-nth-word wd ln top 0)]
+      (if (or (== s 0) (or (== s 6) (== s 7))) (return 0))
+      (if (== s 1)
+        (if (< (hd-dec wd et w0) 64) (return 0))))
+    (if (!= (st-get sf b (sfk-page)) (st-get sf top (sfk-page))) (return 0))
+    (if (> (st-get sf top (sfk-cps)) 60) (return 0))
+    (if (> (* (hd-abs (- (st-get sf b (sfk-x0)) (st-get sf top (sfk-x0)))) 2) sz) (return 0))
+    (if (> (st-get sf b (sfk-cps)) 0)
+      (if (!= (hd-marker wd ln et ws b) 0) (return 0)))
+    (if (>= a 0)
+      (if (!= (hd-marker wd ln et ws a) 0) (return 0)))
+    (return 1)))
+
 (defn ^I32 hd-unit-score [^Cells wd ^Cells ln ^Cells et ^:mut ^Cells ws ^Cells sf ^Cells sc ^I32 cnt]
   (comment "The score of the unit whose lines are ws[WS_LINES..]: -1 when it cannot be a heading. Leaves the")
   (comment "numbering of its first line in ws[0..4].")
@@ -604,6 +630,7 @@
         ^:mut ^I32 total 0
         ^:mut ^I32 i 0
         ^:mut ^I32 s 0
+        ^:mut ^I32 sand 0
         ^:mut ^I32 pts 0]
     (while (< i cnt)
       (do (set total (+ total (st-get sf (cells-at ws (+ WS_LINES i)) (sfk-cps))))
@@ -612,6 +639,8 @@
     (if (hd-sentence-end (st-get sf last (sfk-last))) (return -1))
     (if (== ps 0)
       (if (== (hd-list-run wd ln et ws sf top last) 1) (return -1)))
+    (if (== ps 0)
+      (set sand (hd-sandwich wd ln et ws sf top last cnt)))
     (set s (hd-marker wd ln et ws top))
     (set pts ps)
     (if (> s 0)
@@ -625,7 +654,7 @@
           ^I32 gb (st-get sf last (sfk-gap-below))]
       (if (and (== ps 0) (< sp 1)) (return -1))
       (comment "a body-styled numbered line followed at the body's own line gap is a paragraph or a list item")
-      (if (and (== ps 0) (and (>= b 0) (< (* gb 2) (* lg 3)))) (return -1))
+      (if (and (== ps 0) (and (== sand 0) (and (>= b 0) (< (* gb 2) (* lg 3))))) (return -1))
       (comment "smaller than the body, so it is the weight or the capitals alone that says heading: it must at least")
       (comment "be followed by text close by, or be numbered (a label inside a seal or a figure is neither)")
       (if (and (<= (* sz 100) (* (st-hget sf (sfh-size)) 96)) (== s 0))
@@ -762,7 +791,8 @@
         ^I32 sclass (st-get sf (hd-un ws u 0) (sfk-class))
         ^:mut ^I32 v 0
         ^:mut ^I32 same 0]
-    (if (and (>= s 2) (<= s 5))
+    (comment "a line set in capitals after its letter or numeral (`I. GOVERNANCE`) is a title, not a name (D395)")
+    (if (and (>= s 2) (and (<= s 5) (== (st-get sf (hd-un ws u 0) (sfk-caps)) 0)))
       (do (while (< v nu)
             (do (if (and (== (hd-un ws v 5) s) (== (st-get sf (hd-un ws v 0) (sfk-class)) sclass))
                   (set same (+ same 1)))

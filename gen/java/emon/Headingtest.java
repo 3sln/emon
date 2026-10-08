@@ -334,6 +334,61 @@ public final class Headingtest {
         emon.Testport.assertEq(Heading.hdLevel(hc, 7), 0, "the second");
         emon.Testport.assertEq(Heading.hdLevel(hc, 8), 0, "the third");
     }
+    public static void testANumberedTitleBetweenParagraphsIsAHeading() {
+        // D395: no weight, no size, no italic (a scan): a short numbered line with a paragraph above and below, the
+        // paragraph flush with it, is a heading; the same numbers closing a list are not.
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        int y = 5000;
+        y = htBody(wd, ln, et, 1, y, 5);
+        y += 900;
+        htLine(wd, ln, et, emon.Testport.textBlob("a) Charter"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        y = htBody(wd, ln, et, 1, y, 3);
+        y += 900;
+        htLine(wd, ln, et, emon.Testport.textBlob("b) Membership"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        y = htBody(wd, ln, et, 1, y, 3);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 2, "two headings");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 5), 1, "`a) Charter`");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 9), 1, "`b) Membership`");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 4), 0, "the paragraph above");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 6), 0, "the paragraph below");
+    }
+    public static void testTheLastItemOfANumberedListIsNotAHeading() {
+        // D395: the list's items stand next to one another; the last one has a numbered line above it.
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells sf = emon.Port.newCells();
+        emon.Port.Cells sc = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells ws = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells ptxt = emon.Port.newCells();
+        int y = 5000;
+        y = htBody(wd, ln, et, 1, y, 5);
+        y += 900;
+        htLine(wd, ln, et, emon.Testport.textBlob("a) Apples"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        htLine(wd, ln, et, emon.Testport.textBlob("b) Pears"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 1400;
+        htLine(wd, ln, et, emon.Testport.textBlob("c) Plums"), 1, 7200, y, 40000, y + 1200, 1100, 0);
+        y += 2300;
+        y = htBody(wd, ln, et, 1, y, 4);
+        emon.Testport.assertEq(htRun(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 5), 0, "the first item");
+        emon.Testport.assertEq(Heading.hdLevel(hc, 7), 0, "the last item");
+    }
     public static void testAnInitialIsNeverAHeadingButADividerIs() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();

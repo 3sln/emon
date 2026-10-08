@@ -771,6 +771,53 @@ public static class Heading {
         }
         return 0;
     }
+    internal static int HdSandwich(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, int top, int last, int cnt) {
+        // Is a body-styled numbered line a title standing BETWEEN paragraphs (D395): one short line, no marker on
+        // the line above or below it, and the line below it flush with it (a paragraph's first line, not the hanging
+        // continuation of a list item). A list's items are next to one another or carry their text on their own line;
+        // a numbered line that alternates with full paragraphs is a heading whose style the scan could not read.
+        if (cnt != 1) {
+            return 0;
+        }
+        int a = Style.StGet(sf, top, Style.SfkAbove());
+        int b = Style.StGet(sf, last, Style.SfkBelow());
+        int sz = Style.StGet(sf, top, Style.SfkSize());
+        if (b < 0) {
+            return 0;
+        }
+        // an enumerator proper: a letter or a roman numeral with its delimiter, or a number with one (`12 Harbour
+        // Road` is an address and `Table 2` a caption)
+        int s = HdMarker(wd, ln, et, ws, top);
+        int w0 = HdNthWord(wd, ln, top, 0);
+        if ((s == 0) || ((s == 6) || (s == 7))) {
+            return 0;
+        }
+        if (s == 1) {
+            if (HdDec(wd, et, w0) < 64) {
+                return 0;
+            }
+        }
+        if (Style.StGet(sf, b, Style.SfkPage()) != Style.StGet(sf, top, Style.SfkPage())) {
+            return 0;
+        }
+        if (Style.StGet(sf, top, Style.SfkCps()) > 60) {
+            return 0;
+        }
+        if ((HdAbs(Style.StGet(sf, b, Style.SfkX0()) - Style.StGet(sf, top, Style.SfkX0())) * 2) > sz) {
+            return 0;
+        }
+        if (Style.StGet(sf, b, Style.SfkCps()) > 0) {
+            if (HdMarker(wd, ln, et, ws, b) != 0) {
+                return 0;
+            }
+        }
+        if (a >= 0) {
+            if (HdMarker(wd, ln, et, ws, a) != 0) {
+                return 0;
+            }
+        }
+        return 1;
+    }
     internal static int HdUnitScore(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells ws, emon.Port.Cells sf, emon.Port.Cells sc, int cnt) {
         // The score of the unit whose lines are ws[WS_LINES..]: -1 when it cannot be a heading. Leaves the
         // numbering of its first line in ws[0..4].
@@ -781,6 +828,7 @@ public static class Heading {
         int total = 0;
         int i = 0;
         int s = 0;
+        int sand = 0;
         int pts = 0;
         while (i < cnt) {
             total += Style.StGet(sf, emon.Port.CellsAt(ws, WsLines + i), Style.SfkCps());
@@ -796,6 +844,9 @@ public static class Heading {
             if (HdListRun(wd, ln, et, ws, sf, top, last) == 1) {
                 return -1;
             }
+        }
+        if (ps == 0) {
+            sand = HdSandwich(wd, ln, et, ws, sf, top, last, cnt);
         }
         s = HdMarker(wd, ln, et, ws, top);
         pts = ps;
@@ -815,7 +866,7 @@ public static class Heading {
             return -1;
         }
         // a body-styled numbered line followed at the body's own line gap is a paragraph or a list item
-        if ((ps == 0) && ((b >= 0) && ((gb * 2) < (lg * 3)))) {
+        if ((ps == 0) && ((sand == 0) && ((b >= 0) && ((gb * 2) < (lg * 3))))) {
             return -1;
         }
         // smaller than the body, so it is the weight or the capitals alone that says heading: it must at least
@@ -982,7 +1033,8 @@ public static class Heading {
         int sclass = Style.StGet(sf, HdUn(ws, u, 0), Style.SfkClass());
         int v = 0;
         int same = 0;
-        if ((s >= 2) && (s <= 5)) {
+        // a line set in capitals after its letter or numeral (`I. GOVERNANCE`) is a title, not a name (D395)
+        if ((s >= 2) && ((s <= 5) && (Style.StGet(sf, HdUn(ws, u, 0), Style.SfkCaps()) == 0))) {
             while (v < nu) {
                 if ((HdUn(ws, v, 5) == s) && (Style.StGet(sf, HdUn(ws, v, 0), Style.SfkClass()) == sclass)) {
                     same += 1;

@@ -349,6 +349,63 @@ fn test_a_numbered_list_is_not_a_run_of_headings() {
     crate::testport::assert_eq(hd_level(hc, 8), 0, "the third");
 }
 #[test]
+fn test_a_numbered_title_between_paragraphs_is_a_heading() {
+    // D395: no weight, no size, no italic (a scan): a short numbered line with a paragraph above and below, the
+    // paragraph flush with it, is a heading; the same numbers closing a list are not.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    y = ht_body(wd, ln, et, 1, y, 5);
+    y += 900;
+    ht_line(wd, ln, et, (&crate::testport::text_blob("a) Charter")[..]), 1, 7200, y, 40000, y + 1200, 1100, 0);
+    y += 1400;
+    y = ht_body(wd, ln, et, 1, y, 3);
+    y += 900;
+    ht_line(wd, ln, et, (&crate::testport::text_blob("b) Membership")[..]), 1, 7200, y, 40000, y + 1200, 1100, 0);
+    y += 1400;
+    y = ht_body(wd, ln, et, 1, y, 3);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 2, "two headings");
+    crate::testport::assert_eq(hd_level(hc, 5), 1, "`a) Charter`");
+    crate::testport::assert_eq(hd_level(hc, 9), 1, "`b) Membership`");
+    crate::testport::assert_eq(hd_level(hc, 4), 0, "the paragraph above");
+    crate::testport::assert_eq(hd_level(hc, 6), 0, "the paragraph below");
+}
+#[test]
+fn test_the_last_item_of_a_numbered_list_is_not_a_heading() {
+    // D395: the list's items stand next to one another; the last one has a numbered line above it.
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ws: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ptxt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut y: i32 = 5000;
+    y = ht_body(wd, ln, et, 1, y, 5);
+    y += 900;
+    ht_line(wd, ln, et, (&crate::testport::text_blob("a) Apples")[..]), 1, 7200, y, 40000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, (&crate::testport::text_blob("b) Pears")[..]), 1, 7200, y, 40000, y + 1200, 1100, 0);
+    y += 1400;
+    ht_line(wd, ln, et, (&crate::testport::text_blob("c) Plums")[..]), 1, 7200, y, 40000, y + 1200, 1100, 0);
+    y += 2300;
+    y = ht_body(wd, ln, et, 1, y, 4);
+    crate::testport::assert_eq(ht_run(wd, ln, et, sf, sc, hc, ws, tmp, pr, ptxt), 0, "no heading");
+    crate::testport::assert_eq(hd_level(hc, 5), 0, "the first item");
+    crate::testport::assert_eq(hd_level(hc, 7), 0, "the last item");
+}
+#[test]
 fn test_an_initial_is_never_a_heading_but_a_divider_is() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
