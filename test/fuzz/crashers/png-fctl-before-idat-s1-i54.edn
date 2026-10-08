@@ -1,0 +1,4 @@
+;; Found by `bb fuzz` (P10.5, D384): seed 1, case 54, a PNG with an fcTL chunk (animation frame control) and no acTL. The Rust crate refused it (`undecodable`), Go's decoder skipped it and decoded.
+;; Fixed in host/rust/src/imgdec.rs and host/go/imgdec.go (`png_strip_apng`: neither decoder is shown acTL, fcTL or fdAT; a PNG's frame is its default image, D389); replayed on every `bb fuzz` and must pass.
+{:seed 1 :index 54 :fixture "test/image/png-gray8.png" :ops ["png insert fcTL@2"] :signature ["engine-status-mismatch"] :bytes 754 :status :fixed
+ :detail ["engine-status-mismatch rust: [:err undecodable] | go: [:ok]"]}

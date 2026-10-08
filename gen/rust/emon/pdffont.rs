@@ -787,6 +787,13 @@ pub(crate) fn pfn_add_tu(mut f: &mut crate::port::Cells, d: &[u8], lo: i32, hi: 
     crate::port::cells_push(f, 0);
     return 1;
 }
+pub(crate) fn pfn_sat(a: i32, j: i32) -> i32 {
+    // a + j for j >= 0, held at 2^31-1: a /W start of 2147483647 plus an index (P10.5, D387).
+    if a > (2147483647 - j) {
+        return 2147483647;
+    }
+    return a + j;
+}
 pub(crate) fn pfn_add_val(mut f: &mut crate::port::Cells, lo: i32, hi: i32, v: i32) -> i32 {
     // A [lo hi value] record (a CID range or a width range).
     if lo < 0 {
@@ -2178,7 +2185,10 @@ pub(crate) fn pfn_load_simple(src: &crate::port::Src, mut ar: &mut crate::port::
                         pfn_entry_put(f, code, 5);
                     }
                 }
-                code += 1;
+                // a code past 255 names nothing, and 2^31-1 + 1 must not wrap (P10.5, D385)
+                if code < 2147483647 {
+                    code += 1;
+                }
             }
             k = pl_next(ar, k);
         }
@@ -2244,7 +2254,7 @@ pub(crate) fn pfn_parse_w(src: &crate::port::Src, mut ar: &mut crate::port::Cell
                 while el != 0 {
                     ev = pd_resolve(src, ar, dc, a, b, st, el);
                     if pfn_isnum(ar, ev) == 1 {
-                        pfn_add_val(f, c1 + j, c1 + j, pl_num_cp(ar, ev));
+                        pfn_add_val(f, pfn_sat(c1, j), pfn_sat(c1, j), pl_num_cp(ar, ev));
                     }
                     j += 1;
                     el = pl_next(ar, el);
@@ -2487,7 +2497,7 @@ pub(crate) fn pfn_parse_w2(src: &crate::port::Src, mut ar: &mut crate::port::Cel
                     if e2 == 0 {
                         el = 0;
                     } else {
-                        pfn_add_w2(f, c1 + j, c1 + j, pfn_num_or_zero(src, ar, dc, a, b, st, el), pfn_num_or_zero(src, ar, dc, a, b, st, e1), pfn_num_or_zero(src, ar, dc, a, b, st, e2));
+                        pfn_add_w2(f, pfn_sat(c1, j), pfn_sat(c1, j), pfn_num_or_zero(src, ar, dc, a, b, st, el), pfn_num_or_zero(src, ar, dc, a, b, st, e1), pfn_num_or_zero(src, ar, dc, a, b, st, e2));
                         j += 1;
                         el = pl_next(ar, e2);
                     }

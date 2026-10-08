@@ -1,0 +1,4 @@
+;; Found by `bb fuzz` (P10.5, D384): the generated seed `font-differences` (tools/fuzz/seeds.clj), unmutated. /Differences [2147483647 /A /B ...]: `code += 1` past 2^31-1 panicked on Rust (pdffont.rs:2181) and wrapped on Go.
+;; Fixed in kin/pdffont.kin (`pfn-load-simple`: the code stops at 2^31-1, D387); replayed on every `bb fuzz` and must pass.
+{:seed 2 :index nil :fixture "seed:font-differences.pdf" :ops ["unmutated"] :signature ["panic:rust:async" "panic:rust:mem" "engine-panic:rust"] :bytes 690 :status :fixed
+ :detail ["panic rust: PANIC attempt to add with overflow at emon/pdffont.rs:2181"]}

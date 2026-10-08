@@ -1456,8 +1456,8 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 		}
 		tbSortWords(wl, wd, i, j, 1)
 		var ri int32 = tbRowsOf(rw, rws)
-		var sumy int32 = 0
-		var sums int32 = 0
+		var sumy int64 = int64(0)
+		var sums int64 = int64(0)
 		var x0 int32 = 2000000000
 		var x1 int32 = -2000000000
 		var y0 int32 = 2000000000
@@ -1465,8 +1465,8 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 		var k int32 = i
 		for k < j {
 			var wk int32 = port.CellsAt(wl, k)
-			sumy += evidence.WdGet(wd, wk, evidence.HdBy1())
-			sums += tbMax(1, evidence.WdGet(wd, wk, evidence.WfSize()))
+			sumy = sumy + int64(evidence.WdGet(wd, wk, evidence.HdBy1()))
+			sums = sums + int64(tbMax(1, evidence.WdGet(wd, wk, evidence.WfSize())))
 			if evidence.WdGet(wd, wk, evidence.HdX0()) < x0 {
 				x0 = evidence.WdGet(wd, wk, evidence.HdX0())
 			}
@@ -1482,14 +1482,14 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 			k += 1
 		}
 		var cnt int32 = j - i
-		var size int32 = sums / cnt
+		var size int32 = int32(sums / int64(cnt))
 		var thr int32 = (size * segNum) / segDen
 		var sf int32 = tbRowsOf(sg, sgs)
 		var cstart int32 = i
 		var cmax int32 = evidence.WdGet(wd, port.CellsAt(wl, i), evidence.HdX1())
 		port.CellsPush(rw, i)
 		port.CellsPush(rw, cnt)
-		port.CellsPush(rw, sumy/cnt)
+		port.CellsPush(rw, int32(sumy/int64(cnt)))
 		port.CellsPush(rw, size)
 		port.CellsPush(rw, x0)
 		port.CellsPush(rw, x1)
@@ -1727,7 +1727,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 	// for none. Answers the
 	// table's index, -1 when there are not two columns and two rows.
 	var ntab int32 = 0
-	var sumsz int32 = 0
+	var sumsz int64 = int64(0)
 	var r int32 = ra
 	var nch int32 = 0
 	var ncols int32 = 0
@@ -1746,7 +1746,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 		if port.CellsAt(rw, (r*rws)+9) >= 2 {
 			ntab += 1
 		}
-		sumsz += port.CellsAt(rw, (r*rws)+3)
+		sumsz = sumsz + int64(port.CellsAt(rw, (r*rws)+3))
 		if port.CellsAt(rw, (r*rws)+4) < minx {
 			minx = port.CellsAt(rw, (r*rws)+4)
 		}
@@ -1764,7 +1764,7 @@ func tbTextGrid(wd *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, 
 	if (ntab < 2) || ((rb - ra) <= 1) {
 		return -1
 	}
-	nch = tbChannels(wd, wl, rw, sg, ra, rb, ntab/6, ((sumsz/(rb-ra))*segNum)/segDen, ch, st, en)
+	nch = tbChannels(wd, wl, rw, sg, ra, rb, ntab/6, int32(((sumsz/int64(rb-ra))*int64(segNum))/int64(segDen)), ch, st, en)
 	if nch < 1 {
 		return -1
 	}

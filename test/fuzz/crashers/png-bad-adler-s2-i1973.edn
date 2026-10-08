@@ -1,0 +1,4 @@
+;; Found by `bb fuzz` (P10.5, D384): seed 2, case 1973, a PNG whose IDAT is split into one-byte chunks and two bytes flipped: the zlib Adler-32 is wrong. Rust decoded it, Go said `undecodable`.
+;; Fixed in host/rust/src/imgdec.rs and host/go/imgdec.go (`png_data_sound`: one whole zlib stream with its checksum, D389); replayed on every `bb fuzz` and must pass.
+{:seed 2 :index 1973 :fixture "test/image/png-rgb8.png" :ops ["flip x2" "png IDAT split to bytes"] :signature ["engine-status-mismatch"] :bytes 13601 :status :fixed
+ :detail ["engine-status-mismatch rust: [:ok] | go: [:err undecodable]"]}

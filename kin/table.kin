@@ -30,7 +30,7 @@
 ;; A TABLE'S LINES ARE CLAIMED: the spare cell of a claimed line holds its table's index + 1 (`tb-claimed`), and
 ;; `emon.para` leaves such lines out of its paragraphs and calls `tb-emit` where the table belongs.
 (ns emon.table
-  (:require [emon.lang :refer [I32 Bool Cells]]
+  (:require [emon.lang :refer [I32 I64 Bool Cells i64 i32 add64 mul64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.evidence :refer [wd-get wd-count ln-get ln-set ln-count wf-gfirst
                                    hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-by0 hd-by1 hd-rot hd-tstart hd-tlen
@@ -1192,8 +1192,8 @@
             (tb-sort-words wl wd i j 1)
             ;; the row
             (let [^I32 ri (tb-rows-of rw RWS)
-                  ^:mut ^I32 sumy 0
-                  ^:mut ^I32 sums 0
+                  ^:mut ^I64 sumy (i64 0)
+                  ^:mut ^I64 sums (i64 0)
                   ^:mut ^I32 x0 2000000000
                   ^:mut ^I32 x1 -2000000000
                   ^:mut ^I32 y0 2000000000
@@ -1201,22 +1201,22 @@
                   ^:mut ^I32 k i]
               (while (< k j)
                 (do (let [^I32 wk (cells-at wl k)]
-                      (set sumy (+ sumy (wd-get wd wk (hd-by1))))
-                      (set sums (+ sums (tb-max 1 (wd-get wd wk (wf-size)))))
+                      (set sumy (add64 sumy (i64 (wd-get wd wk (hd-by1)))))
+                      (set sums (add64 sums (i64 (tb-max 1 (wd-get wd wk (wf-size))))))
                       (if (< (wd-get wd wk (hd-x0)) x0) (set x0 (wd-get wd wk (hd-x0))))
                       (if (> (wd-get wd wk (hd-x1)) x1) (set x1 (wd-get wd wk (hd-x1))))
                       (if (< (wd-get wd wk (hd-y0)) y0) (set y0 (wd-get wd wk (hd-y0))))
                       (if (> (wd-get wd wk (hd-y1)) y1) (set y1 (wd-get wd wk (hd-y1)))))
                     (set k (+ k 1))))
               (let [^I32 cnt (- j i)
-                    ^I32 size (quot sums cnt)
+                    ^I32 size (i32 (quot sums (i64 cnt)))
                     ^I32 thr (quot (* size SEG_NUM) SEG_DEN)
                     ^I32 sf (tb-rows-of sg SGS)
                     ^:mut ^I32 cstart i
                     ^:mut ^I32 cmax (wd-get wd (cells-at wl i) (hd-x1))]
                 (cells-push rw i)
                 (cells-push rw cnt)
-                (cells-push rw (quot sumy cnt))
+                (cells-push rw (i32 (quot sumy (i64 cnt))))
                 (cells-push rw size)
                 (cells-push rw x0)
                 (cells-push rw x1)
@@ -1405,7 +1405,7 @@
   (comment "for none. Answers the")
   (comment "table's index, -1 when there are not two columns and two rows.")
   (let [^:mut ^I32 ntab 0
-        ^:mut ^I32 sumsz 0
+        ^:mut ^I64 sumsz (i64 0)
         ^:mut ^I32 r ra
         ^:mut ^I32 nch 0
         ^:mut ^I32 ncols 0
@@ -1422,14 +1422,14 @@
         ^:mut ^I32 maxy -2000000000]
     (while (< r rb)
       (do (if (>= (cells-at rw (+ (* r RWS) 9)) 2) (set ntab (+ ntab 1)))
-          (set sumsz (+ sumsz (cells-at rw (+ (* r RWS) 3))))
+          (set sumsz (add64 sumsz (i64 (cells-at rw (+ (* r RWS) 3)))))
           (if (< (cells-at rw (+ (* r RWS) 4)) minx) (set minx (cells-at rw (+ (* r RWS) 4))))
           (if (> (cells-at rw (+ (* r RWS) 5)) maxx) (set maxx (cells-at rw (+ (* r RWS) 5))))
           (if (< (cells-at rw (+ (* r RWS) 6)) miny) (set miny (cells-at rw (+ (* r RWS) 6))))
           (if (> (cells-at rw (+ (* r RWS) 7)) maxy) (set maxy (cells-at rw (+ (* r RWS) 7))))
           (set r (+ r 1))))
     (if (or (< ntab 2) (<= (- rb ra) 1)) (return -1))
-    (set nch (tb-channels wd wl rw sg ra rb (quot ntab 6) (quot (* (quot sumsz (- rb ra)) SEG_NUM) SEG_DEN) ch st en))
+    (set nch (tb-channels wd wl rw sg ra rb (quot ntab 6) (i32 (quot (mul64 (quot sumsz (i64 (- rb ra))) (i64 SEG_NUM)) (i64 SEG_DEN))) ch st en))
     (if (< nch 1) (return -1))
     (set ncols (+ nch 1))
     (if (> ncols 40) (return -1))

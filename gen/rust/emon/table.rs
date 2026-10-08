@@ -1373,8 +1373,8 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
         }
         tb_sort_words(wl, wd, i, j, 1);
         let ri: i32 = tb_rows_of(rw, RWS);
-        let mut sumy: i32 = 0;
-        let mut sums: i32 = 0;
+        let mut sumy: i64 = 0 as i64;
+        let mut sums: i64 = 0 as i64;
         let mut x0: i32 = 2000000000;
         let mut x1: i32 = -2000000000;
         let mut y0: i32 = 2000000000;
@@ -1382,8 +1382,8 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
         let mut k: i32 = i;
         while k < j {
             let wk: i32 = crate::port::cells_at(wl, k);
-            sumy += wd_get(wd, wk, hd_by1());
-            sums += tb_max(1, wd_get(wd, wk, wf_size()));
+            sumy = (sumy).wrapping_add(wd_get(wd, wk, hd_by1()) as i64);
+            sums = (sums).wrapping_add(tb_max(1, wd_get(wd, wk, wf_size())) as i64);
             if wd_get(wd, wk, hd_x0()) < x0 {
                 x0 = wd_get(wd, wk, hd_x0());
             }
@@ -1399,14 +1399,14 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
             k += 1;
         }
         let cnt: i32 = j - i;
-        let size: i32 = sums / cnt;
+        let size: i32 = (sums / (cnt as i64)) as i32;
         let thr: i32 = (size * SEG_NUM) / SEG_DEN;
         let sf: i32 = tb_rows_of(sg, SGS);
         let mut cstart: i32 = i;
         let mut cmax: i32 = wd_get(wd, crate::port::cells_at(wl, i), hd_x1());
         crate::port::cells_push(rw, i);
         crate::port::cells_push(rw, cnt);
-        crate::port::cells_push(rw, sumy / cnt);
+        crate::port::cells_push(rw, (sumy / (cnt as i64)) as i32);
         crate::port::cells_push(rw, size);
         crate::port::cells_push(rw, x0);
         crate::port::cells_push(rw, x1);
@@ -1636,7 +1636,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
     // for none. Answers the
     // table's index, -1 when there are not two columns and two rows.
     let mut ntab: i32 = 0;
-    let mut sumsz: i32 = 0;
+    let mut sumsz: i64 = 0 as i64;
     let mut r: i32 = ra;
     let mut nch: i32 = 0;
     let mut ncols: i32 = 0;
@@ -1655,7 +1655,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
         if crate::port::cells_at(rw, (r * RWS) + 9) >= 2 {
             ntab += 1;
         }
-        sumsz += crate::port::cells_at(rw, (r * RWS) + 3);
+        sumsz = (sumsz).wrapping_add(crate::port::cells_at(rw, (r * RWS) + 3) as i64);
         if crate::port::cells_at(rw, (r * RWS) + 4) < minx {
             minx = crate::port::cells_at(rw, (r * RWS) + 4);
         }
@@ -1673,7 +1673,7 @@ pub(crate) fn tb_text_grid(wd: &mut crate::port::Cells, wl: &mut crate::port::Ce
     if (ntab < 2) || ((rb - ra) <= 1) {
         return -1;
     }
-    nch = tb_channels(wd, wl, rw, sg, ra, rb, ntab / 6, ((sumsz / (rb - ra)) * SEG_NUM) / SEG_DEN, ch, st, en);
+    nch = tb_channels(wd, wl, rw, sg, ra, rb, ntab / 6, ((sumsz / ((rb - ra) as i64)).wrapping_mul(SEG_NUM as i64) / (SEG_DEN as i64)) as i32, ch, st, en);
     if nch < 1 {
         return -1;
     }
