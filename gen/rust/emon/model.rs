@@ -480,6 +480,12 @@ pub fn fk_node() -> i32 {
 pub fn fk_ocr_scope() -> i32 {
     return 98;
 }
+pub fn fk_signed() -> i32 {
+    return 99;
+}
+pub fn fk_location() -> i32 {
+    return 100;
+}
 pub fn fk_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "id");
@@ -871,6 +877,14 @@ pub fn fk_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 98 {
         crate::port::text_ascii(t, "ocr-scope");
+        return 1;
+    }
+    if code == 99 {
+        crate::port::text_ascii(t, "signed");
+        return 1;
+    }
+    if code == 100 {
+        crate::port::text_ascii(t, "location");
         return 1;
     }
     return 0;

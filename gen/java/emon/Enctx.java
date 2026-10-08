@@ -384,6 +384,7 @@ public final class Enctx {
         public emon.Port.Cells ffd = emon.Port.newCells();
         public emon.Port.Cells fab = emon.Port.newCells();
         public emon.Port.Cells fws = emon.Port.newCells();
+        public emon.Port.Cells sgc = emon.Port.newCells();
         public Scratch() {
         }
         @Override
@@ -518,6 +519,7 @@ public final class Enctx {
             emon.Port.cellsCopyInto(c.ffd, this.ffd);
             emon.Port.cellsCopyInto(c.fab, this.fab);
             emon.Port.cellsCopyInto(c.fws, this.fws);
+            emon.Port.cellsCopyInto(c.sgc, this.sgc);
             return c;
         }
     }

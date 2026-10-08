@@ -1327,7 +1327,37 @@ pub(crate) fn fc_link(cand: &mut crate::port::Cells, page: i32, x0: i32, y0: i32
     }
     return -1;
 }
-pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut fnodes: &mut crate::port::Cells, mut fattrs: &mut crate::port::Cells, mut fregions: &mut crate::port::Cells, mut fnm: &mut crate::port::Cells, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, fi: &mut crate::port::Cells, grg: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, et: &mut crate::port::Cells, pg: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, level: i32, mut fcand: &mut crate::port::Cells, mut cl: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
+pub(crate) fn fc_signature_over(sl: &mut crate::port::Cells, page: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // 1 when a signature or initials READ FROM PIXELS (an `sl` row of kind 3 or 4 with flag 128: `emon.sigpx`'s) lies in the region on its page: its box is at least half of the region
+    // and the region is at most four times its box (the picture of a signature is the signature's placeholder and no figure: SPEC 10.7, P8.3, D430; a signature inside a photograph is not
+    // this). A region that no figure was made of keeps its words in the body: they were the figure's `labels` otherwise.
+    let n: i32 = crate::port::cells_len(sl) / 16;
+    let mut j: i32 = 0;
+    let mut q: i32 = 0;
+    let mut ow: i32 = 0;
+    let mut oh: i32 = 0;
+    let mut area: i32 = 0;
+    let mut sa: i32 = 0;
+    let mut ra: i32 = 0;
+    while j < n {
+        q = j * 16;
+        if (crate::port::cells_at(sl, q) == page) && ((crate::port::cells_at(sl, q + 5) >= 3) && ((crate::port::cells_at(sl, q + 5) <= 4) && ((crate::port::cells_at(sl, q + 12) & 128) != 0))) {
+            ow = fc_min(x1, crate::port::cells_at(sl, q + 3)) - fc_max(x0, crate::port::cells_at(sl, q + 1));
+            oh = fc_min(y1, crate::port::cells_at(sl, q + 4)) - fc_max(y0, crate::port::cells_at(sl, q + 2));
+            if (ow > 0) && (oh > 0) {
+                area = (ow / 100) * (oh / 100);
+                sa = ((crate::port::cells_at(sl, q + 3) - crate::port::cells_at(sl, q + 1)) / 100) * ((crate::port::cells_at(sl, q + 4) - crate::port::cells_at(sl, q + 2)) / 100);
+                ra = ((x1 - x0) / 100) * ((y1 - y0) / 100);
+                if ((area * 2) >= ra) && (ra <= (sa * 4)) {
+                    return 1;
+                }
+            }
+        }
+        j += 1;
+    }
+    return 0;
+}
+pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut fnodes: &mut crate::port::Cells, mut fattrs: &mut crate::port::Cells, mut fregions: &mut crate::port::Cells, mut fnm: &mut crate::port::Cells, pa: &mut crate::port::Cells, im: &mut crate::port::Cells, fi: &mut crate::port::Cells, grg: &mut crate::port::Cells, grl: &mut crate::port::Cells, fw: &mut crate::port::Cells, fl: &mut crate::port::Cells, et: &mut crate::port::Cells, pg: &mut crate::port::Cells, sl: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, level: i32, mut fcand: &mut crate::port::Cells, mut cl: &mut crate::port::Cells, mut fg: &mut crate::port::Cells, mut fd: &mut crate::port::Cells, mut ab: &mut crate::port::Cells, mut ws: &mut crate::port::Cells) -> i32 {
     // THE FIGURES (SPEC 10.6): the candidate regions (the image placements, the vector clusters of `emon.asset`, the shaded fills, P7.G's
     // `figure` regions), each measured and judged, the ones that are figures placed among the blocks with their kind, confidence
     // and `labels` (`rs-figures`) into the empty arenas `fnodes fattrs fregions` (the caller swaps them in, then restructures). `cand`
@@ -1398,6 +1428,9 @@ pub fn fc_stage(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, 
             if fc_measure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws) == 0 {
                 rej = fc_reject(ws);
             }
+        }
+        if fc_signature_over(sl, page, x0, y0, x1, y1) == 1 {
+            rej = 1;
         }
         if crate::port::cells_at(fcand, b + CR_KORI) == -1 {
             pk = fc_image_kind(fi, crate::port::cells_at(fcand, b + CR_ROW), x1 - x0, y1 - y0, y0, y1, pageh, recur);

@@ -175,8 +175,11 @@ public static class Sealmarktest {
         emon.Port.Cells ep = emon.Port.NewCells();
         emon.Port.Cells scr = emon.Port.NewCells();
         emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells txt = emon.Port.NewCells();
+        emon.Port.Cells sgc = emon.Port.NewCells();
         Evidence.EpNew(ep, 1, 61200, 79200);
-        return Sealmark.SmFind(pa, pts, gl, fw, et, ep, cg, refs, ow, 1, sm, scr, tmp);
+        return Sealmark.SmFind(pa, pts, gl, fw, et, ep, cg, refs, ow, an, txt, 1, sm, scr, tmp, sgc);
     }
     [Xunit.Fact]
     public static void TestASealHoldsItsArcAndItsInkAndNotTheBodyUnderIt() {

@@ -370,6 +370,9 @@ public static class Pageunit {
                 Retarget.RtWitness(g0, Player.CgCount(cg), cg, rtp, oruns, owords);
                 if (PuPx(bms, nid, fuse) == 1) {
                     Sealpx.SxRecord(i, nview, dpi * 100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
+                    // the pen strokes over a signature line in the text-free render (P8.3): no request, no view; the groups are written with the seals'
+                    Sigpx.SpFind(i + 1, views, nview, rules, owords, etext, emon.Port.BmsGet(bms, nid), pgw, s5, s6);
+                    Sigpx.SpRecord(i, s5, cg);
                 }
             }
         }
@@ -440,8 +443,12 @@ public static class Pageunit {
         }
         Retarget.RtRecord(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
         Sealpx.SxRecord(i, vdec, dpi100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
+        // the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
+        Sigpx.SpFind(i + 1, views, vdec, rules, owords, etext, emon.Port.BmsGet(bms, did), PuField(pl, i, 8), s5, s6);
+        Sigpx.SpRecord(i, s5, cg);
         nsel = Retarget.RtAdopt(rtp, oruns, run, olines, owords, scr);
         nsel = Sealpx.SxDropLines(scr, nsel, olines, owords, s1);
+        nsel = Sigpx.SpDropLines(scr, nsel, olines, owords, s5);
         Retarget.RtUpright(rtp, run, epages, i + 1);
         nl = Evidence.OrGet(oruns, run, Evidence.OrfLcount());
         rotmed = Evidence.EvRotMedian(olines, l0, nl);

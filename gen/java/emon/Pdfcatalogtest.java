@@ -299,9 +299,9 @@ public final class Pdfcatalogtest {
             Pdfx.pxJsonBox(t, an, (14 * 38) + 4);
         }
         if (which == 5) {
-            n = emon.Port.cellsLen(sg) / 36;
+            n = emon.Port.cellsLen(sg) / 38;
             while (i < n) {
-                at = i * 36;
+                at = i * 38;
                 if (i > 0) {
                     emon.Port.textAscii(t, "|");
                 }
@@ -334,6 +334,37 @@ public final class Pdfcatalogtest {
                 emon.Port.textI32(t, emon.Port.cellsAt(sg, at + 33));
                 emon.Port.textAscii(t, ";");
                 emon.Port.textI32(t, emon.Port.cellsAt(sg, at));
+                i += 1;
+            }
+        }
+        if (which == 9) {
+            n = emon.Port.cellsLen(an) / 38;
+            while (i < n) {
+                at = i * 38;
+                if (emon.Port.cellsAt(an, at + 1) == 27) {
+                    if (first == 0) {
+                        emon.Port.textAscii(t, "|");
+                    }
+                    first = 0;
+                    emon.Port.textAscii(t, "p");
+                    emon.Port.textI32(t, emon.Port.cellsAt(an, at));
+                    emon.Port.textAscii(t, ";b");
+                    emon.Port.textI32(t, emon.Port.cellsAt(an, at + 30));
+                    emon.Port.textAscii(t, ";y");
+                    emon.Port.textI32(t, emon.Port.cellsAt(an, at + 8));
+                    emon.Port.textAscii(t, ";m");
+                    emon.Port.textI32(t, emon.Port.cellsAt(an, at + 15));
+                    emon.Port.textAscii(t, ";n");
+                    cgPut(t, txt, emon.Port.cellsAt(an, at + 23), emon.Port.cellsAt(an, at + 24));
+                    emon.Port.textAscii(t, ";c");
+                    cgPut(t, txt, emon.Port.cellsAt(an, at + 34), emon.Port.cellsAt(an, at + 35));
+                    emon.Port.textAscii(t, ";f");
+                    cgPut(t, txt, emon.Port.cellsAt(an, at + 25), emon.Port.cellsAt(an, at + 26));
+                    emon.Port.textAscii(t, ";r");
+                    cgPut(t, txt, emon.Port.cellsAt(an, at + 27), emon.Port.cellsAt(an, at + 28));
+                    emon.Port.textAscii(t, ";l");
+                    cgPut(t, txt, emon.Port.cellsAt(an, at + 32), emon.Port.cellsAt(an, at + 33));
+                }
                 i += 1;
             }
         }
@@ -537,6 +568,21 @@ public final class Pdfcatalogtest {
         StringBuilder t = emon.Testport.newText();
         emon.Testport.assertEq(cgLine(emon.Testport.testFile("pdf/catalog/sigs.pdf"), 5, t), 0, "read");
         emon.Testport.assertText(t, "Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;3;0|;D:20240301000000Z;2024-3-1T0:0:0/0;;;;Adobe.PPKLite;ETSI.RFC3161;0,10,20,30;1;7;1|Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;11;-1", "signatures");
+    }
+    public static void testSignatureFieldsRideInAnAsSyntheticRows() {
+        // P8.3 (D426): after the annotations and fields, `pa-run` appends to `an` one synthetic row a signature field that has a widget on a page, signed or not, for the document unit
+        // (the Engines hand it `an` and not `sg`). Page, bits (`sg`'s 33; 0 for no dictionary), the year, the length of /M, the signer's /Name (UTF-16: ten characters), the
+        // certificate's name, the field's name, the reason and the location. The unsigned field has none of the signature's. `pa-dump` leaves the rows out (the golden is unchanged).
+        StringBuilder t = emon.Testport.newText();
+        emon.Testport.assertEq(cgLine(emon.Testport.testFile("pdf/catalog/sigs.pdf"), 9, t), 0, "read");
+        emon.Testport.assertText(t, "p0;b3;y2024;m23;nZo{235} Sigfoo;c;fsigA;rI approve this document;lBerlin|p0;b7;y2024;m17;n;c;fstamp;r;l|p0;b0;y-1;m0;n;c;funsigned;r;l", "three fields, three rows");
+    }
+    public static void testTheCertificatesNameIsReadAsBytesAndNeverVerified() {
+        // `test/signatures/sig-digital.pdf` (tools/synth/sig_pdf.clj): a field with a /Name, a field whose dictionary has none and whose /Contents is an openssl CMS signature of an EC key
+        // (`/O=Example Org/CN=Taylor Certificate`, self-signed: the issuer and the subject are the same), and an unsigned field. The second's name is the certificate's.
+        StringBuilder t = emon.Testport.newText();
+        emon.Testport.assertEq(cgLine(emon.Testport.testFile("signatures/sig-digital.pdf"), 9, t), 0, "read");
+        emon.Testport.assertText(t, "p0;b3;y2026;m23;nMorgan Reyes;c;fApproverSig;rI approve this document;lBerlin|p0;b3;y2026;m10;n;cTaylor Certificate;fVendorSig;r;l|p0;b0;y-1;m0;n;c;fCounterSig;r;l", "the second has the certificate's name");
     }
     public static void testMetadataInEveryEncodingPlainAndEncrypted() {
         // Info strings in UTF-16 (`Un{239}{8364}ode`), in PDFDocEncoding (the bullet, Euro and

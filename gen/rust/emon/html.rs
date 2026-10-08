@@ -1170,6 +1170,28 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
             h_run(t, text, attr_value(attrs, b), attr_len(attrs, b));
             crate::port::text_ascii(t, "\"");
         }
+        b = h_iattr(nodes, attrs, n, fk_signed());
+        if b >= 0 {
+            crate::port::text_ascii(t, " data-emon-signed=\"");
+            if attr_value(attrs, b) != 0 {
+                crate::port::text_ascii(t, "true");
+            } else {
+                crate::port::text_ascii(t, "false");
+            }
+            crate::port::text_ascii(t, "\"");
+        }
+        b = h_tattr(nodes, attrs, n, fk_reason());
+        if b >= 0 {
+            crate::port::text_ascii(t, " data-emon-reason=\"");
+            h_run(t, text, attr_value(attrs, b), attr_len(attrs, b));
+            crate::port::text_ascii(t, "\"");
+        }
+        b = h_tattr(nodes, attrs, n, fk_location());
+        if b >= 0 {
+            crate::port::text_ascii(t, " data-emon-location=\"");
+            h_run(t, text, attr_value(attrs, b), attr_len(attrs, b));
+            crate::port::text_ascii(t, "\"");
+        }
         if asid < 0 {
             crate::port::text_ascii(t, " role=\"img\" aria-label=\"");
             h_alt(t, nodes, attrs, text, n);

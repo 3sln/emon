@@ -34,7 +34,19 @@
 ;;         day hour minute second zone-minutes; -1 absent, zone -99999 unknown), 18-19
 ;;         /Reason, 20-21 /Location, 22-23 /ContactInfo, 24-25 /Filter, 26-27 /SubFilter,
 ;;         28-31 /ByteRange, 32 bytes in /Contents, 33 bits (1 signed, 2 has a /ByteRange, 4 a
-;;         document timestamp, 8 from /Perms), 34 ranges, 35 spare.
+;;         document timestamp, 8 from /Perms), 34 ranges, 35 spare, 36-37 the common name of
+;;         the first certificate's subject in the /Contents bytes, as a run (P8.3, D426: read
+;;         as bytes, NEVER validated; absent -1 0).
+;;
+;; THE DIGITAL SIGNATURE ROWS (P8.3, D426). After everything above, `pa-run` appends to `an` one
+;; SYNTHETIC row (subtype `an-digsig`, 27) for every signature field that has a widget on a page,
+;; signed or not: 0 page, 1 subtype 27, 2 the field's object number, 4-7 the widget's rectangle
+;; in page space, 8-14 the signing time (`sg` 11-17: year month day hour minute second
+;; zone-minutes, -1 absent; 15 the length of the /M text, 16 or more characters say the time of day is there), 23-24 the signer's /Name, 25-26 the field's name, 27-28 the
+;; /Reason, 32-33 the /Location, 30 bits (`sg` 33; 0 when the field has no signature dictionary),
+;; 34-35 the certificate's common name (`sg` 36-37). Every run is absent as -1 0.
+;; The Engines hand the document unit `an` and `txt` and not `sg`/`fd`, and the hosts are not
+;; edited by P8.3, so the rows ride in `an`: `pa-dump` and the return value leave them out.
 ;;
 ;; THE APPEARANCE is decoded and its text shown (`BT` .. `ET`, strings and their line
 ;; moves) is read as Latin-1: enough for a form filled with a base-14 or WinAnsi font; text
@@ -81,7 +93,7 @@
 
 (defconst ^I32 AN_STRIDE 38)
 (defconst ^I32 FD_STRIDE 32)
-(defconst ^I32 SG_STRIDE 36)
+(defconst ^I32 SG_STRIDE 38)
 (defconst ^I32 FS_STRIDE 8)
 (defconst ^I32 FS_DEPTH 26)           ;; field-tree depth
 (defconst ^I32 PA_ANNOTS 200000)      ;; annotations read
@@ -115,7 +127,8 @@
    [an-trap-net 23 "TrapNet"]
    [an-watermark 24 "Watermark"]
    [an-redact 25 "Redact"]
-   [an-rich-media 26 "RichMedia"]])
+   [an-rich-media 26 "RichMedia"]
+   [an-digsig 27 "DigitalSignature"]])
 
 (defenum ^:pub an-act
   [[ac-none 0 "none"]
@@ -543,9 +556,80 @@
     (while (< k 32)
       (do (cells-set sg (+ at k) -1)
           (set k (+ k 1))))
+    (cells-set sg (+ at 36) -1)
     (return row)))
 
-(defn ^I32 pa-sig-fill [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+(defn ^I32 pa-asn-cp [^Cells ar ^I32 h ^I32 i ^I32 end ^I32 tag ^:mut ^Cells out]
+  (comment "Append to `out` the characters of the ASN.1 string whose content is the bytes [i, end) of string `h`; `tag` is its universal tag: 12 UTF8String is decoded as")
+  (comment "UTF-8 (a malformed byte is U+FFFD), 30 BMPString as UTF-16BE, every other as Latin-1. Answers the code points appended.")
+  (let [^:mut ^I32 k i
+        ^:mut ^I32 c 0
+        ^:mut ^I32 n 0
+        ^:mut ^I32 cp 0
+        ^:mut ^I32 need 0]
+    (while (< k end)
+      (do (set c (px-bat ar h k))
+          (set cp c)
+          (if (== tag 30)
+            (do (if (< (+ k 1) end) (set cp (+ (* c 256) (px-bat ar h (+ k 1)))))
+                (set k (+ k 1))))
+          (if (and (== tag 12) (>= c 128))
+            (do (set need 0)
+                (if (and (>= c 194) (< c 224)) (do (set need 1) (set cp (- c 192))))
+                (if (and (>= c 224) (< c 240)) (do (set need 2) (set cp (- c 224))))
+                (if (and (>= c 240) (< c 245)) (do (set need 3) (set cp (- c 240))))
+                (if (== need 0)
+                  (set cp 65533)
+                  (if (> (+ k need) (- end 1))
+                    (do (set cp 65533) (set need 0))
+                    (while (> need 0)
+                      (do (set k (+ k 1))
+                          (set cp (+ (* cp 64) (bit-and (px-bat ar h k) 63)))
+                          (set need (- need 1))))))))
+          (px-push-cp out cp)
+          (set n (+ n 1))
+          (set k (+ k 1))))
+    (return n)))
+
+(defn ^I32 pa-cert-name [^Cells ar ^I32 h ^:mut ^Cells txt ^:mut ^Cells sg ^I32 at]
+  (comment "The common name of the SIGNER's certificate, read as bytes from the PKCS#7 in the /Contents string `h`; a run at sg[at, at+2), absent (-1 0) when there is none.")
+  (comment "NOTHING IS VERIFIED: the bytes are searched for the AttributeType commonName (55 04 03) followed by a UTF8String, PrintableString, T61String, IA5String or BMPString of")
+  (comment "a short length, and the SECOND one is taken (a certificate lists its issuer before its subject, and the signer's is the first certificate of the set: Adobe and openssl write")
+  (comment "it so), else the first. A name of a self-signed certificate is the same twice. D426.")
+  (let [^I32 n (px-blen ar h)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 seen 0
+        ^:mut ^I32 tag 0
+        ^:mut ^I32 clen 0
+        ^:mut ^I32 s0 -1
+        ^:mut ^I32 l0 0
+        ^:mut ^I32 t0 0
+        ^:mut ^I32 s1 -1
+        ^:mut ^I32 l1 0
+        ^:mut ^I32 t1 0]
+    (cells-set sg at -1)
+    (cells-set sg (+ at 1) 0)
+    (while (and (< (+ i 5) n) (< seen 2))
+      (do (if (and (== (px-bat ar h i) 85) (and (== (px-bat ar h (+ i 1)) 4) (== (px-bat ar h (+ i 2)) 3)))
+            (do (set tag (px-bat ar h (+ i 3)))
+                (set clen (px-bat ar h (+ i 4)))
+                (if (and (or (== tag 12) (or (== tag 19) (or (== tag 20) (or (== tag 22) (== tag 30))))) (and (> clen 0) (and (< clen 128) (<= (+ (+ i 5) clen) n))))
+                  (do (if (== seen 0) (do (set s0 (+ i 5)) (set l0 clen) (set t0 tag)))
+                      (if (== seen 1) (do (set s1 (+ i 5)) (set l1 clen) (set t1 tag)))
+                      (set seen (+ seen 1))
+                      (set i (+ (+ i 4) clen))))))
+          (set i (+ i 1))))
+    (if (== s0 -1) (return 0))
+    (let [^I32 start (cells-len txt)
+          ^:mut ^I32 cnt 0]
+      (if (== seen 2)
+        (set cnt (pa-asn-cp ar h s1 (+ s1 l1) t1 txt))
+        (set cnt (pa-asn-cp ar h s0 (+ s0 l0) t0 txt)))
+      (cells-set sg at start)
+      (cells-set sg (+ at 1) cnt)
+      (return cnt))))
+
+(defn ^I32 pa-sig-fill[^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                         ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells txt
                         ^:mut ^Cells sg ^I32 row ^I32 sd ^I32 bits]
   (comment "Fill signature row `row` from the signature dictionary `sd` (resolved). Nothing")
@@ -587,6 +671,7 @@
     (set v (pd-dget src ar dc a b st sd (pn-contents)))
     (if (and (!= v 0) (== (pl-kind-of ar v) 5))
       (do (cells-set sg (+ at 32) (pl-str-len ar v))
+          (pa-cert-name ar v txt sg (+ at 36))
           (set fl (bit-or fl 1))))
     (set v (pd-dget src ar dc a b st sd (pn-type)))
     (if (== (px-is ar v (px-doc-time-stamp)) 1) (set fl (bit-or fl 4)))
@@ -1092,9 +1177,71 @@
           (set i (+ i 1))))
     (return 0)))
 
+;; ------------------------------------------------------------------------ the digital signature rows
+
+(defn ^I32 pa-digsig-row [^:mut ^Cells an ^Cells fd ^Cells sg ^I32 frow]
+  (comment "Append the synthetic `an-digsig` row (see the head of this file) of terminal field `frow` (a signature field with a widget on a page). Signed: its signature")
+  (comment "dictionary has a /Contents. Nothing is verified. Answers 1 when a row was written.")
+  (let [^I32 f (* frow FD_STRIDE)
+        ^I32 srow (cells-at fd (+ f 24))
+        ^I32 s (* srow SG_STRIDE)
+        ^I32 at (cells-len an)
+        ^:mut ^I32 k 0]
+    (if (< (cells-at fd (+ f 15)) 0) (return 0))
+    (while (< k AN_STRIDE)
+      (do (cells-push an 0)
+          (set k (+ k 1))))
+    (cells-set an at (cells-at fd (+ f 15)))
+    (cells-set an (+ at 1) (an-digsig))
+    (cells-set an (+ at 2) (cells-at fd f))
+    (set k 0)
+    (while (< k 4)
+      (do (cells-set an (+ (+ at 4) k) (cells-at fd (+ (+ f 16) k)))
+          (set k (+ k 1))))
+    (set k 8)
+    (while (< k 15)
+      (do (cells-set an (+ at k) -1)
+          (set k (+ k 1))))
+    (cells-set an (+ at 23) -1)
+    (cells-set an (+ at 25) (cells-at fd (+ f 2)))
+    (cells-set an (+ at 26) (cells-at fd (+ f 3)))
+    (cells-set an (+ at 27) -1)
+    (cells-set an (+ at 29) -1)
+    (cells-set an (+ at 32) -1)
+    (cells-set an (+ at 34) -1)
+    (cells-set an (+ at 35) 0)
+    (cells-set an (+ at 36) -1)
+    (if (>= srow 0)
+      (do (cells-set an (+ at 23) (cells-at sg (+ s 7)))
+          (cells-set an (+ at 24) (cells-at sg (+ s 8)))
+          (set k 0)
+          (while (< k 7)
+            (do (cells-set an (+ (+ at 8) k) (cells-at sg (+ (+ s 11) k)))
+                (set k (+ k 1))))
+          (cells-set an (+ at 15) (cells-at sg (+ s 10)))
+          (cells-set an (+ at 27) (cells-at sg (+ s 18)))
+          (cells-set an (+ at 28) (cells-at sg (+ s 19)))
+          (cells-set an (+ at 32) (cells-at sg (+ s 20)))
+          (cells-set an (+ at 33) (cells-at sg (+ s 21)))
+          (cells-set an (+ at 30) (cells-at sg (+ s 33)))
+          (cells-set an (+ at 34) (cells-at sg (+ s 36)))
+          (cells-set an (+ at 35) (cells-at sg (+ s 37)))))
+    (return 1)))
+
+(defn ^I32 pa-digsigs [^:mut ^Cells an ^Cells fd ^Cells sg]
+  (comment "The synthetic rows of every signature field (`fd` kind 7) that has a widget on a page, in field order. Answers the rows written.")
+  (let [^I32 nf (quot (cells-len fd) FD_STRIDE)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 n 0]
+    (while (< i nf)
+      (do (if (== (cells-at fd (+ (* i FD_STRIDE) 6)) 7)
+            (set n (+ n (pa-digsig-row an fd sg i))))
+          (set i (+ i 1))))
+    (return n)))
+
 ;; ------------------------------------------------------------------------ run
 
-(defn ^:pub ^I32 pa-run [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
+(defn ^:pub ^I32 pa-run[^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a
                          ^:mut ^Cells b ^:mut ^Cells st ^:mut ^Cells pg ^:mut ^Cells idx
                          ^:mut ^Cells txt ^:mut ^Cells w ^:mut ^Cells fs ^:mut ^Cells seen
                          ^:mut ^Cells fm ^:mut ^Cells an ^:mut ^Cells aq ^:mut ^Cells fd ^:mut ^Cells sg]
@@ -1160,7 +1307,9 @@
             (do (set srow (pa-sig-new sg -1))
                 (pa-sig-fill src ar dc a b st txt sg srow v 8)))))
     (if (ps-missed src) (return -1))
-    (return (quot (cells-len an) AN_STRIDE))))
+    (set i (quot (cells-len an) AN_STRIDE))
+    (pa-digsigs an fd sg)
+    (return i)))
 
 ;; ------------------------------------------------------------------------ dump
 
@@ -1348,8 +1497,9 @@
         ^:mut ^I32 i 0]
     (emit-ascii t "{\"annots\":[")
     (while (< i na)
-      (do (if (> i 0) (emit-ascii t ","))
-          (pa-dump-annot t txt an aq i)
+      (do (if (!= (cells-at an (+ (* i AN_STRIDE) 1)) (an-digsig))
+            (do (if (> i 0) (emit-ascii t ","))
+                (pa-dump-annot t txt an aq i)))
           (set i (+ i 1))))
     (emit-ascii t "],\"fields\":[")
     (set i 0)

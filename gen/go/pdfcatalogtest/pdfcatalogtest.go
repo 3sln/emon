@@ -317,9 +317,9 @@ func cgLine(f []byte, which int32, t *strings.Builder) int32 {
 		pdfx.PxJsonBox(t, an, (14*38)+4)
 	}
 	if which == 5 {
-		n = port.CellsLen(sg) / 36
+		n = port.CellsLen(sg) / 38
 		for i < n {
-			at = i * 36
+			at = i * 38
 			if i > 0 {
 				port.TextAscii(t, "|")
 			}
@@ -352,6 +352,37 @@ func cgLine(f []byte, which int32, t *strings.Builder) int32 {
 			port.TextI32(t, port.CellsAt(sg, at+33))
 			port.TextAscii(t, ";")
 			port.TextI32(t, port.CellsAt(sg, at))
+			i += 1
+		}
+	}
+	if which == 9 {
+		n = port.CellsLen(an) / 38
+		for i < n {
+			at = i * 38
+			if port.CellsAt(an, at+1) == 27 {
+				if first == 0 {
+					port.TextAscii(t, "|")
+				}
+				first = 0
+				port.TextAscii(t, "p")
+				port.TextI32(t, port.CellsAt(an, at))
+				port.TextAscii(t, ";b")
+				port.TextI32(t, port.CellsAt(an, at+30))
+				port.TextAscii(t, ";y")
+				port.TextI32(t, port.CellsAt(an, at+8))
+				port.TextAscii(t, ";m")
+				port.TextI32(t, port.CellsAt(an, at+15))
+				port.TextAscii(t, ";n")
+				cgPut(t, txt, port.CellsAt(an, at+23), port.CellsAt(an, at+24))
+				port.TextAscii(t, ";c")
+				cgPut(t, txt, port.CellsAt(an, at+34), port.CellsAt(an, at+35))
+				port.TextAscii(t, ";f")
+				cgPut(t, txt, port.CellsAt(an, at+25), port.CellsAt(an, at+26))
+				port.TextAscii(t, ";r")
+				cgPut(t, txt, port.CellsAt(an, at+27), port.CellsAt(an, at+28))
+				port.TextAscii(t, ";l")
+				cgPut(t, txt, port.CellsAt(an, at+32), port.CellsAt(an, at+33))
+			}
 			i += 1
 		}
 	}
@@ -561,6 +592,23 @@ func TestSignatureDictionariesAreReadNotValidated(emonT *testing.T) {
 	var t *strings.Builder = port.NewText()
 	port.AssertEq(emonT, cgLine(port.TestFile("pdf/catalog/sigs.pdf"), 5, t), 0, "read")
 	port.AssertText(emonT, t, "Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;3;0|;D:20240301000000Z;2024-3-1T0:0:0/0;;;;Adobe.PPKLite;ETSI.RFC3161;0,10,20,30;1;7;1|Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;11;-1", "signatures")
+}
+
+func TestSignatureFieldsRideInAnAsSyntheticRows(emonT *testing.T) {
+	// P8.3 (D426): after the annotations and fields, `pa-run` appends to `an` one synthetic row a signature field that has a widget on a page, signed or not, for the document unit
+	// (the Engines hand it `an` and not `sg`). Page, bits (`sg`'s 33; 0 for no dictionary), the year, the length of /M, the signer's /Name (UTF-16: ten characters), the
+	// certificate's name, the field's name, the reason and the location. The unsigned field has none of the signature's. `pa-dump` leaves the rows out (the golden is unchanged).
+	var t *strings.Builder = port.NewText()
+	port.AssertEq(emonT, cgLine(port.TestFile("pdf/catalog/sigs.pdf"), 9, t), 0, "read")
+	port.AssertText(emonT, t, "p0;b3;y2024;m23;nZo{235} Sigfoo;c;fsigA;rI approve this document;lBerlin|p0;b7;y2024;m17;n;c;fstamp;r;l|p0;b0;y-1;m0;n;c;funsigned;r;l", "three fields, three rows")
+}
+
+func TestTheCertificatesNameIsReadAsBytesAndNeverVerified(emonT *testing.T) {
+	// `test/signatures/sig-digital.pdf` (tools/synth/sig_pdf.clj): a field with a /Name, a field whose dictionary has none and whose /Contents is an openssl CMS signature of an EC key
+	// (`/O=Example Org/CN=Taylor Certificate`, self-signed: the issuer and the subject are the same), and an unsigned field. The second's name is the certificate's.
+	var t *strings.Builder = port.NewText()
+	port.AssertEq(emonT, cgLine(port.TestFile("signatures/sig-digital.pdf"), 9, t), 0, "read")
+	port.AssertText(emonT, t, "p0;b3;y2026;m23;nMorgan Reyes;c;fApproverSig;rI approve this document;lBerlin|p0;b3;y2026;m10;n;cTaylor Certificate;fVendorSig;r;l|p0;b0;y-1;m0;n;c;fCounterSig;r;l", "the second has the certificate's name")
 }
 
 func TestMetadataInEveryEncodingPlainAndEncrypted(emonT *testing.T) {

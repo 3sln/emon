@@ -36,7 +36,7 @@ public final class Engine {
     public static int enFigures(emon.Enctx.Arenas m, emon.Enctx.Scratch s, emon.Enctx.Doc d, int level) {
         // P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of
         // `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
-        Figclass.fcStage(m.nodes, m.attrs, m.regions, m.text, m.pages, s.fnodes, s.fattrs, s.fregions, s.fnm, d.pa, d.im, d.fi, s.grg, d.grl, d.fw, d.fl, d.et, d.pg, d.cand, level, s.fcand, s.fcl, s.fg, s.ffd, s.fab, s.fws);
+        Figclass.fcStage(m.nodes, m.attrs, m.regions, m.text, m.pages, s.fnodes, s.fattrs, s.fregions, s.fnm, d.pa, d.im, d.fi, s.grg, d.grl, d.fw, d.fl, d.et, d.pg, s.sm, d.cand, level, s.fcand, s.fcl, s.fg, s.ffd, s.fab, s.fws);
         emon.Port.cellsSwap(m.nodes, s.fnodes);
         emon.Port.cellsSwap(m.attrs, s.fattrs);
         emon.Port.cellsSwap(m.regions, s.fregions);
@@ -155,6 +155,9 @@ public final class Engine {
         if (emon.Port.cellsLen(d.cg) > 0) {
             d.fused = 1;
         }
+        if (Sigmark.sgHasDigital(d.an) == 1) {
+            d.fused = 1;
+        }
         if ((c.ocr != 0) && (d.fused == 0) && (emon.Port.cellsLen(ev.owords) == 0)) {
             emon.Port.cellsFree(ev.epages);
             emon.Port.cellsFree(ev.feats);
@@ -163,7 +166,7 @@ public final class Engine {
         if (d.fused == 1) {
             Health.hlDoc(ev.feats, d.fw, d.hl);
             int trust0 = Pdfstruct.tgTrust(d.ss);
-            Sealmark.smFind(d.pa, d.pts, d.gl, d.fw, d.et, ev.epages, d.cg, ev.refs, ev.owords, np, s.sm, s.sscr, s.stmp);
+            Sealmark.smFind(d.pa, d.pts, d.gl, d.fw, d.et, ev.epages, d.cg, ev.refs, ev.owords, d.an, d.txt, np, s.sm, s.sscr, s.stmp, s.sgc);
             Arbiter.arDoc(d.cg, ev.refs, d.fw, d.fl, d.et, ev.feats, ev.owords, ev.olines, ev.oruns, ev.osyms, ev.images, ev.epages, d.gl, d.mk, d.an, d.txt, trust0, s.rc, s.nfw, s.nfl, s.fv, s.fx, s.afa, s.gd, s.gv, s.w2g, s.o2g, s.pp, s.ftw, s.ftl, d.xs0);
             emon.Port.cellsSwap(d.fw, s.nfw);
             emon.Port.cellsSwap(d.fl, s.nfl);

@@ -1,0 +1,770 @@
+;; HANDWRITTEN SIGNATURES, INITIALS AND DIGITAL SIGNATURE FIELDS (P8.3; SPEC 10.7; D016, D205, D426-D433). emon's own module (D039). It refines the signature candidates P7.7 made
+;; (`emon.sealmark`'s old `sm-signatures`) and adds the two kinds the SPEC names after them:
+;;
+;;   (sg-collect pa pts fw et owords page p0 p1 pw ph tmp sgc)   the page's pen-stroke CLUSTERS, each measured and its cues read, appended to `sgc`
+;;   (sg-decide sgc et)                                           the document's verdict on every cluster: a signature, initials or nothing
+;;   (sg-emit sgc an txt et page scr n0)                          the page's accepted clusters and digital signature fields as candidate records of `scr`
+;;
+;; WHAT A VECTOR SIGNATURE IS HERE (D426). The strokes are the page's open, stroked, unfilled CURVES no wider than `sg-pen-width` (2.5 pt), merged where they lie within
+;; `sg-gap` of each other: a cluster. A cluster is measured by its box, its Bezier segments and its TORTUOSITY (the length of its control polygons over the diagonal of its
+;; box, squared: a pen's loops are well over `sg-tort`, a chart's line or a diagonal flourish is not). A cluster is a signature or initials by its SIZE (initials: at most
+;; `sg-ini-w` x `sg-ini-h`, 28 x 24 pt), and it is taken when the page gives it a CUE. THE CUES ARE SHAPES, not words (language independent):
+;;   1  a hint word (`signature`, `signed`, `sign here`, `by:`, case-folded): the English forms of P7.7, kept as the locale's hint, within 3 line heights;
+;;   2  a RULE under it: a straight stroke or a thin filled rectangle, 60 pt to four fifths of the page wide, passing through the lower part of the cluster or just under
+;;      it, the cluster standing on at least half of its length;
+;;   4  a COLON TOKEN beside it: a word of at most seven characters that ends in a colon (`By:`, `Von:`, `Par:`, a fullwidth colon too) to its left on its line;
+;;   8  a LABEL under the rule: a text line within two and a half line heights below it (`Signature`, `Date`, a typed name);
+;; and it is refused when OCR READS it: two words of three letters or more that the engine was at least `sg-legible` per mille sure of lie inside it (that is handwriting
+;; as text, not a signature). INITIALS are also taken without a cue when the same small mark stands at the same place of a margin on at least one other page (RECURRENCE:
+;; within a tenth of the page and half to twice the size), or on two. The TYPED NAME (2 to 5 words of letters, the first not in lower case in a cased script,
+;; cut at the first comma) is the signature's `name`: the line the strokes are drawn OVER (a signature over a typed name), else the first line under the rule it stands on; a label of one
+;; word is not a name.
+;;
+;; DIGITAL SIGNATURES come from `emon.pdfannot`'s synthetic `an` rows (P3.8, D120, D426). NOTHING IS VERIFIED: the field, whether it holds a signature dictionary with a
+;; /Contents (signed), the signer's name (/Name, else the common name of the first certificate's subject read as bytes), the time (/M) and the reason and the location,
+;; exactly as the file says. A record `name US reason US location US date` (US the code point 31) is the text of the candidate.
+;;
+;; THE RECORDS. `sgc`: 16 cells a cluster: 0 page, 1-4 box, 5 Bezier segments, 6 first path row, 7 ink (0xRRGGBB), 8 length (-1: the geometry was not kept), 9 cue bits, 10 page
+;; width, 11 page height, 12 verdict (3 signature, 4 initials, 0 none), 13 confidence, 14 the y of the rule it stands on (-1 none), 15 the sum of the diagonals of its strokes' boxes. A candidate record of `scr` is `emon.sealmark`'s
+;; (12 cells: kind, row, box, 6-8 centre and radius (a typed name's run for a signature, a digital record's run: start and length in 6 and 7), ink, flags + 65536 x confidence).
+(ns emon.sigmark
+  (:require [emon.lang :refer [I32 I64 Cells i64 mul64 add64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.sealfield :refer [sf-script sf-digit]]
+            [emon.pdfannot :refer [an-digsig]]
+            [emon.evidence :refer [pa-get pt-get ow-get ow-count hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf
+                                   pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-stroke pf-width pf-flags pf-pfirst pf-pcount
+                                   ptf-x ptf-y ptf-op pg-closed pg-filled pg-stroked pg-clip pa-line pa-rect pa-curve po-curve]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and bit-or]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 13: named, first values; P10.1 calibrates)
+
+(defn ^:pub ^I32 sg-w [] (comment "Cells of a cluster record of `sgc`.") (return 16))
+(defn ^:pub ^I32 sg-pen-width [] (comment "`sig-width`: the widest stroke (centipoints) of a pen: 2.5 pt (D314).") (return 250))
+(defn ^:pub ^I32 sg-gap [] (comment "`sig-gap`: how far (centipoints) strokes of one signature lie apart.") (return 800))
+(defn ^:pub ^I32 sg-min-side [] (comment "The smallest side (centipoints) of a mark: 5 pt.") (return 500))
+(defn ^:pub ^I32 sg-ini-w [] (comment "`ini-width`: the widest initials (centipoints): 28 pt.") (return 2800))
+(defn ^:pub ^I32 sg-ini-h [] (comment "`ini-height`: the tallest initials (centipoints): 24 pt.") (return 2400))
+(defn ^:pub ^I32 sg-sig-min-w [] (comment "The narrowest signature (centipoints): 28 pt, the widest initials' width.") (return 2800))
+(defn ^:pub ^I32 sg-sig-max-w [] (comment "The widest signature (centipoints): 300 pt.") (return 30000))
+(defn ^:pub ^I32 sg-sig-max-h [] (comment "The tallest signature (centipoints): 90 pt.") (return 9000))
+(defn ^:pub ^I32 sg-sig-segs [] (comment "`sig-segs`: the Bezier segments a signature has, together.") (return 3))
+(defn ^:pub ^I32 sg-ini-segs [] (comment "The Bezier segments initials have, together.") (return 2))
+(defn ^:pub ^I32 sg-tort [] (comment "`sig-tort`: the squared length of the control polygons over the squared diagonal of the box, per cent: 180 is 1.34 times.") (return 180))
+(defn ^:pub ^I32 sg-rule-min [] (comment "The shortest signature line (centipoints): 60 pt.") (return 6000))
+(defn ^:pub ^I32 sg-rule-thick [] (comment "The thickest signature line (centipoints): 2 pt.") (return 200))
+(defn ^:pub ^I32 sg-rule-page [] (comment "A rule of more than this share of the page's width (per mille) is a separator, not a signature line.") (return 800))
+(defn ^:pub ^I32 sg-cue-lines [] (comment "`cue-lines`: how many line heights from a hint word a signature may lie (D314).") (return 3))
+(defn ^:pub ^I32 sg-label-lines [] (comment "How far under a rule (tenths of a line height) a label or the typed name may begin: 25.") (return 25))
+(defn ^:pub ^I32 sg-margin-x [] (comment "`ini-margin-x`: the band (per mille of the page's width) at each side where recurring initials are margin initials.") (return 140))
+(defn ^:pub ^I32 sg-margin-y [] (comment "`ini-margin-y`: the band (per mille of the page's height) at the top and the foot.") (return 120))
+(defn ^:pub ^I32 sg-rec-pos [] (comment "`ini-rec-pos`: how far apart (per mille of the page) two marks of one place are.") (return 100))
+(defn ^:pub ^I32 sg-legible [] (comment "`sig-legible`: the confidence (per mille) from which an OCR word inside a cluster is legible handwriting.") (return 700))
+(defn ^:pub ^I32 sg-max [] (comment "The most clusters of a document and of a page.") (return 512))
+(defn ^:pub ^I32 sg-max-strokes [] (comment "The most strokes of a page that are clustered.") (return 96))
+(defn ^:pub ^I32 sg-cw [] (comment "Cells of a candidate record of `emon.sealmark`'s `scr`.") (return 12))
+
+;; ------------------------------------------------------------- small helpers
+
+(defn ^I32 sg-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 sg-lo [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 sg-hi [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 sg-dist [^I32 dx ^I32 dy]
+  (comment "The length of (dx, dy) within 4 per cent: the larger part and three eighths of the smaller.")
+  (let [^I32 a (sg-abs dx)
+        ^I32 b (sg-abs dy)]
+    (return (+ (sg-hi a b) (quot (* 3 (sg-lo a b)) 8)))))
+
+(defn ^I32 sg-gap-of [^I32 a0 ^I32 a1 ^I32 b0 ^I32 b1]
+  (comment "The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.")
+  (if (> b0 a1) (return (- b0 a1)))
+  (if (> a0 b1) (return (- a0 b1)))
+  (return 0))
+
+(defn ^I32 sg-overlap [^I32 a0 ^I32 a1 ^I32 b0 ^I32 b1]
+  (comment "The length the intervals [a0, a1] and [b0, b1] share, 0 when they do not.")
+  (let [^I32 v (- (sg-lo a1 b1) (sg-hi a0 b0))]
+    (if (< v 0) (return 0))
+    (return v)))
+
+(defn ^I32 sg-fold [^I32 c]
+  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
+  (return c))
+
+(defn ^I32 sg-wget [^Cells fw ^I32 row ^I32 k]
+  (return (cells-at fw (+ (* row 24) k))))
+
+(defn ^I32 sg-word-is [^Cells fw ^Cells et ^I32 row ^I32 pre0 ^I32 pre1 ^I32 pre2 ^I32 pre3 ^I32 pre4 ^I32 pre5 ^I32 pre6 ^I32 pre7 ^I32 pre8 ^I32 want]
+  (comment "1 when word `row` starts, case-folded, with the code points pre0..pre(want-1) (nine at most).")
+  (let [^I32 ts (sg-wget fw row 11)
+        ^I32 tl (sg-wget fw row 12)]
+    (if (< tl want) (return 0))
+    (if (!= (sg-fold (cells-at et ts)) pre0) (return 0))
+    (if (and (> want 1) (!= (sg-fold (cells-at et (+ ts 1))) pre1)) (return 0))
+    (if (and (> want 2) (!= (sg-fold (cells-at et (+ ts 2))) pre2)) (return 0))
+    (if (and (> want 3) (!= (sg-fold (cells-at et (+ ts 3))) pre3)) (return 0))
+    (if (and (> want 4) (!= (sg-fold (cells-at et (+ ts 4))) pre4)) (return 0))
+    (if (and (> want 5) (!= (sg-fold (cells-at et (+ ts 5))) pre5)) (return 0))
+    (if (and (> want 6) (!= (sg-fold (cells-at et (+ ts 6))) pre6)) (return 0))
+    (if (and (> want 7) (!= (sg-fold (cells-at et (+ ts 7))) pre7)) (return 0))
+    (if (and (> want 8) (!= (sg-fold (cells-at et (+ ts 8))) pre8)) (return 0))
+    (return 1)))
+
+(defn ^I32 sg-hint-word [^Cells fw ^Cells et ^I32 row ^I32 end]
+  (comment "1 when word `row` (of a page whose words end at `end`) is a hint: `signature`, `signed`, `sign` followed by `here`, `by:`; case-folded (P7.7's, the locale hint).")
+  (let [^I32 tl (sg-wget fw row 12)]
+    (if (== (sg-word-is fw et row 115 105 103 110 97 116 117 114 101 9) 1) (return 1))
+    (if (== (sg-word-is fw et row 115 105 103 110 101 100 0 0 0 6) 1) (return 1))
+    (if (and (== tl 3) (== (sg-word-is fw et row 98 121 58 0 0 0 0 0 0 3) 1)) (return 1))
+    (if (and (== tl 4) (and (== (sg-word-is fw et row 115 105 103 110 0 0 0 0 0 4) 1) (< (+ row 1) end)))
+      (if (== (sg-word-is fw et (+ row 1) 104 101 114 101 0 0 0 0 0 4) 1) (return 1)))
+    (return 0)))
+
+(defn ^I32 sg-colon-token [^Cells fw ^Cells et ^I32 row]
+  (comment "1 when word `row` is a short label that ends in a colon: at most seven characters, ASCII or fullwidth colon last, at least one letter before it (language independent).")
+  (let [^I32 ts (sg-wget fw row 11)
+        ^I32 tl (sg-wget fw row 12)
+        ^I32 last (cells-at et (+ ts (- tl 1)))]
+    (if (or (< tl 2) (> tl 7)) (return 0))
+    (if (and (!= last 58) (!= last 65306)) (return 0))
+    (if (== (sf-script (cells-at et ts)) 0) (return 0))
+    (return 1)))
+
+;; ------------------------------------------------------------- strokes and clusters
+
+(defn ^I32 sg-stroke-ok [^Cells pa ^I32 r]
+  (comment "1 when path row r is a pen stroke: stroked, not filled, not a clip, open, no wider than `sg-pen-width`, and a curve.")
+  (let [^I32 fl (pa-get pa r (pf-flags))]
+    (if (== (bit-and fl (pg-stroked)) 0) (return 0))
+    (if (!= (bit-and fl (pg-filled)) 0) (return 0))
+    (if (!= (bit-and fl (pg-clip)) 0) (return 0))
+    (if (!= (bit-and fl (pg-closed)) 0) (return 0))
+    (if (> (pa-get pa r (pf-width)) (sg-pen-width)) (return 0))
+    (if (!= (pa-get pa r (pf-kind)) (pa-curve)) (return 0))
+    (return 1)))
+
+(defn ^I32 sg-measure [^Cells pa ^Cells pts ^I32 r ^:mut ^Cells out]
+  (comment "The Bezier segments of path row r in out[0] and the length of its control polygons in out[1] (-1 when its geometry was not kept: the segments are then a third of its points).")
+  (let [^I32 n (pa-get pa r (pf-pcount))
+        ^I32 f (pa-get pa r (pf-pfirst))
+        ^:mut ^I32 j 1
+        ^:mut ^I32 c 0
+        ^:mut ^I32 plen 0]
+    (if (< f 0)
+      (do (cells-set out 0 (quot n 3))
+          (cells-set out 1 -1)
+          (return 0)))
+    (while (< j n)
+      (do (set plen (+ plen (sg-dist (- (pt-get pts (+ f j) (ptf-x)) (pt-get pts (+ f (- j 1)) (ptf-x)))
+                                   (- (pt-get pts (+ f j) (ptf-y)) (pt-get pts (+ f (- j 1)) (ptf-y))))))
+          (if (== (pt-get pts (+ f j) (ptf-op)) (po-curve)) (set c (+ c 1)))
+          (set j (+ j 1))))
+    (cells-set out 0 (quot c 3))
+    (cells-set out 1 plen)
+    (return 0)))
+
+(defn ^I32 sg-is-rule [^Cells pa ^I32 r ^I32 pw]
+  (comment "1 when path row r is a signature line: a straight stroke (or a stroked or filled rectangle) at least `sg-rule-min` long, at most `sg-rule-page` of the page, and no thicker than `sg-rule-thick`.")
+  (let [^I32 k (pa-get pa r (pf-kind))
+        ^I32 fl (pa-get pa r (pf-flags))
+        ^I32 w (- (pa-get pa r (pf-x1)) (pa-get pa r (pf-x0)))
+        ^I32 h (- (pa-get pa r (pf-y1)) (pa-get pa r (pf-y0)))]
+    (if (!= (bit-and fl (pg-clip)) 0) (return 0))
+    (if (and (!= k (pa-line)) (!= k (pa-rect))) (return 0))
+    (if (and (== (bit-and fl (pg-stroked)) 0) (== (bit-and fl (pg-filled)) 0)) (return 0))
+    (if (< w (sg-rule-min)) (return 0))
+    (if (> (* w 1000) (* pw (sg-rule-page))) (return 0))
+    (if (> h (sg-rule-thick)) (return 0))
+    (return 1)))
+
+(defn ^I32 sg-axis [^Cells pa ^I32 p0 ^I32 p1 ^I32 pw ^I32 ry ^I32 rx0 ^I32 rx1]
+  (comment "1 when the rule at y `ry` from `rx0` to `rx1` is a chart's axis or a grid's line and not a signature line: a vertical straight stroke at least 20 pt long that meets one of its ends and")
+  (comment "crosses its height (the frame of a chart), or two other rules of its length and width within 40 pt above or under it (a table's, a ruled form's).")
+  (let [^:mut ^I32 r p0
+        ^:mut ^I32 others 0
+        ^:mut ^I32 ymid 0
+        ^:mut ^I32 w 0]
+    (while (< r p1)
+      (do (if (== (pa-get pa r (pf-kind)) (pa-line))
+            (if (and (!= (bit-and (pa-get pa r (pf-flags)) (pg-stroked)) 0) (== (bit-and (pa-get pa r (pf-flags)) (pg-clip)) 0))
+              (if (and (<= (- (pa-get pa r (pf-x1)) (pa-get pa r (pf-x0))) 200) (>= (- (pa-get pa r (pf-y1)) (pa-get pa r (pf-y0))) 2000))
+                (if (and (<= (pa-get pa r (pf-y0)) (+ ry 300)) (>= (pa-get pa r (pf-y1)) (- ry 300)))
+                  (if (or (<= (sg-abs (- (pa-get pa r (pf-x0)) rx0)) 300) (<= (sg-abs (- (pa-get pa r (pf-x0)) rx1)) 300))
+                    (return 1))))))
+          (if (== (sg-is-rule pa r pw) 1)
+            (do (set ymid (quot (+ (pa-get pa r (pf-y0)) (pa-get pa r (pf-y1))) 2))
+                (set w (- rx1 rx0))
+                (if (and (> (sg-abs (- ymid ry)) 200) (<= (sg-abs (- ymid ry)) 4000))
+                  (if (>= (* 2 (sg-overlap rx0 rx1 (pa-get pa r (pf-x0)) (pa-get pa r (pf-x1)))) w)
+                    (set others (+ others 1))))))
+          (set r (+ r 1))))
+    (if (>= others 2) (return 1))
+    (return 0)))
+
+(defn ^I32 sg-rule-under [^Cells pa ^I32 p0 ^I32 p1 ^I32 pw ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^:mut ^Cells out]
+  (comment "The signature line the cluster (x0, y0, x1, y1) stands on, in out[0..3] (its y, x0, x1; -1 for none): a rule whose y lies from two fifths of the cluster's height down to")
+  (comment "half a height and 4 pt under it, with at least half of the cluster's width over it, and the cluster's centre over it. Of several, the nearest to the cluster's foot. Answers 1 when found.")
+  (let [^I32 h (- y1 y0)
+        ^I32 w (- x1 x0)
+        ^I32 cx (quot (+ x0 x1) 2)
+        ^:mut ^I32 r p0
+        ^:mut ^I32 ry 0
+        ^:mut ^I32 best -1
+        ^:mut ^I32 bd 0
+        ^:mut ^I32 bry 0
+        ^:mut ^I32 bx0 0
+        ^:mut ^I32 bx1 0
+        ^:mut ^I32 d 0]
+    (cells-set out 0 -1)
+    (while (< r p1)
+      (do (if (== (sg-is-rule pa r pw) 1)
+            (do (set ry (quot (+ (pa-get pa r (pf-y0)) (pa-get pa r (pf-y1))) 2))
+                (if (and (>= ry (+ y0 (quot (* h 2) 5))) (<= ry (+ (+ y1 (quot h 2)) 400)))
+                  (if (and (>= cx (pa-get pa r (pf-x0))) (<= cx (pa-get pa r (pf-x1))))
+                    (if (>= (* 2 (sg-overlap x0 x1 (pa-get pa r (pf-x0)) (pa-get pa r (pf-x1)))) w)
+                      (do (set d (sg-abs (- ry y1)))
+                          (if (or (< best 0) (< d bd))
+                            (do (set best r)
+                                (set bd d)))))))))
+          (set r (+ r 1))))
+    (if (< best 0) (return 0))
+    (set bry (quot (+ (pa-get pa best (pf-y0)) (pa-get pa best (pf-y1))) 2))
+    (set bx0 (pa-get pa best (pf-x0)))
+    (set bx1 (pa-get pa best (pf-x1)))
+    (if (== (sg-axis pa p0 p1 pw bry bx0 bx1) 1) (return 0))
+    (cells-set out 0 bry)
+    (cells-set out 1 bx0)
+    (cells-set out 2 bx1)
+    (return 1)))
+
+(defn ^I32 sg-cues [^Cells pa ^Cells fw ^Cells et ^I32 page ^I32 p0 ^I32 p1 ^I32 pw ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^:mut ^Cells rule]
+  (comment "The cue bits of a cluster (see the head of this file): 1 a hint word, 2 a rule it stands on, 4 a colon token to its left, 8 a label under the rule. `rule` (4 cells) gets the rule.")
+  (let [^I32 nw (quot (cells-len fw) 24)
+        ^I32 w (- x1 x0)
+        ^:mut ^I32 bits 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 lh 0
+        ^:mut ^I32 vg 0
+        ^:mut ^I32 hg 0
+        ^:mut ^I32 wy0 0
+        ^:mut ^I32 wy1 0]
+    (if (== (sg-rule-under pa p0 p1 pw x0 y0 x1 y1 rule) 1) (set bits 2))
+    (while (< j nw)
+      (do (if (== (sg-wget fw j 0) page)
+            (do (set wy0 (sg-wget fw j 2))
+                (set wy1 (sg-wget fw j 4))
+                (set lh (- wy1 wy0))
+                (if (== (sg-hint-word fw et j nw) 1)
+                  (do (set vg (sg-gap-of y0 y1 wy0 wy1))
+                      (set hg (sg-gap-of x0 x1 (sg-wget fw j 1) (sg-wget fw j 3)))
+                      (if (and (<= vg (* lh (sg-cue-lines))) (<= hg w)) (set bits (bit-or bits 1)))))
+                (if (== (sg-colon-token fw et j) 1)
+                  (if (and (<= (sg-wget fw j 3) (+ x0 800)) (>= (sg-wget fw j 3) (- x0 8000)))
+                    (if (>= (* 5 (sg-overlap y0 y1 wy0 wy1)) (* 2 lh))
+                      (set bits (bit-or bits 4)))))
+                (if (!= (bit-and bits 2) 0)
+                  (if (and (>= wy0 (- (cells-at rule 0) 300)) (<= wy0 (+ (cells-at rule 0) (quot (* lh (sg-label-lines)) 10))))
+                    (if (and (>= (quot (+ (sg-wget fw j 1) (sg-wget fw j 3)) 2) (cells-at rule 1)) (<= (quot (+ (sg-wget fw j 1) (sg-wget fw j 3)) 2) (cells-at rule 2)))
+                      (set bits (bit-or bits 8)))))))
+          (set j (+ j 1))))
+    (return bits)))
+
+;; ------------------------------------------------------------- collecting a page's clusters
+
+(defn ^I32 sg-tortuous [^I32 plen ^I32 diag]
+  (comment "1 when the control polygons of the strokes (their total length) are `sg-tort` per cent of the sum of their boxes' diagonals, squared, or longer (a pen loops and doubles back; two")
+  (comment "parallel straight lines are as long as their diagonals); always 1 when the length is unknown (-1).")
+  (let [^I64 l2 (mul64 (i64 plen) (i64 plen))
+        ^I64 d2 (mul64 (i64 diag) (i64 diag))]
+    (if (< plen 0) (return 1))
+    (if (>= (mul64 l2 (i64 100)) (mul64 d2 (i64 (sg-tort)))) (return 1))
+    (return 0)))
+
+(defn ^I32 sg-in-text-layer [^Cells fw ^I32 page ^I32 cx ^I32 cy]
+  (comment "1 when the point lies inside a word of the text layer of the page: the page's own typed text, which OCR reads as it reads anything and which is no handwriting.")
+  (let [^I32 nw (quot (cells-len fw) 24)
+        ^:mut ^I32 j 0]
+    (while (< j nw)
+      (do (if (== (sg-wget fw j 0) page)
+            (if (and (>= cx (sg-wget fw j 1)) (and (<= cx (sg-wget fw j 3)) (and (>= cy (sg-wget fw j 2)) (<= cy (sg-wget fw j 4)))))
+              (return 1)))
+          (set j (+ j 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sg-legible-words [^Cells owords ^Cells et ^Cells fw ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "How many OCR words of the page lie with their centre inside the box, with at least three letters, the engine at least `sg-legible` per mille sure of them: handwriting OCR can read.")
+  (comment "An OCR word that lies over a word of the text layer (a typed name the strokes are drawn over or beside) is the page's own text and not handwriting: it does not count.")
+  (let [^I32 n (ow-count owords)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 letters 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0]
+    (while (< i n)
+      (do (if (== (ow-get owords i (hd-page)) page)
+            (if (>= (ow-get owords i (hd-conf)) (sg-legible))
+              (do (set cx (quot (+ (ow-get owords i (hd-x0)) (ow-get owords i (hd-x1))) 2))
+                  (set cy (quot (+ (ow-get owords i (hd-y0)) (ow-get owords i (hd-y1))) 2))
+                  (if (and (>= cx x0) (and (<= cx x1) (and (>= cy y0) (<= cy y1))))
+                    (if (== (sg-in-text-layer fw page cx cy) 0)
+                    (do (set ts (ow-get owords i (hd-tstart)))
+                        (set tl (ow-get owords i (hd-tlen)))
+                        (set letters 0)
+                        (set k 0)
+                        (while (< k tl)
+                          (do (if (> (sf-script (cells-at et (+ ts k))) 0) (set letters (+ letters 1)))
+                              (set k (+ k 1))))
+                        (if (>= letters 3) (set cnt (+ cnt 1)))))))))
+          (set i (+ i 1))))
+    (return cnt)))
+
+(defn ^I32 sg-push-cluster [^:mut ^Cells sgc ^I32 page ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 segs ^I32 row ^I32 ink ^I32 plen ^I32 cues ^I32 pw ^I32 ph ^I32 ruley ^I32 diag]
+  (cells-push sgc page)
+  (cells-push sgc x0)
+  (cells-push sgc y0)
+  (cells-push sgc x1)
+  (cells-push sgc y1)
+  (cells-push sgc segs)
+  (cells-push sgc row)
+  (cells-push sgc ink)
+  (cells-push sgc plen)
+  (cells-push sgc cues)
+  (cells-push sgc pw)
+  (cells-push sgc ph)
+  (cells-push sgc 0)
+  (cells-push sgc 0)
+  (cells-push sgc ruley)
+  (cells-push sgc diag)
+  (return 0))
+
+;; the strokes of a page: a record of 9 cells in `tmp` from cell 16: box x0 y0 x1 y1, segments (-1: merged into another), first path row, ink, length, the diagonal of its box
+(defn ^:pub ^I32 sg-collect [^Cells pa ^Cells pts ^Cells fw ^Cells et ^Cells owords ^I32 page ^I32 p0 ^I32 p1 ^I32 pw ^I32 ph ^:mut ^Cells tmp ^:mut ^Cells sgc]
+  (comment "The clusters of page `page`'s paths [p0, p1) (see the head of this file), measured, their cues read, appended to `sgc` (not yet judged). `tmp` is scratch (16 cells and 8 a")
+  (comment "stroke, nine cells). Answers the clusters added.")
+  (let [^:mut ^I32 r p0
+        ^:mut ^I32 ns 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 changed 1
+        ^:mut ^I32 a 0
+        ^:mut ^I32 b 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 cues 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 la 0
+        ^:mut ^I32 ruley -1
+        ^:mut ^I32 lb 0]
+    (cells-drop tmp 0)
+    (while (< (cells-len tmp) 16)
+      (cells-push tmp 0))
+    (while (< r p1)
+      (do (if (and (== (sg-stroke-ok pa r) 1) (< ns (sg-max-strokes)))
+            (if (and (< (- (pa-get pa r (pf-x1)) (pa-get pa r (pf-x0))) pw) (< (* (- (pa-get pa r (pf-y1)) (pa-get pa r (pf-y0))) 3) ph))
+              (do (sg-measure pa pts r tmp)
+                  (cells-push tmp (pa-get pa r (pf-x0)))
+                  (cells-push tmp (pa-get pa r (pf-y0)))
+                  (cells-push tmp (pa-get pa r (pf-x1)))
+                  (cells-push tmp (pa-get pa r (pf-y1)))
+                  (cells-push tmp (cells-at tmp 0))
+                  (cells-push tmp r)
+                  (cells-push tmp (pa-get pa r (pf-stroke)))
+                  (cells-push tmp (cells-at tmp 1))
+                  (cells-push tmp (sg-dist (- (pa-get pa r (pf-x1)) (pa-get pa r (pf-x0))) (- (pa-get pa r (pf-y1)) (pa-get pa r (pf-y0)))))
+                  (set ns (+ ns 1)))))
+          (set r (+ r 1))))
+    (comment "merge until nothing merges")
+    (while (== changed 1)
+      (do (set changed 0)
+          (set i 0)
+          (while (< i ns)
+            (do (set a (+ 16 (* i 9)))
+                (if (>= (cells-at tmp (+ a 4)) 0)
+                  (do (set j (+ i 1))
+                      (while (< j ns)
+                        (do (set b (+ 16 (* j 9)))
+                            (if (>= (cells-at tmp (+ b 4)) 0)
+                              (if (and (<= (sg-gap-of (cells-at tmp a) (cells-at tmp (+ a 2)) (cells-at tmp b) (cells-at tmp (+ b 2))) (sg-gap))
+                                       (<= (sg-gap-of (cells-at tmp (+ a 1)) (cells-at tmp (+ a 3)) (cells-at tmp (+ b 1)) (cells-at tmp (+ b 3))) (sg-gap)))
+                                (do (cells-set tmp a (sg-lo (cells-at tmp a) (cells-at tmp b)))
+                                    (cells-set tmp (+ a 1) (sg-lo (cells-at tmp (+ a 1)) (cells-at tmp (+ b 1))))
+                                    (cells-set tmp (+ a 2) (sg-hi (cells-at tmp (+ a 2)) (cells-at tmp (+ b 2))))
+                                    (cells-set tmp (+ a 3) (sg-hi (cells-at tmp (+ a 3)) (cells-at tmp (+ b 3))))
+                                    (cells-set tmp (+ a 4) (+ (cells-at tmp (+ a 4)) (cells-at tmp (+ b 4))))
+                                    (set la (cells-at tmp (+ a 7)))
+                                    (set lb (cells-at tmp (+ b 7)))
+                                    (if (or (< la 0) (< lb 0))
+                                      (cells-set tmp (+ a 7) -1)
+                                      (cells-set tmp (+ a 7) (+ la lb)))
+                                    (cells-set tmp (+ a 8) (+ (cells-at tmp (+ a 8)) (cells-at tmp (+ b 8))))
+                                    (cells-set tmp (+ b 4) -1)
+                                    (set changed 1))))
+                            (set j (+ j 1))))))
+                (set i (+ i 1))))))
+    (set i 0)
+    (while (< i ns)
+      (do (set a (+ 16 (* i 9)))
+          (set w (- (cells-at tmp (+ a 2)) (cells-at tmp a)))
+          (set h (- (cells-at tmp (+ a 3)) (cells-at tmp (+ a 1))))
+          (if (and (>= (cells-at tmp (+ a 4)) (sg-ini-segs)) (and (>= w (sg-min-side)) (>= h (sg-min-side))))
+            (if (and (< (quot (cells-len sgc) (sg-w)) (sg-max)) (and (<= w (sg-sig-max-w)) (<= h (sg-sig-max-h))))
+              (do (set cues (sg-cues pa fw et page p0 p1 pw (cells-at tmp a) (cells-at tmp (+ a 1)) (cells-at tmp (+ a 2)) (cells-at tmp (+ a 3)) tmp))
+                  (set ruley -1)
+                  (if (!= (bit-and cues 2) 0) (set ruley (cells-at tmp 0)))
+                  (sg-push-cluster sgc page (cells-at tmp a) (cells-at tmp (+ a 1)) (cells-at tmp (+ a 2)) (cells-at tmp (+ a 3))
+                                   (cells-at tmp (+ a 4)) (cells-at tmp (+ a 5)) (cells-at tmp (+ a 6)) (cells-at tmp (+ a 7)) cues pw ph
+                                   ruley (cells-at tmp (+ a 8)))
+                  (set made (+ made 1)))))
+          (set i (+ i 1))))
+    (return made)))
+
+;; ------------------------------------------------------------- the verdict
+
+(defn ^I32 sg-small [^Cells sgc ^I32 c]
+  (comment "1 when cluster record `c` is initials-sized.")
+  (if (and (<= (- (cells-at sgc (+ c 3)) (cells-at sgc (+ c 1))) (sg-ini-w)) (<= (- (cells-at sgc (+ c 4)) (cells-at sgc (+ c 2))) (sg-ini-h))) (return 1))
+  (return 0))
+
+(defn ^I32 sg-in-margin [^Cells sgc ^I32 c]
+  (comment "1 when the cluster lies wholly in the band at a side of its page or at its head or foot.")
+  (let [^I32 pw (cells-at sgc (+ c 10))
+        ^I32 ph (cells-at sgc (+ c 11))]
+    (if (<= (* (cells-at sgc (+ c 3)) 1000) (* pw (sg-margin-x))) (return 1))
+    (if (>= (* (cells-at sgc (+ c 1)) 1000) (* pw (- 1000 (sg-margin-x)))) (return 1))
+    (if (<= (* (cells-at sgc (+ c 4)) 1000) (* ph (sg-margin-y))) (return 1))
+    (if (>= (* (cells-at sgc (+ c 2)) 1000) (* ph (- 1000 (sg-margin-y)))) (return 1))
+    (return 0)))
+
+(defn ^I32 sg-same-mark [^Cells sgc ^I32 a ^I32 b]
+  (comment "1 when the clusters at records a and b are the same small mark on two pages: centres within `sg-rec-pos` per mille of the page, sides within half to twice.")
+  (let [^I32 pw (cells-at sgc (+ a 10))
+        ^I32 ph (cells-at sgc (+ a 11))
+        ^I32 ax (+ (cells-at sgc (+ a 1)) (cells-at sgc (+ a 3)))
+        ^I32 ay (+ (cells-at sgc (+ a 2)) (cells-at sgc (+ a 4)))
+        ^I32 bx (+ (cells-at sgc (+ b 1)) (cells-at sgc (+ b 3)))
+        ^I32 by (+ (cells-at sgc (+ b 2)) (cells-at sgc (+ b 4)))
+        ^I32 aw (- (cells-at sgc (+ a 3)) (cells-at sgc (+ a 1)))
+        ^I32 bw (- (cells-at sgc (+ b 3)) (cells-at sgc (+ b 1)))
+        ^I32 ah (- (cells-at sgc (+ a 4)) (cells-at sgc (+ a 2)))
+        ^I32 bh (- (cells-at sgc (+ b 4)) (cells-at sgc (+ b 2)))]
+    (if (> (* (sg-abs (- ax bx)) 500) (* pw (sg-rec-pos))) (return 0))
+    (if (> (* (sg-abs (- ay by)) 500) (* ph (sg-rec-pos))) (return 0))
+    (if (or (> aw (* 2 bw)) (> bw (* 2 aw))) (return 0))
+    (if (or (> ah (* 2 bh)) (> bh (* 2 ah))) (return 0))
+    (return 1)))
+
+(defn ^I32 sg-recurrence [^Cells sgc ^I32 n ^I32 c]
+  (comment "On how many OTHER pages a small cluster of the same place and size stands (record c of n).")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 pages 0
+        ^:mut ^I32 seen -1
+        ^:mut ^I32 q 0]
+    (while (< k n)
+      (do (set q (* k (sg-w)))
+          (if (and (!= (cells-at sgc q) (cells-at sgc c)) (== (sg-small sgc q) 1))
+            (if (== (sg-same-mark sgc c q) 1)
+              (if (!= (cells-at sgc q) seen)
+                (do (set pages (+ pages 1))
+                    (set seen (cells-at sgc q))))))
+          (set k (+ k 1))))
+    (return pages)))
+
+(defn ^:pub ^I32 sg-decide [^:mut ^Cells sgc ^Cells owords ^Cells et ^Cells fw]
+  (comment "The document's verdict on every cluster of `sgc`, written to cells 12 and 13 (see the head of this file): a SIGNATURE (3) is a cluster of signature size with a cue, at least")
+  (comment "three segments, the pen's tortuosity and no legible OCR word in it; INITIALS (4) are a small cluster with at least two segments and the pen's tortuosity and a cue, or a mark")
+  (comment "of a margin that recurs on another page, or one that recurs on two. Answers the clusters kept.")
+  (let [^I32 n (quot (cells-len sgc) (sg-w))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 rec 0
+        ^:mut ^I32 cues 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 conf 0
+        ^:mut ^I32 kept 0]
+    (while (< k n)
+      (do (set c (* k (sg-w)))
+          (set cues (cells-at sgc (+ c 9)))
+          (set w (- (cells-at sgc (+ c 3)) (cells-at sgc (+ c 1))))
+          (set h (- (cells-at sgc (+ c 4)) (cells-at sgc (+ c 2))))
+          (set kind 0)
+          (set conf 0)
+          (if (and (== (sg-tortuous (cells-at sgc (+ c 8)) (cells-at sgc (+ c 15))) 1)
+                   (< (sg-legible-words owords et fw (cells-at sgc c) (cells-at sgc (+ c 1)) (cells-at sgc (+ c 2)) (cells-at sgc (+ c 3)) (cells-at sgc (+ c 4))) 2))
+            (do (if (== (sg-small sgc c) 1)
+                  (do (set rec (sg-recurrence sgc n c))
+                      (if (or (!= (bit-and cues 7) 0) (or (and (>= rec 1) (== (sg-in-margin sgc c) 1)) (>= rec 2)))
+                        (do (set kind 4)
+                            (set conf 450)
+                            (if (!= (bit-and cues 7) 0) (set conf (+ conf 150)))
+                            (if (>= rec 1) (set conf (+ conf 150)))
+                            (if (>= rec 2) (set conf (+ conf 50))))))
+                  (if (and (!= (bit-and cues 7) 0)
+                           (and (>= w (sg-sig-min-w)) (and (>= (* w 2) (* h 3)) (>= (cells-at sgc (+ c 5)) (sg-sig-segs)))))
+                    (do (set kind 3)
+                        (set conf 500)
+                        (if (!= (bit-and cues 2) 0) (set conf (+ conf 150)))
+                        (if (!= (bit-and cues 4) 0) (set conf (+ conf 100)))
+                        (if (!= (bit-and cues 1) 0) (set conf (+ conf 100)))
+                        (if (!= (bit-and cues 8) 0) (set conf (+ conf 50))))))))
+          (if (> conf 900) (set conf 900))
+          (cells-set sgc (+ c 12) kind)
+          (cells-set sgc (+ c 13) conf)
+          (if (> kind 0) (set kept (+ kept 1)))
+          (set k (+ k 1))))
+    (return kept)))
+
+;; ------------------------------------------------------------- the typed name
+
+(defn ^I32 sg-push-run [^:mut ^Cells et ^I32 ts ^I32 tl]
+  (comment "Append the code points et[ts, ts + tl) to `et` again.")
+  (let [^:mut ^I32 j 0]
+    (while (< j tl)
+      (do (cells-push et (cells-at et (+ ts j)))
+          (set j (+ j 1))))
+    (return 0)))
+
+(defn ^I32 sg-lower [^I32 c]
+  (comment "1 when the code point is a lower case letter of a cased script (Latin, Greek, Cyrillic).")
+  (if (and (>= c 97) (<= c 122)) (return 1))
+  (if (and (>= c 223) (<= c 255)) (return 1))
+  (if (and (>= c 945) (<= c 969)) (return 1))
+  (if (and (>= c 1072) (<= c 1103)) (return 1))
+  (return 0))
+
+(defn ^I32 sg-name-word-ok [^Cells et ^I32 ts ^I32 tl]
+  (comment "1 when a word of a typed name: at least one letter, no digit, and no character that is neither a letter nor a point, a hyphen or an apostrophe (the ends may be a comma).")
+  (let [^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 letters 0]
+    (while (< k tl)
+      (do (set c (cells-at et (+ ts k)))
+          (if (> (sf-script c) 0) (set letters (+ letters 1)))
+          (if (>= (sf-digit c) 0) (return 0))
+          (if (and (== (sf-script c) 0) (and (!= c 46) (and (!= c 45) (and (!= c 39) (and (!= c 44) (and (!= c 8217) (!= c 59)))))))
+            (return 0))
+          (set k (+ k 1))))
+    (if (== letters 0) (return 0))
+    (return 1)))
+
+(defn ^:pub ^I32 sg-typed-name [^Cells fw ^:mut ^Cells et ^I32 page ^I32 ymin ^I32 ymax ^I32 x0 ^I32 x1 ^I32 slack ^:mut ^Cells out]
+  (comment "The typed name of a signature: the line of words of `page` that begins first (by its top, between `ymin` and `ymax`) and whose first word's centre lies between x0 and x1 (widened by")
+  (comment "`slack`): the line a signature is drawn over, or the line under its rule. Two to five words that are all name-like (`sg-name-word-ok`), the first not in lower case, cut after a word that")
+  (comment "ends in a comma or a semicolon, which loses its mark. Appended to `et` as one run, answered in out[0] (start) and out[1] (length 0 for none).")
+  (let [^I32 nw (quot (cells-len fw) 24)
+        ^:mut ^I32 j 0
+        ^:mut ^I32 first -1
+        ^:mut ^I32 top 0
+        ^:mut ^I32 lh 0
+        ^:mut ^I32 cy 0
+        ^:mut ^I32 words 0
+        ^:mut ^I32 stop 0
+        ^:mut ^I32 start 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 lastc 0
+        ^:mut ^I32 cx 0]
+    (cells-set out 0 0)
+    (cells-set out 1 0)
+    (while (< j nw)
+      (do (if (== (sg-wget fw j 0) page)
+            (do (set cx (quot (+ (sg-wget fw j 1) (sg-wget fw j 3)) 2))
+                (if (and (>= (sg-wget fw j 2) ymin) (and (<= (sg-wget fw j 2) ymax) (and (>= cx (- x0 slack)) (<= cx (+ x1 slack)))))
+                  (if (or (< first 0) (< (sg-wget fw j 2) top))
+                    (do (set first j)
+                        (set top (sg-wget fw j 2)))))))
+          (set j (+ j 1))))
+    (if (< first 0) (return 0))
+    (set lh (- (sg-wget fw first 4) (sg-wget fw first 2)))
+    (set cy (quot (+ (sg-wget fw first 2) (sg-wget fw first 4)) 2))
+    (set start (cells-len et))
+    (set j first)
+    (while (and (< j nw) (== stop 0))
+      (do (if (!= (sg-wget fw j 0) page)
+            (set stop 1)
+            (if (or (>= (sg-abs (- (quot (+ (sg-wget fw j 2) (sg-wget fw j 4)) 2) cy)) (quot lh 2))
+                    (> (quot (+ (sg-wget fw j 1) (sg-wget fw j 3)) 2) (+ x1 slack)))
+              (set stop 1)
+              (do (set ts (sg-wget fw j 11))
+                  (set tl (sg-wget fw j 12))
+                  (if (== (sg-name-word-ok et ts tl) 0)
+                    (do (set stop 1)
+                        (if (== words 0) (set words -100)))
+                    (do (if (and (== words 0) (== (sg-lower (cells-at et ts)) 1))
+                          (do (set stop 1)
+                              (set words -100)))
+                        (if (== stop 0)
+                          (do (set lastc (cells-at et (+ ts (- tl 1))))
+                              (if (> words 0) (cells-push et 32))
+                              (if (or (== lastc 44) (== lastc 59))
+                                (do (sg-push-run et ts (- tl 1))
+                                    (set stop 1))
+                                (sg-push-run et ts tl))
+                              (set words (+ words 1)))))))))
+          (set j (+ j 1))))
+    (if (or (< words 2) (> words 5))
+      (do (cells-drop et start)
+          (return 0)))
+    (cells-set out 0 start)
+    (cells-set out 1 (- (cells-len et) start))
+    (return 1)))
+
+;; ------------------------------------------------------------- the digital signature rows
+
+(defn ^I32 sg-push-txt [^:mut ^Cells et ^Cells txt ^I32 s ^I32 n]
+  (comment "Append the run txt[s, s + n) (n 0 or s -1: none) to `et`.")
+  (let [^:mut ^I32 j 0]
+    (if (or (< s 0) (<= n 0)) (return 0))
+    (while (< j n)
+      (do (cells-push et (cells-at txt (+ s j)))
+          (set j (+ j 1))))
+    (return n)))
+
+(defn ^I32 sg-push-num [^:mut ^Cells et ^I32 v ^I32 digits]
+  (comment "Append v as `digits` decimal digits, zero filled.")
+  (let [^:mut ^I32 d (- digits 1)
+        ^:mut ^I32 p 1]
+    (while (> d 0)
+      (do (set p (* p 10))
+          (set d (- d 1))))
+    (set d 0)
+    (while (< d digits)
+      (do (cells-push et (+ 48 (rem (quot v p) 10)))
+          (set p (quot p 10))
+          (set d (+ d 1))))
+    (return digits)))
+
+(defn ^I32 sg-push-date [^:mut ^Cells et ^Cells an ^I32 at]
+  (comment "The signing time of synthetic row `at` as ISO 8601: `YYYY-MM-DD`, with `Thh:mm:ss` and the zone (`Z` or `+hh:mm`) when the /M string had the time of day (16 characters or more).")
+  (let [^I32 start (cells-len et)
+        ^I32 tz (cells-at an (+ at 14))
+        ^:mut ^I32 z 0]
+    (if (< (cells-at an (+ at 8)) 0) (return 0))
+    (sg-push-num et (cells-at an (+ at 8)) 4)
+    (cells-push et 45)
+    (sg-push-num et (cells-at an (+ at 9)) 2)
+    (cells-push et 45)
+    (sg-push-num et (cells-at an (+ at 10)) 2)
+    (if (>= (cells-at an (+ at 15)) 16)
+      (do (cells-push et 84)
+          (sg-push-num et (cells-at an (+ at 11)) 2)
+          (cells-push et 58)
+          (sg-push-num et (cells-at an (+ at 12)) 2)
+          (cells-push et 58)
+          (sg-push-num et (cells-at an (+ at 13)) 2)
+          (if (== tz 0) (cells-push et 90))
+          (if (and (!= tz 0) (!= tz -99999))
+            (do (set z tz)
+                (if (< z 0)
+                  (do (cells-push et 45) (set z (- 0 z)))
+                  (cells-push et 43))
+                (sg-push-num et (quot z 60) 2)
+                (cells-push et 58)
+                (sg-push-num et (rem z 60) 2)))))
+    (return (- (cells-len et) start))))
+
+(defn ^I32 sg-digital-text [^:mut ^Cells et ^Cells an ^Cells txt ^I32 row]
+  (comment "Append the record of synthetic row `row` of `an` to `et`: name, reason, location and date, each followed by the code point 31 but the last; the name is /Name or the certificate's.")
+  (let [^I32 at (* row 38)]
+    (if (> (cells-at an (+ at 24)) 0)
+      (sg-push-txt et txt (cells-at an (+ at 23)) (cells-at an (+ at 24)))
+      (sg-push-txt et txt (cells-at an (+ at 34)) (cells-at an (+ at 35))))
+    (cells-push et 31)
+    (sg-push-txt et txt (cells-at an (+ at 27)) (cells-at an (+ at 28)))
+    (cells-push et 31)
+    (sg-push-txt et txt (cells-at an (+ at 32)) (cells-at an (+ at 33)))
+    (cells-push et 31)
+    (sg-push-date et an at)
+    (return 0)))
+
+;; ------------------------------------------------------------- the candidates of a page
+
+(defn ^I32 sg-add [^:mut ^Cells scr ^I32 kind ^I32 row ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 run0 ^I32 runn ^I32 ink ^I32 flags]
+  (cells-push scr kind)
+  (cells-push scr row)
+  (cells-push scr x0)
+  (cells-push scr y0)
+  (cells-push scr x1)
+  (cells-push scr y1)
+  (cells-push scr run0)
+  (cells-push scr runn)
+  (cells-push scr 0)
+  (cells-push scr ink)
+  (cells-push scr flags)
+  (cells-push scr 0)
+  (return 0))
+
+(defn ^:pub ^I32 sg-emit [^Cells sgc ^Cells an ^Cells txt ^Cells fw ^:mut ^Cells et ^I32 page ^:mut ^Cells scr ^I32 n0 ^:mut ^Cells tmp]
+  (comment "Append to `scr` the candidate records of page `page`: the accepted clusters (kind 3 or 4, the typed name under a signature in `et`) and the digital signature fields of `an`")
+  (comment "(kind 5, the record in `et`; flag 512 when signed). The record's cell 10 is its flags (1 chromatic, 512 signed) plus 65536 times the confidence. Answers the records in all.")
+  (let [^I32 n (quot (cells-len sgc) (sg-w))
+        ^I32 na (quot (cells-len an) 38)
+        ^:mut ^I32 total n0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 fl 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 r0 0
+        ^:mut ^I32 rl 0
+        ^:mut ^I32 start 0]
+    (while (< (cells-len tmp) 4)
+      (cells-push tmp 0))
+    (while (< k n)
+      (do (set c (* k (sg-w)))
+          (if (and (== (cells-at sgc c) page) (> (cells-at sgc (+ c 12)) 0) (< total 64))
+            (do (set fl 0)
+                (if (== (cells-at sgc (+ c 12)) 3)
+                  (do (set got 0)
+                      (cells-set tmp 0 0)
+                      (cells-set tmp 1 0)
+                      (set got (sg-typed-name fw et page (- (cells-at sgc (+ c 2)) 300) (cells-at sgc (+ c 4)) (cells-at sgc (+ c 1)) (cells-at sgc (+ c 3)) 300 tmp))
+                      (if (and (== got 0) (>= (cells-at sgc (+ c 14)) 0))
+                        (set got (sg-typed-name fw et page (- (cells-at sgc (+ c 14)) 300) (+ (cells-at sgc (+ c 14)) 3000) (cells-at sgc (+ c 1)) (cells-at sgc (+ c 3)) 6000 tmp)))
+                      (if (!= got 0)
+                        (do (set r0 (cells-at tmp 0))
+                            (set rl (cells-at tmp 1)))
+                        (do (set r0 0)
+                            (set rl 0))))
+                  (do (set r0 0)
+                      (set rl 0)))
+                (sg-add scr (cells-at sgc (+ c 12)) (cells-at sgc (+ c 6)) (cells-at sgc (+ c 1)) (cells-at sgc (+ c 2)) (cells-at sgc (+ c 3)) (cells-at sgc (+ c 4))
+                        r0 rl (cells-at sgc (+ c 7)) (+ fl (* 65536 (cells-at sgc (+ c 13)))))
+                (set total (+ total 1))))
+          (set k (+ k 1))))
+    (set row 0)
+    (while (< row na)
+      (do (set c (* row 38))
+          (if (and (== (cells-at an (+ c 1)) (an-digsig)) (and (== (+ (cells-at an c) 1) page) (< total 64)))
+            (do (set start (cells-len et))
+                (sg-digital-text et an txt row)
+                (set fl 0)
+                (if (!= (bit-and (cells-at an (+ c 30)) 1) 0) (set fl 512))
+                (sg-add scr 5 row (cells-at an (+ c 4)) (cells-at an (+ c 5)) (cells-at an (+ c 6)) (cells-at an (+ c 7))
+                        start (- (cells-len et) start) -1 (+ fl (* 65536 (+ 900 (quot fl 10)))))
+                (set total (+ total 1))))
+          (set row (+ row 1))))
+    (return total)))
+
+(defn ^:pub ^I32 sg-has-digital [^Cells an]
+  (comment "1 when `an` holds a synthetic digital signature row (P3.8's, D426): the document has a signature field with a widget on a page and so is a document with a seal node to write.")
+  (let [^I32 na (quot (cells-len an) 38)
+        ^:mut ^I32 i 0]
+    (while (< i na)
+      (do (if (== (cells-at an (+ (* i 38) 1)) (an-digsig)) (return 1))
+          (set i (+ i 1))))
+    (return 0)))

@@ -1459,7 +1459,38 @@ func fcLink(cand *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32
 	return -1
 }
 
-func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, fnodes *port.Cells, fattrs *port.Cells, fregions *port.Cells, fnm *port.Cells, pa *port.Cells, im *port.Cells, fi *port.Cells, grg *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, et *port.Cells, pg *port.Cells, cand *port.Cells, level int32, fcand *port.Cells, cl *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, ws *port.Cells) int32 {
+func fcSignatureOver(sl *port.Cells, page int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// 1 when a signature or initials READ FROM PIXELS (an `sl` row of kind 3 or 4 with flag 128: `emon.sigpx`'s) lies in the region on its page: its box is at least half of the region
+	// and the region is at most four times its box (the picture of a signature is the signature's placeholder and no figure: SPEC 10.7, P8.3, D430; a signature inside a photograph is not
+	// this). A region that no figure was made of keeps its words in the body: they were the figure's `labels` otherwise.
+	var n int32 = port.CellsLen(sl) / 16
+	var j int32 = 0
+	var q int32 = 0
+	var ow int32 = 0
+	var oh int32 = 0
+	var area int32 = 0
+	var sa int32 = 0
+	var ra int32 = 0
+	for j < n {
+		q = j * 16
+		if (port.CellsAt(sl, q) == page) && ((port.CellsAt(sl, q+5) >= 3) && ((port.CellsAt(sl, q+5) <= 4) && ((port.CellsAt(sl, q+12) & 128) != 0))) {
+			ow = fcMin(x1, port.CellsAt(sl, q+3)) - fcMax(x0, port.CellsAt(sl, q+1))
+			oh = fcMin(y1, port.CellsAt(sl, q+4)) - fcMax(y0, port.CellsAt(sl, q+2))
+			if (ow > 0) && (oh > 0) {
+				area = (ow / 100) * (oh / 100)
+				sa = ((port.CellsAt(sl, q+3) - port.CellsAt(sl, q+1)) / 100) * ((port.CellsAt(sl, q+4) - port.CellsAt(sl, q+2)) / 100)
+				ra = ((x1 - x0) / 100) * ((y1 - y0) / 100)
+				if ((area * 2) >= ra) && (ra <= (sa * 4)) {
+					return 1
+				}
+			}
+		}
+		j += 1
+	}
+	return 0
+}
+
+func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, fnodes *port.Cells, fattrs *port.Cells, fregions *port.Cells, fnm *port.Cells, pa *port.Cells, im *port.Cells, fi *port.Cells, grg *port.Cells, grl *port.Cells, fw *port.Cells, fl *port.Cells, et *port.Cells, pg *port.Cells, sl *port.Cells, cand *port.Cells, level int32, fcand *port.Cells, cl *port.Cells, fg *port.Cells, fd *port.Cells, ab *port.Cells, ws *port.Cells) int32 {
 	// THE FIGURES (SPEC 10.6): the candidate regions (the image placements, the vector clusters of `emon.asset`, the shaded fills, P7.G's
 	// `figure` regions), each measured and judged, the ones that are figures placed among the blocks with their kind, confidence
 	// and `labels` (`rs-figures`) into the empty arenas `fnodes fattrs fregions` (the caller swaps them in, then restructures). `cand`
@@ -1530,6 +1561,9 @@ func FcStage(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *po
 			if FcMeasure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws) == 0 {
 				rej = FcReject(ws)
 			}
+		}
+		if fcSignatureOver(sl, page, x0, y0, x1, y1) == 1 {
+			rej = 1
 		}
 		if port.CellsAt(fcand, b+crKori) == -1 {
 			pk = FcImageKind(fi, port.CellsAt(fcand, b+crRow), x1-x0, y1-y0, y0, y1, pageh, recur)

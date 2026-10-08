@@ -288,6 +288,12 @@ func PlsStamp() int32 {
 func PlsSignature() int32 {
 	return 3
 }
+func PlsInitials() int32 {
+	return 4
+}
+func PlsDigitalSignature() int32 {
+	return 5
+}
 func PlsEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "seal")
@@ -299,6 +305,14 @@ func PlsEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 3 {
 		port.TextAscii(t, "signature")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "initials")
+		return 1
+	}
+	if code == 5 {
+		port.TextAscii(t, "digital-signature")
 		return 1
 	}
 	return 0
@@ -333,6 +347,12 @@ func PlgSealPx() int32 {
 }
 func PlgSealStamp() int32 {
 	return 512
+}
+func PlgSealSig() int32 {
+	return 1024
+}
+func PlgSealInit() int32 {
+	return 2048
 }
 func PlgEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
@@ -373,6 +393,14 @@ func PlgEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 512 {
 		port.TextAscii(t, "seal-stamp")
+		return 1
+	}
+	if code == 1024 {
+		port.TextAscii(t, "seal-sig")
+		return 1
+	}
+	if code == 2048 {
+		port.TextAscii(t, "seal-init")
 		return 1
 	}
 	return 0

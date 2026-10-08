@@ -36,7 +36,7 @@ public static class Engine {
     internal static int EnFigures(emon.Enctx.Arenas m, emon.Enctx.Scratch s, emon.Enctx.Doc d, int level) {
         // P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of
         // `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
-        Figclass.FcStage(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, s.Fnodes, s.Fattrs, s.Fregions, s.Fnm, d.Pa, d.Im, d.Fi, s.Grg, d.Grl, d.Fw, d.Fl, d.Et, d.Pg, d.Cand, level, s.Fcand, s.Fcl, s.Fg, s.Ffd, s.Fab, s.Fws);
+        Figclass.FcStage(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, s.Fnodes, s.Fattrs, s.Fregions, s.Fnm, d.Pa, d.Im, d.Fi, s.Grg, d.Grl, d.Fw, d.Fl, d.Et, d.Pg, s.Sm, d.Cand, level, s.Fcand, s.Fcl, s.Fg, s.Ffd, s.Fab, s.Fws);
         emon.Port.CellsSwap(m.Nodes, s.Fnodes);
         emon.Port.CellsSwap(m.Attrs, s.Fattrs);
         emon.Port.CellsSwap(m.Regions, s.Fregions);
@@ -155,6 +155,9 @@ public static class Engine {
         if (emon.Port.CellsLen(d.Cg) > 0) {
             d.Fused = 1;
         }
+        if (Sigmark.SgHasDigital(d.An) == 1) {
+            d.Fused = 1;
+        }
         if ((c.Ocr != 0) && (d.Fused == 0) && (emon.Port.CellsLen(ev.Owords) == 0)) {
             emon.Port.CellsFree(ev.Epages);
             emon.Port.CellsFree(ev.Feats);
@@ -163,7 +166,7 @@ public static class Engine {
         if (d.Fused == 1) {
             Health.HlDoc(ev.Feats, d.Fw, d.Hl);
             int trust0 = Pdfstruct.TgTrust(d.Ss);
-            Sealmark.SmFind(d.Pa, d.Pts, d.Gl, d.Fw, d.Et, ev.Epages, d.Cg, ev.Refs, ev.Owords, np, s.Sm, s.Sscr, s.Stmp);
+            Sealmark.SmFind(d.Pa, d.Pts, d.Gl, d.Fw, d.Et, ev.Epages, d.Cg, ev.Refs, ev.Owords, d.An, d.Txt, np, s.Sm, s.Sscr, s.Stmp, s.Sgc);
             Arbiter.ArDoc(d.Cg, ev.Refs, d.Fw, d.Fl, d.Et, ev.Feats, ev.Owords, ev.Olines, ev.Oruns, ev.Osyms, ev.Images, ev.Epages, d.Gl, d.Mk, d.An, d.Txt, trust0, s.Rc, s.Nfw, s.Nfl, s.Fv, s.Fx, s.Afa, s.Gd, s.Gv, s.W2g, s.O2g, s.Pp, s.Ftw, s.Ftl, d.Xs0);
             emon.Port.CellsSwap(d.Fw, s.Nfw);
             emon.Port.CellsSwap(d.Fl, s.Nfl);

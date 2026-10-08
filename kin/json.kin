@@ -93,7 +93,7 @@
                                 fk-checked fk-subkind fk-conf
                                 fk-asset fk-noasset fk-assets fk-asset-dpi fk-asset-pixels fk-asset-bytes
                                 fk-assets-bytes fk-asset-signatures fk-origin fk-from fk-object fk-bytes
-                                fk-sha256 fk-uses fk-node fk-ocr-scope
+                                fk-sha256 fk-uses fk-node fk-ocr-scope fk-signed fk-location
                                 asset-count asset-type asset-origin asset-from asset-object asset-blen asset-sha
                                 asset-w asset-h asset-dpi asset-flags asset-use-head use-node use-page use-x0
                                 use-y0 use-x1 use-y1 use-next amt-emit-name ao-emit-name afm-emit-name
@@ -587,6 +587,9 @@
           (set s (js-ftext t pr d nodes attrs text n (fk-name) s))
           (set s (js-ftext t pr d nodes attrs text n (fk-date) s))
           (set s (js-ftext t pr d nodes attrs text n (fk-color) s))
+          (set s (js-fbool t pr d nodes attrs n (fk-signed) s))
+          (set s (js-ftext t pr d nodes attrs text n (fk-reason) s))
+          (set s (js-ftext t pr d nodes attrs text n (fk-location) s))
           (set s (js-fint t pr d nodes attrs n (fk-asset) s))
           (set s (js-f-noasset t pr d nodes attrs n s))))
     (if (== kind (nk-formula))

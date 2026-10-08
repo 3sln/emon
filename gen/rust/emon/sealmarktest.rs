@@ -176,8 +176,11 @@ pub(crate) fn st_find(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells,
     let ep: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let txt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sgc: &mut crate::port::Cells = &mut crate::port::Cells::new();
     ep_new(ep, 1, 61200, 79200);
-    return sm_find(pa, pts, gl, fw, et, ep, cg, refs, ow, 1, sm, scr, tmp);
+    return sm_find(pa, pts, gl, fw, et, ep, cg, refs, ow, an, txt, 1, sm, scr, tmp, sgc);
 }
 #[test]
 fn test_a_seal_holds_its_arc_and_its_ink_and_not_the_body_under_it() {

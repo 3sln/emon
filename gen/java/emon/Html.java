@@ -1170,6 +1170,28 @@ public final class Html {
                 hRun(t, text, Model.attrValue(attrs, b), Model.attrLen(attrs, b));
                 emon.Port.textAscii(t, "\"");
             }
+            b = hIattr(nodes, attrs, n, Model.fkSigned());
+            if (b >= 0) {
+                emon.Port.textAscii(t, " data-emon-signed=\"");
+                if (Model.attrValue(attrs, b) != 0) {
+                    emon.Port.textAscii(t, "true");
+                } else {
+                    emon.Port.textAscii(t, "false");
+                }
+                emon.Port.textAscii(t, "\"");
+            }
+            b = hTattr(nodes, attrs, n, Model.fkReason());
+            if (b >= 0) {
+                emon.Port.textAscii(t, " data-emon-reason=\"");
+                hRun(t, text, Model.attrValue(attrs, b), Model.attrLen(attrs, b));
+                emon.Port.textAscii(t, "\"");
+            }
+            b = hTattr(nodes, attrs, n, Model.fkLocation());
+            if (b >= 0) {
+                emon.Port.textAscii(t, " data-emon-location=\"");
+                hRun(t, text, Model.attrValue(attrs, b), Model.attrLen(attrs, b));
+                emon.Port.textAscii(t, "\"");
+            }
             if (asid < 0) {
                 emon.Port.textAscii(t, " role=\"img\" aria-label=\"");
                 hAlt(t, nodes, attrs, text, n);

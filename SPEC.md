@@ -262,7 +262,7 @@ API expose.
 | `cell` | inlines or blocks | `rowspan`, `colspan`, `header` (`col`/`row`/none), `empty`, `align` (`start`/`center`/`end`; §10.10) |
 | `caption` | inlines | `label` (e.g. `"Table 3"`), `target` (node id), `align` |
 | `figure` | `caption`? | `subkind` (§10.6; D053), `label`, `alt` (from the PDF, if any), `labels` (text found inside, optional), `asset` / `noasset` (§10.11; only when `assets` is not `none`) |
-| `seal` | — | `subkind` (`seal`/`stamp`/`signature`/`initials`/`digital-signature`; D053), `name`, `text`, `date`, `color`, `asset` / `noasset` (§10.11) |
+| `seal` | — | `subkind` (`seal`/`stamp`/`signature`/`initials`/`digital-signature`; D053), `name`, `text`, `date`, `color`, `asset` / `noasset` (§10.11); a `digital-signature` also `signed` (boolean), `reason`, `location` (§10.7, D426) |
 | `formula` | — | `text` (best-effort linear text), `display` (block/inline) |
 | `code` | inlines | — (monospace block with preserved whitespace) |
 | `quote` | blocks | — |
@@ -574,7 +574,7 @@ information and removes only what the options say.
 | `list` / `item` | `<ul>` / `<ol start type>`; `<li value>` |
 | `table` | `<table>` with `<caption>`, `<thead>`/`<tbody>`/`<tfoot>`, `<tr>`, `<th scope>` / `<td rowspan colspan>` |
 | `figure` | `<figure data-emon-kind="chart" role="img" aria-label="…">` + `<figcaption>`; **no `<img>`** unless it has an asset (§10.11): then `<figure data-emon-kind="chart"><img src alt width height>…<figcaption>` |
-| `seal` | `<figure data-emon-kind="stamp" data-emon-name="…" role="img" aria-label="Stamp: …"></figure>`; with an asset, the label moves to the `<img alt>` as for a figure |
+| `seal` | `<figure data-emon-kind="stamp" data-emon-name="…" role="img" aria-label="Stamp: …"></figure>`; with an asset, the label moves to the `<img alt>` as for a figure; a digital signature also `data-emon-signed="true"` or `"false"`, `data-emon-reason` and `data-emon-location` |
 | `formula` | `<figure data-emon-kind="formula">` with the linear text in `aria-label` (MathML parked) |
 | `code` | `<pre><code>` |
 | `quote` | `<blockquote>` |
@@ -1819,7 +1819,7 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 
 | arena | stride | fields |
 | --- | --- | --- |
-| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (ONE cell, its arena being known: D240), similarity (case kept), similarity (case-folded letters), flags (`plg`: text-only, OCR-only, split, merged, in-figure, in-seal, **bink** and **bink-absent**: the page has a body-ink OCR run and no word of it lies over the group, P7.4; **seal-px** and **seal-stamp**: the group is a seal's (a stamp's) reading found in pixels, its `rot` the colour code, P8.2) |
+| `cg` | 16 | page, box, rot, text-layer candidates `refs` run, OCR candidates `refs` run, `hidden-text` candidates `refs` run, `tlines` reference (ONE cell, its arena being known: D240), similarity (case kept), similarity (case-folded letters), flags (`plg`: text-only, OCR-only, split, merged, in-figure, in-seal, **bink** and **bink-absent**: the page has a body-ink OCR run and no word of it lies over the group, P7.4; **seal-px** and **seal-stamp**: the group is a seal's (a stamp's) reading found in pixels, its `rot` the colour code, P8.2; **seal-sig** and **seal-init**: the group is a handwritten signature's (initials') strokes found in pixels, with no word, its `rot` the colour code, P8.3) |
 | `fw` | 24 | **the layout of `words`** (word head 16, style, glyph run, font, size, gap, `wbreak`, `src`): `src` is the sources bitset (`sr`: text, hidden-text, ocr, trace), the glyph run is the text-layer word's when it won, empty otherwise |
 | `fl` | 16 | **the layout of `lines`**; a line of OCR-won words is measured as D213 measures an OCR line |
 | `fv` | 8 | per `fw` row: group, winning source (`sr` code), rule (`fr` number), confidence (per-mille, uncalibrated until P10.1), flags (`fl`: low-conf, ocr-only, text-layer-suspect), spare (3) |
@@ -1830,7 +1830,7 @@ evidence (dump version "2": these arenas after the tagged tree's, `ea` 34 on: `c
 | `gfl` | 16 | **the fused fills**: page, box, colour, lightness (0..1000), sources, winning source, rule, confidence, flags (`gq`: shading, pattern, in-image, tint-coloured: the colour came from the tracer), group, `z`, spare (2) |
 | `ggp` | 12 | **graphics groups** (the `cg` of graphics): page, kind (`gk`: rule, fill, region), vector members (`refs` run of `(paths, i)` and `(pts, k)` pairs: the path and the first point of the segment), tracer members (`refs` run of `rules` or `prims` rows), OCR members (`refs` run of `oblocks` rows), flags, spare (3) |
 | `grg` | 16 | **graphic regions**: page, box, kind (`rk`: table-in-image, figure, table-hint), sources (`gs`: vector, trace, ocr, struct, image), subject (`(ea, index)`: the image placement, the `oblocks` block, the `se` element, -1), fused rules inside (count), fills inside (count), confidence, flags, spare (3) |
-| `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`), ink row, primitive or component reference (as built: `(paths, row)` of the vector path), confidence, OCR words inside (a `refs` run), flags (as built: 1 chromatic, 2 double ring, 4 inner ring of another, 16 roundness unverified, 32 text from the text layer, 64 written, 128 read from pixels (P8.2: the ink cell is then the colour code)), and in the three spare cells the node's `etext` run and ink (D317) |
+| `sl` | 16 | seal and signature candidates: page, box, kind (`seal`, `stamp`, `signature`, `initials`, `digital-signature`), ink row, primitive or component reference (as built: `(paths, row)` of the vector path), confidence, OCR words inside (a `refs` run), flags (as built: 1 chromatic, 2 double ring, 4 inner ring of another, 16 roundness unverified, 32 text from the text layer, 64 written, 128 read from pixels (P8.2: the ink cell is then the colour code), 256 the text run is a digital signature's record, 512 that field is signed, 1024 the text run is a signature's typed name; P8.3), and in the three spare cells the node's `etext` run and ink (D317) |
 
 **The tagged tables' verdicts, `tb` (D302, P5.5).** A document whose tagged tree has a `Table` adds one key after the arenas, `tb`, an
 array with a row for every tagged table the table stage read (§10.5), in document order: `page`, `se` (the `Table` element's row), `rows`,
@@ -2479,7 +2479,7 @@ fused rules and fills inside them (a chart's axes are two perpendicular
 
 **As built (P7.7).** Candidates, their words and the node are `emon.sealmark`'s (§9.5, D314-D318): seal, stamp and signature nodes with `subkind`, `color`
 (12 hue buckets, black, gray, white) and `text` (the words in the text layer's order, flagged `low-conf`; none for a signature), in reading order; the
-candidates are the layer's `sl` arena (§9.7). The signature's typed name is P8.3's; the handwriting of raster strokes waits for the tracer's candidates (D316).
+candidates are the layer's `sl` arena (§9.7). A signature's typed name, handwriting in pixels, initials and digital signatures are P8.3's (below).
 
 **As built (P8.2, D412-D418): seals and stamps from pixels, `name` and `date`.** *Fields* (`emon.sealfield`, language independent): a seal's `name` is the first
 phrase of its text between the separators a ring puts between its phrases (a bullet, a star, a bar, a long dash, a line end, a hyphen with a space beside it or between two words of five letters or more) that has
@@ -2504,6 +2504,22 @@ body text (`sx-drop-lines`; also a line with 60 per cent of its characters insid
 a noisy mixed-case or punctuation-ridden misread), and leaves the ring's lone separators out of the node's `text` (the name field is cut by them first). A stamp is also a curve or ellipse of a colour layer
 whose sides differ by more than 15 per cent (a rotated outline). Not built: raster inputs (PNG, JPEG, TIFF files: their page unit has no ink arenas), a seal the layer clustering did not separate from the
 body (a faint stamp on a tinted ground), the second strip for text written with its tops inward, the locale hint at `sm-write`.
+
+**As built (P8.3, D426-D433): handwritten signatures, initials and digital signatures.** *Digital signatures* (`emon.sigmark`, `emon.pdfannot`): every `/Sig` field that has a widget on a page is a `seal` node of subkind
+`digital-signature`, signed or not; P3.8's reader appends one synthetic `an` row a field (subtype `DigitalSignature`; the Engines hand the document unit `an` and not `sg`), and `sm-find` makes its `sl` row, so the node exists with or
+without OCR. Its `name` is the signer's /Name, else the common name of the first certificate's subject in the /Contents bytes (the second `commonName` of the DER: a certificate lists its issuer first; read as bytes);
+its `date` is the /M as ISO 8601 (`YYYY-MM-DD`, with `Thh:mm:ss` and the zone when the /M had the time of day), `reason`, `location`, and `signed` (the field's dictionary has a /Contents; an unsigned field says `false` and nothing
+else). **NOTHING IS VERIFIED**: no digest is computed, no certificate is checked, no chain, no revocation, and the byte range is reported by the dump only. The node is read after the label whose line starts inside its height (a
+field's own row). *Handwritten signatures and initials*: the page's open stroked curves of a pen (at most 2.5 pt wide), merged where they lie within 8 pt, are a cluster (`sgc`); a cluster is judged for its tortuosity (the loops
+of a pen: the strokes' control polygons over their boxes' diagonals, squared, at least 1.8), refused when OCR reads two words of it (confidence at least 700), and is INITIALS when it is at most 28 x 24 pt and a SIGNATURE when it
+is wider and at least 28 pt and wider than 1.5 times its height. The CUES are shapes (language independent): a rule it stands on (a straight stroke or thin rectangle of 60 pt to four fifths of the page, passing through the lower
+part of the cluster or just under it, half the cluster's width over it), a colon token to its left (a word of at most seven characters that ends in a colon), a label under the rule, and P7.7's English hint words (the locale's hint,
+kept). Initials are also taken with no cue when the same mark recurs at the same place of a margin on another page, or on two pages anywhere. The typed `name` is the line of 2 to 5 name-like words the strokes are drawn over, else the
+first under the rule (a one-word label is not a name). Raster: the tracer's rules of the page and the first pass OCR (`emon.sigpx`): the zone above a rule, its ink not under a word OCR was sure of and not on the rule, measured as
+a pen's (stroke width, loops, coverage); the result is a correspondence group with no word and the flags `seal-sig` or `seal-init`, which `sm-raster` turns into the `sl` row; a scan's lines made of the strokes are not the page's text.
+The words OCR reads in a signature are the strokes' and are never body text (rules 401 and 402; on a scan `sp-drop-lines`), and the picture of a raster signature is no `figure` (§10.6: its words
+stay the body's). A signature, initials or a digital signature that overlaps no block is written after the last block of its page above it (a digital signature field: above its bottom). Not built: Ink annotations, a typed name before the strokes, initials in a margin of a raster page with
+no rule, signatures that are filled shapes, certificates verified (by decision).
 
 ### 10.8 Footnotes, captions, links
 

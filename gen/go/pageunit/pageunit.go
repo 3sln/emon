@@ -16,6 +16,7 @@ import (
 	"emon/retarget"
 	"emon/scan"
 	"emon/sealpx"
+	"emon/sigpx"
 	"emon/xalign"
 )
 
@@ -395,6 +396,9 @@ func puRunBorn(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 			retarget.RtWitness(g0, player.CgCount(cg), cg, rtp, oruns, owords)
 			if puPx(bms, nid, fuse) == 1 {
 				sealpx.SxRecord(i, nview, dpi*100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4)
+				// the pen strokes over a signature line in the text-free render (P8.3): no request, no view; the groups are written with the seals'
+				sigpx.SpFind(i+1, views, nview, rules, owords, etext, port.BmsGet(bms, nid), pgw, s5, s6)
+				sigpx.SpRecord(i, s5, cg)
 			}
 		}
 	}
@@ -466,8 +470,12 @@ func puRunScan(i int32, input int32, fuse int32, pl *port.Cells, ans *port.Cells
 	}
 	retarget.RtRecord(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 	sealpx.SxRecord(i, vdec, dpi100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4)
+	// the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
+	sigpx.SpFind(i+1, views, vdec, rules, owords, etext, port.BmsGet(bms, did), PuField(pl, i, 8), s5, s6)
+	sigpx.SpRecord(i, s5, cg)
 	nsel = retarget.RtAdopt(rtp, oruns, run, olines, owords, scr)
 	nsel = sealpx.SxDropLines(scr, nsel, olines, owords, s1)
+	nsel = sigpx.SpDropLines(scr, nsel, olines, owords, s5)
 	retarget.RtUpright(rtp, run, epages, i+1)
 	nl = evidence.OrGet(oruns, run, evidence.OrfLcount())
 	rotmed = evidence.EvRotMedian(olines, l0, nl)

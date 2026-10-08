@@ -380,6 +380,7 @@ public static class Enctx {
         public emon.Port.Cells Ffd = emon.Port.NewCells();
         public emon.Port.Cells Fab = emon.Port.NewCells();
         public emon.Port.Cells Fws = emon.Port.NewCells();
+        public emon.Port.Cells Sgc = emon.Port.NewCells();
         public Scratch() {
         }
         public Scratch Clone() {
@@ -513,6 +514,7 @@ public static class Enctx {
             emon.Port.CellsCopyInto(c.Ffd, this.Ffd);
             emon.Port.CellsCopyInto(c.Fab, this.Fab);
             emon.Port.CellsCopyInto(c.Fws, this.Fws);
+            emon.Port.CellsCopyInto(c.Sgc, this.Sgc);
             return c;
         }
     }

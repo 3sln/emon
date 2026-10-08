@@ -579,6 +579,9 @@ pub(crate) fn js_kfields(mut t: &mut String, pr: i32, d: i32, nodes: &mut crate:
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_name(), s);
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_date(), s);
         s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_color(), s);
+        s = js_fbool(t, pr, d, nodes, attrs, n, fk_signed(), s);
+        s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_reason(), s);
+        s = js_ftext(t, pr, d, nodes, attrs, text, n, fk_location(), s);
         s = js_fint(t, pr, d, nodes, attrs, n, fk_asset(), s);
         s = js_f_noasset(t, pr, d, nodes, attrs, n, s);
     }

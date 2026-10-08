@@ -280,6 +280,12 @@ pub fn pls_stamp() -> i32 {
 pub fn pls_signature() -> i32 {
     return 3;
 }
+pub fn pls_initials() -> i32 {
+    return 4;
+}
+pub fn pls_digital_signature() -> i32 {
+    return 5;
+}
 pub fn pls_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "seal");
@@ -291,6 +297,14 @@ pub fn pls_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 3 {
         crate::port::text_ascii(t, "signature");
+        return 1;
+    }
+    if code == 4 {
+        crate::port::text_ascii(t, "initials");
+        return 1;
+    }
+    if code == 5 {
+        crate::port::text_ascii(t, "digital-signature");
         return 1;
     }
     return 0;
@@ -324,6 +338,12 @@ pub fn plg_seal_px() -> i32 {
 }
 pub fn plg_seal_stamp() -> i32 {
     return 512;
+}
+pub fn plg_seal_sig() -> i32 {
+    return 1024;
+}
+pub fn plg_seal_init() -> i32 {
+    return 2048;
 }
 pub fn plg_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
@@ -364,6 +384,14 @@ pub fn plg_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 512 {
         crate::port::text_ascii(t, "seal-stamp");
+        return 1;
+    }
+    if code == 1024 {
+        crate::port::text_ascii(t, "seal-sig");
+        return 1;
+    }
+    if code == 2048 {
+        crate::port::text_ascii(t, "seal-init");
         return 1;
     }
     return 0;

@@ -7,7 +7,7 @@ namespace emon;
 public static class Pdfannot {
     internal const int AnStride = 38;
     internal const int FdStride = 32;
-    internal const int SgStride = 36;
+    internal const int SgStride = 38;
     internal const int FsStride = 8;
     internal const int FsDepth = 26;
     internal const int PaAnnots = 200000;
@@ -93,6 +93,9 @@ public static class Pdfannot {
     }
     public static int AnRichMedia() {
         return 26;
+    }
+    public static int AnDigsig() {
+        return 27;
     }
     public static int AnSubEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
@@ -201,6 +204,10 @@ public static class Pdfannot {
         }
         if (code == 26) {
             emon.Port.TextAscii(t, "RichMedia");
+            return 1;
+        }
+        if (code == 27) {
+            emon.Port.TextAscii(t, "DigitalSignature");
             return 1;
         }
         return 0;
@@ -1060,7 +1067,111 @@ public static class Pdfannot {
             emon.Port.CellsSet(sg, at + k, -1);
             k += 1;
         }
+        emon.Port.CellsSet(sg, at + 36, -1);
         return row;
+    }
+    internal static int PaAsnCp(emon.Port.Cells ar, int h, int i, int end, int tag, emon.Port.Cells @out) {
+        // Append to `out` the characters of the ASN.1 string whose content is the bytes [i, end) of string `h`; `tag` is its universal tag: 12 UTF8String is decoded as
+        // UTF-8 (a malformed byte is U+FFFD), 30 BMPString as UTF-16BE, every other as Latin-1. Answers the code points appended.
+        int k = i;
+        int c = 0;
+        int n = 0;
+        int cp = 0;
+        int need = 0;
+        while (k < end) {
+            c = Pdfx.PxBat(ar, h, k);
+            cp = c;
+            if (tag == 30) {
+                if ((k + 1) < end) {
+                    cp = (c * 256) + Pdfx.PxBat(ar, h, k + 1);
+                }
+                k += 1;
+            }
+            if ((tag == 12) && (c >= 128)) {
+                need = 0;
+                if ((c >= 194) && (c < 224)) {
+                    need = 1;
+                    cp = c - 192;
+                }
+                if ((c >= 224) && (c < 240)) {
+                    need = 2;
+                    cp = c - 224;
+                }
+                if ((c >= 240) && (c < 245)) {
+                    need = 3;
+                    cp = c - 240;
+                }
+                if (need == 0) {
+                    cp = 65533;
+                } else if ((k + need) > (end - 1)) {
+                    cp = 65533;
+                    need = 0;
+                } else {
+                    while (need > 0) {
+                        k += 1;
+                        cp = (cp * 64) + (Pdfx.PxBat(ar, h, k) & 63);
+                        need -= 1;
+                    }
+                }
+            }
+            Pdfx.PxPushCp(@out, cp);
+            n += 1;
+            k += 1;
+        }
+        return n;
+    }
+    internal static int PaCertName(emon.Port.Cells ar, int h, emon.Port.Cells txt, emon.Port.Cells sg, int at) {
+        // The common name of the SIGNER's certificate, read as bytes from the PKCS#7 in the /Contents string `h`; a run at sg[at, at+2), absent (-1 0) when there is none.
+        // NOTHING IS VERIFIED: the bytes are searched for the AttributeType commonName (55 04 03) followed by a UTF8String, PrintableString, T61String, IA5String or BMPString of
+        // a short length, and the SECOND one is taken (a certificate lists its issuer before its subject, and the signer's is the first certificate of the set: Adobe and openssl write
+        // it so), else the first. A name of a self-signed certificate is the same twice. D426.
+        int n = Pdfx.PxBlen(ar, h);
+        int i = 0;
+        int seen = 0;
+        int tag = 0;
+        int clen = 0;
+        int s0 = -1;
+        int l0 = 0;
+        int t0 = 0;
+        int s1 = -1;
+        int l1 = 0;
+        int t1 = 0;
+        emon.Port.CellsSet(sg, at, -1);
+        emon.Port.CellsSet(sg, at + 1, 0);
+        while (((i + 5) < n) && (seen < 2)) {
+            if ((Pdfx.PxBat(ar, h, i) == 85) && ((Pdfx.PxBat(ar, h, i + 1) == 4) && (Pdfx.PxBat(ar, h, i + 2) == 3))) {
+                tag = Pdfx.PxBat(ar, h, i + 3);
+                clen = Pdfx.PxBat(ar, h, i + 4);
+                if (((tag == 12) || ((tag == 19) || ((tag == 20) || ((tag == 22) || (tag == 30))))) && ((clen > 0) && ((clen < 128) && (((i + 5) + clen) <= n)))) {
+                    if (seen == 0) {
+                        s0 = i + 5;
+                        l0 = clen;
+                        t0 = tag;
+                    }
+                    if (seen == 1) {
+                        s1 = i + 5;
+                        l1 = clen;
+                        t1 = tag;
+                    }
+                    seen += 1;
+                    i = (i + 4) + clen;
+                }
+            }
+            i += 1;
+        }
+        if (s0 == -1) {
+            return 0;
+        }
+        int start = emon.Port.CellsLen(txt);
+        int cnt = 0;
+        if (seen == 2) {
+            cnt = PaAsnCp(ar, h, s1, s1 + l1, t1, txt);
+        } else {
+            cnt = PaAsnCp(ar, h, s0, s0 + l0, t0, txt);
+        }
+        emon.Port.CellsSet(sg, at, start);
+        emon.Port.CellsSet(sg, at + 1, cnt);
+        return cnt;
     }
     internal static int PaSigFill(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells txt, emon.Port.Cells sg, int row, int sd, int bits) {
         // Fill signature row `row` from the signature dictionary `sd` (resolved). Nothing
@@ -1106,6 +1217,7 @@ public static class Pdfannot {
         v = Pdfdoc.PdDget(src, ar, dc, a, b, st, sd, Pdfnames.PnContents());
         if ((v != 0) && (Pdflex.PlKindOf(ar, v) == 5)) {
             emon.Port.CellsSet(sg, at + 32, Pdflex.PlStrLen(ar, v));
+            PaCertName(ar, v, txt, sg, at + 36);
             fl |= 1;
         }
         v = Pdfdoc.PdDget(src, ar, dc, a, b, st, sd, Pdfnames.PnType());
@@ -1773,6 +1885,75 @@ public static class Pdfannot {
         }
         return 0;
     }
+    internal static int PaDigsigRow(emon.Port.Cells an, emon.Port.Cells fd, emon.Port.Cells sg, int frow) {
+        // Append the synthetic `an-digsig` row (see the head of this file) of terminal field `frow` (a signature field with a widget on a page). Signed: its signature
+        // dictionary has a /Contents. Nothing is verified. Answers 1 when a row was written.
+        int f = frow * FdStride;
+        int srow = emon.Port.CellsAt(fd, f + 24);
+        int s = srow * SgStride;
+        int at = emon.Port.CellsLen(an);
+        int k = 0;
+        if (emon.Port.CellsAt(fd, f + 15) < 0) {
+            return 0;
+        }
+        while (k < AnStride) {
+            emon.Port.CellsPush(an, 0);
+            k += 1;
+        }
+        emon.Port.CellsSet(an, at, emon.Port.CellsAt(fd, f + 15));
+        emon.Port.CellsSet(an, at + 1, AnDigsig());
+        emon.Port.CellsSet(an, at + 2, emon.Port.CellsAt(fd, f));
+        k = 0;
+        while (k < 4) {
+            emon.Port.CellsSet(an, (at + 4) + k, emon.Port.CellsAt(fd, (f + 16) + k));
+            k += 1;
+        }
+        k = 8;
+        while (k < 15) {
+            emon.Port.CellsSet(an, at + k, -1);
+            k += 1;
+        }
+        emon.Port.CellsSet(an, at + 23, -1);
+        emon.Port.CellsSet(an, at + 25, emon.Port.CellsAt(fd, f + 2));
+        emon.Port.CellsSet(an, at + 26, emon.Port.CellsAt(fd, f + 3));
+        emon.Port.CellsSet(an, at + 27, -1);
+        emon.Port.CellsSet(an, at + 29, -1);
+        emon.Port.CellsSet(an, at + 32, -1);
+        emon.Port.CellsSet(an, at + 34, -1);
+        emon.Port.CellsSet(an, at + 35, 0);
+        emon.Port.CellsSet(an, at + 36, -1);
+        if (srow >= 0) {
+            emon.Port.CellsSet(an, at + 23, emon.Port.CellsAt(sg, s + 7));
+            emon.Port.CellsSet(an, at + 24, emon.Port.CellsAt(sg, s + 8));
+            k = 0;
+            while (k < 7) {
+                emon.Port.CellsSet(an, (at + 8) + k, emon.Port.CellsAt(sg, (s + 11) + k));
+                k += 1;
+            }
+            emon.Port.CellsSet(an, at + 15, emon.Port.CellsAt(sg, s + 10));
+            emon.Port.CellsSet(an, at + 27, emon.Port.CellsAt(sg, s + 18));
+            emon.Port.CellsSet(an, at + 28, emon.Port.CellsAt(sg, s + 19));
+            emon.Port.CellsSet(an, at + 32, emon.Port.CellsAt(sg, s + 20));
+            emon.Port.CellsSet(an, at + 33, emon.Port.CellsAt(sg, s + 21));
+            emon.Port.CellsSet(an, at + 30, emon.Port.CellsAt(sg, s + 33));
+            emon.Port.CellsSet(an, at + 34, emon.Port.CellsAt(sg, s + 36));
+            emon.Port.CellsSet(an, at + 35, emon.Port.CellsAt(sg, s + 37));
+        }
+        return 1;
+    }
+    internal static int PaDigsigs(emon.Port.Cells an, emon.Port.Cells fd, emon.Port.Cells sg) {
+        // The synthetic rows of every signature field (`fd` kind 7) that has a widget on a page, in field order. Answers the rows written.
+        int nf = emon.Port.CellsLen(fd) / FdStride;
+        int i = 0;
+        int n = 0;
+        while (i < nf) {
+            if (emon.Port.CellsAt(fd, (i * FdStride) + 6) == 7) {
+                n += PaDigsigRow(an, fd, sg, i);
+            }
+            i += 1;
+        }
+        return n;
+    }
     public static int PaRun(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells pg, emon.Port.Cells idx, emon.Port.Cells txt, emon.Port.Cells w, emon.Port.Cells fs, emon.Port.Cells seen, emon.Port.Cells fm, emon.Port.Cells an, emon.Port.Cells aq, emon.Port.Cells fd, emon.Port.Cells sg) {
         // Everything P3.8 reads, after `pd-open`, `pd-pages` and `px-index-build`: fields
         // first (so a widget finds its field), then every page's /Annots, then the
@@ -1853,7 +2034,9 @@ public static class Pdfannot {
         if (Pdfsrc.PsMissed(src)) {
             return -1;
         }
-        return emon.Port.CellsLen(an) / AnStride;
+        i = emon.Port.CellsLen(an) / AnStride;
+        PaDigsigs(an, fd, sg);
+        return i;
     }
     internal static int PaDumpAnnot(System.Text.StringBuilder t, emon.Port.Cells txt, emon.Port.Cells an, emon.Port.Cells aq, int row) {
         int at = row * AnStride;
@@ -2076,10 +2259,12 @@ public static class Pdfannot {
         int i = 0;
         emon.Port.TextAscii(t, "{\"annots\":[");
         while (i < na) {
-            if (i > 0) {
-                emon.Port.TextAscii(t, ",");
+            if (emon.Port.CellsAt(an, (i * AnStride) + 1) != AnDigsig()) {
+                if (i > 0) {
+                    emon.Port.TextAscii(t, ",");
+                }
+                PaDumpAnnot(t, txt, an, aq, i);
             }
-            PaDumpAnnot(t, txt, an, aq, i);
             i += 1;
         }
         emon.Port.TextAscii(t, "],\"fields\":[");

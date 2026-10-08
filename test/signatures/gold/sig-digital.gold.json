@@ -1,0 +1,102 @@
+{
+  "emon-gold" : "1.0",
+  "id" : "sig-digital",
+  "provenance" : {
+    "pdf" : "sig-digital.pdf",
+    "producer" : "tools/synth/sig_pdf.clj (P8.3)"
+  },
+  "annotated" : {
+    "attributes" : {
+      "table" : [ "profile", "columns", "continued" ],
+      "heading" : [ "level", "number", "numbering" ],
+      "list" : [ "ordered", "scheme", "start" ],
+      "rowgroup" : [ "role" ],
+      "figure" : [ "subkind", "label", "alt", "labels" ],
+      "cell" : [ "rowspan", "colspan", "header", "empty" ],
+      "note" : [ "role", "marker" ],
+      "section" : [ "level" ],
+      "item" : [ "marker", "value" ],
+      "row" : [ "repeated" ],
+      "seal" : [ "subkind", "name", "date", "color", "signed", "reason", "location" ],
+      "caption" : [ "label" ]
+    },
+    "dropped" : [ "page-number", "running-title", "watermark", "duplicate-header-row" ],
+    "furniture" : true,
+    "inlines" : true,
+    "pages" : [ "n", "w", "h", "label" ],
+    "structure" : [ "section", "heading", "paragraph", "list", "item", "table", "rowgroup", "row", "cell", "caption", "figure", "seal", "quote", "code", "note" ],
+    "text" : true
+  },
+  "model" : {
+    "body" : {
+      "id" : 0,
+      "kind" : "document",
+      "children" : [ {
+        "id" : 1,
+        "kind" : "section",
+        "level" : 1,
+        "children" : [ {
+          "id" : 2,
+          "kind" : "heading",
+          "level" : 1,
+          "text" : "Service Approval"
+        }, {
+          "id" : 3,
+          "kind" : "paragraph",
+          "text" : "market engine office evening engine table picture kitchen ground mother question evening napkin weather engine machine window ground button bridge lesson rabbit rabbit friend house garden house water system country morning house"
+        }, {
+          "id" : 4,
+          "kind" : "paragraph",
+          "text" : "Approved by"
+        }, {
+          "id" : 5,
+          "kind" : "seal",
+          "subkind" : "digital-signature",
+          "signed" : true,
+          "name" : "Morgan Reyes",
+          "date" : "2026-03-12T14:30:05+01:00",
+          "reason" : "I approve this document",
+          "location" : "Berlin"
+        }, {
+          "id" : 6,
+          "kind" : "paragraph",
+          "text" : "Vendor"
+        }, {
+          "id" : 7,
+          "kind" : "seal",
+          "subkind" : "digital-signature",
+          "signed" : true,
+          "name" : "Taylor Certificate",
+          "date" : "2026-04-01"
+        }, {
+          "id" : 8,
+          "kind" : "paragraph",
+          "text" : "Counter-signed by"
+        }, {
+          "id" : 9,
+          "kind" : "seal",
+          "subkind" : "digital-signature",
+          "signed" : false
+        } ]
+      } ]
+    },
+    "dropped" : [ ],
+    "emon" : "1.0",
+    "furniture" : [ ],
+    "meta" : { },
+    "pages" : [ {
+      "n" : 1,
+      "w" : 612,
+      "h" : 792,
+      "rot" : 0
+    } ],
+    "settings" : {
+      "locale" : "en"
+    },
+    "source" : {
+      "format" : "pdf",
+      "lang" : "en",
+      "pages" : 1
+    }
+  }
+}

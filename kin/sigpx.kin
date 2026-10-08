@@ -1,0 +1,478 @@
+;; HANDWRITTEN SIGNATURES AND INITIALS FROM PIXELS (P8.3; SPEC 10.7, 8.2, 9.7; D016, D205, D426-D433). emon's own module (D039).
+;;
+;; WHAT THIS ADDS TO `emon.sigmark`. A scan, a photographed page, or a signature that is a picture on a born-digital page has no path to read: its pen strokes are ink in the
+;; raster the page unit already has. This module reads them from that raster, the tracer's RULES (P6.4: the lines a signature stands on) and the first pass OCR (what is text and
+;; what is not), with no request and no view of its own:
+;;
+;;   (sp-find page1 views srcview rules owords etext src pw ph cand mask)   the candidates of a page, in `cand` (SP_W cells each)
+;;   (sp-record page0 cand cg)                                              one correspondence group a candidate (flags `in-seal`, `seal-px`, `seal-sig` or `seal-init`)
+;;   (sp-drop-lines scr nsel olines owords cand)                            a scanned page's chosen lines without those that are the strokes read as letters
+;;
+;; THE ZONE of a rule (a horizontal line of the tracer, 60 pt to four fifths of the page wide, at most 4 pt thick) is the strip of the raster above it (`sp-up` 70 pt) and a little below
+;; (`sp-down`), as wide as the rule. Its INK is the pixels that are dark (luminance under `sp-dark`) or strongly coloured, that are not on the rule itself (`sp-band`) and not under a word
+;; OCR was sure of (`sp-conf`: a typed name or a label; its box is paper), so what is left is what is not text. The strokes are measured as a pen's: the box of the ink; its
+;; STROKE WIDTH (the shorter of the median horizontal and vertical run of ink, at most `sp-pen` 4.5 pt); the length of its path (the ink over the stroke width) over the diagonal of
+;; its box, squared, at least `sg-tort` (the loops of a pen: `emon.sigmark`'s tortuosity); its COVERAGE (the ink over the box: strokes are at most `sp-cover` per cent of it, a
+;; picture is not); that OCR reads no two words of it is the mask's doing (a word OCR was 500 per mille sure of is paper: handwriting it reads is no ink). By SIZE it is initials (at most `sg-ini-w` x `sg-ini-h`) or a signature (at least `sg-sig-min-w`, wider
+;; than 1.5 times its height). Its colour is the mean of its ink, as `sm-hue` names it. Every number is a named setting; P10.1 calibrates them.
+;;
+;; THE EVIDENCE. A candidate is a correspondence group with no word (`cg-new`: its runs empty), its box the ink's, its `rot` cell the colour code, flagged `in-seal` and `seal-px` and
+;; `seal-sig` (a signature) or `seal-init` (initials): `emon.sealmark`'s `sm-raster` makes its `sl` row, flags the OCR-only groups inside it `in-seal` (their words never reach the body:
+;; rules 401, 402) and finds the typed name; on a scan `sp-drop-lines` takes the lines the first pass made of the strokes out of the chosen ones.
+(ns emon.sigpx
+  (:require [emon.lang :refer [I32 Cells Bitmap]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop bitmap-w bitmap-h bitmap-channels bitmap-u8]]
+            [emon.evidence :refer [rl-count rl-get rlf-page rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-thick
+                                   ow-count ow-get hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf
+                                   vw-cpt-to-px vw-px-to-cpt
+                                   ol-get lh-first lh-count]]
+            [emon.sealfield :refer [sf-script]]
+            [emon.sigmark :refer [sg-ini-w sg-ini-h sg-sig-min-w sg-sig-max-w sg-sig-max-h sg-min-side sg-rule-min sg-rule-thick sg-rule-page sg-tort]]
+            [emon.sealmark :refer [sm-hue]]
+            [emon.scan :refer [sc-sel-base]]
+            [emon.player :refer [cg-new cg-set cgf-flags plg-in-seal plg-seal-px plg-seal-sig plg-seal-init]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem bit-and]]))
+
+;; ------------------------------------------------------------- the settings (SPEC 13: named, first values; P10.1 calibrates)
+
+(defn ^:pub ^I32 sp-w [] (comment "Cells of a candidate: 0 kind (3 signature, 4 initials), 1 rule row, 2-5 box (centipoints), 6 ink pixels, 7 colour 0xRRGGBB, 8 stroke width (centipoints), 9 confidence.") (return 12))
+(defn ^:pub ^I32 sp-up [] (comment "`sig-zone-up`: how far above a rule (centipoints) its zone reaches: 70 pt.") (return 7000))
+(defn ^:pub ^I32 sp-down [] (comment "How far below a rule (centipoints) its zone reaches: 8 pt.") (return 800))
+(defn ^:pub ^I32 sp-side [] (comment "How far beyond a rule's ends (centipoints) its zone reaches: 3 pt.") (return 300))
+(defn ^:pub ^I32 sp-dark [] (comment "`sig-dark`: a pixel with a luminance (0-255) under this is ink.") (return 170))
+(defn ^:pub ^I32 sp-spread [] (comment "A pixel with a spread of its channels over this and a luminance under 225 is ink too (a pale coloured pen).") (return 60))
+(defn ^:pub ^I32 sp-conf [] (comment "`sig-text-conf`: an OCR word with at least this confidence (per mille) and two letters is text: its box is paper.") (return 500))
+(defn ^:pub ^I32 sp-pen [] (comment "`sig-pen`: the widest stroke (centipoints) of a pen: 4.5 pt.") (return 450))
+(defn ^:pub ^I32 sp-cover [] (comment "`sig-cover`: the share (per cent) of its box that strokes cover at most.") (return 40))
+(defn ^:pub ^I32 sp-min-ink [] (comment "The fewest ink pixels a signature has.") (return 40))
+(defn ^:pub ^I32 sp-max [] (comment "The most candidates of a page (the most rules looked at).") (return 8))
+(defn ^:pub ^I32 sp-max-zone [] (comment "The most pixels of a zone: a zone is bounded by a rule and 80 pt; a hostile page has no larger one.") (return 4000000))
+
+;; ------------------------------------------------------------- one pixel
+
+(defn ^I32 sp-lum [^Bitmap src ^I32 x ^I32 y]
+  (comment "The luminance (0-255) of pixel (x, y); a colour pixel is (3 r + 6 g + b) / 10.")
+  (if (< (bitmap-channels src) 3) (return (bitmap-u8 src x y 0)))
+  (return (quot (+ (+ (* 3 (bitmap-u8 src x y 0)) (* 6 (bitmap-u8 src x y 1))) (bitmap-u8 src x y 2)) 10)))
+
+(defn ^I32 sp-is-ink [^Bitmap src ^I32 x ^I32 y]
+  (comment "1 when pixel (x, y) is ink: dark, or a pale pen of some colour.")
+  (let [^I32 l (sp-lum src x y)
+        ^:mut ^I32 hi 0
+        ^:mut ^I32 lo 255
+        ^:mut ^I32 v 0
+        ^:mut ^I32 k 0]
+    (if (< l (sp-dark)) (return 1))
+    (if (< (bitmap-channels src) 3) (return 0))
+    (if (>= l 225) (return 0))
+    (while (< k 3)
+      (do (set v (bitmap-u8 src x y k))
+          (if (> v hi) (set hi v))
+          (if (< v lo) (set lo v))
+          (set k (+ k 1))))
+    (if (> (- hi lo) (sp-spread)) (return 1))
+    (return 0)))
+
+;; ------------------------------------------------------------- a rule's zone
+
+(defn ^I32 sp-abs [^I32 v]
+  (if (< v 0) (return (- 0 v)))
+  (return v))
+
+(defn ^I32 sp-lo [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 sp-hi [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 sp-overlap [^I32 a0 ^I32 a1 ^I32 b0 ^I32 b1]
+  (comment "The length the intervals [a0, a1] and [b0, b1] share, 0 when they do not.")
+  (let [^I32 v (- (sp-lo a1 b1) (sp-hi a0 b0))]
+    (if (< v 0) (return 0))
+    (return v)))
+
+(defn ^I32 sp-is-rule [^Cells rules ^I32 r ^I32 pw]
+  (comment "1 when rules row r is a signature line: horizontal (no thicker than `sg-rule-thick` twice), 60 pt to four fifths of the page long.")
+  (let [^I32 w (- (rl-get rules r (rlf-x1)) (rl-get rules r (rlf-x0)))
+        ^I32 h (- (rl-get rules r (rlf-y1)) (rl-get rules r (rlf-y0)))]
+    (if (< w (sg-rule-min)) (return 0))
+    (if (> (* w 1000) (* pw (sg-rule-page))) (return 0))
+    (if (> h (* 2 (sg-rule-thick))) (return 0))
+    (return 1)))
+
+(defn ^I32 sp-framed [^I32 page1 ^Cells rules ^I32 r ^I32 pw]
+  (comment "1 when rules row r is a side of a frame, a chart's axis or a grid's line and not a signature line (`emon.sigmark`'s `sg-axis`, in pixels' rows): a vertical rule at least 20 pt long")
+  (comment "meets one of its ends and crosses its height, or two other horizontal rules of its width lie within 40 pt of it.")
+  (let [^I32 n (rl-count rules)
+        ^I32 rx0 (rl-get rules r (rlf-x0))
+        ^I32 rx1 (rl-get rules r (rlf-x1))
+        ^I32 ry (quot (+ (rl-get rules r (rlf-y0)) (rl-get rules r (rlf-y1))) 2)
+        ^:mut ^I32 s 0
+        ^:mut ^I32 others 0
+        ^:mut ^I32 ymid 0
+        ^:mut ^I32 sx0 0
+        ^:mut ^I32 sy0 0
+        ^:mut ^I32 sx1 0
+        ^:mut ^I32 sy1 0]
+    (while (< s n)
+      (do (if (and (!= s r) (== (rl-get rules s (rlf-page)) page1))
+            (do (set sx0 (rl-get rules s (rlf-x0)))
+                (set sy0 (rl-get rules s (rlf-y0)))
+                (set sx1 (rl-get rules s (rlf-x1)))
+                (set sy1 (rl-get rules s (rlf-y1)))
+                (if (and (>= (- sy1 sy0) 2000) (<= (- sx1 sx0) 600))
+                  (if (and (<= sy0 (+ ry 300)) (>= sy1 (- ry 300)))
+                    (if (or (<= (sp-abs (- sx0 rx0)) 300) (<= (sp-abs (- sx0 rx1)) 300))
+                      (return 1))))
+                (if (== (sp-is-rule rules s pw) 1)
+                  (do (set ymid (quot (+ sy0 sy1) 2))
+                      (if (and (> (sp-abs (- ymid ry)) 200) (<= (sp-abs (- ymid ry)) 4000))
+                        (if (>= (* 2 (sp-overlap rx0 rx1 sx0 sx1)) (- rx1 rx0))
+                          (set others (+ others 1))))))))
+          (set s (+ s 1))))
+    (if (>= others 2) (return 1))
+    (return 0)))
+
+(defn ^I32 sp-mask-words [^I32 page1 ^Cells owords ^Cells etext ^Cells views ^I32 srcview ^I32 zx0 ^I32 zy0 ^I32 zw ^I32 zh ^:mut ^Cells mask]
+  (comment "Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters, inside the zone (px zx0, zy0, zw x zh). Answers the words.")
+  (let [^I32 n (ow-count owords)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 made 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 letters 0
+        ^:mut ^I32 ts 0
+        ^:mut ^I32 tl 0
+        ^:mut ^I32 x0 0
+        ^:mut ^I32 y0 0
+        ^:mut ^I32 x1 0
+        ^:mut ^I32 y1 0
+        ^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< i n)
+      (do (if (== (ow-get owords i (hd-page)) page1)
+            (if (>= (ow-get owords i (hd-conf)) (sp-conf))
+              (do (set ts (ow-get owords i (hd-tstart)))
+                  (set tl (ow-get owords i (hd-tlen)))
+                  (set letters 0)
+                  (set k 0)
+                  (while (< k tl)
+                    (do (if (> (sf-script (cells-at etext (+ ts k))) 0) (set letters (+ letters 1)))
+                        (set k (+ k 1))))
+                  (if (>= letters 2)
+                    (do (set x0 (- (vw-cpt-to-px views srcview 0 (ow-get owords i (hd-x0)) (ow-get owords i (hd-y0))) 1))
+                        (set y0 (- (vw-cpt-to-px views srcview 1 (ow-get owords i (hd-x0)) (ow-get owords i (hd-y0))) 1))
+                        (set x1 (+ (vw-cpt-to-px views srcview 0 (ow-get owords i (hd-x1)) (ow-get owords i (hd-y1))) 1))
+                        (set y1 (+ (vw-cpt-to-px views srcview 1 (ow-get owords i (hd-x1)) (ow-get owords i (hd-y1))) 1))
+                        (if (< x0 zx0) (set x0 zx0))
+                        (if (< y0 zy0) (set y0 zy0))
+                        (if (> x1 (+ zx0 zw)) (set x1 (+ zx0 zw)))
+                        (if (> y1 (+ zy0 zh)) (set y1 (+ zy0 zh)))
+                        (set y y0)
+                        (while (< y y1)
+                          (do (set x x0)
+                              (while (< x x1)
+                                (do (cells-set mask (+ (* (- y zy0) zw) (- x zx0)) 0)
+                                    (set x (+ x 1))))
+                              (set y (+ y 1))))
+                        (set made (+ made 1)))))))
+          (set i (+ i 1))))
+    (return made)))
+
+
+(defn ^I32 sp-map [^Bitmap src ^I32 zx0 ^I32 zy0 ^I32 zw ^I32 zh ^I32 rpy ^I32 band ^:mut ^Cells mask]
+  (comment "Fill the zone's ink map (cell y * zw + x, 1 for ink, not on the rule's band of rows). Answers the ink pixels.")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 ink 0]
+    (while (< y zh)
+      (do (set x 0)
+          (while (< x zw)
+            (do (cells-set mask (+ (* y zw) x) 0)
+                (if (> (sp-abs (- (+ zy0 y) rpy)) band)
+                  (if (== (sp-is-ink src (+ zx0 x) (+ zy0 y)) 1)
+                    (do (cells-set mask (+ (* y zw) x) 1)
+                        (set ink (+ ink 1)))))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return ink)))
+
+;; the statistics of a zone, from cell `n` of its map (n = zw x zh): 0-63 the horizontal runs of ink by length, 64-127 the vertical ones, 128 bx0, 129 by0, 130 bx1, 131 by1 (the ink's
+;; box, zone pixels), 132 ink, 133-135 the sums of its red, green and blue, 136 and 137 how many horizontal and vertical runs
+(defn ^I32 sp-stats [^Bitmap src ^I32 zx0 ^I32 zy0 ^I32 zw ^I32 zh ^:mut ^Cells mask ^I32 n]
+  (comment "Write the statistics (see above) of the zone's ink map at mask[n, n + 138).")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 run 0
+        ^:mut ^I32 k 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 b 0]
+    (while (< (cells-len mask) (+ n 138))
+      (cells-push mask 0))
+    (while (< k 138)
+      (do (cells-set mask (+ n k) 0)
+          (set k (+ k 1))))
+    (cells-set mask (+ n 128) zw)
+    (cells-set mask (+ n 129) zh)
+    (cells-set mask (+ n 130) -1)
+    (cells-set mask (+ n 131) -1)
+    (while (< y zh)
+      (do (set run 0)
+          (set x 0)
+          (while (<= x zw)
+            (do (if (and (< x zw) (== (cells-at mask (+ (* y zw) x)) 1))
+                  (do (set run (+ run 1))
+                      (if (< x (cells-at mask (+ n 128))) (cells-set mask (+ n 128) x))
+                      (if (> x (cells-at mask (+ n 130))) (cells-set mask (+ n 130) x))
+                      (if (< y (cells-at mask (+ n 129))) (cells-set mask (+ n 129) y))
+                      (if (> y (cells-at mask (+ n 131))) (cells-set mask (+ n 131) y))
+                      (cells-set mask (+ n 132) (+ (cells-at mask (+ n 132)) 1))
+                      (cells-set mask (+ n 133) (+ (cells-at mask (+ n 133)) (bitmap-u8 src (+ zx0 x) (+ zy0 y) 0)))
+                      (if (>= (bitmap-channels src) 3)
+                        (do (set g (bitmap-u8 src (+ zx0 x) (+ zy0 y) 1))
+                            (set b (bitmap-u8 src (+ zx0 x) (+ zy0 y) 2))
+                            (cells-set mask (+ n 134) (+ (cells-at mask (+ n 134)) g))
+                            (cells-set mask (+ n 135) (+ (cells-at mask (+ n 135)) b)))))
+                  (do (if (> run 0)
+                        (do (set k run)
+                            (if (> k 63) (set k 63))
+                            (cells-set mask (+ n k) (+ (cells-at mask (+ n k)) 1))
+                            (cells-set mask (+ n 136) (+ (cells-at mask (+ n 136)) 1))))
+                      (set run 0)))
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (set x 0)
+    (while (< x zw)
+      (do (set run 0)
+          (set y 0)
+          (while (<= y zh)
+            (do (if (and (< y zh) (== (cells-at mask (+ (* y zw) x)) 1))
+                  (set run (+ run 1))
+                  (do (if (> run 0)
+                        (do (set k run)
+                            (if (> k 63) (set k 63))
+                            (cells-set mask (+ (+ n 64) k) (+ (cells-at mask (+ (+ n 64) k)) 1))
+                            (cells-set mask (+ n 137) (+ (cells-at mask (+ n 137)) 1))))
+                      (set run 0)))
+                (set y (+ y 1))))
+          (set x (+ x 1))))
+    (return (cells-at mask (+ n 132)))))
+
+(defn ^I32 sp-median [^Cells mask ^I32 at ^I32 total]
+  (comment "The median of the histogram of run lengths at mask[at, at + 64): the smallest length at which the count reaches half of `total`; 0 for no run.")
+  (let [^:mut ^I32 k 1
+        ^:mut ^I32 acc 0]
+    (if (== total 0) (return 0))
+    (while (< k 64)
+      (do (set acc (+ acc (cells-at mask (+ at k))))
+          (if (>= (* 2 acc) total) (return k))
+          (set k (+ k 1))))
+    (return 64)))
+
+(defn ^I32 sp-add [^:mut ^Cells cand ^I32 kind ^I32 row ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 ink ^I32 rgb ^I32 sw ^I32 conf]
+  (comment "Append a candidate unless one already lies over this box (half of the smaller). Answers 1 when added.")
+  (let [^I32 n (quot (cells-len cand) (sp-w))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 ow 0
+        ^:mut ^I32 oh 0
+        ^:mut ^I32 small 0]
+    (while (< j n)
+      (do (set q (* j (sp-w)))
+          (set ow (- (sp-lo x1 (cells-at cand (+ q 4))) (sp-hi x0 (cells-at cand (+ q 2)))))
+          (set oh (- (sp-lo y1 (cells-at cand (+ q 5))) (sp-hi y0 (cells-at cand (+ q 3)))))
+          (if (and (> ow 0) (> oh 0))
+            (do (set small (sp-lo (quot (* (quot (- x1 x0) 10) (quot (- y1 y0) 10)) 10)
+                                  (quot (* (quot (- (cells-at cand (+ q 4)) (cells-at cand (+ q 2))) 10) (quot (- (cells-at cand (+ q 5)) (cells-at cand (+ q 3))) 10)) 10)))
+                (if (>= (* (quot (* (quot ow 10) (quot oh 10)) 10) 2) small)
+                  (return 0))))
+          (set j (+ j 1))))
+    (cells-push cand kind)
+    (cells-push cand row)
+    (cells-push cand x0)
+    (cells-push cand y0)
+    (cells-push cand x1)
+    (cells-push cand y1)
+    (cells-push cand ink)
+    (cells-push cand rgb)
+    (cells-push cand sw)
+    (cells-push cand conf)
+    (cells-push cand 0)
+    (cells-push cand 0)
+    (return 1)))
+
+(defn ^I32 sp-judge [^I32 page1 ^Cells views ^I32 srcview ^Cells owords ^Cells etext ^Bitmap src ^I32 row ^I32 zx0 ^I32 zy0 ^Cells mask ^I32 n ^:mut ^Cells cand]
+  (comment "Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says")
+  (comment "signature or initials. Answers 1 when added.")
+  (let [^I32 ink (cells-at mask (+ n 132))
+        ^I32 bx0 (cells-at mask (+ n 128))
+        ^I32 by0 (cells-at mask (+ n 129))
+        ^I32 bx1 (cells-at mask (+ n 130))
+        ^I32 by1 (cells-at mask (+ n 131))
+        ^I32 wpx (+ (- bx1 bx0) 1)
+        ^I32 hpx (+ (- by1 by0) 1)
+        ^I32 x0 (vw-px-to-cpt views srcview 0 (+ zx0 bx0) (+ zy0 by0))
+        ^I32 y0 (vw-px-to-cpt views srcview 1 (+ zx0 bx0) (+ zy0 by0))
+        ^I32 x1 (vw-px-to-cpt views srcview 0 (+ (+ zx0 bx1) 1) (+ (+ zy0 by1) 1))
+        ^I32 y1 (vw-px-to-cpt views srcview 1 (+ (+ zx0 bx1) 1) (+ (+ zy0 by1) 1))
+        ^I32 w (- x1 x0)
+        ^I32 h (- y1 y0)
+        ^I32 nh (cells-at mask (+ n 136))
+        ^I32 nv (cells-at mask (+ n 137))
+        ^I32 mh (sp-median mask n nh)
+        ^I32 mv (sp-median mask (+ n 64) nv)
+        ^:mut ^I32 sw 1
+        ^:mut ^I32 swc 0
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 conf 0
+        ^:mut ^I32 rgb 0
+        ^:mut ^I32 ln 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 b 0]
+    (if (< bx1 bx0) (return 0))
+    (if (or (< w (sg-min-side)) (< h (sg-min-side))) (return 0))
+    (if (or (> w (sg-sig-max-w)) (> h (sg-sig-max-h))) (return 0))
+    (set sw mh)
+    (if (or (== sw 0) (and (> mv 0) (< mv sw))) (set sw mv))
+    (if (< sw 1) (set sw 1))
+    (set swc (quot (* sw w) wpx))
+    (if (> swc (sp-pen)) (return 0))
+    (if (> (* ink 100) (* (* wpx hpx) (sp-cover))) (return 0))
+    (set ln (quot ink sw))
+    (if (< (* (quot (* ln ln) 4) 100) (* (quot (+ (* wpx wpx) (* hpx hpx)) 4) (sg-tort))) (return 0))
+    (if (and (<= w (sg-ini-w)) (<= h (sg-ini-h))) (set kind 4))
+    (if (and (== kind 0) (and (>= w (sg-sig-min-w)) (>= (* w 2) (* h 3)))) (set kind 3))
+    (if (== kind 0) (return 0))
+    (set conf 600)
+    (if (== kind 4) (set conf 550))
+    (set r (quot (cells-at mask (+ n 133)) ink))
+    (set g r)
+    (set b r)
+    (if (>= (bitmap-channels src) 3)
+      (do (set g (quot (cells-at mask (+ n 134)) ink))
+          (set b (quot (cells-at mask (+ n 135)) ink))))
+    (set rgb (+ (+ (* r 65536) (* g 256)) b))
+    (return (sp-add cand kind row x0 y0 x1 y1 ink rgb swc conf))))
+
+(defn ^I32 sp-zone [^I32 page1 ^Cells views ^I32 srcview ^Cells owords ^Cells etext ^Bitmap src ^Cells rules ^I32 r ^:mut ^Cells cand ^:mut ^Cells mask]
+  (comment "Measure the zone of rules row r and, when its ink is a pen's, append a candidate to `cand` (see the head of this file). `mask` is the zone's ink map (one cell a pixel) and the")
+  (comment "statistics after it. Answers 1 when a candidate was added.")
+  (let [^I32 rx0 (- (rl-get rules r (rlf-x0)) (sp-side))
+        ^I32 rx1 (+ (rl-get rules r (rlf-x1)) (sp-side))
+        ^I32 ry (quot (+ (rl-get rules r (rlf-y0)) (rl-get rules r (rlf-y1))) 2)
+        ^I32 th (- (rl-get rules r (rlf-y1)) (rl-get rules r (rlf-y0)))
+        ^I32 rpy (vw-cpt-to-px views srcview 1 rx0 ry)
+        ^:mut ^I32 zx0 (vw-cpt-to-px views srcview 0 rx0 (- ry (sp-up)))
+        ^:mut ^I32 zy0 (vw-cpt-to-px views srcview 1 rx0 (- ry (sp-up)))
+        ^:mut ^I32 zx1 (vw-cpt-to-px views srcview 0 rx1 (+ ry (sp-down)))
+        ^:mut ^I32 zy1 (vw-cpt-to-px views srcview 1 rx1 (+ ry (sp-down)))
+        ^:mut ^I32 zw 0
+        ^:mut ^I32 zh 0
+        ^:mut ^I32 band 2
+        ^:mut ^I32 ink 0
+        ^:mut ^I32 k 0]
+    (if (< zx0 0) (set zx0 0))
+    (if (< zy0 0) (set zy0 0))
+    (if (> zx1 (bitmap-w src)) (set zx1 (bitmap-w src)))
+    (if (> zy1 (bitmap-h src)) (set zy1 (bitmap-h src)))
+    (set zw (- zx1 zx0))
+    (set zh (- zy1 zy0))
+    (if (or (<= zw 8) (<= zh 8)) (return 0))
+    (if (> (* zw zh) (sp-max-zone)) (return 0))
+    (set band (+ 2 (quot (* (+ th 100) zh) (* 2 (+ (sp-up) (sp-down))))))
+    (cells-drop mask 0)
+    (while (< k (* zw zh))
+      (do (cells-push mask 0)
+          (set k (+ k 1))))
+    (set ink (sp-map src zx0 zy0 zw zh rpy band mask))
+    (if (< ink (sp-min-ink)) (return 0))
+    (sp-mask-words page1 owords etext views srcview zx0 zy0 zw zh mask)
+    (set ink (sp-stats src zx0 zy0 zw zh mask (* zw zh)))
+    (if (< ink (sp-min-ink)) (return 0))
+    (return (sp-judge page1 views srcview owords etext src r zx0 zy0 mask (* zw zh) cand))))
+
+(defn ^:pub ^I32 sp-find [^I32 page1 ^Cells views ^I32 srcview ^Cells rules ^Cells owords ^Cells etext ^Bitmap src ^I32 pw ^:mut ^Cells cand ^:mut ^Cells mask]
+  (comment "The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared")
+  (comment "first). `mask` is scratch. Answers how many.")
+  (let [^I32 n (rl-count rules)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 looked 0]
+    (cells-drop cand 0)
+    (while (< r n)
+      (do (if (== (rl-get rules r (rlf-page)) page1)
+            (if (and (< looked (sp-max)) (and (== (sp-is-rule rules r pw) 1) (== (sp-framed page1 rules r pw) 0)))
+              (do (set looked (+ looked 1))
+                  (sp-zone page1 views srcview owords etext src rules r cand mask))))
+          (set r (+ r 1))))
+    (return (quot (cells-len cand) (sp-w)))))
+
+(defn ^:pub ^I32 sp-record [^I32 page0 ^Cells cand ^:mut ^Cells cg]
+  (comment "One correspondence group a candidate: no word, its box the ink's, its colour code (`sm-hue`) in `rot`, flagged `in-seal`, `seal-px` and `seal-sig` or `seal-init`. Answers the groups written.")
+  (let [^I32 n (quot (cells-len cand) (sp-w))
+        ^:mut ^I32 j 0
+        ^:mut ^I32 c 0
+        ^:mut ^I32 g 0
+        ^:mut ^I32 fl 0]
+    (while (< j n)
+      (do (set c (* j (sp-w)))
+          (set g (cg-new cg (+ page0 1) (cells-at cand (+ c 2)) (cells-at cand (+ c 3)) (cells-at cand (+ c 4)) (cells-at cand (+ c 5)) (sm-hue (cells-at cand (+ c 7)))))
+          (set fl (+ (plg-in-seal) (plg-seal-px)))
+          (if (== (cells-at cand c) 3)
+            (set fl (+ fl (plg-seal-sig)))
+            (set fl (+ fl (plg-seal-init))))
+          (cg-set cg g (cgf-flags) fl)
+          (set j (+ j 1))))
+    (return n)))
+
+(defn ^:pub ^I32 sp-drop-lines [^:mut ^Cells scr ^I32 nsel ^Cells olines ^Cells owords ^Cells cand]
+  (comment "A scanned page's chosen lines (the selection of `scr`) without the lines that the strokes of a candidate made: every word of the line has its centre in a candidate's box and the engine")
+  (comment "was under 600 per mille sure of them on average (a typed name the strokes are drawn over is read with confidence and stays), or at least 60 per cent of them do and it was under 450.")
+  (comment "Answers the lines left.")
+  (let [^I32 n (quot (cells-len cand) (sp-w))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 out 0
+        ^:mut ^I32 l 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 cnt 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 q 0
+        ^:mut ^I32 nin 0
+        ^:mut ^I32 csum 0
+        ^:mut ^I32 inone 0
+        ^:mut ^I32 wi 0
+        ^:mut ^I32 gone 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0]
+    (while (< k nsel)
+      (do (set l (cells-at scr (+ (sc-sel-base) k)))
+          (set f (ol-get olines l (lh-first)))
+          (set cnt (ol-get olines l (lh-count)))
+          (set nin 0)
+          (set csum 0)
+          (set gone 0)
+          (if (> cnt 0)
+            (do (set j 0)
+                (while (< j cnt)
+                  (do (set wi (+ f j))
+                      (set cx (quot (+ (ow-get owords wi (hd-x0)) (ow-get owords wi (hd-x1))) 2))
+                      (set cy (quot (+ (ow-get owords wi (hd-y0)) (ow-get owords wi (hd-y1))) 2))
+                      (set inone 0)
+                      (set q 0)
+                      (while (< q n)
+                        (do (if (and (>= cx (cells-at cand (+ (* q (sp-w)) 2))) (and (<= cx (cells-at cand (+ (* q (sp-w)) 4)))
+                                     (and (>= cy (cells-at cand (+ (* q (sp-w)) 3))) (<= cy (cells-at cand (+ (* q (sp-w)) 5))))))
+                              (set inone 1))
+                            (set q (+ q 1))))
+                      (if (== inone 1) (set nin (+ nin 1)))
+                      (set csum (+ csum (ow-get owords wi (hd-conf))))
+                      (set j (+ j 1))))
+                (if (and (== nin cnt) (< csum (* cnt 600))) (set gone 1))
+                (if (and (>= (* nin 100) (* cnt 60)) (< csum (* cnt 450))) (set gone 1))))
+          (if (== gone 0)
+            (do (cells-set scr (+ (sc-sel-base) out) l)
+                (set out (+ out 1))))
+          (set k (+ k 1))))
+    (return out)))

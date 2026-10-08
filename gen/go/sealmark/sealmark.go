@@ -10,6 +10,7 @@ import (
 	"emon/port"
 	"emon/restruct"
 	"emon/sealfield"
+	"emon/sigmark"
 )
 
 func SmSealMin() int32 {
@@ -20,31 +21,6 @@ func SmSealMin() int32 {
 func SmStampWidth() int32 {
 	// `stamp-width`: the border (centipoints) a stamp's rectangle needs: 1.5 pt.
 	return 150
-}
-
-func SmSigWidth() int32 {
-	// `sig-width`: the widest stroke (centipoints) of a pen signature.
-	return 250
-}
-
-func SmSigGap() int32 {
-	// `sig-gap`: how far (centipoints) strokes of one signature lie apart.
-	return 800
-}
-
-func SmSigSegs() int32 {
-	// `sig-segs`: the Bezier segments a signature has, together.
-	return 3
-}
-
-func SmSigMinW() int32 {
-	// The width (centipoints) a signature needs: 30 pt.
-	return 3000
-}
-
-func SmCueLines() int32 {
-	// `cue-lines`: how many line heights from a cue a signature may lie.
-	return 3
 }
 
 func SmRound() int32 {
@@ -85,11 +61,6 @@ func SmOverlap() int32 {
 func SmMaxCands() int32 {
 	// The most candidates of one page (a hostile page's strokes).
 	return 64
-}
-
-func SmMaxStrokes() int32 {
-	// The most signature strokes of one page that are clustered.
-	return 96
 }
 
 func SmCw() int32 {
@@ -459,70 +430,6 @@ func SmRingTest(pa *port.Cells, pts *port.Cells, r int32, out *port.Cells) int32
 	return 1
 }
 
-func smFold(c int32) int32 {
-	if (c >= 65) && (c <= 90) {
-		return c + 32
-	}
-	return c
-}
-
-func smWordIs(fw *port.Cells, et *port.Cells, row int32, pre0 int32, pre1 int32, pre2 int32, pre3 int32, pre4 int32, pre5 int32, pre6 int32, pre7 int32, pre8 int32, want int32) int32 {
-	// 1 when word `row` starts, case-folded, with the code points pre0..pre(want-1) (nine at most).
-	var ts int32 = port.CellsAt(fw, (row*24)+11)
-	var tl int32 = port.CellsAt(fw, (row*24)+12)
-	if tl < want {
-		return 0
-	}
-	if smFold(port.CellsAt(et, ts)) != pre0 {
-		return 0
-	}
-	if (want > 1) && (smFold(port.CellsAt(et, ts+1)) != pre1) {
-		return 0
-	}
-	if (want > 2) && (smFold(port.CellsAt(et, ts+2)) != pre2) {
-		return 0
-	}
-	if (want > 3) && (smFold(port.CellsAt(et, ts+3)) != pre3) {
-		return 0
-	}
-	if (want > 4) && (smFold(port.CellsAt(et, ts+4)) != pre4) {
-		return 0
-	}
-	if (want > 5) && (smFold(port.CellsAt(et, ts+5)) != pre5) {
-		return 0
-	}
-	if (want > 6) && (smFold(port.CellsAt(et, ts+6)) != pre6) {
-		return 0
-	}
-	if (want > 7) && (smFold(port.CellsAt(et, ts+7)) != pre7) {
-		return 0
-	}
-	if (want > 8) && (smFold(port.CellsAt(et, ts+8)) != pre8) {
-		return 0
-	}
-	return 1
-}
-
-func smCueWord(fw *port.Cells, et *port.Cells, row int32, end int32) int32 {
-	// 1 when word `row` (of a page whose words end at `end`) is a signature cue: `signature`, `signed`, `sign` followed by `here`, `by:`; case-folded.
-	var tl int32 = port.CellsAt(fw, (row*24)+12)
-	if smWordIs(fw, et, row, 115, 105, 103, 110, 97, 116, 117, 114, 101, 9) == 1 {
-		return 1
-	}
-	if smWordIs(fw, et, row, 115, 105, 103, 110, 101, 100, 0, 0, 0, 6) == 1 {
-		return 1
-	}
-	if (tl == 3) && (smWordIs(fw, et, row, 98, 121, 58, 0, 0, 0, 0, 0, 0, 3) == 1) {
-		return 1
-	}
-	if (tl == 4) && ((smWordIs(fw, et, row, 115, 105, 103, 110, 0, 0, 0, 0, 0, 4) == 1) && ((row + 1) < end)) {
-		if smWordIs(fw, et, row+1, 104, 101, 114, 101, 0, 0, 0, 0, 0, 4) == 1 {
-			return 1
-		}
-	}
-	return 0
-}
-
 func SmTurned(rot int32) int32 {
 	// 1 when the rotation (centi-degrees) is at least `sm-arc-turn` off every right angle.
 	var a int32 = ((rot % 9000) + 9000) % 9000
@@ -564,7 +471,7 @@ func smMember(scr *port.Cells, c int32, fw *port.Cells, gl *port.Cells, row int3
 	var cy int32 = (port.CellsAt(fw, at+2) + port.CellsAt(fw, at+4)) / 2
 	var kind int32 = port.CellsAt(scr, c)
 	var ink int32 = smWordInk(fw, gl, row)
-	if (kind == 0) || (kind == player.PlsSignature()) {
+	if (kind == 0) || (kind > player.PlsStamp()) {
 		return 0
 	}
 	if smInside(scr, c, cx, cy) == 0 {
@@ -743,140 +650,6 @@ func smStamps(pa *port.Cells, pts *port.Cells, p0 int32, p1 int32, pw int32, ph 
 	return n
 }
 
-func smSegs(pa *port.Cells, pts *port.Cells, r int32) int32 {
-	// The Bezier segments of path row r (a triple of curve points), 0 when its geometry was not kept.
-	var n int32 = evidence.PaGet(pa, r, evidence.PfPcount())
-	var f int32 = evidence.PaGet(pa, r, evidence.PfPfirst())
-	var j int32 = 0
-	var c int32 = 0
-	if f < 0 {
-		return 0
-	}
-	for j < n {
-		if evidence.PtGet(pts, f+j, evidence.PtfOp()) == evidence.PoCurve() {
-			c += 1
-		}
-		j += 1
-	}
-	return c / 3
-}
-
-func smGap(a0 int32, a1 int32, b0 int32, b1 int32) int32 {
-	// The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.
-	if b0 > a1 {
-		return b0 - a1
-	}
-	if a0 > b1 {
-		return a0 - b1
-	}
-	return 0
-}
-
-func smSignatures(pa *port.Cells, pts *port.Cells, fw *port.Cells, et *port.Cells, page int32, p0 int32, p1 int32, pw int32, ph int32, scr *port.Cells, n0 int32, tmp *port.Cells) int32 {
-	// The signature candidates of page `page`'s paths [p0, p1): the open, stroked, unfilled curves no wider than `sm-sig-width` (and neither the page's width nor
-	// a third of its height), merged where they lie within `sm-sig-gap`, kept when they have at least `sm-sig-segs` Bezier segments, are at least 30 pt wide and
-	// wider than 1.5 times their height, and a cue word of the page lies within `sm-cue-lines` line heights of the cluster. Appended to `scr`.
-	var r int32 = p0
-	var ns int32 = 0
-	var n int32 = n0
-	var i int32 = 0
-	var j int32 = 0
-	var changed int32 = 1
-	var a int32 = 0
-	var b int32 = 0
-	var w int32 = 0
-	var h int32 = 0
-	var cue int32 = 0
-	var vg int32 = 0
-	var hg int32 = 0
-	var lh int32 = 0
-	var nw int32 = port.CellsLen(fw) / 24
-	port.CellsDrop(tmp, 8)
-	for r < p1 {
-		if (smStrokeOnly(pa, r) == 1) && (ns < SmMaxStrokes()) {
-			if ((evidence.PaGet(pa, r, evidence.PfFlags()) & evidence.PgClosed()) == 0) && (evidence.PaGet(pa, r, evidence.PfWidth()) <= SmSigWidth()) {
-				if evidence.PaGet(pa, r, evidence.PfKind()) == evidence.PaCurve() {
-					if ((evidence.PaGet(pa, r, evidence.PfX1()) - evidence.PaGet(pa, r, evidence.PfX0())) < pw) && (((evidence.PaGet(pa, r, evidence.PfY1()) - evidence.PaGet(pa, r, evidence.PfY0())) * 3) < ph) {
-						port.CellsPush(tmp, evidence.PaGet(pa, r, evidence.PfX0()))
-						port.CellsPush(tmp, evidence.PaGet(pa, r, evidence.PfY0()))
-						port.CellsPush(tmp, evidence.PaGet(pa, r, evidence.PfX1()))
-						port.CellsPush(tmp, evidence.PaGet(pa, r, evidence.PfY1()))
-						port.CellsPush(tmp, smSegs(pa, pts, r))
-						port.CellsPush(tmp, r)
-						port.CellsPush(tmp, evidence.PaGet(pa, r, evidence.PfStroke()))
-						ns += 1
-					}
-				}
-			}
-		}
-		r += 1
-	}
-	// merge until nothing merges; a stroke is a record of 7 cells from cell 8 of tmp
-	for changed == 1 {
-		changed = 0
-		i = 0
-		for i < ns {
-			a = 8 + (i * 7)
-			if port.CellsAt(tmp, a+4) >= 0 {
-				j = i + 1
-				for j < ns {
-					b = 8 + (j * 7)
-					if port.CellsAt(tmp, b+4) >= 0 {
-						if (smGap(port.CellsAt(tmp, a), port.CellsAt(tmp, a+2), port.CellsAt(tmp, b), port.CellsAt(tmp, b+2)) <= SmSigGap()) && (smGap(port.CellsAt(tmp, a+1), port.CellsAt(tmp, a+3), port.CellsAt(tmp, b+1), port.CellsAt(tmp, b+3)) <= SmSigGap()) {
-							if port.CellsAt(tmp, b) < port.CellsAt(tmp, a) {
-								port.CellsSet(tmp, a, port.CellsAt(tmp, b))
-							}
-							if port.CellsAt(tmp, b+1) < port.CellsAt(tmp, a+1) {
-								port.CellsSet(tmp, a+1, port.CellsAt(tmp, b+1))
-							}
-							if port.CellsAt(tmp, b+2) > port.CellsAt(tmp, a+2) {
-								port.CellsSet(tmp, a+2, port.CellsAt(tmp, b+2))
-							}
-							if port.CellsAt(tmp, b+3) > port.CellsAt(tmp, a+3) {
-								port.CellsSet(tmp, a+3, port.CellsAt(tmp, b+3))
-							}
-							port.CellsSet(tmp, a+4, port.CellsAt(tmp, a+4)+port.CellsAt(tmp, b+4))
-							port.CellsSet(tmp, b+4, -1)
-							changed = 1
-						}
-					}
-					j += 1
-				}
-			}
-			i += 1
-		}
-	}
-	i = 0
-	for i < ns {
-		a = 8 + (i * 7)
-		w = port.CellsAt(tmp, a+2) - port.CellsAt(tmp, a)
-		h = port.CellsAt(tmp, a+3) - port.CellsAt(tmp, a+1)
-		if (port.CellsAt(tmp, a+4) >= SmSigSegs()) && ((w >= SmSigMinW()) && ((w * 2) >= (h * 3))) {
-			cue = 0
-			j = 0
-			for (j < nw) && (cue == 0) {
-				if port.CellsAt(fw, j*24) == page {
-					if smCueWord(fw, et, j, nw) == 1 {
-						lh = port.CellsAt(fw, (j*24)+4) - port.CellsAt(fw, (j*24)+2)
-						vg = smGap(port.CellsAt(tmp, a+1), port.CellsAt(tmp, a+3), port.CellsAt(fw, (j*24)+2), port.CellsAt(fw, (j*24)+4))
-						hg = smGap(port.CellsAt(tmp, a), port.CellsAt(tmp, a+2), port.CellsAt(fw, (j*24)+1), port.CellsAt(fw, (j*24)+3))
-						if (vg <= (lh * SmCueLines())) && (hg <= w) {
-							cue = 1
-						}
-					}
-				}
-				j += 1
-			}
-			if (cue == 1) && (n < SmMaxCands()) {
-				smAddCand(scr, player.PlsSignature(), port.CellsAt(tmp, a+5), port.CellsAt(tmp, a), port.CellsAt(tmp, a+1), port.CellsAt(tmp, a+2), port.CellsAt(tmp, a+3), 0, 0, 0, port.CellsAt(tmp, a+6), 0)
-				n += 1
-			}
-		}
-		i += 1
-	}
-	return n
-}
-
 func smGroupInside(cg *port.Cells, refs *port.Cells, owords *port.Cells, g int32, scr *port.Cells, c int32) int32 {
 	// 1 when the group has no text-layer or hidden word, has OCR words, and the centre of every one lies inside the candidate at record `c`.
 	var no int32 = player.CgGet(cg, g, player.CgfOcount())
@@ -1014,7 +787,7 @@ func smPage(scr *port.Cells, n int32, page int32, fw *port.Cells, gl *port.Cells
 		kind = port.CellsAt(scr, c)
 		tl = 0
 		oc = 0
-		if kind != player.PlsSignature() {
+		if kind <= player.PlsStamp() {
 			tl = smCountMembers(scr, c, fw, gl, page)
 		}
 		port.CellsSet(scr, c+11, tl)
@@ -1057,7 +830,7 @@ func smPage(scr *port.Cells, n int32, page int32, fw *port.Cells, gl *port.Cells
 			ts = port.CellsLen(et)
 			first = -1
 			nref = 0
-			if (kind != player.PlsSignature()) && (tl > 0) {
+			if (kind <= player.PlsStamp()) && (tl > 0) {
 				smTextLayerText(scr, c, fw, gl, et, page)
 			}
 			g = 0
@@ -1072,7 +845,7 @@ func smPage(scr *port.Cells, n int32, page int32, fw *port.Cells, gl *port.Cells
 							row = port.CellsAt(refs, ((player.CgGet(cg, g, player.CgfOfirst())+j)*2)+1)
 							evidence.RfAdd(refs, evidence.EaOwords(), row)
 							nref += 1
-							if (tl == 0) && (kind != player.PlsSignature()) {
+							if (tl == 0) && (kind <= player.PlsStamp()) {
 								if port.CellsLen(et) > ts {
 									port.CellsPush(et, 32)
 								}
@@ -1100,23 +873,41 @@ func smPage(scr *port.Cells, n int32, page int32, fw *port.Cells, gl *port.Cells
 			if tl > 0 {
 				conf += 100
 			}
-			if conf > 900 {
+			if kind > player.PlsStamp() {
+				conf = port.CellsAt(scr, c+10) / 65536
+			}
+			if (kind <= player.PlsStamp()) && (conf > 900) {
 				conf = 900
 			}
 			o = player.SlNew(sm, page, port.CellsAt(scr, c+2), port.CellsAt(scr, c+3), port.CellsAt(scr, c+4), port.CellsAt(scr, c+5), kind)
 			port.CellsSet(sm, (o*16)+7, evidence.EaPaths())
 			port.CellsSet(sm, (o*16)+8, port.CellsAt(scr, c+1))
+			if kind == player.PlsDigitalSignature() {
+				port.CellsSet(sm, (o*16)+7, -1)
+				port.CellsSet(sm, (o*16)+8, -1)
+			}
 			port.CellsSet(sm, (o*16)+9, conf)
 			if nref > 0 {
 				port.CellsSet(sm, (o*16)+10, first)
 				port.CellsSet(sm, (o*16)+11, nref)
 			}
-			port.CellsSet(sm, (o*16)+12, port.CellsAt(scr, c+10))
+			port.CellsSet(sm, (o*16)+12, port.CellsAt(scr, c+10)%65536)
 			if tl > 0 {
 				port.CellsSet(sm, (o*16)+12, port.CellsAt(scr, c+10)|32)
 			}
 			port.CellsSet(sm, (o*16)+13, ts)
 			port.CellsSet(sm, (o*16)+14, port.CellsLen(et)-ts)
+			// a signature's or initials' typed name and a digital signature's record are runs `emon.sigmark` appended (scr cells 6 and 7): flag 1024 says the run is a name, 256 a record
+			if kind > player.PlsStamp() {
+				port.CellsSet(sm, (o*16)+13, port.CellsAt(scr, c+6))
+				port.CellsSet(sm, (o*16)+14, port.CellsAt(scr, c+7))
+				if (kind != player.PlsDigitalSignature()) && (port.CellsAt(scr, c+7) > 0) {
+					port.CellsSet(sm, (o*16)+12, port.CellsAt(sm, (o*16)+12)|1024)
+				}
+				if kind == player.PlsDigitalSignature() {
+					port.CellsSet(sm, (o*16)+12, port.CellsAt(sm, (o*16)+12)|256)
+				}
+			}
 			port.CellsSet(sm, (o*16)+15, port.CellsAt(scr, c+9))
 		}
 		k += 1
@@ -1332,9 +1123,40 @@ func smOverlapShare(ax0 int32, ay0 int32, ax1 int32, ay1 int32, bx0 int32, by0 i
 	return ((w * h) * 100) / small
 }
 
-func smRaster(page int32, et *port.Cells, cg *port.Cells, refs *port.Cells, owords *port.Cells, sm *port.Cells) int32 {
-	// The `sl` rows of the seals and stamps that page units found in pixels (`emon.sealpx`): one for every group of `page` flagged `seal-px`, unless a candidate that is
-	// already there (found in the vector paths) has its box (half of the smaller). Its text is `sm-px-text`'s, its colour the group's code, its words the group's. Answers the rows written.
+func smBoxGroup(cg *port.Cells, refs *port.Cells, owords *port.Cells, g int32, x0 int32, y0 int32, x1 int32, y1 int32) int32 {
+	// 1 when the group has no text-layer or hidden word, has OCR words, and the centre of every one lies inside the box.
+	var no int32 = player.CgGet(cg, g, player.CgfOcount())
+	var of int32 = player.CgGet(cg, g, player.CgfOfirst())
+	var k int32 = 0
+	var row int32 = 0
+	var cx int32 = 0
+	var cy int32 = 0
+	if player.CgGet(cg, g, player.CgfTcount()) > 0 {
+		return 0
+	}
+	if player.CgGet(cg, g, player.CgfHcount()) > 0 {
+		return 0
+	}
+	if no == 0 {
+		return 0
+	}
+	for k < no {
+		row = port.CellsAt(refs, ((of+k)*2)+1)
+		cx = (evidence.OwGet(owords, row, evidence.HdX0()) + evidence.OwGet(owords, row, evidence.HdX1())) / 2
+		cy = (evidence.OwGet(owords, row, evidence.HdY0()) + evidence.OwGet(owords, row, evidence.HdY1())) / 2
+		if (cx < x0) || ((cx > x1) || ((cy < y0) || (cy > y1))) {
+			return 0
+		}
+		k += 1
+	}
+	return 1
+}
+
+func smRaster(page int32, et *port.Cells, cg *port.Cells, refs *port.Cells, owords *port.Cells, fw *port.Cells, tmp *port.Cells, sm *port.Cells) int32 {
+	// The `sl` rows of the seals, stamps, signatures and initials that page units found in pixels (`emon.sealpx`, `emon.sigpx`): one for every group of `page` flagged `seal-px`, unless a candidate
+	// that is already there (found in the vector paths) has its box (half of the smaller). A seal's or stamp's text is `sm-px-text`'s; a signature's or initials' is none, but the typed name
+	// under or beneath its strokes (`emon.sigmark`'s `sg-typed-name`: the line the strokes are drawn over, else the first within 45 pt under them) when there is one (flag 1024); the OCR-only
+	// groups inside a signature or initials are flagged `in-seal` (their words are the strokes read as letters). Its colour is the group's code, its words the group's. Answers the rows written.
 	var ng int32 = player.CgCount(cg)
 	var g int32 = 0
 	var o int32 = 0
@@ -1344,6 +1166,16 @@ func smRaster(page int32, et *port.Cells, cg *port.Cells, refs *port.Cells, owor
 	var fl int32 = 0
 	var kind int32 = 0
 	var conf int32 = 0
+	var got int32 = 0
+	var gx0 int32 = 0
+	var gy0 int32 = 0
+	var gx1 int32 = 0
+	var gy1 int32 = 0
+	var fq int32 = 0
+	var q int32 = 0
+	for port.CellsLen(tmp) < 4 {
+		port.CellsPush(tmp, 0)
+	}
 	for g < ng {
 		if (player.CgGet(cg, g, player.CgfPage()) == page) && ((player.CgGet(cg, g, player.CgfFlags()) & player.PlgSealPx()) != 0) {
 			dup = 0
@@ -1362,18 +1194,41 @@ func smRaster(page int32, et *port.Cells, cg *port.Cells, refs *port.Cells, owor
 				if (fl & player.PlgSealStamp()) != 0 {
 					kind = player.PlsStamp()
 				}
+				if (fl & player.PlgSealSig()) != 0 {
+					kind = player.PlsSignature()
+				}
+				if (fl & player.PlgSealInit()) != 0 {
+					kind = player.PlsInitials()
+				}
 				ts = port.CellsLen(et)
-				smPxText(et, refs, owords, player.CgGet(cg, g, player.CgfOfirst()), player.CgGet(cg, g, player.CgfOcount()))
+				got = 0
+				if kind <= player.PlsStamp() {
+					smPxText(et, refs, owords, player.CgGet(cg, g, player.CgfOfirst()), player.CgGet(cg, g, player.CgfOcount()))
+				} else {
+					gx0 = player.CgGet(cg, g, player.CgfX0())
+					gy0 = player.CgGet(cg, g, player.CgfY0())
+					gx1 = player.CgGet(cg, g, player.CgfX1())
+					gy1 = player.CgGet(cg, g, player.CgfY1())
+					got = sigmark.SgTypedName(fw, et, page, gy0-300, gy1, gx0, gx1, 300, tmp)
+					if got == 0 {
+						got = sigmark.SgTypedName(fw, et, page, gy1-300, gy1+4500, gx0, gx1, 4000, tmp)
+					}
+				}
 				// a reading with no word kept is no text: the seal has none
 				conf = 600
 				if kind == player.PlsStamp() {
 					conf = 700
 				}
-				if player.CgGet(cg, g, player.CgfRot()) > 2 {
-					conf += 100
+				if kind <= player.PlsStamp() {
+					if player.CgGet(cg, g, player.CgfRot()) > 2 {
+						conf += 100
+					}
+					if port.CellsLen(et) > ts {
+						conf += 100
+					}
 				}
-				if port.CellsLen(et) > ts {
-					conf += 100
+				if kind == player.PlsInitials() {
+					conf = 550
 				}
 				if conf > 900 {
 					conf = 900
@@ -1385,7 +1240,30 @@ func smRaster(page int32, et *port.Cells, cg *port.Cells, refs *port.Cells, owor
 				port.CellsSet(sm, (o*16)+12, 128)
 				port.CellsSet(sm, (o*16)+13, ts)
 				port.CellsSet(sm, (o*16)+14, port.CellsLen(et)-ts)
+				if (kind > player.PlsStamp()) && (got != 0) {
+					port.CellsSet(sm, (o*16)+13, port.CellsAt(tmp, 0))
+					port.CellsSet(sm, (o*16)+14, port.CellsAt(tmp, 1))
+					port.CellsSet(sm, (o*16)+12, 1152)
+				}
 				port.CellsSet(sm, (o*16)+15, player.CgGet(cg, g, player.CgfRot()))
+				if kind > player.PlsStamp() {
+					port.CellsSet(sm, (o*16)+10, -1)
+					port.CellsSet(sm, (o*16)+11, 0)
+					gx0 = player.CgGet(cg, g, player.CgfX0())
+					gy0 = player.CgGet(cg, g, player.CgfY0())
+					gx1 = player.CgGet(cg, g, player.CgfX1())
+					gy1 = player.CgGet(cg, g, player.CgfY1())
+					q = 0
+					for q < ng {
+						if (player.CgGet(cg, q, player.CgfPage()) == page) && ((player.CgGet(cg, q, player.CgfFlags()) & player.PlgSealPx()) == 0) {
+							if smBoxGroup(cg, refs, owords, q, gx0, gy0, gx1, gy1) == 1 {
+								fq = player.CgGet(cg, q, player.CgfFlags())
+								player.CgSet(cg, q, player.CgfFlags(), fq|player.PlgInSeal())
+							}
+						}
+						q += 1
+					}
+				}
 				made += 1
 			}
 		}
@@ -1394,9 +1272,11 @@ func smRaster(page int32, et *port.Cells, cg *port.Cells, refs *port.Cells, owor
 	return made
 }
 
-func SmFind(pa *port.Cells, pts *port.Cells, gl *port.Cells, fw *port.Cells, et *port.Cells, epages *port.Cells, cg *port.Cells, refs *port.Cells, owords *port.Cells, np int32, sm *port.Cells, scr *port.Cells, tmp *port.Cells) int32 {
+func SmFind(pa *port.Cells, pts *port.Cells, gl *port.Cells, fw *port.Cells, et *port.Cells, epages *port.Cells, cg *port.Cells, refs *port.Cells, owords *port.Cells, an *port.Cells, txt *port.Cells, np int32, sm *port.Cells, scr *port.Cells, tmp *port.Cells, sgc *port.Cells) int32 {
 	// The candidates of every page (see the head of this file) into `sm` (the `sl` arena), the text of their words appended to `et` (`sl` cells 13-14), and
-	// the flag `plg-in-seal` on the groups of `cg` that are theirs. `scr` and `tmp` are scratch. Answers the candidates written.
+	// the flag `plg-in-seal` on the groups of `cg` that are theirs. Handwritten signatures, initials and digital signature fields are `emon.sigmark`'s: its clusters are found in a
+	// first pass over every page (`sgc`; the document's verdict needs all of them: initials recur) and written here as candidate records. `an` and `txt` are P3.8's. `scr`, `tmp`
+	// and `sgc` are scratch. Answers the candidates written.
 	var npaths int32 = evidence.PaCount(pa)
 	var p int32 = 1
 	var pi int32 = 0
@@ -1407,6 +1287,8 @@ func SmFind(pa *port.Cells, pts *port.Cells, gl *port.Cells, fw *port.Cells, et 
 	var pw int32 = 61200
 	var ph int32 = 79200
 	port.CellsDrop(sm, 0)
+	port.CellsDrop(sgc, 0)
+	// the first pass: every page's pen-stroke clusters, then the document's verdict on them
 	for p <= np {
 		for (pi < npaths) && (evidence.PaGet(pa, pi, evidence.PfPage()) < p) {
 			pi += 1
@@ -1416,13 +1298,40 @@ func SmFind(pa *port.Cells, pts *port.Cells, gl *port.Cells, fw *port.Cells, et 
 			pi += 1
 		}
 		p1 = pi
+		pw = 61200
+		ph = 79200
+		ep = evidence.EvPageRow(epages, p)
+		if ep >= 0 {
+			pw = evidence.EpGet(epages, ep, evidence.EpfWidth())
+			ph = evidence.EpGet(epages, ep, evidence.EpfHeight())
+		}
 		if p1 > p0 {
-			ep = evidence.EvPageRow(epages, p)
-			if ep >= 0 {
-				pw = evidence.EpGet(epages, ep, evidence.EpfWidth())
-				ph = evidence.EpGet(epages, ep, evidence.EpfHeight())
-			}
-			port.CellsDrop(scr, 0)
+			sigmark.SgCollect(pa, pts, fw, et, owords, p, p0, p1, pw, ph, tmp, sgc)
+		}
+		p += 1
+	}
+	sigmark.SgDecide(sgc, owords, et, fw)
+	p = 1
+	pi = 0
+	for p <= np {
+		for (pi < npaths) && (evidence.PaGet(pa, pi, evidence.PfPage()) < p) {
+			pi += 1
+		}
+		p0 = pi
+		for (pi < npaths) && (evidence.PaGet(pa, pi, evidence.PfPage()) == p) {
+			pi += 1
+		}
+		p1 = pi
+		pw = 61200
+		ph = 79200
+		ep = evidence.EvPageRow(epages, p)
+		if ep >= 0 {
+			pw = evidence.EpGet(epages, ep, evidence.EpfWidth())
+			ph = evidence.EpGet(epages, ep, evidence.EpfHeight())
+		}
+		port.CellsDrop(scr, 0)
+		n = 0
+		if p1 > p0 {
 			port.CellsDrop(tmp, 0)
 			port.CellsPush(tmp, 0)
 			port.CellsPush(tmp, 0)
@@ -1434,12 +1343,12 @@ func SmFind(pa *port.Cells, pts *port.Cells, gl *port.Cells, fw *port.Cells, et 
 			port.CellsPush(tmp, 0)
 			n = smRings(pa, pts, p0, p1, scr, tmp)
 			n = smStamps(pa, pts, p0, p1, pw, ph, scr, n)
-			n = smSignatures(pa, pts, fw, et, p, p0, p1, pw, ph, scr, n, tmp)
-			if n > 0 {
-				smPage(scr, n, p, fw, gl, et, cg, refs, owords, sm)
-			}
 		}
-		smRaster(p, et, cg, refs, owords, sm)
+		n = sigmark.SgEmit(sgc, an, txt, fw, et, p, scr, n, tmp)
+		if n > 0 {
+			smPage(scr, n, p, fw, gl, et, cg, refs, owords, sm)
+		}
+		smRaster(p, et, cg, refs, owords, fw, tmp, sm)
 		p += 1
 	}
 	return player.SlCount(sm)
@@ -1548,6 +1457,36 @@ func smEarlier(sm *port.Cells, a int32, b int32) int32 {
 	return 0
 }
 
+func smRefY(sm *port.Cells, o int32) int32 {
+	// The y that places candidate `o` among the blocks that start below it: its top, but a digital signature field's BOTTOM (a field a line of text sits beside is read after the
+	// label that starts inside its height: `Approved by` then the field, P8.3, D432).
+	if player.SlGet(sm, o, 5) == player.PlsDigitalSignature() {
+		return player.SlGet(sm, o, 4)
+	}
+	return player.SlGet(sm, o, 2)
+}
+
+func smLastAbove(sm *port.Cells, o int32, on *port.Cells, orr *port.Cells, n int32) int32 {
+	// The last top-level block (in reading order) of candidate `o`'s page that starts above its reference y (`sm-ref-y`), -1 for none: where a signature, initials or a digital signature
+	// that overlaps no block is placed AFTER (the initials at the foot of page 1 are the end of page 1's blocks, not the start of page 2's: P8.3, D432).
+	var ref int32 = smRefY(sm, o)
+	var i int32 = 0
+	var r int32 = 0
+	var pick int32 = -1
+	for i < n {
+		if smIsTop(on, i) == 1 {
+			r = model.NodeRegionHead(on, i)
+			if r >= 0 {
+				if (model.RegionPage(orr, r) == player.SlGet(sm, o, 0)) && (model.RegionY0(orr, r) < ref) {
+					pick = i
+				}
+			}
+		}
+		i += 1
+	}
+	return pick
+}
+
 func smPending(sm *port.Cells, nm *port.Cells, n0 int32, on *port.Cells, i int32, page int32, y0 int32, mode int32) int32 {
 	// The next candidate to write before node i, -1 for none. `nm[n0 + o]` is the node a candidate is placed after (-1: none overlaps it). Mode 0: the
 	// candidates placed after a node whose subtree has ended (i is later and not in it). Mode 1: those with no such node, whose top lies before (page, y0). Mode 2:
@@ -1570,7 +1509,7 @@ func smPending(sm *port.Cells, nm *port.Cells, n0 int32, on *port.Cells, i int32
 				}
 			}
 			if (mode == 1) && (a < 0) {
-				if (player.SlGet(sm, o, 0) < page) || ((player.SlGet(sm, o, 0) == page) && (player.SlGet(sm, o, 2) < y0)) {
+				if (player.SlGet(sm, o, 0) < page) || ((player.SlGet(sm, o, 0) == page) && (smRefY(sm, o) < y0)) {
 					ok = 1
 				}
 			}
@@ -1639,6 +1578,51 @@ func smEmitFields(et *port.Cells, ts int32, tl int32, kind int32, nodes *port.Ce
 	return 0
 }
 
+func smEmitSeg(et *port.Cells, from int32, to int32, nodes *port.Cells, attrs *port.Cells, text *port.Cells, nn int32, key int32) int32 {
+	// Add the code points et[from, to) to the Model's text as attribute `key` of node `nn`; nothing for an empty range.
+	var j int32 = from
+	var start int32 = port.CellsLen(text)
+	if to <= from {
+		return 0
+	}
+	for j < to {
+		model.TextAppendCp(text, port.CellsAt(et, j))
+		j += 1
+	}
+	model.NodeAddAttrText(nodes, attrs, nn, key, start, to-from)
+	return 1
+}
+
+func smEmitDigital(et *port.Cells, ts int32, tl int32, signed int32, nodes *port.Cells, attrs *port.Cells, text *port.Cells, nn int32) int32 {
+	// A digital signature's attributes (P8.3, D426) from the record et[ts, ts + tl): the signer's name, the reason, the location and the time, each ended by the code point 31, as
+	// `name`, `reason`, `location` and `date`; and `signed`, the state of the field (it holds a signature dictionary with a /Contents). Nothing is verified.
+	var end int32 = ts + tl
+	var j int32 = ts
+	var from int32 = ts
+	var seg int32 = 0
+	for j <= end {
+		if (j == end) || (port.CellsAt(et, j) == 31) {
+			if seg == 0 {
+				smEmitSeg(et, from, j, nodes, attrs, text, nn, model.FkName())
+			}
+			if seg == 1 {
+				smEmitSeg(et, from, j, nodes, attrs, text, nn, model.FkReason())
+			}
+			if seg == 2 {
+				smEmitSeg(et, from, j, nodes, attrs, text, nn, model.FkLocation())
+			}
+			if seg == 3 {
+				smEmitSeg(et, from, j, nodes, attrs, text, nn, model.FkDate())
+			}
+			from = j + 1
+			seg += 1
+		}
+		j += 1
+	}
+	model.NodeSetAttrBool(nodes, attrs, nn, model.FkSigned(), signed)
+	return 0
+}
+
 func smEmit(sm *port.Cells, o int32, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, parent int32, nm *port.Cells, fb int32) int32 {
 	// Write candidate `o` as a `seal` node, the last child of `parent`: its subkind, confidence, source, region, the words as `text` (flagged `low-conf`),
 	// its name and date (`sm-emit-fields`) and its colour name. `nm` from cell `fb` is the fields' scratch.
@@ -1657,7 +1641,13 @@ func smEmit(sm *port.Cells, o int32, et *port.Cells, nodes *port.Cells, attrs *p
 	model.NodeSetConf(nodes, nn, player.SlGet(sm, o, 9))
 	model.NodeAddSrc(nodes, nn, model.SrInfer())
 	model.NodeAddRegion(nodes, regions, nn, player.SlGet(sm, o, 0), player.SlGet(sm, o, 1), player.SlGet(sm, o, 2), player.SlGet(sm, o, 3), player.SlGet(sm, o, 4))
-	if tl > 0 {
+	if (tl > 0) && ((fl & 256) != 0) {
+		smEmitDigital(et, ts, tl, (fl&512)/512, nodes, attrs, text, nn)
+	}
+	if (tl > 0) && ((fl & 1024) != 0) {
+		smEmitSeg(et, ts, ts+tl, nodes, attrs, text, nn, model.FkName())
+	}
+	if (tl > 0) && ((fl & 1280) == 0) {
 		start = port.CellsLen(text)
 		// the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them
 		for j < tl {
@@ -1767,6 +1757,9 @@ func SmWrite(sm *port.Cells, et *port.Cells, on *port.Cells, oa *port.Cells, orr
 				}
 				i += 1
 			}
+		}
+		if (pick < 0) && (player.SlGet(sm, o, 5) > player.PlsStamp()) {
+			pick = smLastAbove(sm, o, on, orr, n)
 		}
 		port.CellsPush(nm, pick)
 		o += 1

@@ -172,8 +172,11 @@ public final class Sealmarktest {
         emon.Port.Cells ep = emon.Port.newCells();
         emon.Port.Cells scr = emon.Port.newCells();
         emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells txt = emon.Port.newCells();
+        emon.Port.Cells sgc = emon.Port.newCells();
         Evidence.epNew(ep, 1, 61200, 79200);
-        return Sealmark.smFind(pa, pts, gl, fw, et, ep, cg, refs, ow, 1, sm, scr, tmp);
+        return Sealmark.smFind(pa, pts, gl, fw, et, ep, cg, refs, ow, an, txt, 1, sm, scr, tmp, sgc);
     }
     public static void testASealHoldsItsArcAndItsInkAndNotTheBodyUnderIt() {
         emon.Port.Cells pa = emon.Port.newCells();

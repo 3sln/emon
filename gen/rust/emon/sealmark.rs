@@ -6,6 +6,7 @@ use crate::emon::model::*;
 use crate::emon::player::*;
 use crate::emon::restruct::*;
 use crate::emon::sealfield::*;
+use crate::emon::sigmark::*;
 
 pub fn sm_seal_min() -> i32 {
     // `seal-min`: the radius (centipoints) a ring needs to be a seal: 8 mm.
@@ -14,26 +15,6 @@ pub fn sm_seal_min() -> i32 {
 pub fn sm_stamp_width() -> i32 {
     // `stamp-width`: the border (centipoints) a stamp's rectangle needs: 1.5 pt.
     return 150;
-}
-pub fn sm_sig_width() -> i32 {
-    // `sig-width`: the widest stroke (centipoints) of a pen signature.
-    return 250;
-}
-pub fn sm_sig_gap() -> i32 {
-    // `sig-gap`: how far (centipoints) strokes of one signature lie apart.
-    return 800;
-}
-pub fn sm_sig_segs() -> i32 {
-    // `sig-segs`: the Bezier segments a signature has, together.
-    return 3;
-}
-pub fn sm_sig_min_w() -> i32 {
-    // The width (centipoints) a signature needs: 30 pt.
-    return 3000;
-}
-pub fn sm_cue_lines() -> i32 {
-    // `cue-lines`: how many line heights from a cue a signature may lie.
-    return 3;
 }
 pub fn sm_round() -> i32 {
     // `seal-round`: how far (per cent of the radius) a ring's end points may lie from the circle.
@@ -66,10 +47,6 @@ pub fn sm_overlap() -> i32 {
 pub fn sm_max_cands() -> i32 {
     // The most candidates of one page (a hostile page's strokes).
     return 64;
-}
-pub fn sm_max_strokes() -> i32 {
-    // The most signature strokes of one page that are clustered.
-    return 96;
 }
 pub fn sm_cw() -> i32 {
     return 12;
@@ -428,67 +405,6 @@ pub fn sm_ring_test(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, r
     crate::port::cells_set(out, 3, 0);
     return 1;
 }
-pub(crate) fn sm_fold(c: i32) -> i32 {
-    if (c >= 65) && (c <= 90) {
-        return c + 32;
-    }
-    return c;
-}
-pub(crate) fn sm_word_is(fw: &mut crate::port::Cells, et: &mut crate::port::Cells, row: i32, pre0: i32, pre1: i32, pre2: i32, pre3: i32, pre4: i32, pre5: i32, pre6: i32, pre7: i32, pre8: i32, want: i32) -> i32 {
-    // 1 when word `row` starts, case-folded, with the code points pre0..pre(want-1) (nine at most).
-    let ts: i32 = crate::port::cells_at(fw, (row * 24) + 11);
-    let tl: i32 = crate::port::cells_at(fw, (row * 24) + 12);
-    if tl < want {
-        return 0;
-    }
-    if sm_fold(crate::port::cells_at(et, ts)) != pre0 {
-        return 0;
-    }
-    if (want > 1) && (sm_fold(crate::port::cells_at(et, ts + 1)) != pre1) {
-        return 0;
-    }
-    if (want > 2) && (sm_fold(crate::port::cells_at(et, ts + 2)) != pre2) {
-        return 0;
-    }
-    if (want > 3) && (sm_fold(crate::port::cells_at(et, ts + 3)) != pre3) {
-        return 0;
-    }
-    if (want > 4) && (sm_fold(crate::port::cells_at(et, ts + 4)) != pre4) {
-        return 0;
-    }
-    if (want > 5) && (sm_fold(crate::port::cells_at(et, ts + 5)) != pre5) {
-        return 0;
-    }
-    if (want > 6) && (sm_fold(crate::port::cells_at(et, ts + 6)) != pre6) {
-        return 0;
-    }
-    if (want > 7) && (sm_fold(crate::port::cells_at(et, ts + 7)) != pre7) {
-        return 0;
-    }
-    if (want > 8) && (sm_fold(crate::port::cells_at(et, ts + 8)) != pre8) {
-        return 0;
-    }
-    return 1;
-}
-pub(crate) fn sm_cue_word(fw: &mut crate::port::Cells, et: &mut crate::port::Cells, row: i32, end: i32) -> i32 {
-    // 1 when word `row` (of a page whose words end at `end`) is a signature cue: `signature`, `signed`, `sign` followed by `here`, `by:`; case-folded.
-    let tl: i32 = crate::port::cells_at(fw, (row * 24) + 12);
-    if sm_word_is(fw, et, row, 115, 105, 103, 110, 97, 116, 117, 114, 101, 9) == 1 {
-        return 1;
-    }
-    if sm_word_is(fw, et, row, 115, 105, 103, 110, 101, 100, 0, 0, 0, 6) == 1 {
-        return 1;
-    }
-    if (tl == 3) && (sm_word_is(fw, et, row, 98, 121, 58, 0, 0, 0, 0, 0, 0, 3) == 1) {
-        return 1;
-    }
-    if (tl == 4) && ((sm_word_is(fw, et, row, 115, 105, 103, 110, 0, 0, 0, 0, 0, 4) == 1) && ((row + 1) < end)) {
-        if sm_word_is(fw, et, row + 1, 104, 101, 114, 101, 0, 0, 0, 0, 0, 4) == 1 {
-            return 1;
-        }
-    }
-    return 0;
-}
 pub fn sm_turned(rot: i32) -> i32 {
     // 1 when the rotation (centi-degrees) is at least `sm-arc-turn` off every right angle.
     let a: i32 = ((rot % 9000) + 9000) % 9000;
@@ -527,7 +443,7 @@ pub(crate) fn sm_member(scr: &mut crate::port::Cells, c: i32, fw: &mut crate::po
     let cy: i32 = (crate::port::cells_at(fw, at + 2) + crate::port::cells_at(fw, at + 4)) / 2;
     let kind: i32 = crate::port::cells_at(scr, c);
     let ink: i32 = sm_word_ink(fw, gl, row);
-    if (kind == 0) || (kind == pls_signature()) {
+    if (kind == 0) || (kind > pls_stamp()) {
         return 0;
     }
     if sm_inside(scr, c, cx, cy) == 0 {
@@ -698,137 +614,6 @@ pub(crate) fn sm_stamps(pa: &mut crate::port::Cells, pts: &mut crate::port::Cell
     }
     return n;
 }
-pub(crate) fn sm_segs(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, r: i32) -> i32 {
-    // The Bezier segments of path row r (a triple of curve points), 0 when its geometry was not kept.
-    let n: i32 = pa_get(pa, r, pf_pcount());
-    let f: i32 = pa_get(pa, r, pf_pfirst());
-    let mut j: i32 = 0;
-    let mut c: i32 = 0;
-    if f < 0 {
-        return 0;
-    }
-    while j < n {
-        if pt_get(pts, f + j, ptf_op()) == po_curve() {
-            c += 1;
-        }
-        j += 1;
-    }
-    return c / 3;
-}
-pub(crate) fn sm_gap(a0: i32, a1: i32, b0: i32, b1: i32) -> i32 {
-    // The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.
-    if b0 > a1 {
-        return b0 - a1;
-    }
-    if a0 > b1 {
-        return a0 - b1;
-    }
-    return 0;
-}
-pub(crate) fn sm_signatures(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, fw: &mut crate::port::Cells, et: &mut crate::port::Cells, page: i32, p0: i32, p1: i32, pw: i32, ph: i32, mut scr: &mut crate::port::Cells, n0: i32, mut tmp: &mut crate::port::Cells) -> i32 {
-    // The signature candidates of page `page`'s paths [p0, p1): the open, stroked, unfilled curves no wider than `sm-sig-width` (and neither the page's width nor
-    // a third of its height), merged where they lie within `sm-sig-gap`, kept when they have at least `sm-sig-segs` Bezier segments, are at least 30 pt wide and
-    // wider than 1.5 times their height, and a cue word of the page lies within `sm-cue-lines` line heights of the cluster. Appended to `scr`.
-    let mut r: i32 = p0;
-    let mut ns: i32 = 0;
-    let mut n: i32 = n0;
-    let mut i: i32 = 0;
-    let mut j: i32 = 0;
-    let mut changed: i32 = 1;
-    let mut a: i32 = 0;
-    let mut b: i32 = 0;
-    let mut w: i32 = 0;
-    let mut h: i32 = 0;
-    let mut cue: i32 = 0;
-    let mut vg: i32 = 0;
-    let mut hg: i32 = 0;
-    let mut lh: i32 = 0;
-    let mut nw: i32 = crate::port::cells_len(fw) / 24;
-    crate::port::cells_drop(tmp, 8);
-    while r < p1 {
-        if (sm_stroke_only(pa, r) == 1) && (ns < sm_max_strokes()) {
-            if ((pa_get(pa, r, pf_flags()) & pg_closed()) == 0) && (pa_get(pa, r, pf_width()) <= sm_sig_width()) {
-                if pa_get(pa, r, pf_kind()) == pa_curve() {
-                    if ((pa_get(pa, r, pf_x1()) - pa_get(pa, r, pf_x0())) < pw) && (((pa_get(pa, r, pf_y1()) - pa_get(pa, r, pf_y0())) * 3) < ph) {
-                        crate::port::cells_push(tmp, pa_get(pa, r, pf_x0()));
-                        crate::port::cells_push(tmp, pa_get(pa, r, pf_y0()));
-                        crate::port::cells_push(tmp, pa_get(pa, r, pf_x1()));
-                        crate::port::cells_push(tmp, pa_get(pa, r, pf_y1()));
-                        crate::port::cells_push(tmp, sm_segs(pa, pts, r));
-                        crate::port::cells_push(tmp, r);
-                        crate::port::cells_push(tmp, pa_get(pa, r, pf_stroke()));
-                        ns += 1;
-                    }
-                }
-            }
-        }
-        r += 1;
-    }
-    // merge until nothing merges; a stroke is a record of 7 cells from cell 8 of tmp
-    while changed == 1 {
-        changed = 0;
-        i = 0;
-        while i < ns {
-            a = 8 + (i * 7);
-            if crate::port::cells_at(tmp, a + 4) >= 0 {
-                j = i + 1;
-                while j < ns {
-                    b = 8 + (j * 7);
-                    if crate::port::cells_at(tmp, b + 4) >= 0 {
-                        if (sm_gap(crate::port::cells_at(tmp, a), crate::port::cells_at(tmp, a + 2), crate::port::cells_at(tmp, b), crate::port::cells_at(tmp, b + 2)) <= sm_sig_gap()) && (sm_gap(crate::port::cells_at(tmp, a + 1), crate::port::cells_at(tmp, a + 3), crate::port::cells_at(tmp, b + 1), crate::port::cells_at(tmp, b + 3)) <= sm_sig_gap()) {
-                            if crate::port::cells_at(tmp, b) < crate::port::cells_at(tmp, a) {
-                                crate::port::cells_set(tmp, a, crate::port::cells_at(tmp, b));
-                            }
-                            if crate::port::cells_at(tmp, b + 1) < crate::port::cells_at(tmp, a + 1) {
-                                crate::port::cells_set(tmp, a + 1, crate::port::cells_at(tmp, b + 1));
-                            }
-                            if crate::port::cells_at(tmp, b + 2) > crate::port::cells_at(tmp, a + 2) {
-                                crate::port::cells_set(tmp, a + 2, crate::port::cells_at(tmp, b + 2));
-                            }
-                            if crate::port::cells_at(tmp, b + 3) > crate::port::cells_at(tmp, a + 3) {
-                                crate::port::cells_set(tmp, a + 3, crate::port::cells_at(tmp, b + 3));
-                            }
-                            crate::port::cells_set(tmp, a + 4, crate::port::cells_at(tmp, a + 4) + crate::port::cells_at(tmp, b + 4));
-                            crate::port::cells_set(tmp, b + 4, -1);
-                            changed = 1;
-                        }
-                    }
-                    j += 1;
-                }
-            }
-            i += 1;
-        }
-    }
-    i = 0;
-    while i < ns {
-        a = 8 + (i * 7);
-        w = crate::port::cells_at(tmp, a + 2) - crate::port::cells_at(tmp, a);
-        h = crate::port::cells_at(tmp, a + 3) - crate::port::cells_at(tmp, a + 1);
-        if (crate::port::cells_at(tmp, a + 4) >= sm_sig_segs()) && ((w >= sm_sig_min_w()) && ((w * 2) >= (h * 3))) {
-            cue = 0;
-            j = 0;
-            while (j < nw) && (cue == 0) {
-                if crate::port::cells_at(fw, j * 24) == page {
-                    if sm_cue_word(fw, et, j, nw) == 1 {
-                        lh = crate::port::cells_at(fw, (j * 24) + 4) - crate::port::cells_at(fw, (j * 24) + 2);
-                        vg = sm_gap(crate::port::cells_at(tmp, a + 1), crate::port::cells_at(tmp, a + 3), crate::port::cells_at(fw, (j * 24) + 2), crate::port::cells_at(fw, (j * 24) + 4));
-                        hg = sm_gap(crate::port::cells_at(tmp, a), crate::port::cells_at(tmp, a + 2), crate::port::cells_at(fw, (j * 24) + 1), crate::port::cells_at(fw, (j * 24) + 3));
-                        if (vg <= (lh * sm_cue_lines())) && (hg <= w) {
-                            cue = 1;
-                        }
-                    }
-                }
-                j += 1;
-            }
-            if (cue == 1) && (n < sm_max_cands()) {
-                sm_add_cand(scr, pls_signature(), crate::port::cells_at(tmp, a + 5), crate::port::cells_at(tmp, a), crate::port::cells_at(tmp, a + 1), crate::port::cells_at(tmp, a + 2), crate::port::cells_at(tmp, a + 3), 0, 0, 0, crate::port::cells_at(tmp, a + 6), 0);
-                n += 1;
-            }
-        }
-        i += 1;
-    }
-    return n;
-}
 pub(crate) fn sm_group_inside(cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, g: i32, scr: &mut crate::port::Cells, c: i32) -> i32 {
     // 1 when the group has no text-layer or hidden word, has OCR words, and the centre of every one lies inside the candidate at record `c`.
     let no: i32 = cg_get(cg, g, cgf_ocount());
@@ -959,7 +744,7 @@ pub(crate) fn sm_page(scr: &mut crate::port::Cells, n: i32, page: i32, fw: &mut 
         kind = crate::port::cells_at(scr, c);
         tl = 0;
         oc = 0;
-        if kind != pls_signature() {
+        if kind <= pls_stamp() {
             tl = sm_count_members(scr, c, fw, gl, page);
         }
         crate::port::cells_set(scr, c + 11, tl);
@@ -1002,7 +787,7 @@ pub(crate) fn sm_page(scr: &mut crate::port::Cells, n: i32, page: i32, fw: &mut 
             ts = crate::port::cells_len(et);
             first = -1;
             nref = 0;
-            if (kind != pls_signature()) && (tl > 0) {
+            if (kind <= pls_stamp()) && (tl > 0) {
                 sm_text_layer_text(scr, c, fw, gl, et, page);
             }
             g = 0;
@@ -1017,7 +802,7 @@ pub(crate) fn sm_page(scr: &mut crate::port::Cells, n: i32, page: i32, fw: &mut 
                             row = crate::port::cells_at(refs, ((cg_get(cg, g, cgf_ofirst()) + j) * 2) + 1);
                             rf_add(refs, ea_owords(), row);
                             nref += 1;
-                            if (tl == 0) && (kind != pls_signature()) {
+                            if (tl == 0) && (kind <= pls_stamp()) {
                                 if crate::port::cells_len(et) > ts {
                                     crate::port::cells_push(et, 32);
                                 }
@@ -1045,23 +830,41 @@ pub(crate) fn sm_page(scr: &mut crate::port::Cells, n: i32, page: i32, fw: &mut 
             if tl > 0 {
                 conf += 100;
             }
-            if conf > 900 {
+            if kind > pls_stamp() {
+                conf = crate::port::cells_at(scr, c + 10) / 65536;
+            }
+            if (kind <= pls_stamp()) && (conf > 900) {
                 conf = 900;
             }
             o = sl_new(sm, page, crate::port::cells_at(scr, c + 2), crate::port::cells_at(scr, c + 3), crate::port::cells_at(scr, c + 4), crate::port::cells_at(scr, c + 5), kind);
             crate::port::cells_set(sm, (o * 16) + 7, ea_paths());
             crate::port::cells_set(sm, (o * 16) + 8, crate::port::cells_at(scr, c + 1));
+            if kind == pls_digital_signature() {
+                crate::port::cells_set(sm, (o * 16) + 7, -1);
+                crate::port::cells_set(sm, (o * 16) + 8, -1);
+            }
             crate::port::cells_set(sm, (o * 16) + 9, conf);
             if nref > 0 {
                 crate::port::cells_set(sm, (o * 16) + 10, first);
                 crate::port::cells_set(sm, (o * 16) + 11, nref);
             }
-            crate::port::cells_set(sm, (o * 16) + 12, crate::port::cells_at(scr, c + 10));
+            crate::port::cells_set(sm, (o * 16) + 12, crate::port::cells_at(scr, c + 10) % 65536);
             if tl > 0 {
                 crate::port::cells_set(sm, (o * 16) + 12, crate::port::cells_at(scr, c + 10) | 32);
             }
             crate::port::cells_set(sm, (o * 16) + 13, ts);
             crate::port::cells_set(sm, (o * 16) + 14, crate::port::cells_len(et) - ts);
+            // a signature's or initials' typed name and a digital signature's record are runs `emon.sigmark` appended (scr cells 6 and 7): flag 1024 says the run is a name, 256 a record
+            if kind > pls_stamp() {
+                crate::port::cells_set(sm, (o * 16) + 13, crate::port::cells_at(scr, c + 6));
+                crate::port::cells_set(sm, (o * 16) + 14, crate::port::cells_at(scr, c + 7));
+                if (kind != pls_digital_signature()) && (crate::port::cells_at(scr, c + 7) > 0) {
+                    crate::port::cells_set(sm, (o * 16) + 12, crate::port::cells_at(sm, (o * 16) + 12) | 1024);
+                }
+                if kind == pls_digital_signature() {
+                    crate::port::cells_set(sm, (o * 16) + 12, crate::port::cells_at(sm, (o * 16) + 12) | 256);
+                }
+            }
             crate::port::cells_set(sm, (o * 16) + 15, crate::port::cells_at(scr, c + 9));
         }
         k += 1;
@@ -1268,9 +1071,39 @@ pub(crate) fn sm_overlap_share(ax0: i32, ay0: i32, ax1: i32, ay1: i32, bx0: i32,
     }
     return ((w * h) * 100) / small;
 }
-pub(crate) fn sm_raster(page: i32, mut et: &mut crate::port::Cells, cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, mut sm: &mut crate::port::Cells) -> i32 {
-    // The `sl` rows of the seals and stamps that page units found in pixels (`emon.sealpx`): one for every group of `page` flagged `seal-px`, unless a candidate that is
-    // already there (found in the vector paths) has its box (half of the smaller). Its text is `sm-px-text`'s, its colour the group's code, its words the group's. Answers the rows written.
+pub(crate) fn sm_box_group(cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, g: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+    // 1 when the group has no text-layer or hidden word, has OCR words, and the centre of every one lies inside the box.
+    let no: i32 = cg_get(cg, g, cgf_ocount());
+    let of: i32 = cg_get(cg, g, cgf_ofirst());
+    let mut k: i32 = 0;
+    let mut row: i32 = 0;
+    let mut cx: i32 = 0;
+    let mut cy: i32 = 0;
+    if cg_get(cg, g, cgf_tcount()) > 0 {
+        return 0;
+    }
+    if cg_get(cg, g, cgf_hcount()) > 0 {
+        return 0;
+    }
+    if no == 0 {
+        return 0;
+    }
+    while k < no {
+        row = crate::port::cells_at(refs, ((of + k) * 2) + 1);
+        cx = (ow_get(owords, row, hd_x0()) + ow_get(owords, row, hd_x1())) / 2;
+        cy = (ow_get(owords, row, hd_y0()) + ow_get(owords, row, hd_y1())) / 2;
+        if (cx < x0) || ((cx > x1) || ((cy < y0) || (cy > y1))) {
+            return 0;
+        }
+        k += 1;
+    }
+    return 1;
+}
+pub(crate) fn sm_raster(page: i32, mut et: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, fw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut sm: &mut crate::port::Cells) -> i32 {
+    // The `sl` rows of the seals, stamps, signatures and initials that page units found in pixels (`emon.sealpx`, `emon.sigpx`): one for every group of `page` flagged `seal-px`, unless a candidate
+    // that is already there (found in the vector paths) has its box (half of the smaller). A seal's or stamp's text is `sm-px-text`'s; a signature's or initials' is none, but the typed name
+    // under or beneath its strokes (`emon.sigmark`'s `sg-typed-name`: the line the strokes are drawn over, else the first within 45 pt under them) when there is one (flag 1024); the OCR-only
+    // groups inside a signature or initials are flagged `in-seal` (their words are the strokes read as letters). Its colour is the group's code, its words the group's. Answers the rows written.
     let ng: i32 = cg_count(cg);
     let mut g: i32 = 0;
     let mut o: i32 = 0;
@@ -1280,6 +1113,16 @@ pub(crate) fn sm_raster(page: i32, mut et: &mut crate::port::Cells, cg: &mut cra
     let mut fl: i32 = 0;
     let mut kind: i32 = 0;
     let mut conf: i32 = 0;
+    let mut got: i32 = 0;
+    let mut gx0: i32 = 0;
+    let mut gy0: i32 = 0;
+    let mut gx1: i32 = 0;
+    let mut gy1: i32 = 0;
+    let mut fq: i32 = 0;
+    let mut q: i32 = 0;
+    while crate::port::cells_len(tmp) < 4 {
+        crate::port::cells_push(tmp, 0);
+    }
     while g < ng {
         if (cg_get(cg, g, cgf_page()) == page) && ((cg_get(cg, g, cgf_flags()) & plg_seal_px()) != 0) {
             dup = 0;
@@ -1298,18 +1141,41 @@ pub(crate) fn sm_raster(page: i32, mut et: &mut crate::port::Cells, cg: &mut cra
                 if (fl & plg_seal_stamp()) != 0 {
                     kind = pls_stamp();
                 }
+                if (fl & plg_seal_sig()) != 0 {
+                    kind = pls_signature();
+                }
+                if (fl & plg_seal_init()) != 0 {
+                    kind = pls_initials();
+                }
                 ts = crate::port::cells_len(et);
-                sm_px_text(et, refs, owords, cg_get(cg, g, cgf_ofirst()), cg_get(cg, g, cgf_ocount()));
+                got = 0;
+                if kind <= pls_stamp() {
+                    sm_px_text(et, refs, owords, cg_get(cg, g, cgf_ofirst()), cg_get(cg, g, cgf_ocount()));
+                } else {
+                    gx0 = cg_get(cg, g, cgf_x0());
+                    gy0 = cg_get(cg, g, cgf_y0());
+                    gx1 = cg_get(cg, g, cgf_x1());
+                    gy1 = cg_get(cg, g, cgf_y1());
+                    got = sg_typed_name(fw, et, page, gy0 - 300, gy1, gx0, gx1, 300, tmp);
+                    if got == 0 {
+                        got = sg_typed_name(fw, et, page, gy1 - 300, gy1 + 4500, gx0, gx1, 4000, tmp);
+                    }
+                }
                 // a reading with no word kept is no text: the seal has none
                 conf = 600;
                 if kind == pls_stamp() {
                     conf = 700;
                 }
-                if cg_get(cg, g, cgf_rot()) > 2 {
-                    conf += 100;
+                if kind <= pls_stamp() {
+                    if cg_get(cg, g, cgf_rot()) > 2 {
+                        conf += 100;
+                    }
+                    if crate::port::cells_len(et) > ts {
+                        conf += 100;
+                    }
                 }
-                if crate::port::cells_len(et) > ts {
-                    conf += 100;
+                if kind == pls_initials() {
+                    conf = 550;
                 }
                 if conf > 900 {
                     conf = 900;
@@ -1321,7 +1187,30 @@ pub(crate) fn sm_raster(page: i32, mut et: &mut crate::port::Cells, cg: &mut cra
                 crate::port::cells_set(sm, (o * 16) + 12, 128);
                 crate::port::cells_set(sm, (o * 16) + 13, ts);
                 crate::port::cells_set(sm, (o * 16) + 14, crate::port::cells_len(et) - ts);
+                if (kind > pls_stamp()) && (got != 0) {
+                    crate::port::cells_set(sm, (o * 16) + 13, crate::port::cells_at(tmp, 0));
+                    crate::port::cells_set(sm, (o * 16) + 14, crate::port::cells_at(tmp, 1));
+                    crate::port::cells_set(sm, (o * 16) + 12, 1152);
+                }
                 crate::port::cells_set(sm, (o * 16) + 15, cg_get(cg, g, cgf_rot()));
+                if kind > pls_stamp() {
+                    crate::port::cells_set(sm, (o * 16) + 10, -1);
+                    crate::port::cells_set(sm, (o * 16) + 11, 0);
+                    gx0 = cg_get(cg, g, cgf_x0());
+                    gy0 = cg_get(cg, g, cgf_y0());
+                    gx1 = cg_get(cg, g, cgf_x1());
+                    gy1 = cg_get(cg, g, cgf_y1());
+                    q = 0;
+                    while q < ng {
+                        if (cg_get(cg, q, cgf_page()) == page) && ((cg_get(cg, q, cgf_flags()) & plg_seal_px()) == 0) {
+                            if sm_box_group(cg, refs, owords, q, gx0, gy0, gx1, gy1) == 1 {
+                                fq = cg_get(cg, q, cgf_flags());
+                                cg_set(cg, q, cgf_flags(), fq | plg_in_seal());
+                            }
+                        }
+                        q += 1;
+                    }
+                }
                 made += 1;
             }
         }
@@ -1329,9 +1218,11 @@ pub(crate) fn sm_raster(page: i32, mut et: &mut crate::port::Cells, cg: &mut cra
     }
     return made;
 }
-pub fn sm_find(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, gl: &mut crate::port::Cells, fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, epages: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, np: i32, mut sm: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells) -> i32 {
+pub fn sm_find(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, gl: &mut crate::port::Cells, fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, epages: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, owords: &mut crate::port::Cells, an: &mut crate::port::Cells, txt: &mut crate::port::Cells, np: i32, mut sm: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut sgc: &mut crate::port::Cells) -> i32 {
     // The candidates of every page (see the head of this file) into `sm` (the `sl` arena), the text of their words appended to `et` (`sl` cells 13-14), and
-    // the flag `plg-in-seal` on the groups of `cg` that are theirs. `scr` and `tmp` are scratch. Answers the candidates written.
+    // the flag `plg-in-seal` on the groups of `cg` that are theirs. Handwritten signatures, initials and digital signature fields are `emon.sigmark`'s: its clusters are found in a
+    // first pass over every page (`sgc`; the document's verdict needs all of them: initials recur) and written here as candidate records. `an` and `txt` are P3.8's. `scr`, `tmp`
+    // and `sgc` are scratch. Answers the candidates written.
     let npaths: i32 = pa_count(pa);
     let mut p: i32 = 1;
     let mut pi: i32 = 0;
@@ -1342,6 +1233,8 @@ pub fn sm_find(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, gl: &m
     let mut pw: i32 = 61200;
     let mut ph: i32 = 79200;
     crate::port::cells_drop(sm, 0);
+    crate::port::cells_drop(sgc, 0);
+    // the first pass: every page's pen-stroke clusters, then the document's verdict on them
     while p <= np {
         while (pi < npaths) && (pa_get(pa, pi, pf_page()) < p) {
             pi += 1;
@@ -1351,13 +1244,40 @@ pub fn sm_find(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, gl: &m
             pi += 1;
         }
         p1 = pi;
+        pw = 61200;
+        ph = 79200;
+        ep = ev_page_row(epages, p);
+        if ep >= 0 {
+            pw = ep_get(epages, ep, epf_width());
+            ph = ep_get(epages, ep, epf_height());
+        }
         if p1 > p0 {
-            ep = ev_page_row(epages, p);
-            if ep >= 0 {
-                pw = ep_get(epages, ep, epf_width());
-                ph = ep_get(epages, ep, epf_height());
-            }
-            crate::port::cells_drop(scr, 0);
+            sg_collect(pa, pts, fw, et, owords, p, p0, p1, pw, ph, tmp, sgc);
+        }
+        p += 1;
+    }
+    sg_decide(sgc, owords, et, fw);
+    p = 1;
+    pi = 0;
+    while p <= np {
+        while (pi < npaths) && (pa_get(pa, pi, pf_page()) < p) {
+            pi += 1;
+        }
+        p0 = pi;
+        while (pi < npaths) && (pa_get(pa, pi, pf_page()) == p) {
+            pi += 1;
+        }
+        p1 = pi;
+        pw = 61200;
+        ph = 79200;
+        ep = ev_page_row(epages, p);
+        if ep >= 0 {
+            pw = ep_get(epages, ep, epf_width());
+            ph = ep_get(epages, ep, epf_height());
+        }
+        crate::port::cells_drop(scr, 0);
+        n = 0;
+        if p1 > p0 {
             crate::port::cells_drop(tmp, 0);
             crate::port::cells_push(tmp, 0);
             crate::port::cells_push(tmp, 0);
@@ -1369,12 +1289,12 @@ pub fn sm_find(pa: &mut crate::port::Cells, pts: &mut crate::port::Cells, gl: &m
             crate::port::cells_push(tmp, 0);
             n = sm_rings(pa, pts, p0, p1, scr, tmp);
             n = sm_stamps(pa, pts, p0, p1, pw, ph, scr, n);
-            n = sm_signatures(pa, pts, fw, et, p, p0, p1, pw, ph, scr, n, tmp);
-            if n > 0 {
-                sm_page(scr, n, p, fw, gl, et, cg, refs, owords, sm);
-            }
         }
-        sm_raster(p, et, cg, refs, owords, sm);
+        n = sg_emit(sgc, an, txt, fw, et, p, scr, n, tmp);
+        if n > 0 {
+            sm_page(scr, n, p, fw, gl, et, cg, refs, owords, sm);
+        }
+        sm_raster(p, et, cg, refs, owords, fw, tmp, sm);
         p += 1;
     }
     return sl_count(sm);
@@ -1475,6 +1395,34 @@ pub(crate) fn sm_earlier(sm: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn sm_ref_y(sm: &mut crate::port::Cells, o: i32) -> i32 {
+    // The y that places candidate `o` among the blocks that start below it: its top, but a digital signature field's BOTTOM (a field a line of text sits beside is read after the
+    // label that starts inside its height: `Approved by` then the field, P8.3, D432).
+    if sl_get(sm, o, 5) == pls_digital_signature() {
+        return sl_get(sm, o, 4);
+    }
+    return sl_get(sm, o, 2);
+}
+pub(crate) fn sm_last_above(sm: &mut crate::port::Cells, o: i32, on: &mut crate::port::Cells, orr: &mut crate::port::Cells, n: i32) -> i32 {
+    // The last top-level block (in reading order) of candidate `o`'s page that starts above its reference y (`sm-ref-y`), -1 for none: where a signature, initials or a digital signature
+    // that overlaps no block is placed AFTER (the initials at the foot of page 1 are the end of page 1's blocks, not the start of page 2's: P8.3, D432).
+    let r#ref: i32 = sm_ref_y(sm, o);
+    let mut i: i32 = 0;
+    let mut r: i32 = 0;
+    let mut pick: i32 = -1;
+    while i < n {
+        if sm_is_top(on, i) == 1 {
+            r = node_region_head(on, i);
+            if r >= 0 {
+                if (region_page(orr, r) == sl_get(sm, o, 0)) && (region_y0(orr, r) < r#ref) {
+                    pick = i;
+                }
+            }
+        }
+        i += 1;
+    }
+    return pick;
+}
 pub(crate) fn sm_pending(sm: &mut crate::port::Cells, nm: &mut crate::port::Cells, n0: i32, on: &mut crate::port::Cells, i: i32, page: i32, y0: i32, mode: i32) -> i32 {
     // The next candidate to write before node i, -1 for none. `nm[n0 + o]` is the node a candidate is placed after (-1: none overlaps it). Mode 0: the
     // candidates placed after a node whose subtree has ended (i is later and not in it). Mode 1: those with no such node, whose top lies before (page, y0). Mode 2:
@@ -1497,7 +1445,7 @@ pub(crate) fn sm_pending(sm: &mut crate::port::Cells, nm: &mut crate::port::Cell
                 }
             }
             if (mode == 1) && (a < 0) {
-                if (sl_get(sm, o, 0) < page) || ((sl_get(sm, o, 0) == page) && (sl_get(sm, o, 2) < y0)) {
+                if (sl_get(sm, o, 0) < page) || ((sl_get(sm, o, 0) == page) && (sm_ref_y(sm, o) < y0)) {
                     ok = 1;
                 }
             }
@@ -1563,6 +1511,49 @@ pub(crate) fn sm_emit_fields(et: &mut crate::port::Cells, ts: i32, tl: i32, kind
     }
     return 0;
 }
+pub(crate) fn sm_emit_seg(et: &mut crate::port::Cells, from: i32, to: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, nn: i32, key: i32) -> i32 {
+    // Add the code points et[from, to) to the Model's text as attribute `key` of node `nn`; nothing for an empty range.
+    let mut j: i32 = from;
+    let start: i32 = crate::port::cells_len(text);
+    if to <= from {
+        return 0;
+    }
+    while j < to {
+        text_append_cp(text, crate::port::cells_at(et, j));
+        j += 1;
+    }
+    node_add_attr_text(nodes, attrs, nn, key, start, to - from);
+    return 1;
+}
+pub(crate) fn sm_emit_digital(et: &mut crate::port::Cells, ts: i32, tl: i32, signed: i32, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, nn: i32) -> i32 {
+    // A digital signature's attributes (P8.3, D426) from the record et[ts, ts + tl): the signer's name, the reason, the location and the time, each ended by the code point 31, as
+    // `name`, `reason`, `location` and `date`; and `signed`, the state of the field (it holds a signature dictionary with a /Contents). Nothing is verified.
+    let end: i32 = ts + tl;
+    let mut j: i32 = ts;
+    let mut from: i32 = ts;
+    let mut seg: i32 = 0;
+    while j <= end {
+        if (j == end) || (crate::port::cells_at(et, j) == 31) {
+            if seg == 0 {
+                sm_emit_seg(et, from, j, nodes, attrs, text, nn, fk_name());
+            }
+            if seg == 1 {
+                sm_emit_seg(et, from, j, nodes, attrs, text, nn, fk_reason());
+            }
+            if seg == 2 {
+                sm_emit_seg(et, from, j, nodes, attrs, text, nn, fk_location());
+            }
+            if seg == 3 {
+                sm_emit_seg(et, from, j, nodes, attrs, text, nn, fk_date());
+            }
+            from = j + 1;
+            seg += 1;
+        }
+        j += 1;
+    }
+    node_set_attr_bool(nodes, attrs, nn, fk_signed(), signed);
+    return 0;
+}
 pub(crate) fn sm_emit(mut sm: &mut crate::port::Cells, o: i32, et: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, parent: i32, mut nm: &mut crate::port::Cells, fb: i32) -> i32 {
     // Write candidate `o` as a `seal` node, the last child of `parent`: its subkind, confidence, source, region, the words as `text` (flagged `low-conf`),
     // its name and date (`sm-emit-fields`) and its colour name. `nm` from cell `fb` is the fields' scratch.
@@ -1581,7 +1572,13 @@ pub(crate) fn sm_emit(mut sm: &mut crate::port::Cells, o: i32, et: &mut crate::p
     node_set_conf(nodes, nn, sl_get(sm, o, 9));
     node_add_src(nodes, nn, sr_infer());
     node_add_region(nodes, regions, nn, sl_get(sm, o, 0), sl_get(sm, o, 1), sl_get(sm, o, 2), sl_get(sm, o, 3), sl_get(sm, o, 4));
-    if tl > 0 {
+    if (tl > 0) && ((fl & 256) != 0) {
+        sm_emit_digital(et, ts, tl, (fl & 512) / 512, nodes, attrs, text, nn);
+    }
+    if (tl > 0) && ((fl & 1024) != 0) {
+        sm_emit_seg(et, ts, ts + tl, nodes, attrs, text, nn, fk_name());
+    }
+    if (tl > 0) && ((fl & 1280) == 0) {
         start = crate::port::cells_len(text);
         // the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them
         while j < tl {
@@ -1689,6 +1686,9 @@ pub fn sm_write(mut sm: &mut crate::port::Cells, et: &mut crate::port::Cells, on
                 }
                 i += 1;
             }
+        }
+        if (pick < 0) && (sl_get(sm, o, 5) > pls_stamp()) {
+            pick = sm_last_above(sm, o, on, orr, n);
         }
         crate::port::cells_push(nm, pick);
         o += 1;

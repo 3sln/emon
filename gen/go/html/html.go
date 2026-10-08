@@ -1222,6 +1222,28 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 			hRun(t, text, model.AttrValue(attrs, b), model.AttrLen(attrs, b))
 			port.TextAscii(t, "\"")
 		}
+		b = hIattr(nodes, attrs, n, model.FkSigned())
+		if b >= 0 {
+			port.TextAscii(t, " data-emon-signed=\"")
+			if model.AttrValue(attrs, b) != 0 {
+				port.TextAscii(t, "true")
+			} else {
+				port.TextAscii(t, "false")
+			}
+			port.TextAscii(t, "\"")
+		}
+		b = hTattr(nodes, attrs, n, model.FkReason())
+		if b >= 0 {
+			port.TextAscii(t, " data-emon-reason=\"")
+			hRun(t, text, model.AttrValue(attrs, b), model.AttrLen(attrs, b))
+			port.TextAscii(t, "\"")
+		}
+		b = hTattr(nodes, attrs, n, model.FkLocation())
+		if b >= 0 {
+			port.TextAscii(t, " data-emon-location=\"")
+			hRun(t, text, model.AttrValue(attrs, b), model.AttrLen(attrs, b))
+			port.TextAscii(t, "\"")
+		}
 		if asid < 0 {
 			port.TextAscii(t, " role=\"img\" aria-label=\"")
 			hAlt(t, nodes, attrs, text, n)

@@ -370,6 +370,9 @@ public final class Pageunit {
                 Retarget.rtWitness(g0, Player.cgCount(cg), cg, rtp, oruns, owords);
                 if (puPx(bms, nid, fuse) == 1) {
                     Sealpx.sxRecord(i, nview, dpi * 100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
+                    // the pen strokes over a signature line in the text-free render (P8.3): no request, no view; the groups are written with the seals'
+                    Sigpx.spFind(i + 1, views, nview, rules, owords, etext, emon.Port.bmsGet(bms, nid), pgw, s5, s6);
+                    Sigpx.spRecord(i, s5, cg);
                 }
             }
         }
@@ -440,8 +443,12 @@ public final class Pageunit {
         }
         Retarget.rtRecord(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
         Sealpx.sxRecord(i, vdec, dpi100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
+        // the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
+        Sigpx.spFind(i + 1, views, vdec, rules, owords, etext, emon.Port.bmsGet(bms, did), puField(pl, i, 8), s5, s6);
+        Sigpx.spRecord(i, s5, cg);
         nsel = Retarget.rtAdopt(rtp, oruns, run, olines, owords, scr);
         nsel = Sealpx.sxDropLines(scr, nsel, olines, owords, s1);
+        nsel = Sigpx.spDropLines(scr, nsel, olines, owords, s5);
         Retarget.rtUpright(rtp, run, epages, i + 1);
         nl = Evidence.orGet(oruns, run, Evidence.orfLcount());
         rotmed = Evidence.evRotMedian(olines, l0, nl);

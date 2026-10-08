@@ -42,6 +42,7 @@
             [emon.scan :refer [sc-eligible sc-dct-span sc-request sc-page sc-page-view sc-page-evidence sc-emit-sel sc-prep sc-lang sc-answer]]
             [emon.pageink :refer [pn-has pn-mark pn-undo pn-ink pn-features pn-k-text pn-k-clean]]
             [emon.sealpx :refer [sx-find sx-plan sx-record sx-drop-lines]]
+            [emon.sigpx :refer [sp-find sp-record sp-drop-lines]]
             [emon.xalign :refer [xa-page]]
             [emon.health :refer [hl-page-fw]]
             [kin.lang :refer [defn return let set while if do comment
@@ -342,7 +343,10 @@
         (do (rt-record i view (* dpi 100) loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
             (rt-witness g0 (cg-count cg) cg rtp oruns owords)
             (if (== (pu-px bms nid fuse) 1)
-              (sx-record i nview (* dpi 100) loc ans s1 views epages etext oruns oblocks olines owords osyms oalts feats refs cg s4)))))
+              (do (sx-record i nview (* dpi 100) loc ans s1 views epages etext oruns oblocks olines owords osyms oalts feats refs cg s4)
+                  (comment "the pen strokes over a signature line in the text-free render (P8.3): no request, no view; the groups are written with the seals'")
+                  (sp-find (+ i 1) views nview rules owords etext (bms-get bms nid) pgw s5 s6)
+                  (sp-record i s5 cg))))))
     (return (us-done))))
 
 (defn ^I32 pu-run-scan [^I32 i ^I32 input ^I32 fuse ^Cells pl ^Cells ans ^:mut ^Cells rq ^Cells loc ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
@@ -416,8 +420,12 @@
           (return (us-requests))))
     (rt-record i vdec dpi100 loc ans rtp views epages etext oruns oblocks olines owords osyms oalts feats)
     (sx-record i vdec dpi100 loc ans s1 views epages etext oruns oblocks olines owords osyms oalts feats refs cg s4)
+    (comment "the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text")
+    (sp-find (+ i 1) views vdec rules owords etext (bms-get bms did) (pu-field pl i 8) s5 s6)
+    (sp-record i s5 cg)
     (set nsel (rt-adopt rtp oruns run olines owords scr))
     (set nsel (sx-drop-lines scr nsel olines owords s1))
+    (set nsel (sp-drop-lines scr nsel olines owords s5))
     (rt-upright rtp run epages (+ i 1))
     (set nl (or-get oruns run (orf-lcount)))
     (set rotmed (ev-rot-median olines l0 nl))

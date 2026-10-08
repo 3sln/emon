@@ -1,0 +1,452 @@
+;; Laws for `emon.sigmark` and the signature half of `emon.sealmark` (P8.3; SPEC 10.7; D016, D205, D426-D433), on every target. Everything is built by hand: vector paths and their
+;; points, the text layer's words, OCR words, P3.8's synthetic digital-signature rows of `an`, and a small Model.
+;;
+;;   * the CUES of a signature are shapes: a rule it stands on, a colon token beside it, a hint word (P7.7's, the locale's hint); with none of them it is a doodle;
+;;   * a stroke with no loops (the tortuosity of a pen is well over a straight line's) is no signature; handwriting that OCR reads as words is no signature;
+;;   * INITIALS are a small cluster with a cue, or one that recurs at the same place of a margin on another page, or on two; a small mark in the middle of one page is nothing;
+;;   * the TYPED NAME under the rule is the signature's `name` (the first line, two to five words, cut at the comma); a one-word label is not;
+;;   * a DIGITAL SIGNATURE is a synthetic row of `an`: its record (name, reason, location, date), whether it is signed, and the Model's node carries them.
+(ns emon.sigmarktest
+  (:require [emon.lang :refer [I32 Cells Blob]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells text-blob]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop blob-len blob-u8]]
+            [emon.evidence :refer [pa-new pa-set pt-add wd-new ep-new ow-new
+                                   pf-stroke pf-width pf-flags pf-pfirst pf-pcount pg-stroked pa-curve pa-line
+                                   po-move po-line po-curve]]
+            [emon.player :refer [sl-get pls-signature pls-initials pls-digital-signature]]
+            [emon.model :refer [model-init model-check node-new node-kind node-sub node-add-region
+                                node-attr attr-value attr-len fk-name fk-date fk-reason fk-location fk-signed
+                                nk-section nk-paragraph nk-seal sl-digital-signature]]
+            [emon.sealmark :refer [sm-find sm-write]]
+            [emon.sigmark :refer [sg-has-digital]]
+            [emon.pdfannot :refer [an-digsig]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot bit-and]]))
+
+;; ------------------------------------------------------------- the page
+
+(defn ^I32 gt-loops [^:mut ^Cells pa ^:mut ^Cells pts ^I32 page ^I32 x0 ^I32 y0 ^I32 segs ^I32 step ^I32 high]
+  (comment "An open stroked curve of `segs` Bezier segments from (x0, y0), `step` wide each and `high` high, looping up and down (a pen's); 140 wide; blue; answers its row.")
+  (let [^I32 first (quot (cells-len pts) 3)
+        ^:mut ^I32 k 0
+        ^I32 r (pa-new pa page (pa-curve) x0 y0 (+ x0 (* segs step)) (+ y0 high))]
+    (pt-add pts x0 y0 (po-move))
+    (while (< k segs)
+      (do (pt-add pts (+ x0 (* k step)) (+ y0 high) (po-curve))
+          (pt-add pts (+ x0 (+ (* k step) (quot step 2))) y0 (po-curve))
+          (pt-add pts (+ x0 (* (+ k 1) step)) (+ y0 (quot (* high 5) 10)) (po-curve))
+          (set k (+ k 1))))
+    (pa-set pa r (pf-flags) (pg-stroked))
+    (pa-set pa r (pf-stroke) 2047903)
+    (pa-set pa r (pf-width) 140)
+    (pa-set pa r (pf-pfirst) first)
+    (pa-set pa r (pf-pcount) (+ 1 (* segs 3)))
+    (return r)))
+
+(defn ^I32 gt-flat [^:mut ^Cells pa ^:mut ^Cells pts ^I32 page ^I32 x0 ^I32 y0 ^I32 segs ^I32 step]
+  (comment "An open stroked curve of `segs` Bezier segments that runs straight to the right (every control point on the line): no loops at all.")
+  (let [^I32 first (quot (cells-len pts) 3)
+        ^:mut ^I32 k 0
+        ^I32 r (pa-new pa page (pa-curve) x0 y0 (+ x0 (* segs step)) (+ y0 10))]
+    (pt-add pts x0 y0 (po-move))
+    (while (< k segs)
+      (do (pt-add pts (+ x0 (+ (* k step) (quot step 3))) y0 (po-curve))
+          (pt-add pts (+ x0 (+ (* k step) (quot (* step 2) 3))) y0 (po-curve))
+          (pt-add pts (+ x0 (* (+ k 1) step)) y0 (po-curve))
+          (set k (+ k 1))))
+    (pa-set pa r (pf-flags) (pg-stroked))
+    (pa-set pa r (pf-stroke) 2047903)
+    (pa-set pa r (pf-width) 140)
+    (pa-set pa r (pf-pfirst) first)
+    (pa-set pa r (pf-pcount) (+ 1 (* segs 3)))
+    (return r)))
+
+(defn ^I32 gt-rule [^:mut ^Cells pa ^:mut ^Cells pts ^I32 page ^I32 x0 ^I32 x1 ^I32 y]
+  (comment "A straight stroked line from (x0, y) to (x1, y), 80 wide, gray.")
+  (let [^I32 first (quot (cells-len pts) 3)
+        ^I32 r (pa-new pa page (pa-line) x0 y x1 y)]
+    (pt-add pts x0 y (po-move))
+    (pt-add pts x1 y (po-line))
+    (pa-set pa r (pf-flags) (pg-stroked))
+    (pa-set pa r (pf-stroke) 6316128)
+    (pa-set pa r (pf-width) 80)
+    (pa-set pa r (pf-pfirst) first)
+    (pa-set pa r (pf-pcount) 2)
+    (return r)))
+
+(defn ^I32 gt-word [^:mut ^Cells fw ^:mut ^Cells et ^I32 page ^I32 x ^I32 y ^Blob b]
+  (comment "A text-layer word of the bytes of `b` with its box 1100 high and 600 wide a letter, its top-left corner at (x, y); answers its row.")
+  (let [^I32 ts (cells-len et)
+        ^I32 n (blob-len b)
+        ^:mut ^I32 k 0
+        ^I32 w (wd-new fw page x y (+ x (* n 600)) (+ y 1100) x (+ y 900) (+ x (* n 600)) (+ y 900) 0 0 ts n 0 -1 -1)]
+    (while (< k n)
+      (do (cells-push et (blob-u8 b k))
+          (set k (+ k 1))))
+    (return w)))
+
+(defn ^I32 gt-oword [^:mut ^Cells ow ^:mut ^Cells et ^I32 page ^I32 x ^I32 y ^Blob b ^I32 conf]
+  (comment "An OCR word of page `page` with its box 1100 high and 600 wide a letter, its top-left corner at (x, y), the engine's confidence `conf`; answers its row.")
+  (let [^I32 ts (cells-len et)
+        ^I32 n (blob-len b)
+        ^:mut ^I32 k 0
+        ^I32 r (ow-new ow page x y (+ x (* n 600)) (+ y 1100) x (+ y 900) (+ x (* n 600)) (+ y 900) 0 0 ts n 0 conf -1)]
+    (while (< k n)
+      (do (cells-push et (blob-u8 b k))
+          (set k (+ k 1))))
+    (return r)))
+
+(defn ^I32 gt-find [^Cells pa ^Cells pts ^Cells fw ^:mut ^Cells et ^Cells ow ^Cells an ^Cells txt ^I32 np ^:mut ^Cells sm]
+  (comment "`sm-find` over `np` pages of 612 x 792 pt, with no correspondence group.")
+  (let [^Cells ep (new-cells)
+        ^Cells gl (new-cells)
+        ^Cells cg (new-cells)
+        ^Cells refs (new-cells)
+        ^Cells scr (new-cells)
+        ^Cells tmp (new-cells)
+        ^Cells sgc (new-cells)
+        ^:mut ^I32 p 1]
+    (while (<= p np)
+      (do (ep-new ep p 61200 79200)
+          (set p (+ p 1))))
+    (return (sm-find pa pts gl fw et ep cg refs ow an txt np sm scr tmp sgc))))
+
+;; ------------------------------------------------------------- signatures: the cues are shapes
+
+(deftest test-a-rule-under-the-strokes-is-a-cue-in-any-language
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (gt-loops pa pts 1 10000 20000 5 800 1800)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "strokes with no cue are a doodle")
+    (gt-rule pa pts 1 8000 20000 21000)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "a rule under the loops that they stand on is a cue: a signature")
+    (assert-eq (sl-get sm 0 5) (pls-signature) "a signature")
+    (assert-eq (sl-get sm 0 1) 10000 "its box is the strokes'")
+    (assert-eq (sl-get sm 0 15) 2047903 "in blue")
+    (assert-eq (sl-get sm 0 9) 650 "the confidence a rule gives it")
+    (assert-eq (sl-get sm 0 14) 0 "no typed name")))
+
+(deftest test-a-rule-must-be-the-right-rule
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (gt-loops pa pts 1 10000 20000 5 800 1800)
+    (gt-rule pa pts 1 10000 14000 21000)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "a rule of 40 pt is too short to be a signature line")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (gt-loops pa pts 1 10000 20000 5 800 1800)
+    (gt-rule pa pts 1 1000 60000 21000)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "a rule across the page is a separator")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (gt-loops pa pts 1 10000 20000 5 800 1800)
+    (gt-rule pa pts 1 8000 20000 15000)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "a rule above the strokes is no line they stand on")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (gt-loops pa pts 1 10000 20000 5 800 1800)
+    (gt-rule pa pts 1 30000 40000 21000)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "a rule beside them is not under them")))
+
+(deftest test-a-colon-token-and-a-hint-word-are-cues
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (gt-loops pa pts 1 10000 20000 5 800 1800)
+    (gt-word fw et 1 6500 20300 (text-blob "Von:"))
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "a short word that ends in a colon beside the strokes (German `Von:`): a signature")
+    (assert-eq (sl-get sm 0 9) 600 "its confidence: the colon gives 100")
+    (cells-drop fw 0)
+    (cells-drop et 0)
+    (gt-word fw et 1 6500 20300 (text-blob "Underwritten:"))
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "a long word with a colon is a heading, not a token")
+    (cells-drop fw 0)
+    (cells-drop et 0)
+    (gt-word fw et 1 6500 20300 (text-blob "Signed"))
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "and P7.7's hint word `Signed` still is one")
+    (cells-drop fw 0)
+    (cells-drop et 0)
+    (gt-word fw et 1 6500 20300 (text-blob "Name"))
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "an ordinary word beside them is none")))
+
+(deftest test-a-straight-stroke-and-handwriting-ocr-reads-are-not-signatures
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (gt-flat pa pts 1 10000 20000 5 800)
+    (gt-flat pa pts 1 10000 20800 5 800)
+    (gt-rule pa pts 1 8000 20000 21000)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "strokes that run straight have no loops: a chart's line on a rule is no signature")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (gt-loops pa pts 1 10000 20000 5 800 1800)
+    (gt-rule pa pts 1 8000 20000 21000)
+    (gt-oword ow et 1 10500 20200 (text-blob "meeting") 900)
+    (gt-oword ow et 1 11800 20200 (text-blob "agenda") 880)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "two words OCR reads clearly inside: handwriting as text")
+    (cells-drop ow 0)
+    (gt-oword ow et 1 10500 20200 (text-blob "meeting") 300)
+    (gt-oword ow et 1 11800 20200 (text-blob "agenda") 250)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "the same words the engine is unsure of are noise: a signature")))
+
+(deftest test-the-typed-name-under-the-rule-is-the-name
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (gt-loops pa pts 1 10000 20000 5 800 1800)
+    (gt-rule pa pts 1 8000 20000 21000)
+    (gt-word fw et 1 8000 21200 (text-blob "Alex"))
+    (gt-word fw et 1 9400 21200 (text-blob "Morgan,"))
+    (gt-word fw et 1 11800 21200 (text-blob "Director"))
+    (gt-word fw et 1 8000 22800 (text-blob "Unterschrift"))
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "a signature")
+    (assert-eq (sl-get sm 0 14) 11 "its typed name is `Alex Morgan`, cut at the comma")
+    (assert-eq (bit-and (sl-get sm 0 12) 1024) 1024 "the run is a name, flag 1024")
+    (assert-eq (cells-at et (sl-get sm 0 13)) 65 "which starts with A")
+    (assert-eq (cells-at et (+ (sl-get sm 0 13) 10)) 110 "and ends with n")
+    (comment "a one-word label under the rule is no name")
+    (cells-drop fw 0)
+    (cells-drop et 0)
+    (cells-drop sm 0)
+    (gt-word fw et 1 8000 21200 (text-blob "Unterschrift"))
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "still a signature")
+    (assert-eq (sl-get sm 0 14) 0 "with no name")
+    (comment "a line of lower case words is a sentence, not a name")
+    (cells-drop fw 0)
+    (cells-drop et 0)
+    (gt-word fw et 1 8000 21200 (text-blob "signed"))
+    (gt-word fw et 1 9400 21200 (text-blob "above"))
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "a signature")
+    (assert-eq (sl-get sm 0 14) 0 "a lower case first word is no name")))
+
+(deftest test-a-signature-drawn-over-a-typed-name-takes-the-name
+  (comment "The corpus's `sig-over-name`: the strokes are drawn over the typed name, a rule is under both, the label below it.")
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (gt-loops pa pts 1 10000 20000 5 1400 1800)
+    (gt-rule pa pts 1 8000 20000 21800)
+    (gt-word fw et 1 10400 20600 (text-blob "Jordan"))
+    (gt-word fw et 1 14400 20600 (text-blob "Rivera"))
+    (gt-word fw et 1 8000 22200 (text-blob "Signature"))
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "a signature")
+    (assert-eq (sl-get sm 0 14) 13 "its name is the typed one inside it, Jordan Rivera, and not the label under the rule")
+    (assert-eq (cells-at et (sl-get sm 0 13)) 74 "which starts with J")))
+
+;; ------------------------------------------------------------- initials
+
+(deftest test-initials-are-small-with-a-cue-or-a-recurring-margin-mark
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (gt-loops pa pts 1 10000 20000 2 1000 1500)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "a small mark in the middle of a page is nothing")
+    (gt-rule pa pts 1 8000 20000 21000)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 1 "but on a signature line it is initials")
+    (assert-eq (sl-get sm 0 5) (pls-initials) "initials")
+    (comment "recurrence: the same mark at the same place of the foot margin of two pages")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (cells-drop sm 0)
+    (gt-loops pa pts 1 51000 74000 2 1000 1500)
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 0 "alone in a margin it is a mark")
+    (gt-loops pa pts 2 51100 74100 2 1000 1500)
+    (assert-eq (gt-find pa pts fw et ow an txt 2 sm) 2 "the same mark in the same margin of the next page: initials on both")
+    (assert-eq (sl-get sm 0 5) (pls-initials) "initials on the first")
+    (assert-eq (sl-get sm 1 5) (pls-initials) "and on the second")
+    (assert-eq (sl-get sm 1 0) 2 "page 2")
+    (assert-eq (sl-get sm 0 9) 600 "recurrence on one page: the confidence of 450 and 150")))
+
+(deftest test-a-small-mark-in-the-middle-recurs-only-on-two-pages
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (gt-loops pa pts 1 30000 40000 2 1000 1500)
+    (gt-loops pa pts 2 30100 40100 2 1000 1500)
+    (assert-eq (gt-find pa pts fw et ow an txt 2 sm) 0 "one other page is not enough away from a margin")
+    (gt-loops pa pts 3 30050 40050 2 1000 1500)
+    (assert-eq (gt-find pa pts fw et ow an txt 3 sm) 3 "two other pages with the same mark: it is initials")
+    (comment "a different place is a different mark")
+    (cells-drop pa 0)
+    (cells-drop pts 0)
+    (gt-loops pa pts 1 30000 40000 2 1000 1500)
+    (gt-loops pa pts 2 10000 20000 2 1000 1500)
+    (gt-loops pa pts 3 50000 60000 2 1000 1500)
+    (assert-eq (gt-find pa pts fw et ow an txt 3 sm) 0 "marks at three places are no recurrence")))
+
+;; ------------------------------------------------------------- digital signatures
+
+(defn ^I32 gt-text [^:mut ^Cells txt ^Blob b]
+  (comment "Append the bytes of `b` to `txt` as code points; answers the run's start.")
+  (let [^I32 s (cells-len txt)
+        ^I32 n (blob-len b)
+        ^:mut ^I32 k 0]
+    (while (< k n)
+      (do (cells-push txt (blob-u8 b k))
+          (set k (+ k 1))))
+    (return s)))
+
+(defn ^I32 gt-digsig [^:mut ^Cells an ^:mut ^Cells txt ^I32 page ^I32 y ^I32 bits ^I32 year ^I32 mlen]
+  (comment "A synthetic row of P3.8 for a signature field on page `page` (0-based), its rectangle at y: /Name `Zed Fox`, /Reason `ok`, /Location `Rome`, the signing time year-04-01 08:09:10 UTC when year >= 0.")
+  (let [^I32 at (cells-len an)
+        ^:mut ^I32 k 0]
+    (while (< k 38)
+      (do (cells-push an 0)
+          (set k (+ k 1))))
+    (cells-set an at page)
+    (cells-set an (+ at 1) (an-digsig))
+    (cells-set an (+ at 4) 19000)
+    (cells-set an (+ at 5) y)
+    (cells-set an (+ at 6) 40000)
+    (cells-set an (+ at 7) (+ y 3400))
+    (set k 8)
+    (while (< k 15)
+      (do (cells-set an (+ at k) -1)
+          (set k (+ k 1))))
+    (if (>= year 0)
+      (do (cells-set an (+ at 8) year)
+          (cells-set an (+ at 9) 4)
+          (cells-set an (+ at 10) 1)
+          (cells-set an (+ at 11) 8)
+          (cells-set an (+ at 12) 9)
+          (cells-set an (+ at 13) 10)
+          (cells-set an (+ at 14) 0)))
+    (cells-set an (+ at 15) mlen)
+    (cells-set an (+ at 23) -1)
+    (cells-set an (+ at 24) 0)
+    (cells-set an (+ at 27) -1)
+    (cells-set an (+ at 28) 0)
+    (cells-set an (+ at 32) -1)
+    (cells-set an (+ at 33) 0)
+    (cells-set an (+ at 34) -1)
+    (cells-set an (+ at 35) 0)
+    (cells-set an (+ at 30) bits)
+    (if (> bits 0)
+      (do (cells-set an (+ at 23) (gt-text txt (text-blob "Zed Fox")))
+          (cells-set an (+ at 24) 7)
+          (cells-set an (+ at 27) (gt-text txt (text-blob "ok")))
+          (cells-set an (+ at 28) 2)
+          (cells-set an (+ at 32) (gt-text txt (text-blob "Rome")))
+          (cells-set an (+ at 33) 4)))
+    (return (quot at 38))))
+
+(deftest test-a-digital-signature-field-is-a-candidate-whether-signed-or-not
+  (let [^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)]
+    (assert-eq (sg-has-digital an) 0 "no row, no digital signature")
+    (gt-digsig an txt 0 30000 3 2026 16)
+    (gt-digsig an txt 0 50000 0 -1 0)
+    (assert-eq (sg-has-digital an) 1 "a row of the subtype")
+    (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 2 "a signed field and an unsigned one, on a page with no path at all")
+    (assert-eq (sl-get sm 0 5) (pls-digital-signature) "a digital signature")
+    (assert-eq (sl-get sm 0 1) 19000 "its box is the widget's")
+    (assert-eq (bit-and (sl-get sm 0 12) 256) 256 "the text run is a record (flag 256)")
+    (assert-eq (bit-and (sl-get sm 0 12) 512) 512 "signed (flag 512)")
+    (assert-eq (sl-get sm 0 7) -1 "it points at no path")
+    (assert-eq (sl-get sm 0 15) -1 "and has no ink")
+    (assert-eq (sl-get sm 0 9) 951 "a signed field is as sure as the file says")
+    (assert-eq (bit-and (sl-get sm 1 12) 512) 0 "the second is not signed")
+    (assert-eq (sl-get sm 1 9) 900 "and a little less sure")
+    (assert-eq (sl-get sm 1 14) 3 "its record is only the three separators")
+    (comment "the record of the first: Zed Fox US ok US Rome US 2026-04-01T08:09:10Z")
+    (assert-eq (sl-get sm 0 14) 36 "7 + 1 + 2 + 1 + 4 + 1 + 20 characters")
+    (assert-eq (cells-at et (+ (sl-get sm 0 13) 7)) 31 "the separator after the name")))
+
+(deftest test-the-model-carries-the-digital-signature
+  (let [^Cells nodes (new-cells)
+        ^Cells attrs (new-cells)
+        ^Cells regions (new-cells)
+        ^Cells text (new-cells)
+        ^Cells pages (new-cells)
+        ^Cells ledger (new-cells)
+        ^Cells layout (new-cells)
+        ^Cells chk (new-cells)
+        ^Cells pa (new-cells)
+        ^Cells pts (new-cells)
+        ^Cells fw (new-cells)
+        ^Cells et (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sm (new-cells)
+        ^Cells nn (new-cells)
+        ^Cells na (new-cells)
+        ^Cells nr (new-cells)
+        ^Cells nm (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (let [^I32 sec (node-new nodes (nk-section) 0)
+          ^I32 par (node-new nodes (nk-paragraph) sec)]
+      (node-add-region nodes regions par 1 10000 10000 60000 20000)
+      (gt-digsig an txt 0 30000 3 2026 16)
+      (gt-digsig an txt 0 50000 0 -1 0)
+      (assert-eq (gt-find pa pts fw et ow an txt 1 sm) 2 "two candidates")
+      (assert-eq (sm-write sm et nodes attrs regions text nn na nr nm) 2 "two nodes written")
+      (assert-eq (node-kind nn 3) (nk-seal) "the first seal node")
+      (assert-eq (node-sub nn 3) (sl-digital-signature) "of the subkind digital-signature")
+      (let [^I32 a (node-attr nn na 3 (fk-name))
+            ^I32 d (node-attr nn na 3 (fk-date))
+            ^I32 r (node-attr nn na 3 (fk-reason))
+            ^I32 l (node-attr nn na 3 (fk-location))
+            ^I32 s (node-attr nn na 3 (fk-signed))
+            ^I32 u (node-attr nn na 4 (fk-signed))
+            ^I32 un (node-attr nn na 4 (fk-name))]
+        (assert-eq (attr-len na a) 7 "the signer, Zed Fox")
+        (assert-eq (cells-at text (attr-value na a)) 90 "which starts with Z")
+        (assert-eq (attr-len na r) 2 "the reason, ok")
+        (assert-eq (attr-len na l) 4 "the location, Rome")
+        (assert-eq (attr-len na d) 20 "the time as ISO 8601 with its zone")
+        (assert-eq (cells-at text (+ (attr-value na d) 19)) 90 "ending in Z for UTC")
+        (assert-eq (cells-at text (+ (attr-value na d) 10)) 84 "with a T between the day and the hour")
+        (assert-eq (attr-value na s) 1 "signed")
+        (assert-eq (attr-value na u) 0 "the second is not")
+        (assert-eq (node-attr nn na 4 (fk-date)) -1 "and says no date")
+        (assert-eq un -1 "or name"))
+      (assert-eq (model-check nn na nr text pages ledger layout chk) 0 "and the Model still checks"))))

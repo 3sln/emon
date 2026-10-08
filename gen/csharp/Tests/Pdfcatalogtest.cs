@@ -300,9 +300,9 @@ public static class Pdfcatalogtest {
             Pdfx.PxJsonBox(t, an, (14 * 38) + 4);
         }
         if (which == 5) {
-            n = emon.Port.CellsLen(sg) / 36;
+            n = emon.Port.CellsLen(sg) / 38;
             while (i < n) {
-                at = i * 36;
+                at = i * 38;
                 if (i > 0) {
                     emon.Port.TextAscii(t, "|");
                 }
@@ -335,6 +335,37 @@ public static class Pdfcatalogtest {
                 emon.Port.TextI32(t, emon.Port.CellsAt(sg, at + 33));
                 emon.Port.TextAscii(t, ";");
                 emon.Port.TextI32(t, emon.Port.CellsAt(sg, at));
+                i += 1;
+            }
+        }
+        if (which == 9) {
+            n = emon.Port.CellsLen(an) / 38;
+            while (i < n) {
+                at = i * 38;
+                if (emon.Port.CellsAt(an, at + 1) == 27) {
+                    if (first == 0) {
+                        emon.Port.TextAscii(t, "|");
+                    }
+                    first = 0;
+                    emon.Port.TextAscii(t, "p");
+                    emon.Port.TextI32(t, emon.Port.CellsAt(an, at));
+                    emon.Port.TextAscii(t, ";b");
+                    emon.Port.TextI32(t, emon.Port.CellsAt(an, at + 30));
+                    emon.Port.TextAscii(t, ";y");
+                    emon.Port.TextI32(t, emon.Port.CellsAt(an, at + 8));
+                    emon.Port.TextAscii(t, ";m");
+                    emon.Port.TextI32(t, emon.Port.CellsAt(an, at + 15));
+                    emon.Port.TextAscii(t, ";n");
+                    CgPut(t, txt, emon.Port.CellsAt(an, at + 23), emon.Port.CellsAt(an, at + 24));
+                    emon.Port.TextAscii(t, ";c");
+                    CgPut(t, txt, emon.Port.CellsAt(an, at + 34), emon.Port.CellsAt(an, at + 35));
+                    emon.Port.TextAscii(t, ";f");
+                    CgPut(t, txt, emon.Port.CellsAt(an, at + 25), emon.Port.CellsAt(an, at + 26));
+                    emon.Port.TextAscii(t, ";r");
+                    CgPut(t, txt, emon.Port.CellsAt(an, at + 27), emon.Port.CellsAt(an, at + 28));
+                    emon.Port.TextAscii(t, ";l");
+                    CgPut(t, txt, emon.Port.CellsAt(an, at + 32), emon.Port.CellsAt(an, at + 33));
+                }
                 i += 1;
             }
         }
@@ -544,6 +575,23 @@ public static class Pdfcatalogtest {
         System.Text.StringBuilder t = emon.Testport.NewText();
         emon.Testport.AssertEq(CgLine(emon.Testport.TestFile("pdf/catalog/sigs.pdf"), 5, t), 0, "read");
         emon.Testport.AssertText(t, "Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;3;0|;D:20240301000000Z;2024-3-1T0:0:0/0;;;;Adobe.PPKLite;ETSI.RFC3161;0,10,20,30;1;7;1|Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;11;-1", "signatures");
+    }
+    [Xunit.Fact]
+    public static void TestSignatureFieldsRideInAnAsSyntheticRows() {
+        // P8.3 (D426): after the annotations and fields, `pa-run` appends to `an` one synthetic row a signature field that has a widget on a page, signed or not, for the document unit
+        // (the Engines hand it `an` and not `sg`). Page, bits (`sg`'s 33; 0 for no dictionary), the year, the length of /M, the signer's /Name (UTF-16: ten characters), the
+        // certificate's name, the field's name, the reason and the location. The unsigned field has none of the signature's. `pa-dump` leaves the rows out (the golden is unchanged).
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        emon.Testport.AssertEq(CgLine(emon.Testport.TestFile("pdf/catalog/sigs.pdf"), 9, t), 0, "read");
+        emon.Testport.AssertText(t, "p0;b3;y2024;m23;nZo{235} Sigfoo;c;fsigA;rI approve this document;lBerlin|p0;b7;y2024;m17;n;c;fstamp;r;l|p0;b0;y-1;m0;n;c;funsigned;r;l", "three fields, three rows");
+    }
+    [Xunit.Fact]
+    public static void TestTheCertificatesNameIsReadAsBytesAndNeverVerified() {
+        // `test/signatures/sig-digital.pdf` (tools/synth/sig_pdf.clj): a field with a /Name, a field whose dictionary has none and whose /Contents is an openssl CMS signature of an EC key
+        // (`/O=Example Org/CN=Taylor Certificate`, self-signed: the issuer and the subject are the same), and an unsigned field. The second's name is the certificate's.
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        emon.Testport.AssertEq(CgLine(emon.Testport.TestFile("signatures/sig-digital.pdf"), 9, t), 0, "read");
+        emon.Testport.AssertText(t, "p0;b3;y2026;m23;nMorgan Reyes;c;fApproverSig;rI approve this document;lBerlin|p0;b3;y2026;m10;n;cTaylor Certificate;fVendorSig;r;l|p0;b0;y-1;m0;n;c;fCounterSig;r;l", "the second has the certificate's name");
     }
     [Xunit.Fact]
     public static void TestMetadataInEveryEncodingPlainAndEncrypted() {

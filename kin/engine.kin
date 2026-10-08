@@ -23,6 +23,7 @@
             [emon.gfuse :refer [gf-fuse gf-write]]
             [emon.health :refer [hl-doc]]
             [emon.sealmark :refer [sm-find sm-write]]
+            [emon.sigmark :refer [sg-has-digital]]
             [emon.arbiter :refer [ar-doc ar-write ar-tag]]
             [emon.player :refer [pl-check pl-emit-open pl-emit-gfx-open]]
             [emon.evidence :refer [ev-emit-open]]
@@ -83,7 +84,7 @@
   (comment "P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of")
   (comment "`assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).")
   (fc-stage (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd s fnodes) (fd s fattrs) (fd s fregions) (fd s fnm)
-            (fd d pa) (fd d im) (fd d fi) (fd s grg) (fd d grl) (fd d fw) (fd d fl) (fd d et) (fd d pg) (fd d cand) level
+            (fd d pa) (fd d im) (fd d fi) (fd s grg) (fd d grl) (fd d fw) (fd d fl) (fd d et) (fd d pg) (fd s sm) (fd d cand) level
             (fd s fcand) (fd s fcl) (fd s fg) (fd s ffd) (fd s fab) (fd s fws))
   (cells-swap (fd m nodes) (fd s fnodes))
   (cells-swap (fd m attrs) (fd s fattrs))
@@ -217,6 +218,8 @@
     ;; FUSION (P7.3, D285-D290): the page units aligned every OCR'd born-digital page (`cg`); with the document's verdict on every font (`hl-doc`)
     ;; the arbiter picks each group's source and makes the fused flow stage 3 reads. With no group none of this runs and nothing below is different.
     (if (> (cells-len (fd d cg)) 0) (set (fd d fused) 1))
+    ;; a signature field with a widget is a node of its own (P8.3, D426): the seal stages run for it, whether OCR read the document or not
+    (if (== (sg-has-digital (fd d an)) 1) (set (fd d fused) 1))
     (if (and (!= (fd c ocr) 0) (== (fd d fused) 0) (== (cells-len (fd ev owords)) 0))
       (do (cells-free (fd ev epages))
           (cells-free (fd ev feats))))
@@ -229,8 +232,8 @@
       (do
         (hl-doc (fd ev feats) (fd d fw) (fd d hl))
         (let [^I32 trust0 (tg-trust (fd d ss))]
-        (sm-find (fd d pa) (fd d pts) (fd d gl) (fd d fw) (fd d et) (fd ev epages) (fd d cg) (fd ev refs) (fd ev owords) np (fd s sm) (fd s sscr)
-                 (fd s stmp))
+        (sm-find (fd d pa) (fd d pts) (fd d gl) (fd d fw) (fd d et) (fd ev epages) (fd d cg) (fd ev refs) (fd ev owords) (fd d an) (fd d txt) np (fd s sm) (fd s sscr)
+                 (fd s stmp) (fd s sgc))
         (ar-doc (fd d cg) (fd ev refs) (fd d fw) (fd d fl) (fd d et) (fd ev feats) (fd ev owords) (fd ev olines) (fd ev oruns) (fd ev osyms)
                  (fd ev images) (fd ev epages) (fd d gl) (fd d mk) (fd d an) (fd d txt) trust0 (fd s rc) (fd s nfw) (fd s nfl) (fd s fv) (fd s fx)
                  (fd s afa) (fd s gd) (fd s gv) (fd s w2g) (fd s o2g) (fd s pp) (fd s ftw) (fd s ftl) (fd d xs0))

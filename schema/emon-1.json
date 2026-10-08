@@ -704,6 +704,15 @@
         "color": {
           "type": "string"
         },
+        "location": {
+          "type": "string"
+        },
+        "signed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
         "colspan": {
           "type": "integer",
           "minimum": 1
@@ -1260,6 +1269,9 @@
                 "name",
                 "date",
                 "color",
+                "signed",
+                "reason",
+                "location",
                 "asset",
                 "noasset"
               ]

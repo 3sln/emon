@@ -1,0 +1,88 @@
+{
+  "emon-gold" : "1.0",
+  "id" : "sig-scan",
+  "provenance" : {
+    "pdf" : "sig-scan.pdf",
+    "producer" : "tools/synth/sig_pdf.clj (P8.3)"
+  },
+  "annotated" : {
+    "attributes" : {
+      "table" : [ "profile", "columns", "continued" ],
+      "heading" : [ "level", "number", "numbering" ],
+      "list" : [ "ordered", "scheme", "start" ],
+      "rowgroup" : [ "role" ],
+      "figure" : [ "subkind", "label", "alt", "labels" ],
+      "cell" : [ "rowspan", "colspan", "header", "empty" ],
+      "note" : [ "role", "marker" ],
+      "section" : [ "level" ],
+      "item" : [ "marker", "value" ],
+      "row" : [ "repeated" ],
+      "seal" : [ "subkind", "name", "date", "color", "signed", "reason", "location" ],
+      "caption" : [ "label" ]
+    },
+    "dropped" : [ "page-number", "running-title", "watermark", "duplicate-header-row" ],
+    "furniture" : true,
+    "inlines" : true,
+    "pages" : [ "n", "w", "h", "label" ],
+    "structure" : [ "section", "heading", "paragraph", "list", "item", "table", "rowgroup", "row", "cell", "caption", "figure", "seal", "quote", "code", "note" ],
+    "text" : true
+  },
+  "model" : {
+    "body" : {
+      "id" : 0,
+      "kind" : "document",
+      "children" : [ {
+        "id" : 1,
+        "kind" : "section",
+        "level" : 1,
+        "children" : [ {
+          "id" : 2,
+          "kind" : "heading",
+          "level" : 1,
+          "text" : "Supplier Declaration"
+        }, {
+          "id" : 3,
+          "kind" : "paragraph",
+          "text" : "weather village system school window wagon story river shadow friend market story problem question evening rabbit table wagon forest example example village bridge season shadow forest lesson teacher yellow rabbit weather valley friend machine hammer family forest winter letter evening kitchen orange winter pencil island mirror market friend"
+        }, {
+          "id" : 4,
+          "kind" : "paragraph",
+          "text" : "Authorised signatory"
+        }, {
+          "id" : 5,
+          "kind" : "seal",
+          "subkind" : "signature",
+          "color" : "blue",
+          "name" : "Dana Kim",
+          "text" : ""
+        }, {
+          "id" : 6,
+          "kind" : "paragraph",
+          "text" : "Dana Kim"
+        }, {
+          "id" : 7,
+          "kind" : "paragraph",
+          "text" : "Date"
+        } ]
+      } ]
+    },
+    "dropped" : [ ],
+    "emon" : "1.0",
+    "furniture" : [ ],
+    "meta" : { },
+    "pages" : [ {
+      "n" : 1,
+      "w" : 612,
+      "h" : 792,
+      "rot" : 0
+    } ],
+    "settings" : {
+      "locale" : "en"
+    },
+    "source" : {
+      "format" : "pdf",
+      "lang" : "en",
+      "pages" : 1
+    }
+  }
+}

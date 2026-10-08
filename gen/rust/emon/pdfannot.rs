@@ -10,7 +10,7 @@ use crate::emon::pdfxnames::*;
 
 pub(crate) const AN_STRIDE: i32 = 38;
 pub(crate) const FD_STRIDE: i32 = 32;
-pub(crate) const SG_STRIDE: i32 = 36;
+pub(crate) const SG_STRIDE: i32 = 38;
 pub(crate) const FS_STRIDE: i32 = 8;
 pub(crate) const FS_DEPTH: i32 = 26;
 pub(crate) const PA_ANNOTS: i32 = 200000;
@@ -96,6 +96,9 @@ pub fn an_redact() -> i32 {
 }
 pub fn an_rich_media() -> i32 {
     return 26;
+}
+pub fn an_digsig() -> i32 {
+    return 27;
 }
 pub fn an_sub_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
@@ -204,6 +207,10 @@ pub fn an_sub_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 26 {
         crate::port::text_ascii(t, "RichMedia");
+        return 1;
+    }
+    if code == 27 {
+        crate::port::text_ascii(t, "DigitalSignature");
         return 1;
     }
     return 0;
@@ -1063,7 +1070,111 @@ pub(crate) fn pa_sig_new(mut sg: &mut crate::port::Cells, field: i32) -> i32 {
         crate::port::cells_set(sg, at + k, -1);
         k += 1;
     }
+    crate::port::cells_set(sg, at + 36, -1);
     return row;
+}
+pub(crate) fn pa_asn_cp(ar: &mut crate::port::Cells, h: i32, i: i32, end: i32, tag: i32, mut out: &mut crate::port::Cells) -> i32 {
+    // Append to `out` the characters of the ASN.1 string whose content is the bytes [i, end) of string `h`; `tag` is its universal tag: 12 UTF8String is decoded as
+    // UTF-8 (a malformed byte is U+FFFD), 30 BMPString as UTF-16BE, every other as Latin-1. Answers the code points appended.
+    let mut k: i32 = i;
+    let mut c: i32 = 0;
+    let mut n: i32 = 0;
+    let mut cp: i32 = 0;
+    let mut need: i32 = 0;
+    while k < end {
+        c = px_bat(ar, h, k);
+        cp = c;
+        if tag == 30 {
+            if (k + 1) < end {
+                cp = (c * 256) + px_bat(ar, h, k + 1);
+            }
+            k += 1;
+        }
+        if (tag == 12) && (c >= 128) {
+            need = 0;
+            if (c >= 194) && (c < 224) {
+                need = 1;
+                cp = c - 192;
+            }
+            if (c >= 224) && (c < 240) {
+                need = 2;
+                cp = c - 224;
+            }
+            if (c >= 240) && (c < 245) {
+                need = 3;
+                cp = c - 240;
+            }
+            if need == 0 {
+                cp = 65533;
+            } else if (k + need) > (end - 1) {
+                cp = 65533;
+                need = 0;
+            } else {
+                while need > 0 {
+                    k += 1;
+                    cp = (cp * 64) + (px_bat(ar, h, k) & 63);
+                    need -= 1;
+                }
+            }
+        }
+        px_push_cp(out, cp);
+        n += 1;
+        k += 1;
+    }
+    return n;
+}
+pub(crate) fn pa_cert_name(ar: &mut crate::port::Cells, h: i32, mut txt: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, at: i32) -> i32 {
+    // The common name of the SIGNER's certificate, read as bytes from the PKCS#7 in the /Contents string `h`; a run at sg[at, at+2), absent (-1 0) when there is none.
+    // NOTHING IS VERIFIED: the bytes are searched for the AttributeType commonName (55 04 03) followed by a UTF8String, PrintableString, T61String, IA5String or BMPString of
+    // a short length, and the SECOND one is taken (a certificate lists its issuer before its subject, and the signer's is the first certificate of the set: Adobe and openssl write
+    // it so), else the first. A name of a self-signed certificate is the same twice. D426.
+    let n: i32 = px_blen(ar, h);
+    let mut i: i32 = 0;
+    let mut seen: i32 = 0;
+    let mut tag: i32 = 0;
+    let mut clen: i32 = 0;
+    let mut s0: i32 = -1;
+    let mut l0: i32 = 0;
+    let mut t0: i32 = 0;
+    let mut s1: i32 = -1;
+    let mut l1: i32 = 0;
+    let mut t1: i32 = 0;
+    crate::port::cells_set(sg, at, -1);
+    crate::port::cells_set(sg, at + 1, 0);
+    while ((i + 5) < n) && (seen < 2) {
+        if (px_bat(ar, h, i) == 85) && ((px_bat(ar, h, i + 1) == 4) && (px_bat(ar, h, i + 2) == 3)) {
+            tag = px_bat(ar, h, i + 3);
+            clen = px_bat(ar, h, i + 4);
+            if ((tag == 12) || ((tag == 19) || ((tag == 20) || ((tag == 22) || (tag == 30))))) && ((clen > 0) && ((clen < 128) && (((i + 5) + clen) <= n))) {
+                if seen == 0 {
+                    s0 = i + 5;
+                    l0 = clen;
+                    t0 = tag;
+                }
+                if seen == 1 {
+                    s1 = i + 5;
+                    l1 = clen;
+                    t1 = tag;
+                }
+                seen += 1;
+                i = (i + 4) + clen;
+            }
+        }
+        i += 1;
+    }
+    if s0 == -1 {
+        return 0;
+    }
+    let start: i32 = crate::port::cells_len(txt);
+    let mut cnt: i32 = 0;
+    if seen == 2 {
+        cnt = pa_asn_cp(ar, h, s1, s1 + l1, t1, txt);
+    } else {
+        cnt = pa_asn_cp(ar, h, s0, s0 + l0, t0, txt);
+    }
+    crate::port::cells_set(sg, at, start);
+    crate::port::cells_set(sg, at + 1, cnt);
+    return cnt;
 }
 pub(crate) fn pa_sig_fill(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, row: i32, sd: i32, bits: i32) -> i32 {
     // Fill signature row `row` from the signature dictionary `sd` (resolved). Nothing
@@ -1109,6 +1220,7 @@ pub(crate) fn pa_sig_fill(src: &crate::port::Src, mut ar: &mut crate::port::Cell
     v = pd_dget(src, ar, dc, a, b, st, sd, pn_contents());
     if (v != 0) && (pl_kind_of(ar, v) == 5) {
         crate::port::cells_set(sg, at + 32, pl_str_len(ar, v));
+        pa_cert_name(ar, v, txt, sg, at + 36);
         fl |= 1;
     }
     v = pd_dget(src, ar, dc, a, b, st, sd, pn_type());
@@ -1776,6 +1888,75 @@ pub(crate) fn pa_finalize(ar: &mut crate::port::Cells, mut fd: &mut crate::port:
     }
     return 0;
 }
+pub(crate) fn pa_digsig_row(mut an: &mut crate::port::Cells, fd: &mut crate::port::Cells, sg: &mut crate::port::Cells, frow: i32) -> i32 {
+    // Append the synthetic `an-digsig` row (see the head of this file) of terminal field `frow` (a signature field with a widget on a page). Signed: its signature
+    // dictionary has a /Contents. Nothing is verified. Answers 1 when a row was written.
+    let f: i32 = frow * FD_STRIDE;
+    let srow: i32 = crate::port::cells_at(fd, f + 24);
+    let s: i32 = srow * SG_STRIDE;
+    let at: i32 = crate::port::cells_len(an);
+    let mut k: i32 = 0;
+    if crate::port::cells_at(fd, f + 15) < 0 {
+        return 0;
+    }
+    while k < AN_STRIDE {
+        crate::port::cells_push(an, 0);
+        k += 1;
+    }
+    crate::port::cells_set(an, at, crate::port::cells_at(fd, f + 15));
+    crate::port::cells_set(an, at + 1, an_digsig());
+    crate::port::cells_set(an, at + 2, crate::port::cells_at(fd, f));
+    k = 0;
+    while k < 4 {
+        crate::port::cells_set(an, (at + 4) + k, crate::port::cells_at(fd, (f + 16) + k));
+        k += 1;
+    }
+    k = 8;
+    while k < 15 {
+        crate::port::cells_set(an, at + k, -1);
+        k += 1;
+    }
+    crate::port::cells_set(an, at + 23, -1);
+    crate::port::cells_set(an, at + 25, crate::port::cells_at(fd, f + 2));
+    crate::port::cells_set(an, at + 26, crate::port::cells_at(fd, f + 3));
+    crate::port::cells_set(an, at + 27, -1);
+    crate::port::cells_set(an, at + 29, -1);
+    crate::port::cells_set(an, at + 32, -1);
+    crate::port::cells_set(an, at + 34, -1);
+    crate::port::cells_set(an, at + 35, 0);
+    crate::port::cells_set(an, at + 36, -1);
+    if srow >= 0 {
+        crate::port::cells_set(an, at + 23, crate::port::cells_at(sg, s + 7));
+        crate::port::cells_set(an, at + 24, crate::port::cells_at(sg, s + 8));
+        k = 0;
+        while k < 7 {
+            crate::port::cells_set(an, (at + 8) + k, crate::port::cells_at(sg, (s + 11) + k));
+            k += 1;
+        }
+        crate::port::cells_set(an, at + 15, crate::port::cells_at(sg, s + 10));
+        crate::port::cells_set(an, at + 27, crate::port::cells_at(sg, s + 18));
+        crate::port::cells_set(an, at + 28, crate::port::cells_at(sg, s + 19));
+        crate::port::cells_set(an, at + 32, crate::port::cells_at(sg, s + 20));
+        crate::port::cells_set(an, at + 33, crate::port::cells_at(sg, s + 21));
+        crate::port::cells_set(an, at + 30, crate::port::cells_at(sg, s + 33));
+        crate::port::cells_set(an, at + 34, crate::port::cells_at(sg, s + 36));
+        crate::port::cells_set(an, at + 35, crate::port::cells_at(sg, s + 37));
+    }
+    return 1;
+}
+pub(crate) fn pa_digsigs(mut an: &mut crate::port::Cells, fd: &mut crate::port::Cells, sg: &mut crate::port::Cells) -> i32 {
+    // The synthetic rows of every signature field (`fd` kind 7) that has a widget on a page, in field order. Answers the rows written.
+    let nf: i32 = crate::port::cells_len(fd) / FD_STRIDE;
+    let mut i: i32 = 0;
+    let mut n: i32 = 0;
+    while i < nf {
+        if crate::port::cells_at(fd, (i * FD_STRIDE) + 6) == 7 {
+            n += pa_digsig_row(an, fd, sg, i);
+        }
+        i += 1;
+    }
+    return n;
+}
 pub fn pa_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut idx: &mut crate::port::Cells, mut txt: &mut crate::port::Cells, mut w: &mut crate::port::Cells, mut fs: &mut crate::port::Cells, mut seen: &mut crate::port::Cells, mut fm: &mut crate::port::Cells, mut an: &mut crate::port::Cells, mut aq: &mut crate::port::Cells, mut fd: &mut crate::port::Cells, mut sg: &mut crate::port::Cells) -> i32 {
     // Everything P3.8 reads, after `pd-open`, `pd-pages` and `px-index-build`: fields
     // first (so a widget finds its field), then every page's /Annots, then the
@@ -1856,7 +2037,9 @@ pub fn pa_run(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &
     if ps_missed(src) {
         return -1;
     }
-    return crate::port::cells_len(an) / AN_STRIDE;
+    i = crate::port::cells_len(an) / AN_STRIDE;
+    pa_digsigs(an, fd, sg);
+    return i;
 }
 pub(crate) fn pa_dump_annot(mut t: &mut String, txt: &mut crate::port::Cells, an: &mut crate::port::Cells, aq: &mut crate::port::Cells, row: i32) -> i32 {
     let at: i32 = row * AN_STRIDE;
@@ -2079,10 +2262,12 @@ pub fn pa_dump(mut t: &mut String, txt: &mut crate::port::Cells, an: &mut crate:
     let mut i: i32 = 0;
     crate::port::text_ascii(t, "{\"annots\":[");
     while i < na {
-        if i > 0 {
-            crate::port::text_ascii(t, ",");
+        if crate::port::cells_at(an, (i * AN_STRIDE) + 1) != an_digsig() {
+            if i > 0 {
+                crate::port::text_ascii(t, ",");
+            }
+            pa_dump_annot(t, txt, an, aq, i);
         }
-        pa_dump_annot(t, txt, an, aq, i);
         i += 1;
     }
     crate::port::text_ascii(t, "],\"fields\":[");

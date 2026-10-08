@@ -483,6 +483,12 @@ public static class Model {
     public static int FkOcrScope() {
         return 98;
     }
+    public static int FkSigned() {
+        return 99;
+    }
+    public static int FkLocation() {
+        return 100;
+    }
     public static int FkEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "id");
@@ -874,6 +880,14 @@ public static class Model {
         }
         if (code == 98) {
             emon.Port.TextAscii(t, "ocr-scope");
+            return 1;
+        }
+        if (code == 99) {
+            emon.Port.TextAscii(t, "signed");
+            return 1;
+        }
+        if (code == 100) {
+            emon.Port.TextAscii(t, "location");
             return 1;
         }
         return 0;

@@ -13,26 +13,6 @@ public static class Sealmark {
         // `stamp-width`: the border (centipoints) a stamp's rectangle needs: 1.5 pt.
         return 150;
     }
-    public static int SmSigWidth() {
-        // `sig-width`: the widest stroke (centipoints) of a pen signature.
-        return 250;
-    }
-    public static int SmSigGap() {
-        // `sig-gap`: how far (centipoints) strokes of one signature lie apart.
-        return 800;
-    }
-    public static int SmSigSegs() {
-        // `sig-segs`: the Bezier segments a signature has, together.
-        return 3;
-    }
-    public static int SmSigMinW() {
-        // The width (centipoints) a signature needs: 30 pt.
-        return 3000;
-    }
-    public static int SmCueLines() {
-        // `cue-lines`: how many line heights from a cue a signature may lie.
-        return 3;
-    }
     public static int SmRound() {
         // `seal-round`: how far (per cent of the radius) a ring's end points may lie from the circle.
         return 8;
@@ -64,10 +44,6 @@ public static class Sealmark {
     public static int SmMaxCands() {
         // The most candidates of one page (a hostile page's strokes).
         return 64;
-    }
-    public static int SmMaxStrokes() {
-        // The most signature strokes of one page that are clustered.
-        return 96;
     }
     public static int SmCw() {
         return 12;
@@ -426,67 +402,6 @@ public static class Sealmark {
         emon.Port.CellsSet(@out, 3, 0);
         return 1;
     }
-    internal static int SmFold(int c) {
-        if ((c >= 65) && (c <= 90)) {
-            return c + 32;
-        }
-        return c;
-    }
-    internal static int SmWordIs(emon.Port.Cells fw, emon.Port.Cells et, int row, int pre0, int pre1, int pre2, int pre3, int pre4, int pre5, int pre6, int pre7, int pre8, int want) {
-        // 1 when word `row` starts, case-folded, with the code points pre0..pre(want-1) (nine at most).
-        int ts = emon.Port.CellsAt(fw, (row * 24) + 11);
-        int tl = emon.Port.CellsAt(fw, (row * 24) + 12);
-        if (tl < want) {
-            return 0;
-        }
-        if (SmFold(emon.Port.CellsAt(et, ts)) != pre0) {
-            return 0;
-        }
-        if ((want > 1) && (SmFold(emon.Port.CellsAt(et, ts + 1)) != pre1)) {
-            return 0;
-        }
-        if ((want > 2) && (SmFold(emon.Port.CellsAt(et, ts + 2)) != pre2)) {
-            return 0;
-        }
-        if ((want > 3) && (SmFold(emon.Port.CellsAt(et, ts + 3)) != pre3)) {
-            return 0;
-        }
-        if ((want > 4) && (SmFold(emon.Port.CellsAt(et, ts + 4)) != pre4)) {
-            return 0;
-        }
-        if ((want > 5) && (SmFold(emon.Port.CellsAt(et, ts + 5)) != pre5)) {
-            return 0;
-        }
-        if ((want > 6) && (SmFold(emon.Port.CellsAt(et, ts + 6)) != pre6)) {
-            return 0;
-        }
-        if ((want > 7) && (SmFold(emon.Port.CellsAt(et, ts + 7)) != pre7)) {
-            return 0;
-        }
-        if ((want > 8) && (SmFold(emon.Port.CellsAt(et, ts + 8)) != pre8)) {
-            return 0;
-        }
-        return 1;
-    }
-    internal static int SmCueWord(emon.Port.Cells fw, emon.Port.Cells et, int row, int end) {
-        // 1 when word `row` (of a page whose words end at `end`) is a signature cue: `signature`, `signed`, `sign` followed by `here`, `by:`; case-folded.
-        int tl = emon.Port.CellsAt(fw, (row * 24) + 12);
-        if (SmWordIs(fw, et, row, 115, 105, 103, 110, 97, 116, 117, 114, 101, 9) == 1) {
-            return 1;
-        }
-        if (SmWordIs(fw, et, row, 115, 105, 103, 110, 101, 100, 0, 0, 0, 6) == 1) {
-            return 1;
-        }
-        if ((tl == 3) && (SmWordIs(fw, et, row, 98, 121, 58, 0, 0, 0, 0, 0, 0, 3) == 1)) {
-            return 1;
-        }
-        if ((tl == 4) && ((SmWordIs(fw, et, row, 115, 105, 103, 110, 0, 0, 0, 0, 0, 4) == 1) && ((row + 1) < end))) {
-            if (SmWordIs(fw, et, row + 1, 104, 101, 114, 101, 0, 0, 0, 0, 0, 4) == 1) {
-                return 1;
-            }
-        }
-        return 0;
-    }
     public static int SmTurned(int rot) {
         // 1 when the rotation (centi-degrees) is at least `sm-arc-turn` off every right angle.
         int a = ((rot % 9000) + 9000) % 9000;
@@ -525,7 +440,7 @@ public static class Sealmark {
         int cy = (emon.Port.CellsAt(fw, at + 2) + emon.Port.CellsAt(fw, at + 4)) / 2;
         int kind = emon.Port.CellsAt(scr, c);
         int ink = SmWordInk(fw, gl, row);
-        if ((kind == 0) || (kind == Player.PlsSignature())) {
+        if ((kind == 0) || (kind > Player.PlsStamp())) {
             return 0;
         }
         if (SmInside(scr, c, cx, cy) == 0) {
@@ -696,137 +611,6 @@ public static class Sealmark {
         }
         return n;
     }
-    internal static int SmSegs(emon.Port.Cells pa, emon.Port.Cells pts, int r) {
-        // The Bezier segments of path row r (a triple of curve points), 0 when its geometry was not kept.
-        int n = Evidence.PaGet(pa, r, Evidence.PfPcount());
-        int f = Evidence.PaGet(pa, r, Evidence.PfPfirst());
-        int j = 0;
-        int c = 0;
-        if (f < 0) {
-            return 0;
-        }
-        while (j < n) {
-            if (Evidence.PtGet(pts, f + j, Evidence.PtfOp()) == Evidence.PoCurve()) {
-                c += 1;
-            }
-            j += 1;
-        }
-        return c / 3;
-    }
-    internal static int SmGap(int a0, int a1, int b0, int b1) {
-        // The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.
-        if (b0 > a1) {
-            return b0 - a1;
-        }
-        if (a0 > b1) {
-            return a0 - b1;
-        }
-        return 0;
-    }
-    internal static int SmSignatures(emon.Port.Cells pa, emon.Port.Cells pts, emon.Port.Cells fw, emon.Port.Cells et, int page, int p0, int p1, int pw, int ph, emon.Port.Cells scr, int n0, emon.Port.Cells tmp) {
-        // The signature candidates of page `page`'s paths [p0, p1): the open, stroked, unfilled curves no wider than `sm-sig-width` (and neither the page's width nor
-        // a third of its height), merged where they lie within `sm-sig-gap`, kept when they have at least `sm-sig-segs` Bezier segments, are at least 30 pt wide and
-        // wider than 1.5 times their height, and a cue word of the page lies within `sm-cue-lines` line heights of the cluster. Appended to `scr`.
-        int r = p0;
-        int ns = 0;
-        int n = n0;
-        int i = 0;
-        int j = 0;
-        int changed = 1;
-        int a = 0;
-        int b = 0;
-        int w = 0;
-        int h = 0;
-        int cue = 0;
-        int vg = 0;
-        int hg = 0;
-        int lh = 0;
-        int nw = emon.Port.CellsLen(fw) / 24;
-        emon.Port.CellsDrop(tmp, 8);
-        while (r < p1) {
-            if ((SmStrokeOnly(pa, r) == 1) && (ns < SmMaxStrokes())) {
-                if (((Evidence.PaGet(pa, r, Evidence.PfFlags()) & Evidence.PgClosed()) == 0) && (Evidence.PaGet(pa, r, Evidence.PfWidth()) <= SmSigWidth())) {
-                    if (Evidence.PaGet(pa, r, Evidence.PfKind()) == Evidence.PaCurve()) {
-                        if (((Evidence.PaGet(pa, r, Evidence.PfX1()) - Evidence.PaGet(pa, r, Evidence.PfX0())) < pw) && (((Evidence.PaGet(pa, r, Evidence.PfY1()) - Evidence.PaGet(pa, r, Evidence.PfY0())) * 3) < ph)) {
-                            emon.Port.CellsPush(tmp, Evidence.PaGet(pa, r, Evidence.PfX0()));
-                            emon.Port.CellsPush(tmp, Evidence.PaGet(pa, r, Evidence.PfY0()));
-                            emon.Port.CellsPush(tmp, Evidence.PaGet(pa, r, Evidence.PfX1()));
-                            emon.Port.CellsPush(tmp, Evidence.PaGet(pa, r, Evidence.PfY1()));
-                            emon.Port.CellsPush(tmp, SmSegs(pa, pts, r));
-                            emon.Port.CellsPush(tmp, r);
-                            emon.Port.CellsPush(tmp, Evidence.PaGet(pa, r, Evidence.PfStroke()));
-                            ns += 1;
-                        }
-                    }
-                }
-            }
-            r += 1;
-        }
-        // merge until nothing merges; a stroke is a record of 7 cells from cell 8 of tmp
-        while (changed == 1) {
-            changed = 0;
-            i = 0;
-            while (i < ns) {
-                a = 8 + (i * 7);
-                if (emon.Port.CellsAt(tmp, a + 4) >= 0) {
-                    j = i + 1;
-                    while (j < ns) {
-                        b = 8 + (j * 7);
-                        if (emon.Port.CellsAt(tmp, b + 4) >= 0) {
-                            if ((SmGap(emon.Port.CellsAt(tmp, a), emon.Port.CellsAt(tmp, a + 2), emon.Port.CellsAt(tmp, b), emon.Port.CellsAt(tmp, b + 2)) <= SmSigGap()) && (SmGap(emon.Port.CellsAt(tmp, a + 1), emon.Port.CellsAt(tmp, a + 3), emon.Port.CellsAt(tmp, b + 1), emon.Port.CellsAt(tmp, b + 3)) <= SmSigGap())) {
-                                if (emon.Port.CellsAt(tmp, b) < emon.Port.CellsAt(tmp, a)) {
-                                    emon.Port.CellsSet(tmp, a, emon.Port.CellsAt(tmp, b));
-                                }
-                                if (emon.Port.CellsAt(tmp, b + 1) < emon.Port.CellsAt(tmp, a + 1)) {
-                                    emon.Port.CellsSet(tmp, a + 1, emon.Port.CellsAt(tmp, b + 1));
-                                }
-                                if (emon.Port.CellsAt(tmp, b + 2) > emon.Port.CellsAt(tmp, a + 2)) {
-                                    emon.Port.CellsSet(tmp, a + 2, emon.Port.CellsAt(tmp, b + 2));
-                                }
-                                if (emon.Port.CellsAt(tmp, b + 3) > emon.Port.CellsAt(tmp, a + 3)) {
-                                    emon.Port.CellsSet(tmp, a + 3, emon.Port.CellsAt(tmp, b + 3));
-                                }
-                                emon.Port.CellsSet(tmp, a + 4, emon.Port.CellsAt(tmp, a + 4) + emon.Port.CellsAt(tmp, b + 4));
-                                emon.Port.CellsSet(tmp, b + 4, -1);
-                                changed = 1;
-                            }
-                        }
-                        j += 1;
-                    }
-                }
-                i += 1;
-            }
-        }
-        i = 0;
-        while (i < ns) {
-            a = 8 + (i * 7);
-            w = emon.Port.CellsAt(tmp, a + 2) - emon.Port.CellsAt(tmp, a);
-            h = emon.Port.CellsAt(tmp, a + 3) - emon.Port.CellsAt(tmp, a + 1);
-            if ((emon.Port.CellsAt(tmp, a + 4) >= SmSigSegs()) && ((w >= SmSigMinW()) && ((w * 2) >= (h * 3)))) {
-                cue = 0;
-                j = 0;
-                while ((j < nw) && (cue == 0)) {
-                    if (emon.Port.CellsAt(fw, j * 24) == page) {
-                        if (SmCueWord(fw, et, j, nw) == 1) {
-                            lh = emon.Port.CellsAt(fw, (j * 24) + 4) - emon.Port.CellsAt(fw, (j * 24) + 2);
-                            vg = SmGap(emon.Port.CellsAt(tmp, a + 1), emon.Port.CellsAt(tmp, a + 3), emon.Port.CellsAt(fw, (j * 24) + 2), emon.Port.CellsAt(fw, (j * 24) + 4));
-                            hg = SmGap(emon.Port.CellsAt(tmp, a), emon.Port.CellsAt(tmp, a + 2), emon.Port.CellsAt(fw, (j * 24) + 1), emon.Port.CellsAt(fw, (j * 24) + 3));
-                            if ((vg <= (lh * SmCueLines())) && (hg <= w)) {
-                                cue = 1;
-                            }
-                        }
-                    }
-                    j += 1;
-                }
-                if ((cue == 1) && (n < SmMaxCands())) {
-                    SmAddCand(scr, Player.PlsSignature(), emon.Port.CellsAt(tmp, a + 5), emon.Port.CellsAt(tmp, a), emon.Port.CellsAt(tmp, a + 1), emon.Port.CellsAt(tmp, a + 2), emon.Port.CellsAt(tmp, a + 3), 0, 0, 0, emon.Port.CellsAt(tmp, a + 6), 0);
-                    n += 1;
-                }
-            }
-            i += 1;
-        }
-        return n;
-    }
     internal static int SmGroupInside(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells owords, int g, emon.Port.Cells scr, int c) {
         // 1 when the group has no text-layer or hidden word, has OCR words, and the centre of every one lies inside the candidate at record `c`.
         int no = Player.CgGet(cg, g, Player.CgfOcount());
@@ -957,7 +741,7 @@ public static class Sealmark {
             kind = emon.Port.CellsAt(scr, c);
             tl = 0;
             oc = 0;
-            if (kind != Player.PlsSignature()) {
+            if (kind <= Player.PlsStamp()) {
                 tl = SmCountMembers(scr, c, fw, gl, page);
             }
             emon.Port.CellsSet(scr, c + 11, tl);
@@ -1000,7 +784,7 @@ public static class Sealmark {
                 ts = emon.Port.CellsLen(et);
                 first = -1;
                 nref = 0;
-                if ((kind != Player.PlsSignature()) && (tl > 0)) {
+                if ((kind <= Player.PlsStamp()) && (tl > 0)) {
                     SmTextLayerText(scr, c, fw, gl, et, page);
                 }
                 g = 0;
@@ -1015,7 +799,7 @@ public static class Sealmark {
                                 row = emon.Port.CellsAt(refs, ((Player.CgGet(cg, g, Player.CgfOfirst()) + j) * 2) + 1);
                                 Evidence.RfAdd(refs, Evidence.EaOwords(), row);
                                 nref += 1;
-                                if ((tl == 0) && (kind != Player.PlsSignature())) {
+                                if ((tl == 0) && (kind <= Player.PlsStamp())) {
                                     if (emon.Port.CellsLen(et) > ts) {
                                         emon.Port.CellsPush(et, 32);
                                     }
@@ -1043,23 +827,41 @@ public static class Sealmark {
                 if (tl > 0) {
                     conf += 100;
                 }
-                if (conf > 900) {
+                if (kind > Player.PlsStamp()) {
+                    conf = emon.Port.CellsAt(scr, c + 10) / 65536;
+                }
+                if ((kind <= Player.PlsStamp()) && (conf > 900)) {
                     conf = 900;
                 }
                 o = Player.SlNew(sm, page, emon.Port.CellsAt(scr, c + 2), emon.Port.CellsAt(scr, c + 3), emon.Port.CellsAt(scr, c + 4), emon.Port.CellsAt(scr, c + 5), kind);
                 emon.Port.CellsSet(sm, (o * 16) + 7, Evidence.EaPaths());
                 emon.Port.CellsSet(sm, (o * 16) + 8, emon.Port.CellsAt(scr, c + 1));
+                if (kind == Player.PlsDigitalSignature()) {
+                    emon.Port.CellsSet(sm, (o * 16) + 7, -1);
+                    emon.Port.CellsSet(sm, (o * 16) + 8, -1);
+                }
                 emon.Port.CellsSet(sm, (o * 16) + 9, conf);
                 if (nref > 0) {
                     emon.Port.CellsSet(sm, (o * 16) + 10, first);
                     emon.Port.CellsSet(sm, (o * 16) + 11, nref);
                 }
-                emon.Port.CellsSet(sm, (o * 16) + 12, emon.Port.CellsAt(scr, c + 10));
+                emon.Port.CellsSet(sm, (o * 16) + 12, emon.Port.CellsAt(scr, c + 10) % 65536);
                 if (tl > 0) {
                     emon.Port.CellsSet(sm, (o * 16) + 12, emon.Port.CellsAt(scr, c + 10) | 32);
                 }
                 emon.Port.CellsSet(sm, (o * 16) + 13, ts);
                 emon.Port.CellsSet(sm, (o * 16) + 14, emon.Port.CellsLen(et) - ts);
+                // a signature's or initials' typed name and a digital signature's record are runs `emon.sigmark` appended (scr cells 6 and 7): flag 1024 says the run is a name, 256 a record
+                if (kind > Player.PlsStamp()) {
+                    emon.Port.CellsSet(sm, (o * 16) + 13, emon.Port.CellsAt(scr, c + 6));
+                    emon.Port.CellsSet(sm, (o * 16) + 14, emon.Port.CellsAt(scr, c + 7));
+                    if ((kind != Player.PlsDigitalSignature()) && (emon.Port.CellsAt(scr, c + 7) > 0)) {
+                        emon.Port.CellsSet(sm, (o * 16) + 12, emon.Port.CellsAt(sm, (o * 16) + 12) | 1024);
+                    }
+                    if (kind == Player.PlsDigitalSignature()) {
+                        emon.Port.CellsSet(sm, (o * 16) + 12, emon.Port.CellsAt(sm, (o * 16) + 12) | 256);
+                    }
+                }
                 emon.Port.CellsSet(sm, (o * 16) + 15, emon.Port.CellsAt(scr, c + 9));
             }
             k += 1;
@@ -1266,9 +1068,39 @@ public static class Sealmark {
         }
         return ((w * h) * 100) / small;
     }
-    internal static int SmRaster(int page, emon.Port.Cells et, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells owords, emon.Port.Cells sm) {
-        // The `sl` rows of the seals and stamps that page units found in pixels (`emon.sealpx`): one for every group of `page` flagged `seal-px`, unless a candidate that is
-        // already there (found in the vector paths) has its box (half of the smaller). Its text is `sm-px-text`'s, its colour the group's code, its words the group's. Answers the rows written.
+    internal static int SmBoxGroup(emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells owords, int g, int x0, int y0, int x1, int y1) {
+        // 1 when the group has no text-layer or hidden word, has OCR words, and the centre of every one lies inside the box.
+        int no = Player.CgGet(cg, g, Player.CgfOcount());
+        int of = Player.CgGet(cg, g, Player.CgfOfirst());
+        int k = 0;
+        int row = 0;
+        int cx = 0;
+        int cy = 0;
+        if (Player.CgGet(cg, g, Player.CgfTcount()) > 0) {
+            return 0;
+        }
+        if (Player.CgGet(cg, g, Player.CgfHcount()) > 0) {
+            return 0;
+        }
+        if (no == 0) {
+            return 0;
+        }
+        while (k < no) {
+            row = emon.Port.CellsAt(refs, ((of + k) * 2) + 1);
+            cx = (Evidence.OwGet(owords, row, Evidence.HdX0()) + Evidence.OwGet(owords, row, Evidence.HdX1())) / 2;
+            cy = (Evidence.OwGet(owords, row, Evidence.HdY0()) + Evidence.OwGet(owords, row, Evidence.HdY1())) / 2;
+            if ((cx < x0) || ((cx > x1) || ((cy < y0) || (cy > y1)))) {
+                return 0;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    internal static int SmRaster(int page, emon.Port.Cells et, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells owords, emon.Port.Cells fw, emon.Port.Cells tmp, emon.Port.Cells sm) {
+        // The `sl` rows of the seals, stamps, signatures and initials that page units found in pixels (`emon.sealpx`, `emon.sigpx`): one for every group of `page` flagged `seal-px`, unless a candidate
+        // that is already there (found in the vector paths) has its box (half of the smaller). A seal's or stamp's text is `sm-px-text`'s; a signature's or initials' is none, but the typed name
+        // under or beneath its strokes (`emon.sigmark`'s `sg-typed-name`: the line the strokes are drawn over, else the first within 45 pt under them) when there is one (flag 1024); the OCR-only
+        // groups inside a signature or initials are flagged `in-seal` (their words are the strokes read as letters). Its colour is the group's code, its words the group's. Answers the rows written.
         int ng = Player.CgCount(cg);
         int g = 0;
         int o = 0;
@@ -1278,6 +1110,16 @@ public static class Sealmark {
         int fl = 0;
         int kind = 0;
         int conf = 0;
+        int got = 0;
+        int gx0 = 0;
+        int gy0 = 0;
+        int gx1 = 0;
+        int gy1 = 0;
+        int fq = 0;
+        int q = 0;
+        while (emon.Port.CellsLen(tmp) < 4) {
+            emon.Port.CellsPush(tmp, 0);
+        }
         while (g < ng) {
             if ((Player.CgGet(cg, g, Player.CgfPage()) == page) && ((Player.CgGet(cg, g, Player.CgfFlags()) & Player.PlgSealPx()) != 0)) {
                 dup = 0;
@@ -1296,18 +1138,41 @@ public static class Sealmark {
                     if ((fl & Player.PlgSealStamp()) != 0) {
                         kind = Player.PlsStamp();
                     }
+                    if ((fl & Player.PlgSealSig()) != 0) {
+                        kind = Player.PlsSignature();
+                    }
+                    if ((fl & Player.PlgSealInit()) != 0) {
+                        kind = Player.PlsInitials();
+                    }
                     ts = emon.Port.CellsLen(et);
-                    SmPxText(et, refs, owords, Player.CgGet(cg, g, Player.CgfOfirst()), Player.CgGet(cg, g, Player.CgfOcount()));
+                    got = 0;
+                    if (kind <= Player.PlsStamp()) {
+                        SmPxText(et, refs, owords, Player.CgGet(cg, g, Player.CgfOfirst()), Player.CgGet(cg, g, Player.CgfOcount()));
+                    } else {
+                        gx0 = Player.CgGet(cg, g, Player.CgfX0());
+                        gy0 = Player.CgGet(cg, g, Player.CgfY0());
+                        gx1 = Player.CgGet(cg, g, Player.CgfX1());
+                        gy1 = Player.CgGet(cg, g, Player.CgfY1());
+                        got = Sigmark.SgTypedName(fw, et, page, gy0 - 300, gy1, gx0, gx1, 300, tmp);
+                        if (got == 0) {
+                            got = Sigmark.SgTypedName(fw, et, page, gy1 - 300, gy1 + 4500, gx0, gx1, 4000, tmp);
+                        }
+                    }
                     // a reading with no word kept is no text: the seal has none
                     conf = 600;
                     if (kind == Player.PlsStamp()) {
                         conf = 700;
                     }
-                    if (Player.CgGet(cg, g, Player.CgfRot()) > 2) {
-                        conf += 100;
+                    if (kind <= Player.PlsStamp()) {
+                        if (Player.CgGet(cg, g, Player.CgfRot()) > 2) {
+                            conf += 100;
+                        }
+                        if (emon.Port.CellsLen(et) > ts) {
+                            conf += 100;
+                        }
                     }
-                    if (emon.Port.CellsLen(et) > ts) {
-                        conf += 100;
+                    if (kind == Player.PlsInitials()) {
+                        conf = 550;
                     }
                     if (conf > 900) {
                         conf = 900;
@@ -1319,7 +1184,30 @@ public static class Sealmark {
                     emon.Port.CellsSet(sm, (o * 16) + 12, 128);
                     emon.Port.CellsSet(sm, (o * 16) + 13, ts);
                     emon.Port.CellsSet(sm, (o * 16) + 14, emon.Port.CellsLen(et) - ts);
+                    if ((kind > Player.PlsStamp()) && (got != 0)) {
+                        emon.Port.CellsSet(sm, (o * 16) + 13, emon.Port.CellsAt(tmp, 0));
+                        emon.Port.CellsSet(sm, (o * 16) + 14, emon.Port.CellsAt(tmp, 1));
+                        emon.Port.CellsSet(sm, (o * 16) + 12, 1152);
+                    }
                     emon.Port.CellsSet(sm, (o * 16) + 15, Player.CgGet(cg, g, Player.CgfRot()));
+                    if (kind > Player.PlsStamp()) {
+                        emon.Port.CellsSet(sm, (o * 16) + 10, -1);
+                        emon.Port.CellsSet(sm, (o * 16) + 11, 0);
+                        gx0 = Player.CgGet(cg, g, Player.CgfX0());
+                        gy0 = Player.CgGet(cg, g, Player.CgfY0());
+                        gx1 = Player.CgGet(cg, g, Player.CgfX1());
+                        gy1 = Player.CgGet(cg, g, Player.CgfY1());
+                        q = 0;
+                        while (q < ng) {
+                            if ((Player.CgGet(cg, q, Player.CgfPage()) == page) && ((Player.CgGet(cg, q, Player.CgfFlags()) & Player.PlgSealPx()) == 0)) {
+                                if (SmBoxGroup(cg, refs, owords, q, gx0, gy0, gx1, gy1) == 1) {
+                                    fq = Player.CgGet(cg, q, Player.CgfFlags());
+                                    Player.CgSet(cg, q, Player.CgfFlags(), fq | Player.PlgInSeal());
+                                }
+                            }
+                            q += 1;
+                        }
+                    }
                     made += 1;
                 }
             }
@@ -1327,9 +1215,11 @@ public static class Sealmark {
         }
         return made;
     }
-    public static int SmFind(emon.Port.Cells pa, emon.Port.Cells pts, emon.Port.Cells gl, emon.Port.Cells fw, emon.Port.Cells et, emon.Port.Cells epages, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells owords, int np, emon.Port.Cells sm, emon.Port.Cells scr, emon.Port.Cells tmp) {
+    public static int SmFind(emon.Port.Cells pa, emon.Port.Cells pts, emon.Port.Cells gl, emon.Port.Cells fw, emon.Port.Cells et, emon.Port.Cells epages, emon.Port.Cells cg, emon.Port.Cells refs, emon.Port.Cells owords, emon.Port.Cells an, emon.Port.Cells txt, int np, emon.Port.Cells sm, emon.Port.Cells scr, emon.Port.Cells tmp, emon.Port.Cells sgc) {
         // The candidates of every page (see the head of this file) into `sm` (the `sl` arena), the text of their words appended to `et` (`sl` cells 13-14), and
-        // the flag `plg-in-seal` on the groups of `cg` that are theirs. `scr` and `tmp` are scratch. Answers the candidates written.
+        // the flag `plg-in-seal` on the groups of `cg` that are theirs. Handwritten signatures, initials and digital signature fields are `emon.sigmark`'s: its clusters are found in a
+        // first pass over every page (`sgc`; the document's verdict needs all of them: initials recur) and written here as candidate records. `an` and `txt` are P3.8's. `scr`, `tmp`
+        // and `sgc` are scratch. Answers the candidates written.
         int npaths = Evidence.PaCount(pa);
         int p = 1;
         int pi = 0;
@@ -1340,6 +1230,8 @@ public static class Sealmark {
         int pw = 61200;
         int ph = 79200;
         emon.Port.CellsDrop(sm, 0);
+        emon.Port.CellsDrop(sgc, 0);
+        // the first pass: every page's pen-stroke clusters, then the document's verdict on them
         while (p <= np) {
             while ((pi < npaths) && (Evidence.PaGet(pa, pi, Evidence.PfPage()) < p)) {
                 pi += 1;
@@ -1349,13 +1241,40 @@ public static class Sealmark {
                 pi += 1;
             }
             p1 = pi;
+            pw = 61200;
+            ph = 79200;
+            ep = Evidence.EvPageRow(epages, p);
+            if (ep >= 0) {
+                pw = Evidence.EpGet(epages, ep, Evidence.EpfWidth());
+                ph = Evidence.EpGet(epages, ep, Evidence.EpfHeight());
+            }
             if (p1 > p0) {
-                ep = Evidence.EvPageRow(epages, p);
-                if (ep >= 0) {
-                    pw = Evidence.EpGet(epages, ep, Evidence.EpfWidth());
-                    ph = Evidence.EpGet(epages, ep, Evidence.EpfHeight());
-                }
-                emon.Port.CellsDrop(scr, 0);
+                Sigmark.SgCollect(pa, pts, fw, et, owords, p, p0, p1, pw, ph, tmp, sgc);
+            }
+            p += 1;
+        }
+        Sigmark.SgDecide(sgc, owords, et, fw);
+        p = 1;
+        pi = 0;
+        while (p <= np) {
+            while ((pi < npaths) && (Evidence.PaGet(pa, pi, Evidence.PfPage()) < p)) {
+                pi += 1;
+            }
+            p0 = pi;
+            while ((pi < npaths) && (Evidence.PaGet(pa, pi, Evidence.PfPage()) == p)) {
+                pi += 1;
+            }
+            p1 = pi;
+            pw = 61200;
+            ph = 79200;
+            ep = Evidence.EvPageRow(epages, p);
+            if (ep >= 0) {
+                pw = Evidence.EpGet(epages, ep, Evidence.EpfWidth());
+                ph = Evidence.EpGet(epages, ep, Evidence.EpfHeight());
+            }
+            emon.Port.CellsDrop(scr, 0);
+            n = 0;
+            if (p1 > p0) {
                 emon.Port.CellsDrop(tmp, 0);
                 emon.Port.CellsPush(tmp, 0);
                 emon.Port.CellsPush(tmp, 0);
@@ -1367,12 +1286,12 @@ public static class Sealmark {
                 emon.Port.CellsPush(tmp, 0);
                 n = SmRings(pa, pts, p0, p1, scr, tmp);
                 n = SmStamps(pa, pts, p0, p1, pw, ph, scr, n);
-                n = SmSignatures(pa, pts, fw, et, p, p0, p1, pw, ph, scr, n, tmp);
-                if (n > 0) {
-                    SmPage(scr, n, p, fw, gl, et, cg, refs, owords, sm);
-                }
             }
-            SmRaster(p, et, cg, refs, owords, sm);
+            n = Sigmark.SgEmit(sgc, an, txt, fw, et, p, scr, n, tmp);
+            if (n > 0) {
+                SmPage(scr, n, p, fw, gl, et, cg, refs, owords, sm);
+            }
+            SmRaster(p, et, cg, refs, owords, fw, tmp, sm);
             p += 1;
         }
         return Player.SlCount(sm);
@@ -1473,6 +1392,34 @@ public static class Sealmark {
         }
         return 0;
     }
+    internal static int SmRefY(emon.Port.Cells sm, int o) {
+        // The y that places candidate `o` among the blocks that start below it: its top, but a digital signature field's BOTTOM (a field a line of text sits beside is read after the
+        // label that starts inside its height: `Approved by` then the field, P8.3, D432).
+        if (Player.SlGet(sm, o, 5) == Player.PlsDigitalSignature()) {
+            return Player.SlGet(sm, o, 4);
+        }
+        return Player.SlGet(sm, o, 2);
+    }
+    internal static int SmLastAbove(emon.Port.Cells sm, int o, emon.Port.Cells on, emon.Port.Cells orr, int n) {
+        // The last top-level block (in reading order) of candidate `o`'s page that starts above its reference y (`sm-ref-y`), -1 for none: where a signature, initials or a digital signature
+        // that overlaps no block is placed AFTER (the initials at the foot of page 1 are the end of page 1's blocks, not the start of page 2's: P8.3, D432).
+        int @ref = SmRefY(sm, o);
+        int i = 0;
+        int r = 0;
+        int pick = -1;
+        while (i < n) {
+            if (SmIsTop(on, i) == 1) {
+                r = Model.NodeRegionHead(on, i);
+                if (r >= 0) {
+                    if ((Model.RegionPage(orr, r) == Player.SlGet(sm, o, 0)) && (Model.RegionY0(orr, r) < @ref)) {
+                        pick = i;
+                    }
+                }
+            }
+            i += 1;
+        }
+        return pick;
+    }
     internal static int SmPending(emon.Port.Cells sm, emon.Port.Cells nm, int n0, emon.Port.Cells on, int i, int page, int y0, int mode) {
         // The next candidate to write before node i, -1 for none. `nm[n0 + o]` is the node a candidate is placed after (-1: none overlaps it). Mode 0: the
         // candidates placed after a node whose subtree has ended (i is later and not in it). Mode 1: those with no such node, whose top lies before (page, y0). Mode 2:
@@ -1495,7 +1442,7 @@ public static class Sealmark {
                     }
                 }
                 if ((mode == 1) && (a < 0)) {
-                    if ((Player.SlGet(sm, o, 0) < page) || ((Player.SlGet(sm, o, 0) == page) && (Player.SlGet(sm, o, 2) < y0))) {
+                    if ((Player.SlGet(sm, o, 0) < page) || ((Player.SlGet(sm, o, 0) == page) && (SmRefY(sm, o) < y0))) {
                         ok = 1;
                     }
                 }
@@ -1561,6 +1508,49 @@ public static class Sealmark {
         }
         return 0;
     }
+    internal static int SmEmitSeg(emon.Port.Cells et, int from, int to, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int nn, int key) {
+        // Add the code points et[from, to) to the Model's text as attribute `key` of node `nn`; nothing for an empty range.
+        int j = from;
+        int start = emon.Port.CellsLen(text);
+        if (to <= from) {
+            return 0;
+        }
+        while (j < to) {
+            Model.TextAppendCp(text, emon.Port.CellsAt(et, j));
+            j += 1;
+        }
+        Model.NodeAddAttrText(nodes, attrs, nn, key, start, to - from);
+        return 1;
+    }
+    internal static int SmEmitDigital(emon.Port.Cells et, int ts, int tl, int signed, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, int nn) {
+        // A digital signature's attributes (P8.3, D426) from the record et[ts, ts + tl): the signer's name, the reason, the location and the time, each ended by the code point 31, as
+        // `name`, `reason`, `location` and `date`; and `signed`, the state of the field (it holds a signature dictionary with a /Contents). Nothing is verified.
+        int end = ts + tl;
+        int j = ts;
+        int from = ts;
+        int seg = 0;
+        while (j <= end) {
+            if ((j == end) || (emon.Port.CellsAt(et, j) == 31)) {
+                if (seg == 0) {
+                    SmEmitSeg(et, from, j, nodes, attrs, text, nn, Model.FkName());
+                }
+                if (seg == 1) {
+                    SmEmitSeg(et, from, j, nodes, attrs, text, nn, Model.FkReason());
+                }
+                if (seg == 2) {
+                    SmEmitSeg(et, from, j, nodes, attrs, text, nn, Model.FkLocation());
+                }
+                if (seg == 3) {
+                    SmEmitSeg(et, from, j, nodes, attrs, text, nn, Model.FkDate());
+                }
+                from = j + 1;
+                seg += 1;
+            }
+            j += 1;
+        }
+        Model.NodeSetAttrBool(nodes, attrs, nn, Model.FkSigned(), signed);
+        return 0;
+    }
     internal static int SmEmit(emon.Port.Cells sm, int o, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, int parent, emon.Port.Cells nm, int fb) {
         // Write candidate `o` as a `seal` node, the last child of `parent`: its subkind, confidence, source, region, the words as `text` (flagged `low-conf`),
         // its name and date (`sm-emit-fields`) and its colour name. `nm` from cell `fb` is the fields' scratch.
@@ -1579,7 +1569,13 @@ public static class Sealmark {
         Model.NodeSetConf(nodes, nn, Player.SlGet(sm, o, 9));
         Model.NodeAddSrc(nodes, nn, Model.SrInfer());
         Model.NodeAddRegion(nodes, regions, nn, Player.SlGet(sm, o, 0), Player.SlGet(sm, o, 1), Player.SlGet(sm, o, 2), Player.SlGet(sm, o, 3), Player.SlGet(sm, o, 4));
-        if (tl > 0) {
+        if ((tl > 0) && ((fl & 256) != 0)) {
+            SmEmitDigital(et, ts, tl, (fl & 512) / 512, nodes, attrs, text, nn);
+        }
+        if ((tl > 0) && ((fl & 1024) != 0)) {
+            SmEmitSeg(et, ts, ts + tl, nodes, attrs, text, nn, Model.FkName());
+        }
+        if ((tl > 0) && ((fl & 1280) == 0)) {
             start = emon.Port.CellsLen(text);
             // the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them
             while (j < tl) {
@@ -1687,6 +1683,9 @@ public static class Sealmark {
                     }
                     i += 1;
                 }
+            }
+            if ((pick < 0) && (Player.SlGet(sm, o, 5) > Player.PlsStamp())) {
+                pick = SmLastAbove(sm, o, on, orr, n);
             }
             emon.Port.CellsPush(nm, pick);
             o += 1;

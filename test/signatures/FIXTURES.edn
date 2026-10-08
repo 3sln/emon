@@ -1,0 +1,6 @@
+;; The signature fixtures `bb sigs-record` records (P8.3): :born pages are rendered by pdfium, :scan pages are decoded.
+{"sig-contract" {:pdf "test/signatures/sig-contract.pdf", :kind :born},
+ "sig-digital" {:pdf "test/signatures/sig-digital.pdf", :kind :born},
+ "sig-negatives"
+ {:pdf "test/signatures/sig-negatives.pdf", :kind :born},
+ "sig-scan" {:pdf "test/signatures/sig-scan.pdf", :kind :scan}}
