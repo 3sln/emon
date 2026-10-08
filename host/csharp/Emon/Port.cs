@@ -536,79 +536,67 @@ public static class Port {
     }
 
     // ---------------------------------------------------------- limits
+    //
+    // THE TABLES OF LIMITS AND SETTINGS ARE KIN'S (`emon.limits`, P10.10): a name, a default and a range are read from it. Overrides are
+    // the platform's (D942): none here yet; the Engine layer adopts a process-wide table behind a lock, as Go does.
+
+    private static string KinName(int n, System.Func<int, int> ch) {
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < n; i++) {
+            sb.Append(new System.Text.Rune(ch(i)).ToString());
+        }
+        return sb.ToString();
+    }
+
+    // The name of limit `kind` as kin's table spells it (`input-bytes`); `unknown` for a kind it has no row for.
+    public static string LimitName(int kind) {
+        string s = KinName(Limits.LmNameLen(kind), i => Limits.LmNameCh(kind, i));
+        return s.Length == 0 ? "unknown" : s;
+    }
+
+    // `input-bytes` is `EMON_LIMIT_INPUT_BYTES`.
+    private static string EnvName(string prefix, string name) {
+        return prefix + name.ToUpperInvariant().Replace('-', '_');
+    }
 
     // @kin:link:form:limit-of: {:template "emon.Port.LimitOf({0})" :arity 1}
     public static int LimitOf(int kind) {
-        string v = System.Environment.GetEnvironmentVariable("EMON_LIMIT_" + LimitName(kind));
+        string v = System.Environment.GetEnvironmentVariable(EnvName("EMON_LIMIT_", LimitName(kind)));
         if (v != null && int.TryParse(v, out int n)) return n;
-        return LimitDefault(kind);
+        return Limits.LmDefault(kind);
+    }
+
+    // THE PAYLOAD OF A BREACH (P10.10, D941): which limit, the bound in force and the number the input reached. A host catches it by its TYPE and
+    // names the error from `Name`; nothing reads the words of the message, which is for a person.
+    public sealed class Breach : System.Exception {
+        public int Kind { get; }
+        public int Limit { get; }
+        public int Actual { get; }
+
+        public Breach(int kind, int limit, int actual)
+            : base("the " + LimitName(kind).Replace('-', ' ') + " limit is " + limit
+                + " and this input reached " + actual + ". Raise it with "
+                + EnvName("EMON_LIMIT_", LimitName(kind)) + ", or find out why the input needs that much -- a limit is a"
+                + " bound on emon, not a statement about the document.") {
+            Kind = kind;
+            Limit = limit;
+            Actual = actual;
+        }
+
+        public string Name => LimitName(Kind);
     }
 
     // @kin:link:form:limit-breach: {:template "emon.Port.LimitBreach({0}, {1})" :arity 2}
     public static int LimitBreach(int kind, int actual) {
-        string name = LimitName(kind);
-        throw new System.Exception(
-            "the " + name.ToLower().Replace('_', ' ') + " limit is " + LimitOf(kind)
-            + " and this input reached " + actual + ". Raise it with EMON_LIMIT_"
-            + name + ", or find out why the input needs that much -- a limit is a"
-            + " bound on emon, not a statement about the document.");
+        throw new Breach(kind, LimitOf(kind), actual);
     }
 
     // @kin:link:form:setting-of: {:template "emon.Port.SettingOf({0})" :arity 1}
     public static int SettingOf(int kind) {
-        string v = System.Environment.GetEnvironmentVariable("EMON_SETTING_" + SettingName(kind));
+        string name = KinName(Limits.SgNameLen(kind), i => Limits.SgNameCh(kind, i));
+        string v = System.Environment.GetEnvironmentVariable(EnvName("EMON_SETTING_", name.Length == 0 ? "unknown" : name));
         if (v != null && int.TryParse(v, out int n)) return n;
-        return SettingDefault(kind);
-    }
-
-    private static string LimitName(int kind) {
-        switch (kind) {
-            case 0: return "INPUT_BYTES";
-            case 1: return "STREAM_BYTES";
-            case 2: return "TOTAL_BYTES";
-            case 3: return "OBJECTS";
-            case 4: return "REF_DEPTH";
-            case 5: return "OPERATORS";
-            case 6: return "FORM_DEPTH";
-            case 7: return "PATTERN_DEPTH";
-            case 8: return "PAGES";
-            case 9: return "PIXELS";
-            case 10: return "OCR_REQUESTS";
-            default: return "UNKNOWN";
-        }
-    }
-
-    private static int LimitDefault(int kind) {
-        switch (kind) {
-            case 0: return 1073741824;
-            case 1: return 268435456;
-            case 2: return 1073741824;
-            case 3: return 10000000;
-            case 4: return 64;
-            case 5: return 50000000;
-            case 6: return 32;
-            case 7: return 8;
-            case 8: return 100000;
-            case 9: return 268435456;
-            case 10: return 100000;
-            default: return 0;
-        }
-    }
-
-    private static string SettingName(int kind) {
-        switch (kind) {
-            case 0: return "OCR_MODE";
-            case 1: return "TASKS";
-            default: return "UNKNOWN";
-        }
-    }
-
-    private static int SettingDefault(int kind) {
-        switch (kind) {
-            case 0: return 0;
-            case 1: return 0;
-            default: return 0;
-        }
+        return Limits.SgDefault(kind);
     }
 
     // ------------------------------------------------------------- Crypto

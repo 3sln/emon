@@ -129,6 +129,15 @@ type Cfg struct {
 	Keep    int32
 	Haveloc int32
 	Lcl     *port.Cells
+	Chunk   int32
+	Maxr    int32
+	Fetchr  int32
+	Rec     int32
+	Jsocr   int32
+	Num     int32
+	Lims    *port.Cells
+	Prod    *port.Cells
+	Msg     *strings.Builder
 }
 
 func NewCfg() *Cfg {
@@ -145,6 +154,15 @@ func NewCfg() *Cfg {
 		Keep:    0,
 		Haveloc: 0,
 		Lcl:     port.NewCells(),
+		Chunk:   0,
+		Maxr:    0,
+		Fetchr:  0,
+		Rec:     0,
+		Jsocr:   0,
+		Num:     0,
+		Lims:    port.NewCells(),
+		Prod:    port.NewCells(),
+		Msg:     &strings.Builder{},
 	}
 }
 func (d *Cfg) Clone() *Cfg {
@@ -161,6 +179,15 @@ func (d *Cfg) Clone() *Cfg {
 	c.Keep = d.Keep
 	c.Haveloc = d.Haveloc
 	port.CellsCopyInto(c.Lcl, d.Lcl)
+	c.Chunk = d.Chunk
+	c.Maxr = d.Maxr
+	c.Fetchr = d.Fetchr
+	c.Rec = d.Rec
+	c.Jsocr = d.Jsocr
+	c.Num = d.Num
+	port.CellsCopyInto(c.Lims, d.Lims)
+	port.CellsCopyInto(c.Prod, d.Prod)
+	c.Msg.WriteString(d.Msg.String())
 	return c
 }
 

@@ -25,7 +25,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 use crate::emon;
-use crate::engine::{Assets, ChunkCache, Config, Engine, Error, Furniture, HtmlAssets, HtmlOptions, JsonOptions, Model, OcrPolicy, OcrScope, Ocr, OcrPort, Options, Run};
+use crate::engine::{parse_options, ChunkCache, Engine, Error, HtmlAssets, HtmlOptions, JsonOptions, Model, Ocr, OcrPort, Run};
 use crate::plan::{self, Answer, Bitmaps, PlanError, Range, Replayer, Request, Transcript};
 use crate::port::{Bitmap, Cells};
 use std::cell::RefCell;
@@ -178,97 +178,6 @@ pub extern "C" fn emon_const(i: u32) -> i32 {
 
 // ------------------------------------------------------------------------------------------------ options
 
-struct Parsed {
-    opts: Options,
-    cfg: Config,
-    record: bool,
-    producer: Vec<(String, String)>,
-    js_ocr: bool,
-}
-
-// Limits are named as `Config::limits` kinds are numbered (`port::limit_spec`).
-fn limit_kind(name: &str) -> Option<i32> {
-    Some(match name {
-        "input-bytes" => 0,
-        "stream-bytes" => 1,
-        "total-bytes" => 2,
-        "objects" => 3,
-        "ref-depth" => 4,
-        "operators" => 5,
-        "form-depth" => 6,
-        "pattern-depth" => 7,
-        "pages" => 8,
-        "pixels" => 9,
-        "ocr-requests" => 10,
-        _ => return None,
-    })
-}
-
-// `key=value` lines: the settings of SPEC 13 by their names, the limits as `limit.NAME=N`, the loop's bounds, the ports the host has.
-fn parse_options(t: &str, chunk: usize) -> Result<Parsed, String> {
-    let mut p = Parsed { opts: Options::default(), cfg: Config::default(), record: false, producer: Vec::new(), js_ocr: false };
-    p.cfg.chunk_size = chunk;
-    let num = |k: &str, v: &str| -> Result<i32, String> { v.parse::<i32>().map_err(|_| format!("{} wants a number, not {:?}", k, v)) };
-    for line in t.lines().filter(|l| !l.is_empty()) {
-        let (k, v) = line.split_once('=').ok_or_else(|| format!("option {:?} has no value", line))?;
-        match k {
-            "locale" => p.opts.locale = Some(v.to_string()),
-            "ocr" => {
-                p.opts.ocr = match v {
-                    "always" => OcrPolicy::Always,
-                    "auto" => OcrPolicy::Auto,
-                    "never" => OcrPolicy::Never,
-                    _ => return Err("ocr is always, auto or never".to_string()),
-                }
-            }
-            "furniture" => {
-                p.opts.furniture = match v {
-                    "policy" => Furniture::Policy,
-                    "keep" => Furniture::Keep,
-                    "drop" => Furniture::Drop,
-                    _ => return Err("furniture is policy, keep or drop".to_string()),
-                }
-            }
-            "assets" => {
-                p.opts.assets = match v {
-                    "none" => Assets::None,
-                    "images" => Assets::Images,
-                    "figures" => Assets::Figures,
-                    _ => return Err("assets is none, images or figures".to_string()),
-                }
-            }
-            "asset-dpi" => p.opts.asset_dpi = num(k, v)?,
-            "asset-pixels" => p.opts.asset_pixels = num(k, v)?,
-            "asset-bytes" => p.opts.asset_bytes = num(k, v)?,
-            "assets-bytes" => p.opts.assets_bytes = num(k, v)?,
-            "asset-signatures" => p.opts.asset_signatures = v == "on",
-            "keep-evidence" => p.opts.keep_evidence = v == "1",
-            "ocr-scope" => {
-                p.opts.ocr_scope = match v {
-                    "full" => OcrScope::Full,
-                    "witness" => OcrScope::Witness,
-                    _ => return Err("ocr-scope is full or witness".to_string()),
-                }
-            }
-            "max-rounds" => p.cfg.max_rounds = num(k, v)?,
-            "fetch-rounds" => p.cfg.fetch_rounds = num(k, v)?,
-            "record" => p.record = v == "1",
-            "js-ocr" => p.js_ocr = v == "1",
-            _ => {
-                if let Some(n) = k.strip_prefix("limit.") {
-                    let kind = limit_kind(n).ok_or_else(|| format!("no limit named {}", n))?;
-                    p.cfg.limits.push((kind, num(k, v)?));
-                } else if let Some(n) = k.strip_prefix("producer.") {
-                    p.producer.push((n.to_string(), v.to_string()));
-                } else {
-                    return Err(format!("unknown option {}", k));
-                }
-            }
-        }
-    }
-    Ok(p)
-}
-
 // The same list as the drivers' `--html=`.
 fn parse_html(list: &str) -> Result<HtmlOptions, String> {
     let mut o = HtmlOptions::default();
@@ -312,21 +221,23 @@ impl Ocr for HostOcr {
 #[no_mangle]
 pub unsafe extern "C" fn emon_open(len: f64, chunk: u32, mode: u32, password_ptr: u32, password_len: u32, opts_ptr: u32, opts_len: u32) -> i32 {
     guard(|| {
-        let p = match parse_options(text(opts_ptr, opts_len), if chunk == 0 { 65536 } else { chunk as usize }) {
+        let mut p = match parse_options(text(opts_ptr, opts_len)) {
             Ok(p) => p,
             Err(m) => {
                 put_str(&format!("usage\n{}", m));
                 return -1;
             }
         };
+        // the chunk is the caller's argument (the browser's source decides it), not an option
+        p.config.chunk_size = if chunk == 0 { 65536 } else { chunk as usize };
         let password = if password_len > 0 { Some(bytes(password_ptr, password_len).to_vec()) } else { None };
         // an input longer than a `Src` can address is refused by the engine's own check against the LENGTH; `u32::MAX` stands for
         // every length that does not fit, which the check refuses too
         let ulen = if len > i32::MAX as f64 { i32::MAX as usize + 1 } else { len as usize };
-        let cache = ChunkCache::pushed(ulen, p.cfg.chunk_size);
-        let engine = Engine::new(p.cfg.clone());
+        let cache = ChunkCache::pushed(ulen, p.config.chunk_size);
+        let engine = Engine::new(p.config.clone());
         let idx = 0usize;
-        let run = match engine.start_pushed(idx, cache.clone(), password, &p.opts, mode == 1) {
+        let run = match engine.start_pushed(idx, cache.clone(), password, &p.options, mode == 1) {
             Ok(r) => r,
             Err(e) => return put_error(&e),
         };

@@ -8,6 +8,9 @@ public class Main {
             StringBuilder t = new StringBuilder();
             emon.Fuzzprobe.fzCase(b, chunk, t);
             return t.toString();
+        } catch (emon.Port.Breach b) {
+            // a limit breach is a typed payload and a NAMED outcome (SPEC 7.4, P10.10), the same line on every host: nothing reads a message
+            return "LIMIT-" + b.name();
         } catch (Throwable e) {
             return ("PANIC " + e).replace('\n', ' ').replace('\t', ' ');
         }

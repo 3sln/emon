@@ -89,6 +89,15 @@ public static class Enctx {
         public int Keep = 0;
         public int Haveloc = 0;
         public emon.Port.Cells Lcl = emon.Port.NewCells();
+        public int Chunk = 0;
+        public int Maxr = 0;
+        public int Fetchr = 0;
+        public int Rec = 0;
+        public int Jsocr = 0;
+        public int Num = 0;
+        public emon.Port.Cells Lims = emon.Port.NewCells();
+        public emon.Port.Cells Prod = emon.Port.NewCells();
+        public System.Text.StringBuilder Msg = new System.Text.StringBuilder();
         public Cfg() {
         }
         public Cfg Clone() {
@@ -105,6 +114,15 @@ public static class Enctx {
             c.Keep = this.Keep;
             c.Haveloc = this.Haveloc;
             emon.Port.CellsCopyInto(c.Lcl, this.Lcl);
+            c.Chunk = this.Chunk;
+            c.Maxr = this.Maxr;
+            c.Fetchr = this.Fetchr;
+            c.Rec = this.Rec;
+            c.Jsocr = this.Jsocr;
+            c.Num = this.Num;
+            emon.Port.CellsCopyInto(c.Lims, this.Lims);
+            emon.Port.CellsCopyInto(c.Prod, this.Prod);
+            c.Msg.Append(this.Msg.ToString());
             return c;
         }
     }

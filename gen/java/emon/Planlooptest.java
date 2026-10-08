@@ -790,48 +790,4 @@ public final class Planlooptest {
         tName(0, "render", Planloop.rtEmitName(e, Planloop.rtRender()), e);
         tName(0, "unsupported", Planloop.rtEmitName(f, Planloop.rtUnsupported()), f);
     }
-    public static int tCps(emon.Port.Cells c, byte[] b) {
-        // The bytes of `b` as code points.
-        int i = 0;
-        while (i < emon.Port.blobLen(b)) {
-            emon.Port.cellsPush(c, emon.Port.blobU8(b, i));
-            i += 1;
-        }
-        return 0;
-    }
-    public static int tBreach(int emonT, byte[] b, String name, int limit, int actual) {
-        // The message `b` is a limit breach: named `name`, the limit `limit`, the number reached `actual`.
-        emon.Port.Cells m = emon.Port.newCells();
-        emon.Planctx.Plan p = new emon.Planctx.Plan();
-        tCps(m, b);
-        emon.Testport.assertEq(Planloop.lbParse(m, p), 1, name);
-        emon.Testport.assertText(p.msg, name, name);
-        emon.Testport.assertEq(p.errLimit, limit, name);
-        emon.Testport.assertEq(p.errActual, actual, name);
-        return 0;
-    }
-    public static int tNotABreach(int emonT, byte[] b, String msg) {
-        emon.Port.Cells m = emon.Port.newCells();
-        emon.Planctx.Plan p = new emon.Planctx.Plan();
-        tCps(m, b);
-        emon.Testport.assertEq(Planloop.lbParse(m, p), 0, msg);
-        emon.Testport.assertText(p.msg, "", msg);
-        return 0;
-    }
-    public static void testALimitBreachsMessageIsNamedByItsWords() {
-        tBreach(0, emon.Testport.textBlob("the pixels limit is 268435456 and this input reached 300000000. Raise it with EMON_LIMIT_PIXELS, or find out why"), "pixels", 268435456, 300000000);
-        tBreach(0, emon.Testport.textBlob("the input bytes limit is 100 and this input reached 2000. Raise it"), "input-bytes", 100, 2000);
-        tBreach(0, emon.Testport.textBlob("the ocr requests limit is 7 and this input reached 8."), "ocr-requests", 7, 8);
-        tBreach(0, emon.Testport.textBlob("the form depth limit is 32 and this input reached 33"), "form-depth", 32, 33);
-    }
-    public static void testAnythingElseIsNotABreach() {
-        tNotABreach(0, emon.Testport.textBlob("index out of bounds"), "a panic of the host's");
-        tNotABreach(0, emon.Testport.textBlob(""), "nothing");
-        tNotABreach(0, emon.Testport.textBlob("the limit is 3"), "the name is missing");
-        tNotABreach(0, emon.Testport.textBlob("the pixels limit is x and this input reached 9"), "a limit that is not a number");
-        tNotABreach(0, emon.Testport.textBlob("the pixels limit is 5 and this input reached"), "no number reached");
-        tNotABreach(0, emon.Testport.textBlob("the pixels limit is 5 and then it reached 9"), "another sentence");
-        tNotABreach(0, emon.Testport.textBlob("the pixels limit is 99999999999 and this input reached 9"), "a number over 31 bits");
-        tNotABreach(0, emon.Testport.textBlob("pixels limit is 5 and this input reached 9"), "no 'the'");
-    }
 }

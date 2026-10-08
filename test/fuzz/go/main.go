@@ -17,6 +17,11 @@ import (
 func run(b []byte, chunk int32) (out string) {
 	defer func() {
 		if r := recover(); r != nil {
+			// a limit breach is a typed payload and a NAMED outcome (SPEC 7.4, P10.10), the same line on every host: nothing reads a message
+			if b, ok := r.(*port.Breach); ok {
+				out = "LIMIT-" + b.Name()
+				return
+			}
 			m := strings.NewReplacer("\n", " ", "\t", " ").Replace(fmt.Sprint(r))
 			out = "PANIC " + m
 		}

@@ -2,10 +2,10 @@
 ;; a unit wrote, checked and sorted by id; the answered set; the answers of a round, in any order of arrival and appended in id order; the transcript's
 ;; entries; the `bytes` round; the fetch planner; the schedule; the routing; every name the loop reports.
 (ns emon.planlooptest
-  (:require [emon.lang :refer [I32 Cells Text Blob fd]]
+  (:require [emon.lang :refer [I32 Cells Text fd]]
             [emon.planctx :refer [Plan]]
-            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text new-ctx test-t TestT Str text-blob]]
-            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop blob-len blob-u8]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text new-ctx test-t TestT Str]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.plan :refer [us-done us-requests us-need-bytes pk-render pk-decode pk-ocr pk-bytes pk-crop pk-decode-img ps-ok ps-failed ps-unsupported
                                rq-render rq-crop rq-decode rq-ocr rq-ocr-end rq-bytes rq-arg rq-decode-img an-render an-decode an-fail an-bytes an-status
                                rec-count rec-find]]
@@ -18,7 +18,7 @@
                                    act-done act-requests act-fetch act-miss act-error pp-ocr pp-render
                                    rt-none rt-decode rt-decode-img rt-ocr rt-render rt-unsupported rt-emit-name
                                    pl-reset pl-attempt pl-after pl-miss-round pl-fetch pl-offer pl-has pl-owed pl-commit pl-fold en-next pl-route
-                                   pl-unsupported pl-spans tx-round tx-req tx-ans tx-next fp-plan lb-parse]]
+                                   pl-unsupported pl-spans tx-round tx-req tx-ans tx-next fp-plan]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -789,48 +789,3 @@
     (t-name (test-t) "ocr" (rt-emit-name d (rt-ocr)) d)
     (t-name (test-t) "render" (rt-emit-name e (rt-render)) e)
     (t-name (test-t) "unsupported" (rt-emit-name f (rt-unsupported)) f)))
-
-;; ------------------------------------------------------------------ a limit breach caught as a panic
-
-(defn ^I32 t-cps [^Cells c ^Blob b]
-  (comment "The bytes of `b` as code points.")
-  (let [^:mut ^I32 i 0]
-    (while (< i (blob-len b))
-      (do (cells-push c (blob-u8 b i))
-          (set i (+ i 1))))
-    (return 0)))
-
-(defn ^I32 t-breach [^TestT emon-t ^Blob b ^Str name ^I32 limit ^I32 actual]
-  (comment "The message `b` is a limit breach: named `name`, the limit `limit`, the number reached `actual`.")
-  (let [^Cells m (new-cells)
-        ^Plan p (new-ctx Plan)]
-    (t-cps m b)
-    (assert-eq (lb-parse m p) 1 name)
-    (assert-text (fd p msg) name name)
-    (assert-eq (fd p err-limit) limit name)
-    (assert-eq (fd p err-actual) actual name)
-    (return 0)))
-
-(defn ^I32 t-not-a-breach [^TestT emon-t ^Blob b ^Str msg]
-  (let [^Cells m (new-cells)
-        ^Plan p (new-ctx Plan)]
-    (t-cps m b)
-    (assert-eq (lb-parse m p) 0 msg)
-    (assert-text (fd p msg) "" msg)
-    (return 0)))
-
-(deftest test-a-limit-breachs-message-is-named-by-its-words
-  (t-breach (test-t) (text-blob "the pixels limit is 268435456 and this input reached 300000000. Raise it with EMON_LIMIT_PIXELS, or find out why") "pixels" 268435456 300000000)
-  (t-breach (test-t) (text-blob "the input bytes limit is 100 and this input reached 2000. Raise it") "input-bytes" 100 2000)
-  (t-breach (test-t) (text-blob "the ocr requests limit is 7 and this input reached 8.") "ocr-requests" 7 8)
-  (t-breach (test-t) (text-blob "the form depth limit is 32 and this input reached 33") "form-depth" 32 33))
-
-(deftest test-anything-else-is-not-a-breach
-  (t-not-a-breach (test-t) (text-blob "index out of bounds") "a panic of the host's")
-  (t-not-a-breach (test-t) (text-blob "") "nothing")
-  (t-not-a-breach (test-t) (text-blob "the limit is 3") "the name is missing")
-  (t-not-a-breach (test-t) (text-blob "the pixels limit is x and this input reached 9") "a limit that is not a number")
-  (t-not-a-breach (test-t) (text-blob "the pixels limit is 5 and this input reached") "no number reached")
-  (t-not-a-breach (test-t) (text-blob "the pixels limit is 5 and then it reached 9") "another sentence")
-  (t-not-a-breach (test-t) (text-blob "the pixels limit is 99999999999 and this input reached 9") "a number over 31 bits")
-  (t-not-a-breach (test-t) (text-blob "pixels limit is 5 and this input reached 9") "no 'the'"))

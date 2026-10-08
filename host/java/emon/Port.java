@@ -525,10 +525,32 @@ public final class Port {
     }
 
     // ---------------------------------------------------------- limits
+    //
+    // THE TABLES OF LIMITS AND SETTINGS ARE KIN'S (`emon.limits`, P10.10): a name, a default and a range are read from it. Overrides are
+    // the platform's (D942): none here yet; the Engine layer adopts a process-wide table behind a lock, as Go does.
+
+    private static String kinName(int n, java.util.function.IntUnaryOperator ch) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            sb.appendCodePoint(ch.applyAsInt(i));
+        }
+        return sb.toString();
+    }
+
+    // The name of limit `kind` as kin's table spells it (`input-bytes`); `unknown` for a kind it has no row for.
+    public static String limitName(int kind) {
+        String s = kinName(Limits.lmNameLen(kind), i -> Limits.lmNameCh(kind, i));
+        return s.isEmpty() ? "unknown" : s;
+    }
+
+    // `input-bytes` is `EMON_LIMIT_INPUT_BYTES`.
+    private static String envName(String prefix, String name) {
+        return prefix + name.toUpperCase(java.util.Locale.ROOT).replace('-', '_');
+    }
 
     // @kin:link:form:limit-of: {:template "emon.Port.limitOf({0})" :arity 1}
     public static int limitOf(int kind) {
-        String v = System.getenv("EMON_LIMIT_" + limitName(kind));
+        String v = System.getenv(envName("EMON_LIMIT_", limitName(kind)));
         if (v != null) {
             try {
                 return Integer.parseInt(v);
@@ -536,22 +558,40 @@ public final class Port {
                 // fall through to the default, as the other hosts do
             }
         }
-        return limitDefault(kind);
+        return Limits.lmDefault(kind);
+    }
+
+    // THE PAYLOAD OF A BREACH (P10.10, D941): which limit, the bound in force and the number the input reached. A host catches it by its TYPE and
+    // names the error from `name()`; nothing reads the words of the message, which is for a person.
+    public static final class Breach extends RuntimeException {
+        public final int kind;
+        public final int limit;
+        public final int actual;
+
+        public Breach(int kind, int limit, int actual) {
+            super("the " + limitName(kind).replace('-', ' ') + " limit is " + limit
+                + " and this input reached " + actual + ". Raise it with "
+                + envName("EMON_LIMIT_", limitName(kind)) + ", or find out why the input needs that much -- a limit is a"
+                + " bound on emon, not a statement about the document.");
+            this.kind = kind;
+            this.limit = limit;
+            this.actual = actual;
+        }
+
+        public String name() {
+            return limitName(kind);
+        }
     }
 
     // @kin:link:form:limit-breach: {:template "emon.Port.limitBreach({0}, {1})" :arity 2}
     public static int limitBreach(int kind, int actual) {
-        String name = limitName(kind);
-        throw new RuntimeException(
-            "the " + name.toLowerCase().replace('_', ' ') + " limit is " + limitOf(kind)
-            + " and this input reached " + actual + ". Raise it with EMON_LIMIT_"
-            + name + ", or find out why the input needs that much -- a limit is a"
-            + " bound on emon, not a statement about the document.");
+        throw new Breach(kind, limitOf(kind), actual);
     }
 
     // @kin:link:form:setting-of: {:template "emon.Port.settingOf({0})" :arity 1}
     public static int settingOf(int kind) {
-        String v = System.getenv("EMON_SETTING_" + settingName(kind));
+        String name = kinName(Limits.sgNameLen(kind), i -> Limits.sgNameCh(kind, i));
+        String v = System.getenv(envName("EMON_SETTING_", name.isEmpty() ? "unknown" : name));
         if (v != null) {
             try {
                 return Integer.parseInt(v);
@@ -559,57 +599,7 @@ public final class Port {
                 // fall through to the default
             }
         }
-        return settingDefault(kind);
-    }
-
-    private static String limitName(int kind) {
-        switch (kind) {
-            case 0: return "INPUT_BYTES";
-            case 1: return "STREAM_BYTES";
-            case 2: return "TOTAL_BYTES";
-            case 3: return "OBJECTS";
-            case 4: return "REF_DEPTH";
-            case 5: return "OPERATORS";
-            case 6: return "FORM_DEPTH";
-            case 7: return "PATTERN_DEPTH";
-            case 8: return "PAGES";
-            case 9: return "PIXELS";
-            case 10: return "OCR_REQUESTS";
-            default: return "UNKNOWN";
-        }
-    }
-
-    private static int limitDefault(int kind) {
-        switch (kind) {
-            case 0: return 1073741824;
-            case 1: return 268435456;
-            case 2: return 1073741824;
-            case 3: return 10000000;
-            case 4: return 64;
-            case 5: return 50000000;
-            case 6: return 32;
-            case 7: return 8;
-            case 8: return 100000;
-            case 9: return 268435456;
-            case 10: return 100000;
-            default: return 0;
-        }
-    }
-
-    private static String settingName(int kind) {
-        switch (kind) {
-            case 0: return "OCR_MODE";
-            case 1: return "TASKS";
-            default: return "UNKNOWN";
-        }
-    }
-
-    private static int settingDefault(int kind) {
-        switch (kind) {
-            case 0: return 0;
-            case 1: return 0;
-            default: return 0;
-        }
+        return Limits.sgDefault(kind);
     }
 
     // ------------------------------------------------------------- Crypto

@@ -1,0 +1,110 @@
+;; THE TABLES OF LIMITS AND SETTINGS (P10.10; D396, D940; SPEC 7.4): every bound a kin source reads through `limit-of`, and every choice it reads
+;; through `setting-of`, with its NAME, its DEFAULT and its RANGE, once. A host's `limit-of` is `override, then the environment, then this table's
+;; default` and nothing more; it used to carry the table (`limit_spec`, in four spellings) and the names were parsed back out of an English message.
+;;
+;; THIS MODULE IS PURE (it refers no port form), which is what lets Go's `port` package import it: a module that writes text refers `text-ascii`, so
+;; the generated package imports `port`, and `port` could not import it back (D405). The writing and parsing of names is `emon.config`'s.
+;;
+;; A KIND IS A ROW'S INDEX. The numbering is the contract the sources already use (`(limit-of 3)` is OBJECTS) and `kin/porttest.kin` still asserts
+;; it on every host. A name is the spelling `limit.NAME` takes in an options text and the host's error reports (`input-bytes`); the environment
+;; variable is `EMON_LIMIT_` and the name in capitals with `_` for `-`. A kind not in the table has default 0 and no name (a host reports `unknown`).
+;;
+;; A row of `lm-rows` is [default lo hi name-offset name-length]; `lm-chars` is every name back to back, as code points. The names and the rows
+;; were written by a script and `kin/configtest.kin` holds each one to its literal.
+(ns emon.limits
+  (:require [emon.lang :refer [I32]]
+            [kin.lang :refer [defn defdata return if or < >= + comment]]))
+
+(defdata ^:pub lm-chars
+  :emitter kin.lang/flat-array
+  :data [105 110 112 117 116 45 98 121 116 101 115 115 116 114 101 97
+         109 45 98 121 116 101 115 116 111 116 97 108 45 98 121 116
+         101 115 111 98 106 101 99 116 115 114 101 102 45 100 101 112
+         116 104 111 112 101 114 97 116 111 114 115 102 111 114 109 45
+         100 101 112 116 104 112 97 116 116 101 114 110 45 100 101 112
+         116 104 112 97 103 101 115 112 105 120 101 108 115 111 99 114
+         45 114 101 113 117 101 115 116 115]
+  :accessors {^I32 lm-char-at [^I32 ignored ^I32 i]})
+
+(defdata ^:pub lm-rows
+  :emitter kin.lang/flat-array
+  :stride 5
+  :data [1073741824 0 2147483647 0 11     ;; 0  input-bytes
+         268435456 0 2147483647 11 12     ;; 1  stream-bytes
+         1073741824 0 2147483647 23 11    ;; 2  total-bytes
+         10000000 0 2147483647 34 7       ;; 3  objects
+         64 0 2147483647 41 9             ;; 4  ref-depth
+         50000000 0 2147483647 50 9       ;; 5  operators
+         32 0 2147483647 59 10            ;; 6  form-depth
+         8 0 2147483647 69 13             ;; 7  pattern-depth
+         100000 0 2147483647 82 5         ;; 8  pages
+         268435456 0 2147483647 87 6      ;; 9  pixels
+         100000 0 2147483647 93 12]       ;; 10 ocr-requests
+  :accessors {^I32 lm-row-count [^I32 ignored]
+              ^I32 lm-row-at [^I32 ignored ^I32 row ^I32 field]})
+
+;; A SETTING IS A CHOICE AND NOT A BOUND (`setting-of`): [default lo hi name-offset name-length]. OCR_MODE 0 auto / 1 always / 2 never (SPEC 17.1 is
+;; still open, so `auto`), TASKS 0 serial / 1 parallel (D022: serial is the default).
+(defdata ^:pub sg-chars
+  :emitter kin.lang/flat-array
+  :data [111 99 114 45 109 111 100 101 116 97 115 107 115]
+  :accessors {^I32 sg-char-at [^I32 ignored ^I32 i]})
+
+(defdata ^:pub sg-rows
+  :emitter kin.lang/flat-array
+  :stride 5
+  :data [0 0 2 0 8                        ;; 0  ocr-mode
+         0 0 1 8 5]                       ;; 1  tasks
+  :accessors {^I32 sg-row-count [^I32 ignored]
+              ^I32 sg-row-at [^I32 ignored ^I32 row ^I32 field]})
+
+(defn ^:pub ^I32 lm-count []
+  (return (lm-row-count 0)))
+
+(defn ^:pub ^I32 lm-default [^I32 kind]
+  (comment "The limit's default; 0 for a kind not in the table.")
+  (if (or (< kind 0) (>= kind (lm-row-count 0))) (return 0))
+  (return (lm-row-at 0 kind 0)))
+
+(defn ^:pub ^I32 lm-lo [^I32 kind]
+  (if (or (< kind 0) (>= kind (lm-row-count 0))) (return 0))
+  (return (lm-row-at 0 kind 1)))
+
+(defn ^:pub ^I32 lm-hi [^I32 kind]
+  (if (or (< kind 0) (>= kind (lm-row-count 0))) (return 0))
+  (return (lm-row-at 0 kind 2)))
+
+(defn ^:pub ^I32 lm-name-len [^I32 kind]
+  (comment "The length of the limit's name, 0 for a kind not in the table.")
+  (if (or (< kind 0) (>= kind (lm-row-count 0))) (return 0))
+  (return (lm-row-at 0 kind 4)))
+
+(defn ^:pub ^I32 lm-name-ch [^I32 kind ^I32 i]
+  (comment "The i-th code point of the limit's name; -1 past its end or for a kind not in the table.")
+  (if (or (< kind 0) (>= kind (lm-row-count 0))) (return -1))
+  (if (or (< i 0) (>= i (lm-row-at 0 kind 4))) (return -1))
+  (return (lm-char-at 0 (+ (lm-row-at 0 kind 3) i))))
+
+(defn ^:pub ^I32 sg-count []
+  (return (sg-row-count 0)))
+
+(defn ^:pub ^I32 sg-default [^I32 kind]
+  (if (or (< kind 0) (>= kind (sg-row-count 0))) (return 0))
+  (return (sg-row-at 0 kind 0)))
+
+(defn ^:pub ^I32 sg-lo [^I32 kind]
+  (if (or (< kind 0) (>= kind (sg-row-count 0))) (return 0))
+  (return (sg-row-at 0 kind 1)))
+
+(defn ^:pub ^I32 sg-hi [^I32 kind]
+  (if (or (< kind 0) (>= kind (sg-row-count 0))) (return 0))
+  (return (sg-row-at 0 kind 2)))
+
+(defn ^:pub ^I32 sg-name-len [^I32 kind]
+  (if (or (< kind 0) (>= kind (sg-row-count 0))) (return 0))
+  (return (sg-row-at 0 kind 4)))
+
+(defn ^:pub ^I32 sg-name-ch [^I32 kind ^I32 i]
+  (if (or (< kind 0) (>= kind (sg-row-count 0))) (return -1))
+  (if (or (< i 0) (>= i (sg-row-at 0 kind 4))) (return -1))
+  (return (sg-char-at 0 (+ (sg-row-at 0 kind 3) i))))

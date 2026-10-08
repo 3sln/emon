@@ -973,11 +973,22 @@ func TestAPanicInTheDocumentUnitIsTheEnginesNamedError(t *testing.T) {
 	if r.err == nil || r.err.Kind != ErrInternal || !strings.Contains(r.err.Message, "overflow") {
 		t.Errorf("a panic in the document unit is %+v, wanted an internal error", r.err)
 	}
-	r = finishGuarded(func() outcome {
-		panic("the objects limit is 10 and this input reached 11. Raise it with EMON_LIMIT_OBJECTS")
+	// a breach is a typed payload (kind, limit, actual): the bound in force is the override's, the name is kin's table's
+	port.WithLimits([][2]int32{{3, 10}}, func() {
+		r = finishGuarded(func() outcome {
+			port.LimitBreach(3, 11)
+			return outcome{}
+		})
 	})
 	if r.err == nil || r.err.Kind != ErrLimit || r.err.Status != "objects" || r.err.Limit != 10 || r.err.Actual != 11 {
 		t.Errorf("a limit breach in the document unit is %+v, wanted the named objects limit", r.err)
+	}
+	// the words of a message are nothing: a panic that only says so is internal
+	r = finishGuarded(func() outcome {
+		panic("the objects limit is 10 and this input reached 11. Raise it with EMON_LIMIT_OBJECTS")
+	})
+	if r.err == nil || r.err.Kind != ErrInternal {
+		t.Errorf("a message that reads like a breach is %+v, wanted an internal error", r.err)
 	}
 	if ok := finishGuarded(func() outcome { return outcome{} }); ok.err != nil {
 		t.Errorf("a document unit that does not panic gave %+v", ok.err)

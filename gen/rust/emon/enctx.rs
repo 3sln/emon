@@ -99,6 +99,15 @@ pub struct Cfg {
     pub keep: i32,
     pub haveloc: i32,
     pub lcl: crate::port::Cells,
+    pub chunk: i32,
+    pub maxr: i32,
+    pub fetchr: i32,
+    pub rec: i32,
+    pub jsocr: i32,
+    pub num: i32,
+    pub lims: crate::port::Cells,
+    pub prod: crate::port::Cells,
+    pub msg: String,
 }
 impl Cfg {
     pub fn new() -> Cfg {
@@ -115,6 +124,15 @@ impl Cfg {
             keep: 0,
             haveloc: 0,
             lcl: crate::port::Cells::new(),
+            chunk: 0,
+            maxr: 0,
+            fetchr: 0,
+            rec: 0,
+            jsocr: 0,
+            num: 0,
+            lims: crate::port::Cells::new(),
+            prod: crate::port::Cells::new(),
+            msg: String::new(),
         }
     }
 }

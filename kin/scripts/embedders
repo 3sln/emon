@@ -229,7 +229,9 @@
 
 (def go-only
   "Go surface with no Rust twin, and why: [kind Type member]."
-  {[:func "ReaderAtInput" nil] "SPEC 13.1's Go form: an `io.ReaderAt` and a size (an *os.File and its Stat size, an *io.SectionReader); Rust's twin is `Input::new(impl ByteSource)`"
+  {[:func "ParseOptions" nil] "the options grammar, parsed by kin (P10.10): Rust's twin is the free function `parse_options` at the crate root (this surface reads types, not free functions)"
+   [:func "IsOptionKey" nil] "whether a driver's `--name=` is a key of kin's options grammar (P10.10): Rust's twin is the free function `is_option_key`"
+   [:func "ReaderAtInput" nil] "SPEC 13.1's Go form: an `io.ReaderAt` and a size (an *os.File and its Stat size, an *io.SectionReader); Rust's twin is `Input::new(impl ByteSource)`"
    [:type "SliceSource" nil] "Rust's `ByteSource::as_slice` default method; Go's optional interface"
    [:type "ErrorKind" nil] "the tag of Go's flattened Error (Rust: the enum's variants)"
    [:type "AttrKind" nil] "the tag of Go's Attr (Rust: the enum's variants)"

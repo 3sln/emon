@@ -84,6 +84,9 @@ type PlanStats struct {
 type PlanError struct {
 	Name string
 	Msg  string
+	// Limited is true for the two named limits, whose bound and the number reached are kin's (`err-limit`, `err-actual`), not words to parse.
+	Limited      bool
+	Limit, Actual int32
 }
 
 func (e *PlanError) Error() string { return e.Name + ": " + e.Msg }

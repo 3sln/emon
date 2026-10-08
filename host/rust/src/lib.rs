@@ -32,7 +32,7 @@ pub mod wasm;
 #[cfg(feature = "tesseract")]
 pub mod tess;
 
-pub use engine::{Asset, AssetFile, AssetUse, Assets, Attr, Config, Dropped, Engine, Error, Furniture, HtmlAssets, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, Ocr, OcrPolicy, OcrPort, OcrScope, Options, Output, Page, Region, RunStats, Transcript};
+pub use engine::{is_option_key, parse_options, Asset, AssetFile, AssetUse, Assets, Attr, Config, Dropped, Engine, Error, Furniture, HtmlAssets, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, Ocr, OcrPolicy, OcrPort, OcrScope, Options, Output, Page, Parsed, Region, RunStats, Transcript};
 pub use pdfimg::{CodecFail, PdfCodecs, Pix};
 pub use render::{Clip, KindMux, RenderError, RenderFulfiller, RenderInput, RenderRequest, Renderer};
 pub use source::{ByteSource, BytesSource, Input, Inputs, SeekSource, SpoolSource};

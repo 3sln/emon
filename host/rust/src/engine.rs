@@ -172,6 +172,15 @@ impl OcrPolicy {
             OcrPolicy::Always => 2,
         }
     }
+
+    // The policy of kin's code (what a parsed `Cfg` holds).
+    fn from_code(code: i32) -> OcrPolicy {
+        match code {
+            0 => OcrPolicy::Never,
+            1 => OcrPolicy::Auto,
+            _ => OcrPolicy::Always,
+        }
+    }
 }
 
 // THE `Ocr` PORT (SPEC 7.2; D008, D095, D211): fulfils one `ocr` request. A host brings its engine (Tesseract through
@@ -217,6 +226,14 @@ impl Assets {
             Assets::Figures => 2,
         }
     }
+
+    fn from_level(level: i32) -> Assets {
+        match level {
+            1 => Assets::Images,
+            2 => Assets::Figures,
+            _ => Assets::None,
+        }
+    }
 }
 
 // SPEC 13's `furniture` (D017, D153): `Policy` drops what the output already says and keeps the rest as asides, `Keep` leaves
@@ -235,6 +252,14 @@ impl Furniture {
             Furniture::Policy => 0,
             Furniture::Keep => 1,
             Furniture::Drop => 2,
+        }
+    }
+
+    fn from_mode(mode: i32) -> Furniture {
+        match mode {
+            1 => Furniture::Keep,
+            2 => Furniture::Drop,
+            _ => Furniture::Policy,
         }
     }
 }
@@ -265,9 +290,10 @@ pub struct Options {
     pub no_retarget: bool,
 }
 
+// SPEC 13's defaults are kin's (`emon.config`'s `cf-defaults`): the default Options are the parse of the empty text.
 impl Default for Options {
     fn default() -> Options {
-        Options { locale: None, ocr: OcrPolicy::Always, assets: Assets::None, asset_dpi: 150, asset_pixels: 4_194_304, asset_bytes: 4_194_304, assets_bytes: 33_554_432, asset_signatures: false, furniture: Furniture::Policy, keep_evidence: false, ocr_scope: OcrScope::Full, no_retarget: false }
+        options_of(&parse_cfg("").expect("the empty options text parses"))
     }
 }
 
@@ -285,6 +311,14 @@ impl OcrScope {
         match self {
             OcrScope::Full => 0,
             OcrScope::Witness => 1,
+        }
+    }
+
+    fn from_code(code: i32) -> OcrScope {
+        if code == 1 {
+            OcrScope::Witness
+        } else {
+            OcrScope::Full
         }
     }
 }
@@ -317,8 +351,91 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Config {
-        Config { limits: Vec::new(), chunk_size: 65536, simulate_async: false, max_rounds: plan::MAX_ROUNDS, fetch_rounds: plan::FETCH_ROUNDS, ocr: None, renderer: None, pdf_codecs: None }
+        config_of(&parse_cfg("").expect("the empty options text parses"))
     }
+}
+
+// ------------------------------------------------------------------------------------------------ options from text (P10.10)
+//
+// ONE `key=value` GRAMMAR, PARSED BY KIN (`emon.config`) INTO A `Cfg`: the browser binding, the drivers, and later the C binding and the pod say
+// what a conversion is asked to do in the same text. `Options` and `Config` stay the idiomatic typed structs; these functions are the thin wrapper
+// that reads one back out of the `Cfg` kin filled. A key's name, a word's spelling, a default and a range are not known here.
+
+// What a text asks for: the Options and the Config (limits, chunk size, the loop's bounds), and the browser binding's own switches.
+#[derive(Debug, Clone)]
+pub struct Parsed {
+    pub options: Options,
+    pub config: Config,
+    // `record=1`: keep a transcript of the conversion
+    pub record: bool,
+    // `js-ocr=1`: the host owes the `ocr` requests
+    pub js_ocr: bool,
+    // `producer.NAME=VALUE`, in order: what the transcript says produced it
+    pub producer: Vec<(String, String)>,
+}
+
+fn cells_of_str(s: &str) -> Cells {
+    let mut c = Cells::new();
+    for ch in s.chars() {
+        cells_push(&mut c, ch as i32);
+    }
+    c
+}
+
+fn string_of_cells(c: &Cells, from: i32, n: i32) -> String {
+    (from..from + n).map(|i| char::from_u32(cells_at(c, i) as u32).unwrap_or('\u{FFFD}')).collect()
+}
+
+fn parse_cfg(text: &str) -> Result<Cfg, String> {
+    let mut t = cells_of_str(text);
+    let mut c = Cfg::new();
+    if crate::emon::config::cf_parse(&mut t, &mut c) != 0 {
+        return Err(c.msg);
+    }
+    Ok(c)
+}
+
+fn options_of(c: &Cfg) -> Options {
+    Options {
+        locale: if c.haveloc == 1 { Some(string_of_cells(&c.lcl, 0, cells_len(&c.lcl))) } else { None },
+        ocr: OcrPolicy::from_code(c.ocr),
+        assets: Assets::from_level(c.level),
+        asset_dpi: c.dpi,
+        asset_pixels: c.pixels,
+        asset_bytes: c.abyte,
+        assets_bytes: c.tbyte,
+        asset_signatures: c.sigs != 0,
+        furniture: Furniture::from_mode(c.furn),
+        keep_evidence: c.keep != 0,
+        ocr_scope: OcrScope::from_code(c.scope),
+        no_retarget: false,
+    }
+}
+
+fn config_of(c: &Cfg) -> Config {
+    let limits = (0..cells_len(&c.lims) / 2).map(|i| (cells_at(&c.lims, 2 * i), cells_at(&c.lims, 2 * i + 1))).collect();
+    Config { limits, chunk_size: c.chunk as usize, simulate_async: false, max_rounds: c.maxr, fetch_rounds: c.fetchr, ocr: None, renderer: None, pdf_codecs: None }
+}
+
+// `key=value` lines, parsed by kin: the settings of SPEC 13 by their names, `limit.NAME=N` for the limits, the loop's bounds, and the ports the
+// host has. An Err is the sentence a driver prints after `usage`.
+pub fn parse_options(text: &str) -> Result<Parsed, String> {
+    let c = parse_cfg(text)?;
+    let mut producer = Vec::new();
+    let mut at = 0;
+    while at < cells_len(&c.prod) {
+        let (kl, vl) = (cells_at(&c.prod, at), cells_at(&c.prod, at + 1));
+        producer.push((string_of_cells(&c.prod, at + 2, kl), string_of_cells(&c.prod, at + 2 + kl, vl)));
+        at += 2 + kl + vl;
+    }
+    Ok(Parsed { options: options_of(&c), config: config_of(&c), record: c.rec != 0, js_ocr: c.jsocr != 0, producer })
+}
+
+// Whether `name` (a driver's `--name=`) is a key of the grammar, which kin owns.
+pub fn is_option_key(name: &str) -> bool {
+    let mut t = cells_of_str(name);
+    let n = cells_len(&t);
+    crate::emon::config::cf_is_key(&mut t, 0, n) == 1
 }
 
 // JSON options (SPEC 4): the indented form or the compact one.
@@ -1214,24 +1331,20 @@ fn status_name(input: usize, status: i32) -> Error {
     }
 }
 
-// A kin limit breach is a panic whose message is `port::limit_breach`'s: kin names it (`lb-parse`, interim until P10.10's typed payload).
-fn panic_error(msg: String) -> Error {
-    let mut cells = Cells::new();
-    for ch in msg.chars() {
-        cells_push(&mut cells, ch as i32);
+// A kin limit breach unwinds with a `port::LimitBreach` (kind, limit, actual), caught by its type; its name is the table's in kin (`emon.limits`). Any
+// other panic is `internal`, with its message.
+fn panic_error(p: Box<dyn std::any::Any + Send>) -> Error {
+    if let Some(b) = p.downcast_ref::<port::LimitBreach>() {
+        return Error::Limit { name: b.name(), limit: b.limit as i64, actual: b.actual as i64 };
     }
-    let mut p = crate::emon::planctx::Plan::new();
-    if crate::emon::planloop::lb_parse(&mut cells, &mut p) == 1 {
-        return Error::Limit { name: p.msg, limit: p.err_limit as i64, actual: p.err_actual as i64 };
-    }
-    Error::Internal(msg)
+    Error::Internal(panic_message(p))
 }
 
 // The document unit under `catch_unwind`: what a panic in it becomes is what a panic in a page unit becomes (`panic_error`).
 fn finish_guarded(f: impl FnOnce() -> Outcome) -> Outcome {
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(o) => o,
-        Err(p) => Outcome::Failed(panic_error(panic_message(p))),
+        Err(p) => Outcome::Failed(panic_error(p)),
     }
 }
 
@@ -1895,7 +2008,7 @@ impl Run {
                             if view.missed() {
                                 plan::UNIT_NEED_BYTES
                             } else {
-                                self.outcome = Outcome::Failed(panic_error(panic_message(p)));
+                                self.outcome = Outcome::Failed(panic_error(p));
                                 plan::UNIT_DONE
                             }
                         }
@@ -1936,7 +2049,7 @@ impl Run {
                             if view.missed() {
                                 plan::UNIT_NEED_BYTES
                             } else {
-                                self.outcome = Outcome::Failed(panic_error(panic_message(p)));
+                                self.outcome = Outcome::Failed(panic_error(p));
                                 plan::UNIT_DONE
                             }
                         }
@@ -1975,7 +2088,7 @@ impl Run {
                             plan::UNIT_DONE
                         }
                         Err(p) => {
-                            self.failed = Some(panic_error(panic_message(p)));
+                            self.failed = Some(panic_error(p));
                             plan::UNIT_DONE
                         }
                     }
@@ -2039,7 +2152,7 @@ impl Run {
                             }
                         }
                         Err(p) => {
-                            self.failed = Some(panic_error(panic_message(p)));
+                            self.failed = Some(panic_error(p));
                             plan::UNIT_DONE
                         }
                     }
@@ -2612,9 +2725,21 @@ mod finish_guard_tests {
             Outcome::Failed(Error::Internal(m)) => assert!(m.contains("overflow")),
             _ => panic!("a panic in the document unit is not an internal error"),
         }
-        match finish_guarded(|| panic!("the objects limit is 10 and this input reached 11. Raise it with EMON_LIMIT_OBJECTS")) {
+        // a breach is a typed payload (kind, limit, actual): the bound in force is the override's, the name is kin's table's
+        let breached = port::with_limits(&[(3, 10)], || {
+            finish_guarded(|| {
+                port::limit_breach(3, 11);
+                Outcome::None
+            })
+        });
+        match breached {
             Outcome::Failed(Error::Limit { name, limit, actual }) => assert_eq!((name.as_str(), limit, actual), ("objects", 10, 11)),
             _ => panic!("a limit breach in the document unit is not a named limit error"),
+        }
+        // the words of a message are nothing: a panic that only says so is `internal`
+        match finish_guarded(|| panic!("the objects limit is 10 and this input reached 11. Raise it with EMON_LIMIT_OBJECTS")) {
+            Outcome::Failed(Error::Internal(_)) => {}
+            _ => panic!("a message is not a breach"),
         }
         assert!(matches!(finish_guarded(|| Outcome::None), Outcome::None));
     }

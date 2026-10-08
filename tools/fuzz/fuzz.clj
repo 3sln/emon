@@ -237,15 +237,8 @@
 
 (defn panic? [s] (and s (str/starts-with? s "PANIC")))
 
-(defn limit-of-panic
-  "A kin limit breach is a NAMED outcome (SPEC 7.4), not a panic: `PANIC the stream bytes limit is N and ...` is
-   `LIMIT-stream-bytes`, whatever the host's place in the code."
-  [s]
-  (when (panic? s)
-    (when-let [[_ nm] (re-find #"^PANIC the (.+?) limit is \d+ and this input reached" s)]
-      (str "LIMIT-" (str/replace nm " " "-")))))
-
-(defn norm-line [s] (or (limit-of-panic s) s))
+;; A kin limit breach is a NAMED outcome (SPEC 7.4), not a panic. Each host's probe driver catches the typed payload
+;; (kind, limit, actual) and writes `LIMIT-<name>`, the name from kin's table (`emon.limits`): nothing here reads a message (P10.10).
 
 (defn status-of [line] (first (str/split (or line "") #" ")))
 
@@ -260,8 +253,7 @@
         (:crash v) (add! [:crash h (:crash v)])
         (= "IOERROR" (:mem v)) (add! [:crash h "IOERROR"])
         :else
-        (let [{:keys [mem async]} v
-              mem (norm-line mem) async (norm-line async)]
+        (let [{:keys [mem async]} v]
           (when (panic? mem) (add! [:panic h (str "mem " mem)]))
           ;; a panic (or a limit breach) in an async round that MISSED is a miss, never reported (D058, SPEC 13.1): the probe's
           ;; loop is kin's, so the panic reaches the driver whole. It is the same panic as the memory run's when it is real,
@@ -271,7 +263,7 @@
                      (not (and (str/starts-with? async "LIMIT-") (not (str/starts-with? mem "LIMIT-")))))
             (add! [:async h (str "memory `" mem "` vs async `" async "`")])))))
     (let [clean (for [[h v] by-host
-                      :let [mem (norm-line (:mem v))]
+                      :let [mem (:mem v)]
                       :when (and (:mem v) (not (panic? mem)) (not= "IOERROR" mem))]
                   [h mem])]
       (when (> (count (distinct (map second clean))) 1)
@@ -423,16 +415,16 @@
             (swap! bad inc)
             (println (str "  FAIL selftest: `" k "` judged " (pr-str got) ", wanted " (pr-str (want k)))))))
       ;; a kin limit breach is a named outcome, not a panic; a panic with a place is still a panic
-      (let [lim (fn [s] (norm-line s))]
-        (when (not= "LIMIT-stream-bytes" (lim "PANIC the stream bytes limit is 33554432 and this input reached 40000000. Raise it with EMON_LIMIT_STREAM_BYTES at emon/pdffilter.rs:80"))
-          (swap! bad inc) (println "  FAIL selftest: a limit breach is not recognised"))
+      (do
+        (when (seq (failures {"A" {:mem "LIMIT-stream-bytes" :async "LIMIT-stream-bytes"} "B" {:mem "LIMIT-stream-bytes" :async "LIMIT-stream-bytes"}}))
+          (swap! bad inc) (println "  FAIL selftest: a limit breach named alike on two hosts is reported"))
+        (when (empty? (failures {"A" {:mem "LIMIT-stream-bytes"} "B" {:mem "LIMIT-pixels"}}))
+          (swap! bad inc) (println "  FAIL selftest: a limit breach that names a different limit on two hosts is not reported"))
         ;; a panic or limit breach in an async round that missed is a miss (D058, D388): the probe's async line alone is not judged for it
-        (when (seq (failures {"A" {:mem "ok 1" :async "PANIC the stream bytes limit is 1 and this input reached 2. x"}}))
+        (when (seq (failures {"A" {:mem "ok 1" :async "LIMIT-stream-bytes"}}))
           (swap! bad inc) (println "  FAIL selftest: a limit breach in a missed async round is reported"))
-        (when (seq (failures {"A" {:mem "ok 1" :async "PANIC attempt to add with overflow at emon/x.rs:1"}}))
-          (swap! bad inc) (println "  FAIL selftest: a panic in a missed async round is reported"))
-        (when (limit-of-panic "PANIC attempt to add with overflow at emon/x.rs:1")
-          (swap! bad inc) (println "  FAIL selftest: an overflow is taken for a limit breach")))
+        (when (empty? (failures {"A" {:mem "ok 1" :async "PANIC attempt to add with overflow at emon/x.rs:1"}}))
+          (swap! bad inc) (println "  FAIL selftest: a panic in a missed async round is not reported")))
       (let [ctx {:hosts hosts :chunk 512 :timeout-ms 1500 :env nil}
             mn (minimize ctx (.getBytes "aaaaaaaaXbbbbbbbbbbbbbbbbbbbbbbbbcccc" "UTF-8")
                          (sorted-set "panic:A:mem" "panic:B:mem" "panic:A:async" "panic:B:async") 60000)]
@@ -557,7 +549,7 @@
                                  (let [f (concat (when (:probe? c) (analyze pres (:path c)))
                                                  (when (:engine? c) (engine-fails o (get eres (:path c)) (:path c))))]
                                    (when (and (:probe? c) first-host)
-                                     (swap! statuses update (status-of (norm-line (:mem (get-in pres [first-host (:path c)])))) (fnil inc 0)))
+                                     (swap! statuses update (status-of (:mem (get-in pres [first-host (:path c)]))) (fnil inc 0)))
                                    (when (:engine? c)
                                      (doseq [[[h arm] r] (get eres (:path c))]
                                        (swap! engine-runs inc)

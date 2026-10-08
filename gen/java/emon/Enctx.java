@@ -91,6 +91,15 @@ public final class Enctx {
         public int keep = 0;
         public int haveloc = 0;
         public emon.Port.Cells lcl = emon.Port.newCells();
+        public int chunk = 0;
+        public int maxr = 0;
+        public int fetchr = 0;
+        public int rec = 0;
+        public int jsocr = 0;
+        public int num = 0;
+        public emon.Port.Cells lims = emon.Port.newCells();
+        public emon.Port.Cells prod = emon.Port.newCells();
+        public StringBuilder msg = new StringBuilder();
         public Cfg() {
         }
         @Override
@@ -108,6 +117,15 @@ public final class Enctx {
             c.keep = this.keep;
             c.haveloc = this.haveloc;
             emon.Port.cellsCopyInto(c.lcl, this.lcl);
+            c.chunk = this.chunk;
+            c.maxr = this.maxr;
+            c.fetchr = this.fetchr;
+            c.rec = this.rec;
+            c.jsocr = this.jsocr;
+            c.num = this.num;
+            emon.Port.cellsCopyInto(c.lims, this.lims);
+            emon.Port.cellsCopyInto(c.prod, this.prod);
+            c.msg.append(this.msg.toString());
             return c;
         }
     }
