@@ -151,10 +151,10 @@ func TestNoRuleAShortRuleAndTheWrongInkAreNoSignature(emonT *testing.T) {
 	spxLine(b, 20, 280, 100)
 	var y int32 = 0
 	for y < 20 {
-		var x int32 = 0
-		for x < 100 {
-			spxDot(b, 40+x, 70+y, 1, 20, 40, 120)
-			x += 1
+		var bx int32 = 0
+		for bx < 100 {
+			spxDot(b, 40+bx, 70+y, 1, 20, 40, 120)
+			bx += 1
 		}
 		y += 1
 	}

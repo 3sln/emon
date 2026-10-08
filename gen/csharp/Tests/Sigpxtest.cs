@@ -139,10 +139,10 @@ public static class Sigpxtest {
         SpxLine(b, 20, 280, 100);
         int y = 0;
         while (y < 20) {
-            int x = 0;
-            while (x < 100) {
-                SpxDot(b, 40 + x, 70 + y, 1, 20, 40, 120);
-                x += 1;
+            int bx = 0;
+            while (bx < 100) {
+                SpxDot(b, 40 + bx, 70 + y, 1, 20, 40, 120);
+                bx += 1;
             }
             y += 1;
         }

@@ -140,10 +140,10 @@ fn test_no_rule_a_short_rule_and_the_wrong_ink_are_no_signature() {
     spx_line(b, 20, 280, 100);
     let mut y: i32 = 0;
     while y < 20 {
-        let mut x: i32 = 0;
-        while x < 100 {
-            spx_dot(b, 40 + x, 70 + y, 1, 20, 40, 120);
-            x += 1;
+        let mut bx: i32 = 0;
+        while bx < 100 {
+            spx_dot(b, 40 + bx, 70 + y, 1, 20, 40, 120);
+            bx += 1;
         }
         y += 1;
     }

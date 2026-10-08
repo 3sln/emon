@@ -132,10 +132,10 @@
     (spx-line b 20 280 100)
     (let [^:mut ^I32 y 0]
       (while (< y 20)
-        (do (let [^:mut ^I32 x 0]
-              (while (< x 100)
-                (do (spx-dot b (+ 40 x) (+ 70 y) 1 20 40 120)
-                    (set x (+ x 1)))))
+        (do (let [^:mut ^I32 bx 0]
+              (while (< bx 100)
+                (do (spx-dot b (+ 40 bx) (+ 70 y) 1 20 40 120)
+                    (set bx (+ bx 1)))))
             (set y (+ y 1)))))
     (assert-eq (spx-find rules ow et b cand) 0 "a block of ink is a picture, not a pen")))
 
