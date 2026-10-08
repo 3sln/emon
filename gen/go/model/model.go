@@ -488,6 +488,12 @@ func FkNode() int32 {
 func FkOcrScope() int32 {
 	return 98
 }
+func FkSigned() int32 {
+	return 99
+}
+func FkLocation() int32 {
+	return 100
+}
 func FkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "id")
@@ -879,6 +885,14 @@ func FkEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 98 {
 		port.TextAscii(t, "ocr-scope")
+		return 1
+	}
+	if code == 99 {
+		port.TextAscii(t, "signed")
+		return 1
+	}
+	if code == 100 {
+		port.TextAscii(t, "location")
 		return 1
 	}
 	return 0

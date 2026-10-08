@@ -618,6 +618,9 @@ func jsKfields(t *strings.Builder, pr int32, d int32, nodes *port.Cells, attrs *
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkName(), s)
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkDate(), s)
 		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkColor(), s)
+		s = jsFbool(t, pr, d, nodes, attrs, n, model.FkSigned(), s)
+		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkReason(), s)
+		s = jsFtext(t, pr, d, nodes, attrs, text, n, model.FkLocation(), s)
 		s = jsFint(t, pr, d, nodes, attrs, n, model.FkAsset(), s)
 		s = jsFNoasset(t, pr, d, nodes, attrs, n, s)
 	}

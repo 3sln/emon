@@ -18,7 +18,7 @@ const anStride int32 = 38
 
 const fdStride int32 = 32
 
-const sgStride int32 = 36
+const sgStride int32 = 38
 
 const fsStride int32 = 8
 
@@ -110,6 +110,9 @@ func AnRedact() int32 {
 }
 func AnRichMedia() int32 {
 	return 26
+}
+func AnDigsig() int32 {
+	return 27
 }
 func AnSubEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
@@ -218,6 +221,10 @@ func AnSubEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 26 {
 		port.TextAscii(t, "RichMedia")
+		return 1
+	}
+	if code == 27 {
+		port.TextAscii(t, "DigitalSignature")
 		return 1
 	}
 	return 0
@@ -1094,7 +1101,113 @@ func paSigNew(sg *port.Cells, field int32) int32 {
 		port.CellsSet(sg, at+k, -1)
 		k += 1
 	}
+	port.CellsSet(sg, at+36, -1)
 	return row
+}
+
+func paAsnCp(ar *port.Cells, h int32, i int32, end int32, tag int32, out *port.Cells) int32 {
+	// Append to `out` the characters of the ASN.1 string whose content is the bytes [i, end) of string `h`; `tag` is its universal tag: 12 UTF8String is decoded as
+	// UTF-8 (a malformed byte is U+FFFD), 30 BMPString as UTF-16BE, every other as Latin-1. Answers the code points appended.
+	var k int32 = i
+	var c int32 = 0
+	var n int32 = 0
+	var cp int32 = 0
+	var need int32 = 0
+	for k < end {
+		c = pdfx.PxBat(ar, h, k)
+		cp = c
+		if tag == 30 {
+			if (k + 1) < end {
+				cp = (c * 256) + pdfx.PxBat(ar, h, k+1)
+			}
+			k += 1
+		}
+		if (tag == 12) && (c >= 128) {
+			need = 0
+			if (c >= 194) && (c < 224) {
+				need = 1
+				cp = c - 192
+			}
+			if (c >= 224) && (c < 240) {
+				need = 2
+				cp = c - 224
+			}
+			if (c >= 240) && (c < 245) {
+				need = 3
+				cp = c - 240
+			}
+			if need == 0 {
+				cp = 65533
+			} else if (k + need) > (end - 1) {
+				cp = 65533
+				need = 0
+			} else {
+				for need > 0 {
+					k += 1
+					cp = (cp * 64) + (pdfx.PxBat(ar, h, k) & 63)
+					need -= 1
+				}
+			}
+		}
+		pdfx.PxPushCp(out, cp)
+		n += 1
+		k += 1
+	}
+	return n
+}
+
+func paCertName(ar *port.Cells, h int32, txt *port.Cells, sg *port.Cells, at int32) int32 {
+	// The common name of the SIGNER's certificate, read as bytes from the PKCS#7 in the /Contents string `h`; a run at sg[at, at+2), absent (-1 0) when there is none.
+	// NOTHING IS VERIFIED: the bytes are searched for the AttributeType commonName (55 04 03) followed by a UTF8String, PrintableString, T61String, IA5String or BMPString of
+	// a short length, and the SECOND one is taken (a certificate lists its issuer before its subject, and the signer's is the first certificate of the set: Adobe and openssl write
+	// it so), else the first. A name of a self-signed certificate is the same twice. D900.
+	var n int32 = pdfx.PxBlen(ar, h)
+	var i int32 = 0
+	var seen int32 = 0
+	var tag int32 = 0
+	var clen int32 = 0
+	var s0 int32 = -1
+	var l0 int32 = 0
+	var t0 int32 = 0
+	var s1 int32 = -1
+	var l1 int32 = 0
+	var t1 int32 = 0
+	port.CellsSet(sg, at, -1)
+	port.CellsSet(sg, at+1, 0)
+	for ((i + 5) < n) && (seen < 2) {
+		if (pdfx.PxBat(ar, h, i) == 85) && ((pdfx.PxBat(ar, h, i+1) == 4) && (pdfx.PxBat(ar, h, i+2) == 3)) {
+			tag = pdfx.PxBat(ar, h, i+3)
+			clen = pdfx.PxBat(ar, h, i+4)
+			if ((tag == 12) || ((tag == 19) || ((tag == 20) || ((tag == 22) || (tag == 30))))) && ((clen > 0) && ((clen < 128) && (((i + 5) + clen) <= n))) {
+				if seen == 0 {
+					s0 = i + 5
+					l0 = clen
+					t0 = tag
+				}
+				if seen == 1 {
+					s1 = i + 5
+					l1 = clen
+					t1 = tag
+				}
+				seen += 1
+				i = (i + 4) + clen
+			}
+		}
+		i += 1
+	}
+	if s0 == -1 {
+		return 0
+	}
+	var start int32 = port.CellsLen(txt)
+	var cnt int32 = 0
+	if seen == 2 {
+		cnt = paAsnCp(ar, h, s1, s1+l1, t1, txt)
+	} else {
+		cnt = paAsnCp(ar, h, s0, s0+l0, t0, txt)
+	}
+	port.CellsSet(sg, at, start)
+	port.CellsSet(sg, at+1, cnt)
+	return cnt
 }
 
 func paSigFill(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, txt *port.Cells, sg *port.Cells, row int32, sd int32, bits int32) int32 {
@@ -1141,6 +1254,7 @@ func paSigFill(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *
 	v = pdfdoc.PdDget(src, ar, dc, a, b, st, sd, pdfnames.PnContents())
 	if (v != 0) && (pdflex.PlKindOf(ar, v) == 5) {
 		port.CellsSet(sg, at+32, pdflex.PlStrLen(ar, v))
+		paCertName(ar, v, txt, sg, at+36)
 		fl |= 1
 	}
 	v = pdfdoc.PdDget(src, ar, dc, a, b, st, sd, pdfnames.PnType())
@@ -1824,6 +1938,77 @@ func paFinalize(ar *port.Cells, fd *port.Cells) int32 {
 	return 0
 }
 
+func paDigsigRow(an *port.Cells, fd *port.Cells, sg *port.Cells, frow int32) int32 {
+	// Append the synthetic `an-digsig` row (see the head of this file) of terminal field `frow` (a signature field with a widget on a page). Signed: its signature
+	// dictionary has a /Contents. Nothing is verified. Answers 1 when a row was written.
+	var f int32 = frow * fdStride
+	var srow int32 = port.CellsAt(fd, f+24)
+	var s int32 = srow * sgStride
+	var at int32 = port.CellsLen(an)
+	var k int32 = 0
+	if port.CellsAt(fd, f+15) < 0 {
+		return 0
+	}
+	for k < anStride {
+		port.CellsPush(an, 0)
+		k += 1
+	}
+	port.CellsSet(an, at, port.CellsAt(fd, f+15))
+	port.CellsSet(an, at+1, AnDigsig())
+	port.CellsSet(an, at+2, port.CellsAt(fd, f))
+	k = 0
+	for k < 4 {
+		port.CellsSet(an, (at+4)+k, port.CellsAt(fd, (f+16)+k))
+		k += 1
+	}
+	k = 8
+	for k < 15 {
+		port.CellsSet(an, at+k, -1)
+		k += 1
+	}
+	port.CellsSet(an, at+23, -1)
+	port.CellsSet(an, at+25, port.CellsAt(fd, f+2))
+	port.CellsSet(an, at+26, port.CellsAt(fd, f+3))
+	port.CellsSet(an, at+27, -1)
+	port.CellsSet(an, at+29, -1)
+	port.CellsSet(an, at+32, -1)
+	port.CellsSet(an, at+34, -1)
+	port.CellsSet(an, at+35, 0)
+	port.CellsSet(an, at+36, -1)
+	if srow >= 0 {
+		port.CellsSet(an, at+23, port.CellsAt(sg, s+7))
+		port.CellsSet(an, at+24, port.CellsAt(sg, s+8))
+		k = 0
+		for k < 7 {
+			port.CellsSet(an, (at+8)+k, port.CellsAt(sg, (s+11)+k))
+			k += 1
+		}
+		port.CellsSet(an, at+15, port.CellsAt(sg, s+10))
+		port.CellsSet(an, at+27, port.CellsAt(sg, s+18))
+		port.CellsSet(an, at+28, port.CellsAt(sg, s+19))
+		port.CellsSet(an, at+32, port.CellsAt(sg, s+20))
+		port.CellsSet(an, at+33, port.CellsAt(sg, s+21))
+		port.CellsSet(an, at+30, port.CellsAt(sg, s+33))
+		port.CellsSet(an, at+34, port.CellsAt(sg, s+36))
+		port.CellsSet(an, at+35, port.CellsAt(sg, s+37))
+	}
+	return 1
+}
+
+func paDigsigs(an *port.Cells, fd *port.Cells, sg *port.Cells) int32 {
+	// The synthetic rows of every signature field (`fd` kind 7) that has a widget on a page, in field order. Answers the rows written.
+	var nf int32 = port.CellsLen(fd) / fdStride
+	var i int32 = 0
+	var n int32 = 0
+	for i < nf {
+		if port.CellsAt(fd, (i*fdStride)+6) == 7 {
+			n += paDigsigRow(an, fd, sg, i)
+		}
+		i += 1
+	}
+	return n
+}
+
 func PaRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, pg *port.Cells, idx *port.Cells, txt *port.Cells, w *port.Cells, fs *port.Cells, seen *port.Cells, fm *port.Cells, an *port.Cells, aq *port.Cells, fd *port.Cells, sg *port.Cells) int32 {
 	// Everything P3.8 reads, after `pd-open`, `pd-pages` and `px-index-build`: fields
 	// first (so a widget finds its field), then every page's /Annots, then the
@@ -1904,7 +2089,9 @@ func PaRun(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port
 	if pdfsrc.PsMissed(src) {
 		return -1
 	}
-	return port.CellsLen(an) / anStride
+	i = port.CellsLen(an) / anStride
+	paDigsigs(an, fd, sg)
+	return i
 }
 
 func paDumpAnnot(t *strings.Builder, txt *port.Cells, an *port.Cells, aq *port.Cells, row int32) int32 {
@@ -2131,10 +2318,12 @@ func PaDump(t *strings.Builder, txt *port.Cells, an *port.Cells, aq *port.Cells,
 	var i int32 = 0
 	port.TextAscii(t, "{\"annots\":[")
 	for i < na {
-		if i > 0 {
-			port.TextAscii(t, ",")
+		if port.CellsAt(an, (i*anStride)+1) != AnDigsig() {
+			if i > 0 {
+				port.TextAscii(t, ",")
+			}
+			paDumpAnnot(t, txt, an, aq, i)
 		}
-		paDumpAnnot(t, txt, an, aq, i)
 		i += 1
 	}
 	port.TextAscii(t, "],\"fields\":[")

@@ -580,6 +580,9 @@ public static class Json {
             s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkName(), s);
             s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkDate(), s);
             s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkColor(), s);
+            s = JsFbool(t, pr, d, nodes, attrs, n, Model.FkSigned(), s);
+            s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkReason(), s);
+            s = JsFtext(t, pr, d, nodes, attrs, text, n, Model.FkLocation(), s);
             s = JsFint(t, pr, d, nodes, attrs, n, Model.FkAsset(), s);
             s = JsFNoasset(t, pr, d, nodes, attrs, n, s);
         }

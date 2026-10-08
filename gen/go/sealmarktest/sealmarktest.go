@@ -187,8 +187,11 @@ func stFind(pa *port.Cells, pts *port.Cells, gl *port.Cells, fw *port.Cells, et 
 	var ep *port.Cells = port.NewCells()
 	var scr *port.Cells = port.NewCells()
 	var tmp *port.Cells = port.NewCells()
+	var an *port.Cells = port.NewCells()
+	var txt *port.Cells = port.NewCells()
+	var sgc *port.Cells = port.NewCells()
 	evidence.EpNew(ep, 1, 61200, 79200)
-	return sealmark.SmFind(pa, pts, gl, fw, et, ep, cg, refs, ow, 1, sm, scr, tmp)
+	return sealmark.SmFind(pa, pts, gl, fw, et, ep, cg, refs, ow, an, txt, 1, sm, scr, tmp, sgc)
 }
 
 func TestASealHoldsItsArcAndItsInkAndNotTheBodyUnderIt(emonT *testing.T) {

@@ -1170,6 +1170,28 @@ public static class Html {
                 HRun(t, text, Model.AttrValue(attrs, b), Model.AttrLen(attrs, b));
                 emon.Port.TextAscii(t, "\"");
             }
+            b = HIattr(nodes, attrs, n, Model.FkSigned());
+            if (b >= 0) {
+                emon.Port.TextAscii(t, " data-emon-signed=\"");
+                if (Model.AttrValue(attrs, b) != 0) {
+                    emon.Port.TextAscii(t, "true");
+                } else {
+                    emon.Port.TextAscii(t, "false");
+                }
+                emon.Port.TextAscii(t, "\"");
+            }
+            b = HTattr(nodes, attrs, n, Model.FkReason());
+            if (b >= 0) {
+                emon.Port.TextAscii(t, " data-emon-reason=\"");
+                HRun(t, text, Model.AttrValue(attrs, b), Model.AttrLen(attrs, b));
+                emon.Port.TextAscii(t, "\"");
+            }
+            b = HTattr(nodes, attrs, n, Model.FkLocation());
+            if (b >= 0) {
+                emon.Port.TextAscii(t, " data-emon-location=\"");
+                HRun(t, text, Model.AttrValue(attrs, b), Model.AttrLen(attrs, b));
+                emon.Port.TextAscii(t, "\"");
+            }
             if (asid < 0) {
                 emon.Port.TextAscii(t, " role=\"img\" aria-label=\"");
                 HAlt(t, nodes, attrs, text, n);

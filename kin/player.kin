@@ -84,13 +84,17 @@
 (defenum ^:pub pls
   [[pls-seal 1 "seal"]
    [pls-stamp 2 "stamp"]
-   [pls-signature 3 "signature"]])
+   [pls-signature 3 "signature"]
+   [pls-initials 4 "initials"]
+   [pls-digital-signature 5 "digital-signature"]])
 
 ;; `cg` flags (`gf`): the bits of a group's flags. `bink` (P7.4): the page has a body-ink OCR run (the raster with every foreign ink layer painted the paper's) and
 ;; this group was looked for in it; `bink-absent`: no word of that run lies over the group. Both are written after alignment, by `emon.retarget`.
 ;; `seal-px` (P8.2): the group is the reading of a seal or stamp found in PIXELS (`emon.sealpx`): its OCR words are those of the targeted `seal-strip` runs, its box is
 ;; the seal's, its `rot` cell holds the seal's colour as `sm-hue`'s code, and `emon.sealmark`'s `sm-find` makes its `sl` row; `seal-stamp` says it is a stamp (a
 ;; rectangle), else a seal (a ring). A group that has the flag is also `in-seal` and `ocr-only`.
+;; `seal-sig` and `seal-init` (P8.3): with `seal-px`, the group is the strokes of a handwritten SIGNATURE (INITIALS) found in pixels (`emon.sigpx`): no word, its box the ink's, its `rot` the colour
+;; code, flagged `in-seal` and not `ocr-only`; `emon.sealmark`'s `sm-raster` makes its `sl` row of kind `signature` (`initials`).
 (defenum ^:pub plg
   [[plg-text-only 1 "text-only"]
    [plg-ocr-only 2 "ocr-only"]
@@ -101,7 +105,9 @@
    [plg-bink 64 "bink"]
    [plg-bink-absent 128 "bink-absent"]
    [plg-seal-px 256 "seal-px"]
-   [plg-seal-stamp 512 "seal-stamp"]])
+   [plg-seal-stamp 512 "seal-stamp"]
+   [plg-seal-sig 1024 "seal-sig"]
+   [plg-seal-init 2048 "seal-init"]])
 
 ;; The layer's `ea` codes and strides. An arena's index here is 0 for `cg` ... 8 for `sl`.
 (defn ^:pub ^I32 pl-ea-cg [] (return 34))

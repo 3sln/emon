@@ -1,0 +1,9 @@
+;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/signatures/replay/ID, as `bb sigs-record` made it (P8.3, D905).
+{"sig-contract"
+ "98dfefe3c900140ca5cc5af10ba63e19748c662049499bffa312ee7820501b61",
+ "sig-digital"
+ "741223d10c82ad100a42a2512e157dbdf993ac3894ba5a5fb5f61857d2ff9e40",
+ "sig-negatives"
+ "20a2c96f82903fc6603e67c8efe74d5198f0c79bbfe1d56987857bb69f5deb01",
+ "sig-scan"
+ "f7717051ec4d343036bf42fbb4a18fe2f22c6c0eb002c9b8c30f05663efb5b40"}

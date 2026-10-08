@@ -28,6 +28,7 @@ import (
 	"emon/restruct"
 	"emon/scan"
 	"emon/sealmark"
+	"emon/sigmark"
 	"emon/table"
 	"emon/tagtable"
 	"emon/tlhealth"
@@ -67,7 +68,7 @@ func EnSeal(m *enctx.Arenas, chk *port.Cells, out *port.Cells, level int32) int3
 func enFigures(m *enctx.Arenas, s *enctx.Scratch, d *enctx.Doc, level int32) int32 {
 	// P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of
 	// `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
-	figclass.FcStage(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, s.Fnodes, s.Fattrs, s.Fregions, s.Fnm, d.Pa, d.Im, d.Fi, s.Grg, d.Grl, d.Fw, d.Fl, d.Et, d.Pg, d.Cand, level, s.Fcand, s.Fcl, s.Fg, s.Ffd, s.Fab, s.Fws)
+	figclass.FcStage(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, s.Fnodes, s.Fattrs, s.Fregions, s.Fnm, d.Pa, d.Im, d.Fi, s.Grg, d.Grl, d.Fw, d.Fl, d.Et, d.Pg, s.Sm, d.Cand, level, s.Fcand, s.Fcl, s.Fg, s.Ffd, s.Fab, s.Fws)
 	port.CellsSwap(m.Nodes, s.Fnodes)
 	port.CellsSwap(m.Attrs, s.Fattrs)
 	port.CellsSwap(m.Regions, s.Fregions)
@@ -190,6 +191,9 @@ func EnFinishPdf(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas
 	if port.CellsLen(d.Cg) > 0 {
 		d.Fused = 1
 	}
+	if sigmark.SgHasDigital(d.An) == 1 {
+		d.Fused = 1
+	}
 	if (c.Ocr != 0) && (d.Fused == 0) && (port.CellsLen(ev.Owords) == 0) {
 		port.CellsFree(ev.Epages)
 		port.CellsFree(ev.Feats)
@@ -198,7 +202,7 @@ func EnFinishPdf(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas
 	if d.Fused == 1 {
 		health.HlDoc(ev.Feats, d.Fw, d.Hl)
 		var trust0 int32 = pdfstruct.TgTrust(d.Ss)
-		sealmark.SmFind(d.Pa, d.Pts, d.Gl, d.Fw, d.Et, ev.Epages, d.Cg, ev.Refs, ev.Owords, np, s.Sm, s.Sscr, s.Stmp)
+		sealmark.SmFind(d.Pa, d.Pts, d.Gl, d.Fw, d.Et, ev.Epages, d.Cg, ev.Refs, ev.Owords, d.An, d.Txt, np, s.Sm, s.Sscr, s.Stmp, s.Sgc)
 		arbiter.ArDoc(d.Cg, ev.Refs, d.Fw, d.Fl, d.Et, ev.Feats, ev.Owords, ev.Olines, ev.Oruns, ev.Osyms, ev.Images, ev.Epages, d.Gl, d.Mk, d.An, d.Txt, trust0, s.Rc, s.Nfw, s.Nfl, s.Fv, s.Fx, s.Afa, s.Gd, s.Gv, s.W2g, s.O2g, s.Pp, s.Ftw, s.Ftl, d.Xs0)
 		port.CellsSwap(d.Fw, s.Nfw)
 		port.CellsSwap(d.Fl, s.Nfl)

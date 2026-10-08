@@ -279,6 +279,12 @@ public final class Player {
     public static int plsSignature() {
         return 3;
     }
+    public static int plsInitials() {
+        return 4;
+    }
+    public static int plsDigitalSignature() {
+        return 5;
+    }
     public static int plsEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "seal");
@@ -290,6 +296,14 @@ public final class Player {
         }
         if (code == 3) {
             emon.Port.textAscii(t, "signature");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.textAscii(t, "initials");
+            return 1;
+        }
+        if (code == 5) {
+            emon.Port.textAscii(t, "digital-signature");
             return 1;
         }
         return 0;
@@ -323,6 +337,12 @@ public final class Player {
     }
     public static int plgSealStamp() {
         return 512;
+    }
+    public static int plgSealSig() {
+        return 1024;
+    }
+    public static int plgSealInit() {
+        return 2048;
     }
     public static int plgEmitName(StringBuilder t, int code) {
         if (code == 1) {
@@ -363,6 +383,14 @@ public final class Player {
         }
         if (code == 512) {
             emon.Port.textAscii(t, "seal-stamp");
+            return 1;
+        }
+        if (code == 1024) {
+            emon.Port.textAscii(t, "seal-sig");
+            return 1;
+        }
+        if (code == 2048) {
+            emon.Port.textAscii(t, "seal-init");
             return 1;
         }
         return 0;

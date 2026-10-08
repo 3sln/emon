@@ -1,0 +1,146 @@
+{
+  "emon-gold" : "1.0",
+  "id" : "sig-contract",
+  "provenance" : {
+    "pdf" : "sig-contract.pdf",
+    "producer" : "tools/synth/sig_pdf.clj (P8.3)"
+  },
+  "annotated" : {
+    "attributes" : {
+      "table" : [ "profile", "columns", "continued" ],
+      "heading" : [ "level", "number", "numbering" ],
+      "list" : [ "ordered", "scheme", "start" ],
+      "rowgroup" : [ "role" ],
+      "figure" : [ "subkind", "label", "alt", "labels" ],
+      "cell" : [ "rowspan", "colspan", "header", "empty" ],
+      "note" : [ "role", "marker" ],
+      "section" : [ "level" ],
+      "item" : [ "marker", "value" ],
+      "row" : [ "repeated" ],
+      "seal" : [ "subkind", "name", "date", "color", "signed", "reason", "location" ],
+      "caption" : [ "label" ]
+    },
+    "dropped" : [ "page-number", "running-title", "watermark", "duplicate-header-row" ],
+    "furniture" : true,
+    "inlines" : true,
+    "pages" : [ "n", "w", "h", "label" ],
+    "structure" : [ "section", "heading", "paragraph", "list", "item", "table", "rowgroup", "row", "cell", "caption", "figure", "seal", "quote", "code", "note" ],
+    "text" : true
+  },
+  "model" : {
+    "body" : {
+      "id" : 0,
+      "kind" : "document",
+      "children" : [ {
+        "id" : 1,
+        "kind" : "section",
+        "level" : 1,
+        "children" : [ {
+          "id" : 2,
+          "kind" : "heading",
+          "level" : 1,
+          "text" : "Purchase Agreement"
+        }, {
+          "id" : 3,
+          "kind" : "paragraph",
+          "text" : "weather village system school window wagon story river shadow friend market story problem question evening rabbit table wagon forest example example village bridge season shadow forest lesson teacher yellow rabbit weather valley friend machine hammer family forest winter letter evening kitchen orange winter pencil island mirror market friend"
+        }, {
+          "id" : 4,
+          "kind" : "paragraph",
+          "text" : "mother shadow ground hammer evening napkin question candle market summer ticket teacher candle family market engine family weather picture pencil city machine ground number winter weather number question orange napkin ticket button jacket system market pencil number valley hammer letter"
+        }, {
+          "id" : 5,
+          "kind" : "paragraph",
+          "text" : "answer summer answer example engine water city paper market table yellow problem ticket story napkin shadow school school hammer window village garden island forest system winter village season country ticket hammer evening orange season orange dinner house office candle garden engine answer island system story island wagon system"
+        }, {
+          "id" : 6,
+          "kind" : "seal",
+          "subkind" : "initials",
+          "color" : "black",
+          "text" : ""
+        } ]
+      }, {
+        "id" : 7,
+        "kind" : "section",
+        "level" : 1,
+        "children" : [ {
+          "id" : 8,
+          "kind" : "heading",
+          "level" : 1,
+          "text" : "Signatures"
+        }, {
+          "id" : 9,
+          "kind" : "paragraph",
+          "text" : "market engine office evening engine table picture kitchen ground mother question evening napkin weather engine machine window ground button bridge lesson rabbit rabbit friend house garden house water system country morning house"
+        }, {
+          "id" : 10,
+          "kind" : "paragraph",
+          "text" : "Buyer"
+        }, {
+          "id" : 11,
+          "kind" : "seal",
+          "subkind" : "signature",
+          "color" : "blue",
+          "name" : "Alex Morgan",
+          "text" : ""
+        }, {
+          "id" : 12,
+          "kind" : "paragraph",
+          "text" : "Alex Morgan, Director"
+        }, {
+          "id" : 13,
+          "kind" : "paragraph",
+          "text" : "Unterschrift"
+        }, {
+          "id" : 14,
+          "kind" : "paragraph",
+          "text" : "Seller"
+        }, {
+          "id" : 15,
+          "kind" : "seal",
+          "subkind" : "signature",
+          "color" : "blue",
+          "name" : "Jordan Lee",
+          "text" : ""
+        }, {
+          "id" : 16,
+          "kind" : "paragraph",
+          "text" : "Jordan Lee"
+        }, {
+          "id" : 17,
+          "kind" : "paragraph",
+          "text" : "Firma"
+        }, {
+          "id" : 18,
+          "kind" : "seal",
+          "subkind" : "initials",
+          "color" : "black",
+          "text" : ""
+        } ]
+      } ]
+    },
+    "dropped" : [ ],
+    "emon" : "1.0",
+    "furniture" : [ ],
+    "meta" : { },
+    "pages" : [ {
+      "n" : 1,
+      "w" : 612,
+      "h" : 792,
+      "rot" : 0
+    }, {
+      "n" : 2,
+      "w" : 612,
+      "h" : 792,
+      "rot" : 0
+    } ],
+    "settings" : {
+      "locale" : "en"
+    },
+    "source" : {
+      "format" : "pdf",
+      "lang" : "en",
+      "pages" : 2
+    }
+  }
+}

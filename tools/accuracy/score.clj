@@ -713,6 +713,39 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
             (when (and p (= (seal-key (get g "date")) (seal-key (get p "date")))) (add "seal-date.ok")))
           (recur (rest gs) (if j (conj taken j) taken)))))))
 
+(defn sig-counts!
+  "P8.3's counts. Per subkind of handwritten mark (`signature` -> `sig`, `initials` -> `init`): the gold's seal nodes of that subkind, the predicted ones, and the true positives, which are
+  as many as the two lists share by count (a node has no box in the gold: the match is by number, so a wrong node of the right subkind counts for the right one, and a node of the wrong
+  subkind counts for nothing: `sig.gold`/`.pred`/`.tp`, `init.gold`/`.pred`/`.tp`). The typed NAME of every gold signature that has one is right when a predicted signature not yet taken has the same
+  letters and digits (`sig-name.n`/`.ok`). A DIGITAL signature of the gold is right when a predicted one not yet taken agrees on `name`, `date`, `reason`, `location` and `signed` (an absent `signed`
+  is false): `digsig.n`/`.ok`."
+  [add gold pred]
+  (let [gb (get-in gold ["model" "body"])
+        pb (or (get pred "body") {"id" 0 "kind" "document"})
+        nodes (fn [body sub] (vec (for [n (walk body) :when (and (= "seal" (get n "kind")) (= sub (get n "subkind")))] n)))]
+    (doseq [[sub pre] [["signature" "sig"] ["initials" "init"]]]
+      (let [g (nodes gb sub) p (nodes pb sub)]
+        (when (or (seq g) (seq p))
+          (add (str pre ".gold") (count g))
+          (add (str pre ".pred") (count p))
+          (add (str pre ".tp") (min (count g) (count p))))))
+    (let [g (nodes gb "signature") p (nodes pb "signature")]
+      (loop [g (filter #(get % "name") g) used #{}]
+        (when-let [n (first g)]
+          (add "sig-name.n")
+          (let [j (first (keep-indexed (fn [j q] (when (and (not (used j)) (= (seal-key (get n "name")) (seal-key (get q "name")))) j)) p))]
+            (when j (add "sig-name.ok"))
+            (recur (rest g) (if j (conj used j) used))))))
+    (let [g (nodes gb "digital-signature") p (nodes pb "digital-signature")
+          field (fn [n k] (if (= k "signed") (boolean (get n k)) (get n k)))
+          same (fn [a b] (every? #(= (field a %) (field b %)) ["name" "date" "reason" "location" "signed"]))]
+      (loop [g g used #{}]
+        (when-let [n (first g)]
+          (add "digsig.n")
+          (let [j (first (keep-indexed (fn [j q] (when (and (not (used j)) (same n q)) j)) p))]
+            (when j (add "digsig.ok"))
+            (recur (rest g) (if j (conj used j) used))))))))
+
 (defn fusion-counts!
   "Adds the fusion counts of one document. `opts` {:variant \"pdf\"|\"scan\"|...}: `tl-override` is a
   born-digital measure, so scans do not count it, and a gold whose `facts.tl-untrusted` is true (a text layer
@@ -872,6 +905,7 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
                      (count (filter (fn [[i j]] (pyeq (get-in g [i "continued"] 1) (get-in p [j "continued"] 1))) tp_)))))))))
     (when (get ann "text") (fusion-counts! add gold pred opts))
     (when (get ann "text") (seal-field-counts! add gold pred))
+    (when (get ann "text") (sig-counts! add gold pred))
     ;; inline styles and links
     (when (get ann "inlines") (inline-counts! add gb pb))
     ;; paragraph boundaries
@@ -1006,6 +1040,15 @@ strings are code-point sequences, the sequence matcher is difflib's algorithm
             m)
         m (if (contains? c "seal-date.n")
             (set* m "seal-date-acc" (ratio (get c "seal-date.ok" 0) (c "seal-date.n")))
+            m)
+        ;; P8.3: handwritten signatures and initials (precision and recall), the typed name of a signature, the fields of a digital signature
+        m (prf m c "sig" "seal-sig")
+        m (prf m c "init" "seal-init")
+        m (if (contains? c "sig-name.n")
+            (set* m "sig-name-acc" (ratio (get c "sig-name.ok" 0) (c "sig-name.n")))
+            m)
+        m (if (contains? c "digsig.n")
+            (set* m "digsig-acc" (ratio (get c "digsig.ok" 0) (c "digsig.n")))
             m)
         m (if (contains? c "fusion.src-chars")
             (set* m "src-ocr-share" (or (ratio (c "fusion.src-ocr-chars") (c "fusion.src-chars")) 0.0))

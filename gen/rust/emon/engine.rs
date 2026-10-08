@@ -23,6 +23,7 @@ use crate::emon::rasterplan::*;
 use crate::emon::restruct::*;
 use crate::emon::scan::*;
 use crate::emon::sealmark::*;
+use crate::emon::sigmark::*;
 use crate::emon::table::*;
 use crate::emon::tagtable::*;
 use crate::emon::tlhealth::*;
@@ -58,7 +59,7 @@ pub fn en_seal(m: &mut crate::emon::enctx::Arenas, mut chk: &mut crate::port::Ce
 pub(crate) fn en_figures(m: &mut crate::emon::enctx::Arenas, s: &mut crate::emon::enctx::Scratch, d: &mut crate::emon::enctx::Doc, level: i32) -> i32 {
     // P8.1 (SPEC 10.6): the figures, before `rs-run` (a caption next to one finds it as its object): every output has them, at every level of
     // `assets` (which only decides whether they get pixels, and tells the asset stage's candidate rows `cand` what P8.1 found).
-    fc_stage(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut s.fnodes, &mut s.fattrs, &mut s.fregions, &mut s.fnm, &mut d.pa, &mut d.im, &mut d.fi, &mut s.grg, &mut d.grl, &mut d.fw, &mut d.fl, &mut d.et, &mut d.pg, &mut d.cand, level, &mut s.fcand, &mut s.fcl, &mut s.fg, &mut s.ffd, &mut s.fab, &mut s.fws);
+    fc_stage(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut s.fnodes, &mut s.fattrs, &mut s.fregions, &mut s.fnm, &mut d.pa, &mut d.im, &mut d.fi, &mut s.grg, &mut d.grl, &mut d.fw, &mut d.fl, &mut d.et, &mut d.pg, &mut s.sm, &mut d.cand, level, &mut s.fcand, &mut s.fcl, &mut s.fg, &mut s.ffd, &mut s.fab, &mut s.fws);
     crate::port::cells_swap(&mut m.nodes, &mut s.fnodes);
     crate::port::cells_swap(&mut m.attrs, &mut s.fattrs);
     crate::port::cells_swap(&mut m.regions, &mut s.fregions);
@@ -177,6 +178,9 @@ pub fn en_finish_pdf(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx
     if crate::port::cells_len(&mut d.cg) > 0 {
         d.fused = 1;
     }
+    if sg_has_digital(&mut d.an) == 1 {
+        d.fused = 1;
+    }
     if (c.ocr != 0) && (d.fused == 0) && (crate::port::cells_len(&mut ev.owords) == 0) {
         crate::port::cells_free(&mut ev.epages);
         crate::port::cells_free(&mut ev.feats);
@@ -185,7 +189,7 @@ pub fn en_finish_pdf(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx
     if d.fused == 1 {
         hl_doc(&mut ev.feats, &mut d.fw, &mut d.hl);
         let trust0: i32 = tg_trust(&mut d.ss);
-        sm_find(&mut d.pa, &mut d.pts, &mut d.gl, &mut d.fw, &mut d.et, &mut ev.epages, &mut d.cg, &mut ev.refs, &mut ev.owords, np, &mut s.sm, &mut s.sscr, &mut s.stmp);
+        sm_find(&mut d.pa, &mut d.pts, &mut d.gl, &mut d.fw, &mut d.et, &mut ev.epages, &mut d.cg, &mut ev.refs, &mut ev.owords, &mut d.an, &mut d.txt, np, &mut s.sm, &mut s.sscr, &mut s.stmp, &mut s.sgc);
         ar_doc(&mut d.cg, &mut ev.refs, &mut d.fw, &mut d.fl, &mut d.et, &mut ev.feats, &mut ev.owords, &mut ev.olines, &mut ev.oruns, &mut ev.osyms, &mut ev.images, &mut ev.epages, &mut d.gl, &mut d.mk, &mut d.an, &mut d.txt, trust0, &mut s.rc, &mut s.nfw, &mut s.nfl, &mut s.fv, &mut s.fx, &mut s.afa, &mut s.gd, &mut s.gv, &mut s.w2g, &mut s.o2g, &mut s.pp, &mut s.ftw, &mut s.ftl, &mut d.xs0);
         crate::port::cells_swap(&mut d.fw, &mut s.nfw);
         crate::port::cells_swap(&mut d.fl, &mut s.nfl);

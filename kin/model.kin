@@ -189,7 +189,10 @@
    [fk-uses 96 "uses"]
    [fk-node 97 "node"]
    ;; the OCR scope setting (P7.S, D200, D363): written on the root only when it is not `full`
-   [fk-ocr-scope 98 "ocr-scope"]])
+   [fk-ocr-scope 98 "ocr-scope"]
+   ;; a digital signature's state and place (P8.3, D900): `signed` (an int 0 or 1) on a `seal` of subkind digital-signature; `reason` (51) is its /Reason
+   [fk-signed 99 "signed"]
+   [fk-location 100 "location"]])
 
 ;; Provenance bits (SPEC 3.5). The code IS the bit.
 (defenum ^:pub sr

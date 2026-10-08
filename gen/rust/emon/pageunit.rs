@@ -12,6 +12,7 @@ use crate::emon::rasterplan::*;
 use crate::emon::retarget::*;
 use crate::emon::scan::*;
 use crate::emon::sealpx::*;
+use crate::emon::sigpx::*;
 use crate::emon::xalign::*;
 
 pub fn pu_dpi() -> i32 {
@@ -379,6 +380,9 @@ pub(crate) fn pu_run_born(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
             rt_witness(g0, cg_count(cg), cg, rtp, oruns, owords);
             if pu_px(bms, nid, fuse) == 1 {
                 sx_record(i, nview, dpi * 100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
+                // the pen strokes over a signature line in the text-free render (P8.3): no request, no view; the groups are written with the seals'
+                sp_find(i + 1, views, nview, rules, owords, etext, crate::port::bms_get(bms, nid), pgw, s5, s6);
+                sp_record(i, s5, cg);
             }
         }
     }
@@ -449,8 +453,12 @@ pub(crate) fn pu_run_scan(i: i32, input: i32, fuse: i32, pl: &mut crate::port::C
     }
     rt_record(i, vdec, dpi100, loc, ans, rtp, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
     sx_record(i, vdec, dpi100, loc, ans, s1, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats, refs, cg, s4);
+    // the pen strokes over a signature line of the scan (P8.3): the lines the first pass made of them are not the page's text
+    sp_find(i + 1, views, vdec, rules, owords, etext, crate::port::bms_get(bms, did), pu_field(pl, i, 8), s5, s6);
+    sp_record(i, s5, cg);
     nsel = rt_adopt(rtp, oruns, run, olines, owords, scr);
     nsel = sx_drop_lines(scr, nsel, olines, owords, s1);
+    nsel = sp_drop_lines(scr, nsel, olines, owords, s5);
     rt_upright(rtp, run, epages, i + 1);
     nl = or_get(oruns, run, orf_lcount());
     rotmed = ev_rot_median(olines, l0, nl);

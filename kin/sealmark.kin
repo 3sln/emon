@@ -2,8 +2,8 @@
 ;; module (D039). The VERDICTS on the words are rows of `emon.fuserules` (block 400, tried before every other block: `fr-order`); this module measures
 ;; what those rows read (which groups lie in a seal) and writes the placeholders:
 ;;
-;;   (sm-find pa pts gl fw et epages cg refs owords np sm scr)
-;;       Before arbitration, over the document's evidence: the seal, stamp and signature CANDIDATES of every page, one row each of the layer's `sl` arena
+;;   (sm-find pa pts gl fw et epages cg refs owords an txt np sm scr tmp sgc)
+;;       Before arbitration, over the document's evidence: the seal, stamp, signature, initials and digital signature CANDIDATES of every page, one row each of the layer's `sl` arena
 ;;       (SPEC 9.7: page, box, kind, ink row (-1), primitive reference (`paths`, the path), confidence, the OCR words inside as a `refs` run, flags, and in
 ;;       the three spare cells the node's text (an `etext` run) and its colour), and the flag `plg-in-seal` on every correspondence group whose words are the
 ;;       candidate's: arbitration reads that flag as the group column `ag-seal`, and rows 401 and 402 keep the group out of the body.
@@ -22,9 +22,9 @@
 ;;                path inside it (the double ring);
 ;;   a STAMP      a stroked, unfilled quadrilateral (rotated or not) with a border at least `sm-stamp-width` (1.5 pt), of a chromatic ink, that holds words of
 ;;                that ink;
-;;   a SIGNATURE  stroked, unfilled, open curves no wider than `sm-sig-width`, merged where they lie within `sm-sig-gap`, at least `sm-sig-segs` Bezier segments,
-;;                wider than high, within `sm-cue-lines` line heights of a CUE: a text-layer word `signature`, `signed`, `sign` followed by `here`, or `by:`,
-;;                case-folded. Its words are none (the typed name beside it is body text).
+;;   a SIGNATURE, INITIALS, a DIGITAL SIGNATURE: `emon.sigmark`'s (P8.3, D900-D903: pen strokes with a cue that is a shape, small marks, the signature fields of P3.8's synthetic `an` rows);
+;;                they have no words (a typed name is the page's own text, and the node's `name` is a copy of it); this module writes their candidate rows (`sm-page`),
+;;                their nodes (`sm-emit`), and the rows of the ones found in PIXELS (`sm-raster`: `emon.sigpx`'s groups, D904).
 ;;
 ;; A WORD OF A SEAL OR STAMP is a text-layer word whose centre is inside the candidate and (its first glyph's fill is within `sm-ink-dist` of the candidate's ink
 ;; and chromatic) or (the candidate is round and the word is TURNED: its rotation at least `sm-arc-turn` off every right angle, in the ring between half the
@@ -33,9 +33,8 @@
 ;; An OCR-ONLY group (no text-layer word) whose words' centres all lie inside a seal, a stamp or a signature is the ring's or the stroke's own ink read as
 ;; letters: it joins the candidate (its words are the node's text only when the candidate has no text-layer word).
 ;;
-;; WHAT IS NOT HERE (D316): the tracer's colour-layer components and primitives (no pixels in a replay; the page unit does not wire P6.3/P6.4 and nothing in a
-;; fused born-digital page asks for them), so a seal that is only RASTER (an image placement) or only outlined is no candidate; raster pages (scans, the
-;; `scan-ovl` variants and mapo80) are not fused until P7.S. The candidate row keeps its ink-row and primitive cells for them.
+;; WHAT IS NOT HERE (D316, D802, D804): the vector candidates read no pixel; a seal or stamp that is only RASTER is found by `emon.sealpx` and a pen by `emon.sigpx`, which write
+;; correspondence groups that `sm-raster` turns into rows.
 (ns emon.sealmark
   (:require [emon.lang :refer [I32 I64 Cells i64 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
@@ -44,14 +43,15 @@
                                    pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-width pf-flags pf-pfirst pf-pcount
                                    ptf-x ptf-y ptf-op gf-fill ea-paths ea-owords ev-page-row ep-get epf-width epf-height
                                    pg-closed pg-filled pg-stroked pg-clip pa-curve pa-rect pa-other po-move po-line po-curve po-close]]
-            [emon.player :refer [cg-count cg-get cg-set cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-rot plg-seal-px plg-seal-stamp
+            [emon.player :refer [cg-count cg-get cg-set cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 cgf-rot plg-seal-px plg-seal-stamp plg-seal-sig plg-seal-init
                                  cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hcount cgf-flags plg-in-seal
-                                 sl-new sl-count sl-get pls-seal pls-stamp pls-signature]]
+                                 sl-new sl-count sl-get pls-seal pls-stamp pls-signature pls-initials pls-digital-signature]]
+            [emon.sigmark :refer [sg-collect sg-decide sg-emit sg-typed-name]]
             [emon.model :refer [node-count node-kind node-parent node-region-head node-region-count node-next region-next
                                 region-page region-x0 region-y0 region-x1 region-y1
-                                node-new node-set-text node-set-sub node-set-conf node-add-flag node-add-src node-add-region node-add-attr-text
+                                node-new node-set-text node-set-sub node-set-conf node-add-flag node-add-src node-add-region node-add-attr-text node-set-attr-bool
                                 text-append-cp nk-document nk-section nk-heading nk-paragraph nk-list nk-table nk-figure nk-quote nk-code nk-note
-                                nk-formula nk-caption nk-seal nk-furniture fk-color fk-name fk-date fl-low-conf sr-text sr-ocr sr-infer]]
+                                nk-formula nk-caption nk-seal nk-furniture fk-color fk-name fk-date fk-signed fk-reason fk-location fl-low-conf sr-text sr-ocr sr-infer]]
             [emon.restruct :refer [rs-node rs-remap]]
             [kin.lang :refer [defn defdata return let set while if do comment
                               + - * < > <= >= == != and or quot rem bit-and bit-or]]))
@@ -60,11 +60,6 @@
 
 (defn ^:pub ^I32 sm-seal-min [] (comment "`seal-min`: the radius (centipoints) a ring needs to be a seal: 8 mm.") (return 2268))
 (defn ^:pub ^I32 sm-stamp-width [] (comment "`stamp-width`: the border (centipoints) a stamp's rectangle needs: 1.5 pt.") (return 150))
-(defn ^:pub ^I32 sm-sig-width [] (comment "`sig-width`: the widest stroke (centipoints) of a pen signature.") (return 250))
-(defn ^:pub ^I32 sm-sig-gap [] (comment "`sig-gap`: how far (centipoints) strokes of one signature lie apart.") (return 800))
-(defn ^:pub ^I32 sm-sig-segs [] (comment "`sig-segs`: the Bezier segments a signature has, together.") (return 3))
-(defn ^:pub ^I32 sm-sig-min-w [] (comment "The width (centipoints) a signature needs: 30 pt.") (return 3000))
-(defn ^:pub ^I32 sm-cue-lines [] (comment "`cue-lines`: how many line heights from a cue a signature may lie.") (return 3))
 (defn ^:pub ^I32 sm-round [] (comment "`seal-round`: how far (per cent of the radius) a ring's end points may lie from the circle.") (return 8))
 (defn ^:pub ^I32 sm-square [] (comment "How far (per cent) a ring's box may be from a square.") (return 12))
 (defn ^:pub ^I32 sm-chroma [] (comment "`ink-chroma`: the spread (0-255) between the largest and smallest channel of a chromatic ink.") (return 48))
@@ -73,7 +68,6 @@
 (defn ^:pub ^I32 sm-page-share [] (comment "The share of the page (per mille) a stamp's box may cover: a coloured frame round the page is no stamp.") (return 350))
 (defn ^:pub ^I32 sm-overlap [] (comment "`seal-overlap`: the share (per cent) of a candidate's box a top-level block must cover for the candidate to be written after it.") (return 5))
 (defn ^:pub ^I32 sm-max-cands [] (comment "The most candidates of one page (a hostile page's strokes).") (return 64))
-(defn ^:pub ^I32 sm-max-strokes [] (comment "The most signature strokes of one page that are clustered.") (return 96))
 
 ;; the candidate record in the page scratch: 12 cells
 ;; 0 kind (`pls`; 0 dropped), 1 path row, 2-5 box, 6 centre x, 7 centre y, 8 radius (0 for a stamp or a signature), 9 ink (0xRRGGBB, -1),
@@ -299,36 +293,6 @@
 
 ;; ------------------------------------------------------------- words
 
-(defn ^I32 sm-fold [^I32 c]
-  (if (and (>= c 65) (<= c 90)) (return (+ c 32)))
-  (return c))
-
-(defn ^I32 sm-word-is [^Cells fw ^Cells et ^I32 row ^I32 pre0 ^I32 pre1 ^I32 pre2 ^I32 pre3 ^I32 pre4 ^I32 pre5 ^I32 pre6 ^I32 pre7 ^I32 pre8 ^I32 want]
-  (comment "1 when word `row` starts, case-folded, with the code points pre0..pre(want-1) (nine at most).")
-  (let [^I32 ts (cells-at fw (+ (* row 24) 11))
-        ^I32 tl (cells-at fw (+ (* row 24) 12))]
-    (if (< tl want) (return 0))
-    (if (!= (sm-fold (cells-at et ts)) pre0) (return 0))
-    (if (and (> want 1) (!= (sm-fold (cells-at et (+ ts 1))) pre1)) (return 0))
-    (if (and (> want 2) (!= (sm-fold (cells-at et (+ ts 2))) pre2)) (return 0))
-    (if (and (> want 3) (!= (sm-fold (cells-at et (+ ts 3))) pre3)) (return 0))
-    (if (and (> want 4) (!= (sm-fold (cells-at et (+ ts 4))) pre4)) (return 0))
-    (if (and (> want 5) (!= (sm-fold (cells-at et (+ ts 5))) pre5)) (return 0))
-    (if (and (> want 6) (!= (sm-fold (cells-at et (+ ts 6))) pre6)) (return 0))
-    (if (and (> want 7) (!= (sm-fold (cells-at et (+ ts 7))) pre7)) (return 0))
-    (if (and (> want 8) (!= (sm-fold (cells-at et (+ ts 8))) pre8)) (return 0))
-    (return 1)))
-
-(defn ^I32 sm-cue-word [^Cells fw ^Cells et ^I32 row ^I32 end]
-  (comment "1 when word `row` (of a page whose words end at `end`) is a signature cue: `signature`, `signed`, `sign` followed by `here`, `by:`; case-folded.")
-  (let [^I32 tl (cells-at fw (+ (* row 24) 12))]
-    (if (== (sm-word-is fw et row 115 105 103 110 97 116 117 114 101 9) 1) (return 1))
-    (if (== (sm-word-is fw et row 115 105 103 110 101 100 0 0 0 6) 1) (return 1))
-    (if (and (== tl 3) (== (sm-word-is fw et row 98 121 58 0 0 0 0 0 0 3) 1)) (return 1))
-    (if (and (== tl 4) (and (== (sm-word-is fw et row 115 105 103 110 0 0 0 0 0 4) 1) (< (+ row 1) end)))
-      (if (== (sm-word-is fw et (+ row 1) 104 101 114 101 0 0 0 0 0 4) 1) (return 1)))
-    (return 0)))
-
 (defn ^:pub ^I32 sm-turned [^I32 rot]
   (comment "1 when the rotation (centi-degrees) is at least `sm-arc-turn` off every right angle.")
   (let [^I32 a (rem (+ (rem rot 9000) 9000) 9000)
@@ -361,7 +325,7 @@
         ^I32 cy (quot (+ (cells-at fw (+ at 2)) (cells-at fw (+ at 4))) 2)
         ^I32 kind (cells-at scr c)
         ^I32 ink (sm-word-ink fw gl row)]
-    (if (or (== kind 0) (== kind (pls-signature))) (return 0))
+    (if (or (== kind 0) (> kind (pls-stamp))) (return 0))
     (if (== (sm-inside scr c cx cy) 0) (return 0))
     (if (and (> (sm-spread ink) (sm-chroma)) (== (sm-ink-near ink (cells-at scr (+ c 9))) 1)) (return 1))
     (if (and (== kind (pls-seal)) (== (sm-turned (cells-at fw (+ at 9))) 1))
@@ -490,105 +454,6 @@
           (set r (+ r 1))))
     (return n)))
 
-;; the signature strokes: 6 cells each in `tmp` (from cell 8): box x0 y0 x1 y1, Bezier segments (-1: merged into another), first path row, ink
-
-(defn ^I32 sm-segs [^Cells pa ^Cells pts ^I32 r]
-  (comment "The Bezier segments of path row r (a triple of curve points), 0 when its geometry was not kept.")
-  (let [^I32 n (pa-get pa r (pf-pcount))
-        ^I32 f (pa-get pa r (pf-pfirst))
-        ^:mut ^I32 j 0
-        ^:mut ^I32 c 0]
-    (if (< f 0) (return 0))
-    (while (< j n)
-      (do (if (== (pt-get pts (+ f j) (ptf-op)) (po-curve)) (set c (+ c 1)))
-          (set j (+ j 1))))
-    (return (quot c 3))))
-
-(defn ^I32 sm-gap [^I32 a0 ^I32 a1 ^I32 b0 ^I32 b1]
-  (comment "The distance between the intervals [a0, a1] and [b0, b1]; 0 when they overlap.")
-  (if (> b0 a1) (return (- b0 a1)))
-  (if (> a0 b1) (return (- a0 b1)))
-  (return 0))
-
-(defn ^I32 sm-signatures [^Cells pa ^Cells pts ^Cells fw ^Cells et ^I32 page ^I32 p0 ^I32 p1 ^I32 pw ^I32 ph ^:mut ^Cells scr ^I32 n0 ^:mut ^Cells tmp]
-  (comment "The signature candidates of page `page`'s paths [p0, p1): the open, stroked, unfilled curves no wider than `sm-sig-width` (and neither the page's width nor")
-  (comment "a third of its height), merged where they lie within `sm-sig-gap`, kept when they have at least `sm-sig-segs` Bezier segments, are at least 30 pt wide and")
-  (comment "wider than 1.5 times their height, and a cue word of the page lies within `sm-cue-lines` line heights of the cluster. Appended to `scr`.")
-  (let [^:mut ^I32 r p0
-        ^:mut ^I32 ns 0
-        ^:mut ^I32 n n0
-        ^:mut ^I32 i 0
-        ^:mut ^I32 j 0
-        ^:mut ^I32 changed 1
-        ^:mut ^I32 a 0
-        ^:mut ^I32 b 0
-        ^:mut ^I32 w 0
-        ^:mut ^I32 h 0
-        ^:mut ^I32 cue 0
-        ^:mut ^I32 vg 0
-        ^:mut ^I32 hg 0
-        ^:mut ^I32 lh 0
-        ^:mut ^I32 nw (quot (cells-len fw) 24)]
-    (cells-drop tmp 8)
-    (while (< r p1)
-      (do (if (and (== (sm-stroke-only pa r) 1) (< ns (sm-max-strokes)))
-            (if (and (== (bit-and (pa-get pa r (pf-flags)) (pg-closed)) 0) (<= (pa-get pa r (pf-width)) (sm-sig-width)))
-              (if (== (pa-get pa r (pf-kind)) (pa-curve))
-                (if (and (< (- (pa-get pa r (pf-x1)) (pa-get pa r (pf-x0))) pw) (< (* (- (pa-get pa r (pf-y1)) (pa-get pa r (pf-y0))) 3) ph))
-                  (do (cells-push tmp (pa-get pa r (pf-x0)))
-                      (cells-push tmp (pa-get pa r (pf-y0)))
-                      (cells-push tmp (pa-get pa r (pf-x1)))
-                      (cells-push tmp (pa-get pa r (pf-y1)))
-                      (cells-push tmp (sm-segs pa pts r))
-                      (cells-push tmp r)
-                      (cells-push tmp (pa-get pa r (pf-stroke)))
-                      (set ns (+ ns 1)))))))
-          (set r (+ r 1))))
-    (comment "merge until nothing merges; a stroke is a record of 7 cells from cell 8 of tmp")
-    (while (== changed 1)
-      (do (set changed 0)
-          (set i 0)
-          (while (< i ns)
-            (do (set a (+ 8 (* i 7)))
-                (if (>= (cells-at tmp (+ a 4)) 0)
-                  (do (set j (+ i 1))
-                      (while (< j ns)
-                        (do (set b (+ 8 (* j 7)))
-                            (if (>= (cells-at tmp (+ b 4)) 0)
-                              (if (and (<= (sm-gap (cells-at tmp a) (cells-at tmp (+ a 2)) (cells-at tmp b) (cells-at tmp (+ b 2))) (sm-sig-gap))
-                                       (<= (sm-gap (cells-at tmp (+ a 1)) (cells-at tmp (+ a 3)) (cells-at tmp (+ b 1)) (cells-at tmp (+ b 3))) (sm-sig-gap)))
-                                (do (if (< (cells-at tmp b) (cells-at tmp a)) (cells-set tmp a (cells-at tmp b)))
-                                    (if (< (cells-at tmp (+ b 1)) (cells-at tmp (+ a 1))) (cells-set tmp (+ a 1) (cells-at tmp (+ b 1))))
-                                    (if (> (cells-at tmp (+ b 2)) (cells-at tmp (+ a 2))) (cells-set tmp (+ a 2) (cells-at tmp (+ b 2))))
-                                    (if (> (cells-at tmp (+ b 3)) (cells-at tmp (+ a 3))) (cells-set tmp (+ a 3) (cells-at tmp (+ b 3))))
-                                    (cells-set tmp (+ a 4) (+ (cells-at tmp (+ a 4)) (cells-at tmp (+ b 4))))
-                                    (cells-set tmp (+ b 4) -1)
-                                    (set changed 1))))
-                            (set j (+ j 1))))))
-                (set i (+ i 1))))))
-    (set i 0)
-    (while (< i ns)
-      (do (set a (+ 8 (* i 7)))
-          (set w (- (cells-at tmp (+ a 2)) (cells-at tmp a)))
-          (set h (- (cells-at tmp (+ a 3)) (cells-at tmp (+ a 1))))
-          (if (and (>= (cells-at tmp (+ a 4)) (sm-sig-segs)) (and (>= w (sm-sig-min-w)) (>= (* w 2) (* h 3))))
-            (do (set cue 0)
-                (set j 0)
-                (while (and (< j nw) (== cue 0))
-                  (do (if (== (cells-at fw (* j 24)) page)
-                        (if (== (sm-cue-word fw et j nw) 1)
-                          (do (set lh (- (cells-at fw (+ (* j 24) 4)) (cells-at fw (+ (* j 24) 2))))
-                              (set vg (sm-gap (cells-at tmp (+ a 1)) (cells-at tmp (+ a 3)) (cells-at fw (+ (* j 24) 2)) (cells-at fw (+ (* j 24) 4))))
-                              (set hg (sm-gap (cells-at tmp a) (cells-at tmp (+ a 2)) (cells-at fw (+ (* j 24) 1)) (cells-at fw (+ (* j 24) 3))))
-                              (if (and (<= vg (* lh (sm-cue-lines))) (<= hg w)) (set cue 1)))))
-                      (set j (+ j 1))))
-                (if (and (== cue 1) (< n (sm-max-cands)))
-                  (do (sm-add-cand scr (pls-signature) (cells-at tmp (+ a 5)) (cells-at tmp a) (cells-at tmp (+ a 1)) (cells-at tmp (+ a 2)) (cells-at tmp (+ a 3))
-                                   0 0 0 (cells-at tmp (+ a 6)) 0)
-                      (set n (+ n 1))))))
-          (set i (+ i 1))))
-    (return n)))
-
 ;; ------------------------------------------------------------- the words of a candidate
 
 (defn ^I32 sm-group-inside [^Cells cg ^Cells refs ^Cells owords ^I32 g ^Cells scr ^I32 c]
@@ -694,7 +559,7 @@
           (set kind (cells-at scr c))
           (set tl 0)
           (set oc 0)
-          (if (!= kind (pls-signature))
+          (if (<= kind (pls-stamp))
             (set tl (sm-count-members scr c fw gl page)))
           (cells-set scr (+ c 11) tl)
           (set g 0)
@@ -721,7 +586,7 @@
                 (set ts (cells-len et))
                 (set first -1)
                 (set nref 0)
-                (if (and (!= kind (pls-signature)) (> tl 0))
+                (if (and (<= kind (pls-stamp)) (> tl 0))
                   (sm-text-layer-text scr c fw gl et page))
                 (set g 0)
                 (while (< g ng)
@@ -733,7 +598,7 @@
                                 (do (set row (cells-at refs (+ (* (+ (cg-get cg g (cgf-ofirst)) j) 2) 1)))
                                     (rf-add refs (ea-owords) row)
                                     (set nref (+ nref 1))
-                                    (if (and (== tl 0) (!= kind (pls-signature)))
+                                    (if (and (== tl 0) (<= kind (pls-stamp)))
                                       (do (if (> (cells-len et) ts) (cells-push et 32))
                                           (sm-push-run et (ow-get owords row (hd-tstart)) (ow-get owords row (hd-tlen)))))
                                     (set j (+ j 1)))))))
@@ -744,18 +609,30 @@
                 (if (!= (bit-and (cells-at scr (+ c 10)) 1) 0) (set conf (+ conf 100)))
                 (if (!= (bit-and (cells-at scr (+ c 10)) 2) 0) (set conf (+ conf 100)))
                 (if (> tl 0) (set conf (+ conf 100)))
-                (if (> conf 900) (set conf 900))
+                (if (> kind (pls-stamp)) (set conf (quot (cells-at scr (+ c 10)) 65536)))
+                (if (and (<= kind (pls-stamp)) (> conf 900)) (set conf 900))
                 (set o (sl-new sm page (cells-at scr (+ c 2)) (cells-at scr (+ c 3)) (cells-at scr (+ c 4)) (cells-at scr (+ c 5)) kind))
                 (cells-set sm (+ (* o 16) 7) (ea-paths))
                 (cells-set sm (+ (* o 16) 8) (cells-at scr (+ c 1)))
+                (if (== kind (pls-digital-signature))
+                  (do (cells-set sm (+ (* o 16) 7) -1)
+                      (cells-set sm (+ (* o 16) 8) -1)))
                 (cells-set sm (+ (* o 16) 9) conf)
                 (if (> nref 0)
                   (do (cells-set sm (+ (* o 16) 10) first)
                       (cells-set sm (+ (* o 16) 11) nref)))
-                (cells-set sm (+ (* o 16) 12) (cells-at scr (+ c 10)))
+                (cells-set sm (+ (* o 16) 12) (rem (cells-at scr (+ c 10)) 65536))
                 (if (> tl 0) (cells-set sm (+ (* o 16) 12) (bit-or (cells-at scr (+ c 10)) 32)))
                 (cells-set sm (+ (* o 16) 13) ts)
                 (cells-set sm (+ (* o 16) 14) (- (cells-len et) ts))
+                (comment "a signature's or initials' typed name and a digital signature's record are runs `emon.sigmark` appended (scr cells 6 and 7): flag 1024 says the run is a name, 256 a record")
+                (if (> kind (pls-stamp))
+                  (do (cells-set sm (+ (* o 16) 13) (cells-at scr (+ c 6)))
+                      (cells-set sm (+ (* o 16) 14) (cells-at scr (+ c 7)))
+                      (if (and (!= kind (pls-digital-signature)) (> (cells-at scr (+ c 7)) 0))
+                        (cells-set sm (+ (* o 16) 12) (bit-or (cells-at sm (+ (* o 16) 12)) 1024)))
+                      (if (== kind (pls-digital-signature))
+                        (cells-set sm (+ (* o 16) 12) (bit-or (cells-at sm (+ (* o 16) 12)) 256)))))
                 (cells-set sm (+ (* o 16) 15) (cells-at scr (+ c 9)))))
           (set k (+ k 1))))
     (comment "3. the groups that are theirs: every text-layer word of the group belongs to one candidate, or the group is OCR-only and inside one")
@@ -890,9 +767,31 @@
     (if (<= small 0) (return 0))
     (return (quot (* (* w h) 100) small))))
 
-(defn ^I32 sm-raster [^I32 page ^:mut ^Cells et ^Cells cg ^Cells refs ^Cells owords ^:mut ^Cells sm]
-  (comment "The `sl` rows of the seals and stamps that page units found in pixels (`emon.sealpx`): one for every group of `page` flagged `seal-px`, unless a candidate that is")
-  (comment "already there (found in the vector paths) has its box (half of the smaller). Its text is `sm-px-text`'s, its colour the group's code, its words the group's. Answers the rows written.")
+(defn ^I32 sm-box-group [^Cells cg ^Cells refs ^Cells owords ^I32 g ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1]
+  (comment "1 when the group has no text-layer or hidden word, has OCR words, and the centre of every one lies inside the box.")
+  (let [^I32 no (cg-get cg g (cgf-ocount))
+        ^I32 of (cg-get cg g (cgf-ofirst))
+        ^:mut ^I32 k 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 cx 0
+        ^:mut ^I32 cy 0]
+    (if (> (cg-get cg g (cgf-tcount)) 0) (return 0))
+    (if (> (cg-get cg g (cgf-hcount)) 0) (return 0))
+    (if (== no 0) (return 0))
+    (while (< k no)
+      (do (set row (cells-at refs (+ (* (+ of k) 2) 1)))
+          (set cx (quot (+ (ow-get owords row (hd-x0)) (ow-get owords row (hd-x1))) 2))
+          (set cy (quot (+ (ow-get owords row (hd-y0)) (ow-get owords row (hd-y1))) 2))
+          (if (or (< cx x0) (or (> cx x1) (or (< cy y0) (> cy y1))))
+            (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 sm-raster [^I32 page ^:mut ^Cells et ^:mut ^Cells cg ^Cells refs ^Cells owords ^Cells fw ^:mut ^Cells tmp ^:mut ^Cells sm]
+  (comment "The `sl` rows of the seals, stamps, signatures and initials that page units found in pixels (`emon.sealpx`, `emon.sigpx`): one for every group of `page` flagged `seal-px`, unless a candidate")
+  (comment "that is already there (found in the vector paths) has its box (half of the smaller). A seal's or stamp's text is `sm-px-text`'s; a signature's or initials' is none, but the typed name")
+  (comment "under or beneath its strokes (`emon.sigmark`'s `sg-typed-name`: the line the strokes are drawn over, else the first within 45 pt under them) when there is one (flag 1024); the OCR-only")
+  (comment "groups inside a signature or initials are flagged `in-seal` (their words are the strokes read as letters). Its colour is the group's code, its words the group's. Answers the rows written.")
   (let [^I32 ng (cg-count cg)
         ^:mut ^I32 g 0
         ^:mut ^I32 o 0
@@ -901,7 +800,16 @@
         ^:mut ^I32 ts 0
         ^:mut ^I32 fl 0
         ^:mut ^I32 kind 0
-        ^:mut ^I32 conf 0]
+        ^:mut ^I32 conf 0
+        ^:mut ^I32 got 0
+        ^:mut ^I32 gx0 0
+        ^:mut ^I32 gy0 0
+        ^:mut ^I32 gx1 0
+        ^:mut ^I32 gy1 0
+        ^:mut ^I32 fq 0
+        ^:mut ^I32 q 0]
+    (while (< (cells-len tmp) 4)
+      (cells-push tmp 0))
     (while (< g ng)
       (do (if (and (== (cg-get cg g (cgf-page)) page) (!= (bit-and (cg-get cg g (cgf-flags)) (plg-seal-px)) 0))
             (do (set dup 0)
@@ -916,13 +824,26 @@
                   (do (set fl (cg-get cg g (cgf-flags)))
                       (set kind (pls-seal))
                       (if (!= (bit-and fl (plg-seal-stamp)) 0) (set kind (pls-stamp)))
+                      (if (!= (bit-and fl (plg-seal-sig)) 0) (set kind (pls-signature)))
+                      (if (!= (bit-and fl (plg-seal-init)) 0) (set kind (pls-initials)))
                       (set ts (cells-len et))
-                      (sm-px-text et refs owords (cg-get cg g (cgf-ofirst)) (cg-get cg g (cgf-ocount)))
+                      (set got 0)
+                      (if (<= kind (pls-stamp))
+                        (sm-px-text et refs owords (cg-get cg g (cgf-ofirst)) (cg-get cg g (cgf-ocount)))
+                        (do (set gx0 (cg-get cg g (cgf-x0)))
+                            (set gy0 (cg-get cg g (cgf-y0)))
+                            (set gx1 (cg-get cg g (cgf-x1)))
+                            (set gy1 (cg-get cg g (cgf-y1)))
+                            (set got (sg-typed-name fw et page (- gy0 300) gy1 gx0 gx1 300 tmp))
+                            (if (== got 0)
+                              (set got (sg-typed-name fw et page (- gy1 300) (+ gy1 4500) gx0 gx1 4000 tmp)))))
                       (comment "a reading with no word kept is no text: the seal has none")
                       (set conf 600)
                       (if (== kind (pls-stamp)) (set conf 700))
-                      (if (> (cg-get cg g (cgf-rot)) 2) (set conf (+ conf 100)))
-                      (if (> (cells-len et) ts) (set conf (+ conf 100)))
+                      (if (<= kind (pls-stamp))
+                        (do (if (> (cg-get cg g (cgf-rot)) 2) (set conf (+ conf 100)))
+                            (if (> (cells-len et) ts) (set conf (+ conf 100)))))
+                      (if (== kind (pls-initials)) (set conf 550))
                       (if (> conf 900) (set conf 900))
                       (set o (sl-new sm page (cg-get cg g (cgf-x0)) (cg-get cg g (cgf-y0)) (cg-get cg g (cgf-x1)) (cg-get cg g (cgf-y1)) kind))
                       (cells-set sm (+ (* o 16) 9) conf)
@@ -931,16 +852,36 @@
                       (cells-set sm (+ (* o 16) 12) 128)
                       (cells-set sm (+ (* o 16) 13) ts)
                       (cells-set sm (+ (* o 16) 14) (- (cells-len et) ts))
+                      (if (and (> kind (pls-stamp)) (!= got 0))
+                        (do (cells-set sm (+ (* o 16) 13) (cells-at tmp 0))
+                            (cells-set sm (+ (* o 16) 14) (cells-at tmp 1))
+                            (cells-set sm (+ (* o 16) 12) 1152)))
                       (cells-set sm (+ (* o 16) 15) (cg-get cg g (cgf-rot)))
+                      (if (> kind (pls-stamp))
+                        (do (cells-set sm (+ (* o 16) 10) -1)
+                            (cells-set sm (+ (* o 16) 11) 0)
+                            (set gx0 (cg-get cg g (cgf-x0)))
+                            (set gy0 (cg-get cg g (cgf-y0)))
+                            (set gx1 (cg-get cg g (cgf-x1)))
+                            (set gy1 (cg-get cg g (cgf-y1)))
+                            (set q 0)
+                            (while (< q ng)
+                              (do (if (and (== (cg-get cg q (cgf-page)) page) (== (bit-and (cg-get cg q (cgf-flags)) (plg-seal-px)) 0))
+                                    (if (== (sm-box-group cg refs owords q gx0 gy0 gx1 gy1) 1)
+                                      (do (set fq (cg-get cg q (cgf-flags)))
+                                          (cg-set cg q (cgf-flags) (bit-or fq (plg-in-seal))))))
+                                  (set q (+ q 1))))))
                       (set made (+ made 1))))))
           (set g (+ g 1))))
     (return made)))
 
 (defn ^:pub ^I32 sm-find [^Cells pa ^Cells pts ^Cells gl ^Cells fw ^:mut ^Cells et ^Cells epages
-                          ^:mut ^Cells cg ^:mut ^Cells refs ^Cells owords ^I32 np
-                          ^:mut ^Cells sm ^:mut ^Cells scr ^:mut ^Cells tmp]
+                          ^:mut ^Cells cg ^:mut ^Cells refs ^Cells owords ^Cells an ^Cells txt ^I32 np
+                          ^:mut ^Cells sm ^:mut ^Cells scr ^:mut ^Cells tmp ^:mut ^Cells sgc]
   (comment "The candidates of every page (see the head of this file) into `sm` (the `sl` arena), the text of their words appended to `et` (`sl` cells 13-14), and")
-  (comment "the flag `plg-in-seal` on the groups of `cg` that are theirs. `scr` and `tmp` are scratch. Answers the candidates written.")
+  (comment "the flag `plg-in-seal` on the groups of `cg` that are theirs. Handwritten signatures, initials and digital signature fields are `emon.sigmark`'s: its clusters are found in a")
+  (comment "first pass over every page (`sgc`; the document's verdict needs all of them: initials recur) and written here as candidate records. `an` and `txt` are P3.8's. `scr`, `tmp`")
+  (comment "and `sgc` are scratch. Answers the candidates written.")
   (let [^I32 npaths (pa-count pa)
         ^:mut ^I32 p 1
         ^:mut ^I32 pi 0
@@ -951,6 +892,8 @@
         ^:mut ^I32 pw 61200
         ^:mut ^I32 ph 79200]
     (cells-drop sm 0)
+    (cells-drop sgc 0)
+    (comment "the first pass: every page's pen-stroke clusters, then the document's verdict on them")
     (while (<= p np)
       (do (while (and (< pi npaths) (< (pa-get pa pi (pf-page)) p))
             (set pi (+ pi 1)))
@@ -958,13 +901,35 @@
           (while (and (< pi npaths) (== (pa-get pa pi (pf-page)) p))
             (set pi (+ pi 1)))
           (set p1 pi)
+          (set pw 61200)
+          (set ph 79200)
+          (set ep (ev-page-row epages p))
+          (if (>= ep 0)
+            (do (set pw (ep-get epages ep (epf-width)))
+                (set ph (ep-get epages ep (epf-height)))))
           (if (> p1 p0)
-            (do (set ep (ev-page-row epages p))
-                (if (>= ep 0)
-                  (do (set pw (ep-get epages ep (epf-width)))
-                      (set ph (ep-get epages ep (epf-height)))))
-                (cells-drop scr 0)
-                (cells-drop tmp 0)
+            (sg-collect pa pts fw et owords p p0 p1 pw ph tmp sgc))
+          (set p (+ p 1))))
+    (sg-decide sgc owords et fw)
+    (set p 1)
+    (set pi 0)
+    (while (<= p np)
+      (do (while (and (< pi npaths) (< (pa-get pa pi (pf-page)) p))
+            (set pi (+ pi 1)))
+          (set p0 pi)
+          (while (and (< pi npaths) (== (pa-get pa pi (pf-page)) p))
+            (set pi (+ pi 1)))
+          (set p1 pi)
+          (set pw 61200)
+          (set ph 79200)
+          (set ep (ev-page-row epages p))
+          (if (>= ep 0)
+            (do (set pw (ep-get epages ep (epf-width)))
+                (set ph (ep-get epages ep (epf-height)))))
+          (cells-drop scr 0)
+          (set n 0)
+          (if (> p1 p0)
+            (do (cells-drop tmp 0)
                 (cells-push tmp 0)
                 (cells-push tmp 0)
                 (cells-push tmp 0)
@@ -974,10 +939,10 @@
                 (cells-push tmp 0)
                 (cells-push tmp 0)
                 (set n (sm-rings pa pts p0 p1 scr tmp))
-                (set n (sm-stamps pa pts p0 p1 pw ph scr n))
-                (set n (sm-signatures pa pts fw et p p0 p1 pw ph scr n tmp))
-                (if (> n 0) (sm-page scr n p fw gl et cg refs owords sm))))
-          (sm-raster p et cg refs owords sm)
+                (set n (sm-stamps pa pts p0 p1 pw ph scr n))))
+          (set n (sg-emit sgc an txt fw et p scr n tmp))
+          (if (> n 0) (sm-page scr n p fw gl et cg refs owords sm))
+          (sm-raster p et cg refs owords fw tmp sm)
           (set p (+ p 1))))
     (return (sl-count sm))))
 
@@ -1040,6 +1005,28 @@
   (if (and (== (sl-get sm a 0) (sl-get sm b 0)) (< (sl-get sm a 2) (sl-get sm b 2))) (return 1))
   (return 0))
 
+(defn ^I32 sm-ref-y [^Cells sm ^I32 o]
+  (comment "The y that places candidate `o` among the blocks that start below it: its top, but a digital signature field's BOTTOM (a field a line of text sits beside is read after the")
+  (comment "label that starts inside its height: `Approved by` then the field, P8.3, D906).")
+  (if (== (sl-get sm o 5) (pls-digital-signature)) (return (sl-get sm o 4)))
+  (return (sl-get sm o 2)))
+
+(defn ^I32 sm-last-above [^Cells sm ^I32 o ^Cells on ^Cells orr ^I32 n]
+  (comment "The last top-level block (in reading order) of candidate `o`'s page that starts above its reference y (`sm-ref-y`), -1 for none: where a signature, initials or a digital signature")
+  (comment "that overlaps no block is placed AFTER (the initials at the foot of page 1 are the end of page 1's blocks, not the start of page 2's: P8.3, D906).")
+  (let [^I32 ref (sm-ref-y sm o)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 pick -1]
+    (while (< i n)
+      (do (if (== (sm-is-top on i) 1)
+            (do (set r (node-region-head on i))
+                (if (>= r 0)
+                  (if (and (== (region-page orr r) (sl-get sm o 0)) (< (region-y0 orr r) ref))
+                    (set pick i)))))
+          (set i (+ i 1))))
+    (return pick)))
+
 (defn ^I32 sm-pending [^Cells sm ^Cells nm ^I32 n0 ^Cells on ^I32 i ^I32 page ^I32 y0 ^I32 mode]
   (comment "The next candidate to write before node i, -1 for none. `nm[n0 + o]` is the node a candidate is placed after (-1: none overlaps it). Mode 0: the")
   (comment "candidates placed after a node whose subtree has ended (i is later and not in it). Mode 1: those with no such node, whose top lies before (page, y0). Mode 2:")
@@ -1057,7 +1044,7 @@
                 (if (and (== mode 0) (>= a 0))
                   (if (and (> i a) (== (sm-below on i a) 0)) (set ok 1)))
                 (if (and (== mode 1) (< a 0))
-                  (if (or (< (sl-get sm o 0) page) (and (== (sl-get sm o 0) page) (< (sl-get sm o 2) y0))) (set ok 1)))
+                  (if (or (< (sl-get sm o 0) page) (and (== (sl-get sm o 0) page) (< (sm-ref-y sm o) y0))) (set ok 1)))
                 (if (== ok 1)
                   (if (< best 0)
                     (set best o)
@@ -1107,6 +1094,36 @@
                 (node-add-attr-text nodes attrs nn (fk-date) start (cells-at nm (+ fb 4)))))))
     (return 0)))
 
+(defn ^I32 sm-emit-seg [^Cells et ^I32 from ^I32 to ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 nn ^I32 key]
+  (comment "Add the code points et[from, to) to the Model's text as attribute `key` of node `nn`; nothing for an empty range.")
+  (let [^:mut ^I32 j from
+        ^I32 start (cells-len text)]
+    (if (<= to from) (return 0))
+    (while (< j to)
+      (do (text-append-cp text (cells-at et j))
+          (set j (+ j 1))))
+    (node-add-attr-text nodes attrs nn key start (- to from))
+    (return 1)))
+
+(defn ^I32 sm-emit-digital [^Cells et ^I32 ts ^I32 tl ^I32 signed ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^I32 nn]
+  (comment "A digital signature's attributes (P8.3, D900) from the record et[ts, ts + tl): the signer's name, the reason, the location and the time, each ended by the code point 31, as")
+  (comment "`name`, `reason`, `location` and `date`; and `signed`, the state of the field (it holds a signature dictionary with a /Contents). Nothing is verified.")
+  (let [^I32 end (+ ts tl)
+        ^:mut ^I32 j ts
+        ^:mut ^I32 from ts
+        ^:mut ^I32 seg 0]
+    (while (<= j end)
+      (do (if (or (== j end) (== (cells-at et j) 31))
+            (do (if (== seg 0) (sm-emit-seg et from j nodes attrs text nn (fk-name)))
+                (if (== seg 1) (sm-emit-seg et from j nodes attrs text nn (fk-reason)))
+                (if (== seg 2) (sm-emit-seg et from j nodes attrs text nn (fk-location)))
+                (if (== seg 3) (sm-emit-seg et from j nodes attrs text nn (fk-date)))
+                (set from (+ j 1))
+                (set seg (+ seg 1))))
+          (set j (+ j 1))))
+    (node-set-attr-bool nodes attrs nn (fk-signed) signed)
+    (return 0)))
+
 (defn ^I32 sm-emit [^:mut ^Cells sm ^I32 o ^Cells et ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text ^I32 parent ^:mut ^Cells nm ^I32 fb]
   (comment "Write candidate `o` as a `seal` node, the last child of `parent`: its subkind, confidence, source, region, the words as `text` (flagged `low-conf`),")
   (comment "its name and date (`sm-emit-fields`) and its colour name. `nm` from cell `fb` is the fields' scratch.")
@@ -1123,7 +1140,11 @@
     (node-set-conf nodes nn (sl-get sm o 9))
     (node-add-src nodes nn (sr-infer))
     (node-add-region nodes regions nn (sl-get sm o 0) (sl-get sm o 1) (sl-get sm o 2) (sl-get sm o 3) (sl-get sm o 4))
-    (if (> tl 0)
+    (if (and (> tl 0) (!= (bit-and fl 256) 0))
+      (sm-emit-digital et ts tl (quot (bit-and fl 512) 512) nodes attrs text nn))
+    (if (and (> tl 0) (!= (bit-and fl 1024) 0))
+      (sm-emit-seg et ts (+ ts tl) nodes attrs text nn (fk-name)))
+    (if (and (> tl 0) (== (bit-and fl 1280) 0))
       (do (set start (cells-len text))
           (comment "the node's text has the words of a pixel-read ring and not the marks it puts between them (they are a word of their own to a reader of the text); the fields below see them")
           (while (< j tl)
@@ -1209,6 +1230,8 @@
                               (if (>= (* (sm-hit sm o orr r) 2) best)
                                 (if (> best 0) (set pick i))))))
                       (set i (+ i 1))))))
+          (if (and (< pick 0) (> (sl-get sm o 5) (pls-stamp)))
+            (set pick (sm-last-above sm o on orr n)))
           (cells-push nm pick)
           (set o (+ o 1))))
     (sf-prep nm (+ n ns))

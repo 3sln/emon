@@ -1,0 +1,177 @@
+#!/usr/bin/env bb
+;; HANDWRITTEN SIGNATURES, INITIALS AND DIGITAL SIGNATURES, replayed from transcripts WITH THEIR PIXELS (P8.3, SPEC 10.7, 9.5, D016, D205, D900-D907).   kin/scripts/sigs
+;;
+;; test/signatures (tools/synth/sig_pdf.clj) holds four fixtures: `sig-contract` (two pages: initials in the foot margin of both, a blue VECTOR signature on a rule with the typed name `Alex Morgan,
+;; Director` under it, a RASTER signature (a JPEG image) on a second rule with the typed name `Jordan Lee`; the labels are German and Spanish: the cues are shapes), `sig-negatives` (a doodle, a rule
+;; with a typed name and no ink, a chart's line, a scribble in a figure, a `Signature:` label with nothing: NO node), `sig-digital` (three signature FIELDS: signed with a /Name, signed with a
+;; certificate and no /Name, unsigned) and `sig-scan` (a scanned page with a pen signature over a rule). test/signatures/replay/ID is what the live ports answered, recorded by `bb sigs-record` on
+;; Rust (pdfium, Tesseract) WITH the bitmaps the page units read. This gate only REPLAYS them, through the whole Engine on Rust and Go, and holds:
+;;
+;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the bundle the recording made (SHA-256);
+;;   2. THE NODES: the seal nodes of the body are the gold's: subkind, page, colour, the typed NAME of a signature, and for a digital signature the name, date, reason, location and whether it is
+;;      signed (nothing is verified); nothing else is a node (`sig-negatives` has none);
+;;   3. NOTHING LEAKS AND NOTHING IS LOST: no body word that is not the page's own (a stroke OCR read as letters), and every word of the page's own text is in the body (the scan has OCR's errors
+;;      and is held to its recording);
+;;   4. NO OCR, NO PIXEL: the signature fields are nodes with no transcript at all (the Engines' plain conversion of `sig-digital` gives the same three nodes);
+;;   5. THE METRICS: signature precision and recall, initials precision and recall, signature name accuracy, digital-signature field accuracy, over the four fixtures; and the scoreboard's
+;;      `emon-sigs` (the scorer's `seal-sig-p`, `seal-init-p`, `digsig-acc` ... over the same replays) holds.
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process]]
+         '[cheshire.core :as json]
+         '[clojure.edn :as edn]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(def abs #(str (fs/absolutize %)))
+(def fixtures (edn/read-string (slurp "test/signatures/FIXTURES.edn")))
+(def gold (edn/read-string (slurp "test/signatures/gold.edn")))
+(def ids (vec (sort (filter #(fs/exists? (str "test/signatures/replay/" % "/transcript.edn")) (keys fixtures)))))
+(def digests (let [f "test/signatures/replay/DIGESTS.edn"] (if (fs/exists? f) (read-string (slurp f)) {})))
+
+(defn sha256 [s]
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest md (.getBytes ^String s "UTF-8"))))))
+
+(defn build-driver [script what]
+  (let [r @(process {:out :string :err :string} script)]
+    (if (zero? (:exit r)) (str/trim (:out r)) (do (bad "the " what " Engine driver did not build:\n" (:err r)) nil))))
+
+(def rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" "Rust")))
+(def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
+(when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
+(when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+
+(defn drive [drv & a]
+  (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
+    {:exit (:exit r) :out (:out r) :err (:err r)}))
+(defn same? [a b] (and (= (:exit a) (:exit b)) (= (:out a) (:out b)) (= (:err a) (:err b))))
+
+(defn pdf-of [id] (abs (:pdf (get fixtures id))))
+(defn walk [n] (when (map? n) (cons n (mapcat walk (get n "children")))))
+(defn words [s] (re-seq #"[\p{L}\p{N}]+" (str/lower-case (str s))))
+(defn key* [s] (str/join (words s)))
+(defn seals [model] (filter #(= "seal" (get % "kind")) (walk (get model "body"))))
+(defn body-words
+  "The words of every text of the body outside the seal nodes."
+  [model]
+  (mapcat (fn [n] (when (and (not= "seal" (get n "kind")) (string? (get n "text")) (empty? (get n "children"))) (words (get n "text"))))
+          (walk (get model "body"))))
+(defn page-of [n] (some-> (get n "at") first first))
+
+(defn model-of [drv rep pdf] (json/parse-string (:out (drive drv "--out=json" (str "--replay=" rep) pdf))))
+
+(defn view
+  "A predicted node as the gold writes one."
+  [n]
+  (let [sub (get n "subkind")]
+    (cond-> {:page (page-of n) :subkind sub}
+      (get n "color") (assoc :color (get n "color"))
+      (get n "name") (assoc :name (get n "name"))
+      (= "digital-signature" sub) (assoc :signed (boolean (get n "signed")))
+      (get n "date") (assoc :date (get n "date"))
+      (get n "reason") (assoc :reason (get n "reason"))
+      (get n "location") (assoc :location (get n "location")))))
+
+(defn node-ok?
+  "A predicted node (view) is the gold's: subkind, page and, where the gold says one, the colour, the name (letters and digits), and the digital signature's fields exactly."
+  [g p]
+  (and p (= (:subkind g) (:subkind p)) (= (:page g) (:page p))
+       (or (nil? (:color g)) (= (:color g) (:color p)))
+       (or (nil? (:name g)) (= (key* (:name g)) (key* (:name p))))
+       (or (not= "digital-signature" (:subkind g))
+           (and (= (boolean (:signed g)) (boolean (:signed p))) (= (:date g) (:date p)) (= (:reason g) (:reason p)) (= (:location g) (:location p))))))
+
+(defn pair-up
+  "Each gold node with the first unused predicted node that is its own (`node-ok?`), else with the first of its subkind and page: [[gold pred-or-nil]] and the predicted nodes left over."
+  [gs ps]
+  (loop [gs gs, left (vec ps), out []]
+    (if-let [g (first gs)]
+      (let [i (or (first (keep-indexed (fn [i p] (when (node-ok? g p) i)) left))
+                  (first (keep-indexed (fn [i p] (when (and (= (:subkind g) (:subkind p)) (= (:page g) (:page p))) i)) left)))]
+        (recur (rest gs) (if i (into (subvec left 0 i) (subvec left (inc i))) left) (conj out [g (when i (nth left i))])))
+      [out left])))
+
+(def totals (atom {}))
+(defn tally! [k n] (swap! totals update k (fnil + 0) n))
+
+(defn ratio [a b] (if (zero? b) 1.0 (/ (double a) b)))
+
+(when (and rdrv gdrv (seq ids))
+  (doseq [id ids]
+    (let [g (get gold id)
+          pdf (pdf-of id)
+          rep (abs (str "test/signatures/replay/" id))
+          rr (drive rdrv "--out=bundle" (str "--replay=" rep) pdf)
+          rg (drive gdrv "--out=bundle" (str "--replay=" rep) pdf)
+          want (get digests id)
+          scan? (= :scan (:kind (get fixtures id)))]
+      ;; 1 ---------------------------------------------------------------------------------------------------------------------------
+      (check (and (zero? (:exit rr)) (same? rr rg))
+             id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
+      ;; 2 ---------------------------------------------------------------------------------------------------------------------------
+      (let [m (model-of rdrv rep pdf)
+            ps (mapv view (seals m))
+            exp (:nodes g)
+            [pairs extra] (pair-up exp ps)
+            right (count (filter (fn [[a b]] (node-ok? a b)) pairs))]
+        (check (and (= right (count exp)) (empty? extra))
+               id ": the seal nodes are the gold's: " (count ps) " found, " (count exp) " expected" (when-not (and (= right (count exp)) (empty? extra)) (str " -- got " (pr-str ps))))
+        (doseq [sub ["signature" "initials"]]
+          (let [gs (filter #(= sub (:subkind %)) exp) pp (filter #(= sub (:subkind %)) ps)
+                k (if (= sub "signature") "sig" "init")]
+            (tally! (str k ".gold") (count gs))
+            (tally! (str k ".pred") (count pp))
+            (tally! (str k ".tp") (count (filter (fn [[a b]] (and (= sub (:subkind a)) (node-ok? (dissoc a :name) (some-> b (dissoc :name))))) pairs)))))
+        (let [gn (filter #(and (= "signature" (:subkind %)) (:name %)) exp)]
+          (tally! "name.n" (count gn))
+          (tally! "name.ok" (count (filter (fn [[a b]] (and (= "signature" (:subkind a)) (:name a) b (= (key* (:name a)) (key* (:name b))))) pairs))))
+        (let [gd (filter #(= "digital-signature" (:subkind %)) exp)]
+          (tally! "dig.n" (count gd))
+          (tally! "dig.ok" (count (filter (fn [[a b]] (and (= "digital-signature" (:subkind a)) (node-ok? a b))) pairs))))
+        ;; 3 -------------------------------------------------------------------------------------------------------------------------
+        (let [bw (frequencies (body-words m))
+              gw (frequencies (words (str/join " " (:body g))))
+              missing (reduce + (for [[w n] gw] (max 0 (- n (get bw w 0)))))
+              extras (reduce + (for [[w n] bw] (max 0 (- n (get gw w 0)))))]
+          (if scan?
+            (do (check (<= missing 6) id ": the words of the scan that OCR reads reach the body (" missing " of " (reduce + (vals gw)) " missing: its engine's errors)")
+                (check (<= extras 6) id ": and not the strokes (" extras " words that are not the page's own: held to the recording)"))
+            (do (check (zero? missing) id ": every word of the page's own text is in the body (" missing " missing)")
+                (check (zero? extras) id ": no stroke is body text: no word that is not the page's own (" extras " extra)")))))))
+  ;; 4 -----------------------------------------------------------------------------------------------------------------------------
+  (let [pdf (pdf-of "sig-digital")
+        want (:nodes (get gold "sig-digital"))
+        a (drive rdrv "--out=json" pdf)
+        b (drive gdrv "--out=json" pdf)
+        ps (mapv view (seals (json/parse-string (:out a))))
+        [pairs extra] (pair-up want ps)]
+    (check (and (zero? (:exit a)) (same? a b)) "sig-digital: with no OCR and no pixel, the Rust and the Go Engine give the identical JSON")
+    (check (and (every? (fn [[g p]] (node-ok? g p)) pairs) (empty? extra))
+           "sig-digital: and the three signature fields are nodes (" (count ps) "): signed with a /Name, signed with a certificate's name, unsigned"))
+  ;; 5 -----------------------------------------------------------------------------------------------------------------------------
+  (let [t @totals
+        p #(ratio (get t (str % ".tp") 0) (get t (str % ".pred") 0))
+        r #(ratio (get t (str % ".tp") 0) (get t (str % ".gold") 0))]
+    (ok (format "signatures: precision %.2f, recall %.2f (%d of %d gold, %d predicted); initials: precision %.2f, recall %.2f (%d of %d gold, %d predicted); typed names %d of %d; digital-signature fields %d of %d"
+                (p "sig") (r "sig") (get t "sig.tp" 0) (get t "sig.gold" 0) (get t "sig.pred" 0)
+                (p "init") (r "init") (get t "init.tp" 0) (get t "init.gold" 0) (get t "init.pred" 0)
+                (get t "name.ok" 0) (get t "name.n" 0) (get t "dig.ok" 0) (get t "dig.n" 0)))
+    (check (and (>= (p "sig") 0.9) (>= (r "sig") 0.9)) "signature precision and recall at least 0.9")
+    (check (and (>= (p "init") 0.9) (>= (r "init") 0.9)) "initials precision and recall at least 0.9")
+    (check (= (get t "dig.ok" 0) (get t "dig.n" 0)) "every digital-signature field is exactly the gold's: name, date, reason, location, signed"))
+  ;; the ratchet of the scoreboard's `emon-sigs`: the same replays, scored by the scorer against gold/ID.gold.json
+  (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-sigs")]
+    (check (and (zero? (:exit r)) (str/includes? (:out r) "ok   accuracy[emon-sigs]") (not (str/includes? (:out r) "FAIL")))
+           "accuracy[emon-sigs]: the fixtures, replayed, hold their scoreboard entry"
+           (when-let [l (some #(when (str/includes? % "accuracy[emon-sigs]") (str/trim %)) (str/split-lines (:out r)))]
+             (str " (" (str/replace l #"^ok +accuracy\[emon-sigs\]: " "") ")"))))
+  (when (zero? @fails)
+    (ok "signatures: handwritten signatures and initials (vector and raster, over rules and by cues that are shapes) and digital signature fields are nodes of their own, their strokes are out of the body; on Rust and Go")))
+
+(when (empty? ids) (println "  SKIP no signature transcripts committed (bb sigs-record)"))
+(when (pos? @fails) (System/exit 1))

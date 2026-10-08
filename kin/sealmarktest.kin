@@ -163,9 +163,12 @@
 (defn ^I32 st-find [^Cells pa ^Cells pts ^Cells gl ^Cells fw ^Cells et ^Cells cg ^Cells refs ^Cells ow ^:mut ^Cells sm]
   (let [^Cells ep (new-cells)
         ^Cells scr (new-cells)
-        ^Cells tmp (new-cells)]
+        ^Cells tmp (new-cells)
+        ^Cells an (new-cells)
+        ^Cells txt (new-cells)
+        ^Cells sgc (new-cells)]
     (ep-new ep 1 61200 79200)
-    (return (sm-find pa pts gl fw et ep cg refs ow 1 sm scr tmp))))
+    (return (sm-find pa pts gl fw et ep cg refs ow an txt 1 sm scr tmp sgc))))
 
 (deftest test-a-seal-holds-its-arc-and-its-ink-and-not-the-body-under-it
   (let [^Cells pa (new-cells)

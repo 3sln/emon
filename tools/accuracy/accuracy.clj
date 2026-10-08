@@ -14,6 +14,9 @@
                                        NOT a gate (it needs Tesseract and takes minutes); `bb ocr-live` runs it for the scans
     bb accuracy --predictor emon-sealpx  the Rust Engine REPLAYING the committed transcripts of test/sealpx/replay/ovl-ID (scanned pages with seals, recorded WITH the bitmaps
                                        the page units read; P8.2, D805): `bb sealpx` runs it with `--variants scan-ovl --ids stamp-seal,seal-over-text,sig-over-name`
+    bb accuracy --predictor emon-sigs  the Rust Engine REPLAYING the committed transcripts of test/signatures/replay/ID (P8.3, D907): the fixture set test/signatures (a contract
+                                       with vector and raster signatures and initials, signature fields, a scan with a signature, a page with none) scored against its gold/ID.gold.json;
+                                       `bb sigs` runs it
     bb accuracy --predictor emon-fusion  the Rust Engine converting BORN-DIGITAL documents with its default settings (the born-digital pages are OCR'd
                                        under `always`, P7.S), REPLAYING the committed transcripts of test/fusion/replay/ID/ (a gate's: `bb fusion`)
     bb accuracy --predictor emon-fusion-live  the same LIVE (pdfium and Tesseract). NOT a gate (needs both; takes minutes)
@@ -73,6 +76,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "emon-live" ["sh" (str (fs/path HERE "predict-emon-live.sh"))]
    "emon-replay" ["sh" (str (fs/path HERE "predict-emon-replay.sh"))]
    "emon-sealpx" ["sh" (str (fs/path HERE "predict-emon-sealpx.sh"))]
+   "emon-sigs" ["sh" (str (fs/path HERE "predict-emon-sigs.sh"))]
    "emon-replay-px" ["sh" (str (fs/path HERE "predict-emon-replay.sh")) "px"]
    "emon-fusion" ["sh" (str (fs/path HERE "predict-emon-fusion.sh"))]
    "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]
@@ -90,7 +94,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 ;; A FIXTURE SET (P8.4): a predictor scored over hand-made fixtures that are not the synthetic corpus, in `DIR/gold/ID.gold.json`
 ;; beside `DIR/ID.pdf` (one input form, `pdf`), with an entry of its own: no pool of the corpus moves for it. The Rust driver is
 ;; the predictor, as for `emon`.
-(def FIXTURE-SETS {"emon-figures" "test/assets/fig"})
+(def FIXTURE-SETS {"emon-figures" "test/assets/fig" "emon-sigs" "test/signatures"})
 
 (def REFERENCES
   {"baseline-pdfplumber" {:tool "pdfplumber" :variants #{"pdf" "pdf-tagged"}}

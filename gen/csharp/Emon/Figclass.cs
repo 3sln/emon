@@ -1322,7 +1322,37 @@ public static class Figclass {
         }
         return -1;
     }
-    public static int FcStage(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells fnodes, emon.Port.Cells fattrs, emon.Port.Cells fregions, emon.Port.Cells fnm, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells fi, emon.Port.Cells grg, emon.Port.Cells grl, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells et, emon.Port.Cells pg, emon.Port.Cells cand, int level, emon.Port.Cells fcand, emon.Port.Cells cl, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, emon.Port.Cells ws) {
+    internal static int FcSignatureOver(emon.Port.Cells sl, int page, int x0, int y0, int x1, int y1) {
+        // 1 when a signature or initials READ FROM PIXELS (an `sl` row of kind 3 or 4 with flag 128: `emon.sigpx`'s) lies in the region on its page: its box is at least half of the region
+        // and the region is at most four times its box (the picture of a signature is the signature's placeholder and no figure: SPEC 10.7, P8.3, D904; a signature inside a photograph is not
+        // this). A region that no figure was made of keeps its words in the body: they were the figure's `labels` otherwise.
+        int n = emon.Port.CellsLen(sl) / 16;
+        int j = 0;
+        int q = 0;
+        int ow = 0;
+        int oh = 0;
+        int area = 0;
+        int sa = 0;
+        int ra = 0;
+        while (j < n) {
+            q = j * 16;
+            if ((emon.Port.CellsAt(sl, q) == page) && ((emon.Port.CellsAt(sl, q + 5) >= 3) && ((emon.Port.CellsAt(sl, q + 5) <= 4) && ((emon.Port.CellsAt(sl, q + 12) & 128) != 0)))) {
+                ow = FcMin(x1, emon.Port.CellsAt(sl, q + 3)) - FcMax(x0, emon.Port.CellsAt(sl, q + 1));
+                oh = FcMin(y1, emon.Port.CellsAt(sl, q + 4)) - FcMax(y0, emon.Port.CellsAt(sl, q + 2));
+                if ((ow > 0) && (oh > 0)) {
+                    area = (ow / 100) * (oh / 100);
+                    sa = ((emon.Port.CellsAt(sl, q + 3) - emon.Port.CellsAt(sl, q + 1)) / 100) * ((emon.Port.CellsAt(sl, q + 4) - emon.Port.CellsAt(sl, q + 2)) / 100);
+                    ra = ((x1 - x0) / 100) * ((y1 - y0) / 100);
+                    if (((area * 2) >= ra) && (ra <= (sa * 4))) {
+                        return 1;
+                    }
+                }
+            }
+            j += 1;
+        }
+        return 0;
+    }
+    public static int FcStage(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells fnodes, emon.Port.Cells fattrs, emon.Port.Cells fregions, emon.Port.Cells fnm, emon.Port.Cells pa, emon.Port.Cells im, emon.Port.Cells fi, emon.Port.Cells grg, emon.Port.Cells grl, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells et, emon.Port.Cells pg, emon.Port.Cells sl, emon.Port.Cells cand, int level, emon.Port.Cells fcand, emon.Port.Cells cl, emon.Port.Cells fg, emon.Port.Cells fd, emon.Port.Cells ab, emon.Port.Cells ws) {
         // THE FIGURES (SPEC 10.6): the candidate regions (the image placements, the vector clusters of `emon.asset`, the shaded fills, P7.G's
         // `figure` regions), each measured and judged, the ones that are figures placed among the blocks with their kind, confidence
         // and `labels` (`rs-figures`) into the empty arenas `fnodes fattrs fregions` (the caller swaps them in, then restructures). `cand`
@@ -1393,6 +1423,9 @@ public static class Figclass {
                 if (FcMeasure(pa, grl, fw, fl, et, page, x0, y0, x1, y1, ws) == 0) {
                     rej = FcReject(ws);
                 }
+            }
+            if (FcSignatureOver(sl, page, x0, y0, x1, y1) == 1) {
+                rej = 1;
             }
             if (emon.Port.CellsAt(fcand, b + CrKori) == -1) {
                 pk = FcImageKind(fi, emon.Port.CellsAt(fcand, b + CrRow), x1 - x0, y1 - y0, y0, y1, pageh, recur);

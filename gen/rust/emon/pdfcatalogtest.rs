@@ -303,9 +303,9 @@ pub(crate) fn cg_line(f: &[u8], which: i32, mut t: &mut String) -> i32 {
         px_json_box(t, an, (14 * 38) + 4);
     }
     if which == 5 {
-        n = crate::port::cells_len(sg) / 36;
+        n = crate::port::cells_len(sg) / 38;
         while i < n {
-            at = i * 36;
+            at = i * 38;
             if i > 0 {
                 crate::port::text_ascii(t, "|");
             }
@@ -338,6 +338,37 @@ pub(crate) fn cg_line(f: &[u8], which: i32, mut t: &mut String) -> i32 {
             crate::port::text_i32(t, crate::port::cells_at(sg, at + 33));
             crate::port::text_ascii(t, ";");
             crate::port::text_i32(t, crate::port::cells_at(sg, at));
+            i += 1;
+        }
+    }
+    if which == 9 {
+        n = crate::port::cells_len(an) / 38;
+        while i < n {
+            at = i * 38;
+            if crate::port::cells_at(an, at + 1) == 27 {
+                if first == 0 {
+                    crate::port::text_ascii(t, "|");
+                }
+                first = 0;
+                crate::port::text_ascii(t, "p");
+                crate::port::text_i32(t, crate::port::cells_at(an, at));
+                crate::port::text_ascii(t, ";b");
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 30));
+                crate::port::text_ascii(t, ";y");
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 8));
+                crate::port::text_ascii(t, ";m");
+                crate::port::text_i32(t, crate::port::cells_at(an, at + 15));
+                crate::port::text_ascii(t, ";n");
+                cg_put(t, txt, crate::port::cells_at(an, at + 23), crate::port::cells_at(an, at + 24));
+                crate::port::text_ascii(t, ";c");
+                cg_put(t, txt, crate::port::cells_at(an, at + 34), crate::port::cells_at(an, at + 35));
+                crate::port::text_ascii(t, ";f");
+                cg_put(t, txt, crate::port::cells_at(an, at + 25), crate::port::cells_at(an, at + 26));
+                crate::port::text_ascii(t, ";r");
+                cg_put(t, txt, crate::port::cells_at(an, at + 27), crate::port::cells_at(an, at + 28));
+                crate::port::text_ascii(t, ";l");
+                cg_put(t, txt, crate::port::cells_at(an, at + 32), crate::port::cells_at(an, at + 33));
+            }
             i += 1;
         }
     }
@@ -547,6 +578,23 @@ fn test_signature_dictionaries_are_read_not_validated() {
     let t: &mut String = &mut crate::port::new_text();
     crate::testport::assert_eq(cg_line(&crate::testport::test_file("pdf/catalog/sigs.pdf")[..], 5, t), 0, "read");
     crate::testport::assert_text(t, "Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;3;0|;D:20240301000000Z;2024-3-1T0:0:0/0;;;;Adobe.PPKLite;ETSI.RFC3161;0,10,20,30;1;7;1|Zo{235} Sigfoo;D:20240229123456+01'00';2024-2-29T12:34:56/60;I approve this document;Berlin;z@example.org;Adobe.PPKLite;adbe.pkcs7.detached;0,100,200,300;27;11;-1", "signatures");
+}
+#[test]
+fn test_signature_fields_ride_in_an_as_synthetic_rows() {
+    // P8.3 (D900): after the annotations and fields, `pa-run` appends to `an` one synthetic row a signature field that has a widget on a page, signed or not, for the document unit
+    // (the Engines hand it `an` and not `sg`). Page, bits (`sg`'s 33; 0 for no dictionary), the year, the length of /M, the signer's /Name (UTF-16: ten characters), the
+    // certificate's name, the field's name, the reason and the location. The unsigned field has none of the signature's. `pa-dump` leaves the rows out (the golden is unchanged).
+    let t: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(cg_line(&crate::testport::test_file("pdf/catalog/sigs.pdf")[..], 9, t), 0, "read");
+    crate::testport::assert_text(t, "p0;b3;y2024;m23;nZo{235} Sigfoo;c;fsigA;rI approve this document;lBerlin|p0;b7;y2024;m17;n;c;fstamp;r;l|p0;b0;y-1;m0;n;c;funsigned;r;l", "three fields, three rows");
+}
+#[test]
+fn test_the_certificates_name_is_read_as_bytes_and_never_verified() {
+    // `test/signatures/sig-digital.pdf` (tools/synth/sig_pdf.clj): a field with a /Name, a field whose dictionary has none and whose /Contents is an openssl CMS signature of an EC key
+    // (`/O=Example Org/CN=Taylor Certificate`, self-signed: the issuer and the subject are the same), and an unsigned field. The second's name is the certificate's.
+    let t: &mut String = &mut crate::port::new_text();
+    crate::testport::assert_eq(cg_line(&crate::testport::test_file("signatures/sig-digital.pdf")[..], 9, t), 0, "read");
+    crate::testport::assert_text(t, "p0;b3;y2026;m23;nMorgan Reyes;c;fApproverSig;rI approve this document;lBerlin|p0;b3;y2026;m10;n;cTaylor Certificate;fVendorSig;r;l|p0;b0;y-1;m0;n;c;fCounterSig;r;l", "the second has the certificate's name");
 }
 #[test]
 fn test_metadata_in_every_encoding_plain_and_encrypted() {

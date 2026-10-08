@@ -1,0 +1,222 @@
+;; Laws for `emon.sigpx` (P8.3; SPEC 10.7, 8.2, 9.7; D016, D205, D900-D907), on every target. Every bitmap is drawn by hand, one pixel a point (72 dpi).
+;;
+;;   * the ZONE of a rule: a zig-zag pen over a line is a signature; with no line (no rule row), a short line, or ink that is a solid block, a straight line or a word OCR was sure of, it is not;
+;;   * the SIZE: a small mark on a rule is initials; the colour is the mean of the ink;
+;;   * the EVIDENCE: a candidate is one group with no word, flagged `in-seal`, `seal-px` and `seal-sig` or `seal-init`, its colour code in `rot`;
+;;   * a SCAN's lines: a line the strokes made (every word inside, the engine unsure) is not chosen for the body; a typed name the strokes are drawn over (the engine sure) stays.
+(ns emon.sigpxtest
+  (:require [emon.lang :refer [I32 Bitmap Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells]]
+            [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-set-u8 cells-len cells-at cells-set cells-push cells-drop]]
+            [emon.scan :refer [sc-sel-base]]
+            [emon.evidence :refer [rl-new ow-new ol-new vw-new vk-render]]
+            [emon.player :refer [cg-count cg-get cgf-flags cgf-rot cgf-ocount cgf-page cgf-x0 cgf-y0 cgf-x1 cgf-y1 plg-in-seal plg-seal-px plg-seal-sig plg-seal-init]]
+            [emon.sigpx :refer [sp-find sp-record sp-drop-lines sp-w]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^I32 spx-paper [^Bitmap b]
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 y 0]
+    (while (< y (bitmap-h b))
+      (do (set x 0)
+          (while (< x (bitmap-w b))
+            (do (bitmap-set-u8 b x y 0 255)
+                (bitmap-set-u8 b x y 1 255)
+                (bitmap-set-u8 b x y 2 255)
+                (set x (+ x 1))))
+          (set y (+ y 1))))
+    (return 0)))
+
+(defn ^I32 spx-dot [^Bitmap b ^I32 x ^I32 y ^I32 thick ^I32 r ^I32 g ^I32 bl]
+  (let [^:mut ^I32 i 0
+        ^:mut ^I32 j 0]
+    (while (< j thick)
+      (do (set i 0)
+          (while (< i thick)
+            (do (bitmap-set-u8 b (+ x i) (+ y j) 0 r)
+                (bitmap-set-u8 b (+ x i) (+ y j) 1 g)
+                (bitmap-set-u8 b (+ x i) (+ y j) 2 bl)
+                (set i (+ i 1))))
+          (set j (+ j 1))))
+    (return 0)))
+
+(defn ^I32 spx-zig [^Bitmap b ^I32 x0 ^I32 y0 ^I32 n ^I32 period ^I32 amp ^I32 r ^I32 g ^I32 bl]
+  (comment "A pen: a zig-zag from (x0, y0) of n columns, each period `period` wide and `amp` high, two pixels thick. Draws every column and the pixels between rows so that it is connected.")
+  (let [^:mut ^I32 x 0
+        ^:mut ^I32 ph 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 prev 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 lo 0
+        ^:mut ^I32 hi 0]
+    (while (< x n)
+      (do (set ph (rem x period))
+          (if (< ph (quot period 2))
+            (set h ph)
+            (set h (- period ph)))
+          (set y (- y0 (quot (* h amp 2) period)))
+          (set lo y)
+          (set hi y)
+          (if (> x 0)
+            (do (if (< prev lo) (set lo prev))
+                (if (> prev hi) (set hi prev))))
+          (set y (- y0 (quot (* h amp 2) period)))
+          (while (<= lo hi)
+            (do (spx-dot b (+ x0 x) lo 2 r g bl)
+                (set lo (+ lo 1))))
+          (set prev y)
+          (set x (+ x 1))))
+    (return 0)))
+
+(defn ^I32 spx-line [^Bitmap b ^I32 x0 ^I32 x1 ^I32 y]
+  (let [^:mut ^I32 x x0]
+    (while (< x x1)
+      (do (spx-dot b x y 2 120 120 120)
+          (set x (+ x 1))))
+    (return 0)))
+
+(defn ^I32 spx-rule [^:mut ^Cells rules ^I32 x0 ^I32 x1 ^I32 y]
+  (comment "A tracer rule row of page 1 from pixel (x0, y) to (x1, y) on the 72 dpi view 0: centipoints are pixels times a hundred.")
+  (return (rl-new rules 1 (* x0 100) (* y 100) (* x1 100) (* y 100) 0)))
+
+(defn ^I32 spx-find [^Cells rules ^Cells ow ^Cells et ^Bitmap b ^:mut ^Cells cand]
+  (let [^Cells views (new-cells)
+        ^Cells mask (new-cells)]
+    (vw-new views 1 (vk-render) -1 -1 (bitmap-w b) (bitmap-h b) 7200 0 -1 0 0 0 0 0)
+    (return (sp-find 1 views 0 rules ow et b 61200 cand mask))))
+
+(deftest test-a-pen-over-a-line-is-a-signature
+  (let [^Bitmap b (bitmap-new 300 120 3)
+        ^Cells rules (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cand (new-cells)]
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (spx-zig b 40 98 150 24 36 20 40 120)
+    (spx-rule rules 20 280 100)
+    (assert-eq (spx-find rules ow et b cand) 1 "a zig-zag pen standing on a line: one candidate")
+    (assert-eq (cells-at cand 0) 3 "a signature")
+    (assert-that (and (>= (cells-at cand 2) 4000) (<= (cells-at cand 2) 4500)) "its box begins at the pen's first column (the first is on the rule's band, which is no ink)")
+    (assert-that (and (> (cells-at cand 4) 18000) (< (cells-at cand 4) 19500)) "and ends at its last")
+    (assert-that (and (> (cells-at cand 3) 6000) (< (cells-at cand 3) 6800)) "its top is the pen's highest point")
+    (assert-eq (cells-at cand 7) 1321080 "its colour is the mean of its ink: (20, 40, 120)")
+    (assert-eq (cells-at cand 9) 600 "and its confidence")))
+
+(deftest test-no-rule-a-short-rule-and-the-wrong-ink-are-no-signature
+  (let [^Bitmap b (bitmap-new 300 120 3)
+        ^Cells rules (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cand (new-cells)]
+    (spx-paper b)
+    (spx-zig b 40 98 150 24 36 20 40 120)
+    (assert-eq (spx-find rules ow et b cand) 0 "no rule row: no zone, no candidate")
+    (spx-rule rules 20 60 100)
+    (assert-eq (spx-find rules ow et b cand) 0 "a rule of 40 pt is no signature line")
+    (cells-drop rules 0)
+    (spx-rule rules 20 280 100)
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (assert-eq (spx-find rules ow et b cand) 0 "a line and nothing on it")
+    (comment "a straight stroke is no pen: its path is as long as its box")
+    (spx-dot b 40 80 2 20 40 120)
+    (let [^:mut ^I32 x 0]
+      (while (< x 150)
+        (do (spx-dot b (+ 40 x) 80 2 20 40 120)
+            (set x (+ x 1)))))
+    (assert-eq (spx-find rules ow et b cand) 0 "a straight line has no loops")
+    (comment "a solid block covers its box")
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (let [^:mut ^I32 y 0]
+      (while (< y 20)
+        (do (let [^:mut ^I32 x 0]
+              (while (< x 100)
+                (do (spx-dot b (+ 40 x) (+ 70 y) 1 20 40 120)
+                    (set x (+ x 1)))))
+            (set y (+ y 1)))))
+    (assert-eq (spx-find rules ow et b cand) 0 "a block of ink is a picture, not a pen")))
+
+(deftest test-a-word-ocr-was-sure-of-is-paper
+  (let [^Bitmap b (bitmap-new 300 120 3)
+        ^Cells rules (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cand (new-cells)]
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (spx-zig b 40 98 150 24 36 20 40 120)
+    (spx-rule rules 20 280 100)
+    (cells-push et 83)
+    (cells-push et 105)
+    (cells-push et 103)
+    (comment "an OCR word over the whole pen that the engine was 900 per mille sure of: the pen is text")
+    (ow-new ow 1 3000 5500 21000 10500 3000 10500 21000 10500 0 0 0 3 0 900 -1)
+    (assert-eq (spx-find rules ow et b cand) 0 "the pen under a word the engine is sure of is paper: nothing is left")
+    (cells-drop ow 0)
+    (ow-new ow 1 3000 5500 21000 10500 3000 10500 21000 10500 0 0 0 3 0 300 -1)
+    (assert-eq (spx-find rules ow et b cand) 1 "the same word at 300: it is the pen read as letters, and the pen is a signature")))
+
+(deftest test-a-small-pen-is-initials
+  (let [^Bitmap b (bitmap-new 300 120 3)
+        ^Cells rules (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cand (new-cells)]
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (spx-zig b 40 98 24 12 22 20 40 120)
+    (spx-rule rules 20 280 100)
+    (assert-eq (spx-find rules ow et b cand) 1 "a small pen on a line")
+    (assert-eq (cells-at cand 0) 4 "initials: 26 pt wide and 22 high")
+    (assert-eq (cells-at cand 9) 550 "a little less sure")))
+
+(deftest test-a-candidate-is-a-group-with-no-word
+  (let [^Bitmap b (bitmap-new 300 120 3)
+        ^Cells rules (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells et (new-cells)
+        ^Cells cand (new-cells)
+        ^Cells cg (new-cells)]
+    (spx-paper b)
+    (spx-line b 20 280 100)
+    (spx-zig b 40 98 150 24 36 20 40 120)
+    (spx-rule rules 20 280 100)
+    (assert-eq (spx-find rules ow et b cand) 1 "a signature")
+    (assert-eq (sp-record 3 cand cg) 1 "one group")
+    (assert-eq (cg-get cg 0 (cgf-page)) 4 "of page 4 (the argument is 0-based)")
+    (assert-eq (cg-get cg 0 (cgf-ocount)) 0 "no word")
+    (assert-eq (cg-get cg 0 (cgf-flags)) (+ (+ (plg-in-seal) (plg-seal-px)) (plg-seal-sig)) "flagged in-seal, seal-px and seal-sig")
+    (assert-eq (cg-get cg 0 (cgf-rot)) 10 "its colour code: blue")
+    (assert-eq (cg-get cg 0 (cgf-x0)) (cells-at cand 2) "its box is the candidate's")))
+
+(deftest test-the-lines-the-strokes-made-are-not-the-pages-text
+  (let [^Cells cand (new-cells)
+        ^Cells ow (new-cells)
+        ^Cells ol (new-cells)
+        ^Cells scr (new-cells)]
+    (while (< (cells-len cand) (sp-w))
+      (cells-push cand 0))
+    (cells-set cand 0 3)
+    (cells-set cand 2 1000)
+    (cells-set cand 3 1000)
+    (cells-set cand 4 7000)
+    (cells-set cand 5 4000)
+    (comment "line 1: two words inside, the engine 300 sure (the strokes read as letters); line 2: one word inside at 900 (a typed name under the strokes); line 3: elsewhere")
+    (ow-new ow 1 1500 1500 3000 2500 1500 2500 3000 2500 0 0 0 1 0 300 -1)
+    (ow-new ow 1 3500 1500 5000 2500 3500 2500 5000 2500 0 0 0 1 0 300 -1)
+    (ow-new ow 1 2000 3000 4000 3800 2000 3800 4000 3800 0 0 0 1 0 900 -1)
+    (ow-new ow 1 30000 30000 32000 31000 30000 31000 32000 31000 0 0 0 1 0 900 -1)
+    (ol-new ol 1 1500 1500 5000 2500 1500 2500 5000 2500 0 0 0 2)
+    (ol-new ol 1 2000 3000 4000 3800 2000 3800 4000 3800 0 0 2 1)
+    (ol-new ol 1 30000 30000 32000 31000 30000 31000 32000 31000 0 0 3 1)
+    (while (< (cells-len scr) (+ (sc-sel-base) 8))
+      (cells-push scr 0))
+    (cells-set scr (sc-sel-base) 0)
+    (cells-set scr (+ (sc-sel-base) 1) 1)
+    (cells-set scr (+ (sc-sel-base) 2) 2)
+    (assert-eq (sp-drop-lines scr 3 ol ow cand) 2 "the strokes' line is out; the typed name the engine is sure of and the line elsewhere stay")
+    (assert-eq (cells-at scr (sc-sel-base)) 1 "the typed name first")
+    (assert-eq (cells-at scr (+ (sc-sel-base) 1)) 2 "then the other")))

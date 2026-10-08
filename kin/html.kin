@@ -76,7 +76,7 @@
                                 fk-color fk-href fk-title fk-lang fk-generator
                                 fk-author fk-subject fk-keywords fk-creator
                                 fk-producer fk-created fk-modified fk-type
-                                fk-checked fk-pages fk-asset fk-noasset
+                                fk-checked fk-pages fk-asset fk-noasset fk-signed fk-location fk-reason
                                 asset-type asset-bstart asset-blen asset-use-head use-node use-x0 use-x1 use-y0 use-y1
                                 use-next amt-emit-name nz-emit-name]]
             [kin.lang :refer [defn declarefn return let set while if do comment
@@ -936,6 +936,21 @@
           (set b (h-tattr nodes attrs n (fk-color)))
           (if (>= b 0)
             (do (emit-ascii t " data-emon-color=\"")
+                (h-run t text (attr-value attrs b) (attr-len attrs b))
+                (emit-ascii t "\"")))
+          (set b (h-iattr nodes attrs n (fk-signed)))
+          (if (>= b 0)
+            (do (emit-ascii t " data-emon-signed=\"")
+                (if (!= (attr-value attrs b) 0) (emit-ascii t "true") (emit-ascii t "false"))
+                (emit-ascii t "\"")))
+          (set b (h-tattr nodes attrs n (fk-reason)))
+          (if (>= b 0)
+            (do (emit-ascii t " data-emon-reason=\"")
+                (h-run t text (attr-value attrs b) (attr-len attrs b))
+                (emit-ascii t "\"")))
+          (set b (h-tattr nodes attrs n (fk-location)))
+          (if (>= b 0)
+            (do (emit-ascii t " data-emon-location=\"")
                 (h-run t text (attr-value attrs b) (attr-len attrs b))
                 (emit-ascii t "\"")))
           (if (< asid 0)
