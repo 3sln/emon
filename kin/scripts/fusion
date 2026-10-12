@@ -59,6 +59,16 @@
 (def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go")))
 (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
 (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+;; THE JAVA ENGINE (P9.1, D1000) replays the same transcripts: optional, left out LOUDLY without a JDK 22+ (`emon-java-build` exits 3);
+;; EMON_SKIP_JAVA=1 leaves it out on purpose
+(def jdrv
+  (if (System/getenv "EMON_SKIP_JAVA")
+    (do (println "  SKIP java engine -- EMON_SKIP_JAVA is set") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-java-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the Java arm is left out)")) nil)
+        (do (bad "the Java Engine driver did not build:\n" (:err r)) nil)))))
 
 (defn drive [drv & a]
   (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
@@ -77,6 +87,10 @@
         (check (and (zero? (:exit rr)) (same? rr rg))
                id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr))
                " bytes: JSON, HTML, evidence version 2)")
+        (when jdrv
+          (let [rj (drive jdrv flag "--out=bundle" (str "--replay=" (dir id)) (pdf id))]
+            (check (same? rr rj)
+                   id ": THE JAVA ENGINE replays it to the identical bundle too (fusion over real pdfium and Tesseract answers)")))
         (check (and want (= want (sha256 (:out rr))))
                id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
         (let [edn (slurp (str (dir id) "/transcript.edn"))
