@@ -44,7 +44,7 @@ func TestAKindWithNoRowGoesThroughAsItIs(emonT *testing.T) {
 func TestTheTableIsSortedAndMonotoneInTheRawScore(emonT *testing.T) {
 	// Rows are [kind class raw-lo calibrated], sorted by kind, class, raw-lo; within one kind and class the raw-lo rises strictly
 	// and the calibrated value never falls (isotonic), and a value is a confidence.
-	var n int32 = 18
+	var n int32 = 19
 	var i int32 = 1
 	port.AssertThat(emonT, n > 0, "the table has a row (the identity table has one that no node matches)")
 	for i < n {
@@ -66,7 +66,7 @@ func TestEveryStepOfTheTableAnswersWithItsOwnValue(emonT *testing.T) {
 	// At a step's raw-lo (and one above it, if that is still below the next step) the lookup is the step's value,
 	// for the class the row names (an `any` row is read through a class that has no row of its own: a class code
 	// the table never names, 9, falls back to `any`).
-	var n int32 = 18
+	var n int32 = 19
 	var i int32 = 0
 	for i < n {
 		if calibdata.CdRows[i*4+1] == -1 {
@@ -78,7 +78,7 @@ func TestEveryStepOfTheTableAnswersWithItsOwnValue(emonT *testing.T) {
 
 func TestTheLookupClampsAtBothEndsOfAStepFunction(emonT *testing.T) {
 	// Below a row's first step the first step's value; above the last the last's (no extrapolation).
-	var n int32 = 18
+	var n int32 = 19
 	var i int32 = 0
 	for i < n {
 		if calibdata.CdRows[i*4+1] == -1 {

@@ -95,6 +95,10 @@ public final class Tabletest {
                 emon.Port.textCp(t, 93);
                 emon.Port.textCp(t, 59);
             }
+            if (kind == Model.nkNote()) {
+                emon.Port.textCp(t, 78);
+                emon.Port.textCp(t, 59);
+            }
             if (kind == Model.nkTable()) {
                 emon.Port.textCp(t, 84);
                 emon.Port.textI32(t, Model.nodeAttrIntOr(nodes, attrs, i, Model.fkColumns(), 0));
@@ -500,6 +504,63 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("3"), 17600, 14600, 0, 0);
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "caption: well formed");
         emon.Testport.assertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph");
+    }
+    public static int ttSmall(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int x, int y, int size) {
+        // One word and a line of its own, 500 per character, `size` tall (a note's small type).
+        int w0 = Evidence.wdCount(wd);
+        int x1 = x + (500 * emon.Port.blobLen(b));
+        ttTw(wd, et, b, x, y, x1, y + size, 0, size, Evidence.lnCount(ln));
+        Evidence.lnNew(ln, 1, x, y, x1, y + size, x, (y + size) - 200, x1, (y + size) - 200, 0, 0, w0, 1);
+        return 0;
+    }
+    public static int ttLedgerPage(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa) {
+        // Four lines of a paragraph that end at x 26000, then a ruled 3 x 3 table to x 37200 whose last column's words stand
+        // right of where the paragraph ends (the shape of the `ttab-*` and `gfx-*` documents: a narrow last column).
+        ttWord(wd, ln, et, emon.Testport.textBlob("The table below was extracted from the ledger"), 7200, 4000, 26000, 4800, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("and the figures are totals for the quarter"), 7200, 5200, 26000, 6000, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("of the year as the office has recorded them"), 7200, 6400, 26000, 7200, 0);
+        ttWord(wd, ln, et, emon.Testport.textBlob("and as the auditors have since confirmed."), 7200, 7600, 26000, 8400, 0);
+        ttRule(pa, 7200, 9950, 37200, 10050);
+        ttRule(pa, 7200, 11950, 37200, 12050);
+        ttRule(pa, 7200, 13950, 37200, 14050);
+        ttRule(pa, 7200, 15950, 37200, 16050);
+        ttRule(pa, 7150, 10000, 7250, 16000);
+        ttRule(pa, 17150, 10000, 17250, 16000);
+        ttRule(pa, 27150, 10000, 27250, 16000);
+        ttRule(pa, 37150, 10000, 37250, 16000);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Item"), 7600, 10600, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Qty"), 17600, 10600, 1, 0);
+        ttSmall(wd, ln, et, emon.Testport.textBlob("Note"), 27600, 10600, 900);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Bolt"), 7600, 12600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("10"), 17600, 12600, 0, 0);
+        ttSmall(wd, ln, et, emon.Testport.textBlob("up"), 27600, 12600, 900);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Nut"), 7600, 14600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("12"), 17600, 14600, 0, 0);
+        ttSmall(wd, ln, et, emon.Testport.textBlob("flat"), 27600, 14600, 900);
+        return 0;
+    }
+    public static void testTheLastColumnOfATableIsItsCellsAndNotANote() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttLedgerPage(wd, ln, et, pa);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "last column: well formed");
+        emon.Testport.assertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the words of the last column stand right of the paragraph and are the table's cells: no note repeats them (D1060; a text layer's too, as a scan's in D463)");
+    }
+    public static void testANoteBesideATableIsStillANote() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttLedgerPage(wd, ln, et, pa);
+        // A note in small type left of the table (the paragraph and the table begin at 7200), beside the row of Bolt: not a
+        // cell, so a note. (Right of the table it would be one run with the last column's small words, which a table holds.)
+        ttSmall(wd, ln, et, emon.Testport.textBlob("see note"), 1500, 12600, 700);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "note: well formed");
+        emon.Testport.assertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see note];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "a note beside the table, outside it, is a note of its own, and the cells are still the table's");
     }
     public static int ttGolden(byte[] pdf, StringBuilder t, StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a

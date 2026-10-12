@@ -108,6 +108,10 @@ pub(crate) fn tt_brief(mut t: &mut String, nodes: &mut crate::port::Cells, attrs
             crate::port::text_cp(t, 93);
             crate::port::text_cp(t, 59);
         }
+        if kind == nk_note() {
+            crate::port::text_cp(t, 78);
+            crate::port::text_cp(t, 59);
+        }
         if kind == nk_table() {
             crate::port::text_cp(t, 84);
             crate::port::text_i32(t, node_attr_int_or(nodes, attrs, i, fk_columns(), 0));
@@ -521,6 +525,65 @@ fn test_a_caption_and_a_bold_last_row() {
     tt_at(wd, ln, et, &crate::testport::text_blob("3")[..], 17600, 14600, 0, 0);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "caption: well formed");
     crate::testport::assert_text(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph");
+}
+pub(crate) fn tt_small(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], x: i32, y: i32, size: i32) -> i32 {
+    // One word and a line of its own, 500 per character, `size` tall (a note's small type).
+    let w0: i32 = wd_count(wd);
+    let x1: i32 = x + (500 * crate::port::blob_len(b));
+    tt_tw(wd, et, b, x, y, x1, y + size, 0, size, ln_count(ln));
+    ln_new(ln, 1, x, y, x1, y + size, x, (y + size) - 200, x1, (y + size) - 200, 0, 0, w0, 1);
+    return 0;
+}
+pub(crate) fn tt_ledger_page(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells) -> i32 {
+    // Four lines of a paragraph that end at x 26000, then a ruled 3 x 3 table to x 37200 whose last column's words stand
+    // right of where the paragraph ends (the shape of the `ttab-*` and `gfx-*` documents: a narrow last column).
+    tt_word(wd, ln, et, &crate::testport::text_blob("The table below was extracted from the ledger")[..], 7200, 4000, 26000, 4800, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("and the figures are totals for the quarter")[..], 7200, 5200, 26000, 6000, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("of the year as the office has recorded them")[..], 7200, 6400, 26000, 7200, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("and as the auditors have since confirmed.")[..], 7200, 7600, 26000, 8400, 0);
+    tt_rule(pa, 7200, 9950, 37200, 10050);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_rule(pa, 7200, 13950, 37200, 14050);
+    tt_rule(pa, 7200, 15950, 37200, 16050);
+    tt_rule(pa, 7150, 10000, 7250, 16000);
+    tt_rule(pa, 17150, 10000, 17250, 16000);
+    tt_rule(pa, 27150, 10000, 27250, 16000);
+    tt_rule(pa, 37150, 10000, 37250, 16000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Qty")[..], 17600, 10600, 1, 0);
+    tt_small(wd, ln, et, &crate::testport::text_blob("Note")[..], 27600, 10600, 900);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Bolt")[..], 7600, 12600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10")[..], 17600, 12600, 0, 0);
+    tt_small(wd, ln, et, &crate::testport::text_blob("up")[..], 27600, 12600, 900);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Nut")[..], 7600, 14600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("12")[..], 17600, 14600, 0, 0);
+    tt_small(wd, ln, et, &crate::testport::text_blob("flat")[..], 27600, 14600, 900);
+    return 0;
+}
+#[test]
+fn test_the_last_column_of_a_table_is_its_cells_and_not_a_note() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_ledger_page(wd, ln, et, pa);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "last column: well formed");
+    crate::testport::assert_text(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the words of the last column stand right of the paragraph and are the table's cells: no note repeats them (D1060; a text layer's too, as a scan's in D463)");
+}
+#[test]
+fn test_a_note_beside_a_table_is_still_a_note() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_ledger_page(wd, ln, et, pa);
+    // A note in small type left of the table (the paragraph and the table begin at 7200), beside the row of Bolt: not a
+    // cell, so a note. (Right of the table it would be one run with the last column's small words, which a table holds.)
+    tt_small(wd, ln, et, &crate::testport::text_blob("see note")[..], 1500, 12600, 700);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "note: well formed");
+    crate::testport::assert_text(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see note];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "a note beside the table, outside it, is a note of its own, and the cells are still the table's");
 }
 pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) -> i32 {
     // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a

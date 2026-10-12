@@ -1610,9 +1610,9 @@ func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, 
 		if (port.CellsAt(cf, base+cfRole) != model.RlBody()) && (port.CellsAt(cf, base+cfDone) == 0) {
 			if (port.CellsAt(cf, base+cfAssoc) < cur) || ((port.CellsAt(cf, base+cfAssoc) == cur) && (port.CellsAt(cf, base+cfY0) <= ty)) {
 				port.CellsSet(cf, base+cfDone, 1)
-				// a side fragment of a scan every line of which a table holds is the table's cells, not a note (a narrow last
-				// column; D459). A text layer's are left as they were: its born-digital digests and ratchets hold them.
-				if (evidence.LnGet(ln, port.CellsAt(lo, port.CellsAt(cf, base+cfFirst)), evidence.LfSrc()) != model.SrOcr()) || (paLive(ln, lo, port.CellsAt(cf, base+cfFirst), port.CellsAt(cf, base+cfCount)) < port.CellsAt(cf, base+cfCount)) {
+				// a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;
+				// D459 for a scan, D1060 for a text layer too).
+				if paLive(ln, lo, port.CellsAt(cf, base+cfFirst), port.CellsAt(cf, base+cfCount)) < port.CellsAt(cf, base+cfCount) {
 					paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc)
 				}
 			} else if pend > r {

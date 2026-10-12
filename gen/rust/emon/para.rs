@@ -1505,9 +1505,9 @@ pub(crate) fn pa_notes(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
         if (crate::port::cells_at(cf, base + CF_ROLE) != rl_body()) && (crate::port::cells_at(cf, base + CF_DONE) == 0) {
             if (crate::port::cells_at(cf, base + CF_ASSOC) < cur) || ((crate::port::cells_at(cf, base + CF_ASSOC) == cur) && (crate::port::cells_at(cf, base + CF_Y0) <= ty)) {
                 crate::port::cells_set(cf, base + CF_DONE, 1);
-                // a side fragment of a scan every line of which a table holds is the table's cells, not a note (a narrow last
-                // column; D459). A text layer's are left as they were: its born-digital digests and ratchets hold them.
-                if (ln_get(ln, crate::port::cells_at(lo, crate::port::cells_at(cf, base + CF_FIRST)), lf_src()) != sr_ocr()) || (pa_live(ln, lo, crate::port::cells_at(cf, base + CF_FIRST), crate::port::cells_at(cf, base + CF_COUNT)) < crate::port::cells_at(cf, base + CF_COUNT)) {
+                // a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;
+                // D459 for a scan, D1060 for a text layer too).
+                if pa_live(ln, lo, crate::port::cells_at(cf, base + CF_FIRST), crate::port::cells_at(cf, base + CF_COUNT)) < crate::port::cells_at(cf, base + CF_COUNT) {
                     pa_note(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
                 }
             } else if pend > r {

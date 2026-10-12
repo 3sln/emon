@@ -28,7 +28,7 @@ pub fn cal_lookup(kind: i32, cls: i32, raw: i32) -> i32 {
     if raw < 0 {
         return raw;
     }
-    let n: i32 = 18;
+    let n: i32 = 19;
     let mut i: i32 = 0;
     let mut hit_c: i32 = -1;
     let mut first_c: i32 = -1;

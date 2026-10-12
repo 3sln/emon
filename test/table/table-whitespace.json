@@ -47,7 +47,7 @@
             "text": "Second could made part however day number pay now.",
             "at": [[1, 72, 130.17, 339.61, 142.66]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           },
           {
             "id": 4,
@@ -433,7 +433,7 @@
             "text": "Light my next above house sometimes after think. Does and these whole face above no turned together as different.",
             "at": [[1, 72, 286.92, 524.79, 315.16]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           }
         ],
         "src": ["infer"],

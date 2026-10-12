@@ -1,9 +1,9 @@
 ;; The SHA-256 of each replayed bundle (JSON, HTML, evidence) of test/seals/replay/ID, as `bb fusion-record` made it (P7.3, D285-D290; P7.5, D307).
 {"seal-black-ring"
- "670ce91902c1fb46de06dec6c8297435ebd713375da41403b38378138f7289d3",
+ "5ed8c4b41aa90d13f1e943ca2f94b90a0104ff79bf3b45937182e770e0d9a39a",
  "seal-negatives"
- "ac2f86577f800f49433c98daccc8d4d3d79a2be52ad5ef410731e117977a20d0",
+ "dca2b22107f4ee14fea58d4cea752702a0afcd271b6ebae8a7ae84f4b7ad3864",
  "sig-by-line"
- "52bd24d8d301a1c9f00b143754a4cb75750046e370380cea346af9ada23112d8",
+ "e172014f784e1691a39493a0ca14b4da79de785f6c84f93929e3c4d9acbd5109",
  "stamp-translucent"
- "5b15dd6486a11be901f5432ea19c435e83577ec0bbb8becc71272638650d1c5d"}
+ "25b97fbdb4291ed8ec6afe4c3de53b5e89ba18dd04de8e73ab12fa0c930f4217"}

@@ -123,6 +123,10 @@ func ttBrief(t *strings.Builder, nodes *port.Cells, attrs *port.Cells, text *por
 			port.TextCp(t, 93)
 			port.TextCp(t, 59)
 		}
+		if kind == model.NkNote() {
+			port.TextCp(t, 78)
+			port.TextCp(t, 59)
+		}
 		if kind == model.NkTable() {
 			port.TextCp(t, 84)
 			port.TextI32(t, model.NodeAttrIntOr(nodes, attrs, i, model.FkColumns(), 0))
@@ -541,6 +545,67 @@ func TestACaptionAndABoldLastRow(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("3"), 17600, 14600, 0, 0)
 	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "caption: well formed")
 	port.AssertText(emonT, t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph")
+}
+
+func ttSmall(wd *port.Cells, ln *port.Cells, et *port.Cells, b []byte, x int32, y int32, size int32) int32 {
+	// One word and a line of its own, 500 per character, `size` tall (a note's small type).
+	var w0 int32 = evidence.WdCount(wd)
+	var x1 int32 = x + (500 * port.BlobLen(b))
+	ttTw(wd, et, b, x, y, x1, y+size, 0, size, evidence.LnCount(ln))
+	evidence.LnNew(ln, 1, x, y, x1, y+size, x, (y+size)-200, x1, (y+size)-200, 0, 0, w0, 1)
+	return 0
+}
+
+func ttLedgerPage(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells) int32 {
+	// Four lines of a paragraph that end at x 26000, then a ruled 3 x 3 table to x 37200 whose last column's words stand
+	// right of where the paragraph ends (the shape of the `ttab-*` and `gfx-*` documents: a narrow last column).
+	ttWord(wd, ln, et, port.TextBlob("The table below was extracted from the ledger"), 7200, 4000, 26000, 4800, 0)
+	ttWord(wd, ln, et, port.TextBlob("and the figures are totals for the quarter"), 7200, 5200, 26000, 6000, 0)
+	ttWord(wd, ln, et, port.TextBlob("of the year as the office has recorded them"), 7200, 6400, 26000, 7200, 0)
+	ttWord(wd, ln, et, port.TextBlob("and as the auditors have since confirmed."), 7200, 7600, 26000, 8400, 0)
+	ttRule(pa, 7200, 9950, 37200, 10050)
+	ttRule(pa, 7200, 11950, 37200, 12050)
+	ttRule(pa, 7200, 13950, 37200, 14050)
+	ttRule(pa, 7200, 15950, 37200, 16050)
+	ttRule(pa, 7150, 10000, 7250, 16000)
+	ttRule(pa, 17150, 10000, 17250, 16000)
+	ttRule(pa, 27150, 10000, 27250, 16000)
+	ttRule(pa, 37150, 10000, 37250, 16000)
+	ttAt(wd, ln, et, port.TextBlob("Item"), 7600, 10600, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Qty"), 17600, 10600, 1, 0)
+	ttSmall(wd, ln, et, port.TextBlob("Note"), 27600, 10600, 900)
+	ttAt(wd, ln, et, port.TextBlob("Bolt"), 7600, 12600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("10"), 17600, 12600, 0, 0)
+	ttSmall(wd, ln, et, port.TextBlob("up"), 27600, 12600, 900)
+	ttAt(wd, ln, et, port.TextBlob("Nut"), 7600, 14600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("12"), 17600, 14600, 0, 0)
+	ttSmall(wd, ln, et, port.TextBlob("flat"), 27600, 14600, 900)
+	return 0
+}
+
+func TestTheLastColumnOfATableIsItsCellsAndNotANote(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttLedgerPage(wd, ln, et, pa)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "last column: well formed")
+	port.AssertText(emonT, t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the words of the last column stand right of the paragraph and are the table's cells: no note repeats them (D1060; a text layer's too, as a scan's in D463)")
+}
+
+func TestANoteBesideATableIsStillANote(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	ttLedgerPage(wd, ln, et, pa)
+	// A note in small type left of the table (the paragraph and the table begin at 7200), beside the row of Bolt: not a
+	// cell, so a note. (Right of the table it would be one run with the last column's small words, which a table holds.)
+	ttSmall(wd, ln, et, port.TextBlob("see note"), 1500, 12600, 700)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "note: well formed")
+	port.AssertText(emonT, t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see note];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "a note beside the table, outside it, is a note of its own, and the cells are still the table's")
 }
 
 func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {

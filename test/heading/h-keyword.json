@@ -48,7 +48,7 @@
             "text": "At just or car policy different back different animal hard got because well back.",
             "at": [[1, 72, 111.42, 452.35, 123.91]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           },
           {
             "id": 4,
@@ -73,7 +73,7 @@
                 "text": "Story want live not any be again right figure measure. For below life better thought was sometimes land want later move.",
                 "at": [[1, 72, 158.67, 493.12, 186.91]],
                 "src": ["text", "infer"],
-                "conf": 747
+                "conf": 783
               },
               {
                 "id": 7,
@@ -99,7 +99,7 @@
                     "text": "Tell want other second home example my sentence.",
                     "at": [[1, 72, 217.92, 321.35, 230.41]],
                     "src": ["text", "infer"],
-                    "conf": 747
+                    "conf": 783
                   }
                 ],
                 "src": ["infer"],
@@ -132,7 +132,7 @@
                 "text": "True school turn should us most sound been large. Second country leave face high however come man leave but point show good.",
                 "at": [[1, 72, 265.17, 512.11, 293.41]],
                 "src": ["text", "infer"],
-                "conf": 747
+                "conf": 783
               },
               {
                 "id": 13,
@@ -158,7 +158,7 @@
                     "text": "Land done budget story many here those boy second all world across.",
                     "at": [[1, 72, 324.42, 407.51, 336.91]],
                     "src": ["text", "infer"],
-                    "conf": 747
+                    "conf": 783
                   }
                 ],
                 "src": ["infer"],
@@ -195,7 +195,7 @@
             "text": "Using head hard both house sound came to true budget three began after.",
             "at": [[1, 72, 378.42, 428.18, 390.91]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           },
           {
             "id": 19,
@@ -220,7 +220,7 @@
                 "text": "Back look one words better report make near air. Too also part line some if find soon today two right story find or sun sea.",
                 "at": [[1, 72, 425.67, 531.63, 453.91]],
                 "src": ["text", "infer"],
-                "conf": 747
+                "conf": 783
               },
               {
                 "id": 22,
@@ -246,7 +246,7 @@
                     "text": "On read away see very almost cut sea another be over saw every back once has.",
                     "at": [[1, 72, 484.92, 452.4, 497.41]],
                     "src": ["text", "infer"],
-                    "conf": 747
+                    "conf": 783
                   }
                 ],
                 "src": ["infer"],
@@ -279,7 +279,7 @@
                 "text": "Thing tell one however sentence asked around story did not even number asked. At side using out measure four to even enough region method hear left.",
                 "at": [[1, 72, 531.42, 525.32, 560.41]],
                 "src": ["text", "infer"],
-                "conf": 747
+                "conf": 783
               },
               {
                 "id": 28,
@@ -305,7 +305,7 @@
                     "text": "Young during near what answer far by story story get across after.",
                     "at": [[1, 72, 590.67, 390, 603.16]],
                     "src": ["text", "infer"],
-                    "conf": 747
+                    "conf": 783
                   }
                 ],
                 "src": ["infer"],

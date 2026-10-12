@@ -95,6 +95,10 @@ public static class Tabletest {
                 emon.Port.TextCp(t, 93);
                 emon.Port.TextCp(t, 59);
             }
+            if (kind == Model.NkNote()) {
+                emon.Port.TextCp(t, 78);
+                emon.Port.TextCp(t, 59);
+            }
             if (kind == Model.NkTable()) {
                 emon.Port.TextCp(t, 84);
                 emon.Port.TextI32(t, Model.NodeAttrIntOr(nodes, attrs, i, Model.FkColumns(), 0));
@@ -508,6 +512,65 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("3"), 17600, 14600, 0, 0);
         emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "caption: well formed");
         emon.Testport.AssertText(t, "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];", "the caption is the table's first child: label and text, not a paragraph");
+    }
+    internal static int TtSmall(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] b, int x, int y, int size) {
+        // One word and a line of its own, 500 per character, `size` tall (a note's small type).
+        int w0 = Evidence.WdCount(wd);
+        int x1 = x + (500 * emon.Port.BlobLen(b));
+        TtTw(wd, et, b, x, y, x1, y + size, 0, size, Evidence.LnCount(ln));
+        Evidence.LnNew(ln, 1, x, y, x1, y + size, x, (y + size) - 200, x1, (y + size) - 200, 0, 0, w0, 1);
+        return 0;
+    }
+    internal static int TtLedgerPage(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa) {
+        // Four lines of a paragraph that end at x 26000, then a ruled 3 x 3 table to x 37200 whose last column's words stand
+        // right of where the paragraph ends (the shape of the `ttab-*` and `gfx-*` documents: a narrow last column).
+        TtWord(wd, ln, et, emon.Testport.TextBlob("The table below was extracted from the ledger"), 7200, 4000, 26000, 4800, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("and the figures are totals for the quarter"), 7200, 5200, 26000, 6000, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("of the year as the office has recorded them"), 7200, 6400, 26000, 7200, 0);
+        TtWord(wd, ln, et, emon.Testport.TextBlob("and as the auditors have since confirmed."), 7200, 7600, 26000, 8400, 0);
+        TtRule(pa, 7200, 9950, 37200, 10050);
+        TtRule(pa, 7200, 11950, 37200, 12050);
+        TtRule(pa, 7200, 13950, 37200, 14050);
+        TtRule(pa, 7200, 15950, 37200, 16050);
+        TtRule(pa, 7150, 10000, 7250, 16000);
+        TtRule(pa, 17150, 10000, 17250, 16000);
+        TtRule(pa, 27150, 10000, 27250, 16000);
+        TtRule(pa, 37150, 10000, 37250, 16000);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Item"), 7600, 10600, 1, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Qty"), 17600, 10600, 1, 0);
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("Note"), 27600, 10600, 900);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Bolt"), 7600, 12600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("10"), 17600, 12600, 0, 0);
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("up"), 27600, 12600, 900);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Nut"), 7600, 14600, 0, 0);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("12"), 17600, 14600, 0, 0);
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("flat"), 27600, 14600, 900);
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestTheLastColumnOfATableIsItsCellsAndNotANote() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtLedgerPage(wd, ln, et, pa);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "last column: well formed");
+        emon.Testport.AssertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the words of the last column stand right of the paragraph and are the table's cells: no note repeats them (D1060; a text layer's too, as a scan's in D463)");
+    }
+    [Xunit.Fact]
+    public static void TestANoteBesideATableIsStillANote() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtLedgerPage(wd, ln, et, pa);
+        // A note in small type left of the table (the paragraph and the table begin at 7200), beside the row of Bolt: not a
+        // cell, so a note. (Right of the table it would be one run with the last column's small words, which a table holds.)
+        TtSmall(wd, ln, et, emon.Testport.TextBlob("see note"), 1500, 12600, 700);
+        emon.Testport.AssertEq(TtRun(wd, ln, et, pa, t), 0, "note: well formed");
+        emon.Testport.AssertText(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see note];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "a note beside the table, outside it, is a note of its own, and the cells are still the table's");
     }
     internal static int TtGolden(byte[] pdf, System.Text.StringBuilder t, System.Text.StringBuilder tvt) {
         // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a

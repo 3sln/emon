@@ -39,7 +39,7 @@ public static class Calibtest {
     public static void TestTheTableIsSortedAndMonotoneInTheRawScore() {
         // Rows are [kind class raw-lo calibrated], sorted by kind, class, raw-lo; within one kind and class the raw-lo rises strictly
         // and the calibrated value never falls (isotonic), and a value is a confidence.
-        int n = 18;
+        int n = 19;
         int i = 1;
         emon.Testport.AssertThat(n > 0, "the table has a row (the identity table has one that no node matches)");
         while (i < n) {
@@ -61,7 +61,7 @@ public static class Calibtest {
         // At a step's raw-lo (and one above it, if that is still below the next step) the lookup is the step's value,
         // for the class the row names (an `any` row is read through a class that has no row of its own: a class code
         // the table never names, 9, falls back to `any`).
-        int n = 18;
+        int n = 19;
         int i = 0;
         while (i < n) {
             if (Calibdata.CdRows[i * 4 + 1] == -1) {
@@ -73,7 +73,7 @@ public static class Calibtest {
     [Xunit.Fact]
     public static void TestTheLookupClampsAtBothEndsOfAStepFunction() {
         // Below a row's first step the first step's value; above the last the last's (no extrapolation).
-        int n = 18;
+        int n = 19;
         int i = 0;
         while (i < n) {
             if (Calibdata.CdRows[i * 4 + 1] == -1) {

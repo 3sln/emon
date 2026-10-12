@@ -47,7 +47,7 @@
   (:require [emon.lang :refer [I32 Bool Cells Text emit-ascii]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
             [emon.evidence :refer [wd-get ln-get ln-count lh-page lh-x0 lh-y0 lh-x1 lh-y1 lh-by0 lh-by1
-                                   lh-rot lh-dir lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style lf-src]]
+                                   lh-rot lh-dir lh-first lh-count hd-tstart hd-tlen wf-font wf-size wf-style]]
             [emon.columns :refer [lc-copy lc-page]]
             [emon.table :refer [tb-due tb-skip tb-emit tb-claimed]]
             [emon.initial :refer [in-retire in-row in-get-ii in-cell]]
@@ -58,7 +58,7 @@
                                 fl-low-conf node-set-align nk-heading node-set-attr-text
                                 fk-number fk-numbering nk-item nk-caption nk-ref node-kind
                                 fk-marker fk-label fk-box node-set-attr-int text-append-cp
-                                nk-span nk-link fk-href sr-annot sr-ocr]]
+                                nk-span nk-link fk-href sr-annot]]
             [emon.inline :refer [il-base il-cur il-set-cur il-wstate il-mark il-mix il-state-at il-has il-base-of
                                  il-styled il-eff il-link il-bits il-mark-end il-mark-value il-s-sty il-link-get]]
             [emon.lists :refer [ls-split ls-hang ls-hang-col ls-start ls-get ls-k-textx ls-s-item ls-s-end ls-s-note ls-s-cap ls-s-ref
@@ -1257,10 +1257,9 @@
                       (and (== (cells-at cf (+ base CF_ASSOC)) cur)
                            (<= (cells-at cf (+ base CF_Y0)) ty)))
                 (do (cells-set cf (+ base CF_DONE) 1)
-                    (comment "a side fragment of a scan every line of which a table holds is the table's cells, not a note (a narrow last")
-                    (comment "column; D459). A text layer's are left as they were: its born-digital digests and ratchets hold them.")
-                    (if (or (!= (ln-get ln (cells-at lo (cells-at cf (+ base CF_FIRST))) (lf-src)) (sr-ocr))
-                            (< (pa-live ln lo (cells-at cf (+ base CF_FIRST)) (cells-at cf (+ base CF_COUNT))) (cells-at cf (+ base CF_COUNT))))
+                    (comment "a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;")
+                    (comment "D459 for a scan, D1060 for a text layer too).")
+                    (if (< (pa-live ln lo (cells-at cf (+ base CF_FIRST)) (cells-at cf (+ base CF_COUNT))) (cells-at cf (+ base CF_COUNT)))
                       (pa-note wd ln et nodes attrs regions text raw tmp fr al ii cf lo r med hc)))
                 (if (> pend r) (set pend r)))))
           (set r (+ r 1))))

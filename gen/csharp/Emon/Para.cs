@@ -1497,9 +1497,9 @@ public static class Para {
             if ((emon.Port.CellsAt(cf, @base + CfRole) != Model.RlBody()) && (emon.Port.CellsAt(cf, @base + CfDone) == 0)) {
                 if ((emon.Port.CellsAt(cf, @base + CfAssoc) < cur) || ((emon.Port.CellsAt(cf, @base + CfAssoc) == cur) && (emon.Port.CellsAt(cf, @base + CfY0) <= ty))) {
                     emon.Port.CellsSet(cf, @base + CfDone, 1);
-                    // a side fragment of a scan every line of which a table holds is the table's cells, not a note (a narrow last
-                    // column; D459). A text layer's are left as they were: its born-digital digests and ratchets hold them.
-                    if ((Evidence.LnGet(ln, emon.Port.CellsAt(lo, emon.Port.CellsAt(cf, @base + CfFirst)), Evidence.LfSrc()) != Model.SrOcr()) || (PaLive(ln, lo, emon.Port.CellsAt(cf, @base + CfFirst), emon.Port.CellsAt(cf, @base + CfCount)) < emon.Port.CellsAt(cf, @base + CfCount))) {
+                    // a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;
+                    // D459 for a scan, D1060 for a text layer too).
+                    if (PaLive(ln, lo, emon.Port.CellsAt(cf, @base + CfFirst), emon.Port.CellsAt(cf, @base + CfCount)) < emon.Port.CellsAt(cf, @base + CfCount)) {
                         PaNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
                     }
                 } else if (pend > r) {

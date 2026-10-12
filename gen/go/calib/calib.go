@@ -34,7 +34,7 @@ func CalLookup(kind int32, cls int32, raw int32) int32 {
 	if raw < 0 {
 		return raw
 	}
-	var n int32 = 18
+	var n int32 = 19
 	var i int32 = 0
 	var hitC int32 = -1
 	var firstC int32 = -1
