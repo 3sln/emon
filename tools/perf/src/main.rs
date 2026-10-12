@@ -247,6 +247,55 @@ fn bet_lzw(cfg: &Cfg, set: &Inputs) {
     }
 }
 
+// ------------------------------------------------------------------------------ ccitt (P10.11, D447)
+
+/// Three bilevel pages, Group 4 encoded by `fax`'s encoder: the synthetic text page thresholded, a noise page, a blank page.
+/// Both sides produce the same packed rows (high bit first, 1 = black) into a fresh zeroed buffer, which is what each
+/// host's caller does; `fax`'s decoder reports the transitions of a row, so it paints them.
+fn bet_ccitt(cfg: &Cfg, set: &Inputs) {
+    let (w, h) = (set.pw, set.ph);
+    let stride = (w + 7) / 8;
+    let mut noise = vec![255u8; w * h];
+    let mut r = Rng(0x5eed_00cc);
+    for v in noise.iter_mut() {
+        if r.below(8) == 0 {
+            *v = 0;
+        }
+    }
+    let pages: Vec<(&str, Vec<u8>)> = vec![
+        ("text-page", set.page.iter().map(|&p| if p < 128 { 0 } else { 255 }).collect()),
+        ("noise-page", noise),
+        ("blank-page", vec![255u8; w * h]),
+    ];
+    for (name, gray) in pages {
+        let mut packed = vec![0u8; stride * h];
+        for y in 0..h {
+            for x in 0..w {
+                if gray[y * w + x] < 128 {
+                    packed[y * stride + x / 8] |= 0x80 >> (x % 8);
+                }
+            }
+        }
+        let z = refs::fax_g4_encode(&gray, w, h);
+        let mut out = Buf::new();
+        let mut ws = Cells::new();
+        let mut st = -1;
+        let mut kin = || {
+            out = Buf(vec![0u8; stride * h]);
+            st = emon::ccitt::cc_decode(&z, 0, z.len() as i32, -1, w as i32, h as i32, 0, &mut out, &mut ws);
+            std::hint::black_box(&out);
+        };
+        let mut fo: Vec<u8> = Vec::new();
+        let mut r1 = || {
+            fo = refs::fax_g4_decode(&z, w, h);
+            std::hint::black_box(&fo);
+        };
+        let t = pair(cfg.reps, &mut kin, &mut r1);
+        let ok = st == 0 && out.0 == packed && fo == packed;
+        report("ccitt", &format!("{}-{}x{}/g4({} B)", name, w, h, z.len()), "fax(0.2.7) decode_g4 + paint", packed.len(), cfg.reps, t, if ok { "ok" } else { "MISMATCH" }, "kin cc-decode (Group 4) vs the fax crate's decode_g4 painting the same packed rows; the stream is fax's encoder's");
+    }
+}
+
 // ------------------------------------------------------------------------------ raster: Otsu, Sauvola, union-find labelling
 
 fn bet_raster(cfg: &Cfg, set: &Inputs) {
@@ -370,6 +419,7 @@ fn main() {
     if cfg.wants("png-write") { bet_png_write(&cfg, &set); }
     if cfg.wants("png-unfilter") { bet_png_read(&cfg, &set); }
     if cfg.wants("lzw") { bet_lzw(&cfg, &set); }
+    if cfg.wants("ccitt") { bet_ccitt(&cfg, &set); }
     if cfg.wants("raster") { bet_raster(&cfg, &set); }
     if cfg.wants("tracer") { bet_tracer(&cfg, &set); }
 }

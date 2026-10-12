@@ -1,4 +1,21 @@
-{"content|8 synthetic PDFs, 26 pages|pdftotext -bbox-layout (poppler; process wall less startup)"
+{"ccitt|blank-page-1000x1400/g4(178 B)|fax(0.2.7) decode_g4 + paint"
+ {:quick {:ratio 1.3, :min_ratio 1.295, :kin_ms 0.017, :ref_ms 0.013}},
+ "ccitt|blank-page-2481x3508/g4(442 B)|fax(0.2.7) decode_g4 + paint"
+ {:full
+  {:ratio 1.232, :min_ratio 1.231, :kin_ms 0.047, :ref_ms 0.038}},
+ "ccitt|noise-page-1000x1400/g4(225132 B)|fax(0.2.7) decode_g4 + paint"
+ {:quick
+  {:ratio 1.104, :min_ratio 1.089, :kin_ms 7.003, :ref_ms 6.341}},
+ "ccitt|noise-page-2481x3508/g4(1400487 B)|fax(0.2.7) decode_g4 + paint"
+ {:full
+  {:ratio 1.099, :min_ratio 1.091, :kin_ms 43.415, :ref_ms 39.493}},
+ "ccitt|text-page-1000x1400/g4(6991 B)|fax(0.2.7) decode_g4 + paint"
+ {:quick
+  {:ratio 1.153, :min_ratio 1.165, :kin_ms 0.523, :ref_ms 0.454}},
+ "ccitt|text-page-2481x3508/g4(335699 B)|fax(0.2.7) decode_g4 + paint"
+ {:full
+  {:ratio 1.059, :min_ratio 1.058, :kin_ms 8.727, :ref_ms 8.239}},
+ "content|8 synthetic PDFs, 26 pages|pdftotext -bbox-layout (poppler; process wall less startup)"
  {:full
   {:ratio 11.382714765232864,
    :min_ratio 11.382714765232864,

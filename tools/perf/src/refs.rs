@@ -62,6 +62,56 @@ pub fn png_idat(file: &[u8]) -> Vec<u8> {
     out
 }
 
+// ------------------------------------------------------------------------------ ccitt (the `fax` crate; P10.11, D447)
+
+/// Group 4 encode a gray page (below 128 is black) with the `fax` crate's encoder.
+pub fn fax_g4_encode(gray: &[u8], w: usize, h: usize) -> Vec<u8> {
+    let mut e = fax::encoder::Encoder::new(fax::VecWriter::new());
+    for y in 0..h {
+        let row = &gray[y * w..(y + 1) * w];
+        e.encode_line(row.iter().map(|&p| if p < 128 { fax::Color::Black } else { fax::Color::White }), w as u16).unwrap();
+    }
+    e.finish().unwrap().finish()
+}
+
+/// Set bits [a, b) of a packed row, high bit first.
+fn fax_set_bits(row: &mut [u8], a: usize, b: usize) {
+    if a >= b {
+        return;
+    }
+    let (fa, fb) = (a / 8, (b - 1) / 8);
+    let (ma, mb) = (0xffu8 >> (a % 8), 0xffu8 << (7 - (b - 1) % 8));
+    if fa == fb {
+        row[fa] |= ma & mb;
+    } else {
+        row[fa] |= ma;
+        for v in &mut row[fa + 1..fb] {
+            *v = 0xff;
+        }
+        row[fb] |= mb;
+    }
+}
+
+/// Group 4 decode with `fax`'s `decode_g4` and paint each row's black runs into zeroed packed rows (1 = black).
+pub fn fax_g4_decode(z: &[u8], w: usize, h: usize) -> Vec<u8> {
+    let stride = (w + 7) / 8;
+    let mut out = vec![0u8; stride * h];
+    let mut y = 0;
+    fax::decoder::decode_g4(z.iter().copied(), w as u16, Some(h as u16), |t| {
+        let row = &mut out[y * stride..(y + 1) * stride];
+        let mut i = 0;
+        while i < t.len() {
+            let a = t[i] as usize;
+            let b = if i + 1 < t.len() { t[i + 1] as usize } else { w };
+            fax_set_bits(row, a, b.min(w));
+            i += 2;
+        }
+        y += 1;
+    })
+    .unwrap();
+    out
+}
+
 // ------------------------------------------------------------------------------ lzw (PDF LZWDecode, MSB first)
 
 fn lzw_width(nxt: usize, early: usize) -> u32 {

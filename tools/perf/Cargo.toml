@@ -18,6 +18,9 @@ fdeflate = "=0.3.7"
 # PNG encoder/decoder reference (filters, adaptive filtering, unfilter).
 png = "=0.18.1"
 
+# CCITT Group 3/4 reference (P10.11, D447): the crate the hosts used before kin's `emon.ccitt`. A comparator ONLY; no host depends on it.
+fax = "=0.2.7"
+
 [profile.release]
 opt-level = 3
 debug = false

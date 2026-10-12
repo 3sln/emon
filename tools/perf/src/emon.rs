@@ -10,6 +10,8 @@ pub mod png;
 pub mod splitmix;
 #[path = "../../../gen/rust/emon/pngprobe.rs"]
 pub mod pngprobe;
+#[path = "../../../gen/rust/emon/ccitt.rs"]
+pub mod ccitt;
 #[path = "../../../gen/rust/emon/pdffilter.rs"]
 pub mod pdffilter;
 #[path = "../../../gen/rust/emon/raster.rs"]
