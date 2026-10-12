@@ -304,9 +304,13 @@
 ;; 6. THE PIXEL SCANS (D392). test/ocr/scan-px/ID/ holds WHOLE transcripts (bitmaps kept, `record-scan.clj --px`): the engine reads pixels
 ;; since P6.3, and a table on a scan (invoice, bank-statement: the `scan/forms` category) asks for per-cell OCR from them, so a slim
 ;; transcript of such a page is not what the engine did. Here: both Engines replay to the IDENTICAL bundle, the text is the transcript's
-;; (the Model has `ocr` sources), and the `emon-replay-px` ratchet holds `scan/forms` (a table's rows on a tilted scan, D391).
+;; (the Model has `ocr` sources), and the `emon-replay-px` ratchet holds `scan/forms` (a table's rows on a tilted scan, D391) and, since
+;; D459, the colour and overlay scans that D391 once broke: `scan-ovl/forms` (an invoice whose table has text after it) and
+;; `scan-color/graphics` (a table whose narrow last column was also a margin note).
 (def px-dir "test/ocr/scan-px")
+;; a directory ID is the scan ID.pdf; VARIANT--ID is the colour or overlay scan VARIANT/ID.pdf (D459)
 (def px-ids (when (fs/exists? px-dir) (vec (sort (map fs/file-name (filter fs/directory? (fs/list-dir px-dir)))))))
+(defn px-doc [d] (if (str/includes? d "--") (str/split d #"--" 2) ["scan" d]))
 
 (when (seq px-ids)
   (let [rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" {} "Rust"))
@@ -317,7 +321,8 @@
       (let [drive (fn [drv & a] (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
                                   {:exit (:exit r) :out (:out r) :err (:err r)}))]
         (doseq [id px-ids]
-          (let [pdf (abs (str "test/corpus/synth/scan/" id ".pdf"))
+          (let [[variant did] (px-doc id)
+                pdf (abs (str "test/corpus/synth/" variant "/" did ".pdf"))
                 dir (abs (str px-dir "/" id))
                 rr (drive rdrv "--out=bundle" (str "--replay=" dir) pdf)
                 rg (drive gdrv "--out=bundle" (str "--replay=" dir) pdf)]
@@ -333,10 +338,10 @@
                        id ": and the C# Engine replays it to the same bundle")))
             (check (and (str/includes? (:out rr) "\"ocr\":\"always\"") (str/includes? (:out rr) "\"src\":[\"ocr\",\"infer\"]"))
                    id ": the Model says where the text came from")))
-        (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-replay-px" "--variants" "scan"
-                          "--ids" (str/join "," px-ids))]
+        (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-replay-px"
+                          "--docs" (str/join "," (map #(let [[v i] (px-doc %)] (str v "/" i)) px-ids)))]
           (check (and (zero? (:exit r)) (str/includes? (:out r) "ok   accuracy[emon-replay-px]") (not (str/includes? (:out r) "FAIL")))
-                 "accuracy[emon-replay-px]: the whole transcripts, replayed, hold their scoreboard entry (scan/forms)"
+                 "accuracy[emon-replay-px]: the whole transcripts, replayed, hold their scoreboard entry (scan/forms, scan-ovl/forms, scan-color/graphics)"
                  (when-let [l (some #(when (str/includes? % "accuracy[emon-replay-px]") (str/trim %)) (str/split-lines (:out r)))]
                    (str " (" (str/replace l #"^ok +accuracy\[emon-replay-px\]: " "") ")"))))))))
 

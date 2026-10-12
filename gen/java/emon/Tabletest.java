@@ -317,6 +317,121 @@ public final class Tabletest {
         emon.Testport.assertEq(ttRun(wd, ln, et, pa, t2), 0, "prose: well formed");
         emon.Testport.assertText(t2, "P[the old];P[was and];P[of the];P[that is];P[and then];P[went on];P[she said];P[to him];", "lowercase text with half the cells empty is not a table");
     }
+    public static int ttLine2(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] a, byte[] b, int x, int y) {
+        // One line of two words, 500 per character and a 500 gap, 800 tall from y.
+        int w0 = Evidence.wdCount(wd);
+        int xb = (x + (500 * emon.Port.blobLen(a))) + 500;
+        ttW(wd, et, a, x, y, x + (500 * emon.Port.blobLen(a)), y + 800, 0);
+        ttW(wd, et, b, xb, y, xb + (500 * emon.Port.blobLen(b)), y + 800, 0);
+        Evidence.lnNew(ln, 1, x, y, xb + (500 * emon.Port.blobLen(b)), y + 800, x, (y + 800) - 200, xb + (500 * emon.Port.blobLen(b)), (y + 800) - 200, 0, 0, w0, 2);
+        return 0;
+    }
+    public static int ttProseRow(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, int y, byte[] a1, byte[] a2, byte[] b1, byte[] b2, byte[] c1, byte[] c2) {
+        // A row of three cells of two lowercase words each: text set in chunks.
+        ttLine2(wd, ln, et, a1, a2, 7200, y);
+        ttLine2(wd, ln, et, b1, b2, 30000, y);
+        ttLine2(wd, ln, et, c1, c2, 40000, y);
+        return 0;
+    }
+    public static int ttTw(emon.Port.Cells wd, emon.Port.Cells et, byte[] b, int x0, int y0, int x1, int y1, int tilt, int size, int line) {
+        // One word whose baseline slopes by `tilt` parts per million from y1 - 200 at x 7200 (the line of a scan).
+        int ts = emon.Port.cellsLen(et);
+        int base = y1 - 200;
+        Model.textAppendUtf8(et, b, 0, emon.Port.blobLen(b));
+        int r = Evidence.wdNew(wd, 1, x0, y0, x1, y1, x0, base + ((tilt * (x0 - 7200)) / 1000000), x1, base + ((tilt * (x1 - 7200)) / 1000000), 0, 0, ts, emon.Port.cellsLen(et) - ts, line, -1, -1);
+        Evidence.wdSet(wd, r, Evidence.wfSize(), size);
+        Evidence.wdSet(wd, r, Evidence.wfFont(), 0);
+        Evidence.wdSet(wd, r, Evidence.wfStyle(), 0);
+        return 0;
+    }
+    public static int ttTrow(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, byte[] a, byte[] b, byte[] c, int y, int tilt, int size) {
+        // One line of three words (at x 7200, 20000 and 36000, 800 tall from y) with a baseline that slopes by `tilt` parts per
+        // million, and the words' size `size`: a row of a scan, whose lines Tesseract fits one by one.
+        int w0 = Evidence.wdCount(wd);
+        int l = Evidence.lnCount(ln);
+        int xb = 20000;
+        int xc = 36000;
+        int x1 = xc + (500 * emon.Port.blobLen(c));
+        int base = y + 600;
+        ttTw(wd, et, a, 7200, y, 7200 + (500 * emon.Port.blobLen(a)), y + 800, tilt, size, l);
+        ttTw(wd, et, b, xb, y, xb + (500 * emon.Port.blobLen(b)), y + 800, tilt, size, l);
+        ttTw(wd, et, c, xc, y, x1, y + 800, tilt, size, l);
+        Evidence.lnNew(ln, 1, 7200, y, x1, y + 800, 7200, base, x1, base + ((tilt * (x1 - 7200)) / 1000000), 0, 0, w0, 3);
+        return 0;
+    }
+    public static void testATailThatSpoilsAWhitespaceRunIsLetGo() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // A header, five rows of a label and two numbers, then three rows of lowercase text set in three chunks: as one run
+        // they are prose in columns and the run is refused; without its last three rows it is the table.
+        ttAt(wd, ln, et, emon.Testport.textBlob("Fund"), 7200, 10000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Q1"), 30000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Q2"), 40000, 10000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Alpha"), 7200, 11600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("3.0%"), 30000, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("111.5%"), 40000, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Bo"), 7200, 13200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("4.7%"), 30000, 13200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("4.3%"), 40000, 13200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Gammarays"), 7200, 14800, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("12.1%"), 30000, 14800, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("9.5%"), 40000, 14800, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Delta"), 7200, 16400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("5.1%"), 30000, 16400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("2.2%"), 40000, 16400, 0, 1);
+        ttProseRow(wd, ln, et, 19000, emon.Testport.textBlob("net"), emon.Testport.textBlob("thirty"), emon.Testport.textBlob("days"), emon.Testport.textBlob("from"), emon.Testport.textBlob("late"), emon.Testport.textBlob("fees"));
+        ttProseRow(wd, ln, et, 20600, emon.Testport.textBlob("pay"), emon.Testport.textBlob("by"), emon.Testport.textBlob("bank"), emon.Testport.textBlob("transfer"), emon.Testport.textBlob("sort"), emon.Testport.textBlob("code"));
+        ttProseRow(wd, ln, et, 22200, emon.Testport.textBlob("thank"), emon.Testport.textBlob("you"), emon.Testport.textBlob("for"), emon.Testport.textBlob("your"), emon.Testport.textBlob("custom"), emon.Testport.textBlob("again"));
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "tail: well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];R;Cs[Delta];C[5.1%];Ce[2.2%];P[net thirty];P[days from];P[late fees];P[pay by];P[bank transfer];P[sort code];P[thank you];P[for your];P[custom again];", "the three rows of text in chunks that spoil the run are not rows of the table: five rows and a header, then paragraphs");
+    }
+    public static void testARunningHeaderApartFromAWhitespaceRunIsNoRowOfIt() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // Two chunks of a page header, more than two pitches above a table of numbers whose rows are a pitch (1200) apart.
+        ttAt(wd, ln, et, emon.Testport.textBlob("Statement"), 7200, 5400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Page 2"), 40000, 5400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Fund"), 7200, 8000, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Q1"), 30000, 8000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Q2"), 40000, 8000, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Alpha"), 7200, 9200, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("3.0%"), 30000, 9200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("111.5%"), 40000, 9200, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Bo"), 7200, 10400, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("4.7%"), 30000, 10400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("4.3%"), 40000, 10400, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Gammarays"), 7200, 11600, 0, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("12.1%"), 30000, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("9.5%"), 40000, 11600, 0, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7200, 12800, 1, 0);
+        ttAt(wd, ln, et, emon.Testport.textBlob("6.4%"), 30000, 12800, 1, 1);
+        ttAt(wd, ln, et, emon.Testport.textBlob("6.6%"), 40000, 12800, 1, 1);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "header: well formed");
+        emon.Testport.assertText(t, "P[Statement];P[Page 2];T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];Gf;R;Cws[Total];Cw[6.4%];Cwe[6.6%];", "the page header more than two pitches above is two paragraphs, not the first row of the table");
+    }
+    public static void testTheRowsOfATiltedScanAreToldApartByTheirLines() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        // Five rows a pitch (1000) apart on a page tilted by 20000 parts per million, the third fitted flat by the OCR and with a size
+        // four times the others' (a box that took in a dark band): its words' own baselines differ by 700 across the row, and the
+        // chain tolerance of its size is more than the pitch; each line has one key, and the tolerance of two sizes is the smaller.
+        ttTrow(wd, ln, et, emon.Testport.textBlob("Fund"), emon.Testport.textBlob("Q1"), emon.Testport.textBlob("Q2"), 10000, 20000, 1000);
+        ttTrow(wd, ln, et, emon.Testport.textBlob("Alpha"), emon.Testport.textBlob("3.0%"), emon.Testport.textBlob("111.5%"), 11000, 20000, 1000);
+        ttTrow(wd, ln, et, emon.Testport.textBlob("Bo"), emon.Testport.textBlob("4.7%"), emon.Testport.textBlob("4.3%"), 12000, 0, 4000);
+        ttTrow(wd, ln, et, emon.Testport.textBlob("Gammarays"), emon.Testport.textBlob("12.1%"), emon.Testport.textBlob("9.5%"), 13000, 20000, 1000);
+        ttTrow(wd, ln, et, emon.Testport.textBlob("Delta"), emon.Testport.textBlob("5.1%"), emon.Testport.textBlob("2.2%"), 14000, 20000, 1000);
+        emon.Testport.assertEq(ttRun(wd, ln, et, pa, t), 0, "tilt: well formed");
+        emon.Testport.assertText(t, "T3w;Gh;R;Chs[Fund];Ch[Q1];Chs[Q2];Gb;R;Cs[Alpha];C[3.0%];Cs[111.5%];R;Cs[Bo];C[4.7%];Cs[4.3%];R;Cs[Gammarays];C[12.1%];Cs[9.5%];R;Cs[Delta];C[5.1%];Cs[2.2%];", "five rows of three cells on a tilted page, the row of the oversized flat line one row of its own");
+    }
     public static void testRulesAboveAndBelowMakeAPartialTable() {
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();

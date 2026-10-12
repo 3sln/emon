@@ -332,6 +332,124 @@ fn test_columns_of_whitespace_are_a_table_and_prose_columns_are_not() {
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t2), 0, "prose: well formed");
     crate::testport::assert_text(t2, "P[the old];P[was and];P[of the];P[that is];P[and then];P[went on];P[she said];P[to him];", "lowercase text with half the cells empty is not a table");
 }
+pub(crate) fn tt_line2(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, a: &[u8], b: &[u8], x: i32, y: i32) -> i32 {
+    // One line of two words, 500 per character and a 500 gap, 800 tall from y.
+    let w0: i32 = wd_count(wd);
+    let xb: i32 = (x + (500 * crate::port::blob_len(a))) + 500;
+    tt_w(wd, et, a, x, y, x + (500 * crate::port::blob_len(a)), y + 800, 0);
+    tt_w(wd, et, b, xb, y, xb + (500 * crate::port::blob_len(b)), y + 800, 0);
+    ln_new(ln, 1, x, y, xb + (500 * crate::port::blob_len(b)), y + 800, x, (y + 800) - 200, xb + (500 * crate::port::blob_len(b)), (y + 800) - 200, 0, 0, w0, 2);
+    return 0;
+}
+pub(crate) fn tt_prose_row(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, y: i32, a1: &[u8], a2: &[u8], b1: &[u8], b2: &[u8], c1: &[u8], c2: &[u8]) -> i32 {
+    // A row of three cells of two lowercase words each: text set in chunks.
+    tt_line2(wd, ln, et, a1, a2, 7200, y);
+    tt_line2(wd, ln, et, b1, b2, 30000, y);
+    tt_line2(wd, ln, et, c1, c2, 40000, y);
+    return 0;
+}
+pub(crate) fn tt_tw(mut wd: &mut crate::port::Cells, mut et: &mut crate::port::Cells, b: &[u8], x0: i32, y0: i32, x1: i32, y1: i32, tilt: i32, size: i32, line: i32) -> i32 {
+    // One word whose baseline slopes by `tilt` parts per million from y1 - 200 at x 7200 (the line of a scan).
+    let ts: i32 = crate::port::cells_len(et);
+    let base: i32 = y1 - 200;
+    text_append_utf8(et, b, 0, crate::port::blob_len(b));
+    let r: i32 = wd_new(wd, 1, x0, y0, x1, y1, x0, base + ((tilt * (x0 - 7200)) / 1000000), x1, base + ((tilt * (x1 - 7200)) / 1000000), 0, 0, ts, crate::port::cells_len(et) - ts, line, -1, -1);
+    wd_set(wd, r, wf_size(), size);
+    wd_set(wd, r, wf_font(), 0);
+    wd_set(wd, r, wf_style(), 0);
+    return 0;
+}
+pub(crate) fn tt_trow(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, a: &[u8], b: &[u8], c: &[u8], y: i32, tilt: i32, size: i32) -> i32 {
+    // One line of three words (at x 7200, 20000 and 36000, 800 tall from y) with a baseline that slopes by `tilt` parts per
+    // million, and the words' size `size`: a row of a scan, whose lines Tesseract fits one by one.
+    let w0: i32 = wd_count(wd);
+    let l: i32 = ln_count(ln);
+    let xb: i32 = 20000;
+    let xc: i32 = 36000;
+    let x1: i32 = xc + (500 * crate::port::blob_len(c));
+    let base: i32 = y + 600;
+    tt_tw(wd, et, a, 7200, y, 7200 + (500 * crate::port::blob_len(a)), y + 800, tilt, size, l);
+    tt_tw(wd, et, b, xb, y, xb + (500 * crate::port::blob_len(b)), y + 800, tilt, size, l);
+    tt_tw(wd, et, c, xc, y, x1, y + 800, tilt, size, l);
+    ln_new(ln, 1, 7200, y, x1, y + 800, 7200, base, x1, base + ((tilt * (x1 - 7200)) / 1000000), 0, 0, w0, 3);
+    return 0;
+}
+#[test]
+fn test_a_tail_that_spoils_a_whitespace_run_is_let_go() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // A header, five rows of a label and two numbers, then three rows of lowercase text set in three chunks: as one run
+    // they are prose in columns and the run is refused; without its last three rows it is the table.
+    tt_at(wd, ln, et, &crate::testport::text_blob("Fund")[..], 7200, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Q1")[..], 30000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Q2")[..], 40000, 10000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Alpha")[..], 7200, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3.0%")[..], 30000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("111.5%")[..], 40000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Bo")[..], 7200, 13200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("4.7%")[..], 30000, 13200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("4.3%")[..], 40000, 13200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Gammarays")[..], 7200, 14800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("12.1%")[..], 30000, 14800, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("9.5%")[..], 40000, 14800, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Delta")[..], 7200, 16400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("5.1%")[..], 30000, 16400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("2.2%")[..], 40000, 16400, 0, 1);
+    tt_prose_row(wd, ln, et, 19000, &crate::testport::text_blob("net")[..], &crate::testport::text_blob("thirty")[..], &crate::testport::text_blob("days")[..], &crate::testport::text_blob("from")[..], &crate::testport::text_blob("late")[..], &crate::testport::text_blob("fees")[..]);
+    tt_prose_row(wd, ln, et, 20600, &crate::testport::text_blob("pay")[..], &crate::testport::text_blob("by")[..], &crate::testport::text_blob("bank")[..], &crate::testport::text_blob("transfer")[..], &crate::testport::text_blob("sort")[..], &crate::testport::text_blob("code")[..]);
+    tt_prose_row(wd, ln, et, 22200, &crate::testport::text_blob("thank")[..], &crate::testport::text_blob("you")[..], &crate::testport::text_blob("for")[..], &crate::testport::text_blob("your")[..], &crate::testport::text_blob("custom")[..], &crate::testport::text_blob("again")[..]);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "tail: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];R;Cs[Delta];C[5.1%];Ce[2.2%];P[net thirty];P[days from];P[late fees];P[pay by];P[bank transfer];P[sort code];P[thank you];P[for your];P[custom again];", "the three rows of text in chunks that spoil the run are not rows of the table: five rows and a header, then paragraphs");
+}
+#[test]
+fn test_a_running_header_apart_from_a_whitespace_run_is_no_row_of_it() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // Two chunks of a page header, more than two pitches above a table of numbers whose rows are a pitch (1200) apart.
+    tt_at(wd, ln, et, &crate::testport::text_blob("Statement")[..], 7200, 5400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Page 2")[..], 40000, 5400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Fund")[..], 7200, 8000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Q1")[..], 30000, 8000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Q2")[..], 40000, 8000, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Alpha")[..], 7200, 9200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("3.0%")[..], 30000, 9200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("111.5%")[..], 40000, 9200, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Bo")[..], 7200, 10400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("4.7%")[..], 30000, 10400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("4.3%")[..], 40000, 10400, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Gammarays")[..], 7200, 11600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("12.1%")[..], 30000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("9.5%")[..], 40000, 11600, 0, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7200, 12800, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("6.4%")[..], 30000, 12800, 1, 1);
+    tt_at(wd, ln, et, &crate::testport::text_blob("6.6%")[..], 40000, 12800, 1, 1);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "header: well formed");
+    crate::testport::assert_text(t, "P[Statement];P[Page 2];T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];Gf;R;Cws[Total];Cw[6.4%];Cwe[6.6%];", "the page header more than two pitches above is two paragraphs, not the first row of the table");
+}
+#[test]
+fn test_the_rows_of_a_tilted_scan_are_told_apart_by_their_lines() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    // Five rows a pitch (1000) apart on a page tilted by 20000 parts per million, the third fitted flat by the OCR and with a size
+    // four times the others' (a box that took in a dark band): its words' own baselines differ by 700 across the row, and the
+    // chain tolerance of its size is more than the pitch; each line has one key, and the tolerance of two sizes is the smaller.
+    tt_trow(wd, ln, et, &crate::testport::text_blob("Fund")[..], &crate::testport::text_blob("Q1")[..], &crate::testport::text_blob("Q2")[..], 10000, 20000, 1000);
+    tt_trow(wd, ln, et, &crate::testport::text_blob("Alpha")[..], &crate::testport::text_blob("3.0%")[..], &crate::testport::text_blob("111.5%")[..], 11000, 20000, 1000);
+    tt_trow(wd, ln, et, &crate::testport::text_blob("Bo")[..], &crate::testport::text_blob("4.7%")[..], &crate::testport::text_blob("4.3%")[..], 12000, 0, 4000);
+    tt_trow(wd, ln, et, &crate::testport::text_blob("Gammarays")[..], &crate::testport::text_blob("12.1%")[..], &crate::testport::text_blob("9.5%")[..], 13000, 20000, 1000);
+    tt_trow(wd, ln, et, &crate::testport::text_blob("Delta")[..], &crate::testport::text_blob("5.1%")[..], &crate::testport::text_blob("2.2%")[..], 14000, 20000, 1000);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "tilt: well formed");
+    crate::testport::assert_text(t, "T3w;Gh;R;Chs[Fund];Ch[Q1];Chs[Q2];Gb;R;Cs[Alpha];C[3.0%];Cs[111.5%];R;Cs[Bo];C[4.7%];Cs[4.3%];R;Cs[Gammarays];C[12.1%];Cs[9.5%];R;Cs[Delta];C[5.1%];Cs[2.2%];", "five rows of three cells on a tilted page, the row of the oversized flat line one row of its own");
+}
 #[test]
 fn test_rules_above_and_below_make_a_partial_table() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();

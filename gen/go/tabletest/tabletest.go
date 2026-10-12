@@ -349,6 +349,128 @@ func TestColumnsOfWhitespaceAreATableAndProseColumnsAreNot(emonT *testing.T) {
 	port.AssertText(emonT, t2, "P[the old];P[was and];P[of the];P[that is];P[and then];P[went on];P[she said];P[to him];", "lowercase text with half the cells empty is not a table")
 }
 
+func ttLine2(wd *port.Cells, ln *port.Cells, et *port.Cells, a []byte, b []byte, x int32, y int32) int32 {
+	// One line of two words, 500 per character and a 500 gap, 800 tall from y.
+	var w0 int32 = evidence.WdCount(wd)
+	var xb int32 = (x + (500 * port.BlobLen(a))) + 500
+	ttW(wd, et, a, x, y, x+(500*port.BlobLen(a)), y+800, 0)
+	ttW(wd, et, b, xb, y, xb+(500*port.BlobLen(b)), y+800, 0)
+	evidence.LnNew(ln, 1, x, y, xb+(500*port.BlobLen(b)), y+800, x, (y+800)-200, xb+(500*port.BlobLen(b)), (y+800)-200, 0, 0, w0, 2)
+	return 0
+}
+
+func ttProseRow(wd *port.Cells, ln *port.Cells, et *port.Cells, y int32, a1 []byte, a2 []byte, b1 []byte, b2 []byte, c1 []byte, c2 []byte) int32 {
+	// A row of three cells of two lowercase words each: text set in chunks.
+	ttLine2(wd, ln, et, a1, a2, 7200, y)
+	ttLine2(wd, ln, et, b1, b2, 30000, y)
+	ttLine2(wd, ln, et, c1, c2, 40000, y)
+	return 0
+}
+
+func ttTw(wd *port.Cells, et *port.Cells, b []byte, x0 int32, y0 int32, x1 int32, y1 int32, tilt int32, size int32, line int32) int32 {
+	// One word whose baseline slopes by `tilt` parts per million from y1 - 200 at x 7200 (the line of a scan).
+	var ts int32 = port.CellsLen(et)
+	var base int32 = y1 - 200
+	model.TextAppendUtf8(et, b, 0, port.BlobLen(b))
+	var r int32 = evidence.WdNew(wd, 1, x0, y0, x1, y1, x0, base+((tilt*(x0-7200))/1000000), x1, base+((tilt*(x1-7200))/1000000), 0, 0, ts, port.CellsLen(et)-ts, line, -1, -1)
+	evidence.WdSet(wd, r, evidence.WfSize(), size)
+	evidence.WdSet(wd, r, evidence.WfFont(), 0)
+	evidence.WdSet(wd, r, evidence.WfStyle(), 0)
+	return 0
+}
+
+func ttTrow(wd *port.Cells, ln *port.Cells, et *port.Cells, a []byte, b []byte, c []byte, y int32, tilt int32, size int32) int32 {
+	// One line of three words (at x 7200, 20000 and 36000, 800 tall from y) with a baseline that slopes by `tilt` parts per
+	// million, and the words' size `size`: a row of a scan, whose lines Tesseract fits one by one.
+	var w0 int32 = evidence.WdCount(wd)
+	var l int32 = evidence.LnCount(ln)
+	var xb int32 = 20000
+	var xc int32 = 36000
+	var x1 int32 = xc + (500 * port.BlobLen(c))
+	var base int32 = y + 600
+	ttTw(wd, et, a, 7200, y, 7200+(500*port.BlobLen(a)), y+800, tilt, size, l)
+	ttTw(wd, et, b, xb, y, xb+(500*port.BlobLen(b)), y+800, tilt, size, l)
+	ttTw(wd, et, c, xc, y, x1, y+800, tilt, size, l)
+	evidence.LnNew(ln, 1, 7200, y, x1, y+800, 7200, base, x1, base+((tilt*(x1-7200))/1000000), 0, 0, w0, 3)
+	return 0
+}
+
+func TestATailThatSpoilsAWhitespaceRunIsLetGo(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// A header, five rows of a label and two numbers, then three rows of lowercase text set in three chunks: as one run
+	// they are prose in columns and the run is refused; without its last three rows it is the table.
+	ttAt(wd, ln, et, port.TextBlob("Fund"), 7200, 10000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Q1"), 30000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Q2"), 40000, 10000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Alpha"), 7200, 11600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("3.0%"), 30000, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("111.5%"), 40000, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Bo"), 7200, 13200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("4.7%"), 30000, 13200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("4.3%"), 40000, 13200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Gammarays"), 7200, 14800, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("12.1%"), 30000, 14800, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("9.5%"), 40000, 14800, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Delta"), 7200, 16400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("5.1%"), 30000, 16400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("2.2%"), 40000, 16400, 0, 1)
+	ttProseRow(wd, ln, et, 19000, port.TextBlob("net"), port.TextBlob("thirty"), port.TextBlob("days"), port.TextBlob("from"), port.TextBlob("late"), port.TextBlob("fees"))
+	ttProseRow(wd, ln, et, 20600, port.TextBlob("pay"), port.TextBlob("by"), port.TextBlob("bank"), port.TextBlob("transfer"), port.TextBlob("sort"), port.TextBlob("code"))
+	ttProseRow(wd, ln, et, 22200, port.TextBlob("thank"), port.TextBlob("you"), port.TextBlob("for"), port.TextBlob("your"), port.TextBlob("custom"), port.TextBlob("again"))
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "tail: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];R;Cs[Delta];C[5.1%];Ce[2.2%];P[net thirty];P[days from];P[late fees];P[pay by];P[bank transfer];P[sort code];P[thank you];P[for your];P[custom again];", "the three rows of text in chunks that spoil the run are not rows of the table: five rows and a header, then paragraphs")
+}
+
+func TestARunningHeaderApartFromAWhitespaceRunIsNoRowOfIt(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// Two chunks of a page header, more than two pitches above a table of numbers whose rows are a pitch (1200) apart.
+	ttAt(wd, ln, et, port.TextBlob("Statement"), 7200, 5400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("Page 2"), 40000, 5400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Fund"), 7200, 8000, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("Q1"), 30000, 8000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Q2"), 40000, 8000, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("Alpha"), 7200, 9200, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("3.0%"), 30000, 9200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("111.5%"), 40000, 9200, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Bo"), 7200, 10400, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("4.7%"), 30000, 10400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("4.3%"), 40000, 10400, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Gammarays"), 7200, 11600, 0, 0)
+	ttAt(wd, ln, et, port.TextBlob("12.1%"), 30000, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("9.5%"), 40000, 11600, 0, 1)
+	ttAt(wd, ln, et, port.TextBlob("Total"), 7200, 12800, 1, 0)
+	ttAt(wd, ln, et, port.TextBlob("6.4%"), 30000, 12800, 1, 1)
+	ttAt(wd, ln, et, port.TextBlob("6.6%"), 40000, 12800, 1, 1)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "header: well formed")
+	port.AssertText(emonT, t, "P[Statement];P[Page 2];T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];Gf;R;Cws[Total];Cw[6.4%];Cwe[6.6%];", "the page header more than two pitches above is two paragraphs, not the first row of the table")
+}
+
+func TestTheRowsOfATiltedScanAreToldApartByTheirLines(emonT *testing.T) {
+	var wd *port.Cells = port.NewCells()
+	var ln *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pa *port.Cells = port.NewCells()
+	var t *strings.Builder = port.NewText()
+	// Five rows a pitch (1000) apart on a page tilted by 20000 parts per million, the third fitted flat by the OCR and with a size
+	// four times the others' (a box that took in a dark band): its words' own baselines differ by 700 across the row, and the
+	// chain tolerance of its size is more than the pitch; each line has one key, and the tolerance of two sizes is the smaller.
+	ttTrow(wd, ln, et, port.TextBlob("Fund"), port.TextBlob("Q1"), port.TextBlob("Q2"), 10000, 20000, 1000)
+	ttTrow(wd, ln, et, port.TextBlob("Alpha"), port.TextBlob("3.0%"), port.TextBlob("111.5%"), 11000, 20000, 1000)
+	ttTrow(wd, ln, et, port.TextBlob("Bo"), port.TextBlob("4.7%"), port.TextBlob("4.3%"), 12000, 0, 4000)
+	ttTrow(wd, ln, et, port.TextBlob("Gammarays"), port.TextBlob("12.1%"), port.TextBlob("9.5%"), 13000, 20000, 1000)
+	ttTrow(wd, ln, et, port.TextBlob("Delta"), port.TextBlob("5.1%"), port.TextBlob("2.2%"), 14000, 20000, 1000)
+	port.AssertEq(emonT, ttRun(wd, ln, et, pa, t), 0, "tilt: well formed")
+	port.AssertText(emonT, t, "T3w;Gh;R;Chs[Fund];Ch[Q1];Chs[Q2];Gb;R;Cs[Alpha];C[3.0%];Cs[111.5%];R;Cs[Bo];C[4.7%];Cs[4.3%];R;Cs[Gammarays];C[12.1%];Cs[9.5%];R;Cs[Delta];C[5.1%];Cs[2.2%];", "five rows of three cells on a tilted page, the row of the oversized flat line one row of its own")
+}
+
 func TestRulesAboveAndBelowMakeAPartialTable(emonT *testing.T) {
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()

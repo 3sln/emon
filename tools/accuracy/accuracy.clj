@@ -233,6 +233,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 
 (def ^:dynamic *variants* nil)   ; a set of variant names, or nil for every one
 (def ^:dynamic *ids* nil)        ; a set of document ids, or nil for every one
+(def ^:dynamic *docs* nil)       ; a set of "VARIANT/ID" pairs, or nil: only these documents (D459: a variant's documents of a few ids)
 (def ^:dynamic *fixture-set* nil) ; a directory of FIXTURE-SETS, or nil for the synthetic corpus
 (def VARIANTS ["pdf" "scan" "pdf-tagged" "scan-color" "scan-ovl"])
 
@@ -243,6 +244,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
           :let [files (get-in man ["docs" doc-id "files"])]
           variant VARIANTS
           :when (or (nil? *variants*) (contains? *variants* variant))
+          :when (or (nil? *docs*) (contains? *docs* (str variant "/" doc-id)))
           :when (contains? files variant)]
       [doc-id variant (str (fs/path CORPUS (get-in files [variant "path"])))
        ;; the overlay scans have their own gold: the document's, plus the overlays' ledger and seal nodes (D209)
@@ -450,7 +452,9 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
                            (recur (nnext a) pred update only))
           "--ids" (do (alter-var-root #'*ids* (constantly (set (str/split (second a) #","))))
                       (recur (nnext a) pred update only))
-          (do (println "usage: accuracy.clj [--predictor emon|emon-live|emon-replay|oracle|degraded|fixtures|CMD] [--update] [--only ID] [--variants V,V] [--ids ID,ID]")
+          "--docs" (do (alter-var-root #'*docs* (constantly (set (str/split (second a) #","))))
+                       (recur (nnext a) pred update only))
+          (do (println "usage: accuracy.clj [--predictor emon|emon-live|emon-replay|oracle|degraded|fixtures|CMD] [--update] [--only ID] [--variants V,V] [--ids ID,ID] [--docs V/ID,V/ID]")
               (System/exit 2))))
       (let [board (load-board)
             ;; a reference is scored on its fixed subset of the input forms unless --variants says otherwise

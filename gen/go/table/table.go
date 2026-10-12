@@ -1417,8 +1417,23 @@ func tbBkey(wd *port.Cells, w int32, ppm int32) int32 {
 	// words share on a tilted scan, where a row's left and right words differ by several sizes of baseline over a table's
 	// width and the chain of rows below would cut a row where a column is empty. ppm 0 answers `by1`, as before.
 	// 64-bit and clamped: a hostile coordinate times the tilt does not overflow (D387's kind).
-	var sh int64 = (int64(evidence.WdGet(wd, w, evidence.HdBx1())/100) * int64(ppm)) / int64(10000)
-	return tbClamp64(int64(evidence.WdGet(wd, w, evidence.HdBy1())) + (sh * int64(-1)))
+	if ppm == 0 {
+		return evidence.WdGet(wd, w, evidence.HdBy1())
+	}
+	var f int32 = w
+	var steps int32 = 0
+	var lin int32 = evidence.WdGet(wd, w, evidence.HdLine())
+	// The anchor is the first word of the word's line (at most 64 words back): every word of a line gets one key,
+	// the line's start carried along the page's tilt, and not its own point on a baseline whose slope is a pixel's noise
+	// (a short line's slope is not the page's, and the error grows with the distance from the line's start; D459).
+	if lin >= 0 {
+		for (f > 0) && ((steps < 64) && (evidence.WdGet(wd, f-1, evidence.HdLine()) == lin)) {
+			f -= 1
+			steps += 1
+		}
+	}
+	var sh int64 = (int64(evidence.WdGet(wd, f, evidence.HdBx0())/100) * int64(ppm)) / int64(10000)
+	return tbClamp64(int64(evidence.WdGet(wd, f, evidence.HdBy0())) + (sh * int64(-1)))
 }
 
 func tbWless(wd *port.Cells, a int32, b int32, mode int32, ppm int32) bool {
@@ -1473,6 +1488,19 @@ func tbSortWords(wl *port.Cells, wd *port.Cells, from int32, to int32, mode int3
 	return 0
 }
 
+func tbChainTol(wd *port.Cells, a int32, b int32, tol int32) int32 {
+	// The baseline distance at which the word b still joins the row of the word a: `tol`, a third of the first word's size, but at
+	// most a third of the smaller of the two sizes. A line's size is its box's height, and a box that took in the dark band of a
+	// header (or a stamp) is several times the text's; its size must not let the line below join its row (D459).
+	var sa int32 = tbMax(500, evidence.WdGet(wd, a, evidence.WfSize()))
+	var sb int32 = tbMax(500, evidence.WdGet(wd, b, evidence.WfSize()))
+	var t2 int32 = (3 * tbMin(sa, sb)) / 10
+	if t2 < tol {
+		return t2
+	}
+	return tol
+}
+
 func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32, ry1 int32, wl *port.Cells, rw *port.Cells, sg *port.Cells) int32 {
 	// The upright words w0..w1 of the page whose centre is in the box, as baseline rows and chunks (see the
 	// head of this section). Answers the number of rows.
@@ -1504,7 +1532,7 @@ func tbRows(wd *port.Cells, w0 int32, w1 int32, rx0 int32, ry0 int32, rx1 int32,
 		// A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
 		// order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
 		j = i + 1
-		for (j < n) && (tbAbs(tbBkey(wd, port.CellsAt(wl, j), ppm)-tbBkey(wd, port.CellsAt(wl, j-1), ppm)) <= tol) {
+		for (j < n) && (tbAbs(tbBkey(wd, port.CellsAt(wl, j), ppm)-tbBkey(wd, port.CellsAt(wl, j-1), ppm)) <= tbChainTol(wd, port.CellsAt(wl, j-1), port.CellsAt(wl, j), tol)) {
 			j += 1
 		}
 		tbSortWords(wl, wd, i, j, 1, ppm)
@@ -2854,6 +2882,142 @@ func tbShadedPage(fl *port.Cells, page int32, wd *port.Cells, et *port.Cells, w0
 	return 0
 }
 
+func tbTabularBaselineRows(rw *port.Cells, ra int32, rb int32) int32 {
+	// How many of the baseline rows ra..rb are cut in two chunks or more.
+	var r int32 = ra
+	var n int32 = 0
+	for r < rb {
+		if port.CellsAt(rw, (r*rws)+9) >= 2 {
+			n += 1
+		}
+		r += 1
+	}
+	return n
+}
+
+func tbMedianPitch(rw *port.Cells, ra int32, rb int32, scratch *port.Cells) int32 {
+	// The median distance between the baselines of consecutive rows ra..rb (0 for fewer than two). `scratch` is clobbered.
+	var r int32 = ra + 1
+	port.CellsDrop(scratch, 0)
+	for r < rb {
+		port.CellsPush(scratch, port.CellsAt(rw, (r*rws)+2)-port.CellsAt(rw, ((r-1)*rws)+2))
+		r += 1
+	}
+	if port.CellsLen(scratch) < 2 {
+		return 0
+	}
+	tbSortNums(scratch)
+	return port.CellsAt(scratch, port.CellsLen(scratch)/2)
+}
+
+func tbProseEdge(tb *port.Cells, k int32, wd *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells) int32 {
+	// 1 when the first row of table k is a line of prose, 2 when the last is, 3 when both are: the line of a paragraph beside
+	// or under a table that its row would have taken (D459). A line of prose is a row with one cell holding nine words or more, or
+	// a row of which every cell has two words or more and begins with a lowercase letter (text set in chunks).
+	var b int32 = k * tbs
+	var nrows int32 = port.CellsAt(tb, b+7)
+	var cfirst int32 = port.CellsAt(tb, b+9)
+	var cend int32 = cfirst + port.CellsAt(tb, b+10)
+	var c int32 = cfirst
+	var filled0 int32 = 0
+	var words0 int32 = 0
+	var low0 int32 = 0
+	var filled1 int32 = 0
+	var words1 int32 = 0
+	var low1 int32 = 0
+	var res int32 = 0
+	for c < cend {
+		var cb int32 = c * tcs
+		var cn int32 = port.CellsAt(tc, cb+9)
+		if cn > 0 {
+			var fw int32 = port.CellsAt(tw, port.CellsAt(tc, cb+8))
+			var c0 int32 = port.CellsAt(et, evidence.WdGet(wd, fw, evidence.HdTstart()))
+			var low int32 = 0
+			if (cn >= 2) && ((c0 >= 97) && (c0 <= 122)) {
+				low = 1
+			}
+			if port.CellsAt(tc, cb) == 0 {
+				filled0 += 1
+				low0 += low
+				if cn > words0 {
+					words0 = cn
+				}
+			}
+			if port.CellsAt(tc, cb) == (nrows - 1) {
+				filled1 += 1
+				low1 += low
+				if cn > words1 {
+					words1 = cn
+				}
+			}
+		}
+		c += 1
+	}
+	if nrows < 4 {
+		return 0
+	}
+	if ((filled0 == 1) && (words0 >= 9)) || ((filled0 >= 2) && (low0 == filled0)) {
+		res = 1
+	}
+	if ((filled1 == 1) && (words1 >= 9)) || ((filled1 >= 2) && (low1 == filled1)) {
+		res += 2
+	}
+	return res
+}
+
+func tbWhitespaceRun(page int32, wd *port.Cells, et *port.Cells, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, ra int32, rb int32) int32 {
+	// The rows ra..rb (inclusive) as a whitespace candidate: its rows of one chunk at either end are not in it, and a
+	// run that is refused as a whole is tried again without its last row (the lines that follow a table, set in two
+	// chunks like a label and its text, join the run once the rows are right; D459). Three rows cut in two chunks at least.
+	var a int32 = ra
+	var jj int32 = rb
+	var again int32 = 0
+	for (a < jj) && (port.CellsAt(rw, (a*rws)+9) < 2) {
+		a += 1
+	}
+	for (jj > a) && (port.CellsAt(rw, (jj*rws)+9) < 2) {
+		jj -= 1
+	}
+	if tbTabularBaselineRows(rw, a, jj+1) >= 3 {
+		again = 1
+	}
+	for again == 1 {
+		again = 0
+		var nt int32 = tbRowsOf(tb, tbs)
+		var c0 int32 = tbRowsOf(tc, tcs)
+		var wl0 int32 = port.CellsLen(tw)
+		var xl0 int32 = port.CellsLen(tx)
+		var t int32 = tbTextGrid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, jj+1, pfWhitespace, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000)
+		if t >= 0 {
+			var sc int32 = tbScore(tb, t, wd, et, tc, tw)
+			var pe int32 = tbProseEdge(tb, t, wd, et, tc, tw)
+			if (sc == 0) || (pe > 0) {
+				tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)
+				if (sc == 0) || (pe >= 2) {
+					jj -= 1
+				}
+				if (pe == 1) || (pe == 3) {
+					a += 1
+				}
+				for (jj > a) && (port.CellsAt(rw, (jj*rws)+9) < 2) {
+					jj -= 1
+				}
+				for (a < jj) && (port.CellsAt(rw, (a*rws)+9) < 2) {
+					a += 1
+				}
+				// ...until three rows are left, and no more rows are let go than are kept (a run of columns of text
+				// that is refused is not a table with some prose after it)
+				if (tbTabularBaselineRows(rw, a, jj+1) >= 3) && (((rb - jj) + (a - ra)) <= ((jj - a) + 1)) {
+					again = 1
+				}
+			} else {
+				port.CellsSet(tb, (t*tbs)+6, sc)
+			}
+		}
+	}
+	return 0
+}
+
 func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 int32, wl *port.Cells, rw *port.Cells, sg *port.Cells, ch *port.Cells, st *port.Cells, en *port.Cells, rmap *port.Cells, gm *port.Cells, gs *port.Cells, ry *port.Cells, pr *port.Cells, so *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells) int32 {
 	// The rows of the whole page, in runs of rows that are cut in two or more chunks (a row of one chunk
 	// goes in a run when a row of two follows it), each run of three such rows or more a whitespace candidate.
@@ -2895,19 +3059,21 @@ func tbWhitespacePage(page int32, wd *port.Cells, et *port.Cells, w0 int32, w1 i
 				j -= 1
 			}
 			if ntab >= 3 {
-				var nt int32 = tbRowsOf(tb, tbs)
-				var c0 int32 = tbRowsOf(tc, tcs)
-				var wl0 int32 = port.CellsLen(tw)
-				var xl0 int32 = port.CellsLen(tx)
-				var t int32 = tbTextGrid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, i, j+1, pfWhitespace, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000)
-				if t >= 0 {
-					var sc int32 = tbScore(tb, t, wd, et, tc, tw)
-					if sc == 0 {
-						tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0)
-					} else {
-						port.CellsSet(tb, (t*tbs)+6, sc)
+				var a int32 = i
+				var e int32 = j
+				var med int32 = tbMedianPitch(rw, i, j+1, st)
+				// A row set apart from the run's body by more than twice the run's median pitch is not in it: a page's running
+				// header above a table, a label below it. The rows were once cut in halves by a tilted scan and these stood alone;
+				// set right, they join the run (D459).
+				if med > 0 {
+					for (a < e) && ((10 * (port.CellsAt(rw, ((a+1)*rws)+2) - port.CellsAt(rw, (a*rws)+2))) > (20 * med)) {
+						a += 1
+					}
+					for (e > a) && ((10 * (port.CellsAt(rw, (e*rws)+2) - port.CellsAt(rw, ((e-1)*rws)+2))) > (20 * med)) {
+						e -= 1
 					}
 				}
+				tbWhitespaceRun(page, wd, et, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, e)
 			}
 		} else {
 			j = i
@@ -2947,7 +3113,7 @@ func tbSameColumns(tb *port.Cells, a int32, b int32, tx *port.Cells) bool {
 	if na < 3 {
 		return 0 == 1
 	}
-	var tol int32 = tbMax(500, (port.CellsAt(tx, xa+(na-1))-port.CellsAt(tx, xa))/60)
+	var tol int32 = tbMax(1000, (port.CellsAt(tx, xa+(na-1))-port.CellsAt(tx, xa))/20)
 	for i < na {
 		if tbAbs(port.CellsAt(tx, xa+i)-port.CellsAt(tx, xb+i)) > tol {
 			return 0 == 1
