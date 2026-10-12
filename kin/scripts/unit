@@ -343,8 +343,22 @@ RUNNER
 esac
 
 # --- C# ---------------------------------------------------------------------
+# The SDK is `kin/scripts/dotnet-sdk`'s (D1023): none that runs, or older than .NET 8, is a LOUD skip (`SKIP csharp -- why`, the same words as
+# `emon-cs-build`'s exit 3), never a failure; EMON_SKIP_CSHARP=1 leaves the arm out on purpose.
 case "$arms" in *csharp*)
-  if command -v dotnet > /dev/null; then
+  cs_sdk=""
+  if [ -n "${EMON_SKIP_CSHARP:-}" ]; then
+    echo "  SKIP csharp -- EMON_SKIP_CSHARP is set"
+  elif cs_sdk=$("$repo/kin/scripts/dotnet-sdk" 2>"$work/dotnet-sdk.err"); then
+    :
+  else
+    sed 's/^/  /' "$work/dotnet-sdk.err"
+    cs_sdk=""
+  fi
+  if [ -n "$cs_sdk" ]; then
+    export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+    cs_dotnet=${cs_sdk% *}
+    cs_major=${cs_sdk##* }
     mkdir -p "$work/cs"
     cp gen/csharp/Emon/*.cs "$work/cs/"
     cp gen/csharp/Tests/*.cs "$work/cs/"
@@ -364,16 +378,16 @@ case "$arms" in *csharp*)
   </ItemGroup>
 </Project>
 PROJ
+    # the project targets the SDK's own framework, as `emon-cs-build`'s does
+    sed "s/net10\.0/net$cs_major.0/" "$work/cs/cs.csproj" > "$work/cs/cs.csproj.new" && mv "$work/cs/cs.csproj.new" "$work/cs/cs.csproj"
     # RELEASE, NOT DEBUG: the arm is 379 laws and two of them (the 512-byte async source over the real PDFs, and the
     # glyph streams pdfminer agreed with) are tight loops over megabytes of PDF. Unoptimised (Debug) they took 9.5 and 3.2
     # minutes of a 13.5-minute arm (measured, D217): the whole arm sat near the 900 s cap and, on a loaded machine
     # with the other arms before it, went over it. Optimised, the same two take under 50 s together and the arm
     # about 1.5 minutes. The cap stays at 900 s: it is now a hang detector with ten times the headroom.
-    rc=0; out=$(cd "$work/cs" && "$emon_cap" 900 dotnet test -c Release -v q --nologo 2>&1) || rc=$?
+    rc=0; out=$(cd "$work/cs" && "$emon_cap" 900 "$cs_dotnet" test -c Release -v q --nologo 2>&1) || rc=$?
     n=$(printf '%s\n' "$out" | grep -o '\(Passed\|Failed\): *[0-9]*' | grep -o '[0-9]*$' | awk '{n+=$1} END {print n+0}')
     finish csharp "$rc" "$n" "$out"
-  else
-    echo "  SKIP csharp -- dotnet not on PATH"
   fi ;;
 esac
 

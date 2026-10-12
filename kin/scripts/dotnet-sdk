@@ -1,0 +1,28 @@
+#!/bin/sh
+# Find a .NET SDK the C# host can use; print `PATH MAJOR` on stdout.   kin/scripts/dotnet-sdk
+#
+# The one place that decides whether the C# arm of a gate runs (DEVLOG P9.2, D1020, D1023): `emon-cs-build` and the C# arm of `bb unit` both ask it.
+# The SDK is $EMON_DOTNET, else `dotnet` on the PATH, else /opt/homebrew/bin/dotnet, else ~/.dotnet/dotnet. It must RUN and be .NET 8 or newer (the
+# ports use `IndexOfAnyExcept`, `ZLibStream` and `AesEcb`). WITHOUT ONE THIS SKIPS LOUDLY: it prints `SKIP csharp -- why` on stderr and exits 3, and a
+# caller leaves the C# arm out and says so; nothing fails. `EMON_SKIP_CSHARP=1` leaves the arm out on purpose (the callers that run arms test it).
+DOTNET="${EMON_DOTNET:-}"
+if [ -z "$DOTNET" ]; then
+  DOTNET=$(command -v dotnet 2>/dev/null || true)
+fi
+[ -x "$DOTNET" ] || DOTNET=/opt/homebrew/bin/dotnet
+[ -x "$DOTNET" ] || DOTNET="$HOME/.dotnet/dotnet"
+if ! [ -x "$DOTNET" ]; then
+  echo "SKIP csharp -- no dotnet found (set EMON_DOTNET)" >&2
+  exit 3
+fi
+export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+ver=$("$DOTNET" --version 2>/dev/null || true)
+major=${ver%%.*}
+case "$major" in
+  ''|*[!0-9]*) echo "SKIP csharp -- \`$DOTNET --version\` gave no .NET SDK (set EMON_DOTNET)" >&2; exit 3 ;;
+esac
+if [ "$major" -lt 8 ]; then
+  echo "SKIP csharp -- the C# host needs a .NET 8 SDK or newer; $DOTNET is $ver" >&2
+  exit 3
+fi
+echo "$DOTNET $major"

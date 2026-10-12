@@ -1,0 +1,137 @@
+#!/bin/sh
+# Build the C# Engine and its driver; print the driver's path.   kin/scripts/emon-cs-build
+#
+# The C# twin of `emon-java-build` and `emon-go-build` (DEVLOG P9.2). The tree is ASSEMBLED, not committed:
+#
+#     .cache/emon-cs/src/gen/*.cs           gen/csharp/Emon/, every class that is NOT a law or a probe (names ending `test`
+#                                           or `probe`)
+#     .cache/emon-cs/src/host/*.cs          host/csharp/Emon/*.cs without `Testport.cs` (test support is not the library):
+#                                           the ports, the plan/fulfil loop, the Renderer port
+#     .cache/emon-cs/src/host/Api/*.cs      host/csharp/Emon/Api/: the Engine API, the byte sources, ImageDecode
+#     .cache/emon-cs/src/host/Ffi/*.cs      host/csharp/Emon/Ffi/: the pdfium and Tesseract bindings (P/Invoke, no native build)
+#     .cache/emon-cs/src/Main.cs            test/driver/csharp/Main.cs, the `emon-cs` driver
+#     .cache/emon-cs/src/EngineTest.cs      test/driver/csharp/EngineTest.cs, the Engine API's native tests (`bb slice` runs them)
+#     .cache/emon-cs/emon-cs.csproj         one executable project, built in RELEASE (D217: Debug is an order of magnitude slower)
+#     .cache/emon-cs/out/                   the build output
+#     .cache/emon-cs/emon-cs                the launcher (a shell script: `dotnet out/emon-cs.dll "$@"`)
+#     .cache/emon-cs/emon-cs-test           the native tests' launcher (`emon-cs.dll --engine-tests`)
+#
+# `.cache/` is gitignored. `bb emit` is NOT run here: callers that must be current run it first.
+#
+# THE SDK is `kin/scripts/dotnet-sdk`'s: $EMON_DOTNET, else `dotnet` on the PATH, else /opt/homebrew/bin/dotnet, else ~/.dotnet/dotnet. WITHOUT A
+# SUITABLE SDK (none that RUNS, or older than .NET 8: the ports use `IndexOfAnyExcept`, `ZLibStream` and `AesEcb`) THIS SKIPS LOUDLY: it prints
+# `SKIP csharp -- ...` on stderr and exits 3 (callers that include a C# arm leave it out and say so; nothing fails; `EMON_SKIP_CSHARP=1` leaves
+# the arm out on purpose). The project targets the SDK's own framework (net8.0, net9.0, net10.0 ...). A BUILD FAILURE OTHER THAN THE SDK'S
+# ABSENCE EXITS 1 and fails the gate.
+#
+# THE NATIVE BINDINGS (pdfium, Tesseract) are .NET P/Invoke: the libraries are found at RUN time (EMON_PDFIUM_LIB,
+# EMON_TESS_LIB), so nothing here links them and no gate needs them. DEVLOG D1020.
+set -e
+cd "$(dirname "$0")/../.."
+sdk=$(kin/scripts/dotnet-sdk)
+DOTNET=${sdk% *}
+major=${sdk##* }
+export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_GENERATE_ASPNET_CERTIFICATE=false
+mod=.cache/emon-cs
+mkdir -p "$mod/src/gen" "$mod/src/host/Api" "$mod/src/host/Ffi"
+
+put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
+
+# a module that is not the library: a law or a probe (gen), test support (host)
+skipped() {
+  case "$1:$2" in
+    gen:*test|gen:*probe|gen:*Test|gen:*Probe|host:Testport) return 0 ;;
+  esac
+  return 1
+}
+
+# sync a directory of .cs files: copy what changed, drop what is gone
+sync_dir() {
+  src=$1; dst=$2; kind=$3
+  keep=""
+  for f in "$src"/*.cs; do
+    [ -e "$f" ] || continue
+    m=$(basename "$f" .cs)
+    if skipped "$kind" "$m"; then continue; fi
+    keep="$keep $m"
+    put "$f" "$dst/$m.cs"
+  done
+  for f in "$dst"/*.cs; do
+    [ -e "$f" ] || continue
+    m=$(basename "$f" .cs)
+    case " $keep " in *" $m "*) ;; *) rm -f "$f" ;; esac
+  done
+}
+
+sync_dir gen/csharp/Emon "$mod/src/gen" gen
+sync_dir host/csharp/Emon "$mod/src/host" host
+sync_dir host/csharp/Emon/Api "$mod/src/host/Api" api
+sync_dir host/csharp/Emon/Ffi "$mod/src/host/Ffi" ffi
+put test/driver/csharp/Main.cs "$mod/src/Main.cs"
+put test/driver/csharp/EngineTest.cs "$mod/src/EngineTest.cs"
+
+cat > "$mod/emon-cs.csproj.new" <<PROJ
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net${major}.0</TargetFramework>
+    <AssemblyName>emon-cs</AssemblyName>
+    <RootNamespace>emon</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TieredPGO>false</TieredPGO>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <UseAppHost>false</UseAppHost>
+    <NoWarn>\$(NoWarn);CS1717;CS0164;CS0162;CS0219</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="src/**/*.cs" />
+  </ItemGroup>
+</Project>
+PROJ
+put "$mod/emon-cs.csproj.new" "$mod/emon-cs.csproj"
+rm -f "$mod/emon-cs.csproj.new"
+
+# EMON_CS_LINT=1: the host files are HELD CLEAN (what `go vet` is to Go and `javac -Xlint:all` to Java): every warning in src/host,
+# src/Main.cs and src/EngineTest.cs fails the build (the generated code is not linted: its warnings are filtered out).
+lint=""
+[ "${EMON_CS_LINT:-}" = 1 ] && lint="--no-incremental"
+
+# msbuild's own up-to-date check makes this cheap when nothing changed
+out=$("$DOTNET" build "$mod/emon-cs.csproj" -c Release -o "$mod/out" --nologo -v q -clp:NoSummary -p:UseSharedCompilation=true $lint 2>&1) || {
+  echo "$out" | head -80 >&2
+  echo "emon-cs: build failed" >&2
+  exit 1
+}
+if [ "${EMON_CS_LINT:-}" = 1 ]; then
+  bad=$(echo "$out" | grep -E '(src/host|src/Main|src/EngineTest)[^ ]*: warning ' | sort -u | head -40 || true)
+  if [ -n "$bad" ]; then echo "$bad" >&2; echo "emon-cs: the host files are not warning-clean" >&2; exit 1; fi
+fi
+
+root=$(pwd)
+cat > "$mod/emon-cs.new" <<LAUNCHER
+#!/bin/sh
+# Generated by kin/scripts/emon-cs-build: the C# driver. EMON_CS_OPTS adds runtime options (none are needed).
+export DOTNET_TieredPGO=0 DOTNET_gcServer=0 DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+exec "$DOTNET" "$root/$mod/out/emon-cs.dll" "\$@"
+LAUNCHER
+put "$mod/emon-cs.new" "$mod/emon-cs"
+rm -f "$mod/emon-cs.new"
+chmod +x "$mod/emon-cs"
+# the native tests' launcher (`bb slice`): the same runtime, `--engine-tests`; `EMON_ROOT` is the repository
+cat > "$mod/emon-cs-test.new" <<LAUNCHER
+#!/bin/sh
+# Generated by kin/scripts/emon-cs-build: the Engine API's native tests.
+export DOTNET_TieredPGO=0 DOTNET_gcServer=0 DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+exec "$DOTNET" "$root/$mod/out/emon-cs.dll" --engine-tests "\$@"
+LAUNCHER
+put "$mod/emon-cs-test.new" "$mod/emon-cs-test"
+rm -f "$mod/emon-cs-test.new"
+chmod +x "$mod/emon-cs-test"
+echo "$mod/emon-cs"

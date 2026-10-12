@@ -19,6 +19,9 @@
 ;; AND ON THE JAVA HOST (P9.1, D449) when a JDK 22+ is there (`emon-java`, `host/java/emon/api/`): its native tests (`EngineTest`, the Go file's
 ;; twin) and the same sections through its driver; without a JDK the arm is left out, loudly.
 ;;
+;; AND ON THE C# HOST (P9.2, D1023) when a .NET 8+ SDK is there (`emon-cs`, `host/csharp/Emon/Api/`): its native tests (`EngineTest`, the Java
+;; file's twin) and the same sections through its driver; without an SDK the arm is left out, loudly (EMON_SKIP_CSHARP=1 leaves it out).
+;;
 ;; Every section below runs on EVERY host: the Go Engine (`host/go/{source,engine,model}.go`, driver `emon-go`)
 ;; has its own native tests (`host/go/engine_test.go`, `go test`: the eleven laws of the Rust file and one more, concurrent reads) and the
 ;; same fixtures, goldens, async runs and errors, from the same driver flags; `bb identity` holds the two to
@@ -63,9 +66,20 @@
         0 (str/trim (:out r))
         3 (do (println (str "  " (str/trim (:err r)) " (the Java arm is left out)")) nil)
         (do (println "  FAIL the Java driver did not build:\n" (:err r)) (System/exit 1))))))
+;; THE C# ARM (P9.2, D1023): `emon-cs-build` exits 3 with `SKIP csharp -- why` on stderr when there is no .NET 8+ SDK (EMON_DOTNET, dotnet on the
+;; PATH, /opt/homebrew/bin, ~/.dotnet); the arm is then left out, LOUDLY, and nothing fails. EMON_SKIP_CSHARP=1 leaves it out on purpose.
+(def cs-exe
+  (if (System/getenv "EMON_SKIP_CSHARP")
+    (do (println "  SKIP csharp arm -- EMON_SKIP_CSHARP is set") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-cs-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the C# arm is left out)")) nil)
+        (do (println "  FAIL the C# driver did not build:\n" (:err r)) (System/exit 1))))))
 (def hosts (cond-> [["rust" (build-driver "kin/scripts/emon-rs-build" "Rust")]
                     ["go" (build-driver "kin/scripts/emon-go-build" "Go")]]
-             java-exe (conj ["java" java-exe])))
+             java-exe (conj ["java" java-exe])
+             cs-exe (conj ["csharp" cs-exe])))
 
 (defn drive [& args]
   (let [t0 (System/nanoTime)
@@ -113,6 +127,26 @@
     (binding [*label* "[java] "]
       (if (and (zero? (:exit r)) (>= n 16) (not (re-find #"FAIL" out)))
         (ok "the Engine API's native tests: " n " passed (adapters identical; async 512 = memory over every PDF fixture; D040; limits; record/replay; the Model walks and reads from many threads; images; OCR port; assets; the Renderer port)")
+        (bad "the Engine API's native tests failed:\n" (str/join "\n" (take 60 (str/split-lines out))))))))
+
+;; The C# host files are held clean, as Go's are by `go vet`: every warning in the host files, the Engine layer, the bindings and the drivers fails the
+;; build (the generated code is not linted). `--no-incremental` makes the compiler report them again.
+(when cs-exe
+  (let [r @(process {:out :string :err :string :extra-env {"EMON_CS_LINT" "1"}} "kin/scripts/emon-cs-build")]
+    (binding [*label* "[csharp] "]
+      (if (zero? (:exit r))
+        (ok "the host files are warning-clean over host/csharp and the drivers")
+        (bad "the C# host files are not warning-clean:\n" (str (:out r) (:err r)))))))
+
+;; The C# Engine's native tests: the assembled tree, `EngineTest` (test/driver/csharp/EngineTest.cs; no xunit here, D044), the Java tests' twins.
+(when cs-exe
+  (let [launcher (str (fs/parent cs-exe) "/emon-cs-test")
+        r @(process {:out :string :err :string :extra-env {"EMON_ROOT" (str (fs/canonicalize "."))}} launcher)
+        out (str (:out r) (:err r))
+        n (count (re-seq #"(?m)^ok   " out))]
+    (binding [*label* "[csharp] "]
+      (if (and (zero? (:exit r)) (>= n 17) (not (re-find #"FAIL" out)))
+        (ok "the Engine API's native tests: " n " passed (adapters identical; async 512 = memory over every PDF fixture; D040; limits; record/replay; the Model walks and reads from many threads; images; OCR port; assets; the Renderer port; decode-img)")
         (bad "the Engine API's native tests failed:\n" (str/join "\n" (take 60 (str/split-lines out))))))))
 
 (doseq [[label exe] hosts]
@@ -309,5 +343,5 @@
       (fs/delete-tree outd))))
 
 (if (zero? @fails)
-  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host, the Go host" (if java-exe " and the Java host" "") (if wasm " and in the browser (WASM + JS SDK, nine byte-source adapters)" "") ", in memory and async")
+  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host, the Go host" (if java-exe " and the Java host" "") (if cs-exe " and the C# host" "") (if wasm " and in the browser (WASM + JS SDK, nine byte-source adapters)" "") ", in memory and async")
   (do (println "  FAIL" @fails "check(s) failed") (System/exit 1)))
