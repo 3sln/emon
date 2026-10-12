@@ -69,6 +69,16 @@
         0 (str/trim (:out r))
         3 (do (println (str "  " (str/trim (:err r)) " (the Java arm is left out)")) nil)
         (do (bad "the Java Engine driver did not build:\n" (:err r)) nil)))))
+;; THE C# ENGINE (P9.2, D457) replays the same transcripts: optional, left out LOUDLY without a .NET 8+ SDK (`emon-cs-build` exits 3);
+;; EMON_SKIP_CSHARP=1 leaves it out on purpose
+(def cdrv
+  (if (System/getenv "EMON_SKIP_CSHARP")
+    (do (println "  SKIP csharp engine -- EMON_SKIP_CSHARP is set") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-cs-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the C# arm is left out)")) nil)
+        (do (bad "the C# Engine driver did not build:\n" (:err r)) nil)))))
 
 (defn drive [drv & a]
   (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
@@ -91,6 +101,10 @@
           (let [rj (drive jdrv flag "--out=bundle" (str "--replay=" (dir id)) (pdf id))]
             (check (same? rr rj)
                    id ": THE JAVA ENGINE replays it to the identical bundle too (fusion over real pdfium and Tesseract answers)")))
+        (when cdrv
+          (let [rc (drive cdrv flag "--out=bundle" (str "--replay=" (dir id)) (pdf id))]
+            (check (same? rr rc)
+                   id ": THE C# ENGINE replays it to the identical bundle too (fusion over real pdfium and Tesseract answers)")))
         (check (and want (= want (sha256 (:out rr))))
                id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
         (let [edn (slurp (str (dir id) "/transcript.edn"))

@@ -69,6 +69,9 @@ fusion/replay/wm-ocg/transcript.edn
 ocr/h-keyword/transcript.edn
 ocr/scan-px/bank-statement/transcript.edn
 ocr/scan-px/invoice/transcript.edn
+ocr/scan-px/scan-color--gfx-shading-bands/transcript.edn
+ocr/scan-px/scan-color--mixed-table-image-shaded/transcript.edn
+ocr/scan-px/scan-ovl--invoice/transcript.edn
 ocr/scan/columns-two/transcript.edn
 ocr/scan/furn-title-pagenum/transcript.edn
 ocr/scan/h-keyword/transcript.edn

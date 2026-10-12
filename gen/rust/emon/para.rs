@@ -1443,6 +1443,16 @@ pub(crate) fn pa_join_score(wd: &mut crate::port::Cells, ln: &mut crate::port::C
     }
     return pts;
 }
+pub(crate) fn pa_live(ln: &mut crate::port::Cells, lo: &mut crate::port::Cells, first: i32, cnt: i32) -> i32 {
+    // How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
+    // sees every line of the page, tables included, so that what it makes of the rest is what it always made;
+    // the lines a table holds are left out here, where the paragraphs are made.
+    let mut k: i32 = 0;
+    while (k < cnt) && (tb_claimed(ln, crate::port::cells_at(lo, first + k)) != 0) {
+        k += 1;
+    }
+    return k;
+}
 pub(crate) fn pa_note(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut al: &mut crate::port::Cells, ii: &mut crate::port::Cells, cf: &mut crate::port::Cells, lo: &mut crate::port::Cells, r: i32, med: i32, mut hc: &mut crate::port::Cells) -> i32 {
     // The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
     // paragraphs as any fragment's (D113).
@@ -1495,7 +1505,11 @@ pub(crate) fn pa_notes(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
         if (crate::port::cells_at(cf, base + CF_ROLE) != rl_body()) && (crate::port::cells_at(cf, base + CF_DONE) == 0) {
             if (crate::port::cells_at(cf, base + CF_ASSOC) < cur) || ((crate::port::cells_at(cf, base + CF_ASSOC) == cur) && (crate::port::cells_at(cf, base + CF_Y0) <= ty)) {
                 crate::port::cells_set(cf, base + CF_DONE, 1);
-                pa_note(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
+                // a side fragment of a scan every line of which a table holds is the table's cells, not a note (a narrow last
+                // column; D459). A text layer's are left as they were: its born-digital digests and ratchets hold them.
+                if (ln_get(ln, crate::port::cells_at(lo, crate::port::cells_at(cf, base + CF_FIRST)), lf_src()) != sr_ocr()) || (pa_live(ln, lo, crate::port::cells_at(cf, base + CF_FIRST), crate::port::cells_at(cf, base + CF_COUNT)) < crate::port::cells_at(cf, base + CF_COUNT)) {
+                    pa_note(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
+                }
             } else if pend > r {
                 pend = r;
             }
@@ -1610,16 +1624,6 @@ pub(crate) fn pa_columns(wd: &mut crate::port::Cells, et: &mut crate::port::Cell
         p += 1;
     }
     return 0;
-}
-pub(crate) fn pa_live(ln: &mut crate::port::Cells, lo: &mut crate::port::Cells, first: i32, cnt: i32) -> i32 {
-    // How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
-    // sees every line of the page, tables included, so that what it makes of the rest is what it always made;
-    // the lines a table holds are left out here, where the paragraphs are made.
-    let mut k: i32 = 0;
-    while (k < cnt) && (tb_claimed(ln, crate::port::cells_at(lo, first + k)) != 0) {
-        k += 1;
-    }
-    return k;
 }
 pub(crate) fn pa_tables(tb: &mut crate::port::Cells, tcur: i32, p: i32, ymid2: i32, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, hc: &mut crate::port::Cells) -> i32 {
     // Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice

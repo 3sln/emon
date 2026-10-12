@@ -1435,6 +1435,16 @@ public final class Para {
         }
         return pts;
     }
+    public static int paLive(emon.Port.Cells ln, emon.Port.Cells lo, int first, int cnt) {
+        // How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
+        // sees every line of the page, tables included, so that what it makes of the rest is what it always made;
+        // the lines a table holds are left out here, where the paragraphs are made.
+        int k = 0;
+        while ((k < cnt) && (Table.tbClaimed(ln, emon.Port.cellsAt(lo, first + k)) != 0)) {
+            k += 1;
+        }
+        return k;
+    }
     public static int paNote(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells ii, emon.Port.Cells cf, emon.Port.Cells lo, int r, int med, emon.Port.Cells hc) {
         // The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
         // paragraphs as any fragment's (D113).
@@ -1487,7 +1497,11 @@ public final class Para {
             if ((emon.Port.cellsAt(cf, base + CF_ROLE) != Model.rlBody()) && (emon.Port.cellsAt(cf, base + CF_DONE) == 0)) {
                 if ((emon.Port.cellsAt(cf, base + CF_ASSOC) < cur) || ((emon.Port.cellsAt(cf, base + CF_ASSOC) == cur) && (emon.Port.cellsAt(cf, base + CF_Y0) <= ty))) {
                     emon.Port.cellsSet(cf, base + CF_DONE, 1);
-                    paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
+                    // a side fragment of a scan every line of which a table holds is the table's cells, not a note (a narrow last
+                    // column; D459). A text layer's are left as they were: its born-digital digests and ratchets hold them.
+                    if ((Evidence.lnGet(ln, emon.Port.cellsAt(lo, emon.Port.cellsAt(cf, base + CF_FIRST)), Evidence.lfSrc()) != Model.srOcr()) || (paLive(ln, lo, emon.Port.cellsAt(cf, base + CF_FIRST), emon.Port.cellsAt(cf, base + CF_COUNT)) < emon.Port.cellsAt(cf, base + CF_COUNT))) {
+                        paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
+                    }
                 } else if (pend > r) {
                     pend = r;
                 }
@@ -1602,16 +1616,6 @@ public final class Para {
             p += 1;
         }
         return 0;
-    }
-    public static int paLive(emon.Port.Cells ln, emon.Port.Cells lo, int first, int cnt) {
-        // How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
-        // sees every line of the page, tables included, so that what it makes of the rest is what it always made;
-        // the lines a table holds are left out here, where the paragraphs are made.
-        int k = 0;
-        while ((k < cnt) && (Table.tbClaimed(ln, emon.Port.cellsAt(lo, first + k)) != 0)) {
-            k += 1;
-        }
-        return k;
     }
     public static int paTables(emon.Port.Cells tb, int tcur, int p, int ymid2, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells ledger, emon.Port.Cells hc) {
         // Emit, in document order, the tables of page p from `tcur` on whose top is at or above `ymid2` (twice

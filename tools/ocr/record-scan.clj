@@ -3,7 +3,8 @@
 ;; (brew: tesseract, leptonica; EMON_TESS_LIB is the directory of the libraries, default /opt/homebrew/lib), and is what produced
 ;; test/ocr/scan/ID/.
 ;;
-;;     bb tools/ocr/record-scan.clj [--keep-bitmaps] [--px] ID...       each ID is test/corpus/synth/scan/ID.pdf
+;;     bb tools/ocr/record-scan.clj [--keep-bitmaps] [--px] [VARIANT/]ID...   each ID is test/corpus/synth/VARIANT/ID.pdf (VARIANT scan, scan-color or
+;;                                                                       scan-ovl; scan when left out); the directory is ID for scan, VARIANT--ID else (D459)
 ;;
 ;; Each document goes through the Engine with the Tesseract `Ocr` port (`emon-rs --tesseract --record`), and the transcript the
 ;; run wrote is committed AS A REPLAY INPUT: `transcript.edn` (the decode and the OCR request and answer of every page, and the
@@ -33,9 +34,10 @@
 
 (defn strip-bitmaps [edn] (str/replace edn #" :bitmap \"[^\"]*\"" ""))
 
-(doseq [id ids]
-  (let [pdf (str "test/corpus/synth/scan/" id ".pdf")
-        out (str (if px? "test/ocr/scan-px/" "test/ocr/scan/") id)
+(doseq [spec ids]
+  (let [[variant id] (if (str/includes? spec "/") (str/split spec #"/" 2) ["scan" spec])
+        pdf (str "test/corpus/synth/" variant "/" id ".pdf")
+        out (str (if px? "test/ocr/scan-px/" "test/ocr/scan/") (if (= variant "scan") id (str variant "--" id)))
         t0 (System/currentTimeMillis)]
     (fs/delete-tree out)
     (fs/create-dirs out)
