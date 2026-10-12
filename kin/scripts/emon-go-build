@@ -11,7 +11,6 @@
 #     .cache/emon-go/planrun/         host/go/planrun/ (the driver of kin's plan machine and the transcript: not in `port`, whose package the generated
 #                                     `planloop` imports)
 #     .cache/emon-go/*.go             host/go/*.go: the root package `emon` (source, model, engine, imgdec)
-#     .cache/emon-go/go.sum           host/go/go.sum: the checksums of golang.org/x/image (the ImageDecode port, D189)
 #     .cache/emon-go/cmd/emon-go/     test/driver/go/main.go, the `emon-go` binary
 #
 # `.cache/` is gitignored. A file is copied only when it differs; a package no longer generated is removed.
@@ -49,10 +48,9 @@ put host/go/pngenc/pngenc.go "$mod/pngenc/pngenc.go"
 for f in host/go/planrun/*.go; do put "$f" "$mod/planrun/$(basename "$f")"; done
 for f in host/go/*.go; do put "$f" "$mod/$(basename "$f")"; done
 put test/driver/go/main.go "$mod/cmd/emon-go/main.go"
-printf 'module emon\n\ngo 1.21\n\nrequire golang.org/x/image v0.18.0\n' > "$mod/go.mod.new"
+printf 'module emon\n\ngo 1.21\n' > "$mod/go.mod.new"
 put "$mod/go.mod.new" "$mod/go.mod"
-put host/go/go.sum "$mod/go.sum"
-rm -f "$mod/go.mod.new"
+rm -f "$mod/go.mod.new" "$mod/go.sum"
 
 if [ -n "$tags" ]; then export CGO_ENABLED=1 CGO_LDFLAGS="-L${EMON_TESS_LIB:-/opt/homebrew/lib} ${CGO_LDFLAGS:-}"; fi
 out=$(cd "$mod" && go build $tags -o emon-go ./cmd/emon-go 2>&1) || { echo "$out" | head -80 >&2; echo "emon-go: build failed" >&2; exit 1; }

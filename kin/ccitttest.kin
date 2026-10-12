@@ -1,0 +1,102 @@
+;; Laws for `emon.ccitt` (P10.11, D396(4)): the one CCITT Group 3 / Group 4 decoder, TIFF's and PDF's.
+;;
+;; Every stream here is written out bit by bit from T.4 and T.6 and decoded by hand in the comment beside it: a 16-pixel row with
+;; the four pixels 4..7 black is `0f 00` (bits packed high first, 1 black). The corpus laws (a real TIFF's strips) are
+;; `emon.tiffchecktest`'s, which reads the fixtures of `test/image/` through the validator and this decoder.
+(ns emon.ccitttest
+  (:require [emon.lang :refer [I32 Blob Cells Buf]]
+            [emon.test :refer [deftest assert-eq new-cells new-buf test-t TestT Str hex-blob]]
+            [emon.port :refer [blob-len buf-len buf-at buf-push]]
+            [emon.ccitt :refer [cc-decode]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot rem]]))
+
+(defn ^I32 t-zeros [^:mut ^Buf b ^I32 n]
+  (comment "The caller's part of the contract: `n` zero bytes to paint on.")
+  (let [^:mut ^I32 i 0]
+    (while (< i n)
+      (do (buf-push b 0)
+          (set i (+ i 1))))
+    (return 0)))
+
+;; decode `d` (all of it) and say the status; `b0 b1 ...` are the first bytes expected when it is ok (-1: not looked at)
+(defn ^I32 t-dec [^TestT emon-t ^Cells ws ^Blob d ^I32 k ^I32 cols ^I32 rows ^I32 flags ^I32 want ^I32 nbytes
+                  ^I32 b0 ^I32 b1 ^I32 b2 ^I32 b3 ^Str msg]
+  (let [^Buf out (new-buf)]
+    (t-zeros out (* rows (quot (+ cols 7) 8)))
+    (let [^I32 st (cc-decode d 0 (blob-len d) k cols rows flags out ws)]
+      (assert-eq st want msg)
+      (if (== want 0)
+        (do (assert-eq (buf-len out) nbytes msg)
+            (if (>= b0 0) (assert-eq (buf-at out 0) b0 msg))
+            (if (>= b1 0) (assert-eq (buf-at out 1) b1 msg))
+            (if (>= b2 0) (assert-eq (buf-at out 2) b2 msg))
+            (if (>= b3 0) (assert-eq (buf-at out 3) b3 msg))))
+      (return 0))))
+
+(deftest test-ccitt-out-too-small
+  (comment "`out` must already hold the rows: 16 x 2 pixels is four bytes, and three are not enough (status 3).")
+  (let [^Cells ws (new-cells)
+        ^Buf out (new-buf)]
+    (t-zeros out 3)
+    (assert-eq (cc-decode (hex-blob "f0") 0 1 -1 16 2 0 out ws) 3 "a buffer short of the rows")))
+
+(deftest test-ccitt-g4-white
+  ;; four rows of vertical-zero (`1`): every row is the reference's colour all the way: 4 x 2 bytes of white
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "f0") -1 16 4 0 0 8 0 0 0 0 "G4: four white rows")))
+
+(deftest test-ccitt-g4-horizontal
+  ;; 001 (horizontal) 1011 (white 4) 011 (black 4) then `1` (vertical zero to the imaginary b1 at the width): 0011 0110 111
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "36e0") -1 16 1 0 0 2 15 0 -1 -1 "G4: a black run of four")))
+
+(deftest test-ccitt-g4-two-rows
+  ;; the second row is all vertical zero against the first: `1` `1` `1`
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "36fc") -1 16 2 0 0 4 15 0 15 0 "G4: the second row against the first")))
+
+(deftest test-ccitt-g4-aligned
+  ;; EncodedByteAlign: each row starts on a byte, so row 1 is `36 e0` and row 2 `e0`; read unaligned the second row is garbage
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "36e0e0") -1 16 2 2 0 4 15 0 15 0 "G4 with byte-aligned rows")
+    (t-dec (test-t) ws (hex-blob "36e0e0") -1 16 2 0 1 0 -1 -1 -1 -1 "G4 aligned data read unaligned is a fault")))
+
+(deftest test-ccitt-g3-1d
+  ;; EOL 000000000001, white 4 `1011`, black 4 `011`, white 8 `10011`: 00 1b 73
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "001b73") 0 16 1 0 0 2 15 0 -1 -1 "G3 1-D with an EOL")
+    (t-dec (test-t) ws (hex-blob "001b73") 0 16 1 4 0 2 15 0 -1 -1 "G3 1-D with an EOL, EndOfLine required")
+    (t-dec (test-t) ws (hex-blob "b730") 0 16 1 0 0 2 15 0 -1 -1 "G3 1-D with no EOL at all")
+    (t-dec (test-t) ws (hex-blob "b730") 0 16 1 4 1 0 -1 -1 -1 -1 "G3 1-D with no EOL where one is required")))
+
+(deftest test-ccitt-g3-2d
+  ;; K = 1: after each EOL a tag bit, 1 for a 1-D row, 0 for a 2-D one. Row 1: EOL 1 1011 011 10011. Row 2: EOL 0 `1` `1` `1`
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "001db9800b80") 1 16 2 0 0 4 15 0 15 0 "G3 2-D: a 1-D row, then a 2-D one")
+    (t-dec (test-t) ws (hex-blob "b730") 1 16 1 0 1 0 -1 -1 -1 -1 "G3 2-D needs its EOLs")))
+
+(deftest test-ccitt-faults
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "36") -1 16 1 0 1 0 -1 -1 -1 -1 "G4: truncated inside a code")
+    (t-dec (test-t) ws (hex-blob "f0") -1 16 5 0 1 0 -1 -1 -1 -1 "G4: four rows of five")
+    (t-dec (test-t) ws (hex-blob "0000") -1 16 1 0 1 0 -1 -1 -1 -1 "G4: no such mode")
+    (t-dec (test-t) ws (hex-blob "001001") -1 16 1 0 1 0 -1 -1 -1 -1 "G4: EOFB with rows owed")
+    (t-dec (test-t) ws (hex-blob "d9a8") 0 16 1 0 1 0 -1 -1 -1 -1 "G3: a run past the width")
+    (t-dec (test-t) ws (hex-blob "001001") 0 16 1 0 1 0 -1 -1 -1 -1 "G3: RTC with rows owed")
+    (t-dec (test-t) ws (hex-blob "f0") -1 0 1 0 1 0 -1 -1 -1 -1 "no width")
+    (t-dec (test-t) ws (hex-blob "f0") -1 16 0 0 1 0 -1 -1 -1 -1 "no rows")))
+
+(deftest test-ccitt-long-runs
+  ;; make-up and terminating codes add up: white 64 `11011` + white 0 `00110101` is a row of 64 white pixels; white 64 +
+  ;; white 8 `10011` one of 72
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "d9a8") 0 64 1 0 0 8 0 0 0 0 "G3: a make-up code and a zero")
+    (t-dec (test-t) ws (hex-blob "dcc0") 0 72 1 0 0 9 0 0 0 0 "G3: a make-up code and a terminating code")))
+
+(deftest test-ccitt-ws-reuse
+  ;; one `ws` for strips of different widths gives the answers a fresh one does
+  (let [^Cells ws (new-cells)]
+    (t-dec (test-t) ws (hex-blob "36e0") -1 16 1 0 0 2 15 0 -1 -1 "first")
+    (t-dec (test-t) ws (hex-blob "f0") -1 40 4 0 0 20 0 0 0 0 "wider")
+    (t-dec (test-t) ws (hex-blob "36e0") -1 16 1 0 0 2 15 0 -1 -1 "again")))

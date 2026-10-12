@@ -4,10 +4,11 @@
 // applied, alpha composited onto white, resolution in dots per inch x100 (0 = unknown), a `bilevel` flag for
 // one-bit gray. It never resamples.
 //
-// PNG and JPEG pixels come from `image/png` and `image/jpeg`; everything around them (header fields,
-// reduction to 8 bits, alpha, orientation, resolution) is ours and is the same as Rust's. TIFF is read by our
-// own container code over `ByteSource` (random access): IFDs, strips and tiles, then LZW, PackBits, Deflate
-// (`compress/zlib`), CCITT G4 and G3 1-D (`golang.org/x/image/ccitt`), and our own bit unpacking and colour.
+// What an image may contain is kin's (D396(4), P10.11): `emon.pngcheck` and `emon.tiffcheck` parse the container, decide,
+// apply the limits and report; `image/png` is shown only input they accepted, and only the chunks that matter. PNG and JPEG
+// pixels come from `image/png` and `image/jpeg`; the reduction to 8 bits, alpha and orientation are ours and the same as Rust's.
+// TIFF samples are unpacked from the strips and tiles the validator listed: LZW, PackBits, Deflate (`compress/zlib`), the
+// predictor, bit unpacking and colour; CCITT G3 and G4 are kin's (`emon.ccitt`, the decoder PDF uses too).
 // What it refuses is `imgUnsupported`, a damaged file `imgFailed`, a frame over the pixel bound `imgLimit`.
 
 package emon
@@ -16,7 +17,6 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -24,7 +24,11 @@ import (
 	"io"
 	"math/bits"
 
-	"golang.org/x/image/ccitt"
+	kccitt "emon/ccitt"
+	"emon/imgcheck"
+	"emon/pngcheck"
+	"emon/port"
+	"emon/tiffcheck"
 )
 
 type imgFailKind int
@@ -84,9 +88,9 @@ func (m memSource) ReadAt(p []byte, off int64) (int, error) {
 	return readSlice(m, p, off)
 }
 
-// imgDecode: frame >= 0 is that frame's pixels; frame < 0 only the header of frame -frame-1. maxPixels is the
-// PIXELS limit.
-func imgDecode(src ByteSource, frame int32, maxPixels uint64) (*imgDecoded, error) {
+// imgDecode: frame >= 0 is that frame's pixels; frame < 0 only the header of frame -frame-1. A frame over the
+// PIXELS limit (limit-of 9) is an imgLimit failure.
+func imgDecode(src ByteSource, frame int32) (*imgDecoded, error) {
 	var head [8]byte
 	n := imgReadAtMost(src, 0, head[:])
 	want := frame >= 0
@@ -99,14 +103,14 @@ func imgDecode(src ByteSource, frame int32, maxPixels uint64) (*imgDecoded, erro
 		if f != 0 {
 			return nil, imgFailedf("this format has one frame")
 		}
-		return imgPng(src, want, maxPixels)
+		return imgPng(src, want)
 	case imgJPEG:
 		if f != 0 {
 			return nil, imgFailedf("this format has one frame")
 		}
-		return imgJpeg(src, want, maxPixels)
+		return imgJpeg(src, want)
 	case imgTIFF:
-		return imgTiff(src, f, want, maxPixels)
+		return imgTiff(src, f, want)
 	}
 	return nil, imgFailedf("not a PNG, JPEG or TIFF")
 }
@@ -179,23 +183,6 @@ func imgYccRgb(y, cb, cr int32) [3]byte {
 	return [3]byte{imgClamp8(y + (91881*cr+32768)>>16), imgClamp8(y - (22554*cb+46802*cr+32768)>>16), imgClamp8(y + (116130*cb+32768)>>16)}
 }
 
-func imgDpiRational(num, den uint64, unit uint32) int32 {
-	if den == 0 || num == 0 {
-		return 0
-	}
-	var v uint64
-	switch unit {
-	case 2:
-		v = (num*100*2 + den) / (den * 2)
-	case 3:
-		v = (num*254*2 + den) / (den * 2)
-	}
-	if v > 1<<31-1 {
-		return 0
-	}
-	return int32(v)
-}
-
 // ------------------------------------------------------------------ orientation
 
 func imgOrient(d []byte, w, h, ch int, o uint32) ([]byte, int, int) {
@@ -232,488 +219,69 @@ func imgOrient(d []byte, w, h, ch int, o uint32) ([]byte, int, int) {
 	return out, ow, oh
 }
 
-// ------------------------------------------------------- the TIFF container (also EXIF)
+// --------------------------------------------------------------- the validators (kin)
+//
+// WHAT AN IMAGE MAY CONTAIN IS KIN'S (D396(4), P10.11; the Rust twin says it at length): `emon.pngcheck` and `emon.tiffcheck` read
+// the container, decide, apply the pixel and byte limits and report what the host needs; a platform library is asked for pixels only
+// of input they accepted, and is shown only the chunks that matter. CCITT G3 and G4 are kin's (`emon.ccitt`): `x/image/ccitt`
+// reads no two-dimensional Group 3 and no fill bits.
 
-type tifEntry struct {
-	tag, typ uint16
-	count    uint32
-	raw      [4]byte
+func imgAt(r *port.Cells, i int32) int32 { return port.CellsAt(r, i) }
+
+// imgRefused turns a validator's status into the port's failure.
+func imgRefused(status int32, what string, limit int32) error {
+	switch status {
+	case imgcheck.IcUnsupported():
+		return imgUnsupportedf(what)
+	case imgcheck.IcLimit():
+		return &imgFail{Kind: imgLimit, Msg: "pixels", Pixels: uint64(limit)}
+	}
+	return imgFailedf(what)
 }
 
-type tifIfd struct {
-	entries []tifEntry
-}
-
-type tifFile struct {
-	src ByteSource
-	bo  binary.ByteOrder
-}
-
-func tifTypeSize(t uint16) int {
-	switch t {
-	case 1, 2, 6, 7:
-		return 1
-	case 3, 8:
-		return 2
-	case 4, 9, 11:
-		return 4
-	case 5, 10, 12:
-		return 8
-	}
-	return 0
-}
-
-func newTifFile(src ByteSource) (*tifFile, error) {
-	h, err := imgReadExact(src, 0, 8)
-	if err != nil {
-		return nil, err
-	}
-	t := &tifFile{src: src}
-	switch string(h[:2]) {
-	case "II":
-		t.bo = binary.LittleEndian
-	case "MM":
-		t.bo = binary.BigEndian
-	default:
-		return nil, imgFailedf("not a TIFF header")
-	}
-	switch t.bo.Uint16(h[2:4]) {
-	case 42:
-		return t, nil
-	case 43:
-		return nil, imgUnsupportedf("BigTIFF")
-	}
-	return nil, imgFailedf("not a TIFF header")
-}
-
-func (t *tifFile) firstIfd() (uint32, error) {
-	h, err := imgReadExact(t.src, 4, 4)
-	if err != nil {
-		return 0, err
-	}
-	return t.bo.Uint32(h), nil
-}
-
-func (t *tifFile) ifd(off uint32) (*tifIfd, error) {
-	if off < 8 {
-		return nil, imgFailedf("a TIFF directory at a bad offset")
-	}
-	c, err := imgReadExact(t.src, int64(off), 2)
-	if err != nil {
-		return nil, err
-	}
-	n := int(t.bo.Uint16(c))
-	b, err := imgReadExact(t.src, int64(off)+2, n*12+4)
-	if err != nil {
-		return nil, err
-	}
-	d := &tifIfd{}
-	for i := 0; i < n; i++ {
-		e := b[i*12 : i*12+12]
-		ent := tifEntry{tag: t.bo.Uint16(e[0:2]), typ: t.bo.Uint16(e[2:4]), count: t.bo.Uint32(e[4:8])}
-		copy(ent.raw[:], e[8:12])
-		d.entries = append(d.entries, ent)
-	}
-	return d, nil
-}
-
-func (t *tifFile) chain() ([]uint32, error) {
-	var out []uint32
-	off, err := t.firstIfd()
-	if err != nil {
-		return nil, err
-	}
-	seen := map[uint32]bool{}
-	for off != 0 && len(out) < 1<<20 {
-		if seen[off] {
-			break
-		}
-		seen[off] = true
-		c, err := imgReadExact(t.src, int64(off), 2)
-		if err != nil {
-			if len(out) == 0 {
-				return nil, err
-			}
-			break
-		}
-		n := int64(t.bo.Uint16(c))
-		nb, err := imgReadExact(t.src, int64(off)+2+n*12, 4)
-		if err != nil {
-			if len(out) == 0 {
-				return nil, err
-			}
-			break
-		}
-		out = append(out, off)
-		off = t.bo.Uint32(nb)
-	}
-	if len(out) == 0 {
-		return nil, imgFailedf("a TIFF with no directory")
-	}
-	return out, nil
-}
-
-func (d *tifIfd) find(tag uint16) *tifEntry {
-	for i := range d.entries {
-		if d.entries[i].tag == tag {
-			return &d.entries[i]
-		}
-	}
-	return nil
-}
-
-// ints: the values of an entry as unsigned integers (BYTE, SHORT, LONG), at most cap of them; nil when absent.
-func (t *tifFile) ints(d *tifIfd, tag uint16, cap int) ([]uint32, bool, error) {
-	e := d.find(tag)
-	if e == nil {
-		return nil, false, nil
-	}
-	sz := tifTypeSize(e.typ)
-	if !(e.typ == 1 || e.typ == 3 || e.typ == 4) || int(e.count) > cap {
-		return nil, false, imgFailedf("a TIFF field of a type or size that does not fit")
-	}
-	n := int(e.count)
-	var data []byte
-	if sz*n <= 4 {
-		data = e.raw[:sz*n]
-	} else {
-		var err error
-		data, err = imgReadExact(t.src, int64(t.bo.Uint32(e.raw[:])), sz*n)
-		if err != nil {
-			return nil, false, err
-		}
-	}
-	v := make([]uint32, n)
-	for i := 0; i < n; i++ {
-		switch sz {
-		case 1:
-			v[i] = uint32(data[i])
-		case 2:
-			v[i] = uint32(t.bo.Uint16(data[i*2:]))
-		default:
-			v[i] = t.bo.Uint32(data[i*4:])
-		}
-	}
-	return v, true, nil
-}
-
-func (t *tifFile) int1(d *tifIfd, tag uint16) (uint32, bool, error) {
-	v, ok, err := t.ints(d, tag, 1<<24)
-	if err != nil || !ok || len(v) == 0 {
-		return 0, false, err
-	}
-	return v[0], true, nil
-}
-
-func (t *tifFile) rational(d *tifIfd, tag uint16) (uint64, uint64, bool) {
-	e := d.find(tag)
-	if e == nil || e.typ != 5 || e.count < 1 {
-		return 0, 0, false
-	}
-	b, err := imgReadExact(t.src, int64(t.bo.Uint32(e.raw[:])), 8)
-	if err != nil {
-		return 0, 0, false
-	}
-	return uint64(t.bo.Uint32(b[0:4])), uint64(t.bo.Uint32(b[4:8])), true
-}
-
-// imgExif: the orientation and the horizontal and vertical resolution (dpi x100, 0 unknown) of the first
-// directory of an EXIF blob. A blob that does not read says nothing.
+// imgExif: what the first directory of an EXIF blob says: orientation and the horizontal and vertical resolution (dpi x100, 0
+// unknown). A blob that does not read says nothing.
 func imgExif(blob []byte) (o uint32, dx, dy int32) {
-	o = 1
-	t, err := newTifFile(memSource(blob))
-	if err != nil {
-		return
-	}
-	off, err := t.firstIfd()
-	if err != nil {
-		return
-	}
-	d, err := t.ifd(off)
-	if err != nil {
-		return
-	}
-	if v, ok, _ := t.int1(d, 274); ok && v >= 1 && v <= 8 {
-		o = v
-	}
-	unit := uint32(2)
-	if v, ok, _ := t.int1(d, 296); ok {
-		unit = v
-	}
-	r := func(tag uint16) int32 {
-		if n, dn, ok := t.rational(d, tag); ok {
-			return imgDpiRational(n, dn, unit)
-		}
-		return 0
-	}
-	return o, r(282), r(283)
+	r := port.NewCells()
+	tiffcheck.TcExif(blob, 0, int32(len(blob)), r)
+	return uint32(imgAt(r, tiffcheck.TrEo())), imgAt(r, tiffcheck.TrEx()), imgAt(r, tiffcheck.TrEy())
 }
 
 // ------------------------------------------------------------------------ PNG
 
-type pngMeta struct {
-	w, h         uint32
-	depth, ctype uint8
-	interlace    uint8
-	dx, dy       int32
-	exif         []byte
-}
-
-// imgPngSound: a PNG is sound when every chunk up to IEND is whole and its checksum is right. The two hosts'
-// PNG libraries differ in how much damage they forgive, and the two must answer alike (D190). So the structure is held to one rule set
-// here, before either decoder is asked (P10.5, D389): IHDR first and once, then in order PLTE (once, 1..256 entries) and tRNS (of the
-// length its colour type wants; none with an alpha channel) before the first IDAT, the IDATs contiguous, at least one, no unknown
-// critical chunk (a capital first letter), IEND last.
-func imgPngSound(p []byte) bool {
-	i := 8
-	var ctype byte
-	seenIDAT, idatDone, plte, plteN := false, false, false, 0
-	for {
-		if i+12 > len(p) {
-			return false
-		}
-		n := int(binary.BigEndian.Uint32(p[i:]))
-		if n < 0 || n > len(p) || i+12+n > len(p) {
-			return false
-		}
-		if crc32.ChecksumIEEE(p[i+4:i+8+n]) != binary.BigEndian.Uint32(p[i+8+n:]) {
-			return false
-		}
-		kind := string(p[i+4 : i+8])
-		if i == 8 {
-			if kind != "IHDR" || n != 13 {
-				return false
-			}
-			ctype = p[i+8+9]
-		} else if kind == "IHDR" {
-			return false
-		}
-		if kind == "IDAT" {
-			if idatDone {
-				return false
-			}
-			seenIDAT = true
-		} else if seenIDAT {
-			idatDone = true
-		}
-		switch kind {
-		case "PLTE":
-			if seenIDAT || plte || n == 0 || n%3 != 0 || n/3 > 256 {
-				return false
-			}
-			plte, plteN = true, n/3
-		case "tRNS":
-			if seenIDAT {
-				return false
-			}
-			switch ctype {
-			case 0:
-				if n != 2 {
-					return false
-				}
-			case 2:
-				if n != 6 {
-					return false
-				}
-			case 3:
-				if !plte || n > plteN {
-					return false
-				}
-			default:
-				return false
-			}
-		case "IEND":
-			return seenIDAT
-		case "IHDR", "IDAT":
-		default:
-			if kind[0] >= 'A' && kind[0] <= 'Z' {
-				return false
-			}
-		}
-		i += 12 + n
-	}
-}
-
-// imgPngRawSize is the byte count of a PNG's decompressed image data, filter bytes included (RFC 2083 8.2): what its header says
-// it holds. 0 when the header names a depth or colour type the format does not have (the decoders then refuse it alike).
-func imgPngRawSize(m *pngMeta) uint64 {
-	ch := map[uint8]uint64{0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[m.ctype]
-	if ch == 0 || m.depth == 0 || m.depth > 16 {
-		return 0
-	}
-	bits := ch * uint64(m.depth)
-	w, h := uint64(m.w), uint64(m.h)
-	if m.interlace == 0 {
-		return h * (1 + (w*bits+7)/8)
-	}
-	var total uint64
-	for _, p := range [7][4]uint64{{0, 0, 8, 8}, {4, 0, 8, 8}, {0, 4, 4, 8}, {2, 0, 4, 4}, {0, 2, 2, 4}, {1, 0, 2, 2}, {0, 1, 1, 2}} {
-		if w <= p[0] || h <= p[1] {
-			continue
-		}
-		pw, ph := (w-p[0]+p[2]-1)/p[2], (h-p[1]+p[3]-1)/p[3]
-		total += ph * (1 + (pw*bits+7)/8)
-	}
-	return total
-}
-
-// imgPngDataSound: the IDAT chunks, joined, are one zlib stream whose checksum is right and which holds exactly the bytes the header
-// says. The two hosts' PNG libraries differ here too (Go refuses a bad Adler-32 and surplus data, the Rust crate forgives both), and
-// the two must answer alike (D190, P10.5 D389). The caller has seen the chunks are whole (`imgPngSound`) and the size is in bounds.
-func imgPngDataSound(p []byte, m *pngMeta) bool {
-	want := imgPngRawSize(m)
-	if want == 0 {
-		return true
-	}
-	var idat []byte
-	for i := 8; i+12 <= len(p); {
-		n := int(binary.BigEndian.Uint32(p[i:]))
-		if n < 0 || i+12+n > len(p) {
-			break
-		}
-		kind := string(p[i+4 : i+8])
-		if kind == "IDAT" {
-			idat = append(idat, p[i+8:i+8+n]...)
-		}
-		if kind == "IEND" {
-			break
-		}
-		i += 12 + n
-	}
-	zr, err := zlib.NewReader(bytes.NewReader(idat))
-	if err != nil {
-		return false
-	}
-	n, err := io.Copy(io.Discard, io.LimitReader(zr, int64(want)+1))
-	return err == nil && uint64(n) == want
-}
-
-// imgPngStripApng: the animation chunks (acTL, fcTL, fdAT) are not read: a PNG's frame is its default image (`frames` is 1). The Rust
-// crate refuses an fcTL it finds odd and Go's decoder skips all three, so neither decoder is shown them (D389). The other chunks and
-// their checksums are kept as they are.
-func imgPngStripApng(p []byte) []byte {
-	out := make([]byte, 0, len(p))
-	out = append(out, p[:8]...)
-	i, cut := 8, false
-	for i+12 <= len(p) {
-		n := int(binary.BigEndian.Uint32(p[i:]))
-		if n < 0 || i+12+n > len(p) {
-			break
-		}
-		switch string(p[i+4 : i+8]) {
-		case "acTL", "fcTL", "fdAT":
-			cut = true
-		default:
-			out = append(out, p[i:i+12+n]...)
-		}
-		i += 12 + n
-	}
-	if !cut {
-		return p
-	}
-	return append(out, p[i:]...)
-}
-
-func imgPngMeta(p []byte) (*pngMeta, error) {
-	m := &pngMeta{ctype: 255}
-	have := false
-	i := 8
-	for i+8 <= len(p) {
-		n := int(binary.BigEndian.Uint32(p[i:]))
-		kind := string(p[i+4 : i+8])
-		if n < 0 || i+8+n > len(p) {
-			break
-		}
-		body := p[i+8 : i+8+n]
-		switch {
-		case kind == "IHDR" && n >= 13:
-			m.w = binary.BigEndian.Uint32(body[0:])
-			m.h = binary.BigEndian.Uint32(body[4:])
-			m.depth = body[8]
-			m.ctype = body[9]
-			m.interlace = body[12]
-			have = true
-		case kind == "pHYs" && n >= 9 && body[8] == 1:
-			f := func(v uint64) int32 {
-				r := (v*254 + 50) / 100
-				if r > 1<<31-1 {
-					r = 1<<31 - 1
-				}
-				return int32(r)
-			}
-			m.dx = f(uint64(binary.BigEndian.Uint32(body[0:])))
-			m.dy = f(uint64(binary.BigEndian.Uint32(body[4:])))
-		case kind == "eXIf":
-			m.exif = append([]byte(nil), body...)
-		}
-		if kind == "IEND" {
-			break
-		}
-		i += 12 + n
-	}
-	if !have || m.w == 0 || m.h == 0 {
-		return nil, imgFailedf("a PNG without a usable header")
-	}
-	return m, nil
-}
-
-func imgPng(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
+func imgPng(src ByteSource, want bool) (*imgDecoded, error) {
 	b, err := imgReadAll(src)
 	if err != nil {
 		return nil, err
 	}
-	if !imgPngSound(b) {
-		return nil, imgFailedf("a PNG with a damaged chunk, a bad checksum or no IEND")
+	deep := int32(0)
+	if want {
+		deep = 1
 	}
-	m, err := imgPngMeta(b)
-	if err != nil {
-		return nil, err
+	r, st, out, idat, clean := port.NewCells(), port.NewCells(), port.NewCells(), port.NewBuf(), port.NewBuf()
+	s := pngcheck.PcCheck(b, deep, r, st, out, idat, clean)
+	b, st, out, idat = nil, nil, nil, nil
+	if s != imgcheck.IcOk() {
+		return nil, imgRefused(s, "a PNG the validator refused: damaged, or past the rules of D389", imgAt(r, pngcheck.PrLimit()))
 	}
-	o, ex, ey := uint32(1), int32(0), int32(0)
-	if m.exif != nil {
-		o, ex, ey = imgExif(m.exif)
-	}
-	gray := m.ctype == 0 || m.ctype == 4
-	w, h := uint64(m.w), uint64(m.h)
-	ow, oh := w, h
-	if o >= 5 {
-		ow, oh = h, w
-	}
-	dx, dy := m.dx, m.dy
-	if dx <= 0 {
-		dx, dy = ex, ey
-	}
-	out := &imgDecoded{W: int32(ow), H: int32(oh), Ch: 3, Frames: 1, Bilevel: m.ctype == 0 && m.depth == 1}
-	if gray {
-		out.Ch = 1
-	}
-	if o >= 5 {
-		out.Dpi100 = dy
-	} else {
-		out.Dpi100 = dx
-	}
-	if w*h > maxPixels {
-		return nil, &imgFail{Kind: imgLimit, Msg: "pixels", Pixels: w * h}
-	}
-	if ow > 1<<31-1 || oh > 1<<31-1 {
-		return nil, &imgFail{Kind: imgLimit, Msg: "pixels", Pixels: 1<<64 - 1}
-	}
+	w, h := int(imgAt(r, pngcheck.PrW())), int(imgAt(r, pngcheck.PrH()))
+	ch := int(imgAt(r, pngcheck.PrCh()))
+	gray := ch == 1
+	o := uint32(imgAt(r, pngcheck.PrOrient()))
+	res := &imgDecoded{W: imgAt(r, pngcheck.PrOw()), H: imgAt(r, pngcheck.PrOh()), Ch: int32(ch), Dpi100: imgAt(r, pngcheck.PrDpi()), Bilevel: imgAt(r, pngcheck.PrBilevel()) != 0, Frames: 1}
 	if !want {
-		return out, nil
+		return res, nil
 	}
-	if !imgPngDataSound(b, m) {
-		return nil, imgFailedf("a PNG whose image data is not one whole zlib stream of the bytes its header says")
-	}
-	img, err := png.Decode(bytes.NewReader(imgPngStripApng(b)))
+	// the library is shown the chunks that matter, whole and in order, and nothing else (`clean`)
+	img, err := png.Decode(bytes.NewReader(clean.B))
 	if err != nil {
 		return nil, imgFailedf(err.Error())
 	}
-	r := img.Bounds()
-	iw, ih := r.Dx(), r.Dy()
-	if uint64(iw) != w || uint64(ih) != h {
+	rc := img.Bounds()
+	iw, ih := rc.Dx(), rc.Dy()
+	if iw != w || ih != h {
 		return nil, imgFailedf("a PNG whose pixels are not the size its header says")
 	}
-	ch := int(out.Ch)
 	px := make([]byte, iw*ih*ch)
 	// pixel (x, y) as (c0, c1, c2, a) in 8 bits, c's straight (not premultiplied)
 	switch im := img.(type) {
@@ -796,7 +364,6 @@ func imgPng(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 		if gray {
 			return nil, imgFailedf("a PNG the decoder gave in a form that does not match its header")
 		}
-		type ent struct{ c [3]byte }
 		pal := make([][3]byte, len(im.Palette))
 		for i, c := range im.Palette {
 			switch v := c.(type) {
@@ -821,8 +388,8 @@ func imgPng(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
 		return nil, imgFailedf("a PNG the decoder gave in a form we do not read")
 	}
 	px, _, _ = imgOrient(px, iw, ih, ch, o)
-	out.Pixels = px
-	return out, nil
+	res.Pixels = px
+	return res, nil
 }
 
 // ----------------------------------------------------------------------- JPEG
@@ -893,7 +460,8 @@ func imgJpegMeta(p []byte) (*jpegMeta, error) {
 	return m, nil
 }
 
-func imgJpeg(src ByteSource, want bool, maxPixels uint64) (*imgDecoded, error) {
+func imgJpeg(src ByteSource, want bool) (*imgDecoded, error) {
+	maxPixels := uint64(port.LimitOf(9))
 	b, err := imgReadAll(src)
 	if err != nil {
 		return nil, err
@@ -1113,30 +681,6 @@ func imgUpsample(p []byte, stride, w, h int, r image.YCbCrSubsampleRatio) []byte
 
 // ----------------------------------------------------------------------- TIFF
 
-func imgTiff(src ByteSource, f int32, want bool, maxPixels uint64) (*imgDecoded, error) {
-	t, err := newTifFile(src)
-	if err != nil {
-		return nil, err
-	}
-	chain, err := t.chain()
-	if err != nil {
-		return nil, err
-	}
-	if int(f) >= len(chain) {
-		return nil, imgFailedf("a frame that the TIFF does not have")
-	}
-	d, err := t.ifd(chain[f])
-	if err != nil {
-		return nil, err
-	}
-	out, err := imgTiffFrame(t, d, want, maxPixels)
-	if err != nil {
-		return nil, err
-	}
-	out.Frames = int32(len(chain))
-	return out, nil
-}
-
 func imgPackbits(d []byte, expect int) []byte {
 	out := make([]byte, 0, expect)
 	i := 0
@@ -1302,44 +846,18 @@ func imgInflate(d []byte, expect int) ([]byte, error) {
 	return out[:n], nil
 }
 
-// imgCcitt: `rows` rows of `cw` pixels, bits packed MSB first, 1 = black
-func imgCcitt(d []byte, g4 bool, cw, rows int) ([]byte, error) {
-	stride := (cw + 7) / 8
-	mode := ccitt.Group3
+// imgCcitt: kin's one CCITT decoder (`emon.ccitt`, TIFF's and PDF's): `rows` rows of `cw` pixels, bits packed MSB first, 1 = black, a
+// row to a whole number of bytes. `ws` is the decoder's scratch, kept for every strip of an image.
+func imgCcitt(d []byte, g4 bool, cw, rows int, ws *port.Cells) ([]byte, error) {
+	out := &port.Buf{B: make([]byte, ((cw+7)/8)*rows)}
+	k := int32(0)
 	if g4 {
-		mode = ccitt.Group4
+		k = -1
 	}
-	r := ccitt.NewReader(bytes.NewReader(d), ccitt.MSB, mode, cw, rows, nil)
-	out := make([]byte, stride*rows)
-	n, err := io.ReadFull(r, out)
-	if err != nil && g4 {
-		return nil, imgFailedf("a bad CCITT G4 stream")
+	if kccitt.CcDecode(d, 0, int32(len(d)), k, int32(cw), int32(rows), 0, out, ws) != kccitt.CcOk() {
+		return nil, imgFailedf("a short or damaged CCITT stream")
 	}
-	// only whole rows count
-	done := n / stride
-	if done > rows {
-		done = rows
-	}
-	// every row must have come: a damaged stream is told apart by the rows it did not give, which is all that
-	// `fax` and `x/image/ccitt` (whose error recovery differs) can be asked
-	if done < rows && !g4 {
-		return nil, imgFailedf("a short or damaged CCITT G3 stream")
-	}
-	for i := range out {
-		if i < done*stride {
-			// x/image/ccitt gives 0 for black and 1 for white; ours is the other way round
-			out[i] = ^out[i]
-		} else {
-			out[i] = 0
-		}
-	}
-	// the padding bits of each row are not pixels
-	if cw%8 != 0 {
-		for y := 0; y < rows; y++ {
-			out[y*stride+stride-1] &= 0xFF << uint(8-cw%8)
-		}
-	}
-	return out, nil
+	return out.B, nil
 }
 
 type imgPhoto struct {
@@ -1351,311 +869,79 @@ type imgPhoto struct {
 	cmap  []uint16
 }
 
-func imgTiffFrame(t *tifFile, d *tifIfd, want bool, maxPixels uint64) (*imgDecoded, error) {
-	one := func(tag uint16) (uint32, bool, error) { return t.int1(d, tag) }
-	orDefault := func(tag uint16, def uint32) (uint32, error) {
-		v, ok, err := one(tag)
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
-			return def, nil
-		}
-		return v, nil
-	}
-	wv, ok, err := one(256)
+// imgTiff: the whole file is read, `emon.tiffcheck` decides (the byte order, the chain of frames, every tag, the bounds of every strip
+// and tile, the pixel limit) and reports; what is left here is turning the chunks it listed into samples and the samples into the
+// 8-bit pixels of D188. A multi-page TIFF reads only the frame asked for.
+func imgTiff(src ByteSource, f int32, want bool) (*imgDecoded, error) {
+	b, err := imgReadAll(src)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		return nil, imgFailedf("a TIFF without a width")
+	deep := int32(0)
+	if want {
+		deep = 1
 	}
-	hv, ok, err := one(257)
-	if err != nil {
-		return nil, err
+	r := port.NewCells()
+	s := tiffcheck.TcCheck(b, f, deep, r)
+	if s != imgcheck.IcOk() {
+		return nil, imgRefused(s, "a TIFF the validator refused: damaged, or a coding the port does not read (D188)", imgAt(r, tiffcheck.TrLimit()))
 	}
-	if !ok {
-		return nil, imgFailedf("a TIFF without a height")
-	}
-	w, h := int(wv), int(hv)
-	if w == 0 || h == 0 {
-		return nil, imgFailedf("a TIFF frame with no pixels")
-	}
-	sppv, err := orDefault(277, 1)
-	if err != nil {
-		return nil, err
-	}
-	spp := int(sppv)
-	if spp == 0 || spp > 16 {
-		return nil, imgFailedf("a TIFF with a strange sample count")
-	}
-	bpsv, ok, err := t.ints(d, 258, 64)
-	if err != nil {
-		return nil, err
-	}
-	if !ok || len(bpsv) == 0 {
-		bpsv = []uint32{1}
-	}
-	for len(bpsv) < spp {
-		bpsv = append(bpsv, bpsv[len(bpsv)-1])
-	}
-	for _, b := range bpsv[:spp] {
-		if b != bpsv[0] {
-			return nil, imgUnsupportedf("TIFF samples of different depths")
-		}
-	}
-	bps := uint(bpsv[0])
-	if bps == 0 {
-		return nil, imgFailedf("a TIFF with a strange bit depth")
-	}
-	if bps > 16 {
-		return nil, imgUnsupportedf("TIFF samples deeper than 16 bits")
-	}
-	if sf, ok, err := t.ints(d, 339, 64); err != nil {
-		return nil, err
-	} else if ok {
-		for _, v := range sf {
-			if v != 1 && v != 4 {
-				return nil, imgUnsupportedf("TIFF float or signed samples")
-			}
-		}
-	}
-	comp, err := orDefault(259, 1)
-	if err != nil {
-		return nil, err
-	}
-	kind, ok, err := one(262)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		switch {
-		case comp == 3 || comp == 4:
-			kind = 0
-		case spp >= 3:
-			kind = 2
-		default:
-			kind = 1
-		}
-	}
-	var nc int
-	switch kind {
-	case 0, 1, 3:
-		nc = 1
-	case 2, 6:
-		nc = 3
-	case 5:
-		nc = 4
-	default:
-		return nil, imgUnsupportedf("this TIFF photometric interpretation (Lab, LogLuv, a mask)")
-	}
-	if spp < nc {
-		return nil, imgFailedf("a TIFF with fewer samples than its colour needs")
-	}
-	if kind == 5 {
-		if ink, err := orDefault(332, 1); err != nil {
-			return nil, err
-		} else if ink != 1 {
-			return nil, imgUnsupportedf("a TIFF separation that is not CMYK")
-		}
-	}
-	alpha := -1
-	if spp > nc {
-		if es, ok, err := t.ints(d, 338, 64); err != nil {
-			return nil, err
-		} else if ok && len(es) > 0 {
-			switch es[0] {
-			case 1:
-				alpha = 1
-			case 2:
-				alpha = 0
-			}
-		}
-	}
-	var cmap []uint16
-	if kind == 3 {
-		v, ok, err := t.ints(d, 320, 3*65536)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, imgFailedf("a palette TIFF with no colour map")
-		}
-		if len(v) < 3<<bps {
-			return nil, imgFailedf("a TIFF colour map shorter than its depth needs")
-		}
-		cmap = make([]uint16, len(v))
-		for i, x := range v {
-			cmap[i] = uint16(x)
-		}
-	}
-	if kind == 6 && (bps != 8 || spp != 3) {
-		return nil, imgUnsupportedf("YCbCr TIFF other than 8 bits, three samples")
-	}
-	if (comp == 3 || comp == 4) && (bps != 1 || spp != 1) {
-		return nil, imgFailedf("a CCITT TIFF that is not one-bit, one-sample")
-	}
-	switch comp {
-	case 1, 3, 4, 5, 8, 32773, 32946:
-	default:
-		return nil, imgUnsupportedf("this TIFF compression (JPEG, ThunderScan, SGILog, ...)")
-	}
-	if comp == 3 {
-		t4, err := orDefault(292, 0)
-		if err != nil {
-			return nil, err
-		}
-		// bit 0 two-dimensional, bit 1 uncompressed mode, bit 2 fill bits before each EOL: x/image/ccitt reads
-		// none of them, and the two hosts must read the same set
-		if t4&7 != 0 {
-			return nil, imgUnsupportedf("CCITT Group 3 two-dimensional, uncompressed mode or fill bits")
-		}
-	}
-	pl, err := orDefault(284, 1)
-	if err != nil {
-		return nil, err
-	}
-	planar2 := pl == 2 && spp > 1
-	if planar2 && kind == 6 {
-		return nil, imgUnsupportedf("planar YCbCr")
-	}
-	predictor, err := orDefault(317, 1)
-	if err != nil {
-		return nil, err
-	}
-	if predictor != 1 && !(predictor == 2 && (bps == 8 || bps == 16)) {
-		return nil, imgUnsupportedf("this TIFF predictor")
-	}
-	fo, err := orDefault(266, 1)
-	if err != nil {
-		return nil, err
-	}
-	fill2 := fo == 2
-	ov, err := orDefault(274, 1)
-	if err != nil {
-		return nil, err
-	}
-	if ov < 1 || ov > 8 {
-		ov = 1
-	}
-	unit, err := orDefault(296, 2)
-	if err != nil {
-		return nil, err
-	}
-	res := func(tag uint16) int32 {
-		if n, dn, ok := t.rational(d, tag); ok {
-			return imgDpiRational(n, dn, unit)
-		}
-		return 0
-	}
-	rx, ry := res(282), res(283)
-	ch := 3
-	if kind == 0 || kind == 1 {
-		ch = 1
-	}
-	ow, oh := w, h
-	if ov >= 5 {
-		ow, oh = h, w
-	}
-	out := &imgDecoded{W: int32(ow), H: int32(oh), Ch: int32(ch), Dpi100: rx, Bilevel: (kind == 0 || kind == 1) && bps == 1, Frames: 1}
-	if ov >= 5 {
-		out.Dpi100 = ry
-	}
-	pixels := uint64(w) * uint64(h)
-	if pixels > maxPixels {
-		return nil, &imgFail{Kind: imgLimit, Msg: "pixels", Pixels: pixels}
-	}
-	if ow > 1<<31-1 || oh > 1<<31-1 {
-		return nil, &imgFail{Kind: imgLimit, Msg: "pixels", Pixels: 1<<64 - 1}
+	out := &imgDecoded{
+		W: imgAt(r, tiffcheck.TrOw()), H: imgAt(r, tiffcheck.TrOh()), Ch: imgAt(r, tiffcheck.TrCh()),
+		Dpi100: imgAt(r, tiffcheck.TrDpi()), Bilevel: imgAt(r, tiffcheck.TrBilevel()) != 0, Frames: imgAt(r, tiffcheck.TrFrames()),
 	}
 	if !want {
 		return out, nil
 	}
-	ph := &imgPhoto{kind: kind, spp: spp, nc: nc, bps: bps, alpha: alpha, cmap: cmap}
-
-	_, tiled, err := t.ints(d, 322, 1)
+	out.Pixels, err = imgTiffPixels(b, r)
 	if err != nil {
 		return nil, err
 	}
-	var cw0, bandRows, across, down int
-	var offs, cnts []uint32
-	pickInts := func(a, b uint16) ([]uint32, bool, error) {
-		v, ok, err := t.ints(d, a, 1<<24)
-		if err != nil || ok {
-			return v, ok, err
-		}
-		return t.ints(d, b, 1<<24)
+	return out, nil
+}
+
+func imgTiffPixels(b []byte, rep *port.Cells) ([]byte, error) {
+	g := func(i int32) int { return int(imgAt(rep, i)) }
+	w, h := g(tiffcheck.TrW()), g(tiffcheck.TrH())
+	spp, bps := g(tiffcheck.TrSpp()), uint(g(tiffcheck.TrBps()))
+	comp, kind, nc := g(tiffcheck.TrComp()), uint32(g(tiffcheck.TrKind())), g(tiffcheck.TrNc())
+	alpha := -1
+	switch g(tiffcheck.TrAlpha()) {
+	case 1:
+		alpha = 1
+	case 2:
+		alpha = 0
 	}
-	if tiled {
-		tw, _ := orDefault(322, 0)
-		th, _ := orDefault(323, 0)
-		if tw == 0 || th == 0 || tw > 1<<20 || th > 1<<20 {
-			return nil, imgFailedf("a TIFF with strange tiles")
-		}
-		cw0, bandRows = int(tw), int(th)
-		across = (w + cw0 - 1) / cw0
-		down = (h + bandRows - 1) / bandRows
-		var ok bool
-		if offs, ok, err = pickInts(324, 273); err != nil {
-			return nil, err
-		} else if !ok {
-			return nil, imgFailedf("a tiled TIFF with no tile offsets")
-		}
-		if cnts, ok, err = pickInts(325, 279); err != nil {
-			return nil, err
-		} else if !ok {
-			return nil, imgFailedf("a tiled TIFF with no tile byte counts")
-		}
-	} else {
-		rv, err := orDefault(278, uint32(h))
-		if err != nil {
-			return nil, err
-		}
-		rps := int(rv)
-		if rps == 0 || rps > h {
-			rps = h
-		}
-		cw0, bandRows, across = w, rps, 1
-		down = (h + rps - 1) / rps
-		var ok bool
-		if offs, ok, err = t.ints(d, 273, 1<<24); err != nil {
-			return nil, err
-		} else if !ok {
-			return nil, imgFailedf("a TIFF with no strip offsets")
-		}
-		if cnts, _, err = t.ints(d, 279, 1<<24); err != nil {
-			return nil, err
+	predictor, planar2, fill2, le := g(tiffcheck.TrPredictor()), g(tiffcheck.TrPlanar()) == 1, g(tiffcheck.TrFill2()) == 1, g(tiffcheck.TrLe()) == 1
+	tiled := g(tiffcheck.TrTiled()) == 1
+	cw0, bandRows := g(tiffcheck.TrCw()), g(tiffcheck.TrBand())
+	across, down := g(tiffcheck.TrAcross()), g(tiffcheck.TrDown())
+	hs, vs := g(tiffcheck.TrHs()), g(tiffcheck.TrVs())
+	planes := g(tiffcheck.TrPlanes())
+	offsAt, lensAt := int32(g(tiffcheck.TrOffsAt())), int32(g(tiffcheck.TrLensAt()))
+	ch := g(tiffcheck.TrCh())
+	ov := uint32(g(tiffcheck.TrOrient()))
+	var cmap []uint16
+	if kind == 3 {
+		cmap = make([]uint16, 3<<bps)
+		for i := range cmap {
+			cmap[i] = uint16(imgAt(rep, int32(g(tiffcheck.TrCmapAt())+i)))
 		}
 	}
-	planes := 1
-	if planar2 {
-		planes = spp
+	ph := &imgPhoto{kind: kind, spp: spp, nc: nc, bps: bps, alpha: alpha, cmap: cmap}
+	var bo binary.ByteOrder = binary.BigEndian
+	if le {
+		bo = binary.LittleEndian
 	}
+
 	perPlane := across * down
-	if len(offs) < perPlane*planes {
-		return nil, imgFailedf("a TIFF with fewer strips or tiles than its size needs")
-	}
-	hs, vs := 1, 1
-	if kind == 6 {
-		v, ok, err := t.ints(d, 530, 2)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			v = []uint32{2, 2}
-		}
-		okv := func(x uint32) bool { return x == 1 || x == 2 || x == 4 }
-		if len(v) != 2 || !okv(v[0]) || !okv(v[1]) {
-			return nil, imgFailedf("a TIFF with strange chroma subsampling")
-		}
-		hs, vs = int(v[0]), int(v[1])
-	}
 	cs := spp
 	if planar2 {
 		cs = 1
 	}
 	px := make([]byte, w*h*ch)
 	table := imgLut(bps)
+	ws := port.NewCells()
 	var samp []uint16
 	for by := 0; by < down; by++ {
 		y0 := by * bandRows
@@ -1673,27 +959,13 @@ func imgTiffFrame(t *tifFile, d *tifIfd, want bool, maxPixels uint64) (*imgDecod
 		}
 		for p := 0; p < planes; p++ {
 			for bx := 0; bx < across; bx++ {
-				idx := p*perPlane + by*across + bx
-				off := int64(offs[idx])
-				var n int64
-				switch {
-				case idx < len(cnts):
-					n = int64(cnts[idx])
-				case perPlane*planes == 1:
-					n = t.src.Size() - off
-					if n < 0 {
-						n = 0
-					}
-				default:
-					return nil, imgFailedf("a TIFF with no byte count for a strip")
-				}
-				data, err := imgReadExact(t.src, off, int(n))
-				if err != nil {
-					return nil, err
-				}
+				idx := int32(p*perPlane + by*across + bx)
+				off, n := int(uint32(imgAt(rep, offsAt+idx))), int(uint32(imgAt(rep, lensAt+idx)))
+				data := make([]byte, n)
+				copy(data, b[off:off+n])
 				if fill2 {
-					for i, b := range data {
-						data[i] = bits.Reverse8(b)
+					for i, c := range data {
+						data[i] = bits.Reverse8(c)
 					}
 				}
 				cw := cw0
@@ -1707,6 +979,7 @@ func imgTiffFrame(t *tifFile, d *tifIfd, want bool, maxPixels uint64) (*imgDecod
 					expect = ((cw + hs - 1) / hs) * ((crows + vs - 1) / vs) * (hs*vs + 2)
 				}
 				var raw []byte
+				var err error
 				switch comp {
 				case 1:
 					raw = data
@@ -1717,9 +990,9 @@ func imgTiffFrame(t *tifFile, d *tifIfd, want bool, maxPixels uint64) (*imgDecod
 				case 8, 32946:
 					raw, err = imgInflate(data, expect)
 				case 4:
-					raw, err = imgCcitt(data, true, cw, crows)
+					raw, err = imgCcitt(data, true, cw, crows, ws)
 				default:
-					raw, err = imgCcitt(data, false, cw, crows)
+					raw, err = imgCcitt(data, false, cw, crows, ws)
 				}
 				if err != nil {
 					return nil, err
@@ -1737,8 +1010,8 @@ func imgTiffFrame(t *tifFile, d *tifIfd, want bool, maxPixels uint64) (*imgDecod
 							}
 						} else {
 							for i := cs; i < cw*cs; i++ {
-								a := t.bo.Uint16(row[i*2:]) + t.bo.Uint16(row[(i-cs)*2:])
-								t.bo.PutUint16(row[i*2:], a)
+								a := bo.Uint16(row[i*2:]) + bo.Uint16(row[(i-cs)*2:])
+								bo.PutUint16(row[i*2:], a)
 							}
 						}
 					}
@@ -1771,7 +1044,7 @@ func imgTiffFrame(t *tifFile, d *tifIfd, want bool, maxPixels uint64) (*imgDecod
 								case 8:
 									v = uint16(row[k])
 								case 16:
-									v = t.bo.Uint16(row[k*2:])
+									v = bo.Uint16(row[k*2:])
 								default:
 									bit := k * int(bps)
 									var acc uint32
@@ -1797,8 +1070,7 @@ func imgTiffFrame(t *tifFile, d *tifIfd, want bool, maxPixels uint64) (*imgDecod
 		}
 	}
 	px, _, _ = imgOrient(px, w, h, ch, ov)
-	out.Pixels = px
-	return out, nil
+	return px, nil
 }
 
 func imgConvertRow(ph *imgPhoto, table []byte, s []uint16, d []byte) {

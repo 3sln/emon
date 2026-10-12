@@ -157,9 +157,8 @@
 ;; ------------------------------------------------------------------ damage
 ;; Deterministic mutants of a dozen fixtures (truncated, three flipped bytes, a zeroed span, a corrupt link or length):
 ;; a host answers `ok` or a NAMED error (exit 0 or 4), never a crash (exit 1), a panic or a hang, and for PNG and TIFF
-;; both hosts give the same answer. (A JPEG's two decoders may disagree on what a damaged file still holds, and
-;; so may `fax` and `x/image/ccitt` on a damaged G4 payload, D189.) The fuzz
-;; gate (`bb fuzz`) does the same for PDFs.
+;; both hosts give the same answer. (A JPEG's two decoders may disagree on what a damaged file still holds, D190; PNG, TIFF and
+;; CCITT are one kin validator and decoder on both hosts, P10.11.) The fuzz gate (`bb fuzz`) does the same for PDFs.
 (def bases ["png-rgb8.png" "png-palette-trns.png" "png-interlaced.png" "png-gray16.png" "jpeg-420.jpg" "jpeg-progressive.jpg"
             "tiff-rgb8-lzw.tif" "tiff-gray8-zip.tif" "tiff-bilevel-g4.tif" "tiff-multi3-rgb-lzw.tif" "tiff-tiled16.tif"
             "tiff-gray16-lzw-pred2.tif" "tiff-bilevel-g3.tif" "tiff-planar-rgb.tif" "tiff-rgba8-assoc.tif"])
@@ -188,11 +187,10 @@
                     [kind bytes] (mutants base (fs/read-all-bytes (str "test/image/" base)))]
                 (let [f (str dir "/" base "." kind (second (re-find #"(\.[a-z]+)$" base)))]
                   (fs/write-bytes f bytes)
-                  ;; JPEG: two decoders disagree on what damage still holds; CCITT G4: `fax` goes on decoding some damaged
-                  ;; payloads that `x/image/ccitt` refuses (D189). Both are held to "no crash" only.
+                  ;; JPEG: two decoders disagree on what damage still holds, and are held to "no crash" only (D190). PNG, TIFF and
+                  ;; CCITT are one kin validator and one kin decoder on both hosts (P10.11): the answers are equal.
                   {:file f :label (str base " " kind)
-                   :jpeg? (or (str/ends-with? base ".jpg")
-                              (and (str/includes? base "-g4") (re-find #"^(flip|zero|ff)" kind)))}))
+                   :jpeg? (str/ends-with? base ".jpg")}))
         results (doall (pmap (fn [{:keys [file label jpeg?]}]
                                (let [r (drive rust :r file) g (drive go :g file)
                                      bad-exit (fn [x] (not (#{0 4} (:exit x))))]

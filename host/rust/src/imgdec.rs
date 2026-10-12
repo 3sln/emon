@@ -1,4 +1,4 @@
-// THE `ImageDecode` PORT, Rust host (DEVLOG P6.1; SPEC 7.2, 7.3; D058, D089, D187-D190). Encoded bytes (PNG,
+// THE `ImageDecode` PORT, Rust host (DEVLOG P6.1, P10.11; SPEC 7.2, 7.3; D058, D089, D187-D190, D396). Encoded bytes (PNG,
 // JPEG, TIFF) in, one frame's pixels out, normalised to the Bitmap contract: 8-bit gray or RGB, row-major,
 // top-left, EXIF orientation applied, alpha composited onto white, resolution in dots per inch x100 (0 =
 // unknown), a `bilevel` flag for one-bit gray. It NEVER resamples.
@@ -7,21 +7,28 @@
 // to the same pixels (PNG, TIFF: exactly; JPEG: within the tolerance D190 records, and through a transcript
 // exactly).
 //
-// WHICH LIBRARY DOES WHAT (D189). PNG and JPEG pixels come from the `image` crate (Go: `image/png`,
-// `image/jpeg`); everything AROUND them is ours and is the same in both hosts, because the libraries differ in
-// exactly those places: the header fields (size, depth, colour type, resolution, EXIF orientation, Adobe
-// marker), the reduction to 8 bits, the alpha, the orientation. TIFF is read by our own container code over
-// random access (`Source`), because neither library exposes frames, orientation or raw samples alike: IFDs,
-// strips and tiles, then LZW, PackBits, Deflate, CCITT G4 and G3 (1-D) through `fax`, and our own bit
-// unpacking and colour. A multi-page TIFF reads only the frame asked for (the others' IFDs are walked, their
-// strips never read).
+// WHAT AN IMAGE MAY CONTAIN IS KIN'S (D396(4), P10.11). `emon.pngcheck` and `emon.tiffcheck` parse the container, decide accept or
+// refuse (every rule of D389 for a PNG; the byte order, the chain of directories, every tag, the strips and tiles for a TIFF), apply
+// the pixel and byte limits, and report the size, orientation, resolution, colour model and the D188 reduction; the platform library
+// is asked for pixels only of input they accepted, and is shown only the chunks that matter. So two libraries' leniency is never a
+// difference between hosts. CCITT G3 and G4 are kin's too (`emon.ccitt`, the decoder PDF uses): no library reads the whole family.
+//
+// WHICH LIBRARY DOES WHAT (D189). PNG and JPEG pixels come from the `image` crate (Go: `image/png`, `image/jpeg`); the reduction to 8
+// bits, the alpha and the orientation are ours and are the same in both hosts. A JPEG's header (size, components, JFIF, the Adobe
+// marker) is read here: JPEG stays native (D190). TIFF samples are unpacked from the strips and tiles the validator listed by our
+// own code (neither library exposes frames, orientation or raw samples alike): PackBits, LZW, Deflate (`miniz_oxide`), the
+// predictor, bit unpacking and colour. A multi-page TIFF reads only the frame asked for.
 //
 // WHAT IT REFUSES, by name, as `Fail::Unsupported` (an honest answer, transcribed): JPEG with four components
-// (CMYK/YCCK: P6.1a, with the Adobe marker), JPEG-in-TIFF, old-style LZW, G3 2-D and uncompressed mode, float
-// and signed samples, bit depths over 16, Lab, LogLuv, ThunderScan, BigTIFF. A damaged file is `Fail::Failed`.
+// (CMYK/YCCK: P6.1a, with the Adobe marker), JPEG-in-TIFF, G3 2-D and uncompressed mode as TIFF compressions (the validator keeps
+// refusing them: D189's sets), float and signed samples, bit depths over 16, Lab, LogLuv, ThunderScan, BigTIFF. A damaged file
+// is `Fail::Failed`; one over the pixel bound `Fail::Limit`.
 //
 // NOTHING HERE NAMES A FILESYSTEM (D058): a `Source` is a size and `read_at`.
 
+use crate::emon::ccitt as kccitt;
+use crate::emon::{imgcheck, pngcheck, tiffcheck};
+use crate::port::{cells_at, Buf, Cells};
 use std::io::Cursor;
 
 // ------------------------------------------------------------------ the contract
@@ -104,16 +111,16 @@ pub fn sniff(head: &[u8]) -> Option<Format> {
 }
 
 // `frame` >= 0: that frame's pixels. `frame` < 0: only the header of frame `-frame - 1` (size, resolution,
-// frame count), no pixel decoded. `max_pixels` is the PIXELS limit: a bigger frame is `Fail::Limit`.
-pub fn decode(src: &dyn Source, frame: i32, max_pixels: u64) -> Result<Decoded, Fail> {
+// frame count), no pixel decoded. A frame bigger than the PIXELS limit (`limit-of` 9) is `Fail::Limit`.
+pub fn decode(src: &dyn Source, frame: i32) -> Result<Decoded, Fail> {
     let mut head = [0u8; 8];
     let n = read_at_most(src, 0, &mut head);
     let want = frame >= 0;
     let f = if want { frame } else { -frame - 1 };
     match sniff(&head[..n]) {
-        Some(Format::Png) => single(f, || png(src, want, max_pixels)),
-        Some(Format::Jpeg) => single(f, || jpeg(src, want, max_pixels)),
-        Some(Format::Tiff) => tiff(src, f, want, max_pixels),
+        Some(Format::Png) => single(f, || png(src, want)),
+        Some(Format::Jpeg) => single(f, || jpeg(src, want)),
+        Some(Format::Tiff) => tiff(src, f, want),
         None => failed("not a PNG, JPEG or TIFF"),
     }
 }
@@ -185,23 +192,6 @@ pub(crate) fn ycc_rgb(y: i32, cb: i32, cr: i32) -> [u8; 3] {
     [clamp8(y + ((91881 * cr + 32768) >> 16)), clamp8(y - ((22554 * cb + 46802 * cr + 32768) >> 16)), clamp8(y + ((116130 * cb + 32768) >> 16))]
 }
 
-// dots per inch x100 from a rational and a unit: 2 inch, 3 centimetre, anything else unknown. Rounded half up.
-fn dpi_rational(num: u64, den: u64, unit: u32) -> i32 {
-    if den == 0 || num == 0 {
-        return 0;
-    }
-    let v = match unit {
-        2 => (num * 100 * 2 + den) / (den * 2),
-        3 => (num * 254 * 2 + den) / (den * 2),
-        _ => 0,
-    };
-    if v > i32::MAX as u64 {
-        0
-    } else {
-        v as i32
-    }
-}
-
 // ------------------------------------------------------------------ orientation
 
 // EXIF orientation 1..8 applied to `d` (w x h, ch bytes a pixel): the displayed pixels and their size.
@@ -230,438 +220,60 @@ fn orient(d: Vec<u8>, w: usize, h: usize, ch: usize, o: u32) -> (Vec<u8>, usize,
     (out, ow, oh)
 }
 
-// ------------------------------------------------------- the TIFF container (also EXIF)
+// --------------------------------------------------------------- the validators (kin)
+//
+// WHAT AN IMAGE MAY CONTAIN IS KIN'S (D396(4), P10.11): `emon.pngcheck` and `emon.tiffcheck` read the container, decide, and
+// report what the host needs; a platform library is asked for pixels only of input they accepted. A refusal comes back as a
+// status (damaged, unsupported, over a limit) and is turned into `Fail` here; nothing else of the container is read by this file.
 
-#[derive(Clone)]
-struct Entry {
-    tag: u16,
-    typ: u16,
-    count: u32,
-    raw: [u8; 4],
+fn at(r: &Cells, i: i32) -> i32 {
+    cells_at(r, i)
 }
 
-struct Ifd {
-    entries: Vec<Entry>,
-    next: u32,
-}
-
-struct Tf<'a> {
-    src: &'a dyn Source,
-    le: bool,
-}
-
-fn type_size(t: u16) -> usize {
-    match t {
-        1 | 2 | 6 | 7 => 1,
-        3 | 8 => 2,
-        4 | 9 | 11 => 4,
-        5 | 10 | 12 => 8,
-        _ => 0,
+fn refused<T>(status: i32, what: &str, limit: i32) -> Result<T, Fail> {
+    if status == imgcheck::ic_unsupported() {
+        return Err(Fail::Unsupported(what.to_string()));
     }
-}
-
-impl<'a> Tf<'a> {
-    fn new(src: &'a dyn Source) -> Result<Tf<'a>, Fail> {
-        let h = read_exact(src, 0, 8)?;
-        let le = match &h[..2] {
-            b"II" => true,
-            b"MM" => false,
-            _ => return failed("not a TIFF header"),
-        };
-        let t = Tf { src, le };
-        match t.u16_of(&h[2..4]) {
-            42 => Ok(t),
-            43 => unsupported("BigTIFF"),
-            _ => failed("not a TIFF header"),
-        }
+    if status == imgcheck::ic_limit() {
+        return Err(Fail::Limit(limit as u64));
     }
-    fn u16_of(&self, b: &[u8]) -> u16 {
-        if self.le {
-            u16::from_le_bytes([b[0], b[1]])
-        } else {
-            u16::from_be_bytes([b[0], b[1]])
-        }
-    }
-    fn u32_of(&self, b: &[u8]) -> u32 {
-        if self.le {
-            u32::from_le_bytes([b[0], b[1], b[2], b[3]])
-        } else {
-            u32::from_be_bytes([b[0], b[1], b[2], b[3]])
-        }
-    }
-    fn first_ifd(&self) -> Result<u32, Fail> {
-        let h = read_exact(self.src, 4, 4)?;
-        Ok(self.u32_of(&h))
-    }
-    fn ifd(&self, off: u32) -> Result<Ifd, Fail> {
-        if off < 8 {
-            return failed("a TIFF directory at a bad offset");
-        }
-        let c = read_exact(self.src, off as u64, 2)?;
-        let n = self.u16_of(&c) as usize;
-        let b = read_exact(self.src, off as u64 + 2, n * 12 + 4)?;
-        let mut entries = Vec::with_capacity(n);
-        for i in 0..n {
-            let e = &b[i * 12..i * 12 + 12];
-            entries.push(Entry { tag: self.u16_of(&e[0..2]), typ: self.u16_of(&e[2..4]), count: self.u32_of(&e[4..8]), raw: [e[8], e[9], e[10], e[11]] });
-        }
-        let next = self.u32_of(&b[n * 12..]);
-        Ok(Ifd { entries, next })
-    }
-    // the offsets of the frames: the chain of IFDs, a loop or a bad link ending it
-    fn chain(&self) -> Result<Vec<u32>, Fail> {
-        let mut out: Vec<u32> = Vec::new();
-        let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
-        let mut off = self.first_ifd()?;
-        while off != 0 && out.len() < (1 << 20) && seen.insert(off) {
-            let c = match read_exact(self.src, off as u64, 2) {
-                Ok(c) => c,
-                Err(e) => {
-                    if out.is_empty() {
-                        return Err(e);
-                    }
-                    break;
-                }
-            };
-            let n = self.u16_of(&c) as u64;
-            let nb = match read_exact(self.src, off as u64 + 2 + n * 12, 4) {
-                Ok(b) => b,
-                Err(e) => {
-                    if out.is_empty() {
-                        return Err(e);
-                    }
-                    break;
-                }
-            };
-            out.push(off);
-            off = self.u32_of(&nb);
-        }
-        if out.is_empty() {
-            return failed("a TIFF with no directory");
-        }
-        Ok(out)
-    }
-    // the values of an entry as unsigned integers (BYTE, SHORT, LONG), at most `cap` of them
-    fn ints(&self, ifd: &Ifd, tag: u16, cap: usize) -> Result<Option<Vec<u32>>, Fail> {
-        let e = match ifd.entries.iter().find(|e| e.tag == tag) {
-            Some(e) => e,
-            None => return Ok(None),
-        };
-        let sz = type_size(e.typ);
-        if !matches!(e.typ, 1 | 3 | 4) || (e.count as usize) > cap {
-            return failed("a TIFF field of a type or size that does not fit");
-        }
-        let n = e.count as usize;
-        let data: Vec<u8> = if sz * n <= 4 { e.raw[..sz * n].to_vec() } else { read_exact(self.src, self.u32_of(&e.raw) as u64, sz * n)? };
-        let mut v = Vec::with_capacity(n);
-        for i in 0..n {
-            v.push(match sz {
-                1 => data[i] as u32,
-                2 => self.u16_of(&data[i * 2..]) as u32,
-                _ => self.u32_of(&data[i * 4..]),
-            });
-        }
-        Ok(Some(v))
-    }
-    fn int(&self, ifd: &Ifd, tag: u16) -> Result<Option<u32>, Fail> {
-        Ok(self.ints(ifd, tag, 1 << 24)?.and_then(|v| v.first().copied()))
-    }
-    fn rational(&self, ifd: &Ifd, tag: u16) -> Result<Option<(u64, u64)>, Fail> {
-        let e = match ifd.entries.iter().find(|e| e.tag == tag) {
-            Some(e) => e,
-            None => return Ok(None),
-        };
-        if e.typ != 5 || e.count < 1 {
-            return Ok(None);
-        }
-        let b = read_exact(self.src, self.u32_of(&e.raw) as u64, 8)?;
-        Ok(Some((self.u32_of(&b[0..4]) as u64, self.u32_of(&b[4..8]) as u64)))
-    }
+    Err(Fail::Failed(what.to_string()))
 }
 
 // What the first directory of an EXIF blob says: orientation and the horizontal and vertical resolution
 // (dpi x100, 0 unknown). A blob that does not read says nothing.
 fn exif_of(blob: &[u8]) -> (u32, i32, i32) {
-    let mem = Mem(blob);
-    let t = match Tf::new(&mem) {
-        Ok(t) => t,
-        Err(_) => return (1, 0, 0),
-    };
-    let ifd = match t.first_ifd().and_then(|o| t.ifd(o)) {
-        Ok(i) => i,
-        Err(_) => return (1, 0, 0),
-    };
-    let o = t.int(&ifd, 274).ok().flatten().unwrap_or(1);
-    let unit = t.int(&ifd, 296).ok().flatten().unwrap_or(2);
-    let r = |tag| t.rational(&ifd, tag).ok().flatten().map_or(0, |(n, d)| dpi_rational(n, d, unit));
-    (if (1..=8).contains(&o) { o } else { 1 }, r(282), r(283))
+    let mut r = Cells::new();
+    tiffcheck::tc_exif(blob, 0, blob.len() as i32, &mut r);
+    (at(&r, tiffcheck::tr_eo()) as u32, at(&r, tiffcheck::tr_ex()), at(&r, tiffcheck::tr_ey()))
 }
 
 // ------------------------------------------------------------------------ PNG
 
-struct PngMeta {
-    w: u32,
-    h: u32,
-    depth: u8,
-    ctype: u8,
-    interlace: u8,
-    dpi: (i32, i32),
-    exif: Option<Vec<u8>>,
-}
-
-// CRC-32 (IEEE), table-driven: the PNG chunk checksum.
-const CRC_TABLE: [u32; 256] = {
-    let mut t = [0u32; 256];
-    let mut n = 0;
-    while n < 256 {
-        let mut c = n as u32;
-        let mut k = 0;
-        while k < 8 {
-            c = if c & 1 != 0 { 0xEDB88320 ^ (c >> 1) } else { c >> 1 };
-            k += 1;
-        }
-        t[n] = c;
-        n += 1;
-    }
-    t
-};
-
-fn crc32(d: &[u8]) -> u32 {
-    let mut c = 0xFFFF_FFFFu32;
-    for &b in d {
-        c = CRC_TABLE[((c ^ b as u32) & 0xFF) as usize] ^ (c >> 8);
-    }
-    !c
-}
-
-// A PNG is sound when every chunk up to IEND is whole and its checksum is right. The two hosts' PNG libraries differ
-// in how much damage they forgive (the Rust one lets an ancillary chunk's checksum or a missing last byte go), and the
-// two must answer alike (D190): neither is asked about a file that fails this.
-fn png_sound(p: &[u8]) -> bool {
-    let mut i = 8usize;
-    let mut ctype = 0u8;
-    let (mut seen_idat, mut idat_done, mut plte, mut plte_n) = (false, false, false, 0usize);
-    loop {
-        if i + 12 > p.len() {
-            return false;
-        }
-        let n = u32::from_be_bytes([p[i], p[i + 1], p[i + 2], p[i + 3]]) as usize;
-        if n > p.len() || i + 12 + n > p.len() {
-            return false;
-        }
-        let crc = u32::from_be_bytes([p[i + 8 + n], p[i + 9 + n], p[i + 10 + n], p[i + 11 + n]]);
-        if crc32(&p[i + 4..i + 8 + n]) != crc {
-            return false;
-        }
-        // The structure is held to one rule set (P10.5, D389; Go's twin is `imgPngSound`): IHDR first and once, then in order PLTE (once,
-        // 1..256 entries) and tRNS (of the length its colour type wants; none with an alpha channel) before the first IDAT, the IDATs
-        // contiguous, at least one, no unknown critical chunk (a capital first letter), IEND last.
-        let kind = &p[i + 4..i + 8];
-        if i == 8 {
-            if kind != b"IHDR" || n != 13 {
-                return false;
-            }
-            ctype = p[i + 8 + 9];
-        } else if kind == b"IHDR" {
-            return false;
-        }
-        if kind == b"IDAT" {
-            if idat_done {
-                return false;
-            }
-            seen_idat = true;
-        } else if seen_idat {
-            idat_done = true;
-        }
-        match kind {
-            b"PLTE" => {
-                if seen_idat || plte || n == 0 || n % 3 != 0 || n / 3 > 256 {
-                    return false;
-                }
-                plte = true;
-                plte_n = n / 3;
-            }
-            b"tRNS" => {
-                if seen_idat {
-                    return false;
-                }
-                let ok = match ctype {
-                    0 => n == 2,
-                    2 => n == 6,
-                    3 => plte && n <= plte_n,
-                    _ => false,
-                };
-                if !ok {
-                    return false;
-                }
-            }
-            b"IEND" => return seen_idat,
-            b"IHDR" | b"IDAT" => {}
-            _ => {
-                if kind[0].is_ascii_uppercase() {
-                    return false;
-                }
-            }
-        }
-        i += 12 + n;
-    }
-}
-
-// The byte count of a PNG's decompressed image data, filter bytes included (RFC 2083 8.2): what its header says it holds. 0 when the
-// header names a depth or colour type the format does not have (the decoders then refuse it alike).
-fn png_raw_size(m: &PngMeta) -> u64 {
-    let ch: u64 = match m.ctype {
-        0 | 3 => 1,
-        2 => 3,
-        4 => 2,
-        6 => 4,
-        _ => 0,
-    };
-    if ch == 0 || m.depth == 0 || m.depth > 16 {
-        return 0;
-    }
-    let bits = ch * m.depth as u64;
-    let (w, h) = (m.w as u64, m.h as u64);
-    if m.interlace == 0 {
-        return h * (1 + (w * bits + 7) / 8);
-    }
-    let mut total = 0u64;
-    for p in [[0u64, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4], [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2]] {
-        if w <= p[0] || h <= p[1] {
-            continue;
-        }
-        let (pw, ph) = ((w - p[0] + p[2] - 1) / p[2], (h - p[1] + p[3] - 1) / p[3]);
-        total += ph * (1 + (pw * bits + 7) / 8);
-    }
-    total
-}
-
-// The IDAT chunks, joined, are one zlib stream whose checksum is right and which holds exactly the bytes the header says. The two
-// hosts' PNG libraries differ here too (Go refuses a bad Adler-32 and surplus data, this crate forgives both), and the two must answer
-// alike (D190, P10.5 D389). The caller has seen the chunks are whole (`png_sound`) and the size is in bounds.
-fn png_data_sound(p: &[u8], m: &PngMeta) -> bool {
-    let want = png_raw_size(m);
-    if want == 0 {
-        return true;
-    }
-    let mut idat: Vec<u8> = Vec::new();
-    let mut i = 8usize;
-    while i + 12 <= p.len() {
-        let n = u32::from_be_bytes([p[i], p[i + 1], p[i + 2], p[i + 3]]) as usize;
-        if i + 12 + n > p.len() {
-            break;
-        }
-        match &p[i + 4..i + 8] {
-            b"IDAT" => idat.extend_from_slice(&p[i + 8..i + 8 + n]),
-            b"IEND" => break,
-            _ => {}
-        }
-        i += 12 + n;
-    }
-    match miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(&idat, want as usize + 1) {
-        Ok(v) => v.len() as u64 == want,
-        Err(_) => false,
-    }
-}
-
-// The animation chunks (acTL, fcTL, fdAT) are not read: a PNG's frame is its default image (`frames` is 1). The two hosts' decoders
-// judge a damaged animation chunk differently (this crate refuses an fcTL it finds odd, Go's decoder skips all three), so neither is
-// shown them (D389). The other chunks, and their checksums, are kept as they are.
-fn png_strip_apng(p: Vec<u8>) -> Vec<u8> {
-    let mut out = Vec::with_capacity(p.len());
-    out.extend_from_slice(&p[..8]);
-    let mut i = 8usize;
-    let mut cut = false;
-    while i + 12 <= p.len() {
-        let n = u32::from_be_bytes([p[i], p[i + 1], p[i + 2], p[i + 3]]) as usize;
-        if i + 12 + n > p.len() {
-            break;
-        }
-        let kind = &p[i + 4..i + 8];
-        if kind == b"acTL" || kind == b"fcTL" || kind == b"fdAT" {
-            cut = true;
-        } else {
-            out.extend_from_slice(&p[i..i + 12 + n]);
-        }
-        i += 12 + n;
-    }
-    if !cut {
-        return p;
-    }
-    out.extend_from_slice(&p[i..]);
-    out
-}
-
-fn png_meta(p: &[u8]) -> Result<PngMeta, Fail> {
-    let mut m = PngMeta { w: 0, h: 0, depth: 0, ctype: 255, interlace: 0, dpi: (0, 0), exif: None };
-    let mut have = false;
-    let mut i = 8usize;
-    while i + 8 <= p.len() {
-        let n = u32::from_be_bytes([p[i], p[i + 1], p[i + 2], p[i + 3]]) as usize;
-        let kind = &p[i + 4..i + 8];
-        if i + 8 + n > p.len() {
-            break;
-        }
-        let body = &p[i + 8..i + 8 + n];
-        match kind {
-            b"IHDR" if n >= 13 => {
-                m.w = u32::from_be_bytes([body[0], body[1], body[2], body[3]]);
-                m.h = u32::from_be_bytes([body[4], body[5], body[6], body[7]]);
-                m.depth = body[8];
-                m.ctype = body[9];
-                m.interlace = body[12];
-                have = true;
-            }
-            b"pHYs" if n >= 9 && body[8] == 1 => {
-                let x = u32::from_be_bytes([body[0], body[1], body[2], body[3]]) as u64;
-                let y = u32::from_be_bytes([body[4], body[5], body[6], body[7]]) as u64;
-                // pixels per metre -> dpi x100: ppm * 100 / 39.37 = ppm * 254 / 100
-                let f = |v: u64| ((v * 254 + 50) / 100).min(i32::MAX as u64) as i32;
-                m.dpi = (f(x), f(y));
-            }
-            b"eXIf" => m.exif = Some(body.to_vec()),
-            b"IEND" => break,
-            _ => {}
-        }
-        i += 12 + n;
-    }
-    if !have || m.w == 0 || m.h == 0 {
-        return failed("a PNG without a usable header");
-    }
-    Ok(m)
-}
-
-fn png(src: &dyn Source, want: bool, max_pixels: u64) -> Result<Decoded, Fail> {
+fn png(src: &dyn Source, want: bool) -> Result<Decoded, Fail> {
     let bytes = read_all(src)?;
-    if !png_sound(&bytes) {
-        return failed("a PNG with a damaged chunk, a bad checksum or no IEND");
+    let (mut r, mut st, mut out) = (Cells::new(), Cells::new(), Cells::new());
+    let (mut idat, mut clean) = (Buf::new(), Buf::new());
+    let s = pngcheck::pc_check(&bytes, want as i32, &mut r, &mut st, &mut out, &mut idat, &mut clean);
+    drop((bytes, st, out, idat));
+    if s != imgcheck::ic_ok() {
+        return refused(s, "a PNG the validator refused: damaged, or past the rules of D389", at(&r, pngcheck::pr_limit()));
     }
-    let m = png_meta(&bytes)?;
-    let (o, ex, ey) = m.exif.as_deref().map_or((1, 0, 0), exif_of);
-    let gray = m.ctype == 0 || m.ctype == 4;
-    let (w, h) = (m.w as u64, m.h as u64);
-    let (ow, oh) = if o >= 5 { (h, w) } else { (w, h) };
-    let (dx, dy) = if m.dpi.0 > 0 { m.dpi } else { (ex, ey) };
-    let mut out = Decoded { w: ow as i32, h: oh as i32, ch: if gray { 1 } else { 3 }, dpi100: if o >= 5 { dy } else { dx }, bilevel: m.ctype == 0 && m.depth == 1, frames: 1, pixels: None };
-    if w * h > max_pixels {
-        return Err(Fail::Limit(w * h));
-    }
-    if ow > i32::MAX as u64 || oh > i32::MAX as u64 {
-        return Err(Fail::Limit(u64::MAX));
-    }
+    let g = |i: i32| at(&r, i);
+    let (w, h) = (g(pngcheck::pr_w()) as usize, g(pngcheck::pr_h()) as usize);
+    let gray = g(pngcheck::pr_ch()) == 1;
+    let mut out = Decoded { w: g(pngcheck::pr_ow()), h: g(pngcheck::pr_oh()), ch: g(pngcheck::pr_ch()), dpi100: g(pngcheck::pr_dpi()), bilevel: g(pngcheck::pr_bilevel()) != 0, frames: 1, pixels: None };
     if !want {
         return Ok(out);
     }
-    if !png_data_sound(&bytes, &m) {
-        return failed("a PNG whose image data is not one whole zlib stream of the bytes its header says");
-    }
+    let o = g(pngcheck::pr_orient()) as u32;
+    // the library is shown the chunks that matter, whole and in order, and nothing else (`clean`)
     use image::DynamicImage as D;
-    let bytes = png_strip_apng(bytes);
-    let mut dec = image::codecs::png::PngDecoder::new(Cursor::new(&bytes[..])).map_err(|e| Fail::Failed(e.to_string()))?;
+    let mut dec = image::codecs::png::PngDecoder::new(Cursor::new(&clean.0[..])).map_err(|e| Fail::Failed(e.to_string()))?;
     let _ = image::ImageDecoder::set_limits(&mut dec, image::Limits::no_limits());
     let img = D::from_decoder(dec).map_err(|e| Fail::Failed(e.to_string()))?;
     let (iw, ih) = (img.width() as usize, img.height() as usize);
-    if iw as u64 != w || ih as u64 != h {
+    if iw != w || ih != h {
         return failed("a PNG whose pixels are not the size its header says");
     }
     let n = iw * ih;
@@ -778,7 +390,8 @@ fn jpeg_meta(p: &[u8]) -> Result<JpegMeta, Fail> {
     Ok(m)
 }
 
-fn jpeg(src: &dyn Source, want: bool, max_pixels: u64) -> Result<Decoded, Fail> {
+fn jpeg(src: &dyn Source, want: bool) -> Result<Decoded, Fail> {
+    let max_pixels = crate::port::limit_of(9) as u64;
     let bytes = read_all(src)?;
     let m = jpeg_meta(&bytes)?;
     if m.ncomp != 1 && m.ncomp != 3 {
@@ -815,18 +428,6 @@ fn jpeg(src: &dyn Source, want: bool, max_pixels: u64) -> Result<Decoded, Fail> 
 }
 
 // ----------------------------------------------------------------------- TIFF
-
-fn tiff(src: &dyn Source, f: i32, want: bool, max_pixels: u64) -> Result<Decoded, Fail> {
-    let t = Tf::new(src)?;
-    let chain = t.chain()?;
-    if f as usize >= chain.len() {
-        return failed("a frame that the TIFF does not have");
-    }
-    let ifd = t.ifd(chain[f as usize])?;
-    let mut d = tiff_frame(&t, &ifd, want, max_pixels)?;
-    d.frames = chain.len() as i32;
-    Ok(d)
-}
 
 fn bit_reverse(b: &mut [u8]) {
     for x in b.iter_mut() {
@@ -957,67 +558,15 @@ fn inflate(d: &[u8], expect: usize) -> Result<Vec<u8>, Fail> {
     }
 }
 
-// CCITT (bits: 1 = black, rows byte-aligned) -> `rows` rows of `cw` pixels
-fn ccitt(d: &[u8], g4: bool, cw: usize, rows: usize) -> Result<Vec<u8>, Fail> {
-    let stride = (cw + 7) / 8;
-    let mut out = vec![0u8; stride * rows];
-    let mut y = 0usize;
-    // a G3 row is whole when its runs add up to the width: a damaged one is told apart by it (the decoders differ in
-    // what they make of a row that does not)
-    let mut bad_row = false;
-    let mut put = |tr: &[u16]| {
-        if y >= rows {
-            return;
-        }
-        if !g4 && tr.last().map_or(true, |&l| l as usize != cw) {
-            bad_row = true;
-        }
-        // a G4 row's changing elements never go back and never pass the width
-        if g4 && (tr.windows(2).any(|p| p[1] < p[0]) || tr.last().map_or(false, |&l| l as usize > cw)) {
-            bad_row = true;
-        }
-        // transitions: white run, black run, white run, ...
-        let mut x = 0usize;
-        let mut black = false;
-        for &p in tr {
-            let e = std::cmp::min(p as usize, cw);
-            if black {
-                for i in x..e {
-                    out[y * stride + i / 8] |= 0x80 >> (i % 8);
-                }
-            }
-            x = std::cmp::max(x, e);
-            black = !black;
-        }
-        if black {
-            for i in x..cw {
-                out[y * stride + i / 8] |= 0x80 >> (i % 8);
-            }
-        }
-        y += 1;
-    };
-    if g4 {
-        if cw > u16::MAX as usize || rows > u16::MAX as usize {
-            return unsupported("a G4 strip wider or taller than 65535");
-        }
-        fax::decoder::decode_g4(d.iter().copied(), cw as u16, Some(rows as u16), |tr| put(tr)).ok_or_else(|| Fail::Failed("a bad CCITT G4 stream".to_string()))?;
-        if bad_row {
-            return failed("a bad CCITT G4 stream");
-        }
-    } else {
-        // Group 3 one-dimensional, EOL-framed. `fax` drops the last
-        // line of a stream that has no EOL after it (libtiff writes none), so six EOLs (the RTC) are appended:
-        // they close the last line and end the decode, and do nothing to a stream that has its own.
-        let mut data = d.to_vec();
-        data.extend_from_slice(&[0x00, 0x10, 0x01, 0x00, 0x10, 0x01, 0x00, 0x10, 0x01]);
-        let _ = fax::decoder::decode_g3(data.iter().copied(), |tr| put(tr));
-        // every row must have come: a damaged stream is told apart by the rows it did not give, which is
-        // all that `fax` and `x/image/ccitt` (whose error recovery differs) can be asked
-        if y < rows || bad_row {
-            return failed("a short or damaged CCITT G3 stream");
-        }
+// CCITT through kin's one decoder (`emon.ccitt`, TIFF's and PDF's): `rows` rows of `cw` pixels, bits packed high first, 1 for a black
+// run (the libtiff reading, D188), rows byte-aligned. `ws` is the decoder's scratch, kept for every strip of an image.
+fn ccitt(d: &[u8], g4: bool, cw: usize, rows: usize, ws: &mut Cells) -> Result<Vec<u8>, Fail> {
+    let mut out = Buf(vec![0u8; ((cw + 7) / 8) * rows]);
+    let k = if g4 { -1 } else { 0 };
+    if kccitt::cc_decode(d, 0, d.len() as i32, k, cw as i32, rows as i32, 0, &mut out, ws) != kccitt::cc_ok() {
+        return failed("a short or damaged CCITT stream");
     }
-    Ok(out)
+    Ok(out.0)
 }
 
 struct Photo {
@@ -1030,182 +579,69 @@ struct Photo {
     cmap: Vec<u16>,
 }
 
-fn tiff_frame(t: &Tf, ifd: &Ifd, want: bool, max_pixels: u64) -> Result<Decoded, Fail> {
-    let one = |tag| t.int(ifd, tag);
-    let w = one(256)?.ok_or_else(|| Fail::Failed("a TIFF without a width".to_string()))? as usize;
-    let h = one(257)?.ok_or_else(|| Fail::Failed("a TIFF without a height".to_string()))? as usize;
-    if w == 0 || h == 0 {
-        return failed("a TIFF frame with no pixels");
-    }
-    let spp = one(277)?.unwrap_or(1) as usize;
-    if spp == 0 || spp > 16 {
-        return failed("a TIFF with a strange sample count");
-    }
-    let mut bpsv = t.ints(ifd, 258, 64)?.unwrap_or_else(|| vec![1]);
-    if bpsv.is_empty() {
-        bpsv = vec![1];
-    }
-    while bpsv.len() < spp {
-        bpsv.push(bpsv[bpsv.len() - 1]);
-    }
-    if bpsv[..spp].iter().any(|&b| b != bpsv[0]) {
-        return unsupported("TIFF samples of different depths");
-    }
-    let bps = bpsv[0];
-    if bps == 0 {
-        return failed("a TIFF with a strange bit depth");
-    }
-    if bps > 16 {
-        return unsupported("TIFF samples deeper than 16 bits");
-    }
-    if let Some(sf) = t.ints(ifd, 339, 64)? {
-        // 1 unsigned, 4 undefined (read as unsigned, as libtiff does); 2 signed and 3 float are not read
-        if sf.iter().any(|&v| v != 1 && v != 4) {
-            return unsupported("TIFF float or signed samples");
-        }
-    }
-    let comp = one(259)?.unwrap_or(1);
-    let kind = match one(262)? {
-        Some(k) => k,
-        None => {
-            if comp == 3 || comp == 4 {
-                0
-            } else if spp >= 3 {
-                2
-            } else {
-                1
-            }
-        }
-    };
-    let nc = match kind {
-        0 | 1 | 3 => 1,
-        2 | 6 => 3,
-        5 => 4,
-        _ => return unsupported("this TIFF photometric interpretation (Lab, LogLuv, a mask)"),
-    };
-    if spp < nc {
-        return failed("a TIFF with fewer samples than its colour needs");
-    }
-    if kind == 5 && one(332)?.unwrap_or(1) != 1 {
-        return unsupported("a TIFF separation that is not CMYK");
-    }
-    let alpha = if spp > nc {
-        match t.ints(ifd, 338, 64)?.and_then(|v| v.first().copied()) {
-            Some(1) => Some(true),
-            Some(2) => Some(false),
-            _ => None,
-        }
+fn u16_of(le: bool, b: &[u8]) -> u16 {
+    if le {
+        u16::from_le_bytes([b[0], b[1]])
     } else {
-        None
+        u16::from_be_bytes([b[0], b[1]])
+    }
+}
+
+// THE TIFF: the whole file is read, `emon.tiffcheck` decides (the byte order, the chain of frames, every tag, the bounds of every
+// strip and tile, the pixel limit) and reports; what is left here is turning the chunks it listed into samples and the samples into
+// the 8-bit pixels of D188. A multi-page TIFF reads only the frame asked for.
+fn tiff(src: &dyn Source, f: i32, want: bool) -> Result<Decoded, Fail> {
+    let bytes = read_all(src)?;
+    let mut r = Cells::new();
+    let s = tiffcheck::tc_check(&bytes, f, want as i32, &mut r);
+    if s != imgcheck::ic_ok() {
+        return refused(s, "a TIFF the validator refused: damaged, or a coding the port does not read (D188)", at(&r, tiffcheck::tr_limit()));
+    }
+    let g = |i: i32| at(&r, i);
+    let mut out = Decoded {
+        w: g(tiffcheck::tr_ow()),
+        h: g(tiffcheck::tr_oh()),
+        ch: g(tiffcheck::tr_ch()),
+        dpi100: g(tiffcheck::tr_dpi()),
+        bilevel: g(tiffcheck::tr_bilevel()) != 0,
+        frames: g(tiffcheck::tr_frames()),
+        pixels: None,
     };
-    let mut cmap: Vec<u16> = Vec::new();
-    if kind == 3 {
-        let v = t.ints(ifd, 320, 3 * 65536)?.ok_or_else(|| Fail::Failed("a palette TIFF with no colour map".to_string()))?;
-        if v.len() < 3 << bps {
-            return failed("a TIFF colour map shorter than its depth needs");
-        }
-        cmap = v.iter().map(|&x| x as u16).collect();
-    }
-    if kind == 6 && (bps != 8 || spp != 3) {
-        return unsupported("YCbCr TIFF other than 8 bits, three samples");
-    }
-    if (comp == 3 || comp == 4) && (bps != 1 || spp != 1) {
-        return failed("a CCITT TIFF that is not one-bit, one-sample");
-    }
-    if !matches!(comp, 1 | 3 | 4 | 5 | 8 | 32773 | 32946) {
-        return unsupported("this TIFF compression (JPEG, ThunderScan, SGILog, ...)");
-    }
-    let mut t4 = 0;
-    if comp == 3 {
-        t4 = one(292)?.unwrap_or(0);
-        // bit 0 two-dimensional, bit 1 uncompressed mode, bit 2 fill bits before each EOL: the Go host's
-        // x/image/ccitt reads none of them, and the two hosts must read the same set (D189)
-        if t4 & 7 != 0 {
-            return unsupported("CCITT Group 3 two-dimensional, uncompressed mode or fill bits");
-        }
-    }
-    let planar2 = one(284)?.unwrap_or(1) == 2 && spp > 1;
-    if planar2 && kind == 6 {
-        return unsupported("planar YCbCr");
-    }
-    let predictor = one(317)?.unwrap_or(1);
-    if predictor != 1 && !(predictor == 2 && (bps == 8 || bps == 16)) {
-        return unsupported("this TIFF predictor");
-    }
-    let fill2 = one(266)?.unwrap_or(1) == 2;
-    let orient_tag = one(274)?.filter(|o| (1..=8).contains(o)).unwrap_or(1);
-    let unit = one(296)?.unwrap_or(2);
-    let res = |tag| t.rational(ifd, tag).ok().flatten().map_or(0, |(n, d)| dpi_rational(n, d, unit));
-    let (rx, ry) = (res(282), res(283));
-    let ch = if matches!(kind, 0 | 1) { 1 } else { 3 };
-    let (ow, oh) = if orient_tag >= 5 { (h, w) } else { (w, h) };
-    let mut out = Decoded { w: ow as i32, h: oh as i32, ch: ch as i32, dpi100: if orient_tag >= 5 { ry } else { rx }, bilevel: matches!(kind, 0 | 1) && bps == 1, frames: 1, pixels: None };
-    let pixels = w as u64 * h as u64;
-    if pixels > max_pixels {
-        return Err(Fail::Limit(pixels));
-    }
-    if ow > i32::MAX as usize || oh > i32::MAX as usize {
-        return Err(Fail::Limit(u64::MAX));
-    }
     if !want {
         return Ok(out);
     }
+    out.pixels = Some(tiff_pixels(&bytes, &r)?);
+    Ok(out)
+}
+
+fn tiff_pixels(bytes: &[u8], rep: &Cells) -> Result<Vec<u8>, Fail> {
+    let g = |i: i32| at(rep, i);
+    let (w, h) = (g(tiffcheck::tr_w()) as usize, g(tiffcheck::tr_h()) as usize);
+    let (spp, bps) = (g(tiffcheck::tr_spp()) as usize, g(tiffcheck::tr_bps()) as u32);
+    let (comp, kind, nc) = (g(tiffcheck::tr_comp()), g(tiffcheck::tr_kind()) as u32, g(tiffcheck::tr_nc()) as usize);
+    let alpha = match g(tiffcheck::tr_alpha()) {
+        1 => Some(true),
+        2 => Some(false),
+        _ => None,
+    };
+    let (predictor, planar2, fill2, le) = (g(tiffcheck::tr_predictor()), g(tiffcheck::tr_planar()) == 1, g(tiffcheck::tr_fill2()) == 1, g(tiffcheck::tr_le()) == 1);
+    let tiled = g(tiffcheck::tr_tiled()) == 1;
+    let (cw0, band_rows) = (g(tiffcheck::tr_cw()) as usize, g(tiffcheck::tr_band()) as usize);
+    let (across, down) = (g(tiffcheck::tr_across()) as usize, g(tiffcheck::tr_down()) as usize);
+    let (hs, vs) = (g(tiffcheck::tr_hs()) as usize, g(tiffcheck::tr_vs()) as usize);
+    let planes = g(tiffcheck::tr_planes()) as usize;
+    let (offs_at, lens_at) = (g(tiffcheck::tr_offs_at()), g(tiffcheck::tr_lens_at()));
+    let ch = g(tiffcheck::tr_ch()) as usize;
+    let orient_tag = g(tiffcheck::tr_orient()) as u32;
+    let cmap: Vec<u16> = if kind == 3 { (0..3i32 << bps).map(|i| g(g(tiffcheck::tr_cmap_at()) + i) as u16).collect() } else { Vec::new() };
     let ph = Photo { kind, spp, nc, bps, alpha, cmap };
 
-    // the chunks: tiles or strips
-    let tiled = t.ints(ifd, 322, 1)?.is_some();
-    let (cw0, band_rows, across, down, offs, cnts);
-    if tiled {
-        let tw = one(322)?.unwrap_or(0) as usize;
-        let th = one(323)?.unwrap_or(0) as usize;
-        if tw == 0 || th == 0 || tw > 1 << 20 || th > 1 << 20 {
-            return failed("a TIFF with strange tiles");
-        }
-        cw0 = tw;
-        band_rows = th;
-        across = (w + tw - 1) / tw;
-        down = (h + th - 1) / th;
-        // some writers (SGI's) put a tiled image's offsets in the strip tags: libtiff reads those too
-        let o = match t.ints(ifd, 324, 1 << 24)? {
-            Some(o) => Some(o),
-            None => t.ints(ifd, 273, 1 << 24)?,
-        };
-        offs = o.ok_or_else(|| Fail::Failed("a tiled TIFF with no tile offsets".to_string()))?;
-        let c = match t.ints(ifd, 325, 1 << 24)? {
-            Some(c) => Some(c),
-            None => t.ints(ifd, 279, 1 << 24)?,
-        };
-        cnts = c.ok_or_else(|| Fail::Failed("a tiled TIFF with no tile byte counts".to_string()))?;
-    } else {
-        let mut rps = one(278)?.unwrap_or(h as u32) as usize;
-        if rps == 0 || rps > h {
-            rps = h;
-        }
-        cw0 = w;
-        band_rows = rps;
-        across = 1;
-        down = (h + rps - 1) / rps;
-        offs = t.ints(ifd, 273, 1 << 24)?.ok_or_else(|| Fail::Failed("a TIFF with no strip offsets".to_string()))?;
-        cnts = t.ints(ifd, 279, 1 << 24)?.unwrap_or_default();
-    }
-    let planes = if planar2 { spp } else { 1 };
     let per_plane = across * down;
-    if offs.len() < per_plane * planes {
-        return failed("a TIFF with fewer strips or tiles than its size needs");
-    }
-    let (hs, vs) = if kind == 6 {
-        let v = t.ints(ifd, 530, 2)?.unwrap_or_else(|| vec![2, 2]);
-        if v.len() != 2 || !matches!(v[0], 1 | 2 | 4) || !matches!(v[1], 1 | 2 | 4) {
-            return failed("a TIFF with strange chroma subsampling");
-        }
-        (v[0] as usize, v[1] as usize)
-    } else {
-        (1, 1)
-    };
     let cs = if planar2 { 1 } else { spp };
     let mut px = vec![0u8; w * h * ch];
     let table = lut(bps);
     let mut samp: Vec<u16> = Vec::new();
+    let mut ws = Cells::new();
     for by in 0..down {
         let y0 = by * band_rows;
         let rows = std::cmp::min(band_rows, h - y0);
@@ -1213,14 +649,10 @@ fn tiff_frame(t: &Tf, ifd: &Ifd, want: bool, max_pixels: u64) -> Result<Decoded,
         samp.resize(rows * w * spp, 0);
         for p in 0..planes {
             for bx in 0..across {
-                let idx = p * per_plane + by * across + bx;
-                let off = offs[idx] as u64;
-                let n = match cnts.get(idx) {
-                    Some(&c) => c as u64,
-                    None if per_plane * planes == 1 => t.src.size().saturating_sub(off),
-                    None => return failed("a TIFF with no byte count for a strip"),
-                };
-                let mut data = read_exact(t.src, off, n as usize)?;
+                let idx = (p * per_plane + by * across + bx) as i32;
+                let off = g(offs_at + idx) as u32 as usize;
+                let n = g(lens_at + idx) as u32 as usize;
+                let mut data = bytes[off..off + n].to_vec();
                 if fill2 {
                     bit_reverse(&mut data);
                 }
@@ -1233,11 +665,8 @@ fn tiff_frame(t: &Tf, ifd: &Ifd, want: bool, max_pixels: u64) -> Result<Decoded,
                     32773 => packbits(&data, expect),
                     5 => lzw(&data, expect)?,
                     8 | 32946 => inflate(&data, expect)?,
-                    4 => ccitt(&data, true, cw, crows)?,
-                    _ => {
-                        let _ = t4;
-                        ccitt(&data, false, cw, crows)?
-                    }
+                    4 => ccitt(&data, true, cw, crows, &mut ws)?,
+                    _ => ccitt(&data, false, cw, crows, &mut ws)?,
                 };
                 raw.resize(expect, 0);
                 if predictor == 2 {
@@ -1249,8 +678,8 @@ fn tiff_frame(t: &Tf, ifd: &Ifd, want: bool, max_pixels: u64) -> Result<Decoded,
                             }
                         } else {
                             for i in cs..cw * cs {
-                                let a = t.u16_of(&row[i * 2..]).wrapping_add(t.u16_of(&row[(i - cs) * 2..]));
-                                let b = if t.le { a.to_le_bytes() } else { a.to_be_bytes() };
+                                let a = u16_of(le, &row[i * 2..]).wrapping_add(u16_of(le, &row[(i - cs) * 2..]));
+                                let b = if le { a.to_le_bytes() } else { a.to_be_bytes() };
                                 row[i * 2..i * 2 + 2].copy_from_slice(&b);
                             }
                         }
@@ -1279,7 +708,7 @@ fn tiff_frame(t: &Tf, ifd: &Ifd, want: bool, max_pixels: u64) -> Result<Decoded,
                                 let k = c * cs + s;
                                 let v: u16 = match bps {
                                     8 => row[k] as u16,
-                                    16 => t.u16_of(&row[k * 2..]),
+                                    16 => u16_of(le, &row[k * 2..]),
                                     b => {
                                         let bit = k * b as usize;
                                         let mut v = 0u32;
@@ -1306,8 +735,7 @@ fn tiff_frame(t: &Tf, ifd: &Ifd, want: bool, max_pixels: u64) -> Result<Decoded,
         }
     }
     let (px, _, _) = orient(px, w, h, ch, orient_tag);
-    out.pixels = Some(px);
-    Ok(out)
+    Ok(px)
 }
 
 fn convert_row(ph: &Photo, table: &[u8], s: &[u16], d: &mut [u8]) {
@@ -1359,6 +787,6 @@ fn convert_row(ph: &Photo, table: &[u8], s: &[u16], d: &mut [u8]) {
 }
 
 // a convenience for callers that hold the bytes
-pub fn decode_bytes(b: &[u8], frame: i32, max_pixels: u64) -> Result<Decoded, Fail> {
-    decode(&Mem(b), frame, max_pixels)
+pub fn decode_bytes(b: &[u8], frame: i32) -> Result<Decoded, Fail> {
+    decode(&Mem(b), frame)
 }

@@ -1,0 +1,645 @@
+;; THE TIFF VALIDATOR (P10.11, D396(4); D188, D189, D190). emon's own module (D039), written from the TIFF 6.0 specification.
+;;
+;;   (tc-check t frame deep rep)     decide one frame of a TIFF: accept or refuse by name, and report what the host decodes with
+;;   (tc-exif b base size rep)       the orientation and resolution of an EXIF blob (a JPEG's APP1, a PNG's eXIf): its first directory
+;;
+;; `t` is the whole file as a `Blob` (the host reads it: the validator holds no source). `frame` is the frame wanted (0 for the
+;; first). `deep` is 1 when pixels are wanted: then the strip and tile tags are read and every chunk's bytes are checked to lie in
+;; the file; with 0 only the header answer (size, resolution, frame count) is given, as before. `rep` is the report, a `Cells` the
+;; caller makes and hands to every call (it is rewritten).
+;;
+;; WHAT THE HOSTS DID IN THEIR OWN CODE BEFORE (`imgdec.rs` and `imgdec.go`, twins) IS HERE ONCE: the byte order and the magic; the
+;; chain of directories (a loop or a bad link ends it, at most 2^20 frames); each tag's type and count (a SHORT, LONG or BYTE field
+;; whose values lie in the file; a count over the bound is a fault); the samples (one depth for all of them, 1 to 16 bits; signed and
+;; float samples are refused), the photometric interpretation and what it needs, the compression (none, PackBits, LZW, Deflate
+;; both numberings, CCITT G3 one-dimensional and G4; every other is refused by name), the predictor, planar configuration, tiles
+;; and strips (their count, and that every one of them lies in the file), chroma subsampling, the colour map, the extra
+;; samples, the orientation, the resolution, and the PIXELS bound (`limit-of`). The host's code that is left is what only the
+;; platform's arithmetic has to say: decompressing a strip and turning samples into the 8-bit pixels of D188.
+;;
+;; THE ANSWER is the status (also in the report's `(tr-status)`): `ic-ok`, `ic-failed` (damaged), `ic-unsupported` (valid, not
+;; read; the refusals D188 names), `ic-limit` (the report's `(tr-limit)` is the count over the bound: pixels, or the area of a
+;; tile). A TIFF is read as `II*\0` or `MM\0*`; BigTIFF (43) is refused by name and not read.
+;;
+;; THE REPORT'S ARRAYS (when `deep` is 1 and the frame is ok): the colour map of a palette image (3 << bps values, 16-bit),
+;; and for each of the `(tr-nchunks)` strips or tiles (all the planes, plane after plane) the file offset and the byte count, the
+;; count already settled (a missing one is the rest of the file, for an image of one chunk) and the whole chunk in the file, at
+;; indexes `(tr-offs-at)` and `(tr-lens-at)` (the colour map at `(tr-cmap-at)`). A value is an I32 holding the 32-bit pattern.
+(ns emon.tiffcheck
+  (:require [emon.lang :refer [I32 I64 Blob Cells i64 i32 add64 mul64 shl32]]
+            [emon.port :refer [blob-len blob-u8 blob-u16 blob-u32 blob-u16le blob-u32le
+                               cells-len cells-at cells-set cells-grow cells-drop limit-of]]
+            [emon.imgcheck :refer [ic-ok ic-failed ic-unsupported ic-limit ic-u32 ic-clamp ic-dpi]]
+            [kin.lang :refer [defn defconst return let set while if comment do
+                              + - * < > <= >= == != and or bit-and quot rem]]))
+
+;; ------------------------------------------------------------ the report
+
+(defn ^:pub ^I32 tr-status [] (return 0))
+(defn ^:pub ^I32 tr-frames [] (return 1))
+(defn ^:pub ^I32 tr-w [] (return 2))          ;; the frame's size as stored
+(defn ^:pub ^I32 tr-h [] (return 3))
+(defn ^:pub ^I32 tr-ow [] (return 4))         ;; ... as displayed (after the orientation)
+(defn ^:pub ^I32 tr-oh [] (return 5))
+(defn ^:pub ^I32 tr-ch [] (return 6))         ;; the pixels' channels: 1 gray, 3 RGB
+(defn ^:pub ^I32 tr-dpi [] (return 7))        ;; dots per inch x 100 across the displayed width, 0 unknown
+(defn ^:pub ^I32 tr-bilevel [] (return 8))
+(defn ^:pub ^I32 tr-orient [] (return 9))     ;; 1..8
+(defn ^:pub ^I32 tr-limit [] (return 10))     ;; with `ic-limit`: how many, as large as an I32 says
+(defn ^:pub ^I32 tr-eo [] (return 11))        ;; `tc-exif`: orientation 1..8, horizontal and vertical resolution
+(defn ^:pub ^I32 tr-ex [] (return 12))
+(defn ^:pub ^I32 tr-ey [] (return 13))
+(defn ^:pub ^I32 tr-spp [] (return 16))       ;; samples a pixel
+(defn ^:pub ^I32 tr-bps [] (return 17))       ;; bits a sample
+(defn ^:pub ^I32 tr-comp [] (return 18))      ;; 1 none, 3 CCITT G3, 4 CCITT G4, 5 LZW, 8 or 32946 Deflate, 32773 PackBits
+(defn ^:pub ^I32 tr-kind [] (return 19))      ;; photometric: 0 min-is-white 1 min-is-black 2 RGB 3 palette 5 CMYK 6 YCbCr
+(defn ^:pub ^I32 tr-nc [] (return 20))        ;; the colour samples of that kind
+(defn ^:pub ^I32 tr-alpha [] (return 21))     ;; 0 no alpha, 1 associated (premultiplied), 2 unassociated
+(defn ^:pub ^I32 tr-predictor [] (return 22)) ;; 1 or 2
+(defn ^:pub ^I32 tr-planar [] (return 23))    ;; 1: samples in separate planes
+(defn ^:pub ^I32 tr-fill2 [] (return 24))     ;; 1: FillOrder 2 (bits reversed in each byte)
+(defn ^:pub ^I32 tr-le [] (return 25))        ;; 1: little-endian
+(defn ^:pub ^I32 tr-tiled [] (return 26))
+(defn ^:pub ^I32 tr-cw [] (return 27))        ;; a chunk's width in pixels (the tile's, or the image's)
+(defn ^:pub ^I32 tr-band [] (return 28))      ;; a chunk's rows (the tile's, or the strip's)
+(defn ^:pub ^I32 tr-across [] (return 29))    ;; chunks across, and down
+(defn ^:pub ^I32 tr-down [] (return 30))
+(defn ^:pub ^I32 tr-hs [] (return 31))        ;; YCbCr subsampling, horizontal and vertical (1 otherwise)
+(defn ^:pub ^I32 tr-vs [] (return 32))
+(defn ^:pub ^I32 tr-planes [] (return 33))    ;; 1, or the samples a pixel when planar
+(defn ^:pub ^I32 tr-nchunks [] (return 34))   ;; chunks listed: across * down * planes
+(defn ^:pub ^I32 tr-cmap-at [] (return 35))   ;; where the colour map, the offsets and the byte counts are in the report
+(defn ^:pub ^I32 tr-offs-at [] (return 36))
+(defn ^:pub ^I32 tr-lens-at [] (return 37))
+
+(defconst ^I32 R_STATUS 0)
+(defconst ^I32 R_FRAMES 1)
+(defconst ^I32 R_W 2)
+(defconst ^I32 R_H 3)
+(defconst ^I32 R_OW 4)
+(defconst ^I32 R_OH 5)
+(defconst ^I32 R_CH 6)
+(defconst ^I32 R_DPI 7)
+(defconst ^I32 R_BILEVEL 8)
+(defconst ^I32 R_ORIENT 9)
+(defconst ^I32 R_LIMIT 10)
+(defconst ^I32 R_EO 11)
+(defconst ^I32 R_EX 12)
+(defconst ^I32 R_EY 13)
+(defconst ^I32 R_SPP 16)
+(defconst ^I32 R_BPS 17)
+(defconst ^I32 R_COMP 18)
+(defconst ^I32 R_KIND 19)
+(defconst ^I32 R_NC 20)
+(defconst ^I32 R_ALPHA 21)
+(defconst ^I32 R_PRED 22)
+(defconst ^I32 R_PLANAR 23)
+(defconst ^I32 R_FILL2 24)
+(defconst ^I32 R_LEFLAG 25)
+(defconst ^I32 R_TILED 26)
+(defconst ^I32 R_CW 27)
+(defconst ^I32 R_BAND 28)
+(defconst ^I32 R_ACROSS 29)
+(defconst ^I32 R_DOWN 30)
+(defconst ^I32 R_HS 31)
+(defconst ^I32 R_VS 32)
+(defconst ^I32 R_PLANES 33)
+(defconst ^I32 R_NCHUNKS 34)
+(defconst ^I32 R_CMAP_AT 35)
+(defconst ^I32 R_OFFS_AT 36)
+(defconst ^I32 R_LENS_AT 37)
+;; the validator's own registers
+(defconst ^I32 R_BASE 100)     ;; where the TIFF starts in the blob
+(defconst ^I32 R_SIZE 101)     ;; its length
+(defconst ^I32 R_LE 102)       ;; 1 little-endian
+(defconst ^I32 R_ERR 103)      ;; the first fault's status, 0 for none
+(defconst ^I32 R_FLOC 104)     ;; the field last found: where its values are, and the size of each
+(defconst ^I32 R_FSZ 105)
+(defconst ^I32 R_IFD 106)      ;; the directory in hand: its offset and entry count
+(defconst ^I32 R_NENT 107)
+(defconst ^I32 R_FIRST 108)    ;; the header's first directory
+(defconst ^I32 R_ARR 128)      ;; the arrays begin here
+
+(defconst ^I32 CAP_COUNT 16777216)   ;; the most values a field may claim
+(defconst ^I32 MAX_FRAMES 1048576)
+(defconst ^I32 MAX_TILE 1048576)     ;; the widest or tallest tile
+
+;; ------------------------------------------------------------- primitives
+
+(defn ^I32 tc-ret [^:mut ^Cells r ^I32 kind]
+  (comment "Note a fault (the first one stays) and answer the status the report now holds.")
+  (if (== (cells-at r R_ERR) 0) (cells-set r R_ERR kind))
+  (return (cells-at r R_ERR)))
+
+(defn ^I32 tc-inb [^Cells r ^I32 at ^I32 n]
+  (comment "1 when [at, at + n) lies inside the TIFF (`at` may be a 32-bit pattern, which is then past any size).")
+  (let [^I32 size (cells-at r R_SIZE)]
+    (if (< at 0) (return 0))
+    (if (> at size) (return 0))
+    (if (< n 0) (return 0))
+    (if (> n (- size at)) (return 0))
+    (return 1)))
+
+(defn ^I32 tc-u16 [^Blob t ^Cells r ^I32 at]
+  (let [^I32 i (+ (cells-at r R_BASE) at)]
+    (if (== (cells-at r R_LE) 1) (return (blob-u16le t i)))
+    (return (blob-u16 t i))))
+
+(defn ^I32 tc-u32 [^Blob t ^Cells r ^I32 at]
+  (let [^I32 i (+ (cells-at r R_BASE) at)]
+    (if (== (cells-at r R_LE) 1) (return (blob-u32le t i)))
+    (return (blob-u32 t i))))
+
+(defn ^I32 tc-find [^Blob t ^Cells r ^I32 tag]
+  (comment "The first entry of the directory in hand with this tag: its offset, or -1.")
+  (let [^I32 ifd (cells-at r R_IFD)
+        ^I32 n (cells-at r R_NENT)
+        ^:mut ^I32 i 0
+        ^:mut ^I32 e 0]
+    (while (< i n)
+      (do (set e (+ (+ ifd 2) (* i 12)))
+          (if (== (tc-u16 t r e) tag) (return e))
+          (set i (+ i 1))))
+    (return -1)))
+
+(defn ^I32 tc-field [^Blob t ^:mut ^Cells r ^I32 tag ^I32 most]
+  (comment "Find a BYTE, SHORT or LONG field and place its values: the count, or -1 when it is absent (or a fault: the")
+  (comment "register says). A field of another type, or of more than `most` values, or whose values are outside the file, is a")
+  (comment "fault.")
+  (let [^I32 e (tc-find t r tag)]
+    (if (< e 0) (return -1))
+    (let [^I32 ty (tc-u16 t r (+ e 2))
+          ^I32 cnt (tc-u32 t r (+ e 4))
+          ^:mut ^I32 sz 4
+          ^:mut ^I32 loc (+ e 8)]
+      (if (== ty 1) (set sz 1))
+      (if (== ty 3) (set sz 2))
+      (if (and (!= ty 1) (and (!= ty 3) (!= ty 4)))
+        (do (tc-ret r (ic-failed)) (return -1)))
+      (if (or (< cnt 0) (> cnt most))
+        (do (tc-ret r (ic-failed)) (return -1)))
+      (if (> (* sz cnt) 4)
+        (do (set loc (tc-u32 t r (+ e 8)))
+            (if (== (tc-inb r loc (* sz cnt)) 0)
+              (do (tc-ret r (ic-failed)) (return -1)))))
+      (cells-set r R_FLOC loc)
+      (cells-set r R_FSZ sz)
+      (return cnt))))
+
+(defn ^I32 tc-val [^Blob t ^Cells r ^I32 i]
+  (comment "The i-th value of the field last found, as a 32-bit pattern.")
+  (let [^I32 sz (cells-at r R_FSZ)
+        ^I32 at (+ (cells-at r R_FLOC) (* i sz))]
+    (if (== sz 1) (return (blob-u8 t (+ (cells-at r R_BASE) at))))
+    (if (== sz 2) (return (tc-u16 t r at)))
+    (return (tc-u32 t r at))))
+
+(defn ^I32 tc-int [^Blob t ^:mut ^Cells r ^I32 tag ^I32 dflt]
+  (comment "The first value of a field, or `dflt` when it is absent or has none (a fault is the register's).")
+  (let [^I32 c (tc-field t r tag CAP_COUNT)]
+    (if (< c 1) (return dflt))
+    (return (tc-val t r 0))))
+
+(defn ^I32 tc-dpi [^Blob t ^Cells r ^I32 tag ^I32 unit]
+  (comment "A RATIONAL resolution field as dots per inch x 100; 0 when it is absent, is not a rational or cannot be read.")
+  (let [^I32 e (tc-find t r tag)]
+    (if (< e 0) (return 0))
+    (let [^I32 ty (tc-u16 t r (+ e 2))
+              ^I32 cnt (tc-u32 t r (+ e 4))
+              ^I32 loc (tc-u32 t r (+ e 8))]
+      (if (or (!= ty 5) (== cnt 0)) (return 0))
+      (if (== (tc-inb r loc 8) 0) (return 0))
+      (return (ic-dpi (tc-u32 t r loc) (tc-u32 t r (+ loc 4)) unit)))))
+
+(defn ^I32 tc-ifd [^Blob t ^:mut ^Cells r ^I32 off]
+  (comment "Take the directory at `off`: not inside the header, its entries and the link after them in the file.")
+  (if (< off 8) (return (tc-ret r (ic-failed))))
+  (if (== (tc-inb r off 2) 0) (return (tc-ret r (ic-failed))))
+  (let [^I32 n (tc-u16 t r off)]
+    (if (== (tc-inb r (+ off 2) (+ (* n 12) 4)) 0) (return (tc-ret r (ic-failed))))
+    (cells-set r R_IFD off)
+    (cells-set r R_NENT n)
+    (return 0)))
+
+(defn ^I32 tc-head [^Blob t ^:mut ^Cells r]
+  (comment "The header: the byte order, the magic. 0, or the status of the refusal; the first directory goes to R_FIRST.")
+  (if (== (tc-inb r 0 8) 0) (return (tc-ret r (ic-failed))))
+  (let [^I32 a (blob-u8 t (cells-at r R_BASE))
+        ^I32 b (blob-u8 t (+ (cells-at r R_BASE) 1))
+        ^:mut ^I32 known 0]
+    (if (and (== a 73) (== b 73)) (do (cells-set r R_LE 1) (set known 1)))
+    (if (and (== a 77) (== b 77)) (do (cells-set r R_LE 0) (set known 1)))
+    (if (== known 0) (return (tc-ret r (ic-failed))))
+    (let [^I32 magic (tc-u16 t r 2)]
+      (if (== magic 43) (return (tc-ret r (ic-unsupported))))
+      (if (!= magic 42) (return (tc-ret r (ic-failed))))
+      (let [^I32 first (tc-u32 t r 4)]
+        (cells-set r R_FIRST first)
+        (return 0)))))
+
+;; ------------------------------------------------------------- the chain
+
+(defn ^I32 tc-valid [^Blob t ^Cells r ^I32 x]
+  (comment "1 when x is the offset of a directory (not 0) whose entry count and link can be read.")
+  (if (== x 0) (return 0))
+  (if (== (tc-inb r x 2) 0) (return 0))
+  (let [^I32 n (tc-u16 t r x)
+        ^I32 room (- (- (cells-at r R_SIZE) x) 6)]
+    (if (< room 0) (return 0))
+    (if (> (* n 12) room) (return 0))
+    (return 1)))
+
+(defn ^I32 tc-link [^Blob t ^Cells r ^I32 x]
+  (comment "The directory after x, when that is itself a good directory; else 0 (the end of the chain). A 0 stays 0.")
+  (if (== (tc-valid t r x) 0) (return 0))
+  (let [^I32 n (tc-u16 t r x)
+        ^I32 nx (tc-u32 t r (+ (+ x 2) (* n 12)))]
+    (if (== (tc-valid t r nx) 0) (return 0))
+    (return nx)))
+
+(defn ^I32 tc-count [^Blob t ^Cells r ^I32 x0]
+  (comment "How many directories the chain from x0 has: it ends at a link of 0 or one that does not lead to a good directory,")
+  (comment "at the first directory it comes to twice (a loop), or at MAX_FRAMES. Floyd's two pointers, 0 being where the chain")
+  (comment "stops: no memory and no scan of what was seen.")
+  (let [^:mut ^I32 tort (tc-link t r x0)
+        ^:mut ^I32 hare tort
+        ^:mut ^I32 steps 0
+        ^:mut ^I32 m 0
+        ^:mut ^I32 x x0]
+    (set hare (tc-link t r hare))
+    (while (and (!= tort hare) (< steps MAX_FRAMES))
+      (do (set tort (tc-link t r tort))
+          (set hare (tc-link t r hare))
+          (set hare (tc-link t r hare))
+          (set steps (+ steps 1))))
+    (if (!= tort hare) (return MAX_FRAMES))
+    (if (== tort 0)
+      (do (while (and (!= x 0) (< m MAX_FRAMES))
+            (do (set m (+ m 1))
+                (set x (tc-link t r x))))
+          (return m)))
+    ;; a loop: where it starts (mu), and how long it is (lam); the first directory seen twice is number mu + lam
+    (set tort x0)
+    (while (!= tort hare)
+      (do (set tort (tc-link t r tort))
+          (set hare (tc-link t r hare))
+          (set m (+ m 1))))
+    (set hare (tc-link t r tort))
+    (set steps 1)
+    (while (!= tort hare)
+      (do (set hare (tc-link t r hare))
+          (set steps (+ steps 1))))
+    (set m (+ m steps))
+    (if (> m MAX_FRAMES) (set m MAX_FRAMES))
+    (return m)))
+
+;; ------------------------------------------------------------- the frame
+
+(defn ^I32 tc-bad [^Cells r]
+  (comment "The register's fault, or 0.")
+  (return (cells-at r R_ERR)))
+
+(defn ^I32 tc-ceil [^I32 a ^I32 b]
+  (comment "ceil(a / b) for a >= 0, b > 0, without overflow.")
+  (return (i32 (quot (add64 (i64 a) (i64 (- b 1))) (i64 b)))))
+
+(defn ^I32 tc-frame [^Blob t ^:mut ^Cells r ^I32 deep]
+  (comment "The directory in hand, as a frame: everything the host needs, or why not. Tags are read in the order the hosts")
+  (comment "read them, so a file with two faults gets the first one's name.")
+  (let [^:mut ^I32 c 0
+        ^:mut ^I32 i 0
+        ^:mut ^I32 v 0
+        ^:mut ^I32 w 0
+        ^:mut ^I32 h 0
+        ^:mut ^I32 spp 1
+        ^:mut ^I32 bps 1
+        ^:mut ^I32 comp 1
+        ^:mut ^I32 kind 0
+        ^:mut ^I32 nc 1
+        ^:mut ^I32 alpha 0
+        ^:mut ^I32 planar 0
+        ^:mut ^I32 pred 1
+        ^:mut ^I32 orient 1
+        ^:mut ^I32 unit 2
+        ^:mut ^I32 rx 0
+        ^:mut ^I32 ry 0
+        ^:mut ^I32 ch 1
+        ^:mut ^I32 ow 0
+        ^:mut ^I32 oh 0
+        ^:mut ^I32 tiled 0
+        ^:mut ^I32 cw0 0
+        ^:mut ^I32 band 0
+        ^:mut ^I32 across 1
+        ^:mut ^I32 down 1
+        ^:mut ^I32 planes 1
+        ^:mut ^I32 tw 0
+        ^:mut ^I32 th 0
+        ^:mut ^I32 hs 1
+        ^:mut ^I32 vs 1
+        ^:mut ^I32 offs-tag 0
+        ^:mut ^I32 cnts-tag 0
+        ^:mut ^I32 noffs 0
+        ^:mut ^I32 ncnts 0
+        ^:mut ^I32 need 0
+        ^:mut ^I32 cm 0
+        ^:mut ^I32 offs-at 0
+        ^:mut ^I32 lens-at 0
+        ^:mut ^I32 off 0
+        ^:mut ^I32 n 0
+        ^:mut ^I64 area (i64 0)]
+    ;; the size
+    (set c (tc-field t r 256 CAP_COUNT))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (< c 1) (return (tc-ret r (ic-failed))))
+    (set w (tc-val t r 0))
+    (set c (tc-field t r 257 CAP_COUNT))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (< c 1) (return (tc-ret r (ic-failed))))
+    (set h (tc-val t r 0))
+    (if (or (== w 0) (== h 0)) (return (tc-ret r (ic-failed))))
+    ;; the samples
+    (set spp (tc-int t r 277 1))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (or (== spp 0) (or (< spp 0) (> spp 16))) (return (tc-ret r (ic-failed))))
+    (set c (tc-field t r 258 64))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (>= c 1)
+      (do (set bps (tc-val t r 0))
+          (set i 1)
+          (while (and (< i spp) (< i c))
+            (do (if (!= (tc-val t r i) bps) (return (tc-ret r (ic-unsupported))))
+                (set i (+ i 1))))))
+    (if (== bps 0) (return (tc-ret r (ic-failed))))
+    (if (or (< bps 0) (> bps 16)) (return (tc-ret r (ic-unsupported))))
+    ;; SampleFormat: 1 unsigned, 4 undefined (read as unsigned, as libtiff does); 2 signed and 3 float are not read
+    (set c (tc-field t r 339 64))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (set i 0)
+    (while (< i c)
+      (do (set v (tc-val t r i))
+          (if (and (!= v 1) (!= v 4)) (return (tc-ret r (ic-unsupported))))
+          (set i (+ i 1))))
+    (set comp (tc-int t r 259 1))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    ;; the photometric interpretation, and its default when the tag is missing
+    (set kind 1)
+    (if (>= spp 3) (set kind 2))
+    (if (or (== comp 3) (== comp 4)) (set kind 0))
+    (set c (tc-field t r 262 CAP_COUNT))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (>= c 1) (set kind (tc-val t r 0)))
+    (if (or (== kind 0) (or (== kind 1) (== kind 3))) (set nc 1))
+    (if (or (== kind 2) (== kind 6)) (set nc 3))
+    (if (== kind 5) (set nc 4))
+    (if (and (!= kind 0) (and (!= kind 1) (and (!= kind 2) (and (!= kind 3) (and (!= kind 5) (!= kind 6))))))
+      (return (tc-ret r (ic-unsupported))))
+    (if (< spp nc) (return (tc-ret r (ic-failed))))
+    (if (== kind 5)
+      (do (set v (tc-int t r 332 1))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (!= v 1) (return (tc-ret r (ic-unsupported))))))
+    ;; extra samples: 1 associated alpha, 2 unassociated; anything else is dropped
+    (if (> spp nc)
+      (do (set c (tc-field t r 338 64))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (>= c 1)
+            (do (set v (tc-val t r 0))
+                (if (== v 1) (set alpha 1))
+                (if (== v 2) (set alpha 2))))))
+    ;; the colour map of a palette image
+    (if (== kind 3)
+      (do (set c (tc-field t r 320 196608))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (< c 1) (return (tc-ret r (ic-failed))))
+          (if (< c (shl32 3 bps)) (return (tc-ret r (ic-failed))))))
+    (if (and (== kind 6) (or (!= bps 8) (!= spp 3))) (return (tc-ret r (ic-unsupported))))
+    (if (and (or (== comp 3) (== comp 4)) (or (!= bps 1) (!= spp 1))) (return (tc-ret r (ic-failed))))
+    (if (and (!= comp 1) (and (!= comp 3) (and (!= comp 4) (and (!= comp 5) (and (!= comp 8) (and (!= comp 32773) (!= comp 32946)))))))
+      (return (tc-ret r (ic-unsupported))))
+    ;; T4Options: bit 0 two-dimensional, bit 1 uncompressed mode, bit 2 fill bits before each EOL. They are refused on every host
+    ;; (D189: the hosts' CCITT readers of the day read none of them) and the fixtures `tiff-bilevel-g3-2d` and `-g3-fill` say so
+    (if (== comp 3)
+      (do (set v (tc-int t r 292 0))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (!= (bit-and v 7) 0) (return (tc-ret r (ic-unsupported))))))
+    (set v (tc-int t r 284 1))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (and (== v 2) (> spp 1)) (set planar 1))
+    (if (and (== planar 1) (== kind 6)) (return (tc-ret r (ic-unsupported))))
+    (set pred (tc-int t r 317 1))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (and (!= pred 1) (or (!= pred 2) (and (!= bps 8) (!= bps 16))))
+      (return (tc-ret r (ic-unsupported))))
+    (set v (tc-int t r 266 1))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (cells-set r R_FILL2 0)
+    (if (== v 2) (cells-set r R_FILL2 1))
+    (set v (tc-int t r 274 1))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (and (>= v 1) (<= v 8)) (set orient v))
+    (set unit (tc-int t r 296 2))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (set rx (tc-dpi t r 282 unit))
+    (set ry (tc-dpi t r 283 unit))
+    (set ow w)
+    (set oh h)
+    (if (>= orient 5)
+      (do (set ow h) (set oh w)))
+    (if (or (== kind 0) (== kind 1)) (set ch 1) (set ch 3))
+    ;; the pixels bound: a frame is refused from its header, before a byte of it is read
+    (if (or (< w 0) (< h 0))
+      (do (cells-set r R_LIMIT 2147483647)
+          (return (tc-ret r (ic-limit)))))
+    (set area (mul64 (i64 w) (i64 h)))
+    (if (> area (i64 (limit-of 9)))
+      (do (cells-set r R_LIMIT (ic-clamp area))
+          (return (tc-ret r (ic-limit)))))
+    (cells-set r R_W w)
+    (cells-set r R_H h)
+    (cells-set r R_OW ow)
+    (cells-set r R_OH oh)
+    (cells-set r R_CH ch)
+    (cells-set r R_DPI rx)
+    (if (>= orient 5) (cells-set r R_DPI ry))
+    (cells-set r R_BILEVEL 0)
+    (if (and (or (== kind 0) (== kind 1)) (== bps 1)) (cells-set r R_BILEVEL 1))
+    (cells-set r R_ORIENT orient)
+    (cells-set r R_SPP spp)
+    (cells-set r R_BPS bps)
+    (cells-set r R_COMP comp)
+    (cells-set r R_KIND kind)
+    (cells-set r R_NC nc)
+    (cells-set r R_ALPHA alpha)
+    (cells-set r R_PRED pred)
+    (cells-set r R_PLANAR planar)
+    (if (== deep 0) (return (ic-ok)))
+    ;; ---- the chunks: tiles or strips
+    (set c (tc-field t r 322 1))
+    (if (!= (tc-bad r) 0) (return (tc-bad r)))
+    (if (>= c 0) (set tiled 1))
+    (if (== tiled 1)
+      (do (set tw (tc-int t r 322 0))
+          (set th (tc-int t r 323 0))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (or (<= tw 0) (or (<= th 0) (or (> tw MAX_TILE) (> th MAX_TILE))))
+            (return (tc-ret r (ic-failed))))
+          (set area (mul64 (i64 tw) (i64 th)))
+          (if (> area (i64 (limit-of 9)))
+            (do (cells-set r R_LIMIT (ic-clamp area))
+                (return (tc-ret r (ic-limit)))))
+          (set cw0 tw)
+          (set band th)
+          (set across (tc-ceil w tw))
+          (set down (tc-ceil h th))
+          ;; some writers (SGI's) put a tiled image's offsets and counts in the strip tags: libtiff reads those too
+          (set offs-tag 324)
+          (set noffs (tc-field t r 324 CAP_COUNT))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (< noffs 0)
+            (do (set offs-tag 273)
+                (set noffs (tc-field t r 273 CAP_COUNT))
+                (if (!= (tc-bad r) 0) (return (tc-bad r)))))
+          (if (< noffs 0) (return (tc-ret r (ic-failed))))
+          (set cnts-tag 325)
+          (set ncnts (tc-field t r 325 CAP_COUNT))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (< ncnts 0)
+            (do (set cnts-tag 279)
+                (set ncnts (tc-field t r 279 CAP_COUNT))
+                (if (!= (tc-bad r) 0) (return (tc-bad r)))))
+          (if (< ncnts 0) (return (tc-ret r (ic-failed)))))
+      (do (set band (tc-int t r 278 h))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (or (<= band 0) (> band h)) (set band h))
+          (set cw0 w)
+          (set across 1)
+          (set down (tc-ceil h band))
+          (set offs-tag 273)
+          (set noffs (tc-field t r 273 CAP_COUNT))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (< noffs 0) (return (tc-ret r (ic-failed))))
+          (set cnts-tag 279)
+          (set ncnts (tc-field t r 279 CAP_COUNT))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (< ncnts 0) (set ncnts 0))))
+    (if (== planar 1) (set planes spp))
+    (set area (mul64 (mul64 (i64 across) (i64 down)) (i64 planes)))
+    (if (< (i64 noffs) area) (return (tc-ret r (ic-failed))))
+    (set need (i32 area))
+    ;; chroma subsampling
+    (if (== kind 6)
+      (do (set hs 2)
+          (set vs 2)
+          (set c (tc-field t r 530 2))
+          (if (!= (tc-bad r) 0) (return (tc-bad r)))
+          (if (>= c 0)
+            (do (if (!= c 2) (return (tc-ret r (ic-failed))))
+                (set hs (tc-val t r 0))
+                (set vs (tc-val t r 1))
+                (if (and (!= hs 1) (and (!= hs 2) (!= hs 4))) (return (tc-ret r (ic-failed))))
+                (if (and (!= vs 1) (and (!= vs 2) (!= vs 4))) (return (tc-ret r (ic-failed))))))))
+    ;; the arrays
+    (if (== kind 3) (set cm (shl32 3 bps)))
+    (set offs-at (+ R_ARR cm))
+    (set lens-at (+ offs-at need))
+    (cells-grow r (+ cm (* 2 need)) 0)
+    (if (== kind 3)
+      (do (set c (tc-field t r 320 196608))
+          (set i 0)
+          (while (< i cm)
+            (do (set v (tc-val t r i))
+                (cells-set r (+ R_ARR i) (bit-and v 65535))
+                (set i (+ i 1))))))
+    (set c (tc-field t r offs-tag CAP_COUNT))
+    (set i 0)
+    (while (< i need)
+      (do (set v (tc-val t r i))
+          (cells-set r (+ offs-at i) v)
+          (set i (+ i 1))))
+    (if (> ncnts 0) (set c (tc-field t r cnts-tag CAP_COUNT)))
+    (set i 0)
+    (while (< i need)
+      (do (set off (cells-at r (+ offs-at i)))
+          (if (< i ncnts)
+            (set n (tc-val t r i))
+            (do (if (!= need 1) (return (tc-ret r (ic-failed))))
+                (set n 0)
+                (if (and (>= off 0) (<= off (cells-at r R_SIZE)))
+                  (set n (- (cells-at r R_SIZE) off)))))
+          (if (== (tc-inb r off n) 0) (return (tc-ret r (ic-failed))))
+          (cells-set r (+ lens-at i) n)
+          (set i (+ i 1))))
+    (cells-set r R_TILED tiled)
+    (cells-set r R_CW cw0)
+    (cells-set r R_BAND band)
+    (cells-set r R_ACROSS across)
+    (cells-set r R_DOWN down)
+    (cells-set r R_HS hs)
+    (cells-set r R_VS vs)
+    (cells-set r R_PLANES planes)
+    (cells-set r R_NCHUNKS need)
+    (cells-set r R_CMAP_AT R_ARR)
+    (cells-set r R_OFFS_AT offs-at)
+    (cells-set r R_LENS_AT lens-at)
+    (return (ic-ok))))
+
+;; ------------------------------------------------------------- the entry
+
+(defn ^I32 tc-run [^Blob t ^I32 frame ^I32 deep ^:mut ^Cells r]
+  (let [^:mut ^I32 st (tc-head t r)]
+    (if (!= st 0) (return st))
+    (let [^I32 first (cells-at r R_FIRST)]
+      (if (== (tc-valid t r first) 0) (return (tc-ret r (ic-failed))))
+      (let [^I32 frames (tc-count t r first)
+            ^:mut ^I32 x first
+            ^:mut ^I32 i 0]
+        (cells-set r R_FRAMES frames)
+        (if (or (< frame 0) (>= frame frames)) (return (tc-ret r (ic-failed))))
+        (while (< i frame)
+          (do (set x (tc-link t r x))
+              (set i (+ i 1))))
+        (set st (tc-ifd t r x))
+        (if (!= st 0) (return st))
+        (return (tc-frame t r deep))))))
+
+(defn ^:pub ^I32 tc-check [^Blob t ^I32 frame ^I32 deep ^:mut ^Cells r]
+  (comment "See the head of the file. The answer is also in the report's `(tr-status)`.")
+  (cells-drop r 0)
+  (cells-grow r R_ARR 0)
+  (cells-set r R_SIZE (blob-len t))
+  (cells-set r R_EO 1)
+  (cells-set r R_ORIENT 1)
+  (cells-set r R_PRED 1)
+  (cells-set r R_HS 1)
+  (cells-set r R_VS 1)
+  (cells-set r R_PLANES 1)
+  (let [^I32 st (tc-run t frame deep r)]
+    (cells-set r R_STATUS st)
+    (cells-set r R_LEFLAG (cells-at r R_LE))
+    (return st)))
+
+(defn ^:pub ^I32 tc-exif [^Blob b ^I32 base ^I32 size ^:mut ^Cells r]
+  (comment "The first directory of an EXIF blob b[base, base + size): its orientation 1..8 as (tr-eo) and its horizontal and")
+  (comment "vertical resolution (tr-ex, tr-ey; dots per inch x 100, 0 unknown). A blob that does not read says (1, 0, 0). `r` may be")
+  (comment "any `Cells`, new or a report in use; it is grown to the report's registers if shorter and only the EXIF fields move.")
+  (if (< (cells-len r) R_ARR) (cells-grow r (- R_ARR (cells-len r)) 0))
+  (cells-set r R_EO 1)
+  (cells-set r R_EX 0)
+  (cells-set r R_EY 0)
+  (cells-set r R_ERR 0)
+  (if (or (< base 0) (or (< size 8) (> size (- (blob-len b) base)))) (return 0))
+  (cells-set r R_BASE base)
+  (cells-set r R_SIZE size)
+  (if (!= (tc-head b r) 0) (return 0))
+  (if (!= (tc-ifd b r (cells-at r R_FIRST)) 0) (return 0))
+  (let [^:mut ^I32 o (tc-int b r 274 1)
+        ^:mut ^I32 unit 2]
+    (cells-set r R_ERR 0)
+    (if (and (>= o 1) (<= o 8)) (cells-set r R_EO o))
+    (set unit (tc-int b r 296 2))
+    (cells-set r R_ERR 0)
+    (set o (tc-dpi b r 282 unit))
+    (cells-set r R_EX o)
+    (set o (tc-dpi b r 283 unit))
+    (cells-set r R_EY o)
+    (return 0)))

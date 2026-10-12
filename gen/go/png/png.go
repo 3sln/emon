@@ -42,7 +42,7 @@ const tIdat int32 = 1229209940
 
 const tIend int32 = 1229278788
 
-func pnCrcTable(ws *port.Cells, at int32) int32 {
+func PnCrcTable(ws *port.Cells, at int32) int32 {
 	// The table of CRC-32 (polynomial EDB88320, reflected) at ws[at..at+256).
 	var n int32 = 0
 	var c int32 = 0
@@ -129,7 +129,7 @@ func PngBegin(ws *port.Cells, out *port.Buf, z *port.Buf, w int32, h int32, ctyp
 	rowb = ((w * bits) + 7) / 8
 	bpp = (bits + 7) / 8
 	port.CellsGrow(ws, pnPrev+rowb, 0)
-	pnCrcTable(ws, b+pnCrc)
+	PnCrcTable(ws, b+pnCrc)
 	port.CellsSet(ws, b+pnW, w)
 	port.CellsSet(ws, b+pnH, h)
 	port.CellsSet(ws, b+pnCt, ctype)

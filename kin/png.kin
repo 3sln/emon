@@ -61,7 +61,7 @@
 
 ;; ------------------------------------------------------------------ CRC-32
 
-(defn ^I32 pn-crc-table [^:mut ^Cells ws ^I32 at]
+(defn ^:pub ^I32 pn-crc-table [^:mut ^Cells ws ^I32 at]
   (comment "The table of CRC-32 (polynomial EDB88320, reflected) at ws[at..at+256).")
   (let [^:mut ^I32 n 0
         ^:mut ^I32 c 0

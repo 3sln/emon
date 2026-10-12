@@ -232,7 +232,6 @@
       expect (fn [stem host]
                (cond (or (str/starts-with? stem "jpx") (str/starts-with? stem "jbig2")) :codec
                      (#{"dct-arith" "dct-size"} stem) :codec
-                     (and (= host :go) (#{"ccitt-g3-1d-align" "ccitt-g3-1d-noeol" "ccitt-g3-1d-align-noeol" "ccitt-g3-2d"} stem)) :codec
                      :else :decoded))
       wrong (atom []) n (atom 0) lossy (atom 0)]
   (when (and (have? "magick") (have? "pdfimages"))

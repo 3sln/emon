@@ -22,7 +22,7 @@ public static class Png {
     internal const int TPhys = 1883789683;
     internal const int TIdat = 1229209940;
     internal const int TIend = 1229278788;
-    internal static int PnCrcTable(emon.Port.Cells ws, int at) {
+    public static int PnCrcTable(emon.Port.Cells ws, int at) {
         // The table of CRC-32 (polynomial EDB88320, reflected) at ws[at..at+256).
         int n = 0;
         int c = 0;

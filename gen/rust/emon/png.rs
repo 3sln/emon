@@ -20,7 +20,7 @@ pub(crate) const T_TRNS: i32 = 1951551059;
 pub(crate) const T_PHYS: i32 = 1883789683;
 pub(crate) const T_IDAT: i32 = 1229209940;
 pub(crate) const T_IEND: i32 = 1229278788;
-pub(crate) fn pn_crc_table(mut ws: &mut crate::port::Cells, at: i32) -> i32 {
+pub fn pn_crc_table(mut ws: &mut crate::port::Cells, at: i32) -> i32 {
     // The table of CRC-32 (polynomial EDB88320, reflected) at ws[at..at+256).
     let mut n: i32 = 0;
     let mut c: i32 = 0;

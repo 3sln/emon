@@ -8,18 +8,19 @@
 //   DCT     `zune-jpeg` directly (the `image` crate's own JPEG decoder; the ImageDecode port's JPEG is the same library). 1 and 3
 //           components as the library decodes them; 4 components ONLY with an Adobe APP14 marker, converted to RGB honouring it
 //           (`dct4`). The Go host: `image/jpeg` and the same rules.
-//   CCITT   `fax`'s code tables (`fax::maps`, which the crate's own decoders use) under OUR row loop, because the crate's decoders
-//           read neither `EncodedByteAlign`, nor Group 3 without EOLs, nor Group 3 two-dimensional. The loop is the standard's
-//           (T.4, T.6), over `Columns` and `Rows`, `BlackIs1`, `EncodedByteAlign`, `EndOfLine`, `EndOfBlock`. The Go host:
-//           `golang.org/x/image/ccitt`, which reads Group 4 (with alignment) and Group 3 one-dimensional with EOLs, and refuses
-//           the rest: THE TWO HOSTS AGREE WHERE BOTH DECODE.
+//   CCITT   kin's `emon.ccitt` (P10.11, D396(4)): no platform library reads the whole family (`fax` neither `EncodedByteAlign`, nor
+//           Group 3 without EOLs, nor Group 3 two-dimensional; Go's `x/image/ccitt` no two-dimensional Group 3 and no fill bits), so
+//           one decoder written from T.4 and T.6 serves TIFF and PDF on every host. The host only paints its packed rows with
+//           `BlackIs1` and the image's size. THE TWO HOSTS READ THE SAME SET.
 //   JPX     the embedder's `PdfCodecs` (OpenJPEG through `pdfcodecs.rs`, `--cfg codecs`), else `unsupported`. Go: `unsupported`.
 //   JBIG2   the same with jbig2dec; its globals are given with the image.
 //
 // A damaged stream is `Fail::Failed`; a valid one this host does not read is `Fail::Unsupported`; one over the pixel bound is
 // `Fail::Limit`. Nothing here names a filesystem (D058).
 
+use crate::emon::ccitt as kccitt;
 use crate::imgdec;
+use crate::port::{Buf, Cells};
 use zune_core::bytestream::ZCursor;
 use zune_core::colorspace::ColorSpace;
 use zune_core::options::DecoderOptions;
@@ -242,239 +243,6 @@ fn dct(data: &[u8], max_pixels: u64) -> Result<Pix, CodecFail> {
 
 // ----------------------------------------------------------------------------- CCITT
 
-// A bit reader over a slice for `fax::maps`' tables: MSB first, and at the end of the data a peek pads with zeros (a code that
-// ends the stream is still read), while a consume past the end is an error.
-struct Bits<'a> {
-    d: &'a [u8],
-    pos: usize,
-}
-
-impl<'a> Bits<'a> {
-    fn left(&self) -> usize {
-        self.d.len() * 8 - self.pos
-    }
-    fn align(&mut self) {
-        self.pos = (self.pos + 7) & !7;
-    }
-}
-
-impl<'a> fax::BitReader for Bits<'a> {
-    type Error = ();
-    fn peek(&self, bits: u8) -> Option<u16> {
-        if bits > 16 || self.left() == 0 {
-            return None;
-        }
-        let mut v: u32 = 0;
-        for i in 0..bits as usize {
-            let p = self.pos + i;
-            let bit = if p < self.d.len() * 8 { (self.d[p / 8] >> (7 - p % 8)) & 1 } else { 0 };
-            v = (v << 1) | bit as u32;
-        }
-        Some(v as u16)
-    }
-    fn consume(&mut self, bits: u8) -> Result<(), ()> {
-        if self.left() < bits as usize {
-            self.pos = self.d.len() * 8;
-            return Err(());
-        }
-        self.pos += bits as usize;
-        Ok(())
-    }
-    fn bits_to_byte_boundary(&self) -> u8 {
-        ((8 - self.pos % 8) % 8) as u8
-    }
-}
-
-// a run of `black` or white pixels: make-up codes (>= 64) add up until a terminating code
-fn run(black: bool, r: &mut Bits) -> Option<i64> {
-    let mut sum: i64 = 0;
-    loop {
-        let n = if black { fax::maps::black::decode(r) } else { fax::maps::white::decode(r) }? as i64;
-        sum += n;
-        if n < 64 {
-            return Some(sum);
-        }
-        if sum > (1 << 24) {
-            return None;
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-enum RowEnd {
-    Row,
-    // the end of the data: EOFB, RTC, or nothing left
-    End,
-}
-
-// One row's changing elements into `cur` (positions where the colour flips, the first from white to black; at most `cols`).
-// `two_d`: a two-dimensional row against `refl`.
-fn decode_row(r: &mut Bits, cols: i64, two_d: bool, refl: &[i64], cur: &mut Vec<i64>) -> Result<(), ()> {
-    cur.clear();
-    let mut a0: i64 = -1;
-    let mut black = false;
-    if !two_d {
-        let mut x: i64 = 0;
-        while x < cols {
-            let n = run(black, r).ok_or(())?;
-            x += n;
-            if x > cols {
-                return Err(());
-            }
-            if x < cols {
-                cur.push(x);
-            }
-            black = !black;
-        }
-        return Ok(());
-    }
-    let mut bi = 0usize;
-    while a0 < cols {
-        // b1: the first change right of a0 to the colour opposite a0's (even index: to black)
-        let n = refl.len();
-        if bi > n {
-            bi = n;
-        }
-        while bi > 0 && refl[bi - 1] > a0 {
-            bi -= 1;
-        }
-        while bi < n && refl[bi] <= a0 {
-            bi += 1;
-        }
-        let j = if (bi % 2 == 1) != black { bi + 1 } else { bi };
-        let b1 = if j < n { refl[j] } else { cols };
-        let b2 = if j + 1 < n { refl[j + 1] } else { cols };
-        match fax::maps::mode::decode(r).ok_or(())? {
-            fax::maps::Mode::Pass => {
-                a0 = b2;
-            }
-            fax::maps::Mode::Horizontal => {
-                let r1 = run(black, r).ok_or(())?;
-                let r2 = run(!black, r).ok_or(())?;
-                let s = if a0 < 0 { 0 } else { a0 };
-                let a1 = s + r1;
-                let a2 = a1 + r2;
-                if a2 > cols {
-                    return Err(());
-                }
-                if a1 < cols {
-                    cur.push(a1);
-                }
-                if a2 < cols {
-                    cur.push(a2);
-                }
-                a0 = a2;
-            }
-            fax::maps::Mode::Vertical(d) => {
-                // a1 is right of a0 (a0 is -1, imaginary, at the start of a row)
-                let a1 = b1 + d as i64;
-                if a1 < 0 || a1 > cols || a1 <= a0 {
-                    return Err(());
-                }
-                if a1 < cols {
-                    cur.push(a1);
-                }
-                black = !black;
-                a0 = a1;
-            }
-            _ => return Err(()),
-        }
-    }
-    Ok(())
-}
-
-// An EOL next (T.4): any number of fill zeros, eleven zeros in all or more, and a one. How many bits it takes, fill included.
-// (No code starts with eight zeros, so a run of eleven is an EOL and never the padding that precedes a byte-aligned row.)
-fn eol_len(r: &Bits) -> Option<usize> {
-    let total = r.d.len() * 8;
-    let mut p = r.pos;
-    while p < total && (r.d[p / 8] >> (7 - p % 8)) & 1 == 0 {
-        p += 1;
-    }
-    if p < total && p - r.pos >= 11 {
-        Some(p + 1 - r.pos)
-    } else {
-        None
-    }
-}
-
-// CCITT `data` -> `rows` rows of `cols` pixels, one byte a pixel (1 black, 0 white), as the PDF's parameters say
-fn ccitt_rows(a: &Args, data: &[u8], cols: usize, rows: usize) -> Result<Vec<u8>, CodecFail> {
-    let align = a.flags & 2 != 0;
-    let eol_wanted = a.flags & 4 != 0;
-    let k = a.k;
-    let mut r = Bits { d: data, pos: 0 };
-    let mut out = vec![0u8; cols * rows];
-    let mut refl: Vec<i64> = Vec::new();
-    let mut cur: Vec<i64> = Vec::new();
-    let bad = || CodecFail::Failed("a bad or short CCITT stream".to_string());
-    let mut y = 0usize;
-    while y < rows {
-        let mut two_d = k < 0;
-        if k >= 0 {
-            // Group 3: fill bits and an EOL before the row (required when EndOfLine says so, permitted always); K > 0: a tag bit
-            // after it says one-dimensional (1) or two-dimensional (0). RTC (six EOLs) ends the data
-            let mut seen = 0;
-            while let Some(n) = eol_len(&r) {
-                r.pos += n;
-                seen += 1;
-                if k > 0 && fax::BitReader::peek(&r, 1).is_some() {
-                    two_d = fax::BitReader::peek(&r, 1) == Some(0);
-                    let _ = fax::BitReader::consume(&mut r, 1);
-                }
-            }
-            // two EOLs in a row are the data's end (RTC), and rows are still owed
-            if seen >= 2 {
-                return Err(bad());
-            }
-            if seen == 0 {
-                // no EOL: two-dimensional coding and `EndOfLine` need one; otherwise a row begins where the last ended
-                // (on a byte boundary under `EncodedByteAlign`)
-                if k > 0 || eol_wanted {
-                    return Err(bad());
-                }
-                if align {
-                    r.align();
-                }
-            }
-        } else {
-            if align {
-                r.align();
-            }
-            // EOFB
-            if fax::BitReader::peek(&r, 12) == Some(1) {
-                return Err(bad());
-            }
-        }
-        if r.left() == 0 {
-            return Err(bad());
-        }
-        decode_row(&mut r, cols as i64, two_d, &refl, &mut cur).map_err(|_| bad())?;
-        // paint: changes alternate white -> black, black -> white
-        let row = &mut out[y * cols..(y + 1) * cols];
-        let mut x = 0usize;
-        let mut black = false;
-        for &p in cur.iter() {
-            let e = std::cmp::min(p.max(0) as usize, cols);
-            if black {
-                for v in row[x..e].iter_mut() {
-                    *v = 1;
-                }
-            }
-            x = std::cmp::max(x, e);
-            black = !black;
-        }
-        if black {
-            for v in row[x..].iter_mut() {
-                *v = 1;
-            }
-        }
-        std::mem::swap(&mut refl, &mut cur);
-        y += 1;
-    }
-    Ok(out)
-}
-
 fn ccitt(a: &Args, data: &[u8], max_pixels: u64) -> Result<Pix, CodecFail> {
     if a.w < 1 || a.h < 1 || a.columns < 1 {
         return failed("a CCITT image with no size");
@@ -488,14 +256,25 @@ fn ccitt(a: &Args, data: &[u8], max_pixels: u64) -> Result<Pix, CodecFail> {
     let (w, h, cols) = (a.w as usize, a.h as usize, a.columns as usize);
     // the rows the stream has: `Rows`, or the image's height
     let rows = if a.rows > 0 { std::cmp::min(a.rows as usize, h) } else { h };
-    let bits = ccitt_rows(a, data, cols, rows)?;
+    // the stream's own area (`Columns` need not be the image's width) is held to the pixel bound too
+    if (cols as u64) * (rows as u64) > max_pixels {
+        return Err(CodecFail::Limit((cols as u64) * (rows as u64)));
+    }
+    // the one CCITT decoder (kin's `emon.ccitt`, TIFF's too): T.4 and T.6 over `K`, `Columns`, `Rows`, `EncodedByteAlign` and
+    // `EndOfLine`; the rows come packed, high bit first, 1 for black
+    let mut ws = Cells::new();
+    let mut bits = Buf(vec![0u8; ((cols + 7) / 8) * rows]);
+    if kccitt::cc_decode(data, 0, data.len() as i32, a.k, cols as i32, rows as i32, a.flags & 6, &mut bits, &mut ws) != kccitt::cc_ok() {
+        return failed("a bad or short CCITT stream");
+    }
+    let (stride, bits) = ((cols + 7) / 8, &bits.0);
     // the image's size: rows below the stream's and columns past `Columns` are white
     let black_is_1 = a.flags & 1 != 0;
     let (blk, wht) = if black_is_1 { (255u8, 0u8) } else { (0u8, 255u8) };
     let mut px = vec![wht; w * h];
     for y in 0..rows {
         for x in 0..std::cmp::min(w, cols) {
-            if bits[y * cols + x] == 1 {
+            if (bits[y * stride + x / 8] >> (7 - x % 8)) & 1 == 1 {
                 px[y * w + x] = blk;
             }
         }
