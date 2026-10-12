@@ -49,7 +49,7 @@ pub fn sp_min_ink() -> i32 {
     return 40;
 }
 pub fn sp_gap() -> i32 {
-    // How far above its rule (centipoints) a pen's lowest ink may end at least: 16 pt (D1040).
+    // How far above its rule (centipoints) a pen's lowest ink may end at least: 16 pt (D466).
     return 1600;
 }
 pub fn sp_max() -> i32 {
@@ -159,7 +159,7 @@ pub(crate) fn sp_framed(page1: i32, rules: &mut crate::port::Cells, r: i32, pw: 
             sy0 = rl_get(rules, s, rlf_y0());
             sx1 = rl_get(rules, s, rlf_x1());
             sy1 = rl_get(rules, s, rlf_y1());
-            // a vertical rule at least 10 pt long that meets the rule's row at its ends or between them is a cell border of a ruled table (D1040)
+            // a vertical rule at least 10 pt long that meets the rule's row at its ends or between them is a cell border of a ruled table (D466)
             if ((sy1 - sy0) >= 1000) && ((sx1 - sx0) <= 600) {
                 if (sy0 <= (ry + 300)) && (sy1 >= (ry - 300)) {
                     if (sx0 >= (rx0 - 300)) && (sx0 <= (rx1 + 300)) {
@@ -167,7 +167,7 @@ pub(crate) fn sp_framed(page1: i32, rules: &mut crate::port::Cells, r: i32, pw: 
                     }
                 }
             }
-            // a rule on the same line that ends where this one begins or begins where it ends (within 6 pt, 4 pt of height) is the next cell of a table's row (D1040)
+            // a rule on the same line that ends where this one begins or begins where it ends (within 6 pt, 4 pt of height) is the next cell of a table's row (D466)
             if ((sx1 - sx0) >= 6000) && (((sy1 - sy0) * 20) <= (sx1 - sx0)) {
                 if sp_abs(((sy0 + sy1) / 2) - ry) <= 400 {
                     if (sp_abs(sx0 - rx1) <= 600) || (sp_abs(sx1 - rx0) <= 600) {
@@ -183,7 +183,7 @@ pub(crate) fn sp_framed(page1: i32, rules: &mut crate::port::Cells, r: i32, pw: 
                     }
                 }
             }
-            // a long flat line (a scan's skew thickens its box: 1 in 20) up to 28 pt above, as long as this rule or more, is a table's row line (D1040)
+            // a long flat line (a scan's skew thickens its box: 1 in 20) up to 28 pt above, as long as this rule or more, is a table's row line (D466)
             if ((sx1 - sx0) >= 6000) && (((sy1 - sy0) * 20) <= (sx1 - sx0)) {
                 ymid = (sy0 + sy1) / 2;
                 if (ymid < ry) && ((ry - ymid) <= 2800) {
@@ -201,7 +201,7 @@ pub(crate) fn sp_framed(page1: i32, rules: &mut crate::port::Cells, r: i32, pw: 
     return 0;
 }
 pub(crate) fn sp_mask_words(page1: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, views: &mut crate::port::Cells, srcview: i32, zx0: i32, zy0: i32, zw: i32, zh: i32, mut mask: &mut crate::port::Cells) -> i32 {
-    // Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D1040; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.
+    // Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D466; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.
     let n: i32 = ow_count(owords);
     let mut i: i32 = 0;
     let mut made: i32 = 0;
@@ -459,7 +459,7 @@ pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32,
     if (w > sg_sig_max_w()) || (h > sg_sig_max_h()) {
         return 0;
     }
-    // the pen is ON its line: the ink's foot is within `sp-gap` of the rule or 40 per cent of the ink's height, whichever is more (D1040: a stamp above a line is no signature)
+    // the pen is ON its line: the ink's foot is within `sp-gap` of the rule or 40 per cent of the ink's height, whichever is more (D466: a stamp above a line is no signature)
     gap = (h * 2) / 5;
     if gap < sp_gap() {
         gap = sp_gap();

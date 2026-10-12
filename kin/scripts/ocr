@@ -306,7 +306,7 @@
 ;; transcript of such a page is not what the engine did. Here: both Engines replay to the IDENTICAL bundle, the text is the transcript's
 ;; (the Model has `ocr` sources), and the `emon-replay-px` ratchet holds `scan/forms` (a table's rows on a tilted scan, D391) and, since
 ;; D459, the colour and overlay scans that D391 once broke: `scan-ovl/forms` (an invoice whose table has text after it) and
-;; `scan-color/graphics` (a table whose narrow last column was also a margin note) and, since D1041, `scan/seals` (a scan with a seal and a stamp,
+;; `scan-color/graphics` (a table whose narrow last column was also a margin note) and, since D467, `scan/seals` (a scan with a seal and a stamp,
 ;; a "Signed:" line and NO signature: the strokes of a stamp over a signature line were a signature, P8.3).
 (def px-dir "test/ocr/scan-px")
 ;; a directory ID is the scan ID.pdf; VARIANT--ID is the colour or overlay scan VARIANT/ID.pdf (D459)
