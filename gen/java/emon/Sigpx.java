@@ -45,6 +45,10 @@ public final class Sigpx {
         // The fewest ink pixels a signature has.
         return 40;
     }
+    public static int spGap() {
+        // How far above its rule (centipoints) a pen's lowest ink may end at least: 16 pt (D1040).
+        return 1600;
+    }
     public static int spMax() {
         // The most candidates of a page (the most rules looked at).
         return 8;
@@ -152,9 +156,18 @@ public final class Sigpx {
                 sy0 = Evidence.rlGet(rules, s, Evidence.rlfY0());
                 sx1 = Evidence.rlGet(rules, s, Evidence.rlfX1());
                 sy1 = Evidence.rlGet(rules, s, Evidence.rlfY1());
-                if (((sy1 - sy0) >= 2000) && ((sx1 - sx0) <= 600)) {
+                // a vertical rule at least 10 pt long that meets the rule's row at its ends or between them is a cell border of a ruled table (D1040)
+                if (((sy1 - sy0) >= 1000) && ((sx1 - sx0) <= 600)) {
                     if ((sy0 <= (ry + 300)) && (sy1 >= (ry - 300))) {
-                        if ((spAbs(sx0 - rx0) <= 300) || (spAbs(sx0 - rx1) <= 300)) {
+                        if ((sx0 >= (rx0 - 300)) && (sx0 <= (rx1 + 300))) {
+                            return 1;
+                        }
+                    }
+                }
+                // a rule on the same line that ends where this one begins or begins where it ends (within 6 pt, 4 pt of height) is the next cell of a table's row (D1040)
+                if (((sx1 - sx0) >= 6000) && (((sy1 - sy0) * 20) <= (sx1 - sx0))) {
+                    if (spAbs(((sy0 + sy1) / 2) - ry) <= 400) {
+                        if ((spAbs(sx0 - rx1) <= 600) || (spAbs(sx1 - rx0) <= 600)) {
                             return 1;
                         }
                     }
@@ -167,6 +180,15 @@ public final class Sigpx {
                         }
                     }
                 }
+                // a long flat line (a scan's skew thickens its box: 1 in 20) up to 28 pt above, as long as this rule or more, is a table's row line (D1040)
+                if (((sx1 - sx0) >= 6000) && (((sy1 - sy0) * 20) <= (sx1 - sx0))) {
+                    ymid = (sy0 + sy1) / 2;
+                    if ((ymid < ry) && ((ry - ymid) <= 2800)) {
+                        if ((2 * spOverlap(rx0, rx1, sx0, sx1)) >= (rx1 - rx0)) {
+                            return 1;
+                        }
+                    }
+                }
             }
             s += 1;
         }
@@ -176,7 +198,7 @@ public final class Sigpx {
         return 0;
     }
     public static int spMaskWords(int page1, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells views, int srcview, int zx0, int zy0, int zw, int zh, emon.Port.Cells mask) {
-        // Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters, inside the zone (px zx0, zy0, zw x zh). Answers the words.
+        // Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D1040; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.
         int n = Evidence.owCount(owords);
         int i = 0;
         int made = 0;
@@ -199,6 +221,9 @@ public final class Sigpx {
                     k = 0;
                     while (k < tl) {
                         if (Sealfield.sfScript(emon.Port.cellsAt(etext, ts + k)) > 0) {
+                            letters += 1;
+                        }
+                        if (Sealfield.sfDigit(emon.Port.cellsAt(etext, ts + k)) >= 0) {
                             letters += 1;
                         }
                         k += 1;
@@ -392,7 +417,7 @@ public final class Sigpx {
         emon.Port.cellsPush(cand, 0);
         return 1;
     }
-    public static int spJudge(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, int row, int zx0, int zy0, emon.Port.Cells mask, int n, emon.Port.Cells cand) {
+    public static int spJudge(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, emon.Port.Cells rules, int row, int zx0, int zy0, emon.Port.Cells mask, int n, emon.Port.Cells cand) {
         // Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
         // signature or initials. Answers 1 when added.
         int ink = emon.Port.cellsAt(mask, n + 132);
@@ -413,6 +438,7 @@ public final class Sigpx {
         int mh = spMedian(mask, n, nh);
         int mv = spMedian(mask, n + 64, nv);
         int sw = 1;
+        int gap = 0;
         int swc = 0;
         int kind = 0;
         int conf = 0;
@@ -428,6 +454,14 @@ public final class Sigpx {
             return 0;
         }
         if ((w > Sigmark.sgSigMaxW()) || (h > Sigmark.sgSigMaxH())) {
+            return 0;
+        }
+        // the pen is ON its line: the ink's foot is within `sp-gap` of the rule or 40 per cent of the ink's height, whichever is more (D1040: a stamp above a line is no signature)
+        gap = (h * 2) / 5;
+        if (gap < spGap()) {
+            gap = spGap();
+        }
+        if ((y1 + gap) < ((Evidence.rlGet(rules, row, Evidence.rlfY0()) + Evidence.rlGet(rules, row, Evidence.rlfY1())) / 2)) {
             return 0;
         }
         sw = mh;
@@ -523,7 +557,7 @@ public final class Sigpx {
         if (ink < spMinInk()) {
             return 0;
         }
-        return spJudge(page1, views, srcview, owords, etext, src, r, zx0, zy0, mask, zw * zh, cand);
+        return spJudge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw * zh, cand);
     }
     public static int spFind(int page1, emon.Port.Cells views, int srcview, emon.Port.Cells rules, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Bitmap src, int pw, emon.Port.Cells cand, emon.Port.Cells mask) {
         // The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared

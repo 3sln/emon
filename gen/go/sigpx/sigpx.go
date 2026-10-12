@@ -63,6 +63,11 @@ func SpMinInk() int32 {
 	return 40
 }
 
+func SpGap() int32 {
+	// How far above its rule (centipoints) a pen's lowest ink may end at least: 16 pt (D1040).
+	return 1600
+}
+
 func SpMax() int32 {
 	// The most candidates of a page (the most rules looked at).
 	return 8
@@ -179,9 +184,18 @@ func spFramed(page1 int32, rules *port.Cells, r int32, pw int32) int32 {
 			sy0 = evidence.RlGet(rules, s, evidence.RlfY0())
 			sx1 = evidence.RlGet(rules, s, evidence.RlfX1())
 			sy1 = evidence.RlGet(rules, s, evidence.RlfY1())
-			if ((sy1 - sy0) >= 2000) && ((sx1 - sx0) <= 600) {
+			// a vertical rule at least 10 pt long that meets the rule's row at its ends or between them is a cell border of a ruled table (D1040)
+			if ((sy1 - sy0) >= 1000) && ((sx1 - sx0) <= 600) {
 				if (sy0 <= (ry + 300)) && (sy1 >= (ry - 300)) {
-					if (spAbs(sx0-rx0) <= 300) || (spAbs(sx0-rx1) <= 300) {
+					if (sx0 >= (rx0 - 300)) && (sx0 <= (rx1 + 300)) {
+						return 1
+					}
+				}
+			}
+			// a rule on the same line that ends where this one begins or begins where it ends (within 6 pt, 4 pt of height) is the next cell of a table's row (D1040)
+			if ((sx1 - sx0) >= 6000) && (((sy1 - sy0) * 20) <= (sx1 - sx0)) {
+				if spAbs(((sy0+sy1)/2)-ry) <= 400 {
+					if (spAbs(sx0-rx1) <= 600) || (spAbs(sx1-rx0) <= 600) {
 						return 1
 					}
 				}
@@ -191,6 +205,15 @@ func spFramed(page1 int32, rules *port.Cells, r int32, pw int32) int32 {
 				if (spAbs(ymid-ry) > 200) && (spAbs(ymid-ry) <= 4000) {
 					if (2 * spOverlap(rx0, rx1, sx0, sx1)) >= (rx1 - rx0) {
 						others += 1
+					}
+				}
+			}
+			// a long flat line (a scan's skew thickens its box: 1 in 20) up to 28 pt above, as long as this rule or more, is a table's row line (D1040)
+			if ((sx1 - sx0) >= 6000) && (((sy1 - sy0) * 20) <= (sx1 - sx0)) {
+				ymid = (sy0 + sy1) / 2
+				if (ymid < ry) && ((ry - ymid) <= 2800) {
+					if (2 * spOverlap(rx0, rx1, sx0, sx1)) >= (rx1 - rx0) {
+						return 1
 					}
 				}
 			}
@@ -204,7 +227,7 @@ func spFramed(page1 int32, rules *port.Cells, r int32, pw int32) int32 {
 }
 
 func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port.Cells, srcview int32, zx0 int32, zy0 int32, zw int32, zh int32, mask *port.Cells) int32 {
-	// Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters, inside the zone (px zx0, zy0, zw x zh). Answers the words.
+	// Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D1040; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.
 	var n int32 = evidence.OwCount(owords)
 	var i int32 = 0
 	var made int32 = 0
@@ -227,6 +250,9 @@ func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port
 				k = 0
 				for k < tl {
 					if sealfield.SfScript(port.CellsAt(etext, ts+k)) > 0 {
+						letters += 1
+					}
+					if sealfield.SfDigit(port.CellsAt(etext, ts+k)) >= 0 {
 						letters += 1
 					}
 					k += 1
@@ -425,7 +451,7 @@ func spAdd(cand *port.Cells, kind int32, row int32, x0 int32, y0 int32, x1 int32
 	return 1
 }
 
-func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, etext *port.Cells, src *port.Bitmap, row int32, zx0 int32, zy0 int32, mask *port.Cells, n int32, cand *port.Cells) int32 {
+func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, etext *port.Cells, src *port.Bitmap, rules *port.Cells, row int32, zx0 int32, zy0 int32, mask *port.Cells, n int32, cand *port.Cells) int32 {
 	// Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
 	// signature or initials. Answers 1 when added.
 	var ink int32 = port.CellsAt(mask, n+132)
@@ -446,6 +472,7 @@ func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, 
 	var mh int32 = spMedian(mask, n, nh)
 	var mv int32 = spMedian(mask, n+64, nv)
 	var sw int32 = 1
+	var gap int32 = 0
 	var swc int32 = 0
 	var kind int32 = 0
 	var conf int32 = 0
@@ -461,6 +488,14 @@ func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, 
 		return 0
 	}
 	if (w > sigmark.SgSigMaxW()) || (h > sigmark.SgSigMaxH()) {
+		return 0
+	}
+	// the pen is ON its line: the ink's foot is within `sp-gap` of the rule or 40 per cent of the ink's height, whichever is more (D1040: a stamp above a line is no signature)
+	gap = (h * 2) / 5
+	if gap < SpGap() {
+		gap = SpGap()
+	}
+	if (y1 + gap) < ((evidence.RlGet(rules, row, evidence.RlfY0()) + evidence.RlGet(rules, row, evidence.RlfY1())) / 2) {
 		return 0
 	}
 	sw = mh
@@ -557,7 +592,7 @@ func spZone(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, e
 	if ink < SpMinInk() {
 		return 0
 	}
-	return spJudge(page1, views, srcview, owords, etext, src, r, zx0, zy0, mask, zw*zh, cand)
+	return spJudge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw*zh, cand)
 }
 
 func SpFind(page1 int32, views *port.Cells, srcview int32, rules *port.Cells, owords *port.Cells, etext *port.Cells, src *port.Bitmap, pw int32, cand *port.Cells, mask *port.Cells) int32 {

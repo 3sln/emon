@@ -48,6 +48,10 @@ pub fn sp_min_ink() -> i32 {
     // The fewest ink pixels a signature has.
     return 40;
 }
+pub fn sp_gap() -> i32 {
+    // How far above its rule (centipoints) a pen's lowest ink may end at least: 16 pt (D1040).
+    return 1600;
+}
 pub fn sp_max() -> i32 {
     // The most candidates of a page (the most rules looked at).
     return 8;
@@ -155,9 +159,18 @@ pub(crate) fn sp_framed(page1: i32, rules: &mut crate::port::Cells, r: i32, pw: 
             sy0 = rl_get(rules, s, rlf_y0());
             sx1 = rl_get(rules, s, rlf_x1());
             sy1 = rl_get(rules, s, rlf_y1());
-            if ((sy1 - sy0) >= 2000) && ((sx1 - sx0) <= 600) {
+            // a vertical rule at least 10 pt long that meets the rule's row at its ends or between them is a cell border of a ruled table (D1040)
+            if ((sy1 - sy0) >= 1000) && ((sx1 - sx0) <= 600) {
                 if (sy0 <= (ry + 300)) && (sy1 >= (ry - 300)) {
-                    if (sp_abs(sx0 - rx0) <= 300) || (sp_abs(sx0 - rx1) <= 300) {
+                    if (sx0 >= (rx0 - 300)) && (sx0 <= (rx1 + 300)) {
+                        return 1;
+                    }
+                }
+            }
+            // a rule on the same line that ends where this one begins or begins where it ends (within 6 pt, 4 pt of height) is the next cell of a table's row (D1040)
+            if ((sx1 - sx0) >= 6000) && (((sy1 - sy0) * 20) <= (sx1 - sx0)) {
+                if sp_abs(((sy0 + sy1) / 2) - ry) <= 400 {
+                    if (sp_abs(sx0 - rx1) <= 600) || (sp_abs(sx1 - rx0) <= 600) {
                         return 1;
                     }
                 }
@@ -170,6 +183,15 @@ pub(crate) fn sp_framed(page1: i32, rules: &mut crate::port::Cells, r: i32, pw: 
                     }
                 }
             }
+            // a long flat line (a scan's skew thickens its box: 1 in 20) up to 28 pt above, as long as this rule or more, is a table's row line (D1040)
+            if ((sx1 - sx0) >= 6000) && (((sy1 - sy0) * 20) <= (sx1 - sx0)) {
+                ymid = (sy0 + sy1) / 2;
+                if (ymid < ry) && ((ry - ymid) <= 2800) {
+                    if (2 * sp_overlap(rx0, rx1, sx0, sx1)) >= (rx1 - rx0) {
+                        return 1;
+                    }
+                }
+            }
         }
         s += 1;
     }
@@ -179,7 +201,7 @@ pub(crate) fn sp_framed(page1: i32, rules: &mut crate::port::Cells, r: i32, pw: 
     return 0;
 }
 pub(crate) fn sp_mask_words(page1: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, views: &mut crate::port::Cells, srcview: i32, zx0: i32, zy0: i32, zw: i32, zh: i32, mut mask: &mut crate::port::Cells) -> i32 {
-    // Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters, inside the zone (px zx0, zy0, zw x zh). Answers the words.
+    // Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D1040; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.
     let n: i32 = ow_count(owords);
     let mut i: i32 = 0;
     let mut made: i32 = 0;
@@ -202,6 +224,9 @@ pub(crate) fn sp_mask_words(page1: i32, owords: &mut crate::port::Cells, etext: 
                 k = 0;
                 while k < tl {
                     if sf_script(crate::port::cells_at(etext, ts + k)) > 0 {
+                        letters += 1;
+                    }
+                    if sf_digit(crate::port::cells_at(etext, ts + k)) >= 0 {
                         letters += 1;
                     }
                     k += 1;
@@ -395,7 +420,7 @@ pub(crate) fn sp_add(mut cand: &mut crate::port::Cells, kind: i32, row: i32, x0:
     crate::port::cells_push(cand, 0);
     return 1;
 }
-pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, row: i32, zx0: i32, zy0: i32, mask: &mut crate::port::Cells, n: i32, mut cand: &mut crate::port::Cells) -> i32 {
+pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, rules: &mut crate::port::Cells, row: i32, zx0: i32, zy0: i32, mask: &mut crate::port::Cells, n: i32, mut cand: &mut crate::port::Cells) -> i32 {
     // Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says
     // signature or initials. Answers 1 when added.
     let ink: i32 = crate::port::cells_at(mask, n + 132);
@@ -416,6 +441,7 @@ pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32,
     let mh: i32 = sp_median(mask, n, nh);
     let mv: i32 = sp_median(mask, n + 64, nv);
     let mut sw: i32 = 1;
+    let mut gap: i32 = 0;
     let mut swc: i32 = 0;
     let mut kind: i32 = 0;
     let mut conf: i32 = 0;
@@ -431,6 +457,14 @@ pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32,
         return 0;
     }
     if (w > sg_sig_max_w()) || (h > sg_sig_max_h()) {
+        return 0;
+    }
+    // the pen is ON its line: the ink's foot is within `sp-gap` of the rule or 40 per cent of the ink's height, whichever is more (D1040: a stamp above a line is no signature)
+    gap = (h * 2) / 5;
+    if gap < sp_gap() {
+        gap = sp_gap();
+    }
+    if (y1 + gap) < ((rl_get(rules, row, rlf_y0()) + rl_get(rules, row, rlf_y1())) / 2) {
         return 0;
     }
     sw = mh;
@@ -526,7 +560,7 @@ pub(crate) fn sp_zone(page1: i32, views: &mut crate::port::Cells, srcview: i32, 
     if ink < sp_min_ink() {
         return 0;
     }
-    return sp_judge(page1, views, srcview, owords, etext, src, r, zx0, zy0, mask, zw * zh, cand);
+    return sp_judge(page1, views, srcview, owords, etext, src, rules, r, zx0, zy0, mask, zw * zh, cand);
 }
 pub fn sp_find(page1: i32, views: &mut crate::port::Cells, srcview: i32, rules: &mut crate::port::Cells, owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, src: &crate::port::Bitmap, pw: i32, mut cand: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
     // The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared
