@@ -1,0 +1,147 @@
+#!/usr/bin/env bb
+;; THE BABASHKA POD (DEVLOG P9.4, D1083, D1084): emon behind the pod protocol, loaded by this very babashka.   kin/scripts/pod
+;;
+;; Builds the pod (`emon-pod-build --pod`: a Rust binary over the Rust host, bencode on stdin and stdout, EDN values) and loads it with
+;; `babashka.pods/load-pod`; then, through `emon/convert` and the other ops:
+;;
+;;   1. the slice's fixtures (test/para's seven documents), as a path (a lazy source) and as base64 bytes, give the goldens' JSON
+;;      (test/para/NAME.json) and HTML (test/slice/NAME.html, NAME.full.html), byte for byte, in ONE call each; the Model as EDN is the JSON's
+;;      data (an independent reading by cheshire); the result's `:intake` and `:stats` say what the engine did;
+;;   2. a chunk of 512 bytes (`chunk=512`, kin's text) gives the same Model, and option text is kin's: a bad text is an error with kin's sentence;
+;;   3. the errors are exceptions with ex-data {:name :code :category}: the names of D040 and kin's, the limit's by its name;
+;;   4. a password opens the locked file to the plain twin's Model; the assets of test/assets/dct-rgb.pdf are the document's JPEG (bytes and sha256);
+;;      the evidence dump of the minimal PDF is the P1.7 golden; images convert; `emon/intake`, `emon/check-options`, `emon/option-key?` and
+;;      `emon/capabilities` answer.
+;;
+;; The pod needs only babashka. EMON_SKIP_POD=1 leaves it out on purpose (`SKIP pod -- why`, exit 0). NOT a gate on its own: `bb slice` runs
+;; this and the pod driver's sections, `bb identity` the pod arms.   bb pod
+(require '[babashka.fs :as fs]
+         '[babashka.pods :as pods]
+         '[babashka.process :refer [process shell]]
+         '[cheshire.core :as json]
+         '[clojure.string :as str])
+
+(import '(java.util Base64)
+        '(java.security MessageDigest))
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+(defn check [pass? & msg] (if pass? (apply ok msg) (apply bad msg)))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+(def built @(process {:out :string :err :string} "kin/scripts/emon-pod-build" "--pod"))
+(case (:exit built)
+  0 nil
+  3 (do (println (str "  " (str/trim (:err built)) " (the pod arm is left out)")) (System/exit 0))
+  (do (println "  FAIL the pod did not build:\n" (:err built)) (System/exit 1)))
+
+(def pod (pods/load-pod [(str/trim (:out built))]))
+
+(defn thrown
+  "The [message data] of the exception `f` throws, or nil."
+  [f]
+  (try (f) nil (catch Exception e [(ex-message e) (ex-data e)])))
+
+(defn b64 [^bytes b] (.encodeToString (Base64/getEncoder) b))
+(defn unb64 [^String s] (.decode (Base64/getDecoder) s))
+(defn sha256 [^bytes b] (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest (MessageDigest/getInstance "SHA-256") b))))
+(defn keywordize [k] (if (re-matches #"[A-Za-z][A-Za-z0-9_.*+!?-]*" k) (keyword k) k))
+
+(def docs ["h-plain" "h-keyword" "h-inverted-numbered" "h-numbered" "initial-image" "initial-vector" "furn-informative"])
+(def FULL "ids,geometry,confidence=950,ledger,pretty")
+(defn pdf [d] (str "test/corpus/synth/pdf/" d ".pdf"))
+
+;; ------------------------------------------------------------------------------------ the pod itself
+
+(let [c (emon/capabilities)]
+  (check (and (string? (:version c)) (contains? c :pdfium) (contains? c :tesseract) (contains? c :codecs))
+         "emon/capabilities: " (pr-str c)))
+;; (a top-level `false` from a pod reaches babashka as nil: it is falsey either way)
+(check (and (true? (emon/option-key? "ocr")) (true? (emon/option-key? "limit.pages")) (not (emon/option-key? "nonsense")))
+       "emon/option-key? asks kin's grammar")
+(check (true? (emon/check-options "ocr=never\nassets=images\nlimit.pages=50")) "emon/check-options: a good text")
+(let [[m d] (thrown #(emon/check-options "ocr=sometimes"))]
+  (check (and (= "usage" (:name d)) (= "ocr is always, auto or never" m)) "emon/check-options: a bad word is an error with kin's own sentence: " (pr-str m)))
+
+;; ------------------------------------------------------------------------------------ 1. the slice's fixtures
+
+(doseq [d docs]
+  (let [golden (slurp (str "test/para/" d ".json"))
+        html (slurp (str "test/slice/" d ".html"))
+        full (slurp (str "test/slice/" d ".full.html"))
+        file (pdf d)
+        spec {:model [:json-pretty :json :edn] :html ["" FULL]}
+        by-path (emon/convert file nil spec)
+        by-bytes (emon/convert {:bytes (b64 (fs/read-all-bytes file))} "" spec)
+        [pretty compact edn] (:model by-path)
+        [h hf] (:html by-path)]
+    (check (and (= (str pretty "\n") golden) (= h html) (= hf full))
+           d ": a path, in one call, gives test/para/" d ".json and the HTML goldens, byte for byte")
+    (check (and (= (:model by-path) (:model by-bytes)) (= (:html by-path) (:html by-bytes)))
+           d ": base64 bytes give the same Model and HTML as the path")
+    (check (= edn (json/parse-string compact keywordize)) d ": the Model as EDN is the JSON's data (" (count (str edn)) " chars of EDN)")
+    (let [r (emon/convert file nil {:model :json :html "ids"})]
+      (check (and (string? (:model r)) (string? (:html r)) (= (:model r) compact)) d ": a spec that names one gives one (not a vector)"))
+    (let [c (emon/convert file "chunk=512" {:model :json-pretty :html true})]
+      (check (and (= (:model c) pretty) (= (:html c) html) (= (get-in c [:intake :format]) "pdf") (pos? (get-in c [:stats :source-reads])))
+             d ": chunk=512 (kin's text) gives the same Model; the path was read in chunks (" (get-in c [:stats :source-reads]) " reads)"))))
+
+;; the default spec: the Model as JSON, the HTML, the assets
+(let [r (emon/convert (pdf "h-plain") "ocr=never")]
+  (check (and (string? (:model r)) (string? (:html r)) (= [] (:assets r)) (map? (:intake r)) (= 2 (get-in r [:intake :pages])))
+         "emon/convert with no spec returns :model, :html, :assets, :intake and :stats"))
+
+;; ------------------------------------------------------------------------------------ 3. the errors
+
+(defn named [file name code & [opts]]
+  (let [[m d] (thrown #(emon/convert file opts))]
+    (check (and (= name (:name d)) (= code (:code d)) (string? (:category d)) (str/starts-with? (str m) name))
+           file " -> " name " (code " code "): " (pr-str m))))
+(named "test/pdf/notpdf.pdf" "unsupported-format" 7)
+(named "test/pdf/p3/crypt-aes-128-user.pdf" "password-required" 4)
+(named "test/pdf/p3/unsupported-pubsec.pdf" "encryption-unsupported" 6)
+(named "test/image/png-truncated.png" "undecodable" 8)
+(named "test/image/tiff-jpeg.tif" "unsupported-image" 8)
+(named (pdf "h-plain") "input-bytes" 3 "limit.input-bytes=100")
+(let [[m d] (thrown #(emon/convert {:path "test/pdf/p3/crypt-aes-128-user.pdf" :password "wrong"}))]
+  (check (= "password-incorrect" (:name d)) "a wrong password: password-incorrect (" m ")"))
+(let [[m d] (thrown #(emon/convert "no/such/file.pdf"))]
+  (check (= "io" (:name d)) "a path that is not there: io (" m ")"))
+(let [[m d] (thrown #(emon/convert (pdf "h-plain") "record=1"))]
+  (check (= "usage" (:name d)) "record=1 is a session's option (the C binding's): " m))
+(let [[m d] (thrown #(emon/convert 42))]
+  (check (= "usage" (:name d)) "an input that is neither a path nor a map: " m))
+
+;; ------------------------------------------------------------------------------------ 4. passwords, assets, evidence, images
+
+(let [r (emon/convert {:path "test/pdf/p3/crypt-aes-128-user.pdf" :password "user-secret"} nil {:model :json})
+      p (emon/convert "test/pdf/p3/plain.pdf" nil {:model :json})]
+  (check (= (:model r) (:model p)) "the password opens the locked file to the plain twin's Model"))
+
+(let [r (emon/convert "test/assets/dct-rgb.pdf" "assets=images" {:model :json :assets :bytes})
+      a (first (:assets r))
+      bytes (unb64 (:bytes a))]
+  (check (and (= 1 (count (:assets r))) (= "image/jpeg" (:media-type a)) (= (:size a) (alength bytes)) (= (:sha256 a) (sha256 bytes))
+              (= [-1 -40] (map #(aget bytes %) [0 1])) (str/includes? (:model r) "\"asset\":0"))
+         "assets=images: asset 0 is the embedded JPEG; its bytes are its size and sha256 (" (:name a) ", " (:size a) " bytes)")
+  (let [i (emon/convert "test/assets/dct-rgb.pdf" "assets=images" {:assets :info})]
+    (check (and (= (:sha256 a) (:sha256 (first (:assets i)))) (not (contains? (first (:assets i)) :bytes)))
+           "assets :info has the table without the bytes"))
+  (let [x (emon/convert "test/assets/dct-rgb.pdf" "assets=images" {:html "assets=external,prefix=assets/"})]
+    (check (str/includes? (:html x) (str "assets/" (:name a))) "external HTML names the asset's file")))
+
+(let [r (emon/convert "test/pdf/minimal.pdf" nil {:evidence true})]
+  (check (= (str (:evidence r) "\n") (slurp "test/content/minimal.evidence.json")) "the evidence dump of test/pdf/minimal.pdf is the P1.7 golden"))
+
+(let [r (emon/convert "test/image/png-rgb8.png" nil {:model :json})
+      t (emon/convert "test/image/tiff-multi3-g4.tif" nil {:model :edn})]
+  (check (str/includes? (:model r) "\"kind\":\"image\"") "a PNG is a Model of one image page")
+  (check (= 3 (count (filter #(= "image" (:kind %)) (:pages (:model t))))) "a multi-page TIFF is three image pages (as EDN)"))
+
+(let [i (emon/intake (pdf "h-plain"))]
+  (check (= {:format "pdf" :version "1.4" :pages 2 :encrypted false} (dissoc i :bytes)) "emon/intake: stage 0 alone, " (pr-str i)))
+
+(if (zero? @fails)
+  (System/exit 0)
+  (do (println "  FAIL" @fails "check(s) failed") (System/exit 1)))

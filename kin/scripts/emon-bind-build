@@ -1,0 +1,112 @@
+#!/bin/sh
+# Build the C binding's library or the babashka pod; print what it built.   kin/scripts/emon-bind-build lib|pod
+#
+# THE TWO BINDINGS OF DEVLOG P9.4 (D001, D1080-D1085) are the SAME crate `emon-rs-build` assembles (the generated modules and
+# `host/rust/src/`), plus a file each, so neither adds a kin arm:
+#
+#     .cache/emon-bind/src/            what `.cache/emon-rs/src/` has, a `lib.rs` that also declares `capi`, and
+#       capi.rs                        host/c/src/capi.rs: the C ABI (`host/c/include/emon.h` is its header)
+#       pod.rs                         host/pod/src/main.rs: the babashka pod, a binary over the library (no crates beyond the host's)
+#     .cache/emon-bind/target/release/ libemon.{dylib,so} (cdylib), libemon.a (staticlib), emon-pod
+#
+# `lib` prints the DIRECTORY holding the library; `pod` prints the pod's path. Like `emon-rs-build`, `bb emit` is NOT run here, warnings
+# are off (EMON_RS_WARN=1 turns them on, for the host files), and these switches are the same ones, so the library and the pod carry the Rust
+# host's NATIVE ports when asked (never a gate's: a gate replays a transcript):
+#
+#   EMON_RS_LIVE=1        the `tesseract` feature (libtesseract, libleptonica from EMON_TESS_LIB, default /opt/homebrew/lib)
+#   EMON_RS_PDFIUM=DIR    `--cfg pdfium` linked to the pinned pdfium's lib directory (`bb pdfium-fetch`)
+#   EMON_RS_CODECS=DIR    `--cfg codecs` linked to libopenjp2 and libjbig2dec in DIR
+#
+# The library's `emon_capabilities()` and the pod's `emon/capabilities` say which of them a build has.
+set -e
+cd "$(dirname "$0")/../.."
+what="${1:-lib}"
+case "$what" in lib|pod) ;; *) echo "usage: emon-bind-build lib|pod" >&2; exit 2 ;; esac
+crate=.cache/emon-bind
+pdfium_lib="${EMON_RS_PDFIUM:-}"
+codecs_lib="${EMON_RS_CODECS:-}"
+live=0
+[ "${EMON_RS_LIVE:-}" = 1 ] && live=1
+[ -n "$pdfium_lib" ] && live=1
+# a live build is not the plain one: its own directory, so the two do not rebuild each other
+if [ "$live" = 1 ] || [ -n "$codecs_lib" ]; then crate=.cache/emon-bind-live; fi
+mkdir -p "$crate/src/emon"
+
+put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
+
+keep=""
+for f in gen/rust/emon/*.rs; do
+  m=$(basename "$f" .rs)
+  case "$m" in *test|*probe) continue ;; esac
+  keep="$keep $m"
+  put "$f" "$crate/src/emon/$m.rs"
+done
+for f in "$crate"/src/emon/*.rs; do
+  [ -e "$f" ] || continue
+  m=$(basename "$f" .rs)
+  case " $keep " in *" $m "*) ;; *) rm -f "$f" ;; esac
+done
+for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
+put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
+rm -f "$crate/src/emon.rs.new"
+
+for f in port plan source engine imgdec tess render pdfium pdfimg pdfcodecs; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+# the host's lib.rs, and the one line that adds the C ABI (host/rust is not changed: the native crate has no C ABI)
+{ cat host/rust/src/lib.rs; echo; echo "// the C binding (P9.4): assembled in by kin/scripts/emon-bind-build from host/c/src/capi.rs"; echo "pub mod capi;"; } > "$crate/src/lib.rs.new"
+put "$crate/src/lib.rs.new" "$crate/src/lib.rs"
+rm -f "$crate/src/lib.rs.new"
+put host/c/src/capi.rs "$crate/src/capi.rs"
+put host/pod/src/main.rs "$crate/src/pod.rs"
+cat > "$crate/Cargo.toml.new" <<'TOML'
+[package]
+name = "emon"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[bin]]
+name = "emon-pod"
+path = "src/pod.rs"
+
+[features]
+tesseract = []
+
+[dependencies]
+# exactly the Rust host's (host/rust/Cargo.lock): the binding adds no crate (D1083)
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
+miniz_oxide = "=0.8.9"
+zune-jpeg = "=0.5.15"
+zune-core = "=0.5.3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)"] }
+
+[profile.release]
+opt-level = 3
+overflow-checks = true
+debug = false
+TOML
+put "$crate/Cargo.toml.new" "$crate/Cargo.toml"
+rm -f "$crate/Cargo.toml.new"
+
+flags="-A warnings"
+[ "${EMON_RS_WARN:-}" = 1 ] && flags=""
+cargo_features=""
+if [ "${EMON_RS_LIVE:-}" = 1 ] || [ -n "$pdfium_lib" ]; then
+  flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
+  cargo_features="--features tesseract"
+fi
+if [ -n "$pdfium_lib" ]; then
+  flags="$flags --cfg pdfium -L native=$pdfium_lib -C link-arg=-Wl,-rpath,$pdfium_lib"
+fi
+if [ -n "$codecs_lib" ]; then
+  flags="$flags --cfg codecs -L native=$codecs_lib -C link-arg=-Wl,-rpath,$codecs_lib"
+fi
+put host/rust/Cargo.lock "$crate/Cargo.lock"
+if [ "$what" = lib ]; then target="--lib"; else target="--bin emon-pod"; fi
+out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q $target $cargo_features 2>&1 || RUSTFLAGS="$flags" cargo build --release -q $target $cargo_features 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-bind: build failed" >&2; exit 1; }
+[ -z "$out" ] || echo "$out" >&2
+if [ "$what" = lib ]; then echo "$crate/target/release"; else echo "$crate/target/release/emon-pod"; fi

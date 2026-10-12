@@ -425,6 +425,68 @@
   (when (and (empty? types-missing) (empty? names-missing) (empty? adapters-missing))
     (ok "C# SURFACE: every name SPEC 3.9/13 spells (" (count spec-names) " members, " (count spec-types) " types, the byte-source adapters of 13.1) is in host/csharp/Emon/Api")))
 
+;; --------------------------------------------------------------- the C binding's surface (P9.4)
+;;
+;; The C binding (`host/c/include/emon.h` over `host/c/src/capi.rs`) is the Rust host behind a C ABI. It is not compared member for member either
+;; (C has no methods), but it owes what SPEC 13 / 13.1 name and what a binding owes (D1080): (a) the Engine's four verbs, spelled in C
+;; (`convert`, `intake`, `record` and `replay` as a session with record=1 and a replayed transcript); (b) the Model's `to_json`, `to_html`, the
+;; assets accessors and the evidence; (c) an Input that is bytes or a LAZY source, with a password; (d) the options as kin's text, and kin's error
+;; names; (e) explicit ownership: a `emon_free_*` for everything emon allocates; and (f) the browser binding's ABI (`host/wasm/src/wasm.rs`: open,
+;; step, provide, answer, ...), each export of which has its C counterpart. What C does NOT give is the Model's walk (`root`, `pages`, `find`):
+;; the JSON is the interchange there (D1081). The header and the Rust file declare the same functions; `bb c` holds the header to the built library.
+
+(let [header (slurp "host/c/include/emon.h")
+      hcode (str/replace header #"(?s)/\*.*?\*/" "")
+      impl (slurp "host/c/src/capi.rs")
+      declared (set (map second (re-seq #"\b(emon_[a-z0-9_]+)\s*\(" hcode)))
+      declared (disj declared "emon_read_fn")
+      defined (set (map second (re-seq #"(?s)#\[no_mangle\]\s*pub (?:unsafe )?extern \"C\" fn (emon_[a-z0-9_]+)" impl)))
+      spec-c ["emon_convert" "emon_intake" "emon_open" "emon_step" "emon_provide" "emon_finish" "emon_replay_file" "emon_replay_end" "emon_transcript"
+              "emon_model_json" "emon_model_html" "emon_model_evidence" "emon_model_asset_count" "emon_model_asset_info" "emon_model_asset_bytes"
+              "emon_check_options" "emon_is_option_key" "emon_const" "emon_answer" "emon_answer_ocr" "emon_fail" "emon_prefetch" "emon_close"
+              "emon_convert_json" "emon_convert_html" "emon_model_stats" "emon_error_category"]
+      frees ["emon_free_buf" "emon_free_error" "emon_free_model" "emon_free_step" "emon_free_files" "emon_free_asset_info"]
+      ;; the browser binding's exports and their C counterparts; the linear-memory plumbing has none (a C caller has pointers)
+      wasm-exports (set (map second (re-seq #"(?s)#\[no_mangle\]\s*pub (?:unsafe )?extern \"C\" fn (emon_[a-z0-9_]+)" (slurp "host/wasm/src/wasm.rs"))))
+      plumbing #{"emon_alloc" "emon_free" "emon_out_ptr" "emon_out_len" "emon_out_free"}
+      alias {"emon_model_free" "emon_free_model" "emon_stats" "emon_model_stats" "emon_finish_intake" "emon_finish_intake"}
+      wasm-missing (for [w (sort wasm-exports) :when (not (plumbing w)) :let [c (get alias w w)] :when (not (contains? defined c))] [w c])
+      input-fields (every? #(re-find (re-pattern (str "\\b" % "\\b")) hcode) ["data" "source" "password" "read_at" "length"])
+      problems (concat
+                (for [d (sort (remove defined declared))] (str "emon.h declares " d " and capi.rs does not define it"))
+                (for [d (sort (remove declared defined))] (str "capi.rs defines " d " and emon.h does not declare it"))
+                (for [n (concat spec-c frees) :when (not (contains? defined n))] (str "the C binding has no " n))
+                (for [[w c] wasm-missing] (str "the browser binding exports " w " and the C binding has no " c))
+                (when-not input-fields ["an emon_input needs bytes or a lazy source (length, read_at) and a password"]))]
+  (doseq [p problems] (bad "C SURFACE: " p))
+  (when (empty? problems)
+    (ok "C SURFACE: emon.h and capi.rs declare and define the same " (count defined) " functions; the Engine's verbs (convert, intake, record/replay as a session), "
+        "the Model's JSON, HTML, evidence and assets, a lazy source or bytes with a password, kin's option text and error names, " (count frees) " emon_free_* functions, "
+        "and a counterpart for each of the " (- (count wasm-exports) (count plumbing)) " exports of the browser binding that is not linear-memory plumbing")))
+
+;; --------------------------------------------------------------- the pod's surface (P9.4)
+;;
+;; The pod (`host/pod/src/main.rs`) is held to its protocol: every var it describes to babashka has an arm that answers it and every arm is
+;; described, `emon/convert` is there, and it takes what SPEC 13 and 13.1 say a binding takes (a path or bytes, a password, kin's option text),
+;; returns the Model (JSON or EDN), the HTML and the assets, and answers errors with kin's names.
+
+(let [pod (slurp "host/pod/src/main.rs")
+      described (set (map second (re-seq #"\"([a-z?-]+)\"" (second (re-find #"(?s)fn describe\(\) -> Bv \{.*?let vars[^\[]*\[(.*?)\]\.iter\(\)" pod)))))
+      arms (set (map second (re-seq #"(?m)^\s+\"([a-z?-]+)\"( =>|,)" (re-find #"(?s)fn invoke\(.*?\n\}\n" pod))))
+      spec-pod ["convert" "intake" "check-options" "option-key?" "capabilities"]
+      wants [[#":bytes" "bytes as an input"] [#":path" "a path as an input"] [#":password" "a password"] [#"parse_options" "kin's option text"]
+             [#":edn" "the Model as EDN"] [#":json" "the Model as JSON"] [#"model.to_html" "the HTML"] [#"assets_of" "the assets"]
+             [#"category_code" "the error categories of the C binding"] [#"e\.name\(\)" "the engine's own error names"]
+             [#"\"ex-message\"" "errors as exceptions"] [#"\"ex-data\"" "ex-data"] [#"\"bencode\"|fn read_bv" "bencode"]]
+      problems (concat
+                (for [v spec-pod :when (not (contains? described v))] (str "the pod does not describe emon/" v))
+                (for [v spec-pod :when (not (contains? arms v))] (str "the pod has no arm for emon/" v))
+                (for [v (sort (remove (set spec-pod) (concat described arms)))] (str "the pod describes or answers emon/" v " and this table does not know it"))
+                (for [[re what] wants :when (not (re-find re pod))] (str "the pod does not take or give " what)))]
+  (doseq [p problems] (bad "POD SURFACE: " p))
+  (when (empty? problems)
+    (ok "POD SURFACE: emon/" (str/join ", emon/" spec-pod) " are described and answered; convert takes a path or bytes, a password and kin's option text, and returns the Model (JSON or EDN), the HTML and the assets, with errors as exceptions carrying kin's names")))
+
 ;; ------------------------------------------------------ no filesystem (D058)
 
 (defn banned-in
@@ -450,7 +512,7 @@
 (def library-files
   (let [g (fn [d pat] (map str (fs/glob d pat)))
         not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/tess\.go|/ffi/tess\.java|/ffi/tess\.cs|_test\.go|/tests/" %) fs))]
-    {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs")))
+    {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs") (g "host/c/src" "*.rs")))
      :js (g "host/js/src" "*.js")
      :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go") (g "host/go/planrun" "*.go")))
      ;; Java (P9.1): the ports and the driver of the plan machine, the Engine layer (`api/`) and the pdfium binding (`ffi/Pdfium.java`); `ffi/Tess.java`

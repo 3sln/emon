@@ -53,6 +53,17 @@
 ;; replay of Rust's transcript, and Rust's replay of its transcript, each to the reference bundle. Without an SDK
 ;; (`kin/scripts/emon-cs-build` exits 3) the arm is left out, loudly; EMON_SKIP_CSHARP=1 leaves it out on purpose.
 ;;
+;; THE C BINDING (P9.4, D1082) is a fifth driver when a C compiler is there: `emon-c`, a C program over libemon (the Rust host behind
+;; host/c/include/emon.h). Five arms: the one-shot call over bytes, over a LAZY pread source, over a spooled stream, the inverted step API
+;; (emon_open/step/provide/finish), and the step API over 512-byte chunks that miss and re-run; its transcript (the step API with record=1)
+;; equal to Rust's (directory, byte for byte), its replay of Rust's, and Rust's replay of its transcript. Without a C compiler
+;; (`kin/scripts/emon-c-build` exits 3) the arm is left out, loudly; EMON_SKIP_C=1 leaves it out on purpose.
+;;
+;; THE BABASHKA POD (P9.4, D1084) is a sixth: the pod (a Rust binary over the Rust host) loaded by babashka, driven by `test/driver/pod/emon-pod`
+;; through `emon/convert`. Two arms: the file as a path (the pod reads it lazily) and as base64 bytes. A pod converts in one call, so it has
+;; no async source and no transcript: the arms that need those, and the inputs that replay a committed transcript, leave it out.
+;; EMON_SKIP_POD=1 leaves it out on purpose.
+;;
 ;; A difference prints the first differing section and byte offset, and the arms.
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [process shell destroy-tree]]
@@ -100,6 +111,21 @@
         0 (str/trim (:out r))
         3 (do (println (str "  " (str/trim (:err r)) " (the C# arm is left out)")) nil)
         (do (println "  FAIL the C# driver did not build:\n" (:err r)) (System/exit 1))))))
+;; THE C ARM (P9.4, D1082) is optional: `emon-c-build` exits 3 with `SKIP c -- why` on stderr when there is no C compiler, and the arm is then left out,
+;; LOUDLY, and nothing fails. `EMON_SKIP_C=1` leaves it out on purpose.
+(def cbind
+  (let [r @(process {:out :string :err :string} "kin/scripts/emon-c-build")]
+    (case (:exit r)
+      0 (str/trim (:out r))
+      3 (do (println (str "  " (str/trim (:err r)) " (the C arm is left out)")) nil)
+      (do (println "  FAIL the C driver did not build:\n" (:err r)) (System/exit 1)))))
+;; THE POD ARM (P9.4, D1084) is optional the same way (`emon-pod-build` exits 3 with `SKIP pod -- why`).
+(def pod
+  (let [r @(process {:out :string :err :string} "kin/scripts/emon-pod-build")]
+    (case (:exit r)
+      0 (str/trim (:out r))
+      3 (do (println (str "  " (str/trim (:err r)) " (the pod arm is left out)")) nil)
+      (do (println "  FAIL the pod did not build:\n" (:err r)) (System/exit 1)))))
 ;; THE BROWSER ARM (P9.3, D356) is optional: `emon-wasm-run --check` exits 3 with `SKIP wasm -- why` on stderr when the toolchain is
 ;; missing, and the arm is then left out, LOUDLY, and nothing fails.
 (def wasm
@@ -168,12 +194,23 @@
            [:csharp "seek" ["--source=seek"]]
            [:csharp "spool" ["--source=spool"]]
            [:csharp "async512" ["--chunk=512" "--async"]]])
-        (for [h (cond-> [:rust :go] java (conj :java) csharp (conj :csharp)) [n a] chunk-arms] [h n a]))))
+        ;; the C driver's five arms (P9.4): the one-shot over bytes, over a lazy pread source, over a spooled stream, the step API, the step API over 512-byte chunks
+        (when cbind
+          [[:c "bytes" []]
+           [:c "seek" ["--source=seek"]]
+           [:c "spool" ["--source=spool"]]
+           [:c "step" ["--source=step"]]
+           [:c "async512" ["--chunk=512" "--async"]]])
+        ;; the pod's two (P9.4): a path (read lazily) and base64 bytes
+        (when pod
+          [[:pod "bytes" []]
+           [:pod "path" ["--source=seek"]]])
+        (for [h (cond-> [:rust :go] java (conj :java) csharp (conj :csharp) cbind (conj :c)) [n a] chunk-arms] [h n a]))))
 
 (defn drive
   "Run a driver: {:exit :out (bytes) :err}. A run that takes over two minutes is killed (our own process)."
   [host args {:keys [file pw replay]}]
-  (let [exe (case host :rust rust :go go :java java :csharp csharp)
+  (let [exe (case host :rust rust :go go :java java :csharp csharp :c cbind :pod pod)
         p (apply process {:out :bytes :err :string}
                  exe "--out=bundle" (concat args @extra (when pw [(str "--password=" pw)]) (when replay [(str "--replay=" replay)]) [file]))
         r (deref p 120000 ::timeout)]
@@ -211,7 +248,9 @@
         probs (atom [])
         note (fn [& xs] (swap! probs conj (apply str xs)))]
     (when (= -1 (:exit ref)) (note "the reference timed out"))
-    (doseq [[host name a] (rest arms)]
+    (doseq [[host name a] (rest arms)
+            ;; a pod converts in one call: it has no transcript to replay (P9.4)
+            :when (not (and (= host :pod) (:replay item)))]
       (let [r (drive host a item)]
         (when-not (same? ref r)
           (note (clojure.core/name host) "/" name " differs from rust/bytes: " (first-diff ref r)))))
@@ -261,6 +300,21 @@
                   rc (drive :rust [(str "--replay=" cd)] item)]
               (when-not (same? ref cp) (note "csharp replaying rust's transcript differs: " (first-diff ref cp)))
               (when-not (same? ref rc) (note "rust replaying csharp's transcript differs: " (first-diff ref rc))))
+            (fs/delete-tree cd)))
+        ;; the C binding (P9.4): the step API with record=1 writes the same directory, replays Rust's, and Rust replays its
+        (when cbind
+          (let [cd (str work "/" i "-c")
+                cr (drive :c [(str "--record=" cd)] item)]
+            (when-not (same? ref cr) (note "c --record changes the answer: " (first-diff ref cr)))
+            (let [rf (dir-files rd) cf (dir-files cd)
+                  lossy? (re-find #"(?i)\.jpe?g$" (:file item))
+                  strip-png (fn [m] (into {} (remove (fn [[k _]] (str/ends-with? k ".png")) m)))]
+              (when-not (if lossy? (= (strip-png rf) (strip-png cf)) (= rf cf))
+                (note "the transcripts differ: rust " (some-> rf keys vec) " c " (some-> cf keys vec))))
+            (let [cp (drive :c [(str "--replay=" rd)] item)
+                  rc (drive :rust [(str "--replay=" cd)] item)]
+              (when-not (same? ref cp) (note "c replaying rust's transcript differs: " (first-diff ref cp)))
+              (when-not (same? ref rc) (note "rust replaying c's transcript differs: " (first-diff ref rc))))
             (fs/delete-tree cd)))
         (fs/delete-tree rd) (fs/delete-tree gd)))
     {:probs @probs

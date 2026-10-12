@@ -1,0 +1,99 @@
+#!/usr/bin/env bb
+;; THE POD DRIVER (DEVLOG P9.4, D1084): a test-only CLI over the babashka pod (host/pod, `emon/convert`), the twin of test/driver/rust/main.rs.
+;; Babashka loads the pod named by EMON_POD (`kin/scripts/emon-pod-build` prints it), the file is handed to `emon/convert` as a path (a lazy
+;; source: `--source=seek`) or as base64 bytes (`--source=bytes`, the default; `spool` is the same), and the STDOUT is what the Rust driver prints.
+;; `bb slice` and `bb identity` hold it to that byte for byte.
+;;
+;;     emon-pod [--out=json|html|evidence|intake|bundle] [--pretty] [--html=OPTS] [--html-assets=M] [--asset-prefix=P] [--password=TEXT]
+;;              [--source=bytes|seek|spool] [--asset-dir=D] [--KEY=VALUE ...] FILE
+;;
+;; A pod converts in one call: no async source (`--async`), no transcript (`--record`, `--replay`) and no stats: those exit 2, as a flag the
+;; driver does not have. The exit codes and stderr are the Rust driver's (0 ok; 2 usage; 4 a named emon error; 1 anything else).
+(require '[babashka.fs :as fs]
+         '[babashka.pods :as pods]
+         '[clojure.string :as str])
+
+(import '(java.util Base64))
+
+(defn usage [msg]
+  (binding [*out* *err*] (println (str "emon-pod: " msg)))
+  (System/exit 2))
+
+(def pod (or (System/getenv "EMON_POD") (usage "EMON_POD names the pod's executable (kin/scripts/emon-pod-build)")))
+(pods/load-pod [pod])
+
+(defn emit [^String s]
+  (.write System/out (.getBytes s "UTF-8"))
+  (.flush System/out))
+
+(let [args *command-line-args*
+      state (atom {:out "json" :html "" :kin [] :source "bytes"})]
+  (doseq [a args]
+    (let [[_ k v] (re-matches #"--([^=]+)=(.*)" a)]
+      (cond
+        (= a "--pretty") (swap! state assoc :pretty true)
+        (= k "out") (swap! state assoc :out v)
+        (= k "html") (swap! state assoc :html v)
+        (= k "html-assets") (swap! state assoc :html-assets v)
+        (= k "asset-prefix") (swap! state assoc :asset-prefix v)
+        (= k "asset-dir") (swap! state assoc :asset-dir v)
+        (= k "password") (swap! state assoc :password v)
+        (= k "source") (swap! state assoc :source v)
+        (or (= a "--async") (= k "record") (= k "replay") (= a "--stats")) (usage (str "the pod has no " a))
+        (and k (emon/option-key? k)) (swap! state update :kin conj (str k "=" v))
+        (str/starts-with? a "--") (usage (str "unknown flag " a))
+        (:file @state) (usage "one FILE")
+        :else (swap! state assoc :file a))))
+  (let [{:keys [out pretty html html-assets asset-prefix asset-dir password source kin file]} @state
+        _ (when-not file (usage "no FILE"))
+        _ (when-not (#{"json" "html" "evidence" "bundle" "intake"} out) (usage "--out is json, html, evidence, bundle or intake"))
+        _ (when-not (#{"bytes" "seek" "spool"} source) (usage "--source is bytes, seek or spool"))
+        ;; the last `assets=` line wins, as in kin's grammar
+        assets-on (boolean (some->> kin (filter #(str/starts-with? % "assets=")) last (re-find #"=(images|figures)$")))
+        opts (str/join "\n" kin)
+        input (let [base (if (= source "seek")
+                           {:path file}
+                           (do (when-not (fs/exists? file) (binding [*out* *err*] (println (str "emon-pod: " file ": No such file or directory")) (System/exit 1)))
+                               {:bytes (.encodeToString (Base64/getEncoder) (fs/read-all-bytes file))}))]
+                (cond-> base password (assoc :password password)))
+        fail (fn [e]
+               (let [d (ex-data e)]
+                 (if (and d (:name d))
+                   (if (= "usage" (:name d))
+                     (usage (ex-message e))
+                     (do (binding [*out* *err*] (println (str "error: " (:name d))) (println (ex-message e)))
+                         (System/exit (if (= "internal" (:name d)) 1 4))))
+                   (do (binding [*out* *err*] (println (str "emon-pod: " (ex-message e)))) (System/exit 1)))))
+        convert (fn [spec] (try (emon/convert input opts spec) (catch Exception e (fail e))))
+        intake-line (fn [{:keys [format version pages encrypted bytes]}] (str format " " version " pages=" pages " encrypted=" encrypted " bytes=" bytes))
+        hex (fn [^bytes b] (let [sb (StringBuilder.)] (doseq [x b] (.append sb (format "%02x" (bit-and x 0xff)))) (str sb)))
+        write-assets (fn [assets]
+                       (when asset-dir
+                         (fs/create-dirs asset-dir)
+                         (doseq [a assets] (fs/write-bytes (fs/path asset-dir (:name a)) (.decode (Base64/getDecoder) ^String (:bytes a))))))]
+    (case out
+      "json" (let [r (convert {:model (if pretty :json-pretty :json) :assets (when asset-dir :bytes)})]
+               (write-assets (:assets r))
+               (emit (:model r)))
+      "html" (let [h (str/join "," (remove str/blank? [html (when html-assets (str "assets=" html-assets)) (when asset-prefix (str "prefix=" asset-prefix))]))
+                   r (convert {:html h :assets (when asset-dir :bytes)})]
+               (write-assets (:assets r))
+               (emit (:html r)))
+      "evidence" (emit (:evidence (convert {:evidence true})))
+      "intake" (emit (str (intake-line (try (emon/intake input opts) (catch Exception e (fail e)))) "\n"))
+      "bundle"
+      (let [full "ids,geometry,confidence=950,ledger,pretty"
+            r (convert (cond-> {:model [:json :json-pretty] :evidence true
+                                :html (cond-> ["" full] assets-on (into ["assets=external,prefix=assets/" "assets=omit"]))}
+                         assets-on (assoc :assets :bytes)))
+            [json pretty-json] (:model r)
+            [h hfull hext homit] (:html r)
+            s (str "== json\n" json "\n== json-pretty\n" pretty-json "\n== html\n" h "\n== html-full\n" hfull
+                   "\n== evidence\n" (:evidence r) "\n== intake\n" (intake-line (:intake r)) "\n")
+            s (if assets-on
+                (str s "== html-external\n" hext "\n== html-omit\n" homit "\n== assets\n"
+                     (apply str (for [a (:assets r)]
+                                  (str (:name a) " " (:media-type a) " " (:size a) "\n" (hex (.decode (Base64/getDecoder) ^String (:bytes a))) "\n"))))
+                s)]
+        (emit s)))
+    (System/exit 0)))
