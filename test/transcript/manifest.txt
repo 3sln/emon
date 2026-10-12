@@ -72,6 +72,7 @@ ocr/scan-px/invoice/transcript.edn
 ocr/scan-px/scan-color--gfx-shading-bands/transcript.edn
 ocr/scan-px/scan-color--mixed-table-image-shaded/transcript.edn
 ocr/scan-px/scan-ovl--invoice/transcript.edn
+ocr/scan-px/stamp-seal/transcript.edn
 ocr/scan/columns-two/transcript.edn
 ocr/scan/furn-title-pagenum/transcript.edn
 ocr/scan/h-keyword/transcript.edn
