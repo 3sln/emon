@@ -139,11 +139,11 @@
 <g>
 <rect x="474" y="814" width="152" height="152" fill="none" stroke="#999"/>
 <line x1="474" y1="966.0" x2="626" y2="814.0" stroke="#bbb" stroke-dasharray="4 3"/>
-<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="550.0,814.0 610.8,852.0"/>
-<circle cx="550.0" cy="814.0" r="5.2" fill="#1f6feb" fill-opacity="0.55"/>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="595.6,814.0 610.8,852.0"/>
+<circle cx="595.6" cy="814.0" r="5.2" fill="#1f6feb" fill-opacity="0.55"/>
 <circle cx="610.8" cy="852.0" r="7.9" fill="#1f6feb" fill-opacity="0.55"/>
 <text x="474" y="802" font-weight="bold">seal  n=5</text>
-<text x="474" y="980">ECE 0.220  Brier 0.218</text>
+<text x="474" y="980">ECE 0.160  Brier 0.176</text>
 <text x="474" y="992" fill="#666">confidence (x) vs accuracy (y)</text>
 </g>
 <g>

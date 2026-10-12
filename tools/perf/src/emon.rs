@@ -28,3 +28,5 @@ pub mod trig;
 pub mod calib;
 #[path = "../../../gen/rust/emon/calibdata.rs"]
 pub mod calibdata;
+#[path = "../../../gen/rust/emon/limits.rs"]
+pub mod limits;

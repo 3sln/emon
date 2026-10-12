@@ -691,6 +691,6 @@ public final class Transcripttest {
             }
             at = e + 1;
         }
-        emon.Testport.assertEq(row, 86, "the transcripts under test/");
+        emon.Testport.assertEq(row, 97, "the transcripts under test/");
     }
 }
