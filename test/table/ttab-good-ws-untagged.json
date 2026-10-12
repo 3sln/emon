@@ -57,52 +57,25 @@
             "text": "The table below was extracted from the supplies ledger. Figures are totals for the quarter.",
             "at": [[1, 72, 94.1, 344.06, 118.28]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           },
           {
             "id": 4,
-            "kind": "note",
-            "role": "margin",
-            "children": [
-              {
-                "id": 5,
-                "kind": "paragraph",
-                "text": "Stock",
-                "at": [[1, 408, 199.32, 435.23, 208.57]],
-                "src": ["text", "infer"],
-                "conf": 747
-              },
-              {
-                "id": 6,
-                "kind": "paragraph",
-                "align": "start",
-                "text": "yes no yes",
-                "at": [[1, 408, 221.32, 423.56, 274.57]],
-                "src": ["text", "infer"],
-                "conf": 747
-              }
-            ],
-            "at": [[1, 408, 199.32, 435.23, 274.57]],
-            "src": ["infer"],
-            "conf": 500
-          },
-          {
-            "id": 7,
             "kind": "table",
             "profile": "whitespace",
             "columns": 4,
             "children": [
               {
-                "id": 8,
+                "id": 5,
                 "kind": "rowgroup",
                 "role": "head",
                 "children": [
                   {
-                    "id": 9,
+                    "id": 6,
                     "kind": "row",
                     "children": [
                       {
-                        "id": 10,
+                        "id": 7,
                         "kind": "cell",
                         "header": "col",
                         "text": "Item",
@@ -111,7 +84,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 11,
+                        "id": 8,
                         "kind": "cell",
                         "header": "col",
                         "text": "Qty",
@@ -120,7 +93,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 12,
+                        "id": 9,
                         "kind": "cell",
                         "header": "col",
                         "text": "Price",
@@ -129,7 +102,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 13,
+                        "id": 10,
                         "kind": "cell",
                         "header": "col",
                         "text": "Stock",
@@ -146,16 +119,16 @@
                 "conf": 938
               },
               {
-                "id": 14,
+                "id": 11,
                 "kind": "rowgroup",
                 "role": "body",
                 "children": [
                   {
-                    "id": 15,
+                    "id": 12,
                     "kind": "row",
                     "children": [
                       {
-                        "id": 16,
+                        "id": 13,
                         "kind": "cell",
                         "text": "Pens",
                         "at": [[1, 78, 221.32, 146.34, 230.57]],
@@ -163,7 +136,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 17,
+                        "id": 14,
                         "kind": "cell",
                         "align": "start",
                         "text": "12",
@@ -172,7 +145,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 18,
+                        "id": 15,
                         "kind": "cell",
                         "text": "3.40",
                         "at": [[1, 251.33, 221.32, 365.23, 230.57]],
@@ -180,7 +153,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 19,
+                        "id": 16,
                         "kind": "cell",
                         "text": "yes",
                         "at": [[1, 365.23, 221.32, 435.23, 230.57]],
@@ -192,11 +165,11 @@
                     "conf": 971
                   },
                   {
-                    "id": 20,
+                    "id": 17,
                     "kind": "row",
                     "children": [
                       {
-                        "id": 21,
+                        "id": 18,
                         "kind": "cell",
                         "text": "Paper",
                         "at": [[1, 78, 243.32, 146.34, 252.57]],
@@ -204,7 +177,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 22,
+                        "id": 19,
                         "kind": "cell",
                         "align": "start",
                         "text": "4",
@@ -213,7 +186,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 23,
+                        "id": 20,
                         "kind": "cell",
                         "text": "7.25",
                         "at": [[1, 251.33, 243.32, 365.23, 252.57]],
@@ -221,7 +194,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 24,
+                        "id": 21,
                         "kind": "cell",
                         "text": "no",
                         "at": [[1, 365.23, 243.32, 435.23, 252.57]],
@@ -233,11 +206,11 @@
                     "conf": 971
                   },
                   {
-                    "id": 25,
+                    "id": 22,
                     "kind": "row",
                     "children": [
                       {
-                        "id": 26,
+                        "id": 23,
                         "kind": "cell",
                         "text": "Tape",
                         "at": [[1, 78, 265.32, 146.34, 274.57]],
@@ -245,7 +218,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 27,
+                        "id": 24,
                         "kind": "cell",
                         "align": "start",
                         "text": "9",
@@ -254,7 +227,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 28,
+                        "id": 25,
                         "kind": "cell",
                         "text": "2.10",
                         "at": [[1, 251.33, 265.32, 365.23, 274.57]],
@@ -262,7 +235,7 @@
                         "conf": 987
                       },
                       {
-                        "id": 29,
+                        "id": 26,
                         "kind": "cell",
                         "text": "yes",
                         "at": [[1, 365.23, 265.32, 435.23, 274.57]],
@@ -283,13 +256,13 @@
             "conf": 907
           },
           {
-            "id": 30,
+            "id": 27,
             "kind": "paragraph",
             "align": "start",
             "text": "Questions go to the purchasing office.",
             "at": [[1, 72, 300.1, 256.66, 310.28]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           }
         ],
         "src": ["infer"],

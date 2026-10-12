@@ -23,7 +23,7 @@
             [emon.model :refer [model-init model-check page-new pk-vector node-count node-kind
                                 node-text-start node-text-len node-sub node-attr node-attr-int-or
                                 attr-value attr-len text-at text-append-utf8
-                                nk-paragraph nk-table nk-rowgroup nk-row nk-cell nk-caption
+                                nk-paragraph nk-note nk-table nk-rowgroup nk-row nk-cell nk-caption
                                 fk-rowspan fk-colspan fk-columns fk-profile fk-label fk-align]]
             [emon.json :refer [js-emit]]
             [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style
@@ -129,6 +129,8 @@
             (do (text-cp t 80) (text-cp t 91)
                 (tt-run-text nodes i text t)
                 (text-cp t 93) (text-cp t 59)))
+          (if (== kind (nk-note))
+            (do (text-cp t 78) (text-cp t 59)))
           (if (== kind (nk-table))
             (do (text-cp t 84)
                 (text-i32 t (node-attr-int-or nodes attrs i (fk-columns) 0))
@@ -437,9 +439,64 @@
     (assert-text t "T3r;K[Table 2|Results];Gh;R;Ch[A];Ch[B];Ch[C];Gb;R;Cs[x];C[1];C[2];R;Cs[Sum];Cc2[3];"
                  "the caption is the table's first child: label and text, not a paragraph")))
 
+;; ------------------------------------- a table's last column is not a note (D469)
+
+(defn ^I32 tt-small [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob b ^I32 x ^I32 y ^I32 size]
+  (comment "One word and a line of its own, 500 per character, `size` tall (a note's small type).")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 x1 (+ x (* 500 (blob-len b)))]
+    (tt-tw wd et b x y x1 (+ y size) 0 size (ln-count ln))
+    (ln-new ln 1 x y x1 (+ y size) x (- (+ y size) 200) x1 (- (+ y size) 200) 0 0 w0 1)
+    (return 0)))
+
+(defn ^I32 tt-ledger-page [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^:mut ^Cells pa]
+  (comment "Four lines of a paragraph that end at x 26000, then a ruled 3 x 3 table to x 37200 whose last column's words stand")
+  (comment "right of where the paragraph ends (the shape of the `ttab-*` and `gfx-*` documents: a narrow last column).")
+  (tt-word wd ln et (text-blob "The table below was extracted from the ledger") 7200 4000 26000 4800 0)
+  (tt-word wd ln et (text-blob "and the figures are totals for the quarter") 7200 5200 26000 6000 0)
+  (tt-word wd ln et (text-blob "of the year as the office has recorded them") 7200 6400 26000 7200 0)
+  (tt-word wd ln et (text-blob "and as the auditors have since confirmed.") 7200 7600 26000 8400 0)
+  (tt-rule pa 7200 9950 37200 10050)
+  (tt-rule pa 7200 11950 37200 12050)
+  (tt-rule pa 7200 13950 37200 14050)
+  (tt-rule pa 7200 15950 37200 16050)
+  (tt-rule pa 7150 10000 7250 16000)
+  (tt-rule pa 17150 10000 17250 16000)
+  (tt-rule pa 27150 10000 27250 16000)
+  (tt-rule pa 37150 10000 37250 16000)
+  (tt-at wd ln et (text-blob "Item") 7600 10600 1 0)
+  (tt-at wd ln et (text-blob "Qty") 17600 10600 1 0)
+  (tt-small wd ln et (text-blob "Note") 27600 10600 900)
+  (tt-at wd ln et (text-blob "Bolt") 7600 12600 0 0)
+  (tt-at wd ln et (text-blob "10") 17600 12600 0 0)
+  (tt-small wd ln et (text-blob "up") 27600 12600 900)
+  (tt-at wd ln et (text-blob "Nut") 7600 14600 0 0)
+  (tt-at wd ln et (text-blob "12") 17600 14600 0 0)
+  (tt-small wd ln et (text-blob "flat") 27600 14600 900)
+  (return 0))
+
+(deftest test-the-last-column-of-a-table-is-its-cells-and-not-a-note
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (tt-ledger-page wd ln et pa)
+    (assert-eq (tt-run wd ln et pa t) 0 "last column: well formed")
+    (assert-text t "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];"
+                 "the words of the last column stand right of the paragraph and are the table's cells: no note repeats them (D469; a text layer's too, as a scan's in D463)")))
+
+(deftest test-a-note-beside-a-table-is-still-a-note
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (tt-ledger-page wd ln et pa)
+    (comment "A note in small type left of the table (the paragraph and the table begin at 7200), beside the row of Bolt: not a")
+    (comment "cell, so a note. (Right of the table it would be one run with the last column's small words, which a table holds.)")
+    (tt-small wd ln et (text-blob "see note") 1500 12600 700)
+    (assert-eq (tt-run wd ln et pa t) 0 "note: well formed")
+    (assert-text t "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see note];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];"
+                 "a note beside the table, outside it, is a note of its own, and the cells are still the table's")))
+
 ;; --------------------------------------------------------------- real documents
 
-(defn ^I32 tt-golden [^Blob pdf ^:mut ^Text t ^:mut ^Text tvt]
+(defn ^I32 tt-golden[^Blob pdf ^:mut ^Text t ^:mut ^Text tvt]
   (comment "PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a")
   (comment "code naming the step (1 open, 2 content, 3 the Model's check). The JSON is `t`. The tagged tree is read and joined (P5.5), and the")
   (comment "verdicts of its tables, as the evidence dump's `tb` writes them, are `tvt`.")

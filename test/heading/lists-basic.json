@@ -47,7 +47,7 @@
             "text": "Young seen since word take see part turned been some night family own have.",
             "at": [[1, 72, 130.17, 449.15, 142.66]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           },
           {
             "id": 4,
@@ -55,7 +55,7 @@
             "text": "Tent and groundsheet Stove, with spare fuel canister Water filter Backup tablets Bottle One litre Two litre",
             "at": [[1, 89.59, 154.17, 239.76, 271.66]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           },
           {
             "id": 5,
@@ -63,7 +63,7 @@
             "text": "First aid kit",
             "at": [[1, 89.59, 283.92, 145.74, 296.41]],
             "src": ["text", "infer"],
-            "conf": 747
+            "conf": 783
           },
           {
             "id": 6,
@@ -86,7 +86,7 @@
                 "text": "1. Lay out the groundsheet. 2. Stake the corners. 3. Raise the poles a. Short pole first. b. Long pole second.",
                 "at": [[1, 77.82, 343.17, 210.4, 426.16]],
                 "src": ["text", "infer"],
-                "conf": 747
+                "conf": 783
               },
               {
                 "id": 9,
@@ -94,7 +94,7 @@
                 "text": "4. Attach the fly.",
                 "at": [[1, 77.75, 438.42, 157.4, 450.91]],
                 "src": ["text", "infer"],
-                "conf": 747
+                "conf": 783
               },
               {
                 "id": 10,
@@ -102,7 +102,7 @@
                 "text": "Usually family four best much or form animal write example once something two car by think.",
                 "at": [[1, 72, 463.17, 527.4, 475.66]],
                 "src": ["text", "infer"],
-                "conf": 747
+                "conf": 783
               }
             ],
             "src": ["infer"],

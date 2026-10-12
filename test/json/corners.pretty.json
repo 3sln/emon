@@ -88,7 +88,7 @@
             "kind": "paragraph",
             "text": "a & b < c > d \"e\" cr:\u000d nul:\u0000 c1: del: ctl:\u0001 ff:\u000c tab:\t lf:\n ls:\u2028 nc:￾ ﷐ 😀",
             "at": [[1, 72, 90, 540, 120]],
-            "conf": 747
+            "conf": 783
           },
           {
             "id": 5,
