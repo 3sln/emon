@@ -309,5 +309,5 @@
       (fs/delete-tree outd))))
 
 (if (zero? @fails)
-  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host, the Go host" (if wasm " and in the browser (WASM + JS SDK, nine byte-source adapters)" "") ", in memory and async")
+  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host, the Go host" (if java-exe " and the Java host" "") (if wasm " and in the browser (WASM + JS SDK, nine byte-source adapters)" "") ", in memory and async")
   (do (println "  FAIL" @fails "check(s) failed") (System/exit 1)))

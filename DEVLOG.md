@@ -3500,7 +3500,17 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
 
 ## Phase 9 — The remaining host layers and bindings
 
-- [ ] P9.1 — Java host (ports, Engine, Tesseract binding, pdfium binding).
+- [x] **P9.1 — Java host (ports, Engine, Tesseract binding, pdfium binding)**.
+  *Done (D1000-D1004; the first branch's D520-D525, renumbered, the coordinator renumbers again at merge).* The Java Engine layer is the DRIVER of kin's
+  pieces (D396), written against the CURRENT Rust and Go hosts, not ported from the first branch's host code: `host/java/emon/Planrun.java` (the machine over
+  `emon.planloop`, the transcript over `emon.transcript`, the fulfilment: Go's `planrun`), `host/java/emon/api/` (`Engine` drives `en-next`'s phases; `Units` is
+  the document pass and one call into `emon.engine` for stage 3; `Ports`, `ChunkCache` over `fp-plan`, `Options` a thin wrapper over `emon.config`'s `key=value`
+  parse into `Cfg`, `ImgDec` and `PdfImg` with kin's validators and one CCITT decoder in front of ImageIO), `host/java/emon/ffi/{Pdfium,Tess}.java` (the Java FFM
+  API, JDK 22+; `Tess` asks `emon.ocrport`), `test/driver/java/{Main,EngineTest}.java`, `kin/scripts/emon-java-build`. **Gates**: `bb identity` 586 inputs x 13 arms
+  (the Java host's four arms and its record/replay trip, wasm too), assets=images 90 documents, assets=figures 21, no difference; `bb slice` (17 native tests,
+  `javac -Xlint:all` clean), `bb ocr`, `bb fusion` (22 documents), `bb embedders`, `bb drift`, `bb hosts`, `bb check`; `bb unit` 874 laws on Rust, Go and Java.
+  **Live**: pdfium and Tesseract 5.5.3 over FFM record `h-numbered` and `lists-basic` entry for entry as the committed Rust recordings of `test/fusion/replay`
+  (only the `:producer`'s `:host` and the bitmaps the slim files omit differ). Left: D1004.
 - [ ] P9.2 — C# host.
 - [x] P9.3 — WASM binding, JS SDK, tesseract.js through plan/fulfil. **Done**
   (D356-D361; what was built, the toolchain, each "done when" point with its
@@ -10383,4 +10393,31 @@ words are the engine's own misreads of true ring words (`GRERK`, `DFFICIAL`; and
 ### D448 — What P10.11 did not do (P10.11; D444-D447)
 **Decision** (a record): not done and owned: the transcript's PNG reader (plan.rs's third inflater: after P10.9); a JPEG validator (header sanity and limits: the JPEG path still reads its own header and the two decoders still forgive different damage, D190, the one `known` class of `bb fuzz`); a palette pixel that is outside its palette (Go refuses it, the Rust crate maps it; the validator does not unfilter the image); the LZW, PackBits and Deflate decompressors and the 8-bit reduction (host code in both idioms, D188); Java and C# (not on main: their `ImgDec` is to call `pcCheck`, `tcCheck`, `tcExif` and `ccDecode` first and keep only the JPEG codec, a PNG library behind `clean`, and what their platform lacks among LZW/PackBits/Deflate). (The `bb perf` row for the CCITT decoder, listed here by the branch, was added at the merge: D447.)
 **Why**: each needs something P10.11 was not given (P10.9, P10.3, the other hosts).
+- [ ] **Signed off** (maintainer)
+
+### D1000 — The Java host's native bindings use the Java FFM API (`java.lang.foreign`), not JNA or JNI; the floor is JDK 22 (P9.1; SPEC 13, 7.2; D007, D127, D211; the first branch's D520)
+**Decision**: pdfium (`host/java/emon/ffi/Pdfium.java`) and Tesseract/Leptonica (`ffi/Tess.java`) are bound with the Foreign Function & Memory API, final since JDK 22 (here: 25). The libraries are found at RUN time (`EMON_PDFIUM_LIB`, `EMON_TESS_LIB`, the usual directories), so nothing links them and no gate needs them; a missing one is `emon.ffi.Unavailable`. pdfium's file-access callback is an upcall stub over the run's `RenderPort.Source`. The launcher `emon-java-build` writes passes `--enable-native-access=ALL-UNNAMED`. With no JDK 22+ `emon-java-build` exits 3 with `SKIP java -- why` and every gate arm leaves Java out, loudly; `EMON_SKIP_JAVA=1` leaves it out on purpose. `Tess` no longer holds the OCR policy: which models read a request, a word's language, the OSD script and a block's type are `emon.ocrport` (P10.7, D396-D397). SPEC 8.3 names the FFM API for Java.
+**Why**: no dependency to fetch, no shim to build per platform; it is what SPEC 13 says ("the C API via Panama").
+**Alternatives**: JNA; JNI.
+- [ ] **Signed off** (maintainer)
+
+### D1001 — The Java Engine adopts kin's machine instead of porting the first host's loop (P9.1; D396, D404-D408, D438-D442, D434-D437, D444-D448; the first branch's D521)
+**Decision**: `Planrun` is the Java driver of `emon.planloop` and `emon.transcript` (Go's `planrun`): one attempt's accounting, the two named limits, request checks, answer order, the schedule (`en-next`), the fetch planner (`fp-plan`, in `ChunkCache`), routing (`pl-route`) and every name are kin's; requests are read by kin's field names (`rd-*`, `dc-*`, `dq-*`, `oc-*`, `bq-*`); the transcript file is `emon.transcript` over named files (the host keeps the PNG per bitmap: `PngRead` is the reader P10.11 left to the hosts). Deleted from the first host: `PlanLoop.run`, its EDN reader and writer, `producerInOrder`, the kind table, the replay map and the unused count, `ChunkCache.take`, the hand-written `Stages` (the document unit is one call, `engine.en-finish-pdf`/`-raster`), the hand-written options (`Options.parse` calls `emon.config`, so `ocrBornDigital`'s drift is gone and `ocrScope` and `noRetarget` exist), the message-parsed limit breach (a `Port.Breach` is caught by type), the limit tables in `Port` (kin's). The class is `Planrun`, not `PlanLoop`: the generated `Planloop` differs from it only in case, which a case-insensitive file system cannot hold. `Port.withLimits` is Go's design (a process-wide table behind a read-write lock). The Java Engine now has the asset unit, the figures phase, `decode-img` (DCT through ImageIO's raster reader, CCITT through kin, JPX and JBIG2 `unsupported` unless the embedder's `Options.PdfCodecs` brings them), the born-digital OCR policy and `ocr-scope`, which the first host predates. Shared kin and the Rust and Go hosts were not touched.
+**Why**: D396 ("kin by default"); the first host would have been a second copy of what four others now call.
+**Alternatives**: porting `PlanLoop` forward (rejected: that is what D396 ends).
+- [ ] **Signed off** (maintainer)
+
+### D1002 — The ImageDecode port in Java: kin's validators decide, ImageIO produces the pixels (P9.1; P10.11, D444-D448; D187-D190; the first branch's D522)
+**Decision**: `ImgDec` reads the whole file, `Pngcheck.pcCheck` / `Tiffcheck.tcCheck` / `tcExif` decide, report and bound it, ImageIO's PNG reader is shown only `clean` (the chunks that matter), and what is left is the 8-bit reduction, alpha over white, orientation, TIFF's strips and tiles through LZW and PackBits (the JDK has neither; Deflate is `Inflater`) and CCITT G3/G4 through `Ccitt.ccDecode` (given a zeroed Buf of rows * stride bytes, D447). JPEG goes through ImageIO in raster mode and Go's integer YCbCr step (D190's tolerance); the Java PNG decoder, TIFF container reader, EXIF reader and CCITT decoder of the first host (about 1,060 lines) are gone. `ImgDec.java` 2,017 -> 954 lines.
+**Why**: two libraries' leniency is never a cross-host difference (D444).
+- [ ] **Signed off** (maintainer)
+
+### D1003 — The Java arm of `bb identity`, `bb slice`, `bb ocr`, `bb fusion` and `bb embedders`: optional, skipped loudly, never a failure (P9.1; the first branch's D523)
+**Decision**: as the first branch, on the current gates. `bb identity`: four Java arms (bytes, a `SeekableByteChannel` which is also `readerat`, a spooled `InputStream`, a 512-byte async source) against Rust's bytes arm (bundle, exit code, stderr), its `--record` directory equal to Rust's, its replay of Rust's transcript and Rust's replay of its; **586 inputs x 13 arms, assets=images 90 documents, assets=figures 21, wasm included: no difference**. `bb slice` builds, lints (`javac -Xlint:all`, clean) and runs `EngineTest` (17 native tests) and every section through `emon-java`; `bb ocr` and `bb fusion` replay the committed transcripts (a changed request is `transcript-miss` with the same stderr as Go and Rust: the sentence is kin's now); `bb embedders` holds the Java names to SPEC 3.9/13 in Java's spelling and the library files (`Planrun`, `api/`, `ffi/Pdfium`) to D058. A build failure other than the JDK's absence FAILS the gate.
+**Why**: the same corpus, the same answers.
+- [ ] **Signed off** (maintainer)
+
+### D1004 — What the live bindings were held to, and what P9.1 left (P9.1; D127, D216; the first branch's D524, D525)
+**Decision**: with pdfium (chromium/8076) and Tesseract 5.5.3, Leptonica 1.87.0, `emon-java --pdfium --tesseract --record` of `h-numbered` and `lists-basic` is the committed Rust recording of `test/fusion/replay` entry for entry (renders at 300 dpi, the 19k-cell OCR answers; only the `:producer`'s `:host` differs, and the slim files omit the bitmaps). The Engine's default dpi is 0 (as Go's) and Tesseract warns `Invalid resolution 0 dpi. Using 70 instead.`; the committed recordings carry the same requests. A live Tesseract over a SCANNED page differs from the Rust recording in the OCR answer because the JPEG decoders' last bits differ (D190), as it does for Go. NOT wired: the Java host is not an arm of `bb image` (`emon-java --out=pixels` exists), `bb repeat`, `bb fuzz`, `bb render`, `bb align`, `bb artifacts`, `bb seals`, `bb accuracy`, `bb ocr-live`, `bb render-record`; no `Tess.close()`; no packaging beyond `javac` on the assembled tree; `emon-java` starts a JVM per conversion. The transcript PNG reader (`PngRead`) stays until the hosts' reader moves into kin (P10.11's left item).
+**Why**: the transcript is the identity mechanism (D008); the list is for the next item.
 - [ ] **Signed off** (maintainer)

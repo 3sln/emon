@@ -5,7 +5,7 @@
 //
 //   emon-java [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
 //             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]]
-//             [--ocr-born-digital] [--assets=none|images|figures] [--password=TEXT]
+//             [--assets=none|images|figures] [--password=TEXT]
 //             [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //             [--html-assets=inline|external|omit] [--asset-prefix=P]
 //             [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats]
@@ -65,7 +65,7 @@ public class Main {
 
     static void usage(String msg) {
         err.println("emon-java: " + msg);
-        err.println("usage: emon-java [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]] [--ocr-born-digital] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
+        err.println("usage: emon-java [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--pdfium[=LIBDIR]] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|readerat|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--parallel=N] FILE");
         throw new Exit(2);
     }
 
