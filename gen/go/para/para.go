@@ -1546,6 +1546,17 @@ func paJoinScore(wd *port.Cells, ln *port.Cells, et *port.Cells, raw *port.Cells
 	return pts
 }
 
+func paLive(ln *port.Cells, lo *port.Cells, first int32, cnt int32) int32 {
+	// How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
+	// sees every line of the page, tables included, so that what it makes of the rest is what it always made;
+	// the lines a table holds are left out here, where the paragraphs are made.
+	var k int32 = 0
+	for (k < cnt) && (table.TbClaimed(ln, port.CellsAt(lo, first+k)) != 0) {
+		k += 1
+	}
+	return k
+}
+
 func paNote(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, al *port.Cells, ii *port.Cells, cf *port.Cells, lo *port.Cells, r int32, med int32, hc *port.Cells) int32 {
 	// The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
 	// paragraphs as any fragment's (D113).
@@ -1599,7 +1610,11 @@ func paNotes(wd *port.Cells, ln *port.Cells, et *port.Cells, nodes *port.Cells, 
 		if (port.CellsAt(cf, base+cfRole) != model.RlBody()) && (port.CellsAt(cf, base+cfDone) == 0) {
 			if (port.CellsAt(cf, base+cfAssoc) < cur) || ((port.CellsAt(cf, base+cfAssoc) == cur) && (port.CellsAt(cf, base+cfY0) <= ty)) {
 				port.CellsSet(cf, base+cfDone, 1)
-				paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc)
+				// a side fragment of a scan every line of which a table holds is the table's cells, not a note (a narrow last
+				// column; D980). A text layer's are left as they were: its born-digital digests and ratchets hold them.
+				if (evidence.LnGet(ln, port.CellsAt(lo, port.CellsAt(cf, base+cfFirst)), evidence.LfSrc()) != model.SrOcr()) || (paLive(ln, lo, port.CellsAt(cf, base+cfFirst), port.CellsAt(cf, base+cfCount)) < port.CellsAt(cf, base+cfCount)) {
+					paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc)
+				}
 			} else if pend > r {
 				pend = r
 			}
@@ -1718,17 +1733,6 @@ func paColumns(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, 
 		p += 1
 	}
 	return 0
-}
-
-func paLive(ln *port.Cells, lo *port.Cells, first int32, cnt int32) int32 {
-	// How many lines at the head of the fragment lo[first, first+cnt) a table holds (D178): the column stage
-	// sees every line of the page, tables included, so that what it makes of the rest is what it always made;
-	// the lines a table holds are left out here, where the paragraphs are made.
-	var k int32 = 0
-	for (k < cnt) && (table.TbClaimed(ln, port.CellsAt(lo, first+k)) != 0) {
-		k += 1
-	}
-	return k
 }
 
 func paTables(tb *port.Cells, tcur int32, p int32, ymid2 int32, wd *port.Cells, ln *port.Cells, et *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, ledger *port.Cells, hc *port.Cells) int32 {

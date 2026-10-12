@@ -1334,8 +1334,23 @@ pub(crate) fn tb_bkey(wd: &mut crate::port::Cells, w: i32, ppm: i32) -> i32 {
     // words share on a tilted scan, where a row's left and right words differ by several sizes of baseline over a table's
     // width and the chain of rows below would cut a row where a column is empty. ppm 0 answers `by1`, as before.
     // 64-bit and clamped: a hostile coordinate times the tilt does not overflow (D387's kind).
-    let sh: i64 = ((wd_get(wd, w, hd_bx1()) / 100) as i64).wrapping_mul(ppm as i64) / (10000 as i64);
-    return tb_clamp64((wd_get(wd, w, hd_by1()) as i64).wrapping_add((sh).wrapping_mul(-1 as i64)));
+    if ppm == 0 {
+        return wd_get(wd, w, hd_by1());
+    }
+    let mut f: i32 = w;
+    let mut steps: i32 = 0;
+    let lin: i32 = wd_get(wd, w, hd_line());
+    // The anchor is the first word of the word's line (at most 64 words back): every word of a line gets one key,
+    // the line's start carried along the page's tilt, and not its own point on a baseline whose slope is a pixel's noise
+    // (a short line's slope is not the page's, and the error grows with the distance from the line's start; D980).
+    if lin >= 0 {
+        while (f > 0) && ((steps < 64) && (wd_get(wd, f - 1, hd_line()) == lin)) {
+            f -= 1;
+            steps += 1;
+        }
+    }
+    let sh: i64 = ((wd_get(wd, f, hd_bx0()) / 100) as i64).wrapping_mul(ppm as i64) / (10000 as i64);
+    return tb_clamp64((wd_get(wd, f, hd_by0()) as i64).wrapping_add((sh).wrapping_mul(-1 as i64)));
 }
 pub(crate) fn tb_wless(wd: &mut crate::port::Cells, a: i32, b: i32, mode: i32, ppm: i32) -> bool {
     // Does word a come before word b: mode 0 by baseline then x, mode 1 by x; then by index.
@@ -1387,6 +1402,18 @@ pub(crate) fn tb_sort_words(mut wl: &mut crate::port::Cells, wd: &mut crate::por
     }
     return 0;
 }
+pub(crate) fn tb_chain_tol(wd: &mut crate::port::Cells, a: i32, b: i32, tol: i32) -> i32 {
+    // The baseline distance at which the word b still joins the row of the word a: `tol`, a third of the first word's size, but at
+    // most a third of the smaller of the two sizes. A line's size is its box's height, and a box that took in the dark band of a
+    // header (or a stamp) is several times the text's; its size must not let the line below join its row (D980).
+    let sa: i32 = tb_max(500, wd_get(wd, a, wf_size()));
+    let sb: i32 = tb_max(500, wd_get(wd, b, wf_size()));
+    let t2: i32 = (3 * tb_min(sa, sb)) / 10;
+    if t2 < tol {
+        return t2;
+    }
+    return tol;
+}
 pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, ry0: i32, rx1: i32, ry1: i32, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells) -> i32 {
     // The upright words w0..w1 of the page whose centre is in the box, as baseline rows and chunks (see the
     // head of this section). Answers the number of rows.
@@ -1418,7 +1445,7 @@ pub(crate) fn tb_rows(wd: &mut crate::port::Cells, w0: i32, w1: i32, rx0: i32, r
         // A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
         // order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
         j = i + 1;
-        while (j < n) && (tb_abs(tb_bkey(wd, crate::port::cells_at(wl, j), ppm) - tb_bkey(wd, crate::port::cells_at(wl, j - 1), ppm)) <= tol) {
+        while (j < n) && (tb_abs(tb_bkey(wd, crate::port::cells_at(wl, j), ppm) - tb_bkey(wd, crate::port::cells_at(wl, j - 1), ppm)) <= tb_chain_tol(wd, crate::port::cells_at(wl, j - 1), crate::port::cells_at(wl, j), tol)) {
             j += 1;
         }
         tb_sort_words(wl, wd, i, j, 1, ppm);
@@ -2733,6 +2760,138 @@ pub(crate) fn tb_shaded_page(fl: &mut crate::port::Cells, page: i32, wd: &mut cr
     }
     return 0;
 }
+pub(crate) fn tb_tabular_baseline_rows(rw: &mut crate::port::Cells, ra: i32, rb: i32) -> i32 {
+    // How many of the baseline rows ra..rb are cut in two chunks or more.
+    let mut r: i32 = ra;
+    let mut n: i32 = 0;
+    while r < rb {
+        if crate::port::cells_at(rw, (r * RWS) + 9) >= 2 {
+            n += 1;
+        }
+        r += 1;
+    }
+    return n;
+}
+pub(crate) fn tb_median_pitch(rw: &mut crate::port::Cells, ra: i32, rb: i32, mut scratch: &mut crate::port::Cells) -> i32 {
+    // The median distance between the baselines of consecutive rows ra..rb (0 for fewer than two). `scratch` is clobbered.
+    let mut r: i32 = ra + 1;
+    crate::port::cells_drop(scratch, 0);
+    while r < rb {
+        crate::port::cells_push(scratch, crate::port::cells_at(rw, (r * RWS) + 2) - crate::port::cells_at(rw, ((r - 1) * RWS) + 2));
+        r += 1;
+    }
+    if crate::port::cells_len(scratch) < 2 {
+        return 0;
+    }
+    tb_sort_nums(scratch);
+    return crate::port::cells_at(scratch, crate::port::cells_len(scratch) / 2);
+}
+pub(crate) fn tb_prose_edge(tb: &mut crate::port::Cells, k: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells) -> i32 {
+    // 1 when the first row of table k is a line of prose, 2 when the last is, 3 when both are: the line of a paragraph beside
+    // or under a table that its row would have taken (D980). A line of prose is a row with one cell holding nine words or more, or
+    // a row of which every cell has two words or more and begins with a lowercase letter (text set in chunks).
+    let b: i32 = k * TBS;
+    let nrows: i32 = crate::port::cells_at(tb, b + 7);
+    let cfirst: i32 = crate::port::cells_at(tb, b + 9);
+    let cend: i32 = cfirst + crate::port::cells_at(tb, b + 10);
+    let mut c: i32 = cfirst;
+    let mut filled0: i32 = 0;
+    let mut words0: i32 = 0;
+    let mut low0: i32 = 0;
+    let mut filled1: i32 = 0;
+    let mut words1: i32 = 0;
+    let mut low1: i32 = 0;
+    let mut res: i32 = 0;
+    while c < cend {
+        let cb: i32 = c * TCS;
+        let cn: i32 = crate::port::cells_at(tc, cb + 9);
+        if cn > 0 {
+            let fw: i32 = crate::port::cells_at(tw, crate::port::cells_at(tc, cb + 8));
+            let c0: i32 = crate::port::cells_at(et, wd_get(wd, fw, hd_tstart()));
+            let mut low: i32 = 0;
+            if (cn >= 2) && ((c0 >= 97) && (c0 <= 122)) {
+                low = 1;
+            }
+            if crate::port::cells_at(tc, cb) == 0 {
+                filled0 += 1;
+                low0 += low;
+                if cn > words0 {
+                    words0 = cn;
+                }
+            }
+            if crate::port::cells_at(tc, cb) == (nrows - 1) {
+                filled1 += 1;
+                low1 += low;
+                if cn > words1 {
+                    words1 = cn;
+                }
+            }
+        }
+        c += 1;
+    }
+    if nrows < 4 {
+        return 0;
+    }
+    if ((filled0 == 1) && (words0 >= 9)) || ((filled0 >= 2) && (low0 == filled0)) {
+        res = 1;
+    }
+    if ((filled1 == 1) && (words1 >= 9)) || ((filled1 >= 2) && (low1 == filled1)) {
+        res += 2;
+    }
+    return res;
+}
+pub(crate) fn tb_whitespace_run(page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, ra: i32, rb: i32) -> i32 {
+    // The rows ra..rb (inclusive) as a whitespace candidate: its rows of one chunk at either end are not in it, and a
+    // run that is refused as a whole is tried again without its last row (the lines that follow a table, set in two
+    // chunks like a label and its text, join the run once the rows are right; D980). Three rows cut in two chunks at least.
+    let mut a: i32 = ra;
+    let mut jj: i32 = rb;
+    let mut again: i32 = 0;
+    while (a < jj) && (crate::port::cells_at(rw, (a * RWS) + 9) < 2) {
+        a += 1;
+    }
+    while (jj > a) && (crate::port::cells_at(rw, (jj * RWS) + 9) < 2) {
+        jj -= 1;
+    }
+    if tb_tabular_baseline_rows(rw, a, jj + 1) >= 3 {
+        again = 1;
+    }
+    while again == 1 {
+        again = 0;
+        let nt: i32 = tb_rows_of(tb, TBS);
+        let c0: i32 = tb_rows_of(tc, TCS);
+        let wl0: i32 = crate::port::cells_len(tw);
+        let xl0: i32 = crate::port::cells_len(tx);
+        let t: i32 = tb_text_grid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, jj + 1, PF_WHITESPACE, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000);
+        if t >= 0 {
+            let sc: i32 = tb_score(tb, t, wd, et, tc, tw);
+            let pe: i32 = tb_prose_edge(tb, t, wd, et, tc, tw);
+            if (sc == 0) || (pe > 0) {
+                tb_reject(tb, tc, tw, tx, nt, c0, wl0, xl0);
+                if (sc == 0) || (pe >= 2) {
+                    jj -= 1;
+                }
+                if (pe == 1) || (pe == 3) {
+                    a += 1;
+                }
+                while (jj > a) && (crate::port::cells_at(rw, (jj * RWS) + 9) < 2) {
+                    jj -= 1;
+                }
+                while (a < jj) && (crate::port::cells_at(rw, (a * RWS) + 9) < 2) {
+                    a += 1;
+                }
+                // ...until three rows are left, and no more rows are let go than are kept (a run of columns of text
+                // that is refused is not a table with some prose after it)
+                if (tb_tabular_baseline_rows(rw, a, jj + 1) >= 3) && (((rb - jj) + (a - ra)) <= ((jj - a) + 1)) {
+                    again = 1;
+                }
+            } else {
+                crate::port::cells_set(tb, (t * TBS) + 6, sc);
+            }
+        }
+    }
+    return 0;
+}
 pub(crate) fn tb_whitespace_page(page: i32, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, w0: i32, w1: i32, mut wl: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut ch: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut en: &mut crate::port::Cells, mut rmap: &mut crate::port::Cells, mut gm: &mut crate::port::Cells, mut gs: &mut crate::port::Cells, mut ry: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut so: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tx: &mut crate::port::Cells) -> i32 {
     // The rows of the whole page, in runs of rows that are cut in two or more chunks (a row of one chunk
     // goes in a run when a row of two follows it), each run of three such rows or more a whitespace candidate.
@@ -2774,19 +2933,21 @@ pub(crate) fn tb_whitespace_page(page: i32, wd: &mut crate::port::Cells, et: &mu
                 j -= 1;
             }
             if ntab >= 3 {
-                let nt: i32 = tb_rows_of(tb, TBS);
-                let c0: i32 = tb_rows_of(tc, TCS);
-                let wl0: i32 = crate::port::cells_len(tw);
-                let xl0: i32 = crate::port::cells_len(tx);
-                let t: i32 = tb_text_grid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, i, j + 1, PF_WHITESPACE, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000);
-                if t >= 0 {
-                    let sc: i32 = tb_score(tb, t, wd, et, tc, tw);
-                    if sc == 0 {
-                        tb_reject(tb, tc, tw, tx, nt, c0, wl0, xl0);
-                    } else {
-                        crate::port::cells_set(tb, (t * TBS) + 6, sc);
+                let mut a: i32 = i;
+                let mut e: i32 = j;
+                let med: i32 = tb_median_pitch(rw, i, j + 1, st);
+                // A row set apart from the run's body by more than twice the run's median pitch is not in it: a page's running
+                // header above a table, a label below it. The rows were once cut in halves by a tilted scan and these stood alone;
+                // set right, they join the run (D980).
+                if med > 0 {
+                    while (a < e) && ((10 * (crate::port::cells_at(rw, ((a + 1) * RWS) + 2) - crate::port::cells_at(rw, (a * RWS) + 2))) > (20 * med)) {
+                        a += 1;
+                    }
+                    while (e > a) && ((10 * (crate::port::cells_at(rw, (e * RWS) + 2) - crate::port::cells_at(rw, ((e - 1) * RWS) + 2))) > (20 * med)) {
+                        e -= 1;
                     }
                 }
+                tb_whitespace_run(page, wd, et, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, e);
             }
         } else {
             j = i;
@@ -2824,7 +2985,7 @@ pub(crate) fn tb_same_columns(tb: &mut crate::port::Cells, a: i32, b: i32, tx: &
     if na < 3 {
         return 0 == 1;
     }
-    let tol: i32 = tb_max(500, (crate::port::cells_at(tx, xa + (na - 1)) - crate::port::cells_at(tx, xa)) / 60);
+    let tol: i32 = tb_max(1000, (crate::port::cells_at(tx, xa + (na - 1)) - crate::port::cells_at(tx, xa)) / 20);
     while i < na {
         if tb_abs(crate::port::cells_at(tx, xa + i) - crate::port::cells_at(tx, xb + i)) > tol {
             return 0 == 1;

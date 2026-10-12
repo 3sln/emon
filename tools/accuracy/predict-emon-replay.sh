@@ -13,7 +13,10 @@ if ! command -v cargo > /dev/null; then
   exit 3
 fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
-t="$root/test/ocr/$dir/$1"
+name=$1
+# a whole transcript of a colour or overlay scan is in test/ocr/scan-px/VARIANT--ID/ (D980); a scan's is in ID/
+if [ "$dir" = scan-px ] && [ "$2" != scan ]; then name="$2--$1"; fi
+t="$root/test/ocr/$dir/$name"
 if [ ! -f "$t/transcript.edn" ]; then
   echo "emon-replay: no committed transcript for $1" >&2
   exit 3

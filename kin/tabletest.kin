@@ -26,7 +26,7 @@
                                 nk-paragraph nk-table nk-rowgroup nk-row nk-cell nk-caption
                                 fk-rowspan fk-colspan fk-columns fk-profile fk-label fk-align]]
             [emon.json :refer [js-emit]]
-            [emon.evidence :refer [wd-new wd-set wd-count ln-new wf-size wf-font wf-style
+            [emon.evidence :refer [wd-new wd-set wd-count ln-new ln-count wf-size wf-font wf-style
                                    pa-new pa-set pa-rect pf-flags pf-fill pf-falpha pg-filled]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.pdfcontent :refer [pc-document]]
@@ -255,6 +255,120 @@
     (assert-eq (tt-run wd ln et pa t2) 0 "prose: well formed")
     (assert-text t2 "P[the old];P[was and];P[of the];P[that is];P[and then];P[went on];P[she said];P[to him];"
                  "lowercase text with half the cells empty is not a table")))
+
+;; ------------------------------------------- whitespace runs on scans (D980)
+
+(defn ^I32 tt-line2 [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob a ^Blob b ^I32 x ^I32 y]
+  (comment "One line of two words, 500 per character and a 500 gap, 800 tall from y.")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 xb (+ (+ x (* 500 (blob-len a))) 500)]
+    (tt-w wd et a x y (+ x (* 500 (blob-len a))) (+ y 800) 0)
+    (tt-w wd et b xb y (+ xb (* 500 (blob-len b))) (+ y 800) 0)
+    (ln-new ln 1 x y (+ xb (* 500 (blob-len b))) (+ y 800) x (- (+ y 800) 200) (+ xb (* 500 (blob-len b))) (- (+ y 800) 200) 0 0 w0 2)
+    (return 0)))
+
+(defn ^I32 tt-prose-row [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^I32 y
+                         ^Blob a1 ^Blob a2 ^Blob b1 ^Blob b2 ^Blob c1 ^Blob c2]
+  (comment "A row of three cells of two lowercase words each: text set in chunks.")
+  (tt-line2 wd ln et a1 a2 7200 y)
+  (tt-line2 wd ln et b1 b2 30000 y)
+  (tt-line2 wd ln et c1 c2 40000 y)
+  (return 0))
+
+(defn ^I32 tt-tw [^:mut ^Cells wd ^:mut ^Cells et ^Blob b ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 tilt ^I32 size ^I32 line]
+  (comment "One word whose baseline slopes by `tilt` parts per million from y1 - 200 at x 7200 (the line of a scan).")
+  (let [^I32 ts (cells-len et)
+        ^I32 base (- y1 200)]
+    (text-append-utf8 et b 0 (blob-len b))
+    (let [^I32 r (wd-new wd 1 x0 y0 x1 y1
+                         x0 (+ base (quot (* tilt (- x0 7200)) 1000000)) x1 (+ base (quot (* tilt (- x1 7200)) 1000000))
+                         0 0 ts (- (cells-len et) ts) line -1 -1)]
+      (wd-set wd r (wf-size) size)
+      (wd-set wd r (wf-font) 0)
+      (wd-set wd r (wf-style) 0))
+    (return 0)))
+
+(defn ^I32 tt-trow [^:mut ^Cells wd ^:mut ^Cells ln ^:mut ^Cells et ^Blob a ^Blob b ^Blob c ^I32 y ^I32 tilt ^I32 size]
+  (comment "One line of three words (at x 7200, 20000 and 36000, 800 tall from y) with a baseline that slopes by `tilt` parts per")
+  (comment "million, and the words' size `size`: a row of a scan, whose lines Tesseract fits one by one.")
+  (let [^I32 w0 (wd-count wd)
+        ^I32 l (ln-count ln)
+        ^I32 xb 20000
+        ^I32 xc 36000
+        ^I32 x1 (+ xc (* 500 (blob-len c)))
+        ^I32 base (+ y 600)]
+    (tt-tw wd et a 7200 y (+ 7200 (* 500 (blob-len a))) (+ y 800) tilt size l)
+    (tt-tw wd et b xb y (+ xb (* 500 (blob-len b))) (+ y 800) tilt size l)
+    (tt-tw wd et c xc y x1 (+ y 800) tilt size l)
+    (ln-new ln 1 7200 y x1 (+ y 800) 7200 base x1 (+ base (quot (* tilt (- x1 7200)) 1000000)) 0 0 w0 3)
+    (return 0)))
+
+(deftest test-a-tail-that-spoils-a-whitespace-run-is-let-go
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "A header, five rows of a label and two numbers, then three rows of lowercase text set in three chunks: as one run")
+    (comment "they are prose in columns and the run is refused; without its last three rows it is the table.")
+    (tt-at wd ln et (text-blob "Fund") 7200 10000 1 0)
+    (tt-at wd ln et (text-blob "Q1") 30000 10000 1 1)
+    (tt-at wd ln et (text-blob "Q2") 40000 10000 1 1)
+    (tt-at wd ln et (text-blob "Alpha") 7200 11600 0 0)
+    (tt-at wd ln et (text-blob "3.0%") 30000 11600 0 1)
+    (tt-at wd ln et (text-blob "111.5%") 40000 11600 0 1)
+    (tt-at wd ln et (text-blob "Bo") 7200 13200 0 0)
+    (tt-at wd ln et (text-blob "4.7%") 30000 13200 0 1)
+    (tt-at wd ln et (text-blob "4.3%") 40000 13200 0 1)
+    (tt-at wd ln et (text-blob "Gammarays") 7200 14800 0 0)
+    (tt-at wd ln et (text-blob "12.1%") 30000 14800 0 1)
+    (tt-at wd ln et (text-blob "9.5%") 40000 14800 0 1)
+    (tt-at wd ln et (text-blob "Delta") 7200 16400 0 0)
+    (tt-at wd ln et (text-blob "5.1%") 30000 16400 0 1)
+    (tt-at wd ln et (text-blob "2.2%") 40000 16400 0 1)
+    (tt-prose-row wd ln et 19000 (text-blob "net") (text-blob "thirty") (text-blob "days") (text-blob "from") (text-blob "late") (text-blob "fees"))
+    (tt-prose-row wd ln et 20600 (text-blob "pay") (text-blob "by") (text-blob "bank") (text-blob "transfer") (text-blob "sort") (text-blob "code"))
+    (tt-prose-row wd ln et 22200 (text-blob "thank") (text-blob "you") (text-blob "for") (text-blob "your") (text-blob "custom") (text-blob "again"))
+    (assert-eq (tt-run wd ln et pa t) 0 "tail: well formed")
+    (assert-text t "T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];R;Cs[Delta];C[5.1%];Ce[2.2%];P[net thirty];P[days from];P[late fees];P[pay by];P[bank transfer];P[sort code];P[thank you];P[for your];P[custom again];"
+                 "the three rows of text in chunks that spoil the run are not rows of the table: five rows and a header, then paragraphs")))
+
+(deftest test-a-running-header-apart-from-a-whitespace-run-is-no-row-of-it
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Two chunks of a page header, more than two pitches above a table of numbers whose rows are a pitch (1200) apart.")
+    (tt-at wd ln et (text-blob "Statement") 7200 5400 0 0)
+    (tt-at wd ln et (text-blob "Page 2") 40000 5400 0 1)
+    (tt-at wd ln et (text-blob "Fund") 7200 8000 1 0)
+    (tt-at wd ln et (text-blob "Q1") 30000 8000 1 1)
+    (tt-at wd ln et (text-blob "Q2") 40000 8000 1 1)
+    (tt-at wd ln et (text-blob "Alpha") 7200 9200 0 0)
+    (tt-at wd ln et (text-blob "3.0%") 30000 9200 0 1)
+    (tt-at wd ln et (text-blob "111.5%") 40000 9200 0 1)
+    (tt-at wd ln et (text-blob "Bo") 7200 10400 0 0)
+    (tt-at wd ln et (text-blob "4.7%") 30000 10400 0 1)
+    (tt-at wd ln et (text-blob "4.3%") 40000 10400 0 1)
+    (tt-at wd ln et (text-blob "Gammarays") 7200 11600 0 0)
+    (tt-at wd ln et (text-blob "12.1%") 30000 11600 0 1)
+    (tt-at wd ln et (text-blob "9.5%") 40000 11600 0 1)
+    (tt-at wd ln et (text-blob "Total") 7200 12800 1 0)
+    (tt-at wd ln et (text-blob "6.4%") 30000 12800 1 1)
+    (tt-at wd ln et (text-blob "6.6%") 40000 12800 1 1)
+    (assert-eq (tt-run wd ln et pa t) 0 "header: well formed")
+    (assert-text t "P[Statement];P[Page 2];T3w;Gh;R;Chs[Fund];Che[Q1];Che[Q2];Gb;R;Cs[Alpha];C[3.0%];Ce[111.5%];R;Cs[Bo];C[4.7%];Ce[4.3%];R;Cs[Gammarays];C[12.1%];Ce[9.5%];Gf;R;Cws[Total];Cw[6.4%];Cwe[6.6%];"
+                 "the page header more than two pitches above is two paragraphs, not the first row of the table")))
+
+(deftest test-the-rows-of-a-tilted-scan-are-told-apart-by-their-lines
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (comment "Five rows a pitch (1000) apart on a page tilted by 20000 parts per million, the third fitted flat by the OCR and with a size")
+    (comment "four times the others' (a box that took in a dark band): its words' own baselines differ by 700 across the row, and the")
+    (comment "chain tolerance of its size is more than the pitch; each line has one key, and the tolerance of two sizes is the smaller.")
+    (tt-trow wd ln et (text-blob "Fund") (text-blob "Q1") (text-blob "Q2") 10000 20000 1000)
+    (tt-trow wd ln et (text-blob "Alpha") (text-blob "3.0%") (text-blob "111.5%") 11000 20000 1000)
+    (tt-trow wd ln et (text-blob "Bo") (text-blob "4.7%") (text-blob "4.3%") 12000 0 4000)
+    (tt-trow wd ln et (text-blob "Gammarays") (text-blob "12.1%") (text-blob "9.5%") 13000 20000 1000)
+    (tt-trow wd ln et (text-blob "Delta") (text-blob "5.1%") (text-blob "2.2%") 14000 20000 1000)
+    (assert-eq (tt-run wd ln et pa t) 0 "tilt: well formed")
+    (assert-text t "T3w;Gh;R;Chs[Fund];Ch[Q1];Chs[Q2];Gb;R;Cs[Alpha];C[3.0%];Cs[111.5%];R;Cs[Bo];C[4.7%];Cs[4.3%];R;Cs[Gammarays];C[12.1%];Cs[9.5%];R;Cs[Delta];C[5.1%];Cs[2.2%];"
+                 "five rows of three cells on a tilted page, the row of the oversized flat line one row of its own")))
 
 ;; ------------------------------------------------------------ partial, shaded
 

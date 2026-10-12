@@ -1331,8 +1331,23 @@ public final class Table {
         // words share on a tilted scan, where a row's left and right words differ by several sizes of baseline over a table's
         // width and the chain of rows below would cut a row where a column is empty. ppm 0 answers `by1`, as before.
         // 64-bit and clamped: a hostile coordinate times the tilt does not overflow (D387's kind).
-        long sh = (((long) (Evidence.wdGet(wd, w, Evidence.hdBx1()) / 100)) * ((long) ppm)) / ((long) 10000);
-        return tbClamp64(((long) Evidence.wdGet(wd, w, Evidence.hdBy1())) + (sh * ((long) -1)));
+        if (ppm == 0) {
+            return Evidence.wdGet(wd, w, Evidence.hdBy1());
+        }
+        int f = w;
+        int steps = 0;
+        int lin = Evidence.wdGet(wd, w, Evidence.hdLine());
+        // The anchor is the first word of the word's line (at most 64 words back): every word of a line gets one key,
+        // the line's start carried along the page's tilt, and not its own point on a baseline whose slope is a pixel's noise
+        // (a short line's slope is not the page's, and the error grows with the distance from the line's start; D980).
+        if (lin >= 0) {
+            while ((f > 0) && ((steps < 64) && (Evidence.wdGet(wd, f - 1, Evidence.hdLine()) == lin))) {
+                f -= 1;
+                steps += 1;
+            }
+        }
+        long sh = (((long) (Evidence.wdGet(wd, f, Evidence.hdBx0()) / 100)) * ((long) ppm)) / ((long) 10000);
+        return tbClamp64(((long) Evidence.wdGet(wd, f, Evidence.hdBy0())) + (sh * ((long) -1)));
     }
     public static boolean tbWless(emon.Port.Cells wd, int a, int b, int mode, int ppm) {
         // Does word a come before word b: mode 0 by baseline then x, mode 1 by x; then by index.
@@ -1384,6 +1399,18 @@ public final class Table {
         }
         return 0;
     }
+    public static int tbChainTol(emon.Port.Cells wd, int a, int b, int tol) {
+        // The baseline distance at which the word b still joins the row of the word a: `tol`, a third of the first word's size, but at
+        // most a third of the smaller of the two sizes. A line's size is its box's height, and a box that took in the dark band of a
+        // header (or a stamp) is several times the text's; its size must not let the line below join its row (D980).
+        int sa = tbMax(500, Evidence.wdGet(wd, a, Evidence.wfSize()));
+        int sb = tbMax(500, Evidence.wdGet(wd, b, Evidence.wfSize()));
+        int t2 = (3 * tbMin(sa, sb)) / 10;
+        if (t2 < tol) {
+            return t2;
+        }
+        return tol;
+    }
     public static int tbRows(emon.Port.Cells wd, int w0, int w1, int rx0, int ry0, int rx1, int ry1, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg) {
         // The upright words w0..w1 of the page whose centre is in the box, as baseline rows and chunks (see the
         // head of this section). Answers the number of rows.
@@ -1415,7 +1442,7 @@ public final class Table {
             // A row is a CHAIN of baselines: each word within a third of the size of the one before it in baseline
             // order (not of the first: a scan's rows slope, so one row's baselines spread over several points: OCR lines in the table stage, D213).
             j = i + 1;
-            while ((j < n) && (tbAbs(tbBkey(wd, emon.Port.cellsAt(wl, j), ppm) - tbBkey(wd, emon.Port.cellsAt(wl, j - 1), ppm)) <= tol)) {
+            while ((j < n) && (tbAbs(tbBkey(wd, emon.Port.cellsAt(wl, j), ppm) - tbBkey(wd, emon.Port.cellsAt(wl, j - 1), ppm)) <= tbChainTol(wd, emon.Port.cellsAt(wl, j - 1), emon.Port.cellsAt(wl, j), tol))) {
                 j += 1;
             }
             tbSortWords(wl, wd, i, j, 1, ppm);
@@ -2730,6 +2757,138 @@ public final class Table {
         }
         return 0;
     }
+    public static int tbTabularBaselineRows(emon.Port.Cells rw, int ra, int rb) {
+        // How many of the baseline rows ra..rb are cut in two chunks or more.
+        int r = ra;
+        int n = 0;
+        while (r < rb) {
+            if (emon.Port.cellsAt(rw, (r * RWS) + 9) >= 2) {
+                n += 1;
+            }
+            r += 1;
+        }
+        return n;
+    }
+    public static int tbMedianPitch(emon.Port.Cells rw, int ra, int rb, emon.Port.Cells scratch) {
+        // The median distance between the baselines of consecutive rows ra..rb (0 for fewer than two). `scratch` is clobbered.
+        int r = ra + 1;
+        emon.Port.cellsDrop(scratch, 0);
+        while (r < rb) {
+            emon.Port.cellsPush(scratch, emon.Port.cellsAt(rw, (r * RWS) + 2) - emon.Port.cellsAt(rw, ((r - 1) * RWS) + 2));
+            r += 1;
+        }
+        if (emon.Port.cellsLen(scratch) < 2) {
+            return 0;
+        }
+        tbSortNums(scratch);
+        return emon.Port.cellsAt(scratch, emon.Port.cellsLen(scratch) / 2);
+    }
+    public static int tbProseEdge(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw) {
+        // 1 when the first row of table k is a line of prose, 2 when the last is, 3 when both are: the line of a paragraph beside
+        // or under a table that its row would have taken (D980). A line of prose is a row with one cell holding nine words or more, or
+        // a row of which every cell has two words or more and begins with a lowercase letter (text set in chunks).
+        int b = k * TBS;
+        int nrows = emon.Port.cellsAt(tb, b + 7);
+        int cfirst = emon.Port.cellsAt(tb, b + 9);
+        int cend = cfirst + emon.Port.cellsAt(tb, b + 10);
+        int c = cfirst;
+        int filled0 = 0;
+        int words0 = 0;
+        int low0 = 0;
+        int filled1 = 0;
+        int words1 = 0;
+        int low1 = 0;
+        int res = 0;
+        while (c < cend) {
+            int cb = c * TCS;
+            int cn = emon.Port.cellsAt(tc, cb + 9);
+            if (cn > 0) {
+                int fw = emon.Port.cellsAt(tw, emon.Port.cellsAt(tc, cb + 8));
+                int c0 = emon.Port.cellsAt(et, Evidence.wdGet(wd, fw, Evidence.hdTstart()));
+                int low = 0;
+                if ((cn >= 2) && ((c0 >= 97) && (c0 <= 122))) {
+                    low = 1;
+                }
+                if (emon.Port.cellsAt(tc, cb) == 0) {
+                    filled0 += 1;
+                    low0 += low;
+                    if (cn > words0) {
+                        words0 = cn;
+                    }
+                }
+                if (emon.Port.cellsAt(tc, cb) == (nrows - 1)) {
+                    filled1 += 1;
+                    low1 += low;
+                    if (cn > words1) {
+                        words1 = cn;
+                    }
+                }
+            }
+            c += 1;
+        }
+        if (nrows < 4) {
+            return 0;
+        }
+        if (((filled0 == 1) && (words0 >= 9)) || ((filled0 >= 2) && (low0 == filled0))) {
+            res = 1;
+        }
+        if (((filled1 == 1) && (words1 >= 9)) || ((filled1 >= 2) && (low1 == filled1))) {
+            res += 2;
+        }
+        return res;
+    }
+    public static int tbWhitespaceRun(int page, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells en, emon.Port.Cells rmap, emon.Port.Cells gm, emon.Port.Cells gs, emon.Port.Cells ry, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, int ra, int rb) {
+        // The rows ra..rb (inclusive) as a whitespace candidate: its rows of one chunk at either end are not in it, and a
+        // run that is refused as a whole is tried again without its last row (the lines that follow a table, set in two
+        // chunks like a label and its text, join the run once the rows are right; D980). Three rows cut in two chunks at least.
+        int a = ra;
+        int jj = rb;
+        int again = 0;
+        while ((a < jj) && (emon.Port.cellsAt(rw, (a * RWS) + 9) < 2)) {
+            a += 1;
+        }
+        while ((jj > a) && (emon.Port.cellsAt(rw, (jj * RWS) + 9) < 2)) {
+            jj -= 1;
+        }
+        if (tbTabularBaselineRows(rw, a, jj + 1) >= 3) {
+            again = 1;
+        }
+        while (again == 1) {
+            again = 0;
+            int nt = tbRowsOf(tb, TBS);
+            int c0 = tbRowsOf(tc, TCS);
+            int wl0 = emon.Port.cellsLen(tw);
+            int xl0 = emon.Port.cellsLen(tx);
+            int t = tbTextGrid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, a, jj + 1, PF_WHITESPACE, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000);
+            if (t >= 0) {
+                int sc = tbScore(tb, t, wd, et, tc, tw);
+                int pe = tbProseEdge(tb, t, wd, et, tc, tw);
+                if ((sc == 0) || (pe > 0)) {
+                    tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0);
+                    if ((sc == 0) || (pe >= 2)) {
+                        jj -= 1;
+                    }
+                    if ((pe == 1) || (pe == 3)) {
+                        a += 1;
+                    }
+                    while ((jj > a) && (emon.Port.cellsAt(rw, (jj * RWS) + 9) < 2)) {
+                        jj -= 1;
+                    }
+                    while ((a < jj) && (emon.Port.cellsAt(rw, (a * RWS) + 9) < 2)) {
+                        a += 1;
+                    }
+                    // ...until three rows are left, and no more rows are let go than are kept (a run of columns of text
+                    // that is refused is not a table with some prose after it)
+                    if ((tbTabularBaselineRows(rw, a, jj + 1) >= 3) && (((rb - jj) + (a - ra)) <= ((jj - a) + 1))) {
+                        again = 1;
+                    }
+                } else {
+                    emon.Port.cellsSet(tb, (t * TBS) + 6, sc);
+                }
+            }
+        }
+        return 0;
+    }
     public static int tbWhitespacePage(int page, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells en, emon.Port.Cells rmap, emon.Port.Cells gm, emon.Port.Cells gs, emon.Port.Cells ry, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx) {
         // The rows of the whole page, in runs of rows that are cut in two or more chunks (a row of one chunk
         // goes in a run when a row of two follows it), each run of three such rows or more a whitespace candidate.
@@ -2771,19 +2930,21 @@ public final class Table {
                     j -= 1;
                 }
                 if (ntab >= 3) {
-                    int nt = tbRowsOf(tb, TBS);
-                    int c0 = tbRowsOf(tc, TCS);
-                    int wl0 = emon.Port.cellsLen(tw);
-                    int xl0 = emon.Port.cellsLen(tx);
-                    int t = tbTextGrid(wd, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, page, i, j + 1, PF_WHITESPACE, 0, 0, 2000000000, 2000000000, -2000000000, -2000000000);
-                    if (t >= 0) {
-                        int sc = tbScore(tb, t, wd, et, tc, tw);
-                        if (sc == 0) {
-                            tbReject(tb, tc, tw, tx, nt, c0, wl0, xl0);
-                        } else {
-                            emon.Port.cellsSet(tb, (t * TBS) + 6, sc);
+                    int a = i;
+                    int e = j;
+                    int med = tbMedianPitch(rw, i, j + 1, st);
+                    // A row set apart from the run's body by more than twice the run's median pitch is not in it: a page's running
+                    // header above a table, a label below it. The rows were once cut in halves by a tilted scan and these stood alone;
+                    // set right, they join the run (D980).
+                    if (med > 0) {
+                        while ((a < e) && ((10 * (emon.Port.cellsAt(rw, ((a + 1) * RWS) + 2) - emon.Port.cellsAt(rw, (a * RWS) + 2))) > (20 * med))) {
+                            a += 1;
+                        }
+                        while ((e > a) && ((10 * (emon.Port.cellsAt(rw, (e * RWS) + 2) - emon.Port.cellsAt(rw, ((e - 1) * RWS) + 2))) > (20 * med))) {
+                            e -= 1;
                         }
                     }
+                    tbWhitespaceRun(page, wd, et, wl, rw, sg, ch, st, en, rmap, gm, gs, ry, pr, so, tb, tc, tw, tx, a, e);
                 }
             } else {
                 j = i;
@@ -2821,7 +2982,7 @@ public final class Table {
         if (na < 3) {
             return 0 == 1;
         }
-        int tol = tbMax(500, (emon.Port.cellsAt(tx, xa + (na - 1)) - emon.Port.cellsAt(tx, xa)) / 60);
+        int tol = tbMax(1000, (emon.Port.cellsAt(tx, xa + (na - 1)) - emon.Port.cellsAt(tx, xa)) / 20);
         while (i < na) {
             if (tbAbs(emon.Port.cellsAt(tx, xa + i) - emon.Port.cellsAt(tx, xb + i)) > tol) {
                 return 0 == 1;
