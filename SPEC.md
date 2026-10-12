@@ -1144,7 +1144,7 @@ within `fill-tol` (2 px), at least `fill-min` (6 pt) each way.
 ### 8.3 OCR (D033)
 
 * **Default engine**: Tesseract (LSTM), bound natively in each host (Rust:
-  the C API; Go: cgo; Java: JNI/Tess4J-style or the C API via Panama; C#: the
+  the C API; Go: cgo; Java: the C API via the FFM API (Panama, JDK 22+; D449); C#: the
   C API via P/Invoke; WASM: tesseract.js through plan/fulfil).
 * **First pass**: full page, automatic segmentation, languages from the
   locale hint or from script detection (below), with orientation and script

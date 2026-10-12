@@ -18,8 +18,8 @@
 ;;      GENERATED non-test module names a filesystem type or function. Test support (`testport.*`, `tess.rs`, `tess.go`),
 ;;      the tests and the drivers are not the library.
 ;;
-;; Java and C# have ports only so far (their Engine layers are later phases): their surface is not compared,
-;; their no-filesystem check is.
+;; (Java, P9.1: its Engine layer is held to SPEC 3.9/13's names in its own spelling, below; C# has ports only so far.)
+;; C#'s surface is not compared; the no-filesystem check covers all four.
 (require '[babashka.fs :as fs]
          '[clojure.string :as str])
 
@@ -387,6 +387,25 @@
         (count spec-types) " types; the byte-source adapters of 13.1; the asset accessors of 3.9, D117) exists on Rust and on Go"
         (when (seq spec-pending) (str "; PENDING on both: " (str/join ", " spec-pending))))))
 
+;; --------------------------------------------------------------- the Java surface (P9.1)
+;;
+;; The Java Engine layer (`host/java/emon/api/`, the driver of kin's plan machine in `host/java/emon/Planrun.java`) is not compared member for member
+;; (Java's idiom is its own: checked exceptions, enums, nested types), but every name SPEC 3.9/13 spells must be there, in
+;; the Java spelling (case and underscores ignored: `to_json` is `toJson`), and the byte-source adapters of 13.1 (a byte[], a
+;; ByteBuffer, a SeekableByteChannel, a spooled InputStream).
+
+(let [files (conj (mapv str (fs/glob "host/java/emon/api" "*.java")) "host/java/emon/Planrun.java")
+      text (str/join "\n" (map slurp files))
+      has? (fn [n] (boolean (re-find (re-pattern (str "(?i)\\b" (str/replace n "_" "") "\\b")) text)))
+      types-missing (remove #(re-find (re-pattern (str "(class|interface|enum) " % "\\b")) text) spec-types)
+      names-missing (for [[t m _] spec-names :when (not (has? m))] (str t "." m))
+      adapters-missing (remove #(re-find (re-pattern (str "static \\w+ " % "\\(")) text) ["bytes" "seekable" "spooled"])]
+  (doseq [t types-missing] (bad "SPEC 3.9/13: Java has no type " t))
+  (doseq [m names-missing] (bad "SPEC 3.9/13: Java has no " m))
+  (doseq [a adapters-missing] (bad "SPEC 13.1: Java has no input adapter " a))
+  (when (and (empty? types-missing) (empty? names-missing) (empty? adapters-missing))
+    (ok "JAVA SURFACE: every name SPEC 3.9/13 spells (" (count spec-names) " members, " (count spec-types) " types, the byte-source adapters of 13.1) is in host/java/emon/api")))
+
 ;; ------------------------------------------------------ no filesystem (D058)
 
 (defn banned-in
@@ -411,11 +430,13 @@
 
 (def library-files
   (let [g (fn [d pat] (map str (fs/glob d pat)))
-        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/tess\.go|_test\.go|/tests/" %) fs))]
+        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/tess\.go|/ffi/tess\.java|_test\.go|/tests/" %) fs))]
     {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs")))
      :js (g "host/js/src" "*.js")
      :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go") (g "host/go/planrun" "*.go")))
-     :java (not-test (g "host/java/emon" "*.java"))
+     ;; Java (P9.1): the ports and the driver of the plan machine, the Engine layer (`api/`) and the pdfium binding (`ffi/Pdfium.java`); `ffi/Tess.java`
+     ;; reads the tessdata directory like Go's tess.go does (it is a binding, not the library)
+     :java (not-test (concat (g "host/java/emon" "*.java") (g "host/java/emon/api" "*.java") (g "host/java/emon/ffi" "*.java")))
      :csharp (not-test (g "host/csharp/Emon" "*.cs"))}))
 
 (def generated-files

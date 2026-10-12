@@ -170,9 +170,21 @@
       (str/trim (:out r))
       (do (bad "the " what " Engine driver did not build:\n" (:err r)) nil))))
 
+;; THE JAVA ENGINE (P9.1, D449) replays the same transcripts: optional, left out LOUDLY without a JDK 22+ (`emon-java-build` exits 3);
+;; EMON_SKIP_JAVA=1 leaves it out on purpose
+(defn java-driver []
+  (if (System/getenv "EMON_SKIP_JAVA")
+    (do (println "  SKIP java engine -- EMON_SKIP_JAVA is set") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-java-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the Java arm is left out)")) nil)
+        (do (bad "the Java Engine driver did not build:\n" (:err r)) nil)))))
+
 (when (seq scan-ids)
   (let [rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" {} "Rust"))
-        gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go"))]
+        gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go"))
+        jdrv (java-driver)]
     (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
     (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
     (when (and rdrv gdrv)
@@ -189,6 +201,10 @@
             (check (and (zero? (:exit rr)) (same? rr rg))
                    id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle ("
                    (count (:out rr)) " bytes: JSON, HTML, evidence)")
+            (when jdrv
+              (let [rj (drive jdrv "--out=bundle" (str "--replay=" dir) pdf)]
+                (check (same? rr rj)
+                       id ": THE JAVA ENGINE replays the Tesseract transcript to the identical bundle, byte for byte")))
             (check (and (str/includes? (:out rr) "\"ocr\":\"always\"") (str/includes? (:out rr) "\"kind\":\"scanned\"")
                         (str/includes? (:out rr) "\"src\":[\"ocr\",\"infer\"]") (str/includes? (:out rr) "\"ocr-only\""))
                    id ": the Model says where the text came from (settings.ocr, scanned pages, ocr sources, ocr-only)")
@@ -202,13 +218,20 @@
               (check (and (not= edn (slurp (str tam "/transcript.edn")))
                           (= 4 (:exit tr)) (= 4 (:exit tg))
                           (str/includes? (:err tr) "error: transcript-miss") (str/includes? (:err tg) "error: transcript-miss"))
-                     id ": a changed request (psm 3 -> 4) is transcript-miss on both Engines, nothing guessed"))
+                     id ": a changed request (psm 3 -> 4) is transcript-miss on both Engines, nothing guessed")
+              (when jdrv
+                (let [tj (drive jdrv "--out=bundle" (str "--replay=" tam) pdf)]
+                  (check (and (= 4 (:exit tj)) (same? tg tj))
+                         id ": the same changed request is transcript-miss on the Java Engine, with the same stderr (the sentence is kin's)"))))
             ;; no transcript, no port
             (let [nr (drive rdrv "--out=bundle" pdf)
                   ng (drive gdrv "--out=bundle" pdf)]
               (check (and (zero? (:exit nr)) (same? nr ng) (not (str/includes? (:out nr) "\"ocr\":\"always\""))
                           (not (str/includes? (:out nr) "\"kind\":\"scanned\"")))
-                     id ": with no engine the same scan converts to pages with no text, the same on both (`unsupported` is an answer)"))))
+                     id ": with no engine the same scan converts to pages with no text, the same on both (`unsupported` is an answer)")
+              (when jdrv
+                (check (same? nr (drive jdrv "--out=bundle" pdf))
+                       id ": and the same on the Java Engine")))))
         ;; THE BROWSER (P9.3, D356, D358): the Rust host built for wasm32, driven by the JS SDK in a headless Chrome, replays the same
         ;; committed transcripts to the Rust Engine's bundle; a changed request is `transcript-miss` there too; and with no OCR port and no
         ;; transcript the scan converts to pages with no text, as on Rust (`unsupported` is an answer: the SPEC 7.3 rule for a browser with no engine).
@@ -264,7 +287,8 @@
 
 (when (seq px-ids)
   (let [rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" {} "Rust"))
-        gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go"))]
+        gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go"))
+        jdrv (java-driver)]
     (when (and rdrv gdrv)
       (let [drive (fn [drv & a] (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
                                   {:exit (:exit r) :out (:out r) :err (:err r)}))]
@@ -275,6 +299,10 @@
                 rg (drive gdrv "--out=bundle" (str "--replay=" dir) pdf)]
             (check (and (zero? (:exit rr)) (= (:exit rr) (:exit rg)) (= (:out rr) (:out rg)) (= (:err rr) (:err rg)))
                    id ": the Rust Engine and the Go Engine replay the whole transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+            (when jdrv
+              (let [rj (drive jdrv "--out=bundle" (str "--replay=" dir) pdf)]
+                (check (and (zero? (:exit rj)) (= (:out rr) (:out rj)) (= (:err rr) (:err rj)))
+                       id ": and the Java Engine replays it to the same bundle")))
             (check (and (str/includes? (:out rr) "\"ocr\":\"always\"") (str/includes? (:out rr) "\"src\":[\"ocr\",\"infer\"]"))
                    id ": the Model says where the text came from")))
         (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-replay-px" "--variants" "scan"

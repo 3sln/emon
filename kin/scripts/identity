@@ -43,6 +43,11 @@
 ;; file. Without the toolchain (`kin/scripts/emon-wasm-run` exits 3: no nightly with rust-src, Node 22, Chrome, or the JS
 ;; devDependencies) the arm is left out, loudly; EMON_SKIP_WASM=1 leaves it out on purpose.
 ;;
+;; THE JAVA HOST (P9.1, D449) is a third host when a JDK 22+ is there: four arms (bytes, a SeekableByteChannel, a spooled
+;; InputStream, a 512-byte async source), its transcript equal to Rust's (directory, byte for byte; a JPEG's PNGs apart, as for
+;; Go), its replay of Rust's transcript, and Rust's replay of its transcript, each to the reference bundle. Without a JDK
+;; (`kin/scripts/emon-java-build` exits 3) the arm is left out, loudly; EMON_SKIP_JAVA=1 leaves it out on purpose.
+;;
 ;; A difference prints the first differing section and byte offset, and the arms.
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [process shell destroy-tree]]
@@ -70,6 +75,16 @@
       (do (println "  FAIL the" what "driver did not build:\n" (:err r)) (System/exit 1)))))
 (def rust (build "kin/scripts/emon-rs-build" "Rust"))
 (def go (build "kin/scripts/emon-go-build" "Go"))
+;; THE JAVA ARM (P9.1, D449) is optional: `emon-java-build` exits 3 with `SKIP java -- why` on stderr when there is no JDK 22+
+;; (`EMON_JDK`, /opt/homebrew/opt/openjdk, `java_home`), and the arm is then left out, LOUDLY, and nothing fails. `EMON_SKIP_JAVA=1` leaves it out on purpose.
+(def java
+  (if (System/getenv "EMON_SKIP_JAVA")
+    (do (println "  SKIP java arm -- EMON_SKIP_JAVA is set") nil)
+    (let [r @(process {:out :string :err :string} "kin/scripts/emon-java-build")]
+      (case (:exit r)
+        0 (str/trim (:out r))
+        3 (do (println (str "  " (str/trim (:err r)) " (the Java arm is left out)")) nil)
+        (do (println "  FAIL the Java driver did not build:\n" (:err r)) (System/exit 1))))))
 ;; THE BROWSER ARM (P9.3, D356) is optional: `emon-wasm-run --check` exits 3 with `SKIP wasm -- why` on stderr when the toolchain is
 ;; missing, and the arm is then left out, LOUDLY, and nothing fails.
 (def wasm
@@ -126,12 +141,18 @@
          [:go "seek" ["--source=seek"]]
          [:go "spool" ["--source=spool"]]
          [:go "async512" ["--chunk=512" "--async"]]]
-        (for [h [:rust :go] [n a] chunk-arms] [h n a]))))
+        ;; the Java host's four arms: a byte[], a SeekableByteChannel (also what `readerat` is in Java), a spooled InputStream, a 512-byte async source
+        (when java
+          [[:java "bytes" []]
+           [:java "seek" ["--source=seek"]]
+           [:java "spool" ["--source=spool"]]
+           [:java "async512" ["--chunk=512" "--async"]]])
+        (for [h (cond-> [:rust :go] java (conj :java)) [n a] chunk-arms] [h n a]))))
 
 (defn drive
   "Run a driver: {:exit :out (bytes) :err}. A run that takes over two minutes is killed (our own process)."
   [host args {:keys [file pw replay]}]
-  (let [exe (if (= host :rust) rust go)
+  (let [exe (case host :rust rust :go go :java java)
         p (apply process {:out :bytes :err :string}
                  exe "--out=bundle" (concat args @extra (when pw [(str "--password=" pw)]) (when replay [(str "--replay=" replay)]) [file]))
         r (deref p 120000 ::timeout)]
@@ -190,6 +211,21 @@
               rp (drive :rust [(str "--replay=" gd)] item)]
           (when-not (same? ref gp) (note "go replaying rust's transcript differs: " (first-diff ref gp)))
           (when-not (same? ref rp) (note "rust replaying go's transcript differs: " (first-diff ref rp))))
+        ;; the Java host (P9.1): it records the same directory, replays Rust's, and Rust replays its
+        (when java
+          (let [jd (str work "/" i "-java")
+                jr (drive :java [(str "--record=" jd)] item)]
+            (when-not (same? ref jr) (note "java --record changes the answer: " (first-diff ref jr)))
+            (let [rf (dir-files rd) jf (dir-files jd)
+                  lossy? (re-find #"(?i)\.jpe?g$" (:file item))
+                  strip-png (fn [m] (into {} (remove (fn [[k _]] (str/ends-with? k ".png")) m)))]
+              (when-not (if lossy? (= (strip-png rf) (strip-png jf)) (= rf jf))
+                (note "the transcripts differ: rust " (some-> rf keys vec) " java " (some-> jf keys vec))))
+            (let [jp (drive :java [(str "--replay=" rd)] item)
+                  rj (drive :rust [(str "--replay=" jd)] item)]
+              (when-not (same? ref jp) (note "java replaying rust's transcript differs: " (first-diff ref jp)))
+              (when-not (same? ref rj) (note "rust replaying java's transcript differs: " (first-diff ref rj))))
+            (fs/delete-tree jd)))
         (fs/delete-tree rd) (fs/delete-tree gd)))
     {:probs @probs
      :outcome (if (zero? (:exit ref)) :document (or (second (re-find #"error: (\S+)" (:err ref))) :other))}))

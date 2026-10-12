@@ -52,6 +52,11 @@ public final class Port {
         return new Cells();
     }
 
+    // The cells as an int[] copy: what a host takes out of an arena (Go's `Cells.V`).
+    public static int[] cellsVec(Cells c) {
+        return java.util.Arrays.copyOf(c.v, c.n);
+    }
+
     // @kin:link:form:cells-len: {:template "emon.Port.cellsLen({0})" :arity 1}
     public static int cellsLen(Cells c) {
         return c.n;
@@ -548,8 +553,45 @@ public final class Port {
         return prefix + name.toUpperCase(java.util.Locale.ROOT).replace('-', '_');
     }
 
+    // THE ENGINE'S LIMITS (SPEC 13: `Config` carries the limits), as Go's `port.WithLimits` has them (Java has no thread-local a worker pool would
+    // respect): the override table is process-wide and `withLimits` keeps it honest. A conversion with overrides holds the lock EXCLUSIVELY (it runs
+    // alone), one without holds it shared (it never sees an override). `limitOf` consults the table before `EMON_LIMIT_*`; kin still reads a bound
+    // only through `limit-of`. The names and defaults are kin's table (`emon.limits`).
+    private static volatile int[][] limitOverrides = null;
+    private static final java.util.concurrent.locks.ReentrantReadWriteLock limitLock =
+        new java.util.concurrent.locks.ReentrantReadWriteLock();
+
+    // Runs f with the (kind, value) overrides in force.
+    public static void withLimits(int[][] overrides, Runnable f) {
+        if (overrides == null || overrides.length == 0) {
+            limitLock.readLock().lock();
+            try {
+                f.run();
+            } finally {
+                limitLock.readLock().unlock();
+            }
+            return;
+        }
+        limitLock.writeLock().lock();
+        try {
+            limitOverrides = overrides;
+            f.run();
+        } finally {
+            limitOverrides = null;
+            limitLock.writeLock().unlock();
+        }
+    }
+
     // @kin:link:form:limit-of: {:template "emon.Port.limitOf({0})" :arity 1}
     public static int limitOf(int kind) {
+        int[][] ov = limitOverrides;
+        if (ov != null) {
+            for (int[] o : ov) {
+                if (o[0] == kind) {
+                    return o[1];
+                }
+            }
+        }
         String v = System.getenv(envName("EMON_LIMIT_", limitName(kind)));
         if (v != null) {
             try {

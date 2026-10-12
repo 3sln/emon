@@ -1,0 +1,116 @@
+#!/bin/sh
+# Build the Java Engine and its driver; print the driver's path.   kin/scripts/emon-java-build
+#
+# The Java twin of `emon-go-build` (DEVLOG P9.1). The tree is ASSEMBLED, not committed:
+#
+#     .cache/emon-java/src/emon/*.java       gen/java/emon/, every class that is NOT a law or a probe (names ending `test`
+#                                            or `probe`), and host/java/emon/*.java without `Testport.java` (test support
+#                                            is not the library)
+#     .cache/emon-java/src/emon/api/*.java   host/java/emon/api/: the Engine API, the byte sources, ImageDecode
+#     .cache/emon-java/src/emon/ffi/*.java   host/java/emon/ffi/: the pdfium and Tesseract bindings (Java FFM API, no JNI)
+#     .cache/emon-java/src/Main.java         test/driver/java/Main.java, the `emon-java` driver
+#     .cache/emon-java/src/EngineTest.java   test/driver/java/EngineTest.java, the Engine API's native tests (`bb slice` runs them)
+#     .cache/emon-java/classes/              javac's output
+#     .cache/emon-java/emon-java             the launcher (a shell script: `java -cp classes Main "$@"`)
+#
+# `.cache/` is gitignored. `bb emit` is NOT run here: callers that must be current run it first.
+#
+# THE JDK is $EMON_JDK, else /opt/homebrew/opt/openjdk, else `java_home`. macOS's /usr/bin/javac is a STUB that exists
+# whether or not a JDK does, so the test is that `javac -version` RUNS. WITHOUT A JDK THIS SKIPS LOUDLY: it prints
+# `SKIP java -- ...` on stderr and exits 3 (callers that include a Java arm leave it out and say so; nothing fails).
+#
+# THE NATIVE BINDINGS (pdfium, Tesseract) use `java.lang.foreign` (final since JDK 22): the driver is run with
+# `--enable-native-access=ALL-UNNAMED`; the libraries are found at run time (EMON_PDFIUM_LIB, EMON_TESS_LIB), so nothing
+# here links them and no gate needs them. DEVLOG D520.
+set -e
+cd "$(dirname "$0")/../.."
+JDK="${EMON_JDK:-/opt/homebrew/opt/openjdk}"
+[ -x "$JDK/bin/javac" ] || JDK=$(/usr/libexec/java_home 2>/dev/null || true)
+if ! { [ -x "$JDK/bin/javac" ] && "$JDK/bin/javac" -version > /dev/null 2>&1; }; then
+  echo "SKIP java -- no working JDK found (set EMON_JDK)" >&2
+  exit 3
+fi
+ver=$("$JDK/bin/javac" -version 2>&1 | sed 's/^javac //; s/[.-].*//')
+if [ "${ver:-0}" -lt 22 ] 2>/dev/null; then
+  echo "SKIP java -- the Java host needs JDK 22 or newer (java.lang.foreign is final from 22); $JDK is $ver" >&2
+  exit 3
+fi
+mod=.cache/emon-java
+mkdir -p "$mod/src/emon/api" "$mod/src/emon/ffi" "$mod/classes"
+
+put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
+
+keep=""
+for f in gen/java/emon/*.java; do
+  m=$(basename "$f" .java)
+  case "$m" in *test|*probe|*Test|*Probe) continue ;; esac
+  keep="$keep $m"
+  put "$f" "$mod/src/emon/$m.java"
+done
+for f in host/java/emon/*.java; do
+  m=$(basename "$f" .java)
+  case "$m" in Testport) continue ;; esac
+  keep="$keep $m"
+  put "$f" "$mod/src/emon/$m.java"
+done
+for f in "$mod"/src/emon/*.java; do
+  [ -e "$f" ] || continue
+  m=$(basename "$f" .java)
+  case " $keep " in *" $m "*) ;; *) rm -f "$f" ;; esac
+done
+for sub in api ffi; do
+  keep=""
+  for f in host/java/emon/$sub/*.java; do
+    [ -e "$f" ] || continue
+    m=$(basename "$f" .java)
+    keep="$keep $m"
+    put "$f" "$mod/src/emon/$sub/$m.java"
+  done
+  for f in "$mod"/src/emon/$sub/*.java; do
+    [ -e "$f" ] || continue
+    m=$(basename "$f" .java)
+    case " $keep " in *" $m "*) ;; *) rm -f "$f" ;; esac
+  done
+done
+put test/driver/java/Main.java "$mod/src/Main.java"
+put test/driver/java/EngineTest.java "$mod/src/EngineTest.java"
+
+# javac is skipped when no source is newer than the stamp
+stamp="$mod/classes/.built"
+if [ ! -e "$stamp" ] || [ -n "$(find "$mod/src" -name '*.java' -newer "$stamp" | head -1)" ]; then
+  rm -rf "$mod/classes"
+  mkdir -p "$mod/classes"
+  out=$(cd "$mod" && "$JDK/bin/javac" -encoding UTF-8 -nowarn -d classes $(find src -name '*.java') 2>&1) || { echo "$out" | head -80 >&2; echo "emon-java: build failed" >&2; exit 1; }
+  [ -z "$out" ] || echo "$out" | grep -v '^Note:' >&2 || true
+  : > "$stamp"
+fi
+
+# EMON_JAVA_LINT=1: the host files are HELD CLEAN (what `go vet` is to Go): javac -Xlint:all over them (the generated code is not linted;
+# `restricted` is the FFM API's own note, which the launcher's --enable-native-access answers). Warnings fail the build.
+if [ "${EMON_JAVA_LINT:-}" = 1 ]; then
+  lintdir=$(mktemp -d "${TMPDIR:-/tmp}/emon-java-lint.XXXXXX")
+  lint=$(cd "$mod" && "$JDK/bin/javac" -Xlint:all,-restricted -implicit:none -encoding UTF-8 -d "$lintdir" -cp classes \
+    src/emon/Planrun.java src/emon/PngRead.java src/emon/RenderPort.java src/emon/api/*.java src/emon/ffi/*.java src/Main.java src/EngineTest.java 2>&1) || true
+  rm -rf "$lintdir"
+  if [ -n "$lint" ]; then echo "$lint" | head -60 >&2; echo "emon-java: the host files are not lint-clean" >&2; exit 1; fi
+fi
+
+root=$(pwd)
+cat > "$mod/emon-java.new" <<LAUNCHER
+#!/bin/sh
+# Generated by kin/scripts/emon-java-build: the Java driver. EMON_JAVA_OPTS adds JVM options.
+exec "$JDK/bin/java" -XX:+UseSerialGC -Djava.awt.headless=true --enable-native-access=ALL-UNNAMED \$EMON_JAVA_OPTS -cp "$root/$mod/classes" Main "\$@"
+LAUNCHER
+put "$mod/emon-java.new" "$mod/emon-java"
+rm -f "$mod/emon-java.new"
+chmod +x "$mod/emon-java"
+# the native tests' launcher (`bb slice`): the same JVM, `EngineTest` as the main class, `EMON_ROOT` the repository
+cat > "$mod/emon-java-test.new" <<LAUNCHER
+#!/bin/sh
+# Generated by kin/scripts/emon-java-build: the Engine API's native tests.
+exec "$JDK/bin/java" -XX:+UseSerialGC -Djava.awt.headless=true --enable-native-access=ALL-UNNAMED \$EMON_JAVA_OPTS -cp "$root/$mod/classes" EngineTest "\$@"
+LAUNCHER
+put "$mod/emon-java-test.new" "$mod/emon-java-test"
+rm -f "$mod/emon-java-test.new"
+chmod +x "$mod/emon-java-test"
+echo "$mod/emon-java"
