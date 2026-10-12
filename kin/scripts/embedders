@@ -18,8 +18,8 @@
 ;;      GENERATED non-test module names a filesystem type or function. Test support (`testport.*`, `tess.rs`, `tess.go`),
 ;;      the tests and the drivers are not the library.
 ;;
-;; (Java, P9.1: its Engine layer is held to SPEC 3.9/13's names in its own spelling, below; C# has ports only so far.)
-;; C#'s surface is not compared; the no-filesystem check covers all four.
+;; (Java, P9.1, and C#, P9.2: their Engine layers are held to SPEC 3.9/13's names in their own spelling, below.)
+;; The no-filesystem check covers all four.
 (require '[babashka.fs :as fs]
          '[clojure.string :as str])
 
@@ -406,6 +406,25 @@
   (when (and (empty? types-missing) (empty? names-missing) (empty? adapters-missing))
     (ok "JAVA SURFACE: every name SPEC 3.9/13 spells (" (count spec-names) " members, " (count spec-types) " types, the byte-source adapters of 13.1) is in host/java/emon/api")))
 
+;; --------------------------------------------------------------- the C# surface (P9.2)
+;;
+;; The C# Engine layer (`host/csharp/Emon/Api/`, the driver of kin's plan machine in `host/csharp/Emon/Planrun.cs`) is held as Java's is: not compared member for
+;; member (C#'s idiom is its own: exceptions, enums, nested types, `IByteSource`), but every name SPEC 3.9/13 spells must be there, in the C#
+;; spelling (case and underscores ignored: `to_json` is `ToJson`), and the byte-source adapters of 13.1 (a byte[], a ReadOnlyMemory, a seekable
+;; Stream, a spooled Stream).
+
+(let [files (conj (mapv str (fs/glob "host/csharp/Emon/Api" "*.cs")) "host/csharp/Emon/Planrun.cs")
+      text (str/join "\n" (map slurp files))
+      has? (fn [n] (boolean (re-find (re-pattern (str "(?i)\\b" (str/replace n "_" "") "\\b")) text)))
+      types-missing (remove #(re-find (re-pattern (str "(class|interface|enum) I?" % "\\b")) text) spec-types)
+      names-missing (for [[t m _] spec-names :when (not (has? m))] (str t "." m))
+      adapters-missing (remove #(re-find (re-pattern (str "(?i)static \\w+ " % "\\(")) text) ["bytes" "seekable" "spooled"])]
+  (doseq [t types-missing] (bad "SPEC 3.9/13: C# has no type " t))
+  (doseq [m names-missing] (bad "SPEC 3.9/13: C# has no " m))
+  (doseq [a adapters-missing] (bad "SPEC 13.1: C# has no input adapter " a))
+  (when (and (empty? types-missing) (empty? names-missing) (empty? adapters-missing))
+    (ok "C# SURFACE: every name SPEC 3.9/13 spells (" (count spec-names) " members, " (count spec-types) " types, the byte-source adapters of 13.1) is in host/csharp/Emon/Api")))
+
 ;; ------------------------------------------------------ no filesystem (D058)
 
 (defn banned-in
@@ -430,14 +449,16 @@
 
 (def library-files
   (let [g (fn [d pat] (map str (fs/glob d pat)))
-        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/tess\.go|/ffi/tess\.java|_test\.go|/tests/" %) fs))]
+        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/tess\.go|/ffi/tess\.java|/ffi/tess\.cs|_test\.go|/tests/" %) fs))]
     {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs")))
      :js (g "host/js/src" "*.js")
      :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go") (g "host/go/planrun" "*.go")))
      ;; Java (P9.1): the ports and the driver of the plan machine, the Engine layer (`api/`) and the pdfium binding (`ffi/Pdfium.java`); `ffi/Tess.java`
      ;; reads the tessdata directory like Go's tess.go does (it is a binding, not the library)
      :java (not-test (concat (g "host/java/emon" "*.java") (g "host/java/emon/api" "*.java") (g "host/java/emon/ffi" "*.java")))
-     :csharp (not-test (g "host/csharp/Emon" "*.cs"))}))
+     ;; C# (P9.2): as Java's - the ports and the driver of the plan machine, the Engine layer (`Api/`) and the pdfium binding (`Ffi/Pdfium.cs`); `Ffi/Tess.cs`
+     ;; reads the tessdata directory like Go's tess.go does (it is a binding, not the library)
+     :csharp (not-test (concat (g "host/csharp/Emon" "*.cs") (g "host/csharp/Emon/Api" "*.cs") (g "host/csharp/Emon/Ffi" "*.cs")))}))
 
 (def generated-files
   (let [lib? #(not (re-find #"(?i)(test|probe)[^/]*\.(rs|go|java|cs)$|/Tests/" %))]

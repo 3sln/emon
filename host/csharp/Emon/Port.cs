@@ -538,7 +538,7 @@ public static class Port {
     // ---------------------------------------------------------- limits
     //
     // THE TABLES OF LIMITS AND SETTINGS ARE KIN'S (`emon.limits`, P10.10): a name, a default and a range are read from it. Overrides are
-    // the platform's (D436): none here yet; the Engine layer adopts a process-wide table behind a lock, as Go does.
+    // the platform's (D436): a process-wide table behind a lock, as Go's (below).
 
     private static string KinName(int n, System.Func<int, int> ch) {
         var sb = new System.Text.StringBuilder();
@@ -559,8 +559,51 @@ public static class Port {
         return prefix + name.ToUpperInvariant().Replace('-', '_');
     }
 
+    // THE ENGINE'S LIMITS (SPEC 13: `Config` carries the limits), as Go's `port.WithLimits` and Java's `Port.withLimits` have them: the override table is
+    // process-wide and `WithLimits` keeps it honest. A conversion with overrides holds the lock EXCLUSIVELY (it runs alone), one without holds it shared
+    // (it never sees an override). `LimitOf` consults the table before `EMON_LIMIT_*`; kin still reads a bound only through `limit-of`. The names and
+    // defaults are kin's table (`emon.limits`).
+    private static volatile int[][] limitOverrides = null;
+    private static readonly System.Threading.ReaderWriterLockSlim limitLock = new System.Threading.ReaderWriterLockSlim();
+
+    // The cells as an int[] copy: what a host takes out of an arena (Go's `Cells.V`).
+    public static int[] CellsVec(Cells c) {
+        var v = new int[c.N];
+        System.Array.Copy(c.V, v, c.N);
+        return v;
+    }
+
+    // Runs f with the (kind, value) overrides in force.
+    public static void WithLimits(int[][] overrides, System.Action f) {
+        if (overrides == null || overrides.Length == 0) {
+            limitLock.EnterReadLock();
+            try {
+                f();
+            } finally {
+                limitLock.ExitReadLock();
+            }
+            return;
+        }
+        limitLock.EnterWriteLock();
+        try {
+            limitOverrides = overrides;
+            f();
+        } finally {
+            limitOverrides = null;
+            limitLock.ExitWriteLock();
+        }
+    }
+
     // @kin:link:form:limit-of: {:template "emon.Port.LimitOf({0})" :arity 1}
     public static int LimitOf(int kind) {
+        int[][] ov = limitOverrides;
+        if (ov != null) {
+            foreach (int[] o in ov) {
+                if (o[0] == kind) {
+                    return o[1];
+                }
+            }
+        }
         string v = System.Environment.GetEnvironmentVariable(EnvName("EMON_LIMIT_", LimitName(kind)));
         if (v != null && int.TryParse(v, out int n)) return n;
         return Limits.LmDefault(kind);
