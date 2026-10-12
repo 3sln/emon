@@ -7772,7 +7772,7 @@
         :bow-p 0.96425
         :bow-r 0.841536
         :cer 0.143152
-        :conf-brier-all 0.45627
+        :conf-brier-all 0.456365
         :conf-brier-cell 0.486368
         :conf-brier-cell-ocr 0.486368
         :conf-brier-dropped 0.645589
@@ -7793,7 +7793,7 @@
         :conf-brier-row-infer 0.70932
         :conf-brier-rowgroup 0.479387
         :conf-brier-rowgroup-infer 0.479387
-        :conf-brier-seal 0.3425
+        :conf-brier-seal 0.325
         :conf-brier-seal-infer 0.36
         :conf-brier-seal-ocr 0.325
         :conf-brier-section 0.298718
@@ -7802,7 +7802,7 @@
         :conf-brier-table-ocr 0.23476
         :conf-brier-text 0.034225
         :conf-brier-text-ocr 0.034225
-        :conf-ece-all 0.439227
+        :conf-ece-all 0.439069
         :conf-ece-cell 0.491561
         :conf-ece-cell-ocr 0.491561
         :conf-ece-dropped 0.650667
@@ -7823,7 +7823,7 @@
         :conf-ece-row-infer 0.723101
         :conf-ece-rowgroup 0.480857
         :conf-ece-rowgroup-infer 0.480857
-        :conf-ece-seal 0.525
+        :conf-ece-seal 0.45
         :conf-ece-seal-infer 0.6
         :conf-ece-seal-ocr 0.45
         :conf-ece-section 0.280273
@@ -8319,7 +8319,7 @@
         :bow-p 0.984928
         :bow-r 0.93452
         :cer 0.054304
-        :conf-brier-all 0.173948
+        :conf-brier-all 0.172176
         :conf-brier-cell 0.048461
         :conf-brier-cell-ocr 0.048461
         :conf-brier-heading 0.270769
@@ -8330,14 +8330,14 @@
         :conf-brier-row-infer 0.236341
         :conf-brier-rowgroup 0.441844
         :conf-brier-rowgroup-infer 0.441844
-        :conf-brier-seal 0.336667
+        :conf-brier-seal 0.325
         :conf-brier-seal-infer 0.36
         :conf-brier-seal-ocr 0.325
         :conf-brier-section 0.350671
         :conf-brier-section-infer 0.350671
         :conf-brier-table 0.008649
         :conf-brier-table-ocr 0.008649
-        :conf-ece-all 0.094132
+        :conf-ece-all 0.089314
         :conf-ece-cell 0.031
         :conf-ece-cell-ocr 0.031
         :conf-ece-heading 0.184615
@@ -8348,7 +8348,7 @@
         :conf-ece-row-infer 0.221
         :conf-ece-rowgroup 0.438
         :conf-ece-rowgroup-infer 0.438
-        :conf-ece-seal 0.5
+        :conf-ece-seal 0.45
         :conf-ece-seal-infer 0.6
         :conf-ece-seal-ocr 0.45
         :conf-ece-section 0.337615
@@ -8409,7 +8409,7 @@
         :bow-p 0.969072
         :bow-r 0.961145
         :cer 0.061651
-        :conf-brier-all 0.167482
+        :conf-brier-all 0.166215
         :conf-brier-cell 0.056442
         :conf-brier-cell-ocr 0.056442
         :conf-brier-heading 0.04
@@ -8426,7 +8426,7 @@
         :conf-brier-section-infer 0.002209
         :conf-brier-table 0.279982
         :conf-brier-table-ocr 0.279982
-        :conf-ece-all 0.149667
+        :conf-ece-all 0.146704
         :conf-ece-cell 0.021476
         :conf-ece-cell-ocr 0.021476
         :conf-ece-heading 0.2
@@ -8629,7 +8629,7 @@
         :block-paragraph-f1 0.544715
         :block-paragraph-p 0.448161
         :block-paragraph-r 0.694301
-        :block-seal-f1 0.212766
+        :block-seal-f1 0.217391
         :block-seal-p 1.0
         :block-seal-r 0.121951
         :block-table-f1 0.666667
@@ -8639,7 +8639,7 @@
         :bow-p 0.945165
         :bow-r 0.766447
         :cer 0.208369
-        :conf-brier-all 0.570233
+        :conf-brier-all 0.570343
         :conf-brier-caption 0.003844
         :conf-brier-caption-ocr 0.003844
         :conf-brier-cell 0.62095
@@ -8662,8 +8662,8 @@
         :conf-brier-row-infer 0.810961
         :conf-brier-rowgroup 0.643998
         :conf-brier-rowgroup-infer 0.643998
-        :conf-brier-seal 0.303333
-        :conf-brier-seal-infer 0.26
+        :conf-brier-seal 0.292
+        :conf-brier-seal-infer 0.16
         :conf-brier-seal-ocr 0.325
         :conf-brier-section 0.335025
         :conf-brier-section-infer 0.335025
@@ -8671,7 +8671,7 @@
         :conf-brier-table-ocr 0.321726
         :conf-brier-text 0.034225
         :conf-brier-text-ocr 0.034225
-        :conf-ece-all 0.591373
+        :conf-ece-all 0.591787
         :conf-ece-caption 0.062
         :conf-ece-caption-ocr 0.062
         :conf-ece-cell 0.652161
@@ -8694,8 +8694,8 @@
         :conf-ece-row-infer 0.831
         :conf-ece-rowgroup 0.668769
         :conf-ece-rowgroup-infer 0.668769
-        :conf-ece-seal 0.333333
-        :conf-ece-seal-infer 0.1
+        :conf-ece-seal 0.44
+        :conf-ece-seal-infer 0.4
         :conf-ece-seal-ocr 0.45
         :conf-ece-section 0.320347
         :conf-ece-section-infer 0.320347
@@ -8728,8 +8728,8 @@
         :seal-date-acc 0.0
         :seal-leak 0.0
         :seal-name-acc 0.0
-        :seal-sig-f1 0.1
-        :seal-sig-p 0.5
+        :seal-sig-f1 0.105263
+        :seal-sig-p 1.0
         :seal-sig-r 0.055556
         :sig-name-acc 1.0
         :span-bold-f1 0.0
@@ -8891,7 +8891,7 @@
         :bow-p 0.845697
         :bow-r 0.860161
         :cer 0.064915
-        :conf-brier-all 0.843314
+        :conf-brier-all 0.843818
         :conf-brier-cell 0.83301
         :conf-brier-cell-ocr 0.83301
         :conf-brier-dropped 0.968256
@@ -8912,7 +8912,7 @@
         :conf-brier-section-infer 0.908209
         :conf-brier-table 0.822649
         :conf-brier-table-ocr 0.822649
-        :conf-ece-all 0.910547
+        :conf-ece-all 0.910871
         :conf-ece-cell 0.905216
         :conf-ece-cell-ocr 0.905216
         :conf-ece-dropped 0.984
@@ -9595,7 +9595,7 @@
         :bow-p 0.859321
         :bow-r 0.874788
         :cer 0.090454
-        :conf-brier-all 0.506587
+        :conf-brier-all 0.50717
         :conf-brier-caption 0.003844
         :conf-brier-caption-ocr 0.003844
         :conf-brier-cell 0.52658
@@ -9620,7 +9620,7 @@
         :conf-brier-row-infer 0.80392
         :conf-brier-rowgroup 0.761921
         :conf-brier-rowgroup-infer 0.761921
-        :conf-brier-seal 0.363816
+        :conf-brier-seal 0.49
         :conf-brier-seal-infer 0.356806
         :conf-brier-seal-ocr 0.49
         :conf-brier-section 0.357425
@@ -9629,7 +9629,7 @@
         :conf-brier-table-ocr 0.575982
         :conf-brier-text 0.068306
         :conf-brier-text-ocr 0.068306
-        :conf-ece-all 0.514708
+        :conf-ece-all 0.514386
         :conf-ece-caption 0.062
         :conf-ece-caption-ocr 0.062
         :conf-ece-cell 0.539547
@@ -9654,7 +9654,7 @@
         :conf-ece-row-infer 0.823525
         :conf-ece-rowgroup 0.803385
         :conf-ece-rowgroup-infer 0.803385
-        :conf-ece-seal 0.602632
+        :conf-ece-seal 0.7
         :conf-ece-seal-infer 0.597222
         :conf-ece-seal-ocr 0.7
         :conf-ece-section 0.34507
@@ -10093,7 +10093,7 @@
         :bow-p 0.631912
         :bow-r 0.589102
         :cer 0.254251
-        :conf-brier-all 0.415458
+        :conf-brier-all 0.415956
         :conf-brier-cell 0.324423
         :conf-brier-cell-ocr 0.324423
         :conf-brier-heading 0.094545
@@ -10112,7 +10112,7 @@
         :conf-brier-section-infer 0.084573
         :conf-brier-table 0.619149
         :conf-brier-table-ocr 0.619149
-        :conf-ece-all 0.427691
+        :conf-ece-all 0.426144
         :conf-ece-cell 0.29831
         :conf-ece-cell-ocr 0.29831
         :conf-ece-heading 0.109091
@@ -10177,7 +10177,7 @@
         :bow-p 0.935356
         :bow-r 0.942193
         :cer 0.020572
-        :conf-brier-all 0.245791
+        :conf-brier-all 0.245535
         :conf-brier-heading 0.263881
         :conf-brier-heading-ocr 0.263881
         :conf-brier-item 0.938961
@@ -10190,7 +10190,7 @@
         :conf-brier-seal-infer 0.3025
         :conf-brier-section 0.340269
         :conf-brier-section-infer 0.340269
-        :conf-ece-all 0.176076
+        :conf-ece-all 0.174392
         :conf-ece-heading 0.173134
         :conf-ece-heading-ocr 0.173134
         :conf-ece-item 0.969
@@ -10382,7 +10382,7 @@
         :bow-p 0.094771
         :bow-r 0.110266
         :cer 0.80473
-        :conf-brier-all 0.713
+        :conf-brier-all 0.723182
         :conf-brier-cell 0.844561
         :conf-brier-cell-ocr 0.844561
         :conf-brier-heading 0.6
@@ -10399,7 +10399,7 @@
         :conf-brier-section-infer 0.847809
         :conf-brier-table 0.822649
         :conf-brier-table-ocr 0.822649
-        :conf-ece-all 0.821738
+        :conf-ece-all 0.828135
         :conf-ece-cell 0.919
         :conf-ece-cell-ocr 0.919
         :conf-ece-heading 0.733333
@@ -10456,22 +10456,22 @@
         :bow-p 0.909091
         :bow-r 0.865385
         :cer 0.127976
-        :conf-brier-all 0.267031
+        :conf-brier-all 0.253749
         :conf-brier-heading 0.04
         :conf-brier-heading-ocr 0.04
         :conf-brier-paragraph 0.311009
         :conf-brier-paragraph-ocr 0.311009
-        :conf-brier-seal 0.425
+        :conf-brier-seal 0.49
         :conf-brier-seal-infer 0.36
         :conf-brier-seal-ocr 0.49
         :conf-brier-section 0.002209
         :conf-brier-section-infer 0.002209
-        :conf-ece-all 0.316875
+        :conf-ece-all 0.276429
         :conf-ece-heading 0.2
         :conf-ece-heading-ocr 0.2
         :conf-ece-paragraph 0.247
         :conf-ece-paragraph-ocr 0.247
-        :conf-ece-seal 0.65
+        :conf-ece-seal 0.7
         :conf-ece-seal-infer 0.6
         :conf-ece-seal-ocr 0.7
         :conf-ece-section 0.047
@@ -10531,7 +10531,7 @@
         :bow-p 0.814671
         :bow-r 0.854064
         :cer 0.101279
-        :conf-brier-all 0.525912
+        :conf-brier-all 0.526666
         :conf-brier-caption 0.003844
         :conf-brier-caption-ocr 0.003844
         :conf-brier-cell 0.487709
@@ -10554,7 +10554,7 @@
         :conf-brier-section-infer 0.058834
         :conf-brier-table 0.551316
         :conf-brier-table-ocr 0.551316
-        :conf-ece-all 0.540345
+        :conf-ece-all 0.540074
         :conf-ece-caption 0.062
         :conf-ece-caption-ocr 0.062
         :conf-ece-cell 0.493163
@@ -11095,7 +11095,7 @@
         :bow-p 0.84466
         :bow-r 0.820755
         :cer 0.1808
-        :conf-brier-all 0.672147
+        :conf-brier-all 0.676737
         :conf-brier-cell 0.635061
         :conf-brier-cell-ocr 0.635061
         :conf-brier-furniture 0.005041
@@ -11108,13 +11108,11 @@
         :conf-brier-row-infer 0.942841
         :conf-brier-rowgroup 0.879844
         :conf-brier-rowgroup-infer 0.879844
-        :conf-brier-seal 0.36
-        :conf-brier-seal-infer 0.36
         :conf-brier-section 0.908209
         :conf-brier-section-infer 0.908209
         :conf-brier-table 0.822649
         :conf-brier-table-ocr 0.822649
-        :conf-ece-all 0.727855
+        :conf-ece-all 0.729735
         :conf-ece-cell 0.669
         :conf-ece-cell-ocr 0.669
         :conf-ece-furniture 0.071
@@ -11127,8 +11125,6 @@
         :conf-ece-row-infer 0.971
         :conf-ece-rowgroup 0.938
         :conf-ece-rowgroup-infer 0.938
-        :conf-ece-seal 0.6
-        :conf-ece-seal-infer 0.6
         :conf-ece-section 0.953
         :conf-ece-section-infer 0.953
         :conf-ece-table 0.907
@@ -11147,9 +11143,6 @@
         :para-boundary-p 0.166667
         :para-boundary-r 0.25
         :seal-leak 0.0
-        :seal-sig-f1 0.0
-        :seal-sig-p 0.0
-        :seal-sig-r 0.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -11180,7 +11173,7 @@
         :bow-p 0.84466
         :bow-r 0.820755
         :cer 0.1808
-        :conf-brier-all 0.672147
+        :conf-brier-all 0.676737
         :conf-brier-cell 0.635061
         :conf-brier-cell-ocr 0.635061
         :conf-brier-furniture 0.005041
@@ -11193,13 +11186,11 @@
         :conf-brier-row-infer 0.942841
         :conf-brier-rowgroup 0.879844
         :conf-brier-rowgroup-infer 0.879844
-        :conf-brier-seal 0.36
-        :conf-brier-seal-infer 0.36
         :conf-brier-section 0.908209
         :conf-brier-section-infer 0.908209
         :conf-brier-table 0.822649
         :conf-brier-table-ocr 0.822649
-        :conf-ece-all 0.727855
+        :conf-ece-all 0.729735
         :conf-ece-cell 0.669
         :conf-ece-cell-ocr 0.669
         :conf-ece-furniture 0.071
@@ -11212,8 +11203,6 @@
         :conf-ece-row-infer 0.971
         :conf-ece-rowgroup 0.938
         :conf-ece-rowgroup-infer 0.938
-        :conf-ece-seal 0.6
-        :conf-ece-seal-infer 0.6
         :conf-ece-section 0.953
         :conf-ece-section-infer 0.953
         :conf-ece-table 0.907
@@ -11232,9 +11221,6 @@
         :para-boundary-p 0.166667
         :para-boundary-r 0.25
         :seal-leak 0.0
-        :seal-sig-f1 0.0
-        :seal-sig-p 0.0
-        :seal-sig-r 0.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -11249,72 +11235,82 @@
         :watermark-leak 0.0
         :wer 0.273585}
       "scan/all" {
-        :block-heading-f1 0.444444
-        :block-heading-p 0.5
-        :block-heading-r 0.4
-        :block-paragraph-f1 0.47619
-        :block-paragraph-p 0.357143
-        :block-paragraph-r 0.714286
+        :block-heading-f1 0.545455
+        :block-heading-p 0.6
+        :block-heading-r 0.5
+        :block-paragraph-f1 0.5
+        :block-paragraph-p 0.388889
+        :block-paragraph-r 0.7
+        :block-seal-f1 0.666667
+        :block-seal-p 1.0
+        :block-seal-r 0.5
         :block-table-f1 0.571429
         :block-table-p 0.666667
         :block-table-r 0.5
-        :bow-f1 0.853414
-        :bow-p 0.848303
-        :bow-r 0.858586
-        :cer 0.050223
-        :conf-brier-all 0.741342
+        :bow-f1 0.854823
+        :bow-p 0.85076
+        :bow-r 0.858925
+        :cer 0.054164
+        :conf-brier-all 0.737322
         :conf-brier-cell 0.719468
         :conf-brier-cell-ocr 0.719468
         :conf-brier-dropped 0.726256
         :conf-brier-dropped-text 0.726256
         :conf-brier-furniture 0.291041
         :conf-brier-furniture-ocr 0.291041
-        :conf-brier-heading 0.49
-        :conf-brier-heading-ocr 0.49
-        :conf-brier-paragraph 0.416866
-        :conf-brier-paragraph-ocr 0.416866
+        :conf-brier-heading 0.4
+        :conf-brier-heading-ocr 0.4
+        :conf-brier-paragraph 0.393342
+        :conf-brier-paragraph-ocr 0.393342
         :conf-brier-row 0.93465
         :conf-brier-row-infer 0.93465
         :conf-brier-rowgroup 0.704644
         :conf-brier-rowgroup-infer 0.704644
-        :conf-brier-section 0.681709
-        :conf-brier-section-infer 0.681709
+        :conf-brier-seal 0.49
+        :conf-brier-seal-ocr 0.49
+        :conf-brier-section 0.545809
+        :conf-brier-section-infer 0.545809
         :conf-brier-table 0.822649
         :conf-brier-table-ocr 0.822649
-        :conf-ece-all 0.787861
+        :conf-ece-all 0.783062
         :conf-ece-cell 0.769725
         :conf-ece-cell-ocr 0.769725
         :conf-ece-dropped 0.734
         :conf-ece-dropped-text 0.734
         :conf-ece-furniture 0.262333
         :conf-ece-furniture-ocr 0.262333
-        :conf-ece-heading 0.55
-        :conf-ece-heading-ocr 0.55
-        :conf-ece-paragraph 0.461286
-        :conf-ece-paragraph-ocr 0.461286
+        :conf-ece-heading 0.4
+        :conf-ece-heading-ocr 0.4
+        :conf-ece-paragraph 0.413667
+        :conf-ece-paragraph-ocr 0.413667
         :conf-ece-row 0.962304
         :conf-ece-row-infer 0.962304
         :conf-ece-rowgroup 0.738
         :conf-ece-rowgroup-infer 0.738
-        :conf-ece-section 0.703
-        :conf-ece-section-infer 0.703
+        :conf-ece-seal 0.7
+        :conf-ece-seal-ocr 0.7
+        :conf-ece-section 0.553
+        :conf-ece-section-infer 0.553
         :conf-ece-table 0.907
         :conf-ece-table-ocr 0.907
         :furniture-f1 0.434783
         :furniture-p 0.454545
         :furniture-r 0.416667
-        :ghost-rate 0.151697
-        :heading-f1 0.444444
-        :heading-level-acc 0.5
-        :heading-level-e2e 0.2
+        :ghost-rate 0.14914
+        :heading-f1 0.545455
+        :heading-level-acc 0.666667
+        :heading-level-e2e 0.333333
         :heading-level-near 1.0
-        :heading-p 0.5
-        :heading-r 0.4
+        :heading-p 0.6
+        :heading-r 0.5
         :order-tau 1.0
         :page-label-acc 1.0
-        :para-boundary-f1 0.352941
-        :para-boundary-p 0.25
-        :para-boundary-r 0.6
+        :para-boundary-f1 0.454545
+        :para-boundary-p 0.333333
+        :para-boundary-r 0.714286
+        :seal-date-acc 0.0
+        :seal-leak 0.0
+        :seal-name-acc 1.0
         :span-bold-f1 0.0
         :span-bold-p 0.0
         :span-bold-r 0.0
@@ -11325,7 +11321,7 @@
         :table-continued-acc 0.25
         :table-teds-lite 0.153341
         :table-teds-struct-lite 0.381757
-        :wer 0.169697}
+        :wer 0.167946}
       "scan/forms" {
         :block-heading-f1 0.444444
         :block-heading-p 0.5
@@ -11403,7 +11399,65 @@
         :table-continued-acc 0.25
         :table-teds-lite 0.153341
         :table-teds-struct-lite 0.381757
-        :wer 0.169697}}
+        :wer 0.169697}
+      "scan/seals" {
+        :block-heading-f1 1.0
+        :block-heading-p 1.0
+        :block-heading-r 1.0
+        :block-paragraph-f1 0.571429
+        :block-paragraph-p 0.5
+        :block-paragraph-r 0.666667
+        :block-seal-f1 0.666667
+        :block-seal-p 1.0
+        :block-seal-r 0.5
+        :bow-f1 0.882353
+        :bow-p 0.9
+        :bow-r 0.865385
+        :cer 0.127976
+        :conf-brier-all 0.253749
+        :conf-brier-heading 0.04
+        :conf-brier-heading-ocr 0.04
+        :conf-brier-paragraph 0.311009
+        :conf-brier-paragraph-ocr 0.311009
+        :conf-brier-seal 0.49
+        :conf-brier-seal-ocr 0.49
+        :conf-brier-section 0.002209
+        :conf-brier-section-infer 0.002209
+        :conf-ece-all 0.276429
+        :conf-ece-heading 0.2
+        :conf-ece-heading-ocr 0.2
+        :conf-ece-paragraph 0.247
+        :conf-ece-paragraph-ocr 0.247
+        :conf-ece-seal 0.7
+        :conf-ece-seal-ocr 0.7
+        :conf-ece-section 0.047
+        :conf-ece-section-infer 0.047
+        :furniture-f1 1.0
+        :furniture-p 1.0
+        :furniture-r 1.0
+        :ghost-rate 0.090909
+        :heading-f1 1.0
+        :heading-level-acc 1.0
+        :heading-level-e2e 1.0
+        :heading-level-near 1.0
+        :heading-p 1.0
+        :heading-r 1.0
+        :order-tau 1.0
+        :page-label-acc 1.0
+        :para-boundary-f1 0.8
+        :para-boundary-p 0.666667
+        :para-boundary-r 1.0
+        :seal-date-acc 0.0
+        :seal-leak 0.0
+        :seal-name-acc 1.0
+        :span-bold-f1 0.0
+        :span-bold-p 0.0
+        :span-bold-r 0.0
+        :src-ocr-share 1.0
+        :table-adj-f1 1.0
+        :table-adj-p 1.0
+        :table-adj-r 1.0
+        :wer 0.134615}}
     "emon-sealpx" {
       "scan-ovl/all" {
         :block-heading-f1 0.7

@@ -306,7 +306,8 @@
 ;; transcript of such a page is not what the engine did. Here: both Engines replay to the IDENTICAL bundle, the text is the transcript's
 ;; (the Model has `ocr` sources), and the `emon-replay-px` ratchet holds `scan/forms` (a table's rows on a tilted scan, D391) and, since
 ;; D459, the colour and overlay scans that D391 once broke: `scan-ovl/forms` (an invoice whose table has text after it) and
-;; `scan-color/graphics` (a table whose narrow last column was also a margin note).
+;; `scan-color/graphics` (a table whose narrow last column was also a margin note) and, since D1041, `scan/seals` (a scan with a seal and a stamp,
+;; a "Signed:" line and NO signature: the strokes of a stamp over a signature line were a signature, P8.3).
 (def px-dir "test/ocr/scan-px")
 ;; a directory ID is the scan ID.pdf; VARIANT--ID is the colour or overlay scan VARIANT/ID.pdf (D459)
 (def px-ids (when (fs/exists? px-dir) (vec (sort (map fs/file-name (filter fs/directory? (fs/list-dir px-dir)))))))
@@ -341,7 +342,7 @@
         (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-replay-px"
                           "--docs" (str/join "," (map #(let [[v i] (px-doc %)] (str v "/" i)) px-ids)))]
           (check (and (zero? (:exit r)) (str/includes? (:out r) "ok   accuracy[emon-replay-px]") (not (str/includes? (:out r) "FAIL")))
-                 "accuracy[emon-replay-px]: the whole transcripts, replayed, hold their scoreboard entry (scan/forms, scan-ovl/forms, scan-color/graphics)"
+                 "accuracy[emon-replay-px]: the whole transcripts, replayed, hold their scoreboard entry (scan/forms, scan-ovl/forms, scan-color/graphics, scan/seals)"
                  (when-let [l (some #(when (str/includes? % "accuracy[emon-replay-px]") (str/trim %)) (str/split-lines (:out r)))]
                    (str " (" (str/replace l #"^ok +accuracy\[emon-replay-px\]: " "") ")"))))))))
 

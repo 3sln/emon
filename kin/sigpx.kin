@@ -26,7 +26,7 @@
                                    ow-count ow-get hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf
                                    vw-cpt-to-px vw-px-to-cpt
                                    ol-get lh-first lh-count]]
-            [emon.sealfield :refer [sf-script]]
+            [emon.sealfield :refer [sf-script sf-digit]]
             [emon.sigmark :refer [sg-ini-w sg-ini-h sg-sig-min-w sg-sig-max-w sg-sig-max-h sg-min-side sg-rule-min sg-rule-thick sg-rule-page sg-tort]]
             [emon.sealmark :refer [sm-hue]]
             [emon.scan :refer [sc-sel-base]]
@@ -46,7 +46,8 @@
 (defn ^:pub ^I32 sp-pen [] (comment "`sig-pen`: the widest stroke (centipoints) of a pen: 4.5 pt.") (return 450))
 (defn ^:pub ^I32 sp-cover [] (comment "`sig-cover`: the share (per cent) of its box that strokes cover at most.") (return 40))
 (defn ^:pub ^I32 sp-min-ink [] (comment "The fewest ink pixels a signature has.") (return 40))
-(defn ^:pub ^I32 sp-max [] (comment "The most candidates of a page (the most rules looked at).") (return 8))
+(defn ^:pub ^I32 sp-gap [] (comment "How far above its rule (centipoints) a pen's lowest ink may end at least: 16 pt (D1040).") (return 1600))
+(defn ^:pub ^I32 sp-max [](comment "The most candidates of a page (the most rules looked at).") (return 8))
 (defn ^:pub ^I32 sp-max-zone [] (comment "The most pixels of a zone: a zone is bounded by a rule and 80 pt; a hostile page has no larger one.") (return 4000000))
 
 ;; ------------------------------------------------------------- one pixel
@@ -123,21 +124,33 @@
                 (set sy0 (rl-get rules s (rlf-y0)))
                 (set sx1 (rl-get rules s (rlf-x1)))
                 (set sy1 (rl-get rules s (rlf-y1)))
-                (if (and (>= (- sy1 sy0) 2000) (<= (- sx1 sx0) 600))
+                (comment "a vertical rule at least 10 pt long that meets the rule's row at its ends or between them is a cell border of a ruled table (D1040)")
+                (if (and (>= (- sy1 sy0) 1000) (<= (- sx1 sx0) 600))
                   (if (and (<= sy0 (+ ry 300)) (>= sy1 (- ry 300)))
-                    (if (or (<= (sp-abs (- sx0 rx0)) 300) (<= (sp-abs (- sx0 rx1)) 300))
+                    (if (and (>= sx0 (- rx0 300)) (<= sx0 (+ rx1 300)))
+                      (return 1))))
+                (comment "a rule on the same line that ends where this one begins or begins where it ends (within 6 pt, 4 pt of height) is the next cell of a table's row (D1040)")
+                (if (and (>= (- sx1 sx0) 6000) (<= (* (- sy1 sy0) 20) (- sx1 sx0)))
+                  (if (<= (sp-abs (- (quot (+ sy0 sy1) 2) ry)) 400)
+                    (if (or (<= (sp-abs (- sx0 rx1)) 600) (<= (sp-abs (- sx1 rx0)) 600))
                       (return 1))))
                 (if (== (sp-is-rule rules s pw) 1)
                   (do (set ymid (quot (+ sy0 sy1) 2))
                       (if (and (> (sp-abs (- ymid ry)) 200) (<= (sp-abs (- ymid ry)) 4000))
                         (if (>= (* 2 (sp-overlap rx0 rx1 sx0 sx1)) (- rx1 rx0))
-                          (set others (+ others 1))))))))
+                          (set others (+ others 1))))))
+                (comment "a long flat line (a scan's skew thickens its box: 1 in 20) up to 28 pt above, as long as this rule or more, is a table's row line (D1040)")
+                (if (and (>= (- sx1 sx0) 6000) (<= (* (- sy1 sy0) 20) (- sx1 sx0)))
+                  (do (set ymid (quot (+ sy0 sy1) 2))
+                      (if (and (< ymid ry) (<= (- ry ymid) 2800))
+                        (if (>= (* 2 (sp-overlap rx0 rx1 sx0 sx1)) (- rx1 rx0))
+                          (return 1)))))))
           (set s (+ s 1))))
     (if (>= others 2) (return 1))
     (return 0)))
 
 (defn ^I32 sp-mask-words [^I32 page1 ^Cells owords ^Cells etext ^Cells views ^I32 srcview ^I32 zx0 ^I32 zy0 ^I32 zw ^I32 zh ^:mut ^Cells mask]
-  (comment "Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters, inside the zone (px zx0, zy0, zw x zh). Answers the words.")
+  (comment "Paper over (mask 0) the boxes of the OCR words of the page that the engine was sure of and that hold at least two letters or digits (D1040; a lone digit is a stroke's), inside the zone (px zx0, zy0, zw x zh). Answers the words.")
   (let [^I32 n (ow-count owords)
         ^:mut ^I32 i 0
         ^:mut ^I32 made 0
@@ -160,6 +173,7 @@
                   (set k 0)
                   (while (< k tl)
                     (do (if (> (sf-script (cells-at etext (+ ts k))) 0) (set letters (+ letters 1)))
+                        (if (>= (sf-digit (cells-at etext (+ ts k))) 0) (set letters (+ letters 1)))
                         (set k (+ k 1))))
                   (if (>= letters 2)
                     (do (set x0 (- (vw-cpt-to-px views srcview 0 (ow-get owords i (hd-x0)) (ow-get owords i (hd-y0))) 1))
@@ -303,7 +317,7 @@
     (cells-push cand 0)
     (return 1)))
 
-(defn ^I32 sp-judge [^I32 page1 ^Cells views ^I32 srcview ^Cells owords ^Cells etext ^Bitmap src ^I32 row ^I32 zx0 ^I32 zy0 ^Cells mask ^I32 n ^:mut ^Cells cand]
+(defn ^I32 sp-judge [^I32 page1 ^Cells views ^I32 srcview ^Cells owords ^Cells etext ^Bitmap src ^Cells rules ^I32 row ^I32 zx0 ^I32 zy0 ^Cells mask ^I32 n ^:mut ^Cells cand]
   (comment "Is the ink of a zone (statistics at mask[n...]) a pen's? Add a candidate when it is: the box, the stroke width, the loops of the path, the coverage, no legible word, then the size says")
   (comment "signature or initials. Answers 1 when added.")
   (let [^I32 ink (cells-at mask (+ n 132))
@@ -324,6 +338,7 @@
         ^I32 mh (sp-median mask n nh)
         ^I32 mv (sp-median mask (+ n 64) nv)
         ^:mut ^I32 sw 1
+        ^:mut ^I32 gap 0
         ^:mut ^I32 swc 0
         ^:mut ^I32 kind 0
         ^:mut ^I32 conf 0
@@ -335,6 +350,10 @@
     (if (< bx1 bx0) (return 0))
     (if (or (< w (sg-min-side)) (< h (sg-min-side))) (return 0))
     (if (or (> w (sg-sig-max-w)) (> h (sg-sig-max-h))) (return 0))
+    (comment "the pen is ON its line: the ink's foot is within `sp-gap` of the rule or 40 per cent of the ink's height, whichever is more (D1040: a stamp above a line is no signature)")
+    (set gap (quot (* h 2) 5))
+    (if (< gap (sp-gap)) (set gap (sp-gap)))
+    (if (< (+ y1 gap) (quot (+ (rl-get rules row (rlf-y0)) (rl-get rules row (rlf-y1))) 2)) (return 0))
     (set sw mh)
     (if (or (== sw 0) (and (> mv 0) (< mv sw))) (set sw mv))
     (if (< sw 1) (set sw 1))
@@ -392,7 +411,7 @@
     (sp-mask-words page1 owords etext views srcview zx0 zy0 zw zh mask)
     (set ink (sp-stats src zx0 zy0 zw zh mask (* zw zh)))
     (if (< ink (sp-min-ink)) (return 0))
-    (return (sp-judge page1 views srcview owords etext src r zx0 zy0 mask (* zw zh) cand))))
+    (return (sp-judge page1 views srcview owords etext src rules r zx0 zy0 mask (* zw zh) cand))))
 
 (defn ^:pub ^I32 sp-find [^I32 page1 ^Cells views ^I32 srcview ^Cells rules ^Cells owords ^Cells etext ^Bitmap src ^I32 pw ^:mut ^Cells cand ^:mut ^Cells mask]
   (comment "The candidates of page `page1` (1-based) from the tracer's rules of the raster `srcview` (a `views` row; `src` its pixels): see the head of this file; written to `cand` (cleared")
