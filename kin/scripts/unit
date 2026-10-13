@@ -271,7 +271,7 @@ case "$arms" in *rust*)
     cat > "$work/rust/Cargo.toml" <<'TOML'
 [package]
 name = "emon"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 
 [lib]

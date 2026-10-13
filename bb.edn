@@ -136,6 +136,13 @@
                     :task (shell "bb" "tools/corpus.clj" "index-sha")}
   ci {:doc "CI helpers: bb ci coverage (every gate is in a gates.yml job) | laws-record ARM LOG DIR | laws-compare DIR (D266). NOT a gate."
       :task (apply shell "bb" "tools/ci.clj" *command-line-args*)}
+  version {:doc "The package version (P11.1, D1401): version.edn is the single source.  bb version | set X.Y.Z | bump major|minor|patch | --check TAG (every manifest equals the tag, leading v optional; lists the ones that do not) | --self-test (on a temporary copy). NOT a gate."
+           :override-builtin true
+           :task (apply shell "bb" "tools/version.clj" *command-line-args*)}
+  release-audit {:doc "Is the tree one we may publish under MIT (P11.3, D1410)?  LICENSE is MIT; release/third-party.edn lists every Rust crate of Cargo.lock, every npm package and the native libraries and data a release artifact carries or links, each with an allowed SPDX licence; no jbig2dec and no GPL-family component is in the inventory, Cargo.lock, a build script's link line or a host source's library names; THIRD_PARTY_NOTICES.md is what the inventory generates.  bb release-audit [--write | --import-texts | --self-test]"
+                 :task (apply shell "bb" "tools/release_audit.clj" *command-line-args*)}
+  api-diff {:doc "Is the public API what api/surface.edn froze (P11.2, D1420)?  The surface of every shipped package (the Rust crate's root items, the Go, Java and C# public declarations, the JS exports, emon.h, the pod's vars, the option keys, limits, flags and the Model schema's keys) is read from source and diffed against the file: a removed or changed public entry fails; a new one fails unless --allow-additions; accidental and provisional entries are notes.  bb api-diff [--allow-additions | --write | --list [HOST] | --self-test]"
+            :task (apply shell "bb" "tools/api_diff.clj" *command-line-args*)}
   corpus-test {:doc "SigV4 vectors, then a push/pull round trip against a local MinIO. NOT a gate."
                :task (do (shell "bb" "-cp" "tools" "tools/corpus_test.clj")
                          (shell "bb" "-cp" "tools" "tools/corpus_roundtrip.clj"))}}}

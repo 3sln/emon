@@ -352,7 +352,7 @@ pub unsafe extern "C" fn emon_free_asset_info(a: *mut emon_asset_info) {
 
 // ------------------------------------------------------------------------------------------------ what the library is
 
-static VERSION: &[u8] = b"0.0.0\0";
+static VERSION: &[u8] = b"0.1.0\0";
 
 #[no_mangle]
 pub extern "C" fn emon_version() -> *const c_char {
