@@ -15,7 +15,6 @@ import (
 	"sync/atomic"
 
 	"emon/plan"
-	_ "emon/pngenc"
 	"emon/planrun"
 	"emon/port"
 )

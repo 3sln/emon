@@ -6,7 +6,7 @@
 // table, `ProducerInOrder`, its replay map and its unused count) is here the unit call (the caller's, under the caller's own panic catch), the await, and
 // the fulfilment of the ports. One attempt's accounting, the two named limits, the requests a unit wrote (checked, and sorted by id), the answered set,
 // the order the answers are appended in, the transcript's entries, the schedule (`en-next`), the fetch planner and every name are kin's. What stays is
-// what is not observable: the bitmaps (a PNG each, `PngRead`), the in-memory `Transcript` the embedder holds, the `Replayer` that answers the loop from
+// what is not observable: the bitmaps (a PNG each, kin's `emon.pngread`, P10.11), the in-memory `Transcript` the embedder holds, the `Replayer` that answers the loop from
 // kin's map and the fulfilment.
 //
 // It is named `Planrun`, not `PlanLoop`: the generated `emon.Planloop` is kin's and a case-insensitive file system would hold only one of them. Nothing
@@ -662,7 +662,7 @@ public static class Planrun {
                     throw Bad(name + " " + TbName(emon.Transcript.TbBitmapMissing()));
                 }
                 try {
-                    bm = PngRead.PngDecode(png);
+                    bm = PngDecode(png);
                 } catch (System.ArgumentException x) {
                     throw Bad(x.Message);
                 }
@@ -676,18 +676,25 @@ public static class Planrun {
     public static byte[] PngEncode(Port.Bitmap b) {
         Port.Cells ws = Port.NewCells(), pal = Port.NewCells(), row = Port.NewCells();
         Port.Buf o = Port.NewBuf(), z = Port.NewBuf();
-        int ct = b.Ch == 3 ? 2 : 0;
-        Png.PngBegin(ws, o, z, b.W, b.H, ct, 8, 0, pal, 0, 0);
-        int n = b.W * b.Ch;
-        for (int y = 0; y < b.H; y++) {
-            Port.CellsDrop(row, 0);
-            for (int k = 0; k < n; k++) {
-                Port.CellsPush(row, b.D[y * b.Stride + k]);
-            }
-            Png.PngRow(ws, o, z, row, 0);
-        }
-        Png.PngEnd(ws, o, z);
+        Pngread.PgEncode(b, ws, o, z, pal, row);
         return Port.BufBlob(o);
+    }
+
+    /// <summary>Reads a transcript's bitmap: a PNG emon wrote (kin's `emon.pngread`, P10.11, D1180). Throws an ArgumentException with kin's sentence on a bad one.</summary>
+    public static Port.Bitmap PngDecode(byte[] p) {
+        Port.Cells r = Port.NewCells(), st = Port.NewCells(), inflated = Port.NewCells(), px = Port.NewCells();
+        Port.Buf idat = Port.NewBuf(), clean = Port.NewBuf();
+        int s = Pngread.PgOpen(p, r, st, inflated, idat, clean);
+        if (s == 0) {
+            Port.Bitmap bm = Port.BitmapNew(Port.CellsAt(r, Pngcheck.PrW()), Port.CellsAt(r, Pngcheck.PrH()), Port.CellsAt(r, Pngcheck.PrCh()));
+            s = Pngread.PgFill(r, inflated, px, bm);
+            if (s == 0) {
+                return bm;
+            }
+        }
+        var sb = new System.Text.StringBuilder();
+        Pngread.PgMsg(s, sb);
+        throw new System.ArgumentException(sb.ToString());
     }
 
     /// <summary>

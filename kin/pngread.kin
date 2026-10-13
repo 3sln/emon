@@ -1,0 +1,99 @@
+;; THE TRANSCRIPT BITMAP CODEC (P10.11 second part, D396; D438, D444, D117). emon's own module (D039). A transcript's page bitmaps
+;; (`bitmap-NNNN.png`) are emon's own canonical PNGs (`emon.png`: 8-bit gray or RGB, one zlib setting, no optional chunks beyond pHYs),
+;; and they were decoded and encoded once on each host (Rust's hand-written inflater, Go's compress/zlib, Java's Inflater, .NET's
+;; ZLibStream). This is the one codec; a host keeps no PNG code for its transcripts.
+;;
+;;   READ    (pg-open p r st out idat clean)  ->  status, the report `r` (`emon.pngcheck`'s: `pr-w`, `pr-h`, `pr-ch`), the inflated
+;;                                                  bytes in `out`
+;;           (pg-fill r out px dst)            ->  status; `dst` is a Bitmap the host made of (w, h, ch)
+;;           (pg-msg status text)                 the sentence of a refusal
+;;   WRITE   (pg-encode b ws out z pal row)    ->  the file in `out`, the canonical writer's, byte for byte
+;;
+;; READING IS `pc-check` (deep 2: the validator of D444, every chunk and checksum, the stream and its size, the pixels and stream
+;; limits), then the kin inflate (the one `pc-check` ran; its bytes are kept, not made twice), then `pf-predict` (the PNG predictor)
+;; into `px`, then the pixels into the Bitmap. Only what the writer makes is read: colour type 0 or 2, depth 8, no interlace
+;; (`ic-unsupported` otherwise); the validator forgives nothing else (an animation chunk, a palette, a bit depth the writer never
+;; wrote were accepted by the hosts' own readers and by no transcript). The host makes the Bitmap because kin cannot return one:
+;; it reads the size from the report, `pg-fill` checks it.
+(ns emon.pngread
+  (:require [emon.lang :refer [I32 Cells Buf Blob Text Bitmap emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-drop cells-free cells-push
+                               bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
+            [emon.imgcheck :refer [ic-ok ic-failed ic-unsupported ic-limit]]
+            [emon.pngcheck :refer [pc-check pr-w pr-h pr-ch pr-ctype pr-depth pr-interlace]]
+            [emon.pdffilter :refer [pf-predict]]
+            [emon.png :refer [png-begin png-row png-end]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or]]))
+
+(defn ^:pub ^I32 pg-open [^Blob p ^:mut ^Cells r ^:mut ^Cells st ^:mut ^Cells out ^:mut ^Buf idat ^:mut ^Buf clean]
+  (comment "Validate `p` and inflate its image data into `out` (one cell a byte, the filter bytes in). Answers an `ic-status`: ok, or")
+  (comment "failed, unsupported (not 8-bit gray or RGB, or interlaced) or limit (the report's `pr-limit` is the count).")
+  (let [^I32 s (pc-check p 2 r st out idat clean)]
+    (if (!= s (ic-ok)) (return s))
+    (if (and (!= (cells-at r (pr-ctype)) 0) (!= (cells-at r (pr-ctype)) 2))
+      (do (cells-free out) (return (ic-unsupported))))
+    (if (or (!= (cells-at r (pr-depth)) 8) (!= (cells-at r (pr-interlace)) 0))
+      (do (cells-free out) (return (ic-unsupported))))
+    (return (ic-ok))))
+
+(defn ^:pub ^I32 pg-fill [^Cells r ^:mut ^Cells out ^:mut ^Cells px ^Bitmap dst]
+  (comment "Undo the predictor over `out` into `px`, then write the pixels to `dst`, which must be (pr-w) by (pr-h) by (pr-ch). Gives")
+  (comment "both scratch arenas back. A damaged filter byte or a Bitmap of another size is failed.")
+  (let [^I32 w (cells-at r (pr-w))
+        ^I32 h (cells-at r (pr-h))
+        ^I32 ch (cells-at r (pr-ch))
+        ^I32 n (* w ch)
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0]
+    (if (or (!= (bitmap-w dst) w) (or (!= (bitmap-h dst) h) (!= (bitmap-channels dst) ch)))
+      (do (cells-free out) (return (ic-failed))))
+    (cells-drop px 0)
+    (if (!= (pf-predict out 0 (cells-len out) px 15 ch 8 w) 0)
+      (do (cells-free out) (cells-free px) (return (ic-failed))))
+    (cells-free out)
+    (if (!= (cells-len px) (* h n))
+      (do (cells-free px) (return (ic-failed))))
+    (comment "A row is `n` bytes from x 0: the port checks the byte index, not each coordinate (port.rs), so channel `i` of x 0 is byte i.")
+    (while (< y h)
+      (do (set i 0)
+          (while (< i n)
+            (do (bitmap-set-u8 dst 0 y i (cells-at px (+ (* y n) i)))
+                (set i (+ i 1))))
+          (set y (+ y 1))))
+    (cells-free px)
+    (return (ic-ok))))
+
+(defn ^:pub ^I32 pg-msg [^I32 s ^:mut ^Text out]
+  (comment "The sentence of a refusal, for a `transcript-bad` error.")
+  (if (== s (ic-unsupported))
+    (do (emit-ascii out "a bitmap that is not an 8-bit gray or RGB PNG without interlacing, which is all a transcript holds")
+        (return 0)))
+  (if (== s (ic-limit))
+    (do (emit-ascii out "a bitmap past the pixel or stream limit")
+        (return 0)))
+  (emit-ascii out "a bitmap that is not a PNG emon wrote (damaged, or not whole)")
+  (return 0))
+
+(defn ^:pub ^I32 pg-encode [^Bitmap b ^:mut ^Cells ws ^:mut ^Buf out ^:mut ^Buf z ^:mut ^Cells pal ^:mut ^Cells row]
+  (comment "`b` as the canonical PNG (`emon.png`): 8-bit gray for one channel, RGB for three, no pHYs, into `out`. `ws`, `out`, `z`,")
+  (comment "`pal` and `row` are fresh.")
+  (let [^I32 w (bitmap-w b)
+        ^I32 h (bitmap-h b)
+        ^I32 ch (bitmap-channels b)
+        ^I32 n (* w ch)
+        ^:mut ^I32 ct 0
+        ^:mut ^I32 y 0
+        ^:mut ^I32 i 0]
+    (if (== ch 3) (set ct 2))
+    (png-begin ws out z w h ct 8 0 pal 0 0)
+    (while (< y h)
+      (do (cells-drop row 0)
+          (set i 0)
+          (while (< i n)
+            (do (cells-push row (bitmap-u8 b 0 y i))
+                (set i (+ i 1))))
+          (png-row ws out z row 0)
+          (set y (+ y 1))))
+    (png-end ws out z)
+    (return 0)))

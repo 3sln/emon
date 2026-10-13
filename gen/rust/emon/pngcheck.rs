@@ -292,9 +292,9 @@ pub(crate) fn pc_run(p: &[u8], deep: i32, mut r: &mut crate::port::Cells, mut st
         }
         if (deep == 1) && (keep == 1) {
             crate::port::buf_append_blob(clean, p, i, i + (12 + ln));
-            if kind == T_IDAT {
-                crate::port::buf_append_blob(idat, p, i + 8, i + (8 + ln));
-            }
+        }
+        if (deep != 0) && (kind == T_IDAT) {
+            crate::port::buf_append_blob(idat, p, i + 8, i + (8 + ln));
         }
         i += 12 + ln;
     }
@@ -385,7 +385,10 @@ pub(crate) fn pc_run(p: &[u8], deep: i32, mut r: &mut crate::port::Cells, mut st
     if iz_consumed(st) != crate::port::buf_len(idat) {
         return ic_failed();
     }
-    crate::port::cells_free(out);
+    // deep 2 keeps the inflated bytes in `out` for the caller (`emon.pngread`); deep 1 lets them go
+    if deep == 1 {
+        crate::port::cells_free(out);
+    }
     crate::port::cells_free(st);
     return ic_ok();
 }

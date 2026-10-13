@@ -348,9 +348,9 @@ func pcRun(p []byte, deep int32, r *port.Cells, st *port.Cells, out *port.Cells,
 		}
 		if (deep == 1) && (keep == 1) {
 			port.BufAppendBlob(clean, p, i, i+(12+ln))
-			if kind == tIdat {
-				port.BufAppendBlob(idat, p, i+8, i+(8+ln))
-			}
+		}
+		if (deep != 0) && (kind == tIdat) {
+			port.BufAppendBlob(idat, p, i+8, i+(8+ln))
 		}
 		i += 12 + ln
 	}
@@ -441,7 +441,10 @@ func pcRun(p []byte, deep int32, r *port.Cells, st *port.Cells, out *port.Cells,
 	if inflate.IzConsumed(st) != port.BufLen(idat) {
 		return imgcheck.IcFailed()
 	}
-	port.CellsFree(out)
+	// deep 2 keeps the inflated bytes in `out` for the caller (`emon.pngread`); deep 1 lets them go
+	if deep == 1 {
+		port.CellsFree(out)
+	}
 	port.CellsFree(st)
 	return imgcheck.IcOk()
 }

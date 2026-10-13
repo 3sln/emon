@@ -13,7 +13,6 @@ import (
 
 	"emon/alignprobe"
 	"emon/plan"
-	_ "emon/pngenc"
 	"emon/planrun"
 	"emon/port"
 )

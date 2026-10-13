@@ -291,9 +291,9 @@ public final class Pngcheck {
             }
             if ((deep == 1) && (keep == 1)) {
                 emon.Port.bufAppendBlob(clean, p, i, i + (12 + ln));
-                if (kind == T_IDAT) {
-                    emon.Port.bufAppendBlob(idat, p, i + 8, i + (8 + ln));
-                }
+            }
+            if ((deep != 0) && (kind == T_IDAT)) {
+                emon.Port.bufAppendBlob(idat, p, i + 8, i + (8 + ln));
             }
             i += 12 + ln;
         }
@@ -384,7 +384,10 @@ public final class Pngcheck {
         if (Inflate.izConsumed(st) != emon.Port.bufLen(idat)) {
             return Imgcheck.icFailed();
         }
-        emon.Port.cellsFree(out);
+        // deep 2 keeps the inflated bytes in `out` for the caller (`emon.pngread`); deep 1 lets them go
+        if (deep == 1) {
+            emon.Port.cellsFree(out);
+        }
         emon.Port.cellsFree(st);
         return Imgcheck.icOk();
     }

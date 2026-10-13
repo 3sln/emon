@@ -291,9 +291,9 @@ public static class Pngcheck {
             }
             if ((deep == 1) && (keep == 1)) {
                 emon.Port.BufAppendBlob(clean, p, i, i + (12 + ln));
-                if (kind == TIdat) {
-                    emon.Port.BufAppendBlob(idat, p, i + 8, i + (8 + ln));
-                }
+            }
+            if ((deep != 0) && (kind == TIdat)) {
+                emon.Port.BufAppendBlob(idat, p, i + 8, i + (8 + ln));
             }
             i += 12 + ln;
         }
@@ -384,7 +384,10 @@ public static class Pngcheck {
         if (Inflate.IzConsumed(st) != emon.Port.BufLen(idat)) {
             return Imgcheck.IcFailed();
         }
-        emon.Port.CellsFree(@out);
+        // deep 2 keeps the inflated bytes in `out` for the caller (`emon.pngread`); deep 1 lets them go
+        if (deep == 1) {
+            emon.Port.CellsFree(@out);
+        }
         emon.Port.CellsFree(st);
         return Imgcheck.IcOk();
     }

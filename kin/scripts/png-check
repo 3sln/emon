@@ -113,10 +113,10 @@ fn main() {
 (defn build-rust []
   (let [d (str work "/rust")]
     (fs/create-dirs (str d "/emon"))
-    (doseq [m ["deflate" "png" "pngprobe" "splitmix"]]
+    (doseq [m ["deflate" "limits" "png" "pngprobe" "splitmix"]]
       (fs/copy (str "gen/rust/emon/" m ".rs") (str d "/emon/" m ".rs")))
     (fs/copy "host/rust/src/port.rs" (str d "/port.rs"))
-    (spit (str d "/emon.rs") "pub mod deflate;\npub mod png;\npub mod pngprobe;\npub mod splitmix;\n")
+    (spit (str d "/emon.rs") "pub mod deflate;\npub mod limits;\npub mod png;\npub mod pngprobe;\npub mod splitmix;\n")
     (spit (str d "/main.rs") rust-main)
     (let [r (exec d "rustc" "--edition" "2021" "-O" "-A" "warnings" "-o" "prog" "main.rs")]
       (if (zero? (:exit r))

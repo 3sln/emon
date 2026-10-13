@@ -224,6 +224,49 @@ fn bet_png_read(cfg: &Cfg, set: &Inputs) {
     report("png-unfilter", "page-gray", "png(decode)", page.len(), cfg.reps, t, if ok { "ok" } else { "MISMATCH" }, "kin iz-zlib + pf-predict (PNG predictor 15) vs the png crate's whole decode of the same file");
 }
 
+// ------------------------------------------------------------------------------ transcript PNG reader (P10.11, D1180)
+
+/// What `host/rust/src/plan.rs`'s `png_decode` does since P10.11: kin's `emon.pngread` (the validator, the inflate, the predictor, the pixels into
+/// a Bitmap), with the buffers made as the host makes them.
+fn kin_transcript_decode(p: &[u8]) -> Bitmap {
+    let (mut r, mut st, mut inflated, mut px) = (Cells::new(), Cells::new(), Cells::new(), Cells::new());
+    let (mut idat, mut clean) = (Buf::new(), Buf::new());
+    assert_eq!(emon::pngread::pg_open(p, &mut r, &mut st, &mut inflated, &mut idat, &mut clean), 0);
+    let bm = Bitmap::new(port::cells_at(&r, emon::pngcheck::pr_w()), port::cells_at(&r, emon::pngcheck::pr_h()), port::cells_at(&r, emon::pngcheck::pr_ch()));
+    assert_eq!(emon::pngread::pg_fill(&mut r, &mut inflated, &mut px, &bm), 0);
+    bm
+}
+
+fn bet_png_transcript(cfg: &Cfg, set: &Inputs) {
+    let imgs: Vec<(&str, &Vec<u8>, usize, usize, usize)> = vec![("page-gray", &set.page, set.pw, set.ph, 1), ("photo-rgb-1200x800", &set.photo, set.photo_w, set.photo_h, 3)];
+    for (name, px, w, h, ch) in imgs {
+        let (mut ws, mut out, mut z, mut row, mut pal) = (Cells::new(), Buf::new(), Buf::new(), Cells::new(), Cells::new());
+        emon::pngprobe::pp_page(&mut ws, &mut out, &mut z, px, w as i32, h as i32, ch as i32, 0, &mut row, &mut pal);
+        let file = out.0.clone();
+        let mut got: Option<Bitmap> = None;
+        let mut kin = || {
+            got = Some(kin_transcript_decode(&file));
+            std::hint::black_box(&got);
+        };
+        let mut old: Option<Bitmap> = None;
+        let mut r1 = || {
+            old = Some(refs::legacy::png_decode(&file).unwrap());
+            std::hint::black_box(&old);
+        };
+        let mut lib: Vec<u8> = Vec::new();
+        let mut r2 = || {
+            lib = refs::png_decode(&file).2;
+            std::hint::black_box(&lib);
+        };
+        let t = multi(cfg.reps, &mut kin, &mut [&mut r1, &mut r2]);
+        let ok = got.as_ref().map(|b| b.to_bytes()) == Some(px.to_vec()) && old.as_ref().map(|b| b.to_bytes()) == Some(px.to_vec()) && lib == *px;
+        for (i, rname) in ["legacy plan.rs png_decode (hand-written inflater)", "png crate (whole decode)"].iter().enumerate() {
+            let note = "kin pg-open (pc-check, inflate) + pg-fill (pf-png, into the Bitmap) of a canonical PNG, against the Rust host's retired transcript reader (copied into refs.rs) and the png crate";
+            report("png-transcript", name, rname, px.len(), cfg.reps, t[i], if ok { "ok" } else { "MISMATCH" }, note);
+        }
+    }
+}
+
 // ------------------------------------------------------------------------------ lzw
 
 fn bet_lzw(cfg: &Cfg, set: &Inputs) {
@@ -418,6 +461,7 @@ fn main() {
     if cfg.wants("deflate") { bet_deflate(&cfg, &set); }
     if cfg.wants("png-write") { bet_png_write(&cfg, &set); }
     if cfg.wants("png-unfilter") { bet_png_read(&cfg, &set); }
+    if cfg.wants("png-transcript") { bet_png_transcript(&cfg, &set); }
     if cfg.wants("lzw") { bet_lzw(&cfg, &set); }
     if cfg.wants("ccitt") { bet_ccitt(&cfg, &set); }
     if cfg.wants("raster") { bet_raster(&cfg, &set); }

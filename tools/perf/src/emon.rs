@@ -32,3 +32,11 @@ pub mod calib;
 pub mod calibdata;
 #[path = "../../../gen/rust/emon/limits.rs"]
 pub mod limits;
+#[path = "../../../gen/rust/emon/imgcheck.rs"]
+pub mod imgcheck;
+#[path = "../../../gen/rust/emon/tiffcheck.rs"]
+pub mod tiffcheck;
+#[path = "../../../gen/rust/emon/pngcheck.rs"]
+pub mod pngcheck;
+#[path = "../../../gen/rust/emon/pngread.rs"]
+pub mod pngread;

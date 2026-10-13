@@ -1,35 +1,41 @@
-// Package pngenc is the bridge from the host's transcript writer to emon's
-// canonical PNG encoder (`emon.png`, D124/D125). kin's generated packages
-// import `port`, so `port` cannot import them; this package can, and registers
-// the encoder with `port.PngEncoder` when it is linked in:
-//
-//	import _ "emon/pngenc"
+// Package pngenc is the Go host's way into the transcript bitmap codec (`emon.pngread`, P10.11, D1180; the writer is `emon.png`, D124/D125).
+// The codec is kin's: this only makes the buffers and the Bitmap, which kin cannot return. `port` cannot import kin's packages (they
+// import it), so the glue lives here, and `planrun` and the tests call it.
 package pngenc
 
 import (
-	"emon/png"
+	"errors"
+	"strings"
+
+	"emon/pngcheck"
+	"emon/pngread"
 	"emon/port"
 )
 
-func init() { port.PngEncoder = Encode }
-
-// Encode writes the bitmap as emon's canonical PNG: 8-bit gray or RGB, no
-// pHYs, bytes identical on every target.
+// Encode writes the bitmap as emon's canonical PNG: 8-bit gray or RGB, no pHYs, bytes identical on every target.
 func Encode(b *port.Bitmap) []byte {
 	ws, out, z, pal, row := port.NewCells(), port.NewBuf(), port.NewBuf(), port.NewCells(), port.NewCells()
-	ct := int32(0)
-	if b.Ch == 3 {
-		ct = 2
-	}
-	png.PngBegin(ws, out, z, b.W, b.H, ct, 8, 0, pal, 0, 0)
-	n := int(b.W) * int(b.Ch)
-	for y := 0; y < int(b.H); y++ {
-		port.CellsDrop(row, 0)
-		for _, v := range b.D[y*int(b.Stride) : y*int(b.Stride)+n] {
-			port.CellsPush(row, int32(v))
-		}
-		png.PngRow(ws, out, z, row, 0)
-	}
-	png.PngEnd(ws, out, z)
+	pngread.PgEncode(b, ws, out, z, pal, row)
 	return out.B
+}
+
+// Decode reads a transcript's bitmap: a PNG emon wrote (8-bit gray or RGB).
+func Decode(p []byte) (*port.Bitmap, error) {
+	r, st, inflated, px := port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()
+	idat, clean := port.NewBuf(), port.NewBuf()
+	s := pngread.PgOpen(p, r, st, inflated, idat, clean)
+	if s != 0 {
+		return nil, errors.New(msg(s))
+	}
+	bm := port.BitmapNew(port.CellsAt(r, pngcheck.PrW()), port.CellsAt(r, pngcheck.PrH()), port.CellsAt(r, pngcheck.PrCh()))
+	if s = pngread.PgFill(r, inflated, px, bm); s != 0 {
+		return nil, errors.New(msg(s))
+	}
+	return bm, nil
+}
+
+func msg(s int32) string {
+	var sb strings.Builder
+	pngread.PgMsg(s, &sb)
+	return sb.String()
 }
