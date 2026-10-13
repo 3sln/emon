@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; RE-DERIVE every committed digest and golden that a legitimate change of outputs moves (D1200; D398, D470, D487). NOT a gate.
+;; RE-DERIVE every committed digest and golden that a legitimate change of outputs moves (D488; D398, D470, D487). NOT a gate.
 ;;
 ;;     bb rederive                 run every step below, in order, then list what changed (git diff --stat over test/ and gen/)
 ;;     bb rederive --check         the guard: every replay gate has a re-derivation registered here (see `exempt`), and nothing a step names is missing
@@ -11,7 +11,7 @@
 ;; runs them all, REPLAY ONLY: no pdfium, no Tesseract, nothing live (the transcripts and bitmaps are the committed ones and are never rewritten). On a tree that
 ;; is consistent it changes nothing. It does NOT record improvements into the scoreboard (`bb accuracy --update` is a decision) and does NOT refit
 ;; (`bb calibration --refit`): it re-baselines only the calibration rows (`conf-ece-*`, `conf-brier-*`) that read worse than the entry, as D398 says.
-;; What no script writes: a literal in a Kin test (D470: `paratest`'s `conf`), which `bb unit` will name.
+;; The two heading goldens with a list or inline styles and `paratest`'s `conf` literal (D470) are set by the `heading` and `para` steps (D488).
 ;;
 ;; THE GUARD. A gate whose script replays transcripts (`--replay`) or reads a DIGESTS file must be COVERED by a step (`:covers`) or be in `exempt` with a
 ;; reason, and every `DIGESTS.edn` under test/ must be written by a step (`:writes`) or be in `exempt-files`. A new replay gate cannot be added without one.

@@ -3,7 +3,7 @@
 ;; born-digital fixture, the pinned pdfium: `bb pdfium-fetch`).
 ;;
 ;;     bb retarget-record [ID...]          the fixtures of test/retarget/FIXTURES.edn (default: all)
-;;     bb retarget-record --digests [ID...]   NO live engine (D1200): replay the committed transcripts on Rust, require Go to give the same bundle, and
+;;     bb retarget-record --digests [ID...]   NO live engine (D488): replay the committed transcripts on Rust, require Go to give the same bundle, and
 ;;                                            rewrite DIGESTS.edn (what a refit or a node change does to the bundles)
 ;;
 ;; The Engine converts each document with the LIVE ports and records what they answered: the decode or the renders, every OCR answer, and (D196: kin
@@ -64,7 +64,7 @@
     (doseq [b @dropped] (fs/delete-if-exists (str dir "/" b)))
     (count @dropped)))
 
-;; --digests (D1200): NO live engine. Replay the committed transcripts with the plain Rust driver (`--out=bundle`, the SHA-256 of its output is what
+;; --digests (D488): NO live engine. Replay the committed transcripts with the plain Rust driver (`--out=bundle`, the SHA-256 of its output is what
 ;; `bb retarget` holds both Engines to), require the Go driver to give the same bundle, and rewrite DIGESTS.edn. For what a change to kin (a refit, a
 ;; conf, a node) does to the bundles while the answers of pdfium and Tesseract are the same ones.
 (when digests-only?

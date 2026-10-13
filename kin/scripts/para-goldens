@@ -36,3 +36,25 @@
   (let [out (run ".cache/emon-rs/target/release/emon-rs" "--pretty" (str "test/corpus/synth/pdf/" d ".pdf"))]
     (spit (io/file root "test" "para" (str d ".json")) (str out "\n") :encoding "UTF-8")
     (println "  wrote test/para/" (str d ".json") (count out) "bytes")))
+
+;; THE ONE LITERAL (D470's open item, closed by D488): `paratest`'s "a paragraph on two pages, in JSON" holds the whole JSON as a string, with the
+;; paragraph's calibrated `conf`. That conf is set here to the one `h-plain` has on its paragraphs (just written above; the same raw confidence, the same
+;; calibdata row), so a refit needs no hand edit. On a tree that is consistent this changes nothing.
+(let [h (slurp (io/file root "test" "para" "h-plain.json") :encoding "UTF-8")
+      ;; pretty JSON: a node's `kind` precedes its `conf`, at the same indent
+      confs (loop [ls (str/split-lines h) kinds {} acc #{}]
+              (if-let [l (first ls)]
+                (if-let [[_ ind k] (re-matches #"(\s*)\"kind\": \"(\w+)\",?" l)]
+                  (recur (rest ls) (assoc kinds (count ind) k) acc)
+                  (if-let [[_ ind n] (re-matches #"(\s*)\"conf\": (\d+),?" l)]
+                    (recur (rest ls) kinds (if (= "paragraph" (get kinds (count ind))) (conj acc n) acc))
+                    (recur (rest ls) kinds acc)))
+                acc))
+      f (io/file root "kin" "paratest.kin")
+      src (slurp f :encoding "UTF-8")
+      lit #"(\\\"src\\\":\[\\\"text\\\",\\\"infer\\\"\],\\\"conf\\\":)\d+(\}\]\},\\\"furniture\\\":\[\],\\\"dropped\\\":\[\]\}\" \"a paragraph on two pages, in JSON\")"]
+  (when-not (= 1 (count confs)) (println "FAIL h-plain has paragraphs of the confidences" (pr-str confs)) (System/exit 1))
+  (when-not (re-find lit src) (println "FAIL kin/paratest.kin: the literal of `a paragraph on two pages, in JSON` is not where para-goldens looks for it") (System/exit 1))
+  (let [new (str/replace src lit (str "$1" (first confs) "$2"))]
+    (spit f new :encoding "UTF-8")
+    (println "  paratest literal conf" (first confs))))

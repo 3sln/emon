@@ -32,11 +32,49 @@
 (run "sh" "tools/accuracy/predict-emon.sh" "x" "pdf" "test/corpus/synth/pdf/h-plain.pdf" "x")
 
 (.mkdirs (io/file root "test" "heading"))
-;; THE TWO THIS CANNOT WRITE (D470's open item, D1200): the driver runs the lists stage, and `headingtest` reads a Model without it. For a document with
-;; a list the driver's Model is not the golden's, so these two are left as they are. After a refit their `"conf"` literals are changed by hand (D470).
-(def not-written #{"initial-letter-headings" "lists-basic"})
+;; THE TWO THIS CANNOT WRITE FROM THE DRIVER (D470's open item, closed by D488): the driver runs the lists stage and the inline stage, and `headingtest`
+;; reads a Model without them, so for a document with a list or inline styles the driver's Model is not the golden's. These two are RE-CONFIDED instead:
+;; the committed golden is kept and only the `"conf"` of its section, heading and paragraph nodes is set to what the driver gives those kinds on `h-plain`
+;; (the calibrated value, kin/calibdata.kin; every node of a kind in these goldens has the one raw confidence, which is checked). The structure of the
+;; two stays what a person last wrote on purpose; a refit moves nothing else in them. On a tree that is consistent this changes nothing.
+(def reconf #{"initial-letter-headings" "lists-basic"})
+(def conf-kinds #{"section" "heading" "paragraph"})
 
-(doseq [d docs :when (or (not (not-written d)) (do (println "  SKIP test/heading/" (str d ".json") "-- the driver's Model has the lists stage (D470); a refit changes its conf by hand") false))]
-  (let [out (run ".cache/emon-rs/target/release/emon-rs" "--pretty" (str "test/corpus/synth/pdf/" d ".pdf"))]
-    (spit (io/file root "test" "heading" (str d ".json")) (str out "\n") :encoding "UTF-8")
-    (println "  wrote test/heading/" (str d ".json") (count out) "bytes")))
+(defn conf-lines
+  "-> [[line-index kind conf-value] ...] for every `\"conf\": N` of a node of a kind in `conf-kinds` in the pretty JSON lines (a node's `kind` precedes its `conf`, at the same indent)."
+  [lines]
+  (loop [i 0 kinds {} acc []]
+    (if (= i (count lines))
+      acc
+      (let [l (nth lines i)]
+        (if-let [[_ ind k] (re-matches #"(\s*)\"kind\": \"(\w+)\",?" l)]
+          (recur (inc i) (assoc kinds (count ind) k) acc)
+          (if-let [[_ ind n] (re-matches #"(\s*)\"conf\": (\d+),?" l)]
+            (let [k (get kinds (count ind))]
+              (recur (inc i) kinds (if (conf-kinds k) (conj acc [i k (parse-long n)]) acc)))
+            (recur (inc i) kinds acc)))))))
+
+(defn driver-json [d] (run ".cache/emon-rs/target/release/emon-rs" "--pretty" (str "test/corpus/synth/pdf/" d ".pdf")))
+
+;; kind -> the one confidence the driver gives it on h-plain
+(def kind-conf
+  (let [m (reduce (fn [m [_ k n]] (update m k (fnil conj #{}) n)) {} (conf-lines (str/split-lines (driver-json "h-plain"))))]
+    (doseq [k conf-kinds]
+      (when-not (= 1 (count (m k))) (println "FAIL h-plain gives" k "the confidences" (pr-str (m k)) "-- want exactly one") (System/exit 1)))
+    (update-vals m first)))
+
+(doseq [d docs]
+  (if (reconf d)
+    (let [f (io/file root "test" "heading" (str d ".json"))
+          text (slurp f :encoding "UTF-8")
+          lines (vec (str/split-lines text))
+          found (conf-lines lines)
+          olds (reduce (fn [m [_ k n]] (update m k (fnil conj #{}) n)) {} found)]
+      (doseq [[k s] olds :when (> (count s) 1)]
+        (println "FAIL test/heading/" (str d ".json") "has" k "nodes of the confidences" (pr-str s) "-- the re-confidence wants one") (System/exit 1))
+      (let [new (reduce (fn [ls [i k _]] (update ls i str/replace #"\d+(,?)$" (str (kind-conf k) "$1"))) lines found)]
+        (spit f (str (str/join "\n" new) "\n") :encoding "UTF-8")
+        (println "  re-confed test/heading/" (str d ".json") (count found) "node(s)")))
+    (let [out (driver-json d)]
+      (spit (io/file root "test" "heading" (str d ".json")) (str out "\n") :encoding "UTF-8")
+      (println "  wrote test/heading/" (str d ".json") (count out) "bytes"))))

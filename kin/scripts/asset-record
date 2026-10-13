@@ -11,7 +11,7 @@
 ;; (no pdfium, no renderer) and holds the output to those digests, and the crops to pdftoppm (D127: a different rasteriser, a sanity bound).
 ;;
 ;;   --scratch   record into .cache/asset-scratch/ and do not touch the committed files (to look at a change first)
-;;   --digests   NO live engine, no pdfium (D1200): replay the committed transcripts and rewrite DIGESTS.edn (bb asset-fig-record --digests)
+;;   --digests   NO live engine, no pdfium (D488): replay the committed transcripts and rewrite DIGESTS.edn (bb asset-fig-record --digests)
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [process shell]]
          '[clojure.edn :as edn]
@@ -36,7 +36,7 @@
 (defn sha256 [^bytes bs] (apply str (map #(format "%02x" (bit-and % 255)) (.digest (MessageDigest/getInstance "SHA-256") bs))))
 (defn run [& cmd] @(apply process {:out :bytes :err :string} cmd))
 
-;; --digests (D1200): NO live engine and no pdfium. The committed transcripts of test/asset/figures/ replay on the plain Rust driver (`--ocr=never`, as
+;; --digests (D488): NO live engine and no pdfium. The committed transcripts of test/asset/figures/ replay on the plain Rust driver (`--ocr=never`, as
 ;; `kin/scripts/asset-check` replays them) and the JSON, the HTML in three modes and every asset file are digested again into DIGESTS.edn: what a refit
 ;; (a conf in the JSON) or a change to the figures stage does to the output while pdfium's crops are the same ones. The transcripts and PNGs are not touched.
 (when (args "--digests")

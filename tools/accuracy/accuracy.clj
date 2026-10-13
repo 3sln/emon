@@ -234,7 +234,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
 (def ^:dynamic *variants* nil)   ; a set of variant names, or nil for every one
 (def ^:dynamic *ids* nil)        ; a set of document ids, or nil for every one
 (def ^:dynamic *docs* nil)       ; a set of "VARIANT/ID" pairs, or nil: only these documents (D459: a variant's documents of a few ids)
-(def ^:dynamic *rebaseline-conf* false) ; --rebaseline-conf: replace the calibration rows that read worse than the entry (D398, D1200); nothing else
+(def ^:dynamic *rebaseline-conf* false) ; --rebaseline-conf: replace the calibration rows that read worse than the entry (D398, D488); nothing else
 (def ^:dynamic *fixture-set* nil) ; a directory of FIXTURE-SETS, or nil for the synthetic corpus
 (def VARIANTS ["pdf" "scan" "pdf-tagged" "scan-color" "scan-ovl"])
 
@@ -403,7 +403,7 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
           [0 board]))
 
       (and *rebaseline-conf* (get-in board [":predictors" name]))
-      ;; D398 / D1200: a refit changes what a confidence means, so the calibration rows (`conf-ece-*`, `conf-brier-*`) that now
+      ;; D398 / D488: a refit changes what a confidence means, so the calibration rows (`conf-ece-*`, `conf-brier-*`) that now
       ;; read worse than the entry beyond :tolerance are REPLACED by the measured value. Nothing else moves: not an
       ;; improvement, not a conf row inside the tolerance, not another metric (a regression of one of those still fails).
       (let [tol (get board ":tolerance" TOLERANCE)
