@@ -11,6 +11,7 @@
 ;; (no pdfium, no renderer) and holds the output to those digests, and the crops to pdftoppm (D127: a different rasteriser, a sanity bound).
 ;;
 ;;   --scratch   record into .cache/asset-scratch/ and do not touch the committed files (to look at a change first)
+;;   --digests   NO live engine, no pdfium (D1200): replay the committed transcripts and rewrite DIGESTS.edn (bb asset-fig-record --digests)
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [process shell]]
          '[clojure.edn :as edn]
@@ -34,6 +35,37 @@
 
 (defn sha256 [^bytes bs] (apply str (map #(format "%02x" (bit-and % 255)) (.digest (MessageDigest/getInstance "SHA-256") bs))))
 (defn run [& cmd] @(apply process {:out :bytes :err :string} cmd))
+
+;; --digests (D1200): NO live engine and no pdfium. The committed transcripts of test/asset/figures/ replay on the plain Rust driver (`--ocr=never`, as
+;; `kin/scripts/asset-check` replays them) and the JSON, the HTML in three modes and every asset file are digested again into DIGESTS.edn: what a refit
+;; (a conf in the JSON) or a change to the figures stage does to the output while pdfium's crops are the same ones. The transcripts and PNGs are not touched.
+(when (args "--digests")
+  (shell {:out :string :err :string} "kin/scripts/emit")
+  (let [exe (let [r @(process {:out :string :err :string} "kin/scripts/emon-rs-build")]
+              (when-not (zero? (:exit r)) (println "FAIL build:\n" (:err r)) (System/exit 1))
+              (str/trim (:out r)))
+        file (str out-root "/DIGESTS.edn")
+        old (clojure.edn/read-string (slurp file))
+        new (into (sorted-map)
+                  (for [[stem entry] old :when (or (empty? stems) (some #{stem} stems))]
+                    (let [t (str out-root "/" stem) d (str ".cache/asset-rep-" stem) pdf (:pdf entry)
+                          rep (fn [& more] (apply run exe "--ocr=never" "--assets=figures" (str "--replay=" t) (concat more [pdf])))]
+                      (fs/delete-tree d)
+                      (let [r (rep (str "--asset-dir=" d))]
+                        (when-not (zero? (:exit r)) (println "FAIL" stem "does not replay:" (:err r)) (System/exit 1))
+                        (let [html (fn [mode] (:out (rep "--out=html" mode)))
+                              files (if (fs/exists? d) (into (sorted-map) (for [f (fs/list-dir d)] [(fs/file-name f) (sha256 (fs/read-all-bytes f))])) {})
+                              e (assoc entry
+                                       :json (sha256 (:out r))
+                                       :html-inline (sha256 (html "--html=assets=inline"))
+                                       :html-external (sha256 (html "--html=assets=external,prefix=img/"))
+                                       :html-omit (sha256 (html "--html=assets=omit"))
+                                       :assets files)]
+                          (fs/delete-tree d)
+                          (println "digest" stem)
+                          [stem e])))))]
+    (spit file (with-out-str (clojure.pprint/pprint (merge old new))))
+    (System/exit 0)))
 
 (shell {:out :string :err :string} "kin/scripts/emit")
 (shell "bb" "tools/pdfium/fetch.clj")
