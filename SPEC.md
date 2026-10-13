@@ -3224,6 +3224,15 @@ Settings (all named, all with defaults, all in the Model header):
 | `assets-bytes` | encoded bytes per document | 32 MiB |
 | `asset-signatures` | `off` / `on`: pixels for handwritten signatures and initials | `off` |
 
+### 13.2 Bindings (D001, D471-D476)
+
+The browser (§13.1), the C library and the babashka pod are the Rust host and add no kin arm. All three take the settings above as **one
+`key=value` text, parsed by kin** (`emon.config`), and name errors as the Engine does (D040: the stable name, kin's). The C library
+(`host/c/include/emon.h`) is the Engine's four verbs in C: a one-shot `convert`/`intake` over bytes or a lazy `read_at` callback, and the inverted
+`open`/`step`/`provide`/`finish` session of the browser's ABI for a caller that owns the byte source (and the `ocr` fulfilment), with `record`
+and `replay` as a session; emon allocates and the caller frees (`emon_free_*`), and no panic crosses its boundary. It gives the Model as JSON,
+HTML and assets, not as a walk. The pod gives `emon/convert` (a path or bytes and option text in; the Model as JSON or EDN, the HTML and the assets out).
+
 ---
 
 ## 14. Testing and accuracy evaluation (D023)

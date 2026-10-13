@@ -22,6 +22,11 @@
 ;; AND ON THE C# HOST (P9.2, D457) when a .NET 8+ SDK is there (`emon-cs`, `host/csharp/Emon/Api/`): its native tests (`EngineTest`, the Java
 ;; file's twin) and the same sections through its driver; without an SDK the arm is left out, loudly (EMON_SKIP_CSHARP=1 leaves it out).
 ;;
+;; AND THE C BINDING (P9.4, D473) when a C compiler is there (`emon-c`, host/c/include/emon.h over libemon): the C test program (host/c/test/emon_test.c) against the
+;; shared and the static library, then the same sections through the C driver (one-shot, lazy source, step API, 512-byte async); AND THE BABASHKA POD (P9.4,
+;; D475): babashka loads the pod and converts the fixtures (`kin/scripts/pod`), then the same sections through the pod driver (it has no async source, so
+;; `--chunk=512` stands in). EMON_SKIP_C=1 and EMON_SKIP_POD=1 leave them out, loudly.
+;;
 ;; Every section below runs on EVERY host: the Go Engine (`host/go/{source,engine,model}.go`, driver `emon-go`)
 ;; has its own native tests (`host/go/engine_test.go`, `go test`: the eleven laws of the Rust file and one more, concurrent reads) and the
 ;; same fixtures, goldens, async runs and errors, from the same driver flags; `bb identity` holds the two to
@@ -76,10 +81,26 @@
         0 (str/trim (:out r))
         3 (do (println (str "  " (str/trim (:err r)) " (the C# arm is left out)")) nil)
         (do (println "  FAIL the C# driver did not build:\n" (:err r)) (System/exit 1))))))
+;; THE C ARM (P9.4, D473): `emon-c-build` exits 3 with `SKIP c -- why` on stderr when there is no C compiler; the arm is then left out, LOUDLY, and
+;; nothing fails. EMON_SKIP_C=1 leaves it out on purpose. THE POD ARM (P9.4, D475): `emon-pod-build` likewise (EMON_SKIP_POD=1).
+(def c-exe
+  (let [r @(process {:out :string :err :string} "kin/scripts/emon-c-build")]
+    (case (:exit r)
+      0 (str/trim (:out r))
+      3 (do (println (str "  " (str/trim (:err r)) " (the C arm is left out)")) nil)
+      (do (println "  FAIL the C driver did not build:\n" (:err r)) (System/exit 1)))))
+(def pod-exe
+  (let [r @(process {:out :string :err :string} "kin/scripts/emon-pod-build")]
+    (case (:exit r)
+      0 (str/trim (:out r))
+      3 (do (println (str "  " (str/trim (:err r)) " (the pod arm is left out)")) nil)
+      (do (println "  FAIL the pod did not build:\n" (:err r)) (System/exit 1)))))
 (def hosts (cond-> [["rust" (build-driver "kin/scripts/emon-rs-build" "Rust")]
                     ["go" (build-driver "kin/scripts/emon-go-build" "Go")]]
              java-exe (conj ["java" java-exe])
-             cs-exe (conj ["csharp" cs-exe])))
+             cs-exe (conj ["csharp" cs-exe])
+             c-exe (conj ["c" c-exe])
+             pod-exe (conj ["pod" pod-exe])))
 
 (defn drive [& args]
   (let [t0 (System/nanoTime)
@@ -149,6 +170,30 @@
         (ok "the Engine API's native tests: " n " passed (adapters identical; async 512 = memory over every PDF fixture; D040; limits; record/replay; the Model walks and reads from many threads; images; OCR port; assets; the Renderer port; decode-img)")
         (bad "the Engine API's native tests failed:\n" (str/join "\n" (take 60 (str/split-lines out))))))))
 
+;; The C binding's own test program (host/c/test/emon_test.c): the API of emon.h through the system C compiler, against the shared library and libemon.a.
+(when c-exe
+  (doseq [[label exe] [["shared" "emon-c-test"] ["static" "emon-c-static"]]]
+    (let [r @(process {:out :string :err :string} (str (fs/parent c-exe) "/" exe))
+          out (str (:out r))
+          n (count (re-seq #"(?m)^ok   " out))]
+      (binding [*label* "[c] "]
+        (if (and (zero? (:exit r)) (>= n 55) (not (re-find #"(?m)^FAIL" out)))
+          (ok "the C test against the " label " library: " n " checks passed (one-shot over bytes and a lazy source, the step API, errors by category and name, kin's option text, assets, record/replay, free, a panic that does not cross, a small caller stack)")
+          (bad "the C test against the " label " library failed:\n" (str/join "\n" (take 60 (str/split-lines (str out (:err r)))))))))))
+
+;; The pod's protocol test (kin/scripts/pod): babashka loads the pod and converts the slice's fixtures (path and bytes), errors, passwords, assets.
+(when pod-exe
+  (let [r @(process {:out :string :err :string} "bb" "kin/scripts/pod")
+        out (str (:out r))
+        n (count (re-seq #"(?m)^  ok   " out))]
+    (binding [*label* "[pod] "]
+      (if (and (zero? (:exit r)) (>= n 55) (not (re-find #"(?m)^  FAIL" out)))
+        (ok "babashka loads the pod and converts the slice's seven fixtures by path and by bytes to the goldens (" n " checks: Model as JSON and EDN, HTML, assets, evidence, errors by name, passwords)")
+        (bad "the pod's test failed:\n" (str/join "\n" (take 60 (str/split-lines (str out (:err r))))))))))
+
+;; WHAT A HOST DOES NOT HAVE is not asked of it: a pod converts in one call (a path or bytes), with no async source and no stats.
+(def no-async? #{"pod"})
+
 (doseq [[label exe] hosts]
   (binding [*exe* exe *label* (str "[" label "] ")]
   ;; --------------------------------------------------------- 2. the fixtures
@@ -191,13 +236,16 @@
       (check (= (html-paragraphs (:out h)) (json-paragraphs (:out m)))
              d ": the HTML's <p> are the JSON's paragraphs, in order (" (count (json-paragraphs (:out m))) ")")
       ;; 3. the async source and the other adapters
-      (let [a (drive "--pretty" "--chunk=512" "--async" "--stats" (pdf d))
-            ah (drive "--out=html" "--chunk=512" "--async" (pdf d))
-            stats (re-find #"attempts=(\d+) fetch-rounds=(\d+) bytes-requests=(\d+) source-reads=(\d+) bytes-fetched=(\d+) of (\d+)" (:err a))]
-        (check (and (= (:out a) (:out m)) (= (:out ah) (:out h)))
-               d ": --chunk=512 --async is the in-memory JSON and HTML, byte for byte")
-        (check (and stats (> (Long/parseLong (nth stats 1)) 1) (> (Long/parseLong (nth stats 2)) 0))
-               d ": it missed and re-ran: " (str/trim (:err a))))
+      (if (no-async? label)
+        (check (and (= (:out (drive "--pretty" "--chunk=512" (pdf d))) (:out m)) (= (:out (drive "--out=html" "--chunk=512" (pdf d))) (:out h)))
+               d ": --chunk=512 (no async source here) is the in-memory JSON and HTML, byte for byte")
+        (let [a (drive "--pretty" "--chunk=512" "--async" "--stats" (pdf d))
+              ah (drive "--out=html" "--chunk=512" "--async" (pdf d))
+              stats (re-find #"attempts=(\d+) fetch-rounds=(\d+) bytes-requests=(\d+) source-reads=(\d+) bytes-fetched=(\d+) of (\d+)" (:err a))]
+          (check (and (= (:out a) (:out m)) (= (:out ah) (:out h)))
+                 d ": --chunk=512 --async is the in-memory JSON and HTML, byte for byte")
+          (check (and stats (> (Long/parseLong (nth stats 1)) 1) (> (Long/parseLong (nth stats 2)) 0))
+                 d ": it missed and re-ran: " (str/trim (:err a)))))
       (doseq [src ["seek" "spool"]]
         (check (= (:out (drive "--pretty" (str "--source=" src) (pdf d))) (:out m)) d ": --source=" src " is the same JSON"))))
 
@@ -343,5 +391,5 @@
       (fs/delete-tree outd))))
 
 (if (zero? @fails)
-  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host, the Go host" (if java-exe " and the Java host" "") (if cs-exe " and the C# host" "") (if wasm " and in the browser (WASM + JS SDK, nine byte-source adapters)" "") ", in memory and async")
+  (ok "the first vertical slice: " (count docs) " fixtures, PDF to JSON and HTML on the Rust host, the Go host" (if java-exe " and the Java host" "") (if cs-exe " and the C# host" "") (if c-exe ", the C binding" "") (if pod-exe ", the babashka pod" "") (if wasm " and in the browser (WASM + JS SDK, nine byte-source adapters)" "") ", in memory and async")
   (do (println "  FAIL" @fails "check(s) failed") (System/exit 1)))

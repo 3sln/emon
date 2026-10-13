@@ -1,0 +1,29 @@
+#!/bin/sh
+# Build the babashka pod and its driver; print the DRIVER's path (the pod's with --pod).   kin/scripts/emon-pod-build [--pod]
+#
+# The pod is `emon-bind-build pod` (host/pod/src/main.rs, a Rust binary over the Rust host: D474). The driver is a one-line launcher in
+# .cache/emon-pod/emon-pod that runs test/driver/pod/emon-pod under babashka with EMON_POD set to the pod, so that `bb slice` and `bb identity`
+# can run it like any other driver. The pod needs babashka (which is running this); it needs nothing else, so there is no skip -- unless
+# EMON_SKIP_POD=1 leaves it out on purpose (exit 3, `SKIP pod -- why` on stderr).
+set -e
+cd "$(dirname "$0")/../.."
+if [ -n "${EMON_SKIP_POD:-}" ]; then
+  echo "SKIP pod -- EMON_SKIP_POD is set" >&2
+  exit 3
+fi
+if ! command -v bb > /dev/null 2>&1; then
+  echo "SKIP pod -- babashka (bb) is not on the PATH: a pod is loaded by it" >&2
+  exit 3
+fi
+pod=$(kin/scripts/emon-bind-build pod) || exit 1
+pod="$(cd "$(dirname "$pod")" && pwd)/$(basename "$pod")"
+if [ "${1:-}" = "--pod" ]; then
+  echo "$pod"
+  exit 0
+fi
+root="$(pwd)"
+mkdir -p .cache/emon-pod
+printf '#!/bin/sh\nEMON_POD="%s" exec bb "%s/test/driver/pod/emon-pod" "$@"\n' "$pod" "$root" > .cache/emon-pod/emon-pod.new
+chmod +x .cache/emon-pod/emon-pod.new
+mv .cache/emon-pod/emon-pod.new .cache/emon-pod/emon-pod
+echo "$root/.cache/emon-pod/emon-pod"

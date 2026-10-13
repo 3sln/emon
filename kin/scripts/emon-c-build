@@ -1,0 +1,47 @@
+#!/bin/sh
+# Build the C binding and its C programs with the system C compiler; print the driver's path.   kin/scripts/emon-c-build
+#
+# The library is `emon-bind-build lib` (libemon.{dylib,so}, libemon.a: the Rust host behind host/c/include/emon.h). Beside it, in .cache/emon-c/:
+#
+#     emon-c         test/driver/c/emon-c.c: the C driver, the twin of the Rust driver (`bb slice` and `bb identity` hold it to it)
+#     emon-c-test    host/c/test/emon_test.c: the C test program, linked to the shared library (`kin/scripts/emon-c-test` runs it)
+#     emon-c-static  the same test, linked to libemon.a (it must need nothing the platform does not give a C program)
+#
+# WITHOUT A C COMPILER THIS SKIPS LOUDLY: it prints `SKIP c -- why` on stderr and exits 3 (callers with a C arm leave it out and say so;
+# nothing fails). EMON_SKIP_C=1 leaves it out on purpose. CC names the compiler (default: cc, then clang, then gcc).
+set -e
+cd "$(dirname "$0")/../.."
+if [ -n "${EMON_SKIP_C:-}" ]; then
+  echo "SKIP c -- EMON_SKIP_C is set" >&2
+  exit 3
+fi
+cc="${CC:-}"
+if [ -z "$cc" ]; then
+  for c in cc clang gcc; do
+    if command -v "$c" > /dev/null 2>&1; then cc="$c"; break; fi
+  done
+fi
+if [ -z "$cc" ] || ! command -v "$cc" > /dev/null 2>&1; then
+  echo "SKIP c -- no C compiler (cc, clang or gcc; CC names one)" >&2
+  exit 3
+fi
+lib=$(kin/scripts/emon-bind-build lib) || exit 1
+lib="$(cd "$lib" && pwd)"
+out=.cache/emon-c
+# a build with the native ports (EMON_RS_LIVE, EMON_RS_PDFIUM, EMON_RS_CODECS: see emon-bind-build) is not the plain one: its own directory
+if [ "${EMON_RS_LIVE:-}" = 1 ] || [ -n "${EMON_RS_PDFIUM:-}" ] || [ -n "${EMON_RS_CODECS:-}" ]; then out=.cache/emon-c-live; fi
+mkdir -p "$out"
+cflags="-std=c11 -O1 -Wall -Wextra -Werror -Ihost/c/include"
+# the shared library, found at run time through an rpath (the cdylib's install name is @rpath/libemon.dylib on macOS)
+$cc $cflags -o "$out/emon-c" test/driver/c/emon-c.c -L"$lib" -lemon -Wl,-rpath,"$lib" || { echo "emon-c: the C driver did not compile" >&2; exit 1; }
+$cc $cflags -o "$out/emon-c-test" host/c/test/emon_test.c -L"$lib" -lemon -Wl,-rpath,"$lib" || { echo "emon-c: the C test did not compile" >&2; exit 1; }
+# the static library: what Rust's std needs from the platform (rustc --print native-static-libs says; on macOS and Linux these)
+case "$(uname -s)" in
+  Darwin) sys="-framework Security -framework CoreFoundation -liconv -lm" ;;
+  *) sys="-lpthread -ldl -lm" ;;
+esac
+if [ "$out" = .cache/emon-c ]; then
+  $cc $cflags -o "$out/emon-c-static" host/c/test/emon_test.c "$lib/libemon.a" $sys || { echo "emon-c: the C test did not link statically" >&2; exit 1; }
+fi
+# (a build with the native ports needs their libraries too when linked statically: it is shared-only)
+echo "$out/emon-c"

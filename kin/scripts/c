@@ -1,0 +1,70 @@
+#!/usr/bin/env bb
+;; THE C BINDING (DEVLOG P9.4, D471-D476): the Rust host behind host/c/include/emon.h, from a C program.   kin/scripts/c
+;;
+;; Builds libemon (cdylib and staticlib, `emon-bind-build lib`), the C driver and the C test program with the system C compiler, then:
+;;
+;;   1. runs the C test (host/c/test/emon_test.c) against the shared library and against libemon.a: the one-shot calls (bytes and a lazy
+;;      source), the step API, the named errors by category and name, option text parsed by kin, assets, record and replay, memory freed by
+;;      the matching emon_free_*, a panic that does not cross, a 256 KiB caller stack;
+;;   2. holds the header to the library: every function emon.h declares is exported by libemon and every emon_* export is declared;
+;;   3. runs the C driver over a document through the one-shot bytes, the lazy source and the step API, and requires one answer
+;;      (`bb slice` and `bb identity` hold it to the Rust driver).
+;;
+;; WITHOUT A C COMPILER IT SKIPS LOUDLY (`SKIP c -- why`, exit 0): nothing fails. EMON_SKIP_C=1 leaves it out on purpose. NOT a gate on its
+;; own: `bb slice` runs the same C test and the C driver's sections, `bb identity` the C arms.   bb c
+(require '[babashka.fs :as fs]
+         '[babashka.process :refer [process shell]]
+         '[clojure.string :as str])
+
+(def fails (atom 0))
+(defn ok [& xs] (println (str "  ok   " (apply str xs))))
+(defn bad [& xs] (swap! fails inc) (println (str "  FAIL " (apply str xs))))
+
+(shell {:out :string :err :string} "kin/scripts/emit")
+(def built @(process {:out :string :err :string} "kin/scripts/emon-c-build"))
+(case (:exit built)
+  0 nil
+  3 (do (println (str "  " (str/trim (:err built)) " (the C arm is left out)")) (System/exit 0))
+  (do (println "  FAIL the C binding did not build:\n" (:err built)) (System/exit 1)))
+(def driver (str/trim (:out built)))
+(def bindir (str (fs/parent driver)))
+
+(doseq [[label exe] [["shared" "emon-c-test"] ["static" "emon-c-static"]]
+        :when (fs/exists? (str bindir "/" exe))]
+  (let [r @(process {:out :string :err :string} (str bindir "/" exe))
+        out (:out r)
+        n (count (re-seq #"(?m)^ok   " out))]
+    (if (and (zero? (:exit r)) (>= n 55) (not (re-find #"(?m)^FAIL" out)))
+      (ok "the C test (" label " library): " n " checks passed (one-shot, lazy source, step API, errors, options, assets, record/replay, free, panic, small stack)")
+      (bad "the C test (" label " library) failed:\n" (str/join "\n" (take 60 (str/split-lines (str out (:err r)))))))))
+
+;; the header and the library agree
+(let [header (slurp "host/c/include/emon.h")
+      declared (set (map second (re-seq #"\b(emon_[a-z0-9_]+)\s*\(" (str/replace header #"(?s)/\*.*?\*/" ""))))
+      declared (into #{} (remove #{"emon_read_fn"}) declared)
+      lib (first (filter fs/exists? [".cache/emon-bind/target/release/libemon.dylib" ".cache/emon-bind/target/release/libemon.so"]))
+      nm (if lib (:out @(process {:out :string :err :string} "nm" "-g" lib)) "")
+      exported (set (map second (re-seq #"(?m)\sT _?(emon_[a-z0-9_]+)$" nm)))]
+  (if (and (seq declared) (seq exported))
+    (let [undefined (remove exported declared)
+          undeclared (remove declared exported)]
+      (if (and (empty? undefined) (empty? undeclared))
+        (ok "emon.h declares " (count declared) " functions and libemon exports exactly those")
+        (bad "emon.h and libemon disagree: declared but not exported " (vec undefined) "; exported but not declared " (vec undeclared))))
+    (ok "(the header/library symbol check needs `nm`; left out)")))
+
+;; the driver, three ways in
+(let [doc "test/corpus/synth/pdf/h-plain.pdf"
+      run (fn [& args] @(apply process {:out :string :err :string} driver (concat args [doc])))
+      a (run "--pretty")
+      b (run "--pretty" "--source=seek" "--chunk=512")
+      c (run "--pretty" "--source=step")
+      d (run "--pretty" "--chunk=512" "--async" "--stats")]
+  (if (and (zero? (:exit a)) (= (:out a) (:out b) (:out c) (:out d)) (= (str (:out a) "\n") (slurp "test/para/h-plain.json"))
+           (re-find #"attempts=(\d+)" (:err d)))
+    (ok "the C driver: bytes, a lazy pread source, the step API and a 512-byte async source give test/para/h-plain.json (" (str/trim (:err d)) ")")
+    (bad "the C driver's ways in differ: " (mapv :exit [a b c d]) (:err a) (:err d))))
+
+(if (zero? @fails)
+  (System/exit 0)
+  (do (println "  FAIL" @fails "check(s) failed") (System/exit 1)))
