@@ -29,7 +29,7 @@
 (defn opt [k] (some->> (map-indexed vector args) (some (fn [[i a]] (when (= a k) (get args (inc i)))))))
 (def hosts (mapv keyword (str/split (or (opt "--hosts") "rust,go,java,csharp") #",")))
 (def ns* (mapv parse-long (str/split (or (opt "--n") "1,2,4,8") #",")))
-(def reps (parse-long (or (opt "--reps") "3")))
+(def reps-opt (some-> (opt "--reps") parse-long))
 (def doc-names (mapv keyword (str/split (or (opt "--docs") "scan,born") #",")))
 (def out-file (opt "--out"))
 
@@ -37,11 +37,11 @@
 (def corpus "corpus")
 (def docs
   {:scan   {:file (str corpus "/financial/agami-indian-bank-statements/train/India_Bank_Statement_Scanned_Type1/00010.pdf") :flags ["--tesseract"]
-            :why "6 pages, scanned"}
+            :why "6 pages, scanned" :reps 3}
    :born   {:file (str corpus "/financial/annual-reports/berkshire-2023-annual-report-10k.pdf") :flags ["--tesseract" "--ocr=auto"]
-            :why "152 pages, born-digital, ocr=auto"}
+            :why "152 pages, born-digital, ocr=auto" :reps 3}
    :fusion {:file (str corpus "/layout/arxiv/1409.1556.pdf") :flags ["--tesseract" "--pdfium"]
-            :why "14 pages, born-digital, ocr=always (renders + OCR per page)" :hosts #{:rust :java :csharp}}})
+            :why "14 pages, born-digital, ocr=always (renders + OCR per page)" :hosts #{:rust :java :csharp} :reps 2}})
 
 (def drivers
   {:rust   {:exe ".cache/emon-rs-fusion/target/release/emon-rs"}
@@ -79,7 +79,8 @@
 (doseq [dn doc-names
         :let [doc (docs dn)]
         :when (fs/exists? (:file doc))]
-  (let [hs (filterv #(and (available? %) (or (nil? (:hosts doc)) ((:hosts doc) %))) hosts)]
+  (let [hs (filterv #(and (available? %) (or (nil? (:hosts doc)) ((:hosts doc) %))) hosts)
+        reps (or reps-opt (:reps doc))]
     (println)
     (println (str "== " (name dn) ": " (:why doc) " (" (:file doc) ")"))
     (println (str "   cores " (:out @(process {:out :string} "sysctl" "-n" "hw.ncpu")) "   hosts " (str/join "," (map name hs)) "   N " (str/join "," ns*) "   reps " reps))
