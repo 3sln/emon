@@ -93,6 +93,12 @@ ocr/scan/furn-title-pagenum/transcript.edn
 ocr/scan/h-keyword/transcript.edn
 ocr/scan/h-plain/transcript.edn
 ocr/scan/table-simple-ruled/transcript.edn
+pdfium-wasm/replay/columns-span-figure/transcript.edn
+pdfium-wasm/replay/fig-logo-pages/transcript.edn
+pdfium-wasm/replay/fig-over-image/transcript.edn
+pdfium-wasm/replay/fig-vector-chart/transcript.edn
+pdfium-wasm/replay/figures-charts/transcript.edn
+pdfium-wasm/replay/figures-logo-screenshot/transcript.edn
 render/render/transcript.edn
 retarget/replay/born-icdar-us-034/transcript.edn
 retarget/replay/born-wm-gray-behind/transcript.edn
