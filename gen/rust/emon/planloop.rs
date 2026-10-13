@@ -30,6 +30,9 @@ pub fn pe_bad_record() -> i32 {
 pub fn pe_stalled() -> i32 {
     return 8;
 }
+pub fn pe_ocr_requests() -> i32 {
+    return 9;
+}
 pub fn pe_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 0 {
         crate::port::text_ascii(t, "none");
@@ -65,6 +68,10 @@ pub fn pe_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 8 {
         crate::port::text_ascii(t, "need-bytes-stalled");
+        return 1;
+    }
+    if code == 9 {
+        crate::port::text_ascii(t, "ocr-requests");
         return 1;
     }
     return 0;
@@ -471,6 +478,10 @@ pub(crate) fn pl_requests(p: &mut crate::emon::planctx::Plan) -> i32 {
         return pl_limit(p, pe_max_rounds(), p.max_rounds, p.rounds);
     }
     p.requests += n;
+    // The `ocr-requests` limit (SPEC 7.4, P10.4): the requests a unit asks in all, over its rounds. A named limit of the loop, as `max-rounds` is.
+    if p.requests > crate::port::limit_of(10) {
+        return pl_limit(p, pe_ocr_requests(), crate::port::limit_of(10), p.requests);
+    }
     p.round = p.rounds - 1;
     p.outk = 2;
     return act_requests();

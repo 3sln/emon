@@ -37,7 +37,7 @@
 ;; `part`: no node of an `images` run can be that image, and a scan's page image would take the budget for nothing.
 (ns emon.asset
   (:require [emon.lang :refer [I32 I64 Src Cells Bitmap BitmapSet Buf i64 i32 add64 mul64]]
-            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop bms-get bms-has
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop bms-get bms-has limit-of
                                buf-len buf-push buf-blob buf-append-blob
                                bitmap-new bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
                                crypto-sha256]]
@@ -82,7 +82,7 @@
   (comment "The most host pixels asked for in one document: `AS_HOSTFACTOR` times `asset-pixels`, saturated.")
   (if (> maxpix 268435455) (return 2147483647))
   (return (* maxpix AS_HOSTFACTOR)))
-(defconst ^I32 AS_MAXPROD 4096)     ;; placements that make pixels, a document (the rest are `budget`)
+;; The placements that make pixels, a document (the rest are `budget`), are `limit-of` ASSET_PLACEMENTS (4096 by default; P10.4, D477).
 (defconst ^I32 AS_STRIDE 32)
 (defconst ^I32 AS_OVERLAY_WORK 100000000) ;; rows the `overlaid` flag may read in all; past it the flag is not set
 (defconst ^I32 AS_PAD 200)          ;; a render's pad, centipoints (2 pt, SPEC 10.11)
@@ -813,13 +813,14 @@
                              ^:mut ^Cells words ^:mut ^Cells hs]
   (comment "The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with")
   (comment "its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice")
-  (comment "`totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.")
+  (comment "`totbytes` (`assets-bytes`) before a placement is `budget`, and at most `asset-placements` (`limit-of` 13) placements make pixels.")
   (comment "`out rec mrec smp msmp data rows tmp ws z glob words hs` are scratch. A codec image's pixels are the HOST's: the")
   (comment "first attempt writes a `decode-img` request for each (`rq`, with its bytes in `payload` when they are not the input's")
   (comment "own; `input` is the input's index) and answers 1; the host fulfils them and runs the unit again with `ans` and the")
   (comment "bitmaps `bms`, and the same call makes the candidates. Answers 0 (done), 1 (requests written: fulfil and run again) or")
   (comment "12 when the source missed (stop, re-run).")
   (let [^I32 n (im-count im)
+        ^I32 maxprod (limit-of 13)
         ^:mut ^I32 r 0
         ^:mut ^I32 row 0
         ^:mut ^I32 prod 0
@@ -899,7 +900,7 @@
                         (as-set cand row AC_STATUS (nz-part))
                         (if (<= obj 0)
                           (as-set cand row AC_STATUS (nz-codec))
-                          (if (or (>= prod AS_MAXPROD) (> (quot (buf-len cbytes) 2) totbytes))
+                          (if (or (>= prod maxprod) (> (quot (buf-len cbytes) 2) totbytes))
                             (as-set cand row AC_STATUS (nz-budget))
                             (do (set prod (+ prod 1))
                                 (set rc (as-make src ar dc a b st maxpix cand row obj ori 1 cbytes out rec mrec smp msmp data rows tmp ws z

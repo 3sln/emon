@@ -16,10 +16,6 @@ const ntRf int32 = 8
 
 const ntNb int32 = 10
 
-const ntMaxrf int32 = 8192
-
-const ntMaxnb int32 = 4096
-
 var NtKw [361]int32 = [361]int32{
 	116, 97, 98, 108, 101, 102, 105, 103, 117, 114, 101, 102, 105, 103, 46, 102,
 	105, 103, 99, 104, 97, 114, 116, 101, 120, 104, 105, 98, 105, 116, 100, 105,
@@ -595,11 +591,11 @@ func ntScanWord(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, 
 			}
 			if (pa >= 0) && (pb >= 0) {
 				if (i == 0) && (first == 1) {
-					if (port.CellsLen(nb) / ntNb) < ntMaxnb {
+					if (port.CellsLen(nb) / ntNb) < port.LimitOf(11) {
 						ntPushNb(nb, l, page, w, 1, pb, ms, port.CellsLen(mk)-ms, szok, band)
 					}
 				} else {
-					if ((port.CellsLen(rf) / ntRf) < ntMaxrf) && (ntRefContext(gl, et, g0, gn, i, j, pwc) == 1) {
+					if ((port.CellsLen(rf) / ntRf) < port.LimitOf(12)) && (ntRefContext(gl, et, g0, gn, i, j, pwc) == 1) {
 						ntPushRf(rf, w, pa, pb, l, page, ms, port.CellsLen(mk)-ms)
 					}
 				}
@@ -721,7 +717,7 @@ func ntScan(wd *port.Cells, ln *port.Cells, et *port.Cells, gl *port.Cells, sf *
 				if (fw >= 0) && (lists.LsSecondWord(wd, ln, l) >= 0) {
 					ms = port.CellsLen(mk)
 					ml = ntPlainMarker(wd, et, fw, mk)
-					if (ml > 0) && ((port.CellsLen(nb) / ntNb) < ntMaxnb) {
+					if (ml > 0) && ((port.CellsLen(nb) / ntNb) < port.LimitOf(11)) {
 						ntPushNb(nb, l, evidence.LnGet(ln, l, evidence.LhPage()), fw, 2, 0, ms, ml, szok, band)
 					}
 				}

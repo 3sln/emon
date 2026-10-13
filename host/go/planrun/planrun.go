@@ -80,7 +80,7 @@ func vec(c *port.Cells, from, to int32) []int32 {
 func (m *Machine) err() *port.PlanError {
 	var name strings.Builder
 	planloop.PeEmitName(&name, m.p.Err)
-	limited := m.p.Err == planloop.PeMaxRounds() || m.p.Err == planloop.PeFetchRounds()
+	limited := m.p.Err == planloop.PeMaxRounds() || m.p.Err == planloop.PeFetchRounds() || m.p.Err == planloop.PeOcrRequests()
 	return &port.PlanError{Name: name.String(), Msg: m.p.Msg.String(), Limited: limited, Limit: m.p.ErrLimit, Actual: m.p.ErrActual}
 }
 

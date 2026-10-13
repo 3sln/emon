@@ -80,7 +80,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheLimitsHaveTheirNamesInKin() {
-        emon.Testport.AssertEq(Limits.LmCount(), 11, "eleven limits");
+        emon.Testport.AssertEq(Limits.LmCount(), 14, "fourteen limits");
         TLimitName(0, 0, "input-bytes");
         TLimitName(0, 1, "stream-bytes");
         TLimitName(0, 2, "total-bytes");
@@ -92,6 +92,9 @@ public static class Configtest {
         TLimitName(0, 8, "pages");
         TLimitName(0, 9, "pixels");
         TLimitName(0, 10, "ocr-requests");
+        TLimitName(0, 11, "note-bodies");
+        TLimitName(0, 12, "note-refs");
+        TLimitName(0, 13, "asset-placements");
     }
     [Xunit.Fact]
     public static void TestTheLimitsHaveTheirDefaultsAndRangesInKin() {
@@ -106,15 +109,64 @@ public static class Configtest {
         emon.Testport.AssertEq(Limits.LmDefault(8), 100000, "pages");
         emon.Testport.AssertEq(Limits.LmDefault(9), 268435456, "pixels");
         emon.Testport.AssertEq(Limits.LmDefault(10), 100000, "ocr-requests");
+        emon.Testport.AssertEq(Limits.LmDefault(11), 4096, "note-bodies");
+        emon.Testport.AssertEq(Limits.LmDefault(12), 8192, "note-refs");
+        emon.Testport.AssertEq(Limits.LmDefault(13), 4096, "asset-placements");
         emon.Testport.AssertEq(Limits.LmLo(3), 0, "a limit is not negative");
         emon.Testport.AssertEq(Limits.LmHi(3), 2147483647, "a limit fits 31 bits");
+        emon.Testport.AssertEq(Limits.LmHi(6), 32, "form-depth is the stack of the forms being run");
+    }
+    internal static int TNegativeRows() {
+        // How many numeric options (shape 1) and limits have a minimum below 0.
+        int n = 0;
+        int i = 0;
+        int k = 0;
+        while (i < 18) {
+            if ((Config.CkRows[i * 5 + 0] == 1) && (Config.CkRows[i * 5 + 1] < 0)) {
+                n += 1;
+            }
+            i += 1;
+        }
+        while (k < Limits.LmCount()) {
+            if (Limits.LmLo(k) < 0) {
+                n += 1;
+            }
+            k += 1;
+        }
+        return n;
+    }
+    [Xunit.Fact]
+    public static void TestNoNumericOptionOrLimitAcceptsANegativeValue() {
+        emon.Testport.AssertEq(TNegativeRows(), 0, "every minimum is 0 or more");
+        TRefused(0, emon.Testport.TextBlob("max-rounds=-5"), "max-rounds is out of range 0..2147483647");
+        TRefused(0, emon.Testport.TextBlob("asset-dpi=-5"), "asset-dpi is out of range 1..2147483647");
+        TRefused(0, emon.Testport.TextBlob("asset-dpi=0"), "asset-dpi is out of range 1..2147483647");
+    }
+    [Xunit.Fact]
+    public static void TestEveryLimitSaysWhatHappensAtItsBound() {
+        emon.Testport.AssertEq(Limits.LmOnHit(0), 0, "input-bytes breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(1), 0, "stream-bytes breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(2), 0, "total-bytes breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(3), 0, "objects breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(4), 1, "ref-depth reads as absent");
+        emon.Testport.AssertEq(Limits.LmOnHit(5), 0, "operators breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(6), 1, "form-depth skips the form");
+        emon.Testport.AssertEq(Limits.LmOnHit(7), 2, "pattern-depth is reserved");
+        emon.Testport.AssertEq(Limits.LmOnHit(8), 0, "pages breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(9), 0, "pixels breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(10), 0, "ocr-requests breaches");
+        emon.Testport.AssertEq(Limits.LmOnHit(11), 1, "note-bodies is a budget");
+        emon.Testport.AssertEq(Limits.LmOnHit(12), 1, "note-refs is a budget");
+        emon.Testport.AssertEq(Limits.LmOnHit(13), 1, "asset-placements is a budget");
+        emon.Testport.AssertEq(Limits.LmOnHit(14), 0, "past the table");
+        emon.Testport.AssertEq(Limits.LmOnHit(-1), 0, "before the table");
     }
     [Xunit.Fact]
     public static void TestAKindOutsideTheTableHasNoNameAndADefaultOfNothing() {
-        emon.Testport.AssertEq(Limits.LmDefault(11), 0, "past the table");
+        emon.Testport.AssertEq(Limits.LmDefault(14), 0, "past the table");
         emon.Testport.AssertEq(Limits.LmDefault(-1), 0, "before the table");
-        emon.Testport.AssertEq(Limits.LmNameLen(11), 0, "no name");
-        emon.Testport.AssertEq(Limits.LmNameCh(11, 0), -1, "no character");
+        emon.Testport.AssertEq(Limits.LmNameLen(14), 0, "no name");
+        emon.Testport.AssertEq(Limits.LmNameCh(14, 0), -1, "no character");
         emon.Testport.AssertEq(Limits.LmNameCh(0, 11), -1, "past the name's end");
         emon.Testport.AssertEq(Limits.LmNameCh(0, -1), -1, "before the name");
         emon.Testport.AssertEq(Limits.SgDefault(2), 0, "no setting");
@@ -302,8 +354,8 @@ public static class Configtest {
         emon.Enctx.Cfg d = new emon.Enctx.Cfg();
         emon.Testport.AssertEq(TParse(a, emon.Testport.TextBlob("asset-dpi=+36")), 0, "plus");
         emon.Testport.AssertEq(a.Dpi, 36, "36");
-        emon.Testport.AssertEq(TParse(b, emon.Testport.TextBlob("asset-dpi=-5")), 0, "minus");
-        emon.Testport.AssertEq(b.Dpi, -5, "-5");
+        emon.Testport.AssertEq(TParse(b, emon.Testport.TextBlob("asset-pixels=-0")), 0, "minus");
+        emon.Testport.AssertEq(b.Pixels, 0, "-0 is 0");
         emon.Testport.AssertEq(TParse(d, emon.Testport.TextBlob("asset-pixels=2147483647")), 0, "the largest");
         emon.Testport.AssertEq(d.Pixels, 2147483647, "2147483647");
     }
@@ -326,6 +378,7 @@ public static class Configtest {
         TRefused(0, emon.Testport.TextBlob("limit.pages=lots"), "limit.pages wants a number, not \"lots\"");
         TRefused(0, emon.Testport.TextBlob("chunk=0"), "chunk is out of range 1..2147483647");
         TRefused(0, emon.Testport.TextBlob("limit.pages=-1"), "limit.pages is out of range 0..2147483647");
+        TRefused(0, emon.Testport.TextBlob("limit.form-depth=33"), "limit.form-depth is out of range 0..32");
     }
     [Xunit.Fact]
     public static void TestAnUnknownKeyOrALineWithoutAValueIsRefusedByName() {
@@ -344,5 +397,17 @@ public static class Configtest {
         emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 8), -1, "a prefix of it");
         emon.Testport.AssertEq(Config.CfLimitFind(t, 4, 9), -1, "its tail");
         emon.Testport.AssertEq(Config.CfKeyFind(t, 0, 9), -1, "not a key");
+    }
+    [Xunit.Fact]
+    public static void TestTheLimitsOfP104AreFoundByTheirNames() {
+        emon.Port.Cells t = emon.Port.NewCells();
+        TCps(t, emon.Testport.TextBlob("asset-placements"));
+        emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 16), 13, "asset-placements");
+        emon.Port.CellsDrop(t, 0);
+        TCps(t, emon.Testport.TextBlob("ocr-requests"));
+        emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 12), 10, "ocr-requests");
+        emon.Port.CellsDrop(t, 0);
+        TCps(t, emon.Testport.TextBlob("note-refs"));
+        emon.Testport.AssertEq(Config.CfLimitFind(t, 0, 9), 12, "note-refs");
     }
 }

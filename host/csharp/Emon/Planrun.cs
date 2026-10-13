@@ -314,7 +314,7 @@ public static class Planrun {
 
         // the error kin holds, as the loop reports it: the name is kin's and so is the sentence
         private PlanError Err() {
-            bool limited = p.Err == Planloop.PeMaxRounds() || p.Err == Planloop.PeFetchRounds();
+            bool limited = p.Err == Planloop.PeMaxRounds() || p.Err == Planloop.PeFetchRounds() || p.Err == Planloop.PeOcrRequests();
             return new PlanError(PeName(p.Err), p.Msg.ToString(), limited, p.ErrLimit, p.ErrActual);
         }
 

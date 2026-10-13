@@ -1,0 +1,80 @@
+;; THE INVENTORY OF BOUNDS (P10.4, D477): every hard-coded maximum or cap in kin/*.kin and host/ that guards a size, a count, a depth, rounds, pixels, bytes
+;; or time, and which of three things it is. `bb limits --inventory` prints it with the counts. (a) is not listed here: it is the table itself
+;; (`kin/limits.kin`) and the numeric options of `kin/config.kin`, read from their sources.
+;;
+;;   :b       was not a named limit and is now (the row is in `kin/limits.kin`, `:limit` names it); or was a limit that nothing read (`:wired`)
+;;   :b-open  should become one and has not yet: `:reason` says what it waits for
+;;   :c       an internal constant that stays fixed, with the reason. The reasons, in the order they are used:
+;;              stack     it bounds a recursion, and the depth a host's stack holds is the host's, not the embedder's
+;;              slab      it is the size of a fixed region of a context's cells (a `defconst` offset follows it): raising it is a re-layout
+;;              format    it is what a file format or an algorithm says (a window, a table, a code width)
+;;              work      it keeps a quadratic pass linear; it DEFINES the output, as a threshold does (raising it changes every document's answer)
+;;              detector  how many candidates a heuristic looks at (a seal, a signature, a witness line); measured, SPEC 9.x
+;;              reported  reaching it is already reported (a warning bit, a ledger flag, a `budget` reason), so it is not silent
+;;              unread    nothing on the conversion path reads what it bounds yet
+;;              default   the same number as a limit's default, copied into a host binding the embedder constructs
+[;; ------------------------------------------------------------------------------------------ became limits, or began to be read
+ {:class :b :wired true :limit "total-bytes" :where "kin/pdfdoc.kin pd-total-add (D_TOTB)" :value "1 GiB"
+  :guards "decoded bytes of every stream a unit reads through pd-stream-data" :reason "named in the table since P10.10 and read by nothing; `bb fuzz` set EMON_LIMIT_TOTAL_BYTES in vain"}
+ {:class :b :wired true :limit "ocr-requests" :where "kin/planloop.kin pl-requests (pe-ocr-requests)" :value "100000"
+  :guards "requests a unit asks over its rounds" :reason "named in the table since P10.10 and read by nothing; a plan-loop error like max-rounds, on all four hosts"}
+ {:class :b :limit "note-bodies" :where "kin/notes.kin (was NT_MAXNB)" :value "4096"
+  :guards "note-body candidates a document keeps" :reason "a long book can pass it and the footnotes past it were dropped without a word; a budget, not an error (D477)"}
+ {:class :b :limit "note-refs" :where "kin/notes.kin (was NT_MAXRF)" :value "8192"
+  :guards "note-reference candidates a document keeps" :reason "as note-bodies"}
+ {:class :b :limit "asset-placements" :where "kin/asset.kin (was AS_MAXPROD)" :value "4096"
+  :guards "image placements that make pixels, a document" :reason "a catalogue can pass it; the rest are `budget` assets (SPEC 10.11), which stays"}
+ {:class :b :limit "form-depth" :where "kin/limits.kin range" :value "0..32"
+  :guards "the range was 0..2^31-1 but MAX_FORMS (the stack of forms being run) is 32 cells, so a larger value did nothing" :reason "the range now says what the bound can be"}
+ ;; ------------------------------------------------------------------------------------------ should become limits, and have not
+ {:class :b-open :where "kin/pdfcontent.kin MAX_FIDS" :value "512" :guards "fonts a document's content shows (evidence ids)"
+  :reason "a merged document can carry more and its text in the 513th font gets id -1; the ids sit in a slab of `cx`, so naming it needs a re-layout of the context (C_FIDS is followed by C_ constants)"}
+ {:class :b-open :where "host/*/pdfium (Rust max_pixels, Go MaxPixels, Java maxPixels, C# MaxPixels)" :value "1<<28"
+  :guards "pixels of one render" :reason "a copy of the pixels default in a port the embedder constructs (`failed`, not a breach); it should read limit 9; four host edits, held back while a merge is running on the hosts"}
+ {:class :b-open :where "host/js/src/index.js (two sites)" :value "1<<30" :guards "bytes a streamed source is spooled to"
+  :reason "a copy of the input-bytes default; the browser does not read kin's table, so `bb embedders` holds the copy to it"}
+ {:class :b-open :where "SPEC 7.4: wall-clock per stage" :value "none" :guards "time"
+  :reason "SPEC says host-enforced; no host enforces anything (the Run reads no clock, and the browser has none: host/rust/src/engine.rs); an embedder's own timer or cancellation is the answer today"}
+ ;; ------------------------------------------------------------------------------------------ recursion: the stack
+ {:class :c :why :stack :where "kin/pdflex.kin MAX_NEST" :value "128" :guards "array and dictionary nesting of one object" :reason "recursive descent (pl-array / pl-dict)"}
+ {:class :c :why :stack :where "kin/pdfdoc.kin pd-walk" :value "64" :guards "page-tree depth" :reason "recursive walk; a deeper node is dropped with a warning bit"}
+ {:class :c :why :stack :where "kin/model.kin max-depth" :value "200" :guards "depth of the Model's tree (node-new refuses)" :reason "the JSON and HTML writers recurse to it (json.kin, html.kin)"}
+ {:class :c :why :stack :where "kin/transcript.kin tb-nesting" :value "64" :guards "nesting of a transcript's EDN" :reason "recursive reader; a transcript is the embedder's own artefact, not a document"}
+ {:class :c :why :stack :where "kin/pdfstruct.kin TG_MAXDEPTH, SS_MAXDEPTH" :value "64, 12" :guards "structure-tree depth; parent-tree depth" :reason "recursive walks; reported by SS_LIMITS bits"}
+ {:class :c :why :stack :where "kin/pdfcontent.kin MAX_FORMS" :value "32" :guards "forms being run (its range is limit form-depth)" :reason "a stack in `cx`"}
+ {:class :c :why :stack :where "host/csharp/Emon/Api/Engine.cs (the worker thread)" :value "1<<30" :guards "the stack the C# Engine runs a unit on" :reason "a stack size, not a document bound: the recursion bounds above assume a host stack this large"}
+ ;; ------------------------------------------------------------------------------------------ slabs of the contexts
+ {:class :c :why :slab :where "kin/pdfcontent.kin MAX_GS, MAX_MC, MAX_CONT, MAX_ENT" :value "256, 256, 16, 4096" :guards "q depth; marked-content depth; open containers; operand entries"
+  :reason "regions of `cx`; each is reported (a warning bit, W_OPERANDS, W_MC)"}
+ {:class :c :why :slab :where "kin/pdfdoc.kin D_TRAIL, D_SEEN" :value "16, 64" :guards "trailer dictionaries; xref sections read" :reason "regions of `dc`; /Prev loops are the common reason"}
+ {:class :c :why :slab :where "kin/retarget.kin rt-max with rt-lines, rt-cells, rt-reserved" :value "24 (16, 24, 4)" :guards "targeted OCR requests a page asks"
+  :reason "rt-max less rt-reserved is shared by the cells (rt-cells) and the lines (rt-lines), whose rows sit in `rtp`; one number cannot raise the total, and raising any changes the evidence (the accuracy ratchets)"}
+ {:class :c :why :slab :where "kin/rasterplan.kin rp-witness-max" :value "12" :guards "witness lines a page asks" :reason "ri-witness is 96 + j in a slab"}
+ {:class :c :why :slab :where "kin/pdfmeta.kin PM_LB_MAX, PM_XMP" :value "10000, 1 MiB" :guards "page-label ranges; XMP bytes read" :reason "regions of `md`"}
+ ;; ------------------------------------------------------------------------------------------ format and algorithm
+ {:class :c :why :format :where "kin/pdfdoc.kin pd-stream-plan" :value "16" :guards "filters in one stream's chain (more: bad filter)" :reason "a chain of 200 is an attack (seeds chain-*-200) and 16 is far past any producer; that stream's status is 11 and the document goes on"}
+ {:class :c :why :format :where "kin/inflate.kin, kin/pdffilter.kin" :value "32768, 4096, 12 bits" :guards "window; LZW table; LZW code width" :reason "the formats"}
+ {:class :c :why :format :where "kin/deflate.kin PM_CAP, chain length" :value "600, 32" :guards "package-merge scratch; match candidates" :reason "the encoder's algorithm; the output is byte-identical to zlib level 6 (D117)"}
+ {:class :c :why :format :where "kin/tiffcheck.kin CAP_COUNT, MAX_FRAMES, MAX_TILE" :value "2^24, 2^20, 2^20" :guards "values a field may claim; directories in a chain; a tile side" :reason "format sanity under `pages` and `pixels`"}
+ {:class :c :why :format :where "kin/pngcheck.kin PLTE 256, host CCITT columns 1<<20 (4 hosts), host JPEG 65535 (Rust)" :value "256, 2^20, 65535" :guards "palette; CCITT row width; JPEG side" :reason "the formats' own bounds; a CCITT row wider than 2^20 is `unsupported` (pdfimg), a larger JPEG is refused by the decoder"}
+ {:class :c :why :format :where "kin/pdffont.kin CM_MAX" :value "100000" :guards "CMap ranges and /W entries a font keeps" :reason "a font warning bit (4) reports it, and `bb fuzz` holds the hostile ones (seeds widths-100000, cmap-*)"}
+ ;; ------------------------------------------------------------------------------------------ work bounds (they define the output)
+ {:class :c :why :work :where "kin/asset.kin AS_VWORK, AS_OVERLAY_WORK" :value "50M, 100M" :guards "cluster tests; overlay rows read" :reason "past it the flag or the join is not made; they define the answer"}
+ {:class :c :why :work :where "kin/restruct.kin (50 million rows)" :value "50M" :guards "rows looked at when targets are re-linked" :reason "keeps a quadratic pass bounded"}
+ {:class :c :why :work :where "kin/figclass.kin FC_MAXIMG, FC_MAXREG" :value "4096, 128" :guards "image placements read; candidate regions measured" :reason "the classifier looks at no more; raising either changes the figures a document has"}
+ {:class :c :why :work :where "kin/inline.kin IL_MAXC, IL_MAXG, IL_MAXF" :value "100000, 4000, 400" :guards "the gathering loop of kin/inline.kin; glyphs of a word (more: one state); fonts compared" :reason "IL_MAXF keeps the family comparison from being quadratic"}
+ {:class :c :why :work :where "kin/lists.kin LS_MAXCAND, LS_MAXSHAPE" :value "6000, 20000" :guards "list candidates; bullet shapes" :reason "the neighbour search is quadratic in the window"}
+ {:class :c :why :work :where "kin/table.kin MAX_RULES; kin/trace.kin tr-parent-cands; kin/pdfvis.kin PV_SCAN; kin/scan.kin sc-cap; kin/tlhealth.kin th-line-cap" :value "1500, 4096, -, 400, 64"
+  :guards "rules of a table page; enclosing components searched; rows scanned for what hides a glyph; lines clustered; words per median" :reason "MAX_RULES is also semantic: a page with more is a drawing, not a table"}
+ {:class :c :why :work :where "kin/pdfstruct.kin TG_MAXELEMS, TG_MAXSC, TG_MAXPT" :value "1M, 2M, 200000" :guards "structure elements, content items, parent-tree nodes" :reason "reported by the Model's limits flags (SS_LIMITS)"}
+ ;; ------------------------------------------------------------------------------------------ detectors
+ {:class :c :why :detector :where "kin/sealpx.kin sx-max (seal-max)" :value "4" :guards "seals and stamps a page reads from pixels" :reason "each is an OCR read; measured (P8.2)"}
+ {:class :c :why :detector :where "kin/sealmark.kin sm-max-cands, kin/sigmark.kin sg-max, sg-max-strokes, kin/sigpx.kin sp-max, sp-max-zone" :value "64, 512, 96, 8, 4000000"
+  :guards "seal candidates; signature clusters; strokes clustered; rule candidates; pixels of a zone" :reason "heuristics' candidate counts, sized to a hostile page (P8.3); raising one changes the answer"}
+ ;; ------------------------------------------------------------------------------------------ not read
+ {:class :c :why :unread :where "kin/pdfmeta.kin PM_OL_MAX, PM_ND_MAX, PM_DEPTH" :value "200000, 50000, 64" :guards "outline rows; named destinations; outline depth"
+  :reason "`emon.pdfmeta` is read by `bb catalog` and its laws; no stage of the conversion consumes it yet (checked: no `pm-run` outside the module), so a limit would bound nothing; name them when a stage reads them"}
+ {:class :c :why :unread :limit "pattern-depth" :where "SPEC 7.4: pattern/Type3 recursion" :value "8" :guards "recursion into a tiling pattern or a Type3 glyph procedure"
+  :reason "emon interprets neither (fuserules: \"a tiling pattern emon does not interpret\"; no CharProc is run): the limit is named so that the environment and `limit.pattern-depth` already mean it; `on-hit` is reserved"}
+ ;; ------------------------------------------------------------------------------------------ copies of a default
+ {:class :c :why :default :where "host/*/pdfium MaxPixels (= pixels), host/js/src/index.js (= input-bytes)" :value "1<<28, 1<<30" :guards "see :b-open above" :reason "held to the table by `bb embedders`"}]

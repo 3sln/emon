@@ -206,7 +206,9 @@ const dSeen int32 = 32
 
 const dCr int32 = 96
 
-const dFirst int32 = 448
+const dTotb int32 = 448
+
+const dFirst int32 = 449
 
 const pageStride int32 = 16
 
@@ -1101,12 +1103,29 @@ func PdRunPlan(src *port.Src, ar *port.Cells, plan int32, sh int32, b *port.Cell
 	return status
 }
 
+func pdTotalAdd(dc *port.Cells, n int32) int32 {
+	// The `total-bytes` limit (SPEC 7.4, the zip-bomb bound): the decoded bytes of every stream this unit has read through `pd-stream-data`,
+	// summed. A sum past the limit is a breach (never returns); the count is saturated at 2^31 - 1 so that the sum itself cannot overflow.
+	var have int32 = port.CellsAt(dc, dTotb)
+	var lim int32 = port.LimitOf(2)
+	if n > (2147483647 - have) {
+		port.LimitBreach(2, 2147483647)
+	}
+	if (have + n) > lim {
+		port.LimitBreach(2, have+n)
+	}
+	port.CellsSet(dc, dTotb, have+n)
+	return 0
+}
+
 func PdStreamData(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, sh int32, out *port.Cells) int32 {
 	// The DECODED bytes of stream `sh` into `out` (cleared first), by
 	// planning the chain and running it. `out` must not be `a`, `b` or
 	// `st` (they are overwritten); answers a `pf-status`, the first error.
 	var plan int32 = PdStreamPlan(src, ar, dc, a, b, st, sh)
-	return PdRunPlan(src, ar, plan, sh, b, st, out)
+	var status int32 = PdRunPlan(src, ar, plan, sh, b, st, out)
+	pdTotalAdd(dc, port.CellsLen(out))
+	return status
 }
 
 func pdAddTrailer(dc *port.Cells, dict int32) int32 {

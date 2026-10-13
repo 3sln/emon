@@ -24,7 +24,6 @@ pub(crate) fn as_hcap(maxpix: i32) -> i32 {
     }
     return maxpix * AS_HOSTFACTOR;
 }
-pub(crate) const AS_MAXPROD: i32 = 4096;
 pub(crate) const AS_STRIDE: i32 = 32;
 pub(crate) const AS_OVERLAY_WORK: i32 = 100000000;
 pub(crate) const AS_PAD: i32 = 200;
@@ -957,13 +956,14 @@ pub fn as_grg_regions(grg: &mut crate::port::Cells, mut cand: &mut crate::port::
 pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, im: &mut crate::port::Cells, pa: &mut crate::port::Cells, gl: &mut crate::port::Cells, pg: &mut crate::port::Cells, maxpix: i32, totbytes: i32, level: i32, grg: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut mrec: &mut crate::port::Cells, mut smp: &mut crate::port::Cells, mut msmp: &mut crate::port::Cells, mut data: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, input: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut payload: &mut crate::port::Buf, bms: &crate::port::BitmapSet, mut glob: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut hs: &mut crate::port::Cells) -> i32 {
     // The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
     // its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice
-    // `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.
+    // `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `asset-placements` (`limit-of` 13) placements make pixels.
     // `out rec mrec smp msmp data rows tmp ws z glob words hs` are scratch. A codec image's pixels are the HOST's: the
     // first attempt writes a `decode-img` request for each (`rq`, with its bytes in `payload` when they are not the input's
     // own; `input` is the input's index) and answers 1; the host fulfils them and runs the unit again with `ans` and the
     // bitmaps `bms`, and the same call makes the candidates. Answers 0 (done), 1 (requests written: fulfil and run again) or
     // 12 when the source missed (stop, re-run).
     let n: i32 = im_count(im);
+    let maxprod: i32 = crate::port::limit_of(13);
     let mut r: i32 = 0;
     let mut row: i32 = 0;
     let mut prod: i32 = 0;
@@ -1059,7 +1059,7 @@ pub fn as_collect(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut d
                     as_set(cand, row, AC_STATUS, nz_part());
                 } else if obj <= 0 {
                     as_set(cand, row, AC_STATUS, nz_codec());
-                } else if (prod >= AS_MAXPROD) || ((crate::port::buf_len(cbytes) / 2) > totbytes) {
+                } else if (prod >= maxprod) || ((crate::port::buf_len(cbytes) / 2) > totbytes) {
                     as_set(cand, row, AC_STATUS, nz_budget());
                 } else {
                     prod += 1;

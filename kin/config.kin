@@ -47,15 +47,15 @@
          2 0 0 6 3                                  ;; 1  ocr
          2 0 0 9 9                                  ;; 2  furniture
          2 0 0 18 6                                 ;; 3  assets
-         1 -2147483647 2147483647 24 9              ;; 4  asset-dpi
-         1 -2147483647 2147483647 33 12             ;; 5  asset-pixels
-         1 -2147483647 2147483647 45 11             ;; 6  asset-bytes
-         1 -2147483647 2147483647 56 12             ;; 7  assets-bytes
+         1 1 2147483647 24 9                        ;; 4  asset-dpi (0 dpi means nothing)
+         1 0 2147483647 33 12                       ;; 5  asset-pixels
+         1 0 2147483647 45 11                       ;; 6  asset-bytes
+         1 0 2147483647 56 12                       ;; 7  assets-bytes
          2 0 0 68 16                                ;; 8  asset-signatures
          3 0 0 84 13                                ;; 9  keep-evidence
          2 0 0 97 9                                 ;; 10 ocr-scope
-         1 -2147483647 2147483647 106 10            ;; 11 max-rounds
-         1 -2147483647 2147483647 116 12            ;; 12 fetch-rounds
+         1 0 2147483647 106 10                      ;; 11 max-rounds
+         1 0 2147483647 116 12                      ;; 12 fetch-rounds
          3 0 0 128 6                                ;; 13 record
          3 0 0 134 6                                ;; 14 js-ocr
          1 1 2147483647 140 5                       ;; 15 chunk

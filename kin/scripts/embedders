@@ -540,6 +540,77 @@
   (when (and (empty? hits) (pos? libs) (pos? gens))
     (ok "NO FILESYSTEM (D058): " libs " host library files (the browser's too: the WASM binding and the JS SDK, P9.3) and " gens " generated non-test modules, in Rust, Go, Java and C#, name no file, path or directory function or type (`os.LookupEnv`/`std::env` for the EMON_LIMIT_* bounds are the only operating-system reads)")))
 
+;; ------------------------------------------------------------ the names of the limits (P10.4, D477)
+;;
+;; A limit's name is kin's (`kin/limits.kin`): a host SPELLS it from the table's code points and never types a second table. Held here, by what a source can
+;; say: the table is sound; each host's Port reads names and defaults from the generated `emon.limits` and says `EMON_LIMIT_` once; no host library names a
+;; limit as a string except where it raises `input-bytes` itself (a source's length is checked before kin runs, so the name is said by the host); the copies
+;; of a default that a host binding cannot read from kin (a pdfium port the embedder builds, the browser SDK's spool) are held to the table's number; the C
+;; binding and the pod (P9.4) take `cf-parse`, and are held to it. The runtime half, the SAME name from all four hosts' drivers for the
+;; same breach, is `bb limits --run`.
+(require '[limits.table :as lt])
+
+(let [limits (lt/read-limits)
+      by-name (into {} (map (juxt :name identity)) limits)
+      names (set (keys by-name))
+      sound? (and (= (count names) (count limits))
+                  (every? #(re-matches #"[a-z]+(-[a-z]+)*" (:name %)) limits)
+                  (every? #(<= (:lo %) (:default %) (:hi %)) limits)
+                  (every? #(= (:kind %) (.indexOf ^java.util.List (mapv :name limits) (:name %))) limits))]
+  (if sound?
+    (ok "LIMIT TABLE: " (count limits) " limits in kin/limits.kin, names unique and kebab-case, every default inside its range")
+    (bad "kin/limits.kin: a limit name is repeated or not kebab-case, or a default is outside its range"))
+  ;; each host's Port: names and defaults from kin's generated table, the environment prefix said once
+  (doseq [[host file needles] [[:rust "host/rust/src/port.rs" [#"emon::limits::lm_name_len" #"emon::limits::lm_default" #"\"EMON_LIMIT_\""]]
+                               [:go "host/go/port/port.go" [#"limits\.LmNameLen" #"limits\.LmDefault" #"\"EMON_LIMIT_\""]]
+                               [:java "host/java/emon/Port.java" [#"Limits\.lmNameLen" #"Limits\.lmDefault" #"\"EMON_LIMIT_\""]]
+                               [:csharp "host/csharp/Emon/Port.cs" [#"Limits\.LmNameLen" #"Limits\.LmDefault" #"\"EMON_LIMIT_\""]]]]
+    (let [text (slurp file)
+          missing (remove #(re-find % text) needles)]
+      (if (empty? missing)
+        (ok "LIMIT NAMES, " (name host) ": " file " spells a limit's name and default from kin's table (emon.limits) and the environment prefix once")
+        (bad file " does not read the limit names or defaults from kin's table (missing " (str/join ", " (map str missing)) ")"))))
+  ;; no host library types a limit name as a string, except `input-bytes` where the host raises it itself
+  (let [allowed #{"input-bytes"}
+        files (concat (mapcat val library-files))
+        ;; the part of a Rust file before its in-file tests; a decoder's own `Fail(LIMIT, "pixels", n)` is a label on a failure the Engine maps to the
+        ;; `limit` status, and names nothing the Engine reports
+        lit (fn [f] (for [[i l] (map-indexed vector (str/split-lines (first (str/split (slurp f) #"#\[cfg\(test\)\]"))))
+                          :when (not (re-find #"^\s*(//|\*|/\*|///)" l))
+                          :when (not (re-find #"\bFail\b|imgFail" l))
+                          n names
+                          :when (and (not (allowed n)) (re-find (re-pattern (str "[\"']" n "[\"']")) l))]
+                      [f (inc i) n]))
+        hits (mapcat lit (remove #(re-find #"port\.rs$|port\.go$|Port\.java$|Port\.cs$|plan\.go$|/Options\.|options\.js" %) files))]
+    (doseq [[f i n] hits] (bad f ":" i " names the limit `" n "` as a string: a name is kin's table's (kin/limits.kin)"))
+    (when (empty? hits)
+      (ok "LIMIT NAMES: no host library (Rust, Go, Java, C#, the wasm binding, the JS SDK) types a limit name as a string but `input-bytes` where it raises that one itself")))
+  ;; the copies of a default that a host cannot read from kin
+  (doseq [[file re limit expect what]
+          [["host/js/src/index.js" #"limits\?\.\['input-bytes'\] \?\? (1 << 30)" "input-bytes" (* 1 (bit-shift-left 1 30)) "the SDK's spool bound"]
+           ["host/rust/src/pdfium.rs" #"Pdfium \{ max_pixels: (1 << 28) \}" "pixels" (bit-shift-left 1 28) "the pdfium port's render bound"]
+           ["host/go/pdfium/pdfium.go" #"&Pdfium\{MaxPixels: (1 << 28)\}" "pixels" (bit-shift-left 1 28) "the pdfium port's render bound"]
+           ["host/java/emon/ffi/Pdfium.java" #"long maxPixels = (1L << 28)" "pixels" (bit-shift-left 1 28) "the pdfium port's render bound"]
+           ["host/csharp/Emon/Ffi/Pdfium.cs" #"long MaxPixels = (1L << 28)" "pixels" (bit-shift-left 1 28) "the pdfium port's render bound"]]]
+    (let [text (slurp file) m (re-find re text) d (:default (by-name limit))]
+      (cond (nil? m) (bad file " no longer has the copy of the `" limit "` default (" what ") this check holds to the table; update the check or use the table")
+            (not= d expect) (bad file " copies the `" limit "` default as " expect " (" what ") but kin/limits.kin says " d)
+            :else (ok "LIMIT DEFAULT COPY: " file " (" what ") is the `" limit "` default, " d))))
+  ;; the C binding and the pod (P9.4) parse options with kin's `cf-parse`; held to it
+  (doseq [[what dir] [["C binding" "host/c"] ["pod" "host/pod"]]]
+    (if (fs/exists? dir)
+      (let [files (filter #(re-find #"\.(c|h|rs|go|java|py|clj)$" %) (map str (fs/glob dir "**/*")))
+            routes? (some #(re-find #"cf_parse|parse_options|ParseOptions|cf-parse" (slurp %)) files)]
+        (if routes?
+          (ok "LIMIT NAMES, " what ": " dir " takes its options through kin's parse (cf_parse), so `limit.NAME` means what the table says")
+          (bad dir " does not route options through kin's parse (cf_parse / parse_options): a `limit.NAME` would be its own spelling")))
+      (bad dir " is missing: the " what " (P9.4) is held to kin's `cf_parse`")))
+  ;; the browser binding takes `limit.NAME` through kin's parse too
+  (let [wasm (slurp "host/wasm/src/wasm.rs")]
+    (if (re-find #"parse_options" wasm)
+      (ok "LIMIT NAMES, wasm: host/wasm/src/wasm.rs parses its options text with kin (parse_options): `limit.NAME` is the table's, refused by name when it is not")
+      (bad "host/wasm/src/wasm.rs does not parse options with kin (parse_options)"))))
+
 (if (zero? @fails)
   (System/exit 0)
   (do (println "  FAIL" @fails "difference(s)") (System/exit 1)))

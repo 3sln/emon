@@ -19,7 +19,6 @@ public static class Asset {
         }
         return maxpix * AsHostfactor;
     }
-    internal const int AsMaxprod = 4096;
     internal const int AsStride = 32;
     internal const int AsOverlayWork = 100000000;
     internal const int AsPad = 200;
@@ -952,13 +951,14 @@ public static class Asset {
     public static int AsCollect(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells im, emon.Port.Cells pa, emon.Port.Cells gl, emon.Port.Cells pg, int maxpix, int totbytes, int level, emon.Port.Cells grg, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells @out, emon.Port.Cells rec, emon.Port.Cells mrec, emon.Port.Cells smp, emon.Port.Cells msmp, emon.Port.Cells data, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells ws, emon.Port.Buf z, int input, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Buf payload, emon.Port.BitmapSet bms, emon.Port.Cells glob, emon.Port.Cells words, emon.Port.Cells hs) {
         // The asset unit (a document-level plan/fulfil unit, P6.1a):  a candidate row for every image placement that passed P3.6's checks (`images` rows `im`), with
         // its pixels made when a browser or a PNG can show them. `maxpix` is `asset-pixels`; `cbytes` holds at most twice
-        // `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `AS_MAXPROD` placements make pixels.
+        // `totbytes` (`assets-bytes`) before a placement is `budget`, and at most `asset-placements` (`limit-of` 13) placements make pixels.
         // `out rec mrec smp msmp data rows tmp ws z glob words hs` are scratch. A codec image's pixels are the HOST's: the
         // first attempt writes a `decode-img` request for each (`rq`, with its bytes in `payload` when they are not the input's
         // own; `input` is the input's index) and answers 1; the host fulfils them and runs the unit again with `ans` and the
         // bitmaps `bms`, and the same call makes the candidates. Answers 0 (done), 1 (requests written: fulfil and run again) or
         // 12 when the source missed (stop, re-run).
         int n = Evidence.ImCount(im);
+        int maxprod = emon.Port.LimitOf(13);
         int r = 0;
         int row = 0;
         int prod = 0;
@@ -1054,7 +1054,7 @@ public static class Asset {
                         AsSet(cand, row, AcStatus, Model.NzPart());
                     } else if (obj <= 0) {
                         AsSet(cand, row, AcStatus, Model.NzCodec());
-                    } else if ((prod >= AsMaxprod) || ((emon.Port.BufLen(cbytes) / 2) > totbytes)) {
+                    } else if ((prod >= maxprod) || ((emon.Port.BufLen(cbytes) / 2) > totbytes)) {
                         AsSet(cand, row, AcStatus, Model.NzBudget());
                     } else {
                         prod += 1;

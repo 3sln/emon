@@ -11,20 +11,25 @@ public final class Limits {
         116, 104, 111, 112, 101, 114, 97, 116, 111, 114, 115, 102, 111, 114, 109, 45,
         100, 101, 112, 116, 104, 112, 97, 116, 116, 101, 114, 110, 45, 100, 101, 112,
         116, 104, 112, 97, 103, 101, 115, 112, 105, 120, 101, 108, 115, 111, 99, 114,
-        45, 114, 101, 113, 117, 101, 115, 116, 115
+        45, 114, 101, 113, 117, 101, 115, 116, 115, 110, 111, 116, 101, 45, 98, 111,
+        100, 105, 101, 115, 110, 111, 116, 101, 45, 114, 101, 102, 115, 97, 115, 115,
+        101, 116, 45, 112, 108, 97, 99, 101, 109, 101, 110, 116, 115
     };
     public static final int[] LM_ROWS = {
-        1073741824, 0, 2147483647, 0, 11,
-        268435456, 0, 2147483647, 11, 12,
-        1073741824, 0, 2147483647, 23, 11,
-        10000000, 0, 2147483647, 34, 7,
-        64, 0, 2147483647, 41, 9,
-        50000000, 0, 2147483647, 50, 9,
-        32, 0, 2147483647, 59, 10,
-        8, 0, 2147483647, 69, 13,
-        100000, 0, 2147483647, 82, 5,
-        268435456, 0, 2147483647, 87, 6,
-        100000, 0, 2147483647, 93, 12
+        1073741824, 0, 2147483647, 0, 11, 0,
+        268435456, 0, 2147483647, 11, 12, 0,
+        1073741824, 0, 2147483647, 23, 11, 0,
+        10000000, 0, 2147483647, 34, 7, 0,
+        64, 0, 2147483647, 41, 9, 1,
+        50000000, 0, 2147483647, 50, 9, 0,
+        32, 0, 32, 59, 10, 1,
+        8, 0, 2147483647, 69, 13, 2,
+        100000, 0, 2147483647, 82, 5, 0,
+        268435456, 0, 2147483647, 87, 6, 0,
+        100000, 0, 2147483647, 93, 12, 0,
+        4096, 0, 2147483647, 105, 11, 1,
+        8192, 0, 2147483647, 116, 9, 1,
+        4096, 0, 2147483647, 125, 16, 1
     };
     public static final int[] SG_CHARS = {111, 99, 114, 45, 109, 111, 100, 101, 116, 97, 115, 107, 115};
     public static final int[] SG_ROWS = {
@@ -32,43 +37,51 @@ public final class Limits {
         0, 0, 1, 8, 5
     };
     public static int lmCount() {
-        return 11;
+        return 14;
     }
     public static int lmDefault(int kind) {
         // The limit's default; 0 for a kind not in the table.
-        if ((kind < 0) || (kind >= 11)) {
+        if ((kind < 0) || (kind >= 14)) {
             return 0;
         }
-        return LM_ROWS[kind * 5 + 0];
+        return LM_ROWS[kind * 6 + 0];
     }
     public static int lmLo(int kind) {
-        if ((kind < 0) || (kind >= 11)) {
+        if ((kind < 0) || (kind >= 14)) {
             return 0;
         }
-        return LM_ROWS[kind * 5 + 1];
+        return LM_ROWS[kind * 6 + 1];
     }
     public static int lmHi(int kind) {
-        if ((kind < 0) || (kind >= 11)) {
+        if ((kind < 0) || (kind >= 14)) {
             return 0;
         }
-        return LM_ROWS[kind * 5 + 2];
+        return LM_ROWS[kind * 6 + 2];
+    }
+    public static int lmOnHit(int kind) {
+        // What happens at the bound: 0 a breach (an error), 1 a budget (the work stops there, the conversion goes on), 2 reserved (nothing reads it yet).
+        // 0 for a kind not in the table.
+        if ((kind < 0) || (kind >= 14)) {
+            return 0;
+        }
+        return LM_ROWS[kind * 6 + 5];
     }
     public static int lmNameLen(int kind) {
         // The length of the limit's name, 0 for a kind not in the table.
-        if ((kind < 0) || (kind >= 11)) {
+        if ((kind < 0) || (kind >= 14)) {
             return 0;
         }
-        return LM_ROWS[kind * 5 + 4];
+        return LM_ROWS[kind * 6 + 4];
     }
     public static int lmNameCh(int kind, int i) {
         // The i-th code point of the limit's name; -1 past its end or for a kind not in the table.
-        if ((kind < 0) || (kind >= 11)) {
+        if ((kind < 0) || (kind >= 14)) {
             return -1;
         }
-        if ((i < 0) || (i >= LM_ROWS[kind * 5 + 4])) {
+        if ((i < 0) || (i >= LM_ROWS[kind * 6 + 4])) {
             return -1;
         }
-        return LM_CHARS[LM_ROWS[kind * 5 + 3] + i];
+        return LM_CHARS[LM_ROWS[kind * 6 + 3] + i];
     }
     public static int sgCount() {
         return 2;

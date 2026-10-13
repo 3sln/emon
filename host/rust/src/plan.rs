@@ -446,7 +446,7 @@ impl Machine {
     // The error kin holds, as the loop reports it.
     fn error(&self) -> PlanError {
         let code = self.p.err;
-        if code == lp::pe_max_rounds() || code == lp::pe_fetch_rounds() {
+        if code == lp::pe_max_rounds() || code == lp::pe_fetch_rounds() || code == lp::pe_ocr_requests() {
             PlanError::Limit { name: pe_name(code), limit: self.p.err_limit, actual: self.p.err_actual }
         } else if code == lp::pe_unit_failed() {
             PlanError::Unit(self.p.err_actual)

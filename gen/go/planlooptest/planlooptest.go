@@ -227,6 +227,33 @@ func TestMaxRoundsIsANamedLimit(emonT *testing.T) {
 	tErr(emonT, p, planloop.PeMaxRounds(), "max-rounds", "the limit is 1 and this run reached 2")
 }
 
+func TestOcrRequestsIsANamedLimitOfTheLoop(emonT *testing.T) {
+	// The unit's requests over its rounds are counted against `ocr-requests` (kind 10, 100000 by default; P10.4): the count is set as a unit that had
+	// asked nearly that many would have left it, so that the law does not need 100000 records.
+	var p *planctx.Plan = planctx.NewPlan()
+	tInit(p, 5, 24)
+	planloop.PlAttempt(p)
+	p.Requests = 99998
+	tRender(p, 1)
+	tRender(p, 2)
+	port.AssertEq(emonT, planloop.PlAfter(p, plan.UsRequests()), planloop.ActRequests(), "exactly the limit is not over it")
+	port.AssertEq(emonT, p.Requests, 100000, "counted")
+}
+
+func TestOneRequestPastOcrRequestsIsTheNamedError(emonT *testing.T) {
+	var p *planctx.Plan = planctx.NewPlan()
+	tInit(p, 5, 24)
+	planloop.PlAttempt(p)
+	p.Requests = 99999
+	tRender(p, 1)
+	tRender(p, 2)
+	port.AssertEq(emonT, planloop.PlAfter(p, plan.UsRequests()), planloop.ActError(), "one past it is")
+	port.AssertEq(emonT, p.ErrLimit, 100000, "the limit")
+	port.AssertEq(emonT, p.ErrActual, 100001, "what it reached")
+	port.AssertEq(emonT, p.Rounds, 1, "the round was counted first")
+	tErr(emonT, p, planloop.PeOcrRequests(), "ocr-requests", "the limit is 100000 and this run reached 100001")
+}
+
 func TestAMissIsNotARoundAndFetchRoundsIsANamedLimit(emonT *testing.T) {
 	var p *planctx.Plan = planctx.NewPlan()
 	tInit(p, 5, 2)
@@ -810,6 +837,11 @@ func TestTheStalledErrorAndThePhasesAreNamed(emonT *testing.T) {
 	tName(emonT, "finish", planloop.PhEmitName(e, planloop.PhFinish()), e)
 	tName(emonT, "figures", planloop.PhEmitName(f, planloop.PhFigures()), f)
 	tName(emonT, "finished", planloop.PhEmitName(g, planloop.PhDone()), g)
+}
+
+func TestTheOcrRequestsLimitIsNamedAsTheTableNamesIt(emonT *testing.T) {
+	var a *strings.Builder = port.NewText()
+	tName(emonT, "ocr-requests", planloop.PeEmitName(a, planloop.PeOcrRequests()), a)
 }
 
 func TestADocumentsStatusIsNamedAndHasAClass(emonT *testing.T) {
