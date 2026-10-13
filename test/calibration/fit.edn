@@ -3,7 +3,7 @@
 {:min-n 8 :smoothing :laplace
  :rows [
   ["caption" "any" 500 938 14]
-  ["cell" "any" 600 987 4790]
+  ["cell" "any" 600 997 4800]
   ["cell" "ocr" 600 919 35]
   ["dropped" "any" 600 984 61]
   ["figure" "any" 520 923 11]
@@ -13,11 +13,11 @@
   ["initial" "any" 500 955 20]
   ["item" "any" 500 969 127]
   ["list" "any" 500 923 24]
-  ["note" "any" 500 850 18]
-  ["paragraph" "any" 500 783 991]
+  ["note" "any" 500 944 16]
+  ["paragraph" "any" 500 793 979]
   ["paragraph" "ocr" 500 759 81]
-  ["row" "any" 600 971 941]
-  ["rowgroup" "any" 600 938 142]
+  ["row" "any" 600 987 944]
+  ["rowgroup" "any" 600 959 145]
   ["section" "any" 500 953 462]
-  ["table" "any" 600 907 73]
+  ["table" "any" 600 933 73]
   ["text" "any" 1000 815 129]]}

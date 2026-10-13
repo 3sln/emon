@@ -1453,6 +1453,31 @@ pub(crate) fn pa_live(ln: &mut crate::port::Cells, lo: &mut crate::port::Cells, 
     }
     return k;
 }
+pub(crate) fn pa_held(ln: &mut crate::port::Cells, lo: &mut crate::port::Cells, first: i32, cnt: i32) -> i32 {
+    // How many lines of the fragment lo[first, first+cnt) a table holds, wherever they stand in it (D1280).
+    let mut k: i32 = 0;
+    let mut n: i32 = 0;
+    while k < cnt {
+        if tb_claimed(ln, crate::port::cells_at(lo, first + k)) != 0 {
+            n += 1;
+        }
+        k += 1;
+    }
+    return n;
+}
+pub(crate) fn pa_free_words(ln: &mut crate::port::Cells, lo: &mut crate::port::Cells, first: i32, cnt: i32) -> i32 {
+    // How many words the lines of the fragment lo[first, first+cnt) that no table holds have between them (D1280).
+    let mut k: i32 = 0;
+    let mut n: i32 = 0;
+    while k < cnt {
+        let l: i32 = crate::port::cells_at(lo, first + k);
+        if tb_claimed(ln, l) == 0 {
+            n += ln_get(ln, l, lh_count());
+        }
+        k += 1;
+    }
+    return n;
+}
 pub(crate) fn pa_note(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut al: &mut crate::port::Cells, ii: &mut crate::port::Cells, cf: &mut crate::port::Cells, lo: &mut crate::port::Cells, r: i32, med: i32, mut hc: &mut crate::port::Cells) -> i32 {
     // The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
     // paragraphs as any fragment's (D113).
@@ -1462,8 +1487,9 @@ pub(crate) fn pa_note(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
     let page: i32 = crate::port::cells_at(cf, base + CF_PAGE);
     let note: i32 = node_new(nodes, nk_note(), hd_cur(hc));
     let mg: i32 = pa_fmargin(ln, lo, first, cnt);
-    let mut i: i32 = 1;
-    let mut prev: i32 = crate::port::cells_at(lo, first);
+    let lead: i32 = pa_live(ln, lo, first, cnt);
+    let mut i: i32 = lead + 1;
+    let mut prev: i32 = crate::port::cells_at(lo, first + lead);
     node_set_sub(nodes, note, crate::port::cells_at(cf, base + CF_ROLE));
     node_set_conf(nodes, note, 500);
     node_add_src(nodes, note, sr_infer());
@@ -1476,17 +1502,20 @@ pub(crate) fn pa_note(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, 
     pa_al_add(wd, ln, al, prev, crate::port::cells_at(cf, base + CF_X0), crate::port::cells_at(cf, base + CF_X1));
     while i < cnt {
         let b: i32 = crate::port::cells_at(lo, first + i);
-        if (in_row(ln, b) >= 0) || pa_new_par(wd, ln, prev, b, med, mg, hc) {
-            pa_flush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
-            pa_frag_open(fr, ln, page, b, 0);
-            pa_ini_start(wd, ln, et, raw, fr, ii, b);
-        } else {
-            pa_join(wd, ln, et, raw, b);
-            pa_frag_extend(fr, ln, b);
+        // a line a table holds stays the table's cell (D1280)
+        if tb_claimed(ln, b) == 0 {
+            if (in_row(ln, b) >= 0) || pa_new_par(wd, ln, prev, b, med, mg, hc) {
+                pa_flush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
+                pa_frag_open(fr, ln, page, b, 0);
+                pa_ini_start(wd, ln, et, raw, fr, ii, b);
+            } else {
+                pa_join(wd, ln, et, raw, b);
+                pa_frag_extend(fr, ln, b);
+            }
+            pa_add_line(wd, ln, et, raw, b, hc, fr);
+            pa_al_add(wd, ln, al, b, crate::port::cells_at(cf, base + CF_X0), crate::port::cells_at(cf, base + CF_X1));
+            prev = b;
         }
-        pa_add_line(wd, ln, et, raw, b, hc, fr);
-        pa_al_add(wd, ln, al, b, crate::port::cells_at(cf, base + CF_X0), crate::port::cells_at(cf, base + CF_X1));
-        prev = b;
         i += 1;
     }
     pa_flush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
@@ -1506,8 +1535,9 @@ pub(crate) fn pa_notes(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells,
             if (crate::port::cells_at(cf, base + CF_ASSOC) < cur) || ((crate::port::cells_at(cf, base + CF_ASSOC) == cur) && (crate::port::cells_at(cf, base + CF_Y0) <= ty)) {
                 crate::port::cells_set(cf, base + CF_DONE, 1);
                 // a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;
-                // D459 for a scan, D469 for a text layer too).
-                if pa_live(ln, lo, crate::port::cells_at(cf, base + CF_FIRST), crate::port::cells_at(cf, base + CF_COUNT)) < crate::port::cells_at(cf, base + CF_COUNT) {
+                // D459 for a scan, D469 for a text layer too); one that a table holds in part is a note of the lines it does
+                // not, or none when they are fewer than three words (D1280).
+                if (pa_held(ln, lo, crate::port::cells_at(cf, base + CF_FIRST), crate::port::cells_at(cf, base + CF_COUNT)) < crate::port::cells_at(cf, base + CF_COUNT)) && ((pa_held(ln, lo, crate::port::cells_at(cf, base + CF_FIRST), crate::port::cells_at(cf, base + CF_COUNT)) == 0) || (pa_free_words(ln, lo, crate::port::cells_at(cf, base + CF_FIRST), crate::port::cells_at(cf, base + CF_COUNT)) >= 3)) {
                     pa_note(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
                 }
             } else if pend > r {

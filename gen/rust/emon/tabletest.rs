@@ -506,6 +506,55 @@ fn test_bands_of_fill_make_a_shaded_table() {
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "shaded: well formed");
     crate::testport::assert_text(t, "T3s;Gh;R;Ch[Task];Ch[Owner];Ch[Due];Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];", "four bands of fill of one extent, two colours: rows from the bands");
 }
+pub(crate) fn tt_zebra(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells) -> i32 {
+    // Three stripes of one colour with a plain row between them and the body rows in them (a zebra, 1600 a row), and no
+    // stripe under the header row: the stack of fills begins at y 11600 and the header row is above it (D1280).
+    tt_fill(pa, 7200, 11600, 37200, 13200, 15000000);
+    tt_fill(pa, 7200, 14800, 37200, 16400, 15000000);
+    tt_fill(pa, 7200, 18000, 37200, 19600, 15000000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Build")[..], 7600, 12000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Ana")[..], 20000, 12000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("May")[..], 30000, 12000, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Test")[..], 7600, 13600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Ben")[..], 20000, 13600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("June")[..], 30000, 13600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Ship")[..], 7600, 15200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Chen")[..], 20000, 15200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("July")[..], 30000, 15200, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Pack")[..], 7600, 16800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Dee")[..], 20000, 16800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Aug")[..], 30000, 16800, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Done")[..], 7600, 18400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Eli")[..], 20000, 18400, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Sept")[..], 30000, 18400, 0, 0);
+    return 0;
+}
+#[test]
+fn test_the_plain_row_above_a_zebra_is_its_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_zebra(wd, ln, et, pa);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Task")[..], 7600, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Owner")[..], 20000, 10000, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Due")[..], 30000, 10000, 1, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "zebra header: well formed");
+    crate::testport::assert_text(t, "T3s;Gh;R;Ch[Task];Ch[Owner];Ch[Due];Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];R;C[Pack];C[Dee];C[Aug];R;C[Done];C[Eli];C[Sept];", "the row of cells above the first stripe, one gap from it, is the table's header row, not paragraphs (D1280)");
+}
+#[test]
+fn test_a_line_of_prose_above_a_zebra_is_not_its_header() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_zebra(wd, ln, et, pa);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Orders ship free of charge")[..], 7600, 10000, 0, 0);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "zebra prose: well formed");
+    crate::testport::assert_text(t, "P[Orders ship free of charge];T3s;Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];R;C[Pack];C[Dee];C[Aug];R;C[Done];C[Eli];C[Sept];", "one chunk of prose above the stripes is a paragraph, and the stripes are the table (D1280)");
+}
 #[test]
 fn test_a_caption_and_a_bold_last_row() {
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -584,6 +633,55 @@ fn test_a_note_beside_a_table_is_still_a_note() {
     tt_small(wd, ln, et, &crate::testport::text_blob("see note")[..], 1500, 12600, 700);
     crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "note: well formed");
     crate::testport::assert_text(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see note];T3r;Gb;R;C[Item];C[Qty];Cs[Note];R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "a note beside the table, outside it, is a note of its own, and the cells are still the table's");
+}
+pub(crate) fn tt_headless_page(mut wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, mut et: &mut crate::port::Cells, mut pa: &mut crate::port::Cells) -> i32 {
+    // The ledger page whose table lacks its first row: the rules begin under the header, so the header's small word `Note`
+    // in the last column is not held while the values under it are (the side fragment is held in part).
+    tt_word(wd, ln, et, &crate::testport::text_blob("The table below was extracted from the ledger")[..], 7200, 4000, 26000, 4800, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("and the figures are totals for the quarter")[..], 7200, 5200, 26000, 6000, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("of the year as the office has recorded them")[..], 7200, 6400, 26000, 7200, 0);
+    tt_word(wd, ln, et, &crate::testport::text_blob("and as the auditors have since confirmed.")[..], 7200, 7600, 26000, 8400, 0);
+    tt_rule(pa, 7200, 11950, 37200, 12050);
+    tt_rule(pa, 7200, 13950, 37200, 14050);
+    tt_rule(pa, 7200, 15950, 37200, 16050);
+    tt_rule(pa, 7150, 12000, 7250, 16000);
+    tt_rule(pa, 17150, 12000, 17250, 16000);
+    tt_rule(pa, 27150, 12000, 27250, 16000);
+    tt_rule(pa, 37150, 12000, 37250, 16000);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Item")[..], 7600, 10600, 1, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Qty")[..], 17600, 10600, 1, 0);
+    tt_small(wd, ln, et, &crate::testport::text_blob("Note")[..], 27600, 10600, 900);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Bolt")[..], 7600, 12600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("10")[..], 17600, 12600, 0, 0);
+    tt_small(wd, ln, et, &crate::testport::text_blob("up")[..], 27600, 12600, 900);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Nut")[..], 7600, 14600, 0, 0);
+    tt_at(wd, ln, et, &crate::testport::text_blob("12")[..], 17600, 14600, 0, 0);
+    tt_small(wd, ln, et, &crate::testport::text_blob("flat")[..], 27600, 14600, 900);
+    return 0;
+}
+#[test]
+fn test_a_side_fragment_held_in_part_with_one_word_left_is_no_note() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_headless_page(wd, ln, et, pa);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "held in part: well formed");
+    crate::testport::assert_text(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the header's `Note` is the one word the table does not hold, too little for a note, and `up` and `flat` are not written twice (D1280)");
+}
+#[test]
+fn test_a_side_fragment_held_in_part_is_a_note_of_the_lines_left() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_headless_page(wd, ln, et, pa);
+    tt_small(wd, ln, et, &crate::testport::text_blob("see")[..], 27600, 9000, 900);
+    tt_small(wd, ln, et, &crate::testport::text_blob("the")[..], 27600, 9800, 900);
+    crate::testport::assert_eq(tt_run(wd, ln, et, pa, t), 0, "held in part, words left: well formed");
+    crate::testport::assert_text(t, "P[The table below was extracted from the ledger and the figures are totals for the quarter of the year as the office has recorded them and as the auditors have since confirmed.];N;P[see the Note];P[Item];P[Qty];T3r;Gb;R;C[Bolt];C[10];Cs[up];R;C[Nut];C[12];Cs[flat];", "the lines the table does not hold are a note and the ones it holds stay in the table (D1280)");
 }
 pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) -> i32 {
     // PDF -> content -> tables -> paragraphs -> Model -> pretty JSON; answer 0 when every step answered 0, else a

@@ -1,7 +1,7 @@
 {"columns-span-figure"
  {:pdf "test/corpus/synth/pdf/columns-span-figure.pdf",
   :json
-  "fcfd210568e7ed555cc9d92799f31b7e2820780f91aa8fca085b464cf49567cf",
+  "44fc6ca0783765a7cf5b8e5f5dc215a7453d004bb55175823db3dec5a5fd813d",
   :html-inline
   "579952bc2111106fc3b5f55f4e2480fd51dc569b51112c177f6ac0faaa5c958b",
   :html-external
@@ -29,7 +29,7 @@
  "fig-over-image"
  {:pdf "test/assets/fig/fig-over-image.pdf",
   :json
-  "9571f56523050aae225f7e21583f1854d818e78cf013cfd639783fa3add2f9a6",
+  "d1ea57c4eb4919dd1aae542de3db4a14601c7f2fde9686d825ccdf64004b83d5",
   :html-inline
   "f4124fa168bac29146cc8089393ab70d4b547a660c5980507ee425fee70314b7",
   :html-external
@@ -50,7 +50,7 @@
  "fig-vector-chart"
  {:pdf "test/assets/fig/fig-vector-chart.pdf",
   :json
-  "559c479fd5ab0b533b7c7511333f550b326065b19822501327e87b640c411702",
+  "078ed0db2ba64b034bba108681a9fc0e97def237b53e15f5b511c515211f3058",
   :html-inline
   "a0285016a79c854aae45ef03e435a3a89664897e595f9d6dd0e5d5996d292ee9",
   :html-external
@@ -65,7 +65,7 @@
  "figures-charts"
  {:pdf "test/corpus/synth/pdf/figures-charts.pdf",
   :json
-  "a2da634a7ee8a83e5586c3150ac30ec0dca18c97ec5a5d3219421cd773f92530",
+  "f38d86302092de1f2921d560bdda1dd6c0b2c0cd868012a9e2ee6fcde28c0c19",
   :html-inline
   "e44235f511a5f4e5373bcb62328d85d59ca27d7c13fb899f33b082c8c2a090b3",
   :html-external
@@ -84,7 +84,7 @@
  "figures-logo-screenshot"
  {:pdf "test/corpus/synth/pdf/figures-logo-screenshot.pdf",
   :json
-  "0d68be07f3c4b49d60f9fa2037c785bf902a3e0fbe513b0617f5c9e4f5a7c19e",
+  "8f64aed9bffade5d3caa785197ab17375f7e19bb42c613b2f066ec6e967114f5",
   :html-inline
   "2c05e3d83a2db0c48fff2d6025434450b32a5336b69998e547dbc394b5fc3515",
   :html-external

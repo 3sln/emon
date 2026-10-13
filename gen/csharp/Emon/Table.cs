@@ -2662,6 +2662,21 @@ public static class Table {
         }
         return -1;
     }
+    internal static int TbBandHeader(emon.Port.Cells wd, int w0, int w1, int sx0, int sx1, int y0, int gap, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg) {
+        // The top of a stack of zebra bands that begins at y0 and whose bands are `gap` apart, with the row above it: a header
+        // is unshaded (the zebra's first stripe is the plain one), so it is no band, and the stack's own extent would leave it out
+        // of the table. The row is the one baseline row, cut in two chunks or more, whose words are within a gap and a quarter
+        // above y0; answers its top when there is one, y0 when there is not (D1280).
+        if (gap <= 0) {
+            return y0;
+        }
+        int hy0 = y0 - (gap + (gap / 4));
+        int nh = TbRows(wd, w0, w1, sx0, hy0, sx1, y0 - 1, wl, rw, sg);
+        if ((nh == 1) && (emon.Port.CellsAt(rw, 9) >= 2)) {
+            return hy0;
+        }
+        return y0;
+    }
     internal static int TbShadedPage(emon.Port.Cells fl, int page, emon.Port.Cells wd, emon.Port.Cells et, int w0, int w1, emon.Port.Cells bd, emon.Port.Cells used, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells ch, emon.Port.Cells st, emon.Port.Cells en, emon.Port.Cells rmap, emon.Port.Cells gm, emon.Port.Cells gs, emon.Port.Cells ry, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx) {
         // Stacks of three or more bands of one extent, each starting where the one before ended or one row
         // later, with two colours or a gap (zebra), are shaded candidates: a band is a row (several baselines may
@@ -2673,6 +2688,7 @@ public static class Table {
         int last = 0;
         int ncol = 0;
         int gapseen = 0;
+        int gap1 = 0;
         emon.Port.CellsDrop(used, 0);
         while (i < nb) {
             emon.Port.CellsPush(used, 0);
@@ -2688,6 +2704,7 @@ public static class Table {
                 last = i;
                 ncol = 1;
                 gapseen = 0;
+                gap1 = 0;
                 emon.Port.CellsSet(used, i, 2);
                 j = i + 1;
                 while ((j < nb) && ((emon.Port.CellsAt(bd, j * 6) - emon.Port.CellsAt(bd, (last * 6) + 1)) <= 3000)) {
@@ -2700,6 +2717,9 @@ public static class Table {
                             if (g > 150) {
                                 gapseen = 1;
                             }
+                            if ((g > 150) && (gap1 == 0)) {
+                                gap1 = g;
+                            }
                             if (emon.Port.CellsAt(bd, (j * 6) + 4) != colour0) {
                                 ncol = 2;
                             }
@@ -2709,7 +2729,7 @@ public static class Table {
                     j += 1;
                 }
                 if ((cnt >= 3) && ((ncol == 2) || (gapseen == 1))) {
-                    int y0 = emon.Port.CellsAt(bd, i * 6);
+                    int y0 = TbBandHeader(wd, w0, w1, sx0, sx1, emon.Port.CellsAt(bd, i * 6), gap1, wl, rw, sg);
                     int y1 = emon.Port.CellsAt(bd, (last * 6) + 1);
                     int nr = TbRows(wd, w0, w1, sx0, y0, sx1, y1, wl, rw, sg);
                     int nt = TbRowsOf(tb, Tbs);

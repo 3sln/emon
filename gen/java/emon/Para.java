@@ -1445,6 +1445,31 @@ public final class Para {
         }
         return k;
     }
+    public static int paHeld(emon.Port.Cells ln, emon.Port.Cells lo, int first, int cnt) {
+        // How many lines of the fragment lo[first, first+cnt) a table holds, wherever they stand in it (D1280).
+        int k = 0;
+        int n = 0;
+        while (k < cnt) {
+            if (Table.tbClaimed(ln, emon.Port.cellsAt(lo, first + k)) != 0) {
+                n += 1;
+            }
+            k += 1;
+        }
+        return n;
+    }
+    public static int paFreeWords(emon.Port.Cells ln, emon.Port.Cells lo, int first, int cnt) {
+        // How many words the lines of the fragment lo[first, first+cnt) that no table holds have between them (D1280).
+        int k = 0;
+        int n = 0;
+        while (k < cnt) {
+            int l = emon.Port.cellsAt(lo, first + k);
+            if (Table.tbClaimed(ln, l) == 0) {
+                n += Evidence.lnGet(ln, l, Evidence.lhCount());
+            }
+            k += 1;
+        }
+        return n;
+    }
     public static int paNote(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells al, emon.Port.Cells ii, emon.Port.Cells cf, emon.Port.Cells lo, int r, int med, emon.Port.Cells hc) {
         // The side fragment (row r of `cf`) as a `note` block of its role, in the open section (D167; the root when none), its lines made
         // paragraphs as any fragment's (D113).
@@ -1454,8 +1479,9 @@ public final class Para {
         int page = emon.Port.cellsAt(cf, base + CF_PAGE);
         int note = Model.nodeNew(nodes, Model.nkNote(), Heading.hdCur(hc));
         int mg = paFmargin(ln, lo, first, cnt);
-        int i = 1;
-        int prev = emon.Port.cellsAt(lo, first);
+        int lead = paLive(ln, lo, first, cnt);
+        int i = lead + 1;
+        int prev = emon.Port.cellsAt(lo, first + lead);
         Model.nodeSetSub(nodes, note, emon.Port.cellsAt(cf, base + CF_ROLE));
         Model.nodeSetConf(nodes, note, 500);
         Model.nodeAddSrc(nodes, note, Model.srInfer());
@@ -1468,17 +1494,20 @@ public final class Para {
         paAlAdd(wd, ln, al, prev, emon.Port.cellsAt(cf, base + CF_X0), emon.Port.cellsAt(cf, base + CF_X1));
         while (i < cnt) {
             int b = emon.Port.cellsAt(lo, first + i);
-            if ((Initial.inRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg, hc)) {
-                paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
-                paFragOpen(fr, ln, page, b, 0);
-                paIniStart(wd, ln, et, raw, fr, ii, b);
-            } else {
-                paJoin(wd, ln, et, raw, b);
-                paFragExtend(fr, ln, b);
+            // a line a table holds stays the table's cell (D1280)
+            if (Table.tbClaimed(ln, b) == 0) {
+                if ((Initial.inRow(ln, b) >= 0) || paNewPar(wd, ln, prev, b, med, mg, hc)) {
+                    paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
+                    paFragOpen(fr, ln, page, b, 0);
+                    paIniStart(wd, ln, et, raw, fr, ii, b);
+                } else {
+                    paJoin(wd, ln, et, raw, b);
+                    paFragExtend(fr, ln, b);
+                }
+                paAddLine(wd, ln, et, raw, b, hc, fr);
+                paAlAdd(wd, ln, al, b, emon.Port.cellsAt(cf, base + CF_X0), emon.Port.cellsAt(cf, base + CF_X1));
+                prev = b;
             }
-            paAddLine(wd, ln, et, raw, b, hc, fr);
-            paAlAdd(wd, ln, al, b, emon.Port.cellsAt(cf, base + CF_X0), emon.Port.cellsAt(cf, base + CF_X1));
-            prev = b;
             i += 1;
         }
         paFlush(nodes, attrs, regions, text, raw, tmp, fr, al, hc, note);
@@ -1498,8 +1527,9 @@ public final class Para {
                 if ((emon.Port.cellsAt(cf, base + CF_ASSOC) < cur) || ((emon.Port.cellsAt(cf, base + CF_ASSOC) == cur) && (emon.Port.cellsAt(cf, base + CF_Y0) <= ty))) {
                     emon.Port.cellsSet(cf, base + CF_DONE, 1);
                     // a side fragment every line of which a table holds is the table's cells, not a note (a narrow last column;
-                    // D459 for a scan, D469 for a text layer too).
-                    if (paLive(ln, lo, emon.Port.cellsAt(cf, base + CF_FIRST), emon.Port.cellsAt(cf, base + CF_COUNT)) < emon.Port.cellsAt(cf, base + CF_COUNT)) {
+                    // D459 for a scan, D469 for a text layer too); one that a table holds in part is a note of the lines it does
+                    // not, or none when they are fewer than three words (D1280).
+                    if ((paHeld(ln, lo, emon.Port.cellsAt(cf, base + CF_FIRST), emon.Port.cellsAt(cf, base + CF_COUNT)) < emon.Port.cellsAt(cf, base + CF_COUNT)) && ((paHeld(ln, lo, emon.Port.cellsAt(cf, base + CF_FIRST), emon.Port.cellsAt(cf, base + CF_COUNT)) == 0) || (paFreeWords(ln, lo, emon.Port.cellsAt(cf, base + CF_FIRST), emon.Port.cellsAt(cf, base + CF_COUNT)) >= 3))) {
                         paNote(wd, ln, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, r, med, hc);
                     }
                 } else if (pend > r) {

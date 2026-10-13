@@ -2188,6 +2188,18 @@
           (set i (+ i 1))))
     (return -1)))
 
+(defn ^I32 tb-band-header [^Cells wd ^I32 w0 ^I32 w1 ^I32 sx0 ^I32 sx1 ^I32 y0 ^I32 gap
+                           ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg]
+  (comment "The top of a stack of zebra bands that begins at y0 and whose bands are `gap` apart, with the row above it: a header")
+  (comment "is unshaded (the zebra's first stripe is the plain one), so it is no band, and the stack's own extent would leave it out")
+  (comment "of the table. The row is the one baseline row, cut in two chunks or more, whose words are within a gap and a quarter")
+  (comment "above y0; answers its top when there is one, y0 when there is not (D1280).")
+  (if (<= gap 0) (return y0))
+  (let [^I32 hy0 (- y0 (+ gap (quot gap 4)))
+        ^I32 nh (tb-rows wd w0 w1 sx0 hy0 sx1 (- y0 1) wl rw sg)]
+    (if (and (== nh 1) (>= (cells-at rw 9) 2)) (return hy0))
+    (return y0)))
+
 (defn ^I32 tb-shaded-page [^Cells fl ^I32 page ^Cells wd ^Cells et ^I32 w0 ^I32 w1
                            ^:mut ^Cells bd ^:mut ^Cells used ^:mut ^Cells wl ^:mut ^Cells rw ^:mut ^Cells sg
                            ^:mut ^Cells ch ^:mut ^Cells st ^:mut ^Cells en ^:mut ^Cells rmap
@@ -2202,7 +2214,8 @@
         ^:mut ^I32 cnt 0
         ^:mut ^I32 last 0
         ^:mut ^I32 ncol 0
-        ^:mut ^I32 gapseen 0]
+        ^:mut ^I32 gapseen 0
+        ^:mut ^I32 gap1 0]
     (cells-drop used 0)
     (while (< i nb)
       (do (cells-push used 0)
@@ -2217,6 +2230,7 @@
                   (set last i)
                   (set ncol 1)
                   (set gapseen 0)
+                  (set gap1 0)
                   (cells-set used i 2)
                   (set j (+ i 1))
                   (while (and (< j nb) (<= (- (cells-at bd (* j 6)) (cells-at bd (+ (* last 6) 1))) 3000))
@@ -2229,11 +2243,12 @@
                                   (do (cells-set used j 2)
                                       (set cnt (+ cnt 1))
                                       (if (> g 150) (set gapseen 1))
+                                      (if (and (> g 150) (== gap1 0)) (set gap1 g))
                                       (if (!= (cells-at bd (+ (* j 6) 4)) colour0) (set ncol 2))
                                       (set last j))))))
                         (set j (+ j 1))))
                   (if (and (>= cnt 3) (or (== ncol 2) (== gapseen 1)))
-                    (do (let [^I32 y0 (cells-at bd (* i 6))
+                    (do (let [^I32 y0 (tb-band-header wd w0 w1 sx0 sx1 (cells-at bd (* i 6)) gap1 wl rw sg)
                               ^I32 y1 (cells-at bd (+ (* last 6) 1))
                               ^I32 nr (tb-rows wd w0 w1 sx0 y0 sx1 y1 wl rw sg)
                               ^I32 nt (tb-rows-of tb TBS)
