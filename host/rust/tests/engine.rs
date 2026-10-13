@@ -1045,3 +1045,156 @@ fn a_port_that_panics_panics_the_conversion_in_a_parallel_run_as_in_a_serial_one
         assert!(r.is_err(), "parallel={}: the panic reaches the caller", n);
     }
 }
+
+// ---------------------------------------------------------------------------- the step session with a renderer (P11.4c)
+//
+// `js-render=1`: the `render` and `crop` requests are the CALLER's (the browser's pdfium, `host/js/src/pdfium.js`), answered with `Session::answer_render`
+// from the whole page's RGB pixels. A session that is given the pixels a renderer port would have made is the Engine with that renderer: the same Model.
+
+use emon::session::{Fault, Session, Step};
+
+fn open_session(bytes: &[u8], options: &str) -> Session {
+    match Session::open(bytes.len() as u64, Some(bytes.len()), false, None, options) {
+        Ok(s) => s,
+        Err(_) => panic!("the session did not open: {}", options),
+    }
+}
+
+// Step until the session owes the caller something (the bytes it misses are provided from `bytes`); None when it is done.
+fn owed(s: &mut Session, bytes: &[u8]) -> Option<Vec<Vec<i32>>> {
+    loop {
+        match s.step() {
+            Ok(Step::Done) => return None,
+            Ok(Step::Bytes(r)) => {
+                for (o, l) in r {
+                    s.provide(o as usize, &bytes[o as usize..(o + l) as usize]);
+                }
+            }
+            Ok(Step::Requests(v)) => return Some(v),
+            Err(e) => panic!("step: {}", e.name()),
+        }
+    }
+}
+
+fn usage(r: Result<(), Fault>) -> String {
+    match r {
+        Err(Fault::Usage(m)) => m,
+        Err(Fault::Engine(e)) => panic!("an engine error, not a usage one: {}", e.name()),
+        Ok(()) => panic!("the call was accepted"),
+    }
+}
+
+// The argument a request record has for kin's field `f`.
+fn arg(rec: &[i32], f: i32) -> i32 {
+    rec[3 + f as usize]
+}
+
+// A Letter page at `dpi`, pixel (x, y) a function of x, y and the layer: what an engine with no text layer would make of it.
+fn page_rgb(dpi: i32, layer: i32) -> (i32, i32, Vec<u8>) {
+    let d = dpi as u32;
+    let (w, h) = ((1224 * d + 72) / 144, (1584 * d + 72) / 144);
+    let mut px = Vec::new();
+    for y in 0..h {
+        for x in 0..w {
+            let p = letter_px(x, y);
+            px.extend_from_slice(&[p[0].wrapping_add(layer as u8), p[1], p[2]]);
+        }
+    }
+    (w as i32, h as i32, px)
+}
+
+#[derive(Debug, Default)]
+struct AnyLayer;
+impl Renderer for AnyLayer {
+    fn render(&self, _input: &dyn ByteSource, _pw: Option<&[u8]>, req: &RenderRequest) -> Result<emon::port::Bitmap, RenderError> {
+        let (w, h, px) = page_rgb(req.dpi, req.layer);
+        Ok(emon::port::Bitmap::from_bytes(w, h, 3, &px))
+    }
+    fn layers(&self) -> u32 {
+        0b00111
+    }
+}
+
+#[test]
+fn a_session_with_js_render_answered_with_the_renderers_pixels_is_the_engine_with_that_renderer() {
+    use emon::emon::plan::{rd_dpi, rd_layer};
+    // a born-digital page under `always` asks for its rasters (renders, with and without its text); a figure document asks for crops
+    for (name, pdf, options, o) in [
+        ("renders", synth("h-plain"), "js-render=1\n", Options::default()),
+        ("crops", read("test/assets/fig/fig-vector-chart.pdf"), "js-render=1\nocr=never\nassets=figures\n", Options { assets: Assets::Figures, ocr: OcrPolicy::Never, ..Options::default() }),
+    ] {
+        let mut s = open_session(&pdf, options);
+        let mut asked = 0;
+        while let Some(reqs) = owed(&mut s, &pdf) {
+            for rec in reqs {
+                assert!(rec[1] == emon::plan::KIND_RENDER || rec[1] == emon::plan::KIND_CROP, "{}: only renders and crops are owed (no ocr port)", name);
+                let (w, h, px) = page_rgb(arg(&rec, rd_dpi()), arg(&rec, rd_layer()));
+                assert!(s.answer_render(rec[2], w, h, &px).is_ok(), "{}: request {}", name, rec[2]);
+                asked += 1;
+            }
+        }
+        assert!(asked > 0, "{}: the renderer was asked", name);
+        let (m, _) = match s.finish() {
+            Ok(r) => r,
+            Err(_) => panic!("finish"),
+        };
+        let live = Engine::new(Config { renderer: Some(Arc::new(AnyLayer)), ..Config::default() }).convert(Input::bytes(pdf.clone()), &o).unwrap();
+        assert_eq!(json(&m), json(&live), "{}: the session's Model is the renderer port's", name);
+        assert_eq!(m.asset_files(), live.asset_files(), "{}: and its asset files", name);
+        assert_eq!(m.to_html(&HtmlOptions::default()), live.to_html(&HtmlOptions::default()), "{}: and its HTML", name);
+        if name == "crops" {
+            assert_eq!(m.assets().len(), 2, "the chart and the diagram are PNGs cut from the page");
+        }
+    }
+    // without `js-render` nothing is owed: a render is answered `unsupported` inside the session, as before
+    let pdf = synth("h-plain");
+    let mut s = open_session(&pdf, "");
+    assert!(owed(&mut s, &pdf).is_none());
+}
+
+#[test]
+fn a_session_refuses_a_render_answer_that_is_not_what_it_owes() {
+    use emon::emon::plan::rd_dpi;
+    let pdf = read("test/assets/fig/fig-vector-chart.pdf");
+    let options = "js-render=1\nocr=never\nassets=figures\n";
+    let mut s = open_session(&pdf, options);
+    // nothing is owed before the first step
+    assert!(usage(s.answer_render(1, 1, 1, &[0, 0, 0])).contains("no requests are owed"));
+    let reqs = owed(&mut s, &pdf).expect("a figure document asks for its crops");
+    assert!(reqs.len() >= 2 && reqs.iter().all(|r| r[1] == emon::plan::KIND_CROP));
+    let (rec, rest) = (reqs[0].clone(), reqs[1..].to_vec());
+    let dpi = arg(&rec, rd_dpi());
+    let (w, h, px) = page_rgb(dpi, 0);
+    // a request that was not asked
+    assert!(usage(s.answer_render(99999, w, h, &px)).contains("not owed"));
+    // a bitmap that is not width x height x 3 bytes, or has no area
+    assert!(usage(s.answer_render(rec[2], w, h, &px[..px.len() - 1])).contains("bitmap"));
+    assert!(usage(s.answer_render(rec[2], w, h + 1, &px)).contains("bitmap"));
+    assert!(usage(s.answer_render(rec[2], 0, h, &[])).contains("bitmap"));
+    assert!(usage(s.answer_render(rec[2], -1, -1, &[])).contains("bitmap"));
+    // one answer each
+    assert!(s.answer_render(rec[2], w, h, &px).is_ok());
+    assert!(usage(s.answer_render(rec[2], w, h, &px)).contains("not owed"));
+    // the others are answered with a page too small to hold their rectangles: a crop outside the page is a `failed` answer (as natively), not an error
+    for r in rest {
+        assert!(s.answer_render(r[2], 2, 2, &[255u8; 12]).is_ok());
+    }
+    while let Some(more) = owed(&mut s, &pdf) {
+        for r in more {
+            assert!(s.answer_render(r[2], 2, 2, &[255u8; 12]).is_ok());
+        }
+    }
+    let (m, _) = match s.finish() {
+        Ok(r) => r,
+        Err(_) => panic!("finish"),
+    };
+    assert!(m.assets().len() < 2, "a crop that fell outside the page made no asset");
+    // the pixels bound is kin's table and the conversion's own `limit.pixels`
+    let s = open_session(&pdf, options);
+    assert_eq!(s.limit(9), emon::port::limit_default(9).unwrap());
+    let mut s = open_session(&pdf, "js-render=1\nocr=never\nassets=figures\nlimit.pixels=1000\n");
+    assert_eq!(s.limit(9), 1000);
+    let reqs = owed(&mut s, &pdf).unwrap();
+    assert!(usage(s.answer_render(reqs[0][2], 40, 40, &[0u8; 4800])).contains("pixels limit"));
+    assert!(s.answer_render(reqs[0][2], 30, 33, &[0u8; 2970]).is_ok(), "990 pixels are within 1000");
+}

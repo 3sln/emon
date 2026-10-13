@@ -868,6 +868,30 @@ pub unsafe extern "C" fn emon_answer_ocr(s: *mut emon_session, id: i32, cells: *
     })
 }
 
+// A `render` or `crop` answer (`js-render=1`, P11.4c): the caller's renderer made the WHOLE page, `width` x `height` pixels of RGB (3 channels,
+// row-major, `len` bytes); a crop is the cut of it, made here (`render::cut`), so the pixels are the same however a crop is asked (SPEC 7.2). A
+// bitmap that is not `width * height * 3` bytes or is over the `pixels` limit (`emon_limit`) is `usage`.
+#[no_mangle]
+pub unsafe extern "C" fn emon_answer_render(s: *mut emon_session, id: i32, width: i32, height: i32, rgb: *const u8, len: usize, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        session(s)?.answer_render(id, width, height, bytes(rgb, len))?;
+        Ok(0)
+    })
+}
+
+// The value of limit `kind` in force for the session (kin's table, the options' `limit.NAME=N` over it): the bound a renderer must keep
+// (`pixels` is kind 9; `emon_const(100 + kind)` is the default).
+#[no_mangle]
+pub unsafe extern "C" fn emon_limit(s: *mut emon_session, kind: i32, out: *mut i64, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        if out.is_null() {
+            return Err(Fail::Usage("an output pointer is NULL".to_string()));
+        }
+        *out = session(s)?.limit(kind) as i64;
+        Ok(0)
+    })
+}
+
 // The bitmap a request names (an `ocr` request's `bitmap` argument, or the answer of any request already answered), as a canonical PNG:
 // what the caller's recogniser reads. Valid while the requests of the round are owed.
 #[no_mangle]

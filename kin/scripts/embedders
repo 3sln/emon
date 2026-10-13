@@ -591,6 +591,7 @@
   (doseq [[file reads copy limit what]
           [["host/js/src/index.js" #"this\.w\.inputBytes" #"input-bytes'\]\s*\?\?\s*(1\s*<<\s*30|1073741824)" "input-bytes" "the SDK's spool bound"]
            ["host/js/src/wasm.js" #"emon_const\(100\)" #"1\s*<<\s*30|1073741824" "input-bytes" "the SDK's spool bound (the module's export of kin's table)"]
+           ["host/js/src/index.js" #"emon_limit\(" #"1\s*<<\s*28|268435456" "pixels" "the SDK's render bound (asked of the module, P11.4c)"]
            ["host/rust/src/pdfium.rs" #"port::limit_of\(9\)" #"1\s*<<\s*28|268435456" "pixels" "the pdfium port's render bound"]
            ["host/go/pdfium/pdfium.go" #"port\.LimitOf\(9\)" #"1\s*<<\s*28|268435456" "pixels" "the pdfium port's render bound"]
            ["host/java/emon/ffi/Pdfium.java" #"Port\.limitOf\(9\)" #"1L?\s*<<\s*28|268435456" "pixels" "the pdfium port's render bound"]
