@@ -168,6 +168,8 @@ func PdWarningEmitName(t *strings.Builder, code int32) int32 {
 	return 0
 }
 
+const dHintMax int32 = 65536
+
 const dBase int32 = 0
 
 const dShift int32 = 1
@@ -1495,7 +1497,8 @@ func pdHintExtents(src *port.Src, dc *port.Cells, b *port.Cells) int32 {
 	// Once the cross-reference is read, every object's EXTENT is known: from
 	// its offset to the next larger offset (or the end of the source). Tell
 	// the source, so a miss on an object can fetch the whole object, not a
-	// guess (D058). `b` is scratch. Answers the number of hints.
+	// guess (D058). An object longer than `D_HINT_MAX` (a picture, a font program) is not told: a miss in its dictionary would fetch all of it
+	// (D484), and a stream the unit really reads is missed chunk by chunk anyway. `b` is scratch. Answers the number of hints.
 	var n int32 = pdfsrc.PsLen(src)
 	var nent int32 = port.CellsAt(dc, dNent)
 	var shift int32 = port.CellsAt(dc, dShift)
@@ -1525,7 +1528,7 @@ func pdHintExtents(src *port.Src, dc *port.Cells, b *port.Cells) int32 {
 		if (i + 1) < cnt {
 			nx = port.CellsAt(b, i+1)
 		}
-		if nx > o {
+		if (nx > o) && ((nx - o) <= dHintMax) {
 			pdfsrc.PsHint(src, o, nx)
 			hints += 1
 		}

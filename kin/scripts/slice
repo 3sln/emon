@@ -194,6 +194,46 @@
 ;; WHAT A HOST DOES NOT HAVE is not asked of it: a pod converts in one call (a path or bytes), with no async source and no stats.
 (def no-async? #{"pod"})
 
+;; LAZY READS ARE A REQUIREMENT (D058, D483): a one-page document that is mostly one 3 MiB picture is converted through a source that counts
+;; what is read from it, and what is read is a tenth of it at most (P9.3 measured 2.1% in the browser; P8.4's image digests read all of it for
+;; a release, unseen, because `bb wasm` is no gate). Built here, in memory, the way test/driver/wasm/fixtures.mjs builds it (`bigImagePdf`),
+;; so the gate needs no browser; the same bytes, written to .cache/.
+(defn big-picture-pdf!
+  "Write a one-page PDF (a heading, a paragraph and a raw 2048 x 1536 gray picture of noise, drawn on the page) to `path`; its length."
+  [path]
+  (let [bos (java.io.ByteArrayOutputStream.)
+        put (fn [^bytes b] (.write bos b 0 (alength b)))
+        txt (fn [s] (.getBytes ^String s "ISO-8859-1"))
+        img (byte-array (* 2048 1536))
+        content (txt "BT /F1 24 Tf 72 700 Td (Field notes on range reads) Tj ET\nBT /F1 12 Tf 72 660 Td (Most of this page is a picture the conversion never reads.) Tj ET\nq 400 0 0 300 72 300 cm /Im1 Do Q\n")
+        objs [["<< /Type /Catalog /Pages 2 0 R >>" nil]
+              ["<< /Type /Pages /Kids [3 0 R] /Count 1 >>" nil]
+              ["<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /XObject << /Im1 6 0 R >> >> >>" nil]
+              [(str "<< /Length " (alength content) " >>") content]
+              ["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>" nil]
+              [(str "<< /Type /XObject /Subtype /Image /Width 2048 /Height 1536 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length " (alength img) " >>") img]]]
+    (.nextBytes (java.util.Random. 7) img)
+    (put (txt "%PDF-1.7\n%"))
+    (put (byte-array (map unchecked-byte [0xE2 0xE3 0xCF 0xD3 10])))
+    (let [offs (vec (map-indexed
+                     (fn [i [dict stream]]
+                       (let [at (.size bos)]
+                         (put (txt (str (inc i) " 0 obj\n" dict "\n")))
+                         (when stream (put (txt "stream\n")) (put stream) (put (txt "\nendstream\n")))
+                         (put (txt "endobj\n"))
+                         at))
+                     objs))
+          xref (.size bos)]
+      (put (txt (str "xref\n0 " (inc (count objs)) "\n0000000000 65535 f \n"
+                     (apply str (map #(format "%010d 00000 n \n" %) offs))
+                     "trailer\n<< /Size " (inc (count objs)) " /Root 1 0 R >>\nstartxref\n" xref "\n%%EOF\n"))))
+    (fs/create-dirs (fs/parent path))
+    (with-open [o (java.io.FileOutputStream. (str path))] (.write o (.toByteArray bos)))
+    (.size bos)))
+
+(def big-picture-path ".cache/lazy-reads/big-picture.pdf")
+(def big-picture-length (big-picture-pdf! big-picture-path))
+
 (doseq [[label exe] hosts]
   (binding [*exe* exe *label* (str "[" label "] ")]
   ;; --------------------------------------------------------- 2. the fixtures
@@ -248,6 +288,20 @@
                  d ": it missed and re-ran: " (str/trim (:err a)))))
       (doseq [src ["seek" "spool"]]
         (check (= (:out (drive "--pretty" (str "--source=" src) (pdf d))) (:out m)) d ": --source=" src " is the same JSON"))))
+
+  ;; LAZY READS (D058, D483): the big picture is never fetched. Every host with a counting (async) source reads at most a tenth of it, at
+  ;; the browser's chunk (4 KiB) and at the slice's 512 bytes, and gives the Model that memory gives.
+  (when-not (no-async? label)
+    (let [mem (drive big-picture-path)]
+      (check (zero? (:exit mem)) "the one-page big-picture document (" big-picture-length " bytes) converts")
+      (doseq [chunk ["--chunk=4096" "--chunk=512"]]
+        (let [a (drive chunk "--async" "--stats" big-picture-path)
+              [_ fetched total] (re-find #"bytes-fetched=(\d+) of (\d+)" (:err a))
+              fetched (some-> fetched Long/parseLong)]
+          (check (and (zero? (:exit a)) (= (:out a) (:out mem)) fetched (= (Long/parseLong total) big-picture-length))
+                 chunk " --async over the big-picture document is the in-memory Model")
+          (check (and fetched (< (* 10 fetched) big-picture-length))
+                 chunk " --async reads " fetched " of " big-picture-length " bytes of the one-page big-picture document (at most a tenth: a rule that needs a length or a header must not fetch a picture)")))))
 
   (ok "driver wall time per fixture (ms, in memory, baseline): "
       (str/join ", " (for [[d ms] @timings] (format "%s %.0f" d ms))))

@@ -176,14 +176,33 @@ public static class Figclass {
         }
         return 0;
     }
+    internal static int FcSeed1(int slen) {
+        // The first rolling hash of `fc-digest` before it reads a byte: the stream's length.
+        return slen % 2000003;
+    }
+    internal static int FcSeed2(int w, int h) {
+        // The second rolling hash of `fc-digest` before it reads a byte: the image's pixel size.
+        return (((w % 270000) * 7919) + (h % 1999993)) % 1999993;
+    }
+    internal static int FcDigestSeed(emon.Port.Src src, emon.Port.Cells fi, int k, int sstart, int slen, int w, int h) {
+        // D483: the digest of an image stream before a byte of it is read: the two hashes at their start (they say the stream's length and the
+        // image's size, and nothing of its bytes), in the cells `k + 10` and `k + 11` of `fi`. A stream that is not in the file has none (0).
+        // Reading the bytes (`fc-digest`) is for the rows that could recur, `fc-digest-twins`: a lazy source is not asked for a picture it need not read.
+        if ((sstart < 0) || ((slen < 1) || ((sstart + slen) > Pdfsrc.PsLen(src)))) {
+            return 0;
+        }
+        emon.Port.CellsSet(fi, k + 10, FcSeed1(slen) + 1);
+        emon.Port.CellsSet(fi, k + 11, FcSeed2(w, h) + 1);
+        return 1;
+    }
     internal static int FcDigest(emon.Port.Src src, emon.Port.Cells fi, int k, int sstart, int slen, int w, int h) {
         // P8.4: the digest of an image stream's bytes as the file holds them, in the cells `k + 10` and `k + 11` of `fi` (two rolling hashes,
         // each under 2^21, from the stream's length and the image's pixel size too). A stream of `FC_DIGEST_N` bytes or fewer is read whole; a longer
         // one by a stride through it, and its last 64 bytes. Equal digests of images of one size are one raster. 0 for none (the stream is not in the file).
         int total = Pdfsrc.PsLen(src);
         int step = FcMax(1, slen / FcDigestN);
-        int h1 = slen % 2000003;
-        int h2 = (((w % 270000) * 7919) + (h % 1999993)) % 1999993;
+        int h1 = FcSeed1(slen);
+        int h2 = FcSeed2(w, h);
         int i = 0;
         int b = 0;
         if ((sstart < 0) || ((slen < 1) || ((sstart + slen) > total))) {
@@ -207,6 +226,75 @@ public static class Figclass {
         emon.Port.CellsSet(fi, k + 10, h1 + 1);
         emon.Port.CellsSet(fi, k + 11, h2 + 1);
         return 1;
+    }
+    internal static int FcTwin(emon.Port.Cells im, emon.Port.Cells fi, int r, int j) {
+        // 1 when the rows r and j of `fi` could be one raster seen on two pages: two image objects with a digest, on two pages, of one pixel size
+        // and the same hashes at their start (so the same stream length). Only such a pair is ever told apart by the bytes (`fc-same-drawing`).
+        int a = r * FiStride;
+        int b = j * FiStride;
+        if ((emon.Port.CellsAt(fi, b) != 1) || (emon.Port.CellsAt(fi, b + 10) == 0)) {
+            return 0;
+        }
+        if (Evidence.ImGet(im, j, Evidence.MfObj()) == Evidence.ImGet(im, r, Evidence.MfObj())) {
+            return 0;
+        }
+        if (Evidence.ImGet(im, j, Evidence.MfPage()) == Evidence.ImGet(im, r, Evidence.MfPage())) {
+            return 0;
+        }
+        if (emon.Port.CellsAt(fi, b + 5) != emon.Port.CellsAt(fi, a + 5)) {
+            return 0;
+        }
+        if (emon.Port.CellsAt(fi, b + 6) != emon.Port.CellsAt(fi, a + 6)) {
+            return 0;
+        }
+        if (FcAbs(emon.Port.CellsAt(fi, b + 10)) != FcAbs(emon.Port.CellsAt(fi, a + 10))) {
+            return 0;
+        }
+        if (FcAbs(emon.Port.CellsAt(fi, b + 11)) != FcAbs(emon.Port.CellsAt(fi, a + 11))) {
+            return 0;
+        }
+        return 1;
+    }
+    internal static int FcDigestTwins(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells im, emon.Port.Cells @out, emon.Port.Cells rec, emon.Port.Cells fi) {
+        // D483: the bytes of an image stream are read for its digest only when another image on another page has the same pixel size and
+        // stream length (`fc-twin`): a picture that nothing could equal is not read, so a lazy source (D058) fetches a one-page document's
+        // dictionaries and not its pictures. The rows to read are marked first (cell 10 negative) so that a digest finished early does not
+        // change who is a twin; then each marked row's digest is made by `fc-digest`, as it always was.
+        int n = emon.Port.CellsLen(fi) / FiStride;
+        int r = 0;
+        int j = 0;
+        int sh = 0;
+        int k = 0;
+        while (r < n) {
+            k = r * FiStride;
+            if ((emon.Port.CellsAt(fi, k) == 1) && (emon.Port.CellsAt(fi, k + 10) > 0)) {
+                j = 0;
+                while (j < n) {
+                    if ((j != r) && (FcTwin(im, fi, r, j) == 1)) {
+                        emon.Port.CellsSet(fi, k + 10, 0 - emon.Port.CellsAt(fi, k + 10));
+                        j = n;
+                    } else {
+                        j += 1;
+                    }
+                }
+            }
+            r += 1;
+        }
+        r = 0;
+        while (r < n) {
+            k = r * FiStride;
+            if (emon.Port.CellsAt(fi, k + 10) < 0) {
+                sh = Pdfdoc.PdGet(src, ar, dc, a, b, st, Evidence.ImGet(im, r, Evidence.MfObj()));
+                if ((sh != 0) && (Pdfimage.PiInfo(src, ar, dc, a, b, st, @out, rec, sh, Evidence.ImGet(im, r, Evidence.MfObj())) == 0)) {
+                    FcDigest(src, fi, k, Pdfimage.PiGet(rec, Pdfimage.PiFSstart()), Pdfimage.PiGet(rec, Pdfimage.PiFSlen()), emon.Port.CellsAt(fi, k + 5), emon.Port.CellsAt(fi, k + 6));
+                }
+                if (emon.Port.CellsAt(fi, k + 10) < 0) {
+                    emon.Port.CellsSet(fi, k + 10, 0 - emon.Port.CellsAt(fi, k + 10));
+                }
+            }
+            r += 1;
+        }
+        return 0;
     }
     public static int FcImages(emon.Port.Src src, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells im, emon.Port.Cells @out, emon.Port.Cells rec, emon.Port.Cells fi) {
         // What the dictionary of each image placement says, in `fi` (stride `FI_STRIDE`, one row to a row of `im`): its codec, colour class,
@@ -269,13 +357,17 @@ public static class Figclass {
                             emon.Port.CellsSet(fi, k + 7, (int) bpp);
                             emon.Port.CellsSet(fi, k + 8, Pdfimage.PiGet(rec, Pdfimage.PiFHival()));
                             emon.Port.CellsSet(fi, k + 9, Pdfimage.PiGet(rec, Pdfimage.PiFMkind()));
-                            FcDigest(src, fi, k, Pdfimage.PiGet(rec, Pdfimage.PiFSstart()), Pdfimage.PiGet(rec, Pdfimage.PiFSlen()), w, h);
+                            FcDigestSeed(src, fi, k, Pdfimage.PiGet(rec, Pdfimage.PiFSstart()), Pdfimage.PiGet(rec, Pdfimage.PiFSlen()), w, h);
                         }
                     }
                 }
             }
             r += 1;
         }
+        if (Pdfsrc.PsMissed(src)) {
+            return 12;
+        }
+        FcDigestTwins(src, ar, dc, a, b, st, im, @out, rec, fi);
         if (Pdfsrc.PsMissed(src)) {
             return 12;
         }
