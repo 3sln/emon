@@ -60,7 +60,7 @@ put host/pod/src/main.rs "$crate/src/pod.rs"
 cat > "$crate/Cargo.toml.new" <<'TOML'
 [package]
 name = "emon"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 
 [lib]

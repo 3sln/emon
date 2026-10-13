@@ -3960,6 +3960,45 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   decoder needs a zeroed `Buf` of `rows * stride` bytes from the caller (D447).** `bb perf` has the row (bet `ccitt`, Group 4 against the `fax` crate, kept only in `tools/perf`'s Cargo.toml as a reference): kin is 1.06x fax on a scanned page (full inputs), 1.10x on a noise page, 1.23x on a blank one, 1.15x on the quick synthetic text page (D447).
   *Done* (D444-D448, D489-D493; Java and C# adopted the validators and `Ccitt.ccDecode` when P9.1 and P9.2 merged, D449-D458, and keep only the JPEG codec, the PNG library behind `clean` (Java) or kin's inflate and PNG filters (C#), and the colour step). Every done-when holds. *Optional, owned and not blocking*: a JPEG header validator (D190 keeps JPEG native; it is the one `known` class of `bb fuzz`), a palette pixel outside its palette, and the TIFF decompressors and 8-bit reduction as host code (D188).
 
+## Phase 11 — First release
+
+The terms are D1400 (scope, accuracy bar, licence, version, CI, the two release jobs, credentials, the browser demo). The order is
+the order of the items; P11.0 is the maintainer's and runs beside everything else.
+
+- [ ] P11.0 — Accounts and namespaces (maintainer). Reserve the Maven Central namespace `com.3sln` (domain 3sln.com verified by a DNS TXT
+  record) and the names `emon` on crates.io, `@3sln/emon` on npm and `Emon` on NuGet. The coordinator says when each credential is
+  needed (D1400): the reservations now; a GitHub App or PAT later; the registry tokens last.
+- [x] P11.1 — `version.edn` plus `bb version` (D1401). `version.edn` is the single source; `bb version [set X.Y.Z | bump
+  major|minor|patch | --check TAG | --self-test]` rewrites and checks every manifest by targeted text edits.
+- [ ] P11.2 — API freeze: `api/surface.edn` (the public names and arities of each host, the C header, the JS exports, the pod's vars)
+  and `bb api-diff`, which fails on a removal or change the version does not allow.
+- [ ] P11.3 — `LICENSE` (MIT), third-party notices, and `bb release-audit`: every shipped file has a licence, the notices match what
+  is bundled, and jbig2dec (and any other excluded library) is not in any artifact.
+- [ ] P11.4 — `bb package` (one artifact per registry: crate, Go module tag, Maven jar and pom, NuGet package, npm tarball, C library
+  plus `emon.h`, pod) plus a package gate that installs each from the built artifact and runs the slice on it.
+- [ ] P11.4b — The per-platform CLI with bundled dependencies, on the Rust driver: pdfium bundled, Tesseract and Leptonica static, `eng`
+  and `osd` tessdata. macOS arm64 and x64, Linux x64 and arm64, Windows x64.
+- [ ] P11.4c — Browser: pdfium compiled to WASM behind a JS SDK `Renderer` interface, a lazy `@3sln/emon/pdfium` adapter, and a
+  client-side demo page on GitHub Pages (the browser is the main demo).
+- [ ] P11.5 — Native dependency builds: pdfium, Tesseract, Leptonica, and the pdfium WASM build, pinned and reproducible per platform.
+- [ ] P11.6 — Docs (`bb docs`): README, per-host quick start, the option and limit tables from kin, the API surface of P11.2.
+- [ ] P11.7 — The gate map plus `--fast` variants: a path-to-gate map (`tools/ci.clj`), a fast core, and a `bb ci coverage` that fails
+  on any tracked path no gate claims.
+- [ ] P11.8 — The PR workflow (change-scoped gates and the fast core) and the full and weekly workflows (release, `workflow_dispatch`,
+  a weekly schedule). Gates run locally until GitHub Actions credits return (D1400).
+- [ ] P11.9 — The prepare-release workflow (`workflow_dispatch`): a PR with the bump; after it merges, the tag and a draft GitHub
+  release with notes; full gates on the tagged commit and the commit status `emon/full-gates`.
+- [ ] P11.10 — The publish workflow, on `release: types [published]` only: re-verify `bb version --check`, a green `emon/full-gates`
+  and the tag still on the gated commit, then publish to every registry.
+- [ ] P11.11 — Release 0.1.0: the repo goes public (MIT), the release is drafted, published, and the demo page is live.
+
+Open, owned, not blocking the release by themselves:
+
+- [ ] P11.x1 — Wire pdfium into the Go ENGINE driver. Today Go has pdfium only in its render driver (`host/go/pdfium`), so the Go engine
+  cannot render for OCR or figures; the Rust driver can.
+- [ ] P11.x2 — Sample-driven quality fixes found by reading real documents against the "useful for scraping" bar (D1400): CJK stray
+  spaces; heading over-nesting (`aria-level` 9); the W-9 logo classified as a chart; checkboxes flattened.
+
 ---
 
 ## Decisions
@@ -10878,4 +10917,35 @@ Fixed by D460-D464; D465 says what is still below the entry and why.
 **Decision**: the Rust `Bitmap` is a `Vec<Cell<u8>>` so that one bitmap can be handed to two parameters of a kin call (a write takes a shared borrow); `Cell` makes it `!Sync`, so an `Arc<Bitmap>` (a render's or decode's pixels, a round's views) could not go to a worker. `unsafe impl Sync for Bitmap {}` in `host/rust/src/port.rs`, with the rule at the type: a bitmap is WRITTEN only by the unit that made it (`bms-put`, `bitmap-new`), on the thread that runs the unit, while it runs; a bitmap a port made, and every bitmap a round's requests may name, is READ ONLY from the moment it is handed over until the round's answers are in (kin runs between rounds), and a dry attempt writes no bitmap. A caller that writes a bitmap another thread reads is outside the contract, as it is for the unit that made it. No other host has the problem (Go, Java and C# bitmaps are plain arrays, and the machine's `all` map is copied before a job takes it: the machine adds to its own map as answers commit).
 **Why**: `AtomicU8` would make it sound without `unsafe` and costs the bulk forms their auto-vectorisation (histogram, threshold, integral: the bets of D092 and the 2x rule of P10.3); a wrapper type that is `Send` would put the same assertion in a file of its own. The assertion is the same either way; it is made once, where the rule is.
 **Alternatives**: `AtomicU8` (above); copying the pixels into every job (a copy of a 26 MB page per request).
+- [ ] **Signed off** (maintainer)
+
+### D1400 — The first release: scope, terms, CI, versioning, the two release jobs, credentials, the browser demo (P11; D001, D1401)
+**Decision** (the maintainer's):
+- **Scope.** Every host ships: the Rust crate, the Go module, Java (Maven `com.3sln`, the domain 3sln.com verified by a DNS TXT record), C#/NuGet `Emon`, npm `@3sln/emon` (WASM/JS), a C library plus `emon.h`, and the babashka pod. Also a convenience CLI per platform with its dependencies bundled, built on the Rust driver: pdfium bundled, Tesseract and Leptonica static, the `eng` and `osd` tessdata; macOS arm64 and x64, Linux x64 and arm64, Windows x64.
+- **Terms.** The accuracy bar is "useful for scraping". The repo goes public at release. Licence MIT. Version 0.1.0.
+- **Deferred.** JBIG2 and JPX assets stay `unsupported` in releases. Code blocks, quotes, formulas, initials, GPU kernels and locale extras wait until after the release (already parked in this log).
+- **CI.** A PR runs change-scoped gates: a path-to-gate map plus a fast core, and a coverage check that fails on a path no gate claims. The full gates run on release, on `workflow_dispatch` and on a weekly schedule. Until GitHub Actions credits return, the gates run locally.
+- **Versioning.** `version.edn` is the single source. `bb version` prints it; `bb version set X.Y.Z` and `bb version bump major|minor|patch` rewrite every manifest; `bb version --check TAG` fails unless every manifest equals the tag, with or without a leading `v`.
+- **Prepare-release job** (`workflow_dispatch`): (1) open a PR with the bump; (2) after it merges, tag, then create a draft GitHub release with notes; (3) run the full gates on the tagged commit and post the commit status `emon/full-gates`.
+- **Publish job.** It runs only on `release: types [published]`. It re-verifies `bb version --check`, that the `emon/full-gates` status is green, and that the tag still points at the gated commit; then it publishes to every registry.
+- **Credentials**, created by the maintainer, the coordinator saying when each is needed: NOW the Maven Central namespace and the name reservations; LATER a GitHub App or PAT for the release PR and the tag; LAST `CARGO_REGISTRY_TOKEN`, `NPM_TOKEN`, `NUGET_API_KEY`, `MAVEN_CENTRAL_USERNAME`/`MAVEN_CENTRAL_PASSWORD`, `MAVEN_GPG_PRIVATE_KEY`/`MAVEN_GPG_PASSPHRASE`.
+- **Browser demo.** The browser is the main demo. pdfium compiled to WASM sits behind a JS SDK `Renderer` interface plus a lazy `@3sln/emon/pdfium` adapter, with a client-side demo page on GitHub Pages.
+**Why**: the maintainer's decisions of the release planning session, recorded as one entry so the items P11.0-P11.11 cite one place. The publish job trusts nothing but the tag, the gated commit and the status, so a release cannot publish what the full gates did not see.
+**Alternatives**: publishing on tag push (not chosen: a draft release is reviewed first, and `published` is the human act); running the full gates on every PR (not chosen: cost, and the change-scoped map plus the weekly run bound the same risk).
+- [ ] **Signed off** (maintainer)
+
+### D1401 — `version.edn` and `bb version`: where a version lives in this tree, and how it is rewritten (P11.1; D1400)
+**Decision**: `version.edn` (`{:version "0.1.0"}`) is the one source; `tools/version.clj` (`bb version`, `override-builtin` because babashka has a `version` command) keeps these places equal to it, by a regex per place whose group 2 is the version, so every other byte of a file is as it was (no TOML or JSON is parsed and re-serialised; a place whose pattern matches other than the expected number of times is an error, so a reformatted manifest cannot silently stop being rewritten). **The inventory** (this tree has no committed Cargo.toml, go.mod, pom, csproj or nuspec: the Rust, Go and C# modules are ASSEMBLED by `kin/scripts/emon-*-build`):
+1. `host/js/package.json` `version` (npm `@3sln/emon`; it has no internal `@3sln` dependency, only devDependencies);
+2. `host/js/package-lock.json`, the root package's `version`, twice (top and `packages[""]`);
+3. `kin/scripts/emon-rs-build`, the `[package]` of the heredoc Cargo.toml (the driver build);
+4. `kin/scripts/emon-bind-build`, the same for the C library and the pod (one crate `emon`);
+5. `kin/scripts/emon-wasm-build`, the same for wasm32;
+6. `kin/scripts/unit`, the Cargo.toml of the unit-test crate (not published; kept equal so no `0.0.0` remains);
+7. `host/rust/Cargo.lock`, the `emon` entry (the build scripts copy it in; it must match the crate's version or `--locked` builds fail);
+8. `host/c/src/capi.rs`, `VERSION`, which is `emon_version()` (`emon.h` has no version macro);
+9. `host/pod/src/main.rs`, the `version` of `emon/capabilities` (the pod has no separate manifest).
+Not listed on purpose: Go has no version in `go.mod` (`module emon`, assembled): the module version IS the git tag (`v0.1.0`), and the module path for publication is P11.4's; Java and C# have no pom, Gradle file, csproj or nuspec yet: P11.4 creates them and adds each to `targets` in `tools/version.clj` in the same commit, and `bb version --self-test` (a set, a bump, a check and a drifted manifest on a COPY in a temporary directory; the real tree is hashed before and after) runs over whatever `targets` holds; `tools/perf/Cargo.toml` is `publish = false`, a comparator crate, and keeps `0.0.0`. `--check TAG` prints each place that differs (file, what it is, what it holds) and exits 1; unknown arguments exit 2.
+**Why**: the release job (D1400) must be able to prove, from the tag alone, that every artifact it publishes carries that version; with the manifests spread over generated-module scripts, a Rust constant and a lock file, a list kept in one table with a self-test is the cheapest thing that cannot drift.
+**Alternatives**: generating the version into each manifest at build time (rejected: the manifests assembled in build scripts are not the published ones, and a release must be checkable by reading the tree); a TOML/JSON library round trip (rejected: it reformats files).
 - [ ] **Signed off** (maintainer)
