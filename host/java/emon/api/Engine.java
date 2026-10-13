@@ -8,10 +8,10 @@
 //     for (Node p : model.root().children()) System.out.println(p.text());
 //
 // THE SCHEDULE IS KIN'S (`en-next`, D404-D405): which unit runs next is the machine's phase (`Planrun.Machine`, over `emon.planloop`), and this class is the
-// DRIVER of each unit: the document pass, the asset unit, one unit a page, the document unit (`Units.finishPdf`, one call into `emon.engine`) and the figures
-// unit. The loop is wired (D058): a fresh `Src` view and fresh arenas per attempt, a miss checked after each stage, a panic in an attempt that missed is a miss,
-// never reported. A sync source is read inline and never misses; `Config.simulateAsync` makes the cache behave like a browser Blob. The stages kin runs, and the
-// order, are `Units`'.
+// DRIVER of each unit: the document pass, the asset unit, one unit a page, the document unit and the figures unit, each ONE call into `emon.engine`
+// (`Units`). The loop is wired (D058): a fresh `Src` view and fresh arenas per attempt, a miss checked after each stage, a panic in an attempt that missed is a
+// miss, never reported. A sync source is read inline and never misses; `Config.simulateAsync` makes the cache behave like a browser Blob. The stages kin runs,
+// and the order, are kin's (`emon.engine`).
 //
 // NOTHING IN THIS PACKAGE NAMES A FILESYSTEM (D058): inputs are `ByteSource`s.
 
@@ -156,8 +156,7 @@ public final class Engine {
         final Port.Src base = new Port.Src(backing);
         final Port.Src pw = Port.srcOfBlob(in.password.clone());
         final Units.Outcome[] res = {new Units.Outcome()};
-        final Units.PdfDoc[] docPdf = {null};
-        final Units.RasterDoc[] docRaster = {null};
+        final Units.UnitDoc[] docU = {null};
         Planrun.Unit unit = (answers, rq, bms, payload) -> {
             Port.Src view = base.view();
             Units.Step s = Units.dispatch(view, pw, answers, rq, idx, opts, intakeOnly, size);
@@ -168,8 +167,7 @@ public final class Engine {
                 return Planrun.UNIT_REQUESTS;
             }
             res[0] = s.out != null ? s.out : new Units.Outcome();
-            docPdf[0] = s.pdf;
-            docRaster[0] = s.raster;
+            docU[0] = s.doc;
             return Planrun.UNIT_DONE;
         };
         Planrun.Fulfiller bytesF = new Planrun.Sync((req, bm) -> {
@@ -237,16 +235,16 @@ public final class Engine {
                     throw loopError(perr);
                 }
                 tPages = System.nanoTime();
-                advance(m, docPdf[0], docRaster[0], opts);
+                advance(m, docU[0], opts);
             } else if (phase == Planloop.phAsset()) {
                 // THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are asked of the host
                 // (`decode-img`, one round for them all); it reads the input (and so may miss, like the document pass)
                 final EmonError[] afailed = {null};
-                final Units.PdfDoc dp = docPdf[0];
+                final Units.UnitDoc du = docU[0];
                 Planrun.Unit unitA = (answers, rq, bms, payload) -> {
                     Port.Src view = base.view();
                     try {
-                        int s = Units.assetUnit(view, pw, dp, opts, idx, answers, rq, bms, payload);
+                        int s = Units.assetUnit(view, pw, du, opts, idx, answers, rq, bms, payload);
                         if (s == 0) {
                             return Planrun.UNIT_DONE;
                         }
@@ -278,17 +276,16 @@ public final class Engine {
                 if (afailed[0] != null) {
                     throw afailed[0];
                 }
-                advance(m, docPdf[0], docRaster[0], opts);
+                advance(m, docU[0], opts);
             } else if (phase == Planloop.phPages()) {
                 // THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and BitmapSet, dropped when the unit ends, so a
                 // conversion holds one page's bitmaps and not the document's. A page unit never reads the input.
                 final int page = m.page();
                 final EmonError[] failed = {null};
-                final Units.PdfDoc dp = docPdf[0];
-                final Units.RasterDoc dr = docRaster[0];
+                final Units.UnitDoc du = docU[0];
                 Planrun.Unit unitP = (answers, rq, bms, payload) -> {
                     try {
-                        int s = dp != null ? Units.unitPdf(dp, page, idx, opts, answers, rq, bms) : Units.unitRaster(dr, page, idx, size, opts, answers, rq, bms);
+                        int s = Units.unitPage(du, page, idx, size, opts, answers, rq, bms);
                         if (s == 0) {
                             return Planrun.UNIT_DONE;
                         }
@@ -313,13 +310,13 @@ public final class Engine {
                 if (failed[0] != null) {
                     throw failed[0];
                 }
-                advance(m, docPdf[0], docRaster[0], opts);
+                advance(m, docU[0], opts);
             } else if (phase == Planloop.phFinish()) {
                 stats.pagesUs = (System.nanoTime() - tPages) / 1000;
                 long t0 = System.nanoTime();
                 // the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D386)
                 try {
-                    res[0] = docPdf[0] != null ? Units.finishPdf(docPdf[0], opts) : Units.finishRaster(docRaster[0], opts);
+                    res[0] = Units.finishDoc(docU[0], opts);
                 } catch (RuntimeException | StackOverflowError | OutOfMemoryError p) {
                     res[0] = Units.Outcome.error(EmonError.panic(p));
                 }
@@ -358,7 +355,7 @@ public final class Engine {
                 if (done[0] == null) {
                     throw EmonError.internal("the asset unit finished with no Model");
                 }
-                advance(m, docPdf[0], docRaster[0], opts);
+                advance(m, docU[0], opts);
                 b.arenas = done[0];
                 EmonError sealed = Units.sealArenas(b.arenas, opts);
                 if (sealed != null) {
@@ -401,14 +398,11 @@ public final class Engine {
     }
 
     // the unit that just finished is folded into the totals, and the schedule moves on
-    private static void advance(Planrun.Machine m, Units.PdfDoc dp, Units.RasterDoc dr, Options opts) {
+    private static void advance(Planrun.Machine m, Units.UnitDoc du, Options opts) {
         int kind = 0, np = 0;
-        if (dp != null) {
-            kind = 1;
-            np = dp.info.pages;
-        } else if (dr != null) {
-            kind = 2;
-            np = dr.info.pages;
+        if (du != null) {
+            kind = du.doc.kind;
+            np = du.info.pages;
         }
         m.endUnit();
         m.nextPhase(kind, opts.assets != Options.Assets.NONE, false, np);

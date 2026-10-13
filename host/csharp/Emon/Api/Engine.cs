@@ -8,10 +8,10 @@
 //     foreach (Node p in model.Root().Children()) Console.WriteLine(p.Text());
 //
 // THE SCHEDULE IS KIN'S (`en-next`, D404-D405): which unit runs next is the machine's phase (`Planrun.Machine`, over `emon.planloop`), and this class is the
-// DRIVER of each unit: the document pass, the asset unit, one unit a page, the document unit (`Units.FinishPdf`, one call into `emon.engine`) and the figures
-// unit. The loop is wired (D058): a fresh `Src` view and fresh arenas per attempt, a miss checked after each stage, a panic in an attempt that missed is a miss,
-// never reported. A sync source is read inline and never misses; `Config.SimulateAsync` makes the cache behave like a browser Blob. The stages kin runs, and the
-// order, are `Units`'.
+// DRIVER of each unit: the document pass, the asset unit, one unit a page, the document unit and the figures unit, each ONE call into `emon.engine`
+// (`Units`). The loop is wired (D058): a fresh `Src` view and fresh arenas per attempt, a miss checked after each stage, a panic in an attempt that missed is a
+// miss, never reported. A sync source is read inline and never misses; `Config.SimulateAsync` makes the cache behave like a browser Blob. The stages kin runs,
+// and the order, are kin's (`emon.engine`).
 //
 // THE STACK: kin's stages recurse, and .NET cannot catch a stack overflow, so the conversion always runs on a thread with a 1 GiB stack (the Engine starts
 // one itself unless the caller is already on one of its own): the library is self-contained.
@@ -180,8 +180,7 @@ public sealed class Engine {
         var bas = new emon.Port.Src(backing);
         emon.Port.Src pw = emon.Port.SrcOfBlob((byte[]) input.Password.Clone());
         Units.Outcome res = new Units.Outcome();
-        Units.PdfDoc docPdf = null;
-        Units.RasterDoc docRaster = null;
+        Units.UnitDoc docU = null;
         emon.Planrun.Unit unit = (answers, rq, bms, payload) => {
             emon.Port.Src view = bas.View();
             Units.Step s = Units.Dispatch(view, pw, answers, rq, idx, opts, intakeOnly, size);
@@ -192,8 +191,7 @@ public sealed class Engine {
                 return emon.Planrun.UnitRequests;
             }
             res = s.Out != null ? s.Out : new Units.Outcome();
-            docPdf = s.Pdf;
-            docRaster = s.Raster;
+            docU = s.Doc;
             return emon.Planrun.UnitDone;
         };
         emon.Planrun.IFulfiller bytesF = new emon.Planrun.Sync((req, bm) => {
@@ -260,16 +258,16 @@ public sealed class Engine {
                     throw LoopError(perr);
                 }
                 tPages = System.Diagnostics.Stopwatch.GetTimestamp();
-                Advance(m, docPdf, docRaster, opts);
+                Advance(m, docU, opts);
             } else if (phase == emon.Planloop.PhAsset()) {
                 // THE ASSET UNIT (P6.1a, D117): a PDF's image placements become asset candidates, and a codec image's pixels are asked of the host
                 // (`decode-img`, one round for them all); it reads the input (and so may miss, like the document pass)
                 EmonError afailed = null;
-                Units.PdfDoc dp = docPdf;
+                Units.UnitDoc du = docU;
                 emon.Planrun.Unit unitA = (answers, rq, bms, payload) => {
                     emon.Port.Src view = bas.View();
                     try {
-                        int s = Units.AssetUnit(view, pw, dp, opts, idx, answers, rq, bms, payload);
+                        int s = Units.AssetUnit(view, pw, du, opts, idx, answers, rq, bms, payload);
                         if (s == 0) {
                             return emon.Planrun.UnitDone;
                         }
@@ -301,17 +299,16 @@ public sealed class Engine {
                 if (afailed != null) {
                     throw afailed;
                 }
-                Advance(m, docPdf, docRaster, opts);
+                Advance(m, docU, opts);
             } else if (phase == emon.Planloop.PhPages()) {
                 // THE PAGE UNITS (P7.U, D195): one plan/fulfil loop a page, each with its own answers, requests and BitmapSet, dropped when the unit ends, so a
                 // conversion holds one page's bitmaps and not the document's. A page unit never reads the input.
                 int page = m.Page();
                 EmonError failed = null;
-                Units.PdfDoc dp = docPdf;
-                Units.RasterDoc dr = docRaster;
+                Units.UnitDoc du = docU;
                 emon.Planrun.Unit unitP = (answers, rq, bms, payload) => {
                     try {
-                        int s = dp != null ? Units.UnitPdf(dp, page, idx, opts, answers, rq, bms) : Units.UnitRaster(dr, page, idx, size, opts, answers, rq, bms);
+                        int s = Units.UnitPage(du, page, idx, size, opts, answers, rq, bms);
                         if (s == 0) {
                             return emon.Planrun.UnitDone;
                         }
@@ -336,13 +333,13 @@ public sealed class Engine {
                 if (failed != null) {
                     throw failed;
                 }
-                Advance(m, docPdf, docRaster, opts);
+                Advance(m, docU, opts);
             } else if (phase == emon.Planloop.PhFinish()) {
                 stats.PagesUs = Us(tPages);
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 // the document unit is kin too: a panic in it (a bug, or a limit breach) is the Engine's named error, never the embedder's (P10.5, D386)
                 try {
-                    res = docPdf != null ? Units.FinishPdf(docPdf, opts) : Units.FinishRaster(docRaster, opts);
+                    res = Units.FinishDoc(docU, opts);
                 } catch (System.Exception p) {
                     res = Units.Outcome.Error(EmonError.Panic(p));
                 }
@@ -381,7 +378,7 @@ public sealed class Engine {
                 if (done == null) {
                     throw EmonError.Internal("the asset unit finished with no Model");
                 }
-                Advance(m, docPdf, docRaster, opts);
+                Advance(m, docU, opts);
                 b.Arenas = done;
                 EmonError sealedErr = Units.SealArenas(b.Arenas, opts);
                 if (sealedErr != null) {
@@ -426,14 +423,11 @@ public sealed class Engine {
     }
 
     // the unit that just finished is folded into the totals, and the schedule moves on
-    private static void Advance(emon.Planrun.Machine m, Units.PdfDoc dp, Units.RasterDoc dr, Options opts) {
+    private static void Advance(emon.Planrun.Machine m, Units.UnitDoc du, Options opts) {
         int kind = 0, np = 0;
-        if (dp != null) {
-            kind = 1;
-            np = dp.Info.Pages;
-        } else if (dr != null) {
-            kind = 2;
-            np = dr.Info.Pages;
+        if (du != null) {
+            kind = du.Doc.Kind;
+            np = du.Info.Pages;
         }
         m.EndUnit();
         m.NextPhase(kind, opts.Assets != Options.AssetsLevel.None, false, np);

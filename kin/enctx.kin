@@ -8,6 +8,7 @@
 ;;               input's (an image has no text layer: its glyph arenas, tagged tree and the rest stay empty)
 ;;   Scratch     the document unit's scratch, one field a scratch
 ;;   Cfg         the Options the document unit reads, as integers (the asset level is 0 none, 1 images, 2 figures), and the locale's code points
+;;   Pass        the document pass's and the asset units' scratch (S3, D485), made fresh for each attempt
 (ns emon.enctx
   (:require [emon.lang :refer [I32 Cells Buf Text defctx]]))
 
@@ -20,7 +21,7 @@
 ;; Cfg is also what `emon.config` parses an options text into (P10.10, D434): `chunk`, `maxr` and `fetchr` are the Engine's own, `rec` and `jsocr` the browser
 ;; binding's, `lims` the `limit.NAME=N` pairs (kind, value) and `prod` the `producer.NAME=V` records, `num` the parser's scratch and `msg` its refusal.
 (defctx ^:pub Cfg [^I32 ocr ^I32 scope ^I32 furn ^I32 level ^I32 dpi ^I32 pixels ^I32 abyte ^I32 tbyte ^I32 sigs ^I32 keep ^I32 haveloc ^Cells lcl
-      ^I32 chunk ^I32 maxr ^I32 fetchr ^I32 rec ^I32 jsocr ^I32 num ^Cells lims ^Cells prod ^Text msg])
+      ^I32 chunk ^I32 maxr ^I32 fetchr ^I32 rec ^I32 jsocr ^I32 num ^Cells lims ^Cells prod ^Text msg ^I32 nort])
 
 ;; the document pass's arenas, the page units' scratch (`xs`: the alignment's, `ys`: the ink stage's and the targeted passes') and the unit's answer
 (defctx ^:pub Doc [^Cells et ^Cells gl ^Cells mk ^Cells fnt ^Cells wd ^Cells ln ^Cells fw ^Cells fl
@@ -31,7 +32,20 @@
       ^Cells ys5 ^Cells ys6 ^Cells ys7 ^Cells ys8 ^Cells ys9 ^Cells ys10 ^Cells ys11 ^Cells ys12
       ^Cells ys13 ^Cells ys14 ^Cells ys15 ^Cells ys16 ^Cells ys17 ^Cells ys18 ^Cells snapg ^Cells snapk
       ^Cells snapf ^Cells cand ^Cells aim ^Cells fi ^Buf cbytes ^Text evidence ^I32 nl0 ^I32 fused ^I32 hassnap
-      ^I32 fcode ^I32 fnode])
+      ^I32 fcode ^I32 fnode
+      ^Cells pscr ^I32 kind ^I32 ifmt ^I32 ipages ^I32 imajor ^I32 iminor ^I32 ienc ^I32 rfrom])
+
+;; THE DOCUMENT PASS'S SCRATCH (P10.6 S3, D485): what `en-attempt` (the PDF document pass and the raster one) and `en-asset-unit` open, read and write that is
+;; NOT the unit's own (`Doc`'s): the opened document's tables, the content interpreter's, the catalogue's and the tagged tree's, the asset unit's. One field a
+;; scratch. The host makes a fresh one for every attempt and lets it go with the attempt (a miss discards it whole, and the page units never see it).
+(defctx ^:pub Pass [^Cells ar ^Cells dc ^Cells ca ^Cells cb ^Cells st
+      ^Cells cx ^Cells ox ^Cells cs ^Cells xo ^Cells f0 ^Cells f1 ^Cells f2 ^Cells f3 ^Cells gx
+      ^Cells tle ^Cells tlf ^Cells thsc ^Cells sp ^Cells rs1 ^Cells rs2 ^Cells gcand ^Cells gmeas ^Cells fo ^Cells fr
+      ^Cells qidx ^Cells qw ^Cells qseen ^Cells xm ^Cells nd ^Cells nt ^Cells sk ^Cells so ^Cells wk ^Cells sa ^Cells ha ^Cells hb ^Cells hh
+      ^Cells vfs ^Cells vfm ^Cells vaq ^Cells vfd ^Cells vsg
+      ^Cells ax ^Cells aout ^Cells arec ^Cells amrec ^Cells asmp ^Cells amsmp ^Cells adata ^Cells arows ^Cells atmp ^Cells aws ^Buf az
+      ^Cells glob ^Cells words ^Cells hs
+      ^Cells fz0 ^Cells fz1 ^Cells fz2 ^Cells fz3 ^Cells fz4 ^Buf zb])
 
 (defctx ^:pub Scratch [^Cells cd ^Cells sl ^Cells gr ^Cells ford ^Cells tx ^Cells bh ^Cells fo ^Cells fp ^Cells ft ^Cells pl
       ^Cells tb ^Cells tc ^Cells tw ^Cells tq ^Cells tbx ^Cells s0 ^Cells s1 ^Cells s2 ^Cells s3 ^Cells s4

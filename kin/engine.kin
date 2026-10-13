@@ -4,6 +4,12 @@
 ;; KIN STILL NEVER ALLOCATES: every arena a stage writes is a field of a context, and the scratch each stage wants is `Scratch`'s, one field a
 ;; scratch (a field shared by two stages would hand the second what the first left behind).
 ;;
+;; THE DOCUMENT PASS AND THE ASSET UNIT (S3, D485): `en-attempt` is the whole of what the hosts' `dispatch`, `attempt` and `attempt_raster` were (the sniff,
+;; then the raster unit's header or the PDF's text layer, catalogue, tagged tree and plan of the page units), `en-page` the page unit of either kind,
+;; `en-asset-unit` the asset unit's collection and `en-asset-figures` the figures unit; with `en-finish` a host's unit is ONE CALL of this file, and a host
+;; names no stage (`bb hosts` holds it to that, D486). What stays the host's is what has to be: the `Src` (`src-missed` is kin's to ask, the bytes are the
+;; host's), a catch around each call, and the clock.
+;;
 ;; A move, not a rewrite: the order of the stage calls, the arenas each is handed and what a failure answers are the Engines' they were.
 ;; THE KINDS: `en-stage3` runs the raster document unit (kind 1) and the PDF's (kind 0) over the same sequence; what a raster input has no
 ;; evidence for (the inline styles, the provisional figures, the triage's ledger rows, fusion) is skipped by kind and not run over empty arenas,
@@ -13,14 +19,21 @@
 ;; (`assets: figures`, D351: the Model is not sealed yet), 2 `pl-check` failed (`fcode`), 3 `model-check` failed (`fcode`, `fnode`), 4
 ;; `model-check-assets` failed (`fcode`, `fnode`).
 (ns emon.engine
-  (:require [emon.lang :refer [I32 Cells Buf Text fd emit-ascii]]
-            [emon.enctx :refer [Cfg Doc EvArenas Arenas Scratch]]
-            [emon.port :refer [cells-len cells-at cells-push cells-swap cells-copy-into cells-free]]
-            [emon.model :refer [model-init model-check model-check-assets page-count text-append-cp node-set-attr-text fk-locale]]
+  (:require [emon.lang :refer [I32 Cells Buf Text Src BitmapSet fd emit-ascii]]
+            [emon.enctx :refer [Cfg Doc EvArenas Arenas Scratch Pass]]
+            [emon.port :refer [cells-len cells-at cells-push cells-drop cells-swap cells-copy-into cells-free buf-truncate src-missed]]
+            [emon.model :refer [model-init model-check model-check-assets page-count text-append-cp node-set-attr-text fk-locale afm-png afm-jpeg afm-tiff]]
             [emon.para :refer [pa-pages pa-build]]
-            [emon.pdfdoc :refer [pd-pg-count]]
-            [emon.tlhealth :refer [th-append th-write]]
-            [emon.gfuse :refer [gf-fuse gf-write]]
+            [emon.pdfdoc :refer [pd-pg-count pd-open-pw pd-pages pd-need-bytes pd-version-major pd-version-minor pd-encrypted]]
+            [emon.pdfcontent :refer [pc-document]]
+            [emon.pageunit :refer [pu-plan pu-run-pdf]]
+            [emon.pdfx :refer [px-index-build]]
+            [emon.pdfmeta :refer [pm-run]]
+            [emon.pdfannot :refer [pa-run]]
+            [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-doc rs-page]]
+            [emon.planloop :refer [ds-undecodable ds-unsupported-image ds-no-pages ds-content-failed]]
+            [emon.tlhealth :refer [th-run th-append th-write]]
+            [emon.gfuse :refer [gf-doc gfx-mode gf-fuse gf-write]]
             [emon.health :refer [hl-doc]]
             [emon.sealmark :refer [sm-find sm-write]]
             [emon.sigmark :refer [sg-has-digital]]
@@ -28,7 +41,7 @@
             [emon.player :refer [pl-check pl-emit-open pl-emit-gfx-open]]
             [emon.evidence :refer [ev-emit-open]]
             [emon.tagtable :refer [tt-emit]]
-            [emon.pdfstruct :refer [tg-trust]]
+            [emon.pdfstruct :refer [tg-trust tg-read tg-join]]
             [emon.furniture :refer [fu-find fu-write]]
             [emon.table :refer [tb-build]]
             [emon.columns :refer [lc-copy]]
@@ -36,13 +49,219 @@
             [emon.heading :refer [hd-prior-outline hd-analyze]]
             [emon.notes :refer [nt-analyze]]
             [emon.lists :refer [ls-analyze]]
-            [emon.inline :refer [il-analyze]]
+            [emon.inline :refer [il-analyze il-fonts]]
             [emon.restruct :refer [rs-run]]
-            [emon.figclass :refer [fc-stage]]
+            [emon.figclass :refer [fc-stage fc-images]]
             [emon.scan :refer [sc-tag]]
             [emon.rasterplan :refer [rp-settings]]
-            [emon.asset :refer [as-settings as-run as-page-cands]]
-            [kin.lang :refer [defn return let set while if do comment + - < > == != and]]))
+            [emon.asset :refer [as-settings as-run as-page-cands as-collect as-run-figures]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > == != and or quot]]))
+
+;; ----------------------------------------------------------------------------------------------- the document pass (P10.6 S3, D485)
+
+;; What `en-attempt` answers. A miss is the attempt discarded whole (the source missed: the host fetches and runs it again on fresh contexts), `requests` that
+;; the unit wrote requests to `rq` for the host to fulfil, `failed` that the input is refused or damaged (`fcode` is the status: `ds-class` and `ds-known`
+;; of `emon.planloop` name it), `internal` that the raster unit answered a status it has no name for (`fcode`), `intake` that stage 0 was all that was asked
+;; for (`kind`, `ifmt`, `ipages`, `imajor`, `iminor`, `ienc` say what the input is), `built` that the document pass is done and the page units are next
+;; (the same fields, with `kind` 1 a PDF and 2 a raster input).
+(defn ^:pub ^I32 at-built [] (return 0))
+(defn ^:pub ^I32 at-miss [] (return 1))
+(defn ^:pub ^I32 at-requests [] (return 2))
+(defn ^:pub ^I32 at-failed [] (return 3))
+(defn ^:pub ^I32 at-internal [] (return 4))
+(defn ^:pub ^I32 at-intake [] (return 5))
+
+;; `Doc`'s `kind`: what the document unit and the page units read the input as (the schedule's `doc_kind` too: 1 a PDF, 2 a raster input). `ifmt`: what the input
+;; is called in its intake (`format`): 0 a PDF, 1 a PNG, 2 a JPEG, 3 a TIFF.
+(defn ^:pub ^I32 en-kind-pdf [] (return 1))
+(defn ^:pub ^I32 en-kind-raster [] (return 2))
+(defn ^:pub ^I32 en-fmt-pdf [] (return 0))
+(defn ^:pub ^I32 en-fmt-png [] (return 1))
+(defn ^:pub ^I32 en-fmt-jpeg [] (return 2))
+(defn ^:pub ^I32 en-fmt-tiff [] (return 3))
+
+(defn ^I32 en-locale [^Cfg c ^Doc d]
+  (comment "The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.")
+  (if (!= (fd c haveloc) 0)
+    (cells-copy-into (fd d loc) (fd c lcl)))
+  (return 0))
+
+(defn ^I32 en-info-pdf [^Doc d ^Pass p ^I32 np]
+  (comment "What stage 0 says of a PDF: the version and whether it is encrypted from the document table, the page count (never below 0).")
+  (set (fd d kind) (en-kind-pdf))
+  (set (fd d ifmt) (en-fmt-pdf))
+  (set (fd d imajor) (pd-version-major (fd p dc)))
+  (set (fd d iminor) (pd-version-minor (fd p dc)))
+  (set (fd d ienc) (pd-encrypted (fd p dc)))
+  (if (< np 0)
+    (set (fd d ipages) 0)
+    (set (fd d ipages) np))
+  (return 0))
+
+(defn ^I32 en-attempt-raster [^Src view ^Cfg c ^Doc d ^Arenas m ^Cells ans ^:mut ^Cells rq ^I32 idx ^I32 fmt ^I32 intake-only]
+  (comment "ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `en-attempt-pdf` is for a PDF. An image's pages are made by `rs-doc` (decode, then")
+  (comment "OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213): the stages after it are the PDF's, in its order, with the")
+  (comment "glyph-fed ones given empty arenas. The Model the pass begins is `m`'s (its pages and nodes).")
+  (model-init (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout))
+  (let [^I32 status (rs-doc view idx fmt ans rq (fd m nodes) (fd m attrs) (fd m text) (fd m pages) (fd d mask))
+        ^I32 np (page-count (fd m pages))]
+    (if (src-missed view) (return (at-miss)))
+    (if (== status 1) (return (at-requests)))
+    (if (or (== status (ds-undecodable)) (== status (ds-unsupported-image)))
+      (do (set (fd d fcode) status)
+          (return (at-failed))))
+    (if (!= status 0)
+      (do (set (fd d fcode) status)
+          (return (at-internal))))
+    (set (fd d kind) (en-kind-raster))
+    (set (fd d ifmt) (en-fmt-tiff))
+    (if (== fmt (rs-png)) (set (fd d ifmt) (en-fmt-png)))
+    (if (== fmt (rs-jpeg)) (set (fd d ifmt) (en-fmt-jpeg)))
+    (if (< np 0)
+      (set (fd d ipages) 0)
+      (set (fd d ipages) np))
+    ;; what the asset unit at `figures` reads the frames' pixels as (`afm`): the format's own
+    (set (fd d rfrom) (afm-tiff))
+    (if (== fmt (rs-png)) (set (fd d rfrom) (afm-png)))
+    (if (== fmt (rs-jpeg)) (set (fd d rfrom) (afm-jpeg)))
+    (if (!= intake-only 0) (return (at-intake)))
+    (en-locale c d)
+    (return (at-built))))
+
+(defn ^I32 en-attempt-pdf [^Src view ^Src pw ^Cfg c ^Doc d ^EvArenas ev ^Pass p ^I32 idx ^I32 intake-only]
+  (comment "ONE ATTEMPT OF THE DOCUMENT PASS for one input: everything kin does that READS THE INPUT, from scratch, on a fresh view and fresh arenas: the text")
+  (comment "layer, the catalogue and the tagged tree, and the plan of the page units (which pages are scanned, where their image streams are). A miss at any")
+  (comment "checkpoint ends it at once (`at-miss`): what a missed attempt computed is never looked at (SPEC 13.1). The page units (`en-page`) and the document unit")
+  (comment "(`en-finish-pdf`) follow and never read the input.")
+  (let [^I32 ostatus (pd-open-pw view pw (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st))]
+    (if (or (src-missed view) (== ostatus (pd-need-bytes))) (return (at-miss)))
+    (if (!= ostatus 0)
+      (do (set (fd d fcode) ostatus)
+          (return (at-failed))))
+    (if (!= intake-only 0)
+      (do
+        (let [^I32 inp (pd-pages view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d pg))]
+          (if (src-missed view) (return (at-miss)))
+          (if (< inp 0)
+            (do (set (fd d fcode) (ds-no-pages))
+                (return (at-failed))))
+          (en-info-pdf d p inp)
+          (return (at-intake)))))
+    (let [^I32 status (pc-document view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd p cx) (fd p ox) (fd p cs) (fd p xo) (fd p f0) (fd p f1) (fd p f2) (fd p f3)
+                                   (fd d gl) (fd d et) (fd d mk) (fd d fnt) (fd d pg) (fd d wd) (fd d ln) (fd d pa) (fd d im) (fd d pts) (fd p gx))]
+      (if (or (src-missed view) (== status (pd-need-bytes))) (return (at-miss)))
+      (if (!= status 0)
+        (do (set (fd d fcode) (ds-content-failed))
+            (return (at-failed)))))
+    (let [^I32 np (pd-pg-count (fd d pg))
+          ^:mut ^I32 fusion 0]
+      (if (!= (fd c ocr) 0) (set fusion 1))
+      (en-info-pdf d p np)
+      ;; THE PLAN OF THE PAGE UNITS (P6.5, D212, P7.U): a page with no text layer and one JPEG image that covers it is a scanned page (a `decode` of the stream,
+      ;; then an `ocr` of its bitmap, in its own unit); its stream is located here, the one place that reads the input. A page with a text layer is left as the
+      ;; text layer made it (fusion, P7.3, is what weighs a second reading against it).
+      ;; The text layer's own triage and health (P7.0, D195, D208): `epages`, the stage-1 features, the flow COPIED into `fw`/`fl` without the words that failed a
+      ;; P3.6 check (set aside in `fa`, written to the ledger after `fu-write`), and the font health in `hl`. Stage 3 reads `fw`/`fl` from here on, never
+      ;; `wd`/`ln`; the scanned pages' lines join them after the page units.
+      (th-run (fd d pg) (fd d gl) (fd d et) (fd d mk) (fd d fnt) (fd d wd) (fd d ln) (fd d im) (fd p tle) (fd p tlf) (fd d fw) (fd d fl) (fd d fa) (fd d hl) (fd p thsc))
+      (set (fd d nl0) (quot (cells-len (fd d ln)) 16))
+      (pu-plan view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d pg) (fd d im) (fd d wd) (fd c ocr) (fd c scope) (fd d fw) (fd d fl) (fd d et) (fd d hl)
+               (fd p sp) (fd d plan) (fd p rs1) (fd p rs2))
+      (if (src-missed view) (return (at-miss)))
+      ;; The fused graphics (P5.5a, D270): the vector source's rules and fills of every page, which the table stage reads instead of `paths`
+      (gf-doc (fd d pa) (fd d pts) (fd d mk) (fd d im) np (gfx-mode) (fd d grl) (fd d gfl) (fd p gcand) (fd p gmeas))
+      ;; P3.13 (SPEC 10.11): the asset candidates are made by the ASSET UNIT (`en-asset-unit`, P6.1a), which runs after this pass and reads the input again,
+      ;; because a codec image's pixels are the host's and ask the plan/fulfil loop; the placements it works from are kept.
+      (if (!= (fd c level) 0) (cells-copy-into (fd d aim) (fd d im)))
+      ;; P8.1 (SPEC 10.6): what each image placement's dictionary says, which the figures' kinds are read from (one more read of the input)
+      (fc-images view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d im) (fd p fo) (fd p fr) (fd d fi))
+      (if (src-missed view) (return (at-miss)))
+      (if (!= (fd c keep) 0)
+        (do (cells-copy-into (fd d snapg) (fd d gl))
+            (cells-copy-into (fd d snapk) (fd d mk))
+            (cells-copy-into (fd d snapf) (fd d fnt))
+            (set (fd d hassnap) 1)))
+      ;; With fusion on (every policy but `never`), the text layer's `epages` and `feats` are the evidence's own: the OCR of a born-digital page adds its feature
+      ;; rows to the same arena, and alignment reads both (P7.3). Without it they are dropped, as before, so the dump is the one it always was.
+      (if (== fusion 1)
+        (do (cells-swap (fd ev epages) (fd p tle))
+            (cells-swap (fd ev feats) (fd p tlf))))
+      ;; The catalogue's extras and the tagged tree (P3.9, P3.7): the Info /Title and /PageLabels, and the tree's trust (D076), which the furniture stage weighs
+      ;; the tree's /Artifact marks by.
+      (px-index-build view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d pg) (fd p qidx))
+      (pm-run view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d pg) (fd p qidx) (fd d txt) (fd p qw) (fd p qseen) (fd d md) (fd p xm) (fd d ol) (fd d lb)
+              (fd p nd) (fd p nt))
+      (tg-read view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d pg) (fd p qidx) (fd d txt) (fd p qw) (fd p qseen) (fd d ss) (fd d se) (fd p sk) (fd d sc)
+               (fd p so) (fd p wk) (fd d md))
+      (tg-join (fd d ss) (fd d se) (fd p sk) (fd d sc) (fd p so) (fd p sa) (fd d gl) (fd d mk) (fd d fnt) (fd d pg) (fd p ha) (fd p hb) (fd p hh))
+      ;; inline styles and links (P4.7): what each font says of weight and slant, and the link annotations (P3.8)
+      (il-fonts view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d fnt) (fd d et) (fd d ift))
+      (pa-run view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d pg) (fd p qidx) (fd d txt) (fd p qw) (fd p vfs) (fd p qseen) (fd p vfm) (fd d an) (fd p vaq)
+              (fd p vfd) (fd p vsg))
+      (if (src-missed view) (return (at-miss)))
+      (let [^:mut ^I32 i 0]
+        (while (< i np)
+          (do (cells-push (fd d mask) 0)
+              (set i (+ i 1)))))
+      (if (== fusion 0) (cells-free (fd d pts)))
+      (en-locale c d)
+      (return (at-built)))))
+
+(defn ^:pub ^I32 en-attempt [^Src view ^Src pw ^Cfg c ^Doc d ^EvArenas ev ^Arenas m ^Pass p ^Cells ans ^:mut ^Cells rq ^I32 idx ^I32 intake-only]
+  (comment "THE UNIT OF ONE INPUT (the document pass, P7.U): a PNG, JPEG or TIFF (by `rs-sniff`) is read by the raster unit, anything else by the PDF one, which")
+  (comment "refuses what is not a PDF by name. `d`, `ev`, `m` and `p` are fresh contexts, made for this attempt. Answers `at-built` (the page units are next: `kind`),")
+  (comment "`at-miss`, `at-requests`, `at-failed`, `at-internal` or `at-intake`, as above.")
+  (let [^I32 fmt (rs-sniff view)]
+    (if (src-missed view) (return (at-miss)))
+    (if (!= fmt (rs-none))
+      (return (en-attempt-raster view c d m ans rq idx fmt intake-only)))
+    (return (en-attempt-pdf view pw c d ev p idx intake-only))))
+
+;; ----------------------------------------------------------------------------------------------- the page unit
+
+(defn ^:pub ^I32 en-page [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
+  (comment "One page's unit (P7.U, D195; a frame's, for a raster input): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is")
+  (comment "left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.")
+  (cells-drop (fd d pscr) 0)
+  (if (== (fd d kind) (en-kind-pdf))
+    (return (pu-run-pdf i idx (fd c ocr) (fd d plan) ans rq (fd d loc) bms (fd d mask) (fd d pscr)
+                        (fd ev epages) (fd ev views) (fd d et) (fd ev feats) (fd ev images) (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms)
+                        (fd ev oalts) (fd d wd) (fd d ln)
+                        (* 2 (fd c nort)) (fd d fw) (fd d fl) (fd d hl) (fd ev refs) (fd d cg) (fd ev tlines)
+                        (fd d xs0) (fd d xs1) (fd d xs2) (fd d xs3) (fd d xs4) (fd d xs5)
+                        (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev pts)
+                        (fd d ys0) (fd d ys1) (fd d ys2) (fd d ys3) (fd d ys4) (fd d ys5) (fd d ys6) (fd d ys7) (fd d ys8) (fd d ys9) (fd d ys10) (fd d ys11)
+                        (fd d ys12) (fd d ys13) (fd d ys14) (fd d ys15) (fd d ys16) (fd d ys17) (fd d ys18))))
+  (return (rs-page i idx nbytes (fd c ocr) ans rq (fd d loc) bms (fd d mask)
+                   (fd ev epages) (fd ev views) (fd d et) (fd ev feats) (fd ev images) (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms)
+                   (fd ev oalts) (fd d wd) (fd d ln) (fd d pscr))))
+
+;; ----------------------------------------------------------------------------------------------- the asset unit
+
+(defn ^:pub ^I32 en-asset-unit [^Src view ^Src pw ^Cfg c ^Doc d ^Pass p ^I32 idx ^Cells ans ^:mut ^Cells rq ^BitmapSet bms ^:mut ^Buf payload]
+  (comment "THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil loop. It re-opens the document")
+  (comment "(the document pass's arenas are gone) and runs `as-collect` over the placements the document pass kept: a codec image whose pixels are the host's is")
+  (comment "asked for, with the bytes kin made itself in `payload`; the unit is run again with the answers and makes the candidates. `p` is fresh for the attempt.")
+  (comment "Answers 0 (the candidates are in `cand`, `cbytes`), 1 (it asked), 7 (the source missed) or 100 and the open's status.")
+  (let [^I32 ostatus (pd-open-pw view pw (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st))]
+    (if (or (src-missed view) (== ostatus (pd-need-bytes))) (return 7))
+    (if (!= ostatus 0) (return (+ 100 ostatus)))
+    (buf-truncate (fd d cbytes) 0)
+    (let [^I32 rc (as-collect view (fd p ar) (fd p dc) (fd p ca) (fd p cb) (fd p st) (fd d aim) (fd d pa) (fd d gl) (fd d pg) (fd c pixels) (fd c tbyte) (fd c level)
+                              (fd p ax) (fd d cand) (fd d cbytes) (fd p aout) (fd p arec) (fd p amrec) (fd p asmp) (fd p amsmp) (fd p adata) (fd p arows) (fd p atmp)
+                              (fd p aws) (fd p az) idx ans rq payload bms (fd p glob) (fd p words) (fd p hs))]
+      (if (or (src-missed view) (== rc 12)) (return 7))
+      (return rc))))
+
+(defn ^:pub ^I32 en-asset-figures [^Cfg c ^Arenas m ^:mut ^Cells cand ^:mut ^Buf cbytes ^I32 rfrom ^Pass p ^I32 input ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
+  (comment "P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the caller made of the Model and the candidates")
+  (comment "(`cand`, `cbytes`: the document unit's; `rfrom` is 0 for a PDF or the `afm` of a raster input's format). It writes the Model's settings and every figure's")
+  (comment "and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq` (then its results are meaningless: the loop answers and")
+  (comment "runs it again). `p` is fresh for the attempt.")
+  (as-settings (fd m nodes) (fd m attrs) (fd m text) (fd c level) (fd c dpi) (fd c pixels) (fd c abyte) (fd c tbyte) (fd c sigs))
+  (return (as-run-figures (fd m nodes) (fd m attrs) (fd m regions) (fd m pages) cand cbytes (fd m assets) (fd m uses) (fd m abytes)
+                          (fd c abyte) (fd c tbyte) (fd c sigs) (fd c dpi) (fd c pixels) input nbytes rfrom ans rq bms
+                          (fd p fz0) (fd p zb) (fd p fz1) (fd p fz2) (fd p fz3) (fd p fz4))))
 
 ;; ----------------------------------------------------------------------------------------------- the evidence's dump
 
@@ -269,3 +488,9 @@
     (model-init (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout))
     (pa-pages (fd d pg) (fd m pages))
     (return (en-stage3 c d ev m s np 0))))
+
+(defn ^:pub ^I32 en-finish [^Cfg c ^Doc d ^EvArenas ev ^Arenas m ^Scratch s]
+  (comment "The document unit of whatever kind the document pass made (`kind`): `en-finish-pdf` or `en-finish-raster`. Answers as the file's head says.")
+  (if (== (fd d kind) (en-kind-pdf))
+    (return (en-finish-pdf c d ev m s)))
+  (return (en-finish-raster c d ev m s)))

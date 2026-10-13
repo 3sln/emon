@@ -19,11 +19,18 @@ import (
 	"emon/lists"
 	"emon/model"
 	"emon/notes"
+	"emon/pageunit"
 	"emon/para"
+	"emon/pdfannot"
+	"emon/pdfcontent"
 	"emon/pdfdoc"
+	"emon/pdfmeta"
 	"emon/pdfstruct"
+	"emon/pdfx"
+	"emon/planloop"
 	"emon/player"
 	"emon/port"
+	"emon/rasterin"
 	"emon/rasterplan"
 	"emon/restruct"
 	"emon/scan"
@@ -34,6 +41,262 @@ import (
 	"emon/tlhealth"
 	"strings"
 )
+
+func AtBuilt() int32 {
+	return 0
+}
+
+func AtMiss() int32 {
+	return 1
+}
+
+func AtRequests() int32 {
+	return 2
+}
+
+func AtFailed() int32 {
+	return 3
+}
+
+func AtInternal() int32 {
+	return 4
+}
+
+func AtIntake() int32 {
+	return 5
+}
+
+func EnKindPdf() int32 {
+	return 1
+}
+
+func EnKindRaster() int32 {
+	return 2
+}
+
+func EnFmtPdf() int32 {
+	return 0
+}
+
+func EnFmtPng() int32 {
+	return 1
+}
+
+func EnFmtJpeg() int32 {
+	return 2
+}
+
+func EnFmtTiff() int32 {
+	return 3
+}
+
+func enLocale(c *enctx.Cfg, d *enctx.Doc) int32 {
+	// The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
+	if c.Haveloc != 0 {
+		port.CellsCopyInto(d.Loc, c.Lcl)
+	}
+	return 0
+}
+
+func enInfoPdf(d *enctx.Doc, p *enctx.Pass, np int32) int32 {
+	// What stage 0 says of a PDF: the version and whether it is encrypted from the document table, the page count (never below 0).
+	d.Kind = EnKindPdf()
+	d.Ifmt = EnFmtPdf()
+	d.Imajor = pdfdoc.PdVersionMajor(p.Dc)
+	d.Iminor = pdfdoc.PdVersionMinor(p.Dc)
+	d.Ienc = pdfdoc.PdEncrypted(p.Dc)
+	if np < 0 {
+		d.Ipages = 0
+	} else {
+		d.Ipages = np
+	}
+	return 0
+}
+
+func enAttemptRaster(view *port.Src, c *enctx.Cfg, d *enctx.Doc, m *enctx.Arenas, ans *port.Cells, rq *port.Cells, idx int32, fmt int32, intakeOnly int32) int32 {
+	// ONE ATTEMPT OF THE RASTER UNIT, from scratch on fresh arenas, as `en-attempt-pdf` is for a PDF. An image's pages are made by `rs-doc` (decode, then
+	// OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213): the stages after it are the PDF's, in its order, with the
+	// glyph-fed ones given empty arenas. The Model the pass begins is `m`'s (its pages and nodes).
+	model.ModelInit(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, m.Ledger, m.Layout)
+	var status int32 = rasterin.RsDoc(view, idx, fmt, ans, rq, m.Nodes, m.Attrs, m.Text, m.Pages, d.Mask)
+	var np int32 = model.PageCount(m.Pages)
+	if port.SrcMissed(view) {
+		return AtMiss()
+	}
+	if status == 1 {
+		return AtRequests()
+	}
+	if (status == planloop.DsUndecodable()) || (status == planloop.DsUnsupportedImage()) {
+		d.Fcode = status
+		return AtFailed()
+	}
+	if status != 0 {
+		d.Fcode = status
+		return AtInternal()
+	}
+	d.Kind = EnKindRaster()
+	d.Ifmt = EnFmtTiff()
+	if fmt == rasterin.RsPng() {
+		d.Ifmt = EnFmtPng()
+	}
+	if fmt == rasterin.RsJpeg() {
+		d.Ifmt = EnFmtJpeg()
+	}
+	if np < 0 {
+		d.Ipages = 0
+	} else {
+		d.Ipages = np
+	}
+	d.Rfrom = model.AfmTiff()
+	if fmt == rasterin.RsPng() {
+		d.Rfrom = model.AfmPng()
+	}
+	if fmt == rasterin.RsJpeg() {
+		d.Rfrom = model.AfmJpeg()
+	}
+	if intakeOnly != 0 {
+		return AtIntake()
+	}
+	enLocale(c, d)
+	return AtBuilt()
+}
+
+func enAttemptPdf(view *port.Src, pw *port.Src, c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, p *enctx.Pass, idx int32, intakeOnly int32) int32 {
+	// ONE ATTEMPT OF THE DOCUMENT PASS for one input: everything kin does that READS THE INPUT, from scratch, on a fresh view and fresh arenas: the text
+	// layer, the catalogue and the tagged tree, and the plan of the page units (which pages are scanned, where their image streams are). A miss at any
+	// checkpoint ends it at once (`at-miss`): what a missed attempt computed is never looked at (SPEC 13.1). The page units (`en-page`) and the document unit
+	// (`en-finish-pdf`) follow and never read the input.
+	var ostatus int32 = pdfdoc.PdOpenPw(view, pw, p.Ar, p.Dc, p.Ca, p.Cb, p.St)
+	if port.SrcMissed(view) || (ostatus == pdfdoc.PdNeedBytes()) {
+		return AtMiss()
+	}
+	if ostatus != 0 {
+		d.Fcode = ostatus
+		return AtFailed()
+	}
+	if intakeOnly != 0 {
+		var inp int32 = pdfdoc.PdPages(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg)
+		if port.SrcMissed(view) {
+			return AtMiss()
+		}
+		if inp < 0 {
+			d.Fcode = planloop.DsNoPages()
+			return AtFailed()
+		}
+		enInfoPdf(d, p, inp)
+		return AtIntake()
+	}
+	var status int32 = pdfcontent.PcDocument(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, p.Cx, p.Ox, p.Cs, p.Xo, p.F0, p.F1, p.F2, p.F3, d.Gl, d.Et, d.Mk, d.Fnt, d.Pg, d.Wd, d.Ln, d.Pa, d.Im, d.Pts, p.Gx)
+	if port.SrcMissed(view) || (status == pdfdoc.PdNeedBytes()) {
+		return AtMiss()
+	}
+	if status != 0 {
+		d.Fcode = planloop.DsContentFailed()
+		return AtFailed()
+	}
+	var np int32 = pdfdoc.PdPgCount(d.Pg)
+	var fusion int32 = 0
+	if c.Ocr != 0 {
+		fusion = 1
+	}
+	enInfoPdf(d, p, np)
+	tlhealth.ThRun(d.Pg, d.Gl, d.Et, d.Mk, d.Fnt, d.Wd, d.Ln, d.Im, p.Tle, p.Tlf, d.Fw, d.Fl, d.Fa, d.Hl, p.Thsc)
+	d.Nl0 = port.CellsLen(d.Ln) / 16
+	pageunit.PuPlan(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, d.Im, d.Wd, c.Ocr, c.Scope, d.Fw, d.Fl, d.Et, d.Hl, p.Sp, d.Plan, p.Rs1, p.Rs2)
+	if port.SrcMissed(view) {
+		return AtMiss()
+	}
+	gfuse.GfDoc(d.Pa, d.Pts, d.Mk, d.Im, np, gfuse.GfxMode(), d.Grl, d.Gfl, p.Gcand, p.Gmeas)
+	if c.Level != 0 {
+		port.CellsCopyInto(d.Aim, d.Im)
+	}
+	figclass.FcImages(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Im, p.Fo, p.Fr, d.Fi)
+	if port.SrcMissed(view) {
+		return AtMiss()
+	}
+	if c.Keep != 0 {
+		port.CellsCopyInto(d.Snapg, d.Gl)
+		port.CellsCopyInto(d.Snapk, d.Mk)
+		port.CellsCopyInto(d.Snapf, d.Fnt)
+		d.Hassnap = 1
+	}
+	if fusion == 1 {
+		port.CellsSwap(ev.Epages, p.Tle)
+		port.CellsSwap(ev.Feats, p.Tlf)
+	}
+	pdfx.PxIndexBuild(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, p.Qidx)
+	pdfmeta.PmRun(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, p.Qidx, d.Txt, p.Qw, p.Qseen, d.Md, p.Xm, d.Ol, d.Lb, p.Nd, p.Nt)
+	pdfstruct.TgRead(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, p.Qidx, d.Txt, p.Qw, p.Qseen, d.Ss, d.Se, p.Sk, d.Sc, p.So, p.Wk, d.Md)
+	pdfstruct.TgJoin(d.Ss, d.Se, p.Sk, d.Sc, p.So, p.Sa, d.Gl, d.Mk, d.Fnt, d.Pg, p.Ha, p.Hb, p.Hh)
+	inline.IlFonts(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Fnt, d.Et, d.Ift)
+	pdfannot.PaRun(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Pg, p.Qidx, d.Txt, p.Qw, p.Vfs, p.Qseen, p.Vfm, d.An, p.Vaq, p.Vfd, p.Vsg)
+	if port.SrcMissed(view) {
+		return AtMiss()
+	}
+	var i int32 = 0
+	for i < np {
+		port.CellsPush(d.Mask, 0)
+		i += 1
+	}
+	if fusion == 0 {
+		port.CellsFree(d.Pts)
+	}
+	enLocale(c, d)
+	return AtBuilt()
+}
+
+func EnAttempt(view *port.Src, pw *port.Src, c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, p *enctx.Pass, ans *port.Cells, rq *port.Cells, idx int32, intakeOnly int32) int32 {
+	// THE UNIT OF ONE INPUT (the document pass, P7.U): a PNG, JPEG or TIFF (by `rs-sniff`) is read by the raster unit, anything else by the PDF one, which
+	// refuses what is not a PDF by name. `d`, `ev`, `m` and `p` are fresh contexts, made for this attempt. Answers `at-built` (the page units are next: `kind`),
+	// `at-miss`, `at-requests`, `at-failed`, `at-internal` or `at-intake`, as above.
+	var fmt int32 = rasterin.RsSniff(view)
+	if port.SrcMissed(view) {
+		return AtMiss()
+	}
+	if fmt != rasterin.RsNone() {
+		return enAttemptRaster(view, c, d, m, ans, rq, idx, fmt, intakeOnly)
+	}
+	return enAttemptPdf(view, pw, c, d, ev, p, idx, intakeOnly)
+}
+
+func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, nbytes int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet) int32 {
+	// One page's unit (P7.U, D195; a frame's, for a raster input): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
+	// left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.
+	port.CellsDrop(d.Pscr, 0)
+	if d.Kind == EnKindPdf() {
+		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, 2*c.Nort, d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18)
+	}
+	return rasterin.RsPage(i, idx, nbytes, c.Ocr, ans, rq, d.Loc, bms, d.Mask, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, d.Pscr)
+}
+
+func EnAssetUnit(view *port.Src, pw *port.Src, c *enctx.Cfg, d *enctx.Doc, p *enctx.Pass, idx int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet, payload *port.Buf) int32 {
+	// THE ASSET UNIT (P6.1a, D117, D291, SPEC 10.11): the candidates of the document's image placements, in its own plan/fulfil loop. It re-opens the document
+	// (the document pass's arenas are gone) and runs `as-collect` over the placements the document pass kept: a codec image whose pixels are the host's is
+	// asked for, with the bytes kin made itself in `payload`; the unit is run again with the answers and makes the candidates. `p` is fresh for the attempt.
+	// Answers 0 (the candidates are in `cand`, `cbytes`), 1 (it asked), 7 (the source missed) or 100 and the open's status.
+	var ostatus int32 = pdfdoc.PdOpenPw(view, pw, p.Ar, p.Dc, p.Ca, p.Cb, p.St)
+	if port.SrcMissed(view) || (ostatus == pdfdoc.PdNeedBytes()) {
+		return 7
+	}
+	if ostatus != 0 {
+		return 100 + ostatus
+	}
+	port.BufTruncate(d.Cbytes, 0)
+	var rc int32 = asset.AsCollect(view, p.Ar, p.Dc, p.Ca, p.Cb, p.St, d.Aim, d.Pa, d.Gl, d.Pg, c.Pixels, c.Tbyte, c.Level, p.Ax, d.Cand, d.Cbytes, p.Aout, p.Arec, p.Amrec, p.Asmp, p.Amsmp, p.Adata, p.Arows, p.Atmp, p.Aws, p.Az, idx, ans, rq, payload, bms, p.Glob, p.Words, p.Hs)
+	if port.SrcMissed(view) || (rc == 12) {
+		return 7
+	}
+	return rc
+}
+
+func EnAssetFigures(c *enctx.Cfg, m *enctx.Arenas, cand *port.Cells, cbytes *port.Buf, rfrom int32, p *enctx.Pass, input int32, nbytes int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet) int32 {
+	// P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the caller made of the Model and the candidates
+	// (`cand`, `cbytes`: the document unit's; `rfrom` is 0 for a PDF or the `afm` of a raster input's format). It writes the Model's settings and every figure's
+	// and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq` (then its results are meaningless: the loop answers and
+	// runs it again). `p` is fresh for the attempt.
+	asset.AsSettings(m.Nodes, m.Attrs, m.Text, c.Level, c.Dpi, c.Pixels, c.Abyte, c.Tbyte, c.Sigs)
+	return asset.AsRunFigures(m.Nodes, m.Attrs, m.Regions, m.Pages, cand, cbytes, m.Assets, m.Uses, m.Abytes, c.Abyte, c.Tbyte, c.Sigs, c.Dpi, c.Pixels, input, nbytes, rfrom, ans, rq, bms, p.Fz0, p.Zb, p.Fz1, p.Fz2, p.Fz3, p.Fz4)
+}
 
 func EnDump(et *port.Cells, gl *port.Cells, wd *port.Cells, ln *port.Cells, mk *port.Cells, fnt *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells, ev *enctx.EvArenas, t *strings.Builder) int32 {
 	// The evidence dump of a conversion, OPEN (`}` is the caller's, who may add a member first): `ev` is what the OCR stages made, the rest the text layer's.
@@ -233,4 +496,12 @@ func EnFinishPdf(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas
 	model.ModelInit(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, m.Ledger, m.Layout)
 	para.PaPages(d.Pg, m.Pages)
 	return enStage3(c, d, ev, m, s, np, 0)
+}
+
+func EnFinish(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s *enctx.Scratch) int32 {
+	// The document unit of whatever kind the document pass made (`kind`): `en-finish-pdf` or `en-finish-raster`. Answers as the file's head says.
+	if d.Kind == EnKindPdf() {
+		return EnFinishPdf(c, d, ev, m, s)
+	}
+	return EnFinishRaster(c, d, ev, m, s)
 }
