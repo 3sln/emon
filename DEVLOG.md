@@ -3647,7 +3647,21 @@ what reaches the Model records BEFORE and AFTER for its metrics in its entry, li
   `bb c`, `bb pod`, and the C and pod arms of `bb slice`, `bb identity` and `bb embedders`. *Identity*: 586 inputs x 24 arms (the C driver's five and the
   pod's two among them) byte-identical, plus the record/replay trip for C; assets=images 90 documents and assets=figures 21 likewise. *Left for P9.5*:
   share the step session between `wasm.rs` and `capi.rs` (D472; **done, D481**); the browser arm was not run here (no node_modules).
-- [ ] P9.5 — `bb identity` over all four hosts and three bindings.
+- [x] P9.5 — `bb identity` over all four hosts and three bindings. **Done (D1240-D1243).** `bb identity`: 586 inputs, 24 arms, assets=images 90 and assets=figures 21 documents, the browser at all three levels, a coverage ledger (every host ran every arm on every input; the only skips are the pod's, which has no transcript); 8 min 49 s on a loaded machine. One cross-host difference found by the new fuzz arms and fixed (D1242: C# named a non-8-bit or arithmetic JPEG `unsupported-image`, the others `undecodable`). The fuzz browser arm's 404 was a harness bug, fixed; it is a normal arm (D1241). Laws: rust, go, java, csharp 885 each. *Matrix* (ok / skip(reason) / n/a(reason); "ok" = the arm is in the gate, left out loudly without its toolchain):
+
+  | gate | Rust | Go | Java | C# | C | pod | browser |
+  |---|---|---|---|---|---|---|---|
+  | identity | ok | ok | ok | ok | ok | ok; skip(replay inputs, trip: no transcript) | ok (corpus, images, figures) |
+  | image | ok | ok | ok (pixels) | ok (pixels) | ok (conversion; no pixel output) | ok (conversion) | n/a(no pixel output; `identity`) |
+  | repeat | ok | ok | ok | ok | ok; skip(parallel: no threads) | ok; skip(parallel) | n/a(one thread) |
+  | fuzz | ok | ok | ok (probe all, engine 1 in 8) | ok (same) | ok (engine 1 in 8) | ok (engine 1 in 8) | ok (24 files a batch) |
+  | render | ok | ok | ok | ok | n/a(no plan unit) | n/a | n/a(no renderer, D358) |
+  | align | ok | ok | ok | ok | n/a | n/a | n/a |
+  | artifacts, seals, sealpx, sigs, retarget | ok | ok | ok | ok | ok | n/a(no transcript; `sigs`: plain conversion ok) | skip(not wired; `ocr`, `identity` replay there) |
+  | fusion, ocr | ok | ok | ok | ok | ok | n/a(no transcript) | ocr ok; fusion skip(not wired) |
+  | accuracy | ok (ratchet) | ok (Model identical) | ok | ok | ok | ok | n/a |
+  | ocr-live | ok | n/a(live recorder) | n/a | n/a | n/a | n/a | n/a |
+  | render-record | ok | ok (`--go`) | n/a(live recorder) | n/a | n/a | n/a | n/a |
 - [x] ~~P9.6 — Ranged inputs, optional~~ — **promoted into the main design**
   by D058's revision (maintainer: lazy range reads are required): now
   P1.11 (the `Src` port), P1.4/P1.5's checklist, P1.10's re-run loop, P2.2's
