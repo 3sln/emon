@@ -14,6 +14,11 @@
 ;;
 ;; An answer is `[:ok digest]`, `[:err name]`, `[:panic]`, `[:crash exit]` or `[:hang]`. Only the error NAME is
 ;; compared between hosts (SPEC 7.4, D058): the message after it is a host's own words.
+;;
+;; THE HOSTS (P9.5, D1241): Rust and Go run every file in both arms, and the browser (a normal arm: the runner stages a file outside the repository for
+;; the page, and gives it the bounds the native drivers get from EMON_LIMIT_*) a sample of them; the SAMPLED HOSTS, the Java host, the C# host, the C
+;; binding and the pod (`build-extra-drivers`, each left out LOUDLY without its toolchain), run the in-memory arm of 1 file in `--extra-every`, so four
+;; more hosts take the time of about one, and are judged with the rest (status, output, panic, crash, hang, resident set).
 (ns fuzz.engine
   (:require [babashka.fs :as fs]
             [extra-hosts :as xh]

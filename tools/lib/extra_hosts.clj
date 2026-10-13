@@ -41,6 +41,24 @@
          :when out]
      out)))
 
+(defn plan-drivers
+  "The REPLAY drivers of a plan gate (`render` or `align`) for the Java and the C# host, built by kin/scripts/emon-plandrv-build over the host's own library
+  tree: [{:host :label :drv}], with the same loud SKIPs and the same `:on-fail` as `engines`. (The C binding and the pod have no plan unit to drive: they
+  convert documents; Rust and Go have their drivers in test/<gate>/{rust,go}.)"
+  [{:keys [tool hosts on-fail] :or {hosts [:java :csharp] on-fail (fn [& _] nil)}}]
+  (vec
+   (for [h hosts
+         :let [{:keys [label env arm]} (specs h)
+               out (if (System/getenv env)
+                     (do (println (str "  SKIP " (name h) " -- " env " is set (" arm " is left out)")) nil)
+                     (let [r @(process {:out :string :err :string} "kin/scripts/emon-plandrv-build" (name h) (name tool))]
+                       (case (:exit r)
+                         0 {:host h :label label :drv (str (fs/absolutize (str/trim (:out r))))}
+                         3 (do (println (str "  " (str/trim (:err r)) " (" arm " is left out)")) nil)
+                         (do (on-fail "the " label " " (name tool) " driver did not build:\n" (:err r)) nil))))]
+         :when out]
+     out)))
+
 (defn run
   "Run driver `drv` with `args`: {:exit :out (string) :err}. A run over `timeout-ms` (default 180000) is killed (our own process) and answers exit -1."
   [drv args & [timeout-ms]]

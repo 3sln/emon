@@ -9,7 +9,8 @@
 ;; (the `emon.scan` builders), then `xa-page`. It holds:
 ;;
 ;;   1. the Rust replay and the Go replay print the IDENTICAL dump (one line a correspondence group, then the transcript's hashes), and
-;;      it is the dump the live recording printed;
+;;      it is the dump the live recording printed; so do the Java host's and the C# host's (P9.5, D1240; test/fusion/align/{java,csharp},
+;;      left out LOUDLY without their toolchains). The live recorder (`bb align-record`) and the timing (5) are Rust's, by design;
 ;;   2. COVERAGE (the visible text-layer words in a group with an OCR candidate) is at least 0.99 on the four documents whose text
 ;;      OCR can read (`h-numbered`, `columns-two`, `table-simple-ruled`, `watermark-draft`: the watermark's own word is text-only, as it
 ;;      should be), and on `stamp-seal` at least the recorded floor: what Tesseract cannot read there is the seal's ARC text, a
@@ -46,6 +47,14 @@
           (let [[prog err] (l/build-go work)] (or prog (do (bad "go driver did not build:\n" err) nil)))
           (do (println "  SKIP go     -- go not on PATH") nil)))
 
+;; THE OTHER HOSTS (P9.5, D1240): the Java and the C# host replay the same transcripts through a driver of their own (test/fusion/align/{java,csharp}, built by
+;; kin/scripts/emon-plandrv-build over the host's library tree plus the generated `Alignprobe`); each is left out LOUDLY without its toolchain. The C binding and
+;; the pod convert documents and have no `alignprobe` unit to run. The live recorder (`bb align-record`: pdfium and Tesseract through the Rust FFI) and the 10 ms
+;; timing (5) are Rust's, by design.
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
+(def plans (xh/plan-drivers {:tool :align :on-fail bad}))
+
 (defn pct* [a b] (if (pos? b) (/ (double a) b) 0.0))
 (def healthy ["h-numbered" "columns-two" "table-simple-ruled" "watermark-draft"])
 (def stamp-floor 0.57)
@@ -65,6 +74,10 @@
                                   (count (str/split-lines (:out rr))) " lines: the groups, then the transcript's hash)")
                            (check (and (zero? (:exit rg)) (= (:out rr) (:out rg)))
                                   id ": GO REPLAYS THE TRANSCRIPT: the identical correspondence groups, byte for byte")
+                           (doseq [{:keys [label drv]} plans]
+                             (let [rx (run drv id)]
+                               (check (and (zero? (:exit rx)) (= (:out rr) (:out rx)))
+                                      id ": " (str/upper-case label) " REPLAYS THE TRANSCRIPT: the identical correspondence groups, byte for byte")))
                            [id (r/parse-dump (:out rr))])))
         ms (into {} (for [[id gs] dumps] [id (r/measure gs)]))]
     ;; 2. coverage ------------------------------------------------------------------------------------------------------------

@@ -38,9 +38,9 @@
 ;; `Range` from a local server, a spooled ReadableStream, and a `{size, read}` over 512-byte chunks whose every read is a promise: the
 ;; engine misses, the JS loop awaits and runs it again), each to the reference bundle, exit code and stderr (`--full`: also a
 ;; Uint8Array view, a File, a custom source and an ArrayBuffer read by range); then the browser RECORDS a transcript (the same
-;; directory as Rust's, byte for byte) and REPLAYS Rust's to the reference bundle. With `assets` on, the asset documents run
-;; through it as well (from their committed transcripts where a codec image needs one): the HTML in three modes and every asset
-;; file. Without the toolchain (`kin/scripts/emon-wasm-run` exits 3: no nightly with rust-src, Node 22, Chrome, or the JS
+;; directory as Rust's, byte for byte) and REPLAYS Rust's to the reference bundle. With `assets` on (`images`, and since
+;; P9.5 `figures` too), the asset documents run through it as well (from their committed transcripts where a codec image needs one): the HTML in
+;; three modes and every asset file. Without the toolchain (`kin/scripts/emon-wasm-run` exits 3: no nightly with rust-src, Node 22, Chrome, or the JS
 ;; devDependencies) the arm is left out, loudly; EMON_SKIP_WASM=1 leaves it out on purpose.
 ;;
 ;; THE JAVA HOST (P9.1, D449) is a third host when a JDK 22+ is there: four arms (bytes, a SeekableByteChannel, a spooled
@@ -63,6 +63,12 @@
 ;; through `emon/convert`. Two arms: the file as a path (the pod reads it lazily) and as base64 bytes. A pod converts in one call, so it has
 ;; no async source and no transcript: the arms that need those, and the inputs that replay a committed transcript, leave it out.
 ;; EMON_SKIP_POD=1 leaves it out on purpose.
+;;
+;; THE COVERAGE CHECK (P9.5, D1240): after each pass the gate adds up WHAT EACH HOST RAN (a ledger per input: every [host arm] it was run on, every one it was
+;; not, with the reason) and FAILS when a host that is present ran an arm on fewer inputs than the pass has without a skip that says why. The skips are
+;; printed as `note` lines: the pod's, which converts in one call and so has no transcript to record or replay (it is not run on an input that is run from a
+;; committed transcript, nor does it join the record/replay trip); the transcript trip itself is not made for an input that is refused or run from a
+;; committed transcript, on any host. The browser has its own pass over the same inputs at all three levels (the plain corpus, `images`, `figures`).
 ;;
 ;; A difference prints the first differing section and byte offset, and the arms.
 (require '[babashka.fs :as fs]
@@ -246,14 +252,28 @@
   [i item]
   (let [ref (drive :rust [] item)
         probs (atom [])
+        ;; THE LEDGER (P9.5, D1240): every [host arm] this input ran on, and every one it was NOT run on, with the reason; `coverage` adds them up
+        ran (atom [[:rust "bytes"]])
+        skips (atom [])
         note (fn [& xs] (swap! probs conj (apply str xs)))]
     (when (= -1 (:exit ref)) (note "the reference timed out"))
-    (doseq [[host name a] (rest arms)
-            ;; a pod converts in one call: it has no transcript to replay (P9.4)
-            :when (not (and (= host :pod) (:replay item)))]
-      (let [r (drive host a item)]
-        (when-not (same? ref r)
-          (note (clojure.core/name host) "/" name " differs from rust/bytes: " (first-diff ref r)))))
+    (doseq [[host name a] (rest arms)]
+      (if (and (= host :pod) (:replay item))
+        ;; a pod converts in one call: it has no transcript to replay (P9.4)
+        (swap! skips conj [host name "the input is run from a committed transcript, and the pod has none to replay"])
+        (let [r (drive host a item)]
+          (swap! ran conj [host name])
+          (when-not (same? ref r)
+            (note (clojure.core/name host) "/" name " differs from rust/bytes: " (first-diff ref r))))))
+    (when (and (zero? (:exit ref)) (:replay item))
+      (doseq [h (cond-> [:rust :go] java (conj :java) csharp (conj :csharp) cbind (conj :c) pod (conj :pod))]
+        (swap! skips conj [h "trip" "the input is run from a committed transcript on every arm (its pixels are the recording's), so there is nothing to record"])))
+    (when-not (zero? (:exit ref))
+      (doseq [h (cond-> [:rust :go] java (conj :java) csharp (conj :csharp) cbind (conj :c) pod (conj :pod))]
+        (swap! skips conj [h "trip" (str "the input is refused (" (second (re-find #"error: (\S+)" (:err ref))) "), so there is no transcript to record")])))
+    (when pod
+      (when (and (zero? (:exit ref)) (not (:replay item)))
+        (swap! skips conj [:pod "trip" "a pod converts in one call: it records no transcript and replays none (P9.4)"])))
     ;; the transcript: record on each, compare the directories, replay each on the other (a document whose images the host decodes IS
     ;; given its committed transcript above, on every arm: its pixels are the recording's, so the arms are about everything else)
     (when (and (zero? (:exit ref)) (not (:replay item)))
@@ -269,6 +289,7 @@
             (note "the transcripts differ: rust " (some-> rf keys vec) " go " (some-> gf keys vec))))
         (let [gp (drive :go [(str "--replay=" rd)] item)
               rp (drive :rust [(str "--replay=" gd)] item)]
+          (swap! ran conj [:rust "trip"] [:go "trip"])
           (when-not (same? ref gp) (note "go replaying rust's transcript differs: " (first-diff ref gp)))
           (when-not (same? ref rp) (note "rust replaying go's transcript differs: " (first-diff ref rp))))
         ;; the Java host (P9.1): it records the same directory, replays Rust's, and Rust replays its
@@ -282,7 +303,8 @@
               (when-not (if lossy? (= (strip-png rf) (strip-png jf)) (= rf jf))
                 (note "the transcripts differ: rust " (some-> rf keys vec) " java " (some-> jf keys vec))))
             (let [jp (drive :java [(str "--replay=" rd)] item)
-                  rj (drive :rust [(str "--replay=" jd)] item)]
+                  rj (drive :rust [(str "--replay=" jd)] item)
+                  _ (swap! ran conj [:java "trip"])]
               (when-not (same? ref jp) (note "java replaying rust's transcript differs: " (first-diff ref jp)))
               (when-not (same? ref rj) (note "rust replaying java's transcript differs: " (first-diff ref rj))))
             (fs/delete-tree jd)))
@@ -297,7 +319,8 @@
               (when-not (if lossy? (= (strip-png rf) (strip-png cf)) (= rf cf))
                 (note "the transcripts differ: rust " (some-> rf keys vec) " csharp " (some-> cf keys vec))))
             (let [cp (drive :csharp [(str "--replay=" rd)] item)
-                  rc (drive :rust [(str "--replay=" cd)] item)]
+                  rc (drive :rust [(str "--replay=" cd)] item)
+                  _ (swap! ran conj [:csharp "trip"])]
               (when-not (same? ref cp) (note "csharp replaying rust's transcript differs: " (first-diff ref cp)))
               (when-not (same? ref rc) (note "rust replaying csharp's transcript differs: " (first-diff ref rc))))
             (fs/delete-tree cd)))
@@ -312,13 +335,41 @@
               (when-not (if lossy? (= (strip-png rf) (strip-png cf)) (= rf cf))
                 (note "the transcripts differ: rust " (some-> rf keys vec) " c " (some-> cf keys vec))))
             (let [cp (drive :c [(str "--replay=" rd)] item)
-                  rc (drive :rust [(str "--replay=" cd)] item)]
+                  rc (drive :rust [(str "--replay=" cd)] item)
+                  _ (swap! ran conj [:c "trip"])]
               (when-not (same? ref cp) (note "c replaying rust's transcript differs: " (first-diff ref cp)))
               (when-not (same? ref rc) (note "rust replaying c's transcript differs: " (first-diff ref rc))))
             (fs/delete-tree cd)))
         (fs/delete-tree rd) (fs/delete-tree gd)))
     {:probs @probs
+     :ran @ran
+     :skips @skips
      :outcome (if (zero? (:exit ref)) :document (or (second (re-find #"error: (\S+)" (:err ref))) :other))}))
+
+(defn coverage
+  "THE COVERAGE CHECK (P9.5, D1240): did every host see every input on every arm? Adds up the ledgers of a pass's results: a [host arm] that ran on fewer
+  inputs than the pass has, without a skip that says why, FAILS; the skips (reason and count) are printed. Answers the printed summary."
+  [label results]
+  (let [n (count results)
+        ran (frequencies (mapcat (comp :ran second) results))
+        skipped (frequencies (map (fn [[h a why]] [h a why]) (mapcat (comp :skips second) results)))
+        skipped-by (reduce (fn [m [[h a _] c]] (update m [h a] (fnil + 0) c)) {} skipped)
+        ;; the transcript trip is for the inputs that convert from no committed transcript; every other [host arm] is for EVERY input
+        trips-expected (- n (reduce + 0 (for [[_ r] results :when (some (fn [[h a _]] (and (= h :rust) (= a "trip"))) (:skips r))] 1)))
+        short (for [[h a] (distinct (map #(subvec % 0 2) (concat (keys ran) (keys skipped-by))))
+                    :let [want (- n (get skipped-by [h a] 0))
+                          got (get ran [h a] 0)]
+                    :when (not= want got)]
+                [h a got want])]
+    (doseq [[h a got want] short] (bad "[" label "] coverage: " (name h) "/" a " ran on " got " inputs, " want " expected"))
+    (doseq [[[h a why] c] (sort-by (comp str key) skipped) :when (or (not= a "trip") (= h :pod))]   ; (a trip skipped for a refused input or a committed transcript is the same for every host)
+      (println (str "  note [" label "] " (name h) "/" a " skipped on " c " of " n " inputs: " why)))
+    (let [hosts (distinct (map first (keys ran)))
+          per (for [h hosts]
+                (let [arms* (filter (fn [[hh _]] (= hh h)) (keys ran))]
+                  (str (name h) " " (count (remove #(= "trip" (second %)) arms*)) " arms"
+                       (when (some #(= "trip" (second %)) arms*) (str " + trip on " (get ran [h "trip"]) "/" trips-expected)))))]
+      (str (str/join ", " per) " over " n " inputs"))))
 
 ;; ------------------------------------------------------------ the browser arm (P9.3, D356)
 
@@ -335,7 +386,7 @@
         base-job (fn [i item id adapter]
                    (cond-> {:id id :path (:file item) :adapter adapter}
                      (:pw item) (assoc :password (:pw item))
-                     assets? (assoc :assets "images")))
+                     assets? (assoc :assets (if (some #{"--assets=figures"} @extra) "figures" "images"))))
         jobs (vec (concat
                    (for [[i item _ _] batch a wasm-adapters]
                      (cond-> (base-job i item (str i "-" a) a)
@@ -404,6 +455,7 @@
 (def results (doall (pmap (fn [[i item]] [item (one i item)]) (map-indexed vector corpus*))))
 (doseq [[item {:keys [probs]}] results :when (seq probs)]
   (bad (:file item) (when (:pw item) (str " (password " (:pw item) ")")) ": " (str/join "; " probs)))
+(def cov-main (coverage "main" results))
 
 (when (zero? @fails)
   (let [outcomes (frequencies (map (comp :outcome second) results))
@@ -411,7 +463,8 @@
     (ok "IDENTITY: " (count results) " inputs (" docs " converted, " (- (count results) docs) " refused by name: "
         (str/join ", " (for [[k v] (sort-by (comp str key) (dissoc outcomes :document))] (str k " " v)))
         "), " (count arms) " arms each, byte-identical bundles (JSON compact and pretty, HTML default and full, evidence, intake) and exit and stderr; "
-        "the record/replay trip across hosts is the same (" (quot (- (System/currentTimeMillis) t0) 1000) " s)")))
+        "the record/replay trip across hosts is the same (" (quot (- (System/currentTimeMillis) t0) 1000) " s)")
+    (ok "COVERAGE (main): every host saw every input on every arm: " cov-main)))
 
 ;; the browser, over the same corpus (P9.3)
 (when (and wasm (not corpus?) (zero? @fails))
@@ -436,11 +489,13 @@
         res (doall (pmap (fn [[i item]] [item (one (+ 100000 i) item)]) (map-indexed vector asset-corpus)))]
     (doseq [[item {:keys [probs]}] res :when (seq probs)]
       (bad "[assets=images] " (:file item) ": " (str/join "; " probs)))
-    (when (zero? @fails)
-      (let [n (count (filter #(= :document (:outcome (second %))) res))]
-        (ok "IDENTITY (assets=images): " (count res) " documents (" n " converted), " (count arms) " arms each: byte-identical JSON with its `assets`, HTML in the "
-            "default, full, external and omit modes and every asset file (hex), the record/replay trip across hosts the same ("
-            (quot (- (System/currentTimeMillis) t1) 1000) " s)"))))
+    (let [cov (coverage "assets=images" res)]
+      (when (zero? @fails)
+        (let [n (count (filter #(= :document (:outcome (second %))) res))]
+          (ok "IDENTITY (assets=images): " (count res) " documents (" n " converted), " (count arms) " arms each: byte-identical JSON with its `assets`, HTML in the "
+              "default, full, external and omit modes and every asset file (hex), the record/replay trip across hosts the same ("
+              (quot (- (System/currentTimeMillis) t1) 1000) " s)")
+          (ok "COVERAGE (assets=images): " cov)))))
   (when (and wasm (zero? @fails))
     (wasm-pass "assets" asset-corpus)))
 
@@ -464,10 +519,15 @@
         res (doall (pmap (fn [[i item]] [item (one (+ 200000 i) item)]) (map-indexed vector figures-corpus)))]
     (doseq [[item {:keys [probs]}] res :when (seq probs)]
       (bad "[assets=figures] " (:file item) ": " (str/join "; " probs)))
-    (when (zero? @fails)
-      (let [n (count (filter #(= :document (:outcome (second %))) res))]
-        (ok "IDENTITY (assets=figures): " (count res) " documents (" n " converted), " (count arms) " arms each: byte-identical JSON, HTML in four modes and asset files, "
-            "and the transcript of the asset unit's requests, the same on both hosts and replayed across them (" (quot (- (System/currentTimeMillis) t2) 1000) " s)")))))
+    (let [cov (coverage "assets=figures" res)]
+      (when (zero? @fails)
+        (let [n (count (filter #(= :document (:outcome (second %))) res))]
+          (ok "IDENTITY (assets=figures): " (count res) " documents (" n " converted), " (count arms) " arms each: byte-identical JSON, HTML in four modes and asset files, "
+              "and the transcript of the asset unit's requests, the same on every host and replayed across them (" (quot (- (System/currentTimeMillis) t2) 1000) " s)")
+          (ok "COVERAGE (assets=figures): " cov)))))
+  ;; the browser at `figures` too (P9.5, D1240): its session answers `render` and `crop` `unsupported` as the drivers do (D199)
+  (when (and wasm (zero? @fails))
+    (wasm-pass "figures" figures-corpus)))
 
 (if (zero? @fails)
   (System/exit 0)

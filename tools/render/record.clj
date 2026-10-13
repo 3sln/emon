@@ -18,6 +18,11 @@
 ;;
 ;; The committed transcript, not a re-render, is what every gate compares (D008): the numbers above say how
 ;; far a second engine may stray from it, and DEVLOG D127 records them.
+;;
+;; RUST AND GO ONLY, BY DESIGN (P9.5, D1240). This is a LIVE recorder: pdfium is a native library, and the recording is made by the Rust host's FFI
+;; (and, with --go, Go's cgo, to measure the cross-host difference of pixels). The Java and C# hosts bind pdfium too (`emon-java --pdfium`, `emon-cs
+;; --pdfium`; D453 and D458 hold their recordings of the born-digital fixtures to the Rust ones entry for entry); what every host is held to is the
+;; REPLAY of the committed transcript, which `bb render` does on Rust, Go, Java and C#.
 (require '[babashka.fs :as fs]
          '[babashka.classpath :as cp]
          '[babashka.process :refer [shell]]
