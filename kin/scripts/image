@@ -8,7 +8,7 @@
 ;; resolution, flag, frame count and an FNV-1a 64 hash of the pixels (`--dump` also writes the raw bytes). For every
 ;; fixture of `test/image/` (written by `tools/image-fixtures.clj`; `expect.edn` is what ImageMagick says they are):
 ;;
-;;   1. a refused input (a coding the port does not read, or damage) is refused BY THE SAME NAME on both hosts
+;;   1. a refused input (a coding the port does not read, or damage) is refused BY THE SAME NAME on every host
 ;;      (`error: unsupported-image`, `error: undecodable`), exit 4;
 ;;   2. every other fixture decodes on both hosts to the line `expect.edn` states: the pixels EXACTLY (the hash) for
 ;;      PNG and TIFF, and for JPEG (two decoders' inverse DCTs and chroma upsampling) the line without the hash, the
@@ -20,10 +20,20 @@
 ;;   bb image                  the gate
 ;;   bb image --corpus         INSTEAD every image of corpus/formats (never committed): the hosts to each other, and
 ;;                             the refusals by name; a non-gate, slow
+;;
+;; THE OTHER HOSTS (P9.5, D1240). The Java host (P9.1) and the C# host (P9.2) are arms of 1-4 when their toolchains are there (each is left out LOUDLY
+;; without one; EMON_SKIP_JAVA / EMON_SKIP_CSHARP on purpose): their `--out=pixels` lines are held to expect.edn's, their pixels to Rust's (exactly,
+;; but a JPEG's within six: D190), their async lines to their in-memory ones, their mutants to "no crash" and, for PNG and TIFF, to Rust's answer.
+;; The C binding and the pod have no `--out=pixels` (a decode is a transcript entry of the step API, not an output of the one-shot call), so they
+;; join as CONVERSIONS: every fixture and every mutant converted to pages (`--out=bundle`) is Rust's, bundle, exit code and stderr, JPEG mutants
+;; apart (no crash). `--corpus` stays Rust against Go (a non-gate).
 (require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
          '[babashka.process :refer [process shell]]
          '[clojure.edn :as edn]
          '[clojure.string :as str])
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
 
 (def fails (atom 0))
 (defn ok [& xs] (println (str "  ok   " (apply str xs))))
@@ -39,6 +49,11 @@
       (do (println "  FAIL the" what "driver did not build:\n" (:err r)) (System/exit 1)))))
 (def rust (build "kin/scripts/emon-rs-build" "Rust"))
 (def go (build "kin/scripts/emon-go-build" "Go"))
+;; the hosts that print `--out=pixels` (Rust and Go, then Java and C# where they are) and the ones that only convert (C, pod)
+(def pixel-extras (if corpus? [] (xh/engines {:hosts [:java :csharp] :on-fail bad})))
+(def conv-extras (if corpus? [] (xh/engines {:hosts [:c :pod] :on-fail bad})))
+(def hosts (vec (concat [{:name "rust" :exe rust :tag :r} {:name "go" :exe go :tag :g}]
+                        (for [{:keys [label drv host]} pixel-extras] {:name label :exe drv :tag host}))))
 
 (def work (str (fs/create-temp-dir {:dir (fs/create-dirs ".cache/image") :prefix "run."})))
 (.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (fs/delete-tree work))))
@@ -48,6 +63,13 @@
         p (apply process {:out :string :err :string} exe "--out=pixels" (str "--dump=" d) (concat args [file]))
         r (deref p 120000 ::timeout)]
     {:exit (if (= r ::timeout) -1 (:exit r)) :out (:out r) :err (:err r) :dump d}))
+
+(defn drive-bundle
+  "A driver's whole conversion of one image (`--out=bundle`): {:exit :out :err}."
+  [exe file]
+  (let [p (process {:out :string :err :string} exe "--out=bundle" file)
+        r (deref p 120000 ::timeout)]
+    (if (= r ::timeout) {:exit -1 :out "" :err "TIMEOUT"} {:exit (:exit r) :out (:out r) :err (:err r)})))
 
 (defn err-name [r] (second (re-find #"(?m)^error: (\S+)" (:err r))))
 (defn raw [r frame]
@@ -81,26 +103,28 @@
         note (fn [& xs] (swap! probs conj (apply str xs)))
         jpeg? (str/ends-with? name ".jpg")
         lossy? (or jpeg? (pos? (or (:tol row) 0)))
-        rr (drive rust :r file)
-        gr (drive go :g file)]
+        runs (mapv (fn [h] (assoc h :run (drive (:exe h) (:tag h) file))) hosts)
+        rr (:run (first runs))]
     (if-let [want (:refuse row)]
-      (doseq [[h r] [["rust" rr] ["go" gr]]]
+      (doseq [{h :name r :run} runs]
         (when-not (and (= 4 (:exit r)) (= want (err-name r)))
           (note h " should refuse with " want " and exits " (:exit r) ": " (pr-str (err-name r)))))
       (let [want (expected-lines row lossy?)
             lines (fn [r] (str/split-lines (:out r)))]
-        (doseq [[h r] [["rust" rr] ["go" gr]]]
+        (doseq [{h :name r :run} runs]
           (cond
             (not (zero? (:exit r))) (note h " exits " (:exit r) ": " (str/trim (:err r)))
             (not= want (if lossy? (mapv strip-fnv (lines r)) (lines r)))
             (note h " says " (pr-str (lines r)) ", expected " (pr-str want))))
-        (when (and (zero? (:exit rr)) (zero? (:exit gr)))
-          ;; the hosts to each other: exact, but for JPEG one
-          (doseq [i (range (:frames row))]
-            (let [a (raw rr i) b (raw gr i)
+        (when (zero? (:exit rr))
+          ;; the hosts to Rust: exact, but for JPEG six
+          (doseq [{h :name r :run} (rest runs) :when (zero? (:exit r)) i (range (:frames row))]
+            (let [a (raw rr i) b (raw r i)
                   d (if (and a b) (maxdiff a b) Integer/MAX_VALUE)]
-              (when (> d (if jpeg? 6 0)) (note "frame " i ": the hosts differ by " d (if jpeg? " (at most 6 for JPEG, D190)" " (exactly equal expected)")))
-              ;; the hosts to the oracle
+              (when (> d (if jpeg? 6 0)) (note h " frame " i ": differs from rust by " d (if jpeg? " (at most 6 for JPEG, D190)" " (exactly equal expected)")))))
+          ;; Rust to the oracle
+          (doseq [i (range (:frames row))]
+            (let [a (raw rr i)]
               (when (and a (pos? (:tol row)))
                 (if magick?
                   (let [o (oracle-raw file i (:ch row))
@@ -108,10 +132,15 @@
                     (when (> d (:tol row)) (note "frame " i ": rust differs from ImageMagick by " d ", more than " (:tol row))))
                   (swap! skipped-oracle inc))))))
         ;; a source that misses must give the same lines
-        (doseq [[h exe tag] [["rust" rust :r] ["go" go :g]]]
-          (let [a (drive exe tag file "--chunk=512" "--async")
-                base (if (= tag :r) rr gr)]
-            (when-not (= (:out a) (:out base)) (note h " --chunk=512 --async differs from the in-memory run"))))))
+        (doseq [{h :name exe :exe tag :tag r :run} runs]
+          (let [a (drive exe tag file "--chunk=512" "--async")]
+            (when-not (= (:out a) (:out r)) (note h " --chunk=512 --async differs from the in-memory run"))))))
+    ;; the C binding and the pod convert it: the same bundle, exit code and stderr as Rust's (a refusal too)
+    (let [rb (drive-bundle rust file)]
+      (doseq [{h :label drv :drv} conv-extras]
+        (let [b (drive-bundle drv file)]
+          (when-not (and (= (:exit rb) (:exit b)) (= (:err rb) (:err b)) (= (:out rb) (:out b)))
+            (note h " converts it differently from rust (exit " (:exit b) " vs " (:exit rb) ", " (err-name b) " vs " (err-name rb) ")")))))
     {:name name :probs @probs}))
 
 ;; the fixtures still say to ImageMagick what expect.edn says (the oracle's own check; skipped without ImageMagick)
@@ -148,7 +177,8 @@
     (doseq [{:keys [name probs]} results :when (seq probs)]
       (bad name ": " (str/join "; " probs)))
     (when (zero? @fails)
-      (ok "IMAGE: " (count results) " fixtures (" (- (count results) refused) " decoded, " refused " refused by name) on Rust and Go: "
+      (ok "IMAGE: " (count results) " fixtures (" (- (count results) refused) " decoded, " refused " refused by name) on " (str/join ", " (map :name hosts))
+          (when (seq conv-extras) (str " (converted alike by " (xh/names conv-extras) ")")) ": "
           "the pixels of PNG and TIFF exactly what ImageMagick says, JPEG within six bytes of each other and the row's tolerance of ImageMagick's, "
           "the same lines through a source that misses (" (quot (- (System/currentTimeMillis) t0) 1000) " s)"))
     (when (and (pos? @skipped-oracle) (not magick?))
@@ -192,22 +222,33 @@
                   {:file f :label (str base " " kind)
                    :jpeg? (str/ends-with? base ".jpg")}))
         results (doall (pmap (fn [{:keys [file label jpeg?]}]
-                               (let [r (drive rust :r file) g (drive go :g file)
-                                     bad-exit (fn [x] (not (#{0 4} (:exit x))))]
+                               (let [r (drive rust :r file)
+                                     bad-exit (fn [x] (not (#{0 4} (:exit x))))
+                                     ;; Go, Java and C#: the pixel lines
+                                     others (for [{h :name exe :exe tag :tag} (rest hosts)] [h (drive exe tag file)])
+                                     ;; the C binding and the pod: the whole conversion, bundle and all
+                                     rb (when (seq conv-extras) (drive-bundle rust file))
+                                     convs (for [{h :label drv :drv} conv-extras] [h (drive-bundle drv file)])]
                                  {:label label :decoded (zero? (:exit r))
-                                  :probs (cond-> []
-                                           (bad-exit r) (conj (str "rust exits " (:exit r) ": " (str/trim (str (:err r)))))
-                                           (bad-exit g) (conj (str "go exits " (:exit g) ": " (str/trim (str (:err g)))))
-                                           (and (not jpeg?) (not (bad-exit r)) (not (bad-exit g))
-                                                (or (not= (:exit r) (:exit g)) (not= (err-name r) (err-name g)) (not= (:out r) (:out g))))
-                                           (conj (str "the hosts differ: rust " (:exit r) " " (err-name r) " " (pr-str (:out r))
-                                                      " / go " (:exit g) " " (err-name g) " " (pr-str (:out g)))))}))
+                                  :probs (vec (concat
+                                               (when (bad-exit r) [(str "rust exits " (:exit r) ": " (str/trim (str (:err r))))])
+                                               (for [[h g] others :when (bad-exit g)] (str h " exits " (:exit g) ": " (str/trim (str (:err g)))))
+                                               (for [[h g] others
+                                                     :when (and (not jpeg?) (not (bad-exit r)) (not (bad-exit g))
+                                                                (or (not= (:exit r) (:exit g)) (not= (err-name r) (err-name g)) (not= (:out r) (:out g))))]
+                                                 (str "the hosts differ: rust " (:exit r) " " (err-name r) " " (pr-str (:out r))
+                                                      " / " h " " (:exit g) " " (err-name g) " " (pr-str (:out g))))
+                                               (for [[h b] convs :when (not (#{0 4} (:exit b)))] (str h " exits " (:exit b) ": " (str/trim (str (:err b)))))
+                                               (for [[h b] convs
+                                                     :when (and (#{0 4} (:exit b))   ; (the Rust library's own JPEG decoder: equal even for a damaged JPEG)
+                                                                (or (not= (:exit rb) (:exit b)) (not= (:err rb) (:err b)) (not= (:out rb) (:out b))))]
+                                                 (str h " converts the mutant differently from rust: " (:exit b) " " (err-name b) " / " (:exit rb) " " (err-name rb)))))}))
                              items))]
     (doseq [{:keys [label probs]} results :when (seq probs)]
       (bad "damaged " label ": " (str/join "; " probs)))
     (when (zero? @fails)
       (ok "DAMAGE: " (count results) " mutants of " (count bases) " fixtures (truncated, flipped, zeroed, corrupt links and sizes): "
-          "no crash, hang or panic on either host (" (count (filter :decoded results)) " still decode), PNG and TIFF answered alike"))))
+          "no crash, hang or panic on any host (" (count (filter :decoded results)) " still decode), PNG and TIFF answered alike"))))
 
 
 (if (zero? @fails)

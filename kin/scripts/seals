@@ -10,17 +10,21 @@
 ;;                       with a `By:` cue, and a page with four things that are NOT seals); test/seals/replay/ID, test/seals/gold.edn
 ;;
 ;;   1. IDENTITY: both Engines give the identical bundle (JSON, HTML, evidence dump) and it is the recorded one (SHA-256) (test/seals only: the corpus
-;;      documents are held to theirs by `bb fusion`);
+;;      documents are held to theirs by `bb fusion`); so do the Java Engine, the C# Engine and the C binding when their toolchains are there
+;;      (P9.5, D1240; each is left out LOUDLY without one; the pod has no transcript to replay);
 ;;   2. THE NODES: the seal nodes of the body are the gold's: block-seal precision and recall of at least 0.9 over the corpus documents, subkind and
 ;;      colour right on every node matched (`color` accuracy at least 0.9), and exactly the nodes of test/seals/gold.edn on the fixtures;
 ;;   3. NOTHING LEAKS: no word of a seal or a stamp is in the body outside its node (`seal-leak` 0), and every word of the page's own text is (no body word lost);
 ;;   4. NOTHING ELSE IS ONE: the 19 other documents of the fusion set have no seal node, and `seal-negatives` has none;
 ;;   5. THE DUMP: the candidates are in the evidence's `sl` arena, one row a node, kinds seal, stamp or signature.
 (require '[babashka.fs :as fs]
+         '[babashka.classpath :as cp]
          '[babashka.process :refer [process]]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
          '[clojure.string :as str])
+(cp/add-classpath "tools/lib")
+(require '[extra-hosts :as xh])
 
 (def fails (atom 0))
 (defn ok [& xs] (println (str "  ok   " (apply str xs))))
@@ -45,6 +49,9 @@
 (def gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" "Go")))
 (when-not rdrv (println "  SKIP rust engine -- cargo not on PATH"))
 (when-not gdrv (println "  SKIP go engine   -- go not on PATH"))
+;; THE OTHER HOSTS (P9.5, D1240): the Java and C# Engines and the C binding replay the fixtures' transcripts too (the pod has no transcript to replay);
+;; each is left out LOUDLY without its toolchain
+(def extras (xh/engines {:hosts [:java :csharp :c] :on-fail bad}))
 
 (defn drive [drv & a]
   (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
@@ -82,6 +89,10 @@
           want (get fixture-digests id)]
       (check (and (zero? (:exit rr)) (= (:out rr) (:out rg)) (= (:err rr) (:err rg)))
              id ": the Rust Engine and the Go Engine replay the committed transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes)")
+      (doseq [{:keys [label drv]} extras]
+        (let [rx (drive drv "--out=bundle" (str "--replay=" rep) pdf)]
+          (check (and (= (:exit rr) (:exit rx)) (= (:out rr) (:out rx)) (= (:err rr) (:err rx)))
+                 id ": the " label " Engine replays it to the identical bundle too")))
       (check (and want (= want (sha256 (:out rr)))) id ": and it is the bundle the live recording made (SHA-256 " (when want (subs want 0 12)) ")")
       (let [m (model-of rdrv "test/seals/replay" id "test/seals/pdf")
             ns (seals m)
@@ -136,4 +147,5 @@
 
 (when (pos? @fails) (System/exit 1))
 (when (and rdrv gdrv (zero? @fails))
-  (ok "seals: seals, stamps and signatures drawn in vectors are nodes of their own, their words are out of the body, nothing else is one; on Rust and Go"))
+  (ok "seals: seals, stamps and signatures drawn in vectors are nodes of their own, their words are out of the body, nothing else is one; on Rust and Go"
+      (when (seq extras) (str " (and the same bundle on " (xh/names extras) ")"))))
