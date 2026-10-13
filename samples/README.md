@@ -40,7 +40,7 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
 - Synthetic corpus (`test/corpus/synth`, ours): columns-two, footnotes, dropcap, align-justify, figures-charts,
   invoice, bank-statement, table-multipage, table-zebra, table-spans, table-unruled, watermark-draft, seal-stamp,
   signature, tagged-table, broken-tounicode, scan-plain, scan-color-invoice, scan-stamp-overlay, arabic-rtl, cjk.
-- Public domain US Government works (`test/corpus/DATASETS.md`): `uscourts-table` (US Courts), `irs-form-w9` and
+- Public domain US Government works (`test/corpus/DATASETS.md`): `uscourts-table` (US Courts), `irs-form-w9`, `irs-form-1040` and
   `irs-pub15-excerpt` (IRS), `gao-report` (GAO; GAO notes that third-party images in some products may be copyrighted,
   the excerpt's pages are text and the agency logo/photo).
 - `image-invoice.jpg`: katanaml-invoices (synthetic; MIT on the card, upstream CC BY 4.0: attribution).
@@ -64,6 +64,7 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
 | invoice | header block, one table with a thead, right-aligned amounts, footer furniture |
 | bank-statement | one `table` with one `thead` over 3 pages; header and footer lines as furniture on pages 1 2 3 |
 | irs-form-w9 | a real form: numbered lines, bold line numbers, signature; weakest on checkbox/field structure |
+| irs-form-1040 | the real 2025 Form 1040 (2 pages); it crashed on an `i32` overflow until D521 |
 | table-multipage | the repeated header row folded into one thead |
 | table-zebra / table-unruled | tables found from shading only or from alignment only |
 | table-spans | `rowspan`/`colspan` in the header |
@@ -81,8 +82,6 @@ emon-rs --pdfium --tesseract --assets=figures --out=html figures-charts.pdf > fi
 
 ## Known weak spots (honest list)
 
-- **Form 1040 does not convert.** The real IRS Form 1040 (2 pages) fails with `error: internal / attempt to multiply with
-  overflow` at these defaults. It is left out and the W-9 is used instead. This is a bug to look at, not hidden here.
 - **Scans: ruled tables are weaker.** In `scan-color-invoice` the invoice table loses some column boundaries (quantity and
   unit price share a cell, a `~` noise glyph in an amount) and the first rows of the header block merge into one paragraph.
 - **Scan text has character errors** (`friend` read `frlend`, `group` read `gtoup`, `Course` read `Cours¢`): Tesseract's

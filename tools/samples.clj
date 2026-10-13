@@ -43,7 +43,9 @@
    {:id "bank-statement" :src "bank-statement.pdf" :group "Business documents" :title "Bank statement (3 pages)"
     :note "A transaction table over three pages with its header repeated on each: one table, one thead."}
    {:id "irs-form-w9" :src "irs-form-w9.pdf" :group "Business documents" :title "IRS Form W-9 (pages 1-2)"
-    :note "A real US tax form: fields, checkboxes, numbered lines, boxed parts. Public domain. (Form 1040 hit an internal overflow error and is left out; see README.)"}
+    :note "A real US tax form: fields, checkboxes, numbered lines, boxed parts. Public domain."}
+   {:id "irs-form-1040" :src "irs-form-1040.pdf" :group "Business documents" :title "IRS Form 1040 (2 pages)"
+    :note "The real 2025 Form 1040: income lines, dependants, checkboxes, boxed parts. Public domain. It crashed the Rust driver (i32 overflow, D521) until it was fixed."}
    {:id "table-multipage" :src "table-multipage.pdf" :group "Tables" :title "Table across four pages"
     :note "A ruled table whose header row repeats per page (thead) and whose body continues."}
    {:id "table-zebra" :src "table-zebra.pdf" :group "Tables" :title "Zebra-striped table"
