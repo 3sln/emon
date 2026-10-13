@@ -207,14 +207,31 @@
 
 ;; ------------------------------------------------------------------------------------------------ the document pass
 
+(defn ^I32 fc-seed1 [^I32 slen]
+  (comment "The first rolling hash of `fc-digest` before it reads a byte: the stream's length.")
+  (return (rem slen 2000003)))
+
+(defn ^I32 fc-seed2 [^I32 w ^I32 h]
+  (comment "The second rolling hash of `fc-digest` before it reads a byte: the image's pixel size.")
+  (return (rem (+ (* (rem w 270000) 7919) (rem h 1999993)) 1999993)))
+
+(defn ^I32 fc-digest-seed [^Src src ^:mut ^Cells fi ^I32 k ^I32 sstart ^I32 slen ^I32 w ^I32 h]
+  (comment "D1140: the digest of an image stream before a byte of it is read: the two hashes at their start (they say the stream's length and the")
+  (comment "image's size, and nothing of its bytes), in the cells `k + 10` and `k + 11` of `fi`. A stream that is not in the file has none (0).")
+  (comment "Reading the bytes (`fc-digest`) is for the rows that could recur, `fc-digest-twins`: a lazy source is not asked for a picture it need not read.")
+  (if (or (< sstart 0) (or (< slen 1) (> (+ sstart slen) (ps-len src)))) (return 0))
+  (cells-set fi (+ k 10) (+ (fc-seed1 slen) 1))
+  (cells-set fi (+ k 11) (+ (fc-seed2 w h) 1))
+  (return 1))
+
 (defn ^I32 fc-digest [^Src src ^:mut ^Cells fi ^I32 k ^I32 sstart ^I32 slen ^I32 w ^I32 h]
   (comment "P8.4: the digest of an image stream's bytes as the file holds them, in the cells `k + 10` and `k + 11` of `fi` (two rolling hashes,")
   (comment "each under 2^21, from the stream's length and the image's pixel size too). A stream of `FC_DIGEST_N` bytes or fewer is read whole; a longer")
   (comment "one by a stride through it, and its last 64 bytes. Equal digests of images of one size are one raster. 0 for none (the stream is not in the file).")
   (let [^I32 total (ps-len src)
         ^I32 step (fc-max 1 (quot slen FC_DIGEST_N))
-        ^:mut ^I32 h1 (rem slen 2000003)
-        ^:mut ^I32 h2 (rem (+ (* (rem w 270000) 7919) (rem h 1999993)) 1999993)
+        ^:mut ^I32 h1 (fc-seed1 slen)
+        ^:mut ^I32 h2 (fc-seed2 w h)
         ^:mut ^I32 i 0
         ^:mut ^I32 b 0]
     (if (or (< sstart 0) (or (< slen 1) (> (+ sstart slen) total))) (return 0))
@@ -233,6 +250,53 @@
     (cells-set fi (+ k 10) (+ h1 1))
     (cells-set fi (+ k 11) (+ h2 1))
     (return 1)))
+
+(defn ^I32 fc-twin [^Cells im ^Cells fi ^I32 r ^I32 j]
+  (comment "1 when the rows r and j of `fi` could be one raster seen on two pages: two image objects with a digest, on two pages, of one pixel size")
+  (comment "and the same hashes at their start (so the same stream length). Only such a pair is ever told apart by the bytes (`fc-same-drawing`).")
+  (let [^I32 a (* r FI_STRIDE)
+        ^I32 b (* j FI_STRIDE)]
+    (if (or (!= (cells-at fi b) 1) (== (cells-at fi (+ b 10)) 0)) (return 0))
+    (if (== (im-get im j (mf-obj)) (im-get im r (mf-obj))) (return 0))
+    (if (== (im-get im j (mf-page)) (im-get im r (mf-page))) (return 0))
+    (if (!= (cells-at fi (+ b 5)) (cells-at fi (+ a 5))) (return 0))
+    (if (!= (cells-at fi (+ b 6)) (cells-at fi (+ a 6))) (return 0))
+    (if (!= (fc-abs (cells-at fi (+ b 10))) (fc-abs (cells-at fi (+ a 10)))) (return 0))
+    (if (!= (fc-abs (cells-at fi (+ b 11))) (fc-abs (cells-at fi (+ a 11)))) (return 0))
+    (return 1)))
+
+(defn ^I32 fc-digest-twins [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
+                            ^Cells im ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells fi]
+  (comment "D1140: the bytes of an image stream are read for its digest only when another image on another page has the same pixel size and")
+  (comment "stream length (`fc-twin`): a picture that nothing could equal is not read, so a lazy source (D058) fetches a one-page document's")
+  (comment "dictionaries and not its pictures. The rows to read are marked first (cell 10 negative) so that a digest finished early does not")
+  (comment "change who is a twin; then each marked row's digest is made by `fc-digest`, as it always was.")
+  (let [^I32 n (quot (cells-len fi) FI_STRIDE)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 sh 0
+        ^:mut ^I32 k 0]
+    (while (< r n)
+      (do (set k (* r FI_STRIDE))
+          (if (and (== (cells-at fi k) 1) (> (cells-at fi (+ k 10)) 0))
+            (do (set j 0)
+                (while (< j n)
+                  (do (if (and (!= j r) (== (fc-twin im fi r j) 1))
+                        (do (cells-set fi (+ k 10) (- 0 (cells-at fi (+ k 10))))
+                            (set j n))
+                        (set j (+ j 1)))))))
+          (set r (+ r 1))))
+    (set r 0)
+    (while (< r n)
+      (do (set k (* r FI_STRIDE))
+          (if (< (cells-at fi (+ k 10)) 0)
+            (do (set sh (pd-get src ar dc a b st (im-get im r (mf-obj))))
+                (if (and (!= sh 0) (== (pi-info src ar dc a b st out rec sh (im-get im r (mf-obj))) 0))
+                  (fc-digest src fi k (pi-get rec (pi-f-sstart)) (pi-get rec (pi-f-slen)) (cells-at fi (+ k 5)) (cells-at fi (+ k 6))))
+                (if (< (cells-at fi (+ k 10)) 0)
+                  (cells-set fi (+ k 10) (- 0 (cells-at fi (+ k 10)))))))
+          (set r (+ r 1))))
+    (return 0)))
 
 (defn ^:pub ^I32 fc-images [^Src src ^:mut ^Cells ar ^:mut ^Cells dc ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells st
                             ^Cells im ^:mut ^Cells out ^:mut ^Cells rec ^:mut ^Cells fi]
@@ -289,8 +353,10 @@
                                   (cells-set fi (+ k 7) (i32 bpp))
                                   (cells-set fi (+ k 8) (pi-get rec (pi-f-hival)))
                                   (cells-set fi (+ k 9) (pi-get rec (pi-f-mkind)))
-                                  (fc-digest src fi k (pi-get rec (pi-f-sstart)) (pi-get rec (pi-f-slen)) w h)))))))))
+                                  (fc-digest-seed src fi k (pi-get rec (pi-f-sstart)) (pi-get rec (pi-f-slen)) w h)))))))))
           (set r (+ r 1))))
+    (if (ps-missed src) (return 12))
+    (fc-digest-twins src ar dc a b st im out rec fi)
     (if (ps-missed src) (return 12))
     (return 0)))
 

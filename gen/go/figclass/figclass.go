@@ -280,14 +280,36 @@ func fcNumeric(et *port.Cells, ts int32, tl int32) int32 {
 	return 0
 }
 
+func fcSeed1(slen int32) int32 {
+	// The first rolling hash of `fc-digest` before it reads a byte: the stream's length.
+	return slen % 2000003
+}
+
+func fcSeed2(w int32, h int32) int32 {
+	// The second rolling hash of `fc-digest` before it reads a byte: the image's pixel size.
+	return (((w % 270000) * 7919) + (h % 1999993)) % 1999993
+}
+
+func fcDigestSeed(src *port.Src, fi *port.Cells, k int32, sstart int32, slen int32, w int32, h int32) int32 {
+	// D1140: the digest of an image stream before a byte of it is read: the two hashes at their start (they say the stream's length and the
+	// image's size, and nothing of its bytes), in the cells `k + 10` and `k + 11` of `fi`. A stream that is not in the file has none (0).
+	// Reading the bytes (`fc-digest`) is for the rows that could recur, `fc-digest-twins`: a lazy source is not asked for a picture it need not read.
+	if (sstart < 0) || ((slen < 1) || ((sstart + slen) > pdfsrc.PsLen(src))) {
+		return 0
+	}
+	port.CellsSet(fi, k+10, fcSeed1(slen)+1)
+	port.CellsSet(fi, k+11, fcSeed2(w, h)+1)
+	return 1
+}
+
 func fcDigest(src *port.Src, fi *port.Cells, k int32, sstart int32, slen int32, w int32, h int32) int32 {
 	// P8.4: the digest of an image stream's bytes as the file holds them, in the cells `k + 10` and `k + 11` of `fi` (two rolling hashes,
 	// each under 2^21, from the stream's length and the image's pixel size too). A stream of `FC_DIGEST_N` bytes or fewer is read whole; a longer
 	// one by a stride through it, and its last 64 bytes. Equal digests of images of one size are one raster. 0 for none (the stream is not in the file).
 	var total int32 = pdfsrc.PsLen(src)
 	var step int32 = fcMax(1, slen/fcDigestN)
-	var h1 int32 = slen % 2000003
-	var h2 int32 = (((w % 270000) * 7919) + (h % 1999993)) % 1999993
+	var h1 int32 = fcSeed1(slen)
+	var h2 int32 = fcSeed2(w, h)
 	var i int32 = 0
 	var b int32 = 0
 	if (sstart < 0) || ((slen < 1) || ((sstart + slen) > total)) {
@@ -311,6 +333,77 @@ func fcDigest(src *port.Src, fi *port.Cells, k int32, sstart int32, slen int32, 
 	port.CellsSet(fi, k+10, h1+1)
 	port.CellsSet(fi, k+11, h2+1)
 	return 1
+}
+
+func fcTwin(im *port.Cells, fi *port.Cells, r int32, j int32) int32 {
+	// 1 when the rows r and j of `fi` could be one raster seen on two pages: two image objects with a digest, on two pages, of one pixel size
+	// and the same hashes at their start (so the same stream length). Only such a pair is ever told apart by the bytes (`fc-same-drawing`).
+	var a int32 = r * fiStride
+	var b int32 = j * fiStride
+	if (port.CellsAt(fi, b) != 1) || (port.CellsAt(fi, b+10) == 0) {
+		return 0
+	}
+	if evidence.ImGet(im, j, evidence.MfObj()) == evidence.ImGet(im, r, evidence.MfObj()) {
+		return 0
+	}
+	if evidence.ImGet(im, j, evidence.MfPage()) == evidence.ImGet(im, r, evidence.MfPage()) {
+		return 0
+	}
+	if port.CellsAt(fi, b+5) != port.CellsAt(fi, a+5) {
+		return 0
+	}
+	if port.CellsAt(fi, b+6) != port.CellsAt(fi, a+6) {
+		return 0
+	}
+	if fcAbs(port.CellsAt(fi, b+10)) != fcAbs(port.CellsAt(fi, a+10)) {
+		return 0
+	}
+	if fcAbs(port.CellsAt(fi, b+11)) != fcAbs(port.CellsAt(fi, a+11)) {
+		return 0
+	}
+	return 1
+}
+
+func fcDigestTwins(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, im *port.Cells, out *port.Cells, rec *port.Cells, fi *port.Cells) int32 {
+	// D1140: the bytes of an image stream are read for its digest only when another image on another page has the same pixel size and
+	// stream length (`fc-twin`): a picture that nothing could equal is not read, so a lazy source (D058) fetches a one-page document's
+	// dictionaries and not its pictures. The rows to read are marked first (cell 10 negative) so that a digest finished early does not
+	// change who is a twin; then each marked row's digest is made by `fc-digest`, as it always was.
+	var n int32 = port.CellsLen(fi) / fiStride
+	var r int32 = 0
+	var j int32 = 0
+	var sh int32 = 0
+	var k int32 = 0
+	for r < n {
+		k = r * fiStride
+		if (port.CellsAt(fi, k) == 1) && (port.CellsAt(fi, k+10) > 0) {
+			j = 0
+			for j < n {
+				if (j != r) && (fcTwin(im, fi, r, j) == 1) {
+					port.CellsSet(fi, k+10, 0-port.CellsAt(fi, k+10))
+					j = n
+				} else {
+					j += 1
+				}
+			}
+		}
+		r += 1
+	}
+	r = 0
+	for r < n {
+		k = r * fiStride
+		if port.CellsAt(fi, k+10) < 0 {
+			sh = pdfdoc.PdGet(src, ar, dc, a, b, st, evidence.ImGet(im, r, evidence.MfObj()))
+			if (sh != 0) && (pdfimage.PiInfo(src, ar, dc, a, b, st, out, rec, sh, evidence.ImGet(im, r, evidence.MfObj())) == 0) {
+				fcDigest(src, fi, k, pdfimage.PiGet(rec, pdfimage.PiFSstart()), pdfimage.PiGet(rec, pdfimage.PiFSlen()), port.CellsAt(fi, k+5), port.CellsAt(fi, k+6))
+			}
+			if port.CellsAt(fi, k+10) < 0 {
+				port.CellsSet(fi, k+10, 0-port.CellsAt(fi, k+10))
+			}
+		}
+		r += 1
+	}
+	return 0
 }
 
 func FcImages(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, im *port.Cells, out *port.Cells, rec *port.Cells, fi *port.Cells) int32 {
@@ -374,13 +467,17 @@ func FcImages(src *port.Src, ar *port.Cells, dc *port.Cells, a *port.Cells, b *p
 						port.CellsSet(fi, k+7, int32(bpp))
 						port.CellsSet(fi, k+8, pdfimage.PiGet(rec, pdfimage.PiFHival()))
 						port.CellsSet(fi, k+9, pdfimage.PiGet(rec, pdfimage.PiFMkind()))
-						fcDigest(src, fi, k, pdfimage.PiGet(rec, pdfimage.PiFSstart()), pdfimage.PiGet(rec, pdfimage.PiFSlen()), w, h)
+						fcDigestSeed(src, fi, k, pdfimage.PiGet(rec, pdfimage.PiFSstart()), pdfimage.PiGet(rec, pdfimage.PiFSlen()), w, h)
 					}
 				}
 			}
 		}
 		r += 1
 	}
+	if pdfsrc.PsMissed(src) {
+		return 12
+	}
+	fcDigestTwins(src, ar, dc, a, b, st, im, out, rec, fi)
 	if pdfsrc.PsMissed(src) {
 		return 12
 	}

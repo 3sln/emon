@@ -181,14 +181,33 @@ pub(crate) fn fc_numeric(et: &mut crate::port::Cells, ts: i32, tl: i32) -> i32 {
     }
     return 0;
 }
+pub(crate) fn fc_seed1(slen: i32) -> i32 {
+    // The first rolling hash of `fc-digest` before it reads a byte: the stream's length.
+    return slen % 2000003;
+}
+pub(crate) fn fc_seed2(w: i32, h: i32) -> i32 {
+    // The second rolling hash of `fc-digest` before it reads a byte: the image's pixel size.
+    return (((w % 270000) * 7919) + (h % 1999993)) % 1999993;
+}
+pub(crate) fn fc_digest_seed(src: &crate::port::Src, mut fi: &mut crate::port::Cells, k: i32, sstart: i32, slen: i32, w: i32, h: i32) -> i32 {
+    // D1140: the digest of an image stream before a byte of it is read: the two hashes at their start (they say the stream's length and the
+    // image's size, and nothing of its bytes), in the cells `k + 10` and `k + 11` of `fi`. A stream that is not in the file has none (0).
+    // Reading the bytes (`fc-digest`) is for the rows that could recur, `fc-digest-twins`: a lazy source is not asked for a picture it need not read.
+    if (sstart < 0) || ((slen < 1) || ((sstart + slen) > ps_len(src))) {
+        return 0;
+    }
+    crate::port::cells_set(fi, k + 10, fc_seed1(slen) + 1);
+    crate::port::cells_set(fi, k + 11, fc_seed2(w, h) + 1);
+    return 1;
+}
 pub(crate) fn fc_digest(src: &crate::port::Src, mut fi: &mut crate::port::Cells, k: i32, sstart: i32, slen: i32, w: i32, h: i32) -> i32 {
     // P8.4: the digest of an image stream's bytes as the file holds them, in the cells `k + 10` and `k + 11` of `fi` (two rolling hashes,
     // each under 2^21, from the stream's length and the image's pixel size too). A stream of `FC_DIGEST_N` bytes or fewer is read whole; a longer
     // one by a stride through it, and its last 64 bytes. Equal digests of images of one size are one raster. 0 for none (the stream is not in the file).
     let total: i32 = ps_len(src);
     let step: i32 = fc_max(1, slen / FC_DIGEST_N);
-    let mut h1: i32 = slen % 2000003;
-    let mut h2: i32 = (((w % 270000) * 7919) + (h % 1999993)) % 1999993;
+    let mut h1: i32 = fc_seed1(slen);
+    let mut h2: i32 = fc_seed2(w, h);
     let mut i: i32 = 0;
     let mut b: i32 = 0;
     if (sstart < 0) || ((slen < 1) || ((sstart + slen) > total)) {
@@ -212,6 +231,75 @@ pub(crate) fn fc_digest(src: &crate::port::Src, mut fi: &mut crate::port::Cells,
     crate::port::cells_set(fi, k + 10, h1 + 1);
     crate::port::cells_set(fi, k + 11, h2 + 1);
     return 1;
+}
+pub(crate) fn fc_twin(im: &mut crate::port::Cells, fi: &mut crate::port::Cells, r: i32, j: i32) -> i32 {
+    // 1 when the rows r and j of `fi` could be one raster seen on two pages: two image objects with a digest, on two pages, of one pixel size
+    // and the same hashes at their start (so the same stream length). Only such a pair is ever told apart by the bytes (`fc-same-drawing`).
+    let a: i32 = r * FI_STRIDE;
+    let b: i32 = j * FI_STRIDE;
+    if (crate::port::cells_at(fi, b) != 1) || (crate::port::cells_at(fi, b + 10) == 0) {
+        return 0;
+    }
+    if im_get(im, j, mf_obj()) == im_get(im, r, mf_obj()) {
+        return 0;
+    }
+    if im_get(im, j, mf_page()) == im_get(im, r, mf_page()) {
+        return 0;
+    }
+    if crate::port::cells_at(fi, b + 5) != crate::port::cells_at(fi, a + 5) {
+        return 0;
+    }
+    if crate::port::cells_at(fi, b + 6) != crate::port::cells_at(fi, a + 6) {
+        return 0;
+    }
+    if fc_abs(crate::port::cells_at(fi, b + 10)) != fc_abs(crate::port::cells_at(fi, a + 10)) {
+        return 0;
+    }
+    if fc_abs(crate::port::cells_at(fi, b + 11)) != fc_abs(crate::port::cells_at(fi, a + 11)) {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn fc_digest_twins(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, im: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut fi: &mut crate::port::Cells) -> i32 {
+    // D1140: the bytes of an image stream are read for its digest only when another image on another page has the same pixel size and
+    // stream length (`fc-twin`): a picture that nothing could equal is not read, so a lazy source (D058) fetches a one-page document's
+    // dictionaries and not its pictures. The rows to read are marked first (cell 10 negative) so that a digest finished early does not
+    // change who is a twin; then each marked row's digest is made by `fc-digest`, as it always was.
+    let n: i32 = crate::port::cells_len(fi) / FI_STRIDE;
+    let mut r: i32 = 0;
+    let mut j: i32 = 0;
+    let mut sh: i32 = 0;
+    let mut k: i32 = 0;
+    while r < n {
+        k = r * FI_STRIDE;
+        if (crate::port::cells_at(fi, k) == 1) && (crate::port::cells_at(fi, k + 10) > 0) {
+            j = 0;
+            while j < n {
+                if (j != r) && (fc_twin(im, fi, r, j) == 1) {
+                    crate::port::cells_set(fi, k + 10, 0 - crate::port::cells_at(fi, k + 10));
+                    j = n;
+                } else {
+                    j += 1;
+                }
+            }
+        }
+        r += 1;
+    }
+    r = 0;
+    while r < n {
+        k = r * FI_STRIDE;
+        if crate::port::cells_at(fi, k + 10) < 0 {
+            sh = pd_get(src, ar, dc, a, b, st, im_get(im, r, mf_obj()));
+            if (sh != 0) && (pi_info(src, ar, dc, a, b, st, out, rec, sh, im_get(im, r, mf_obj())) == 0) {
+                fc_digest(src, fi, k, pi_get(rec, pi_f_sstart()), pi_get(rec, pi_f_slen()), crate::port::cells_at(fi, k + 5), crate::port::cells_at(fi, k + 6));
+            }
+            if crate::port::cells_at(fi, k + 10) < 0 {
+                crate::port::cells_set(fi, k + 10, 0 - crate::port::cells_at(fi, k + 10));
+            }
+        }
+        r += 1;
+    }
+    return 0;
 }
 pub fn fc_images(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, im: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut fi: &mut crate::port::Cells) -> i32 {
     // What the dictionary of each image placement says, in `fi` (stride `FI_STRIDE`, one row to a row of `im`): its codec, colour class,
@@ -274,13 +362,17 @@ pub fn fc_images(src: &crate::port::Src, mut ar: &mut crate::port::Cells, mut dc
                         crate::port::cells_set(fi, k + 7, bpp as i32);
                         crate::port::cells_set(fi, k + 8, pi_get(rec, pi_f_hival()));
                         crate::port::cells_set(fi, k + 9, pi_get(rec, pi_f_mkind()));
-                        fc_digest(src, fi, k, pi_get(rec, pi_f_sstart()), pi_get(rec, pi_f_slen()), w, h);
+                        fc_digest_seed(src, fi, k, pi_get(rec, pi_f_sstart()), pi_get(rec, pi_f_slen()), w, h);
                     }
                 }
             }
         }
         r += 1;
     }
+    if ps_missed(src) {
+        return 12;
+    }
+    fc_digest_twins(src, ar, dc, a, b, st, im, out, rec, fi);
     if ps_missed(src) {
         return 12;
     }
