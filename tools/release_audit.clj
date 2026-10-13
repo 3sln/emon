@@ -333,6 +333,22 @@
               (when-not (fs/exists? (path root (str texts-dir "/" f)))
                 (fail! (:id c) ": licence text " texts-dir "/" f " is missing (bb release-audit --import-texts for a crate)")))
             (when (= b (n-before)) (ok! "every licence text the inventory names is in release/licenses/")))
+          ;; the browser demo's vendored files (P11.4c): every file `bb demo` vendors maps to a component the demo carries
+          (let [b (n-before)
+                df (:demo-files inv)
+                build (rd root "tools/demo/build.clj")
+                lits (when build (distinct (map second (re-seq #"\"/(vendor/[^\"]*)\"" build))))]
+            (doseq [[prefix ids] df
+                    id ids
+                    :let [c (by-id id)]]
+              (cond (nil? c) (fail! inventory-path " :demo-files " prefix ": no component " id)
+                    (not (some #{:browser-demo} (:carried-by c))) (fail! inventory-path " :demo-files " prefix ": " id " is not carried by the browser demo")))
+            (when (and build (empty? df)) (fail! inventory-path " has no :demo-files, and tools/demo/build.clj vendors files"))
+            (doseq [lit lits
+                    :when (not (some #(str/starts-with? lit %) (keys df)))]
+              (fail! "tools/demo/build.clj vendors `" lit "` and no :demo-files prefix of " inventory-path " covers it"))
+            (when (and build (seq df) (empty? lits)) (fail! "tools/demo/build.clj names no /vendor/ file: this check reads nothing"))
+            (when (= b (n-before)) (ok! (str "every file the demo vendors (" (count lits) " paths in tools/demo/build.clj) maps to components the browser demo carries (" (count df) " prefixes)"))))
           nil)))
     @out))
 
@@ -355,7 +371,7 @@
   [[:crate "Rust crates" "Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock)."]
    [:native "Native libraries" "Not carried by the library packages (the Go, Java and C# hosts and the C library and pod load pdfium and Tesseract from the user's system at run time); carried by the per-platform CLI and the browser demo."]
    [:data "Data the generated code embeds" "Tables built into every artifact by kin's generators from these sources."]
-   [:npm "npm packages" "Development dependencies of host/js (the browser test harness and the Tesseract.js adapter); `files` is `src` only, so none is in the npm package."]])
+   [:npm "npm packages" "Development dependencies of host/js (the browser test harness and the Tesseract.js adapter); `files` is `src` only, so none is in the npm package. The browser demo ships tesseract.js, tesseract.js-core, the English model's package and what tesseract.js bundles (`bb demo` copies their dist files)."]])
 
 (defn notices
   "THIRD_PARTY_NOTICES.md for the inventory, with licence texts read from `root`'s release/licenses/."
@@ -455,7 +471,7 @@
 
 ;; ------------------------------------------------------------------------------------------------ the self-test
 
-(def copy-roots ["LICENSE" "THIRD_PARTY_NOTICES.md" "release" "host" "kin/scripts"])
+(def copy-roots ["LICENSE" "THIRD_PARTY_NOTICES.md" "release" "host" "kin/scripts" "tools/demo"])
 
 (defn- copy-tree! [from to]
   (doseq [r copy-roots
@@ -546,6 +562,11 @@
              #(edit! "host/rust/src/lib.rs" (fn [s] (str/replace s "#[cfg(codecs)]\npub mod pdfcodecs;" "pub mod pdfcodecs;"))))
       (case! "the dev-only cfg flag set by another script" #"emon-wasm-build: sets `--cfg codecs`"
              #(edit! "kin/scripts/emon-wasm-build" (fn [s] (str s "\nflags=\"$flags --cfg codecs\"\n"))))
+      ;; 5b. the demo's vendored files (P11.4c)
+      (case! "a vendored file that maps to no component" #"tools/demo/build.clj vendors `vendor/bogus/x.js`"
+             #(edit! "tools/demo/build.clj" (fn [s] (str s "\n(copy! \"x\" (str out \"/vendor/bogus/x.js\"))\n"))))
+      (case! "a demo component that the demo does not carry" #":demo-files vendor/pdfium/: native/pdfium-llvm-libc is not carried by the browser demo"
+             #(edit! inventory-path (fn [s] (str/replace-first s "\"native/pdfium-simdutf\"" "\"native/pdfium-llvm-libc\" \"native/pdfium-simdutf\""))))
       ;; 6. fonts and ICC
       (case! "a font under host/" #"host/js/src/bogus.ttf: a font or ICC profile"
              #(spit (path tmp "host/js/src/bogus.ttf") "x"))

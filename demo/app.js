@@ -14,8 +14,7 @@ const SAMPLES = [
   { file: 'columns-two.pdf', label: 'Two columns', note: 'reading order down each column' },
   { file: 'table-multipage.pdf', label: 'Table over four pages', note: 'a table that continues, header and all' },
   { file: 'figures-charts.pdf', label: 'Charts and figures', note: 'figures become images: pdfium renders them', figures: true },
-  { file: 'scan-plain.pdf', label: 'Scanned page', note: 'a picture of text: Tesseract reads it' },
-  { file: 'image-invoice.jpg', label: 'JPEG invoice', note: 'an image is a page too: Tesseract reads it' },
+  { file: 'scan-plain.pdf', label: 'Scanned page', note: 'a picture of text: Tesseract reads it (a PNG or JPEG of a page works too: drop one in)' },
 ];
 
 // the iframe that shows emon's HTML gets a few lines of styling, spliced in here only (the Model's HTML is unstyled)
